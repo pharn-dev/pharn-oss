@@ -50,6 +50,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`pharn/ARCHITECTURE.md` — restore the `archetype-maps` specified-marker substring dropped in the
+  §7 enforcement list.** The recent arch refresh rewrote "the four archetype maps agree (fix #5 —
+  conditional; specified, ships with the guarded surface)" as "the archetype maps agree …", which
+  made `check-specified-markers` RED (direction 2: marker gone, primitive still absent). No semantic
+  change — the marker bytes are restored so the doc stays honest about a protection that is still
+  conditional.
+
 - **Two expired forward-looking claims on the PRODUCT surface — `/pharn-plan` said the `applied_lessons` declaration was unverified after 2.8.0 made it verified** ([`/pharn-plan`](./.claude/commands/pharn-plan.md)). The command asserted, in its Two-clocks note and again in its guarantee audit, that "**no downstream stage re-verifies it**" and that the field was "**self-attested by the stage that wrote it**", naming `grill-lessons-reverify` as a pending follow-up. That follow-up **shipped in 2.8.0** (`0f3a02d`, #171): both grill stages run the checker against their own canon as a deterministic RED. Both sentences were false on `main`, and the adjacent bullet in the _same_ audit block correctly said the spec-hash re-verifier "**is built**" — one bullet current, its neighbour stale.
 
   **Why nothing caught it, which is the durable part.** The hedges were never registered in [`.dev/floor/specified-primitives.json`](./.dev/floor/specified-primitives.json)'s `forward_claims`, so `check-specified-markers.mjs` — the checker that exists precisely to fire when a hedge outlives its artifact — had no site to fire on. `lessons-learned.md` **L33** ("a 'not yet built' claim expires the moment the work lands; the repair pass misses sites") recurring verbatim, one increment after the mechanism to catch it was built (#170). **No entry is added to `forward_claims` now**, deliberately: the artifact has shipped and the hedge is gone, so there is nothing left to guard — the durable remedy is to register a hedge **when writing it**, which is what did not happen here.
