@@ -254,7 +254,8 @@ P5 — the checker **owns** this verdict; you do not re-decide it):
 node pharn/floor/check-plan-lessons.mjs features/<name>/PLAN.md memory-bank/lessons-learned.md
 ```
 
-- **exit 0 (GREEN)** → the declaration is present and well-formed → end your turn.
+- **exit 0 (GREEN)** → the declaration is present, well-formed, every cited id resolves, and every cited
+  id is referenced in the plan body → end your turn.
 - **exit non-zero (RED)** → **fix the PLAN and re-run.** The message names the refusal: an absent field
   (add `applied_lessons`), a malformed value (`none` or `[L1, L2]`), `[]` (use `none`), a cited id
   with no matching lesson heading, or — sub-check (D) — a cited id the plan **body** never mentions. That
@@ -304,7 +305,8 @@ chain to `/pharn-grill` or `/pharn-build` (later stages). **End your turn.**
   it. Grill/review territory. Writing "the plan applies its lessons" would be the disease — **struck**;
   write "the plan **declares** them". **Narrowed, not closed:** `/pharn-grill` re-verifies the
   declaration, so it is no longer self-attested by its author — but re-verification checks the same
-  three things again, and adds nothing about whether the lessons were applied.
+  four things again (presence, shape, id-existence, body-reference), and adds nothing about whether the
+  lessons were applied.
 - **"Every cited lesson is discussed somewhere in the plan"** → **FLOOR**, and this is the narrow claim:
   sub-check (D) requires each cited `L<n>` to appear in the plan **body**, not merely in the header, so a
   citation costs a line. **What it is NOT:** proof the lesson was read. A body line reading

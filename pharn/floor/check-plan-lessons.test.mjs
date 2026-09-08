@@ -237,6 +237,77 @@ test("✧ (D) runs AFTER existence — a nonexistent id REDs on resolution, not 
   assert.doesNotMatch(r.out, /BODY never mentions/);
 });
 
+// ── Fence matching is DELIMITER-AWARE (the boolean toggle (D) would have inherited) ─────────────────
+//
+// A `~~~` line inside a ``` block is NOT a closer. Under the old toggle it read as one, the following
+// `##` became the body start, and fenced text was admitted into the body — a FALSE GREEN for (D). Each
+// row pairs with its control so the assertion cannot pass against a checker that simply REDs.
+
+test("✧ a `~~~` line inside a ``` block does not close it — the fenced `##` is not the body start", () => {
+  // The ONLY occurrence of L2 is inside the fenced block. If the fence closed early, the fenced `##`
+  // would start the body, that L2 would count, and (D) would wrongly pass.
+  const plan =
+    `# PLAN — a thing\n\n- applied_lessons: [L2]\n- increment: one sentence\n\n` +
+    "```text\n~~~\n## Fenced heading\n\nL2 lives only inside this fence.\n```\n\n" +
+    `## Files\n\n- \`x.mjs\` — a file\n`;
+  const r = run(plan);
+  assert.equal(r.status, 1);
+  assert.match(r.out, /cites L2/);
+  assert.match(r.out, /BODY never mentions/);
+});
+
+test("✧ DISCRIMINATION: the same plan with L2 in the REAL body is GREEN", () => {
+  const plan =
+    `# PLAN — a thing\n\n- applied_lessons: [L2]\n- increment: one sentence\n\n` +
+    "```text\n~~~\n## Fenced heading\n\nL2 lives only inside this fence.\n```\n\n" +
+    `## Files\n\n- \`x.mjs\` — a file\n\n## Applied\n\n- **L2** — how it was applied.\n`;
+  const r = run(plan);
+  assert.equal(r.status, 0);
+  assert.match(r.out, /referenced in the plan body/);
+});
+
+test("✧ a ``` line inside a ~~~ block does not close it either (the mirror case)", () => {
+  const plan =
+    `# PLAN — a thing\n\n- applied_lessons: [L2]\n- increment: one sentence\n\n` +
+    "~~~text\n```\n## Fenced heading\n\nL2 lives only inside this fence.\n~~~\n\n" +
+    `## Files\n\n- \`x.mjs\` — a file\n`;
+  const r = run(plan);
+  assert.equal(r.status, 1);
+  assert.match(r.out, /cites L2/);
+});
+
+test("✧ a longer closer is accepted; a SHORTER run of the same char is not a closer", () => {
+  // ````` opens; ``` is too short to close, so the `##` after it stays fenced and only the LAST
+  // `## Applied` (after the real ````` closer) is body — where L2 does appear.
+  const plan =
+    `# PLAN — a thing\n\n- applied_lessons: [L2]\n- increment: one sentence\n\n` +
+    "`````\n```\n## Still fenced\n`````\n\n" +
+    `## Applied\n\n- **L2** — how it was applied.\n`;
+  const r = run(plan);
+  assert.equal(r.status, 0);
+  assert.match(r.out, /referenced in the plan body/);
+});
+
+test("✧ a fence closer carrying an info string is not a closer (it must be bare)", () => {
+  const plan =
+    `# PLAN — a thing\n\n- applied_lessons: [L2]\n- increment: one sentence\n\n` +
+    "```\n```js\n## Still fenced\n\nL2 only here.\n```\n\n" +
+    `## Files\n\n- \`x.mjs\` — a file\n`;
+  const r = run(plan);
+  assert.equal(r.status, 1);
+  assert.match(r.out, /cites L2/);
+});
+
+test("✧ the declaration is still masked inside a fence under delimiter-aware matching (L6 preserved)", () => {
+  const plan =
+    `# PLAN — a thing\n\n- spec_content_hash: ${"a".repeat(64)}\n\n` +
+    "```\n- applied_lessons: [L1]\n```\n\n" +
+    `## Files\n\n- \`x.mjs\` — a file\n`;
+  const r = run(plan);
+  assert.equal(r.status, 1);
+  assert.match(r.out, /declares no `applied_lessons`/);
+});
+
 test("✧ the GREEN line states (D)'s bound — that a token match is not proof of reading", () => {
   const r = run(devPlan("- applied_lessons: [L1]", "", REF("L1")));
   assert.equal(r.status, 0);

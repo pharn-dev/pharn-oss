@@ -182,10 +182,12 @@ citing an id later removed from the user's canon, passed unnoticed because nothi
 it. `/pharn-grill` is the first stage that did **not** author the field and re-verifies it anyway. The
 checker is **reused byte-for-byte** — no new floor primitive.
 
-**The honest bound (P0).** The verdict covers the **declaration**: present, well-formed, ids resolve. It
-says **nothing** about whether the lessons were genuinely applied, or whether a `none` is justified —
-that stays advisory, in the interrogation below. Re-verification **narrows** self-attestation; it does
-not close the declaration-vs-application gap. "The grill verified the lessons were applied" is the P0
+**The honest bound (P0).** The verdict covers the **declaration**: present, well-formed, ids resolve, and
+each cited id is referenced in the plan body. It says **nothing** about whether the lessons were
+genuinely applied, or whether a `none` is justified — that stays advisory, in the interrogation below.
+Re-verification **narrows** self-attestation; it does not close the declaration-vs-application gap, and
+neither does the body-reference half: a line reading `L1: considered.` satisfies it, so a citation costs
+a line and still proves nothing about comprehension. "The grill verified the lessons were applied" is the P0
 disease — **struck**.
 
 ## Step 3 — Interrogate the plan (ADVISORY — model work; reached only on a GREEN chain and a GREEN declaration)
