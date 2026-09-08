@@ -44,7 +44,7 @@ promote returned, not from that command's printed output (L6).
 not `npm run docs:generate` — L22) and `check-lessons-index.mjs` is GREEN at 36 lessons, 36 tagged, 0
 malformed, 0 untagged. Canon and index are two files in one logical change and belong in the same commit.
 
-## Two corrections this run made rather than shipped
+## Corrections made rather than shipped — two inside the chain, two after it
 
 Recorded because a run that reports only its green verdicts is not reporting what happened.
 
@@ -61,6 +61,34 @@ Recorded because a run that reports only its green verdicts is not reporting wha
    (every back-ticked `lesson: …` the command writes must match a member), mutation-tested against the
    pre-fix text. Both `regression-report.json` and `verify-report.json` were then **recomputed** rather
    than carried forward; a PASS about a tree that no longer existed would have been the disease.
+
+### After GATE 2 — two further rounds, recorded because this file is the run's record
+
+Both happened **outside** the `/pharn-dev-ship` chain (the chain ended at GATE 2, above), during the
+human-authorized merge path. Neither changes any verdict in the table; both are in the PR's commits.
+
+1. **Self-audit before the PR settled (`16d2357`).** The L7 `writes:` guard's DISCRIMINATES test matched
+   a hand-written string against a hand-written regex — passing **by construction** (L4) while
+   exercising none of the guard's own extraction, so it would have stayed green had the guard stopped
+   finding the `writes:` line at all. Rewritten to run the real body and a body-derived mutant through
+   one extracted function.
+2. **CodeRabbit's review (`ca76b28`) — three valid findings, one corrected presentation.** It had to be
+   triggered manually (this repo is under the 10-star threshold for automatic review) and re-triggered
+   once after a push invalidated its first pass. **(a)** The `--loop` section contradicted itself —
+   Step 2b "runs at every stop" while `STOP_CAP`/`INCONCLUSIVE` recorded `not-reached`, which by 2b.4's
+   own definition means it did **not** run; resolved to the rule _Step 2b runs iff the run reached
+   GATE 2_, so all three loop stops record their actual outcome. **(b)** The RED-stop path required a
+   `lesson:` line but named no write route — it would be omitted, or written outside scope where fix #7
+   denies it, i.e. the silent drop this step exists to prevent; Step 3 now states it runs on both exit
+   paths. **(c)** The promote matcher keyed on the bare command name, which appears **8 times** in the
+   file with only one being the real hand-off — measured: with the invocation deleted and 7 mentions
+   surviving, the old matcher passes and the anchored one fails. Same defect class as the self-audit
+   item above, found independently. **(d)** Its diff-count arithmetic was wrong (147 is git's combined ±bar, so
+   145+145+63 = 353) but it correctly caught that `REVIEW.md` labelled a ±bar as insertions.
+
+**The pattern across all four is worth naming, since it is this increment's own subject:** every one was
+a matcher or a requirement that **certified by not looking precisely enough**, and none was caught by a
+gate. Two were caught by a review lens, one by self-audit, one by an external reviewer.
 
 ## Standing state at GATE 2
 
