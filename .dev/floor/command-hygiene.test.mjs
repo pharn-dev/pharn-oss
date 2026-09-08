@@ -337,3 +337,170 @@ test("✧ the lessons-reverify wiring set is non-vacuous — every named command
     "expected both surfaces x three roles (dev/product x plan-selfcheck/grill-reverify/ship-read)"
   );
 });
+
+// ── The lesson-extract wiring (Step 2b of /pharn-dev-ship) ───────────────────────────────────────────
+//
+// A THIRD set, separate from both above for the reason L29 gives: three obligations behind one `length`
+// assertion is the failure, not a tidier version of it. LESSONS_SWEEP_WIRING ranges over the index
+// tooling, PLAN_LESSONS_WIRING over the declaration checker; this one ranges over the PROPOSE-and-ask
+// step, which invokes neither checker and answers a different question again (did the run offer its
+// lesson to a human, and route an accepted one through the gated command?).
+//
+// WHY THE SET HAS THREE NAMED MEMBERS AND ONE WIRED MEMBER, written down rather than discovered later.
+// L31: a deliberate copy-pair creates an obligation set nothing ranges over, and the second copy is
+// where the obligation gets dropped — precisely because the first copy is correct and reviewable in
+// isolation. Scoping lesson-extract to /pharn-dev-ship ALONE (an explicit human decision at the
+// discovery halt, not an oversight) CREATES exactly such a set: three orchestrators reach a
+// post-verify human gate, and one of them now offers a lesson there. So the set is materialized NOW,
+// with the two unwired members carried as `wired: false` rather than omitted — an omitted member is
+// indistinguishable from a member nobody thought of, which is the whole defect L31 names.
+//
+// `pharn-loop.md` additionally needs a DIFFERENT shape when it is wired, and that is recorded here
+// because it is the kind of fact that is expensive to rediscover: it already carries a lesson-adjacent
+// `## Handoff` -> `### learned`, and pharn/floor/check-loop-record.mjs holds that subsection list to
+// EXACT equality — so a lesson there is a MODIFICATION of an existing step (a new top-level section or
+// an envelope key), never an added `###`, which would be an immediate RED.
+//
+// Honest scope, the same narrow kind as every set above: these pin that the command PROSE carries the
+// invocation, the ordering, and the outcome vocabulary. They CANNOT prove a run executed Step 2b, that
+// a human was actually asked, or that a candidate was not dropped — the increment's only real behavior
+// is untestable from here by construction (commands are not `role:`-bearing capabilities, so nothing
+// can run a behavioral case over one). "The wiring is pinned" NEVER means "the lesson was extracted".
+const LESSON_EXTRACT_WIRING = [
+  {
+    file: "pharn-dev-ship.md",
+    wired: true,
+    role: "proposes a lesson at GATE 2 and routes an accepted one through the gated promote command",
+    // The PROMOTE COMMAND is the discriminating token: Step 2b must hand off to the dedicated command,
+    // never write canon itself. Dev surface, so the DEV promote command — a product `/pharn-memory-promote`
+    // here would point a dev run at the user's memory-bank/, the same cross-surface error
+    // PLAN_LESSONS_WIRING guards on its own axis.
+    re: /\/pharn-dev-memory-promote/,
+  },
+  { file: "pharn-ship.md", wired: false, role: "not wired — deferred by explicit human decision", re: null },
+  { file: "pharn-loop.md", wired: false, role: "not wired — deferred; needs the Handoff-modification shape", re: null },
+];
+
+// The five outcome values, materialized once (L29). Three carry a VARIABLE payload, so a member is a
+// MATCHER and not a bare literal: string equality over `promoted L<n>` would fail on the very values it
+// exists to pin, and a `.includes()` on the stem alone would let `lesson: promoted` (no id) pass. Each
+// pattern is anchored on the literal `lesson:` prefix so a stray mention of the word elsewhere in the
+// command cannot satisfy it.
+const LESSON_OUTCOMES = [
+  { name: "promoted", re: /`lesson: promoted L<n>`/ },
+  { name: "skipped", re: /`lesson: skipped`/ },
+  { name: "none", re: /`lesson: none`/ },
+  { name: "not-reached", re: /`lesson: not-reached \(<stage>\)`/ },
+  { name: "error", re: /`lesson: error <reason>`/ },
+];
+
+// A LINE-INITIAL `## ` heading offset, not an `indexOf` over the body (GRILL F2 -> L6: a structural
+// fact is read from its structured location, never pattern-matched as a substring). The command's own
+// `description:` frontmatter and its prose both mention step names; only a heading declares one.
+// Returns -1 when absent, and every caller below asserts >= 0 FIRST, so a missing heading fails closed
+// rather than comparing against -1 and silently reading as "earlier".
+function headingOffset(body, title) {
+  const re = new RegExp(`^ {0,3}#{2,6}[ \\t]+${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "m");
+  const m = body.match(re);
+  return m ? m.index : -1;
+}
+
+for (const site of LESSON_EXTRACT_WIRING.filter((s) => s.wired)) {
+  test(`✧ ${site.file} ${site.role} — the invocation is present, not merely described`, () => {
+    assert.match(
+      commandBody(site.file),
+      site.re,
+      `${site.file} must INVOKE /pharn-dev-memory-promote for an accepted candidate, not name the condition in prose`
+    );
+  });
+
+  // L4: an authored assertion passes by construction. Pin the DISCRIMINATION directly.
+  test(`✧ the ${site.file} lesson-extract rule DISCRIMINATES — it fails on a body with the invocation removed`, () => {
+    const stripped = commandBody(site.file).replace(new RegExp(site.re.source, "g"), "<<removed>>");
+    assert.doesNotMatch(stripped, site.re, `the ${site.file} matcher must not still pass once the invocation is gone`);
+  });
+
+  // The L7 GUARD, and it is the load-bearing rule in this file for this increment. A stage that only
+  // PROPOSES a lesson must not hold write-scope to canon: declaring the canon path in `writes:` would
+  // make set-writes-scope.cjs resolve a scope the pre-write hook then PERMITS, handing this command the
+  // ungated canon write that check-provenance + the human accept exist to withhold. That is L7's own
+  // recorded instance (it happened to /review) and it was available here. Scoped to the `writes:` LINE
+  // so the path may still appear in `reads:` and in prose, which it must.
+  test(`✧ ${site.file} does NOT declare memory-bank canon in writes: (L7)`, () => {
+    const line = commandBody(site.file).match(/^writes:.*$/m);
+    assert.ok(line, `${site.file} must declare a writes: line`);
+    assert.doesNotMatch(
+      line[0],
+      /memory-bank/,
+      `${site.file} declares canon in writes: — a proposing stage must route the write through /pharn-dev-memory-promote, never hold scope to it`
+    );
+  });
+
+  test(`✧ the ${site.file} writes: guard DISCRIMINATES — an injected canon path is caught`, () => {
+    const injected = `writes: [".dev/features/<name>/SHIP.md", ".dev/memory-bank/lessons-learned.md"]`;
+    assert.match(injected, /memory-bank/, "the guard's matcher must catch a canon path spliced into writes:");
+  });
+
+  // POSITION (the re-anchored "before the final commit" requirement). No ship/loop command performs any
+  // git operation, so the original anchor does not exist; the real one is "before the roll-up write".
+  test(`✧ ${site.file} runs lesson-extract BEFORE the SHIP.md write step`, () => {
+    const body = commandBody(site.file);
+    const lesson = headingOffset(body, "Step 2b — lesson-extract");
+    const write = headingOffset(body, "Step 3 —");
+    assert.ok(lesson >= 0, `${site.file} must carry a line-initial "Step 2b — lesson-extract" heading`);
+    assert.ok(write >= 0, `${site.file} must carry a line-initial "Step 3 —" heading`);
+    assert.ok(
+      lesson < write,
+      `${site.file} places lesson-extract at offset ${lesson}, after the Step-3 roll-up write at ${write} — the lesson must be decided before the artifact that records it is written`
+    );
+  });
+
+  for (const outcome of LESSON_OUTCOMES) {
+    test(`✧ ${site.file} specifies the \`${outcome.name}\` lesson outcome`, () => {
+      assert.match(
+        commandBody(site.file),
+        outcome.re,
+        `${site.file} must name the ${outcome.name} outcome — an outcome the command does not spell out is one a run can silently omit`
+      );
+    });
+  }
+
+  // THE CLOSURE assertion, and it is the half that makes the enumeration above mean anything. Presence
+  // rules are satisfiable by a set that is not closed: the command shipped `not-reached (<stop>)`
+  // alongside `not-reached (<stage>)` and every presence rule stayed GREEN, because a matcher can only
+  // pin the spelling its author was looking at. Caught at /pharn-dev-review, in the increment whose
+  // stated purpose was to close this very set.
+  //
+  // L27's shape — "present in its own case AND ABSENT from the others" — applied to SPELLING rather
+  // than to branches: collect EVERY back-ticked `lesson: …` the command writes and require each to be a
+  // member. A variant of any member (not just the one that drifted) now fails here. The parameterized
+  // members are the ones at risk, because a parameter is the part an author re-derives from local
+  // context instead of copying — `<stop>` read naturally in a section about loop stops.
+  test(`✧ ${site.file} writes NO lesson-outcome spelling outside the enumeration (closure, not just presence)`, () => {
+    const found = [...commandBody(site.file).matchAll(/`lesson: [^`]+`/g)].map((m) => m[0]);
+    assert.ok(found.length > 0, "expected at least one back-ticked lesson: outcome — otherwise this rule is vacuous (L34)");
+    const stray = [...new Set(found.filter((f) => !LESSON_OUTCOMES.some((o) => o.re.test(f))))];
+    assert.deepEqual(
+      stray,
+      [],
+      `${site.file} writes lesson-outcome spelling(s) outside LESSON_OUTCOMES: ${stray.join(", ")} — add the member, or fix the spelling; a set with a member under two names is not a closed set`
+    );
+  });
+}
+
+test("✧ the lesson-extract wiring set is non-vacuous — every named command exists on disk", () => {
+  // L34, and it is not decorative here: the WIRED subset has exactly ONE member, so without this guard
+  // every rule above would pass vacuously the day someone renames the command, and a vacuous pass is
+  // indistinguishable from a real one at the verdict. Both the total and the wired count are pinned, so
+  // wiring a deferred member (or dropping one) fails here and forces the change to be deliberate.
+  const present = new Set(commandFiles());
+  const missing = LESSON_EXTRACT_WIRING.filter((s) => !present.has(s.file)).map((s) => s.file);
+  assert.deepEqual(missing, [], `these wiring-set members name no live command file: ${missing.join(", ")}`);
+  assert.equal(LESSON_EXTRACT_WIRING.length, 3, "expected all three post-verify orchestrators to be NAMED (L31)");
+  assert.equal(
+    LESSON_EXTRACT_WIRING.filter((s) => s.wired).length,
+    1,
+    "expected exactly one WIRED member (/pharn-dev-ship); the product two are deferred by explicit decision"
+  );
+  assert.equal(LESSON_OUTCOMES.length, 5, "the outcome enumeration is the deliverable (L29) — pin its size");
+});

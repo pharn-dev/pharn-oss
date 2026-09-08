@@ -10,7 +10,7 @@ lessons to fetch; canon stays the source of truth and the floor's verification t
 applied, without fetching its full `## L<n>` entry from canon, is the P0 disease. "The index was
 consulted" never means "the relevant lessons were read".
 
-35 lessons · 35 tagged · 0 malformed · 0 untagged · ~23261 tokens total
+36 lessons · 36 tagged · 0 malformed · 0 untagged · ~24017 tokens total
 
 Columns: `id | type | concepts | title | promoted | ~tokens`. Every canon entry carries a tag line, so
 BOTH absence markers are unexpected: `-` = no tag line, i.e. an entry that reached canon without
@@ -55,4 +55,5 @@ L32 | process  | verification-fidelity,doc-drift,command-prescription,false-gree
 L33 | process  | doc-drift,shipped-surface,false-green,enumeration                                           | A "not yet built" claim expires the moment the work lands — nothing reads shipped prose, and the repair pass misses the variant spellings | 2026-08-23 | ~1083
 L34 | floor    | vacuous-truth,empty-set,fail-closed,eval-design                                             | "For each X, assert P" says nothing when there are no X — a per-item assertion set certifies the suppressed emission | 2026-08-23 | ~1083
 L35 | process  | redundant-identity,remedy-design,version-discipline,sync-cost                               | When one fact is stored twice, retire the second copy — a sync check is a third thing to keep in sync | 2026-08-23 | ~921
+L36 | floor    | enumeration,variant-spelling,closure-assertion,presence-vs-closure,parameterized-value      | A per-member presence set is not a closed set — a parameterized value acquires variant spellings, and the enumeration certifies the one its author was looking at | 2026-09-08 | ~756
 ```

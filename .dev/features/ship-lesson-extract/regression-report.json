@@ -1,0 +1,27 @@
+{
+  "base": "HEAD",
+  "inside": [
+    ".claude/commands/pharn-dev-ship.md",
+    ".dev/features/ship-lesson-extract/GRILL.md",
+    ".dev/features/ship-lesson-extract/PLAN.md",
+    ".dev/floor/command-hygiene.test.mjs",
+    "CHANGELOG.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
