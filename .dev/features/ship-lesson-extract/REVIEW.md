@@ -3,9 +3,15 @@
 **Step 1 — floor first (P0):** `node pharn/floor/validate.mjs .` → **GREEN**, 36 capabilities, exit 0.
 The increment was eligible for review. Everything below the floor line is **advisory**.
 
-**Under review:** 3 files, +353 / −2 — `.claude/commands/pharn-dev-ship.md` (+147),
-`.dev/floor/command-hygiene.test.mjs` (+145), `CHANGELOG.md` (+63). Treated as `trust: untrusted`
-throughout.
+**Under review:** 3 files, **+353 / −2** as of this review — `.claude/commands/pharn-dev-ship.md`
+(+145 / −2), `.dev/floor/command-hygiene.test.mjs` (+145), `CHANGELOG.md` (+63). Treated as
+`trust: untrusted` throughout.
+
+> An earlier draft of this line reported the first file as `(+147)`, which is git's **combined ±bar**
+> (145 insertions + 2 deletions), not its insertion count — so the per-file figures appeared not to sum
+> to the aggregate. Corrected to insertions/deletions throughout; the aggregate `+353` was right all
+> along. The counts describe the tree **at review time**; the post-review remediation below and the two
+> follow-up commits add to them.
 
 ## Floor-gate findings (blocking — the verdict comes from checkable content)
 
