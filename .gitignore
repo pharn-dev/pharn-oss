@@ -2,3 +2,5 @@ node_modules/
 .claude/settings.local.json
 .pharn/
 runs/
+.env
+.DS_Store
