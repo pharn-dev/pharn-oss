@@ -162,7 +162,7 @@ when you want to drive a step yourself.
 | `/pharn-ship`           | The same chain, one pass, then the PR — gated on the same two human decisions.                                                                                   |
 | `/pharn-review`         | Review lenses over any code, run in parallel as subagents, findings merged deterministically. Not a pipeline stage: point it at anything, any time.              |
 | `/pharn-spec`           | Prose intent into a structured `SPEC.md`, gaps surfaced, stops for your approval, pinned by a body hash once approved.                                           |
-| `/pharn-plan`           | An approved `SPEC.md` into a `PLAN.md` — the files the build may touch, and which of your promoted lessons the plan applied.                                     |
+| `/pharn-plan`           | An approved `SPEC.md` into a `PLAN.md` — the files the build may touch, and which of your promoted lessons the plan declares it applied.                         |
 | `/pharn-grill`          | Grillers interrogate the plan before code exists; the spec to plan hash chain and the plan's declared lessons are both re-verified.                              |
 | `/pharn-build`          | Writes the implementation, scoped to the paths the plan declared.                                                                                                |
 | `/pharn-regress`        | Re-runs your existing suites to catch breakage outside the feature just built.                                                                                   |

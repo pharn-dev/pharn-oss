@@ -1,6 +1,6 @@
 # PLAN — lessons-body-reference (the citation must cost a line, and the surface must stop lying)
 
-- spec_content_hash: 54af0643c9c92257a8ca210db8d7548e4538a85a5f6298a5a9f48fcc1e423492 # fix #4 (sha256 of pharn/ARCHITECTURE.md, live worktree state this run — P6)
+- spec_content_hash: 8f5ec002e3b18cbfd2f094b08a3671f7ed42a05a3fbaf01a11bbbd28da30fb52 # fix #4 (sha256 of pharn/ARCHITECTURE.md as COMMITTED — see the note below)
 - applied_lessons: [L1, L3, L4, L6, L20, L33, L34] # see "Applied lessons" below
 - increment: Make the `applied_lessons` surface **truthful** and **check what it already requires** — (1) correct two EXPIRED forward-looking claims in the product `/pharn-plan` command that 2.8.0 falsified, and (2) add a fourth deterministic sub-check to `pharn/floor/check-plan-lessons.mjs`: every cited `L<n>` must also appear in the PLAN body.
 - layer(s): product floor (`pharn/floor/`) + the product `/pharn-plan` command (`.claude/`, advisory orchestration) # ARCHITECTURE.md §2 primitive #3, §6
@@ -11,8 +11,24 @@
 One reason to change: **a cited lesson must cost something, and the surface that demands the citation
 must not misdescribe itself.** Both halves are the same axis — the honesty of the `applied_lessons`
 declaration. Part 1 repairs a claim that says the field is unverified when it is; Part 2 makes the
-citation non-free. Lesson _selection_, routing, the dev-surface twin's prose, and any change to
-`/pharn-grill`'s re-verification are explicitly **out of scope**.
+citation non-free.
+
+**Out of scope, stated precisely** (an earlier draft of this paragraph said "the dev-surface twin's
+prose and any change to `/pharn-grill`" were excluded, which the `## Files` list below then
+contradicted — the contradiction appeared when the **L1** sweep expanded `## Files` and this paragraph
+was not revisited): lesson **selection**, routing, and any change to what `/pharn-grill` **does** — its
+re-verification **behaviour** is untouched, and it gains no new primitive. What **is** in scope is the
+**prose** of every command that ENUMERATES the checker's sub-checks, dev twins included; those
+sentences become false the moment (D) lands, so leaving them out would ship the very defect Part 1
+exists to repair.
+
+> **On `spec_content_hash` (P6).** The pin is the hash of `pharn/ARCHITECTURE.md` **as committed on this
+> branch** (`8f5ec002…`), not of the author's working copy. At authoring time the worktree carried an
+> unrelated **staged, uncommitted** human edit to that trusted doc, whose hash is `54af0643…`; pinning
+> that would have bound this plan to a file state that exists in no commit and ships nowhere, so
+> `/pharn-dev-build` would refuse against the tree this plan actually travels with. The trusted doc is
+> hook-protected and human-only; it is untouched by this increment and is deliberately absent from the
+> commit.
 
 ## Trigger (P7) — stated honestly, because the two halves do NOT share one
 

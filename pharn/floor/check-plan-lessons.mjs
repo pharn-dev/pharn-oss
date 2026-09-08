@@ -117,20 +117,41 @@ function fromFrontmatter(text) {
 // Body = from that first `##` heading onward, so the leading bullet block is excluded exactly as the
 // frontmatter is above. The heading index is captured in the SAME pass that tracks fences — a `##`
 // inside a fenced block ends nothing, so it can neither terminate the header nor start the body.
+//
+// FENCE MATCHING IS DELIMITER-AWARE, and that is a correctness requirement, not tidiness. A boolean
+// toggle (the shape this function used before sub-check (D)) treats ``` as a closer for a ~~~ opener
+// and vice versa, so a CommonMark-legal plan whose ``` block contains a ~~~ line is read as leaving the
+// fence early; a following `##` would then be taken as the body start, moving the body EARLIER and
+// admitting fenced text into it — a false GREEN for (D) over a lesson the real body never discusses.
+// The toggle was harmless while fences only masked the declaration scan; (D) makes the body BOUNDARY
+// depend on it, so it is fixed here. Per CommonMark a closer must use the SAME character as its opener,
+// be at least as long, and carry nothing but trailing whitespace.
+const FENCE_RE = /^\s*(`{3,}|~{3,})(.*)$/;
+
 function fromBulletHeader(text) {
   const m = text.match(FM_RE);
   const after = m ? text.slice(m[0].length) : text;
   const lines = after.split(/\r?\n/);
-  let inFence = false;
+  let fence = null; // { char, len } while a fence is OPEN; null while closed
   let raw;
   let bodyStart = -1;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (/^\s*(```|~~~)/.test(line)) {
-      inFence = !inFence;
+    const f = line.match(FENCE_RE);
+    if (f) {
+      const char = f[1][0];
+      const len = f[1].length;
+      if (fence === null) {
+        // An opener may carry an info string — except that a BACKTICK fence's info string may not
+        // contain a backtick (CommonMark); such a line is not a fence at all, so it opens nothing.
+        if (!(char === "`" && f[2].includes("`"))) fence = { char, len };
+        continue;
+      }
+      // A closer only if it matches the OPENER's character, is at least as long, and is bare.
+      if (char === fence.char && len >= fence.len && f[2].trim() === "") fence = null;
       continue;
     }
-    if (inFence) continue;
+    if (fence !== null) continue;
     if (/^#{2,}\s/.test(line)) {
       bodyStart = i; // the structured header region ends at the first `##` heading
       break;

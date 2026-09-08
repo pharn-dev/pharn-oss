@@ -31,9 +31,17 @@ record says so rather than implying six stages executed.
   increment's**: `pharn/ARCHITECTURE.md` carries a **staged, uncommitted human edit** that removed the
   `archetype-maps` annotation. That file is hook-protected and human-only; it is untouched here and is
   **not** in this increment's commit.
-- `npm run check` **in an isolated `git worktree` at `7db7cb9` with only this increment's diff applied**
-  → **all 8 gates GREEN**, `1665/1665` tests pass (baseline `1653`; +12 from this increment). This is the
-  tree CI will see, because the commit contains only the 12 paths below.
+- `npm run check` **in an isolated `git worktree` at `7db7cb9`** → **all 8 gates GREEN**, `1665/1665`
+  tests pass (baseline `1653`). **What that tree contained, precisely** (it is NOT byte-identical to the
+  commit, and saying "the tree CI will see" without this note would overstate it): the 12 tracked-file
+  diffs **plus** `PLAN.md`, and **not** `SHIP.md` — this record did not exist when the run happened, and
+  cannot, since it reports that run's result. The gap is bounded and checkable rather than asserted: both
+  omitted paths are `.dev/features/**` markdown, which **no** gate in `scripts.check` reads as input —
+  `pharn/floor/validate.mjs` excludes `.dev/` wholesale, and `docs:check` / `check:markers` /
+  `check:badge` / `check:contributing` each range over a fixed, named surface that does not include it.
+  They ARE linted (`lint:md`, `format:check` are whole-repo), and both were run against them separately —
+  `0 issues`. **The authoritative answer is CI on the pushed branch, not this local run.**
+- **A second `npm run check` was run after the review-fix commit** and is reported in the same terms.
 
 ## Corpus measurement (the P7 evidence, and the migration proof)
 
