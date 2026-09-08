@@ -1,5 +1,5 @@
 ---
-description: "Interrogate an approved PLAN.md BEFORE /pharn-dev-build AND deterministically re-verify the plan's applied_lessons declaration. It has TWO natures. FLOOR (deterministic, pharn/floor/check-plan-lessons.mjs): /pharn-dev-grill is the FIRST stage that did NOT author the field to re-verify it — the PLAN's applied_lessons must still be present, well-formed (`none` | `[L<n>…]`), and every cited id must still resolve to a `## L<n> ` heading in canon, else the declaration is stale → a deterministic RED. Before this, the field was self-attested by the stage that wrote it. ADVISORY: the interrogation itself — surface gaps, unstated assumptions, missing guarantee-audit reductions, untested axes — emitted as an advisory grill-log (GRILL.md) of finding-shape findings + a verdict. The interrogation NEVER blocks; the lessons-declaration RED is the ONLY deterministic stop. '/pharn-dev-grill produced a GRILL.md' guarantees the declaration held — it NEVER means 'the plan is good', and NEVER means the lessons were genuinely APPLIED (P0)."
+description: "Interrogate an approved PLAN.md BEFORE /pharn-dev-build AND deterministically re-verify the plan's applied_lessons declaration. It has TWO natures. FLOOR (deterministic, pharn/floor/check-plan-lessons.mjs): /pharn-dev-grill is the FIRST stage that did NOT author the field to re-verify it — the PLAN's applied_lessons must still be present, well-formed (`none` | `[L<n>…]`), and every cited id must still resolve to a `## L<n> ` heading in canon, and every cited id must be referenced in the plan body (sub-check D — a citation costs a line, never proof it was read), else the declaration is stale → a deterministic RED. Before this, the field was self-attested by the stage that wrote it. ADVISORY: the interrogation itself — surface gaps, unstated assumptions, missing guarantee-audit reductions, untested axes — emitted as an advisory grill-log (GRILL.md) of finding-shape findings + a verdict. The interrogation NEVER blocks; the lessons-declaration RED is the ONLY deterministic stop. '/pharn-dev-grill produced a GRILL.md' guarantees the declaration held — it NEVER means 'the plan is good', and NEVER means the lessons were genuinely APPLIED (P0)."
 role: griller
 kind: pharn-owned
 trust: trusted
@@ -96,8 +96,8 @@ verdict; you do not re-decide it):
 node pharn/floor/check-plan-lessons.mjs .dev/features/<name>/PLAN.md .dev/memory-bank/lessons-learned.md
 ```
 
-- **exit 0 (GREEN)** → the declaration is present, well-formed, and every cited id resolves → **proceed**
-  to Step 2.
+- **exit 0 (GREEN)** → the declaration is present, well-formed, every cited id resolves, and every cited
+  id is referenced in the plan body (sub-check (D)) → **proceed** to Step 2.
 - **exit non-zero (RED)** → **STOP.** Write the RED into `.dev/features/<name>/GRILL.md` (header +
   verbatim checker output), present it, and hand to the human. Do **not** interrogate further, do **not**
   fix the plan's declaration yourself, and never relax or skip the check. The remedy is a re-plan: the

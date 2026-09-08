@@ -1,5 +1,5 @@
 ---
-description: "Interrogate an approved features/<name>/PLAN.md AND deterministically re-verify TWO things — the spec→plan hash chain and the plan's applied_lessons declaration — the third product-pipeline stage (spec → plan → grill → build → regress → verify → ship). It has TWO natures. FLOOR (deterministic, TWO stops): (1) pharn/floor/check-plan-spec-agree.mjs — which REUSES check-spec-approved.mjs + check-spec.mjs --hash — makes /pharn-grill the FIRST downstream consumer that RE-VERIFIES /pharn-spec's pin after /pharn-plan: the PLAN's carried spec_content_hash MUST equal the current Approved, un-drifted SPEC's body hash, else the plan was made against stale intent → a deterministic RED (re-plan / re-approve); (2) pharn/floor/check-plan-lessons.mjs makes it the FIRST stage that did NOT author applied_lessons to re-verify it — the field must still be present, well-formed (`none` | `[L<n>…]`), and every cited id must still resolve in the user's memory-bank canon, else the declaration is stale → a deterministic RED. A project with NO memory-bank is unblocked by construction: `none` short-circuits before the file is read. ADVISORY (inherited from /pharn-dev-grill): interrogate the PLAN — gaps, unstated assumptions, missing guarantee-audit reductions, untested axes — and emit a grill-log (features/<name>/GRILL.md) of finding-shape findings. The interrogation NEVER blocks; those two checks are the ONLY deterministic stops. '/pharn-grill produced a GRILL.md' guarantees the chain held and the declaration was well-formed — it NEVER means 'the plan is good', and NEVER means the lessons were genuinely APPLIED (P0)."
+description: "Interrogate an approved features/<name>/PLAN.md AND deterministically re-verify TWO things — the spec→plan hash chain and the plan's applied_lessons declaration — the third product-pipeline stage (spec → plan → grill → build → regress → verify → ship). It has TWO natures. FLOOR (deterministic, TWO stops): (1) pharn/floor/check-plan-spec-agree.mjs — which REUSES check-spec-approved.mjs + check-spec.mjs --hash — makes /pharn-grill the FIRST downstream consumer that RE-VERIFIES /pharn-spec's pin after /pharn-plan: the PLAN's carried spec_content_hash MUST equal the current Approved, un-drifted SPEC's body hash, else the plan was made against stale intent → a deterministic RED (re-plan / re-approve); (2) pharn/floor/check-plan-lessons.mjs makes it the FIRST stage that did NOT author applied_lessons to re-verify it — the field must still be present, well-formed (`none` | `[L<n>…]`), and every cited id must still resolve in the user's memory-bank canon, and every cited id must be referenced in the plan body (sub-check D — a citation costs a line, never proof it was read), else the declaration is stale → a deterministic RED. A project with NO memory-bank is unblocked by construction: `none` short-circuits before the file is read. ADVISORY (inherited from /pharn-dev-grill): interrogate the PLAN — gaps, unstated assumptions, missing guarantee-audit reductions, untested axes — and emit a grill-log (features/<name>/GRILL.md) of finding-shape findings. The interrogation NEVER blocks; those two checks are the ONLY deterministic stops. '/pharn-grill produced a GRILL.md' guarantees the chain held and the declaration was well-formed — it NEVER means 'the plan is good', and NEVER means the lessons were genuinely APPLIED (P0)."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -80,8 +80,9 @@ Load the trusted prefix and obey it for the whole run:
      **first enforcement** of `/pharn-spec`'s pin downstream of `/pharn-plan`; the pin is **not decorative**.
   2. **The lessons declaration.** Run `pharn/floor/check-plan-lessons.mjs` (reused unchanged — this stage
      adds **no** new primitive). It passes only when `applied_lessons` is present, matches the grammar
-     `none` | `[L<n>…]`, and every cited id resolves to a `## L<n>` heading in the user's canon
-     (enum/regex + membership, primitive #3). This is the **first check by a stage that did not author
+     `none` | `[L<n>…]`, every cited id resolves to a `## L<n>` heading in the user's canon, and every
+     cited id is referenced in the plan BODY — sub-check (D), which makes a citation cost a line
+     (enum/regex + membership + substring, primitive #3). This is the **first check by a stage that did not author
      the field** — before it, the declaration was self-attested by `/pharn-plan`.
 
   Both are refuse-or-proceed. Neither rests on your judgment, and neither says anything about the plan's
@@ -161,8 +162,8 @@ P5 — the checker **owns** this verdict; you do not re-decide it):
 node pharn/floor/check-plan-lessons.mjs features/<name>/PLAN.md memory-bank/lessons-learned.md
 ```
 
-- **exit 0 (GREEN)** → the declaration is present, well-formed, and every cited id resolves → proceed to
-  Step 3 (the interrogation).
+- **exit 0 (GREEN)** → the declaration is present, well-formed, every cited id resolves, and every cited
+  id is referenced in the plan body → proceed to Step 3 (the interrogation).
 - **exit non-zero (RED)** → **do NOT interrogate**, but **DO write the grill-log recording the RED**
   (Step 4 — the audit trail is never silent), then **HALT**. The remedy is a re-plan via `/pharn-plan`
   with a corrected `applied_lessons`. Never relax or skip the check, and never edit the declaration
@@ -325,9 +326,11 @@ does **not** chain to `/pharn-build`. **End your turn.** The human reads the gri
 - **"A broken / stale chain stops the stage"** → **FLOOR** (the checker's exit code — a membership/equality
   verdict). **"`/pharn-grill` invokes the gate and obeys it"** → **ADVISORY** command orchestration (two
   clocks; the guaranteed decision rests on the checker, not this prose).
-- **"The PLAN's `applied_lessons` is present, well-formed, and every cited id resolves"** → **FLOOR**:
-  enum/regex over the field's value **+** `## L<n>` heading membership (`check-plan-lessons.mjs`,
-  primitive #3), reused unchanged — this stage adds no new primitive. **"A stale declaration stops the
+- **"The PLAN's `applied_lessons` is present, well-formed, every cited id resolves, and every cited id
+  is referenced in the plan body"** → **FLOOR**: enum/regex over the field's value **+** `## L<n>` heading
+  membership **+** a body substring test (`check-plan-lessons.mjs`, primitive #3), reused unchanged — this
+  stage adds no new primitive. **The body half is NOT proof of reading** (a line reading `L3: considered.`
+  passes); it raises a citation's price, nothing more. **"A stale declaration stops the
   stage"** → **FLOOR** (its exit code); **"`/pharn-grill` invokes it"** → **ADVISORY** orchestration.
 - **"The declaration is no longer self-attested"** → **FLOOR, and this is the narrow claim worth
   stating precisely:** the field is now checked by a stage that did not write it. That is a change in

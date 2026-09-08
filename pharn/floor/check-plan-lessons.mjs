@@ -17,13 +17,31 @@
 // NON-LLM. Node stdlib only (fs). No network, no eval, no deps, no child processes.
 //
 // ── Honest scope (P0) — the split this file must never blur ───────────────────────────────────────────
-// FLOOR (what the exit code guarantees): the field is PRESENT, WELL-FORMED, and every cited id RESOLVES
-//   to a real lesson heading. All three are enum/regex/membership tests.
+// FLOOR (what the exit code guarantees): the field is PRESENT, WELL-FORMED, every cited id RESOLVES
+//   to a real lesson heading, and every cited id is REFERENCED in the plan BODY. All four are
+//   enum/regex/membership tests.
 // ADVISORY (what it can NEVER check): whether the lessons were GENUINELY applied, and whether a `none`
 //   is JUSTIFIED. A plan may cite [L1] having ignored L1 completely and this checker will pass it — that
 //   is grill/review territory, never this file's. "passed check-plan-lessons" means ONLY "the plan
 //   declared its lesson application in a well-formed way", NEVER "the plan applied its lessons" — that
 //   conflation is the P0 disease this repo exists to prevent.
+//
+// ── Sub-check (D), and its bound stated in the same breath (P0) ───────────────────────────────────────
+// (D) requires each cited `L<n>` to appear in the plan BODY, not only in the structured header. It makes
+// a citation COST something: before it, `applied_lessons: [L1, L2, L3]` could be pasted into a header
+// whose body never mentions a lesson, and the plan passed. It is emphatically NOT proof the lesson was
+// read — a body line reading `L3: considered.` satisfies it, and that is not a defect to be patched
+// later but the honest ceiling of a substring test. It raises the floor's PRICE, it does not measure
+// comprehension. Anything stronger is an eval, not a floor primitive.
+//
+// HONEST TRIGGER (P7), because this file's own header sets the standard: (D) was NOT added in response
+// to an observed failure. Measured over the 150 committed PLAN.md files in this repo at the time it was
+// written, 52 declared at least one cited id and ZERO omitted a cited id from the body — the convention
+// held on discipline alone in 52 consecutive opportunities, so lessons-learned L20's "the second
+// occurrence is the trigger" bar was NOT met (the occurrence count was zero). It was added at the
+// explicit, repeated direction of the human maintainer, which is a legitimate authority under P5 (the
+// terminal fallback of any chain is ASK THE HUMAN, and the human answered) — but it is not a dogfood or
+// eval failure, and this comment says so rather than manufacturing a trigger after the fact.
 // Two clocks: this checker's VERDICT is floor; a plan command's ACT of invoking it is ADVISORY
 //   orchestration (exactly as /pharn-plan reads check-spec-approved).
 //
@@ -44,7 +62,8 @@
 // Usage:
 //   node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 //       exit 0 (GREEN) iff `applied_lessons` is present and well-formed AND (it is `none`, or every
-//       cited `L<n>` has a `## L<n> ` heading in the lessons file); exit 1 (RED) otherwise.
+//       cited `L<n>` both has a `## L<n> ` heading in the lessons file AND is referenced in the plan
+//       body); exit 1 (RED) otherwise.
 //
 // Exit: 0 only when the declaration holds; 1 on every refusal (fail-closed).
 
@@ -77,13 +96,17 @@ function clean(v) {
     .trim();
 }
 
-// (1) The product PLAN shape: the field as a frontmatter key.
+// Both parsers return `{ raw, body }` — the declared VALUE plus the plan's BODY REGION, the two things
+// the gate needs. `body` is deterministically delimited (never "the whole file"): the header region that
+// carries the declaration is EXCLUDED, so the declaration line can never satisfy its own sub-check (D).
+//
+// (1) The product PLAN shape: the field as a frontmatter key. Body = everything after the frontmatter.
 function fromFrontmatter(text) {
   const m = text.match(FM_RE);
   if (!m) return undefined;
   for (const line of m[1].split(/\r?\n/)) {
     const kv = line.match(/^([A-Za-z_][\w-]*):[ \t]*(.*)$/);
-    if (kv && kv[1] === FIELD) return clean(kv[2]);
+    if (kv && kv[1] === FIELD) return { raw: clean(kv[2]), body: text.slice(m[0].length) };
   }
   return undefined;
 }
@@ -91,21 +114,32 @@ function fromFrontmatter(text) {
 // (2) The dev PLAN shape: the field as a `- key: value` bullet in the leading header block. The region
 // ENDS at the first `##`+ heading, and fenced blocks within it are skipped — so only a real declaration
 // in the structured header registers (L6).
+// Body = from that first `##` heading onward, so the leading bullet block is excluded exactly as the
+// frontmatter is above. The heading index is captured in the SAME pass that tracks fences — a `##`
+// inside a fenced block ends nothing, so it can neither terminate the header nor start the body.
 function fromBulletHeader(text) {
   const m = text.match(FM_RE);
-  const body = m ? text.slice(m[0].length) : text;
+  const after = m ? text.slice(m[0].length) : text;
+  const lines = after.split(/\r?\n/);
   let inFence = false;
-  for (const line of body.split(/\r?\n/)) {
+  let raw;
+  let bodyStart = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (/^\s*(```|~~~)/.test(line)) {
       inFence = !inFence;
       continue;
     }
     if (inFence) continue;
-    if (/^#{2,}\s/.test(line)) break; // the structured header region ends at the first `##` heading
+    if (/^#{2,}\s/.test(line)) {
+      bodyStart = i; // the structured header region ends at the first `##` heading
+      break;
+    }
     const kv = line.match(/^-[ \t]+([A-Za-z_][\w-]*):[ \t]*(.*)$/);
-    if (kv && kv[1] === FIELD) return clean(kv[2]);
+    if (kv && kv[1] === FIELD && raw === undefined) raw = clean(kv[2]);
   }
-  return undefined;
+  if (raw === undefined) return undefined;
+  return { raw, body: bodyStart === -1 ? "" : lines.slice(bodyStart).join("\n") };
 }
 
 // Collect the lesson ids that actually EXIST, as a membership set (P5 — a set test, not a substring scan).
@@ -128,7 +162,9 @@ function gate(planPath, lessonsPath) {
 
   // Frontmatter first, then the leading bullet block. Both are structured header regions, so this needs
   // no fragile "does this file have frontmatter" branch and handles BOTH plan shapes uniformly.
-  const raw = fromFrontmatter(planText) ?? fromBulletHeader(planText);
+  const parsed = fromFrontmatter(planText) ?? fromBulletHeader(planText);
+  const raw = parsed?.raw;
+  const planBody = parsed?.body ?? "";
 
   // (A) PRESENCE — the field is mandatory. The VALUE `none` is the escape; OMISSION is not.
   if (raw === undefined) {
@@ -183,10 +219,31 @@ function gate(planPath, lessonsPath) {
     );
   }
 
+  // (D) BODY REFERENCE — a citation must COST a line. Every cited id must also appear in the plan BODY,
+  // so a header list cannot be pasted over a body that never mentions a lesson.
+  //
+  // `\b` anchors both ends, which is load-bearing on a corpus that has passed L9: without the trailing
+  // boundary `L3` would be satisfied by the text `L33`, silently GREENing a citation the plan never
+  // discusses. Interpolating `id` into a RegExp is safe by CONSTRUCTION, not by trust (P2): every member
+  // of `ids` was produced by `raw.match(/L\d+/g)` AFTER `raw` passed LIST_RE, so an id is always
+  // `L` + digits — there is no metacharacter to escape and no path by which plan text reaches this
+  // pattern unvalidated.
+  const unreferenced = ids.filter((id) => !new RegExp(`\\b${id}\\b`).test(planBody));
+  if (unreferenced.length > 0) {
+    return red(
+      `PLAN's \`${FIELD}\` cites ${unreferenced.join(", ")} but the plan BODY never mentions ` +
+        `${unreferenced.length > 1 ? "them" : "it"} (${planPath}) — a cited lesson must cost a body line ` +
+        `saying HOW it was applied. Add that line for each id above, or drop the id from the ` +
+        `declaration. NOTE: the header region that carries the declaration is deliberately not the body, ` +
+        `so the declaration cannot satisfy itself.`
+    );
+  }
+
   console.log(
     `GREEN — ${FIELD}: ${ids.join(", ")} (${planPath}); all ${ids.length} cited id(s) resolve in ` +
-      `${lessonsPath}. NOTE (P0): that these lessons were GENUINELY applied is advisory — this checker ` +
-      `verifies the DECLARATION, never the application.`
+      `${lessonsPath} and are referenced in the plan body. NOTE (P0): that these lessons were GENUINELY ` +
+      `applied is advisory — this checker verifies the DECLARATION, never the application; a body line ` +
+      `reading "${ids[0]}: considered." satisfies the reference check.`
   );
   return 0;
 }

@@ -1,5 +1,5 @@
 ---
-description: "Plan ONE increment of PHARN. Discovery-first, grounded in live state, pins the architecture content-hash, halts and asks before any build. Produces PLAN.md. FLOOR (deterministic, pharn/floor/check-plan-lessons.mjs): the PLAN must DECLARE `applied_lessons` — present, well-formed (`none` | `[L<n>…]`), every cited id resolving to a real lesson heading — so a promoted lesson can never be silently ignored. ADVISORY: whether those lessons were GENUINELY applied, and whether a `none` is justified, is model judgment the checker cannot see — grill/review territory. 'The plan cited L1' NEVER means 'the plan applied L1' (P0)."
+description: "Plan ONE increment of PHARN. Discovery-first, grounded in live state, pins the architecture content-hash, halts and asks before any build. Produces PLAN.md. FLOOR (deterministic, pharn/floor/check-plan-lessons.mjs): the PLAN must DECLARE `applied_lessons` — present, well-formed (`none` | `[L<n>…]`), every cited id resolving to a real lesson heading, and every cited id REFERENCED in the plan body (sub-check D) so a citation costs a line — so a promoted lesson can never be silently ignored. (D) is NOT proof of reading: a body line reading 'L3: considered.' satisfies it. ADVISORY: whether those lessons were GENUINELY applied, and whether a `none` is justified, is model judgment the checker cannot see — grill/review territory. 'The plan cited L1' NEVER means 'the plan applied L1' (P0)."
 role: skill
 kind: pharn-owned
 trust: trusted
@@ -227,14 +227,21 @@ node pharn/floor/check-plan-lessons.mjs .dev/features/<name>/PLAN.md .dev/memory
 
 - **exit 0 (GREEN)** → the declaration is present and well-formed → proceed to the halt below.
 - **exit non-zero (RED)** → **fix the PLAN and re-run.** The message names the refusal: an absent field
-  (add `applied_lessons`), a malformed value (`none` or `[L1, L2]`), `[]` (use `none`), or a cited id
-  with no matching lesson heading (cite only promoted lessons). Never relax or skip the check.
+  (add `applied_lessons`), a malformed value (`none` or `[L1, L2]`), `[]` (use `none`), a cited id
+  with no matching lesson heading (cite only promoted lessons), or — sub-check (D) — a cited id the plan
+  **body** never mentions. That last one is fixed by writing the line this command already asks for
+  above: **one body line per cited id saying how it was applied**. The leading bullet block that carries
+  the declaration is deliberately **not** the body, so the declaration cannot satisfy itself, and a plan
+  with no `##` heading at all has an empty body. Cite only what you will discuss. Never relax or skip the
+  check.
 
-> **Two clocks, honestly (P0).** The checker's **verdict** is FLOOR (enum/regex + heading membership).
-> This command's **act** of invoking it is **ADVISORY** orchestration — nothing on the floor forces this
-> prose to run it. And the checker verifies the **declaration**, never the **application**: it cannot
-> tell whether you actually applied L1, only that you said you did in a well-formed way. Do not write
-> "the plan applies its lessons" — write that it **declares** them.
+> **Two clocks, honestly (P0).** The checker's **verdict** is FLOOR (enum/regex + heading membership +
+> body reference). This command's **act** of invoking it is **ADVISORY** orchestration — nothing on the
+> floor forces this prose to run it. And the checker verifies the **declaration**, never the
+> **application**: it cannot tell whether you actually applied L1, only that you said you did in a
+> well-formed way and spent a line on it. A body line reading `L1: considered.` passes — sub-check (D)
+> raises the **price** of a citation, it does not measure comprehension. Do not write "the plan applies
+> its lessons" — write that it **declares** them.
 
 Then, do **not** build. Resolve any remaining open questions and confirm approval
 through an **interactive form**, then end your turn:
