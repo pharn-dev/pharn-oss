@@ -152,9 +152,19 @@ node pharn/floor/validate.mjs [target-dir]
 node pharn/floor/check-structural.mjs <expected.json> <actual.json> [repoDir]
 
 # Check that a PLAN DECLARES which promoted lessons it applied (the `applied_lessons` field).
-# Floor: the field is present + well-formed (`none` | `[L<n>…]`) + every cited id resolves to a
-# `## L<n> ` heading. ADVISORY (never checked): whether the lessons were genuinely applied.
-# Both /pharn-plan and /pharn-dev-plan self-run it before their halt. Exits non-zero on RED.
+# Floor, FOUR sub-checks: the field is present + well-formed (`none` | `[L<n>…]`) + every cited id
+# resolves to a `## L<n> ` heading + (D, added 3.0.0) every cited id is REFERENCED in the plan BODY, so a
+# citation costs a line and a header list cannot be pasted over a body that never mentions a lesson. The
+# header region carrying the declaration is deliberately NOT the body, so the declaration cannot satisfy
+# itself; `none` is exempt from (D) (no id to reference); the id match is `\b`-anchored, so `L33` in the
+# body does NOT satisfy a citation of `L3`. ADVISORY (never checked): whether the lessons were genuinely
+# applied. (D) is NOT proof of reading — a body line reading `L3: considered.` satisfies it; it raises a
+# citation's PRICE, it does not measure comprehension. HONEST TRIGGER (P7): (D) answered no observed
+# failure — measured over the 150 committed PLAN.md files, 52 cited >=1 id and ZERO omitted one from the
+# body, so L20's "second occurrence" bar was NOT met; it was added at the maintainer's explicit direction
+# (P5 — ask the human), and this comment says so rather than inventing a trigger.
+# Both /pharn-plan and /pharn-dev-plan self-run it before their halt; both grill stages RE-verify it
+# (2.8.0), and both ship stages read its exit code. Exits non-zero on RED.
 node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 
 # Check the SHAPE of a loop-record — the features/<name>/LOOP.md that /pharn-loop writes at every stop.
@@ -448,8 +458,17 @@ framework-specific`), via the first-match-wins procedure in `pharn/ARCHITECTURE.
   product `features/<name>/PLAN.md`, the leading `- key: value` bullet block for a dev
   `.dev/features/<name>/PLAN.md`. The value is `none` **or** a list of `L<n>` ids, each cited id getting
   one body line saying **how** it was applied. `pharn/floor/check-plan-lessons.mjs` enforces
-  presence + shape + id-existence; **omission is not the escape — the value `none` is.** The floor sees
-  only the declaration: whether the lessons were genuinely applied is advisory (grill/review).
+  presence + shape + id-existence + **body-reference**; **omission is not the escape — the value `none`
+  is.** The floor sees only the declaration: whether the lessons were genuinely applied is advisory
+  (grill/review).
+  - **The one-body-line-per-cited-id rule stopped being convention in 3.0.0 (sub-check D).** It was
+    documented from 2.0.0 and enforced by nothing; now a cited id absent from the body is a RED. **The
+    bound is the point and must not be overstated:** it proves the id's CHARACTERS appear below the
+    header, never that the lesson was read — `L3: considered.` passes. It makes a citation cost a line;
+    that is all. **Its P7 trigger was the maintainer's explicit direction, NOT an observed failure** —
+    measured across all 150 committed PLAN.md files, 52 cited at least one id and **zero** omitted one
+    from the body, so L20's "the second occurrence is the trigger" bar was **not** met. Recorded this way
+    because a manufactured trigger would be exactly the disease P0 names.
   - **The field is no longer SELF-ATTESTED — a stage that did not author it now re-verifies it
     (`grill-lessons-reverify`, shipped 2.8.0).** Both grill stages run the SAME checker against their own
     canon (`/pharn-dev-grill` → `.dev/memory-bank/lessons-learned.md`, `/pharn-grill` →

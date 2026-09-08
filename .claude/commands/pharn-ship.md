@@ -156,7 +156,7 @@ human (terminal fallback = hand to the human, never a guess).
      un-drifted spec → proceed. Non-zero → **STOP**, present the RED chain (`/pharn-grill` wrote a RED
      `GRILL.md`), hand to the human (re-plan via `/pharn-plan` / re-approve via `/pharn-spec`).
    - **lessons (`check-plan-lessons.mjs`)** — `0` → the PLAN's `applied_lessons` is present, well-formed,
-     and every cited id resolves → proceed. Non-zero → **STOP**, present the RED, hand to the human
+     every cited id resolves, and every cited id is referenced in the plan body → proceed. Non-zero → **STOP**, present the RED, hand to the human
      (re-plan via `/pharn-plan` with a corrected declaration). A project with **no** `memory-bank/` is
      unblocked by construction — `none` short-circuits before the file is read — so this is not a new
      barrier for a fresh install.

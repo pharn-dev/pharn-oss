@@ -27,14 +27,24 @@ const CHECKER = join(here, "check-plan-lessons.mjs");
 // A realistic lessons file: `## L<n> — <title>` headings, the live canon format.
 const LESSONS = ["L1", "L2", "L3"].map((id) => `## ${id} — a promoted lesson\n\n**Lesson.** filler.\n`).join("\n");
 
+// `body` is appended at the END of both shapes, which is unambiguously inside the BODY region for each
+// (after the first `##` for the dev shape, after the frontmatter for the product shape). It exists
+// because sub-check (D) requires every cited id to appear in the body — `extra` cannot serve, since for
+// the dev shape it lands in the HEADER region, which (D) deliberately excludes.
+//
+// It is a SEPARATE, EXPLICIT parameter rather than something the helpers synthesize from the field line:
+// auto-generating the body reference would make every citing fixture satisfy (D) by construction and the
+// sub-check would be untestable through these helpers (lessons-learned L4).
+const REF = (...ids) => `\n## Applied lessons\n\n${ids.map((id) => `- **${id}** — how it was applied.`).join("\n")}\n`;
+
 // The dev PLAN shape: NO frontmatter; a leading `- key: value` bullet block ended by the first `##`.
-function devPlan(fieldLine, extra = "") {
-  return `# PLAN — a thing\n\n- spec_content_hash: ${"a".repeat(64)} # fix #4\n${fieldLine ? fieldLine + "\n" : ""}- increment: one sentence\n${extra}\n## Files\n\n- \`x.mjs\` — a file\n`;
+function devPlan(fieldLine, extra = "", body = "") {
+  return `# PLAN — a thing\n\n- spec_content_hash: ${"a".repeat(64)} # fix #4\n${fieldLine ? fieldLine + "\n" : ""}- increment: one sentence\n${extra}\n## Files\n\n- \`x.mjs\` — a file\n${body}`;
 }
 
 // The product PLAN shape: a `---`-fenced YAML frontmatter carrying the field.
-function productPlan(fieldLine, extra = "") {
-  return `---\nspec_id: my-feature\nspec_content_hash: ${"b".repeat(64)}\n${fieldLine ? fieldLine + "\n" : ""}---\n\n## Approach\n\n${extra}\nprose.\n`;
+function productPlan(fieldLine, extra = "", body = "") {
+  return `---\nspec_id: my-feature\nspec_content_hash: ${"b".repeat(64)}\n${fieldLine ? fieldLine + "\n" : ""}---\n\n## Approach\n\n${extra}\nprose.\n${body}`;
 }
 
 // Write the inputs to a fresh tmp dir and run the checker. `lessons === null` omits the file entirely,
@@ -104,13 +114,13 @@ test("a free-text value → RED as malformed, quoting what it got", () => {
 });
 
 test("✦ inner whitespace is tolerated: `[ L1 , L2 ]` → GREEN", () => {
-  const r = run(devPlan("- applied_lessons: [ L1 , L2 ]"));
+  const r = run(devPlan("- applied_lessons: [ L1 , L2 ]", "", REF("L1", "L2")));
   assert.equal(r.status, 0);
   assert.match(r.out, /^GREEN — /m);
 });
 
 test("✦ duplicates are de-duplicated, not an error: `[L1, L1]` → GREEN citing L1 once", () => {
-  const r = run(devPlan("- applied_lessons: [L1, L1]"));
+  const r = run(devPlan("- applied_lessons: [L1, L1]", "", REF("L1")));
   assert.equal(r.status, 0);
   assert.match(r.out, /applied_lessons: L1 \(/);
 });
@@ -144,6 +154,96 @@ test("`## L1x` does not satisfy a citation of L1 (the heading's trailing space i
   assert.match(r.out, /cites L1/);
 });
 
+// ── (D) BODY REFERENCE: a cited id must also appear in the plan BODY ─────────────────────────────────
+//
+// Every ✧ row below carries its own DISCRIMINATION control — the same fixture with the body line added
+// must be GREEN. Without that pairing the RED assertions would pass just as well against a checker that
+// REDs unconditionally, and the set would certify nothing (lessons-learned L34).
+
+test("✧ acceptance: a cited id ABSENT from the body → RED, NAMING that id", () => {
+  const r = run(devPlan("- applied_lessons: [L1]"));
+  assert.equal(r.status, 1);
+  assert.match(r.out, /cites L1/);
+  assert.match(r.out, /BODY never mentions/);
+  assert.match(r.out, /must cost a body line/);
+});
+
+test("✧ DISCRIMINATION: the same fixture WITH the body line is GREEN (the RED above came from (D))", () => {
+  const r = run(devPlan("- applied_lessons: [L1]", "", REF("L1")));
+  assert.equal(r.status, 0);
+  assert.match(r.out, /referenced in the plan body/);
+});
+
+test("✧ a partially-referenced list REDs and names ONLY the unreferenced id", () => {
+  const r = run(devPlan("- applied_lessons: [L1, L2]", "", REF("L1")));
+  assert.equal(r.status, 1);
+  assert.match(r.out, /cites L2 /);
+  assert.doesNotMatch(r.out, /cites L1/);
+});
+
+test("✧ the DECLARATION cannot satisfy itself — the dev header region is not the body", () => {
+  // The id appears twice in the HEADER (the field line, plus an `- increment:`-adjacent bullet) and
+  // never below the first `##`. If the header counted, this would be GREEN.
+  const r = run(devPlan("- applied_lessons: [L2]", "- note: this increment applies L2 thoroughly"));
+  assert.equal(r.status, 1);
+  assert.match(r.out, /cites L2/);
+  assert.match(r.out, /header region .* is deliberately not the body/);
+});
+
+test("✧ the DECLARATION cannot satisfy itself — the product frontmatter is not the body", () => {
+  const r = run(productPlan("applied_lessons: [L3]"));
+  assert.equal(r.status, 1);
+  assert.match(r.out, /cites L3/);
+});
+
+test("✧ DISCRIMINATION: the product shape IS GREEN once the body references the id", () => {
+  const r = run(productPlan("applied_lessons: [L3]", "", REF("L3")));
+  assert.equal(r.status, 0);
+  assert.match(r.out, /referenced in the plan body/);
+});
+
+test("✧ word-boundary: a body mentioning L33 does NOT satisfy a citation of L3", () => {
+  const lessons = LESSONS + "\n## L33 — a much later lesson\n\n**Lesson.** filler.\n";
+  const r = run(devPlan("- applied_lessons: [L3]", "", "\n## Applied\n\nOnly L33 is discussed here.\n"), lessons);
+  assert.equal(r.status, 1);
+  assert.match(r.out, /cites L3 /);
+});
+
+test("✧ DISCRIMINATION: the same body ALSO mentioning L3 is GREEN (the boundary is the only difference)", () => {
+  const lessons = LESSONS + "\n## L33 — a much later lesson\n\n**Lesson.** filler.\n";
+  const r = run(devPlan("- applied_lessons: [L3]", "", "\n## Applied\n\nL33 and L3 are both discussed.\n"), lessons);
+  assert.equal(r.status, 0);
+});
+
+test("✧ a dev PLAN with NO `##` heading at all has an EMPTY body — a citation there REDs", () => {
+  const plan = `# PLAN — a thing\n\n- applied_lessons: [L1]\n- increment: one sentence\n`;
+  const r = run(plan);
+  assert.equal(r.status, 1);
+  assert.match(r.out, /cites L1/);
+  assert.match(r.out, /BODY never mentions/);
+});
+
+test("✧ `none` is exempt from (D) — there is no id to reference, and no body is required", () => {
+  const r = run(devPlan("- applied_lessons: none"));
+  assert.equal(r.status, 0);
+  assert.match(r.out, /^GREEN — /m);
+  assert.doesNotMatch(r.out, /BODY never mentions/);
+});
+
+test("✧ (D) runs AFTER existence — a nonexistent id REDs on resolution, not on body reference", () => {
+  const r = run(devPlan("- applied_lessons: [L99]"));
+  assert.equal(r.status, 1);
+  assert.match(r.out, /no matching/);
+  assert.doesNotMatch(r.out, /BODY never mentions/);
+});
+
+test("✧ the GREEN line states (D)'s bound — that a token match is not proof of reading", () => {
+  const r = run(devPlan("- applied_lessons: [L1]", "", REF("L1")));
+  assert.equal(r.status, 0);
+  assert.match(r.out, /considered\./);
+  assert.match(r.out, /never the application/);
+});
+
 // ── Regression: the entry TAG LINE sits BELOW the heading and must not disturb id resolution ─────────
 //
 // `/pharn-dev-memory-promote` renders a `type: … · concepts: […]` tag line as the first non-empty line
@@ -161,7 +261,7 @@ const TAGGED_LESSONS = ["L1", "L2", "L3"]
   .join("\n");
 
 test("a TAGGED lessons canon still resolves cited ids → GREEN (the tag line is below the heading)", () => {
-  const r = run(devPlan("- applied_lessons: [L1, L3]"), TAGGED_LESSONS);
+  const r = run(devPlan("- applied_lessons: [L1, L3]", "", REF("L1", "L3")), TAGGED_LESSONS);
   assert.equal(r.status, 0);
   assert.match(r.out, /all 2 cited id\(s\) resolve/);
 });
@@ -184,19 +284,19 @@ test("a `type:`/`concepts:` tag line is never itself mistaken for a lesson headi
 // ── Both plan shapes, and the header's lexical quirks ────────────────────────────────────────────────
 
 test("acceptance: this increment's own shape — a dev PLAN citing [L1, L6]-style ids → GREEN", () => {
-  const r = run(devPlan("- applied_lessons: [L1, L2]"));
+  const r = run(devPlan("- applied_lessons: [L1, L2]", "", REF("L1", "L2")));
   assert.equal(r.status, 0);
   assert.match(r.out, /all 2 cited id\(s\) resolve/);
 });
 
 test("the product PLAN shape (frontmatter) is read too → GREEN", () => {
-  const r = run(productPlan("applied_lessons: [L3]"));
+  const r = run(productPlan("applied_lessons: [L3]", "", REF("L3")));
   assert.equal(r.status, 0);
   assert.match(r.out, /^GREEN — /m);
 });
 
 test("a trailing ` # comment` on the value is stripped, not parsed as part of it", () => {
-  const r = run(devPlan("- applied_lessons: [L1] # the field this increment introduces"));
+  const r = run(devPlan("- applied_lessons: [L1] # the field this increment introduces", "", REF("L1")));
   assert.equal(r.status, 0);
   assert.match(r.out, /^GREEN — /m);
 });

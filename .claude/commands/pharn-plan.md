@@ -1,5 +1,5 @@
 ---
-description: "Turn an Approved features/<name>/SPEC.md into an implementation features/<name>/PLAN.md — the second product-pipeline stage (spec → plan → grill → build → regress → verify → ship). It enforces a deterministic APPROVED-INPUT GATE before producing anything: the SPEC must be state == Approved AND un-drifted (spec_content_hash == sha256(body)), so a plan can only come from approved, unchanged intent. A Draft or a drifted SPEC → HALT, never a plan. On a passing gate it emits an advisory PLAN.md that carries spec_id + spec_content_hash forward (fix #4), so the next stage can re-verify spec↔plan agreement. FLOOR (deterministic, pharn/floor/check-spec-approved.mjs — which REUSES pharn/floor/check-spec.mjs): the input gate (state==Approved enum + the content-hash pin). /pharn-plan is the first downstream consumer that ENFORCES /pharn-spec's pin — the pin is not decorative. ALSO FLOOR (pharn/floor/check-plan-lessons.mjs): the emitted PLAN must DECLARE `applied_lessons` — present, well-formed (`none` | `[L<n>…]`), every cited id resolving to a real lesson heading — so a promoted lesson can never be silently ignored. The lessons sweep is TWO-STEP — SELECT candidates from the derived `.pharn/lessons-index.md` address book, then READ each candidate's full `## L<n>` entry from canon — and branches on `pharn/floor/check-lessons-index.mjs --verdict`'s closed token set, whose stale/invalid tokens degrade to 'read canon in full and say so', NEVER to a block. That index check is FLOOR but NARROWED: it compares a gitignored, disposable CACHE against a recompute, so it is a staleness check, not a durable committed pin, and 'the index was consulted' NEVER means 'the relevant lessons were read'. ADVISORY: the plan's CONTENT (the implementation approach) is model judgment — downstream grill/build/verify check whether it is correct; and whether the cited lessons were GENUINELY applied, or a `none` is justified, is judgment no checker can see. '/pharn-plan produced it' NEVER means 'the plan is sound', and 'the plan cited L1' NEVER means 'the plan applied L1' (P0)."
+description: "Turn an Approved features/<name>/SPEC.md into an implementation features/<name>/PLAN.md — the second product-pipeline stage (spec → plan → grill → build → regress → verify → ship). It enforces a deterministic APPROVED-INPUT GATE before producing anything: the SPEC must be state == Approved AND un-drifted (spec_content_hash == sha256(body)), so a plan can only come from approved, unchanged intent. A Draft or a drifted SPEC → HALT, never a plan. On a passing gate it emits an advisory PLAN.md that carries spec_id + spec_content_hash forward (fix #4), so the next stage can re-verify spec↔plan agreement. FLOOR (deterministic, pharn/floor/check-spec-approved.mjs — which REUSES pharn/floor/check-spec.mjs): the input gate (state==Approved enum + the content-hash pin). /pharn-plan is the first downstream consumer that ENFORCES /pharn-spec's pin — the pin is not decorative. ALSO FLOOR (pharn/floor/check-plan-lessons.mjs): the emitted PLAN must DECLARE `applied_lessons` — present, well-formed (`none` | `[L<n>…]`), every cited id resolving to a real lesson heading, and every cited id REFERENCED in the plan body (sub-check D, 3.0.0) so a citation costs a line — so a promoted lesson can never be silently ignored. (D) is NOT proof of reading: a body line reading 'L3: considered.' satisfies it. The lessons sweep is TWO-STEP — SELECT candidates from the derived `.pharn/lessons-index.md` address book, then READ each candidate's full `## L<n>` entry from canon — and branches on `pharn/floor/check-lessons-index.mjs --verdict`'s closed token set, whose stale/invalid tokens degrade to 'read canon in full and say so', NEVER to a block. That index check is FLOOR but NARROWED: it compares a gitignored, disposable CACHE against a recompute, so it is a staleness check, not a durable committed pin, and 'the index was consulted' NEVER means 'the relevant lessons were read'. ADVISORY: the plan's CONTENT (the implementation approach) is model judgment — downstream grill/build/verify check whether it is correct; and whether the cited lessons were GENUINELY applied, or a `none` is justified, is judgment no checker can see. '/pharn-plan produced it' NEVER means 'the plan is sound', and 'the plan cited L1' NEVER means 'the plan applied L1' (P0)."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -256,15 +256,19 @@ node pharn/floor/check-plan-lessons.mjs features/<name>/PLAN.md memory-bank/less
 
 - **exit 0 (GREEN)** → the declaration is present and well-formed → end your turn.
 - **exit non-zero (RED)** → **fix the PLAN and re-run.** The message names the refusal: an absent field
-  (add `applied_lessons`), a malformed value (`none` or `[L1, L2]`), `[]` (use `none`), or a cited id
-  with no matching lesson heading. A project with **no** `memory-bank/lessons-learned.md` passes with
-  `applied_lessons: none` — that is the honest state, not a gap. Never relax or skip the check.
+  (add `applied_lessons`), a malformed value (`none` or `[L1, L2]`), `[]` (use `none`), a cited id
+  with no matching lesson heading, or — sub-check (D) — a cited id the plan **body** never mentions. That
+  last one is fixed by writing the line the field always asked for: **one body line per cited id saying
+  how it was applied**; the header that carries the declaration is deliberately not the body, so the
+  declaration cannot satisfy itself. Cite only what you will discuss. A project with **no**
+  `memory-bank/lessons-learned.md` passes with `applied_lessons: none` — that is the honest state, not a
+  gap, and `none` is exempt from (D) because there is no id to reference. Never relax or skip the check.
 
-> **Two clocks, honestly (P0).** The checker's **verdict** is FLOOR (enum/regex + heading membership).
-> This command's **act** of invoking it is **ADVISORY** orchestration — nothing on the floor forces this
-> prose to run it, and today **no downstream stage re-verifies it** (that is the named follow-up
-> `grill-lessons-reverify`), so the field is currently **self-attested by the stage that wrote it**.
-> And the checker verifies the **declaration**, never the **application**.
+> **Two clocks, honestly (P0).** The checker's **verdict** is FLOOR (enum/regex + heading membership +
+> body reference). This command's **act** of invoking it is **ADVISORY** orchestration — nothing on the
+> floor forces this prose to run it. The declaration is **no longer self-attested**: `/pharn-grill` runs
+> the same checker against the same canon as a deterministic RED, so a stage that did **not** author the
+> field re-verifies it. And the checker still verifies the **declaration**, never the **application**.
 
 `/pharn-plan` does **one** thing — it lands **one** plan derived from an approved spec. It does **not**
 chain to `/pharn-grill` or `/pharn-build` (later stages). **End your turn.**
@@ -298,8 +302,14 @@ chain to `/pharn-grill` or `/pharn-build` (later stages). **End your turn.**
 - **"The cited lessons were GENUINELY applied / a `none` is justified"** → **ADVISORY**, and
   structurally uncheckable here: a plan may cite `L1` having ignored L1 entirely and the checker passes
   it. Grill/review territory. Writing "the plan applies its lessons" would be the disease — **struck**;
-  write "the plan **declares** them". **Also honest:** with no downstream re-verification yet, the
-  declaration is **self-attested by the authoring stage** (follow-up `grill-lessons-reverify`).
+  write "the plan **declares** them". **Narrowed, not closed:** `/pharn-grill` re-verifies the
+  declaration, so it is no longer self-attested by its author — but re-verification checks the same
+  three things again, and adds nothing about whether the lessons were applied.
+- **"Every cited lesson is discussed somewhere in the plan"** → **FLOOR**, and this is the narrow claim:
+  sub-check (D) requires each cited `L<n>` to appear in the plan **body**, not merely in the header, so a
+  citation costs a line. **What it is NOT:** proof the lesson was read. A body line reading
+  `L3: considered.` satisfies it. The check raises the **price** of a citation; it does not measure
+  comprehension. Anything stronger is an eval, not a floor primitive.
 - **"It writes only `features/<name>/PLAN.md`"** → **FLOOR: hook (fix #7)** (`set-writes-scope.cjs` +
   `enforce-writes-scope.cjs` pin the one declared path).
 - **"The plan carries `spec_content_hash` forward"** → a **deterministic copy** of a floor-verified

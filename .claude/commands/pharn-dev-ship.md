@@ -91,7 +91,8 @@ present it to the human (terminal fallback = hand to the human, never a guess).
    node pharn/floor/check-plan-lessons.mjs .dev/features/<name>/PLAN.md .dev/memory-bank/lessons-learned.md
    ```
 
-   `0` → the declaration is present, well-formed, and every cited id resolves → **proceed**. Non-zero →
+   `0` → the declaration is present, well-formed, every cited id resolves, and every cited id is
+   referenced in the plan body → **proceed**. Non-zero →
    **STOP**, present the RED (`/pharn-dev-grill` wrote a RED `GRILL.md`), hand to the human — the remedy
    is a re-plan via `/pharn-dev-plan` with a corrected declaration.
 
