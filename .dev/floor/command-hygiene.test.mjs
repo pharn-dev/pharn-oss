@@ -371,11 +371,15 @@ const LESSON_EXTRACT_WIRING = [
     file: "pharn-dev-ship.md",
     wired: true,
     role: "proposes a lesson at GATE 2 and routes an accepted one through the gated promote command",
-    // The PROMOTE COMMAND is the discriminating token: Step 2b must hand off to the dedicated command,
-    // never write canon itself. Dev surface, so the DEV promote command — a product `/pharn-memory-promote`
-    // here would point a dev run at the user's memory-bank/, the same cross-surface error
-    // PLAN_LESSONS_WIRING guards on its own axis.
-    re: /\/pharn-dev-memory-promote/,
+    // The IMPERATIVE INVOCATION is the discriminating token — not the bare command name. The name
+    // appears EIGHT times in this command (in `reads:`, in the frontmatter rationale comment, in the
+    // 2b.4 outcome table, and in five prose citations), so a bare-name matcher would stay GREEN with
+    // the actual hand-off deleted: it would certify by not looking precisely enough, the same defect
+    // as the first `writes:` guard below. Anchoring on `**invoke \`…\`` means only Step 2b's actual
+    // instruction satisfies it. Dev surface, so the DEV promote command — a product
+    // `/pharn-memory-promote` here would point a dev run at the user's `memory-bank/`, the
+    // cross-surface error PLAN_LESSONS_WIRING guards on its own axis.
+    re: /\*\*invoke\s+`\/pharn-dev-memory-promote`/,
   },
   { file: "pharn-ship.md", wired: false, role: "not wired — deferred by explicit human decision", re: null },
   { file: "pharn-loop.md", wired: false, role: "not wired — deferred; needs the Handoff-modification shape", re: null },
@@ -424,9 +428,21 @@ for (const site of LESSON_EXTRACT_WIRING.filter((s) => s.wired)) {
   });
 
   // L4: an authored assertion passes by construction. Pin the DISCRIMINATION directly.
-  test(`✧ the ${site.file} lesson-extract rule DISCRIMINATES — it fails on a body with the invocation removed`, () => {
+  //
+  // The SECOND assertion is the load-bearing one, and it names the failure mode a bare-name matcher
+  // would have missed: after stripping the invocation the command name is STILL present many times
+  // over (`reads:`, the frontmatter comment, the outcome table, five prose citations). A matcher
+  // keyed on the bare name would keep passing on that body — certifying a command that had lost its
+  // hand-off. Asserting the name SURVIVED the mutation is what stops the first assertion from passing
+  // for the uninteresting reason that the mutation erased every trace.
+  test(`✧ the ${site.file} lesson-extract rule DISCRIMINATES — surviving prose mentions do NOT satisfy it`, () => {
     const stripped = commandBody(site.file).replace(new RegExp(site.re.source, "g"), "<<removed>>");
     assert.doesNotMatch(stripped, site.re, `the ${site.file} matcher must not still pass once the invocation is gone`);
+    assert.match(
+      stripped,
+      /pharn-dev-memory-promote/,
+      "the mutant must still MENTION the command — otherwise this proves nothing about a matcher keyed on the bare name"
+    );
   });
 
   // The L7 GUARD, and it is the load-bearing rule in this file for this increment. A stage that only

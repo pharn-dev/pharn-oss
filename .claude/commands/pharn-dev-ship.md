@@ -155,9 +155,18 @@ artifacts are complete, and the outcome lands in the same `SHIP.md` the human re
 > **before the roll-up write**, and `.dev/floor/command-hygiene.test.mjs` pins that ordering by comparing
 > the two headings' line-initial offsets — not by trusting this sentence.
 
-**On a RED-verdict STOP this step does not run.** The chain ended early, `REVIEW.md` does not exist, and a
-lesson drawn from a half-run has no traceable `source`. Record `lesson: not-reached (<stage>)` and stop —
-never silently omit the line.
+**On a RED-verdict STOP this step does not run** — the only path on which it does not. The chain ended
+early, `REVIEW.md` does not exist, and a lesson drawn from a half-run has no traceable `source`, so there
+is nothing for 2b.3 to ask about.
+
+**The `lesson: not-reached (<stage>)` line is still WRITTEN on that path, and the write route is Step 3 —
+not a special case.** Step 3 already covers the RED stop: its roll-up records "where the run ended (GATE 2,
+or which stage's RED-verdict STOPped it)". So a RED-verdict STOP **proceeds to Step 3**, which sets the
+`SHIP.md` scope and writes the partial roll-up, and only then ends the turn. `<stage>` names the stage
+whose verdict came back non-GREEN. Spelling this out because the requirement and its write path used to
+sit in different sections: a required line on a path with no scoped write is either omitted or written
+outside the active scope, and the fix #7 hook would deny the second — so the line would simply vanish,
+which is the silent drop this whole step exists to prevent.
 
 ### 2b.1 — Review the cycle, propose at most ONE candidate
 
@@ -256,7 +265,13 @@ written for whichever member was in front of the author):
 `/pharn-dev-ship` sets **no global scope** and never an over-broad one. Each sub-stage already runs its **own**
 Step 0 writes-scope setter (overwriting `.pharn/writes-scope.json` per stage — the per-stage
 propagation). `/pharn-dev-ship`'s **only** Write-tool output is `SHIP.md`; scope it to itself **immediately
-before writing**, after `/pharn-dev-review`:
+before writing**.
+
+**Step 3 runs on BOTH exit paths, not only the GATE-2 one.** After `/pharn-dev-review` + Step 2b when the
+chain completed, and **also** after a RED-verdict STOP at any stage — the roll-up's job is to record
+_where the run ended_, so the stopped case is the one it most needs to capture. Setting the scope here is
+what makes that write possible at all; a stop that skipped this step would leave its `lesson:` and
+verdict lines with nowhere to go.
 
 ```bash
 node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-dev-ship.md --target .dev/features/<name>/SHIP.md
@@ -370,10 +385,18 @@ whichever stop it reaches** (`STOP_GREEN`, `STOP_CAP` or `INCONCLUSIVE`) — no 
 added. The exclusion from the **iteration body** is deliberate and load-bearing: Step 2b is a human halt,
 and the loop's defining property is that **no human sits between iterations**. Putting a halt in the body
 would either stall the loop or pressure the halt into a default-yes, and a default-yes on a canon write is
-the thing this whole step refuses. On `STOP_CAP` / `INCONCLUSIVE` the chain did not reach a clean end, so
-the outcome is `lesson: not-reached (<stage>)` — the same rule, and the same **single spelling**, the
-gated mode applies to a RED-verdict STOP. The parameter is `<stage>` here too, naming the stage the loop
-stopped at; a second spelling would leave the closed set of 2b.4 not actually closed.
+the thing this whole step refuses.
+
+**All three loop stops record Step 2b's ACTUAL outcome — never `not-reached`.** `not-reached` means
+_Step 2b did not run_, and under `--loop` it always does: every `check-ship.mjs` stop is presented at
+GATE 2, and the iteration body has already run `/pharn-dev-review`, so `REVIEW.md` exists and the
+candidate has a traceable `source` at `STOP_CAP` and `INCONCLUSIVE` just as it does at `STOP_GREEN`.
+Recording `not-reached` at a stop the step reached would say the opposite of what happened. **A capped or
+inconclusive run is often the one most worth a lesson** — something failed to converge, or a verdict
+report came back malformed — so the outcome is whatever 2b.3 produced: `promoted L<n>`, `skipped`,
+`none`, or `error <reason>`. Judging a candidate drawn from a run whose verdicts were `INCONCLUSIVE` is
+model work and the human still gates it; the artifacts' unreliability is context to state in the
+rationale, not a reason to suppress the line.
 
 ## Guarantee audit (P0) — gated adds none; `--loop` adds only the tested stop core
 
