@@ -276,7 +276,7 @@ is now labeled correctly (`LIMITS.md`).
 
 `pharn/floor/validate.mjs` (the `validate` step) enforces, deterministically: capability frontmatter
 present; evals present (P1); **every `enforces` rule_id produced by ≥1 eval** (P1, fix #6);
-`coupling` enum membership; `applies` present and archetype-enum membership; the archetype maps agree (fix #5 — conditional; specified, ships with the guarded surface); finding templates separate
+`coupling` enum membership; `applies` present and archetype-enum membership; the four archetype maps agree (fix #5 — conditional; specified, ships with the guarded surface); finding templates separate
 enum-gated from free-text fields (fix #1); no forbidden sibling reference (P3, best-effort grep);
 no capability cites a floor checker at a stale path.
 
