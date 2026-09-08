@@ -1235,3 +1235,41 @@ choosing a remedy, never after.
   `.dev/floor/check-version-badge.mjs:26-40` and the live `SKILLS_VERSION`/badge agreement re-derived at
   HEAD `a0cfd0d`
 - promoted: 2026-08-23 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L36 — A per-member presence set is not a closed set — a parameterized value acquires variant spellings, and the enumeration certifies the one its author was looking at
+
+type: floor · concepts: [enumeration, variant-spelling, closure-assertion, presence-vs-closure, parameterized-value]
+
+**Lesson.** An enumeration pinned by one presence assertion per member is satisfied by a set that is not
+closed. `ship-lesson-extract` shipped a five-member outcome vocabulary AND the test that enumerates it in
+the same diff, and one member arrived under two names — `lesson: not-reached (<stage>)` in three places,
+`lesson: not-reached (<stop>)` in the `--loop` section — with every presence rule GREEN, because a matcher
+can only pin the spelling its author was looking at. The **parameter** is the fragment at risk: `<stop>`
+read naturally in a section about loop stops, so it was re-derived from local context rather than copied.
+Remedy: for a value carrying a parameter, add a **closure** assertion — collect every occurrence of the
+stem the command writes and require each to match a member — so a variant of **any** member fails, not
+just the one that happened to drift.
+
+**Why it matters.** Presence and closure are indistinguishable at review time: both are green tests whose
+names read correctly, and the difference only surfaces when a member drifts. This composes two existing
+lessons in a way neither predicts. [[L29]] establishes that a remedy quantified over a set owes the
+enumeration as its deliverable — it does not say the enumeration must also be _exhaustive over the text_.
+[[L34]] establishes that a per-item assertion set says nothing over an empty domain — here the domain was
+non-empty and the assertions all true, yet the set still certified a vocabulary the command did not use.
+The composition is the new part, and the increment demonstrated it **at range zero**: one file, one
+sitting, by the author who had just written both lessons into the plan's `applied_lessons`. Note also what
+did _not_ catch it — `npm test`, `validate`, `lint`, `format:check`, `lint:md` and the structural gate were
+all green over the defective text; it was found by a **review lens**, and the gate that now catches it
+exists only because the lens found it first. Per [[L20]] a discipline-only remedy recurs, which is why the
+remedy here is an assertion rather than a note to be careful.
+
+**Provenance.**
+
+- feature: `ship-lesson-extract`
+- commit: `313b20b7557b7d407a16c5d04cc9f32268e05b32` (working-tree dogfood built on this commit;
+  uncommitted at promotion time)
+- source: `.dev/features/ship-lesson-extract/REVIEW.md` § "Floor-gate findings" — the single blocking
+  finding (rule_id P5, `.claude/commands/pharn-dev-ship.md:374`) and the candidate proposed under
+  § "Proposed lesson candidate"; the closure assertion was mutation-tested against the pre-fix text before
+  promotion (it names `` `lesson: not-reached (<stop>)` `` explicitly)
+- promoted: 2026-09-08 via gated `/pharn-dev-memory-promote` (human-approved).

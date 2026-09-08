@@ -882,6 +882,69 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`/pharn-dev-ship` now offers the run's lesson at GATE 2 instead of letting it die with the session
+  (`Step 2b — lesson-extract`).** After `/pharn-dev-review` and **before** the `SHIP.md` write, the stage
+  reviews its own cycle (`PLAN.md` including `applied_lessons`, `GRILL.md`, `REGRESSION.md`, `VERIFY.md`,
+  `REVIEW.md`, the two verdict JSONs), proposes **at most one** lesson candidate — or an explicit "no
+  lesson" — prints it with a short rationale, and **always** halts on an `AskQuestion` form. An accepted
+  candidate is handed to **`/pharn-dev-memory-promote`**, which sets its own writes-scope, runs
+  `.dev/floor/check-provenance.mjs`, and holds its own accept/deny gate. `SHIP.md` then carries exactly one
+  `lesson:` line from a closed set (`promoted L<n>` | `skipped` | `none` | `not-reached (<stage>)` |
+  `error <reason>`) plus a `deferred:` list, so a considered-and-declined lesson and an absent one cannot
+  look the same.
+  **The anchor moved, because the one the request named does not exist.** No ship or loop command performs
+  any git operation — `/pharn-dev-ship` has no commit step to sit "before" — so the step is anchored
+  **before the roll-up write**, and `.dev/floor/command-hygiene.test.mjs` pins that ordering by comparing
+  **line-initial heading offsets**, not by `indexOf` over the body: the command's own `description:`
+  frontmatter and prose both mention step names, and only a heading declares one (L6). Both offsets are
+  asserted `>= 0` first, so a missing heading fails closed instead of comparing against `-1`.
+  **`writes:` is deliberately UNCHANGED, and that is the load-bearing half (L7).** Declaring
+  `.dev/memory-bank/lessons-learned.md` here would make `set-writes-scope.cjs` resolve a scope the
+  pre-write hook then **permits**, silently handing `/pharn-dev-ship` the ungated canon write that
+  `check-provenance` + the human accept exist to withhold — L7's own recorded instance (it happened to
+  `/review`), and it was available here. Canon stays reachable only through the dedicated command; a test
+  pins that the `writes:` **line** names no `memory-bank` path, scoped to that line so `reads:` and prose
+  may still cite it.
+  **`--loop` inherits Step 2b at the STOP and is structurally excluded from the iteration body.** The step
+  is a human halt and the loop's defining property is that no human sits between iterations; a halt in the
+  body would either stall the loop or pressure the gate toward a default-yes, which on a canon write is
+  the thing the step refuses. `check-ship.mjs` is byte-unchanged and its input signature has **no lesson
+  parameter**, so a lesson-extract failure cannot flip a verdict — impossible by construction, not by
+  discipline.
+  **The honest split (P0), stated rather than implied.** Step 2b adds **no new floor primitive**. FLOOR:
+  the fix #7 hook that keeps this command's `writes:` at `SHIP.md` alone (a guarantee it inherits **by not
+  changing**), and — in the sub-stage, not here — `check-provenance.mjs` over the candidate's provenance,
+  id and target. **ADVISORY:** that a candidate is worth promoting, that a human answered the form (the
+  floor cannot verify a "yes"), and that the `lesson:` line is present at all — nothing reads `SHIP.md`,
+  so its completeness is discipline over an unread file. "`/pharn-dev-ship` guarantees no lesson is
+  dropped" is the disease and is **struck**; a checker over the written line is the named residual
+  `ship-lesson-line-check`, left unbuilt because **L20's bar is a second occurrence and there is not yet a
+  first**.
+  **The residual GROWS, and says so** (`LIMITS.md §2`, `THREAT-MODEL.md §2` surface 3). This opens a
+  routine path from untrusted free text toward canon. The floor bounds the **shape** and the **route**; it
+  cannot make a well-formed but poisoned lesson detectable — that stays the human's judgment at the
+  promote gate. What genuinely changes is **frequency**: ratification becomes an end-of-run prompt rather
+  than a deliberate act, and a gate resting on continued human attention is weakened by being asked often.
+  The one-candidate-per-run rule bounds the rate, and it is advisory.
+  **No headless branch was built, deliberately.** Nothing in this repo detects interactivity — verified
+  live: zero `isTTY` / `headless` / `non-interactive` occurrences across `.claude/**`, `pharn/**`,
+  `.dev/floor/**` — so a prose rule reading "if non-interactive, do not ask" would enforce nothing and
+  would be exactly the "written in the command" ≠ "guaranteed" confusion. The step always asks; an
+  unanswered run stops holding an unpromoted candidate, which is the fail-safe direction.
+  **Scoped to `/pharn-dev-ship` alone, by explicit human decision — and the omission is enumerated rather
+  than left to be rediscovered (L31).** Three orchestrators reach a post-verify human gate; one is wired.
+  `LESSON_EXTRACT_WIRING` carries all three, with `pharn-ship.md` and `pharn-loop.md` as `wired: false`,
+  and both the total (3) and the wired count (1) are pinned — so wiring or dropping a member fails the
+  test and forces the change to be deliberate. Recorded there too: `/pharn-loop` will need a **different
+  shape**, because it already carries a lesson-adjacent `## Handoff` → `### learned` whose subsection list
+  `check-loop-record.mjs` holds to **exact equality**, making an added `###` an immediate RED.
+  **Honest P7 trigger, recorded rather than manufactured:** **no observed failure motivates this.** No
+  lesson in canon, no dogfood run and no eval failure records a lesson being lost at ship time; the
+  trigger is the **maintainer's explicit direction**, which P5 makes a legitimate terminal input. The
+  precedent is `applied_lessons` sub-check D (3.0.0), whose `CLAUDE.md` comment records the same.
+  **Apparatus: no `SKILLS_VERSION` bump.** A `pharn-dev-*` command and a `*.test.mjs` file are both
+  outside the bump-triggering set; the product surface is untouched.
+
 - **`applied_lessons` is re-verified by a stage that did not author it — `SKILLS_VERSION` `2.7.15` →
   `2.8.0` (minor: a newly wired deterministic gate on a shipped command).** Until now the field was
   **self-attested**: `/pharn-plan` and `/pharn-dev-plan` each self-checked the declaration they had just
