@@ -399,6 +399,15 @@ const LESSON_OUTCOMES = [
 // `description:` frontmatter and its prose both mention step names; only a heading declares one.
 // Returns -1 when absent, and every caller below asserts >= 0 FIRST, so a missing heading fails closed
 // rather than comparing against -1 and silently reading as "earlier".
+// The L7 guard's logic, EXTRACTED so the real body and a mutant run through the SAME code path.
+// Returns null when there is no `writes:` line at all (the caller REDs on that separately — a command
+// with no declaration is not silently "clean"), else whether that line names canon.
+function canonInWritesLine(body) {
+  const line = body.match(/^writes:.*$/m);
+  if (!line) return null;
+  return /memory-bank/.test(line[0]);
+}
+
 function headingOffset(body, title) {
   const re = new RegExp(`^ {0,3}#{2,6}[ \\t]+${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "m");
   const m = body.match(re);
@@ -427,18 +436,28 @@ for (const site of LESSON_EXTRACT_WIRING.filter((s) => s.wired)) {
   // recorded instance (it happened to /review) and it was available here. Scoped to the `writes:` LINE
   // so the path may still appear in `reads:` and in prose, which it must.
   test(`✧ ${site.file} does NOT declare memory-bank canon in writes: (L7)`, () => {
-    const line = commandBody(site.file).match(/^writes:.*$/m);
-    assert.ok(line, `${site.file} must declare a writes: line`);
-    assert.doesNotMatch(
-      line[0],
-      /memory-bank/,
+    const verdict = canonInWritesLine(commandBody(site.file));
+    assert.notEqual(verdict, null, `${site.file} must declare a writes: line at all`);
+    assert.equal(
+      verdict,
+      false,
       `${site.file} declares canon in writes: — a proposing stage must route the write through /pharn-dev-memory-promote, never hold scope to it`
     );
   });
 
-  test(`✧ the ${site.file} writes: guard DISCRIMINATES — an injected canon path is caught`, () => {
-    const injected = `writes: [".dev/features/<name>/SHIP.md", ".dev/memory-bank/lessons-learned.md"]`;
-    assert.match(injected, /memory-bank/, "the guard's matcher must catch a canon path spliced into writes:");
+  // L4: an authored fixture passes by construction. An earlier version of this test matched a
+  // hand-written `writes:` string against a hand-written regex — it exercised NONE of the guard's own
+  // extraction, so it would have stayed green even if `canonInWritesLine` had stopped finding the line
+  // at all. The mutant is derived from the REAL body, so both sides run the same code.
+  test(`✧ the ${site.file} writes: guard DISCRIMINATES — canon spliced into the REAL writes: line is caught`, () => {
+    const body = commandBody(site.file);
+    const mutant = body.replace(/^writes:.*$/m, (l) => l.replace(/\]\s*$/, `, ".dev/memory-bank/lessons-learned.md"]`));
+    assert.notEqual(mutant, body, "the mutation must actually change the body, or this test is vacuous (L34)");
+    assert.equal(
+      canonInWritesLine(mutant),
+      true,
+      "the guard must catch a canon path spliced into the command's own writes: line — otherwise it certifies by not looking"
+    );
   });
 
   // POSITION (the re-anchored "before the final commit" requirement). No ship/loop command performs any
