@@ -26,6 +26,11 @@ const PLAN_PRODUCT_CMD = join(__dirname, "..", "commands", "pharn-plan.md");
 function tmp() {
   return fs.mkdtempSync(join(os.tmpdir(), "pharn-sws-"));
 }
+
+function seedDevRepo(cwd) {
+  fs.mkdirSync(join(cwd, ".dev", "floor"), { recursive: true });
+  return cwd;
+}
 function setter(cwd, ...args) {
   return spawnSync(process.execPath, [SETTER, ...args], { cwd, encoding: "utf8" });
 }
@@ -524,7 +529,7 @@ test("--clear is IDEMPOTENT: with no scope file it still exits 0 (a last step mu
 });
 
 test("after --clear, enforce falls back to the DEFAULT_SAFE_SET — a safe-set path is ALLOWED again", () => {
-  const cwd = tmp();
+  const cwd = seedDevRepo(tmp());
   // A one-path scope that does NOT cover `.dev/features/**` — the shape a finished command leaves.
   seedScope(cwd, { scope: [".dev/features/demo/SHIP.md"], set_by: "x.md", set_at: "t" });
   assert.equal(enforce(cwd, ".dev/features/other/PLAN.md").status, 2, "denied while the stale scope stands");
@@ -533,7 +538,7 @@ test("after --clear, enforce falls back to the DEFAULT_SAFE_SET — a safe-set p
 });
 
 test("after --clear, enforce is still FAIL-CLOSED — an out-of-safe-set path stays DENIED", () => {
-  const cwd = tmp();
+  const cwd = seedDevRepo(tmp());
   seedScope(cwd, { scope: [".dev/features/demo/SHIP.md"], set_by: "x.md", set_at: "t" });
   assert.equal(setter(cwd, "--clear").status, 0);
   // Clearing returns to the DEFAULT, never to "anything goes": root files and the sensitive zones are

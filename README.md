@@ -15,7 +15,7 @@ model judgment is treated as advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-3.0.1-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-3.0.2-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -334,9 +334,11 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   `PreToolUse` write-scope hooks.
 - **The write-scope guard's fail-closed default does not cover your source.** Where
   `enforce-writes-scope.cjs` is wired and no scope is active, Claude Code's
-  Write/Edit/MultiEdit/NotebookEdit tools are restricted to `features/**`, `.dev/features/**` (present
-  only in PHARN's own repo, never in an install), `pharn/pharn-*/**` and `.pharn/**` — PHARN's own
-  artifact directories, defined as `DEFAULT_SAFE_SET` in `.claude/hooks/enforce-writes-scope.cjs`.
+  Write/Edit/MultiEdit/NotebookEdit tools are restricted to `features/**` and `.pharn/**` in an
+  installed project — PHARN's product pipeline artifact directories. In PHARN's own dev repo (`.dev/floor/`
+  present AND no `skillsVersion` in `pharn.config.json`), the default also admits `.dev/features/**` and
+  `pharn/pharn-*/**`. The
+  set is computed at runtime in `.claude/hooks/enforce-writes-scope.cjs`.
   Ordinary edits to your own code (`src/app.ts`, `package.json`, `README.md`) are denied. That is the
   intended posture — a stage sets the scope in its first step, so `/pharn-build` writes exactly the
   concrete paths your `PLAN.md` declared — but it means the guard is not a drop-in for editing outside
