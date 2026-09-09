@@ -734,3 +734,219 @@ test("✧ the promote gate-parity set is non-vacuous — both commands exist and
   const keys = PROMOTE_GATE_PARITY.map((s) => s.obligation);
   assert.equal(new Set(keys).size, keys.length, `duplicate obligation key(s) in PROMOTE_GATE_PARITY: ${keys.join(", ")}`);
 });
+
+// ── The `--target` narrowing rules (L8's mechanic, converted from canon note to check) ───────────────
+//
+// WHY THIS EXISTS (P7). An external adversarial review reported, and this increment reproduced live,
+// that `/pharn-ship` invoked `set-writes-scope.cjs --from-frontmatter` with NO `--target` while
+// declaring THREE placeholder `writes:` paths. `resolveEntry` returns null for every placeholder entry
+// when `target` is undefined, so the scope came back empty and the setter FAILED CLOSED — exit 1, no
+// scope file written — leaving the terminal pipeline stage running under `enforce-writes-scope.cjs`'s
+// DEFAULT_SAFE_SET (which permits any path under `features/**`) while the command's own guarantee audit
+// claimed "FLOOR: hook (fix #7) … pin exactly these three paths". A false floor claim in the stage that
+// ends the pipeline. The setter's refusal was CORRECT and is unchanged; the call site was the bug.
+//
+// THE TRIGGER, STATED RATHER THAN INFLATED. `lessons-learned.md` L8 already names this mechanic and
+// prescribes the remedy verbatim ("re-scope per-artifact — call the setter once immediately before each
+// write, as /pharn-dev-regress and /pharn-dev-verify do"). But L8's own provenance records its first
+// instance as "AVOIDED, not hit — surfaced by reading set-writes-scope.cjs live, not by a dogfood
+// failure". So this is the FIRST OBSERVED failure and L20's "the second occurrence is the trigger" bar
+// is NOT cleanly met. It does not need to be: P7's own bar — an addition triggered by a real failure —
+// is met directly by the reported, reproduced defect. Recorded this way because a manufactured trigger
+// is exactly the disease P0 names; `check-plan-lessons` sub-check (D) takes the same posture.
+//
+// WHY TWO RULES AND NOT ONE (L36 — presence is not closure). Rule A alone is satisfied by a single call
+// carrying one `--target`, which would have left two of `/pharn-ship`'s three artifacts unscoped: the
+// per-line rule cannot see that a command owes N calls. Rule B ranges over the ARTIFACTS instead, so a
+// partial fix still fails.
+//
+// The site set is DISCOVERED from the corpus rather than hand-listed (L29 in its strongest available
+// form): a command added later inherits both rules without anyone editing this file.
+//
+// Honest scope, the same narrow kind as every set above: these read command PROSE. Rule A proves the
+// flag is PRESENT on an anchored invocation LINE. Rule B is deliberately WEAKER and the difference is
+// stated rather than glossed: it proves each declared path appears somewhere in the body after a
+// `--target` token — `targetValues()` scans the whole body, NOT only invocation lines — so a path named
+// after `--target` in ordinary prose would satisfy it. Rule A is what keeps the invocations themselves
+// honest; Rule B ranges over the ARTIFACTS, and the two are complementary rather than nested. Neither
+// can prove a run executed the line, that a call sits immediately before the write it authorizes, or
+// that the ordering is right — "the wiring is pinned" NEVER means "the scope was set" (P0). Tightening
+// Rule B to invocation lines only would pass over today's corpus, but no observed failure motivates it
+// (P7), so it is recorded as the named residual `ruleb-invocation-line-scan` rather than built.
+
+// Anchored to line start, so a prose mention of the script name never counts as an invocation — the
+// same discipline `.claude/hooks/writes-scope-release.test.cjs` uses (pharn-ship.md names the setter in
+// prose several times and invokes it four times).
+const FROM_FRONTMATTER_LINE = /^[ \t]*node \.claude\/hooks\/set-writes-scope\.cjs --from-frontmatter\b/;
+const FROM_PLAN_LINE = /^[ \t]*node \.claude\/hooks\/set-writes-scope\.cjs --from-plan\b/;
+// `--target` followed by a real operand. `\S` excludes the flag-with-no-value form, which the setter
+// itself rejects (`--target requires a path`).
+const TARGET_ON_LINE = /\s--target\s+\S/;
+const TARGET_VALUES = /--target\s+(\S+)/g;
+
+/**
+ * Is this `writes:` entry a SCOPEABLE placeholder path — one the setter can only resolve via --target?
+ * Three deterministic tests, no judgment (P5): it carries a placeholder, it looks like a path, and it
+ * has no whitespace. The whitespace test is what excludes pharn-build.md's prose entry
+ * `<user-code files named in the plan's ## Files (Phase-1, via --from-plan — not from this list)>`
+ * BY CONSTRUCTION rather than by a hand-written exemption (L3: a rule must not convert an existing
+ * correct declaration into a block). A glob entry with no `<` (pharn-review.md's `features/**`,
+ * pharn-dev-eval.md's `runs/**`) is likewise out — neither command invokes the setter at all.
+ */
+function isScopeablePlaceholder(entry) {
+  return entry.includes("<") && entry.includes("/") && !/\s/.test(entry);
+}
+
+/**
+ * The `writes:` entries of a command, read from its FRONTMATTER FENCE — never grepped from the body
+ * (L6: a structural fact is read from its structured location). The quoted-string extraction mirrors
+ * `set-writes-scope.cjs`'s own `writesFromFrontmatter`, so this sees what the setter sees.
+ */
+function writesEntries(body) {
+  const fm = body.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!fm) return [];
+  const line = fm[1].split(/\r?\n/).find((l) => /^writes:/.test(l));
+  if (!line) return [];
+  return [...line.matchAll(/"([^"]*)"/g)].map((m) => m[1]);
+}
+
+function targetValues(body) {
+  return new Set([...body.matchAll(TARGET_VALUES)].map((m) => m[1]));
+}
+
+/** Every `--from-frontmatter` invocation in the corpus, as {file, line, text}. Discovered, not listed. */
+function fromFrontmatterSites() {
+  const sites = [];
+  for (const file of commandFiles()) {
+    commandBody(file)
+      .split(/\r?\n/)
+      .forEach((line, i) => {
+        if (FROM_FRONTMATTER_LINE.test(line)) sites.push({ file, line: i + 1, text: line.trim() });
+      });
+  }
+  return sites;
+}
+
+/** Commands owing >=2 setter calls: L8's exact domain ("a command that emits >=2 artifacts"). */
+function multiArtifactCommands() {
+  return commandFiles()
+    .map((file) => ({ file, entries: writesEntries(commandBody(file)).filter(isScopeablePlaceholder) }))
+    .filter((c) => c.entries.length >= 2);
+}
+
+test("✧ RULE A: every `--from-frontmatter` setter invocation narrows to a `--target`", () => {
+  // Without --target, set-writes-scope.cjs resolves every placeholder entry to null, finds an empty
+  // scope, and exits 1 having written NOTHING — so the command runs on the fail-closed default instead
+  // of its declared scope, and any floor claim it makes about its own writes is false.
+  const offenders = fromFrontmatterSites()
+    .filter((s) => !TARGET_ON_LINE.test(s.text))
+    .map((s) => `${s.file}:${s.line} — ${s.text}`);
+  assert.deepEqual(
+    offenders,
+    [],
+    `these setter invocations resolve ZERO paths (placeholder \`writes:\` needs \`--target\`):\n    ${offenders.join("\n    ")}`
+  );
+});
+
+test("✧ RULE A is non-vacuous — the discovered invocation set is non-trivial", () => {
+  // L34: "for each X, assert P" says nothing when there are no X. If the anchor above ever stops
+  // matching (the command line is reworded, the commands move), Rule A would pass over an empty domain
+  // and a vacuous pass is indistinguishable from a real one at the verdict.
+  const sites = fromFrontmatterSites();
+  assert.ok(sites.length >= 15, `expected the --from-frontmatter corpus to be non-trivial, got ${sites.length}`);
+});
+
+test("✧ RULE A DISCRIMINATES — a real invocation line with its `--target` stripped is caught", () => {
+  // L4: an authored fixture passes by construction. The mutant is derived from a REAL corpus line, so
+  // both sides run the same matchers; a hand-written string would exercise neither.
+  const sites = fromFrontmatterSites();
+  const sample = sites.find((s) => TARGET_ON_LINE.test(s.text));
+  assert.ok(sample, "expected at least one compliant invocation to mutate (L34)");
+  const mutant = sample.text.replace(TARGET_VALUES, "").trimEnd();
+  assert.notEqual(mutant, sample.text, "the mutation must actually change the line, or this test is vacuous");
+  assert.ok(FROM_FRONTMATTER_LINE.test(mutant), "the mutant must still READ as an invocation — else this proves nothing");
+  assert.ok(!TARGET_ON_LINE.test(mutant), "Rule A must flag an invocation whose --target was removed");
+});
+
+test("✧ RULE A is CONDITIONAL — `--from-plan` invocations are exempt, and the corpus exercises that branch", () => {
+  // L3: a rule made load-bearing must not turn an existing correct declaration into a block.
+  // `--from-plan` reads the PLAN's `## Files`, which are already concrete, so it needs no --target and
+  // deliberately carries none. Without this control the exemption would be untested and a future
+  // widening of the anchor to `--from-` would RED three correct commands.
+  const planSites = commandFiles().flatMap((file) =>
+    commandBody(file)
+      .split(/\r?\n/)
+      .filter((l) => FROM_PLAN_LINE.test(l))
+      .map((l) => ({ file, text: l.trim() }))
+  );
+  assert.ok(planSites.length > 0, "expected at least one --from-plan invocation as the control case (L34)");
+  for (const s of planSites) {
+    assert.ok(!FROM_FRONTMATTER_LINE.test(s.text), `${s.file}: a --from-plan line must not match the --from-frontmatter anchor`);
+  }
+});
+
+test("✧ RULE B: a command declaring >=2 placeholder `writes:` paths names EACH as a `--target`", () => {
+  // L8's mechanic stated over ARTIFACTS rather than over call sites, which is what closes the gap Rule A
+  // leaves: one call with one --target satisfies Rule A while leaving the other declared paths unscoped,
+  // and the pre-write hook then DENIES them.
+  //
+  // The >=2 filter is L8's own domain ("a command that emits >=2 artifacts under placeholder paths"),
+  // NOT an exemption invented to dodge a failure. It is load-bearing: /pharn-memory-promote and
+  // /pharn-dev-memory-promote each declare ONE placeholder entry (`memory-bank/<canon-file>`) and pass
+  // `--target <canon-file>` — a bare operator placeholder the human substitutes at run time, which the
+  // setter's placeholder regex then resolves. Both are CORRECT; an unfiltered Rule B would RED them,
+  // reintroducing the exact L3 defect this file's Rule A control case guards against.
+  const offenders = [];
+  for (const { file, entries } of multiArtifactCommands()) {
+    const targets = targetValues(commandBody(file));
+    const missing = entries.filter((e) => !targets.has(e));
+    if (missing.length) offenders.push(`${file} — declared but never a --target: ${missing.join(", ")}`);
+  }
+  assert.deepEqual(offenders, [], `multi-artifact commands must scope EACH declared path:\n    ${offenders.join("\n    ")}`);
+});
+
+test("✧ RULE B is non-vacuous — the multi-artifact domain is non-empty and pinned", () => {
+  // L34 again, and it bites harder here than for Rule A: the domain is derived through TWO filters
+  // (frontmatter parse, then the placeholder predicate), so a change to either could silently empty it.
+  // The floor is pinned rather than merely `> 0` so that losing a member fails loudly.
+  const domain = multiArtifactCommands();
+  assert.ok(
+    domain.length >= 5,
+    `expected >=5 multi-artifact commands (ship + the regress/verify pairs), got ${domain.length}: ${domain.map((c) => c.file).join(", ")}`
+  );
+  assert.ok(
+    domain.some((c) => c.file === "pharn-ship.md"),
+    "pharn-ship.md declares three placeholder writes: paths and MUST be in Rule B's domain — it is the defect this rule was built from"
+  );
+});
+
+test("✧ RULE B DISCRIMINATES — a fourth placeholder spliced into the REAL writes: line is caught", () => {
+  // L4, in the form the LESSON_EXTRACT_WIRING guard already uses: mutate the REAL body so the guard's
+  // own frontmatter extraction runs on both sides. An earlier shape that matched a hand-written
+  // `writes:` string against a hand-written regex would have stayed green even if `writesEntries` had
+  // stopped finding the line at all.
+  const body = commandBody("pharn-ship.md");
+  const mutant = body.replace(/^writes:.*$/m, (l) => l.replace(/\]\s*$/, `, "features/<name>/NEVER-SCOPED.md"]`));
+  assert.notEqual(mutant, body, "the mutation must actually change the body, or this test is vacuous (L34)");
+  const entries = writesEntries(mutant).filter(isScopeablePlaceholder);
+  assert.ok(entries.includes("features/<name>/NEVER-SCOPED.md"), "the guard must SEE the spliced entry — else it proves nothing");
+  assert.ok(
+    !targetValues(mutant).has("features/<name>/NEVER-SCOPED.md"),
+    "the guard must catch a declared path that is never passed as a --target — otherwise it certifies by not looking"
+  );
+});
+
+test("✧ the placeholder predicate DISCRIMINATES — it admits real scopeable paths and rejects the known non-paths", () => {
+  // L36/L29: the predicate is the part that decides Rule B's DOMAIN, so pinning it directly is what
+  // stops a future loosening from silently emptying the rule. Every rejected string below is a REAL
+  // `writes:` entry live in this corpus, not an invented one.
+  assert.ok(isScopeablePlaceholder("features/<name>/SHIP.md"), "a real placeholder path must qualify");
+  assert.ok(isScopeablePlaceholder(".dev/features/<name>/regression-report.json"), "a dev placeholder path must qualify");
+  assert.ok(
+    !isScopeablePlaceholder("<user-code files named in the plan's ## Files (Phase-1, via --from-plan — not from this list)>"),
+    "pharn-build.md's PROSE entry must not qualify — it is scoped via --from-plan, not --target"
+  );
+  assert.ok(!isScopeablePlaceholder("<files named in PLAN.md only>"), "pharn-dev-build.md's prose entry must not qualify");
+  assert.ok(!isScopeablePlaceholder("features/**"), "a bare glob with no placeholder must not qualify (pharn-review.md)");
+  assert.ok(!isScopeablePlaceholder("runs/**"), "a bare glob with no placeholder must not qualify (pharn-dev-eval.md)");
+});
