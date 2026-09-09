@@ -1,6 +1,10 @@
 <div align="center">
 
-# PHARN
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/pharn-logo-dark-transparent.svg" />
+  <source media="(prefers-color-scheme: light)" srcset="./docs/assets/pharn-logo-light-transparent.svg" />
+  <img alt="Pharn" src="./docs/assets/pharn-logo-light-transparent.svg" width="320" />
+</picture>
 
 **Audit-grade workflow for AI-assisted software development.**
 
@@ -24,6 +28,14 @@ npx @pharn-dev/pharn@latest init
 [![Floor](https://github.com/pharn-dev/pharn-oss/actions/workflows/floor.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/floor.yml)
 [![Secrets](https://github.com/pharn-dev/pharn-oss/actions/workflows/gitleaks.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/gitleaks.yml)
 [![Built for Claude Code](https://img.shields.io/badge/built%20for-Claude%20Code-555)](https://claude.com/claude-code)
+
+<br />
+
+<img
+  src="./docs/assets/pharn-github-cover.png"
+  alt="Welcome to Pharn: Audit-grade workflow for AI-assisted software development"
+  width="100%"
+/>
 
 </div>
 
