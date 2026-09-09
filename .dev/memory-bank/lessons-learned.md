@@ -1273,3 +1273,51 @@ remedy here is an assertion rather than a note to be careful.
   § "Proposed lesson candidate"; the closure assertion was mutation-tested against the pre-fix text before
   promotion (it names `` `lesson: not-reached (<stop>)` `` explicitly)
 - promoted: 2026-09-08 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L37 — A doc stating a guard's bounds must be PROBED against the guard, not read off it — the universal quantifier is where the drift lands
+
+type: contract · concepts: [guarantee-audit, verification-fidelity, universal-quantifier, doc-drift, false-green]
+
+**Lesson.** Two sentences written to disclose `enforce-writes-scope.cjs`'s `DEFAULT_SAFE_SET` were
+derived by **correctly reading** the hook, and both were wrong at the edges. (1) "the **only** paths …
+may write are `features/**`, `.dev/features/**`, `pharn/pharn-*/**` and `.pharn/**`" is false for
+`.pharn/writes-scope.json`, denied at `:314` **before** the allow-list is consulted. (2) "`/pharn-build`
+writes **exactly the paths** your `PLAN.md` declared" is false for a glob entry, silently dropped by
+`set-writes-scope.cjs`'s `isConcrete()` — measured: a two-bullet `## Files` list containing one glob
+printed `1 path(s)`. Both survived authoring, a correct reading of the source, and a human plan-gate
+approval; both fell to a 30-second probe. The transferable part is **where**: universal quantifiers —
+"only", "exactly", "every" — are the fragment a careful reading does not check, because the reader
+confirms the **listed** members and never hunts the **unlisted** exception. Remedy: for any sentence
+quantifying over what a floor op permits or denies, **execute the op over at least one member you expect
+to be excluded**, and record the exit code beside the sentence.
+
+**Why it matters.** This is the P0 disease at its most deniable. Nothing here was sloppy — the author
+read the implementation, the reviewer approved the text, and every gate was green over both false
+sentences, because **no checker reads README prose**: `validate.mjs` ignores root docs,
+`check-capability-catalog` guards only the `CURRENT-STATE` markers, `check-version-badge` reads only the
+shields badge. So the failure mode is not "someone did not check"; it is "checking by reading cannot
+reach this class". [[L2]] establishes that a contract may cite only a **live** floor op, verified by
+reading the implementation **this run** — this is the sharpening: reading is what produced both defects,
+so for a **quantified** claim, reading is not the verification, executing is. [[L26]] and [[L32]] are the
+same family from the other side (a patch verified against a copy outside the repo; a method that consults
+a mutable alias) — all three say the artifact you verify against must be the one that will actually run.
+Distinct from [[L36]], which is about an author's **enumeration** acquiring a variant spelling: there the
+set was mis-transcribed, here the set was transcribed correctly and the **quantifier around it** was
+wrong. A corroborating instance surfaced in the same increment, in a different surface: restoring an
+absent `node_modules` changed `npm test` from `1682 pass / 1 skipped` to `1683 pass / 0 skipped`, and the
+test that had been self-skipping (`.dev/floor/capability-catalog-core.test.mjs:477`) was
+`style: a spliced README passes the repo's prettier and markdownlint unchanged` — the single most
+relevant test for the README-only change under review. A suite that skips still exits **0**, so
+`check-verify.mjs`'s `PASS iff every gate exit 0` cannot see it: the verdict, too, confirms the members
+it was shown and never hunts the one that quietly withdrew.
+
+**Provenance.**
+
+- feature: `writes-scope-default-disclosure`
+- commit: `ab9aabdf5ea5177713bda2fee82c7220ec559a7c` (working-tree dogfood built on this commit;
+  uncommitted at promotion time)
+- source: `.dev/features/writes-scope-default-disclosure/GRILL.md` G1 and G2 (both with their probes
+  quoted in `evidence`) + `.dev/features/writes-scope-default-disclosure/REVIEW.md`
+  § "Proposed lesson candidate"; the two repairs are visible in `git diff README.md` against the
+  approved text quoted in that increment's `PLAN.md`
+- promoted: 2026-09-09 via gated `/pharn-dev-memory-promote` (human-approved).

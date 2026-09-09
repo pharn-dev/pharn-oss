@@ -1,0 +1,31 @@
+{
+  "base": "ab9aabdf5ea5177713bda2fee82c7220ec559a7c",
+  "inside": [
+    "README.md",
+    ".dev/features/writes-scope-default-disclosure/GRILL.md",
+    ".dev/features/writes-scope-default-disclosure/PLAN.md",
+    ".dev/features/writes-scope-default-disclosure/REGRESSION.md",
+    ".dev/features/writes-scope-default-disclosure/REVIEW.md",
+    ".dev/features/writes-scope-default-disclosure/SHIP.md",
+    ".dev/features/writes-scope-default-disclosure/VERIFY.md",
+    ".dev/features/writes-scope-default-disclosure/regression-report.json",
+    ".dev/features/writes-scope-default-disclosure/verify-report.json"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
