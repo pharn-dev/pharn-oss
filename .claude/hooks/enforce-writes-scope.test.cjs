@@ -78,7 +78,6 @@ test("no scope (install posture): features/ scratch is still ALLOWED", () => {
   assert.equal(hook(tmp(), "features/foo/bar.md").status, 0);
 });
 
-
 test("no scope: .dev/memory-bank/ is DENIED (P2-gated zone — moved under .dev/, still deny-by-default)", () => {
   assert.equal(hook(tmp(), ".dev/memory-bank/x.md").status, 2);
 });
