@@ -1,0 +1,37 @@
+{
+  "base": "ab9aabdf5ea5177713bda2fee82c7220ec559a7c",
+  "inside": [
+    ".markdownlint-cli2.jsonc",
+    ".dev/features/stale-lint-ignores/GRILL.md",
+    ".dev/features/stale-lint-ignores/PLAN.md"
+  ],
+  "outside_gates": {
+    "format:check": {
+      "base": 0,
+      "head": 0
+    },
+    "lint": {
+      "base": 0,
+      "head": 0
+    },
+    "lint:md": {
+      "base": 0,
+      "head": 0
+    },
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
