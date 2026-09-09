@@ -50,6 +50,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The writes-scope guard's fail-closed default no longer carries dev-repo posture into
+  installed projects** ([#180](https://github.com/pharn-dev/pharn-oss/issues/180)). When no scope
+  file is set, `enforce-writes-scope.cjs` now partitions its default safe-set by `.dev/floor/`
+  presence: installed projects get `features/**` only (plus `.pharn/**` bootstrap); PHARN's dev repo
+  keeps the prior set including `.dev/features/**` and `pharn/pharn-*/**`. Prevents agent edits to
+  installed capabilities from being classified as user drift by `pharn update`.
+
 - **`pharn/ARCHITECTURE.md` — restore the `archetype-maps` specified-marker substring dropped in the
   §7 enforcement list.** The recent arch refresh rewrote "the four archetype maps agree (fix #5 —
   conditional; specified, ships with the guarded surface)" as "the archetype maps agree …", which

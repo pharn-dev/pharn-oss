@@ -102,15 +102,30 @@ function resolveWriteTarget(p) {
 // the Write tool cannot self-escalate by editing the gate's input.
 const ALWAYS = [".pharn/**"];
 
-// Fail-closed allow-list used when no scope file is set. Product module dirs + process scratch only;
-// the sensitive zones (.dev/memory-bank/, .dev/floor/, pharn/floor/, pharn/CONSTITUTION.md +
+// Fail-closed allow-list used when no scope file is set. PARTITIONED by repo kind:
+//   - Installed project (no `.dev/floor/`): `features/**` only — product pipeline artifacts.
+//   - PHARN dev repo (`.dev/floor/` present): also `.dev/features/**` (build-loop artifacts) and
+//     `pharn/pharn-*/**` (product module dirs under active development).
+// In both postures the sensitive zones (.dev/memory-bank/, pharn/floor/, pharn/CONSTITUTION.md +
 // pharn/ARCHITECTURE.md, .claude/, other root files) are intentionally absent — reaching them requires
 // an explicit `writes:` declaration. `pharn/pharn-*/**` matches the relocated product module dirs
 // (pharn/pharn-contracts, pharn/pharn-core, pharn/pharn-pipeline, pharn/pharn-review) but NOT
 // pharn/floor/ or the pharn/-top-level trusted docs (no hyphen after `pharn/pharn`), so the floor stays
-// deny-by-default exactly as `.dev/floor/` did pre-relocation. `.dev/features/**` (build-loop artifacts)
-// keeps its writable-by-default behavior; every sensitive zone above still matches none of these globs.
-const DEFAULT_SAFE_SET = ["features/**", ".dev/features/**", "pharn/pharn-*/**"];
+// deny-by-default exactly as `.dev/floor/` did pre-relocation.
+const DEV_SAFE_SET_EXTRA = [".dev/features/**", "pharn/pharn-*/**"];
+const INSTALL_SAFE_SET = ["features/**"];
+
+function isPharnDevRepo() {
+  try {
+    return fs.statSync(path.resolve(ROOT, ".dev/floor")).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function defaultSafeSet() {
+  return isPharnDevRepo() ? [...INSTALL_SAFE_SET, ...DEV_SAFE_SET_EXTRA] : INSTALL_SAFE_SET;
+}
 
 const SCOPE_FILE = ".pharn/writes-scope.json";
 
@@ -308,7 +323,7 @@ const isWrite = /^(Write|Edit|MultiEdit|NotebookEdit)$/i.test(toolName) || (!too
 if (isWrite) {
   const record = loadRecord();
   const scope = loadScope(record);
-  const allow = [...ALWAYS, ...(scope || DEFAULT_SAFE_SET)].map(globToRegExp);
+  const allow = [...ALWAYS, ...(scope || defaultSafeSet())].map(globToRegExp);
   for (const p of writePaths) {
     const rel = toRel(p);
     if (rel === SCOPE_FILE) deny(rel, scope, record);

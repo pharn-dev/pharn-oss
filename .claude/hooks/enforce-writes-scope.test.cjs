@@ -22,6 +22,11 @@ function tmp() {
   return fs.mkdtempSync(join(os.tmpdir(), "pharn-ws-"));
 }
 
+function seedDevRepo(cwd) {
+  fs.mkdirSync(join(cwd, ".dev", "floor"), { recursive: true });
+  return cwd;
+}
+
 function setScope(cwd, scope) {
   fs.mkdirSync(join(cwd, ".pharn"), { recursive: true });
   fs.writeFileSync(join(cwd, ".pharn", "writes-scope.json"), JSON.stringify({ scope, set_by: "test", set_at: "now" }));
@@ -41,9 +46,10 @@ function setter(cwd, ...args) {
 
 // --- Hook, no scope file: fail-closed default-safe-set ---
 
-test("no scope: a relocated product module dir (pharn/pharn-review/) is ALLOWED", () => {
+test("no scope (dev repo): a relocated product module dir (pharn/pharn-review/) is ALLOWED", () => {
   // Ported safe-set: `pharn-*/**` -> `pharn/pharn-*/**` after the runtime-layout move.
-  assert.equal(hook(tmp(), "pharn/pharn-review/foo.md").status, 0);
+  const cwd = seedDevRepo(tmp());
+  assert.equal(hook(cwd, "pharn/pharn-review/foo.md").status, 0);
 });
 
 test("no scope: pharn/floor/ is DENIED (the relocated PRODUCT floor — deny-by-default, exactly as .dev/floor/ was)", () => {
@@ -60,6 +66,19 @@ test("no scope: features/ scratch is ALLOWED", () => {
   assert.equal(hook(tmp(), "features/foo/bar.md").status, 0);
 });
 
+test("no scope (install posture): pharn/pharn-review/ is DENIED", () => {
+  assert.equal(hook(tmp(), "pharn/pharn-review/foo.md").status, 2);
+});
+
+test("no scope (install posture): .dev/features/ is DENIED", () => {
+  assert.equal(hook(tmp(), ".dev/features/foo/PLAN.md").status, 2);
+});
+
+test("no scope (install posture): features/ scratch is still ALLOWED", () => {
+  assert.equal(hook(tmp(), "features/foo/bar.md").status, 0);
+});
+
+
 test("no scope: .dev/memory-bank/ is DENIED (P2-gated zone — moved under .dev/, still deny-by-default)", () => {
   assert.equal(hook(tmp(), ".dev/memory-bank/x.md").status, 2);
 });
@@ -68,10 +87,11 @@ test("no scope: .dev/floor/ is DENIED (the floor itself — moved under .dev/, s
   assert.equal(hook(tmp(), ".dev/floor/x.mjs").status, 2);
 });
 
-test("no scope: .dev/features/ build-loop artifacts are ALLOWED (decision A — relocated features/ keeps writable-by-default)", () => {
-  // Locks decision A: the dev/product move added `.dev/features/**` to DEFAULT_SAFE_SET so the build-loop
+test("no scope (dev repo): .dev/features/ build-loop artifacts are ALLOWED (decision A — relocated features/ keeps writable-by-default)", () => {
+  // Locks decision A: the dev/product move added `.dev/features/**` to the dev-repo safe-set so the build-loop
   // artifact zone keeps its prior behavior, while the two sensitive .dev/ zones above stay denied.
-  assert.equal(hook(tmp(), ".dev/features/foo/PLAN.md").status, 0);
+  const cwd = seedDevRepo(tmp());
+  assert.equal(hook(cwd, ".dev/features/foo/PLAN.md").status, 0);
 });
 
 test("no scope: .claude/ is DENIED (commands + hooks — a write here could disable fix #7)", () => {
