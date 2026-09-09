@@ -335,8 +335,9 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
 - **The write-scope guard's fail-closed default does not cover your source.** Where
   `enforce-writes-scope.cjs` is wired and no scope is active, Claude Code's
   Write/Edit/MultiEdit/NotebookEdit tools are restricted to `features/**` and `.pharn/**` in an
-  installed project — PHARN's product pipeline artifact directories. In PHARN's own dev repo (detected
-  by `.dev/floor/` presence), the default also admits `.dev/features/**` and `pharn/pharn-*/**`. The
+  installed project — PHARN's product pipeline artifact directories. In PHARN's own dev repo (`.dev/floor/`
+  present AND no `skillsVersion` in `pharn.config.json`), the default also admits `.dev/features/**` and
+  `pharn/pharn-*/**`. The
   set is computed at runtime in `.claude/hooks/enforce-writes-scope.cjs`.
   Ordinary edits to your own code (`src/app.ts`, `package.json`, `README.md`) are denied. That is the
   intended posture — a stage sets the scope in its first step, so `/pharn-build` writes exactly the

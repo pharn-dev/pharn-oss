@@ -27,6 +27,11 @@ function seedDevRepo(cwd) {
   return cwd;
 }
 
+function seedInstalledProject(cwd) {
+  fs.writeFileSync(join(cwd, "pharn.config.json"), JSON.stringify({ skillsVersion: "1.0.0" }));
+  return cwd;
+}
+
 function setScope(cwd, scope) {
   fs.mkdirSync(join(cwd, ".pharn"), { recursive: true });
   fs.writeFileSync(join(cwd, ".pharn", "writes-scope.json"), JSON.stringify({ scope, set_by: "test", set_at: "now" }));
@@ -72,6 +77,12 @@ test("no scope (install posture): pharn/pharn-review/ is DENIED", () => {
 
 test("no scope (install posture): .dev/features/ is DENIED", () => {
   assert.equal(hook(tmp(), ".dev/features/foo/PLAN.md").status, 2);
+});
+
+test("no scope (install posture wins): .dev/floor/ + skillsVersion → pharn/pharn-review/ and .dev/features/ are DENIED", () => {
+  const cwd = seedInstalledProject(seedDevRepo(tmp()));
+  assert.equal(hook(cwd, "pharn/pharn-review/foo.md").status, 2);
+  assert.equal(hook(cwd, ".dev/features/foo/PLAN.md").status, 2);
 });
 
 test("no scope (install posture): features/ scratch is still ALLOWED", () => {
