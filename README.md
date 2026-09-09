@@ -122,7 +122,7 @@ For a one-pass shipping run, use:
 /pharn-ship implement password reset with a one-time token
 ```
 
-Every stage is also available as its own command; see [Commands](#commands).
+The pipeline stages and standalone product commands are listed in [Commands](#commands).
 
 Already installed? `npx @pharn-dev/pharn status` reports your installed skills version and drift.
 `update` re-fetches the latest skills version, `add` and `remove` manage capabilities, and `list` prints
@@ -198,8 +198,9 @@ specific deterministic checks.
 
 ## Commands
 
-Two commands cover the normal path. The other eight are the stages those two run, available on their own
-when you want to inspect or drive one step manually.
+These are the user-facing PHARN product commands. `/pharn-loop` and `/pharn-ship` drive the normal
+workflow; the stage commands let you inspect or run one step manually; `/pharn-review` and
+`/pharn-memory-promote` are standalone product commands.
 
 | Command                 | Use it when you want to...                                                                                                                              |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
