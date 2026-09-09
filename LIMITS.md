@@ -26,8 +26,11 @@ thing whose purpose is to be executed as instructions.
 
 - **Struck claim:** "markdown-only = safe."
 - **Backstop (floor):** `kind: community` cannot declare trusted-write or off-allowlist egress
-  (`ARCHITECTURE.md §5`, pre-write hook; pre-egress specified, ships with the guarded surface). Safety comes from the floor, not from the
-  absence of `.cjs`.
+  (`THREAT-MODEL.md §3`, pre-write hook; pre-egress specified, ships with the guarded surface). Safety comes from the floor, not from the
+  absence of `.cjs`. **Live today, and narrower than that sentence reads:** `pharn/floor/validate.mjs`
+  enforces `kind` enum membership and restricts `seal` to `kind: pharn-owned`. The markdown-only /
+  no-`.cjs` half and the trusted-write half are enforced by **no running check** — the three hooks
+  contain zero `kind` references, so both are _(specified; ships with the guarded surface)_.
 
 ### 1b. The fence is enforced by the model that may be compromised
 

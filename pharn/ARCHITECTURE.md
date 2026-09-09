@@ -46,7 +46,7 @@ small, explicit, and non-LLM. Nothing else is a guarantee.
 2. **Content-hash** — identity of _content_, not identity of _id_. Detects silent mutation of a
    pinned artifact (spec, seam resolution, fetched doc, ship record).
 3. **Enum / regex check** — set membership or pattern match, in `validate` and at gates
-   (`coupling ∈ {...}`, `applies ∈ archetypes`, `rule_id ∈ roster`, regex for a hardcoded secret).
+   (`coupling ∈ {...}`, `applies ∈ archetypes`, `rule_id ∈ roster` _(specified; ships with the guarded surface — no roster artifact exists; `merge-findings.mjs` checks rule_id SHAPE only)_, regex for a hardcoded secret).
 
 **Rule of reduction:** any sentence in this architecture that says "guaranteed" must trace to one
 of these three. If it cannot, it is `advisory` and is labeled so (P0). The honest consequence:
@@ -62,8 +62,11 @@ A skill, lens, validator, verifier, griller, and auditor are **not six kinds** �
 with a `role` discriminator. Each is a scoped LLM instruction + evals + typed findings. Unifying
 them gives one eval runner, one template, one mental model, one community contribution format.
 The `role` enum is the one `pharn/floor/validate.mjs` enforces; today the shipped tree carries
-`skill`, `lens`, `griller` and `verifier` — `validator` and `auditor` are reserved members with no
-shipped capability behind them (P7: a role is added when a real capability needs it, not before).
+`skill`, `lens` and `griller` — `validator`, `verifier` and `auditor` are reserved members with
+no shipped capability behind them (P7: a role is added when a real capability needs it, not
+before). Read the live count, never this sentence: `node pharn/floor/count-verifiers.mjs .`
+reports `{"registered":0}` today, and `/pharn-verify` defers its verifier runner until the
+first one is authored.
 
 Frontmatter contract (every Capability):
 
@@ -71,7 +74,7 @@ Frontmatter contract (every Capability):
 ---
 name: "<id>"
 role: skill | lens | validator | verifier | griller | auditor
-kind: pharn-owned | vendor-official | community   # also a privilege level — see §5
+kind: pharn-owned | vendor-official | community   # also a privilege level — see LIMITS.md §1a + THREAT-MODEL.md §3
 trust: trusted                                     # the Capability itself is trusted; its INPUT may not be
 coupling: agnostic | framework-seam | framework-specific   # §3.2; only on framework-touching capabilities
 applies: ["universal"] | ["<archetype>", …]        # REQUIRED — archetype scoping over the §5 enum + `universal`
@@ -161,9 +164,11 @@ pharn/pharn-contracts   L-1  schemas only, ZERO behavior: finding-shape (incl. s
 ## 5. Inter-layer contracts
 
 Layers meet on named contracts, never ad hoc.
-
-**Constitution injection.** The constitution text is an immutable prefix on every LLM prompt
-(`[CONSTITUTION] / [TASK]`). It is the `trusted` channel by definition.
+**Constitution injection** _(specified; ships with the guarded surface)_**.** Commands are
+instructed to load the constitution text as an immutable prefix on every LLM prompt
+(`[CONSTITUTION] / [TASK]`) — the `trusted` channel by definition. **ADVISORY (P0):** no
+injector exists; the prepend is a command-level convention that nothing on the floor performs
+or verifies. See `pharn/CONSTITUTION.md` § "How this file is enforced".
 
 **Principle-as-SoT + finding shape.** The constitution's principles are the single source of truth
 (P4); there is no separate rule bank. A finding chains `finding → rule_id (P0–P7) → constitution`,
@@ -179,8 +184,9 @@ render as quoted/escaped data in PRs and reports. The floor-verifiable fields (`
 guaranteed decision ever rests on a tainted field** — it rests on the enum-gated fields (§8). This
 is what stops an injected code comment from flipping a guaranteed block.
 
-**Seam + seam-record + content-hash.** A seam = `{name, framework, runtime, packages[],
-resolution, resolved_via, pinned_at, content_hash}`. The agnostic resolver resolves each needed
+**Seam + seam-record + content-hash** _(specified; ships with the guarded surface — no
+`seam-record.json` is written and no `ai_docs` pin is read by any shipped code today; the live
+content-hash primitive is `spec_content_hash`)_**.** A seam = `{name, framework, runtime, packages[],
 seam once through a confidence-gated chain (official skill → pinned ai_docs → model → fetch+pin →
 ask; terminal fallback is **ask**, P5) and pins it to `seam-record.json` by commit hash **and
 content hash**. Re-resolve only on a MAJOR bump of a pinned package. A re-fetch that changes
@@ -224,12 +230,16 @@ linking back to the spec:
 | spec    | `SPEC.md`            | intent (Draft → Approved)                    |
 | plan | `PLAN.md` | `spec_id` **+ `spec_content_hash`** (fix #4) + `applied_lessons` (floor-shaped: `none` \| `[L<n>…]`; content advisory) |
 | grill   | grill-log            | findings vs plan                             |
-| build   | `build-summary.json` | per-phase results                            |
+| build   | `BUILD.md`           | per-phase results                            |
 | regress | regression-report    | regressions outside the feature              |
 | verify  | verify-report        | compliance per verifier                      |
 | ship    | ship-report          | decision + `PHARN ✓ reviewed` seal           |
 
-**Keystone:** `SPEC.md` is the root artifact and every downstream artifact carries `spec_id`.
+**Keystone:** `SPEC.md` is the root artifact and every downstream artifact is bound to it. **The
+binding is the feature slug, not a field on every artifact** — `spec_id` ≡ `<name>` ≡ the
+`features/<name>/` directory that holds the whole chain, an identity `pharn/floor/check-plan-spec-agree.mjs`
+asserts and four downstream stages re-verify. A literal `spec_id` field appears in `PLAN.md` and
+`BRIEFING.md`; the other artifacts carry the identity positionally.
 But **`spec_id` binds identity, not content** — so the plan also pins `spec_content_hash` (fix #4,
 reusing the seam-record content-hash mechanism). If the spec is edited after the plan, the hash
 diverges and it is **detectable, not silent**. This is what makes the intent → diff → finding →
@@ -266,7 +276,7 @@ Three moments, all reading **typed fields** (never model prose):
 **Two gate kinds (fix #3) — do not conflate them:**
 
 - **floor-gate** — computes a verdict from actual content (regex for a hardcoded secret,
-  content-hash mismatch, an enum-roster `rule_id`). This is the **only** gate allowed to block a
+  content-hash mismatch, an enum-roster `rule_id` _(specified; ships with the guarded surface)_). This is the **only** gate allowed to block a
   _guaranteed_ invariant.
 - **advisory-gate** — reads LLM-assigned `severity`. It may escalate or warn; it is **never** the
   sole basis for a guaranteed/constitutional block.

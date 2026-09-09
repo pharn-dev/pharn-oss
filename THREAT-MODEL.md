@@ -62,12 +62,12 @@ Every answer reduces to the floor (P0) or is labeled a limit (`LIMITS.md`).
 
 | Surface                 | Structural answer                                                                                                           | Floor primitive             |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
-| ai_docs poisoning       | content-hash pin; re-fetch that changes content requires re-review diff                                                     | content-hash                |
-| seam fetch fallback     | terminal fallback is **ask** (P5); resolution pinned + content-hashed                                                       | content-hash + (ask)        |
+| ai_docs poisoning       | content-hash pin; re-fetch that changes content requires re-review diff                                                     | content-hash _(specified; ships with the guarded surface)_ |
+| seam fetch fallback     | terminal fallback is **ask** (P5); resolution pinned + content-hashed                                                       | content-hash + (ask) _(specified; ships with the guarded surface)_ |
 | memory poisoning        | promotion to canon is a **gated write** with per-entry provenance                                                           | pre-write hook              |
 | reviewed-code injection | finding is computed from enum-gated fields; injected comment reaches only free-text (fix #1)                                | enum check                  |
-| seam-record poisoning   | content-hash on resolution; drift is loud, not silent                                                                       | content-hash                |
-| community Capability    | `kind` is a **privilege level**: community = markdown-only, no `.cjs`; cannot declare trusted-write or off-allowlist egress | pre-write hook + pre-egress (specified; ships with the guarded surface) |
+| seam-record poisoning   | content-hash on resolution; drift is loud, not silent                                                                       | content-hash _(specified; ships with the guarded surface)_ |
+| community Capability    | `kind` is a **privilege level**: community = markdown-only, no `.cjs`; cannot declare trusted-write or off-allowlist egress | `seal`-gating enforced (validate.mjs); markdown-only/no-`.cjs` and trusted-write pre-write hook + pre-egress (specified; ships with the guarded surface) |
 | cross-model response    | egress-fenced + response returns in an untrusted fence + advisory-only (never gates ship)                                   | pre-egress (specified; ships with the guarded surface) + enum gate |
 
 ---
@@ -99,8 +99,11 @@ The red-team's verdict: a **single disease in five places — "written in the co
 
 8a. **Markdown is executable** — a community Capability is a prompt-injection delivery mechanism
 _by design_. "markdown-only = safe" is **struck**. Backstop: community Capabilities cannot declare
-trusted-write or off-allowlist egress (floor), so blast radius is bounded even when the body is
-hostile.
+trusted-write or off-allowlist egress (specified; ships with the guarded surface), so blast radius
+is bounded even when the body is hostile. **What is live today is narrower and must be read as the
+whole of it:** `pharn/floor/validate.mjs` enforces `kind` enum membership and restricts `seal` to
+`kind: pharn-owned`. The markdown-only / no-`.cjs` half and the trusted-write half are **enforced by
+no running check** — the three hooks contain zero `kind` references.
 
 8b. **The fence is enforced by the same model that may be compromised** — fencing reduces blast
 radius and converts some attacks into findings, but does **not** make the LLM layer injection-
