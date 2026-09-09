@@ -2,14 +2,16 @@
 
 # PHARN
 
-**Code got cheap. Understanding got scarce.**
+**Audit-grade workflow for AI-assisted software development.**
 
-PHARN gives AI-assisted development a persistent engineering record: what you intended to build,
-how the agent planned it, what changed, and what was checked before shipping.
+PHARN turns an AI coding session into a persistent engineering record: the intent that anchored the
+change, the plan the agent followed, the files it declared, the checks that ran, and the handoff at the
+shipping gate.
 
-Specs, plans, review artifacts, and rules stay in your repository as readable Markdown. Deterministic
-hooks and checkers enforce the parts that can actually be enforced; everything that still depends on
-model judgment is treated as advisory.
+It is open-source methodology, not a black box: Claude Code commands, readable Markdown artifacts,
+deterministic hooks, stdlib-only floor checkers, grillers, and review lenses that live in your
+repository. PHARN is strict about one thing: claims backed by deterministic checks are named as such;
+model or human judgment remains advisory.
 
 ```bash
 npx @pharn-dev/pharn@latest init
@@ -32,10 +34,13 @@ npx @pharn-dev/pharn@latest init
 
 ## Contents
 
-- [What PHARN does](#what-pharn-does)
+- [What PHARN is](#what-pharn-is)
+- [Why it exists](#why-it-exists)
 - [Quick start](#quick-start)
+- [What gets installed](#what-gets-installed)
+- [How the workflow works](#how-the-workflow-works)
 - [Commands](#commands)
-- [What it catches](#what-it-catches)
+- [Capability coverage](#capability-coverage)
 - [Why not just CLAUDE.md or AGENTS.md?](#why-not-just-claudemd-or-agentsmd)
 - [Guaranteed vs advisory](#guaranteed-vs-advisory)
 - [The pipeline](#the-pipeline)
@@ -48,31 +53,42 @@ npx @pharn-dev/pharn@latest init
 
 ---
 
-## What PHARN does
+## What PHARN is
 
-AI agents can write code quickly, but the reasoning behind a change usually disappears with the chat:
-why the change exists, what constraints mattered, what the agent planned, and what was actually checked.
+PHARN is an open-source workflow layer for teams using AI agents to change real code. It gives each
+increment a committed paper trail:
 
-PHARN keeps that reasoning in the repository as versioned artifacts and adds deterministic checks around
-the parts of the workflow that can be checked without trusting the model.
+- `SPEC.md` — the human-readable intent PHARN asks you to approve before implementation.
+- `PLAN.md` — the agent's implementation plan and declared write scope.
+- `GRILL.md` — pre-build interrogation of the plan.
+- `BUILD.md`, `REGRESSION.md`, `VERIFY.md`, `SHIP.md` — what changed, what ran, what passed, what did
+  not, and where the run stopped.
 
-**Before code is written** — you describe the intent. PHARN turns it into a structured `SPEC.md`,
-interrogates it for gaps, and stops for explicit human approval. An approved spec is pinned by a SHA-256
-hash of its body, so later intent drift is detectable.
+The project is intentionally small-surface: prompts and contracts in Markdown, plus deterministic Node
+helpers. There is no hidden service in this repository and no proprietary rule engine needed to inspect
+what PHARN is doing.
 
-**While the agent works** — the plan declares the files it expects to touch. Claude Code's
-Write/Edit/MultiEdit/NotebookEdit tools are restricted to the active write scope by deterministic hooks.
-Grillers interrogate the plan before implementation, while review lenses inspect code for classes of
-problems such as injection, SSRF, path traversal, n-plus-one queries, swallowed exceptions, race
-conditions, and placeholder code shipped as done.
+PHARN is **not** a correctness oracle, a security guarantee, or a replacement for tests and code review.
+It preserves intent, narrows some agent write behavior, runs focused plan/code scrutiny, and labels the
+boundary between deterministic checks and judgment.
 
-**After the change** — PHARN leaves a diffable trail: the spec, plan, grill log, regression report, and
-verify report. Verification also checks build completeness at the filesystem level: if a concrete path
-declared by the plan does not exist after the build, verification reports `INCOMPLETE`.
+---
 
-PHARN does **not** prove that a plan is good, that a finding is correct, or that the resulting code is
-correct or secure. Those remain model or human judgments. The point is to preserve the reasoning and
-make deterministic claims only where PHARN can actually support them.
+## Why it exists
+
+AI made code cheaper to produce. It did not make code cheaper to understand six weeks later.
+
+The expensive questions moved upstream and downstream:
+
+- What did we ask the agent to build?
+- Which constraints shaped the plan?
+- Which files was the agent supposed to edit?
+- What did the workflow actually check?
+- Which findings were deterministic, and which were model judgment?
+- What should a reviewer, maintainer, or future incident responder trust?
+
+PHARN puts those answers in the repo, where normal engineering tools can diff, review, and preserve
+them. The goal is not to make AI development look clean. The goal is to make it inspectable.
 
 ---
 
@@ -85,23 +101,51 @@ runs it on Node 24. In your project root:
 npx @pharn-dev/pharn@latest init
 ```
 
-Archetype detection is JS/TS-shaped: it reads `package.json` and scans for `next.config.*`, `app/`
-route handlers, `.tsx`/`.jsx`, `migrations/` and `.sql`, resolving to `ssr`, `backend`, `spa`, or `lib`.
-A repo with none of those still installs and gets the universal capabilities — 28 of the 35 grillers and
-lenses declare `applies: ["universal"]` and read code without assuming a language. The seven that do not
-are the SSR/SPA/backend-specific ones.
+Then open Claude Code in the same project and run the full loop:
 
-The installer reads those signals, detects your project's archetype, and selects the capabilities
-that apply — showing you the full list, with a reason beside each one, before it writes anything. It
-then installs:
+```text
+/pharn-loop implement password reset with a one-time token
+```
 
-- the **product commands** into `.claude/commands/`,
-- the **write-gating hooks** into `.claude/hooks/`,
-- the **floor** — the deterministic checkers — plus the **contracts**, **grillers** and **review lenses**
-  under `pharn/`,
-- and a `pharn.config.json` pinning the skills version and the exact commit it installed from.
+`/pharn-loop` runs spec → plan → grill → build → regress → verify, then repeats the build → regress →
+verify middle until it reaches a deterministic stop condition: green, the `--max-iter` cap, or the first
+terminal failure. It is designed around two human gates: approve the spec before code is written, then
+decide merge, fix, or abandon after verification.
 
-Concretely, that is:
+For a one-pass shipping run, use:
+
+```text
+/pharn-ship implement password reset with a one-time token
+```
+
+Every stage is also available as its own command; see [Commands](#commands).
+
+Already installed? `npx @pharn-dev/pharn status` reports your installed skills version and drift.
+`update` re-fetches the latest skills version, `add` and `remove` manage capabilities, and `list` prints
+what is installed. `init` installs into the project rather than onto your `PATH`, so keep the `npx`
+prefix unless you installed the CLI globally.
+
+**Two version numbers, on purpose.** The `pharn` badge above tracks
+[`SKILLS_VERSION`](./SKILLS_VERSION) — the content an install receives, and what `status` and
+`CHANGELOG.md` are keyed to. The npm package `@pharn-dev/pharn` carries the installer's own version.
+They move independently and are not meant to match.
+
+---
+
+## What gets installed
+
+The installer reads your project and selects the capabilities that apply before writing files. Detection
+is JS/TS-shaped today: it reads `package.json` and scans for `next.config.*`, `app/` route handlers,
+`.tsx`/`.jsx`, `migrations/`, and `.sql`, resolving to `ssr`, `backend`, `spa`, or `lib`. A repo with none
+of those signals still installs the universal capabilities.
+
+You see the selected capability list, with a reason beside each entry, before the installer writes. A
+normal install adds:
+
+- product commands in `.claude/commands/`,
+- write-gating hooks in `.claude/hooks/`,
+- the deterministic floor, contracts, grillers, and review lenses under `pharn/`,
+- `pharn.config.json`, pinning the skills version and exact installed commit.
 
 ```text
 your-repo/
@@ -120,64 +164,61 @@ your-repo/
 └── .pharn/                        # runtime scratch — add to .gitignore
 ```
 
-The hooks only enforce anything once they are registered in `.claude/settings.json`. If your project
-already has that file, the installer **preserves it and does not wire the hooks** — it warns, and the
-wiring is then yours to copy over. Until you do, everything in
-[Guaranteed vs advisory](#guaranteed-vs-advisory) that depends on a `PreToolUse` hook is not in force.
+The hooks enforce only after they are registered in `.claude/settings.json`. If your project already has
+that file, the installer preserves it and warns instead of overwriting it. Until you copy the hook wiring
+over, any guarantee that depends on a `PreToolUse` hook is not active.
 
-Then open Claude Code and describe what you want built:
+---
 
-```text
-/pharn-loop implement password reset with a one-time token
-```
+## How the workflow works
 
-`/pharn-loop` runs the whole chain — spec, plan, grill, build, regress, verify — and iterates the
-build → regress → verify middle until a deterministic stop: floor-green, the iteration cap
-(`--max-iter N`, default 3), or the first terminal failure. It hands back to you at exactly two points, and no others: once to approve the
-`SPEC.md` before any code is written, and once after verification to decide merge, fix, or abandon.
+PHARN splits an AI-assisted change into typed stages:
 
-`/pharn-ship` is the same chain without the auto-iteration — one pass, then the PR. Every stage is also
-its own command if you want to stop somewhere and look; see [Commands](#commands).
+1. **Spec** — turn prose intent into `SPEC.md`, surface gaps, and stop for approval.
+2. **Plan** — turn the approved spec into `PLAN.md`, including the concrete files the build may touch.
+3. **Grill** — interrogate the plan before code exists.
+4. **Build** — implement the plan. With hooks wired, Claude Code write/edit tools are denied outside
+   the active scope.
+5. **Regress** — re-run existing project suites and record breakage outside the feature.
+6. **Verify** — check declared artifacts and completeness signals, including missing concrete paths.
+7. **Ship** — write the ship/briefing artifacts and present the final human decision gate.
 
-Already installed? `npx @pharn-dev/pharn status` reports your version and whether any installed file has
-drifted; `update` re-fetches at the latest skills version; `add` and `remove` manage individual
-capabilities; `list` prints what is installed. (`init` installs into the project, not onto your `PATH`,
-so keep the `npx` prefix unless you installed the CLI globally.)
+The approved spec body is pinned by a content hash, so later drift is detectable. Verification can also
+report `INCOMPLETE` when a concrete path declared by the plan does not exist after the build.
 
-**Two version numbers, on purpose.** The `pharn` badge above tracks
-[`SKILLS_VERSION`](./SKILLS_VERSION) — the content an install receives, and what `status` and
-`CHANGELOG.md` are keyed to. The npm package `@pharn-dev/pharn` carries the installer's own version.
-They move independently and are not meant to match.
+Those are narrow checks, not magic. PHARN does not prove that the plan was wise, that every finding is
+correct, or that the final code is secure. It makes the workflow legible and backs specific claims with
+specific deterministic checks.
 
 ---
 
 ## Commands
 
-Two commands cover the normal case. The other eight are the stages those two run, available on their own
-when you want to drive a step yourself.
+Two commands cover the normal path. The other eight are the stages those two run, available on their own
+when you want to inspect or drive one step manually.
 
-| Command                 | What it does                                                                                                                                                     |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/pharn-loop`           | The whole chain, auto-iterated until a deterministic stop (green, the `--max-iter` cap, default 3, or the first terminal failure). Two human gates, no `--yolo`. |
-| `/pharn-ship`           | The same chain, one pass, then the PR — gated on the same two human decisions.                                                                                   |
-| `/pharn-review`         | Review lenses over any code, run in parallel as subagents, findings merged deterministically. Not a pipeline stage: point it at anything, any time.              |
-| `/pharn-spec`           | Prose intent into a structured `SPEC.md`, gaps surfaced, stops for your approval, pinned by a body hash once approved.                                           |
-| `/pharn-plan`           | An approved `SPEC.md` into a `PLAN.md` — the files the build may touch, and which of your promoted lessons the plan declares it applied.                         |
-| `/pharn-grill`          | Grillers interrogate the plan before code exists; the spec to plan hash chain and the plan's declared lessons are both re-verified.                              |
-| `/pharn-build`          | Writes the implementation, scoped to the paths the plan declared.                                                                                                |
-| `/pharn-regress`        | Re-runs your existing suites to catch breakage outside the feature just built.                                                                                   |
-| `/pharn-verify`         | Checks the build against the plan's contracts; a declared file that was never written yields `INCOMPLETE`.                                                       |
-| `/pharn-memory-promote` | Gated promotion of a single lesson into your `memory-bank/`.                                                                                                     |
+| Command                 | Use it when you want to...                                                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/pharn-loop`           | Run the full workflow with bounded build → regress → verify iteration until green, the `--max-iter` cap, or a terminal failure.                         |
+| `/pharn-ship`           | Run the full workflow once, then present the ship record and briefing at the final human decision gate.                                                 |
+| `/pharn-review`         | Run code-review lenses in parallel over any code and merge their structured findings deterministically. This is standalone; it is not a pipeline stage. |
+| `/pharn-spec`           | Convert prose intent into a structured `SPEC.md`, surface gaps, and stop for approval before implementation.                                            |
+| `/pharn-plan`           | Convert an approved `SPEC.md` into a `PLAN.md` with declared files and declared promoted lessons.                                                       |
+| `/pharn-grill`          | Challenge the plan before code exists and re-check the spec/plan hash chain.                                                                            |
+| `/pharn-build`          | Implement the plan after setting the active write scope from `PLAN.md`.                                                                                 |
+| `/pharn-regress`        | Re-run existing project suites and record regressions outside the feature.                                                                              |
+| `/pharn-verify`         | Check build artifacts and completeness signals, including declared concrete paths that were never created.                                              |
+| `/pharn-memory-promote` | Promote one lesson into `memory-bank/` through a gated provenance check.                                                                                |
 
 The command names are generated and drift-guarded in the [inventory below](#pharn-builds-pharn); the
 one-line descriptions in this table are hand-written and are not.
 
 ---
 
-## What it catches
+## Capability coverage
 
-Capabilities are named for the problem they find, not the technology they use. Grillers interrogate a
-**plan**; lenses read **code**.
+Capabilities are named for the problem they inspect, not the framework they run in. Grillers interrogate
+a **plan** before implementation; lenses read **code** after implementation or during standalone review.
 
 **Grillers** — a11y, architecture, comprehension, coupling, documentation, error-handling, i18n,
 migrations, observability, performance, privacy, security, testability.
@@ -187,8 +228,8 @@ input validation, hallucinated APIs, missing `await`, missing timeouts, null der
 race conditions, resource leaks, swallowed exceptions, missing error handling, n-plus-one queries,
 duplicated logic, copy-paste drift, magic values, placeholder-as-done, and a trust fence.
 
-Every capability ships with its own eval cases and expected outputs; the floor refuses a capability
-whose rules no eval exercises.
+Every capability ships with eval cases and expected outputs. The floor refuses a capability whose
+declared rules are not exercised by at least one eval.
 
 This section is a tour, not the authoritative inventory. The drift-guarded lists are generated from the
 repository: [`docs/capabilities/`](./docs/capabilities/README.md) and the
@@ -340,9 +381,9 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   `pharn/pharn-*/**`. The
   set is computed at runtime in `.claude/hooks/enforce-writes-scope.cjs`.
   Ordinary edits to your own code (`src/app.ts`, `package.json`, `README.md`) are denied. That is the
-  intended posture — a stage sets the scope in its first step, so `/pharn-build` writes exactly the
-  concrete paths your `PLAN.md` declared — but it means the guard is not a drop-in for editing outside
-  a PHARN run. Clearing the scope (`set-writes-scope.cjs --clear`, or deleting
+  intended posture — a stage sets the scope in its first step, so with hooks wired, write/edit tool calls
+  outside the concrete paths your `PLAN.md` declared are denied — but it means the guard is not a drop-in
+  for editing outside a PHARN run. Clearing the scope (`set-writes-scope.cjs --clear`, or deleting
   `.pharn/writes-scope.json`) returns to this default; it does **not** re-open your source. To write
   elsewhere, either set a scope that names those paths
   (`set-writes-scope.cjs --from-plan <PLAN.md>`), or leave `enforce-writes-scope.cjs` out of
@@ -350,6 +391,8 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
 - **Model judgment remains model judgment.** Architecture quality, review correctness, severity,
   completeness of intent, and semantic correctness are advisory unless a specific deterministic checker
   covers the claim.
+- **Approval is workflow discipline, not proof of a person.** A content hash detects drift after a spec is
+  marked approved; it does not prove who marked it approved.
 - **Build completeness is filesystem-level.** PHARN can detect that a concrete declared path is missing;
   it cannot prove that an existing path was actually modified or implemented correctly.
 - **Prompt injection is not solved.** PHARN narrows which data may influence guaranteed decisions, but it
