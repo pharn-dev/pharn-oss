@@ -33,21 +33,16 @@
     // entry: probed the same way, `prettier --check .` does NOT traverse `.pharn/`, so there is no
     // trigger for one (P7 — no speculative additions).
     ".pharn/lessons-index.md",
-    // Human-authored scratch under gitignored `.pharn/` — fix-request writeups, review notes. Excluded
-    // for a DIFFERENT reason than the entry above: not "a --fix would damage a generated artifact" but
-    // "these files are not the repo's markdown and were never meant to face its style gate". The
-    // trigger is a real failure, not a hypothetical (P7): six such files RED'd `lint:md`, and through
-    // it the capability-catalog `style:` test, which is L11's shape exactly — a whole-repo gate failing
-    // on files unrelated to any increment blocks EVERY later feature's /pharn-dev-verify.
-    // Deliberately `.pharn/fixes` and NOT a blanket `.pharn/`: the narrower scope is what was
-    // authorized, and a blanket entry would silently also cover future load-bearing artifacts there.
-    ".pharn/fixes",
-    // The same scratch corpus, one stray copy of which sits at the `.pharn/` ROOT rather than under
-    // `fixes/` (byte-identical to `.pharn/fixes/FABLE_REVIEW.md`, verified live). Named explicitly
-    // instead of widening the entry above to a blanket `.pharn/`, so the exclusion stays an enumerated
-    // list of known scratch rather than a standing waiver over a directory that also holds the
-    // load-bearing product-index cache.
-    ".pharn/FABLE_REVIEW.md",
+    // Zone note, kept where the next editor of this list will need it: `.pharn/` is excluded ENTRY BY
+    // ENTRY, never as a blanket `.pharn/`. The reason is structural rather than situational — the
+    // directory holds the fix #7 writes-scope file and the product-index cache above alongside
+    // disposable per-command scratch (`.pharn/<command>/`), so a directory-wide waiver would stand over
+    // load-bearing artifacts too, and it would merge two exclusions that exist for different reasons: a
+    // generated artifact a `--fix` must not rewrite (above) versus human scratch that was never this
+    // repo's markdown. Per-file entries of the second kind have been added here and later removed once
+    // nothing under `.pharn/` matched them; re-adding one the next time `lint:md` reds on such a file is
+    // the intended cycle, not a gap. ADVISORY: no checker reads this note, and none tests whether an
+    // entry here still matches anything (named residual `lint-ignore-reachability-check`).
   ],
   "config": {
     "default": true,

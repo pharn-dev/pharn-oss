@@ -1,0 +1,14 @@
+{
+  "feature": "stale-lint-ignores",
+  "gates": {
+    "format:check": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "verifiers": { "registered": 0, "findings": [] }
+}
