@@ -410,8 +410,6 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   `/pharn-review` fans every applicable lens out as its own parallel subagent; `/pharn-loop` repeats
   build → regress → verify up to the cap. That buys parallel scrutiny and costs tokens accordingly.
   Budget for it, or drive individual stages instead of the loop.
-- **Not every design doc ships into an install.** The installer copies `pharn/CONSTITUTION.md` and
-  `pharn/ARCHITECTURE.md` only; `THREAT-MODEL.md` and `LIMITS.md` are read here, in the repository.
 
 [`LIMITS.md`](./LIMITS.md) documents what PHARN does not guarantee.
 [`THREAT-MODEL.md`](./THREAT-MODEL.md) documents the attack surface and trust assumptions.
@@ -429,8 +427,9 @@ The architecture is specified in four documents:
 4. [`LIMITS.md`](./LIMITS.md) — what PHARN does **not** guarantee.
 
 These trusted docs are protected from edits through Claude Code's Write/Edit/MultiEdit/NotebookEdit tool
-surface. As described above, Bash writes are outside that protection, and only the first two are copied
-into an install (see [Current limitations](#current-limitations)).
+surface. As described above, Bash writes are outside that protection. In the current `pharn/` layout, the
+installer mirrors all four docs into an installed project: `pharn/CONSTITUTION.md`,
+`pharn/ARCHITECTURE.md`, `THREAT-MODEL.md`, and `LIMITS.md`.
 
 ---
 
