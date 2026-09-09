@@ -332,6 +332,19 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
 - **Claude Code only today.** The current shipped integration uses Claude Code commands and hooks.
 - **Shell writes are outside the write guard.** Bash can modify files without passing through the
   `PreToolUse` write-scope hooks.
+- **The write-scope guard's fail-closed default does not cover your source.** Where
+  `enforce-writes-scope.cjs` is wired and no scope is active, Claude Code's
+  Write/Edit/MultiEdit/NotebookEdit tools are restricted to `features/**`, `.dev/features/**` (present
+  only in PHARN's own repo, never in an install), `pharn/pharn-*/**` and `.pharn/**` — PHARN's own
+  artifact directories, defined as `DEFAULT_SAFE_SET` in `.claude/hooks/enforce-writes-scope.cjs`.
+  Ordinary edits to your own code (`src/app.ts`, `package.json`, `README.md`) are denied. That is the
+  intended posture — a stage sets the scope in its first step, so `/pharn-build` writes exactly the
+  concrete paths your `PLAN.md` declared — but it means the guard is not a drop-in for editing outside
+  a PHARN run. Clearing the scope (`set-writes-scope.cjs --clear`, or deleting
+  `.pharn/writes-scope.json`) returns to this default; it does **not** re-open your source. To write
+  elsewhere, either set a scope that names those paths
+  (`set-writes-scope.cjs --from-plan <PLAN.md>`), or leave `enforce-writes-scope.cjs` out of
+  `.claude/settings.json` — at the cost of `writes:` enforcement.
 - **Model judgment remains model judgment.** Architecture quality, review correctness, severity,
   completeness of intent, and semantic correctness are advisory unless a specific deterministic checker
   covers the claim.
