@@ -29,14 +29,6 @@ npx @pharn-dev/pharn@latest init
 [![Secrets](https://github.com/pharn-dev/pharn-oss/actions/workflows/gitleaks.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/gitleaks.yml)
 [![Built for Claude Code](https://img.shields.io/badge/built%20for-Claude%20Code-555)](https://claude.com/claude-code)
 
-<br />
-
-<img
-  src="./docs/assets/pharn-github-cover.png"
-  alt="Welcome to Pharn: Audit-grade workflow for AI-assisted software development"
-  width="100%"
-/>
-
 </div>
 
 > **Status:** Ready to install and use with Claude Code today. Active development continues;
