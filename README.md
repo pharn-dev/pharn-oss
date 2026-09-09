@@ -404,8 +404,6 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   it cannot prove that an existing path was actually modified or implemented correctly.
 - **Prompt injection is not solved.** PHARN narrows which data may influence guaranteed decisions, but it
   does not claim to eliminate prompt injection.
-- **No verifier/auditor capability ships yet.** `/pharn-verify` uses the shipped floor and project gates;
-  the verifier plug-in slot remains empty.
 - **It is token-hungry by construction.** `/pharn-grill` runs the grillers over your plan and
   `/pharn-review` fans every applicable lens out as its own parallel subagent; `/pharn-loop` repeats
   build → regress → verify up to the cap. That buys parallel scrutiny and costs tokens accordingly.
