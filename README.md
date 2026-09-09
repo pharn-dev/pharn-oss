@@ -130,9 +130,11 @@ what is installed. `init` installs into the project rather than onto your `PATH`
 prefix unless you installed the CLI globally.
 
 **Two version numbers, on purpose.** The `pharn` badge above tracks
-[`SKILLS_VERSION`](./SKILLS_VERSION) — the content an install receives, and what `status` and
-`CHANGELOG.md` are keyed to. The npm package `@pharn-dev/pharn` carries the installer's own version.
-They move independently and are not meant to match.
+[`SKILLS_VERSION`](./SKILLS_VERSION) — the PHARN-OSS product surface an install receives, and what
+`status` and `CHANGELOG.md` are keyed to. The published npm package `@pharn-dev/pharn` is the installer
+CLI, whose source lives in [`pharn-cli`](https://github.com/pharn-dev/pharn-cli); it installs PHARN-OSS
+into your project and records the exact installed commit. Those versions move independently and are not
+meant to match.
 
 ---
 
@@ -408,8 +410,6 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   `/pharn-review` fans every applicable lens out as its own parallel subagent; `/pharn-loop` repeats
   build → regress → verify up to the cap. That buys parallel scrutiny and costs tokens accordingly.
   Budget for it, or drive individual stages instead of the loop.
-- **Packaging is still pre-release shaped.** There are no GitHub releases or git tags yet; the installer
-  currently fetches the repository's `main` and records the exact installed commit.
 - **Not every design doc ships into an install.** The installer copies `pharn/CONSTITUTION.md` and
   `pharn/ARCHITECTURE.md` only; `THREAT-MODEL.md` and `LIMITS.md` are read here, in the repository.
 
