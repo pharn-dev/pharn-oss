@@ -403,9 +403,6 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   does not claim to eliminate prompt injection.
 - **No verifier/auditor capability ships yet.** `/pharn-verify` uses the shipped floor and project gates;
   the verifier plug-in slot remains empty.
-- **Several announced modules are not built.** `pharn-audits`, `pharn-skills-*`, `pharn-stack-*`, and the
-  rest of `pharn-core` — the constitution engine, the agnostic rule set, and the memory-bank commands
-  beyond promotion. What exists is what the generated inventory above lists.
 - **Per-stage model routing is not wired yet.** `pharn.config.json` carries a `models` block, and the
   installer validates it and prints it back, but no product command reads it — the pipeline runs on
   whatever model your Claude Code session is using. Treat the block as reserved, not as a control.
