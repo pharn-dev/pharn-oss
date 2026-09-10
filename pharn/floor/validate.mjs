@@ -423,7 +423,7 @@ for (const cap of capabilities) {
   // defect .dev/memory-bank/lessons-learned.md L3 names. The exemption therefore keys on the TARGET
   // module, and the reader-side skip is gone, so a base-module capability's own reads: is checkable too.
   //
-  // NARROWED, and stated — three distinct bounds, none of which the widening closes:
+  // NARROWED, and stated — FOUR distinct bounds, none of which the widening closes:
   //   1. It is a MEMBERSHIP set, not a layer RANK. A capability inside pharn-contracts naming pharn-core
   //      is admitted, though §4's tree puts core ABOVE contracts. Modelling rank would mean inventing an
   //      ordering for modules nobody has built (pharn-audits, pharn-stack-<fw>, pharn-skills-*) — the
@@ -434,6 +434,18 @@ for (const cap of capabilities) {
   //      `../injection/injection.md` reaching a sibling directory names no module token and is GREEN.
   //      That is a property of name-matching, not of this regex, and no tightening of the pattern
   //      reaches it.
+  //   4. A BARE FILENAME reference evades it: `reads: ["pharn-stack-next.md"]` splits to the single
+  //      token `pharn-stack-next.md`, whose `.` leaves it unanchorable, so CHECK 6 stays GREEN. The
+  //      PREVIOUS substring matcher caught that shape, so this is a real NARROWING and is recorded as
+  //      one rather than left to be rediscovered — raised by an automated review of the widening PR.
+  //      It is ACCEPTED, not overlooked, because the two shapes are LEXICALLY INDISTINGUISHABLE:
+  //      stripping the extension to catch `pharn-stack-next.md` equally converts `docs/pharn-notes.md`
+  //      into the module token `pharn-notes` and REDs a correct declaration. The trade is a false
+  //      NEGATIVE against a false POSITIVE, and L3 settles it — a rule that turns correct declarations
+  //      into blocks is the defect this repo keeps hitting, and CHECK 6 is labeled best-effort. Every
+  //      `reads:` value in the live corpus is path-shaped (`pharn/pharn-contracts/finding-shape.md`,
+  //      `pharn-stack-next/tokens.md`), where the module IS its own segment and matches; measured, not
+  //      assumed. If a bare-filename `reads:` ever lands, this bound is the thing to revisit.
   // Widening changed what the grep can SEE. It did not change what a declaration PROVES.
   const ownModule = (rel.split(sep).find((s) => s.startsWith("pharn-")) || "").trim();
   const reads = Array.isArray(fm.reads) ? fm.reads : fm.reads ? [fm.reads] : [];

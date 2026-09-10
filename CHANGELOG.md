@@ -50,8 +50,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-<<<<<<< HEAD
-
 - **`pharn/floor/scan-code-missing-error-handling.mjs` carried two RAW NUL bytes; they are now built
   with `String.fromCharCode(0)` like the sibling that documents the convention.** `SKILLS_VERSION`
   **3.0.3 → 3.0.4** (patch — a correction to bytes that already shipped; the intermediate number is
@@ -88,7 +86,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   tested, and every other control or non-ASCII byte passes untouched. The sweep is **non-recursive over
   two directories**: `.claude/hooks/*.cjs`, `.claude/commands/**`, all `*.md`, both `test-fixtures/`
   subtrees, and test files themselves are outside it.
-  \=======
 
 - **`pharn/floor/validate.mjs` CHECK 6 — the only floor expression of P3 — could not fire on either
   sibling module that exists** (`SKILLS_VERSION` 3.0.4 → **3.0.5**). Its target matcher was

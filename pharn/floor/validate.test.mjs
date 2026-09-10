@@ -906,6 +906,37 @@ test("★ CHECK 6 NON-VACUITY: the RED disappears when CHECK 6's branch is disab
   });
 });
 
+// BOUND 4, pinned as a KNOWN state rather than left to drift. A bare-filename module reference evades
+// CHECK 6: the `.` leaves the token unanchorable. The previous substring matcher caught this shape, so
+// the widening genuinely NARROWED here — raised by an automated review of the widening PR. It is
+// ACCEPTED because the two shapes are lexically indistinguishable: stripping the extension to catch
+// `pharn-stack-next.md` equally turns `docs/pharn-notes.md` into the module token `pharn-notes` and REDs
+// a correct declaration. L3 settles the trade (a rule that blocks correct declarations is the recurring
+// defect), and CHECK 6 is labeled best-effort. This test asserts BOTH halves, so a future change that
+// closes the gap fails here and forces the false-positive question to be answered deliberately.
+test("★ CHECK 6 BOUND 4: a bare-filename sibling ref is GREEN (accepted narrowing), while the path form REDs", () => {
+  // The evading shape — no path separator, so the extension stays attached to the token.
+  withRepo(capWithReads("pharn-pipeline", "sample", ["pharn-stack-next.md"]), (root) => {
+    const r = run(root);
+    assert.equal(r.status, 0, `bare-filename ref is a KNOWN, documented miss; got:\n${r.stdout}`);
+    assert.doesNotMatch(r.stdout, CHECK6_RE);
+  });
+
+  // The discriminator: the SAME module named in path form IS caught, so the miss above is specifically
+  // the extension-attachment case and not CHECK 6 having stopped working.
+  withRepo(capWithReads("pharn-pipeline", "sample", ["pharn-stack-next/tokens.md"]), (root) => {
+    const r = run(root);
+    assert.equal(r.status, 1, `the path form MUST still RED, or bound 4 is masking a real break; got:\n${r.stdout}`);
+    assert.match(r.stdout, CHECK6_RE);
+  });
+
+  // And the reason the extension is not simply stripped: this correct declaration must stay GREEN.
+  withRepo(capWithReads("pharn-pipeline", "sample", ["docs/pharn-notes.md"]), (root) => {
+    const r = run(root);
+    assert.equal(r.status, 0, `a doc whose stem merely starts with pharn- must NOT RED; got:\n${r.stdout}`);
+  });
+});
+
 // The value is free text (fix #1) and reaches the human-facing report, so it gets the same quoted-render
 // treatment as the target path: a newline in it must not be able to forge a `- [blocking]` line.
 test("★ CHECK 6: a newline-bearing reads: value cannot forge a finding line", () => {
