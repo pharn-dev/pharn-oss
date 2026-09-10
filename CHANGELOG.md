@@ -332,7 +332,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   lens's verdict.
 
 - **A Capability's `writes:` is parsed by NOTHING, while two shipped docs called it floor-enforced**
-  (`SKILLS_VERSION` 3.0.10 → **3.1.2**, patch over shipped bytes). `pharn/ARCHITECTURE.md §3.1` annotates
+  (`SKILLS_VERSION` 3.0.10 → **3.0.11**, patch over shipped bytes). `pharn/ARCHITECTURE.md §3.1` annotates
   `writes: ["<path>"]` as _"ENFORCED by the pre-write hook"_, and
   `pharn/pharn-contracts/finding-shape.md` claimed that once a Capability names `findings.json` in its
   `writes:` the guard _"pins the path"_. **Neither holds.** `enforce-writes-scope.cjs` reads exactly one
