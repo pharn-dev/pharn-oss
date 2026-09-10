@@ -25,6 +25,57 @@
 // vector at once. enforce-writes-scope.cjs keeps its own compare (defense in depth), and
 // set-writes-scope.cjs is unaffected: it writes the file with fs.writeFileSync, which PreToolUse never sees.
 //
+// ── MEMORY-BANK CANON (the canon-write denylist) ────────────────────────────────────────────────────
+// `memory-bank/` and `.dev/memory-bank/` are denied as ROOTED SUBTREES, with one narrow escape.
+//
+// WHY IT IS HERE AT ALL. THREAT-MODEL.md §2 #3 calls memory-bank poisoning the "worst persistence
+// vector" — write-once-influence-forever, silent and cumulative, with no rollback signal — and §3 maps
+// it to the floor primitive "pre-write hook". That mapping did not hold: this file had ZERO memory-bank
+// references, so the composed verdict rested entirely on enforce-writes-scope.cjs, whose scope for
+// /pharn-build and /pharn-dev-build is parsed from an UNTRUSTED PLAN.md's `## Files`
+// (set-writes-scope.cjs --from-plan), and whose CONTROL_SURFACE refusal covers only the four .claude/
+// control paths — never canon. A `## Files` entry naming a canon file therefore granted a direct,
+// ungated canon write, and no human approves a PRODUCT PLAN.md. Measured before the fix: a Write payload
+// naming memory-bank/lessons-learned.md exited 0 here.
+//
+// NOT A HYPOTHETICAL (P7). It happened twice and both are in canon: lessons-learned L7 (a `writes:`
+// over-declaration handed /review "a direct, ungated canon write") and L20 (a `## Files` over-grant
+// resolved 6 paths against the human-approved 2, and the over-grant reached
+// .dev/memory-bank/lessons-learned.md itself — through `--from-plan`, this exact vector). L20's own rule
+// is that the second occurrence of a discipline-only remedy earns a floor check. This is that check.
+//
+// THE ESCAPE, AND EXACTLY WHAT IT IS NOT. A PreToolUse hook is fed on STDIN, never argv, so
+// set-writes-scope.cjs's `--allow-claude-dir` shape is not literally available. The authorization signal
+// is instead the ORIGIN of the active writes-scope: canonWriteAuthorized() permits a canon write only
+// when .pharn/writes-scope.json parses to an object whose `set_by` is an exact member of
+// PROMOTE_COMMANDS and whose `scope` is a SINGLE entry equal to the write target. Every other state —
+// absent, unparseable, non-object, wrong origin, multi-entry, or naming a different canon file — DENIES.
+//   • What it genuinely buys: `set_by` is written from the setter's ARGV, so NO `writes:` declaration and
+//     NO `## Files` entry can set it for itself — the same property set-writes-scope.cjs claims for
+//     --allow-claude-dir. /pharn-build and /pharn-dev-build invoke `--from-plan <PLAN.md>`, whose
+//     `set_by` is the plan path, so the vector above is closed for a DECLARATION, on the
+//     Write/Edit/MultiEdit/NotebookEdit surface.
+//   • What it is NOT, and must never be sold as: it is NOT non-self-grantable against an agent holding
+//     Bash. set-writes-scope.cjs writes its record with fs.writeFileSync, which PreToolUse never sees,
+//     so an agent can run the setter with promote-shaped argv, or forge the record outright, with no
+//     human gate. NO mechanism without that hole was found, and none is claimed. It grants nothing new:
+//     the same actor could already `cat >> memory-bank/lessons-learned.md`, which this hook has never
+//     covered. What changes is that on the guarded tool surface a canon write now costs a SEPARATE,
+//     EXPLICIT, auditable act a build plan cannot cause, instead of arriving as an ordinary in-scope
+//     build write. That is a NARROWING, not a closure.
+//   • It is also NOT evidence a human approved. The floor cannot verify a form answer (LIMITS.md §1d);
+//     the promote commands' accept/deny halt stays exactly as advisory as it is today.
+//
+// A CAPABILITY THIS DELIBERATELY REMOVES. .claude/commands/pharn-dev-memory-promote.md documents a
+// second, legitimate canon route: the L1-L17 retro-tagging increment travelled "the ordinary gated build
+// path — declared in its PLAN's `## Files`, scoped by --from-plan, approved by a human at the plan
+// gate". That route is byte-for-byte the vector above, and the floor cannot tell an honest retag plan
+// from a poisoned one, so it is closed. A future canon ANNOTATION is a human hand-edit, or runs under a
+// deliberately-set promote-origin scope. Both remedies are named in the canon deny message (L27 — a
+// guard that prints an impossible remedy trains the bypass it exists to prevent), and the
+// declare-it-in-`writes:`-and-re-run-the-setter remedy is deliberately ABSENT from that message, because
+// it is exactly the route this denylist exists to refuse.
+//
 // ── MATCHING ────────────────────────────────────────────────────────────────────────────────────────
 // REPO-RELATIVE, EXACT, CASE- AND UNICODE-FOLDED. Every default entry is a path relative to a guarded
 // root, and a write is denied only when the target's own relative path equals one of them under the
@@ -36,6 +87,15 @@
 // `.claude/commands/**` and `.claude/hooks/*.test.cjs` are deliberately NOT protected: the commands are
 // the methodology this repo edits every increment, and a guard that froze its own tests would be
 // unmaintainable.
+//
+// PROTECTED_SUBTREES is the ONE deliberate exception to exact matching, and it is NOT a return to the
+// removed branches. A canon directory cannot be spelled as an exact path, so it is matched as a ROOTED
+// PREFIX — `<guarded root>/memory-bank/…` — which is still trust-by-LOCATION. The removed fragment
+// branch denied a user's docs/ARCHITECTURE.md ANYWHERE in the tree because it matched a path SEGMENT
+// wherever it appeared; this matches only what actually sits under a guarded root's canon directory, so
+// a nested vendor copy at src/vendor/memory-bank/x.md is untouched. The honest over-block that remains
+// is a user's OWN unrelated memory-bank/ at the guarded root — structural, exactly as for the
+// root-level THREAT-MODEL.md / LIMITS.md / CODEOWNERS entries.
 //
 // ── WHAT THIS FILE LEARNED FROM BEING ATTACKED ──────────────────────────────────────────────────────
 // The first repo-relative draft of this matcher was correct on every case its author thought of, and
@@ -63,7 +123,9 @@
 // the write proceeds. So every crash in a write-guard is a bypass. Three were found and are closed
 // here — a deleted cwd (process.cwd() throws), a literal `null` stdin payload (JSON.parse returns null,
 // which then dereferences), and a pathological path (path.join spread past the argument limit) — and
-// the decision itself is wrapped so that ANY unexpected error DENIES rather than allows.
+// the decision itself is wrapped so that ANY unexpected error DENIES rather than allows. The canon
+// escape inherits this posture in the strictest direction: every failure to read, parse or validate
+// .pharn/writes-scope.json returns "not authorized", i.e. the write is DENIED.
 //
 // ── HONEST BOUNDS (P0) ──────────────────────────────────────────────────────────────────────────────
 // • Case-folding is fail-SAFE, not free. On a case-SENSITIVE volume `pharn/constitution.md` is a
@@ -73,10 +135,21 @@
 //   dot/space strip (Windows semantics) and the Unicode fold, which is close to — but not provably
 //   identical with — the filesystem's own equivalence.
 // • Root-level entries (THREAT-MODEL.md, LIMITS.md, CODEOWNERS) still over-block a user's own
-//   same-named file at the guarded root. That is structural: PHARN's own copies live there.
+//   same-named file at the guarded root. That is structural: PHARN's own copies live there. The canon
+//   SUBTREES over-block on the same terms and for the same reason.
 // • The .pharn/writes-scope.json entry closes the WRITE-TOOL vector only. The claim is "the Write-tool
 //   self-escalation is closed", NEVER "the scope file cannot be rewritten" — see the Bash bound below,
 //   which reaches it exactly as it reaches every other guarded path.
+// • The canon denylist covers the Write/Edit/MultiEdit/NotebookEdit surface ONLY. "Canon cannot be
+//   written" is STRUCK. See the Bash bound immediately below — it is the whole ceiling on the canon
+//   guarantee, and the escape's authorization record is reachable through it too.
+// • CANON_INODES collects only the FOUR NAMED canon files, so a hard-link alias of some OTHER file
+//   inside a canon subtree is not caught. A recursive subtree walk on every tool call is the hang risk
+//   this file already refuses elsewhere (MAX_RESOLVED_SEGMENTS), and creating a hard link needs Bash,
+//   which bypasses this hook entirely. HONEST TRIGGER (P7): CANON_INODES answers NO observed failure —
+//   it exists for PARITY with the PROTECTED_INODES coverage the trusted docs already have, so the canon
+//   half of a deliberate pair does not silently ship weaker (lessons-learned L31). Said plainly rather
+//   than dressed as failure-driven, following the check-plan-lessons sub-check D precedent.
 // • Bash-tool writes bypass PreToolUse hooks ENTIRELY. That is by far the largest hole in this guard
 //   and no amount of path matching narrows it.
 // • PHARN vendored at a SUBPATH of a larger project is not guarded: Claude Code loads .claude/ from
@@ -85,11 +158,17 @@
 //   checkout's CONSTITUTION.md is a different repo's file, and denying it was the original over-match.
 //
 // Composes with set-writes-scope.cjs, which REFUSES to emit a scope naming the .claude/ control paths
-// unless --allow-claude-dir is passed. The two are independent: this denylist holds no matter what scope
-// was set, so neutering the setter's refusal still does not make a control file writable. The setter's
-// CONTROL_SURFACE deliberately does NOT carry .pharn/writes-scope.json: the two sets are pinned equal on
-// the .claude/-prefixed entries by a ✧ test in set-writes-scope.test.cjs, and a scope naming the file is
-// inert anyway — both this hook and enforce-writes-scope.cjs deny the write regardless of scope.
+// unless --allow-claude-dir is passed. For every DEFAULT_PROTECTED entry the two remain independent:
+// that denylist holds no matter what scope was set, so neutering the setter's refusal still does not
+// make a control file writable. THE CANON BRANCH IS THE ONE EXCEPTION, and the qualifier is load-bearing
+// (it was previously stated without one, and this increment made that sentence false): a canon write
+// CONSULTS .pharn/writes-scope.json, so for canon the two guards are coupled by the record's SHAPE —
+// `set_by` plus a one-entry `scope`, as emitted at set-writes-scope.cjs's `const record = {…}`. A ✧ test
+// pins that the setter's live output still satisfies canonWriteAuthorized(), so the two cannot drift
+// into disagreement unnoticed. The setter's CONTROL_SURFACE deliberately does NOT carry
+// .pharn/writes-scope.json: the two sets are pinned equal on the .claude/-prefixed entries by a ✧ test
+// in set-writes-scope.test.cjs, and a scope naming the file is inert anyway — both this hook and
+// enforce-writes-scope.cjs deny the write regardless of scope.
 //
 // Wired via .claude/settings.json (PreToolUse matcher: Write|Edit|MultiEdit|NotebookEdit).
 
@@ -168,6 +247,28 @@ const DEFAULT_PROTECTED = [
   ".pharn/writes-scope.json",
 ];
 
+// Memory-bank canon, denied as ROOTED SUBTREES (see the header). Both halves of the deliberate
+// dev/product copy-pair are listed, because the second copy is where a pair's obligation gets dropped
+// (lessons-learned L31). No trailing slash here — one is appended once, at fold time.
+const PROTECTED_SUBTREES = ["memory-bank", ".dev/memory-bank"];
+
+// The four canon files the two promote commands' TARGET_ENUMs actually name. Used ONLY to collect
+// hard-link inodes (a bounded four stats, versus a recursive walk of the subtrees on every tool call).
+const CANON_FILES = [
+  "memory-bank/lessons-learned.md",
+  "memory-bank/pattern-library.md",
+  ".dev/memory-bank/lessons-learned.md",
+  ".dev/memory-bank/pattern-library.md",
+];
+
+// The ONLY writes-scope origins that may authorize a canon write. Exact membership over a literal array
+// (ARCHITECTURE.md §2 primitive #3) — never a prefix test, never a pattern: `pharn-dev-memory-promote`
+// and `pharn-memory-promote` are named in full so a differently-named command cannot prefix its way in.
+const PROMOTE_COMMANDS = [".claude/commands/pharn-memory-promote.md", ".claude/commands/pharn-dev-memory-promote.md"];
+
+// The writes-scope guard's input, read (never written) by the canon escape.
+const SCOPE_FILE = ".pharn/writes-scope.json";
+
 const extra = (process.env.PHARN_PROTECTED || "")
   .split(",")
   .map((s) => s.trim())
@@ -197,6 +298,12 @@ const ROOT_PREFIXES = ROOTS.map((r) => {
   return k.endsWith("/") ? k : k + "/";
 });
 
+// Canon subtrees as folded prefixes WITH the trailing slash, so `memory-banked/x.md` cannot match
+// `memory-bank`. The bare directory itself is not a write target, so requiring something after the
+// slash is correct as well as narrower.
+const PROTECTED_SUBTREE_KEYS = PROTECTED_SUBTREES.map((s) => toKey(s) + "/");
+const PROMOTE_COMMAND_KEYS = new Set(PROMOTE_COMMANDS.map(toKey));
+
 // PHARN_PROTECTED keeps its ORIGINAL basename/path-fragment semantics, deliberately. Narrowing it to
 // exact repo-relative paths would silently strip protection from an operator's existing setting — a
 // guard that fails OPEN on a config it used to honor, with no error. There is no over-block victim: an
@@ -218,10 +325,10 @@ function matchesExtra(key, entryKey) {
 // Hard links have no link to resolve, so realpath returns the alias unchanged and a path match never
 // sees the trusted key — while the write mutates the same inode. Only files that ACTUALLY carry a
 // second link are collected (nlink > 1), so in the normal case this set is empty and costs nothing.
-const PROTECTED_INODES = (() => {
+function collectInodes(rels) {
   const s = new Set();
   for (const root of ROOTS) {
-    for (const rel of DEFAULT_PROTECTED) {
+    for (const rel of rels) {
       try {
         const st = fs.statSync(path.join(root, rel));
         if (st.nlink > 1) s.add(st.dev + ":" + st.ino);
@@ -231,7 +338,24 @@ const PROTECTED_INODES = (() => {
     }
   }
   return s;
-})();
+}
+
+const PROTECTED_INODES = collectInodes(DEFAULT_PROTECTED);
+// Kept SEPARATE from PROTECTED_INODES on purpose: an inode hit in that set is unconditionally denied,
+// while a canon hit must still route through the escape. Merging them would make a legitimate promote
+// write to a canon file that happens to carry a second link undeniable-by-escape, i.e. it would break
+// /pharn-memory-promote on a hard-linked canon file for no security gain.
+const CANON_INODES = collectInodes(CANON_FILES);
+
+function inodeIn(set, abs) {
+  if (!set.size) return false;
+  try {
+    const st = fs.statSync(abs);
+    return set.has(st.dev + ":" + st.ino);
+  } catch {
+    return false; // absent: cannot be an alias of an existing file
+  }
+}
 
 // Canonicalize a (possibly not-yet-existent) write target through symlinks, ONE SEGMENT AT A TIME.
 //
@@ -336,18 +460,49 @@ function resolveWriteTarget(p) {
 // path — callers pass both the cwd-resolved literal and the symlink-canonicalized target.
 function isProtected(abs) {
   const key = toKey(path.resolve(String(abs)));
-  if (PROTECTED_INODES.size) {
-    try {
-      const st = fs.statSync(abs);
-      if (PROTECTED_INODES.has(st.dev + ":" + st.ino)) return true;
-    } catch {
-      /* absent: cannot be an alias of an existing file */
-    }
-  }
+  if (inodeIn(PROTECTED_INODES, abs)) return true;
   if (EXTRA_KEYS.some((e) => matchesExtra(key, e))) return true;
   for (const prefix of ROOT_PREFIXES) {
     if (!key.startsWith(prefix)) continue; // not under this root (this also rejects the root itself)
     if (PROTECTED_KEYS.has(key.slice(prefix.length))) return true;
+  }
+  return false;
+}
+
+// The target's ROOT-RELATIVE folded key if it sits inside a canon subtree, else null. Returning the key
+// (rather than a boolean) is what lets the escape compare the scope's single entry against the very
+// path being written, instead of merely against "some canon path".
+function canonRelKey(abs) {
+  const key = toKey(path.resolve(String(abs)));
+  for (const prefix of ROOT_PREFIXES) {
+    if (!key.startsWith(prefix)) continue;
+    const rel = key.slice(prefix.length);
+    for (const sub of PROTECTED_SUBTREE_KEYS) if (rel.startsWith(sub) && rel.length > sub.length) return rel;
+  }
+  return null;
+}
+
+// Is this write authorized by the ORIGIN of the active writes-scope? See the header for what this does
+// and does not buy. Every branch that is not an exact match returns false, so the guard is fail-closed
+// on an absent, unreadable, unparseable, non-object, wrong-origin, multi-entry or mismatched record.
+function canonWriteAuthorized(relKey) {
+  if (typeof relKey !== "string" || !relKey) return false;
+  for (const root of ROOTS) {
+    let parsed;
+    try {
+      parsed = JSON.parse(fs.readFileSync(path.join(root, SCOPE_FILE), "utf8"));
+    } catch {
+      continue; // absent or unparseable at this root -> not an authorization
+    }
+    // JSON.parse("null") returns null and JSON.parse("[]") an array; neither throws.
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue;
+    // (2) ORIGIN: exact membership over a literal array. This is the argv-derived field.
+    if (typeof parsed.set_by !== "string" || !PROMOTE_COMMAND_KEYS.has(toKey(parsed.set_by))) continue;
+    // (3) EXACTLY ONE entry, equal to this very target. A promote run resolves `--target` to one path,
+    // so this is the shape the legitimate caller emits; anything wider is refused rather than searched.
+    if (!Array.isArray(parsed.scope) || parsed.scope.length !== 1) continue;
+    if (typeof parsed.scope[0] !== "string") continue;
+    if (toKey(parsed.scope[0]) === relKey) return true;
   }
   return false;
 }
@@ -370,6 +525,19 @@ function extractPaths(toolInput) {
   }
   return paths;
 }
+
+// The deny message is composed PER BRANCH, never as one shared string with per-case bullets appended.
+// enforce-writes-scope.cjs learned this the hard way (lessons-learned L27): a shared message prints
+// every remedy in every case, including the ones that cannot work, and a guard that prints an impossible
+// remedy trains the exact bypass it exists to prevent. The two branches are deliberately DISJOINT in
+// their remedies — the trusted branch never mentions the promote commands, and the canon branch never
+// offers "declare it in `writes:` and re-run the setter", which is precisely the route it refuses.
+const DENY_REASONS = {
+  trusted: (shown) =>
+    `BLOCKED by PHARN floor: ${shown} is (or resolves to) a trusted file (CONSTITUTION P2 / fix #2). Trusted spec is human-only; the build agent may not write it. If a change is genuinely needed, a human edits it outside the agent loop.`,
+  canon: (shown) =>
+    `BLOCKED by PHARN floor: ${shown} is (or resolves to) memory-bank CANON (CONSTITUTION P2 / fix #2; THREAT-MODEL.md §2 #3 — memory poisoning is silent, cumulative, and has no rollback signal). Canon is written only through the gated promotion path. FIX (pick one): • run /pharn-memory-promote (or /pharn-dev-memory-promote), which after its human accept/deny gate sets a writes-scope whose ORIGIN authorizes exactly this one canon file; • or have a human edit canon by hand, outside the agent loop. Re-scoping a build from a PLAN's \`## Files\` CANNOT authorize this write — that is the specific thing this guard refuses, deliberately.`,
+};
 
 const raw = readStdin();
 let payload;
@@ -396,9 +564,28 @@ if (isWrite) {
     try {
       const literal = path.resolve(CWD, String(rawPath));
       const real = resolveWriteTarget(rawPath);
-      hit = isProtected(literal) || isProtected(real) ? { rawPath, literal, real } : null;
+      if (isProtected(literal) || isProtected(real)) {
+        hit = { rawPath, literal, real, kind: "trusted" };
+      } else {
+        // ORDER MATTERS, and getting it wrong is not theoretical — the first draft of this branch
+        // ANDed in `!aliased` and the probe caught it: a canon file that merely HAPPENS to carry a
+        // second hard link has nlink > 1, so it lands in CANON_INODES, so the legitimate promote write
+        // to the file's own declared path was denied. The inode set exists to catch an alias whose OWN
+        // NAME is not canon; it must never re-classify the real path.
+        //   • ck !== null  -> the target IS a canon path by name. The escape applies normally.
+        //   • ck === null but the inode matches -> a hard-link alias. It can never be the promote
+        //     command's `--target`, so there is no key to authorize and it is unconditionally denied.
+        const ck = canonRelKey(literal) || canonRelKey(real);
+        if (ck !== null) {
+          hit = canonWriteAuthorized(ck) ? null : { rawPath, literal, real, kind: "canon" };
+        } else if (inodeIn(CANON_INODES, literal) || inodeIn(CANON_INODES, real)) {
+          hit = { rawPath, literal, real, kind: "canon" };
+        } else {
+          hit = null;
+        }
+      }
     } catch {
-      hit = { rawPath, literal: String(rawPath), real: String(rawPath), errored: true };
+      hit = { rawPath, literal: String(rawPath), real: String(rawPath), errored: true, kind: "trusted" };
     }
     if (hit) {
       offender = hit;
@@ -408,11 +595,16 @@ if (isWrite) {
   if (offender) {
     let shown = offender.rawPath;
     try {
-      if (!offender.errored && !isProtected(offender.literal)) shown = `${offender.rawPath} -> ${offender.real}`;
+      if (!offender.errored && !isProtected(offender.literal) && canonRelKey(offender.literal) === null)
+        shown = `${offender.rawPath} -> ${offender.real}`;
     } catch {
       /* keep the raw path in the message */
     }
-    const reason = `BLOCKED by PHARN floor: ${shown} is (or resolves to) a trusted file (CONSTITUTION P2 / fix #2). Trusted spec is human-only; the build agent may not write it. If a change is genuinely needed, a human edits it outside the agent loop.`;
+    // The message is built from the BLOCKED PATH and fixed text only. No field of the writes-scope
+    // record ever reaches it: this hook has no asData() control-character fold (enforce-writes-scope.cjs
+    // carries one precisely because a record field CAN forge a line in a deny message), so keeping
+    // record-derived text out of the message is load-bearing, not stylistic. A ✧ test pins it.
+    const reason = (DENY_REASONS[offender.kind] || DENY_REASONS.trusted)(shown);
     // Current Claude Code form:
     process.stdout.write(
       JSON.stringify({
