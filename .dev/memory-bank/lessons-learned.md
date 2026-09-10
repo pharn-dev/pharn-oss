@@ -311,6 +311,14 @@ only cost is that benign product findings must document the split. Surfaced live
 the product `/pharn-grill` `GRILL.md` landed on the scanned surface and passed CHECK 5 only because the split was
 documented; a bare-findings `GRILL.md` would have RED'd the floor.
 
+**Provenance.**
+
+- feature: `product-pipeline-probe`
+- commit: `a66f5872e48265eb39c4c58b6d58c0593f00e8e4`
+- surfaced by: `.dev/features/product-pipeline-probe/PROBE.md` (CF-A) + `.dev/features/product-pipeline-probe/REVIEW.md`
+  (proposed lesson).
+- promoted: 2026-06-30 via gated `/pharn-dev-memory-promote` (human-approved).
+
 ## L11 — Verify's whole-repo style gates let a pre-existing unrelated error block every later feature's verify
 
 type: process · concepts: [style-gates, gate-map, whole-repo-scope]
@@ -339,14 +347,6 @@ input/orchestration trust boundary).
 - commit: `05a466ed8ca8ab9ab45aa7397c6f081d863d319d`
 - surfaced by: `.dev/features/architecture-griller/REVIEW.md` — proposed lesson candidate L-GATE-1.
 - promoted: 2026-07-01 via gated `/pharn-dev-memory-promote` (human-approved).
-
-**Provenance.**
-
-- feature: `product-pipeline-probe`
-- commit: `a66f5872e48265eb39c4c58b6d58c0593f00e8e4`
-- surfaced by: `.dev/features/product-pipeline-probe/PROBE.md` (CF-A) + `.dev/features/product-pipeline-probe/REVIEW.md`
-  (proposed lesson).
-- promoted: 2026-06-30 via gated `/pharn-dev-memory-promote` (human-approved).
 
 ## L12 — Prevent an increment's own style misses at BUILD (format written files), don't only DETECT them at verify
 
@@ -1359,3 +1359,45 @@ wrong kind.
   `.dev/features/readme-audit-repairs/REGRESSION.md` § "Run history" (both attempts, with the clobbered
   scope record quoted) + `.dev/features/readme-audit-repairs/GRILL.md` (the denied write)
 - promoted: 2026-09-10 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L39 — One declaration section read by two consumers asking different questions is right for one and silently wrong for the other
+
+type: scoping · concepts: [writes-scope, plan-shape, generated-artifact, shared-parser, false-red]
+
+**Lesson.** A PLAN's `## Files` is parsed by `set-writes-scope.cjs --from-plan` to answer "what may the
+pre-write hook allow?" and by `check-regress.mjs scope --declared` to answer "what did the plan authorize?".
+Those are different questions and they diverge exactly at GENERATED artifacts: a file a generator writes
+through Bash must be EXCLUDED from the first ([[L19]] — do not imply the gate covered it) and INCLUDED in the
+second (the plan did authorize it). Sharing one parser makes every increment that regenerates a derived
+artifact trip a false fix#7 scope breach, and the natural workaround — widening `--declared` by hand from the
+plan's own prose — hands an untrusted document control over a floor helper's authorization set.
+
+**Why it matters.** The false RED is the visible half and the cheap half; the expensive half is the fix.
+Clearing it requires letting an untrusted `PLAN.md` define the boundary a floor helper polices, which
+composes with [[L19]]'s Bash escape into an undetected write: a plan listing a real source file under a
+`### Regenerated` heading would have that path read as authorized, while the hook that would deny a Write to
+it is bypassed anyway because the write goes through Bash. Measured live in `claude-dir-scan-exclusion`:
+`scope` exited 1 naming **37** escaped paths, all of them genuine generator output, and clearing it required
+exactly that widening. The generated-artifact category is standing rather than incidental in this repo —
+`docs/capabilities/**`, `docs/lessons-index.md`, the README `CURRENT-STATE` region — so this recurs on every
+increment that regenerates anything, which is what makes it a mechanism failure rather than a slip.
+Complements [[L19]] (which says declare the Bash write rather than pretend the gate covered it) by naming
+what happens when a SECOND consumer reads that declaration for a different purpose, and sits beside [[L17]]
+on the other argument of the same helper. The deterministic remedy belongs to `check-regress.mjs` — an
+exemption for paths a plan declares as generated, reported in `escape_exempt` the way `--feature`'s already
+are — not to the increment that trips it. **Honest bound, recorded rather than smoothed over:** observed
+**once**. [[L20]]'s bar for escalating a discipline remedy to a floor check is a second occurrence, so this
+entry records the shape and does not yet claim the trigger fired.
+
+**Provenance.**
+
+- feature: `claude-dir-scan-exclusion`
+- commit: `4bd1b0c3269504ee55060b2a74ca8f1eca68de23` (working-tree dogfood built on this commit;
+  uncommitted at promotion time)
+- source: `.dev/features/claude-dir-scan-exclusion/REVIEW.md` R2 (the advisory P2 finding), with the false
+  breach and its clearance both reproduced live in that run and recorded in the same feature's
+  `REGRESSION.md`
+- promoted: 2026-09-10 via gated `/pharn-dev-memory-promote` (human-approved). Promoted as `L38` and
+  **renumbered to `L39` when merging `main`**: PR #206 landed its own `L38` first, so the id collided.
+  The collision is itself an instance of that entry's subject — see [[L38]], promoted from the other side
+  of the same contention.

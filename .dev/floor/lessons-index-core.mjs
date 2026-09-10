@@ -278,10 +278,14 @@ export function renderIndex(entries) {
     `\n` +
     `${entries.length} lessons · ${tagged} tagged · ${malformed} malformed · ${untagged} untagged · ~${totalTokens} tokens total\n` +
     `\n` +
-    `Columns: \`id | type | concepts | title | promoted | ~tokens\`. Every canon entry carries a tag line, so\n` +
-    `BOTH absence markers are unexpected: \`${ABSENT}\` = no tag line, i.e. an entry that reached canon without\n` +
-    `the promote gate's \`type\`/\`concepts\`; \`${MALFORMED}\` = a tag line is present but failed its gate. Read that\n` +
-    `entry in canon either way. \`~tokens\` is \`ceil(chars / ${CHARS_PER_TOKEN})\` over the FULL section\n` +
+    `Columns: \`id | type | concepts | title | promoted | ~tokens\`. \`${ABSENT}\` is rendered in THREE columns\n` +
+    `and does NOT mean the same thing in each — read it against the column it sits in. In \`type\`/\`concepts\`:\n` +
+    `every canon entry carries a tag line, so BOTH markers there are unexpected — \`${ABSENT}\` = no tag line,\n` +
+    `i.e. an entry that reached canon without the promote gate's \`type\`/\`concepts\`; \`${MALFORMED}\` = a tag line\n` +
+    `is present but failed its gate. Read that entry in canon either way. In \`promoted\`: \`${ABSENT}\` = the\n` +
+    `entry has no \`- promoted: <date>\` line in its provenance block — a DIFFERENT defect, and one the\n` +
+    `\`untagged\` count above does not measure, so a \`0 untagged\` header and a \`${ABSENT}\` in this column are\n` +
+    `not a contradiction. \`~tokens\` is \`ceil(chars / ${CHARS_PER_TOKEN})\` over the FULL section\n` +
     `(heading through the line before the next \`##\`), an ESTIMATE with a confidence band, never a measurement\n` +
     `(\`LIMITS.md §1c\`). Titles are canon free text, reproduced verbatim as DATA.\n` +
     `\n` +

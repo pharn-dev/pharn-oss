@@ -10,12 +10,16 @@ lessons to fetch; canon stays the source of truth and the floor's verification t
 applied, without fetching its full `## L<n>` entry from canon, is the P0 disease. "The index was
 consulted" never means "the relevant lessons were read".
 
-38 lessons · 38 tagged · 0 malformed · 0 untagged · ~25725 tokens total
+39 lessons · 39 tagged · 0 malformed · 0 untagged · ~26567 tokens total
 
-Columns: `id | type | concepts | title | promoted | ~tokens`. Every canon entry carries a tag line, so
-BOTH absence markers are unexpected: `-` = no tag line, i.e. an entry that reached canon without
-the promote gate's `type`/`concepts`; `?` = a tag line is present but failed its gate. Read that
-entry in canon either way. `~tokens` is `ceil(chars / 4)` over the FULL section
+Columns: `id | type | concepts | title | promoted | ~tokens`. `-` is rendered in THREE columns
+and does NOT mean the same thing in each — read it against the column it sits in. In `type`/`concepts`:
+every canon entry carries a tag line, so BOTH markers there are unexpected — `-` = no tag line,
+i.e. an entry that reached canon without the promote gate's `type`/`concepts`; `?` = a tag line
+is present but failed its gate. Read that entry in canon either way. In `promoted`: `-` = the
+entry has no `- promoted: <date>` line in its provenance block — a DIFFERENT defect, and one the
+`untagged` count above does not measure, so a `0 untagged` header and a `-` in this column are
+not a contradiction. `~tokens` is `ceil(chars / 4)` over the FULL section
 (heading through the line before the next `##`), an ESTIMATE with a confidence band, never a measurement
 (`LIMITS.md §1c`). Titles are canon free text, reproduced verbatim as DATA.
 
@@ -29,8 +33,8 @@ L6  | floor    | membership-test,frontmatter,enum-gated                         
 L7  | scoping  | writes-scope,over-declaration,canon-write,declaration-audit                                 | A stage's writes: must equal exactly what it writes — never declare a downstream gate's target upstream | 2026-06-29 | ~571
 L8  | scoping  | writes-scope,setter-resolution,command-design                                               | The writes-scope setter resolves one --target — favor single-file command outputs | 2026-06-30 | ~575
 L9  | process  | style-gates,gate-map,stage-seam                                                             | An increment's own markdown style is gated by neither /pharn-dev-regress nor /pharn-dev-verify | 2026-06-30 | ~667
-L10 | floor    | validate-scan-surface,dev-product-boundary,enum-gated                                       | Product-pipeline artifacts sit on the validate-SCANNED surface; `.dev/` dev artifacts don't | - | ~524
-L11 | process  | style-gates,gate-map,whole-repo-scope                                                       | Verify's whole-repo style gates let a pre-existing unrelated error block every later feature's verify | 2026-07-01 | ~603
+L10 | floor    | validate-scan-surface,dev-product-boundary,enum-gated                                       | Product-pipeline artifacts sit on the validate-SCANNED surface; `.dev/` dev artifacts don't | 2026-06-30 | ~606
+L11 | process  | style-gates,gate-map,whole-repo-scope                                                       | Verify's whole-repo style gates let a pre-existing unrelated error block every later feature's verify | 2026-07-01 | ~521
 L12 | process  | style-gates,prevention-vs-detection,formatter                                               | Prevent an increment's own style misses at BUILD (format written files), don't only DETECT them at verify | 2026-07-06 | ~734
 L13 | process  | style-gates,prevention-vs-detection,gate-map                                                | Extend the Step-2b format discipline (L12) to every artifact-writing stage, not just `/pharn-dev-build` | 2026-07-07 | ~475
 L14 | floor    | enum-gated,control-char-guard,regex-anchoring                                               | A shape-regex tightening of an enum-gated field must COMPOSE with the control-char guard, never replace it | 2026-07-09 | ~535
@@ -58,4 +62,5 @@ L35 | process  | redundant-identity,remedy-design,version-discipline,sync-cost  
 L36 | floor    | enumeration,variant-spelling,closure-assertion,presence-vs-closure,parameterized-value      | A per-member presence set is not a closed set — a parameterized value acquires variant spellings, and the enumeration certifies the one its author was looking at | 2026-09-08 | ~756
 L37 | contract | guarantee-audit,verification-fidelity,universal-quantifier,doc-drift,false-green            | A doc stating a guard's bounds must be PROBED against the guard, not read off it — the universal quantifier is where the drift lands | 2026-09-09 | ~981
 L38 | scoping  | writes-scope,concurrency,shared-state,false-red                                             | Concurrent agent sessions contend for the single writes-scope record, and the scope check then reports a false cause | 2026-09-10 | ~727
+L39 | scoping  | writes-scope,plan-shape,generated-artifact,shared-parser,false-red                          | One declaration section read by two consumers asking different questions is right for one and silently wrong for the other | 2026-09-10 | ~842
 ```

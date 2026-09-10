@@ -26,7 +26,8 @@
   "author": "Przemysław Galarowicz",
   "type": "commonjs",
   "scripts": {
-    "test": "node --test \"**/*.test.mjs\" \"**/*.test.cjs\" \".claude/**/*.test.mjs\" \".claude/**/*.test.cjs\" \".dev/**/*.test.mjs\" \".dev/**/*.test.cjs\" \"pharn/**/*.test.mjs\" \"pharn/**/*.test.cjs\"",
+    "_test_glob_comment": "`.claude/hooks/*` NOT `.claude/**` — the narrowing is load-bearing, not cosmetic. `**` does not descend into dot-directories, so the leading `**/*.test.mjs` never reached `.claude/`; the EXPLICIT `.claude/**` did, and it pulled a nested checkout under `.claude/worktrees/<name>/` into the run (measured: 3055 tests against 1886, the duplicates re-running another checkout's suites against that checkout's sources). Verified in a fixture holding a nested duplicate: `**/*.test.mjs` alone -> 1 test; adding `.claude/**/*.test.mjs` -> 2; adding `.claude/hooks/*.test.mjs` instead -> 2, the real hook test and NOT the duplicate. The narrowing loses nothing: every test file under `.claude/` is a hook test (`find .claude -name '*.test.*' -not -path '.claude/hooks/*'` -> 0). ADVISORY (P0): no checker reads this pattern — nothing stops it widening again. Companion to the `.claude/` closure in the capability walkers (lessons-learned L36); the named residual is `test-glob-check`.",
+    "test": "node --test \"**/*.test.mjs\" \"**/*.test.cjs\" \".claude/hooks/*.test.mjs\" \".claude/hooks/*.test.cjs\" \".dev/**/*.test.mjs\" \".dev/**/*.test.cjs\" \"pharn/**/*.test.mjs\" \"pharn/**/*.test.cjs\"",
     "lint": "eslint .",
     "lint:md": "markdownlint-cli2",
     "format": "prettier --write .",

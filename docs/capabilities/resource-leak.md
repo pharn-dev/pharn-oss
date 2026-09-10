@@ -20,4 +20,4 @@ read untrusted CODE, flag a resource opened but never closed
 
 [`pharn/pharn-review/resource-leak/resource-leak.md`](../../pharn/pharn-review/resource-leak/resource-leak.md)
 
-_No install command yet — this repo has no PHARN CLI or install-token. Copy the source file above._
+_PHARN installs with `npx @pharn-dev/pharn@latest init`, which selects the capabilities that apply to your project; there is no per-capability install command. This page documents the source file linked above._
