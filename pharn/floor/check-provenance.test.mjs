@@ -247,6 +247,46 @@ test("RED: a RELATIVE canon arg with an EXTRA leading segment is refused — rel
   }
 });
 
+// The ABSOLUTE branch is a DISTINCT code path from the relative one — a suffix test, not equality — and
+// the promote commands explicitly support absolute canon paths. Raised by an automated review of this PR:
+// every binding test above exercised only relative paths, so a regression in the suffix branch could ship
+// while the suite stayed green. Both directions are probed against the live checker (L37).
+test("GREEN: an ABSOLUTE canon arg ENDING in the declared target at a segment boundary is admitted", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pharn-prov-prod-"));
+  try {
+    const candPath = join(dir, "candidate.json");
+    writeFileSync(candPath, JSON.stringify(VALID));
+    mkdirSync(join(dir, "memory-bank"), { recursive: true });
+    const abs = join(dir, "memory-bank", "lessons-learned.md");
+    writeFileSync(abs, CANON);
+    // Deliberately run from an UNRELATED cwd: the absolute form must be cwd-INDEPENDENT by construction.
+    const r = spawnSync(process.execPath, [CHECK, candPath, abs], { encoding: "utf8", cwd: tmpdir() });
+    assert.equal(r.status, 0, r.stdout);
+    assert.match(r.stdout, /GREEN/);
+    assert.doesNotMatch(r.stdout, /canon-arg/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("RED: an ABSOLUTE canon arg whose tail matches only MID-SEGMENT is refused (boundary, not substring)", () => {
+  // `.../memory-bank/xx-lessons-learned.md` ends with the target's characters but NOT at a segment
+  // boundary. A substring-based suffix test would admit it; the segment-wise one must not.
+  const dir = mkdtempSync(join(tmpdir(), "pharn-prov-prod-"));
+  try {
+    const candPath = join(dir, "candidate.json");
+    writeFileSync(candPath, JSON.stringify(VALID));
+    mkdirSync(join(dir, "memory-bank"), { recursive: true });
+    const abs = join(dir, "memory-bank", "xx-lessons-learned.md");
+    writeFileSync(abs, CANON);
+    const r = spawnSync(process.execPath, [CHECK, candPath, abs], { encoding: "utf8", cwd: tmpdir() });
+    assert.equal(r.status, 1, r.stdout);
+    assert.match(r.stdout, /RED — canon-arg failed/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("the binding is GATED on the target enum — a non-member target reports ONE reason, not two", () => {
   // A false REASON for a true refusal misdirects whoever acts on it (the same discipline the concepts
   // uniqueness branch keeps). A non-member target is already sufficient; the binding must stay quiet.
