@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // pharn/floor/render-ship-briefing.mjs — the deterministic GENERATOR for the GATE-2 briefing artifact
-// (`features/<name>/BRIEFING.md`), on the PRODUCT surface.
+// (`pharn/features/<name>/BRIEFING.md`), on the PRODUCT surface.
 //
 // Non-LLM, dependency-free (Node stdlib + `git rev-parse`, the same subprocess convention
 // `check-provenance.mjs`'s command-side caller uses to fill `commit`). Every enum-gated frontmatter field
@@ -32,7 +32,7 @@
 //
 // ── The dual PLAN shape (lessons-learned.md L6, reused from check-plan-lessons.mjs — cited, not restated,
 //    P4; re-implemented IN-FILE per P3, no sibling/cross-tree import) ──────────────────────────────────
-// A PLAN's structured header is EITHER `---`-fenced YAML frontmatter (the PRODUCT `features/<name>/PLAN.md`
+// A PLAN's structured header is EITHER `---`-fenced YAML frontmatter (the PRODUCT `pharn/features/<name>/PLAN.md`
 // shape) OR a leading `- key: value` bullet block ending at the first `##`+ heading (the DEV
 // `.dev/features/<name>/PLAN.md` shape). Both are read the SAME way here as `check-plan-lessons.mjs`
 // already reads `applied_lessons` — a field absent from BOTH shapes (e.g. `spec_id` on every dev PLAN, by
@@ -52,7 +52,7 @@
 // handled by the honest NO_DECISION_LINE fallback, never a crash and never a fabricated quote.
 //
 // Usage:
-//   node pharn/floor/render-ship-briefing.mjs <name> [--base <dir>]   (default --base: features)
+//   node pharn/floor/render-ship-briefing.mjs <name> [--base <dir>]   (default --base: pharn/features)
 //     Prints the rendered BRIEFING.md to stdout. Exit 0 on success; exit 1 if PLAN.md (the one REQUIRED
 //     input) is absent or unreadable — fail-closed, since there is nothing to render without it.
 
@@ -315,7 +315,7 @@ function resolveCommit() {
  * `{ ok: false, reason }` when PLAN.md (the one required input) is missing/unreadable.
  */
 export function renderBriefing(name, opts = {}) {
-  const base = opts.base ?? "features";
+  const base = opts.base ?? "pharn/features";
   const dir = join(base, name);
 
   const planPath = join(dir, "PLAN.md");
@@ -435,8 +435,8 @@ function main() {
     process.stderr.write("usage: node pharn/floor/render-ship-briefing.mjs <name> [--base <dir>]\n");
     process.exit(1);
   }
-  const base = flag(argv, "--base") ?? "features";
-  const result = renderBriefing(name, { base });
+  const baseFlag = flag(argv, "--base");
+  const result = renderBriefing(name, baseFlag !== undefined ? { base: baseFlag } : {});
   if (!result.ok) {
     process.stderr.write(`RED — ${result.reason}\n`);
     process.exit(1);

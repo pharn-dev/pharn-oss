@@ -67,7 +67,7 @@
 //   - <out.json> required; zero inputs is legal → writes the empty array [].
 //   - Each input is read as a finding-shape findings.json (a JSON ARRAY). The input's SOURCE lens id is
 //     derived deterministically from its path (parent dir name — the emission convention
-//     features/<lens>/findings.json), used only as trusted provenance in sources[].
+//     pharn/features/<lens>/findings.json), used only as trusted provenance in sources[].
 // Output:  writes <out.json> (2-space JSON + trailing newline, deterministic); prints
 //          {"merged":<int>,"inputs":<int>,"dropped":<int>} to stdout; exit 0 on success.
 // Fail-closed (P5): a missing <out>, or ANY input that is unreadable / not valid JSON / not an array,
@@ -138,7 +138,7 @@ function asText(v) {
   return typeof v === "string" ? v : v == null ? "" : String(v);
 }
 
-// The trusted source id for provenance: the emission convention is features/<lens>/findings.json, so the
+// The trusted source id for provenance: the emission convention is pharn/features/<lens>/findings.json, so the
 // lens is the parent directory name. Deterministic; falls back to the raw path if there is no parent.
 function sourceIdOf(inputPath) {
   const parent = basename(dirname(inputPath));

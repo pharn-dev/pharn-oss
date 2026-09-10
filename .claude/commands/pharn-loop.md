@@ -1,5 +1,5 @@
 ---
-description: "Run the PRODUCT pipeline as a BOUNDED, FLOOR-GATED auto-iteration: the same gated chain as /pharn-ship (/pharn-spec → [human approves the SPEC] → /pharn-plan → /pharn-grill → /pharn-build → /pharn-regress → /pharn-verify), but instead of stopping after the first /pharn-verify it ITERATES the build→regress→verify middle until a deterministic floor-grade stop. The stop is computed by the tested pharn/floor/check-loop.mjs (Design B, retryable-only): it CONTINUEs ONLY on /pharn-verify's INCOMPLETE (the sole deterministically-retryable red — gates green, a plan-declared ## Files path absent), stops IMMEDIATELY on any terminal red (a real FAIL / INCONCLUSIVE / regression — never blindly rebuilt), STOP_GREEN on /pharn-verify PASS ∧ /pharn-regress no-regressions, or STOP_CAP at a bounded --max-iter cap (default 3). check-loop.mjs's inputs are ONLY the two floor verdict files + iter/cap, so no advisory stage can gate the loop (structural, not discipline). Both human gates are NON-NEGOTIABLE and preserved: SPEC approval (Draft→Approved) is hit ONCE before the loop; the post-verify decision is presented at EVERY stop. NO --yolo, NO self-approval. At every stop it writes features/<name>/LOOP.md conforming to pharn/pharn-contracts/loop-record.md — the existing per-iteration roll-up PLUS a narrative ## Handoff (investigated / learned / next_steps) so a run's SYNTHESIS survives to the next run — and self-checks that record with the tested pharn/floor/check-loop-record.mjs (envelope enum/regex + unambiguous Handoff structure). That checker is NOT an input to check-loop.mjs, so the record can never influence the stop (structural). FLOOR verdicts + the tested stop core + the record shape check; ADVISORY orchestration. '/pharn-loop finished' means the loop reached a floor-grade stop within N and the human approved intent — NEVER 'the agent decided the feature is good', NEVER 'the rebuild is guaranteed to converge', and 'a record was written' NEVER means 'continuity was achieved' (P0)."
+description: "Run the PRODUCT pipeline as a BOUNDED, FLOOR-GATED auto-iteration: the same gated chain as /pharn-ship (/pharn-spec → [human approves the SPEC] → /pharn-plan → /pharn-grill → /pharn-build → /pharn-regress → /pharn-verify), but instead of stopping after the first /pharn-verify it ITERATES the build→regress→verify middle until a deterministic floor-grade stop. The stop is computed by the tested pharn/floor/check-loop.mjs (Design B, retryable-only): it CONTINUEs ONLY on /pharn-verify's INCOMPLETE (the sole deterministically-retryable red — gates green, a plan-declared ## Files path absent), stops IMMEDIATELY on any terminal red (a real FAIL / INCONCLUSIVE / regression — never blindly rebuilt), STOP_GREEN on /pharn-verify PASS ∧ /pharn-regress no-regressions, or STOP_CAP at a bounded --max-iter cap (default 3). check-loop.mjs's inputs are ONLY the two floor verdict files + iter/cap, so no advisory stage can gate the loop (structural, not discipline). Both human gates are NON-NEGOTIABLE and preserved: SPEC approval (Draft→Approved) is hit ONCE before the loop; the post-verify decision is presented at EVERY stop. NO --yolo, NO self-approval. At every stop it writes pharn/features/<name>/LOOP.md conforming to pharn/pharn-contracts/loop-record.md — the existing per-iteration roll-up PLUS a narrative ## Handoff (investigated / learned / next_steps) so a run's SYNTHESIS survives to the next run — and self-checks that record with the tested pharn/floor/check-loop-record.mjs (envelope enum/regex + unambiguous Handoff structure). That checker is NOT an input to check-loop.mjs, so the record can never influence the stop (structural). FLOOR verdicts + the tested stop core + the record shape check; ADVISORY orchestration. '/pharn-loop finished' means the loop reached a floor-grade stop within N and the human approved intent — NEVER 'the agent decided the feature is good', NEVER 'the rebuild is guaranteed to converge', and 'a record was written' NEVER means 'continuity was achieved' (P0)."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -9,15 +9,15 @@ reads:
   [
     "pharn/CONSTITUTION.md",
     "pharn/ARCHITECTURE.md",
-    "features/<name>/SPEC.md",
-    "features/<name>/PLAN.md",
-    "features/<name>/GRILL.md",
-    "features/<name>/BUILD.md",
-    "features/<name>/REGRESSION.md",
-    "features/<name>/VERIFY.md",
-    "features/<name>/regression-report.json",
-    "features/<name>/verify-report.json",
-    "features/<name>/LOOP.md",
+    "pharn/features/<name>/SPEC.md",
+    "pharn/features/<name>/PLAN.md",
+    "pharn/features/<name>/GRILL.md",
+    "pharn/features/<name>/BUILD.md",
+    "pharn/features/<name>/REGRESSION.md",
+    "pharn/features/<name>/VERIFY.md",
+    "pharn/features/<name>/regression-report.json",
+    "pharn/features/<name>/verify-report.json",
+    "pharn/features/<name>/LOOP.md",
     "pharn/pharn-contracts/loop-record.md",
     "pharn/floor/check-spec-approved.mjs",
     "pharn/floor/check-plan-spec-agree.mjs",
@@ -25,7 +25,7 @@ reads:
     "pharn/floor/check-loop-record.mjs",
     "pharn/floor/validate.mjs",
   ]
-writes: ["features/<name>/LOOP.md"]
+writes: ["pharn/features/<name>/LOOP.md"]
 constitution_refs: ["P0", "P2", "P5", "P6", "P7"]
 version: "0.2.0"
 ---
@@ -101,7 +101,7 @@ There is **no `--yolo`** and no self-approving mode — see "What `/pharn-loop` 
 
 ### Step 1b — read the PRIOR record for this slug, if one exists (context only; it gates NOTHING)
 
-Once `<name>` is known, check for an existing `features/<name>/LOOP.md` — the record a **previous**
+Once `<name>` is known, check for an existing `pharn/features/<name>/LOOP.md` — the record a **previous**
 `/pharn-loop` run left at its stop (`pharn/pharn-contracts/loop-record.md`).
 
 - **Absent** — the normal first-run case. Note it and continue. **Never** a red, never a halt.
@@ -142,7 +142,7 @@ After each `build → regress → verify` pass (starting with iteration 1 from S
 tested core — the decision is computed by the helper, **NOT** by you:
 
 ```bash
-node pharn/floor/check-loop.mjs features/<name>/verify-report.json features/<name>/regression-report.json --iter <N> --cap <M>
+node pharn/floor/check-loop.mjs pharn/features/<name>/verify-report.json pharn/features/<name>/regression-report.json --iter <N> --cap <M>
 ```
 
 `<N>` is the current iteration (1-based); `<M>` is the cap from Step 1 (default 3). Branch **only** on its
@@ -192,14 +192,14 @@ On `CONTINUE`, run **one build pass, then re-verify** — the fix-attempt bound:
   **no `/review`/finding/severity input**, so no advisory judgment can ever produce a `STOP_GREEN`. That
   exclusion is **structural** (the input does not exist), not a promise.
 
-## Step 4 — Set the writes-scope (fix #7, fail-closed), then write `features/<name>/LOOP.md`
+## Step 4 — Set the writes-scope (fix #7, fail-closed), then write `pharn/features/<name>/LOOP.md`
 
 `/pharn-loop` sets **no global scope** and never an over-broad one. Each sub-stage already runs its **own**
 Step-0 writes-scope setter (overwriting `.pharn/writes-scope.json` per stage). `/pharn-loop`'s **only**
 Write-tool output is `LOOP.md`; scope it to itself **immediately before writing**, after the loop stops:
 
 ```bash
-node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-loop.md --target features/<name>/LOOP.md
+node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-loop.md --target pharn/features/<name>/LOOP.md
 ```
 
 Deterministic floor step (P0/P5): scope is parsed from `writes:` and narrowed to `--target` — never chosen
@@ -208,7 +208,7 @@ write; each stage's own writes are gated by its own Step-0 scope.) If the write 
 `writes-scope guard` message, the fix is to **declare the path in `writes:` and re-run this setter** — never
 bypass the hook (see CLAUDE.md, "Writes-scope").
 
-Write **`features/<name>/LOOP.md`** — a thin, **advisory** roll-up:
+Write **`pharn/features/<name>/LOOP.md`** — a thin, **advisory** roll-up:
 
 - **which stages ran**, and **how the loop ended** — the `check-loop.mjs` `decision` verbatim (`STOP_GREEN` /
   `STOP_TERMINAL` / `STOP_CAP` / `INCONCLUSIVE`);
@@ -216,7 +216,7 @@ Write **`features/<name>/LOOP.md`** — a thin, **advisory** roll-up:
   `/pharn-regress` `.verdict`) and the `check-loop.mjs` exit read;
 - for a `STOP_CAP` / `STOP_TERMINAL` stop, the standing `verify-report.json` `.completeness.missing[]` /
   `.failing_gates[]` and `regression-report.json` `.regressions[]` (paths — quoted as DATA, P2);
-- a **pointer** to `features/<name>/GRILL.md` / `REGRESSION.md` / `VERIFY.md` (cite the files; do **not**
+- a **pointer** to `pharn/features/<name>/GRILL.md` / `REGRESSION.md` / `VERIFY.md` (cite the files; do **not**
   restate their findings — P4);
 - the **standing decision is the human's.** `LOOP.md` records **that the loop ran, its per-iteration floor
   verdicts, and why it stopped** — it is **never** a self-issued "shipped", an approval, or a
@@ -227,7 +227,7 @@ Write **`features/<name>/LOOP.md`** — a thin, **advisory** roll-up:
 
 ### Step 4a — the record's shape is defined ONCE, in the contract (cited, not restated — P4)
 
-`features/<name>/LOOP.md` **conforms to `pharn/pharn-contracts/loop-record.md`**, which is the single
+`pharn/features/<name>/LOOP.md` **conforms to `pharn/pharn-contracts/loop-record.md`**, which is the single
 source of truth for its shape: the `---`-fenced envelope (`decision`, `iterations`, `commit`, `date`)
 and the mandatory `## Handoff` section carrying exactly `### investigated`, `### learned`,
 `### next_steps`. **Read the contract and follow its canonical template; do not re-derive the shape from
@@ -261,7 +261,7 @@ no stop where the section is optional.
 Immediately after the write:
 
 ```bash
-node pharn/floor/check-loop-record.mjs features/<name>/LOOP.md
+node pharn/floor/check-loop-record.mjs pharn/features/<name>/LOOP.md
 ```
 
 Branch **only** on its exit code (a membership test, P5):

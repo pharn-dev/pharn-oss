@@ -77,8 +77,8 @@ test("★ scope: a changed path outside declared writes → exit 1 + blocking P0
   assert.equal(o.findings[0].file, "floor/evil.mjs");
 });
 
-test("scope: a glob in declared (features/regress/**) covers nested changed files", () => {
-  const r = run(["scope", "--changed", "features/regress/REGRESSION.md", "--declared", "features/regress/**"]);
+test("scope: a glob in declared (pharn/features/regress/**) covers nested changed files", () => {
+  const r = run(["scope", "--changed", "pharn/features/regress/REGRESSION.md", "--declared", "pharn/features/regress/**"]);
   assert.equal(r.status, 0);
   assert.deepEqual(json(r).escaped, []);
 });
@@ -107,10 +107,10 @@ test("★ escape-exempt: the feature's OWN pipeline artifacts are not escapes (t
   assert.deepEqual(j.escape_exempt.sort(), [".dev/features/my-feat/GRILL.md", ".dev/features/my-feat/PLAN.md"]);
 });
 
-test("escape-exempt: the PRODUCT features/<name>/ root is exempt too, not only .dev/", () => {
-  const r = run(["scope", "--changed", "features/my-feat/VERIFY.md", "--declared", "src/a.ts", "--feature", "my-feat"]);
+test("escape-exempt: the PRODUCT pharn/features/<name>/ root is exempt too, not only .dev/", () => {
+  const r = run(["scope", "--changed", "pharn/features/my-feat/VERIFY.md", "--declared", "src/a.ts", "--feature", "my-feat"]);
   assert.equal(r.status, 0);
-  assert.deepEqual(json(r).escape_exempt, ["features/my-feat/VERIFY.md"]);
+  assert.deepEqual(json(r).escape_exempt, ["pharn/features/my-feat/VERIFY.md"]);
 });
 
 test("escape-exempt is NARROW: a stray file in the feature dir is STILL an escape (exact names, not a glob)", () => {
@@ -141,7 +141,7 @@ test("escape-exempt: an EMPTY-segment path is not exempt — the `!feature` guar
   assert.equal(r.status, 1);
   assert.deepEqual(json(r).escape_exempt, []);
   // An explicitly EMPTY --feature is refused outright by the shape gate — stronger than merely inert.
-  const empty = run(["scope", "--changed", "features//PLAN.md", "--declared", "src/a.ts", "--feature", ""]);
+  const empty = run(["scope", "--changed", "pharn/features//PLAN.md", "--declared", "src/a.ts", "--feature", ""]);
   assert.equal(empty.status, 2);
   assert.match(empty.stdout, /inconclusive/);
 });
@@ -168,7 +168,7 @@ test("★ escape-exempt covers the PRODUCT artifacts too — BUILD.md / SPEC.md 
   const r = run([
     "scope",
     "--changed",
-    "features/my-feat/SPEC.md,features/my-feat/BUILD.md,features/my-feat/findings.json,src/impl.ts",
+    "pharn/features/my-feat/SPEC.md,pharn/features/my-feat/BUILD.md,pharn/features/my-feat/findings.json,src/impl.ts",
     "--declared",
     "src/impl.ts",
     "--feature",
@@ -180,17 +180,17 @@ test("★ escape-exempt covers the PRODUCT artifacts too — BUILD.md / SPEC.md 
 });
 
 test("escape-exempt covers a lens's NESTED findings.json, and only that shape", () => {
-  const ok = run(["scope", "--changed", "features/f/lenses/security/findings.json", "--declared", "src/a.ts", "--feature", "f"]);
+  const ok = run(["scope", "--changed", "pharn/features/f/lenses/security/findings.json", "--declared", "src/a.ts", "--feature", "f"]);
   assert.equal(ok.status, 0);
-  assert.deepEqual(ok.escape_exempt ?? json(ok).escape_exempt, ["features/f/lenses/security/findings.json"]);
+  assert.deepEqual(ok.escape_exempt ?? json(ok).escape_exempt, ["pharn/features/f/lenses/security/findings.json"]);
   // deeper nesting, and any other filename under lenses/, are STILL escapes
-  for (const p of ["features/f/lenses/a/b/findings.json", "features/f/lenses/security/notes.md"]) {
+  for (const p of ["pharn/features/f/lenses/a/b/findings.json", "pharn/features/f/lenses/security/notes.md"]) {
     const bad = run(["scope", "--changed", p, "--declared", "src/a.ts", "--feature", "f"]);
     assert.equal(bad.status, 1, `${p} must still be an escape`);
   }
 });
 
-test("★ recurrence guard: the enum covers EVERY features/<name>/ artifact the commands declare", () => {
+test("★ recurrence guard: the enum covers EVERY pharn/features/<name>/ artifact the commands declare", () => {
   // The defect this pins is not "a name is missing" but "the list was written from memory". Derive the
   // truth from the commands themselves; a newly-added artifact now fails HERE instead of REDding a
   // user's pipeline. Files (not directories) only — `lenses` is a dir, covered by its own nested shape.
@@ -204,7 +204,7 @@ test("★ recurrence guard: the enum covers EVERY features/<name>/ artifact the 
   }
   assert.ok(declared.size >= 10, `expected to discover the artifact set, found ${declared.size}`);
   const missing = [...declared].filter((name) => {
-    const r = run(["scope", "--changed", `features/probe/${name}`, "--declared", "src/a.ts", "--feature", "probe"]);
+    const r = run(["scope", "--changed", `pharn/features/probe/${name}`, "--declared", "src/a.ts", "--feature", "probe"]);
     return r.status !== 0;
   });
   assert.deepEqual(missing, [], `PIPELINE_ARTIFACTS is missing artifact(s) the commands declare: ${missing}`);
@@ -222,9 +222,9 @@ test("★ a space-containing path is ONE path, not two exempt tokens (escape lau
 });
 
 test("a space-containing path cannot be laundered through the feature exemption either", () => {
-  const r = run(["scope", "--changed", "src/a.ts features/f/PLAN.md", "--declared", "src/a.ts", "--feature", "f"]);
+  const r = run(["scope", "--changed", "src/a.ts pharn/features/f/PLAN.md", "--declared", "src/a.ts", "--feature", "f"]);
   assert.equal(r.status, 1);
-  assert.deepEqual(json(r).escaped, ["src/a.ts features/f/PLAN.md"]);
+  assert.deepEqual(json(r).escaped, ["src/a.ts pharn/features/f/PLAN.md"]);
 });
 
 test("comma lists still tolerate spaces AROUND the separator (normPath trims)", () => {

@@ -101,7 +101,7 @@ re-run this setter** — never bypass the hook.
    feature's own `PLAN.md` / `GRILL.md` / earlier artifacts land in the diff and used to be reported as
    the build escaping its scope. They are not: each is written by its own stage under that stage's own
    Step-0 writes-scope. `--feature` exempts exactly those (a closed filename enum under
-   `.dev/features/<name>/` and `features/<name>/`, plus `lenses/<lens>/findings.json`), as do the four
+   `.dev/features/<name>/` and `pharn/features/<name>/`, plus `lenses/<lens>/findings.json`), as do the four
    hook-protected trusted docs, which the agent cannot write at all. Every exemption is listed in the
    returned **`escape_exempt`** — read it, the same way you read the setter's path count. A **stray** file
    in the feature dir, another feature's artifact, and every real source path are all still escapes, and a

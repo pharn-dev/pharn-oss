@@ -4,7 +4,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -55,14 +55,14 @@ test("★ the reconciled set is tracked ∪ untracked-not-ignored — git-ignore
 test("★ the scope is SNAPSHOTTED into the record, not left to be read live (L38)", () => {
   const dir = makeRepo();
   mkdirSync(join(dir, ".pharn"), { recursive: true });
-  writeFileSync(join(dir, SCOPE_PATH), JSON.stringify({ scope: ["a.md", "b.md"], set_by: "features/x/PLAN.md", set_at: "T" }));
+  writeFileSync(join(dir, SCOPE_PATH), JSON.stringify({ scope: ["a.md", "b.md"], set_by: "pharn/features/x/PLAN.md", set_at: "T" }));
   const built = buildRecord(dir, "test");
   assert.ok(built.ok);
   assert.deepEqual(built.record.scope_snapshot.scope, ["a.md", "b.md"]);
-  assert.equal(built.record.scope_snapshot.set_by, "features/x/PLAN.md");
+  assert.equal(built.record.scope_snapshot.set_by, "pharn/features/x/PLAN.md");
 
   // The live file changing afterwards must NOT change what the record says — that is the whole point.
-  writeFileSync(join(dir, SCOPE_PATH), JSON.stringify({ scope: ["LATER.md"], set_by: "features/verify/PLAN.md", set_at: "T2" }));
+  writeFileSync(join(dir, SCOPE_PATH), JSON.stringify({ scope: ["LATER.md"], set_by: "pharn/features/verify/PLAN.md", set_at: "T2" }));
   assert.deepEqual(built.record.scope_snapshot.scope, ["a.md", "b.md"]);
 });
 
@@ -84,6 +84,32 @@ test("hashFile returns null for a directory or a missing path, never a fabricate
   assert.equal(hashFile(join(dir, "nope.md")), null);
   assert.equal(hashFile(join(dir, "ignored")), null, "a directory is not a file");
   assert.match(hashFile(join(dir, "tracked.md")), /^[0-9a-f]{64}$/);
+});
+
+// The TOCTOU pair has TWO members — the read AND the write — and the first version of this test
+// asserted the read half only (`openSync` + `readFileSync(fd)`), which read as a discharged rule while
+// `writeFileSync(abs, …)` still re-resolved the name two lines later. CodeQL reported exactly that on
+// the next analysis (js/file-system-race, high). Per lessons-learned L29, the deliverable for a rule
+// quantified over a set is the ENUMERATION with the assertion iterating it — so this ranges over every
+// `*Sync(abs` call in the region rather than over the members someone thought to name. That also closes
+// L36's variant-spelling hole: a `renameSync(abs`/`appendFileSync(abs` added later needs no new rule.
+test("★ amendScope reads AND writes ONE descriptor — exactly one path-addressed call, the open (CWE-367)", () => {
+  const src = readFileSync(join(HERE, "reconcile-baseline.mjs"), "utf8");
+  const region = src.slice(src.indexOf("function replaceThroughFd"), src.indexOf("function main(argv)"));
+  // Comments are stripped before the enumeration runs, or the rationale ABOVE the fix — which quotes the
+  // `writeFileSync(abs, …)` call it removed — reads as the defect and the rule can never be satisfied by
+  // a correct file. The assertion is over CODE; prose is not evidence either way.
+  const code = region.replace(/\/\/.*$/gm, "");
+  assert.deepEqual(
+    code.match(/\b\w+Sync\(abs\b/g),
+    ["openSync(abs"],
+    "after the open, every operation must address the fd — a path-addressed call re-resolves the name"
+  );
+  assert.match(code, /openSync\(abs, "r\+"\)/, "one READ-WRITE descriptor, so the write needs no second open");
+  assert.match(code, /readFileSync\(fd, "utf8"\)/, "must read the DESCRIPTOR, not the path");
+  assert.match(code, /ftruncateSync\(fd, 0\)/, "a write through an fd does not truncate — a shorter record would keep its tail");
+  assert.match(code, /writeSync\(fd, buf, off/, "must write the DESCRIPTOR at an explicit offset");
+  assert.match(code, /closeSync\(fd\)/, "the descriptor must be released on every path");
 });
 
 test("★ hashFile hashes what it INSPECTED — no check-then-reopen-by-name (CWE-367)", () => {
@@ -164,4 +190,110 @@ test("✧ the record path is under .pharn/, which is gitignored — the baseline
   assert.ok(RECORD_PATH.startsWith(".pharn/"), "the baseline must be disposable runtime state");
   const gi = readFileSync(resolve(HERE, "..", "..", ".gitignore"), "utf8");
   assert.match(gi, /^\.pharn\/$/m, "this repo must still gitignore .pharn/ for that to hold");
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────
+// --amend-scope — an epoch may hold MORE THAN ONE authorized scope.
+// Trigger: .dev/features/product-features-relocation/REVIEW.md F3 (a promote-stage canon write,
+// hook-approved and human-accepted, reported as a Bash escape because the epoch's snapshot is the
+// BUILD stage's scope).
+
+function anchored(dir, scope) {
+  mkdirSync(join(dir, ".pharn"), { recursive: true });
+  if (scope) writeFileSync(join(dir, SCOPE_PATH), JSON.stringify(scope));
+  execFileSync(process.execPath, [ANCHOR, "--anchor", "--base", dir, "--by", "test"], { stdio: "pipe" });
+  return () => JSON.parse(readFileSync(join(dir, RECORD_PATH), "utf8"));
+}
+
+test("★ a fresh anchor carries scope_amendments as an EMPTY ARRAY, never absent", () => {
+  const dir = makeRepo();
+  const built = buildRecord(dir, "test");
+  assert.ok(built.ok);
+  assert.deepEqual(built.record.scope_amendments, [], "always an array, so no reader branches on presence");
+});
+
+test("★ --amend-scope APPENDS the live scope to an existing epoch, preserving the opening snapshot", () => {
+  const dir = makeRepo();
+  const read = anchored(dir, { scope: ["build.md"], set_by: "PLAN.md", set_at: "T1" });
+  writeFileSync(
+    join(dir, SCOPE_PATH),
+    JSON.stringify({ scope: ["canon.md"], set_by: ".claude/commands/pharn-dev-memory-promote.md", set_at: "T2" })
+  );
+  const r = spawnSync(process.execPath, [ANCHOR, "--amend-scope", "--base", dir], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+
+  const rec = read();
+  assert.deepEqual(rec.scope_snapshot.scope, ["build.md"], "the OPENING snapshot is never overwritten");
+  assert.equal(rec.scope_amendments.length, 1);
+  assert.deepEqual(rec.scope_amendments[0].scope, ["canon.md"]);
+  assert.equal(rec.scope_amendments[0].set_by, ".claude/commands/pharn-dev-memory-promote.md");
+});
+
+// The write side's one behavioural risk, exercised rather than reasoned about: a write through an
+// existing descriptor does not truncate, so without ftruncateSync a record that shrinks keeps the
+// previous tail. 4 KiB of trailing whitespace is JSON-LEGAL, so the amend still parses its input — and
+// the padding survives verbatim into the output if the truncate is dropped. Delete the `ftruncateSync`
+// line and this test fails; that is what makes it a check rather than a restatement.
+test("★ --amend-scope REPLACES the record — a longer prior file leaves no trailing bytes", () => {
+  const dir = makeRepo();
+  const read = anchored(dir, { scope: ["build.md"], set_by: "PLAN.md", set_at: "T1" });
+  const abs = join(dir, RECORD_PATH);
+  writeFileSync(abs, readFileSync(abs, "utf8") + " ".repeat(4096));
+  writeFileSync(join(dir, SCOPE_PATH), JSON.stringify({ scope: ["canon.md"], set_by: "promote", set_at: "T2" }));
+
+  const r = spawnSync(process.execPath, [ANCHOR, "--amend-scope", "--base", dir], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+
+  const raw = readFileSync(abs, "utf8");
+  assert.equal(raw, JSON.stringify(JSON.parse(raw), null, 2) + "\n", "the previous tail must not survive the rewrite");
+  assert.equal(read().scope_amendments.length, 1, "and the amendment itself still landed");
+});
+
+test("★ --amend-scope is ORDERED and cumulative — several stages inside one epoch each append", () => {
+  const dir = makeRepo();
+  const read = anchored(dir, { scope: ["build.md"], set_by: "PLAN.md", set_at: "T1" });
+  for (const [p, by] of [
+    ["a.md", "one"],
+    ["b.md", "two"],
+  ]) {
+    writeFileSync(join(dir, SCOPE_PATH), JSON.stringify({ scope: [p], set_by: by, set_at: "T" }));
+    execFileSync(process.execPath, [ANCHOR, "--amend-scope", "--base", dir], { stdio: "pipe" });
+  }
+  const rec = read();
+  assert.deepEqual(
+    rec.scope_amendments.map((a) => a.set_by),
+    ["one", "two"],
+    "append order is the call order"
+  );
+});
+
+// L41: the no-baseline and no-live-scope paths are the ones a hermetic suite skips, so they are
+// exercised explicitly rather than assumed.
+test("★ FAIL-CLOSED: --amend-scope with NO baseline writes nothing and exits 2", () => {
+  const dir = makeRepo();
+  const r = spawnSync(process.execPath, [ANCHOR, "--amend-scope", "--base", dir], { encoding: "utf8" });
+  assert.equal(r.status, 2, "an epoch that was never opened cannot be amended");
+  assert.match(r.stderr, /--anchor first/);
+  assert.ok(!existsSync(join(dir, RECORD_PATH)), "nothing is written");
+});
+
+test("★ FAIL-CLOSED: --amend-scope with NO live scope records NOTHING, not an empty amendment", () => {
+  const dir = makeRepo();
+  const read = anchored(dir, { scope: ["build.md"], set_by: "PLAN.md", set_at: "T1" });
+  rmSync(join(dir, SCOPE_PATH), { force: true });
+  const r = spawnSync(process.execPath, [ANCHOR, "--amend-scope", "--base", dir], { encoding: "utf8" });
+  assert.equal(r.status, 2, r.stdout);
+  assert.deepEqual(read().scope_amendments, [], "an empty amendment would read as 'authorized to write nothing' — a different claim");
+});
+
+test("★ a baseline written BEFORE scope_amendments existed is amendable — the field is coerced, not required", () => {
+  const dir = makeRepo();
+  const read = anchored(dir, { scope: ["build.md"], set_by: "PLAN.md", set_at: "T1" });
+  const legacy = read();
+  delete legacy.scope_amendments;
+  writeFileSync(join(dir, RECORD_PATH), JSON.stringify(legacy, null, 2) + "\n");
+  writeFileSync(join(dir, SCOPE_PATH), JSON.stringify({ scope: ["canon.md"], set_by: "promote", set_at: "T2" }));
+  const r = spawnSync(process.execPath, [ANCHOR, "--amend-scope", "--base", dir], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(read().scope_amendments.length, 1);
 });

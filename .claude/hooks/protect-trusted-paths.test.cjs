@@ -107,18 +107,18 @@ test("allows writes to an ordinary file", () => {
 
 test("blocks a Write to a committed symlink that resolves to a trusted doc (leaf symlink)", () => {
   const sb = sandbox(["pharn/CONSTITUTION.md"]);
-  fs.mkdirSync(join(sb, "features"));
-  fs.symlinkSync(join("..", "pharn", "CONSTITUTION.md"), join(sb, "features", "notes.md"));
-  const r = runIn(sb, { tool_name: "Write", tool_input: { file_path: "features/notes.md" } });
+  fs.mkdirSync(join(sb, "pharn", "features"), { recursive: true });
+  fs.symlinkSync(join("..", "..", "pharn", "CONSTITUTION.md"), join(sb, "pharn", "features", "notes.md"));
+  const r = runIn(sb, { tool_name: "Write", tool_input: { file_path: "pharn/features/notes.md" } });
   assert.equal(r.status, 2);
   assert.match(r.stderr, /BLOCKED by PHARN floor/);
 });
 
 test("blocks a Write through a symlinked PARENT dir onto a trusted doc (ancestor resolves)", () => {
   const sb = sandbox(["pharn/CONSTITUTION.md"]);
-  fs.mkdirSync(join(sb, "features"));
-  fs.symlinkSync("..", join(sb, "features", "evil")); // features/evil -> repo root
-  const r = runIn(sb, { tool_name: "Write", tool_input: { file_path: "features/evil/pharn/CONSTITUTION.md" } });
+  fs.mkdirSync(join(sb, "pharn", "features"), { recursive: true });
+  fs.symlinkSync(join("..", ".."), join(sb, "pharn", "features", "evil")); // pharn/features/evil -> repo root
+  const r = runIn(sb, { tool_name: "Write", tool_input: { file_path: "pharn/features/evil/pharn/CONSTITUTION.md" } });
   assert.equal(r.status, 2);
   assert.match(r.stderr, /BLOCKED by PHARN floor/);
 });
@@ -134,15 +134,15 @@ test("blocks a deeply-nested symlink resolving onto pharn/CONSTITUTION.md, and r
 
 test("blocks a Write to a committed symlink that resolves to .claude/settings.json", () => {
   const sb = sandbox([".claude/settings.json"]);
-  fs.mkdirSync(join(sb, "features"));
-  fs.symlinkSync(join("..", ".claude", "settings.json"), join(sb, "features", "notes.md"));
-  const r = runIn(sb, { tool_name: "Write", tool_input: { file_path: "features/notes.md" } });
+  fs.mkdirSync(join(sb, "pharn", "features"), { recursive: true });
+  fs.symlinkSync(join("..", "..", ".claude", "settings.json"), join(sb, "pharn", "features", "notes.md"));
+  const r = runIn(sb, { tool_name: "Write", tool_input: { file_path: "pharn/features/notes.md" } });
   assert.equal(r.status, 2);
 });
 
 test("allows a real (non-symlink) file in a nested allowed dir (no false positive from realpath)", () => {
-  const sb = sandbox(["features/notes.md"]);
-  const r = runIn(sb, { tool_name: "Write", tool_input: { file_path: "features/notes.md" } });
+  const sb = sandbox(["pharn/features/notes.md"]);
+  const r = runIn(sb, { tool_name: "Write", tool_input: { file_path: "pharn/features/notes.md" } });
   assert.equal(r.status, 0);
 });
 
@@ -346,7 +346,7 @@ test("allows a CODEOWNERS at a location GitHub does not honor", () => {
 // --- F4 (d): lexical re-spellings must not walk past the exact test; outside the guarded root is never
 // protected. ---
 
-for (const p of ["./pharn/ARCHITECTURE.md", "pharn/../pharn/ARCHITECTURE.md", "features/../LIMITS.md"]) {
+for (const p of ["./pharn/ARCHITECTURE.md", "pharn/../pharn/ARCHITECTURE.md", "pharn/features/../../LIMITS.md"]) {
   test(`blocks a lexical re-spelling of a protected path: ${p}`, () => {
     assert.equal(run({ tool_name: "Write", tool_input: { file_path: p } }).status, 2);
   });
@@ -373,7 +373,7 @@ for (const p of [
   ".claude/settings.json.bak",
   ".claude/hooks/set-writes-scope.cjs.example",
   "backup/.claude/settings.json.bak",
-  "features/CONSTITUTION.md.bak",
+  "pharn/features/CONSTITUTION.md.bak",
   ".claude/hooks/protect-trusted-paths.cjs.bak",
   "docs/ARCHITECTURE.mdx",
   "backup/LIMITS.md.bak",
@@ -684,9 +684,12 @@ for (const p of ["LIMITS.md.", "LIMITS.md ", "pharn/CONSTITUTION.md.", "pharn/CO
 // --- RELATIVE PATHS mean cwd, not the guarded root ---
 
 test("✧ a relative payload path is resolved against cwd, so a user's own subdirectory file is allowed", () => {
-  const sb = sandbox(["pharn/CONSTITUTION.md", "features/pharn/CONSTITUTION.md"]);
-  // cwd = <root>/features, so "pharn/CONSTITUTION.md" means features/pharn/CONSTITUTION.md — the user's.
-  assert.equal(runIn(sb, { tool_name: "Write", tool_input: { file_path: "pharn/CONSTITUTION.md" } }, join(sb, "features")).status, 0);
+  const sb = sandbox(["pharn/CONSTITUTION.md", "pharn/features/pharn/CONSTITUTION.md"]);
+  // cwd = <root>/features, so "pharn/CONSTITUTION.md" means pharn/features/pharn/CONSTITUTION.md — the user's.
+  assert.equal(
+    runIn(sb, { tool_name: "Write", tool_input: { file_path: "pharn/CONSTITUTION.md" } }, join(sb, "pharn", "features")).status,
+    0
+  );
   // ...while the same relative path from the root still denies.
   assert.equal(runIn(sb, { tool_name: "Write", tool_input: { file_path: "pharn/CONSTITUTION.md" } }).status, 2);
 });

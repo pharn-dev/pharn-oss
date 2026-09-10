@@ -56,7 +56,7 @@ const VINCOMPLETE = {
   gates: {},
   verdict: "INCOMPLETE",
   failing_gates: [],
-  completeness: { complete: false, missing: ["features/x/foo.md"] },
+  completeness: { complete: false, missing: ["pharn/features/x/foo.md"] },
 };
 const VINCONCLUSIVE = { feature: "x", gates: {}, verdict: "INCONCLUSIVE", failing_gates: [] };
 const CLEAN = { verdict: "no-regressions", regressions: [] };

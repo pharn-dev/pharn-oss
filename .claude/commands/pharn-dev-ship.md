@@ -275,7 +275,23 @@ verdict lines with nowhere to go.
 
 ```bash
 node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-dev-ship.md --target .dev/features/<name>/SHIP.md
+node pharn/floor/reconcile-baseline.mjs --amend-scope   # IMMEDIATELY after the setter, never before
 ```
+
+**The second line records this stage's scope on the open reconciliation epoch** (contract:
+`pharn/pharn-contracts/reconciliation-record.md`). The epoch was anchored at Step 3's `/pharn-dev-build`
+and holds **one** opening `scope_snapshot`, so a later stage's writes are judged against the **build's**
+scope unless they are amended in. Ordering mirrors `--anchor`'s own (**L38**): amend **after** the
+setter, or it records the previous stage's scope. Exit **2** with _"no baseline"_ is expected and
+harmless when no epoch is open.
+
+> **HONEST TRIGGER (P7) — this wiring answered NO observed failure.** It was added at the maintainer's
+> explicit direction, and that is recorded here rather than dressed in a manufactured one (the
+> `check-plan-lessons` sub-check D precedent; P5's terminal fallback is ask the human). Measured at the
+> time it was written: **every** scope this command sets targets `SHIP.md`, which is already exempt under
+> `pipeline_artifacts`, so the amendment **changes no verdict today**. Its value is prospective — a
+> future ship-stage write to a NON-artifact path would be accounted for instead of reported as an escape.
+> The observed failure that drove the mechanism belongs to `/pharn-dev-memory-promote` (F3), not here.
 
 Deterministic floor step (P0/P5): scope is parsed from `writes:` and narrowed to `--target` — never
 chosen by a model. (Invoking the stages is not a `Write|Edit|MultiEdit`, so the hook gates only this

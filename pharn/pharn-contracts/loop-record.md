@@ -2,7 +2,7 @@
 name: loop-record
 trust: trusted
 layer: pharn-contracts
-purpose: "Single source of truth for the loop-record — the features/<name>/LOOP.md artifact /pharn-loop writes at every stop, including its narrative Handoff section. Schema only, zero behavior. Defines the deterministic envelope (enum/regex — FLOOR) vs the untrusted free-text Handoff (ADVISORY) split, so a run's synthesis can survive to the next run without any guaranteed decision resting on it (P0, P2)."
+purpose: "Single source of truth for the loop-record — the pharn/features/<name>/LOOP.md artifact /pharn-loop writes at every stop, including its narrative Handoff section. Schema only, zero behavior. Defines the deterministic envelope (enum/regex — FLOOR) vs the untrusted free-text Handoff (ADVISORY) split, so a run's synthesis can survive to the next run without any guaranteed decision resting on it (P0, P2)."
 ---
 
 # Contract — loop-record
@@ -13,7 +13,7 @@ purpose: "Single source of truth for the loop-record — the features/<name>/LOO
 > P5) live in `pharn/CONSTITUTION.md`, and the enum-gated vs tainted-free-text split it inherits is
 > defined once in `pharn/pharn-contracts/finding-shape.md` — cited here, never re-defined.
 
-The loop-record is `features/<name>/LOOP.md` — the **only** file `/pharn-loop` writes (fix #7, unchanged
+The loop-record is `pharn/features/<name>/LOOP.md` — the **only** file `/pharn-loop` writes (fix #7, unchanged
 by this contract). It carries two cleanly separated halves:
 
 1. a **deterministic envelope** — YAML frontmatter holding four enum/regex-gated scalars; and

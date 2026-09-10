@@ -3,7 +3,7 @@
 // Run as a subprocess (mirrors check-spec.test.mjs / check-provenance.test.mjs) so the checker keeps
 // its dependency-free, top-level-exec contract: we assert only on its public surface (exit code +
 // RED/GREEN stdout). Inputs are written to a fresh temp dir per run — no committed fixtures, and
-// nothing touches the real features/ tree. Because the checker shells to check-spec.mjs (resolved
+// nothing touches the real pharn/features/ tree. Because the checker shells to check-spec.mjs (resolved
 // relative to its OWN dir), these tests also exercise that reuse end-to-end.
 //
 // The three brief-required cases are the gate's guarantee made testable: Draft → refuse, Approved +

@@ -44,7 +44,18 @@
 //
 // Exit: 0 ok · 2 unusable input / git unavailable / write failed — FAIL-CLOSED (P5). Never a silent pass.
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, openSync, fstatSync, closeSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  writeSync,
+  ftruncateSync,
+  mkdirSync,
+  existsSync,
+  statSync,
+  openSync,
+  fstatSync,
+  closeSync,
+} from "node:fs";
 import { resolve, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -145,10 +156,115 @@ export function buildRecord(baseDir, by) {
       epoch: new Date().toISOString(),
       anchored_by: by,
       scope_snapshot: snapshotScope(baseDir),
+      // Further scopes that came legitimately into force DURING this epoch — see amendScope below.
+      // Always an array, never absent, so a reader never branches on presence (a baseline written
+      // before this field existed reads as `undefined`, which the checker coerces to `[]`).
+      scope_amendments: [],
       entry_count: hashed,
       entries,
     },
   };
+}
+
+// Replace a descriptor's ENTIRE contents in place — the fd-addressed equivalent of a path write.
+//
+// `ftruncateSync` is load-bearing, not ceremony. The `writeFileSync(path, …)` this replaces truncated
+// implicitly (`O_TRUNC`); a write through an existing descriptor neither truncates nor seeks, so a record
+// that got SHORTER would keep the previous tail behind as trailing garbage. The loop is not decoration
+// either: `writeSync` may return a SHORT count, and a silently half-written record is precisely the
+// artifact this file exists to keep honest.
+//
+// HONEST BOUND (P0): this is NOT an atomic replacement, and it never was. Truncate-then-write has a
+// window in which a crash leaves a partial record — the same window `O_TRUNC` had. Downstream that is
+// not a silent pass: check-bash-reconcile.mjs reports an unparseable baseline as INCONCLUSIVE at exit 2
+// (fail-closed, P5). Write-temp-then-rename would close the window at the cost of re-introducing a path
+// operation and a second inode; no observed failure asks for it (P7).
+function replaceThroughFd(fd, text) {
+  const buf = Buffer.from(text, "utf8");
+  ftruncateSync(fd, 0);
+  let off = 0;
+  while (off < buf.length) {
+    const n = writeSync(fd, buf, off, buf.length - off, off);
+    if (n <= 0) throw new Error(`short write at byte ${off} of ${buf.length}`);
+    off += n;
+  }
+}
+
+// APPEND the currently-live writes-scope to an existing epoch's `scope_amendments`.
+//
+// WHY THIS EXISTS. An epoch spans build -> ship, and exactly one `scope_snapshot` is taken when it
+// OPENS — but a run legitimately writes under SEVERAL scopes inside it. The measured case
+// (.dev/features/product-features-relocation/REVIEW.md F3): /pharn-*memory-promote writes canon through
+// the Edit tool, past both live PreToolUse guards, behind a human accept — and the reconciler reported
+// it as `a write reached it outside the guarded tool surface`, because the epoch's snapshot is the
+// BUILD stage's scope. Canon is `never_exempt` by deliberate design, and per lessons-learned L7 the
+// build/ship scope may never NAME canon, so no `## Files` declaration can fix it from the plan side.
+// Without this, every /pharn-dev-ship run that promotes a lesson ends RED — lessons-learned L17's
+// failure mode exactly: a changed-since-anchor test reported as a wrote-outside-scope test, blocking on
+// the correct designed workflow.
+//
+// ORDERING IS LOAD-BEARING, the same way --anchor's is (L38): call this AFTER the stage's own Step-0
+// setter, never before, or it appends the PREVIOUS stage's scope and authorizes the wrong paths.
+//
+// FAIL-CLOSED on every unusable input — no baseline, unreadable/malformed record, or no live scope all
+// return `{ok:false}` and write NOTHING. In particular a missing live scope is NOT recorded as an empty
+// amendment: `{"scope": []}` is truthy downstream and an empty entry would read as "this stage was
+// authorized to write nothing", which is a different claim from "no amendment was made".
+//
+// HONEST BOUND (P0), and it must not be overstated: this is a Bash call, so anything holding Bash can
+// append a scope authorizing anything. That grants NO new power — the same actor could already rewrite
+// the baseline outright, which pharn/pharn-contracts/reconciliation-record.md already concedes ("an
+// accounting tool against tooling that escapes its scope, NOT a control against an attacker"). This
+// increment leaves that bound exactly where it was; it does not tighten the detector.
+export function amendScope(baseDir) {
+  const abs = resolve(baseDir, RECORD_PATH);
+  let fd;
+  // ONE descriptor for the read AND the write. The previous shape read the DESCRIPTOR but wrote back
+  // with `writeFileSync(abs, …)`, which re-resolves the NAME: between the two the path can be replaced,
+  // unlinked or pointed at a symlink, so the file receiving the amendment need not be the file whose
+  // bytes were amended. That is CWE-367, and CodeQL reported it (js/file-system-race, high) on the
+  // analysis AFTER the read-side fix — the read half was corrected and the write half read as covered
+  // (lessons-learned L29). `r+` never creates, so a missing baseline still lands in the ENOENT branch
+  // exactly as `"r"` did; what it does add is a WRITE-permission requirement at open time, which is why
+  // an unwritable record now fails here rather than at the write (`cannot open`, not `cannot write`).
+  try {
+    fd = openSync(abs, "r+");
+  } catch (e) {
+    if (e.code === "ENOENT") {
+      return { ok: false, reason: `no baseline at ${RECORD_PATH} — run --anchor first` };
+    }
+    return { ok: false, reason: `cannot open ${RECORD_PATH}: ${e.message}` };
+  }
+  try {
+    let record;
+    try {
+      record = JSON.parse(readFileSync(fd, "utf8"));
+    } catch (e) {
+      return { ok: false, reason: `cannot read ${RECORD_PATH}: ${e.message}` };
+    }
+    if (!record || typeof record !== "object" || !record.entries) {
+      return { ok: false, reason: `${RECORD_PATH} is not a usable baseline record` };
+    }
+    const live = snapshotScope(baseDir);
+    if (live === null) {
+      return { ok: false, reason: `no usable writes-scope at ${SCOPE_PATH} — set one before amending` };
+    }
+    // Coerce rather than branch: a baseline anchored before this field existed has no array yet.
+    if (!Array.isArray(record.scope_amendments)) record.scope_amendments = [];
+    record.scope_amendments.push(live);
+    try {
+      replaceThroughFd(fd, JSON.stringify(record, null, 2) + "\n");
+    } catch (e) {
+      return { ok: false, reason: `cannot write ${RECORD_PATH}: ${e.message}` };
+    }
+    return { ok: true, amendment: live, count: record.scope_amendments.length };
+  } finally {
+    try {
+      closeSync(fd);
+    } catch {
+      /* already closed / invalid — nothing to reclaim */
+    }
+  }
 }
 
 function main(argv) {
@@ -157,20 +273,44 @@ function main(argv) {
   let baseDir = ".";
   let by = "unknown";
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--anchor" || args[i] === "--show") mode = args[i];
+    if (args[i] === "--anchor" || args[i] === "--show" || args[i] === "--amend-scope") mode = args[i];
     else if (args[i] === "--base") baseDir = args[++i] ?? die("--base requires a directory");
     else if (args[i] === "--by") by = args[++i] ?? die("--by requires a label");
     else die(`unknown argument: ${args[i]}`);
   }
-  if (!mode) die("usage: reconcile-baseline.mjs (--anchor | --show) [--base <dir>] [--by <label>]");
+  if (!mode) die("usage: reconcile-baseline.mjs (--anchor | --amend-scope | --show) [--base <dir>] [--by <label>]");
 
   const root = resolve(baseDir);
   if (!existsSync(root) || !statSync(root).isDirectory()) die(`--base is not a directory: ${baseDir}`);
 
+  if (mode === "--amend-scope") {
+    const res = amendScope(root);
+    if (!res.ok) die(res.reason, 2);
+    process.stdout.write(
+      `reconcile scope amended: ${res.amendment.scope.length} entr(ies) from ${res.amendment.set_by}` +
+        ` (amendment ${res.count}) -> ${RECORD_PATH}\n`
+    );
+    process.exit(0);
+  }
+
   if (mode === "--show") {
     const abs = resolve(root, RECORD_PATH);
-    if (!existsSync(abs)) die(`no baseline at ${RECORD_PATH} — run --anchor first`, 2);
-    process.stdout.write(readFileSync(abs, "utf8"));
+    let fd;
+    try {
+      fd = openSync(abs, "r");
+      process.stdout.write(readFileSync(fd, "utf8"));
+    } catch (e) {
+      if (e.code === "ENOENT") die(`no baseline at ${RECORD_PATH} — run --anchor first`, 2);
+      die(`cannot read ${RECORD_PATH}: ${e.message}`, 2);
+    } finally {
+      if (fd !== undefined) {
+        try {
+          closeSync(fd);
+        } catch {
+          /* already closed / invalid — nothing to reclaim */
+        }
+      }
+    }
     process.exit(0);
   }
 

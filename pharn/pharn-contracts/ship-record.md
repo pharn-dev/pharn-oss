@@ -13,7 +13,7 @@ purpose: "Single source of truth for the ship-record and its OPTIONAL named-huma
 > `ship` stage); the principles (P0, P2, P5) live in `pharn/CONSTITUTION.md`.
 
 The ship-record is the machine-readable roll-up `/pharn-ship` writes at the terminal stage
-(`features/<name>/ship-record.json`), beside the human-facing `SHIP.md`. Its only **floor-relevant** part is
+(`pharn/features/<name>/ship-record.json`), beside the human-facing `SHIP.md`. Its only **floor-relevant** part is
 the OPTIONAL `attestation` block: a **named human's** attestation to having **READ** the record, **bound to
 the record's content** by a hash. Everything else in the record is the advisory ship roll-up (stages that
 ran, floor verdicts read, a pointer to `SHIP.md`) and carries the same trust as its sub-stage sources.
@@ -32,7 +32,7 @@ ran, floor verdicts read, a pointer to `SHIP.md`) and carries the same trust as 
 ## The object
 
 ```yaml
-ship-record: # features/<name>/ship-record.json — a JSON object
+ship-record: # pharn/features/<name>/ship-record.json — a JSON object
   # ... advisory ship roll-up fields (stages[], verdicts{}, decision, pointers) — NOT floor-checked ...
   attestation: # OPTIONAL. Absent by default → the record renders `· unattested` (a valid, honest state).
     by: "<handle>" # a NAMED HUMAN's handle

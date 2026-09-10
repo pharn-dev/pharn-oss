@@ -1,7 +1,7 @@
 // pharn/floor/render-ship-briefing.test.mjs — hermetic tests for the deterministic GATE-2 briefing
 // generator. Imports the module directly (mirrors gen-lessons-index.mjs's export-for-testing convention,
 // not check-loop-record.mjs's subprocess convention) — a fresh scratch dir per test, nothing touches the
-// real features/ tree.
+// real pharn/features/ tree.
 //
 // The marked test groups pin the things that would otherwise be silent forks:
 //   ★ INJECTION — an instruction-looking / enum-mimicking string inside PLAN.md's untrusted free text
@@ -392,17 +392,33 @@ test("grill_verdict containing a double-quote round-trips through the hand-emitt
   }
 });
 
-test("default --base is 'features'", () => {
+test("default --base is 'pharn/features'", () => {
   const cwd = process.cwd();
   const base = scratchDir();
   try {
     process.chdir(base);
     writeFeature(".", "feat", { "PLAN.md": MINIMAL_PLAN });
-    // relative default base 'features' resolves under cwd — simulate by writing under ./features
-    mkdirSync(join(base, "features"), { recursive: true });
-    writeFeature("features", "feat", { "PLAN.md": MINIMAL_PLAN });
+    // relative default base 'pharn/features' resolves under cwd — simulate by writing under ./pharn/features
+    mkdirSync(join(base, "pharn", "features"), { recursive: true });
+    writeFeature("pharn/features", "feat", { "PLAN.md": MINIMAL_PLAN });
     const r = renderBriefing("feat", {});
     assert.equal(r.ok, true);
+  } finally {
+    process.chdir(cwd);
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("CLI: default --base is pharn/features (main() shares renderBriefing default)", () => {
+  const cwd = process.cwd();
+  const base = scratchDir();
+  try {
+    process.chdir(base);
+    mkdirSync(join(base, "pharn", "features"), { recursive: true });
+    writeFeature("pharn/features", "feat", { "PLAN.md": MINIMAL_PLAN });
+    const ok = spawnSync(process.execPath, [CLI, "feat"], { encoding: "utf8" });
+    assert.equal(ok.status, 0, ok.stderr);
+    assert.match(ok.stdout, /# BRIEFING — feat/);
   } finally {
     process.chdir(cwd);
     rmSync(base, { recursive: true, force: true });

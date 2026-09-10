@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // pharn/floor/render-cost-record.mjs — the deterministic RENDERER for the measured token-cost block on
-// `features/<name>/ship-record.json`, on the PRODUCT surface.
+// `pharn/features/<name>/ship-record.json`, on the PRODUCT surface.
 //
 // Non-LLM, dependency-free (Node stdlib only). It reads the CURRENT run's Claude Code session transcript,
 // deduplicates it, and sums the usage fields the platform recorded. It is the floor reduction of

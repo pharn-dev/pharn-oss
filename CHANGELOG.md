@@ -52,6 +52,150 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`amendScope()` now WRITES the baseline through the same descriptor it read, closing the half of the
+  CWE-367 pair the entry below left standing.** `SKILLS_VERSION` **5.1.1 → 5.1.2** (patch: a correction
+  to bytes 5.1.0 already put on the product surface; no capability is added and every success path is
+  byte-for-byte what it was — one error message moves, recorded below).
+  ([`pharn/floor/reconcile-baseline.mjs`](./pharn/floor/reconcile-baseline.mjs),
+  [`.dev/features/amendscope-write-fd/`](./.dev/features/amendscope-write-fd/)) — the entry below
+  replaced an `existsSync` + `readFileSync(path)` probe with a descriptor read, and stopped there. The
+  amended record was still written back with `writeFileSync(abs, …)`, which **re-resolves the name**: the
+  file receiving the amendment need not be the file whose bytes were amended. CodeQL reported exactly
+  that on the next analysis of this branch (`js/file-system-race`, security-severity **high**, at the
+  write with the paired open cited as its check). `amendScope()` now opens **`r+` once**, reads that
+  descriptor, and replaces its contents in place — `ftruncateSync(fd, 0)` then a `writeSync` loop at
+  offset 0 — with the descriptor released in a `finally` spanning both. `r+` does not create, so the
+  `"no baseline at … — run --anchor first"` ENOENT message and every fail-closed return are unchanged.
+
+  **Why the first fix read as complete, because that is the transferable part.** The TOCTOU pair has two
+  members and the pin written for it asserted one — a per-member assertion standing in for a per-set
+  rule, which is `.dev/memory-bank/lessons-learned.md` **L29** exactly, one increment later and in the
+  same function. The replacement pin is an **enumeration**: it matches every `\w+Sync(abs` occurrence in
+  the region and requires the list to equal `["openSync(abs"]`, so a path-addressed call of **any** name
+  added later fails without anyone having to remember this class (which also closes the variant-spelling
+  hole **L36** names). Both new assertions were **mutation-tested** rather than read: dropping
+  `ftruncateSync` fails the padded-record test, and restoring the path write fails the enumeration.
+
+  **`ftruncateSync` is load-bearing, not ceremony.** A write through an existing descriptor neither
+  truncates nor seeks, so a record that got **shorter** would keep the previous tail as trailing garbage;
+  the path write it replaces truncated implicitly (`O_TRUNC`). Pinned by `★ --amend-scope REPLACES the
+record — a longer prior file leaves no trailing bytes`, which pads the record with 4 KiB of JSON-legal
+  whitespace and requires the result to be byte-exactly its own canonical serialization.
+
+  **One error path moves.** Opening `r+` requires write permission, so an unwritable record now fails at
+  **open** — `cannot open .pharn/reconcile/baseline.json: <message>` — where it previously reached the
+  write and reported `cannot write …`. Both are exit **2** with nothing written, so the fail-closed
+  behaviour is identical and only the string a caller reads changes.
+
+  **Two things are NOT claimed (P0).** The write is **not atomic**: truncate-then-write has a window in
+  which a crash leaves a partial record, the same window `O_TRUNC` had — downstream that is not a silent
+  pass, since `check-bash-reconcile.mjs` reports an unparseable baseline as `INCONCLUSIVE` at exit 2.
+  And **"the alert is resolved" is settled by the next analysis, not by this repo**: no CodeQL CLI is
+  installed in the build environment, so what was verified here is the structural property the rule tests
+  — treating a correct reading as a verification is the failure this entry exists to correct (**L37**).
+
+- **`reconcile-baseline.mjs` now reads the baseline record through ONE descriptor, closing a
+  check-then-read race (CWE-367).** `SKILLS_VERSION` **5.1.0 → 5.1.1** (patch: a correction to bytes that
+  the 5.1.0 entry below already put on the product surface; no capability is added and every success
+  path is byte-for-byte what it was — but one error path does move, recorded below rather than smoothed
+  over).
+  ([`pharn/floor/reconcile-baseline.mjs`](./pharn/floor/reconcile-baseline.mjs), commit `c338b9d`,
+  [`.dev/features/record-amendscope-hardening/`](./.dev/features/record-amendscope-hardening/)) —
+  `amendScope()` and the `--show` CLI mode each probed the record with `existsSync()` and then opened it
+  again with a separate `readFileSync(path)`. Between those two syscalls the path can change: the file
+  can be replaced, removed, or swapped for a symlink, so the bytes parsed are not necessarily the bytes
+  the existence test approved. Both now `openSync()` once and read **the descriptor**, distinguish
+  `ENOENT` inside the `catch` to preserve the exact _"no baseline at … — run `--anchor` first"_ message
+  that callers and tests depend on, and release the descriptor in a `finally` so a parse failure cannot
+  leak it. Pinned by `★ amendScope reads the baseline through ONE descriptor — no
+exists-then-read/write (CWE-367)`.
+
+  **One error path DID move, and naming it is what a patch entry is for.** `--show`'s `readFileSync`
+  previously sat outside any `try`, so a **non-`ENOENT`** read failure (`EACCES`, `EISDIR`, a mid-read
+  I/O error) threw **uncaught** — Node exit **1** with a stack trace. It is now caught and reported as
+  `cannot read .pharn/reconcile/baseline.json: <message>` at exit **2**, joining that mode's existing
+  refusal code. Strictly better behaviour, and still a change to what a caller branching on `--show`'s
+  exit code observes. `amendScope()` has no counterpart change: its `readFileSync` was already inside
+  the `try`, so both its failure modes return the strings they returned before.
+
+  **The bound is unchanged and must not be read as tightened (P0).** The reconciliation record is
+  unauthenticated state in the writable tree, and `LIMITS.md §6` plus
+  [`pharn/pharn-contracts/reconciliation-record.md`](./pharn/pharn-contracts/reconciliation-record.md)
+  both already say a writer holding Bash can rewrite it outright. Closing a TOCTOU window does not
+  make the detector adversarial — it removes a way for the checker to act on bytes it never validated,
+  which is **correctness under concurrency**, not strength against an attacker. The detector stays
+  **non-adversarial** accounting against tooling that escapes its scope.
+
+  **Recorded separately from the change itself, and that is the finding worth keeping.** `c338b9d`
+  landed the fix without bumping `SKILLS_VERSION` or adding an entry here, and **both version gates
+  stayed exit 0** — `check:changelog` asks only whether the CURRENT value appears in this file, and
+  `check:badge` disclaims the class in its own header (_"a badge matching a wrong bump stays GREEN"_).
+  Nothing verifies that a bump TRACKS the product bytes that changed. That gap is now measured (at
+  `26ab408..HEAD`: one commit, one product-surface file, no bump) and carried as a deferred detector,
+  not closed — see [`.dev/features/record-amendscope-hardening/SHIP.md`](./.dev/features/record-amendscope-hardening/SHIP.md).
+
+- **A reconciliation epoch may now hold MORE THAN ONE authorized scope, so a hook-approved write by a
+  LATER stage stops being reported as a Bash escape.** `SKILLS_VERSION` **5.0.1 → 5.1.0** (minor: a newly
+  shipped mode on a shipped checker; no existing install is invalidated — a baseline with no
+  `scope_amendments` key reads as `[]`). ([`pharn/floor/reconcile-baseline.mjs`](./pharn/floor/reconcile-baseline.mjs),
+  [`pharn/floor/check-bash-reconcile.mjs`](./pharn/floor/check-bash-reconcile.mjs),
+  [`pharn/pharn-contracts/reconciliation-record.md`](./pharn/pharn-contracts/reconciliation-record.md),
+  [`.dev/features/reconcile-scope-amendments/`](./.dev/features/reconcile-scope-amendments/)).
+
+  **The defect, measured rather than reasoned about.** An epoch is anchored once at `/pharn-*build`
+  Step 0 and carries **one** `scope_snapshot`, but a run legitimately writes under **several** scopes
+  inside it. `/pharn-dev-ship`'s Step 2b invokes `/pharn-dev-memory-promote` **after** that anchor, so a
+  canon write that went through the **`Edit` tool**, passed **both** live `PreToolUse` guards, and cleared
+  an explicit human accept at the promote gate was reported by `check-bash-reconcile.mjs` as _"a write
+  reached it outside the guarded tool surface"_ — **false for that write; nothing Bash-written touched
+  canon.** Reproduced live while promoting `L41`, and recorded as
+  [`.dev/features/product-features-relocation/REVIEW.md`](./.dev/features/product-features-relocation/REVIEW.md)
+  **F3**.
+
+  **Probed in BOTH directions, per [[L40]].** With the scope released,
+  `protect-trusted-paths.cjs` denies (exit 2); with the promote-origin scope restored it **permits**
+  (exit 0) — and the escape **survived anyway**, because the checker then consults
+  `baseline.scope_snapshot`, which holds the build's scope. So the live-hook half was a red herring and
+  the snapshot half was the cause. **Structural, not incidental:** canon is `never_exempt` by deliberate
+  design, and per [[L7]] a build or ship scope may never **name** canon — that is precisely what the
+  promote gate exists to withhold — so no `## Files` declaration could fix it from the plan side. Left
+  alone, **every** `/pharn-dev-ship` run that promoted a lesson ended `npm run check` RED: [[L17]]'s
+  failure mode exactly — a changed-since-anchor test reported as a wrote-outside-scope test, blocking on
+  the **correct, designed** workflow, which is what trains an operator to wave through the one finding
+  that must never be waved through.
+
+  **The fix.** `reconcile-baseline.mjs --amend-scope` appends the live scope to a new `scope_amendments[]`
+  on the open baseline; `check-bash-reconcile.mjs` judges a candidate against the **union** of the opening
+  snapshot and every amendment. Additive: `scope_snapshot` keeps its shape and meaning, and an absent
+  `scope_amendments` (a pre-5.1.0 record) coerces to `[]`. Wired into both `*-memory-promote` commands
+  immediately after their Step-0 setter — **ordering load-bearing, exactly as `--anchor`'s is ([[L38]])**:
+  amend _after_ the setter, or it records the previous stage's scope. Fails closed on every unusable
+  input (no baseline, unreadable record, no live scope) and deliberately does **not** record an empty
+  amendment, since `{"scope": []}` reads as "authorized to write nothing" — a different claim from "no
+  amendment was made".
+
+  **`activeFeatureSlug()` still reads the opening snapshot ONLY.** A promote amendment's `set_by` is a
+  command path, not a feature; unioning it in would let a promote silently repoint the pipeline-artifact
+  exemption at another slug. Pinned by a test.
+
+  **What did NOT change, and the distinction is the whole guarantee.** An amendment makes a write
+  **accounted for**, never **exempt** — `never_exempt` is untouched, canon stays in the candidate set every
+  epoch, and an _unaccounted_ canon write is still `ESCAPE` (pinned by a non-vacuity control, [[L34]]).
+  Nor can an amendment override a guard: a path clears only if the guard **itself**, re-executed with that
+  scope materialized in a probe sandbox, permits it — so an amendment whose `set_by` is a `PLAN.md`
+  **cannot** launder a canon write past the origin check (also pinned). Delegated, never re-derived
+  ([[L37]]). **The detector's non-adversarial bound is unchanged and is not claimed to be tightened:**
+  `--amend-scope` is a Bash call, so anything holding Bash can append a scope authorizing anything — but
+  the same actor could already rewrite the baseline outright. Still an accounting tool against tooling
+  that escapes its scope, still not a control against an attacker.
+
+  **The ship-command wiring carries a DIFFERENT, weaker trigger, and says so (P7).** The same line was
+  added after each setter in `/pharn-ship` and `/pharn-dev-ship` **at the maintainer's explicit direction,
+  answering no observed failure** — recorded plainly rather than given a manufactured trigger (the
+  `check-plan-lessons` sub-check D precedent). Measured: every scope those commands set targets
+  `BRIEFING.md` / `SHIP.md` / `ship-record.json`, each already exempt under `pipeline_artifacts`, so it
+  **changes no verdict today**; the value is prospective.
+
 - **Two docs stating the writes-scope guard's fail-closed default were wrong about its width and its
   source; both are corrected against a probe rather than a reading.** `SKILLS_VERSION` **3.2.0 → 3.2.1**
   (patch — a correction to product-surface bytes that already shipped; no new capability, command or
@@ -1807,6 +1951,16 @@ floor-verified; ...)` paragraph — the _only_ generated prose in the artifact, 
 - **Split the repo into a dev/product boundary** — moved the build apparatus under `.dev/` (`.dev/floor/` checkers + tests, `.dev/features/` audit trails, `.dev/memory-bank/`), excluded wholesale by `.dev/floor/validate.mjs`; the product surface stays at the root (`pharn-review/`, `pharn-pipeline/`, `pharn-contracts/`). Commands split by name prefix — `pharn-dev-*` (apparatus) vs `pharn-*` (product) — since `.claude/commands/` cannot move.
 - Reframed the repository from "PHARN bootstrap" to **PHARN-OSS** — the product/methodology itself, self-hosting and early-stage — across all docs and metadata; renamed the package `pharn` → `pharn-oss`. No change to the released surface (the floor, the write-guard hook, the build/review commands, or capabilities).
 - **Corrected the ship-attestation entry's overstated `/pharn-loop` relationship, and documented the feature in the architecture (docs-only).** The `Added` entry above frames `ship.requireAttestation: true` as an opt-in that "halts-and-asks" in the `/pharn-loop` flow — that overstates it. `/pharn-loop` ends at **GATE 2** (writes `LOOP.md`) and **never runs attestation**; attestation is a **human-run `/pharn-ship`** concern ([`pharn/ARCHITECTURE.md §6`](./pharn/ARCHITECTURE.md), [`pharn/pharn-contracts/ship-record.md`](./pharn/pharn-contracts/ship-record.md)), so `requireAttestation` gates only that stage and **cannot stall the loop**. Also added the ship-record/attestation description to `ARCHITECTURE.md §6` and clarified the `/pharn-ship` Step 3b (attestation) prose — its gate-read sub-step (2, "Read the gate") and verdict-render sub-step (4, "Verify + render the clause"). No behavior change. `SKILLS_VERSION` → `1.1.1` — a **patch** bump: these are shipped-surface edits (the `/pharn-ship` and `/pharn-loop` command prose plus `pharn/ARCHITECTURE.md`), so a `pharn init` install now carries changed bytes.
+
+## [5.0.0] - 2026-09-10
+
+### Changed — BREAKING
+
+- **Relocated the product pipeline artifact root from `features/` to `pharn/features/`. `SKILLS_VERSION` `4.0.0` → `5.0.0`.** Requires `@pharn-dev/pharn` **0.5.0** or later (`MIN_CLI` at repo root). **Publish pharn-cli 0.5.0 and this release together** — merging OSS alone leaves fresh installs incompatible until the CLI that writes `pharn/features/` ships. Product commands, capabilities, floor checkers, contracts, and the fail-closed writes-scope default now target `pharn/features/<name>/`; root `features/` is no longer in the install safe-set (your own application `features/` trees are unaffected — PHARN simply no longer uses the root as its artifact root). `.dev/features/` (the build loop) is unchanged. **`pharn update` (0.5.0+)** warns when a root `features/README.md` copy is left behind; move pipeline artifacts to `pharn/features/<name>/` and delete obsolete root copies — reconcile/regress no longer exempt legacy root pipeline paths. See [`pharn/features/README.md`](./pharn/features/README.md).
+
+### Fixed
+
+- **Post-review hardening for the relocation (`SKILLS_VERSION` `5.0.0` → `5.0.1`).** Floor tests pin install-posture denial of legacy root `features/` and reconcile non-exemption of root pipeline paths; `render-ship-briefing.mjs` CLI default matches `pharn/features/`; migration prose added to `pharn/features/README.md`.
 
 ## [1.0.0] - 2026-06-23
 

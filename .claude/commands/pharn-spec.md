@@ -1,12 +1,12 @@
 ---
-description: "Turn a user's prose intent into a structured, human-approved features/<name>/SPEC.md — the head of the product pipeline (spec → plan → grill → build → regress → verify → ship) and the versioned record of INTENT every downstream stage reads. INTERROGATES the intent for gaps (advisory — never gates), EMITS a Draft SPEC.md with required sections, then HALTS for explicit human approval; only on approval does it flip Draft → Approved, assign a spec_id, and pin the approved intent with a content-hash (fix #4). FLOOR (deterministic, pharn/floor/check-spec.mjs): required-section PRESENCE, the Draft|Approved state enum, spec_id presence, and — when Approved — spec_content_hash == sha256(body). ADVISORY/HUMAN: whether the intent is clear/complete/wise — the human owns that, and owns the Draft → Approved gate. The model NEVER self-approves. '/pharn-spec produced it' NEVER means 'the intent is sound' (P0)."
+description: "Turn a user's prose intent into a structured, human-approved pharn/features/<name>/SPEC.md — the head of the product pipeline (spec → plan → grill → build → regress → verify → ship) and the versioned record of INTENT every downstream stage reads. INTERROGATES the intent for gaps (advisory — never gates), EMITS a Draft SPEC.md with required sections, then HALTS for explicit human approval; only on approval does it flip Draft → Approved, assign a spec_id, and pin the approved intent with a content-hash (fix #4). FLOOR (deterministic, pharn/floor/check-spec.mjs): required-section PRESENCE, the Draft|Approved state enum, spec_id presence, and — when Approved — spec_content_hash == sha256(body). ADVISORY/HUMAN: whether the intent is clear/complete/wise — the human owns that, and owns the Draft → Approved gate. The model NEVER self-approves. '/pharn-spec produced it' NEVER means 'the intent is sound' (P0)."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
 model: opus
 effort: high
-reads: ["pharn/CONSTITUTION.md", "pharn/ARCHITECTURE.md", "features/<name>/SPEC.md", "pharn/floor/check-spec.mjs"]
-writes: ["features/<name>/SPEC.md"]
+reads: ["pharn/CONSTITUTION.md", "pharn/ARCHITECTURE.md", "pharn/features/<name>/SPEC.md", "pharn/floor/check-spec.mjs"]
+writes: ["pharn/features/<name>/SPEC.md"]
 constitution_refs: ["P0", "P2", "P4", "P5", "P6", "P7"]
 version: "0.1.0"
 ---
@@ -15,14 +15,14 @@ version: "0.1.0"
 
 You are the **head of the product pipeline** (`spec → plan → grill → build → regress → verify → ship`,
 `pharn/ARCHITECTURE.md §6`). You take a user's **prose description of what they want to build** and turn it into a
-structured `features/<name>/SPEC.md` — the **versioned record of intent** every downstream stage reads. Intent,
+structured `pharn/features/<name>/SPEC.md` — the **versioned record of intent** every downstream stage reads. Intent,
 not code, is the primary versioned artifact. You **interrogate** the intent to help the user sharpen it, you
 **prepare** the spec, and you **HALT** for the user to approve their own intent. You do **not** decide whether
 the intent is good — that is what the human's approval **is**.
 
 > **This is a PRODUCT command (`pharn-`, not `pharn-dev-`).** It is the UX a PHARN **user** runs, distinct from
 > the build loop (`/pharn-dev-plan` / `-build` / `-review`) that builds PHARN itself. Its artifact lives on the
-> **product** side of the boundary: root `features/<name>/SPEC.md` (`features/README.md`), never `.dev/`.
+> **product** side of the boundary: root `pharn/features/<name>/SPEC.md` (`pharn/features/README.md`), never `.dev/`.
 
 Load the trusted prefix and obey it for the whole run:
 
@@ -57,16 +57,16 @@ Load the trusted prefix and obey it for the whole run:
 2. **Set the scope to the single SPEC.md** before any write:
 
    ```bash
-   node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-spec.md --target features/<name>/SPEC.md
+   node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-spec.md --target pharn/features/<name>/SPEC.md
    ```
 
-   Deterministic floor step (P0/P5): `writes:` is the placeholder `features/<name>/SPEC.md`; the setter narrows
+   Deterministic floor step (P0/P5): `writes:` is the placeholder `pharn/features/<name>/SPEC.md`; the setter narrows
    it to the one `--target` path. If a later write is blocked with the `writes-scope guard` message, the fix is
    to **pass the correct `--target` and re-run this setter** — never bypass the hook (CLAUDE.md, "Writes-scope").
 
 ## Step 1 — Discovery (P6, mandatory; never assert from memory)
 
-1. Read `features/<name>/` **live** this run: does a `SPEC.md` already exist (resume / revise) or is this new?
+1. Read `pharn/features/<name>/` **live** this run: does a `SPEC.md` already exist (resume / revise) or is this new?
    If one exists, read it — never overwrite an `Approved` spec without the human explicitly choosing to revise
    (a revision re-opens it to `Draft` and requires re-approval to re-pin).
 2. The user's **prose intent** is the input. If it is too thin to populate even the required sections, say so
@@ -87,7 +87,7 @@ they approve it. It **never blocks** and it **never judges the intent as good or
 
 ## Step 3 — Emit / refresh the Draft SPEC.md
 
-Write `features/<name>/SPEC.md` (scope-permitted from Step 0) as a **Draft**, with the four required `##`
+Write `pharn/features/<name>/SPEC.md` (scope-permitted from Step 0) as a **Draft**, with the four required `##`
 sections filled from the user's intent (informed by Step 2). Use exactly these canonical headings — the floor
 checks their **presence** by name:
 
@@ -125,7 +125,7 @@ spec_content_hash: ""
 Then validate the Draft on the floor:
 
 ```bash
-node pharn/floor/check-spec.mjs features/<name>/SPEC.md
+node pharn/floor/check-spec.mjs pharn/features/<name>/SPEC.md
 ```
 
 A structurally-valid Draft is **GREEN**. If **RED** (a required section missing / malformed frontmatter),
@@ -154,7 +154,7 @@ Only on an explicit **approve**, pin the spec (the SPEC body is final — do not
    validate-time recompute can never drift):
 
    ```bash
-   node pharn/floor/check-spec.mjs --hash features/<name>/SPEC.md
+   node pharn/floor/check-spec.mjs --hash pharn/features/<name>/SPEC.md
    ```
 
 2. **Edit the frontmatter:** set `state: Approved` and `spec_content_hash:` to the hash from step 1. (The hash
@@ -163,7 +163,7 @@ Only on an explicit **approve**, pin the spec (the SPEC body is final — do not
 3. **Re-validate** — this must be **GREEN** (now `Approved` **and** `spec_content_hash == sha256(body)`):
 
    ```bash
-   node pharn/floor/check-spec.mjs features/<name>/SPEC.md
+   node pharn/floor/check-spec.mjs pharn/features/<name>/SPEC.md
    ```
 
    If it is RED, the pin is wrong — recompute and re-write the hash; never relax the check or hand-edit the body

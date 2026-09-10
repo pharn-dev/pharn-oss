@@ -103,7 +103,7 @@ function resolveWriteTarget(p) {
 const ALWAYS = [".pharn/**"];
 
 // Fail-closed allow-list used when no scope file is set. PARTITIONED by repo kind:
-//   - Installed project (`pharn.config.json` has non-empty `skillsVersion`): `features/**` only —
+//   - Installed project (`pharn.config.json` has non-empty `skillsVersion`): `pharn/features/**` only —
 //     product pipeline artifacts. `skillsVersion` wins over `.dev/floor/` — a tree that carries both
 //     still gets the install posture.
 //   - PHARN dev repo (`.dev/floor/` present AND no `skillsVersion`): also `.dev/features/**`
@@ -114,8 +114,13 @@ const ALWAYS = [".pharn/**"];
 // (pharn/pharn-contracts, pharn/pharn-core, pharn/pharn-pipeline, pharn/pharn-review) but NOT
 // pharn/floor/ or the pharn/-top-level trusted docs (no hyphen after `pharn/pharn`), so the floor stays
 // deny-by-default exactly as `.dev/floor/` did pre-relocation.
+// `pharn/features/**` is listed SEPARATELY and cannot be folded into `pharn/pharn-*/**`: that glob
+// requires a literal `pharn-` prefix after `pharn/`, which `features` does not have. The product
+// artifact root moved under pharn/ so an install stops colliding with a project's own root
+// `features/` (Cucumber's default glob; feature-sliced architectures). `.dev/features/**` did NOT
+// move — the build loop keeps its own root.
 const DEV_SAFE_SET_EXTRA = [".dev/features/**", "pharn/pharn-*/**"];
-const INSTALL_SAFE_SET = ["features/**"];
+const INSTALL_SAFE_SET = ["pharn/features/**"];
 
 function isPharnInstalledProject() {
   try {

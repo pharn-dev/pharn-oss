@@ -29,8 +29,8 @@ docs/lessons-index.md
 # product-pipeline FAIL to discover it.
 .dev/features/*/verify-report.json
 .dev/features/*/regression-report.json
-features/*/verify-report.json
-features/*/regression-report.json
+pharn/features/*/verify-report.json
+pharn/features/*/regression-report.json
 
 # Trusted spec docs: human-only, hook-protected. Excluded from the formatter
 # so style fixes can never mutate their content-hash (fix #4 / spec-drift).

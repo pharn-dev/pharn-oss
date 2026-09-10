@@ -237,7 +237,7 @@ linking back to the spec:
 
 **Keystone:** `SPEC.md` is the root artifact and every downstream artifact is bound to it. **The
 binding is the feature slug, not a field on every artifact** — `spec_id` ≡ `<name>` ≡ the
-`features/<name>/` directory that holds the whole chain, an identity `pharn/floor/check-plan-spec-agree.mjs`
+`pharn/features/<name>/` directory that holds the whole chain, an identity `pharn/floor/check-plan-spec-agree.mjs`
 asserts and four downstream stages re-verify. A literal `spec_id` field appears in `PLAN.md` and
 `BRIEFING.md`; the other artifacts carry the identity positionally.
 But **`spec_id` binds identity, not content** — so the plan also pins `spec_content_hash` (fix #4,
@@ -248,7 +248,7 @@ the one thing only you have"). An audit whose spec content floats under a stable
 audit-grade.
 
 **The ship stage's optional attestation clause (content-bound).** Beside `SHIP.md`, `/pharn-ship`
-emits the machine-readable roll-up `features/<name>/ship-record.json`, which may carry an **optional**
+emits the machine-readable roll-up `pharn/features/<name>/ship-record.json`, which may carry an **optional**
 `attestation` block — a **named human's** attestation to having **read** the record, bound to its
 content by a hash so a later edit is **detectable, not silent** (the same content-hash mechanism as
 `spec_content_hash` above) and gated by the config key `ship.requireAttestation` (default `false`).

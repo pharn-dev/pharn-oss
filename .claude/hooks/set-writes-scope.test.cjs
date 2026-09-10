@@ -1,10 +1,10 @@
 // .claude/hooks/set-writes-scope.test.cjs — locks the dev/product ARTIFACT SPLIT (fix #7 setter).
 //
 // After the dev/product boundary move, the build-loop commands write their artifacts under
-// `.dev/features/`, NOT root `features/` (root `features/` is reserved for the PRODUCT pipeline's
+// `.dev/features/`, NOT root `pharn/features/` (root `pharn/features/` is reserved for the PRODUCT pipeline's
 // SPEC.md etc.). That split is enforced DETERMINISTICALLY by each `pharn-dev-*` command's `writes:`
 // placeholder being `.dev/features/<name>/…`: the setter resolves a `.dev/features/<name>` --target,
-// and a ROOT `features/<name>` --target matches no entry → fail-closed (no scope written).
+// and a ROOT `pharn/features/<name>` --target matches no entry → fail-closed (no scope written).
 //
 // This pins that for `/pharn-dev-plan` against the REAL command file (membership, not a synthetic
 // fixture — mirrors enforce-writes-scope.test.cjs's real-review.md regression test). It also backfills
@@ -43,10 +43,10 @@ test("artifact-split lock: /pharn-dev-plan resolves a .dev/features/<name> --tar
   assert.deepEqual(rec.scope, [".dev/features/sample/PLAN.md"]);
 });
 
-test("artifact-split lock: a ROOT features/<name> --target is REJECTED (pharn-dev-* write .dev/features/, never root features/)", () => {
+test("artifact-split lock: a ROOT pharn/features/<name> --target is REJECTED (pharn-dev-* write .dev/features/, never root pharn/features/)", () => {
   const cwd = tmp();
-  const r = setter(cwd, "--from-frontmatter", PLAN_CMD, "--target", "features/sample/PLAN.md");
-  // pharn-dev-plan's `writes:` placeholder is `.dev/features/<name>/PLAN.md`; a root `features/…` target
+  const r = setter(cwd, "--from-frontmatter", PLAN_CMD, "--target", "pharn/features/sample/PLAN.md");
+  // pharn-dev-plan's `writes:` placeholder is `.dev/features/<name>/PLAN.md`; a root `pharn/features/…` target
   // matches no entry, so the setter emits no concrete scope, exits non-zero, and writes nothing (fail-closed).
   assert.equal(r.status, 1);
   assert.equal(fs.existsSync(join(cwd, ".pharn", "writes-scope.json")), false);
@@ -355,15 +355,21 @@ function capWith(cwd, ...frontmatterLines) {
 
 test("--from-frontmatter resolves a GLOB `writes:` entry against --target", () => {
   const cwd = tmp();
-  const r = setter(cwd, "--from-frontmatter", capWith(cwd, 'writes: ["features/*/REVIEW.md"]'), "--target", "features/x/REVIEW.md");
+  const r = setter(
+    cwd,
+    "--from-frontmatter",
+    capWith(cwd, 'writes: ["pharn/features/*/REVIEW.md"]'),
+    "--target",
+    "pharn/features/x/REVIEW.md"
+  );
   assert.equal(r.status, 0);
   const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
-  assert.deepEqual(rec.scope, ["features/x/REVIEW.md"]);
+  assert.deepEqual(rec.scope, ["pharn/features/x/REVIEW.md"]);
 });
 
 test("--from-frontmatter: a GLOB that does not match --target yields no scope (fail-closed)", () => {
   const cwd = tmp();
-  const r = setter(cwd, "--from-frontmatter", capWith(cwd, 'writes: ["features/*/REVIEW.md"]'), "--target", "docs/other.md");
+  const r = setter(cwd, "--from-frontmatter", capWith(cwd, 'writes: ["pharn/features/*/REVIEW.md"]'), "--target", "docs/other.md");
   assert.notEqual(r.status, 0);
   assert.equal(fs.existsSync(join(cwd, ".pharn", "writes-scope.json")), false);
 });
@@ -394,7 +400,7 @@ test("a BLOCK-list `writes:` naming a control file is refused too (the refusal i
 
 test("--target that escapes the repo root is rejected", () => {
   const cwd = tmp();
-  const r = setter(cwd, "--from-frontmatter", capWith(cwd, 'writes: ["features/<name>/PLAN.md"]'), "--target", "../outside/PLAN.md");
+  const r = setter(cwd, "--from-frontmatter", capWith(cwd, 'writes: ["pharn/features/<name>/PLAN.md"]'), "--target", "../outside/PLAN.md");
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /escapes repo root/);
 });

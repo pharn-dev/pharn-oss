@@ -1445,3 +1445,132 @@ leaving the attribution itself unguarded, i.e. it would report GREEN over exactl
 - source: `.dev/features/readme-writes-scope-default/PLAN.md` (defect A.1) +
   `.dev/features/readme-writes-scope-default/REVIEW.md` (lens 3)
 - promoted: 2026-09-10 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L41 — A default every test overrides is exercised by nothing — hermetic fixtures are the blind spot
+
+type: process · concepts: [test-blindspot, default-values, redundant-identity, relocation]
+
+**Lesson.** When a parameter has a default AND every test supplies that parameter explicitly for
+hermeticity, the default is dead code to the suite. It can be wrong for an entire release line while every
+gate stays green, because the only caller that ever reaches it is production.
+
+**Measured, not argued.** The 5.0.0 `features/` -> `pharn/features/` relocation updated one of the TWO
+copies of the `base` default in `pharn/floor/render-ship-briefing.mjs`: the renderer (`:318`) became
+`"pharn/features"`, the CLI entry point (`:438`) stayed `"features"`. `/pharn-ship` Step 2c invokes that
+CLI WITHOUT `--base`, so the stale copy WAS the production path and every product ship RED-failed at GATE 2
+with `ENOENT ... features/<name>/PLAN.md`. The suite was **1979/1979 green** across the whole defect: every
+CLI case in `render-ship-briefing.test.mjs` passes `--base` explicitly (each builds its own scratch dir) and
+every unit case calls `renderBriefing()` directly. The convention that makes those tests hermetic and
+order-independent is the same convention that made the default unobservable.
+
+**This is not [[L35]], though it rhymes.** L35 says a fact stored twice should have its second copy retired
+rather than synced, and that is the correct remedy here (the fix deletes the CLI default so `flag()`
+returning `undefined` falls through to the renderer's single `?? "pharn/features"`). What L35 does not
+explain is why a green suite failed to notice the divergence for a whole release. The answer is the test
+convention, and that is the part worth carrying.
+
+**Remedy.** When a parameter carries a default, either (a) one test must exercise the no-argument path, or
+(b) the default must not exist in two places. Prefer (b); add (a) when the default legitimately lives in one
+place and a caller depends on it. A bulk find-and-replace across a relocation is exactly the operation that
+splits paired constants, so a relocation is the moment to enumerate defaults, not only paths.
+
+**Bound (P0).** This is a convention, not a floor check. Nothing detects a default that no test reaches:
+coverage tooling would report the LINE as covered (the tests execute `main()`), because what is uncovered is
+the _branch where the flag is absent_, not the statement. No checker is added here — P7's bar is a real
+second failure, and this is the first.
+
+**Provenance.**
+
+- feature: `product-features-relocation`
+- commit: `aa5aafe2d3f29dbdef5cf85e1ce4b75866a7e20e`
+- source: `.dev/features/product-features-relocation/REVIEW.md` (F2)
+- promoted: 2026-09-10 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L42 — Re-executing a policy engine after the fact answers "would it allow this NOW", not "did it allow this THEN"
+
+type: floor · concepts: [delegation, temporal-state, detector-precision, false-positive, policy-replay]
+
+**Lesson.** Delegating to the real guard instead of re-deriving its rules ([[L37]]) is right, and it
+carries a trap L37 does not name: the guard answers about the state it can see **now**. When its decision
+depends on mutable state the workflow legitimately changes — a scope file, a config, a flag — an
+after-the-fact checker that re-runs it gets a verdict about the PRESENT and reports the correct workflow
+as a violation.
+
+**Measured.** `check-bash-reconcile.mjs` already knew half of this ([[L38]]: snapshot the scope, never
+read it live) and had the defect anyway, because it snapshotted ONCE PER EPOCH while an epoch spans
+build → ship and holds several legitimately-different scopes. `/pharn-dev-ship` Step 2b invokes
+`/pharn-dev-memory-promote` AFTER the build anchor, so a canon write made through the `Edit` tool, past
+both live `PreToolUse` guards, behind an explicit human accept, was reported as "a write reached it
+outside the guarded tool surface". Per [[L7]] the build scope may never NAME canon, so no `## Files`
+declaration could fix it: EVERY promoting ship run ended `npm run check` RED. That is [[L17]]'s failure
+mode — a blocking finding on the designed workflow, which is what trains an operator to wave through the
+finding that must never be waved through.
+
+**The probe found the WRONG cause first, which is the part worth carrying.** Varying the attributed
+condition ([[L40]]) showed `protect-trusted-paths.cjs` flipping exit 2 → 0 when the promote scope was
+restored — which looked like the whole answer. The escape survived, because a SECOND consultation read
+the stale snapshot. A single confirming probe would have produced a fix for the wrong half.
+
+**Remedy.** When a detector replays a policy engine, ask what that engine's INPUTS were at the moment of
+the act; enumerate every input the workflow may legitimately change; and record each change as it
+happens. One snapshot is correct only when the policy has exactly one state per window. Here that became
+`scope_amendments[]` plus `--amend-scope`, called immediately after each stage's own setter.
+
+**Bound (P0).** Recording more state does not make the detector adversarial-proof, and must not be
+described as tightening it: the record is unauthenticated state in the writable tree, so anything holding
+Bash can append an authorization — the same actor could already forge a baseline hash. This buys
+PRECISION (fewer false escapes on correct workflows), never strength. And an amendment makes a write
+ACCOUNTED FOR, never EXEMPT: the path stays in the candidate set, and it clears only if the guard itself,
+re-executed with that scope materialized, permits it.
+
+**Provenance.**
+
+- feature: `reconcile-scope-amendments`
+- commit: `d0aaf6cdc581ab17854c86c82cc6997b0b308507`
+- source: `.dev/features/product-features-relocation/REVIEW.md` (F3) +
+  `.dev/features/reconcile-scope-amendments/PLAN.md`
+- promoted: 2026-09-10 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L43 — A consistency check over several stores of one fact certifies their agreement, never the fact — they can all be stale together
+
+type: floor · concepts: [consistency-check, version-discipline, mirrored-state, check-blindness, referent-binding]
+
+**Lesson.** When one fact is mirrored across several stores, the reflex is to check that the stores
+AGREE. That check is structurally blind to the whole set going stale AT ONCE, because agreement is
+PRESERVED by updating none of them. Before adding one, ask: what would still be wrong if every copy
+agreed? If the answer is "the value itself", the check you need binds the value to its REFERENT — the
+thing it describes — not the copies to each other.
+
+**Measured.** `SKILLS_VERSION`, the README shields badge and the `CHANGELOG.md` version key all read
+`5.1.0` while `pharn/floor/reconcile-baseline.mjs` — a product-surface byte the version exists to
+version — had moved past it in `c338b9d`. `check:badge` and `check:changelog` both exited 0, and
+`npm run check` was exit 0 across all ten gates with the bump missing. Neither gate is weak; each
+answered exactly the question it was built to answer. `check-version-badge.mjs` even disclaims the class
+in its own header ("a badge matching a wrong bump stays GREEN") — the blindness was documented at the one
+site nothing cross-reads while bumping.
+
+**Distinct from its two neighbours, and the distinction is the usable part.** [[L35]] asks whether the
+second copy should exist at all and prescribes DRAINING it. Here the copies must exist — the CHANGELOG's
+version string is a JOIN KEY binding a number to the description of what changed in it, argued in
+`check-skills-version-recorded.mjs`'s own header — so draining is unavailable and the remedy lies on a
+different axis. [[L20]] says a discipline-only remedy has earned a floor check on its second occurrence;
+this says WHICH check, because a third mutual-consistency gate would have been green too.
+
+**Remedy.** Bind the fact to what it describes. Here that is: compare the commit that last moved
+`SKILLS_VERSION` against the product-surface paths changed since it — the same git-as-floor-input
+precedent `check-bash-reconcile.mjs` already sets.
+
+**Bound (P0).** Naming the missing check does not build it, and this entry must not be read as having
+closed anything. The detector is DEFERRED with two real design problems: the bump-triggering set becomes
+a maintained enumeration ([[L29]]/[[L36]]), and a bump landing in a sibling commit of the same PR is
+correct practice yet would RED. Until it exists this stays discipline — which is precisely what [[L20]]
+predicts will recur. This is at least the third occurrence: `check-skills-version-recorded.mjs`'s header
+already records `6c5ae8e` and `e4e8529`.
+
+**Provenance.**
+
+- feature: `record-amendscope-hardening`
+- commit: `c338b9d07f2d620ebd35becd5831afbcd6727061`
+- source: `.dev/features/record-amendscope-hardening/REVIEW.md` +
+  `.dev/features/record-amendscope-hardening/PLAN.md`
+- promoted: 2026-09-10 via gated `/pharn-dev-memory-promote` (human-approved).

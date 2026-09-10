@@ -48,8 +48,8 @@ function makeRepo({ devRepo = true, gitignore = "node_modules/\n.pharn/\nrunned/
   }
   if (devRepo) mkdirSync(join(dir, ".dev/floor"), { recursive: true });
   else writeFileSync(join(dir, "pharn.config.json"), JSON.stringify({ skillsVersion: "9.9.9" }) + "\n");
-  mkdirSync(join(dir, "features"), { recursive: true });
-  writeFileSync(join(dir, "features/keep.md"), "seed\n");
+  mkdirSync(join(dir, "pharn", "features"), { recursive: true });
+  writeFileSync(join(dir, "pharn/features/keep.md"), "seed\n");
   git("add", "-A");
   git("commit", "-q", "-m", "seed");
   return dir;
@@ -69,7 +69,7 @@ function setScope(dir, scope) {
   mkdirSync(join(dir, ".pharn"), { recursive: true });
   writeFileSync(
     join(dir, ".pharn/writes-scope.json"),
-    JSON.stringify({ scope, set_by: "features/t/PLAN.md", set_at: new Date().toISOString() }, null, 2) + "\n"
+    JSON.stringify({ scope, set_by: "pharn/features/t/PLAN.md", set_at: new Date().toISOString() }, null, 2) + "\n"
   );
 }
 const anchor = (dir, extra = []) =>
@@ -89,7 +89,7 @@ function check(dir, extra = []) {
 
 test("★ ESCAPE: a Bash write to a path outside the declared scope is detected and exits 1", () => {
   const dir = makeRepo();
-  setScope(dir, ["features/keep.md"]);
+  setScope(dir, ["pharn/features/keep.md"]);
   assert.equal(anchor(dir).status, 0);
   writeFileSync(join(dir, "SNEAKY.txt"), "written outside the guarded surface\n");
   const r = check(dir);
@@ -105,9 +105,9 @@ test("★ ESCAPE: a Bash write to a path outside the declared scope is detected 
 
 test("★ CLEAN: a Bash write INSIDE the declared scope is not an escape", () => {
   const dir = makeRepo();
-  setScope(dir, ["features/keep.md"]);
+  setScope(dir, ["pharn/features/keep.md"]);
   assert.equal(anchor(dir).status, 0);
-  writeFileSync(join(dir, "features/keep.md"), "rewritten in scope\n");
+  writeFileSync(join(dir, "pharn/features/keep.md"), "rewritten in scope\n");
   const r = check(dir);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.json.verdict, "CLEAN");
@@ -119,9 +119,9 @@ test("★ NON-VACUITY CONTROL (L34): the suite cannot pass by reporting everythi
   // The mirror of the test above, same fixture shape, opposite expectation. Without this, a checker
   // hard-wired to return CLEAN would satisfy every green assertion in this file.
   const dir = makeRepo();
-  setScope(dir, ["features/keep.md"]);
+  setScope(dir, ["pharn/features/keep.md"]);
   assert.equal(anchor(dir).status, 0);
-  writeFileSync(join(dir, "features/keep.md"), "in scope\n");
+  writeFileSync(join(dir, "pharn/features/keep.md"), "in scope\n");
   writeFileSync(join(dir, "OUT.txt"), "out of scope\n");
   const r = check(dir);
   assert.equal(r.json.verdict, "ESCAPE");
@@ -134,9 +134,9 @@ test("★ NON-VACUITY CONTROL (L34): the suite cannot pass by reporting everythi
 });
 
 test("★ no-scope FAIL-CLOSED: with no scope set, the default is delegated to the live hook", () => {
-  const dir = makeRepo({ devRepo: true }); // dev posture: features/**, .dev/features/**, pharn/pharn-*/**
+  const dir = makeRepo({ devRepo: true }); // dev posture: pharn/features/**, .dev/features/**, pharn/pharn-*/**
   assert.equal(anchor(dir).status, 0);
-  writeFileSync(join(dir, "features/allowed.md"), "inside the default safe-set\n");
+  writeFileSync(join(dir, "pharn/features/allowed.md"), "inside the default safe-set\n");
   writeFileSync(join(dir, "ROOT-FILE.md"), "root files are denied by the default\n");
   const r = check(dir);
   assert.equal(r.status, 1, r.stdout + r.stderr);
@@ -159,7 +159,7 @@ test("★ no-scope: the INSTALL posture is delegated too — `.dev/features/**` 
 
 test("★ ignored-path exemption: a git-ignored write is invisible by derivation", () => {
   const dir = makeRepo();
-  setScope(dir, ["features/keep.md"]);
+  setScope(dir, ["pharn/features/keep.md"]);
   assert.equal(anchor(dir).status, 0);
   mkdirSync(join(dir, "node_modules"), { recursive: true });
   writeFileSync(join(dir, "node_modules/whatever.js"), "ignored\n");
@@ -191,7 +191,7 @@ test("★ control surface cannot be exempted, even if it appears in the scope sn
 
 test("★ memory-bank canon reached through Bash is an escape (THREAT-MODEL §2 #3)", () => {
   const dir = makeRepo();
-  setScope(dir, ["features/keep.md"]);
+  setScope(dir, ["pharn/features/keep.md"]);
   mkdirSync(join(dir, ".dev/memory-bank"), { recursive: true });
   writeFileSync(join(dir, ".dev/memory-bank/lessons-learned.md"), "## L1 — seed\n");
   execFileSync("git", ["add", "-A"], { cwd: dir, stdio: "pipe" });
@@ -228,7 +228,7 @@ test("a malformed baseline is INCONCLUSIVE, never a reassuring CLEAN", () => {
 
 test("a FUTURE schema version is INCONCLUSIVE; an OLDER one is tolerated at read with a warning", () => {
   const dir = makeRepo();
-  setScope(dir, ["features/keep.md"]);
+  setScope(dir, ["pharn/features/keep.md"]);
   assert.equal(anchor(dir).status, 0);
   const rec = JSON.parse(readFileSync(join(dir, RECORD_PATH), "utf8"));
   writeFileSync(join(dir, RECORD_PATH), JSON.stringify({ ...rec, version: 99 }));
@@ -241,12 +241,12 @@ test("a FUTURE schema version is INCONCLUSIVE; an OLDER one is tolerated at read
 
 test("a DELETION is a warning, not an escape — nothing was written", () => {
   const dir = makeRepo();
-  setScope(dir, ["features/keep.md"]);
+  setScope(dir, ["pharn/features/keep.md"]);
   assert.equal(anchor(dir).status, 0);
-  rmSync(join(dir, "features/keep.md"));
+  rmSync(join(dir, "pharn/features/keep.md"));
   const r = check(dir);
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.ok(r.json.warnings.some((w) => w.includes("features/keep.md")));
+  assert.ok(r.json.warnings.some((w) => w.includes("pharn/features/keep.md")));
 });
 
 test("an absent guard is INCONCLUSIVE — no guard, no premise to reconcile against", () => {
@@ -263,7 +263,7 @@ test("the verdict enum is CLOSED — every emitted verdict is a member (L29: ite
   const seen = new Set();
   seen.add(check(dir).json.verdict); // NO_BASELINE
   seen.add(check(dir, ["--require-baseline"]).json.verdict); // INCONCLUSIVE
-  setScope(dir, ["features/keep.md"]);
+  setScope(dir, ["pharn/features/keep.md"]);
   anchor(dir);
   seen.add(check(dir).json.verdict); // CLEAN
   writeFileSync(join(dir, "X.txt"), "x\n");
@@ -287,7 +287,7 @@ test("✧ PARITY: globToRegExp agrees with enforce-writes-scope.cjs, verified by
     { scope: ["pharn/pharn-*/**"], path: "pharn/pharn-core/x.md" },
     { scope: ["pharn/pharn-*/**"], path: "pharn/floor/x.mjs" },
     { scope: ["a.b.c"], path: "aXbXc" },
-    { scope: ["features/**"], path: "features/x/PLAN.md" },
+    { scope: ["pharn/features/**"], path: "pharn/features/x/PLAN.md" },
   ];
   for (const c of cases) {
     setScope(dir, c.scope);
@@ -356,7 +356,7 @@ test("✧ isAlwaysReconciled covers the prefixes as well as the exact members", 
   assert.ok(isAlwaysReconciled("pharn/floor/check-verify.mjs", data));
   assert.ok(isAlwaysReconciled(".dev/floor/check-provenance.mjs", data));
   assert.ok(isAlwaysReconciled(".claude/settings.json", data));
-  assert.ok(!isAlwaysReconciled("features/x/PLAN.md", data));
+  assert.ok(!isAlwaysReconciled("pharn/features/x/PLAN.md", data));
 });
 
 // --------------------------------------------------------------------------------- ✧ WIRING PINS
@@ -400,7 +400,7 @@ test("★ L17: a stage's OWN pipeline artifact is exempt — changed-since-ancho
   mkdirSync(join(dir, ".pharn"), { recursive: true });
   writeFileSync(
     join(dir, ".pharn/writes-scope.json"),
-    JSON.stringify({ scope: ["features/keep.md"], set_by: ".dev/features/x/PLAN.md", set_at: "T" })
+    JSON.stringify({ scope: ["pharn/features/keep.md"], set_by: ".dev/features/x/PLAN.md", set_at: "T" })
   );
   assert.equal(anchor(dir).status, 0);
   writeFileSync(join(dir, ".dev/features/x/PLAN.md"), "the plan is the scope SOURCE, not a scope member\n");
@@ -428,11 +428,12 @@ test("✧ PARITY: pipeline_artifacts.names equals check-regress.mjs's PIPELINE_A
 
 test("✧ the pipeline-artifact slug is shape-gated — `..` cannot build a traversing exemption", () => {
   const data = loadIgnoreData(IGNORE_JSON);
-  assert.equal(isPipelineArtifact("features/../PLAN.md", data), false);
+  assert.equal(isPipelineArtifact("pharn/features/../PLAN.md", data), false);
   assert.equal(isPipelineArtifact(".dev/features/../../PLAN.md", data), false);
-  assert.equal(isPipelineArtifact("features/x/PLAN.md", data), true);
+  assert.equal(isPipelineArtifact("features/x/PLAN.md", data), false, "legacy root features/ is not a pipeline exemption");
+  assert.equal(isPipelineArtifact("pharn/features/x/PLAN.md", data), true);
   assert.equal(isPipelineArtifact(".dev/features/x/SHIP.md", data), true);
-  assert.equal(isPipelineArtifact("features/x/other.md", data), false, "exact enum membership, never a glob");
+  assert.equal(isPipelineArtifact("pharn/features/x/other.md", data), false, "exact enum membership, never a glob");
 });
 
 // ------------------------------------------------- fail-open defects found in review (PR #212)
@@ -442,7 +443,7 @@ test("★ REVIEW: the control surface is reconciled against HEAD even WITH a bas
   // guard's baseline entry to the new hash — the path then matches its baseline, never becomes a
   // candidate, and the verdict is CLEAN. The guarantee this file claims is "reconciled ALWAYS".
   const dir = makeRepo();
-  setScope(dir, ["features/keep.md"]);
+  setScope(dir, ["pharn/features/keep.md"]);
   assert.equal(anchor(dir).status, 0);
   const hook = join(dir, ".claude/hooks/enforce-writes-scope.cjs");
   writeFileSync(hook, "// disarmed\n");
@@ -457,7 +458,7 @@ test("★ REVIEW: the control surface is reconciled against HEAD even WITH a bas
 
 test("★ REVIEW: an unexpected hook exit code is INCONCLUSIVE, never treated as permission", () => {
   const dir = makeRepo();
-  setScope(dir, ["features/keep.md"]);
+  setScope(dir, ["pharn/features/keep.md"]);
   assert.equal(anchor(dir).status, 0);
   writeFileSync(join(dir, "OUT.txt"), "x\n");
   // A guard that malfunctions (exit 1) must not read as "allowed".
@@ -474,20 +475,20 @@ test("★ REVIEW: an EXPLICIT empty scope denies everything — it is not 'no sc
   const dir = makeRepo();
   setScope(dir, []);
   assert.equal(anchor(dir).status, 0);
-  writeFileSync(join(dir, "features/keep.md"), "would be allowed by the DEFAULT safe-set\n");
+  writeFileSync(join(dir, "pharn/features/keep.md"), "would be allowed by the DEFAULT safe-set\n");
   const r = check(dir);
-  assert.equal(r.status, 1, "features/** is in the default safe-set but NOT in an empty explicit scope");
+  assert.equal(r.status, 1, "pharn/features/** is in the default safe-set but NOT in an empty explicit scope");
   assert.equal(r.json.escapes[0].denied_by, "writes-scope (snapshot)");
 });
 
 test("★ REVIEW: an unreadable path is treated as CHANGED, not waved through as a warning", () => {
   const dir = makeRepo();
-  setScope(dir, ["features/keep.md"]);
+  setScope(dir, ["pharn/features/keep.md"]);
   assert.equal(anchor(dir).status, 0);
   // Replace a tracked regular file with a directory: enumerated, but not hashable.
-  rmSync(join(dir, "features/keep.md"));
-  mkdirSync(join(dir, "features/keep.md"), { recursive: true });
-  writeFileSync(join(dir, "features/keep.md/inner.txt"), "x\n");
+  rmSync(join(dir, "pharn/features/keep.md"));
+  mkdirSync(join(dir, "pharn/features/keep.md"), { recursive: true });
+  writeFileSync(join(dir, "pharn/features/keep.md/inner.txt"), "x\n");
   const r = check(dir);
   assert.ok(
     r.json.warnings.some((w) => /treated as changed/.test(w)),
@@ -502,7 +503,7 @@ test("★ REVIEW: the pipeline exemption is restricted to the ACTIVE feature slu
   mkdirSync(join(dir, ".pharn"), { recursive: true });
   writeFileSync(
     join(dir, ".pharn/writes-scope.json"),
-    JSON.stringify({ scope: ["features/keep.md"], set_by: ".dev/features/mine/PLAN.md", set_at: "T" })
+    JSON.stringify({ scope: ["pharn/features/keep.md"], set_by: ".dev/features/mine/PLAN.md", set_at: "T" })
   );
   assert.equal(anchor(dir).status, 0);
   writeFileSync(join(dir, ".dev/features/mine/SHIP.md"), "this feature's own artifact\n");
@@ -519,12 +520,12 @@ test("★ REVIEW: the pipeline exemption is restricted to the ACTIVE feature slu
 
 test("✧ activeFeatureSlug derives from set_by, and falls back to slug-agnostic rather than guessing", () => {
   assert.equal(activeFeatureSlug({ set_by: ".dev/features/mine/PLAN.md" }), "mine");
-  assert.equal(activeFeatureSlug({ set_by: "features/x/PLAN.md" }), "x");
+  assert.equal(activeFeatureSlug({ set_by: "pharn/features/x/PLAN.md" }), "x");
   assert.equal(activeFeatureSlug({ set_by: ".claude/commands/pharn-verify.md" }), null);
   assert.equal(activeFeatureSlug(null), null);
   const data = loadIgnoreData(IGNORE_JSON);
-  assert.equal(isPipelineArtifact("features/any/PLAN.md", data, null), true, "no slug known => no narrowing");
-  assert.equal(isPipelineArtifact("features/any/PLAN.md", data, "mine"), false);
+  assert.equal(isPipelineArtifact("pharn/features/any/PLAN.md", data, null), true, "no slug known => no narrowing");
+  assert.equal(isPipelineArtifact("pharn/features/any/PLAN.md", data, "mine"), false);
 });
 
 test("★ REVIEW: a FORGED baseline entry hides an ordinary-path escape — the bound, pinned as behaviour", () => {
@@ -533,7 +534,7 @@ test("★ REVIEW: a FORGED baseline entry hides an ordinary-path escape — the 
   // silent CLEAN. Pinning it means the docs cannot quietly drift back to claiming otherwise, and if a
   // later increment closes the hole this test FAILS and forces the claim to be widened deliberately.
   const dir = makeRepo();
-  setScope(dir, ["features/keep.md"]);
+  setScope(dir, ["pharn/features/keep.md"]);
   assert.equal(anchor(dir).status, 0);
   writeFileSync(join(dir, "DENIED.txt"), "an out-of-scope write\n");
   assert.equal(check(dir).status, 1, "precondition: it IS detected before the entry is forged");
@@ -572,4 +573,123 @@ test("✧ the shipped claim says NON-ADVERSARIAL everywhere it is stated (P0 —
 test("✧ the contract exists and declares the verdict enum this file iterates", () => {
   const contract = readFileSync(join(REPO, "pharn/pharn-contracts/reconciliation-record.md"), "utf8");
   for (const v of VERDICTS) assert.ok(contract.includes(v), `contract does not name ${v}`);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────
+// scope_amendments — an epoch may hold MORE THAN ONE authorized scope.
+//
+// The measured trigger is .dev/features/product-features-relocation/REVIEW.md F3: /pharn-dev-ship's
+// Step 2b invokes /pharn-dev-memory-promote AFTER the Step-3 build anchor, so a canon write that passed
+// BOTH live guards and a human accept was reported as "a write reached it outside the guarded tool
+// surface". Canon is `never_exempt` by design and per L7 the build scope may never NAME canon, so the
+// plan side cannot fix it. Without amendments EVERY promoting ship run ends RED — L17's failure mode.
+
+const CANON = ".dev/memory-bank/lessons-learned.md";
+const PROMOTE = ".claude/commands/pharn-dev-memory-promote.md";
+
+function seedCanon(dir) {
+  mkdirSync(join(dir, ".dev/memory-bank"), { recursive: true });
+  writeFileSync(join(dir, CANON), "## L1 — seed\n");
+  execFileSync("git", ["add", "-A"], { cwd: dir, stdio: "pipe" });
+  execFileSync("git", ["commit", "-q", "-m", "canon"], { cwd: dir, stdio: "pipe" });
+}
+const amend = (dir) => spawnSync(process.execPath, [ANCHOR, "--amend-scope", "--base", dir], { encoding: "utf8" });
+function setPromoteScope(dir, target) {
+  mkdirSync(join(dir, ".pharn"), { recursive: true });
+  writeFileSync(
+    join(dir, ".pharn/writes-scope.json"),
+    JSON.stringify({ scope: [target], set_by: PROMOTE, set_at: new Date().toISOString() }, null, 2) + "\n"
+  );
+}
+
+test("★ F3 REGRESSION: a promote-stage canon write recorded as an amendment is CLEAN, not an escape", () => {
+  const dir = makeRepo();
+  seedCanon(dir);
+  setScope(dir, ["pharn/features/keep.md"]); // the BUILD stage's scope — cannot name canon (L7)
+  assert.equal(anchor(dir).status, 0);
+
+  // The promote stage: its own Step-0 setter, then the amendment, then the canon write.
+  setPromoteScope(dir, CANON);
+  assert.equal(amend(dir).status, 0);
+  writeFileSync(join(dir, CANON), "## L1 — seed\n\n## L2 — promoted\n");
+
+  const r = check(dir);
+  assert.equal(r.json?.verdict, "CLEAN", `expected CLEAN, got ${r.stdout}`);
+  assert.equal(r.status, 0);
+});
+
+test("★ F3 REGRESSION: it stays CLEAN after the promote scope is RELEASED — the real F3 condition", () => {
+  const dir = makeRepo();
+  seedCanon(dir);
+  setScope(dir, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  setPromoteScope(dir, CANON);
+  assert.equal(amend(dir).status, 0);
+  writeFileSync(join(dir, CANON), "## L1 — seed\n\n## L2 — promoted\n");
+  // Every command's LAST step clears the scope, which is exactly when the checker runs.
+  rmSync(join(dir, ".pharn/writes-scope.json"), { force: true });
+
+  const r = check(dir);
+  assert.equal(r.json?.verdict, "CLEAN", `a released scope must not resurrect the escape: ${r.stdout}`);
+});
+
+// L34 non-vacuity: the clearance must come from the AMENDMENT, not from the test's own shape.
+test("★ NON-VACUITY: the SAME canon write with NO amendment recorded is still an ESCAPE", () => {
+  const dir = makeRepo();
+  seedCanon(dir);
+  setScope(dir, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  writeFileSync(join(dir, CANON), "## L1 — seed\n\n## L2 — unaccounted\n");
+
+  const r = check(dir);
+  assert.equal(r.json?.verdict, "ESCAPE", "canon must stay VISIBLE — amendments account for writes, they never exempt paths");
+  assert.equal(r.status, 1);
+  assert.ok(r.json.escapes.some((e) => e.file === CANON));
+});
+
+test("★ an amendment whose ORIGIN is not a promote command does NOT clear a canon write", () => {
+  const dir = makeRepo();
+  seedCanon(dir);
+  setScope(dir, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  // A plan-derived scope naming canon: the exact vector protect-trusted-paths' canon denylist closes.
+  setScope(dir, [CANON]); // set_by is a PLAN.md, not a promote command
+  assert.equal(amend(dir).status, 0);
+  writeFileSync(join(dir, CANON), "## L1 — seed\n\n## L2 — smuggled\n");
+
+  const r = check(dir);
+  assert.equal(r.json?.verdict, "ESCAPE", "an amendment cannot launder a canon write past the ORIGIN check");
+  assert.ok(r.json.escapes.some((e) => e.file === CANON && e.denied_by === "protect-trusted-paths.cjs"));
+});
+
+test("★ an amendment authorizes an ORDINARY path the opening scope did not cover", () => {
+  const dir = makeRepo();
+  setScope(dir, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  setScope(dir, ["later.md"]);
+  assert.equal(amend(dir).status, 0);
+  writeFileSync(join(dir, "later.md"), "written under the amendment\n");
+  assert.equal(check(dir).json?.verdict, "CLEAN");
+});
+
+// L41: an epoch with NO amendments is the default path — exercised explicitly, not assumed.
+test("★ a baseline with NO scope_amendments behaves exactly as before (the default path)", () => {
+  const dir = makeRepo();
+  setScope(dir, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  const rec = JSON.parse(readFileSync(join(dir, RECORD_PATH), "utf8"));
+  delete rec.scope_amendments; // a baseline anchored before the field existed
+  writeFileSync(join(dir, RECORD_PATH), JSON.stringify(rec, null, 2) + "\n");
+  writeFileSync(join(dir, "SNEAKY.txt"), "outside\n");
+
+  const r = check(dir);
+  assert.equal(r.json?.verdict, "ESCAPE", "an absent field must read as [], never as 'authorize everything'");
+  assert.ok(r.json.escapes.some((e) => e.file === "SNEAKY.txt"));
+});
+
+test("★ activeFeatureSlug reads the OPENING snapshot only — an amendment cannot repoint the exemption", () => {
+  // A promote amendment's set_by is a COMMAND path, not a feature; letting it win would silently move
+  // the pipeline-artifact exemption to another slug.
+  assert.equal(activeFeatureSlug({ set_by: "pharn/features/real/PLAN.md" }), "real");
+  assert.equal(activeFeatureSlug({ set_by: PROMOTE }), null, "a command path names no feature");
 });

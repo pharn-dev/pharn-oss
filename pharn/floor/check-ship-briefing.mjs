@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // pharn/floor/check-ship-briefing.mjs — the deterministic CROSS-FILE checker for the GATE-2 briefing
-// artifact (`features/<name>/BRIEFING.md`), on the PRODUCT surface.
+// artifact (`pharn/features/<name>/BRIEFING.md`), on the PRODUCT surface.
 //
 // Floor/eval infrastructure — NOT a Capability (no `role:`; lives in this floor-ignored dir, exactly like
 // `check-loop-record.mjs` / `check-provenance.mjs`). It is the executable SoT for

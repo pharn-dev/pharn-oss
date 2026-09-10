@@ -1,0 +1,18 @@
+{
+  "feature": "record-amendscope-hardening",
+  "gates": {
+    "check:badge": 0,
+    "check:changelog": 0,
+    "check:contributing": 0,
+    "check:markers": 0,
+    "docs:check": 0,
+    "format:check": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": []
+}

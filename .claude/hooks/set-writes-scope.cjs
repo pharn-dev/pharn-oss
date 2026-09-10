@@ -16,7 +16,7 @@
 // --clear DELETES .pharn/writes-scope.json, returning enforce-writes-scope.cjs to its fail-closed
 // DEFAULT_SAFE_SET. It exists because a SET scope REPLACES that safe-set: a command that finished and
 // left its scope behind is STRICTER than the default, so ordinary later work is silently denied
-// (measured: with a leftover one-path scope, `features/**`, `.dev/features/**` and `pharn/pharn-*/**`
+// (measured: with a leftover one-path scope, `pharn/features/**`, `.dev/features/**` and `pharn/pharn-*/**`
 // paths the default PERMITS all exit 2). It takes no --target and REFUSES to combine with
 // --from-plan / --from-frontmatter: clearing and setting in one call is always a mistake, and the
 // refusal is louder than a silently-honored precedence rule. Absent file -> exit 0, no output change
@@ -32,7 +32,7 @@
 //       lifecycle hygiene; the FLOOR guarantee is unchanged and belongs to the reader, not to this
 //       writer — "no usable scope file => DEFAULT_SAFE_SET". Never write "--clear guarantees cleanup".
 //
-// `--target` resolves placeholder/glob `writes:` entries (e.g. features/<name>/PLAN.md) to one concrete
+// `--target` resolves placeholder/glob `writes:` entries (e.g. pharn/features/<name>/PLAN.md) to one concrete
 // file before emitting scope — so the hook allowlist is a single artifact path, not a broad directory.
 //
 // Exits non-zero (and writes nothing) rather than emit an empty/placeholder scope — fail-closed.

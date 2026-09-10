@@ -67,8 +67,8 @@ test("no scope: a bare root product-module path (old layout) is now DENIED (the 
   assert.equal(hook(tmp(), "pharn-review/foo.md").status, 2);
 });
 
-test("no scope: features/ scratch is ALLOWED", () => {
-  assert.equal(hook(tmp(), "features/foo/bar.md").status, 0);
+test("no scope: pharn/features/ scratch is ALLOWED", () => {
+  assert.equal(hook(tmp(), "pharn/features/foo/bar.md").status, 0);
 });
 
 test("no scope (install posture): pharn/pharn-review/ is DENIED", () => {
@@ -85,8 +85,13 @@ test("no scope (install posture wins): .dev/floor/ + skillsVersion → pharn/pha
   assert.equal(hook(cwd, ".dev/features/foo/PLAN.md").status, 2);
 });
 
-test("no scope (install posture): features/ scratch is still ALLOWED", () => {
-  assert.equal(hook(tmp(), "features/foo/bar.md").status, 0);
+test("no scope (install posture): pharn/features/ scratch is still ALLOWED", () => {
+  assert.equal(hook(tmp(), "pharn/features/foo/bar.md").status, 0);
+});
+
+test("no scope (install posture): legacy root features/ is DENIED (pre-5.0.0 layout)", () => {
+  const cwd = seedInstalledProject(tmp());
+  assert.equal(hook(cwd, "features/x/SPEC.md").status, 2);
 });
 
 test("no scope: .dev/memory-bank/ is DENIED (P2-gated zone — moved under .dev/, still deny-by-default)", () => {
@@ -97,7 +102,7 @@ test("no scope: .dev/floor/ is DENIED (the floor itself — moved under .dev/, s
   assert.equal(hook(tmp(), ".dev/floor/x.mjs").status, 2);
 });
 
-test("no scope (dev repo): .dev/features/ build-loop artifacts are ALLOWED (decision A — relocated features/ keeps writable-by-default)", () => {
+test("no scope (dev repo): .dev/features/ build-loop artifacts are ALLOWED (decision A — relocated pharn/features/ keeps writable-by-default)", () => {
   // Locks decision A: the dev/product move added `.dev/features/**` to the dev-repo safe-set so the build-loop
   // artifact zone keeps its prior behavior, while the two sensitive .dev/ zones above stay denied.
   const cwd = seedDevRepo(tmp());
@@ -142,15 +147,15 @@ test("no scope: an absolute path outside the repo root is DENIED (root-normaliza
 
 // --- Hook, scope present: authoritative (replaces the safe-set, not additive) ---
 
-test("scope [features/foo/**]: inside is ALLOWED", () => {
+test("scope [pharn/features/foo/**]: inside is ALLOWED", () => {
   const cwd = tmp();
-  setScope(cwd, ["features/foo/**"]);
-  assert.equal(hook(cwd, "features/foo/x.md").status, 0);
+  setScope(cwd, ["pharn/features/foo/**"]);
+  assert.equal(hook(cwd, "pharn/features/foo/x.md").status, 0);
 });
 
-test("scope [features/foo/**]: a module path OUTSIDE is DENIED (authoritative, not additive)", () => {
+test("scope [pharn/features/foo/**]: a module path OUTSIDE is DENIED (authoritative, not additive)", () => {
   const cwd = tmp();
-  setScope(cwd, ["features/foo/**"]);
+  setScope(cwd, ["pharn/features/foo/**"]);
   assert.equal(hook(cwd, "pharn-core/x.md").status, 2);
 });
 
@@ -170,13 +175,13 @@ test("scope [memory-bank/lessons-learned.md]: a sibling in the zone is DENIED (d
 
 test("scope set: .pharn/writes-scope.json is DENIED even when scope names it (setter-only)", () => {
   const cwd = tmp();
-  setScope(cwd, [".pharn/writes-scope.json", "features/foo/**"]);
+  setScope(cwd, [".pharn/writes-scope.json", "pharn/features/foo/**"]);
   assert.equal(hook(cwd, ".pharn/writes-scope.json").status, 2);
 });
 
 test("scope set: other .pharn/ runtime files remain ALLOWED (bootstrap)", () => {
   const cwd = tmp();
-  setScope(cwd, ["features/foo/**"]);
+  setScope(cwd, ["pharn/features/foo/**"]);
   assert.equal(hook(cwd, ".pharn/other").status, 0);
 });
 
@@ -236,30 +241,30 @@ test("setter --from-frontmatter on a placeholder-only writes: exits non-zero and
   assert.equal(fs.existsSync(join(cwd, ".pharn", "writes-scope.json")), false);
 });
 
-test("setter --from-frontmatter resolves features/<name>/PLAN.md to --target single file", () => {
+test("setter --from-frontmatter resolves pharn/features/<name>/PLAN.md to --target single file", () => {
   const cwd = tmp();
   const md = join(cwd, "plan.md");
-  fs.writeFileSync(md, '---\nwrites: ["features/<name>/PLAN.md"]\n---\n# x\n');
-  const r = setter(cwd, "--from-frontmatter", md, "--target", "features/foo/PLAN.md");
+  fs.writeFileSync(md, '---\nwrites: ["pharn/features/<name>/PLAN.md"]\n---\n# x\n');
+  const r = setter(cwd, "--from-frontmatter", md, "--target", "pharn/features/foo/PLAN.md");
   assert.equal(r.status, 0);
   const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
-  assert.deepEqual(rec.scope, ["features/foo/PLAN.md"]);
+  assert.deepEqual(rec.scope, ["pharn/features/foo/PLAN.md"]);
 });
 
 test("setter --from-frontmatter resolves a glob writes entry to --target single file", () => {
   const cwd = tmp();
   const md = join(cwd, "plan.md");
-  fs.writeFileSync(md, '---\nwrites: ["features/**/PLAN.md"]\n---\n# x\n');
-  const r = setter(cwd, "--from-frontmatter", md, "--target", "features/writes-scope/PLAN.md");
+  fs.writeFileSync(md, '---\nwrites: ["pharn/features/**/PLAN.md"]\n---\n# x\n');
+  const r = setter(cwd, "--from-frontmatter", md, "--target", "pharn/features/writes-scope/PLAN.md");
   assert.equal(r.status, 0);
   const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
-  assert.deepEqual(rec.scope, ["features/writes-scope/PLAN.md"]);
+  assert.deepEqual(rec.scope, ["pharn/features/writes-scope/PLAN.md"]);
 });
 
 test("setter --from-frontmatter on placeholder writes without --target exits non-zero", () => {
   const cwd = tmp();
   const md = join(cwd, "plan.md");
-  fs.writeFileSync(md, '---\nwrites: ["features/<name>/PLAN.md"]\n---\n# x\n');
+  fs.writeFileSync(md, '---\nwrites: ["pharn/features/<name>/PLAN.md"]\n---\n# x\n');
   const r = setter(cwd, "--from-frontmatter", md);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /--target/);
@@ -269,15 +274,15 @@ test("setter --from-frontmatter on placeholder writes without --target exits non
 test("setter --from-frontmatter keeps concrete paths and resolves placeholders with --target", () => {
   const cwd = tmp();
   const md = join(cwd, "review.md");
-  fs.writeFileSync(md, '---\nwrites: ["features/<name>/REVIEW.md", "memory-bank/lessons-learned.md (gated)"]\n---\n# x\n');
-  const r = setter(cwd, "--from-frontmatter", md, "--target", "features/foo/REVIEW.md");
+  fs.writeFileSync(md, '---\nwrites: ["pharn/features/<name>/REVIEW.md", "memory-bank/lessons-learned.md (gated)"]\n---\n# x\n');
+  const r = setter(cwd, "--from-frontmatter", md, "--target", "pharn/features/foo/REVIEW.md");
   assert.equal(r.status, 0);
   const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
-  assert.deepEqual(rec.scope, ["features/foo/REVIEW.md", "memory-bank/lessons-learned.md"]);
+  assert.deepEqual(rec.scope, ["pharn/features/foo/REVIEW.md", "memory-bank/lessons-learned.md"]);
 });
 
 // --- Regression (pipeline-integration-probe finding #2): the REAL /review declares ONLY its output ---
-// /review writes one artifact — features/<name>/REVIEW.md. Canon (memory-bank/**) is written solely by
+// /review writes one artifact — pharn/features/<name>/REVIEW.md. Canon (memory-bank/**) is written solely by
 // /memory-promote (gated + check-provenance + human accept). A `memory-bank/**` entry in /review's
 // `writes:` would make the setter resolve a scope the pre-write hook then PERMITS — a direct, ungated
 // canon write. Pin the real command file's resolved scope to exactly its REVIEW.md path.
@@ -575,10 +580,10 @@ test("setter overwrite: a second setter call REPLACES the scope, never merges (p
   assert.deepEqual(first.scope, ["pharn-core/a.md", "pharn-core/b.md"]);
   // Stage 2: a later stage sets its own scope to ONE different file — it must REPLACE, not append.
   const md = join(cwd, "review.md");
-  fs.writeFileSync(md, '---\nrole: lens\nwrites: ["features/<name>/REVIEW.md"]\n---\n# x\n');
-  assert.equal(setter(cwd, "--from-frontmatter", md, "--target", "features/foo/REVIEW.md").status, 0);
+  fs.writeFileSync(md, '---\nrole: lens\nwrites: ["pharn/features/<name>/REVIEW.md"]\n---\n# x\n');
+  assert.equal(setter(cwd, "--from-frontmatter", md, "--target", "pharn/features/foo/REVIEW.md").status, 0);
   const second = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
-  assert.deepEqual(second.scope, ["features/foo/REVIEW.md"]);
+  assert.deepEqual(second.scope, ["pharn/features/foo/REVIEW.md"]);
   assert.ok(!second.scope.includes("pharn-core/a.md"), "stage-1 paths must NOT persist (overwrite, not merge)");
   assert.ok(!second.scope.includes("pharn-core/b.md"), "stage-1 paths must NOT persist (overwrite, not merge)");
 });
@@ -598,43 +603,43 @@ test("integration: setter unlocks memory-bank/lessons-learned.md; hook then allo
 // A committed symlink in an allowed dir must not launder a write onto a trusted doc / out-of-scope path.
 // The decision is still pure path-membership (P2) — realpath just canonicalizes the path first.
 
-test("no scope: a symlink in features/ resolving to a trusted doc is DENIED (real target outside safe-set)", () => {
+test("no scope: a symlink in pharn/features/ resolving to a trusted doc is DENIED (real target outside safe-set)", () => {
   const cwd = tmp();
   fs.writeFileSync(join(cwd, "CONSTITUTION.md"), "trusted\n");
-  fs.mkdirSync(join(cwd, "features"));
-  fs.symlinkSync(join("..", "CONSTITUTION.md"), join(cwd, "features", "notes.md"));
-  const r = hook(cwd, "features/notes.md");
+  fs.mkdirSync(join(cwd, "pharn", "features"), { recursive: true });
+  fs.symlinkSync(join("..", "..", "CONSTITUTION.md"), join(cwd, "pharn", "features", "notes.md"));
+  const r = hook(cwd, "pharn/features/notes.md");
   assert.equal(r.status, 2);
   assert.match(r.stderr, /writes-scope guard/);
   assert.match(r.stderr, /Blocked path : CONSTITUTION\.md/);
 });
 
-test("no scope: a real (non-symlink) file in features/ is still ALLOWED (no false positive from realpath)", () => {
+test("no scope: a real (non-symlink) file in pharn/features/ is still ALLOWED (no false positive from realpath)", () => {
   const cwd = tmp();
-  fs.mkdirSync(join(cwd, "features"));
-  fs.writeFileSync(join(cwd, "features", "notes.md"), "ordinary\n");
-  assert.equal(hook(cwd, "features/notes.md").status, 0);
+  fs.mkdirSync(join(cwd, "pharn", "features"), { recursive: true });
+  fs.writeFileSync(join(cwd, "pharn", "features", "notes.md"), "ordinary\n");
+  assert.equal(hook(cwd, "pharn/features/notes.md").status, 0);
 });
 
-test("scope [features/foo/**]: a symlink inside resolving OUTSIDE scope is DENIED (judged on real target)", () => {
+test("scope [pharn/features/foo/**]: a symlink inside resolving OUTSIDE scope is DENIED (judged on real target)", () => {
   const cwd = tmp();
   fs.mkdirSync(join(cwd, "pharn-core"), { recursive: true });
   fs.writeFileSync(join(cwd, "pharn-core", "x.md"), "real\n");
-  fs.mkdirSync(join(cwd, "features", "foo"), { recursive: true });
-  fs.symlinkSync(join("..", "..", "pharn-core", "x.md"), join(cwd, "features", "foo", "link.md"));
-  setScope(cwd, ["features/foo/**"]);
-  const r = hook(cwd, "features/foo/link.md");
+  fs.mkdirSync(join(cwd, "pharn", "features", "foo"), { recursive: true });
+  fs.symlinkSync(join("..", "..", "..", "pharn-core", "x.md"), join(cwd, "pharn", "features", "foo", "link.md"));
+  setScope(cwd, ["pharn/features/foo/**"]);
+  const r = hook(cwd, "pharn/features/foo/link.md");
   assert.equal(r.status, 2);
   assert.match(r.stderr, /writes-scope guard/);
 });
 
-test("scope [features/foo/**]: a symlink resolving to an IN-scope real target is ALLOWED (allow-side symmetry)", () => {
+test("scope [pharn/features/foo/**]: a symlink resolving to an IN-scope real target is ALLOWED (allow-side symmetry)", () => {
   const cwd = tmp();
-  fs.mkdirSync(join(cwd, "features", "foo"), { recursive: true });
-  fs.writeFileSync(join(cwd, "features", "foo", "real.md"), "in scope\n");
-  fs.symlinkSync("real.md", join(cwd, "features", "foo", "link.md")); // both under features/foo/**
-  setScope(cwd, ["features/foo/**"]);
-  assert.equal(hook(cwd, "features/foo/link.md").status, 0);
+  fs.mkdirSync(join(cwd, "pharn", "features", "foo"), { recursive: true });
+  fs.writeFileSync(join(cwd, "pharn", "features", "foo", "real.md"), "in scope\n");
+  fs.symlinkSync("real.md", join(cwd, "pharn", "features", "foo", "link.md")); // both under pharn/features/foo/**
+  setScope(cwd, ["pharn/features/foo/**"]);
+  assert.equal(hook(cwd, "pharn/features/foo/link.md").status, 0);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────

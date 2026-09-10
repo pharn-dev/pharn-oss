@@ -76,12 +76,12 @@ import { readFileSync, existsSync } from "node:fs";
 // stage's own Step-0 writes-scope — never by /pharn-dev-build — so finding one in the diff is evidence the
 // PIPELINE ran, not that the build escaped its `## Files`. Exact names, deliberately NOT a `**` glob over
 // the feature dir: a stray or unexpected file under the same directory is still REPORTED as an escape.
-// DERIVED, not recalled: this list must cover every `features/<name>/<artifact>` any command declares.
-//   grep -hoE 'features/<name>/[A-Za-z0-9._-]+' .claude/commands/*.md | sort -u
+// DERIVED, not recalled: this list must cover every `pharn/features/<name>/<artifact>` any command declares.
+//   grep -hoE 'pharn/features/<name>/[A-Za-z0-9._-]+' .claude/commands/*.md | sort -u
 // A test pins enum ⊇ that enumeration, so a newly-added artifact fails a TEST rather than REDding a
 // user's pipeline. The first cut of this enum was written from the dev loop's artifacts alone and omitted
 // BUILD.md / SPEC.md / findings.json — which made /pharn-regress RED on 100% of PRODUCT runs, because
-// /pharn-build writes features/<name>/BUILD.md under a SEPARATE re-scope and `--declared` is the plan's
+// /pharn-build writes pharn/features/<name>/BUILD.md under a SEPARATE re-scope and `--declared` is the plan's
 // `## Files`, so that artifact is STRUCTURALLY never declared.
 const PIPELINE_ARTIFACTS = [
   "SPEC.md",
@@ -100,7 +100,7 @@ const PIPELINE_ARTIFACTS = [
   "LOOP.md",
 ];
 
-// /pharn-review writes one findings.json per lens, NESTED: features/<name>/lenses/<lens>/findings.json.
+// /pharn-review writes one findings.json per lens, NESTED: pharn/features/<name>/lenses/<lens>/findings.json.
 // An exact-filename enum structurally cannot express that, so it gets its own narrow shape: exactly one
 // path segment for the lens name, and the filename must still be `findings.json`. Anything deeper, or any
 // other filename under lenses/, is still an escape.
@@ -123,14 +123,14 @@ const FEATURE_SLUG_RE = /^(?!\.\.?$)[A-Za-z0-9._-]+$/;
 const TRUSTED_DOCS = ["pharn/CONSTITUTION.md", "pharn/ARCHITECTURE.md", "THREAT-MODEL.md", "LIMITS.md"];
 
 // THE NARROWING THIS EXEMPTION INTRODUCES — the honest cost, stated because it is not obvious (P0/P7).
-// A build that rewrites its OWN `features/<name>/PLAN.md` `## Files` to retroactively authorize a path it
+// A build that rewrites its OWN `pharn/features/<name>/PLAN.md` `## Files` to retroactively authorize a path it
 // already wrote is NO LONGER DETECTED here: the plan edit is exempt, and the added path then reads as
 // declared. Before the exemption, the plan edit itself was the tell and `scope` exited 1. Nothing else
 // catches it — check-plan-spec-agree.mjs reads only `spec_content_hash` from the PLAN, and a `## Files`
 // edit does not move that. This matters most for a Bash-tool write, which bypasses enforce-writes-scope.cjs
 // entirely (L19) and leaves this check as the last detector. It is an ADVISORY GAP, not a guarantee.
 // FOLLOW-UP (the deterministic remedy, deliberately not smuggled into this increment): have `scope` compare
-// `git show <base>:features/<name>/PLAN.md`'s `## Files` against HEAD's and RED on any difference —
+// `git show <base>:pharn/features/<name>/PLAN.md`'s `## Files` against HEAD's and RED on any difference —
 // primitive #3, and it restores the tell without re-opening the false positives this exemption removes.
 //
 // Is `file` one of THIS feature's own pipeline artifacts? Requires an explicit `--feature <name>`: with no
@@ -139,7 +139,7 @@ const TRUSTED_DOCS = ["pharn/CONSTITUTION.md", "pharn/ARCHITECTURE.md", "THREAT-
 // prefix; matching is then literal `startsWith` + exact membership, never a glob.
 function isPipelineArtifact(file, feature) {
   if (!feature || !FEATURE_SLUG_RE.test(feature)) return false;
-  for (const root of [`.dev/features/${feature}/`, `features/${feature}/`]) {
+  for (const root of [`.dev/features/${feature}/`, `pharn/features/${feature}/`]) {
     if (!file.startsWith(root)) continue;
     const rest = file.slice(root.length);
     if (PIPELINE_ARTIFACTS.includes(rest) || LENS_FINDINGS_RE.test(rest)) return true;

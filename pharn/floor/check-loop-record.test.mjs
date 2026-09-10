@@ -2,7 +2,7 @@
 //
 // Run as a subprocess (mirrors check-plan-lessons.test.mjs / check-loop.test.mjs) so the checker keeps its
 // dependency-free, top-level-exec contract: we assert only on its public surface (exit code + RED/GREEN
-// stdout). Records are written to a fresh temp dir per run — nothing touches the real features/ tree.
+// stdout). Records are written to a fresh temp dir per run — nothing touches the real pharn/features/ tree.
 //
 // The marked test groups pin the things that would otherwise be silent forks:
 //   ✧ AGREEMENT — the canonical template is extracted from pharn/pharn-contracts/loop-record.md and must
