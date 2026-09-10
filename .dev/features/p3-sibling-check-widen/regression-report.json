@@ -1,0 +1,29 @@
+{
+  "base": "8bc6c0a8f1b9e7df2e01ff0f98a73602dfa47422",
+  "inside": [
+    ".dev/features/p3-sibling-check-widen/GRILL.md",
+    ".dev/features/p3-sibling-check-widen/PLAN.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/validate.mjs",
+    "pharn/floor/validate.test.mjs"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

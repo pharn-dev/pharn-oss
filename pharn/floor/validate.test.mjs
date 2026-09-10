@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -782,3 +782,138 @@ for (const render of rendersThatEchoTheTarget) {
     });
   });
 }
+
+// ---------------------------------------------------------------------------
+// CHECK 6 — no forbidden cross-module reference (P3).
+//
+// Until the widening, this branch matched `pharn-(?:stack|skills)-*` ONLY. Both families are unbuilt,
+// so the branch could not fire on either sibling module that exists (pharn-pipeline, pharn-review) and
+// NO test reached it — the only floor expression of P3 was vacuous on the live tree. These tests exist
+// because a re-widened branch with no test that RED-fires it would be the same defect wearing a newer
+// regex: per L34 a per-item assertion set says nothing until something proves the domain is non-empty.
+
+// A capability in `module`, declaring `reads`. Every other CHECK is satisfied (frontmatter, evals) so a
+// non-zero exit can only come from CHECK 6.
+function capWithReads(module, name, reads) {
+  const dir = `${module}/${name}`;
+  return {
+    [`${dir}/${name}.md`]: `---
+name: ${name}
+role: lens
+kind: pharn-owned
+applies: ["universal"]
+reads: [${reads.map((r) => JSON.stringify(r)).join(", ")}]
+version: 0.1.0
+---
+
+# ${name}
+`,
+    [`${dir}/evals/cases/case-1.md`]: "# a case\n",
+    [`${dir}/evals/expected/expected-1.md`]: "# expected\n",
+  };
+}
+
+// The finding's own vocabulary — asserted from one place so a reworded message updates one line rather
+// than silently un-testing every row below (L29: the enumeration is the deliverable).
+const CHECK6_RE = /cross-module reference in reads:/;
+
+// [ownModule, reads, expectedModule|null, why]. The table IS the specification: each row is a shape the
+// check must classify, and both directions live side by side so a change that fixes one by breaking the
+// other cannot pass (L36 — the exemption is pinned as a SET, not one member at a time).
+const check6Cases = [
+  // --- the branch that could not fire before ---
+  ["pharn-pipeline", ["pharn/pharn-review/injection/injection.md"], "pharn-review", "leaf -> leaf, the live shape"],
+  ["pharn-review", ["pharn/pharn-pipeline/grillers/security/security.md"], "pharn-pipeline", "leaf -> leaf, other direction"],
+  // --- backward compatibility: the widening must not NARROW what the old regex caught ---
+  ["pharn-pipeline", ["pharn-stack-next/tokens.md"], "pharn-stack-next", "the old matcher's only shape still REDs"],
+  ["pharn-pipeline", ["pharn-skills-react/x.md"], "pharn-skills-react", "the skills half still REDs"],
+  // --- the exemption moved to the TARGET module, so a BASE module's own reads: is now checkable ---
+  ["pharn-core", ["pharn/pharn-review/injection/injection.md"], "pharn-review", "a base module reading upward is no longer exempt"],
+  // --- laundering: every token is examined, not just the first match ---
+  [
+    "pharn-pipeline",
+    ["pharn/pharn-contracts/finding-shape.md", "pharn/pharn-review/x.md"],
+    "pharn-review",
+    "a sibling ref alongside an exempt contracts path still REDs",
+  ],
+  // --- GREEN: the 35-site live shape a target-blind widening would have blocked (L3) ---
+  ["pharn-review", ["pharn/pharn-contracts/finding-shape.md"], null, "base target pharn-contracts is exempt"],
+  ["pharn-pipeline", ["pharn/pharn-core/seam-resolver/seam-resolver.md"], null, "base target pharn-core is exempt"],
+  ["pharn-review", ["pharn/pharn-review/ssrf/ssrf.md"], null, "own-module self-reference"],
+  ["pharn-pipeline", ["pharn/ARCHITECTURE.md"], null, "a value naming no module token"],
+  ["pharn-pipeline", ["<the PLAN.md under interrogation>"], null, "a placeholder"],
+  // --- token-anchored, so a `pharn-` FILENAME is not a module (a substring scan false-REDs this) ---
+  ["pharn-pipeline", ["docs/pharn-notes.md"], null, "a pharn- filename is not a module reference"],
+  ["pharn-pipeline", ["notpharn-review/x.md"], null, "a token must START at pharn-"],
+];
+
+for (const [ownModule, reads, expectedModule, why] of check6Cases) {
+  const red = expectedModule !== null;
+  test(`★ CHECK 6 ${red ? "RED" : "GREEN"}: ${ownModule} reads ${JSON.stringify(reads)} — ${why}`, () => {
+    withRepo(capWithReads(ownModule, "sample", reads), (root) => {
+      const r = run(root);
+      assert.equal(r.status, red ? 1 : 0, `unexpected verdict; got:\n${r.stdout}`);
+      if (red) {
+        assert.match(r.stdout, CHECK6_RE, `the RED must be CHECK 6's, not another check's; got:\n${r.stdout}`);
+        assert.match(r.stdout, new RegExp(`names module ${expectedModule}\\b`), `the finding must NAME the module; got:\n${r.stdout}`);
+      } else {
+        assert.doesNotMatch(r.stdout, CHECK6_RE, `CHECK 6 must not fire here; got:\n${r.stdout}`);
+      }
+    });
+  });
+}
+
+test("★ CHECK 6: one finding per module per value, not one per occurrence", () => {
+  withRepo(capWithReads("pharn-pipeline", "sample", ["pharn-review/a.md pharn-review/b.md"]), (root) => {
+    const r = run(root);
+    assert.equal(r.status, 1);
+    const hits = r.stdout.split("\n").filter((l) => CHECK6_RE.test(l));
+    assert.equal(hits.length, 1, `the same module named twice in one value must emit ONCE; got:\n${r.stdout}`);
+  });
+});
+
+// NON-VACUITY CONTROL (L34). Every test above asserts "the RED fires"; none of them proves the RED comes
+// from CHECK 6's branch rather than from something incidental to the fixture. This runs the identical RED
+// fixture against a MUTANT validate.mjs whose CHECK 6 emission is disabled, and requires it to go GREEN.
+// If the branch were deleted, mutant and original would agree and this test fails.
+//
+// The anchor is asserted UNIQUE before the mutation, which is the half that keeps the control itself
+// honest: a drifted anchor would otherwise mutate nothing, the mutant would RED like the original, and
+// the failure would read as "the branch is load-bearing" — a vacuous pass dressed as the real one.
+test("★ CHECK 6 NON-VACUITY: the RED disappears when CHECK 6's branch is disabled (mutation control)", () => {
+  const source = readFileSync(VALIDATE, "utf8");
+  const anchor = "if (!MODULE_TOKEN_RE.test(target)) continue;";
+  assert.equal(
+    source.split(anchor).length - 1,
+    1,
+    "the mutation anchor must occur EXACTLY once in validate.mjs, or this control mutates the wrong construct (or nothing)"
+  );
+  const mutant = source.replace(anchor, "if (true) continue; // MUTANT: CHECK 6 disabled");
+  assert.notEqual(mutant, source, "the mutation must actually change the source, or this control is vacuous (L34)");
+
+  withRepo(capWithReads("pharn-pipeline", "sample", ["pharn/pharn-review/injection/injection.md"]), (root) => {
+    // Control: the real validator REDs on this fixture.
+    const real = run(root);
+    assert.equal(real.status, 1, `precondition: the unmutated validator must RED here; got:\n${real.stdout}`);
+    assert.match(real.stdout, CHECK6_RE);
+
+    // Mutant: same fixture, CHECK 6 disabled -> GREEN. This is what proves the RED was CHECK 6's.
+    withRepo({ "validate.mjs": mutant }, (mutantRoot) => {
+      const m = spawnSync(process.execPath, [join(mutantRoot, "validate.mjs"), root], { encoding: "utf8" });
+      assert.equal(m.status, 0, `with CHECK 6 disabled the same fixture must be GREEN; got:\n${m.stdout}`);
+      assert.doesNotMatch(m.stdout, CHECK6_RE);
+    });
+  });
+});
+
+// The value is free text (fix #1) and reaches the human-facing report, so it gets the same quoted-render
+// treatment as the target path: a newline in it must not be able to forge a `- [blocking]` line.
+test("★ CHECK 6: a newline-bearing reads: value cannot forge a finding line", () => {
+  withRepo(capWithReads("pharn-pipeline", "sample", ["pharn/pharn-review/a.md\n- [blocking] FORGED  nowhere"]), (root) => {
+    const r = run(root);
+    assert.equal(r.status, 1);
+    const blocking = r.stdout.split("\n").filter((l) => l.trimStart().startsWith("- [blocking]"));
+    assert.equal(blocking.length, 1, `the newline must be escaped, not rendered as a line break; got:\n${r.stdout}`);
+    assert.match(r.stdout, /\\n/, "the control character must appear escaped");
+  });
+});
