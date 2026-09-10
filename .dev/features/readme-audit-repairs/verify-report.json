@@ -1,0 +1,14 @@
+{
+  "feature": "readme-audit-repairs",
+  "gates": {
+    "format:check": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "structural:expected-injection-comment": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "verifiers": { "registered": 0, "findings": [] }
+}

@@ -1322,7 +1322,45 @@ it was shown and never hunts the one that quietly withdrew.
   approved text quoted in that increment's `PLAN.md`
 - promoted: 2026-09-09 via gated `/pharn-dev-memory-promote` (human-approved).
 
-## L38 — One declaration section read by two consumers asking different questions is right for one and silently wrong for the other
+## L38 — Concurrent agent sessions contend for the single writes-scope record, and the scope check then reports a false cause
+
+type: scoping · concepts: [writes-scope, concurrency, shared-state, false-red]
+
+**Lesson.** `.pharn/writes-scope.json` is ONE mutable file, global to the working tree, while every
+stage's Step 0 assumes it owns it — so two agent sessions in one tree contend for it, and the contention
+surfaces twice over. Observed live: mid-`/pharn-dev-grill`, another session's `/pharn-dev-plan` overwrote
+the record (`set_by: .claude/commands/pharn-dev-plan.md`, target
+`.dev/features/claude-dir-scan-exclusion/PLAN.md`), and this stage's own `GRILL.md` write was refused
+against a scope it never set; re-running Step 0 fixed it and clobbered theirs in turn. Then
+`/pharn-dev-regress` exited 1 with a fix #7 escape naming that same untracked file, because `scope`
+derives `escaped` from `git diff <base>` plus untracked files — _what changed_, not _what this build
+wrote_, and `--feature` exempts only the feature's own artifacts. Remedy: resolve it **structurally** —
+run the stage from an isolated detached worktree, where the other session's work is absent by
+construction — never by hand-filtering `--changed`, which is the move [[L17]]/[[L20]] exist to forbid.
+
+**Why it matters.** The dangerous half is the second failure, because it is a **blocking finding whose
+stated cause is false**: the message reads _"the build escaped its plan's `## Files`"_ when the build's
+scope was `['README.md']` for every write, under a guard that had already demonstrably fired on that same
+session minutes earlier. A future reader trusting that sentence hunts a scope breach that never happened
+— and the tempting fix (edit the `--changed` list until the check passes) is precisely the hand-exclusion
+[[L17]] documents and [[L20]] demands be given a floor check instead. The first failure fails **closed**
+(a denied legitimate write — loud, recoverable, the safe direction); the second fails toward a **false
+accusation**, which is worse because it looks like the system working. Distinct from [[L17]], which
+concerns the method's granularity WITHIN one run, and from [[L19]], where a Bash write escapes the gate —
+here the gate's own INPUT is the contended resource, which is why neither existing entry reaches it. The
+remedy that suggests itself, "don't run two sessions at once", is discipline, which [[L20]] says is the
+wrong kind.
+
+**Provenance.**
+
+- feature: `readme-audit-repairs`
+- commit: `f0664927c4f00edf20748831c183cc92238133e5`
+- source: `.dev/features/readme-audit-repairs/REVIEW.md` § "Proposed lesson candidate" +
+  `.dev/features/readme-audit-repairs/REGRESSION.md` § "Run history" (both attempts, with the clobbered
+  scope record quoted) + `.dev/features/readme-audit-repairs/GRILL.md` (the denied write)
+- promoted: 2026-09-10 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L39 — One declaration section read by two consumers asking different questions is right for one and silently wrong for the other
 
 type: scoping · concepts: [writes-scope, plan-shape, generated-artifact, shared-parser, false-red]
 
@@ -1359,4 +1397,7 @@ entry records the shape and does not yet claim the trigger fired.
 - source: `.dev/features/claude-dir-scan-exclusion/REVIEW.md` R2 (the advisory P2 finding), with the false
   breach and its clearance both reproduced live in that run and recorded in the same feature's
   `REGRESSION.md`
-- promoted: 2026-09-10 via gated `/pharn-dev-memory-promote` (human-approved).
+- promoted: 2026-09-10 via gated `/pharn-dev-memory-promote` (human-approved). Promoted as `L38` and
+  **renumbered to `L39` when merging `main`**: PR #206 landed its own `L38` first, so the id collided.
+  The collision is itself an instance of that entry's subject — see [[L38]], promoted from the other side
+  of the same contention.

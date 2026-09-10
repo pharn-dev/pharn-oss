@@ -34,7 +34,7 @@ is a separate file and the two chains cannot collide. The main checkout was neve
 Each was read as a proceed input; none was re-decided. `/pharn-dev-review` has no structural verdict and
 none was invented for it.
 
-**Post-GATE-2 state, re-measured after the R1 fix and the L38 promotion:** `npm run check` exit **0** (all
+**Post-GATE-2 state, re-measured after the R1 fix and the L39 promotion:** `npm run check` exit **0** (all
 eight gates), `npm test` **1893 passing / 0 failing**, `validate` GREEN at 36.
 
 ## Artifacts
@@ -57,21 +57,34 @@ eight gates), `npm test` **1893 passing / 0 failing**, `validate` GREEN at 36.
     and bound the claim to PHARN's own tree, and the cost is **pinned by a new test** so a future change
     that intends to start counting them fails rather than drifts. `npm test` 1892 → **1893**.
   - **R2 — not fixed here, deliberately.** The remedy belongs to `check-regress.mjs` (an exemption for paths
-    a plan declares as generated), not to the increment that tripped it. Promoted to canon as **L38** so it
+    a plan declares as generated), not to the increment that tripped it. Promoted to canon as **L39** so it
     is not carried only in this feature's REVIEW.
 
-lesson: promoted L38
+lesson: promoted L39
 
-`L38 — One declaration section read by two consumers asking different questions is right for one and
+`L39 — One declaration section read by two consumers asking different questions is right for one and
 silently wrong for the other` (`type: scoping`). Floor gates before the write: title shape GREEN;
 `check-provenance.mjs` GREEN (valid provenance, unique id in the declared target, enum-member `type`, 5
 well-shaped concepts); content-hash unchanged since discovery; `check-provenance.mjs` re-run GREEN
 immediately before the append. Written under a promote-origin writes-scope, then `docs/lessons-index.md`
-regenerated with the narrow generator (L22) — index now 38 lessons, `docs:check` exit 0.
+regenerated with the narrow generator (L22) — `docs:check` exit 0.
+
+**Promoted as `L38`, renumbered to `L39` when `main` was merged before the PR.** PR #206 landed its own
+`L38` first, so the id collided. `check-provenance.mjs`'s duplicate-id check was correct and is not at
+fault: it ranges over the canon file it is given, and at promotion time this branch's canon genuinely had
+no `L38`. The collision is a **cross-branch** one, which no single-file uniqueness check can see — worth
+recording because the reflex is to blame the gate. Resolved by taking `main`'s canon wholesale and
+re-appending this entry as `L39` under a promote-origin scope, then regenerating the index from canon
+rather than hand-resolving the derived file's conflict. Index now **39 lessons**.
+
+**The collision is an instance of `main`'s own new `L38`** — _"Concurrent agent sessions contend for the
+single writes-scope record, and the scope check then reports a false cause"_ — promoted by the other
+session from **the other side of the same contention** that denied this run's grill write. Both sessions
+independently promoted a lesson about the same event, each seeing a different face of it.
 
 deferred:
 
-- `check-regress.mjs` exemption for plan-declared generated paths (the R2 / L38 remedy) — reopens on the
+- `check-regress.mjs` exemption for plan-declared generated paths (the R2 / L39 remedy) — reopens on the
   second occurrence per L20.
 - `expired-claim-check` — a floor checker over the "not yet / no X yet" claim class on the shipped surface.
   Axis C is the first occurrence to reach a generated artifact.
@@ -79,9 +92,10 @@ deferred:
 - `provenance-block-count-check` — "exactly one `**Provenance.**` block per canon entry"; nothing asserts it,
   which is how the `L10`/`L11` displacement survived.
 - Nested checkouts **outside** `.claude/` — a clone at `tmp/` still doubles every count. No observed failure.
-- The concurrent-session hazard — `.pharn/writes-scope.json` is one mutable file per checkout with no session
-  isolation, so two chains in one checkout race. Worked around with a worktree; the design question is a
-  human's.
+- ~~The concurrent-session hazard~~ — **no longer deferred: it is canon.** `.pharn/writes-scope.json` is one
+  mutable file per checkout with no session isolation, so two chains in one checkout race. This run worked
+  around it with a worktree and listed it as a design question for a human; the other session promoted it as
+  **L38** while this branch was in flight. The remedy remains unbuilt, but the shape is now recorded.
 - The audit's four non-defect observations (catalog renders 7 of ~14 frontmatter fields; no page shows the
   floor/advisory split though the taglines encode it; zero-count roles dropped from the index; the `—`
   absent-marker has no legend) — enhancements with no observed failure (P7).

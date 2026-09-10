@@ -10,7 +10,7 @@ lessons to fetch; canon stays the source of truth and the floor's verification t
 applied, without fetching its full `## L<n>` entry from canon, is the P0 disease. "The index was
 consulted" never means "the relevant lessons were read".
 
-38 lessons · 38 tagged · 0 malformed · 0 untagged · ~25776 tokens total
+39 lessons · 39 tagged · 0 malformed · 0 untagged · ~26567 tokens total
 
 Columns: `id | type | concepts | title | promoted | ~tokens`. `-` is rendered in THREE columns
 and does NOT mean the same thing in each — read it against the column it sits in. In `type`/`concepts`:
@@ -61,5 +61,6 @@ L34 | floor    | vacuous-truth,empty-set,fail-closed,eval-design                
 L35 | process  | redundant-identity,remedy-design,version-discipline,sync-cost                               | When one fact is stored twice, retire the second copy — a sync check is a third thing to keep in sync | 2026-08-23 | ~921
 L36 | floor    | enumeration,variant-spelling,closure-assertion,presence-vs-closure,parameterized-value      | A per-member presence set is not a closed set — a parameterized value acquires variant spellings, and the enumeration certifies the one its author was looking at | 2026-09-08 | ~756
 L37 | contract | guarantee-audit,verification-fidelity,universal-quantifier,doc-drift,false-green            | A doc stating a guard's bounds must be PROBED against the guard, not read off it — the universal quantifier is where the drift lands | 2026-09-09 | ~981
-L38 | scoping  | writes-scope,plan-shape,generated-artifact,shared-parser,false-red                          | One declaration section read by two consumers asking different questions is right for one and silently wrong for the other | 2026-09-10 | ~778
+L38 | scoping  | writes-scope,concurrency,shared-state,false-red                                             | Concurrent agent sessions contend for the single writes-scope record, and the scope check then reports a false cause | 2026-09-10 | ~727
+L39 | scoping  | writes-scope,plan-shape,generated-artifact,shared-parser,false-red                          | One declaration section read by two consumers asking different questions is right for one and silently wrong for the other | 2026-09-10 | ~842
 ```
