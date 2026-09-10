@@ -54,15 +54,15 @@ The verify-report is `features/<name>/verify-report.json` (product) / `.dev/feat
 
 ## Field shape + trust classes
 
-| field           | shape                                                    | who writes it                                                       | class                                      |
-| --------------- | -------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------ |
-| `feature`       | the increment's slug, or `null`                          | `check-verify.mjs` (from `--feature`)                               | ADVISORY — no floor op reads it            |
-| `gates`         | flat `{ "<gate-id>": <int exit code> }`, keys sorted     | `check-verify.mjs`                                                  | ADVISORY — no floor op reads it            |
-| `verdict`       | **enum** — see the table below                           | `check-verify.mjs`                                                  | **FLOOR-RELEVANT** — enum-gated by 4 sites |
-| `failing_gates` | array of the `gates` keys whose value is non-zero        | `check-verify.mjs`                                                  | ADVISORY — no floor op reads it            |
-| `completeness`  | `{ complete: bool, missing: [], skipped: [] }`, OPTIONAL | the command, from `pharn/floor/check-build-complete.mjs`'s stdout   | ADVISORY — no floor op reads it            |
-| `verifiers`     | `{ registered: <int>, findings: [] }`, OPTIONAL          | the command, from `pharn/floor/count-verifiers.mjs` + each verifier | ADVISORY — no floor op reads it            |
-| `reason`        | a diagnostic sentence, present only on `INCONCLUSIVE`    | `check-verify.mjs`                                                  | ADVISORY — no floor op reads it            |
+| field           | shape                                                                                                                                                                                    | who writes it                                                       | class                                      |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------ |
+| `feature`       | the increment's slug, or `null`                                                                                                                                                          | `check-verify.mjs` (from `--feature`)                               | ADVISORY — no floor op reads it            |
+| `gates`         | flat `{ "<gate-id>": <int exit code> }`, keys sorted                                                                                                                                     | `check-verify.mjs`                                                  | ADVISORY — no floor op reads it            |
+| `verdict`       | **enum** — see the table below                                                                                                                                                           | `check-verify.mjs`                                                  | **FLOOR-RELEVANT** — enum-gated by 4 sites |
+| `failing_gates` | array of the `gates` keys whose value is non-zero                                                                                                                                        | `check-verify.mjs`                                                  | ADVISORY — no floor op reads it            |
+| `completeness`  | `{ declared: [], skipped: [], missing: [], complete: bool, verdict: str, note: str }`, OPTIONAL — members vary by emitter; treat any subset as valid                                     | the command, from `pharn/floor/check-build-complete.mjs`'s stdout   | ADVISORY — no floor op reads it            |
+| `verifiers`     | `{ registered: <int>, findings: [], note: str }`, OPTIONAL — `findings` and `note` are each optional; zero verifiers ship today, so no committed report exercises a non-empty `findings` | the command, from `pharn/floor/count-verifiers.mjs` + each verifier | ADVISORY — no floor op reads it            |
+| `reason`        | a diagnostic sentence, present only on `INCONCLUSIVE`                                                                                                                                    | `check-verify.mjs`                                                  | ADVISORY — no floor op reads it            |
 
 **Trust (P2).** Every field except one carries deterministic-tool output — gate-id strings, integer exit
 codes, path strings: the enum-gated / floor-verifiable class. The exceptions are **free text and inherit
@@ -77,12 +77,12 @@ structural fact about the consumers, not a promise about this document.
 `verdict` is the only field any floor checker reads from a committed report. Four checkers read it, each
 testing it for membership in **its own** set, and **those sets are deliberately not identical**:
 
-| consumer                               | accepted `verdict` set                          | on a value outside it                      |
-| -------------------------------------- | ----------------------------------------------- | ------------------------------------------ |
-| `pharn/floor/check-ship.mjs`           | `PASS` · `FAIL` · `INCONCLUSIVE`                | `INCONCLUSIVE`, exit 2 — fail-closed       |
-| `pharn/floor/check-loop.mjs`           | `PASS` · `FAIL` · `INCOMPLETE` · `INCONCLUSIVE` | `INCONCLUSIVE`, exit 2 — fail-closed       |
-| `pharn/floor/render-ship-briefing.mjs` | `PASS` · `FAIL` · `INCOMPLETE` · `INCONCLUSIVE` | the honest literal `unknown` in the render |
-| `pharn/floor/check-ship-briefing.mjs`  | `PASS` · `FAIL` · `INCOMPLETE` · `INCONCLUSIVE` | RED (shape)                                |
+| consumer                               | accepted `verdict` set                          | on a value outside it                  |
+| -------------------------------------- | ----------------------------------------------- | -------------------------------------- |
+| `pharn/floor/check-ship.mjs`           | `PASS` · `FAIL` · `INCONCLUSIVE`                | `INCONCLUSIVE`, exit 2 — fail-closed   |
+| `pharn/floor/check-loop.mjs`           | `PASS` · `FAIL` · `INCOMPLETE` · `INCONCLUSIVE` | `INCONCLUSIVE`, exit 2 — fail-closed   |
+| `pharn/floor/render-ship-briefing.mjs` | `PASS` · `FAIL` · `INCOMPLETE` · `INCONCLUSIVE` | the honest literal `n/a` in the render |
+| `pharn/floor/check-ship-briefing.mjs`  | `PASS` · `FAIL` · `INCOMPLETE` · `INCONCLUSIVE` | RED (shape)                            |
 
 **The artifact's enum is the union — `{PASS, FAIL, INCOMPLETE, INCONCLUSIVE}` — and "conforming" therefore
 does NOT mean "accepted everywhere."** `check-ship.mjs` omits `INCOMPLETE` **on purpose** (it is the dev

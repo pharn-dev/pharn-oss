@@ -91,12 +91,12 @@ into this file.
 here — unlike `pharn/pharn-contracts/verify-report.md`, where the sets diverge — **all four accept the
 same set**, `{no-regressions, regressions, inconclusive}`:
 
-| consumer                               | on a value outside the set                 |
-| -------------------------------------- | ------------------------------------------ |
-| `pharn/floor/check-ship.mjs`           | `INCONCLUSIVE`, exit 2 — fail-closed       |
-| `pharn/floor/check-loop.mjs`           | `INCONCLUSIVE`, exit 2 — fail-closed       |
-| `pharn/floor/render-ship-briefing.mjs` | the honest literal `unknown` in the render |
-| `pharn/floor/check-ship-briefing.mjs`  | RED (shape)                                |
+| consumer                               | on a value outside the set             |
+| -------------------------------------- | -------------------------------------- |
+| `pharn/floor/check-ship.mjs`           | `INCONCLUSIVE`, exit 2 — fail-closed   |
+| `pharn/floor/check-loop.mjs`           | `INCONCLUSIVE`, exit 2 — fail-closed   |
+| `pharn/floor/render-ship-briefing.mjs` | the honest literal `n/a` in the render |
+| `pharn/floor/check-ship-briefing.mjs`  | RED (shape)                            |
 
 The agreement is worth stating rather than assuming: the verify-report's four sets are **not** identical,
 so "the two spine reports behave the same way here" is a fact about this artifact, not a symmetry a

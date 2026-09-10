@@ -1310,8 +1310,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   it".** Full record: `.dev/features/skills-version-recorded/`.
 
 - **The two pipeline-spine artifacts that had no contract now have one — `pharn/pharn-contracts/verify-report.md`
-  and `pharn/pharn-contracts/regression-report.md` (`SKILLS_VERSION` 3.0.12 → 3.1.0, minor: newly shipped
-  product-surface documents).** `pharn-contracts` is the schemas-only root of the layer tree that
+  and `pharn/pharn-contracts/regression-report.md` (`SKILLS_VERSION` 3.0.12 → 3.1.0, **minor**, matching this repo's own
+  precedent for every prior contract addition — `ship-record.md` 1.0.0 → 1.1.0, `loop-record.md`
+  2.0.0 → 2.1.0, `ship-briefing.md` 2.5.5 → 2.6.0 — and SemVer's rule that ADDED surface is minor
+  while patch is reserved for backward-compatible fixes; flagged in review as arguably patch, since
+  CLAUDE.md's bump-size sentence names "capability / command / checker" and a contract is none of
+  the three, so the precedent is recorded here rather than the ambiguity being resolved silently).** `pharn-contracts` is the schemas-only root of the layer tree that
   everything depends on, yet **two of the seven spine artifacts bypassed it**: `verify-report.json` and
   `regression-report.json` were emitted by shipped commands, read by shipped floor checkers, and
   described nowhere. Surfaced by an adversarial review of this repo
