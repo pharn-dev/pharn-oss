@@ -9,7 +9,12 @@
 // ============================ WHAT IT GUARANTEES, AND WHAT IT DOES NOT =============================
 //
 // THE CLAIM, and it is deliberately this narrow (P0):
-//   "A write to a path the active writes-scope would have DENIED is DETECTED, and fails the stage."
+//   "A NON-ADVERSARIAL write to a path the active writes-scope would have DENIED is DETECTED, and fails
+//    the stage."
+//
+//   "Non-adversarial" is load-bearing, not hedging — see bound 5. The baseline is unauthenticated state
+//   inside the writable tree, so a writer who also rewrites it defeats detection on ordinary paths. This
+//   is an ACCOUNTING tool against tooling that escapes its scope, NOT a control against an attacker.
 //
 //   NOT "Bash writes are prevented." Detection is strictly weaker than prevention. The only true
 //   prevention is OS-level sandboxing of the Bash process, which PHARN does not implement and cannot —
@@ -79,10 +84,34 @@
 //     the edited file does not clear it. An earlier draft ran that blob-id comparison only in the
 //     no-baseline branch, which meant the guarantee this header claims was strictly wider than the one
 //     the code implemented; caught in review, and the test named "reconciled against HEAD even WITH a
-//     baseline present" exists to keep it caught. "Cannot be disabled" is STRUCK; "cannot be disabled
-//     quietly" is what this supports.
+//     baseline present" exists to keep it caught.
+//
+//     BUT THE CLAIM MUST BE NARROWED FURTHER, AND THIS IS THE MOST IMPORTANT SENTENCE IN THIS HEADER:
+//     that argument holds ONLY for the always-reconciled control surface. For an ORDINARY path the
+//     baseline IS the reference, the baseline lives under `.pharn/` — which Bash reaches — and nothing
+//     authenticates it. So a writer who edits a denied file AND rewrites that file's baseline entry to
+//     the new hash gets a SILENT `CLEAN`: no escape, no warning, no INCONCLUSIVE. Therefore:
+//       • WHAT THIS DETECTS: a Bash write by a NON-ADVERSARIAL writer — a stage's own tooling, a
+//         formatter, a generator, a script, a mistake. That is the entire population of L19/L20's
+//         observed failures, and it is what the increment was built for.
+//       • WHAT THIS DOES NOT DETECT: an ADVERSARY who also rewrites the baseline. Against that actor
+//         only the control surface holds, because only it is anchored in committed git objects.
+//     "Cannot be disabled quietly" is therefore STRUCK for ordinary paths and TRUE only for the control
+//     surface. Closing it needs authenticated state outside the worktree — the same harness-layer
+//     category as the OS sandbox in LIMITS.md §6, and just as absent. Raised in review; the accepted
+//     remedy offered there was "narrow the documented guarantee", and this is that narrowing.
 //  6. A COMMITTED change moves HEAD too, so the control-surface fallback cannot see it. The backstop
 //     there is Code-Owner review, which is where CODEOWNERS already sits.
+//  7. THIS FILE CANNOT VOUCH FOR ITSELF. /pharn-*verify runs the WORKTREE copy of this checker through
+//     Bash, so a modified checker can print `CLEAN` without reconciling anything. `pharn/floor/` is in
+//     `always_reconciled`, which means a modified checker is detected — BY ITSELF, which is circular and
+//     is not a guarantee. A real fix loads the checker from an immutable installation outside the
+//     worktree; PHARN has no such location, so this is stated rather than solved.
+//  8. THE ANCHOR IS ADVISORY (lessons-learned L19 — it is a Bash call, outside the PreToolUse gate). A
+//     run that SKIPS it does not reliably fail: `--require-baseline` is satisfied by whatever earlier
+//     epoch is still on disk, so the reconciliation silently ranges over the wrong window. Only a tree
+//     that has NEVER anchored yields INCONCLUSIVE. Binding a record to a specific successful build
+//     would need a pending/committed lifecycle this does not implement.
 //
 // Usage:
 //   node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline] [--json]

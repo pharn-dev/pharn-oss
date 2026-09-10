@@ -419,16 +419,26 @@ verify time the single mutable `.pharn/writes-scope.json` holds a LATER stage's 
 `/pharn-*verify` runs `pharn/floor/check-bash-reconcile.mjs`, which re-hashes the tree and asks the
 **live guards** whether each changed path would have been denied. Denied ⇒ the `reconcile` gate fails ⇒
 verify `FAIL`. `check-verify.mjs` needed no change: it is generic over gate keys.
-**DETECTED, never PREVENTED** — the only true prevention is OS-level sandboxing of the `Bash` process,
-which is harness-layer and not implemented. Bounds, all stated in
-`pharn/pharn-contracts/reconciliation-record.md`: ignored paths are outside the reconciled set, the
-window is anchor→verify, one worktree per session, and there is **no attribution** (it reports _what_,
-never _who_). **No shell command string is ever read** — parsing one is undecidable and a verb denylist
-would be a heuristic, which P0 forbids calling a guarantee.
+**DETECTED, never PREVENTED — and NON-ADVERSARIAL detection at that.** The baseline is unauthenticated
+state under `.pharn/`, which Bash reaches, so a writer who edits a denied file **and** rewrites that
+file's baseline entry gets a silent `CLEAN`. This is an **accounting tool against tooling that escapes
+its scope** — a formatter, a generator, a script, a mistake — **not a control against an attacker**. Only
+the always-reconciled control surface resists that actor, because only it is anchored in committed blob
+ids rather than in the baseline. The only true prevention is OS-level sandboxing, harness-layer and not
+implemented; an authenticated baseline store outside the worktree is the same category and equally
+absent. Further bounds, all in `pharn/pharn-contracts/reconciliation-record.md`: ignored paths are
+outside the reconciled set; the window is anchor→verify; one worktree per session; **no attribution** (it
+reports _what_, never _who_); the checker runs from the worktree, so it cannot vouch for its own
+integrity; and the anchor is a Bash step (L19), so a run that SKIPS it silently reuses an earlier epoch
+instead of failing — only a tree that has never anchored yields `INCONCLUSIVE`. **No shell command string
+is ever read** — parsing one is undecidable and a verb denylist would be a heuristic, which P0 forbids
+calling a guarantee.
 **When an increment legitimately writes a tracked path through Bash** (a generator, say): declare that
 path in the plan's `## Files`, or record it in `pharn/floor/reconcile-ignore.json` alongside the command
-that writes it. **Never delete the baseline to silence a RED** — `--require-baseline` turns that into a
-loud `INCONCLUSIVE`, and the always-reconciled control surface falls back to committed blob ids anyway.
+that writes it. **Never delete or hand-edit the baseline to silence a RED.** Deleting is loud
+(`--require-baseline` turns it into `INCONCLUSIVE`) — but hand-editing an entry is **silent**, which is
+precisely why it is forbidden by discipline here rather than caught by a check: nothing detects it, so
+the rule has to be the thing that holds.
 
 - **Set scope BEFORE writing.** Each command's **first step** runs `set-writes-scope.cjs` to write
   `.pharn/writes-scope.json` from the active Capability/command's declared `writes:`

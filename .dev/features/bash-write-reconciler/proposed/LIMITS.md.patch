@@ -1,6 +1,6 @@
 --- a/LIMITS.md
 +++ b/LIMITS.md
-@@ -192,10 +192,31 @@
+@@ -192,10 +192,45 @@
  - **Struck claim:** "the trusted docs are write-protected", "`writes:` is enforced", or "canon cannot be
    written", stated without a tool-surface qualifier. Each is true of `Write`/`Edit`/`MultiEdit`/
    `NotebookEdit` and false of `Bash` — including for **this file**, which the probe above reaches.
@@ -20,12 +20,26 @@
 +  sharing a tree share `.pharn/`, so a second session's writes can surface as this one's escape —
 +  [[L38]], which this inherits and cannot fix); and there is **no attribution** — it reports *what*,
 +  never *who*.
-+- **It can be disabled through the channel it monitors — but LOUDLY.** The baseline lives under
-+  `.pharn/`, which `Bash` reaches. Deleting it does not yield a quiet green: `/pharn-*verify` passes
-+  `--require-baseline`, which makes an absent baseline `INCONCLUSIVE`, and the always-reconciled control
-+  surface (`.claude/hooks/*`, `.claude/settings*.json`, `pharn/floor/*`, `.dev/floor/*`) falls back to
-+  **committed blob ids**, so that half stays covered with no baseline at all. "The detector cannot be
-+  disabled" is **struck**; "it cannot be disabled quietly" is what holds.
++- **DELETING it is loud; FORGING it is silent — and that bounds the whole claim.** The baseline lives
++  under `.pharn/`, which `Bash` reaches, and nothing authenticates it. Deleting it does not yield a quiet
++  green: `/pharn-*verify` passes `--require-baseline`, which makes an absent baseline `INCONCLUSIVE`, and
++  the always-reconciled control surface (`.claude/hooks/*`, `.claude/settings*.json`, `pharn/floor/*`,
++  `.dev/floor/*`) is compared against **committed blob ids** rather than against the baseline, so that
++  half resists a determined writer. But for an **ordinary** path the baseline IS the reference, so a
++  writer who edits a denied file **and** rewrites that file's baseline entry obtains a silent `CLEAN` —
++  no escape, no warning. **Therefore the guarantee is NON-ADVERSARIAL detection:** it catches tooling
++  that escapes its scope — a formatter, a generator, a script, a mistake, which is the entire population
++  of the failures [[L19]] and [[L20]] recorded — and it does **not** catch an attacker. "The detector
++  cannot be disabled" is **struck**; "it cannot be disabled quietly" is **struck for ordinary paths** and
++  true only for the control surface. Closing it needs authenticated state outside the worktree — the same
++  harness-layer category as the OS sandbox below, and just as absent.
++- **Two further bounds, stated rather than solved.** (1) `/pharn-*verify` runs the **worktree** copy of
++  the checker through `Bash`, so a modified checker can print `CLEAN` without reconciling anything;
++  `pharn/floor/` is always-reconciled, which means a modified checker is caught **by itself**, and that
++  is circular rather than a guarantee. (2) The anchor is a `Bash` step ([[L19]]), so a run that **skips**
++  it does not reliably fail — `--require-baseline` is satisfied by whatever earlier epoch is still on
++  disk, and the reconciliation then ranges over the wrong window. Only a tree that has **never** anchored
++  yields `INCONCLUSIVE`.
 +- **No shell command is ever parsed, and that is a design constraint rather than an omission.** Shell
 +  parsing is undecidable and a verb denylist is a heuristic, which P0 forbids labelling a guarantee. The
 +  reconciler compares hashes and paths, so `sed -i`, a here-doc, `node -e`, a Makefile target and a
@@ -34,7 +48,7 @@
    path the plan's `## Files` did not declare, and is the only thing in the tree that can surface such a
    write after the fact. Four bounds, every one stated in that checker's own header: it fires only if
    `/pharn-regress` runs; it compares _changed since base_, not _written by the build_; it carries
-@@ -210,3 +231,10 @@
+@@ -210,3 +245,10 @@
  **Why this is not one of §1's four irreducible limits.** It _is_ reducible — the sandbox above reduces
  it — just not by anything this repository can ship. §1's four cannot be reduced at all, which is what
  "irreducible" means there; folding this one in would dilute that word.

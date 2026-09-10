@@ -527,6 +527,48 @@ test("✧ activeFeatureSlug derives from set_by, and falls back to slug-agnostic
   assert.equal(isPipelineArtifact("features/any/PLAN.md", data, "mine"), false);
 });
 
+test("★ REVIEW: a FORGED baseline entry hides an ordinary-path escape — the bound, pinned as behaviour", () => {
+  // This test asserts a LIMITATION, deliberately. The baseline is unauthenticated state inside the
+  // writable tree, so on an ORDINARY path a writer who edits a denied file AND rewrites its entry gets a
+  // silent CLEAN. Pinning it means the docs cannot quietly drift back to claiming otherwise, and if a
+  // later increment closes the hole this test FAILS and forces the claim to be widened deliberately.
+  const dir = makeRepo();
+  setScope(dir, ["features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  writeFileSync(join(dir, "DENIED.txt"), "an out-of-scope write\n");
+  assert.equal(check(dir).status, 1, "precondition: it IS detected before the entry is forged");
+  const rec = JSON.parse(readFileSync(join(dir, RECORD_PATH), "utf8"));
+  rec.entries["DENIED.txt"] = createHash("sha256")
+    .update(readFileSync(join(dir, "DENIED.txt")))
+    .digest("hex");
+  writeFileSync(join(dir, RECORD_PATH), JSON.stringify(rec));
+  const r = check(dir);
+  assert.equal(r.status, 0, "KNOWN BOUND: a forged entry yields CLEAN on an ordinary path");
+  assert.equal(r.json.verdict, "CLEAN");
+  // ...and the SAME forgery does NOT work on the control surface, which is the asymmetry the claim rests on.
+  const hook = join(dir, ".claude/hooks/set-writes-scope.cjs");
+  writeFileSync(hook, "// disarmed\n");
+  const rec2 = JSON.parse(readFileSync(join(dir, RECORD_PATH), "utf8"));
+  rec2.entries[".claude/hooks/set-writes-scope.cjs"] = createHash("sha256").update(readFileSync(hook)).digest("hex");
+  writeFileSync(join(dir, RECORD_PATH), JSON.stringify(rec2));
+  assert.equal(check(dir).status, 1, "the control surface is anchored in blob ids, so the same forgery fails");
+});
+
+test("✧ the shipped claim says NON-ADVERSARIAL everywhere it is stated (P0 — no surface may overclaim)", () => {
+  // The defect class this whole increment exists for is a doc claiming more than its mechanism. Every
+  // surface that states the claim must carry the same qualifier, so drift in ONE of them is a red.
+  const surfaces = {
+    "pharn/floor/check-bash-reconcile.mjs": /NON-ADVERSARIAL|non-adversarial/,
+    "pharn/pharn-contracts/reconciliation-record.md": /non-adversarial/i,
+    "README.md": /non-adversarial/i,
+    "CLAUDE.md": /NON-ADVERSARIAL|non-adversarial/,
+    ".dev/features/bash-write-reconciler/proposed/LIMITS.md.patch": /NON-ADVERSARIAL|non-adversarial/,
+  };
+  for (const [rel, re] of Object.entries(surfaces)) {
+    assert.match(readFileSync(join(REPO, rel), "utf8"), re, `${rel} states the claim without the qualifier`);
+  }
+});
+
 test("✧ the contract exists and declares the verdict enum this file iterates", () => {
   const contract = readFileSync(join(REPO, "pharn/pharn-contracts/reconciliation-record.md"), "utf8");
   for (const v of VERDICTS) assert.ok(contract.includes(v), `contract does not name ${v}`);

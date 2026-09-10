@@ -23,19 +23,29 @@ Both `PreToolUse` write guards match `Write|Edit|MultiEdit|NotebookEdit`. A writ
 leaves no record. `LIMITS.md §6` states that bound; this contract is the shape of the mechanism that
 makes such a write **detectable after the fact**.
 
-## The claim these artifacts support — and the four it does not
+## The claim these artifacts support — and the seven it does not
 
-**Supported, literally:** _a write to a path the active writes-scope would have DENIED is detected, and
-fails the stage._
+**Supported, literally:** _a **non-adversarial** write to a path the active writes-scope would have
+DENIED is detected, and fails the stage._
+
+**"Non-adversarial" is load-bearing.** The baseline is unauthenticated state inside the writable tree, so
+a writer who edits a denied file **and** rewrites that file's baseline entry gets a silent `CLEAN`. This
+is an **accounting tool against tooling that escapes its scope** — a formatter, a generator, a script, a
+mistake, which is the entire population of the `L19`/`L20` failures it was built for — and it is **not a
+control against an attacker**. Only the always-reconciled control surface resists that actor, because
+only it is anchored in committed git objects rather than in the baseline.
 
 **Struck (P0), each for a stated reason:**
 
-| Struck claim                                 | Why                                                                                                                                                                                                                                                             |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "Bash writes are prevented"                  | Detection is strictly weaker than prevention. The only true prevention is OS-level sandboxing of the `Bash` process, which PHARN does not implement and cannot — harness-layer, environment-dependent, not expressible in markdown methodology (`LIMITS.md §6`) |
-| "all Bash writes are detected"               | Only those to **denied** paths, inside the reconciled set, between two anchors, in one worktree                                                                                                                                                                 |
-| "a `CLEAN` verdict means no escape occurred" | It means none was **detected**                                                                                                                                                                                                                                  |
-| "the detector cannot be disabled"            | Its state is reachable by the channel it monitors. What holds is that disabling it is **loud** — `--require-baseline` makes an absent baseline `INCONCLUSIVE`, and the always-reconciled control surface falls back to committed blob ids                       |
+| Struck claim                                  | Why                                                                                                                                                                                                                                                             |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Bash writes are prevented"                   | Detection is strictly weaker than prevention. The only true prevention is OS-level sandboxing of the `Bash` process, which PHARN does not implement and cannot — harness-layer, environment-dependent, not expressible in markdown methodology (`LIMITS.md §6`) |
+| "all Bash writes are detected"                | Only those to **denied** paths, inside the reconciled set, between two anchors, in one worktree                                                                                                                                                                 |
+| "a `CLEAN` verdict means no escape occurred"  | It means none was **detected**                                                                                                                                                                                                                                  |
+| "the detector cannot be disabled"             | Its state is reachable by the channel it monitors. **Deleting** it is loud (`--require-baseline` ⇒ `INCONCLUSIVE`), and the control surface is anchored in committed blob ids — but **forging** an ordinary path's baseline entry is silent                     |
+| "the detector cannot be disabled **quietly**" | True for the control surface **only**. For ordinary paths a forged baseline entry yields `CLEAN` with no warning. Closing this needs authenticated state outside the worktree — the same harness-layer category as the OS sandbox, and just as absent           |
+| "the checker vouches for its own integrity"   | It cannot. `/pharn-*verify` runs the **worktree** copy through Bash. `pharn/floor/` is always-reconciled, so a modified checker is caught **by itself** — circular, and not a guarantee                                                                         |
+| "skipping the anchor fails the run"           | Only in a tree that has **never** anchored. Otherwise `--require-baseline` is satisfied by whatever earlier epoch is on disk, and the reconciliation silently ranges over the wrong window. The anchor is a Bash call (`L19`), so nothing forces it             |
 
 ## 1. The baseline record — `.pharn/reconcile/baseline.json`
 
