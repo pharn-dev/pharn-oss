@@ -52,6 +52,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`amendScope()` now WRITES the baseline through the same descriptor it read, closing the half of the
+  CWE-367 pair the entry below left standing.** `SKILLS_VERSION` **5.1.1 → 5.1.2** (patch: a correction
+  to bytes 5.1.0 already put on the product surface; no capability is added and every success path is
+  byte-for-byte what it was — one error message moves, recorded below).
+  ([`pharn/floor/reconcile-baseline.mjs`](./pharn/floor/reconcile-baseline.mjs),
+  [`.dev/features/amendscope-write-fd/`](./.dev/features/amendscope-write-fd/)) — the entry below
+  replaced an `existsSync` + `readFileSync(path)` probe with a descriptor read, and stopped there. The
+  amended record was still written back with `writeFileSync(abs, …)`, which **re-resolves the name**: the
+  file receiving the amendment need not be the file whose bytes were amended. CodeQL reported exactly
+  that on the next analysis of this branch (`js/file-system-race`, security-severity **high**, at the
+  write with the paired open cited as its check). `amendScope()` now opens **`r+` once**, reads that
+  descriptor, and replaces its contents in place — `ftruncateSync(fd, 0)` then a `writeSync` loop at
+  offset 0 — with the descriptor released in a `finally` spanning both. `r+` does not create, so the
+  `"no baseline at … — run --anchor first"` ENOENT message and every fail-closed return are unchanged.
+
+  **Why the first fix read as complete, because that is the transferable part.** The TOCTOU pair has two
+  members and the pin written for it asserted one — a per-member assertion standing in for a per-set
+  rule, which is `.dev/memory-bank/lessons-learned.md` **L29** exactly, one increment later and in the
+  same function. The replacement pin is an **enumeration**: it matches every `\w+Sync(abs` occurrence in
+  the region and requires the list to equal `["openSync(abs"]`, so a path-addressed call of **any** name
+  added later fails without anyone having to remember this class (which also closes the variant-spelling
+  hole **L36** names). Both new assertions were **mutation-tested** rather than read: dropping
+  `ftruncateSync` fails the padded-record test, and restoring the path write fails the enumeration.
+
+  **`ftruncateSync` is load-bearing, not ceremony.** A write through an existing descriptor neither
+  truncates nor seeks, so a record that got **shorter** would keep the previous tail as trailing garbage;
+  the path write it replaces truncated implicitly (`O_TRUNC`). Pinned by `★ --amend-scope REPLACES the
+record — a longer prior file leaves no trailing bytes`, which pads the record with 4 KiB of JSON-legal
+  whitespace and requires the result to be byte-exactly its own canonical serialization.
+
+  **One error path moves.** Opening `r+` requires write permission, so an unwritable record now fails at
+  **open** — `cannot open .pharn/reconcile/baseline.json: <message>` — where it previously reached the
+  write and reported `cannot write …`. Both are exit **2** with nothing written, so the fail-closed
+  behaviour is identical and only the string a caller reads changes.
+
+  **Two things are NOT claimed (P0).** The write is **not atomic**: truncate-then-write has a window in
+  which a crash leaves a partial record, the same window `O_TRUNC` had — downstream that is not a silent
+  pass, since `check-bash-reconcile.mjs` reports an unparseable baseline as `INCONCLUSIVE` at exit 2.
+  And **"the alert is resolved" is settled by the next analysis, not by this repo**: no CodeQL CLI is
+  installed in the build environment, so what was verified here is the structural property the rule tests
+  — treating a correct reading as a verification is the failure this entry exists to correct (**L37**).
+
 - **`reconcile-baseline.mjs` now reads the baseline record through ONE descriptor, closing a
   check-then-read race (CWE-367).** `SKILLS_VERSION` **5.1.0 → 5.1.1** (patch: a correction to bytes that
   the 5.1.0 entry below already put on the product surface; no capability is added and every success

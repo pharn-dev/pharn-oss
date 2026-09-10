@@ -86,14 +86,30 @@ test("hashFile returns null for a directory or a missing path, never a fabricate
   assert.match(hashFile(join(dir, "tracked.md")), /^[0-9a-f]{64}$/);
 });
 
-test("★ amendScope reads the baseline through ONE descriptor — no exists-then-read/write (CWE-367)", () => {
+// The TOCTOU pair has TWO members — the read AND the write — and the first version of this test
+// asserted the read half only (`openSync` + `readFileSync(fd)`), which read as a discharged rule while
+// `writeFileSync(abs, …)` still re-resolved the name two lines later. CodeQL reported exactly that on
+// the next analysis (js/file-system-race, high). Per lessons-learned L29, the deliverable for a rule
+// quantified over a set is the ENUMERATION with the assertion iterating it — so this ranges over every
+// `*Sync(abs` call in the region rather than over the members someone thought to name. That also closes
+// L36's variant-spelling hole: a `renameSync(abs`/`appendFileSync(abs` added later needs no new rule.
+test("★ amendScope reads AND writes ONE descriptor — exactly one path-addressed call, the open (CWE-367)", () => {
   const src = readFileSync(join(HERE, "reconcile-baseline.mjs"), "utf8");
-  const body = src.slice(src.indexOf("export function amendScope"), src.indexOf("function main(argv)"));
-  assert.match(body, /openSync\(abs, "r"\)/, "must open a descriptor");
-  assert.match(body, /readFileSync\(fd, "utf8"\)/, "must read the DESCRIPTOR, not the path");
-  assert.ok(!/existsSync\(abs\)/.test(body), "an existence check before read/write is the TOCTOU pattern");
-  assert.ok(!/readFileSync\(abs/.test(body), "a path-based read here reopens by name — the race");
-  assert.match(body, /closeSync\(fd\)/, "the descriptor must be released on every path");
+  const region = src.slice(src.indexOf("function replaceThroughFd"), src.indexOf("function main(argv)"));
+  // Comments are stripped before the enumeration runs, or the rationale ABOVE the fix — which quotes the
+  // `writeFileSync(abs, …)` call it removed — reads as the defect and the rule can never be satisfied by
+  // a correct file. The assertion is over CODE; prose is not evidence either way.
+  const code = region.replace(/\/\/.*$/gm, "");
+  assert.deepEqual(
+    code.match(/\b\w+Sync\(abs\b/g),
+    ["openSync(abs"],
+    "after the open, every operation must address the fd — a path-addressed call re-resolves the name"
+  );
+  assert.match(code, /openSync\(abs, "r\+"\)/, "one READ-WRITE descriptor, so the write needs no second open");
+  assert.match(code, /readFileSync\(fd, "utf8"\)/, "must read the DESCRIPTOR, not the path");
+  assert.match(code, /ftruncateSync\(fd, 0\)/, "a write through an fd does not truncate — a shorter record would keep its tail");
+  assert.match(code, /writeSync\(fd, buf, off/, "must write the DESCRIPTOR at an explicit offset");
+  assert.match(code, /closeSync\(fd\)/, "the descriptor must be released on every path");
 });
 
 test("★ hashFile hashes what it INSPECTED — no check-then-reopen-by-name (CWE-367)", () => {
@@ -211,6 +227,26 @@ test("★ --amend-scope APPENDS the live scope to an existing epoch, preserving 
   assert.equal(rec.scope_amendments.length, 1);
   assert.deepEqual(rec.scope_amendments[0].scope, ["canon.md"]);
   assert.equal(rec.scope_amendments[0].set_by, ".claude/commands/pharn-dev-memory-promote.md");
+});
+
+// The write side's one behavioural risk, exercised rather than reasoned about: a write through an
+// existing descriptor does not truncate, so without ftruncateSync a record that shrinks keeps the
+// previous tail. 4 KiB of trailing whitespace is JSON-LEGAL, so the amend still parses its input — and
+// the padding survives verbatim into the output if the truncate is dropped. Delete the `ftruncateSync`
+// line and this test fails; that is what makes it a check rather than a restatement.
+test("★ --amend-scope REPLACES the record — a longer prior file leaves no trailing bytes", () => {
+  const dir = makeRepo();
+  const read = anchored(dir, { scope: ["build.md"], set_by: "PLAN.md", set_at: "T1" });
+  const abs = join(dir, RECORD_PATH);
+  writeFileSync(abs, readFileSync(abs, "utf8") + " ".repeat(4096));
+  writeFileSync(join(dir, SCOPE_PATH), JSON.stringify({ scope: ["canon.md"], set_by: "promote", set_at: "T2" }));
+
+  const r = spawnSync(process.execPath, [ANCHOR, "--amend-scope", "--base", dir], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+
+  const raw = readFileSync(abs, "utf8");
+  assert.equal(raw, JSON.stringify(JSON.parse(raw), null, 2) + "\n", "the previous tail must not survive the rewrite");
+  assert.equal(read().scope_amendments.length, 1, "and the amendment itself still landed");
 });
 
 test("★ --amend-scope is ORDERED and cumulative — several stages inside one epoch each append", () => {

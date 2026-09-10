@@ -44,7 +44,18 @@
 //
 // Exit: 0 ok · 2 unusable input / git unavailable / write failed — FAIL-CLOSED (P5). Never a silent pass.
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, openSync, fstatSync, closeSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  writeSync,
+  ftruncateSync,
+  mkdirSync,
+  existsSync,
+  statSync,
+  openSync,
+  fstatSync,
+  closeSync,
+} from "node:fs";
 import { resolve, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -155,6 +166,30 @@ export function buildRecord(baseDir, by) {
   };
 }
 
+// Replace a descriptor's ENTIRE contents in place — the fd-addressed equivalent of a path write.
+//
+// `ftruncateSync` is load-bearing, not ceremony. The `writeFileSync(path, …)` this replaces truncated
+// implicitly (`O_TRUNC`); a write through an existing descriptor neither truncates nor seeks, so a record
+// that got SHORTER would keep the previous tail behind as trailing garbage. The loop is not decoration
+// either: `writeSync` may return a SHORT count, and a silently half-written record is precisely the
+// artifact this file exists to keep honest.
+//
+// HONEST BOUND (P0): this is NOT an atomic replacement, and it never was. Truncate-then-write has a
+// window in which a crash leaves a partial record — the same window `O_TRUNC` had. Downstream that is
+// not a silent pass: check-bash-reconcile.mjs reports an unparseable baseline as INCONCLUSIVE at exit 2
+// (fail-closed, P5). Write-temp-then-rename would close the window at the cost of re-introducing a path
+// operation and a second inode; no observed failure asks for it (P7).
+function replaceThroughFd(fd, text) {
+  const buf = Buffer.from(text, "utf8");
+  ftruncateSync(fd, 0);
+  let off = 0;
+  while (off < buf.length) {
+    const n = writeSync(fd, buf, off, buf.length - off, off);
+    if (n <= 0) throw new Error(`short write at byte ${off} of ${buf.length}`);
+    off += n;
+  }
+}
+
 // APPEND the currently-live writes-scope to an existing epoch's `scope_amendments`.
 //
 // WHY THIS EXISTS. An epoch spans build -> ship, and exactly one `scope_snapshot` is taken when it
@@ -183,41 +218,53 @@ export function buildRecord(baseDir, by) {
 // increment leaves that bound exactly where it was; it does not tighten the detector.
 export function amendScope(baseDir) {
   const abs = resolve(baseDir, RECORD_PATH);
-  let record;
   let fd;
+  // ONE descriptor for the read AND the write. The previous shape read the DESCRIPTOR but wrote back
+  // with `writeFileSync(abs, …)`, which re-resolves the NAME: between the two the path can be replaced,
+  // unlinked or pointed at a symlink, so the file receiving the amendment need not be the file whose
+  // bytes were amended. That is CWE-367, and CodeQL reported it (js/file-system-race, high) on the
+  // analysis AFTER the read-side fix — the read half was corrected and the write half read as covered
+  // (lessons-learned L29). `r+` never creates, so a missing baseline still lands in the ENOENT branch
+  // exactly as `"r"` did; what it does add is a WRITE-permission requirement at open time, which is why
+  // an unwritable record now fails here rather than at the write (`cannot open`, not `cannot write`).
   try {
-    fd = openSync(abs, "r");
-    record = JSON.parse(readFileSync(fd, "utf8"));
+    fd = openSync(abs, "r+");
   } catch (e) {
     if (e.code === "ENOENT") {
       return { ok: false, reason: `no baseline at ${RECORD_PATH} — run --anchor first` };
     }
-    return { ok: false, reason: `cannot read ${RECORD_PATH}: ${e.message}` };
+    return { ok: false, reason: `cannot open ${RECORD_PATH}: ${e.message}` };
+  }
+  try {
+    let record;
+    try {
+      record = JSON.parse(readFileSync(fd, "utf8"));
+    } catch (e) {
+      return { ok: false, reason: `cannot read ${RECORD_PATH}: ${e.message}` };
+    }
+    if (!record || typeof record !== "object" || !record.entries) {
+      return { ok: false, reason: `${RECORD_PATH} is not a usable baseline record` };
+    }
+    const live = snapshotScope(baseDir);
+    if (live === null) {
+      return { ok: false, reason: `no usable writes-scope at ${SCOPE_PATH} — set one before amending` };
+    }
+    // Coerce rather than branch: a baseline anchored before this field existed has no array yet.
+    if (!Array.isArray(record.scope_amendments)) record.scope_amendments = [];
+    record.scope_amendments.push(live);
+    try {
+      replaceThroughFd(fd, JSON.stringify(record, null, 2) + "\n");
+    } catch (e) {
+      return { ok: false, reason: `cannot write ${RECORD_PATH}: ${e.message}` };
+    }
+    return { ok: true, amendment: live, count: record.scope_amendments.length };
   } finally {
-    if (fd !== undefined) {
-      try {
-        closeSync(fd);
-      } catch {
-        /* already closed / invalid — nothing to reclaim */
-      }
+    try {
+      closeSync(fd);
+    } catch {
+      /* already closed / invalid — nothing to reclaim */
     }
   }
-  if (!record || typeof record !== "object" || !record.entries) {
-    return { ok: false, reason: `${RECORD_PATH} is not a usable baseline record` };
-  }
-  const live = snapshotScope(baseDir);
-  if (live === null) {
-    return { ok: false, reason: `no usable writes-scope at ${SCOPE_PATH} — set one before amending` };
-  }
-  // Coerce rather than branch: a baseline anchored before this field existed has no array yet.
-  if (!Array.isArray(record.scope_amendments)) record.scope_amendments = [];
-  record.scope_amendments.push(live);
-  try {
-    writeFileSync(abs, JSON.stringify(record, null, 2) + "\n");
-  } catch (e) {
-    return { ok: false, reason: `cannot write ${RECORD_PATH}: ${e.message}` };
-  }
-  return { ok: true, amendment: live, count: record.scope_amendments.length };
 }
 
 function main(argv) {
