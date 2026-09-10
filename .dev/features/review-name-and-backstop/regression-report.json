@@ -1,0 +1,27 @@
+{
+  "base": "8bc6c0a",
+  "inside": [
+    ".claude/commands/pharn-review.md",
+    ".dev/floor/command-hygiene.test.mjs",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION"
+  ],
+  "outside_gates": {
+    "structural:expected-injection-comment": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

@@ -950,3 +950,142 @@ test("✧ the placeholder predicate DISCRIMINATES — it admits real scopeable p
   assert.ok(!isScopeablePlaceholder("features/**"), "a bare glob with no placeholder must not qualify (pharn-review.md)");
   assert.ok(!isScopeablePlaceholder("runs/**"), "a bare glob with no placeholder must not qualify (pharn-dev-eval.md)");
 });
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────
+// /pharn-review's SUPPRESSION-BACKSTOP CARVE-OUT must keep naming exactly the SCANNER-LESS lenses.
+//
+// WHY THIS EXISTS (P7 — the trigger is an occurrence, not a hypothetical). `/pharn-review` Step 3b
+// asserted, with no carve-out, that "a lens's Layer-1 verdict comes from the scanner's deterministic regex
+// … so a skill … cannot erase a scanner-detected shape". That is FALSE for the lenses
+// `pharn/floor/lens-scanner-map.json` maps to `null`: no scanner runs, so the backstop does not exist and
+// suppression is unbounded — including for `trust-fence`, the attempt-0 injection probe. The command's own
+// Step 3 stated the opposite twelve lines above, and nothing detected the contradiction, because
+// `validate.mjs` excludes `.claude/commands/`.
+//
+// This is the SECOND occurrence of the class, which is what earns it a check rather than a comment (L20).
+// Occurrence #1 is recorded in the map's own `doc` string — "a real, already-observed drift: two lenses'
+// prose name scanners that do not exist" — and the response to it was `pharn/floor/lens-scanner-map.test.mjs`,
+// which pins map↔disk↔count-lenses. That test does NOT read command prose, which is precisely the gap that
+// let this drift land: a maintainer who wires a scanner for a null lens updates the map and that test, and
+// leaves this carve-out naming a lens that is no longer scanner-less, GREEN.
+//
+// MEMBERSHIP COMES FROM THE MAP, NEVER FROM THIS FILE (L6). Both sets are derived at run time, so a lens
+// that gains or loses a scanner is covered the day it changes; nothing here hardcodes a name or a count.
+//
+// ── Honest scope (P0) ────────────────────────────────────────────────────────────────────────────────
+// FLOOR: the carve-out region NAMES every scanner-less lens and NO scanner-bound one.
+// NOT guaranteed: that the prose around those names is TRUE or sufficient. A carve-out listing all four
+//   and explaining them wrongly stays GREEN — the same bound `check-contributing-gates` states about
+//   itself. It also pins ONE site; the command's three other bounded claims are not covered here (one
+//   occurrence, and L20's bar is a second).
+const REVIEW_CMD = "pharn-review.md";
+
+// PINNED LITERAL anchor, never a line number — editing the command shifts every line below it
+// (the `check-version-badge.mjs` precedent, which locates the badge by URL pattern for this reason).
+const CARVE_OUT_ANCHOR = "**The carve-out, and it is the sharp half (P0).**";
+
+function lensScannerMap() {
+  const p = new URL("../../pharn/floor/lens-scanner-map.json", import.meta.url).pathname;
+  return JSON.parse(readFileSync(p, "utf8")).scanners;
+}
+
+// The contiguous blockquote containing the anchor. Structural: expand over `>`-prefixed lines, so the
+// region tracks the blockquote rather than an offset.
+function carveOutRegion(body) {
+  const lines = body.split(/\r?\n/);
+  const at = lines.findIndex((l) => l.includes(CARVE_OUT_ANCHOR));
+  if (at === -1) return null;
+  let lo = at;
+  let hi = at;
+  while (lo > 0 && /^\s*>/.test(lines[lo - 1])) lo--;
+  while (hi < lines.length - 1 && /^\s*>/.test(lines[hi + 1])) hi++;
+  return lines.slice(lo, hi + 1).join("\n");
+}
+
+// Lens names are matched as BACK-TICKED tokens, not bare substrings. This is load-bearing, not cosmetic:
+// `injection` is itself a mapped lens name AND an ordinary English word the carve-out uses in prose
+// ("the attempt-0 injection probe"), so a substring test would make the closure rule below unsatisfiable.
+// The command names every lens in a code span, so the back-ticks are the real signal.
+function backtickedLensNames(region, names) {
+  const found = new Set();
+  for (const m of region.matchAll(/`([^`]+)`/g)) if (names.has(m[1])) found.add(m[1]);
+  return found;
+}
+
+test("✧ the /pharn-review carve-out NAMES every scanner-less lens (derived from the map, not hardcoded)", () => {
+  const scanners = lensScannerMap();
+  const nullLenses = Object.keys(scanners).filter((k) => scanners[k] === null);
+  // L34: a per-item assertion set says NOTHING over an empty domain. If the map ever stopped parsing, or
+  // every lens gained a scanner, the loop below would certify the carve-out by examining zero lenses.
+  assert.ok(nullLenses.length > 0, "no scanner-less lens in the map — the rule below would pass vacuously");
+
+  const region = carveOutRegion(readFileSync(join(COMMANDS_DIR, REVIEW_CMD), "utf8"));
+  assert.ok(region, `${REVIEW_CMD}: carve-out anchor not found — the suppression carve-out is missing or reworded`);
+
+  const named = backtickedLensNames(region, new Set(Object.keys(scanners)));
+  const missing = nullLenses.filter((l) => !named.has(l));
+  assert.deepEqual(
+    missing,
+    [],
+    `the carve-out omits scanner-less lens(es): ${missing.join(", ")} — a lens with no backstop that the carve-out does not name is the exact defect this rule exists to catch`
+  );
+});
+
+test("✧ the carve-out is CLOSED — it names no SCANNER-BOUND lens (presence is not closure, L36)", () => {
+  const scanners = lensScannerMap();
+  const mapped = Object.keys(scanners).filter((k) => scanners[k] !== null);
+  // L34 again, for the other direction of the domain.
+  assert.ok(mapped.length > 0, "no scanner-bound lens in the map — the closure rule below would pass vacuously");
+
+  const region = carveOutRegion(readFileSync(join(COMMANDS_DIR, REVIEW_CMD), "utf8"));
+  assert.ok(region, `${REVIEW_CMD}: carve-out anchor not found`);
+
+  // The stale-list direction: a lens gains a scanner, the map is updated, and the carve-out keeps naming
+  // it as unprotected. A presence-only rule stays GREEN on exactly that, which is why this half exists.
+  const named = backtickedLensNames(region, new Set(Object.keys(scanners)));
+  const wrong = mapped.filter((l) => named.has(l));
+  assert.deepEqual(
+    wrong,
+    [],
+    `the carve-out names scanner-BOUND lens(es) as unprotected: ${wrong.join(", ")} — it has gone stale against the map`
+  );
+});
+
+test("✧ the carve-out rules DISCRIMINATE — both halves fail on a mutated command body", () => {
+  // Mutation-tested against the REAL body, not a synthetic fixture: a rule that never fails is
+  // indistinguishable from one that passes for the right reason.
+  const scanners = lensScannerMap();
+  const names = new Set(Object.keys(scanners));
+  const nullLenses = Object.keys(scanners).filter((k) => scanners[k] === null);
+  const mapped = Object.keys(scanners).filter((k) => scanners[k] !== null);
+  const body = readFileSync(join(COMMANDS_DIR, REVIEW_CMD), "utf8");
+
+  // (a) DROP a scanner-less lens from the carve-out -> the presence rule must catch it.
+  const dropped = body.replace(new RegExp("\\*\\*`" + nullLenses[0] + "`\\*\\*"), "**`totally-made-up-lens`**");
+  assert.notEqual(
+    dropped,
+    body,
+    `mutation (a) changed nothing — the carve-out does not name ${nullLenses[0]} in the expected bold-code form`
+  );
+  const regionA = carveOutRegion(dropped);
+  assert.ok(
+    !backtickedLensNames(regionA, names).has(nullLenses[0]),
+    "mutation (a) did not remove the name from the region — the presence rule would not have been exercised"
+  );
+
+  // (b) SPLICE a scanner-bound lens into the carve-out -> the closure rule must catch it.
+  const spliced = body.replace(CARVE_OUT_ANCHOR, CARVE_OUT_ANCHOR + " Also `" + mapped[0] + "`.");
+  assert.notEqual(spliced, body, "mutation (b) changed nothing — the anchor was not found");
+  const regionB = carveOutRegion(spliced);
+  assert.ok(
+    backtickedLensNames(regionB, names).has(mapped[0]),
+    `mutation (b) should make the closure rule fail on ${mapped[0]}, but the name did not land inside the region`
+  );
+
+  // (c) REMOVE the anchor entirely -> both rules must fail closed, not silently find an empty region.
+  assert.equal(
+    carveOutRegion(body.replace(CARVE_OUT_ANCHOR, "")),
+    null,
+    "removing the anchor must make the region unlocatable, so the rules fail rather than pass over nothing"
+  );
+});

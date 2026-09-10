@@ -213,6 +213,53 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   marker is absent cannot be registered without REDding a doc nobody broke, so it needs a human edit;
   the manifest's `rule_id-roster` `$comment` names the line and the follow-up.
 
+- **`/pharn-review` no longer claims a suppression backstop it does not have for 4 of its 22 lenses, and
+  it now resolves the `<name>` its own artifacts are written under** (`SKILLS_VERSION` 3.0.7 → **3.0.8**;
+  patch-class — corrections to bytes that already shipped, no contract or finding-shape change, so no
+  install is invalidated).
+
+  **The false claim.** Step 3b asserted, with no carve-out, that "a lens's Layer-1 verdict comes from the
+  **scanner's deterministic regex over the code text** … so a skill informs _judgment_ but **cannot erase a
+  scanner-detected shape**." That is false for the lenses `pharn/floor/lens-scanner-map.json` maps to
+  `null` — `hallucinated-api`, `input-validation`, `race-condition`, `trust-fence` — which have **no
+  deterministic prefilter at all**, so there is no scanner verdict for a skill to fail to erase and
+  suppression is bounded by nothing structural. The set includes **`trust-fence`, the attempt-0 injection
+  probe** the experiment agenda points at. The command's **own Step 3 said the opposite twelve lines
+  above**; nothing detected the contradiction, because `validate.mjs` excludes `.claude/commands/`.
+
+  **Four sites, not one.** The review reported the Step-3b blockquote. A scan anchored on the shortest
+  invariant stems (`regardless`, `scanner-detected`, `cannot erase`) found the same unbounded claim at
+  three more: the Step-4 lens instruction, the guarantee audit, and `## Trust (P2)` — where it made the
+  named suppression residual read **narrower than it is**. All four are bounded now (`L33`: a prior
+  enumeration is a lower bound to beat, never a set to confirm).
+
+  **Bounded in both directions (P0).** The carve-out does not claim the other 18 are safe: for a
+  scanner-bound lens only the scanner's **MATCH** is deterministic — whether the lens **reports** it stays
+  advisory, since spawning, slicing and lens judgment are all advisory. And naming the gap **does not
+  reduce** the suppression risk for the four; it stops the document from denying it.
+
+  **`<name>` was unbound.** The command wrote `features/<name>/…` at four places with no step resolving
+  `<name>` — the review's "vertical-slice blocker". A Step 0 now resolves it via explicit
+  `--feature <name>` (a flag, since Step 1 already claims the positional args as target paths), else
+  **ask the human** (P5's terminal fallback), matching `/pharn-spec` and `/pharn-regress`.
+
+  **No writes-scope setter was added, and the command now says why.** `/pharn-review` remains the one
+  artifact-writing command with no `set-writes-scope.cjs` call — deliberately. The setter resolves one
+  `--target` per call and overwrites the single scope file (`L8`), while Step 4 fans out to **N parallel
+  subagent writers** whose N is known only at run time, so the usual per-artifact re-scope does not reach
+  it. Measured: with the scope at `features/<name>/findings.json`, writes to the lens `findings.json` and
+  to `REVIEW.md` **both exit 2** — a setter would break the command. fix #7 still applies through the
+  fail-closed default, whose install safe-set is exactly `features/**`; the honest guarantee is therefore
+  "writes only inside `features/**`", not "exactly the three artifact paths".
+
+  **Apparatus (no bump):** `.dev/floor/command-hygiene.test.mjs` gains three rules deriving both lens sets
+  from the map at run time (`L6` — never hardcoded): presence (every scanner-less lens is named), closure
+  (`L36` — no scanner-**bound** lens is named, catching the stale-list direction), and a discrimination
+  test mutating the real command body. Both halves guard against a vacuous pass (`L34`). Its P7 trigger is
+  the **second** occurrence of this class: the map's own `doc` records the first ("a real, already-observed
+  drift: two lenses' prose name scanners that do not exist"), answered by `lens-scanner-map.test.mjs` —
+  which pins map↔disk but reads no command prose, which is the gap that let this land.
+
 - **The writes-scope guard's fail-closed default no longer carries dev-repo posture into
   installed projects** (`SKILLS_VERSION` 3.0.1 → **3.0.2**, patch;
   [#180](https://github.com/pharn-dev/pharn-oss/issues/180), shipped in
