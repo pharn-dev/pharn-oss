@@ -235,6 +235,8 @@ scope through Bash (`.dev/memory-bank/lessons-learned.md` **L19**, cited not res
 floor op; it never blocks, and the deterministic style gate remains `/pharn-dev-verify`'s
 `check-verify.mjs` gate map (L9) — and the machine report `regression-report.json` is deliberately **NOT** formatted, because Step 4 requires it to stay the helper's `verdict` JSON **verbatim**.
 
+**Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the audit sections for document layout only, and a reader who stops at the turn-end never reaches it.
+
 Then **end your turn.** `/pharn-dev-regress` does **not** invoke `/pharn-dev-verify` and does not gate it — the human reads
 the report and the verdict's exit code decides the stage.
 

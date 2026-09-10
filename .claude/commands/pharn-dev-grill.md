@@ -261,6 +261,8 @@ scope through Bash (`.dev/memory-bank/lessons-learned.md` **L19**, cited not res
 floor op; it never blocks, and the deterministic style gate remains `/pharn-dev-verify`'s
 `check-verify.mjs` gate map (L9).
 
+**Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the audit sections for document layout only, and a reader who stops at the turn-end never reaches it.
+
 Then **end your turn**. `/pharn-dev-grill` does not invoke `/pharn-dev-build` and does not gate it — the human reads the
 grill-log and decides. Building is a separate `/pharn-dev-build` run.
 

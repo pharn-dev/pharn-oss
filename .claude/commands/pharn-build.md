@@ -266,6 +266,8 @@ reviewed` seal (the §6 ship-stage seal is the **human's** post-review decision 
 `/pharn-build`'s). End with the honest line: _"built within the named scope from a current approved plan —
 this is NOT a judgment that the code is correct; that is `/pharn-regress` / `/pharn-verify` + the human."_
 
+**Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the audit sections for document layout only, and a reader who stops at the turn-end never reaches it.
+
 `/pharn-build` does **one** stage. It does **not** chain to `/pharn-regress`. **End your turn.**
 
 ## Guarantee audit (P0) — the honest split

@@ -420,6 +420,8 @@ node pharn/floor/gen-lessons-index.mjs .
 - If the project has no lessons yet the generator prints `no canon … nothing to index` and writes
   nothing, at exit 0. That is the expected first-run output, not a failure.
 
+**Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the audit sections for document layout only, and a reader who stops at the turn-end never reaches it.
+
 Then **end your turn.** `/pharn-memory-promote` does one thing: it lands **one** vetted,
 provenance-carrying entry. It does not chain to another stage.
 

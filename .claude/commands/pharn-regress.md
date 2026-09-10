@@ -296,6 +296,8 @@ breakage outside the feature` or `REGRESSIONS: N outside the feature — stage F
 chain must hold first`. **Never** write "regress passed" as if it certified the feature whole — it
    certifies only the comparison (P0).
 
+**Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the audit sections for document layout only, and a reader who stops at the turn-end never reaches it.
+
 Then **end your turn.** `/pharn-regress` does **not** invoke `/pharn-verify` and does not gate it — the
 human reads the report and the verdict's exit code decides the stage.
 

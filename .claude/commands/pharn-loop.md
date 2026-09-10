@@ -276,6 +276,8 @@ checker keeps no state across invocations and cannot know how many times it has 
 this is the one command with **no human between iterations**, so an unbounded "fix and re-run" is exactly
 the class of autonomy `check-loop.mjs` was built to bound. Labeled, not sold as a guarantee.
 
+**Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the audit sections for document layout only, and a reader who stops at the turn-end never reaches it.
+
 Then **end your turn** at the human gate. `/pharn-loop` does not merge, push, or seal.
 
 ## Guarantee audit (P0) — `/pharn-loop` owns TWO floor primitives: the stop core and the record shape check

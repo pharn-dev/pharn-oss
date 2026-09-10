@@ -315,6 +315,8 @@ pharn/floor/check-plan-spec-agree.mjs) · lessons: GREEN (verified by pharn/floo
   covers the **declaration**, never that the lessons were applied. Keep the floor results in the header
   and out of the concern counts: a deterministic stop and a model-authored concern must not share a tally.
 
+**Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the audit sections for document layout only, and a reader who stops at the turn-end never reaches it.
+
 `/pharn-grill` does **one** stage — it re-verifies the chain and the lessons declaration, then (on GREEN
 at both) interrogates one plan. It
 does **not** chain to `/pharn-build`. **End your turn.** The human reads the grill-log and decides.

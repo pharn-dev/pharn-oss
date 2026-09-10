@@ -445,6 +445,8 @@ node .dev/floor/gen-lessons-index.mjs .
   (`.dev/floor/check-lessons-index.mjs`, byte-equality), which is exactly what catches the skip. **"The
   promotion regenerated the index" is never a precondition of anything.**
 
+**Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the audit sections for document layout only, and a reader who stops at the turn-end never reaches it.
+
 Then **end your turn.** `/pharn-dev-memory-promote` does one thing: it lands **one** vetted, provenance-carrying entry.
 It does not chain to another stage.
 

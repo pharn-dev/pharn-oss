@@ -243,6 +243,8 @@ node pharn/floor/check-plan-lessons.mjs .dev/features/<name>/PLAN.md .dev/memory
 > raises the **price** of a citation, it does not measure comprehension. Do not write "the plan applies
 > its lessons" — write that it **declares** them.
 
+**Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the audit sections for document layout only, and a reader who stops at the turn-end never reaches it.
+
 Then, do **not** build. Resolve any remaining open questions and confirm approval
 through an **interactive form**, then end your turn:
 

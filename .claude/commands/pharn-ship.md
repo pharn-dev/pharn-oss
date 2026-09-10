@@ -541,6 +541,8 @@ only); the **rendering** of the verdict into `SHIP.md`; and that the human **und
 (attestation ≠ comprehension). No new floor primitive is added to `/pharn-ship` beyond the one sub-checker it
 invokes.
 
+**Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the audit sections for document layout only, and a reader who stops at the turn-end never reaches it.
+
 Then **end your turn** at the human gate. `/pharn-ship` does not merge, push, or seal.
 
 ## `/pharn-ship --loop` — deferred to a separate increment (NOT built here)
