@@ -27,7 +27,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -52,12 +52,26 @@ const VALID = {
 };
 const CANON = "# Lessons learned\n\n## L1 — first lesson\n\nbody\n\n## L2 — second lesson\n\nbody\n";
 
+// Where the canon file must LIVE inside the temp dir, given a candidate. The checker BINDS argv[3] to
+// `cand.target`, so a harness that always wrote a bare `canon.md` would make every case RED for the wrong
+// reason. A candidate whose `target` is not a usable relative path falls back to `canon.md` — which is
+// exactly the mismatch shape, and is correct for those cases: they are already RED on the target enum,
+// and the binding is gated on that check passing.
+function canonRelFor(candidate) {
+  const t = candidate.target;
+  const usable = typeof t === "string" && /^[A-Za-z0-9._/-]+$/.test(t) && !t.split("/").includes("..");
+  return usable ? t : "canon.md";
+}
+
 // Write candidate + canon to a fresh temp dir, run the checker, clean up, return the spawn result.
-function runWith(candidate, canonText = CANON) {
+// `canonRel` is overridable so a test can deliberately point argv[3] somewhere OTHER than the declared
+// target — the one thing the binding exists to refuse.
+function runWith(candidate, canonText = CANON, canonRel = canonRelFor(candidate)) {
   const dir = mkdtempSync(join(tmpdir(), "pharn-prov-prod-"));
   try {
     const candPath = join(dir, "candidate.json");
-    const canonPath = join(dir, "canon.md");
+    const canonPath = join(dir, canonRel);
+    mkdirSync(dirname(canonPath), { recursive: true });
     writeFileSync(candPath, JSON.stringify(candidate));
     writeFileSync(canonPath, canonText);
     return spawnSync(process.execPath, [CHECK, candPath, canonPath], { encoding: "utf8" });
@@ -153,6 +167,136 @@ test("RED: a target outside the canon enum exits 1", () => {
   assert.match(r.stdout, /RED — target failed/);
 });
 
+// ── The canon-arg BINDING: argv[3] must name the DECLARED target ─────────────────────────────────────
+//
+// The defect this closes: the duplicate-id check ranged over WHATEVER FILE THE CALLER NAMED while the
+// enum test only ever saw `cand.target`, so "the target is one of the two prescription files" read as a
+// claim about the file being checked and was not one. Reproduced live before the fix — a candidate whose
+// id was ALREADY taken in its declared target exited 0 GREEN against any other file.
+
+test("RED: argv[3] naming a file OTHER than the declared target exits 1", () => {
+  // The candidate declares memory-bank/lessons-learned.md; argv[3] is pointed at a decoy.
+  const r = runWith(VALID, CANON, "decoy.md");
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /RED — canon-arg failed/);
+  assert.match(r.stdout, /does not name the declared target/);
+  assert.match(r.stdout, /"memory-bank\/lessons-learned\.md"/);
+});
+
+test("NON-VACUITY: the SAME candidate at its DECLARED path is GREEN — the refusal is the mismatch, not the fixture", () => {
+  // Without this control the test above would pass against a checker that REDs everything (L4: an
+  // authored assertion passes by construction). The only difference between the two runs is argv[3].
+  const r = runWith(VALID);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /GREEN/);
+});
+
+test("THE DANGEROUS DIRECTION: a real duplicate can no longer be laundered through a different canon file", () => {
+  // This is the finding's actual impact, pinned as a behaviour rather than a message. `L1` IS taken in
+  // CANON. Pointed at the declared target it is a duplicate RED; pointed at an empty decoy it USED TO be
+  // GREEN — a re-used id passing the gate. Now the decoy run is refused before the id lookup is reached.
+  const dup = { ...VALID, id: "L1" };
+  const honest = runWith(dup);
+  assert.equal(honest.status, 1);
+  assert.match(honest.stdout, /RED — id failed/);
+  assert.match(honest.stdout, /duplicate/);
+
+  const laundered = runWith(dup, "# an empty decoy\n", "decoy.md");
+  assert.equal(laundered.status, 1, "a duplicate id must not become GREEN by naming another file");
+  assert.match(laundered.stdout, /RED — canon-arg failed/);
+  assert.doesNotMatch(laundered.stdout, /GREEN/);
+});
+
+test("GREEN: a `./`-prefixed relative canon arg is NORMALIZED, not refused", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pharn-prov-prod-"));
+  try {
+    const candPath = join(dir, "candidate.json");
+    writeFileSync(candPath, JSON.stringify(VALID));
+    // Run with cwd = dir so the relative path resolves there; `./` must not read as an extra segment.
+    mkdirSync(join(dir, "memory-bank"), { recursive: true });
+    writeFileSync(join(dir, "memory-bank", "lessons-learned.md"), CANON);
+    const r = spawnSync(process.execPath, [CHECK, candPath, "./memory-bank/lessons-learned.md"], {
+      encoding: "utf8",
+      cwd: dir,
+    });
+    assert.equal(r.status, 0, r.stdout);
+    assert.match(r.stdout, /GREEN/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("RED: a RELATIVE canon arg with an EXTRA leading segment is refused — relative form demands EQUALITY", () => {
+  // The bound stated in the checker: a relative argv[3] must EQUAL the declared target segment-wise, so
+  // `foo/memory-bank/lessons-learned.md` is NOT admitted by the suffix rule that governs absolute paths.
+  // Probed against the live checker rather than read off it (L37).
+  const dir = mkdtempSync(join(tmpdir(), "pharn-prov-prod-"));
+  try {
+    const candPath = join(dir, "candidate.json");
+    writeFileSync(candPath, JSON.stringify(VALID));
+    mkdirSync(join(dir, "foo", "memory-bank"), { recursive: true });
+    writeFileSync(join(dir, "foo", "memory-bank", "lessons-learned.md"), CANON);
+    const r = spawnSync(process.execPath, [CHECK, candPath, "foo/memory-bank/lessons-learned.md"], {
+      encoding: "utf8",
+      cwd: dir,
+    });
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /RED — canon-arg failed/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// The ABSOLUTE branch is a DISTINCT code path from the relative one — a suffix test, not equality — and
+// the promote commands explicitly support absolute canon paths. Raised by an automated review of this PR:
+// every binding test above exercised only relative paths, so a regression in the suffix branch could ship
+// while the suite stayed green. Both directions are probed against the live checker (L37).
+test("GREEN: an ABSOLUTE canon arg ENDING in the declared target at a segment boundary is admitted", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pharn-prov-prod-"));
+  try {
+    const candPath = join(dir, "candidate.json");
+    writeFileSync(candPath, JSON.stringify(VALID));
+    mkdirSync(join(dir, "memory-bank"), { recursive: true });
+    const abs = join(dir, "memory-bank", "lessons-learned.md");
+    writeFileSync(abs, CANON);
+    // Deliberately run from an UNRELATED cwd: the absolute form must be cwd-INDEPENDENT by construction.
+    const r = spawnSync(process.execPath, [CHECK, candPath, abs], { encoding: "utf8", cwd: tmpdir() });
+    assert.equal(r.status, 0, r.stdout);
+    assert.match(r.stdout, /GREEN/);
+    assert.doesNotMatch(r.stdout, /canon-arg/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("RED: an ABSOLUTE canon arg whose tail matches only MID-SEGMENT is refused (boundary, not substring)", () => {
+  // `.../memory-bank/xx-lessons-learned.md` ends with the target's characters but NOT at a segment
+  // boundary. A substring-based suffix test would admit it; the segment-wise one must not.
+  const dir = mkdtempSync(join(tmpdir(), "pharn-prov-prod-"));
+  try {
+    const candPath = join(dir, "candidate.json");
+    writeFileSync(candPath, JSON.stringify(VALID));
+    mkdirSync(join(dir, "memory-bank"), { recursive: true });
+    const abs = join(dir, "memory-bank", "xx-lessons-learned.md");
+    writeFileSync(abs, CANON);
+    const r = spawnSync(process.execPath, [CHECK, candPath, abs], { encoding: "utf8", cwd: tmpdir() });
+    assert.equal(r.status, 1, r.stdout);
+    assert.match(r.stdout, /RED — canon-arg failed/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("the binding is GATED on the target enum — a non-member target reports ONE reason, not two", () => {
+  // A false REASON for a true refusal misdirects whoever acts on it (the same discipline the concepts
+  // uniqueness branch keeps). A non-member target is already sufficient; the binding must stay quiet.
+  const r = runWith({ ...VALID, target: "memory-bank/feature-catalog.md" }, CANON, "decoy.md");
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /RED — target failed/);
+  assert.doesNotMatch(r.stdout, /canon-arg/);
+  assert.match(r.stdout, /RED — 1 provenance check\(s\) failed/);
+});
+
 test("★ P2: an instruction-looking needle in title/body does NOT affect the verdict (body is ignored DATA)", () => {
   const r = runWith({
     ...VALID,
@@ -239,7 +383,7 @@ test("GREEN: a not-yet-created canon file means no existing ids (the first-promo
   const dir = mkdtempSync(join(tmpdir(), "pharn-prov-prod-"));
   try {
     const candPath = join(dir, "candidate.json");
-    const canonPath = join(dir, "does-not-exist.md"); // e.g. pattern-library.md before any pattern
+    const canonPath = join(dir, "memory-bank", "pattern-library.md"); // never created: before any pattern
     writeFileSync(candPath, JSON.stringify({ ...VALID, target: "memory-bank/pattern-library.md" }));
     const r = spawnSync(process.execPath, [CHECK, candPath, canonPath], { encoding: "utf8" });
     assert.equal(r.status, 0);
@@ -442,7 +586,8 @@ test("ROUND TRIP: an entry rendered from a GREEN candidate resolves in check-pla
   const dir = mkdtempSync(join(tmpdir(), "pharn-prov-roundtrip-"));
   try {
     const candPath = join(dir, "candidate.json");
-    const canonPath = join(dir, "lessons-learned.md");
+    const canonPath = join(dir, "memory-bank", "lessons-learned.md"); // the DECLARED target (argv[3] is bound to it)
+    mkdirSync(dirname(canonPath), { recursive: true });
     const cand = { ...VALID, id: "L1" };
     writeFileSync(candPath, JSON.stringify(cand));
 

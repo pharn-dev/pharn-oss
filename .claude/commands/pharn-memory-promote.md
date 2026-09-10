@@ -252,6 +252,11 @@ Then run the provenance floor check (the candidate's `commit` must still be the 
 node pharn/floor/check-provenance.mjs .pharn/pharn-memory-promote/candidate.json <canon-file>
 ```
 
+`<canon-file>` **must be the candidate's own declared `target`** — the checker BINDS the two and REDs a
+mismatch (`canon-arg`), because otherwise the duplicate-id check would range over a file the candidate
+never declared. Pass it repo-root-relative (or as an absolute path ending in it); do not substitute a
+scratch copy.
+
 Read its exit code: `0` GREEN (provenance valid, id unique, target in enum, `type`/`concepts` well-shaped) ·
 `1` RED (it prints each failure). **Any RED → HALT and refuse. Do not write, do not "fix it for the human,"
 do not relax a field.** The remedy is to correct the candidate's provenance truthfully and re-run — or to
@@ -429,6 +434,18 @@ provenance-carrying entry. It does not chain to another stage.
   scheme it cannot collide — which is why Step 2 branch 3 halts and asks instead of relying on it.
 - **"The target is one of the two prescription files"** → **FLOOR** (exact array membership; a test pins
   that the enum was not widened to §5's four state files).
+- **"The duplicate-id check ranges over the file the candidate DECLARED"** → **FLOOR** (the canon-arg
+  binding: `check-provenance.mjs` compares argv[3] to `cand.target` segment-wise and REDs a mismatch).
+  This bullet exists because the one above it used to carry the weight alone and could not: the enum test
+  only ever saw `cand.target`, so "the target is one of the two prescription files" read as a claim about
+  the file being CHECKED while the uniqueness verdict ranged over whatever path the caller passed. Measured
+  before the fix — a candidate whose id was already taken in its declared target exited **0 GREEN** against
+  any other file, i.e. a re-used id passed the gate.
+  **NARROWED, and stated:** a relative argument must EQUAL the target; an absolute one need only END with
+  it at a segment boundary, so a same-named file under a different root still matches. It binds the
+  ARGUMENT to the DECLARATION — it does **not** prove the declaration named the RIGHT member (either is
+  admissible; which is apt is the human's read at the accept/deny gate), and it does **not** prove the
+  WRITE lands there. That is fix #7's pre-write hook, a different primitive — the two compose.
 - **"Every promoted candidate carries an enum-member `type` and a well-SHAPED `concepts` list"** → **FLOOR**
   (primitive #3 — exact array membership for `type`; a control-char guard composed with an anchored shape
   regex for each concept). Note the **two clocks**: the checker's _verdict_ is floor, but this command's

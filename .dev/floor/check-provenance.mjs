@@ -16,6 +16,20 @@
 // FLOOR (what the exit code guarantees): a candidate carries VALID, well-shaped provenance, a NON-DUPLICATE
 //   id, a target in the canon enum, an enum-member `type`, and a well-SHAPED `concepts` list. All are
 //   enum / regex / presence / set-membership tests.
+// FLOOR, and this one is newer than the rest — the canon-file ARGUMENT is BOUND to `cand.target`
+//   (canonArgMatchesTarget, below). Before it, the uniqueness verdict ranged over whatever file the
+//   CALLER named while the enum test only ever saw the DECLARATION, so the two could disagree and a
+//   re-used id passed. Say what it buys precisely: the file this checker READ is the file the candidate
+//   DECLARED. It does NOT prove the declaration is the RIGHT one of the two members (a candidate may
+//   honestly declare either; which is apt stays the human's read at the accept/deny gate), and it does
+//   NOT prove the WRITE lands there — that is the fix #7 pre-write hook, a different primitive.
+// WHY THE TWO COPIES NOW AGREE ON THREE MORE BEHAVIOURS (L31 — the copy-pair lesson's own instance).
+//   `isGregorianDate()` and the whitespace-free id check shipped in the PRODUCT copy and never reached
+//   this one, for a whole release line, while the ✧ cross-copy guard stayed green — because that guard
+//   compared `const` DECLARATIONS and both patches live in the validation BODY. The pair's CODE was
+//   pinned; the pair's BEHAVIOUR had no enumeration anywhere. `CROSS_COPY_BEHAVIOURS` in
+//   check-provenance.test.mjs is that missing enumeration, and it is a PRESENCE set: it pins the
+//   behaviours a review NAMED and structurally cannot discover an unnamed divergence (L36).
 // ADVISORY (what it can NEVER check): whether the lesson is TRUE, GENERAL, or WORTH canonizing — and,
 //   since this increment added them, whether the `type` and `concepts` VALUES actually DESCRIBE the entry.
 //   A candidate typed `floor` about something else entirely passes this checker. "The entry is typed
@@ -58,6 +72,7 @@
 // Exit: 1 on any RED (prints each), 0 + "GREEN — ..." otherwise.
 
 import { readFileSync, existsSync } from "node:fs";
+import { isAbsolute } from "node:path";
 
 // Enums / shapes — every branch is a membership / regex / presence test (P5); the terminal fallback on any
 // non-member is a loud RED, never a guess. These are the enum-gated / floor-verifiable fields (never body).
@@ -65,6 +80,56 @@ const TARGET_ENUM = [".dev/memory-bank/lessons-learned.md", ".dev/memory-bank/pa
 const REQUIRED_PROVENANCE = ["feature", "commit", "source", "date"]; // Q2: the mandatory per-entry schema
 const COMMIT_RE = /^[0-9a-f]{7,40}$/; // a git SHA (short or full); the real value is captured by the command via `git rev-parse HEAD`
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/; // ISO calendar date
+
+// Shape match is necessary but not sufficient: DATE_RE admits 2026-02-30. Round-trip through the
+// local-date constructor — no timezone offset — so an impossible month/day rolls forward and fails.
+function isGregorianDate(s) {
+  const m = DATE_RE.exec(s);
+  if (!m) return false;
+  const y = Number(s.slice(0, 4));
+  const mo = Number(s.slice(5, 7));
+  const d = Number(s.slice(8, 10));
+  const dt = new Date(y, mo - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d;
+}
+
+// ── The canon-arg BINDING: argv[3] must NAME the file `cand.target` declares ─────────────────────────
+// Without this, the duplicate-id check (3) below ranges over WHATEVER FILE THE CALLER NAMED, while the
+// enum test (1) only ever sees `cand.target` — so "the target is one of the two prescription files" read
+// as a claim about the file that gets CHECKED, and it was not one. MEASURED before the fix (never
+// inferred): a candidate declaring `.dev/memory-bank/lessons-learned.md` with an id ALREADY taken there
+// exited 0 GREEN when argv[3] named any other file. A real duplicate passed the gate.
+//
+// Purely lexical, primitive #3: split on either separator and drop "" and "." segments. A ".." segment is
+// KEPT literally rather than resolved, and since no TARGET_ENUM member contains one it can never match
+// inside the compared tail. No filesystem access, no symlink resolution, no cwd read — the comparison is
+// over this one invocation's own two inputs (an argv string and an already-enum-gated JSON field), which
+// is why it is the EXISTING enum/regex primitive and not the cross-FILE equality primitive
+// check-ship-briefing.mjs introduced.
+function pathSegments(p) {
+  return String(p)
+    .split(/[\\/]+/)
+    .filter((s) => s !== "" && s !== ".");
+}
+
+// RELATIVE argv[3] → segment-wise EQUALITY with the declared target. That is the shape the promote
+// command passes (run from the repo root), and the two strings are the same KIND of thing — both
+// repo-root-relative — so equality is the honest test, and `foo/memory-bank/lessons-learned.md` is RED.
+// ABSOLUTE argv[3] → the target must be a segment-aligned SUFFIX. An absolute path cannot EQUAL a
+// repo-relative declaration, and resolving it against `process.cwd()` would silently make the verdict
+// depend on the caller's working directory; the suffix is the strongest cwd-INDEPENDENT test available.
+// NARROWED, and stated rather than left for a reader to discover: the suffix form therefore admits a
+// same-named file under a DIFFERENT root. It binds the ARGUMENT to the DECLARATION; it does not prove
+// the file sits under this repo, and it never proves the WRITE lands there — that is fix #7's hook.
+function canonArgMatchesTarget(canonPath, target) {
+  const want = pathSegments(target);
+  const got = pathSegments(canonPath);
+  if (want.length === 0) return false;
+  if (!isAbsolute(canonPath)) return got.length === want.length && want.every((s, i) => got[i] === s);
+  if (got.length < want.length) return false;
+  const tail = got.slice(got.length - want.length);
+  return want.every((s, i) => tail[i] === s);
+}
 
 // The entry TAXONOMY. This array is the SINGLE SOURCE OF TRUTH for the `type` enum (P4): the
 // `/pharn-dev-memory-promote` doc restates the member list once, for a human drafting a candidate, and
@@ -173,6 +238,21 @@ function main() {
     red("target", `target ${JSON.stringify(cand.target)} not in {${TARGET_ENUM.join(", ")}}`);
   }
 
+  // (1b) the canon-file ARGUMENT names the DECLARED target — the binding that makes check (3) below a
+  //      statement about `cand.target` rather than about whatever the caller happened to pass.
+  //      GATED ON (1) PASSING, deliberately: a non-member target is already a loud RED carrying a true
+  //      and sufficient reason, and emitting a second RED for the same root cause would misdirect whoever
+  //      acts on it — the same "a false REASON for a true refusal" discipline the concepts branch keeps.
+  if (TARGET_ENUM.includes(cand.target) && !canonArgMatchesTarget(canonPath, cand.target)) {
+    red(
+      "canon-arg",
+      `the canon-file argument does not name the declared target: argv[3] is ${JSON.stringify(canonPath)} ` +
+        `but target is ${JSON.stringify(cand.target)}. The duplicate-id check would otherwise range over a ` +
+        `file this candidate never declared, so a re-used id could pass. Pass the declared target as the ` +
+        `canon-file argument (repo-root-relative, or an absolute path ending in it), or correct the target.`
+    );
+  }
+
   // (2) provenance present + shape — the mandatory per-entry schema (ARCHITECTURE §5; Q2). A candidate
   //     missing or malforming any field is REJECTED deterministically, before any write.
   const p = cand.provenance;
@@ -191,8 +271,12 @@ function main() {
     if ("commit" in p && !(typeof p.commit === "string" && COMMIT_RE.test(p.commit))) {
       red("provenance", `commit must match ${COMMIT_RE} (a git SHA, 7–40 hex), got ${JSON.stringify(p.commit)}`);
     }
-    if ("date" in p && !(typeof p.date === "string" && DATE_RE.test(p.date))) {
-      red("provenance", `date must match ${DATE_RE} (YYYY-MM-DD), got ${JSON.stringify(p.date)}`);
+    if ("date" in p) {
+      if (!(typeof p.date === "string" && DATE_RE.test(p.date))) {
+        red("provenance", `date must match ${DATE_RE} (YYYY-MM-DD), got ${JSON.stringify(p.date)}`);
+      } else if (!isGregorianDate(p.date)) {
+        red("provenance", `date ${JSON.stringify(p.date)} is not a valid Gregorian calendar date`);
+      }
     }
   }
 
@@ -201,8 +285,11 @@ function main() {
   if (!nonEmptyString(cand.id)) {
     red("id", `id must be a non-empty string, got ${JSON.stringify(cand.id)}`);
   } else {
-    const id = String(cand.id).trim();
-    if (existingIds(canonPath).includes(id)) {
+    const raw = String(cand.id);
+    const id = raw.trim();
+    if (/\s/.test(raw)) {
+      red("id", `id must be a whitespace-free single token, got ${JSON.stringify(raw)}`);
+    } else if (existingIds(canonPath).includes(id)) {
       red("id", `id ${JSON.stringify(id)} already exists as a "## ${id}" heading in ${canonPath} — duplicate`);
     }
   }
@@ -247,7 +334,8 @@ function main() {
 
   if (reds.length) return fail();
   console.log(
-    `GREEN — provenance valid; id ${JSON.stringify(String(cand.id).trim())} is unique in ${canonPath}; ` +
+    `GREEN — provenance valid; id ${JSON.stringify(String(cand.id).trim())} is unique in ${canonPath}, ` +
+      `which is the declared target ${JSON.stringify(cand.target)}; ` +
       `type ${JSON.stringify(cand.type)}, ${cand.concepts.length} concept(s). NOTE (P0): that these VALUES ` +
       `describe the entry is ADVISORY — this checker verifies SHAPE, never aboutness.`
   );
