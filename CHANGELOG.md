@@ -299,7 +299,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   next command's first-step **set** still overwrites a leftover scope either way.
 
 - **The `/pharn-review` dedup key DEGENERATES on the shipped lens set, and nothing said so**
-  (`SKILLS_VERSION` 3.0.9 → **3.1.1**, patch over shipped bytes). `merge-findings.mjs` groups on the
+  (`SKILLS_VERSION` 3.0.9 → **3.0.10**, patch over shipped bytes). `merge-findings.mjs` groups on the
   enum-gated key `(type, rule_id, file)` — sound by design. But **all 22 shipped lenses declare
   `enforces: ["P2"]` and emit `rule_id: P2`**, one value corpus-wide (`44 rule_id: P2`), so the
   `rule_id` term is **constant** and the key collapses to effectively **`(type, file)`**. Any two
