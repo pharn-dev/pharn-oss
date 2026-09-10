@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // pharn/floor/check-loop-record.mjs — the deterministic SHAPE check over a loop-record
-// (`features/<name>/LOOP.md`, the artifact the product `/pharn-loop` writes at every stop).
+// (`pharn/features/<name>/LOOP.md`, the artifact the product `/pharn-loop` writes at every stop).
 //
 // Floor/eval infrastructure — NOT a Capability (no `role:`; it lives in this floor-ignored dir, exactly
 // like check-loop.mjs / check-plan-lessons.mjs / check-attestation.mjs). It is the executable SoT for

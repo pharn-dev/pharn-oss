@@ -7,7 +7,7 @@ coupling: agnostic
 applies: ["universal"]
 model_tier: sonnet
 reads: ["pharn/pharn-contracts/finding-shape.md", "<artifact-under-review>"]
-writes: ["features/<name>/lenses/placeholder-as-done/findings.json"]
+writes: ["pharn/features/<name>/lenses/placeholder-as-done/findings.json"]
 constitution_refs: ["P0", "P2", "P4", "P5", "P7"]
 enforces: ["P2"]
 version: "0.1.0"
@@ -139,7 +139,7 @@ never gates: the review stage **surfaces** the finding, it does not block on it.
 ## Machine-readable emission (`findings.json`)
 
 Alongside the human-facing `REVIEW.md`, the lens serializes its findings as a single
-`features/placeholder-as-done/findings.json` — the JSON array defined by `pharn/pharn-contracts/finding-shape.md`
+`pharn/features/placeholder-as-done/findings.json` — the JSON array defined by `pharn/pharn-contracts/finding-shape.md`
 §Emission (the enum-gated / free-text split as real JSON field boundaries; cited, not restated — P4), with that path
 declared in this lens's `writes:` (fix #7). On the emitted array the no-laundering trip-wire is the floor form
 checked by `pharn/floor/check-structural.mjs` (`needle_absent_from_enum_gated`: no needle from the untrusted input

@@ -7,7 +7,7 @@ coupling: agnostic
 applies: ["universal"]
 model_tier: sonnet
 reads: ["pharn/pharn-contracts/finding-shape.md", "<the PLAN.md under interrogation>"]
-writes: ["features/<name>/findings.json"]
+writes: ["pharn/features/<name>/findings.json"]
 constitution_refs: ["P0", "P2", "P4", "P5", "P6", "P7"]
 enforces: ["P6"]
 version: "0.1.0"
@@ -169,7 +169,7 @@ block on them (the grill stage's deterministic stops are the spec→plan hash ch
 Per `pharn/pharn-contracts/finding-shape.md` §Emission, a finding-emitting capability serializes its findings as the
 JSON array declared in `writes:` (the enum-gated / free-text split as real JSON field boundaries; cited, not
 restated — P4). **In-loop today**, the grill stage runs this griller and folds its findings into
-`features/<name>/GRILL.md` (advisory); the standalone `findings.json` path in `writes:` is finalized when the
+`pharn/features/<name>/GRILL.md` (advisory); the standalone `findings.json` path in `writes:` is finalized when the
 **live griller runner** lands (deferred P7 — exactly as the testability / architecture / security /
 error-handling grillers defer it). No half-specified runner is built here.
 

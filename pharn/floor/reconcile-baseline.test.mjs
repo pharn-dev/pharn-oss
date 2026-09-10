@@ -55,14 +55,14 @@ test("★ the reconciled set is tracked ∪ untracked-not-ignored — git-ignore
 test("★ the scope is SNAPSHOTTED into the record, not left to be read live (L38)", () => {
   const dir = makeRepo();
   mkdirSync(join(dir, ".pharn"), { recursive: true });
-  writeFileSync(join(dir, SCOPE_PATH), JSON.stringify({ scope: ["a.md", "b.md"], set_by: "features/x/PLAN.md", set_at: "T" }));
+  writeFileSync(join(dir, SCOPE_PATH), JSON.stringify({ scope: ["a.md", "b.md"], set_by: "pharn/features/x/PLAN.md", set_at: "T" }));
   const built = buildRecord(dir, "test");
   assert.ok(built.ok);
   assert.deepEqual(built.record.scope_snapshot.scope, ["a.md", "b.md"]);
-  assert.equal(built.record.scope_snapshot.set_by, "features/x/PLAN.md");
+  assert.equal(built.record.scope_snapshot.set_by, "pharn/features/x/PLAN.md");
 
   // The live file changing afterwards must NOT change what the record says — that is the whole point.
-  writeFileSync(join(dir, SCOPE_PATH), JSON.stringify({ scope: ["LATER.md"], set_by: "features/verify/PLAN.md", set_at: "T2" }));
+  writeFileSync(join(dir, SCOPE_PATH), JSON.stringify({ scope: ["LATER.md"], set_by: "pharn/features/verify/PLAN.md", set_at: "T2" }));
   assert.deepEqual(built.record.scope_snapshot.scope, ["a.md", "b.md"]);
 });
 

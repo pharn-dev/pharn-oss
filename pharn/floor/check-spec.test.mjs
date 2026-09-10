@@ -3,7 +3,7 @@
 // Run as a subprocess (mirrors check-provenance.test.mjs / validate.test.mjs) so check-spec.mjs keeps its
 // dependency-free, top-level-exec contract: we assert only on its public surface (exit code + RED/GREEN
 // stdout, or the printed hash). Inputs are written to a fresh temp dir per run — no committed fixtures, and
-// nothing touches the real features/ tree.
+// nothing touches the real pharn/features/ tree.
 //
 // The ★ test (needle-in-intent-is-ignored) is the one that proves the P0/P2 thesis is ENFORCED, not
 // decorative: an instruction-looking payload in the untrusted intent prose does NOT move the verdict, because

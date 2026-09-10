@@ -24,7 +24,7 @@
 
   "pipeline_artifacts": {
     "why": "A stage's OWN artifact legitimately changes after the build's anchor — /pharn-verify writes VERIFY.md, /pharn-review writes findings.json, and the PLAN.md that SOURCED the scope is itself edited when a plan is corrected. None of these is in the build's scope (a plan is the scope's SOURCE, not a member), so without this they all read as escapes. That is lessons-learned L17 exactly: a changed-since-anchor test REPORTED as a wrote-outside-scope test, producing a BLOCKING finding on the correct, designed workflow — which trains an operator to wave through the one finding that must never be waved through.",
-    "shape": "Exempt iff the path is `features/<slug>/<name>` or `.dev/features/<slug>/<name>` where <name> is an EXACT member of `names` below, or matches `lenses/<lens>/findings.json` under the same prefix. <slug> is one path segment and may not be `.` or `..`. Deliberately NOT a `**` glob over the feature dir: a stray or unexpected file there is still REPORTED.",
+    "shape": "Exempt iff the path is `pharn/features/<slug>/<name>` or `.dev/features/<slug>/<name>` where <name> is an EXACT member of `names` below, or matches `lenses/<lens>/findings.json` under the same prefix. <slug> is one path segment and may not be `.` or `..`. Deliberately NOT a `**` glob over the feature dir: a stray or unexpected file there is still REPORTED.",
     "parity": "`names` is a deliberate copy of PIPELINE_ARTIFACTS in pharn/floor/check-regress.mjs, which derives it from what the commands actually declare. check-bash-reconcile.test.mjs pins the two set-equal — the same discipline check-build-complete.mjs uses against the writes-scope setter.",
     "names": [
       "SPEC.md",

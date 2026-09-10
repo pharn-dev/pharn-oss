@@ -7,7 +7,7 @@ coupling: agnostic
 applies: ["universal"]
 model_tier: sonnet
 reads: ["pharn/pharn-contracts/finding-shape.md", "pharn/ARCHITECTURE.md", "<the PLAN.md under interrogation>"]
-writes: ["features/<name>/findings.json"]
+writes: ["pharn/features/<name>/findings.json"]
 constitution_refs: ["P0", "P2", "P3", "P4", "P5", "P7"]
 enforces: ["P3"]
 version: "0.1.0"
@@ -153,7 +153,7 @@ assessment (fix #3), and grillers as a class never gate.
 Per `pharn/pharn-contracts/finding-shape.md` §Emission, a finding-emitting capability serializes its findings
 as the JSON array declared in `writes:` (the enum-gated / free-text split as real JSON field boundaries;
 cited, not restated — P4). **In-loop today**, the grill stage runs this griller and folds its findings
-into `features/<name>/GRILL.md` (advisory); the standalone `findings.json` path in `writes:` is finalized
+into `pharn/features/<name>/GRILL.md` (advisory); the standalone `findings.json` path in `writes:` is finalized
 when the **live griller runner** lands (deferred P7 — exactly as every existing griller defers it). No
 half-specified runner is built here, and the `writes:` path is **not** an active guarantee that
 `findings.json` is produced until that runner lands.

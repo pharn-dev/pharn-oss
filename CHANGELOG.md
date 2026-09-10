@@ -1274,6 +1274,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed — BREAKING
 
+- **Relocated the product pipeline artifact root from `features/` to `pharn/features/`. `SKILLS_VERSION` `4.0.0` → `5.0.0`.** Requires `@pharn-dev/pharn` **0.5.0** or later (`MIN_CLI`). Product commands, capabilities, floor checkers, contracts, and the fail-closed writes-scope default now target `pharn/features/<name>/`; root `features/` is no longer in the install safe-set. `.dev/features/` (the build loop) is unchanged. Coordinated with pharn-cli layout/install/update migration advisory.
+
 - **A Bash write outside the declared writes-scope is now DETECTED, and fails `/pharn-verify`. `SKILLS_VERSION` `3.2.1` → `4.0.0`** ([`pharn/floor/check-bash-reconcile.mjs`](./pharn/floor/check-bash-reconcile.mjs), [`pharn/floor/reconcile-baseline.mjs`](./pharn/floor/reconcile-baseline.mjs), [`pharn/pharn-contracts/reconciliation-record.md`](./pharn/pharn-contracts/reconciliation-record.md), [`.dev/features/bash-write-reconciler/`](./.dev/features/bash-write-reconciler/)).
 
   **The gap.** Both `PreToolUse` guards match `Write|Edit|MultiEdit|NotebookEdit`, so a write issued through **`Bash`** reaches every path in the repo, is not denied, and — no `PostToolUse` hook being wired — leaves no record. `LIMITS.md §6` states that bound. `lessons-learned` **L19** named it on 2026-08-05 with a **discipline-only** remedy; **L20**'s rule is that such a remedy WILL recur and the **second** occurrence earns a floor check. It recurred at least three times (L19's own repo-wide-formatter case, **L38**'s writes-scope contention, and `/pharn-*memory-promote`'s `docs/lessons-index.md` generator write), so the trigger is met and is **not** manufactured.

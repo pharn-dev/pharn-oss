@@ -2,7 +2,7 @@
 name: regression-report
 trust: trusted
 layer: pharn-contracts
-purpose: "Single source of truth for the machine regression-report — the features/<name>/regression-report.json /pharn-regress and /pharn-dev-regress emit at the regress stage. Schema only, zero behavior. Defines the ONE floor-relevant field (`verdict`, enum-gated at four live consumer sites) versus the rest of the object, which is ADVISORY shape documentation no floor op reads (pharn/ARCHITECTURE.md §6; P0, P2)."
+purpose: "Single source of truth for the machine regression-report — the pharn/features/<name>/regression-report.json /pharn-regress and /pharn-dev-regress emit at the regress stage. Schema only, zero behavior. Defines the ONE floor-relevant field (`verdict`, enum-gated at four live consumer sites) versus the rest of the object, which is ADVISORY shape documentation no floor op reads (pharn/ARCHITECTURE.md §6; P0, P2)."
 ---
 
 # Contract — regression-report
@@ -21,7 +21,7 @@ purpose: "Single source of truth for the machine regression-report — the featu
 > regression-report" therefore does **not** mean "the regression-report's shape is guaranteed" — that
 > inference is the exact disease this repo exists to prevent.
 
-The regression-report is `features/<name>/regression-report.json` (product) /
+The regression-report is `pharn/features/<name>/regression-report.json` (product) /
 `.dev/features/<name>/regression-report.json` (dev) — the machine half of the regress stage, written
 beside the human-facing `REGRESSION.md`. It is `pharn/floor/check-regress.mjs`'s **`verdict` subcommand**
 stdout **verbatim**; unlike the verify-report, the emitting command merges **nothing** into it.

@@ -12,7 +12,7 @@ purpose: "Single source of truth for the GATE-2 briefing artifact /pharn-ship wr
 > do not restate its semantics (P4). It elaborates `pharn/ARCHITECTURE.md §6` (the `ship` stage); the
 > principles (P0, P2, P5) live in `pharn/CONSTITUTION.md`.
 
-`BRIEFING.md` (`features/<name>/BRIEFING.md`) answers, on one screen, what a reviewer needs before
+`BRIEFING.md` (`pharn/features/<name>/BRIEFING.md`) answers, on one screen, what a reviewer needs before
 opening any other file: **what** was built, **why this design** (when recoverable), and whether it
 **matches what was asked** — the three floor-adjacent verdicts already computed by upstream stages. It is
 a **sibling** of `SHIP.md`, never a replacement: `SHIP.md` remains the thin roll-up of record; `BRIEFING.md`
@@ -37,7 +37,7 @@ design` section MAY carry a model-synthesized paragraph under the heading `## Wh
 ## The object
 
 ```yaml
-briefing: # features/<name>/BRIEFING.md — a markdown file with `---`-fenced frontmatter
+briefing: # pharn/features/<name>/BRIEFING.md — a markdown file with `---`-fenced frontmatter
   feature: "<name>" # the feature slug
   spec_id: "<id>" | "n/a" # "n/a" ONLY when the source SPEC.md is absent (e.g. a dev-loop render)
   spec_state: "Approved" | "n/a"

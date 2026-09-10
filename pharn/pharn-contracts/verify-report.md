@@ -2,7 +2,7 @@
 name: verify-report
 trust: trusted
 layer: pharn-contracts
-purpose: "Single source of truth for the machine verify-report — the features/<name>/verify-report.json /pharn-verify and /pharn-dev-verify emit at the verify stage. Schema only, zero behavior. Defines the ONE floor-relevant field (`verdict`, enum-gated at four live consumer sites) versus the rest of the object, which is ADVISORY shape documentation no floor op reads (pharn/ARCHITECTURE.md §6; P0, P2)."
+purpose: "Single source of truth for the machine verify-report — the pharn/features/<name>/verify-report.json /pharn-verify and /pharn-dev-verify emit at the verify stage. Schema only, zero behavior. Defines the ONE floor-relevant field (`verdict`, enum-gated at four live consumer sites) versus the rest of the object, which is ADVISORY shape documentation no floor op reads (pharn/ARCHITECTURE.md §6; P0, P2)."
 ---
 
 # Contract — verify-report
@@ -21,7 +21,7 @@ purpose: "Single source of truth for the machine verify-report — the features/
 > verify-report" therefore does **not** mean "the verify-report's shape is guaranteed" — that inference is
 > the exact disease this repo exists to prevent.
 
-The verify-report is `features/<name>/verify-report.json` (product) / `.dev/features/<name>/verify-report.json`
+The verify-report is `pharn/features/<name>/verify-report.json` (product) / `.dev/features/<name>/verify-report.json`
 (dev) — the machine half of the verify stage, written beside the human-facing `VERIFY.md`. Its
 `feature` / `gates` / `verdict` / `failing_gates` fields are `pharn/floor/check-verify.mjs`'s stdout
 **verbatim**; the emitting command merges the advisory blocks in afterwards.

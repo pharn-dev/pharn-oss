@@ -29,7 +29,7 @@ docs) from **the apparatus used to build it** (under `.dev/`):
   deterministic checkers + their tests that the `/pharn-*` product commands run on a user's code). Two of the
   four trusted docs live here too (`pharn/CONSTITUTION.md`, `pharn/ARCHITECTURE.md`); the other two
   (`THREAT-MODEL.md`, `LIMITS.md`), `README`/`LICENSE`/`CHANGELOG`/`SECURITY`, `pharn.config.json`, and a
-  root-level `features/` for **product-pipeline** artifacts (`SPEC.md`, …) sit at the root. This is what a user clones.
+  product-pipeline artifacts under `pharn/features/` (`SPEC.md`, …) sit at the root. This is what a user clones.
 - **Build apparatus (`.dev/`):** `.dev/floor/` (dev-only checkers — `check-provenance`, `check-variance`,
   `check-config` — with their tests; the `scan-plan-*` grill-scanners **moved to `pharn/floor/` in 2.4.0**,
   because the grillers that invoke them ship), `.dev/features/` (build-loop audit
@@ -190,7 +190,7 @@ node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 node pharn/floor/reconcile-baseline.mjs --anchor [--base <dir>] [--by <label>]
 node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
 
-# Check the SHAPE of a loop-record — the features/<name>/LOOP.md that /pharn-loop writes at every stop.
+# Check the SHAPE of a loop-record — the pharn/features/<name>/LOOP.md that /pharn-loop writes at every stop.
 # Floor: the frontmatter envelope (`decision` in {STOP_GREEN, STOP_CAP, STOP_TERMINAL, INCONCLUSIVE};
 # `iterations` a positive integer; `commit` a git SHA or the literal `unknown`; `date` ISO YYYY-MM-DD)
 # plus an unambiguous `## Handoff` — exactly `### investigated`, `### learned`, `### next_steps`, in that
@@ -199,7 +199,7 @@ node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
 # NOT an input to check-loop.mjs — the record can never influence the stop. Exits non-zero on RED.
 node pharn/floor/check-loop-record.mjs <LOOP.md>
 
-# Render / cross-verify the GATE-2 briefing artifact (features/<name>/BRIEFING.md) /pharn-ship writes
+# Render / cross-verify the GATE-2 briefing artifact (pharn/features/<name>/BRIEFING.md) /pharn-ship writes
 # alongside SHIP.md. render-ship-briefing.mjs is Node stdlib only, no LLM call: every enum-gated
 # frontmatter field is a verbatim copy of a value already in a committed source file (SPEC/PLAN
 # frontmatter, regression-report.json, verify-report.json, GRILL.md's own verdict line), or the literal
@@ -445,7 +445,7 @@ the rule has to be the thing that holds.
   (`--from-frontmatter <cap.md>`) or, for `/pharn-dev-build`, the plan's `## Files` (`--from-plan <PLAN.md>`).
   The scope is **parsed deterministically** (P0/P5) — no model picks it.
 - **Fail-closed.** With no scope file, only a default-safe-set is writable (other `.pharn/**` — not
-  `writes-scope.json`, which is setter-only — `features/**`, `.dev/features/**`, `pharn/pharn-*/**` — which
+  `writes-scope.json`, which is setter-only — `pharn/features/**`, `.dev/features/**`, `pharn/pharn-*/**` — which
   matches the relocated module dirs but **not** `pharn/floor/` or the `pharn/` trusted docs); `.dev/memory-bank/**`,
   `.dev/floor/**`, `pharn/floor/**`, `.claude/**`, and root files are **denied** until an explicit `writes:`
   declaration names them. A **set** scope is authoritative — it replaces the safe-set for non-`.pharn` zones — so
@@ -568,7 +568,7 @@ framework-specific`), via the first-match-wins procedure in `pharn/ARCHITECTURE.
   always "what forces this content to change," never "what _is_ auth."
 - **Every PLAN declares `applied_lessons` (floor-checked).** Both plan stages read the memory-bank's
   `lessons-learned.md` and emit the field in the PLAN's **structured header** — YAML frontmatter for a
-  product `features/<name>/PLAN.md`, the leading `- key: value` bullet block for a dev
+  product `pharn/features/<name>/PLAN.md`, the leading `- key: value` bullet block for a dev
   `.dev/features/<name>/PLAN.md`. The value is `none` **or** a list of `L<n>` ids, each cited id getting
   one body line saying **how** it was applied. `pharn/floor/check-plan-lessons.mjs` enforces
   presence + shape + id-existence + **body-reference**; **omission is not the escape — the value `none`

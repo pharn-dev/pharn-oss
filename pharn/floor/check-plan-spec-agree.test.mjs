@@ -4,7 +4,7 @@
 // Run as a subprocess (mirrors check-spec-approved.test.mjs / check-spec.test.mjs) so the checker keeps its
 // dependency-free, top-level-exec contract: we assert only on its public surface (exit code + RED/GREEN
 // stdout). Inputs are written to a fresh temp dir per run — no committed fixtures, nothing touches the real
-// features/ tree. Because the checker shells to check-spec-approved.mjs and check-spec.mjs (resolved
+// pharn/features/ tree. Because the checker shells to check-spec-approved.mjs and check-spec.mjs (resolved
 // relative to its OWN dir), these tests also exercise that reuse end-to-end.
 //
 // The brief-required cases are the chain guarantee made testable: chain holds (plan hash == spec hash, spec

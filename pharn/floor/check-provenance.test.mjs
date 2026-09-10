@@ -44,7 +44,7 @@ const VALID = {
   provenance: {
     feature: "checkout-flow",
     commit: "abc1234",
-    source: "features/checkout-flow/REVIEW.md F1",
+    source: "pharn/features/checkout-flow/REVIEW.md F1",
     date: "2026-06-26",
   },
   title: "Some lesson title",

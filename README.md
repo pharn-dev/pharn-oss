@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-4.0.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-5.0.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -167,7 +167,7 @@ your-repo/
 │   ├── pharn-pipeline/grillers/   # plan interrogators
 │   └── pharn-review/              # code lenses
 ├── pharn.config.json              # skills version + installed commit + models.stages
-├── features/<name>/               # per increment, written as you run the pipeline:
+├── pharn/features/<name>/               # per increment, written as you run the pipeline:
 │                                  # SPEC PLAN GRILL BUILD REGRESSION VERIFY SHIP — commit these
 └── .pharn/                        # runtime scratch — add to .gitignore
 ```
@@ -432,7 +432,7 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   Makefile target and a compiled binary are all equally visible to it, and none is special-cased.
 - **The write-scope guard's fail-closed default does not cover your source.** Where
   `enforce-writes-scope.cjs` is wired and no scope is active, Claude Code's
-  Write/Edit/MultiEdit/NotebookEdit tools may write only `features/**` in an installed project — PHARN's
+  Write/Edit/MultiEdit/NotebookEdit tools may write only `pharn/features/**` in an installed project — PHARN's
   pipeline artifact directory. In PHARN's own dev repo (`.dev/floor/` present AND no `skillsVersion` in
   `pharn.config.json`), the default also admits `.dev/features/**` and `pharn/pharn-*/**`. **`.pharn/**` is
   writable too, but it is not part of that default** — it is the gitignored runtime-state directory the
@@ -445,7 +445,7 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   run. Clearing the scope (`set-writes-scope.cjs --clear`, or deleting `.pharn/writes-scope.json`) returns
   to this default; it does **not** re-open your source. To write elsewhere, either set a scope that names
   those paths (`set-writes-scope.cjs --from-plan <PLAN.md>`) — noting that a set scope **replaces** this
-  default rather than adding to it, so a scope naming `src/app.ts` also stops `features/**` from being
+  default rather than adding to it, so a scope naming `src/app.ts` also stops `pharn/features/**` from being
   writable — or leave `enforce-writes-scope.cjs` out of `.claude/settings.json`, at the cost of `writes:`
   enforcement.
 - **The memory-bank denylist covers the write-tool surface only — Bash still reaches canon.**

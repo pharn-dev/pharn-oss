@@ -4,7 +4,7 @@
 // Run as a subprocess (mirrors check-plan-spec-agree.test.mjs / check-spec.test.mjs) so the checker keeps
 // its dependency-free, top-level-exec contract: we assert only on its public surface (exit code +
 // RED/GREEN stdout). Inputs are written to a fresh temp dir per run — no committed fixtures, nothing
-// touches the real features/ or memory-bank trees.
+// touches the real pharn/features/ or memory-bank trees.
 //
 // The brief-required acceptance rows are the guarantee made testable: a plan with NO field → RED; a
 // nonexistent id (`[L99]`) → RED NAMING L99; `none` with no lessons file at all → GREEN; a well-formed

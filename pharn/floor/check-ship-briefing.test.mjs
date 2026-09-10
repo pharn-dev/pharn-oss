@@ -1,7 +1,7 @@
 // pharn/floor/check-ship-briefing.test.mjs — black-box tests for the deterministic ship-briefing
 // cross-file checker. Run as a subprocess (mirrors check-loop-record.test.mjs / check-provenance.test.mjs)
 // so the checker keeps its dependency-free, top-level-exec contract. Fixtures live in a fresh temp dir per
-// test — nothing touches the real features/ tree.
+// test — nothing touches the real pharn/features/ tree.
 //
 // ✧ PARITY — check-ship-briefing.mjs duplicates three field readers from render-ship-briefing.mjs (P3, no
 //   sibling import). This group asserts both copies produce IDENTICAL output across a shared fixture set,

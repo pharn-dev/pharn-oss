@@ -1,7 +1,7 @@
-# features/ — product-loop artifacts (what a PHARN user produces)
+# pharn/features/ — product-loop artifacts (what a PHARN user produces)
 
 Each increment a **PHARN user** runs through the product pipeline gets one folder here —
-`features/<feature-name>/` — holding its **process and audit artifacts**:
+`pharn/features/<feature-name>/` — holding its **process and audit artifacts**:
 
 - `SPEC.md` — intent (Draft → Approved), the root artifact every downstream stage carries `spec_id` from
   (`ARCHITECTURE.md §6`)
@@ -11,7 +11,7 @@ regress → verify → ship`)
 This mirrors `.dev/features/` — but for the **product loop**, not the build loop. The split is the
 dev/product boundary made structural:
 
-- **root `features/`** (here) = what a PHARN **user** produces with the `pharn-*` product commands;
+- **`pharn/features/`** (here) = what a PHARN **user** produces with the `pharn-*` product commands;
 - **`.dev/features/`** = the audit trail of **building PHARN itself**, with the `pharn-dev-*` commands
   (contributor apparatus — see `.dev/features/README.md`).
 

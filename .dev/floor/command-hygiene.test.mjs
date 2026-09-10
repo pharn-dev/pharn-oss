@@ -926,12 +926,12 @@ test("✧ RULE B DISCRIMINATES — a fourth placeholder spliced into the REAL wr
   // `writes:` string against a hand-written regex would have stayed green even if `writesEntries` had
   // stopped finding the line at all.
   const body = commandBody("pharn-ship.md");
-  const mutant = body.replace(/^writes:.*$/m, (l) => l.replace(/\]\s*$/, `, "features/<name>/NEVER-SCOPED.md"]`));
+  const mutant = body.replace(/^writes:.*$/m, (l) => l.replace(/\]\s*$/, `, "pharn/features/<name>/NEVER-SCOPED.md"]`));
   assert.notEqual(mutant, body, "the mutation must actually change the body, or this test is vacuous (L34)");
   const entries = writesEntries(mutant).filter(isScopeablePlaceholder);
-  assert.ok(entries.includes("features/<name>/NEVER-SCOPED.md"), "the guard must SEE the spliced entry — else it proves nothing");
+  assert.ok(entries.includes("pharn/features/<name>/NEVER-SCOPED.md"), "the guard must SEE the spliced entry — else it proves nothing");
   assert.ok(
-    !targetValues(mutant).has("features/<name>/NEVER-SCOPED.md"),
+    !targetValues(mutant).has("pharn/features/<name>/NEVER-SCOPED.md"),
     "the guard must catch a declared path that is never passed as a --target — otherwise it certifies by not looking"
   );
 });
@@ -940,7 +940,7 @@ test("✧ the placeholder predicate DISCRIMINATES — it admits real scopeable p
   // L36/L29: the predicate is the part that decides Rule B's DOMAIN, so pinning it directly is what
   // stops a future loosening from silently emptying the rule. Every rejected string below is a REAL
   // `writes:` entry live in this corpus, not an invented one.
-  assert.ok(isScopeablePlaceholder("features/<name>/SHIP.md"), "a real placeholder path must qualify");
+  assert.ok(isScopeablePlaceholder("pharn/features/<name>/SHIP.md"), "a real placeholder path must qualify");
   assert.ok(isScopeablePlaceholder(".dev/features/<name>/regression-report.json"), "a dev placeholder path must qualify");
   assert.ok(
     !isScopeablePlaceholder("<user-code files named in the plan's ## Files (Phase-1, via --from-plan — not from this list)>"),
@@ -1200,7 +1200,7 @@ test("✧ the reachability rule DISCRIMINATES — it fails on the real pre-fix s
 //
 // It was also WRONG on its face: the 22 lenses declared `features/<lens>/findings.json` and
 // `features/<lens>/REVIEW.md`, while /pharn-review directs each subagent to
-// `features/<name>/lenses/<lens>/findings.json` and writes REVIEW.md ITSELF at Step 6. Two errors in a
+// `pharn/features/<name>/lenses/<lens>/findings.json` and writes REVIEW.md ITSELF at Step 6. Two errors in a
 // field nothing reads, which is exactly how it stayed wrong.
 //
 // HONEST SCOPE (P0): these rules make the declaration TRUTHFUL and keep it truthful. They do NOT make it
@@ -1208,7 +1208,7 @@ test("✧ the reachability rule DISCRIMINATES — it fails on the real pre-fix s
 // enforcement that exists belongs to the invoking COMMAND's scope (or the fail-closed default), is
 // coarser than a per-Capability pin, and is unchanged by this file.
 const LENS_ROOT = join(COMMANDS_DIR, "..", "..", "pharn", "pharn-review");
-const LENS_WRITES_RE = /^writes:\s*\["features\/<name>\/lenses\/([^/"]+)\/findings\.json"\]\s*$/m;
+const LENS_WRITES_RE = /^writes:\s*\["pharn\/features\/<name>\/lenses\/([^/"]+)\/findings\.json"\]\s*$/m;
 
 function lensCapabilityFiles() {
   const out = [];
@@ -1231,7 +1231,7 @@ test("✧ every lens's `writes:` names the path /pharn-review ACTUALLY directs i
   const offenders = [];
   for (const { dir, file, text } of lensCapabilityFiles()) {
     const m = LENS_WRITES_RE.exec(text);
-    if (!m) offenders.push(`${dir} — writes: is not \`["features/<name>/lenses/${dir}/findings.json"]\``);
+    if (!m) offenders.push(`${dir} — writes: is not \`["pharn/features/<name>/lenses/${dir}/findings.json"]\``);
     else if (m[1] !== dir) offenders.push(`${dir} — writes: names lens directory "${m[1]}", not its own "${dir}"`);
     void file;
   }

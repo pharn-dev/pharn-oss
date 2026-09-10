@@ -58,7 +58,7 @@ clone.
   "version": 1,
   "epoch": "2026-09-10T11:33:19.704Z",
   "anchored_by": "pharn-build",
-  "scope_snapshot": { "scope": ["src/app.ts"], "set_by": "features/x/PLAN.md", "set_at": "…" },
+  "scope_snapshot": { "scope": ["src/app.ts"], "set_by": "pharn/features/x/PLAN.md", "set_at": "…" },
   "entry_count": 1759,
   "entries": { "<repo-relative path>": "<sha256 hex>" }
 }
@@ -128,13 +128,13 @@ _legacy records tolerated at read._
 One file, iterated by the rules **and** by the tests (lessons-learned **L29**: when a remedy is
 quantified over a set, the enumeration is the deliverable). Five keys:
 
-| Key                  | What it holds                                                                                                                                                                                                                                                                                  |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `derived_ignore`     | git's own ignore rules — **never re-listed** here (**L35**: retire the second copy). The reconciled set is `tracked ∪ untracked-not-ignored`, so `node_modules/`, `.pharn/`, `runs/` cost nothing                                                                                              |
-| `always_reconciled`  | Never exemptible; falls back to committed blob ids when no baseline exists. A **copy** of the guards' own control-surface sets, pinned set-equal by test                                                                                                                                       |
-| `pipeline_artifacts` | A stage's **own** output (`features/<slug>/PLAN.md`, `VERIFY.md`, `lenses/<lens>/findings.json`, …) — **exact** enum membership, never a `**` glob, so a stray file under the same directory is still reported. A copy of `check-regress.mjs`'s `PIPELINE_ARTIFACTS`, pinned set-equal by test |
-| `exempt`             | Tracked paths a **named** command legitimately rewrites through Bash. Deliberately tiny; each entry carries its `writer`                                                                                                                                                                       |
-| `never_exempt`       | A refusal set — memory-bank canon, the four trusted docs, `CODEOWNERS`. Enforced at **run time**, not only under test                                                                                                                                                                          |
+| Key                  | What it holds                                                                                                                                                                                                                                                                                        |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `derived_ignore`     | git's own ignore rules — **never re-listed** here (**L35**: retire the second copy). The reconciled set is `tracked ∪ untracked-not-ignored`, so `node_modules/`, `.pharn/`, `runs/` cost nothing                                                                                                    |
+| `always_reconciled`  | Never exemptible; falls back to committed blob ids when no baseline exists. A **copy** of the guards' own control-surface sets, pinned set-equal by test                                                                                                                                             |
+| `pipeline_artifacts` | A stage's **own** output (`pharn/features/<slug>/PLAN.md`, `VERIFY.md`, `lenses/<lens>/findings.json`, …) — **exact** enum membership, never a `**` glob, so a stray file under the same directory is still reported. A copy of `check-regress.mjs`'s `PIPELINE_ARTIFACTS`, pinned set-equal by test |
+| `exempt`             | Tracked paths a **named** command legitimately rewrites through Bash. Deliberately tiny; each entry carries its `writer`                                                                                                                                                                             |
+| `never_exempt`       | A refusal set — memory-bank canon, the four trusted docs, `CODEOWNERS`. Enforced at **run time**, not only under test                                                                                                                                                                                |
 
 **Why `pipeline_artifacts` exists, and it is lessons-learned L17 verbatim.** A stage's own artifact
 changes _after_ the build's anchor — `/pharn-verify` writes `VERIFY.md`, `/pharn-review` writes

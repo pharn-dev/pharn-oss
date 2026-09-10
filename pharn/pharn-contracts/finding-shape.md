@@ -87,7 +87,7 @@ for "therefore guaranteed." The `MUST` above is a **three-way split**, not one b
   (verified by enumerating them). So a Capability's `writes:` is **parsed by nothing** and pins
   nothing — it is declared metadata that documents intent.
   **What IS floor-enforced** is the scope the invoking **command** set: a lens subagent spawned by
-  `/pharn-review` writes under `features/**` because that is the active scope (or the fail-closed
+  `/pharn-review` writes under `pharn/features/**` because that is the active scope (or the fail-closed
   default), **not** because the lens declared a path. The guarantee is real but it belongs to the
   command, and it is **coarser** than a per-Capability pin. Surfaced by an adversarial review
   (`capability-writes-never-bound-to-guard`, HIGH).

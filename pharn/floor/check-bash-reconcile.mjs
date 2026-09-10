@@ -176,16 +176,16 @@ export function loadIgnoreData(path = IGNORE_DATA_PATH) {
   return { ok: true, exempt, neverExempt, alwaysExact, alwaysPrefixes, pipelineNames };
 }
 
-// --- A stage's OWN pipeline artifact (lessons-learned L17). `features/<slug>/<NAME>` or the same under
+// --- A stage's OWN pipeline artifact (lessons-learned L17). `pharn/features/<slug>/<NAME>` or the same under
 // --- `.dev/`, where <NAME> is EXACT membership in the closed enum — never a `**` glob over the feature
 // --- dir, so a stray file there is still reported. <slug> is shape-gated so a crafted `..` cannot build
 // --- a traversing prefix (the same refusal check-regress.mjs's FEATURE_SLUG_RE makes, for the same
 // --- reason: the previous shape "yields a prefix that matches no path" was nearly true, not true).
-const PIPELINE_RE = /^(?:\.dev\/)?features\/(?!\.\.?\/)([A-Za-z0-9._-]+)\/(.+)$/;
+const PIPELINE_RE = /^(?:\.dev\/|pharn\/)features\/(?!\.\.?\/)([A-Za-z0-9._-]+)\/(.+)$/;
 
 // The ACTIVE feature slug, derived from the scope record's own `set_by` (a PLAN path). Narrowing the
 // exemption to that one feature matters: exempting a pipeline filename under ANY slug lets a write to
-// `features/<anything>/SHIP.md` pass unexamined, and an exemption set wide enough to swallow the rule is
+// `pharn/features/<anything>/SHIP.md` pass unexamined, and an exemption set wide enough to swallow the rule is
 // the failure this whole increment was weighed against. When no slug is derivable (no snapshot, or a
 // `set_by` that is not a feature path) the exemption stays slug-agnostic — that is strictly no wider
 // than before, and it is the honest fallback rather than a guess.
