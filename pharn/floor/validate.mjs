@@ -97,6 +97,18 @@ const KIND_ENUM = ["pharn-owned", "vendor-official", "community"];
 // redefine the archetype enum). REQUIRED field: every capability must declare a valid `applies`
 // (absent or empty → RED); each declared value must be an enum member.
 const APPLIES_ENUM = ["universal", "ssr", "backend", "spa", "lib"];
+// CHECK 6's exemption set: the two modules ARCHITECTURE §4's tree places BELOW every other module —
+// `pharn-contracts` (L-1, the root: "Everything depends on this") and `pharn-core` (L0, directly above
+// it). "Sharing flows only through the bottom" is exactly the statement that these two may be depended
+// on from anywhere, which is why the exemption is keyed on the module being READ (the target), not on
+// the module doing the reading. See the CHECK 6 block for the bound this set does and does not carry.
+const BASE_MODULES = ["pharn-contracts", "pharn-core"];
+// A `reads:` value is a path or an artifact reference, so module names are separated from their
+// surroundings by a path separator, whitespace, or a comma. Splitting on those and ANCHORING each token
+// is what keeps `docs/pharn-notes.md` from reading as a module named `pharn-notes`: the `.` leaves the
+// token unanchorable. A bare substring scan has no such edge and false-REDs that shape.
+const REF_SEPARATOR_RE = /[\\/\s,]+/;
+const MODULE_TOKEN_RE = /^pharn-[A-Za-z0-9-]+$/;
 // `pharn/floor` holds the deterministic checkers + their test-fixtures (incl. the deliberately-RED
 // fixture) — tooling, never product capabilities — so it is excluded from the capability scan exactly
 // as `.dev/` (its pre-relocation home) always was. The product surface remains pharn/pharn-*/**.
@@ -388,20 +400,76 @@ for (const cap of capabilities) {
     finding("blocking", "P1/fix#6", rel, `declares enforces ${JSON.stringify(enforces)} but has no expected fixtures to bind them`);
   }
 
-  // CHECK 6 (best-effort): no sibling reference (P3)
-  // a reads: path pointing into a DIFFERENT pharn-stack-* / pharn-skills-* module is a sibling ref,
-  // unless this capability lives in pharn-contracts or pharn-core (allowed to be depended on).
+  // CHECK 6 (best-effort): no forbidden cross-module reference (P3)
+  //
+  // RULE: a `reads:` value may name only the capability's OWN module or a BASE_MODULES member. Any other
+  // `pharn-<name>` module token it names is a RED — the leaf→leaf reference P3 forbids.
+  //
+  // WHY THE MATCHER WIDENED. This check previously matched `pharn-(?:stack|skills)-*` only. Both of
+  // those module families are UNBUILT, and the two sibling modules that DO exist — pharn-pipeline and
+  // pharn-review — were unmatchable, so the only floor expression of P3 could not fire on the live tree:
+  // zero of the committed capabilities could reach it under any value they could legally hold, and zero
+  // tests reached the RED branch. A check that cannot fire is not a weaker guarantee than one that can;
+  // it is the appearance of one, which is the P0 disease aimed at the floor itself. Surfaced by an
+  // adversarial review of this repo (finding `check6-vacuous`), so the trigger is an observed defect in
+  // a shipped checker, not a hypothetical (P7).
+  //
+  // WHY THE EXEMPTION MOVED SIDES, which is the load-bearing half. The old guard read
+  // `ownModule !== "pharn-contracts" && ownModule !== "pharn-core"` under a comment saying those modules
+  // are "allowed to be DEPENDED ON" — a property of a module being READ, applied to the module doing the
+  // reading. Widening the matcher without moving it is not a smaller change, it is a broken one: every
+  // capability outside the base declares `reads: ["pharn/pharn-contracts/finding-shape.md"]`, so a
+  // target-blind widening REDs all of them — 35 correct declarations, measured before the change, the
+  // defect .dev/memory-bank/lessons-learned.md L3 names. The exemption therefore keys on the TARGET
+  // module, and the reader-side skip is gone, so a base-module capability's own reads: is checkable too.
+  //
+  // NARROWED, and stated — FOUR distinct bounds, none of which the widening closes:
+  //   1. It is a MEMBERSHIP set, not a layer RANK. A capability inside pharn-contracts naming pharn-core
+  //      is admitted, though §4's tree puts core ABOVE contracts. Modelling rank would mean inventing an
+  //      ordering for modules nobody has built (pharn-audits, pharn-stack-<fw>, pharn-skills-*) — the
+  //      speculation P7 forbids — and pharn-contracts holds no role:-bearing file to make it a real case.
+  //   2. It reads a DECLARATION, never a dependency. Markdown has no `import` (ARCHITECTURE §4's labeled
+  //      caveat — cited, not restated, P4), so an empty or untruthful `reads:` is invisible here.
+  //   3. Even a TRUTHFUL declaration evades it when the path never spells the module: a relative
+  //      `../injection/injection.md` reaching a sibling directory names no module token and is GREEN.
+  //      That is a property of name-matching, not of this regex, and no tightening of the pattern
+  //      reaches it.
+  //   4. A BARE FILENAME reference evades it: `reads: ["pharn-stack-next.md"]` splits to the single
+  //      token `pharn-stack-next.md`, whose `.` leaves it unanchorable, so CHECK 6 stays GREEN. The
+  //      PREVIOUS substring matcher caught that shape, so this is a real NARROWING and is recorded as
+  //      one rather than left to be rediscovered — raised by an automated review of the widening PR.
+  //      It is ACCEPTED, not overlooked, because the two shapes are LEXICALLY INDISTINGUISHABLE:
+  //      stripping the extension to catch `pharn-stack-next.md` equally converts `docs/pharn-notes.md`
+  //      into the module token `pharn-notes` and REDs a correct declaration. The trade is a false
+  //      NEGATIVE against a false POSITIVE, and L3 settles it — a rule that turns correct declarations
+  //      into blocks is the defect this repo keeps hitting, and CHECK 6 is labeled best-effort. Every
+  //      `reads:` value in the live corpus is path-shaped (`pharn/pharn-contracts/finding-shape.md`,
+  //      `pharn-stack-next/tokens.md`), where the module IS its own segment and matches; measured, not
+  //      assumed. If a bare-filename `reads:` ever lands, this bound is the thing to revisit.
+  // Widening changed what the grep can SEE. It did not change what a declaration PROVES.
   const ownModule = (rel.split(sep).find((s) => s.startsWith("pharn-")) || "").trim();
   const reads = Array.isArray(fm.reads) ? fm.reads : fm.reads ? [fm.reads] : [];
-  if (ownModule && ownModule !== "pharn-contracts" && ownModule !== "pharn-core") {
+  if (ownModule) {
     for (const r of reads) {
-      const m = String(r).match(/(pharn-(?:stack|skills)-[A-Za-z0-9-]+)/);
-      if (m && m[1] !== ownModule) {
+      const value = String(r);
+      // EVERY module token in the value is examined, not just the first match: a value naming
+      // pharn-contracts before a sibling would otherwise launder the sibling behind an exempt prefix.
+      const seen = new Set(); // one finding per module per value, not one per occurrence
+      for (const target of value.split(REF_SEPARATOR_RE)) {
+        if (!MODULE_TOKEN_RE.test(target)) continue;
+        if (target === ownModule || BASE_MODULES.includes(target) || seen.has(target)) continue;
+        seen.add(target);
+        // `value` is a hand-written frontmatter string — free text (fix #1), and on a user's repo not
+        // necessarily written by whoever runs the floor. It is rendered through showPath() for the same
+        // reason the target path is: a value may legally contain a newline, and a raw splice would let
+        // one forge an extra `- [blocking] …` line that no check produced. `target` IS spliced raw, and
+        // that is safe by construction rather than by trust — it matched MODULE_TOKEN_RE, so it cannot
+        // hold a control character or a separator.
         finding(
           "blocking",
           "P3",
           rel,
-          `sibling reference in reads: "${r}" points at module ${m[1]} — route shared things through pharn-contracts`
+          `cross-module reference in reads: ${showPath(value)} names module ${target} — a capability may reference only its own module or the base modules (${BASE_MODULES.join(", ")}); move the shared thing down into pharn-contracts`
         );
       }
     }

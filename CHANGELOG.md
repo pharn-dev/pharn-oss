@@ -87,6 +87,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   two directories**: `.claude/hooks/*.cjs`, `.claude/commands/**`, all `*.md`, both `test-fixtures/`
   subtrees, and test files themselves are outside it.
 
+- **`pharn/floor/validate.mjs` CHECK 6 — the only floor expression of P3 — could not fire on either
+  sibling module that exists** (`SKILLS_VERSION` 3.0.4 → **3.0.5**). Its target matcher was
+  `/(pharn-(?:stack|skills)-[A-Za-z0-9-]+)/`, and both of those module families are **unbuilt**, so
+  `pharn-pipeline` and `pharn-review` were unmatchable: no committed capability could reach the RED
+  branch under any `reads:` value it could legally hold, and no test reached it either
+  (`grep -c 'pharn-stack\|pharn-skills' pharn/floor/validate.test.mjs` → 0). "No sibling imports" was
+  backed by a branch that was vacuous on the live tree. Surfaced by an adversarial review of this repo.
+
+  **The fix is two changes, and the second is the load-bearing one.** (1) The matcher now recognises any
+  `pharn-<name>` module token, read as a separator-delimited, anchored TOKEN rather than a bare
+  substring — so `docs/pharn-notes.md` is not mistaken for a module — and **every** token in a value is
+  examined, so a sibling cannot be laundered behind a leading `pharn-contracts` path. (2) The base-layer
+  exemption moved from the READER's module to the **TARGET's**. The old guard skipped capabilities
+  _living in_ `pharn-contracts` / `pharn-core` under a comment saying those modules are "allowed to be
+  depended on" — a property of a module being READ, applied to the module doing the reading. Widening
+  the matcher without moving the exemption is not a smaller change but a broken one: every capability
+  outside the base declares `reads: ["pharn/pharn-contracts/finding-shape.md"]`, so a target-blind
+  widening REDs **35 correct declarations**. That was measured across all 36 committed capabilities
+  before the change rather than discovered after it (`.dev/memory-bank/lessons-learned.md` L3). The
+  reader-side skip is now gone, so a base-module capability's own `reads:` is checkable too.
+
+  **Coverage is strictly wider, never narrower:** the `pharn-stack-*` / `pharn-skills-*` shapes the old
+  regex caught still RED, pinned by tests. 15 tests were added, including a **mutation control** that
+  re-runs the RED fixture against a `validate.mjs` whose CHECK 6 emission is disabled and requires it to
+  go GREEN — so "the branch fires" is proven rather than assumed (L34), with the mutation anchor asserted
+  unique so the control cannot itself pass vacuously.
+
+  **What this does NOT prove (P0).** CHECK 6 reads a hand-written **declaration**, never a dependency:
+  markdown has no `import` (`pharn/ARCHITECTURE.md` §4's labeled caveat), so an empty or untruthful
+  `reads:` is invisible to it, and so is a truthful relative path that never spells the module
+  (`../injection/injection.md`). It is also a membership set, not a layer **rank** — a capability inside
+  `pharn-contracts` naming `pharn-core` is admitted. It remains the "best-effort grep" the architecture
+  labels it; the widening changed what that grep can **see**, not what a declaration **proves**.
+
+  **Bump size — patch, deliberately.** No new capability, command, or checker ships, and no contract or
+  finding shape changes: this corrects the coverage of bytes that already shipped, which is the patch
+  criterion in `CLAUDE.md`'s SemVer rule. The finding's free-text wording changes (`sibling reference` →
+  `cross-module reference`), which is a report string no artifact is keyed to, not an interface. `3.0.5`
+  rather than `3.0.3` is an **assigned** number, reserved to avoid colliding with parallel open PRs.
+  Audit trail: `.dev/features/p3-sibling-check-widen/`.
+
+> > > > > > > 940eb16 (fix(floor): make CHECK 6 -- the only floor expression of P3 -- able to fire (3.0.5))
+
 - **The writes-scope guard's fail-closed default no longer carries dev-repo posture into
   installed projects** (`SKILLS_VERSION` 3.0.1 → **3.0.2**, patch;
   [#180](https://github.com/pharn-dev/pharn-oss/issues/180), shipped in
