@@ -503,3 +503,38 @@ test("✧ a target that is an EMPTY directory refuses on the version file, in pr
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ── The BAD_TARGET refusal must hold for EVERY unusable target, not just a missing one ───────────────
+//
+// Raised by an automated review of this PR: the guard was `!existsSync(t) || !statSync(t).isDirectory()`,
+// a TOCTOU pair. If the target vanished between the two calls — or statSync threw on a metadata /
+// permission error — the exception propagated PAST the named refusal, producing a Node stack trace
+// instead of the checker's stable RED, and the exported function threw instead of returning its
+// documented verdict object. That is the one shape a fail-closed checker must never take.
+// Now a single atomic statSync inside a try, so every failure mode lands on the same BAD_TARGET.
+test("✧ BAD_TARGET: an unreadable/invalid target RETURNS a verdict object, never throws", () => {
+  for (const bad of [undefined, null, "", 42, {}, join(tmpdir(), "pharn-nope-" + Date.now()), "\0invalid"]) {
+    let v;
+    assert.doesNotThrow(
+      () => {
+        v = checkSkillsVersionRecorded(bad);
+      },
+      `checkSkillsVersionRecorded(${JSON.stringify(String(bad))}) must not throw — it must return a verdict`
+    );
+    assert.equal(v.ok, false, `${JSON.stringify(String(bad))} must be RED (ok:false), never a silent GREEN`);
+    assert.equal(v.findings[0].type, "BAD_TARGET", `${JSON.stringify(String(bad))} must use the NAMED refusal`);
+  }
+});
+
+test("✧ BAD_TARGET: a FILE passed where a directory is required is refused, not read", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pharn-svr-"));
+  try {
+    const file = join(dir, "not-a-dir");
+    writeFileSync(file, "x");
+    const v = checkSkillsVersionRecorded(file);
+    assert.equal(v.ok, false);
+    assert.equal(v.findings[0].type, "BAD_TARGET");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

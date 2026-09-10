@@ -95,7 +95,7 @@
 // Usage:  node .dev/floor/check-skills-version-recorded.mjs [targetDir]     (default: cwd)
 // Non-LLM, stdlib-only, fail-closed. Apparatus: never ships to a user install, so no SKILLS_VERSION bump.
 
-import { readFileSync, existsSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 /** The file that owns the version. Single source of truth; the CHANGELOG records it. */
@@ -209,11 +209,22 @@ const finding = (type, file, problem, fix) => ({ ok: false, findings: [{ type, f
  */
 export function checkSkillsVersionRecorded(targetDir) {
   // ── 0. The target itself (fail-closed: a missing target is a named refusal, never a silent GREEN) ──
-  if (typeof targetDir !== "string" || targetDir === "" || !existsSync(targetDir) || !statSync(targetDir).isDirectory()) {
+  // statSync is called INSIDE the try and existsSync is gone: the pair was a TOCTOU window (the target
+  // can vanish between the two calls) and statSync also throws outright on a metadata/permission error.
+  // Either path threw a Node stack trace PAST this named refusal and past the function's documented
+  // verdict-object contract — the one shape a fail-closed checker must never take. Raised by an
+  // automated review; one atomic call, and every failure mode lands on the same BAD_TARGET refusal.
+  let isDir = false;
+  try {
+    isDir = typeof targetDir === "string" && targetDir !== "" && statSync(targetDir).isDirectory();
+  } catch {
+    isDir = false;
+  }
+  if (!isDir) {
     return finding(
       "BAD_TARGET",
       String(targetDir),
-      `target dir not found (or not a directory): ${JSON.stringify(String(targetDir))}`,
+      `target dir not found, unreadable, or not a directory: ${JSON.stringify(String(targetDir))}`,
       `pass a path to a directory holding ${VERSION_PATH} and ${CHANGELOG_PATH} (default: the current directory).`
     );
   }
