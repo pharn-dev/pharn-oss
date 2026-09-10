@@ -229,15 +229,49 @@ inventory surfaced.
 - `pharn/floor/check-bash-reconcile.test.mjs` — NEW. Escape detected · in-scope Bash write clean · no-scope fail-closed · ignored-path exemption · control-surface always-reconciled · **non-vacuity control (L34)** · **parity test** for every set delegated to or copied from another file · `ci.yml` + `package.json` pin test. — layer: none (test)
 - `pharn/floor/reconcile-ignore.json` — NEW. Item 5's data. — layer: none (floor data)
 - `pharn/floor/check-verify.mjs` — EDIT: add the gate to the map. — layer: none (floor)
-- `.claude/commands/pharn-verify.md`, `pharn-dev-verify.md` — EDIT: run the checker; read its exit. — layer: none (product/dev command)
-- `.claude/commands/pharn-plan.md`, `pharn-dev-plan.md`, `pharn-build.md`, `pharn-dev-build.md`, `pharn-grill.md`, `pharn-dev-grill.md`, `pharn-regress.md`, `pharn-dev-regress.md` — EDIT: add the Step-0 `--anchor` line beside the existing setter. — layer: none (commands)
+- `.claude/commands/pharn-build.md` — EDIT: Step-0 `--anchor` beside the setter. — layer: none (command)
+- `.claude/commands/pharn-dev-build.md` — EDIT: same. — layer: none (command)
+- `.claude/commands/pharn-verify.md` — EDIT: run the checker; read its exit. — layer: none (command)
+- `.claude/commands/pharn-dev-verify.md` — EDIT: same. — layer: none (command)
 - `.github/workflows/ci.yml` — EDIT: add the checker as its own step (ci.yml never runs `npm run check`). — layer: none (CI)
 - `.github/workflows/gitleaks.yml` — EDIT: extract to `$RUNNER_TEMP` (item 8's one real RED). — layer: none (CI)
 - `package.json` — EDIT: `check:reconcile` in the `check` chain. — layer: none (repo-meta)
 - `README.md` — EDIT: Phase-1 wording → the detection claim. — layer: none (repo-meta)
 - `CLAUDE.md` — EDIT: Commands block + writes-scope section. — layer: none (repo-meta)
-- `CHANGELOG.md`, `SKILLS_VERSION` — EDIT: the bump decided at the gate below. — layer: none (repo-meta)
-- `.dev/features/bash-write-reconciler/proposed/{APPLY.md,LIMITS.md.patch,THREAT-MODEL.md.patch}` — NEW. Human-applied. — layer: none (apparatus)
+- `CHANGELOG.md` — EDIT: the `4.0.0` entry. — layer: none (repo-meta)
+- `SKILLS_VERSION` — EDIT: `3.1.2` → `4.0.0`. — layer: none (repo-meta)
+- `.dev/features/bash-write-reconciler/proposed/APPLY.md` — NEW. Human-applied hand-off. — layer: none (apparatus)
+- `.dev/features/bash-write-reconciler/proposed/LIMITS.md.patch` — NEW. — layer: none (apparatus)
+- `.dev/features/bash-write-reconciler/proposed/THREAT-MODEL.md.patch` — NEW. — layer: none (apparatus)
+
+### Two design corrections the scope-setting run forced (recorded, not silently applied)
+
+Running `set-writes-scope.cjs --from-plan` against the first draft of this list resolved **16 of 27**
+paths: the setter takes **one back-ticked path per bullet**, so every multi-path bullet silently dropped
+its tail — the L37 failure mode (a correct reading, a wrong quantifier) reproduced inside this very plan.
+One path per bullet now. Two design changes followed from re-reading what the dropped paths were for:
+
+1. **Anchor at BUILD only — not at plan/grill/regress too.** More anchors is *worse*, not better: each
+   anchor resets the baseline, so anchoring at grill or regress would **erase** an escape that happened
+   during build. The reconciled window is deliberately **build → verify**. Command edits drop 10 → 4.
+   **Bound, stated:** a Bash escape during plan or grill is outside the window and is not detected.
+2. **The `PostToolUse` recorder is DROPPED — it turned out to be unnecessary, not merely costly.** The
+   verdict asks *"would the guards have denied this path?"* A path written through the guarded surface
+   was, by construction, permitted by those same guards — so it can never be flagged, and no record of
+   guarded writes is needed to keep ordinary edits clean. This removes the increment's only
+   control-surface dependency: **no `.claude/settings.json` edit, therefore no human-applied hook patch**
+   (the `canon-write-denylist` cost) and no `--allow-claude-dir`. Item 1's recorder half is withdrawn;
+   its enforcement half stands.
+
+**Consequence for item 6 — the scope is snapshotted, and the duplication is bounded and parity-tested.**
+At verify time `.pharn/writes-scope.json` holds *verify's* scope, not the build's — the exact trap
+`check-regress.mjs` documents ("by the time /pharn-dev-regress runs it holds the regress stage's own
+scope"). So `--anchor` snapshots the live scope record **into** the baseline, and the checker matches
+candidates against that snapshot. The **fail-closed default** is still delegated by executing the live
+hook (a snapshot of *absence* is absence), and trusted-path denial is delegated to
+`protect-trusted-paths.cjs`, which is scope-independent. Only the explicit-scope glob match is the
+checker's own code — the `check-build-complete.mjs` precedent exactly, and it carries the same kind of
+parity test.
 
 ### Deliberately NOT in scope
 
