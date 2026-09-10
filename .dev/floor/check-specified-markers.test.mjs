@@ -7,7 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -413,3 +413,162 @@ test("the GREEN line reports the forward-claim counts, so a silently emptied cla
   const r = run(REPO);
   assert.match(r.out, /forward-claim site\(s\) across \d+ registered claim\(s\)/);
 });
+
+// ------------------------------------------------ the REAL registrations, driven in BOTH directions
+//
+// The tests above prove the checker's MECHANICS with synthetic fixtures. These prove the REAL manifest
+// entries — real probe, real marker bytes, real doc files — actually fire. L4 again, one level up: a
+// registration that is merely PRESENT passes `check:markers` by construction, exactly as an authored
+// fixture passes by construction. The only way to know an entry guards anything is to break it.
+//
+// L29/L36: the enumeration is the deliverable. REGISTERED_IDS is the closed set every rule below
+// iterates, and `closure` pins it against the live manifest — so an entry added, removed or renamed
+// later fails HERE rather than silently escaping every rule. A per-member assertion written for
+// whichever entry the author was looking at is precisely what L36 says not to ship.
+
+const MANIFEST_PATH = join(HERE, "specified-primitives.json");
+const REAL_MANIFEST = JSON.parse(readFileSync(MANIFEST_PATH, "utf8"));
+
+/** Every `specified_primitives` id the manifest is expected to carry. Closure-pinned below. */
+const REGISTERED_IDS = [
+  "pre-egress",
+  "archetype-maps",
+  "pharn-estimate",
+  "pharn-audits",
+  "seam-record",
+  "community-privilege",
+  "rule_id-roster",
+  "constitution-injection",
+];
+
+/** The five registrations the `specified-marker-registration` increment added or extended. */
+const NEW_REGISTRATIONS = ["seam-record", "community-privilege", "rule_id-roster", "constitution-injection", "archetype-maps"];
+
+const entryFor = (id) => REAL_MANIFEST.specified_primitives.find((p) => p.id === id);
+
+/**
+ * Materialize a throwaway tree holding the REAL doc files this entry's sites name, each optionally
+ * mutated. `opts.live` additionally creates the artifact the entry's REAL probe looks for.
+ * The sub-manifest carries the one real entry, so the other entries' docs need not be copied.
+ */
+function realFixture(id, opts = {}) {
+  const entry = entryFor(id);
+  const dir = mkdtempSync(join(tmpdir(), "pharn-real-markers-"));
+
+  // Accumulate per FILE, not per site, then write once. Several sites of one entry share a doc
+  // (three of seam-record's four are THREAT-MODEL.md), so a write-per-site loop re-reads the pristine
+  // file and silently overwrites the mutation — leaving only the LAST site of each file actually
+  // testable. That bug shipped in this helper's first draft and every direction-2 case except the
+  // per-file last one went green against an unmutated doc: L36 one more time, a rule passing for the
+  // member the author happened to look at.
+  const bodies = new Map();
+  for (const site of entry.sites) {
+    if (!bodies.has(site.file)) bodies.set(site.file, readFileSync(join(REPO, site.file), "utf8"));
+  }
+  if (opts.dropMarker !== undefined) {
+    const target = entry.sites[opts.dropMarker];
+    const mutated = bodies.get(target.file).split(target.marker).join("<<< marker removed by the test >>>");
+    assert.notEqual(mutated, bodies.get(target.file), `the mutation was a no-op — ${target.file} does not contain the registered marker`);
+    bodies.set(target.file, mutated);
+  }
+  for (const [rel, body] of bodies) {
+    const dest = join(dir, rel);
+    mkdirSync(dirname(dest), { recursive: true });
+    writeFileSync(dest, body);
+  }
+
+  if (opts.live) {
+    const probe = entry.probe;
+    if (probe.type === "path") {
+      mkdirSync(join(dir, dirname(probe.path)), { recursive: true });
+      writeFileSync(join(dir, probe.path), "// stub — the primitive shipped\n");
+    } else {
+      mkdirSync(join(dir, probe.dir), { recursive: true });
+      writeFileSync(join(dir, probe.dir, `${probe.substring}-probe.stub`), "// stub — the primitive shipped\n");
+    }
+  }
+
+  const mPath = join(dir, "manifest.json");
+  writeFileSync(mPath, JSON.stringify({ specified_primitives: [entry] }));
+  return { dir, mPath, entry, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
+// ------------------------------------------------------------------------- closure over the manifest
+
+test("✧ closure — REGISTERED_IDS equals the live manifest's id set exactly (no entry escapes the rules below)", () => {
+  const live = REAL_MANIFEST.specified_primitives.map((p) => p.id);
+  assert.deepEqual(
+    [...live].sort(),
+    [...REGISTERED_IDS].sort(),
+    "an entry was added, removed or renamed — update REGISTERED_IDS and give it both-direction coverage"
+  );
+});
+
+test("✧ L34 — the enumerations are non-empty, so the per-entry rules below cannot pass vacuously", () => {
+  assert.ok(REGISTERED_IDS.length > 0);
+  assert.ok(NEW_REGISTRATIONS.length > 0);
+  for (const id of NEW_REGISTRATIONS) assert.ok(entryFor(id), `${id} is not in the manifest`);
+});
+
+// ------------------------------------------------------- every registered marker must be UNIQUE
+//
+// Direction 2 is `src.includes(site.marker)` — a PRESENCE test over the whole file. It only detects a
+// deletion when the marker occurs EXACTLY ONCE: a string appearing twice keeps the check green after one
+// of the two is removed. THREAT-MODEL's ai_docs and seam-record rows are the live instance — their right
+// cells are byte-identical, which is why those two markers span their row-distinctive LEFT cell. This
+// rule generalizes that fix instead of asserting it for the pair someone happened to look at (L36), and
+// it ranges over EVERY entry, so the four pre-existing registrations are retro-covered.
+
+for (const id of REGISTERED_IDS) {
+  test(`✧ every \`${id}\` marker occurs EXACTLY ONCE in its doc (presence-test => uniqueness is load-bearing)`, () => {
+    for (const site of entryFor(id).sites) {
+      const src = readFileSync(join(REPO, site.file), "utf8");
+      const n = src.split(site.marker).length - 1;
+      assert.equal(n, 1, `${id} -> ${site.file}: marker occurs ${n}x, expected exactly 1: ${JSON.stringify(site.marker.slice(0, 80))}`);
+    }
+  });
+}
+
+// --------------------------------------------------- the new registrations, direction 1 and direction 2
+
+for (const id of NEW_REGISTRATIONS) {
+  test(`✧ DIRECTION 1 — \`${id}\` SHIPS while its markers remain => RED`, () => {
+    const f = realFixture(id, { live: true });
+    const r = run(f.dir, f.mPath);
+    f.cleanup();
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /IS NOW LIVE/);
+    assert.match(r.out, /REMOVE the marker/);
+  });
+
+  test(`✧ the \`${id}\` steady state is GREEN (primitive absent + markers present), so direction 1 is a real transition`, () => {
+    const f = realFixture(id);
+    const r = run(f.dir, f.mPath);
+    f.cleanup();
+    assert.equal(r.code, 0, r.out);
+  });
+
+  test(`✧ \`${id}\`'s probe is NOT live in the real repo today (L37 — probed, not read off the manifest)`, () => {
+    const f = realFixture(id); // markers intact, no probe artifact
+    // The steady-state GREEN above already proves "not live" for the temp tree; this asserts it of the
+    // REAL tree, which is what makes today's `check:markers` GREEN mean "absent + present" and not
+    // "live + removed" — two states the checker reports identically.
+    const r = run(REPO);
+    f.cleanup();
+    assert.equal(r.code, 0, r.out);
+    assert.match(r.out, /\(0 now live\)/);
+  });
+
+  const sites = entryFor(id).sites;
+  for (let i = 0; i < sites.length; i++) {
+    test(`✧ DIRECTION 2 — \`${id}\` site ${i + 1}/${sites.length} (${sites[i].file}) marker DELETED while absent => RED`, () => {
+      const f = realFixture(id, { dropMarker: i });
+      const r = run(f.dir, f.mPath);
+      f.cleanup();
+      assert.equal(r.code, 1, r.out);
+      assert.match(r.out, /annotation is GONE/);
+      assert.match(r.out, /still absent/);
+      assert.ok(r.out.includes(sites[i].file), `the RED must name the site file, got: ${r.out}`);
+    });
+  }
+}

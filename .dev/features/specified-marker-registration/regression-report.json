@@ -1,0 +1,28 @@
+{
+  "base": "8bc6c0a8f1b9e7df2e01ff0f98a73602dfa47422",
+  "inside": [
+    ".dev/floor/check-specified-markers.test.mjs",
+    ".dev/floor/specified-primitives.json",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/pharn-contracts/finding-shape.md"
+  ],
+  "outside_gates": {
+    "structural:expected-injection-comment": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
