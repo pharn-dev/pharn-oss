@@ -45,6 +45,9 @@ jobs:
       - name: Version badge check
         if: ${{ always() && steps.install.outcome == 'success' }}
         run: npm run check:badge
+      - name: CHANGELOG version-record check
+        if: ${{ always() && steps.install.outcome == 'success' }}
+        run: npm run check:changelog
       - name: CONTRIBUTING gate-chain check
         if: ${{ always() && steps.install.outcome == 'success' }}
         run: npm run check:contributing
