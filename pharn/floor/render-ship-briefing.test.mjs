@@ -409,6 +409,22 @@ test("default --base is 'pharn/features'", () => {
   }
 });
 
+test("CLI: default --base is pharn/features (main() shares renderBriefing default)", () => {
+  const cwd = process.cwd();
+  const base = scratchDir();
+  try {
+    process.chdir(base);
+    mkdirSync(join(base, "pharn", "features"), { recursive: true });
+    writeFeature("pharn/features", "feat", { "PLAN.md": MINIMAL_PLAN });
+    const ok = spawnSync(process.execPath, [CLI, "feat"], { encoding: "utf8" });
+    assert.equal(ok.status, 0, ok.stderr);
+    assert.match(ok.stdout, /# BRIEFING — feat/);
+  } finally {
+    process.chdir(cwd);
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
 test("no `## Files` / `## Contracts satisfied` sections -> honest placeholder text, never a crash", () => {
   const base = scratchDir();
   try {

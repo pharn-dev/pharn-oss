@@ -52,7 +52,7 @@
 // handled by the honest NO_DECISION_LINE fallback, never a crash and never a fabricated quote.
 //
 // Usage:
-//   node pharn/floor/render-ship-briefing.mjs <name> [--base <dir>]   (default --base: features)
+//   node pharn/floor/render-ship-briefing.mjs <name> [--base <dir>]   (default --base: pharn/features)
 //     Prints the rendered BRIEFING.md to stdout. Exit 0 on success; exit 1 if PLAN.md (the one REQUIRED
 //     input) is absent or unreadable — fail-closed, since there is nothing to render without it.
 
@@ -435,8 +435,8 @@ function main() {
     process.stderr.write("usage: node pharn/floor/render-ship-briefing.mjs <name> [--base <dir>]\n");
     process.exit(1);
   }
-  const base = flag(argv, "--base") ?? "features";
-  const result = renderBriefing(name, { base });
+  const baseFlag = flag(argv, "--base");
+  const result = renderBriefing(name, baseFlag !== undefined ? { base: baseFlag } : {});
   if (!result.ok) {
     process.stderr.write(`RED — ${result.reason}\n`);
     process.exit(1);

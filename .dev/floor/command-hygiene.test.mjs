@@ -742,7 +742,7 @@ test("✧ the promote gate-parity set is non-vacuous — both commands exist and
 // declaring THREE placeholder `writes:` paths. `resolveEntry` returns null for every placeholder entry
 // when `target` is undefined, so the scope came back empty and the setter FAILED CLOSED — exit 1, no
 // scope file written — leaving the terminal pipeline stage running under `enforce-writes-scope.cjs`'s
-// DEFAULT_SAFE_SET (which permits any path under `features/**`) while the command's own guarantee audit
+// DEFAULT_SAFE_SET (which permits any path under `pharn/features/**`) while the command's own guarantee audit
 // claimed "FLOOR: hook (fix #7) … pin exactly these three paths". A false floor claim in the stage that
 // ends the pipeline. The setter's refusal was CORRECT and is unchanged; the call site was the bug.
 //
@@ -790,7 +790,7 @@ const TARGET_VALUES = /--target\s+(\S+)/g;
  * has no whitespace. The whitespace test is what excludes pharn-build.md's prose entry
  * `<user-code files named in the plan's ## Files (Phase-1, via --from-plan — not from this list)>`
  * BY CONSTRUCTION rather than by a hand-written exemption (L3: a rule must not convert an existing
- * correct declaration into a block). A glob entry with no `<` (pharn-review.md's `features/**`,
+ * correct declaration into a block). A glob entry with no `<` (pharn-review.md's `pharn/features/**`,
  * pharn-dev-eval.md's `runs/**`) is likewise out — neither command invokes the setter at all.
  */
 function isScopeablePlaceholder(entry) {
