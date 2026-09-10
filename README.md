@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-3.2.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-3.2.1-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -411,19 +411,22 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   methodology can express.
 - **The write-scope guard's fail-closed default does not cover your source.** Where
   `enforce-writes-scope.cjs` is wired and no scope is active, Claude Code's
-  Write/Edit/MultiEdit/NotebookEdit tools are restricted to `features/**` and `.pharn/**` in an
-  installed project — PHARN's product pipeline artifact directories. In PHARN's own dev repo (`.dev/floor/`
-  present AND no `skillsVersion` in `pharn.config.json`), the default also admits `.dev/features/**` and
-  `pharn/pharn-*/**`. The
-  set is computed at runtime in `.claude/hooks/enforce-writes-scope.cjs`.
-  Ordinary edits to your own code (`src/app.ts`, `package.json`, `README.md`) are denied. That is the
-  intended posture — a stage sets the scope in its first step, so with hooks wired, write/edit tool calls
-  outside the concrete paths your `PLAN.md` declared are denied — but it means the guard is not a drop-in
-  for editing outside a PHARN run. Clearing the scope (`set-writes-scope.cjs --clear`, or deleting
-  `.pharn/writes-scope.json`) returns to this default; it does **not** re-open your source. To write
-  elsewhere, either set a scope that names those paths
-  (`set-writes-scope.cjs --from-plan <PLAN.md>`), or leave `enforce-writes-scope.cjs` out of
-  `.claude/settings.json` — at the cost of `writes:` enforcement.
+  Write/Edit/MultiEdit/NotebookEdit tools may write only `features/**` in an installed project — PHARN's
+  pipeline artifact directory. In PHARN's own dev repo (`.dev/floor/` present AND no `skillsVersion` in
+  `pharn.config.json`), the default also admits `.dev/features/**` and `pharn/pharn-*/**`. **`.pharn/**` is
+  writable too, but it is not part of that default** — it is the gitignored runtime-state directory the
+  guard bootstraps from, composed into the allow-list unconditionally, so it stays writable **even under a
+  set scope**. One path inside it is denied by name: `.pharn/writes-scope.json`, the guard's own input.
+  The whole set is computed at runtime in `.claude/hooks/enforce-writes-scope.cjs`. Ordinary edits to your
+  own code (`src/app.ts`, `package.json`, `README.md`) are denied. That is the intended posture — a stage
+  sets the scope in its first step, so with hooks wired, write/edit tool calls outside the concrete paths
+  your `PLAN.md` declared are denied — but it means the guard is not a drop-in for editing outside a PHARN
+  run. Clearing the scope (`set-writes-scope.cjs --clear`, or deleting `.pharn/writes-scope.json`) returns
+  to this default; it does **not** re-open your source. To write elsewhere, either set a scope that names
+  those paths (`set-writes-scope.cjs --from-plan <PLAN.md>`) — noting that a set scope **replaces** this
+  default rather than adding to it, so a scope naming `src/app.ts` also stops `features/**` from being
+  writable — or leave `enforce-writes-scope.cjs` out of `.claude/settings.json`, at the cost of `writes:`
+  enforcement.
 - **The memory-bank denylist covers the write-tool surface only — Bash still reaches canon.**
   `THREAT-MODEL.md` treats memory-bank poisoning as the worst persistence vector. As of `3.1.1`
   `.claude/hooks/protect-trusted-paths.cjs` **does** deny `Write`/`Edit`/`MultiEdit`/`NotebookEdit` to

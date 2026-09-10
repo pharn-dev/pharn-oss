@@ -1401,3 +1401,47 @@ entry records the shape and does not yet claim the trigger fired.
   **renumbered to `L39` when merging `main`**: PR #206 landed its own `L38` first, so the id collided.
   The collision is itself an instance of that entry's subject — see [[L38]], promoted from the other side
   of the same contention.
+
+## L40 — Probing a claim's members confirms membership, never the claim's stated CAUSE — to test an attribution, vary the attributed condition, not the member
+
+type: process · concepts: [verification-fidelity, attribution, lesson-recurrence, doc-drift, false-green]
+
+**Lesson.** [[L37]]'s remedy — a doc stating a guard's bounds must be **probed**, not read off it — was in
+force, was followed, and the defect shipped anyway. The sentence "with no scope active, the write tools are
+restricted to `features/**` and `.pharn/**`" was probed exactly as prescribed (no scope file, `Write`
+`.pharn/scratch.json`, **exit 0**) and the probe **confirmed a false sentence**. `.pharn/**` is `ALWAYS`
+(`enforce-writes-scope.cjs:120`), composed into the allow-list unconditionally —
+`allow = [...ALWAYS, ...(scope || defaultSafeSet())]` — so it is permitted whether or not a scope is set.
+The permission was real; what was false was the **cause the sentence assigned to it**. A member-probe
+structurally cannot see this: the member passes under the stated condition, and a claim of the form "under
+C, X is permitted" never says "and not otherwise", so every member you test agrees with you. Remedy: when a
+sentence attributes a permission or a denial to a condition C, run the probe a **second time with C false**.
+If X still behaves the same way, C is not why — and the sentence is wrong in a way no amount of testing
+under C will reveal.
+
+**Why it matters.** This is the failure mode that survives a correctly-applied verification standard, which
+makes it the quietest kind. [[L37]] sharpened [[L2]] from "read the implementation" to "execute the op",
+and this sharpens L37 again: executing the op is not enough when the claim is **causal** rather than
+**extensional**. The two defect classes are easy to confuse and need different probes — L37's is a
+**quantifier** defect (the listed set is right, the word around it is wrong; probe an **excluded** member),
+this one is an **attribution** defect (the set is right, the _reason_ is wrong; probe under a **negated
+condition**). The same increment carried one of each, and only the quantifier one was caught by L37's
+recipe. Note where it landed: in the very sentence L37 was **promoted from**, whose repair had swapped the
+quantifier `only` for `restricted to` while re-deriving the rest of the claim from the same reading that
+produced it — so [[L33]]'s "the repair pass misses the variant spellings" applies **within a single
+sentence**, not only across sibling files. Distinct from both lessons this run rebased onto: [[L38]] is the same file's _runtime_ hazard (two
+sessions contending for the single scope record) and [[L39]] is its _declaration_ read by two consumers
+— neither is a claim ABOUT what the guard permits, which is what drifted here. The practical
+consequence for a reader was not academic: the
+sentence implied that setting a scope would remove `.pharn/**` writability, and it does not. Per [[L20]] a
+discipline-only remedy recurs, and this one is deliberately left as discipline — a checker comparing prose
+to a runtime-computed path set was declined on **value**, since it would pin one exception's spelling while
+leaving the attribution itself unguarded, i.e. it would report GREEN over exactly this defect.
+
+**Provenance.**
+
+- feature: `readme-writes-scope-default`
+- commit: `80dba05928221e6659de0617dfa3be868925b848`
+- source: `.dev/features/readme-writes-scope-default/PLAN.md` (defect A.1) +
+  `.dev/features/readme-writes-scope-default/REVIEW.md` (lens 3)
+- promoted: 2026-09-10 via gated `/pharn-dev-memory-promote` (human-approved).
