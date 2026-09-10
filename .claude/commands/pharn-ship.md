@@ -279,7 +279,7 @@ node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/phar
 > under `enforce-writes-scope.cjs`'s fail-closed `DEFAULT_SAFE_SET`, which permits **any** path under
 > `features/**` — so the guarantee-audit's "the hook pins exactly these three paths" was false for the
 > whole terminal stage. The setter's refusal was correct and is deliberately unchanged; the call site was
-> the bug. This is `.dev/memory-bank/lessons-learned.md` **L8** ("the writes-scope setter resolves one
+> the bug. This is PHARN's own build-loop lesson **L8** ("the writes-scope setter resolves one
 > `--target` — a command emitting ≥2 placeholder artifacts must re-scope per artifact"), cited not
 > restated (P4).
 
@@ -598,7 +598,7 @@ the `check-ship.mjs` cap.
   call resolved zero paths, exited 1, wrote no scope file, and left the run on the fail-closed
   `DEFAULT_SAFE_SET`, which permits **any** path under `features/**`. Recorded rather than quietly
   corrected: it is exactly the P0 disease this repo exists to prevent — a floor citation whose cited op
-  never ran (`.dev/memory-bank/lessons-learned.md` **L2**).
+  never ran (PHARN's own build-loop lesson **L2**).
   - **Two clocks, and the split is load-bearing.** The **deny** is FLOOR: given whatever scope is active,
     an out-of-scope write is blocked by a non-LLM program, every time. That **the intended scope is
     active** at each write is **ADVISORY** — it depends on this command's prose ordering being followed,
@@ -704,7 +704,7 @@ default-safe-set, so a leftover scope from a finished run is **stricter** than n
 the default permits start being denied in later sessions, with nothing naming the cause.
 
 **ADVISORY (P0), and the bound is the point.** This is agent-run orchestration through **Bash**, so it
-sits outside the `PreToolUse` gate entirely (`.dev/memory-bank/lessons-learned.md` L19) — nothing on
+sits outside the `PreToolUse` gate entirely (PHARN's own build-loop lesson **L19**) — nothing on
 the floor forces it, and an early abort skips it. It degrades safely: the next command's first-step
 **set** overwrites a leftover scope, which is exactly today's behavior. The floor guarantee is
 unchanged and belongs to the **reader**, not to this step — **absence of a scope file = the

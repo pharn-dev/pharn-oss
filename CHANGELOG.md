@@ -362,6 +362,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   **`pharn/ARCHITECTURE.md §3.1` is hook-protected and still carries the false annotation** — it needs a
   human edit outside the agent loop. The exact replacement is in the PR body.
 
+- **The shipped surface cited `.dev/` canon, which an install does not contain** (`SKILLS_VERSION`
+  3.0.11 → **3.1.3**, patch over shipped bytes). Nine of ten product commands cited
+  `.dev/memory-bank/lessons-learned.md L<n>` in prose — and the review's verifier **extended the class**:
+  so did the shipped floor (`validate.mjs` ×2, `check-spec.mjs`) and
+  `pharn/pharn-contracts/loop-record.md`. **14 citations in all.** An install ships `pharn/` plus the
+  product `.claude/` surface **without** `.dev/`, so every one of those pointers resolves to nothing in
+  the place it is read. Reported as `product-cmds-cite-dev-canon` (LOW).
+
+  **The fix was not to delete the provenance.** P4 says cite rather than restate, and the lessons are
+  real; what was wrong was the **path**, which promised a file the reader cannot open. Each site now
+  reads _"PHARN's own build-loop lesson L&lt;n&gt;"_ — provenance kept, dangling pointer gone. In every
+  case the surrounding sentence already carried the lesson's substance, so nothing was lost by dropping
+  the path.
+
+  **Scoped to the canon-citation shape, not the string `.dev/`.** A shipped file may legitimately name
+  `.dev/` when the subject **is** the dev surface — `/pharn-memory-promote` explains that
+  `/pharn-dev-memory-promote` → `.dev/memory-bank/` is a separate command, which is correct and is
+  deliberately left alone.
+
+  Guarded by three rules in `command-hygiene.test.mjs` (a test — no bump of its own): no shipped file
+  may cite the dev canon file; an [[L4]] **discrimination** control mutated from the **real** historical
+  citation string (it must fire on the pre-fix shape and must **not** fire on the corrected one); plus an
+  [[L34]] non-vacuity assertion.
+
+  **Honest scope (P0):** this proves no shipped file cites the dev canon **file**. It does not prove the
+  remaining prose is accurate, and it cannot check the installer — whose source is out of tree — so the
+  install-absence half rests on `CLAUDE.md`'s documented dev/product boundary, exactly as the review's
+  verifier scoped it.
+
 - **The writes-scope guard's fail-closed default no longer carries dev-repo posture into
   installed projects** (`SKILLS_VERSION` 3.0.1 → **3.0.2**, patch;
   [#180](https://github.com/pharn-dev/pharn-oss/issues/180), shipped in

@@ -215,7 +215,7 @@ function emitSpecId(specPath) {
 //
 // WHY a print-mode and not "read the state out of validate's GREEN line", which is the cheaper-looking
 // alternative a future reader will propose: that line is PROSE, and a membership fact read by pattern-matching
-// free text is exactly the defect .dev/memory-bank/lessons-learned.md L6 names. The extra child process is the
+// free text is exactly the defect PHARN's own build-loop lesson L6 names. The extra child process is the
 // price of reading the structured location; it is paid once per gate invocation and is the correct trade.
 //
 // Mirrors emitHash / emitSpecId in exit codes (unreadable → 1, no frontmatter → 1), in reporting an ABSENT

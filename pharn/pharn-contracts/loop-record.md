@@ -81,7 +81,7 @@ The next concrete step, stated as one — free text, untrusted DATA. Informs; ne
 | `date`       | `^\d{4}-\d{2}-\d{2}$`                                                     | **value** shape-gated; that it is the real date is advisory                       |
 
 Every anchored regex above is applied **only after** a control-char + length guard on the raw value —
-composed, never replaced (`.dev/memory-bank/lessons-learned.md` L14, cited not restated — P4). The
+composed, never replaced (PHARN's own build-loop lesson **L14**, cited not restated — P4). The
 executable SoT for all four is `pharn/floor/check-loop-record.mjs`; this table describes them for the
 human.
 
