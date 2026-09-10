@@ -8,6 +8,14 @@
 
 ## Files
 
+> `set-writes-scope.cjs --from-plan` reads **one literal path per bullet** — the FIRST back-ticked token
+> — and drops `*`-glob entries unless `--target` narrows them. A bullet naming several paths therefore
+> scoped only its first, and a glob bullet scoped nothing: measured, this list resolved **13** paths while
+> naming far more. The multi-path bullets below were split so every path this increment writes is
+> declarable, which is the sanctioned remedy (declare it and re-run the setter), not a widening of the
+> approved intent — every added path was already named in this list's prose. The one genuine addition is
+> `.dev/floor/command-hygiene.test.mjs` (two comment attributions the relocation made stale).
+
 - `.claude/hooks/enforce-writes-scope.test.cjs` — product safe-set vectors → `pharn/features/**`
 - `.claude/hooks/set-writes-scope.test.cjs` — path examples → `pharn/features/`
 - `.claude/commands/pharn-*.md` (10 product commands) — all `features/` paths → `pharn/features/`
@@ -15,13 +23,20 @@
 - `pharn/floor/check-regress.mjs` — product root in `isPipelineArtifact` + comments
 - `pharn/floor/render-ship-briefing.mjs` — default `base` → `pharn/features`
 - `pharn/floor/reconcile-ignore.json` — pipeline_artifacts shape prose
-- `pharn/floor/check-loop-record.mjs`, `check-ship-briefing.mjs`, `render-cost-record.mjs`, `merge-findings.mjs` — header comments
-- `pharn/floor/*.test.mjs` — fixture paths (preserve `.dev/features/`)
+- `pharn/floor/check-loop-record.mjs` — header comment
+- `pharn/floor/check-ship-briefing.mjs` — header comment
+- `pharn/floor/render-cost-record.mjs` — header comment
+- `pharn/floor/merge-findings.mjs` — header comment
+- `pharn/floor/render-ship-briefing.test.mjs` — fixture paths + the CLI-default regression case
+- `pharn/floor/*.test.mjs` — remaining fixture paths (preserve `.dev/features/`)
 - `pharn/pharn-contracts/*.md` (7 contracts) — product artifact paths
 - `pharn/pharn-review/**/*.md`, `pharn/pharn-pipeline/grillers/**/*.md` (35 capabilities) — writes + prose
+- `.dev/floor/command-hygiene.test.mjs` — stale `pharn-review.md` attributions in two comments
 - `.prettierignore` — `features/*/` → `pharn/features/*/`
-- `features/README.md` → `pharn/features/README.md` (git mv + prose rewrite)
-- `README.md`, `CLAUDE.md`, `CONTRIBUTING.md` — product root path prose
+- `pharn/features/README.md` — moved from `features/README.md` (git mv + prose rewrite)
+- `README.md` — product root path prose
+- `CLAUDE.md` — product root path prose + the `MIN_CLI` discipline paragraph
+- `CONTRIBUTING.md` — product root path prose
 - `SKILLS_VERSION` — 4.0.0 → 5.0.0
 - `MIN_CLI` — new file, `0.5.0`
 - `CHANGELOG.md` — [5.0.0] breaking relocation entry

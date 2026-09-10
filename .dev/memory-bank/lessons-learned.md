@@ -1445,3 +1445,43 @@ leaving the attribution itself unguarded, i.e. it would report GREEN over exactl
 - source: `.dev/features/readme-writes-scope-default/PLAN.md` (defect A.1) +
   `.dev/features/readme-writes-scope-default/REVIEW.md` (lens 3)
 - promoted: 2026-09-10 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L41 — A default every test overrides is exercised by nothing — hermetic fixtures are the blind spot
+
+type: process · concepts: [test-blindspot, default-values, redundant-identity, relocation]
+
+**Lesson.** When a parameter has a default AND every test supplies that parameter explicitly for
+hermeticity, the default is dead code to the suite. It can be wrong for an entire release line while every
+gate stays green, because the only caller that ever reaches it is production.
+
+**Measured, not argued.** The 5.0.0 `features/` -> `pharn/features/` relocation updated one of the TWO
+copies of the `base` default in `pharn/floor/render-ship-briefing.mjs`: the renderer (`:318`) became
+`"pharn/features"`, the CLI entry point (`:438`) stayed `"features"`. `/pharn-ship` Step 2c invokes that
+CLI WITHOUT `--base`, so the stale copy WAS the production path and every product ship RED-failed at GATE 2
+with `ENOENT ... features/<name>/PLAN.md`. The suite was **1979/1979 green** across the whole defect: every
+CLI case in `render-ship-briefing.test.mjs` passes `--base` explicitly (each builds its own scratch dir) and
+every unit case calls `renderBriefing()` directly. The convention that makes those tests hermetic and
+order-independent is the same convention that made the default unobservable.
+
+**This is not [[L35]], though it rhymes.** L35 says a fact stored twice should have its second copy retired
+rather than synced, and that is the correct remedy here (the fix deletes the CLI default so `flag()`
+returning `undefined` falls through to the renderer's single `?? "pharn/features"`). What L35 does not
+explain is why a green suite failed to notice the divergence for a whole release. The answer is the test
+convention, and that is the part worth carrying.
+
+**Remedy.** When a parameter carries a default, either (a) one test must exercise the no-argument path, or
+(b) the default must not exist in two places. Prefer (b); add (a) when the default legitimately lives in one
+place and a caller depends on it. A bulk find-and-replace across a relocation is exactly the operation that
+splits paired constants, so a relocation is the moment to enumerate defaults, not only paths.
+
+**Bound (P0).** This is a convention, not a floor check. Nothing detects a default that no test reaches:
+coverage tooling would report the LINE as covered (the tests execute `main()`), because what is uncovered is
+the _branch where the flag is absent_, not the statement. No checker is added here — P7's bar is a real
+second failure, and this is the first.
+
+**Provenance.**
+
+- feature: `product-features-relocation`
+- commit: `aa5aafe2d3f29dbdef5cf85e1ce4b75866a7e20e`
+- source: `.dev/features/product-features-relocation/REVIEW.md` (F2)
+- promoted: 2026-09-10 via gated `/pharn-dev-memory-promote` (human-approved).

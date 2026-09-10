@@ -28,8 +28,10 @@ docs) from **the apparatus used to build it** (under `.dev/`):
   (grillers), `pharn/pharn-review/` (code-review lenses) — **plus the product floor** `pharn/floor/` (the
   deterministic checkers + their tests that the `/pharn-*` product commands run on a user's code). Two of the
   four trusted docs live here too (`pharn/CONSTITUTION.md`, `pharn/ARCHITECTURE.md`); the other two
-  (`THREAT-MODEL.md`, `LIMITS.md`), `README`/`LICENSE`/`CHANGELOG`/`SECURITY`, `pharn.config.json`, and a
-  product-pipeline artifacts under `pharn/features/` (`SPEC.md`, …) sit at the root. This is what a user clones.
+  (`THREAT-MODEL.md`, `LIMITS.md`), `README`/`LICENSE`/`CHANGELOG`/`SECURITY`, `pharn.config.json`,
+  `SKILLS_VERSION` and `MIN_CLI` sit at the root; the **product-pipeline** artifacts (`SPEC.md`, …) live under
+  `pharn/features/`, which is where they MOVED in 5.0.0 — a root `features/` collided with a project's own
+  (Cucumber's default glob; feature-sliced architectures). This is what a user clones.
 - **Build apparatus (`.dev/`):** `.dev/floor/` (dev-only checkers — `check-provenance`, `check-variance`,
   `check-config` — with their tests; the `scan-plan-*` grill-scanners **moved to `pharn/floor/` in 2.4.0**,
   because the grillers that invoke them ship), `.dev/features/` (build-loop audit
@@ -55,6 +57,22 @@ file. **Bounded, and stated:** the versioning UNIT is the product surface, which
 "files an install contains" — the installer copies `pharn/CONSTITUTION.md` and `pharn/ARCHITECTURE.md`
 but **not** `THREAT-MODEL.md` / `LIMITS.md`, which are read here in the repo. All four still bump (they
 are the shipped methodology's trusted docs); two of them simply never land in a user's directory.
+
+**`MIN_CLI` (repo root) is the OTHER version file, and it is not a second `SKILLS_VERSION`.** One bare
+SemVer line + trailing newline, nothing else. It declares the minimum `@pharn-dev/pharn` version that can
+install this tree, and the CLI's `minCliGate()` refuses a **strictly older** CLI with an actionable
+message instead of letting it half-install. **Bump it only when an older CLI would install a BROKEN
+tree** — a relocation of an installed path, a frontmatter/contract change that invalidates existing
+installs — never merely because `SKILLS_VERSION` moved; most releases leave it untouched. It went in at
+`0.5.0` with the 5.0.0 `features/` → `pharn/features/` relocation, because a pre-0.5.0 CLI looks for the
+boundary contract at the old root, finds nothing, and — both of its readers being existence-guarded —
+installs it **silently, with no error and no warning**.
+**FAIL-OPEN IN ONE DIRECTION ONLY, and that is the thing to know (P0):** absent, unreadable, malformed
+and incomparable all mean _"no constraint"_, so a typo cannot brick the fleet — it **silently disables
+the gate** instead. Nothing in this repo checks the file: no floor primitive reads it, so its correctness
+is care, not a guarantee. The named residual is `min-cli-format-check`, deliberately unbuilt — P7's bar
+is a real failure and there has not been a first one. What it CANNOT do is make an old CLI understand a
+new layout; it converts a silent half-install into a clean refusal, which is the whole benefit.
 
 - **Any change that alters product-surface bytes MUST bump `SKILLS_VERSION` and add a `CHANGELOG.md`
   entry — prose-only edits included.** A clarified `/pharn-*` command step, a reworded contract, or a

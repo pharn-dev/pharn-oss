@@ -947,7 +947,7 @@ test("✧ the placeholder predicate DISCRIMINATES — it admits real scopeable p
     "pharn-build.md's PROSE entry must not qualify — it is scoped via --from-plan, not --target"
   );
   assert.ok(!isScopeablePlaceholder("<files named in PLAN.md only>"), "pharn-dev-build.md's prose entry must not qualify");
-  assert.ok(!isScopeablePlaceholder("features/**"), "a bare glob with no placeholder must not qualify (pharn-review.md)");
+  assert.ok(!isScopeablePlaceholder("pharn/features/**"), "a bare glob with no placeholder must not qualify (pharn-review.md)");
   assert.ok(!isScopeablePlaceholder("runs/**"), "a bare glob with no placeholder must not qualify (pharn-dev-eval.md)");
 });
 
