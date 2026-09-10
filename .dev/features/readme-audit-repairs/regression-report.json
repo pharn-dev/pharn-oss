@@ -1,0 +1,27 @@
+{
+  "base": "4bd1b0c3269504ee55060b2a74ca8f1eca68de23",
+  "inside": [
+    ".dev/features/readme-audit-repairs/GRILL.md",
+    ".dev/features/readme-audit-repairs/PLAN.md",
+    ".dev/features/readme-audit-repairs/REGRESSION.md",
+    ".dev/features/readme-audit-repairs/SHIP.md",
+    "README.md"
+  ],
+  "outside_gates": {
+    "structural:expected-injection-comment": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
