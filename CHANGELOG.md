@@ -331,6 +331,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   which is why the render is now unconditional. But a merged scalar triple must **never** be read as one
   lens's verdict.
 
+- **A Capability's `writes:` is parsed by NOTHING, while two shipped docs called it floor-enforced**
+  (`SKILLS_VERSION` 3.0.10 → **3.0.11**, patch over shipped bytes). `pharn/ARCHITECTURE.md §3.1` annotates
+  `writes: ["<path>"]` as _"ENFORCED by the pre-write hook"_, and
+  `pharn/pharn-contracts/finding-shape.md` claimed that once a Capability names `findings.json` in its
+  `writes:` the guard _"pins the path"_. **Neither holds.** `enforce-writes-scope.cjs` reads exactly one
+  input — `.pharn/writes-scope.json` — which `set-writes-scope.cjs` writes from a
+  `--from-frontmatter <file>` argument, and **every call site in the corpus names a COMMAND file; not
+  one names a Capability.** Reported by an adversarial review
+  (`capability-writes-never-bound-to-guard`, HIGH).
+
+  **The 22 lens declarations were also wrong on their face**, which is how the field stayed wrong: each
+  declared `features/<lens>/findings.json` **and** `features/<lens>/REVIEW.md`, while `/pharn-review`
+  directs every subagent to `features/<name>/lenses/<lens>/findings.json` and writes `REVIEW.md`
+  **itself** at Step 6. Two errors in a field nothing reads. All 22 are re-pointed at the path the
+  command actually directs.
+
+  **What IS enforced, stated at its real width:** a lens subagent writes under `features/**` because
+  that is the **invoking command's** active scope (or the fail-closed default) — **not** because the
+  lens declared a path. The guarantee is real, but it belongs to the command and is **coarser** than a
+  per-Capability pin.
+
+  Three rules in `command-hygiene.test.mjs` (a test — no bump of its own) keep the declaration truthful:
+  every lens's `writes:` must name its own directory under the real path; **no** `--from-frontmatter`
+  call site may name anything outside `.claude/commands/` (the load-bearing fact behind the corrected
+  bullet — if that ever changes, the corrected prose must be re-derived); plus an [[L34]] non-vacuity
+  assertion. **They make the declaration HONEST; they do not make it ENFORCED**, and they do not pretend
+  to.
+
+  **`pharn/ARCHITECTURE.md §3.1` is hook-protected and still carries the false annotation** — it needs a
+  human edit outside the agent loop. The exact replacement is in the PR body.
+
 - **The writes-scope guard's fail-closed default no longer carries dev-repo posture into
   installed projects** (`SKILLS_VERSION` 3.0.1 → **3.0.2**, patch;
   [#180](https://github.com/pharn-dev/pharn-oss/issues/180), shipped in

@@ -7,7 +7,7 @@ coupling: agnostic
 applies: ["universal"]
 model_tier: sonnet
 reads: ["pharn/pharn-contracts/finding-shape.md", "<artifact-under-review>"]
-writes: ["features/off-by-one/REVIEW.md", "features/off-by-one/findings.json"]
+writes: ["features/<name>/lenses/off-by-one/findings.json"]
 constitution_refs: ["P0", "P2", "P4", "P5", "P7"]
 enforces: ["P2"]
 version: "0.1.0"

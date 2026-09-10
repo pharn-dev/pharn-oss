@@ -78,10 +78,19 @@ the finding object defined above (zero or more) — **in addition to** any human
 Honest scope, because the disease this repo exists to prevent is "written in the contract" mistaken
 for "therefore guaranteed." The `MUST` above is a **three-way split**, not one blanket guarantee:
 
-- **Declaring it → floor-enforced (fix #7).** Once a Capability names `findings.json` in its `writes:`
-  (`pharn/ARCHITECTURE.md §3.1`), the live pre-write **writes-scope guard** (`enforce-writes-scope.cjs`,
-  fix #7) pins the **path** — a hook reduction (`pharn/ARCHITECTURE.md §2`): the Capability may write its
-  findings array only where it declared, nowhere else.
+- **Declaring it → ADVISORY today, not floor-enforced.** This bullet previously claimed that once a
+  Capability names `findings.json` in its `writes:` (`pharn/ARCHITECTURE.md §3.1`), the pre-write
+  writes-scope guard "pins the path". **That is false, and the correction matters more than the claim
+  did.** `enforce-writes-scope.cjs` reads exactly one input — `.pharn/writes-scope.json` — which
+  `set-writes-scope.cjs` writes from a **`--from-frontmatter <file>`** argument. **Every one of the
+  corpus's `--from-frontmatter` call sites names a COMMAND file; not one names a Capability**
+  (verified by enumerating them). So a Capability's `writes:` is **parsed by nothing** and pins
+  nothing — it is declared metadata that documents intent.
+  **What IS floor-enforced** is the scope the invoking **command** set: a lens subagent spawned by
+  `/pharn-review` writes under `features/**` because that is the active scope (or the fail-closed
+  default), **not** because the lens declared a path. The guarantee is real but it belongs to the
+  command, and it is **coarser** than a per-Capability pin. Surfaced by an adversarial review
+  (`capability-writes-never-bound-to-guard`, HIGH).
 - **Emitting it at all → advisory.** Nothing on the floor forces a Capability to declare or write
   `findings.json` — `pharn/floor/validate.mjs` does not check for it, and no hook fabricates an emission. So
   `MUST emit` is a **conformance requirement** on a conforming Capability, **not** a floor-guaranteed
