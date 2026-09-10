@@ -1188,3 +1188,76 @@ test("✧ the reachability rule DISCRIMINATES — it fails on the real pre-fix s
   // And it must ACCEPT the unmutated body, so the rejection above is about the mutation, not the fixture.
   assert.equal(releaseUnreachableReason(real), null, `the production predicate must ACCEPT the real ${file}`);
 });
+
+// ── A Capability's `writes:` binds to NOTHING, and the lens set must at least be HONEST about it ──────
+//
+// THE DEFECT (adversarial review: `capability-writes-never-bound-to-guard`, HIGH). ARCHITECTURE §3.1
+// annotates `writes:` as "ENFORCED by the pre-write hook", and finding-shape.md claimed the guard "pins
+// the path" once a Capability names findings.json. Both are false. enforce-writes-scope.cjs reads ONE
+// input — .pharn/writes-scope.json — which set-writes-scope.cjs writes from `--from-frontmatter <file>`,
+// and EVERY call site in the corpus names a COMMAND file. Not one names a Capability. So a Capability's
+// `writes:` is parsed by nothing.
+//
+// It was also WRONG on its face: the 22 lenses declared `features/<lens>/findings.json` and
+// `features/<lens>/REVIEW.md`, while /pharn-review directs each subagent to
+// `features/<name>/lenses/<lens>/findings.json` and writes REVIEW.md ITSELF at Step 6. Two errors in a
+// field nothing reads, which is exactly how it stayed wrong.
+//
+// HONEST SCOPE (P0): these rules make the declaration TRUTHFUL and keep it truthful. They do NOT make it
+// ENFORCED — nothing here binds a lens's `writes:` to the guard, and this test does not pretend to. The
+// enforcement that exists belongs to the invoking COMMAND's scope (or the fail-closed default), is
+// coarser than a per-Capability pin, and is unchanged by this file.
+const LENS_ROOT = join(COMMANDS_DIR, "..", "..", "pharn", "pharn-review");
+const LENS_WRITES_RE = /^writes:\s*\["features\/<name>\/lenses\/([^/"]+)\/findings\.json"\]\s*$/m;
+
+function lensCapabilityFiles() {
+  const out = [];
+  for (const e of readdirSync(LENS_ROOT, { withFileTypes: true })) {
+    if (!e.isDirectory()) continue;
+    for (const f of readdirSync(join(LENS_ROOT, e.name))) {
+      if (!f.endsWith(".md")) continue;
+      const text = readFileSync(join(LENS_ROOT, e.name, f), "utf8");
+      if (/^role:\s*lens\s*$/m.test(text)) out.push({ dir: e.name, file: join(LENS_ROOT, e.name, f), text });
+    }
+  }
+  return out;
+}
+
+test("✧ L34 — lens capabilities are discovered (the writes: rule below cannot pass vacuously)", () => {
+  assert.ok(lensCapabilityFiles().length > 0, `discovered 0 role: lens capabilities under ${LENS_ROOT} — the walk broke`);
+});
+
+test("✧ every lens's `writes:` names the path /pharn-review ACTUALLY directs it to", () => {
+  const offenders = [];
+  for (const { dir, file, text } of lensCapabilityFiles()) {
+    const m = LENS_WRITES_RE.exec(text);
+    if (!m) offenders.push(`${dir} — writes: is not \`["features/<name>/lenses/${dir}/findings.json"]\``);
+    else if (m[1] !== dir) offenders.push(`${dir} — writes: names lens directory "${m[1]}", not its own "${dir}"`);
+    void file;
+  }
+  assert.deepEqual(offenders, [], `lens writes: disagrees with /pharn-review's Step 4 path:\n    ${offenders.join("\n    ")}`);
+});
+
+test("✧ NO --from-frontmatter call site names a Capability — the reason lens writes: binds to nothing", () => {
+  // The load-bearing fact behind the corrected finding-shape.md bullet. Measured from the corpus, so if
+  // a future increment DOES point the setter at a capability, this fails and the corrected prose — which
+  // says a Capability's writes: is parsed by nothing — must be revisited.
+  const targets = [];
+  for (const file of commandFiles()) {
+    const text = readFileSync(join(COMMANDS_DIR, file), "utf8");
+    // Only REAL invocations: the argument must look like a path. Guarantee-audit prose writes
+    // `--from-frontmatter … --target`, and an ellipsis is a citation of the flag, not a call site.
+    for (const m of text.matchAll(/--from-frontmatter\s+(\S+)/g)) {
+      if (/[./]/.test(m[1])) targets.push(m[1]);
+    }
+  }
+  assert.ok(targets.length > 0, "discovered 0 --from-frontmatter call sites — the walk broke (L34)");
+  const nonCommand = [...new Set(targets)].filter((t) => !t.includes(".claude/commands/"));
+  assert.deepEqual(
+    nonCommand,
+    [],
+    "A --from-frontmatter call site now names something outside .claude/commands/. If it names a " +
+      "Capability, then a Capability's writes: IS parsed, and finding-shape.md's corrected bullet " +
+      `("parsed by nothing") must be re-derived. Offending targets: ${JSON.stringify(nonCommand)}`
+  );
+});

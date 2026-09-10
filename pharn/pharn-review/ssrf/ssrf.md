@@ -7,7 +7,7 @@ coupling: agnostic
 applies: ["backend", "ssr"]
 model_tier: sonnet
 reads: ["pharn/pharn-contracts/finding-shape.md", "<artifact-under-review>"]
-writes: ["features/ssrf/REVIEW.md", "features/ssrf/findings.json"]
+writes: ["features/<name>/lenses/ssrf/findings.json"]
 constitution_refs: ["P0", "P2", "P4", "P5", "P7"]
 enforces: ["P2"]
 version: "0.1.0"
