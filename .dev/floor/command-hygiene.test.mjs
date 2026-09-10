@@ -1261,3 +1261,76 @@ test("✧ NO --from-frontmatter call site names a Capability — the reason lens
       `("parsed by nothing") must be re-derived. Offending targets: ${JSON.stringify(nonCommand)}`
   );
 });
+
+// ── The SHIPPED surface must not cite `.dev/` CANON, which a user's install does not have ────────────
+//
+// THE DEFECT (adversarial review: `product-cmds-cite-dev-canon`, LOW, and its verifier EXTENDED the
+// class): 9 of 10 product commands cited `.dev/memory-bank/lessons-learned.md L<n>` in prose, and so did
+// the shipped floor (validate.mjs, check-spec.mjs) and pharn-contracts/loop-record.md. An install ships
+// `pharn/` plus the product `.claude/` surface WITHOUT `.dev/`, so every one of those pointers resolves
+// to nothing in the place it is read.
+//
+// THE FIX WAS NOT TO DELETE THE PROVENANCE. P4 says cite rather than restate, and the lessons are real;
+// what was wrong was the PATH, which promised a file the reader cannot open. Each site now reads
+// "PHARN's own build-loop lesson L<n>" — provenance kept, dangling pointer gone — and in every case the
+// surrounding sentence already carried the lesson's substance, so nothing was lost by dropping the path.
+//
+// SCOPED to `.dev/memory-bank/` CANON on purpose. A shipped file may still name `.dev/` when the subject
+// IS the dev surface: /pharn-memory-promote explains that `/pharn-dev-memory-promote` -> `.dev/memory-bank/`
+// is a separate command, which is correct and must not be flagged. The rule targets the lessons-canon
+// citation shape, not the string `.dev/`.
+//
+// HONEST SCOPE (P0): this proves no shipped file cites the dev canon FILE. It does not prove the
+// remaining prose is accurate, and it cannot check the installer (its source is out of tree) — the
+// install-absence half rests on CLAUDE.md's documented dev/product boundary, exactly as the review's
+// verifier scoped it.
+const DEV_CANON_RE = /\.dev\/memory-bank\/lessons-learned\.md/;
+
+function shippedSurfaceFiles() {
+  const out = [];
+  for (const f of commandFiles()) {
+    if (f.startsWith("pharn-dev-")) continue; // apparatus commands legitimately cite dev canon
+    out.push(["'.claude/commands/" + f + "'", join(COMMANDS_DIR, f)]);
+  }
+  const PHARN = join(COMMANDS_DIR, "..", "..", "pharn");
+  const walk = (dir) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if ((e.name.endsWith(".mjs") || e.name.endsWith(".md")) && !e.name.includes(".test.")) out.push([p, p]);
+    }
+  };
+  walk(PHARN);
+  return out;
+}
+
+test("✧ L34 — the shipped surface is non-empty (the dev-canon rule below cannot pass vacuously)", () => {
+  assert.ok(shippedSurfaceFiles().length > 0, "discovered 0 shipped-surface files — the walk broke");
+});
+
+test("✧ no SHIPPED file cites `.dev/memory-bank/lessons-learned.md` — an install has no `.dev/`", () => {
+  const offenders = [];
+  for (const [label, path] of shippedSurfaceFiles()) {
+    readFileSync(path, "utf8")
+      .split(/\r?\n/)
+      .forEach((line, i) => {
+        if (DEV_CANON_RE.test(line)) offenders.push(`${label}:${i + 1} — ${line.trim().slice(0, 110)}`);
+      });
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    "Shipped bytes cite the DEV lessons canon, which a user's install does not contain. Keep the " +
+      'provenance and drop the path — write "PHARN\'s own build-loop lesson L<n>" instead:\n    ' +
+      offenders.join("\n    ")
+  );
+});
+
+test("✧ the dev-canon rule DISCRIMINATES — it fires on the real pre-fix citation shape (L4)", () => {
+  // Mutated from the REAL historical string rather than a synthetic one, so a future loosening of the
+  // matcher fails here instead of silently re-admitting the defect.
+  const pre = "sits outside the `PreToolUse` gate entirely (`.dev/memory-bank/lessons-learned.md` L19) — nothing on";
+  const post = "sits outside the `PreToolUse` gate entirely (PHARN's own build-loop lesson **L19**) — nothing on";
+  assert.ok(DEV_CANON_RE.test(pre), "the matcher must fire on the pre-fix citation, or the rule above is vacuous");
+  assert.ok(!DEV_CANON_RE.test(post), "the matcher must NOT fire on the corrected form, or the fix is unachievable");
+});

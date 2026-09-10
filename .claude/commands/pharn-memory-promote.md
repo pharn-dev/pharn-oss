@@ -410,7 +410,7 @@ node pharn/floor/gen-lessons-index.mjs .
   fails or you skip it, the next `/pharn-plan` reads `STALE` and falls back to reading canon in full,
   which is the safe direction.
 - **This write ESCAPES the fix #7 writes-scope — declared, not pretended**
-  (`.dev/memory-bank/lessons-learned.md` **L19**, cited not restated — P4). The pre-write hook gates
+  (PHARN's own build-loop lesson **L19**, cited not restated — P4). The pre-write hook gates
   `Write|Edit|MultiEdit`, and this runs through **Bash** as a subprocess, so Step 0's scope does not
   cover it. It is benign for **this** target — `.pharn/**` is always-writable runtime scratch, so nothing
   is reached that the scope withheld — but the mechanism is the one L19 documents, and it is named here
@@ -531,7 +531,7 @@ default-safe-set, so a leftover scope from a finished run is **stricter** than n
 the default permits start being denied in later sessions, with nothing naming the cause.
 
 **ADVISORY (P0), and the bound is the point.** This is agent-run orchestration through **Bash**, so it
-sits outside the `PreToolUse` gate entirely (`.dev/memory-bank/lessons-learned.md` L19) — nothing on
+sits outside the `PreToolUse` gate entirely (PHARN's own build-loop lesson **L19**) — nothing on
 the floor forces it, and an early abort skips it. It degrades safely: the next command's first-step
 **set** overwrites a leftover scope, which is exactly today's behavior. The floor guarantee is
 unchanged and belongs to the **reader**, not to this step — **absence of a scope file = the

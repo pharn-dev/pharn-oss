@@ -39,7 +39,7 @@ const TARGET = process.argv[2] || ".";
 // capability walk VACUOUS: `walk()` below swallows the readdirSync failure by design, so the run
 // printed `GREEN — 0 capabilities checked in /no/such/dir` and exited 0 — a fabricated pass, and
 // invisible to a CI step that reads only the exit code. A checker must REJECT a wrongly-shaped input
-// rather than trust its caller (.dev/memory-bank/lessons-learned.md L21 — cited, not restated, P4).
+// rather than trust its caller (PHARN's own build-loop lesson L21 — cited, not restated, P4).
 //
 // Floor primitive #3 (presence + type test; ARCHITECTURE §2). Runs BEFORE the walk, so the refusal
 // can never be confused with a completed scan. Two branches, each carrying a message that is true for
@@ -420,7 +420,7 @@ for (const cap of capabilities) {
   // reading. Widening the matcher without moving it is not a smaller change, it is a broken one: every
   // capability outside the base declares `reads: ["pharn/pharn-contracts/finding-shape.md"]`, so a
   // target-blind widening REDs all of them — 35 correct declarations, measured before the change, the
-  // defect .dev/memory-bank/lessons-learned.md L3 names. The exemption therefore keys on the TARGET
+  // defect PHARN's own build-loop lesson L3 names. The exemption therefore keys on the TARGET
   // module, and the reader-side skip is gone, so a base-module capability's own reads: is checkable too.
   //
   // NARROWED, and stated — FOUR distinct bounds, none of which the widening closes:
@@ -510,7 +510,7 @@ if (existsSync(archManifest)) {
 // self-headers but not the capability bodies that INVOKE them, so a lens's Layer-1 sub-check still
 // named the old directory and ENOENTed — the strongest deterministic sub-check silently degrading to
 // judgment, with the audit record citing a command that errored. That hand-fix was a discipline-only
-// remedy and the canon rotted anyway; per .dev/memory-bank/lessons-learned.md L20 the second
+// remedy and the canon rotted anyway; per PHARN's own build-loop lesson L20 the second
 // occurrence is the trigger to give the class a deterministic check rather than another reminder.
 //
 // RULE: a literal `.dev/floor/<B>` is RED iff <TARGET>/pharn/floor/<B> is a real file — i.e. the cite

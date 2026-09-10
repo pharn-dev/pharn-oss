@@ -442,7 +442,7 @@ default-safe-set, so a leftover scope from a finished run is **stricter** than n
 the default permits start being denied in later sessions, with nothing naming the cause.
 
 **ADVISORY (P0), and the bound is the point.** This is agent-run orchestration through **Bash**, so it
-sits outside the `PreToolUse` gate entirely (`.dev/memory-bank/lessons-learned.md` L19) — nothing on
+sits outside the `PreToolUse` gate entirely (PHARN's own build-loop lesson **L19**) — nothing on
 the floor forces it, and an early abort skips it. It degrades safely: the next command's first-step
 **set** overwrites a leftover scope, which is exactly today's behavior. The floor guarantee is
 unchanged and belongs to the **reader**, not to this step — **absence of a scope file = the
