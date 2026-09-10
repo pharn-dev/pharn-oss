@@ -1530,3 +1530,47 @@ re-executed with that scope materialized, permits it.
 - source: `.dev/features/product-features-relocation/REVIEW.md` (F3) +
   `.dev/features/reconcile-scope-amendments/PLAN.md`
 - promoted: 2026-09-10 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L43 — A consistency check over several stores of one fact certifies their agreement, never the fact — they can all be stale together
+
+type: floor · concepts: [consistency-check, version-discipline, mirrored-state, check-blindness, referent-binding]
+
+**Lesson.** When one fact is mirrored across several stores, the reflex is to check that the stores
+AGREE. That check is structurally blind to the whole set going stale AT ONCE, because agreement is
+PRESERVED by updating none of them. Before adding one, ask: what would still be wrong if every copy
+agreed? If the answer is "the value itself", the check you need binds the value to its REFERENT — the
+thing it describes — not the copies to each other.
+
+**Measured.** `SKILLS_VERSION`, the README shields badge and the `CHANGELOG.md` version key all read
+`5.1.0` while `pharn/floor/reconcile-baseline.mjs` — a product-surface byte the version exists to
+version — had moved past it in `c338b9d`. `check:badge` and `check:changelog` both exited 0, and
+`npm run check` was exit 0 across all ten gates with the bump missing. Neither gate is weak; each
+answered exactly the question it was built to answer. `check-version-badge.mjs` even disclaims the class
+in its own header ("a badge matching a wrong bump stays GREEN") — the blindness was documented at the one
+site nothing cross-reads while bumping.
+
+**Distinct from its two neighbours, and the distinction is the usable part.** [[L35]] asks whether the
+second copy should exist at all and prescribes DRAINING it. Here the copies must exist — the CHANGELOG's
+version string is a JOIN KEY binding a number to the description of what changed in it, argued in
+`check-skills-version-recorded.mjs`'s own header — so draining is unavailable and the remedy lies on a
+different axis. [[L20]] says a discipline-only remedy has earned a floor check on its second occurrence;
+this says WHICH check, because a third mutual-consistency gate would have been green too.
+
+**Remedy.** Bind the fact to what it describes. Here that is: compare the commit that last moved
+`SKILLS_VERSION` against the product-surface paths changed since it — the same git-as-floor-input
+precedent `check-bash-reconcile.mjs` already sets.
+
+**Bound (P0).** Naming the missing check does not build it, and this entry must not be read as having
+closed anything. The detector is DEFERRED with two real design problems: the bump-triggering set becomes
+a maintained enumeration ([[L29]]/[[L36]]), and a bump landing in a sibling commit of the same PR is
+correct practice yet would RED. Until it exists this stays discipline — which is precisely what [[L20]]
+predicts will recur. This is at least the third occurrence: `check-skills-version-recorded.mjs`'s header
+already records `6c5ae8e` and `e4e8529`.
+
+**Provenance.**
+
+- feature: `record-amendscope-hardening`
+- commit: `c338b9d07f2d620ebd35becd5831afbcd6727061`
+- source: `.dev/features/record-amendscope-hardening/REVIEW.md` +
+  `.dev/features/record-amendscope-hardening/PLAN.md`
+- promoted: 2026-09-10 via gated `/pharn-dev-memory-promote` (human-approved).

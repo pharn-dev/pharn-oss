@@ -1,0 +1,23 @@
+{
+  "base": "c338b9d",
+  "inside": [
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    ".dev/features/record-amendscope-hardening/GRILL.md",
+    ".dev/features/record-amendscope-hardening/PLAN.md"
+  ],
+  "outside_gates": {
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

@@ -52,6 +52,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`reconcile-baseline.mjs` now reads the baseline record through ONE descriptor, closing a
+  check-then-read race (CWE-367).** `SKILLS_VERSION` **5.1.0 → 5.1.1** (patch: a correction to bytes that
+  the 5.1.0 entry below already put on the product surface; no capability is added and every success
+  path is byte-for-byte what it was — but one error path does move, recorded below rather than smoothed
+  over).
+  ([`pharn/floor/reconcile-baseline.mjs`](./pharn/floor/reconcile-baseline.mjs), commit `c338b9d`,
+  [`.dev/features/record-amendscope-hardening/`](./.dev/features/record-amendscope-hardening/)) —
+  `amendScope()` and the `--show` CLI mode each probed the record with `existsSync()` and then opened it
+  again with a separate `readFileSync(path)`. Between those two syscalls the path can change: the file
+  can be replaced, removed, or swapped for a symlink, so the bytes parsed are not necessarily the bytes
+  the existence test approved. Both now `openSync()` once and read **the descriptor**, distinguish
+  `ENOENT` inside the `catch` to preserve the exact _"no baseline at … — run `--anchor` first"_ message
+  that callers and tests depend on, and release the descriptor in a `finally` so a parse failure cannot
+  leak it. Pinned by `★ amendScope reads the baseline through ONE descriptor — no
+exists-then-read/write (CWE-367)`.
+
+  **One error path DID move, and naming it is what a patch entry is for.** `--show`'s `readFileSync`
+  previously sat outside any `try`, so a **non-`ENOENT`** read failure (`EACCES`, `EISDIR`, a mid-read
+  I/O error) threw **uncaught** — Node exit **1** with a stack trace. It is now caught and reported as
+  `cannot read .pharn/reconcile/baseline.json: <message>` at exit **2**, joining that mode's existing
+  refusal code. Strictly better behaviour, and still a change to what a caller branching on `--show`'s
+  exit code observes. `amendScope()` has no counterpart change: its `readFileSync` was already inside
+  the `try`, so both its failure modes return the strings they returned before.
+
+  **The bound is unchanged and must not be read as tightened (P0).** The reconciliation record is
+  unauthenticated state in the writable tree, and `LIMITS.md §6` plus
+  [`pharn/pharn-contracts/reconciliation-record.md`](./pharn/pharn-contracts/reconciliation-record.md)
+  both already say a writer holding Bash can rewrite it outright. Closing a TOCTOU window does not
+  make the detector adversarial — it removes a way for the checker to act on bytes it never validated,
+  which is **correctness under concurrency**, not strength against an attacker. The detector stays
+  **non-adversarial** accounting against tooling that escapes its scope.
+
+  **Recorded separately from the change itself, and that is the finding worth keeping.** `c338b9d`
+  landed the fix without bumping `SKILLS_VERSION` or adding an entry here, and **both version gates
+  stayed exit 0** — `check:changelog` asks only whether the CURRENT value appears in this file, and
+  `check:badge` disclaims the class in its own header (_"a badge matching a wrong bump stays GREEN"_).
+  Nothing verifies that a bump TRACKS the product bytes that changed. That gap is now measured (at
+  `26ab408..HEAD`: one commit, one product-surface file, no bump) and carried as a deferred detector,
+  not closed — see [`.dev/features/record-amendscope-hardening/SHIP.md`](./.dev/features/record-amendscope-hardening/SHIP.md).
+
 - **A reconciliation epoch may now hold MORE THAN ONE authorized scope, so a hook-approved write by a
   LATER stage stops being reported as a Bash escape.** `SKILLS_VERSION` **5.0.1 → 5.1.0** (minor: a newly
   shipped mode on a shipped checker; no existing install is invalidated — a baseline with no
