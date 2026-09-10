@@ -2,9 +2,16 @@
   "models": {
     "stages": {
       "default": { "model": "sonnet", "effort": "high" },
+      "spec": { "model": "opus", "effort": "high" },
       "plan": { "model": "opus", "effort": "high" },
+      "grill": { "model": "opus", "effort": "high" },
       "build": { "model": "sonnet", "effort": "high" },
-      "review": { "model": "opus", "effort": "high" }
+      "regress": { "model": "sonnet", "effort": "high" },
+      "verify": { "model": "sonnet", "effort": "high" },
+      "ship": { "model": "sonnet", "effort": "high" },
+      "loop": { "model": "sonnet", "effort": "high" },
+      "review": { "model": "opus", "effort": "high" },
+      "memory-promote": { "model": "opus", "effort": "high" }
     }
   },
   "ship": { "requireAttestation": false }

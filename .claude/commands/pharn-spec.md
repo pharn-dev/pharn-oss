@@ -3,6 +3,8 @@ description: "Turn a user's prose intent into a structured, human-approved featu
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
+model: opus
+effort: high
 reads: ["pharn/CONSTITUTION.md", "pharn/ARCHITECTURE.md", "features/<name>/SPEC.md", "pharn/floor/check-spec.mjs"]
 writes: ["features/<name>/SPEC.md"]
 constitution_refs: ["P0", "P2", "P4", "P5", "P6", "P7"]

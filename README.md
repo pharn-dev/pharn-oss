@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-3.1.2-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-3.2.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -151,7 +151,9 @@ normal install adds:
 - product commands in `.claude/commands/`,
 - write-gating hooks in `.claude/hooks/`,
 - the deterministic floor, contracts, grillers, and review lenses under `pharn/`,
-- `pharn.config.json`, pinning the skills version and exact installed commit.
+- `pharn.config.json`, pinning the skills version and exact installed commit, and carrying the
+  `models.stages` block that sets each product command's model and effort (see
+  [Current limitations](#current-limitations) for what that does and does not reach).
 
 ```text
 your-repo/
@@ -164,7 +166,7 @@ your-repo/
 │   ├── pharn-contracts/           # artifact shapes
 │   ├── pharn-pipeline/grillers/   # plan interrogators
 │   └── pharn-review/              # code lenses
-├── pharn.config.json              # skills version + installed commit
+├── pharn.config.json              # skills version + installed commit + models.stages
 ├── features/<name>/               # per increment, written as you run the pipeline:
 │                                  # SPEC PLAN GRILL BUILD REGRESSION VERIFY SHIP — commit these
 └── .pharn/                        # runtime scratch — add to .gitignore
@@ -298,6 +300,7 @@ judgment is **advisory**.
 | Secret-shaped literals in a plan can be detected by the shipped regex scanner                                                                                                                                                                                            | `scan-plan-secrets.mjs`                                                                                                                                                                                    |
 | A missing concrete path declared by the plan yields an incomplete build signal                                                                                                                                                                                           | `check-build-complete.mjs` feeding `check-verify.mjs`                                                                                                                                                      |
 | Which lenses run, and how structured findings merge                                                                                                                                                                                                                      | `count-lenses.mjs` + `merge-findings.mjs`                                                                                                                                                                  |
+| The ten product commands' `model:` / `effort:` frontmatter equals what `pharn.config.json`'s `models.stages` resolves for that stage — not that the stage ran under it                                                                                                   | `check-model-config.mjs`                                                                                                                                                                                   |
 
 **Advisory** — everything a model judges: whether a plan is wise, whether a review finding is real,
 whether a severity is right, whether the code satisfies the product intent, and whether the resulting
@@ -312,6 +315,9 @@ by wording them strongly.
   secret or that an unmatched plan contains none.
 - `check-build-complete` proves that declared concrete paths exist. It does not prove that the build
   modified them, or that their contents are correct.
+- `check-model-config` compares two files. Model and effort are applied by the Claude Code platform, so
+  nothing here observes that a stage ran under the configured model — and an org `availableModels`
+  allowlist or auto mode can decline a value silently.
 - A green PHARN floor means the named deterministic checks passed. It does not mean the code is correct.
 
 See [`LIMITS.md`](./LIMITS.md) for the full set of bounds.
@@ -374,7 +380,7 @@ byte-for-byte by `npm run docs:check`, so it cannot quietly drift from what is a
 - **Product commands — 10** (`.claude/commands/`): `/pharn-build`, `/pharn-grill`, `/pharn-loop`, `/pharn-memory-promote`, `/pharn-plan`, `/pharn-regress`, `/pharn-review`, `/pharn-ship`, `/pharn-spec`, `/pharn-verify`.
 - **Dev-apparatus commands — 9** (`.claude/commands/`): `/pharn-dev-build`, `/pharn-dev-eval`, `/pharn-dev-grill`, `/pharn-dev-memory-promote`, `/pharn-dev-plan`, `/pharn-dev-regress`, `/pharn-dev-review`, `/pharn-dev-ship`, `/pharn-dev-verify`.
 - **Hook scripts — 3** (`.claude/hooks/`): `enforce-writes-scope.cjs`, `protect-trusted-paths.cjs`, `set-writes-scope.cjs`.
-- **Floor checkers — 50** `.mjs` files under `pharn/floor/` (tests excluded).
+- **Floor checkers — 51** `.mjs` files under `pharn/floor/` (tests excluded).
 
 <!-- CURRENT-STATE:END -->
 
@@ -433,9 +439,17 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
 - **Several announced modules are not built.** `pharn-audits`, `pharn-skills-*`, `pharn-stack-*`, and the
   rest of `pharn-core` — the constitution engine, the agnostic rule set, and the memory-bank commands
   beyond promotion. What exists is what the generated inventory above lists.
-- **Per-stage model routing is not wired yet.** `pharn.config.json` carries a `models` block, and the
-  installer validates it and prints it back, but no product command reads it — the pipeline runs on
-  whatever model your Claude Code session is using. Treat the block as reserved, not as a control.
+- **Per-stage model routing is static frontmatter, and it does not reach stages run inside an
+  orchestrator.** `pharn.config.json`'s `models.stages` is the source of truth for the ten product
+  commands' `model:` / `effort:` frontmatter, and `pharn/floor/check-model-config.mjs` RED-fails when
+  the two disagree — but Claude Code selects a command's model from that **static frontmatter and
+  nothing at run time**, so three things follow. The override lasts for **the turn that invokes the
+  command**: you get per-stage routing when you run `/pharn-plan` yourself, and **not** for stages
+  `/pharn-ship` or `/pharn-loop` invoke as steps inside their own turn. An organization
+  `availableModels` allowlist, or auto mode, can decline a value silently. And nothing can observe that
+  a stage actually ran under the configured model — a green checker means the config and the
+  frontmatter agree, never that `/pharn-plan` ran on Opus. Editing the config is therefore only half
+  the change: update the command frontmatter too, or the checker will tell you.
 - **It is token-hungry by construction.** `/pharn-grill` runs the grillers over your plan and
   `/pharn-review` fans every applicable lens out as its own parallel subagent; `/pharn-loop` repeats
   build → regress → verify up to the cap. That buys parallel scrutiny and costs tokens accordingly.

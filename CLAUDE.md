@@ -243,16 +243,51 @@ node pharn/floor/check-lessons-index.mjs [target-dir] [--verdict]
 # Exits non-zero on any RED. /pharn-dev-memory-promote runs it before the human accept/deny gate (never writes on RED).
 node .dev/floor/check-provenance.mjs <candidate.json> <canon-file.md>
 
+# PRODUCT-surface twin of check-config (below), but NOT a copy-pair: hold pharn.config.json's
+# `models.stages` in EQUALITY with the TEN /pharn-* product commands' platform `model:`/`effort:`
+# frontmatter. Same three modes (validate | resolve <stage> | agreement) and the same primitive #3, over a
+# DIFFERENT closed map (PRODUCT_STAGES: spec plan grill build regress verify ship loop review
+# memory-promote), a DIFFERENT filename prefix, and a DIFFERENT fresh-install posture. The DISTINCT
+# BASENAME is deliberate: unlike check-provenance / lessons-index-core, the two files share almost no
+# substance, so no ✧ shared-constant obligation set is implied.
+# MECHANISM, read live (P6): Claude Code selects a command's model from STATIC FRONTMATTER and nothing
+# else — `model:`/`effort:` are real platform-honored command-frontmatter fields, and there is NO runtime
+# routing hook. So the config cannot BE the control; it can only be the SOURCE OF TRUTH the frontmatter is
+# held to. Simulating routing in prose would be the P0 disease.
+# FLOOR: config shape/enums; a `default` entry; every stage key a PRODUCT stage (a `bulid` typo is RED —
+# on this surface it governs nothing); the own-property resolve with a `default` fallback (L15); and
+# BIDIRECTIONAL agreement over the closed map — no mapped command missing, no UNMAPPED product command
+# carrying model:/effort:, and an empty walk is RED, never a vacuous GREEN (L34).
+# NARROWED, and stated three ways: (1) it NEVER proves a stage RAN under that model — the platform applies
+# model/effort, invisible to any hook/hash/enum; (2) TURN SCOPE — the override lasts the invoking turn, so
+# a stage run as a STEP INSIDE /pharn-ship or /pharn-loop gets no per-stage routing; (3) an org
+# availableModels allowlist or auto mode can decline a value SILENTLY. `model_tier:` is a DIFFERENT,
+# platform-inert field (ARCHITECTURE §3.1) and is untouched — the parser matches keys exactly (L6).
+# GREEN BY DESIGN on no pharn.config.json and on a config with no `models.stages` (the check-lessons-index
+# NO_CANON/COLD precedent — the honest normal state of an install that does not use the block); the cost
+# is stated: deleting the block loses the check rather than failing it.
+# Gated by its own *.test.mjs live run, exactly as the dev twin is — no separate npm script, deliberately
+# (L35: a parallel script + chain + CI step + CONTRIBUTING token would be a fourth identity to sync).
+# Ships: bumps SKILLS_VERSION. Exits non-zero on RED.
+node pharn/floor/check-model-config.mjs [validate | resolve <stage> | agreement]
+
 # Validate pharn.config.json (per-stage model/effort) and check that the wired /pharn-dev-* command
 # frontmatter AGREES with it. Config-validity + config↔frontmatter consistency only — NOT proof a stage
 # ran under that model (the platform applies model/effort; that binding is advisory).
 # TWO DIFFERENT FILES SHARE THIS NAME, and only the first is what this checker reads:
-#   (1) THIS repo's root pharn.config.json — the `models.stages` block above, dev-apparatus config;
+#   (1) THIS repo's root pharn.config.json — the `models.stages` block above;
 #   (2) the pharn.config.json the INSTALLER writes into a USER's project — skillsVersion + the exact
 #       installed commit, which `pharn status` / `pharn update` compare against SKILLS_VERSION.
-# And the routing itself is NOT WIRED on the product surface: a user's config carries a `models` block
-# that NO product command reads (README `## Current limitations` states this) — the pipeline runs on
-# whatever model the Claude Code session is using. Reserved, not a control. Exits non-zero on RED.
+# `models.stages` is NO LONGER dev-apparatus-only: since 3.2.0 the SAME map is the source of truth for
+# the ten PRODUCT commands' frontmatter (check-model-config.mjs, above). This checker therefore scopes
+# its agreement to a CLOSED `DEV_WIRED` set {plan, build, review} rather than "every non-default config
+# stage" — otherwise a product-only key (`spec`, `loop`) would send it looking for a pharn-dev-spec.md
+# that does not exist and RED a correct repo. A materialized set, NOT a filesystem probe: an existence
+# test would silently stop checking a RENAMED dev command (L29/L36). Its REVERSE pass is re-keyed onto
+# DEV_WIRED too and is now STRICTLY STRONGER — before, it asked "does a config stage exist?", so
+# pharn-dev-grill.md could have gained a `model:` unnoticed the moment `grill` existed for the product
+# surface. Adding model:/effort: to a dev command means adding its stage to DEV_WIRED in the same edit.
+# Exits non-zero on RED.
 node .dev/floor/check-config.mjs [validate | resolve <stage> | agreement]
 
 # Bind PHARN's own "(specified; ships with the guarded surface)" annotations to reality, BOTH ways.

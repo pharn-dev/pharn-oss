@@ -3,6 +3,8 @@ description: "Build the USER's code from an approved features/<name>/PLAN.md —
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
+model: sonnet
+effort: high
 reads:
   [
     "pharn/CONSTITUTION.md",

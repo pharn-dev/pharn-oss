@@ -3,6 +3,8 @@ description: "Run the PRODUCT pipeline in order so a PHARN user need not re-type
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
+model: sonnet
+effort: high
 reads:
   [
     "pharn/CONSTITUTION.md",

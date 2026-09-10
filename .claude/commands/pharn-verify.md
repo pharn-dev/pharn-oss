@@ -3,6 +3,8 @@ description: "Verify a built feature CORRECTLY in the USER's codebase through tw
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
+model: sonnet
+effort: high
 reads:
   [
     "pharn/CONSTITUTION.md",

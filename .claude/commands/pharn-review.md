@@ -3,6 +3,8 @@ description: "Review a codebase with PHARN's code-review lenses run IN PARALLEL 
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
+model: opus
+effort: high
 reads:
   [
     "pharn/CONSTITUTION.md",

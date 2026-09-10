@@ -7,9 +7,20 @@
 // `claude-*` full-id regex — a namespace bound, NOT a closed allowlist: a non-real `claude-*` id validates),
 // every `effort` ∈ {low,medium,high,xhigh,max}, a `default` entry present, resolution is the own-property
 // membership pick `Object.hasOwn(stages, stage) ? stages[stage] : stages.default` (not inherited — P5), and
-// agreement is BIDIRECTIONAL: each WIRED stage's command-file frontmatter `model:`/`effort:` EQUALS the
-// config-resolved value, AND no command carrying `model:`/`effort:` frontmatter lacks a config stage — a
-// deterministic equality between two repo files, the same drift-detection class as a content-hash (#2).
+// agreement is BIDIRECTIONAL over the closed `DEV_WIRED` set below: each wired stage's command-file
+// frontmatter `model:`/`effort:` EQUALS the config-resolved value, AND no `pharn-dev-*` command carrying
+// `model:`/`effort:` frontmatter sits OUTSIDE that set — a deterministic equality between two repo files,
+// the same drift-detection class as a content-hash (#2).
+//
+// WHY `DEV_WIRED` IS A CLOSED SET AND NOT "every non-default config stage" (changed alongside the product
+// checker). `models.stages` is keyed by PIPELINE STAGE, and since `pharn/floor/check-model-config.mjs`
+// landed the SAME map is the source of truth for the ten PRODUCT commands — which include stages the dev
+// surface has no command for at all (`spec`, `loop`). Iterating every config key here would look for a
+// `pharn-dev-spec.md` that does not exist and RED on a correct repo. The narrowing is therefore to a
+// materialized set, NOT to "whichever stages happen to have a file" (lessons-learned L29/L36: the
+// enumeration is the deliverable). The distinction is load-bearing in both directions — a file-existence
+// test would silently stop checking a RENAMED dev command, and it is the reverse pass, re-keyed onto
+// DEV_WIRED below, that keeps an unlisted dev command from quietly gaining a `model:`.
 // NON-LLM, dependency-free (Node stdlib only). No network, no child_process, no eval, no dynamic import.
 //
 // Honest scope (P0): it guarantees the config is SHAPE/ENUM-valid, that a stage RESOLVES deterministically,
@@ -34,9 +45,9 @@
 //        print {"model":..,"effort":..} for <stage>
 //        (Object.hasOwn(stages, stage) ? stages[stage] : stages.default) → exit 0, else RED
 //   node .dev/floor/check-config.mjs agreement [--config <path>] [--commands-dir <dir>]
-//        validate + BIDIRECTIONAL config↔frontmatter agreement — (fwd) each non-`default` stage's
+//        validate + BIDIRECTIONAL config↔frontmatter agreement — (fwd) each DEV_WIRED stage's
 //        <commands-dir>/pharn-dev-<stage>.md `model:`/`effort:` EQUALS the config-resolved value, AND (rev)
-//        no pharn-dev-*.md carrying `model:`/`effort:` lacks a config stage → exit 1 on any RED, else 0 + GREEN
+//        no pharn-dev-*.md carrying `model:`/`effort:` sits outside DEV_WIRED → exit 1 on any RED, else 0 + GREEN
 //
 // Exit: 1 on any RED / unreadable / malformed; 0 otherwise.
 
@@ -51,6 +62,13 @@ const MODEL_ID_RE = /^claude-[a-z0-9][a-z0-9-]*$/; // a full model id, e.g. clau
 const EFFORT_ENUM = ["low", "medium", "high", "xhigh", "max"];
 const DEFAULT_CONFIG = "pharn.config.json";
 const DEFAULT_COMMANDS_DIR = join(".claude", "commands");
+
+// The closed set of DEV stages the config governs — the `pharn-dev-<stage>.md` files that MUST exist,
+// MUST carry `model:`/`effort:`, and MUST equal the config-resolved value. Both agreement passes iterate
+// exactly this (see the header for why it is a materialized set rather than a filesystem probe or "every
+// config key"). A dev command NOT listed here must carry NO `model:`/`effort:` at all; adding one to a
+// dev command means adding its stage here in the same edit, which is the point of the reverse pass.
+const DEV_WIRED = ["plan", "build", "review"];
 
 const reds = [];
 function red(kind, detail) {
@@ -189,10 +207,11 @@ function doAgreement(configPath, commandsDir) {
   validateStages(stages);
   if (reds.length) return fail();
 
-  // Forward pass (config → command): each non-`default` stage's command frontmatter EQUALS its resolved value.
+  // Forward pass (config → command): each DEV_WIRED stage's command frontmatter EQUALS its resolved value.
+  // Iterating DEV_WIRED (not the config keys) is what lets `models.stages` also carry the product-only
+  // stages `pharn/floor/check-model-config.mjs` governs without REDding a correct repo here.
   const checked = [];
-  for (const name of Object.keys(stages)) {
-    if (name === "default") continue;
+  for (const name of DEV_WIRED) {
     const cmdPath = join(commandsDir, `pharn-dev-${name}.md`);
     let text;
     try {
@@ -202,7 +221,11 @@ function doAgreement(configPath, commandsDir) {
       continue;
     }
     const fm = frontmatterModelEffort(text);
-    const want = resolveStage(stages, name); // == stages[name] (name is a present own key here)
+    // A DEV_WIRED stage need NOT be an own key of `stages` — it may resolve through `default`, and then
+    // the command's frontmatter must equal the DEFAULT. So this is the full own-property pick, not
+    // `stages[name]`. (`default` is guaranteed present: validateStages REDs without it, above.)
+    const want = resolveStage(stages, name);
+    if (!want) continue;
     if (fm.model === undefined) red("agreement", `stage ${JSON.stringify(name)} → ${cmdPath} frontmatter has no \`model:\``);
     else if (fm.model !== want.model)
       red(
@@ -218,9 +241,12 @@ function doAgreement(configPath, commandsDir) {
     checked.push(name);
   }
 
-  // Reverse pass (command → config): a pharn-dev-*.md that CARRIES `model:`/`effort:` frontmatter MUST map to a
-  // config stage — else a command silently gains a model/effort the config never governs (the forward pass,
-  // config→command, cannot see it). Fail-closed: an unreadable commands dir is a loud RED, never a silent pass.
+  // Reverse pass (command → config): a pharn-dev-*.md that CARRIES `model:`/`effort:` frontmatter MUST be
+  // in DEV_WIRED — else a command silently gains a model/effort the forward pass (which walks DEV_WIRED)
+  // cannot see. It is keyed on DEV_WIRED rather than on "has a config stage" because `models.stages` now
+  // also carries the PRODUCT-only stages: keying on config membership would let `pharn-dev-grill.md` gain
+  // a `model:` unnoticed the moment a `grill` key existed for the product surface.
+  // Fail-closed: an unreadable commands dir is a loud RED, never a silent pass.
   // SAME frontmatter parser as the forward pass, so `model_tier:` (a different key) never counts.
   let dirEntries;
   try {
@@ -229,12 +255,14 @@ function doAgreement(configPath, commandsDir) {
     red("agreement", `commands dir unreadable (${commandsDir}): ${e.message}`);
     return fail();
   }
-  const configStages = new Set(Object.keys(stages));
+  const wired = new Set(DEV_WIRED);
+  let devSeen = 0;
   for (const fileName of dirEntries) {
     const m = fileName.match(/^pharn-dev-(.+)\.md$/);
     if (!m) continue;
+    devSeen++;
     const stage = m[1];
-    if (stage === "default") continue; // `default` is the resolution fallback, never a command file
+    if (wired.has(stage)) continue; // covered by the forward pass
     let text;
     try {
       text = readFileSync(join(commandsDir, fileName), "utf8");
@@ -242,16 +270,21 @@ function doAgreement(configPath, commandsDir) {
       continue; // vanished mid-scan; the forward pass owns wired-stage presence
     }
     const fm = frontmatterModelEffort(text);
-    if ((fm.model !== undefined || fm.effort !== undefined) && !configStages.has(stage))
+    if (fm.model !== undefined || fm.effort !== undefined)
       red(
         "agreement",
-        `command ${JSON.stringify(fileName)} carries \`model:\`/\`effort:\` frontmatter but has no \`${stage}\` config stage (unwired-command drift)`
+        `command ${JSON.stringify(fileName)} carries \`model:\`/\`effort:\` frontmatter but \`${stage}\` is not in DEV_WIRED {${DEV_WIRED.join(", ")}} (unwired-command drift)`
       );
   }
 
+  // A walk that discovered ZERO dev commands has not passed — it has failed to look (lessons-learned
+  // L34): every per-item assertion above is vacuously true over an empty set.
+  if (devSeen === 0) red("agreement", `no pharn-dev-*.md found in ${commandsDir} — the walk found nothing to check`);
+
   if (reds.length) return fail();
   console.log(
-    `GREEN — config valid; ${checked.length} wired stage(s) [${checked.join(", ")}] agree with command frontmatter; no unwired command carries model:/effort: (bidirectional)`
+    `GREEN — config valid; ${checked.length}/${DEV_WIRED.length} wired stage(s) [${checked.join(", ")}] agree with command frontmatter; ` +
+      `${devSeen} pharn-dev-* command(s) scanned; no unwired command carries model:/effort: (bidirectional)`
   );
   return 0;
 }

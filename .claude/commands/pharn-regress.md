@@ -3,6 +3,8 @@ description: "Detect regressions OUTSIDE the just-built feature in the USER's co
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
+model: sonnet
+effort: high
 reads:
   [
     "pharn/CONSTITUTION.md",

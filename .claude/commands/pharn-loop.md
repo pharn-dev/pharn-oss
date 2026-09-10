@@ -3,6 +3,8 @@ description: "Run the PRODUCT pipeline as a BOUNDED, FLOOR-GATED auto-iteration:
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
+model: sonnet
+effort: high
 reads:
   [
     "pharn/CONSTITUTION.md",

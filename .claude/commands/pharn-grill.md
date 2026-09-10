@@ -3,6 +3,8 @@ description: "Interrogate an approved features/<name>/PLAN.md AND deterministica
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
+model: opus
+effort: high
 reads:
   [
     "pharn/CONSTITUTION.md",
