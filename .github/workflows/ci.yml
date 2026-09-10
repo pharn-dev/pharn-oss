@@ -51,6 +51,13 @@ jobs:
       - name: CONTRIBUTING gate-chain check
         if: ${{ always() && steps.install.outcome == 'success' }}
         run: npm run check:contributing
+      # A fresh CI checkout has never anchored a reconciliation epoch, so this reports NO_BASELINE and
+      # exits 0 — green by design. It is wired here anyway because the ALWAYS-RECONCILED control surface
+      # (.claude/hooks/*, .claude/settings*.json, pharn/floor/*, .dev/floor/*) falls back to committed
+      # blob ids with no baseline at all, so this step DOES catch an uncommitted change to a guard.
+      - name: Bash-write reconciliation check
+        if: ${{ always() && steps.install.outcome == 'success' }}
+        run: npm run check:reconcile
       - name: Test
         if: ${{ always() && steps.install.outcome == 'success' }}
         run: npm test

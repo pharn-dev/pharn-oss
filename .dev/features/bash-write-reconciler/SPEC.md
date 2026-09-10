@@ -1,9 +1,9 @@
 # SPEC — bash-write-reconciler
 
 - spec_id: bash-write-reconciler
-- state: Draft
+- state: Approved
 - date: 2026-09-10
-- base: `d851a08`
+- base: `6f05ba3` (authored against `d851a08`; rebased mid-run)
 
 > **Artifact-location note.** This increment builds PHARN itself, so its audit trail belongs under
 > `.dev/features/` (CLAUDE.md, dev/product boundary). There is no `/pharn-dev-spec` stage — `SPEC.md` is a

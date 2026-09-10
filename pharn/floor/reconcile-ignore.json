@@ -1,0 +1,74 @@
+{
+  "$schema_note": "pharn/pharn-contracts/reconciliation-record.md — the ignore/exempt DATA for pharn/floor/check-bash-reconcile.mjs. ONE place, iterated by the rules AND by the tests (lessons-learned L29: when a remedy is quantified over a set, the ENUMERATION is the deliverable). Adding a member here covers it in every rule for free; no rule hardcodes a member.",
+
+  "derived_ignore": {
+    "source": "git-ignore",
+    "how": "`git ls-files --cached --others --exclude-standard` enumerates the reconciled set, so every git-ignored path is excluded BY DERIVATION and is never listed here.",
+    "why": "Re-listing them would be a second copy to keep in sync with .gitignore (lessons-learned L35: when one fact is stored twice, retire the second copy). node_modules/, .pharn/, runs/, .env and .DS_Store are covered by this and MUST NOT be added below.",
+    "bound": "The reconciled set is therefore exactly `tracked ∪ untracked-not-ignored`. A change to a git-ignored path is INVISIBLE to this checker, by construction and by design — that is the Phase-2 exemption class, and it is why `.pharn/` scratch, `runs/**` and machine reports cost nothing."
+  },
+
+  "always_reconciled": {
+    "why": "These paths are NEVER exempt and are never dropped from the candidate set by any rule — a detector that can be silently disabled through the channel it monitors is not a guarantee. They are additionally reconciled against their committed blob id when no usable baseline exists, so deleting the reconciler's own state does not blind this half.",
+    "not_a_deny": "Being listed here does NOT make a change to these paths an escape. It makes the path VISIBLE. The verdict is still `would the guards have denied this write?` — so a plan that legitimately declares `pharn/floor/x.mjs` in its `## Files` writes it cleanly. `.claude/hooks/*` and `.claude/settings*.json` are effectively unreachable that way, because set-writes-scope.cjs REFUSES to emit a scope naming them without --allow-claude-dir.",
+    "exact": [
+      ".claude/settings.json",
+      ".claude/settings.local.json",
+      ".claude/hooks/protect-trusted-paths.cjs",
+      ".claude/hooks/enforce-writes-scope.cjs",
+      ".claude/hooks/set-writes-scope.cjs"
+    ],
+    "prefixes": ["pharn/floor/", ".dev/floor/"],
+    "parity": "The five `exact` entries are a deliberate COPY of CONTROL_SURFACE in .claude/hooks/set-writes-scope.cjs and of the corresponding tail of DEFAULT_PROTECTED in .claude/hooks/protect-trusted-paths.cjs. check-bash-reconcile.test.mjs pins all three set-equal; they must be updated together."
+  },
+
+  "pipeline_artifacts": {
+    "why": "A stage's OWN artifact legitimately changes after the build's anchor — /pharn-verify writes VERIFY.md, /pharn-review writes findings.json, and the PLAN.md that SOURCED the scope is itself edited when a plan is corrected. None of these is in the build's scope (a plan is the scope's SOURCE, not a member), so without this they all read as escapes. That is lessons-learned L17 exactly: a changed-since-anchor test REPORTED as a wrote-outside-scope test, producing a BLOCKING finding on the correct, designed workflow — which trains an operator to wave through the one finding that must never be waved through.",
+    "shape": "Exempt iff the path is `features/<slug>/<name>` or `.dev/features/<slug>/<name>` where <name> is an EXACT member of `names` below, or matches `lenses/<lens>/findings.json` under the same prefix. <slug> is one path segment and may not be `.` or `..`. Deliberately NOT a `**` glob over the feature dir: a stray or unexpected file there is still REPORTED.",
+    "parity": "`names` is a deliberate copy of PIPELINE_ARTIFACTS in pharn/floor/check-regress.mjs, which derives it from what the commands actually declare. check-bash-reconcile.test.mjs pins the two set-equal — the same discipline check-build-complete.mjs uses against the writes-scope setter.",
+    "names": [
+      "SPEC.md",
+      "PLAN.md",
+      "GRILL.md",
+      "BUILD.md",
+      "REGRESSION.md",
+      "regression-report.json",
+      "VERIFY.md",
+      "verify-report.json",
+      "REVIEW.md",
+      "findings.json",
+      "SHIP.md",
+      "ship-record.json",
+      "BRIEFING.md",
+      "LOOP.md"
+    ]
+  },
+
+  "exempt": {
+    "why": "TRACKED, non-ignored paths that a named command legitimately rewrites through Bash. Each carries its writer so a reader can tell a deliberate exemption from an oversight. This list is deliberately TINY: every other Phase-2 Bash-write site is either git-ignored (derived_ignore), inside the declared scope, or outside the repo root.",
+    "bound": "An exemption is UNCONDITIONAL — the checker does not verify that the named writer is what actually wrote the path, because it cannot (attribution is out of scope, SPEC.md #4). An exempt path is a hole the size of that file, accepted knowingly.",
+    "paths": [
+      {
+        "path": "docs/lessons-index.md",
+        "writer": "/pharn-dev-memory-promote — Step 6b, `node .dev/floor/gen-lessons-index.mjs .`",
+        "why": "The generated address book must be regenerated after a lesson promotion or `npm run docs:check` REDs. The command declares this as the lessons-learned L19 escape it is; the write is a Bash-run generator, and its correctness is guarded by docs:check byte-equality, not by this checker."
+      }
+    ]
+  },
+
+  "never_exempt": {
+    "why": "Membership here is a REFUSAL: these may never appear in `exempt`, whatever a future edit says. Enforced by a test, not by convention.",
+    "paths": [
+      ".dev/memory-bank/lessons-learned.md",
+      ".dev/memory-bank/pattern-library.md",
+      "memory-bank/lessons-learned.md",
+      "memory-bank/pattern-library.md",
+      "pharn/CONSTITUTION.md",
+      "pharn/ARCHITECTURE.md",
+      "THREAT-MODEL.md",
+      "LIMITS.md",
+      "CODEOWNERS"
+    ],
+    "reason": "Memory-bank canon is what THREAT-MODEL.md §2 #3 calls the worst persistence vector, and the four trusted docs plus CODEOWNERS are the human-only surface. A Bash write to any of them is precisely the class this checker exists to surface, so exempting one would hollow out the increment."
+  }
+}

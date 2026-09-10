@@ -29,7 +29,20 @@ pre-write hook permits exactly the files the plan names and denies everything el
 
 ```bash
 node .claude/hooks/set-writes-scope.cjs --from-plan <active PLAN.md>
+node pharn/floor/reconcile-baseline.mjs --anchor --by pharn-dev-build
 ```
+
+**The anchor runs AFTER the setter, and the order is load-bearing.** `--anchor` snapshots the live
+`.pharn/writes-scope.json` **into** the baseline, so the scope this build was given is the scope
+`/pharn-dev-verify` later judges its writes against. Anchoring first would snapshot the previous stage's
+scope. **This opens the reconciliation epoch:** every worktree change from here to the next reconcile is
+compared against it, and `pharn/floor/check-bash-reconcile.mjs` REDs on any path the guards would have
+denied — which is how a **Bash** write, invisible to both `PreToolUse` guards, becomes detectable
+(`pharn/pharn-contracts/reconciliation-record.md`; `LIMITS.md §6`). Anchoring is deliberately **not**
+repeated at grill/regress: each anchor RESETS the baseline, so a later one would erase an earlier escape.
+**ADVISORY (P0):** this is a Bash call outside the `PreToolUse` gate (L19) — nothing forces it, and a run
+that skips it leaves `/pharn-dev-verify` with no baseline, which its `--require-baseline` turns into a
+loud `INCONCLUSIVE` rather than a quiet pass.
 
 `<active PLAN.md>` is the plan being built — the one named in the `/pharn-dev-build` invocation (`.dev/features/<name>/PLAN.md`). `/pharn-dev-build`'s own `writes:` is a placeholder, so the scope is
 read from the plan's `## Files` list (the back-tick paths above the "not touched" subsection) — which

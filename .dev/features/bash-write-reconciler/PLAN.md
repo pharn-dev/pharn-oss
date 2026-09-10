@@ -8,7 +8,8 @@
   judgment in the verdict.
 - layer(s): `pharn-contracts` (the record shape) + `pharn/floor` (the checker; floor is outside the layer tree)
 - constitution_refs: [P0, P2, P3, P4, P5, P6, P7]
-- status: **AWAITING HUMAN APPROVAL AT THE SKILLS_VERSION GATE — nothing implemented**
+- status: **APPROVED at the SKILLS_VERSION gate (major, 3.2.1 -> 4.0.0) and BUILT**
+- base: `6f05ba3` (rebased onto main mid-run; the plan was authored against `d851a08`, and #208/#209/#211 landed in between)
 
 ## Applied lessons
 
@@ -228,7 +229,6 @@ inventory surfaced.
 - `pharn/floor/check-bash-reconcile.mjs` — NEW. The verdict. Exit `0` clean · `1` escape · `2` inconclusive. — layer: none (floor)
 - `pharn/floor/check-bash-reconcile.test.mjs` — NEW. Escape detected · in-scope Bash write clean · no-scope fail-closed · ignored-path exemption · control-surface always-reconciled · **non-vacuity control (L34)** · **parity test** for every set delegated to or copied from another file · `ci.yml` + `package.json` pin test. — layer: none (test)
 - `pharn/floor/reconcile-ignore.json` — NEW. Item 5's data. — layer: none (floor data)
-- `pharn/floor/check-verify.mjs` — EDIT: add the gate to the map. — layer: none (floor)
 - `.claude/commands/pharn-build.md` — EDIT: Step-0 `--anchor` beside the setter. — layer: none (command)
 - `.claude/commands/pharn-dev-build.md` — EDIT: same. — layer: none (command)
 - `.claude/commands/pharn-verify.md` — EDIT: run the checker; read its exit. — layer: none (command)
@@ -236,10 +236,11 @@ inventory surfaced.
 - `.github/workflows/ci.yml` — EDIT: add the checker as its own step (ci.yml never runs `npm run check`). — layer: none (CI)
 - `.github/workflows/gitleaks.yml` — EDIT: extract to `$RUNNER_TEMP` (item 8's one real RED). — layer: none (CI)
 - `package.json` — EDIT: `check:reconcile` in the `check` chain. — layer: none (repo-meta)
+- `CONTRIBUTING.md` — EDIT: name the new gate. `check-contributing-gates.mjs` parses `scripts.check` and requires every gate to appear as a back-ticked token, so adding a gate without this is a RED. — layer: none (repo-meta)
 - `README.md` — EDIT: Phase-1 wording → the detection claim. — layer: none (repo-meta)
 - `CLAUDE.md` — EDIT: Commands block + writes-scope section. — layer: none (repo-meta)
 - `CHANGELOG.md` — EDIT: the `4.0.0` entry. — layer: none (repo-meta)
-- `SKILLS_VERSION` — EDIT: `3.1.2` → `4.0.0`. — layer: none (repo-meta)
+- `SKILLS_VERSION` — EDIT: `3.2.1` → `4.0.0`. — layer: none (repo-meta)
 - `.dev/features/bash-write-reconciler/proposed/APPLY.md` — NEW. Human-applied hand-off. — layer: none (apparatus)
 - `.dev/features/bash-write-reconciler/proposed/LIMITS.md.patch` — NEW. — layer: none (apparatus)
 - `.dev/features/bash-write-reconciler/proposed/THREAT-MODEL.md.patch` — NEW. — layer: none (apparatus)
@@ -251,24 +252,40 @@ paths: the setter takes **one back-ticked path per bullet**, so every multi-path
 its tail — the L37 failure mode (a correct reading, a wrong quantifier) reproduced inside this very plan.
 One path per bullet now. Two design changes followed from re-reading what the dropped paths were for:
 
-1. **Anchor at BUILD only — not at plan/grill/regress too.** More anchors is *worse*, not better: each
+1. **Anchor at BUILD only — not at plan/grill/regress too.** More anchors is _worse_, not better: each
    anchor resets the baseline, so anchoring at grill or regress would **erase** an escape that happened
    during build. The reconciled window is deliberately **build → verify**. Command edits drop 10 → 4.
    **Bound, stated:** a Bash escape during plan or grill is outside the window and is not detected.
-2. **The `PostToolUse` recorder is DROPPED — it turned out to be unnecessary, not merely costly.** The
-   verdict asks *"would the guards have denied this path?"* A path written through the guarded surface
+2. **`pharn/floor/check-verify.mjs` needs NO edit, so it left `## Files`.** Read live: it is **generic
+   over gate keys** — "it computes the verdict over **whatever** `{gate-id: exit-int}` map this command
+   assembles". The verify commands add a `reconcile` entry to that map and the existing absolute
+   threshold does the rest. Declaring a file the increment does not write would be the L7
+   over-declaration, in the permissive direction.
+3. **The `PostToolUse` recorder is DROPPED — it turned out to be unnecessary, not merely costly.** The
+   verdict asks _"would the guards have denied this path?"_ A path written through the guarded surface
    was, by construction, permitted by those same guards — so it can never be flagged, and no record of
    guarded writes is needed to keep ordinary edits clean. This removes the increment's only
    control-surface dependency: **no `.claude/settings.json` edit, therefore no human-applied hook patch**
    (the `canon-write-denylist` cost) and no `--allow-claude-dir`. Item 1's recorder half is withdrawn;
    its enforcement half stands.
+4. **A fourth exemption class — `pipeline_artifacts` — was added AT BUILD, because the checker caught
+   the defect in its own increment.** The first `npm run check` after wiring came back `ESCAPE` on
+   `.dev/features/bash-write-reconciler/PLAN.md` and `CONTRIBUTING.md`. Neither was an escape: a PLAN is
+   the scope's **source**, never a member of it, and `CONTRIBUTING.md` had joined `## Files` after the
+   anchor. That is **L17 reproduced inside the increment built to avoid L17** — a _changed-since-anchor_
+   fact reported as a _wrote-outside-scope_ claim, as a **blocking** finding on the correct workflow,
+   which is exactly how an operator is trained to wave through the finding that must never be waved
+   through. Fixed with the same remedy `check-regress.mjs` already uses: an exact-membership enum of
+   pipeline artifact names (copied from that file and pinned set-equal by a parity test), never a `**`
+   glob — so a stray file under a feature directory is still reported. **Found by running the thing, not
+   by reasoning about it** (L37).
 
 **Consequence for item 6 — the scope is snapshotted, and the duplication is bounded and parity-tested.**
-At verify time `.pharn/writes-scope.json` holds *verify's* scope, not the build's — the exact trap
+At verify time `.pharn/writes-scope.json` holds _verify's_ scope, not the build's — the exact trap
 `check-regress.mjs` documents ("by the time /pharn-dev-regress runs it holds the regress stage's own
 scope"). So `--anchor` snapshots the live scope record **into** the baseline, and the checker matches
 candidates against that snapshot. The **fail-closed default** is still delegated by executing the live
-hook (a snapshot of *absence* is absence), and trusted-path denial is delegated to
+hook (a snapshot of _absence_ is absence), and trusted-path denial is delegated to
 `protect-trusted-paths.cjs`, which is scope-independent. Only the explicit-scope glob match is the
 checker's own code — the `check-build-complete.mjs` precedent exactly, and it carries the same kind of
 parity test.

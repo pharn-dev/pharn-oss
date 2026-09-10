@@ -89,11 +89,27 @@ npm run format:check > /dev/null 2>&1; f=$?           # prettier clean — whole
 npm run lint:md > /dev/null 2>&1; lm=$?               # markdownlint clean — whole-repo (L9)
 # per committed eval pair the feature ships (see below) — one structural:<expected> gate each:
 node pharn/floor/check-structural.mjs <expected.json> <actual.json> . > /dev/null 2>&1; s=$?
+# The Bash-write reconciliation (fix #7's blind spot). --require-baseline because /pharn-dev-build DID
+# anchor an epoch, so an absent baseline here is a real refusal, not a fresh-clone NO_BASELINE.
+node pharn/floor/check-bash-reconcile.mjs --base . --require-baseline > .pharn/pharn-dev-verify/reconcile.json 2>&1; rc=$?
 # assemble → .pharn/pharn-dev-verify/results.json, one entry per gate actually run:
-printf '{"test":%d,"validate":%d,"lint":%d,"format:check":%d,"lint:md":%d,"structural:%s":%d}' \
-  "$t" "$v" "$l" "$f" "$lm" "<expected.json>" "$s" \
+printf '{"test":%d,"validate":%d,"lint":%d,"format:check":%d,"lint:md":%d,"structural:%s":%d,"reconcile":%d}' \
+  "$t" "$v" "$l" "$f" "$lm" "<expected.json>" "$s" "$rc" \
   > .pharn/pharn-dev-verify/results.json
 ```
+
+- **The `reconcile` gate needs NO change to `check-verify.mjs`** — that helper is generic over gate keys
+  and computes the verdict over whatever `{gate-id: exit-int}` map this step assembles, by the same
+  absolute threshold (`PASS iff every gate exit 0`). So a detected escape makes the verdict **`FAIL`**,
+  which `/pharn-dev-ship` already branches on. **No new floor primitive; no new proceed/stop wiring.**
+- **What a `reconcile` RED means, exactly:** a path changed since the build's anchor that the write
+  guards **would have denied**. That is a write which reached the worktree outside the guarded
+  `Write|Edit|MultiEdit|NotebookEdit` surface — almost always **Bash**. Read `reconcile.json`'s
+  `escapes[]` for the paths; its `problem` strings are free text and are quoted as **DATA** (P2).
+- **Its bounds are the contract's, not this command's** — the reconciled set excludes git-ignored paths,
+  the window is anchor→reconcile, the model is one worktree per session, and there is no attribution.
+  A `CLEAN` here means **no escape was detected**, never that none occurred
+  (`pharn/pharn-contracts/reconciliation-record.md`).
 
 - **The gates are the existing checks — `/pharn-dev-verify` invents none** (`npm test`, `pharn/floor/validate.mjs`,
   `pharn/floor/check-structural.mjs`, `npm run lint`, `npm run format:check`, `npm run lint:md`). It orchestrates

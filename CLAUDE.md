@@ -167,6 +167,29 @@ node pharn/floor/check-structural.mjs <expected.json> <actual.json> [repoDir]
 # (2.8.0), and both ship stages read its exit code. Exits non-zero on RED.
 node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 
+# ANCHOR a reconciliation epoch / DETECT a write the write-guards would have denied — the fix #7 blind
+# spot. Both PreToolUse guards match Write|Edit|MultiEdit|NotebookEdit only, so a Bash write reaches every
+# path unblocked and (no PostToolUse being wired) unrecorded. L19 named that in 2026-08-05 with a
+# discipline-only remedy; L20 says the SECOND occurrence earns a floor check and it recurred at least
+# three times, so this is that check. `--anchor` runs at /pharn-*build Step 0 AFTER the scope-setter and
+# snapshots the live scope INTO the baseline (by verify time .pharn/writes-scope.json holds a LATER
+# stage's scope — L38); the checker re-hashes at /pharn-*verify and asks the LIVE guards, by EXECUTING
+# them, whether each changed path would have been denied. Denied => `reconcile` gate fails => verify FAIL.
+# DELEGATED, not re-derived (L37): trusted-path/canon denial runs protect-trusted-paths.cjs; the
+# fail-closed DEFAULT runs enforce-writes-scope.cjs in a probe sandbox reproducing only the two runtime
+# signals its defaultSafeSet() reads, so that set is never copied. Exactly ONE matcher is duplicated (the
+# explicit-scope glob — undelegatable, since the hook reads the scope from disk) and a parity test RUNS
+# the real hook over shared cases. NOT git status: that answers changed-since-BASE, misses a write that
+# restores HEAD bytes, and counts every legitimate Edit — the exact conflation L17 records in
+# check-regress.mjs. DETECTED, NEVER PREVENTED (OS-level sandboxing is the only true prevention and is not
+# implemented); bounds — ignored paths are outside the reconciled set, the window is anchor->verify, one
+# worktree per session, no attribution. NO_BASELINE is GREEN by design (a fresh clone never anchored, the
+# check-lessons-index COLD posture); /pharn-*verify passes --require-baseline, where absence is a refusal.
+# Contract: pharn/pharn-contracts/reconciliation-record.md. Data: pharn/floor/reconcile-ignore.json.
+# Exit: 0 CLEAN|NO_BASELINE · 1 ESCAPE · 2 INCONCLUSIVE.
+node pharn/floor/reconcile-baseline.mjs --anchor [--base <dir>] [--by <label>]
+node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
+
 # Check the SHAPE of a loop-record — the features/<name>/LOOP.md that /pharn-loop writes at every stop.
 # Floor: the frontmatter envelope (`decision` in {STOP_GREEN, STOP_CAP, STOP_TERMINAL, INCONCLUSIVE};
 # `iterations` a positive integer; `commit` a git SHA or the literal `unknown`; `date` ISO YYYY-MM-DD)
@@ -368,7 +391,7 @@ echo '{"tool_name":"Write","tool_input":{"file_path":"pharn/pharn-core/rules/x.m
   have **zero runtime dependencies** (Node stdlib; Node 24). The repo carries **dev-only**
   devDependencies (ESLint, Prettier, markdownlint) wired as npm scripts: `npm run check`
   (`format:check` + `lint` + `lint:md` + `docs:check` + `check:markers` + `check:badge` +
-  `check:contributing` + `test`) is the
+  `check:changelog` + `check:contributing` + `check:reconcile` + `test`) is the
   aggregate gate, and `npm test` runs
   `node --test` over the hook, product-floor, and dev-floor suites (`.claude/hooks/*.test.cjs` +
   `pharn/floor/*.test.mjs` + `.dev/floor/*.test.mjs`) — **green** at this writing; read the count live
@@ -387,6 +410,25 @@ echo '{"tool_name":"Write","tool_input":{"file_path":"pharn/pharn-core/rules/x.m
 `.claude/settings.json`): `protect-trusted-paths.cjs` (fix #2 — the trusted-doc denylist) **and**
 `enforce-writes-scope.cjs` (fix #7 — the writes-scope guard). A write must pass **both**; a deny from
 either blocks.
+
+**A `Bash` write passes NEITHER, and since 4.0.0 it is DETECTED rather than prevented.** The matcher
+above excludes `Bash`, so a shell write reaches every path unblocked (`LIMITS.md §6`). What changed is
+that it is no longer unrecorded: `/pharn-*build` Step 0 anchors a content-hash baseline **after** the
+setter — order load-bearing, because the anchor snapshots the live scope **into** the baseline, and by
+verify time the single mutable `.pharn/writes-scope.json` holds a LATER stage's scope (**L38**) — and
+`/pharn-*verify` runs `pharn/floor/check-bash-reconcile.mjs`, which re-hashes the tree and asks the
+**live guards** whether each changed path would have been denied. Denied ⇒ the `reconcile` gate fails ⇒
+verify `FAIL`. `check-verify.mjs` needed no change: it is generic over gate keys.
+**DETECTED, never PREVENTED** — the only true prevention is OS-level sandboxing of the `Bash` process,
+which is harness-layer and not implemented. Bounds, all stated in
+`pharn/pharn-contracts/reconciliation-record.md`: ignored paths are outside the reconciled set, the
+window is anchor→verify, one worktree per session, and there is **no attribution** (it reports _what_,
+never _who_). **No shell command string is ever read** — parsing one is undecidable and a verb denylist
+would be a heuristic, which P0 forbids calling a guarantee.
+**When an increment legitimately writes a tracked path through Bash** (a generator, say): declare that
+path in the plan's `## Files`, or record it in `pharn/floor/reconcile-ignore.json` alongside the command
+that writes it. **Never delete the baseline to silence a RED** — `--require-baseline` turns that into a
+loud `INCONCLUSIVE`, and the always-reconciled control surface falls back to committed blob ids anyway.
 
 - **Set scope BEFORE writing.** Each command's **first step** runs `set-writes-scope.cjs` to write
   `.pharn/writes-scope.json` from the active Capability/command's declared `writes:`

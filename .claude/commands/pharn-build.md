@@ -91,7 +91,20 @@ Load the trusted prefix and obey it for the whole run:
 
    ```bash
    node .claude/hooks/set-writes-scope.cjs --from-plan features/<name>/PLAN.md
+   node pharn/floor/reconcile-baseline.mjs --anchor --by pharn-build
    ```
+
+   **The anchor runs AFTER the setter, and the order is load-bearing.** `--anchor` snapshots the live
+   `.pharn/writes-scope.json` **into** the baseline, so the scope this build was given is the scope
+   `/pharn-verify` later judges its writes against — anchoring first would snapshot the previous stage's
+   scope. **This opens the reconciliation epoch:** every worktree change from here to the next reconcile
+   is compared against it, and `pharn/floor/check-bash-reconcile.mjs` REDs on any path the guards would
+   have denied. That is how a **Bash** write — which neither `PreToolUse` guard ever sees — becomes
+   detectable (`pharn/pharn-contracts/reconciliation-record.md`; `LIMITS.md §6`). It is deliberately
+   **not** repeated at grill/regress: each anchor RESETS the baseline, so a later one would erase an
+   earlier escape. **ADVISORY (P0):** a Bash call outside the `PreToolUse` gate (L19) — nothing forces
+   it, and skipping it leaves `/pharn-verify` with no baseline, which its `--require-baseline` turns into
+   a loud `INCONCLUSIVE` rather than a quiet pass.
 
    - **HALT on a non-zero exit, BEFORE any write (fail-closed).** A non-zero exit means the setter wrote
      **no scope** — the plan declares **no parseable `## Files`** (e.g. a malformed or hand-written plan

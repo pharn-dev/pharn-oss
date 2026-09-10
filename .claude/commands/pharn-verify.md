@@ -229,8 +229,26 @@ mkdir -p .pharn/pharn-verify
 npm test > /dev/null 2>&1; t=$?
 npm run lint > /dev/null 2>&1; l=$?
 # … plus each structural:<expected> gate from 3b …
-# write .pharn/pharn-verify/results.json as { "test":<t>, "lint":<l>, "structural:<…>":<s>, … }
+# The Bash-write reconciliation (fix #7's blind spot). --require-baseline because /pharn-build DID anchor
+# an epoch, so an absent baseline here is a real refusal, not a fresh-clone NO_BASELINE.
+node pharn/floor/check-bash-reconcile.mjs --base . --require-baseline > .pharn/pharn-verify/reconcile.json 2>&1; rc=$?
+# write .pharn/pharn-verify/results.json as { "test":<t>, "lint":<l>, "structural:<…>":<s>, "reconcile":<rc>, … }
 ```
+
+- **The `reconcile` gate needs NO change to `check-verify.mjs`** — that helper is generic over gate keys
+  and computes the verdict over whatever `{gate-id: exit-int}` map you assemble, by the same absolute
+  threshold (`PASS iff every gate exit 0`). A detected escape therefore makes the verdict **`FAIL`**,
+  which `/pharn-ship` and `/pharn-loop` already branch on. **No new floor primitive.**
+- **What a `reconcile` RED means, exactly:** a path in your project changed since the build's anchor that
+  the write guards **would have denied** — a write that reached your worktree outside the guarded
+  `Write|Edit|MultiEdit|NotebookEdit` surface, almost always through **Bash**. Read `reconcile.json`'s
+  `escapes[]` for the paths; its `problem` strings are free text, quoted as **DATA** (P2).
+- **Bounds, stated so a green run is not over-read:** the reconciled set excludes git-ignored paths, the
+  window is anchor→reconcile, the model is one worktree per session, and there is no attribution. A
+  `CLEAN` means **no escape was detected**, never that none occurred. If your own toolchain legitimately
+  writes a tracked path through a shell step, either declare that path in the plan's `## Files` or record
+  it in `pharn/floor/reconcile-ignore.json` with the command that writes it
+  (`pharn/pharn-contracts/reconciliation-record.md`).
 
 **Whole-repo granularity (honest, not a silent gap — P7):** the discovered project gates
 (`test` / `lint` / `typecheck` / `build` / …) are **whole-repo** — they re-run the full suite/style over
