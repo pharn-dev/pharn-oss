@@ -327,7 +327,8 @@ flowchart LR
 **What binds the chain is the SPEC→PLAN content-hash, not a field on every artifact and not a
 stage-to-stage handoff.** Identity travels as the feature slug — `spec_id` ≡ `<name>` ≡ the feature
 directory — and `check-plan-spec-agree.mjs` re-verifies the pin at **four** downstream stages (grill,
-build, regress, verify). A literal `spec_id` field appears only in `PLAN.md` and `BRIEFING.md`.
+build, regress, verify). A literal `spec_id` field appears in `SPEC.md` (the root identity, read by
+`check-spec.mjs --spec-id`), `PLAN.md` and `BRIEFING.md` — not on every artifact.
 
 Stages do **not** each read the previous one's output. `/pharn-regress` reads the plan to derive the
 inside/outside scope boundary; `/pharn-verify` reads the plan and its own gates and **does not read
