@@ -15,7 +15,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -318,4 +318,76 @@ test("zero inputs → writes the empty array [], exit 0", () => {
 
 test("no <out> arg → exit non-zero (usage)", () => {
   assert.notEqual(run([]).status, 0);
+});
+
+// ── The dedup key's LIVE degeneracy, pinned as a KNOWN state ─────────────────────────────────────────
+//
+// The `rule_id-precise` test above contrasts P0 against P2 to prove the key separates on rule_id. That
+// property is real, but its PREMISE is unreachable by the shipped lens set: every lens emits `P2` and
+// nothing else, so no real /pharn-review run can produce two rule_ids at one file:line. The test proves
+// a capability the corpus cannot exercise — which is worth knowing, not worth deleting.
+//
+// Surfaced by an adversarial review (`dedup-key-degenerate-p2`, HIGH). These rules MEASURE the corpus
+// rather than assert a hoped-for state, so the day a second rule_id value ships they FAIL — and that
+// failure is the signal to revisit the bound documented in merge-findings.mjs's header and in
+// /pharn-review's Step 5 blockquote. Failing on IMPROVEMENT is deliberate: it is the only moment anyone
+// would otherwise forget the prose exists.
+const LENS_DIR = join(here, "..", "pharn-review");
+
+function shippedRuleIds() {
+  const ids = new Set();
+  for (const entry of readdirSync(LENS_DIR, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    for (const f of readdirSync(join(LENS_DIR, entry.name))) {
+      if (!f.endsWith(".md")) continue;
+      const text = readFileSync(join(LENS_DIR, entry.name, f), "utf8");
+      for (const m of text.matchAll(/^\s*rule_id:\s*([A-Za-z0-9._-]+)/gm)) ids.add(m[1]);
+    }
+  }
+  return ids;
+}
+
+test("✧ L34 — the shipped lens corpus yields at least one rule_id (the rule below cannot pass vacuously)", () => {
+  assert.ok(
+    shippedRuleIds().size > 0,
+    `discovered 0 rule_id values under ${LENS_DIR} — the walk broke, so the degeneracy rule below would be meaningless`
+  );
+});
+
+test("✧ KNOWN STATE: every shipped lens emits exactly ONE rule_id, so the dedup key degenerates to (type, file)", () => {
+  const ids = [...shippedRuleIds()].sort();
+  assert.deepEqual(
+    ids,
+    ["P2"],
+    "The shipped lens set no longer emits a single rule_id. That is an IMPROVEMENT and this test is the " +
+      "tripwire for it: the dedup key (type, rule_id, file) now genuinely separates, the `rule_id-precise` " +
+      "test above becomes REACHABLE by real runs, and the degeneracy prose must be re-derived in BOTH " +
+      "places that state it — pharn/floor/merge-findings.mjs's header block and /pharn-review's Step 5 " +
+      `blockquote. Observed ids: ${JSON.stringify(ids)}`
+  );
+});
+
+test("✧ the degeneracy is REAL at the merge — two different concerns at one file:line collapse", () => {
+  // Executed against the live merger rather than argued from the key expression (L37). This is the
+  // failure mode in its actual shape: severity from one contributor, text from ANOTHER.
+  const secret = F({ rule_id: "P2", severity: "blocking", problem: "hardcoded secret", evidence: "API_KEY = ..." });
+  const dupe = F({ rule_id: "P2", severity: "minor", problem: "duplicated logic block", evidence: "same block twice" });
+  withInputs({ "a-dup-lens": [dupe], "z-secret-lens": [secret] }, (root, out, paths) => {
+    const r = run([out, ...paths]);
+    assert.equal(r.status, 0);
+    assert.equal(json(r).merged, 1, "two different concerns at one file:line must collapse to ONE group (the degeneracy)");
+    const [m] = JSON.parse(readFileSync(out, "utf8"));
+    assert.equal(m.severity, "blocking", "severity is MAX-escalated across the group");
+    assert.equal(
+      m.problem,
+      "duplicated logic block",
+      "problem comes from sources[0] — the lexicographic-min lens NAME, not the escalating lens"
+    );
+    assert.equal(m.sources.length, 2, "both contributors must survive verbatim in sources[] — that is what keeps the loss auditable");
+    assert.deepEqual(
+      m.sources.map((x) => x.severity).sort(),
+      ["blocking", "minor"],
+      "each contributor's OWN severity stays visible, so the max-escalation is auditable"
+    );
+  });
 });

@@ -298,6 +298,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   skips it. It raises the odds a reader reaches the step; it does not make the release a guarantee. The
   next command's first-step **set** still overwrites a leftover scope either way.
 
+- **The `/pharn-review` dedup key DEGENERATES on the shipped lens set, and nothing said so**
+  (`SKILLS_VERSION` 3.0.9 → **3.0.10**, patch over shipped bytes). `merge-findings.mjs` groups on the
+  enum-gated key `(type, rule_id, file)` — sound by design. But **all 22 shipped lenses declare
+  `enforces: ["P2"]` and emit `rule_id: P2`**, one value corpus-wide (`44 rule_id: P2`), so the
+  `rule_id` term is **constant** and the key collapses to effectively **`(type, file)`**. Any two
+  findings at the same `file:line` merge, whatever they were about. Reported by an adversarial review
+  (`dedup-key-degenerate-p2`, HIGH).
+
+  **The loss runs in two directions at once**, which is what makes it worse than a plain over-merge:
+  `severity` is **max-escalated** across the group, while `problem`/`evidence` come from **`sources[0]`,
+  the lexicographic-min lens NAME**. A `blocking` hardcoded-secret and a `minor` duplicated-block at
+  `src/app.ts:10` render as one finding reading _"blocking — duplicated logic block"_ — **severity from
+  one contributor, text from another.** Proven by a test executed against the live merger, not argued
+  from the key expression.
+
+  **Labeled, not redesigned** — the review's own prescription. The structural fix is distinct
+  file-qualified `rule_id`s (P4's `security.md SEC-1` shape) across 22 lenses and their fixtures; that is
+  a different increment, and inventing per-lens ids here would be the speculative addition P7 forbids.
+  What changed: the bound is now stated in **both** places that describe the merge
+  (`merge-findings.mjs`'s header and `/pharn-review`'s Step 5), and Step 6's `sources[]` rendering is
+  promoted from **conditional** to **mandatory** — on this lens set a multi-source group is the norm, so
+  rendering only when `sources[]` has "more than one entry" hid the common case rather than the rare one.
+
+  **A tripwire replaces the discipline.** `merge-findings.test.mjs` now MEASURES the corpus and pins the
+  single-`rule_id` state, so the day a second value ships the test **fails on the improvement** — which is
+  precisely the moment the prose above would otherwise be forgotten. It also records that the existing
+  `rule_id-precise` test contrasts `P0` vs `P2` and is therefore **unreachable by any real run**: a real
+  property the corpus cannot exercise, worth knowing rather than deleting.
+
+  **Nothing is fabricated and nothing is dropped** — every contributor survives verbatim in `sources[]`,
+  which is why the render is now unconditional. But a merged scalar triple must **never** be read as one
+  lens's verdict.
+
 - **The writes-scope guard's fail-closed default no longer carries dev-repo posture into
   installed projects** (`SKILLS_VERSION` 3.0.1 → **3.0.2**, patch;
   [#180](https://github.com/pharn-dev/pharn-oss/issues/180), shipped in

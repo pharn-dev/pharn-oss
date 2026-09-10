@@ -17,6 +17,30 @@
 // grouping/identity decision rests only on validated, normalized enum-gated fields; no guaranteed decision
 // rests on a tainted field (ARCHITECTURE §8, fix #1).
 //
+// THE KEY DEGENERATES ON THE SHIPPED LENS SET, AND THAT MUST BE SAID PLAINLY (P0). The paragraph above
+// describes the key's DESIGN. Its LIVE behaviour today is narrower: all 22 shipped lenses under
+// pharn/pharn-review/ declare `enforces: ["P2"]` and emit `rule_id: P2` — ONE value, corpus-wide
+// (`grep -ho 'rule_id: *[A-Za-z0-9._-]*' pharn/pharn-review/*/*.md | sort | uniq -c` -> `44 rule_id: P2`).
+// The rule_id term is therefore CONSTANT, and the key collapses from (type, rule_id, file) to
+// effectively (type, file). Every finding two lenses report at the same file:line merges, whatever the
+// two were actually about.
+//
+// WHAT THAT COSTS, concretely, because the merge is lossy in TWO different directions at once:
+//   - `severity` is MAX-ESCALATED across the group (rankToSeverity[g.sevRank]).
+//   - `problem`/`evidence` are taken from sources[0] — the LEXICOGRAPHIC-MIN lens NAME.
+// So a `blocking` hardcoded-secret finding and a `minor` duplicated-block finding at src/app.ts:10
+// render as one finding reading "blocking — duplicated logic block": the severity from one contributor
+// and the text from a DIFFERENT one. Nothing is fabricated and nothing is silently dropped — every
+// contributor survives verbatim in `sources[]`, which is why /pharn-review renders it UNCONDITIONALLY —
+// but the merged scalar triple is a chimera and must not be read as one lens's verdict.
+//
+// NOT REDESIGNED, deliberately. The structural fix is distinct file-qualified rule_ids (P4's
+// "security.md SEC-1" shape) across 22 lenses and their eval fixtures — a large change that is not this
+// increment's, and inventing per-lens ids here would be the speculative addition P7 forbids. Surfaced by
+// an adversarial review (`dedup-key-degenerate-p2`, HIGH), whose own prescription was "label, don't
+// redesign". `merge-findings.test.mjs` pins the degeneracy as a KNOWN state, so the day a second rule_id
+// value ships, that test fails and this comment gets revisited.
+//
 // FAIL-CLOSED VALIDATION AT THE MERGE (fix #1 applied here). A lens subagent reads trust: untrusted
 // code and could be injected into LAUNDERING a needle (e.g. a multi-line instruction) into an
 // enum-gated field. Before grouping, every finding's enum-gated fields are structurally validated;
