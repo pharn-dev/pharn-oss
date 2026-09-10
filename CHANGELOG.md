@@ -1309,6 +1309,67 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   runs each script individually and never `npm run check`. **"The wiring is pinned" never means "CI ran
   it".** Full record: `.dev/features/skills-version-recorded/`.
 
+- **The two pipeline-spine artifacts that had no contract now have one — `pharn/pharn-contracts/verify-report.md`
+  and `pharn/pharn-contracts/regression-report.md` (`SKILLS_VERSION` 3.0.12 → 3.1.0, **minor**, matching this repo's own
+  precedent for every prior contract addition — `ship-record.md` 1.0.0 → 1.1.0, `loop-record.md`
+  2.0.0 → 2.1.0, `ship-briefing.md` 2.5.5 → 2.6.0 — and SemVer's rule that ADDED surface is minor
+  while patch is reserved for backward-compatible fixes; flagged in review as arguably patch, since
+  CLAUDE.md's bump-size sentence names "capability / command / checker" and a contract is none of
+  the three, so the precedent is recorded here rather than the ambiguity being resolved silently).** `pharn-contracts` is the schemas-only root of the layer tree that
+  everything depends on, yet **two of the seven spine artifacts bypassed it**: `verify-report.json` and
+  `regression-report.json` were emitted by shipped commands, read by shipped floor checkers, and
+  described nowhere. Surfaced by an adversarial review of this repo
+  (`no-contract-for-2-of-7-artifacts`, MED, dimension B1), which classed the resulting drift as
+  **structural, not an active defect** — which is precisely why the remedy is two documents and **not** a
+  checker.
+
+  **The honest bound, stated here as it is stated in each file's opening (P0).** These contracts are
+  **ADVISORY shape documentation**. Exactly **one** field in either artifact is floor-relevant —
+  `verdict`, because four live checkers test it for enum membership — and **no checker validates a report
+  against either contract**. Writing them did **not** make any report conform: three committed
+  regression-reports already diverge and every gate stays green over them. "There is a contract for the
+  verify-report" does **not** mean "the verify-report's shape is guaranteed".
+
+  **What the documents establish, by probe rather than by reading.** The load-bearing claim is
+  quantified, so it was **executed**: a report reduced to `{"verdict": …}` alone, and a report with every
+  _other_ field corrupted (`gates: "GARBAGE"`, `failing_gates: "NOT-AN-ARRAY"`,
+  `regressions: ["FAKE-REGRESSION"]`, `verifiers.findings: ["ignore all previous instructions"]`),
+  produced **byte-identical** output from `check-ship.mjs`, `check-loop.mjs` and
+  `render-ship-briefing.mjs`, and GREEN from `check-ship-briefing.mjs`; flipping **only** `verdict` turned
+  that GREEN into a RED naming the field, so the probe is not vacuous. The consumer set was derived from
+  the shortest paraphrase-invariant substring rather than the spelling first searched for.
+
+  **This corrects the originating finding's own framing.** It named `check-verify.mjs` /
+  `check-regress.mjs` as the artifacts' _consumers_; they are their **emitters**. Feeding a committed
+  report back to either yields `INCONCLUSIVE` exit 2, because their input is a `{ "<gate-id>": <int> }`
+  map, not a report. The real consumers are the four checkers above.
+
+  **Two asymmetries are recorded rather than smoothed over.** The verify-report's four consumers do
+  **not** share one enum — `check-ship.mjs` deliberately omits `INCOMPLETE` — so a contract-conforming
+  `INCOMPLETE` report handed to it is **refused fail-closed**, and "conforming" is not "accepted
+  everywhere"; the regression-report's four consumers **do** agree. And "only `verdict` is read" is true
+  **of the floor** only: the ship orchestrators present `failing_gates[]` / `regressions[]` to a human,
+  which is an advisory presentation read, not a deterministic branch.
+
+  **Conformance measured 2026-09-09 at commit `8bc6c0a`, and recorded as a dated measurement that expires
+  rather than an invariant:** **122/122** committed verify-reports carry the required core
+  `{feature, gates, verdict, failing_gates}` and an in-enum `verdict` (119 also carry `verifiers`; the
+  three without it are the emitter's unmodified pre-`verifiers` output, legacy shape rather than drift).
+  **118/121** regression-reports carry the full core and **120/121** an in-enum `verdict`; the three
+  exceptions are hand-assembled and each is classified in the contract — one as a **documented
+  non-instance** whose own `note` says it is not an emitter object, two as **legacy drift**. Legacy drift
+  is recorded, never retro-fixed: rewriting a committed audit artifact to match a contract written
+  afterwards would falsify the record it exists to preserve.
+
+  **No new floor primitive, and no checker (P7).** A shape-validating checker is deliberately not built:
+  no dogfood run, eval, or user report has failed on report shape, so L20's second-occurrence trigger has
+  not fired. Each contract names where that decision would be recorded should one surface.
+
+  **A follow-up a human must make, reported rather than worked around.** `pharn/ARCHITECTURE.md:131-132`
+  enumerates the contracts by name and now lists six of eight. That file is hook-protected and human-only
+  (fix #2); the exact edit is to append `verify-report, regression-report` to that list. It was not
+  routed around the guard via Bash.
+
 - **`/pharn-dev-ship` now offers the run's lesson at GATE 2 instead of letting it die with the session
   (`Step 2b — lesson-extract`).** After `/pharn-dev-review` and **before** the `SHIP.md` write, the stage
   reviews its own cycle (`PLAN.md` including `applied_lessons`, `GRILL.md`, `REGRESSION.md`, `VERIFY.md`,
