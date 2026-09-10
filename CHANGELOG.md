@@ -50,6 +50,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`pharn/floor/scan-code-missing-error-handling.mjs` carried two RAW NUL bytes; they are now built
+  with `String.fromCharCode(0)` like the sibling that documents the convention.** `SKILLS_VERSION`
+  **3.0.3 → 3.0.4** (patch — a correction to bytes that already shipped; the intermediate number is
+  reserved by a parallel branch). The scanner needed a NUL as its dedup-key separator and embedded the
+  byte literally at lines 314 and 320 — one inside a comment, one inside the live key template — while
+  `pharn/floor/merge-findings.mjs:57-59` needed the same separator and states the rule at its own
+  constant: _"Built via `fromCharCode` so the SOURCE stays printable ASCII."_ A raw NUL makes the file
+  read as **binary to line-oriented tooling**, and the consequence was **measured, not assumed**: with
+  the bytes present, `grep "const key" <file>` printed nothing and exited 1 while the string was
+  demonstrably in the bytes. A silent miss at exit 1 is indistinguishable from "not there" — which is how
+  two of them survived in a shipped product-floor file. **The obvious second detector does not hold, and
+  saying so is the point:** `git diff` did **not** flag this file, because it sniffs only about the first
+  8000 bytes and these sat at offset 18809, so the hunk rendered as ordinary text. Whether git notices
+  depends on where the byte lands, which is why the new guard reads the whole buffer instead of trusting
+  either tool. The repair changes **no
+  behaviour** — the key string is byte-identical, since `String.fromCharCode(0)` is the same code unit
+  the raw byte encoded. Verified rather than asserted: the scanner's output and exit code are
+  byte-identical before and after over a fixture that exercises the dedup path, and its 28 existing
+  tests still pass unchanged.
+
+  **The convention is now enforceable rather than documented** — new
+  `.dev/floor/source-nul-guard.test.mjs` (apparatus; **not** shipped, so it does not itself bump).
+  It sweeps every non-test `.mjs` directly under **both** floors and REDs on any `0x00`. Per `L20` the
+  trigger is an observed second occurrence, not a hypothetical: the convention had exactly two sites and
+  the second violated it, which is `L25`'s shape — a rationale comment reaches only the file it sits in.
+  The swept surface is materialized as one iterated list (`L29`) and discovered from the filesystem
+  rather than hardcoded (`L36`).
+
+  **Bounds, stated because a guard invites the overclaim (P0).** Green means: no non-test `.mjs`
+  directly under `pharn/floor/` or `.dev/floor/` holds the byte `0x00`; the swept set is non-empty
+  (`L34` — the post-fix expected result is an empty offender list, so the domain is asserted before the
+  per-file rules run); and the predicate demonstrably fires on a NUL-bearing buffer and stays silent on
+  a clean one. Green does **not** mean the source is printable ASCII — exactly one byte value is
+  tested, and every other control or non-ASCII byte passes untouched. The sweep is **non-recursive over
+  two directories**: `.claude/hooks/*.cjs`, `.claude/commands/**`, all `*.md`, both `test-fixtures/`
+  subtrees, and test files themselves are outside it.
+
 - **The writes-scope guard's fail-closed default no longer carries dev-repo posture into
   installed projects** (`SKILLS_VERSION` 3.0.1 → **3.0.2**, patch;
   [#180](https://github.com/pharn-dev/pharn-oss/issues/180), shipped in

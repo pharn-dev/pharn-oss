@@ -311,13 +311,25 @@ const HANDLED_RE = /\.\s*catch\s*\(/;
 // blanked) — NOT `masked` — so a backtick `.catch(` in string text can never MANUFACTURE same-line handling that
 // silences a real unguarded await (P2; see maskTemplateInteriors). Line numbers are identical (newlines preserved).
 const maskedForSuppressionLines = maskedForSuppression.split("\n");
-const seen = new Set(); // dedup key `${line} ${kind}`
+
+// Dedup-key separator: the NUL byte. Built via `fromCharCode` so the SOURCE stays printable ASCII — the
+// convention pharn/floor/merge-findings.mjs states at its own NUL constant. A RAW NUL byte here makes the
+// file read as BINARY to line-oriented tooling — MEASURED, not assumed: with the byte present,
+// `grep "const key" <this file>` printed nothing and exited 1 although the string was in the bytes.
+// That silent miss is how two raw NULs survived here. (`git diff` is NOT reliably a second detector:
+// it sniffs only the first ~8000 bytes, and these sat at 18809, so it rendered the hunk as text.)
+// NOT load-bearing for collision-safety, and saying so matters (P0): `line` is an integer and `kind` is one
+// of two internal literals, so the key is unambiguous with or without a separator. The separator is
+// defensive. What the convention covers is exactly this ONE BYTE staying out of the source — it is NOT a
+// claim that the source is printable ASCII, and no check here establishes that broader property.
+const NUL = String.fromCharCode(0);
+const seen = new Set(); // dedup key `${line}${NUL}${kind}`
 const hits = [];
 function consider(p, kind, applyCatch) {
   if (guarded(p)) return;
   const line = lineAt(masked, p);
   if (applyCatch && HANDLED_RE.test(maskedForSuppressionLines[line - 1] ?? "")) return; // same-line .catch → handled (await only)
-  const key = `${line} ${kind}`;
+  const key = `${line}${NUL}${kind}`;
   if (seen.has(key)) return;
   seen.add(key);
   hits.push({ line, kind });
