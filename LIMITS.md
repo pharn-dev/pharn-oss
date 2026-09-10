@@ -192,10 +192,45 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
 - **Struck claim:** "the trusted docs are write-protected", "`writes:` is enforced", or "canon cannot be
   written", stated without a tool-surface qualifier. Each is true of `Write`/`Edit`/`MultiEdit`/
   `NotebookEdit` and false of `Bash` — including for **this file**, which the probe above reaches.
-- **True statement:** a `Bash` write is **neither denied nor detected at the time it happens**. No
+- **True statement:** a `Bash` write is **not denied**, and is **not detected at the time it happens**. No
   `PostToolUse` hook is wired (`grep -c PostToolUse .claude/settings.json` → `0`), so nothing observes
   the write, and no record of it exists to reconcile later.
-- **Partial backstop — advisory, not floor.** `pharn/floor/check-regress.mjs scope` exits 1 on a changed
+- **It IS detected AFTERWARDS, as of `SKILLS_VERSION` 4.0.0 — and detection is strictly weaker than
+  prevention.** `/pharn-*build` anchors a content-hash baseline and `/pharn-*verify` runs
+  `pharn/floor/check-bash-reconcile.mjs`, which re-hashes the tree and asks the **live guards**, by
+  executing them, whether each changed path would have been denied. Denied means the `reconcile` gate
+  fails, so the verify verdict is `FAIL`. **The supported claim is exactly "a write to a path the active
+  scope would have denied is detected and fails the stage" — never "Bash writes are prevented."** Four
+  bounds, all in `pharn/pharn-contracts/reconciliation-record.md`: ignored paths are outside the
+  reconciled set; the window is anchor-to-verify; the model is **one worktree per session** (two sessions
+  sharing a tree share `.pharn/`, so a second session's writes can surface as this one's escape —
+  [[L38]], which this inherits and cannot fix); and there is **no attribution** — it reports *what*,
+  never *who*.
+- **DELETING it is loud; FORGING it is silent — and that bounds the whole claim.** The baseline lives
+  under `.pharn/`, which `Bash` reaches, and nothing authenticates it. Deleting it does not yield a quiet
+  green: `/pharn-*verify` passes `--require-baseline`, which makes an absent baseline `INCONCLUSIVE`, and
+  the always-reconciled control surface (`.claude/hooks/*`, `.claude/settings*.json`, `pharn/floor/*`,
+  `.dev/floor/*`) is compared against **committed blob ids** rather than against the baseline, so that
+  half resists a determined writer. But for an **ordinary** path the baseline IS the reference, so a
+  writer who edits a denied file **and** rewrites that file's baseline entry obtains a silent `CLEAN` —
+  no escape, no warning. **Therefore the guarantee is NON-ADVERSARIAL detection:** it catches tooling
+  that escapes its scope — a formatter, a generator, a script, a mistake, which is the entire population
+  of the failures [[L19]] and [[L20]] recorded — and it does **not** catch an attacker. "The detector
+  cannot be disabled" is **struck**; "it cannot be disabled quietly" is **struck for ordinary paths** and
+  true only for the control surface. Closing it needs authenticated state outside the worktree — the same
+  harness-layer category as the OS sandbox below, and just as absent.
+- **Two further bounds, stated rather than solved.** (1) `/pharn-*verify` runs the **worktree** copy of
+  the checker through `Bash`, so a modified checker can print `CLEAN` without reconciling anything;
+  `pharn/floor/` is always-reconciled, which means a modified checker is caught **by itself**, and that
+  is circular rather than a guarantee. (2) The anchor is a `Bash` step ([[L19]]), so a run that **skips**
+  it does not reliably fail — `--require-baseline` is satisfied by whatever earlier epoch is still on
+  disk, and the reconciliation then ranges over the wrong window. Only a tree that has **never** anchored
+  yields `INCONCLUSIVE`.
+- **No shell command is ever parsed, and that is a design constraint rather than an omission.** Shell
+  parsing is undecidable and a verb denylist is a heuristic, which P0 forbids labelling a guarantee. The
+  reconciler compares hashes and paths, so `sed -i`, a here-doc, `node -e`, a Makefile target and a
+  compiled binary are equally visible to it, and none is special-cased.
+- **Older partial backstop, advisory and still present.** `pharn/floor/check-regress.mjs scope` exits 1 on a changed
   path the plan's `## Files` did not declare, and is the only thing in the tree that can surface such a
   write after the fact. Four bounds, every one stated in that checker's own header: it fires only if
   `/pharn-regress` runs; it compares _changed since base_, not _written by the build_; it carries
@@ -210,3 +245,10 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
 **Why this is not one of §1's four irreducible limits.** It _is_ reducible — the sandbox above reduces
 it — just not by anything this repository can ship. §1's four cannot be reduced at all, which is what
 "irreducible" means there; folding this one in would dilute that word.
+
+**Detection did not close this limit, and must not be read as having closed it.** A detected write has
+already happened: the reconciler reports, it never reverts, and rollback is explicitly out of scope
+(nothing captures pre-write content, and a revert is itself a write). What changed in 4.0.0 is that the
+write stops being **silent** — it costs a red stage instead of nothing. The distance between "nobody can
+do this" and "somebody will notice this happened" is the distance between a prevention and a detection,
+and this section names which side PHARN is on.
