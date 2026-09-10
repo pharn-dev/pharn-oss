@@ -1,74 +1,63 @@
 # REGRESSION — readme-audit-repairs
 
-**STAGE STOPPED BEFORE THE VERDICT.** `check-regress.mjs scope` exited **1** with a blocking fix #7
-finding, and the stage spec is explicit that this is _"a scope breach, not a regression — surface it and
-stop."_ No `verdict` was computed, so **`regression-report.json` is deliberately NOT written**: that file
-is contractually the helper's `verdict` JSON verbatim, and fabricating one for a run that never reached
-Step 3 would be the exact P0 disease this repo exists to prevent.
+**Base:** `4bd1b0c3269504ee55060b2a74ca8f1eca68de23` · **Head:** `4375b299379ae58332ff6a53aa4931237b6c41b3`
 
-- **Base:** `4bd1b0c3269504ee55060b2a74ca8f1eca68de23` (working-tree dogfood — `git status --porcelain`
-  non-empty → `base = HEAD`, per the Step-1 deterministic state test).
-- **Declared writes (`PLAN.md` `## Files`):** `README.md` — one path.
+## Run history — this stage ran twice, and the first attempt is kept on purpose
 
-## The partition
+**Attempt 1 STOPPED before the verdict.** `check-regress.mjs scope` exited **1** with a blocking fix #7
+escape finding naming `.dev/features/claude-dir-scan-exclusion/PLAN.md` — **another agent session's
+artifact**, written into the same working tree at 10:38:21 while this run was in flight (different
+increment, different `applied_lessons`; this build's writes-scope was `['README.md']` throughout, under a
+guard that had already fired on this session's own `GRILL.md` write). No verdict was computed and
+`regression-report.json` was deliberately not written.
 
-| classification   | path                                              |
-| ---------------- | ------------------------------------------------- |
-| inside, declared | `README.md`                                       |
-| `escape_exempt`  | `.dev/features/readme-audit-repairs/PLAN.md`      |
-| `escape_exempt`  | `.dev/features/readme-audit-repairs/GRILL.md`     |
-| **`escaped`**    | `.dev/features/claude-dir-scan-exclusion/PLAN.md` |
+**Attempt 2 (this one) removed the cause structurally, not by filtering.** The increment was committed to
+`docs/readme-audit-repairs` (`4375b29`) and the stage re-run from an **isolated detached worktree** at that
+commit — a checkout with `0` untracked files, so the other session's in-progress work is absent from
+`git ls-files --others` by construction. Nothing of theirs was moved, ignored, or deleted, and the
+checker's inputs were **not** hand-edited: `.dev/memory-bank/lessons-learned.md` **L17** and **L20** are
+precisely about not excluding paths by hand to make this check pass. `scope` then returned
+`escaped: []` on its own.
 
-```yaml
-- type: FINDING
-  rule_id: "P0"
-  severity: blocking
-  file: ".dev/features/claude-dir-scan-exclusion/PLAN.md"
-  problem: "changed file '.dev/features/claude-dir-scan-exclusion/PLAN.md' is outside the declared writes-scope (fix #7) — the build escaped its plan's `## Files`"
-```
+The first attempt is recorded rather than overwritten because it found something real: `scope` derives
+`escaped` from `git diff <base>`, which answers _what changed_, not _what this build wrote_. `--feature`
+closes that gap for a feature's own artifacts; **a second agent session sharing the working tree is the
+same gap in a case `--feature` does not cover.** That is carried as a lesson candidate, not discarded.
 
-## Why the finding's stated cause is wrong here — and why that is a limitation, not a dismissal
+## Partition
 
-The finding is **correctly emitted** and its wording (_"the build escaped its plan's `## Files`"_) is
-**false for this run**. The evidence, gathered live:
+| classification          | paths                                                                |
+| ----------------------- | -------------------------------------------------------------------- |
+| inside, declared        | `README.md`                                                          |
+| inside, `escape_exempt` | this feature's own `PLAN.md`, `GRILL.md`, `REGRESSION.md`, `SHIP.md` |
+| **`escaped`**           | **none**                                                             |
+| outside gates run       | 72 test files, `validate`, 1 committed eval pair                     |
 
-1. **It is a different increment's plan.** Its title is "close the `.claude/` scan exclusion, and repair
-   the three expired/ambiguous doc claims beside it"; its `applied_lessons` are
-   `[L1, L11, L19, L26, L29, L31, L33, L34, L36]` — a different set from this plan's.
-2. **The timestamps order it outside this build.** The file was written at **10:38:21**; this build wrote
-   `README.md` at **10:43:54**.
-3. **This build could not have written it.** Its writes-scope was `['README.md']` for every write, and
-   fix #7 demonstrably denies out-of-scope writes — it denied _this session's own_ `GRILL.md` write at
-   ~10:37 when the scope had been clobbered. The guard is not a claim here; it fired on this session.
-4. **A concurrent writer was observed directly.** Mid-grill, `.pharn/writes-scope.json` was overwritten
-   with `{"scope":[".dev/features/claude-dir-scan-exclusion/PLAN.md"],"set_by":".claude/commands/pharn-dev-plan.md","set_at":"2026-09-10T08:36:36.747Z"}`.
+## Per-gate comparison
 
-**The real cause is concurrency, and it is a genuine limitation of this stage's method.** `scope` derives
-`escaped` from `git diff <base>`, which answers _"what changed since base"_ — not _"what did this build
-write."_ The command already documents that gap for the feature's own artifacts and closes it with
-`--feature`. **A second agent session writing into the same working tree is the same gap in a case
-`--feature` does not cover**, and it is not hand-filterable: `.dev/memory-bank/lessons-learned.md` **L17**
-and **L20** are precisely about not hand-excluding paths to make this check pass.
+| gate                                    | base | head | result |
+| --------------------------------------- | ---- | ---- | ------ |
+| `tests` (72 outside test files)         | 0    | 0    | stable |
+| `validate`                              | 0    | 0    | stable |
+| `structural:expected-injection-comment` | 0    | 0    | stable |
+
+`regressions[]`: **empty** · `pre_existing[]`: **empty**
+
+**Style gates were skipped by the deterministic config-touch rule**, and their absence is from **both**
+maps, not one: `inside` touches no shared style config (`eslint.config.mjs`, `.prettierrc.json`,
+`.prettierignore`, `.markdownlint-cli2.jsonc`), so over byte-identical outside files a style flip is
+provably impossible. This also avoided an `npm ci` in the baseline worktree (`LIMITS.md §3c` cold-start
+analog). The style gates were separately confirmed green in the working tree at Step 2b of the build.
 
 ## Verdict
 
-**INCONCLUSIVE — stage stopped at the scope check; no regression verdict was computed.**
+**REGRESSIONS: none — no deterministically-detectable breakage outside the feature.**
 
-This is **not** "no regressions" and **not** "regressions". The honest statement is that the comparison
-**never ran**, because its input partition is untrustworthy while a second session mutates the same tree.
-Recording it as clean would certify a comparison that did not happen.
+Computed by `pharn/floor/check-regress.mjs verdict` (exit **0**), from exit codes alone. The verdict is
+floor-grade; everything around it — choosing the base, partitioning, running the suite, isolating the
+worktree — is advisory orchestration.
 
-The stage's standing residual applies unchanged and is worth restating for whoever resumes: even a
-completed run catches **exactly what its deterministic suite catches, nothing more** — never "nothing
-broke."
-
-## What unblocks it
-
-Any one of these makes the partition trustworthy again; none should be done by an agent that does not own
-the other session's work:
-
-- let the concurrent `claude-dir-scan-exclusion` session finish and commit, then re-run `/pharn-dev-regress`;
-- or commit this increment's `README.md` change and re-run with `--base <that commit>`, so the other
-  session's untracked file is no longer in `git diff <base>`;
-- or run this increment in an isolated worktree, which is the structural fix for two sessions sharing one
-  tree and one mutable `.pharn/writes-scope.json`.
+**The honest residual:** this catches **exactly what its deterministic suite catches, nothing more.** A
+regression no test, rule, or eval covers is invisible here. "No regressions" is **not** "nothing broke" —
+and for a prose-only increment it is a weak signal by construction: no test in this repo reads README
+sentences, which is the very gap the increment's own F5 finding is about.
