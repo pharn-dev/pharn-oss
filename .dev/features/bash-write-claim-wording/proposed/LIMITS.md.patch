@@ -1,0 +1,57 @@
+--- a/LIMITS.md
++++ b/LIMITS.md
+@@ -76,8 +76,11 @@
+   advisory orchestration, not a floor primitive (the "two clocks," stated in the checkers themselves).
+ - **Backstop (floor):** a forged approval moves only the advisory _intent-approval_ signal; it unlocks
+   no floor-gated capability — the pre-write / writes-scope hooks (and pre-egress, specified; ships with the guarded surface) re-gate every downstream
+-  write and network call regardless of `state`, and the human GATE-2 decision still stands between a
+-  built increment and merge. Closing the gate itself needs an out-of-band approval signal the Write tool
++  write **issued through the `Write`/`Edit`/`MultiEdit`/`NotebookEdit` tool surface** and network call
++  regardless of `state`, and the human GATE-2 decision still stands between a built increment and merge.
++  The quantifier is bounded and the bound is load-bearing: a write issued through **`Bash`** is re-gated
++  by neither hook, so this backstop covers that one tool surface and no other — **§6**.
++  Closing the gate itself needs an out-of-band approval signal the Write tool
+   cannot forge (e.g. a `PreToolUse` hook admitting the Draft→Approved transition only against a
+   human-supplied signed marker) — that is **harness-layer**, environment-dependent, not expressible in
+   markdown methodology. Until an environment supplies it, this stays a named limit, not a guarantee.
+@@ -170,3 +173,40 @@
+ 
+ Reopens when a real failure surfaces it (P7) — a dogfood or eval run where a plan-declared signal
+ was absent from the built code — or when a sink becomes declarable.
++
++---
++
++## 6. The write guards cover one tool surface; `Bash` is outside it
++
++The `PreToolUse` matcher wired in `.claude/settings.json` is `Write|Edit|MultiEdit|NotebookEdit`, and
++both hooks re-test that same set in their own code (`enforce-writes-scope.cjs:333`,
++`protect-trusted-paths.cjs:555`). A write issued through the **`Bash`** tool therefore never reaches
++either hook. Probed rather than read off the wiring — §1d's quantifier is precisely why:
++
++| payload                                                       | hook                        | verdict                   |
++| ------------------------------------------------------------- | --------------------------- | ------------------------- |
++| `{"tool_name":"Bash",…{"command":"printf x >> LIMITS.md"}}`   | `protect-trusted-paths.cjs` | **exit 0** — not denied   |
++| `{"tool_name":"Bash",…{"command":"printf x >> README.md"}}`   | `enforce-writes-scope.cjs`  | **exit 0** — not denied   |
++| `{"tool_name":"Edit","tool_input":{"file_path":"LIMITS.md"}}` | `protect-trusted-paths.cjs` | exit 2 — denied (control) |
++
++- **Struck claim:** "the trusted docs are write-protected", "`writes:` is enforced", or "canon cannot be
++  written", stated without a tool-surface qualifier. Each is true of `Write`/`Edit`/`MultiEdit`/
++  `NotebookEdit` and false of `Bash` — including for **this file**, which the probe above reaches.
++- **True statement:** a `Bash` write is **neither denied nor detected at the time it happens**. No
++  `PostToolUse` hook is wired (`grep -c PostToolUse .claude/settings.json` → `0`), so nothing observes
++  the write, and no record of it exists to reconcile later.
++- **Partial backstop — advisory, not floor.** `pharn/floor/check-regress.mjs scope` exits 1 on a changed
++  path the plan's `## Files` did not declare, and is the only thing in the tree that can surface such a
++  write after the fact. Four bounds, every one stated in that checker's own header: it fires only if
++  `/pharn-regress` runs; it compares _changed since base_, not _written by the build_; it carries
++  closed-enum exemptions for the pipeline's own artifacts; and a plan that edits its own `## Files`
++  defeats it. A smoke alarm, never the guard.
++- **The only true prevention is OS-level sandboxing of the `Bash` process** — a filesystem jail, a
++  read-only mount, or an equivalent harness-layer control that makes the write fail before any hook
++  would be consulted. PHARN does **not** implement it, and cannot: exactly like §1d's out-of-band
++  approval signal, it is **harness-layer, environment-dependent, and not expressible in markdown
++  methodology**. Until an environment supplies it, this stays a named limit, not a guarantee.
++
++**Why this is not one of §1's four irreducible limits.** It _is_ reducible — the sandbox above reduces
++it — just not by anything this repository can ship. §1's four cannot be reduced at all, which is what
++"irreducible" means there; folding this one in would dilute that word.
