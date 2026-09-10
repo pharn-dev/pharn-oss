@@ -313,8 +313,7 @@ See [`LIMITS.md`](./LIMITS.md) for the full set of bounds.
 
 ## The pipeline
 
-Seven typed stages. Each emits a versioned artifact carrying the `spec_id`, and each reads what the
-previous stage produced:
+Seven typed stages, each emitting a typed artifact:
 
 ```mermaid
 flowchart LR
@@ -325,8 +324,16 @@ flowchart LR
     G2 --> SH["ship"]
 ```
 
-`/pharn-ship` orchestrates that chain and preserves two human decision points: explicit spec approval
-before planning, and the final merge/fix/abandon decision after verification.
+**What binds the chain is the SPEC→PLAN content-hash, not a field on every artifact and not a
+stage-to-stage handoff.** Identity travels as the feature slug — `spec_id` ≡ `<name>` ≡ the feature
+directory — and `check-plan-spec-agree.mjs` re-verifies the pin at **four** downstream stages (grill,
+build, regress, verify). A literal `spec_id` field appears only in `PLAN.md` and `BRIEFING.md`.
+
+Stages do **not** each read the previous one's output. `/pharn-regress` reads the plan to derive the
+inside/outside scope boundary; `/pharn-verify` reads the plan and its own gates and **does not read
+`regression-report.json` at all**. The stage that reads everything is `/pharn-ship`, which orchestrates
+the chain and preserves two human decision points: explicit spec approval before planning, and the
+final merge/fix/abandon decision after verification.
 
 The orchestration itself is not a deterministic guarantee: the agent invokes the stages. The proceed/stop
 decisions inside the pipeline are read from the deterministic verdicts emitted by the relevant checkers.
