@@ -400,6 +400,17 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   elsewhere, either set a scope that names those paths
   (`set-writes-scope.cjs --from-plan <PLAN.md>`), or leave `enforce-writes-scope.cjs` out of
   `.claude/settings.json` — at the cost of `writes:` enforcement.
+- **The memory-bank is not write-protected, so a plan can reach it.** `THREAT-MODEL.md` treats
+  memory-bank poisoning as the worst persistence vector and maps it to the pre-write hook, but
+  `.claude/hooks/protect-trusted-paths.cjs` does not list `memory-bank/`. Whether a canon write is
+  allowed is therefore decided entirely by the writes-scope hook, whose scope for `/pharn-build` comes
+  from your `PLAN.md`'s `## Files` list — and no human approves a product `PLAN.md`. A `## Files` entry
+  naming `memory-bank/lessons-learned.md` grants a write that never passes `/pharn-memory-promote`'s
+  provenance check or its human accept/deny gate, and a lesson written that way is then read by every
+  later `/pharn-plan` run. Treat `memory-bank/**` as agent-reachable: review it in diffs like any other
+  file, and check `## Files` before approving a plan. A denylist for it is prepared and verified but not
+  yet applied — the guard scripts are protected by the guard itself, so only a human can land it
+  (`.dev/features/canon-write-denylist/`).
 - **Model judgment remains model judgment.** Architecture quality, review correctness, severity,
   completeness of intent, and semantic correctness are advisory unless a specific deterministic checker
   covers the claim.
