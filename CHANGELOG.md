@@ -158,6 +158,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     behave identically". It was mutation-tested (removing the dev copy's Gregorian call makes it RED and
     names which copy drifted) — notably the textual pins stayed green there, which is the gap it covers.
 
+- **`SKILLS_VERSION` 3.0.6 → 3.0.7. The `(specified; ships with the guarded surface)` markers added by
+  the previous trusted-doc correction are now REGISTERED, so they are guarded instead of merely
+  written.** That correction added the prose half — the annotations on THREAT-MODEL's three
+  content-hash rows, the community-privilege backstop, and `ARCHITECTURE`'s two `rule_id ∈ roster`
+  claims — and stopped there. It never added the matching entries to
+  `.dev/floor/specified-primitives.json`, the hand-maintained manifest `check-specified-markers.mjs`
+  reads, so the new markers sat outside the check entirely: deleting one REDded nothing, and the day a
+  primitive shipped, nothing would have REDded either. The defect the findings named, reproduced one
+  layer down in the repair itself.
+
+  **What is registered (4 → 8 primitives, 11 → 25 sites).** `seam-record` — THREAT-MODEL §3 maps
+  ai_docs poisoning, seam fetch fallback and seam-record poisoning to the content-hash primitive, and
+  no shipped code writes a `seam-record.json` or reads an `ai_docs` pin. `community-privilege` —
+  LIMITS §1a's backstop, of whose three sub-claims exactly one is live (`validate.mjs` restricts
+  `seal` to `kind: pharn-owned`); markdown-only / no-`.cjs` is enforced by nothing.
+  `rule_id-roster` — no roster artifact exists, and `pharn/floor/merge-findings.mjs` says so in its
+  own comment: _"NOT roster membership … the claim is precisely 'shape-valid'."_
+  `constitution-injection` — `CONSTITUTION.md` states outright that no injector exists. Plus a
+  previously-missed second `archetype-maps` site in the file that entry already named.
+
+  **Two of those five were not in the brief, and finding them is the point.** The commissioning list
+  named three classes; a re-scan anchored on the shortest invariant substring found
+  `constitution-injection` and the extra `archetype-maps` site as well. `lessons-learned.md` L33 says a
+  prior enumeration is a lower bound to beat rather than a set to confirm, and that its recorded
+  failure mode is a repair pass that fixes one site and leaves another in the file it just named.
+
+  **Also corrected: `pharn/pharn-contracts/finding-shape.md`** (the product-surface change that drives
+  the version bump). It asserted roster membership twice with no annotation — in the `rule_id` YAML
+  comment and in the field-trust table — and was missed by the earlier pass, which corrected only the
+  two `ARCHITECTURE` sites. Both now carry the marker, and a new section states the bound in the
+  contract itself: `rule_id` is enum-gated **in shape**; a well-formed id naming a rule that does not
+  exist is shape-valid and passes.
+
+  **What registration does NOT buy (P0).** The manifest is a hand-maintained address book. It holds
+  the LISTED sites to their bytes in both directions and **cannot discover an overclaim nobody
+  registered** — "the manifest checked out" never means "the docs are true". The probes test file
+  EXISTENCE by name, never function: a backstop implemented inside an existing file (a new
+  `validate.mjs` CHECK, `kind` handling added to an existing hook) flips no probe, and direction 1
+  stays silent there. Each entry records its own miss in a `$comment` rather than leaving it inferable,
+  and `constitution-injection` is flagged as the weakest of the five.
+
+  **Tests (`.dev/floor/check-specified-markers.test.mjs`, +7 → 75 passing).** Both directions are
+  driven against the REAL manifest entries — real probe, real marker bytes, real docs — because a
+  registration that is merely present passes `check:markers` by construction (L4). The site and id
+  enumerations are closure-pinned to the live manifest (L29/L36), so an entry added or renamed later
+  fails there rather than escaping every rule. A new rule requires every registered marker to occur
+  **exactly once** in its doc: direction 2 is a presence test, so a marker appearing twice would
+  survive one deletion — the live instance being THREAT-MODEL's two byte-identical content-hash cells.
+  That rule ranges over all eight entries, retro-covering the four pre-existing ones.
+
+  **Known residual, reported rather than fixed.** `pharn/ARCHITECTURE.md:304` carries the unmarked twin
+  of the `finding-shape.md:24` claim. The file is hook-protected and human-only, and a site whose
+  marker is absent cannot be registered without REDding a doc nobody broke, so it needs a human edit;
+  the manifest's `rule_id-roster` `$comment` names the line and the follow-up.
+
 - **The writes-scope guard's fail-closed default no longer carries dev-repo posture into
   installed projects** (`SKILLS_VERSION` 3.0.1 → **3.0.2**, patch;
   [#180](https://github.com/pharn-dev/pharn-oss/issues/180), shipped in

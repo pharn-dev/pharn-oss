@@ -56,8 +56,172 @@
           "marker": "the four archetype maps agree (fix #5 — conditional; specified, ships with the guarded surface)"
         },
         {
+          "$comment": "ARCHITECTURE §4's OWN statement of the same conditional, distinct from §8's above. It was unregistered until the `specified-marker-registration` sweep — the site an anchored re-scan found in the file the original entry already named, which is the failure shape lessons-learned L33 describes.",
+          "file": "pharn/ARCHITECTURE.md",
+          "marker": "manifest exists** (conditional; specified, ships with the guarded surface)."
+        },
+        {
           "file": "THREAT-MODEL.md",
           "marker": "_Specified; the check is conditional and no manifest exists, so it never fires._"
+        }
+      ]
+    },
+
+    {
+      "$comment": [
+        "THREAT-MODEL §3 maps three attack surfaces — ai_docs poisoning, seam fetch fallback, seam-record",
+        "poisoning — to the CONTENT-HASH floor primitive, and ARCHITECTURE §5 states the same claim in prose.",
+        "Nothing computes that hash: no seam-record*, no `seam-record` or `ai_docs` reference in any shipped",
+        ".mjs/.cjs. ARCHITECTURE §5's own marker says it outright — 'no seam-record.json is written and no",
+        "ai_docs pin is read by any shipped code today; the live content-hash primitive is spec_content_hash'.",
+        "",
+        "PROBE CHOICE, and its miss. The primitive is a CONTENT-HASH, which is live when shipped code COMPUTES",
+        "and COMPARES one — so the probe watches pharn/floor/, where this repo's checkers live (check-seam-config.mjs",
+        "is the naming precedent; the `seam-record` substring deliberately does NOT match it). NARROWED, and",
+        "stated: an implementation that lands INSIDE an existing file — a new validate.mjs CHECK, or a command",
+        "that writes seam-record.json with no new checker — flips no filename probe, so direction 1 stays silent",
+        "there. That is the checker's existence-not-function bound, inherited, not a new one.",
+        "",
+        "The two THREAT-MODEL table rows carry a BYTE-IDENTICAL right cell, so each marker spans from its",
+        "row-distinctive LEFT cell through the annotation. A marker of the shared cell alone would let one row's",
+        "annotation be deleted while the other kept the check green (lessons-learned L36)."
+      ],
+      "id": "seam-record",
+      "what": "shipped code that writes seam-record.json / reads an ai_docs pin and content-hashes it — the primitive THREAT-MODEL §3's three content-hash rows and ARCHITECTURE §5 name",
+      "probe": { "type": "dir-contains", "dir": "pharn/floor", "substring": "seam-record" },
+      "sites": [
+        {
+          "file": "THREAT-MODEL.md",
+          "marker": "| ai_docs poisoning       | content-hash pin; re-fetch that changes content requires re-review diff                                                     | content-hash _(specified; ships with the guarded surface)_ |"
+        },
+        {
+          "file": "THREAT-MODEL.md",
+          "marker": "content-hash + (ask) _(specified; ships with the guarded surface)_"
+        },
+        {
+          "file": "THREAT-MODEL.md",
+          "marker": "| seam-record poisoning   | content-hash on resolution; drift is loud, not silent                                                                       | content-hash _(specified; ships with the guarded surface)_ |"
+        },
+        {
+          "file": "pharn/ARCHITECTURE.md",
+          "marker": "**Seam + seam-record + content-hash** _(specified; ships with the guarded surface — no\n`seam-record.json` is written and no `ai_docs` pin is read by any shipped code today; the live\ncontent-hash primitive is `spec_content_hash`)_"
+        }
+      ]
+    },
+
+    {
+      "$comment": [
+        "LIMITS §1a and THREAT-MODEL §3 name a floor BACKSTOP for irreducible limit 1a: `kind: community` =",
+        "markdown-only, no `.cjs`, cannot declare trusted-write. Of the three sub-claims exactly one is live —",
+        "pharn/floor/validate.mjs restricts `seal` to kind: pharn-owned (:293) and enum-checks `kind` (:292).",
+        "The markdown-only / no-.cjs half is enforced by NOTHING, and the egress half waits on the (separately",
+        "registered) pre-egress hook. LIMITS §1a states the absence precisely: the three hooks contain zero",
+        "`kind` references.",
+        "",
+        "PROBE CHOICE, and its miss. Both sites locate the missing backstop in the HOOKS, so the probe watches",
+        ".claude/hooks for a *community* file — the pre-egress precedent (probe the directory where the doc says",
+        "the thing would live, by concept substring). NARROWED, and stated: the markdown-only half would just as",
+        "plausibly ship as a new validate.mjs CHECK, and `kind` handling added to an EXISTING hook creates no new",
+        "filename either; neither flips this probe. Direction 2 — the annotation deleted while the backstop is",
+        "still absent — is unaffected, and that is the direction the original F7 defect actually took.",
+        "",
+        "LIMITS.md:29 is deliberately NOT a site here: its annotation is about pre-egress and is already",
+        "registered under that entry. Registering the same bytes twice would tie one line to two probes."
+      ],
+      "id": "community-privilege",
+      "what": "a running check enforcing that kind: community is markdown-only / no `.cjs` and cannot declare trusted-write — the backstop LIMITS §1a and THREAT-MODEL §3/#8a name",
+      "probe": { "type": "dir-contains", "dir": ".claude/hooks", "substring": "community" },
+      "sites": [
+        {
+          "file": "THREAT-MODEL.md",
+          "marker": "`seal`-gating enforced (validate.mjs); markdown-only/no-`.cjs` and trusted-write pre-write hook + pre-egress (specified; ships with the guarded surface)"
+        },
+        {
+          "file": "THREAT-MODEL.md",
+          "marker": "trusted-write or off-allowlist egress (specified; ships with the guarded surface), so blast radius"
+        },
+        {
+          "file": "LIMITS.md",
+          "marker": "contain zero `kind` references, so both are _(specified; ships with the guarded surface)_."
+        }
+      ]
+    },
+
+    {
+      "$comment": [
+        "ARCHITECTURE §3.1 lists `rule_id ∈ roster` beside three LIVE enum checks and §7 calls it a floor-gate,",
+        "but no roster artifact exists. The only implementation contradicts the claim in its own words —",
+        "pharn/floor/merge-findings.mjs: 'This is a SHAPE guarantee (enum-regex, ARCHITECTURE §2), NOT roster",
+        "membership — no roster artifact exists; the claim is precisely shape-valid.'",
+        "",
+        "finding-shape.md's three sites were added by the `specified-marker-registration` increment. The contract",
+        "is the file a capability author actually reads to learn what `rule_id` guarantees, and it was the site",
+        "the earlier repair pass missed while correcting the two ARCHITECTURE ones — so its bytes are registered",
+        "here rather than left to the next reader (lessons-learned L2: a contract's honesty travels with the",
+        "artifact). The third site is the bound NOTE, registered because 'no roster artifact exists' is itself a",
+        "claim that expires the day one lands (L33).",
+        "",
+        "PROBE CHOICE, and its miss. ARCHITECTURE §3.1's own marker names the missing thing: 'no roster artifact",
+        "exists'. A roster is a contracts-layer artifact — the archetype-maps entry above registers exactly such",
+        "a missing pharn/pharn-contracts manifest — so the probe watches that directory for a *roster* file rather",
+        "than guessing one filename. NARROWED, and stated: a roster hardcoded inside validate.mjs or",
+        "merge-findings.mjs flips no filename probe.",
+        "",
+        "NOT REGISTERED, and the omission is deliberate: pharn/ARCHITECTURE.md:304 carries the unmarked twin of",
+        "the finding-shape.md:24 claim ('MUST exist in the roster AND have an eval'). It has no marker to hold to,",
+        "and registering a site whose marker is absent is an instant direction-2 RED on a doc nobody broke. The",
+        "file is hook-protected and human-only, so the marker must be added by a human; add the site here in the",
+        "same edit."
+      ],
+      "id": "rule_id-roster",
+      "what": "the rule/principle roster artifact that would make `rule_id ∈ roster` a real membership check rather than the shape check merge-findings.mjs actually performs",
+      "probe": { "type": "dir-contains", "dir": "pharn/pharn-contracts", "substring": "roster" },
+      "sites": [
+        {
+          "file": "pharn/ARCHITECTURE.md",
+          "marker": "`rule_id ∈ roster` _(specified; ships with the guarded surface — no roster artifact exists; `merge-findings.mjs` checks rule_id SHAPE only)_"
+        },
+        {
+          "file": "pharn/ARCHITECTURE.md",
+          "marker": "an enum-roster `rule_id` _(specified; ships with the guarded surface)_"
+        },
+        {
+          "file": "pharn/pharn-contracts/finding-shape.md",
+          "marker": "# MUST exist in the roster (specified; ships with the guarded surface) AND be eval-bound (P1, P4)"
+        },
+        {
+          "file": "pharn/pharn-contracts/finding-shape.md",
+          "marker": "membership in the rule / principle roster _(specified; ships with the guarded surface)_"
+        },
+        {
+          "file": "pharn/pharn-contracts/finding-shape.md",
+          "marker": "annotated `(specified; ships with the guarded surface)` because **no roster"
+        }
+      ]
+    },
+
+    {
+      "$comment": [
+        "ARCHITECTURE §5 annotates the constitution prefix, and CONSTITUTION.md § 'How this file is enforced'",
+        "confirms the absence in its own words: 'No injector exists: nothing on the floor performs the prepend",
+        "and nothing verifies it happened.' Unregistered until the `specified-marker-registration` sweep, which",
+        "found it by re-scanning the guarded docs on the shortest invariant substring rather than by trusting",
+        "the list of classes it had been handed (lessons-learned L33).",
+        "",
+        "PROBE CHOICE, and it is the WEAKEST of the five — stated plainly rather than left to look equivalent.",
+        "An injector would be a prompt-stage hook, so the probe watches .claude/hooks for an *inject* file. But",
+        "the prefix is a PROMPT-level mechanism: it could ship purely as a settings.json wiring entry, or stay a",
+        "command-level convention, creating no such filename at all — in which case direction 1 never fires for",
+        "this entry. Direction 2 (the annotation deleted while no injector exists) is unaffected and is the",
+        "direction that matters most here, since the doc is currently HONEST and the risk is losing that."
+      ],
+      "id": "constitution-injection",
+      "what": "an injector that actually performs and verifies the constitution prefix — ARCHITECTURE §5 names it; CONSTITUTION.md § 'How this file is enforced' confirms none exists",
+      "probe": { "type": "dir-contains", "dir": ".claude/hooks", "substring": "inject" },
+      "sites": [
+        {
+          "file": "pharn/ARCHITECTURE.md",
+          "marker": "**Constitution injection** _(specified; ships with the guarded surface)_"
         }
       ]
     },

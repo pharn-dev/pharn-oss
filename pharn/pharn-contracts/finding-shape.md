@@ -21,7 +21,7 @@ what stops an injected code comment from flipping a guaranteed decision.
 finding:
   # --- enum-gated / floor-verifiable (TRUSTED: produced by enum-check / path-resolution) ---
   type: "<enum>" # FINDING | CONSTITUTION_VIOLATION | ...
-  rule_id: "<file.md ID | P0..P7>" # MUST exist in the roster AND be eval-bound (P1, P4)
+  rule_id: "<file.md ID | P0..P7>" # MUST exist in the roster (specified; ships with the guarded surface) AND be eval-bound (P1, P4)
   severity: blocking | important | minor # enum; the LLM's *assignment* is advisory (fix #3)
   file: "<path:line>" # resolves to a real location
   # --- free-text (UNTRUSTED: inherits the trust of the INPUT; rendered as DATA, never executed) ---
@@ -31,14 +31,26 @@ finding:
 
 ## Field trust classes
 
-| field      | class      | how its value is produced                    | trust                                                 |
-| ---------- | ---------- | -------------------------------------------- | ----------------------------------------------------- |
-| `type`     | enum-gated | set membership over the type enum            | trusted                                               |
-| `rule_id`  | enum-gated | membership in the rule / principle roster    | trusted                                               |
-| `severity` | enum-gated | membership in `{blocking, important, minor}` | trusted _value_; the _assignment_ is advisory (fix#3) |
-| `file`     | enum-gated | path resolves to a real `path:line`          | trusted                                               |
-| `problem`  | free-text  | derived from the (possibly untrusted) input  | **inherits input trust**                              |
-| `evidence` | free-text  | quoted snippet from the input                | **inherits input trust**                              |
+| field      | class      | how its value is produced                                                               | trust                                                 |
+| ---------- | ---------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `type`     | enum-gated | set membership over the type enum                                                       | trusted                                               |
+| `rule_id`  | enum-gated | membership in the rule / principle roster _(specified; ships with the guarded surface)_ | trusted                                               |
+| `severity` | enum-gated | membership in `{blocking, important, minor}`                                            | trusted _value_; the _assignment_ is advisory (fix#3) |
+| `file`     | enum-gated | path resolves to a real `path:line`                                                     | trusted                                               |
+| `problem`  | free-text  | derived from the (possibly untrusted) input                                             | **inherits input trust**                              |
+| `evidence` | free-text  | quoted snippet from the input                                                           | **inherits input trust**                              |
+
+### What `rule_id`'s "enum-gated" class DOES and does NOT buy today (P0)
+
+The `rule_id` row above is annotated `(specified; ships with the guarded surface)` because **no roster
+artifact exists**, so roster membership is enforced by no running check. What ships today is a **shape**
+guarantee: `pharn/floor/merge-findings.mjs` requires `rule_id` to match the file-qualified /
+principle-id pattern, and says so in its own words — _"This is a SHAPE guarantee (enum-regex,
+`pharn/ARCHITECTURE.md §2`), NOT roster membership — no roster artifact exists; the claim is precisely
+'shape-valid'."_ A well-formed `rule_id` naming a rule that does not exist is therefore **shape-valid
+and passes**. Read the row as "the field is enum-gated **in shape**"; the membership half is specified,
+not live. This bound is stated here, in the contract, rather than only in the plan that introduced it —
+a contract's honesty has to travel with the artifact, and it may cite only a floor op that is live.
 
 ## Emission — findings.json (the machine-readable array)
 
