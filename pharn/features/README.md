@@ -18,3 +18,13 @@ dev/product boundary made structural:
 `/pharn-spec` writes the first `SPEC.md` here. Until a user runs it this directory is empty — the
 declared home for product-pipeline artifacts, so every product capability lands on the product side of
 the boundary from the start, never needing a later migration.
+
+## Upgrading from root `features/` (SKILLS_VERSION 5.0.0)
+
+If your project still has pipeline artifacts under the old root `features/<name>/` tree:
+
+1. Run `pharn update` with **@pharn-dev/pharn 0.5.0** or later — the CLI installs new bytes under `pharn/features/` and warns when a root copy is left behind.
+2. Move or recreate artifacts under `pharn/features/<name>/` (or start a fresh increment there).
+3. Delete the obsolete root `features/` tree when you no longer need it — reconcile and regress no longer treat those paths as pipeline exemptions, and the write-guard default no longer allows agent scratch writes there.
+
+Root `features/` may still exist for **your own** application code (Cucumber, feature-sliced layouts); PHARN simply no longer uses it as the product artifact root.

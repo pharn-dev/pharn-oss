@@ -430,6 +430,7 @@ test("✧ the pipeline-artifact slug is shape-gated — `..` cannot build a trav
   const data = loadIgnoreData(IGNORE_JSON);
   assert.equal(isPipelineArtifact("pharn/features/../PLAN.md", data), false);
   assert.equal(isPipelineArtifact(".dev/features/../../PLAN.md", data), false);
+  assert.equal(isPipelineArtifact("features/x/PLAN.md", data), false, "legacy root features/ is not a pipeline exemption");
   assert.equal(isPipelineArtifact("pharn/features/x/PLAN.md", data), true);
   assert.equal(isPipelineArtifact(".dev/features/x/SHIP.md", data), true);
   assert.equal(isPipelineArtifact("pharn/features/x/other.md", data), false, "exact enum membership, never a glob");

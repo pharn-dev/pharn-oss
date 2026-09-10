@@ -89,6 +89,11 @@ test("no scope (install posture): pharn/features/ scratch is still ALLOWED", () 
   assert.equal(hook(tmp(), "pharn/features/foo/bar.md").status, 0);
 });
 
+test("no scope (install posture): legacy root features/ is DENIED (pre-5.0.0 layout)", () => {
+  const cwd = seedInstalledProject(tmp());
+  assert.equal(hook(cwd, "features/x/SPEC.md").status, 2);
+});
+
 test("no scope: .dev/memory-bank/ is DENIED (P2-gated zone — moved under .dev/, still deny-by-default)", () => {
   assert.equal(hook(tmp(), ".dev/memory-bank/x.md").status, 2);
 });
