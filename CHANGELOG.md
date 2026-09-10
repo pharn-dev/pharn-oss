@@ -1255,6 +1255,78 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`pharn.config.json`'s `models.stages` is now the floor-checked source of truth for the ten PRODUCT
+  commands' model/effort** (`SKILLS_VERSION` 3.1.2 → **3.2.0**, minor: a newly shipped product-floor
+  checker plus changed product-command bytes) — `pharn/floor/check-model-config.mjs`, with
+  `pharn/floor/check-model-config.test.mjs` as its invoker, so `npm test` → `npm run check` → CI all
+  fail on drift. Until now the block governed only the three wired `pharn-dev-*` commands, and the
+  README said so: _"no product command reads it — the pipeline runs on whatever model your Claude Code
+  session is using. Treat the block as reserved, not as a control."_ That sentence is replaced, not
+  deleted (`lessons-learned` **L33** — a "not yet wired" claim expires the moment the work lands).
+
+  **The mechanism was READ LIVE, and it decides the whole design (P6).** Claude Code selects a
+  command's model through **static frontmatter and nothing else**: `model:` and `effort:` are real,
+  platform-honored command-frontmatter fields. There is **no runtime routing hook** — no command can
+  read a JSON file and switch its own model, and nothing in this repo reads `pharn.config.json` at run
+  time. So `models.stages` cannot _be_ the runtime control; it can only be the **source of truth the
+  static frontmatter is held to**. The ten product commands (`/pharn-spec`, `-plan`, `-grill`, `-build`,
+  `-regress`, `-verify`, `-ship`, `-loop`, `-review`, `-memory-promote`) now each carry `model:` /
+  `effort:` equal to their config-resolved value, and the checker REDs on any disagreement.
+  Simulating routing — a command "consulting" the config in prose — was refused: written in the config
+  mistaken for guaranteed is the P0 disease.
+
+  **What GREEN buys, and the three things it does not (P0).** FLOOR: the config is shape/enum-valid; a
+  stage resolves deterministically through the own-property pick with a `default` fallback
+  (**L15** — `Object.hasOwn`, never `||`/`??`, so `resolve toString` cannot print `{}` at exit 0); and
+  each of the ten commands' frontmatter EQUALS its resolved value, **bidirectionally** (no mapped
+  command missing, no unmapped product command carrying `model:`/`effort:`). NOT guaranteed:
+  (1) **the stage is never proven to have RUN under that model** — the platform applies model/effort,
+  invisible to any hook, hash or enum; (2) **turn scope** — the platform states the override "applies
+  for the rest of the current turn", so it takes effect when a human invokes a stage command
+  **directly**, and a stage invoked as a step **inside** `/pharn-ship` or `/pharn-loop` runs in the
+  orchestrator's turn and gets no per-stage routing; (3) **platform veto** — a value excluded by an
+  organization's `availableModels` allowlist, or unsupported in auto mode, is silently not used. All
+  three are stated in the checker header, in the `agreement` GREEN line itself, and in the README.
+
+  **Fresh-install posture, and its cost, stated rather than hidden.** A target with no
+  `pharn.config.json`, or a config with no `models.stages`, is **GREEN by design** — the
+  `check-lessons-index` `NO_CANON` / `COLD` precedent: the honest normal state of an install that does
+  not use the block, and REDding there would make every such install a false alarm. The consequence is
+  that a user who **deletes** the block loses the check rather than failing it. Conversely a config
+  stage key that is not a product stage (a `bulid` typo) **is** a RED: on the product surface it
+  governs nothing, so it must not sit there looking like a control.
+
+  **Why a sync check at all — `lessons-learned` L35's question was asked first.** L20 says a
+  discipline-only invariant earns a floor check on its second occurrence; L35 is the qualifier that
+  stops that from firing every time: _must the second copy exist?_ Here it must, in both directions.
+  The frontmatter copy is the **only** copy the platform reads. The config copy is the one place a user
+  tunes all ten stages, and the installer already validates and prints it. Neither can be drained the
+  way `package.json`'s `version` was, which puts this in **L31**'s regime (copies that must both exist
+  → build the thing that ranges over them), not L35's. A **generator** that rendered the ten
+  frontmatters from config would be the stronger answer still — a generated copy is a rendering, not a
+  maintained identity — and it is recorded as considered-and-not-taken in
+  `.dev/features/product-model-config/PLAN.md`, not silently dropped.
+
+  **The enumeration is the deliverable (L29 / L36 / L34).** `PRODUCT_STAGES` is a materialized, closed
+  stage→command map that every pass iterates; the agreement RED test walks **all ten** stages one at a
+  time rather than asserting over the one its author had in front of them; the reverse pass **closes**
+  the set instead of merely asserting presence over its members; and a walk that discovers **zero**
+  product commands is a loud RED, never a vacuous GREEN. `model_tier:` is deliberately untouched and
+  cannot be confused for `model:` — it is PHARN's own capability frontmatter (`ARCHITECTURE §3.1`),
+  inert to the platform, and the parser matches keys exactly (**L6**: read the structured location,
+  never grep).
+
+  **Apparatus change, and why it was needed.** `.dev/floor/check-config.mjs`'s agreement pass is now
+  scoped to a closed `DEV_WIRED` set (`plan`, `build`, `review`) instead of "every non-`default` config
+  stage". Without it, the shared `models.stages` — which now legitimately carries product-only stages
+  like `spec` and `loop` — would make the dev checker look for a `pharn-dev-spec.md` that does not
+  exist and RED on a correct repo. The narrowing is to a **materialized set**, not to "whichever stages
+  happen to have a file", because a file-existence test would silently stop checking a **renamed** dev
+  command. Its **reverse** pass was re-keyed onto `DEV_WIRED` for the same reason and is now strictly
+  stronger: before, it asked "does a config stage exist?", so the moment `grill` existed for the
+  product surface `pharn-dev-grill.md` could have gained a `model:` unnoticed. No `pharn-dev-*` command
+  gained or lost `model:`/`effort:`; the three that carry them still do, with the same values.
+
 - **A shipped `SKILLS_VERSION` with no changelog record is now a RED, not a discipline problem** —
   `.dev/floor/check-skills-version-recorded.mjs`, wired as `check:changelog` in `scripts.check` **and**
   as its own `ci.yml` step. **Apparatus only: `SKILLS_VERSION` does not bump** (`.dev/**`,

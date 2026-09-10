@@ -3,6 +3,8 @@ description: "Turn an Approved features/<name>/SPEC.md into an implementation fe
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
+model: opus
+effort: high
 reads:
   [
     "pharn/CONSTITUTION.md",

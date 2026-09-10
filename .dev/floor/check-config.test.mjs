@@ -161,7 +161,7 @@ test("agreement GREEN: command frontmatter matching the config exits 0", () => {
     });
     const r = run(["agreement", "--config", configPath, "--commands-dir", cmdDir]);
     assert.equal(r.status, 0, r.stdout + r.stderr);
-    assert.match(r.stdout, /GREEN — config valid; 3 wired stage/);
+    assert.match(r.stdout, /GREEN — config valid; 3\/3 wired stage/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -265,6 +265,85 @@ test("★ P0/P2: an instruction-looking extra config field does NOT move the ver
   const r = onConfig(c, ["validate"]);
   assert.equal(r.status, 0); // verdict stays GREEN — it reads only model/effort, never free-text content
   assert.match(r.stdout, /GREEN/);
+});
+
+// ── the DEV_WIRED narrowing (added alongside pharn/floor/check-model-config.mjs) ─────────────────────
+// `models.stages` is now ALSO the source of truth for the ten PRODUCT commands, so it legitimately
+// carries stages this surface has no command for. These four tests pin both halves of the narrowing: a
+// product-only stage must NOT RED here, and the reverse pass must still close over DEV_WIRED.
+
+test("agreement GREEN: a PRODUCT-only config stage (spec) with no pharn-dev-spec.md does NOT RED — DEV_WIRED scopes the forward pass", () => {
+  const c = clone(VALID);
+  c.models.stages.spec = { model: "opus", effort: "high" }; // a product stage; there is no dev twin
+  const { dir, configPath } = withConfig(c);
+  try {
+    const cmdDir = writeCommands(dir, {
+      plan: { model: "opus", effort: "high" },
+      build: { model: "sonnet", effort: "high" },
+      review: { model: "opus", effort: "high" },
+      // deliberately NO pharn-dev-spec.md — the whole point of the narrowing
+    });
+    const r = run(["agreement", "--config", configPath, "--commands-dir", cmdDir]);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /3\/3 wired stage/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("agreement RED: a dev command OUTSIDE DEV_WIRED carrying model:/effort: RED-s even when the config HAS that stage", () => {
+  // The hole the re-key closes. Before it, the reverse pass asked "does a config stage exist?" — so the
+  // moment `grill` existed for the PRODUCT surface, pharn-dev-grill.md could gain a `model:` unnoticed.
+  const c = clone(VALID);
+  c.models.stages.grill = { model: "opus", effort: "high" };
+  const { dir, configPath } = withConfig(c);
+  try {
+    const cmdDir = writeCommands(dir, {
+      plan: { model: "opus", effort: "high" },
+      build: { model: "sonnet", effort: "high" },
+      review: { model: "opus", effort: "high" },
+      grill: { model: "opus", effort: "high" }, // matches config, but `grill` is not in DEV_WIRED
+    });
+    const r = run(["agreement", "--config", configPath, "--commands-dir", cmdDir]);
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /is not in DEV_WIRED/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("agreement RED: a DEV_WIRED stage with NO own config entry must still match `default` (the fallback branch)", () => {
+  // A DEV_WIRED stage is no longer guaranteed to be an own config key, so the forward pass resolves via
+  // the own-property pick. Dropping `review` from the config makes it resolve to default (sonnet/high),
+  // and the command's `opus` must then RED.
+  const c = clone(VALID);
+  delete c.models.stages.review;
+  const { dir, configPath } = withConfig(c);
+  try {
+    const cmdDir = writeCommands(dir, {
+      plan: { model: "opus", effort: "high" },
+      build: { model: "sonnet", effort: "high" },
+      review: { model: "opus", effort: "high" }, // config now resolves review → default sonnet
+    });
+    const r = run(["agreement", "--config", configPath, "--commands-dir", cmdDir]);
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /stage "review" .*model "opus" != config "sonnet"/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("★ L34: an EMPTY commands dir is a loud RED, never a vacuous GREEN over zero members", () => {
+  const { dir, configPath } = withConfig(VALID);
+  try {
+    const cmdDir = join(dir, "commands");
+    mkdirSync(cmdDir, { recursive: true });
+    const r = run(["agreement", "--config", configPath, "--commands-dir", cmdDir]);
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /the walk found nothing to check/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("★ live ★: agreement over the REAL repo config is GREEN (real config↔frontmatter consistency, gated by npm test)", () => {

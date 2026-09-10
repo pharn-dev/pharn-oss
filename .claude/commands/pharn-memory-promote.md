@@ -3,6 +3,8 @@ description: "Prepare and GATE the promotion of ONE lesson/pattern to the USER's
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
+model: opus
+effort: high
 reads:
   [
     "pharn/CONSTITUTION.md",
