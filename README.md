@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-3.1.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-3.1.1-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -400,17 +400,18 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   elsewhere, either set a scope that names those paths
   (`set-writes-scope.cjs --from-plan <PLAN.md>`), or leave `enforce-writes-scope.cjs` out of
   `.claude/settings.json` — at the cost of `writes:` enforcement.
-- **The memory-bank is not write-protected, so a plan can reach it.** `THREAT-MODEL.md` treats
-  memory-bank poisoning as the worst persistence vector and maps it to the pre-write hook, but
-  `.claude/hooks/protect-trusted-paths.cjs` does not list `memory-bank/`. Whether a canon write is
-  allowed is therefore decided entirely by the writes-scope hook, whose scope for `/pharn-build` comes
-  from your `PLAN.md`'s `## Files` list — and no human approves a product `PLAN.md`. A `## Files` entry
-  naming `memory-bank/lessons-learned.md` grants a write that never passes `/pharn-memory-promote`'s
-  provenance check or its human accept/deny gate, and a lesson written that way is then read by every
-  later `/pharn-plan` run. Treat `memory-bank/**` as agent-reachable: review it in diffs like any other
-  file, and check `## Files` before approving a plan. A denylist for it is prepared and verified but not
-  yet applied — the guard scripts are protected by the guard itself, so only a human can land it
-  (`.dev/features/canon-write-denylist/`).
+- **The memory-bank denylist covers the write-tool surface only — Bash still reaches canon.**
+  `THREAT-MODEL.md` treats memory-bank poisoning as the worst persistence vector. As of `3.1.1`
+  `.claude/hooks/protect-trusted-paths.cjs` **does** deny `Write`/`Edit`/`MultiEdit`/`NotebookEdit` to
+  `memory-bank/**` and `.dev/memory-bank/**`, and the escape is the writes-scope record's **origin**
+  (`set_by`), which `set-writes-scope.cjs` writes from its own **argv** — so **no `writes:` declaration
+  and no `PLAN.md` `## Files` entry can grant itself a canon write.** That closes the reported vector: a
+  `## Files` entry naming `memory-bank/lessons-learned.md` is now denied rather than silently allowed.
+  **What it does NOT close:** `PreToolUse` hooks never see **Bash**, so an agent holding Bash can still
+  append to canon, run the setter with promote-shaped argv, or forge the scope record. No mechanism
+  without that hole was found and none is claimed. So "canon cannot be written" stays **struck** — what
+  changed is that on the guarded tool surface a canon write now costs a separate, explicit, auditable
+  act that a build plan cannot cause. Keep reviewing `memory-bank/**` in diffs like any other file.
 - **Model judgment remains model judgment.** Architecture quality, review correctness, severity,
   completeness of intent, and semantic correctness are advisory unless a specific deterministic checker
   covers the claim.
