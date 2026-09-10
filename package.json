@@ -35,8 +35,9 @@
     "docs:check": "node .dev/floor/check-capability-catalog.mjs . && node .dev/floor/check-lessons-index.mjs .",
     "check:markers": "node .dev/floor/check-specified-markers.mjs .",
     "check:badge": "node .dev/floor/check-version-badge.mjs .",
+    "check:changelog": "node .dev/floor/check-skills-version-recorded.mjs .",
     "check:contributing": "node .dev/floor/check-contributing-gates.mjs .",
-    "check": "npm run format:check && npm run lint && npm run lint:md && npm run docs:check && npm run check:markers && npm run check:badge && npm run check:contributing && npm test"
+    "check": "npm run format:check && npm run lint && npm run lint:md && npm run docs:check && npm run check:markers && npm run check:badge && npm run check:changelog && npm run check:contributing && npm test"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

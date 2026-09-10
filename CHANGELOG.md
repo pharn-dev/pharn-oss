@@ -51,11 +51,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - **The writes-scope guard's fail-closed default no longer carries dev-repo posture into
-  installed projects** ([#180](https://github.com/pharn-dev/pharn-oss/issues/180)). When no scope
+  installed projects** (`SKILLS_VERSION` 3.0.1 → **3.0.2**, patch;
+  [#180](https://github.com/pharn-dev/pharn-oss/issues/180), shipped in
+  [#188](https://github.com/pharn-dev/pharn-oss/pull/188)). When no scope
   file is set, `enforce-writes-scope.cjs` now partitions its default safe-set by `.dev/floor/`
   presence: installed projects get `features/**` only (plus `.pharn/**` bootstrap); PHARN's dev repo
   keeps the prior set including `.dev/features/**` and `pharn/pharn-*/**`. Prevents agent edits to
   installed capabilities from being classified as user drift by `pharn update`.
+
+  **The version key was added retroactively, and that is the defect this file's newest gate exists
+  for.** `#188` bumped `SKILLS_VERSION` and edited this entry in the same diff without ever writing the
+  string `3.0.2`, so the shipped product surface had no changelog record — see the `check:changelog`
+  entry under **Added** below.
 
 - **`pharn/ARCHITECTURE.md` — restore the `archetype-maps` specified-marker substring dropped in the
   §7 enforcement list.** The recent arch refresh rewrote "the four archetype maps agree (fix #5 —
@@ -888,6 +895,68 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   that has never promoted a lesson migrates with that single line. Full behavior below.
 
 ### Added
+
+- **A shipped `SKILLS_VERSION` with no changelog record is now a RED, not a discipline problem** —
+  `.dev/floor/check-skills-version-recorded.mjs`, wired as `check:changelog` in `scripts.check` **and**
+  as its own `ci.yml` step. **Apparatus only: `SKILLS_VERSION` does not bump** (`.dev/**`,
+  `package.json`, CI, `CONTRIBUTING.md` and this file are all outside CLAUDE.md's bump-triggering set).
+
+  **The trigger is a measured second occurrence, which is exactly `lessons-learned` L20's bar (P7).**
+  Two commits shipped product-surface bytes with no bump and no entry — `6c5ae8e` (`pharn/ARCHITECTURE.md`
+  alone, the commit that introduced a false claim about shipped verifiers) and `e4e8529`
+  (`pharn/floor/check-plan-lessons.mjs` plus two `pharn-*` commands). Then `#188` (`f71f501`) bumped
+  `3.0.1 → 3.0.2`, **edited `CHANGELOG.md` in the same diff**, and never wrote the string `3.0.2` — so
+  two different `check-plan-lessons.mjs` behaviours and two different `ARCHITECTURE.md` byte-sets shipped
+  under one version string, and the file that is supposed to say what changed said nothing about the
+  version that changed. Verified against that commit's own bytes rather than a mutable ref (**L32**):
+  `git show f71f501:CHANGELOG.md | grep -c '3\.0\.2'` → `0`, and the new checker exits **1** on exactly
+  those bytes. `check-version-badge.mjs` disclaims this class in its own header ("a badge matching a
+  wrong bump stays GREEN"), so nothing in the chain could see it.
+
+  **`SKILLS_VERSION` 3.0.2 is now recorded** on the `#188` entry above, in this file's own convention
+  (the entry names the version it shipped). **`## [Unreleased]` was deliberately NOT cut into a
+  `## [3.0.2]` section, and no tag was cut:** a release heading asserts a release, `git tag -l` is empty,
+  and writing one anyway would be "written in the changelog" masquerading as "therefore released" — the
+  P0 disease in this file's own shape. Cutting release sections and their tags is a human decision about
+  release identity; follow-up `changelog-release-sections`.
+
+  **What it guarantees, and the bound is the headline.** FLOOR (`ARCHITECTURE.md §2` primitive #3 —
+  enum/regex): the trimmed, shape-validated `SKILLS_VERSION` scalar appears in `CHANGELOG.md` as a
+  complete version token. **ADVISORY, and stated in the checker's header, this entry and the PR body: it
+  proves the string APPEARS, never that the entry is correct, complete, or describes the right change — a
+  version recorded against a wrong bump stays GREEN**, and a product-surface change that never bumped at
+  all leaves it GREEN too. Fail-closed over a **closed, exported** refusal set the tests iterate rather
+  than hand-list (**L29**): `BAD_TARGET`, `MISSING_VERSION`, `ENUM_ERROR`, `MISSING_CHANGELOG`,
+  `EMPTY_CHANGELOG`, `UNRECORDED` — every one probed live, including `SKILLS_VERSION` and `CHANGELOG.md`
+  as **directories**, because a universal quantifier over inputs is where the drift lands (**L37**).
+  `SKILLS_VERSION` is validated FIRST so two simultaneous REDs cannot race.
+
+  **Why a boundary rule rather than a bare substring or a markup requirement.** `3.0.2` occurs inside
+  `3.0.20`, `13.0.2` and `3.0.2.1`, so `includes()` would GREEN a changelog recording only a neighbouring
+  version — each near-miss case is pinned by a **mutation** assertion that the naive predicate is `true`
+  while the checker exits 1. Requiring back-ticks (the `check-contributing-gates` move) would be wrong
+  here for a stated reason: there the token was `test`, an ordinary English word; here it is a dotted
+  numeric triple, so the collision is **numeric, not lexical**, and pinning one rendering would RED
+  correct entries and train authors to satisfy markup instead of recording a version (**L36**, **L27**).
+  An occurrence counts iff the character before is not `[0-9A-Za-z.]` and the character after is not a
+  digit, a letter, or a `.` followed by a digit. Excluding a letter prefix is **measured**, not stylistic:
+  `2.0.0` is a real past `SKILLS_VERSION` and this file's header permanently links
+  `https://semver.org/spec/v2.0.0.html`, so a bare-boundary rule would have certified a `2.0.0` release
+  vacuously.
+
+  **L35 was answered before L20 was applied**, in that order, because L35 is the qualifier that stops L20
+  sending you to build a checker every time: a sync check is the right remedy only once the second copy is
+  established as one that must exist. It must — the CHANGELOG's version string is not a redundant identity
+  like `package.json`'s drained `version`, it is the **join key** binding a version number to the
+  description of what changed in it, and draining it is not available. The three constants shared with
+  `check-version-badge.mjs` are a deliberate second copy for the recorded reason that a checker→checker
+  import would be the leaf→leaf shape `ARCHITECTURE.md §4` forbids (every floor import in the repo points
+  at a `*-core.mjs` bottom) and extracting a core would edit a live guard on a second axis with no
+  triggering failure; the pair is pinned by a ✧ test asserting both agreement **and** the one deliberate
+  divergence (no `UNSUPPORTED` state here — the shared `VERSION_RE` already rejects a pre-release, so both
+  checkers RED and only the refusal's name differs). Both wirings are pinned by tests, because `ci.yml`
+  runs each script individually and never `npm run check`. **"The wiring is pinned" never means "CI ran
+  it".** Full record: `.dev/features/skills-version-recorded/`.
 
 - **`/pharn-dev-ship` now offers the run's lesson at GATE 2 instead of letting it die with the session
   (`Step 2b — lesson-extract`).** After `/pharn-dev-review` and **before** the `SHIP.md` write, the stage
