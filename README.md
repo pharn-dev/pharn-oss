@@ -98,8 +98,8 @@ them. The goal is not to make AI development look clean. The goal is to make it 
 
 ## Quick start
 
-PHARN runs on [Claude Code](https://claude.com/claude-code). The installer requires Node 20 or newer; CI
-runs it on Node 24. In your project root:
+PHARN runs on [Claude Code](https://claude.com/claude-code). The installer requires Node 20 or newer. In
+your project root:
 
 ```bash
 npx @pharn-dev/pharn@latest init
@@ -140,8 +140,9 @@ They move independently and are not meant to match.
 
 The installer reads your project and selects the capabilities that apply before writing files. Detection
 is JS/TS-shaped today: it reads `package.json` and scans for `next.config.*`, `app/` route handlers,
-`.tsx`/`.jsx`, `migrations/`, and `.sql`, resolving to `ssr`, `backend`, `spa`, or `lib`. A repo with none
-of those signals still installs the universal capabilities.
+`.tsx`/`.jsx`, `migrations/`, and `.sql`, resolving to one or more of `ssr`, `backend`, `spa`, and `lib`
+— a project can match several, so Next plus Express resolves to `ssr` and `backend` together. A repo with
+none of those signals still installs the universal capabilities.
 
 You see the selected capability list, with a reason beside each entry, before the installer writes. A
 normal install adds:
@@ -168,9 +169,11 @@ your-repo/
 └── .pharn/                        # runtime scratch — add to .gitignore
 ```
 
-The hooks enforce only after they are registered in `.claude/settings.json`. If your project already has
-that file, the installer preserves it and warns instead of overwriting it. Until you copy the hook wiring
-over, any guarantee that depends on a `PreToolUse` hook is not active.
+The hooks enforce only after they are registered in Claude Code's settings — `.claude/settings.json`, or
+`.claude/settings.local.json`, which is loaded too and can wire or override the same hooks. If your
+project already has a `.claude/settings.json`, the installer preserves it and warns instead of
+overwriting it. Until you copy the hook wiring over, any guarantee that depends on a `PreToolUse` hook is
+not active.
 
 ---
 
@@ -198,8 +201,10 @@ specific deterministic checks.
 
 ## Commands
 
-Two commands cover the normal path. The other eight are the stages those two run, available on their own
-when you want to inspect or drive one step manually.
+Two commands cover the normal path. Six of the other eight are the pipeline stages those two run,
+available on their own when you want to inspect or drive one step manually. The remaining two —
+`/pharn-review` and `/pharn-memory-promote` — are standalone: neither is a pipeline stage, and neither is
+invoked by `/pharn-loop` or `/pharn-ship`.
 
 | Command                 | Use it when you want to...                                                                                                                              |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -283,14 +288,15 @@ judgment is **advisory**.
 
 **Guaranteed** — examples of narrow claims backed by named checkers:
 
-| Guarantee                                                                                                                                      | The check behind it                                                                                                                                                                                        |
-| ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The four trusted docs — and the guards' own control surface — cannot be edited through Claude Code's Write/Edit/MultiEdit/NotebookEdit surface | `.claude/hooks/protect-trusted-paths.cjs`                                                                                                                                                                  |
-| That same tool surface is restricted to the active write scope, fail-closed to a default-safe set when none is active                          | `set-writes-scope.cjs` + `enforce-writes-scope.cjs`                                                                                                                                                        |
-| An approved spec is pinned, so later body drift is detectable                                                                                  | `check-spec.mjs --hash` at approval; re-verified at plan, grill, build, regress, verify and ship by `check-spec-approved.mjs` (directly at plan and ship, through `check-plan-spec-agree.mjs` at the rest) |
-| Secret-shaped literals in a plan can be detected by the shipped regex scanner                                                                  | `scan-plan-secrets.mjs`                                                                                                                                                                                    |
-| A missing concrete path declared by the plan yields an incomplete build signal                                                                 | `check-build-complete.mjs` feeding `check-verify.mjs`                                                                                                                                                      |
-| Which lenses run, and how structured findings merge                                                                                            | `count-lenses.mjs` + `merge-findings.mjs`                                                                                                                                                                  |
+| Guarantee                                                                                                                                                                                                                                                                | The check behind it                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The four trusted docs — and the guards' own control surface — cannot be edited through Claude Code's Write/Edit/MultiEdit/NotebookEdit surface                                                                                                                           | `.claude/hooks/protect-trusted-paths.cjs`                                                                                                                                                                  |
+| Memory-bank canon (`memory-bank/`, `.dev/memory-bank/`, subtrees included) is denied on that same surface, **unless** the active writes-scope was set by a promotion command **and** names that one canon file alone — so a build plan cannot grant itself a canon write | `.claude/hooks/protect-trusted-paths.cjs` (origin read from `set-writes-scope.cjs`'s argv)                                                                                                                 |
+| That same tool surface is restricted to the active write scope, fail-closed to a default-safe set when none is active                                                                                                                                                    | `set-writes-scope.cjs` + `enforce-writes-scope.cjs`                                                                                                                                                        |
+| An approved spec is pinned, so later body drift is detectable                                                                                                                                                                                                            | `check-spec.mjs --hash` at approval; re-verified at plan, grill, build, regress, verify and ship by `check-spec-approved.mjs` (directly at plan and ship, through `check-plan-spec-agree.mjs` at the rest) |
+| Secret-shaped literals in a plan can be detected by the shipped regex scanner                                                                                                                                                                                            | `scan-plan-secrets.mjs`                                                                                                                                                                                    |
+| A missing concrete path declared by the plan yields an incomplete build signal                                                                                                                                                                                           | `check-build-complete.mjs` feeding `check-verify.mjs`                                                                                                                                                      |
+| Which lenses run, and how structured findings merge                                                                                                                                                                                                                      | `count-lenses.mjs` + `merge-findings.mjs`                                                                                                                                                                  |
 
 **Advisory** — everything a model judges: whether a plan is wise, whether a review finding is real,
 whether a severity is right, whether the code satisfies the product intent, and whether the resulting
