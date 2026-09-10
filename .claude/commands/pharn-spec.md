@@ -167,6 +167,8 @@ Only on an explicit **approve**, pin the spec (the SPEC body is final — do not
    If it is RED, the pin is wrong — recompute and re-write the hash; never relax the check or hand-edit the body
    to match a stale hash.
 
+**Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the audit sections for document layout only, and a reader who stops at the turn-end never reaches it.
+
 The `SPEC.md` is now **Approved and pinned**: its identity (`spec_id`) and approved intent (content-hash) are
 fixed, so any later edit to the intent body is **detectable** by the next stage (fix #4). `/pharn-spec` does one
 thing — it lands **one** human-approved, pinned spec. It does **not** chain to `/pharn-plan` (a later stage).

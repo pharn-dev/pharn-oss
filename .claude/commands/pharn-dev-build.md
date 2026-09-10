@@ -157,6 +157,8 @@ agree; finding templates separate enum-gated from free-text fields; no forbidden
 
 ## Step 4 — Record and stop
 
+**Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the audit sections for document layout only, and a reader who stops at the turn-end never reaches it.
+
 Write a one-paragraph build note (what landed, floor status GREEN, any decisions). Update the
 memory-bank `pattern-library`/`lessons-learned` **only** via a gated promotion with provenance
 (`pharn/ARCHITECTURE.md §5`) — do not silently write canon (P2). End your turn. Do not self-review;

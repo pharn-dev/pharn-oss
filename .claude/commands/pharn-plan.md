@@ -271,6 +271,8 @@ node pharn/floor/check-plan-lessons.mjs features/<name>/PLAN.md memory-bank/less
 > the same checker against the same canon as a deterministic RED, so a stage that did **not** author the
 > field re-verifies it. And the checker still verifies the **declaration**, never the **application**.
 
+**Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the audit sections for document layout only, and a reader who stops at the turn-end never reaches it.
+
 `/pharn-plan` does **one** thing — it lands **one** plan derived from an approved spec. It does **not**
 chain to `/pharn-grill` or `/pharn-build` (later stages). **End your turn.**
 

@@ -1089,3 +1089,102 @@ test("✧ the carve-out rules DISCRIMINATE — both halves fail on a mutated com
     "removing the anchor must make the region unlocatable, so the rules fail rather than pass over nothing"
   );
 });
+
+// ── The release step must be REACHABLE, not merely present ───────────────────────────────────────────
+//
+// THE DEFECT, measured across the corpus before the fix: in ALL 17 setter-invoking commands the
+// `## Final step — release the writes-scope` heading sat BELOW the command's last "end your turn"
+// instruction. A reader following the document top-to-bottom is told to stop before ever reaching it, so
+// `--clear` never ran on any happy path. CLAUDE.md states why that matters: "a SET scope REPLACES the
+// safe-set, making a finished run's leftover scope STRICTER than no scope at all" — paths the
+// fail-closed default permits start being denied in later sessions, with nothing naming the cause.
+// (That leftover state is not hypothetical: it is what denied /pharn-review's own lens writes, exit 2.)
+//
+// WHY THE EXISTING TEST DID NOT CATCH IT, which is the instructive half. A test already pinned that each
+// setter-invoking command DECLARES the release and orders it AFTER every set. Both properties held while
+// the step was unreachable — presence and set-relative ordering say nothing about whether a reader gets
+// there. The missing axis was ordering relative to the TERMINAL INSTRUCTION.
+//
+// Surfaced by an adversarial review of this repo (finding `release-step-unreachable`, HIGH, 17/17).
+//
+// HONEST SCOPE (P0): this proves a POINTER precedes the terminal instruction in the command's prose. It
+// does NOT prove any run executed `--clear` — the release is a Bash call outside the PreToolUse gate
+// (L19), so nothing on the floor forces it, and an early abort still skips it. It raises the odds a
+// reader reaches the step; it does not make the release a guarantee. The next command's first-step SET
+// still overwrites a leftover scope either way.
+const RELEASE_POINTER = "Before ending your turn, run the release step";
+const TURN_END_RE = /end (your|the) turn/i;
+
+/**
+ * Commands that SET a writes-scope — the only ones that can LEAVE one behind and therefore owe a
+ * release. Membership is `--from-frontmatter` / `--from-plan`, NOT the bare string "set-writes-scope":
+ * `/pharn-review` invokes the setter only as `--clear` (it deliberately sets no scope of its own, since
+ * its Step 4 fans out to N parallel writers), so a substring test wrongly demanded a release step from a
+ * command that has nothing to release. Surfaced by this very rule firing on it once both changes landed
+ * together — the domain was wrong, not the command.
+ */
+function setterCommands() {
+  return commandFiles().filter((f) => /--from-(frontmatter|plan)\s+\S*[./]/.test(readFileSync(join(COMMANDS_DIR, f), "utf8")));
+}
+
+test("✧ L34 — the setter-invoking corpus is non-empty (the per-file rules below cannot pass vacuously)", () => {
+  assert.ok(
+    setterCommands().length > 0,
+    "discovered 0 setter-invoking commands — the walk broke, and every rule below would pass vacuously"
+  );
+});
+
+/**
+ * THE ACCEPTANCE PREDICATE, extracted so the rule and its mutation control share ONE implementation.
+ * Returns null when the body is acceptable, else the reason string. Raised by an automated review: the
+ * control previously re-scanned the mutant itself and only confirmed the pointer was gone, so it never
+ * exercised the production rule — if the rule stopped rejecting the mutation, the control still passed.
+ * Sharing the predicate is what makes the control a real check on the rule rather than on its input.
+ */
+function releaseUnreachableReason(body) {
+  const lines = body.split(/\r?\n/);
+  const pointer = lines.findIndex((l) => l.includes(RELEASE_POINTER));
+  let lastTurnEnd = -1;
+  lines.forEach((l, i) => {
+    if (TURN_END_RE.test(l)) lastTurnEnd = i;
+  });
+  if (pointer === -1) return "no release pointer; a reader stopping at the turn-end never reaches `--clear`";
+  if (lastTurnEnd !== -1 && pointer > lastTurnEnd) {
+    return `release pointer at line ${pointer + 1} sits BELOW the last turn-end at line ${lastTurnEnd + 1}`;
+  }
+  return null;
+}
+
+test("✧ every setter-invoking command names the release step BEFORE its last turn-end instruction", () => {
+  const offenders = [];
+  for (const file of setterCommands()) {
+    const reason = releaseUnreachableReason(readFileSync(join(COMMANDS_DIR, file), "utf8"));
+    if (reason) offenders.push(`${file} — ${reason}`);
+  }
+  assert.deepEqual(offenders, [], `release step unreachable in:\n    ${offenders.join("\n    ")}`);
+});
+
+test("✧ the reachability rule DISCRIMINATES — it fails on the real pre-fix shape (L4 mutation control)", () => {
+  // Mutated from a REAL command body, not a synthetic string: strip the pointer from live bytes and the
+  // rule must fail. Without this, the rule above passes by construction on a corpus already fixed.
+  const file = setterCommands()[0];
+  const real = readFileSync(join(COMMANDS_DIR, file), "utf8");
+  assert.ok(real.includes(RELEASE_POINTER), `precondition: ${file} must carry the pointer, or this control mutates nothing`);
+
+  // The mutant: the real body with its pointer stripped — the exact pre-fix shape.
+  const mutant = real
+    .split("\n")
+    .filter((l) => !l.includes(RELEASE_POINTER))
+    .join("\n");
+  assert.notEqual(mutant, real, "the mutation must actually change the body, or the control is vacuous (L34)");
+
+  // THE LOAD-BEARING ASSERTION: run the PRODUCTION predicate against the mutant. If the rule ever stops
+  // rejecting this shape, THIS fails — which a control that re-scanned the mutant itself could not do.
+  assert.equal(
+    releaseUnreachableReason(mutant),
+    "no release pointer; a reader stopping at the turn-end never reaches `--clear`",
+    `the production predicate must REJECT the pre-fix shape of ${file}`
+  );
+  // And it must ACCEPT the unmutated body, so the rejection above is about the mutation, not the fixture.
+  assert.equal(releaseUnreachableReason(real), null, `the production predicate must ACCEPT the real ${file}`);
+});

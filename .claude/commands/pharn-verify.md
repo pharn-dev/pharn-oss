@@ -379,6 +379,8 @@ missing/malformed (fail-closed)` — then a **completeness line** (`build comple
 first`. **Never** write "`/pharn-verify` ensures the feature is correct" (the disease, P0) — it certifies
    only the gates it ran.
 
+**Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the audit sections for document layout only, and a reader who stops at the turn-end never reaches it.
+
 Then **end your turn.** `/pharn-verify` does **not** invoke a downstream stage and does not gate it — the
 human reads the report and the verdict's exit code decides the stage.
 

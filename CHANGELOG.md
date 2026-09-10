@@ -260,6 +260,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   drift: two lenses' prose name scanners that do not exist"), answered by `lens-scanner-map.test.mjs` —
   which pins map↔disk but reads no command prose, which is the gap that let this land.
 
+- **The writes-scope release step was UNREACHABLE in all 17 setter-invoking commands** (`SKILLS_VERSION`
+  3.0.8 → **3.0.9**, patch — 10 of the 17 are product-surface `pharn-*` commands; the 7 `pharn-dev-*`
+  ones and the hygiene test are apparatus). Measured across the corpus: in **17 of 17**, the
+  `## Final step — release the writes-scope` heading sat **below** the command's last _"end your turn"_
+  instruction. A reader following the document top-to-bottom is told to stop before ever reaching it, so
+  `set-writes-scope.cjs --clear` never ran on any happy path. Reported by an adversarial review
+  (`release-step-unreachable`, HIGH) and re-derived live before it was scoped.
+
+  **Why that matters is already stated in `CLAUDE.md`:** a **set** scope REPLACES
+  `enforce-writes-scope.cjs`'s fail-closed default-safe-set, so a finished run's leftover scope is
+  **stricter** than no scope at all — paths the default permits start being denied in later sessions,
+  with nothing naming the cause. **That state is not hypothetical:** a leftover scope is exactly what
+  denied `/pharn-review`'s own lens writes with exit 2 during this same remediation batch.
+
+  **Why the existing test did not catch it, which is the instructive half.** A test already pinned that
+  every setter-invoking command **declares** the release and orders it **after every set**. Both
+  properties held while the step was unreachable — presence and set-relative ordering say nothing about
+  whether a reader ever gets there. The missing axis was ordering relative to the **terminal
+  instruction**.
+
+  **The fix copies an established shape rather than inventing one** ([[L8]]): `/pharn-dev-plan`'s
+  `### Format this stage's own artifact` already says _"Immediately after writing it, and **before**
+  ending the turn"_. Each command now carries the same framing as a pointer paragraph immediately above
+  its terminal instruction. The release section itself is unchanged and stays where it is — it is
+  reference-adjacent by layout, and moving 17 audit sections would have been the larger, riskier edit.
+
+  **Pinned by two new rules in `command-hygiene.test.mjs`** (a test — no bump of its own): the pointer
+  must exist and must precede the last turn-end line, over a corpus **discovered** from the filesystem
+  ([[L29]]/[[L36]]) with an [[L34]] non-vacuity assertion; plus an [[L4]] **discrimination control**
+  mutated from a **real** command body — strip the pointer from live bytes and the rule must fail.
+  Confirmed to RED against the pre-fix bytes (**2 failures**).
+
+  **ADVISORY, and the bound is unchanged (P0):** this proves a **pointer precedes the terminal
+  instruction in prose**. It does **not** prove any run executed `--clear` — the release is a Bash call
+  outside the `PreToolUse` gate ([[L19]]), so nothing on the floor forces it and an early abort still
+  skips it. It raises the odds a reader reaches the step; it does not make the release a guarantee. The
+  next command's first-step **set** still overwrites a leftover scope either way.
+
 - **The writes-scope guard's fail-closed default no longer carries dev-repo posture into
   installed projects** (`SKILLS_VERSION` 3.0.1 → **3.0.2**, patch;
   [#180](https://github.com/pharn-dev/pharn-oss/issues/180), shipped in
