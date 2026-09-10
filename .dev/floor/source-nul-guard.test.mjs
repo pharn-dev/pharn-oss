@@ -125,8 +125,8 @@ for (const [label, dir] of FLOORS) {
       offenders,
       [],
       `raw NUL byte(s) in floor source. Build the byte with \`String.fromCharCode(0)\` and interpolate ` +
-        `it, the way pharn/floor/merge-findings.mjs does — a raw NUL makes the file binary to git diff ` +
-        `and to grep-based sweeps:\n  ${offenders.join("\n  ")}`
+        `it, the way pharn/floor/merge-findings.mjs does — a raw NUL makes grep-based sweeps ` +
+        `MISS matching lines, and can make the file binary to git diff depending on the byte's OFFSET:\n  ${offenders.join("\n  ")}`
     );
   });
 }
