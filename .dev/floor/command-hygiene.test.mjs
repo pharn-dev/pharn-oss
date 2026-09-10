@@ -1134,20 +1134,32 @@ test("✧ L34 — the setter-invoking corpus is non-empty (the per-file rules be
   );
 });
 
+/**
+ * THE ACCEPTANCE PREDICATE, extracted so the rule and its mutation control share ONE implementation.
+ * Returns null when the body is acceptable, else the reason string. Raised by an automated review: the
+ * control previously re-scanned the mutant itself and only confirmed the pointer was gone, so it never
+ * exercised the production rule — if the rule stopped rejecting the mutation, the control still passed.
+ * Sharing the predicate is what makes the control a real check on the rule rather than on its input.
+ */
+function releaseUnreachableReason(body) {
+  const lines = body.split(/\r?\n/);
+  const pointer = lines.findIndex((l) => l.includes(RELEASE_POINTER));
+  let lastTurnEnd = -1;
+  lines.forEach((l, i) => {
+    if (TURN_END_RE.test(l)) lastTurnEnd = i;
+  });
+  if (pointer === -1) return "no release pointer; a reader stopping at the turn-end never reaches `--clear`";
+  if (lastTurnEnd !== -1 && pointer > lastTurnEnd) {
+    return `release pointer at line ${pointer + 1} sits BELOW the last turn-end at line ${lastTurnEnd + 1}`;
+  }
+  return null;
+}
+
 test("✧ every setter-invoking command names the release step BEFORE its last turn-end instruction", () => {
   const offenders = [];
   for (const file of setterCommands()) {
-    const lines = readFileSync(join(COMMANDS_DIR, file), "utf8").split(/\r?\n/);
-    const pointer = lines.findIndex((l) => l.includes(RELEASE_POINTER));
-    let lastTurnEnd = -1;
-    lines.forEach((l, i) => {
-      if (TURN_END_RE.test(l)) lastTurnEnd = i;
-    });
-    if (pointer === -1) {
-      offenders.push(`${file} — no release pointer; a reader stopping at the turn-end never reaches \`--clear\``);
-    } else if (lastTurnEnd !== -1 && pointer > lastTurnEnd) {
-      offenders.push(`${file} — release pointer at line ${pointer + 1} sits BELOW the last turn-end at line ${lastTurnEnd + 1}`);
-    }
+    const reason = releaseUnreachableReason(readFileSync(join(COMMANDS_DIR, file), "utf8"));
+    if (reason) offenders.push(`${file} — ${reason}`);
   }
   assert.deepEqual(offenders, [], `release step unreachable in:\n    ${offenders.join("\n    ")}`);
 });
@@ -1159,12 +1171,20 @@ test("✧ the reachability rule DISCRIMINATES — it fails on the real pre-fix s
   const real = readFileSync(join(COMMANDS_DIR, file), "utf8");
   assert.ok(real.includes(RELEASE_POINTER), `precondition: ${file} must carry the pointer, or this control mutates nothing`);
 
-  const mutant = real.split("\n").filter((l) => !l.includes(RELEASE_POINTER));
-  const pointer = mutant.findIndex((l) => l.includes(RELEASE_POINTER));
-  let lastTurnEnd = -1;
-  mutant.forEach((l, i) => {
-    if (TURN_END_RE.test(l)) lastTurnEnd = i;
-  });
-  assert.equal(pointer, -1, "the mutation must remove the pointer, or the control is vacuous (L34)");
-  assert.notEqual(lastTurnEnd, -1, `${file} must still contain a turn-end instruction after the mutation`);
+  // The mutant: the real body with its pointer stripped — the exact pre-fix shape.
+  const mutant = real
+    .split("\n")
+    .filter((l) => !l.includes(RELEASE_POINTER))
+    .join("\n");
+  assert.notEqual(mutant, real, "the mutation must actually change the body, or the control is vacuous (L34)");
+
+  // THE LOAD-BEARING ASSERTION: run the PRODUCTION predicate against the mutant. If the rule ever stops
+  // rejecting this shape, THIS fails — which a control that re-scanned the mutant itself could not do.
+  assert.equal(
+    releaseUnreachableReason(mutant),
+    "no release pointer; a reader stopping at the turn-end never reaches `--clear`",
+    `the production predicate must REJECT the pre-fix shape of ${file}`
+  );
+  // And it must ACCEPT the unmutated body, so the rejection above is about the mutation, not the fixture.
+  assert.equal(releaseUnreachableReason(real), null, `the production predicate must ACCEPT the real ${file}`);
 });
