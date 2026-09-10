@@ -183,12 +183,24 @@ export function buildRecord(baseDir, by) {
 // increment leaves that bound exactly where it was; it does not tighten the detector.
 export function amendScope(baseDir) {
   const abs = resolve(baseDir, RECORD_PATH);
-  if (!existsSync(abs)) return { ok: false, reason: `no baseline at ${RECORD_PATH} — run --anchor first` };
   let record;
+  let fd;
   try {
-    record = JSON.parse(readFileSync(abs, "utf8"));
+    fd = openSync(abs, "r");
+    record = JSON.parse(readFileSync(fd, "utf8"));
   } catch (e) {
+    if (e.code === "ENOENT") {
+      return { ok: false, reason: `no baseline at ${RECORD_PATH} — run --anchor first` };
+    }
     return { ok: false, reason: `cannot read ${RECORD_PATH}: ${e.message}` };
+  } finally {
+    if (fd !== undefined) {
+      try {
+        closeSync(fd);
+      } catch {
+        /* already closed / invalid — nothing to reclaim */
+      }
+    }
   }
   if (!record || typeof record !== "object" || !record.entries) {
     return { ok: false, reason: `${RECORD_PATH} is not a usable baseline record` };
@@ -236,8 +248,22 @@ function main(argv) {
 
   if (mode === "--show") {
     const abs = resolve(root, RECORD_PATH);
-    if (!existsSync(abs)) die(`no baseline at ${RECORD_PATH} — run --anchor first`, 2);
-    process.stdout.write(readFileSync(abs, "utf8"));
+    let fd;
+    try {
+      fd = openSync(abs, "r");
+      process.stdout.write(readFileSync(fd, "utf8"));
+    } catch (e) {
+      if (e.code === "ENOENT") die(`no baseline at ${RECORD_PATH} — run --anchor first`, 2);
+      die(`cannot read ${RECORD_PATH}: ${e.message}`, 2);
+    } finally {
+      if (fd !== undefined) {
+        try {
+          closeSync(fd);
+        } catch {
+          /* already closed / invalid — nothing to reclaim */
+        }
+      }
+    }
     process.exit(0);
   }
 

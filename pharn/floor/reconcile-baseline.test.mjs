@@ -86,6 +86,16 @@ test("hashFile returns null for a directory or a missing path, never a fabricate
   assert.match(hashFile(join(dir, "tracked.md")), /^[0-9a-f]{64}$/);
 });
 
+test("★ amendScope reads the baseline through ONE descriptor — no exists-then-read/write (CWE-367)", () => {
+  const src = readFileSync(join(HERE, "reconcile-baseline.mjs"), "utf8");
+  const body = src.slice(src.indexOf("export function amendScope"), src.indexOf("function main(argv)"));
+  assert.match(body, /openSync\(abs, "r"\)/, "must open a descriptor");
+  assert.match(body, /readFileSync\(fd, "utf8"\)/, "must read the DESCRIPTOR, not the path");
+  assert.ok(!/existsSync\(abs\)/.test(body), "an existence check before read/write is the TOCTOU pattern");
+  assert.ok(!/readFileSync\(abs/.test(body), "a path-based read here reopens by name — the race");
+  assert.match(body, /closeSync\(fd\)/, "the descriptor must be released on every path");
+});
+
 test("★ hashFile hashes what it INSPECTED — no check-then-reopen-by-name (CWE-367)", () => {
   // A baseline that can be made to hash a different file than it stat'd cannot support the integrity
   // claim its own header makes. The fix is structural: one descriptor, opened once, fstat'd and read
