@@ -268,6 +268,14 @@ node .dev/floor/check-provenance.mjs <candidate.json> <canon-file.md>
 # is stated: deleting the block loses the check rather than failing it.
 # Gated by its own *.test.mjs live run, exactly as the dev twin is — no separate npm script, deliberately
 # (L35: a parallel script + chain + CI step + CONTRIBUTING token would be a fourth identity to sync).
+# THE ONE SHARED-CONFIG GOTCHA, stated because it is not obvious and it BINDS THIS REPO: `models.stages`
+# is now read by BOTH checkers, and this one REDs on any key outside PRODUCT_STAGES ∪ {default}. So a
+# DEV-ONLY stage key — `eval` is the live candidate, the one dev command with no product twin — CANNOT be
+# added to the config as things stand: it would RED here even though `.dev/floor/check-config.mjs` would
+# accept it. That is deliberate (on a user's surface such a key governs nothing, so it must not sit there
+# looking like a control), and the consequence is a real constraint, not a bug: giving a dev-only stage
+# its own model would need a separate namespace, and that decision has not been made. Today the dev
+# surface's three wired stages (plan, build, review) are all product stages too, so nothing is blocked.
 # Ships: bumps SKILLS_VERSION. Exits non-zero on RED.
 node pharn/floor/check-model-config.mjs [validate | resolve <stage> | agreement]
 
