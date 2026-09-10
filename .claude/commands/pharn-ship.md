@@ -263,16 +263,25 @@ incomplete (a plan-declared `## Files` path is absent; `.completeness.missing[]`
 ## Step 2c — Render the GATE-2 briefing artifact (`BRIEFING.md`)
 
 Reached only after a `PASS` verify (step 6) — the same point step 7 reads the standing verdicts. Before
-writing anything, set the run's writes-scope from `/pharn-ship`'s own declared `writes:` (now three paths —
-`SHIP.md`, `ship-record.json`, `BRIEFING.md` — covered by **one** call, since no `--target` narrows it):
+writing anything, scope this step's own artifact. **The setter resolves exactly one `--target` per call
+and OVERWRITES `.pharn/writes-scope.json`**, so `/pharn-ship` — which declares **three** placeholder
+`writes:` paths (`SHIP.md`, `ship-record.json`, `BRIEFING.md`) — scopes **each artifact to itself
+immediately before writing it**, the same shape `/pharn-regress` and `/pharn-verify` already use:
 
 ```bash
-node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-ship.md
+node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-ship.md --target features/<name>/BRIEFING.md
 ```
 
-This is the **same** setter call Step 3 below used to run on its own; relocated here so it covers
-`BRIEFING.md` too, and Step 3 no longer repeats it (the scope, once set, stands until a later stage
-overwrites `.pharn/writes-scope.json`).
+> **Why `--target` is not optional here (the defect this replaced).** Every entry in this command's
+> `writes:` carries the `<name>` placeholder, and `set-writes-scope.cjs` resolves a placeholder entry
+> **only** against a `--target`. Without one, all three entries resolve to `null`, the scope is empty,
+> and the setter **fails closed**: it exits 1 and writes **no scope file at all**. The run then proceeded
+> under `enforce-writes-scope.cjs`'s fail-closed `DEFAULT_SAFE_SET`, which permits **any** path under
+> `features/**` — so the guarantee-audit's "the hook pins exactly these three paths" was false for the
+> whole terminal stage. The setter's refusal was correct and is deliberately unchanged; the call site was
+> the bug. This is `.dev/memory-bank/lessons-learned.md` **L8** ("the writes-scope setter resolves one
+> `--target` — a command emitting ≥2 placeholder artifacts must re-scope per artifact"), cited not
+> restated (P4).
 
 1. **Render deterministically.**
 
@@ -387,10 +396,25 @@ not a claim.
 `/pharn-ship` sets **no global scope** and never an over-broad one. Each sub-stage already runs its **own**
 Step 0 writes-scope setter (overwriting `.pharn/writes-scope.json` per stage — the per-stage propagation).
 `/pharn-ship`'s **only** Write-tool outputs are `SHIP.md`, (Step 3b) `ship-record.json`, and (Step 2c)
-`BRIEFING.md` — all three are its declared `writes:`, already scoped by Step 2c's call above (no need to
-re-run the setter here; it stands until a later stage overwrites `.pharn/writes-scope.json`). If a write is
-blocked with the `writes-scope guard` message, the fix is to **declare the path in `writes:` and re-run the
-setter** — never bypass the hook (see CLAUDE.md, "Writes-scope").
+`BRIEFING.md` — all three its declared `writes:`. **Re-scope to this one, now:**
+
+```bash
+node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-ship.md --target features/<name>/SHIP.md
+```
+
+**This call is required here, not a repeat of Step 2c's.** Two reasons, and the second is the one that is
+easy to miss:
+
+1. Step 2c's call scoped `BRIEFING.md` and **overwrote** any prior scope, so at this point the active
+   scope names `BRIEFING.md` — a `SHIP.md` write would be **denied**. One `--target` authorizes one path.
+2. **Step 2c does not always run.** It is reached "only after a `PASS` verify", whereas Step 3 runs on
+   **both** exit paths — including a RED-verdict STOP, whose whole job is to record where the run ended.
+   A stopped run therefore reaches this write having executed **no setter call at all**, and would fall
+   back to `enforce-writes-scope.cjs`'s `DEFAULT_SAFE_SET` rather than a pinned scope.
+
+If a write is blocked with the `writes-scope guard` message, the fix is to **declare the path in `writes:`
+and re-run this setter with the right `--target`** — never bypass the hook (see CLAUDE.md,
+"Writes-scope").
 
 Write **`features/<name>/SHIP.md`** — a thin, **advisory** roll-up:
 
@@ -434,9 +458,19 @@ comprehension, correctness, or a self-issued seal — **attestation ≠ comprehe
    `coverage: "unavailable"`, embed that block verbatim — an honest absence is a member, never a reason to
    omit the key or to fabricate a figure.
 
-2. **Emit the machine record.** Write `features/<name>/ship-record.json` — a JSON object carrying the same
+2. **Re-scope, then emit the machine record.** The active scope still names `SHIP.md` from Step 3, so
+   re-scope to this artifact immediately before writing it:
+
+   ```bash
+   node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-ship.md --target features/<name>/ship-record.json
+   ```
+
+   Write `features/<name>/ship-record.json` — a JSON object carrying the same
    advisory roll-up as `SHIP.md` (stages that ran, the floor verdicts read, `decision: null`), **plus the
-   `cost` block from step 1**, and **without** an `attestation` key yet.
+   `cost` block from step 1**, and **without** an `attestation` key yet. **Step 3b's own step 4** below
+   re-writes this same file, and needs no further setter call — it is the same `--target`, so the scope
+   set here still authorizes it. (There is no top-level `## Step 4` in this command; the numbered items
+   in this section are 3b's, not the command's.)
 
    > **Ordering is load-bearing.** `record_hash` covers the record _with `attestation` removed_, so `cost`
    > is **inside** the attested content. Write it **before** computing any attestation hash, or the
@@ -475,6 +509,13 @@ comprehension, correctness, or a self-issued seal — **attestation ≠ comprehe
 
    ```bash
    node pharn/floor/check-attestation.mjs features/<name>/ship-record.json
+   ```
+
+   **Both rendering branches below write into `SHIP.md`, and the active scope still names
+   `ship-record.json` from step 2 — so re-scope back before rendering either one:**
+
+   ```bash
+   node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-ship.md --target features/<name>/SHIP.md
    ```
 
    - `attested` → render the **clause `· attested by <by>`** into `SHIP.md` as an annotation on the human's
@@ -548,9 +589,25 @@ the `check-ship.mjs` cap.
   preserves the gates **by construction**, backstopped (not replaced) by `/pharn-plan`'s deterministic
   approved-input gate.
 - **"`/pharn-ship` may write only `SHIP.md`, `ship-record.json`, and `BRIEFING.md`"** → **FLOOR: hook
-  (fix #7).** `set-writes-scope.cjs` + `enforce-writes-scope.cjs` pin exactly these three paths (its
-  declared `writes:`). The Bash stage-invocations are not gated; each stage's own writes are gated by its
-  own scope.
+  (fix #7)**, and the claim is now backed by a setter call that actually resolves. `set-writes-scope.cjs`
+  narrows this command's placeholder `writes:` to **one `--target` per call**, and
+  `enforce-writes-scope.cjs` denies any Write/Edit/MultiEdit/NotebookEdit outside the resulting scope.
+  **This sentence was FALSE until the four per-artifact calls above landed** — the single `--target`-less
+  call resolved zero paths, exited 1, wrote no scope file, and left the run on the fail-closed
+  `DEFAULT_SAFE_SET`, which permits **any** path under `features/**`. Recorded rather than quietly
+  corrected: it is exactly the P0 disease this repo exists to prevent — a floor citation whose cited op
+  never ran (`.dev/memory-bank/lessons-learned.md` **L2**).
+  - **Two clocks, and the split is load-bearing.** The **deny** is FLOOR: given whatever scope is active,
+    an out-of-scope write is blocked by a non-LLM program, every time. That **the intended scope is
+    active** at each write is **ADVISORY** — it depends on this command's prose ordering being followed,
+    and nothing on the floor forces a setter call to run. Do not read "each write is pinned to one path"
+    as floor; read "a write outside the active scope is denied" as floor.
+  - **NARROWED, and stated (L19):** this covers the `Write|Edit|MultiEdit|NotebookEdit` surface **only**.
+    The Bash stage-invocations, the `> /tmp/briefing-draft.md` render in Step 2c, and Step 2c.3's single
+    scoped `prettier` + `markdownlint-cli2` pass over `BRIEFING.md` all run through **Bash**, which
+    `PreToolUse` never sees — they are outside this guarantee entirely, and no checker would catch a
+    future edit that added another. Each sub-stage's own writes are gated by its own scope, not by this
+    one.
 - **"`BRIEFING.md`'s frontmatter fields match their sources"** → **FLOOR — the ONE new floor primitive
   this command's own Step 2c introduces** (`pharn/floor/check-ship-briefing.mjs`, cross-file equality +
   shape, `pharn/ARCHITECTURE.md §2` primitive #3). Unlike every other verdict `/pharn-ship` reads, this
