@@ -539,3 +539,198 @@ test("✧ the lesson-extract wiring set is non-vacuous — every named command e
   );
   assert.equal(LESSON_OUTCOMES.length, 5, "the outcome enumeration is the deliverable (L29) — pin its size");
 });
+
+// ── The *memory-promote GATE-PROCEDURE parity set ────────────────────────────────────────────────────
+//
+// A FOURTH set, separate from the three above for the reason L29 gives. Those range over the index
+// tooling, the declaration checker, and the propose-and-ask step; this one ranges over the GATE
+// PROCEDURE the two *memory-promote commands run before they write canon — a different question again:
+// does each surface's promote command still perform every hardening step, or has one copy quietly kept
+// fewer than the other?
+//
+// WHY IT EXISTS (the P7 trigger — a REAL prior occurrence, not a hypothetical). Five product-only
+// hardenings (`SKILLS_VERSION` 2.2.4-2.2.8) landed in ONE PR (#117) that CREATED and hardened
+// `/pharn-memory-promote`; the dev twin was never brought forward and kept NONE of them, with every
+// gate green. That is the SECOND time this exact pair has dropped an obligation: the FIRST is recorded
+// in canon as L31, whose own provenance is `dev-lessons-index-gate` — the increment where "the product
+// half shipped both invocations while the dev half shipped neither" was discovered in the very same
+// *memory-promote / *plan wiring (see LESSONS_SWEEP_WIRING's header above, which narrates it). L20's
+// bar is "a discipline-only remedy WILL recur; the second occurrence is the trigger to give it a floor
+// check", and that bar is met here with a named first occurrence rather than a manufactured one.
+//
+// L31 diagnoses WHY it recurs: a deliberate copy-pair's CODE is pinned to agree (check-provenance.mjs's
+// twin has ✧ agreement tests), while the pair's COMMAND OBLIGATIONS were enumerated nowhere — so "done"
+// was assessed per-file, and the second copy is where the obligation gets dropped precisely because the
+// first is correct and reviewable in isolation. This array is that missing enumeration.
+//
+// THE 5 -> 8 MAPPING, written down so the CHANGELOG correspondence stays traceable. The five shipped
+// hardenings expand to eight INDEPENDENTLY DROPPABLE obligations, and the count tracks droppability
+// rather than the changelog, because droppability is what the test is for:
+//   2.2.4 (canon TOCTOU)          -> `canon-hash-pin` + `canon-hash-reverify`   (pin and compare can be
+//                                     dropped separately; a pin nobody compares is inert)
+//   2.2.5 (canon write channel)   -> `canon-write-channel` + `canon-write-forbidden-routes`
+//                                     (the mandate and the denied-alternatives list are separable — the
+//                                     dev command already carried a fragment of the first with none of
+//                                     the second)
+//   2.2.6 (title shape)           -> `title-shape-gate`
+//   2.2.7 (live-state provenance) -> `runtime-date-capture` + `provenance-captured-not-composed`
+//                                     (a runtime `date` capture and the no-model-recall rule are
+//                                     separately removable)
+//   2.2.8 (two clocks + gate)     -> `gate-before-askquestion`
+//
+// THE ANCHORS ARE PINNED STRINGS, NOT PARAPHRASES (L22): each `re` matches a literal command line or a
+// mandated-verb heading the command must carry, never incidental prose. Every anchor was MEASURED
+// against live bytes of both commands BEFORE this set was authored (L4: an authored assertion passes by
+// construction) — all eight were present in the product command and ABSENT from the pre-port dev
+// command, 8/8, so each matcher demonstrably measures the hardening rather than pre-existing text.
+//
+// !! IF A PRODUCT-SIDE MEMBER GOES RED, RE-READ `pharn-memory-promote.md` — DO NOT LOOSEN THE REGEX. !!
+// This instruction lives HERE, at the point where the pressure is felt, and not only in a plan nobody
+// re-reads. The pressure is real and structural: an increment scoped to the DEV command cannot edit the
+// product one, so weakening the matcher is the only remedy available inside such a scope — which is
+// exactly the ratchet toward a set that certifies less and less (L29 / L36). A product-side red means
+// the product command changed; the correct responses are to update the anchor to the product's NEW
+// pinned line (having read it), or to port the change. Never to widen.
+//
+// Honest scope, the same narrow kind as the three sets above: this pins that each command's PROSE
+// contains the pinned line or mandated verb. It CANNOT prove a run executed the step, that a HALT is
+// obeyed, or that the ported one-liners are implemented correctly (two of them are inline `node -e`
+// with no test of their own). "The parity is pinned" NEVER means "the gate ran" (P0).
+const PROMOTE_GATE_PARITY = [
+  {
+    obligation: "canon-hash-pin", // 2.2.4a
+    role: "pins the canon content-hash at discovery, for the Step-6 TOCTOU compare",
+    dev: /\.pharn\/pharn-dev-memory-promote\/canon-content-hash\.txt/,
+    prod: /\.pharn\/pharn-memory-promote\/canon-content-hash\.txt/,
+  },
+  {
+    obligation: "canon-hash-reverify", // 2.2.4b
+    role: "re-verifies canon against that pin immediately before the accept-path write",
+    dev: /changed since Step 1 discovery/,
+    prod: /changed since Step 1 discovery/,
+  },
+  {
+    obligation: "canon-write-channel", // 2.2.5a
+    role: "mandates a hook-gated Write/Edit/MultiEdit channel for every canon byte",
+    dev: /\*\*Canon write channel \(fix #7\)\.\*\*/,
+    prod: /\*\*Canon write channel \(fix #7\)\.\*\*/,
+  },
+  {
+    obligation: "canon-write-forbidden-routes", // 2.2.5b
+    role: "names the denied alternatives (shell redirection / Node fs / formatter auto-fix)",
+    dev: /\*\*Explicitly forbidden for canon writes:\*\*/,
+    prod: /\*\*Explicitly forbidden for canon writes:\*\*/,
+  },
+  {
+    obligation: "title-shape-gate", // 2.2.6
+    role: "validates the candidate title's shape before any Markdown render",
+    dev: /title must be a single line \(no newlines\)/,
+    prod: /title must be a single line \(no newlines\)/,
+  },
+  {
+    obligation: "runtime-date-capture", // 2.2.7a
+    role: "captures `date` from runtime rather than a model-estimated today",
+    dev: /date \+%Y-%m-%d/,
+    prod: /date \+%Y-%m-%d/,
+  },
+  {
+    obligation: "provenance-captured-not-composed", // 2.2.7b
+    role: "forbids model-composed provenance fields",
+    dev: /\*\*Provenance is captured, not composed \(P5\)\.\*\*/,
+    prod: /\*\*Provenance is captured, not composed \(P5\)\.\*\*/,
+  },
+  {
+    obligation: "gate-before-askquestion", // 2.2.8
+    role: "blocks the human gate until the Step-3 floor check is GREEN",
+    dev: /Do not call `AskQuestion`/,
+    prod: /Do not call `AskQuestion`/,
+  },
+];
+
+// THE CROSS-SURFACE COUPLING THIS SET INTRODUCES, recorded because it was ACCEPTED, not overlooked.
+// Ranging over both surfaces makes a DEV-side test's health a function of PRODUCT-side prose: an unrelated
+// reword of `pharn-memory-promote.md` can redden this suite for reasons having nothing to do with the dev
+// command. That is a real ripple across the boundary the dev/product split otherwise insulates, and it was
+// put to the maintainer at the plan gate and accepted deliberately — a dev-only set would repeat the
+// per-file assessment that let all five hardenings go missing in the first place (L31), which is the whole
+// defect this set exists to close. The mitigation is the anchor discipline stated above (pinned command
+// lines and mandated verbs only, never incidental prose), NOT a narrower domain.
+//
+// Note the direction, because it is the permitted one: this dependency points `.dev/` -> `.claude/commands/`.
+// A user's install ships `pharn/floor/` WITHOUT `.dev/`, so nothing on the shipped surface depends on this
+// test; the honest consequence is the same as the lessons-index pair's — it guards the two commands IN THIS
+// REPO and does not travel with the shipped code.
+const PROMOTE_SURFACES = [
+  { file: "pharn-dev-memory-promote.md", key: "dev", label: "DEV" },
+  { file: "pharn-memory-promote.md", key: "prod", label: "PRODUCT" },
+];
+
+for (const site of PROMOTE_GATE_PARITY) {
+  for (const surface of PROMOTE_SURFACES) {
+    const re = site[surface.key];
+
+    test(`✧ ${surface.file} carries the ${site.obligation} gate step — it ${site.role}`, () => {
+      assert.match(
+        commandBody(surface.file),
+        re,
+        `${surface.file} is missing the ${site.obligation} step. If this is the PRODUCT command, RE-READ it and update the anchor or port the change — never loosen the regex.`
+      );
+    });
+
+    // L4: an authored assertion passes by construction. Pin the matcher's DISCRIMINATION directly, the
+    // same way every set above does — strip the matched text and require the regex to stop matching.
+    test(`✧ the ${surface.file} ${site.obligation} rule DISCRIMINATES — it fails on a body with the step removed`, () => {
+      const stripped = commandBody(surface.file).replace(new RegExp(re.source, "g"), "<<removed>>");
+      assert.doesNotMatch(stripped, re, `the ${surface.file} ${site.obligation} matcher must not still pass once the step is gone`);
+    });
+  }
+}
+
+// The CROSS-SURFACE closure guard, and it is the load-bearing half (L27's "present in its own case AND
+// absent from the other", which L29 calls the part that is not decorative). The paste error this pair
+// invites is copying a step across without re-pointing its floor path — a dev step running the PRODUCT
+// checker would validate a candidate against the wrong TARGET_ENUM and the wrong COMMIT_RE (the product
+// copy admits `unknown`, which the dev surface deliberately rejects), and every other gate would stay
+// green. Presence alone cannot see that; this can.
+//
+// Scoped to `floor` paths ONLY, deliberately: the product command legitimately CITES `.dev/memory-bank/`
+// canon paths in its L19 attributions, and a separate in-flight change may remove them, so a broader
+// `\.dev\/` rule would couple this test to prose it has no business pinning.
+for (const surface of PROMOTE_SURFACES) {
+  test(`✧ ${surface.file} runs its OWN surface's check-provenance — the other floor's copy does not appear`, () => {
+    const wrong = surface.key === "dev" ? /pharn\/floor\/check-provenance\.mjs/ : /\.dev\/floor\/check-provenance\.mjs/;
+    assert.doesNotMatch(
+      commandBody(surface.file),
+      wrong,
+      `${surface.file} references the ${surface.key === "dev" ? "PRODUCT" : "DEV"} check-provenance.mjs — the two copies gate different TARGET_ENUMs and COMMIT_REs, so the surfaces must not cross`
+    );
+  });
+
+  test(`✧ ${surface.file} does invoke a check-provenance at all — otherwise the closure rule above is vacuous (L34)`, () => {
+    const own = surface.key === "dev" ? /\.dev\/floor\/check-provenance\.mjs/ : /pharn\/floor\/check-provenance\.mjs/;
+    assert.match(
+      commandBody(surface.file),
+      own,
+      `${surface.file} invokes no check-provenance.mjs — the absence would satisfy the cross-surface rule for free`
+    );
+  });
+}
+
+test("✧ the promote gate-parity set is non-vacuous — both commands exist and the enumeration is pinned", () => {
+  // L34: "for each X, assert P" says nothing when there are no X. Both the surface list and the
+  // obligation list are pinned, so truncating either — or renaming a command — fails HERE rather than
+  // silently reducing the domain every rule above ranges over.
+  const present = new Set(commandFiles());
+  const missing = PROMOTE_SURFACES.filter((s) => !present.has(s.file)).map((s) => s.file);
+  assert.deepEqual(missing, [], `these promote surfaces name no live command file: ${missing.join(", ")}`);
+  assert.equal(PROMOTE_SURFACES.length, 2, "the parity set spans the copy-PAIR — a one-surface set is the per-file assessment L31 names");
+  assert.equal(
+    PROMOTE_GATE_PARITY.length,
+    8,
+    "eight independently-droppable obligations (the 5 -> 8 mapping is in this section's header); pin the size, per L29"
+  );
+  // Every member must name a distinct obligation: a duplicated key would inflate the count above while
+  // covering less than it claims.
+  const keys = PROMOTE_GATE_PARITY.map((s) => s.obligation);
+  assert.equal(new Set(keys).size, keys.length, `duplicate obligation key(s) in PROMOTE_GATE_PARITY: ${keys.join(", ")}`);
+});

@@ -1,0 +1,26 @@
+{
+  "base": "ab9aabdf5ea5177713bda2fee82c7220ec559a7c",
+  "inside": [
+    ".claude/commands/pharn-dev-memory-promote.md",
+    ".dev/floor/command-hygiene.test.mjs",
+    ".dev/features/promote-dev-parity/GRILL.md",
+    ".dev/features/promote-dev-parity/PLAN.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
