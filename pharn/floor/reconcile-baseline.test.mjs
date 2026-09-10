@@ -86,6 +86,30 @@ test("hashFile returns null for a directory or a missing path, never a fabricate
   assert.match(hashFile(join(dir, "tracked.md")), /^[0-9a-f]{64}$/);
 });
 
+test("★ hashFile hashes what it INSPECTED — no check-then-reopen-by-name (CWE-367)", () => {
+  // A baseline that can be made to hash a different file than it stat'd cannot support the integrity
+  // claim its own header makes. The fix is structural: one descriptor, opened once, fstat'd and read
+  // through that same fd. Pinned by reading the source, because the race window is not reachable
+  // deterministically from a test — an assertion that "raced correctly" would be a flake, not a proof.
+  const src = readFileSync(join(HERE, "reconcile-baseline.mjs"), "utf8");
+  const body = src.slice(src.indexOf("export function hashFile"), src.indexOf("export function snapshotScope"));
+  assert.match(body, /openSync\(/, "must open a descriptor");
+  assert.match(body, /fstatSync\(fd\)/, "must stat the DESCRIPTOR, not the path");
+  assert.match(body, /readFileSync\(fd\)/, "must read the DESCRIPTOR, not the path");
+  assert.ok(!/statSync\(abs\)/.test(body), "a path-based stat here is the TOCTOU pattern this replaced");
+  assert.ok(!/readFileSync\(abs\)/.test(body), "a path-based read here reopens by name — the race");
+  assert.match(body, /closeSync\(fd\)/, "the descriptor must be released on every path");
+});
+
+test("hashFile does not leak descriptors across many calls", () => {
+  const dir = makeRepo();
+  const target = join(dir, "tracked.md");
+  const first = hashFile(target);
+  for (let i = 0; i < 300; i++) hashFile(target);
+  for (let i = 0; i < 300; i++) hashFile(join(dir, "nope.md")); // the throwing path releases too
+  assert.equal(hashFile(target), first, "still readable after 600 opens — nothing was leaked");
+});
+
 test("★ the same bytes hash the same; one changed byte changes the digest", () => {
   const dir = makeRepo();
   const before = buildRecord(dir, "t").record.entries["tracked.md"];

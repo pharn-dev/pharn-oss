@@ -44,7 +44,7 @@
 //
 // Exit: 0 ok · 2 unusable input / git unavailable / write failed — FAIL-CLOSED (P5). Never a silent pass.
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, openSync, fstatSync, closeSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -76,12 +76,29 @@ export function enumerate(baseDir) {
   return { ok: true, paths };
 }
 
+// ONE DESCRIPTOR, never a path checked and then re-resolved. `statSync(p)` followed by `readFileSync(p)`
+// is a TOCTOU race (CWE-367): the name can be re-pointed between the two calls, so the bytes hashed need
+// not be the bytes stat'd. That is a defect anywhere; in THIS file it is self-defeating, because the
+// whole artifact is an integrity baseline — a reconciler that can be made to hash a different file than
+// it inspected cannot support the claim its own header makes. Caught by CodeQL on the PR that introduced
+// it (js/file-system-race, high), not by review. `open` → `fstat` → `read` on the SAME fd closes it:
+// after openSync the descriptor is bound to one inode, and fstatSync/readFileSync both address the fd.
 export function hashFile(abs) {
+  let fd;
   try {
-    if (!statSync(abs).isFile()) return null;
-    return createHash("sha256").update(readFileSync(abs)).digest("hex");
+    fd = openSync(abs, "r");
+    if (!fstatSync(fd).isFile()) return null; // a directory or special file is not a hashable entry
+    return createHash("sha256").update(readFileSync(fd)).digest("hex");
   } catch {
     return null; // unreadable / vanished between enumeration and read — recorded as absent, never guessed
+  } finally {
+    if (fd !== undefined) {
+      try {
+        closeSync(fd);
+      } catch {
+        /* already closed / invalid — nothing to reclaim */
+      }
+    }
   }
 }
 
