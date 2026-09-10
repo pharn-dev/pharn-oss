@@ -141,8 +141,9 @@ They move independently and are not meant to match.
 The installer reads your project and selects the capabilities that apply before writing files. Detection
 is JS/TS-shaped today: it reads `package.json` and scans for `next.config.*`, `app/` route handlers,
 `.tsx`/`.jsx`, `migrations/`, and `.sql`, resolving to one or more of `ssr`, `backend`, `spa`, and `lib`
-— a project can match several, so Next plus Express resolves to `ssr` and `backend` together. A repo with
-none of those signals still installs the universal capabilities.
+— a project can match several rather than exactly one. (The installer's own documentation gives Next plus
+Express as an example resolving to `ssr` and `backend` together.) A repo with none of those signals still
+installs the universal capabilities.
 
 You see the selected capability list, with a reason beside each entry, before the installer writes. A
 normal install adds:
