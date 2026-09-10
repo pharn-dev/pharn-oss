@@ -311,6 +311,14 @@ only cost is that benign product findings must document the split. Surfaced live
 the product `/pharn-grill` `GRILL.md` landed on the scanned surface and passed CHECK 5 only because the split was
 documented; a bare-findings `GRILL.md` would have RED'd the floor.
 
+**Provenance.**
+
+- feature: `product-pipeline-probe`
+- commit: `a66f5872e48265eb39c4c58b6d58c0593f00e8e4`
+- surfaced by: `.dev/features/product-pipeline-probe/PROBE.md` (CF-A) + `.dev/features/product-pipeline-probe/REVIEW.md`
+  (proposed lesson).
+- promoted: 2026-06-30 via gated `/pharn-dev-memory-promote` (human-approved).
+
 ## L11 — Verify's whole-repo style gates let a pre-existing unrelated error block every later feature's verify
 
 type: process · concepts: [style-gates, gate-map, whole-repo-scope]
@@ -339,14 +347,6 @@ input/orchestration trust boundary).
 - commit: `05a466ed8ca8ab9ab45aa7397c6f081d863d319d`
 - surfaced by: `.dev/features/architecture-griller/REVIEW.md` — proposed lesson candidate L-GATE-1.
 - promoted: 2026-07-01 via gated `/pharn-dev-memory-promote` (human-approved).
-
-**Provenance.**
-
-- feature: `product-pipeline-probe`
-- commit: `a66f5872e48265eb39c4c58b6d58c0593f00e8e4`
-- surfaced by: `.dev/features/product-pipeline-probe/PROBE.md` (CF-A) + `.dev/features/product-pipeline-probe/REVIEW.md`
-  (proposed lesson).
-- promoted: 2026-06-30 via gated `/pharn-dev-memory-promote` (human-approved).
 
 ## L12 — Prevent an increment's own style misses at BUILD (format written files), don't only DETECT them at verify
 
