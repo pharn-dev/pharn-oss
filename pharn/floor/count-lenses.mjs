@@ -28,9 +28,14 @@ import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
 const TARGET = process.argv[2] || ".";
-// Same exclusions as pharn/floor/validate.mjs: tooling (.claude/commands, .dev/) and noise are NOT the
+// Same exclusions as pharn/floor/validate.mjs: tooling (.claude/, .dev/) and noise are NOT the
 // capability surface, so a `role: lens` frontmatter there is not a built-PHARN lens.
-const EXCLUDE_SEGMENTS = [`${sep}.claude${sep}commands${sep}`, `${sep}.dev${sep}`, `${sep}node_modules${sep}`, `${sep}.git${sep}`];
+// `.claude` is excluded WHOLESALE (lessons-learned L36): naming only `.claude/commands/` left every
+// other `.claude/` subtree on the scanned surface, so a nested checkout under `.claude/worktrees/<name>/`
+// doubled this count (22 lenses -> 44, measured). Closure, not a second member — an arbitrarily named
+// `.claude/<x>/` fires it identically. The `.claude/commands/` case this list has always covered (a real
+// `role: lens` in a stage command) stays covered by the wider segment.
+const EXCLUDE_SEGMENTS = [`${sep}.claude${sep}`, `${sep}.dev${sep}`, `${sep}node_modules${sep}`, `${sep}.git${sep}`];
 
 function fail(msg) {
   process.stderr.write("count-lenses: " + msg + "\n");

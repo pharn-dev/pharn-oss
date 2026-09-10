@@ -26,9 +26,14 @@ import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
 const TARGET = process.argv[2] || ".";
-// Same exclusions as pharn/floor/validate.mjs: tooling (.claude/commands, .dev/) and noise are NOT the
+// Same exclusions as pharn/floor/validate.mjs: tooling (.claude/, .dev/) and noise are NOT the
 // capability surface, so a `role: verifier` frontmatter there is not a built-PHARN verifier.
-const EXCLUDE_SEGMENTS = [`${sep}.claude${sep}commands${sep}`, `${sep}.dev${sep}`, `${sep}node_modules${sep}`, `${sep}.git${sep}`];
+// `.claude` is excluded WHOLESALE (lessons-learned L36): naming only `.claude/commands/` left every other
+// `.claude/` subtree on the scanned surface, so a nested checkout under `.claude/worktrees/<name>/` would
+// double this count. It reads 0 today, which is exactly why the widening matters here — a doubled 0 is
+// still 0, so this walker would have gone on reporting a correct-looking number while sharing the defect,
+// and only the enumeration test ranges over it. Closure, not a second member.
+const EXCLUDE_SEGMENTS = [`${sep}.claude${sep}`, `${sep}.dev${sep}`, `${sep}node_modules${sep}`, `${sep}.git${sep}`];
 
 function fail(msg) {
   process.stderr.write("count-verifiers: " + msg + "\n");

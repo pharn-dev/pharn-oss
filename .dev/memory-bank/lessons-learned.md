@@ -1321,3 +1321,42 @@ it was shown and never hunts the one that quietly withdrew.
   § "Proposed lesson candidate"; the two repairs are visible in `git diff README.md` against the
   approved text quoted in that increment's `PLAN.md`
 - promoted: 2026-09-09 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L38 — One declaration section read by two consumers asking different questions is right for one and silently wrong for the other
+
+type: scoping · concepts: [writes-scope, plan-shape, generated-artifact, shared-parser, false-red]
+
+**Lesson.** A PLAN's `## Files` is parsed by `set-writes-scope.cjs --from-plan` to answer "what may the
+pre-write hook allow?" and by `check-regress.mjs scope --declared` to answer "what did the plan authorize?".
+Those are different questions and they diverge exactly at GENERATED artifacts: a file a generator writes
+through Bash must be EXCLUDED from the first ([[L19]] — do not imply the gate covered it) and INCLUDED in the
+second (the plan did authorize it). Sharing one parser makes every increment that regenerates a derived
+artifact trip a false fix#7 scope breach, and the natural workaround — widening `--declared` by hand from the
+plan's own prose — hands an untrusted document control over a floor helper's authorization set.
+
+**Why it matters.** The false RED is the visible half and the cheap half; the expensive half is the fix.
+Clearing it requires letting an untrusted `PLAN.md` define the boundary a floor helper polices, which
+composes with [[L19]]'s Bash escape into an undetected write: a plan listing a real source file under a
+`### Regenerated` heading would have that path read as authorized, while the hook that would deny a Write to
+it is bypassed anyway because the write goes through Bash. Measured live in `claude-dir-scan-exclusion`:
+`scope` exited 1 naming **37** escaped paths, all of them genuine generator output, and clearing it required
+exactly that widening. The generated-artifact category is standing rather than incidental in this repo —
+`docs/capabilities/**`, `docs/lessons-index.md`, the README `CURRENT-STATE` region — so this recurs on every
+increment that regenerates anything, which is what makes it a mechanism failure rather than a slip.
+Complements [[L19]] (which says declare the Bash write rather than pretend the gate covered it) by naming
+what happens when a SECOND consumer reads that declaration for a different purpose, and sits beside [[L17]]
+on the other argument of the same helper. The deterministic remedy belongs to `check-regress.mjs` — an
+exemption for paths a plan declares as generated, reported in `escape_exempt` the way `--feature`'s already
+are — not to the increment that trips it. **Honest bound, recorded rather than smoothed over:** observed
+**once**. [[L20]]'s bar for escalating a discipline remedy to a floor check is a second occurrence, so this
+entry records the shape and does not yet claim the trigger fired.
+
+**Provenance.**
+
+- feature: `claude-dir-scan-exclusion`
+- commit: `4bd1b0c3269504ee55060b2a74ca8f1eca68de23` (working-tree dogfood built on this commit;
+  uncommitted at promotion time)
+- source: `.dev/features/claude-dir-scan-exclusion/REVIEW.md` R2 (the advisory P2 finding), with the false
+  breach and its clearance both reproduced live in that run and recorded in the same feature's
+  `REGRESSION.md`
+- promoted: 2026-09-10 via gated `/pharn-dev-memory-promote` (human-approved).

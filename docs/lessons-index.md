@@ -10,12 +10,16 @@ lessons to fetch; canon stays the source of truth and the floor's verification t
 applied, without fetching its full `## L<n>` entry from canon, is the P0 disease. "The index was
 consulted" never means "the relevant lessons were read".
 
-37 lessons · 37 tagged · 0 malformed · 0 untagged · ~24998 tokens total
+38 lessons · 38 tagged · 0 malformed · 0 untagged · ~25776 tokens total
 
-Columns: `id | type | concepts | title | promoted | ~tokens`. Every canon entry carries a tag line, so
-BOTH absence markers are unexpected: `-` = no tag line, i.e. an entry that reached canon without
-the promote gate's `type`/`concepts`; `?` = a tag line is present but failed its gate. Read that
-entry in canon either way. `~tokens` is `ceil(chars / 4)` over the FULL section
+Columns: `id | type | concepts | title | promoted | ~tokens`. `-` is rendered in THREE columns
+and does NOT mean the same thing in each — read it against the column it sits in. In `type`/`concepts`:
+every canon entry carries a tag line, so BOTH markers there are unexpected — `-` = no tag line,
+i.e. an entry that reached canon without the promote gate's `type`/`concepts`; `?` = a tag line
+is present but failed its gate. Read that entry in canon either way. In `promoted`: `-` = the
+entry has no `- promoted: <date>` line in its provenance block — a DIFFERENT defect, and one the
+`untagged` count above does not measure, so a `0 untagged` header and a `-` in this column are
+not a contradiction. `~tokens` is `ceil(chars / 4)` over the FULL section
 (heading through the line before the next `##`), an ESTIMATE with a confidence band, never a measurement
 (`LIMITS.md §1c`). Titles are canon free text, reproduced verbatim as DATA.
 
@@ -57,4 +61,5 @@ L34 | floor    | vacuous-truth,empty-set,fail-closed,eval-design                
 L35 | process  | redundant-identity,remedy-design,version-discipline,sync-cost                               | When one fact is stored twice, retire the second copy — a sync check is a third thing to keep in sync | 2026-08-23 | ~921
 L36 | floor    | enumeration,variant-spelling,closure-assertion,presence-vs-closure,parameterized-value      | A per-member presence set is not a closed set — a parameterized value acquires variant spellings, and the enumeration certifies the one its author was looking at | 2026-09-08 | ~756
 L37 | contract | guarantee-audit,verification-fidelity,universal-quantifier,doc-drift,false-green            | A doc stating a guard's bounds must be PROBED against the guard, not read off it — the universal quantifier is where the drift lands | 2026-09-09 | ~981
+L38 | scoping  | writes-scope,plan-shape,generated-artifact,shared-parser,false-red                          | One declaration section read by two consumers asking different questions is right for one and silently wrong for the other | 2026-09-10 | ~778
 ```

@@ -20,4 +20,4 @@ does the plan FIT the existing architecture, or introduce structural inconsisten
 
 [`pharn/pharn-pipeline/grillers/architecture/architecture.md`](../../pharn/pharn-pipeline/grillers/architecture/architecture.md)
 
-_No install command yet — this repo has no PHARN CLI or install-token. Copy the source file above._
+_PHARN installs with `npx @pharn-dev/pharn@latest init`, which selects the capabilities that apply to your project; there is no per-capability install command. This page documents the source file linked above._

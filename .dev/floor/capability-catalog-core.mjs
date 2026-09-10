@@ -57,8 +57,16 @@ export const ROLE_VERB = {
 // Same capability surface as validate.mjs / count-grillers.mjs: tooling + noise are NOT capabilities.
 // `docs` is additionally excluded so a generated page (which carries no `role:` anyway) can never be
 // re-ingested as a source — defensive, changes the capability set by nothing.
+//
+// `.claude` is excluded WHOLESALE (lessons-learned L36). Naming only `.claude/commands/` pinned ONE
+// member of the `.claude/` subtree, so a nested checkout under `.claude/worktrees/<name>/` was walked as
+// this repo's product surface. Here that failed LOUDLY rather than silently — two capabilities with the
+// same directory name produce a duplicate page slug, which `enumerateCapabilities` throws on (fail-closed,
+// by design) — so `npm run docs:check` went RED with `duplicate page slug "seam-resolver"` for a reason
+// no reader could connect to a worktree. Closure, not a second member: an arbitrarily named `.claude/<x>/`
+// reproduces it identically, so a `.claude/worktrees/` entry would only certify the current spelling.
 const EXCLUDE_SEGMENTS = [
-  `${sep}.claude${sep}commands${sep}`,
+  `${sep}.claude${sep}`,
   `${sep}.dev${sep}`,
   `${sep}pharn${sep}floor${sep}`,
   `${sep}node_modules${sep}`,
@@ -216,7 +224,20 @@ export function renderPage(cap) {
     `\n` +
     `[\`${cap.srcRel}\`](${link})\n` +
     `\n` +
-    `_No install command yet ${dash} this repo has no PHARN CLI or install-token. Copy the source file above._\n`
+    // The install footer. It read "No install command yet — this repo has no PHARN CLI or install-token"
+    // from #101 (2026-07-23) until 3.1.2, and EXPIRED when `@pharn-dev/pharn` was published: the
+    // 2026-08-23 rewrite (f7c3caa, #166) corrected that claim class across README / SECURITY /
+    // CONTRIBUTING / CLAUDE and missed the generated surface, because nothing reads a rendered sentence
+    // (lessons-learned L33 — a "not yet" claim expires in a file nobody is editing, and the repair pass
+    // misses the variant spellings). Each clause below is sourced: the command is README.md's install
+    // section; "selects the capabilities that apply to your project" is README.md `## What gets installed`;
+    // "no per-capability install command" is true because no such mechanism exists. It deliberately does
+    // NOT say this capability WILL be installed — selection is archetype-gated by `applies:`.
+    // STILL ADVISORY (P0): no floor op reads this sentence for truth. Fixing it does not close that gap;
+    // `check-capability-catalog.mjs` guarantees only committed == recomputed, exactly as before.
+    `_PHARN installs with \`npx @pharn-dev/pharn@latest init\`, which selects the capabilities that apply ` +
+    `to your project; there is no per-capability install command. This page documents the source file ` +
+    `linked above._\n`
   );
 }
 

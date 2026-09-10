@@ -148,7 +148,18 @@ test("renderPage: full fields, GENERATED header names source, source link + inst
     assert.match(page, /\| Enforces \| P2 \|/);
     assert.match(page, /## What it flags\n\nread untrusted CODE, flag concat into a sink\n/);
     assert.match(page, /\[`pharn\/pharn-review\/injection\/injection\.md`\]\(\.\.\/\.\.\/pharn\/pharn-review\/injection\/injection\.md\)/);
-    assert.match(page, /No install command yet/);
+    // The install footer. Retargeted in 3.1.2: this pinned `No install command yet`, a claim that expired
+    // when `@pharn-dev/pharn` was published, and the pin is what made the stale sentence load-bearing —
+    // a test asserting a false claim actively resists its correction (lessons-learned L33).
+    // Pinned as TWO independent assertions on purpose: the positive one would still pass if the old
+    // sentence were appended alongside the new one, so the negative one is the half that makes the
+    // REPLACEMENT verifiable rather than merely the addition.
+    assert.match(page, /PHARN installs with `npx @pharn-dev\/pharn@latest init`/);
+    assert.ok(!/No install command yet/.test(page), "the expired install claim must not survive anywhere on the page");
+    // It is ONE line: the renderer emits no newline inside the footer, and a wrap would change the bytes
+    // of all 36 generated pages. Asserted rather than trusted, since the plan specified it wrapped.
+    const footer = page.trimEnd().split("\n").at(-1);
+    assert.match(footer, /^_PHARN installs with .*documents the source file linked above\._$/);
     // A generated page must NOT open with a `---` role frontmatter block (else validate.mjs misclassifies it).
     assert.ok(!page.startsWith("---"));
   } finally {

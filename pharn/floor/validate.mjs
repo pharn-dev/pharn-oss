@@ -112,8 +112,28 @@ const MODULE_TOKEN_RE = /^pharn-[A-Za-z0-9-]+$/;
 // `pharn/floor` holds the deterministic checkers + their test-fixtures (incl. the deliberately-RED
 // fixture) — tooling, never product capabilities — so it is excluded from the capability scan exactly
 // as `.dev/` (its pre-relocation home) always was. The product surface remains pharn/pharn-*/**.
+//
+// `.claude` is excluded WHOLESALE, and the width is the point (lessons-learned L36). This list named
+// `.claude/commands/` — ONE member of the `.claude/` subtree — so every OTHER `.claude/` subtree was
+// walked as product surface. A nested checkout under `.claude/worktrees/<name>/` (Claude Code's own
+// worktree feature puts one there, git-ignored via `.git/info/exclude`) therefore DOUBLED every count:
+// measured against a fixture, 36 capabilities became 72 while this checker still EXITED 0 — a wrong
+// count reported silently. The repair is closure, not a second member: adding `.claude/worktrees/`
+// would re-certify only the spelling its author happened to be looking at, and an arbitrarily named
+// `.claude/<x>/` reproduces the defect identically.
+//
+// THE COST, BOUNDED AND MEASURED — because this file runs on a USER's repo, not only on PHARN's. In
+// PHARN's own tree nothing under `.claude/` is a capability (commands were already excluded, hooks are
+// `.cjs`, settings are JSON), so the widening costs this repo nothing. That reasoning does NOT transfer:
+// `.claude/` is the USER's directory, and a capability a user authored under e.g. `.claude/my-caps/` was
+// counted before this change and is NOT counted after — measured on a fixture user-repo, 2 capabilities
+// became 1, with this checker EXITING 0 both times. That is a real, silent loss of coverage, accepted
+// deliberately: it is the same trade `.claude/commands/` already made, no such user is known, and the
+// alternative (walking a nested checkout as product surface) is the defect this closes. Do not restate
+// this as "widening loses nothing" — it loses exactly that, and the loss is pinned by a test in
+// .dev/floor/walker-exclusion.test.mjs so it stays a stated cost rather than a forgotten one.
 const EXCLUDE_SEGMENTS = [
-  `${sep}.claude${sep}commands${sep}`,
+  `${sep}.claude${sep}`,
   `${sep}.dev${sep}`,
   `${sep}pharn${sep}floor${sep}`,
   `${sep}node_modules${sep}`,

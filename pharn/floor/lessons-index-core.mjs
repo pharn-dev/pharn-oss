@@ -309,8 +309,11 @@ export function renderIndex(entries) {
     `\n` +
     `${entries.length} lessons · ${tagged} tagged · ${malformed} malformed · ${untagged} untagged · ~${totalTokens} tokens total\n` +
     `\n` +
-    `Columns: \`id | type | concepts | title | promoted | ~tokens\`. \`${ABSENT}\` = no tag line (an entry\n` +
-    `written before the tag line existed, or by hand — expected and benign). \`${MALFORMED}\` = a tag line is\n` +
+    `Columns: \`id | type | concepts | title | promoted | ~tokens\`. \`${ABSENT}\` is rendered in THREE columns\n` +
+    `and does NOT mean the same thing in each. In \`type\`/\`concepts\`: \`${ABSENT}\` = no tag line (an entry\n` +
+    `written before the tag line existed, or by hand — expected and benign). In \`promoted\`: \`${ABSENT}\` = the\n` +
+    `entry has no \`- promoted: <date>\` line, which the \`untagged\` count above does not measure, so it is not\n` +
+    `a contradiction beside a \`0 untagged\` header. \`${MALFORMED}\` = a tag line is\n` +
     `present but failed its gate — that is unexpected; read the entry in canon. \`~tokens\` is\n` +
     `\`ceil(chars / ${CHARS_PER_TOKEN})\` over the FULL section (heading through the line before the next \`##\`), an\n` +
     `ESTIMATE with a confidence band, never a measurement (\`LIMITS.md §1c\`). Titles are canon free text,\n` +

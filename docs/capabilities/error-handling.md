@@ -20,4 +20,4 @@ does the plan account for what goes WRONG?
 
 [`pharn/pharn-pipeline/grillers/error-handling/error-handling.md`](../../pharn/pharn-pipeline/grillers/error-handling/error-handling.md)
 
-_No install command yet — this repo has no PHARN CLI or install-token. Copy the source file above._
+_PHARN installs with `npx @pharn-dev/pharn@latest init`, which selects the capabilities that apply to your project; there is no per-capability install command. This page documents the source file linked above._

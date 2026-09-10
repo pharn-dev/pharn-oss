@@ -20,4 +20,4 @@ read untrusted CODE, flag an ODD-ONE-OUT among copy-pasted lines (a missed edit)
 
 [`pharn/pharn-review/copy-paste-drift/copy-paste-drift.md`](../../pharn/pharn-review/copy-paste-drift/copy-paste-drift.md)
 
-_No install command yet — this repo has no PHARN CLI or install-token. Copy the source file above._
+_PHARN installs with `npx @pharn-dev/pharn@latest init`, which selects the capabilities that apply to your project; there is no per-capability install command. This page documents the source file linked above._
