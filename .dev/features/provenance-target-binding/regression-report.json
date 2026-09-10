@@ -1,0 +1,34 @@
+{
+  "base": "8bc6c0a",
+  "inside": [
+    ".claude/commands/pharn-dev-memory-promote.md",
+    ".claude/commands/pharn-memory-promote.md",
+    ".dev/floor/check-provenance.mjs",
+    ".dev/floor/check-provenance.test.mjs",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/check-provenance.mjs",
+    "pharn/floor/check-provenance.test.mjs",
+    ".dev/features/provenance-target-binding/GRILL.md",
+    ".dev/features/provenance-target-binding/PLAN.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

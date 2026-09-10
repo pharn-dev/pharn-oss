@@ -197,6 +197,15 @@ node pharn/floor/check-ship-briefing.mjs <BRIEFING.md>
 # admits the literal `unknown` — a user's project need not be a git repo, so an honest absence is a
 # member and a fabricated SHA is not. FLOOR, NARROWED and stated: "well-shaped provenance" therefore
 # does NOT imply a diff pointer. Run by /pharn-memory-promote before its human accept/deny gate.
+# CANON-ARG BINDING (added 3.0.6, both copies): argv[3] must NAME the candidate's declared `target` —
+# a relative arg must EQUAL it segment-wise, an absolute one must END with it at a segment boundary —
+# else a `canon-arg` RED. Before this the duplicate-id verdict ranged over WHATEVER FILE THE CALLER
+# NAMED while the enum test only ever saw `cand.target`, so a candidate whose id was already taken in
+# its declared target exited 0 GREEN against any other file. NARROWED: the absolute form is a SUFFIX
+# test (a same-named file under a different root still matches; the comparison is cwd-INDEPENDENT by
+# construction), it never proves the declaration named the APT member, and it never proves the WRITE
+# lands there — that is fix #7. Gated on the target-enum check passing, so a non-member target still
+# reports exactly one true reason.
 # A DELIBERATE second copy of .dev/floor/check-provenance.mjs, not a shared core (the alternative made
 # the gate's membership set a CLI argument); the two are pinned to agree on every shared constant by
 # ✧ tests in .dev/floor/check-provenance.test.mjs, which also assert the two TARGET_ENUMs/COMMIT_REs
@@ -222,6 +231,15 @@ node pharn/floor/check-lessons-index.mjs [target-dir] [--verdict]
 # control-char-free lowercase/digit/hyphen, <=32 chars). Both are REQUIRED on new candidates; legacy canon
 # entries are never scanned. SHAPE only — that the values DESCRIBE the entry is advisory (human-ratified at
 # the Step-5 gate), so a `type`-keyed filter is context selection, never a guarantee.
+# Carries the SAME canon-arg binding as the product twin (above), plus two patches BACK-PORTED in 3.0.6
+# that had shipped product-only for a whole release line — isGregorianDate (this copy accepted the
+# non-existent 2026-02-31) and the whitespace-free id check (it accepted `L99 extra`, and .trim()ed
+# "L1\n" into a COLLIDING token). The checker gating PHARN's OWN canon had been the weaker of the two.
+# The ✧ guard missed it because it compared `const` DECLARATIONS and both patches live in the validation
+# BODY (L31); check-provenance.test.mjs now adds a shared-FUNCTION-body pin and CROSS_COPY_BEHAVIOURS,
+# which EXECUTES both checkers on one input and requires the same verdict. NARROWED (L36): a PRESENCE
+# set over behaviours a review NAMED — it cannot DISCOVER an unnamed divergence, so a green run still
+# never means "the two copies behave identically".
 # Exits non-zero on any RED. /pharn-dev-memory-promote runs it before the human accept/deny gate (never writes on RED).
 node .dev/floor/check-provenance.mjs <candidate.json> <canon-file.md>
 

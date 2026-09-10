@@ -26,7 +26,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { mkdtempSync, writeFileSync, rmSync, readFileSync, readdirSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -51,12 +51,26 @@ const VALID = {
 };
 const CANON = "# Lessons learned\n\n## L1 — first lesson\n\nbody\n\n## L2 — second lesson\n\nbody\n";
 
+// Where the canon file must LIVE inside the temp dir, given a candidate. The checker BINDS argv[3] to
+// `cand.target`, so a harness that always wrote a bare `canon.md` would make every case RED for the wrong
+// reason. A candidate whose `target` is not a usable relative path falls back to `canon.md` — which is
+// exactly the mismatch shape, and is correct for those cases: they are already RED on the target enum,
+// and the binding is gated on that check passing.
+function canonRelFor(candidate) {
+  const t = candidate.target;
+  const usable = typeof t === "string" && /^[A-Za-z0-9._/-]+$/.test(t) && !t.split("/").includes("..");
+  return usable ? t : "canon.md";
+}
+
 // Write candidate + canon to a fresh temp dir, run the checker, clean up, return the spawn result.
-function runWith(candidate, canonText = CANON) {
+// `canonRel` is overridable so a test can deliberately point argv[3] somewhere OTHER than the declared
+// target — the one thing the binding exists to refuse.
+function runWith(candidate, canonText = CANON, canonRel = canonRelFor(candidate)) {
   const dir = mkdtempSync(join(tmpdir(), "pharn-prov-"));
   try {
     const candPath = join(dir, "candidate.json");
-    const canonPath = join(dir, "canon.md");
+    const canonPath = join(dir, canonRel);
+    mkdirSync(dirname(canonPath), { recursive: true });
     writeFileSync(candPath, JSON.stringify(candidate));
     writeFileSync(canonPath, canonText);
     return spawnSync(process.execPath, [CHECK, candPath, canonPath], { encoding: "utf8" });
@@ -128,6 +142,94 @@ test("RED: a target outside the canon enum exits 1", () => {
   assert.match(r.stdout, /RED — target failed/);
 });
 
+// ── The canon-arg BINDING: argv[3] must name the DECLARED target ─────────────────────────────────────
+//
+// The defect this closes: the duplicate-id check ranged over WHATEVER FILE THE CALLER NAMED while the
+// enum test only ever saw `cand.target`, so "the target is one of the two prescription files" read as a
+// claim about the file being checked and was not one. Reproduced live before the fix — a candidate whose
+// id was ALREADY taken in its declared target exited 0 GREEN against any other file.
+
+test("RED: argv[3] naming a file OTHER than the declared target exits 1", () => {
+  const r = runWith(VALID, CANON, "decoy.md");
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /RED — canon-arg failed/);
+  assert.match(r.stdout, /does not name the declared target/);
+});
+
+test("NON-VACUITY: the SAME candidate at its DECLARED path is GREEN — the refusal is the mismatch, not the fixture", () => {
+  // Without this control the test above would pass against a checker that REDs everything (L4).
+  const r = runWith(VALID);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /GREEN/);
+});
+
+test("THE DANGEROUS DIRECTION: a real duplicate can no longer be laundered through a different canon file", () => {
+  const dup = { ...VALID, id: "L1" }; // L1 IS taken in CANON
+  const honest = runWith(dup);
+  assert.equal(honest.status, 1);
+  assert.match(honest.stdout, /RED — id failed/);
+  assert.match(honest.stdout, /duplicate/);
+
+  const laundered = runWith(dup, "# an empty decoy\n", "decoy.md");
+  assert.equal(laundered.status, 1, "a duplicate id must not become GREEN by naming another file");
+  assert.match(laundered.stdout, /RED — canon-arg failed/);
+  assert.doesNotMatch(laundered.stdout, /GREEN/);
+});
+
+test("the binding is GATED on the target enum — a non-member target reports ONE reason, not two", () => {
+  const r = runWith({ ...VALID, target: ".dev/memory-bank/feature-catalog.md" }, CANON, "decoy.md");
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /RED — target failed/);
+  assert.doesNotMatch(r.stdout, /canon-arg/);
+  assert.match(r.stdout, /RED — 1 provenance check\(s\) failed/);
+});
+
+// ── The two BACK-PORTED hardening patches (finding `provenance-dev-copy-behind`) ─────────────────────
+//
+// Both shipped in the PRODUCT copy and never reached this one, for a whole release line, while the ✧
+// cross-copy guard below stayed green — it compared `const` DECLARATIONS and both patches live in the
+// validation BODY. Measured on the live dev copy BEFORE the back-port: each of these inputs exited 0.
+
+test("RED: an impossible Gregorian date (2026-02-31) exits 1 — DATE_RE shape is necessary, not sufficient", () => {
+  const r = runWith(withProv({ date: "2026-02-31" }));
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /RED — provenance failed/);
+  assert.match(r.stdout, /not a valid Gregorian calendar date/);
+  assert.doesNotMatch(r.stdout, /GREEN/);
+});
+
+test("NON-VACUITY: a REAL calendar date in the same month is still GREEN", () => {
+  // 2026-02-28 exists; 2026-02-31 does not. Only the day differs, so a checker that REDs every date
+  // cannot satisfy both this and the test above.
+  const r = runWith(withProv({ date: "2026-02-28" }));
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /GREEN/);
+});
+
+test("RED: an id containing a space exits 1 before duplicate lookup", () => {
+  const r = runWith({ ...VALID, id: "L5 extra" });
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /RED — id failed/);
+  assert.match(r.stdout, /whitespace-free single token/);
+  assert.doesNotMatch(r.stdout, /duplicate/);
+});
+
+test("RED: an id containing a newline exits 1 before duplicate lookup", () => {
+  // The sharp case the bare `.trim()` admitted: "L1\n" trims to "L1", which IS taken in CANON, so the
+  // old code silently normalized a malformed id into a colliding one.
+  const r = runWith({ ...VALID, id: "L5\n" });
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /RED — id failed/);
+  assert.match(r.stdout, /whitespace-free single token/);
+  assert.doesNotMatch(r.stdout, /duplicate/);
+});
+
+test("NON-VACUITY: the same id WITHOUT whitespace is GREEN — the guard rejects the whitespace, not the id", () => {
+  const r = runWith({ ...VALID, id: "L5" });
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /GREEN/);
+});
+
 test("★ P2: an instruction-looking needle in title/body does NOT affect the verdict (body is ignored DATA)", () => {
   const r = runWith({
     ...VALID,
@@ -142,7 +244,7 @@ test("GREEN: a not-yet-created canon file means no existing ids (the first-promo
   const dir = mkdtempSync(join(tmpdir(), "pharn-prov-"));
   try {
     const candPath = join(dir, "candidate.json");
-    const canonPath = join(dir, "does-not-exist.md"); // e.g. pattern-library.md before any pattern
+    const canonPath = join(dir, ".dev", "memory-bank", "pattern-library.md"); // never created: before any pattern
     writeFileSync(candPath, JSON.stringify({ ...VALID, target: ".dev/memory-bank/pattern-library.md" }));
     const r = spawnSync(process.execPath, [CHECK, candPath, canonPath], { encoding: "utf8" });
     assert.equal(r.status, 0);
@@ -391,6 +493,117 @@ test("✧ the two TARGET_ENUMs are DELIBERATELY different — dev canon vs a use
   assert.match(prod, /"memory-bank\/lessons-learned\.md"/);
   assert.match(prod, /"memory-bank\/pattern-library\.md"/);
   assert.doesNotMatch(prod, /\.dev\//, "a .dev path in the product enum would gate a path no install has");
+});
+
+// Extract a top-level `function <NAME>(…) { … }` body from a source file, from the `function` keyword
+// through the matching brace at column 0. Textual and derived from BOTH sources, like constSource().
+function functionSource(file, name) {
+  const src = readFileSync(file, "utf8");
+  const m = src.match(new RegExp(`^function ${name}\\([\\s\\S]*?\\n\\}`, "m"));
+  assert.ok(m, `${file} must declare a top-level \`function ${name}(…)\``);
+  return m[0];
+}
+
+// The SHARED FUNCTION set — the enumeration is the deliverable (L29), materialized here so a function
+// added to one copy and not the other fails rather than being assessed per-file (L31).
+const SHARED_FUNCTIONS = ["nonEmptyString", "cleanScalar", "existingIds", "isGregorianDate", "pathSegments", "canonArgMatchesTarget"];
+
+test("✧ the dev and product provenance checkers agree on every shared FUNCTION body", () => {
+  // The constant guard above compares DECLARATIONS. That is exactly why the two back-ported patches
+  // (`isGregorianDate`, the whitespace-free id check) drifted for a whole release line with every gate
+  // green: both live in the validation BODY, which no rule ranged over. This closes the half of the
+  // stated bound that could be closed textually.
+  assert.ok(SHARED_FUNCTIONS.length >= 6, "the shared-function set must not silently shrink (L34)");
+  for (const name of SHARED_FUNCTIONS) {
+    assert.equal(
+      functionSource(PRODUCT_CHECK, name),
+      functionSource(CHECK, name),
+      `${name}() has drifted between .dev/floor/check-provenance.mjs and pharn/floor/check-provenance.mjs — ` +
+        `port the change to both copies, or split them deliberately and update this guard`
+    );
+  }
+});
+
+// ── ✧ BEHAVIOURAL cross-copy agreement — the obligation set nothing ranged over (L31) ────────────────
+//
+// WHY, precisely. The guards above compare TEXT: constants, now also function bodies. The ✧ block's own
+// header states the residual — "NOT guaranteed: that the two files BEHAVE identically" — and finding
+// `provenance-dev-copy-behind` is that residual cashing out: two product-only patches never reached the
+// dev copy, and the constant guard could not see them. This set EXECUTES both checkers on the same
+// input class and requires the same verdict, which is a strictly different kind of evidence.
+//
+// HONEST BOUND, and it is the point (L36). This is a PRESENCE set over behaviours a review NAMED. It
+// cannot DISCOVER an unnamed divergence, and `length >= 3` defeats vacuity (L34) but not attrition — a
+// member deleted and replaced by a trivial one keeps it green. "The behavioural guard is green" NEVER
+// means "the two copies behave identically"; it means these three cannot drift again silently.
+const CROSS_COPY_BEHAVIOURS = [
+  {
+    name: "an impossible Gregorian date is refused",
+    mutate: (v) => ({ ...v, provenance: { ...v.provenance, date: "2026-02-31" } }),
+    expect: /not a valid Gregorian calendar date/,
+  },
+  {
+    name: "a whitespace-bearing id is refused before the duplicate lookup",
+    mutate: (v) => ({ ...v, id: "L5 extra" }),
+    expect: /whitespace-free single token/,
+  },
+  {
+    name: "a canon-file argument that is not the declared target is refused",
+    mutate: (v) => v,
+    canonRel: "decoy.md",
+    expect: /does not name the declared target/,
+  },
+];
+
+// Run an ARBITRARY checker against a candidate, with the canon file placed at `canonRel` inside a fresh
+// temp dir. Neither copy's target is restated as a literal — see validCandidateFor().
+function runOn(checker, candidate, canonRel) {
+  const dir = mkdtempSync(join(tmpdir(), "pharn-prov-xcopy-"));
+  try {
+    const candPath = join(dir, "candidate.json");
+    const canonPath = join(dir, canonRel ?? canonRelFor(candidate));
+    mkdirSync(dirname(canonPath), { recursive: true });
+    writeFileSync(candPath, JSON.stringify(candidate));
+    writeFileSync(canonPath, CANON);
+    return spawnSync(process.execPath, [checker, candPath, canonPath], { encoding: "utf8" });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// A valid candidate for whichever copy, with `target` DERIVED from that copy's own TARGET_ENUM rather
+// than restated here — so this guard cannot drift from either enum.
+function validCandidateFor(checker) {
+  const enumSrc = constSource(checker, "TARGET_ENUM");
+  const first = enumSrc.match(/"([^"]+)"/);
+  assert.ok(first, `${checker} must declare a TARGET_ENUM with at least one string member`);
+  return { ...VALID, target: first[1] };
+}
+
+test("✧ BEHAVIOUR: both copies REFUSE each named input, with the same reason", () => {
+  assert.ok(CROSS_COPY_BEHAVIOURS.length >= 3, "the behaviour set must not pass vacuously (L34)");
+  for (const b of CROSS_COPY_BEHAVIOURS) {
+    for (const [label, checker] of [
+      ["dev", CHECK],
+      ["product", PRODUCT_CHECK],
+    ]) {
+      const cand = b.mutate(validCandidateFor(checker));
+      const r = runOn(checker, cand, b.canonRel);
+      assert.equal(r.status, 1, `${label}: ${b.name} — expected exit 1, got ${r.status}: ${r.stdout}`);
+      assert.match(r.stdout, b.expect, `${label}: ${b.name} — wrong or missing reason`);
+    }
+  }
+});
+
+test("✧ BEHAVIOUR NON-VACUITY: the UNMUTATED candidate is GREEN in both copies", () => {
+  // Without this, every assertion above would be satisfied by a checker that refuses everything (L4).
+  for (const [label, checker] of [
+    ["dev", CHECK],
+    ["product", PRODUCT_CHECK],
+  ]) {
+    const r = runOn(checker, validCandidateFor(checker));
+    assert.equal(r.status, 0, `${label}: the baseline candidate must be GREEN, got: ${r.stdout}`);
+  }
 });
 
 test("✧ COMMIT_RE differs deliberately: only the PRODUCT copy admits the literal `unknown`", () => {

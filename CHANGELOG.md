@@ -130,6 +130,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 > > > > > > > 940eb16 (fix(floor): make CHECK 6 -- the only floor expression of P3 -- able to fire (3.0.5))
 
+- **`check-provenance.mjs` now BINDS its canon-file argument to the candidate's declared `target`, in
+  both copies** (`SKILLS_VERSION` **3.0.5 → 3.0.6**; the product checker is bump-triggering surface, its
+  `.dev/` twin and all `*.test.*` are not). Two findings from an adversarial review, both reproduced live
+  before the fix rather than inferred:
+  - **`provenance-canon-arg-unbound`.** The checker never compared `argv[3]` to `cand.target`, so the
+    duplicate-id verdict ranged over **whatever file the caller named** while the enum test only ever saw
+    the declaration. The guarantee-audit bullet _"The target is one of the two prescription files →
+    FLOOR"_ therefore read as a claim about the file being checked and was not one. Measured: a candidate
+    declaring `memory-bank/lessons-learned.md` with an id **already taken there** exited `0` GREEN against
+    any other file — a re-used id passing the gate. Now a mismatch is a `canon-arg` RED.
+    **Bounded, and stated:** a _relative_ argument must EQUAL the target segment-wise; an _absolute_ one
+    need only end with it at a segment boundary, so a same-named file under a different root still
+    matches (the comparison is deliberately cwd-independent). It binds the **argument** to the
+    **declaration** — never that the declaration is the apt member, and never that the **write** lands
+    there, which stays fix #7's pre-write hook.
+  - **`provenance-dev-copy-behind`.** Two product-only hardening patches had never reached the dev copy,
+    so the checker gating **PHARN's own** canon was weaker than the one gating a user's: `isGregorianDate()`
+    (the dev copy accepted `2026-02-31`) and the whitespace-free id check (it accepted `L99 extra`, and
+    `.trim()`ed `"L1\n"` into a colliding token). Both back-ported; both measured GREEN before and RED after.
+  - **Why the existing ✧ cross-copy guard missed it, and what now covers that** — L31's own instance. That
+    guard compares `const` **declarations**, and both drifted patches live in the validation **body**, so
+    it stayed green for a whole release line. Added: a shared-**function**-body pin and a
+    `CROSS_COPY_BEHAVIOURS` set that **executes both checkers** on the same input and requires the same
+    verdict. **Honest bound (L36):** it is a _presence_ set over behaviours a review NAMED — it cannot
+    discover an unnamed divergence, so "the behavioural guard is green" still never means "the two copies
+    behave identically". It was mutation-tested (removing the dev copy's Gregorian call makes it RED and
+    names which copy drifted) — notably the textual pins stayed green there, which is the gap it covers.
+
 - **The writes-scope guard's fail-closed default no longer carries dev-repo posture into
   installed projects** (`SKILLS_VERSION` 3.0.1 → **3.0.2**, patch;
   [#180](https://github.com/pharn-dev/pharn-oss/issues/180), shipped in

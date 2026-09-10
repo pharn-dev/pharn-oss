@@ -16,6 +16,13 @@
 // FLOOR (what the exit code guarantees): a candidate carries VALID, well-shaped provenance, a NON-DUPLICATE
 //   id, a target in the canon enum, an enum-member `type`, and a well-SHAPED `concepts` list. All are
 //   enum / regex / presence / set-membership tests.
+// FLOOR, and this one is newer than the rest — the canon-file ARGUMENT is BOUND to `cand.target`
+//   (canonArgMatchesTarget, below). Before it, the uniqueness verdict ranged over whatever file the
+//   CALLER named while the enum test only ever saw the DECLARATION, so the two could disagree and a
+//   re-used id passed. Say what it buys precisely: the file this checker READ is the file the candidate
+//   DECLARED. It does NOT prove the declaration is the RIGHT one of the two members (a candidate may
+//   honestly declare either; which is apt stays the human's read at the accept/deny gate), and it does
+//   NOT prove the WRITE lands there — that is the fix #7 pre-write hook, a different primitive.
 // FLOOR, NARROWED — say it rather than letting the guarantee quietly shrink: `commit` admits the literal
 //   `unknown` (see COMMIT_RE), because a user's project need not be a git repo at all. So "well-shaped
 //   provenance" does NOT mean "carries a diff pointer": it means `feature` and `source` are non-empty and
@@ -68,6 +75,7 @@
 // Exit: 1 on any RED (prints each), 0 + "GREEN — ..." otherwise.
 
 import { readFileSync, existsSync } from "node:fs";
+import { isAbsolute } from "node:path";
 
 // Enums / shapes — every branch is a membership / regex / presence test (P5); the terminal fallback on any
 // non-member is a loud RED, never a guess. These are the enum-gated / floor-verifiable fields (never body).
@@ -99,6 +107,44 @@ function isGregorianDate(s) {
   const d = Number(s.slice(8, 10));
   const dt = new Date(y, mo - 1, d);
   return dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d;
+}
+
+// ── The canon-arg BINDING: argv[3] must NAME the file `cand.target` declares ─────────────────────────
+// Without this, the duplicate-id check (3) below ranges over WHATEVER FILE THE CALLER NAMED, while the
+// enum test (1) only ever sees `cand.target` — so "the target is one of the two prescription files" read
+// as a claim about the file that gets CHECKED, and it was not one. MEASURED before the fix (never
+// inferred): a candidate declaring `memory-bank/lessons-learned.md` with an id ALREADY taken there
+// exited 0 GREEN when argv[3] named any other file. A real duplicate passed the gate.
+//
+// Purely lexical, primitive #3: split on either separator and drop "" and "." segments. A ".." segment is
+// KEPT literally rather than resolved, and since no TARGET_ENUM member contains one it can never match
+// inside the compared tail. No filesystem access, no symlink resolution, no cwd read — the comparison is
+// over this one invocation's own two inputs (an argv string and an already-enum-gated JSON field), which
+// is why it is the EXISTING enum/regex primitive and not the cross-FILE equality primitive
+// check-ship-briefing.mjs introduced.
+function pathSegments(p) {
+  return String(p)
+    .split(/[\\/]+/)
+    .filter((s) => s !== "" && s !== ".");
+}
+
+// RELATIVE argv[3] → segment-wise EQUALITY with the declared target. That is the shape the promote
+// command passes (run from the repo root), and the two strings are the same KIND of thing — both
+// repo-root-relative — so equality is the honest test, and `foo/memory-bank/lessons-learned.md` is RED.
+// ABSOLUTE argv[3] → the target must be a segment-aligned SUFFIX. An absolute path cannot EQUAL a
+// repo-relative declaration, and resolving it against `process.cwd()` would silently make the verdict
+// depend on the caller's working directory; the suffix is the strongest cwd-INDEPENDENT test available.
+// NARROWED, and stated rather than left for a reader to discover: the suffix form therefore admits a
+// same-named file under a DIFFERENT root. It binds the ARGUMENT to the DECLARATION; it does not prove
+// the file sits under this repo, and it never proves the WRITE lands there — that is fix #7's hook.
+function canonArgMatchesTarget(canonPath, target) {
+  const want = pathSegments(target);
+  const got = pathSegments(canonPath);
+  if (want.length === 0) return false;
+  if (!isAbsolute(canonPath)) return got.length === want.length && want.every((s, i) => got[i] === s);
+  if (got.length < want.length) return false;
+  const tail = got.slice(got.length - want.length);
+  return want.every((s, i) => tail[i] === s);
 }
 
 // The entry TAXONOMY. This array is the SINGLE SOURCE OF TRUTH for the `type` enum (P4): the
@@ -222,6 +268,21 @@ function main() {
     red("target", `target ${JSON.stringify(cand.target)} not in {${TARGET_ENUM.join(", ")}}`);
   }
 
+  // (1b) the canon-file ARGUMENT names the DECLARED target — the binding that makes check (3) below a
+  //      statement about `cand.target` rather than about whatever the caller happened to pass.
+  //      GATED ON (1) PASSING, deliberately: a non-member target is already a loud RED carrying a true
+  //      and sufficient reason, and emitting a second RED for the same root cause would misdirect whoever
+  //      acts on it — the same "a false REASON for a true refusal" discipline the concepts branch keeps.
+  if (TARGET_ENUM.includes(cand.target) && !canonArgMatchesTarget(canonPath, cand.target)) {
+    red(
+      "canon-arg",
+      `the canon-file argument does not name the declared target: argv[3] is ${JSON.stringify(canonPath)} ` +
+        `but target is ${JSON.stringify(cand.target)}. The duplicate-id check would otherwise range over a ` +
+        `file this candidate never declared, so a re-used id could pass. Pass the declared target as the ` +
+        `canon-file argument (repo-root-relative, or an absolute path ending in it), or correct the target.`
+    );
+  }
+
   // (2) provenance present + shape — the mandatory per-entry schema (ARCHITECTURE §5). A candidate
   //     missing or malforming any field is REJECTED deterministically, before any write.
   const p = cand.provenance;
@@ -309,7 +370,8 @@ function main() {
 
   if (reds.length) return fail();
   console.log(
-    `GREEN — provenance valid; id ${JSON.stringify(String(cand.id).trim())} is unique in ${canonPath}; ` +
+    `GREEN — provenance valid; id ${JSON.stringify(String(cand.id).trim())} is unique in ${canonPath}, ` +
+      `which is the declared target ${JSON.stringify(cand.target)}; ` +
       `type ${JSON.stringify(cand.type)}, ${cand.concepts.length} concept(s). NOTE (P0): that these VALUES ` +
       `describe the entry is ADVISORY — this checker verifies SHAPE, never aboutness.`
   );

@@ -260,6 +260,11 @@ SHA, never fabricated, never a placeholder):
 node .dev/floor/check-provenance.mjs .pharn/pharn-dev-memory-promote/candidate.json <canon-file>
 ```
 
+`<canon-file>` **must be the candidate's own declared `target`** — the checker BINDS the two and REDs a
+mismatch (`canon-arg`), because otherwise the duplicate-id check would range over a file the candidate
+never declared. Pass it repo-root-relative (or as an absolute path ending in it); do not substitute a
+scratch copy.
+
 Read its exit code: `0` GREEN (provenance valid, id unique, target in enum) · `1` RED (it prints each
 failure). **Any RED → HALT and refuse. Do not write, do not "fix it for the human," do not relax a field.**
 The remedy is to correct the candidate's provenance truthfully and re-run — or to abandon the promotion. A
@@ -466,6 +471,16 @@ It does not chain to another stage.
   command: nothing forces the step to run.
 - **"No duplicate-id entry enters canon"** → **FLOOR** (`check-provenance.mjs`, set-membership over `## <id>`
   headings).
+- **"The duplicate-id check ranges over the file the candidate DECLARED"** → **FLOOR** (the canon-arg
+  binding: `check-provenance.mjs` compares argv[3] to `cand.target` segment-wise and REDs a mismatch).
+  This bullet exists because the two above it used to carry the weight alone and could not: the enum test
+  only ever saw `cand.target`, so the uniqueness verdict ranged over whatever path the caller passed.
+  Measured before the fix — a candidate whose id was already taken in its declared target exited **0
+  GREEN** against any other file, i.e. a re-used id passed the gate.
+  **NARROWED, and stated:** a relative argument must EQUAL the target; an absolute one need only END with
+  it at a segment boundary, so a same-named file under a different root still matches. It binds the
+  ARGUMENT to the DECLARATION — it does **not** prove the declaration named the RIGHT member, and it does
+  **not** prove the WRITE lands there. That is fix #7's pre-write hook, a different primitive.
 - **"Every promoted candidate carries an enum-member `type` and a well-SHAPED `concepts` list"** → **FLOOR**
   (`check-provenance.mjs`, primitive #3 — exact array membership for `type`; a control-char guard composed
   with an anchored shape regex for each concept, per L14). Note the **two clocks**: the checker's _verdict_
