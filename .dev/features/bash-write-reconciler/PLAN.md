@@ -279,6 +279,29 @@ One path per bullet now. Two design changes followed from re-reading what the dr
    pipeline artifact names (copied from that file and pinned set-equal by a parity test), never a `**`
    glob — so a stray file under a feature directory is still reported. **Found by running the thing, not
    by reasoning about it** (L37).
+5. **A TOCTOU race in the hasher, found by CodeQL on the PR — and the audit of its siblings, which is
+   the transferable half (L29).** `hashFile` did `statSync(path)` then `readFileSync(path)`: a
+   check-then-reopen **by name**, so the bytes hashed need not be the bytes inspected (CWE-367,
+   `js/file-system-race`, high). That is a defect anywhere; in an **integrity baseline** it is
+   self-defeating, and it survived authoring plus a read-through of the file. Fixed structurally — one
+   descriptor, `open` → `fstat(fd)` → `read(fd)`, released in `finally` on every path.
+
+   **The enumeration, because fixing only the flagged instance is what L29 forbids.** All **9**
+   path-based check/use pairs across the two new files were audited. Exactly one was a defect. The other
+   eight are **deliberately unchanged**, each for a stated reason, and P7 is the discipline: an addition
+   is justified by a real failure, never a hypothetical, and a speculative rewrite of eight fail-closed
+   sites is that violation.
+   - `reconcile-baseline.mjs:159` (`--show`) and `check-bash-reconcile.mjs:239` (baseline read) share the
+     **shape** but are wrapped in try/catch, so a race lands in the catch and yields `INCONCLUSIVE` — the
+     safe direction. Note the ordering there is load-bearing and was checked, not assumed: `existsSync`
+     is what separates `NO_BASELINE` (green by design) from a malformed baseline (`INCONCLUSIVE`), and a
+     mid-read vanish degrades toward the **stricter** of the two.
+   - `reconcile-baseline.mjs:155` / `check-bash-reconcile.mjs:216` (`--base` validation) and `:229` (hook
+     presence) are fail-fast checks for a better message; the real use (`git` cwd, `spawnSync`) fails
+     closed on its own.
+   - `check-bash-reconcile.mjs:181` (config copy) is already caught, and the sandbox tolerates an absent
+     signal by design. `:189` stats `.dev/floor` but creates a **different** path — not a race on one
+     file at all.
 
 **Consequence for item 6 — the scope is snapshotted, and the duplication is bounded and parity-tested.**
 At verify time `.pharn/writes-scope.json` holds _verify's_ scope, not the build's — the exact trap
