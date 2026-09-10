@@ -214,7 +214,7 @@ export function checkSkillsVersionRecorded(targetDir) {
   // Either path threw a Node stack trace PAST this named refusal and past the function's documented
   // verdict-object contract — the one shape a fail-closed checker must never take. Raised by an
   // automated review; one atomic call, and every failure mode lands on the same BAD_TARGET refusal.
-  let isDir = false;
+  let isDir;
   try {
     isDir = typeof targetDir === "string" && targetDir !== "" && statSync(targetDir).isDirectory();
   } catch {
