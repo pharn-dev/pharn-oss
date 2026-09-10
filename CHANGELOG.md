@@ -363,7 +363,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   human edit outside the agent loop. The exact replacement is in the PR body.
 
 - **The shipped surface cited `.dev/` canon, which an install does not contain** (`SKILLS_VERSION`
-  3.0.11 → **3.1.3**, patch over shipped bytes). Nine of ten product commands cited
+  3.0.11 → **3.0.12**, patch over shipped bytes). Nine of ten product commands cited
   `.dev/memory-bank/lessons-learned.md L<n>` in prose — and the review's verifier **extended the class**:
   so did the shipped floor (`validate.mjs` ×2, `check-spec.mjs`) and
   `pharn/pharn-contracts/loop-record.md`. **14 citations in all.** An install ships `pharn/` plus the
