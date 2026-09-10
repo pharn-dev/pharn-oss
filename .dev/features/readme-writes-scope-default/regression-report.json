@@ -1,0 +1,54 @@
+{
+  "feature": "readme-writes-scope-default",
+  "base": "914f57e",
+  "inside": [
+    "README.md",
+    ".claude/commands/pharn-review.md",
+    "SKILLS_VERSION",
+    "CHANGELOG.md",
+    ".dev/memory-bank/lessons-learned.md",
+    "docs/lessons-index.md",
+    ".dev/features/readme-writes-scope-default/PLAN.md"
+  ],
+  "outside_gates": {
+    "format:check": {
+      "base": 0,
+      "head": 0
+    },
+    "lint": {
+      "base": 0,
+      "head": 0
+    },
+    "lint:md": {
+      "base": 0,
+      "head": 0
+    },
+    "docs:check": {
+      "base": 0,
+      "head": 0
+    },
+    "check:markers": {
+      "base": 0,
+      "head": 0
+    },
+    "check:badge": {
+      "base": 0,
+      "head": 0
+    },
+    "check:changelog": {
+      "base": 0,
+      "head": 0
+    },
+    "check:contributing": {
+      "base": 0,
+      "head": 0
+    },
+    "test": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

@@ -1,0 +1,19 @@
+{
+  "feature": "readme-writes-scope-default",
+  "head": "fix/readme-writes-scope-default rebased onto 914f57e",
+  "gates": {
+    "format:check": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "docs:check": 0,
+    "check:markers": 0,
+    "check:badge": 0,
+    "check:changelog": 0,
+    "check:contributing": 0,
+    "test": 0,
+    "floor:validate": 0
+  },
+  "failing_gates": [],
+  "verifiers": [],
+  "verdict": "PASS"
+}

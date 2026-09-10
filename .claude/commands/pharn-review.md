@@ -83,10 +83,16 @@ case `features/<name>/` is created for it.
 > `features/<name>/REVIEW.md` **both exit 2**.
 >
 > **fix #7 still applies here — through the fail-closed DEFAULT, not through a declared scope.** With no
-> scope file, `enforce-writes-scope.cjs` permits its install safe-set, which is exactly `features/**` —
-> the same set this command's `writes:` declares. So the honest guarantee is **"this command writes only
-> inside `features/**`"**, and **NOT** "exactly the three artifact paths". A reader who assumed the
-> tighter claim would be wrong, which is why it is written at its real width.
+> scope file, `enforce-writes-scope.cjs` permits its install safe-set — `features/**` — **plus
+> `.pharn/**`, which is composed into the allow-list unconditionally** and is therefore NOT "the same set
+> this command's `writes:` declares". Measured, not read off the source (L37 — a guard's bounds must be
+> probed, and the universal quantifier is where the drift lands): with no scope file, a `Write` to
+> `features/<name>/findings.json` exits 0 and one to `.pharn/anything.json` **also exits 0**. So the honest
+> guarantee is **"this command writes only inside `features/**` or `.pharn/**`"** — WIDER than its own
+> `writes: ["features/**"]` declaration, and wider still than "exactly the three artifact paths". Every
+> tighter claim is wrong, which is why this is written at its real width. The one member excluded from
+> that width, named rather than left to a reader to discover: `.pharn/writes-scope.json`, the guard's own
+> input, is denied by name regardless of scope.
 
 ## Step 1 — Resolve the review TARGET deterministically (its provenance is explicit)
 
