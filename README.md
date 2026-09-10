@@ -262,7 +262,7 @@ flowchart LR
     A["agent proposes a write"] --> H{"PreToolUse hook"}
     H -- "path is in the plan's declared scope" --> OK["write proceeds"]
     H -- "trusted doc, or outside that scope" --> D["exit 2 — denied"]
-    BASH["the same write, issued via Bash"] -. "bypasses both hooks" .-> OK
+    BASH["the same write, issued via Bash"] -. "matcher excludes Bash —<br/>neither hook runs" .-> UN["write proceeds,<br/>unevaluated and unrecorded"]
 ```
 
 - **A file states a rule. A hook can enforce one.** PHARN's `PreToolUse` hooks can deny writes through
@@ -295,7 +295,7 @@ judgment is **advisory**.
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | The four trusted docs — and the guards' own control surface — cannot be edited through Claude Code's Write/Edit/MultiEdit/NotebookEdit surface                                                                                                                           | `.claude/hooks/protect-trusted-paths.cjs`                                                                                                                                                                  |
 | Memory-bank canon (`memory-bank/`, `.dev/memory-bank/`, subtrees included) is denied on that same surface, **unless** the active writes-scope was set by a promotion command **and** names that one canon file alone — so a build plan cannot grant itself a canon write | `.claude/hooks/protect-trusted-paths.cjs` (origin read from `set-writes-scope.cjs`'s argv)                                                                                                                 |
-| That same tool surface is restricted to the active write scope, fail-closed to a default-safe set when none is active                                                                                                                                                    | `set-writes-scope.cjs` + `enforce-writes-scope.cjs`                                                                                                                                                        |
+| Writes through that same tool surface — **and only that surface**, since the wired `PreToolUse` matcher does not match `Bash` — are restricted to the active write scope, fail-closed to a default-safe set when none is active                                          | `set-writes-scope.cjs` + `enforce-writes-scope.cjs`                                                                                                                                                        |
 | An approved spec is pinned, so later body drift is detectable                                                                                                                                                                                                            | `check-spec.mjs --hash` at approval; re-verified at plan, grill, build, regress, verify and ship by `check-spec-approved.mjs` (directly at plan and ship, through `check-plan-spec-agree.mjs` at the rest) |
 | Secret-shaped literals in a plan can be detected by the shipped regex scanner                                                                                                                                                                                            | `scan-plan-secrets.mjs`                                                                                                                                                                                    |
 | A missing concrete path declared by the plan yields an incomplete build signal                                                                                                                                                                                           | `check-build-complete.mjs` feeding `check-verify.mjs`                                                                                                                                                      |
@@ -396,8 +396,19 @@ where the review caught a false bound shipped by the very increment that was rep
 PHARN is deliberately narrower than the claims many AI-development tools make.
 
 - **Claude Code only today.** The current shipped integration uses Claude Code commands and hooks.
-- **Shell writes are outside the write guard.** Bash can modify files without passing through the
-  `PreToolUse` write-scope hooks.
+- **Shell writes are outside the write guard — neither denied nor detected at the time of the write.**
+  The `PreToolUse` matcher wired in `.claude/settings.json` is `Write|Edit|MultiEdit|NotebookEdit`, and
+  both hooks re-test that set in their own code, so a write issued through `Bash` never reaches either
+  one. It is not blocked, and nothing records that it happened. **Every write-guard guarantee on this
+  page — the trusted-doc denylist, the canon denylist, and the writes-scope restriction — is scoped to
+  that tool surface and to no other.** One partial detector exists **after the fact**, and it is
+  advisory, not a backstop: `/pharn-regress` runs `check-regress.mjs scope`, which exits 1 on a changed
+  path the plan's `## Files` did not declare. Its four bounds are stated in that checker's own header —
+  it fires only if that stage runs, it compares _changed since base_ rather than _written by the build_,
+  it carries closed-enum exemptions for the pipeline's own artifacts, and a plan that edits its own
+  `## Files` defeats it. The only true prevention is OS-level sandboxing of the `Bash` process itself.
+  PHARN does **not** implement it: that is a harness-layer capability, not something markdown
+  methodology can express.
 - **The write-scope guard's fail-closed default does not cover your source.** Where
   `enforce-writes-scope.cjs` is wired and no scope is active, Claude Code's
   Write/Edit/MultiEdit/NotebookEdit tools are restricted to `features/**` and `.pharn/**` in an
