@@ -55,7 +55,21 @@ Resolve it, in order (P5 — a membership/CLI test, never a guess):
 `<name>` need not already exist. `/pharn-review` also reviews code the pipeline did not build, in which
 case `features/<name>/` is created for it.
 
-> **This command sets NO writes-scope (fix #7), and that is deliberate — not an oversight (P0).**
+> **This command SETS no writes-scope but must RELEASE any leftover one (fix #7). Run this first:**
+>
+> ```bash
+> node .claude/hooks/set-writes-scope.cjs --clear
+> ```
+>
+> **Why a release and not a set.** A **set** scope REPLACES the fail-closed safe-set, so a scope left
+> behind by an aborted earlier command is **stricter** than no scope at all and would deny this
+> command's own writes. Measured, not reasoned about — with a leftover
+> `features/other/PLAN.md` scope active, a `Write` to `features/<name>/lenses/<lens>/findings.json`
+> **exits 2**; after `--clear` the same write **exits 0**. `--clear` is idempotent and safe when no scope
+> exists, so it is unconditional. (Raised by an automated review of this command: the original text
+> claimed the fail-closed default applies here, which is true only once a stale scope is gone.)
+>
+> **And this command sets no scope of its own, which is deliberate — not an oversight (P0).**
 > Every other artifact-writing command's first step runs `set-writes-scope.cjs`. This one cannot, and the
 > reason is structural: the setter resolves **one `--target` per call** and each call **overwrites** the
 > single `.pharn/writes-scope.json`. Step 4 fans out to **N parallel subagent writers** under
