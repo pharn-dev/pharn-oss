@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-3.2.1-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-4.0.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -262,7 +262,10 @@ flowchart LR
     A["agent proposes a write"] --> H{"PreToolUse hook"}
     H -- "path is in the plan's declared scope" --> OK["write proceeds"]
     H -- "trusted doc, or outside that scope" --> D["exit 2 — denied"]
-    BASH["the same write, issued via Bash"] -. "matcher excludes Bash —<br/>neither hook runs" .-> UN["write proceeds,<br/>unevaluated and unrecorded"]
+    BASH["the same write, issued via Bash"] -. "matcher excludes Bash —<br/>neither hook runs" .-> UN["write proceeds,<br/>unblocked"]
+    UN -. "re-hashed at /pharn-verify" .-> REC{"would the guards<br/>have denied it?"}
+    REC -- "yes" --> RED["reconcile gate fails<br/>— detected, not prevented"]
+    REC -- "no" --> OK
 ```
 
 - **A file states a rule. A hook can enforce one.** PHARN's `PreToolUse` hooks can deny writes through
@@ -291,16 +294,17 @@ judgment is **advisory**.
 
 **Guaranteed** — examples of narrow claims backed by named checkers:
 
-| Guarantee                                                                                                                                                                                                                                                                | The check behind it                                                                                                                                                                                        |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The four trusted docs — and the guards' own control surface — cannot be edited through Claude Code's Write/Edit/MultiEdit/NotebookEdit surface                                                                                                                           | `.claude/hooks/protect-trusted-paths.cjs`                                                                                                                                                                  |
-| Memory-bank canon (`memory-bank/`, `.dev/memory-bank/`, subtrees included) is denied on that same surface, **unless** the active writes-scope was set by a promotion command **and** names that one canon file alone — so a build plan cannot grant itself a canon write | `.claude/hooks/protect-trusted-paths.cjs` (origin read from `set-writes-scope.cjs`'s argv)                                                                                                                 |
-| Writes through that same tool surface — **and only that surface**, since the wired `PreToolUse` matcher does not match `Bash` — are restricted to the active write scope, fail-closed to a default-safe set when none is active                                          | `set-writes-scope.cjs` + `enforce-writes-scope.cjs`                                                                                                                                                        |
-| An approved spec is pinned, so later body drift is detectable                                                                                                                                                                                                            | `check-spec.mjs --hash` at approval; re-verified at plan, grill, build, regress, verify and ship by `check-spec-approved.mjs` (directly at plan and ship, through `check-plan-spec-agree.mjs` at the rest) |
-| Secret-shaped literals in a plan can be detected by the shipped regex scanner                                                                                                                                                                                            | `scan-plan-secrets.mjs`                                                                                                                                                                                    |
-| A missing concrete path declared by the plan yields an incomplete build signal                                                                                                                                                                                           | `check-build-complete.mjs` feeding `check-verify.mjs`                                                                                                                                                      |
-| Which lenses run, and how structured findings merge                                                                                                                                                                                                                      | `count-lenses.mjs` + `merge-findings.mjs`                                                                                                                                                                  |
-| The ten product commands' `model:` / `effort:` frontmatter equals what `pharn.config.json`'s `models.stages` resolves for that stage — not that the stage ran under it                                                                                                   | `check-model-config.mjs`                                                                                                                                                                                   |
+| Guarantee                                                                                                                                                                                                                                                                                                                                                                          | The check behind it                                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The four trusted docs — and the guards' own control surface — cannot be edited through Claude Code's Write/Edit/MultiEdit/NotebookEdit surface                                                                                                                                                                                                                                     | `.claude/hooks/protect-trusted-paths.cjs`                                                                                                                                                                  |
+| Memory-bank canon (`memory-bank/`, `.dev/memory-bank/`, subtrees included) is denied on that same surface, **unless** the active writes-scope was set by a promotion command **and** names that one canon file alone — so a build plan cannot grant itself a canon write                                                                                                           | `.claude/hooks/protect-trusted-paths.cjs` (origin read from `set-writes-scope.cjs`'s argv)                                                                                                                 |
+| Writes through that same tool surface — **and only that surface**, since the wired `PreToolUse` matcher does not match `Bash` — are restricted to the active write scope, fail-closed to a default-safe set when none is active                                                                                                                                                    | `set-writes-scope.cjs` + `enforce-writes-scope.cjs`                                                                                                                                                        |
+| A **non-adversarial** write that reached a path the active scope would have **denied** — including one issued through `Bash`, which no hook sees — is **detected** between build and verify, and fails the verify verdict. Detected, **not** prevented; git-ignored paths are outside the reconciled set; and a writer who also rewrites the baseline defeats it on ordinary paths | `reconcile-baseline.mjs --anchor` + `check-bash-reconcile.mjs`, feeding `check-verify.mjs`                                                                                                                 |
+| An approved spec is pinned, so later body drift is detectable                                                                                                                                                                                                                                                                                                                      | `check-spec.mjs --hash` at approval; re-verified at plan, grill, build, regress, verify and ship by `check-spec-approved.mjs` (directly at plan and ship, through `check-plan-spec-agree.mjs` at the rest) |
+| Secret-shaped literals in a plan can be detected by the shipped regex scanner                                                                                                                                                                                                                                                                                                      | `scan-plan-secrets.mjs`                                                                                                                                                                                    |
+| A missing concrete path declared by the plan yields an incomplete build signal                                                                                                                                                                                                                                                                                                     | `check-build-complete.mjs` feeding `check-verify.mjs`                                                                                                                                                      |
+| Which lenses run, and how structured findings merge                                                                                                                                                                                                                                                                                                                                | `count-lenses.mjs` + `merge-findings.mjs`                                                                                                                                                                  |
+| The ten product commands' `model:` / `effort:` frontmatter equals what `pharn.config.json`'s `models.stages` resolves for that stage — not that the stage ran under it                                                                                                                                                                                                             | `check-model-config.mjs`                                                                                                                                                                                   |
 
 **Advisory** — everything a model judges: whether a plan is wise, whether a review finding is real,
 whether a severity is right, whether the code satisfies the product intent, and whether the resulting
@@ -376,11 +380,11 @@ byte-for-byte by `npm run docs:check`, so it cannot quietly drift from what is a
 <!-- CURRENT-STATE:BEGIN — GENERATED by .dev/floor/gen-capability-catalog.mjs. DO NOT EDIT BETWEEN MARKERS. Regenerate: npm run docs:generate -->
 
 - **Capabilities — 36 built**, counted by the `role:` frontmatter test (mirrors `pharn/floor/validate.mjs`): **13** grillers, **22** lenses, **1** skill (`pharn/pharn-core/seam-resolver/`), **0** validators, **0** verifiers, **0** auditors. Full list: [`docs/capabilities/README.md`](./docs/capabilities/README.md).
-- **Contracts — 8** (`pharn/pharn-contracts/`): `eval-format`, `finding-shape`, `loop-record`, `regression-report`, `seam-config`, `ship-briefing`, `ship-record`, `verify-report`.
+- **Contracts — 9** (`pharn/pharn-contracts/`): `eval-format`, `finding-shape`, `loop-record`, `reconciliation-record`, `regression-report`, `seam-config`, `ship-briefing`, `ship-record`, `verify-report`.
 - **Product commands — 10** (`.claude/commands/`): `/pharn-build`, `/pharn-grill`, `/pharn-loop`, `/pharn-memory-promote`, `/pharn-plan`, `/pharn-regress`, `/pharn-review`, `/pharn-ship`, `/pharn-spec`, `/pharn-verify`.
 - **Dev-apparatus commands — 9** (`.claude/commands/`): `/pharn-dev-build`, `/pharn-dev-eval`, `/pharn-dev-grill`, `/pharn-dev-memory-promote`, `/pharn-dev-plan`, `/pharn-dev-regress`, `/pharn-dev-review`, `/pharn-dev-ship`, `/pharn-dev-verify`.
 - **Hook scripts — 3** (`.claude/hooks/`): `enforce-writes-scope.cjs`, `protect-trusted-paths.cjs`, `set-writes-scope.cjs`.
-- **Floor checkers — 51** `.mjs` files under `pharn/floor/` (tests excluded).
+- **Floor checkers — 53** `.mjs` files under `pharn/floor/` (tests excluded).
 
 <!-- CURRENT-STATE:END -->
 
@@ -396,19 +400,36 @@ where the review caught a false bound shipped by the very increment that was rep
 PHARN is deliberately narrower than the claims many AI-development tools make.
 
 - **Claude Code only today.** The current shipped integration uses Claude Code commands and hooks.
-- **Shell writes are outside the write guard — neither denied nor detected at the time of the write.**
-  The `PreToolUse` matcher wired in `.claude/settings.json` is `Write|Edit|MultiEdit|NotebookEdit`, and
-  both hooks re-test that set in their own code, so a write issued through `Bash` never reaches either
-  one. It is not blocked, and nothing records that it happened. **Every write-guard guarantee on this
-  page — the trusted-doc denylist, the canon denylist, and the writes-scope restriction — is scoped to
-  that tool surface and to no other.** One partial detector exists **after the fact**, and it is
-  advisory, not a backstop: `/pharn-regress` runs `check-regress.mjs scope`, which exits 1 on a changed
-  path the plan's `## Files` did not declare. Its four bounds are stated in that checker's own header —
-  it fires only if that stage runs, it compares _changed since base_ rather than _written by the build_,
-  it carries closed-enum exemptions for the pipeline's own artifacts, and a plan that edits its own
-  `## Files` defeats it. The only true prevention is OS-level sandboxing of the `Bash` process itself.
-  PHARN does **not** implement it: that is a harness-layer capability, not something markdown
-  methodology can express.
+- **Shell writes are still not PREVENTED — they are now DETECTED, and that is a weaker thing.** The
+  `PreToolUse` matcher wired in `.claude/settings.json` is `Write|Edit|MultiEdit|NotebookEdit`, and both
+  hooks re-test that set in their own code, so a write issued through `Bash` never reaches either one and
+  **is not blocked**. **Every write-guard guarantee on this page — the trusted-doc denylist, the canon
+  denylist, and the writes-scope restriction — is scoped to that tool surface and to no other.** What
+  changed is that such a write no longer goes unrecorded: `/pharn-build` anchors a content-hash baseline,
+  and `/pharn-verify` runs `check-bash-reconcile.mjs`, which re-hashes the tree and asks the **live
+  guards** whether each changed path would have been denied. Denied ⇒ the `reconcile` gate fails and the
+  verify verdict is `FAIL`. **The claim is exactly "a write to a path the active scope would have denied
+  is detected and fails the stage" — never "Bash writes are prevented."** Four bounds, all in
+  [`reconciliation-record.md`](./pharn/pharn-contracts/reconciliation-record.md): git-ignored paths are
+  outside the reconciled set; the window is anchor→verify; the model is one worktree per session; and
+  there is no attribution — it reports _what_, never _who_. A clean verdict means **no escape was
+  detected**, not that none occurred. **And this is accounting, not security.** The baseline is
+  unauthenticated state inside the writable tree, so a writer who edits a denied file **and** rewrites
+  that file's baseline entry gets a silent clean result. What it reliably catches is a **non-adversarial**
+  escape — a formatter, a generator, a script, a mistake, which is the whole population of failures it
+  was built for. **Deleting** its state is loud (a missing baseline is `INCONCLUSIVE` at verify) and the
+  always-reconciled control surface (`.claude/hooks/*`, `.claude/settings*.json`, `pharn/floor/*`,
+  `.dev/floor/*`) is anchored in committed blob ids rather than the baseline, so that half resists a
+  determined writer — but **forging** an ordinary path's entry does not. Two further bounds, stated
+  rather than solved: the checker runs from the worktree, so it cannot vouch for its own integrity; and
+  the anchor is a shell step, so a run that skips it silently reuses an earlier epoch instead of failing.
+  **The only true prevention remains OS-level sandboxing of the `Bash` process, which PHARN does not
+  implement** — a harness-layer capability, not something markdown methodology can express, and the same
+  category the missing authenticated baseline store falls into.
+- **No shell command is ever parsed, and that is deliberate.** The reconciler compares hashes and paths;
+  it never reads a `Bash` command string. Shell parsing is undecidable and a verb denylist would be a
+  heuristic, which the constitution forbids labelling a guarantee — so `sed -i`, a here-doc, `node -e`, a
+  Makefile target and a compiled binary are all equally visible to it, and none is special-cased.
 - **The write-scope guard's fail-closed default does not cover your source.** Where
   `enforce-writes-scope.cjs` is wired and no scope is active, Claude Code's
   Write/Edit/MultiEdit/NotebookEdit tools may write only `features/**` in an installed project — PHARN's

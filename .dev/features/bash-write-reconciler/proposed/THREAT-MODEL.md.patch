@@ -1,0 +1,25 @@
+--- a/THREAT-MODEL.md
++++ b/THREAT-MODEL.md
+@@ -64,7 +64,7 @@
+ | ----------------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+ | ai_docs poisoning       | content-hash pin; re-fetch that changes content requires re-review diff                                                     | content-hash _(specified; ships with the guarded surface)_ |
+ | seam fetch fallback     | terminal fallback is **ask** (P5); resolution pinned + content-hashed                                                       | content-hash + (ask) _(specified; ships with the guarded surface)_ |
+-| memory poisoning        | promotion to canon is a **gated write** with per-entry provenance                                                           | pre-write hook — `Write`/`Edit`/`MultiEdit`/`NotebookEdit` only; a `Bash` write reaches canon unhooked and undetected (`LIMITS.md §6`) |
++| memory poisoning        | promotion to canon is a **gated write** with per-entry provenance                                                           | pre-write hook — `Write`/`Edit`/`MultiEdit`/`NotebookEdit` only. A `Bash` write still reaches canon **unhooked**, but is no longer **undetected**: canon is `never_exempt` in the 4.0.0 reconciler, so a change to it between build and verify REDs the stage (`LIMITS.md §6`). Detected, not prevented |
+ | reviewed-code injection | finding is computed from enum-gated fields; injected comment reaches only free-text (fix #1)                                | enum check                  |
+ | seam-record poisoning   | content-hash on resolution; drift is loud, not silent                                                                       | content-hash _(specified; ships with the guarded surface)_ |
+ | community Capability    | `kind` is a **privilege level**: community = markdown-only, no `.cjs`; cannot declare trusted-write or off-allowlist egress | `seal`-gating enforced (validate.mjs); markdown-only/no-`.cjs` and trusted-write pre-write hook + pre-egress (specified; ships with the guarded surface) |
+@@ -97,8 +97,11 @@
+    between a rule's text and a lens's behavior remains a judgment — labeled.*
+ 7. **`reads`/`writes` declared not enforced** — `writes` is enforced by the pre-write hook;
+    `reads` is a declaration whose teeth are on the write side (fix #7). _Closed for writes issued
+-   through the Write/Edit/MultiEdit/NotebookEdit tool surface; a `Bash` write is outside the hook and is
+-   neither denied nor detected, so `writes:` is a declaration again there (residual — `LIMITS.md §6`)._
++   through the Write/Edit/MultiEdit/NotebookEdit tool surface. A `Bash` write is still outside the hook
++   — not denied — but as of 4.0.0 it is **detected** after the fact: `check-bash-reconcile.mjs` re-hashes
++   between build and verify and REDs any changed path the guards would have denied. So `writes:` is no
++   longer merely a declaration there; it is an unenforced boundary whose violation costs a red stage.
++   Detected, never prevented (residual — `LIMITS.md §6`)._
+ 
+ **Not closeable — relabeled as limits (`LIMITS.md`), not bugs:**
+ 
