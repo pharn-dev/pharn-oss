@@ -272,7 +272,27 @@ immediately before writing it**, the same shape `/pharn-regress` and `/pharn-ver
 
 ```bash
 node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-ship.md --target pharn/features/<name>/BRIEFING.md
+node pharn/floor/reconcile-baseline.mjs --amend-scope   # IMMEDIATELY after the setter, never before
 ```
+
+**What the `--amend-scope` line does** (it appears after **each** of this command's four setters). A
+reconciliation epoch is anchored at `/pharn-build` Step 0 and holds **one** opening `scope_snapshot`, so
+a later stage's writes are judged against the **build's** scope unless amended in. It records this
+stage's scope on the open epoch; contract:
+[`pharn/pharn-contracts/reconciliation-record.md`](../../pharn/pharn-contracts/reconciliation-record.md).
+Ordering mirrors `--anchor`'s own (**L38**): amend **after** the setter, never before, or it records the
+previous stage's scope. Exit **2** with _"no baseline"_ is expected and harmless when no epoch is open.
+**ADVISORY** (P0): a Bash call outside the `PreToolUse` gate (**L19**) — a skipped amendment costs a
+**false escape**, never a missed one. It **accounts for** a write; it never exempts a path, and it cannot
+authorize anything the guards would still refuse.
+
+**HONEST TRIGGER (P7) — this wiring answered NO observed failure.** Added at the maintainer's explicit
+direction, recorded plainly rather than given a manufactured trigger (the `check-plan-lessons` sub-check
+D precedent; P5's terminal fallback is ask the human). Measured when written: all four scopes here target
+`BRIEFING.md` / `SHIP.md` / `ship-record.json`, each already exempt under `pipeline_artifacts`, so this
+**changes no verdict today**; the value is prospective, for a future ship-stage write to a non-artifact
+path. The observed failure that drove the mechanism belongs to `/pharn-memory-promote`
+(`.dev/features/product-features-relocation/REVIEW.md` F3), not to this command.
 
 > **Why `--target` is not optional here (the defect this replaced).** Every entry in this command's
 > `writes:` carries the `<name>` placeholder, and `set-writes-scope.cjs` resolves a placeholder entry
@@ -402,6 +422,7 @@ Step 0 writes-scope setter (overwriting `.pharn/writes-scope.json` per stage —
 
 ```bash
 node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-ship.md --target pharn/features/<name>/SHIP.md
+node pharn/floor/reconcile-baseline.mjs --amend-scope   # IMMEDIATELY after the setter, never before
 ```
 
 **This call is required here, not a repeat of Step 2c's.** Two reasons, and the second is the one that is
@@ -465,6 +486,7 @@ comprehension, correctness, or a self-issued seal — **attestation ≠ comprehe
 
    ```bash
    node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-ship.md --target pharn/features/<name>/ship-record.json
+   node pharn/floor/reconcile-baseline.mjs --amend-scope   # IMMEDIATELY after the setter, never before
    ```
 
    Write `pharn/features/<name>/ship-record.json` — a JSON object carrying the same
@@ -518,6 +540,7 @@ comprehension, correctness, or a self-issued seal — **attestation ≠ comprehe
 
    ```bash
    node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-ship.md --target pharn/features/<name>/SHIP.md
+   node pharn/floor/reconcile-baseline.mjs --amend-scope   # IMMEDIATELY after the setter, never before
    ```
 
    - `attested` → render the **clause `· attested by <by>`** into `SHIP.md` as an annotation on the human's

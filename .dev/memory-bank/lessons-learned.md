@@ -1485,3 +1485,48 @@ second failure, and this is the first.
 - commit: `aa5aafe2d3f29dbdef5cf85e1ce4b75866a7e20e`
 - source: `.dev/features/product-features-relocation/REVIEW.md` (F2)
 - promoted: 2026-09-10 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L42 — Re-executing a policy engine after the fact answers "would it allow this NOW", not "did it allow this THEN"
+
+type: floor · concepts: [delegation, temporal-state, detector-precision, false-positive, policy-replay]
+
+**Lesson.** Delegating to the real guard instead of re-deriving its rules ([[L37]]) is right, and it
+carries a trap L37 does not name: the guard answers about the state it can see **now**. When its decision
+depends on mutable state the workflow legitimately changes — a scope file, a config, a flag — an
+after-the-fact checker that re-runs it gets a verdict about the PRESENT and reports the correct workflow
+as a violation.
+
+**Measured.** `check-bash-reconcile.mjs` already knew half of this ([[L38]]: snapshot the scope, never
+read it live) and had the defect anyway, because it snapshotted ONCE PER EPOCH while an epoch spans
+build → ship and holds several legitimately-different scopes. `/pharn-dev-ship` Step 2b invokes
+`/pharn-dev-memory-promote` AFTER the build anchor, so a canon write made through the `Edit` tool, past
+both live `PreToolUse` guards, behind an explicit human accept, was reported as "a write reached it
+outside the guarded tool surface". Per [[L7]] the build scope may never NAME canon, so no `## Files`
+declaration could fix it: EVERY promoting ship run ended `npm run check` RED. That is [[L17]]'s failure
+mode — a blocking finding on the designed workflow, which is what trains an operator to wave through the
+finding that must never be waved through.
+
+**The probe found the WRONG cause first, which is the part worth carrying.** Varying the attributed
+condition ([[L40]]) showed `protect-trusted-paths.cjs` flipping exit 2 → 0 when the promote scope was
+restored — which looked like the whole answer. The escape survived, because a SECOND consultation read
+the stale snapshot. A single confirming probe would have produced a fix for the wrong half.
+
+**Remedy.** When a detector replays a policy engine, ask what that engine's INPUTS were at the moment of
+the act; enumerate every input the workflow may legitimately change; and record each change as it
+happens. One snapshot is correct only when the policy has exactly one state per window. Here that became
+`scope_amendments[]` plus `--amend-scope`, called immediately after each stage's own setter.
+
+**Bound (P0).** Recording more state does not make the detector adversarial-proof, and must not be
+described as tightening it: the record is unauthenticated state in the writable tree, so anything holding
+Bash can append an authorization — the same actor could already forge a baseline hash. This buys
+PRECISION (fewer false escapes on correct workflows), never strength. And an amendment makes a write
+ACCOUNTED FOR, never EXEMPT: the path stays in the candidate set, and it clears only if the guard itself,
+re-executed with that scope materialized, permits it.
+
+**Provenance.**
+
+- feature: `reconcile-scope-amendments`
+- commit: `d0aaf6cdc581ab17854c86c82cc6997b0b308507`
+- source: `.dev/features/product-features-relocation/REVIEW.md` (F3) +
+  `.dev/features/reconcile-scope-amendments/PLAN.md`
+- promoted: 2026-09-10 via gated `/pharn-dev-memory-promote` (human-approved).

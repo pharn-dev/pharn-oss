@@ -59,25 +59,57 @@ clone.
   "epoch": "2026-09-10T11:33:19.704Z",
   "anchored_by": "pharn-build",
   "scope_snapshot": { "scope": ["src/app.ts"], "set_by": "pharn/features/x/PLAN.md", "set_at": "…" },
+  "scope_amendments": [
+    { "scope": ["memory-bank/lessons-learned.md"], "set_by": ".claude/commands/pharn-memory-promote.md", "set_at": "…" }
+  ],
   "entry_count": 1759,
   "entries": { "<repo-relative path>": "<sha256 hex>" }
 }
 ```
 
-| Field            | Type             | Meaning                                                                                                                                   |
-| ---------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `version`        | integer          | Schema version. A **newer** version than the reader is `INCONCLUSIVE`; an **older** one is tolerated at read and reported in `warnings[]` |
-| `epoch`          | ISO-8601         | When this epoch opened                                                                                                                    |
-| `anchored_by`    | string           | A label passed as `--by`. **Advisory** — it is argv, so it is a description, never an authorization                                       |
-| `scope_snapshot` | object \| `null` | A verbatim copy of `.pharn/writes-scope.json` at anchor time, or `null` when none was set                                                 |
-| `entry_count`    | integer          | `Object.keys(entries).length` at write time                                                                                               |
-| `entries`        | object           | Repo-relative path → SHA-256 of its bytes                                                                                                 |
+| Field              | Type             | Meaning                                                                                                                                      |
+| ------------------ | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`          | integer          | Schema version. A **newer** version than the reader is `INCONCLUSIVE`; an **older** one is tolerated at read and reported in `warnings[]`    |
+| `epoch`            | ISO-8601         | When this epoch opened                                                                                                                       |
+| `anchored_by`      | string           | A label passed as `--by`. **Advisory** — it is argv, so it is a description, never an authorization                                          |
+| `scope_snapshot`   | object \| `null` | A verbatim copy of `.pharn/writes-scope.json` at anchor time, or `null` when none was set                                                    |
+| `scope_amendments` | array            | Further scopes that came into force **during** the epoch, in call order. Empty on a fresh anchor; absent on a pre-5.1.0 record, read as `[]` |
+| `entry_count`      | integer          | `Object.keys(entries).length` at write time                                                                                                  |
+| `entries`          | object           | Repo-relative path → SHA-256 of its bytes                                                                                                    |
 
 **Why the scope is snapshotted rather than read live.** By reconciliation time
 `.pharn/writes-scope.json` holds a **later** stage's scope — it is one mutable record, global to the
 worktree, that every stage's Step 0 overwrites (lessons-learned **L38**; `check-regress.mjs` documents
 the same trap from the other side). Reading it live would judge the build's writes against verify's
 scope.
+
+**Why ONE snapshot was not enough — `scope_amendments` (5.1.0).** An epoch spans build → ship, and a run
+legitimately writes under **several** scopes inside it. Judging every candidate against the opening
+snapshot alone reported the later stages' **hook-approved** writes as escapes. The measured case:
+`/pharn-*ship`'s lesson-extract invokes `/pharn-*memory-promote` **after** the build anchor, so a canon
+write that passed **both** live `PreToolUse` guards and an explicit human accept was reported as _"a
+write reached it outside the guarded tool surface"_ — false for that write. Canon is `never_exempt` by
+deliberate design and, per lessons-learned **L7**, a build or ship scope may never **name** canon, so no
+`## Files` declaration could fix it from the plan side. Left alone, **every** promoting ship run ended
+RED: lessons-learned **L17**'s failure mode — a changed-since-anchor test reported as a
+wrote-outside-scope test, blocking on the correct designed workflow, which is exactly what trains an
+operator to wave through the one finding that must never be waved through.
+
+`reconcile-baseline.mjs --amend-scope` appends the live scope to this list. **Ordering is load-bearing,
+exactly as `--anchor`'s is (L38): call it AFTER the stage's own Step-0 setter**, never before, or it
+records the previous stage's scope and authorizes the wrong paths. It **fails closed** on every unusable
+input — no baseline, unreadable record, or no live scope all write nothing and exit 2. A missing live
+scope is deliberately **not** recorded as an empty amendment: `{"scope": []}` reads as "this stage was
+authorized to write nothing", a different claim from "no amendment was made".
+
+**What this does NOT change, stated because the distinction IS the guarantee.** An amendment makes a
+write **accounted for**, never **exempt**. `never_exempt` is untouched: canon stays in the candidate set
+every epoch, and the verdict on an _unaccounted_ canon write is still `ESCAPE`. Nor does an amendment
+override a guard — a path is cleared only if the guard **itself**, re-executed with that scope
+materialized, permits it, so an amendment whose `set_by` is a `PLAN.md` cannot launder a canon write past
+the origin check. And the detector's non-adversarial bound is **unchanged**: `--amend-scope` is a Bash
+call, so anything holding Bash can append a scope authorizing anything — but the same actor could
+already rewrite this record outright. Still an accounting tool, still not a control against an attacker.
 
 **Why the baseline is not `git status`.** `git status` answers _changed since the base commit_, a
 different question: it misses a `Bash` write that restores HEAD bytes, and it counts every legitimate

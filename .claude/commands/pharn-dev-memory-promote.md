@@ -137,6 +137,28 @@ entries**: the checker never scans canon, so nothing here guarantees canon is un
    `.dev/memory-bank/`. If a later write is blocked, the fix is to **pass the correct `--target` and re-run this
    setter** — never bypass the hook (CLAUDE.md, "Writes-scope").
 
+3. **Record this scope on the open reconciliation epoch — IMMEDIATELY after the setter above, never
+   before it:**
+
+   ```bash
+   node pharn/floor/reconcile-baseline.mjs --amend-scope
+   ```
+
+   **Why.** This command runs **inside** a `/pharn-dev-ship` epoch anchored back at `/pharn-dev-build`
+   Step 0, and that epoch holds **one** opening `scope_snapshot` — the build's, which per **L7** may
+   never name canon. Without this line the canon write below is hook-approved, human-accepted, and still
+   reported by `check-bash-reconcile.mjs` as _"a write reached it outside the guarded tool surface"_, so
+   every promoting ship run ends `npm run check` RED. Measured as
+   `.dev/features/product-features-relocation/REVIEW.md` **F3**; **L17** is the same failure mode. The
+   ordering mirrors `--anchor`'s own (**L38**): amend **after** the setter, or it records the previous
+   stage's scope.
+
+   **ADVISORY** (P0), with the anchor's own bounds: this is a Bash call outside the `PreToolUse` gate
+   (**L19**), so nothing forces it — a skipped amendment costs a **false escape**, never a missed one. It
+   **accounts for** the write; it does not exempt the path, and it cannot authorize anything the guards
+   would still refuse. Exit **2** with _"no baseline"_ is **expected and harmless** on a standalone
+   promote run (no epoch is open); it is not a reason to stop.
+
 ## Step 1 — Discovery (P6, mandatory; never assert from memory)
 
 1. Read the **target canon file live** this run — its existing `## <id>` headings and entry format (so the

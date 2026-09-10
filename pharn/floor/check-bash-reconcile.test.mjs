@@ -574,3 +574,122 @@ test("✧ the contract exists and declares the verdict enum this file iterates",
   const contract = readFileSync(join(REPO, "pharn/pharn-contracts/reconciliation-record.md"), "utf8");
   for (const v of VERDICTS) assert.ok(contract.includes(v), `contract does not name ${v}`);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────
+// scope_amendments — an epoch may hold MORE THAN ONE authorized scope.
+//
+// The measured trigger is .dev/features/product-features-relocation/REVIEW.md F3: /pharn-dev-ship's
+// Step 2b invokes /pharn-dev-memory-promote AFTER the Step-3 build anchor, so a canon write that passed
+// BOTH live guards and a human accept was reported as "a write reached it outside the guarded tool
+// surface". Canon is `never_exempt` by design and per L7 the build scope may never NAME canon, so the
+// plan side cannot fix it. Without amendments EVERY promoting ship run ends RED — L17's failure mode.
+
+const CANON = ".dev/memory-bank/lessons-learned.md";
+const PROMOTE = ".claude/commands/pharn-dev-memory-promote.md";
+
+function seedCanon(dir) {
+  mkdirSync(join(dir, ".dev/memory-bank"), { recursive: true });
+  writeFileSync(join(dir, CANON), "## L1 — seed\n");
+  execFileSync("git", ["add", "-A"], { cwd: dir, stdio: "pipe" });
+  execFileSync("git", ["commit", "-q", "-m", "canon"], { cwd: dir, stdio: "pipe" });
+}
+const amend = (dir) => spawnSync(process.execPath, [ANCHOR, "--amend-scope", "--base", dir], { encoding: "utf8" });
+function setPromoteScope(dir, target) {
+  mkdirSync(join(dir, ".pharn"), { recursive: true });
+  writeFileSync(
+    join(dir, ".pharn/writes-scope.json"),
+    JSON.stringify({ scope: [target], set_by: PROMOTE, set_at: new Date().toISOString() }, null, 2) + "\n"
+  );
+}
+
+test("★ F3 REGRESSION: a promote-stage canon write recorded as an amendment is CLEAN, not an escape", () => {
+  const dir = makeRepo();
+  seedCanon(dir);
+  setScope(dir, ["pharn/features/keep.md"]); // the BUILD stage's scope — cannot name canon (L7)
+  assert.equal(anchor(dir).status, 0);
+
+  // The promote stage: its own Step-0 setter, then the amendment, then the canon write.
+  setPromoteScope(dir, CANON);
+  assert.equal(amend(dir).status, 0);
+  writeFileSync(join(dir, CANON), "## L1 — seed\n\n## L2 — promoted\n");
+
+  const r = check(dir);
+  assert.equal(r.json?.verdict, "CLEAN", `expected CLEAN, got ${r.stdout}`);
+  assert.equal(r.status, 0);
+});
+
+test("★ F3 REGRESSION: it stays CLEAN after the promote scope is RELEASED — the real F3 condition", () => {
+  const dir = makeRepo();
+  seedCanon(dir);
+  setScope(dir, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  setPromoteScope(dir, CANON);
+  assert.equal(amend(dir).status, 0);
+  writeFileSync(join(dir, CANON), "## L1 — seed\n\n## L2 — promoted\n");
+  // Every command's LAST step clears the scope, which is exactly when the checker runs.
+  rmSync(join(dir, ".pharn/writes-scope.json"), { force: true });
+
+  const r = check(dir);
+  assert.equal(r.json?.verdict, "CLEAN", `a released scope must not resurrect the escape: ${r.stdout}`);
+});
+
+// L34 non-vacuity: the clearance must come from the AMENDMENT, not from the test's own shape.
+test("★ NON-VACUITY: the SAME canon write with NO amendment recorded is still an ESCAPE", () => {
+  const dir = makeRepo();
+  seedCanon(dir);
+  setScope(dir, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  writeFileSync(join(dir, CANON), "## L1 — seed\n\n## L2 — unaccounted\n");
+
+  const r = check(dir);
+  assert.equal(r.json?.verdict, "ESCAPE", "canon must stay VISIBLE — amendments account for writes, they never exempt paths");
+  assert.equal(r.status, 1);
+  assert.ok(r.json.escapes.some((e) => e.file === CANON));
+});
+
+test("★ an amendment whose ORIGIN is not a promote command does NOT clear a canon write", () => {
+  const dir = makeRepo();
+  seedCanon(dir);
+  setScope(dir, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  // A plan-derived scope naming canon: the exact vector protect-trusted-paths' canon denylist closes.
+  setScope(dir, [CANON]); // set_by is a PLAN.md, not a promote command
+  assert.equal(amend(dir).status, 0);
+  writeFileSync(join(dir, CANON), "## L1 — seed\n\n## L2 — smuggled\n");
+
+  const r = check(dir);
+  assert.equal(r.json?.verdict, "ESCAPE", "an amendment cannot launder a canon write past the ORIGIN check");
+  assert.ok(r.json.escapes.some((e) => e.file === CANON && e.denied_by === "protect-trusted-paths.cjs"));
+});
+
+test("★ an amendment authorizes an ORDINARY path the opening scope did not cover", () => {
+  const dir = makeRepo();
+  setScope(dir, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  setScope(dir, ["later.md"]);
+  assert.equal(amend(dir).status, 0);
+  writeFileSync(join(dir, "later.md"), "written under the amendment\n");
+  assert.equal(check(dir).json?.verdict, "CLEAN");
+});
+
+// L41: an epoch with NO amendments is the default path — exercised explicitly, not assumed.
+test("★ a baseline with NO scope_amendments behaves exactly as before (the default path)", () => {
+  const dir = makeRepo();
+  setScope(dir, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  const rec = JSON.parse(readFileSync(join(dir, RECORD_PATH), "utf8"));
+  delete rec.scope_amendments; // a baseline anchored before the field existed
+  writeFileSync(join(dir, RECORD_PATH), JSON.stringify(rec, null, 2) + "\n");
+  writeFileSync(join(dir, "SNEAKY.txt"), "outside\n");
+
+  const r = check(dir);
+  assert.equal(r.json?.verdict, "ESCAPE", "an absent field must read as [], never as 'authorize everything'");
+  assert.ok(r.json.escapes.some((e) => e.file === "SNEAKY.txt"));
+});
+
+test("★ activeFeatureSlug reads the OPENING snapshot only — an amendment cannot repoint the exemption", () => {
+  // A promote amendment's set_by is a COMMAND path, not a feature; letting it win would silently move
+  // the pipeline-artifact exemption to another slug.
+  assert.equal(activeFeatureSlug({ set_by: "pharn/features/real/PLAN.md" }), "real");
+  assert.equal(activeFeatureSlug({ set_by: PROMOTE }), null, "a command path names no feature");
+});

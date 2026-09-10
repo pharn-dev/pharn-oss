@@ -145,10 +145,67 @@ export function buildRecord(baseDir, by) {
       epoch: new Date().toISOString(),
       anchored_by: by,
       scope_snapshot: snapshotScope(baseDir),
+      // Further scopes that came legitimately into force DURING this epoch — see amendScope below.
+      // Always an array, never absent, so a reader never branches on presence (a baseline written
+      // before this field existed reads as `undefined`, which the checker coerces to `[]`).
+      scope_amendments: [],
       entry_count: hashed,
       entries,
     },
   };
+}
+
+// APPEND the currently-live writes-scope to an existing epoch's `scope_amendments`.
+//
+// WHY THIS EXISTS. An epoch spans build -> ship, and exactly one `scope_snapshot` is taken when it
+// OPENS — but a run legitimately writes under SEVERAL scopes inside it. The measured case
+// (.dev/features/product-features-relocation/REVIEW.md F3): /pharn-*memory-promote writes canon through
+// the Edit tool, past both live PreToolUse guards, behind a human accept — and the reconciler reported
+// it as `a write reached it outside the guarded tool surface`, because the epoch's snapshot is the
+// BUILD stage's scope. Canon is `never_exempt` by deliberate design, and per lessons-learned L7 the
+// build/ship scope may never NAME canon, so no `## Files` declaration can fix it from the plan side.
+// Without this, every /pharn-dev-ship run that promotes a lesson ends RED — lessons-learned L17's
+// failure mode exactly: a changed-since-anchor test reported as a wrote-outside-scope test, blocking on
+// the correct designed workflow.
+//
+// ORDERING IS LOAD-BEARING, the same way --anchor's is (L38): call this AFTER the stage's own Step-0
+// setter, never before, or it appends the PREVIOUS stage's scope and authorizes the wrong paths.
+//
+// FAIL-CLOSED on every unusable input — no baseline, unreadable/malformed record, or no live scope all
+// return `{ok:false}` and write NOTHING. In particular a missing live scope is NOT recorded as an empty
+// amendment: `{"scope": []}` is truthy downstream and an empty entry would read as "this stage was
+// authorized to write nothing", which is a different claim from "no amendment was made".
+//
+// HONEST BOUND (P0), and it must not be overstated: this is a Bash call, so anything holding Bash can
+// append a scope authorizing anything. That grants NO new power — the same actor could already rewrite
+// the baseline outright, which pharn/pharn-contracts/reconciliation-record.md already concedes ("an
+// accounting tool against tooling that escapes its scope, NOT a control against an attacker"). This
+// increment leaves that bound exactly where it was; it does not tighten the detector.
+export function amendScope(baseDir) {
+  const abs = resolve(baseDir, RECORD_PATH);
+  if (!existsSync(abs)) return { ok: false, reason: `no baseline at ${RECORD_PATH} — run --anchor first` };
+  let record;
+  try {
+    record = JSON.parse(readFileSync(abs, "utf8"));
+  } catch (e) {
+    return { ok: false, reason: `cannot read ${RECORD_PATH}: ${e.message}` };
+  }
+  if (!record || typeof record !== "object" || !record.entries) {
+    return { ok: false, reason: `${RECORD_PATH} is not a usable baseline record` };
+  }
+  const live = snapshotScope(baseDir);
+  if (live === null) {
+    return { ok: false, reason: `no usable writes-scope at ${SCOPE_PATH} — set one before amending` };
+  }
+  // Coerce rather than branch: a baseline anchored before this field existed has no array yet.
+  if (!Array.isArray(record.scope_amendments)) record.scope_amendments = [];
+  record.scope_amendments.push(live);
+  try {
+    writeFileSync(abs, JSON.stringify(record, null, 2) + "\n");
+  } catch (e) {
+    return { ok: false, reason: `cannot write ${RECORD_PATH}: ${e.message}` };
+  }
+  return { ok: true, amendment: live, count: record.scope_amendments.length };
 }
 
 function main(argv) {
@@ -157,15 +214,25 @@ function main(argv) {
   let baseDir = ".";
   let by = "unknown";
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--anchor" || args[i] === "--show") mode = args[i];
+    if (args[i] === "--anchor" || args[i] === "--show" || args[i] === "--amend-scope") mode = args[i];
     else if (args[i] === "--base") baseDir = args[++i] ?? die("--base requires a directory");
     else if (args[i] === "--by") by = args[++i] ?? die("--by requires a label");
     else die(`unknown argument: ${args[i]}`);
   }
-  if (!mode) die("usage: reconcile-baseline.mjs (--anchor | --show) [--base <dir>] [--by <label>]");
+  if (!mode) die("usage: reconcile-baseline.mjs (--anchor | --amend-scope | --show) [--base <dir>] [--by <label>]");
 
   const root = resolve(baseDir);
   if (!existsSync(root) || !statSync(root).isDirectory()) die(`--base is not a directory: ${baseDir}`);
+
+  if (mode === "--amend-scope") {
+    const res = amendScope(root);
+    if (!res.ok) die(res.reason, 2);
+    process.stdout.write(
+      `reconcile scope amended: ${res.amendment.scope.length} entr(ies) from ${res.amendment.set_by}` +
+        ` (amendment ${res.count}) -> ${RECORD_PATH}\n`
+    );
+    process.exit(0);
+  }
 
   if (mode === "--show") {
     const abs = resolve(root, RECORD_PATH);

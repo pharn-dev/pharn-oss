@@ -52,6 +52,68 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A reconciliation epoch may now hold MORE THAN ONE authorized scope, so a hook-approved write by a
+  LATER stage stops being reported as a Bash escape.** `SKILLS_VERSION` **5.0.1 → 5.1.0** (minor: a newly
+  shipped mode on a shipped checker; no existing install is invalidated — a baseline with no
+  `scope_amendments` key reads as `[]`). ([`pharn/floor/reconcile-baseline.mjs`](./pharn/floor/reconcile-baseline.mjs),
+  [`pharn/floor/check-bash-reconcile.mjs`](./pharn/floor/check-bash-reconcile.mjs),
+  [`pharn/pharn-contracts/reconciliation-record.md`](./pharn/pharn-contracts/reconciliation-record.md),
+  [`.dev/features/reconcile-scope-amendments/`](./.dev/features/reconcile-scope-amendments/)).
+
+  **The defect, measured rather than reasoned about.** An epoch is anchored once at `/pharn-*build`
+  Step 0 and carries **one** `scope_snapshot`, but a run legitimately writes under **several** scopes
+  inside it. `/pharn-dev-ship`'s Step 2b invokes `/pharn-dev-memory-promote` **after** that anchor, so a
+  canon write that went through the **`Edit` tool**, passed **both** live `PreToolUse` guards, and cleared
+  an explicit human accept at the promote gate was reported by `check-bash-reconcile.mjs` as _"a write
+  reached it outside the guarded tool surface"_ — **false for that write; nothing Bash-written touched
+  canon.** Reproduced live while promoting `L41`, and recorded as
+  [`.dev/features/product-features-relocation/REVIEW.md`](./.dev/features/product-features-relocation/REVIEW.md)
+  **F3**.
+
+  **Probed in BOTH directions, per [[L40]].** With the scope released,
+  `protect-trusted-paths.cjs` denies (exit 2); with the promote-origin scope restored it **permits**
+  (exit 0) — and the escape **survived anyway**, because the checker then consults
+  `baseline.scope_snapshot`, which holds the build's scope. So the live-hook half was a red herring and
+  the snapshot half was the cause. **Structural, not incidental:** canon is `never_exempt` by deliberate
+  design, and per [[L7]] a build or ship scope may never **name** canon — that is precisely what the
+  promote gate exists to withhold — so no `## Files` declaration could fix it from the plan side. Left
+  alone, **every** `/pharn-dev-ship` run that promoted a lesson ended `npm run check` RED: [[L17]]'s
+  failure mode exactly — a changed-since-anchor test reported as a wrote-outside-scope test, blocking on
+  the **correct, designed** workflow, which is what trains an operator to wave through the one finding
+  that must never be waved through.
+
+  **The fix.** `reconcile-baseline.mjs --amend-scope` appends the live scope to a new `scope_amendments[]`
+  on the open baseline; `check-bash-reconcile.mjs` judges a candidate against the **union** of the opening
+  snapshot and every amendment. Additive: `scope_snapshot` keeps its shape and meaning, and an absent
+  `scope_amendments` (a pre-5.1.0 record) coerces to `[]`. Wired into both `*-memory-promote` commands
+  immediately after their Step-0 setter — **ordering load-bearing, exactly as `--anchor`'s is ([[L38]])**:
+  amend _after_ the setter, or it records the previous stage's scope. Fails closed on every unusable
+  input (no baseline, unreadable record, no live scope) and deliberately does **not** record an empty
+  amendment, since `{"scope": []}` reads as "authorized to write nothing" — a different claim from "no
+  amendment was made".
+
+  **`activeFeatureSlug()` still reads the opening snapshot ONLY.** A promote amendment's `set_by` is a
+  command path, not a feature; unioning it in would let a promote silently repoint the pipeline-artifact
+  exemption at another slug. Pinned by a test.
+
+  **What did NOT change, and the distinction is the whole guarantee.** An amendment makes a write
+  **accounted for**, never **exempt** — `never_exempt` is untouched, canon stays in the candidate set every
+  epoch, and an _unaccounted_ canon write is still `ESCAPE` (pinned by a non-vacuity control, [[L34]]).
+  Nor can an amendment override a guard: a path clears only if the guard **itself**, re-executed with that
+  scope materialized in a probe sandbox, permits it — so an amendment whose `set_by` is a `PLAN.md`
+  **cannot** launder a canon write past the origin check (also pinned). Delegated, never re-derived
+  ([[L37]]). **The detector's non-adversarial bound is unchanged and is not claimed to be tightened:**
+  `--amend-scope` is a Bash call, so anything holding Bash can append a scope authorizing anything — but
+  the same actor could already rewrite the baseline outright. Still an accounting tool against tooling
+  that escapes its scope, still not a control against an attacker.
+
+  **The ship-command wiring carries a DIFFERENT, weaker trigger, and says so (P7).** The same line was
+  added after each setter in `/pharn-ship` and `/pharn-dev-ship` **at the maintainer's explicit direction,
+  answering no observed failure** — recorded plainly rather than given a manufactured trigger (the
+  `check-plan-lessons` sub-check D precedent). Measured: every scope those commands set targets
+  `BRIEFING.md` / `SHIP.md` / `ship-record.json`, each already exempt under `pipeline_artifacts`, so it
+  **changes no verdict today**; the value is prospective.
+
 - **Two docs stating the writes-scope guard's fail-closed default were wrong about its width and its
   source; both are corrected against a probe rather than a reading.** `SKILLS_VERSION` **3.2.0 → 3.2.1**
   (patch — a correction to product-surface bytes that already shipped; no new capability, command or

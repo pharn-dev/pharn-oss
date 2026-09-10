@@ -10,7 +10,7 @@ lessons to fetch; canon stays the source of truth and the floor's verification t
 applied, without fetching its full `## L<n>` entry from canon, is the P0 disease. "The index was
 consulted" never means "the relevant lessons were read".
 
-41 lessons · 41 tagged · 0 malformed · 0 untagged · ~28167 tokens total
+42 lessons · 42 tagged · 0 malformed · 0 untagged · ~28963 tokens total
 
 Columns: `id | type | concepts | title | promoted | ~tokens`. `-` is rendered in THREE columns
 and does NOT mean the same thing in each — read it against the column it sits in. In `type`/`concepts`:
@@ -65,4 +65,5 @@ L38 | scoping  | writes-scope,concurrency,shared-state,false-red                
 L39 | scoping  | writes-scope,plan-shape,generated-artifact,shared-parser,false-red                          | One declaration section read by two consumers asking different questions is right for one and silently wrong for the other | 2026-09-10 | ~842
 L40 | process  | verification-fidelity,attribution,lesson-recurrence,doc-drift,false-green                   | Probing a claim's members confirms membership, never the claim's stated CAUSE — to test an attribution, vary the attributed condition, not the member | 2026-09-10 | ~901
 L41 | process  | test-blindspot,default-values,redundant-identity,relocation                                 | A default every test overrides is exercised by nothing — hermetic fixtures are the blind spot | 2026-09-10 | ~699
+L42 | floor    | delegation,temporal-state,detector-precision,false-positive,policy-replay                   | Re-executing a policy engine after the fact answers "would it allow this NOW", not "did it allow this THEN" | 2026-09-10 | ~796
 ```

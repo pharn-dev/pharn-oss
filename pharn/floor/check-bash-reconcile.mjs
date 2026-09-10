@@ -123,8 +123,8 @@
 //   pharn/floor/check-lessons-index.mjs takes for COLD. /verify passes --require-baseline because a
 //   build DID run, so there an absent baseline is a real refusal.
 
-import { readFileSync, existsSync, statSync, mkdtempSync, mkdirSync, copyFileSync } from "node:fs";
-import { resolve, join, dirname } from "node:path";
+import { readFileSync, writeFileSync, existsSync, statSync, mkdtempSync, mkdirSync, copyFileSync } from "node:fs";
+import { resolve, join, dirname, basename } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -231,6 +231,40 @@ function askHook(hookAbs, rel, cwd) {
 
 // --- the probe sandbox: reproduce ONLY the two runtime signals enforce-writes-scope.cjs's
 // --- defaultSafeSet() reads, with NO scope file, so the hook itself computes the fail-closed default.
+// Ask a hook how it would have answered under a RECORDED scope rather than the live one.
+//
+// The hook resolves its guarded roots from its own module path, and reads `.pharn/writes-scope.json`
+// from THOSE roots — not from cwd. So reproducing a past scope means giving the hook a root where that
+// scope is the live one: copy the hook in, materialize the scope, and run it there with cwd set to the
+// sandbox so a repo-relative payload path resolves under that root. This is the same DELEGATION the
+// default probe makes (execute the real hook; reproduce only the runtime signals it reads), never a
+// re-implementation of its rules — L37.
+//
+// NARROWED, and stated: a sandbox holds no real files, so the hook's file-BASED checks (hard-link
+// aliasing, symlink resolution) cannot fire here. That is why this is only ever consulted to
+// RE-EXAMINE a path the real-root probe already denied, and only when a recorded scope covers it — it
+// can soften a denial that a scope legitimately authorizes, and it is never the first or only answer.
+const scopeProbeCache = new Map();
+function askHookUnderScope(hookAbs, rel, root, scopeRecord) {
+  const key = `${hookAbs}::${JSON.stringify(scopeRecord)}`;
+  let dir = scopeProbeCache.get(key);
+  if (dir === undefined) {
+    try {
+      dir = makeDefaultProbeSandbox(root);
+      const hookDir = join(dir, ".claude", "hooks");
+      mkdirSync(hookDir, { recursive: true });
+      copyFileSync(hookAbs, join(hookDir, basename(hookAbs)));
+      mkdirSync(join(dir, ".pharn"), { recursive: true });
+      writeFileSync(join(dir, ".pharn", "writes-scope.json"), JSON.stringify(scopeRecord) + "\n");
+    } catch {
+      dir = null; // unusable sandbox => no clearance, which fails CLOSED (the denial stands)
+    }
+    scopeProbeCache.set(key, dir);
+  }
+  if (dir === null) return { ok: false, reason: `could not build a scope probe sandbox for '${rel}'` };
+  return askHook(join(dir, ".claude", "hooks", basename(hookAbs)), rel, dir);
+}
+
 function makeDefaultProbeSandbox(root) {
   const dir = mkdtempSync(join(tmpdir(), "pharn-reconcile-"));
   const cfg = resolve(root, "pharn.config.json");
@@ -379,15 +413,38 @@ function main(argv) {
   });
 
   // --- permitted vs denied ------------------------------------------------------------------------
+  // The scopes that were legitimately in force during this epoch: the one taken when it OPENED, plus
+  // every scope a later stage recorded with `reconcile-baseline.mjs --amend-scope`. An epoch spans
+  // build -> ship and a run writes under SEVERAL scopes inside it, so judging every candidate against
+  // the opening snapshot alone reports the LATER stages' hook-approved writes as escapes — measured as
+  // .dev/features/product-features-relocation/REVIEW.md F3, and lessons-learned L17's failure mode.
   const scopeSnapshot = baseline?.scope_snapshot ?? null;
+  const amendments = Array.isArray(baseline?.scope_amendments) ? baseline.scope_amendments : [];
+  const recordedScopes = [scopeSnapshot, ...amendments].filter((s) => s && Array.isArray(s.scope));
+
+  // The recorded scope that authorizes `rel`, or null. FIRST match wins and the snapshot is first, so a
+  // later amendment can never re-attribute a path the opening scope already covered.
+  const authorizingScope = (rel) => recordedScopes.find((s) => matchesAny(rel, s.scope)) ?? null;
+
   let sandbox = null;
   const escapes = [];
   for (const rel of candidates) {
+    const auth = authorizingScope(rel);
     const p = askHook(protectHook, rel, root);
     if (!p.ok) emit({ verdict: "INCONCLUSIVE", reason: p.reason }, 2);
     if (p.denied) {
-      escapes.push({ file: rel, denied_by: "protect-trusted-paths.cjs" });
-      continue;
+      // protect-trusted-paths.cjs has ONE scope-dependent rule — the canon denylist, whose escape keys
+      // on the writes-scope ORIGIN (`set_by`). It reads that file from its OWN guarded root, so asking
+      // it here answers "under whatever scope is live NOW", which by reconcile time is a later stage's
+      // or none at all. A denial is therefore not proof of denial under the scope actually in force.
+      // Re-ask the SAME hook — delegated, never re-derived (L37) — in a sandbox where it IS the guarded
+      // root and the authorizing scope is materialized. Only a scope this epoch RECORDED can clear a
+      // path, so nothing is cleared by the absence of a record.
+      const cleared = auth ? askHookUnderScope(protectHook, rel, root, auth) : null;
+      if (!cleared || !cleared.ok || cleared.denied) {
+        escapes.push({ file: rel, denied_by: "protect-trusted-paths.cjs" });
+        continue;
+      }
     }
     // An EXPLICIT scope is authoritative whatever its length. `{"scope": []}` means "this stage may
     // write nothing", NOT "no scope was set" — CLAUDE.md makes the same point about why `--clear`
@@ -395,9 +452,16 @@ function main(argv) {
     // everything. Gating on `length > 0` fell through to the *more permissive* fail-closed default,
     // which is fail-OPEN on the strictest scope a stage can declare. An absent scope is `null`
     // (snapshotScope never returns `[]` for an absent file), so the two states stay distinguishable.
-    if (scopeSnapshot && Array.isArray(scopeSnapshot.scope)) {
-      if (!matchesAny(rel, scopeSnapshot.scope)) {
-        escapes.push({ file: rel, denied_by: "writes-scope (snapshot)", scope_set_by: scopeSnapshot.set_by });
+    // Judged against the UNION of every scope this epoch recorded, not the opening snapshot alone.
+    // `scope_set_by` names WHICH one authorized (or, on a denial, the opening scope) so a reader can
+    // tell a build-scope write from an amendment's without opening the baseline.
+    if (recordedScopes.length > 0) {
+      if (auth === null) {
+        escapes.push({
+          file: rel,
+          denied_by: "writes-scope (snapshot)",
+          scope_set_by: (scopeSnapshot ?? recordedScopes[0]).set_by,
+        });
       }
       continue;
     }

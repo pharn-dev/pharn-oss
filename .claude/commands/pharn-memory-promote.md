@@ -144,6 +144,26 @@ must tolerate untagged entries.
    `memory-bank/`. **Read the setter's printed path count**: it must say `1 path(s)`. If a later write is
    blocked, the fix is to **pass the correct `--target` and re-run this setter** — never bypass the hook.
 
+3. **Record this scope on the open reconciliation epoch — IMMEDIATELY after the setter above, never
+   before it:**
+
+   ```bash
+   node pharn/floor/reconcile-baseline.mjs --amend-scope
+   ```
+
+   **Why.** A reconciliation epoch is anchored at `/pharn-build` Step 0 and holds **one** opening
+   `scope_snapshot` — the build's, which per **L7** may never name canon. Without this line a canon write
+   that passed **both** live guards and this command's own human accept is still reported by
+   `check-bash-reconcile.mjs` as _"a write reached it outside the guarded tool surface"_, failing
+   `/pharn-verify`'s `reconcile` gate on the correct, designed workflow (**L17**). The ordering mirrors
+   `--anchor`'s own (**L38**): amend **after** the setter, or it records the previous stage's scope.
+
+   **ADVISORY** (P0): a Bash call outside the `PreToolUse` gate (**L19**), so nothing forces it — a
+   skipped amendment costs a **false escape**, never a missed one. It **accounts for** the write; it does
+   not exempt the path, and it cannot authorize anything the guards would still refuse. Exit **2** with
+   _"no baseline"_ is **expected and harmless** when no epoch is open (a standalone promote run, or a
+   project that has never anchored); it is not a reason to stop.
+
 ## Step 1 — Discovery (P6, mandatory; never assert from memory)
 
 1. Read the **target canon file live** this run — its existing `## <id>` headings and entry format. If the

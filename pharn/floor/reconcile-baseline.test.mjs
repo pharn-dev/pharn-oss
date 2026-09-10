@@ -4,7 +4,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -164,4 +164,90 @@ test("✧ the record path is under .pharn/, which is gitignored — the baseline
   assert.ok(RECORD_PATH.startsWith(".pharn/"), "the baseline must be disposable runtime state");
   const gi = readFileSync(resolve(HERE, "..", "..", ".gitignore"), "utf8");
   assert.match(gi, /^\.pharn\/$/m, "this repo must still gitignore .pharn/ for that to hold");
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────
+// --amend-scope — an epoch may hold MORE THAN ONE authorized scope.
+// Trigger: .dev/features/product-features-relocation/REVIEW.md F3 (a promote-stage canon write,
+// hook-approved and human-accepted, reported as a Bash escape because the epoch's snapshot is the
+// BUILD stage's scope).
+
+function anchored(dir, scope) {
+  mkdirSync(join(dir, ".pharn"), { recursive: true });
+  if (scope) writeFileSync(join(dir, SCOPE_PATH), JSON.stringify(scope));
+  execFileSync(process.execPath, [ANCHOR, "--anchor", "--base", dir, "--by", "test"], { stdio: "pipe" });
+  return () => JSON.parse(readFileSync(join(dir, RECORD_PATH), "utf8"));
+}
+
+test("★ a fresh anchor carries scope_amendments as an EMPTY ARRAY, never absent", () => {
+  const dir = makeRepo();
+  const built = buildRecord(dir, "test");
+  assert.ok(built.ok);
+  assert.deepEqual(built.record.scope_amendments, [], "always an array, so no reader branches on presence");
+});
+
+test("★ --amend-scope APPENDS the live scope to an existing epoch, preserving the opening snapshot", () => {
+  const dir = makeRepo();
+  const read = anchored(dir, { scope: ["build.md"], set_by: "PLAN.md", set_at: "T1" });
+  writeFileSync(
+    join(dir, SCOPE_PATH),
+    JSON.stringify({ scope: ["canon.md"], set_by: ".claude/commands/pharn-dev-memory-promote.md", set_at: "T2" })
+  );
+  const r = spawnSync(process.execPath, [ANCHOR, "--amend-scope", "--base", dir], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+
+  const rec = read();
+  assert.deepEqual(rec.scope_snapshot.scope, ["build.md"], "the OPENING snapshot is never overwritten");
+  assert.equal(rec.scope_amendments.length, 1);
+  assert.deepEqual(rec.scope_amendments[0].scope, ["canon.md"]);
+  assert.equal(rec.scope_amendments[0].set_by, ".claude/commands/pharn-dev-memory-promote.md");
+});
+
+test("★ --amend-scope is ORDERED and cumulative — several stages inside one epoch each append", () => {
+  const dir = makeRepo();
+  const read = anchored(dir, { scope: ["build.md"], set_by: "PLAN.md", set_at: "T1" });
+  for (const [p, by] of [
+    ["a.md", "one"],
+    ["b.md", "two"],
+  ]) {
+    writeFileSync(join(dir, SCOPE_PATH), JSON.stringify({ scope: [p], set_by: by, set_at: "T" }));
+    execFileSync(process.execPath, [ANCHOR, "--amend-scope", "--base", dir], { stdio: "pipe" });
+  }
+  const rec = read();
+  assert.deepEqual(
+    rec.scope_amendments.map((a) => a.set_by),
+    ["one", "two"],
+    "append order is the call order"
+  );
+});
+
+// L41: the no-baseline and no-live-scope paths are the ones a hermetic suite skips, so they are
+// exercised explicitly rather than assumed.
+test("★ FAIL-CLOSED: --amend-scope with NO baseline writes nothing and exits 2", () => {
+  const dir = makeRepo();
+  const r = spawnSync(process.execPath, [ANCHOR, "--amend-scope", "--base", dir], { encoding: "utf8" });
+  assert.equal(r.status, 2, "an epoch that was never opened cannot be amended");
+  assert.match(r.stderr, /--anchor first/);
+  assert.ok(!existsSync(join(dir, RECORD_PATH)), "nothing is written");
+});
+
+test("★ FAIL-CLOSED: --amend-scope with NO live scope records NOTHING, not an empty amendment", () => {
+  const dir = makeRepo();
+  const read = anchored(dir, { scope: ["build.md"], set_by: "PLAN.md", set_at: "T1" });
+  rmSync(join(dir, SCOPE_PATH), { force: true });
+  const r = spawnSync(process.execPath, [ANCHOR, "--amend-scope", "--base", dir], { encoding: "utf8" });
+  assert.equal(r.status, 2, r.stdout);
+  assert.deepEqual(read().scope_amendments, [], "an empty amendment would read as 'authorized to write nothing' — a different claim");
+});
+
+test("★ a baseline written BEFORE scope_amendments existed is amendable — the field is coerced, not required", () => {
+  const dir = makeRepo();
+  const read = anchored(dir, { scope: ["build.md"], set_by: "PLAN.md", set_at: "T1" });
+  const legacy = read();
+  delete legacy.scope_amendments;
+  writeFileSync(join(dir, RECORD_PATH), JSON.stringify(legacy, null, 2) + "\n");
+  writeFileSync(join(dir, SCOPE_PATH), JSON.stringify({ scope: ["canon.md"], set_by: "promote", set_at: "T2" }));
+  const r = spawnSync(process.execPath, [ANCHOR, "--amend-scope", "--base", dir], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(read().scope_amendments.length, 1);
 });
