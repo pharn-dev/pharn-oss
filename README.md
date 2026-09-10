@@ -415,7 +415,8 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   there is no attribution — it reports _what_, never _who_. A clean verdict means **no escape was
   detected**, not that none occurred. Detection is also **disable-able** through the very channel it
   monitors — but loudly, not quietly: a missing baseline is `INCONCLUSIVE` at verify, and the
-  always-reconciled control surface (`.claude/hooks/*`, `.claude/settings*.json`, `pharn/floor/*`) falls
+  always-reconciled control surface (`.claude/hooks/*`, `.claude/settings*.json`, `pharn/floor/*`,
+  `.dev/floor/*`) falls
   back to committed blob ids, so that half survives with no baseline at all. **The only true prevention
   remains OS-level sandboxing of the `Bash` process, which PHARN does not implement** — a harness-layer
   capability, not something markdown methodology can express.

@@ -72,11 +72,15 @@
 //     surface as this one's escape. That is lessons-learned L38 exactly; this checker inherits the
 //     hazard and cannot fix it. Named as a bound in LIMITS.md; the structural remedy is L38's own.
 //  4. NO ATTRIBUTION. It answers "this path changed and the guards would have denied it", never "who".
-//  5. DELETING THIS CHECKER'S STATE is possible through the very channel it monitors — but it is LOUD,
-//     not silent: with `--require-baseline` (what /verify passes) an absent baseline is INCONCLUSIVE,
-//     and the always-reconciled control surface falls back to committed blob ids, so that half stays
-//     covered with no baseline at all. "Cannot be disabled" is STRUCK; "cannot be disabled quietly" is
-//     what this supports.
+//  5. DELETING OR FORGING THIS CHECKER'S STATE is possible through the very channel it monitors — but it
+//     is LOUD, not silent. Two independent reasons: with `--require-baseline` (what /verify passes) an
+//     absent baseline is INCONCLUSIVE; and the control surface is reconciled against COMMITTED BLOB IDS
+//     on EVERY run — with a baseline and without one — so rewriting a guard's baseline entry to match
+//     the edited file does not clear it. An earlier draft ran that blob-id comparison only in the
+//     no-baseline branch, which meant the guarantee this header claims was strictly wider than the one
+//     the code implemented; caught in review, and the test named "reconciled against HEAD even WITH a
+//     baseline present" exists to keep it caught. "Cannot be disabled" is STRUCK; "cannot be disabled
+//     quietly" is what this supports.
 //  6. A COMMITTED change moves HEAD too, so the control-surface fallback cannot see it. The backstop
 //     there is Code-Owner review, which is where CODEOWNERS already sits.
 //
@@ -149,11 +153,26 @@ export function loadIgnoreData(path = IGNORE_DATA_PATH) {
 // --- a traversing prefix (the same refusal check-regress.mjs's FEATURE_SLUG_RE makes, for the same
 // --- reason: the previous shape "yields a prefix that matches no path" was nearly true, not true).
 const PIPELINE_RE = /^(?:\.dev\/)?features\/(?!\.\.?\/)([A-Za-z0-9._-]+)\/(.+)$/;
-export function isPipelineArtifact(rel, data) {
+
+// The ACTIVE feature slug, derived from the scope record's own `set_by` (a PLAN path). Narrowing the
+// exemption to that one feature matters: exempting a pipeline filename under ANY slug lets a write to
+// `features/<anything>/SHIP.md` pass unexamined, and an exemption set wide enough to swallow the rule is
+// the failure this whole increment was weighed against. When no slug is derivable (no snapshot, or a
+// `set_by` that is not a feature path) the exemption stays slug-agnostic — that is strictly no wider
+// than before, and it is the honest fallback rather than a guess.
+export function activeFeatureSlug(scopeSnapshot) {
+  const setBy = scopeSnapshot?.set_by;
+  if (typeof setBy !== "string") return null;
+  const m = PIPELINE_RE.exec(setBy.replace(/\\/g, "/"));
+  return m ? m[1] : null;
+}
+
+export function isPipelineArtifact(rel, data, activeSlug = null) {
   const m = PIPELINE_RE.exec(rel);
   if (!m) return false;
   const slug = m[1];
   if (slug === "." || slug === "..") return false;
+  if (activeSlug !== null && slug !== activeSlug) return false;
   const tail = m[2];
   if (data.pipelineNames.includes(tail)) return true;
   return /^lenses\/[A-Za-z0-9._-]+\/findings\.json$/.test(tail);
@@ -170,7 +189,15 @@ function askHook(hookAbs, rel, cwd) {
   const payload = JSON.stringify({ tool_name: "Write", tool_input: { file_path: rel } });
   const r = spawnSync(process.execPath, [hookAbs], { input: payload, cwd, encoding: "utf8" });
   if (r.error || r.status === null) return { ok: false, reason: `hook did not run: ${hookAbs}` };
-  return { ok: true, denied: r.status === 2, status: r.status };
+  // ONLY 0 and 2 are answers. Anything else — a crash, a usage error, a future exit code — is NOT an
+  // allow. Reading `status !== 2` as "permitted" would turn any hook malfunction into a false CLEAN,
+  // which is fail-OPEN in the one place this file must not be (P5). Caught in review, not by a test.
+  if (r.status === 0) return { ok: true, denied: false };
+  if (r.status === 2) return { ok: true, denied: true };
+  return {
+    ok: false,
+    reason: `hook ${hookAbs} answered with an unexpected exit code ${r.status} for '${rel}' — not treated as permission`,
+  };
 }
 
 // --- the probe sandbox: reproduce ONLY the two runtime signals enforce-writes-scope.cjs's
@@ -257,6 +284,26 @@ function main(argv) {
   const en = enumerate(root);
   if (!en.ok) emit({ verdict: "INCONCLUSIVE", reason: en.reason }, 2);
 
+  // --- the control surface, reconciled ALWAYS and against COMMITTED BLOB IDS ------------------------
+  // Not "always when there is no baseline" — ALWAYS. The baseline lives under `.pharn/`, which Bash
+  // reaches, so a caller that can edit a guard can also rewrite that guard's baseline entry to the new
+  // hash; the path then matches its baseline and never becomes a candidate. Comparing the control
+  // surface to `HEAD` instead anchors it in something the monitored channel cannot rewrite in place.
+  // This is the difference between the guarantee this file CLAIMS and the one an earlier draft
+  // implemented, and it was caught in review rather than by a test.
+  function controlSurfaceChanges() {
+    try {
+      const out = execFileSync("git", ["diff", "--name-only", "HEAD", "--"], { cwd: root, encoding: "utf8", maxBuffer: 1 << 26 });
+      return out
+        .split("\n")
+        .filter(Boolean)
+        .filter((rel) => isAlwaysReconciled(rel, data));
+    } catch {
+      warnings.push("control-surface blob-id reconciliation unavailable (no git HEAD) — baseline comparison only");
+      return null;
+    }
+  }
+
   // --- candidates ---------------------------------------------------------------------------------
   let candidates = [];
   if (baseline) {
@@ -265,12 +312,17 @@ function main(argv) {
       seen.add(rel);
       const now = hashFile(resolve(root, rel));
       if (now === null) {
-        warnings.push(`unreadable during reconcile: ${rel}`);
+        // FAIL-CLOSED: a path we cannot hash is a path we cannot clear. Treating it as a warning and
+        // continuing would let "make it unreadable" suppress a denied change (P5).
+        warnings.push(`unreadable during reconcile, treated as changed: ${rel}`);
+        candidates.push(rel);
         continue;
       }
       const before = baseline.entries[rel];
       if (before === undefined || before !== now) candidates.push(rel);
     }
+    const cs = controlSurfaceChanges();
+    if (cs) for (const rel of cs) if (!candidates.includes(rel)) candidates.push(rel);
     for (const rel of Object.keys(baseline.entries)) {
       // A deletion is not an escape: nothing was WRITTEN. Reported so it is never silently swallowed.
       if (!seen.has(rel)) warnings.push(`present at anchor, absent now: ${rel}`);
@@ -280,22 +332,17 @@ function main(argv) {
       emit({ verdict: "INCONCLUSIVE", reason: `no baseline at ${RECORD_PATH}, and --require-baseline was passed` }, 2);
     }
     // No anchor: ordinary-path detection is unavailable, but the ALWAYS-RECONCILED control surface still
-    // is — against committed blob ids, which live outside anything the monitored channel can touch.
-    let changed = [];
-    try {
-      const out = execFileSync("git", ["diff", "--name-only", "HEAD", "--"], { cwd: root, encoding: "utf8", maxBuffer: 1 << 26 });
-      changed = out.split("\n").filter(Boolean);
-    } catch {
-      warnings.push("control-surface fallback unavailable (no git HEAD)");
-    }
-    candidates = changed.filter((rel) => isAlwaysReconciled(rel, data));
+    // is — against committed blob ids, which live outside anything the monitored channel can rewrite in
+    // place. Same call as the baseline branch makes; one implementation, two entry points.
+    candidates = controlSurfaceChanges() ?? [];
   }
 
   // --- exemptions ---------------------------------------------------------------------------------
   const exempted = [];
+  const activeSlug = activeFeatureSlug(baseline?.scope_snapshot ?? null);
   candidates = candidates.filter((rel) => {
     if (isAlwaysReconciled(rel, data)) return true; // never exemptible
-    if (data.exempt.includes(rel) || isPipelineArtifact(rel, data)) {
+    if (data.exempt.includes(rel) || isPipelineArtifact(rel, data, activeSlug)) {
       exempted.push(rel);
       return false;
     }
@@ -313,7 +360,13 @@ function main(argv) {
       escapes.push({ file: rel, denied_by: "protect-trusted-paths.cjs" });
       continue;
     }
-    if (scopeSnapshot && Array.isArray(scopeSnapshot.scope) && scopeSnapshot.scope.length > 0) {
+    // An EXPLICIT scope is authoritative whatever its length. `{"scope": []}` means "this stage may
+    // write nothing", NOT "no scope was set" — CLAUDE.md makes the same point about why `--clear`
+    // DELETES the record rather than writing an empty array, since an empty array is truthy and denies
+    // everything. Gating on `length > 0` fell through to the *more permissive* fail-closed default,
+    // which is fail-OPEN on the strictest scope a stage can declare. An absent scope is `null`
+    // (snapshotScope never returns `[]` for an absent file), so the two states stay distinguishable.
+    if (scopeSnapshot && Array.isArray(scopeSnapshot.scope)) {
       if (!matchesAny(rel, scopeSnapshot.scope)) {
         escapes.push({ file: rel, denied_by: "writes-scope (snapshot)", scope_set_by: scopeSnapshot.set_by });
       }

@@ -72,7 +72,20 @@ export function enumerate(baseDir) {
   } catch (e) {
     return { ok: false, reason: `git enumeration failed (not a git repo, or git unavailable): ${e.message}` };
   }
-  const paths = out.toString("utf8").split("\0").filter(Boolean);
+  // REJECT a pathname that does not ROUND-TRIP through UTF-8, rather than silently mangling it.
+  // `toString("utf8")` replaces invalid bytes with U+FFFD, so such a path would be recorded under a name
+  // that resolves to nothing: hashFile returns null, and the real file is never reconciled. A filename
+  // is attacker-choosable, so that is an evasion of exactly this checker, and the safe answer is to
+  // refuse the whole enumeration (fail-closed, P5) rather than to reconcile a set known to be incomplete.
+  const raw = out.toString("utf8");
+  if (Buffer.compare(Buffer.from(raw, "utf8"), out) !== 0) {
+    return {
+      ok: false,
+      reason:
+        "a pathname in this tree is not valid UTF-8, so the reconciled set cannot be enumerated faithfully — refusing rather than reconciling a partial set",
+    };
+  }
+  const paths = raw.split("\0").filter(Boolean);
   return { ok: true, paths };
 }
 

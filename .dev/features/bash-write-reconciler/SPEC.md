@@ -54,7 +54,8 @@ have denied, within the reconciled set.
    verdict.
 4. **Attributing a detected change to a specific command, actor, or `Bash` invocation.** The reconciler
    answers "this path changed and the guards would have denied it"; it does **not** answer "who". The
-   `tool_use_id` correlation of item 7 narrows the window, never the culprit.
+   final design dropped the `PostToolUse` recorder, so no `tool_use_id` correlation exists at all — an
+   earlier draft of this SPEC claimed one, and that sentence expired when the recorder was withdrawn.
 5. **Detecting a `Bash` write to a path the guards would have PERMITTED.** In-scope Bash writes are
    **clean by design** — a stage's own formatter pass is exactly this, and REDding it would make every
    normal run fail. The rule is about _scope escape_, not about _tool choice_.
