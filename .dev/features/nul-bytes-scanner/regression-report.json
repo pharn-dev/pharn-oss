@@ -1,0 +1,29 @@
+{
+  "base": "8bc6c0a8f1b9e7df2e01ff0f98a73602dfa47422",
+  "inside": [
+    ".dev/features/nul-bytes-scanner/GRILL.md",
+    ".dev/features/nul-bytes-scanner/PLAN.md",
+    ".dev/floor/source-nul-guard.test.mjs",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/scan-code-missing-error-handling.mjs"
+  ],
+  "outside_gates": {
+    "structural:expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
