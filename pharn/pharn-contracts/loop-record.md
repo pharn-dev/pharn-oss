@@ -2,19 +2,21 @@
 name: loop-record
 trust: trusted
 layer: pharn-contracts
-purpose: "Single source of truth for the loop-record — the pharn/features/<name>/LOOP.md artifact /pharn-loop writes at every stop, including its narrative Handoff section. Schema only, zero behavior. Defines the deterministic envelope (enum/regex — FLOOR) vs the untrusted free-text Handoff (ADVISORY) split, so a run's synthesis can survive to the next run without any guaranteed decision resting on it (P0, P2)."
+purpose: "Single source of truth for the loop-record — the pharn/features/<name>/LOOP.md artifact /pharn-loop writes at every stop that has a feature directory, including its narrative Handoff section. Schema only, zero behavior. Defines the deterministic envelope (enum/regex — FLOOR) vs the untrusted free-text Handoff (ADVISORY) split, so a run's synthesis can survive to the next run without any guaranteed decision resting on it (P0, P2)."
 ---
 
 # Contract — loop-record
 
 > A `pharn-contracts` schema (zero behavior, no `role:` — it is not a Capability). It is the SoT for the
 > record `/pharn-loop` writes at a stop. Enforcers **cite** it and **conform** to it; they do not restate
-> its semantics (P4). It elaborates the `/pharn-loop` command's Step-4 roll-up; the principles (P0, P2,
+> its semantics (P4). It elaborates the `/pharn-loop` command's Step-6b record; the principles (P0, P2,
 > P5) live in `pharn/CONSTITUTION.md`, and the enum-gated vs tainted-free-text split it inherits is
 > defined once in `pharn/pharn-contracts/finding-shape.md` — cited here, never re-defined.
 
-The loop-record is `pharn/features/<name>/LOOP.md` — the **only** file `/pharn-loop` writes (fix #7, unchanged
-by this contract). It carries two cleanly separated halves:
+The loop-record is `pharn/features/<name>/LOOP.md`. `/pharn-loop` writes it, and exactly one other file
+with the Write tool — `pharn/features/<name>/SPEC.md`, only to revert its own model approval to `Draft` on
+a stop that did not end in a committed `STOP_GREEN` (fix #7 scopes each of the two writes separately). It
+carries two cleanly separated halves:
 
 1. a **deterministic envelope** — YAML frontmatter holding four enum/regex-gated scalars; and
 2. a **human-facing body** — the existing stop roll-up (stages, per-iteration verdicts, standing reds,
@@ -36,7 +38,7 @@ by this contract). It carries two cleanly separated halves:
 
 ## The object
 
-<!-- LOOP-RECORD-TEMPLATE:BEGIN — the canonical, VALID template. `pharn/floor/check-loop-record.test.mjs` extracts the fenced block below verbatim and asserts the checker returns GREEN on it, so THIS CONTRACT AND THE CHECKER cannot drift apart (P4). Scoped honestly (P0): that binding is two-way only. No test reads `.claude/commands/pharn-loop.md`, so the command's agreement rests on its CITING this contract instead of restating the shape — discipline, not a floor guarantee. Edit this template only together with the checker. -->
+<!-- LOOP-RECORD-TEMPLATE:BEGIN — the canonical, VALID template. `pharn/floor/check-loop-record.test.mjs` extracts the fenced block below verbatim and asserts the checker returns GREEN on it, so THIS CONTRACT AND THE CHECKER cannot drift apart (P4). Scoped honestly (P0): that binding is two-way only. No test holds `.claude/commands/pharn-loop.md`'s record instructions to this template (the hygiene pins that read that command check other things), so the command's agreement rests on its CITING this contract instead of restating the shape — discipline, not a floor guarantee. Edit this template only together with the checker. -->
 
 ```text
 ---
@@ -91,9 +93,25 @@ field by **copying that emitted value verbatim**, never by re-typing it. `CONTIN
 `check-loop.mjs` also emits — is deliberately **outside** this enum: a record is written only at a
 **stop**, so a record claiming `CONTINUE` is malformed by construction.
 
+**The one exception: a blocked stop.** When `/pharn-loop` stops on one of its stuck-point rules (a
+sub-stage needed a decision the run may not guess), it does **not** consult `check-loop.mjs`, whose inputs
+could be a previous iteration's stale reports. The record then carries `decision: INCONCLUSIVE` (an enum
+member) plus the extra frontmatter key `blocked: <id>`. Extra keys are ignored by the checker (below), so
+`blocked:` gates nothing; it exists so a reader can tell a blocked stop from a malformed-report stop. For
+such a record `iterations` is the iteration in progress, 1-based, and a stop before the first build counts
+as `1`. A stop before `pharn/features/<name>/` exists writes no record at all.
+
+**`STOP_TERMINAL` changed meaning in `SKILLS_VERSION` 6.0.0, and the record carries no version field.**
+Records written before 6.0.0 used it for any real red — a verify `FAIL`, an inconclusive verdict, or a
+regression. From 6.0.0 a `FAIL` or a regression is retried, and `STOP_TERMINAL` means only an inconclusive
+verdict or a reconcile red. Nothing branches on a prior record's `decision` (a later run reads only its
+`## Handoff`), so no version field is added; read an older record's `decision` with its date in mind.
+
 **`commit` — `unknown` is an honest absence, not a value.** `/pharn-loop` captures the SHA with
-`git rev-parse HEAD` at the moment it writes the record (it never commits, so this is whatever `HEAD`
-was when the loop stopped). When that capture **fails** — no git repository, an unborn `HEAD` with zero
+`git rev-parse HEAD` at the moment it writes the record. That is **before** the loop's own commit: on a
+`STOP_GREEN` run `/pharn-loop` then commits the feature, this record included, to a new local branch, so
+the field names the commit that branch was cut from — never the commit that contains the record, which
+could not name itself. When that capture **fails** — no git repository, an unborn `HEAD` with zero
 commits, any non-zero exit — the field is written as the literal `unknown`. It is **never** left empty
 and **never** filled with a fabricated or guessed SHA. This follows the same rule as
 `pharn/pharn-contracts/ship-record.md`'s `· unattested`: **state is always shown**, because a silent
