@@ -74,7 +74,8 @@ structural fact about the consumers, not a promise about this document.
 
 ## The `verdict` field — the one floor-relevant part
 
-`verdict` is the only field any floor checker reads from a committed report. Four checkers read it, each
+`verdict` is the field every floor checker reads from a committed report, and — with the one exception
+named in the next section — the only one. Four checkers read it, each
 testing it for membership in **its own** set, and **those sets are deliberately not identical**:
 
 | consumer                               | accepted `verdict` set                          | on a value outside it                  |
@@ -95,8 +96,13 @@ costs a reader.
 
 ## Who reads this artifact — and the distinction that matters
 
-- **FLOOR consumers — exactly the four above, and each reads `verdict` and nothing else.** This is a
-  measurement, not a reading of their source: see `## How the "only`verdict`" claim was verified`.
+- **FLOOR consumers — exactly the four above. Three read `verdict` and nothing else; `check-loop.mjs`
+  also reads `failing_gates`, and only when `verdict` is `FAIL`.** It tests that array for **exact
+  membership** of the gate id `reconcile` — a reconcile red is never retried, because a retry re-anchors
+  the reconciliation baseline and would erase the detected escape — and refuses a `FAIL` report whose
+  `failing_gates` is not an array of strings (`INCONCLUSIVE`, exit 2). Gate ids are deterministic-tool
+  output, so no free-text field is read. The three-checker half is a measurement, not a reading of their
+  source: see `## How the "only`verdict`" claim was verified`.
 - **The EMITTERS are not consumers.** `pharn/floor/check-verify.mjs` **produces** the four-field spine; it
   never reads a committed report. Feeding one back to it as its `results.json` yields `INCONCLUSIVE` exit
   2 (`gate "feature" is not an integer exit code`), because its input is a `{ "<gate-id>": <int> }` map,
@@ -126,7 +132,9 @@ quantified claim ("the _only_ field") is exactly where a careful reading drifts:
 
 **The bound on this evidence, stated (P0):** it establishes what those four checkers did **at that
 commit**. It is not a guarantee about a checker added later, and it is not a claim that the four are
-correct — only that their inputs are what this section says.
+correct — only that their inputs are what this section says. It also **predates** `check-loop.mjs`'s
+`failing_gates` read (`SKILLS_VERSION` 6.0.0): the probe used a `PASS` report, on which that field is
+still unread, so it says nothing about the `FAIL` path — `pharn/floor/check-loop.test.mjs` covers that.
 
 ## Extra keys are IGNORED (deliberately not a closed-key object)
 

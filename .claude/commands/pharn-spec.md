@@ -1,5 +1,5 @@
 ---
-description: "Turn a user's prose intent into a structured, human-approved pharn/features/<name>/SPEC.md — the head of the product pipeline (spec → plan → grill → build → regress → verify → ship) and the versioned record of INTENT every downstream stage reads. INTERROGATES the intent for gaps (advisory — never gates), EMITS a Draft SPEC.md with required sections, then HALTS for explicit human approval; only on approval does it flip Draft → Approved, assign a spec_id, and pin the approved intent with a content-hash (fix #4). FLOOR (deterministic, pharn/floor/check-spec.mjs): required-section PRESENCE, the Draft|Approved state enum, spec_id presence, and — when Approved — spec_content_hash == sha256(body). ADVISORY/HUMAN: whether the intent is clear/complete/wise — the human owns that, and owns the Draft → Approved gate. The model NEVER self-approves. '/pharn-spec produced it' NEVER means 'the intent is sound' (P0)."
+description: "Turn a user's prose intent into a structured, human-approved pharn/features/<name>/SPEC.md — the head of the product pipeline (spec → plan → grill → build → regress → verify → ship) and the versioned record of INTENT every downstream stage reads. INTERROGATES the intent for gaps (advisory — never gates), EMITS a Draft SPEC.md with required sections, then HALTS for explicit human approval; only on approval does it flip Draft → Approved, assign a spec_id, and pin the approved intent with a content-hash (fix #4). FLOOR (deterministic, pharn/floor/check-spec.mjs): required-section PRESENCE, the Draft|Approved state enum, spec_id presence, and — when Approved — spec_content_hash == sha256(body). ADVISORY/HUMAN: whether the intent is clear/complete/wise — the human owns that, and owns the Draft → Approved gate. The model NEVER self-approves. '/pharn-spec produced it' NEVER means 'the intent is sound' (P0). ONE EXCEPTION to self-approval: under --model-approve, meant for /pharn-loop's unattended run (nothing prevents a user from passing it), the model pins the spec itself and records approved_by: model — never presented as a human's approval."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -41,7 +41,9 @@ Load the trusted prefix and obey it for the whole run:
 - **ADVISORY / HUMAN — never a guarantee.** Whether the intent is **clear / complete / wise** is the human's
   call. Interrogation (Step 2) **surfaces** concerns; it **never gates**. And the **Draft → Approved transition
   is the human's decision** — the floor cannot verify a human said "yes"; the approval halt is an instruction
-  you follow, backstopped (not replaced) by the four floor ops. The model **NEVER** self-approves.
+  you follow, backstopped (not replaced) by the four floor ops. The model **NEVER** self-approves — the one
+  exception is the `--model-approve` flag `/pharn-loop` passes (Step 4a), and even then the approval is
+  recorded as the model's, never a human's.
 
 > **The honest claim.** `/pharn-spec` guarantees a `SPEC.md` has the required sections, a valid state, a
 > `spec_id`, and (on approval) a content-hash pinning its body. It does **NOT** guarantee the intent is wise or
@@ -139,16 +141,38 @@ via an **interactive form** (`AskQuestion`), one explicit question: **"Approve t
 Approved)?"** with selectable options (e.g. _Approve & pin_ / _Keep as Draft_ / _Revise_). **Wait for the
 answer.**
 
-- **The model NEVER flips `Draft → Approved` on its own.** There is no default-yes, no "looks complete,
-  proceeding." A user approving **their own intent** is the entire point of "human-approved intent as the
-  versioned record."
+- **The model NEVER flips `Draft → Approved` on its own** (without `--model-approve` — see Step 4a). There
+  is no default-yes, no "looks complete, proceeding." A user approving **their own intent** is the entire
+  point of "human-approved intent as the versioned record."
 - On **_Keep as Draft_**: leave the file `Draft` (unpinned) and end the turn.
 - On **_Revise_**: apply the requested changes to the Draft (Steps 2–3 again), then re-render and re-ask. Never
   approve on the user's behalf.
 
+### Step 4a — `--model-approve` (meant for `/pharn-loop`)
+
+When the invocation carries `--model-approve`, `/pharn-loop` is running this stage **unattended**. Do not
+render the form and do not wait:
+
+- If Step 1.2 found the intent too thin to fill the required sections without inventing intent, do **not**
+  approve. Leave the file `Draft` (or unwritten) and report back that the run is blocked on thin intent —
+  the caller stops; nothing is guessed.
+- Otherwise, with Step 3's Draft GREEN, go straight to Step 5, and in Step 5's frontmatter edit also add
+  `approved_by: model`.
+
+**What this is, stated exactly (P0).** The model approving intent on the user's behalf, because the user
+chose an unattended run. `approved_by: model` sits in the frontmatter, outside the body hash, so it moves no
+hash and **gates nothing** — no checker reads it, and its absence proves nothing about a human. It is
+never presented as a human sign-off. What happens to that approval after the run is the caller's policy, not
+this stage's — see `/pharn-loop` Step 6a.
+
+**What it is not.** A way around this stage's thesis for a run with a human available: a user who types
+`--model-approve` approves their own intent by proxy, and nothing on the floor can tell who passed the flag
+(`LIMITS.md §1d`).
+
 ## Step 5 — On explicit approval: pin the approved intent, then halt
 
-Only on an explicit **approve**, pin the spec (the SPEC body is final — do not edit the sections after this):
+Only on an explicit **approve** — or under `--model-approve` (Step 4a) — pin the spec (the SPEC body is
+final — do not edit the sections after this):
 
 1. **Compute the body hash** with the checker's own body-extraction (single source of truth, so the pin and the
    validate-time recompute can never drift):
@@ -157,9 +181,9 @@ Only on an explicit **approve**, pin the spec (the SPEC body is final — do not
    node pharn/floor/check-spec.mjs --hash pharn/features/<name>/SPEC.md
    ```
 
-2. **Edit the frontmatter:** set `state: Approved` and `spec_content_hash:` to the hash from step 1. (The hash
-   ranges over the **body**, which is frontmatter-independent — so flipping `state` and writing the hash do not
-   move it.)
+2. **Edit the frontmatter:** set `state: Approved` and `spec_content_hash:` to the hash from step 1. Under
+   `--model-approve`, also add `approved_by: model`. (The hash ranges over the **body**, which is
+   frontmatter-independent — so flipping `state`, writing the hash and adding `approved_by` do not move it.)
 3. **Re-validate** — this must be **GREEN** (now `Approved` **and** `spec_content_hash == sha256(body)`):
 
    ```bash
@@ -185,7 +209,9 @@ thing — it lands **one** human-approved, pinned spec. It does **not** chain to
   `spec_content_hash == sha256(body)` when `Approved` — content-hash, fix #4).
 - **"A human approved THIS intent"** → **ADVISORY / procedural.** The floor cannot verify a human said yes; the
   Step-4 halt is an instruction you follow, backstopped by the floor ops (a self-flipped `Approved` would still
-  need a body-matching hash + the sections, but an **unwise** spec is caught only by the human).
+  need a body-matching hash + the sections, but an **unwise** spec is caught only by the human). Under
+  `--model-approve` no human approved at all: the approval is the model's, recorded as `approved_by: model`
+  — ungated and not tamper-evident.
 - **"The intent is clear / complete / wise"** → **ADVISORY / human.** Interrogation surfaces concerns; approval
   is the human owning it. **Never** present a spec as proof the intent is sound (P0).
 
@@ -204,7 +230,9 @@ thing — it lands **one** human-approved, pinned spec. It does **not** chain to
 - Every `check-spec.mjs` branch is a presence / enum / hash-equality membership test; no LLM classification
   drives the verdict. `spec_id` is derived deterministically from the human-chosen `<name>`.
 - The terminal fallback of the Draft → Approved decision is **ask the human** (the Step-4 halt), never a model
-  guess. Interrogation is advisory and never branches a guaranteed gate.
+  guess. Under `--model-approve` there is no one to ask mid-run, so the fallback is a **stop**: thin intent
+  is reported back to `/pharn-loop`, which halts and says what it needs. Interrogation is advisory and never
+  branches a guaranteed gate.
 
 ## Final step — release the writes-scope (ADVISORY lifecycle hygiene)
 

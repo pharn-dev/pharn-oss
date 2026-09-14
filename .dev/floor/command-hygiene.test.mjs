@@ -1334,3 +1334,232 @@ test("✧ the dev-canon rule DISCRIMINATES — it fires on the real pre-fix cita
   assert.ok(DEV_CANON_RE.test(pre), "the matcher must fire on the pre-fix citation, or the rule above is vacuous");
   assert.ok(!DEV_CANON_RE.test(post), "the matcher must NOT fire on the corrected form, or the fix is unachievable");
 });
+
+// ── /pharn-loop runs UNATTENDED — its closed sets and its commit block (loop-autonomous, 6.0.0) ────────
+//
+// WHY THESE EXIST. `/pharn-loop` no longer stops for a person: every question a sub-stage could ask maps to
+// ONE row of its stuck-point table, a green result is committed through pinned git lines, and the run ends
+// with a summary. With no human reading the run, the only places a drift can be caught are the command's
+// own spellings. L29: the table and the commit-outcome set are the deliverables, so the pins iterate
+// materialized arrays, not one member. L36: presence is not closure, so every back-ticked `blocked:` and
+// `not committed:` spelling in the file must be a member — a variant fails, not only an absence. L38 is
+// the reason for the ordering pin: the commit must re-derive the plan's scope with `--from-plan` before it
+// stages, because by then `.pharn/writes-scope.json` holds the record's scope, not the plan's — the defect
+// the loop-autonomous grill caught at blocking severity. Its review then found two more defects of the
+// same kind, both pinned below: the branch-delete line read `$b`, a variable set in an EARLIER fenced block —
+// each block runs as its own shell, so it was empty — and the staging lines let git glob a listed
+// `app/[id]/page.tsx` into `app/i/page.tsx` (reproduced), fixed by `GIT_LITERAL_PATHSPECS=1`.
+//
+// HONEST SCOPE (P0), the same narrow kind as every set above: these read command PROSE. They prove the
+// rows, the spellings, the pinned lines and their order are PRESENT, that no fenced line spells a known
+// push / merge / `--no-verify` form, and that no fenced block reads a shell variable it did not assign. They
+// CANNOT prove a run asked nobody, mapped a question to the right row, staged only the listed files, or did
+// not type a forbidden command in a novel spelling or outside a fence.
+// "The wiring is pinned" NEVER means "the run behaved".
+const LOOP_FILE = "pharn-loop.md";
+
+const STUCK_POINTS = [
+  { id: "S1", blocked: "no-slug" },
+  { id: "S2", blocked: null }, // a fixed rule that never stops the run
+  { id: "S3", blocked: "no-git-base" },
+  { id: "S4", blocked: "no-gates" },
+  { id: "S5", blocked: "seam-config" },
+  { id: "S6", blocked: "thin-intent" },
+  { id: "S7", blocked: "plan-ambiguity" },
+  { id: "S8", blocked: "seam-unresolved" },
+  { id: "S9", blocked: "stage-refused" },
+  { id: "S10", blocked: "unlisted-ask" },
+];
+// The one non-member spelling the closure admits: the command's own placeholder in generic prose.
+const BLOCKED_PLACEHOLDER = "<id>";
+
+const COMMIT_OUTCOMES = [
+  "committed <branch>",
+  "not committed: <decision>",
+  "not committed: nothing staged",
+  "not committed: branch failed",
+  "not committed: stage failed",
+  "not committed: commit failed",
+];
+
+const ASK_TOKEN_RE = /\bAsk(?:User)?Question\b/;
+const LOOP_COMMIT_HEADING = "### Step 6c";
+const LOOP_FROM_PLAN_LINE = /^[ \t]*node \.claude\/hooks\/set-writes-scope\.cjs --from-plan pharn\/features\/<name>\/PLAN\.md\s*$/;
+// Both staging lines must disable pathspec globbing — a listed path is a path, never a pattern.
+const LOOP_ADD_LINE = /^[ \t]*GIT_LITERAL_PATHSPECS=1 git add -A --pathspec-from-file=\S+ --pathspec-file-nul\s*$/;
+const LOOP_COMMIT_LINE = /^[ \t]*GIT_LITERAL_PATHSPECS=1 git commit --pathspec-from-file=\S+ --pathspec-file-nul\b/;
+// Anywhere on a fenced line, not only at its start: a compound line (`b=…; git push`), a global option
+// (`git -C . push`) and an argv array (`execFileSync("git", ["push"])`) are all the same invocation. A word
+// boundary keeps `pushed` / `merged` in the commit message's prose from matching.
+const FORBIDDEN_GIT_LINE = /\bgit\b[^\n]*\s(?:push|merge)\b|--no-verify|["'](?:push|merge)["']/;
+const SHELL_ASSIGN_RE = /(?:^|[\s;&|(])([A-Za-z_][A-Za-z0-9_]*)=/g;
+const SHELL_READ_RE = /\$\{?([A-Za-z_][A-Za-z0-9_]*)/g;
+
+/** Fenced blocks as {start, lines: [{line, text}]}. A fence may be indented inside a list item. */
+function fencedBlocks(body) {
+  const blocks = [];
+  let current = null;
+  body.split(/\r?\n/).forEach((text, i) => {
+    if (/^[ \t]*```/.test(text)) {
+      if (current) {
+        blocks.push(current);
+        current = null;
+      } else current = { start: i + 1, lines: [] };
+      return;
+    }
+    if (current) current.lines.push({ line: i + 1, text });
+  });
+  return blocks;
+}
+
+function fencedLines(body) {
+  return fencedBlocks(body).flatMap((b) => b.lines);
+}
+
+/** Every `$var` a fenced block reads without assigning it in the SAME block — shell state does not survive between blocks. */
+function crossBlockVariableOffenders(body) {
+  const out = [];
+  for (const block of fencedBlocks(body)) {
+    const text = block.lines.map((l) => l.text).join("\n");
+    const assigned = new Set([...text.matchAll(SHELL_ASSIGN_RE)].map((m) => m[1]));
+    for (const l of block.lines) {
+      for (const m of l.text.matchAll(SHELL_READ_RE)) {
+        if (!assigned.has(m[1])) out.push(`${l.line}: $${m[1]}`);
+      }
+    }
+  }
+  return out;
+}
+
+function blockedClosureOffenders(body) {
+  const allowed = new Set([...STUCK_POINTS.map((s) => s.blocked).filter(Boolean), BLOCKED_PLACEHOLDER]);
+  return [...body.matchAll(/`blocked: ([^`]+)`/g)].map((m) => m[1]).filter((v) => !allowed.has(v));
+}
+
+function outcomeClosureOffenders(body) {
+  const allowed = new Set(COMMIT_OUTCOMES);
+  const spelled = [...body.matchAll(/`((?:not )?committed[: ][^`]*)`/g)].map((m) => m[1]);
+  return spelled.filter((v) => !allowed.has(v));
+}
+
+/** null when the commit block re-derives scope, stages and commits, in that order, under Step 6c; else why. */
+function commitBlockReason(body) {
+  const lines = body.split(/\r?\n/);
+  const heading = lines.findIndex((l) => l.startsWith(LOOP_COMMIT_HEADING));
+  const fromPlan = lines.findIndex((l) => LOOP_FROM_PLAN_LINE.test(l));
+  const add = lines.findIndex((l) => LOOP_ADD_LINE.test(l));
+  const commit = lines.findIndex((l) => LOOP_COMMIT_LINE.test(l));
+  if (heading === -1) return `no \`${LOOP_COMMIT_HEADING}\` heading`;
+  if (fromPlan === -1) return "no `--from-plan` re-derivation line";
+  if (add === -1) return "no `git add -A --pathspec-from-file` line";
+  if (commit === -1) return "no `git commit --pathspec-from-file` line";
+  if (!(heading < fromPlan && fromPlan < add && add < commit)) {
+    return `out of order: heading ${heading + 1}, --from-plan ${fromPlan + 1}, add ${add + 1}, commit ${commit + 1}`;
+  }
+  return null;
+}
+
+function forbiddenGitOffenders(body) {
+  return fencedLines(body)
+    .filter((l) => FORBIDDEN_GIT_LINE.test(l.text))
+    .map((l) => `${l.line}: ${l.text.trim()}`);
+}
+
+test("✧ L34 — the /pharn-loop sets are non-empty and well-formed (the rules below cannot pass vacuously)", () => {
+  assert.equal(STUCK_POINTS.length, 10, "the stuck-point table is S1–S10");
+  assert.equal(new Set(STUCK_POINTS.map((s) => s.id)).size, STUCK_POINTS.length, "duplicate stuck-point id");
+  assert.ok(COMMIT_OUTCOMES.length > 0, "the commit-outcome set is empty");
+  assert.ok(fencedLines(commandBody(LOOP_FILE)).length > 0, `found no fenced lines in ${LOOP_FILE} — the fence scan broke`);
+});
+
+test("✧ /pharn-loop names no interactive-ask tool — the run asks nobody", () => {
+  assert.doesNotMatch(
+    commandBody(LOOP_FILE),
+    ASK_TOKEN_RE,
+    `${LOOP_FILE} names an interactive-ask tool; an unattended run must map the question to its stuck-point table`
+  );
+});
+
+for (const s of STUCK_POINTS) {
+  test(`✧ /pharn-loop's stuck-point table carries ${s.id}${s.blocked ? ` and its \`blocked: ${s.blocked}\` spelling` : ""}`, () => {
+    const body = commandBody(LOOP_FILE);
+    assert.match(body, new RegExp(`^\\|\\s*${s.id}\\s*\\|`, "m"), `${LOOP_FILE} has no table row for ${s.id}`);
+    if (s.blocked) assert.ok(body.includes(`\`blocked: ${s.blocked}\``), `${LOOP_FILE} never spells \`blocked: ${s.blocked}\``);
+  });
+}
+
+for (const o of COMMIT_OUTCOMES) {
+  test(`✧ /pharn-loop spells the commit outcome \`${o}\``, () => {
+    assert.ok(commandBody(LOOP_FILE).includes(`\`${o}\``), `${LOOP_FILE} never spells the commit outcome \`${o}\``);
+  });
+}
+
+test("✧ CLOSURE — every `blocked:` and commit-outcome spelling in /pharn-loop is a member of its set (L36)", () => {
+  const body = commandBody(LOOP_FILE);
+  assert.deepEqual(blockedClosureOffenders(body), [], "a `blocked:` spelling outside STUCK_POINTS");
+  assert.deepEqual(outcomeClosureOffenders(body), [], "a commit-outcome spelling outside COMMIT_OUTCOMES");
+});
+
+test("✧ /pharn-loop's commit re-derives the plan scope, then stages, then commits by pathspec (L38)", () => {
+  assert.equal(commitBlockReason(commandBody(LOOP_FILE)), null);
+});
+
+test("✧ no fenced line in /pharn-loop spells a known `git push`, `git merge` or `--no-verify` form", () => {
+  assert.deepEqual(forbiddenGitOffenders(commandBody(LOOP_FILE)), []);
+});
+
+test("✧ no fenced block in /pharn-loop reads a shell variable it did not assign — each block is its own shell", () => {
+  assert.deepEqual(crossBlockVariableOffenders(commandBody(LOOP_FILE)), []);
+});
+
+test("✧ /pharn-spec carries the `--model-approve` branch /pharn-loop relies on, recording `approved_by: model`", () => {
+  const body = commandBody("pharn-spec.md");
+  assert.ok(body.includes("### Step 4a — `--model-approve`"), "pharn-spec.md has no Step 4a `--model-approve` branch");
+  assert.ok(body.includes("`approved_by: model`"), "pharn-spec.md never spells `approved_by: model`");
+});
+
+test("✧ the /pharn-loop rules DISCRIMINATE — each fails on a mutant of the real command (L4)", () => {
+  const real = commandBody(LOOP_FILE);
+
+  const asks = `${real}\nCall \`AskUserQuestion\` here.\n`;
+  assert.match(asks, ASK_TOKEN_RE, "the ask-token matcher must fire on an inserted tool name");
+
+  const variant = real.replace("`blocked: no-slug`", "`blocked: no_slug`");
+  assert.notEqual(variant, real, "precondition: the mutation must change the body (L34)");
+  assert.deepEqual(blockedClosureOffenders(variant), ["no_slug"], "blocked closure must reject a variant id");
+
+  const outcome = real.replace("`not committed: commit failed`", "`not committed: commit error`");
+  assert.notEqual(outcome, real, "precondition: the mutation must change the body (L34)");
+  assert.deepEqual(outcomeClosureOffenders(outcome), ["not committed: commit error"], "outcome closure must reject a variant");
+
+  const noRederive = real
+    .split("\n")
+    .filter((l) => !LOOP_FROM_PLAN_LINE.test(l))
+    .join("\n");
+  assert.notEqual(noRederive, real, "precondition: the --from-plan line must exist to be removed (L34)");
+  assert.equal(
+    commitBlockReason(noRederive),
+    "no `--from-plan` re-derivation line",
+    "the ordering rule must reject a commit block that reuses a stale scope"
+  );
+
+  const globbing = real.replace(/GIT_LITERAL_PATHSPECS=1 git add -A/, "git add -A");
+  assert.notEqual(globbing, real, "precondition: the literal-pathspec add line must exist to be mutated (L34)");
+  assert.equal(
+    commitBlockReason(globbing),
+    "no `git add -A --pathspec-from-file` line",
+    "the ordering rule must reject a staging line that lets git glob a listed path"
+  );
+
+  for (const line of ["git push origin HEAD", "b=x; git push origin HEAD", "git -C . push", 'execFileSync("git", ["push"]);']) {
+    const pushes = `${real}\n\`\`\`bash\n${line}\n\`\`\`\n`;
+    assert.equal(forbiddenGitOffenders(pushes).length, 1, `the forbidden-git rule must fire on a fenced \`${line}\``);
+  }
+
+  const splitVar = `${real}\n\`\`\`bash\nb='x'\n\`\`\`\n\n\`\`\`bash\ngit branch -d "$b"\n\`\`\`\n`;
+  assert.equal(crossBlockVariableOffenders(splitVar).length, 1, "the cross-block rule must fire on a variable set in an earlier block");
+
+  assert.deepEqual(blockedClosureOffenders(real), [], "and every rule must ACCEPT the real command");
+  assert.equal(commitBlockReason(real), null);
+  assert.deepEqual(crossBlockVariableOffenders(real), []);
+});

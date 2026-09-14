@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-5.1.2-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.0.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -62,7 +62,8 @@ npx @pharn-dev/pharn@latest init
 PHARN is an open-source workflow layer for teams using AI agents to change real code. It gives each
 increment a committed paper trail:
 
-- `SPEC.md` — the human-readable intent PHARN asks you to approve before implementation.
+- `SPEC.md` — the human-readable intent PHARN asks you to approve before implementation (or, under the
+  unattended `/pharn-loop`, approves for you and records as the model's approval).
 - `PLAN.md` — the agent's implementation plan and declared write scope.
 - `GRILL.md` — pre-build interrogation of the plan.
 - `BUILD.md`, `REGRESSION.md`, `VERIFY.md`, `SHIP.md` — what changed, what ran, what passed, what did
@@ -111,12 +112,15 @@ Then open Claude Code in the same project and run the full loop:
 /pharn-loop implement password reset with a one-time token
 ```
 
-`/pharn-loop` runs spec → plan → grill → build → regress → verify, then repeats the build → regress →
-verify middle until it reaches a deterministic stop condition: green, the `--max-iter` cap, or the first
-terminal failure. It is designed around two human gates: approve the spec before code is written, then
-decide merge, fix, or abandon after verification.
+`/pharn-loop` runs spec → plan → grill → build → regress → verify **unattended**. The model approves its
+own spec, repeats build → regress → verify until a deterministic stop — green, the `--max-iter` cap, or a
+result it must not retry — commits a green result to a new local branch (never pushed or merged), and
+ends with a summary of what was done. When it reaches a point that needs a human decision, it stops and
+says what it needs instead of guessing. On any stop other than a committed green result it reverts its
+own spec approval — a procedural step, so an aborted run can skip it.
 
-For a one-pass shipping run, use:
+To approve the spec yourself and decide merge, fix, or abandon at the end, use the one-pass run with
+both human gates:
 
 ```text
 /pharn-ship implement password reset with a one-time token
@@ -209,18 +213,18 @@ available on their own when you want to inspect or drive one step manually. The 
 `/pharn-review` and `/pharn-memory-promote` — are standalone: neither is a pipeline stage, and neither is
 invoked by `/pharn-loop` or `/pharn-ship`.
 
-| Command                 | Use it when you want to...                                                                                                                              |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/pharn-loop`           | Run the full workflow with bounded build → regress → verify iteration until green, the `--max-iter` cap, or a terminal failure.                         |
-| `/pharn-ship`           | Run the full workflow once, then present the ship record and briefing at the final human decision gate.                                                 |
-| `/pharn-review`         | Run code-review lenses in parallel over any code and merge their structured findings deterministically. This is standalone; it is not a pipeline stage. |
-| `/pharn-spec`           | Convert prose intent into a structured `SPEC.md`, surface gaps, and stop for approval before implementation.                                            |
-| `/pharn-plan`           | Convert an approved `SPEC.md` into a `PLAN.md` with declared files and declared promoted lessons.                                                       |
-| `/pharn-grill`          | Challenge the plan before code exists and re-check the spec/plan hash chain.                                                                            |
-| `/pharn-build`          | Implement the plan after setting the active write scope from `PLAN.md`.                                                                                 |
-| `/pharn-regress`        | Re-run existing project suites and record regressions outside the feature.                                                                              |
-| `/pharn-verify`         | Check build artifacts and completeness signals, including declared concrete paths that were never created.                                              |
-| `/pharn-memory-promote` | Promote one lesson into `memory-bank/` through a gated provenance check.                                                                                |
+| Command                 | Use it when you want to...                                                                                                                                                       |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/pharn-loop`           | Run the full workflow unattended: the model approves the spec, iterates build → regress → verify to a deterministic stop, commits a green result to a local branch, and reports. |
+| `/pharn-ship`           | Run the full workflow once, then present the ship record and briefing at the final human decision gate.                                                                          |
+| `/pharn-review`         | Run code-review lenses in parallel over any code and merge their structured findings deterministically. This is standalone; it is not a pipeline stage.                          |
+| `/pharn-spec`           | Convert prose intent into a structured `SPEC.md`, surface gaps, and stop for approval before implementation.                                                                     |
+| `/pharn-plan`           | Convert an approved `SPEC.md` into a `PLAN.md` with declared files and declared promoted lessons.                                                                                |
+| `/pharn-grill`          | Challenge the plan before code exists and re-check the spec/plan hash chain.                                                                                                     |
+| `/pharn-build`          | Implement the plan after setting the active write scope from `PLAN.md`.                                                                                                          |
+| `/pharn-regress`        | Re-run existing project suites and record regressions outside the feature.                                                                                                       |
+| `/pharn-verify`         | Check build artifacts and completeness signals, including declared concrete paths that were never created.                                                                       |
+| `/pharn-memory-promote` | Promote one lesson into `memory-bank/` through a gated provenance check.                                                                                                         |
 
 The command names are generated and drift-guarded in the [inventory below](#pharn-builds-pharn); the
 one-line descriptions in this table are hand-written and are not.
@@ -334,10 +338,10 @@ Seven typed stages, each emitting a typed artifact:
 
 ```mermaid
 flowchart LR
-    S["spec"] --> G1{{"human approves<br/>the SPEC"}}
+    S["spec"] --> G1{{"SPEC approved<br/>(by the model under /pharn-loop)"}}
     G1 --> P["plan"] --> GR["grill"] --> B["build"] --> R["regress"] --> V["verify"]
-    V -- "not green, under the cap<br/>(/pharn-loop only)" --> B
-    V -- "green, cap reached,<br/>or terminal failure" --> G2{{"human decides<br/>merge / fix / abandon"}}
+    V -- "measurable red, under the cap<br/>(/pharn-loop only)" --> B
+    V -- "green, cap reached,<br/>or a red it must not retry" --> G2{{"human decides<br/>merge / fix / abandon<br/>(/pharn-loop: after its summary)"}}
     G2 --> SH["ship"]
 ```
 
@@ -356,8 +360,11 @@ final merge/fix/abandon decision after verification.
 The orchestration itself is not a deterministic guarantee: the agent invokes the stages. The proceed/stop
 decisions inside the pipeline are read from the deterministic verdicts emitted by the relevant checkers.
 
-`/pharn-loop` iterates the build → regress → verify middle until a deterministic stop condition: green,
-a bounded iteration cap, or a terminal failure.
+`/pharn-loop` runs the same chain without either human gate. The model approves the spec, and the build →
+regress → verify middle repeats until a deterministic stop: green, the iteration cap, or a red it must not
+retry (an inconclusive result, or a reconcile red — a retry would re-anchor the baseline and erase the
+detected escape). Only a green result is committed, to a new local branch; every other stop reverts the
+spec to `Draft`. The human decision comes after the run, on the branch or the working tree it leaves.
 
 **Standalone:** `/pharn-review` is not a pipeline stage. It runs review lenses in parallel as subagents
 and merges their structured findings deterministically. You can run it against code independently of the
@@ -464,7 +471,8 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   completeness of intent, and semantic correctness are advisory unless a specific deterministic checker
   covers the claim.
 - **Approval is workflow discipline, not proof of a person.** A content hash detects drift after a spec is
-  marked approved; it does not prove who marked it approved.
+  marked approved; it does not prove who marked it approved. Under `/pharn-loop` there is no person at
+  all: the model approves and records `approved_by: model`, a marker nothing gates on.
 - **Build completeness is filesystem-level.** PHARN can detect that a concrete declared path is missing;
   it cannot prove that an existing path was actually modified or implemented correctly.
 - **Prompt injection is not solved.** PHARN narrows which data may influence guaranteed decisions, but it
@@ -487,7 +495,8 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   the change: update the command frontmatter too, or the checker will tell you.
 - **It is token-hungry by construction.** `/pharn-grill` runs the grillers over your plan and
   `/pharn-review` fans every applicable lens out as its own parallel subagent; `/pharn-loop` repeats
-  build → regress → verify up to the cap. That buys parallel scrutiny and costs tokens accordingly.
+  build → regress → verify up to the cap, unattended — each pass re-runs your suite at the base and at
+  HEAD plus every verify gate. That buys parallel scrutiny and costs tokens accordingly.
   Budget for it, or drive individual stages instead of the loop.
 - **Packaging is still pre-release shaped.** There are no GitHub releases or git tags yet; the installer
   currently fetches the repository's `main` and records the exact installed commit.

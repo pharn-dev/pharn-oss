@@ -1574,3 +1574,40 @@ already records `6c5ae8e` and `e4e8529`.
 - source: `.dev/features/record-amendscope-hardening/REVIEW.md` +
   `.dev/features/record-amendscope-hardening/PLAN.md`
 - promoted: 2026-09-10 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L44 — A pinned multi-block shell procedure must not carry state between blocks
+
+type: tooling · concepts: [shell-state, command-prose, pinned-commands, bash-tool]
+
+**Lesson.** When command prose pins a procedure as several fenced shell blocks, each block runs as its own
+shell under the agent's Bash tool, so a variable one block sets is empty in the next. Keep every line that
+needs a value in the block that computes it, or have that block print the value and have the prose
+substitute it literally into the later lines.
+
+**Measured.** `/pharn-loop`'s first autonomous draft computed the branch name as `b=…` in its Step 6c branch
+block and deleted a failed branch with `git branch -d "$b"` in a separate Step 6d block. In a real run `$b`
+is empty there: the delete fails and the failed-commit branch is left behind. The independent review caught
+it (`REVIEW.md`, finding `pharn-loop.md:364`); the build's scratch-repo probes had not, because they ran the
+blocks together in one subshell.
+
+**Why it matters.** The blocks read as one script to the author, to a reviewer skimming the diff, and to a
+probe that concatenates them. No gate executes command prose, so nothing fails until an unattended run
+reaches the failure path — typically a recovery path, the one least likely to be exercised.
+
+**Neighbours.** [[L22]] says to pin the invocation line rather than describe it; this is a property a pinned
+multi-block procedure must also have. Probing each pinned block as its own shell, not concatenated, is what
+reproduces a real run.
+
+**Remedy (applied).** The branch block now creates the branch and prints its name in one block, and the later
+block substitutes `<branch>` literally. `.dev/floor/command-hygiene.test.mjs` pins that no fenced block in
+`pharn-loop.md` reads a shell variable it did not assign.
+
+**Bound (P0).** That pin covers one command's fenced blocks and a simple `$var` grammar. It does not see a
+value carried through a file or an exported environment variable, and it does not range over other commands.
+
+**Provenance.**
+
+- feature: `loop-autonomous`
+- commit: `9bafa0e7fd2593b7efc2f8c8acca64adf34dd6fb`
+- source: `.dev/features/loop-autonomous/REVIEW.md finding .claude/commands/pharn-loop.md:364`
+- promoted: 2026-09-14 via gated `/pharn-dev-memory-promote` (human-approved).
