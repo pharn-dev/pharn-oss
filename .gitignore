@@ -4,3 +4,10 @@ node_modules/
 runs/
 .env
 .DS_Store
+
+# Written by Codex's "import from Claude Code". PHARN-OSS targets Claude Code only for now;
+# these are imported copies (AGENTS.md mirrors CLAUDE.md, .codex/hooks mirrors .claude/hooks),
+# not product surface, and would ship in an install if committed.
+/AGENTS.md
+/.agents/
+/.codex/
