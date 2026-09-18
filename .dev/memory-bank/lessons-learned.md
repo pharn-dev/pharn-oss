@@ -1611,3 +1611,43 @@ value carried through a file or an exported environment variable, and it does no
 - commit: `9bafa0e7fd2593b7efc2f8c8acca64adf34dd6fb`
 - source: `.dev/features/loop-autonomous/REVIEW.md finding .claude/commands/pharn-loop.md:364`
 - promoted: 2026-09-14 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L45 — A fix inside a guard never reaches production while the file that INVOKES it keeps the defect — and a suite that spawns the script by path cannot see the gap
+
+type: process · concepts: [hook-wiring, invocation-layer, negative-control, fail-open, test-blindspot]
+
+**Lesson.** When a guard's invocation lives in a separate configuration file, correcting the guard's own
+code does not make the correction reach production: the wiring can keep the original defect for an entire
+release line, and the guard is simply never started. A test suite that spawns the script by absolute path
+exercises the script, never the invocation, so the production path is covered by nothing. Pin the committed
+invocation string and EXECUTE it from the condition that used to break it, with a negative control that
+fails on the old form.
+
+**Measured.** With a session's Bash cwd persisted at `pharn/pharn-core`, a `Write` the guards deny from the
+repo root **succeeded**, and both wired commands run from there returned `exit=1  Cannot find module` — for
+`Edit LIMITS.md` too. Claude Code treats any exit other than 0 or 2 as a non-blocking error, so both guards
+were off with nothing to see. The guard's own header had already recorded the same failure shape one layer
+down ("anchoring to cwd silently disabled the whole guard whenever the agent ran from a subdirectory"), and
+its in-script fix never reached the wiring.
+
+**Why it matters.** The guards' suites were green throughout — 222 assertions — because every one spawned
+the hook by absolute path. Coverage of the script is not coverage of the invocation, and the gap is
+invisible in exactly the direction that fails open.
+
+**Neighbours.** [[L41]] is the same blind-spot shape one level down (a default every test overrides);
+[[L22]] prescribes pinning the invocation line rather than describing it. Neither names the case where the
+invocation lives in a configuration file the suite never reads.
+
+**Remedy (applied).** `.claude/hooks/hook-wiring.test.cjs` reads the committed command strings from
+`.claude/settings.json` and runs them under `sh -c` from a subdirectory, with a negative control asserting
+the old relative form exits neither 0 nor 2.
+
+**Bound (P0).** The test pins the **committed** strings; it cannot prove the running harness loaded that
+`settings.json`. No floor primitive reaches the live harness — the residual is named `hook-wiring-check`.
+
+**Provenance.**
+
+- feature: `hook-cwd-anchoring`
+- commit: `a7f32a1808a2c3a794833d8fa57fc2a41f851c7c`
+- source: `.dev/features/hook-cwd-anchoring/REVIEW.md finding .claude/settings.json:10`
+- promoted: 2026-09-18 via gated `/pharn-dev-memory-promote` (human-approved).

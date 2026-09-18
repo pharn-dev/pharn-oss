@@ -233,8 +233,11 @@ function askHook(hookAbs, rel, cwd) {
 // --- defaultSafeSet() reads, with NO scope file, so the hook itself computes the fail-closed default.
 // Ask a hook how it would have answered under a RECORDED scope rather than the live one.
 //
-// The hook resolves its guarded roots from its own module path, and reads `.pharn/writes-scope.json`
-// from THOSE roots — not from cwd. So reproducing a past scope means giving the hook a root where that
+// The only hook passed here is protect-trusted-paths.cjs. It resolves its guarded roots from its own module
+// path — plus, since hook-cwd-anchoring, the git work tree containing cwd when that tree shares a hook
+// root's common directory — and reads `.pharn/writes-scope.json` from the root a canon target sits under,
+// never from cwd as such. The sandbox is a non-git temp dir, so no tree is added there and the sandbox IS
+// that root. So reproducing a past scope means giving the hook a root where that
 // scope is the live one: copy the hook in, materialize the scope, and run it there with cwd set to the
 // sandbox so a repo-relative payload path resolves under that root. This is the same DELEGATION the
 // default probe makes (execute the real hook; reproduce only the runtime signals it reads), never a

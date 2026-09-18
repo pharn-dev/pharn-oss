@@ -935,9 +935,14 @@ function inRepoDenyMessage() {
 function everyDenyMessage() {
   return [
     { branch: "in-repo", msg: inRepoDenyMessage() },
-    // rel === null: outside the root. The sibling cases (`..` traversal, the root itself) take this same
-    // branch — pinned by the out-of-root tests above — so one representative renders the branch.
+    // rel === null AND the target is in no git tree: outside the root. The sibling cases (`..` traversal,
+    // the root itself) take this same branch — pinned by the out-of-root tests above — so one
+    // representative renders the branch.
     { branch: "out-of-root", msg: denyText(tmp(), join(os.tmpdir(), "pharn-cited-commands-probe.md")) },
+    // rel === null AND the target IS in a git tree, just not this one (hook-cwd-anchoring). Added here
+    // rather than asserted separately, so every membership rule above ranges over it for free — which is
+    // the shape L29 prescribes and the shape its own increment failed to apply the first time.
+    { branch: "other-tree", msg: otherTreeDenyMessage() },
   ];
 }
 
@@ -1002,6 +1007,350 @@ test("deny message: the out-of-root branch cites NO command at all — its own c
   const { msg } = everyDenyMessage().find((b) => b.branch === "out-of-root");
   assert.match(msg, OUT_OF_ROOT_CUE, "the probe must actually render the out-of-root branch");
   assert.deepEqual([...citedCommands(msg)], [], "the out-of-root FIX block prescribes no command restart, so it must name no command");
+});
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════════════
+// JURISDICTION ROOT (hook-cwd-anchoring). ROOT is the first directory, walking up from cwd, that holds a
+// `.git` entry or IS $CLAUDE_PROJECT_DIR — no longer cwd itself. Every test above runs in a non-git temp
+// dir with no CLAUDE_PROJECT_DIR, which is exactly the fallback (root = cwd), so they pin the unchanged
+// half by construction. The tests below pin the new half, and the ✧ parity matrix at the end runs ONE
+// fixture set through BOTH guards (lessons-learned L31).
+//
+// Fixtures build real git repositories with explicit identity/branch config, so they do not depend on the
+// machine's global git config, and every spawn passes an EXPLICIT env, so a CLAUDE_PROJECT_DIR in the
+// ambient environment cannot reach a case that did not ask for one (L41).
+// ═════════════════════════════════════════════════════════════════════════════════════════════════════
+
+const { execFileSync } = require("node:child_process");
+
+function git(cwd, ...args) {
+  return execFileSync("git", ["-c", "user.name=pharn-test", "-c", "user.email=test@localhost", "-c", "init.defaultBranch=main", ...args], {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+}
+
+function gitRepo() {
+  const dir = fs.realpathSync(tmp());
+  git(dir, "init", "-q");
+  git(dir, "commit", "-q", "--allow-empty", "-m", "init");
+  return dir;
+}
+
+function mkdirs(...dirs) {
+  for (const d of dirs) fs.mkdirSync(d, { recursive: true });
+}
+
+function envWith(projectDir) {
+  const env = { ...process.env };
+  delete env.CLAUDE_PROJECT_DIR;
+  if (projectDir) env.CLAUDE_PROJECT_DIR = projectDir;
+  return env;
+}
+
+function hookIn(cwd, filePath, projectDir, script = HOOK) {
+  return spawnSync(process.execPath, [script], {
+    input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: filePath } }),
+    cwd,
+    encoding: "utf8",
+    env: envWith(projectDir),
+  });
+}
+
+function denyTextIn(cwd, filePath, projectDir) {
+  const r = hookIn(cwd, filePath, projectDir);
+  assert.equal(r.status, 2, "these cases must all be denials");
+  return r.stderr;
+}
+
+// The root the hook computed, read back from the one place a message prints it.
+function rootOf(cwd, projectDir) {
+  const msg = denyTextIn(cwd, join(os.tmpdir(), "pharn-root-probe.md"), projectDir);
+  const m = /NOT INSIDE the repo root \(([^)]*)\)/.exec(msg) || /not to the tree this guard judges \(([^)]*)\)/.exec(msg);
+  assert.ok(m, `no message rendered the root: ${msg}`);
+  return m[1];
+}
+
+test("subdirectory of a git sandbox: the scope is read at the ROOT, and a decoy record in the subdirectory is ignored", () => {
+  const repo = gitRepo();
+  const sub = join(repo, "a", "b");
+  mkdirs(sub);
+  setScope(repo, ["a/b/declared.md"]);
+  setScope(sub, ["undeclared.md"]); // the decoy: a scope record in the subdirectory itself
+  assert.equal(hookIn(sub, "declared.md", null).status, 0, "a relative payload resolves against cwd and is in the ROOT's scope");
+  assert.equal(hookIn(sub, "undeclared.md", null).status, 2, "the decoy record in the subdirectory must never be read");
+});
+
+test("subdirectory with NO scope, DEV posture: the default-safe-set is computed at the ROOT (the probe #4 regression)", () => {
+  const repo = seedDevRepo(gitRepo());
+  const sub = join(repo, "pharn", "pharn-core");
+  mkdirs(sub);
+  assert.equal(hookIn(sub, join(repo, ".dev", "features", "x", "PLAN.md"), null).status, 0);
+  assert.equal(hookIn(sub, join(repo, "README.md"), null).status, 2, "a root file is still outside the default");
+});
+
+test("subdirectory with NO scope, INSTALL posture: pharn/features/ only, judged at the ROOT", () => {
+  const repo = seedInstalledProject(gitRepo());
+  const sub = join(repo, "docs");
+  mkdirs(sub);
+  assert.equal(hookIn(sub, join(repo, "pharn", "features", "x", "SPEC.md"), null).status, 0);
+  assert.equal(hookIn(sub, join(repo, ".dev", "features", "x", "PLAN.md"), null).status, 2);
+});
+
+test("a native worktree is judged as ITSELF — the main checkout's scope authorizes nothing inside it", () => {
+  const main = gitRepo();
+  const wt = join(main, ".claude", "worktrees", "w");
+  git(main, "worktree", "add", "-q", wt, "-b", "w");
+  setScope(main, ["src/main-only.ts"]);
+  setScope(wt, ["src/wt-only.ts"]);
+  mkdirs(join(wt, "src"));
+  assert.equal(hookIn(join(wt, "src"), join(wt, "src", "wt-only.ts"), null).status, 0);
+  assert.equal(
+    hookIn(join(wt, "src"), join(wt, "src", "main-only.ts"), null).status,
+    2,
+    "the main checkout's scope must not reach into a worktree"
+  );
+});
+
+test("CLAUDE_PROJECT_DIR stops the walk: a non-git project is its own root", () => {
+  const proj = fs.realpathSync(tmp());
+  const sub = join(proj, "packages", "ui");
+  mkdirs(sub);
+  assert.equal(rootOf(sub, proj), proj);
+});
+
+test("CLAUDE_PROJECT_DIR stops the walk BELOW a repository: a monorepo package is its own root", () => {
+  const mono = gitRepo();
+  const pkg = join(mono, "apps", "web");
+  mkdirs(join(pkg, "src"));
+  assert.equal(rootOf(join(pkg, "src"), pkg), pkg);
+});
+
+test("with neither a .git entry nor CLAUDE_PROJECT_DIR the root is the cwd — today's behavior, unchanged", () => {
+  const dir = fs.realpathSync(tmp());
+  assert.equal(rootOf(dir, null), dir);
+});
+
+// --- The THIRD deny branch: inside SOME git work tree, but not the one this guard judges (L27/L29) ---
+// Its remedy set must be present in its own case AND absent from the other, in both directions.
+
+const OTHER_TREE_CUE = /belongs to a git working tree, but not to the tree this guard judges/;
+const BASH_SCRATCH_CUE = /write it with the Bash tool/;
+
+test("deny branch: a target in a SIBLING worktree gets the work-tree remedy and NO Bash remedy", () => {
+  const main = gitRepo();
+  const sib = join(fs.realpathSync(os.tmpdir()), `pharn-sib-${process.pid}-${Date.now()}`);
+  git(main, "worktree", "add", "-q", sib, "-b", "sib");
+  const msg = denyTextIn(main, join(sib, "src", "a.ts"), null);
+  assert.match(msg, OTHER_TREE_CUE);
+  assert.doesNotMatch(msg, BASH_SCRATCH_CUE, "code in another tree is not scratch — the Bash remedy must be absent");
+  assert.doesNotMatch(msg, OUT_OF_ROOT_CUE, "the two out-of-root branches must not cross-contaminate");
+  fs.rmSync(sib, { recursive: true, force: true });
+});
+
+test("deny branch: the SAME repository outside this guard's root takes the work-tree branch too (the monorepo shape)", () => {
+  const mono = gitRepo();
+  const web = join(mono, "apps", "web");
+  mkdirs(web, join(mono, "apps", "api"));
+  const msg = denyTextIn(web, join(mono, "apps", "api", "x.ts"), web);
+  assert.match(msg, OTHER_TREE_CUE, "the wording must hold where ROOT is a package boundary, not a work-tree root");
+  assert.doesNotMatch(msg, BASH_SCRATCH_CUE);
+});
+
+test("deny branch: a NESTED worktree path, seen from the main checkout, is IN-REPO — not the work-tree branch", () => {
+  // The boundary is root-relativity, not "is there a worktree involved". `.claude/worktrees/w/x` IS inside
+  // the main root, so the reachable remedy really is a declaration in `## Files`, and that is what the
+  // in-repo body offers. Pinned so a later "improvement" cannot route it to the work-tree branch, whose
+  // remedy (work from a session inside that tree) would then be advice the operator does not need.
+  const main = gitRepo();
+  const wt = join(main, ".claude", "worktrees", "w");
+  git(main, "worktree", "add", "-q", wt, "-b", "nested-branch-probe");
+  const msg = denyTextIn(main, join(wt, "src", "a.ts"), null);
+  assert.match(msg, WRITES_ADVICE_CUE, "a nested path can be declared, so that remedy must be offered");
+  assert.doesNotMatch(msg, OTHER_TREE_CUE);
+  assert.doesNotMatch(msg, OUT_OF_ROOT_CUE);
+});
+
+test("deny branch: a path in NO git tree keeps the Bash scratch remedy and not the work-tree one", () => {
+  const msg = denyTextIn(tmp(), join(os.tmpdir(), "pharn-scratch-probe.md"), null);
+  assert.match(msg, OUT_OF_ROOT_CUE);
+  assert.match(msg, BASH_SCRATCH_CUE);
+  assert.doesNotMatch(msg, OTHER_TREE_CUE);
+});
+
+test("deny branch: the root ITSELF stays the out-of-root branch — a tree is not 'another' tree", () => {
+  const msg = denyTextIn(gitRepo(), ".", null);
+  assert.match(msg, OUT_OF_ROOT_CUE);
+  assert.doesNotMatch(msg, OTHER_TREE_CUE);
+});
+
+test("the third branch changes NO verdict — every one of the three still exits 2", () => {
+  const main = gitRepo();
+  const sib = join(fs.realpathSync(os.tmpdir()), `pharn-sib2-${process.pid}-${Date.now()}`);
+  git(main, "worktree", "add", "-q", sib, "-b", "sib2");
+  assert.equal(hookIn(main, join(sib, "x.md"), null).status, 2, "other-tree");
+  assert.equal(hookIn(main, join(os.tmpdir(), "pharn-verdict-probe2.md"), null).status, 2, "out-of-root");
+  assert.equal(hookIn(main, "README.md", null).status, 2, "in-repo, outside the default");
+  fs.rmSync(sib, { recursive: true, force: true });
+});
+
+// Renders the third branch for everyDenyMessage(), which the membership rules above iterate (L29).
+function otherTreeDenyMessage() {
+  const main = gitRepo();
+  const sib = join(fs.realpathSync(os.tmpdir()), `pharn-branch-${process.pid}-${Date.now()}`);
+  git(main, "worktree", "add", "-q", sib, "-b", "branch-probe");
+  const msg = denyTextIn(main, join(sib, "src", "a.ts"), null);
+  fs.rmSync(sib, { recursive: true, force: true });
+  return msg;
+}
+
+// --- ✧ PARITY (L31, L34): ONE fixture set, BOTH guards -----------------------------------------------
+// enforce's root is read from its own message; protect's added root is read from BEHAVIOR — it must deny
+// `<root>/LIMITS.md` exactly where the row expects a root to be guarded, and allow it where it does not.
+// The rows are the worked cases in the plan's Design §2 table, materialized once so a rule added later
+// covers every row for free.
+
+function installFix2(root) {
+  const dir = join(root, ".claude", "hooks");
+  fs.mkdirSync(dir, { recursive: true });
+  const dest = join(dir, "protect-trusted-paths.cjs");
+  if (!fs.existsSync(dest)) fs.symlinkSync(FIX2, dest);
+  return dest;
+}
+
+function fix2At(hookRoot, cwd, filePath, projectDir) {
+  return spawnSync(process.execPath, [installFix2(hookRoot)], {
+    input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: filePath } }),
+    cwd,
+    encoding: "utf8",
+    env: envWith(projectDir),
+  }).status;
+}
+
+function parityRows() {
+  return [
+    {
+      row: "repo root",
+      build: () => {
+        const main = gitRepo();
+        return { hookRoot: main, cwd: main, projectDir: null, expectRoot: main, guarded: true };
+      },
+    },
+    {
+      row: "subdirectory",
+      build: () => {
+        const main = gitRepo();
+        const sub = join(main, "pharn", "pharn-core");
+        mkdirs(sub);
+        return { hookRoot: main, cwd: sub, projectDir: null, expectRoot: main, guarded: true };
+      },
+    },
+    {
+      row: "native worktree",
+      build: () => {
+        const main = gitRepo();
+        const wt = join(main, ".claude", "worktrees", "w");
+        git(main, "worktree", "add", "-q", wt, "-b", "parity-w");
+        mkdirs(join(wt, "src"));
+        return { hookRoot: main, cwd: join(wt, "src"), projectDir: null, expectRoot: wt, guarded: true };
+      },
+    },
+    {
+      row: "sibling worktree (absolute gitdir)",
+      build: () => {
+        const main = gitRepo();
+        const sib = join(fs.realpathSync(os.tmpdir()), `pharn-parity-abs-${process.pid}-${Date.now()}`);
+        git(main, "worktree", "add", "-q", sib, "-b", "parity-abs");
+        return { hookRoot: main, cwd: sib, projectDir: null, expectRoot: sib, guarded: true };
+      },
+    },
+    {
+      row: "sibling worktree (relative gitdir)",
+      build: () => {
+        const main = gitRepo();
+        const sib = join(fs.realpathSync(os.tmpdir()), `pharn-parity-rel-${process.pid}-${Date.now()}`);
+        git(main, "worktree", "add", "-q", sib, "-b", "parity-rel");
+        // git's own relative-paths form (`git worktree add --relative-paths`, 2.48+), written by hand so
+        // the fixture does not depend on the git version CI happens to ship.
+        const admin = join(main, ".git", "worktrees", require("node:path").basename(sib));
+        fs.writeFileSync(join(sib, ".git"), `gitdir: ${require("node:path").relative(sib, admin)}\n`);
+        return { hookRoot: main, cwd: sib, projectDir: null, expectRoot: sib, guarded: true };
+      },
+    },
+    {
+      row: "a different git repository",
+      build: () => {
+        const main = gitRepo();
+        const other = gitRepo();
+        return { hookRoot: main, cwd: other, projectDir: null, expectRoot: other, guarded: false };
+      },
+    },
+    {
+      row: "an unresolvable .git file",
+      build: () => {
+        const main = gitRepo();
+        const bad = fs.realpathSync(tmp());
+        fs.writeFileSync(join(bad, ".git"), "not a gitdir line\n");
+        return { hookRoot: main, cwd: bad, projectDir: null, expectRoot: bad, guarded: true };
+      },
+    },
+    {
+      row: "non-git project with CLAUDE_PROJECT_DIR",
+      build: () => {
+        const proj = fs.realpathSync(tmp());
+        const sub = join(proj, "src");
+        mkdirs(sub);
+        return { hookRoot: proj, cwd: sub, projectDir: proj, expectRoot: proj, guarded: true };
+      },
+    },
+    {
+      row: "non-git, no env (the fallback every hermetic test uses)",
+      build: () => {
+        const main = gitRepo();
+        const dir = fs.realpathSync(tmp());
+        return { hookRoot: main, cwd: dir, projectDir: null, expectRoot: dir, guarded: false };
+      },
+    },
+    {
+      row: "a subpath install entered through a worktree",
+      build: () => {
+        const mono = gitRepo();
+        const pkg = join(mono, "apps", "web");
+        mkdirs(pkg);
+        git(mono, "add", "-A");
+        git(mono, "commit", "-q", "--allow-empty", "-m", "pkg");
+        const wt = join(fs.realpathSync(os.tmpdir()), `pharn-parity-sub-${process.pid}-${Date.now()}`);
+        git(mono, "worktree", "add", "-q", wt, "-b", "parity-sub");
+        const wtPkg = join(wt, "apps", "web");
+        mkdirs(wtPkg);
+        return { hookRoot: pkg, cwd: wtPkg, projectDir: pkg, expectRoot: wt, guarded: false };
+      },
+    },
+  ];
+}
+
+test("✧ PARITY: enforce's root and protect's guarded roots agree over every worked case", () => {
+  const rows = parityRows();
+  assert.ok(rows.length >= 10, "the matrix must cover every shape, or it certifies the one in front of the author");
+  for (const { row, build } of rows) {
+    const f = build();
+    assert.equal(rootOf(f.cwd, f.projectDir), f.expectRoot, `enforce root for: ${row}`);
+    assert.equal(
+      fix2At(f.hookRoot, f.cwd, join(f.expectRoot, "LIMITS.md"), f.projectDir),
+      f.guarded ? 2 : 0,
+      `protect coverage of ${f.expectRoot}/LIMITS.md for: ${row}`
+    );
+  }
+});
+
+test("✧ workTreeRoot() is byte-identical in both guards — the copy-pair pin (L31)", () => {
+  const body = (file) => {
+    const m = /^function workTreeRoot\(dir\) \{[\s\S]*?^\}$/m.exec(fs.readFileSync(file, "utf8"));
+    assert.ok(m, `${file} must declare a top-level workTreeRoot(dir)`);
+    return m[0];
+  };
+  assert.equal(body(HOOK), body(FIX2), "the two copies must agree byte-for-byte — change BOTH, or neither");
 });
 
 test("deny message: the extractor ignores PATH segments, so the tests above are not vacuous", () => {
