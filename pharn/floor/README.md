@@ -85,9 +85,18 @@ never evaluates a `judge` string (no LLM).
 ## Wire the write-guard hooks
 
 Two `PreToolUse` hooks are wired in `.claude/settings.json` (committed), both on
-`Write|Edit|MultiEdit|NotebookEdit`; a deny from **either** blocks. **`protect-trusted-paths.cjs` (fix #2)** blocks
-any write to a protected path. Paths are matched **repo-relative and exact**, case-folded, against the
-guard's own location — never by bare basename, so a user's own `docs/ARCHITECTURE.md` stays writable.
+`Write|Edit|MultiEdit|NotebookEdit`; a deny from **either** blocks. **Wire them with the command form that
+ships** — `node "${CLAUDE_PROJECT_DIR}"/.claude/hooks/<guard>.cjs`. Claude Code runs a hook in Claude's
+_current_ directory, so a relative `node .claude/hooks/…` stops starting after any `cd` into a
+subdirectory: node exits 1, which Claude Code treats as a non-blocking error, and both guards go silently
+off (measured; the shipped form until `6.1.0`). Each guard then judges the **git working tree that contains
+Claude's current directory** — a subdirectory keeps the repo root, a session inside a worktree is judged as
+that worktree — and `LIMITS.md §7` states the bounds that remain. **`protect-trusted-paths.cjs` (fix #2)**
+blocks any write to a protected path. Paths are matched **repo-relative and exact**, case-folded, against
+the guard's own location (plus the work tree Claude is in, when it belongs to the same repository) — never
+by bare basename, so a user's own `docs/ARCHITECTURE.md` stays writable. **Git metadata is denied too**: any
+`.git` path segment under a guarded root, because those entries decide which tree each guard judges and
+`.git/hooks` / `.git/config` run code on the next git command.
 The default set is the four trusted spec docs (`pharn/CONSTITUTION.md`, `pharn/ARCHITECTURE.md`,
 `THREAT-MODEL.md`, `LIMITS.md`), `CODEOWNERS` at each of the three locations GitHub honors (root,
 `.github/`, `docs/`) — the GitHub-layer write-guard itself — and **the two pre-write guards' own control

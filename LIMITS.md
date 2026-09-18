@@ -179,8 +179,8 @@ was absent from the built code — or when a sink becomes declarable.
 ## 6. The write guards cover one tool surface; `Bash` is outside it
 
 The `PreToolUse` matcher wired in `.claude/settings.json` is `Write|Edit|MultiEdit|NotebookEdit`, and
-both hooks re-test that same set in their own code (`enforce-writes-scope.cjs:333`,
-`protect-trusted-paths.cjs:555`). A write issued through the **`Bash`** tool therefore never reaches
+both hooks re-test that same set in their own code (the `isWrite` test in each of `enforce-writes-scope.cjs` and
+`protect-trusted-paths.cjs`). A write issued through the **`Bash`** tool therefore never reaches
 either hook. Probed rather than read off the wiring — §1d's quantifier is precisely why:
 
 | payload                                                       | hook                        | verdict                   |
@@ -252,3 +252,44 @@ already happened: the reconciler reports, it never reverts, and rollback is expl
 write stops being **silent** — it costs a red stage instead of nothing. The distance between "nobody can
 do this" and "somebody will notice this happened" is the distance between a prevention and a detection,
 and this section names which side PHARN is on.
+<!-- §7 was drafted in .dev/features/hook-cwd-anchoring and applied by a human (SKILLS_VERSION 6.1.0). -->
+
+---
+
+## 7. The write guards act only when Claude Code starts them, and judge the tree Claude is in
+
+Every write-guard claim in this file, and `THREAT-MODEL.md §4` items 2 and 7, holds only while both
+`PreToolUse` hooks actually **run**. Claude Code runs a command hook in Claude's **current** directory, and
+treats a hook that exits with anything other than 0 or 2 — including one whose script cannot be found — as a
+non-blocking error. Until `SKILLS_VERSION` 6.1.0 the shipped wiring was a relative `node .claude/hooks/…`,
+so after any persisted `cd` into a subdirectory **both guards silently stopped running**. Probed rather than
+read off the wiring:
+
+| hook command run from               | payload          | exit                                             |
+| ----------------------------------- | ---------------- | ------------------------------------------------ |
+| `pharn/pharn-core`, relative wiring | `Edit LIMITS.md` | **1** — `Cannot find module`; the write proceeds |
+| repo root, relative wiring          | `Edit LIMITS.md` | 2 — denied                                       |
+
+6.1.0 anchors both commands on `${CLAUDE_PROJECT_DIR}`. The bounds that remain:
+
+- **A guard that cannot start, or that times out, still does not block.** That is Claude Code's documented
+  behaviour, and no hook can change it.
+- **The fix reaches an install only through its own `settings.json`.** `pharn update` never touches that
+  file, so an install upgraded without editing it keeps the relative form and stays fail-open from every
+  other directory. Upgrade the hooks first, then the two commands; roll back in the reverse order.
+- **"Current directory" is the hook process's.** When Claude's own directory no longer exists, Claude Code
+  runs hooks from the session-start directory, the project root, home or temp, and the guards judge that
+  directory instead.
+- **A project path containing `"`, `` ` ``, `$` or `\` is unsupported.** The placeholder is substituted into
+  a shell command, where such a character can make the command mis-expand — the guard then does not start —
+  or run text taken from the directory name.
+- **Jurisdiction is the git working tree that contains Claude's current directory**, or `CLAUDE_PROJECT_DIR`
+  when the walk reaches that first. A session cannot write another worktree by path: that write is denied,
+  not unguarded. A launch-checkout session writing into a nested `.claude/worktrees/<name>/` is judged by
+  its own writes-scope, which could name that worktree's hooks if a plan declared them.
+- **A `.git` entry is trusted as a boundary.** Tool writes to git metadata — any `.git` path segment under a
+  guarded root — are denied, because those entries decide jurisdiction. A `Bash` write still reaches them
+  (§6), and re-pointing a worktree's `.git` through `Bash` removes the trusted-file guard from that worktree.
+- **A PHARN install at a subpath of a repository, entered through a worktree of that repository**, reads a
+  different scope record than its setter wrote, and falls back to the default-safe-set: friction, not a
+  hole.

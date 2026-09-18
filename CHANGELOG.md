@@ -52,6 +52,53 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Both write guards could silently fail to START, and neither could judge the worktree Claude was
+  actually in** (`SKILLS_VERSION` 6.0.0 → **6.1.0**, minor: the wiring and jurisdiction halves are
+  corrections, but the increment also ships a **new** guard — fix #2 now denies tool writes to git
+  metadata) ([`.dev/features/hook-cwd-anchoring/`](./.dev/features/hook-cwd-anchoring/)) — Claude Code runs
+  a `PreToolUse` hook in Claude's **current** directory, and the shipped wiring was a relative
+  `node .claude/hooks/…`. **Measured, not reasoned about:** with a session's Bash cwd persisted at
+  `pharn/pharn-core`, a `Write` the guards deny from the repo root **succeeded**, and the two wired commands
+  run from that directory each returned `exit=1  Error: Cannot find module …` — for `Edit LIMITS.md` too.
+  Claude Code treats any exit code other than 0 or 2 as a **non-blocking error**, so both guards were off
+  with nothing to see. The guard's own header had recorded the same failure shape one layer down ("anchoring
+  to cwd silently disabled the whole guard whenever the agent ran from a subdirectory") and its in-script fix
+  never reached the wiring; per **L20** the second occurrence earns an executing check, so
+  `.claude/hooks/hook-wiring.test.cjs` now runs the committed command strings themselves, with a negative
+  control that proves it can tell the fix from the defect (**L40**). The suites that already covered "cwd is
+  a SUBDIRECTORY" could not: they spawn the hook by absolute path, so the production path was exercised by
+  nothing (**L41**).
+
+  **The jurisdiction half.** `ROOT` is no longer the hook process's cwd: it is the first directory, walking
+  up from it, that holds a `.git` entry or is `$CLAUDE_PROJECT_DIR`. A session in a subdirectory therefore
+  reads its repo's scope record, and a session inside a worktree is judged — and, now, **protected** — as
+  that worktree. `protect-trusted-paths.cjs` ADDS that tree to its guarded roots (never substitutes: the
+  hook's own location stays the anchor) when it shares a hook root's git common directory, so a different
+  repository around a subpath install is still not guarded. Until now a launch-checkout session could not
+  write a sibling worktree at all, and — measured in a real user project — agents answered that denial by
+  writing the same files through `python3` heredocs in **Bash**: 11 paths denied, 7 of them written that way
+  anyway. The out-of-root deny message gained a third branch for exactly that case, which names the reachable
+  remedy (work from a session inside the project that owns the file) and offers no Bash route (**L27**).
+
+  **Why a new guard was required, and why it is a minor bump.** With jurisdiction resolved from `.git`
+  entries, a plan that declared a worktree's `.git` could have re-pointed it and removed fix #2 from that
+  worktree — worse than today. fix #2 therefore denies any tool write whose root-relative key carries a
+  `.git` **segment** (never `.github/…` or `.gitignore`); `.git/hooks` and `.git/config` run code on the next
+  git command, so the over-block is deliberate. **Bounded (P0):** this is the `Write`/`Edit`/`MultiEdit`/
+  `NotebookEdit` surface only — a `Bash` write still reaches `.git`, exactly as `LIMITS.md §6` says, and
+  re-pointing a worktree's `.git` that way still removes its trusted-file guard.
+
+  **Upgrading an existing install is ORDERED.** `pharn update` never touches `.claude/settings.json`, so the
+  two commands are a manual step: run `pharn update` first, then change them — the anchored wiring over
+  pre-`6.1.0` hooks regresses both guards (probed) — and roll back in the reverse order. New installs get the
+  anchored form, since `init` copies `settings.json` when absent. The guards, the wiring and `LIMITS.md` are
+  hook-protected, so the change was delivered as a patch and applied by the maintainer through
+  `.dev/features/hook-cwd-anchoring/proposed/apply.sh`, which re-runs the three hook suites against the
+  applied bytes and restores them from `HEAD` on any failure. `LIMITS.md §7` records what remains: a hook that
+  cannot start or times out still does not block; a project path containing `"`, `` ` ``, `$` or `\` is
+  unsupported by the substituted command form; and a subpath install entered through a worktree reads a
+  different scope record than its setter wrote, and falls back to the fail-closed default.
+
 - **`amendScope()` now WRITES the baseline through the same descriptor it read, closing the half of the
   CWE-367 pair the entry below left standing.** `SKILLS_VERSION` **5.1.1 → 5.1.2** (patch: a correction
   to bytes 5.1.0 already put on the product surface; no capability is added and every success path is

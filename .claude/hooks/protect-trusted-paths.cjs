@@ -106,7 +106,12 @@
 //      and read as "outside the repo" — while naming the very same file. Every entry was reachable.
 //   2. The anchor must not be cwd. Relativizing the PROTECTED SET against cwd silently disabled the
 //      whole guard whenever the agent ran from a subdirectory. cwd is used ONLY where the payload
-//      actually means it: resolving a relative write path.
+//      actually means it: resolving a relative write path. RE-DERIVED at 6.1.0, because the sentence
+//      "never cwd" is now half the story: the work tree CONTAINING cwd is ADDED to the guarded roots
+//      (see JURISDICTION below) when it belongs to the same repository, so a worktree session keeps the
+//      coverage its own hook copy used to give it. The anchor is still the hook's own location, a root is
+//      only ever added, and the same failure recurred one layer up anyway — with the old relative wiring
+//      the guard did not START from a subdirectory at all (lessons-learned L20, L41).
 //   3. The anchor must not be __dirname ALONE. Node resolves a module's __dirname THROUGH symlinks, so
 //      a hook symlinked in from a dotfiles repo anchored to the dotfiles checkout and left the real
 //      project unguarded. Both the as-invoked path and the resolved path are therefore guarded roots.
@@ -156,6 +161,16 @@
 //   the project root, so the outer hook is the one that runs and the inner copy is just files to it.
 // • A symlink inside a guarded root that points OUT of it is allowed — deliberately, since a second
 //   checkout's CONSTITUTION.md is a different repo's file, and denying it was the original over-match.
+// • The ADDED work-tree root (see JURISDICTION) covers only a tree that shares a hook root's git common
+//   directory, or one whose common directory cannot be read (over-block). A DIFFERENT repository is still
+//   not guarded — the subpath posture above, unchanged — and a launch-checkout session writing INTO a
+//   nested `.claude/worktrees/<name>/` by path is judged by fix #7 and its own scope, not by this hook's
+//   worktree coverage.
+// • GIT METADATA is denied on the TOOL surface only. The claim is "the write tools cannot re-point a
+//   `.git` entry or plant one", never "git metadata cannot be changed": a `Bash` write reaches `.git`
+//   exactly as it reaches every other guarded path, and re-pointing a worktree's `.git` that way removes
+//   this hook's coverage of that worktree. The rule also over-blocks a vendored repository's own `.git`
+//   under a guarded root, deliberately — no legitimate agent write names one.
 //
 // Composes with set-writes-scope.cjs, which REFUSES to emit a scope naming the .claude/ control paths
 // unless --allow-claude-dir is passed. For every DEFAULT_PROTECTED entry the two remain independent:
@@ -218,6 +233,99 @@ const ROOTS = (() => {
     for (const v of [base, realpathOr(base)]) if (v && !out.includes(v)) out.push(v);
   }
   return out.length ? out : [CWD];
+})();
+
+// ── JURISDICTION: the git work tree Claude is in (hook-cwd-anchoring) ─────────────────────────────────
+// .claude/settings.json runs this file through ${CLAUDE_PROJECT_DIR}, so the copy that runs is always the
+// launch checkout's and ROOTS above always name the launch checkout. Before that wiring, a session inside
+// a worktree ran the worktree's OWN copy, whose ROOTS guarded the worktree; keeping that coverage now
+// means ADDING the work tree that contains cwd — never substituting it, so header #2 still holds (cwd is
+// not an anchor on its own). A root is only ever added, so every error below can only over-block.
+//
+// workTreeRoot() is a DELIBERATE COPY of the function of the same name in enforce-writes-scope.cjs — a
+// shared module would be a new control-surface file. A ✧ test pins the two bodies byte-equal, and a parity
+// matrix executes both hooks over the same fixtures (lessons-learned L31).
+
+// The first directory — `dir` itself, then each ancestor — that holds an entry named `.git` (a file or a
+// directory) or equals realpath($CLAUDE_PROJECT_DIR). null when neither is found. Entry existence and
+// string equality only; no git subprocess. `dir` must already be symlink-resolved.
+function workTreeRoot(dir) {
+  let stop = null;
+  try {
+    const env = process.env.CLAUDE_PROJECT_DIR;
+    if (typeof env === "string" && env !== "") stop = fs.realpathSync(env);
+  } catch {
+    /* an unresolvable project dir is simply not a stop */
+  }
+  let cur = dir;
+  for (;;) {
+    let hasGit = false;
+    try {
+      fs.lstatSync(path.join(cur, ".git"));
+      hasGit = true;
+    } catch {
+      /* no .git entry here */
+    }
+    if (hasGit || (stop !== null && cur === stop)) return cur;
+    const parent = path.dirname(cur);
+    if (parent === cur) return null;
+    cur = parent;
+  }
+}
+
+function hasGitEntry(dir) {
+  try {
+    fs.lstatSync(path.join(dir, ".git"));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// The git common directory of a tree that holds a `.git` entry, or null when it cannot be resolved. A `.git`
+// DIRECTORY is its own common dir. A `.git` FILE names a gitdir (`gitdir: <p>`, resolved against the tree,
+// so git's relative-path form works too); that gitdir's `commondir` file, resolved against the gitdir, names
+// the common dir, and a gitdir with no `commondir` is its own common dir (a main checkout made with
+// --separate-git-dir, or a submodule — which is a different repository and resolves as one).
+function gitCommonDir(tree) {
+  try {
+    const entry = path.join(tree, ".git");
+    if (fs.statSync(entry).isDirectory()) return fs.realpathSync(entry);
+    const m = /^gitdir:[ \t]*(.+?)[ \t]*$/m.exec(fs.readFileSync(entry, "utf8"));
+    if (!m) return null;
+    const gitdir = path.resolve(tree, m[1]);
+    let common = gitdir;
+    try {
+      const rel = fs.readFileSync(path.join(gitdir, "commondir"), "utf8").trim();
+      if (rel) common = path.resolve(gitdir, rel);
+    } catch {
+      /* no commondir: the gitdir is its own common dir */
+    }
+    return fs.realpathSync(common);
+  } catch {
+    return null;
+  }
+}
+
+// ADD the work tree containing cwd when it belongs to the same repository as a hook root, or when that
+// cannot be determined. A tree with no `.git` entry (the walk stopped at CLAUDE_PROJECT_DIR) is not a git
+// tree and adds nothing. A hook root with no `.git` entry of its own (PHARN installed at a subpath)
+// contributes no common directory, so a different repository around it is never added — the subpath
+// posture pinned by protect-trusted-paths.test.cjs holds. Must run before ROOT_PREFIXES and the inode sets
+// are derived from ROOTS below.
+(() => {
+  let tree = null;
+  try {
+    tree = workTreeRoot(CWD);
+    if (tree === null || ROOTS.includes(tree) || !hasGitEntry(tree)) return;
+    const common = gitCommonDir(tree);
+    const hookCommons = ROOTS.filter(hasGitEntry)
+      .map(gitCommonDir)
+      .filter((c) => c !== null);
+    if (common === null || hookCommons.includes(common)) ROOTS.push(tree);
+  } catch {
+    if (tree !== null && !ROOTS.includes(tree)) ROOTS.push(tree);
+  }
 })();
 
 const DEFAULT_PROTECTED = [
@@ -469,42 +577,64 @@ function isProtected(abs) {
   return false;
 }
 
-// The target's ROOT-RELATIVE folded key if it sits inside a canon subtree, else null. Returning the key
-// (rather than a boolean) is what lets the escape compare the scope's single entry against the very
-// path being written, instead of merely against "some canon path".
-function canonRelKey(abs) {
+// The target's ROOT-RELATIVE folded key if it sits inside a canon subtree, together with the guarded root
+// it sits under, else null. Returning the key (rather than a boolean) is what lets the escape compare the
+// scope's single entry against the very path being written, instead of merely against "some canon path".
+// Returning the ROOT is what BINDS that comparison to one tree (hook-cwd-anchoring): with a second root
+// added, a root-agnostic search would let a promote-origin record in one tree authorize the same relative
+// canon path in another.
+function canonMatch(abs) {
   const key = toKey(path.resolve(String(abs)));
-  for (const prefix of ROOT_PREFIXES) {
-    if (!key.startsWith(prefix)) continue;
-    const rel = key.slice(prefix.length);
-    for (const sub of PROTECTED_SUBTREE_KEYS) if (rel.startsWith(sub) && rel.length > sub.length) return rel;
+  for (let i = 0; i < ROOT_PREFIXES.length; i++) {
+    if (!key.startsWith(ROOT_PREFIXES[i])) continue;
+    const rel = key.slice(ROOT_PREFIXES[i].length);
+    for (const sub of PROTECTED_SUBTREE_KEYS) if (rel.startsWith(sub) && rel.length > sub.length) return { rel, root: ROOTS[i] };
   }
   return null;
 }
 
-// Is this write authorized by the ORIGIN of the active writes-scope? See the header for what this does
-// and does not buy. Every branch that is not an exact match returns false, so the guard is fail-closed
-// on an absent, unreadable, unparseable, non-object, wrong-origin, multi-entry or mismatched record.
-function canonWriteAuthorized(relKey) {
-  if (typeof relKey !== "string" || !relKey) return false;
-  for (const root of ROOTS) {
-    let parsed;
-    try {
-      parsed = JSON.parse(fs.readFileSync(path.join(root, SCOPE_FILE), "utf8"));
-    } catch {
-      continue; // absent or unparseable at this root -> not an authorization
-    }
-    // JSON.parse("null") returns null and JSON.parse("[]") an array; neither throws.
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue;
-    // (2) ORIGIN: exact membership over a literal array. This is the argv-derived field.
-    if (typeof parsed.set_by !== "string" || !PROMOTE_COMMAND_KEYS.has(toKey(parsed.set_by))) continue;
-    // (3) EXACTLY ONE entry, equal to this very target. A promote run resolves `--target` to one path,
-    // so this is the shape the legitimate caller emits; anything wider is refused rather than searched.
-    if (!Array.isArray(parsed.scope) || parsed.scope.length !== 1) continue;
-    if (typeof parsed.scope[0] !== "string") continue;
-    if (toKey(parsed.scope[0]) === relKey) return true;
+function canonRelKey(abs) {
+  const m = canonMatch(abs);
+  return m === null ? null : m.rel;
+}
+
+// GIT METADATA under a guarded root: any key carrying `.git` as a path SEGMENT (`.git`, `.git/…`,
+// `x/.git`, `x/.git/…`) — never `.github/…` or `.gitignore`, which are different segments. Those entries
+// decide which work tree each guard judges, and `.git/hooks` / `.git/config` run code on the next git
+// command, so the write tools may not touch them. Deliberately a SEPARATE rule rather than a
+// DEFAULT_PROTECTED entry: the derived F4 invariant requires `vendor/third-party/<basename>` to stay
+// writable for every declared entry, and a `.git` entry there must not be.
+function gitMetaRelKey(abs) {
+  const key = toKey(path.resolve(String(abs)));
+  for (const prefix of ROOT_PREFIXES) {
+    if (!key.startsWith(prefix)) continue;
+    const rel = key.slice(prefix.length);
+    if (rel.split("/").includes(".git")) return rel;
   }
-  return false;
+  return null;
+}
+
+// Is this write authorized by the ORIGIN of the writes-scope record OF THE ROOT THE TARGET SITS UNDER? See
+// the header for what this does and does not buy. Every branch that is not an exact match returns false, so
+// the guard is fail-closed on an absent, unreadable, unparseable, non-object, wrong-origin, multi-entry or
+// mismatched record.
+function canonWriteAuthorized(relKey, root) {
+  if (typeof relKey !== "string" || !relKey || typeof root !== "string" || !root) return false;
+  let parsed;
+  try {
+    parsed = JSON.parse(fs.readFileSync(path.join(root, SCOPE_FILE), "utf8"));
+  } catch {
+    return false; // absent or unparseable at that root -> not an authorization
+  }
+  // JSON.parse("null") returns null and JSON.parse("[]") an array; neither throws.
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+  // (2) ORIGIN: exact membership over a literal array. This is the argv-derived field.
+  if (typeof parsed.set_by !== "string" || !PROMOTE_COMMAND_KEYS.has(toKey(parsed.set_by))) return false;
+  // (3) EXACTLY ONE entry, equal to this very target. A promote run resolves `--target` to one path,
+  // so this is the shape the legitimate caller emits; anything wider is refused rather than searched.
+  if (!Array.isArray(parsed.scope) || parsed.scope.length !== 1) return false;
+  if (typeof parsed.scope[0] !== "string") return false;
+  return toKey(parsed.scope[0]) === relKey;
 }
 
 function readStdin() {
@@ -529,12 +659,15 @@ function extractPaths(toolInput) {
 // The deny message is composed PER BRANCH, never as one shared string with per-case bullets appended.
 // enforce-writes-scope.cjs learned this the hard way (lessons-learned L27): a shared message prints
 // every remedy in every case, including the ones that cannot work, and a guard that prints an impossible
-// remedy trains the exact bypass it exists to prevent. The two branches are deliberately DISJOINT in
-// their remedies — the trusted branch never mentions the promote commands, and the canon branch never
-// offers "declare it in `writes:` and re-run the setter", which is precisely the route it refuses.
+// remedy trains the exact bypass it exists to prevent. The three branches are deliberately DISJOINT in
+// their remedies — the trusted branch never mentions the promote commands, the canon branch never offers
+// "declare it in `writes:` and re-run the setter" (precisely the route it refuses), and the git-metadata
+// branch names the only route that does work there: the git command that owns the change.
 const DENY_REASONS = {
   trusted: (shown) =>
     `BLOCKED by PHARN floor: ${shown} is (or resolves to) a trusted file (CONSTITUTION P2 / fix #2). Trusted spec is human-only; the build agent may not write it. If a change is genuinely needed, a human edits it outside the agent loop.`,
+  gitmeta: (shown) =>
+    `BLOCKED by PHARN floor: ${shown} is (or resolves to) git metadata — a \`.git\` entry under a guarded root. The write tools may not change repository metadata: a \`.git\` entry decides which working tree each write guard judges, so re-pointing one would move this guard off the tree it protects, and \`.git/hooks\` / \`.git/config\` run code on the next git command. FIX (pick one): • make the change with the git command that owns it (\`git worktree add\`, \`git config\`, …), which is the supported route; • or have a human edit it outside the agent loop. Declaring the path in \`writes:\` CANNOT authorize this write — that is the specific thing this guard refuses.`,
   canon: (shown) =>
     `BLOCKED by PHARN floor: ${shown} is (or resolves to) memory-bank CANON (CONSTITUTION P2 / fix #2; THREAT-MODEL.md §2 #3 — memory poisoning is silent, cumulative, and has no rollback signal). Canon is written only through the gated promotion path. FIX (pick one): • run /pharn-memory-promote (or /pharn-dev-memory-promote), which after its human accept/deny gate sets a writes-scope whose ORIGIN authorizes exactly this one canon file; • or have a human edit canon by hand, outside the agent loop. Re-scoping a build from a PLAN's \`## Files\` CANNOT authorize this write — that is the specific thing this guard refuses, deliberately.`,
 };
@@ -566,6 +699,10 @@ if (isWrite) {
       const real = resolveWriteTarget(rawPath);
       if (isProtected(literal) || isProtected(real)) {
         hit = { rawPath, literal, real, kind: "trusted" };
+      } else if (gitMetaRelKey(literal) !== null || gitMetaRelKey(real) !== null) {
+        // Git metadata (hook-cwd-anchoring), checked AFTER the trusted denylist and BEFORE the canon
+        // branch: it carries no escape at all, so nothing below may re-classify it into one.
+        hit = { rawPath, literal, real, kind: "gitmeta" };
       } else {
         // ORDER MATTERS, and getting it wrong is not theoretical — the first draft of this branch
         // ANDed in `!aliased` and the probe caught it: a canon file that merely HAPPENS to carry a
@@ -575,9 +712,9 @@ if (isWrite) {
         //   • ck !== null  -> the target IS a canon path by name. The escape applies normally.
         //   • ck === null but the inode matches -> a hard-link alias. It can never be the promote
         //     command's `--target`, so there is no key to authorize and it is unconditionally denied.
-        const ck = canonRelKey(literal) || canonRelKey(real);
-        if (ck !== null) {
-          hit = canonWriteAuthorized(ck) ? null : { rawPath, literal, real, kind: "canon" };
+        const cm = canonMatch(literal) || canonMatch(real);
+        if (cm !== null) {
+          hit = canonWriteAuthorized(cm.rel, cm.root) ? null : { rawPath, literal, real, kind: "canon" };
         } else if (inodeIn(CANON_INODES, literal) || inodeIn(CANON_INODES, real)) {
           hit = { rawPath, literal, real, kind: "canon" };
         } else {

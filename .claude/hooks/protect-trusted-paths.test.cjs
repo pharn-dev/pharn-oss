@@ -184,7 +184,13 @@ test("✧ MUTANT: lexical `path.resolve` before realpath re-opens the symlink+`.
 
 // --- THE ANCHOR. The protected set is relative to the hook's OWN location, never cwd. Anchoring to cwd
 // silently disabled the entire guard whenever the agent ran from a subdirectory, and left PHARN
-// unprotected when installed at a subpath of a larger project. Both are pinned here. ---
+// unprotected when installed at a subpath of a larger project. Both are pinned here.
+//
+// RE-DERIVED at 6.1.0 (hook-cwd-anchoring), because "never cwd" alone now reads as more than it is: the
+// work tree CONTAINING cwd is ADDED as a guarded root when it belongs to the same repository, which is
+// what keeps a worktree session covered now that one hook copy runs for every tree. The anchor is
+// unchanged and a root is only ever added — the JURISDICTION block at the end of this file pins the
+// addition, including the cases where nothing is added. ---
 
 test("✧ still blocks every trusted path when cwd is a SUBDIRECTORY, not the repo root", () => {
   const sb = sandbox(TRUSTED.concat([".claude/settings.json", "pharn/floor/x.mjs", "docs/keep.md"]));
@@ -781,6 +787,140 @@ test("✧ MUTANT: dropping the non-object payload guard makes a `null` payload e
   const r = spawnSync(process.execPath, [join(sb, ".claude", "hooks", "protect-trusted-paths.cjs")], { input: "null", encoding: "utf8" });
   assert.equal(r.status, 1, "the mutant MUST exit 1 — a non-blocking error, i.e. the write proceeds");
   assert.equal(spawnSync(process.execPath, [HOOK], { input: "null", encoding: "utf8" }).status, 0);
+});
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// JURISDICTION (hook-cwd-anchoring). ROOTS still come from the hook's OWN location — the anchor tests
+// above are intact — but the git work tree that contains cwd is now ADDED when it belongs to the same
+// repository as a hook root. Before the ${CLAUDE_PROJECT_DIR} wiring, a session inside a worktree ran
+// the worktree's OWN copy of this hook and was guarded by it; with one copy now running for every tree,
+// that coverage has to be re-earned here. A root is only ever ADDED, so every failure path over-blocks.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+const { execFileSync } = require("node:child_process");
+
+function git(cwd, ...args) {
+  return execFileSync("git", ["-c", "user.name=pharn-test", "-c", "user.email=test@localhost", "-c", "init.defaultBranch=main", ...args], {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+}
+
+// A sandbox install (this hook at its real relative location) that is also a real git repository.
+function gitSandbox(files = []) {
+  const dir = sandbox(files);
+  git(dir, "init", "-q");
+  git(dir, "commit", "-q", "--allow-empty", "-m", "init");
+  return dir;
+}
+
+// Run the hook INSTALLED in `dir` with an explicit cwd and an explicit CLAUDE_PROJECT_DIR, so an ambient
+// one cannot reach a case that did not ask for it (L41).
+function runAt(dir, cwd, file_path, projectDir) {
+  const env = { ...process.env };
+  delete env.CLAUDE_PROJECT_DIR;
+  if (projectDir) env.CLAUDE_PROJECT_DIR = projectDir;
+  return spawnSync(process.execPath, [join(dir, ".claude", "hooks", "protect-trusted-paths.cjs")], {
+    input: JSON.stringify({ tool_name: "Write", tool_input: { file_path } }),
+    encoding: "utf8",
+    cwd,
+    env,
+  });
+}
+
+test("✧ a worktree of the SAME repository is guarded: its trusted doc, control surface, scope file and canon", () => {
+  const main = gitSandbox(["pharn/CONSTITUTION.md"]);
+  const wt = join(main, "wt");
+  git(main, "worktree", "add", "-q", wt, "-b", "guarded-w");
+  for (const f of ["pharn/CONSTITUTION.md", ".claude/settings.json", ".pharn/writes-scope.json", "memory-bank/lessons-learned.md"]) {
+    assert.equal(runAt(main, wt, join(wt, f), null).status, 2, `${f} inside the worktree must be denied`);
+  }
+});
+
+test("✧ a DIFFERENT repository is NOT guarded — the subpath posture, with the outer tree a real repo", () => {
+  const outer = tmp();
+  git(outer, "init", "-q");
+  git(outer, "commit", "-q", "--allow-empty", "-m", "init");
+  const inner = join(outer, "vendor", "pharn-oss");
+  fs.mkdirSync(join(inner, ".claude", "hooks"), { recursive: true });
+  fs.copyFileSync(HOOK, join(inner, ".claude", "hooks", "protect-trusted-paths.cjs"));
+  fs.mkdirSync(join(inner, "pharn"), { recursive: true });
+  fs.writeFileSync(join(inner, "pharn", "CONSTITUTION.md"), "trusted\n");
+  fs.writeFileSync(join(outer, "LIMITS.md"), "the USER's own file\n");
+  assert.equal(runAt(inner, outer, join(inner, "pharn", "CONSTITUTION.md"), null).status, 2, "PHARN's own doc must stay guarded");
+  assert.equal(
+    runAt(inner, outer, join(outer, "LIMITS.md"), null).status,
+    0,
+    "the outer repository's own root LIMITS.md must NOT be guarded"
+  );
+});
+
+test("✧ no over-block from a subdirectory: a user's docs/THREAT-MODEL.md stays writable", () => {
+  const sb = gitSandbox(["pharn/CONSTITUTION.md", "docs/keep.md"]);
+  assert.equal(runAt(sb, join(sb, "docs"), join(sb, "docs", "THREAT-MODEL.md"), null).status, 0);
+  assert.equal(runAt(sb, join(sb, "docs"), join(sb, "THREAT-MODEL.md"), null).status, 2, "the root one is guarded as always");
+});
+
+test("✧ a CLAUDE_PROJECT_DIR stop that holds no .git entry adds nothing", () => {
+  const sb = sandbox([]);
+  const sub = join(sb, "packages", "ui");
+  fs.mkdirSync(sub, { recursive: true });
+  assert.equal(runAt(sb, sub, join(sub, "LIMITS.md"), sub).status, 0, "the stop is not a git tree, so it is not a guarded root");
+  assert.equal(runAt(sb, sub, join(sb, "LIMITS.md"), sub).status, 2, "the hook's own root is guarded as always");
+});
+
+test("✧ an UNRESOLVABLE .git file in the cwd tree IS added — over-block is the safe direction", () => {
+  const main = gitSandbox([]);
+  const bad = tmp();
+  fs.writeFileSync(join(bad, ".git"), "not a gitdir line\n");
+  assert.equal(runAt(main, bad, join(bad, "LIMITS.md"), null).status, 2);
+});
+
+// --- GIT METADATA: a `.git` path segment under a guarded root is denied, whatever the scope says. The
+// entries decide which tree each guard judges, and .git/hooks + .git/config run code on the next git
+// command. A Bash write still reaches them (LIMITS.md §6) — this closes the TOOL surface only. ---
+
+for (const p of [".git/config", ".git/hooks/pre-commit", ".GIT/config", ".claude/worktrees/w/.git", "src/.git", "vendor/dep/.git/config"]) {
+  test(`✧ blocks a tool write to git metadata: ${p}`, () => {
+    const r = run({ tool_name: "Write", tool_input: { file_path: p } });
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /git metadata/);
+  });
+}
+
+for (const p of [".github/workflows/ci.yml", ".gitignore", "docs/git.md", "src/gitconfig.ts", ".gitattributes"]) {
+  test(`✧ the git-metadata rule does NOT over-block a neighbouring name: ${p}`, () => {
+    assert.equal(run({ tool_name: "Write", tool_input: { file_path: p } }).status, 0);
+  });
+}
+
+test("✧ the canon escape is BOUND to the root the target sits under", () => {
+  const main = gitSandbox([]);
+  const wt = join(main, "wt");
+  git(main, "worktree", "add", "-q", wt, "-b", "canon-w");
+  const promote = JSON.stringify({
+    scope: ["memory-bank/lessons-learned.md"],
+    set_by: ".claude/commands/pharn-memory-promote.md",
+    set_at: "t",
+  });
+  fs.mkdirSync(join(main, ".pharn"), { recursive: true });
+  fs.writeFileSync(join(main, ".pharn", "writes-scope.json"), promote);
+  // cwd inside the worktree: it is a guarded root too, and it carries NO record of its own.
+  assert.equal(
+    runAt(main, wt, join(wt, "memory-bank", "lessons-learned.md"), null).status,
+    2,
+    "a promote record in one tree must not authorize the same relative canon path in another"
+  );
+  assert.equal(
+    runAt(main, wt, join(main, "memory-bank", "lessons-learned.md"), null).status,
+    0,
+    "it still authorizes its OWN tree's canon"
+  );
+  // The mirror image, so the rule is not satisfied by "the worktree is never authorized".
+  fs.mkdirSync(join(wt, ".pharn"), { recursive: true });
+  fs.writeFileSync(join(wt, ".pharn", "writes-scope.json"), promote);
+  assert.equal(runAt(main, wt, join(wt, "memory-bank", "lessons-learned.md"), null).status, 0);
 });
 
 test("✧ MUTANT: dropping the trailing dot/space strip lets the Windows spelling through", () => {

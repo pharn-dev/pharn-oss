@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.0.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.1.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -182,6 +182,20 @@ project already has a `.claude/settings.json`, the installer preserves it and wa
 overwriting it. Until you copy the hook wiring over, any guarantee that depends on a `PreToolUse` hook is
 not active.
 
+Copy the wiring **as it ships**, anchored on the project-directory placeholder:
+
+```json
+"command": "node \"${CLAUDE_PROJECT_DIR}\"/.claude/hooks/protect-trusted-paths.cjs"
+```
+
+Claude Code runs a hook in Claude's _current_ directory, so a relative `node .claude/hooks/…` stops
+starting after any `cd` into a subdirectory: node exits 1, which Claude Code treats as a non-blocking
+error, and **both guards are then silently off**. That was the shipped form until `6.1.0`, and it is
+measured, not theorised. Upgrading an older install is ordered: run `pharn update` first, then change
+these two commands — the anchored wiring over pre-`6.1.0` hooks regresses both guards, so roll back in the
+reverse order. Each guard judges the git working tree that contains Claude's current directory;
+[`LIMITS.md` §7](./LIMITS.md) states the bounds that remain.
+
 ---
 
 ## How the workflow works
@@ -191,8 +205,8 @@ PHARN splits an AI-assisted change into typed stages:
 1. **Spec** — turn prose intent into `SPEC.md`, surface gaps, and stop for approval.
 2. **Plan** — turn the approved spec into `PLAN.md`, including the concrete files the build may touch.
 3. **Grill** — interrogate the plan before code exists.
-4. **Build** — implement the plan. With hooks wired, Claude Code write/edit tools are denied outside
-   the active scope.
+4. **Build** — implement the plan. With the hooks wired as they ship, Claude Code write/edit tools are
+   denied outside the active scope, in whichever working tree Claude is currently in.
 5. **Regress** — re-run existing project suites and record breakage outside the feature.
 6. **Verify** — check declared artifacts and completeness signals, including missing concrete paths.
 7. **Ship** — write the ship/briefing artifacts and present the final human decision gate.
@@ -447,9 +461,9 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   set scope**. One path inside it is denied by name: `.pharn/writes-scope.json`, the guard's own input.
   The whole set is computed at runtime in `.claude/hooks/enforce-writes-scope.cjs`. Ordinary edits to your
   own code (`src/app.ts`, `package.json`, `README.md`) are denied. That is the intended posture — a stage
-  sets the scope in its first step, so with hooks wired, write/edit tool calls outside the concrete paths
-  your `PLAN.md` declared are denied — but it means the guard is not a drop-in for editing outside a PHARN
-  run. Clearing the scope (`set-writes-scope.cjs --clear`, or deleting `.pharn/writes-scope.json`) returns
+  sets the scope in its first step, so with the hooks wired as they ship, write/edit tool calls outside the
+  concrete paths your `PLAN.md` declared are denied, in the working tree Claude is currently in — but it
+  means the guard is not a drop-in for editing outside a PHARN run. Clearing the scope (`set-writes-scope.cjs --clear`, or deleting `.pharn/writes-scope.json`) returns
   to this default; it does **not** re-open your source. To write elsewhere, either set a scope that names
   those paths (`set-writes-scope.cjs --from-plan <PLAN.md>`) — noting that a set scope **replaces** this
   default rather than adding to it, so a scope naming `src/app.ts` also stops `pharn/features/**` from being
