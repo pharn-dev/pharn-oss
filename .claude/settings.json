@@ -1,5 +1,5 @@
 {
-  "_comment": "PHARN floor write-guards: two PreToolUse hooks on Write/Edit/MultiEdit/NotebookEdit. protect-trusted-paths.cjs (fix #2) blocks writes to the four trusted spec docs (CONSTITUTION/ARCHITECTURE/THREAT-MODEL/LIMITS), CODEOWNERS, and the guards' own control surface — this settings.json plus the three hook scripts, so a write can no longer disarm a guard on the next tool call; enforce-writes-scope.cjs (fix #7) blocks writes outside the active writes-scope (.pharn/writes-scope.json), fail-closed to a default-safe-set when none is set. Both run; a deny from either blocks. set-writes-scope.cjs additionally REFUSES to emit a scope naming those four control paths unless --allow-claude-dir is passed. .claude/commands/* and the hooks' own *.test.cjs are deliberately NOT protected. Commit this file — it is a shared guarantee. Adjust the command paths if this repo is not at the repo root; set PHARN_PROTECTED to extend the fix #2 list. Personal, machine-local settings (e.g. permission allowlists) belong in settings.local.json, which is gitignored.",
+  "_comment": "PHARN floor write-guards: two PreToolUse hooks on Write/Edit/MultiEdit/NotebookEdit. protect-trusted-paths.cjs (fix #2) blocks writes to the four trusted spec docs (CONSTITUTION/ARCHITECTURE/THREAT-MODEL/LIMITS), CODEOWNERS, git metadata (any .git path segment), and the guards' own control surface — this settings.json plus the three hook scripts, so a write can no longer disarm a guard on the next tool call; enforce-writes-scope.cjs (fix #7) blocks writes outside the active writes-scope (.pharn/writes-scope.json), fail-closed to a default-safe-set when none is set. Both run; a deny from either blocks. Both commands are anchored on the CLAUDE_PROJECT_DIR placeholder ON PURPOSE: Claude Code runs a hook in Claude's CURRENT directory, so the old relative `node .claude/hooks/...` form could not start after a cd into a subdirectory — node exited 1, which is non-blocking, so both guards were silently off (measured, .dev/features/hook-cwd-anchoring). Each guard then judges the git working tree that contains Claude's current directory. A project path containing a double quote, a backtick, a dollar sign or a backslash is unsupported by this form (LIMITS.md §7). Existing installs: run `pharn update` first, then change these two commands; roll back in the reverse order. set-writes-scope.cjs additionally REFUSES to emit a scope naming the four control paths unless --allow-claude-dir is passed. .claude/commands/* and the hooks' own *.test.cjs are deliberately NOT protected. Commit this file — it is a shared guarantee. Set PHARN_PROTECTED to extend the fix #2 list. Personal, machine-local settings (e.g. permission allowlists) belong in settings.local.json, which is gitignored.",
   "hooks": {
     "PreToolUse": [
       {
@@ -7,11 +7,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/protect-trusted-paths.cjs"
+            "command": "node \"${CLAUDE_PROJECT_DIR}\"/.claude/hooks/protect-trusted-paths.cjs"
           },
           {
             "type": "command",
-            "command": "node .claude/hooks/enforce-writes-scope.cjs"
+            "command": "node \"${CLAUDE_PROJECT_DIR}\"/.claude/hooks/enforce-writes-scope.cjs"
           }
         ]
       }
