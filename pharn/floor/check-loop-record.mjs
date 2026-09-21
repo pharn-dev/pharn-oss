@@ -30,9 +30,10 @@
 // check-plan-lessons.mjs re-implementing FM_RE in-file.
 //
 // ── Honest scope (P0) — the split this file must never blur ───────────────────────────────────────────
-// FLOOR (what the exit code guarantees, GIVEN a record handed to it): the envelope's four fields are
-//   shape-valid (enum membership + anchored regexes over control-char-guarded values + an integer
-//   compare), and the Handoff's STRUCTURE is exactly `## Handoff` containing `### investigated`,
+// FLOOR (what the exit code guarantees, GIVEN a record handed to it): the envelope's four MANDATORY
+//   fields, plus the optional fifth (`cap`, ADDITIVE since the loop-decision-integrity increment — see
+//   below), are shape-valid (enum membership + anchored regexes over control-char-guarded values + an
+//   integer compare), and the Handoff's STRUCTURE is exactly `## Handoff` containing `### investigated`,
 //   `### learned`, `### next_steps` — in that order, as the ONLY `###` headings there, each with a
 //   non-blank body. All of it is ARCHITECTURE §2 primitive #3.
 // ADVISORY (what it can NEVER check): that the Handoff is ACCURATE, complete, or useful; that `decision`
@@ -43,6 +44,17 @@
 // Two clocks: this checker's VERDICT is floor; /pharn-loop's ACT of invoking it is ADVISORY orchestration
 //   — so "the loop cannot leave a malformed record" is FALSE, while "a record the checker sees is
 //   malformed-DETECTABLE" is true. Do not collapse the two.
+//
+// ── `cap` — OPTIONAL, additive (loop-decision-integrity) ────────────────────────────────────────────────
+// A fifth envelope field, `cap` (the loop's `--max-iter` value): validated with the SAME shape rule as
+// `iterations` WHEN PRESENT, but never MANDATORY. This is deliberately additive, not a fifth required
+// field: making it mandatory would RED every LOOP.md this repository (or any install) had already
+// committed before this field existed, which is exactly the breaking-shape-change this contract's own
+// "extra keys are ignored" section exists to avoid inviting. `/pharn-loop` now WRITES it on every
+// non-blocked record (the value is already known at Step 1 entry), and the companion checker
+// `pharn/floor/check-loop-decision.mjs` — NOT this file — reads it to re-derive a `STOP_CAP` decision from
+// a live re-run of `check-loop.mjs`; this file only validates its SHAPE when present, exactly as it does
+// for every other scalar. A record with no `cap` stays GREEN here, same as before this field existed.
 //
 // ── Trust (P2) — why the heading test is EXACT-EQUALITY, and what that does NOT buy ───────────────────
 // The record is untrusted DATA. The verdict ranges ONLY over four enum/regex-gated scalars and over
@@ -84,6 +96,7 @@ const HANDOFF_SECTIONS = ["investigated", "learned", "next_steps"];
 
 // The value grammars (primitive #3). Each is applied ONLY after cleanScalar (see below).
 const ITER_RE = /^\d+$/;
+const CAP_RE = /^\d+$/; // shape-identical to ITER_RE; the OPTIONAL fifth field — see the header note
 const COMMIT_RE = /^([0-9a-f]{7,40}|unknown)$/; // `unknown` = an honest absence, never a fabricated SHA
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -252,6 +265,15 @@ function gate(recordPath) {
   const iterations = fields.get("iterations");
   if (!cleanScalar(iterations, 16) || !ITER_RE.test(iterations) || Number(iterations) < 1) {
     return red(`loop-record's \`iterations\` is ${JSON.stringify(iterations)} (${recordPath}) — expected a positive integer (>= 1).`);
+  }
+
+  // (A2b) cap — OPTIONAL. Validated only when present; its absence is not a refusal (see the header note
+  // on why this field is additive rather than mandatory).
+  if (fields.has("cap")) {
+    const cap = fields.get("cap");
+    if (!cleanScalar(cap, 16) || !CAP_RE.test(cap) || Number(cap) < 1) {
+      return red(`loop-record's \`cap\` is ${JSON.stringify(cap)} (${recordPath}) — when present, expected a positive integer (>= 1).`);
+    }
   }
 
   // (A3) commit — a git SHA, or the literal `unknown` when `git rev-parse HEAD` could not resolve one.

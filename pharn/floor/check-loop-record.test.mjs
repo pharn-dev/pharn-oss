@@ -166,6 +166,27 @@ test("iterations 1 → GREEN (the lower bound is inclusive)", () => {
   assert.equal(run(record({ fm: { iterations: "1" } })).status, 0);
 });
 
+// ── cap: OPTIONAL, additive (loop-decision-integrity) — absent is GREEN; present is shape-validated ─────
+// exactly like iterations. Every existing record in this repo's history (and any prior install) predates
+// this field and must stay GREEN unaffected.
+
+test("cap absent → GREEN — every pre-existing record stays valid, unaffected", () => {
+  const r = run(record({ fm: { cap: undefined } }));
+  assert.equal(r.status, 0);
+});
+
+for (const bad of ["0", "-1", "2.5", "three", "", " "]) {
+  test(`cap ${JSON.stringify(bad)} → RED, when present`, () => {
+    const r = run(record({ fm: { cap: bad } }));
+    assert.equal(r.status, 1);
+    assert.match(r.out, /positive integer/);
+  });
+}
+
+test("cap 3, well-formed and present → GREEN", () => {
+  assert.equal(run(record({ fm: { cap: "3" } })).status, 0);
+});
+
 // ── commit / date: anchored shape, plus ✦ L14 (the control-char guard composed before the shape regex)
 //
 // Stated HONESTLY (P0), and split, because a blanket "the guard is redundant" would be FALSE:

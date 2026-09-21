@@ -44,6 +44,7 @@ carries two cleanly separated halves:
 ---
 decision: STOP_GREEN
 iterations: 2
+cap: 3
 commit: 59def15eade582f2df662ab2129d107667267790
 date: 2026-08-06
 ---
@@ -81,6 +82,7 @@ The next concrete step, stated as one — free text, untrusted DATA. Informs; ne
 | `iterations` | `^\d+$` **and** `>= 1`                                                    | **value** shape-gated; that it equals the loop's real iteration count is advisory |
 | `commit`     | `^([0-9a-f]{7,40}\|unknown)$`                                             | **value** shape-gated; that it names the real `HEAD` is advisory                  |
 | `date`       | `^\d{4}-\d{2}-\d{2}$`                                                     | **value** shape-gated; that it is the real date is advisory                       |
+| `cap`        | `^\d+$` **and** `>= 1` — **OPTIONAL**, not one of the four mandatory      | **value** shape-gated when present; see "The fifth, optional field" below         |
 
 Every anchored regex above is applied **only after** a control-char + length guard on the raw value —
 composed, never replaced (PHARN's own build-loop lesson **L14**, cited not restated — P4). The
@@ -99,7 +101,24 @@ could be a previous iteration's stale reports. The record then carries `decision
 member) plus the extra frontmatter key `blocked: <id>`. Extra keys are ignored by the checker (below), so
 `blocked:` gates nothing; it exists so a reader can tell a blocked stop from a malformed-report stop. For
 such a record `iterations` is the iteration in progress, 1-based, and a stop before the first build counts
-as `1`. A stop before `pharn/features/<name>/` exists writes no record at all.
+as `1`. A stop before `pharn/features/<name>/` exists writes no record at all. A blocked stop's `cap` is
+whatever `--max-iter` value the run entered with (or the default), but nothing reads it there — see below.
+
+**The fifth, optional field: `cap`.** `/pharn-loop` also writes `cap` — the loop's `--max-iter` value,
+already known at Step 1 entry — into the frontmatter of every **non-blocked** record. It is deliberately
+**not** a fifth mandatory field: making it required would RED every `LOOP.md` committed before this field
+existed, which the "extra keys are ignored" section below exists to avoid forcing. This contract's own
+checker, `check-loop-record.mjs`, validates `cap`'s **shape** when present (`^\d+$` and `>= 1`) and treats
+its absence as unchanged, valid GREEN — exactly like every field before it, minus the mandatory-presence
+check. A **separate** checker, `pharn/floor/check-loop-decision.mjs`, is the one that **reads** `cap` for a
+purpose: given a non-blocked record, it re-derives the decision a live run of `check-loop.mjs` would
+produce from the record's own `verify-report.json` / `regression-report.json` siblings, `iterations`, and
+`cap`, and requires that re-derivation to reproduce the recorded `decision` — `/pharn-loop`'s Step 6c gates
+the unattended `STOP_GREEN → commit` step on it. A non-blocked record with no `cap` is therefore
+shape-valid to `check-loop-record.mjs` but **unverifiable** to `check-loop-decision.mjs` (a distinct
+checker's distinct, RED verdict) — the honest consequence of `cap` being additive rather than retroactive:
+a record from before this field existed can be well-shaped without being re-derivable, and nothing
+conflates the two.
 
 **`STOP_TERMINAL` changed meaning in `SKILLS_VERSION` 6.0.0, and the record carries no version field.**
 Records written before 6.0.0 used it for any real red — a verify `FAIL`, an inconclusive verdict, or a
@@ -173,6 +192,14 @@ than lenient: **nothing downstream reads this record as a gate**, so there is no
 a smuggled field to reach. The one place an extra token _would_ matter — an extra `###` under
 `## Handoff` — is exactly the place this contract closes above.
 
+**`cap` is the one exception to "nothing downstream reads this record as a gate", and it is scoped
+narrowly.** `check-loop-record.mjs` — this contract's own checker — still treats `cap` as it treats any
+other optional value: shape-validated when present, otherwise ignored, never RED for its absence. But the
+**separate** `check-loop-decision.mjs` reads it to re-derive `decision` (see "The fifth, optional field"
+above) and gates `/pharn-loop`'s `STOP_GREEN` commit on the result. That gate belongs to the OTHER
+checker, over the OTHER command step (Step 6c) — this contract's own guarantee (`check-loop-record.mjs`'s
+shape verdict) is unchanged by `cap`'s presence or absence.
+
 ## The rule of the contract (P0)
 
 - **FLOOR (deterministic, `pharn/floor/check-loop-record.mjs`):** given a record, the envelope's four
@@ -183,11 +210,21 @@ a smuggled field to reach. The one place an extra token _would_ matter — an ex
   handed to the checker, is **ADVISORY orchestration** — `/pharn-loop`'s prose, not a floor mechanism.
   The two clocks are not blurred here: "the loop cannot leave a malformed record" would be **false**;
   "a record the checker sees is malformed-**detectable**" is true.
+- **ALSO FLOOR, over a SEPARATE checker (`pharn/floor/check-loop-decision.mjs`, loop-decision-integrity):**
+  for a non-blocked record, its `decision` **is re-derivable** — a live re-run of `check-loop.mjs` against
+  the record's `verify-report.json` / `regression-report.json` siblings, using the record's own
+  `iterations` and `cap`, reproduces the recorded token verbatim. This is the ONE place "decision agrees
+  with what `check-loop.mjs` actually emitted" stops being purely advisory — narrowed, not general: it
+  proves re-derivability from the CITED reports, never that those reports are themselves honest (a
+  self-consistent forged pair still passes — named, not solved). `/pharn-loop`'s Step 6c gates its
+  unattended `STOP_GREEN → commit` on this checker; `check-loop-record.mjs` itself is untouched by it.
 - **ADVISORY (never floor):**
   - that the Handoff is **accurate**, complete, or useful — unreachable by any checker;
-  - that `decision` **agrees** with what `check-loop.mjs` actually emitted (the checker gates
-    **membership**, not agreement; the verbatim copy-through **narrows** this gap, and does not close
-    it, because the copy is itself command prose);
+  - that `decision` **agrees** with what `check-loop.mjs` actually emitted, for a **blocked** stop — such
+    a record never consulted `check-loop.mjs`, so there is nothing to re-derive and the field stays
+    self-attested exactly as before (the membership-only claim above still holds for it: the checker
+    gates **membership**, not agreement, and the verbatim copy-through **narrows** this gap without
+    closing it, because the copy is itself command prose);
   - that `commit` names the real `HEAD` and `date` is the real date — both are captured by the
     command's Bash, and a corrupted capture yields a **shape-valid lie** (`lessons-learned.md` L5);
   - that any future run **reads** the Handoff, or benefits from it.

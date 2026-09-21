@@ -1,0 +1,14 @@
+{
+  "feature": "loop-decision-integrity",
+  "gates": {
+    "format:check": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "completeness": { "complete": true, "missing": [], "skipped": [] },
+  "verifiers": { "registered": 0, "findings": [] }
+}

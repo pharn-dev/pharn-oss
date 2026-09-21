@@ -1,0 +1,29 @@
+{
+  "base": "a2d73ebe104bd4fd0a46531fb46784a671145434",
+  "inside": [
+    ".claude/commands/pharn-loop.md",
+    ".dev/floor/command-hygiene.test.mjs",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/check-loop-record.mjs",
+    "pharn/floor/check-loop-record.test.mjs",
+    "pharn/floor/frontmatter-core.test.mjs",
+    "pharn/pharn-contracts/loop-record.md",
+    "pharn/features/loop-decision-integrity/BUILD.md",
+    "pharn/features/loop-decision-integrity/GRILL.md",
+    "pharn/features/loop-decision-integrity/PLAN.md",
+    "pharn/features/loop-decision-integrity/SPEC.md",
+    "pharn/floor/check-loop-decision.mjs",
+    "pharn/floor/check-loop-decision.test.mjs"
+  ],
+  "outside_gates": {
+    "test": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
