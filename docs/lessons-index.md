@@ -10,7 +10,7 @@ lessons to fetch; canon stays the source of truth and the floor's verification t
 applied, without fetching its full `## L<n>` entry from canon, is the P0 disease. "The index was
 consulted" never means "the relevant lessons were read".
 
-45 lessons · 45 tagged · 0 malformed · 0 untagged · ~30978 tokens total
+46 lessons · 46 tagged · 0 malformed · 0 untagged · ~31855 tokens total
 
 Columns: `id | type | concepts | title | promoted | ~tokens`. `-` is rendered in THREE columns
 and does NOT mean the same thing in each — read it against the column it sits in. In `type`/`concepts`:
@@ -69,4 +69,5 @@ L42 | floor    | delegation,temporal-state,detector-precision,false-positive,pol
 L43 | floor    | consistency-check,version-discipline,mirrored-state,check-blindness,referent-binding        | A consistency check over several stores of one fact certifies their agreement, never the fact — they can all be stale together | 2026-09-10 | ~769
 L44 | tooling  | shell-state,command-prose,pinned-commands,bash-tool                                         | A pinned multi-block shell procedure must not carry state between blocks | 2026-09-14 | ~577
 L45 | process  | hook-wiring,invocation-layer,negative-control,fail-open,test-blindspot                      | A fix inside a guard never reaches production while the file that INVOKES it keeps the defect — and a suite that spawns the script by path cannot see the gap | 2026-09-18 | ~669
+L46 | process  | lesson-recurrence,floor-escalation,remedy-design,unbuilt-remedy,plan-shape                  | A lesson that PRESCRIBES a floor check and never gets one keeps recurring — canon cannot tell a shipped remedy from a sentence | 2026-09-21 | ~877
 ```

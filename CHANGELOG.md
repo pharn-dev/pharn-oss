@@ -1520,6 +1520,66 @@ exists-then-read/write (CWE-367)`.
 
 ### Added
 
+- **`/pharn-review` now emits a machine-readable record of what was ASSIGNED to which lens, and a floor
+  checker validates it** (`SKILLS_VERSION` 6.1.0 → **6.2.0**, minor: two newly shipped product-floor
+  helpers plus changed product-command bytes) — `pharn/floor/render-review-assignments.mjs` (the
+  deterministic emitter) and `pharn/floor/check-review-assignments.mjs` (seven invariants), each with its
+  own `*.test.mjs`. **The triggering failure was measured, not hypothesised (P7):** `/pharn-review`'s
+  Step 1 instructed "record the resolved target file list in the review artifact" and **nothing carried
+  it out** — no artifact held it, no emitter wrote it, no checker read it. Dogfooded over a 6-file
+  target where all 18 mapped scanners came back empty: a run that spawned **22 lenses over 6 files** and
+  one that spawned **1 lens over 1 file** produced byte-identical merged `findings.json`
+  (`4dcba3c0…f9b17`), and so did a 6-file versus a 1-file target with an **identical `lenses/` tree** —
+  so the directory tree does not carry coverage either. The absence was confirmed by enumerating all
+  **154** files under `pharn/floor/`, `pharn/pharn-contracts/` and `.claude/commands/`, not a windowed
+  grep. **What the record claims is bounded deliberately and the bound is the whole increment:** each
+  entry says **"this slice was ASSIGNED to this lens"** — never that a lens **read**, reviewed, covered
+  or examined it, which no floor primitive can reach because spawning and honoring a slice stay
+  advisory. The artifact is named `assignments.json`, **not** `coverage.json`, because "coverage" reads
+  as "examined" in the one place every future reader meets it first. **`unassigned_scanner_bound[]`
+  rather than `unassigned[]`, and that correction is the increment's sharpest catch:** the four
+  scanner-less lenses take the whole target, so a plain "assigned to no lens" set is empty **by
+  construction for every run forever** — a field that certifies nothing (**L34**). It instead names the
+  files no deterministic prefilter reached: the widest nominal assignment on the weakest basis.
+  **The emitter, not the model, writes it** — every field is mechanically derivable (a deterministic
+  target resolution, `count-lenses.mjs` membership, each scanner's own regex verdict), so routing it
+  through prose would have left the checker certifying only that the record agrees with itself
+  (**L43**). **The checker deliberately does NOT re-run the scanners** (**L42**): re-execution answers
+  "would this hit **now**", not "was it assigned **then**". Two fail-closed edges, both raised by this
+  increment's own grill and both pinned by tests because an unexercised fail-closed path is the L41
+  blind spot: **no resolvable target** → refuse and write nothing (Step 1's third branch is _ask the
+  human_, which a deterministic emitter cannot do, and an empty-target record is not the honest
+  degradation); **a registered lens absent from `lens-scanner-map.json`** → refuse rather than invent a
+  `basis`. The two mandated failure cases — a registered lens missing from the record, and a slice
+  holding a path outside the target — were **mutation-tested**: against checkers with I1 and I2 disabled
+  both fixtures pass, so the tests fail on a broken checker rather than passing for unrelated reasons.
+  **Wired to no downstream gate, deliberately (P7):** `/pharn-review` self-checks at Step 6b and nothing
+  consumes the exit code; a `/pharn-verify` gate would be speculative (no malformed record has ever
+  occurred, because none existed) and would put a stage in the **L23** position of owning a gate over
+  its own artifact. Named residual: `review-assignments-gate`. **Honest about its own value:** over an
+  unmodified deterministic emitter the checker is near-vacuous on the happy path — it earns its place by
+  making the record falsifiable by a consumer who did not run the emitter, and by detecting a
+  hand-edited record or emitter drift. **No `pharn-contracts/` schema**, recorded rather than omitted:
+  no checker in this repo reads a record contract as an input (probed — `check-loop-record.mjs`
+  hardcodes its own enum and merely cites `loop-record.md`), so a contract would be a third store of one
+  shape (**L35**); reopens on the first second consumer. `assignments.json` was added to **both**
+  `PIPELINE_ARTIFACTS` (`check-regress.mjs`) and `reconcile-ignore.json`'s `pipeline_artifacts.names`,
+  which tests pin set-equal — without it every `/pharn-regress` run emitting the record would RED.
+  **Three findings from the increment's own review were then fixed rather than filed**, each a place
+  where a claim was wider than the mechanism under it: **I5** now checks that a `scanner-bound` entry
+  names a scanner the map actually **binds** (it had tested only "non-empty string", so a record citing
+  a nonexistent scanner passed — weaker than the invariant the approved plan declared, and the map is
+  now a **required** argument so the check cannot silently no-op); the emitter **records
+  `scanner_errors[]`** instead of folding a scanner that failed to run into a clean miss (which had made
+  a wholly broken scanner indistinguishable from a clean target), with **I7** pinning those entries
+  inside the target and **disjoint from the slice** — a failed scanner produced no verdict to hit with;
+  and the command's audit line no longer reads a bare "FLOOR at emission", because **nothing binds a
+  record to its producer** — `generated_by` is self-declared and unread, and a consistently fabricated
+  record passes every invariant (measured). What defends the values is that the emitter is deterministic
+  and is what the command runs, not anything the checker detects.
+  Lens membership, the merge key, the finding shape, the degenerate `rule_id` key, and
+  `/pharn-dev-review` are all **untouched** (one axis).
+
 - **`pharn.config.json`'s `models.stages` is now the floor-checked source of truth for the ten PRODUCT
   commands' model/effort** (`SKILLS_VERSION` 3.1.2 → **3.2.0**, minor: a newly shipped product-floor
   checker plus changed product-command bytes) — `pharn/floor/check-model-config.mjs`, with
