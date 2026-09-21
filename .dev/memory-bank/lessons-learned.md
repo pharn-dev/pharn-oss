@@ -1734,4 +1734,49 @@ than a stronger one being invented.
 - commit: `a2d73ebe104bd4fd0a46531fb46784a671145434`
 - source: `.dev/features/skills-threat-surface/REVIEW.md` F1 (proposed lesson Candidate A) +
   `.dev/features/skills-threat-surface/GRILL.md` F1
+
+## L48 — A mid-stage writes-scope amendment is invisible to an open reconciliation epoch — and the detector's error is LOUD when it over-reports, SILENT when it under-reports
+
+type: scoping · concepts: [writes-scope, reconciliation, snapshot-staleness, asymmetric-detection, false-red]
+
+**Lesson.** The reconciliation epoch is anchored ONCE, at `/pharn-*build` Step 0, snapshotting the
+writes-scope live at that instant. A scope legitimately re-set later in the same stage — because the
+build discovered a path its plan had not declared — is not in that snapshot, so
+`check-bash-reconcile.mjs` judges the write against a stale policy and reports `ESCAPE` naming a path the
+live guard actually **ALLOWED**, through the guarded tool surface. The sanctioned remedy
+(`reconcile-baseline.mjs --amend-scope`) exists, but nothing invokes it: it reduces to remembering, which
+[[L20]] says is the wrong kind of remedy.
+
+**Measured.** The build bumped `SKILLS_VERSION`; `check-version-badge` REDded because the README shields
+badge is held equal to it; `README.md` was declared in the plan's `## Files`, the setter re-run 5 → 6
+paths, and the write made with the **Edit** tool. Verify's `reconcile` gate then exited **1** naming
+`README.md` with `denied_by: "writes-scope (snapshot)"`, while the baseline's opening `scope_snapshot`
+still listed only the original five.
+
+**Why it matters — the ASYMMETRY is the lesson, not the false red.** Forgetting to amend is **loud and
+self-correcting**: a false `ESCAPE` fails verify and someone investigates. The opposite direction is
+**silent** — a genuine Bash escape to a path that a later legitimate amendment happens to cover is
+absorbed into `CLEAN`, with nothing reporting it. The two failure directions are not symmetric noise: the
+direction that reliably gets human attention is the harmless one, and the direction that matters never
+surfaces. A detector whose loud failures are its safe ones trains its operator to read its REDs as
+procedural noise, and that is the corrosive part.
+
+**Distinct from its two neighbours.** [[L38]] is the nearest relative and arguably the first occurrence of
+the family: there the contention is **between concurrent sessions** over the single mutable scope record,
+and the remedy is ordering the anchor after the setter. Here there is one session, the ordering was
+correct, and the staleness comes from a legitimate **within-stage** amendment the anchor could not have
+foreseen. [[L42]] says re-executing a policy engine answers "would it allow this **NOW**"; this is the
+inverse error — the replayed policy is too **OLD**, not too new — so the fix is not to stop replaying but
+to keep the replayed policy current.
+
+**Remedy.** Have the scope-setter itself amend an open epoch when one exists, so the amendment is a
+**consequence of setting scope** rather than a separate act someone must remember. Until that ships this
+stays discipline, which is exactly what [[L20]] predicts will recur — and [[L46]] warns that canon cannot
+tell a shipped remedy from a sentence, so this paragraph is a prescription, not a fix.
+
+**Provenance.**
+
+- feature: `finding-backstop-class`
+- commit: `231e422a43aa12d8c0793267ae6221a2171cfd7d`
+- source: `.dev/features/finding-backstop-class/VERIFY.md § "Disclosure — the reconcile gate REDded on its first run"` + `.dev/features/finding-backstop-class/REVIEW.md § "Advisory findings"` finding 2 (rule_id P0, important)
 - promoted: 2026-09-21 via gated `/pharn-dev-memory-promote` (human-approved).
