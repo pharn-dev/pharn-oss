@@ -1,0 +1,13 @@
+--- a/pharn/floor/check-model-config.mjs
++++ b/pharn/floor/check-model-config.mjs
+@@ -7,8 +7,8 @@
+ // Claude Code selects a command's model through STATIC FRONTMATTER and nothing else. `model:` accepts
+ // the `/model` values (`sonnet` | `opus` | `haiku` | `fable` | a full `claude-*` id | `inherit`) and
+ // `effort:` accepts `low` | `medium` | `high` | `xhigh` | `max`. There is NO runtime routing hook: no
+-// command can read a JSON file and switch its own model, and nothing in this repo reads
+-// `pharn.config.json` at run time. So `models.stages` cannot BE the runtime control — it can only be the
++// command can read a JSON file and switch its own model, and nothing reads the `models.stages` BLOCK
++// at run time — the FILE is read elsewhere (LIMITS.md §8). So `models.stages` cannot BE the runtime control — it can only be the
+ // SOURCE OF TRUTH the static frontmatter is held to, which is what this checker enforces. Simulating
+ // runtime routing (a command "consulting" the config in prose) would be the exact P0 disease: written in
+ // the config, therefore believed guaranteed.

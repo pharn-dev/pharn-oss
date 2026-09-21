@@ -1,0 +1,8 @@
+--- a/LIMITS.md
++++ b/LIMITS.md
+@@ -339,4 +339,4 @@
+ guarantee, which is the disease P0 exists to prevent. It reopens if the platform ever exposes the executed
+ model to a hook.
+ 
+-<!-- §8 was drafted in .dev/features/model-routing-limit and applied by a human (SKILLS_VERSION 6.3.1). -->
++<!-- §8 was drafted in .dev/features/model-routing-limit and applied by a human (SKILLS_VERSION 6.4.1). -->
