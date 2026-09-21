@@ -217,12 +217,26 @@ node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
 
 # Check the SHAPE of a loop-record — the pharn/features/<name>/LOOP.md that /pharn-loop writes at every stop.
 # Floor: the frontmatter envelope (`decision` in {STOP_GREEN, STOP_CAP, STOP_TERMINAL, INCONCLUSIVE};
-# `iterations` a positive integer; `commit` a git SHA or the literal `unknown`; `date` ISO YYYY-MM-DD)
-# plus an unambiguous `## Handoff` — exactly `### investigated`, `### learned`, `### next_steps`, in that
-# order, no extras/duplicates, each with a non-blank body. ADVISORY (never checked): whether the Handoff
-# is TRUE, whether `decision` AGREES with what check-loop.mjs emitted, or whether any run reads it.
-# NOT an input to check-loop.mjs — the record can never influence the stop. Exits non-zero on RED.
+# `iterations` a positive integer; `commit` a git SHA or the literal `unknown`; `date` ISO YYYY-MM-DD; and,
+# when present, `cap` — the loop's --max-iter — a positive integer) plus an unambiguous `## Handoff` —
+# exactly `### investigated`, `### learned`, `### next_steps`, in that order, no extras/duplicates, each with
+# a non-blank body. ADVISORY (never checked BY THIS CHECKER): whether the Handoff is TRUE, whether `decision`
+# AGREES with what check-loop.mjs emitted (check-loop-decision.mjs, below, is the one that asks), or whether
+# any run reads it. NOT an input to check-loop.mjs — the record can never influence the stop. Exits non-zero
+# on RED.
 node pharn/floor/check-loop-record.mjs <LOOP.md>
+
+# RE-DERIVE a loop-record's `decision` (added 6.3.0): does it reduce, via a LIVE re-run of check-loop.mjs against the
+# reports the record cites, to the token it recorded? Floor (primitive #3): shells check-loop.mjs as a CLI (spawnSync,
+# never a sibling import) with the record's own `iterations` and `cap` and compares tokens. A mismatch, a missing or
+# malformed report, or a NON-BLOCKED record with no `cap` (optional to check-loop-record.mjs, required here) is RED,
+# fail-closed. A blocked stop (INCONCLUSIVE + a `blocked` key) never consulted check-loop.mjs and is SKIPPED, GREEN.
+# Runs strictly AFTER a stop exists and gates only /pharn-loop's Step 6c commit, never the stop: a STOP_GREEN whose
+# re-derivation is RED is not committed ("not committed: decision unverifiable"). BOUND, and the point: it proves the
+# decision is RE-DERIVABLE from the cited reports, NOT that the reports are honest — a self-consistent forged pair
+# still passes — and the ACT of running it is command prose (advisory); only its verdict is floor. Exit: 0 GREEN or
+# SKIPPED · 1 RED.
+node pharn/floor/check-loop-decision.mjs <LOOP.md>
 
 # Render / cross-verify the GATE-2 briefing artifact (pharn/features/<name>/BRIEFING.md) /pharn-ship writes
 # alongside SHIP.md. render-ship-briefing.mjs is Node stdlib only, no LLM call: every enum-gated
@@ -746,7 +760,7 @@ PHARN is markdown, so it can be rewritten many times cheaply. The goal is that r
 instead of thrash**, enforced by two rules: (1) **v0.80 is the oracle** — its eval suite is the fixed
 measuring stick, so "rewrote it 10 times" becomes "measured 10 variants against one bar"; (2) **one
 axis of change per attempt**, or you can't attribute cause. The agenda targets four unknowns no
-external review would catch; **attempt 0 targets the one residual that cannot be verified by reasoning**
-— whether the trust-fence holds through the finding object under real injection (`README.md`,
-`THREAT-MODEL.md §5`, `LIMITS.md §2`). Everything else is enum-checks, hooks, and content-hashes:
-either on the floor or labeled a limit.
+external review would catch; **attempt 0 targets the free-text channel, a residual that cannot be verified by
+reasoning** — whether the trust-fence holds through the finding object under real injection. `THREAT-MODEL.md §5`
+and `LIMITS.md §2` own the residuals, and name more than this one. Everything else is enum-checks, hooks, and
+content-hashes: either on the floor or labeled a limit.

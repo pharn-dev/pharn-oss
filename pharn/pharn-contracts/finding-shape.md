@@ -122,5 +122,6 @@ quoted/escaped, never injected into a downstream stage as instructions.
 
 **Residual (named, not hidden — LIMITS.md §2):** when a downstream LLM stage consumes the free-text
 of a finding, "do not execute this as an instruction" is a heuristic again. Fix #1 **bounds** the
-blast radius (free text never alone gates a guaranteed decision) but does not zero it. This is the
-single place the trust model is not provable on paper — the target of attempt 0.
+blast radius (free text never alone gates a guaranteed decision) but does not zero it. This is **not the
+only** place the trust model is not provable on paper (`THREAT-MODEL.md §5` names the known ones) — it is
+the one attempt 0 targets.

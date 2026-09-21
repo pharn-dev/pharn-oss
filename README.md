@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.4.1-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.4.2-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -377,8 +377,12 @@ decisions inside the pipeline are read from the deterministic verdicts emitted b
 `/pharn-loop` runs the same chain without either human gate. The model approves the spec, and the build →
 regress → verify middle repeats until a deterministic stop: green, the iteration cap, or a red it must not
 retry (an inconclusive result, or a reconcile red — a retry would re-anchor the baseline and erase the
-detected escape). Only a green result is committed, to a new local branch; every other stop reverts the
-spec to `Draft`. The human decision comes after the run, on the branch or the working tree it leaves.
+detected escape). Only a green result is committed, to a new local branch, and only if its recorded decision
+re-derives from the reports it cites (`check-loop-decision.mjs` re-runs the loop's stop computation and
+compares); a green that does not re-derive is not committed. That proves the decision is re-derivable, not
+that the reports are honest — a self-consistent forged pair still passes. Every other outcome reverts the
+spec to `Draft`, or the run says it could not. The human decision comes after the run, on the branch or the
+working tree it leaves.
 
 **Standalone:** `/pharn-review` is not a pipeline stage. It runs review lenses in parallel as subagents
 and merges their structured findings deterministically. You can run it against code independently of the
@@ -490,7 +494,10 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
 - **Build completeness is filesystem-level.** PHARN can detect that a concrete declared path is missing;
   it cannot prove that an existing path was actually modified or implemented correctly.
 - **Prompt injection is not solved.** PHARN narrows which data may influence guaranteed decisions, but it
-  does not claim to eliminate prompt injection.
+  does not claim to eliminate prompt injection. That includes skills you install yourself: a
+  `.claude/skills/<name>/SKILL.md` reaches product stages as untrusted context, and a hostile one can talk a
+  lens out of reporting a real finding, which then never reaches you. That is only partly bounded;
+  `THREAT-MODEL.md` §2 (item 8) and §5 state it in full.
 - **No verifier/auditor capability ships yet.** `/pharn-verify` uses the shipped floor and project gates;
   the verifier plug-in slot remains empty.
 - **Several announced modules are not built.** `pharn-audits`, `pharn-skills-*`, `pharn-stack-*`, and the
