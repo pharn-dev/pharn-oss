@@ -33,6 +33,12 @@
     // entry: probed the same way, `prettier --check .` does NOT traverse `.pharn/`, so there is no
     // trigger for one (P7 — no speculative additions).
     ".pharn/lessons-index.md",
+    // RUN-REPORT.md — deterministically rendered by pharn/floor/render-run-report.mjs, and it quotes
+    // untrusted Handoff / PLAN `## Files` text VERBATIM, so no MD rule can be satisfied by construction
+    // over content the renderer does not control. Excluded for the cost.json reason (L23): one writer
+    // for a generated artifact, and no self-referential conflict with a gate /pharn-loop's own
+    // /pharn-verify runs. Listed on reasoning, not after the first FAIL.
+    "pharn/features/*/RUN-REPORT.md",
     // Zone note, kept where the next editor of this list will need it: `.pharn/` is excluded ENTRY BY
     // ENTRY, never as a blanket `.pharn/`. The reason is structural rather than situational — the
     // directory holds the fix #7 writes-scope file and the product-index cache above alongside

@@ -17,13 +17,16 @@
 // membership and path resolution, no LLM classification. `complete` iff every concrete declared path
 // resolves to an existing filesystem entry.
 //
-// PARITY WITH THE WRITES-SCOPE SETTER (Q3 of the plan): the `## Files` extractor below is a faithful
-// RE-IMPLEMENTATION of set-writes-scope.cjs's `pathsFromPlanFiles` + `clean` + `isConcrete` — the setter
-// is the CANONICAL `## Files` parser, and check-build-complete.test.mjs cross-checks this checker's
-// `declared` set against the setter's emitted `--from-plan` scope over shared fixtures (the parity test).
-// The two parsers MUST be updated together; the parity test is example-based, not a proof of equivalence.
-// Residual (shared with the setter, documented there): an inline-marked `- `path` — not touched` item is
-// a path-item to BOTH parsers, so it is treated as declared, not excluded.
+// THE `## Files` PARSER LIVES IN pharn/floor/plan-files-core.mjs, not here (REVIEW finding F3). This
+// file owns the COMPLETENESS axis; the grammar of `## Files` is a separate reason to change, and it
+// acquired a second consumer (render-run-report.mjs) in the loop-run-report increment. The core carries
+// the parity obligation against set-writes-scope.cjs — the CANONICAL parser — and the residual about
+// inline-marked items; both are cited here rather than restated (P4).
+//
+// The parity is still held against THIS file: check-build-complete.test.mjs's ★ PARITY case runs this
+// checker and the setter over a shared fixture and requires the same path set, so the extraction is
+// covered by the test that already ranged over the behaviour. That test is example-based, not a proof of
+// equivalence.
 //
 // TRUST (P2): the PLAN's `## Files` paths are `trust: untrusted` DATA. They are used ONLY as
 // path-membership operands and as `existsSync` arguments (a filesystem READ) — never eval'd, executed,
@@ -48,53 +51,12 @@
 
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, isAbsolute } from "node:path";
+import { pathsFromPlanFiles, clean, isConcrete } from "./plan-files-core.mjs";
 
 // --- emit one JSON document to stdout, then exit. The /verify command captures this verbatim. ---
 function emit(obj, code) {
   console.log(JSON.stringify(obj, null, 2));
   process.exit(code);
-}
-
-// --- PARITY helpers: byte-faithful copies of set-writes-scope.cjs's `clean` + `isConcrete`. ---
-// Strip a trailing " (annotation)" (e.g. " (gated)") and surrounding whitespace.
-function clean(entry) {
-  return String(entry)
-    .replace(/\s*\([^)]*\)\s*$/, "")
-    .trim();
-}
-// A literal repo-relative path — no placeholders, globs, or empties (not existence-checkable).
-function isConcrete(entry) {
-  return entry.length > 0 && !entry.includes("<") && !entry.includes(">") && !entry.includes("*") && !entry.includes("?");
-}
-
-// --- PARITY: the leading back-tick path of each list item under `## Files`, stopping at the next
-//     markdown heading of ANY level OR a head-less prose exclusion cue (non-blockquote). A byte-faithful
-//     re-implementation of set-writes-scope.cjs's `pathsFromPlanFiles` (locked by the parity test). ---
-function pathsFromPlanFiles(text) {
-  const lines = text.split(/\r?\n/);
-  const start = lines.findIndex((l) => /^##\s+Files\b/.test(l));
-  if (start === -1) return { ok: false, reason: "no `## Files` heading" };
-  const out = [];
-  for (let i = start + 1; i < lines.length; i++) {
-    const line = lines[i];
-    // Boundary 1 — STRUCTURAL: any markdown heading of ANY level ends the authorized list (an exclusion
-    // subsection like `### Explicitly not touched` is its own heading, so its paths are never scanned).
-    if (/^\s{0,3}#{1,6}\s/.test(line)) break;
-    // Boundary 2 — CUE fallback for a HEAD-LESS prose exclusion intro, anchored to a NON-path,
-    // NON-blockquote line (a blockquote is explanatory commentary, exempt).
-    const isPathItem = /^\s*-\s+`[^`]+`/.test(line);
-    const isBlockquote = /^\s*>/.test(line);
-    if (
-      !isPathItem &&
-      !isBlockquote &&
-      /\bnot\W*(touch|writ|modif|edit|chang)|\bexplicitly\W*excluded|\bout\W*of\W*scope|\boff\W*limits/i.test(line)
-    ) {
-      break;
-    }
-    const m = line.match(/^\s*-\s+`([^`]+)`/);
-    if (m) out.push(m[1].trim());
-  }
-  return { ok: true, value: out };
 }
 
 function main() {
@@ -211,4 +173,11 @@ function main() {
   emit({ plan: planPath, repoDir, declared, skipped, missing, complete, verdict: complete ? "complete" : "incomplete" }, complete ? 0 : 1);
 }
 
-main();
+// Entry guard. It arrived with the loop-run-report increment because `pathsFromPlanFiles` was EXPORTED
+// from here and an unconditional `main()` would have run the whole CLI on every `import`. That export has
+// since moved to plan-files-core.mjs, so this file exports nothing and the guard is no longer LOAD-BEARING
+// — it is kept as ordinary CLI hygiene, and the comment is corrected rather than left asserting a reason
+// that no longer holds. `import.meta.main` is the form .dev/floor/entry-point-guard.test.mjs pins; the two
+// `file://`-template spellings it BANS are measured silent no-ops on spaced, non-ASCII and symlinked paths
+// (L25). Invoked as a CLI this is unchanged.
+if (import.meta.main) main();
