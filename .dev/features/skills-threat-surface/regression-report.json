@@ -1,0 +1,28 @@
+{
+  "base": "a2d73ebe104bd4fd0a46531fb46784a671145434",
+  "inside": [
+    ".dev/features/skills-threat-surface/GRILL.md",
+    ".dev/features/skills-threat-surface/PLAN.md",
+    ".dev/features/skills-threat-surface/proposed/APPLY.md",
+    ".dev/features/skills-threat-surface/proposed/LIMITS.md.patch",
+    ".dev/features/skills-threat-surface/proposed/THREAT-MODEL.md.patch",
+    ".dev/features/skills-threat-surface/proposed/specified-primitives.json.patch"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

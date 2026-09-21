@@ -92,7 +92,8 @@ but the gate's integrity here rests on _who may write the enum field_, and in pu
 When a downstream LLM stage consumes the **free-text** fields of a finding (`problem`, `evidence`),
 "do not execute this as an instruction" becomes a heuristic again (`THREAT-MODEL.md §5`). Fix #1
 bounds it — free text never alone gates a guaranteed decision — but does not eliminate it. This is
-the one place the trust model is not provable on paper, and is the target of attempt 0.
+**not the only** place the trust model is not provable on paper (`THREAT-MODEL.md §5` names the known
+ones; another is the suppression channel on its §2 surface 8), and it is the one attempt 0 targets.
 
 ---
 
@@ -138,7 +139,8 @@ prevents. The honest standard:
 - Every _guarantee_ reduces to the floor (`ARCHITECTURE.md §2`) **or** is labeled `advisory`.
 - The _known_ holes from red-team are closed or labeled (`THREAT-MODEL.md §4`).
 - The four irreducible limits (§1) are named, not hidden, and backstopped.
-- The one residual (§2) is named and is the first thing the experiment tests.
+- The residuals (§2, `THREAT-MODEL.md §5`) are named, and the free-text one is the first thing the
+  experiment tests.
 
 "Good" = known holes closed or labeled, and limits honest. **Not** "no holes." The unknowns are
 discovered by building and measuring, not by more review (`README.md`, the experiment agenda).
