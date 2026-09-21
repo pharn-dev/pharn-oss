@@ -1697,3 +1697,41 @@ therefore itself a **pending-remedy** lesson, and says so rather than implying o
 - commit: `a2d73ebe104bd4fd0a46531fb46784a671145434`
 - source: `.dev/features/coverage-record/REVIEW.md § Proposed lesson candidate`
 - promoted: 2026-09-21 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L47 — Retracting a false quantifier by substituting a new count rebuilds the defect at the new value
+
+type: contract · concepts: [doc-drift, universal-quantifier, remedy-design, mirrored-state, lesson-recurrence]
+
+**Lesson.** A stale universal quantifier was found and repaired correctly, and the repair introduced a
+fresh one. `/pharn-dev-grill` measured that `THREAT-MODEL.md` §5's "the one residual" had become false
+and was MIRRORED in `LIMITS.md` twice (`:95` "the one place", `:141` "The one residual") — four
+spellings across two files, [[L33]]'s variant-spelling shape composed with [[L43]]'s mirrored state.
+Every site was found and every site was corrected. The correction then asserted **"There are two such
+places"** in one file and **"one of two"** in the other, rebuilding the identical two-file mirror at
+the new value, in the same edit, by the author who had just written the L33 and L37 body lines into
+that increment's `applied_lessons`. Remedy: when retracting a count, replace it with an **OPEN** form
+— "not the only", "the known ones are named here" — never with a new closed count. An open form stays
+true as the set grows; a count is simply a fresh expiry date.
+
+**Why it matters.** This is the repair pass failing in a way none of its ancestors predicts. [[L33]]
+says a repair misses the VARIANT SPELLINGS — here every spelling was found. [[L40]] says probing
+members confirms membership but never the stated CAUSE — the cause was not at issue. [[L37]]
+establishes that quantifiers are where drift lands, and this is its sharpening: the REMEDY for a stale
+quantifier is itself a quantifier, so the class is **self-reproducing** unless the repair deliberately
+changes FORM rather than VALUE. Nothing detects the recurrence — no checker reads shipped prose, and
+the four trusted docs are `.prettierignore`d and markdownlint-excluded — so the new sentence would go
+false exactly as quietly as the old one did. **HONEST TRIGGER (P7), stated rather than dressed up:**
+the replacement sentence was TRUE when written, so this is an observed **reproduction of a defect
+shape**, not yet an observed failure. By [[L20]]'s bar that is arguably a first occurrence, not a
+second. It was promoted anyway, at the maintainer's explicit direction at the ship-stage lesson gate,
+on the [[L36]] precedent — where the defect was likewise caught at range zero, in one sitting, by the
+author who had just cited the governing lessons. The weakness of the trigger is recorded here rather
+than a stronger one being invented.
+
+**Provenance.**
+
+- feature: `skills-threat-surface`
+- commit: `a2d73ebe104bd4fd0a46531fb46784a671145434`
+- source: `.dev/features/skills-threat-surface/REVIEW.md` F1 (proposed lesson Candidate A) +
+  `.dev/features/skills-threat-surface/GRILL.md` F1
+- promoted: 2026-09-21 via gated `/pharn-dev-memory-promote` (human-approved).

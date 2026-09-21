@@ -1,0 +1,27 @@
+--- a/.dev/floor/specified-primitives.json
++++ b/.dev/floor/specified-primitives.json
+@@ -265,5 +265,24 @@
+       "cited_in": "LIMITS.md",
+       "citation": "(security\ngriller,",
+       "must_exist": "pharn/pharn-pipeline/grillers/security"
++    },
++    {
++      "$comment": [
++        "THREAT-MODEL.md §2 item 8 and its §3 row cite the installed-skill enumerator BY NAME. Registered",
++        "so that citation cannot drift to a name the repo does not have — the secrets-in-code precedent.",
++        "",
++        "DELIBERATELY NOT a forward_claims entry, and the omission is reasoned rather than an oversight.",
++        "The §3 row's 'GATES NOTHING' is a genuine expiring claim (lessons-learned L33): it becomes false",
++        "the day any proceed/stop reads the roster. But every forward_claims record requires a mandatory",
++        "probe naming a real filesystem location (check-specified-markers.mjs isLive() THROWS on a missing",
++        "probe => exit 2, fail-closed), and a gate that reads the skills roster has NO named path in this",
++        "repo. That is exactly the shape this manifest already deferred for the live-griller-runner and",
++        "verifier-runner classes: 'a probe would have to invent one. Deferred rather than guessed (P6).'",
++        "Reopens when such a gate is named in a plan or built."
++      ],
++      "id": "scan-installed-skills",
++      "cited_in": "THREAT-MODEL.md",
++      "citation": "scan-installed-skills.mjs",
++      "must_exist": "pharn/floor/scan-installed-skills.mjs"
+     }
+   ],
