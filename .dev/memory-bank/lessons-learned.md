@@ -1651,3 +1651,49 @@ the old relative form exits neither 0 nor 2.
 - commit: `a7f32a1808a2c3a794833d8fa57fc2a41f851c7c`
 - source: `.dev/features/hook-cwd-anchoring/REVIEW.md finding .claude/settings.json:10`
 - promoted: 2026-09-18 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L46 — A lesson that PRESCRIBES a floor check and never gets one keeps recurring — canon cannot tell a shipped remedy from a sentence
+
+type: process · concepts: [lesson-recurrence, floor-escalation, remedy-design, unbuilt-remedy, plan-shape]
+
+**Lesson.** When a promoted lesson's remedy is **itself a floor check**, promoting the lesson does not
+schedule the check. Canon then carries two kinds of entry that read identically — one whose remedy
+SHIPPED, one whose remedy is still a sentence — and nothing in the entry, the index, or any checker
+distinguishes them. The second kind keeps recurring while **reading as handled**, which is worse than an
+unrecorded defect: the record itself is what suppresses the alarm.
+
+**Measured, in the increment that cited the lesson it violated.** `set-writes-scope.cjs --from-plan`
+reported **`10 path(s)` against the 9 the human had approved**, leaking `/pharn-dev-review` into the
+build's write scope out of the plan's exclusion block — which opened with a bold prose intro
+(`**Explicitly NOT in this increment**`) whose wording falls outside the setter's narrow cue vocabulary,
+so the exclusion failed **OPEN**. That is [[L18]] exactly. [[L20]] was promoted on the same defect in
+`product-capability-catalog` (6 paths against 2) and its own text names the fix precisely — _"at
+`/pharn-dev-plan` Step 4 … re-run `set-writes-scope.cjs --from-plan` and deterministically compare the
+parsed scope set against the plan's own `## Files` bullets, RED on disagreement"_ — and **that check was
+never built**. So the defect recurred in a plan whose `applied_lessons` **cited L20**, and was caught
+only because the setter prints its count and the count was read: the exact mechanism L20 had already
+identified as insufficient.
+
+**Why it matters, and how it differs from its neighbour.** [[L20]] says a discipline-only remedy earns a
+floor check on the second occurrence. This is the failure mode **one level up**: L20's own remedy was
+specified and not scheduled, so the escalation L20 prescribes did not happen — and canon gave no signal,
+because a lesson whose remedy is pending is indistinguishable from one whose remedy is live. [[L43]] is
+the same shape in a different medium (several stores of one fact can all be stale together, so check the
+fact against its referent); here the "stores" are canon entries and the referent is **whether the named
+check exists on disk**. [[L34]]'s lens applies too: the set of lessons-with-unbuilt-remedies is a domain
+nothing quantifies over, so no assertion about it can fail.
+
+**Remedy.** When promoting a lesson whose remedy names a check, record the remedy's **status** in the
+entry — shipped (with the checker's path) or pending (with the trigger) — so a reader can tell the two
+apart without auditing the floor. The stronger form is to bind the claim to its referent ([[L43]]): a
+checker that reads canon for remedy-naming entries and verifies the named checker exists. That is
+**deliberately not built here** — P7's bar is a real failure, this is the first recorded one, and
+building it now would repeat the very mistake of shipping a mechanism ahead of its trigger. This entry is
+therefore itself a **pending-remedy** lesson, and says so rather than implying otherwise.
+
+**Provenance.**
+
+- feature: `coverage-record`
+- commit: `a2d73ebe104bd4fd0a46531fb46784a671145434`
+- source: `.dev/features/coverage-record/REVIEW.md § Proposed lesson candidate`
+- promoted: 2026-09-21 via gated `/pharn-dev-memory-promote` (human-approved).

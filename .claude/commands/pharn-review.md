@@ -107,8 +107,41 @@ test, never a guess):
 3. **Else / on ambiguity (no args, not a git repo)** → **ask the human** for the target (never review a
    guessed target).
 
-Record the resolved target file list in the review artifact — "each lens's slice" has no meaning
-without a defined target.
+## Step 1b — EMIT the assignment record (deterministic; it also resolves Step 3's slices)
+
+```bash
+node pharn/floor/render-review-assignments.mjs <name> [--target <path>]...
+```
+
+Pass the **explicit** target paths from Step 1 branch 1 as repeated `--target` flags; pass **none** to let
+the emitter run branch 2's merge-base diff itself. It writes `pharn/features/<name>/assignments.json`:
+the resolved `target[]`, `lenses_registered[]` (from `count-lenses.mjs`), one `assignments[]` entry per
+registered lens (`{lens, basis, scanner, slice}`), `unassigned_scanner_bound[]`, and `scanner_errors[]`
+— every `{lens, file}` whose scanner failed to produce a verdict. **A failed scanner is not a miss:**
+folding the two together would make a wholly broken scanner indistinguishable from a clean target, so
+those files are reported rather than drifting silently into `unassigned_scanner_bound`. A non-empty
+`scanner_errors` is worth reading before trusting the rest of the record.
+
+**This replaced a prose instruction that nothing carried out.** The step used to read "record the
+resolved target file list in the review artifact" — and no artifact carried it, no emitter wrote it and
+no checker read it. Measured: a run that spawned 22 lenses over 6 files and a run that spawned 1 lens
+over 1 file produced **byte-identical** merged `findings.json` (same sha256), and so did a 6-file and a
+1-file target with an identical `lenses/` tree. The artifacts could not distinguish them.
+
+**On the emitter's two refusals (P5, fail-closed — do not work around either):**
+
+- **No resolvable target** → it exits non-zero and writes nothing, because Step 1's third branch is
+  **ask the human** and a deterministic emitter cannot. **Ask, then re-run with `--target`.** Never hand
+  it a placeholder to get past the refusal.
+- **A registered lens missing from `lens-scanner-map.json`** → it exits non-zero rather than invent a
+  `basis`. Fix the map (`lens-scanner-map.test.mjs` pins it against disk).
+
+> **What the record claims, and the bound is the point (P0).** Each entry says **"this slice was
+> ASSIGNED to this lens"** — never that a lens **read**, reviewed, covered or examined it. Spawning and
+> honoring a slice stay advisory (Step 4), so no artifact can reach that. `unassigned_scanner_bound[]` is
+> deliberately not "files assigned to no lens": the four scanner-less lenses take the whole target, so
+> that set would be empty by construction for every run forever and would certify nothing. It names the
+> files **no deterministic prefilter reached** — the widest nominal assignment on the weakest basis.
 
 ## Step 2 — Membership (FLOOR): which lenses run
 
@@ -123,8 +156,13 @@ lenses you run — membership is FLOOR** (`pharn/ARCHITECTURE.md §2` primitive 
 
 ## Step 3 — Per-lens SLICE (ADVISORY): the scanner-prefilter
 
-For each registered lens, derive **only its relevant slice** of the target using the explicit
-`pharn/floor/lens-scanner-map.json` (cite; it is the machine-readable projection of each lens's Layer-1
+**Step 1b already computed every slice — READ them from `assignments.json`, do not recompute.** Running
+the scanners a second time would be a second source of truth for one fact, and a later re-run answers
+"would this scanner hit **now**", not "what was assigned **then**". The record's `assignments[]` is the
+slice list; `basis` says which of the two cases below produced it.
+
+The cases, for reading the record (the derivation itself now lives in the emitter, over the explicit
+`pharn/floor/lens-scanner-map.json` — cite; it is the machine-readable projection of each lens's Layer-1
 scanner binding, consistency-tested by `lens-scanner-map.test.mjs`):
 
 - **Mapped lens** (`scanners[<lens>]` is a scanner file) → run that scanner over each target file;
@@ -236,6 +274,33 @@ multi-source group is the NORM, not the exception. Still quoted DATA. End with a
 `ADVISORY: N findings from M lenses over K files — for the human to weigh`. **Never** "review passed",
 "the code is safe", or any `PHARN ✓ reviewed` seal (P0) — a lens review gates nothing.
 
+**Also render the assignment summary from `assignments.json`** (Step 1b): the resolved target count, and
+**the `unassigned_scanner_bound[]` list in full**. That list is the one thing in this review a reader
+cannot reconstruct from the findings, and it is the honest counterweight to a short findings list — "no
+findings" over files no scanner-bound lens reached is a different statement from "no findings" over files
+every lens was cut a slice of. Word it as **assigned**, never "covered", "reviewed" or "examined".
+
+## Step 6b — Self-check the assignment record (FLOOR shape check; gates nothing)
+
+```bash
+node pharn/floor/check-review-assignments.mjs pharn/features/<name>/assignments.json
+```
+
+Exit `0` GREEN · `1` RED (a named invariant failed) · `2` INCONCLUSIVE (the record is unreadable or not
+a JSON object). On a **RED**, say so in `REVIEW.md` and **do not** hand-edit the record to green it —
+the record is the emitter's output, so a RED means the emitter or the tree disagrees with it, and
+editing the artifact hides exactly the disagreement worth seeing.
+
+> **Deliberately wired to NOTHING downstream (P7).** `/pharn-review` gates nothing today, and no
+> malformed record has ever occurred — because until this increment none existed. A `/pharn-verify` gate
+> would be the speculative half, and it would put a stage in the position of owning a gate over its own
+> artifact (a conflict invisible on the happy path). Named residual: `review-assignments-gate`.
+>
+> **And it is near-vacuous over an unmodified emitter — say so rather than implying vigilance.** It
+> passes on every happy path. Its value is that the record becomes **falsifiable by a consumer who did
+> not run the emitter**, plus detection of a hand-edited or stale record and of emitter drift. It is
+> never evidence that a review was adequate.
+
 ## Guarantee audit (P0)
 
 - **"Which lenses run"** → **FLOOR** (`count-lenses.mjs`, frontmatter membership).
@@ -244,6 +309,27 @@ multi-source group is the NORM, not the exception. Still quoted DATA. End with a
 - **"The lens→scanner map is consistent with disk"** → **FLOOR** (`lens-scanner-map.test.mjs`).
 - **"Lenses run in parallel"**, **"each reads only its slice"**, **"the code has issue X / is safe"** →
   **ADVISORY** (orchestration + each lens's irreducible judgment; a lens never gates — §7).
+- **"Which slice was ASSIGNED to which lens, and which target files no scanner-bound lens reached"** →
+  **FLOOR when the record is the EMITTER'S OUTPUT** (`render-review-assignments.mjs` — a deterministic
+  target resolution, `count-lenses.mjs` membership, and each scanner's own regex verdict; no model picks
+  a slice), plus **FLOOR shape + internal consistency** on the record
+  (`check-review-assignments.mjs` + its tests).
+- **"A record's values came from the emitter"** → **NOT VERIFIED, and the conditional above is doing
+  real work.** Nothing binds a record to its producer: `generated_by` is a self-declared string the
+  checker does not read, and a record whose slices and `unassigned_scanner_bound` were fabricated
+  **consistently** satisfies every invariant. Measured — a hand-authored record with
+  `generated_by: "typed by hand"` exits 0 GREEN. What defends the values is that the emitter is
+  deterministic and is what the command runs, **not** anything the checker detects. Do not read a GREEN
+  as provenance.
+- **"A lens READ / reviewed / covered / examined the slice it was assigned"** → **struck.** The record
+  says **assigned**. Nothing on the floor reaches reading, and the artifacts still cannot distinguish a
+  lens that ran from one that was skipped — the record narrows that gap by making the **assignment**
+  auditable, and closes none of it.
+- **"The resolved target was the complete or correct set of files to review"** → **ADVISORY.** The
+  checker validates the record against its own fields and against live lens membership; agreement
+  between stores is not the fact. A faithful record of a 1-file review passes every invariant.
+- **"The assignment record gates the review"** → **NO.** Its checker is run at Step 6b and consumed by
+  nothing downstream (residual `review-assignments-gate`).
 - **"It discovers which skills the user installed"** → **FLOOR-grade enumeration**
   (`scan-installed-skills.mjs`, deterministic + `.test.mjs`-covered) that **gates nothing** (lens membership
   and the merge do not read it). **"Feeding skills to the lenses makes the review better / safer"** →

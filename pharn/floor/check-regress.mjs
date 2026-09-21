@@ -94,6 +94,7 @@ const PIPELINE_ARTIFACTS = [
   "verify-report.json",
   "REVIEW.md",
   "findings.json",
+  "assignments.json",
   "SHIP.md",
   "ship-record.json",
   "BRIEFING.md",
