@@ -1520,6 +1520,55 @@ exists-then-read/write (CWE-367)`.
 
 ### Added
 
+- **A merged finding now states, per contributor, what deterministic detection stood behind that lens —
+  and `REVIEW.md` shows it** (`SKILLS_VERSION` 6.3.1 → **6.4.0**, minor: a newly shipped capability on
+  the product surface — `pharn/floor/merge-findings.mjs` gains a derived field and the `/pharn-review`
+  command bytes change) ([`.dev/features/finding-backstop-class/`](./.dev/features/finding-backstop-class/))
+  — each `sources[]` entry carries a `backstop` value from the closed, exported `BACKSTOP_ENUM`
+  (`scanner-assigned` · `scanner-less` · `scanner-errored` · `slice-miss` · `unknown`), derived at merge
+  time from the committed `pharn/floor/lens-scanner-map.json` **and** the per-run
+  `assignments.json`. **The trigger was demonstrated before the plan was written, not asserted (P7):**
+  two hand-written findings at one `file:line` — one from the scanner-bound `injection`, one from the
+  scanner-less `trust-fence` — merge into a single group (the shipped corpus emits `44 rule_id: P2`, one
+  value, so the dedup key degenerates to `(type, file)` and a multi-source group is the norm), and
+  rendered per Step 6 the two contributors are **structurally indistinguishable** — while the
+  scanner-less one had **max-escalated the group to `blocking`**. `/pharn-review`'s own audit already
+  **struck** "a skill cannot suppress a finding" for exactly those four lenses; nothing in the render let
+  a reader see which contributors they were. **The nearest existing signal structurally cannot carry
+  it:** `unassigned_scanner_bound[]` is **file-level**, so in that very case the file is _absent_ from it
+  while the group still rests partly on nothing structural. **The asymmetry is deliberate and the label
+  is a property of the CONTRIBUTOR, never the finding:** `scanner-assigned` adds **no** credibility —
+  the floor claim is only that _the record assigned this file to this lens on a scanner-bound basis and
+  the committed map agrees that lens has a scanner_, since the record is **not bound to its producer**
+  (measured: a hand-authored record exits 0 GREEN) — while `scanner-less` **subtracts** an assumption a
+  reader may otherwise make. "A regex matched this file" is **struck**, and "verified" / "confirmed" /
+  "corroborated" / "confidence" are banned from the field names and every rendered string. **Fail-closed
+  in every direction:** an absent, unreadable or malformed record or map, a lens the record does not
+  cover, and a **map↔record disagreement** (refused, never arbitrated — a consistency check certifies
+  agreement, never the fact, **L43**) all resolve to `unknown`; stderr names the degradation and stdout
+  reports per-member counts in enumeration order, so an all-`unknown` run is visible instead of looking
+  like an ordinary success (**L25**). **This increment's own `/pharn-dev-grill` earned its keep:** its one
+  blocking-severity finding showed `slice-miss` was **not** fail-closed — a `file` in a base form
+  `canonFile` declines to normalize (absolute, `../`, backslashes) would fail the lookup and be labelled
+  `slice-miss`, a **confident negative manufactured by a failed join** and indistinguishable from a true
+  miss. The remedy, folded in inside the approved scope: `slice-miss` is gated on the file appearing in
+  the record's own `target`, so anything the record cannot locate goes to `unknown`. `scanner-errored`
+  stays distinct from `slice-miss` because a throw is not a miss. The label **reads** the recorded verdict
+  and never re-runs a scanner, which is the side of **L42** that answers "what was assigned **then**"
+  rather than "would this hit **now**". The positional `<out> <glob>` CLI signature is **unchanged** —
+  both new inputs are named flags with defaults, each exercised by its own test rather than always
+  overridden (**L41**) — and `merge-findings.mjs`'s CLI now sits behind `if (import.meta.main)` so the
+  enumeration can be imported without executing the merge (**L25**'s guard spelling, not a `file://`
+  compare). Tests range over the exported enumeration rather than per-member assertions (**L29/L36**),
+  require a **positive** `scanner-assigned` and ≥2 distinct members so a broken join cannot pass green
+  (**L34**), and pin the two duplicated `basis` strings against the emitter's exported `BASIS_ENUM`
+  (**L31**). **Deliberately NOT done:** `pharn/pharn-contracts/finding-shape.md` is untouched — it never
+  mentions `sources[]` at all, so a label line there would either restate `merge-findings.mjs`'s header
+  (P4) or force documenting the array itself, a second axis; recorded as the deferred follow-up
+  `finding-shape-sources-array`. The degenerate dedup key, the max-severity escalation and the
+  `sources[0]` representative text are also untouched, and **this label must not be read as mitigating
+  them**.
+
 - **`THREAT-MODEL.md` now models the user-installed Claude Code skill surface** (`SKILLS_VERSION` 6.3.0 → **6.3.1**, patch: a clarification to bytes that already shipped — no new capability, no shape change) ([`THREAT-MODEL.md`](./THREAT-MODEL.md) `§2` item 8 / `§3` / `§5`, [`LIMITS.md`](./LIMITS.md) `§2`, [`.dev/features/skills-threat-surface/`](./.dev/features/skills-threat-surface/)) — `§2` enumerated the attack surface as **seven** items and none of them was the one channel three product stages already feed to models: a user-dropped `.claude/skills/<name>/SKILL.md`. **Established by reading, not asserted (P7):** a case-insensitive **whole-file** search of all 134 lines of `THREAT-MODEL.md` for `skill` returned **zero matches**, as did one for `.claude`, and none of the other three trusted docs or the `README` mentions `claude/skills` either — while `pharn/floor/scan-installed-skills.mjs:4` names `/pharn-build`, `/pharn-grill` and `/pharn-review`, whose calls sit at `pharn-build.md:164`, `pharn-grill.md:224` and `pharn-review.md:148`, and `pharn-review.md:187-190` hands the `SKILL.md` bodies to each lens subagent as untrusted context. The sharpest risk in the channel — the **suppression asymmetry**, where a hostile skill talks a lens _out of_ reporting a real finding and the human therefore never sees it, with **no structural backstop at all** for the four scanner-less lenses — was already written down at `pharn-review.md:156-179`, i.e. inside a command file, and absent from the document whose entire job is to enumerate exactly that. This is `lessons-learned` **L25** at range: a rationale reaches only the file it sits in. **The new row is deliberately the weakest in `§3`, and that is the point (P0):** its Floor cell reads **"ENUMERATION ONLY … GATES NOTHING … No primitive is specified or planned for this row"** and omits the `_(specified; ships with the guarded surface)_` marker that four of the seven existing Floor cells carry, because that marker asserts a protection that _will_ ship and **nothing is coming here**. **This change adds no protection whatsoever** — it makes an unmodeled surface modeled, and claims nothing more. **`§5` and `LIMITS.md` were corrected together, and the second file was found by measurement:** `§5` asserted "the one residual", which the increment's own grill measured to be **mirrored in `LIMITS.md` twice** (`:95` "the one place", `:141` "The one residual") — four spellings across two files, and `LIMITS.md:11` states that when claims conflict **the limit wins**, so patching only `THREAT-MODEL.md` would have left the _winning_ document contradicting it. Both were opened to a **non-counting** form ("this is not the only such place", "the known ones are named here") rather than re-counted to "two", because a count is simply a fresh expiry date — promoted as **`L46`**. Also registered `scan-installed-skills.mjs` in [`.dev/floor/specified-primitives.json`](./.dev/floor/specified-primitives.json)'s `named_artifacts` so the new citation cannot drift; **no `forward_claims` entry was added**, and the omission is reasoned rather than forgotten — every such record requires a mandatory `probe` naming a real path (`isLive()` throws → exit 2, fail-closed) and "a gate that reads the skills roster" has none, which is exactly the shape that manifest already deferred for the live-griller-runner and verifier-runner classes: _"a probe would have to invent one. Deferred rather than guessed (P6)."_ **Structurally human-only:** `protect-trusted-paths.cjs` denies the agent every write to `THREAT-MODEL.md` and `LIMITS.md` (probed live, **exit 2**), so the increment shipped three `git apply`-able patches plus an `APPLY.md` and the maintainer applied them, exactly as the `bash-write-claim-wording` precedent prescribes; the Bash route around the guard was **not taken**. Applying them was itself detected by `check-bash-reconcile.mjs` as an escape on `.dev/floor/specified-primitives.json` (`.dev/floor/` is `always_reconciled` against its committed blob) — the checker working as designed, resolved by committing the change rather than by touching the baseline.
 
 - **`/pharn-review` now emits a machine-readable record of what was ASSIGNED to which lens, and a floor
