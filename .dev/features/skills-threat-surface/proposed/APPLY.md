@@ -109,7 +109,7 @@ be weaker than every neighbouring row, on purpose; whether it is weak enough is 
 set (`CLAUDE.md`, "SKILLS_VERSION discipline") even though the installer never copies them into a
 user's project. `.dev/floor/specified-primitives.json` is `.dev/` apparatus and bumps **nothing**.
 
-- **`SKILLS_VERSION` 6.1.0 → 6.1.1** — **patch**: a correction/clarification to bytes that already
+- **`SKILLS_VERSION` 6.3.0 → 6.3.1** — **patch**: a correction/clarification to bytes that already
   shipped. No new capability, no shape change.
 - A **`CHANGELOG.md`** entry is owed in the same edit.
 - **`MIN_CLI` stays `0.5.0`** — no installed path moves, so no older CLI would install a broken tree.
