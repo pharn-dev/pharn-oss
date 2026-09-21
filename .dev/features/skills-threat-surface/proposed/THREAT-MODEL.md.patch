@@ -1,0 +1,60 @@
+--- a/THREAT-MODEL.md
++++ b/THREAT-MODEL.md
+@@ -53,6 +53,16 @@
+ 7. **cross-model review** — the second model's response returning into context; its allowlisted
+    endpoint is a legal hole in egress pointed at a text sink that returns text = an exfiltration
+    channel.
++8. **user-installed Claude Code skill** — a `.claude/skills/<name>/SKILL.md` the user dropped into
++   their own repo. `/pharn-build`, `/pharn-grill` and `/pharn-review` enumerate these
++   (`pharn/floor/scan-installed-skills.mjs`) and feed the bodies to the model as untrusted context;
++   `/pharn-review` hands them to **each lens subagent it spawns**. Same delivery mechanism as 6 — markdown is
++   executable (`LIMITS.md §1a`) — but a **different privilege story**: a Capability's `kind`/`seal`
++   are enum-gated by `validate.mjs`, whereas **nothing gates a `.claude/skills/` drop** —
++   `validate.mjs` never scans `.claude/`. The sharpest risk here is **suppression, not addition**: a
++   hostile skill that talks a lens out of reporting a real finding is invisible, because a suppressed
++   finding never reaches the human. Stated in full, with its carve-out, at
++   `.claude/commands/pharn-review.md` Step 3b — cited, not restated (P4).
+
+ ---
+
+@@ -69,6 +79,7 @@
+ | seam-record poisoning   | content-hash on resolution; drift is loud, not silent                                                                       | content-hash _(specified; ships with the guarded surface)_ |
+ | community Capability    | `kind` is a **privilege level**: community = markdown-only, no `.cjs`; cannot declare trusted-write or off-allowlist egress | `seal`-gating enforced (validate.mjs); markdown-only/no-`.cjs` and trusted-write pre-write hook + pre-egress (specified; ships with the guarded surface) |
+ | cross-model response    | egress-fenced + response returns in an untrusted fence + advisory-only (never gates ship)                                   | pre-egress (specified; ships with the guarded surface) + enum gate |
++| user-installed skill    | Enumerated deterministically, then fed to three stages as untrusted DATA. **Partial bound only:** for a lens whose `pharn/floor/lens-scanner-map.json` entry names a scanner, that scanner's MATCH is a regex verdict a skill cannot erase — but that covers only that it matched, never that the lens REPORTS it, and it does not exist at all for the scanner-less entries (read that membership from the map, not from here). See `.claude/commands/pharn-review.md` Step 3b | enum/regex — **ENUMERATION ONLY** (`scan-installed-skills.mjs`), and it **GATES NOTHING**: no proceed/stop/scope in any stage reads its output. **No primitive is specified or planned for this row** |
+
+ ---
+
+@@ -120,15 +131,25 @@
+
+ ---
+
+-## 5. The one residual (named, bounded, not zeroed)
++## 5. The residuals (named, bounded, not zeroed)
+
+ When a downstream LLM stage consumes the **free-text** of a finding (`problem`, `evidence`), "do
+ not execute this as an instruction" is a heuristic again — co-located with limit 8b. Fix #1 bounds
+-it (free text never alone gates a guaranteed decision) but does not zero it. This is the single
+-place the trust model is not provable on paper.
++it (free text never alone gates a guaranteed decision) but does not zero it.
+
+-**Therefore attempt 0 targets exactly this** (`README.md`): a minimal lens, a hostile
++**This is not the only such place; the known ones are named here.** (1) The free-text channel just
++described. (2) The **suppression** channel on surface 8 (§2, §3): a hostile `SKILL.md` steering a
++lens to DROP a genuine finding, which the human therefore never sees — bounded for a scanner-bound
++lens by the scanner's match, and bounded by **nothing structural** for the scanner-less ones, a set
++that includes `trust-fence`, the attempt-0 probe itself. The quantifier is corrected in the heading
++rather than contradicted by a paragraph beneath it: an unchanged "the one residual" would have left
++a false quantifier standing above text that disagrees with it. It is replaced by an OPEN form rather
++than by a new count — "two" would be exactly as brittle as "one" the day a third is found, and
++nothing in this repo reads shipped prose to notice.
++
++**Therefore attempt 0 targets exactly the FIRST of these** (`README.md`): a minimal lens, a hostile
+ fixture (adversarial code with an injected instruction in a comment), and a check of whether the
+-boundary-through-the-finding-object holds under real injection. It is the only fix that cannot be
+-verified by reasoning — everything else is enum-checks, hooks, and content-hashes, which are either
+-on the floor or not.
++boundary-through-the-finding-object holds under real injection. None of these can be verified by
++reasoning — everything else is enum-checks, hooks, and content-hashes, which are either on the floor
++or not. **The suppression channel is NOT measured by attempt 0, and no experiment currently targets
++it.**

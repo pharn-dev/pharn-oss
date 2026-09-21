@@ -1698,7 +1698,90 @@ therefore itself a **pending-remedy** lesson, and says so rather than implying o
 - source: `.dev/features/coverage-record/REVIEW.md § Proposed lesson candidate`
 - promoted: 2026-09-21 via gated `/pharn-dev-memory-promote` (human-approved).
 
-## L47 — A plan's completed-sweep claim is verified only where a checker happens to exist
+## L47 — Retracting a false quantifier by substituting a new count rebuilds the defect at the new value
+
+type: contract · concepts: [doc-drift, universal-quantifier, remedy-design, mirrored-state, lesson-recurrence]
+
+**Lesson.** A stale universal quantifier was found and repaired correctly, and the repair introduced a
+fresh one. `/pharn-dev-grill` measured that `THREAT-MODEL.md` §5's "the one residual" had become false
+and was MIRRORED in `LIMITS.md` twice (`:95` "the one place", `:141` "The one residual") — four
+spellings across two files, [[L33]]'s variant-spelling shape composed with [[L43]]'s mirrored state.
+Every site was found and every site was corrected. The correction then asserted **"There are two such
+places"** in one file and **"one of two"** in the other, rebuilding the identical two-file mirror at
+the new value, in the same edit, by the author who had just written the L33 and L37 body lines into
+that increment's `applied_lessons`. Remedy: when retracting a count, replace it with an **OPEN** form
+— "not the only", "the known ones are named here" — never with a new closed count. An open form stays
+true as the set grows; a count is simply a fresh expiry date.
+
+**Why it matters.** This is the repair pass failing in a way none of its ancestors predicts. [[L33]]
+says a repair misses the VARIANT SPELLINGS — here every spelling was found. [[L40]] says probing
+members confirms membership but never the stated CAUSE — the cause was not at issue. [[L37]]
+establishes that quantifiers are where drift lands, and this is its sharpening: the REMEDY for a stale
+quantifier is itself a quantifier, so the class is **self-reproducing** unless the repair deliberately
+changes FORM rather than VALUE. Nothing detects the recurrence — no checker reads shipped prose, and
+the four trusted docs are `.prettierignore`d and markdownlint-excluded — so the new sentence would go
+false exactly as quietly as the old one did. **HONEST TRIGGER (P7), stated rather than dressed up:**
+the replacement sentence was TRUE when written, so this is an observed **reproduction of a defect
+shape**, not yet an observed failure. By [[L20]]'s bar that is arguably a first occurrence, not a
+second. It was promoted anyway, at the maintainer's explicit direction at the ship-stage lesson gate,
+on the [[L36]] precedent — where the defect was likewise caught at range zero, in one sitting, by the
+author who had just cited the governing lessons. The weakness of the trigger is recorded here rather
+than a stronger one being invented.
+
+**Provenance.**
+
+- feature: `skills-threat-surface`
+- commit: `a2d73ebe104bd4fd0a46531fb46784a671145434`
+- source: `.dev/features/skills-threat-surface/REVIEW.md` F1 (proposed lesson Candidate A) +
+  `.dev/features/skills-threat-surface/GRILL.md` F1
+
+## L48 — A mid-stage writes-scope amendment is invisible to an open reconciliation epoch — and the detector's error is LOUD when it over-reports, SILENT when it under-reports
+
+type: scoping · concepts: [writes-scope, reconciliation, snapshot-staleness, asymmetric-detection, false-red]
+
+**Lesson.** The reconciliation epoch is anchored ONCE, at `/pharn-*build` Step 0, snapshotting the
+writes-scope live at that instant. A scope legitimately re-set later in the same stage — because the
+build discovered a path its plan had not declared — is not in that snapshot, so
+`check-bash-reconcile.mjs` judges the write against a stale policy and reports `ESCAPE` naming a path the
+live guard actually **ALLOWED**, through the guarded tool surface. The sanctioned remedy
+(`reconcile-baseline.mjs --amend-scope`) exists, but nothing invokes it: it reduces to remembering, which
+[[L20]] says is the wrong kind of remedy.
+
+**Measured.** The build bumped `SKILLS_VERSION`; `check-version-badge` REDded because the README shields
+badge is held equal to it; `README.md` was declared in the plan's `## Files`, the setter re-run 5 → 6
+paths, and the write made with the **Edit** tool. Verify's `reconcile` gate then exited **1** naming
+`README.md` with `denied_by: "writes-scope (snapshot)"`, while the baseline's opening `scope_snapshot`
+still listed only the original five.
+
+**Why it matters — the ASYMMETRY is the lesson, not the false red.** Forgetting to amend is **loud and
+self-correcting**: a false `ESCAPE` fails verify and someone investigates. The opposite direction is
+**silent** — a genuine Bash escape to a path that a later legitimate amendment happens to cover is
+absorbed into `CLEAN`, with nothing reporting it. The two failure directions are not symmetric noise: the
+direction that reliably gets human attention is the harmless one, and the direction that matters never
+surfaces. A detector whose loud failures are its safe ones trains its operator to read its REDs as
+procedural noise, and that is the corrosive part.
+
+**Distinct from its two neighbours.** [[L38]] is the nearest relative and arguably the first occurrence of
+the family: there the contention is **between concurrent sessions** over the single mutable scope record,
+and the remedy is ordering the anchor after the setter. Here there is one session, the ordering was
+correct, and the staleness comes from a legitimate **within-stage** amendment the anchor could not have
+foreseen. [[L42]] says re-executing a policy engine answers "would it allow this **NOW**"; this is the
+inverse error — the replayed policy is too **OLD**, not too new — so the fix is not to stop replaying but
+to keep the replayed policy current.
+
+**Remedy.** Have the scope-setter itself amend an open epoch when one exists, so the amendment is a
+**consequence of setting scope** rather than a separate act someone must remember. Until that ships this
+stays discipline, which is exactly what [[L20]] predicts will recur — and [[L46]] warns that canon cannot
+tell a shipped remedy from a sentence, so this paragraph is a prescription, not a fix.
+
+**Provenance.**
+
+- feature: `finding-backstop-class`
+- commit: `231e422a43aa12d8c0793267ae6221a2171cfd7d`
+- source: `.dev/features/finding-backstop-class/VERIFY.md § "Disclosure — the reconcile gate REDded on its first run"` + `.dev/features/finding-backstop-class/REVIEW.md § "Advisory findings"` finding 2 (rule_id P0, important)
+- promoted: 2026-09-21 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L49 — A plan's completed-sweep claim is verified only where a checker happens to exist
 
 type: process · concepts: [plan-shape, declaration-audit, enumeration, floor-coverage, false-green]
 

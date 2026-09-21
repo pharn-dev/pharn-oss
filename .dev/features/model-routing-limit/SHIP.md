@@ -76,9 +76,37 @@ read as a failure to whoever applied the patches.
   **acted on**: the wording was narrowed and the patch regenerated (+45) and re-verified.
 - `proposed/` — four patches + `APPLY.md` with the verification record and the commit-first ordering.
 
-lesson: promoted L47
+lesson: promoted L49
 
 deferred: none
+
+## Rebase onto main — recorded, because it RENUMBERED two shipped facts
+
+The branch was built on `231e422` (`SKILLS_VERSION` 6.3.0). While it was in flight, main advanced two
+commits to **6.4.0**, and **both** of this increment's chosen numbers were taken in the meantime:
+
+| fact             | as built | collided with                                    | now       |
+| ---------------- | -------- | ------------------------------------------------ | --------- |
+| `SKILLS_VERSION` | 6.3.1    | `1df107b` shipped 6.3.1; `23f6d14` shipped 6.4.0 | **6.4.1** |
+| canon lesson id  | L47      | main's own L47 **and** L48                       | **L49**   |
+
+Resolved by merging `origin/main` into the branch. `LIMITS.md` **auto-merged** — main edited lines 92
+and 138, this increment appends at 293, so the regions are disjoint. Five files conflicted
+(`SKILLS_VERSION`, `README.md`, `CHANGELOG.md`, `.dev/memory-bank/lessons-learned.md`,
+`docs/lessons-index.md`); each was resolved so that **both** sides survive — main's CHANGELOG entries
+and its L47/L48 are intact, and this increment's entry moved to the end of canon as L49.
+`docs/lessons-index.md` was **regenerated**, never hand-merged.
+
+**The narrative artifacts above are deliberately NOT rewritten.** `PLAN.md`, `GRILL.md`,
+`REGRESSION.md` and `REVIEW.md` say `6.3.1` because that is what the run decided and what the floor
+measured at the time — `check-version-badge.mjs` really did report _"the badge reads 6.3.0 but
+SKILLS_VERSION is 6.3.1"_. Back-dating those numbers would falsify the record of a real STOP. Only the
+**shipped** bytes and this file's own status line were renumbered.
+
+**One shipped byte still carries the old number and the agent cannot fix it:** `LIMITS.md:342`'s
+trailing marker reads `(SKILLS_VERSION 6.3.1)` and should read `6.4.1`. It is inside a hook-denied
+trusted doc, so it is staged as `proposed/LIMITS-version-marker.patch` for a human, exactly as §8
+itself was.
 
 ---
 

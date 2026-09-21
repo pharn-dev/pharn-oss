@@ -262,6 +262,14 @@ does not judge** — the merged `findings.json` is **advisory**.
 > verdict.** The structural fix (distinct file-qualified `rule_id`s per P4's `security.md SEC-1` shape)
 > spans 22 lenses and their fixtures and is deliberately **not** done here.
 
+**The merge also derives a per-contributor `backstop` label into each `sources[]` entry.** The command
+line above is **unchanged** and needs no edit: the two artifacts it reads are found by **defaults** —
+`pharn/floor/lens-scanner-map.json` beside the script, and **`assignments.json` beside `<out.json>`**,
+which is exactly where Step 1b wrote it. (`--lens-map` / `--assignments` exist to override them; the
+positional `<out> <glob>` signature is deliberately untouched, since a new positional would have been
+swallowed as an input file.) The value is **derived from those two structured artifacts, never declared
+by a lens** — full semantics and bounds in `merge-findings.mjs`'s header, cited not restated (P4).
+
 ## Step 6 — Render `pharn/features/<name>/REVIEW.md` (human-facing) + an advisory verdict
 
 Write `pharn/features/<name>/REVIEW.md` from the **merged** `findings.json`: the resolved target, the lens
@@ -270,7 +278,52 @@ membership count, and the findings grouped by `file` then `rule_id`. Render ever
 finding's `sources[]` — each contributor's `source`, `severity` and `problem`, attributed to its lens —
 never only the `sources[0]` scalar.** This is **mandatory, not conditional on there being more than one
 entry**: the merged scalars are the group's representative, and on the shipped lens set (below) a
-multi-source group is the NORM, not the exception. Still quoted DATA. End with an explicitly **advisory** verdict, e.g.
+multi-source group is the NORM, not the exception. Still quoted DATA.
+
+**ALSO render each contributor's `backstop`, and the placement is a REQUIREMENT, not a preference.** The
+label is **trusted-derived** (computed by `merge-findings.mjs` from two structured artifacts) and it
+lands beside `evidence`, which legitimately quotes hostile payloads. So it goes on the contributor's
+**plain attribution line**, and **never inside a `>` blockquote** — every free-text field stays inside
+one. That separation is what stops a trusted-looking string from lending its air to the untrusted text
+beneath it (P2). Render exactly one line per member, and **nothing at all for `scanner-assigned`
+beyond the neutral clause below**:
+
+| `backstop`         | render as                                                         |
+| ------------------ | ----------------------------------------------------------------- |
+| `scanner-assigned` | `a recorded scanner verdict assigned this file to this lens`      |
+| `scanner-less`     | `no deterministic scanner backs this lens`                        |
+| `scanner-errored`  | `this lens's scanner produced no verdict for this file`           |
+| `slice-miss`       | `a recorded verdict did not place this file in this lens's slice` |
+| `unknown`          | `nothing is claimed about what backs this lens`                   |
+
+> **The asymmetry is deliberate and must not be flattened into a score (P0).** A `scanner-assigned`
+> label adds **no** credibility to the finding — it states only that the **record** assigned this file to
+> this lens on a scanner-bound basis and the committed map agrees that lens has a scanner. It is **not**
+> "a regex matched": the record is not bound to its producer (see the audit below), and whether a lens
+> **reports** a match stays advisory. A `scanner-less` label **subtracts** a guarantee a reader may
+> otherwise assume — it is the one member carrying information the reader needs, and it is the
+> Step-3b carve-out made visible at the point of consumption. **Word it so a reader who ignores the
+> label entirely is still correct.** The label describes the **CONTRIBUTOR**, never the finding, which is
+> why **"verified", "confirmed", "corroborated" and "confidence" are banned** from this rendering: each
+> would claim something about the finding. And it must **not** be presented as mitigating the
+> degenerate dedup key above — it labels contributors; that defect is untouched.
+>
+> **`unknown`'s rendered text is deliberately CAUSE-NEUTRAL.** That member has five distinct causes —
+> the record or map absent, unreadable or malformed; the lens absent from the record; a map↔record
+> disagreement; or the file outside the record's `target`. A render naming only one of them (an earlier
+> draft said _"no usable assignment record"_) **misattributes** in the other four cases, which is a
+> false statement dressed as a helpful detail. The cause stays where it is knowable: `merge-findings`'
+> stderr names an unusable artifact, and the `backstop` value plus the record itself are on disk. The
+> render says only what holds in every case.
+>
+> **Keep the render markdownlint-clean.** `pharn/features/<name>/REVIEW.md` is an in-repo `.md` inside
+> `lint:md`'s `**/*.md` glob, with no `pharn/features/**` exclusion — so a blank line between two
+> adjacent quoted fields trips `MD028/no-blanks-blockquote` and **REDs a style gate for every later
+> feature**. Measured while building this: 3× MD028 until the adjacent `problem` / `evidence` quotes were
+> joined with a `>` continuation. Put the label line **before** the contributor's single joined quote
+> block; do not sandwich it between two blockquotes.
+
+End with an explicitly **advisory** verdict, e.g.
 `ADVISORY: N findings from M lenses over K files — for the human to weigh`. **Never** "review passed",
 "the code is safe", or any `PHARN ✓ reviewed` seal (P0) — a lens review gates nothing.
 
@@ -334,11 +387,33 @@ editing the artifact hides exactly the disagreement worth seeing.
   (`scan-installed-skills.mjs`, deterministic + `.test.mjs`-covered) that **gates nothing** (lens membership
   and the merge do not read it). **"Feeding skills to the lenses makes the review better / safer"** →
   **ADVISORY** — it enriches each lens's judgment; a lens still never gates.
+- **"Each contributor's `backstop` label is a deterministic function of the committed lens→scanner map
+  and the assignment record"** → **FLOOR** (`merge-findings.mjs` + its tests; enum-regex over a closed
+  `BACKSTOP_ENUM`). No lens declares its own evidence class and no model picks a label.
+- **"`scanner-less` means no deterministic prefilter exists for that lens"** → **FLOOR** over the
+  committed, consistency-tested map. **NARROWED:** `lens-scanner-map.test.mjs` certifies the mapped
+  scanner **file exists on disk** — never that it runs, matches, or works.
+- **"`scanner-assigned` means a deterministic regex MATCHED this file"** → **struck.** The floor claim is
+  exactly: _the record states this file was assigned to this lens on a scanner-bound basis, and the
+  committed map agrees that lens has a scanner._ The record is **not bound to its producer** (the
+  measured `generated_by` finding two bullets below applies here in full), and reporting a match stays
+  advisory. The rendered text says only what the artifacts support.
+- **"An unusable artifact cannot yield a confident label"** → **FLOOR.** An absent/unreadable/malformed
+  record or map, a lens the record does not cover, a **map↔record disagreement** (refused, never
+  arbitrated), and a file outside the record's `target` all resolve to `unknown`. That last gate is what
+  keeps `slice-miss` from being a confident negative manufactured by a failed path join.
+- **"The label says a finding is more or less likely to be true"** → **struck (the disease).** It is a
+  property of the **contributor**, one-directional: the bound label adds nothing, the scanner-less label
+  removes an assumption.
+- **"The human will notice the label"** → **ADVISORY.** Nothing reads `REVIEW.md`; its presence is render
+  discipline, not a floor guarantee.
 - **"A skill cannot suppress a finding"** → **struck**, and it was never true as stated. For a
   **scanner-bound** lens only the scanner's **MATCH** is deterministic — the report is still advisory. For a
   **scanner-less** lens (`hallucinated-api`, `input-validation`, `race-condition`, `trust-fence`) there is
   **no backstop at all**. See the Step-3b carve-out; the membership is `pharn/floor/lens-scanner-map.json`,
-  read there and not restated as a count here.
+  read there and not restated as a count here. **Since the `backstop` label (Step 6) this asymmetry is
+  VISIBLE in the rendered group rather than recoverable only by a reader who already holds the map** —
+  which narrows the reader's exposure, and closes none of the suppression risk itself.
 - **"/pharn-review certifies the code"** → **struck (the disease).** It assembles advisory findings
   deterministically; it never certifies.
 
