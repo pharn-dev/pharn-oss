@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.3.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.3.1-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -498,15 +498,12 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   beyond promotion. What exists is what the generated inventory above lists.
 - **Per-stage model routing is static frontmatter, and it does not reach stages run inside an
   orchestrator.** `pharn.config.json`'s `models.stages` is the source of truth for the ten product
-  commands' `model:` / `effort:` frontmatter, and `pharn/floor/check-model-config.mjs` RED-fails when
-  the two disagree — but Claude Code selects a command's model from that **static frontmatter and
-  nothing at run time**, so three things follow. The override lasts for **the turn that invokes the
-  command**: you get per-stage routing when you run `/pharn-plan` yourself, and **not** for stages
-  `/pharn-ship` or `/pharn-loop` invoke as steps inside their own turn. An organization
-  `availableModels` allowlist, or auto mode, can decline a value silently. And nothing can observe that
-  a stage actually ran under the configured model — a green checker means the config and the
-  frontmatter agree, never that `/pharn-plan` ran on Opus. Editing the config is therefore only half
-  the change: update the command frontmatter too, or the checker will tell you.
+  commands' `model:` / `effort:` frontmatter, and `pharn/floor/check-model-config.mjs` RED-fails when the
+  two disagree — but a green checker means those two files agree, never that `/pharn-plan` ran on Opus,
+  and nothing in PHARN observes what a stage actually ran under. Editing the config is therefore only
+  half the change: update the command frontmatter too, or the checker will tell you. The full bounds —
+  turn scope, the platform veto, and what deleting the block costs — are stated once, in
+  [`LIMITS.md`](./LIMITS.md) § 8.
 - **It is token-hungry by construction.** `/pharn-grill` runs the grillers over your plan and
   `/pharn-review` fans every applicable lens out as its own parallel subagent; `/pharn-loop` repeats
   build → regress → verify up to the cap, unattended — each pass re-runs your suite at the base and at

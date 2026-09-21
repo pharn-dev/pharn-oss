@@ -1697,3 +1697,41 @@ therefore itself a **pending-remedy** lesson, and says so rather than implying o
 - commit: `a2d73ebe104bd4fd0a46531fb46784a671145434`
 - source: `.dev/features/coverage-record/REVIEW.md § Proposed lesson candidate`
 - promoted: 2026-09-21 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L47 — A plan's completed-sweep claim is verified only where a checker happens to exist
+
+type: process · concepts: [plan-shape, declaration-audit, enumeration, floor-coverage, false-green]
+
+**Lesson.** A plan that DECLARES a completed sweep — "I checked every site this increment
+invalidates" — is verified only at the sites that happen to have a floor check. Everywhere else the
+declaration is an unverified assertion, and every later stage inherits it as fact. Measured: this
+increment's PLAN asserted a meta-doc sweep naming four `README.md` sites, `CHANGELOG.md`,
+`SKILLS_VERSION` and a checker header, and OMITTED `README.md:24`, the shields version badge.
+`/pharn-dev-grill` read the declaration and could not catch it — `check-plan-lessons.mjs` verifies
+that an id is cited and referenced, never that the claim is true. It surfaced two stages later as a
+`/pharn-dev-regress` `regressions` verdict, and ONLY because that one omitted site happens to be held
+to byte-equality by `check-version-badge.mjs`. Had the sweep instead missed `README.md:158-160`,
+`:325` or `:499-509` — none of which any checker reads — the run would have reached GATE 2 green,
+carrying a stale meta-doc and a declaration saying the sweep was done.
+
+**Why it matters.** The failure presents as thoroughness. A plan that ENUMERATES sites reads as more
+careful than one that does not, while the enumeration is exactly what bounds the claim to the author's
+attention — so the more specific the declaration, the more convincing the omission. Nothing downstream
+re-derives the site set. The transferable rule: a sweep's reliability equals FLOOR COVERAGE of the
+swept surface, not the care taken over it, so when declaring one, say which sites are checker-backed
+and treat the rest as unverified. Distinct from its neighbours in a way worth keeping: [[L36]] says a
+per-member presence set is not a closed set — that is about the ENUMERATION acquiring a variant
+spelling; [[L1]] requires SCOPING the meta-docs an increment invalidates — that is about remembering
+to look; [[L43]] says a consistency check certifies agreement, never the fact. This is the asymmetry
+underneath all three: the checked subset of a sweep is silently mistaken for the whole. Note also what
+the remedy is NOT — a new checker over declarations would be the third thing to keep in sync that
+[[L35]] warns against; the remedy is to state the coverage boundary inside the declaration, where the
+next reader meets it.
+
+**Provenance.**
+
+- feature: `model-routing-limit`
+- commit: `231e422a43aa12d8c0793267ae6221a2171cfd7d`
+- source: `.dev/features/model-routing-limit/REVIEW.md` (proposed lesson candidate) +
+  `.dev/features/model-routing-limit/REGRESSION.md` (run 1, verdict `regressions`)
+- promoted: 2026-09-21 via gated `/pharn-dev-memory-promote` (human-approved).
