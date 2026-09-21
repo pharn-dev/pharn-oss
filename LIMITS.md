@@ -143,7 +143,7 @@ prevents. The honest standard:
   experiment tests.
 
 "Good" = known holes closed or labeled, and limits honest. **Not** "no holes." The unknowns are
-discovered by building and measuring, not by more review (`README.md`, the experiment agenda).
+discovered by building and measuring, not by more review.
 
 ---
 
@@ -339,4 +339,4 @@ the three floor primitives by the checker's own account; a PHARN-side "fix" woul
 guarantee, which is the disease P0 exists to prevent. It reopens if the platform ever exposes the executed
 model to a hook.
 
-<!-- §8 was drafted in .dev/features/model-routing-limit and applied by a human (SKILLS_VERSION 6.3.1). -->
+<!-- §8 was drafted in .dev/features/model-routing-limit and applied by a human (SKILLS_VERSION 6.4.1). -->

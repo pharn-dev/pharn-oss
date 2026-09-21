@@ -1,0 +1,11 @@
+--- a/THREAT-MODEL.md
++++ b/THREAT-MODEL.md
+@@ -147,7 +147,7 @@ a false quantifier standing above text that disagrees with it. It is replaced by
+ than by a new count — "two" would be exactly as brittle as "one" the day a third is found, and
+ nothing in this repo reads shipped prose to notice.
+ 
+-**Therefore attempt 0 targets exactly the FIRST of these** (`README.md`): a minimal lens, a hostile
++**Therefore attempt 0 targets exactly the FIRST of these** (`pharn/pharn-review/trust-fence/`): a minimal lens, a hostile
+ fixture (adversarial code with an injected instruction in a comment), and a check of whether the
+ boundary-through-the-finding-object holds under real injection. None of these can be verified by
+ reasoning — everything else is enum-checks, hooks, and content-hashes, which are either on the floor

@@ -208,8 +208,8 @@ It prints `{"count":<int>,"skills":[{"name","path"},...]}` (the `.claude/skills/
 > there is no scanner verdict for a skill to fail to erase: such a lens's entire output is model judgment
 > over the whole target, and a hostile `SKILL.md` that talks one of them out of a genuine finding is
 > bounded by **nothing structural**. That set includes **`trust-fence`, the attempt-0 injection probe
-> itself** (`README.md`, `THREAT-MODEL.md §5`) — the one capability this repo's experiment agenda exists to
-> measure. Naming this does not reduce the risk; it stops this document from denying it.
+> itself** (`THREAT-MODEL.md §5`) — the capability attempt 0 measures. Naming this does not reduce the
+> risk; it stops this document from denying it.
 >
 > **And the covered half is narrower than it looks.** Even for a scanner-bound lens, what is deterministic
 > is that the scanner **MATCHED** — never that the lens **reports** it. Spawning, slicing and each lens's
