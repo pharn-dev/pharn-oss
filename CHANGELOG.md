@@ -1524,6 +1524,65 @@ exists-then-read/write (CWE-367)`.
 
 ### Added
 
+- **Every `/pharn-loop` stop now also writes a human-readable run report**
+  (`SKILLS_VERSION` 6.5.2 → **6.6.0**, minor: a newly shipped product-floor capability)
+  ([`pharn/features/<name>/RUN-REPORT.md`](./pharn/floor/render-run-report.mjs),
+  [`.dev/features/loop-run-report/`](./.dev/features/loop-run-report/)) — a deterministic VIEW over
+  `cost.json` and the artifacts the run already wrote: the outcome, a per-stage×iteration×model token
+  table over all six classes, the changed-and-untracked files each carrying its `PLAN.md` `## Files`
+  line quoted verbatim, the standing verify/regress verdicts, and the `LOOP.md` `## Handoff`.
+  **Every line is derived by code; none is authored by a model.** **Trigger (P5):** maintainer
+  direction — at a stop a person should see which model worked on which phase and for how many tokens,
+  which files moved and roughly what each is, and what the run ran into — recorded as such rather than
+  dressed in a manufactured dogfood failure.
+  **It ANNOTATES and gates NOTHING** (fix #3): no proceed/stop reads it, and the Step-6c commit stays
+  gated on `STOP_GREEN` ∧ the decision re-derivation alone. Three bounds travel **inside the artifact**,
+  not only here: the file list is **changed-since-`base_sha`**, which is _not_ "what the build wrote"
+  (**L17** is the record of that conflation producing a blocking finding on the correct workflow); the
+  token numbers are **copied** from `cost.json`'s stored views, never recomputed, so the report cannot
+  disagree with the file `check-cost-ledger.mjs` just certified (**L43**); and the verdicts are the
+  **final iteration only**, because `/pharn-loop` overwrites both report files in place every iteration
+  — the report says so rather than inventing a history that was never recorded.
+  **NO SECTION USES A MARKDOWN TABLE, and that is a measurement rather than a preference:** probed live
+  against the shipped sanitiser (**L37**), `sanitizeIdentity("opus|5", …)` returns it **unchanged** —
+  the ledger's rule 3 bounds length, control characters and absolute paths, and a pipe is none of the
+  three. One pipe in a table cell shifts every column right of it, so every region carrying untrusted
+  text is a fenced block whose delimiter is computed longer than any back-tick run inside it. That makes
+  it inert **to a CommonMark parser**; it is **not** forgery-proofing, and the header says so.
+  **The Handoff grammar is now SHARED, not copied** — `pharn/floor/loop-record-core.mjs` is imported by
+  both `check-loop-record.mjs` and the renderer (**L35**: the second copy should not exist; the rule had
+  already been wrong twice). **The PLAN `## Files` grammar is shared the same way** —
+  `pharn/floor/plan-files-core.mjs` is imported by both `check-build-complete.mjs` and the renderer, and
+  gained an additive `entries` (each item's raw line). The renderer first imported that parser FROM the
+  checker, which gave the checker a **second reason to change** — its completeness axis plus a shared
+  parser, with the `import.meta.main` guard the export forced as the visible symptom. That was **REVIEW
+  finding F3**, and it is **fixed by extraction rather than deferred**: the checker now exports nothing,
+  and its guard is kept as ordinary CLI hygiene with its comment corrected rather than left asserting a
+  reason that no longer holds. The **canonical** `## Files` parser is still `set-writes-scope.cjs` — the
+  core carries that parity obligation, and the ★ parity test that already ranged over the behaviour is
+  what covers the move. **The extraction also SURFACED a real gap it did not create:** giving the parser
+  its own file made visible that the **Boundary-2 exclusion-cue `break`** — the rule already repaired
+  **twice** (`setter-cue-fix`, `plan-cue-continuation`) — was reached by **no product-floor test**, its
+  only coverage living in the setter's own `.cjs` suite (**L31**: the second copy is where the obligation
+  drops). Closed here by a parity case that holds **both** parsers to the same answer and pins the cue's
+  two exemptions (a blockquote, an authorized item's own description) as non-vacuity controls, with a
+  **mutation control** run to prove it fails when the branch is disabled.
+  **`RUN-REPORT.md` joined FIVE enumerations, listed in one place and iterated by a test** (**L29/L31**):
+  `PIPELINE_ARTIFACTS`, `reconcile-ignore.json`'s `pipeline_artifacts.names` (the two already pinned
+  set-equal by a ✧ test, and forced by the ★ recurrence guard), the Step-6c staging list,
+  `.prettierignore` and `.markdownlint-cli2.jsonc`. The last two follow the `cost.json` precedent
+  (**L23**) and are listed **on reasoning rather than after the first FAIL**, with a sharper reason here:
+  the report quotes untrusted text it does not control, so gate-clean output is not achievable by
+  construction. **Coverage, stated exactly rather than rounded up:** 46 tests in the renderer's
+  suite and **100% line and function** over all three new modules (`render-run-report.mjs`,
+  `loop-record-core.mjs`, `plan-files-core.mjs`). **Branch** coverage is **100%** on the two shared cores
+  and **85.96%** on the renderer — named rather than omitted, since "fully covered" would not be true of
+  that third column. The suites carry
+  non-vacuity controls (**L34**) and negative controls proving the porcelain parse (**L21**), the
+  `validate` CHECK-5 preamble (**L10**) and the section-closure assertion (**L36**) can each actually
+  fail. The write is a **Bash** write outside the `PreToolUse` gate (**L19**), declared in the plan and
+  covered by name under `pipeline_artifacts` — never described as gate-covered.
+
 - **`pharn/ARCHITECTURE.md` now names every contract in `pharn/pharn-contracts/`, closing a pre-existing drift the cost-ledger increment surfaced** (`SKILLS_VERSION` 6.5.1 → **6.5.2**, patch: a correction to bytes that already shipped) ([`pharn/ARCHITECTURE.md`](./pharn/ARCHITECTURE.md) §4 and §5, [`.dev/features/loop-cost-ledger/architecture-patch/`](./.dev/features/loop-cost-ledger/architecture-patch/)) — §4's layer tree named **6** contracts while **9** existed on disk: `reconciliation-record`, `regression-report` and `verify-report` had been omitted **before** this increment touched anything, so adding `cost-ledger` alone would have made it 10 named 6. All ten are now named, verified by comparing the block against `readdirSync("pharn/pharn-contracts")` rather than by reading it. §5's durable-files sentence gains `cost.json` beside `findings.json` and `ship-record.json`, which it earns by the same definition that sentence already uses (committed on a green `/pharn-loop` stop, left in the working tree otherwise). **Why this shipped as a staged patch rather than an edit:** `pharn/ARCHITECTURE.md` is human-only and `protect-trusted-paths.cjs` denies the agent's write tools on it (exit 2), so the patch was **generated by editing a throwaway `git worktree` and diffing**, verified with `git apply --check` at the real path ([[L26]] — a patch verified against a copy OUTSIDE the repo is verified under different rules than the repo enforces), and **applied by the maintainer** outside the agent loop, with `APPLY.md` recording the pre-existing-drift decision as theirs rather than folding it in silently. **`spec_content_hash` moves** `b91d773c…` → `aada03c9…`, which is fix #4 behaving correctly: every committed PLAN pinning the old value has already been built, and a plan written-but-unbuilt would now correctly refuse as drifted. **Nothing in the floor catches a missing bump here, and that is why it is recorded rather than assumed:** the four trusted docs are `.prettierignore`d and markdownlint-excluded, `validate.mjs` does not walk root docs, and `check:badge` / `check:changelog` compare the version copies **to each other**, never to what changed — [[L43]] exactly, whose own instance was a product-surface byte moving while all three copies agreed at the stale value.
 
 - **The cost ledger's identity fields are now BOUNDED, closing a contract that asserted a bound the code did not provide** (`SKILLS_VERSION` 6.5.0 → **6.5.1**, patch: a correction to bytes that already shipped) ([`pharn/pharn-contracts/cost-ledger.md`](./pharn/pharn-contracts/cost-ledger.md), [`.dev/features/loop-cost-ledger/REVIEW.md`](./.dev/features/loop-cost-ledger/REVIEW.md)) — `/pharn-dev-review` found `cost-ledger.md` claiming _"the leaf-shape rule bounds what can land in them"_ of `model`, `attribution_skill` and `agent_id`. **It did not:** that rule reaches `usage` only, and those three were copied from an untrusted transcript into a **committed** artifact behind a bare `typeof === "string"` test. **Probed with a control rather than reasoned about:** a 200,000-character `attribution_skill`, one carrying `\u0007`/`\u0000`, one carrying a newline plus a forged `RED — …` line, a 200,000-character `model`, and a control-char `agent_id` were each accepted **GREEN**, while the control — a `usage` leaf containing spaces, the field the rule really covers — REDded. This is the P0 disease in its canonical form and [[L2]] recurring: a contract may cite only a floor op that is live **for the thing it claims to cover**. **The gap is closed rather than the sentence weakened** — a new rule 3 bounds all three (≤128 chars, no control character, no absolute path), a refusal is **dropped with its key path listed** (`model` → the literal `unknown`, the others → `null`) and **never truncated**, which would invent a value that was never in the transcript. The re-probe shows all five vectors RED with the ordinary-values control still GREEN, so the fix is not over-tightened. **Two further review findings fixed in the same pass.** (1) [[L41]] **recurred inside the increment that cited it**: the `pharn/features` default existed in **two** places while the PLAN asserted exactly one, and the no-`--base` **write** path was exercised by nothing because every CLI test passes the flag — `render-ship-briefing.mjs:438` reproduced. It is now one exported `FEATURE_BASE`, referenced twice, with a test that goes through the no-flag branch and a **closure** assertion (L36) counting the literal's occurrences in the source so a re-introduced duplicate fails. (2) [[L31]]: the `usage` leaf rule was encoded **twice** and the two had **already diverged** — the checker's copy omitted the `ABS_PATH_RE` term, masked only by the whole-document path sweep — and `cleanScalar` existed in **three** copies; there is now one `isTokenLeaf` and one `cleanScalar`, exported and imported. Suite 2240 → 2244.

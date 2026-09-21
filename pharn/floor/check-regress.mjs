@@ -100,6 +100,7 @@ const PIPELINE_ARTIFACTS = [
   "BRIEFING.md",
   "cost.json",
   "LOOP.md",
+  "RUN-REPORT.md",
 ];
 
 // /pharn-review writes one findings.json per lens, NESTED: pharn/features/<name>/lenses/<lens>/findings.json.

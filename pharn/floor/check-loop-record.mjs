@@ -82,6 +82,7 @@
 
 import { readFileSync } from "node:fs";
 import { FM_RE, stripBom } from "./frontmatter-core.mjs";
+import { HANDOFF_SECTIONS, handoffSections } from "./loop-record-core.mjs";
 
 // The `decision` enum — exactly the values check-loop.mjs EMITS as `.decision` at a stop. `CONTINUE`
 // (which check-loop.mjs also emits) is deliberately absent: a record is written only at a STOP, so a
@@ -90,33 +91,16 @@ import { FM_RE, stripBom } from "./frontmatter-core.mjs";
 // member such as `toString` would be both truthy and non-nullish and would leak past `||` / `??`).
 const DECISION_ENUM = new Set(["STOP_GREEN", "STOP_CAP", "STOP_TERMINAL", "INCONCLUSIVE"]);
 
-// The Handoff subsections, in NORMATIVE ORDER. The array (not a Set) is the point: order is part of the
-// shape, so the check is list equality, not set membership.
-const HANDOFF_SECTIONS = ["investigated", "learned", "next_steps"];
+// HANDOFF_SECTIONS + the four structure regexes + the fence-pairing scan now live in
+// ./loop-record-core.mjs, so render-run-report.mjs reads the SAME grammar instead of re-deriving it
+// (L35: the second copy should not exist; L31: a copy-pair is where the obligation drops). The rule
+// has been wrong twice, which is why it is shared rather than repeated. This file keeps the VERDICT.
 
 // The value grammars (primitive #3). Each is applied ONLY after cleanScalar (see below).
 const ITER_RE = /^\d+$/;
 const CAP_RE = /^\d+$/; // shape-identical to ITER_RE; the OPTIONAL fifth field — see the header note
 const COMMIT_RE = /^([0-9a-f]{7,40}|unknown)$/; // `unknown` = an honest absence, never a fabricated SHA
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-// Structure regexes. `HANDOFF_RE` matches the section heading exactly; `SUB_RE` matches a level-3
-// heading (`####` does not match — `#` is not the required whitespace); `HEADING_RE` ends the section at
-// the next `#`/`##` heading.
-//
-// All three allow the 0-3 leading spaces CommonMark allows on an ATX heading, and `{0,3}` rather than
-// `\s*` is deliberate: at 4+ spaces the line is an indented code block, not a heading. Anchoring these
-// at column 0 while the fence scan tolerated indentation was a real fail-OPEN — a 3-space-indented
-// `### smuggled` inside the Handoff is a heading to every CommonMark parser, and the checker would
-// return GREEN while asserting the three were the ONLY level-3 headings there.
-const HANDOFF_RE = /^ {0,3}##[ \t]+Handoff[ \t]*$/;
-const SUB_RE = /^ {0,3}###[ \t]+(.*)$/;
-const HEADING_RE = /^ {0,3}#{1,2}[ \t]+\S/;
-
-// A fence delimiter line: 0-3 spaces, then a run of 3+ backticks or 3+ tildes, then anything (the info
-// string on an opener; whitespace only on a closer). `fenceOpens` / `fenceCloses` below implement the
-// CommonMark 4.5 pairing rule — see `handoff()`.
-const FENCE_RE = /^ {0,3}((?:`{3,}|~{3,}))(.*)$/;
 
 function red(msg) {
   console.log(`RED — ${msg}`);
@@ -157,73 +141,11 @@ function envelope(text) {
   return fields;
 }
 
-// Collect the `## Handoff` sections and, for each, the level-3 headings it contains plus whether each
-// heading is followed by at least one non-blank body line. Fenced blocks are skipped throughout.
-// Returns { count, subs: [title…], nonEmpty: [bool…] } for the FIRST Handoff section; `count` reports how
-// many `## Handoff` headings exist so a duplicate section is RED rather than silently first-wins.
+// The Handoff scan is DELEGATED to loop-record-core.mjs, never re-derived here. The core also returns
+// each subsection's raw `bodies`; this checker ignores them by design — it judges STRUCTURE and never
+// reads a body for meaning (P2).
 function handoff(body) {
-  const lines = body.split(/\r?\n/);
-  let openFence = null; // { char, len } while a fenced block is open; null otherwise
-  let count = 0;
-  let inSection = false;
-  const subs = [];
-  const nonEmpty = [];
-
-  // Mark the CURRENT subsection as carrying content. Content before the first `###` is ignored — it
-  // belongs to the section's own preamble, not to any subsection.
-  const markContent = () => {
-    if (inSection && subs.length > 0) nonEmpty[nonEmpty.length - 1] = true;
-  };
-
-  for (const line of lines) {
-    // Fenced blocks: their CONTENT counts as body content (a subsection whose body is a code block is
-    // not empty), but they are NEVER structural — a fenced `### learned` is DATA about the shape, never
-    // a declaration of it (lessons-learned.md L6).
-    //
-    // The pairing follows CommonMark 4.5 rather than toggling on any fence-looking line: a block closes
-    // ONLY on a delimiter of the SAME character whose run is at least as long as the opener's, with
-    // nothing but whitespace after it. A blind toggle desynchronized from real Markdown in both
-    // directions and both were reproduced against micromark and markdown-it: it fail-OPENED (a `~~~`
-    // block "closed" by ``` left two subsections inside a code block yet still reported all three
-    // present) and it fail-CLOSED on the escape hatch this very file prescribes (quoting the record's
-    // own outline needs a nested fence, and the four-backtick idiom broke the toggle).
-    const fence = line.match(FENCE_RE);
-    if (fence) {
-      const marker = fence[1];
-      if (openFence === null) {
-        openFence = { char: marker[0], len: marker.length };
-      } else if (marker[0] === openFence.char && marker.length >= openFence.len && fence[2].trim() === "") {
-        openFence = null;
-      }
-      // a non-matching delimiter while a block is open is ordinary content, not a close
-      markContent();
-      continue;
-    }
-    if (openFence !== null) {
-      if (line.trim().length > 0) markContent();
-      continue;
-    }
-
-    if (HANDOFF_RE.test(line)) {
-      count++;
-      inSection = count === 1; // only the first section is collected; a second makes it RED anyway
-      continue;
-    }
-    if (!inSection) continue;
-
-    const sub = line.match(SUB_RE);
-    if (sub) {
-      subs.push(sub[1].trim());
-      nonEmpty.push(false);
-      continue;
-    }
-    if (HEADING_RE.test(line)) {
-      inSection = false; // the section ends at the next `#`/`##` heading
-      continue;
-    }
-    if (line.trim().length > 0) markContent();
-  }
-
+  const { count, subs, nonEmpty } = handoffSections(body);
   return { count, subs, nonEmpty };
 }
 

@@ -273,6 +273,44 @@ node pharn/floor/mark-phase.mjs --name <slug> --kind <run-start|stage-start|orch
 node pharn/floor/render-cost-ledger.mjs <name> [--base <dir>] [--repo <dir>] [--session <id>] [--stdout]
 node pharn/floor/check-cost-ledger.mjs <cost.json> [--verify-transcript]
 
+# Render `pharn/features/<name>/RUN-REPORT.md` (added 6.6.0) — the human-readable run report /pharn-loop
+# writes at EVERY stop that has a feature directory, right after the cost-ledger checks and before Step 6c.
+# A deterministic VIEW over cost.json + the artifacts the run already wrote: outcome; a token table
+# stage x iteration x model over all six classes plus totals and `unattributed`; the changed-and-untracked
+# files, each marked if already dirty before the run and each carrying its PLAN `## Files` line VERBATIM;
+# the standing verify/regress verdicts; and LOOP.md's `## Handoff`. EVERY LINE IS DERIVED BY CODE.
+# ANNOTATES, gates NOTHING (fix #3) — no proceed/stop reads it, and Step 6c stays gated on STOP_GREEN and
+# the decision re-derivation. There is deliberately NO contract and NO checker (P7: nothing machine-reads
+# it, so both would be additions with no trigger); the module header is the spec and the suite enforces it.
+# THREE BOUNDS, carried INSIDE the artifact, not only here: (1) the file list is CHANGED-SINCE-base_sha
+# plus untracked — NOT "what the build wrote"; a `not named in PLAN ## Files` marker is an observation,
+# never a scope verdict (L17 is that conflation producing a blocking finding on the correct workflow);
+# (2) token numbers are COPIED from cost.json's stored views, never recomputed, so this cannot disagree
+# with the file check-cost-ledger.mjs certifies (L43); (3) verdicts are the FINAL ITERATION ONLY, because
+# /pharn-loop overwrites both report files in place each iteration — earlier ones are not on disk and are
+# not invented. Per-iteration COST is genuine and comes from by_stage_iteration_model.
+# NO MARKDOWN TABLE ANYWHERE, and it is a measurement not a taste (L37): sanitizeIdentity("opus|5", …)
+# returns it UNCHANGED — rule 3 bounds length, control chars and paths, not a pipe — and one pipe shifts
+# every column right of it. So every untrusted region is a fence computed longer than any back-tick run
+# inside it. Inert TO A COMMONMARK PARSER; NOT forgery-proofing, and never described as such.
+# The Handoff grammar is IMPORTED from pharn/floor/loop-record-core.mjs, shared with check-loop-record.mjs
+# (L35) — the fence-pairing rule had already been wrong twice, so it is not re-derived. The PLAN `## Files`
+# grammar is IMPORTED the same way from pharn/floor/plan-files-core.mjs, shared with check-build-complete.mjs:
+# the renderer first imported it FROM that checker, which gave the checker a SECOND reason to change (its
+# completeness axis plus a shared parser) — REVIEW finding F3, fixed by the extraction rather than deferred.
+# The canonical `## Files` parser remains set-writes-scope.cjs, and the core carries that parity obligation;
+# the extraction also SURFACED that the Boundary-2 exclusion-cue break — the rule already repaired twice —
+# was reached by no product-floor test, now closed by a parity case with a mutation control. FEATURE_BASE is
+# imported too: this module introduces ZERO new defaults, pinned by a closure assertion (L41/L52).
+# `RUN-REPORT.md` is a member of FIVE enumerations (L29/L31), iterated by one test: PIPELINE_ARTIFACTS,
+# reconcile-ignore.json pipeline_artifacts.names, the Step-6c staging list, .prettierignore and
+# .markdownlint-cli2.jsonc — the last two on the cost.json reasoning (L23), because the report quotes
+# untrusted text it does not control and gate-clean output is not achievable by construction.
+# The write is a BASH write outside fix #7 (L19), declared in the plan and exempt under pipeline_artifacts.
+# Ships: bumps SKILLS_VERSION. Exit: 0 rendered (an honest `n/a` section is still success) · 2 unusable
+# input (no/!slug <name>, or no feature directory) — fail-closed, nothing written.
+node pharn/floor/render-run-report.mjs <name> [--base <dir>] [--repo <dir>] [--stdout]
+
 # Render / cross-verify the GATE-2 briefing artifact (pharn/features/<name>/BRIEFING.md) /pharn-ship writes
 # alongside SHIP.md. render-ship-briefing.mjs is Node stdlib only, no LLM call: every enum-gated
 # frontmatter field is a verbatim copy of a value already in a committed source file (SPEC/PLAN

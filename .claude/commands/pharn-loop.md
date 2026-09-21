@@ -24,6 +24,7 @@ reads:
     "pharn/floor/mark-phase.mjs",
     "pharn/floor/render-cost-ledger.mjs",
     "pharn/floor/check-cost-ledger.mjs",
+    "pharn/floor/render-run-report.mjs",
     "pharn/floor/check-spec.mjs",
     "pharn/floor/check-spec-approved.mjs",
     "pharn/floor/check-plan-spec-agree.mjs",
@@ -419,9 +420,21 @@ node pharn/floor/render-cost-ledger.mjs '<name>' --command /pharn-loop --base-sh
 node pharn/floor/check-cost-ledger.mjs pharn/features/<name>/cost.json
 ```
 
-Keep the emitter's printed table for Step 7 and the checker's output for the summary. **Commit policy is
-unchanged:** a non-green stop leaves `cost.json` in the working tree exactly as it leaves every other
-artifact.
+Keep the emitter's printed table for Step 7 and the checker's output for the summary.
+
+**Then render the human-readable run report**, on the same every-stop-with-a-feature-directory rule:
+
+```bash
+node pharn/floor/render-run-report.mjs '<name>' --base pharn/features
+```
+
+It is a deterministic VIEW over `cost.json` and the artifacts this run already wrote — the outcome, the
+per-stage token table, the changed files with each one's planned purpose quoted from `PLAN.md`, the
+standing verdicts, and the `## Handoff` quoted verbatim as DATA. **Every line is derived by that code;
+none is authored by you.** Do not retype, summarize or "improve" the file — Step 7 prints from it.
+
+**Commit policy is unchanged:** a non-green stop leaves `cost.json` and `RUN-REPORT.md` in the working
+tree exactly as it leaves every other artifact.
 
 **What this step does NOT do, and the distinction is load-bearing (P0).** `check-cost-ledger.mjs`'s exit
 code is **not** a proceed/stop input. It gates nothing: Step 6c's commit is gated on `STOP_GREEN` **and**
@@ -476,7 +489,7 @@ const ok = (args) => { try { execFileSync("git", args, { stdio: "ignore", env })
 const rec = JSON.parse(fs.readFileSync(".pharn/writes-scope.json", "utf8"));
 if (rec.set_by !== "pharn/features/" + name + "/PLAN.md") process.exit(3);
 const scope = rec.scope;
-const artifacts = ["SPEC.md", "PLAN.md", "GRILL.md", "BUILD.md", "REGRESSION.md", "VERIFY.md", "regression-report.json", "verify-report.json", "LOOP.md", "cost.json"].map((f) => "pharn/features/" + name + "/" + f);
+const artifacts = ["SPEC.md", "PLAN.md", "GRILL.md", "BUILD.md", "REGRESSION.md", "VERIFY.md", "regression-report.json", "verify-report.json", "LOOP.md", "cost.json", "RUN-REPORT.md"].map((f) => "pharn/features/" + name + "/" + f);
 const keep = [];
 for (const p of scope.concat(artifacts)) {
   const exists = fs.existsSync(p);
@@ -559,6 +572,10 @@ Report, plainly and without asking anything:
 - any committed path that was already dirty in the pre-run snapshot (`.pharn/pharn-loop/<name>/pre-run-status.txt`);
 - the SPEC state: **approved by the model** (inside the commit), **reverted to `Draft`**, or **revert failed**
   (still approved by the model — say so);
+- **the run report**: print `pharn/features/<name>/RUN-REPORT.md`'s `## Tokens` table and its `## Files`
+  list. **The FILE is the record; this screen copy is advisory** and is reproduced from it, never
+  retyped. Name the path so the reader can open it. If no report was rendered (a stop before S2 has no
+  feature directory), say that plainly rather than omitting the line;
 - **the cost ledger**: the per-stage table `render-cost-ledger.mjs` printed at Step 6b, verbatim, plus
   `check-cost-ledger.mjs`'s verdict (GREEN, any WARN, or a RED quoted verbatim). **The FILE is the
   record; this screen copy is advisory** — and both carry the same bound: the ledger reports **tokens**,

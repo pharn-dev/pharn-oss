@@ -39,6 +39,14 @@ pharn/features/*/regression-report.json
 # run — so reformatting it would be a standing cost in every `format:check`.
 pharn/features/*/cost.json
 
+# RUN-REPORT.md — the SAME requirement as cost.json above, listed on the same reasoning rather than
+# after the first FAIL discovers it (L23). `pharn/floor/render-run-report.mjs` renders it
+# deterministically, and a formatter re-wrapping it would be a second writer of an artifact one tool
+# owns. Sharper here than for cost.json: the report QUOTES untrusted text verbatim — Handoff bodies and
+# PLAN `## Files` lines it does not control — so gate-clean output is not achievable by construction,
+# and the conflict would land on `/pharn-verify`, a gate `/pharn-loop` itself owns.
+pharn/features/*/RUN-REPORT.md
+
 # The committed cost-ledger transcript fixtures are JSONL — one record per line, byte-exact. Prettier
 # does not understand `.jsonl`, and `--ignore-unknown` skips it; this entry makes the intent explicit so
 # a future formatter that DOES understand it cannot silently re-wrap the fixture the parity test pins.

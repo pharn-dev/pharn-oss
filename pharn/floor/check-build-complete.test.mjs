@@ -12,7 +12,9 @@
 //   • a missing/unparseable PLAN or a `## Files` with no concrete path → INCONCLUSIVE (exit 2),
 //     fail-closed, NEVER a silent complete;
 //   • ★ PARITY: this checker's `declared` set equals set-writes-scope.cjs's `--from-plan` scope over a
-//     shared fixture — the two `## Files` parsers stay in lock-step (Q3 of the plan).
+//     shared fixture — the two `## Files` parsers stay in lock-step (Q3 of the plan);
+//   • ★ PARITY: the Boundary-2 exclusion CUE truncates the list identically in both parsers, and its two
+//     exemptions (a blockquote, an authorized item's own description) do NOT truncate it.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -199,6 +201,61 @@ test("★ PARITY: `declared` equals set-writes-scope.cjs's `--from-plan` scope o
     const declared = json(run([plan, root])).declared;
     assert.deepEqual([...declared].sort(), [...scope].sort()); // lock-step extraction
     assert.deepEqual([...scope].sort(), ["keep/one.md", "keep/two.mjs"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// The cue boundary is the rule this parser has had WRONG TWICE — a bare narrative line between two path
+// items silently truncated the authorized scope (setter-cue-fix), and the continuation case needed a
+// second repair (plan-cue-continuation). The extraction to plan-files-core.mjs made it visible that the
+// `break` itself was reached by NO test in the product floor: the branch was covered only in the setter's
+// own `.cjs` suite, so this copy carried a twice-wrong rule with nothing ranging over it (L31 — the
+// second copy is where the obligation drops). This closes that, and does it as a PARITY case so the two
+// implementations are held to the same answer rather than merely each to itself.
+test("★ PARITY: a head-less exclusion CUE truncates both parsers, and its two exemptions do not", () => {
+  const root = mkdtempSync(join(tmpdir(), "pharn-complete-"));
+  try {
+    const plan = join(root, "PLAN.md");
+    writeFileSync(
+      plan,
+      [
+        "# PLAN — cue fixture",
+        "",
+        "## Files",
+        "",
+        // EXEMPTION 1 — an authorized item's OWN description matches the cue regex (`not modif…`) and
+        // must NOT end the list. Without the path-item exemption this line alone would drop everything.
+        "- `keep/one.md` — the public API is not modified by this change",
+        // EXEMPTION 2 — a blockquote matches the cue (`not touch…`) and is explanatory commentary.
+        "> These notes are commentary; the vendored tree is not touched here.",
+        "",
+        "- `keep/two.mjs` — y",
+        "",
+        // THE CUE — a bare, non-path, non-blockquote prose line. This is the break under test.
+        "The paths below are explicitly excluded from the build.",
+        "",
+        "- `dropped/three.md` — after the cue, never authorized",
+        "",
+      ].join("\n")
+    );
+
+    const s = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
+    assert.equal(s.status, 0, `setter failed: ${s.stderr}`);
+    const scope = JSON.parse(readFileSync(join(root, ".pharn", "writes-scope.json"), "utf8")).scope;
+    const declared = json(run([plan, root])).declared;
+
+    // Lock-step: whatever the cue does, it does to BOTH.
+    assert.deepEqual([...declared].sort(), [...scope].sort(), "the two parsers disagreed about the cue");
+
+    // The exact set: both exemptions held, and the cue truncated.
+    assert.deepEqual([...scope].sort(), ["keep/one.md", "keep/two.mjs"]);
+
+    // NON-VACUITY (L34): the assertion above must be capable of failing on each half. A fixture that
+    // proved only "the cue truncates" would stay green if the exemptions silently stopped working.
+    assert.ok(scope.includes("keep/one.md"), "the path-item exemption did not hold — its own description truncated the list");
+    assert.ok(scope.includes("keep/two.mjs"), "the blockquote exemption did not hold — commentary truncated the list");
+    assert.ok(!scope.includes("dropped/three.md"), "the cue did not truncate — a path after it was authorized");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
