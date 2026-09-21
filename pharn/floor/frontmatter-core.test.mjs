@@ -24,6 +24,7 @@ const SPEC = "---\nspec_id: S1\nstate: Draft\n---\n\n# Body\n";
 const CONSUMERS = [
   "check-spec.mjs",
   "check-loop-record.mjs",
+  "check-loop-decision.mjs",
   "check-plan-lessons.mjs",
   "check-plan-spec-agree.mjs",
   "check-ship-briefing.mjs",

@@ -1376,6 +1376,7 @@ const BLOCKED_PLACEHOLDER = "<id>";
 const COMMIT_OUTCOMES = [
   "committed <branch>",
   "not committed: <decision>",
+  "not committed: decision unverifiable",
   "not committed: nothing staged",
   "not committed: branch failed",
   "not committed: stage failed",

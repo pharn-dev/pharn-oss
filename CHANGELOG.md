@@ -1579,6 +1579,50 @@ exists-then-read/write (CWE-367)`.
   and is what the command runs, not anything the checker detects.
   Lens membership, the merge key, the finding shape, the degenerate `rule_id` key, and
   `/pharn-dev-review` are all **untouched** (one axis).
+- **`/pharn-loop`'s `LOOP.md` now re-derives its own recorded `decision` before an unattended `STOP_GREEN`
+  commits** (`SKILLS_VERSION` 6.2.0 → **6.3.0**, minor: a newly shipped product-floor checker, an
+  additive optional loop-record field, and changed product-command bytes — no existing install is
+  invalidated) — `pharn/floor/check-loop-decision.mjs`, with
+  `pharn/floor/check-loop-decision.test.mjs` as its invoker. A dogfooded, unattended `/pharn-loop` run
+  skipped `/pharn-grill`, `/pharn-regress` and `/pharn-verify` entirely, hand-executed the equivalent work
+  by judgment, and still wrote a `LOOP.md` whose `decision` read as a genuine floor-grade stop.
+  `pharn/floor/check-loop-record.mjs` — the only checker that self-validates a loop-record — passed it,
+  because its own header is explicit that it verifies SHAPE only: "that `decision` AGREES with what
+  `check-loop.mjs` actually emitted (membership is checked, agreement is not)". Nothing in the pipeline
+  ever re-derived a recorded decision from the reports it summarizes, so a hand-authored or corrupted
+  `LOOP.md` was indistinguishable on disk from a genuinely floor-computed one — and on `STOP_GREEN`
+  specifically, that record is committed to a new branch **unattended**, with no human between the record
+  and the commit.
+
+  **The fix, and why it adds no new decision logic (P3/P4).** The new checker shells `check-loop.mjs` as a
+  CLI via `spawnSync` — the SAME `check-plan-spec-agree.mjs` reuse idiom, never a sibling import of its
+  internals — and compares a LIVE re-derived `decision` token to the one recorded, for every non-blocked
+  stop. `check-loop.mjs`'s own input signature stays exactly `{verify-report.json, regression-report.json,
+iter, cap}`, unchanged, so "no advisory stage can gate the loop's stop decision" remains structurally
+  true: this checker consumes the stop's output, after the fact, from a fresh invocation, and gates only
+  the downstream `/pharn-loop` Step 6c commit. `cap` — the loop's `--max-iter` value — is added to the
+  loop-record envelope as an **optional** field (`pharn/pharn-contracts/loop-record.md`), so every
+  existing `LOOP.md` in any install's history stays shape-valid with nothing to backfill; the updated
+  `/pharn-loop` writes it on every non-blocked stop going forward, letting the checker fully re-derive
+  `STOP_CAP` too, not only the cap-independent decisions.
+
+  **Deliberate asymmetry with `check-ship-briefing.mjs` (stated, not accidental).** That checker's
+  cross-file re-verification is annotation-only, because a human `GATE 2` decision already follows it.
+  `/pharn-loop`'s `STOP_GREEN → commit` has no human between the record and the branch, so this checker
+  **gates** that one step — `not committed: decision unverifiable` joins the closed commit-outcome set.
+
+  **Named, not hidden: the residual this does NOT close (P0).** This proves a recorded decision is
+  **re-derivable** from the reports it cites — it does not prove those reports are themselves honest. A
+  self-consistent forgery (a hand-written `LOOP.md` paired with hand-written reports that genuinely reduce
+  to the claimed decision) still passes. Closing that would mean authenticating the reports' provenance,
+  out of this increment's scope. The specific incident's `check-bash-reconcile.mjs` gap is also unclosed
+  by this fix — that window closed when the run's worktree was discarded, and is a separate,
+  already-designed `STOP_TERMINAL` mechanism this increment does not touch.
+
+  Built via `/pharn-loop` itself (`pharn/features/loop-decision-integrity/`), in an isolated git worktree,
+  as an increment fixing the very command that built it — a genuine, not staged, dogfood. It landed
+  **after** the `/pharn-review` assignments entry above took 6.2.0, so this increment is **6.3.0** — the
+  two are independent and neither reads the other.
 
 - **`pharn.config.json`'s `models.stages` is now the floor-checked source of truth for the ten PRODUCT
   commands' model/effort** (`SKILLS_VERSION` 3.1.2 → **3.2.0**, minor: a newly shipped product-floor

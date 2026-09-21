@@ -1,5 +1,5 @@
 ---
-description: "Run the PRODUCT pipeline UNATTENDED to a deterministic stop, then report what was done: /pharn-spec --model-approve (the model approves its own SPEC, recorded as approved_by: model) → /pharn-plan → /pharn-grill → /pharn-build → /pharn-regress → /pharn-verify, iterating build→regress→verify until the tested pharn/floor/check-loop.mjs (Design C) says stop: CONTINUE on any measurable red (verify FAIL / INCOMPLETE, a regression) under a bounded --max-iter cap (default 3); STOP_TERMINAL on an inconclusive verdict or a reconcile red (a retry would re-anchor the baseline and erase a detected Bash escape); STOP_GREEN on verify PASS ∧ regress no-regressions; STOP_CAP at the cap. There is NO human gate inside the run: every sub-stage question maps to ONE enumerated stuck-point table (S1–S10) — mechanical cases resolve by a fixed rule, judgment cases STOP and report, nothing is guessed. At every stop it writes pharn/features/<name>/LOOP.md per pharn/pharn-contracts/loop-record.md and self-checks it with pharn/floor/check-loop-record.mjs. Only a STOP_GREEN result is committed, to a NEW LOCAL BRANCH, staging only regular files from the plan's ## Files plus the feature's named artifacts; every other stop commits nothing and reverts the model's SPEC approval to Draft. Never pushes, never merges, never seals. Ends with a summary, not a question. check-loop.mjs's inputs are ONLY the two verdict reports + iter/cap, so no advisory stage can gate the loop (structural). FLOOR: the stop decision + the record shape; ADVISORY: the orchestration, the self-approval, the stuck-point mapping and every git step. '/pharn-loop finished' means a stop was reached and recorded — NEVER 'the feature is good', NEVER 'a human approved the intent', NEVER 'the fix converged' (P0)."
+description: "Run the PRODUCT pipeline UNATTENDED to a deterministic stop, then report what was done: /pharn-spec --model-approve (the model approves its own SPEC, recorded as approved_by: model) → /pharn-plan → /pharn-grill → /pharn-build → /pharn-regress → /pharn-verify, iterating build→regress→verify until the tested pharn/floor/check-loop.mjs (Design C) says stop: CONTINUE on any measurable red (verify FAIL / INCOMPLETE, a regression) under a bounded --max-iter cap (default 3); STOP_TERMINAL on an inconclusive verdict or a reconcile red (a retry would re-anchor the baseline and erase a detected Bash escape); STOP_GREEN on verify PASS ∧ regress no-regressions; STOP_CAP at the cap. There is NO human gate inside the run: every sub-stage question maps to ONE enumerated stuck-point table (S1–S10) — mechanical cases resolve by a fixed rule, judgment cases STOP and report, nothing is guessed. At every stop it writes pharn/features/<name>/LOOP.md per pharn/pharn-contracts/loop-record.md and self-checks it with pharn/floor/check-loop-record.mjs; for every non-blocked stop it additionally re-derives the recorded decision with pharn/floor/check-loop-decision.mjs — a LIVE re-run of check-loop.mjs against the record's own cited reports, using its iterations and cap, must reproduce the same decision — and a STOP_GREEN commit is gated on that re-derivation being GREEN (a decision that cannot be re-derived from its cited reports is never committed unattended). Only a STOP_GREEN result is committed, to a NEW LOCAL BRANCH, staging only regular files from the plan's ## Files plus the feature's named artifacts; every other stop commits nothing and reverts the model's SPEC approval to Draft. Never pushes, never merges, never seals. Ends with a summary, not a question. check-loop.mjs's inputs are ONLY the two verdict reports + iter/cap, so no advisory stage can gate the loop (structural). FLOOR: the stop decision + the record shape; ADVISORY: the orchestration, the self-approval, the stuck-point mapping and every git step. '/pharn-loop finished' means a stop was reached and recorded — NEVER 'the feature is good', NEVER 'a human approved the intent', NEVER 'the fix converged' (P0)."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -25,11 +25,12 @@ reads:
     "pharn/floor/check-plan-spec-agree.mjs",
     "pharn/floor/check-loop.mjs",
     "pharn/floor/check-loop-record.mjs",
+    "pharn/floor/check-loop-decision.mjs",
     "pharn/floor/validate.mjs",
   ]
 writes: ["pharn/features/<name>/SPEC.md", "pharn/features/<name>/LOOP.md"]
 constitution_refs: ["P0", "P2", "P3", "P5", "P6", "P7"]
-version: "0.3.0"
+version: "0.4.0"
 ---
 
 # /pharn-loop — run the product pipeline unattended to a floor-grade stop, then report what was done
@@ -38,9 +39,13 @@ You are the **orchestrator** of an **unattended** run. You take a user's `<incre
 way through the product pipeline — spec, plan, grill, build, regress, verify — iterate the
 `build → regress → verify` middle until a **deterministic** stop, commit a green result to a new local
 branch, and finish with a **summary**. Nobody answers questions during the run. You **reuse** the existing
-product stage commands and **reimplement none of them**. Two floor primitives are this command's own: the
-tested stop core `pharn/floor/check-loop.mjs`, and the tested record shape check
-`pharn/floor/check-loop-record.mjs` — the second **cannot** feed the first.
+product stage commands and **reimplement none of them**. Three floor primitives are this command's own:
+the tested stop core `pharn/floor/check-loop.mjs`; the tested record shape check
+`pharn/floor/check-loop-record.mjs`; and the tested cross-file re-derivation check
+`pharn/floor/check-loop-decision.mjs`, which asks whether a non-blocked record's `decision` genuinely
+reduces from a live re-run of `check-loop.mjs` over the reports the record cites, and gates the
+`STOP_GREEN` commit on the answer. None of the three can feed **back into** the stop decision — the first
+computes it, the second and third only validate the record written **after** it exists.
 
 > **This is a PRODUCT command (`pharn-`, not `pharn-dev-`).** It is what a PHARN **user** runs when they
 > want the work done without being asked. Its gated sibling is `/pharn-ship`, which stops for the human
@@ -256,9 +261,10 @@ node pharn/floor/reconcile-baseline.mjs --amend-scope   # IMMEDIATELY after the 
 ```
 
 **The record's shape is defined ONCE, in `pharn/pharn-contracts/loop-record.md`** — the envelope
-(`decision`, `iterations`, `commit`, `date`), the blocked-stop exception, and the mandatory `## Handoff` with
-exactly `### investigated`, `### learned`, `### next_steps`. Read the contract and follow its canonical
-template; do not re-derive the shape from this command (P4). This command's own capture rules:
+(`decision`, `iterations`, `commit`, `date`, plus the optional `cap`), the blocked-stop exception, and the
+mandatory `## Handoff` with exactly `### investigated`, `### learned`, `### next_steps`. Read the contract
+and follow its canonical template; do not re-derive the shape from this command (P4). This command's own
+capture rules:
 
 - **`decision`** is **copied verbatim** from the `check-loop.mjs` JSON kept in Step 5 — except on a blocked
   stop, which writes `INCONCLUSIVE` plus the `blocked:` key, as the contract states.
@@ -272,6 +278,10 @@ template; do not re-derive the shape from this command (P4). This command's own 
   because the contract defines `unknown`). Never a guessed SHA, never the loop's own commit.
 
 - **`iterations`** is the iteration reached (a stop before the first build counts as `1`).
+- **`cap`** — on every **non-blocked** stop, write the literal `<M>` this run entered with (Step 1). This
+  is what lets `check-loop-decision.mjs` (below) fully re-derive a `STOP_CAP` decision, not only the
+  cap-independent ones. A **blocked** stop may omit it (Step 2's table never consulted `check-loop.mjs`,
+  so there is nothing for `cap` to help re-derive).
 - The body carries an **`## Outcome`** section with three lines, so the outcome survives on disk and not only
   in the summary: `commit:` — one value from the Step 7 closed set (for `STOP_GREEN`, the expected
   `committed <branch>`; Step 6d rewrites it if the commit does not happen); `spec:` — `approved by the model`,
@@ -288,13 +298,34 @@ node pharn/floor/check-loop-record.mjs pharn/features/<name>/LOOP.md
 ```
 
 Exit 0 → proceed. Exit 1 → fix the record and re-run **at most once**; if it is still RED, carry the
-checker's output into the summary verbatim and continue to Step 6c. Never delete the content the check is
-about to make it pass. **The ≤1 repair bound is advisory** (`LIMITS.md §1d`) — command prose, not a counter.
+checker's output into the summary verbatim and continue to the next check below. Never delete the content
+the check is about to make it pass. **The ≤1 repair bound is advisory** (`LIMITS.md §1d`) — command prose,
+not a counter.
 
-### Step 6c — commit, on `STOP_GREEN` only
+**Then, on every NON-BLOCKED stop only, re-derive the decision:**
 
-Any other decision skips this step: no branch, no commit. On `STOP_GREEN`, run these pinned lines in order
-(PHARN's own build-loop lesson **L22**: the invocation is the instruction, not a description of it).
+```bash
+node pharn/floor/check-loop-decision.mjs pharn/features/<name>/LOOP.md
+```
+
+Keep its exit code as `<decision-check>` for Step 6c and Step 7. **This one is NOT repaired the way a
+malformed record shape is.** An honest run's `decision` was copied verbatim, moments earlier in Step 5,
+from the very reports this checker re-reads — so on a compliant run it is **always** GREEN by
+construction. A RED here means either a real bookkeeping bug in this run, or the exact deceptive shortcut
+this checker exists to catch (a decision that was never genuinely computed from its cited reports); editing
+the record to make it pass would defeat the point, so **do not retry it** — carry its output into the
+summary verbatim and proceed to Step 6c, where a RED here blocks the commit regardless of `decision`. **A
+blocked stop skips this check entirely** — it never consulted `check-loop.mjs`, so there is nothing to
+re-derive; treat `<decision-check>` as N/A for it, and Step 6c's gate below does not apply.
+
+### Step 6c — commit, on `STOP_GREEN` AND a GREEN `<decision-check>` only
+
+Any other decision skips this step: no branch, no commit. **A `STOP_GREEN` whose `<decision-check>` (above)
+was RED also skips this step** — `not committed: decision unverifiable` — this run's own record failed to
+re-derive from its own cited reports, so nothing is committed regardless of the `decision` token; go to
+Step 6d exactly as for any other non-committing outcome. Only on `STOP_GREEN` **with** a GREEN
+`<decision-check>`, run these pinned lines in order (PHARN's own build-loop lesson **L22**: the invocation
+is the instruction, not a description of it).
 
 **Each fenced block runs as its own shell, and no shell state survives between blocks.** A value one block
 needs from another — the branch name — is **printed** by the block that computes it and substituted
@@ -373,10 +404,12 @@ the summary names `<original branch>` so the user can switch back.
 
 ### Step 6d — when the commit does not happen
 
-For `not committed: nothing staged`, `branch failed`, `stage failed` or `commit failed` on a `STOP_GREEN`:
+For `not committed: decision unverifiable`, `not committed: nothing staged`, `branch failed`,
+`stage failed` or `commit failed` on a `STOP_GREEN`:
 
-1. Undo exactly what happened, and nothing else. After `nothing staged`, `branch failed`, or a `stage failed`
-   that came from the setter or the builder, nothing was staged and no branch exists — skip to 2. After a
+1. Undo exactly what happened, and nothing else. **`decision unverifiable` is caught before Step 6c's
+   pinned lines run at all** — nothing was ever staged and no branch exists — skip straight to 2, exactly
+   as for `nothing staged` / `branch failed` / a setter-or-builder `stage failed`. After a
    `stage failed` from `git add`, or a `commit failed`, unstage only the run's list, return to the original
    checkout, and delete the new branch with the safe form (it holds no new commit):
 
@@ -400,9 +433,11 @@ Report, plainly and without asking anything:
 - that the run **finished**, the `decision`, the iteration count, and the `blocked:` id if any — with what the
   run needs from a person to continue (the row's trigger, in one sentence);
 - the files changed, and the per-iteration verify / regress verdicts;
+- **the `<decision-check>` result** (Step 6b) for the final stop — GREEN, RED (quoting
+  `check-loop-decision.mjs`'s message verbatim), or N/A on a blocked stop;
 - the **commit outcome, from this closed set**: `committed <branch>` (plus the SHA) |
-  `not committed: <decision>` | `not committed: nothing staged` | `not committed: branch failed` |
-  `not committed: stage failed` | `not committed: commit failed`;
+  `not committed: <decision>` | `not committed: decision unverifiable` | `not committed: nothing staged` |
+  `not committed: branch failed` | `not committed: stage failed` | `not committed: commit failed`;
 - where the checkout is: on the new branch (naming `<original branch>` to return to), or unchanged;
 - any committed path that was already dirty in the pre-run snapshot (`.pharn/pharn-loop/<name>/pre-run-status.txt`);
 - the SPEC state: **approved by the model** (inside the commit), **reverted to `Draft`**, or **revert failed**
@@ -437,6 +472,16 @@ Then **end your turn**. Do not ask a question, do not push, do not merge, do not
   so neither guard nor reconciler covers it.
 - **"A record the checker sees is well-shaped"** → **FLOOR** (`check-loop-record.mjs`, tested) — given a
   record handed to it. That one is written, and handed over, is advisory.
+- **"A committed `STOP_GREEN` record's `decision` was genuinely re-derived from the reports it cites"** →
+  **FLOOR** (`check-loop-decision.mjs`, tested — `pharn/ARCHITECTURE.md §2` primitive #3, reusing
+  `check-loop.mjs`'s own output via `spawnSync`, never re-implementing its decision table). **Bounded,
+  named, not hidden:** this proves the decision is **re-derivable** from the CITED reports — it does
+  **not** prove those reports are themselves honest; a self-consistent fabricated `verify-report.json` /
+  `regression-report.json` pair still passes. "A `STOP_GREEN` was committed" now additionally means "its
+  decision was not un-derived at commit time" — it never means "the reports were true." A **blocked** stop
+  is exempt by construction (it never consulted `check-loop.mjs`), and a record from before this checker
+  existed has no `cap` to re-derive `STOP_CAP` from, so this guarantee applies going forward, not
+  retroactively.
 - **"The SPEC is approved"** → **ADVISORY.** The model approves; `approved_by: model` sits outside the body
   hash, so it is neither gated nor tamper-evident, and its absence proves nothing about a person.
 - **"A non-green stop leaves no model-approved SPEC"** → **ADVISORY** (the revert is agent-performed); the
