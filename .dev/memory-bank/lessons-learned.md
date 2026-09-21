@@ -1833,3 +1833,43 @@ type: process · concepts: [doc-drift, enumeration, referent-binding, sweep-scop
 - commit: `d9f21337a5343d95f686b92e3c84631cee149105`
 - source: `.dev/features/drift-audit-6-4-1/REVIEW.md` § Proposed lesson candidate + `.dev/features/drift-audit-6-4-1/PLAN.md` Trigger rows 8 and 9
 - promoted: 2026-09-21 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L51 — A guard deleted as "now unreachable" is unreachable only under the reasoning that deleted it
+
+type: floor · concepts: [dead-code-removal, input-domain, test-blindspot, false-green, lookup-rewrite]
+
+**Lesson.** A guard the OLD implementation made necessary does not become unnecessary because the NEW one
+looks like it cannot reach it. Rewriting `pharn/floor/render-cost-record.mjs` to locate a transcript by
+session id made the pre-existing `files === 0` → `unavailable` check appear dead: a successful `statSync`
+on `<dir>/<id>.jsonl` seemed to guarantee `aggregate` would then find at least one file in `<dir>`. It was
+dropped, and the suite stayed **36/36 green at 98.59% line coverage** across the regression. The reasoning
+holds only for well-formed input, and silently assumes two separately-written matchers agree on every id:
+`findTranscriptDirs` **stats a path**, while `aggregate` **filters a recursive walk**. They disagree — an id
+containing `..` satisfies the stat against a file ABOVE the project directory and then escapes the walk — so
+`files === 0` with exactly one hit is reachable, and the render returned `coverage: "partial"` with **zero**
+requests. An absence, dressed as a cheap run, embedded verbatim by `/pharn-ship` into `ship-record.json`
+inside the attested content.
+
+**Why it matters.** The failure direction is the expensive one: a `partial` block of zeros is
+indistinguishable from a genuinely cheap run, so the defect reads as DATA rather than as an error — the P0
+disease in miniature, a confident well-typed output with nothing behind it. Adjacent to [[L41]] and
+[[L34]] and distinct from both in **mechanism**: L41 covers a default every test OVERRIDES, L34 a per-item
+assertion set over an EMPTY domain — in both the path merely goes unvisited, so coverage tooling could in
+principle point at it. Here the path was **deliberately deleted** after being judged unreachable; the line
+was gone, so there was nothing left to report as uncovered. The transferable rule: when a rewrite replaces
+a lookup, every downstream guard the old lookup justified must be re-justified against the NEW one's **full
+input domain**, not its happy path — and the cheapest re-justification is a boundary test, which is exactly
+what was missing and what now pins it. Note also **how** it was found: not by reading the diff but by
+PROBING the built module with a malformed input — [[L37]]'s technique of testing a bound against the guard
+rather than reading it off the guard — and the repair's own non-vacuity check ([[L34]]) is what proved the
+deleted path was live. **Honest trigger (P7):** ONE observed instance, caught by this increment's own
+`/pharn-dev-review` before it left the build loop. By [[L20]]'s bar that is a first occurrence, not a
+second, so no floor check is prescribed here and none was built — stated rather than dressed up as a
+recurrence.
+
+**Provenance.**
+
+- feature: `cost-record-session-lookup`
+- commit: `fc03578713720b0a00159ac4b0af9e984a9d5571`
+- source: `.dev/features/cost-record-session-lookup/REVIEW.md` F1
+- promoted: 2026-09-21 via gated `/pharn-dev-memory-promote` (human-approved).

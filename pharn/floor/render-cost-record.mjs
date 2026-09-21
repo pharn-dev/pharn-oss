@@ -11,6 +11,28 @@
 // the CALLING COMMAND performs the Write (fix #7 gates that write, not this render). It is the same
 // renderer/caller split `render-ship-briefing.mjs` uses.
 //
+// ── How the transcript is LOCATED, and why it is not derived ─────────────────────────────────────────
+// By SESSION ID: the single directory under `<projectsDir>/` holding `<sessionId>.jsonl`, found by a
+// filename test over the immediate children. The directory NAME is opaque here, deliberately.
+//
+// This module used to derive that name from `cwd` by replacing `/` with `-`. That was wrong twice over,
+// and the second reason is why the derivation is retired rather than corrected (measured 2026-09-21; see
+// `.dev/measurements/cost-record-lookup-2026-09-21.md`):
+//   1. The platform also replaces `.` (so `…/repo/.claude/worktrees/wt` is filed under
+//      `-…-repo--claude-worktrees-wt`, with `--`), while leaving `_` alone. A rule this module cannot
+//      pin is a second copy of a platform fact — the thing to retire, not to sync.
+//   2. DECISIVE: the directory is not a function of the session's `cwd` AT ALL. A Claude Code worktree
+//      session is filed under the WORKTREE while its records carry the MAIN REPO as `cwd`, and `cwd` is
+//      not even stable within one session (2-3 distinct values were observed in single transcripts;
+//      only the first was ever read). So a dot-corrected rule still resolves the wrong directory.
+// A session id is a UUID and was measured unique across every transcript on the machine, so the
+// filename test needs no directory rule. If an id ever resolves to MORE than one directory the render
+// REFUSES (below) rather than pick one.
+//
+// A cwd-mismatch refusal stood here until 6.4.3. Its premise was the lossy `a/b` vs `a-b` dirname
+// collision, which a UUID key makes unreachable; meanwhile reason 2 above made it fire on legitimate
+// worktree runs. It is gone, and the honest consequence is stated under ADVISORY below.
+//
 // ── Honest scope (P0) ────────────────────────────────────────────────────────────────────────────────
 // FLOOR (deterministic, primitive #3 + arithmetic): records are deduplicated on `requestId` and summed.
 //   The dedup is LOAD-BEARING, not a nicety — one API response is written to the transcript as several
@@ -19,7 +41,14 @@
 //   stored DISJOINTLY from the parent and are included, or fan-out cost would be invisible. Given the same
 //   transcript bytes the output is byte-identical — no clock read, no randomness (window_start/window_end
 //   come from the records' OWN timestamps, never from Date.now()), so it is pinnable by test.
+// FLOOR (primitive #3, an integer compare — the `check-ship.mjs` `iter >= cap` precedent): a session id
+//   resolving to 2+ transcript directories is REFUSED, never resolved first-match-wins. Bounded, and
+//   stated: that is a property of THIS LOOKUP, not a proof the platform never reuses a session id.
 // ADVISORY / NARROWED, and stated:
+//   * THE REPORTED RUN IS THE ONE `CLAUDE_CODE_SESSION_ID` NAMES, and nothing here verifies that is this
+//     run. This is WEAKER than the cwd refusal it replaced — stated as a downgrade, not hidden. The
+//     refusal was not a working backstop either: it read one arbitrary `cwd` of the several a session
+//     records, so it produced false refusals rather than true catches.
 //   * COVERAGE IS NEVER COMPLETE. The `coverage` enum has no `complete` member by design: the ship stage's
 //     own turns are still being written when this runs, so a run can never fully account for itself. The
 //     number is a floor on spend, never the total.
@@ -33,24 +62,25 @@
 //     byte-equality guarantee.
 //   * `by_stage` keys come from the platform's own `attributionSkill` field. Records without it are grouped
 //     under `(untagged)` — an honest bucket, not an error.
+//   * NAMED RESIDUAL, deliberately unbuilt — `cost-record-unsplit-cache-write`. `fold()` reads the
+//     `cache_creation` SPLIT, so a record carrying `cache_creation_input_tokens` with no split would count
+//     cache writes as 0 with no signal. Measured 2026-09-21: 8068/8068 deduped requests carried the split,
+//     equal to the total, 0 remainder — so P7's bar (a real failure) is unmet and no bucket is added; the
+//     output shape has nowhere to put an unsplit total, and inventing one would be the speculative
+//     addition. Recorded as a pending remedy, not a solved problem.
 //
 // Usage:
-//   node pharn/floor/render-cost-record.mjs [--session <id>] [--cwd <dir>] [--projects-dir <dir>]
+//   node pharn/floor/render-cost-record.mjs [--session <id>] [--projects-dir <dir>]
 // Exit codes: 0 = a valid block was printed (including an honest `unavailable` one); 2 = bad usage.
 
-import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { homedir } from "node:os";
 
 export const SCHEMA = "pharn-cost-record/1";
 export const COVERAGE = Object.freeze(["partial", "unavailable"]);
 const UNTAGGED = "(untagged)";
 const SYNTHETIC = "<synthetic>";
-
-/** Claude Code's project-directory name for a working directory: every `/` becomes `-`. */
-export function projectDirName(cwd) {
-  return String(cwd).replace(/\//g, "-");
-}
 
 const zero = () => ({
   requests: 0,
@@ -71,6 +101,31 @@ function fold(acc, u) {
   acc.output += u.output_tokens ?? 0;
   acc.thinking += u.output_tokens_details?.thinking_tokens ?? 0;
   return acc;
+}
+
+/**
+ * Every immediate child directory of `projectsDir` that holds `<sessionId>.jsonl`, sorted.
+ * Returns `[]` rather than throwing when `projectsDir` is missing or unreadable — a fresh machine, or a
+ * misdirected CLAUDE_CONFIG_DIR, is a real state, and the caller embeds this render's block verbatim.
+ */
+export function findTranscriptDirs(projectsDir, sessionId) {
+  let entries;
+  try {
+    entries = readdirSync(projectsDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const hits = [];
+  for (const e of entries) {
+    if (!e.isDirectory()) continue;
+    const dir = join(projectsDir, e.name);
+    try {
+      if (statSync(join(dir, `${sessionId}.jsonl`)).isFile()) hits.push(dir);
+    } catch {
+      // no transcript for this session here — the ordinary case for every unrelated project
+    }
+  }
+  return hits.sort(); // sorted so the read order and any message is filesystem-independent
 }
 
 /** Every .jsonl under `dir`, recursively. `tool-results/` holds captured tool output, never usage. */
@@ -109,7 +164,6 @@ export function aggregate(projectDir, sessionId) {
   const byModel = new Map();
   let start = null;
   let end = null;
-  let cwdSeen = null;
 
   for (const f of files) {
     let text;
@@ -126,7 +180,6 @@ export function aggregate(projectDir, sessionId) {
       } catch {
         continue; // a torn final line while the session is live is expected, not an error
       }
-      if (r?.cwd && cwdSeen === null) cwdSeen = r.cwd;
       if (r?.type !== "assistant") continue;
       const u = r.message?.usage;
       if (!u) continue;
@@ -151,7 +204,7 @@ export function aggregate(projectDir, sessionId) {
     }
   }
   const sorted = (m) => Object.fromEntries([...m.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
-  return { files: files.length, total, byStage: sorted(byStage), byModel: sorted(byModel), start, end, cwdSeen };
+  return { files: files.length, total, byStage: sorted(byStage), byModel: sorted(byModel), start, end };
 }
 
 function unavailable(note, sessionId) {
@@ -168,18 +221,28 @@ function unavailable(note, sessionId) {
   };
 }
 
-export function render({ sessionId, cwd, projectsDir }) {
+export function render({ sessionId, projectsDir }) {
   if (!sessionId) return unavailable("no session id available (CLAUDE_CODE_SESSION_ID unset)", null);
-  const dir = join(projectsDir, projectDirName(cwd));
-  if (!existsSync(dir) || !statSync(dir).isDirectory()) {
-    return unavailable(`no transcript directory for this working directory (looked for ${dir})`, sessionId);
+  const hits = findTranscriptDirs(projectsDir, sessionId);
+  if (hits.length === 0) {
+    return unavailable(`no transcript found for session ${sessionId} under ${projectsDir}`, sessionId);
   }
-  const a = aggregate(dir, sessionId);
-  if (a.files === 0) return unavailable(`no transcript found for session ${sessionId} under ${dir}`, sessionId);
-  // The cwd->dirname mapping is LOSSY (`a/b` and `a-b` collide), so trust the transcript's own cwd, never
-  // the directory name. A mismatch means we found somebody else's run: refuse rather than report it.
-  if (a.cwdSeen !== null && resolve(a.cwdSeen) !== resolve(cwd)) {
-    return unavailable(`transcript cwd ${a.cwdSeen} does not match ${cwd} — refusing to report a foreign run`, sessionId);
+  if (hits.length > 1) {
+    // A UUID id colliding across directories is the case this was written for, and that case is
+    // unreachable on a sane tree — but the BRANCH is not dead: a malformed `--session` (one holding a
+    // path separator) also lands here, and refusing is the correct answer for both. Do not delete it.
+    return unavailable(
+      `session ${sessionId} resolves to ${hits.length} transcript directories (${hits.join(", ")}) — refusing to guess which run to report`,
+      sessionId
+    );
+  }
+  const a = aggregate(hits[0], sessionId);
+  // A hit means `<dir>/<sessionId>.jsonl` STATTED, not that `aggregate` could read a transcript out of
+  // `<dir>`: the two matchers do not agree on every input (a `..` in the id satisfies the stat and
+  // escapes the walk), and the file can be unlinked between the two. Without this, such a run renders
+  // `coverage: "partial"` with zeros — a measurement that never happened, reported as a cheap one.
+  if (a.files === 0) {
+    return unavailable(`no transcript found for session ${sessionId} under ${hits[0]}`, sessionId);
   }
   const { requests, ...tokens } = a.total;
   const strip = (o) =>
@@ -207,11 +270,10 @@ export function render({ sessionId, cwd, projectsDir }) {
 }
 
 function main(argv) {
-  const opts = { sessionId: process.env.CLAUDE_CODE_SESSION_ID ?? null, cwd: process.cwd(), projectsDir: null };
+  const opts = { sessionId: process.env.CLAUDE_CODE_SESSION_ID ?? null, projectsDir: null };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     if (k === "--session") opts.sessionId = argv[++i];
-    else if (k === "--cwd") opts.cwd = argv[++i];
     else if (k === "--projects-dir") opts.projectsDir = argv[++i];
     else {
       process.stderr.write(`render-cost-record: unknown argument ${k}\n`);
