@@ -238,41 +238,6 @@ node pharn/floor/check-loop-record.mjs <LOOP.md>
 # SKIPPED · 1 RED.
 node pharn/floor/check-loop-decision.mjs <LOOP.md>
 
-# The COST LEDGER trio (added 6.5.0) — `pharn/features/<name>/cost.json`, emitted at EVERY /pharn-loop stop
-# that has a feature dir, green or not. Contract: pharn/pharn-contracts/cost-ledger.md.
-# WHY MARKERS EXIST, measured not assumed: the platform's `attributionSkill` names the ORCHESTRATOR and
-# never the sub-stage — on this repo's loop-decision-integrity run it tagged 213/275 deduped requests and
-# tagged EVERY one of them `pharn-loop`. So "which stage" is a fact about a MOMENT; mark-phase records it
-# then. It is command-neutral, so /pharn-ship reuses it unchanged. `ts` from Node toISOString() because BSD
-# `date` has no %N. RECORD FACTS, DERIVE VIEWS: `requests[]` + `markers[]` are the facts, and all four views
-# are pure functions of requests[] — which is what lets the checker recompute and compare.
-# FLOOR: a CLOSED top-level key set (both directions — a presence set would admit a variant spelling, L36);
-# every `usage` leaf number|bool|null|short-token, anything else DROPPED with its key path listed (arrays are
-# WALKED, so `usage.iterations[]` survives and "verbatim" stays true); NO string anywhere matching the
-# absolute-path regex; unique request ids; strictly increasing marker seq; every view == a recompute.
-# "No message content, no home paths" is a CONSEQUENCE of those rules, NOT a detector — and "no usernames"
-# is STRUCK and written nowhere, because no regex proves it (P0).
-# THE CHECKER'S BOUND (L43), in its header AND its stdout: it certifies INTERNAL CONSISTENCY, never that
-# requests[] matches the transcript — a self-consistent FABRICATED ledger passes, and a test proves it by
-# building one. `--verify-transcript` re-derives the rows live and is usable ONLY while the transcript
-# exists (machine-local, perishable), which is exactly why it is not a gate.
-# TOKENS ONLY, no price table ever: cost = Σ tokens[class] × price(model, class, date, tier) from the
-# READER's own list, list-price equivalent (a subscription is not billed per token); output_thinking is a
-# SUBSET of output, not a seventh class. ANNOTATES, gates NOTHING (fix #3) — a RED ledger never blocks the
-# Step 6c commit, which stays gated on STOP_GREEN ∧ the decision re-derivation.
-# The EMITTER WRITES cost.json ITSELF (render-review-assignments precedent — a model never retypes hundreds
-# of numbers), so it is a BASH write outside fix #7 (L19), declared in the plan and exempted by name in
-# reconcile-ignore.json. Transcript location + the walk are IMPORTED from render-cost-record.mjs, not copied
-# (L35); a ✧ parity test pins the two to agree on totals with the class-name mapping asserted explicitly.
-# SIZE, disclosed rather than discovered: ~393 KiB for a 65-minute one-iteration STOP_GREEN run (275 rows,
-# 402,567 bytes measured), ~263 KiB of it the verbatim `usage` copy — weighed and accepted for fidelity.
-# A stop BEFORE S2 has no feature dir and records nothing; that bound is named in the command.
-# Exit: mark-phase 0 ok · 2 bad usage (nothing written) | render 0 (incl. an honest `unavailable`) · 2 bad
-# usage | check 0 GREEN (WARNs possible) · 1 RED · 2 unusable input.
-node pharn/floor/mark-phase.mjs --name <slug> --kind <run-start|stage-start|orchestrator|run-stop> [--stage <s>] [--iteration <n>] [--base <dir>]
-node pharn/floor/render-cost-ledger.mjs <name> [--base <dir>] [--repo <dir>] [--session <id>] [--stdout]
-node pharn/floor/check-cost-ledger.mjs <cost.json> [--verify-transcript]
-
 # Render / cross-verify the GATE-2 briefing artifact (pharn/features/<name>/BRIEFING.md) /pharn-ship writes
 # alongside SHIP.md. render-ship-briefing.mjs is Node stdlib only, no LLM call: every enum-gated
 # frontmatter field is a verbatim copy of a value already in a committed source file (SPEC/PLAN

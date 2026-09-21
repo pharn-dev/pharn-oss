@@ -32,18 +32,6 @@ docs/lessons-index.md
 pharn/features/*/verify-report.json
 pharn/features/*/regression-report.json
 
-# cost.json — the SAME requirement as the two above, listed on the same reasoning rather than after the
-# first FAIL discovers it (L23). `pharn/floor/render-cost-ledger.mjs` writes the emitter's own bytes, and
-# `check-cost-ledger.mjs` recomputes every view from `requests[]`, so a formatter re-wrapping the file is
-# a second writer of an artifact one tool is supposed to own. It is also large — ~393 KiB for a single
-# run — so reformatting it would be a standing cost in every `format:check`.
-pharn/features/*/cost.json
-
-# The committed cost-ledger transcript fixtures are JSONL — one record per line, byte-exact. Prettier
-# does not understand `.jsonl`, and `--ignore-unknown` skips it; this entry makes the intent explicit so
-# a future formatter that DOES understand it cannot silently re-wrap the fixture the parity test pins.
-pharn/floor/fixtures/cost-ledger/
-
 # Trusted spec docs: human-only, hook-protected. Excluded from the formatter
 # so style fixes can never mutate their content-hash (fix #4 / spec-drift).
 # They may still be formatted by hand; they are out of the formatter's scope only.
