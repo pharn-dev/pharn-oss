@@ -1,0 +1,58 @@
+{
+  "base": "a3ecc48cf29f64bb3b890cbb9a5788463b425f4e",
+  "inside": [
+    ".claude/commands/pharn-loop.md",
+    ".dev/features/loop-cost-ledger/BUILD.md",
+    ".dev/features/loop-cost-ledger/GRILL.md",
+    ".dev/features/loop-cost-ledger/PLAN.md",
+    ".dev/features/loop-cost-ledger/architecture-patch/APPLY.md",
+    ".dev/features/loop-cost-ledger/architecture-patch/architecture.patch",
+    ".prettierignore",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/check-cost-ledger.mjs",
+    "pharn/floor/check-cost-ledger.test.mjs",
+    "pharn/floor/check-regress.mjs",
+    "pharn/floor/fixtures/cost-ledger/single-session.jsonl",
+    "pharn/floor/fixtures/cost-ledger/with-subagents/00000000-0000-4000-8000-00000000cafe.jsonl",
+    "pharn/floor/fixtures/cost-ledger/with-subagents/00000000-0000-4000-8000-00000000cafe/subagents/agent-aaa1111111111111.jsonl",
+    "pharn/floor/fixtures/cost-ledger/with-subagents/00000000-0000-4000-8000-00000000cafe/subagents/agent-bbb2222222222222.jsonl",
+    "pharn/floor/mark-phase.mjs",
+    "pharn/floor/mark-phase.test.mjs",
+    "pharn/floor/reconcile-ignore.json",
+    "pharn/floor/render-cost-ledger.mjs",
+    "pharn/floor/render-cost-ledger.test.mjs",
+    "pharn/pharn-contracts/cost-ledger.md"
+  ],
+  "outside_gates": {
+    "format:check": {
+      "base": 0,
+      "head": 0
+    },
+    "lint": {
+      "base": 0,
+      "head": 0
+    },
+    "lint:md": {
+      "base": 0,
+      "head": 0
+    },
+    "structural:expected-injection-comment": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
