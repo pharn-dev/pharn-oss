@@ -129,7 +129,8 @@ bottom (`pharn-contracts`).
 pharn/CONSTITUTION.md, pharn/ARCHITECTURE.md   trusted docs — the spec the tree is built to
 pharn/floor/                                   the floor (§2): checkers, scanners, validate.mjs
 pharn/pharn-contracts   L-1  schemas only, ZERO behavior: finding-shape (incl. severity enum),
-                             eval-format, seam-config, loop-record, ship-briefing, ship-record.
+                             eval-format, seam-config, loop-record, ship-briefing, ship-record,
+                             cost-ledger, reconciliation-record, regression-report, verify-report.
                              Everything depends on this.
   └─ pharn-core          L0   seam-resolver — the seam MECHANISM, framework-agnostic.
        ├─ pharn-pipeline      grillers (plan-time interrogation, one axis each)
@@ -215,8 +216,8 @@ Promotion of a lesson/pattern to canon is a **gated** action with provenance per
 feature / diff) — memory poisoning is silent and cumulative, so the floor
 (`pharn/floor/check-provenance.mjs` + the fix #7 writes-scope) gates the shape and the target, and
 a human gates the accept (P2). `seam-record.json` and the per-feature artifacts (`findings.json`,
-`ship-record.json`) are the other durable files. All state is human-readable canonical markdown or
-JSON.
+`ship-record.json`, `cost.json`) are the other durable files. All state is human-readable canonical
+markdown or JSON.
 
 ---
 
