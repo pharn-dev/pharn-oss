@@ -23,8 +23,14 @@
 // ── The FLOOR rules (primitive #3 + arithmetic) ──────────────────────────────────────────────────────
 //  1. TOP-LEVEL KEY SET IS CLOSED — both directions: no extra key, no missing key. A per-member
 //     presence set is satisfied by a variant spelling of any member (L36); closure is what fails it.
-//  2. EVERY `usage` LEAF is number | bool | null | a short token (`TOKEN_RE`, composed AFTER a
-//     control-char guard — L14). Arrays are walked (D1), not exempted.
+//  2. EVERY `usage` LEAF is number | bool | null | a short token (`isTokenLeaf`, composed AFTER a
+//     control-char guard — L14). Arrays are walked (D1), not exempted. The predicate is IMPORTED from
+//     the emitter, not re-stated here: the two encodings used to be written separately and had ALREADY
+//     diverged (this copy omitted the path term), which is [[L31]] exactly.
+//  2b. EVERY IDENTITY FIELD — `model`, `attribution_skill`, `agent_id` — is a bounded token (<=128
+//     chars, no control char, no path). The contract calls this rule 3; the numbering here is kept
+//     stable so this file's own older references still resolve. Added after `/pharn-dev-review` found
+//     the contract asserting this bound while NOTHING checked it (see `badIdentity`).
 //  3. NO STRING ANYWHERE in the file matches `ABS_PATH_RE` — every value, at every depth, including
 //     keys' values inside `markers[]` and `outcome`.
 //  4. `request_id`s are UNIQUE (set membership).
@@ -33,7 +39,7 @@
 //     `by_stage_iteration_model`, `unattributed`. The recompute calls the EMITTER's own `buildViews`,
 //     so the two cannot disagree about what a view MEANS, only about whether the stored one matches.
 //
-// "No message content and no home paths are in the file" is a CONSEQUENCE of rules 2 and 3, NOT a
+// "No message content and no home paths are in the file" is a CONSEQUENCE of rules 2, 2b and 3, NOT a
 // detector this file implements. The claim "no usernames" is STRUCK and appears nowhere here: no regex
 // proves it, and writing it would be the exact P0 disease.
 //
@@ -56,27 +62,32 @@ import {
   TOKEN_CLASSES,
   TOP_LEVEL_KEYS,
   SKILLS_VERSION_SOURCES,
-  TOKEN_RE,
   ABS_PATH_RE,
   ATTRIBUTION_METHOD,
+  IDENTITY_MAX,
+  isTokenLeaf,
   buildViews,
   renderLedger,
 } from "./render-cost-ledger.mjs";
-import { MARKER_KINDS } from "./mark-phase.mjs";
+import { MARKER_KINDS, cleanScalar } from "./mark-phase.mjs";
 
 const reds = [];
 const warns = [];
 const red = (m) => reds.push(m);
 const warn = (m) => warns.push(m);
 
-function cleanScalar(v, maxLen) {
-  if (typeof v !== "string") return false;
-  if (v.length < 1 || v.length > maxLen) return false;
-  for (let i = 0; i < v.length; i++) {
-    const c = v.charCodeAt(i);
-    if (c < 0x20 || c === 0x7f) return false;
-  }
-  return true;
+/**
+ * RULE 2b — an IDENTITY field (`model`, `attribution_skill`, `agent_id`).
+ *
+ * These are copied verbatim from an untrusted transcript into a COMMITTED artifact, and until
+ * `/pharn-dev-review` probed them they were checked by nothing at all: a 200,000-char value, embedded
+ * NUL/BEL bytes and a newline carrying a forged `RED — …` line were each accepted GREEN, while the
+ * contract asserted "the leaf-shape rule bounds what can land in them". It did not — that rule reaches
+ * `usage` only. The rule is applied here so the sentence is TRUE rather than corrected downward.
+ */
+function badIdentity(v, allowNull = true) {
+  if (v === null || v === undefined) return !allowNull;
+  return !cleanScalar(v, IDENTITY_MAX) || ABS_PATH_RE.test(v);
 }
 
 /** RULE 3, applied to the WHOLE document at every depth. Exported so the test can range over committed
@@ -101,7 +112,9 @@ export function findAbsolutePaths(value, path, hits) {
 function checkUsageLeaves(value, path, bad) {
   if (value === null || typeof value === "number" || typeof value === "boolean") return bad;
   if (typeof value === "string") {
-    if (!cleanScalar(value, 64) || !TOKEN_RE.test(value)) bad.push(path);
+    // THE SHARED encoding, imported from the emitter — not a second statement of the same rule. The
+    // two used to be written separately and had already diverged (this copy omitted the path term).
+    if (!isTokenLeaf(value)) bad.push(path);
     return bad;
   }
   if (Array.isArray(value)) {
@@ -212,6 +225,13 @@ export function checkLedger(led, opts = {}) {
       else ids.add(r.request_id);
       if (typeof r.sidechain !== "boolean") red(`requests[${i}].sidechain must be a boolean`);
       if (typeof r.model !== "string" || !r.model) red(`requests[${i}].model must be a non-empty string`);
+      // RULE 2b — the three identity fields, bounded. `model` may not be null; the other two may.
+      if (badIdentity(r.model, false))
+        red(`requests[${i}].model is not a bounded identity token (<=${IDENTITY_MAX} chars, no control chars, no path)`);
+      if (badIdentity(r.attribution_skill))
+        red(`requests[${i}].attribution_skill is not a bounded identity token (<=${IDENTITY_MAX} chars, no control chars, no path)`);
+      if (badIdentity(r.agent_id))
+        red(`requests[${i}].agent_id is not a bounded identity token (<=${IDENTITY_MAX} chars, no control chars, no path)`);
       const badLeaves = checkUsageLeaves(r.usage, `requests[${i}].usage`, []);
       if (badLeaves.length)
         red(`usage leaf out of domain (must be number | bool | null | short token): ${badLeaves.slice(0, 4).join(", ")}`);

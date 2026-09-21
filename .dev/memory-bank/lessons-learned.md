@@ -1873,3 +1873,60 @@ recurrence.
 - commit: `fc03578713720b0a00159ac4b0af9e984a9d5571`
 - source: `.dev/features/cost-record-session-lookup/REVIEW.md` F1
 - promoted: 2026-09-21 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L52 — A lesson whose remedy is "write a test" is satisfied by writing it for the wrong member of the set
+
+type: process · concepts: [lesson-recurrence, test-blindspot, enumeration, remedy-design, false-green]
+
+**Lesson.** [[L41]] prescribes: when a parameter carries a default, either one test must exercise the
+no-argument path, or the default must not exist in two places. An increment can cite that lesson, declare
+it applied, WRITE the prescribed test, and still ship the exact defect — because the remedy is quantified
+over a SET (the defaults in this change) and a test is written for a MEMBER. Nothing distinguishes "the
+test exists" from "the test covers the thing the lesson was about", so the declaration reads as
+discharged at every gate.
+
+**Measured, in the increment that cited the lesson.** `loop-cost-ledger` cited L41 in `applied_lessons`
+and asserted in its PLAN body: _"the emitter's `--base` default exists in exactly **one** place, and one
+test exercises the no-argument path."_ It wrote that test — **for `mark-phase.mjs`**. The module the
+sentence was about, `pharn/floor/render-cost-ledger.mjs`, simultaneously carried the `pharn/features`
+default in **two** places (`:365` in `renderLedger`, `:607` in the CLI write path), and the no-`--base`
+WRITE path that reaches the second copy was exercised by **nothing**: every CLI test passes `--base`
+explicitly or uses `--stdout`, which does not write. That is `render-ship-briefing.mjs:438` reproduced
+byte-for-byte in shape — the stale copy on the production path, invisible to a green suite — and the
+suite was **2240/2240** across it.
+
+**Why it matters.** The failure presents as MORE rigour than usual, which is what makes it durable: a
+PLAN that cites a lesson, states the property it guarantees, and ships the test reads as thorough at
+every gate that exists. `check-plan-lessons.mjs` verified the citation and the body reference and was
+GREEN — correctly, since it checks the declaration, never the application. `validate`, `npm run check`,
+regress and verify were all green. It was found by a **review lens reading the diff against the plan's own
+sentence**, which is the one thing in the pipeline positioned to notice that a true statement was made
+about the wrong file.
+
+**Distinct from its neighbours, and the distinction is the usable part.** [[L41]] names the blind spot (a
+default every test overrides); this names how the REMEDY fails. [[L29]] says a set-quantified remedy owes
+the ENUMERATION as its deliverable, and [[L36]] that a per-member presence set is not a closed set — both
+are about the assertion's shape; here the enumeration was never written down at all, so the author's
+attention WAS the set. [[L46]] says canon cannot tell a shipped remedy from a sentence; this is one step
+worse — the remedy shipped, and still did not cover the case. [[L20]]'s bar is met on L41: its own text
+ends _"No checker is added here — P7's bar is a real second failure, and this is the first"_, and this is
+that second failure.
+
+**Remedy (applied).** Prefer L41's option (b) and make it CHECKABLE rather than remembered: the default
+became a single exported `FEATURE_BASE`, referenced twice, with (1) a test that goes through the
+no-argument WRITE branch and lands on disk, and (2) a **closure** assertion counting occurrences of the
+literal in the module source, so a re-introduced duplicate fails rather than merely going untested. The
+transferable rule: when a lesson's remedy is a test, name the SET the test must range over in the same
+sentence — "one test per default in this change", not "one test exercises the no-argument path" — because
+the singular phrasing is what licenses covering one member and declaring it done.
+
+**Bound (P0).** The closure assertion covers ONE literal in ONE module. It does not range over defaults
+repo-wide, and no checker does; a second module acquiring a duplicated default is caught by nothing here.
+Recorded as a pending remedy per [[L46]] rather than implied to be closed.
+
+**Provenance.**
+
+- feature: `loop-cost-ledger`
+- commit: `8dacaa9b28e894adfdc61a08938a0bfb99f79348`
+- source: `.dev/features/loop-cost-ledger/REVIEW.md` F2
+- promoted: 2026-09-21 via gated `/pharn-dev-memory-promote` (human-approved).

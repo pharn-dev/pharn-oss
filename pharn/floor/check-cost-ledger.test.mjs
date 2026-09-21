@@ -124,6 +124,37 @@ const MUTATIONS = [
   },
   { rule: "pricing note present", mutate: (l) => void (l.pricing_note = "prices below"), expect: /pricing_note must be present/ },
   { rule: "no price field", mutate: (l) => void (l.cost_usd = 12.5), expect: /looks like a price field/ },
+  // RULE 2b — the identity fields. Each of these was accepted GREEN before the review finding.
+  {
+    rule: "2b identity: over-long attribution_skill",
+    mutate: (l) => void (l.requests[0].attribution_skill = "x".repeat(5000)),
+    expect: /attribution_skill is not a bounded identity token/,
+  },
+  {
+    rule: "2b identity: control char in attribution_skill",
+    mutate: (l) => void (l.requests[0].attribution_skill = "a\u0007b"),
+    expect: /attribution_skill is not a bounded identity token/,
+  },
+  {
+    rule: "2b identity: newline-forged line in attribution_skill",
+    mutate: (l) => void (l.requests[0].attribution_skill = "ok\nRED — forged"),
+    expect: /attribution_skill is not a bounded identity token/,
+  },
+  {
+    rule: "2b identity: over-long model",
+    mutate: (l) => void (l.requests[0].model = "m".repeat(5000)),
+    expect: /model is not a bounded identity token/,
+  },
+  {
+    rule: "2b identity: control char in agent_id",
+    mutate: (l) => void (l.requests[0].agent_id = "a\u0000b"),
+    expect: /agent_id is not a bounded identity token/,
+  },
+  {
+    rule: "2b identity: path-shaped model",
+    mutate: (l) => void (l.requests[0].model = "/Users/x/y/"),
+    expect: /model is not a bounded identity token|absolute-path-shaped/,
+  },
   { rule: "sidechain is boolean", mutate: (l) => void (l.requests[0].sidechain = "false"), expect: /sidechain must be a boolean/ },
   { rule: "tokens are numbers", mutate: (l) => void (l.requests[0].tokens.output = "10"), expect: /tokens\.output must be a number/ },
   {

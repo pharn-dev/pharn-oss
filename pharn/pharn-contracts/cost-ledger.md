@@ -92,31 +92,33 @@ tagged `pharn-loop`**, with no sub-stage named anywhere. The field is therefore 
 the keys above, no more and no fewer, asserted in **both** directions. A per-member presence set would be
 satisfied by a variant spelling of any member; closure is what makes a variant fail.
 
-| field                                                               | shape                                                           | class                        |
-| ------------------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------- |
-| `schema`                                                            | the literal `pharn-cost-ledger/1`                               | FLOOR (enum)                 |
-| `name`                                                              | the feature slug                                                | FLOOR (present)              |
-| `command`                                                           | the emitting command, e.g. `/pharn-loop`                        | FLOOR (present)              |
-| `base_sha`                                                          | the run's base SHA, or the literal `unknown`                    | FLOOR (present)              |
-| `outcome`                                                           | `{decision, iterations, blocked?, source:"LOOP.md"}`, or `null` | FLOOR (shape)                |
-| `skills_version`                                                    | the version string, or `null`                                   | FLOOR (shape)                |
-| `skills_version_source`                                             | `pharn.config.json` \| `SKILLS_VERSION` \| `unknown`            | FLOOR (enum)                 |
-| `claude_code_versions`                                              | sorted distinct `version` values seen on the records            | FLOOR (array)                |
-| `sessions`                                                          | sorted distinct session ids                                     | FLOOR (array)                |
-| `window_start` / `_end`                                             | ISO timestamps from the **records' own** values, or `null`      | FLOOR (from data)            |
-| `coverage`                                                          | `partial` \| `unavailable` — **there is no `complete`**         | FLOOR (enum)                 |
-| `dedup_key`                                                         | the literal `requestId`                                         | FLOOR (enum)                 |
-| `attribution.method`                                                | the versioned method name                                       | FLOOR (enum)                 |
-| `pricing_note`                                                      | must state the file carries tokens, never prices                | FLOOR (regex)                |
-| `markers[].seq`                                                     | integers, **strictly increasing**                               | FLOOR (integer compare)      |
-| `markers[].kind`                                                    | `run-start` \| `stage-start` \| `orchestrator` \| `run-stop`    | FLOOR (enum)                 |
-| `requests[].request_id`                                             | non-empty, **unique across the array**                          | FLOOR (set membership)       |
-| `requests[].usage`                                                  | every leaf: number \| bool \| null \| a short token             | FLOOR (enum-regex)           |
-| `requests[].tokens.*`                                               | the six classes, each a number                                  | FLOOR (shape)                |
-| `requests[].sidechain`                                              | a boolean                                                       | FLOOR (shape)                |
-| `requests[].stage/iteration`                                        | the derived VIEW                                                | **ADVISORY** (see below)     |
-| `totals` / `by_model` / `by_stage_iteration_model` / `unattributed` | equal to a recompute from `requests[]`                          | FLOOR (recompute + equality) |
-| `dropped[]`                                                         | key paths of leaves the leaf rule refused                       | FLOOR (array)                |
+| field                                                               | shape                                                            | class                        |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------- |
+| `schema`                                                            | the literal `pharn-cost-ledger/1`                                | FLOOR (enum)                 |
+| `name`                                                              | the feature slug                                                 | FLOOR (present)              |
+| `command`                                                           | the emitting command, e.g. `/pharn-loop`                         | FLOOR (present)              |
+| `base_sha`                                                          | the run's base SHA, or the literal `unknown`                     | FLOOR (present)              |
+| `outcome`                                                           | `{decision, iterations, blocked?, source:"LOOP.md"}`, or `null`  | FLOOR (shape)                |
+| `skills_version`                                                    | the version string, or `null`                                    | FLOOR (shape)                |
+| `skills_version_source`                                             | `pharn.config.json` \| `SKILLS_VERSION` \| `unknown`             | FLOOR (enum)                 |
+| `claude_code_versions`                                              | sorted distinct `version` values seen on the records             | FLOOR (array)                |
+| `sessions`                                                          | sorted distinct session ids                                      | FLOOR (array)                |
+| `window_start` / `_end`                                             | ISO timestamps from the **records' own** values, or `null`       | FLOOR (from data)            |
+| `coverage`                                                          | `partial` \| `unavailable` — **there is no `complete`**          | FLOOR (enum)                 |
+| `dedup_key`                                                         | the literal `requestId`                                          | FLOOR (enum)                 |
+| `attribution.method`                                                | the versioned method name                                        | FLOOR (enum)                 |
+| `pricing_note`                                                      | must state the file carries tokens, never prices                 | FLOOR (regex)                |
+| `markers[].seq`                                                     | integers, **strictly increasing**                                | FLOOR (integer compare)      |
+| `markers[].kind`                                                    | `run-start` \| `stage-start` \| `orchestrator` \| `run-stop`     | FLOOR (enum)                 |
+| `requests[].request_id`                                             | non-empty, **unique across the array**                           | FLOOR (set membership)       |
+| `requests[].usage`                                                  | every leaf: number \| bool \| null \| a short token              | FLOOR (enum-regex)           |
+| `requests[].model`                                                  | a bounded identity token (<=128 chars, no control char, no path) | FLOOR (enum-regex)           |
+| `requests[].attribution_skill` / `agent_id`                         | the same bound, or `null`                                        | FLOOR (enum-regex)           |
+| `requests[].tokens.*`                                               | the six classes, each a number                                   | FLOOR (shape)                |
+| `requests[].sidechain`                                              | a boolean                                                        | FLOOR (shape)                |
+| `requests[].stage/iteration`                                        | the derived VIEW                                                 | **ADVISORY** (see below)     |
+| `totals` / `by_model` / `by_stage_iteration_model` / `unattributed` | equal to a recompute from `requests[]`                           | FLOOR (recompute + equality) |
+| `dropped[]`                                                         | key paths of leaves the leaf rule refused                        | FLOOR (array)                |
 
 **`outcome` is copied VERBATIM from the `LOOP.md` envelope** (`pharn/pharn-contracts/loop-record.md` —
 cited, not restated, P4), read from the `---`-fenced frontmatter only and never grepped from the body. The
@@ -129,19 +131,31 @@ lands _inside_ the loop's own commit, so a field naming that commit could not be
 
 ---
 
-## The three FLOOR rules on content, stated precisely (P0)
+## The four FLOOR rules on content, stated precisely (P0)
 
 1. **The top-level key set is closed.** Both directions.
 2. **Every `usage` leaf is `number | bool | null | a short token`.** Anything else is **dropped and its
    key path listed** in `dropped[]` — never coerced, never stringified, never silently kept. **Arrays are
    WALKED, not exempted**: `usage.iterations[]` survives with its scalars, so `usage` is genuinely
    verbatim.
-3. **No string anywhere in the file matches the absolute-path regex.** Every value, at every depth.
+3. **Every IDENTITY field is a bounded token.** `model`, `attribution_skill` and `agent_id` are copied
+   from an untrusted transcript into a **committed** artifact, so each must be ≤128 characters, free of
+   control characters, and free of an absolute path. A refusal is **dropped and its key path listed** —
+   `model` falls back to the literal `unknown`, the other two to `null`. **Never truncated**, which would
+   invent a value that was never in the transcript.
+4. **No string anywhere in the file matches the absolute-path regex.** Every value, at every depth.
 
-**"No message content and no home paths are in the file" is a CONSEQUENCE of those three rules, not a
+**"No message content and no home paths are in the file" is a CONSEQUENCE of those four rules, not a
 detector.** Message bodies are never read, so none can appear; `cwd` and `gitBranch` are never copied, so
 no home path can. **The claim "no usernames" is STRUCK** and appears nowhere in this contract or in the
-implementation: **no regex proves it.** What is guaranteed is exactly what the three rules test.
+implementation: **no regex proves it.** What is guaranteed is exactly what the four rules test.
+
+> **Rule 3 was added after `/pharn-dev-review` found this contract asserting it without the code providing
+> it.** The sentence under "Residual" below used to say the leaf-shape rule bounded these three fields; it
+> did not — that rule reaches `usage` only, and a probe accepted a 200,000-character `attribution_skill`,
+> embedded NUL/BEL bytes, and a newline carrying a forged `RED — …` line. The gap was closed rather than
+> the sentence weakened, which is the direction [[L2]] requires: a contract may cite only a floor op that
+> is live **for the thing it claims to cover**.
 
 ---
 
@@ -228,7 +242,13 @@ exist?" is answered **yes for now**, not **yes permanently**.
 
 ## Residual (named, not hidden — `LIMITS.md §2`, `THREAT-MODEL.md §5`)
 
-The transcript is **untrusted input**. `attribution_skill` and `model` are copied verbatim as JSON string
-values and are attacker-influencable in principle. They key a **view**, never a gate, and the leaf-shape
-rule bounds what can land in them — but a benign-looking token in a committed artifact is a channel, and
-the bound is on **shape**, not on meaning. Stated, not zeroed.
+The transcript is **untrusted input**. `attribution_skill`, `model` and `agent_id` are copied from it into
+a committed artifact and are attacker-influencable in principle. They key a **view**, never a gate, and
+**rule 3 above** — not the `usage` leaf rule — is what bounds them: ≤128 characters, no control character,
+no path.
+
+**That bound is on SHAPE, not on MEANING, and the distinction is the residual.** A 40-character
+lower-case token is admitted whatever it says. An attacker who controls `attributionSkill` can therefore
+place a benign-looking string into a file that a green `/pharn-loop` stop commits — it cannot forge a line
+(no newline survives), cannot smuggle a path, and cannot flip any verdict (`cost.json` gates nothing,
+fix #3), but it is a channel into a durable artifact and it is not closed. Stated, not zeroed.

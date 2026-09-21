@@ -79,10 +79,18 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { findTranscriptDirs, transcriptFiles } from "./render-cost-record.mjs";
-import { DEFAULT_BASE as MARKERS_DEFAULT_BASE, MARKER_KINDS } from "./mark-phase.mjs";
+import { DEFAULT_BASE as MARKERS_DEFAULT_BASE, MARKER_KINDS, cleanScalar } from "./mark-phase.mjs";
 import { FM_RE, stripBom } from "./frontmatter-core.mjs";
 
 export const SCHEMA = "pharn-cost-ledger/1";
+
+/** The ONE definition of where feature artifacts live. Referenced by `renderLedger`'s parameter default
+ *  AND by the CLI's write path — a single const, never two literals. The two-literal form is exactly the
+ *  `render-ship-briefing.mjs:438` defect [[L41]] records, and `/pharn-dev-review` found it reproduced here
+ *  in an increment that cited L41: `:365` had been updated and the CLI copy had not been noticed, because
+ *  every CLI test passes `--base` explicitly. `render-cost-ledger.test.mjs` now exercises the no-`--base`
+ *  WRITE path so this const is reachable from the suite. */
+export const FEATURE_BASE = "pharn/features";
 
 /** No `complete` member, by design — see the header. */
 export const COVERAGE = Object.freeze(["partial", "unavailable"]);
@@ -150,15 +158,42 @@ export const PRICING_NOTE =
 
 const SYNTHETIC = "<synthetic>";
 
-/** Control-char-free and bounded — the precondition, never the whole check (L14). */
-function cleanScalar(v, maxLen) {
-  if (typeof v !== "string") return false;
-  if (v.length < 1 || v.length > maxLen) return false;
-  for (let i = 0; i < v.length; i++) {
-    const c = v.charCodeAt(i);
-    if (c < 0x20 || c === 0x7f) return false;
+/** The bound on the IDENTITY fields (`model`, `attribution_skill`, `agent_id`). Wider than a `usage`
+ *  leaf because a model id is legitimately longer than a `service_tier` token, and still bounded. */
+export const IDENTITY_MAX = 128;
+
+/**
+ * THE ONE ENCODING of the `usage` leaf domain: a short, printable, path-free token.
+ *
+ * Exported and imported by `check-cost-ledger.mjs` rather than re-stated there. The two used to be
+ * written separately and had ALREADY diverged — the checker's copy omitted the `ABS_PATH_RE` term, so
+ * its leaf rule was strictly weaker than the emitter's, and only a second rule (the whole-document path
+ * sweep) masked the gap. [[L31]]: the second copy is where the obligation is dropped.
+ */
+export function isTokenLeaf(value) {
+  return cleanScalar(value, 64) && TOKEN_RE.test(value) && !ABS_PATH_RE.test(value);
+}
+
+/**
+ * An IDENTITY field copied from an untrusted transcript.
+ *
+ * `model`, `attribution_skill` and `agent_id` are attacker-influencable strings that land in a COMMITTED
+ * artifact. They used to be copied with a bare `typeof === "string"` test — no length bound, no
+ * control-char guard, no path check — while this increment's own contract claimed "the leaf-shape rule
+ * bounds what can land in them". It did not: that rule reaches `usage` only. `/pharn-dev-review` probed
+ * it and a 200,000-char value, embedded NUL/BEL bytes, and a newline carrying a forged `RED — …` line
+ * were all accepted GREEN. This closes the gap so the sentence is TRUE rather than corrected downward.
+ *
+ * A refusal is recorded in `dropped[]` and the field becomes `fallback` — never a truncation, which would
+ * silently invent a value that was never in the transcript.
+ */
+export function sanitizeIdentity(value, path, dropped, fallback = null) {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value !== "string" || !cleanScalar(value, IDENTITY_MAX) || ABS_PATH_RE.test(value)) {
+    dropped.push(path);
+    return fallback;
   }
-  return true;
+  return value;
 }
 
 const zeroTokens = () => Object.fromEntries(TOKEN_CLASSES.map((c) => [c, 0]));
@@ -177,7 +212,7 @@ export function sanitizeUsage(value, path, dropped) {
   if (t === "number") return Number.isFinite(value) ? value : (dropped.push(path), undefined);
   if (t === "boolean") return value;
   if (t === "string") {
-    if (cleanScalar(value, 64) && TOKEN_RE.test(value) && !ABS_PATH_RE.test(value)) return value;
+    if (isTokenLeaf(value)) return value;
     dropped.push(path);
     return undefined;
   }
@@ -362,7 +397,7 @@ export function renderLedger({
   sessionId,
   projectsDir,
   markersBase = MARKERS_DEFAULT_BASE,
-  featureBase = "pharn/features",
+  featureBase = FEATURE_BASE,
 }) {
   const markers = readMarkers(join(markersBase, name, "markers.jsonl"));
   const outcome = readOutcome(join(repo, featureBase, name, "LOOP.md"));
@@ -427,16 +462,20 @@ export function renderLedger({
       const sid = typeof r.sessionId === "string" ? r.sessionId : null;
       // Both observed agent-id spellings, in a fixed precedence (L36 — a parameterized value acquires
       // variant spellings, and a set pinned to the one its author saw certifies only that one).
-      const agentId = typeof r.agentId === "string" ? r.agentId : typeof r.attributionAgent === "string" ? r.attributionAgent : null;
+      const rawAgent = typeof r.agentId === "string" ? r.agentId : typeof r.attributionAgent === "string" ? r.attributionAgent : null;
       const where = ts === null ? { stage: null, iteration: null } : attribute(markers, ts, sid);
+      const n = requests.length;
       const row = {
         request_id: String(id),
         ts,
         session_id: sid,
-        model: String(model),
+        // The three identity fields are BOUNDED, not merely copied — see `sanitizeIdentity`. `model`
+        // falls back to the literal `unknown` (the `render-cost-record.mjs` spelling) because the field
+        // is required non-empty; the other two fall back to null, which is already their absent value.
+        model: sanitizeIdentity(String(model), `requests[${n}].model`, dropped, "unknown"),
         sidechain: r.isSidechain === true,
-        agent_id: agentId,
-        attribution_skill: typeof r.attributionSkill === "string" ? r.attributionSkill : null,
+        agent_id: sanitizeIdentity(rawAgent, `requests[${n}].agent_id`, dropped),
+        attribution_skill: sanitizeIdentity(r.attributionSkill, `requests[${n}].attribution_skill`, dropped),
         usage: sanitizeUsage(u, "usage", dropped),
         tokens: normalizeTokens(u),
         stage: where.stage,
@@ -604,7 +643,9 @@ function main(argv) {
     process.stdout.write(json);
     return 0;
   }
-  const dir = join(opts.repo, opts.base ?? "pharn/features", opts.name);
+  // The SINGLE definition, referenced — never a second literal (L41). This line is the one the
+  // suite never reached, because every CLI test passed --base; it is now exercised directly.
+  const dir = join(opts.repo, opts.base ?? FEATURE_BASE, opts.name);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "cost.json"), json);
   process.stdout.write(table(ledger) + "\n");

@@ -62,10 +62,19 @@ const NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const STAGE_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const ITER_RE = /^\d{1,6}$/;
 
-/** Control-char-free and bounded. The PRECONDITION that runs BEFORE any anchored shape regex, never as
- *  a replacement for one (L14): JS `$` without `m` matches before a single trailing newline, so
- *  `/^\d+$/.test("2\n")` is true. Composed, not substituted. */
-function cleanScalar(v, maxLen) {
+/**
+ * Control-char-free and bounded. The PRECONDITION that runs BEFORE any anchored shape regex, never as
+ * a replacement for one (L14): JS `$` without `m` matches before a single trailing newline, so
+ * `/^\d+$/.test("2\n")` is true. Composed, not substituted.
+ *
+ * THE ONE DEFINITION, exported. It previously existed as three byte-identical private copies — here,
+ * in `render-cost-ledger.mjs` and in `check-cost-ledger.mjs` — which `/pharn-dev-review` found alongside
+ * a leaf rule whose two encodings had ALREADY diverged. That is [[L31]] exactly: a copy-pair creates an
+ * obligation set nothing ranges over, and the second copy is where the obligation is dropped. It lives
+ * in THIS file because this module is the base of the import chain (`render-cost-ledger` already imports
+ * it, and `check-cost-ledger` imports both), so a single definition here creates no cycle.
+ */
+export function cleanScalar(v, maxLen) {
   if (typeof v !== "string") return false;
   if (v.length < 1 || v.length > maxLen) return false;
   for (let i = 0; i < v.length; i++) {

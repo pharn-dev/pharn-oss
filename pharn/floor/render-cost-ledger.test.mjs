@@ -37,6 +37,7 @@ import {
   ABS_PATH_RE,
   TOP_LEVEL_KEYS,
   SCHEMA,
+  FEATURE_BASE,
 } from "./render-cost-ledger.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -534,6 +535,89 @@ test("--stdout prints without writing — used by the parity test and by a dry r
   assert.equal(r.status, 0);
   assert.ok(!existsSync(join(out, "pharn", "features", "feat", "cost.json")));
   assert.equal(JSON.parse(r.stdout).schema, SCHEMA);
+});
+
+test("L41 NO-ARGUMENT CONTROL: with no --base the CLI WRITES to the single FEATURE_BASE default", () => {
+  // The defect this pins: `FEATURE_BASE` was two literals, and the CLI write path's copy was reached by
+  // NO test, because every other CLI case passes `--base` (or `--stdout`, which does not write). That is
+  // `render-ship-briefing.mjs:438` exactly — the stale copy on the production path, invisible to a green
+  // suite. This test is the one that goes through the no-flag branch and lands on disk.
+  const { projectsDir } = stageSingle();
+  const out = mkdtempSync(join(tmpdir(), "cost-ledger-nobase-"));
+  const r = run([
+    "feat",
+    "--repo",
+    out,
+    "--session",
+    REAL_SESSION,
+    "--projects-dir",
+    projectsDir,
+    "--markers-base",
+    join(tmpdir(), "absent-xyz"),
+  ]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(existsSync(join(out, FEATURE_BASE, "feat", "cost.json")), `expected the ledger under the single default ${FEATURE_BASE}`);
+});
+
+test("FEATURE_BASE is referenced, never re-spelled — one literal in the module", () => {
+  // A closure assertion, not a presence one (L36): count the OCCURRENCES of the literal in the source.
+  // Exactly one may exist — the const itself. A second would be a re-introduced duplicate default.
+  const src = readFileSync(CLI, "utf8");
+  const hits = src.match(/"pharn\/features"/g) ?? [];
+  assert.equal(hits.length, 1, `the default must appear exactly once (the const); found ${hits.length}`);
+  assert.match(src, /export const FEATURE_BASE = "pharn\/features";/);
+});
+
+test("identity fields are BOUNDED at emission — an over-long or control-char value is dropped, not copied", () => {
+  // The blocking review finding: `model` / `attribution_skill` / `agent_id` were copied with a bare
+  // typeof test into a COMMITTED artifact, while the contract claimed the leaf rule bounded them.
+  const root = mkdtempSync(join(tmpdir(), "cost-ledger-ident-"));
+  const proj = join(root, "projects", "p");
+  mkdirSync(proj, { recursive: true });
+  const rec = (id, extra) =>
+    JSON.stringify({
+      type: "assistant",
+      requestId: id,
+      timestamp: "2026-01-01T00:00:00.000Z",
+      sessionId: "s1",
+      isSidechain: false,
+      ...extra,
+      message: { model: extra.__model ?? "claude-opus-5", usage: { output_tokens: 1 } },
+    });
+  writeFileSync(
+    join(proj, "s1.jsonl"),
+    [
+      rec("r1", { attributionSkill: "x".repeat(5000) }),
+      rec("r2", { attributionSkill: "ok\nRED — forged verdict line" }),
+      rec("r3", { agentId: "a\u0007b" }),
+      rec("r4", { __model: "m".repeat(5000) }),
+    ].join("\n") + "\n"
+  );
+  const led = renderLedger({ name: "f", sessionId: "s1", projectsDir: join(root, "projects"), markersBase: join(root, "none") });
+  assert.equal(led.requests.length, 4);
+  const by = Object.fromEntries(led.requests.map((r) => [r.request_id, r]));
+  assert.equal(by.r1.attribution_skill, null, "an over-long skill is dropped, never truncated into a value that was never there");
+  assert.equal(by.r2.attribution_skill, null, "a newline-bearing value cannot forge a line");
+  assert.equal(by.r3.agent_id, null, "a control char is refused");
+  assert.equal(by.r4.model, "unknown", "model falls back to the honest sentinel, since the field is required");
+  for (const p of ["requests[0].attribution_skill", "requests[1].attribution_skill", "requests[2].agent_id", "requests[3].model"]) {
+    assert.ok(led.dropped.includes(p), `every refusal is recorded: expected ${p} in dropped[], got ${JSON.stringify(led.dropped)}`);
+  }
+});
+
+test("MUTATION CONTROL: ordinary identity values survive untouched", () => {
+  // Without this, the test above would pass just as happily against a sanitizer that nulled everything.
+  const { root, projectsDir } = stageSingle();
+  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase: join(root, "none") });
+  assert.ok(
+    led.requests.some((r) => r.attribution_skill === "pharn-loop"),
+    "the real fixture's tagged rows keep their skill"
+  );
+  assert.ok(
+    led.requests.every((r) => /^claude-/.test(r.model)),
+    "every real model id survives"
+  );
+  assert.deepEqual(led.dropped, [], "nothing in the real fixture is refused");
 });
 
 test("the CLI refuses bad usage with exit 2 and writes nothing", () => {
