@@ -488,6 +488,40 @@ test("a DEAD-PID lock and an AGED lock are both recovered (neither path is reach
   );
 });
 
+test("an UNREADABLE lock record is RECOVERED — a record that does not parse cannot be judged live", () => {
+  // The branch the claim-site restructure makes distinct: readJson fails, `lock` is null, and
+  // isStaleLock(null) is true. Its non-vacuity control is the LIVE-lock test above — a WELL-FORMED live
+  // record still refuses, so this is not a runner that recovers from everything (lessons-learned L34).
+  withRepo(
+    (dir) => {
+      cli(dir, initArgs());
+      writeFileSync(join(dir, OUT, "lock"), "{ not json");
+      assert.equal(cli(dir, runArgs()).code, 0, "a malformed lock was not recovered");
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+test("the lock has ONE exclusive-create call site — a second `wx` on the name re-forms the TOCTOU pair (CWE-367)", () => {
+  // The ENUMERATION is the deliverable, not an assertion for whichever member was in front of the author
+  // (L29): commit 81cb673 removed the `existsSync(lp)` member of this pair and the pair simply re-formed
+  // around the second `openSync` it added, because CodeQL's js/file-system-race counts `openSync` as a
+  // CHECK as well as a USE. It is a CLOSURE, not a presence test, and it matches any flags rather than
+  // the one spelling in front of the author (L36) — a site added later fails whatever it opens `lp` for.
+  //
+  // Comments are stripped first, block then line: the rationale above the claim NAMES `openSync(lp, …)`
+  // in prose, so an enumeration over raw text would be satisfied by a file with two code sites and one
+  // fewer comment. The assertion is over CODE; prose is not evidence either way.
+  const code = readFileSync(CLI, "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+  assert.deepEqual(
+    code.match(/openSync\(lp\b[^)]*\)/g),
+    ['openSync(lp, "wx")'],
+    "every claim must go through the ONE site — a first site DOMINATES a second, which is the pair CodeQL reports"
+  );
+});
+
 test("the lock is RELEASED after a normal call, so the next call proceeds", () => {
   withRepo(
     (dir) => {
