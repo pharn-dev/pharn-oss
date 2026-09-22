@@ -216,8 +216,8 @@ Promotion of a lesson/pattern to canon is a **gated** action with provenance per
 feature / diff) — memory poisoning is silent and cumulative, so the floor
 (`pharn/floor/check-provenance.mjs` + the fix #7 writes-scope) gates the shape and the target, and
 a human gates the accept (P2). `seam-record.json` and the per-feature artifacts (`findings.json`,
-`ship-record.json`, `cost.json`) are the other durable files. All state is human-readable canonical
-markdown or JSON.
+`ship-record.json`, `cost.json`, `RUN-REPORT.md`) are the other durable files. All state is
+human-readable canonical markdown or JSON.
 
 ---
 
