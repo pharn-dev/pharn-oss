@@ -442,7 +442,10 @@ export function renderLedger({
 
   if (!sessionId) return shell("no session id available (CLAUDE_CODE_SESSION_ID unset)");
   const hits = findTranscriptDirs(projectsDir, sessionId);
-  if (hits.length === 0) return shell(`no transcript found for session ${sessionId} under ${projectsDir}`);
+  // No note below names a directory. `projectsDir` / `projectDir` are LOCAL paths, and interpolating one
+  // wrote it into cost.json, where check-cost-ledger.mjs rule 3 then REDs the whole artifact — so an
+  // ordinary transcript miss produced a ledger the shipped checker refuses. Say WHAT happened, never WHERE.
+  if (hits.length === 0) return shell(`no transcript found for session ${sessionId} under the configured projects directory`);
   if (hits.length > 1) {
     // A UUID colliding across directories is unreachable on a sane tree, but the BRANCH is live: a
     // malformed `--session` holding a path separator also lands here, and refusing is correct for both.
@@ -460,7 +463,7 @@ export function renderLedger({
   // the two matchers disagree on some inputs, and the file can be unlinked between them. Without this,
   // such a run renders `partial` with zero rows — a measurement that never happened, reported as a
   // cheap one. This is L51's exact defect and it is kept deliberately.
-  if (files.length === 0) return shell(`no transcript found for session ${sessionId} under ${projectDir}`);
+  if (files.length === 0) return shell(`a transcript directory matched session ${sessionId}, but no transcript file under it was selected`);
 
   const seen = new Set();
   const requests = [];

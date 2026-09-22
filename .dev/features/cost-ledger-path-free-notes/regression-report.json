@@ -1,0 +1,29 @@
+{
+  "base": "cd764cc10e1d3cace163950f19cc7d75ac92f6cb",
+  "inside": [
+    ".dev/features/cost-ledger-path-free-notes/GRILL.md",
+    ".dev/features/cost-ledger-path-free-notes/PLAN.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/render-cost-ledger.mjs",
+    "pharn/floor/render-cost-ledger.test.mjs"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
