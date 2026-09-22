@@ -9,7 +9,11 @@ nothing starts it.
 
 1. **The hook file first.** It lands with this PR (`.claude/hooks/require-loop-record.cjs`).
 2. **Then the wiring**, below.
-3. **Rollback is the reverse:** remove the `Stop` block from `settings.json` first, then the file. A
+3. **Then `README.md`.** Its `## What gets installed` section says the Stop guard lands inert "as of
+   `6.11.1`", because the shipped `settings.json` does not register it. Once this wiring ships, that
+   sentence is false: name the release that wires it instead. The rule before it ("it does nothing
+   unless your settings register it") stays true.
+4. **Rollback is the reverse:** remove the `Stop` block from `settings.json` first, then the file. A
    wired entry pointing at a missing script is a non-blocking error (`node` exits 1 with `Cannot find
 module`). That means the guard is off, and it cannot trap a turn.
 
