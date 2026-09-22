@@ -187,6 +187,22 @@ function sha256File(file) {
  *  belong to a live run, whatever the pid says. Neither path is reachable from an end-to-end run (they
  *  need a crashed runner), so each is exercised by a test that CONSTRUCTS the state directly — a default
  *  no test reaches is a default that is wrong for a release line (lessons-learned L41).
+ *
+ *  THE CLAIM IS ONE CALL SITE, and that is the whole of `claimLock()`'s reason to exist. `wx` —
+ *  exclusive create — IS the claim: a separate existence test first would be a check-then-use (CWE-367,
+ *  CodeQL js/file-system-race), and so is a SECOND `wx` site, because that rule's "check" is `openSync`
+ *  every bit as much as `existsSync` — the first site dominates the second and the name can be replaced
+ *  between them. Removing only the `existsSync` member left the pair standing around the member the fix
+ *  ADDED, which is why the enumeration, not the member, is what a test may pin (lessons-learned L29/L36).
+ *
+ *  NOT CLAIMED — and an earlier comment here asserted the opposite, so the retraction is explicit:
+ *  two recoveries that both judged the SAME incumbent stale can BOTH end up holding the lock. A unlinks
+ *  and creates; B then unlinks A's FRESH lock and creates its own. The exclusive create decides a race
+ *  to CREATE on an unheld name; it cannot decide a race to REMOVE a held one, because POSIX has no
+ *  conditional unlink. What the lock does hold against is the case an end-to-end run produces — two
+ *  runners contending for a LIVE lock. Recovery is best-effort; closing it needs a second protocol
+ *  (an exclusive tombstone keyed to the incumbent's bytes), and no observed run has produced the race,
+ *  so it is a named residual rather than a build (P7): `run-gates-lock-recovery-race`.
  *  ---------------------------------------------------------------------------------------------- */
 function pidAlive(pid) {
   try {
@@ -210,39 +226,43 @@ function isStaleLock(lock, nowMs) {
   return nowMs - lock.started_ms > budget;
 }
 
-function takeLock(outAbs, timeoutMs) {
-  const lp = lockPath(outAbs);
-  // Exclusive create IS the claim — no existsSync first (that is a TOCTOU / CodeQL
-  // js/file-system-race). On EEXIST, read + stale-check; only then unlink and retry.
-  // Two concurrent recoveries still cannot both win: the second `wx` decides.
+/** The claim, and the file's ONLY `openSync(lp, …)`. `busy` is EEXIST — the one outcome a caller may
+ *  recover from; every other errno is a refusal, exactly as before. */
+function claimLock(lp, timeoutMs) {
   let fd;
   try {
     fd = openSync(lp, "wx");
   } catch (e) {
-    if (e.code !== "EEXIST") {
-      fail("lock-busy", `another run-gates invocation is starting at ${lp}`);
-    }
-    const r = readJson(lp);
-    const lock = r.ok ? r.value : null;
-    if (!isStaleLock(lock, Date.now())) {
-      fail("lock-busy", `another run-gates invocation holds ${lp} (pid ${lock.pid}); parallel calls are refused`);
-    }
-    // Stale: recovered. Its in-progress entry, if any, is re-run — `claimed` is cleared below.
-    try {
-      unlinkSync(lp);
-    } catch {
-      /* raced with another recovery — the exclusive create below decides the winner */
-    }
-    try {
-      fd = openSync(lp, "wx");
-    } catch {
-      fail("lock-busy", `another run-gates invocation is starting at ${lp}`);
-    }
+    return { held: false, busy: e.code === "EEXIST" };
   }
   try {
     writeFileSync(fd, JSON.stringify({ pid: process.pid, started_ms: Date.now(), timeout_ms: timeoutMs }));
   } finally {
     closeSync(fd);
+  }
+  return { held: true, busy: false };
+}
+
+function takeLock(outAbs, timeoutMs) {
+  const lp = lockPath(outAbs);
+  const first = claimLock(lp, timeoutMs);
+  if (first.held) return lp;
+  if (!first.busy) fail("lock-busy", `another run-gates invocation is starting at ${lp}`);
+  // EEXIST: read the incumbent and recover ONLY if it is stale. A record that does not parse cannot be
+  // judged live, so it is stale — `isStaleLock(null)` is `true`, never a reason to trust it.
+  const r = readJson(lp);
+  const lock = r.ok ? r.value : null;
+  if (!isStaleLock(lock, Date.now())) {
+    fail("lock-busy", `another run-gates invocation holds ${lp} (pid ${lock.pid}); parallel calls are refused`);
+  }
+  // Stale: recovered. Its in-progress entry, if any, is re-run — `claimed` is cleared below.
+  try {
+    unlinkSync(lp);
+  } catch {
+    /* raced with another recovery — the exclusive create below decides who CREATES the next lock */
+  }
+  if (!claimLock(lp, timeoutMs).held) {
+    fail("lock-busy", `another run-gates invocation is starting at ${lp}`);
   }
   return lp;
 }
