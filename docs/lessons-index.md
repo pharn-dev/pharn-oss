@@ -10,7 +10,7 @@ lessons to fetch; canon stays the source of truth and the floor's verification t
 applied, without fetching its full `## L<n>` entry from canon, is the P0 disease. "The index was
 consulted" never means "the relevant lessons were read".
 
-52 lessons · 52 tagged · 0 malformed · 0 untagged · ~36878 tokens total
+53 lessons · 53 tagged · 0 malformed · 0 untagged · ~37710 tokens total
 
 Columns: `id | type | concepts | title | promoted | ~tokens`. `-` is rendered in THREE columns
 and does NOT mean the same thing in each — read it against the column it sits in. In `type`/`concepts`:
@@ -76,4 +76,5 @@ L49 | process  | plan-shape,declaration-audit,enumeration,floor-coverage,false-g
 L50 | process  | doc-drift,enumeration,referent-binding,sweep-scope,lesson-recurrence                        | A sweep for a retracted claim must enumerate the cites of the referent that broke, not only the claim's spellings | 2026-09-21 | ~907
 L51 | floor    | dead-code-removal,input-domain,test-blindspot,false-green,lookup-rewrite                    | A guard deleted as "now unreachable" is unreachable only under the reasoning that deleted it | 2026-09-21 | ~785
 L52 | process  | lesson-recurrence,test-blindspot,enumeration,remedy-design,false-green                      | A lesson whose remedy is "write a test" is satisfied by writing it for the wrong member of the set | 2026-09-21 | ~1058
+L53 | process  | lesson-recurrence,floor-escalation,unbuilt-remedy,plan-shape,detection-path                 | A lesson whose remedy is an unbuilt floor check is eventually caught by unrelated tooling — and a detection that depends on a coincidence is not a remedy | 2026-09-22 | ~832
 ```

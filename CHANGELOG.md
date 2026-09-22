@@ -1526,6 +1526,67 @@ exists-then-read/write (CWE-367)`.
 
 ### Added
 
+- **`/pharn-verify` and `/pharn-regress` no longer TYPE their own floor input — a tested runner produces
+  it** (`SKILLS_VERSION` 6.7.1 → **6.8.0**, minor: three newly shipped product-floor modules, a new
+  contract, and an additive opt-in surface on two existing checkers — no existing install is invalidated;
+  `MIN_CLI` untouched, because the CLI copies all of `pharn/floor` except tests and no installed path
+  moved) — `pharn/floor/gate-run-core.mjs`, `pharn/floor/worktree-fingerprint.mjs`,
+  `pharn/floor/run-gates.mjs`, and `pharn/pharn-contracts/gate-run-record.md`.
+
+  **The failure, recorded not hypothetical.** Both stages compute a **floor** verdict from a
+  `{gate-id: exit-int}` map, and until now the **model typed that map**. Verify's Step 3c captured five
+  exit codes in Bash (`=$?`) and wrote the JSON by hand; regress's Step 4b instructed the model to
+  "record `0`" for an empty test set and to "assemble each side into a flat map". So both the **keys**
+  (which gates are in the set) and the **values** were model-authored, and each checker judged whatever
+  map it was handed — which their own usage blocks said plainly. The 6.3.0 entry below records a
+  dogfooded, unattended `/pharn-loop` run that "skipped `/pharn-grill`, `/pharn-regress` and
+  `/pharn-verify` entirely, hand-executed the equivalent work by judgment, and still wrote a `LOOP.md`
+  whose `decision` read as a genuine floor-grade stop"; that increment's remedy re-derives a decision
+  from the reports it cites and, **by its own statement, cannot see a report that was never honestly
+  produced**. `lessons-learned` **L5** names the class, **L30** names why the asked-for gate is the
+  skipped one, and **L20**/**L46** make the recurrence the trigger for a floor check rather than another
+  reminder.
+
+  **What is FLOOR now, given the stamp:** the map's values are the exit codes the runner recorded from
+  the listed argv; the keys cover the resolved source set (plus `reconcile` for verify); no tree edit
+  happened between consecutive gates; and `reconcile` ran **last**, so it judges any write an earlier
+  gate made. **What is NOT, each stated rather than left to be discovered:** freshness against the tree
+  at decision time (`fingerprint.final` is written here and compared against nothing — a later
+  increment's job); whether the stage ran at all; whether the report on disk is the checker's output;
+  who wrote an explicit `--gates`; and **forgery** — this certifies **internal consistency, never
+  provenance**, a self-consistent fabricated stamp passes, and a test **builds one** to prove it
+  (**L43**).
+
+  **Build-completeness is deliberately NOT a gate, and getting that wrong would have been silent.** The
+  runner captures `check-build-complete.mjs`'s exit — so it is no longer model-typed — into the stamp's
+  `aux.completeness`, a **sibling of `runs[]`**, and `check-verify.mjs` reads it onto its existing
+  `--complete` path. Folding it into the gate map would make an incomplete build a **red gate**, so the
+  verdict would be `FAIL` and **`INCOMPLETE` would become unreachable** — silently disabling
+  `/pharn-ship` Step 2b's single bounded rebuild, which fires only on `INCOMPLETE`, and collapsing
+  `check-loop.mjs`'s `v ∈ {FAIL, INCOMPLETE}` distinction. Surfaced as `/pharn-dev-grill` finding **R1**
+  against the plan, **before any code was written**.
+
+  **Consequences, stated plainly because they change behaviour:**
+  - **Gates can no longer be skipped.** A project with a gate already red at base now gets an honest
+    `FAIL` every iteration and reaches `STOP_CAP` rather than a green — the **L11** situation, no longer
+    resolvable by quietly dropping the gate.
+  - **A gate that writes a tracked, non-ignored file now always runs, and `reconcile` judges that
+    write.** A build step that rewrites a generated file in the worktree is an escape and will red the
+    stage; declare it in the plan's `## Files` or record it in `pharn/floor/reconcile-ignore.json`.
+  - **A model that stops calling `run --next` gets `INCONCLUSIVE stamp-unfinalized`, not a silent skip**
+    — a named stop where there used to be nothing.
+  - **A project whose suite runs longer than ~9 minutes cannot be gated by this runner**, because the
+    pinned `--timeout-ms` must sit under Claude Code's 600 s Bash-tool maximum. A real bound, named.
+
+  **Narrowed, and named:** gate discovery from a manifest other than `package.json` now requires an
+  explicit `--gates`; the previous "or the project's equivalent manifest" was prose no code implemented.
+
+  **Doc drift this increment CREATES and cannot repair:** `pharn/ARCHITECTURE.md §4` enumerates the
+  contracts by name and is human-only, so an eleventh contract makes it stale.
+  `.dev/features/gate-run-stamp/architecture-patch/APPLY.md` carries the verified one-hunk patch for a
+  human. Raised as `/pharn-dev-grill` finding **R2**; the plan's own sweep had reached the README and
+  missed the trusted doc, which is **L50** exactly.
+
 - **`/pharn-ship` now emits a cost ledger and a run report at every exit that ends the run**
   (`SKILLS_VERSION` 6.6.0 → **6.7.0**, minor: a newly shipped capability on the product surface)
   ([`.claude/commands/pharn-ship.md`](./.claude/commands/pharn-ship.md) Step 3a,

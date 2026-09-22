@@ -196,3 +196,217 @@ test("★ backward-compat: ABSENT --complete can NEVER yield INCOMPLETE (legacy 
     assert.equal(json(r).verdict, "FAIL");
   });
 });
+
+// ===================================================================================================
+// The OPT-IN `--stamp` surface (gate-run-stamp increment).
+//
+// The property under test is PROVENANCE, not semantics: the same gate map, read out of a stamp instead
+// of a hand-written results.json, must produce the IDENTICAL verdict. Every refusal carries a closed
+// reason_code, and the L43 bound is proven by CONSTRUCTING a self-consistent fabricated stamp and
+// showing it passes — the bound is demonstrated, not merely asserted in prose.
+// ===================================================================================================
+
+const A64 = "a".repeat(64);
+const B64 = "b".repeat(64);
+
+/** A valid verify stamp carrying `gates`. Every refusal case below mutates ONE field of this, so each
+ *  assertion is attributable to the field it names. */
+function mkStamp(gates, over = {}) {
+  const ids = Object.keys(gates);
+  const runs = ids.map((id, i) => ({
+    seq: i,
+    id,
+    exit: gates[id],
+    ran: true,
+    timed_out: false,
+    mutated: false,
+    reason: null,
+    fp_before: A64,
+    fp_after: i === ids.length - 1 ? B64 : A64,
+    stdout_sha256: A64,
+    stderr_sha256: A64,
+  }));
+  return {
+    schema: "gate-run-record/1",
+    stage: "verify",
+    side: null,
+    feature: "demo",
+    head: "0".repeat(40),
+    source: "discover",
+    source_raw: null,
+    style_skipped: false,
+    finalized: true,
+    fingerprint: { algo: "worktree-fingerprint/1+sha256", init: A64, final: B64 },
+    required: ids.filter((i) => i !== "reconcile"),
+    runs,
+    aux: { completeness: 0 },
+    ...over,
+  };
+}
+
+function withStamp(stamp, fn) {
+  const dir = mkdtempSync(join(tmpdir(), "cv-stamp-"));
+  const p = join(dir, "stamp.json");
+  writeFileSync(p, JSON.stringify(stamp, null, 2));
+  try {
+    return fn(p, dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test("★ EQUIVALENCE — a stamp yields the IDENTICAL verdict to the flag-less run, over EVERY fixture map", () => {
+  // Quantified over the whole set of interesting maps, not one (L52): the point is that the stamp path
+  // changed where the map comes from and NOTHING about the decision table.
+  const maps = [
+    { test: 0 },
+    { test: 0, lint: 0, reconcile: 0 },
+    { test: 1 },
+    { test: 0, lint: 2 },
+    { test: 0, lint: 0, "structural:a/evals/expected/x.json": 1 },
+    { test: 3, lint: 4, reconcile: 5 },
+  ];
+  assert.ok(maps.length > 0, "the fixture set is empty — this rule would be vacuous");
+  for (const map of maps) {
+    const dir = mkdtempSync(join(tmpdir(), "cv-eq-"));
+    try {
+      const rp = join(dir, "results.json");
+      writeFileSync(rp, JSON.stringify(map));
+      const flagless = run([rp, "--feature", "demo", "--complete", "0"]);
+      const viaStamp = withStamp(mkStamp(map), (p) => run(["--stamp", p, "--feature", "demo"]));
+      assert.equal(viaStamp.status, flagless.status, `exit differed for ${JSON.stringify(map)}`);
+      const a = json(flagless);
+      const b = json(viaStamp);
+      delete b.gate_run; // the ONLY addition; everything else must match byte-for-byte
+      assert.deepEqual(b, a, `verdict differed for ${JSON.stringify(map)}`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test("★ the stamp path adds an ADDITIVE `gate_run` block and nothing else", () => {
+  withStamp(mkStamp({ test: 0 }), (p) => {
+    const r = run(["--stamp", p, "--feature", "demo"]);
+    assert.equal(r.status, 0);
+    const j = json(r);
+    assert.deepEqual(Object.keys(j).sort(), ["failing_gates", "gate_run", "gates", "verdict", "feature"].sort());
+    assert.deepEqual(Object.keys(j.gate_run).sort(), ["fingerprint", "source", "stamp_sha256"]);
+    assert.match(j.gate_run.stamp_sha256, /^[0-9a-f]{64}$/);
+  });
+});
+
+test("★ INCOMPLETE stays REACHABLE through the stamp path (GRILL R1 — completeness is not a gate)", () => {
+  // If completeness were folded into the gates map, this would be FAIL (exit 1) and /pharn-ship Step 2b's
+  // single bounded rebuild — reachable only from INCOMPLETE — would be silently dead.
+  withStamp(mkStamp({ test: 0 }, { aux: { completeness: 1 } }), (p) => {
+    const r = run(["--stamp", p, "--feature", "demo"]);
+    assert.equal(r.status, 3, "an incomplete build did not reach the INCOMPLETE verdict");
+    assert.equal(json(r).verdict, "INCOMPLETE");
+    assert.deepEqual(json(r).failing_gates, [], "completeness leaked into failing_gates");
+  });
+  // And a REAL red gate still BEATS incompleteness, exactly as on the flag-less path.
+  withStamp(mkStamp({ test: 1 }, { aux: { completeness: 1 } }), (p) => {
+    const r = run(["--stamp", p, "--feature", "demo"]);
+    assert.equal(r.status, 1);
+    assert.equal(json(r).verdict, "FAIL");
+  });
+});
+
+test("★ every stamp REFUSAL carries its own closed reason_code (L52: one case per rule)", () => {
+  const cases = [
+    [mkStamp({ test: 0 }, { finalized: false }), "stamp-unfinalized"],
+    [mkStamp({ test: 0 }, { stage: "regress", side: "head" }), "stage-mismatch"],
+    [mkStamp({ test: 0 }, { feature: "other" }), "feature-mismatch"],
+    [mkStamp({ test: 0 }, { required: ["test", "lint"] }), "coverage-violation"],
+    [mkStamp({ test: 0 }, { schema: "nope" }), "stamp-malformed"],
+    [mkStamp({ test: 0 }, { aux: {} }), "stamp-malformed"],
+  ];
+  for (const [stamp, code] of cases) {
+    withStamp(stamp, (p) => {
+      const r = run(["--stamp", p, "--feature", "demo"]);
+      assert.equal(r.status, 2, `expected INCONCLUSIVE for ${code}`);
+      assert.equal(json(r).verdict, "INCONCLUSIVE");
+      assert.equal(json(r).reason_code, code);
+    });
+  }
+  // reconcile-not-last needs a two-entry stamp in the wrong order.
+  const s = mkStamp({ reconcile: 0, test: 0 });
+  withStamp(s, (p) => {
+    const r = run(["--stamp", p, "--feature", "demo"]);
+    assert.equal(json(r).reason_code, "reconcile-not-last");
+  });
+});
+
+test("★ a MISSING stamp file is `stamp-missing`; an unparseable one is `stamp-malformed`", () => {
+  const r1 = run(["--stamp", "/nope/nowhere/stamp.json", "--feature", "demo"]);
+  assert.equal(r1.status, 2);
+  assert.equal(json(r1).reason_code, "stamp-missing");
+  const dir = mkdtempSync(join(tmpdir(), "cv-bad-"));
+  try {
+    const p = join(dir, "stamp.json");
+    writeFileSync(p, "{not json");
+    const r2 = run(["--stamp", p, "--feature", "demo"]);
+    assert.equal(json(r2).reason_code, "stamp-malformed");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("★ --stamp is MUTUALLY EXCLUSIVE with a positional map, and REQUIRES --feature", () => {
+  withStamp(mkStamp({ test: 0 }), (p, dir) => {
+    const rp = join(dir, "results.json");
+    writeFileSync(rp, JSON.stringify({ test: 0 }));
+    const both = run([rp, "--stamp", p, "--feature", "demo"]);
+    assert.equal(both.status, 2);
+    assert.equal(json(both).reason_code, "usage-error");
+    const noFeature = run(["--stamp", p]);
+    assert.equal(noFeature.status, 2);
+    assert.equal(json(noFeature).reason_code, "usage-error");
+  });
+});
+
+test("★ an explicit --complete must AGREE with aux.completeness — a disagreement is a usage error", () => {
+  withStamp(mkStamp({ test: 0 }, { aux: { completeness: 0 } }), (p) => {
+    assert.equal(run(["--stamp", p, "--feature", "demo", "--complete", "0"]).status, 0, "an agreeing --complete must be accepted");
+    const bad = run(["--stamp", p, "--feature", "demo", "--complete", "1"]);
+    assert.equal(bad.status, 2);
+    assert.equal(json(bad).reason_code, "usage-error");
+  });
+});
+
+test("★ L43 BOUND, PROVEN NOT ASSERTED — a self-consistent FABRICATED stamp passes", () => {
+  // Hand-built, never produced by run-gates.mjs: no gate ever ran, no tree was ever hashed, the digests
+  // are invented. It is INTERNALLY CONSISTENT, so it validates — which is exactly the claim's limit.
+  // "The checker accepted this stamp" therefore never means "these gates ran".
+  const forged = mkStamp({ test: 0, lint: 0, reconcile: 0 });
+  withStamp(forged, (p) => {
+    const r = run(["--stamp", p, "--feature", "demo"]);
+    assert.equal(r.status, 0, "the fabricated stamp was rejected — then this bound is overstated and the header must change");
+    assert.equal(json(r).verdict, "PASS");
+  });
+});
+
+test("★ a fail-closed completeness reason NAMES ITS REAL SOURCE, not a flag the caller never passed", () => {
+  // Found by dogfooding the shipped runner end-to-end rather than by reading the code: on the stamp path
+  // the message read `--complete undefined`, which sends a reader to an input that was never supplied.
+  // Fail-closed behaviour was already correct; only the attribution was wrong.
+  withStamp(mkStamp({ test: 0 }, { aux: { completeness: 2 } }), (p) => {
+    const r = run(["--stamp", p, "--feature", "demo"]);
+    assert.equal(r.status, 2, "an inconclusive completeness must stay fail-closed");
+    assert.equal(json(r).verdict, "INCONCLUSIVE");
+    assert.match(json(r).reason, /stamp\.aux\.completeness 2/, "the reason must name the stamp field it came from");
+    assert.doesNotMatch(json(r).reason, /--complete undefined/, "the reason must not blame a flag the caller never passed");
+  });
+  // The flag-less path still names the FLAG, because there the flag really is the source.
+  const dir = mkdtempSync(join(tmpdir(), "cv-src-"));
+  try {
+    const rp = join(dir, "results.json");
+    writeFileSync(rp, JSON.stringify({ test: 0 }));
+    const r = run([rp, "--feature", "demo", "--complete", "2"]);
+    assert.equal(r.status, 2);
+    assert.match(json(r).reason, /--complete "2"/, "the flag-less path must still attribute to --complete");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

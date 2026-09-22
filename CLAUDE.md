@@ -215,6 +215,72 @@ node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 node pharn/floor/reconcile-baseline.mjs --anchor [--base <dir>] [--by <label>]
 node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
 
+# PRODUCE the verify/regress floor input map with TESTED CODE instead of model-typed prose (added 6.8.0).
+# THE RECORDED FAILURE (P7, not a hypothetical): both stages compute a FLOOR verdict from a
+# `{gate-id: exit-int}` map, and the MODEL typed it — verify's Step 3c captured five exit codes in Bash
+# (`=$?`) and wrote the JSON by hand; regress's 4b said "record `0`" for an empty test set and "assemble
+# each side into a flat map". So the KEYS (which gates are in the set) and the VALUES were both
+# model-authored, and each checker judged whatever map it was handed. CHANGELOG 6.3.0 records a dogfooded
+# /pharn-loop run that "skipped /pharn-grill, /pharn-regress and /pharn-verify entirely, hand-executed the
+# equivalent work by judgment" and still wrote a floor-grade-looking decision; #222's fix re-derives a
+# decision from the reports it cites and BY ITS OWN STATEMENT cannot see a report never honestly produced.
+# L5 names the class, L30 why the ASKED-FOR gate is the skipped one, L20/L46 make the recurrence the
+# trigger. THREE FILES, three reasons to change (P3): gate-run-core.mjs is PURE (grammar, coverage, the
+# closed reason_code set, stamp validation — no child_process, so both checkers' "no child process"
+# headers stay true); worktree-fingerprint.mjs is git+hashing; run-gates.mjs is execution.
+# FLOOR, given the stamp: the map's values ARE the exit codes the runner recorded from the listed argv;
+# the keys COVER the resolved source set (+ `reconcile` for verify); NO tree edit happened between
+# consecutive gates (fp_after[k-1] == fp_before[k]); and `reconcile` ran LAST so it judges any write an
+# earlier gate made. NOT COVERED, each stated: FRESHNESS (`fingerprint.final` is WRITTEN here and compared
+# against nothing — a later increment's job, and writing a field whose only consumer is the next increment
+# is a P7 cost accepted at the plan gate); whether the stage ran AT ALL; whether the report on disk is the
+# checker's output; WHO wrote an explicit --gates (only `source` is recorded); and FORGERY — it certifies
+# INTERNAL CONSISTENCY, never provenance, a self-consistent FABRICATED stamp passes and a test BUILDS one
+# to prove it (L43, in check-cost-ledger.mjs's words).
+# BUILD-COMPLETENESS IS NOT A GATE, and that separation is load-bearing: the runner CAPTURES
+# check-build-complete.mjs's exit (so it is not model-typed) into `aux.completeness`, a SIBLING of runs[],
+# and check-verify.mjs reads it onto its EXISTING --complete path. Folding it into the gates map would make
+# an incomplete build a RED GATE, so the verdict would be FAIL (exit 1) and INCOMPLETE (exit 3) UNREACHABLE
+# — silently disabling /pharn-ship Step 2b's single bounded rebuild (reachable only from INCOMPLETE) and
+# collapsing check-loop.mjs's `v in {FAIL, INCOMPLETE}` distinction. Surfaced as GRILL finding R1 BEFORE the
+# build, not at review. `reconcile` is the opposite case and IS a gate, exactly as it is today.
+# THE FINGERPRINT'S TWO EXCLUSIONS answer a DIFFERENT question from reconcile-ignore.json's (L39): reconcile
+# asks "may this change after the build anchor?", this asks "does a change here alter what the gates
+# judged?". They diverge on SPEC/PLAN/GRILL/BUILD.md, which reconcile exempts and this INCLUDES. A partition
+# test pins EXCLUDED u INCLUDED == reconcile-ignore.json pipeline_artifacts.names, so a new pipeline artifact
+# fails CI until someone classifies it for both consumers — and its bound is L43's: it certifies the three
+# stores AGREE, never that the set is correct. `.pharn/` is excluded EXPLICITLY and that is load-bearing in
+# THIS increment, not only the next: enumerate() derives exclusion from git-ignore, so in an install that
+# does NOT ignore `.pharn/` the runner's own logs would move the fingerprint between EVERY pair of gates and
+# refuse every run. MEASURED, never inherited (L24): 1925 paths, ~463 ms cold / ~75-85 ms warm on this repo.
+# BOUNDS: POSIX only; gates assumed order-independent; a `setsid` descendant escapes the group kill; a
+# harness kill before --timeout-ms orphans the group, which is why the Bash-tool timeout must EXCEED it and
+# why --timeout-ms is REQUIRED (floor code carries no harness-specific default, so there is no default for a
+# test to leave unexercised — L41); `--gates` splits on commas, so a command containing one needs a wrapper;
+# gate stdout/stderr are UNTRUSTED free text, written by fd and reduced to a sha256, and NO verdict reads
+# their content; logs are bounded per stage by init's recreate of <out> and are otherwise unbounded across
+# /pharn-loop iterations. The runner writes ONLY inside the state root (containment-checked, no symlink
+# component), so it needs NO reconcile-ignore.json exemption. Contract:
+# pharn/pharn-contracts/gate-run-record.md. Ships: bumps SKILLS_VERSION.
+# Exit: init 0 ok | 2 runner error (closed reason_code) | 3 EMPTY SOURCE SET (nothing written; routes to the
+# existing no-gates HALT, and to /pharn-loop's unattended S4 `blocked: no-gates`) ·
+# run 0 an entry ran (a FAILING GATE IS DATA, not a runner error) | 2 runner error | 3 nothing left.
+node pharn/floor/run-gates.mjs init --stage verify|regress [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--discover <package.json>] [--gates "<cmd>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>]
+node pharn/floor/run-gates.mjs run --next --out <dir> --timeout-ms <N>
+node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
+
+# The two verdict cores gain an OPT-IN stamp surface; FLAG-LESS BEHAVIOR IS BYTE-IDENTICAL (regression-
+# guarded by every pre-existing fixture, asserted as EQUIVALENCE over the whole fixture set, not one case).
+# It is a PROVENANCE change, not a semantics change — neither decision table moved. `--stamp` is mutually
+# exclusive with the positional map and requires --feature; an explicit --complete may accompany it and must
+# then AGREE with aux.completeness. On regress, --base must be a RESOLVED 40-hex SHA, never a symbolic ref
+# (a ref is re-resolvable, a stamp is not), and two checks exist only on that path: the base stamp's recorded
+# `head` == --base, and the two sides' SPECS agree. Both reports gain an ADDITIVE, ADVISORY `gate_run` block
+# and a `reason_code` on fail-closed exits — verified safe by READING all seven consumers, none of which
+# validates a closed top-level key set.
+node pharn/floor/check-verify.mjs --stamp <stamp.json> --feature <name>
+node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --base <40-hex> [--inside <list>]
+
 # Check the SHAPE of a loop-record — the pharn/features/<name>/LOOP.md that /pharn-loop writes at every stop.
 # Floor: the frontmatter envelope (`decision` in {STOP_GREEN, STOP_CAP, STOP_TERMINAL, INCONCLUSIVE};
 # `iterations` a positive integer; `commit` a git SHA or the literal `unknown`; `date` ISO YYYY-MM-DD; and,

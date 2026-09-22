@@ -1,0 +1,608 @@
+// pharn/floor/run-gates.test.mjs — the runner CLI's suite.
+//
+// Every test drives the REAL CLI as a subprocess, because the property under test is what a command's
+// pinned Bash line produces — a suite that only imported the module would exercise the script and never
+// the invocation (lessons-learned L45, the shape that kept a fixed guard out of production for a whole
+// release line). Refusal tests pair with a non-vacuity control so a green run means the rule fired and
+// not that the runner refuses everything (L34), and rules over a set iterate every member (L52).
+
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, symlinkSync, statSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const CLI = join(HERE, "run-gates.mjs");
+const OUT = ".pharn/gates";
+const FEATURE = "demo";
+
+/** Run the CLI and return {code, json}. stdout is always one JSON document, so a caller branches on the
+ *  exit code and reads the document — never on prose. */
+function cli(cwd, args, opts = {}) {
+  const r = spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: "utf8", ...opts });
+  let json = null;
+  try {
+    json = JSON.parse(r.stdout);
+  } catch {
+    /* a crash path — the caller asserts on `code` and `raw` */
+  }
+  return { code: r.status, json, raw: r.stdout + r.stderr };
+}
+
+function repo({ scripts = { test: 'node -e "process.exit(0)"' }, gitignorePharn = true } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), "rg-"));
+  const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe" });
+  git("init", "-q", ".");
+  git("config", "user.email", "t@t");
+  git("config", "user.name", "t");
+  if (gitignorePharn) writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+  mkdirSync(join(dir, `pharn/features/${FEATURE}`), { recursive: true });
+  writeFileSync(join(dir, `pharn/features/${FEATURE}/PLAN.md`), "# PLAN\n\n## Files\n\n- `a.txt` — a\n");
+  writeFileSync(join(dir, "a.txt"), "a\n");
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "fx", scripts }, null, 2));
+  git("add", "-A");
+  git("commit", "-qm", "init");
+  return dir;
+}
+
+const initArgs = (extra = []) => ["init", "--stage", "verify", "--feature", FEATURE, "--out", OUT, "--discover", "package.json", ...extra];
+const runArgs = (ms = 30000) => ["run", "--next", "--out", OUT, "--timeout-ms", String(ms)];
+
+/** Drive `run --next` to completion; returns every call's parsed document. */
+function drain(dir, ms = 30000, max = 20) {
+  const calls = [];
+  for (let i = 0; i < max; i++) {
+    const r = cli(dir, runArgs(ms));
+    calls.push(r);
+    if (r.code === 3 || r.code === 2) break;
+  }
+  return calls;
+}
+
+function stamp(dir) {
+  return JSON.parse(readFileSync(join(dir, OUT, "stamp.json"), "utf8"));
+}
+
+function withRepo(fn, opts) {
+  const dir = repo(opts);
+  try {
+    return fn(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------
+// init
+// ---------------------------------------------------------------------------------------------------
+
+test("init resolves the set, prints the ordered ids, and writes an in-progress record", () => {
+  withRepo(
+    (dir) => {
+      const r = cli(dir, initArgs());
+      assert.equal(r.code, 0);
+      assert.deepEqual(r.json.ids, ["test", "lint", "reconcile"]);
+      assert.equal(r.json.source, "discover");
+      assert.ok(existsSync(join(dir, OUT, "state.json")));
+      assert.ok(!existsSync(join(dir, OUT, "stamp.json")), "init must not write a stamp");
+    },
+    { scripts: { test: "true", lint: "true" } }
+  );
+});
+
+test("L34 — an EMPTY SOURCE set exits 3 and writes NO state, even though the injected entries exist", () => {
+  withRepo(
+    (dir) => {
+      const r = cli(dir, initArgs());
+      assert.equal(r.code, 3, "an empty source set must route to the existing no-gates stop");
+      assert.equal(r.json.reason_code, "empty-source-set");
+      assert.ok(!existsSync(join(dir, OUT, "state.json")), "a refused init must leave no state behind");
+      // Control: ONE allowlisted script makes the same fixture resolvable.
+      writeFileSync(join(dir, "package.json"), JSON.stringify({ scripts: { test: "true" } }));
+      assert.equal(cli(dir, initArgs()).code, 0);
+    },
+    { scripts: { unrelated: "true" } }
+  );
+});
+
+test("init RECREATES <out>, so no stale log or stamp survives an earlier run", () => {
+  withRepo(
+    (dir) => {
+      cli(dir, initArgs());
+      writeFileSync(join(dir, OUT, "stale.out"), "old");
+      cli(dir, initArgs());
+      assert.ok(!existsSync(join(dir, OUT, "stale.out")), "init did not wipe <out>");
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+test("CONTAINMENT: --out outside, equal to, or symlinked through the state root is REFUSED (L52: each case)", () => {
+  withRepo(
+    (dir) => {
+      const cases = [
+        [
+          ["init", "--stage", "verify", "--feature", FEATURE, "--out", "elsewhere/gates", "--discover", "package.json"],
+          "outside the state root",
+        ],
+        [["init", "--stage", "verify", "--feature", FEATURE, "--out", ".pharn", "--discover", "package.json"], "equal to the state root"],
+        [["init", "--stage", "verify", "--feature", FEATURE, "--out", "../escape", "--discover", "package.json"], "traversing out"],
+      ];
+      for (const [args, why] of cases) {
+        const r = cli(dir, args);
+        assert.equal(r.code, 2, `accepted --out ${why}`);
+        assert.equal(r.json.reason_code, "path-containment", `wrong reason_code for ${why}`);
+      }
+      // The symlink case: a component of the path is a link, which `lstat` sees and `stat` would follow.
+      mkdirSync(join(dir, ".pharn"), { recursive: true });
+      mkdirSync(join(dir, "outside-target"), { recursive: true });
+      symlinkSync(join(dir, "outside-target"), join(dir, ".pharn", "linked"));
+      const r = cli(dir, ["init", "--stage", "verify", "--feature", FEATURE, "--out", ".pharn/linked/gates", "--discover", "package.json"]);
+      assert.equal(r.code, 2, "accepted a --out traversing a symlink");
+      assert.equal(r.json.reason_code, "path-containment");
+      // Non-vacuity control: the ordinary path is accepted by the same fixture.
+      assert.equal(cli(dir, initArgs()).code, 0);
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+test("init refuses a scope JSON with a non-empty `escaped`, or an `inconclusive` verdict", () => {
+  withRepo(
+    (dir) => {
+      const sj = join(dir, "scope.json");
+      const base = [
+        "init",
+        "--stage",
+        "regress",
+        "--side",
+        "head",
+        "--feature",
+        FEATURE,
+        "--out",
+        OUT,
+        "--discover",
+        "package.json",
+        "--scope-json",
+        "scope.json",
+      ];
+
+      writeFileSync(sj, JSON.stringify({ escaped: ["src/x.ts"], outside_tests: [], outside_eval_pairs: [] }));
+      let r = cli(dir, base);
+      assert.equal(r.code, 2);
+      assert.equal(r.json.reason_code, "bad-scope-json");
+
+      writeFileSync(sj, JSON.stringify({ escaped: [], verdict: "inconclusive", outside_tests: [] }));
+      r = cli(dir, base);
+      assert.equal(r.code, 2);
+      assert.equal(r.json.reason_code, "bad-scope-json");
+
+      writeFileSync(sj, JSON.stringify({ escaped: [], outside_tests: ["t/*.test.js"] }));
+      r = cli(dir, base);
+      assert.equal(r.code, 2, "a glob-shaped outside_tests entry must be refused");
+      assert.equal(r.json.reason_code, "bad-scope-json");
+
+      // Control: a clean scope JSON is accepted by the same fixture.
+      writeFileSync(sj, JSON.stringify({ escaped: [], verdict: "ok", outside_tests: ["t/a.test.js"], outside_eval_pairs: [] }));
+      assert.equal(cli(dir, base).code, 0);
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+test("regress --side base REQUIRES --spec-from, and copies the head spec VERBATIM", () => {
+  withRepo(
+    (dir) => {
+      const noSpec = cli(dir, [
+        "init",
+        "--stage",
+        "regress",
+        "--side",
+        "base",
+        "--feature",
+        FEATURE,
+        "--out",
+        OUT,
+        "--discover",
+        "package.json",
+      ]);
+      assert.equal(noSpec.code, 2);
+      assert.equal(noSpec.json.reason_code, "usage-error");
+
+      writeFileSync(join(dir, "scope.json"), JSON.stringify({ escaped: [], outside_tests: ["t/a.js"], outside_eval_pairs: [] }));
+      const head = cli(dir, [
+        "init",
+        "--stage",
+        "regress",
+        "--side",
+        "head",
+        "--feature",
+        FEATURE,
+        "--out",
+        ".pharn/head",
+        "--discover",
+        "package.json",
+        "--scope-json",
+        "scope.json",
+      ]);
+      assert.equal(head.code, 0);
+      const base = cli(dir, [
+        "init",
+        "--stage",
+        "regress",
+        "--side",
+        "base",
+        "--feature",
+        FEATURE,
+        "--out",
+        ".pharn/base",
+        "--spec-from",
+        ".pharn/head",
+      ]);
+      assert.equal(base.code, 0);
+      assert.deepEqual(base.json.ids, head.json.ids, "the base side did not copy the head spec verbatim");
+    },
+    { scripts: { test: "true", lint: "true" } }
+  );
+});
+
+// ---------------------------------------------------------------------------------------------------
+// run --next — order, exit mapping, and the failing-gate-is-data rule
+// ---------------------------------------------------------------------------------------------------
+
+test("run --next walks the entries IN SPEC ORDER and finalizes on the last one", () => {
+  withRepo(
+    (dir) => {
+      cli(dir, initArgs());
+      const calls = drain(dir);
+      assert.deepEqual(
+        calls.filter((c) => c.json && c.json.ran).map((c) => c.json.ran),
+        ["test", "lint", "reconcile"]
+      );
+      const last = calls[calls.length - 2];
+      assert.equal(last.json.finalized, true);
+      assert.equal(calls[calls.length - 1].code, 3, "a call after the last entry must exit 3");
+      assert.ok(existsSync(join(dir, OUT, "stamp.json")));
+      assert.ok(!existsSync(join(dir, OUT, "state.json")), "the in-progress record must be removed on finalize");
+    },
+    { scripts: { test: "true", lint: "true" } }
+  );
+});
+
+test("a FAILING gate is DATA, not a runner error — exit 0 with a non-zero recorded exit", () => {
+  withRepo(
+    (dir) => {
+      cli(dir, initArgs());
+      const calls = drain(dir);
+      const lint = calls.find((c) => c.json && c.json.ran === "lint");
+      assert.equal(lint.code, 0, "a red gate must not be a runner error");
+      assert.equal(lint.json.exit, 7);
+      assert.equal(stamp(dir).runs.find((r) => r.id === "lint").exit, 7);
+    },
+    { scripts: { test: "true", lint: 'node -e "process.exit(7)"' } }
+  );
+});
+
+test("EXIT MAPPING covers 0, a non-zero code, 127 (ENOENT), 126 (EACCES) and 128+n (signal)", () => {
+  withRepo(
+    (dir) => {
+      // A non-executable file for the EACCES case, invoked directly via --gates argv-free shell form.
+      const noexec = join(dir, "noexec.sh");
+      writeFileSync(noexec, "#!/bin/sh\nexit 0\n", { mode: 0o644 });
+      assert.equal(statSync(noexec).mode & 0o111, 0, "fixture is wrong: noexec.sh is executable");
+
+      const gates = [
+        'node -e "process.exit(0)"::zero',
+        'node -e "process.exit(5)"::five',
+        "definitely-not-a-real-binary-xyz::enoent",
+        "./noexec.sh::eacces",
+        // NOTE: no literal comma in this token — `--gates` splits on commas, so `process.kill(a,b)` would
+        // be torn in two. The bound is documented in run-gates.mjs's header; this fixture respects it.
+        "sh -c 'kill -TERM $$'::signalled",
+      ].join(",");
+      const r = cli(dir, ["init", "--stage", "verify", "--feature", FEATURE, "--out", OUT, "--gates", gates]);
+      assert.equal(r.code, 0);
+      drain(dir);
+      const map = Object.fromEntries(stamp(dir).runs.map((x) => [x.id, x.exit]));
+      assert.equal(map.zero, 0);
+      assert.equal(map.five, 5);
+      // The shell reports these conventional codes for its own child; the runner maps a direct spawn
+      // failure to the same numbers, so a reader sees one vocabulary either way.
+      assert.equal(map.enoent, 127, "ENOENT did not map to 127");
+      assert.equal(map.eacces, 126, "EACCES did not map to 126");
+      assert.equal(map.signalled, 128 + 15, "a SIGTERM death did not map to 128+n");
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+test("a TIMEOUT records 124 + timed_out, and the whole PROCESS GROUP is dead afterwards", () => {
+  withRepo(
+    (dir) => {
+      const marker = join(dir, "grandchild.pid");
+      // The gate backgrounds a grandchild, so killing only the immediate child would leave it running —
+      // which is precisely what the process-group kill exists to prevent.
+      const gate = `sh -c 'sleep 60 & echo $! > ${marker}; wait'`;
+      cli(dir, ["init", "--stage", "verify", "--feature", FEATURE, "--out", OUT, "--gates", `${gate}::slow`]);
+      const r = cli(dir, runArgs(700));
+      assert.equal(r.code, 0);
+      assert.equal(r.json.exit, 124, "a timeout must record 124");
+      assert.equal(r.json.timed_out, true);
+
+      const pid = Number(readFileSync(marker, "utf8").trim());
+      assert.ok(Number.isInteger(pid) && pid > 0, "the fixture never recorded a grandchild pid");
+      // Give the SIGKILL escalation a moment, then assert the grandchild is gone.
+      execFileSync("sh", ["-c", "sleep 3"]);
+      let alive = true;
+      try {
+        process.kill(pid, 0);
+      } catch {
+        alive = false;
+      }
+      assert.equal(alive, false, `the grandchild ${pid} survived the group kill`);
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+test("argv entries never reach a shell: `;` and `$(…)` are LITERAL arguments", () => {
+  withRepo(
+    (dir) => {
+      // A discovered gate runs as `npm run <id>`; to test argv handling directly the entry is built via
+      // a structural extra, whose argv is fixed by the core. The proof is that check-structural receives
+      // the metacharacter-bearing path as ONE argument and reports it not-found rather than executing it.
+      mkdirSync(join(dir, "cap/evals/expected"), { recursive: true });
+      const nasty = "cap/evals/expected/a;$(touch pwned).json";
+      writeFileSync(join(dir, "cap/evals/expected/plain.json"), "[]");
+      cli(dir, ["init", "--stage", "verify", "--feature", FEATURE, "--out", OUT, "--gates", "true::t", "--extra", JSON.stringify([nasty])]);
+      drain(dir);
+      assert.ok(!existsSync(join(dir, "pwned")), "a $(…) in an argv operand was executed by a shell");
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+test("a SHELL entry appends files as POSITIONAL args — `a b` stays one arg and `$(x)` stays literal", () => {
+  withRepo(
+    (dir) => {
+      // The gate prints each positional arg on its own line; the assertion is on the recorded output.
+      const sj = join(dir, "scope.json");
+      writeFileSync(sj, JSON.stringify({ escaped: [], outside_tests: ["a b.js", "$(touch pwned).js"], outside_eval_pairs: [] }));
+      const r = cli(dir, [
+        "init",
+        "--stage",
+        "regress",
+        "--side",
+        "head",
+        "--feature",
+        FEATURE,
+        "--out",
+        OUT,
+        "--gates",
+        'printf "[%s]\\n"::test',
+        "--scope-json",
+        "scope.json",
+      ]);
+      assert.equal(r.code, 0);
+      drain(dir);
+      const log = readFileSync(join(dir, OUT, "0-test.out"), "utf8");
+      assert.match(log, /\[a b\.js\]/, "a filename with a space was word-split into two arguments");
+      assert.match(log, /\[\$\(touch pwned\)\.js\]/, "a $(…) filename was expanded by the shell");
+      assert.ok(!existsSync(join(dir, "pwned")), "a $(…) filename was executed");
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+test("a file-addressable gate with NO files records 0 / ran:false / reason no-files — never a silent skip", () => {
+  withRepo(
+    (dir) => {
+      writeFileSync(join(dir, "scope.json"), JSON.stringify({ escaped: [], outside_tests: [], outside_eval_pairs: [] }));
+      cli(dir, [
+        "init",
+        "--stage",
+        "regress",
+        "--side",
+        "head",
+        "--feature",
+        FEATURE,
+        "--out",
+        OUT,
+        "--discover",
+        "package.json",
+        "--scope-json",
+        "scope.json",
+      ]);
+      drain(dir);
+      const t = stamp(dir).runs.find((r) => r.id === "test");
+      assert.equal(t.exit, 0);
+      assert.equal(t.ran, false);
+      assert.equal(t.reason, "no-files");
+    },
+    { scripts: { test: 'node -e "process.exit(3)"' } }
+  );
+});
+
+test("a large gate output survives (written by fd, never through a pipe buffer)", () => {
+  withRepo(
+    (dir) => {
+      const big = 5 * 1024 * 1024;
+      cli(dir, [
+        "init",
+        "--stage",
+        "verify",
+        "--feature",
+        FEATURE,
+        "--out",
+        OUT,
+        "--gates",
+        `node -e "process.stdout.write('x'.repeat(${big}))"::loud`,
+      ]);
+      drain(dir, 60000);
+      const s = statSync(join(dir, OUT, "0-loud.out"));
+      assert.equal(s.size, big, "the gate's output was truncated");
+      assert.equal(stamp(dir).runs[0].exit, 0, "a large output turned into a runner error");
+      assert.match(stamp(dir).runs[0].stdout_sha256, /^[0-9a-f]{64}$/);
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+// ---------------------------------------------------------------------------------------------------
+// The lock
+// ---------------------------------------------------------------------------------------------------
+
+test("a LIVE lock makes a concurrent run refuse `lock-busy`", () => {
+  withRepo(
+    (dir) => {
+      cli(dir, initArgs());
+      writeFileSync(join(dir, OUT, "lock"), JSON.stringify({ pid: process.pid, started_ms: Date.now(), timeout_ms: 30000 }));
+      const r = cli(dir, runArgs());
+      assert.equal(r.code, 2);
+      assert.equal(r.json.reason_code, "lock-busy");
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+test("a DEAD-PID lock and an AGED lock are both recovered (neither path is reachable end-to-end)", () => {
+  // Both states need a crashed runner, so an end-to-end run cannot produce them. Constructing the state
+  // directly is what keeps these branches from being code no test reaches (lessons-learned L41).
+  withRepo(
+    (dir) => {
+      cli(dir, initArgs());
+      // (1) dead pid — pid 2^22-1 is above the default max and is reliably absent.
+      writeFileSync(join(dir, OUT, "lock"), JSON.stringify({ pid: 4194303, started_ms: Date.now(), timeout_ms: 30000 }));
+      assert.equal(cli(dir, runArgs()).code, 0, "a dead-pid lock was not recovered");
+      // (2) aged — a LIVE pid (our own) but older than timeout + grace, so pid reuse cannot hold it.
+      writeFileSync(
+        join(dir, OUT, "lock"),
+        JSON.stringify({ pid: process.pid, started_ms: Date.now() - 10 * 60 * 1000, timeout_ms: 1000 })
+      );
+      assert.equal(cli(dir, runArgs()).code, 0, "an aged lock was not recovered");
+    },
+    { scripts: { test: "true", lint: "true" } }
+  );
+});
+
+test("the lock is RELEASED after a normal call, so the next call proceeds", () => {
+  withRepo(
+    (dir) => {
+      cli(dir, initArgs());
+      assert.equal(cli(dir, runArgs()).code, 0);
+      assert.ok(!existsSync(join(dir, OUT, "lock")), "the lock survived a normal call");
+      assert.equal(cli(dir, runArgs()).code, 0);
+    },
+    { scripts: { test: "true", lint: "true" } }
+  );
+});
+
+// ---------------------------------------------------------------------------------------------------
+// finalize
+// ---------------------------------------------------------------------------------------------------
+
+test("finalize REFUSES with `tree-changed-between-gates` when a gate's neighbour saw a different tree", () => {
+  withRepo(
+    (dir) => {
+      // The first gate mutates a TRACKED file, so gate 2's fp_before differs from gate 1's fp_after only
+      // if the mutation lands BETWEEN them — which is what the hand-edit below simulates deterministically.
+      cli(dir, initArgs());
+      cli(dir, runArgs()); // test
+      const statePath = join(dir, OUT, "state.json");
+      const st = JSON.parse(readFileSync(statePath, "utf8"));
+      st.runs[0].fp_after = "f".repeat(64); // a tree state no later gate saw
+      writeFileSync(statePath, JSON.stringify(st));
+      const calls = drain(dir);
+      const refused = calls.find((c) => c.code === 2);
+      assert.ok(refused, "finalize did not refuse a broken fingerprint chain");
+      assert.equal(refused.json.reason_code, "tree-changed-between-gates");
+      assert.ok(!existsSync(join(dir, OUT, "stamp.json")), "a refused finalize must write no stamp");
+    },
+    { scripts: { test: "true", lint: "true" } }
+  );
+});
+
+test("a SELF-MUTATING gate is RECORDED (mutated: true), never refused — reconcile judges that write", () => {
+  withRepo(
+    (dir) => {
+      cli(dir, ["init", "--stage", "verify", "--feature", FEATURE, "--out", OUT, "--gates", "sh -c 'echo changed >> a.txt'::writer"]);
+      drain(dir);
+      const s = stamp(dir);
+      const w = s.runs.find((r) => r.id === "writer");
+      assert.equal(w.mutated, true, "a gate that wrote a tracked file was not recorded as mutating");
+      assert.notEqual(w.fp_before, w.fp_after);
+      assert.equal(s.finalized, true, "a self-mutating gate must not refuse the stamp");
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+test("finalize NEVER writes a results.json — the stamp is the only store of the map (L35)", () => {
+  withRepo(
+    (dir) => {
+      cli(dir, initArgs());
+      drain(dir);
+      const entries = execFileSync("ls", ["-1", join(dir, OUT)], { encoding: "utf8" })
+        .split("\n")
+        .filter(Boolean);
+      assert.ok(!entries.includes("results.json"), `a results.json was written: ${entries.join(", ")}`);
+      assert.ok(entries.includes("stamp.json"));
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+test("the stamp carries aux.completeness OUTSIDE runs[] (GRILL R1 — INCOMPLETE must stay reachable)", () => {
+  withRepo(
+    (dir) => {
+      cli(dir, initArgs());
+      drain(dir);
+      const s = stamp(dir);
+      assert.ok(Number.isInteger(s.aux.completeness), "aux.completeness was not captured");
+      assert.ok(!s.runs.some((r) => r.id === "completeness"), "completeness leaked into runs[] — INCOMPLETE would become unreachable");
+      assert.ok(!s.required.includes("completeness"));
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+test("`run --next` REQUIRES --timeout-ms — floor code carries no harness-specific default (L41)", () => {
+  withRepo(
+    (dir) => {
+      cli(dir, initArgs());
+      const r = cli(dir, ["run", "--next", "--out", OUT]);
+      assert.equal(r.code, 2);
+      assert.equal(r.json.reason_code, "usage-error");
+      assert.match(r.json.reason, /--timeout-ms/);
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+test("`run --next` before an init is `stamp-missing`, not a crash", () => {
+  withRepo(
+    (dir) => {
+      mkdirSync(join(dir, OUT), { recursive: true });
+      const r = cli(dir, runArgs());
+      assert.equal(r.code, 2);
+      assert.equal(r.json.reason_code, "stamp-missing");
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+test("the bare CLI and an unknown subcommand emit a usage document, never a stack trace", () => {
+  withRepo(
+    (dir) => {
+      for (const args of [[], ["frobnicate"], ["run"]]) {
+        const r = cli(dir, args);
+        assert.equal(r.code, 2, `\`${args.join(" ")}\` did not exit 2`);
+        assert.equal(r.json.reason_code, "usage-error");
+      }
+    },
+    { scripts: { test: "true" } }
+  );
+});

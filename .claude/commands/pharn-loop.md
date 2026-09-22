@@ -35,7 +35,7 @@ reads:
   ]
 writes: ["pharn/features/<name>/SPEC.md", "pharn/features/<name>/LOOP.md"]
 constitution_refs: ["P0", "P2", "P3", "P5", "P6", "P7"]
-version: "0.5.0"
+version: "0.6.0"
 ---
 
 # /pharn-loop — run the product pipeline unattended to a floor-grade stop, then report what was done
@@ -271,8 +271,13 @@ no value is carried between blocks (**L44**).
    node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
    ```
 
-2. **`/pharn-regress --base <base sha>`**, then **`/pharn-verify`** (with the same `--complete` wiring
-   `/pharn-ship` Step 2 uses). Each is marked the same way:
+2. **`/pharn-regress --base <base sha>`**, then **`/pharn-verify`**. Both stages now run their gates
+   through `pharn/floor/run-gates.mjs` and read the resulting **stamp**, so build-completeness reaches
+   `check-verify.mjs` from the stamp's `aux.completeness` rather than from a hand-passed `--complete`
+   (`pharn/pharn-contracts/gate-run-record.md`). The `INCOMPLETE` verdict this loop branches on at S-red
+   is **unchanged**, and deliberately so: completeness is recorded OUTSIDE the gate map, because folding
+   it in would make an incomplete build a red gate and `INCOMPLETE` unreachable. Each stage is marked the
+   same way:
 
    ```bash
    node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-regress --iteration <N>

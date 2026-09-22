@@ -181,3 +181,29 @@ residual that remains is the honest one about the verdict itself — a `no-regre
 wide as the suite that produced it, and a reader who takes it as "the change is safe" has substituted a
 guarantee about **gates** for a guarantee about **behavior**. The document says exactly what the gates
 say; it cannot say more.
+
+## The additive `gate_run` block (advisory shape)
+
+Since the gate-run-stamp increment, `/pharn-regress` runs both sides' gates through
+`pharn/floor/run-gates.mjs` and passes the two stamps to `check-regress.mjs verdict --base-stamp/--head-stamp`.
+The verdict fields are **unchanged**; the report additionally carries a **per-side** block:
+
+```json
+{
+  "gate_run": {
+    "base": { "stamp_sha256": "<sha256>", "source": "explicit | discover", "fingerprint": { "algo": "<token>", "final": "<sha256>" } },
+    "head": { "stamp_sha256": "<sha256>", "source": "explicit | discover", "fingerprint": { "algo": "<token>", "final": "<sha256>" } }
+  },
+  "reason_code": "<a closed reason_code, on a fail-closed exit only>"
+}
+```
+
+- **ADDITIVE and ADVISORY**, on the same evidence as the verify report's: every live consumer reads named
+  fields only, verified by reading each.
+- Two refusals exist only on the stamp path, each with its own `reason_code`: the base stamp's recorded
+  `head` must equal the `--base` SHA (`base-head-mismatch`), and the two sides' specs must agree
+  (`spec-mismatch`) — which is what makes "the set is decided once and applied to both" checkable rather
+  than merely intended.
+- **The bound (L43):** internal consistency, never provenance — a self-consistent fabricated pair passes.
+
+Full shape: `pharn/pharn-contracts/gate-run-record.md` (cited, not restated — P4).

@@ -1930,3 +1930,48 @@ Recorded as a pending remedy per [[L46]] rather than implied to be closed.
 - commit: `8dacaa9b28e894adfdc61a08938a0bfb99f79348`
 - source: `.dev/features/loop-cost-ledger/REVIEW.md` F2
 - promoted: 2026-09-21 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L53 — A lesson whose remedy is an unbuilt floor check is eventually caught by unrelated tooling — and a detection that depends on a coincidence is not a remedy
+
+type: process · concepts: [lesson-recurrence, floor-escalation, unbuilt-remedy, plan-shape, detection-path]
+
+**Lesson.** [[L46]] establishes that a lesson whose remedy IS a floor check keeps recurring while reading
+as handled. This is the next observation along that chain: when such a defect finally IS caught, it may be
+caught by tooling that knows nothing about the invariant — and that is not the remedy arriving, it is a
+coincidence standing in for one. A coincidence carries no coverage guarantee: change the formatting, the
+file type, or the lint config, and the same defect ships silently.
+
+**Measured, in the increment that cited the lesson it violated.** `gate-run-stamp`'s own `PLAN.md` opened
+its exclusion block with `**Explicitly NOT in this increment**` — bold prose, not a heading. That is
+[[L18]] exactly, the defect [[L20]] demanded a floor check for and [[L46]] recorded as still unbuilt. It
+surfaced as **markdownlint `MD036/no-emphasis-as-heading`** — a _style_ rule with no concept of
+writes-scope — during the stage's advisory format pass. Only then was the scope consequence checked by
+hand: `set-writes-scope.cjs --from-plan` parsed **24 paths against 24 declared bullets** after the heading
+fix. With the bold form the block fails **OPEN**, and the two files the plan exists _not_ to touch —
+`MIN_CLI` and `pharn/floor/worktree-fingerprint.mjs` — would have entered the build scope.
+
+**Why it matters.** This is at least the third occurrence of the same defect (`product-capability-catalog`
+6-vs-2, `coverage-record` 10-vs-9, this one), and L20's prescribed remedy — _"at `/pharn-dev-plan` Step 4 …
+re-run `set-writes-scope.cjs --from-plan` and deterministically compare the parsed scope set against the
+plan's own `## Files` bullets, RED on disagreement"_ — is **still not built**. What is new is the
+**detection path**, and it is worse than a miss because it _looks_ like coverage: a green `lint:md` run
+reads as a style pass, not as the only thing standing between a plan and an over-granted build scope. The
+count was read by a human who happened to run the check; nothing required it.
+
+**Distinct from its neighbours.** [[L20]] says a discipline-only remedy earns a floor check on the second
+occurrence. [[L46]] says canon cannot tell a shipped remedy from a sentence. This says what happens _after_
+both are true and the check still is not built: detection migrates to whatever unrelated gate happens to
+trip, and the recurrence gets recorded as handled because something caught it. [[L30]]'s shape is adjacent
+— a step that names a gate and asks for it — but there the gate existed and went unrun; here no gate exists
+and an unrelated one substituted.
+
+**Bound (P0), and the remedy's status per [[L46]].** No checker is added by this entry, so it is itself a
+**pending-remedy** lesson and says so. The remedy remains L20's, specified and unbuilt across three
+occurrences.
+
+**Provenance.**
+
+- feature: `gate-run-stamp`
+- commit: `51b8f476f1599cb1a6eb3287e6dacc81dc3c1215`
+- source: `.dev/features/gate-run-stamp/REVIEW.md` § Proposed lesson candidate
+- promoted: 2026-09-22 via gated `/pharn-dev-memory-promote` (human-approved).
