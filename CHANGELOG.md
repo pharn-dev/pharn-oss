@@ -52,6 +52,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`RUN-REPORT.md` no longer shows unmeasured usage as a measured window, or a previous run's ledger as the current one** (`SKILLS_VERSION` 6.9.1 → **6.9.2**, patch: corrections to shipped renderer and command bytes; no `cost.json` schema change) ([`pharn/floor/render-run-report.mjs`](./pharn/floor/render-run-report.mjs), [`.dev/features/run-report-ledger-honesty/`](./.dev/features/run-report-ledger-honesty/)). Both problems were found by the independent integration review of #232/#233/#234.
+  - **F1.** Take a transcript that could not be read inside a KNOWN run window (`coverage: unavailable`, `membership: bounded|open`). `## Tokens` rendered "Measured population: the RUN WINDOW", then "excluded requests 0", then "nothing was recorded against a stage". A reader takes that for a zero. It now renders **"Run usage: UNAVAILABLE — not measured, and NOT a zero"** and quotes the ledger's `coverage_note` as DATA. The branch reads the `coverage` enum. `unknown` also quotes its note.
+  - **F2.** A failed `render-cost-ledger.mjs` (for example exit 2 on bad usage) left the PREVIOUS run's `cost.json` in place. `check-cost-ledger.mjs` was GREEN on it, and the report rendered that run's `gate2` as the current run's. The renderer now binds the ledger to its referent. It compares the live `markers.jsonl`'s latest `run-start` with the one the ledger recorded, by `seq` AND `ts`. It compares identity, not "greater `seq`", so a reset `.pharn/` cannot make an old ledger read as current. When the two differ, the report renders a **STALE LEDGER** banner and `n/a` Outcome/Tokens/Files, and it no longer applies the old ledger's applicability label to the verdicts. With no live markers file it prints "ledger currency not checked" and never presents the ledger as proven current. `--markers-base` falls through to `mark-phase.mjs`'s single `DEFAULT_BASE`.
+  - **Command prose (advisory).** Both `/pharn-ship` and `/pharn-loop` now say that a non-zero emitter exit means no ledger was emitted this run, so the checker's GREEN on an older file is not this run's.
+  - **Bounds.** Staleness is blind when the failed run wrote no `run-start` either, and when the renderer is pointed away from the live markers. `check-cost-ledger.mjs` stays GREEN on a stale file, because it certifies consistency only.
+  - **Tests.** They cover:
+    - F1 through the real emitter CLI, for bounded and open windows, with a measured control;
+    - F2 through a real failed-emission sequence rendered with NO `--markers-base` (the default path), with before and after controls;
+    - a reset-`seq` identity case;
+    - the no-markers-file line.
+
+    The review's own probe now passes 18/18 when pointed at this tree.
+
 - **`/pharn-ship`'s reported `outcome` now uses only verdict evidence that belongs to the CURRENT run, and never a stale `LOOP.md`** (`SKILLS_VERSION` 6.9.0 → **6.9.1**, patch: a correction to shipped derivation bytes. There is no `cost.json` key or schema change, and `MIN_CLI` is untouched) ([`pharn/floor/ship-outcome-core.mjs`](./pharn/floor/ship-outcome-core.mjs), [`.dev/features/ship-outcome-evidence-applicability/`](./.dev/features/ship-outcome-evidence-applicability/)).
   - **Reachability (supported use, not a pure-function probe).**
     - `/pharn-spec` Step 1.1 resumes an existing `<name>`, so a second `/pharn-ship` on a feature appends a new `run-start`. The previous run's `verify-report.json` / `regression-report.json` stay on disk until overwritten, and no code invalidates them. That invalidation was instruction-only.

@@ -1360,3 +1360,160 @@ test("REVIEW F1: a HISTORICAL ship ledger that stored gate2 from reports now jud
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// ===================================================================================================
+// 6.9.2 — the two ledger states the integration review (.dev/features/cost-ship-integration-review, F1/F2)
+// found this report misrendering. Driven through the REAL emitter CLI where the state is produced by it.
+// ===================================================================================================
+
+import { ledgerCurrency } from "./render-run-report.mjs";
+
+const S92 = "00000000-0000-4000-8000-0000000000f2";
+function markersAt(markersBase, name, ms) {
+  mkdirSync(join(markersBase, name), { recursive: true });
+  writeFileSync(
+    join(markersBase, name, "markers.jsonl"),
+    ms.map((m) => JSON.stringify({ stage: null, iteration: null, session_id: S92, ...m })).join("\n") + "\n"
+  );
+}
+function emitCli(root, name, markersBase, extra = []) {
+  return spawnSync(
+    "node",
+    [
+      join(here, "render-cost-ledger.mjs"),
+      name,
+      "--repo",
+      root,
+      "--session",
+      S92,
+      "--projects-dir",
+      join(root, "projects"),
+      "--markers-base",
+      markersBase,
+      ...extra,
+    ],
+    { encoding: "utf8" }
+  );
+}
+
+test("F1: a KNOWN window with an UNAVAILABLE transcript renders 'UNAVAILABLE — NOT a zero', never a measured empty window", () => {
+  const root = scratch();
+  try {
+    mkdirSync(join(root, "projects"), { recursive: true }); // the transcript lookup MISSES
+    const mb = join(root, ".pharn", "cost");
+    for (const [label, ms] of [
+      [
+        "bounded",
+        [
+          { seq: 1, kind: "run-start", ts: "2026-09-22T10:00:00.000Z" },
+          { seq: 2, kind: "run-stop", ts: "2026-09-22T10:30:00.000Z" },
+        ],
+      ],
+      ["open", [{ seq: 1, kind: "run-start", ts: "2026-09-22T10:00:00.000Z" }]],
+    ]) {
+      markersAt(mb, "feat", ms);
+      assert.equal(emitCli(root, "feat", mb).status, 0);
+      const cost = JSON.parse(readFileSync(join(root, "pharn", "features", "feat", "cost.json"), "utf8"));
+      assert.equal(cost.coverage, "unavailable", label);
+      assert.equal(cost.membership.status, label);
+      const t = renderRunReport("feat", { repo: root }).split("## Tokens")[1].split("## Files")[0];
+      assert.match(t, /Run usage: UNAVAILABLE — not measured, and NOT a zero/, label);
+      assert.doesNotMatch(t, /Measured population/, `${label}: an unmeasured run is never labelled as a measured window`);
+      assert.doesNotMatch(t, /nothing was recorded against a stage/, label);
+      assert.match(t, /no transcript found for session/, `${label}: the ledger's own reason is quoted as DATA`);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("F1 CONTROL: a partial (measured) ledger still carries the 'Measured population' label", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", { "cost.json": costJson({ schema: "pharn-cost-ledger/2", membership: MEMB() }) });
+    const t = renderRunReport("feat", { repo: root }).split("## Tokens")[1];
+    assert.match(t, /Measured population: the RUN WINDOW/);
+    assert.doesNotMatch(t, /UNAVAILABLE/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("F2: a FAILED emission leaves the previous run's cost.json — the report renders it as STALE, never as this run's", () => {
+  const root = scratch();
+  try {
+    const proj = join(root, "projects", "p");
+    mkdirSync(proj, { recursive: true });
+    writeFileSync(
+      join(proj, `${S92}.jsonl`),
+      JSON.stringify({
+        type: "assistant",
+        requestId: "r1",
+        timestamp: "2026-09-22T08:05:00.000Z",
+        sessionId: S92,
+        message: { model: "m", usage: { input_tokens: 3, output_tokens: 0 } },
+      }) + "\n"
+    );
+    const mb = join(root, ".pharn", "cost"); // the DEFAULT markers location under --repo (no flag below)
+    const run1 = [
+      { seq: 1, kind: "run-start", ts: "2026-09-22T08:00:00.000Z" },
+      { seq: 2, kind: "stage-start", stage: "pharn-regress", iteration: 1, ts: "2026-09-22T08:01:00.000Z" },
+      { seq: 3, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-09-22T08:02:00.000Z" },
+      { seq: 4, kind: "run-stop", ts: "2026-09-22T08:30:00.000Z" },
+    ];
+    markersAt(mb, "feat", run1);
+    feature(root, "feat", {
+      "verify-report.json": { verdict: "PASS", failing_gates: [] },
+      "regression-report.json": { verdict: "no-regressions", regressions: [] },
+    });
+    assert.equal(emitCli(root, "feat", mb, ["--command", "/pharn-ship"]).status, 0);
+    // CONTROL: run 1's own report is current, with its gate2.
+    let md = renderRunReport("feat", { repo: root });
+    assert.doesNotMatch(md, /STALE LEDGER/);
+    assert.match(md.split("## Outcome")[1].split("## Tokens")[0], /decision\s+gate2/);
+
+    // Run 2 starts (a new run-start), stops at grill, and its emission FAILS (bad usage → exit 2).
+    markersAt(mb, "feat", [
+      ...run1,
+      { seq: 5, kind: "run-start", ts: "2026-09-22T10:00:00.000Z" },
+      { seq: 6, kind: "stage-start", stage: "pharn-grill", ts: "2026-09-22T10:01:00.000Z" },
+    ]);
+    assert.equal(emitCli(root, "feat", mb, ["--command", "/pharn-ship", "--base-sah", "x"]).status, 2);
+    md = renderRunReport("feat", { repo: root }); // NO markersBase: the default path (L41)
+    assert.match(md, /\*\*STALE LEDGER\.\*\*/);
+    const outcome = md.split("## Outcome")[1].split("## Tokens")[0];
+    assert.doesNotMatch(outcome, /gate2/, "the previous run's gate2 is never shown as this run's");
+    assert.match(outcome, /STALE LEDGER — cost\.json describes an EARLIER run/);
+    assert.match(md.split("## Tokens")[1].split("## Files")[0], /STALE LEDGER/);
+    assert.match(md.split("## Files")[1].split("## Verdicts")[0], /STALE LEDGER/);
+    assert.match(md.split("## Verdicts")[1].split("## Briefing")[0], /No current ledger — see STALE LEDGER above/);
+    assert.deepEqual(headings(md), [...SECTIONS], "every section is still present");
+
+    // CONTROL: once run 2 emits successfully, its ledger is current again.
+    assert.equal(emitCli(root, "feat", mb, ["--command", "/pharn-ship"]).status, 0);
+    assert.doesNotMatch(renderRunReport("feat", { repo: root }), /STALE LEDGER/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("F2 / GRILL 1: identity, not 'greater seq' — a RESET markers file whose seq restarted still reads STALE", () => {
+  const cost = { markers: [{ seq: 1, kind: "run-start", ts: "2026-09-22T08:00:00.000Z", stage: null, iteration: null, session_id: null }] };
+  const reset = [{ seq: 1, kind: "run-start", ts: "2026-09-22T10:00:00.000Z", stage: null, iteration: null, session_id: null }];
+  assert.equal(ledgerCurrency(cost, reset).state, "stale");
+  assert.equal(ledgerCurrency(cost, cost.markers).state, "current");
+  assert.equal(ledgerCurrency({ markers: [] }, reset).state, "stale", "a ledger with no run-start vs a live one");
+  assert.equal(ledgerCurrency(cost, []).state, "unchecked");
+});
+
+test("F2: no live markers file → an explicit 'currency not checked' line, never a silent pass", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", { "cost.json": costJson() });
+    const md = renderRunReport("feat", { repo: root, markersBase: join(root, "nowhere") });
+    assert.match(md, /Ledger currency not checked/);
+    assert.doesNotMatch(md, /STALE LEDGER/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
