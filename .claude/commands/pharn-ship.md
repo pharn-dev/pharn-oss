@@ -37,7 +37,7 @@ reads:
   ]
 writes: ["pharn/features/<name>/SHIP.md", "pharn/features/<name>/ship-record.json", "pharn/features/<name>/BRIEFING.md"]
 constitution_refs: ["P0", "P2", "P5", "P6", "P7"]
-version: "0.5.0"
+version: "0.6.0"
 ---
 
 # /pharn-ship — run the product pipeline, end at a human gate
@@ -842,6 +842,16 @@ the `check-ship.mjs` cap.
   `verify-report.json` `.verdict`, the build project-gate exit — `pharn/ARCHITECTURE.md §2` primitive #3);
   `/pharn-ship`'s **act** of reading them and stopping is **ADVISORY orchestration** — the same two-clocks
   split as `/pharn-regress` and `/pharn-verify` themselves.
+- **"The two verdicts this command branches on are computed over gate maps produced by tested code"** →
+  **FLOOR, given the stamp**, and owned by the sub-stages as always. Since the gate-run-stamp increment,
+  `/pharn-regress` and `/pharn-verify` run their gates through `pharn/floor/run-gates.mjs` and read the
+  resulting stamp, so neither map's **keys** nor its **values** are typed by a model
+  (`pharn/pharn-contracts/gate-run-record.md`). `/pharn-ship` reads the same `.verdict` /
+  `.failing_gates[]` fields as before — **this command's own bytes gain no new guarantee**, and the
+  `INCOMPLETE` verdict Step 2b fires on is deliberately preserved, because completeness is recorded
+  OUTSIDE the gate map. **Still ADVISORY, and the bound is the point (L43):** a stamp certifies internal
+  consistency, never provenance — a self-consistent fabricated stamp passes, and nothing here proves a
+  sub-stage ran its runner at all.
 - **"The single build-completion retry fires only on a deterministic `INCOMPLETE`, at most once"** → the
   **firing** is FLOOR (it reads `/pharn-verify`'s `.verdict == "INCOMPLETE"`, itself produced by that
   sub-stage's new `check-build-complete.mjs` — so the new floor primitive belongs to **`/pharn-verify`**, not

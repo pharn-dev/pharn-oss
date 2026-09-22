@@ -417,3 +417,188 @@ test("✧ L2: identical gate sets still compare equal (the fix did not over-tigh
   );
   assert.equal(r.status, 0, "matching gate sets must still pass");
 });
+
+// ===================================================================================================
+// The OPT-IN stamp surface on `verdict` (gate-run-stamp increment).
+//
+// PROVENANCE, not semantics: the same two maps, read out of stamps instead of hand-written results.json
+// files, must produce the IDENTICAL verdict. The two checks that exist only on this path — the base
+// stamp's recorded `head` vs `--base`, and side-spec agreement — are each paired with a control. The L43
+// bound is proven by CONSTRUCTING a self-consistent fabricated pair and showing it passes.
+// ===================================================================================================
+
+const A64 = "a".repeat(64);
+const B64 = "b".repeat(64);
+const SHA = "0".repeat(40);
+
+function mkRegressStamp(gates, side, over = {}) {
+  const ids = Object.keys(gates);
+  const runs = ids.map((id, i) => ({
+    seq: i,
+    id,
+    exit: gates[id],
+    ran: true,
+    timed_out: false,
+    mutated: false,
+    reason: null,
+    fp_before: A64,
+    fp_after: i === ids.length - 1 ? B64 : A64,
+    stdout_sha256: A64,
+    stderr_sha256: A64,
+  }));
+  return {
+    schema: "gate-run-record/1",
+    stage: "regress",
+    side,
+    feature: "demo",
+    head: side === "base" ? SHA : "1".repeat(40),
+    source: "discover",
+    source_raw: null,
+    style_skipped: false,
+    finalized: true,
+    fingerprint: { algo: "worktree-fingerprint/1+sha256", init: A64, final: B64 },
+    required: ids,
+    runs,
+    aux: {},
+    ...over,
+  };
+}
+
+function withPair(baseStamp, headStamp, fn) {
+  const dir = mkdtempSync(join(tmpdir(), "cr-stamp-"));
+  const bp = join(dir, "base.json");
+  const hp = join(dir, "head.json");
+  writeFileSync(bp, JSON.stringify(baseStamp, null, 2));
+  writeFileSync(hp, JSON.stringify(headStamp, null, 2));
+  try {
+    return fn(bp, hp, dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test("★ EQUIVALENCE — stamps yield the IDENTICAL verdict to the flag-less run, over EVERY fixture pair", () => {
+  const pairs = [
+    [{ test: 0 }, { test: 0 }], // clean
+    [{ test: 0 }, { test: 1 }], // a regression
+    [{ test: 1 }, { test: 1 }], // pre-existing, excluded
+    [
+      { test: 0, lint: 0 },
+      { test: 0, lint: 2 },
+    ], // one flip among several
+    [
+      { test: 1, lint: 0 },
+      { test: 1, lint: 1 },
+    ], // pre-existing AND a regression
+  ];
+  assert.ok(pairs.length > 0, "the fixture set is empty — this rule would be vacuous");
+  for (const [b, h] of pairs) {
+    const dir = mkdtempSync(join(tmpdir(), "cr-eq-"));
+    try {
+      const bp = join(dir, "b.json");
+      const hp = join(dir, "h.json");
+      writeFileSync(bp, JSON.stringify(b));
+      writeFileSync(hp, JSON.stringify(h));
+      const flagless = run(["verdict", bp, hp, "--base", SHA]);
+      const viaStamp = withPair(mkRegressStamp(b, "base"), mkRegressStamp(h, "head"), (x, y) =>
+        run(["verdict", "--base-stamp", x, "--head-stamp", y, "--base", SHA])
+      );
+      assert.equal(viaStamp.status, flagless.status, `exit differed for ${JSON.stringify([b, h])}`);
+      const a = JSON.parse(flagless.stdout);
+      const c = JSON.parse(viaStamp.stdout);
+      delete c.gate_run;
+      assert.deepEqual(c, a, `verdict differed for ${JSON.stringify([b, h])}`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test("★ the stamp path adds a PER-SIDE `gate_run` block and nothing else", () => {
+  withPair(mkRegressStamp({ test: 0 }, "base"), mkRegressStamp({ test: 0 }, "head"), (b, h) => {
+    const r = run(["verdict", "--base-stamp", b, "--head-stamp", h, "--base", SHA]);
+    assert.equal(r.status, 0);
+    const j = JSON.parse(r.stdout);
+    assert.deepEqual(Object.keys(j.gate_run).sort(), ["base", "head"]);
+    assert.match(j.gate_run.base.stamp_sha256, /^[0-9a-f]{64}$/);
+    assert.match(j.gate_run.head.stamp_sha256, /^[0-9a-f]{64}$/);
+  });
+});
+
+test("★ the BASE stamp's recorded head must equal --base (the check only a stamp can support)", () => {
+  withPair(mkRegressStamp({ test: 0 }, "base", { head: "9".repeat(40) }), mkRegressStamp({ test: 0 }, "head"), (b, h) => {
+    const r = run(["verdict", "--base-stamp", b, "--head-stamp", h, "--base", SHA]);
+    assert.equal(r.status, 2);
+    assert.equal(JSON.parse(r.stdout).reason_code, "base-head-mismatch");
+  });
+  // Control: the matching head is accepted, so the refusal is about the mismatch and nothing else.
+  withPair(mkRegressStamp({ test: 0 }, "base"), mkRegressStamp({ test: 0 }, "head"), (b, h) => {
+    assert.equal(run(["verdict", "--base-stamp", b, "--head-stamp", h, "--base", SHA]).status, 0);
+  });
+});
+
+test("★ --base must be a 40-hex SHA on the stamp path — a symbolic ref is refused", () => {
+  withPair(mkRegressStamp({ test: 0 }, "base"), mkRegressStamp({ test: 0 }, "head"), (b, h) => {
+    for (const ref of ["HEAD", "main", "abc", ""]) {
+      const r = run(["verdict", "--base-stamp", b, "--head-stamp", h, "--base", ref]);
+      assert.equal(r.status, 2, `accepted --base ${JSON.stringify(ref)}`);
+      assert.equal(JSON.parse(r.stdout).reason_code, "base-not-sha");
+    }
+  });
+});
+
+test("★ the two sides' SPECS must agree — a divergent gate set is `spec-mismatch`", () => {
+  withPair(mkRegressStamp({ test: 0 }, "base"), mkRegressStamp({ test: 0, lint: 0 }, "head"), (b, h) => {
+    const r = run(["verdict", "--base-stamp", b, "--head-stamp", h, "--base", SHA]);
+    assert.equal(r.status, 2);
+    assert.equal(JSON.parse(r.stdout).reason_code, "spec-mismatch");
+  });
+});
+
+test("★ a side whose stamp records the WRONG side is `side-mismatch`; a feature mismatch is its own code", () => {
+  withPair(mkRegressStamp({ test: 0 }, "head"), mkRegressStamp({ test: 0 }, "head"), (b, h) => {
+    assert.equal(JSON.parse(run(["verdict", "--base-stamp", b, "--head-stamp", h, "--base", SHA]).stdout).reason_code, "side-mismatch");
+  });
+  withPair(mkRegressStamp({ test: 0 }, "base"), mkRegressStamp({ test: 0 }, "head", { feature: "other" }), (b, h) => {
+    assert.equal(JSON.parse(run(["verdict", "--base-stamp", b, "--head-stamp", h, "--base", SHA]).stdout).reason_code, "feature-mismatch");
+  });
+});
+
+test("★ stamp refusals: missing, malformed, unfinalized, coverage — each with its own code", () => {
+  const good = mkRegressStamp({ test: 0 }, "head");
+  const cases = [
+    [mkRegressStamp({ test: 0 }, "base", { finalized: false }), good, "stamp-unfinalized"],
+    [mkRegressStamp({ test: 0 }, "base", { schema: "nope" }), good, "stamp-malformed"],
+    [mkRegressStamp({ test: 0 }, "base", { required: ["test", "lint"] }), good, "coverage-violation"],
+  ];
+  for (const [b, h, code] of cases) {
+    withPair(b, h, (x, y) => {
+      const r = run(["verdict", "--base-stamp", x, "--head-stamp", y, "--base", SHA]);
+      assert.equal(r.status, 2, `expected inconclusive for ${code}`);
+      assert.equal(JSON.parse(r.stdout).reason_code, code);
+    });
+  }
+  const r = run(["verdict", "--base-stamp", "/nope/b.json", "--head-stamp", "/nope/h.json", "--base", SHA]);
+  assert.equal(JSON.parse(r.stdout).reason_code, "stamp-missing");
+});
+
+test("★ the stamp flags are MUTUALLY EXCLUSIVE with the positional maps, and must come as a PAIR", () => {
+  withPair(mkRegressStamp({ test: 0 }, "base"), mkRegressStamp({ test: 0 }, "head"), (b, h, dir) => {
+    const m = join(dir, "m.json");
+    writeFileSync(m, JSON.stringify({ test: 0 }));
+    const both = run(["verdict", m, m, "--base-stamp", b, "--head-stamp", h, "--base", SHA]);
+    assert.equal(JSON.parse(both.stdout).reason_code, "usage-error");
+    const lone = run(["verdict", "--base-stamp", b, "--base", SHA]);
+    assert.equal(JSON.parse(lone.stdout).reason_code, "usage-error");
+  });
+});
+
+test("★ L43 BOUND, PROVEN NOT ASSERTED — a self-consistent FABRICATED pair passes", () => {
+  // Hand-built, never produced by run-gates.mjs. Internally consistent, therefore accepted — which is
+  // precisely the claim's limit. "The checker accepted these stamps" never means "these gates ran".
+  withPair(mkRegressStamp({ test: 0, lint: 0 }, "base"), mkRegressStamp({ test: 0, lint: 0 }, "head"), (b, h) => {
+    const r = run(["verdict", "--base-stamp", b, "--head-stamp", h, "--base", SHA]);
+    assert.equal(r.status, 0, "the fabricated pair was rejected — then this bound is overstated and the header must change");
+    assert.equal(JSON.parse(r.stdout).verdict, "no-regressions");
+  });
+});

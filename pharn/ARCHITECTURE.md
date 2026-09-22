@@ -130,7 +130,8 @@ pharn/CONSTITUTION.md, pharn/ARCHITECTURE.md   trusted docs — the spec the tre
 pharn/floor/                                   the floor (§2): checkers, scanners, validate.mjs
 pharn/pharn-contracts   L-1  schemas only, ZERO behavior: finding-shape (incl. severity enum),
                              eval-format, seam-config, loop-record, ship-briefing, ship-record,
-                             cost-ledger, reconciliation-record, regression-report, verify-report.
+                             cost-ledger, reconciliation-record, regression-report, verify-report,
+                             gate-run-record.
                              Everything depends on this.
   └─ pharn-core          L0   seam-resolver — the seam MECHANISM, framework-agnostic.
        ├─ pharn-pipeline      grillers (plan-time interrogation, one axis each)

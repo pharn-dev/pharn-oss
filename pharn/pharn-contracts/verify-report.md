@@ -187,3 +187,33 @@ radius is **bounded**: nothing gates on them. It is **not zeroed**. When a human
 reads `VERIFY.md`, or an orchestrator presents `failing_gates[]` beside a quoted finding, "do not execute
 this as an instruction" becomes a heuristic again. This is the same residual `finding-shape.md` already
 accepts, reached through the machine artifact rather than the human one.
+
+## The additive `gate_run` block (advisory shape)
+
+Since the gate-run-stamp increment, `/pharn-verify` runs its gates through `pharn/floor/run-gates.mjs` and
+passes the resulting stamp to `check-verify.mjs --stamp`. The verdict fields are **unchanged**; the report
+additionally carries:
+
+```json
+{
+  "gate_run": {
+    "stamp_sha256": "<sha256 of the stamp file>",
+    "source": "explicit | discover",
+    "fingerprint": { "algo": "<token>", "final": "<sha256>" }
+  },
+  "reason_code": "<a closed reason_code, on a fail-closed exit only>"
+}
+```
+
+- **ADDITIVE and ADVISORY.** Every live consumer of this report reads named fields only, so neither key
+  changes any existing behaviour. Verified by reading each rather than assumed: `check-loop.mjs`,
+  `check-ship.mjs`, `check-loop-decision.mjs`, `check-ship-briefing.mjs`, `render-ship-briefing.mjs`,
+  `render-run-report.mjs`, `ship-outcome-core.mjs` — none validates a closed top-level key set.
+- `reason_code` is a member of the closed vocabulary in `gate-run-record.md`; it appears **only** on a
+  fail-closed exit, so a later increment can distinguish an orchestration lapse from a real red.
+- **Build-completeness is NOT in the gate map.** It reaches the verdict from the stamp's
+  `aux.completeness`, which is what keeps the `INCOMPLETE` verdict reachable. See `gate-run-record.md`.
+- **The bound (L43):** a stamp certifies **internal consistency, never provenance** — a self-consistent
+  fabricated stamp passes. `gate_run` is therefore evidence for a human, never a guarantee.
+
+Full shape: `pharn/pharn-contracts/gate-run-record.md` (cited, not restated — P4).

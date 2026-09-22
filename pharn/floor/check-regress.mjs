@@ -37,6 +37,25 @@
 // string/int operands and set members — never eval'd, executed, spawned, imported, or sent anywhere.
 // No child process, no network. No guaranteed decision rests on a tainted field.
 //
+// THE OPT-IN STAMP SURFACE ON `verdict` (gate-run-stamp increment) — PROVENANCE, not semantics:
+//   Without the stamp flags this file behaves BYTE-IDENTICALLY to before: `verdict` reads the two
+//   positional results.json maps the command assembled. With `--base-stamp` / `--head-stamp` it reads the
+//   SAME two maps out of gate-run-records that pharn/floor/run-gates.mjs produced, so neither map's KEYS
+//   nor its VALUES were typed by a model (lessons-learned L5). THE COMPARISON TABLE IS UNCHANGED.
+//
+//   Two checks exist only on this path, because only a stamp can support them:
+//     • the BASE stamp's recorded `head` must equal the `--base` SHA, so the base map provably came from
+//       the commit the verdict names — the positional form can only take the caller's word for it;
+//     • the two sides' SPECS must AGREE (same `required` set, same ordered run ids), which is the same
+//       fail-closed intent as the existing gate-set-mismatch check, moved one step earlier.
+//   `--base` must be a 40-hex SHA on this path, never a symbolic ref: a ref is re-resolvable and a stamp
+//   is not, so comparing a stamp's recorded id against a moving name would prove nothing.
+//
+//   THE BOUND (lessons-learned L43): a stamp certifies INTERNAL CONSISTENCY, never provenance. A
+//   self-consistent FABRICATED pair of stamps passes, and a test builds one to prove it. Stamps live in
+//   the writable tree, which `Bash` reaches unhooked (LIMITS.md §6). No child process is spawned — the
+//   stamp grammar is imported from gate-run-core.mjs, so the "no child process" property above holds.
+//
 // Usage:
 //   node pharn/floor/check-regress.mjs scope   --changed <list> --declared <list> [--tests <list>] [--eval-pairs <list>] [--feature <name>]
 //     --feature    : the increment's slug. Exempts THIS feature's own pipeline artifacts (PLAN.md,
@@ -44,6 +63,7 @@
 //                    build (the L17 floor check). Omit it and nothing is exempt on that axis (fail-closed).
 //                    Exemptions are always REPORTED in `escape_exempt`, never silently dropped.
 //   node pharn/floor/check-regress.mjs verdict <base-results.json> <head-results.json> [--base <ref>] [--inside <list>]
+//   node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --base <40-hex> [--inside <list>]
 //     <list>       : comma/whitespace-separated repo-relative paths
 //     <eval-pairs> : comma/whitespace-separated "EXPECTED::ACTUAL" tokens (the committed eval pairs)
 //     results.json : a flat { "<gate-id>": <exit-code int>, ... } map written by the command
@@ -52,6 +72,8 @@
 //   2 inconclusive / bad input — FAIL-CLOSED (P5), never a silent pass.
 
 import { readFileSync, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { validateStamp, stampToMap, gateRunBlock, SHA_RE } from "./gate-run-core.mjs";
 
 // --- The ESCAPE-EXEMPT sets (the floor check for lessons-learned L17). -----------------------------
 // `scope` computes `escaped` over `git diff <base>`, which answers "what CHANGED since base" — but it is
@@ -153,6 +175,13 @@ function isPipelineArtifact(file, feature) {
 // --- emit one JSON document to stdout, then exit. The command captures this verbatim. ---
 function emit(obj, code) {
   console.log(JSON.stringify(obj, null, 2));
+  // The BOUND, on stdout and not only in the header (lessons-learned L43, in check-cost-ledger.mjs's
+  // words — cited, not restated, P4).
+  if (obj && obj.gate_run) {
+    console.error(
+      "NOTE (P0): a gate-run stamp certifies INTERNAL CONSISTENCY, never provenance — a self-consistent fabricated stamp passes."
+    );
+  }
   process.exit(code);
 }
 
@@ -385,14 +414,106 @@ function readResultsMap(path, label) {
   return { ok: true, value: parsed };
 }
 
+// --- read + validate ONE side's stamp. Every refusal carries a CLOSED reason_code from gate-run-core,
+//     so a later increment can route the orchestration-lapse codes to "re-run the stage" (an enum, not
+//     prose). Returns the parsed stamp and its own sha256. ---
+function readSideStamp(path, side, label) {
+  if (!existsSync(path)) return { ok: false, reason_code: "stamp-missing", reason: `${label} not found: ${path}` };
+  let raw;
+  let parsed;
+  try {
+    raw = readFileSync(path, "utf8");
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    return { ok: false, reason_code: "stamp-malformed", reason: `${label} is not valid JSON (${path}): ${e.message}` };
+  }
+  const v = validateStamp(parsed, { stage: "regress", side });
+  if (!v.ok) return { ok: false, reason_code: v.reason_code, reason: `${label}: ${v.reason}` };
+  return { ok: true, stamp: parsed, sha256: createHash("sha256").update(raw).digest("hex") };
+}
+
 function runVerdict(positional, args) {
   const basePath = positional[0];
   const headPath = positional[1];
   const baseRef = flag(args, "--base");
   const inside = parseList(flag(args, "--inside"));
+  const baseStampPath = flag(args, "--base-stamp");
+  const headStampPath = flag(args, "--head-stamp");
 
-  const base = readResultsMap(basePath, "base-results.json");
-  const head = readResultsMap(headPath, "head-results.json");
+  let base;
+  let head;
+  let gate_run = null;
+
+  if (baseStampPath !== undefined || headStampPath !== undefined) {
+    if (baseStampPath === undefined || headStampPath === undefined) {
+      emit({ verdict: "inconclusive", reason: "--base-stamp and --head-stamp must be supplied together", reason_code: "usage-error" }, 2);
+    }
+    if (positional.length) {
+      emit(
+        {
+          verdict: "inconclusive",
+          reason: "the stamp flags are mutually exclusive with the positional results maps",
+          reason_code: "usage-error",
+        },
+        2
+      );
+    }
+    if (baseRef === undefined || !SHA_RE.test(baseRef)) {
+      emit(
+        {
+          verdict: "inconclusive",
+          reason: `--base must be a 40-hex SHA on the stamp path (a symbolic ref is re-resolvable; a stamp is not): got ${JSON.stringify(baseRef)}`,
+          reason_code: "base-not-sha",
+        },
+        2
+      );
+    }
+    const b = readSideStamp(baseStampPath, "base", "base stamp");
+    if (!b.ok) emit({ verdict: "inconclusive", reason: b.reason, reason_code: b.reason_code }, 2);
+    const h = readSideStamp(headStampPath, "head", "head stamp");
+    if (!h.ok) emit({ verdict: "inconclusive", reason: h.reason, reason_code: h.reason_code }, 2);
+
+    if (b.stamp.feature !== h.stamp.feature) {
+      emit(
+        {
+          verdict: "inconclusive",
+          reason: `the two stamps name different features: ${JSON.stringify(b.stamp.feature)} vs ${JSON.stringify(h.stamp.feature)}`,
+          reason_code: "feature-mismatch",
+        },
+        2
+      );
+    }
+    if (b.stamp.head !== baseRef) {
+      emit(
+        {
+          verdict: "inconclusive",
+          reason: `the base stamp records head ${JSON.stringify(b.stamp.head)} but --base is ${JSON.stringify(baseRef)} — the base map did not come from the named commit`,
+          reason_code: "base-head-mismatch",
+        },
+        2
+      );
+    }
+    // The set is decided ONCE and applied to both sides (/pharn-regress Step 4b). A spec divergence is
+    // caught here rather than surfacing later as a gate-set mismatch, so the reason names the cause.
+    const bIds = b.stamp.runs.map((r) => r.id).join("\u0000");
+    const hIds = h.stamp.runs.map((r) => r.id).join("\u0000");
+    if (bIds !== hIds || b.stamp.required.join("\u0000") !== h.stamp.required.join("\u0000")) {
+      emit(
+        {
+          verdict: "inconclusive",
+          reason: "the two sides' specs differ — the gate set must be decided once and applied to both",
+          reason_code: "spec-mismatch",
+        },
+        2
+      );
+    }
+    base = { ok: true, value: stampToMap(b.stamp) };
+    head = { ok: true, value: stampToMap(h.stamp) };
+    gate_run = { base: gateRunBlock(b.stamp, b.sha256), head: gateRunBlock(h.stamp, h.sha256) };
+  } else {
+    base = readResultsMap(basePath, "base-results.json");
+    head = readResultsMap(headPath, "head-results.json");
+  }
   if (!base.ok || !head.ok) {
     emit({ verdict: "inconclusive", reason: [base.ok ? null : base.reason, head.ok ? null : head.reason].filter(Boolean).join("; ") }, 2);
   }
@@ -441,6 +562,7 @@ function runVerdict(positional, args) {
       regressions,
       pre_existing: preExisting,
       verdict,
+      ...(gate_run ? { gate_run } : {}),
     },
     regressions.length ? 1 : 0
   );
@@ -464,7 +586,7 @@ function main() {
     {
       verdict: "inconclusive",
       reason:
-        "usage: check-regress.mjs scope --changed <list> --declared <list> [--tests <list>] [--eval-pairs <list>] | verdict <base-results.json> <head-results.json> [--base <ref>] [--inside <list>]",
+        "usage: check-regress.mjs scope --changed <list> --declared <list> [--tests <list>] [--eval-pairs <list>] | verdict <base-results.json> <head-results.json> [--base <ref>] [--inside <list>] | verdict --base-stamp <p> --head-stamp <p> --base <40-hex> [--inside <list>]",
     },
     2
   );

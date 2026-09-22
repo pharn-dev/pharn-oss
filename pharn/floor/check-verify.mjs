@@ -57,10 +57,34 @@
 // process, no network. The verdict is therefore PROVABLY independent of any tainted field: no guaranteed
 // decision rests on a tainted field.
 //
+// THE OPT-IN `--stamp` SURFACE (gate-run-stamp increment) — WHERE THE MAP COMES FROM, not what it means:
+//   Without `--stamp` this file behaves BYTE-IDENTICALLY to before: it reads the positional results.json
+//   the command assembled. With `--stamp <gate-run-record>` it reads the SAME map out of a stamp that
+//   pharn/floor/run-gates.mjs produced, so neither the map's KEYS nor its VALUES were typed by a model
+//   (lessons-learned L5: a floor verdict is only as trustworthy as the orchestration that captures its
+//   inputs). The VERDICT TABLE IS UNCHANGED — this is a provenance change, not a semantics change (P3).
+//
+//   Build-completeness stays OUT of the map. With `--stamp` it is read from the stamp's `aux.completeness`
+//   — a SIBLING of `runs[]` — and fed onto this file's EXISTING `--complete` path. Folding it into the
+//   gates map would make an incomplete build a red GATE, so the verdict would be FAIL (exit 1) and
+//   INCOMPLETE (exit 3) would be UNREACHABLE, silently disabling /pharn-ship Step 2b's single bounded
+//   rebuild (pharn-ship.md, reachable only from INCOMPLETE) and collapsing check-loop.mjs's
+//   `v ∈ {FAIL, INCOMPLETE}` distinction. An explicit `--complete` may accompany `--stamp` and must then
+//   AGREE with `aux.completeness`; a disagreement is a usage error, never a silently-preferred value.
+//
+//   THE BOUND, stated here and printed on stdout (lessons-learned L43): a stamp certifies INTERNAL
+//   CONSISTENCY, never provenance. A self-consistent FABRICATED stamp passes, and a test builds one to
+//   prove it. The stamp and its logs live in the writable tree, which `Bash` reaches unhooked
+//   (LIMITS.md §6). No child process is spawned here — the stamp grammar is imported from
+//   gate-run-core.mjs, so this file's "no child process" property above is unchanged.
+//
 // Usage:
 //   node pharn/floor/check-verify.mjs <results.json> [--feature <name>] [--complete <int>]
+//   node pharn/floor/check-verify.mjs --stamp <stamp.json> --feature <name> [--complete <int>]
 //     results.json : a flat { "<gate-id>": <exit-code int>, ... } map written by the command, one entry
 //                    per FLOOR gate it ran (e.g. "test", "validate", "lint", "structural:<expected>").
+//     --stamp      : OPTIONAL — a gate-run-record written by run-gates.mjs. MUTUALLY EXCLUSIVE with the
+//                    positional map; requires --feature, which is re-checked against the stamp.
 //     --complete   : OPTIONAL — the exit code of pharn/floor/check-build-complete.mjs (0/1/2). Omit for the
 //                    legacy 3-valued behavior.
 //
@@ -68,10 +92,19 @@
 //       3 INCOMPLETE (gates green but the build is incomplete; only reachable WITH `--complete 1`).
 
 import { readFileSync, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { validateStamp, stampToMap, completenessFromStamp, gateRunBlock } from "./gate-run-core.mjs";
 
 // --- emit one JSON document to stdout, then exit. The command captures this verbatim. ---
 function emit(obj, code) {
   console.log(JSON.stringify(obj, null, 2));
+  // The BOUND, on stdout and not only in the header, so a reader of a run's output sees it without
+  // opening this file (lessons-learned L43, in check-cost-ledger.mjs's words — cited, not restated, P4).
+  if (obj && obj.gate_run) {
+    console.error(
+      "NOTE (P0): a gate-run stamp certifies INTERNAL CONSISTENCY, never provenance — a self-consistent fabricated stamp passes."
+    );
+  }
   process.exit(code);
 }
 
@@ -116,18 +149,123 @@ function main() {
   }
   const resultsPath = positional[0];
   const feature = flag(argv, "--feature") ?? null;
+  const stampPath = flag(argv, "--stamp");
 
   // OPTIONAL build-completeness input (ship-completion-retry): `--complete <int>` = check-build-complete's
   // exit (0 complete · 1 incomplete · 2/other inconclusive). ABSENT ⇒ "n/a" ⇒ legacy 3-valued behavior. A
   // "2" or a malformed value both mean "cannot assert completeness" → INCONCLUSIVE (fail-closed, P5) —
   // NEVER silently treated as complete.
   const completeRaw = flag(argv, "--complete");
+  // Where the completeness value CAME FROM, so a fail-closed reason can name its real source rather than
+  // a flag the caller never passed. Surfaced by dogfooding the runner end-to-end: on the stamp path the
+  // message read `--complete undefined`, pointing a reader at the wrong input.
+  let completeSource = completeRaw !== undefined ? `--complete ${JSON.stringify(completeRaw)}` : "--complete (absent)";
   let completeStatus = "n/a";
   if (completeRaw !== undefined) {
     completeStatus = completeRaw === "0" ? "complete" : completeRaw === "1" ? "incomplete" : "inconclusive";
   }
 
-  const res = readResultsMap(resultsPath, "results.json");
+  // --- the opt-in stamp branch. Every refusal carries a CLOSED reason_code from gate-run-core, so a
+  //     later increment can map the orchestration-lapse codes to "re-run the stage" rather than to a
+  //     terminal stop — which it can only do if the code is an enum and not prose. ---
+  let stampMap = null;
+  let gate_run = null;
+  if (stampPath !== undefined) {
+    if (resultsPath !== undefined) {
+      emit(
+        {
+          feature,
+          gates: {},
+          verdict: "INCONCLUSIVE",
+          failing_gates: [],
+          reason: "--stamp is mutually exclusive with a positional results.json",
+          reason_code: "usage-error",
+        },
+        2
+      );
+    }
+    if (feature === null) {
+      emit(
+        {
+          feature,
+          gates: {},
+          verdict: "INCONCLUSIVE",
+          failing_gates: [],
+          reason: "--stamp requires --feature <name>",
+          reason_code: "usage-error",
+        },
+        2
+      );
+    }
+    if (!existsSync(stampPath)) {
+      emit(
+        {
+          feature,
+          gates: {},
+          verdict: "INCONCLUSIVE",
+          failing_gates: [],
+          reason: `stamp not found: ${stampPath}`,
+          reason_code: "stamp-missing",
+        },
+        2
+      );
+    }
+    let raw;
+    let parsed;
+    try {
+      raw = readFileSync(stampPath, "utf8");
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      emit(
+        {
+          feature,
+          gates: {},
+          verdict: "INCONCLUSIVE",
+          failing_gates: [],
+          reason: `stamp is not valid JSON (${stampPath}): ${e.message}`,
+          reason_code: "stamp-malformed",
+        },
+        2
+      );
+    }
+    const v = validateStamp(parsed, { stage: "verify", feature, side: null });
+    if (!v.ok) {
+      emit({ feature, gates: {}, verdict: "INCONCLUSIVE", failing_gates: [], reason: v.reason, reason_code: v.reason_code }, 2);
+    }
+    const auxComplete = completenessFromStamp(parsed);
+    if (auxComplete === null) {
+      emit(
+        {
+          feature,
+          gates: {},
+          verdict: "INCONCLUSIVE",
+          failing_gates: [],
+          reason: "stamp.aux.completeness is missing — verify requires the build-completeness capture",
+          reason_code: "stamp-malformed",
+        },
+        2
+      );
+    }
+    if (completeRaw !== undefined && String(auxComplete) !== String(completeRaw)) {
+      emit(
+        {
+          feature,
+          gates: {},
+          verdict: "INCONCLUSIVE",
+          failing_gates: [],
+          reason: `--complete ${JSON.stringify(completeRaw)} disagrees with stamp.aux.completeness ${auxComplete}`,
+          reason_code: "usage-error",
+        },
+        2
+      );
+    }
+    completeStatus = auxComplete === 0 ? "complete" : auxComplete === 1 ? "incomplete" : "inconclusive";
+    completeSource = `stamp.aux.completeness ${auxComplete} (${stampPath})`;
+    stampMap = stampToMap(parsed);
+    gate_run = gateRunBlock(parsed, createHash("sha256").update(raw).digest("hex"));
+  }
+
+  const res = stampMap !== null ? { ok: true, value: stampMap } : readResultsMap(resultsPath, "results.json");
   if (!res.ok) {
     // Fail-closed shape: same four-key spine + a diagnostic `reason` (the helper's OWN deterministic
     // message about its input — not untrusted free-text; no verifier finding can reach this code).
@@ -151,11 +289,12 @@ function main() {
   //   4. else → PASS (gates green ∧ completeness complete-or-n/a).
   // When --complete is ABSENT (completeStatus "n/a"), branches 2–3 are dead ⇒ the emitted object AND exit
   // are byte-identical to the legacy {PASS, FAIL} behavior (regression-guarded by the test suite).
+  const extra = gate_run ? { gate_run } : {};
   if (failing.length) {
-    emit({ feature, gates, verdict: "FAIL", failing_gates: failing }, 1);
+    emit({ feature, gates, verdict: "FAIL", failing_gates: failing, ...extra }, 1);
   }
   if (completeStatus === "incomplete") {
-    emit({ feature, gates, verdict: "INCOMPLETE", failing_gates: [] }, 3);
+    emit({ feature, gates, verdict: "INCOMPLETE", failing_gates: [], ...extra }, 3);
   }
   if (completeStatus === "inconclusive") {
     emit(
@@ -164,12 +303,13 @@ function main() {
         gates,
         verdict: "INCONCLUSIVE",
         failing_gates: [],
-        reason: `build-completeness inconclusive (--complete ${JSON.stringify(completeRaw)})`,
+        reason: `build-completeness inconclusive (${completeSource})`,
+        ...extra,
       },
       2
     );
   }
-  emit({ feature, gates, verdict: "PASS", failing_gates: [] }, 0);
+  emit({ feature, gates, verdict: "PASS", failing_gates: [], ...extra }, 0);
 }
 
 main();

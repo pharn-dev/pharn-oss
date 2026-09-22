@@ -17,7 +17,7 @@ reads:
   ]
 writes: ["pharn/features/<name>/REGRESSION.md", "pharn/features/<name>/regression-report.json"]
 constitution_refs: ["P0", "P2", "P3", "P4", "P5", "P6", "P7"]
-version: "0.1.0"
+version: "0.2.0"
 ---
 
 # /pharn-regress — detect regressions OUTSIDE the feature, in the user's codebase
@@ -165,13 +165,19 @@ node pharn/floor/check-plan-spec-agree.mjs pharn/features/<name>/PLAN.md pharn/f
    committed eval pairs to `scope`:
 
    ```bash
+   mkdir -p .pharn/pharn-regress
    node pharn/floor/check-regress.mjs scope \
      --changed "<inside, comma-separated>" \
      --declared "<PLAN.md ## Files paths>" \
      --tests "<the project's test files, expanded to real paths — comma-separated>" \
      --eval-pairs "<EXPECTED::ACTUAL committed eval pairs, if any>" \
-     --feature "<name>"
+     --feature "<name>" > .pharn/pharn-regress/scope.json
    ```
+
+   **The redirect is load-bearing, not tidiness.** Step 4 hands `scope.json` to the gate runner, which
+   reads `outside_tests` and `outside_eval_pairs` **from the file**. No file list passes through shell
+   word-splitting again — which is L5's original incident, where an unquoted expansion under zsh turned a
+   whole test list into one bogus path and fabricated a pre-existing red on both sides.
 
    **Pass `--feature <name>`.** `scope` derives `escaped` from `git diff <base>` — "what CHANGED since
    base", not "what the BUILD wrote" — so on a working-tree run this feature's own `pharn/features/<name>/`
@@ -225,16 +231,65 @@ gate set by a **fixed rule**, in order (first that yields ≥1 gate wins):
 Do **not** "discover whatever checks the project has" by inspection — that would be LLM classification
 driving a branch (P5 forbidden). The set is the allowlist ∩ present scripts, or the explicit `--gates`.
 
-### 4b — Classify each gate's scoping by a fixed membership rule, then run it at base + HEAD
+### 4b — Run BOTH sides through the RUNNER (you never type a gate id or capture an exit code)
 
-Use `git worktree add --detach "$TMP" "<base SHA>"` for the baseline (an **immutable SHA → reproducible,
-non-destructive**); run the working tree for HEAD. For each discovered gate, its handling is fixed by which
-class its id falls in (membership, P5):
+**The two maps are produced by tested code, not by you.** `pharn/floor/run-gates.mjs` resolves the set
+**once**, copies it verbatim to the second side, runs each gate in its own process group, and records every
+exit code into a per-side **gate-run stamp** (`pharn/pharn-contracts/gate-run-record.md`). A map assembled
+by hand is only as trustworthy as the assembly, and the assembly was prose (**L5**); a step that names a
+gate and asks for it is a step whose named gate gets skipped (**L30**).
+
+**Step 1 — the base worktree, at a LITERAL path outside the fingerprinted set.** The runner hashes the
+worktree between gates, so the baseline checkout must not sit inside the tree being judged. Use this exact
+path; it is under the git-ignored state root, and the block prints it rather than carrying a shell variable
+into the next block (**L44**):
+
+```bash
+git worktree add --detach .pharn/pharn-regress/base "<base SHA>" && echo ".pharn/pharn-regress/base"
+```
+
+**Step 2 — initialize HEAD, then BASE from HEAD's spec.** The order is load-bearing: `--spec-from` copies
+the head spec **verbatim**, which is what makes "the set is decided once and applied to both" true rather
+than merely intended.
+
+```bash
+node pharn/floor/run-gates.mjs init --stage regress --side head --feature <name> --out .pharn/pharn-regress/head --discover package.json --scope-json .pharn/pharn-regress/scope.json
+```
+
+```bash
+node pharn/floor/run-gates.mjs init --stage regress --side base --feature <name> --out .pharn/pharn-regress/base-gates --spec-from .pharn/pharn-regress/head --cwd .pharn/pharn-regress/base
+```
+
+`init` refuses a `scope.json` whose `escaped` is non-empty or whose verdict is `inconclusive` — a gate set
+derived from an untrustworthy partition is a set nobody can defend. Exit **3** means the source set is
+empty: route it to 4a's existing no-gates HALT.
+
+**Step 3 — drain each side.** Repeat each line until it exits 3; neither carries shell state (**L44**):
+
+```bash
+node pharn/floor/run-gates.mjs run --next --out .pharn/pharn-regress/head --timeout-ms 540000
+```
+
+```bash
+node pharn/floor/run-gates.mjs run --next --out .pharn/pharn-regress/base-gates --timeout-ms 540000
+```
+
+The Bash-tool timeout must **exceed** `--timeout-ms`; a harness kill leaves no exit code, which is the
+state the model used to improvise over. `540000` sits under Claude Code's 600 s maximum, so a project whose
+suite needs longer **cannot be gated by this runner** — a real bound, stated rather than discovered.
+
+The runner handles the file-addressable case itself: `test` runs over `outside_tests` only, and an **empty**
+list is recorded as exit `0` with `ran: false, reason: "no-files"` — never a silent skip and never a
+hand-typed `0`. Style gates are droppable with `--skip-style`, which records `style_skipped` on the stamp;
+the config-touch rule below stays **advisory**, and the runner never applies it for you.
+
+**Classification (membership, P5) still governs which gates may be dropped:**
 
 - **Tests (file-addressable) — `id == test`:** run the test runner over **`outside_tests` only** (from
   Step 3), at base and HEAD. Inside test files are **excluded**, so a flip in the feature's **own** test is
   correctly **NOT** a regression (it is an expected change, checked by `/pharn-verify` + human, not here).
-  Empty `outside_tests` → record `0` (nothing outside to test).
+  Empty `outside_tests` → the runner records `0` with `ran: false, reason: "no-files"` (nothing outside to
+  test) — a recorded fact, not a number you type.
 - **Cross-file whole-repo gates — `id ∈ {typecheck, type-check, build}` (and anything not in the style set
   below):** **ALWAYS run whole at base and HEAD. NEVER skipped.** These have **cross-file dependencies** —
   an outside file that imports a changed **inside** symbol can break at HEAD with **no** config change — so
@@ -257,19 +312,31 @@ class its id falls in (membership, P5):
 ### 4c — Reproduce the baseline environment (a named cost — honest, not hidden)
 
 To run the project's suite at the base worktree you must reproduce the base's environment — typically the
-project's **dependency install** (e.g. `npm ci`) in `"$TMP"` before the gates run. This is a named cost
+project's **dependency install** (e.g. `npm ci`) in `.pharn/pharn-regress/base` before draining that side. This is a named cost
 (`LIMITS.md §3c` cold-start analog), real for any project with dependencies. (PHARN's own dogfood core
 gates — `node --test`, `validate`, `check-structural` — are stdlib-only and skip the install; that is the
-exception, not the rule for a user project.) Assemble each side into a flat map, e.g.
-`.pharn/pharn-regress/base-results.json` and `.pharn/pharn-regress/head-results.json`.
+exception, not the rule for a user project.) You assemble nothing: each side's map lives in its own stamp
+at `.pharn/pharn-regress/base-gates/stamp.json` and `.pharn/pharn-regress/head/stamp.json`. **A failed
+install is not silent** — its gates go red at base, and `verdict` then classifies them `pre_existing`
+rather than blaming the feature, which is correct and is also why a base-side red deserves a look.
 
 ## Step 5 — The deterministic verdict (FLOOR; no LLM)
 
 ```bash
 node pharn/floor/check-regress.mjs verdict \
-  .pharn/pharn-regress/base-results.json .pharn/pharn-regress/head-results.json \
-  --base "<base ref/SHA>" --inside "<inside, comma-separated>"
+  --base-stamp .pharn/pharn-regress/base-gates/stamp.json \
+  --head-stamp .pharn/pharn-regress/head/stamp.json \
+  --base "<the resolved 40-hex base SHA>" --inside "<inside, comma-separated>"
 ```
+
+Both maps come from the stamps, so neither their **keys** nor their **values** were typed by a model.
+`--base` must be the **resolved 40-hex SHA**, never a symbolic ref: the base stamp records the commit it
+actually ran at, and comparing a recorded id against a moving name would prove nothing. Two refusals exist
+only on this path — a base stamp whose recorded `head` differs from `--base` (`base-head-mismatch`), and
+two sides whose specs disagree (`spec-mismatch`) — each **INCONCLUSIVE** with a closed `reason_code`.
+
+**The bound, printed by the checker itself (L43):** a stamp certifies **internal consistency, never
+provenance**. A self-consistent fabricated pair passes, and a test builds one to prove it.
 
 Capture its **stdout JSON** and read its **exit code**: `0` no regressions · `1` ≥1 regression (the stage
 **FAILS**) · `2` inconclusive (a results map missing / empty / not `{string:int}` / gate-set mismatch —
@@ -279,7 +346,8 @@ fail-closed). You do **not** re-decide — a flipped gate **is** a regression be
 
 Write, in order (re-scoping per artifact, per Step 0's caveat):
 
-1. **`pharn/features/<name>/regression-report.json`** = the helper's `verdict` JSON **verbatim** — the machine
+1. **`pharn/features/<name>/regression-report.json`** = the helper's `verdict` JSON **verbatim** (which
+   now additionally carries the advisory per-side `gate_run` block, and a `reason_code` on a fail-closed exit) — the machine
    regression-report (`pharn/ARCHITECTURE.md §6`). Scope is already pinned to it from Step 0; write it. (On a RED
    chain in Step 2, there is no verdict JSON — write only the RED-chain `REGRESSION.md` below.)
 2. Re-scope, then write the human render:
@@ -299,6 +367,13 @@ chain must hold first`. **Never** write "regress passed" as if it certified the 
    certifies only the comparison (P0).
 
 **Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the audit sections for document layout only, and a reader who stops at the turn-end never reaches it.
+
+**Remove the base worktree** once both sides have drained — it is a real checkout, and leaving it behind
+makes the next run's `git worktree add` fail:
+
+```bash
+git worktree remove --force .pharn/pharn-regress/base
+```
 
 Then **end your turn.** `/pharn-regress` does **not** invoke `/pharn-verify` and does not gate it — the
 human reads the report and the verdict's exit code decides the stage.
@@ -336,7 +411,8 @@ human reads the report and the verdict's exit code decides the stage.
   digests + `state` enum. They **never** read a finding's free-text (`problem`/`evidence`) or any prose
   meaning.
 - **The commands that get executed are the USER's own suite, never a tainted field.** The gates come from
-  `--gates` (passed by the user) or the fixed-allowlist ∩ the project's own `package.json` scripts — the
+  `--gates` (passed by the user) or the fixed-allowlist ∩ the project's own `package.json` scripts, resolved
+  by `run-gates.mjs` rather than by you — the
   user's own project, which the user already runs. They are **never** sourced from the untrusted PLAN /
   SPEC free-text. So the one place `/pharn-regress` executes arbitrary commands is the user's own
   (user-trusted) deterministic suite; **no executed command, and no guaranteed decision, rests on a tainted

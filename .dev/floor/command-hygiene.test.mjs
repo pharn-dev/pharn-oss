@@ -1716,3 +1716,145 @@ test("✧ every emitting command emits the LEDGER and the REPORT, and checks the
     );
   }
 });
+
+// ===================================================================================================
+// ✧ GATE-RUN WIRING — the floor input map must be produced by tested code, not typed by the model.
+//
+// L45 is why these exist at the INVOCATION layer rather than only in pharn/floor/*.test.mjs: a fix inside
+// a checker never reaches production while the file that invokes it keeps the defect, and a suite that
+// only spawns the module by path cannot see that gap. The set of wired commands is materialized ONCE
+// (L29 — the enumeration is the deliverable), so a third caller inherits every rule below for free.
+// ===================================================================================================
+
+/** The product stages whose gate map comes from a gate-run stamp. A member added here inherits every
+ *  rule; a command that starts using the runner and is NOT listed fails the closure test below. */
+const GATE_RUN_WIRING = [
+  { file: "pharn-verify.md", stage: "verify", out: ".pharn/pharn-verify/gates" },
+  { file: "pharn-regress.md", stage: "regress", out: ".pharn/pharn-regress/head" },
+];
+
+test("✧ L34 — the gate-run wiring set is NON-EMPTY (every rule below would otherwise be vacuous)", () => {
+  assert.ok(GATE_RUN_WIRING.length > 0, "GATE_RUN_WIRING is empty");
+  assert.equal(GATE_RUN_WIRING.length, 2, "non-vacuity: the wired set is counted, not merely iterated");
+});
+
+test("✧ no fenced block in a gate-run-wired command CAPTURES an exit code by hand (`<var>=$?`)", () => {
+  // The defect: five `=$?` captures in verify's Step 3c plus a hand-written results.json. The model typed
+  // both the keys and the values of a FLOOR input (L5).
+  const CAPTURE_RE = /(?:^|[\s;&|(])[A-Za-z_][A-Za-z0-9_]*=\$\?/;
+  for (const { file } of GATE_RUN_WIRING) {
+    const offenders = [];
+    for (const block of fencedBlocks(commandBody(file))) {
+      for (const { line, text } of block.lines) {
+        if (CAPTURE_RE.test(text)) offenders.push(`${file}:${line} — ${text.trim()}`);
+      }
+    }
+    assert.deepEqual(offenders, [], `${file} still captures a gate exit code by hand:\n${offenders.join("\n")}`);
+  }
+});
+
+test("✧ the `=$?` rule DISCRIMINATES — it fires on the REAL pre-fix text", () => {
+  // Without this, a green run could mean the matcher matches nothing. These are the actual lines that
+  // stood in pharn-verify.md before this increment, quoted verbatim.
+  const CAPTURE_RE = /(?:^|[\s;&|(])[A-Za-z_][A-Za-z0-9_]*=\$\?/;
+  const preFix = [
+    "npm test > /dev/null 2>&1; t=$?",
+    "npm run lint > /dev/null 2>&1; l=$?",
+    "node pharn/floor/check-bash-reconcile.mjs --base . --require-baseline > .pharn/pharn-verify/reconcile.json 2>&1; rc=$?",
+    "node pharn/floor/check-build-complete.mjs pharn/features/<name>/PLAN.md . > .pharn/pharn-verify/completeness.json 2>/dev/null ; c=$?",
+    "  node pharn/floor/check-structural.mjs <capDir>/evals/expected/<name>.json <capDir>/findings.json . ; s=$?",
+  ];
+  assert.equal(preFix.length, 5, "the pre-fix corpus must cover every capture the increment removed");
+  for (const line of preFix) {
+    assert.ok(CAPTURE_RE.test(line), `the rule failed to fire on the real pre-fix line: ${line}`);
+  }
+  // And it must NOT fire on an ordinary line, or it would be a blanket ban rather than a rule.
+  for (const ok of ["node pharn/floor/run-gates.mjs run --next --out x --timeout-ms 540000", "t=1", "echo $?"]) {
+    assert.equal(CAPTURE_RE.test(ok), false, `the rule wrongly fired on: ${ok}`);
+  }
+});
+
+test("✧ every gate-run-wired command INVOKES the runner — init AND the run --next drain", () => {
+  for (const { file, stage, out } of GATE_RUN_WIRING) {
+    const body = commandBody(file);
+    assert.match(
+      body,
+      new RegExp(`node pharn/floor/run-gates\\.mjs init --stage ${stage}\\b`),
+      `${file} must invoke run-gates.mjs init for stage ${stage}`
+    );
+    assert.match(
+      body,
+      new RegExp(`node pharn/floor/run-gates\\.mjs run --next --out ${out.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} --timeout-ms \\d+`),
+      `${file} must pin the run --next drain line for ${out}`
+    );
+    // --timeout-ms is REQUIRED by the runner; pinning it here is what keeps the command from omitting it
+    // and discovering the usage error at run time (L22 — pin the line, never describe the technique).
+    const m = body.match(/run-gates\.mjs run --next[^\n]*--timeout-ms (\d+)/);
+    assert.ok(m, `${file} has no pinned --timeout-ms`);
+    const ms = Number(m[1]);
+    assert.ok(ms > 0 && ms < 600000, `${file} pins --timeout-ms ${ms}, which must sit UNDER Claude Code's 600000 ms Bash maximum`);
+  }
+});
+
+test("✧ EVERY fenced `check-verify.mjs` / `check-regress.mjs verdict` call in a wired command carries the stamp flags", () => {
+  // The rule ranges over every fenced invocation, not the first one found: a second, unconverted call
+  // site is exactly where the old hand-map form would survive (L29/L52).
+  const offenders = [];
+  for (const { file } of GATE_RUN_WIRING) {
+    for (const block of fencedBlocks(commandBody(file))) {
+      const text = block.lines.map((l) => l.text).join("\n");
+      if (/check-verify\.mjs/.test(text) && !/--stamp\s/.test(text)) {
+        offenders.push(`${file}:${block.start} — check-verify.mjs without --stamp`);
+      }
+      if (/check-regress\.mjs verdict/.test(text) && !/--base-stamp\s/.test(text)) {
+        offenders.push(`${file}:${block.start} — check-regress.mjs verdict without --base-stamp`);
+      }
+    }
+  }
+  assert.deepEqual(offenders, [], `an unconverted verdict call site survives:\n${offenders.join("\n")}`);
+});
+
+test("✧ CLOSURE — a command that invokes run-gates.mjs but is NOT in GATE_RUN_WIRING fails", () => {
+  // The L31 gap in its exact shape: a third caller that ships uncovered because the set was never
+  // written down. Scoped to PRODUCT commands; the dev twins stay flag-less by design.
+  const listed = new Set(GATE_RUN_WIRING.map((c) => c.file));
+  const strays = [];
+  for (const file of readdirSync(COMMANDS_DIR)) {
+    if (!file.endsWith(".md") || file.startsWith("pharn-dev-")) continue;
+    if (listed.has(file)) continue;
+    if (/node pharn\/floor\/run-gates\.mjs/.test(commandBody(file))) strays.push(file);
+  }
+  assert.deepEqual(strays, [], `these commands invoke run-gates.mjs but are not in GATE_RUN_WIRING: ${strays.join(", ")}`);
+});
+
+test("✧ the dev twins stay FLAG-LESS — no dev command invokes the runner or the stamp flags", () => {
+  // Stated as a test because "out of scope" in a plan is not a property of the shipped tree.
+  const strays = [];
+  for (const file of readdirSync(COMMANDS_DIR)) {
+    if (!file.startsWith("pharn-dev-") || !file.endsWith(".md")) continue;
+    const body = commandBody(file);
+    if (/run-gates\.mjs|--base-stamp|--head-stamp|check-verify\.mjs --stamp/.test(body)) strays.push(file);
+  }
+  assert.deepEqual(strays, [], `a dev command picked up the gate-run surface: ${strays.join(", ")}`);
+});
+
+test("✧ verify's Step-6 verbatim-field list NAMES `gate_run`, so the additive block is not dropped", () => {
+  const body = commandBody("pharn-verify.md");
+  assert.match(
+    body,
+    /`feature` \/ `gates` \/ `verdict` \/ `failing_gates` \/ `gate_run` fields are `check-verify\.mjs`'s stdout \*\*verbatim\*\*/,
+    "verify Step 6 must list gate_run among the verbatim fields, or the block is silently dropped from the report"
+  );
+  assert.match(body, /"reason_code":/, "verify's fail-closed artifact shape must carry reason_code");
+});
+
+test("✧ the `--complete` hand-pass is RETIRED from the wired commands (completeness comes from the stamp)", () => {
+  // GRILL R1: completeness must reach check-verify.mjs on its existing --complete PATH but never as a
+  // gate. The command no longer passes the flag at all — the checker reads aux.completeness.
+  const offenders = [];
+  for (const block of fencedBlocks(commandBody("pharn-verify.md"))) {
+    const text = block.lines.map((l) => l.text).join("\n");
+    if (/check-verify\.mjs[^\n]*--complete/.test(text)) offenders.push(`pharn-verify.md:${block.start}`);
+  }
+  assert.deepEqual(offenders, [], `a hand-passed --complete survives: ${offenders.join(", ")}`);
+});
