@@ -68,10 +68,6 @@ increment a committed paper trail:
 - `GRILL.md` — pre-build interrogation of the plan.
 - `BUILD.md`, `REGRESSION.md`, `VERIFY.md`, `SHIP.md` — what changed, what ran, what passed, what did
   not, and where the run stopped.
-- `cost.json`, `RUN-REPORT.md` — what the run cost and what it did, written by `/pharn-loop` at every
-  stop and by `/pharn-ship` at every exit that ends a run. The first is machine-readable token counts
-  per stage, iteration and model; the second is the human-readable view over it. Tokens only — PHARN
-  ships no price table, so money is your own list price applied to those counts.
 
 The project is intentionally small-surface: prompts and contracts in Markdown, plus deterministic Node
 helpers. There is no hidden service in this repository and no proprietary rule engine needed to inspect
@@ -327,7 +323,6 @@ judgment is **advisory**.
 | A missing concrete path declared by the plan yields an incomplete build signal                                                                                                                                                                                                                                                                                                     | `check-build-complete.mjs` feeding `check-verify.mjs`                                                                                                                                                      |
 | Which lenses run, and how structured findings merge                                                                                                                                                                                                                                                                                                                                | `count-lenses.mjs` + `merge-findings.mjs`                                                                                                                                                                  |
 | The ten product commands' `model:` / `effort:` frontmatter equals what `pharn.config.json`'s `models.stages` resolves for that stage — not that the stage ran under it                                                                                                                                                                                                             | `check-model-config.mjs`                                                                                                                                                                                   |
-| A run's `cost.json` is **internally consistent**: a closed top-level key set, every aggregate equal to a recompute from the recorded requests, unique request ids, a strictly increasing marker sequence, and no absolute path anywhere. Consistency only — **not** that the numbers describe the run                                                                              | `check-cost-ledger.mjs`                                                                                                                                                                                    |
 
 **Advisory** — everything a model judges: whether a plan is wise, whether a review finding is real,
 whether a severity is right, whether the code satisfies the product intent, and whether the resulting
@@ -342,11 +337,6 @@ by wording them strongly.
   secret or that an unmatched plan contains none.
 - `check-build-complete` proves that declared concrete paths exist. It does not prove that the build
   modified them, or that their contents are correct.
-- `check-cost-ledger` certifies that a `cost.json` agrees with itself. It does **not** bind the recorded
-  requests to the session that produced them, so a self-consistent fabricated ledger passes — a test in
-  the repository proves it by building one. The `--verify-transcript` flag re-derives the rows from the
-  live transcript, but a transcript is machine-local and Claude Code prunes it on its own schedule, so
-  that check is deliberately not a gate. The ledger annotates a run; it gates nothing.
 - `check-model-config` compares two files. Model and effort are applied by the Claude Code platform, so
   nothing here observes that a stage ran under the configured model — and an org `availableModels`
   allowlist or auto mode can decline a value silently.
@@ -525,10 +515,7 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   `/pharn-review` fans every applicable lens out as its own parallel subagent; `/pharn-loop` repeats
   build → regress → verify up to the cap, unattended — each pass re-runs your suite at the base and at
   HEAD plus every verify gate. That buys parallel scrutiny and costs tokens accordingly.
-  Budget for it, or drive individual stages instead of the loop. Since `6.5.0` a run no longer leaves you
-  guessing what it spent: `/pharn-loop` and `/pharn-ship` write `cost.json` and `RUN-REPORT.md` into the
-  feature directory, with tokens broken down per stage, iteration and model. That is a measurement, not a
-  reduction — it tells you the bill, it does not make the run cheaper.
+  Budget for it, or drive individual stages instead of the loop.
 - **Packaging is still pre-release shaped.** There are no GitHub releases or git tags yet; the installer
   currently fetches the repository's `main` and records the exact installed commit.
 - **Not every design doc ships into an install.** The installer copies `pharn/CONSTITUTION.md` and
