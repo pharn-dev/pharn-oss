@@ -140,13 +140,23 @@ absent ⇒ `M = 3`). A config-file cap key is deferred (P7): `check-loop.mjs` re
    node pharn/floor/mark-phase.mjs --name '<name>' --kind run-start
    ```
 
+   This marker OPENS the run's measurement window (`pharn/pharn-contracts/cost-ledger.md`, "Run
+   membership"). The ledger counts only requests from here to the `run-stop` in Step 6, so unrelated
+   work earlier or later in the same session is excluded, not summed. The Step 1a requests that chose
+   the slug and captured the base precede it and stay outside, as does the request that issues this
+   call. It already precedes `/pharn-spec`, so this command needs no pending start (contrast
+   `/pharn-ship` Step 1). A new `/pharn-loop` invocation writes a fresh `run-start` and gets its own
+   window.
+
    **A stop BEFORE S2 records nothing, and that bound is stated rather than worked around.** S1 and a
    failed S3 have no `<name>` yet, so there is no marker file and no `cost.json`; those runs go straight
    to the Step 7 summary exactly as they do today. Nothing is lost that was ever recorded.
 
    **ADVISORY (P0).** This is a Bash call outside the `PreToolUse` gate (**L19**), so nothing forces it.
-   A skipped marker does not fail the run: the ledger's requests simply stay `unattributed`, and
-   `check-cost-ledger.mjs` reports a counted WARN rather than merging them into a neighbouring stage.
+   A skipped `run-start` does not fail the run, but the ledger then cannot bound the run: its membership
+   is `unknown`, and it reports NO usage rather than the whole session's. A skipped STAGE marker only
+   leaves those requests `unattributed`, and `check-cost-ledger.mjs` reports a counted WARN rather than
+   merging them into a neighbouring stage.
 
 ### Step 1b — read the most recent prior record, if one exists (context only; it gates NOTHING)
 

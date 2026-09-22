@@ -1600,9 +1600,11 @@ const PHASE_MARKER_WIRING = [
   {
     file: "pharn-ship.md",
     // Ship does NOT mark pharn-spec, and the omission is DELIBERATE, not a gap: `<name>` is resolved BY
-    // `/pharn-spec`, and `<name>` is the marker file's own directory — so no marker can exist before that
-    // stage has already run. Its requests are `unattributed`, which the command states as a bound. A rule
-    // demanding a `pharn-spec` marker here would demand an impossible one.
+    // `/pharn-spec`, and `<name>` is the marker file's own directory — so no NAMED marker can exist
+    // before that stage has already run. Since `run-window/1` the spec work is nonetheless INSIDE the
+    // run: Step 1 records a session-keyed `--pending-start` that the named run-start adopts (pinned
+    // below). The spec's requests are therefore run members in the `unattributed` stage bucket. A rule
+    // demanding a `pharn-spec` stage marker here would demand an impossible one.
     stages: ["pharn-plan", "pharn-grill", "pharn-build", "pharn-regress", "pharn-verify"],
     iterated: ["pharn-build", "pharn-regress", "pharn-verify"],
     // Ship does not iterate: it runs the chain once, with AT MOST ONE build-completion retry. So its
@@ -1629,7 +1631,9 @@ test("✧ PHASE-MARKER ENUMERATION is non-vacuous and CLOSED over the corpus", (
 for (const cmd of PHASE_MARKER_WIRING) {
   test(`✧ ${cmd.file} brackets its run and every stage it runs`, () => {
     const body = commandBody(cmd.file);
-    const calls = body.match(MARK_PHASE) ?? [];
+    // A `--pending-start` call carries no --kind by design (it is a moment, not a marker); it is pinned
+    // by its own test below and excluded from the kind closure here.
+    const calls = (body.match(MARK_PHASE) ?? []).filter((c) => !/--pending-start/.test(c));
     assert.ok(calls.length > 0, `non-vacuity: ${cmd.file} must carry mark-phase invocations`);
 
     const kindsSeen = calls.map((c) => (c.match(/--kind\s+(\S+)/) ?? [])[1]);
@@ -1673,6 +1677,60 @@ for (const cmd of PHASE_MARKER_WIRING) {
     }
   });
 }
+
+// The PENDING START (`run-window/1`). The set of commands that need one is CLOSED and named: `/pharn-ship`
+// alone, because it is the only emitting command whose `<name>` is resolved BY `/pharn-spec`. The loop
+// names its slug at S2 and marks run-start before spec, so a pending call there would be dead weight.
+// Presence + ORDER only: this proves the prose carries the call before the spec step, NEVER that an agent
+// executes it (P0, L19).
+const PENDING_START_WIRING = [{ file: "pharn-ship.md", before: ["/pharn-spec <description>", "--kind run-start"] }];
+
+test("✧ PENDING-START is wired exactly where it is needed, and ONLY there", () => {
+  assert.equal(PENDING_START_WIRING.length, 1, "non-vacuity: the enumeration is counted");
+  const live = PHASE_MARKER_WIRING.map((c) => c.file)
+    .filter((f) => /mark-phase\.mjs --pending-start/.test(commandBody(f)))
+    .sort();
+  assert.deepEqual(
+    live,
+    PENDING_START_WIRING.map((c) => c.file).sort(),
+    "closure: a command that gains or loses --pending-start must be enumerated here"
+  );
+  for (const w of PENDING_START_WIRING) {
+    const body = commandBody(w.file);
+    const calls = body.match(/node pharn\/floor\/mark-phase\.mjs --pending-start[^\n]*/g) ?? [];
+    assert.equal(calls.length, 1, `${w.file}: exactly one --pending-start invocation`);
+    assert.equal(calls[0].trim(), "node pharn/floor/mark-phase.mjs --pending-start", "pinned verbatim — no extra flags (L22)");
+    const at = body.indexOf(calls[0]);
+    for (const anchor of w.before) {
+      const other = body.indexOf(anchor);
+      assert.ok(other > -1, `${w.file}: anchor ${JSON.stringify(anchor)} must exist, or the order check is vacuous`);
+      assert.ok(at < other, `${w.file}: --pending-start must precede ${JSON.stringify(anchor)}`);
+    }
+  }
+});
+
+test("✧ ADOPTION is opt-in: ONLY the pending-start commands' named run-start carries --adopt-pending", () => {
+  // REVIEW finding 1: when every run-start adopted, an abandoned ship's pending file widened a later
+  // /pharn-loop window. The flag must sit exactly where --pending-start does, and nowhere else.
+  const pendingFiles = new Set(PENDING_START_WIRING.map((w) => w.file));
+  for (const cmd of PHASE_MARKER_WIRING) {
+    const starts = (commandBody(cmd.file).match(MARK_PHASE) ?? []).filter((c) => /--kind run-start/.test(c));
+    assert.equal(starts.length, 1, `${cmd.file}: exactly one named run-start`);
+    assert.equal(
+      /--adopt-pending/.test(starts[0]),
+      pendingFiles.has(cmd.file),
+      `${cmd.file}: --adopt-pending must be present iff the command records a --pending-start`
+    );
+  }
+});
+
+test("✧ PENDING-START order check DISCRIMINATES — moving the call after the spec step fails it", () => {
+  const body = commandBody("pharn-ship.md");
+  const call = "node pharn/floor/mark-phase.mjs --pending-start\n";
+  assert.ok(body.includes(call), "the real body must carry the call, or this control is vacuous");
+  const moved = body.replace(call, "").replace("/pharn-spec <description>", "/pharn-spec <description>\n" + call);
+  assert.ok(moved.indexOf("--pending-start") > moved.indexOf("/pharn-spec <description>"), "the mutation must reorder");
+});
 
 test("✧ PHASE-MARKER rules DISCRIMINATE — a dropped orchestrator and a mistyped kind are both caught", () => {
   // L4/L34: an assertion that only ever sees the correct corpus certifies nothing. Mutate the REAL body

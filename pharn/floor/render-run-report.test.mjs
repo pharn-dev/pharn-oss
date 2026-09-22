@@ -1065,3 +1065,144 @@ test("Briefing: LINKED when present, honest n/a when absent — never an omitted
     rmSync(bare, { recursive: true, force: true });
   }
 });
+
+// ===================================================================================================
+// MEASUREMENT LABELS (`pharn-cost-ledger/2`) — the report must say WHICH population its numbers count,
+// and an unknown run must never render as a number. Plus one end-to-end CLI chain.
+// ===================================================================================================
+
+const tokensOf = (md) => md.split("## Tokens")[1].split("## Files")[0];
+const MEMB = (over = {}) => ({
+  method: "run-window/1",
+  status: "bounded",
+  reason: null,
+  session: "00000000-0000-4000-8000-0000000000d1",
+  start: "2026-09-21T10:00:00.000Z",
+  end: "2026-09-21T10:30:00.000Z",
+  excluded_requests: 4,
+  ...over,
+});
+
+test("LABEL: a /2 bounded ledger names the RUN WINDOW, its bounds, the selected session and the excluded count", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", { "cost.json": costJson({ schema: "pharn-cost-ledger/2", membership: MEMB() }) });
+    const t = tokensOf(renderRunReport("feat", { repo: root }));
+    assert.match(t, /Measured population: the RUN WINDOW/);
+    assert.match(t, /window start {7}2026-09-21T10:00:00\.000Z/);
+    assert.match(t, /window end {9}2026-09-21T10:30:00\.000Z/);
+    assert.match(t, /excluded requests {2}4/);
+    assert.match(t, /NOT a feature's lifetime cost/);
+    assert.match(t, /TOTAL/, "the numbers still render under a known window");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("LABEL: an UNKNOWN window renders 'UNKNOWN — NOT a zero' and NO token table", () => {
+  const root = scratch();
+  try {
+    const zero = Object.fromEntries(TOKEN_CLASSES.map((c) => [c, 0]));
+    feature(root, "feat", {
+      "cost.json": costJson({
+        schema: "pharn-cost-ledger/2",
+        coverage: "unavailable",
+        membership: MEMB({
+          status: "unknown",
+          reason: "no run-start marker was recorded",
+          start: null,
+          end: null,
+          excluded_requests: null,
+        }),
+        totals: { requests: 0, tokens: zero },
+        by_model: [],
+        by_stage_iteration_model: [],
+      }),
+    });
+    const md = renderRunReport("feat", { repo: root });
+    const t = tokensOf(md);
+    assert.match(t, /Run usage: UNKNOWN — this is NOT a zero/);
+    assert.doesNotMatch(t, /TOTAL/, "no table of zeros may stand in for an unknown");
+    assert.match(md.split("## Outcome")[1].split("## Tokens")[0], /run membership\s+unknown/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("LABEL: an OPEN window says so; a legacy /1 ledger is labelled SESSION-scoped", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", { "cost.json": costJson({ schema: "pharn-cost-ledger/2", membership: MEMB({ status: "open", end: null }) }) });
+    assert.match(tokensOf(renderRunReport("feat", { repo: root })), /The window is OPEN/);
+    feature(root, "old", { "cost.json": costJson() }); // the default fixture IS a /1 ledger
+    const t = tokensOf(renderRunReport("old", { repo: root }));
+    assert.match(t, /LEGACY `pharn-cost-ledger\/1` — SESSION-scoped/);
+    assert.match(t, /may include activity OUTSIDE this run/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("INTEGRATION: CLI emit → CLI check GREEN → report shows the SAME run-scoped totals (100 before / 10 during)", () => {
+  const root = scratch();
+  try {
+    const S = "00000000-0000-4000-8000-0000000000d2";
+    const proj = join(root, "projects", "p");
+    mkdirSync(proj, { recursive: true });
+    const line = (id, ts, input) =>
+      JSON.stringify({
+        type: "assistant",
+        requestId: id,
+        timestamp: ts,
+        sessionId: S,
+        message: {
+          model: "claude-opus-5",
+          usage: { input_tokens: input, output_tokens: 0, cache_creation: {}, output_tokens_details: {} },
+        },
+      });
+    writeFileSync(
+      join(proj, `${S}.jsonl`),
+      [line("before", "2026-09-21T09:00:00.000Z", 100), line("during", "2026-09-21T10:05:00.000Z", 10)].join("\n") + "\n"
+    );
+    const mdir = join(root, "cost", "feat");
+    mkdirSync(mdir, { recursive: true });
+    writeFileSync(
+      join(mdir, "markers.jsonl"),
+      [
+        { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-09-21T10:00:00.000Z", session_id: S },
+        { seq: 2, kind: "run-stop", stage: null, iteration: null, ts: "2026-09-21T10:30:00.000Z", session_id: S },
+      ]
+        .map((m) => JSON.stringify(m))
+        .join("\n") + "\n"
+    );
+    const emit = spawnSync(
+      "node",
+      [
+        join(here, "render-cost-ledger.mjs"),
+        "feat",
+        "--repo",
+        root,
+        "--session",
+        S,
+        "--projects-dir",
+        join(root, "projects"),
+        "--markers-base",
+        join(root, "cost"),
+      ],
+      { encoding: "utf8" }
+    );
+    assert.equal(emit.status, 0, emit.stderr);
+    const costPath = join(root, "pharn", "features", "feat", "cost.json");
+    const check = spawnSync("node", [join(here, "check-cost-ledger.mjs"), costPath], { encoding: "utf8" });
+    assert.equal(check.status, 0, check.stdout);
+    const led = JSON.parse(readFileSync(costPath, "utf8"));
+    assert.equal(led.totals.tokens.input, 10, "independent literal: 10, never 110");
+    const t = tokensOf(renderRunReport("feat", { repo: root }));
+    assert.match(t, /Measured population: the RUN WINDOW/);
+    const total = t.split("\n").find((l) => l.startsWith("TOTAL"));
+    assert.ok(total, "the TOTAL row must render");
+    assert.equal(total.trim().split(/\s+/)[4], "10", "the report's TOTAL input equals the ledger's run-scoped 10");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

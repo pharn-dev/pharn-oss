@@ -24,6 +24,17 @@
 // a **Bash** write, outside the fix #7 `PreToolUse` gate (L19). It is declared in the plan's `## Files`
 // and exempted by name in `pharn/floor/reconcile-ignore.json`, never described as gate-covered.
 //
+// ── RUN MEMBERSHIP (`pharn-cost-ledger/2`, method `run-window/1`) ────────────────────────────────────
+// Through `/1` the markers decided only the stage VIEW, never the request POPULATION, so every request of
+// the selected session was emitted and summed — 100 unrelated input tokens before a run plus 10 inside it
+// reported 110, GREEN. `/2` emits ONLY run members, decided by `run-window-core.mjs` (imported, never
+// re-stated), and records the decision in the top-level `membership` block. Membership and attribution
+// stay SEPARATE: `attribute()` still runs, on members only, so an in-run request with no stage marker is
+// `unattributed` AND counts in `totals`. When the markers cannot bound the run, membership is `unknown`
+// and the ledger is `unavailable` with no rows — never whole-session usage presented as run usage, and
+// never a zero that reads as observed. `/1` files are left alone: `check-cost-ledger.mjs` still validates
+// them under their own rules and labels their totals SESSION-scoped.
+//
 // ── Honest scope (P0) ────────────────────────────────────────────────────────────────────────────────
 // FLOOR (primitive #3 + arithmetic):
 //   * Records are deduplicated on `requestId`. LOAD-BEARING, not a nicety — one API response is written
@@ -73,6 +84,8 @@
 //   node pharn/floor/render-cost-ledger.mjs <name> [--base <dir>] [--repo <dir>] [--session <id>]
 //                                           [--projects-dir <dir>] [--command <cmd>] [--base-sha <sha>]
 //                                           [--markers-base <dir>] [--stdout]
+// `--verify-transcript` in the checker passes the ledger's OWN recorded `markers[]` to `renderLedger`, so a
+// later invocation's appended markers cannot re-bound an already-written ledger.
 // Exit codes: 0 = a ledger was written (including an honest `unavailable` one); 2 = bad usage.
 
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
@@ -82,8 +95,12 @@ import { findTranscriptDirs, transcriptFiles } from "./render-cost-record.mjs";
 import { DEFAULT_BASE as MARKERS_DEFAULT_BASE, MARKER_KINDS, cleanScalar } from "./mark-phase.mjs";
 import { FM_RE, stripBom } from "./frontmatter-core.mjs";
 import { readShipOutcome, OUTCOME_SOURCE as SHIP_OUTCOME_SOURCE } from "./ship-outcome-core.mjs";
+import { runWindow, isMember, tsMs, MEMBERSHIP_METHOD } from "./run-window-core.mjs";
 
-export const SCHEMA = "pharn-cost-ledger/1";
+/** What this emitter writes. `/2` adds the `membership` block and scopes every row to the run window. */
+export const SCHEMA = "pharn-cost-ledger/2";
+/** The legacy schema. Its totals are SESSION-scoped; `check-cost-ledger.mjs` still accepts it, labelled. */
+export const LEGACY_SCHEMA = "pharn-cost-ledger/1";
 
 /** The ONE definition of where feature artifacts live. Referenced by `renderLedger`'s parameter default
  *  AND by the CLI's write path — a single const, never two literals. The two-literal form is exactly the
@@ -159,7 +176,17 @@ export const TOP_LEVEL_KEYS = Object.freeze([
   "by_stage_iteration_model",
   "unattributed",
   "dropped",
+  "membership",
 ]);
+
+/** The `/1` key set — `TOP_LEVEL_KEYS` minus `membership`, DERIVED rather than re-listed (L35). */
+export const TOP_LEVEL_KEYS_V1 = Object.freeze(TOP_LEVEL_KEYS.filter((k) => k !== "membership"));
+
+/** `membership`'s CLOSED key set (L36). `session` is the SELECTED session the window was computed for, so
+ *  the checker can recompute the same window from `markers[]` alone. `excluded_requests` counts deduped
+ *  session requests OUTSIDE a known window — it is `null` when the window is unknown, because then
+ *  nothing was measured, not excluded (GRILL finding 4). */
+export const MEMBERSHIP_KEYS = Object.freeze(["method", "status", "reason", "session", "start", "end", "excluded_requests"]);
 
 export const SKILLS_VERSION_SOURCES = Object.freeze(["pharn.config.json", "SKILLS_VERSION", "unknown"]);
 
@@ -293,24 +320,37 @@ export function readMarkers(markersFile) {
   } catch {
     return [];
   }
-  const out = [];
+  const raw = [];
   for (const line of text.split("\n")) {
     if (!line) continue;
-    let r;
     try {
-      r = JSON.parse(line);
+      raw.push(JSON.parse(line));
     } catch {
       continue; // torn line from an interrupted append
     }
+  }
+  return normalizeMarkers(raw);
+}
+
+/**
+ * The ONE marker normalization, applied to the file's lines AND to a caller-supplied list (the checker's
+ * `--verify-transcript` passes a ledger's recorded `markers[]`). Unknown kinds and non-numeric `seq` are
+ * dropped; `origin` survives only as the literal `pending` that `mark-phase.mjs` writes on adoption.
+ */
+export function normalizeMarkers(list) {
+  const out = [];
+  for (const r of Array.isArray(list) ? list : []) {
     if (!r || typeof r.seq !== "number" || !MARKER_KINDS.has(r.kind)) continue;
-    out.push({
+    const m = {
       seq: r.seq,
       kind: r.kind,
       stage: typeof r.stage === "string" ? r.stage : null,
       iteration: typeof r.iteration === "number" ? r.iteration : null,
       ts: typeof r.ts === "string" ? r.ts : null,
       session_id: typeof r.session_id === "string" ? r.session_id : null,
-    });
+    };
+    if (r.origin === "pending") m.origin = "pending";
+    out.push(m);
   }
   return out.sort((a, b) => a.seq - b.seq);
 }
@@ -329,11 +369,21 @@ export function readMarkers(markersFile) {
  * correction would be a guess.
  */
 export function attribute(markers, ts, sessionId) {
+  // Compared as NUMBERS (`tsMs`), never as strings: `…:00Z` sorts after `…:00.000Z` lexically, so a
+  // precision mismatch could otherwise bill a request to the wrong stage (REVIEW finding 4). The same
+  // conversion `run-window-core.mjs` uses for membership, imported rather than re-stated.
+  const at = tsMs(ts);
+  if (at === null) return { stage: null, iteration: null };
   let best = null;
+  let bestMs = null;
   for (const m of markers) {
-    if (m.ts === null || m.ts > ts) continue;
+    const t = tsMs(m.ts);
+    if (t === null || t > at) continue;
     if (m.session_id !== null && sessionId !== null && m.session_id !== sessionId) continue;
-    if (best === null || m.ts > best.ts || (m.ts === best.ts && m.seq > best.seq)) best = m;
+    if (best === null || t > bestMs || (t === bestMs && m.seq > best.seq)) {
+      best = m;
+      bestMs = t;
+    }
   }
   if (best === null) return { stage: null, iteration: null };
   return { stage: best.stage, iteration: best.iteration };
@@ -388,7 +438,20 @@ export function readSkillsVersion(repo) {
   return { version: null, source: "unknown" };
 }
 
-function unavailableLedger({ name, command, baseSha, outcome, skills, markers, note }) {
+/** The `membership` block for a window (see `MEMBERSHIP_KEYS`). */
+function membershipOf(win, session, excluded) {
+  return {
+    method: MEMBERSHIP_METHOD,
+    status: win.status,
+    reason: win.reason,
+    session: session ?? null,
+    start: win.start,
+    end: win.end,
+    excluded_requests: win.status === "unknown" ? null : excluded,
+  };
+}
+
+function unavailableLedger({ name, command, baseSha, outcome, skills, markers, note, membership }) {
   return {
     schema: SCHEMA,
     name,
@@ -413,6 +476,7 @@ function unavailableLedger({ name, command, baseSha, outcome, skills, markers, n
     by_stage_iteration_model: [],
     unattributed: { requests: 0, tokens: zeroTokens() },
     dropped: [],
+    membership,
   };
 }
 
@@ -426,8 +490,12 @@ export function renderLedger({
   projectsDir,
   markersBase = MARKERS_DEFAULT_BASE,
   featureBase = FEATURE_BASE,
+  markers: suppliedMarkers,
 }) {
-  const markers = readMarkers(join(markersBase, name, "markers.jsonl"));
+  // A supplied list (the checker's `--verify-transcript`) re-derives under the RECORDED boundary; absent,
+  // the live markers file is read. Both pass through the same normalization.
+  const markers = suppliedMarkers === undefined ? readMarkers(join(markersBase, name, "markers.jsonl")) : normalizeMarkers(suppliedMarkers);
+  const win = runWindow(markers, sessionId ?? null);
   // PRECEDENCE, and it is one-way: a DECLARED envelope always wins over a DERIVED outcome. `/pharn-loop`
   // writes `LOOP.md` before this runs, so its bytes do not move; `/pharn-ship` writes no such record, so
   // it falls through to the derivation. Deriving is NOT a repair of a missing envelope — `readOutcome`
@@ -438,7 +506,10 @@ export function renderLedger({
   const featureDir = join(repo, featureBase, name);
   const outcome = readOutcome(join(featureDir, "LOOP.md")) ?? readShipOutcome(featureDir, markers);
   const skills = readSkillsVersion(repo);
-  const shell = (note) => unavailableLedger({ name, command, baseSha, outcome, skills, markers, note });
+  // Transcript-absence shells: nothing was read, so nothing was excluded — `excluded_requests` is 0 for a
+  // known window and null for an unknown one (see `membershipOf`).
+  const shell = (note, excluded = 0) =>
+    unavailableLedger({ name, command, baseSha, outcome, skills, markers, note, membership: membershipOf(win, sessionId, excluded) });
 
   if (!sessionId) return shell("no session id available (CLAUDE_CODE_SESSION_ID unset)");
   const hits = findTranscriptDirs(projectsDir, sessionId);
@@ -467,6 +538,7 @@ export function renderLedger({
 
   const seen = new Set();
   const requests = [];
+  let excluded = 0;
   const dropped = [];
   const versions = new Set();
   const sessions = new Set();
@@ -499,6 +571,13 @@ export function renderLedger({
 
       const ts = typeof r.timestamp === "string" ? r.timestamp : null;
       const sid = typeof r.sessionId === "string" ? r.sessionId : null;
+      // MEMBERSHIP first, attribution second — two decisions, two functions. A non-member is COUNTED and
+      // never emitted: not its usage, not its identity fields, not its version. Dedup ran above, so a
+      // request repeated across lines is counted once here too.
+      if (!isMember(win, ts, sid)) {
+        excluded++;
+        continue;
+      }
       // Both observed agent-id spellings, in a fixed precedence (L36 — a parameterized value acquires
       // variant spellings, and a set pinned to the one its author saw certifies only that one).
       const rawAgent = typeof r.agentId === "string" ? r.agentId : typeof r.attributionAgent === "string" ? r.attributionAgent : null;
@@ -534,10 +613,32 @@ export function renderLedger({
     a.ts === b.ts ? (a.request_id < b.request_id ? -1 : 1) : a.ts === null ? -1 : b.ts === null ? 1 : a.ts < b.ts ? -1 : 1
   );
 
+  // UNKNOWN membership: the rows were read (so the count is real) but none is run usage. `unavailable`,
+  // with no rows — never the session's usage presented as the run's, never an observed-looking zero.
+  if (win.status === "unknown") {
+    return shell(
+      `run membership unknown — ${win.reason}; ${excluded} usage-bearing request(s) of session ${sessionId} were seen and NONE is reported as run usage`,
+      null
+    );
+  }
+
   if (requests.length === 0) {
-    const empty = shell(`transcript for session ${sessionId} carried no usage-bearing assistant records`);
-    empty.dropped = dropped;
-    return empty;
+    if (excluded === 0) {
+      const empty = shell(`transcript for session ${sessionId} carried no usage-bearing assistant records`);
+      empty.dropped = dropped;
+      return empty;
+    }
+    // A KNOWN window that contained nothing: an OBSERVED zero. `partial`, not `unavailable` — the
+    // measurement happened. The checker admits an empty `partial` only under a known window (L34).
+    return {
+      ...shell(
+        `the run window contained no usage-bearing request of session ${sessionId}; ${excluded} session request(s) fell outside it — an OBSERVED zero for the measured window, not an unknown`,
+        excluded
+      ),
+      coverage: "partial",
+      sessions: [sessionId],
+      dropped,
+    };
   }
 
   return {
@@ -553,8 +654,7 @@ export function renderLedger({
     window_start: start,
     window_end: end,
     coverage: "partial",
-    coverage_note:
-      "measured from this run's own session transcript; NEVER complete — the stop's own turns, including this emission, are still being written. A floor on spend, not the total.",
+    coverage_note: `measured from the selected session's transcript, restricted to the run window (membership ${MEMBERSHIP_METHOD}, ${win.status}); ${excluded} session request(s) outside the window were excluded. NEVER complete — the request that opened the window, the emission's own turns and any other session's requests are not in it. A floor on this run's spend, not the total, and not a feature's lifetime cost.`,
     dedup_key: "requestId",
     attribution: { method: ATTRIBUTION_METHOD, markers: markers.length },
     pricing_note: PRICING_NOTE,
@@ -562,6 +662,7 @@ export function renderLedger({
     requests,
     ...buildViews(requests),
     dropped,
+    membership: membershipOf(win, sessionId, excluded),
   };
 }
 
@@ -610,7 +711,12 @@ export function buildViews(requests) {
  *  advisory and is regenerated from the same rows, never typed. */
 export function table(ledger) {
   const rows = ledger.by_stage_iteration_model;
-  const lines = [`cost ledger — ${ledger.name} (${ledger.coverage}, ${ledger.totals.requests} requests, dedup on ${ledger.dedup_key})`];
+  const m = ledger.membership;
+  const scope = m ? `run window ${m.status}${m.status === "unknown" ? "" : `, ${m.excluded_requests} outside excluded`}` : "session-scoped";
+  const lines = [
+    `cost ledger — ${ledger.name} (${ledger.coverage}, ${scope}, ${ledger.totals.requests} requests, dedup on ${ledger.dedup_key})`,
+  ];
+  if (m && m.status === "unknown") return lines.concat(`  run usage UNKNOWN — ${m.reason}. Not a zero.`).join("\n");
   if (rows.length === 0) return lines.concat("  (no attributed requests)").join("\n");
   const w = (s, n) => String(s).padEnd(n);
   const r = (s, n) => String(s).padStart(n);

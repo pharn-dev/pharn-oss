@@ -1,0 +1,47 @@
+{
+  "base": "81b5124cbddd191184d7f7142dc16389cdd522dd",
+  "inside": [
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-ship.md",
+    ".dev/features/run-scoped-token-accounting/GRILL.md",
+    ".dev/features/run-scoped-token-accounting/PLAN.md",
+    ".dev/features/run-scoped-token-accounting/REGRESSION.md",
+    ".dev/features/run-scoped-token-accounting/REVIEW.md",
+    ".dev/features/run-scoped-token-accounting/VERIFY.md",
+    ".dev/features/run-scoped-token-accounting/regression-report.json",
+    ".dev/features/run-scoped-token-accounting/verify-report.json",
+    ".dev/floor/command-hygiene.test.mjs",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/check-cost-ledger.mjs",
+    "pharn/floor/check-cost-ledger.test.mjs",
+    "pharn/floor/mark-phase.mjs",
+    "pharn/floor/mark-phase.test.mjs",
+    "pharn/floor/render-cost-ledger.mjs",
+    "pharn/floor/render-cost-ledger.test.mjs",
+    "pharn/floor/render-run-report.mjs",
+    "pharn/floor/render-run-report.test.mjs",
+    "pharn/floor/run-window-core.mjs",
+    "pharn/floor/run-window-core.test.mjs",
+    "pharn/pharn-contracts/cost-ledger.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
