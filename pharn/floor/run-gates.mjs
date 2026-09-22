@@ -212,7 +212,16 @@ function isStaleLock(lock, nowMs) {
 
 function takeLock(outAbs, timeoutMs) {
   const lp = lockPath(outAbs);
-  if (existsSync(lp)) {
+  // Exclusive create IS the claim — no existsSync first (that is a TOCTOU / CodeQL
+  // js/file-system-race). On EEXIST, read + stale-check; only then unlink and retry.
+  // Two concurrent recoveries still cannot both win: the second `wx` decides.
+  let fd;
+  try {
+    fd = openSync(lp, "wx");
+  } catch (e) {
+    if (e.code !== "EEXIST") {
+      fail("lock-busy", `another run-gates invocation is starting at ${lp}`);
+    }
     const r = readJson(lp);
     const lock = r.ok ? r.value : null;
     if (!isStaleLock(lock, Date.now())) {
@@ -224,13 +233,11 @@ function takeLock(outAbs, timeoutMs) {
     } catch {
       /* raced with another recovery — the exclusive create below decides the winner */
     }
-  }
-  let fd;
-  try {
-    // `wx` — exclusive create. Two concurrent recoveries cannot both win.
-    fd = openSync(lp, "wx");
-  } catch {
-    fail("lock-busy", `another run-gates invocation is starting at ${lp}`);
+    try {
+      fd = openSync(lp, "wx");
+    } catch {
+      fail("lock-busy", `another run-gates invocation is starting at ${lp}`);
+    }
   }
   try {
     writeFileSync(fd, JSON.stringify({ pid: process.pid, started_ms: Date.now(), timeout_ms: timeoutMs }));
