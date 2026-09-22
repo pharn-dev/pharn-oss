@@ -45,10 +45,13 @@ import {
   LOOP_RECORD_SOURCE,
 } from "./render-cost-ledger.mjs";
 import { OUTCOME_SOURCE as SHIP_OUTCOME_SOURCE } from "./ship-outcome-core.mjs";
+import { checkLedger, findAbsolutePaths } from "./check-cost-ledger.mjs";
+import { findTranscriptDirs, transcriptFiles } from "./render-cost-record.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, "render-cost-ledger.mjs");
 const RECORD_CLI = join(HERE, "render-cost-record.mjs");
+const CHECK_CLI = join(HERE, "check-cost-ledger.mjs");
 const FIXTURES = join(HERE, "fixtures", "cost-ledger");
 const REAL_SESSION = "51a7441d-0e03-4066-8d1c-be5a2d419121";
 const SUB_SESSION = "00000000-0000-4000-8000-00000000cafe";
@@ -80,13 +83,15 @@ function writeMarkers(root, name, markers) {
 
 const marker = (seq, kind, stage, iteration, ts, session_id = null) => ({ seq, kind, stage, iteration, ts, session_id });
 
-const run = (args) => {
+const runScript = (script, args, env) => {
   try {
-    return { status: 0, stdout: execFileSync("node", [CLI, ...args], { encoding: "utf8" }) };
+    return { status: 0, stdout: execFileSync("node", [script, ...args], { encoding: "utf8", env: { ...process.env, ...env } }) };
   } catch (e) {
     return { status: e.status, stdout: e.stdout ?? "", stderr: e.stderr ?? "" };
   }
 };
+const run = (args, env = {}) => runScript(CLI, args, env);
+const runChecker = (args) => runScript(CHECK_CLI, args, {});
 
 // ---------------------------------------------------------------- the emitted shape
 
@@ -277,6 +282,156 @@ test("a transcript with no usage-bearing records -> `unavailable`, and it SAYS s
   const led = renderLedger({ name: "f", sessionId: "s1", projectsDir: join(root, "projects"), markersBase: join(root, "none") });
   assert.equal(led.coverage, "unavailable");
   assert.equal(led.requests.length, 0);
+});
+
+// ---------------------------------------------------------------- path-free `unavailable` notes
+//
+// The two notes that used to end `under ${projectsDir}` / `under ${projectDir}` wrote a LOCAL path into
+// cost.json, which check-cost-ledger.mjs rule 3 then REDs — so an ordinary transcript miss produced an
+// artifact the shipped checker refuses. The fix is at the source; the checker is unchanged, and the
+// negative control below proves its regex still fires on the same field.
+//
+// The remedy is quantified over EVERY `unavailable` branch, so the branches are ENUMERATED here and each
+// rule iterates the list (L29) — not a test for the two branches that happened to carry the defect.
+// Each entry asserts WHICH branch it reached through the lookup itself (`findTranscriptDirs` hit count,
+// `transcriptFiles` selection), never by matching note wording, which is not a documented contract.
+
+const SYN_SESSION = "00000000-0000-4000-8000-00000000dead";
+
+/** Every `unavailable` branch of renderLedger, each built over an ABSOLUTE temp projects dir. */
+function unavailableBranches() {
+  const mk = (tag) => {
+    const root = mkdtempSync(join(tmpdir(), `cost-ledger-unav-${tag}-`));
+    const projectsDir = join(root, "projects");
+    mkdirSync(projectsDir, { recursive: true });
+    return { root, projectsDir, markersBase: join(root, "none") };
+  };
+  const selected = (projectsDir, sessionId) => {
+    const hits = findTranscriptDirs(projectsDir, sessionId);
+    return { hits: hits.length, files: hits.length === 1 ? transcriptFiles(hits[0]).length : null };
+  };
+  return [
+    {
+      branch: "no-session",
+      build() {
+        const t = mk("nosess");
+        return {
+          ...t,
+          sessionId: null,
+          led: renderLedger({ name: "f", sessionId: null, projectsDir: t.projectsDir, markersBase: t.markersBase }),
+        };
+      },
+      reached: (b) => assert.equal(b.sessionId, null),
+    },
+    {
+      branch: "no-dir",
+      build() {
+        const t = mk("nodir");
+        mkdirSync(join(t.projectsDir, "unrelated-project"));
+        const led = renderLedger({ name: "f", sessionId: SYN_SESSION, projectsDir: t.projectsDir, markersBase: t.markersBase });
+        return { ...t, sessionId: SYN_SESSION, led };
+      },
+      reached: (b) => assert.equal(selected(b.projectsDir, b.sessionId).hits, 0),
+    },
+    {
+      // A separator-bearing id stats the SAME file from every sibling directory — the live route to the
+      // multi-hit refusal on a sane tree (render-cost-ledger.mjs keeps that branch deliberately, L51).
+      branch: "multi-dir",
+      build() {
+        const t = mk("multi");
+        mkdirSync(join(t.projectsDir, "p"));
+        mkdirSync(join(t.projectsDir, "q"));
+        writeFileSync(join(t.projectsDir, "p", "s.jsonl"), "");
+        const led = renderLedger({ name: "f", sessionId: "../p/s", projectsDir: t.projectsDir, markersBase: t.markersBase });
+        return { ...t, sessionId: "../p/s", led };
+      },
+      reached: (b) => assert.equal(selected(b.projectsDir, b.sessionId).hits, 2),
+    },
+    {
+      // The existing L51 boundary staging: `<dir>/../decoy.jsonl` stats, the recursive walk under `<dir>`
+      // selects nothing. No race, no production seam — the two matchers simply disagree on `..`.
+      branch: "empty-selection",
+      build() {
+        const t = mk("empty");
+        mkdirSync(join(t.projectsDir, "p"));
+        writeFileSync(join(t.projectsDir, "decoy.jsonl"), "");
+        const led = renderLedger({ name: "f", sessionId: "../decoy", projectsDir: t.projectsDir, markersBase: t.markersBase });
+        return { ...t, sessionId: "../decoy", led };
+      },
+      reached: (b) => {
+        const s = selected(b.projectsDir, b.sessionId);
+        assert.equal(s.hits, 1, "the stat found exactly one directory");
+        assert.equal(s.files, 0, "…and the walk under it selected nothing");
+      },
+    },
+    {
+      branch: "no-usage",
+      build() {
+        const t = mk("nousage");
+        mkdirSync(join(t.projectsDir, "p"));
+        writeFileSync(join(t.projectsDir, "p", `${SYN_SESSION}.jsonl`), JSON.stringify({ type: "user", message: {} }) + "\n");
+        const led = renderLedger({ name: "f", sessionId: SYN_SESSION, projectsDir: t.projectsDir, markersBase: t.markersBase });
+        return { ...t, sessionId: SYN_SESSION, led };
+      },
+      reached: (b) => assert.equal(selected(b.projectsDir, b.sessionId).files, 1),
+    },
+  ];
+}
+
+function assertPathFreeUnavailable(led, localPaths, label) {
+  assert.equal(led.coverage, "unavailable", label);
+  assert.deepEqual(led.requests, [], label);
+  assert.equal(led.totals.requests, 0, label);
+  for (const c of TOKEN_CLASSES) assert.equal(led.totals.tokens[c], 0, `${label}: totals.tokens.${c}`);
+  const json = JSON.stringify(led);
+  for (const p of localPaths) assert.ok(!json.includes(p), `${label}: serialized ledger contains the local path ${p}`);
+  const hits = [];
+  findAbsolutePaths(led, "", hits);
+  assert.deepEqual(hits, [], `${label}: absolute-path-shaped string(s) in the ledger`);
+  const { reds } = checkLedger(led);
+  assert.deepEqual(reds, [], `${label}: check-cost-ledger REDs`);
+}
+
+test("A: a missing transcript under an ABSOLUTE projects dir -> a path-free, checker-GREEN `unavailable` ledger", () => {
+  const b = unavailableBranches().find((x) => x.branch === "no-dir");
+  const built = b.build();
+  b.reached(built);
+  assertPathFreeUnavailable(built.led, [built.projectsDir, built.root], "no-dir");
+});
+
+test("B: a located directory whose selection is EMPTY -> the same path-free, checker-GREEN result", () => {
+  const b = unavailableBranches().find((x) => x.branch === "empty-selection");
+  const built = b.build();
+  b.reached(built);
+  assertPathFreeUnavailable(built.led, [built.projectsDir, join(built.projectsDir, "p"), built.root], "empty-selection");
+});
+
+test("L29 ENUMERATION: EVERY `unavailable` branch is path-free and checker-GREEN — the set, not the two defective members", () => {
+  const branches = unavailableBranches();
+  assert.deepEqual(
+    branches.map((b) => b.branch),
+    ["no-session", "no-dir", "multi-dir", "empty-selection", "no-usage"]
+  );
+  for (const b of branches) {
+    const built = b.build();
+    b.reached(built);
+    assertPathFreeUnavailable(built.led, [built.projectsDir, built.root], b.branch);
+  }
+});
+
+test("the no-dir and empty-selection notes stay DISTINGUISHABLE — absence is not reported as an unusable directory", () => {
+  const by = Object.fromEntries(unavailableBranches().map((b) => [b.branch, b.build().led.coverage_note]));
+  const notes = Object.values(by);
+  assert.equal(new Set(notes).size, notes.length, "every unavailable branch carries its own note");
+});
+
+test("D NEGATIVE CONTROL: the checker still REDs an absolute path placed in coverage_note", () => {
+  const b = unavailableBranches().find((x) => x.branch === "no-dir");
+  const led = { ...b.build().led, coverage_note: "no transcript found under /Users/example/.claude/projects" };
+  const { reds } = checkLedger(led);
+  assert.equal(reds.length, 1, reds.join("\n"));
+  assert.match(reds[0], /absolute-path/);
+  assert.match(reds[0], /coverage_note/);
 });
 
 test("a synthetic model is skipped — it is not a real API call", () => {
@@ -521,6 +676,62 @@ test("the CLI WRITES cost.json itself (D3) and prints the per-stage table", () =
   assert.equal(led.requests.length, 12);
   assert.match(r.stdout, /cost ledger — feat/);
   assert.match(r.stdout, /TOKENS ONLY/, "the screen copy carries the pricing bound too");
+});
+
+test("C: the CLI WRITE path on a missing transcript -> exit 0, a path-free cost.json the checker CLI accepts", () => {
+  const root = mkdtempSync(join(tmpdir(), "cost-ledger-cli-unav-"));
+  const projectsDir = join(root, "projects");
+  mkdirSync(projectsDir, { recursive: true });
+  const out = join(root, "repo");
+  const args = [
+    "feat",
+    "--repo",
+    out,
+    "--base",
+    "pharn/features",
+    "--session",
+    SYN_SESSION,
+    "--projects-dir",
+    projectsDir,
+    "--markers-base",
+    join(root, "none"),
+  ];
+  const r = run(args);
+  assert.equal(r.status, 0, r.stderr);
+  const p = join(out, "pharn", "features", "feat", "cost.json");
+  const text = readFileSync(p, "utf8");
+  assert.ok(!text.includes(projectsDir), "cost.json must not carry the fixture's projects dir");
+  assert.ok(!text.includes(root), "cost.json must not carry the fixture root");
+  const led = JSON.parse(text);
+  assert.equal(led.coverage, "unavailable");
+  assert.equal(led.totals.requests, 0);
+  const chk = runChecker([p]);
+  assert.equal(chk.status, 0, chk.stdout + chk.stderr);
+
+  // --stdout stays a bare JSON document on the same path
+  const so = run([...args, "--stdout"]);
+  assert.equal(so.status, 0);
+  assert.equal(JSON.parse(so.stdout).coverage, "unavailable");
+  assert.ok(!so.stdout.includes(projectsDir));
+});
+
+test("C / L41: with NO --projects-dir the CLI derives it from CLAUDE_CONFIG_DIR — and that path stays out of cost.json too", () => {
+  // Every other CLI test passes --projects-dir, so the default derivation is the production path no test
+  // reached. CLAUDE_CONFIG_DIR points it at a scratch dir: the developer's real transcripts are never read.
+  const root = mkdtempSync(join(tmpdir(), "cost-ledger-cli-cfg-"));
+  const cfg = join(root, "claude-config");
+  mkdirSync(join(cfg, "projects"), { recursive: true });
+  const out = join(root, "repo");
+  const r = run(["feat", "--repo", out, "--base", "pharn/features", "--session", SYN_SESSION, "--markers-base", join(root, "none")], {
+    CLAUDE_CONFIG_DIR: cfg,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const p = join(out, "pharn", "features", "feat", "cost.json");
+  const text = readFileSync(p, "utf8");
+  assert.ok(!text.includes(root), "cost.json must not carry the derived projects dir");
+  assert.equal(JSON.parse(text).coverage, "unavailable");
+  const chk = runChecker([p]);
+  assert.equal(chk.status, 0, chk.stdout + chk.stderr);
 });
 
 test("--stdout prints without writing — used by the parity test and by a dry run", () => {
