@@ -1,0 +1,39 @@
+{
+  "base": "1a8b027f8d37e5c6b08ae74c6238a3d8b51401aa",
+  "inside": [
+    ".claude/commands/pharn-loop.md",
+    ".claude/hooks/enforce-writes-scope.test.cjs",
+    ".claude/hooks/hook-wiring.test.cjs",
+    ".claude/hooks/require-loop-record.cjs",
+    ".claude/hooks/require-loop-record.test.cjs",
+    ".dev/features/loop-stop-guard/GRILL.md",
+    ".dev/features/loop-stop-guard/PLAN.md",
+    ".dev/features/loop-stop-guard/REGRESSION.md",
+    ".dev/features/loop-stop-guard/VERIFY.md",
+    ".dev/features/loop-stop-guard/regression-report.json",
+    ".dev/features/loop-stop-guard/settings-patch/APPLY.md",
+    ".dev/features/loop-stop-guard/verify-report.json",
+    ".dev/floor/command-hygiene.test.mjs",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

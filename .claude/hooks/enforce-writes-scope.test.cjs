@@ -1344,13 +1344,20 @@ test("✧ PARITY: enforce's root and protect's guarded roots agree over every wo
   }
 });
 
-test("✧ workTreeRoot() is byte-identical in both guards — the copy-pair pin (L31)", () => {
+test("✧ workTreeRoot() is byte-identical in ALL THREE hooks — the copy-set pin (L31)", () => {
+  // Three copies since the Stop guard (require-loop-record.cjs): a shared module would be a new
+  // control-surface file. The set is enumerated and every member compared, so a fourth copy added later
+  // must be listed here or it drifts unpinned.
+  const COPIES = [HOOK, FIX2, join(__dirname, "require-loop-record.cjs")];
+  assert.equal(COPIES.length, 3, "non-vacuity: the copy set is counted");
   const body = (file) => {
     const m = /^function workTreeRoot\(dir\) \{[\s\S]*?^\}$/m.exec(fs.readFileSync(file, "utf8"));
     assert.ok(m, `${file} must declare a top-level workTreeRoot(dir)`);
     return m[0];
   };
-  assert.equal(body(HOOK), body(FIX2), "the two copies must agree byte-for-byte — change BOTH, or neither");
+  for (const f of COPIES.slice(1)) {
+    assert.equal(body(f), body(COPIES[0]), `${f} diverged from ${COPIES[0]} — change ALL copies, or none`);
+  }
 });
 
 test("deny message: the extractor ignores PATH segments, so the tests above are not vacuous", () => {

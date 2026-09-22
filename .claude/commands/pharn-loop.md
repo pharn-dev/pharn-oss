@@ -37,7 +37,7 @@ reads:
   ]
 writes: ["pharn/features/<name>/SPEC.md", "pharn/features/<name>/LOOP.md"]
 constitution_refs: ["P0", "P2", "P3", "P5", "P6", "P7"]
-version: "0.7.0"
+version: "0.8.0"
 ---
 
 # /pharn-loop — run the product pipeline unattended to a floor-grade stop, then report what was done
@@ -137,6 +137,25 @@ absent ⇒ `M = 3`). A config-file cap key is deferred (P7): `check-loop.mjs` re
    ```bash
    mkdir -p .pharn/pharn-loop/<name> && git status --porcelain -uall > .pharn/pharn-loop/<name>/pre-run-status.txt
    ```
+
+   **Then open the run for the Stop guard** — right after the snapshot, substituting `<name>` and the cap
+   `<M>` literally:
+
+   ```bash
+   node .claude/hooks/require-loop-record.cjs --open '<name>' --cap <M>
+   ```
+
+   This writes `.pharn/pharn-loop/<name>/active.json`, binding the run to this session's
+   `CLAUDE_CODE_SESSION_ID`. While it is open, the `Stop` hook `.claude/hooks/require-loop-record.cjs`
+   refuses to let this session's turn end until `pharn/features/<name>/LOOP.md` exists — up to three times
+   per run, then it allows the end and tells the person the run ended without a record. **A blocked stop is
+   a valid record**, so the way to end a run that cannot continue is Step 6b's blocked record, never a
+   summary. The guard is inert before `pharn/features/<name>/` exists (a stop there writes no record by
+   the rule in Step 2), in plan mode, for another session, and after 24 h. **ADVISORY (P0):** it acts
+   only once a human has wired it in `.claude/settings.json` (it is protected, and the wiring is staged for
+   a human in `.dev/features/loop-stop-guard/settings-patch/APPLY.md`). It refuses a turn end; it cannot
+   make the work happen or judge the record. This line is a Bash call outside the `PreToolUse` gate (L19):
+   a run that skips it is simply unguarded.
 
 5. **Open the cost ledger's marker file** — the `run-start` boundary. This runs **after S2**, because
    `<name>` must exist first:
@@ -754,6 +773,13 @@ Then **end your turn**. Do not ask a question, do not push, do not merge, do not
 - **"No advisory stage can gate the loop" / "the record cannot affect the stop"** → **STRUCTURAL.**
   `check-loop.mjs`'s input signature is `{verify-report.json, regression-report.json, iter, cap}` — no review,
   finding, severity or record parameter.
+- **"A turn end during an open unattended run requires a record"** → **ADVISORY infrastructure, not a new
+  floor primitive.** The `Stop` hook `.claude/hooks/require-loop-record.cjs` is deterministic (session
+  equality, a plan-mode membership test, an age compare, file existence, a counter). It refuses the turn
+  end up to three times per run while `LOOP.md` is absent. It makes an early, record-less ending
+  **visible and costly**, never impossible. **It cannot make a model do work, judge a record, or tell a
+  real record from a fabricated one** (`touch LOOP.md` satisfies it). It runs only when Claude Code starts
+  it (`LIMITS.md §7`), fails **open** on anything unexpected, and is inert until a human wires it.
 - **Net:** "`/pharn-loop` finished" means **a stop was reached and recorded**. STRUCK: "the feature is good",
   "a human approved the intent", "the fix converged", "context was carried forward".
 
@@ -783,6 +809,9 @@ Then **end your turn**. Do not ask a question, do not push, do not merge, do not
 - **A prior run's Handoff informs this run with no person reading it first.** Still quoted as DATA, still
   branches nothing, still never promoted to canon (`THREAT-MODEL.md §2`, surface 3) — but the human filter a
   gated run had is gone.
+- **The Stop guard's marker and counter** (`.pharn/pharn-loop/<name>/active.json`, `stop-blocks.json`) are
+  `.pharn/` state `Bash` reaches. Deleting the marker disarms the guard for that run. The guard never reads
+  `last_assistant_message` or the transcript, and its refusal text is one closed-set line.
 - **The freshness budget ledger** (`.pharn/pharn-loop/<name>/freshness.jsonl`) and every stamp, log and
   report the freshness check reads live in the writable tree, which `Bash` reaches unhooked
   (`LIMITS.md §6`). The checker compares them with each other and with the tree; it cannot tell who wrote
@@ -848,3 +877,13 @@ the floor forces it, and an early abort skips it. It degrades safely: the next c
 unchanged and belongs to the **reader**, not to this step — **absence of a scope file = the
 fail-closed default-safe-set**. Never write "the command cleaned up"; write that it **declares** the
 release step.
+
+**Then close the run for the Stop guard** — after every write, and after the Step 7 summary is written:
+
+```bash
+node .claude/hooks/require-loop-record.cjs --close '<name>'
+```
+
+It removes `.pharn/pharn-loop/<name>/active.json`. **ADVISORY**, exactly as the release above: an early
+abort skips it, and a leftover marker degrades safely — a present `LOOP.md` and the 24 h ceiling both make
+the guard inert.

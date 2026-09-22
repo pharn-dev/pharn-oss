@@ -124,7 +124,10 @@ new layout; it converts a silent half-install into a clean refusal, which is the
    unaffected because it writes via `fs.writeFileSync`, which `PreToolUse` never sees. Deliberately the
    one file, **not** `.pharn/**` — the rest is disposable runtime scratch stages legitimately write.
    `.claude/commands/**` and the hooks' own `*.test.cjs` are deliberately **not** protected — the
-   commands are edited every increment. **Bounded, and stated:** this covers the
+   commands are edited every increment. **Nor is the fourth hook script**, the `/pharn-loop` Stop guard
+   `require-loop-record.cjs` (6.11.0): protecting it would mean editing a hook-protected file, and it is a
+   FAIL-OPEN, advisory guard that a Bash `--close` can already disarm. A Bash edit to it is still caught by
+   `reconcile`, because `.claude/hooks/*` is always-reconciled. It is a named human follow-up. **Bounded, and stated:** this covers the
    Write/Edit/MultiEdit/NotebookEdit surface only — the live `PreToolUse` matcher in
    `.claude/settings.json`, which both hooks re-test in their own code; Bash-tool writes bypass
    `PreToolUse` hooks entirely, exactly as for the trusted docs.
@@ -307,6 +310,35 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # exit trips J — named, not a mystery. Mutating gates do NOT trip F: F compares verify's FINAL fingerprint.
 # Exit: 0 FRESH · 1 RERUN `stage_to_rerun` · 2 INCONCLUSIVE (unusable input, fail-closed) · 4 STOP.
 node pharn/floor/check-loop-fresh.mjs --feature <name> --base <40-hex> (--iter <N> | --commit-gate) [--front] [--repo <dir>] [--verify-stamp <p>] [--regress-head-stamp <p>] [--regress-base-stamp <p>] [--max-reruns <R>]
+
+# The /pharn-loop STOP GUARD (added 6.11.0) — a turn end during an open unattended run requires a record.
+# THE GAP (P7): after #230 (gate map is tested code) and #242 (a stale stage is re-run), nothing stopped the
+# model from ENDING THE TURN anyway — the §6.3.0 incident was a run that finished early with a summary naming
+# the gates it skipped. `.claude/hooks/require-loop-record.cjs` is a Stop hook: while `.pharn/pharn-loop/<name>/
+# active.json` (written by `--open` at /pharn-loop Step 1a, removed by `--close` in its Final step — ONE file owns
+# the schema, L35) names THIS session, the run has a feature directory, and `pharn/features/<name>/LOOP.md` is
+# absent or empty, it refuses the turn end — K = 3 per (session, run) in TOTAL (PHARN_STOP_GUARD_MAX 1..7, kept
+# under the platform's documented "ends the turn after 8 consecutive blocks"), then ALLOWS with a
+# `systemMessage` saying the run ended without a record. INERT for another session, a null session (the env
+# var was unset at --open), plan mode, a marker older than 24 h, and a run with NO feature directory (a stop
+# there writes no record by the command's own rule — GRILL finding 1). It NEVER judges record quality (a
+# LOOP.md check-loop-record.mjs would RED still ends the turn) and never checks freshness.
+# CHANNEL: exit 0 with `{"decision":"block","reason":…}` — NOT exit 2 — because the guard FAILS OPEN (the
+# opposite of the write guards): only a complete, parsed JSON document blocks, so a crash, a partial write or
+# any non-zero exit is non-blocking by the platform's own rules. The refusal renders as a "Stop hook error"
+# (cosmetic, anthropics/claude-code#34600; `additionalContext` is the documented non-error alternative).
+# WHAT IT CANNOT DO (verbatim from its header): make a model do work; judge a record; tell a real record from
+# a fabricated one (`touch LOOP.md` satisfies it); act when Claude Code does not start it (LIMITS.md §7);
+# reach an existing install except by hand. It ships INERT: `.claude/settings.json` is protected, so the exact
+# exec-form, matcher-less entry is staged for a human in .dev/features/loop-stop-guard/settings-patch/APPLY.md,
+# and hook-wiring.test.cjs binds the committed file to that entry the moment it is applied. SESSION BINDING IS
+# OBSERVED, NOT PROBED: CLAUDE_CODE_SESSION_ID in a Bash call equals the session's id, but no live Stop event
+# was fired (that needs the human-applied wiring) — if the payload's id ever differs, the guard is INERT
+# (fail-open, silently useless), and follow-up `stop-guard-live-probe` checks it once wired. Inert-path cost:
+# ~0.03 ms in-process; a spawn is node's own startup (~70 ms). Exits for a person: `--close <name>`, interrupt,
+# or unwire — a model reaches the first and third through Bash too (LIMITS.md §6).
+node .claude/hooks/require-loop-record.cjs --open <name> --cap <M>   # /pharn-loop Step 1a
+node .claude/hooks/require-loop-record.cjs --close <name>           # /pharn-loop Final step
 
 # The two verdict cores gain an OPT-IN stamp surface; FLAG-LESS BEHAVIOR IS BYTE-IDENTICAL (regression-
 # guarded by every pre-existing fixture, asserted as EQUIVALENCE over the whole fixture set, not one case).

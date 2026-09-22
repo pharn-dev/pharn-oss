@@ -1607,6 +1607,53 @@ exists-then-read/write (CWE-367)`.
 
 ### Added
 
+- **A `Stop` hook refuses to end a turn while an unattended `/pharn-loop` run in this session has no record**
+  (`SKILLS_VERSION` 6.10.0 → **6.11.0**, minor: a newly shipped product hook and a new `/pharn-loop`
+  capability. `MIN_CLI` is untouched, and **the hook ships INERT until a human wires it**)
+  ([`.claude/hooks/require-loop-record.cjs`](./.claude/hooks/require-loop-record.cjs),
+  [`.dev/features/loop-stop-guard/`](./.dev/features/loop-stop-guard/)).
+  - **The gap.** #230 and #242 made the gate map tested code and made a stale stage re-run. Nothing
+    stopped the model from ending the turn anyway. The §6.3.0 incident was exactly that: a run that
+    finished early with a summary naming the gates it skipped.
+  - **The guard.** `/pharn-loop` Step 1a runs `require-loop-record.cjs --open <name> --cap <M>`, which
+    writes `.pharn/pharn-loop/<name>/active.json` bound to `CLAUDE_CODE_SESSION_ID`. The Final step runs
+    `--close`. One file owns the marker schema (L35). While the marker names this session, the run has a
+    feature directory, and `LOOP.md` is absent or empty, the Stop hook refuses the turn end. It does this
+    **3 times per run in total** (`PHARN_STOP_GUARD_MAX`, 1–7, kept under the platform's documented
+    8-consecutive-block override). After that it allows the end with a `systemMessage` saying the run
+    ended without a record. A blocked record is a valid record.
+  - **It is inert** for another session, a null session, plan mode, a marker older than 24 h, and a run
+    with **no feature directory**. That last case was grill finding 1: a stop there writes no record by
+    the loop's own rule, and the guard must not push the model to break it. It **never judges record
+    quality**, and never checks freshness.
+  - **Channel: exit 0 with JSON `decision: "block"`, not exit 2.** The guard fails OPEN, the opposite of
+    the write guards. Only a complete, parsed document can block, so a crash, a partial write or any
+    non-zero exit lets the turn end. The refusal renders as a "Stop hook error", which is cosmetic.
+  - **What it cannot do** (verbatim in its header):
+    - make a model do work;
+    - judge a record;
+    - tell a real record from a fabricated one;
+    - act when Claude Code does not start it;
+    - reach an existing install except by hand.
+  - **Correcting the prompt's record.** `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` appears nowhere in the hooks
+    reference. It was read from the raw page because a model summary of it invented a default twice (L37).
+    The reference also documents a third channel the prompt did not name,
+    `hookSpecificOutput.additionalContext`.
+  - **Wiring is staged, not applied.** `.claude/settings.json` is protected (fix #2). The exact
+    exec-form, matcher-less entry (`timeout: 10`) and its patch are in `settings-patch/APPLY.md`. They were
+    generated and verified in a throwaway worktree: 315/315 hook tests pass with the entry applied.
+    `hook-wiring.test.cjs` binds the committed file to that entry once it lands, executes it from a
+    subdirectory, and has a negative control (L40/L45).
+  - `workTreeRoot()` is now a three-way copy, and its ✧ pin covers all three.
+  - The inert-path cost is ~0.03 ms in-process; a spawn costs node's own startup.
+  - **Tests.**
+    - 40 guard tests, at 96.5% line coverage of the hook: an inert set, each case paired with a blocking
+      control; a fail-open set; the budget; `stop_hook_active`; containment; the Stop mode writing nothing
+      but its counter; the marker modes; and a ★ test that executes `/pharn-loop`'s pinned
+      `--open`/`--close` lines.
+    - Hygiene pins for the two lines' positions, with mutants.
+  - `pharn-loop.md` is now `version: 0.8.0`.
+
 - **`/pharn-loop` reads a stop only from evidence that belongs to THIS tree, and re-runs a stale or skipped
   stage instead of reporting it** (`SKILLS_VERSION` 6.9.3 → **6.10.0**, minor: a newly shipped product-floor
   checker and a new `/pharn-loop` capability. There is no stamp or report schema change and `MIN_CLI` is
