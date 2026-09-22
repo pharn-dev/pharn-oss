@@ -103,8 +103,23 @@ export const SECTIONS = Object.freeze([
   "## Tokens — stage x iteration x model",
   "## Files",
   "## Verdicts",
+  "## Briefing",
   "## What the run ran into",
 ]);
+
+/** A command token safe to render INLINE (outside a fence). `cost.command` is a CLI argument: the
+ *  ledger bounds it to <=128 control-char-free chars and nothing more, so a back-tick or a pipe can
+ *  reach this file. Every multi-line untrusted region here is fenced, but these two sections name the
+ *  command in PROSE, so the token is membership-tested and the terminal fallback is a generic phrase —
+ *  never a sanitized rewrite, which would misname the command (P5). */
+const COMMAND_RE = /^\/[a-z0-9][a-z0-9-]{0,63}$/;
+
+/** The emitting command, or an honest generic phrase. Read from `cost.json`'s own `command` field —
+ *  the structured location, never inferred from which artifacts happen to exist (L6). */
+export function commandLabel(cost) {
+  const c = cost && typeof cost.command === "string" ? cost.command : null;
+  return c !== null && COMMAND_RE.test(c) ? `\`${c}\`` : "the emitting command";
+}
 
 /** Rendered wherever an input is absent or unusable. One shape, so a reader learns it once. */
 export function na(reason) {
@@ -274,12 +289,53 @@ function outcomeSection(cost) {
   const w = Math.max(...rows.map((r) => r[0].length));
   // Fenced, not a table: `decision` and `base_sha` are copied from untrusted sources (see the header).
   const body = rows.map(([k, v]) => `${k.padEnd(w)}  ${v}`).join("\n");
+  return [...outcomePreamble(cost, o), "", quoteData("", body).trimStart()].join("\n");
+}
+
+/**
+ * How the `decision` above came to exist — read from `outcome.source`, the structured location, never
+ * inferred from which sibling artifacts happen to be on disk (L6).
+ *
+ * THE FLOOR/ADVISORY SPLIT IS CARRIED HERE, beside the value, and that placement is the point (P0).
+ * `/pharn-dev-grill` raised (G2) that the plan promised "the artifact carries the bound" without naming
+ * a carrier, which would have left the label living only in a contract a reader of this report may
+ * never open. A derived decision is two halves of different strength and they must not read as one.
+ */
+function outcomePreamble(cost, o) {
+  const source = o && typeof o.source === "string" ? o.source : null;
+  if (source === "LOOP.md") {
+    return [
+      "The `decision` below is copied verbatim from `LOOP.md`'s frontmatter by the ledger; this report",
+      "introduces no second source of truth for it.",
+    ];
+  }
+  if (source === "verdicts+markers") {
+    return [
+      `The \`decision\` below was **DERIVED** by the ledger, because ${commandLabel(cost)} writes no`,
+      "`LOOP.md` to copy one from. It is read from this run's own verdict reports and phase markers —",
+      "never from `SHIP.md` prose, which is a roll-up ABOUT a run, not a declaration of one.",
+      "",
+      "**The two forms are not equally strong (P0), and this report does not average them.**",
+      "",
+      "- `gate2` is **FLOOR**: it means `verify-report.json` read `PASS` **and**",
+      "  `regression-report.json` read `no-regressions` — two enum values produced by tested non-LLM",
+      "  checkers. Reaching GATE 2 hands the decision to a human; it is not itself a judgment.",
+      "- `stop:<stage>` is **ADVISORY** in its stage NAME: `<stage>` is the last `stage-start` marker,",
+      "  and markers are written by Bash calls in command prose, outside the `PreToolUse` gate — so a",
+      "  written marker does not mean the stage ran, nor the reverse. That the run did **not** meet the",
+      "  `gate2` test is a membership fact; which stage it stopped at rests on marker discipline.",
+      "- `stop:unknown` is the terminal fallback: markers exist but none is a `stage-start`.",
+      "",
+      "**Neither form says the outcome was correct.** Unlike `/pharn-loop`, whose recorded decision",
+      "`check-loop-decision.mjs` re-derives from its own cited reports, there is no equivalent",
+      "re-derivation here and none is claimed — a ship stop is a human gate or an orchestrator STOP, and",
+      "no checker computes either.",
+    ];
+  }
   return [
-    "The `decision` below is copied verbatim from `LOOP.md`'s frontmatter by the ledger; this report",
-    "introduces no second source of truth for it.",
-    "",
-    quoteData("", body).trimStart(),
-  ].join("\n");
+    "`outcome.source` is absent or unrecognized, so this report says nothing about how the `decision`",
+    "below was produced. Read it as unattributed rather than as either declared or derived.",
+  ];
 }
 
 function tokensSection(cost) {
@@ -355,8 +411,8 @@ function filesSection({ cost, repo, planEntries, dirtyBefore, dirtyNote }) {
     "",
     dirtyNote,
     "",
-    `Rendered before this run's commit and after \`cost.json\` was written, so \`cost.json\` appears below`,
-    "and this report itself does not.",
+    "Rendered after `cost.json` was written and before any commit this run may make, so `cost.json`",
+    "appears below and this report itself does not.",
     "",
   ];
   for (const p of seen) {
@@ -386,8 +442,9 @@ function verdictsSection({ verify, regress, cost }) {
   const iters = cost && cost.outcome && cost.outcome.iterations;
   const label = typeof iters === "number" ? `iteration ${iters} (final)` : "the final iteration";
   const out = [
-    `**${label} only.** \`/pharn-loop\` OVERWRITES \`verify-report.json\` and \`regression-report.json\``,
-    "in place on every iteration, so earlier iterations' verdicts are not on disk at the stop and this",
+    `**${label} only.** ${commandLabel(cost)} OVERWRITES \`verify-report.json\` and \`regression-report.json\``,
+    "in place whenever it re-runs those stages, so earlier iterations' verdicts are not on disk at the",
+    "stop and this",
     "report will not invent them. Per-iteration **cost** is genuine and is in `## Tokens` above.",
     "",
   ];
@@ -419,8 +476,51 @@ function verdictsSection({ verify, regress, cost }) {
   return out.join("\n");
 }
 
-function handoffSection(loopText) {
+/**
+ * A POINTER to the GATE-2 briefing, never a copy of it.
+ *
+ * Only EXISTENCE is tested; no byte of `BRIEFING.md` is read into this report. That is deliberate on two
+ * counts. (1) P4 — `pharn/pharn-contracts/ship-briefing.md` defines what the artifact is and what it is
+ * not; restating any of it here would create a second description to keep in sync ([[L35]]). (2) P2 — the
+ * briefing may carry a bounded, always-labeled model-synthesized paragraph, and quoting untrusted prose
+ * into a second artifact widens its reach for no gain when a link reaches the same reader.
+ *
+ * An absent briefing is a REAL state, not a failure: `/pharn-ship` renders it only after a `PASS` verify,
+ * and `/pharn-loop` never renders one at all. The section is emitted UNCONDITIONALLY with an honest `n/a`
+ * rather than dropped, because a missing section and an absent artifact must not look the same ([[L34]]:
+ * silence and asserted-silence are different claims).
+ */
+function briefingSection({ dir }) {
+  const rel = join(dir, "BRIEFING.md");
+  if (!existsSync(rel)) {
+    // The sentinel states THIS artifact's absence and nothing else. It must NOT explain the emitting
+    // command's lifecycle: the earlier form read "<command> renders one only at GATE 2", which is false
+    // for `/pharn-loop` — a command that has no GATE 2 and never renders a briefing at all. A renderer
+    // whose claim is that every line is DERIVED cannot afford a derived line that is wrong for one of
+    // its two callers (REVIEW finding F1, fixed before the gate rather than deferred).
+    return na(
+      "no BRIEFING.md beside this report — not every command renders one, and a run that stops before its post-verify gate never does"
+    );
+  }
+  return [
+    "- [`BRIEFING.md`](./BRIEFING.md) — the GATE-2 briefing, rendered beside this report.",
+    "",
+    "**Linked, not quoted.** No byte of it is copied here, and this report makes no claim about its",
+    "contents. What that artifact is — and what it is not — is defined once in",
+    "`pharn/pharn-contracts/ship-briefing.md`; its own frontmatter is cross-verified against its sources",
+    "by `pharn/floor/check-ship-briefing.mjs`, which annotates and gates nothing.",
+  ].join("\n");
+}
+
+function handoffSection(loopText, cost) {
   if (loopText === null) {
+    const source = cost && cost.outcome && cost.outcome.source;
+    // A DERIVED outcome means the emitting command writes no record, so the absence is BY DESIGN. The
+    // older single message read "a stop that wrote no record", which invites a reader to hunt for a
+    // record that was never owed — an honest `n/a` must say WHICH of the two states it is.
+    if (source === "verdicts+markers") {
+      return na(`${commandLabel(cost)} writes no \`LOOP.md\`, so this run has no Handoff BY DESIGN — nothing is missing`);
+    }
     return na("no LOOP.md — a stop that wrote no record has no Handoff to quote");
   }
   const { count, subs, nonEmpty, bodies } = handoffSections(loopText);
@@ -514,7 +614,8 @@ export function renderRunReport(name, opts = {}) {
     "## Tokens — stage x iteration x model": tokensSection(cost),
     "## Files": filesSection({ cost, repo, planEntries, dirtyBefore, dirtyNote }),
     "## Verdicts": verdictsSection({ verify, regress, cost }),
-    "## What the run ran into": handoffSection(loopText),
+    "## Briefing": briefingSection({ dir }),
+    "## What the run ran into": handoffSection(loopText, cost),
   };
 
   for (const heading of SECTIONS) {

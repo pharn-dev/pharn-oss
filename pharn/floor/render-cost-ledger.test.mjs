@@ -38,7 +38,13 @@ import {
   TOP_LEVEL_KEYS,
   SCHEMA,
   FEATURE_BASE,
+  DEFAULT_COMMAND,
+  UNKNOWN_BASE_SHA,
+  OUTCOME_SOURCES,
+  OUTCOME_KEYS,
+  LOOP_RECORD_SOURCE,
 } from "./render-cost-ledger.mjs";
+import { OUTCOME_SOURCE as SHIP_OUTCOME_SOURCE } from "./ship-outcome-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, "render-cost-ledger.mjs");
@@ -557,6 +563,137 @@ test("L41 NO-ARGUMENT CONTROL: with no --base the CLI WRITES to the single FEATU
   ]);
   assert.equal(r.status, 0, r.stderr);
   assert.ok(existsSync(join(out, FEATURE_BASE, "feat", "cost.json")), `expected the ledger under the single default ${FEATURE_BASE}`);
+});
+
+// ── the OTHER two defaults this module carried twice (L41 / L52) ─────────────────────────────────────
+//
+// L52's transferable rule is that a set-quantified remedy must NAME THE SET in the same sentence, because
+// the singular phrasing ("one test exercises the no-argument path") is what licenses covering one member
+// and declaring it done — and its recorded instance is THIS MODULE, one constant over. The set here is
+// "every default retired in this change": `command` and `baseSha`. One no-argument test each, plus one
+// closure assertion each. Not one test, and not a test for whichever default was in front of the author.
+
+test("L41/L52 NO-ARGUMENT CONTROL 1 of 2: with no --command the CLI lands on the single DEFAULT_COMMAND", () => {
+  // Before this, `main()`'s opts object ALWAYS passed its own copy, so `renderLedger`'s destructuring
+  // default was dead to every CLI test — the same blind spot, a different constant.
+  const { projectsDir } = stageSingle();
+  const out = mkdtempSync(join(tmpdir(), "cost-ledger-nocmd-"));
+  const r = run(["feat", "--repo", out, "--base", "f", "--session", REAL_SESSION, "--projects-dir", projectsDir, "--stdout"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(JSON.parse(r.stdout).command, DEFAULT_COMMAND);
+});
+
+test("L41/L52 NO-ARGUMENT CONTROL 2 of 2: with no --base-sha the CLI lands on the single UNKNOWN_BASE_SHA", () => {
+  const { projectsDir } = stageSingle();
+  const out = mkdtempSync(join(tmpdir(), "cost-ledger-nosha-"));
+  const r = run(["feat", "--repo", out, "--base", "f", "--session", REAL_SESSION, "--projects-dir", projectsDir, "--stdout"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(JSON.parse(r.stdout).base_sha, UNKNOWN_BASE_SHA);
+});
+
+test("L52 CLOSURE: each retired default appears exactly ONCE in the module source", () => {
+  // The closure half of L52's remedy: a re-introduced duplicate FAILS here rather than merely going
+  // untested. Counting occurrences is what distinguishes this from a presence assertion.
+  const src = readFileSync(CLI, "utf8");
+  for (const [literal, decl] of [
+    ['"/pharn-loop"', /export const DEFAULT_COMMAND = "\/pharn-loop";/],
+    ['"unknown"', null], // see below — `unknown` is a WORD this module uses for other facts too
+  ]) {
+    if (decl === null) continue;
+    const hits = src.split(literal).length - 1;
+    assert.equal(hits, 1, `${literal} must appear exactly once (the const); found ${hits}`);
+    assert.match(src, decl);
+  }
+  // `"unknown"` cannot be counted the same way: it is ALSO a member of SKILLS_VERSION_SOURCES and the
+  // fallback for an unreadable model id — genuinely different facts that share a spelling. So the
+  // closure for THIS default is that the CLI no longer carries a base-sha literal at all: `main()` must
+  // pass it conditionally, exactly as it does for `--base`.
+  assert.match(src, /export const UNKNOWN_BASE_SHA = "unknown";/);
+  assert.match(src, /baseSha = UNKNOWN_BASE_SHA,/, "renderLedger must reference the const, not a literal");
+  assert.match(
+    src,
+    /\.\.\.\(opts\.baseSha === null \? \{\} : \{ baseSha: opts\.baseSha \}\),/,
+    "the CLI must spread the flag away when absent"
+  );
+  assert.match(src, /\.\.\.\(opts\.command === null \? \{\} : \{ command: opts\.command \}\),/);
+});
+
+// ── outcome: the loop DECLARES, every other caller DERIVES ───────────────────────────────────────────
+
+test("outcome PRECEDENCE: a LOOP.md envelope always wins over the derived ship outcome", () => {
+  // The loop's bytes must not move. A feature dir carrying BOTH a record and verdict reports must still
+  // report the DECLARED decision — deriving is a fallback, never a re-interpretation.
+  const { projectsDir } = stageSingle();
+  const out = mkdtempSync(join(tmpdir(), "cost-ledger-prec-"));
+  const dir = join(out, "f", "feat");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "LOOP.md"), "---\ndecision: STOP_GREEN\niterations: 2\n---\n\n# LOOP\n");
+  writeFileSync(join(dir, "verify-report.json"), '{"verdict":"FAIL"}');
+  writeFileSync(join(dir, "regression-report.json"), '{"verdict":"regressions"}');
+  const mb = writeMarkers(out, "feat", [
+    { seq: 1, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-01-01T00:00:00.000Z", session_id: "s1" },
+  ]);
+  const r = run([
+    "feat",
+    "--repo",
+    out,
+    "--base",
+    "f",
+    "--markers-base",
+    mb,
+    "--session",
+    REAL_SESSION,
+    "--projects-dir",
+    projectsDir,
+    "--stdout",
+  ]);
+  assert.equal(r.status, 0, r.stderr);
+  const o = JSON.parse(r.stdout).outcome;
+  assert.equal(o.decision, "STOP_GREEN", "the DECLARED envelope wins");
+  assert.equal(o.source, LOOP_RECORD_SOURCE);
+});
+
+test("outcome FALLBACK: with no LOOP.md the ledger carries the DERIVED ship outcome", () => {
+  const { projectsDir } = stageSingle();
+  const out = mkdtempSync(join(tmpdir(), "cost-ledger-derived-"));
+  const dir = join(out, "f", "feat");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "verify-report.json"), '{"verdict":"PASS"}');
+  writeFileSync(join(dir, "regression-report.json"), '{"verdict":"no-regressions"}');
+  const mb = writeMarkers(out, "feat", [
+    { seq: 1, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-01-01T00:00:00.000Z", session_id: "s1" },
+  ]);
+  const r = run([
+    "feat",
+    "--repo",
+    out,
+    "--base",
+    "f",
+    "--markers-base",
+    mb,
+    "--command",
+    "/pharn-ship",
+    "--session",
+    REAL_SESSION,
+    "--projects-dir",
+    projectsDir,
+    "--stdout",
+  ]);
+  assert.equal(r.status, 0, r.stderr);
+  const led = JSON.parse(r.stdout);
+  assert.equal(led.command, "/pharn-ship");
+  assert.equal(led.outcome.decision, "gate2");
+  assert.equal(led.outcome.source, SHIP_OUTCOME_SOURCE);
+});
+
+test("OUTCOME_SOURCES is the closed two-member enum, defined once and shared with the checker", () => {
+  assert.deepEqual([...OUTCOME_SOURCES], [LOOP_RECORD_SOURCE, SHIP_OUTCOME_SOURCE], "equality, not presence (L36)");
+  assert.equal(OUTCOME_SOURCES.length, 2, "non-vacuity: gaining or losing a member must fail here");
+  assert.deepEqual([...OUTCOME_KEYS], ["decision", "iterations", "source", "blocked"]);
+  // The member is IMPORTED from the module that produces it, never re-spelled here (L35).
+  const src = readFileSync(CLI, "utf8");
+  assert.match(src, /OUTCOME_SOURCE as SHIP_OUTCOME_SOURCE/, "the derived member must be imported, not duplicated");
+  assert.equal(src.split('"verdicts+markers"').length - 1, 0, "the derived source literal must not be re-spelled in this module");
 });
 
 test("FEATURE_BASE is referenced, never re-spelled — one literal in the module", () => {

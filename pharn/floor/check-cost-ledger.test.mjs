@@ -347,3 +347,82 @@ test("the exported TOP_LEVEL_KEYS is what the checker actually enforces (one def
   assert.equal(led.schema, SCHEMA);
   assert.equal(led.attribution.method, ATTRIBUTION_METHOD);
 });
+
+// ── RULE 7: the `outcome` shape ──────────────────────────────────────────────────────────────────────
+//
+// WHY THESE EXIST. `cost-ledger.md` advertised `outcome` as `FLOOR (shape)` from the day the contract
+// shipped, while this checker validated nothing inside it — a FLOOR label with no running op behind it,
+// which is the disease P0 names and the rule [[L2]] states. The rule was built rather than the label
+// relabelled because `/pharn-ship` adds a SECOND producer and a SECOND `source` member: leaving the
+// field unchecked would have deepened the overclaim instead of inheriting it.
+//
+// Each rule below is paired with a MUTATION CONTROL (L4): an assertion that only ever sees the valid
+// input certifies nothing about the invalid one.
+
+test("RULE 7: a null outcome is VALID — and so is each shipped producer's real shape", () => {
+  const led = cleanLedger();
+  // Non-vacuity first (L34): the domain must be non-empty and the clean ledger must actually pass, or
+  // every "must RED" assertion below is satisfied by a checker that reds on everything.
+  const valid = [
+    null,
+    { decision: "STOP_GREEN", iterations: 1, source: "LOOP.md" },
+    { decision: "INCONCLUSIVE", iterations: 2, source: "LOOP.md", blocked: "S7" },
+    { decision: "gate2", iterations: 1, source: "verdicts+markers" },
+    { decision: "stop:pharn-verify", iterations: null, source: "verdicts+markers" },
+    { decision: "stop:unknown", iterations: null, source: "verdicts+markers" },
+  ];
+  assert.ok(valid.length >= 6, "non-vacuity: the valid domain must be non-empty");
+  for (const outcome of valid) {
+    const l = clone(led);
+    l.outcome = outcome;
+    assert.deepEqual(redsOf(l), [], `a valid outcome must not RED: ${JSON.stringify(outcome)}`);
+  }
+});
+
+test("RULE 7 DISCRIMINATES: every malformed outcome REDs, and the message names the field", () => {
+  const led = cleanLedger();
+  const invalid = [
+    [{ decision: "gate2", iterations: 1, source: "SHIP.md" }, /outcome\.source/],
+    [{ decision: "gate2", iterations: 1, source: null }, /outcome\.source/],
+    [{ decision: "gate2", iterations: 1 }, /outcome\.source/],
+    [{ decision: "", iterations: 1, source: "LOOP.md" }, /outcome\.decision/],
+    [{ decision: 7, iterations: 1, source: "LOOP.md" }, /outcome\.decision/],
+    [{ decision: "a\nb", iterations: 1, source: "LOOP.md" }, /outcome\.decision/],
+    [{ decision: "x".repeat(129), iterations: 1, source: "LOOP.md" }, /outcome\.decision/],
+    [{ decision: "gate2", iterations: 1.5, source: "LOOP.md" }, /outcome\.iterations/],
+    [{ decision: "gate2", iterations: "1", source: "LOOP.md" }, /outcome\.iterations/],
+    [{ decision: "gate2", iterations: 1, source: "LOOP.md", blocked: 9 }, /outcome\.blocked/],
+    [{ decision: "gate2", iterations: 1, source: "LOOP.md", extra: true }, /unknown key/],
+    [[1, 2], /outcome must be an object or null/],
+    ["STOP_GREEN", /outcome must be an object or null/],
+  ];
+  assert.ok(invalid.length >= 13, "non-vacuity: the invalid domain must be non-empty");
+  for (const [outcome, re] of invalid) {
+    const l = clone(led);
+    l.outcome = outcome;
+    const reds = redsOf(l);
+    assert.ok(reds.length > 0, `must RED: ${JSON.stringify(outcome)}`);
+    assert.ok(
+      reds.some((m) => re.test(m)),
+      `the RED must name the offending field for ${JSON.stringify(outcome)}; got ${JSON.stringify(reds)}`
+    );
+  }
+});
+
+test("RULE 7 closes the key set in BOTH directions — presence would miss a variant spelling (L36)", () => {
+  const led = cleanLedger();
+  // A per-member presence set is satisfied by a ledger carrying `decisions` beside `decision`; closure
+  // is what fails it. Each variant below is a plausible mis-spelling of a REAL member.
+  for (const k of ["decisions", "Decision", "iteration", "sources", "blocked_by"]) {
+    const l = clone(led);
+    l.outcome = { decision: "gate2", iterations: 1, source: "LOOP.md", [k]: "x" };
+    assert.ok(
+      redsOf(l).some((m) => /unknown key/.test(m)),
+      `a variant key ${k} must fail closure`
+    );
+  }
+  // MUTATION CONTROL: the four real keys must NOT trip it, or the rule rejects everything.
+  const ok = clone(led);
+  ok.outcome = { decision: "INCONCLUSIVE", iterations: 3, source: "LOOP.md", blocked: "S9" };
+  assert.deepEqual(redsOf(ok), []);
+});

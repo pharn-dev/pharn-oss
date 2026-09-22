@@ -1564,3 +1564,155 @@ test("✧ the /pharn-loop rules DISCRIMINATE — each fails on a mutant of the r
   assert.equal(commitBlockReason(real), null);
   assert.deepEqual(crossBlockVariableOffenders(real), []);
 });
+
+// ── PHASE-MARKER WIRING — the ENUMERATION over emitting commands (L29/L31/L36) ───────────────────────
+//
+// `/pharn-loop` was the only command writing phase markers until `/pharn-ship` was wired. The moment a
+// capability has TWO callers, what each caller OWES becomes a set — and [[L31]] is the record of exactly
+// this shape going wrong: a deliberate pair whose CODE was pinned to agree while its OBLIGATIONS were
+// enumerated nowhere, so the second copy shipped missing both invocations for a whole release line with
+// every gate green. The failure was not that someone forgot; it was that the set of sites was never
+// written down, so "done" was assessed per-file.
+//
+// So the obligations are materialized HERE and the rules iterate them: a third emitting command inherits
+// every rule below without anyone editing this file, and the CORPUS CLOSURE test makes it FAIL until it
+// is enumerated rather than silently going uncovered.
+//
+// Honest scope, the same narrow kind as every set above: these read command PROSE. They prove the
+// invocation is PRESENT with the right flags. They cannot prove a run executed it, that the marker file
+// was written, or that the stage named actually ran — "the wiring is pinned" NEVER means "the marker was
+// written" (P0), which is `mark-phase.mjs`'s own stated bound and is not re-claimed stronger here.
+
+const MARK_PHASE = /node pharn\/floor\/mark-phase\.mjs[^\n]*/g;
+
+const PHASE_MARKER_WIRING = [
+  {
+    file: "pharn-loop.md",
+    // The loop marks pharn-spec: it resolves `<name>` at S2 and marks run-start there, before the spec
+    // stage runs.
+    stages: ["pharn-spec", "pharn-plan", "pharn-grill", "pharn-build", "pharn-regress", "pharn-verify"],
+    iterated: ["pharn-build", "pharn-regress", "pharn-verify"],
+    // The loop's iteration count is a RUNTIME value under a `--max-iter` cap, so the command pins the
+    // PLACEHOLDER and the agent substitutes it. Pinning `\d+` here would be wrong for this command.
+    iterationForm: /^<N>$/,
+    iterationWhy: "a runtime value under --max-iter, substituted by the agent",
+  },
+  {
+    file: "pharn-ship.md",
+    // Ship does NOT mark pharn-spec, and the omission is DELIBERATE, not a gap: `<name>` is resolved BY
+    // `/pharn-spec`, and `<name>` is the marker file's own directory — so no marker can exist before that
+    // stage has already run. Its requests are `unattributed`, which the command states as a bound. A rule
+    // demanding a `pharn-spec` marker here would demand an impossible one.
+    stages: ["pharn-plan", "pharn-grill", "pharn-build", "pharn-regress", "pharn-verify"],
+    iterated: ["pharn-build", "pharn-regress", "pharn-verify"],
+    // Ship does not iterate: it runs the chain once, with AT MOST ONE build-completion retry. So its
+    // iteration numbers are LITERAL — 1 in the chain, 2 in the Step-2b retry — and a `<N>` placeholder
+    // here would be a copied-from-the-loop mistake that renders an invalid `--iteration` at runtime.
+    // The two forms are pinned per command precisely so neither can drift into the other.
+    iterationForm: /^[12]$/,
+    iterationWhy: "a literal: 1 in the chain, 2 in the single Step-2b retry",
+  },
+];
+
+test("✧ PHASE-MARKER ENUMERATION is non-vacuous and CLOSED over the corpus", () => {
+  assert.ok(PHASE_MARKER_WIRING.length >= 2, `expected >=2 emitting commands, got ${PHASE_MARKER_WIRING.length}`);
+  const enumerated = PHASE_MARKER_WIRING.map((c) => c.file).sort();
+  assert.deepEqual([...new Set(enumerated)], enumerated, "no duplicate member");
+  // Closure over the CORPUS, not over this list — this is the assertion that makes a third caller fail
+  // here instead of shipping uncovered (L31's exact gap).
+  const live = readdirSync(COMMANDS_DIR)
+    .filter((f) => f.endsWith(".md") && /node pharn\/floor\/mark-phase\.mjs/.test(readFileSync(join(COMMANDS_DIR, f), "utf8")))
+    .sort();
+  assert.deepEqual(live, enumerated, "every command invoking mark-phase.mjs must be enumerated above");
+});
+
+for (const cmd of PHASE_MARKER_WIRING) {
+  test(`✧ ${cmd.file} brackets its run and every stage it runs`, () => {
+    const body = commandBody(cmd.file);
+    const calls = body.match(MARK_PHASE) ?? [];
+    assert.ok(calls.length > 0, `non-vacuity: ${cmd.file} must carry mark-phase invocations`);
+
+    const kindsSeen = calls.map((c) => (c.match(/--kind\s+(\S+)/) ?? [])[1]);
+    // CLOSURE over the kind vocabulary (L36): an invented `--kind` fails, which a per-member presence
+    // set would not catch. The set is the one `mark-phase.mjs` enforces; a typo'd kind is refused at
+    // runtime, so a pinned typo would be a command that silently records nothing.
+    for (const k of kindsSeen) {
+      assert.ok(
+        ["run-start", "stage-start", "orchestrator", "run-stop"].includes(k),
+        `${cmd.file} uses an unknown --kind ${JSON.stringify(k)}`
+      );
+    }
+
+    // The RUN boundaries: exactly one of each. Two `run-start`s would mean two epochs in one ledger.
+    for (const kind of ["run-start", "run-stop"]) {
+      const n = kindsSeen.filter((k) => k === kind).length;
+      assert.equal(n, 1, `${cmd.file} must carry exactly one --kind ${kind} invocation; found ${n}`);
+    }
+
+    // Every stage this command runs must be marked.
+    const staged = new Set(calls.map((c) => (c.match(/--stage\s+(\S+)/) ?? [])[1]).filter(Boolean));
+    assert.deepEqual([...staged].sort(), [...cmd.stages].sort(), `${cmd.file}'s marked stages must equal its declared stage set`);
+
+    // An `orchestrator` marker per stage-start, so a stage's tail is not attributed to the stage.
+    const starts = kindsSeen.filter((k) => k === "stage-start").length;
+    const orchs = kindsSeen.filter((k) => k === "orchestrator").length;
+    assert.equal(orchs, starts, `${cmd.file} must return to the orchestrator after every stage-start (${starts} starts, ${orchs} returns)`);
+
+    // The iterated stages carry an explicit --iteration; the once-only stages must NOT, or their
+    // requests would land in a bucket the run never iterated.
+    for (const c of calls) {
+      const stage = (c.match(/--stage\s+(\S+)/) ?? [])[1];
+      if (!stage) continue;
+      const iter = (c.match(/--iteration\s+(\S+)/) ?? [])[1];
+      if (cmd.iterated.includes(stage)) {
+        assert.ok(iter !== undefined, `${cmd.file}: ${stage} is iterated and must carry --iteration`);
+        assert.match(iter, cmd.iterationForm, `${cmd.file}: ${stage}'s --iteration must be ${cmd.iterationWhy}`);
+      } else {
+        assert.equal(iter, undefined, `${cmd.file}: ${stage} runs once and must not carry --iteration`);
+      }
+    }
+  });
+}
+
+test("✧ PHASE-MARKER rules DISCRIMINATE — a dropped orchestrator and a mistyped kind are both caught", () => {
+  // L4/L34: an assertion that only ever sees the correct corpus certifies nothing. Mutate the REAL body
+  // so the guard's own extraction runs on both sides.
+  const body = commandBody("pharn-ship.md");
+  const dropped = body.replace(/node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind orchestrator\n/, "");
+  assert.notEqual(dropped, body, "the mutation must change the body, or this test is vacuous");
+  const kindsOf = (s) => (s.match(MARK_PHASE) ?? []).map((c) => (c.match(/--kind\s+(\S+)/) ?? [])[1]);
+  const k = kindsOf(dropped);
+  assert.notEqual(
+    k.filter((x) => x === "orchestrator").length,
+    k.filter((x) => x === "stage-start").length,
+    "a dropped orchestrator must break the pairing rule"
+  );
+  const mistyped = body.replace("--kind run-stop", "--kind run-stopped");
+  assert.ok(kindsOf(mistyped).includes("run-stopped"), "the guard must SEE a mistyped kind — else it proves nothing");
+  assert.ok(!["run-start", "stage-start", "orchestrator", "run-stop"].includes("run-stopped"), "and the closure must reject it");
+});
+
+test("✧ every emitting command emits the LEDGER and the REPORT, and checks the ledger", () => {
+  // The three invocations are one obligation set: an emitter that writes cost.json but never checks it
+  // ships an unvalidated artifact, and one that skips the report leaves the ledger with no human view.
+  const OBLIGATIONS = [
+    ["render-cost-ledger", /node pharn\/floor\/render-cost-ledger\.mjs '<name>' --command \/pharn-\w+/],
+    ["check-cost-ledger", /node pharn\/floor\/check-cost-ledger\.mjs pharn\/features\/<name>\/cost\.json/],
+    ["render-run-report", /node pharn\/floor\/render-run-report\.mjs '<name>' --base pharn\/features/],
+  ];
+  assert.equal(OBLIGATIONS.length, 3, "non-vacuity: the obligation set must be non-empty and counted");
+  for (const cmd of PHASE_MARKER_WIRING) {
+    const body = commandBody(cmd.file);
+    for (const [label, re] of OBLIGATIONS) {
+      assert.match(body, re, `${cmd.file} must invoke ${label} with its pinned arguments`);
+    }
+    // `--command` must name THIS command, not a sibling — the defect a copied invocation produces, and
+    // the reason the ledger's `command` field is worth checking at all.
+    const slug = cmd.file.replace(/\.md$/, "");
+    assert.match(
+      body,
+      new RegExp(`render-cost-ledger\\.mjs '<name>' --command /${slug}\\b`),
+      `${cmd.file} must pass --command /${slug} — a copied sibling value would mislabel every ledger it writes`
+    );
+  }
+});
