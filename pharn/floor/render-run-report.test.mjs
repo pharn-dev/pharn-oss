@@ -18,7 +18,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -160,7 +160,7 @@ test("L36 CLOSURE: the rendered `##` headings equal SECTIONS exactly, both direc
   try {
     feature(root, "feat", { "cost.json": costJson(), "LOOP.md": LOOP_MD });
     const got = headings(renderRunReport("feat", { repo: root }));
-    assert.equal(SECTIONS.length, 5, "non-vacuity: the vocabulary must be non-empty");
+    assert.equal(SECTIONS.length, 6, "non-vacuity: the vocabulary must be non-empty");
     // Equality, not per-member presence: a variant spelling of ANY member fails here, which is the
     // whole point — a presence set is satisfied by the spelling its author was looking at.
     assert.deepEqual(got, [...SECTIONS]);
@@ -822,28 +822,246 @@ test("★ ENUMERATION (L29/L31): every site that must know `RUN-REPORT.md` names
   }
 });
 
-test("★ WIRING (L45): the committed pharn-loop.md invokes the renderer, in its Step 6b position", () => {
-  // Pinning the module is not pinning the invocation. L45 is the record of a guard fixed in its own file
-  // while the file that INVOKES it kept the defect for a whole release line, invisible to a suite that
-  // only ever spawned the script by path.
-  const cmd = readFileSync(join(REPO, ".claude", "commands", "pharn-loop.md"), "utf8");
-  const invocation = /node pharn\/floor\/render-run-report\.mjs '<name>' --base pharn\/features/;
-  assert.match(cmd, invocation, "the committed command must carry the pinned invocation line");
+// ── WIRING: an ENUMERATION over INVOKING COMMANDS, not a test for the one in front of the author ─────
+//
+// This began as a single assertion about `pharn-loop.md`. `/pharn-ship` is the SECOND invoker, and
+// [[L29]] is explicit that when a remedy is quantified over a set, the ENUMERATION is the deliverable —
+// an assertion authored for one member reads as discharged for all of them. [[L31]] names a deliberate
+// pair as the highest-value place such a set hides, because the second copy is invisible precisely
+// while the first is correct and reviewable on its own. So the set is materialized HERE and the rules
+// iterate it: a THIRD invoking command inherits every rule below without anyone editing this file.
+//
+// [[L45]] is why this pins the INVOCATION and not the module: a guard fixed in its own file kept the
+// defect for a whole release line because the file that INVOKED it was never updated, and a suite that
+// only ever spawned the script by path could not see the gap.
+//
+// Each member names the boundary its render must precede. The boundaries DIFFER by command and that is
+// the point — the loop must render before it COMMITS, ship before it can HALT on attestation — so a
+// single shared regex would be wrong for one of them.
+const RENDERER_INVOKERS = [
+  {
+    file: "pharn-loop.md",
+    role: "renders at every stop that has a feature directory, before Step 6c's commit",
+    boundary: /^### Step 6c —/m,
+    boundaryLabel: "Step 6c (the commit)",
+  },
+  {
+    file: "pharn-ship.md",
+    role: "renders at every exit that ends the run, before Step 3b can STOP or halt on attestation",
+    boundary: /^## Step 3b —/m,
+    boundaryLabel: "Step 3b (attestation)",
+  },
+];
 
-  const at = (re) => cmd.search(re);
-  const ledgerCheck = at(/node pharn\/floor\/check-cost-ledger\.mjs/);
-  const render = at(invocation);
-  const step6c = at(/^### Step 6c —/m);
-  assert.ok(ledgerCheck > 0 && render > 0 && step6c > 0, "non-vacuity: all three anchors must be found");
-  assert.ok(ledgerCheck < render, "the render must come AFTER Step 6b's ledger checks");
-  assert.ok(render < step6c, "the render must come BEFORE Step 6c");
+const RENDER_INVOCATION = /node pharn\/floor\/render-run-report\.mjs '<name>' --base pharn\/features/;
+const LEDGER_CHECK = /node pharn\/floor\/check-cost-ledger\.mjs/;
 
-  // NEGATIVE CONTROL: the assertion must be capable of failing.
-  assert.ok(!invocation.test("node pharn/floor/render-run-report.mjs"), "the pin must require the full line");
+test("★ WIRING ENUMERATION (L29/L31/L45) is non-vacuous and covers every invoking command", () => {
+  assert.ok(RENDERER_INVOKERS.length >= 2, `expected >=2 invoking commands, got ${RENDERER_INVOKERS.length}`);
+  const files = RENDERER_INVOKERS.map((c) => c.file);
+  assert.deepEqual([...new Set(files)], files, "no duplicate member");
+  // Closure over the CORPUS, not over this list: any command that invokes the renderer must be a
+  // member. This is what makes a third invoker fail here instead of silently going uncovered — the
+  // exact gap L31 records, where the set of sites was never written down so "done" was assessed
+  // per-file.
+  const cmdDir = join(REPO, ".claude", "commands");
+  const invokers = readdirSync(cmdDir).filter((f) => f.endsWith(".md") && RENDER_INVOCATION.test(readFileSync(join(cmdDir, f), "utf8")));
+  assert.deepEqual(invokers.sort(), [...files].sort(), "every command invoking the renderer must be enumerated above");
+});
+
+for (const cmd of RENDERER_INVOKERS) {
+  test(`★ WIRING (L45): ${cmd.file} ${cmd.role}`, () => {
+    const text = readFileSync(join(REPO, ".claude", "commands", cmd.file), "utf8");
+    assert.match(text, RENDER_INVOCATION, "the committed command must carry the pinned invocation line");
+
+    const at = (re) => text.search(re);
+    const ledgerCheck = at(LEDGER_CHECK);
+    const render = at(RENDER_INVOCATION);
+    const boundary = at(cmd.boundary);
+    assert.ok(ledgerCheck > 0 && render > 0 && boundary > 0, `non-vacuity: all three anchors must be found in ${cmd.file}`);
+    assert.ok(ledgerCheck < render, "the render must come AFTER the ledger checks");
+    assert.ok(render < boundary, `the render must come BEFORE ${cmd.boundaryLabel}`);
+  });
+}
+
+test("★ NEGATIVE CONTROL: the invocation pin requires the FULL line, not the module name", () => {
+  assert.ok(!RENDER_INVOCATION.test("node pharn/floor/render-run-report.mjs"), "a bare module path must not satisfy the pin");
+  assert.ok(!RENDER_INVOCATION.test("node pharn/floor/render-run-report.mjs '<name>'"), "a missing --base must not satisfy the pin");
+  assert.ok(RENDER_INVOCATION.test("node pharn/floor/render-run-report.mjs '<name>' --base pharn/features"), "and the real line must");
 });
 
 test("★ the staging list and Step 7 both know the report", () => {
   const cmd = readFileSync(join(REPO, ".claude", "commands", "pharn-loop.md"), "utf8");
   assert.match(cmd, /"LOOP\.md", "cost\.json", "RUN-REPORT\.md"\]/, "Step 6c must stage it");
   assert.match(cmd, /\*\*the run report\*\*/, "Step 7 must print from it");
+});
+
+// ── command-neutrality: the report serves a SECOND emitter without a second renderer ────────────────
+//
+// Everything below branches on `cost.json`'s OWN fields — `command` and `outcome.source` — which is the
+// structured location (L6). Nothing infers the emitting command from which sibling artifacts happen to
+// exist on disk.
+
+/** A ledger as `/pharn-ship` emits it: a DERIVED outcome and no LOOP.md anywhere. */
+const shipCost = (over = {}) =>
+  costJson({ command: "/pharn-ship", outcome: { decision: "gate2", iterations: 1, source: "verdicts+markers" }, ...over });
+
+test("Outcome: a DERIVED decision carries the floor/advisory split BESIDE the value (GRILL G2)", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", { "cost.json": shipCost() });
+    const md = renderRunReport("feat", { repo: root });
+    assert.match(md, /\*\*DERIVED\*\*/, "a derived decision must say so");
+    assert.match(md, /`gate2` is \*\*FLOOR\*\*/, "the floor half must be labelled");
+    assert.match(md, /`stop:<stage>` is \*\*ADVISORY\*\*/, "the advisory half must be labelled");
+    assert.match(md, /`stop:unknown` is the terminal fallback/);
+    assert.match(md, /never from `SHIP\.md` prose/, "L6: the outcome is not read from a roll-up");
+    assert.match(md, /no equivalent\n?re-derivation here and none is claimed/, "the asymmetry with /pharn-loop must be named");
+    // The label must reach a reader of THIS artifact — not only the contract.
+    assert.ok(md.indexOf("ADVISORY") < md.indexOf("## Tokens"), "the split belongs in the Outcome section, beside the value");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Outcome: a DECLARED decision keeps the loop's wording — the loop's bytes do not move", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", { "cost.json": costJson(), "LOOP.md": LOOP_MD });
+    const md = renderRunReport("feat", { repo: root });
+    assert.match(md, /copied verbatim from `LOOP\.md`'s frontmatter/);
+    assert.doesNotMatch(md, /\*\*DERIVED\*\*/, "a declared decision must NOT claim to be derived");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Outcome: an absent or unrecognized source says so rather than picking a story", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", { "cost.json": costJson({ outcome: { decision: "x", iterations: 1, source: "made-up" } }) });
+    const md = renderRunReport("feat", { repo: root });
+    assert.match(md, /absent or unrecognized/);
+    assert.doesNotMatch(md, /\*\*DERIVED\*\*/);
+    assert.doesNotMatch(md, /copied verbatim/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Handoff: a command that writes no record says BY DESIGN, not 'missing'", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", { "cost.json": shipCost() });
+    const md = renderRunReport("feat", { repo: root });
+    assert.match(md, /writes no `LOOP\.md`, so this run has no Handoff BY DESIGN/);
+    assert.match(md, /nothing is missing/);
+    // And the LOOP case must keep the other message, or this is one branch overwriting both.
+    const root2 = scratch();
+    try {
+      feature(root2, "feat", { "cost.json": costJson() }); // declared source, no LOOP.md on disk
+      assert.match(renderRunReport("feat", { repo: root2 }), /a stop that wrote no record has no Handoff to quote/);
+    } finally {
+      rmSync(root2, { recursive: true, force: true });
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Verdicts names the EMITTING command, and a hostile command token cannot reach the prose", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", { "cost.json": shipCost(), "verify-report.json": { verdict: "PASS" } });
+    assert.match(renderRunReport("feat", { repo: root }), /`\/pharn-ship` OVERWRITES/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+  // `command` is a CLI argument the ledger bounds only to <=128 control-char-free chars, so a back-tick
+  // or a pipe reaches this file. These two sections name it in PROSE, outside any fence, so the token is
+  // membership-tested and the fallback is a GENERIC PHRASE — never a silent rewrite, which would misname
+  // the command (P5). L37's recipe is to probe an EXCLUDED member, so each row below is one.
+  const hostile = ["/pharn-ship`; rm -rf /", "/pharn|ship", "not-a-command", "/PHARN-SHIP", "/pharn ship", "", "/" + "x".repeat(70)];
+  assert.ok(hostile.length >= 7, "non-vacuity: the hostile domain must be non-empty");
+  for (const command of hostile) {
+    const r = scratch();
+    try {
+      feature(r, "feat", { "cost.json": shipCost({ command }) });
+      const md = renderRunReport("feat", { repo: r });
+      assert.match(
+        md,
+        /the emitting command OVERWRITES/,
+        `a hostile command ${JSON.stringify(command)} must fall back to the generic phrase`
+      );
+      assert.ok(!md.includes("`" + command + "` OVERWRITES"), "and must never be interpolated into prose");
+    } finally {
+      rmSync(r, { recursive: true, force: true });
+    }
+  }
+  // MUTATION CONTROL: a legal token must survive, or the rule is satisfied by rejecting everything.
+  const r = scratch();
+  try {
+    feature(r, "feat", { "cost.json": shipCost({ command: "/pharn-loop" }) });
+    assert.match(renderRunReport("feat", { repo: r }), /`\/pharn-loop` OVERWRITES/);
+  } finally {
+    rmSync(r, { recursive: true, force: true });
+  }
+});
+
+test("★ F1 REGRESSION: the absent-briefing sentinel states an ABSENCE, never another command's lifecycle", () => {
+  // The defect this pins, found at /pharn-dev-review and fixed before GATE 2 closed: the sentinel read
+  // "<command> renders one only at GATE 2", which is FALSE for `/pharn-loop` — a command with no GATE 2
+  // that never renders a briefing. A renderer whose claim is that EVERY LINE IS DERIVED cannot emit a
+  // derived line that is wrong for one of its two callers, even in an `n/a`.
+  //
+  // Probed per CALLER rather than asserted once (L37: the quantifier is where the drift lands), so a
+  // future sentinel that is true for one command and false for the other fails here.
+  const CALLERS = ["/pharn-loop", "/pharn-ship"];
+  assert.ok(CALLERS.length >= 2, "non-vacuity: the caller set must be non-empty");
+  for (const command of CALLERS) {
+    const root = scratch();
+    try {
+      feature(root, "feat", { "cost.json": costJson({ command }) });
+      const md = renderRunReport("feat", { repo: root });
+      const line = md.split("\n").find((l) => l.includes("no BRIEFING.md"));
+      assert.ok(line, `${command}: the sentinel must be present`);
+      assert.doesNotMatch(line, /GATE 2/, `${command}: the sentinel must not name a gate the command may not have`);
+      assert.doesNotMatch(
+        line,
+        new RegExp(command.replace("/", "\\/")),
+        `${command}: the sentinel must not attribute the absence to a command`
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+  // MUTATION CONTROL: the assertion must be capable of failing, or it certifies by not looking.
+  assert.match("no BRIEFING.md — `/pharn-loop` renders one only at GATE 2", /GATE 2/, "the pre-fix text must trip the rule");
+});
+
+test("Briefing: LINKED when present, honest n/a when absent — never an omitted section (L34)", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", { "cost.json": shipCost(), "BRIEFING.md": "---\nfeature: feat\n---\n\n# BRIEFING\n" });
+    const md = renderRunReport("feat", { repo: root });
+    assert.match(md, /\[`BRIEFING\.md`\]\(\.\/BRIEFING\.md\)/, "a present briefing must be linked");
+    assert.match(md, /Linked, not quoted/);
+    assert.match(md, /ship-briefing\.md/, "P4: the contract is cited, never restated");
+    // LINKED, NOT QUOTED is a real property, not a slogan: no byte of the briefing may appear.
+    assert.ok(!md.includes("# BRIEFING"), "no content of the briefing may be copied in");
+    assert.deepEqual(headings(md), [...SECTIONS], "and the section must not change the closed vocabulary");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+
+  const bare = scratch();
+  try {
+    feature(bare, "feat", { "cost.json": shipCost() });
+    const md = renderRunReport("feat", { repo: bare });
+    assert.match(md, /_n\/a — no BRIEFING\.md beside this report/, "an absent briefing is a stated absence");
+    assert.deepEqual(headings(md), [...SECTIONS], "the section is emitted either way");
+    assert.doesNotMatch(md, /BRIEFING[^\n]*GATE 2/, "the sentinel must not attribute a GATE 2 to the emitting command");
+  } finally {
+    rmSync(bare, { recursive: true, force: true });
+  }
 });

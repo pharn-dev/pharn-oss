@@ -24,6 +24,11 @@ reads:
     "pharn/floor/validate.mjs",
     "pharn/floor/check-attestation.mjs",
     "pharn/floor/render-cost-record.mjs",
+    "pharn/floor/mark-phase.mjs",
+    "pharn/floor/render-cost-ledger.mjs",
+    "pharn/floor/check-cost-ledger.mjs",
+    "pharn/floor/render-run-report.mjs",
+    "pharn/pharn-contracts/cost-ledger.md",
     "pharn/floor/render-ship-briefing.mjs",
     "pharn/floor/check-ship-briefing.mjs",
     "pharn/pharn-contracts/ship-record.md",
@@ -32,7 +37,7 @@ reads:
   ]
 writes: ["pharn/features/<name>/SHIP.md", "pharn/features/<name>/ship-record.json", "pharn/features/<name>/BRIEFING.md"]
 constitution_refs: ["P0", "P2", "P5", "P6", "P7"]
-version: "0.4.0"
+version: "0.5.0"
 ---
 
 # /pharn-ship — run the product pipeline, end at a human gate
@@ -101,6 +106,23 @@ passes it to `/pharn-spec`. The chain starts at **intent**, not at an existing s
   `/pharn-grill`, `/pharn-build`, `/pharn-regress`, `/pharn-verify`, and its own `SHIP.md`). All stages must
   operate on the **same** `pharn/features/<name>/…` the SPEC created; never let a stage re-resolve or re-ask and
   drift to a different slug.
+- **Open the cost ledger's marker file** — the `run-start` boundary — **as soon as `/pharn-spec` has
+  resolved `<name>`**, and before the GATE-1 turn ends. It cannot run earlier: `<name>` IS the marker
+  file's directory.
+
+  ```bash
+  node pharn/floor/mark-phase.mjs --name '<name>' --kind run-start
+  ```
+
+  **Two bounds, stated rather than worked around.** (1) **A run that never reaches a `<name>` records
+  nothing** — an invocation `/pharn-spec` refuses, or one abandoned before the SPEC exists, has no
+  marker file and no `cost.json`; nothing is lost that was ever recorded. (2) **`/pharn-spec`'s own
+  requests precede this marker and are therefore `unattributed`** — an honest bucket, never folded into
+  a neighbouring stage. Both are the shape `/pharn-loop` already carries for the same reason, and
+  `check-cost-ledger.mjs` answers a missing marker with a counted WARN, never a RED.
+
+  **ADVISORY (P0):** a Bash call outside the `PreToolUse` gate (**L19**), so nothing forces it. A
+  skipped marker does not fail the run; its requests simply stay `unattributed`.
 
 ## Step 2 — Run the chain, branching ONLY on each stage's STRUCTURAL verdict (P5)
 
@@ -115,6 +137,12 @@ human (terminal fallback = hand to the human, never a guess).
 > parseable `## Files` scope, an internal HALT), or the expected report is absent/malformed — treat it as a
 > **non-proceed → STOP**, present what the stage did emit, and hand to the human. A "proceed" is only ever an
 > **affirmative** floor verdict; the **absence** of one is a stop, never a silent pass.
+
+**Every STOP still emits the cost ledger and the run report.** A STOP hands to the human by way of
+**Step 3** (the `SHIP.md` roll-up) and **Step 3a** (`cost.json` + `RUN-REPORT.md`) — it does not end the
+turn where the verdict was read. The presentation therefore carries the per-stage token table and the
+checker's verdict alongside the RED, because a run that stopped at verify still paid for every stage
+before it, and that is exactly the number a reader wants. See Step 3a's own presentation rule.
 
 1. **`/pharn-spec <description>`** → writes `pharn/features/<name>/SPEC.md` and **HALTS at its own approval form**
    (`pharn-spec.md` Step 4, Draft → Approved). **This IS GATE 1.** `/pharn-ship` **ends its turn here**; the
@@ -138,79 +166,142 @@ human (terminal fallback = hand to the human, never a guess).
    human halt above, and `/pharn-plan`'s own first gate re-checks the same condition — so a Draft can **never**
    flow to build even if the halt were somehow skipped.
 
-2. **`/pharn-plan`** → writes `pharn/features/<name>/PLAN.md`. `/pharn-plan`'s **own** first gate
-   (`check-spec-approved.mjs`) refuses unless the SPEC is Approved + un-drifted, so if it produced a
-   `PLAN.md`, that floor gate passed. **Product `/pharn-plan` has no separate human-approval halt** — a
-   deliberate divergence from `/pharn-dev-plan`: in the product loop the **SPEC** is the human-approved intent
-   record (GATE 1), and the plan flows deterministically from it. **Proceed** on a produced `PLAN.md`;
-   fail-closed if `/pharn-plan` refused (no `PLAN.md`) → **STOP**.
-
-3. **`/pharn-grill`** → writes `pharn/features/<name>/GRILL.md`. **Verdict read (FLOOR) — `/pharn-grill` owns
-   TWO deterministic stops, and BOTH must be read.** Proceed only when both exit `0`; a non-zero from
-   **either** is a STOP:
+2. **`/pharn-plan`** → writes `pharn/features/<name>/PLAN.md`.
 
    ```bash
-   node pharn/floor/check-plan-spec-agree.mjs pharn/features/<name>/PLAN.md pharn/features/<name>/SPEC.md
-   node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md memory-bank/lessons-learned.md
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-plan
    ```
 
-   - **chain (`check-plan-spec-agree.mjs`)** — `0` → the plan was made against the current Approved,
-     un-drifted spec → proceed. Non-zero → **STOP**, present the RED chain (`/pharn-grill` wrote a RED
-     `GRILL.md`), hand to the human (re-plan via `/pharn-plan` / re-approve via `/pharn-spec`).
-   - **lessons (`check-plan-lessons.mjs`)** — `0` → the PLAN's `applied_lessons` is present, well-formed,
-     every cited id resolves, and every cited id is referenced in the plan body → proceed. Non-zero → **STOP**, present the RED, hand to the human
-     (re-plan via `/pharn-plan` with a corrected declaration). A project with **no** `memory-bank/` is
-     unblocked by construction — `none` short-circuits before the file is read — so this is not a new
-     barrier for a fresh install.
+   …run the stage… then, on return:
 
-   **Read BOTH exit codes, never just the first.** They are separate refusals with separate remedies, and
-   a run that reads only the chain would proceed past a stale lessons declaration — which is exactly the
-   gap this two-stop read exists to close. _(This is `/pharn-grill`'s **divergence** from
-   `/pharn-dev-grill`: the product grill **owns** the hash-chain block as the first enforcing consumer of
-   the pin; both grills own the lessons re-verification.)_ The interrogation itself is **advisory** and
-   gates nothing — **present** its findings' free-text as quoted DATA (P2), then proceed on two GREEN
-   stops regardless of what it raised.
+   ```bash
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
+   ```
 
-   **The honest bound (P0):** a GREEN lessons stop means the **declaration** is well-formed, never that
-   the lessons were applied. Never write that the grill verified the plan's lesson application.
+`/pharn-plan`'s **own** first gate
+(`check-spec-approved.mjs`) refuses unless the SPEC is Approved + un-drifted, so if it produced a
+`PLAN.md`, that floor gate passed. **Product `/pharn-plan` has no separate human-approval halt** — a
+deliberate divergence from `/pharn-dev-plan`: in the product loop the **SPEC** is the human-approved intent
+record (GATE 1), and the plan flows deterministically from it. **Proceed** on a produced `PLAN.md`;
+fail-closed if `/pharn-plan` refused (no `PLAN.md`) → **STOP**.
 
-4. **`/pharn-build`** → writes the user's code + a thin `pharn/features/<name>/BUILD.md`. `/pharn-build` re-checks
-   the chain (the 2nd enforcing consumer) and the fix #7 writes-scope itself, and **HALTs on a RED floor** at
-   its Step 4. **Verdict read (FLOOR):** the exit code of the **same deterministic project gate `/pharn-build`
-   ran at its Step 4** —
-   - when building **PHARN-shaped capabilities** (the dogfood — PHARN builds PHARN), that gate is
-     `node pharn/floor/validate.mjs .` (identical to `/pharn-dev-ship`);
-   - for a **general user project**, it is the gate **discovered the same way `/pharn-build` Step 4 /
-     `/pharn-verify` Step 3a discover it** — explicit `--gates`, else the closed allowlist
-     `{ test, lint, format:check, lint:md, typecheck, type-check, build }` ∩ the project's `package.json`
-     scripts, else **ask the human** (reused, NOT hard-coded `validate.mjs`, P3).
+1. **`/pharn-grill`** → writes `pharn/features/<name>/GRILL.md`.
 
-   `0` → **proceed**; non-zero → **STOP**, present the RED floor, hand to the human. **Fail-closed:** if
-   `/pharn-build` **refused before** its floor gate (missing `PLAN.md`/`SPEC.md`, a plan with no parseable
-   `## Files` scope, a RED chain at its Step 2) and so produced **no** floor exit to read → **STOP** (the
-   build did not complete). _(This floor is **re-confirmed** structurally two stages later by `/pharn-verify`'s
-   absolute all-green-at-HEAD `.verdict` — belt-and-suspenders.)_
+   ```bash
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-grill
+   ```
 
-5. **`/pharn-regress`** → writes `pharn/features/<name>/regression-report.json` (+ `REGRESSION.md`). **Verdict read
-   (FLOOR):** that file's `.verdict` (the `check-regress.mjs verdict` output verbatim). `"no-regressions"` →
-   **proceed**. `"regressions"` (a pass→fail flip **outside** the feature, see `.regressions[]`) or
-   `"inconclusive"` → **STOP**, present, hand to the human. **Fail-closed on a missing file:** on a RED chain
-   `/pharn-regress` writes **only** `REGRESSION.md` (no verdict JSON), so a **missing
-   `regression-report.json` → STOP** (present the RED-chain `REGRESSION.md`) — a membership test (present ∧
-   `.verdict == "no-regressions"`), never a silent proceed.
+   …run the stage… then, on return:
 
-6. **`/pharn-verify`** → writes `pharn/features/<name>/verify-report.json` (+ `VERIFY.md`). **Verdict read (FLOOR):**
-   that file's `.verdict` (the `check-verify.mjs` output). `"PASS"` (every gate green ∧ build complete) →
-   **proceed** to GATE 2. `"INCOMPLETE"` (all gates green but a plan-declared `## Files` path is absent —
-   `.completeness.missing[]` names it) → **the single build-completion retry (Step 2b), EXACTLY once**.
-   `"FAIL"` (a real gate red — offenders in `.failing_gates[]`; a real failure **beats** incompleteness, so
-   this is **never** retried) or `"INCONCLUSIVE"` (fail-closed — e.g. a RED chain; `/pharn-verify` **always**
-   emits this machine artifact) → **STOP**, present, hand to the human. The advisory `verifiers` block is
-   **NOT** a proceed input — a verifier finding never flips the verdict (fix #3, `pharn/ARCHITECTURE.md §7`).
+   ```bash
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
+   ```
 
-7. **GATE 2 — post-verify decision.** On a `PASS` verify, this is the chain's end. `/pharn-ship` **presents**
+**Verdict read (FLOOR) — `/pharn-grill` owns
+TWO deterministic stops, and BOTH must be read.** Proceed only when both exit `0`; a non-zero from
+**either** is a STOP:
+
+```bash
+node pharn/floor/check-plan-spec-agree.mjs pharn/features/<name>/PLAN.md pharn/features/<name>/SPEC.md
+node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md memory-bank/lessons-learned.md
+```
+
+- **chain (`check-plan-spec-agree.mjs`)** — `0` → the plan was made against the current Approved,
+  un-drifted spec → proceed. Non-zero → **STOP**, present the RED chain (`/pharn-grill` wrote a RED
+  `GRILL.md`), hand to the human (re-plan via `/pharn-plan` / re-approve via `/pharn-spec`).
+- **lessons (`check-plan-lessons.mjs`)** — `0` → the PLAN's `applied_lessons` is present, well-formed,
+  every cited id resolves, and every cited id is referenced in the plan body → proceed. Non-zero → **STOP**, present the RED, hand to the human
+  (re-plan via `/pharn-plan` with a corrected declaration). A project with **no** `memory-bank/` is
+  unblocked by construction — `none` short-circuits before the file is read — so this is not a new
+  barrier for a fresh install.
+
+**Read BOTH exit codes, never just the first.** They are separate refusals with separate remedies, and
+a run that reads only the chain would proceed past a stale lessons declaration — which is exactly the
+gap this two-stop read exists to close. _(This is `/pharn-grill`'s **divergence** from
+`/pharn-dev-grill`: the product grill **owns** the hash-chain block as the first enforcing consumer of
+the pin; both grills own the lessons re-verification.)_ The interrogation itself is **advisory** and
+gates nothing — **present** its findings' free-text as quoted DATA (P2), then proceed on two GREEN
+stops regardless of what it raised.
+
+**The honest bound (P0):** a GREEN lessons stop means the **declaration** is well-formed, never that
+the lessons were applied. Never write that the grill verified the plan's lesson application.
+
+1. **`/pharn-build`** → writes the user's code + a thin `pharn/features/<name>/BUILD.md`.
+
+   ```bash
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-build --iteration 1
+   ```
+
+   …run the stage… then, on return:
+
+   ```bash
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
+   ```
+
+`/pharn-build` re-checks
+the chain (the 2nd enforcing consumer) and the fix #7 writes-scope itself, and **HALTs on a RED floor** at
+its Step 4. **Verdict read (FLOOR):** the exit code of the **same deterministic project gate `/pharn-build`
+ran at its Step 4** —
+
+- when building **PHARN-shaped capabilities** (the dogfood — PHARN builds PHARN), that gate is
+  `node pharn/floor/validate.mjs .` (identical to `/pharn-dev-ship`);
+- for a **general user project**, it is the gate **discovered the same way `/pharn-build` Step 4 /
+  `/pharn-verify` Step 3a discover it** — explicit `--gates`, else the closed allowlist
+  `{ test, lint, format:check, lint:md, typecheck, type-check, build }` ∩ the project's `package.json`
+  scripts, else **ask the human** (reused, NOT hard-coded `validate.mjs`, P3).
+
+`0` → **proceed**; non-zero → **STOP**, present the RED floor, hand to the human. **Fail-closed:** if
+`/pharn-build` **refused before** its floor gate (missing `PLAN.md`/`SPEC.md`, a plan with no parseable
+`## Files` scope, a RED chain at its Step 2) and so produced **no** floor exit to read → **STOP** (the
+build did not complete). _(This floor is **re-confirmed** structurally two stages later by `/pharn-verify`'s
+absolute all-green-at-HEAD `.verdict` — belt-and-suspenders.)_
+
+1. **`/pharn-regress`** → writes `pharn/features/<name>/regression-report.json` (+ `REGRESSION.md`).
+
+   ```bash
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-regress --iteration 1
+   ```
+
+   …run the stage… then, on return:
+
+   ```bash
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
+   ```
+
+**Verdict read
+(FLOOR):** that file's `.verdict` (the `check-regress.mjs verdict` output verbatim). `"no-regressions"` →
+**proceed**. `"regressions"` (a pass→fail flip **outside** the feature, see `.regressions[]`) or
+`"inconclusive"` → **STOP**, present, hand to the human. **Fail-closed on a missing file:** on a RED chain
+`/pharn-regress` writes **only** `REGRESSION.md` (no verdict JSON), so a **missing
+`regression-report.json` → STOP** (present the RED-chain `REGRESSION.md`) — a membership test (present ∧
+`.verdict == "no-regressions"`), never a silent proceed.
+
+1. **`/pharn-verify`** → writes `pharn/features/<name>/verify-report.json` (+ `VERIFY.md`).
+
+   ```bash
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-verify --iteration 1
+   ```
+
+   …run the stage… then, on return:
+
+   ```bash
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
+   ```
+
+**Verdict read (FLOOR):**
+that file's `.verdict` (the `check-verify.mjs` output). `"PASS"` (every gate green ∧ build complete) →
+**proceed** to GATE 2. `"INCOMPLETE"` (all gates green but a plan-declared `## Files` path is absent —
+`.completeness.missing[]` names it) → **the single build-completion retry (Step 2b), EXACTLY once**.
+`"FAIL"` (a real gate red — offenders in `.failing_gates[]`; a real failure **beats** incompleteness, so
+this is **never** retried) or `"INCONCLUSIVE"` (fail-closed — e.g. a RED chain; `/pharn-verify` **always**
+emits this machine artifact) → **STOP**, present, hand to the human. The advisory `verifiers` block is
+**NOT** a proceed input — a verifier finding never flips the verdict (fix #3, `pharn/ARCHITECTURE.md §7`).
+
+1. **GATE 2 — post-verify decision.** On a `PASS` verify, this is the chain's end. `/pharn-ship` **presents**
    the standing verdicts (steps 1–6) + the `GRILL.md` / `REGRESSION.md` / `VERIFY.md` (and `BUILD.md`)
-   free-text quoted as DATA (P2), then — after writing `SHIP.md` (Step 3) — **ends its turn**, handing to the
+   free-text quoted as DATA (P2), **plus the per-stage token table and `check-cost-ledger.mjs`'s verdict
+   from Step 3a** (see its presentation rule), then — after writing `SHIP.md` (Step 3) and emitting the
+   ledger + report (Step 3a) — **ends its turn**, handing to the
    human to decide **merge / fix / abandon**. There is **no product `/review` stage** (the dev loop's
    `/pharn-dev-review` is not a §6 spine stage — lenses live in `pharn-review`, §4); the product spine ends at
    `verify`, and the human's ship **decision** is what `pharn/ARCHITECTURE.md §6` names "ship".
@@ -233,9 +324,42 @@ incomplete (a plan-declared `## Files` path is absent; `.completeness.missing[]`
 **The retry, EXACTLY once (a straight-line block with NO back-edge — the ≤1 bound is structural):**
 
 1. Re-invoke **`/pharn-build <name>`** (it re-runs its **own** Step-0 writes-scope + Step-2 hash-chain gates
-   — the rebuild cannot escape the plan's `## Files` or build a stale plan, retry or not).
+   — the rebuild cannot escape the plan's `## Files` or build a stale plan, retry or not). **The retry is
+   ITERATION 2** — the only way a ship run's markers exceed iteration 1 — so each re-invoked stage is
+   bracketed exactly as in the chain above, with `--iteration 2`:
+
+   ```bash
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-build --iteration 2
+   ```
+
+   ```bash
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
+   ```
+
 2. Re-run **`/pharn-regress`**, then **`/pharn-verify`** (the same order, and the same per-stage Step-0
-   scope-setters, as the chain above).
+   scope-setters, as the chain above), each likewise bracketed at `--iteration 2`:
+
+   ```bash
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-regress --iteration 2
+   ```
+
+   ```bash
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
+   ```
+
+   ```bash
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-verify --iteration 2
+   ```
+
+   ```bash
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
+   ```
+
+   **Why the iteration number is worth the six lines.** Without it the retry's requests attribute to the
+   SAME `stage x iteration x model` bucket as the first attempt, so `cost.json` would report one build
+   that cost twice as much rather than two builds — and the whole reason the retry is bounded at ≤1 is
+   that a rebuild is expensive. The number is what makes that cost visible.
+
 3. **Re-read the two `.verdict`s ONCE and branch (P5, deterministic):**
    - re-verify `.verdict == "PASS"` **∧** re-regress `.verdict == "no-regressions"` → **proceed to GATE 2**.
    - **anything else** — still `INCOMPLETE`, now `FAIL` / `INCONCLUSIVE`, a regression, **or** a retry
@@ -353,7 +477,7 @@ path. The observed failure that drove the mechanism belongs to `/pharn-memory-pr
    is reached regardless of this checker's exit code** — the same "never a precondition" rule
    `pharn-contracts/ship-briefing.md` states for the whole artifact.
 
-## Step 2d — Emit the PR handoff (DISPLAY ONLY — `/pharn-ship` runs no git command)
+## Step 2d — Emit the PR handoff (DISPLAY ONLY — this step runs no git command)
 
 `BRIEFING.md` is written to be **pasteable as a pull-request description**
 (`pharn/pharn-contracts/ship-briefing.md`, cited not restated — P4). This step closes the last manual gap
@@ -407,7 +531,12 @@ advisory:
 - that `/pharn-ship` **performs no git write** — true of these bytes and verifiable by reading them, but
   **not "floor by absence"**: fix #7 gates `Write|Edit|MultiEdit|NotebookEdit` only, so a Bash-run `git`
   call bypasses it entirely (`lessons-learned.md` L19; `THREAT-MODEL.md` §4 item 2), and **no checker
-  would catch a future edit that added one**.
+  would catch a future edit that added one**. **The quantifier is WRITE, and it was corrected here the
+  moment it expired (L33):** this command previously read "`/pharn-ship` contains no `git`/`gh`
+  invocation", which became false when Step 3a added `git rev-parse HEAD` to capture the run report's
+  base SHA. A forward-looking or absolute claim goes false in a file nobody is editing, so it is
+  restated rather than left standing — the one git call is a **read**, and no branch, add, commit, push
+  or PR exists anywhere in these bytes.
 
 Step 2d adds **no** new floor primitive and **no** new `writes:` path; it writes nothing at all. If the
 slug check is ever to become a guarantee it needs a checker and a test — a follow-up (`ship-slug-shape`),
@@ -459,6 +588,116 @@ Write **`pharn/features/<name>/SHIP.md`** — a thin, **advisory** roll-up:
   disease, P0). End with the honest line: _"chain ran; the named floor verdicts are as shown, and the human
   approved the intent at the SPEC gate — this is NOT a judgment that the increment is good or wise; that is
   the human's call at the post-verify gate."_
+
+## Step 3a — Close the markers, emit `cost.json` + `RUN-REPORT.md` (EVERY exit that ends the run)
+
+**This step runs on BOTH exit paths, exactly like Step 3 — GATE 2 and every STOP.** A failed run is the
+one whose cost a reader most wants, because a run that stopped at verify still paid for spec, plan,
+grill, build and regress. Nothing here is conditional on attestation, on `ship.requireAttestation`, or
+on which verdict stopped the chain.
+
+**The POSITION is load-bearing — after Step 3, before Step 3b — and the reason is structural, not
+stylistic.** Step 3b can **STOP** on a `stale` / `malformed` attestation verdict, and it can
+**halt-and-ask indefinitely** when `ship.requireAttestation` is `true`. An emission placed after it
+would be skipped on exactly the paths this step exists to cover, so "independent of attestation" is
+satisfied **by position** rather than by a promise. **A related ambiguity is worth naming rather than
+inheriting:** Step 3 states its both-paths reachability explicitly and **Step 3b states none**, so a
+reader cannot tell from this command whether a stopped run reaches attestation at all. Step 3a does not
+resolve that question — it simply does not depend on the answer.
+
+1. **Close the marker file** — the `run-stop` boundary:
+
+   ```bash
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind run-stop
+   ```
+
+2. **Capture the base SHA, in ONE block that prints it.** Substitute the printed value literally as
+   `<base sha>` into step 3 — never carry it in a shell variable, because each fenced block runs as its
+   own shell and a variable set here is empty there (**L44**):
+
+   ```bash
+   git rev-parse HEAD 2>/dev/null || echo unknown
+   ```
+
+   **This is a git READ, and it is the only one this command makes.** `/pharn-ship` still performs zero
+   git WRITES (Step 2d's non-goal is unchanged: no branch, no add, no commit, no push, no PR). The read
+   is correct here precisely _because_ the command never commits: HEAD cannot move during the run, so
+   the SHA captured at the stop is the SHA the run started from, and `RUN-REPORT.md`'s `## Files` section
+   can diff against it. Passing the literal `unknown` instead is honest but costs that whole section —
+   the renderer degrades it to a stated `n/a`, never a guess.
+
+3. **Emit the ledger, then check it:**
+
+   ```bash
+   node pharn/floor/render-cost-ledger.mjs '<name>' --command /pharn-ship --base-sha '<base sha>'
+   ```
+
+   ```bash
+   node pharn/floor/check-cost-ledger.mjs pharn/features/<name>/cost.json
+   ```
+
+   Keep the emitter's printed table for the GATE-2 / STOP presentation, and the checker's output for the
+   same. Contract: [`pharn/pharn-contracts/cost-ledger.md`](../../pharn/pharn-contracts/cost-ledger.md),
+   cited not restated (P4).
+
+   **`outcome` is DERIVED here, not declared, and the two halves differ in strength (P0).**
+   `/pharn-ship` writes no `LOOP.md`, so the ledger falls through to `pharn/floor/ship-outcome-core.mjs`,
+   which reads this run's own verdict reports and phase markers — **never `SHIP.md` prose**, which is a
+   roll-up ABOUT a run and not a declaration of one (**L6**). `gate2` is **FLOOR**: it means
+   `verify-report.json` read `PASS` **and** `regression-report.json` read `no-regressions`, two enums
+   produced by tested non-LLM checkers. `stop:<stage>` is **ADVISORY in its stage name**: it reports the
+   last `stage-start` marker, and markers are Bash-written command prose (**L19**). The label travels
+   with the value — the renderer prints it in `## Outcome` — so a reader of the artifact meets it
+   without opening the contract. **There is no `check-loop-decision.mjs` equivalent here and none is
+   claimed:** a ship stop is a human gate or an orchestrator STOP, and no checker computes either.
+
+4. **Render the human-readable run report:**
+
+   ```bash
+   node pharn/floor/render-run-report.mjs '<name>' --base pharn/features
+   ```
+
+   A deterministic VIEW over `cost.json` and the artifacts this run already wrote — the outcome, the
+   per-stage token table, the changed files with each one's planned purpose quoted from `PLAN.md`, the
+   standing verdicts, and a LINK to `BRIEFING.md` when Step 2c rendered one. **Every line is derived by
+   that code; none is authored by you.** Do not retype, summarize or "improve" it. In a ship run there
+   is **no `## Handoff`** — that section belongs to `/pharn-loop`'s record — and the report says so **by
+   design** rather than reporting a missing file.
+
+5. **Show it, at GATE 2 and at every STOP alike.** The presentation carries:
+   - the per-stage table `render-cost-ledger.mjs` printed at step 3, **verbatim**;
+   - `check-cost-ledger.mjs`'s verdict — GREEN, any WARN, or a RED **quoted verbatim**;
+   - `RUN-REPORT.md`'s `## Tokens` table and its `## Files` list, reproduced from the file and never
+     retyped, plus the path so the reader can open it.
+
+   **The FILES are the record; this screen copy is advisory** (P0). Both carry the same bound: the
+   ledger reports **tokens**, never money — there is no price table in it and there never will be —
+   and it never says whether the spend was worthwhile. If no ledger was emitted (a run that never
+   reached a `<name>`), say that plainly rather than omitting the line.
+
+**TWO COST FIGURES NOW LIVE IN THE FEATURE DIRECTORY, and which is which is stated rather than left to
+be discovered (L35/L43).** `cost.json` (`pharn-cost-ledger/1`, this step) is **authoritative for
+analysis**: per-request rows, marker-based stage attribution, and every view recomputed and checked by
+`check-cost-ledger.mjs`. `ship-record.json`'s `cost` block (`pharn-cost-record/1`, Step 3b) is
+aggregates keyed by the platform's `attributionSkill`, and it stays because it sits **inside attested
+content** — removing it would change what a named human attested to. **They may legitimately disagree,
+and the reason is ordering:** this step renders first, so the attested block's window extends past this
+one. **No cross-check binds them and none is added** — per **L43** it would certify that two stores
+agree, never that either is right, and per **L35** it would be a third thing to keep in sync.
+
+**ADVISORY (P0), and this is the whole of what this step guarantees: nothing.** All five lines are Bash
+calls outside the `PreToolUse` gate (**L19**). The emitter writes `cost.json` **itself** and the
+renderer writes `RUN-REPORT.md` **itself** — a model never retypes hundreds of numbers (the
+`render-review-assignments.mjs` precedent) — so both are Bash writes, already exempt by name under
+`pipeline_artifacts` in `pharn/floor/reconcile-ignore.json`, and neither is described as gate-covered.
+Neither file appears in this command's `writes:`, deliberately: declaring a path the Write tool never
+touches would be a false claim (**L7**) and would oblige a setter call that authorizes nothing.
+
+**`check-cost-ledger.mjs`'s exit code is NOT a proceed/stop input. It gates nothing (fix #3).** A RED
+ledger is reported verbatim in the presentation and the run continues to GATE 2 or its STOP, because the
+ledger **annotates** a run and never judges one. A run that skips this step simply has no ledger and no
+report; nothing downstream fails. Reading a cost record as a verdict would be the exact
+advisory-dressed-as-deterministic disease this repo exists to prevent.
 
 ## Step 3b — Named-human "read the record" attestation (OPTIONAL; the honest seal clause)
 
@@ -649,12 +888,51 @@ the `check-ship.mjs` cap.
   only** (Step 2c). The **rendering** itself (`render-ship-briefing.mjs`) is deterministic but its act of
   running is **advisory orchestration**, exactly like every other stage-invocation here.
 - **"Step 2d's PR handoff runs no git command"** → **not a floor claim — a property of these bytes.**
-  Step 2d emits a fenced code block and executes nothing; `/pharn-ship` contains no `git`/`gh` invocation.
+  Step 2d emits a fenced code block and executes nothing. **The scope of that sentence is STEP 2D, and
+  the narrowing is not cosmetic:** the command as a whole makes exactly one git call — Step 3a's
+  `git rev-parse HEAD`, a **read**, to capture the run report's base SHA. It performs no git WRITE
+  anywhere (no branch, add, commit, push or PR), and `gh` is never invoked at all. This bullet
+  previously read "`/pharn-ship` contains no `git`/`gh` invocation", which Step 3a falsified; it is
+  corrected here rather than left standing, because nothing reads shipped prose for its truth (L33) and
+  a retraction that fixes one spelling and misses its siblings is the defect L50 records — all four
+  sites carrying this claim were swept together.
   Note honestly that this is **not** "floor by absence": fix #7 gates `Write|Edit|MultiEdit|NotebookEdit`
   only, so a Bash-run `git` call would bypass it entirely (`lessons-learned.md` L19; `THREAT-MODEL.md` §4
   item 2) — no checker would catch a future edit that added one. **Step 2d contains no floor element at
   all:** its slug **shape check** is enum/regex in shape but is **specified prose, not a running check**
   (nothing executes it), so it is advisory compliance. Step 2d adds no primitive and no `writes:` path.
+- **"`/pharn-ship` emits `cost.json` and `RUN-REPORT.md` at every exit that ends the run"** →
+  **ADVISORY.** Step 3a's five lines are Bash calls outside the `PreToolUse` gate (L19); nothing on the
+  floor forces them and a skipped step simply leaves no artifacts. What IS structural is the
+  **position** — placed before Step 3b, the emission cannot be skipped by an attestation STOP or by a
+  `requireAttestation` halt — but "the step is ordered correctly in this prose" is a property of these
+  bytes, not a floor op. A test pins that the command **declares** the invocations and orders them; that
+  is presence and ordering, **never** proof a run executed them.
+- **"`cost.json`'s stored views equal a recompute from its own `requests[]`, and its `outcome` matches
+  its shape"** → **FLOOR: enum-regex + arithmetic** (`check-cost-ledger.mjs`). Both rules are the
+  sub-stage checker's, **reused byte-for-byte**; `/pharn-ship` adds no primitive here. **NARROWED, and
+  it is the bound that matters (L43):** the checker certifies INTERNAL CONSISTENCY, never that
+  `requests[]` matches the transcript — a self-consistent fabricated ledger passes, and a test proves it
+  by building one.
+- **"the ledger's `outcome` says what the run did"** → **TWO HALVES, and they are never averaged.**
+  `gate2` is **FLOOR** (two sub-stage `.verdict` enums). `stop:<stage>` is **ADVISORY in its stage
+  name** (the last `stage-start` marker, Bash-written — L19); that the run did _not_ meet the `gate2`
+  test is a membership fact. Unlike `/pharn-loop`, whose decision `check-loop-decision.mjs` re-derives
+  from its own cited reports, **there is no re-derivation here and none is claimed** — a ship stop is a
+  human gate or an orchestrator STOP, and no checker computes either.
+- **"`RUN-REPORT.md` is a deterministic view"** → every line is derived by `render-run-report.mjs` from
+  artifacts that already exist, and **it gates nothing** — no proceed/stop anywhere reads it. It is not
+  a judgment that the change is good, correct, or worth its cost.
+- **"the cost ledger gates something"** → **struck, and the struck-ness is load-bearing (fix #3).**
+  `check-cost-ledger.mjs`'s exit code is not a proceed/stop input; a RED ledger reaches GATE 2 exactly
+  as a GREEN one does. Reading a cost record as a verdict would be advisory-dressed-as-deterministic.
+- **"the ledger accounts for the whole run"** → **NO, and `coverage` has no `complete` member by
+  design.** Two ship-specific bounds beyond that: (1) requests before `<name>` exists — `/pharn-spec`'s
+  own — precede the `run-start` marker and are `unattributed`; (2) **the ledger is SINGLE-SESSION.**
+  `render-cost-ledger.mjs` resolves ONE session's transcript, so a run whose GATE-1 approval arrives in
+  a **new session** records only the final session's requests. Markers carry `session_id` per marker,
+  but that is used to avoid cross-session mis-attribution, **not** to union sessions. Honest
+  under-reporting, stated rather than discovered; it reopens on the first measured multi-session run.
 - **Net (gated mode):** the gated chain introduces **exactly one** new floor primitive of its own — the
   `BRIEFING.md` cross-file checker above, deliberately narrow and never gating — plus the pre-existing
   build-completion-retry primitive that belongs to `/pharn-verify`. Every proceed/stop verdict still
@@ -700,10 +978,11 @@ the `check-ship.mjs` cap.
   adds none. It adds exactly one **non-gating** primitive of its own (`check-ship-briefing.mjs`, Step 2c) —
   named, never conflated with a proceed/stop check. Writing "`/pharn-ship` ensures the chain ran" or "ensures
   quality" is still the disease — struck.
-- **No git, still — and Step 2d does not change that.** Step 2d **displays** a `gh pr create` line for the
-  human to review and run; `/pharn-ship` performs **zero** git operations — no branch, no add, no commit,
-  no push, no PR. The bullet above is unamended and remains exactly true: reaching the end is permission to
-  **present**, never to act. "It printed the command" is not "it opened the PR" (P0).
+- **No git WRITES, still — and neither Step 2d nor Step 3a changes that.** Step 2d **displays** a `gh pr create` line for the
+  human to review and run; `/pharn-ship` performs **zero** git WRITES — no branch, no add, no commit,
+  no push, no PR. Step 3a makes one git **read** (`git rev-parse HEAD`) and writes nothing through git.
+  The bullet above is unamended and remains exactly true: reaching the end is permission to **present**,
+  never to act. "It printed the command" is not "it opened the PR" (P0).
 - **No `--loop`, and the single build-completion retry is NOT a loop.** `--loop` (iterate to a floor-grade
   stop with the `check-ship.mjs` cap) remains a separate deferred increment. Step 2b's retry is a **single,
   bounded** re-build fired **only** on an `INCOMPLETE` verify — **at most once**, **no** second retry, **no**

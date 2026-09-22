@@ -238,12 +238,17 @@ node pharn/floor/check-loop-record.mjs <LOOP.md>
 # SKIPPED · 1 RED.
 node pharn/floor/check-loop-decision.mjs <LOOP.md>
 
-# The COST LEDGER trio (added 6.5.0) — `pharn/features/<name>/cost.json`, emitted at EVERY /pharn-loop stop
-# that has a feature dir, green or not. Contract: pharn/pharn-contracts/cost-ledger.md.
+# The COST LEDGER trio (added 6.5.0) — `pharn/features/<name>/cost.json`. TWO commands emit one, and the
+# set is named here so a third is a deliberate addition: /pharn-loop at EVERY stop that has a feature dir,
+# green or not; /pharn-ship (6.7.0) at EVERY exit that ends the run — GATE 2 and every STOP — from its
+# Step 3a, positioned BEFORE its attestation step, because Step 3b can itself STOP on a stale/malformed
+# verdict and can halt on ship.requireAttestation, so an emission after it would be skipped on exactly
+# the paths it exists to cover. Contract: pharn/pharn-contracts/cost-ledger.md.
 # WHY MARKERS EXIST, measured not assumed: the platform's `attributionSkill` names the ORCHESTRATOR and
 # never the sub-stage — on this repo's loop-decision-integrity run it tagged 213/275 deduped requests and
 # tagged EVERY one of them `pharn-loop`. So "which stage" is a fact about a MOMENT; mark-phase records it
-# then. It is command-neutral, so /pharn-ship reuses it unchanged. `ts` from Node toISOString() because BSD
+# then. It is command-neutral, and since 6.7.0 /pharn-ship DOES reuse it unchanged — no second copy, no
+# fork, no parameterised variant. `ts` from Node toISOString() because BSD
 # `date` has no %N. RECORD FACTS, DERIVE VIEWS: `requests[]` + `markers[]` are the facts, and all four views
 # are pure functions of requests[] — which is what lets the checker recompute and compare.
 # FLOOR: a CLOSED top-level key set (both directions — a presence set would admit a variant spelling, L36);
@@ -273,8 +278,35 @@ node pharn/floor/mark-phase.mjs --name <slug> --kind <run-start|stage-start|orch
 node pharn/floor/render-cost-ledger.mjs <name> [--base <dir>] [--repo <dir>] [--session <id>] [--stdout]
 node pharn/floor/check-cost-ledger.mjs <cost.json> [--verify-transcript]
 
-# Render `pharn/features/<name>/RUN-REPORT.md` (added 6.6.0) — the human-readable run report /pharn-loop
-# writes at EVERY stop that has a feature directory, right after the cost-ledger checks and before Step 6c.
+# DERIVE a /pharn-ship run's ledger `outcome` (added 6.7.0). ITS OWN MODULE, not a second function in the
+# emitter: render-cost-ledger.mjs changes when the ledger SCHEMA changes, this changes when /pharn-ship's
+# CONTROL FLOW changes — two reasons, two files (P3), the plan-files-core.mjs precedent, raised at grill
+# BEFORE the build rather than at review. /pharn-loop DECLARES its decision in LOOP.md and the emitter
+# merely COPIES it; ship has no such record, so this DERIVES from the run's own verdict reports and phase
+# markers — NEVER SHIP.md prose, which is a roll-up ABOUT a run, not a declaration of one (L6).
+# TWO HALVES, never averaged (P0): `gate2` is FLOOR (verify PASS ∧ regress no-regressions — two enums from
+# tested non-LLM checkers); `stop:<stage>` is ADVISORY IN ITS STAGE NAME (the last stage-start marker,
+# Bash-written command prose — L19), though that the run MISSED the gate2 test is a membership fact;
+# `stop:unknown` is the terminal fallback. The stage token is re-tested at READ time, never trusted from
+# the writer, because markers.jsonl is ordinary .pharn/ state a Bash write reaches (LIMITS.md §6).
+# `outcome` is null when there are no markers — no evidence a run happened, which is a real state.
+# NOT RE-DERIVABLE, stated rather than glossed: /pharn-loop has check-loop-decision.mjs; ship has no
+# equivalent and none is claimed, because a ship stop is a human gate or an orchestrator STOP and no
+# checker computes either. The closed vocabulary lives in SHIP_DECISION_FORMS with a CLOSURE regex over
+# the stem (L36 — a parameterized value is where a variant spelling lands). No CLI: it is imported by
+# render-cost-ledger.mjs, which falls through to it only when no LOOP.md exists, so the loop's bytes do
+# not move. NO CLI and no checker of its own, deliberately (P7): nothing invokes it directly and nothing
+# machine-reads its output but the emitter, so both would be additions with no trigger. The module header
+# is the spec and ship-outcome-core.test.mjs enforces it. Ships: bumps SKILLS_VERSION.
+
+# Render `pharn/features/<name>/RUN-REPORT.md` (added 6.6.0) — the human-readable run report, written by
+# the SAME two commands that emit the ledger, always right after the cost-ledger checks: /pharn-loop at
+# every stop with a feature directory (before its Step 6c commit), /pharn-ship at every exit that ends the
+# run (before its Step 3b attestation). Its section prose is driven by cost.json's OWN `command` and
+# `outcome.source` fields (L6), never by inferring the command from which sibling artifacts happen to
+# exist — which is what lets ONE renderer serve both. A ship run has NO `## Handoff`, and the report says
+# so BY DESIGN rather than reporting a missing file; a `## Briefing` section LINKS BRIEFING.md when one
+# exists and never quotes it.
 # A deterministic VIEW over cost.json + the artifacts the run already wrote: outcome; a token table
 # stage x iteration x model over all six classes plus totals and `unattributed`; the changed-and-untracked
 # files, each marked if already dirty before the run and each carrying its PLAN `## Files` line VERBATIM;
@@ -302,6 +334,11 @@ node pharn/floor/check-cost-ledger.mjs <cost.json> [--verify-transcript]
 # the extraction also SURFACED that the Boundary-2 exclusion-cue break — the rule already repaired twice —
 # was reached by no product-floor test, now closed by a parity case with a mutation control. FEATURE_BASE is
 # imported too: this module introduces ZERO new defaults, pinned by a closure assertion (L41/L52).
+# The `★ WIRING` pin is no longer authored for ONE command: it is an ENUMERATION over invoking commands,
+# CLOSED OVER THE CORPUS, so a third caller FAILS until it is listed rather than shipping uncovered — the
+# exact L31 gap. .dev/floor/command-hygiene.test.mjs carries the matching PHASE_MARKER_WIRING set (run
+# boundaries, an orchestrator return per stage-start, each command's OWN --command value, and the
+# iteration FORM pinned per command: the loop's runtime `<N>` vs ship's literal 1|2).
 # `RUN-REPORT.md` is a member of FIVE enumerations (L29/L31), iterated by one test: PIPELINE_ARTIFACTS,
 # reconcile-ignore.json pipeline_artifacts.names, the Step-6c staging list, .prettierignore and
 # .markdownlint-cli2.jsonc — the last two on the cost.json reasoning (L23), because the report quotes

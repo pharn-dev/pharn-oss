@@ -1524,6 +1524,113 @@ exists-then-read/write (CWE-367)`.
 
 ### Added
 
+- **`/pharn-ship` now emits a cost ledger and a run report at every exit that ends the run**
+  (`SKILLS_VERSION` 6.6.0 → **6.7.0**, minor: a newly shipped capability on the product surface)
+  ([`.claude/commands/pharn-ship.md`](./.claude/commands/pharn-ship.md) Step 3a,
+  [`pharn/floor/ship-outcome-core.mjs`](./pharn/floor/ship-outcome-core.mjs),
+  [`.dev/features/ship-cost-ledger/`](./.dev/features/ship-cost-ledger/)) — the second and last product
+  entry point gets the phase markers, `cost.json` and `RUN-REPORT.md` that `/pharn-loop` has carried
+  since 6.5.0/6.6.0. **Nothing is implemented twice:** `mark-phase.mjs` was already command-neutral by
+  construction, and both emitters are invoked unchanged. Before this, `/pharn-ship` rendered cost only
+  inside its attestation step and only into `ship-record.json`.
+
+  **Emitted at GATE 2 and at every STOP, and the POSITION is what makes that true** rather than a
+  promise. Step 3a sits after Step 3's `SHIP.md` write and **before** Step 3b, because Step 3b can
+  itself STOP on a `stale`/`malformed` attestation verdict and can halt indefinitely when
+  `ship.requireAttestation` is `true` — an emission placed after it would be skipped on exactly the
+  paths it exists to cover. A related ambiguity is **named rather than inherited**: Step 3 declares its
+  both-paths reachability explicitly and Step 3b declares none, so the live command does not say whether
+  a stopped run reaches attestation. Step 3a does not depend on the answer.
+
+  **`outcome` is DERIVED here, not declared, and the halves are not equally strong (P0).** `/pharn-ship`
+  writes no `LOOP.md`, so the ledger falls through to the new `ship-outcome-core.mjs`, which reads the
+  run's own verdict reports and phase markers — **never `SHIP.md` prose**, which is a roll-up ABOUT a run
+  and not a declaration of one (**L6**). `gate2` is **FLOOR**: `verify-report.json` `PASS` ∧
+  `regression-report.json` `no-regressions`, two enums from tested non-LLM checkers. `stop:<stage>` is
+  **ADVISORY in its stage name** — the last `stage-start` marker, Bash-written command prose (**L19**) —
+  and `stop:unknown` is the terminal fallback, with the stage token re-tested at READ time because the
+  markers file is ordinary `.pharn/` state a Bash write reaches. **The label travels with the value:**
+  `RUN-REPORT.md`'s `## Outcome` prints the split, so a reader meets it without opening the contract.
+  **Unlike `/pharn-loop`, whose decision `check-loop-decision.mjs` re-derives from its own cited reports,
+  there is no re-derivation here and none is claimed** — a ship stop is a human gate or an orchestrator
+  STOP, and no checker computes either.
+
+  **A pre-existing unbacked FLOOR label was closed rather than deepened.** `cost-ledger.md` advertised
+  `outcome` as `FLOOR (shape)` from the day the contract shipped while `check-cost-ledger.mjs` validated
+  **nothing** inside it beyond the closed top-level key set. Adding a second producer and a second
+  `source` member to an unchecked field would have made an existing overclaim worse, so the rule was
+  built: `decision` a bounded token, `iterations` an integer or `null`, `source` in the closed
+  **imported** two-member enum, optional `blocked` bounded, and the key set **closed in both directions**
+  (**L36** — a `decisions` beside `decision` fails). The trigger is that unbacked claim, recorded plainly
+  rather than manufactured (P7); `git ls-files '*cost.json'` returned **0**, so no committed artifact is
+  retroactively reddened. The contract heading that read "the four FLOOR rules" now carries **no count**
+  at all — per **L47**, substituting a new number rebuilds the defect at the new value.
+
+  **Two cost figures now sit in a ship feature directory, and the question L35 asks was answered at a
+  human gate rather than silently.** They are **not one fact stored twice**: different granularity
+  (aggregates vs per-request rows), different attribution METHOD (the platform's `attributionSkill`,
+  which names the orchestrator and never the sub-stage, vs phase markers), different render moments —
+  and the embedded block sits **inside attested content**, so retiring it would change what a named human
+  attested to. **`cost.json` is authoritative for analysis**; both `cost-ledger.md` and `ship-record.md`
+  now say so and say **why they may legitimately disagree**. **No consistency check binds them and none
+  will be added** — per **L43** it would certify that two stores agree, never that either is right, and
+  per **L35** it would become a third thing to keep in sync. The `cost-ledger.md` paragraph that deferred
+  this question to "the named `/pharn-ship` wiring follow-up" was a forward-looking claim that expired
+  with this increment (**L33**) and is now a settled answer.
+
+  **Two bounds are stated rather than discovered later.** (1) **The ledger is SINGLE-SESSION.**
+  `render-cost-ledger.mjs` resolves one session's transcript, so a ship run whose GATE-1 approval arrives
+  in a **new session** records only the final session's requests. Markers carry `session_id` per marker,
+  but that is used to avoid cross-session mis-attribution, **not** to union sessions — the premise that
+  they union was checked against live code and found false. Honest under-reporting (`coverage` has no
+  `complete` member), and it reopens on the first measured multi-session run. (2) `/pharn-spec`'s own
+  requests precede the `run-start` marker — `<name>` IS the marker file's directory, so no marker can
+  exist before that stage has run — and are `unattributed`, an honest bucket never folded into a
+  neighbour.
+
+  **`RUN-REPORT.md` serves a second emitter without a second renderer.** Its section prose is now driven
+  by `cost.json`'s own `command` and `outcome.source` fields (the structured location — **L6**), never by
+  inferring the command from which artifacts happen to exist. A new `## Briefing` section **links**
+  `BRIEFING.md` when Step 2c rendered one and states an honest `n/a` otherwise — linked, never quoted, so
+  the contract is cited once (P4) and no untrusted prose is widened. A ship run has **no `## Handoff`**,
+  and the report says so **by design** rather than reporting a missing file. The command token is
+  membership-tested before it reaches prose, with a generic phrase as the terminal fallback: the ledger
+  bounds `command` only to ≤128 control-char-free chars, so a back-tick or pipe can reach the renderer.
+
+  **Also retired: two more duplicated defaults in the module `L52` was written about.**
+  `render-cost-ledger.mjs` carried **two copies each** of the `command` and `baseSha` defaults —
+  `renderLedger`'s destructuring defaults and `main()`'s `opts` literal — and because `main()` always
+  passed its copy, the destructuring defaults were dead to every CLI test. That is **L41**'s blind spot
+  one constant over from where L52 recorded it, and `/pharn-ship` is the first caller to pass
+  `--command`, which is exactly when a stale copy bites. L52's rule is that a set-quantified remedy must
+  **name the set in the same sentence**, so: **one no-argument test per default retired in this change**
+  — two defaults, two tests, plus a closure assertion per literal.
+
+  **`/pharn-ship` now makes exactly one git call, and the claim it falsified was corrected in the same
+  diff (L33/L50).** Step 3a runs `git rev-parse HEAD` to capture the run report's base SHA — correct
+  precisely because the command never commits, so HEAD cannot move during the run and `## Files` can diff
+  against it. Passing `unknown` instead is honest but costs that whole section. The command previously
+  claimed it "contains no `git`/`gh` invocation"; **all four sites carrying that claim were swept
+  together**, not just the one that was easiest to find, and each now says **no git WRITE** — no branch,
+  add, commit, push or PR, and `gh` is never invoked.
+
+  **What gates nothing, said plainly (fix #3).** `check-cost-ledger.mjs`'s exit code is not a
+  proceed/stop input; a RED ledger reaches GATE 2 exactly as a GREEN one does. Every line of Step 3a is a
+  Bash call outside the `PreToolUse` gate (**L19**); both emitters write their own files and are already
+  exempt by name under `pipeline_artifacts` in `reconcile-ignore.json` — **nothing was re-added there**.
+  Neither artifact is declared in the command's `writes:`, deliberately: declaring a path the Write tool
+  never touches would be a false claim (**L7**) and would oblige a setter call authorizing nothing.
+
+  **Obligations are enumerated, not asserted per-file (L29/L31).** The run-report suite's `★ WIRING` pin
+  was written for **one** invoking command; it is now an enumeration over invoking commands, **closed
+  over the corpus** so a third caller fails until it is listed. `.dev/floor/command-hygiene.test.mjs`
+  gains a matching `PHASE_MARKER_WIRING` set pinning that each emitting command brackets its run and
+  every stage it runs, pairs an `orchestrator` return to every `stage-start`, and passes its **own**
+  `--command` value. The iteration FORM is pinned per command because the two genuinely differ — the
+  loop's is a runtime `<N>` under `--max-iter`, ship's is a literal `1` or `2` (its single Step-2b retry)
+  — so neither can drift into the other. Ship deliberately marks **no** `pharn-spec` stage, and the test
+  encodes that as a declared asymmetry rather than a gap.
+
 - **Every `/pharn-loop` stop now also writes a human-readable run report**
   (`SKILLS_VERSION` 6.5.2 → **6.6.0**, minor: a newly shipped product-floor capability)
   ([`pharn/features/<name>/RUN-REPORT.md`](./pharn/floor/render-run-report.mjs),

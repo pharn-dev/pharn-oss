@@ -81,6 +81,7 @@ import { homedir } from "node:os";
 import { findTranscriptDirs, transcriptFiles } from "./render-cost-record.mjs";
 import { DEFAULT_BASE as MARKERS_DEFAULT_BASE, MARKER_KINDS, cleanScalar } from "./mark-phase.mjs";
 import { FM_RE, stripBom } from "./frontmatter-core.mjs";
+import { readShipOutcome, OUTCOME_SOURCE as SHIP_OUTCOME_SOURCE } from "./ship-outcome-core.mjs";
 
 export const SCHEMA = "pharn-cost-ledger/1";
 
@@ -91,6 +92,33 @@ export const SCHEMA = "pharn-cost-ledger/1";
  *  every CLI test passes `--base` explicitly. `render-cost-ledger.test.mjs` now exercises the no-`--base`
  *  WRITE path so this const is reachable from the suite. */
 export const FEATURE_BASE = "pharn/features";
+
+/** The ONE definition of the emitting command's default, and of the honest base-SHA absence. Both are
+ *  referenced by `renderLedger`'s parameter defaults and by NOTHING else — the CLI passes `undefined`
+ *  when its flag is absent so the value falls through to here, exactly as `--base` already does.
+ *  Before this, each existed as TWO literals (`renderLedger`'s destructuring default and `main()`'s
+ *  `opts` object), and because `main()` ALWAYS passed its copy, the destructuring defaults were dead to
+ *  every CLI test — [[L41]]'s blind spot in the very module [[L52]] records it in, one constant over.
+ *  `/pharn-ship` is the first caller to pass `--command`, which is precisely when a stale copy bites.
+ *  L52's remedy is quantified over a SET, so the set is named: ONE no-argument test per default retired
+ *  in this change, plus a closure assertion per literal. */
+export const DEFAULT_COMMAND = "/pharn-loop";
+export const UNKNOWN_BASE_SHA = "unknown";
+
+/** `outcome.source` — where the outcome CAME from, recorded beside the value so a reader never has to
+ *  guess whether it was DECLARED or DERIVED. Two members, and they carry different guarantees:
+ *  `LOOP.md` is copied verbatim from a record `check-loop-decision.mjs` can re-derive; `verdicts+markers`
+ *  is derived here and its floor/advisory split is stated in `ship-outcome-core.mjs`. The enumeration
+ *  lives in ONE place and `check-cost-ledger.mjs` IMPORTS it rather than re-spelling the members — a
+ *  second copy would be the sync cost [[L35]] names, and the members would drift apart exactly where
+ *  [[L31]] says they do. */
+export const LOOP_RECORD_SOURCE = "LOOP.md";
+export const OUTCOME_SOURCES = Object.freeze([LOOP_RECORD_SOURCE, SHIP_OUTCOME_SOURCE]);
+
+/** `outcome`'s CLOSED key set, asserted in BOTH directions by `check-cost-ledger.mjs`. A per-member
+ *  presence set would admit a variant spelling of any member; closure is what makes a variant fail
+ *  ([[L36]]). `blocked` is optional — only a blocked loop stop carries it. */
+export const OUTCOME_KEYS = Object.freeze(["decision", "iterations", "source", "blocked"]);
 
 /** No `complete` member, by design — see the header. */
 export const COVERAGE = Object.freeze(["partial", "unavailable"]);
@@ -333,7 +361,7 @@ export function readOutcome(loopPath) {
   const out = {
     decision,
     iterations: iterations !== undefined && /^\d+$/.test(iterations) ? Number(iterations) : null,
-    source: "LOOP.md",
+    source: LOOP_RECORD_SOURCE,
   };
   const blocked = fields.get("blocked");
   if (typeof blocked === "string" && blocked.length > 0) out.blocked = blocked;
@@ -391,8 +419,8 @@ function unavailableLedger({ name, command, baseSha, outcome, skills, markers, n
 /** Build the ledger object. Pure over its inputs — no clock, no randomness. */
 export function renderLedger({
   name,
-  command = "/pharn-loop",
-  baseSha = "unknown",
+  command = DEFAULT_COMMAND,
+  baseSha = UNKNOWN_BASE_SHA,
   repo = ".",
   sessionId,
   projectsDir,
@@ -400,7 +428,15 @@ export function renderLedger({
   featureBase = FEATURE_BASE,
 }) {
   const markers = readMarkers(join(markersBase, name, "markers.jsonl"));
-  const outcome = readOutcome(join(repo, featureBase, name, "LOOP.md"));
+  // PRECEDENCE, and it is one-way: a DECLARED envelope always wins over a DERIVED outcome. `/pharn-loop`
+  // writes `LOOP.md` before this runs, so its bytes do not move; `/pharn-ship` writes no such record, so
+  // it falls through to the derivation. Deriving is NOT a repair of a missing envelope — `readOutcome`
+  // returning null is the ordinary state of every non-loop caller, and `deriveShipOutcome` returns null
+  // in turn when there are no markers, so "no evidence" still renders as `null` rather than as a stop
+  // nobody observed. The derivation's own floor/advisory split lives in `ship-outcome-core.mjs` and is
+  // restated by neither this module nor the report (P4 — cited, not copied).
+  const featureDir = join(repo, featureBase, name);
+  const outcome = readOutcome(join(featureDir, "LOOP.md")) ?? readShipOutcome(featureDir, markers);
   const skills = readSkillsVersion(repo);
   const shell = (note) => unavailableLedger({ name, command, baseSha, outcome, skills, markers, note });
 
@@ -592,8 +628,10 @@ function main(argv) {
     repo: ".",
     sessionId: process.env.CLAUDE_CODE_SESSION_ID ?? null,
     projectsDir: null,
-    command: "/pharn-loop",
-    baseSha: "unknown",
+    // `null` means "flag absent" and is SPREAD AWAY below, so the value falls through to renderLedger's
+    // single definition. No second literal lives here any more (L41/L52).
+    command: null,
+    baseSha: null,
     markersBase: null,
     stdout: false,
   };
@@ -629,8 +667,8 @@ function main(argv) {
   // no-flag path precisely because every other test supplies the flags for hermeticity.
   const ledger = renderLedger({
     name: opts.name,
-    command: opts.command,
-    baseSha: opts.baseSha,
+    ...(opts.command === null ? {} : { command: opts.command }),
+    ...(opts.baseSha === null ? {} : { baseSha: opts.baseSha }),
     repo: opts.repo,
     sessionId: opts.sessionId,
     projectsDir: opts.projectsDir,

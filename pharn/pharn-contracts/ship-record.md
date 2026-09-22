@@ -103,6 +103,22 @@ cost would be invisible. Given the same transcript bytes the render is byte-iden
 - **`by_stage` keys are the platform's `attributionSkill`,** not PHARN's own accounting. A stage missing
   from `by_stage` means the platform did not tag those records, **not** that the stage did not run.
 
+**A SECOND cost figure now sits beside this one, and which is which is stated here rather than left to
+be discovered.** Since the `/pharn-ship` cost-ledger wiring, a ship run also writes
+`pharn/features/<name>/cost.json` (`pharn-cost-ledger/1`, `pharn-contracts/cost-ledger.md`) — per-request
+rows with marker-based stage attribution, every view recomputed and checked by
+`pharn/floor/check-cost-ledger.mjs`. **That file is authoritative for analysis.** This block stays
+because it is **inside attested content**: removing or reshaping it would change what a named human
+attested to, which is a breaking change rather than a tidy-up.
+
+**The two may legitimately disagree, and the reason is ORDERING, not drift.** `/pharn-ship` emits
+`cost.json` at its Step 3a and this block at Step 3b, so this block's window extends past the ledger's.
+They also differ in kind: `by_stage` here is keyed by the platform's `attributionSkill` (which names the
+orchestrator, never the sub-stage), while the ledger attributes by phase markers. **No consistency check
+binds them and none will be added** — such a check would certify that two stores of one fact agree,
+never that either is right, and it would become a third artifact to keep in sync. Each is bound to
+reality by the window it records, which each states.
+
 **Ordering (load-bearing).** `record_hash` is computed over the record with `attestation` removed, so
 `cost` is **inside** the attested content. An emitter MUST write `cost` **before** computing the
 attestation hash; adding or editing it afterwards makes a previously-valid attestation read `stale`.

@@ -18,7 +18,12 @@ stop — green or not. It exists so a reader can compute what a feature cost **i
 **against their own price list**, from a file in the repository.
 
 It is written by `pharn/floor/render-cost-ledger.mjs` and validated by `pharn/floor/check-cost-ledger.mjs`.
-`/pharn-loop` emits one at every stop that has a feature directory.
+
+**TWO commands emit one, and the set is named here so a third is a deliberate addition rather than a
+discovery.** `/pharn-loop` emits at every stop that has a feature directory; `/pharn-ship` emits at
+every exit that ends the run — GATE 2 and every STOP — from its own Step 3a, before its attestation step
+so that neither an attestation STOP nor a `requireAttestation` halt can skip it. Both reuse this one
+emitter unchanged: there is no per-command fork and no second copy.
 
 ---
 
@@ -92,33 +97,33 @@ tagged `pharn-loop`**, with no sub-stage named anywhere. The field is therefore 
 the keys above, no more and no fewer, asserted in **both** directions. A per-member presence set would be
 satisfied by a variant spelling of any member; closure is what makes a variant fail.
 
-| field                                                               | shape                                                            | class                        |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------- |
-| `schema`                                                            | the literal `pharn-cost-ledger/1`                                | FLOOR (enum)                 |
-| `name`                                                              | the feature slug                                                 | FLOOR (present)              |
-| `command`                                                           | the emitting command, e.g. `/pharn-loop`                         | FLOOR (present)              |
-| `base_sha`                                                          | the run's base SHA, or the literal `unknown`                     | FLOOR (present)              |
-| `outcome`                                                           | `{decision, iterations, blocked?, source:"LOOP.md"}`, or `null`  | FLOOR (shape)                |
-| `skills_version`                                                    | the version string, or `null`                                    | FLOOR (shape)                |
-| `skills_version_source`                                             | `pharn.config.json` \| `SKILLS_VERSION` \| `unknown`             | FLOOR (enum)                 |
-| `claude_code_versions`                                              | sorted distinct `version` values seen on the records             | FLOOR (array)                |
-| `sessions`                                                          | sorted distinct session ids                                      | FLOOR (array)                |
-| `window_start` / `_end`                                             | ISO timestamps from the **records' own** values, or `null`       | FLOOR (from data)            |
-| `coverage`                                                          | `partial` \| `unavailable` — **there is no `complete`**          | FLOOR (enum)                 |
-| `dedup_key`                                                         | the literal `requestId`                                          | FLOOR (enum)                 |
-| `attribution.method`                                                | the versioned method name                                        | FLOOR (enum)                 |
-| `pricing_note`                                                      | must state the file carries tokens, never prices                 | FLOOR (regex)                |
-| `markers[].seq`                                                     | integers, **strictly increasing**                                | FLOOR (integer compare)      |
-| `markers[].kind`                                                    | `run-start` \| `stage-start` \| `orchestrator` \| `run-stop`     | FLOOR (enum)                 |
-| `requests[].request_id`                                             | non-empty, **unique across the array**                           | FLOOR (set membership)       |
-| `requests[].usage`                                                  | every leaf: number \| bool \| null \| a short token              | FLOOR (enum-regex)           |
-| `requests[].model`                                                  | a bounded identity token (<=128 chars, no control char, no path) | FLOOR (enum-regex)           |
-| `requests[].attribution_skill` / `agent_id`                         | the same bound, or `null`                                        | FLOOR (enum-regex)           |
-| `requests[].tokens.*`                                               | the six classes, each a number                                   | FLOOR (shape)                |
-| `requests[].sidechain`                                              | a boolean                                                        | FLOOR (shape)                |
-| `requests[].stage/iteration`                                        | the derived VIEW                                                 | **ADVISORY** (see below)     |
-| `totals` / `by_model` / `by_stage_iteration_model` / `unattributed` | equal to a recompute from `requests[]`                           | FLOOR (recompute + equality) |
-| `dropped[]`                                                         | key paths of leaves the leaf rule refused                        | FLOOR (array)                |
+| field                                                               | shape                                                             | class                        |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------- |
+| `schema`                                                            | the literal `pharn-cost-ledger/1`                                 | FLOOR (enum)                 |
+| `name`                                                              | the feature slug                                                  | FLOOR (present)              |
+| `command`                                                           | the emitting command — `/pharn-loop` or `/pharn-ship`             | FLOOR (present)              |
+| `base_sha`                                                          | the run's base SHA, or the literal `unknown`                      | FLOOR (present)              |
+| `outcome`                                                           | `{decision, iterations, source, blocked?}`, or `null` — see below | FLOOR (shape, rule 7)        |
+| `skills_version`                                                    | the version string, or `null`                                     | FLOOR (shape)                |
+| `skills_version_source`                                             | `pharn.config.json` \| `SKILLS_VERSION` \| `unknown`              | FLOOR (enum)                 |
+| `claude_code_versions`                                              | sorted distinct `version` values seen on the records              | FLOOR (array)                |
+| `sessions`                                                          | sorted distinct session ids                                       | FLOOR (array)                |
+| `window_start` / `_end`                                             | ISO timestamps from the **records' own** values, or `null`        | FLOOR (from data)            |
+| `coverage`                                                          | `partial` \| `unavailable` — **there is no `complete`**           | FLOOR (enum)                 |
+| `dedup_key`                                                         | the literal `requestId`                                           | FLOOR (enum)                 |
+| `attribution.method`                                                | the versioned method name                                         | FLOOR (enum)                 |
+| `pricing_note`                                                      | must state the file carries tokens, never prices                  | FLOOR (regex)                |
+| `markers[].seq`                                                     | integers, **strictly increasing**                                 | FLOOR (integer compare)      |
+| `markers[].kind`                                                    | `run-start` \| `stage-start` \| `orchestrator` \| `run-stop`      | FLOOR (enum)                 |
+| `requests[].request_id`                                             | non-empty, **unique across the array**                            | FLOOR (set membership)       |
+| `requests[].usage`                                                  | every leaf: number \| bool \| null \| a short token               | FLOOR (enum-regex)           |
+| `requests[].model`                                                  | a bounded identity token (<=128 chars, no control char, no path)  | FLOOR (enum-regex)           |
+| `requests[].attribution_skill` / `agent_id`                         | the same bound, or `null`                                         | FLOOR (enum-regex)           |
+| `requests[].tokens.*`                                               | the six classes, each a number                                    | FLOOR (shape)                |
+| `requests[].sidechain`                                              | a boolean                                                         | FLOOR (shape)                |
+| `requests[].stage/iteration`                                        | the derived VIEW                                                  | **ADVISORY** (see below)     |
+| `totals` / `by_model` / `by_stage_iteration_model` / `unattributed` | equal to a recompute from `requests[]`                            | FLOOR (recompute + equality) |
+| `dropped[]`                                                         | key paths of leaves the leaf rule refused                         | FLOOR (array)                |
 
 **`outcome` is copied VERBATIM from the `LOOP.md` envelope** (`pharn/pharn-contracts/loop-record.md` —
 cited, not restated, P4), read from the `---`-fenced frontmatter only and never grepped from the body. The
@@ -131,7 +136,12 @@ lands _inside_ the loop's own commit, so a field naming that commit could not be
 
 ---
 
-## The four FLOOR rules on content, stated precisely (P0)
+## The FLOOR rules on content, stated precisely (P0)
+
+> **The heading carries no count, deliberately.** It read "the four FLOOR rules" until rule 5 below was
+> added, and [[L47]] is the record of what goes wrong next: retracting a false quantifier by substituting
+> a new count rebuilds the defect at the new value, because nothing reads shipped prose to notice the
+> day it moves again. The list below is the enumeration; its length is not restated anywhere.
 
 1. **The top-level key set is closed.** Both directions.
 2. **Every `usage` leaf is `number | bool | null | a short token`.** Anything else is **dropped and its
@@ -144,11 +154,56 @@ lands _inside_ the loop's own commit, so a field naming that commit could not be
    `model` falls back to the literal `unknown`, the other two to `null`. **Never truncated**, which would
    invent a value that was never in the transcript.
 4. **No string anywhere in the file matches the absolute-path regex.** Every value, at every depth.
+5. **`outcome` is `null`, or matches its shape.** `decision` a bounded, control-char-free token;
+   `iterations` an integer or `null`; `source` a member of the closed enum below; an optional `blocked`
+   likewise bounded; and **the key set closed in both directions** — a `decisions` beside `decision`
+   fails, which a per-member presence set would not ([[L36]]). Added because this contract advertised
+   the row as `FLOOR (shape)` from the day it shipped while **nothing validated anything inside it**;
+   the same direction [[L2]] requires, and the same repair rule 3 above records. `/pharn-ship` made it
+   urgent rather than merely overdue: a second producer and a second `source` member would have
+   deepened an unbacked label instead of inheriting it.
 
-**"No message content and no home paths are in the file" is a CONSEQUENCE of those four rules, not a
+**"No message content and no home paths are in the file" is a CONSEQUENCE of rules 1–4, not a
 detector.** Message bodies are never read, so none can appear; `cwd` and `gitBranch` are never copied, so
 no home path can. **The claim "no usernames" is STRUCK** and appears nowhere in this contract or in the
-implementation: **no regex proves it.** What is guaranteed is exactly what the four rules test.
+implementation: **no regex proves it.** What is guaranteed is exactly what the rules above test.
+
+### `outcome` — DECLARED or DERIVED, and the two are not equally strong
+
+`outcome.source` records **where the outcome came from**, beside the value, so a reader never has to
+infer it. The enum is **closed at two members**, defined once in `render-cost-ledger.mjs` and _imported_
+by the checker rather than re-spelled:
+
+| `source`           | who writes it                 | `decision` vocabulary                       | strength                                |
+| ------------------ | ----------------------------- | ------------------------------------------- | --------------------------------------- |
+| `LOOP.md`          | `/pharn-loop`, via its record | `check-loop.mjs`'s own tokens               | **DECLARED** — re-derivable (see below) |
+| `verdicts+markers` | any command with no record    | `gate2` \| `stop:<stage>` \| `stop:unknown` | **DERIVED** — split, see below          |
+
+**The declared form is re-derivable and the derived form is not, and that asymmetry is the point.** A
+`LOOP.md` decision is checked by `pharn/floor/check-loop-decision.mjs`, which re-runs `check-loop.mjs`
+against the record's own cited reports and refuses a mismatch. **There is no equivalent for a derived
+outcome and none is claimed**: a `/pharn-ship` stop is a human gate or an orchestrator STOP, and no
+checker computes either, so there is nothing to re-derive against.
+
+**Within the derived form, the two halves differ (P0) and must never be averaged:**
+
+- **`gate2` is FLOOR.** It means `verify-report.json` read `PASS` **and** `regression-report.json` read
+  `no-regressions` — two enum values produced by tested non-LLM checkers. It says the run reached the
+  human gate; it is **not** a judgment that the feature is good, which is the human's call.
+- **`stop:<stage>` is ADVISORY in its stage NAME.** `<stage>` is the last `stage-start` marker, and
+  markers are written by Bash calls in command prose, outside the `PreToolUse` gate — so a written
+  marker does not mean the stage ran, nor the reverse. That the run did **not** satisfy the `gate2`
+  test is a membership fact; _which_ stage it stopped at rests on marker discipline.
+- **`stop:unknown` is the terminal fallback** — markers exist but none is a `stage-start`, or its stage
+  token failed the grammar. The token is re-tested at READ time, not trusted from the writer: the
+  markers file is ordinary state under `.pharn/` that a Bash write reaches (`LIMITS.md §6`).
+
+`outcome` is `null` when there are no markers at all — no evidence a run happened. That is a real state,
+not a failure, and it is what a fresh or abandoned run renders.
+
+**The label travels with the value.** `render-run-report.mjs` prints this split in `RUN-REPORT.md`'s
+`## Outcome` section, so a reader of the artifact meets it without opening this contract. A bound stated
+only in a document nobody opens is not stated (P0).
 
 > **Rule 3 was added after `/pharn-dev-review` found this contract asserting it without the code providing
 > it.** The sentence under "Residual" below used to say the leaf-shape rule bounded these three fields; it
@@ -237,8 +292,28 @@ implementation of transcript location and the file walk — imported, never copi
 
 **The overlap is recorded rather than resolved.** A ✧ parity test asserts the two agree on totals over the
 same bytes, with the class-name mapping made explicit, so they cannot drift silently while both exist.
-Unifying them belongs to the named `/pharn-ship` wiring follow-up; until then, "must the second copy
-exist?" is answered **yes for now**, not **yes permanently**.
+
+**"Must the second copy exist?" now has a settled answer, and it is YES — decided at a human gate during
+the `/pharn-ship` wiring increment this paragraph used to defer to.** [[L35]] asks that question before
+any remedy is chosen, and the evidence says the two are **not one fact stored twice**:
+
+- **Different granularity.** `pharn-cost-record/1` is aggregates; `pharn-cost-ledger/1` is per-request
+  rows from which every aggregate is recomputed and checked.
+- **Different attribution METHOD.** The record's `by_stage` keys are the platform's `attributionSkill`,
+  which names the orchestrator and never the sub-stage; the ledger's are marker-based. Deriving one from
+  the other would silently change what `by_stage` MEANS.
+- **Different moment, hence different windows.** `/pharn-ship` emits `cost.json` at Step 3a and the
+  embedded block at Step 3b, so the block's window legitimately extends past the ledger's. **They may
+  disagree, and that is not drift.**
+- **The block is inside ATTESTED content.** `record_hash` covers the record with `attestation` removed,
+  so removing or reshaping `cost` changes what a named human attested to — a breaking change to
+  `ship-record.md`, not a tidy-up.
+
+**`cost.json` is authoritative for analysis**; the embedded block stays as the attested figure. **No
+consistency check binds the two and none will be added** — per [[L43]] such a check certifies that
+several stores of one fact AGREE, never that any of them is right (they can all be stale together), and
+per [[L35]] it would itself become a third thing to keep in sync. What binds each to reality is the
+window it records, which each already states.
 
 ## Residual (named, not hidden — `LIMITS.md §2`, `THREAT-MODEL.md §5`)
 

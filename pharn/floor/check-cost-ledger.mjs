@@ -38,6 +38,19 @@
 //  6. EVERY VIEW equals a recompute from `requests[]` — `totals`, `by_model`,
 //     `by_stage_iteration_model`, `unattributed`. The recompute calls the EMITTER's own `buildViews`,
 //     so the two cannot disagree about what a view MEANS, only about whether the stored one matches.
+//  7. `outcome` IS `null` OR matches its shape — `decision` a bounded token, `iterations` an integer or
+//     null, `source` in the IMPORTED two-member enum, optional `blocked` a bounded token, and the key
+//     set CLOSED in both directions. Added because the contract had advertised this row as
+//     `FLOOR (shape)` while nothing checked it; see the rule body for the trigger and for why the new
+//     `/pharn-ship` producer made deferring it worse than building it.
+//
+// WHAT RULE 7 STILL DOES NOT DO, stated where the rule is claimed rather than left to a reader. It
+// checks the outcome's SHAPE, never its TRUTH: a well-formed `{"decision":"gate2"}` on a run that
+// stopped at grill passes, because nothing here re-reads the verdict reports. For `/pharn-loop` that
+// gap is closed OUTSIDE this file by `check-loop-decision.mjs`, which re-derives the decision from the
+// record's own cited reports. For `/pharn-ship` there is NO equivalent and none is added: ship's stop
+// is a human gate or an orchestrator STOP, and no checker computes either, so there is nothing to
+// re-derive against. That asymmetry is real and is named rather than papered over.
 //
 // "No message content and no home paths are in the file" is a CONSEQUENCE of rules 2, 2b and 3, NOT a
 // detector this file implements. The claim "no usernames" is STRUCK and appears nowhere here: no regex
@@ -65,6 +78,8 @@ import {
   ABS_PATH_RE,
   ATTRIBUTION_METHOD,
   IDENTITY_MAX,
+  OUTCOME_SOURCES,
+  OUTCOME_KEYS,
   isTokenLeaf,
   buildViews,
   renderLedger,
@@ -277,6 +292,47 @@ export function checkLedger(led, opts = {}) {
       v.by_stage_iteration_model,
       (r) => `${r?.stage ?? ""}/${r?.iteration ?? ""}/${r?.model}`
     );
+  }
+
+  // ---- RULE 7: `outcome` SHAPE ------------------------------------------------------------------
+  // WHY THIS EXISTS, recorded rather than given a manufactured trigger (P7). `cost-ledger.md`'s field
+  // table has advertised `outcome` as `FLOOR (shape)` since the contract shipped, while NOTHING here
+  // validated anything inside it — only the closed TOP-LEVEL key set (which proves the key is present)
+  // and RULE 3's absolute-path walk (which proves no value looks like a path). A FLOOR label with no
+  // running check behind it is precisely the disease P0 names, and [[L2]] states the rule it breaks: a
+  // contract's honesty must travel with the artifact and may cite only LIVE floor ops. The trigger is
+  // that unbacked claim, surfaced by discovery — not a hypothetical, and not the new caller. The new
+  // caller is why it could not be deferred: `/pharn-ship` adds a SECOND producer and a SECOND `source`
+  // member, so leaving the field unchecked would have deepened the overclaim rather than merely
+  // inherited it.
+  //
+  // NO COMMITTED LEDGER IS RETROACTIVELY REDDENED: `git ls-files '*cost.json'` returned 0 when this
+  // rule was written, so the stricter check cannot fail an artifact that predates it.
+  //
+  // The key set is CLOSED in BOTH directions ([[L36]]) and the `source` enum is IMPORTED, never
+  // re-spelled ([[L35]]) — a second copy of the member list is the thing that drifts.
+  if (led.outcome !== null && led.outcome !== undefined) {
+    const o = led.outcome;
+    if (typeof o !== "object" || Array.isArray(o)) {
+      red(`outcome must be an object or null (got ${Array.isArray(o) ? "an array" : typeof o})`);
+    } else {
+      if (!cleanScalar(o.decision, IDENTITY_MAX)) {
+        red(`outcome.decision must be a bounded, control-char-free string (<=${IDENTITY_MAX} chars)`);
+      }
+      if (!(o.iterations === null || Number.isInteger(o.iterations))) {
+        red(`outcome.iterations must be an integer or null (got ${JSON.stringify(o.iterations)})`);
+      }
+      if (!OUTCOME_SOURCES.includes(o.source)) {
+        red(`outcome.source must be one of ${OUTCOME_SOURCES.join(" | ")} (got ${JSON.stringify(o.source)})`);
+      }
+      if (o.blocked !== undefined && !cleanScalar(o.blocked, IDENTITY_MAX)) {
+        red(`outcome.blocked, when present, must be a bounded, control-char-free string (<=${IDENTITY_MAX} chars)`);
+      }
+      for (const k of Object.keys(o)) {
+        if (!OUTCOME_KEYS.includes(k))
+          red(`outcome carries an unknown key ${JSON.stringify(k)} — the key set is closed to ${OUTCOME_KEYS.join(", ")}`);
+      }
+    }
   }
 
   // ---- WARN (never RED): marker completeness ----------------------------------------------------
