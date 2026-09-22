@@ -1,0 +1,29 @@
+{
+  "base": "0bf10f4b3286c8701e8c151087f8ec4150b693e5",
+  "inside": [
+    ".dev/features/docs-sync-6-11/GRILL.md",
+    ".dev/features/docs-sync-6-11/PLAN.md",
+    ".dev/features/loop-stop-guard/settings-patch/APPLY.md",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SECURITY.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

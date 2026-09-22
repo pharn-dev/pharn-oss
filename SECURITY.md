@@ -50,7 +50,7 @@ We will keep you informed throughout, coordinate disclosure timing with you, and
 - **Prompt injection** in the trusted spec docs, the `pharn-dev-*` / `pharn-*` commands, or a capability — content that bypasses the constitution, or launders untrusted data into a guaranteed decision (the trust-fence; `THREAT-MODEL.md §5`).
 - **Write-guard bypass** — any input that makes `protect-trusted-paths.cjs` _allow_ a Write/Edit it should deny to a trusted doc (e.g. a path-normalization or path-traversal gap; fix #2, `THREAT-MODEL.md §4`).
 - **Floor false-negative** — a logic flaw in `pharn/floor/validate.mjs` (or any `pharn/floor/*.mjs` checker) that reports GREEN for input violating an invariant it claims to enforce (a false guarantee — the exact P0 failure mode).
-- Any other defect in the executable floor (the `.cjs` hook or the `.mjs` validator) that undermines a guarantee the docs claim.
+- Any other defect in the executable floor (a `.claude/hooks/*.cjs` hook or a `pharn/floor/*.mjs` checker) that undermines a guarantee the docs claim.
 
 ### Out of scope
 

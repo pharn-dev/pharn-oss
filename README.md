@@ -157,7 +157,10 @@ You see the selected capability list, with a reason beside each entry, before th
 normal install adds:
 
 - product commands in `.claude/commands/`,
-- write-gating hooks in `.claude/hooks/`,
+- hooks in `.claude/hooks/`: the two write guards, the scope setter they read, and a `Stop` guard for
+  `/pharn-loop` (see below),
+- the four trusted docs — `pharn/CONSTITUTION.md` and `pharn/ARCHITECTURE.md`, plus `THREAT-MODEL.md` and
+  `LIMITS.md` at the root,
 - the deterministic floor, contracts, grillers, and review lenses under `pharn/`,
 - `pharn.config.json`, pinning the skills version and exact installed commit, and carrying the
   `models.stages` block that sets each product command's model and effort (see
@@ -167,16 +170,21 @@ normal install adds:
 your-repo/
 ├── .claude/
 │   ├── commands/pharn-*.md        # the 10 product commands
-│   ├── hooks/*.cjs                # the write guards
+│   ├── hooks/*.cjs                # the write guards, their setter, the /pharn-loop Stop guard
 │   └── settings.json              # wires the hooks (see the caveat below)
 ├── pharn/
+│   ├── CONSTITUTION.md            # trusted docs (human-only)
+│   ├── ARCHITECTURE.md
 │   ├── floor/*.mjs                # the deterministic checkers
 │   ├── pharn-contracts/           # artifact shapes
 │   ├── pharn-pipeline/grillers/   # plan interrogators
-│   └── pharn-review/              # code lenses
+│   ├── pharn-review/              # code lenses
+│   └── features/<name>/           # per increment, written as you run the pipeline — commit these:
+│                                  # SPEC PLAN GRILL BUILD REGRESSION VERIFY, then SHIP + BRIEFING
+│                                  # (/pharn-ship) or LOOP (/pharn-loop), and RUN-REPORT + cost.json
+├── THREAT-MODEL.md                # the other two trusted docs
+├── LIMITS.md
 ├── pharn.config.json              # skills version + installed commit + models.stages
-├── pharn/features/<name>/               # per increment, written as you run the pipeline:
-│                                  # SPEC PLAN GRILL BUILD REGRESSION VERIFY SHIP — commit these
 └── .pharn/                        # runtime scratch — add to .gitignore
 ```
 
@@ -185,6 +193,11 @@ The hooks enforce only after they are registered in Claude Code's settings — `
 project already has a `.claude/settings.json`, the installer preserves it and warns instead of
 overwriting it. Until you copy the hook wiring over, any guarantee that depends on a `PreToolUse` hook is
 not active.
+
+`require-loop-record.cjs` is not a write guard. It is a `Stop` hook: while an unattended `/pharn-loop` run
+in the session has written no `LOOP.md`, it refuses to let the turn end, a bounded number of times per run,
+and it fails open. It does nothing unless your settings register it under `Stop`. As of `6.11.1` the
+`settings.json` PHARN ships does not register it, so it lands inert.
 
 Copy the wiring **as it ships**, anchored on the project-directory placeholder:
 
@@ -321,6 +334,7 @@ judgment is **advisory**.
 | The four trusted docs — and the guards' own control surface — cannot be edited through Claude Code's Write/Edit/MultiEdit/NotebookEdit surface                                                                                                                                                                                                                                                                                      | `.claude/hooks/protect-trusted-paths.cjs`                                                                                                                                                                  |
 | Memory-bank canon (`memory-bank/`, `.dev/memory-bank/`, subtrees included) is denied on that same surface, **unless** the active writes-scope was set by a promotion command **and** names that one canon file alone — so a build plan cannot grant itself a canon write                                                                                                                                                            | `.claude/hooks/protect-trusted-paths.cjs` (origin read from `set-writes-scope.cjs`'s argv)                                                                                                                 |
 | Writes through that same tool surface — **and only that surface**, since the wired `PreToolUse` matcher does not match `Bash` — are restricted to the active write scope, fail-closed to a default-safe set when none is active                                                                                                                                                                                                     | `set-writes-scope.cjs` + `enforce-writes-scope.cjs`                                                                                                                                                        |
+| The verify and regress verdicts are computed from a gate map the gate runner wrote, not one a model typed: each value is the exit code the runner recorded for the listed command, the keys cover the resolved gate set (plus `reconcile` for verify, which runs last), and no tree edit happened between consecutive gates                                                                                                         | `run-gates.mjs`, validated by `check-verify.mjs --stamp` and `check-regress.mjs verdict --base-stamp … --head-stamp …`                                                                                     |
 | A **non-adversarial** write that reached a path the active scope would have **denied** — including one issued through `Bash`, which no hook sees — is **detected** between build and verify, and fails the verify verdict. Detected, **not** prevented; git-ignored paths are outside the reconciled set; and a writer who also rewrites the baseline defeats it on ordinary paths                                                  | `reconcile-baseline.mjs --anchor` + `check-bash-reconcile.mjs`, feeding `check-verify.mjs`                                                                                                                 |
 | An approved spec is pinned, so later body drift is detectable                                                                                                                                                                                                                                                                                                                                                                       | `check-spec.mjs --hash` at approval; re-verified at plan, grill, build, regress, verify and ship by `check-spec-approved.mjs` (directly at plan and ship, through `check-plan-spec-agree.mjs` at the rest) |
 | Secret-shaped literals in a plan can be detected by the shipped regex scanner                                                                                                                                                                                                                                                                                                                                                       | `scan-plan-secrets.mjs`                                                                                                                                                                                    |
@@ -347,6 +361,11 @@ by wording them strongly.
   the repository proves it by building one. The `--verify-transcript` flag re-derives the rows from the
   live transcript, but a transcript is machine-local and Claude Code prunes it on its own schedule, so
   that check is deliberately not a gate. The ledger annotates a run; it gates nothing.
+- A validating gate-run stamp proves internal consistency, not provenance. A self-consistent fabricated
+  stamp passes, and a test in the repository builds one to prove it. The stamp alone also says neither
+  that the stage ran nor that the report on disk is its output. Under `/pharn-loop`, `check-loop-fresh.mjs`
+  narrows that by binding each report to its stamp by hash and the verify stamp to the live tree. That is
+  tree identity, not recency.
 - `check-model-config` compares two files. Model and effort are applied by the Claude Code platform, so
   nothing here observes that a stage ran under the configured model — and an org `availableModels`
   allowlist or auto mode can decline a value silently.
@@ -537,8 +556,6 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   reduction — it tells you the bill, it does not make the run cheaper.
 - **Packaging is still pre-release shaped.** There are no GitHub releases or git tags yet; the installer
   currently fetches the repository's `main` and records the exact installed commit.
-- **Not every design doc ships into an install.** The installer copies `pharn/CONSTITUTION.md` and
-  `pharn/ARCHITECTURE.md` only; `THREAT-MODEL.md` and `LIMITS.md` are read here, in the repository.
 
 [`LIMITS.md`](./LIMITS.md) documents what PHARN does not guarantee.
 [`THREAT-MODEL.md`](./THREAT-MODEL.md) documents the attack surface and trust assumptions.

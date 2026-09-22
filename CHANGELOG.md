@@ -52,6 +52,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The hand-written docs now match the last 20 commits (6.4.3 → 6.11.1), and one expired install claim is
+  gone.** Repo meta only, so no `SKILLS_VERSION` bump. The sweep read every commit's files against
+  README, `CLAUDE.md`, `CONTRIBUTING.md`, `SECURITY.md`, `docs/**` and the trusted docs. Generated regions
+  were already current (`docs:check` GREEN), and five sentences were not
+  ([`.dev/features/docs-sync-6-11/`](./.dev/features/docs-sync-6-11/)).
+  - **README, the Stop guard (6.11.0).** The installer copies every `.claude/hooks/*.cjs`, so
+    `require-loop-record.cjs` lands in every install, while the shipped `settings.json` wires only
+    `PreToolUse`. README called the hooks "write-gating" and "the write guards". It now says the Stop
+    guard is not a write guard, does nothing unless registered under `Stop`, and "as of `6.11.1`" lands
+    inert. That last clause will expire, so `loop-stop-guard/settings-patch/APPLY.md` gains the step to
+    revise it when the wiring ships.
+  - **README, the gate runner (6.8.0).** The guarantees table gains a row: the verify and regress
+    verdicts come from a map the runner wrote, not one a model typed. Its bound is taken from
+    `gate-run-record.md`: internal consistency, not provenance; nothing about whether the stage ran; and
+    `check-loop-fresh.mjs` as the narrowing, which gives tree identity, not recency.
+  - **README, the install tree.** The artifact comment listed seven files, predating `cost.json` and
+    `RUN-REPORT.md`. It now also names `BRIEFING.md` and `LOOP.md`, and it sits under `pharn/`, where the
+    directory actually is.
+  - **README and `CLAUDE.md`: "the installer copies `CONSTITUTION.md` and `ARCHITECTURE.md` only" had
+    expired** (`lessons-learned` L33). pharn-cli `7c54820` (first tagged `v0.4.0`) installs all four
+    trusted docs, and `MIN_CLI` 0.5.0 refuses every older CLI that honors it.
+    - README's limitation bullet is removed, and the install list names all four docs.
+    - `CLAUDE.md` keeps its point that the versioning unit is not "files an install contains", now for
+      the reason that still holds: only the selected capabilities are copied. It also names the one CLI
+      the gate cannot reach, pre-0.4.0, because `minCliGate` itself first shipped in 0.4.0.
+  - **`SECURITY.md`.** "the `.cjs` hook or the `.mjs` validator" becomes hooks and checkers, plural;
+    there are four hook scripts now.
+
 - **`/pharn-regress`'s base side can initialize again: the gate runner resolves every path operand against the directory it is invoked from** (`SKILLS_VERSION` 6.9.2 → **6.9.3**, patch: a correction to shipped floor bytes. No stamp schema change, no command edit, and `MIN_CLI` is untouched) ([`pharn/floor/run-gates.mjs`](./pharn/floor/run-gates.mjs), [`.dev/features/run-gates-base-cwd/`](./.dev/features/run-gates-base-cwd/)).
   - **The failure, reproduced before the fix.** `/pharn-regress` Step 4b pins the base-side `init` with `--cwd .pharn/pharn-regress/base`. Executed verbatim in a scratch repo after the pinned worktree and head lines, it exited **2 `spec-mismatch`**: it looked for the head record at `.pharn/pharn-regress/base/.pharn/pharn-regress/head/state.json`, inside the base worktree. `init` resolved `--out` and `--spec-from` against `--cwd`, while `run --next`, which takes no `--cwd`, resolved `--out` against the invoking directory. Even past `init`, the base stamp would have landed inside the worktree that Step 6 deletes. So the base side of the runner had been unreachable from its only caller since 6.8.0 (#230).
   - **Why no test saw it.** Every runner test used the default `--cwd .`, and the one base-side test passed no `--cwd` and no worktree (`lessons-learned` L41). The fix lived in the runner and the defect in its invocation, which is L45's shape.

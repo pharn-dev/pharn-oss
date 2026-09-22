@@ -54,9 +54,13 @@ source lives in the separate `pharn-cli` repo. Do not read the absence of instal
 evidence it does not exist. It fetches this repository, records the exact installed commit in the
 user's `pharn.config.json`, and its `pharn status` / `pharn update` compare that install against this
 file. **Bounded, and stated:** the versioning UNIT is the product surface, which is not the same set as
-"files an install contains" — the installer copies `pharn/CONSTITUTION.md` and `pharn/ARCHITECTURE.md`
-but **not** `THREAT-MODEL.md` / `LIMITS.md`, which are read here in the repo. All four still bump (they
-are the shipped methodology's trusted docs); two of them simply never land in a user's directory.
+"files an install contains" — the installer copies only the capabilities selected for the project, never
+the whole `pharn/` capability tree. **All four trusted docs DO land**, and all four bump. Since
+`@pharn-dev/pharn` 0.4.0 (pharn-cli `7c54820`) the installer copies `THREAT-MODEL.md` and `LIMITS.md` at
+the root beside the two under `pharn/`, and `MIN_CLI` (0.5.0) makes every CLI that honors it refuse
+anything older. The gate cannot reach a pre-0.4.0 CLI, because `minCliGate` itself first shipped in
+0.4.0. Such a CLI omits the two root docs, and it is already broken on this tree by the 5.0.0
+relocation.
 
 **`MIN_CLI` (repo root) is the OTHER version file, and it is not a second `SKILLS_VERSION`.** One bare
 SemVer line + trailing newline, nothing else. It declares the minimum `@pharn-dev/pharn` version that can
