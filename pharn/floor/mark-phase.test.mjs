@@ -17,7 +17,16 @@ import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmSync
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { markPhase, countMarkers, MARKER_KINDS, DEFAULT_BASE } from "./mark-phase.mjs";
+import {
+  markPhase,
+  countMarkers,
+  MARKER_KINDS,
+  DEFAULT_BASE,
+  PENDING_DIR,
+  NO_SESSION_KEY,
+  pendingFile,
+  writePendingStart,
+} from "./mark-phase.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, "mark-phase.mjs");
@@ -157,4 +166,152 @@ test("MUTATION CONTROL: the refusal is real — the same call with a valid kind 
   const base = mkdtempSync(join(tmpdir(), "mark-phase-"));
   assert.equal(run(["--name", "feat", "--kind", "bogus", "--base", base]).status, 2);
   assert.equal(run(["--name", "feat", "--kind", "run-start", "--base", base]).status, 0);
+});
+
+// ---------------------------------------------------------------- the PENDING start (run-window/1)
+// The pending start exists so `/pharn-ship` can open its run window BEFORE `/pharn-spec` names the
+// feature. Every expectation below is a literal, never a value read back from the module (L43).
+
+const SESS = "00000000-0000-4000-8000-00000000abcd";
+const envWith = (sid) => {
+  const env = { ...process.env };
+  if (sid === null) delete env.CLAUDE_CODE_SESSION_ID;
+  else env.CLAUDE_CODE_SESSION_ID = sid;
+  return env;
+};
+
+test("PENDING: a named run-start in the SAME session adopts the pending ts, marks origin, and consumes the file", () => {
+  const base = mkdtempSync(join(tmpdir(), "mark-phase-pending-"));
+  writePendingStart({ base, sessionId: SESS, now: new Date("2026-09-21T10:00:00.000Z") });
+  const pf = join(base, PENDING_DIR, `${SESS}.json`);
+  assert.ok(existsSync(pf), "the pending file must exist before adoption");
+  const m = markPhase({
+    name: "feat",
+    kind: "run-start",
+    base,
+    sessionId: SESS,
+    now: new Date("2026-09-21T10:07:00.000Z"),
+    adoptPending: true,
+  });
+  assert.equal(m.ts, "2026-09-21T10:00:00.000Z", "the marker carries the PENDING moment, not the write moment");
+  assert.equal(m.origin, "pending");
+  assert.equal(existsSync(pf), false, "adoption consumes the pending file");
+  const [onDisk] = lines(join(base, "feat", "markers.jsonl"));
+  assert.equal(onDisk.origin, "pending");
+  // A SECOND run-start (a new invocation) finds no pending file and is byte-identical to the old shape.
+  const m2 = markPhase({
+    name: "feat",
+    kind: "run-start",
+    base,
+    sessionId: SESS,
+    now: new Date("2026-09-21T11:00:00.000Z"),
+    adoptPending: true,
+  });
+  assert.equal(m2.ts, "2026-09-21T11:00:00.000Z");
+  assert.equal("origin" in m2, false);
+});
+
+test("PENDING: another session's pending start is NEVER adopted", () => {
+  const base = mkdtempSync(join(tmpdir(), "mark-phase-pending-"));
+  writePendingStart({ base, sessionId: "00000000-0000-4000-8000-00000000ffff", now: new Date("2026-09-21T09:00:00.000Z") });
+  const m = markPhase({
+    name: "feat",
+    kind: "run-start",
+    base,
+    sessionId: SESS,
+    now: new Date("2026-09-21T10:00:00.000Z"),
+    adoptPending: true,
+  });
+  assert.equal(m.ts, "2026-09-21T10:00:00.000Z");
+  assert.equal("origin" in m, false);
+});
+
+test("PENDING: only run-start adopts — a stage-start leaves the pending file untouched", () => {
+  const base = mkdtempSync(join(tmpdir(), "mark-phase-pending-"));
+  writePendingStart({ base, sessionId: SESS, now: new Date("2026-09-21T09:00:00.000Z") });
+  const m = markPhase({
+    name: "feat",
+    kind: "stage-start",
+    stage: "pharn-plan",
+    base,
+    sessionId: SESS,
+    now: new Date("2026-09-21T10:00:00.000Z"),
+  });
+  assert.equal(m.ts, "2026-09-21T10:00:00.000Z");
+  assert.ok(existsSync(join(base, PENDING_DIR, `${SESS}.json`)));
+});
+
+test("PENDING: a malformed or FUTURE-dated pending file is ignored (degrades to ts = now), never guessed", () => {
+  const base = mkdtempSync(join(tmpdir(), "mark-phase-pending-"));
+  mkdirSync(join(base, PENDING_DIR), { recursive: true });
+  const pf = join(base, PENDING_DIR, `${SESS}.json`);
+  for (const body of [
+    "{torn",
+    JSON.stringify({ ts: "yesterday", session_id: SESS }),
+    JSON.stringify({ ts: "2026-09-21T12:00:00.000Z", session_id: SESS }),
+  ]) {
+    writeFileSync(pf, body);
+    const m = markPhase({
+      name: "feat",
+      kind: "run-start",
+      base,
+      sessionId: SESS,
+      now: new Date("2026-09-21T10:00:00.000Z"),
+      adoptPending: true,
+    });
+    assert.equal(m.ts, "2026-09-21T10:00:00.000Z", `must not adopt ${body}`);
+    assert.equal("origin" in m, false);
+  }
+});
+
+test("PENDING CLI: --pending-start then a named run-start, both through the real CLI, keyed by the env session", () => {
+  const base = mkdtempSync(join(tmpdir(), "mark-phase-pending-cli-"));
+  const env = envWith(SESS);
+  const a = execFileSync("node", [CLI, "--pending-start", "--base", base], { env, encoding: "utf8" });
+  assert.match(a, /^pending run-start: \d{4}-/);
+  const pts = JSON.parse(readFileSync(join(base, PENDING_DIR, `${SESS}.json`), "utf8")).ts;
+  const b = execFileSync("node", [CLI, "--name", "feat", "--kind", "run-start", "--adopt-pending", "--base", base], {
+    env,
+    encoding: "utf8",
+  });
+  assert.match(b, /adopted pending start/);
+  const [m] = lines(join(base, "feat", "markers.jsonl"));
+  assert.equal(m.ts, pts);
+  assert.equal(m.session_id, SESS);
+});
+
+test("PENDING CLI: with no session id the key is the literal no-session; refuses mixing with marker flags", () => {
+  const base = mkdtempSync(join(tmpdir(), "mark-phase-pending-cli-"));
+  execFileSync("node", [CLI, "--pending-start", "--base", base], { env: envWith(null), encoding: "utf8" });
+  assert.ok(existsSync(join(base, PENDING_DIR, `${NO_SESSION_KEY}.json`)));
+  assert.equal(NO_SESSION_KEY, "no-session");
+  const r = run(["--pending-start", "--name", "feat", "--base", base]);
+  assert.equal(r.status, 2, "--pending-start with --name is a usage error");
+  assert.equal(pendingFile(base, "../escape"), null, "a session id that cannot name a file is refused, not rewritten");
+});
+
+test("PENDING L41 NO-ARGUMENT CONTROL: with no --base the pending file lands under DEFAULT_BASE", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "mark-phase-pending-nodefault-"));
+  execFileSync("node", [CLI, "--pending-start"], { cwd, env: envWith(SESS), encoding: "utf8" });
+  assert.ok(existsSync(join(cwd, DEFAULT_BASE, PENDING_DIR, `${SESS}.json`)));
+  rmSync(cwd, { recursive: true, force: true });
+});
+
+test("PENDING is OPT-IN: a run-start WITHOUT --adopt-pending (every /pharn-loop run-start) never adopts, and leaves the file", () => {
+  // REVIEW finding 1, probed: an abandoned /pharn-ship's pending start was adopted by a later /pharn-loop
+  // run-start in the same session, widening the loop's window back to the ship's moment.
+  const base = mkdtempSync(join(tmpdir(), "mark-phase-pending-optin-"));
+  writePendingStart({ base, sessionId: SESS, now: new Date("2026-09-21T08:00:00.000Z") });
+  const m = markPhase({ name: "loopfeat", kind: "run-start", base, sessionId: SESS, now: new Date("2026-09-21T10:00:00.000Z") });
+  assert.equal(m.ts, "2026-09-21T10:00:00.000Z");
+  assert.equal("origin" in m, false);
+  assert.ok(existsSync(join(base, PENDING_DIR, `${SESS}.json`)), "a non-adopting run-start leaves the pending file alone");
+  // Through the real CLI, too — the flag-less form is the loop's pinned invocation.
+  const out = execFileSync("node", [CLI, "--name", "loopfeat2", "--kind", "run-start", "--base", base], {
+    env: envWith(SESS),
+    encoding: "utf8",
+  });
+  assert.doesNotMatch(out, /adopted/);
+  const r = run(["--name", "feat", "--kind", "stage-start", "--stage", "pharn-plan", "--adopt-pending", "--base", base]);
+  assert.equal(r.status, 2, "--adopt-pending on a non-run-start kind is a usage error");
 });

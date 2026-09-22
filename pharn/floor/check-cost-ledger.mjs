@@ -44,6 +44,23 @@
 //     `FLOOR (shape)` while nothing checked it; see the rule body for the trigger and for why the new
 //     `/pharn-ship` producer made deferring it worse than building it.
 //
+//  8. (`/2` only) `membership` is SHAPED and RE-DERIVABLE: a closed key set; `method` the imported
+//     `run-window/1`; `status` in the imported enum; and `status`/`reason`/`start`/`end` EQUAL a recompute
+//     of `run-window-core.mjs`'s `runWindow()` over the file's OWN `markers[]` for the recorded `session`.
+//     Then EVERY row in `requests[]` must be a member of that window, so a row outside the run cannot be
+//     summed into `totals` — the `/1` defect (100 unrelated tokens + 10 in-run reported as 110, GREEN).
+//     `unknown` must be `unavailable` with no rows and `excluded_requests: null`; an EMPTY `partial` is
+//     admitted ONLY under a known window, where it is an observed zero (L34 — silence vs asserted
+//     silence). The rule is IMPORTED, never re-spelled (L35): the checker and emitter cannot disagree
+//     about what membership MEANS, only about whether a stored row satisfies it.
+//     BOUND (P0, L43): this proves the rows agree with the RECORDED markers. It cannot prove the markers
+//     describe the run, nor that `excluded_requests` is the true count — only `--verify-transcript` binds
+//     either to the transcript, and only while it exists.
+//  LEGACY: a `pharn-cost-ledger/1` file is validated under its OWN closed key set and rules, never
+//     retroactively REDed for lacking `membership`, and gets one WARN: its totals are SESSION-scoped and
+//     may include activity outside the run. Reinterpreting them as run-scoped would silently rewrite
+//     history.
+//
 // WHAT RULE 7 STILL DOES NOT DO, stated where the rule is claimed rather than left to a reader. It
 // checks the outcome's SHAPE, never its TRUTH: a well-formed `{"decision":"gate2"}` on a run that
 // stopped at grill passes, because nothing here re-reads the verdict reports. For `/pharn-loop` that
@@ -71,6 +88,10 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import {
   SCHEMA,
+  LEGACY_SCHEMA,
+  TOP_LEVEL_KEYS_V1,
+  MEMBERSHIP_KEYS,
+  normalizeMarkers,
   COVERAGE,
   TOKEN_CLASSES,
   TOP_LEVEL_KEYS,
@@ -85,6 +106,7 @@ import {
   renderLedger,
 } from "./render-cost-ledger.mjs";
 import { MARKER_KINDS, cleanScalar } from "./mark-phase.mjs";
+import { runWindow, isMember, MEMBERSHIP_METHOD, MEMBERSHIP_STATUSES, UNKNOWN_REASONS } from "./run-window-core.mjs";
 
 const reds = [];
 const warns = [];
@@ -155,16 +177,26 @@ export function checkLedger(led, opts = {}) {
     return { reds: [...reds], warns: [...warns] };
   }
 
+  // The schema selects the rule set. Anything but the two known literals is RED and is checked under
+  // the CURRENT rules — an unknown schema never downgrades to the lenient legacy path.
+  const legacy = led.schema === LEGACY_SCHEMA;
+  if (legacy) {
+    warn(
+      `legacy ${LEGACY_SCHEMA} — totals are SESSION-scoped and may include activity outside the run; they are NOT a run measurement (re-emit to get a run-scoped ${SCHEMA} ledger)`
+    );
+  }
+
   // ---- RULE 1: the closed top-level key set, BOTH directions -----------------------------------
   const present = new Set(Object.keys(led));
-  const expected = new Set(TOP_LEVEL_KEYS);
+  const expected = new Set(legacy ? TOP_LEVEL_KEYS_V1 : TOP_LEVEL_KEYS);
   const extra = [...present].filter((k) => !expected.has(k)).sort();
   const missing = [...expected].filter((k) => !present.has(k)).sort();
   if (extra.length) red(`top-level key set is not closed — unexpected key(s): ${extra.join(", ")}`);
   if (missing.length) red(`top-level key set is not closed — missing key(s): ${missing.join(", ")}`);
 
   // ---- enums and scalar grammars ---------------------------------------------------------------
-  if (led.schema !== SCHEMA) red(`schema must be "${SCHEMA}" (got ${JSON.stringify(led.schema)})`);
+  if (led.schema !== SCHEMA && !legacy)
+    red(`schema must be "${SCHEMA}" or the legacy "${LEGACY_SCHEMA}" (got ${JSON.stringify(led.schema)})`);
   if (!COVERAGE.includes(led.coverage)) red(`coverage must be one of ${COVERAGE.join(" | ")} (got ${JSON.stringify(led.coverage)})`);
   if (led.dedup_key !== "requestId") red(`dedup_key must be "requestId" (got ${JSON.stringify(led.dedup_key)})`);
   if (!SKILLS_VERSION_SOURCES.includes(led.skills_version_source)) {
@@ -221,7 +253,10 @@ export function checkLedger(led, opts = {}) {
   // asserted-silence are different claims, and only the second is a record.
   if (Array.isArray(led.requests)) {
     if (led.requests.length === 0) {
-      if (led.coverage !== "unavailable") {
+      // Under `/2` an empty `partial` is an OBSERVED zero when the window is KNOWN; RULE 8 checks the
+      // window. Under `/1`, or under an unknown window, it is an unmeasured run reading as a cheap one.
+      const observedZero = !legacy && ["bounded", "open"].includes(led.membership?.status);
+      if (led.coverage !== "unavailable" && !observedZero) {
         red("requests[] is empty but coverage is not `unavailable` — an empty measurement must say so, not read as a cheap run");
       }
       if (led.totals?.requests !== 0) red("requests[] is empty but totals.requests is not 0");
@@ -335,6 +370,9 @@ export function checkLedger(led, opts = {}) {
     }
   }
 
+  // ---- RULE 8 (`/2`): membership shape, re-derivation, and every row inside the window ----------
+  if (!legacy) checkMembership(led);
+
   // ---- WARN (never RED): marker completeness ----------------------------------------------------
   if (Array.isArray(led.markers) && led.outcome && Number.isInteger(led.outcome.iterations)) {
     const stageStarts = led.markers.filter((m) => m?.kind === "stage-start");
@@ -347,23 +385,40 @@ export function checkLedger(led, opts = {}) {
       );
     }
     if (!led.markers.some((m) => m?.kind === "run-start"))
-      warn("marker completeness: no run-start marker — requests before the first marker are `unattributed`");
+      warn(
+        legacy
+          ? "marker completeness: no run-start marker — requests before the first marker are `unattributed`"
+          : "marker completeness: no run-start marker — the run window cannot be bounded, so membership is `unknown` and no request is reported as run usage"
+      );
     if (!led.markers.some((m) => m?.kind === "run-stop"))
       warn("marker completeness: no run-stop marker — the run's tail is attributed to the last stage that started");
   }
 
   // ---- OPTIONAL: bind the rows to their referent (L43) -------------------------------------------
-  if (opts.verifyTranscript) {
+  if (opts.verifyTranscript && legacy) {
+    warn(
+      `--verify-transcript: not supported for a legacy ${LEGACY_SCHEMA} ledger — its SESSION-scoped rows are not re-derivable under the run-window rule, so this run certifies internal consistency only`
+    );
+  } else if (opts.verifyTranscript && led.membership?.status === "unknown") {
+    // An unknown window has NO rows, and a re-derivation under the same markers is unknown too, so the
+    // comparison would be empty-equals-empty whether or not the transcript still exists — a "binding to
+    // the referent" that bound nothing (REVIEW finding 2, probed). Say so instead of passing silently.
+    warn(
+      "--verify-transcript: membership is `unknown`, so there are no rows to re-derive — this run certifies internal consistency only, not the transcript"
+    );
+  } else if (opts.verifyTranscript) {
+    // Re-derive under the RECORDED boundary: the file's own `markers[]` and `membership.session`, never
+    // the live markers file, so a later invocation's appended run-start cannot re-bound this ledger.
     const live = renderLedger({
       name: led.name,
       command: led.command,
       baseSha: led.base_sha,
       repo: opts.repo ?? ".",
-      sessionId: led.sessions?.[0] ?? null,
+      sessionId: led.membership?.session ?? led.sessions?.[0] ?? null,
       projectsDir: opts.projectsDir,
-      ...(opts.markersBase ? { markersBase: opts.markersBase } : {}),
+      markers: Array.isArray(led.markers) ? led.markers : [],
     });
-    if (live.coverage === "unavailable") {
+    if (live.coverage === "unavailable" && live.membership?.status !== "unknown") {
       warn(
         `--verify-transcript: the transcript is no longer available (${live.coverage_note}) — the rows could NOT be re-derived, so this run certifies internal consistency only`
       );
@@ -374,11 +429,76 @@ export function checkLedger(led, opts = {}) {
         red(`--verify-transcript: requests[] does not match the transcript (${a.length} recorded, ${b.length} re-derived)`);
       } else if (!sameTokens(led.totals.tokens, live.totals.tokens)) {
         red("--verify-transcript: totals do not match a re-derivation from the transcript");
+      } else if ((led.membership?.excluded_requests ?? null) !== (live.membership?.excluded_requests ?? null)) {
+        red(
+          `--verify-transcript: membership.excluded_requests does not match the transcript (${led.membership?.excluded_requests} recorded, ${live.membership?.excluded_requests} re-derived)`
+        );
       }
     }
   }
 
   return { reds: [...reds], warns: [...warns] };
+}
+
+/** RULE 8 — see the header. Uses the SHARED `run-window-core.mjs`; restates none of it. */
+function checkMembership(led) {
+  const m = led.membership;
+  if (!m || typeof m !== "object" || Array.isArray(m)) {
+    red("membership must be an object");
+    return;
+  }
+  const keys = Object.keys(m);
+  const extra = keys.filter((k) => !MEMBERSHIP_KEYS.includes(k));
+  const missing = MEMBERSHIP_KEYS.filter((k) => !keys.includes(k));
+  if (extra.length) red(`membership key set is not closed — unexpected key(s): ${extra.sort().join(", ")}`);
+  if (missing.length) red(`membership key set is not closed — missing key(s): ${missing.join(", ")}`);
+  if (m.method !== MEMBERSHIP_METHOD) red(`membership.method must be "${MEMBERSHIP_METHOD}" (got ${JSON.stringify(m.method)})`);
+  if (!MEMBERSHIP_STATUSES.includes(m.status)) {
+    red(`membership.status must be one of ${MEMBERSHIP_STATUSES.join(" | ")} (got ${JSON.stringify(m.status)})`);
+    return;
+  }
+  if (m.session !== null && badIdentity(m.session)) red("membership.session is not a bounded identity token");
+  if (m.status === "unknown") {
+    if (!Object.values(UNKNOWN_REASONS).includes(m.reason))
+      red(`membership.reason is not a member of the closed reason set (got ${JSON.stringify(m.reason)})`);
+    if (m.excluded_requests !== null)
+      red("membership.excluded_requests must be null when membership is unknown — nothing was measured, so nothing was excluded");
+    if (led.coverage !== "unavailable")
+      red("membership is unknown but coverage is not `unavailable` — an unknown run must never read as a measurement");
+    if (Array.isArray(led.requests) && led.requests.length)
+      red("membership is unknown but requests[] carries rows — whole-session usage presented as run usage");
+  } else {
+    if (m.reason !== null) red("membership.reason must be null when the window is known");
+    if (!Number.isInteger(m.excluded_requests) || m.excluded_requests < 0) {
+      red(
+        `membership.excluded_requests must be a non-negative integer when the window is known (got ${JSON.stringify(m.excluded_requests)})`
+      );
+    }
+    if (m.status === "open")
+      warn(
+        "membership: the run window is OPEN (no run-stop marker) — the run's end is unbounded, so later session activity would be included"
+      );
+  }
+
+  // Re-derive the window from the file's OWN markers — never trusted from the stored block.
+  const win = runWindow(normalizeMarkers(led.markers), m.session ?? null);
+  for (const k of ["status", "reason", "start", "end"]) {
+    if ((m[k] ?? null) !== (win[k] ?? null)) {
+      red(
+        `membership.${k} disagrees with a recompute from markers[] (stored ${JSON.stringify(m[k])}, recomputed ${JSON.stringify(win[k])})`
+      );
+    }
+  }
+  if (!Array.isArray(led.requests)) return;
+  const outside = led.requests.filter((r) => r && typeof r === "object" && !isMember(win, r.ts, r.session_id));
+  if (outside.length) {
+    red(
+      `${outside.length} request(s) lie OUTSIDE the recorded run window and are summed into the run's totals: ${outside
+        .slice(0, 3)
+        .map((r) => r.request_id)
+        .join(", ")}${outside.length > 3 ? ", …" : ""}`
+    );
+  }
 }
 
 function main(argv) {

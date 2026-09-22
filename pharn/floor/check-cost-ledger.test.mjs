@@ -48,6 +48,19 @@ function cleanLedger() {
 }
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
+
+/** A markers dir whose single run-start (null session = every session) precedes the whole fixture, so
+ *  the run window contains every fixture row. Since `pharn-cost-ledger/2` a missing markers file means
+ *  membership `unknown` and NO rows, so a test about rows must open a run explicitly. */
+function openRun(root) {
+  const dir = join(root, "cost", "feat");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, "markers.jsonl"),
+    JSON.stringify({ seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2020-01-01T00:00:00.000Z", session_id: null }) + "\n"
+  );
+  return join(root, "cost");
+}
 const redsOf = (led, opts) => checkLedger(led, opts).reds;
 
 const run = (args) => {
@@ -264,8 +277,9 @@ test("--verify-transcript GREEN when the rows really do re-derive from the trans
   const proj = join(root, "projects", "p");
   mkdirSync(proj, { recursive: true });
   copyFileSync(join(FIXTURES, "single-session.jsonl"), join(proj, `${REAL_SESSION}.jsonl`));
-  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir: join(root, "projects"), markersBase: join(root, "none") });
-  const { reds } = checkLedger(led, { verifyTranscript: true, projectsDir: join(root, "projects"), markersBase: join(root, "none") });
+  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir: join(root, "projects"), markersBase: openRun(root) });
+  assert.ok(led.requests.length > 0, "NON-VACUITY: an unknown-membership ledger would re-derive to nothing and pass for free");
+  const { reds } = checkLedger(led, { verifyTranscript: true, projectsDir: join(root, "projects") });
   assert.deepEqual(reds, []);
 });
 
@@ -277,13 +291,13 @@ test("--verify-transcript REDs a FABRICATED row set that is internally consisten
   const proj = join(root, "projects", "p");
   mkdirSync(proj, { recursive: true });
   copyFileSync(join(FIXTURES, "single-session.jsonl"), join(proj, `${REAL_SESSION}.jsonl`));
-  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir: join(root, "projects"), markersBase: join(root, "none") });
+  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir: join(root, "projects"), markersBase: openRun(root) });
 
   led.requests = led.requests.slice(0, 3); // drop rows, then make the file agree with itself again
   Object.assign(led, buildViews(led.requests));
 
   assert.deepEqual(checkLedger(led).reds, [], "the fabricated ledger is INTERNALLY CONSISTENT — this is the bound L43 names");
-  const { reds } = checkLedger(led, { verifyTranscript: true, projectsDir: join(root, "projects"), markersBase: join(root, "none") });
+  const { reds } = checkLedger(led, { verifyTranscript: true, projectsDir: join(root, "projects") });
   assert.ok(
     reds.some((r) => /does not match the transcript/.test(r)),
     `--verify-transcript must catch it, got: ${reds.join(" | ")}`
@@ -425,4 +439,225 @@ test("RULE 7 closes the key set in BOTH directions — presence would miss a var
   const ok = clone(led);
   ok.outcome = { decision: "INCONCLUSIVE", iterations: 3, source: "LOOP.md", blocked: "S9" };
   assert.deepEqual(redsOf(ok), []);
+});
+
+// ===================================================================================================
+// RULE 8 — run membership (`pharn-cost-ledger/2`) and the `/1` compatibility policy. Mutations are made
+// on a REAL emitted ledger, and every RED is paired with the GREEN it came from (a mutation control).
+// ===================================================================================================
+
+import { LEGACY_SCHEMA, TOP_LEVEL_KEYS_V1 } from "./render-cost-ledger.mjs";
+import { appendFileSync } from "node:fs";
+
+const RS = "00000000-0000-4000-8000-0000000000c1";
+const recLine = (id, ts, input) =>
+  JSON.stringify({
+    type: "assistant",
+    requestId: id,
+    timestamp: ts,
+    sessionId: RS,
+    isSidechain: false,
+    message: { model: "claude-opus-5", usage: { input_tokens: input, output_tokens: 0, cache_creation: {}, output_tokens_details: {} } },
+  });
+
+/** 100 input tokens before the run, 10 inside it — the reproduction from the defect report. */
+function runFixture() {
+  const root = mkdtempSync(join(tmpdir(), "check-cl-run-"));
+  const proj = join(root, "projects", "p");
+  mkdirSync(proj, { recursive: true });
+  writeFileSync(
+    join(proj, `${RS}.jsonl`),
+    [recLine("before", "2026-09-21T09:00:00.000Z", 100), recLine("during", "2026-09-21T10:05:00.000Z", 10)].join("\n") + "\n"
+  );
+  const mdir = join(root, "cost", "feat");
+  mkdirSync(mdir, { recursive: true });
+  writeFileSync(
+    join(mdir, "markers.jsonl"),
+    [
+      { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-09-21T10:00:00.000Z", session_id: RS },
+      { seq: 2, kind: "run-stop", stage: null, iteration: null, ts: "2026-09-21T10:30:00.000Z", session_id: RS },
+    ]
+      .map((m) => JSON.stringify(m))
+      .join("\n") + "\n"
+  );
+  const projectsDir = join(root, "projects");
+  const led = renderLedger({ name: "feat", sessionId: RS, projectsDir, markersBase: join(root, "cost") });
+  return { root, projectsDir, led, markersFile: join(mdir, "markers.jsonl") };
+}
+
+test("RULE 8 — the 100-before/10-during ledger is GREEN and measures 10", () => {
+  const { led } = runFixture();
+  assert.equal(led.totals.tokens.input, 10);
+  assert.deepEqual(redsOf(led), []);
+});
+
+test("RULE 8 — a pre-run row smuggled back in (views recomputed, so internally consistent) is RED", () => {
+  // This is the /1 defect expressed as a /2 file: 110 with every view agreeing. RULE 6 alone is GREEN.
+  const { led } = runFixture();
+  const bad = clone(led);
+  bad.requests.unshift({
+    ...clone(bad.requests[0]),
+    request_id: "before",
+    ts: "2026-09-21T09:00:00.000Z",
+    tokens: { ...bad.requests[0].tokens, input: 100 },
+  });
+  Object.assign(bad, buildViews(bad.requests));
+  assert.equal(bad.totals.tokens.input, 110);
+  const reds = redsOf(bad);
+  assert.ok(
+    reds.some((r) => /OUTSIDE the recorded run window/.test(r)),
+    reds.join(" | ")
+  );
+  assert.deepEqual(redsOf(led), [], "MUTATION CONTROL: the unmutated ledger is GREEN");
+});
+
+test("RULE 8 — a stored membership that disagrees with a recompute from markers[] is RED", () => {
+  const { led } = runFixture();
+  for (const [k, v] of [
+    ["status", "open"],
+    ["start", "2026-09-21T09:00:00.000Z"],
+    ["end", null],
+  ]) {
+    const bad = clone(led);
+    bad.membership[k] = v;
+    assert.ok(
+      redsOf(bad).some((r) => new RegExp(`membership\\.${k} disagrees`).test(r)),
+      `${k} tamper must RED`
+    );
+  }
+});
+
+test("RULE 8 — membership key set is CLOSED in both directions; method and status are enums", () => {
+  const { led } = runFixture();
+  const extra = clone(led);
+  extra.membership.memberships = 1;
+  assert.ok(redsOf(extra).some((r) => /membership key set is not closed — unexpected/.test(r)));
+  const missing = clone(led);
+  delete missing.membership.excluded_requests;
+  assert.ok(redsOf(missing).some((r) => /membership key set is not closed — missing/.test(r)));
+  const method = clone(led);
+  method.membership.method = "run-window/9";
+  assert.ok(redsOf(method).some((r) => /membership\.method/.test(r)));
+  const status = clone(led);
+  status.membership.status = "complete";
+  assert.ok(redsOf(status).some((r) => /membership\.status must be one of/.test(r)));
+  const nomem = clone(led);
+  delete nomem.membership;
+  assert.ok(
+    redsOf(nomem).some((r) => /missing key\(s\): membership/.test(r)),
+    "a /2 file must carry membership"
+  );
+});
+
+test("RULE 8 — UNKNOWN must be unavailable, row-free, and excluded_requests null; never a measurement", () => {
+  const root = mkdtempSync(join(tmpdir(), "check-cl-unk-"));
+  const proj = join(root, "projects", "p");
+  mkdirSync(proj, { recursive: true });
+  writeFileSync(join(proj, `${RS}.jsonl`), recLine("x", "2026-09-21T10:05:00.000Z", 10) + "\n");
+  const led = renderLedger({ name: "feat", sessionId: RS, projectsDir: join(root, "projects"), markersBase: join(root, "none") });
+  assert.equal(led.membership.status, "unknown");
+  assert.deepEqual(redsOf(led), [], "the honest unknown is GREEN");
+  const asPartial = clone(led);
+  asPartial.coverage = "partial";
+  assert.ok(redsOf(asPartial).some((r) => /unknown but coverage is not `unavailable`/.test(r)));
+  const zero = clone(led);
+  zero.membership.excluded_requests = 0;
+  assert.ok(redsOf(zero).some((r) => /must be null when membership is unknown/.test(r)));
+});
+
+test("RULE 8 / L34 — an EMPTY partial is admitted only under a KNOWN window (an observed zero)", () => {
+  const { led } = runFixture();
+  const zero = clone(led);
+  zero.requests = [];
+  Object.assign(zero, buildViews([]));
+  zero.membership.excluded_requests = 2;
+  assert.deepEqual(redsOf(zero), [], "bounded window + no rows = an observed zero, GREEN");
+  const legacyEmpty = clone(zero);
+  legacyEmpty.schema = LEGACY_SCHEMA;
+  delete legacyEmpty.membership;
+  assert.ok(
+    redsOf(legacyEmpty).some((r) => /empty but coverage is not `unavailable`/.test(r)),
+    "under /1 the old rule stands"
+  );
+});
+
+test("COMPATIBILITY — a legacy /1 ledger is GREEN under its own rules, WARNed as SESSION-scoped, never reinterpreted", () => {
+  const { led } = runFixture();
+  // Build a faithful /1-shaped file: the old whole-session population (both rows, 110), no membership.
+  const v1 = clone(led);
+  v1.schema = LEGACY_SCHEMA;
+  delete v1.membership;
+  v1.requests.unshift({
+    ...clone(v1.requests[0]),
+    request_id: "before",
+    ts: "2026-09-21T09:00:00.000Z",
+    tokens: { ...v1.requests[0].tokens, input: 100 },
+  });
+  Object.assign(v1, buildViews(v1.requests));
+  assert.deepEqual(Object.keys(v1).sort(), [...TOP_LEVEL_KEYS_V1].sort());
+  const { reds, warns } = checkLedger(v1);
+  assert.deepEqual(reds, [], "a historical ledger is not retroactively REDed");
+  assert.ok(warns.some((w) => /legacy pharn-cost-ledger\/1 — totals are SESSION-scoped/.test(w)));
+  const withMembership = clone(v1);
+  withMembership.membership = clone(led.membership);
+  assert.ok(
+    redsOf(withMembership).some((r) => /unexpected key\(s\): membership/.test(r)),
+    "/1 keeps its OWN closed key set"
+  );
+  const { warns: vw } = checkLedger(v1, { verifyTranscript: true, projectsDir: join(tmpdir(), "absent") });
+  assert.ok(vw.some((w) => /not supported for a legacy/.test(w)));
+});
+
+test("an unknown schema is RED under the CURRENT rules — never downgraded to the legacy path", () => {
+  const { led } = runFixture();
+  const bad = clone(led);
+  bad.schema = "pharn-cost-ledger/3";
+  assert.ok(redsOf(bad).some((r) => /schema must be/.test(r)));
+});
+
+test("--verify-transcript uses the RECORDED boundary — a later invocation's run-start does not re-bound it", () => {
+  const { led, projectsDir, markersFile } = runFixture();
+  appendFileSync(
+    markersFile,
+    JSON.stringify({ seq: 3, kind: "run-start", stage: null, iteration: null, ts: "2026-09-21T12:00:00.000Z", session_id: RS }) + "\n"
+  );
+  const { reds } = checkLedger(led, { verifyTranscript: true, projectsDir });
+  assert.deepEqual(reds, []);
+});
+
+test("--verify-transcript REDs a tampered excluded_requests the internal check cannot see", () => {
+  const { led, projectsDir } = runFixture();
+  const bad = clone(led);
+  bad.membership.excluded_requests = 0;
+  assert.deepEqual(redsOf(bad), [], "internally, a count is just a count — this is the L43 bound");
+  const { reds } = checkLedger(bad, { verifyTranscript: true, projectsDir });
+  assert.ok(
+    reds.some((r) => /excluded_requests does not match the transcript/.test(r)),
+    reds.join(" | ")
+  );
+});
+
+test("--verify-transcript applies the SAME membership rule: dropping the in-run row is RED", () => {
+  const { led, projectsDir } = runFixture();
+  const bad = clone(led);
+  bad.requests = [];
+  Object.assign(bad, buildViews([]));
+  assert.deepEqual(redsOf(bad), [], "an observed-zero-looking file is internally consistent");
+  const { reds } = checkLedger(bad, { verifyTranscript: true, projectsDir });
+  assert.ok(
+    reds.some((r) => /does not match the transcript \(0 recorded, 1 re-derived\)/.test(r)),
+    reds.join(" | ")
+  );
+});
+
+test("--verify-transcript on an UNKNOWN ledger WARNs that it certified nothing — never a silent GREEN (REVIEW finding 2)", () => {
+  const root = mkdtempSync(join(tmpdir(), "check-cl-vt-unk-"));
+  const led = renderLedger({ name: "feat", sessionId: RS, projectsDir: join(root, "none"), markersBase: join(root, "none") });
+  assert.equal(led.membership.status, "unknown");
+  const { reds, warns } = checkLedger(led, { verifyTranscript: true, projectsDir: join(root, "gone") });
+  assert.deepEqual(reds, []);
+  assert.ok(
+    warns.some((w) => /membership is `unknown`, so there are no rows to re-derive/.test(w)),
+    warns.join(" | ")
+  );
 });

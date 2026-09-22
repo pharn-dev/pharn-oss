@@ -84,7 +84,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
-import { FEATURE_BASE, TOKEN_CLASSES } from "./render-cost-ledger.mjs";
+import { FEATURE_BASE, TOKEN_CLASSES, LEGACY_SCHEMA } from "./render-cost-ledger.mjs";
 import { handoffSections, fenceFor, HANDOFF_SECTIONS } from "./loop-record-core.mjs";
 import { pathsFromPlanFiles } from "./plan-files-core.mjs";
 
@@ -285,6 +285,7 @@ function outcomeSection(cost) {
     ["command", typeof cost.command === "string" ? cost.command : "unknown"],
     ["skills_version", typeof cost.skills_version === "string" ? cost.skills_version : "unknown"],
     ["ledger coverage", typeof cost.coverage === "string" ? cost.coverage : "unknown"],
+    ["run membership", membershipStatus(cost)],
   ];
   const w = Math.max(...rows.map((r) => r[0].length));
   // Fenced, not a table: `decision` and `base_sha` are copied from untrusted sources (see the header).
@@ -338,11 +339,72 @@ function outcomePreamble(cost, o) {
   ];
 }
 
+/** The measured POPULATION, as one token: the membership status, `legacy-session-scoped` for a `/1`
+ *  ledger, or `unrecognized`. Read from the structured location, never inferred (L6). */
+function membershipStatus(cost) {
+  if (cost && cost.schema === LEGACY_SCHEMA) return "legacy-session-scoped";
+  const s = cost && cost.membership && typeof cost.membership.status === "string" ? cost.membership.status : null;
+  return s === "bounded" || s === "open" || s === "unknown" ? s : "unrecognized";
+}
+
+/**
+ * WHAT THE NUMBERS BELOW MEASURE — carried in the artifact, beside the numbers (P0). A `/2` ledger counts
+ * only requests inside the run window (`run-window/1`); a `/1` ledger counts the whole selected session;
+ * an UNKNOWN window counts nothing and must never read as zero. The window's own values (timestamps, a
+ * session id, a count) are copied from `cost.json` and so are fenced as DATA, never inlined in prose.
+ */
+function measurementLabel(cost) {
+  const status = membershipStatus(cost);
+  if (status === "legacy-session-scoped") {
+    return [
+      "**Measured population: LEGACY `pharn-cost-ledger/1` — SESSION-scoped.** These totals count every",
+      "usage-bearing request of the selected session, so they may include activity OUTSIDE this run. They",
+      "are not a run measurement.",
+    ];
+  }
+  if (status === "unrecognized") {
+    return ["**Measured population: unrecognized** — `cost.json` names no membership this report knows. Read the numbers as unscoped."];
+  }
+  const m = cost.membership;
+  const facts = [
+    `status             ${status}`,
+    `window start       ${m.start ?? "none"}`,
+    `window end         ${m.end ?? (status === "open" ? "OPEN (no run-stop)" : "none")}`,
+    `selected session   ${m.session ?? "none"}`,
+    `excluded requests  ${m.excluded_requests === null || m.excluded_requests === undefined ? "n/a — nothing was measured" : m.excluded_requests}`,
+  ].join("\n");
+  if (status === "unknown") {
+    return [
+      "**Run usage: UNKNOWN — this is NOT a zero.** The run's boundary could not be established from its",
+      "markers, so NO session request is reported as run usage. The reason is recorded in `cost.json`'s",
+      "`membership.reason`.",
+      "",
+      quoteData("", facts).trimStart(),
+    ];
+  }
+  return [
+    "**Measured population: the RUN WINDOW** (`run-window/1`) — only requests of the selected session",
+    "that fall inside the window below. Earlier and later activity in that session is excluded and",
+    "counted, never summed. This is NOT a feature's lifetime cost, other sessions' requests are not",
+    "collected, and the request that opened the window falls just before it. A floor on this run's",
+    "spend, never the total.",
+    ...(status === "open" ? ["", "**The window is OPEN** — no `run-stop` was recorded, so its end is unbounded."] : []),
+    "",
+    quoteData("", facts).trimStart(),
+  ];
+}
+
 function tokensSection(cost) {
   if (!cost) return na("no cost.json — no token ledger was emitted for this run");
+  const label = measurementLabel(cost);
+  if (membershipStatus(cost) === "unknown") return label.join("\n");
   const rows = Array.isArray(cost.by_stage_iteration_model) ? cost.by_stage_iteration_model : [];
   if (rows.length === 0) {
-    return na("cost.json carries no attributed rows — nothing was recorded against a stage");
+    const why =
+      cost.coverage === "partial" && ["bounded", "open"].includes(membershipStatus(cost))
+        ? "the run window contained no usage-bearing request — an OBSERVED zero for the measured window"
+        : "cost.json carries no attributed rows — nothing was recorded against a stage";
+    return [...label, "", na(why)].join("\n");
   }
   const head = ["stage", "iter", "model", "reqs", ...TOKEN_CLASSES];
   const body = rows.map((t) => [
@@ -376,13 +438,15 @@ function tokensSection(cost) {
       .trimEnd();
   const table = [fmt(head), widths.map((n) => "-".repeat(n)).join("  "), ...body.map(fmt)].join("\n");
   return [
+    ...label,
+    "",
     "Copied from `cost.json`'s stored views, never recomputed here — `check-cost-ledger.mjs` already",
     "holds those views to a recompute from `requests[]`, so this is one number with one owner.",
     "",
     "**TOKENS ONLY.** There is no price table here or in `cost.json`; money is the reader's own",
     "multiplication against their own list, and `output_thinking` is a SUBSET of `output`, not a seventh",
-    "class. `unattributed` is an honest bucket — requests before the first marker — never folded into a",
-    "neighbouring stage.",
+    "class. `unattributed` is an honest STAGE bucket — run requests before the first stage marker — never",
+    "folded into a neighbouring stage.",
     "",
     quoteData("", table).trimStart(),
   ].join("\n");

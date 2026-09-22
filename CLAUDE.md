@@ -338,9 +338,19 @@ node pharn/floor/check-loop-decision.mjs <LOOP.md>
 # SIZE, disclosed rather than discovered: ~393 KiB for a 65-minute one-iteration STOP_GREEN run (275 rows,
 # 402,567 bytes measured), ~263 KiB of it the verbatim `usage` copy — weighed and accepted for fidelity.
 # A stop BEFORE S2 has no feature dir and records nothing; that bound is named in the command.
+# RUN-SCOPED since pharn-cost-ledger/2 (6.9.0): rows and every view count only requests INSIDE the run
+# window (`run-window/1`, ONE implementation in pharn/floor/run-window-core.mjs, imported by emitter AND
+# checker). Before it, markers decided only the stage VIEW, so 100 unrelated input tokens earlier in the
+# session + 10 in the run reported 110, GREEN. Window = last run-start → last run-stop, each session
+# opening at its first current-run marker; a skipped/malformed/ambiguous boundary is `unknown` →
+# `unavailable` with NO rows (never whole-session usage, never a fake zero). /pharn-ship calls
+# `mark-phase.mjs --pending-start` BEFORE /pharn-spec (which is what names <name>), and ONLY its named run-start
+# adopts it (`--adopt-pending`, opt-in; `origin: "pending"`), so an abandoned ship cannot widen a loop. /1 ledgers are validated under their own rules and WARNed SESSION-scoped,
+# never rewritten. Membership is exact relative to the RECORDED markers only (marker execution is advisory).
 # Exit: mark-phase 0 ok · 2 bad usage (nothing written) | render 0 (incl. an honest `unavailable`) · 2 bad
 # usage | check 0 GREEN (WARNs possible) · 1 RED · 2 unusable input.
 node pharn/floor/mark-phase.mjs --name <slug> --kind <run-start|stage-start|orchestrator|run-stop> [--stage <s>] [--iteration <n>] [--base <dir>]
+node pharn/floor/mark-phase.mjs --pending-start [--base <dir>]   # ship only; its run-start adds --adopt-pending
 node pharn/floor/render-cost-ledger.mjs <name> [--base <dir>] [--repo <dir>] [--session <id>] [--stdout]
 node pharn/floor/check-cost-ledger.mjs <cost.json> [--verify-transcript]
 

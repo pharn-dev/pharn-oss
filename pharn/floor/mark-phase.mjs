@@ -40,12 +40,32 @@
 // everywhere and is the same call `render-cost-ledger.mjs` compares against (L22: the invocation is
 // pinned, not described, and the wrong form is named beside it).
 //
+// ── THE PENDING START (`--pending-start`, added with `run-window/1`) ─────────────────────────────────
+// A ledger now counts only requests INSIDE the run window (`run-window-core.mjs`), so the window must open
+// before the run's first real work. `/pharn-ship` cannot write its named `run-start` that early: `<name>`
+// IS this file's directory, and `/pharn-spec` is what resolves it — so filtering at the named marker would
+// silently exclude the spec stage. `--pending-start` records the boundary FIRST, keyed by session id
+// (`<base>/.pending/<session>.json`, or `no-session.json` when `CLAUDE_CODE_SESSION_ID` is unset), and the
+// later named `run-start --adopt-pending` in the SAME session ADOPTS it. ADOPTION IS OPT-IN, and only
+// `/pharn-ship` opts in: when every `run-start` adopted, a pending file left by an abandoned ship was
+// silently adopted by a later `/pharn-loop` in the same session, widening the loop's window back to the
+// ship's moment (REVIEW finding 1, probed). On adoption the marker carries the pending `ts` plus
+// `origin: "pending"`, so a reader can tell an adopted boundary from one written at that moment (GRILL
+// finding 3). The pending file is then deleted. With no pending file, `run-start` is byte-identical to
+// before.
+// ADVISORY, and the bound is stated: a pending file left by an ABANDONED `/pharn-ship` in the same session
+//   is adopted by a later `/pharn-ship` `run-start` whose own `--pending-start` call was skipped, which
+//   WIDENS that run's window. Nothing here can tell the two apart; it is marker discipline, like every marker (L19).
+//
 // Usage:
 //   node pharn/floor/mark-phase.mjs --name <slug> --kind <kind> [--stage <s>] [--iteration <n>] [--base <dir>]
-// Exit codes: 0 = a marker was appended; 2 = bad usage (nothing written).
+//                                   [--adopt-pending]   (run-start only)
+//   node pharn/floor/mark-phase.mjs --pending-start [--base <dir>]
+// Exit codes: 0 = a marker (or the pending start) was written; 2 = bad usage (nothing written).
 
-import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
+import { tsMs } from "./run-window-core.mjs";
 
 /** The marker vocabulary. A Set, so membership is `.has()` and no arbitrary key indexes a plain
  *  object (L15 — an inherited `toString` would be both truthy and non-nullish). */
@@ -112,24 +132,90 @@ export function countMarkers(file) {
   return n;
 }
 
+/** A session id usable as a FILE NAME: one segment, no separators, no traversal. A platform session id
+ *  is a UUID; anything else is refused rather than rewritten into a name it never had (P5). */
+const SESSION_KEY_RE = /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/;
+/** The key used when no session id is known — never a valid UUID, so it cannot collide with one. */
+export const NO_SESSION_KEY = "no-session";
+/** The pending-start directory's name under the ONE `DEFAULT_BASE` (never a second base literal — L41). */
+export const PENDING_DIR = ".pending";
+
+/** Where the pending start for `sessionId` lives, or `null` when the id cannot name a file. */
+export function pendingFile(base, sessionId) {
+  if (sessionId === null || sessionId === undefined) return join(base, PENDING_DIR, `${NO_SESSION_KEY}.json`);
+  if (typeof sessionId !== "string" || !SESSION_KEY_RE.test(sessionId)) return null;
+  return join(base, PENDING_DIR, `${sessionId}.json`);
+}
+
+/** Record a pending run-start for this session. Overwrites an earlier one. Returns the written object,
+ *  or `null` when the session id cannot name a file (nothing written). */
+export function writePendingStart({ base = DEFAULT_BASE, sessionId = null, now } = {}) {
+  const file = pendingFile(base, sessionId);
+  if (file === null) return null;
+  mkdirSync(join(base, PENDING_DIR), { recursive: true });
+  const pending = { ts: (now ?? new Date()).toISOString(), session_id: sessionId };
+  writeFileSync(file, JSON.stringify(pending) + "\n");
+  return pending;
+}
+
+/**
+ * The pending start for `sessionId`, or `null`. Validated, never trusted: `.pharn/` is state a Bash write
+ * reaches (LIMITS.md §6), so a torn, malformed, cross-session or FUTURE-dated file is ignored rather than
+ * adopted — ignoring it degrades to today's behaviour (`ts` = now), the safe direction.
+ */
+export function readPendingStart(base, sessionId, nowMs) {
+  const file = pendingFile(base, sessionId);
+  if (file === null) return null;
+  let p;
+  try {
+    p = JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    return null;
+  }
+  if (!p || typeof p !== "object" || tsMs(p.ts) === null) return null;
+  if ((p.session_id ?? null) !== (sessionId ?? null)) return null;
+  if (tsMs(p.ts) > nowMs) return null;
+  return { ts: p.ts, file };
+}
+
 /**
  * Append one marker. Returns the written object.
  * `seq` is derived from what is already on disk, so two calls never collide within one run and a
  * resumed run continues the sequence rather than restarting it.
+ * A `run-start` with `adoptPending` ADOPTS this session's pending start when one exists (see the header).
  */
-export function markPhase({ name, kind, stage = null, iteration = null, base = DEFAULT_BASE, sessionId = null, now }) {
+export function markPhase({
+  name,
+  kind,
+  stage = null,
+  iteration = null,
+  base = DEFAULT_BASE,
+  sessionId = null,
+  now,
+  adoptPending = false,
+}) {
   const dir = join(base, name);
   const file = join(dir, "markers.jsonl");
   mkdirSync(dir, { recursive: true });
+  const at = now ?? new Date();
+  const pending = kind === "run-start" && adoptPending === true ? readPendingStart(base, sessionId, at.getTime()) : null;
   const marker = {
     seq: countMarkers(file) + 1,
     kind,
     stage,
     iteration,
-    ts: (now ?? new Date()).toISOString(),
+    ts: pending ? pending.ts : at.toISOString(),
     session_id: sessionId,
   };
+  if (pending) marker.origin = "pending";
   appendFileSync(file, JSON.stringify(marker) + "\n");
+  if (pending) {
+    try {
+      unlinkSync(pending.file);
+    } catch {
+      // already gone — adoption is complete either way
+    }
+  }
   return marker;
 }
 
@@ -137,22 +223,39 @@ function usage(msg) {
   process.stderr.write(`mark-phase: ${msg}\n`);
   process.stderr.write(
     "usage: node pharn/floor/mark-phase.mjs --name <slug> --kind <run-start|stage-start|orchestrator|run-stop>\n" +
-      "                                      [--stage <s>] [--iteration <n>] [--base <dir>]\n"
+      "                                      [--stage <s>] [--iteration <n>] [--base <dir>] [--adopt-pending]\n" +
+      "       node pharn/floor/mark-phase.mjs --pending-start [--base <dir>]\n"
   );
   return 2;
 }
 
 function main(argv) {
-  const opts = { name: null, kind: null, stage: null, iteration: null, base: null };
+  const opts = { name: null, kind: null, stage: null, iteration: null, base: null, pending: false, adopt: false };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
-    if (k === "--name") opts.name = argv[++i];
+    if (k === "--pending-start") opts.pending = true;
+    else if (k === "--adopt-pending") opts.adopt = true;
+    else if (k === "--name") opts.name = argv[++i];
     else if (k === "--kind") opts.kind = argv[++i];
     else if (k === "--stage") opts.stage = argv[++i];
     else if (k === "--iteration") opts.iteration = argv[++i];
     else if (k === "--base") opts.base = argv[++i];
     else return usage(`unknown argument ${k}`);
   }
+
+  const sessionId = process.env.CLAUDE_CODE_SESSION_ID ?? null;
+  if (opts.pending) {
+    // The pending start carries no name, stage or iteration: it is ONLY a moment, keyed by session.
+    if (opts.name !== null || opts.kind !== null || opts.stage !== null || opts.iteration !== null || opts.adopt) {
+      return usage("--pending-start takes no --name, --kind, --stage, --iteration or --adopt-pending");
+    }
+    const p = writePendingStart({ ...(opts.base === null ? {} : { base: opts.base }), sessionId });
+    if (p === null) return usage("CLAUDE_CODE_SESSION_ID cannot name a pending-start file");
+    process.stdout.write(`pending run-start: ${p.ts}\n`);
+    return 0;
+  }
+
+  if (opts.adopt && opts.kind !== "run-start") return usage("--adopt-pending applies to --kind run-start only");
 
   // Every branch below is a membership or grammar test (P5). The terminal fallback is refuse.
   if (!cleanScalar(opts.name, 64) || !NAME_RE.test(opts.name)) return usage(`--name must match ${NAME_RE}`);
@@ -175,9 +278,12 @@ function main(argv) {
     stage: opts.stage,
     iteration,
     ...(opts.base === null ? {} : { base: opts.base }),
-    sessionId: process.env.CLAUDE_CODE_SESSION_ID ?? null,
+    sessionId,
+    adoptPending: opts.adopt,
   });
-  process.stdout.write(`marker ${m.seq}: ${m.kind}${m.stage ? ` ${m.stage}` : ""}${m.iteration ? ` iter=${m.iteration}` : ""} ${m.ts}\n`);
+  process.stdout.write(
+    `marker ${m.seq}: ${m.kind}${m.stage ? ` ${m.stage}` : ""}${m.iteration ? ` iter=${m.iteration}` : ""} ${m.ts}${m.origin ? ` (adopted ${m.origin} start)` : ""}\n`
+  );
   return 0;
 }
 

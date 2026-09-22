@@ -83,6 +83,16 @@ function writeMarkers(root, name, markers) {
 
 const marker = (seq, kind, stage, iteration, ts, session_id = null) => ({ seq, kind, stage, iteration, ts, session_id });
 
+/** A run window that CONTAINS every fixture record: one run-start long before them, bound to no session
+ *  (the null wildcard). Tests of the pre-/2 behaviour — dedup, subagents, identity bounds, views — are
+ *  about rows INSIDE a run, and since `pharn-cost-ledger/2` a transcript with no run boundary yields NO
+ *  rows (membership `unknown`), so they now open a run explicitly instead of relying on the old
+ *  whole-session population. */
+const OPEN_TS = "2020-01-01T00:00:00.000Z";
+function openRun(root, name) {
+  return writeMarkers(root, name, [marker(1, "run-start", null, null, OPEN_TS)]);
+}
+
 const runScript = (script, args, env) => {
   try {
     return { status: 0, stdout: execFileSync("node", [script, ...args], { encoding: "utf8", env: { ...process.env, ...env } }) };
@@ -97,7 +107,7 @@ const runChecker = (args) => runScript(CHECK_CLI, args, {});
 
 test("emits the closed top-level key set, exactly — no extra key, no missing key", () => {
   const { root, projectsDir } = stageSingle();
-  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase: join(root, "none") });
+  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase: openRun(root, "feat") });
   assert.deepEqual(Object.keys(led).sort(), [...TOP_LEVEL_KEYS].sort());
   assert.equal(led.schema, SCHEMA);
   assert.equal(led.coverage, "partial");
@@ -118,7 +128,7 @@ test("one row per DEDUPED requestId — the dedup is load-bearing, not a nicety"
     });
   // The same response written three times, as the platform really does it.
   writeFileSync(join(proj, "s1.jsonl"), [rec("r1", 10), rec("r1", 10), rec("r1", 10), rec("r2", 5)].join("\n") + "\n");
-  const led = renderLedger({ name: "f", sessionId: "s1", projectsDir: join(root, "projects"), markersBase: join(root, "none") });
+  const led = renderLedger({ name: "f", sessionId: "s1", projectsDir: join(root, "projects"), markersBase: openRun(root, "f") });
   assert.equal(led.requests.length, 2, "three lines for one request must collapse to one row");
   assert.equal(led.totals.tokens.output, 15, "a naive sum would report 35");
 });
@@ -136,7 +146,7 @@ test("DETERMINISM: the same transcript AND markers bytes render byte-identically
 
 test("no absolute-path string reaches the emitted ledger, over the real fixture", () => {
   const { root, projectsDir } = stageSingle();
-  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase: join(root, "none") });
+  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase: openRun(root, "feat") });
   const hits = [];
   const walk = (v, p) => {
     if (typeof v === "string") {
@@ -152,7 +162,7 @@ test("no absolute-path string reaches the emitted ledger, over the real fixture"
 
 test("D1: usage.iterations[] is WALKED, not dropped — `verbatim` stays true", () => {
   const { root, projectsDir } = stageSingle();
-  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase: join(root, "none") });
+  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase: openRun(root, "feat") });
   assert.ok(led.requests.length > 0, "NON-VACUITY: no rows means the assertion below says nothing");
   const withIter = led.requests.filter((r) => Array.isArray(r.usage?.iterations));
   assert.ok(withIter.length > 0, "the real fixture carries usage.iterations[]");
@@ -180,7 +190,7 @@ test("D1 NON-VACUITY: dropped[] fires on a synthetic out-of-domain leaf", () => 
 
 test("D2: sidechain rows from disjoint nested files are included, with BOTH agent key spellings", () => {
   const { root, projectsDir } = stageSubagents();
-  const led = renderLedger({ name: "feat", sessionId: SUB_SESSION, projectsDir, markersBase: join(root, "none") });
+  const led = renderLedger({ name: "feat", sessionId: SUB_SESSION, projectsDir, markersBase: openRun(root, "feat") });
   assert.equal(led.requests.length, 4, "2 parent + 2 subagent rows");
   const subs = led.requests.filter((r) => r.sidechain);
   assert.equal(subs.length, 2, "NON-VACUITY: the subagent rows must exist for the next assertions to mean anything");
@@ -227,14 +237,18 @@ test("D5: the orchestrator marker is what keeps the run's tail off the last stag
   assert.equal(byId["req-parent-2"].stage, "pharn-build");
   assert.equal(byId["req-sub-a1"].stage, "pharn-build", "a subagent request inside the stage window is attributed to it");
   assert.equal(byId["req-sub-b1"].stage, null, "after the orchestrator marker the tail is NOT billed to pharn-build");
-  assert.equal(led.unattributed.requests, 2);
+  // Through /1 this was 2: req-parent-1 (10:00) preceded run-start (10:05) and was folded into the run as
+  // `unattributed`. Since /2 it is OUTSIDE the run window — excluded, not unattributed.
+  assert.equal(led.unattributed.requests, 1);
+  assert.equal(byId["req-parent-1"], undefined, "a pre-run request is not a run row");
+  assert.equal(led.membership.excluded_requests, 1);
 });
 
 // ---------------------------------------------------------------- views
 
 test("every view is a pure function of requests[] — buildViews reproduces the stored ones", () => {
   const { root, projectsDir } = stageSingle();
-  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase: join(root, "none") });
+  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase: openRun(root, "feat") });
   const v = buildViews(led.requests);
   assert.deepEqual(led.totals, v.totals);
   assert.deepEqual(led.by_model, v.by_model);
@@ -245,7 +259,7 @@ test("every view is a pure function of requests[] — buildViews reproduces the 
 
 test("totals sum every token class separately — a cached and an uncached token are never blended", () => {
   const { root, projectsDir } = stageSingle();
-  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase: join(root, "none") });
+  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase: openRun(root, "feat") });
   for (const c of TOKEN_CLASSES) {
     const manual = led.requests.reduce((n, r) => n + r.tokens[c], 0);
     assert.equal(led.totals.tokens[c], manual, `${c} must be the row-wise sum`);
@@ -269,7 +283,7 @@ test("a hit that yields no readable transcript -> `unavailable` (L51: the guard 
   const proj = join(root, "projects", "p");
   mkdirSync(proj, { recursive: true });
   writeFileSync(join(root, "projects", "decoy.jsonl"), "");
-  const led = renderLedger({ name: "f", sessionId: "../decoy", projectsDir: join(root, "projects"), markersBase: join(root, "none") });
+  const led = renderLedger({ name: "f", sessionId: "../decoy", projectsDir: join(root, "projects"), markersBase: openRun(root, "f") });
   assert.equal(led.coverage, "unavailable", "never `partial` with zero rows");
   assert.equal(led.totals.requests, 0);
 });
@@ -279,7 +293,7 @@ test("a transcript with no usage-bearing records -> `unavailable`, and it SAYS s
   const proj = join(root, "projects", "p");
   mkdirSync(proj, { recursive: true });
   writeFileSync(join(proj, "s1.jsonl"), JSON.stringify({ type: "user", message: {} }) + "\n");
-  const led = renderLedger({ name: "f", sessionId: "s1", projectsDir: join(root, "projects"), markersBase: join(root, "none") });
+  const led = renderLedger({ name: "f", sessionId: "s1", projectsDir: join(root, "projects"), markersBase: openRun(root, "f") });
   assert.equal(led.coverage, "unavailable");
   assert.equal(led.requests.length, 0);
 });
@@ -447,7 +461,7 @@ test("a synthetic model is skipped — it is not a real API call", () => {
       message: { model, usage: { output_tokens: 7 } },
     });
   writeFileSync(join(proj, "s1.jsonl"), [line("<synthetic>", "a"), line("claude-opus-5", "b")].join("\n") + "\n");
-  const led = renderLedger({ name: "f", sessionId: "s1", projectsDir: join(root, "projects"), markersBase: join(root, "none") });
+  const led = renderLedger({ name: "f", sessionId: "s1", projectsDir: join(root, "projects"), markersBase: openRun(root, "f") });
   assert.equal(led.requests.length, 1);
   assert.equal(led.requests[0].model, "claude-opus-5");
 });
@@ -568,16 +582,17 @@ test("✧ PARITY: ledger totals equal render-cost-record totals over the SAME by
   // The two files name the classes differently on purpose: the ledger's names are 1:1 with the
   // dimensions a price list charges for. Asserting the MAPPING binds the values to their referent
   // rather than letting two spellings drift silently (L43).
-  const { projectsDir } = stageSingle();
+  const { root, projectsDir } = stageSingle();
+  // The record is SESSION-scoped (pharn-cost-record/1 is unchanged, D5); the ledger is RUN-scoped. They
+  // agree exactly when the run window contains the whole session, which is what this window is.
+  const mbAll = openRun(root, "x");
   const record = JSON.parse(
     execFileSync("node", [RECORD_CLI, "--session", REAL_SESSION, "--projects-dir", projectsDir], { encoding: "utf8" })
   );
   const ledger = JSON.parse(
-    execFileSync(
-      "node",
-      [CLI, "x", "--stdout", "--session", REAL_SESSION, "--projects-dir", projectsDir, "--markers-base", join(tmpdir(), "absent-xyz")],
-      { encoding: "utf8" }
-    )
+    execFileSync("node", [CLI, "x", "--stdout", "--session", REAL_SESSION, "--projects-dir", projectsDir, "--markers-base", mbAll], {
+      encoding: "utf8",
+    })
   );
 
   const MAPPING = {
@@ -654,7 +669,7 @@ test("no committed fixture carries message content or a cwd/gitBranch field", ()
 // ---------------------------------------------------------------- the CLI
 
 test("the CLI WRITES cost.json itself (D3) and prints the per-stage table", () => {
-  const { projectsDir } = stageSingle();
+  const { root, projectsDir } = stageSingle();
   const out = mkdtempSync(join(tmpdir(), "cost-ledger-out-"));
   const r = run([
     "feat",
@@ -667,7 +682,7 @@ test("the CLI WRITES cost.json itself (D3) and prints the per-stage table", () =
     "--projects-dir",
     projectsDir,
     "--markers-base",
-    join(tmpdir(), "absent-xyz"),
+    openRun(root, "feat"),
   ]);
   assert.equal(r.status, 0, r.stderr);
   const p = join(out, "pharn", "features", "feat", "cost.json");
@@ -941,7 +956,7 @@ test("identity fields are BOUNDED at emission — an over-long or control-char v
       rec("r4", { __model: "m".repeat(5000) }),
     ].join("\n") + "\n"
   );
-  const led = renderLedger({ name: "f", sessionId: "s1", projectsDir: join(root, "projects"), markersBase: join(root, "none") });
+  const led = renderLedger({ name: "f", sessionId: "s1", projectsDir: join(root, "projects"), markersBase: openRun(root, "f") });
   assert.equal(led.requests.length, 4);
   const by = Object.fromEntries(led.requests.map((r) => [r.request_id, r]));
   assert.equal(by.r1.attribution_skill, null, "an over-long skill is dropped, never truncated into a value that was never there");
@@ -956,7 +971,7 @@ test("identity fields are BOUNDED at emission — an over-long or control-char v
 test("MUTATION CONTROL: ordinary identity values survive untouched", () => {
   // Without this, the test above would pass just as happily against a sanitizer that nulled everything.
   const { root, projectsDir } = stageSingle();
-  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase: join(root, "none") });
+  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase: openRun(root, "feat") });
   assert.ok(
     led.requests.some((r) => r.attribution_skill === "pharn-loop"),
     "the real fixture's tagged rows keep their skill"
@@ -974,16 +989,323 @@ test("the CLI refuses bad usage with exit 2 and writes nothing", () => {
   assert.equal(run(["a", "b"]).status, 2, "two positionals");
 });
 
-test("the table renders an honest line when nothing is attributed", () => {
-  const led = renderLedger({ name: "f", sessionId: null, projectsDir: "/nope", markersBase: "/nope" });
-  assert.match(table(led), /no attributed requests/);
+test("the table renders an honest line when nothing is attributed — and says UNKNOWN, not zero, when membership is unknown", () => {
+  const unknownLed = renderLedger({ name: "f", sessionId: null, projectsDir: "/nope", markersBase: "/nope" });
+  assert.equal(unknownLed.membership.status, "unknown");
+  assert.match(table(unknownLed), /run usage UNKNOWN/);
+  assert.doesNotMatch(table(unknownLed), /no attributed requests/);
+  const root = mkdtempSync(join(tmpdir(), "cost-ledger-table-"));
+  const known = renderLedger({ name: "f", sessionId: null, projectsDir: "/nope", markersBase: openRun(root, "f") });
+  assert.equal(known.membership.status, "open");
+  assert.match(table(known), /no attributed requests/);
 });
 
 test("pricing_note states tokens-only and carries the output_thinking subset warning", () => {
   const { root, projectsDir } = stageSingle();
-  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase: join(root, "none") });
+  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase: openRun(root, "feat") });
   assert.match(led.pricing_note, /TOKENS ONLY/);
   assert.match(led.pricing_note, /SUBSET of `output`/);
   assert.match(led.pricing_note, /LIST-PRICE EQUIVALENT/);
   assert.ok(!/\$/.test(JSON.stringify(led)), "no price symbol anywhere in the emitted file");
+});
+
+// ===================================================================================================
+// RUN MEMBERSHIP (`pharn-cost-ledger/2`, `run-window/1`) — the regression set for "unrelated session
+// activity inflates the run". Synthetic transcripts, explicit timestamps, isolated temp dirs; no real
+// transcript is read. EVERY expected number below is a LITERAL computed by hand from the fixture, never
+// a value read back from `buildViews` or from the checker (L43 — agreement between an emitter and a
+// checker that share a helper is not evidence the number is right).
+// ===================================================================================================
+
+import { markPhase, writePendingStart } from "./mark-phase.mjs";
+import { UNKNOWN_REASONS } from "./run-window-core.mjs";
+
+const RS = "00000000-0000-4000-8000-0000000000a1"; // the run's session
+const RS2 = "00000000-0000-4000-8000-0000000000a2"; // a session the run is resumed in
+
+/** One usage-bearing assistant record. `input` is the only non-zero class unless `out` is given. */
+function rec({ id, ts, sid = RS, input = 0, out = 0, model = "claude-opus-5", side = false, agent = null }) {
+  return JSON.stringify({
+    type: "assistant",
+    requestId: id,
+    timestamp: ts,
+    sessionId: sid,
+    isSidechain: side,
+    ...(agent ? { agentId: agent } : {}),
+    version: "2.1.300",
+    message: { model, usage: { input_tokens: input, output_tokens: out, cache_creation: {}, output_tokens_details: {} } },
+  });
+}
+
+/** Write a session transcript (+ optional subagent files) under a scratch projects dir. */
+function synth(sessionId, lines, subagents = {}) {
+  const root = mkdtempSync(join(tmpdir(), "cost-ledger-run-"));
+  const proj = join(root, "projects", "p");
+  mkdirSync(proj, { recursive: true });
+  writeFileSync(join(proj, `${sessionId}.jsonl`), lines.join("\n") + "\n");
+  for (const [agent, recs] of Object.entries(subagents)) {
+    const d = join(proj, sessionId, "subagents");
+    mkdirSync(d, { recursive: true });
+    writeFileSync(join(d, `${agent}.jsonl`), recs.join("\n") + "\n");
+  }
+  return { root, projectsDir: join(root, "projects") };
+}
+
+test("RUN 1 — 100 input tokens BEFORE the run and 10 INSIDE it measure 10, not 110", () => {
+  const { root, projectsDir } = synth(RS, [
+    rec({ id: "unrelated", ts: "2026-09-21T09:00:00.000Z", input: 100 }),
+    rec({ id: "in-run", ts: "2026-09-21T10:05:00.000Z", input: 10 }),
+  ]);
+  const markersBase = writeMarkers(root, "feat", [
+    marker(1, "run-start", null, null, "2026-09-21T10:00:00.000Z", RS),
+    marker(2, "run-stop", null, null, "2026-09-21T10:30:00.000Z", RS),
+  ]);
+  const led = renderLedger({ name: "feat", sessionId: RS, projectsDir, markersBase });
+  assert.equal(led.schema, "pharn-cost-ledger/2");
+  assert.equal(led.totals.tokens.input, 10, "pharn-cost-ledger/1 reported 110 here (100 + 10) — the defect");
+  assert.equal(led.totals.requests, 1);
+  assert.deepEqual(
+    led.requests.map((r) => r.request_id),
+    ["in-run"]
+  );
+  assert.equal(led.membership.status, "bounded");
+  assert.equal(led.membership.excluded_requests, 1);
+  assert.equal(led.membership.start, "2026-09-21T10:00:00.000Z");
+  assert.equal(led.membership.end, "2026-09-21T10:30:00.000Z");
+  assert.equal(led.coverage, "partial");
+  // Every aggregate uses the SAME population: by_model and the stage view sum to 10 as well.
+  assert.equal(
+    led.by_model.reduce((a, m) => a + m.tokens.input, 0),
+    10
+  );
+  assert.equal(
+    led.by_stage_iteration_model.reduce((a, m) => a + m.tokens.input, 0),
+    10
+  );
+  assert.deepEqual(checkLedger(led).reds, []);
+});
+
+test("RUN 2 — membership vs attribution: an in-run request with NO stage marker counts; a pre-run one does not", () => {
+  const { root, projectsDir } = synth(RS, [
+    rec({ id: "pre", ts: "2026-09-21T09:59:59.999Z", input: 1000 }),
+    rec({ id: "unmarked", ts: "2026-09-21T10:01:00.000Z", input: 7 }),
+    rec({ id: "staged", ts: "2026-09-21T10:06:00.000Z", input: 3 }),
+  ]);
+  const markersBase = writeMarkers(root, "feat", [
+    marker(1, "run-start", null, null, "2026-09-21T10:00:00.000Z", RS),
+    marker(2, "stage-start", "pharn-plan", null, "2026-09-21T10:05:00.000Z", RS),
+    marker(3, "run-stop", null, null, "2026-09-21T10:30:00.000Z", RS),
+  ]);
+  const led = renderLedger({ name: "feat", sessionId: RS, projectsDir, markersBase });
+  assert.equal(led.totals.tokens.input, 10, "7 (unmarked, in run) + 3 (staged) — the 1000 is outside");
+  assert.equal(led.unattributed.requests, 1);
+  assert.equal(led.unattributed.tokens.input, 7, "unattributed is a STAGE bucket inside the run, not an out-of-run bucket");
+  const plan = led.by_stage_iteration_model.find((r) => r.stage === "pharn-plan");
+  assert.equal(plan.tokens.input, 3);
+});
+
+test("RUN 3 — spec boundary: a PENDING start recorded before the feature is named counts the spec work", () => {
+  const { root, projectsDir } = synth(RS, [
+    // The request that ISSUES the --pending-start call precedes the marker it writes: the documented gap.
+    rec({ id: "issues-pending", ts: "2026-09-21T09:59:59.000Z", input: 50 }),
+    rec({ id: "spec-1", ts: "2026-09-21T10:01:00.000Z", input: 20 }),
+    rec({ id: "spec-2", ts: "2026-09-21T10:04:00.000Z", input: 5 }),
+    rec({ id: "plan-1", ts: "2026-09-21T10:07:00.000Z", input: 2 }),
+  ]);
+  const base = join(root, "cost");
+  // Before `/pharn-spec` has named the feature: no `<name>` exists yet, only a session.
+  writePendingStart({ base, sessionId: RS, now: new Date("2026-09-21T10:00:00.000Z") });
+  // `/pharn-spec` resolves `feat`; the named run-start ADOPTS the pending moment.
+  const rsm = markPhase({
+    name: "feat",
+    kind: "run-start",
+    base,
+    sessionId: RS,
+    now: new Date("2026-09-21T10:05:00.000Z"),
+    adoptPending: true,
+  });
+  assert.equal(rsm.ts, "2026-09-21T10:00:00.000Z");
+  markPhase({ name: "feat", kind: "stage-start", stage: "pharn-plan", base, sessionId: RS, now: new Date("2026-09-21T10:06:00.000Z") });
+  markPhase({ name: "feat", kind: "run-stop", base, sessionId: RS, now: new Date("2026-09-21T10:30:00.000Z") });
+  const led = renderLedger({ name: "feat", sessionId: RS, projectsDir, markersBase: base });
+  assert.equal(led.totals.tokens.input, 27, "20 + 5 spec + 2 plan; the 50 that issued the pending call is before the window");
+  assert.equal(led.unattributed.tokens.input, 25, "spec work has no stage marker in /pharn-ship — in the run, unattributed");
+  assert.equal(led.membership.excluded_requests, 1);
+  assert.equal(led.markers[0].origin, "pending", "the adopted boundary is traceable in the ledger");
+  // WITHOUT the pending start the same run would open at 10:05 and lose the spec work: the contrast.
+  const base2 = join(root, "cost-no-pending");
+  markPhase({ name: "feat", kind: "run-start", base: base2, sessionId: RS, now: new Date("2026-09-21T10:05:00.000Z") });
+  markPhase({ name: "feat", kind: "run-stop", base: base2, sessionId: RS, now: new Date("2026-09-21T10:30:00.000Z") });
+  const late = renderLedger({ name: "feat", sessionId: RS, projectsDir, markersBase: base2 });
+  assert.equal(late.totals.tokens.input, 2);
+});
+
+test("RUN 4 — a CLOSED run is not contaminated by later session activity, and a re-render is byte-identical", () => {
+  const lines = [rec({ id: "in", ts: "2026-09-21T10:05:00.000Z", input: 10 })];
+  const { root, projectsDir } = synth(RS, lines);
+  const markersBase = writeMarkers(root, "feat", [
+    marker(1, "run-start", null, null, "2026-09-21T10:00:00.000Z", RS),
+    marker(2, "run-stop", null, null, "2026-09-21T10:30:00.000Z", RS),
+  ]);
+  const first = renderLedger({ name: "feat", sessionId: RS, projectsDir, markersBase });
+  const again = renderLedger({ name: "feat", sessionId: RS, projectsDir, markersBase });
+  assert.equal(JSON.stringify(first), JSON.stringify(again), "re-rendering never double-counts");
+  // Unrelated work later in the SAME session is appended to the transcript; the run is closed.
+  writeFileSync(
+    join(projectsDir, "p", `${RS}.jsonl`),
+    [...lines, rec({ id: "later", ts: "2026-09-21T10:30:00.001Z", input: 5000 })].join("\n") + "\n"
+  );
+  const rerender = renderLedger({ name: "feat", sessionId: RS, projectsDir, markersBase });
+  assert.equal(rerender.totals.tokens.input, 10);
+  assert.equal(rerender.membership.excluded_requests, 1);
+});
+
+test("RUN 5 — a NEW invocation for the same feature measures only its own window", () => {
+  const { root, projectsDir } = synth(RS, [
+    rec({ id: "run1", ts: "2026-09-21T08:10:00.000Z", input: 40 }),
+    rec({ id: "between", ts: "2026-09-21T09:00:00.000Z", input: 900 }),
+    rec({ id: "run2", ts: "2026-09-21T10:10:00.000Z", input: 4 }),
+  ]);
+  const markersBase = writeMarkers(root, "feat", [
+    marker(1, "run-start", null, null, "2026-09-21T08:00:00.000Z", RS),
+    marker(2, "run-stop", null, null, "2026-09-21T08:30:00.000Z", RS),
+    marker(3, "run-start", null, null, "2026-09-21T10:00:00.000Z", RS),
+    marker(4, "run-stop", null, null, "2026-09-21T10:30:00.000Z", RS),
+  ]);
+  const led = renderLedger({ name: "feat", sessionId: RS, projectsDir, markersBase });
+  assert.equal(led.totals.tokens.input, 4, "NOT a feature-lifetime total (40 + 4) and not the session (944)");
+  assert.equal(led.membership.excluded_requests, 2);
+});
+
+test("RUN 6 — a run RESUMED in a new session keeps its window; that session's pre-resume work stays out", () => {
+  const { root, projectsDir } = synth(RS2, [
+    rec({ id: "pre-resume", sid: RS2, ts: "2026-09-21T11:00:00.000Z", input: 300 }),
+    rec({ id: "resumed", sid: RS2, ts: "2026-09-21T12:05:00.000Z", input: 6 }),
+  ]);
+  const markersBase = writeMarkers(root, "feat", [
+    marker(1, "run-start", null, null, "2026-09-21T10:00:00.000Z", RS),
+    marker(2, "stage-start", "pharn-plan", null, "2026-09-21T12:00:00.000Z", RS2),
+    marker(3, "run-stop", null, null, "2026-09-21T12:30:00.000Z", RS2),
+  ]);
+  const led = renderLedger({ name: "feat", sessionId: RS2, projectsDir, markersBase });
+  assert.equal(led.totals.tokens.input, 6);
+  assert.equal(led.membership.session, RS2);
+  assert.equal(led.membership.excluded_requests, 1);
+  // SELECTED-SESSION bound, stated: RS's requests (the spec half) are simply not read here.
+  assert.deepEqual(led.sessions, [RS2]);
+});
+
+test("RUN 7 — missing, malformed or ambiguous boundary evidence → UNKNOWN: unavailable, no rows, excluded null", () => {
+  const lines = [rec({ id: "a", ts: "2026-09-21T10:05:00.000Z", input: 10 }), rec({ id: "b", ts: "2026-09-21T10:06:00.000Z", input: 1 })];
+  const cases = [
+    { label: "no markers file", markers: null, reason: UNKNOWN_REASONS.NO_MARKERS },
+    {
+      label: "no run-start",
+      markers: [marker(1, "stage-start", "pharn-plan", null, "2026-09-21T10:00:00.000Z", RS)],
+      reason: UNKNOWN_REASONS.NO_RUN_START,
+    },
+    {
+      label: "run-start with no valid ts",
+      markers: [marker(1, "run-start", null, null, "sometime", RS)],
+      reason: UNKNOWN_REASONS.BAD_RUN_START_TS,
+    },
+    {
+      label: "a stage after a run-stop (a skipped run-start)",
+      markers: [
+        marker(1, "run-start", null, null, "2026-09-21T08:00:00.000Z", RS),
+        marker(2, "run-stop", null, null, "2026-09-21T08:30:00.000Z", RS),
+        marker(3, "stage-start", "pharn-plan", null, "2026-09-21T10:00:00.000Z", RS),
+      ],
+      reason: UNKNOWN_REASONS.MARKER_AFTER_STOP,
+    },
+  ];
+  assert.equal(cases.length, 4, "NON-VACUITY (L34)");
+  for (const c of cases) {
+    const { root, projectsDir } = synth(RS, lines);
+    const markersBase = c.markers ? writeMarkers(root, "feat", c.markers) : join(root, "none");
+    const led = renderLedger({ name: "feat", sessionId: RS, projectsDir, markersBase });
+    assert.equal(led.coverage, "unavailable", c.label);
+    assert.equal(led.membership.status, "unknown", c.label);
+    assert.equal(led.membership.reason, c.reason, c.label);
+    assert.equal(led.membership.excluded_requests, null, `${c.label}: unmeasured is not excluded`);
+    assert.deepEqual(led.requests, [], `${c.label}: whole-session usage is NEVER presented as run usage`);
+    assert.match(led.coverage_note, /run membership unknown/, c.label);
+    assert.match(led.coverage_note, /2 usage-bearing request\(s\)/, c.label);
+    assert.deepEqual(checkLedger(led).reds, [], `${c.label}: an honest unknown is a valid ledger`);
+  }
+});
+
+test("RUN 8 — a KNOWN window that contains nothing is an OBSERVED zero (partial), distinct from unknown", () => {
+  const { root, projectsDir } = synth(RS, [rec({ id: "before", ts: "2026-09-21T09:00:00.000Z", input: 10 })]);
+  const markersBase = writeMarkers(root, "feat", [
+    marker(1, "run-start", null, null, "2026-09-21T10:00:00.000Z", RS),
+    marker(2, "run-stop", null, null, "2026-09-21T10:30:00.000Z", RS),
+  ]);
+  const led = renderLedger({ name: "feat", sessionId: RS, projectsDir, markersBase });
+  assert.equal(led.coverage, "partial");
+  assert.equal(led.membership.status, "bounded");
+  assert.equal(led.membership.excluded_requests, 1);
+  assert.equal(led.totals.requests, 0);
+  assert.match(led.coverage_note, /OBSERVED zero/);
+  assert.deepEqual(checkLedger(led).reds, []);
+});
+
+test("RUN 9 — dedup, subagents and the three views all operate on the SAME in-window population", () => {
+  const dup = rec({ id: "dup", ts: "2026-09-21T10:05:00.000Z", input: 8, out: 2 });
+  const { root, projectsDir } = synth(RS, [rec({ id: "old", ts: "2026-09-21T09:00:00.000Z", input: 100 }), dup, dup, dup], {
+    "agent-x": [
+      rec({ id: "sub-in", ts: "2026-09-21T10:10:00.000Z", input: 4, out: 1, model: "claude-sonnet-5", side: true, agent: "agent-x" }),
+      rec({ id: "sub-old", ts: "2026-09-21T09:30:00.000Z", input: 60, model: "claude-sonnet-5", side: true, agent: "agent-x" }),
+    ],
+  });
+  const markersBase = writeMarkers(root, "feat", [
+    marker(1, "run-start", null, null, "2026-09-21T10:00:00.000Z", RS),
+    marker(2, "stage-start", "pharn-build", 1, "2026-09-21T10:01:00.000Z", RS),
+    marker(3, "run-stop", null, null, "2026-09-21T10:30:00.000Z", RS),
+  ]);
+  const led = renderLedger({ name: "feat", sessionId: RS, projectsDir, markersBase });
+  assert.deepEqual(
+    led.requests.map((r) => r.request_id),
+    ["dup", "sub-in"]
+  );
+  assert.equal(led.totals.tokens.input, 12, "8 (dup, counted ONCE) + 4 (subagent, in window)");
+  assert.equal(led.totals.tokens.output, 3);
+  assert.equal(led.membership.excluded_requests, 2, "the pre-run parent AND the pre-run subagent request");
+  const sub = led.requests.find((r) => r.request_id === "sub-in");
+  assert.equal(sub.sidechain, true);
+  assert.equal(sub.stage, "pharn-build", "a subagent row inside the stage window is attributed to it");
+  assert.deepEqual(
+    led.by_model.map((m) => [m.model, m.tokens.input]),
+    [
+      ["claude-opus-5", 8],
+      ["claude-sonnet-5", 4],
+    ]
+  );
+  assert.equal(
+    led.by_stage_iteration_model.reduce((a, r) => a + r.requests, 0),
+    2
+  );
+});
+
+test("RUN 10 — the path-free unavailable notes of 6.8.2 survive: no transcript + a known window stays path-free", () => {
+  const root = mkdtempSync(join(tmpdir(), "cost-ledger-run-unav-"));
+  const projectsDir = join(root, "projects");
+  mkdirSync(projectsDir, { recursive: true });
+  const markersBase = writeMarkers(root, "feat", [marker(1, "run-start", null, null, "2026-09-21T10:00:00.000Z", RS)]);
+  const led = renderLedger({ name: "feat", sessionId: RS, projectsDir, markersBase });
+  assert.equal(led.coverage, "unavailable");
+  assert.equal(led.membership.status, "open");
+  assert.equal(led.membership.excluded_requests, 0, "nothing was read, so nothing was excluded");
+  assert.deepEqual(findAbsolutePaths(led, "", []), []);
+  assert.ok(!JSON.stringify(led).includes(root));
+  assert.deepEqual(checkLedger(led).reds, []);
+});
+
+test("attribute() compares timestamps as NUMBERS — a millisecond-less marker is not mis-ordered (REVIEW finding 4)", () => {
+  // As strings "…10:00:00Z" > "…10:00:00.500Z", so the old lexical compare skipped this marker for a
+  // request 500 ms after it and left the request unattributed.
+  const ms = [{ seq: 1, kind: "stage-start", stage: "pharn-build", iteration: 1, ts: "2026-09-21T10:00:00Z", session_id: null }];
+  assert.deepEqual(attribute(ms, "2026-09-21T10:00:00.500Z", RS), { stage: "pharn-build", iteration: 1 });
+  assert.deepEqual(attribute(ms, "2026-09-21T09:59:59.999Z", RS), { stage: null, iteration: null });
+  assert.deepEqual(attribute(ms, null, RS), { stage: null, iteration: null });
 });

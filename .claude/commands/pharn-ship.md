@@ -100,6 +100,21 @@ self-approving mode — see "What `/pharn-ship` does NOT do".
 `/pharn-ship <increment description>`. The `<increment description>` is the feature intent; `/pharn-ship`
 passes it to `/pharn-spec`. The chain starts at **intent**, not at an existing spec or plan.
 
+- **Open the run's measurement window FIRST — before `/pharn-spec`, before anything else:**
+
+  ```bash
+  node pharn/floor/mark-phase.mjs --pending-start
+  ```
+
+  The cost ledger counts only requests INSIDE the run window (`pharn/pharn-contracts/cost-ledger.md`,
+  "Run membership"). The named `run-start` below cannot be written until `/pharn-spec` has resolved
+  `<name>`. Without this line, the spec stage would fall outside the window and be silently left out of
+  the run's cost. This call records the moment keyed by session id, and the named `run-start` adopts it.
+  **The request that issues this call precedes the moment it records**, so it is the one request of
+  the run that stays outside; that gap is inherent and stated rather than corrected. **ADVISORY (P0):**
+  a Bash call outside the `PreToolUse` gate (**L19**). If it is skipped, the window opens at the named
+  `run-start` instead, and the spec stage is excluded. It never fails the run.
+
 - **`<name>` is resolved once, by `/pharn-spec`** (a kebab-case slug for the feature; if the invocation is
   ambiguous, `/pharn-spec` asks the human — P5). **`/pharn-ship` then threads that exact slug as the explicit
   `<name>` / `--feature <name>` argument into every subsequent stage invocation** (`/pharn-plan`,
@@ -111,18 +126,25 @@ passes it to `/pharn-spec`. The chain starts at **intent**, not at an existing s
   file's directory.
 
   ```bash
-  node pharn/floor/mark-phase.mjs --name '<name>' --kind run-start
+  node pharn/floor/mark-phase.mjs --name '<name>' --kind run-start --adopt-pending
   ```
 
+  `--adopt-pending` makes it adopt the pending start recorded above (adoption is opt-in, and only this
+  command opts in, so a pending file an abandoned ship leaves behind can never widen a `/pharn-loop` window), so its timestamp is the moment the run began, not the
+  moment it was written, and it carries `origin: "pending"` to say so.
+
   **Two bounds, stated rather than worked around.** (1) **A run that never reaches a `<name>` records
-  nothing** — an invocation `/pharn-spec` refuses, or one abandoned before the SPEC exists, has no
-  marker file and no `cost.json`; nothing is lost that was ever recorded. (2) **`/pharn-spec`'s own
-  requests precede this marker and are therefore `unattributed`** — an honest bucket, never folded into
-  a neighbouring stage. Both are the shape `/pharn-loop` already carries for the same reason, and
+  nothing.** An invocation `/pharn-spec` refuses, or one abandoned before the SPEC exists, has no marker
+  file and no `cost.json`; nothing is lost that was ever recorded. Its pending start is left behind and
+  would be adopted by a later `/pharn-ship` `run-start` in the same session whose own pending call was
+  skipped. (2)
+  **`/pharn-spec`'s own requests are IN the run but carry no stage marker.** They count in `totals` and
+  sit in the `unattributed` STAGE bucket, never folded into a neighbouring stage.
   `check-cost-ledger.mjs` answers a missing marker with a counted WARN, never a RED.
 
   **ADVISORY (P0):** a Bash call outside the `PreToolUse` gate (**L19**), so nothing forces it. A
-  skipped marker does not fail the run; its requests simply stay `unattributed`.
+  skipped `run-start` does not fail the run, but the ledger then cannot bound it: its membership is
+  `unknown` and it reports NO run usage, rather than the whole session's.
 
 ## Step 2 — Run the chain, branching ONLY on each stage's STRUCTURAL verdict (P5)
 
@@ -937,11 +959,14 @@ the `check-ship.mjs` cap.
   `check-cost-ledger.mjs`'s exit code is not a proceed/stop input; a RED ledger reaches GATE 2 exactly
   as a GREEN one does. Reading a cost record as a verdict would be advisory-dressed-as-deterministic.
 - **"the ledger accounts for the whole run"** → **NO, and `coverage` has no `complete` member by
-  design.** Two ship-specific bounds beyond that: (1) requests before `<name>` exists — `/pharn-spec`'s
-  own — precede the `run-start` marker and are `unattributed`; (2) **the ledger is SINGLE-SESSION.**
+  design.** The ledger counts only requests inside the run WINDOW (`run-window/1`), so earlier and later
+  unrelated work in the same session is excluded. Two ship-specific bounds beyond that: (1) the request
+  that issues Step 1's `--pending-start` precedes the window, and if that call is skipped the window
+  opens at the named `run-start`, which drops `/pharn-spec`'s work; (2) **the ledger is SINGLE-SESSION.**
   `render-cost-ledger.mjs` resolves ONE session's transcript, so a run whose GATE-1 approval arrives in
   a **new session** records only the final session's requests. Markers carry `session_id` per marker,
-  but that is used to avoid cross-session mis-attribution, **not** to union sessions. Honest
+  and they are used to avoid cross-session mis-attribution and to open each session's window at its own
+  first marker (so the new session's pre-resume work stays out), **not** to union sessions. Honest
   under-reporting, stated rather than discovered; it reopens on the first measured multi-session run.
 - **Net (gated mode):** the gated chain introduces **exactly one** new floor primitive of its own — the
   `BRIEFING.md` cross-file checker above, deliberately narrow and never gating — plus the pre-existing
