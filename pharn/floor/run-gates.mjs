@@ -93,7 +93,7 @@ import {
 import { resolve, join, sep } from "node:path";
 import { spawn, spawnSync, execFileSync } from "node:child_process";
 import { constants as osConstants } from "node:os";
-import { SCHEMA, STRUCTURAL_PREFIX, isReasonCode, resolveSet, completenessArgv, actualForExpected } from "./gate-run-core.mjs";
+import { SCHEMA, STRUCTURAL_PREFIX, isReasonCode, resolveSet, completenessArgv, actualForExpected, logBasename } from "./gate-run-core.mjs";
 import { fingerprint } from "./worktree-fingerprint.mjs";
 
 const STATE_ROOT = ".pharn";
@@ -641,9 +641,10 @@ async function runNext(args) {
     const fpBefore = fingerprint(cwd, { feature: rec.feature });
     if (!fpBefore.ok) fail("usage-error", `cannot fingerprint before ${next.id}: ${fpBefore.reason}`);
 
-    const safeId = next.id.replace(/[^A-Za-z0-9._-]/g, "_");
-    const outFile = join(outAbs, `${next.seq}-${safeId}.out`);
-    const errFile = join(outAbs, `${next.seq}-${safeId}.err`);
+    // The log names come from gate-run-core's ONE copy of the rule, which check-loop-fresh.mjs re-hashes.
+    const logBase = logBasename(next.seq, next.id);
+    const outFile = join(outAbs, `${logBase}.out`);
+    const errFile = join(outAbs, `${logBase}.err`);
 
     let exit;
     let timed_out = false;

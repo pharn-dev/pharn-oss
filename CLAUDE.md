@@ -231,10 +231,10 @@ node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
 # FLOOR, given the stamp: the map's values ARE the exit codes the runner recorded from the listed argv;
 # the keys COVER the resolved source set (+ `reconcile` for verify); NO tree edit happened between
 # consecutive gates (fp_after[k-1] == fp_before[k]); and `reconcile` ran LAST so it judges any write an
-# earlier gate made. NOT COVERED, each stated: FRESHNESS (`fingerprint.final` is WRITTEN here and compared
-# against nothing — a later increment's job, and writing a field whose only consumer is the next increment
-# is a P7 cost accepted at the plan gate); whether the stage ran AT ALL; whether the report on disk is the
-# checker's output; WHO wrote an explicit --gates (only `source` is recorded); and FORGERY — it certifies
+# earlier gate made. NOT COVERED BY THE STAMP ALONE, each stated: FRESHNESS (`fingerprint.final` is WRITTEN
+# here; since 6.10.0 check-loop-fresh.mjs, below, is the consumer that compares it to the live tree);
+# whether the stage ran AT ALL and whether the report on disk is the checker's output (both NARROWED by
+# check-loop-fresh.mjs, never proven); WHO wrote an explicit --gates (only `source` is recorded); and FORGERY — it certifies
 # INTERNAL CONSISTENCY, never provenance, a self-consistent FABRICATED stamp passes and a test BUILDS one
 # to prove it (L43, in check-cost-ledger.mjs's words).
 # BUILD-COMPLETENESS IS NOT A GATE, and that separation is load-bearing: the runner CAPTURES
@@ -272,6 +272,41 @@ node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
 node pharn/floor/run-gates.mjs init --stage verify|regress [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--discover <package.json>] [--gates "<cmd>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>]
 node pharn/floor/run-gates.mjs run --next --out <dir> --timeout-ms <N>
 node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
+
+# FRESHNESS — /pharn-loop reads a stop only from evidence that belongs to THIS tree (added 6.10.0).
+# THE RECORDED FAILURE (P7): CHANGELOG 6.3.0's unattended /pharn-loop run skipped /pharn-grill, /pharn-regress
+# and /pharn-verify and still wrote a floor-grade-looking decision. #222 re-derives a decision from the reports
+# it cites; #230 made the gate map tested code and wrote `fingerprint.final` "for a later increment". So an
+# iteration that skipped a stage still found the PREVIOUS iteration's report and stamp, and nothing noticed.
+# This is that later increment — a SEPARATE checker read BEFORE check-loop.mjs, because check-loop.mjs's
+# "inputs are ONLY the two verdict reports + iter/cap" is a load-bearing structural claim a filesystem input
+# would break. THE CHECKS, first failure decides, fabrication (J/E/H) before staleness (F/G):
+#   A reports exist + parse (RERUN report-missing|report-malformed) · B a report reason_code in LAPSE_CODES
+#   (RERUN; empty-source-set → STOP, the command maps it to S4; any other member → STOP) · C each of the three
+#   stamps validates (missing/lapse RERUN, else STOP) · D report.gate_run.stamp_sha256 == sha256(stamp bytes)
+#   (RERUN report-stamp-unbound) · J every recorded stdout/stderr sha256 == its log on disk (STOP
+#   output-hash-mismatch — that member's FIRST emitter) · E a LIVE spawnSync re-run of check-verify.mjs
+#   --stamp / check-regress.mjs verdict reproduces the report's FLOOR fields (STOP report-verdict-mismatch) ·
+#   H base stamp head == --base (STOP) · F verify stamp {algo, final} == the live fingerprint (RERUN verify
+#   tree-moved-since-verify) · G regress head final == verify init (RERUN regress) · I (--front) the three
+#   front checkers exit 0 and GRILL.md exists (STOP front-stage-red).
+# THE BUDGET IS A COUNTER, NOT PROSE: .pharn/pharn-loop/<name>/freshness.jsonl, one row per authorized re-run,
+# --max-reruns (default 1) per (iter, stage), then STOP rerun-budget-exhausted; --commit-gate never re-runs and
+# never writes a row (a RERUN-class cause becomes STOP with its own code). The ledger path is lstat-checked
+# for symlinks INCLUDING a dangling one (existsSync follows a link, so a dangling one read as absent and the
+# append wrote through it — caught by its own test). Wiring: Step 5 sub-step 3 (`--iter <N> --front`) and the
+# FIRST line of Step 6c (`--commit-gate --front`); a RERUN re-invokes that stage inside the same iteration;
+# a STOP / INCONCLUSIVE is S11 `blocked: stale-evidence` (S4 for empty-source-set); a stale commit gate is
+# `not committed: evidence stale`. The pinned lines are EXECUTED by the suite (★ WIRING, L45).
+# BOUNDS, each stated in the header and the contract: TREE IDENTITY, NOT RECENCY (an iteration whose build
+# changed nothing reuses old evidence — a test PINS it; closing it needs transcript binding, a PENDING
+# follow-up); AGREEMENT, NEVER PROVENANCE (a self-consistent fabricated stamp/log/report set over the live
+# tree passes — every fixture in the suite IS one, L43); it runs from the worktree and cannot vouch for
+# itself; the ledger is unauthenticated `.pharn/` state Bash reaches (LIMITS.md §6); GRILL.md presence is
+# membership only; markers are not consulted. A gate whose DETACHED descendant keeps writing its log after
+# exit trips J — named, not a mystery. Mutating gates do NOT trip F: F compares verify's FINAL fingerprint.
+# Exit: 0 FRESH · 1 RERUN `stage_to_rerun` · 2 INCONCLUSIVE (unusable input, fail-closed) · 4 STOP.
+node pharn/floor/check-loop-fresh.mjs --feature <name> --base <40-hex> (--iter <N> | --commit-gate) [--front] [--repo <dir>] [--verify-stamp <p>] [--regress-head-stamp <p>] [--regress-base-stamp <p>] [--max-reruns <R>]
 
 # The two verdict cores gain an OPT-IN stamp surface; FLAG-LESS BEHAVIOR IS BYTE-IDENTICAL (regression-
 # guarded by every pre-existing fixture, asserted as EQUIVALENCE over the whole fixture set, not one case).

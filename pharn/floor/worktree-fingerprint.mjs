@@ -3,8 +3,7 @@
 //
 // One axis: "what tree did this gate see?" (P3). The grammar/coverage half is gate-run-core.mjs and the
 // execution half is run-gates.mjs. This file is separate from both because it is the ONLY one that
-// touches git, and because a later increment's freshness checker imports it too — stated as a sequenced
-// dependency rather than implied.
+// touches git, and because the freshness checker (check-loop-fresh.mjs) imports it too.
 //
 // ============================== WHAT IT IS FOR, AND WHAT IT IS NOT ==============================
 //
@@ -13,10 +12,10 @@
 // `fp_after`. That is the claim "the gates judged ONE tree state" — a content-hash comparison
 // (pharn/ARCHITECTURE.md §2 primitive #2).
 //
-// NOT USED HERE: `fingerprint.final` is WRITTEN and compared against nothing. Comparing it to the live
-// tree at the moment a verdict is read — FRESHNESS — is a later increment. Writing a field whose only
-// consumer is the next increment is a P7 cost, accepted explicitly at this increment's GATE 1 and
-// recorded rather than justified away.
+// USED BY check-loop-fresh.mjs (6.10.0): `fingerprint.final` is compared to the LIVE tree when /pharn-loop
+// reads a stop and again at its commit gate (FRESHNESS), and a regress head stamp's `final` to the verify
+// stamp's `init`. Both are comparisons of this function's digest, so any change to what is hashed must
+// bump ALGO — a silently changed digest would read as a moved tree and re-run a stage.
 //
 // ===================================== THE TWO EXCLUSIONS =====================================
 //
@@ -73,8 +72,8 @@ import { enumerate, hashFile } from "./reconcile-baseline.mjs";
 import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 
 /** The algorithm identity, recorded in every stamp. Bump on ANY change to what is hashed or how the
- *  digest is composed — a later increment compares digests across runs, and an unversioned change would
- *  read as a tree mutation rather than as a tooling change. */
+ *  digest is composed — check-loop-fresh.mjs compares digests across runs (and refuses a stamp whose
+ *  algo differs from the live one), so an unversioned change would read as a tree mutation. */
 export const ALGO = "worktree-fingerprint/1+sha256";
 
 /** The scratch namespace the runner itself writes. See exclusion (1) in the header. */

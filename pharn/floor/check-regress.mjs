@@ -415,8 +415,8 @@ function readResultsMap(path, label) {
 }
 
 // --- read + validate ONE side's stamp. Every refusal carries a CLOSED reason_code from gate-run-core,
-//     so a later increment can route the orchestration-lapse codes to "re-run the stage" (an enum, not
-//     prose). Returns the parsed stamp and its own sha256. ---
+//     so check-loop-fresh.mjs routes the orchestration-lapse codes (LAPSE_CODES) to "re-run the stage"
+//     (an enum, not prose). Returns the parsed stamp and its own sha256. ---
 function readSideStamp(path, side, label) {
   if (!existsSync(path)) return { ok: false, reason_code: "stamp-missing", reason: `${label} not found: ${path}` };
   let raw;

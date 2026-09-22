@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.9.3-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.10.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -387,10 +387,16 @@ decisions inside the pipeline are read from the deterministic verdicts emitted b
 `/pharn-loop` runs the same chain without either human gate. The model approves the spec, and the build →
 regress → verify middle repeats until a deterministic stop: green, the iteration cap, or a red it must not
 retry (an inconclusive result, or a reconcile red — a retry would re-anchor the baseline and erase the
-detected escape). Only a green result is committed, to a new local branch, and only if its recorded decision
-re-derives from the reports it cites (`check-loop-decision.mjs` re-runs the loop's stop computation and
-compares); a green that does not re-derive is not committed. That proves the decision is re-derivable, not
-that the reports are honest — a self-consistent forged pair still passes. Every other outcome reverts the
+detected escape). Before it reads that stop, and again before it commits, `check-loop-fresh.mjs` checks that
+the evidence belongs to the tree: each report must be its checker's output from a stamp that validates, bound
+to it by hash, and the verify stamp must describe the live tree. A skipped or stale stage is re-run inside
+the same iteration under a counted budget. A forged verdict or a spent budget ends the run as a recorded
+blocked stop, not as a summary that names the skipped gates. That is tree identity, not recency: an iteration
+whose build changed nothing can still reuse the previous iteration's evidence. Only a green result is
+committed, to a new local branch, and only if its recorded decision re-derives from the reports it cites
+(`check-loop-decision.mjs` re-runs the loop's stop computation and compares); a green that does not
+re-derive is not committed. None of this proves the reports are honest: a self-consistent forged set of
+stamps and reports still passes. Every other outcome reverts the
 spec to `Draft`, or the run says it could not. The human decision comes after the run, on the branch or the
 working tree it leaves.
 
@@ -419,7 +425,7 @@ byte-for-byte by `npm run docs:check`, so it cannot quietly drift from what is a
 - **Product commands — 10** (`.claude/commands/`): `/pharn-build`, `/pharn-grill`, `/pharn-loop`, `/pharn-memory-promote`, `/pharn-plan`, `/pharn-regress`, `/pharn-review`, `/pharn-ship`, `/pharn-spec`, `/pharn-verify`.
 - **Dev-apparatus commands — 9** (`.claude/commands/`): `/pharn-dev-build`, `/pharn-dev-eval`, `/pharn-dev-grill`, `/pharn-dev-memory-promote`, `/pharn-dev-plan`, `/pharn-dev-regress`, `/pharn-dev-review`, `/pharn-dev-ship`, `/pharn-dev-verify`.
 - **Hook scripts — 3** (`.claude/hooks/`): `enforce-writes-scope.cjs`, `protect-trusted-paths.cjs`, `set-writes-scope.cjs`.
-- **Floor checkers — 67** `.mjs` files under `pharn/floor/` (tests excluded).
+- **Floor checkers — 68** `.mjs` files under `pharn/floor/` (tests excluded).
 
 <!-- CURRENT-STATE:END -->
 

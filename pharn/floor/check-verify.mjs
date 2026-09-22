@@ -165,9 +165,9 @@ function main() {
     completeStatus = completeRaw === "0" ? "complete" : completeRaw === "1" ? "incomplete" : "inconclusive";
   }
 
-  // --- the opt-in stamp branch. Every refusal carries a CLOSED reason_code from gate-run-core, so a
-  //     later increment can map the orchestration-lapse codes to "re-run the stage" rather than to a
-  //     terminal stop — which it can only do if the code is an enum and not prose. ---
+  // --- the opt-in stamp branch. Every refusal carries a CLOSED reason_code from gate-run-core, so
+  //     check-loop-fresh.mjs can map the orchestration-lapse codes (LAPSE_CODES) to "re-run the stage"
+  //     rather than to a terminal stop — which it can only do because the code is an enum and not prose. ---
   let stampMap = null;
   let gate_run = null;
   if (stampPath !== undefined) {

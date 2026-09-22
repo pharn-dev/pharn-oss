@@ -205,5 +205,11 @@ The verdict fields are **unchanged**; the report additionally carries a **per-si
   (`spec-mismatch`) — which is what makes "the set is decided once and applied to both" checkable rather
   than merely intended.
 - **The bound (L43):** internal consistency, never provenance — a self-consistent fabricated pair passes.
+- **One machine consumer:** `check-loop-fresh.mjs` requires each side's `gate_run.<side>.stamp_sha256` to
+  equal the sha256 of that side's stamp on disk, re-derives `verdict` / `regressions` / `pre_existing` /
+  `outside_gates` from the two stamps, and requires the head stamp to have ended on the tree
+  `/pharn-verify` started from. A `reason_code` in its `LAPSE_CODES` subset re-runs `/pharn-regress`.
+  On a RED spec→plan chain `/pharn-regress` writes no report, so an earlier report can survive on disk.
+  The head-final-equals-verify-init check catches that whenever the build moved the tree.
 
 Full shape: `pharn/pharn-contracts/gate-run-record.md` (cited, not restated — P4).

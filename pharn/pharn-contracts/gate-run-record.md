@@ -114,12 +114,22 @@ gate — it already is one today.
 
 ## The closed `reason_code` vocabulary
 
-Every refusal — in `gate-run-core.mjs`, `run-gates.mjs` and both checkers' stamp paths — carries exactly
-one member. It is an **enum and not prose** so a later increment can map the orchestration-lapse codes
-(`stamp-missing`, `stamp-unfinalized`, `tree-changed-between-gates`) to "re-run the stage" rather than to a
-terminal stop. The set is defined once in `gate-run-core.mjs` (`REASON_CODES`) and a closure test collects
-every literal the modules emit and requires each to be a member (**L36** — a per-member presence set is not
-a closed set).
+Every refusal — in `gate-run-core.mjs`, `run-gates.mjs`, both checkers' stamp paths and
+`check-loop-fresh.mjs` — carries exactly one member. It is an **enum and not prose**, so
+`check-loop-fresh.mjs` (6.10.0) can map the orchestration-lapse subset to "re-run the stage" rather than to
+a terminal stop. The set is defined once in `gate-run-core.mjs` (`REASON_CODES`), with two named subsets:
+
+- **`LAPSE_CODES`** — `stamp-missing`, `stamp-unfinalized`, `tree-changed-between-gates` (the three this
+  contract always named), plus `entry-not-run` (a runner that stopped mid-drain; `validateStamp` names it
+  apart from the malformed class for this routing) and `lock-busy` (two runner invocations contended). A
+  report or stamp carrying one of these is re-run, under `/pharn-loop`'s counted budget. Every other
+  member is a stop: a stamp that exists and is **wrong** is evidence to stop on, never to paper over.
+- **`RESERVED_REASON_CODES`** — members kept with no emitter, each with its reason. It is **empty** today.
+
+The closure is tested **both ways** (**L36** — a per-member presence set is not a closed set): every literal
+the modules emit is a member, **and** every member has an emitter or a reserved entry. The second direction
+is new in 6.10.0. Its absence is how `output-hash-mismatch` sat in the vocabulary with no emitter for a
+release line; `check-loop-fresh.mjs`'s log check is now its emitter.
 
 ## What a validating stamp PROVES
 
@@ -130,10 +140,14 @@ a closed set).
 
 ## What it does NOT prove (P0 — each stated, none discovered later)
 
-- **Freshness.** `fingerprint.final` is **written** here and compared against nothing. Comparing it to the
-  live tree at the moment a verdict is read is a **later increment**. Writing a field whose only consumer
-  is the next increment is a P7 cost, accepted explicitly at this increment's plan gate.
-- **That the stage ran at all**, or that the report on disk is the checker's own output.
+- **Freshness, by the stamp alone.** A stamp does not compare itself to anything. `check-loop-fresh.mjs`
+  (6.10.0) is its consumer: it compares the verify stamp's `fingerprint.final` to the live tree, and a
+  regress head stamp's `final` to the verify stamp's `init`, when `/pharn-loop` reads a stop and again at
+  its commit gate. It re-hashes every recorded gate log. What that adds is **tree identity, never run
+  recency**: evidence from an earlier iteration over an unchanged tree still matches.
+- **That the stage ran at all**, or that the report on disk is the checker's own output. This is narrowed,
+  not proven, by `check-loop-fresh.mjs`: it binds each report to its stamp by `sha256` and re-derives the
+  report's verdict live from the stamp.
 - **Who wrote an explicit `--gates` string.** Only `source` is recorded.
 - **Forgery.** This certifies **internal consistency, never provenance** — a self-consistent **fabricated**
   stamp passes, and a test builds one to prove it rather than leaving the bound as prose (**L43**). The

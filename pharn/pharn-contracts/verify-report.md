@@ -210,10 +210,14 @@ additionally carries:
   `check-ship.mjs`, `check-loop-decision.mjs`, `check-ship-briefing.mjs`, `render-ship-briefing.mjs`,
   `render-run-report.mjs`, `ship-outcome-core.mjs` — none validates a closed top-level key set.
 - `reason_code` is a member of the closed vocabulary in `gate-run-record.md`; it appears **only** on a
-  fail-closed exit, so a later increment can distinguish an orchestration lapse from a real red.
+  fail-closed exit, and `check-loop-fresh.mjs` routes a member of its `LAPSE_CODES` subset to "re-run
+  `/pharn-verify`" rather than to a stop.
 - **Build-completeness is NOT in the gate map.** It reaches the verdict from the stamp's
   `aux.completeness`, which is what keeps the `INCOMPLETE` verdict reachable. See `gate-run-record.md`.
 - **The bound (L43):** a stamp certifies **internal consistency, never provenance** — a self-consistent
-  fabricated stamp passes. `gate_run` is therefore evidence for a human, never a guarantee.
+  fabricated stamp passes. **`gate_run` has one machine consumer:** `check-loop-fresh.mjs` requires
+  `gate_run.stamp_sha256` to equal the sha256 of the verify stamp on disk and re-derives
+  `verdict` / `failing_gates` / `gates` from that stamp. It is agreement with the stamp and the live tree,
+  never a guarantee about who wrote either.
 
 Full shape: `pharn/pharn-contracts/gate-run-record.md` (cited, not restated — P4).
