@@ -21,6 +21,22 @@
 // omit (lessons-learned L22: pin the command line rather than describing the technique; L30: the gate a
 // step ASKS for is the one that gets skipped — here the step asks for nothing).
 //
+// ===================================== PATH RESOLUTION =====================================
+// EVERY path operand — `--out`, `--spec-from`, `--discover`, `--scope-json` — resolves against the
+// directory the runner is INVOKED from, and containment is checked against THAT directory's `.pharn/`.
+// `--cwd` changes exactly two things: where the gates EXECUTE, and which tree is fingerprinted (and whose
+// HEAD is recorded). It never moves the runner's own records.
+//
+// Why, stated because the other reading was shipped and was wrong (lessons-learned L45): `init` used to
+// resolve `--out` and `--spec-from` against `--cwd`, while `run --next` — which takes no `--cwd` — resolved
+// `--out` against the invoking directory. The two subcommands therefore disagreed about where the record
+// lived whenever `--cwd` was not `.`, and the one caller that passes it (/pharn-regress Step 4b's base
+// side, `--cwd .pharn/pharn-regress/base`) failed at `init` with `spec-mismatch`, reading the head record
+// from INSIDE the base worktree. Every test ran with the default `--cwd .`, so nothing saw it (L41).
+//
+// The corollary: `init` and every `run --next` for one `<out>` must be issued from the SAME directory.
+// Every pinned caller issues both from the repo root.
+//
 // ==================================== SINGLE STORE (L35) ====================================
 // `<out>/state.json` is the stamp IN PROGRESS (`finalized: false`). Finalizing writes `<out>/stamp.json`
 // and REMOVES the state file, so exactly ONE store of the map exists at rest. No `results.json` is ever
@@ -124,10 +140,13 @@ function has(args, name) {
  *  CONTAINMENT. Every path this runner writes or deletes must resolve STRICTLY inside the state root,
  *  must not BE the state root, and may not traverse a symlink at any component. Checked once per
  *  invocation, before anything is created — a check performed after a write is not a containment check.
+ *
+ *  `base` is the directory `outDir` is resolved against and whose `.pharn/` is the state root. Both
+ *  subcommands pass the INVOKING directory, never `--cwd` (see PATH RESOLUTION in the header).
  *  ---------------------------------------------------------------------------------------------- */
-function assertContained(outDir, cwd) {
-  const rootAbs = resolve(cwd, STATE_ROOT);
-  const outAbs = resolve(cwd, outDir);
+function assertContained(outDir, base) {
+  const rootAbs = resolve(base, STATE_ROOT);
+  const outAbs = resolve(base, outDir);
   if (outAbs === rootAbs) {
     fail("path-containment", `--out may not BE the state root (${rootAbs}); use a subdirectory such as ${rootAbs}/pharn-verify/gates`);
   }
@@ -308,7 +327,8 @@ function runInit(args) {
   const cwd = flag(args, "--cwd") ?? ".";
   const out = flag(args, "--out");
   if (!out) fail("usage-error", "init requires --out <dir>");
-  const outAbs = assertContained(out, cwd);
+  // Against the INVOKING directory, never `--cwd` — `run --next` resolves `--out` the same way.
+  const outAbs = assertContained(out, process.cwd());
 
   const stage = flag(args, "--stage");
   const side = flag(args, "--side") ?? null;
@@ -320,8 +340,10 @@ function runInit(args) {
   // compared over the same keys (check-regress.mjs verdict fails inconclusive on a key-set mismatch).
   if (stage === "regress" && side === "base") {
     if (!specFrom) fail("usage-error", "--side base requires --spec-from <head-out> so the set is decided once");
-    const headStampish = join(resolve(cwd, specFrom), "state.json");
-    const headFinal = join(resolve(cwd, specFrom), "stamp.json");
+    // The head record lives beside this side's own record, in the invoking directory's state root —
+    // resolving it against `--cwd` looked for it inside the base worktree, where it never is.
+    const headStampish = join(resolve(specFrom), "state.json");
+    const headFinal = join(resolve(specFrom), "stamp.json");
     const src = existsSync(headFinal) ? headFinal : headStampish;
     const r = readJson(src);
     if (!r.ok) fail("spec-mismatch", `--spec-from has no readable record at ${src}: ${r.reason}`);
@@ -356,7 +378,7 @@ function runInit(args) {
   const discover = flag(args, "--discover");
   let scripts = null;
   if (discover) {
-    const r = readJson(resolve(cwd, discover));
+    const r = readJson(resolve(discover));
     if (!r.ok) fail("usage-error", `--discover manifest is not readable/parseable: ${r.reason}`);
     scripts = r.value && typeof r.value === "object" ? r.value.scripts : null;
   }
@@ -386,7 +408,7 @@ function runInit(args) {
   if (stage === "regress" && side === "head") {
     const sj = flag(args, "--scope-json");
     if (!sj) fail("usage-error", "--side head requires --scope-json <file>");
-    const s = readScopeJson(resolve(cwd, sj));
+    const s = readScopeJson(resolve(sj));
     if (!s.ok) fail("bad-scope-json", s.reason);
     for (const e of spec.entries) {
       if (e.id === "test") e.files = s.tests;
@@ -607,7 +629,9 @@ async function runNext(args) {
   if (!r.ok) fail("stamp-malformed", `in-progress record is not parseable (${statePath}): ${r.reason}`);
   const rec = r.value;
   const cwd = rec.cwd ?? ".";
-  const outAbs = assertContained(out, cwd);
+  // The recorded `cwd` is where the gates RUN; the record itself lives under the invoking directory,
+  // exactly where `statePath` above was read from (PATH RESOLUTION, header).
+  const outAbs = assertContained(out, process.cwd());
 
   heldLock = takeLock(outAbs, timeoutMs);
   {

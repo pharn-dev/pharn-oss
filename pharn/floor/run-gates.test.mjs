@@ -1,14 +1,18 @@
 // pharn/floor/run-gates.test.mjs — the runner CLI's suite.
 //
-// Every test drives the REAL CLI as a subprocess, because the property under test is what a command's
-// pinned Bash line produces — a suite that only imported the module would exercise the script and never
-// the invocation (lessons-learned L45, the shape that kept a fixed guard out of production for a whole
-// release line). Refusal tests pair with a non-vacuity control so a green run means the rule fired and
-// not that the runner refuses everything (L34), and rules over a set iterate every member (L52).
+// Every test drives the REAL CLI as a subprocess, so the script is exercised through its argv rather than
+// imported. That is NOT the same as executing a command's PINNED line, and this header used to claim it
+// was: for a whole release line these tests passed hand-typed arguments, the one pinned line that passes
+// `--cwd` (/pharn-regress's base side) was never run, and it failed at `init` in every real run
+// (lessons-learned L45 — the invocation layer is covered only by executing the invocation). The ★ WIRING
+// test at the end executes /pharn-regress's committed lines; /pharn-verify's pinned lines are still
+// exercised only through equivalent hand-typed arguments. Refusal tests pair with a non-vacuity control so
+// a green run means the rule fired and not that the runner refuses everything (L34), and rules over a set
+// iterate every member (L52).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, symlinkSync, statSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, symlinkSync, statSync, copyFileSync } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
@@ -639,4 +643,284 @@ test("the bare CLI and an unknown subcommand emit a usage document, never a stac
     },
     { scripts: { test: "true" } }
   );
+});
+
+// ---------------------------------------------------------------------------------------------------
+// PATH RESOLUTION — `--cwd` moves where gates RUN, never where the runner's records live
+//
+// Every test above runs with the default `--cwd .`, so the non-default value was covered by nothing
+// (lessons-learned L41) — and /pharn-regress's base side, the ONE caller that passes it, failed at `init`
+// with `spec-mismatch` for as long as it existed (L45). The rule is quantified over a SET of operands, so
+// the set is materialized once and iterated (L52), and its size is asserted so an emptied list cannot pass
+// (L34).
+// ---------------------------------------------------------------------------------------------------
+
+const SUB = "sub";
+
+/** A repo whose SUBDIRECTORY carries a DIFFERENT manifest, so a resolution against `--cwd` is observable
+ *  as a different gate set, a missing scope file, or a record in the wrong place. */
+function subRepo(dir) {
+  mkdirSync(join(dir, SUB), { recursive: true });
+  writeFileSync(join(dir, SUB, "package.json"), JSON.stringify({ scripts: { lint: "true" } }));
+  writeFileSync(join(dir, "scope.json"), JSON.stringify({ escaped: [], outside_tests: [], outside_eval_pairs: [] }));
+}
+
+const regressHead = (out, extra = [], scope = "scope.json") => [
+  "init",
+  "--stage",
+  "regress",
+  "--side",
+  "head",
+  "--feature",
+  FEATURE,
+  "--out",
+  out,
+  "--discover",
+  "package.json",
+  "--scope-json",
+  scope,
+  ...extra,
+];
+
+const PATH_OPERANDS = [
+  {
+    operand: "--out",
+    check(dir) {
+      const r = cli(dir, [...initArgs(), "--cwd", SUB]);
+      assert.equal(r.code, 0, `init with --cwd ${SUB} refused: ${r.raw}`);
+      assert.ok(existsSync(join(dir, OUT, "state.json")), "the record must land in the INVOKING directory's state root");
+      assert.ok(!existsSync(join(dir, SUB, OUT)), "the record must NOT land under --cwd (the pre-fix location)");
+    },
+  },
+  {
+    operand: "--discover",
+    check(dir) {
+      const r = cli(dir, [...initArgs(), "--cwd", SUB]);
+      assert.equal(r.code, 0, r.raw);
+      // The invoking directory's manifest carries `test`; the subdirectory's carries only `lint`.
+      assert.deepEqual(r.json.ids, ["test", "reconcile"], "--discover must read the invoking directory's manifest");
+    },
+  },
+  {
+    operand: "--scope-json",
+    check(dir) {
+      // scope.json exists ONLY in the invoking directory; resolved against --cwd it would be unreadable.
+      const r = cli(dir, regressHead(".pharn/head", ["--cwd", SUB]));
+      assert.equal(r.code, 0, `--scope-json was not read from the invoking directory: ${r.raw}`);
+    },
+  },
+  {
+    operand: "--spec-from",
+    check(dir) {
+      const head = cli(dir, regressHead(".pharn/head"));
+      assert.equal(head.code, 0, head.raw);
+      const base = cli(dir, [
+        "init",
+        "--stage",
+        "regress",
+        "--side",
+        "base",
+        "--feature",
+        FEATURE,
+        "--out",
+        ".pharn/base",
+        "--spec-from",
+        ".pharn/head",
+        "--cwd",
+        SUB,
+      ]);
+      assert.equal(base.code, 0, `--spec-from was resolved against --cwd: ${base.raw}`);
+      assert.deepEqual(base.json.ids, head.json.ids);
+    },
+  },
+];
+
+test("✧ L34/L52 — the path-operand set is counted, so an emptied list cannot pass vacuously", () => {
+  assert.equal(PATH_OPERANDS.length, 4);
+  assert.deepEqual(PATH_OPERANDS.map((p) => p.operand).sort(), ["--discover", "--out", "--scope-json", "--spec-from"]);
+});
+
+for (const p of PATH_OPERANDS) {
+  test(`PATH RESOLUTION — ${p.operand} resolves against the INVOKING directory, not --cwd`, () => {
+    withRepo(
+      (dir) => {
+        subRepo(dir);
+        p.check(dir);
+      },
+      { scripts: { test: "true" } }
+    );
+  });
+}
+
+test("--cwd still decides where the gates RUN (the half of its meaning that stays)", () => {
+  withRepo(
+    (dir) => {
+      subRepo(dir);
+      cli(dir, ["init", "--stage", "verify", "--feature", FEATURE, "--out", OUT, "--gates", "pwd::where", "--cwd", SUB]);
+      drain(dir);
+      const where = readFileSync(join(dir, OUT, "0-where.out"), "utf8").trim();
+      assert.equal(where.split("/").pop(), SUB, `the gate ran in ${where}, not in --cwd`);
+      assert.equal(stamp(dir).finalized, true);
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+/** Stand up a real base worktree at /pharn-regress's literal path, from a repo with one commit. */
+function withBaseWorktree(fn) {
+  return withRepo(
+    (dir) => {
+      const sha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
+      mkdirSync(join(dir, ".pharn/pharn-regress"), { recursive: true });
+      writeFileSync(
+        join(dir, ".pharn/pharn-regress/scope.json"),
+        JSON.stringify({ escaped: [], outside_tests: [], outside_eval_pairs: [] })
+      );
+      return fn(dir, sha);
+    },
+    { scripts: { test: "true", lint: "true" } }
+  );
+}
+
+test("the regress PAIR end to end through a real git worktree: the base stamp lands in the invoking state root", () => {
+  withBaseWorktree((dir, sha) => {
+    execFileSync("git", ["worktree", "add", "-q", "--detach", ".pharn/pharn-regress/base", sha], { cwd: dir });
+    assert.equal(cli(dir, regressHead(".pharn/pharn-regress/head", [], ".pharn/pharn-regress/scope.json")).code, 0);
+    const base = cli(dir, [
+      "init",
+      "--stage",
+      "regress",
+      "--side",
+      "base",
+      "--feature",
+      FEATURE,
+      "--out",
+      ".pharn/pharn-regress/base-gates",
+      "--spec-from",
+      ".pharn/pharn-regress/head",
+      "--cwd",
+      ".pharn/pharn-regress/base",
+    ]);
+    assert.equal(base.code, 0, `the base init refused: ${base.raw}`);
+    for (const out of [".pharn/pharn-regress/head", ".pharn/pharn-regress/base-gates"]) {
+      for (let i = 0; i < 10; i++) {
+        const r = cli(dir, ["run", "--next", "--out", out, "--timeout-ms", "30000"]);
+        assert.notEqual(r.code, 2, `the ${out} drain hit a runner error: ${r.raw}`);
+        if (r.code === 3) break;
+      }
+    }
+    const baseStamp = join(dir, ".pharn/pharn-regress/base-gates/stamp.json");
+    assert.ok(existsSync(baseStamp), "the base stamp is not in the invoking directory's state root");
+    // Negative control: the pre-fix location, INSIDE the base worktree, stays empty.
+    assert.ok(!existsSync(join(dir, ".pharn/pharn-regress/base/.pharn")), "a record was written inside the base worktree");
+    const s = JSON.parse(readFileSync(baseStamp, "utf8"));
+    assert.equal(s.head, sha, "the base stamp must record the base worktree's HEAD");
+    assert.equal(s.side, "base");
+    assert.equal(s.finalized, true);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
+// ★ WIRING — the COMMITTED /pharn-regress lines, executed (lessons-learned L45)
+//
+// The fix lives in this runner; the file that INVOKES it is `.claude/commands/pharn-regress.md`, and a
+// suite that only spawns the runner by path cannot see a gap between the two. So the pinned lines are
+// EXTRACTED from the command and run, one block per shell (L44), with only their placeholders substituted.
+//
+// Fixture-supplied, and named here rather than implied: `.pharn/pharn-regress/scope.json` (the Step-3
+// `scope` line's operands are placeholder LISTS, and that partition is not what this pins) and the floor
+// modules the lines invoke, copied into the fixture so `node pharn/floor/…` resolves as it does in a repo.
+// ---------------------------------------------------------------------------------------------------
+
+const REGRESS_CMD = join(HERE, "..", "..", ".claude", "commands", "pharn-regress.md");
+const FLOOR_MODULES = ["run-gates.mjs", "gate-run-core.mjs", "worktree-fingerprint.mjs", "reconcile-baseline.mjs", "check-regress.mjs"];
+
+/** Fenced blocks of a command, as arrays of lines. */
+function fencedBlocks(text) {
+  const blocks = [];
+  let cur = null;
+  for (const line of text.split(/\r?\n/)) {
+    if (/^\s*```/.test(line)) {
+      if (cur) {
+        blocks.push(cur);
+        cur = null;
+      } else cur = [];
+      continue;
+    }
+    if (cur) cur.push(line);
+  }
+  return blocks;
+}
+
+/** Exactly ONE block matching `re`, as the text a shell receives. */
+function pinned(blocks, re, label) {
+  const hits = blocks.filter((b) => re.test(b.join("\n")));
+  assert.equal(hits.length, 1, `expected exactly one pinned ${label} block in pharn-regress.md, found ${hits.length}`);
+  return hits[0].join("\n");
+}
+
+test("★ WIRING — /pharn-regress's COMMITTED base-side lines produce a base stamp and a verdict (L45)", () => {
+  const blocks = fencedBlocks(readFileSync(REGRESS_CMD, "utf8"));
+  const lines = {
+    worktreeAdd: pinned(blocks, /^git worktree add --detach \.pharn\/pharn-regress\/base /m, "worktree add"),
+    headInit: pinned(blocks, /run-gates\.mjs init --stage regress --side head\b/, "head init"),
+    baseInit: pinned(blocks, /run-gates\.mjs init --stage regress --side base\b/, "base init"),
+    headDrain: pinned(blocks, /run-gates\.mjs run --next --out \.pharn\/pharn-regress\/head /, "head drain"),
+    baseDrain: pinned(blocks, /run-gates\.mjs run --next --out \.pharn\/pharn-regress\/base-gates /, "base drain"),
+    verdict: pinned(blocks, /check-regress\.mjs verdict/, "verdict"),
+    remove: pinned(blocks, /^git worktree remove --force \.pharn\/pharn-regress\/base\s*$/m, "worktree remove"),
+  };
+  assert.match(
+    lines.baseInit,
+    /--cwd \.pharn\/pharn-regress\/base\b/,
+    "the pinned base init no longer passes --cwd — this test pins the wrong line"
+  );
+
+  withBaseWorktree((dir, sha) => {
+    mkdirSync(join(dir, "pharn/floor"), { recursive: true });
+    for (const m of FLOOR_MODULES) copyFileSync(join(HERE, m), join(dir, "pharn/floor", m));
+    execFileSync("git", ["add", "-A"], { cwd: dir });
+    execFileSync("git", ["commit", "-qm", "floor"], { cwd: dir });
+    const base = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
+    assert.notEqual(base, sha, "precondition: the floor copy is committed, so the base worktree carries it");
+
+    const sub = (text) => {
+      const out = text
+        .replaceAll("<name>", FEATURE)
+        .replaceAll("<base SHA>", base)
+        .replaceAll("<the resolved 40-hex base SHA>", base)
+        .replaceAll("<inside, comma-separated>", "a.txt");
+      assert.doesNotMatch(out, /<[a-z][^>]*>/, `an unsubstituted placeholder remains in: ${out}`);
+      return out;
+    };
+    const sh = (text) => spawnSync("sh", ["-c", sub(text)], { cwd: dir, encoding: "utf8" });
+    const drainPinned = (text) => {
+      for (let i = 0; i < 10; i++) {
+        const r = sh(text);
+        assert.notEqual(r.status, 2, `a pinned drain hit a runner error: ${r.stdout}${r.stderr}`);
+        if (r.status === 3) return;
+      }
+      assert.fail("a pinned drain never reported nothing-left");
+    };
+
+    assert.equal(sh(lines.worktreeAdd).status, 0, "the pinned worktree line failed");
+    let r = sh(lines.headInit);
+    assert.equal(r.status, 0, `the pinned head init failed: ${r.stdout}`);
+    r = sh(lines.baseInit);
+    assert.equal(r.status, 0, `the pinned BASE init failed — the defect this increment repairs: ${r.stdout}`);
+    drainPinned(lines.headDrain);
+    drainPinned(lines.baseDrain);
+    // Negative control: nothing landed at the pre-fix location inside the worktree.
+    assert.ok(!existsSync(join(dir, ".pharn/pharn-regress/base/.pharn")), "a record was written inside the base worktree");
+
+    r = sh(lines.verdict);
+    assert.equal(r.status, 0, `the pinned verdict failed: ${r.stdout}`);
+    assert.equal(JSON.parse(r.stdout).verdict, "no-regressions");
+
+    // The stamp outlives the worktree Step 6 removes, so a later reader of the regress evidence finds it.
+    assert.equal(sh(lines.remove).status, 0, "the pinned worktree removal failed");
+    assert.ok(!existsSync(join(dir, ".pharn/pharn-regress/base")), "the worktree was not removed");
+    r = sh(lines.verdict);
+    assert.equal(r.status, 0, `the verdict no longer reproduces after the worktree removal: ${r.stdout}`);
+  });
 });
