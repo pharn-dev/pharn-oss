@@ -1,0 +1,32 @@
+{
+  "base": "760c5decbfa2fb8f902d621b0cbeec0015254c68",
+  "inside": [
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-ship.md",
+    ".dev/features/run-report-ledger-honesty/GRILL.md",
+    ".dev/features/run-report-ledger-honesty/PLAN.md",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/render-run-report.mjs",
+    "pharn/floor/render-run-report.test.mjs"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

@@ -427,7 +427,13 @@ node pharn/floor/check-cost-ledger.mjs <cost.json> [--verify-transcript]
 # The write is a BASH write outside fix #7 (L19), declared in the plan and exempt under pipeline_artifacts.
 # Ships: bumps SKILLS_VERSION. Exit: 0 rendered (an honest `n/a` section is still success) · 2 unusable
 # input (no/!slug <name>, or no feature directory) — fail-closed, nothing written.
-node pharn/floor/render-run-report.mjs <name> [--base <dir>] [--repo <dir>] [--stdout]
+# 6.9.2: two more ledger states are rendered HONESTLY. (1) coverage `unavailable` under a KNOWN window →
+# "Run usage: UNAVAILABLE — not measured, and NOT a zero" + the coverage_note quoted, never a measured
+# empty window. (2) a STALE ledger — the live markers' latest run-start (seq AND ts; identity, so a reset
+# .pharn/ cannot fool it) is not the one cost.json recorded — means a later run's emission failed; the
+# report renders STALE LEDGER and never shows that file's outcome/tokens/base as this run's. With no live
+# markers file it says "currency not checked". check-cost-ledger stays GREEN on a stale file (consistency only).
+node pharn/floor/render-run-report.mjs <name> [--base <dir>] [--repo <dir>] [--markers-base <dir>] [--stdout]
 
 # Render / cross-verify the GATE-2 briefing artifact (pharn/features/<name>/BRIEFING.md) /pharn-ship writes
 # alongside SHIP.md. render-ship-briefing.mjs is Node stdlib only, no LLM call: every enum-gated

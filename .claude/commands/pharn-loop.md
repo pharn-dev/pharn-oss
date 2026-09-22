@@ -437,6 +437,12 @@ node pharn/floor/check-cost-ledger.mjs pharn/features/<name>/cost.json
 
 Keep the emitter's printed table for Step 7 and the checker's output for the summary.
 
+**If the emitter exits non-zero, no ledger was emitted THIS run.** Any `cost.json` present then belongs
+to an earlier run: the checker can be GREEN on it, but its output is not this run's. Say "no ledger was
+emitted this run" in the summary instead. The render below still runs. It detects the mismatch against
+the live markers and renders **STALE LEDGER**. This instruction is ADVISORY, and the renderer's comparison
+is the backstop.
+
 **Then render the human-readable run report**, on the same every-stop-with-a-feature-directory rule:
 
 ```bash

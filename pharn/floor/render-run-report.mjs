@@ -75,7 +75,7 @@
 // silence and asserted-silence are different claims).
 //
 // Usage:
-//   node pharn/floor/render-run-report.mjs <name> [--base <dir>] [--repo <dir>] [--stdout]
+//   node pharn/floor/render-run-report.mjs <name> [--base <dir>] [--repo <dir>] [--markers-base <dir>] [--stdout]
 //
 // Exit: 0 — the report was rendered (an honest `n/a` in any section is still a success).
 //       2 — unusable input: no `<name>`, a `<name>` that is not a plain slug, or the feature dir is
@@ -84,7 +84,8 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
-import { FEATURE_BASE, TOKEN_CLASSES, LEGACY_SCHEMA, SHIP_COMMAND } from "./render-cost-ledger.mjs";
+import { FEATURE_BASE, TOKEN_CLASSES, LEGACY_SCHEMA, SHIP_COMMAND, readMarkers, normalizeMarkers } from "./render-cost-ledger.mjs";
+import { DEFAULT_BASE as MARKERS_DEFAULT_BASE } from "./mark-phase.mjs";
 import { verdictApplicability, APPLICABILITY } from "./ship-outcome-core.mjs";
 import { handoffSections, fenceFor, HANDOFF_SECTIONS } from "./loop-record-core.mjs";
 import { pathsFromPlanFiles } from "./plan-files-core.mjs";
@@ -275,7 +276,8 @@ const lines = (s) =>
 
 // ── section renderers ────────────────────────────────────────────────────────────────────────────────
 
-function outcomeSection(cost) {
+function outcomeSection(cost, absentReason = null) {
+  if (absentReason) return na(absentReason);
   if (!cost) return na("no cost.json — a stop before the ledger was emitted records no outcome here");
   const o = cost.outcome;
   const rows = [
@@ -382,11 +384,27 @@ function measurementLabel(cost) {
     `selected session   ${m.session ?? "none"}`,
     `excluded requests  ${m.excluded_requests === null || m.excluded_requests === undefined ? "n/a — nothing was measured" : m.excluded_requests}`,
   ].join("\n");
+  const note = typeof cost.coverage_note === "string" && cost.coverage_note ? cost.coverage_note : "(none recorded)";
   if (status === "unknown") {
     return [
       "**Run usage: UNKNOWN — this is NOT a zero.** The run's boundary could not be established from its",
       "markers, so NO session request is reported as run usage. The reason is recorded in `cost.json`'s",
       "`membership.reason`.",
+      "",
+      quoteData("", facts).trimStart(),
+      "",
+      quoteData("coverage_note, quoted as DATA:", note).trimStart(),
+    ];
+  }
+  // A KNOWN window whose transcript could not be read (6.9.2, integration-review F1). The window was
+  // bounded, but nothing inside it was MEASURED — so this must not render as a measured-and-empty window,
+  // which a reader takes for a zero. Branches on `coverage` (the structured field), never on the note.
+  if (cost.coverage === "unavailable") {
+    return [
+      "**Run usage: UNAVAILABLE — not measured, and NOT a zero.** The run window below is known, but no",
+      "transcript could be read for it, so no request inside it was counted. The ledger says why:",
+      "",
+      quoteData("coverage_note, quoted as DATA:", note).trimStart(),
       "",
       quoteData("", facts).trimStart(),
     ];
@@ -403,10 +421,12 @@ function measurementLabel(cost) {
   ];
 }
 
-function tokensSection(cost) {
+function tokensSection(cost, absentReason = null) {
+  if (absentReason) return na(absentReason);
   if (!cost) return na("no cost.json — no token ledger was emitted for this run");
   const label = measurementLabel(cost);
   if (membershipStatus(cost) === "unknown") return label.join("\n");
+  if (cost.coverage === "unavailable" && membershipStatus(cost) !== "legacy-session-scoped") return label.join("\n");
   const rows = Array.isArray(cost.by_stage_iteration_model) ? cost.by_stage_iteration_model : [];
   if (rows.length === 0) {
     const why =
@@ -461,7 +481,8 @@ function tokensSection(cost) {
   ].join("\n");
 }
 
-function filesSection({ cost, repo, planEntries, dirtyBefore, dirtyNote }) {
+function filesSection({ cost, repo, planEntries, dirtyBefore, dirtyNote, absentReason = null }) {
+  if (absentReason) return na(absentReason);
   const base = cost && typeof cost.base_sha === "string" ? cost.base_sha : null;
   if (!base) return na("no cost.json, so no base SHA to diff against");
   if (base === "unknown") {
@@ -542,10 +563,17 @@ function applicabilityLabel(cost) {
   return [head, tail, ...legacy, "", quoteData("", `applicability  ${app.status}\nreason         ${app.reason ?? "none"}`).trimStart(), ""];
 }
 
-function verdictsSection({ verify, regress, cost }) {
+function verdictsSection({ verify, regress, cost, stale = false }) {
   const iters = cost && cost.outcome && cost.outcome.iterations;
   const label = typeof iters === "number" ? `iteration ${iters} (final)` : "the final iteration";
   const out = [
+    ...(stale
+      ? [
+          "**No current ledger — see STALE LEDGER above.** The reports below are simply the files in this",
+          "directory; with no ledger for this run, nothing binds them to it.",
+          "",
+        ]
+      : []),
     ...applicabilityLabel(cost),
     `**${label} only.** ${commandLabel(cost)} OVERWRITES \`verify-report.json\` and \`regression-report.json\``,
     "in place whenever it re-runs those stages, so earlier iterations' verdicts are not on disk at the",
@@ -667,12 +695,56 @@ function handoffSection(loopText, cost) {
  * @param {{base?: string, repo?: string}} [opts] `base` defaults to the IMPORTED `FEATURE_BASE`
  * @returns {string}
  */
+/** The latest `run-start` in a marker list (by `seq`), as `{seq, ts}`, or `null`. */
+function latestRunStart(markers) {
+  let best = null;
+  for (const m of normalizeMarkers(markers)) if (m.kind === "run-start" && (best === null || m.seq > best.seq)) best = m;
+  return best === null ? null : { seq: best.seq, ts: best.ts };
+}
+
+/**
+ * Is `cost.json` the CURRENT run's ledger? (6.9.2, integration-review F2.)
+ *
+ * A failed emission leaves the PREVIOUS run's `cost.json` on disk; `check-cost-ledger.mjs` is GREEN on it,
+ * because internal consistency is all it certifies ([[L43]]), and this report used to render it as the
+ * current run's. So the ledger is bound to its referent: the LIVE markers file's latest `run-start` must
+ * be the SAME marker (`seq` AND `ts` — identity, not "greater", so a reset `.pharn/` that restarts `seq`
+ * cannot make an old ledger read as current, GRILL finding 1) as the latest one the ledger recorded.
+ *
+ *  - `current`   — identical latest run-start.
+ *  - `stale`     — they differ, or the live file has one and the ledger recorded none: a later run started
+ *                  and wrote no ledger of its own.
+ *  - `unchecked` — no live markers file / no live run-start: nothing to bind against, stated, never
+ *                  treated as proven current ([[L34]]).
+ *
+ * BOUND: blind when the failed run wrote no `run-start` either. Markers are advisory (Bash-written).
+ * Never uses a file's mtime ([[L42]]).
+ */
+export function ledgerCurrency(cost, liveMarkers) {
+  const live = latestRunStart(liveMarkers);
+  if (live === null) return { state: "unchecked", reason: "no live run-start marker to compare against" };
+  const rec = latestRunStart(cost && Array.isArray(cost.markers) ? cost.markers : []);
+  if (rec !== null && rec.seq === live.seq && rec.ts === live.ts) return { state: "current", reason: null };
+  return {
+    state: "stale",
+    reason: `the live markers' latest run-start (seq ${live.seq}) is not the one this cost.json recorded (${rec === null ? "none" : `seq ${rec.seq}`}) — a later run started and emitted no ledger of its own`,
+  };
+}
+
 export function renderRunReport(name, opts = {}) {
   const repo = opts.repo ?? ".";
   const base = opts.base ?? FEATURE_BASE;
   const dir = join(repo, base, name);
+  // The live markers, under the ONE markers default (`mark-phase.mjs`'s DEFAULT_BASE) resolved against
+  // `repo` — no second literal here (L41).
+  const markersBase = opts.markersBase ?? join(repo, MARKERS_DEFAULT_BASE);
 
   const cost = readJson(join(dir, "cost.json"));
+  const currency = cost ? ledgerCurrency(cost, readMarkers(join(markersBase, name, "markers.jsonl"))) : null;
+  const staleReason =
+    currency && currency.state === "stale"
+      ? "STALE LEDGER — cost.json describes an EARLIER run, not this one; its values are not shown as current"
+      : null;
   const verify = readJson(join(dir, "verify-report.json"));
   const regress = readJson(join(dir, "regression-report.json"));
 
@@ -713,12 +785,29 @@ export function renderRunReport(name, opts = {}) {
     "judgment that the change is good, correct, or worth its cost.",
     "",
   ];
+  if (currency && currency.state === "stale") {
+    parts.push(
+      "**STALE LEDGER.** The `cost.json` in this directory belongs to an EARLIER run: this run emitted no",
+      "ledger of its own (its emission failed or was skipped). Its outcome, tokens and base are therefore",
+      "NOT shown as this run's. `check-cost-ledger.mjs` can still be GREEN on that file — it certifies",
+      "internal consistency, never which run the file describes.",
+      "",
+      quoteData("", `currency  stale\nreason    ${currency.reason}`).trimStart(),
+      ""
+    );
+  } else if (currency && currency.state === "unchecked") {
+    parts.push(
+      "_Ledger currency not checked — no live phase-marker file with a run-start was found, so whether",
+      "`cost.json` belongs to this run could not be established._",
+      ""
+    );
+  }
 
   const bodyBySection = {
-    "## Outcome": outcomeSection(cost),
-    "## Tokens — stage x iteration x model": tokensSection(cost),
-    "## Files": filesSection({ cost, repo, planEntries, dirtyBefore, dirtyNote }),
-    "## Verdicts": verdictsSection({ verify, regress, cost }),
+    "## Outcome": outcomeSection(cost, staleReason),
+    "## Tokens — stage x iteration x model": tokensSection(cost, staleReason),
+    "## Files": filesSection({ cost, repo, planEntries, dirtyBefore, dirtyNote, absentReason: staleReason }),
+    "## Verdicts": verdictsSection({ verify, regress, cost: staleReason ? null : cost, stale: Boolean(staleReason) }),
     "## Briefing": briefingSection({ dir }),
     "## What the run ran into": handoffSection(loopText, cost),
   };
@@ -759,13 +848,13 @@ function main(argv) {
   }
   const name = positional[0];
   if (!name || !SLUG_RE.test(name)) {
-    console.error("RUN-REPORT: usage: render-run-report.mjs <name> [--base <dir>] [--repo <dir>] [--stdout]");
+    console.error("RUN-REPORT: usage: render-run-report.mjs <name> [--base <dir>] [--repo <dir>] [--markers-base <dir>] [--stdout]");
     console.error("RUN-REPORT: <name> must be a plain slug (a-z, 0-9, hyphen). Nothing written.");
     process.exit(2);
   }
   const repo = flag(argv, "--repo") ?? ".";
   // NO second default: `--base` absent means `renderRunReport`'s own `?? FEATURE_BASE` decides (L41/L52).
-  const opts = { repo, base: flag(argv, "--base") };
+  const opts = { repo, base: flag(argv, "--base"), markersBase: flag(argv, "--markers-base") ?? undefined };
   const dir = join(repo, opts.base ?? FEATURE_BASE, name);
   if (!existsSync(dir)) {
     console.error(`RUN-REPORT: no feature directory at ${dir} — nothing written.`);

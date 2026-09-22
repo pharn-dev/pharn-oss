@@ -662,6 +662,15 @@ resolve that question — it simply does not depend on the answer.
    same. Contract: [`pharn/pharn-contracts/cost-ledger.md`](../../pharn/pharn-contracts/cost-ledger.md),
    cited not restated (P4).
 
+   **If the emitter exits non-zero, no ledger was emitted THIS run.** Any `cost.json` still in the
+   directory belongs to an EARLIER run. `check-cost-ledger.mjs` can be GREEN on it, because it certifies
+   internal consistency, never which run a file describes. So do not present that check's output as this
+   run's ledger: say "no ledger was emitted this run" instead. Still run step 4.
+   `render-run-report.mjs` compares the ledger's latest `run-start` with the live markers' own. When they
+   differ, it renders **STALE LEDGER** and never shows the old outcome or tokens as this run's. This
+   instruction is **ADVISORY**. The renderer's comparison is the code-level backstop. It is blind only
+   when the failed run wrote no `run-start` either.
+
    **`outcome` is DERIVED here, not declared, and the two halves differ in strength (P0).**
    `/pharn-ship` writes no `LOOP.md`, so the ledger falls through to `pharn/floor/ship-outcome-core.mjs`,
    which reads this run's own verdict reports and phase markers — **never `SHIP.md` prose**, which is a
