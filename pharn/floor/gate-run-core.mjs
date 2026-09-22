@@ -29,10 +29,12 @@
 //   • no tree edit happened between consecutive gate runs (fp_after[k-1] === fp_before[k]);
 //   • `reconcile`, when present, ran LAST.
 //
-// NOT PROVEN, and each is stated because the gap is where the disease lives (P0):
+// NOT PROVEN BY A STAMP ALONE, and each is stated because the gap is where the disease lives (P0):
 //   • FRESHNESS — that the tree still matches `fingerprint.final` at the moment a verdict is read. The
-//     field is WRITTEN here and COMPARED by a later increment; nothing in this file compares it.
-//   • that the stage ran at all, or that the report on disk is the checker's own output.
+//     field is WRITTEN here and COMPARED by check-loop-fresh.mjs (6.10.0), at /pharn-loop's decision and
+//     commit gate; nothing in THIS file compares it.
+//   • that the stage ran at all, or that the report on disk is the checker's own output — check-loop-fresh
+//     narrows both (report↔stamp hash binding, a live verdict re-derivation), never proves provenance.
 //   • WHO wrote an explicit `--gates` string. Only `source` ("explicit" | "discover") is recorded.
 //   • FORGERY. **This certifies INTERNAL CONSISTENCY, never provenance — a self-consistent fabricated
 //     stamp passes, and a test builds one to prove it rather than leaving the bound as prose**
@@ -77,12 +79,12 @@ export const RESERVED_IDS = Object.freeze(["reconcile", "completeness"]);
 /** The `structural:` prefix belongs to `--extra` entries alone. */
 export const STRUCTURAL_PREFIX = "structural:";
 
-/** The CLOSED reason_code vocabulary. Every refusal in this module, in run-gates.mjs and in both
- *  checkers' stamp paths carries exactly one member. It is an ENUM and not prose so a later increment can
- *  map the orchestration-lapse codes (`stamp-missing`, `stamp-unfinalized`, `tree-changed-between-gates`)
- *  to "re-run the stage" rather than to a terminal stop. A closure test collects every literal the three
- *  modules emit and requires each to be a member (L36: a per-member presence set is not a closed set —
- *  a parameterized value acquires variant spellings, and presence certifies the one its author saw). */
+/** The CLOSED reason_code vocabulary. Every refusal in this module, in run-gates.mjs, in both checkers'
+ *  stamp paths and in check-loop-fresh.mjs carries exactly one member. It is an ENUM and not prose so
+ *  check-loop-fresh.mjs can map the orchestration-lapse subset (LAPSE_CODES, below) to "re-run the stage"
+ *  rather than to a terminal stop. The closure is tested BOTH ways (L36): every literal the modules emit
+ *  is a member, AND every member has an emitter or an entry in RESERVED_REASON_CODES — the second
+ *  direction is what let `output-hash-mismatch` sit here with no emitter for a whole release line. */
 export const REASON_CODES = Object.freeze([
   "bad-extra",
   "bad-gates",
@@ -93,10 +95,18 @@ export const REASON_CODES = Object.freeze([
   "empty-source-set",
   "entry-not-run",
   "feature-mismatch",
+  "front-stage-red",
+  "ledger-malformed",
   "lock-busy",
   "output-hash-mismatch",
   "path-containment",
   "reconcile-not-last",
+  "regress-verify-tree-mismatch",
+  "report-malformed",
+  "report-missing",
+  "report-stamp-unbound",
+  "report-verdict-mismatch",
+  "rerun-budget-exhausted",
   "side-mismatch",
   "spec-mismatch",
   "stage-mismatch",
@@ -104,10 +114,40 @@ export const REASON_CODES = Object.freeze([
   "stamp-missing",
   "stamp-unfinalized",
   "tree-changed-between-gates",
+  "tree-moved-since-verify",
   "usage-error",
 ]);
 
+/** The ORCHESTRATION-LAPSE subset: a report or stamp carrying one of these means the runner never produced
+ *  one finished stamp for the current state, so the answer is "re-run the stage", never a terminal stop.
+ *  The contract named the first three; `entry-not-run` joins them because validateStamp names it
+ *  separately from the malformed class for exactly this routing (a runner that stopped mid-drain), and
+ *  `lock-busy` because two runner invocations contending is orchestration, not input. Deliberately NOT
+ *  here: `usage-error` (it also covers a hand-passed `--complete` disagreeing with the stamp), every
+ *  `*-mismatch` / `stamp-malformed` / `coverage-violation` / `reconcile-not-last` (a stamp that exists and
+ *  is WRONG is evidence to stop on), and `path-containment` / `bad-*` (configuration a re-run reproduces). */
+export const LAPSE_CODES = Object.freeze([
+  "entry-not-run",
+  "lock-busy",
+  "stamp-missing",
+  "stamp-unfinalized",
+  "tree-changed-between-gates",
+]);
+
+/** Members kept in the vocabulary with NO emitter, each with its reason. The reverse closure test requires
+ *  every member to have an emitter or an entry here, so an orphan cannot sit unnoticed (the shape
+ *  `output-hash-mismatch` had until check-loop-fresh.mjs's check J). Empty today, and that is asserted. */
+export const RESERVED_REASON_CODES = Object.freeze({});
+
 const REASON_SET = new Set(REASON_CODES);
+
+/** The basename (no extension) of a gate's log files under `<out>/`: `<seq>-<id>` with every byte outside
+ *  `[A-Za-z0-9._-]` mapped to `_`. ONE copy (L35): run-gates.mjs WRITES `<basename>.out` / `.err` from it,
+ *  and check-loop-fresh.mjs re-hashes the same names, so the two cannot disagree about which file a
+ *  recorded `stdout_sha256` describes. Pure string work — no filesystem. */
+export function logBasename(seq, id) {
+  return `${seq}-${String(id).replace(/[^A-Za-z0-9._-]/g, "_")}`;
+}
 
 /** Is `code` a member of the closed vocabulary? Used by the CLI and both checkers before emitting. */
 export function isReasonCode(code) {
@@ -443,7 +483,7 @@ export function validateStamp(stamp, expect = {}) {
         return err("stamp-malformed", `stamp.runs[${i}].${k} must be a sha256 hex digest`);
     }
     // An entry that never ran is a stamp that must not have been finalized. Named separately from the
-    // malformed class so a later increment can route it to "re-run the stage".
+    // malformed class so check-loop-fresh.mjs routes it to "re-run the stage" (it is in LAPSE_CODES).
     if (r.ran === false && r.reason !== "no-files") {
       return err("entry-not-run", `stamp.runs[${i}] (${r.id}) never ran and carries no 'no-files' reason`);
     }

@@ -16,6 +16,9 @@ import {
   STYLE_SET,
   RESERVED_IDS,
   REASON_CODES,
+  LAPSE_CODES,
+  RESERVED_REASON_CODES,
+  logBasename,
   STRUCTURAL_PREFIX,
   SCHEMA,
   STAGES,
@@ -41,6 +44,23 @@ import {
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..");
 const read = (rel) => readFileSync(join(REPO, rel), "utf8");
+
+/** Every reason_code LITERAL written at a `fail("…"` / `err("…"` / `reason_code: "…"` site across the modules
+ *  that emit the vocabulary. One scan, used by BOTH closure directions. */
+const EMITTING_MODULES = [
+  "pharn/floor/gate-run-core.mjs",
+  "pharn/floor/run-gates.mjs",
+  "pharn/floor/check-verify.mjs",
+  "pharn/floor/check-regress.mjs",
+  "pharn/floor/check-loop-fresh.mjs",
+];
+function emittedReasonCodes() {
+  const found = new Set();
+  for (const rel of EMITTING_MODULES) {
+    for (const m of read(rel).matchAll(/(?:\b(?:fail|err)\(\s*|reason_code:\s*)"([a-z][a-z0-9-]*)"/g)) found.add(m[1]);
+  }
+  return found;
+}
 
 /** A minimal VALID stamp. Every malformed-case test below mutates exactly one field of this, so each
  *  assertion is attributable to the field it names rather than to a second defect in the fixture. */
@@ -123,21 +143,61 @@ test("✧ L36 CLOSURE — every reason_code LITERAL the shipped modules emit is 
   // A per-member PRESENCE set would certify only the spellings its author looked at. This collects every
   // literal actually written at a `reason_code:`-shaped site across the whole surface and requires
   // membership, so a VARIANT of ANY member fails rather than only the one that happened to drift.
-  const sources = [
-    "pharn/floor/gate-run-core.mjs",
-    "pharn/floor/run-gates.mjs",
-    "pharn/floor/check-verify.mjs",
-    "pharn/floor/check-regress.mjs",
-  ];
-  const found = new Set();
-  for (const rel of sources) {
-    const text = read(rel);
-    // `fail("<code>"` / `err("<code>"` / `reason_code: "<code>"`
-    for (const m of text.matchAll(/(?:\b(?:fail|err)\(\s*|reason_code:\s*)"([a-z][a-z0-9-]*)"/g)) found.add(m[1]);
-  }
+  const found = emittedReasonCodes();
   assert.ok(found.size > 0, "the closure scan found no reason_code literals — the scan broke, not the code");
   const strays = [...found].filter((c) => !isReasonCode(c)).sort();
   assert.deepEqual(strays, [], `these emitted reason_code literals are not members of REASON_CODES: ${strays.join(", ")}`);
+});
+
+test("✧ L36 REVERSE CLOSURE — every REASON_CODES member has an EMITTER or a RESERVED entry with a reason", () => {
+  // The direction the test above cannot see: a member with no emitter passes "emitted ⊆ members" for free.
+  // That is exactly how `output-hash-mismatch` sat in the vocabulary with no emitter for a release line.
+  const found = emittedReasonCodes();
+  const reserved = Object.keys(RESERVED_REASON_CODES);
+  for (const c of reserved) {
+    assert.ok(isReasonCode(c), `reserved ${c} is not a member`);
+    assert.equal(typeof RESERVED_REASON_CODES[c], "string", `reserved ${c} carries no reason`);
+    assert.ok(!found.has(c), `${c} is both reserved and emitted — drop the reservation`);
+  }
+  const orphans = REASON_CODES.filter((c) => !found.has(c) && !reserved.includes(c));
+  assert.deepEqual(orphans, [], `these members have no emitter and no reserved-with-reason entry: ${orphans.join(", ")}`);
+  assert.deepEqual(reserved, [], "RESERVED_REASON_CODES is empty today; a reservation must be deliberate and this test updated");
+});
+
+test("✧ L36 REVERSE CLOSURE discriminates — an unemitted, unreserved member is caught", () => {
+  const found = emittedReasonCodes();
+  const orphan = [...REASON_CODES, "zz-never-emitted"].filter((c) => !found.has(c) && !Object.hasOwn(RESERVED_REASON_CODES, c));
+  assert.deepEqual(orphan, ["zz-never-emitted"]);
+});
+
+test("LAPSE_CODES is a sorted subset of REASON_CODES, and the stop-class codes are NOT in it (L52: every member)", () => {
+  assert.deepEqual([...LAPSE_CODES].sort(), [...LAPSE_CODES]);
+  for (const c of LAPSE_CODES) assert.ok(isReasonCode(c), `lapse ${c} is not a member`);
+  // The routing boundary is the point: these must NOT be lapses (a re-run would paper over them).
+  for (const c of [
+    "usage-error",
+    "stamp-malformed",
+    "coverage-violation",
+    "reconcile-not-last",
+    "base-head-mismatch",
+    "empty-source-set",
+    "output-hash-mismatch",
+    "report-verdict-mismatch",
+  ]) {
+    assert.ok(!LAPSE_CODES.includes(c), `${c} must not be a lapse`);
+  }
+  // The three the contract named are all present.
+  for (const c of ["stamp-missing", "stamp-unfinalized", "tree-changed-between-gates"]) assert.ok(LAPSE_CODES.includes(c));
+});
+
+test("logBasename is the runner's log naming rule, and run-gates.mjs keeps no second copy of it (L35)", () => {
+  assert.equal(logBasename(0, "test"), "0-test");
+  assert.equal(logBasename(3, "format:check"), "3-format_check");
+  assert.equal(logBasename(5, "structural:a/b c.json"), "5-structural_a_b_c.json");
+  assert.ok(
+    !read("pharn/floor/run-gates.mjs").includes("[^A-Za-z0-9._-]"),
+    "run-gates.mjs re-implements the log naming instead of importing it"
+  );
 });
 
 test("✧ L36 CLOSURE discriminates — an injected variant spelling FAILS the scan", () => {

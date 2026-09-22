@@ -1369,6 +1369,7 @@ const STUCK_POINTS = [
   { id: "S8", blocked: "seam-unresolved" },
   { id: "S9", blocked: "stage-refused" },
   { id: "S10", blocked: "unlisted-ask" },
+  { id: "S11", blocked: "stale-evidence" },
 ];
 // The one non-member spelling the closure admits: the command's own placeholder in generic prose.
 const BLOCKED_PLACEHOLDER = "<id>";
@@ -1377,6 +1378,7 @@ const COMMIT_OUTCOMES = [
   "committed <branch>",
   "not committed: <decision>",
   "not committed: decision unverifiable",
+  "not committed: evidence stale",
   "not committed: nothing staged",
   "not committed: branch failed",
   "not committed: stage failed",
@@ -1467,7 +1469,7 @@ function forbiddenGitOffenders(body) {
 }
 
 test("✧ L34 — the /pharn-loop sets are non-empty and well-formed (the rules below cannot pass vacuously)", () => {
-  assert.equal(STUCK_POINTS.length, 10, "the stuck-point table is S1–S10");
+  assert.equal(STUCK_POINTS.length, 11, "the stuck-point table is S1–S11");
   assert.equal(new Set(STUCK_POINTS.map((s) => s.id)).size, STUCK_POINTS.length, "duplicate stuck-point id");
   assert.ok(COMMIT_OUTCOMES.length > 0, "the commit-outcome set is empty");
   assert.ok(fencedLines(commandBody(LOOP_FILE)).length > 0, `found no fenced lines in ${LOOP_FILE} — the fence scan broke`);
@@ -1511,6 +1513,68 @@ test("✧ no fenced line in /pharn-loop spells a known `git push`, `git merge` o
 
 test("✧ no fenced block in /pharn-loop reads a shell variable it did not assign — each block is its own shell", () => {
   assert.deepEqual(crossBlockVariableOffenders(commandBody(LOOP_FILE)), []);
+});
+
+// ── FRESHNESS WIRING (L45/L22): the loop reads the stop only after check-loop-fresh.mjs, and commits only
+// after it runs again at the commit gate. Presence + ORDER over the committed prose — NEVER proof a run
+// executed either line (P0). The lines themselves are EXECUTED by pharn/floor/check-loop-fresh.test.mjs.
+const LOOP_FRESH_DECISION = /^[ \t]*node pharn\/floor\/check-loop-fresh\.mjs --feature '<name>' --base '<base sha>' --iter <N> --front\s*$/;
+const LOOP_FRESH_COMMIT =
+  /^[ \t]*node pharn\/floor\/check-loop-fresh\.mjs --feature '<name>' --base '<base sha>' --commit-gate --front\s*$/;
+const LOOP_STOP_LINE = /^[ \t]*node pharn\/floor\/check-loop\.mjs pharn\/features\/<name>\/verify-report\.json /;
+
+/** null when both freshness calls are pinned exactly once, the decision call precedes check-loop.mjs, and
+ *  the commit-gate call sits under Step 6c BEFORE the scope re-derivation and the staging lines; else why. */
+function freshnessWiringReason(body) {
+  const lines = body.split(/\r?\n/);
+  const idx = (re) => lines.map((l, i) => (re.test(l) ? i : -1)).filter((i) => i !== -1);
+  const decision = idx(LOOP_FRESH_DECISION);
+  const commit = idx(LOOP_FRESH_COMMIT);
+  const stop = idx(LOOP_STOP_LINE);
+  const heading = lines.findIndex((l) => l.startsWith(LOOP_COMMIT_HEADING));
+  const fromPlan = lines.findIndex((l) => LOOP_FROM_PLAN_LINE.test(l));
+  const add = lines.findIndex((l) => LOOP_ADD_LINE.test(l));
+  if (decision.length !== 1) return `expected ONE decision-time freshness call, found ${decision.length}`;
+  if (commit.length !== 1) return `expected ONE commit-gate freshness call, found ${commit.length}`;
+  if (stop.length !== 1) return `expected ONE check-loop.mjs stop line, found ${stop.length}`;
+  if (!(decision[0] < stop[0])) return "the decision-time freshness call must precede check-loop.mjs";
+  if (!(heading < commit[0] && commit[0] < fromPlan && commit[0] < add)) {
+    return "the commit-gate freshness call must sit under Step 6c, before the scope re-derivation and the staging lines";
+  }
+  return null;
+}
+
+test("✧ /pharn-loop reads check-loop-fresh.mjs BEFORE the stop, and again FIRST in the Step 6c commit gate", () => {
+  assert.equal(freshnessWiringReason(commandBody(LOOP_FILE)), null);
+  assert.ok(commandBody(LOOP_FILE).includes('"pharn/floor/check-loop-fresh.mjs"'), "the checker must be in `reads:`");
+});
+
+test("✧ the freshness wiring rule DISCRIMINATES — each mutant of the real command fails (L4)", () => {
+  const real = commandBody(LOOP_FILE);
+  const drop = (re) =>
+    real
+      .split("\n")
+      .filter((l) => !re.test(l))
+      .join("\n");
+  const noDecision = drop(LOOP_FRESH_DECISION);
+  assert.notEqual(noDecision, real, "precondition: the decision call must exist to be dropped (L34)");
+  assert.match(freshnessWiringReason(noDecision), /ONE decision-time/);
+  const noCommit = drop(LOOP_FRESH_COMMIT);
+  assert.notEqual(noCommit, real, "precondition: the commit-gate call must exist to be dropped (L34)");
+  assert.match(freshnessWiringReason(noCommit), /ONE commit-gate/);
+  // Move the decision call AFTER the stop line.
+  const lines = real.split("\n");
+  const d = lines.findIndex((l) => LOOP_FRESH_DECISION.test(l));
+  const moved = [...lines];
+  const [call] = moved.splice(d, 1);
+  moved.splice(moved.findIndex((l) => LOOP_STOP_LINE.test(l)) + 1, 0, call);
+  assert.match(freshnessWiringReason(moved.join("\n")), /must precede check-loop\.mjs/);
+  // Move the commit-gate call AFTER the staging line.
+  const c = lines.findIndex((l) => LOOP_FRESH_COMMIT.test(l));
+  const late = [...lines];
+  const [gate] = late.splice(c, 1);
+  late.splice(late.findIndex((l) => LOOP_ADD_LINE.test(l)) + 1, 0, gate);
+  assert.match(freshnessWiringReason(late.join("\n")), /under Step 6c, before/);
 });
 
 test("✧ /pharn-spec carries the `--model-approve` branch /pharn-loop relies on, recording `approved_by: model`", () => {

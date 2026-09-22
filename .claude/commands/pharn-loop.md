@@ -1,5 +1,5 @@
 ---
-description: "Run the PRODUCT pipeline UNATTENDED to a deterministic stop, then report what was done: /pharn-spec --model-approve (the model approves its own SPEC, recorded as approved_by: model) → /pharn-plan → /pharn-grill → /pharn-build → /pharn-regress → /pharn-verify, iterating build→regress→verify until the tested pharn/floor/check-loop.mjs (Design C) says stop: CONTINUE on any measurable red (verify FAIL / INCOMPLETE, a regression) under a bounded --max-iter cap (default 3); STOP_TERMINAL on an inconclusive verdict or a reconcile red (a retry would re-anchor the baseline and erase a detected Bash escape); STOP_GREEN on verify PASS ∧ regress no-regressions; STOP_CAP at the cap. There is NO human gate inside the run: every sub-stage question maps to ONE enumerated stuck-point table (S1–S10) — mechanical cases resolve by a fixed rule, judgment cases STOP and report, nothing is guessed. At every stop it writes pharn/features/<name>/LOOP.md per pharn/pharn-contracts/loop-record.md and self-checks it with pharn/floor/check-loop-record.mjs; for every non-blocked stop it additionally re-derives the recorded decision with pharn/floor/check-loop-decision.mjs — a LIVE re-run of check-loop.mjs against the record's own cited reports, using its iterations and cap, must reproduce the same decision — and a STOP_GREEN commit is gated on that re-derivation being GREEN (a decision that cannot be re-derived from its cited reports is never committed unattended). Only a STOP_GREEN result is committed, to a NEW LOCAL BRANCH, staging only regular files from the plan's ## Files plus the feature's named artifacts; every other stop commits nothing and reverts the model's SPEC approval to Draft. Never pushes, never merges, never seals. Ends with a summary, not a question. At EVERY stop that has a feature directory it also emits pharn/features/<name>/cost.json per pharn/pharn-contracts/cost-ledger.md — a per-request token ledger written by pharn/floor/render-cost-ledger.mjs itself and validated by pharn/floor/check-cost-ledger.mjs, with phase boundaries recorded live by pharn/floor/mark-phase.mjs because the platform's attributionSkill names the orchestrator and never the sub-stage. The ledger records TOKENS and carries no price table ever; money is the reader's own multiplication. It ANNOTATES and gates NOTHING — a RED ledger never blocks a commit (fix #3). check-loop.mjs's inputs are ONLY the two verdict reports + iter/cap, so no advisory stage can gate the loop (structural). FLOOR: the stop decision + the record shape; ADVISORY: the orchestration, the self-approval, the stuck-point mapping and every git step. '/pharn-loop finished' means a stop was reached and recorded — NEVER 'the feature is good', NEVER 'a human approved the intent', NEVER 'the fix converged' (P0)."
+description: "Run the PRODUCT pipeline UNATTENDED to a deterministic stop, then report what was done: /pharn-spec --model-approve (the model approves its own SPEC, recorded as approved_by: model) → /pharn-plan → /pharn-grill → /pharn-build → /pharn-regress → /pharn-verify, iterating build→regress→verify until the tested pharn/floor/check-loop.mjs (Design C) says stop: CONTINUE on any measurable red (verify FAIL / INCOMPLETE, a regression) under a bounded --max-iter cap (default 3); STOP_TERMINAL on an inconclusive verdict or a reconcile red (a retry would re-anchor the baseline and erase a detected Bash escape); STOP_GREEN on verify PASS ∧ regress no-regressions; STOP_CAP at the cap. There is NO human gate inside the run: every sub-stage question maps to ONE enumerated stuck-point table (S1–S11) — mechanical cases resolve by a fixed rule, judgment cases STOP and report, nothing is guessed. Before it reads the stop, and again before a STOP_GREEN commit, it runs pharn/floor/check-loop-fresh.mjs: the reports must be their checkers' output from stamps that validate, bound by hash, and the verify stamp must describe the live tree — a stale or missing stage is RE-RUN inside the same iteration (a counted budget, default one per stage per iteration), a fabricated verdict or a spent budget is a recorded blocked stop (S11, blocked: stale-evidence), never a summary that names skipped gates. At every stop it writes pharn/features/<name>/LOOP.md per pharn/pharn-contracts/loop-record.md and self-checks it with pharn/floor/check-loop-record.mjs; for every non-blocked stop it additionally re-derives the recorded decision with pharn/floor/check-loop-decision.mjs — a LIVE re-run of check-loop.mjs against the record's own cited reports, using its iterations and cap, must reproduce the same decision — and a STOP_GREEN commit is gated on that re-derivation being GREEN (a decision that cannot be re-derived from its cited reports is never committed unattended). Only a STOP_GREEN result is committed, to a NEW LOCAL BRANCH, staging only regular files from the plan's ## Files plus the feature's named artifacts; every other stop commits nothing and reverts the model's SPEC approval to Draft. Never pushes, never merges, never seals. Ends with a summary, not a question. At EVERY stop that has a feature directory it also emits pharn/features/<name>/cost.json per pharn/pharn-contracts/cost-ledger.md — a per-request token ledger written by pharn/floor/render-cost-ledger.mjs itself and validated by pharn/floor/check-cost-ledger.mjs, with phase boundaries recorded live by pharn/floor/mark-phase.mjs because the platform's attributionSkill names the orchestrator and never the sub-stage. The ledger records TOKENS and carries no price table ever; money is the reader's own multiplication. It ANNOTATES and gates NOTHING — a RED ledger never blocks a commit (fix #3). check-loop.mjs's inputs are ONLY the two verdict reports + iter/cap, so no advisory stage can gate the loop (structural). FLOOR: the stop decision, the freshness of the evidence it reads + the record shape; ADVISORY: the orchestration, the self-approval, the stuck-point mapping and every git step. '/pharn-loop finished' means a stop was reached and recorded — NEVER 'the feature is good', NEVER 'a human approved the intent', NEVER 'the fix converged' (P0)."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -31,11 +31,13 @@ reads:
     "pharn/floor/check-loop.mjs",
     "pharn/floor/check-loop-record.mjs",
     "pharn/floor/check-loop-decision.mjs",
+    "pharn/floor/check-loop-fresh.mjs",
+    "pharn/pharn-contracts/gate-run-record.md",
     "pharn/floor/validate.mjs",
   ]
 writes: ["pharn/features/<name>/SPEC.md", "pharn/features/<name>/LOOP.md"]
 constitution_refs: ["P0", "P2", "P3", "P5", "P6", "P7"]
-version: "0.6.0"
+version: "0.7.0"
 ---
 
 # /pharn-loop — run the product pipeline unattended to a floor-grade stop, then report what was done
@@ -44,13 +46,16 @@ You are the **orchestrator** of an **unattended** run. You take a user's `<incre
 way through the product pipeline — spec, plan, grill, build, regress, verify — iterate the
 `build → regress → verify` middle until a **deterministic** stop, commit a green result to a new local
 branch, and finish with a **summary**. Nobody answers questions during the run. You **reuse** the existing
-product stage commands and **reimplement none of them**. Three floor primitives are this command's own:
-the tested stop core `pharn/floor/check-loop.mjs`; the tested record shape check
+product stage commands and **reimplement none of them**. Four floor primitives are this command's own:
+the tested stop core `pharn/floor/check-loop.mjs`; the tested freshness check
+`pharn/floor/check-loop-fresh.mjs`, which decides whether the evidence the stop would read belongs to
+**this** tree and, when it does not, which stage to re-run; the tested record shape check
 `pharn/floor/check-loop-record.mjs`; and the tested cross-file re-derivation check
 `pharn/floor/check-loop-decision.mjs`, which asks whether a non-blocked record's `decision` genuinely
 reduces from a live re-run of `check-loop.mjs` over the reports the record cites, and gates the
-`STOP_GREEN` commit on the answer. None of the three can feed **back into** the stop decision — the first
-computes it, the second and third only validate the record written **after** it exists.
+`STOP_GREEN` commit on the answer. None of them feeds `check-loop.mjs`'s **inputs**: the freshness check
+runs **before** it and decides only whether it is consulted yet, and the last two validate the record
+written **after** the stop exists.
 
 > **This is a PRODUCT command (`pharn-`, not `pharn-dev-`).** It is what a PHARN **user** runs when they
 > want the work done without being asked. Its gated sibling is `/pharn-ship`, which stops for the human
@@ -175,7 +180,7 @@ Look for `pharn/features/<slug>-<N>/LOOP.md` with the highest existing `<N>`, el
 ## Step 2 — The stuck-point table (the ONE enumeration of every question a sub-stage could ask)
 
 Every "ask the human" a sub-stage would make during this run maps to **exactly one** row. Rows S1–S3 keep
-the run going on a fixed rule; S4–S10 **stop** it. S6, S7 and S8 are triggered by your own judgment, and each
+the run going on a fixed rule; S4–S11 **stop** it. S6, S7 and S8 are triggered by your own judgment, and each
 fails in the safe direction — it stops rather than guesses.
 
 | id  | trigger                                                                                                                                                                               | rule                                                                                                |
@@ -190,6 +195,11 @@ fails in the safe direction — it stops rather than guesses.
 | S8  | the seam resolver's walk reaches `ask`                                                                                                                                                | stop `blocked: seam-unresolved`                                                                     |
 | S9  | a stage refuses before emitting its verdict (a missing artifact, a RED spec→plan chain, a RED lessons declaration, no parseable `## Files`, an unresolved `## Open questions (HALT)`) | stop `blocked: stage-refused`                                                                       |
 | S10 | any other sub-stage instruction to ask the human                                                                                                                                      | stop `blocked: unlisted-ask` — the closure row; nothing falls through to a guess                    |
+| S11 | a stage's evidence is stale or missing after the stage claims to have run, and `check-loop-fresh.mjs` will not offer another re-run (Step 5)                                          | stop `blocked: stale-evidence` — never read a stop from evidence about another tree                 |
+
+**S9 and S11 are different failures, and the difference decides the row.** S9 is a stage that **says** it
+refused. S11 is evidence on disk that does not match the tree, whatever the stages said: a skipped or
+half-run stage, a report or stamp from an earlier iteration, or a report its own stamp does not reproduce.
 
 **A blocked stop does NOT consult `check-loop.mjs`** — its inputs could be a previous iteration's stale
 reports. Go to Step 6 with `decision: INCONCLUSIVE` and the id. The record's shape for that case is defined
@@ -305,7 +315,43 @@ no value is carried between blocks (**L44**).
    node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
    ```
 
-3. **Read the stop:**
+3. **Check that the evidence belongs to this tree — BEFORE reading the stop.** Every stage is mandatory:
+   a stop read from a report the stage did not produce this iteration, or from a stamp about another tree,
+   is the incident this step exists to end. Run the pinned line, substituting `<name>`, `<base sha>` and
+   `<N>` literally:
+
+   ```bash
+   node pharn/floor/check-loop-fresh.mjs --feature '<name>' --base '<base sha>' --iter <N> --front
+   ```
+
+   Branch **only** on the exit code, and on `reason_code` where named (P5):
+
+   - **`0` FRESH** — both reports are their checkers' output from stamps that validate, each report is
+     bound to its stamp by hash, the verify stamp describes the live tree, the regress head stamp ended on
+     the tree verify started from, the base stamp is `<base sha>`, the logs are the logged bytes, and the
+     front (SPEC, chain, lessons, `GRILL.md`) still holds. Go to 4.
+   - **`1` RERUN** — the JSON's `stage_to_rerun` (`verify` or `regress`) is stale or missing. Re-invoke that
+     stage **inside this same iteration `<N>`**, with its own `mark-phase.mjs --iteration <N>` lines as in 2,
+     then run this step again. A re-run consumes **no** iteration. The checker has already recorded the
+     re-run in `.pharn/pharn-loop/<name>/freshness.jsonl`. **A verify re-run can cascade into a regress
+     re-run**: the new verify starts from the current tree, so a regress stamp from before the tree moved no
+     longer matches it. That is one re-run per stage, not a second unexplained staleness. If the re-run
+     stage itself refuses, that is **S9** at the stage, exactly as today.
+   - **`4` STOP with `reason_code` `empty-source-set`** — this is **S4** (`blocked: no-gates`), not stale
+     evidence.
+   - **`4` STOP with any other `reason_code`** — a fabricated or wrong verdict (`report-verdict-mismatch`,
+     `output-hash-mismatch`, `base-head-mismatch`), a front stage that no longer holds (`front-stage-red`),
+     a non-lapse refusal a re-run would not change, or a spent budget (`rerun-budget-exhausted`). This is
+     **S11** (`blocked: stale-evidence`). Go to Step 6 with the checker's JSON quoted in the record. Never
+     re-run past it and never read the stop.
+   - **`2` INCONCLUSIVE** — unusable input. **S11**, fail-closed.
+
+   **The bound, carried here so a FRESH is not over-read:** freshness is **tree identity, not run
+   recency**. An iteration whose build changed nothing and whose later stages were skipped reuses the
+   previous iteration's evidence, and nothing here can tell. The checker certifies agreement between the
+   artifacts and the tree, never who wrote them (`pharn/floor/check-loop-fresh.mjs`, header).
+
+4. **Read the stop:**
 
    ```bash
    node pharn/floor/check-loop.mjs pharn/features/<name>/verify-report.json pharn/features/<name>/regression-report.json --iter <N> --cap <M>
@@ -484,6 +530,19 @@ needs from another — the branch name — is **printed** by the block that comp
 list runs with `GIT_LITERAL_PATHSPECS=1`, so a listed `app/[id]/page.tsx` is that file and never also
 `app/i/page.tsx`.
 
+**0. Re-check freshness at the commit gate — FIRST, after every Step 6b write.** The commit must hold the
+tree that was verified. Every Step 6b write (`LOOP.md`, `cost.json`, `RUN-REPORT.md`) is excluded from the
+fingerprint, so a compliant run is still fresh here. What this line catches is anything that moved an
+included path after the decision was read:
+
+```bash
+node pharn/floor/check-loop-fresh.mjs --feature '<name>' --base '<base sha>' --commit-gate --front
+```
+
+`0` → continue to 1. **Any other exit → `not committed: evidence stale`**, and go to Step 6d. At the commit
+gate the checker never offers a re-run and never spends budget: a `1`-class cause comes back as `4`,
+carrying its own `reason_code`.
+
 **1. Re-derive the plan's scope — never reuse the scope file an earlier stage left** (PHARN's own build-loop
 lesson **L38**: by now `.pharn/writes-scope.json` holds this run's `LOOP.md` scope, not the plan's):
 
@@ -555,11 +614,11 @@ the summary names `<original branch>` so the user can switch back.
 
 ### Step 6d — when the commit does not happen
 
-For `not committed: decision unverifiable`, `not committed: nothing staged`, `branch failed`,
-`stage failed` or `commit failed` on a `STOP_GREEN`:
+For `not committed: decision unverifiable`, `not committed: evidence stale`, `not committed: nothing staged`,
+`branch failed`, `stage failed` or `commit failed` on a `STOP_GREEN`:
 
-1. Undo exactly what happened, and nothing else. **`decision unverifiable` is caught before Step 6c's
-   pinned lines run at all** — nothing was ever staged and no branch exists — skip straight to 2, exactly
+1. Undo exactly what happened, and nothing else. **`decision unverifiable` and `evidence stale` are caught
+   before any staging or branch line runs** — nothing was ever staged and no branch exists — skip straight to 2, exactly
    as for `nothing staged` / `branch failed` / a setter-or-builder `stage failed`. After a
    `stage failed` from `git add`, or a `commit failed`, unstage only the run's list, return to the original
    checkout, and delete the new branch with the safe form (it holds no new commit):
@@ -584,10 +643,18 @@ Report, plainly and without asking anything:
 - that the run **finished**, the `decision`, the iteration count, and the `blocked:` id if any — with what the
   run needs from a person to continue (the row's trigger, in one sentence);
 - the files changed, and the per-iteration verify / regress verdicts;
+- **every stage re-run**, by stage and iteration, read from the budget ledger rather than from memory, and
+  the final freshness verdict (`FRESH`, or the `reason_code` that blocked or stopped the commit):
+
+  ```bash
+  cat .pharn/pharn-loop/<name>/freshness.jsonl 2>/dev/null || echo "no re-runs"
+  ```
+
 - **the `<decision-check>` result** (Step 6b) for the final stop — GREEN, RED (quoting
   `check-loop-decision.mjs`'s message verbatim), or N/A on a blocked stop;
 - the **commit outcome, from this closed set**: `committed <branch>` (plus the SHA) |
-  `not committed: <decision>` | `not committed: decision unverifiable` | `not committed: nothing staged` |
+  `not committed: <decision>` | `not committed: decision unverifiable` | `not committed: evidence stale` |
+  `not committed: nothing staged` |
   `not committed: branch failed` | `not committed: stage failed` | `not committed: commit failed`;
 - where the checkout is: on the new branch (naming `<original branch>` to return to), or unchanged;
 - any committed path that was already dirty in the pre-run snapshot (`.pharn/pharn-loop/<name>/pre-run-status.txt`);
@@ -616,8 +683,33 @@ Then **end your turn**. Do not ask a question, do not push, do not merge, do not
   verdicts + an `iter >= cap` compare, tested — `pharn/ARCHITECTURE.md §2` primitive #3). This is the decision
   **given** its inputs.
 - **"A reconcile red is never retried"** → **FLOOR** (`check-loop.mjs`: exact membership of `reconcile` in
-  `failing_gates` when verify is `FAIL`, tested) — bounded by `/pharn-verify` actually running that gate and
-  writing its key, which is orchestration (advisory).
+  `failing_gates` when verify is `FAIL`, tested). The key is no longer the model's to write: the runner
+  injects `reconcile` with a fixed argv and checks coverage (`gate-run-record.md`), and
+  `check-loop-fresh.mjs` requires the report's `failing_gates` to equal what `check-verify.mjs` computes
+  from that stamp now, and the stamp to describe the live tree. A report that DROPS `reconcile` from
+  `failing_gates` is a `report-verdict-mismatch` stop. The residual is forgery of the stamp itself (below).
+- **"The stop is read only from evidence about THIS tree, and a stale or skipped stage is re-run"** →
+  **FLOOR** (`check-loop-fresh.mjs`, tested — content-hash + enum membership + a live re-derivation via
+  `spawnSync`). At the decision and again at the commit gate, it checks each of these:
+  - both reports are the output their checkers produce from stamps that validate;
+  - each report is bound to its stamp by `sha256`;
+  - the gate logs are the recorded bytes;
+  - the verify stamp's final fingerprint is the live tree;
+  - the regress head stamp ended on the tree verify started from;
+  - the base stamp is `<base sha>`;
+  - the front still holds.
+
+  A lapse code re-runs the stage and a fabricated verdict stops the run. **Bounded, named, not hidden:**
+  - it is **tree identity, not recency**: an iteration that changed nothing reuses old evidence, and a test
+    pins that;
+  - it certifies **agreement, never provenance**: a self-consistent fabricated set of stamps, logs and
+    reports over the live tree passes;
+  - it runs from the worktree and so **cannot vouch for itself**;
+  - its re-run **budget** is unauthenticated state under `.pharn/`, which beats a prose bound and is not
+    tamper-proof.
+
+  That the command CALLS it and obeys its exit is advisory orchestration (L19).
+
 - **"At most `M` iterations"** → **FLOOR compare, ADVISORY bound.** `check-loop.mjs` keeps no counter; it
   compares an **agent-supplied `--iter`**, so the cap bounds the decision, not the agent (`LIMITS.md §1d`).
 - **"A rebuild never writes outside the plan's `## Files`"** → **FLOOR: hook (fix #7)**, owned by
@@ -637,8 +729,11 @@ Then **end your turn**. Do not ask a question, do not push, do not merge, do not
   `check-loop.mjs`'s own output via `spawnSync`, never re-implementing its decision table). **Bounded,
   named, not hidden:** this proves the decision is **re-derivable** from the CITED reports — it does
   **not** prove those reports are themselves honest; a self-consistent fabricated `verify-report.json` /
-  `regression-report.json` pair still passes. "A `STOP_GREEN` was committed" now additionally means "its
-  decision was not un-derived at commit time" — it never means "the reports were true." A **blocked** stop
+  `regression-report.json` pair still passes **this** checker. Since `check-loop-fresh.mjs`, such a pair must
+  also match stamps that validate, reproduce from them live, and describe the live tree. That narrows the
+  forgery to a self-consistent fabricated stamp set, and it does not close it. "A `STOP_GREEN` was
+  committed" now additionally means "its decision was not un-derived at commit time, and its evidence
+  described the committed tree" — it never means "the reports were true." A **blocked** stop
   is exempt by construction (it never consulted `check-loop.mjs`), and a record from before this checker
   existed has no `cap` to re-derive `STOP_CAP` from, so this guarantee applies going forward, not
   retroactively.
@@ -688,6 +783,10 @@ Then **end your turn**. Do not ask a question, do not push, do not merge, do not
 - **A prior run's Handoff informs this run with no person reading it first.** Still quoted as DATA, still
   branches nothing, still never promoted to canon (`THREAT-MODEL.md §2`, surface 3) — but the human filter a
   gated run had is gone.
+- **The freshness budget ledger** (`.pharn/pharn-loop/<name>/freshness.jsonl`) and every stamp, log and
+  report the freshness check reads live in the writable tree, which `Bash` reaches unhooked
+  (`LIMITS.md §6`). The checker compares them with each other and with the tree; it cannot tell who wrote
+  them.
 - **The single mutable `.pharn/writes-scope.json`** can be overwritten by a second session during a long
   unattended run (PHARN's own build-loop lesson **L38**); Step 6c's re-derivation narrows the window to one
   line, not to zero.
@@ -695,7 +794,8 @@ Then **end your turn**. Do not ask a question, do not push, do not merge, do not
 ## Determinism (P5)
 
 - Stop/continue is the `check-loop.mjs` exit code; malformed input is `INCONCLUSIVE` (exit 2), never a silent
-  `CONTINUE`.
+  `CONTINUE`. Whether it is consulted yet is `check-loop-fresh.mjs`'s exit code plus membership of its
+  `reason_code` (`empty-source-set` → S4); a re-run is bounded by the checker's own counter, not by prose.
 - S1's regex, S2's directory test, S3's exit code, S4's empty-set test, S5 and S9's exit codes and heading
   presence, the staging filter (file test, `HEAD` tracking, `check-ignore`) and every commit outcome (exit
   codes) are membership tests. S6, S7 and S8 are judgment-triggered and each ends in a **stop**, never a guess.

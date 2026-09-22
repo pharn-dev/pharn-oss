@@ -1607,6 +1607,71 @@ exists-then-read/write (CWE-367)`.
 
 ### Added
 
+- **`/pharn-loop` reads a stop only from evidence that belongs to THIS tree, and re-runs a stale or skipped
+  stage instead of reporting it** (`SKILLS_VERSION` 6.9.3 → **6.10.0**, minor: a newly shipped product-floor
+  checker and a new `/pharn-loop` capability. There is no stamp or report schema change and `MIN_CLI` is
+  untouched) ([`pharn/floor/check-loop-fresh.mjs`](./pharn/floor/check-loop-fresh.mjs),
+  [`.dev/features/loop-freshness/`](./.dev/features/loop-freshness/)).
+  - **The failure.** §6.3.0's unattended run skipped `/pharn-grill`, `/pharn-regress` and `/pharn-verify` and
+    still wrote a floor-grade-looking decision. #222 re-derives a decision from the reports it cites. #230
+    made the gate map tested code and wrote `fingerprint.final` for "a later increment". An iteration that
+    skipped a stage therefore still found the previous iteration's report and stamp on disk, and nothing
+    noticed.
+  - **The checker** is read at Step 5, before `check-loop.mjs`, and again as the first line of Step 6c. It
+    runs ten checks, first failure decides:
+    - reports exist;
+    - a lapse `reason_code` re-runs the stage;
+    - the three stamps validate;
+    - each report is bound to its stamp by `sha256`;
+    - the gate logs are the recorded bytes;
+    - a live `spawnSync` re-run of `check-verify.mjs` / `check-regress.mjs` reproduces each report's floor
+      fields;
+    - the base stamp is the loop's base;
+    - the verify stamp's final fingerprint is the live tree;
+    - the regress head stamp ended on the tree verify started from;
+    - with `--front`, the SPEC/chain/lessons checkers pass and `GRILL.md` exists.
+
+    Fabrication checks run before staleness checks, so a forged report stops the run instead of being
+    "refreshed". `check-loop.mjs` and `check-loop-decision.mjs` are byte-identical.
+
+  - **A re-run is a counter, not prose.** `.pharn/pharn-loop/<name>/freshness.jsonl` holds one row per
+    authorized re-run, one per stage per iteration by default (`--max-reruns`), then
+    `rerun-budget-exhausted`. A re-run consumes no iteration. A persistent lapse, a forged verdict or a spent
+    budget is the new stuck point **S11** (`blocked: stale-evidence`), and `empty-source-set` still routes to
+    S4. A stale commit gate is the new outcome `not committed: evidence stale`.
+  - **Vocabulary.** `gate-run-core.mjs` gains nine `REASON_CODES` members, the `LAPSE_CODES` subset
+    (`entry-not-run`, `lock-busy`, `stamp-missing`, `stamp-unfinalized`, `tree-changed-between-gates`),
+    `RESERVED_REASON_CODES` (empty), and `logBasename()`. `logBasename()` is the one copy of the runner's
+    log naming, now imported by `run-gates.mjs` (L35). The closure test runs **both ways** now. Every
+    member must have an emitter or a reserved entry, which is how `output-hash-mismatch` went unnoticed
+    with no emitter. Check J is now its emitter.
+  - **Correcting the record.** A gate that mutates a tracked file does **not** trip freshness: F compares
+    verify's FINAL fingerprint, taken after its own gates. This repo's #230 dogfood stamp has no mutating
+    gate.
+  - **Bounds, stated in the header, the contract and the PR:**
+    - **tree identity, not recency** — an iteration whose build changed nothing reuses old evidence. A test
+      pins this, and transcript binding is a pending follow-up.
+    - **agreement, never provenance** — every suite fixture is a self-consistent fabrication the checker
+      certifies (L43).
+    - it runs from the worktree and cannot vouch for itself.
+    - the ledger is unauthenticated `.pharn/` state.
+  - **Found by its own test:** the first ledger containment check used `existsSync`, which follows a link,
+    so a DANGLING symlink read as absent and the append would have written through it. It is now
+    `lstat`-based.
+  - **Tests:**
+    - every check fails alone with its own code and passes once repaired;
+    - every `LAPSE_CODES` member;
+    - lapse versus fabrication, both ways;
+    - the incident (a skipped verify, then a skipped regress);
+    - the recency bound, proven;
+    - the budget and the commit gate;
+    - defaults with no flags;
+    - a git-subdirectory root;
+    - hygiene pins for S11, the outcome and the call order, with mutants;
+    - a **★ WIRING** test that executes both pinned `pharn-loop.md` lines.
+
+    Line coverage of the new file is 99.74%. `pharn-loop.md` `version:` is 0.7.0.
+
 - **`/pharn-verify` and `/pharn-regress` no longer TYPE their own floor input — a tested runner produces
   it** (`SKILLS_VERSION` 6.7.1 → **6.8.0**, minor: three newly shipped product-floor modules, a new
   contract, and an additive opt-in surface on two existing checkers — no existing install is invalidated;
