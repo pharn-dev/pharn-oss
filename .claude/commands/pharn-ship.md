@@ -665,7 +665,13 @@ resolve that question — it simply does not depend on the answer.
    **`outcome` is DERIVED here, not declared, and the two halves differ in strength (P0).**
    `/pharn-ship` writes no `LOOP.md`, so the ledger falls through to `pharn/floor/ship-outcome-core.mjs`,
    which reads this run's own verdict reports and phase markers — **never `SHIP.md` prose**, which is a
-   roll-up ABOUT a run and not a declaration of one (**L6**). `gate2` is **FLOOR**: it means
+   roll-up ABOUT a run and not a declaration of one (**L6**). **Only verdicts that belong to THIS run
+   count:** `gate2` also needs both `pharn-regress` and `pharn-verify` stage-start markers in the current
+   run (from its latest `run-start`) at its latest iteration. So a previous run's green reports left in a
+   resumed feature directory no longer read as this run's `gate2`, and a run whose markers cannot bound it
+   is `undetermined`. A `LOOP.md` in the directory is never read here. This is exact relative to the
+   markers, which are advisory. A stage that starts and then refuses before rewriting its report is not
+   detected (see the contract). `gate2` is **FLOOR**: it means
    `verify-report.json` read `PASS` **and** `regression-report.json` read `no-regressions`, two enums
    produced by tested non-LLM checkers. `stop:<stage>` is **ADVISORY in its stage name**: it reports the
    last `stage-start` marker, and markers are Bash-written command prose (**L19**). The label travels

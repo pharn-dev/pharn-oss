@@ -886,8 +886,11 @@ test("outcome FALLBACK: with no LOOP.md the ledger carries the DERIVED ship outc
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "verify-report.json"), '{"verdict":"PASS"}');
   writeFileSync(join(dir, "regression-report.json"), '{"verdict":"no-regressions"}');
+  // Since 6.9.1 the verdicts count only when BOTH stages started in the current run (applicability).
   const mb = writeMarkers(out, "feat", [
-    { seq: 1, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-01-01T00:00:00.000Z", session_id: "s1" },
+    { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2025-12-31T23:59:00.000Z", session_id: "s1" },
+    { seq: 2, kind: "stage-start", stage: "pharn-regress", iteration: 1, ts: "2025-12-31T23:59:30.000Z", session_id: "s1" },
+    { seq: 3, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-01-01T00:00:00.000Z", session_id: "s1" },
   ]);
   const r = run([
     "feat",
@@ -1308,4 +1311,28 @@ test("attribute() compares timestamps as NUMBERS — a millisecond-less marker i
   assert.deepEqual(attribute(ms, "2026-09-21T10:00:00.500Z", RS), { stage: "pharn-build", iteration: 1 });
   assert.deepEqual(attribute(ms, "2026-09-21T09:59:59.999Z", RS), { stage: null, iteration: null });
   assert.deepEqual(attribute(ms, null, RS), { stage: null, iteration: null });
+});
+
+test("SOURCE SELECTION (6.9.1): a /pharn-ship ledger NEVER copies a LOOP.md left in the feature directory; /pharn-loop still does", () => {
+  // Reachable through supported use: /pharn-ship resumes a /pharn-loop feature via /pharn-spec's resume
+  // path. Pre-fix (9d866ed) the old loop's decision was reported as the ship run's own outcome.
+  const { root, projectsDir } = stageSingle();
+  const out = mkdtempSync(join(tmpdir(), "cost-ledger-srcsel-"));
+  const dir = join(out, "f", "feat");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "LOOP.md"), "---\ndecision: STOP_CAP\niterations: 3\n---\n\n# LOOP\n");
+  writeFileSync(join(dir, "verify-report.json"), '{"verdict":"PASS"}');
+  writeFileSync(join(dir, "regression-report.json"), '{"verdict":"no-regressions"}');
+  const markersBase = writeMarkers(root, "feat", [
+    marker(1, "run-start", null, null, "2020-01-01T00:00:00.000Z"),
+    marker(2, "stage-start", "pharn-regress", 1, "2020-01-01T00:01:00.000Z"),
+    marker(3, "stage-start", "pharn-verify", 1, "2020-01-01T00:02:00.000Z"),
+  ]);
+  const common = { name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase, repo: out, featureBase: "f" };
+  const ship = renderLedger({ ...common, command: "/pharn-ship" });
+  assert.deepEqual(ship.outcome, { decision: "gate2", iterations: 1, source: SHIP_OUTCOME_SOURCE });
+  const loop = renderLedger({ ...common, command: "/pharn-loop" });
+  assert.equal(loop.outcome.decision, "STOP_CAP", "the loop's DECLARED envelope still wins for the loop");
+  assert.equal(loop.outcome.source, LOOP_RECORD_SOURCE);
+  assert.deepEqual(checkLedger(ship).reds, []);
 });

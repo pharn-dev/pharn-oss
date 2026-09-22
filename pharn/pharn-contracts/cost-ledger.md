@@ -280,10 +280,10 @@ implementation: **no regex proves it.** What is guaranteed is exactly what the r
 infer it. The enum is **closed at two members**, defined once in `render-cost-ledger.mjs` and _imported_
 by the checker rather than re-spelled:
 
-| `source`           | who writes it                 | `decision` vocabulary                       | strength                                |
-| ------------------ | ----------------------------- | ------------------------------------------- | --------------------------------------- |
-| `LOOP.md`          | `/pharn-loop`, via its record | `check-loop.mjs`'s own tokens               | **DECLARED** — re-derivable (see below) |
-| `verdicts+markers` | any command with no record    | `gate2` \| `stop:<stage>` \| `stop:unknown` | **DERIVED** — split, see below          |
+| `source`           | who writes it                                          | `decision` vocabulary                                         | strength                                |
+| ------------------ | ------------------------------------------------------ | ------------------------------------------------------------- | --------------------------------------- |
+| `LOOP.md`          | `/pharn-loop`, via its record                          | `check-loop.mjs`'s own tokens                                 | **DECLARED** — re-derivable (see below) |
+| `verdicts+markers` | `/pharn-ship` always; any other command with no record | `gate2` \| `stop:<stage>` \| `stop:unknown` \| `undetermined` | **DERIVED** — split, see below          |
 
 **The declared form is re-derivable and the derived form is not, and that asymmetry is the point.** A
 `LOOP.md` decision is checked by `pharn/floor/check-loop-decision.mjs`, which re-runs `check-loop.mjs`
@@ -303,6 +303,36 @@ checker computes either, so there is nothing to re-derive against.
 - **`stop:unknown` is the terminal fallback** — markers exist but none is a `stage-start`, or its stage
   token failed the grammar. The token is re-tested at READ time, not trusted from the writer: the
   markers file is ordinary state under `.pharn/` that a Bash write reaches (`LIMITS.md §6`).
+
+- **`undetermined`** — markers exist, but the run's own boundary cannot be established from them (the
+  run window is `unknown`, see "Run membership"). No verdict can then be bound to this run, so the outcome
+  is neither a failed check nor a stop stage.
+
+**The verdicts count only when they belong to THIS run (added 6.9.1).** `gate2` additionally requires
+that the CURRENT run carries a `stage-start` for BOTH `pharn-regress` and `pharn-verify` at its LATEST
+recorded iteration. The current run is the markers from the latest `run-start`, the same definition
+`run-window-core.mjs` uses for membership. Otherwise the reports on disk were left by an earlier
+invocation or superseded by a later attempt, and they are excluded. The `stop:<stage>` name and
+`iterations` are also read from the current run only. **Why:** `/pharn-spec` resumes an existing
+`<name>`, so a second `/pharn-ship` over the same feature used to derive `gate2` from the PREVIOUS run's
+green reports after STOPping at grill.
+
+**Strength:** the rule is exact relative to the RECORDED markers (enum + ordering), and the markers are
+advisory. It never uses a file's mtime or its mere existence. **The residual, at its true width:** a
+marker proves a stage STARTED, never that it REWROTE its report. A regress or verify that starts and then
+refuses before emitting leaves the earlier file in place, and that file is accepted. This holds for every
+attempt, and a test pins it. Closing it needs a report-side run identity or a lifecycle invalidation in
+`/pharn-ship`.
+
+**The source is chosen by the emitting COMMAND, not by artifact existence.** A `/pharn-ship` ledger is
+always derived and never reads a `LOOP.md`, even when one is present: a `/pharn-ship` run over a
+`/pharn-loop` feature directory used to copy the old loop's decision. Every other command keeps "a
+`LOOP.md` envelope wins, else derive". So `/pharn-loop`'s declared path is unchanged, and its rarely
+reached no-`LOOP.md` fallback now also applies the applicability rule.
+
+`render-run-report.mjs` labels the `## Verdicts` section with the SAME applicability. It uses the same
+function over the ledger's own `markers[]`, so a report the outcome excluded never appears as an
+unqualified current verdict.
 
 `outcome` is `null` when there are no markers at all — no evidence a run happened. That is a real state,
 not a failure, and it is what a fresh or abandoned run renders.

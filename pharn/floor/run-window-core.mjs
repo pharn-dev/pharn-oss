@@ -84,25 +84,33 @@ const unknown = (reason) => ({ status: "unknown", reason, start: null, end: null
  * `{status, reason, start, end, startMs, endMs, openings}` — `start`/`end` are the recorded marker `ts`
  * strings, `openings` a function session -> opening ms (or null).
  */
-export function runWindow(markers, session = null) {
+/**
+ * The CURRENT RUN's markers: every marker from the LATEST `run-start` (by `seq`) onward, `seq`-sorted —
+ * or `null` when there is no `run-start` at all. THE ONE definition of "the current run" ([[L35]]):
+ * membership (`runWindow`, below) and `/pharn-ship`'s verdict applicability (`ship-outcome-core.mjs`)
+ * both read it, so the two can never disagree about which invocation is current. Validity of the
+ * run-start's timestamp is NOT judged here; `runWindow` judges it.
+ */
+export function currentRunMarkers(markers) {
   const list = Array.isArray(markers) ? [...markers].filter((m) => m && Number.isInteger(m.seq)).sort((a, b) => a.seq - b.seq) : [];
-  if (list.length === 0) return unknown(UNKNOWN_REASONS.NO_MARKERS);
-
-  let startIdx = -1;
   for (let i = list.length - 1; i >= 0; i--) {
-    if (list[i].kind === "run-start") {
-      startIdx = i;
-      break;
-    }
+    if (list[i].kind === "run-start") return list.slice(i);
   }
-  if (startIdx === -1) return unknown(UNKNOWN_REASONS.NO_RUN_START);
+  return null;
+}
+
+export function runWindow(markers, session = null) {
+  const hasAny = Array.isArray(markers) && markers.some((m) => m && Number.isInteger(m.seq));
+  if (!hasAny) return unknown(UNKNOWN_REASONS.NO_MARKERS);
+
+  const current = currentRunMarkers(markers);
+  if (current === null) return unknown(UNKNOWN_REASONS.NO_RUN_START);
   // The LATEST run-start decides, valid or not. Falling back to an EARLIER valid one would silently
   // widen the window across an invocation boundary — the fail-open direction.
-  const startMarker = list[startIdx];
+  const startMarker = current[0];
   const startMs = tsMs(startMarker.ts);
   if (startMs === null) return unknown(UNKNOWN_REASONS.BAD_RUN_START_TS);
 
-  const current = list.slice(startIdx);
   let stopMarker = null;
   let stopMs = null;
   for (const m of current) {
