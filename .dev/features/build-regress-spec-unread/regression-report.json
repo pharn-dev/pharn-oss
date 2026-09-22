@@ -1,0 +1,29 @@
+{
+  "base": "031c5638107d9b3bae791f882b649830ffb4fe28",
+  "inside": [
+    ".claude/commands/pharn-build.md",
+    ".claude/commands/pharn-regress.md",
+    ".dev/features/build-regress-spec-unread/GRILL.md",
+    ".dev/features/build-regress-spec-unread/PLAN.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
