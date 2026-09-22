@@ -1577,6 +1577,62 @@ test("✧ the freshness wiring rule DISCRIMINATES — each mutant of the real co
   assert.match(freshnessWiringReason(late.join("\n")), /under Step 6c, before/);
 });
 
+// ── STOP-GUARD MARKER (L22/L45): the run is OPENED right after the pre-run snapshot and CLOSED after the
+// writes-scope release, each by ONE pinned line. Presence + order over committed prose — never proof a run
+// executed either (P0). The lines are EXECUTED by .claude/hooks/require-loop-record.test.cjs.
+const LOOP_GUARD_OPEN = /^[ \t]*node \.claude\/hooks\/require-loop-record\.cjs --open '<name>' --cap <M>\s*$/;
+const LOOP_GUARD_CLOSE = /^[ \t]*node \.claude\/hooks\/require-loop-record\.cjs --close '<name>'\s*$/;
+const LOOP_SNAPSHOT = /pre-run-status\.txt\s*$/;
+const LOOP_RUN_START = /^[ \t]*node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind run-start\s*$/;
+const LOOP_CLEAR = /^[ \t]*node \.claude\/hooks\/set-writes-scope\.cjs --clear\s*$/;
+
+/** null when --open sits between the snapshot and run-start, and --close after the Final step's --clear. */
+function stopGuardWiringReason(body) {
+  const lines = body.split(/\r?\n/);
+  const idx = (re) => lines.map((l, i) => (re.test(l) ? i : -1)).filter((i) => i !== -1);
+  const open = idx(LOOP_GUARD_OPEN);
+  const close = idx(LOOP_GUARD_CLOSE);
+  const snap = idx(LOOP_SNAPSHOT);
+  const start = idx(LOOP_RUN_START);
+  const clear = idx(LOOP_CLEAR);
+  if (open.length !== 1) return `expected ONE --open line, found ${open.length}`;
+  if (close.length !== 1) return `expected ONE --close line, found ${close.length}`;
+  if (snap.length !== 1 || start.length !== 1 || clear.length !== 1) return "an anchor line is missing (snapshot / run-start / --clear)";
+  if (!(snap[0] < open[0] && open[0] < start[0])) return "--open must follow the pre-run snapshot and precede run-start";
+  if (!(clear[0] < close[0])) return "--close must follow the Final step's --clear";
+  return null;
+}
+
+test("✧ /pharn-loop opens the Stop-guard marker after the snapshot and closes it in the Final step", () => {
+  assert.equal(stopGuardWiringReason(commandBody(LOOP_FILE)), null);
+});
+
+test("✧ the Stop-guard marker rule DISCRIMINATES — dropping or misplacing either line fails (L4)", () => {
+  const real = commandBody(LOOP_FILE);
+  const lines = real.split("\n");
+  const drop = (re) => lines.filter((l) => !re.test(l)).join("\n");
+  assert.notEqual(drop(LOOP_GUARD_OPEN), real, "precondition: the --open line exists (L34)");
+  assert.match(stopGuardWiringReason(drop(LOOP_GUARD_OPEN)), /ONE --open/);
+  assert.notEqual(drop(LOOP_GUARD_CLOSE), real, "precondition: the --close line exists (L34)");
+  assert.match(stopGuardWiringReason(drop(LOOP_GUARD_CLOSE)), /ONE --close/);
+  // Move --close ABOVE --clear.
+  const c = lines.findIndex((l) => LOOP_GUARD_CLOSE.test(l));
+  const early = [...lines];
+  const [closeLine] = early.splice(c, 1);
+  early.splice(
+    early.findIndex((l) => LOOP_CLEAR.test(l)),
+    0,
+    closeLine
+  );
+  assert.match(stopGuardWiringReason(early.join("\n")), /must follow the Final step/);
+  // Move --open AFTER run-start.
+  const o = lines.findIndex((l) => LOOP_GUARD_OPEN.test(l));
+  const late = [...lines];
+  const [openLine] = late.splice(o, 1);
+  late.splice(late.findIndex((l) => LOOP_RUN_START.test(l)) + 1, 0, openLine);
+  assert.match(stopGuardWiringReason(late.join("\n")), /must follow the pre-run snapshot/);
+});
+
 test("✧ /pharn-spec carries the `--model-approve` branch /pharn-loop relies on, recording `approved_by: model`", () => {
   const body = commandBody("pharn-spec.md");
   assert.ok(body.includes("### Step 4a — `--model-approve`"), "pharn-spec.md has no Step 4a `--model-approve` branch");
