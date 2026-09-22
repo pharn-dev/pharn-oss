@@ -32,6 +32,14 @@ asked-for gate is the skipped one, and **L20**/**L46** make the recurrence the t
 Written to `<out>/stamp.json`. `<out>` must resolve **strictly inside** the state root `.pharn/` and may
 not be the state root itself.
 
+**Which directory, exactly.** Every path operand (`--out`, `--spec-from`, `--discover`, `--scope-json`)
+resolves against the directory the runner is **invoked** from, and the state root is that directory's
+`.pharn/`. `--cwd` sets only where the gates execute and which tree is fingerprinted (and whose `HEAD` is
+recorded), never where the record lives. So `init` and every `run --next` for one `<out>` are issued from
+the same directory. Before 6.9.3, `init` resolved `--out` and `--spec-from` against `--cwd` while
+`run --next` did not, and `/pharn-regress`'s base side, the one caller that passes `--cwd`, could not
+initialize at all.
+
 ```json
 {
   "schema": "gate-run-record/1",

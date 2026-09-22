@@ -260,7 +260,11 @@ node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
 # gate stdout/stderr are UNTRUSTED free text, written by fd and reduced to a sha256, and NO verdict reads
 # their content; logs are bounded per stage by init's recreate of <out> and are otherwise unbounded across
 # /pharn-loop iterations. The runner writes ONLY inside the state root (containment-checked, no symlink
-# component), so it needs NO reconcile-ignore.json exemption. Contract:
+# component), so it needs NO reconcile-ignore.json exemption. EVERY path operand (--out, --spec-from,
+# --discover, --scope-json) resolves against the INVOKING directory, whose `.pharn/` is that state root;
+# --cwd moves only where gates RUN and which tree is fingerprinted (6.9.3 — before it, init resolved --out
+# and --spec-from against --cwd while `run --next` did not, so /pharn-regress's base side, the one --cwd
+# caller, failed at init with spec-mismatch; its pinned lines are now EXECUTED by run-gates.test.mjs). Contract:
 # pharn/pharn-contracts/gate-run-record.md. Ships: bumps SKILLS_VERSION.
 # Exit: init 0 ok | 2 runner error (closed reason_code) | 3 EMPTY SOURCE SET (nothing written; routes to the
 # existing no-gates HALT, and to /pharn-loop's unattended S4 `blocked: no-gates`) ·
