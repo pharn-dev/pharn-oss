@@ -52,6 +52,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`/pharn-ship`'s reported `outcome` now uses only verdict evidence that belongs to the CURRENT run, and never a stale `LOOP.md`** (`SKILLS_VERSION` 6.9.0 → **6.9.1**, patch: a correction to shipped derivation bytes. There is no `cost.json` key or schema change, and `MIN_CLI` is untouched) ([`pharn/floor/ship-outcome-core.mjs`](./pharn/floor/ship-outcome-core.mjs), [`.dev/features/ship-outcome-evidence-applicability/`](./.dev/features/ship-outcome-evidence-applicability/)).
+  - **Reachability (supported use, not a pure-function probe).**
+    - `/pharn-spec` Step 1.1 resumes an existing `<name>`, so a second `/pharn-ship` on a feature appends a new `run-start`. The previous run's `verify-report.json` / `regression-report.json` stay on disk until overwritten, and no code invalidates them. That invalidation was instruction-only.
+    - Against the pre-fix module (`9d866ed`), a run that stopped at grill derived **`gate2`** from the previous run's green reports. Now it derives `stop:pharn-grill`.
+    - The emitter also chose the outcome source by artifact existence (`LOOP.md ?? derived`). A `/pharn-ship` run over a `/pharn-loop` feature directory therefore reported the old loop's `STOP_CAP` as its own outcome.
+    - This concerns reporting integrity. `/pharn-ship`'s execution gates are unchanged.
+  - **Fix.**
+    - `verdictApplicability()` counts the two reports only when the CURRENT run carries `stage-start` markers for both `pharn-regress` and `pharn-verify` at its latest iteration. The current run is the one definition, `run-window-core.mjs`'s new `currentRunMarkers`. So an earlier run's pair, or an iteration-1 pair superseded by a started iteration 2, no longer establishes `gate2`.
+    - `stop:<stage>` and `iterations` are read from the current run only.
+    - An unknown run boundary yields the new vocabulary member **`undetermined`**, which is neither a failed check nor an invented stop stage. `SHIP_DECISION_FORMS` and its closure regex move together.
+    - A `/pharn-ship` ledger never reads `LOOP.md`. `/pharn-loop`'s declared path is unchanged.
+    - `RUN-REPORT.md` labels excluded reports **NOT FROM THIS RUN** or **CANNOT BE BOUND** with the same function, so the Outcome and Verdicts sections cannot disagree.
+  - **Strength (P0).** The rule is exact relative to the recorded markers, which are advisory. It never uses mtime or file existence.
+  - **Residual, pinned by a test and not fixed.** A stage that writes its stage-start and then refuses before emitting leaves the earlier report in place, and that report is accepted. This holds for every attempt. Closing it needs a report-side run identity or a lifecycle invalidation in `/pharn-ship`, and both are outside this increment by design.
+  - **Tests.**
+    - The stale run and applicable-run cases each have a positive control.
+    - Mixed evidence, a retry (iteration 2 started, half done and done), resume vs new invocation, and missing, malformed and array reports.
+    - Three unknown-boundary causes.
+    - The pinned residual.
+    - Source selection for ship and loop.
+    - End-to-end CLI emit → `check-cost-ledger` → `RUN-REPORT.md` for applicable, stale and unknown evidence.
+
 - **A run's `cost.json` now measures the RUN, not the whole Claude Code session** (`SKILLS_VERSION` 6.8.2 → **6.9.0**, minor: a new membership rule, a new `mark-phase.mjs --pending-start` capability and ledger schema `pharn-cost-ledger/2`. Existing `/1` ledgers stay valid, so no install is invalidated and `MIN_CLI` is untouched) ([`pharn/floor/run-window-core.mjs`](./pharn/floor/run-window-core.mjs), [`pharn/pharn-contracts/cost-ledger.md`](./pharn/pharn-contracts/cost-ledger.md), [`.dev/features/run-scoped-token-accounting/`](./.dev/features/run-scoped-token-accounting/)).
   - **Root cause.** `render-cost-ledger.mjs` emitted every deduped usage-bearing request of the selected session. Phase markers fed only the stage VIEW (`attribute()`), never the population, so `totals` summed everything. **Reproduced against the pre-fix module (`81b5124`):** 100 input tokens of unrelated work at 09:00, then `run-start` at 10:00 and 10 input tokens at 10:05. The ledger reported `totals.input=110 requests=2 unattributed=2`, and the checker was GREEN. **After:** `totals.input=10 requests=1`, with `membership.excluded_requests=1`.
   - **The rule, `run-window/1`, has ONE implementation in `run-window-core.mjs`**, imported by the emitter and the checker. The current run starts at the LAST `run-start` by `seq`, so a new invocation gets a new window and a resume keeps its own. It closes at the LAST `run-stop` after that, so a re-emission extends the window and never truncates it. Each session opens at its first current-run marker, so a run resumed in a new session does not absorb that session's pre-resume work. Both bounds are inclusive, and timestamps are compared as NUMBERS, because `…:00Z` sorts after `…:00.000Z` as a string.

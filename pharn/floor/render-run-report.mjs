@@ -84,7 +84,8 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
-import { FEATURE_BASE, TOKEN_CLASSES, LEGACY_SCHEMA } from "./render-cost-ledger.mjs";
+import { FEATURE_BASE, TOKEN_CLASSES, LEGACY_SCHEMA, SHIP_COMMAND } from "./render-cost-ledger.mjs";
+import { verdictApplicability, APPLICABILITY } from "./ship-outcome-core.mjs";
 import { handoffSections, fenceFor, HANDOFF_SECTIONS } from "./loop-record-core.mjs";
 import { pathsFromPlanFiles } from "./plan-files-core.mjs";
 
@@ -326,6 +327,14 @@ function outcomePreamble(cost, o) {
       "  written marker does not mean the stage ran, nor the reverse. That the run did **not** meet the",
       "  `gate2` test is a membership fact; which stage it stopped at rests on marker discipline.",
       "- `stop:unknown` is the terminal fallback: markers exist but none is a `stage-start`.",
+      "- `undetermined` means the run's own boundary could not be established from its markers, so no",
+      "  verdict could be bound to THIS run. It is neither a failed check nor a stop stage.",
+      "",
+      "**Only verdicts that belong to THIS run count.** `gate2` additionally requires that the current run",
+      "(from its latest `run-start`) STARTED both `pharn-regress` and `pharn-verify` at its latest iteration;",
+      "reports an earlier run or attempt left on disk are excluded. This is exact relative to the recorded",
+      "markers, which are themselves ADVISORY, and a stage that started but refused before rewriting its",
+      "report is NOT detected.",
       "",
       "**Neither form says the outcome was correct.** Unlike `/pharn-loop`, whose recorded decision",
       "`check-loop-decision.mjs` re-derives from its own cited reports, there is no equivalent",
@@ -502,10 +511,42 @@ const indent = (s, pad) =>
     .map((l) => (l.length ? pad + l : l))
     .join("\n");
 
+/**
+ * For a `/pharn-ship` ledger: the SAME applicability the derived `outcome` used, computed from the
+ * ledger's own recorded `markers[]` by the SAME function (`ship-outcome-core.mjs` — imported, never
+ * re-derived here, [[L35]]). A report the outcome refused must not appear below as an unqualified current
+ * verdict. Returns the label lines, or [] when the reports are current or the command is not ship.
+ */
+function applicabilityLabel(cost) {
+  if (!cost || cost.command !== SHIP_COMMAND || !Array.isArray(cost.markers)) return [];
+  const app = verdictApplicability(cost.markers);
+  if (app.status === APPLICABILITY.CURRENT) return [];
+  const head =
+    app.status === APPLICABILITY.UNKNOWN
+      ? "**CANNOT BE BOUND TO THIS RUN — excluded from the outcome.** The run's boundary could not be"
+      : "**NOT FROM THIS RUN — excluded from the outcome.** The reports below were left on disk by an";
+  const tail =
+    app.status === APPLICABILITY.UNKNOWN
+      ? "established from its markers. The verdicts are shown only as diagnostics."
+      : "earlier run or attempt. They are shown only as diagnostics, never as this run's verdicts.";
+  // A HISTORICAL ledger (derived before 6.9.1) may have STORED `gate2` from exactly these reports. Its
+  // stored value is never rewritten (compatibility), but the two sections must not silently disagree.
+  const legacy =
+    cost.outcome && cost.outcome.decision === "gate2"
+      ? [
+          "",
+          "**The stored `gate2` above predates this applicability rule (6.9.1)** and rests on these same",
+          "reports; it would not be derived as `gate2` today. It is kept as recorded, not rewritten.",
+        ]
+      : [];
+  return [head, tail, ...legacy, "", quoteData("", `applicability  ${app.status}\nreason         ${app.reason ?? "none"}`).trimStart(), ""];
+}
+
 function verdictsSection({ verify, regress, cost }) {
   const iters = cost && cost.outcome && cost.outcome.iterations;
   const label = typeof iters === "number" ? `iteration ${iters} (final)` : "the final iteration";
   const out = [
+    ...applicabilityLabel(cost),
     `**${label} only.** ${commandLabel(cost)} OVERWRITES \`verify-report.json\` and \`regression-report.json\``,
     "in place whenever it re-runs those stages, so earlier iterations' verdicts are not on disk at the",
     "stop and this",

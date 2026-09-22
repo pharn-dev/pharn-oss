@@ -3,7 +3,15 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { runWindow, isMember, tsMs, UNKNOWN_REASONS, MEMBERSHIP_STATUSES, MEMBERSHIP_METHOD } from "./run-window-core.mjs";
+import {
+  runWindow,
+  isMember,
+  tsMs,
+  currentRunMarkers,
+  UNKNOWN_REASONS,
+  MEMBERSHIP_STATUSES,
+  MEMBERSHIP_METHOD,
+} from "./run-window-core.mjs";
 
 const S = "00000000-0000-4000-8000-00000000aaaa";
 const T = "00000000-0000-4000-8000-00000000bbbb";
@@ -135,4 +143,25 @@ test("a null-session marker binds every session (the attribute() wildcard)", () 
 test("marker ORDER is by seq, not by array position", () => {
   const w = runWindow([mk(2, "run-stop", "2026-09-21T11:00:00.000Z"), mk(1, "run-start", "2026-09-21T10:00:00.000Z")], S);
   assert.equal(w.status, "bounded");
+});
+
+test("currentRunMarkers: from the LATEST run-start by seq; null with no run-start; order-independent", () => {
+  const ms = [
+    mk(4, "run-stop", "2026-09-21T10:30:00.000Z"),
+    mk(1, "run-start", "2026-09-21T08:00:00.000Z"),
+    mk(3, "run-start", "2026-09-21T10:00:00.000Z"),
+    mk(2, "run-stop", "2026-09-21T08:30:00.000Z"),
+  ];
+  assert.deepEqual(
+    currentRunMarkers(ms).map((m) => m.seq),
+    [3, 4]
+  );
+  assert.equal(currentRunMarkers([mk(1, "stage-start", "2026-09-21T10:00:00.000Z")]), null);
+  assert.equal(currentRunMarkers([]), null);
+  assert.equal(currentRunMarkers(undefined), null);
+  // An INVALID latest run-start still delimits the current run — validity is runWindow's call.
+  assert.deepEqual(
+    currentRunMarkers([mk(1, "run-start", "2026-09-21T08:00:00.000Z"), mk(2, "run-start", null)]).map((m) => m.seq),
+    [2]
+  );
 });

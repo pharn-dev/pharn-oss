@@ -1206,3 +1206,157 @@ test("INTEGRATION: CLI emit → CLI check GREEN → report shows the SAME run-sc
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// ===================================================================================================
+// APPLICABILITY (6.9.1) — the Outcome and the Verdicts sections must agree about whether the reports on
+// disk belong to THIS run. End-to-end through the real CLIs: emit → check → render.
+// ===================================================================================================
+
+function shipRun(root, markers) {
+  const S = "00000000-0000-4000-8000-0000000000e9";
+  const proj = join(root, "projects", "p");
+  mkdirSync(proj, { recursive: true });
+  writeFileSync(
+    join(proj, `${S}.jsonl`),
+    JSON.stringify({
+      type: "assistant",
+      requestId: "r1",
+      timestamp: "2026-09-22T10:00:30.000Z",
+      sessionId: S,
+      message: { model: "claude-opus-5", usage: { input_tokens: 1, output_tokens: 0, cache_creation: {}, output_tokens_details: {} } },
+    }) + "\n"
+  );
+  const mdir = join(root, "cost", "feat");
+  mkdirSync(mdir, { recursive: true });
+  writeFileSync(
+    join(mdir, "markers.jsonl"),
+    markers.map((m) => JSON.stringify({ iteration: null, stage: null, session_id: S, ...m })).join("\n") + "\n"
+  );
+  feature(root, "feat", {
+    "verify-report.json": { verdict: "PASS", failing_gates: [] },
+    "regression-report.json": { verdict: "no-regressions", regressions: [] },
+  });
+  const emit = spawnSync(
+    "node",
+    [
+      join(here, "render-cost-ledger.mjs"),
+      "feat",
+      "--command",
+      "/pharn-ship",
+      "--repo",
+      root,
+      "--session",
+      S,
+      "--projects-dir",
+      join(root, "projects"),
+      "--markers-base",
+      join(root, "cost"),
+    ],
+    { encoding: "utf8" }
+  );
+  assert.equal(emit.status, 0, emit.stderr);
+  const costPath = join(root, "pharn", "features", "feat", "cost.json");
+  const check = spawnSync("node", [join(here, "check-cost-ledger.mjs"), costPath], { encoding: "utf8" });
+  assert.equal(check.status, 0, check.stdout);
+  const md = renderRunReport("feat", { repo: root });
+  return {
+    led: JSON.parse(readFileSync(costPath, "utf8")),
+    outcome: md.split("## Outcome")[1].split("## Tokens")[0],
+    verdicts: md.split("## Verdicts")[1].split("## Briefing")[0],
+  };
+}
+
+test("INTEGRATION: APPLICABLE ship evidence → gate2, and the verdicts are shown WITHOUT an exclusion label", () => {
+  const root = scratch();
+  try {
+    const r = shipRun(root, [
+      { seq: 1, kind: "run-start", ts: "2026-09-22T10:00:00.000Z" },
+      { seq: 2, kind: "stage-start", stage: "pharn-regress", iteration: 1, ts: "2026-09-22T10:00:10.000Z" },
+      { seq: 3, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-09-22T10:00:20.000Z" },
+      { seq: 4, kind: "run-stop", ts: "2026-09-22T10:01:00.000Z" },
+    ]);
+    assert.equal(r.led.outcome.decision, "gate2");
+    assert.match(r.outcome, /decision\s+gate2/);
+    assert.doesNotMatch(r.verdicts, /NOT FROM THIS RUN|CANNOT BE BOUND/);
+    assert.match(r.verdicts, /- verify: `PASS`/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("INTEGRATION: an EARLIER run's green reports → NOT gate2, and the verdicts are labelled NOT FROM THIS RUN", () => {
+  const root = scratch();
+  try {
+    const r = shipRun(root, [
+      { seq: 1, kind: "run-start", ts: "2026-09-22T09:00:00.000Z" },
+      { seq: 2, kind: "stage-start", stage: "pharn-regress", iteration: 1, ts: "2026-09-22T09:00:10.000Z" },
+      { seq: 3, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-09-22T09:00:20.000Z" },
+      { seq: 4, kind: "run-stop", ts: "2026-09-22T09:01:00.000Z" },
+      { seq: 5, kind: "run-start", ts: "2026-09-22T10:00:00.000Z" },
+      { seq: 6, kind: "stage-start", stage: "pharn-grill", ts: "2026-09-22T10:00:10.000Z" },
+      { seq: 7, kind: "run-stop", ts: "2026-09-22T10:01:00.000Z" },
+    ]);
+    assert.equal(r.led.outcome.decision, "stop:pharn-grill");
+    assert.match(r.verdicts, /NOT FROM THIS RUN — excluded from the outcome/);
+    assert.match(r.verdicts, /applicability {2}not-in-run/);
+    // The two sections AGREE: the outcome is not gate2 exactly when the verdicts are labelled excluded.
+    assert.doesNotMatch(r.outcome, /decision\s+gate2/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("INTEGRATION: an UNKNOWN run boundary → undetermined, and the verdicts are labelled CANNOT BE BOUND", () => {
+  const root = scratch();
+  try {
+    const r = shipRun(root, [
+      { seq: 1, kind: "run-start", ts: "not-a-time" },
+      { seq: 2, kind: "stage-start", stage: "pharn-regress", iteration: 1, ts: "2026-09-22T10:00:10.000Z" },
+      { seq: 3, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-09-22T10:00:20.000Z" },
+    ]);
+    assert.equal(r.led.outcome.decision, "undetermined");
+    assert.match(r.verdicts, /CANNOT BE BOUND TO THIS RUN/);
+    assert.match(r.outcome, /`undetermined` means/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a /pharn-loop ledger's verdicts are never labelled — the applicability rule is ship's", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", {
+      "cost.json": costJson({ markers: [{ seq: 1, kind: "stage-start", stage: "pharn-grill", iteration: null }] }),
+      "verify-report.json": { verdict: "PASS", failing_gates: [] },
+    });
+    const v = renderRunReport("feat", { repo: root }).split("## Verdicts")[1];
+    assert.doesNotMatch(v, /NOT FROM THIS RUN|CANNOT BE BOUND/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("REVIEW F1: a HISTORICAL ship ledger that stored gate2 from reports now judged not-in-run says so beside the verdicts", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", {
+      "cost.json": costJson({
+        command: "/pharn-ship",
+        outcome: { decision: "gate2", iterations: 1, source: "verdicts+markers" },
+        markers: [
+          { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-09-22T09:00:00.000Z", session_id: null },
+          { seq: 2, kind: "stage-start", stage: "pharn-grill", iteration: null, ts: "2026-09-22T09:00:10.000Z", session_id: null },
+        ],
+      }),
+      "verify-report.json": { verdict: "PASS", failing_gates: [] },
+      "regression-report.json": { verdict: "no-regressions", regressions: [] },
+    });
+    const md = renderRunReport("feat", { repo: root });
+    assert.match(md.split("## Outcome")[1].split("## Tokens")[0], /decision\s+gate2/, "the stored value is NOT rewritten");
+    const v = md.split("## Verdicts")[1];
+    assert.match(v, /NOT FROM THIS RUN/);
+    assert.match(v, /stored `gate2` above predates this applicability rule/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

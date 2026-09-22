@@ -46,12 +46,35 @@
 // iterates it and additionally holds `SHIP_DECISION_RE` as a CLOSURE over the emitted stem, so a fourth
 // form fails rather than merely going untested.
 //
+// ── APPLICABILITY — the verdicts must belong to THIS run (added 6.9.1) ───────────────────────────────
+// Until 6.9.1 `gate2` needed only "markers exist" + two green `.verdict`s read from the feature
+// directory, and nothing bound either report to the run being reported. REACHED THROUGH SUPPORTED USE,
+// not a probe of the pure function: `/pharn-spec` resumes an existing `<name>` (its Step 1.1, an
+// instruction), so a second `/pharn-ship` on the same feature appends a new `run-start`, STOPs at grill,
+// and the PREVIOUS run's green reports — still on disk, since no code invalidates them — derived
+// `gate2`. Now the verdicts count only when `verdictApplicability()` says `current`: the CURRENT run
+// (`run-window-core.mjs`'s `currentRunMarkers`, the one definition) carries a `stage-start` for BOTH
+// `pharn-regress` and `pharn-verify` at the run's LATEST recorded iteration, so a new invocation's run
+// cannot inherit an old pair, and a Step 2b retry that started iteration 2 cannot inherit iteration 1's.
+// When the run window itself is `unknown` the outcome is `undetermined` — neither a failed check nor an
+// invented stop stage.
+// STRENGTH, stated: exact RELATIVE TO THE RECORDED MARKERS (enum + ordering), and the markers are
+//   ADVISORY (Bash-written command prose, L19). It never uses a file's mtime or its mere existence ([[L42]]).
+// THE RESIDUAL, at its true width: a marker proves a stage STARTED in this attempt, never that it
+//   REWROTE its report. A `/pharn-verify` (or `/pharn-regress`) that writes its stage-start and then
+//   REFUSES before emitting leaves the previous attempt's — or the previous run's — file in place, and
+//   this derivation accepts it. That applies to EVERY attempt, not only the retry (GRILL finding 1), and
+//   it is pinned by a test so it stays visible. Closing it needs a report-side run identity (a
+//   verify/regression-report contract change) or a lifecycle invalidation in `/pharn-ship` (an
+//   orchestration change) — both outside this increment by design.
+//
 // DETERMINISM (P5): no clock, no randomness. Every branch is a membership or grammar test, and the
 // terminal fallback is the explicit `unknown` stage token — never a guess, never a silently dropped
 // outcome.
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { currentRunMarkers, runWindow } from "./run-window-core.mjs";
 
 /** The literal, un-parameterized decision for a run that reached the human gate. */
 export const GATE2 = "gate2";
@@ -61,6 +84,16 @@ export const STOP_PREFIX = "stop:";
 
 /** The terminal-fallback stage token: markers exist, but none of them is a `stage-start`. */
 export const UNKNOWN_STAGE = "unknown";
+
+/** The outcome when the run's own boundary cannot be established from its markers, so no verdict can be
+ *  bound to it. Deliberately NOT `stop:…` (that would invent a stop) and NOT `gate2`. */
+export const UNDETERMINED = "undetermined";
+
+/** The two stages whose reports the `gate2` test reads — `/pharn-ship`'s own `--stage` tokens. */
+export const VERDICT_STAGES = Object.freeze(["pharn-regress", "pharn-verify"]);
+
+/** `verdictApplicability().status` — a CLOSED set (L29): every consumer branches on membership. */
+export const APPLICABILITY = Object.freeze({ CURRENT: "current", NOT_IN_RUN: "not-in-run", UNKNOWN: "unknown" });
 
 /** `outcome.source` for a derived (as opposed to declared) outcome. The loop's `LOOP.md` is the other
  *  member; both are enumerated in `pharn/pharn-contracts/cost-ledger.md`. */
@@ -74,7 +107,7 @@ const STAGE_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 /** CLOSURE over every `decision` this module can emit. A fourth form fails this, which is the whole
  *  point of a closure over a presence set (L36). */
-export const SHIP_DECISION_RE = /^(gate2|stop:[a-z0-9][a-z0-9-]{0,63})$/;
+export const SHIP_DECISION_RE = /^(gate2|undetermined|stop:[a-z0-9][a-z0-9-]{0,63})$/;
 
 /**
  * The CLOSED vocabulary, materialized once so the rules iterate it rather than being authored for
@@ -102,6 +135,14 @@ export const SHIP_DECISION_FORMS = Object.freeze([
     parameterized: false,
     floor: false,
     means: "markers exist but none is a stage-start, or its stage token failed the grammar — the terminal fallback, never a guess",
+  }),
+  Object.freeze({
+    form: UNDETERMINED,
+    example: UNDETERMINED,
+    parameterized: false,
+    floor: false,
+    means:
+      "markers exist but the run's boundary cannot be established (run-window unknown), so no verdict can be bound to this run — not a failed check, not a stop stage",
   }),
 ]);
 
@@ -162,12 +203,49 @@ export function recordedIterations(markers) {
  */
 export function deriveShipOutcome({ markers, verifyVerdict, regressVerdict }) {
   if (!Array.isArray(markers) || markers.length === 0) return null;
-  const reachedGate2 = verifyVerdict === VERIFY_PROCEED && regressVerdict === REGRESS_PROCEED;
-  const decision = reachedGate2 ? GATE2 : `${STOP_PREFIX}${lastStartedStage(markers)}`;
+  const app = verdictApplicability(markers);
+  if (app.status === APPLICABILITY.UNKNOWN) {
+    return { decision: UNDETERMINED, iterations: null, source: OUTCOME_SOURCE };
+  }
+  // Every fact below comes from the CURRENT run only — an earlier invocation's stages are not this run's.
+  const current = currentRunMarkers(markers);
+  const reachedGate2 = app.status === APPLICABILITY.CURRENT && verifyVerdict === VERIFY_PROCEED && regressVerdict === REGRESS_PROCEED;
+  const decision = reachedGate2 ? GATE2 : `${STOP_PREFIX}${lastStartedStage(current)}`;
   return {
     decision,
-    iterations: recordedIterations(markers),
+    iterations: recordedIterations(current),
     source: OUTCOME_SOURCE,
+  };
+}
+
+/**
+ * Do the two verdict reports on disk belong to THIS run's latest attempt? Read from the recorded markers
+ * only — never from the reports' mtimes or contents ([[L42]], [[L6]]).
+ *
+ *  - `unknown`    — the run window cannot be established (`runWindow(markers, null)` is `unknown`).
+ *  - `current`    — the current run carries a `stage-start` for EVERY member of `VERDICT_STAGES` at the
+ *                   run's LATEST recorded iteration (a run with no iterations: null == null).
+ *  - `not-in-run` — otherwise: the reports were produced by an earlier invocation, or by an earlier
+ *                   attempt that a later iteration has superseded.
+ *
+ * Returns `{status, reason, latestIteration}`. PURE. See the header for the residual this cannot see.
+ */
+export function verdictApplicability(markers) {
+  const win = runWindow(markers, null);
+  if (win.status === "unknown") return { status: APPLICABILITY.UNKNOWN, reason: win.reason, latestIteration: null };
+  const current = currentRunMarkers(markers) ?? [];
+  const latestIteration = recordedIterations(current);
+  const missing = VERDICT_STAGES.filter(
+    (stage) =>
+      !current.some(
+        (m) => m?.kind === "stage-start" && m.stage === stage && (Number.isInteger(m.iteration) ? m.iteration : null) === latestIteration
+      )
+  );
+  if (missing.length === 0) return { status: APPLICABILITY.CURRENT, reason: null, latestIteration };
+  return {
+    status: APPLICABILITY.NOT_IN_RUN,
+    reason: `the current run has no stage-start for ${missing.join(" and ")}${latestIteration === null ? "" : ` at its latest iteration (${latestIteration})`}`,
+    latestIteration,
   };
 }
 

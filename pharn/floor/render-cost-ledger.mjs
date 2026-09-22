@@ -120,6 +120,8 @@ export const FEATURE_BASE = "pharn/features";
  *  L52's remedy is quantified over a SET, so the set is named: ONE no-argument test per default retired
  *  in this change, plus a closure assertion per literal. */
 export const DEFAULT_COMMAND = "/pharn-loop";
+/** The one command whose outcome is ALWAYS derived and never read from a `LOOP.md` (see `renderLedger`). */
+export const SHIP_COMMAND = "/pharn-ship";
 export const UNKNOWN_BASE_SHA = "unknown";
 
 /** `outcome.source` — where the outcome CAME from, recorded beside the value so a reader never has to
@@ -504,7 +506,15 @@ export function renderLedger({
   // nobody observed. The derivation's own floor/advisory split lives in `ship-outcome-core.mjs` and is
   // restated by neither this module nor the report (P4 — cited, not copied).
   const featureDir = join(repo, featureBase, name);
-  const outcome = readOutcome(join(featureDir, "LOOP.md")) ?? readShipOutcome(featureDir, markers);
+  // SOURCE SELECTION IS BY THE EMITTING COMMAND, not by which artifacts happen to exist (6.9.1). A
+  // `/pharn-ship` run over a feature directory a `/pharn-loop` run created — reachable through
+  // `/pharn-spec`'s resume path — used to COPY that old loop's `LOOP.md` decision as the ship run's own
+  // outcome. `/pharn-ship` writes no `LOOP.md`, so a `LOOP.md` beside it is never its record. Every other
+  // command keeps the historic precedence, so `/pharn-loop`'s declared-outcome path is byte-identical.
+  const outcome =
+    command === SHIP_COMMAND
+      ? readShipOutcome(featureDir, markers)
+      : (readOutcome(join(featureDir, "LOOP.md")) ?? readShipOutcome(featureDir, markers));
   const skills = readSkillsVersion(repo);
   // Transcript-absence shells: nothing was read, so nothing was excluded — `excluded_requests` is 0 for a
   // known window and null for an unknown one (see `membershipOf`).

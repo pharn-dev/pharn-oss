@@ -363,7 +363,12 @@ node pharn/floor/check-cost-ledger.mjs <cost.json> [--verify-transcript]
 # TWO HALVES, never averaged (P0): `gate2` is FLOOR (verify PASS ∧ regress no-regressions — two enums from
 # tested non-LLM checkers); `stop:<stage>` is ADVISORY IN ITS STAGE NAME (the last stage-start marker,
 # Bash-written command prose — L19), though that the run MISSED the gate2 test is a membership fact;
-# `stop:unknown` is the terminal fallback. The stage token is re-tested at READ time, never trusted from
+# `stop:unknown` is the terminal fallback; `undetermined` (6.9.1) = markers exist but the run window is
+# unknown, so no verdict can be bound to the run. APPLICABILITY (6.9.1): gate2 also needs BOTH
+# pharn-regress and pharn-verify stage-starts in the CURRENT run (latest run-start, run-window-core's one
+# definition) at its latest iteration — an earlier run's green reports left on disk no longer count, and
+# a /pharn-ship ledger never copies a LOOP.md (source chosen by --command). Residual, pinned by a test: a
+# stage that starts then refuses leaves the old report, which is accepted. The stage token is re-tested at READ time, never trusted from
 # the writer, because markers.jsonl is ordinary .pharn/ state a Bash write reaches (LIMITS.md §6).
 # `outcome` is null when there are no markers — no evidence a run happened, which is a real state.
 # NOT RE-DERIVABLE, stated rather than glossed: /pharn-loop has check-loop-decision.mjs; ship has no
