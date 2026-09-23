@@ -123,8 +123,8 @@ new layout; it converts a silent half-install into a clean refusal, which is the
 
 - **Cite the CHANGELOG by version section, never by line number:** `CHANGELOG [6.3.0]`, not
   `CHANGELOG.md:1817`. Every entry added above a line moves it, so a line cite goes stale on the next PR.
-  `pharn/floor/gate-run-core.mjs:15` is the recorded instance, deferred to the next product-surface
-  increment because fixing it bumps.
+  `pharn/floor/gate-run-core.mjs:15` was the recorded instance; it was deferred until an increment that
+  bumps anyway, and 6.13.0 fixed it.
 
 ## Hard constraints (these will bite you)
 

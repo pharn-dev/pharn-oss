@@ -12,7 +12,7 @@
 // (their exit codes) were model-authored, and the checkers judged whatever map they were handed — which
 // their own usage blocks say plainly (check-verify.mjs:60-65, check-regress.mjs:40-49).
 //
-// The failure is recorded, not hypothetical. CHANGELOG.md:1817-1818: a dogfooded, unattended /pharn-loop
+// The failure is recorded, not hypothetical. CHANGELOG [6.3.0]: a dogfooded, unattended /pharn-loop
 // run "skipped /pharn-grill, /pharn-regress and /pharn-verify entirely, hand-executed the equivalent work
 // by judgment, and still wrote a LOOP.md whose decision read as a genuine floor-grade stop". #222's fix
 // (check-loop-decision.mjs) re-derives a decision from the reports it cites, and by its own statement

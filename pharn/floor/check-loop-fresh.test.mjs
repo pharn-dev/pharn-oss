@@ -757,6 +757,7 @@ const FLOOR_MODULES = [
   "check-regress.mjs",
   "check-spec-approved.mjs",
   "check-spec.mjs",
+  "spec-template-core.mjs",
   "check-plan-spec-agree.mjs",
   "check-plan-lessons.mjs",
   "frontmatter-core.mjs",

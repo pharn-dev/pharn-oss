@@ -1368,6 +1368,7 @@ const STUCK_POINTS = [
   { id: "S4", blocked: "no-gates" },
   { id: "S5", blocked: "seam-config" },
   { id: "S6", blocked: "thin-intent" },
+  { id: "S6b", blocked: "needs-clarification" }, // /pharn-spec left a clarification marker in the Draft (spec-template)
   { id: "S7", blocked: "plan-ambiguity" },
   { id: "S8", blocked: "seam-unresolved" },
   { id: "S9", blocked: "stage-refused" },
@@ -1472,7 +1473,7 @@ function forbiddenGitOffenders(body) {
 }
 
 test("✧ L34 — the /pharn-loop sets are non-empty and well-formed (the rules below cannot pass vacuously)", () => {
-  assert.equal(STUCK_POINTS.length, 11, "the stuck-point table is S1–S11");
+  assert.equal(STUCK_POINTS.length, 12, "the stuck-point table is S1–S11 plus S6b");
   assert.equal(new Set(STUCK_POINTS.map((s) => s.id)).size, STUCK_POINTS.length, "duplicate stuck-point id");
   assert.ok(COMMIT_OUTCOMES.length > 0, "the commit-outcome set is empty");
   assert.ok(fencedLines(commandBody(LOOP_FILE)).length > 0, `found no fenced lines in ${LOOP_FILE} — the fence scan broke`);

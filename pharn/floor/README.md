@@ -13,13 +13,13 @@ block in the root `README.md`: it is rendered from the tree and held to byte-equ
 number — a hand-maintained second copy is exactly what drifted here before (it read "three files" long
 after the directory passed forty).
 
-| file                                            | primitive                                | enforces                                      |
-| ----------------------------------------------- | ---------------------------------------- | --------------------------------------------- |
-| `validate.mjs`                                  | enum / regex / structural check          | P1, P3, P4; fixes #1, #5, #6                  |
-| `check-structural.mjs`                          | enum / regex-substring / path-resolution | `structural[]` of an eval `expected` (P0, P1) |
-| `check-spec.mjs`                                | content-hash (+ enum / presence)         | the approved-intent pin, fix #4               |
-| `../../.claude/hooks/protect-trusted-paths.cjs` | pre-write hook                           | P2; fix #2                                    |
-| `../../.claude/hooks/enforce-writes-scope.cjs`  | pre-write hook                           | P2, P5; fix #7                                |
+| file                                            | primitive                                | enforces                                                          |
+| ----------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------- |
+| `validate.mjs`                                  | enum / regex / structural check          | P1, P3, P4; fixes #1, #5, #6                                      |
+| `check-structural.mjs`                          | enum / regex-substring / path-resolution | `structural[]` of an eval `expected` (P0, P1)                     |
+| `check-spec.mjs`                                | content-hash (+ enum / presence / regex) | the approved-intent pin, fix #4; the opt-in `spec-template` shape |
+| `../../.claude/hooks/protect-trusted-paths.cjs` | pre-write hook                           | P2; fix #2                                                        |
+| `../../.claude/hooks/enforce-writes-scope.cjs`  | pre-write hook                           | P2, P5; fix #7                                                    |
 
 **Content-hash is a file primitive too.** `check-spec.mjs` owns the product spec pin
 (`spec_content_hash`): `--hash` emits the digest `/pharn-spec` pins on approval, and the default mode
@@ -27,6 +27,12 @@ re-verifies it, with `check-spec-approved.mjs` and `check-plan-spec-agree.mjs` s
 re-implementing the hash. The digest is taken over the SPEC **body** with line endings folded to LF, so
 a CRLF checkout does not read as drift — see `bodyHash()` for the exact bound. (The dev loop's own pin
 over `pharn/ARCHITECTURE.md` uses the same fold via `../../.dev/floor/hash-doc.mjs`, which ships to nobody.)
+
+**The SPEC template is opt-in.** For a SPEC whose frontmatter declares `spec_template`, `check-spec.mjs` also
+enforces, through `spec-template-core.mjs`, the shape defined in `../pharn-contracts/spec-template.md` (sections, the acceptance-criteria
+grammar, clarification markers), and `--template-ref <id>` prints the value `/pharn-spec` writes into that
+key. A SPEC without the key is validated exactly as before. A valid acceptance-criteria grammar means the
+criteria are **phrased** testably, never that any test exists, runs, or passes.
 
 ## Run the validator
 
