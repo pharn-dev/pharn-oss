@@ -1,5 +1,5 @@
 ---
-description: "Run the PRODUCT pipeline UNATTENDED to a deterministic stop, then report what was done: /pharn-spec --model-approve (the model approves its own SPEC, recorded as approved_by: model) → /pharn-plan → /pharn-grill → /pharn-build → /pharn-regress → /pharn-verify, iterating build→regress→verify until the tested pharn/floor/check-loop.mjs (Design C) says stop: CONTINUE on any measurable red (verify FAIL / INCOMPLETE, a regression) under a bounded --max-iter cap (default 3); STOP_TERMINAL on an inconclusive verdict or a reconcile red (a retry would re-anchor the baseline and erase a detected Bash escape); STOP_GREEN on verify PASS ∧ regress no-regressions; STOP_CAP at the cap. There is NO human gate inside the run: every sub-stage question maps to ONE enumerated stuck-point table (S1–S11) — mechanical cases resolve by a fixed rule, judgment cases STOP and report, nothing is guessed. Before it reads the stop, and again before a STOP_GREEN commit, it runs pharn/floor/check-loop-fresh.mjs: the reports must be their checkers' output from stamps that validate, bound by hash, and the verify stamp must describe the live tree — a stale or missing stage is RE-RUN inside the same iteration (a counted budget, default one per stage per iteration), a fabricated verdict or a spent budget is a recorded blocked stop (S11, blocked: stale-evidence), never a summary that names skipped gates. At every stop it writes pharn/features/<name>/LOOP.md per pharn/pharn-contracts/loop-record.md and self-checks it with pharn/floor/check-loop-record.mjs; for every non-blocked stop it additionally re-derives the recorded decision with pharn/floor/check-loop-decision.mjs — a LIVE re-run of check-loop.mjs against the record's own cited reports, using its iterations and cap, must reproduce the same decision — and a STOP_GREEN commit is gated on that re-derivation being GREEN (a decision that cannot be re-derived from its cited reports is never committed unattended). Only a STOP_GREEN result is committed, to a NEW LOCAL BRANCH, staging only regular files from the plan's ## Files plus the feature's named artifacts; every other stop commits nothing and reverts the model's SPEC approval to Draft. Never pushes, never merges, never seals. Ends with a summary, not a question. At EVERY stop that has a feature directory it also emits pharn/features/<name>/cost.json per pharn/pharn-contracts/cost-ledger.md — a per-request token ledger written by pharn/floor/render-cost-ledger.mjs itself and validated by pharn/floor/check-cost-ledger.mjs, with phase boundaries recorded live by pharn/floor/mark-phase.mjs because the platform's attributionSkill names the orchestrator and never the sub-stage. The ledger records TOKENS and carries no price table ever; money is the reader's own multiplication. It ANNOTATES and gates NOTHING — a RED ledger never blocks a commit (fix #3). check-loop.mjs's inputs are ONLY the two verdict reports + iter/cap, so no advisory stage can gate the loop (structural). FLOOR: the stop decision, the freshness of the evidence it reads + the record shape; ADVISORY: the orchestration, the self-approval, the stuck-point mapping and every git step. '/pharn-loop finished' means a stop was reached and recorded — NEVER 'the feature is good', NEVER 'a human approved the intent', NEVER 'the fix converged' (P0)."
+description: "Run the PRODUCT pipeline UNATTENDED to a deterministic stop, then report what was done: /pharn-spec --model-approve (the model approves its own SPEC, recorded as approved_by: model) → /pharn-plan → /pharn-grill → /pharn-build → /pharn-regress → /pharn-verify, iterating build→regress→verify until the tested pharn/floor/check-loop.mjs (Design C) says stop: CONTINUE on any measurable red (verify FAIL / INCOMPLETE, a regression) under a bounded --max-iter cap (default 3); STOP_TERMINAL on an inconclusive verdict or a reconcile red (a retry would re-anchor the baseline and erase a detected Bash escape); STOP_GREEN on verify PASS ∧ regress no-regressions; STOP_CAP at the cap. There is NO human gate inside the run: every sub-stage question maps to ONE enumerated stuck-point table (S1–S11) — mechanical cases resolve by a fixed rule, judgment cases STOP and report, nothing is guessed. Before it reads the stop, and again before a STOP_GREEN commit, it runs pharn/floor/check-loop-fresh.mjs: the reports must be their checkers' output from stamps that validate, bound by hash, and the verify stamp must describe the live tree — a stale or missing stage is RE-RUN inside the same iteration (a counted budget, default one per stage per iteration), a fabricated verdict or a spent budget is a recorded blocked stop (S11, blocked: stale-evidence), never a summary that names skipped gates. At every stop it writes pharn/features/<name>/LOOP.md per pharn/pharn-contracts/loop-record.md and self-checks it with pharn/floor/check-loop-record.mjs; for every non-blocked stop it additionally re-derives the recorded decision with pharn/floor/check-loop-decision.mjs — a LIVE re-run of check-loop.mjs against the record's own cited reports, using its iterations and cap, must reproduce the same decision — and a STOP_GREEN commit is gated on that re-derivation being GREEN (a decision that cannot be re-derived from its cited reports is never committed unattended). Only a STOP_GREEN result is committed, to a NEW LOCAL BRANCH, staging only regular files from the plan's ## Files plus the feature's named artifacts; every other stop commits nothing and reverts the model's SPEC approval to Draft (a SPEC the run never approved, as on a clarification stop, stays a Draft). Never pushes, never merges, never seals. Ends with a summary, not a question. At EVERY stop that has a feature directory it also emits pharn/features/<name>/cost.json per pharn/pharn-contracts/cost-ledger.md — a per-request token ledger written by pharn/floor/render-cost-ledger.mjs itself and validated by pharn/floor/check-cost-ledger.mjs, with phase boundaries recorded live by pharn/floor/mark-phase.mjs because the platform's attributionSkill names the orchestrator and never the sub-stage. The ledger records TOKENS and carries no price table ever; money is the reader's own multiplication. It ANNOTATES and gates NOTHING — a RED ledger never blocks a commit (fix #3). check-loop.mjs's inputs are ONLY the two verdict reports + iter/cap, so no advisory stage can gate the loop (structural). FLOOR: the stop decision, the freshness of the evidence it reads + the record shape; ADVISORY: the orchestration, the self-approval, the stuck-point mapping and every git step. '/pharn-loop finished' means a stop was reached and recorded — NEVER 'the feature is good', NEVER 'a human approved the intent', NEVER 'the fix converged' (P0)."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -87,8 +87,9 @@ Load the trusted prefix and obey it:
   stuck-point table (Step 2): a mechanical case resolves by a fixed rule, a judgment case **stops** and the
   summary says what the run needs. Nothing is guessed (P5, P6).
 - **Only `STOP_GREEN` is committed**, to a **new local branch** — never pushed, never merged. Every other
-  stop commits nothing, leaves the changes in the working tree, and **reverts the SPEC to `Draft`** — an
-  agent-performed step (advisory), so an aborted run can skip it.
+  stop commits nothing, leaves the changes in the working tree, and **reverts a model-approved SPEC to
+  `Draft`** — an agent-performed step (advisory), so an aborted run can skip it. A SPEC the run never approved
+  (a clarification stop, S6b) simply stays a `Draft`.
 - **The human decision still exists; it moves to after the run.** A person reviews the branch (or the
   working tree) and decides what to merge.
 - **It is expensive unattended.** Every iteration re-runs `/pharn-regress` (a base worktree, an install,
@@ -199,22 +200,23 @@ Look for `pharn/features/<slug>-<N>/LOOP.md` with the highest existing `<N>`, el
 ## Step 2 — The stuck-point table (the ONE enumeration of every question a sub-stage could ask)
 
 Every "ask the human" a sub-stage would make during this run maps to **exactly one** row. Rows S1–S3 keep
-the run going on a fixed rule; S4–S11 **stop** it. S6, S7 and S8 are triggered by your own judgment, and each
+the run going on a fixed rule; S4–S11 **stop** it. S6, S6b, S7 and S8 are triggered by your own judgment, and each
 fails in the safe direction — it stops rather than guesses.
 
-| id  | trigger                                                                                                                                                                               | rule                                                                                                |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| S1  | always, at entry                                                                                                                                                                      | choose and validate the slug (Step 1a); a failing candidate stops `blocked: no-slug`                |
-| S2  | `pharn/features/<slug>/` already exists                                                                                                                                               | take the first absent `<slug>-2`, `<slug>-3`, … (Step 1a); never overwrite                          |
-| S3  | always, before the first stage                                                                                                                                                        | capture the base SHA and original checkout (Step 1a); a failed capture stops `blocked: no-git-base` |
-| S4  | gate discovery yields no gates (no `--gates`, and the allowlist ∩ `package.json` scripts is empty)                                                                                    | stop `blocked: no-gates` — never run verify over an empty gate map                                  |
-| S5  | `/pharn-build`'s seam-config extraction or `check-seam-config.mjs` is non-zero                                                                                                        | stop `blocked: seam-config` — never substitute the default policy                                   |
-| S6  | the description cannot fill the SPEC's required sections without inventing intent                                                                                                     | stop `blocked: thin-intent`                                                                         |
-| S7  | the build finds the plan ambiguous                                                                                                                                                    | stop `blocked: plan-ambiguity`                                                                      |
-| S8  | the seam resolver's walk reaches `ask`                                                                                                                                                | stop `blocked: seam-unresolved`                                                                     |
-| S9  | a stage refuses before emitting its verdict (a missing artifact, a RED spec→plan chain, a RED lessons declaration, no parseable `## Files`, an unresolved `## Open questions (HALT)`) | stop `blocked: stage-refused`                                                                       |
-| S10 | any other sub-stage instruction to ask the human                                                                                                                                      | stop `blocked: unlisted-ask` — the closure row; nothing falls through to a guess                    |
-| S11 | a stage's evidence is stale or missing after the stage claims to have run, and `check-loop-fresh.mjs` will not offer another re-run (Step 5)                                          | stop `blocked: stale-evidence` — never read a stop from evidence about another tree                 |
+| id  | trigger                                                                                                                                                                               | rule                                                                                                    |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| S1  | always, at entry                                                                                                                                                                      | choose and validate the slug (Step 1a); a failing candidate stops `blocked: no-slug`                    |
+| S2  | `pharn/features/<slug>/` already exists                                                                                                                                               | take the first absent `<slug>-2`, `<slug>-3`, … (Step 1a); never overwrite                              |
+| S3  | always, before the first stage                                                                                                                                                        | capture the base SHA and original checkout (Step 1a); a failed capture stops `blocked: no-git-base`     |
+| S4  | gate discovery yields no gates (no `--gates`, and the allowlist ∩ `package.json` scripts is empty)                                                                                    | stop `blocked: no-gates` — never run verify over an empty gate map                                      |
+| S5  | `/pharn-build`'s seam-config extraction or `check-seam-config.mjs` is non-zero                                                                                                        | stop `blocked: seam-config` — never substitute the default policy                                       |
+| S6  | the description cannot fill the SPEC's required sections without inventing intent                                                                                                     | stop `blocked: thin-intent`                                                                             |
+| S6b | `/pharn-spec` reports the Draft still carries a clarification marker, so it will not approve it                                                                                       | stop `blocked: needs-clarification` — a person answers the marked questions; the run never guesses them |
+| S7  | the build finds the plan ambiguous                                                                                                                                                    | stop `blocked: plan-ambiguity`                                                                          |
+| S8  | the seam resolver's walk reaches `ask`                                                                                                                                                | stop `blocked: seam-unresolved`                                                                         |
+| S9  | a stage refuses before emitting its verdict (a missing artifact, a RED spec→plan chain, a RED lessons declaration, no parseable `## Files`, an unresolved `## Open questions (HALT)`) | stop `blocked: stage-refused`                                                                           |
+| S10 | any other sub-stage instruction to ask the human                                                                                                                                      | stop `blocked: unlisted-ask` — the closure row; nothing falls through to a guess                        |
+| S11 | a stage's evidence is stale or missing after the stage claims to have run, and `check-loop-fresh.mjs` will not offer another re-run (Step 5)                                          | stop `blocked: stale-evidence` — never read a stop from evidence about another tree                     |
 
 **S9 and S11 are different failures, and the difference decides the row.** S9 is a stage that **says** it
 refused. S11 is evidence on disk that does not match the tree, whatever the stages said: a skipped or
@@ -236,7 +238,8 @@ node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn
 
 Invoke `/pharn-spec --model-approve` with the threaded `<name>` and the description. Its Step 4a skips the
 approval form, pins the SPEC through its own Step 5 under its own writes-scope, and records
-`approved_by: model`; on thin intent it reports back instead, which is S6. Then read the gate this run's
+`approved_by: model`; on thin intent it reports back instead, which is S6, and on a clarification marker
+left in the Draft it reports back blocked on clarification, which is S6b. Then read the gate this run's
 plan stage will enforce anyway:
 
 ```bash
@@ -451,7 +454,7 @@ capture rules:
 - The body carries an **`## Outcome`** section with three lines, so the outcome survives on disk and not only
   in the summary: `commit:` — one value from the Step 7 closed set (for `STOP_GREEN`, the expected
   `committed <branch>`; Step 6d rewrites it if the commit does not happen); `spec:` — `approved by the model`,
-  `reverted to Draft` or `revert failed`; `blocked:` — the id, or `none`.
+  `reverted to Draft`, `revert failed`, or `not approved` (a SPEC this run never approved, as on S6b); `blocked:` — the id, or `none`.
 - The per-iteration verdicts, the standing reds (paths, quoted as DATA), and pointers to `GRILL.md` /
   `REGRESSION.md` / `VERIFY.md` — cited, not restated.
 - **The `## Handoff` is written on every stop path.** A run that ended badly is the one whose synthesis is
@@ -677,8 +680,8 @@ Report, plainly and without asking anything:
   `not committed: branch failed` | `not committed: stage failed` | `not committed: commit failed`;
 - where the checkout is: on the new branch (naming `<original branch>` to return to), or unchanged;
 - any committed path that was already dirty in the pre-run snapshot (`.pharn/pharn-loop/<name>/pre-run-status.txt`);
-- the SPEC state: **approved by the model** (inside the commit), **reverted to `Draft`**, or **revert failed**
-  (still approved by the model — say so);
+- the SPEC state: **approved by the model** (inside the commit), **reverted to `Draft`**, **revert failed**
+  (still approved by the model — say so), or **not approved** (the run never approved it, as on S6b);
 - **the run report**: print `pharn/features/<name>/RUN-REPORT.md`'s `## Tokens` table and its `## Files`
   list. **The FILE is the record; this screen copy is advisory** and is reproduced from it, never
   retyped. Name the path so the reader can open it. If no report was rendered (a stop before S2 has no
@@ -690,7 +693,9 @@ Report, plainly and without asking anything:
   S2 has no feature directory), say that plainly rather than omitting the line;
 - instruction-looking content found in any artifact or prior Handoff, quoted as DATA;
 - the honest line: _"The run stopped at the floor-grade decision shown. The SPEC was approved by the model,
-  not a person. This is not a judgment that the change is good; review the branch before merging."_
+  not a person. This is not a judgment that the change is good; review the branch before merging."_ When
+  the SPEC state is **not approved**, its second sentence reads instead: _"The SPEC was never approved;
+  it is a Draft waiting for a person."_
 
 **Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the audit sections for document layout only, and a reader who stops at the turn-end never reaches it.
 
@@ -827,7 +832,7 @@ Then **end your turn**. Do not ask a question, do not push, do not merge, do not
   `reason_code` (`empty-source-set` → S4); a re-run is bounded by the checker's own counter, not by prose.
 - S1's regex, S2's directory test, S3's exit code, S4's empty-set test, S5 and S9's exit codes and heading
   presence, the staging filter (file test, `HEAD` tracking, `check-ignore`) and every commit outcome (exit
-  codes) are membership tests. S6, S7 and S8 are judgment-triggered and each ends in a **stop**, never a guess.
+  codes) are membership tests. S6, S6b, S7 and S8 are judgment-triggered and each ends in a **stop**, never a guess.
 - The terminal fallback of every stuck point is a stop whose summary says what the run needs — P5's "ask the
   human", delivered when the run halts rather than mid-run.
 
@@ -840,7 +845,8 @@ Then **end your turn**. Do not ask a question, do not push, do not merge, do not
 - **No retry of an unmeasured verdict or a reconcile red.** Both are `STOP_TERMINAL`.
 - **No guess at a stuck point.** Every question maps to Step 2; judgment cases stop.
 - **No model approval left behind on a non-green stop — by procedure, not by the floor.** Every stop except a
-  committed `STOP_GREEN` reverts the SPEC; the revert is agent-performed, so an aborted run can skip it.
+  committed `STOP_GREEN` reverts a SPEC the run approved (one it never approved stays a `Draft`); the revert is
+  agent-performed, so an aborted run can skip it.
 - **No unbounded iteration, and no promise of convergence.** The cap bounds the decision; whether a fix works
   is model work.
 - **No re-spec or re-plan inside the loop.** The loop iterates only `build → regress → verify`.

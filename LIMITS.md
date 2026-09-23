@@ -85,6 +85,10 @@ but the gate's integrity here rests on _who may write the enum field_, and in pu
   human-supplied signed marker) — that is **harness-layer**, environment-dependent, not expressible in
   markdown methodology. Until an environment supplies it, this stays a named limit, not a guarantee.
 
+A related bound on the same checker: a valid AC grammar means the AC is PHRASED testably — not that
+any test exists, runs, or passes. The template rules are opt-in by the `spec_template` frontmatter
+key; a SPEC without it validates under the legacy four-section rule.
+
 ---
 
 ## 2. The residual (named, bounded, not zeroed)

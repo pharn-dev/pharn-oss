@@ -22,6 +22,13 @@
 // enum-gated / floor-verifiable fields (section presence, state enum, spec_id presence, body-hash equality) —
 // NEVER over the intent's meaning. No guaranteed decision rests on the free-text intent (mirrors fix #1).
 //
+// THE SPEC-TEMPLATE RULES live in ./spec-template-core.mjs (P3: they change when the TEMPLATE changes; this file
+// changes when §6's pin/state contract does), and pharn/pharn-contracts/spec-template.md defines them. This file
+// only decides WHETHER they apply — isTemplated(): the frontmatter carries a `spec_template` line — and turns
+// their findings into REDs. A SPEC without that line is LEGACY and takes exactly the code path it took before
+// the rules existed: no new RED, the same GREEN line. Their bounds (opt-in, phrased-not-tested, which headings
+// count, the line grammar, provenance only) are stated once, in the core's header, and in the contract.
+//
 // Usage:
 //   node pharn/floor/check-spec.mjs <SPEC.md>           validate → exit 1 on any RED (prints each), else 0 + GREEN
 //   node pharn/floor/check-spec.mjs --spec-id <SPEC.md> print the frontmatter spec_id to stdout — the §6 root
@@ -43,13 +50,25 @@
 //                                                      shells this mode INSTEAD of parsing frontmatter
 //                                                      itself, so the gate cannot disagree with validate
 //                                                      about what `state` IS (see emitState).
+//   node pharn/floor/check-spec.mjs --template-ref <id> print `<id>@sha256:<digest>` for a KNOWN template
+//                                                      id — the value /pharn-spec writes into
+//                                                      `spec_template`. The digest is bodyHash() over the
+//                                                      whole template file (BOM stripped, line endings
+//                                                      folded), so a CRLF checkout prints the same value.
+//                                                      The INTENDED source of that value: /pharn-spec shells
+//                                                      it rather than computing one (PHARN's own build-loop
+//                                                      lesson L22). ADVISORY: rule 7 checks the value's
+//                                                      shape, never that it came from this mode. There is no
+//                                                      default id (L41).
 //
-// Exit: 1 on any RED (validate) / on unreadable | no-frontmatter (--hash, --spec-id, --state); 0 otherwise.
-// All three read-only modes REPORT that refusal on stderr before exiting non-zero (L5). See emitState.
+// Exit: 1 on any RED (validate) / on unreadable | no-frontmatter (--hash, --spec-id, --state) / on an unknown
+// id, a missing id, or an unreadable template (--template-ref); 0 otherwise. Every read-only mode REPORTS its
+// refusal on stderr before exiting non-zero (L5). See emitState.
 
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { FM_RE, stripBom } from "./frontmatter-core.mjs";
+import { H2_RE, isTemplated, checkTemplate, templatePath, knownTemplateIds } from "./spec-template-core.mjs";
 
 // Enums / shapes — every branch is a presence / enum / hash-equality membership test (P5); the terminal
 // fallback on any non-member is a loud RED, never a guess. These are the enum-gated / floor-verifiable fields.
@@ -115,7 +134,7 @@ function parseSpec(text) {
     const kv = line.match(/^([A-Za-z_][\w-]*):[ \t]*(.*)$/);
     if (kv) fm[kv[1]] = readValue(kv[2]);
   }
-  return { fm, body: text.slice(m[0].length) };
+  return { fm, raw: m[1], body: text.slice(m[0].length) };
 }
 
 // The body's SHA-256, with line endings FOLDED (`\r\n` → `\n`) before hashing. LF vs CRLF is the same
@@ -145,7 +164,7 @@ function bodyHash(body) {
 function headingsOf(body) {
   const out = [];
   for (const line of body.split(/\r?\n/)) {
-    const hm = line.match(/^##\s+(.+?)\s*$/);
+    const hm = line.match(H2_RE);
     if (hm) out.push(hm[1].toLowerCase());
   }
   return out;
@@ -224,7 +243,7 @@ function emitSpecId(specPath) {
 // while --hash and --spec-id exited 1 silently. A silent exit hands a shelling caller an exit code and
 // nothing to surface (the input-capture boundary L5 names), and check-spec-approved.mjs echoes this child's
 // output verbatim, so the message is what tells a user WHICH file could not be read — which is an argument
-// for all three modes reporting, not for one of them doing it. The three read-only modes are now uniform;
+// for all three modes reporting, not for one of them doing it. Those three read-only modes are now uniform;
 // this note records that the divergence was removed rather than leaving a stale claim that it persists.
 function emitState(specPath) {
   const text = readText(specPath, "SPEC.md");
@@ -251,7 +270,7 @@ function validate(specPath) {
     red("frontmatter", `no YAML frontmatter block (\`---\` … \`---\`) in ${specPath}`);
     return fail();
   }
-  const { fm, body } = parsed;
+  const { fm, raw, body } = parsed;
 
   // (1) state present + ∈ enum (P5).
   if (!("state" in fm) || fm.state.length === 0) {
@@ -284,9 +303,47 @@ function validate(specPath) {
     }
   }
 
+  // (5) the spec-template rules (spec-template-core.mjs) — ONLY when the frontmatter carries a `spec_template`
+  //     line (isTemplated: a raw line test, so a key line the field parser drops still opts in). A SPEC without
+  //     one is legacy and never reaches this branch, so its verdict and output are unchanged.
+  const templated = isTemplated(fm, raw);
+  let tpl = null;
+  if (templated) {
+    const firstLine = (text.slice(0, text.length - body.length).match(/\n/g) || []).length + 1;
+    tpl = checkTemplate({ fm, body, firstLine, baseRequired: REQUIRED_SECTIONS });
+    for (const f of tpl.findings) red(f.kind, f.detail);
+  }
+
   if (reds.length) return fail();
   const pinned = fm.state === "Approved" ? "; intent pinned" : "";
+  if (templated) {
+    console.log(
+      `GREEN — spec valid; state ${JSON.stringify(fm.state)}; ${tpl.required} required sections present; ` +
+        `template ${JSON.stringify(tpl.id)}; ${tpl.acCount} AC item(s)${pinned}`
+    );
+    return 0;
+  }
   console.log(`GREEN — spec valid; state ${JSON.stringify(fm.state)}; ${REQUIRED_SECTIONS.length} required sections present${pinned}`);
+  return 0;
+}
+
+// --- --template-ref mode: emit `<id>@sha256:<digest>`, the value /pharn-spec writes into `spec_template`. ---
+// The id -> path registry lives in spec-template-core.mjs (templatePath). The digest is bodyHash() over the whole
+// template file — the same fold as the SPEC pin, so a CRLF checkout of the template prints the same value — after
+// readText's BOM strip. It computes a value; it detects nothing: no check ever compares a SPEC's recorded digest
+// with the template file (see spec-template-core.mjs's PROVENANCE bound).
+function emitTemplateRef(id) {
+  const path = templatePath(id);
+  if (path === null) {
+    console.error(`check-spec: unknown template id ${JSON.stringify(id)} — known: {${knownTemplateIds().join(", ")}}`);
+    return 1;
+  }
+  const text = readText(path, `template ${JSON.stringify(id)}`);
+  if (text === undefined) {
+    for (const r of reds) console.error(`check-spec: ${r.kind} failed: ${r.detail}`);
+    return 1;
+  }
+  process.stdout.write(`${id}@sha256:${bodyHash(text)}\n`);
   return 0;
 }
 
@@ -313,8 +370,17 @@ function main() {
     }
     return emitState(args[1]);
   }
+  if (args[0] === "--template-ref") {
+    if (!args[1]) {
+      console.error("check-spec: usage: node pharn/floor/check-spec.mjs --template-ref <id>");
+      return 1;
+    }
+    return emitTemplateRef(args[1]);
+  }
   if (!args[0]) {
-    console.log("RED — usage: node pharn/floor/check-spec.mjs <SPEC.md>  (or --hash <SPEC.md> | --spec-id <SPEC.md> | --state <SPEC.md>)");
+    console.log(
+      "RED — usage: node pharn/floor/check-spec.mjs <SPEC.md>  (or --hash <SPEC.md> | --spec-id <SPEC.md> | --state <SPEC.md> | --template-ref <id>)"
+    );
     return 1;
   }
   return validate(args[0]);

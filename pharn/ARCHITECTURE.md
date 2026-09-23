@@ -131,7 +131,8 @@ pharn/floor/                                   the floor (§2): checkers, scanne
 pharn/pharn-contracts   L-1  schemas only, ZERO behavior: finding-shape (incl. severity enum),
                              eval-format, seam-config, loop-record, ship-briefing, ship-record,
                              cost-ledger, reconciliation-record, regression-report, verify-report,
-                             gate-run-record.
+                             gate-run-record, spec-template (+ templates/spec-template.md, the
+                             default SPEC template it defines).
                              Everything depends on this.
   └─ pharn-core          L0   seam-resolver — the seam MECHANISM, framework-agnostic.
        ├─ pharn-pipeline      grillers (plan-time interrogation, one axis each)
@@ -229,7 +230,7 @@ linking back to the spec:
 
 | stage   | artifact             | key field                                    |
 | ------- | -------------------- | -------------------------------------------- |
-| spec    | `SPEC.md`            | intent (Draft → Approved)                    |
+| spec    | `SPEC.md`            | intent (Draft → Approved) + `spec_template` (provenance) |
 | plan | `PLAN.md` | `spec_id` **+ `spec_content_hash`** (fix #4) + `applied_lessons` (floor-shaped: `none` \| `[L<n>…]`; content advisory) |
 | grill   | grill-log            | findings vs plan                             |
 | build   | `BUILD.md`           | per-phase results                            |

@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.12.1-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.13.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -339,6 +339,7 @@ judgment is **advisory**.
 | The verify and regress verdicts are computed from a gate map the gate runner wrote, not one a model typed: each value is the exit code the runner recorded for the listed command, the keys cover the resolved gate set (plus `reconcile` for verify, which runs last), and no tree edit happened between consecutive gates                                                                                                         | `run-gates.mjs`, validated by `check-verify.mjs --stamp` and `check-regress.mjs verdict --base-stamp … --head-stamp …`                                                                                     |
 | A **non-adversarial** write that reached a path the active scope would have **denied** — including one issued through `Bash`, which no hook sees — is **detected** between build and verify, and fails the verify verdict. Detected, **not** prevented; git-ignored paths are outside the reconciled set; and a writer who also rewrites the baseline defeats it on ordinary paths                                                  | `reconcile-baseline.mjs --anchor` + `check-bash-reconcile.mjs`, feeding `check-verify.mjs`                                                                                                                 |
 | An approved spec is pinned, so later body drift is detectable                                                                                                                                                                                                                                                                                                                                                                       | `check-spec.mjs --hash` at approval; re-verified at plan, grill, build, regress, verify and ship by `check-spec-approved.mjs` (directly at plan and ship, through `check-plan-spec-agree.mjs` at the rest) |
+| A SPEC that declares `spec_template` has the template's sections, acceptance criteria each with an id, Given → When → Then and exactly one `verify:` level, and no clarification marker once approved. That the criteria are **phrased** testably — **not** that any test exists, runs, or passes; and opt-in, so a SPEC without the key is checked as before                                                                       | `check-spec.mjs` (the rules in `pharn/pharn-contracts/spec-template.md`)                                                                                                                                   |
 | Secret-shaped literals in a plan can be detected by the shipped regex scanner                                                                                                                                                                                                                                                                                                                                                       | `scan-plan-secrets.mjs`                                                                                                                                                                                    |
 | A missing concrete path declared by the plan yields an incomplete build signal                                                                                                                                                                                                                                                                                                                                                      | `check-build-complete.mjs` feeding `check-verify.mjs`                                                                                                                                                      |
 | Which lenses run, and how structured findings merge                                                                                                                                                                                                                                                                                                                                                                                 | `count-lenses.mjs` + `merge-findings.mjs`                                                                                                                                                                  |
@@ -417,8 +418,9 @@ whose build changed nothing can still reuse the previous iteration's evidence. O
 committed, to a new local branch, and only if its recorded decision re-derives from the reports it cites
 (`check-loop-decision.mjs` re-runs the loop's stop computation and compares); a green that does not
 re-derive is not committed. None of this proves the reports are honest: a self-consistent forged set of
-stamps and reports still passes. Every other outcome reverts the
-spec to `Draft`, or the run says it could not. The human decision comes after the run, on the branch or the
+stamps and reports still passes. Every other outcome reverts a
+model-approved spec to `Draft`, or the run says it could not; a spec the run never approved (a stop on a
+clarification marker, say) simply stays a `Draft`. The human decision comes after the run, on the branch or the
 working tree it leaves.
 
 **Standalone:** `/pharn-review` is not a pipeline stage. It runs review lenses in parallel as subagents
@@ -442,11 +444,11 @@ byte-for-byte by `npm run docs:check`, so it cannot quietly drift from what is a
 <!-- CURRENT-STATE:BEGIN — GENERATED by .dev/floor/gen-capability-catalog.mjs. DO NOT EDIT BETWEEN MARKERS. Regenerate: npm run docs:generate -->
 
 - **Capabilities — 36 built**, counted by the `role:` frontmatter test (mirrors `pharn/floor/validate.mjs`): **13** grillers, **22** lenses, **1** skill (`pharn/pharn-core/seam-resolver/`), **0** validators, **0** verifiers, **0** auditors. Full list: [`docs/capabilities/README.md`](./docs/capabilities/README.md).
-- **Contracts — 11** (`pharn/pharn-contracts/`): `cost-ledger`, `eval-format`, `finding-shape`, `gate-run-record`, `loop-record`, `reconciliation-record`, `regression-report`, `seam-config`, `ship-briefing`, `ship-record`, `verify-report`.
+- **Contracts — 12** (`pharn/pharn-contracts/`): `cost-ledger`, `eval-format`, `finding-shape`, `gate-run-record`, `loop-record`, `reconciliation-record`, `regression-report`, `seam-config`, `ship-briefing`, `ship-record`, `spec-template`, `verify-report`.
 - **Product commands — 10** (`.claude/commands/`): `/pharn-build`, `/pharn-grill`, `/pharn-loop`, `/pharn-memory-promote`, `/pharn-plan`, `/pharn-regress`, `/pharn-review`, `/pharn-ship`, `/pharn-spec`, `/pharn-verify`.
 - **Dev-apparatus commands — 9** (`.claude/commands/`): `/pharn-dev-build`, `/pharn-dev-eval`, `/pharn-dev-grill`, `/pharn-dev-memory-promote`, `/pharn-dev-plan`, `/pharn-dev-regress`, `/pharn-dev-review`, `/pharn-dev-ship`, `/pharn-dev-verify`.
 - **Hook scripts — 4** (`.claude/hooks/`): `enforce-writes-scope.cjs`, `protect-trusted-paths.cjs`, `require-loop-record.cjs`, `set-writes-scope.cjs`.
-- **Floor checkers — 68** `.mjs` files under `pharn/floor/` (tests excluded).
+- **Floor checkers — 69** `.mjs` files under `pharn/floor/` (tests excluded).
 
 <!-- CURRENT-STATE:END -->
 

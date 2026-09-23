@@ -2042,3 +2042,27 @@ Each let a PR hide a rendered heading, or the rest of the file, from both checks
 - commit: `392817f75deed50015ed4074662595514850e6d5`
 - source: `.dev/features/changelog-per-pr/REVIEW.md` § Proposed lesson candidate + § Iteration 1 floor-gate finding `.dev/floor/changelog-core.mjs:150`, § Iteration 2 floor-gate findings `.dev/floor/changelog-core.mjs:205` and `:28`, § Iteration 3 advisory finding `.dev/floor/changelog-core.mjs:htmlOpener`
 - promoted: 2026-09-23 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L56 — A parser model's stated LIMITS come from the same model — L55 recurred in the first increment to cite it, in its bound and then in its fix
+
+type: floor · concepts: [differential-testing, parser-parity, stated-bound, lesson-recurrence, false-green, floor-escalation]
+
+**Lesson.** When a check re-implements a parser's model of syntax, the sentences that state the model's LIMITS are written from the same model, and they fail the same way. So a bound needs the same reference-parser probe as a rule does. A fix to the model needs that probe again: a hand-written fixture for the fix certifies the fixer's model too.
+
+**Measured, in `spec-template` — the first increment after L55 to cite L55.** The plan cited L55, deferred its remedy (a markdown-it differential) as a dependency decision, and labeled its own test honestly as "a fixture, not a differential". It then wrote one CommonMark exception down as the grammar's bound: an acceptance criterion inside a fenced block is still counted (fail-open). The first markdown-it probe, by an independent reviewer, showed two things:
+
+- the named exception is not one: a column-0 item after an indented fence renders as an item;
+- a real exception existed that nobody had named: a fence opened in an earlier section and closed by an indented line hides the whole `## Acceptance Criteria` section, while the checker said GREEN.
+
+The fix then modeled column-0 blocks. The next probe round found two new divergences from the renderer in that model: a false RED on a fenced example that quotes `## Scope` beside the real section, and a `<!-->` comment treated as unclosed. Every round's own tests were GREEN.
+
+**Why it matters.** A limitation statement reads as the careful, humble part of a claim, so it is the part nobody probes. [[L55]] says fixtures written from the author's model certify that model; this shows the model also writes the disclaimer. Here the disclaimer named a harmless case and missed the harmful one. This is L55's second occurrence, three rounds deep, and [[L20]] says a second occurrence earns a floor check. L55's own bound calls its remedy pending, and this makes it due.
+
+**Remedy (not built here, per [[L46]]).** A differential test that runs markdown-it (already in `node_modules`, a transitive devDependency) over every line-grammar checker's fixtures, and compares the headings and list items it renders with the checker's view. Pinning it is a dependency decision for a human. Until then, the named residual is `spec-ac-grammar-differential`. The discipline in the meantime: run the renderer probe on the stated bounds and on every fix, not only on the rules.
+
+**Provenance.**
+
+- feature: `spec-template`
+- commit: `2bea57cb8ce0b536cb137208280b74760573f22f`
+- source: `.dev/features/spec-template/REVIEW.md` § Floor-gate findings, finding 1 (`pharn/floor/check-spec.mjs:43`) + § Iteration 2 findings N1 (`pharn/floor/spec-template-core.mjs:288`) and N2 (`pharn/floor/spec-template-core.mjs:149`)
+- promoted: 2026-09-23 via gated `/pharn-dev-memory-promote` (human-approved).

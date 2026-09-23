@@ -23,7 +23,74 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.13.0] - 2026-09-23
+
 ### Added
+
+- 2026-09-23: **`/pharn-spec` now fills a shipped SPEC template, and `check-spec.mjs` enforces that template's
+  shape on any SPEC declaring `spec_template` — above all an ID'd, testable acceptance-criteria grammar that later
+  stages can key on. `SKILLS_VERSION` 6.12.1 → 6.13.0** (minor: a newly shipped template, contract and checker
+  rules). `MIN_CLI` stays 0.5.0: pharn-cli has copied `pharn/pharn-contracts/` whole and recursively since that
+  version, for both install and update.
+  - **The template and its contract.** [`pharn/pharn-contracts/templates/spec-template.md`](./pharn/pharn-contracts/templates/spec-template.md)
+    (id `pharn-default`) has nine sections: Intent, Scope, Scenarios, Acceptance Criteria, Constraints, Data,
+    Assumptions, Open Questions and Success Metrics. Five of them are required. Each carries a
+    `<!-- pharn:guidance … -->` comment that `/pharn-spec` removes. [`pharn/pharn-contracts/spec-template.md`](./pharn/pharn-contracts/spec-template.md)
+    defines the sections, the grammar, the clarification marker and the rules. The template sits under
+    `pharn-contracts/` rather than the brief's `pharn/pharn-pipeline/templates/`, because pharn-cli copies only the selected griller directories from `pharn-pipeline/` (lenses live under `pharn-review/`), so a template there would never reach an install.
+  - **Seven opt-in rules, one RED kind each,** in a new pure module,
+    [`pharn/floor/spec-template-core.mjs`](./pharn/floor/spec-template-core.mjs), which
+    [`pharn/floor/check-spec.mjs`](./pharn/floor/check-spec.mjs) imports. The split keeps the §6 pin and state
+    logic apart from the template rules, which the planned template-override increment will change.
+    - `section`: Assumptions is required, each template section appears at most once, and no template heading
+      may sit inside a fenced block, an HTML comment or a `<pre>`-style block opened at column 0, where a
+      renderer would not show it;
+    - `ac`: every criterion is `- **AC-<n>** Given … When … Then …` with exactly one indented
+      `- verify: unit | integration | e2e` line, where a verify level spelled `**verify:**`, `1. verify:` or
+      bare `verify:` also counts toward the one, and every other line in the section is blank or an indented
+      continuation;
+    - `clarification`: at most three `[NEEDS CLARIFICATION: …]` markers, and none once Approved;
+    - `out-of-scope`: at least one non-goal under `## Scope`;
+    - `optional-section`: an optional section that is present is not empty;
+    - `guidance`: no guidance comment remains;
+    - `template`: `spec_template` is `<id>@sha256:<64-hex>` and names a known id.
+
+    A new mode, `--template-ref <id>`, prints that value, and `/pharn-spec` copies its output rather than
+    computing a hash.
+
+  - **Legacy SPECs are untouched.** The rules apply only when the frontmatter has a line starting
+    `spec_template:`, tested on the raw frontmatter text, so a key line the field parser cannot read still
+    opts in (and REDs). All 48
+    pre-existing `check-spec` tests pass unchanged. A differential run of `main`'s checker against this one gave
+    byte-identical stdout, stderr and exit codes on all 80 runs: 20 inputs (both committed SPECs and 18 legacy
+    fixture shapes) under 4 modes each.
+  - **`/pharn-spec`** fills the template, and its inline skeleton is gone. Its interrogation also checks that
+    each Then is observable on the public surface, warns when PHARN's gate discovery finds no `test` script
+    (a project using another runner names it through `--gates`), and asks whether an e2e criterion has a
+    runner. A marker left in the Draft blocks approval. An existing legacy SPEC is revised in
+    place and migrated only when its owner chooses. **`/pharn-loop`** gains stop S6b,
+    `blocked: needs-clarification`, and its record's `spec:` line gains `not approved`.
+  - **Bounds, each stated in the contract and in `spec-template-core.mjs`'s header.**
+    - A valid grammar means the criteria are **phrased** testably, never that any test exists, runs, or passes.
+      PHARN writes and runs no acceptance tests today.
+    - The rules are opt-in, so deleting the key bypasses them.
+    - The criteria are read line by line, not by a markdown parser, and which headings exist comes from a small
+      model of the blocks that can hide one. A block opened 1–3 columns in at the top level, or an HTML block
+      that ends at a blank line, can still hide a heading unnoticed (named residual
+      `spec-ac-grammar-differential`: no reference-parser test pins the model).
+    - Unfilled `<placeholders>` are not detected.
+    - `spec_template` is provenance only: nothing compares it with the template file.
+  - **Also fixed here:** `pharn/floor/gate-run-core.mjs:15` now cites `CHANGELOG [6.3.0]` in place of the stale
+    `CHANGELOG.md:1817-1818`, the deferral recorded in the `changelog-per-pr` entry below.
+  - **Lesson L56 promoted** to `.dev/memory-bank/lessons-learned.md` through `/pharn-dev-memory-promote`, with the
+    human's accept, and `docs/lessons-index.md` regenerated (apparatus only). L55 recurred in this increment:
+    the grammar's stated limit was itself wrong, and the fix's model diverged from the renderer twice more
+    before three review rounds came back clean.
+  - **Trusted docs, edited by the human outside the agent loop** (they are hook-protected):
+    - `LIMITS.md` §1d now says that a valid AC grammar means the criterion is phrased testably, not that any
+      test exists, runs, or passes, and that the template rules are opt-in by the `spec_template` key;
+    - `pharn/ARCHITECTURE.md` §4 lists the `spec-template` contract, and its §6 spec row names
+      `spec_template` as provenance. This moves the `pharn/ARCHITECTURE.md` content hash that dev plans pin.
 
 - 2026-09-23: **Every PR now adds a dated CHANGELOG entry, every `SKILLS_VERSION` bump opens its own dated section, and merged
   entries are append-only — held by two checks over one shared grammar** (no `SKILLS_VERSION` bump: only `.dev/**`, a
