@@ -23,6 +23,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-09-24: **Lesson L59 promoted to `.dev/memory-bank/lessons-learned.md`: a call that follows a symlink answers
+  for the target, never for the link.** It is L54's mechanism at a third floor site. `hashFile` opened each
+  enumerated path with `openSync`, so a tracked directory symlink hashed as `null` and every reconcile reported it
+  as an escape. No fixture in either reconciler suite held a link. The fix itself shipped in 6.17.1
+  (`reconcile-symlink-hash`, PR #259); this entry records only the lesson, which stays a pending remedy: only
+  `reconcile-baseline.test.mjs` carries a `PATH_KINDS` enumeration. `docs/lessons-index.md` was regenerated with
+  the narrow generator. Apparatus only, so there is no `SKILLS_VERSION` bump.
+
 ## [6.17.1] - 2026-09-24
 
 ### Fixed
