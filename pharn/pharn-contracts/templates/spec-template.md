@@ -2,18 +2,18 @@
 spec_id: <name>
 state: Draft
 spec_content_hash: ""
-spec_template: <output of check-spec.mjs --template-ref pharn-default>
+spec_template: <the line check-spec.mjs --resolve-template-ref prints>
 ---
 
 <!-- pharn:guidance
-PHARN's default SPEC template, id `pharn-default`. Its shape is defined by
-pharn/pharn-contracts/spec-template.md, and pharn/floor/check-spec.mjs enforces it on any SPEC whose
-frontmatter carries `spec_template`.
+A PHARN SPEC template: the one PHARN ships, or a project's own copy of it at pharn.spec-template.md in the
+project root. Its shape is defined by pharn/pharn-contracts/spec-template.md, and pharn/floor/check-spec.mjs
+enforces it on any SPEC whose frontmatter carries `spec_template`.
 
 How /pharn-spec uses this file:
 - copy it to pharn/features/<name>/SPEC.md and fill every <placeholder>;
-- set `spec_template` to the exact line `node pharn/floor/check-spec.mjs --template-ref pharn-default`
-  prints, and never compute or type that value by hand;
+- set `spec_template` to the exact line `node pharn/floor/check-spec.mjs --resolve-template-ref` prints,
+  and never compute or type that value by hand;
 - delete an optional section you do not use, because an empty optional section is RED;
 - remove EVERY pharn:guidance comment, this one included, because a remaining one is RED.
 

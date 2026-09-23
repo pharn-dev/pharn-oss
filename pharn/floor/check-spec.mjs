@@ -22,6 +22,12 @@
 // enum-gated / floor-verifiable fields (section presence, state enum, spec_id presence, body-hash equality) —
 // NEVER over the intent's meaning. No guaranteed decision rests on the free-text intent (mirrors fix #1).
 //
+// THE TEMPLATE CLI, a second axis this file hosts, stated rather than hidden (P3): besides §6's pin/state contract,
+// this file is where a template is FOUND and READ — --template-ref, --resolve-template-ref and --template-path,
+// including the project template's file checks (containment, an exact-name directory listing, lstat, an O_NOFOLLOW
+// read). They live here because this is the file that already reads files; what a template's TEXT must contain is
+// spec-template-core.mjs's validateTemplate(), which stays pure. A later split would move exactly those functions.
+//
 // THE SPEC-TEMPLATE RULES live in ./spec-template-core.mjs (P3: they change when the TEMPLATE changes; this file
 // changes when §6's pin/state contract does), and pharn/pharn-contracts/spec-template.md defines them. This file
 // only decides WHETHER they apply — isTemplated(): the frontmatter carries a `spec_template` line — and turns
@@ -59,16 +65,47 @@
 //                                                      it rather than computing one (PHARN's own build-loop
 //                                                      lesson L22). ADVISORY: rule 7 checks the value's
 //                                                      shape, never that it came from this mode. There is no
-//                                                      default id (L41).
+//                                                      default id (L41). The template must pass
+//                                                      validateTemplate() first, else it is REFUSED.
+//   node pharn/floor/check-spec.mjs --resolve-template-ref
+//                                                      print the reference /pharn-spec pins: `project@…` when
+//                                                      the project's own template exists and validates, else
+//                                                      `pharn-default@…`. "Exists" means a directory entry
+//                                                      case-folds to its name; once one does, every failure is
+//                                                      a REFUSAL (exit 1), NEVER a fallback to the default.
+//   node pharn/floor/check-spec.mjs --template-path <id>
+//                                                      print a known id's path, relative to the project root —
+//                                                      the file /pharn-spec fills. Registry only: no file check.
+//
+// A REFUSED template prints nothing on stdout and one line per reason on stderr:
+//   check-spec: template "<id>" refused (<code>): <detail>
+// where <code> is a member of spec-template-core.mjs's TEMPLATE_REFUSALS.
+//
+// Bounds of the project template's file checks, each also in the contract: the O_NOFOLLOW / fstat branches are
+// reachable only by a race between the listing and the read, so no deterministic test reaches them; /pharn-spec's
+// later Read of the file is not tied to the digested bytes; and the hook's Windows trailing dot/space fold is not
+// mirrored. A symlinked pharn/ or pharn/floor/ is a REFUSAL (symlinked-root), not a bound.
 //
 // Exit: 1 on any RED (validate) / on unreadable | no-frontmatter (--hash, --spec-id, --state) / on an unknown
-// id, a missing id, or an unreadable template (--template-ref); 0 otherwise. Every read-only mode REPORTS its
-// refusal on stderr before exiting non-zero (L5). See emitState.
+// id, a missing id, or a refused template (--template-ref, --resolve-template-ref), and on an unknown or missing
+// id (--template-path, which never reads a file); 0 otherwise. Every read-only mode REPORTS its refusal on stderr before exiting non-zero (L5). See emitState.
 
-import { readFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
 import { FM_RE, stripBom } from "./frontmatter-core.mjs";
-import { H2_RE, isTemplated, checkTemplate, templatePath, knownTemplateIds } from "./spec-template-core.mjs";
+import {
+  H2_RE,
+  isTemplated,
+  checkTemplate,
+  templatePath,
+  knownTemplateIds,
+  isShippedTemplate,
+  projectRoot,
+  foldName,
+  validateTemplate,
+  PROJECT_TEMPLATE_ID,
+} from "./spec-template-core.mjs";
 
 // Enums / shapes — every branch is a presence / enum / hash-equality membership test (P5); the terminal
 // fallback on any non-member is a loud RED, never a guess. These are the enum-gated / floor-verifiable fields.
@@ -327,23 +364,153 @@ function validate(specPath) {
   return 0;
 }
 
-// --- --template-ref mode: emit `<id>@sha256:<digest>`, the value /pharn-spec writes into `spec_template`. ---
-// The id -> path registry lives in spec-template-core.mjs (templatePath). The digest is bodyHash() over the whole
-// template file — the same fold as the SPEC pin, so a CRLF checkout of the template prints the same value — after
-// readText's BOM strip. It computes a value; it detects nothing: no check ever compares a SPEC's recorded digest
-// with the template file (see spec-template-core.mjs's PROVENANCE bound).
+// --- the template CLI: find, read, validate, print ---------------------------------------------------------------
+//
+// A template id resolves to a path through spec-template-core.mjs's registry. The digest is bodyHash() over the
+// whole template file — the same fold as the SPEC pin, so a CRLF checkout prints the same value — after the BOM
+// strip. It computes a value; it detects nothing: no check ever compares a SPEC's recorded digest with the template
+// file (see spec-template-core.mjs's PROVENANCE bound).
+
+const rootRel = (p) => relative(projectRoot(), p).split(sep).join("/");
+const refused = (code, detail) => ({ refused: [{ code, detail }] });
+
+// Read a PROJECT (non-shipped) template: containment first (pure path arithmetic, before any filesystem call), then
+// each path component from the root through its parent's directory LISTING — the only absence proof, because a
+// listing names a dangling symlink where a link-following stat reports "absent" (L54) — then lstat, then the read
+// itself through an O_NOFOLLOW | O_NONBLOCK descriptor checked with fstat. Returns { text } | { absent: true } |
+// { refused }. A case-folded match that is not an exact match is a refusal on EVERY filesystem, so a case-insensitive
+// volume and a case-sensitive one resolve the same checkout the same way.
+// The project root as INVOKED: two levels above the path this script was run as (argv[1], which Node does not
+// resolve), canonicalized. projectRoot() comes from the module's REAL path instead. The two differ exactly when the
+// checker was reached through a symlinked pharn/ or pharn/floor/, and then the project template, the write guard
+// and the checker would each mean a different directory — so the checker refuses rather than read the wrong one
+// (REVIEW finding F1). A symlink ABOVE the project (macOS's /var -> /private/var) canonicalizes away on both sides.
+function invokedRootMismatch() {
+  let invoked, real;
+  try {
+    invoked = realpathSync(resolve(dirname(process.argv[1]), "..", ".."));
+    real = realpathSync(projectRoot());
+  } catch (e) {
+    return `cannot resolve the project root: ${e.code || e.message}`;
+  }
+  return invoked === real
+    ? null
+    : "the checker was reached through a symbolic link (pharn/ or pharn/floor/), so the project root it would read is not the one it was run from — run it through the project's real path";
+}
+
+function readProjectTemplate(id) {
+  const mismatch = invokedRootMismatch();
+  if (mismatch) return refused("symlinked-root", mismatch);
+  const target = templatePath(id);
+  const rel = relative(projectRoot(), target);
+  if (rel === "" || isAbsolute(rel) || rel === ".." || rel.startsWith(".." + sep)) {
+    return refused("outside-root", `the registry path does not lie strictly inside the project root`);
+  }
+  let cur = projectRoot();
+  const parts = rel.split(sep);
+  for (let k = 0; k < parts.length; k++) {
+    const name = parts[k];
+    let entries;
+    try {
+      entries = readdirSync(cur);
+    } catch (e) {
+      return refused("unreadable", `cannot list ${rootRel(cur) || "."}: ${e.code || e.message}`);
+    }
+    if (entries.some((e) => e !== name && foldName(e) === foldName(name))) {
+      return refused(
+        "name-case",
+        `an entry in ${rootRel(cur) || "."} matches ${JSON.stringify(name)} only when case is ignored — rename it to exactly that`
+      );
+    }
+    if (!entries.includes(name)) return { absent: true };
+    const p = join(cur, name);
+    let st;
+    try {
+      st = lstatSync(p);
+    } catch (e) {
+      return refused("unreadable", `cannot stat ${rootRel(p)}: ${e.code || e.message}`);
+    }
+    if (st.isSymbolicLink()) return refused("symlink", `${rootRel(p)} is a symbolic link — the template must be a regular file`);
+    const last = k === parts.length - 1;
+    if (last ? !st.isFile() : !st.isDirectory()) {
+      return refused("not-regular-file", `${rootRel(p)} is not a ${last ? "regular file" : "directory"}`);
+    }
+    cur = p;
+  }
+  let fd;
+  try {
+    fd = openSync(cur, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+  } catch (e) {
+    // Reachable only if the leaf was swapped for a symlink between the lstat above and this open (a race).
+    if (e.code === "ELOOP") return refused("symlink", `${rootRel(cur)} became a symbolic link while being read`);
+    return refused("unreadable", `cannot open ${rootRel(cur)}: ${e.code || e.message}`);
+  }
+  try {
+    // Reachable only if the leaf was swapped for a FIFO or device between the lstat and the open (a race).
+    if (!fstatSync(fd).isFile()) return refused("not-regular-file", `${rootRel(cur)} stopped being a regular file while being read`);
+    return { text: stripBom(readFileSync(fd, "utf8")) };
+  } catch (e) {
+    return refused("unreadable", `cannot read ${rootRel(cur)}: ${e.code || e.message}`);
+  } finally {
+    closeSync(fd);
+  }
+}
+
+// Read a SHIPPED template: its path is PHARN's own, so it keeps the plain read it always had.
+function readShippedTemplate(id) {
+  try {
+    return { text: stripBom(readFileSync(templatePath(id), "utf8")) };
+  } catch (e) {
+    return refused("unreadable", `cannot read ${rootRel(templatePath(id))}: ${e.code || e.message}`);
+  }
+}
+
+// Validate a template's text and compute its reference line. Returns { line } | { refused }.
+function templateRef(id, text) {
+  const parsed = parseSpec(text);
+  if (!parsed) return refused("frontmatter", "no YAML frontmatter block (`---` … `---`)");
+  const firstLine = (text.slice(0, text.length - parsed.body.length).match(/\n/g) || []).length + 1;
+  const { refusals } = validateTemplate({ raw: parsed.raw, body: parsed.body, firstLine, baseRequired: REQUIRED_SECTIONS });
+  if (refusals.length) return { refused: refusals };
+  return { line: `${id}@sha256:${bodyHash(text)}` };
+}
+
+function printRef(id, got) {
+  if (got.refused) {
+    for (const r of got.refused) console.error(`check-spec: template ${JSON.stringify(id)} refused (${r.code}): ${r.detail}`);
+    return 1;
+  }
+  const out = templateRef(id, got.text);
+  if (out.refused) return printRef(id, out);
+  process.stdout.write(out.line + "\n");
+  return 0;
+}
+
+const unknownId = (id) => {
+  console.error(`check-spec: unknown template id ${JSON.stringify(id)} — known: {${knownTemplateIds().join(", ")}}`);
+  return 1;
+};
+
+// --- --template-ref <id>: the reference for ONE named template, validated first. ---
 function emitTemplateRef(id) {
-  const path = templatePath(id);
-  if (path === null) {
-    console.error(`check-spec: unknown template id ${JSON.stringify(id)} — known: {${knownTemplateIds().join(", ")}}`);
-    return 1;
-  }
-  const text = readText(path, `template ${JSON.stringify(id)}`);
-  if (text === undefined) {
-    for (const r of reds) console.error(`check-spec: ${r.kind} failed: ${r.detail}`);
-    return 1;
-  }
-  process.stdout.write(`${id}@sha256:${bodyHash(text)}\n`);
+  if (templatePath(id) === null) return unknownId(id);
+  if (isShippedTemplate(id)) return printRef(id, readShippedTemplate(id));
+  const got = readProjectTemplate(id);
+  if (got.absent) return printRef(id, refused("absent", `no ${rootRel(templatePath(id))} at the project root`));
+  return printRef(id, got);
+}
+
+// --- --resolve-template-ref: the project's own template when it exists, else the shipped default. ---
+function emitResolvedRef() {
+  const got = readProjectTemplate(PROJECT_TEMPLATE_ID);
+  if (!got.absent) return printRef(PROJECT_TEMPLATE_ID, got);
+  return printRef("pharn-default", readShippedTemplate("pharn-default"));
+}
+
+// --- --template-path <id>: the file /pharn-spec fills, relative to the project root. Registry only. ---
+function emitTemplatePath(id) {
+  if (templatePath(id) === null) return unknownId(id);
+  process.stdout.write(rootRel(templatePath(id)) + "\n");
   return 0;
 }
 
@@ -377,9 +544,24 @@ function main() {
     }
     return emitTemplateRef(args[1]);
   }
+  if (args[0] === "--resolve-template-ref") {
+    if (args.length !== 1) {
+      console.error("check-spec: usage: node pharn/floor/check-spec.mjs --resolve-template-ref  (it takes no argument)");
+      return 1;
+    }
+    return emitResolvedRef();
+  }
+  if (args[0] === "--template-path") {
+    if (!args[1]) {
+      console.error("check-spec: usage: node pharn/floor/check-spec.mjs --template-path <id>");
+      return 1;
+    }
+    return emitTemplatePath(args[1]);
+  }
   if (!args[0]) {
     console.log(
-      "RED — usage: node pharn/floor/check-spec.mjs <SPEC.md>  (or --hash <SPEC.md> | --spec-id <SPEC.md> | --state <SPEC.md> | --template-ref <id>)"
+      "RED — usage: node pharn/floor/check-spec.mjs <SPEC.md>  (or --hash <SPEC.md> | --spec-id <SPEC.md> | --state <SPEC.md> | " +
+        "--template-ref <id> | --resolve-template-ref | --template-path <id>)"
     );
     return 1;
   }

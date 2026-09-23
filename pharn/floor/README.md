@@ -30,8 +30,11 @@ over `pharn/ARCHITECTURE.md` uses the same fold via `../../.dev/floor/hash-doc.m
 
 **The SPEC template is opt-in.** For a SPEC whose frontmatter declares `spec_template`, `check-spec.mjs` also
 enforces, through `spec-template-core.mjs`, the shape defined in `../pharn-contracts/spec-template.md` (sections, the acceptance-criteria
-grammar, clarification markers), and `--template-ref <id>` prints the value `/pharn-spec` writes into that
-key. A SPEC without the key is validated exactly as before. A valid acceptance-criteria grammar means the
+grammar, clarification markers). `--resolve-template-ref` prints the value `/pharn-spec` writes into that
+key: the project's own `pharn.spec-template.md` when it exists and validates, else the shipped default. Once a
+project template exists, every failure is a refusal (exit 1), never a fallback. `--template-path <id>` prints
+the file to fill, and `--template-ref <id>` names one template directly. Every template is validated before its
+reference is printed. A SPEC without the key is validated exactly as before. A valid acceptance-criteria grammar means the
 criteria are **phrased** testably, never that any test exists, runs, or passes.
 
 ## Run the validator
@@ -110,7 +113,9 @@ surface**: both settings files that can wire the hooks (`.claude/settings.json` 
 `.claude/settings.local.json`) plus the four hook scripts
 (`protect-trusted-paths.cjs`, `enforce-writes-scope.cjs`, `set-writes-scope.cjs`,
 `require-loop-record.cjs`). Each hook is re-read
-fresh on every tool call, so a write to one would disarm that guard on the very next write. Extend the
+fresh on every tool call, so a write to one would disarm that guard on the very next write. It also names
+the project's own SPEC template, `pharn.spec-template.md`, denied whether or not the file exists: its
+guidance comments are instructions `/pharn-spec` follows, so a human edits it directly. Extend the
 set further with the `PHARN_PROTECTED` env var (comma-separated; an entry containing `/` is an exact
 repo-relative path, a bare name still matches that basename at any depth). Confirm it works:
 

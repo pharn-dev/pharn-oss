@@ -1,0 +1,43 @@
+{
+  "base": "ba46b7ba430a804a67c858e2c85c09b358e71152",
+  "inside": [
+    ".claude/commands/pharn-spec.md",
+    ".dev/features/spec-template-override/GRILL.md",
+    ".dev/features/spec-template-override/PLAN.md",
+    ".dev/features/spec-template-override/REGRESSION.md",
+    ".dev/features/spec-template-override/REVIEW.md",
+    ".dev/features/spec-template-override/VERIFY.md",
+    ".dev/features/spec-template-override/proposed/apply.sh",
+    ".dev/features/spec-template-override/proposed/human-only.patch",
+    ".dev/features/spec-template-override/proposed/human-only.sha256",
+    ".dev/features/spec-template-override/regression-report.json",
+    ".dev/features/spec-template-override/verify-report.json",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/README.md",
+    "pharn/floor/check-spec.mjs",
+    "pharn/floor/check-spec.test.mjs",
+    "pharn/floor/spec-template-core.mjs",
+    "pharn/pharn-contracts/spec-template.md",
+    "pharn/pharn-contracts/templates/spec-template.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
