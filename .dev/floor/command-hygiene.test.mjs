@@ -2266,3 +2266,48 @@ test("✧ the `--complete` hand-pass is RETIRED from the wired commands (complet
   }
   assert.deepEqual(offenders, [], `a hand-passed --complete survives: ${offenders.join(", ")}`);
 });
+
+// ---------------------------------------------------------------------------------------------------------------
+// ★ EXECUTED — every pinned `set-writes-scope.cjs --from-frontmatter <cmd> --target <path>` line RUNS (6.17.0).
+// ---------------------------------------------------------------------------------------------------------------
+// Rule A pins that each such line CARRIES `--target`; it never ran one. Prettier then split /pharn-test's `writes:`
+// across lines, which the setter cannot read, and its lock re-scope exited 1 while every hygiene test stayed green
+// (the pharn-test-stage review's blocking finding). PHARN's own lesson L45: an invocation is covered only by
+// EXECUTING it. So every such line in every command is run here, `<name>` substituted, from a scratch cwd, and must
+// exit 0 and scope exactly its target.
+test("★ EXECUTED — every `--from-frontmatter … --target …` line in the commands runs the setter to exit 0", () => {
+  const SETTER = new URL("../../.claude/hooks/set-writes-scope.cjs", import.meta.url).pathname;
+  const LINE_RE = /node \.claude\/hooks\/set-writes-scope\.cjs --from-frontmatter (\.claude\/commands\/[\w.-]+\.md) --target (\S+)/g;
+  const REPO = new URL("../../", import.meta.url).pathname;
+  const sites = [];
+  for (const file of readdirSync(COMMANDS_DIR)
+    .filter((f) => f.endsWith(".md"))
+    .sort()) {
+    const text = readFileSync(join(COMMANDS_DIR, file), "utf8");
+    // `<canon-file>` (the two memory-promote commands) is a member of that command's own `writes:` prefix; the
+    // lessons file is the concrete member both promote to.
+    const canon = file === "pharn-dev-memory-promote.md" ? ".dev/memory-bank/lessons-learned.md" : "memory-bank/lessons-learned.md";
+    for (const m of text.matchAll(LINE_RE)) {
+      const target = m[2]
+        .replace(/<name>/g, "demo")
+        .replace(/<canon-file>/g, canon)
+        .replace(/[`"')]+$/, "");
+      sites.push({ file, cmd: m[1], target });
+    }
+  }
+  assert.ok(sites.length >= 15, `only ${sites.length} site(s) found — the scan broke, not the commands (L34)`);
+  const cwd = mkdtempSync(join(tmpdir(), "hyg-scope-"));
+  try {
+    for (const s of sites) {
+      const r = spawnSync(process.execPath, [SETTER, "--from-frontmatter", join(REPO, s.cmd), "--target", s.target], {
+        cwd,
+        encoding: "utf8",
+      });
+      assert.equal(r.status, 0, `${s.file}: \`--from-frontmatter ${s.cmd} --target ${s.target}\` failed: ${r.stdout}${r.stderr}`);
+      const scope = JSON.parse(readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8")).scope;
+      assert.deepEqual(scope, [s.target], `${s.file}: the setter scoped ${JSON.stringify(scope)}, not the target`);
+    }
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});

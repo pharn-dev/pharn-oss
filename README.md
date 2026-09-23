@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.16.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.17.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -169,7 +169,7 @@ normal install adds:
 ```text
 your-repo/
 ├── .claude/
-│   ├── commands/pharn-*.md        # the 10 product commands
+│   ├── commands/pharn-*.md        # the 11 product commands
 │   ├── hooks/*.cjs                # the write guards, their setter, the /pharn-loop Stop guard
 │   └── settings.json              # wires the hooks (see the caveat below)
 ├── pharn/
@@ -254,6 +254,7 @@ invoked by `/pharn-loop` or `/pharn-ship`.
 | `/pharn-spec`           | Convert prose intent into a structured `SPEC.md`, surface gaps, and stop for approval before implementation.                                                                     |
 | `/pharn-plan`           | Convert an approved `SPEC.md` into a `PLAN.md` with declared files and declared promoted lessons.                                                                                |
 | `/pharn-grill`          | Challenge the plan before code exists and re-check the spec/plan hash chain.                                                                                                     |
+| `/pharn-test`           | Write each acceptance criterion's test before the build, into the files `/pharn-plan` mapped in `AC-TESTS.md`, and pin them. Standalone in this release.                         |
 | `/pharn-build`          | Implement the plan after setting the active write scope from `PLAN.md`.                                                                                                          |
 | `/pharn-regress`        | Re-run existing project suites and record regressions outside the feature.                                                                                                       |
 | `/pharn-verify`         | Check build artifacts and completeness signals, including declared concrete paths that were never created.                                                                       |
@@ -344,7 +345,7 @@ judgment is **advisory**.
 | Secret-shaped literals in a plan can be detected by the shipped regex scanner                                                                                                                                                                                                                                                                                                                                                       | `scan-plan-secrets.mjs`                                                                                                                                                                                    |
 | A missing concrete path declared by the plan yields an incomplete build signal                                                                                                                                                                                                                                                                                                                                                      | `check-build-complete.mjs` feeding `check-verify.mjs`                                                                                                                                                      |
 | Which lenses run, and how structured findings merge                                                                                                                                                                                                                                                                                                                                                                                 | `count-lenses.mjs` + `merge-findings.mjs`                                                                                                                                                                  |
-| The ten product commands' `model:` / `effort:` frontmatter equals what `pharn.config.json`'s `models.stages` resolves for that stage — not that the stage ran under it                                                                                                                                                                                                                                                              | `check-model-config.mjs`                                                                                                                                                                                   |
+| The eleven product commands' `model:` / `effort:` frontmatter equals what `pharn.config.json`'s `models.stages` resolves for that stage — not that the stage ran under it                                                                                                                                                                                                                                                           | `check-model-config.mjs`                                                                                                                                                                                   |
 | A run's `cost.json` is **internally consistent**: a closed top-level key set, every aggregate equal to a recompute from the recorded requests, unique request ids, a strictly increasing marker sequence, no absolute path anywhere, and every row inside the run window recomputed from its own recorded markers (so unrelated session activity cannot be summed in). Consistency only — **not** that the numbers describe the run | `check-cost-ledger.mjs`                                                                                                                                                                                    |
 
 **Advisory** — everything a model judges: whether a plan is wise, whether a review finding is real,
@@ -518,11 +519,11 @@ byte-for-byte by `npm run docs:check`, so it cannot quietly drift from what is a
 <!-- CURRENT-STATE:BEGIN — GENERATED by .dev/floor/gen-capability-catalog.mjs. DO NOT EDIT BETWEEN MARKERS. Regenerate: npm run docs:generate -->
 
 - **Capabilities — 36 built**, counted by the `role:` frontmatter test (mirrors `pharn/floor/validate.mjs`): **13** grillers, **22** lenses, **1** skill (`pharn/pharn-core/seam-resolver/`), **0** validators, **0** verifiers, **0** auditors. Full list: [`docs/capabilities/README.md`](./docs/capabilities/README.md).
-- **Contracts — 13** (`pharn/pharn-contracts/`): `cost-ledger`, `eval-format`, `finding-shape`, `gate-run-record`, `loop-record`, `reconciliation-record`, `regression-report`, `seam-config`, `ship-briefing`, `ship-record`, `spec-template`, `test-results-record`, `verify-report`.
-- **Product commands — 10** (`.claude/commands/`): `/pharn-build`, `/pharn-grill`, `/pharn-loop`, `/pharn-memory-promote`, `/pharn-plan`, `/pharn-regress`, `/pharn-review`, `/pharn-ship`, `/pharn-spec`, `/pharn-verify`.
+- **Contracts — 14** (`pharn/pharn-contracts/`): `ac-tests`, `cost-ledger`, `eval-format`, `finding-shape`, `gate-run-record`, `loop-record`, `reconciliation-record`, `regression-report`, `seam-config`, `ship-briefing`, `ship-record`, `spec-template`, `test-results-record`, `verify-report`.
+- **Product commands — 11** (`.claude/commands/`): `/pharn-build`, `/pharn-grill`, `/pharn-loop`, `/pharn-memory-promote`, `/pharn-plan`, `/pharn-regress`, `/pharn-review`, `/pharn-ship`, `/pharn-spec`, `/pharn-test`, `/pharn-verify`.
 - **Dev-apparatus commands — 9** (`.claude/commands/`): `/pharn-dev-build`, `/pharn-dev-eval`, `/pharn-dev-grill`, `/pharn-dev-memory-promote`, `/pharn-dev-plan`, `/pharn-dev-regress`, `/pharn-dev-review`, `/pharn-dev-ship`, `/pharn-dev-verify`.
 - **Hook scripts — 4** (`.claude/hooks/`): `enforce-writes-scope.cjs`, `protect-trusted-paths.cjs`, `require-loop-record.cjs`, `set-writes-scope.cjs`.
-- **Floor checkers — 71** `.mjs` files under `pharn/floor/` (tests excluded).
+- **Floor checkers — 73** `.mjs` files under `pharn/floor/` (tests excluded).
 
 <!-- CURRENT-STATE:END -->
 
@@ -617,7 +618,7 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   rest of `pharn-core` — the constitution engine, the agnostic rule set, and the memory-bank commands
   beyond promotion. What exists is what the generated inventory above lists.
 - **Per-stage model routing is static frontmatter, and it does not reach stages run inside an
-  orchestrator.** `pharn.config.json`'s `models.stages` is the source of truth for the ten product
+  orchestrator.** `pharn.config.json`'s `models.stages` is the source of truth for the eleven product
   commands' `model:` / `effort:` frontmatter, and `pharn/floor/check-model-config.mjs` RED-fails when the
   two disagree — but a green checker means those two files agree, never that `/pharn-plan` ran on Opus,
   and nothing in PHARN observes what a stage actually ran under. Editing the config is therefore only

@@ -246,14 +246,16 @@ test("the path/digest stream is length-prefixed — two trees cannot collide by 
 test("✧ PARTITION — EXCLUDED ∪ INCLUDED === reconcile-ignore.json pipeline_artifacts.names", () => {
   // A new pipeline artifact now FAILS here until someone classifies it for BOTH consumers: reconcile
   // asks "may this change after the build anchor?", this asks "does a change here alter what the gates
-  // judged?". The answers diverge on exactly the four INCLUDED names, which is why this is a partition
+  // judged?". The answers diverge on the INCLUDED names, which is why this is a partition
   // and not an equality against one list.
   //
   // BOUND (L43), stated rather than implied: this certifies that the THREE stores AGREE, never that the
   // set is CORRECT. All three can be stale together the day a new artifact lands and nobody classifies
   // it. It buys "no silent divergence", not "the set is right".
   const ignore = JSON.parse(readFileSync(join(REPO, "pharn/floor/reconcile-ignore.json"), "utf8"));
-  const names = ignore.pipeline_artifacts.names;
+  // Since 6.17.0 the fingerprint classifies EVERY pipeline artifact, including the pre-anchor ones reconcile does
+  // not exempt (reconcile-ignore.json `pre_anchor_artifacts`).
+  const names = [...ignore.pipeline_artifacts.names, ...ignore.pre_anchor_artifacts.names];
   assert.ok(
     Array.isArray(names) && names.length > 0,
     "reconcile-ignore pipeline_artifacts.names is empty — the partition would be vacuous"
@@ -275,7 +277,7 @@ test("✧ PARTITION — reconcile-ignore.json and check-regress.mjs PIPELINE_ART
   const block = src.match(/const PIPELINE_ARTIFACTS = \[([\s\S]*?)\];/);
   assert.ok(block, "check-regress.mjs no longer carries the PIPELINE_ARTIFACTS literal this test reads");
   const listed = [...block[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();
-  assert.deepEqual(listed, [...ignore.pipeline_artifacts.names].sort());
+  assert.deepEqual(listed, [...ignore.pipeline_artifacts.names, ...ignore.pre_anchor_artifacts.names].sort());
 });
 
 test("the CLI entry point is exercised — a default no test reaches is a default that can be wrong (L41)", () => {

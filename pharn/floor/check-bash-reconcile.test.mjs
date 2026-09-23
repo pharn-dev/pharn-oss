@@ -419,11 +419,33 @@ test("★ L17: a stage's OWN pipeline artifact is exempt — changed-since-ancho
   );
 });
 
-test("✧ PARITY: pipeline_artifacts.names equals check-regress.mjs's PIPELINE_ARTIFACTS", () => {
+test("✧ PARITY: pipeline_artifacts.names ∪ pre_anchor_artifacts.names equals check-regress.mjs's PIPELINE_ARTIFACTS, disjoint", () => {
+  // Since 6.17.0 the two lists legitimately DIFFER (L39): the pre-anchor artifacts are regress-exempt (they changed
+  // since base by design) but must stay reconcile-VISIBLE (nothing changes them after the build's anchor).
   const raw = JSON.parse(readFileSync(IGNORE_JSON, "utf8"));
   const regress = readFileSync(join(HERE, "check-regress.mjs"), "utf8");
-  const theirs = eval(regress.match(/const PIPELINE_ARTIFACTS\s*=\s*(\[[\s\S]*?\n\])/)[1]);
-  assert.deepEqual([...raw.pipeline_artifacts.names].sort(), [...theirs].sort(), "the two artifact enums drifted — update both");
+  const theirs = [...regress.match(/const PIPELINE_ARTIFACTS\s*=\s*\[([\s\S]*?)\n\];/)[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  const exempt = raw.pipeline_artifacts.names;
+  const preAnchor = raw.pre_anchor_artifacts.names;
+  assert.ok(preAnchor.length > 0, "pre_anchor_artifacts.names is empty — the split would be vacuous");
+  assert.deepEqual([...exempt, ...preAnchor].sort(), [...theirs].sort(), "the artifact enums drifted — update all three");
+  assert.deepEqual(
+    exempt.filter((n) => preAnchor.includes(n)),
+    [],
+    "a name is both reconcile-exempt and pre-anchor"
+  );
+});
+
+test("✧ a PRE-ANCHOR artifact (the AC-tests lock) is NOT reconcile-exempt; AC-TESTS.md, a plan file, IS", () => {
+  const raw = JSON.parse(readFileSync(IGNORE_JSON, "utf8"));
+  const data = loadIgnoreData(IGNORE_JSON);
+  assert.deepEqual(raw.pre_anchor_artifacts.names, ["AC-TESTS.lock.json"]);
+  for (const name of raw.pre_anchor_artifacts.names) {
+    assert.equal(isPipelineArtifact(`pharn/features/demo/${name}`, data), false, `${name} was exempted`);
+  }
+  // A re-plan after the anchor legitimately rewrites both plan files; a stale lock is caught by ac-tests-lock --check.
+  assert.equal(isPipelineArtifact("pharn/features/demo/AC-TESTS.md", data), true, "AC-TESTS.md must be exempt like PLAN.md");
+  assert.equal(isPipelineArtifact("pharn/features/demo/PLAN.md", data), true, "control: a post-anchor-editable artifact is exempt");
 });
 
 test("✧ the pipeline-artifact slug is shape-gated — `..` cannot build a traversing exemption", () => {

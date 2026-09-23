@@ -35,15 +35,17 @@
 //     other):
 //       reconcile asks — "may this path change after the build anchor without being a Bash escape?"
 //       this asks    — "does a change here alter what the gates judged?"
-//     They diverge on exactly four names. `SPEC.md`, `PLAN.md`, `GRILL.md` and `BUILD.md` are EXEMPT to
+//     They diverge on the INCLUDED names. `SPEC.md`, `PLAN.md`, `GRILL.md` and `BUILD.md` are EXEMPT to
 //     reconcile and INCLUDED here, because a `PLAN.md` edit changes build-completeness and the spec->plan
-//     chain gate — it changes what a gate would decide. The other thirteen are written AT or AFTER
-//     regress, never before the gates they would be bound to, so a change to one cannot alter a gate's
-//     verdict.
+//     chain gate — it changes what a gate would decide. `AC-TESTS.md` and `AC-TESTS.lock.json` (6.17.0) are
+//     INCLUDED here too — they pin the AC tests a gate will judge. Reconcile exempts AC-TESTS.md (a re-plan
+//     rewrites it, like PLAN.md) but NOT the lock (reconcile-ignore.json `pre_anchor_artifacts`). The
+//     EXCLUDED names are written AT or AFTER regress, never before the gates they would be bound to, so a
+//     change to one cannot alter a gate's verdict.
 //
 //     A PARTITION TEST pins `EXCLUDED_ARTIFACTS ∪ INCLUDED_ARTIFACTS === reconcile-ignore.json
-//     pipeline_artifacts.names`, so a NEW pipeline artifact fails CI until someone classifies it for both
-//     consumers (L29 — the enumeration is the deliverable; L36 — closure, not per-member presence).
+//     pipeline_artifacts.names ∪ pre_anchor_artifacts.names`, so a NEW pipeline artifact fails CI until
+//     someone classifies it for both consumers (L29 — the enumeration is the deliverable; L36 — closure).
 //     BOUND, and it is L43's exactly: that test certifies the three stores AGREE, never that the set is
 //     CORRECT. All three can be stale together the day a new artifact lands and nobody classifies it.
 //
@@ -97,7 +99,7 @@ export const EXCLUDED_ARTIFACTS = Object.freeze([
 ]);
 
 /** PRE-GATE artifacts: reconcile exempts these, this INCLUDES them. The divergence is the point (L39). */
-export const INCLUDED_ARTIFACTS = Object.freeze(["SPEC.md", "PLAN.md", "GRILL.md", "BUILD.md"]);
+export const INCLUDED_ARTIFACTS = Object.freeze(["SPEC.md", "PLAN.md", "GRILL.md", "BUILD.md", "AC-TESTS.md", "AC-TESTS.lock.json"]);
 
 /** /pharn-review writes one findings.json per lens, NESTED. An exact-filename set cannot express that,
  *  so it gets its own narrow shape: exactly one segment for the lens name, filename still findings.json.

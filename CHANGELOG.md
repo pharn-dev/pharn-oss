@@ -23,6 +23,56 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.17.0] - 2026-09-24
+
+### Added
+
+- 2026-09-24: **`/pharn-test`: each Acceptance Criterion's test is written BEFORE the build, into files the build may
+  not touch, and pinned.** `SKILLS_VERSION` 6.16.0 → 6.17.0 (MINOR: a new product command, checker and script).
+  `MIN_CLI` stays 0.5.0: the installer copies every `pharn-*.md`, so the new command ships on `pharn update`.
+  ([`.claude/commands/pharn-test.md`](./.claude/commands/pharn-test.md),
+  [`pharn/floor/check-ac-tests.mjs`](./pharn/floor/check-ac-tests.mjs),
+  [`pharn/floor/ac-tests-lock.mjs`](./pharn/floor/ac-tests-lock.mjs),
+  [`pharn/pharn-contracts/ac-tests.md`](./pharn/pharn-contracts/ac-tests.md),
+  [`.dev/features/pharn-test-stage/`](./.dev/features/pharn-test-stage/))
+  - **Why.** Acceptance Criteria were phrased testably, but if the build writes their tests it can write tests that
+    fit its own implementation. Honest trigger (P7): item 3 of the maintainer's AC-delivery queue.
+  - **The mapping.** For a templated SPEC, `/pharn-plan` (0.4.0) now also writes `AC-TESTS.md`: the SPEC pin, a
+    `## Files` list of exactly the test files, and one `- AC-<n> | <level> |`<file>`| <public target>` line per
+    criterion. `check-ac-tests.mjs` REDs on a closed set of kinds, among them a missing, duplicate or unknown AC, a
+    level that differs from the SPEC, a test file that is also in PLAN.md `## Files` (the build would be scoped to
+    it), and one another feature already owns. The SPEC pin is checked by the shelled `check-plan-spec-agree.mjs`.
+    A new `--spec` mode decides legacy (exit 3) before any mapping exists. AC ids come from a new `specAcceptanceCriteria()` in
+    `spec-template-core.mjs`, through the same item parser `check-spec.mjs` checks with.
+  - **The stage.** `/pharn-test` is scoped by `--from-plan AC-TESTS.md`, so it can write only the mapped files, and
+    the build's `--from-plan PLAN.md` scope excludes them (a test runs the real setter and guard over a fixture and
+    shows both). The checker compares paths as the setter scopes them — a trailing `(…)` annotation stripped,
+    case-folded — so a PLAN entry `tests/ac/a.test.js (gated)` cannot slip a test into the build's scope. Every
+    test's own title starts `AC-<n>:`. `ac-tests-lock.mjs --write` records every file's sha256 in
+    `AC-TESTS.lock.json`, with two sections reserved for later stages; the lock's keys are closed at every level, and
+    `--check` REDs naming the changed path.
+    It runs standalone: `/pharn-ship` and `/pharn-loop` do not call it yet, and nothing runs the tests it writes.
+  - **What had to move with it.** `AC-TESTS.md` and the lock are pipeline artifacts (`PIPELINE_ARTIFACTS`), and
+    `/pharn-regress` (0.4.0) declares AC-TESTS.md's `## Files` beside the PLAN's; otherwise every regress would
+    report the AC tests as build escapes. For reconcile, AC-TESTS.md is exempt like PLAN.md (a re-plan rewrites
+    it), but the lock is not: a new `pre_anchor_artifacts` list in `reconcile-ignore.json` keeps a build-window
+    change to it visible. The fingerprint includes both. `/pharn-loop` commits AC-TESTS.md with its other artifacts. `check-model-config.mjs` gains the stage as `ac-test` (its file is `pharn-test.md`) and now tests the
+    map's file names in its reverse pass.
+  - **Two parser divergences fixed on the way.** `plan-files-core.mjs` lacked the writes-scope setter's
+    wrapped-continuation rule, though its header claimed parity, and its `clean` stripped `src/a(b)` to `src/a` where
+    the setter keeps it. A wrapped `## Files` description containing "out
+    of scope" ended the core's list while the setter kept going. That could have let `in-plan-files` pass while the
+    build's scope still named a test. Both are ported, each with a parity case that runs the real setter. A new
+    hygiene test also EXECUTES every pinned `--from-frontmatter … --target …` line: a formatter had split
+    `/pharn-test`'s `writes:` onto several lines, which the setter cannot read.
+  - **Bounds.** The build exclusion holds for the PLAN.md that was checked; `/pharn-build` does not re-check it yet.
+    A mapped test file is assumed new: an existing test mapped here leaves the regression comparison.
+    `/pharn-test` runs before the reconcile anchor, so its own Bash writes are not reconciled. Whether the tests
+    are right is model work.
+  - **Docs.** `/pharn-spec` (0.4.0) no longer says PHARN writes no acceptance tests, and no longer says the gate
+    allowlist has no e2e member — the second claim went stale in 6.16.0 and is corrected here. The protected
+    `pharn/ARCHITECTURE.md` (§4, §6) and `LIMITS.md` edits are in `.dev/features/pharn-test-stage/PROTECTED-FOLLOWUPS.md`.
+
 ## [6.16.0] - 2026-09-23
 
 ### Added
