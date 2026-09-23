@@ -52,6 +52,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`run-gates.mjs` refuses a dangling symlink or a file component in `--out` with a document instead of
+  crashing** (`SKILLS_VERSION` 6.12.0 → **6.12.1**, patch: a correction to a shipped floor checker)
+  ([`pharn/floor/run-gates.mjs`](./pharn/floor/run-gates.mjs),
+  [`.dev/features/run-gates-dangling-link-containment/`](./.dev/features/run-gates-dangling-link-containment/)).
+  - **The failure, reproduced at `daaa999`.** `assertContained` used `existsSync` as its absence test.
+    `existsSync` stats, and a stat follows a link, so each of these read as absent and the walk stopped
+    before `lstat` saw it:
+    - a dangling symlink component (`.pharn/linked` → missing);
+    - a regular file as a component (`.pharn/afile/gates`);
+    - a dangling symlink as the state root itself.
+
+    `init` then crashed in `mkdirSync` with a stack trace, exit 2, and **no JSON document and no closed
+    `reason_code`**. Nothing was written outside the state root. `run --next` never reached the walk: it
+    reads `state.json` first and exits `stamp-missing`. This is instance (1) of `lessons-learned` L54,
+    first recorded in `loop-freshness`'s REVIEW.
+
+  - **Fix.** Absence is now proven only by `lstat`'s own ENOENT. A dangling link is lstat'ed as a symlink
+    and refused. Any other `lstat` error is refused under `path-containment` because the walk cannot
+    prove the path safe, not because it found an escape. The closed `reason_code` vocabulary is
+    unchanged.
+  - **Test.** One CONTAINMENT test iterates all three shapes (L52), with the ordinary `--out` as the
+    non-vacuity control (L34). Each case was confirmed to crash on the unfixed code before the fix (L4).
+  - **Not changed, and named:**
+    - `run --next` still reads `state.json` before its containment check. That is a read, and there is no
+      observed failure.
+    - A general check banning `existsSync` in containment code stays unbuilt; L54 records why.
+
 - **The hand-written docs now match the last 20 commits (6.4.3 → 6.11.1), and one expired install claim is
   gone.** Repo meta only, so no `SKILLS_VERSION` bump. The sweep read every commit's files against
   README, `CLAUDE.md`, `CONTRIBUTING.md`, `SECURITY.md`, `docs/**` and the trusted docs. Generated regions

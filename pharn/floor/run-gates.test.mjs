@@ -154,6 +154,56 @@ test("CONTAINMENT: --out outside, equal to, or symlinked through the state root 
   );
 });
 
+// L54 — `existsSync` is not an absence test inside a containment walk. It stats, stat follows a link, so a
+// DANGLING link read as absent and the walk stopped before lstat saw it. A FILE component read as absent
+// for everything beneath it. Both reached `mkdirSync` and CRASHED (stack trace, no document). Every case
+// below must end in a closed `path-containment` document instead. The RED on the unfixed code comes from
+// the document assertions (r.json / reason_code). The "target not created" checks are safety assertions
+// that also held before the fix, because the crash wrote nothing.
+test("CONTAINMENT: a DANGLING link, a FILE component and a dangling STATE ROOT are refused, never a crash (L54, L52)", () => {
+  const cases = [
+    {
+      why: "a dangling symlink component",
+      out: ".pharn/linked/gates",
+      target: "missing-target",
+      setup: (dir) => {
+        mkdirSync(join(dir, ".pharn"), { recursive: true });
+        symlinkSync(join(dir, "missing-target"), join(dir, ".pharn", "linked"));
+      },
+    },
+    {
+      why: "a regular FILE as a component",
+      out: ".pharn/afile/gates",
+      target: null,
+      setup: (dir) => {
+        mkdirSync(join(dir, ".pharn"), { recursive: true });
+        writeFileSync(join(dir, ".pharn", "afile"), "not a directory");
+      },
+    },
+    {
+      why: "a dangling symlink as the state root itself",
+      out: ".pharn/gates",
+      target: "missing-root",
+      setup: (dir) => symlinkSync(join(dir, "missing-root"), join(dir, ".pharn")),
+    },
+  ];
+  for (const c of cases) {
+    withRepo(
+      (dir) => {
+        c.setup(dir);
+        const r = cli(dir, ["init", "--stage", "verify", "--feature", FEATURE, "--out", c.out, "--discover", "package.json"]);
+        assert.equal(r.code, 2, `accepted --out through ${c.why}`);
+        assert.ok(r.json, `${c.why}: no document on stdout — the runner crashed instead of refusing`);
+        assert.equal(r.json.reason_code, "path-containment", `${c.why}: wrong reason_code`);
+        if (c.target) assert.ok(!existsSync(join(dir, c.target)), `${c.why}: the link target was created`);
+      },
+      { scripts: { test: "true" } }
+    );
+  }
+  // Non-vacuity control (L34): the ordinary --out is accepted on a clean fixture.
+  withRepo((dir) => assert.equal(cli(dir, initArgs()).code, 0), { scripts: { test: "true" } });
+});
+
 test("init refuses a scope JSON with a non-empty `escaped`, or an `inconclusive` verdict", () => {
   withRepo(
     (dir) => {

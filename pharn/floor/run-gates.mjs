@@ -155,15 +155,22 @@ function assertContained(outDir, base) {
   }
   // Walk every component from the root down. lstat, never stat: stat FOLLOWS the link, which is exactly
   // the case being refused. A component that does not exist yet is fine — it cannot be a symlink.
+  //
+  // ABSENCE IS PROVEN BY lstat's OWN ENOENT, never by `existsSync` (lessons-learned L54). `existsSync` is a
+  // stat, so a DANGLING link read as absent: the walk broke off before lstat saw it, and `mkdirSync` then
+  // crashed through the link with no document. The same guard read a FILE component as absent. Any other
+  // lstat error (ENOTDIR under a file, EACCES) is refused under `path-containment`. That is because
+  // the walk cannot PROVE the path safe, not because it found an escape. The closed vocabulary is not
+  // widened for it.
   let cur = rootAbs;
   const restParts = outAbs.slice(rootAbs.length).split(sep).filter(Boolean);
   for (const part of [rootAbs, ...restParts.map((p) => p)]) {
     cur = part === rootAbs ? rootAbs : join(cur, part);
-    if (!existsSync(cur)) break;
     let st;
     try {
       st = lstatSync(cur);
     } catch (e) {
+      if (e && e.code === "ENOENT") break; // truly absent: lstat does not follow links, so a dangling one never lands here
       fail("path-containment", `cannot lstat ${cur}: ${e.message}`);
     }
     if (st.isSymbolicLink()) {
