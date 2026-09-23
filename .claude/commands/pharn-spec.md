@@ -1,5 +1,5 @@
 ---
-description: "Turn a user's prose intent into a structured, human-approved pharn/features/<name>/SPEC.md — the head of the product pipeline (spec → plan → grill → build → regress → verify → ship) and the versioned record of INTENT every downstream stage reads. INTERROGATES the intent for gaps (advisory — never gates), EMITS a Draft SPEC.md by filling the shipped default template (pharn/pharn-contracts/templates/spec-template.md, id pharn-default, defined by pharn/pharn-contracts/spec-template.md), then HALTS for explicit human approval; only on approval does it flip Draft → Approved, assign a spec_id, and pin the approved intent with a content-hash (fix #4). FLOOR (deterministic, pharn/floor/check-spec.mjs): required-section PRESENCE, the Draft|Approved state enum, spec_id presence, and — when Approved — spec_content_hash == sha256(body); and, for a SPEC that declares `spec_template` (every SPEC this command writes from the template — opt-in by that key, so a SPEC without it is validated as before), the template's shape: Assumptions required, each template section at most once, ID'd acceptance criteria phrased Given/When/Then with exactly one verify level each, at most three clarification markers and none once Approved, a non-empty out-of-scope list, no leftover guidance comment, and a well-formed template reference. A valid AC grammar means the criteria are PHRASED testably — never that any test exists, runs, or passes. ADVISORY/HUMAN: whether the intent is clear/complete/wise — the human owns that, and owns the Draft → Approved gate. The model NEVER self-approves. '/pharn-spec produced it' NEVER means 'the intent is sound' (P0). ONE EXCEPTION to self-approval: under --model-approve, meant for /pharn-loop's unattended run (nothing prevents a user from passing it), the model pins the spec itself and records approved_by: model — never presented as a human's approval."
+description: "Turn a user's prose intent into a structured, human-approved pharn/features/<name>/SPEC.md — the head of the product pipeline (spec → plan → grill → build → regress → verify → ship) and the versioned record of INTENT every downstream stage reads. INTERROGATES the intent for gaps (advisory — never gates), EMITS a Draft SPEC.md by filling the RESOLVED template — the project's own pharn.spec-template.md at the project root when it exists and validates, else the shipped default pharn/pharn-contracts/templates/spec-template.md (both defined by pharn/pharn-contracts/spec-template.md; an existing but invalid project template is a stop, never a fallback) — then HALTS for explicit human approval; only on approval does it flip Draft → Approved, assign a spec_id, and pin the approved intent with a content-hash (fix #4). FLOOR (deterministic, pharn/floor/check-spec.mjs): required-section PRESENCE, the Draft|Approved state enum, spec_id presence, and — when Approved — spec_content_hash == sha256(body); and, for a SPEC that declares `spec_template` (every SPEC this command writes from the template — opt-in by that key, so a SPEC without it is validated as before), the template's shape: Assumptions required, each template section at most once, ID'd acceptance criteria phrased Given/When/Then with exactly one verify level each, at most three clarification markers and none once Approved, a non-empty out-of-scope list, no leftover guidance comment, and a well-formed template reference. A valid AC grammar means the criteria are PHRASED testably — never that any test exists, runs, or passes. ADVISORY/HUMAN: whether the intent is clear/complete/wise — the human owns that, and owns the Draft → Approved gate. The model NEVER self-approves. '/pharn-spec produced it' NEVER means 'the intent is sound' (P0). ONE EXCEPTION to self-approval: under --model-approve, meant for /pharn-loop's unattended run (nothing prevents a user from passing it), the model pins the spec itself and records approved_by: model — never presented as a human's approval."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -11,13 +11,14 @@ reads:
     "pharn/ARCHITECTURE.md",
     "pharn/pharn-contracts/spec-template.md",
     "pharn/pharn-contracts/templates/spec-template.md",
+    "pharn.spec-template.md",
     "pharn/features/<name>/SPEC.md",
     "pharn/floor/check-spec.mjs",
     "package.json",
   ]
 writes: ["pharn/features/<name>/SPEC.md"]
 constitution_refs: ["P0", "P2", "P4", "P5", "P6", "P7"]
-version: "0.2.0"
+version: "0.3.0"
 ---
 
 # /pharn-spec — capture intent as a human-approved SPEC.md
@@ -131,21 +132,35 @@ they approve it. It **never blocks** and it **never judges the intent as good or
 
 ## Step 3 — Emit / refresh the Draft SPEC.md
 
-Write `pharn/features/<name>/SPEC.md` (scope-permitted from Step 0) as a **Draft**, by filling the shipped
-default template, `pharn/pharn-contracts/templates/spec-template.md` (id `pharn-default`). The template is
-the one place the SPEC's shape is written down; this command does not repeat it (P4). Read it, then:
+Write `pharn/features/<name>/SPEC.md` (scope-permitted from Step 0) as a **Draft**, by filling the
+**resolved template**: the project's own `pharn.spec-template.md` at the project root when it exists and
+validates, else PHARN's shipped default, `pharn/pharn-contracts/templates/spec-template.md`. The checker
+decides which; you never choose. The template is the one place the SPEC's shape is written down; this
+command does not repeat it (P4).
 
-1. **Get the template reference** — the exact line this command prints, and nothing else (never compute,
-   shorten or retype a digest):
+1. **Resolve the template and get its reference** — the exact line this command prints, and nothing else
+   (never compute, shorten or retype a digest):
 
    ```bash
-   node pharn/floor/check-spec.mjs --template-ref pharn-default
+   node pharn/floor/check-spec.mjs --resolve-template-ref
    ```
 
-   Exit 1 means the template could not be found or read; stop and report that, never fill the SPEC from
-   memory.
+   Exit 1 means a template was **refused**: stdout is empty and stderr names each reason as
+   `refused (<code>)`. The codes are listed in `pharn/pharn-contracts/spec-template.md`. **Stop and report
+   the codes.** Never fill the SPEC from memory, and never fall back to the default yourself: when a project
+   template exists and is invalid, the project's human fixes it. Under `--model-approve`, report back that
+   the run is blocked on the template.
 
-2. **Fill the template** into the SPEC:
+2. **Get the file to fill.** The `<id>` is the part of that line before `@` — `project` or
+   `pharn-default`:
+
+   ```bash
+   node pharn/floor/check-spec.mjs --template-path <id>
+   ```
+
+   It prints the template's path, relative to the project root. Read that file.
+
+3. **Fill the template** into the SPEC:
    - `spec_id: <name>` is the **root identity** (derived deterministically from the human-chosen `<name>`,
      P5); `state: Draft`; `spec_content_hash: ""` (a Draft is unpinned by design); `spec_template:` the line
      step 1 printed, verbatim.
@@ -265,8 +280,23 @@ thing — it lands **one** human-approved, pinned spec. It does **not** chain to
   **FLOOR**: an `Approved` templated SPEC with a marker REDs `clarification` at Step 5 and at every
   downstream `check-spec-approved.mjs` call.
 - **"`spec_template` records which template the SPEC came from"** → a value **computed** by
-  `check-spec.mjs --template-ref`, never typed by the model. It is provenance: nothing compares it with the
-  template later, so it detects no change to the template.
+  `check-spec.mjs --resolve-template-ref`, never typed by the model. It is provenance: nothing compares it
+  with the template later, so it detects no change to the template, and rule 7 checks only its shape and
+  that its id is known — a hand-typed value passes too.
+- **"The template that was pinned passed validation first"** → **FLOOR** for what the checker PRINTS
+  (`--resolve-template-ref` / `--template-ref` refuse a template missing a required or visible section, an
+  example criterion, the Out-of-scope label or the `spec_template:` line). It is a **minimum shape**: a
+  validated template can still yield a SPEC that REDs. That this command used the printed line is
+  **ADVISORY**.
+- **"An existing project template is never skipped for the default"** → **FLOOR** in the checker: once a
+  directory entry case-folds to `pharn.spec-template.md`, every failure is a refusal (exit 1), never a
+  fallback, and a checker reached through a symlinked `pharn/` refuses (`symlinked-root`) rather than look in
+  another directory. Not falling back by hand is command prose (advisory).
+- **"A project template's guidance is the project's human-only instruction to this command"** → **FLOOR on
+  the Write/Edit/MultiEdit/NotebookEdit surface** (`protect-trusted-paths.cjs` denies those tools on the
+  path, whether or not the file exists), **ADVISORY beyond it**: a Bash write reaches it (`LIMITS.md §6`),
+  and reconcile detects a non-adversarial one only between a build's anchor and its verify, which is after
+  this command ran.
 - **"The no-test-runner and e2e warnings are right"** → **ADVISORY** (Step 2 reads `package.json`, but the
   warning is interrogation, not a gate).
 - **"A human approved THIS intent"** → **ADVISORY / procedural.** The floor cannot verify a human said yes; the
@@ -288,16 +318,27 @@ thing — it lands **one** human-approved, pinned spec. It does **not** chain to
   SPEC — heading membership, list-line shapes, literal tokens and the `spec_template` regex) — **never** over
   the intent's meaning. Its REDs name line numbers and AC ids, never the body's text. **No guaranteed decision
   rests on the free-text intent** (mirrors fix #1).
-- **The template is trusted input, with a stated weakness.** Its guidance comments steer this command, and it
-  is PHARN-owned. In an install it sits under `pharn/pharn-contracts/`, which the fail-closed write guard's
-  default leaves writable, the same as every shipped contract; a changed template leaves no floor trace.
+- **The template is trusted input, with a stated weakness.** Its guidance comments are instructions this
+  command follows, so the template is trusted by PATH, never by your judgment of its content:
+  - **The project's own template** (`pharn.spec-template.md`) is the project's human-only instruction to
+    you. The pre-write hook denies Write/Edit/MultiEdit/NotebookEdit to that fixed path, and it is fixed
+    rather than configurable, because a path read from an unprotected config file would let a build agent
+    point every future run of this command at a file it wrote. The hook stops Claude's write tools only: a
+    merged pull request, a pulled branch or a Bash write still lands in it, and you follow what lands there.
+  - **The shipped default** is PHARN-owned. In an install the fail-closed write guard's default (no scope
+    set) does NOT admit `pharn/pharn-contracts/`, but a set scope that names the template does — a PLAN's
+    `## Files` can — and no hook protects it. A Bash write reaches it too.
+
+  A changed template of either kind leaves no floor trace beyond a digest nothing compares.
 
 ## Determinism audit (P5)
 
 - Every `check-spec.mjs` branch is a presence / enum / hash-equality membership test; no LLM classification
   drives the verdict. `spec_id` is derived deterministically from the human-chosen `<name>`.
 - The template rules are presence / regex / count / `Map`-membership tests; the template id comes from a
-  closed registry, never a guess.
+  closed registry, never a guess. Which template is used is decided by the checker: a directory listing (does an
+  entry case-fold to `pharn.spec-template.md`?), then the validator. A refused template is a stop reported to
+  the human, never a guess and never the default.
 - A genuine ambiguity ends in a **clarification marker** — a question to the human — never a guess; a
   defensible guess is written down in `## Assumptions`, where the human can challenge it.
 - The terminal fallback of the Draft → Approved decision is **ask the human** (the Step-4 halt), never a model

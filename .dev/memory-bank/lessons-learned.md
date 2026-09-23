@@ -2066,3 +2066,20 @@ The fix then modeled column-0 blocks. The next probe round found two new diverge
 - commit: `2bea57cb8ce0b536cb137208280b74760573f22f`
 - source: `.dev/features/spec-template/REVIEW.md` § Floor-gate findings, finding 1 (`pharn/floor/check-spec.mjs:43`) + § Iteration 2 findings N1 (`pharn/floor/spec-template-core.mjs:288`) and N2 (`pharn/floor/spec-template-core.mjs:149`)
 - promoted: 2026-09-23 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L57 — A formatter's config can widen an explicit file list — `markdownlint-cli2 --fix <file>` fixes every path its config globs name
+
+type: tooling · concepts: [bash-escape, formatter, writes-scope, config-globs, lesson-recurrence]
+
+**Lesson.** A formatter or linter invoked with an explicit file list is scoped only if its CONFIG does not add paths of its own. `markdownlint-cli2` ADDS the config's `globs` to the command-line paths, so `npx markdownlint-cli2 --fix <file>` lints — and FIXES — every file the config's `globs` name. In this repo that is `**/*.md`, and the config's `ignores` match only at the root, so the fix also reached other Claude sessions' worktrees under `.claude/worktrees/` and their `node_modules`. Remedy: pass `--no-globs` wherever a path list is meant to be the whole scope, and CHECK the tool's own report of what it touched (`Linting: N file(s)`) instead of trusting the command line.
+
+**Why it matters.** Measured in `spec-template-override`: `/pharn-dev-build` Step 2b's pinned "scoped" line (`printf '%s\n' "$MD" | xargs npx markdownlint-cli2 --fix`) rewrote 124 files the plan never named — two tracked test fixtures and 122 vendored docs, all in another session's worktree. They were restored by hand; `--no-globs` then printed `Linting: 1 file` where the same line had printed `Linting: 1344 files` at the plan stage. The same widening turned `format:check`, `lint:md` and one `npm test` case RED at verify for files that were not this repository's. This is [[L19]] recurring INSIDE [[L19]]'s own remedy: L19 replaced a repo-wide formatter with a per-file one, and the per-file one was repo-wide again through a config file nobody reads when the command line looks scoped. [[L16]] and [[L22]] pinned the line to remove a choice; the pinned line was still wrong, because the scope was decided outside it. Every stage's "format this stage's own artifact" step used the same form.
+
+**Bound (P0), and the remedy's status per [[L46]].** This entry adds no checker. The fix to the command lines (`--no-globs` everywhere a path list is passed, pinned by a closure test) is a separate increment, already running as the follow-up "Scope markdownlint --fix to named files only". Until it lands, this is a pending-remedy lesson.
+
+**Provenance.**
+
+- feature: `spec-template-override`
+- commit: `ba46b7ba430a804a67c858e2c85c09b358e71152`
+- source: `.dev/features/spec-template-override/REVIEW.md` § Proposed lesson candidate + `.dev/features/spec-template-override/VERIFY.md` § The raw capture
+- promoted: 2026-09-23 via gated `/pharn-dev-memory-promote` (human-approved).

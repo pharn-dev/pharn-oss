@@ -160,6 +160,10 @@ new layout; it converts a silent half-install into a clean refusal, which is the
    Write/Edit/MultiEdit/NotebookEdit surface only — the live `PreToolUse` matcher in
    `.claude/settings.json`, which both hooks re-test in their own code; Bash-tool writes bypass
    `PreToolUse` hooks entirely, exactly as for the trusted docs.
+   **Since 6.14.0 it also protects the project's own SPEC template, `pharn.spec-template.md` at the root**, by
+   path, whether or not the file exists: its guidance comments are instructions `/pharn-spec` follows, so the
+   path is fixed rather than configurable and a human edits the file directly (contract:
+   `pharn/pharn-contracts/spec-template.md`, "The project template"). Bash reaches it, as for the trusted docs.
    **Since 6.1.0 the same hook also denies GIT METADATA** — any `.git` path segment under a guarded root
    (never `.github/**` or `.gitignore`). A `.git` entry decides which working tree each guard judges, and
    `.git/hooks` / `.git/config` run code on the next git command, so the write tools may not touch them;
@@ -833,7 +837,7 @@ the rule has to be the thing that holds.
   either way. A test pins that every setter-invoking command **declares** the step and orders it after
   every set; that is presence + ordering, **never** proof a run executed it.
 - `.pharn/` is gitignored runtime state (created on first command run; `--clear` it, or delete it, to
-  reset to fail-closed). fix #7 composes with fix #2 — the trusted docs, `CODEOWNERS`, and the four
+  reset to fail-closed). fix #7 composes with fix #2 — the trusted docs, `CODEOWNERS`, the project SPEC template, and the four
   control paths above stay denied regardless of any scope, so neutering the setter's refusal still does
   not make a guard writable.
 - **What under `.pharn/` is LOAD-BEARING, and what is disposable — because the two sit side by side.**

@@ -23,6 +23,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.14.0] - 2026-09-23
+
+### Added
+
+- 2026-09-23: **A project can replace PHARN's default SPEC template with its own, at one fixed and
+  write-protected path, `pharn.spec-template.md` at the project root. `/pharn-spec` fills whichever template
+  `check-spec.mjs --resolve-template-ref` selects: the project's when it exists and validates, else the
+  shipped default. `SKILLS_VERSION` 6.13.0 → 6.14.0** (minor: a new capability). `MIN_CLI` stays 0.5.0: no
+  installed path moves, and the project template is created by the user, never installed.
+  - **Why the path is fixed, not configurable.** A template's guidance comments are instructions `/pharn-spec`
+    follows. A path read from `pharn.config.json`, which no guard protects, would let a build agent point every
+    future `/pharn-spec` at a file it wrote. So the path is a constant, and
+    `.claude/hooks/protect-trusted-paths.cjs` denies Write/Edit/MultiEdit/NotebookEdit to it by path, whether
+    or not the file exists. A human edits the file directly. The hook change is a human-applied patch
+    (`.dev/features/spec-template-override/proposed/`), because the hook protects itself. Bash still reaches
+    the file; `check-bash-reconcile.mjs` detects a non-adversarial Bash write only between a build's anchor and
+    its verify, which is after `/pharn-spec` ran.
+  - **Resolution never falls back silently.** Once an entry in the project root case-folds to
+    `pharn.spec-template.md`, every failure is a refusal (exit 1, nothing printed). A case variant is itself a
+    refusal (`name-case`), so case-insensitive and case-sensitive filesystems resolve a checkout the same way.
+    Absence is read from the directory listing, never from a link-following stat, so a dangling symlink is
+    `symlink`, not "absent" (L54). The file is read through an `O_NOFOLLOW` descriptor. A checker reached
+    through a symlinked `pharn/` refuses (`symlinked-root`): before that fix, found at review, it silently
+    skipped the project's template for the default.
+  - **Every template is validated before its reference is printed**, the shipped default included, by a new
+    pure `validateTemplate()` in `spec-template-core.mjs`, with twelve closed refusal codes. A validated
+    template has a MINIMUM shape; it does not prove a SPEC filled from it will be GREEN.
+  - **Provenance is unchanged.** `project` is a static registry id, so rule 7 knows it whether or not the file
+    exists, and deleting the template never REDs a SPEC already pinned to it. The `pharn-` id prefix is
+    reserved for shipped templates.
+  - **New modes:** `check-spec.mjs --resolve-template-ref` and `--template-path <id>`. `--template-ref <id>`
+    keeps its contract and now validates first.
+  - **The shipped default template is now id-agnostic** (its placeholder and top comment no longer say
+    `pharn-default`), so a project's copy inherits no claim about its own id. Its digest changes once, which
+    is provenance only.
+  - **Correcting the record.** `pharn/pharn-contracts/spec-template.md` and `/pharn-spec` said the shipped
+    template sits where the fail-closed write guard's default lets an agent write. In an install that default
+    denies it (probed: `enforce-writes-scope.cjs` exit 2). The real weakness is different: a set scope that
+    names it admits it, and no hook protects it. Both sentences are corrected.
+  - **Human follow-ups (trusted docs, not agent-written):** `LIMITS.md` §1d, `THREAT-MODEL.md` §2 and
+    `pharn/ARCHITECTURE.md` §4 could name the project template. See
+    `.dev/features/spec-template-override/PLAN.md`.
+
 ## [6.13.0] - 2026-09-23
 
 ### Added

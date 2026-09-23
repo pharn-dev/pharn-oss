@@ -2,13 +2,16 @@
 //
 // WHY A SEPARATE FILE (P3 — one reason to change per file). check-spec.mjs changes when ARCHITECTURE §6's spec
 // contract changes: the state enum, the spec_id identity, the content-hash pin. THIS file changes when the SPEC
-// TEMPLATE changes: its sections, the acceptance-criteria grammar, the registry of template ids. The planned
-// template-override increment will change this file and not that one. check-spec.mjs imports it and turns its
-// findings into REDs; nothing else imports it. The rules are DEFINED by pharn/pharn-contracts/spec-template.md;
-// the constants below are the one ENFORCING copy, and this header cites rather than restates them (P4).
+// TEMPLATE changes: its sections, the acceptance-criteria grammar, the registry of template ids, and what a
+// template must contain before it can be pinned (validateTemplate). check-spec.mjs imports it and turns its
+// findings and refusals into REDs and exits; nothing else imports it. The rules are DEFINED by
+// pharn/pharn-contracts/spec-template.md; the constants below are the one ENFORCING copy, and this header cites
+// rather than restates them (P4).
 //
-// NON-LLM, dependency-free (Node stdlib only). No network, no child_process, no eval, no dynamic import, and no
-// side effect at import time. Every export is a pure function or a frozen constant.
+// NON-LLM, dependency-free (Node stdlib only). No network, no child_process, no eval, no dynamic import, no
+// filesystem call, and no side effect at import time. Every export is a pure function or a frozen constant: the
+// project template's file checks (lstat, directory listing, O_NOFOLLOW read) live in check-spec.mjs, which reads
+// files; this file only says what a template's TEXT must contain.
 //
 // WHEN THE RULES APPLY. Only to a SPEC whose frontmatter carries the key `spec_template` — see isTemplated().
 // The switch is a RAW line test over the frontmatter block, not "the field parser produced the key": a key line
@@ -49,7 +52,14 @@
 //   - MARKERS are counted by one regex: NEED/NEEDS, any case, with a space, `_` or `-` between the words.
 //   - PROVENANCE ONLY. `spec_template` records which template a SPEC came from and that template's digest at the
 //     time. Nothing compares the digest with the template file, by design: a template edit must never RED an
-//     already-Approved spec.
+//     already-Approved spec. So rule 7 never reads a template file, and the `project` id is a STATIC registry
+//     member: deleting the project template never REDs a SPEC pinned to it. The converse is stated too: a
+//     hand-typed `project@sha256:<64 hex>` passes rule 7, because the validator gates what check-spec PRINTS,
+//     never what a SPEC declares.
+//   - A VALIDATED TEMPLATE HAS A MINIMUM SHAPE. validateTemplate() refuses a template that could not produce a
+//     templated SPEC at all (a required heading missing or hidden, no example criterion, no Out-of-scope label, no
+//     `spec_template:` line). It never proves a faithful fill will be GREEN: extra prose in the template's
+//     Acceptance Criteria section passes here and REDs rule 2 once filled.
 
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -59,17 +69,73 @@ export const TEMPLATE_KEY = "spec_template";
 // near-miss (legacy), like `spec-template:`. `m`: ^ also matches after \r, U+2028 and U+2029.
 const TEMPLATE_KEY_LINE_RE = /^spec_template:/m;
 
-// id -> template path, relative to THIS file (never the cwd), so the lookup resolves the same way in this repo and
-// in an install, where pharn/floor/ and pharn/pharn-contracts/ are copied side by side. A Map, not a plain object:
-// `__proto__` / `constructor` must be unknown ids, not inherited members (PHARN's own build-loop lesson L15). This
-// is the ONLY place an id or a template path is written (L41).
+// id -> { rel, shipped }. `rel` is relative to THIS file (never the cwd), so the lookup resolves the same way in
+// this repo and in an install, where pharn/floor/ sits at <project-root>/pharn/floor/ beside pharn/pharn-contracts/.
+// A Map, not a plain object: `__proto__` / `constructor` must be unknown ids, not inherited members (PHARN's own
+// build-loop lesson L15). This is the ONLY place an id or a template path is written (L41).
+//
+// `project` is the project's OWN template at ONE fixed path, the project root. It is fixed, not configurable, and
+// .claude/hooks/protect-trusted-paths.cjs denies Write/Edit/MultiEdit/NotebookEdit to it by path: a template's
+// guidance comments are instructions /pharn-spec follows, so a path read from an unprotected config would let a
+// build agent point every future /pharn-spec at a file it wrote (P2). The hook's literal is a deliberate second
+// copy (the hook must not import the floor); check-spec.test.mjs pins the two equal. The `pharn-` id prefix is
+// reserved for SHIPPED templates, and a test holds `id.startsWith("pharn-") === shipped` for every entry.
+//
+// HERE is this module's REAL path (Node resolves the main module's symlinks), so a symlinked pharn/ or pharn/floor/
+// would move projectRoot() to the link target's grandparent, where the project's hook does not guard and where the
+// project's own template is not. check-spec.mjs therefore REFUSES (`symlinked-root`) when the root it was invoked
+// through is not this real root, rather than silently reading another directory (REVIEW finding F1).
 const HERE = dirname(fileURLToPath(import.meta.url));
-const TEMPLATES = new Map([["pharn-default", join("..", "pharn-contracts", "templates", "spec-template.md")]]);
+const TEMPLATES = new Map([
+  ["pharn-default", { rel: join("..", "pharn-contracts", "templates", "spec-template.md"), shipped: true }],
+  ["project", { rel: join("..", "..", "pharn.spec-template.md"), shipped: false }],
+]);
+
+/** The id of the project's own template (a static registry member, whether or not its file exists). */
+export const PROJECT_TEMPLATE_ID = "project";
 
 /** Absolute path of a KNOWN template id, or null for any other string (own-key membership, L15). */
 export function templatePath(id) {
-  return TEMPLATES.has(id) ? join(HERE, TEMPLATES.get(id)) : null;
+  return TEMPLATES.has(id) ? join(HERE, TEMPLATES.get(id).rel) : null;
 }
+
+/** Is `id` a known template that PHARN ships (as opposed to one the project supplies)? */
+export function isShippedTemplate(id) {
+  return TEMPLATES.has(id) && TEMPLATES.get(id).shipped;
+}
+
+/** The project root the registry's paths are resolved under: two levels above pharn/floor/. */
+export function projectRoot() {
+  return join(HERE, "..", "..");
+}
+
+/**
+ * The comparison key for a file NAME: NFC, then full case folding (toUpperCase().toLowerCase(), not a bare
+ * toLowerCase(), which is only simple case mapping). The same fold protect-trusted-paths.cjs's toKey applies, minus
+ * its Windows trailing dot/space strip (on POSIX `pharn.spec-template.md.` is a different file, never read).
+ */
+export function foldName(name) {
+  return String(name).normalize("NFC").toUpperCase().toLowerCase();
+}
+
+/**
+ * Why a template is refused, as ONE closed enumeration (L29) — the validator produces five, check-spec.mjs the
+ * file checks. The contract's refusal table cites these codes.
+ */
+export const TEMPLATE_REFUSALS = Object.freeze([
+  "frontmatter",
+  "template-key",
+  "section",
+  "ac-example",
+  "out-of-scope-label",
+  "absent",
+  "outside-root",
+  "symlinked-root",
+  "name-case",
+  "symlink",
+  "not-regular-file",
+  "unreadable",
+]);
 
 /** The known template ids, in registry order. */
 export function knownTemplateIds() {
@@ -174,7 +240,8 @@ function spanned(lines) {
 
 // The body as sections: each VISIBLE `##` heading with the lines under it up to the next one. A `##` line inside a
 // column-0 block is content, and is also reported in `hidden`, so rule 1 can say which heading a renderer would not
-// show. Every line carries its FILE line number (P2 — a RED points at a line, never quotes it).
+// show. Every line carries its FILE line number (P2 — a RED points at a line, never quotes it), and `inBlock`: true
+// when it sits inside a column-0 block. checkTemplate ignores `inBlock`; validateTemplate skips such lines.
 function sectionsOf(body, firstLine) {
   const lines = body.split(/\r?\n/);
   const inside = spanned(lines);
@@ -189,7 +256,7 @@ function sectionsOf(body, firstLine) {
       return;
     }
     if (hm) hidden.push({ name: hm[1].toLowerCase(), line: firstLine + i, opener: firstLine + inside[i] });
-    if (cur) cur.lines.push({ n: firstLine + i, text });
+    if (cur) cur.lines.push({ n: firstLine + i, text, inBlock: inside[i] !== -1 });
   });
   return { sections, hidden };
 }
@@ -357,16 +424,102 @@ export function checkTemplate({ fm, body, firstLine, baseRequired }) {
     out.push([
       "template",
       `a \`${TEMPLATE_KEY}:\` line is present but its value does not read as one clean line (a stray CR, U+2028 or U+2029 in it) — ` +
-        `copy the line \`--template-ref <id>\` prints`,
+        `copy the line \`--resolve-template-ref\` prints`,
     ]);
   } else if (!m) {
     out.push([
       "template",
-      `${TEMPLATE_KEY} (${v.length} chars) is not <id>@sha256:<64 lowercase hex> — copy the line \`--template-ref <id>\` prints`,
+      `${TEMPLATE_KEY} (${v.length} chars) is not <id>@sha256:<64 lowercase hex> — copy the line \`--resolve-template-ref\` prints`,
     ]);
   } else if (!TEMPLATES.has(m[1])) {
     out.push(["template", `${TEMPLATE_KEY} names unknown template "${m[1]}" — known: {${knownTemplateIds().join(", ")}}`]);
   }
 
   return { findings: out.map(([kind, detail]) => ({ kind, detail })), id: m ? m[1] : "", acCount, required: required.length };
+}
+
+// ── The template validator ──────────────────────────────────────────────────────────────────────────────────
+
+// Does `## Acceptance Criteria` hold at least one EXAMPLE criterion a writer can copy? An example is a VISIBLE item
+// that starts `- **AC-<n>**`, reads Given → When → Then, and has exactly one verify-like continuation. The level is
+// NOT checked: the shipped default's example is the placeholder `<unit | integration | e2e>`. Unlike rule 2, other
+// lines are not REDs here: a template's section also holds guidance, so a line that is neither an item start nor a
+// continuation only ENDS the current item. A line inside a column-0 block (a guidance comment's body, say) is
+// skipped for the same reason a renderer skips it, and also ends the current item, as a column-0 block ends a list.
+function hasExampleCriterion(sec) {
+  const items = [];
+  let cur = null;
+  for (const { text, inBlock } of sec.lines) {
+    if (!inBlock && AC_START_RE.test(text)) {
+      cur = [text];
+      items.push(cur);
+    } else if (cur && !inBlock && (isBlank(text) || CONTINUATION_RE.test(text))) {
+      cur.push(text);
+    } else {
+      cur = null;
+    }
+  }
+  return items.some((lines) => {
+    const verify = lines.slice(1).filter((l) => VERIFY_LIKE_RE.test(l));
+    const text = lines.filter((l) => !VERIFY_LIKE_RE.test(l)).join("\n");
+    return verify.length === 1 && inOrder(text, ["Given", "When", "Then"]);
+  });
+}
+
+/**
+ * Validate a template's TEXT before check-spec.mjs may print a reference to it — applied to EVERY template, the
+ * shipped default included. Pure: the caller splits the file (check-spec.mjs's parseSpec) and does every file check.
+ * A refusal names a code from TEMPLATE_REFUSALS plus a heading from the closed section list or a file line number,
+ * never the template's text (P2 discipline, as for a SPEC).
+ *
+ * The dependent checks (`ac-example`, `out-of-scope-label`) are SKIPPED when their section is missing, hidden or
+ * duplicated — exactly as checkTemplate's only() skips rules 2 and 4 — so each defect is reported once, under
+ * `section`, and never under two codes.
+ *
+ * @param {{raw: string, body: string, firstLine: number, baseRequired: string[]}} tpl
+ *   `raw` is the frontmatter block's text; `baseRequired` is check-spec.mjs's base section set (stored there, once).
+ * @returns {{refusals: {code: string, detail: string}[]}}
+ */
+export function validateTemplate({ raw, body, firstLine, baseRequired }) {
+  const out = [];
+  if (!TEMPLATE_KEY_LINE_RE.test(raw)) {
+    out.push([
+      "template-key",
+      `the frontmatter has no line starting \`${TEMPLATE_KEY}:\` — the line /pharn-spec fills with the resolved reference`,
+    ]);
+  }
+  const required = [...baseRequired, ...TEMPLATE_EXTRA_REQUIRED];
+  const templateSections = [...required, ...TEMPLATE_OPTIONAL];
+  const { sections, hidden } = sectionsOf(body, firstLine);
+  const count = (name) => sections.filter((s) => s.name === name).length;
+  const only = (name) => (count(name) === 1 ? sections.find((s) => s.name === name) : null);
+
+  for (const name of required) {
+    if (count(name) > 0) continue;
+    const h = hidden.find((x) => x.name === name);
+    out.push([
+      "section",
+      h
+        ? `line ${h.line}: \`## ${titleCase(name)}\` sits inside a block opened at line ${h.opener}, so a renderer shows no heading there`
+        : `missing required \`## ${titleCase(name)}\` section`,
+    ]);
+  }
+  for (const name of templateSections) {
+    if (count(name) > 1)
+      out.push(["section", `\`## ${titleCase(name)}\` appears ${count(name)} times — a template section appears at most once`]);
+  }
+
+  const ac = only("acceptance criteria");
+  if (ac && !hasExampleCriterion(ac)) {
+    out.push([
+      "ac-example",
+      `\`## Acceptance Criteria\` (line ${ac.line}) has no visible example item: \`- **AC-<n>**\` reading Given … When … Then, ` +
+        `with exactly one \`  - verify: <level>\` continuation`,
+    ]);
+  }
+  const scope = only("scope");
+  if (scope && !scope.lines.some((l) => !l.inBlock && OUT_OF_SCOPE_RE.test(l.text))) {
+    out.push(["out-of-scope-label", `\`## Scope\` (line ${scope.line}) has no visible column-0 \`**Out of scope…**\` label`]);
+  }
+  return { refusals: out.map(([code, detail]) => ({ code, detail })) };
 }

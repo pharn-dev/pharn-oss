@@ -1,0 +1,27 @@
+--- a/.claude/hooks/protect-trusted-paths.cjs	2026-09-23 18:47:18
++++ b/.claude/hooks/protect-trusted-paths.cjs	2026-09-23 18:47:18
+@@ -14,6 +14,9 @@
+ // overwriting one disarms that guard on the very next write, and either settings file can unwire both.
+ // A guard the agent may rewrite is not a floor op — it is a suggestion (P0).
+ //
++// Also protected by default: the project's own SPEC template, pharn.spec-template.md at the root (see the entry in
++// DEFAULT_PROTECTED below). It is an INSTRUCTION channel to /pharn-spec, so it is guarded like the trusted docs.
++//
+ // The control surface includes the writes-scope guard's INPUT, not only its code. .pharn/writes-scope.json
+ // is the file enforce-writes-scope.cjs reads to decide EVERY write. That hook guards it with a single
+ // byte-EXACT compare (rel === SCOPE_FILE) while its ALWAYS glob leaves the rest of .pharn/ writable, so
+@@ -354,6 +357,14 @@
+   // product lessons-index cache lives there too. First entry naming a GENERATED file rather than a
+   // committed one — the deny is by path, so it holds whether or not the file exists yet.
+   ".pharn/writes-scope.json",
++  // The project's own SPEC template (pharn/pharn-contracts/spec-template.md, "The project template"). Its guidance
++  // comments are instructions /pharn-spec follows, so it is a persistent instruction channel: a build agent that
++  // could write it would steer every later SPEC. That is also why its path is FIXED in
++  // pharn/floor/spec-template-core.mjs rather than read from a config file no guard protects. Denied by path,
++  // whether or not the file exists (the .pharn/writes-scope.json precedent above); a human edits it directly. The
++  // core's copy of the path and this entry are pinned equal by a test in pharn/floor/check-spec.test.mjs.
++  // Bounded as every entry here is: a Bash write reaches it.
++  "pharn.spec-template.md",
+ ];
+ 
+ // Memory-bank canon, denied as ROOTED SUBTREES (see the header). Both halves of the deliberate
