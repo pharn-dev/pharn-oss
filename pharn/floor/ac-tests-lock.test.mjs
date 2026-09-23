@@ -81,7 +81,7 @@ test("--check REDs an edited test file, naming its PATH and never its content", 
     writeFileSync(join(root, FILES[0]), `test("rewritten to pass", () => {}); // ${SECRET}\n`);
     const r = cli(root, ["--check", NAME]);
     assert.equal(r.code, 1);
-    assert.match(r.out, new RegExp(`RED — ${FILES[0].replace(/[.]/g, "\\.")} changed since the lock was written`));
+    assert.ok(r.out.includes(`RED — ${FILES[0]} changed since the lock was written`), r.out);
     assert.ok(!r.out.includes(SECRET), "the RED quoted file content");
   } finally {
     rmSync(root, { recursive: true, force: true });
