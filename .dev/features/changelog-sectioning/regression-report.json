@@ -1,0 +1,35 @@
+{
+  "base": "e8b6da2a845a9d965dd88ec668142a01a1855d6a",
+  "inside": [
+    ".dev/features/changelog-sectioning/GRILL.md",
+    ".dev/features/changelog-sectioning/MIGRATION.md",
+    ".dev/features/changelog-sectioning/PLAN.md",
+    ".dev/features/changelog-sectioning/REGRESSION.md",
+    ".dev/features/changelog-sectioning/VERIFY.md",
+    ".dev/features/changelog-sectioning/overrides.json",
+    ".dev/features/changelog-sectioning/regression-report.json",
+    ".dev/features/changelog-sectioning/sectionize-core.mjs",
+    ".dev/features/changelog-sectioning/sectionize-core.test.mjs",
+    ".dev/features/changelog-sectioning/sectionize.mjs",
+    ".dev/features/changelog-sectioning/sectionize.test.mjs",
+    ".dev/features/changelog-sectioning/verify-report.json",
+    "CHANGELOG.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
