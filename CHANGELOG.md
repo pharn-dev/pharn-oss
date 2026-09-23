@@ -35,6 +35,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `docs/lessons-index.md` was regenerated with the narrow generator. Apparatus only, so there is no
   `SKILLS_VERSION` bump.
 
+### Changed
+
+- 2026-09-23: **`cost.json` writes each request and each marker on one line.** A downstream ledger drops from
+  33,051 lines to 823, and the parsed JSON is unchanged. This PR's `SKILLS_VERSION` 6.13.0 → 6.13.1 patch
+  covers it: shipped emitter bytes changed, and no ledger content did.
+  ([`pharn/floor/render-cost-ledger.mjs`](./pharn/floor/render-cost-ledger.mjs),
+  [`pharn/pharn-contracts/cost-ledger.md`](./pharn/pharn-contracts/cost-ledger.md),
+  [`.dev/features/cost-ledger-compact-rows/`](./.dev/features/cost-ledger-compact-rows/))
+  - **The failure, from a downstream project.** `pharn-starter`'s PR #104 added 38,927 lines, and 33,051
+    of them were one file, a 630-row `/pharn-loop` ledger. The emitter wrote
+    `JSON.stringify(ledger, null, 2)`, which expands every row's nested `usage` object, about 52 lines per
+    request. The contract's Size section had disclosed the cost in KiB. The cost that hurt was lines in a
+    diff, and nobody had measured it.
+  - **Change.** A new `serializeLedger()` is used by both the file write and `--stdout`. It writes the two
+    fact arrays, `markers[]` and `requests[]`, one element per `\n`-delimited line, and pretty-prints the
+    rest. The derived views stay readable. The schema, keys, values, key order and determinism are
+    unchanged. Every consumer in this repo reads the file through `JSON.parse` or names it by path, and the
+    sweep is recorded in the increment's `PLAN.md`.
+  - **Measured on 2026-09-23**, by re-serializing the 14 ledgers committed in that project (each parses
+    deep-equal):
+    - the 630-row ledger: 33,051 → 823 lines and 960,206 → 629,344 bytes;
+    - all 14: 231,615 → 6,922 lines and 6,704,361 → 4,402,399 bytes.
+
+    The contract's "Size" section now carries these figures, and the emitter header and `CLAUDE.md` point
+    there instead of restating an older number.
+
+  - **Tests.** Parse-equality is checked over six emitter shapes. A closure-style layout check requires
+    every element to be one whole JSON value on its own line, and the old layout fails it as a mutation
+    control. The file write and `--stdout` are checked byte-for-byte against `serializeLedger`, and two
+    emissions are compared for byte-identity. The checker and the run-report reader both accept the
+    written file.
+  - **Bounds and deferrals.**
+    - A ledger committed before 6.13.1 keeps its old layout until its feature is emitted again. That one
+      re-emission rewrites the whole file once.
+    - `JSON.stringify` leaves U+2028, U+2029 and U+0085 raw. "One line" means one `\n`-delimited line.
+    - The verbatim `usage` copy is still 60.7% of that ledger's bytes, and `usage.iterations[]` alone is
+      22.0%. Dropping either is a fidelity and schema decision. It was considered and deferred.
+
 ### Fixed
 
 - 2026-09-23: **`check-cost-ledger.mjs --verify-transcript` no longer REDs a genuine ledger whose session

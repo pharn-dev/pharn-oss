@@ -1336,3 +1336,223 @@ test("SOURCE SELECTION (6.9.1): a /pharn-ship ledger NEVER copies a LOOP.md left
   assert.equal(loop.outcome.source, LOOP_RECORD_SOURCE);
   assert.deepEqual(checkLedger(ship).reds, []);
 });
+
+// ===================================================================================================
+// THE ON-DISK LAYOUT (6.13.1): the two FACT arrays, one element per `\n`-delimited line.
+//
+// THE RECORDED FAILURE (P7): a downstream `/pharn-loop` ledger (630 rows) committed 33,051 lines, about
+// 52 per request row, because the emitter wrote `JSON.stringify(ledger, null, 2)`, which expands every
+// nested `usage` object of every row. It was 33,051 of the 38,927 lines its PR added. The contract had
+// disclosed the size in KiB; the cost that hurt was LINE COUNT in a diff, and nobody had measured it.
+//
+// The parsed document must not move, and that is asserted as deep-equality over EVERY shape the emitter
+// produces (L29), never one hand-picked ledger. The layout itself is asserted as a CLOSURE: every element
+// is one whole JSON value on its own line, in order, and the array closes right after the last one. A
+// row that spans lines fails, and the old serialization is run through the same assertion as a mutation
+// control, so the check cannot pass on the emitter it replaced.
+// ===================================================================================================
+
+import { isDeepStrictEqual } from "node:util";
+
+/** Every way the written text can break the layout rule, or `[]`. Shared by every test below and by the
+ *  mutation control, so the rule is stated once. */
+function rowLayoutProblems(text, led) {
+  const problems = [];
+  const lines = text.split("\n");
+  if (lines.at(-1) !== "" || lines.at(-2) === "") problems.push("the file must end with exactly one newline");
+  for (const key of ["markers", "requests"]) {
+    const arr = led[key];
+    if (arr.length === 0) {
+      if (!lines.includes(`  "${key}": [],`)) problems.push(`${key}: an empty fact array must be written as []`);
+      continue;
+    }
+    const open = lines.indexOf(`  "${key}": [`);
+    if (open === -1) {
+      problems.push(`${key}: no opening line`);
+      continue;
+    }
+    for (let i = 0; i < arr.length; i++) {
+      const line = lines[open + 1 + i] ?? "";
+      const wantComma = i < arr.length - 1;
+      let parsed;
+      try {
+        if (!line.startsWith("    {") || line.endsWith(",") !== wantComma) throw new Error("shape");
+        parsed = JSON.parse(line.slice(4, wantComma ? -1 : undefined));
+      } catch {
+        problems.push(`${key}[${i}] is not one whole JSON value on its own line`);
+        break;
+      }
+      if (!isDeepStrictEqual(parsed, arr[i])) {
+        problems.push(`${key}[${i}]'s line does not parse to that element`);
+        break;
+      }
+    }
+    if (!["  ],", "  ]"].includes(lines[open + 1 + arr.length]))
+      problems.push(`${key}: the array does not close right after its last element`);
+  }
+  return problems;
+}
+
+/** A bounded run with stage markers over the real fixture: 12 rows, 4 markers. */
+function boundedWithStages() {
+  const { root, projectsDir } = stageSingle();
+  const markersBase = writeMarkers(root, "feat", [
+    marker(1, "run-start", null, null, "2026-09-21T08:00:00.000Z"),
+    marker(2, "stage-start", "pharn-build", 1, "2026-09-21T08:36:00.000Z"),
+    marker(3, "stage-start", "pharn-verify", 1, "2026-09-21T08:41:00.000Z"),
+    marker(4, "run-stop", null, null, "2026-09-21T09:00:00.000Z"),
+  ]);
+  return { root, projectsDir, markersBase };
+}
+
+test("LAYOUT (6.13.1): the CLI writes every request and every marker on ONE \\n-delimited line", () => {
+  const { projectsDir, markersBase } = boundedWithStages();
+  const out = mkdtempSync(join(tmpdir(), "cost-ledger-layout-"));
+  const r = run([
+    "feat",
+    "--repo",
+    out,
+    "--base",
+    "pharn/features",
+    "--session",
+    REAL_SESSION,
+    "--projects-dir",
+    projectsDir,
+    "--markers-base",
+    markersBase,
+  ]);
+  assert.equal(r.status, 0, r.stderr);
+  const text = readFileSync(join(out, "pharn", "features", "feat", "cost.json"), "utf8");
+  const led = JSON.parse(text);
+  // NON-VACUITY (L34): both fact arrays are populated, or "every element on its own line" is free.
+  assert.equal(led.requests.length, 12);
+  assert.equal(led.markers.length, 4);
+  assert.deepEqual(rowLayoutProblems(text, led), []);
+  // MUTATION CONTROL: the serialization this replaced fails the same assertion.
+  assert.ok(rowLayoutProblems(JSON.stringify(led, null, 2) + "\n", led).length > 0, "the old pretty-printed layout must FAIL the rule");
+});
+
+import { serializeLedger, ROW_ARRAYS } from "./render-cost-ledger.mjs";
+import { readJson } from "./render-run-report.mjs";
+
+/** EVERY ledger shape the emitter produces from the committed fixtures, in ONE table (L29). */
+function layoutCases() {
+  const cases = [];
+  {
+    const { projectsDir, markersBase } = boundedWithStages();
+    cases.push({
+      label: "bounded, rows + stage markers",
+      led: renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase }),
+    });
+  }
+  {
+    const { root, projectsDir } = stageSingle();
+    cases.push({
+      label: "open window, rows",
+      led: renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase: openRun(root, "feat") }),
+    });
+  }
+  {
+    const { root, projectsDir } = stageSubagents();
+    cases.push({
+      label: "subagent rows",
+      led: renderLedger({ name: "feat", sessionId: SUB_SESSION, projectsDir, markersBase: openRun(root, "feat") }),
+    });
+  }
+  {
+    const { root, projectsDir } = stageSingle();
+    const markersBase = writeMarkers(root, "feat", [
+      marker(1, "run-start", null, null, "2026-09-21T12:00:00.000Z"),
+      marker(2, "run-stop", null, null, "2026-09-21T12:30:00.000Z"),
+    ]);
+    cases.push({
+      label: "observed zero (known window, no rows)",
+      led: renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase }),
+    });
+  }
+  {
+    const { root, projectsDir } = stageSingle();
+    cases.push({
+      label: "unknown window (no markers)",
+      led: renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase: join(root, "none") }),
+    });
+  }
+  cases.push({
+    label: "no session id (unavailable shell)",
+    led: renderLedger({ name: "feat", sessionId: null, projectsDir: "/nope", markersBase: "/nope" }),
+  });
+  return cases;
+}
+
+test("LAYOUT: JSON.parse of the new file equals JSON.parse of the old one — over EVERY emitter shape (L29/L34)", () => {
+  const cases = layoutCases();
+  assert.equal(cases.length, 6, "non-vacuity: the table ranges over every shape it names");
+  assert.ok(
+    cases.some((c) => c.led.requests.length > 0 && c.led.markers.length > 0),
+    "non-vacuity: some case has both fact arrays populated"
+  );
+  assert.ok(
+    cases.some((c) => c.led.requests.length === 0) && cases.some((c) => c.led.markers.length === 0),
+    "both fact arrays are also seen EMPTY"
+  );
+  assert.equal(cases.find((c) => /observed zero/.test(c.label)).led.coverage, "partial", "the observed-zero case really is one");
+  assert.equal(cases.find((c) => /unknown/.test(c.label)).led.coverage, "unavailable");
+  for (const { label, led } of cases) {
+    const text = serializeLedger(led);
+    const old = JSON.stringify(led, null, 2) + "\n";
+    assert.deepStrictEqual(JSON.parse(text), JSON.parse(old), `${label}: the parsed document must not move`);
+    assert.deepStrictEqual(Object.keys(JSON.parse(text)), Object.keys(JSON.parse(old)), `${label}: key order is unchanged`);
+    assert.deepStrictEqual(rowLayoutProblems(text, led), [], `${label}: layout`);
+    assert.equal(serializeLedger(structuredClone(led)), text, `${label}: byte-deterministic for an equal object`);
+    assert.ok(text.split("\n").length <= old.split("\n").length, `${label}: never MORE lines than the old layout`);
+  }
+  assert.deepEqual([...ROW_ARRAYS], ["markers", "requests"], "exactly the two fact arrays — equality, not presence (L36)");
+});
+
+test("LAYOUT: a value carrying \\n or U+2028 stays on its row's line — the \\n-delimited claim, probed (L37)", () => {
+  const { projectsDir, markersBase } = boundedWithStages();
+  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase });
+  // In-memory only: the emitter never writes these (identity fields are bounded, usage leaves are
+  // tokens), but `session_id` and a marker's `stage` are copied as strings, so the serializer must hold
+  // the property for ANY string, not only the ones the emitter happens to produce today.
+  led.requests[0].session_id = "a\nb c d\u0085e";
+  led.markers[1].stage = "x\ny";
+  const text = serializeLedger(led);
+  assert.deepStrictEqual(rowLayoutProblems(text, led), []);
+  assert.deepStrictEqual(JSON.parse(text), led);
+  assert.ok(text.includes(" "), "BOUND, pinned: U+2028 is left RAW by JSON.stringify — the contract says so");
+});
+
+test("LAYOUT (L41): the file write AND --stdout both emit exactly serializeLedger's bytes; readers accept them", () => {
+  const { projectsDir, markersBase } = boundedWithStages();
+  const out = mkdtempSync(join(tmpdir(), "cost-ledger-layout-cli-"));
+  const args = [
+    "feat",
+    "--repo",
+    out,
+    "--base",
+    "pharn/features",
+    "--session",
+    REAL_SESSION,
+    "--projects-dir",
+    projectsDir,
+    "--markers-base",
+    markersBase,
+  ];
+  const want = serializeLedger(renderLedger({ name: "feat", repo: out, sessionId: REAL_SESSION, projectsDir, markersBase }));
+  const w = run(args);
+  assert.equal(w.status, 0, w.stderr);
+  const p = join(out, "pharn", "features", "feat", "cost.json");
+  const written = readFileSync(p, "utf8");
+  assert.equal(written, want, "the file write path");
+  const so = run([...args, "--stdout"]);
+  assert.equal(so.status, 0, so.stderr);
+  assert.equal(so.stdout, want, "the --stdout path");
+  // Determinism across two whole CLI emissions of the same inputs.
+  assert.equal(run(args).status, 0);
+  assert.equal(readFileSync(p, "utf8"), written, "a second emission is byte-identical");
+  // The two readers that parse the file: the checker CLI and the run report's reader.
+  const chk = runChecker([p]);
+  assert.equal(chk.status, 0, chk.stdout + chk.stderr);
+  assert.deepStrictEqual(readJson(p), JSON.parse(want));
+});

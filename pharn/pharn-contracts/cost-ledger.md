@@ -436,10 +436,38 @@ every aggregate is recomputable from its own rows.
 
 ## Size, disclosed rather than discovered
 
-A single 65-minute, one-iteration `STOP_GREEN` run emits **~393 KiB** of pretty-printed JSON (275 rows;
-402,567 bytes measured). The verbatim `usage` copy is ~263 KiB of that, and `usage.iterations[]` — walked
-so that "verbatim" stays true — duplicates the numbers beside it. That cost was weighed and accepted for
-fidelity. It is stated here so a reader meets it at the contract rather than in a diff.
+**The layout (since 6.13.1).** The file is pretty-printed at a 2-space indent, except the two FACT arrays,
+`markers[]` and `requests[]`. Each of their elements is written as one JSON value on one `\n`-delimited line.
+An empty fact array is `[]`. The derived views stay pretty-printed, because they are what a person reads to
+learn the cost. `JSON.parse` of the file is exactly what it was under the old layout, key order included.
+`render-cost-ledger.mjs`'s `serializeLedger` is the one implementation, and both CLI output paths use it.
+"One line" means one `\n`-delimited line. `JSON.stringify` escapes `\n` and every C0 control, but it leaves
+U+2028, U+2029 and U+0085 raw, and some viewers draw those as line breaks.
+
+**Why the layout changed: the cost that hurt was LINES, and this section had measured only BYTES.** The
+section used to say only this: _a 65-minute, one-iteration `STOP_GREEN` run emits ~393 KiB of pretty-printed
+JSON (275 rows; 402,567 bytes measured), ~263 KiB of it the verbatim `usage` copy._ That was true, and it
+missed the unit that mattered. In a downstream project a single `/pharn-loop` ledger was the bulk of a pull
+request's diff. The measurements below were taken on 2026-09-23 on the `cost.json` files committed in that
+project. The "before" column is the file as committed. The "after" column is `serializeLedger` over the same
+parsed object, which parses deep-equal.
+
+| measured                                           | before (pretty-printed) | after (one row per line) |
+| -------------------------------------------------- | ----------------------- | ------------------------ |
+| one `/2` ledger, 630 rows, 14 markers — lines      | 33,051 (~52 per row)    | 823                      |
+| the same ledger — bytes                            | 960,206                 | 629,344                  |
+| all 14 committed ledgers (13 of them `/1`) — lines | 231,615                 | 6,922                    |
+| all 14 committed ledgers — bytes                   | 6,704,361               | 4,402,399                |
+
+That one ledger was 33,051 of the 38,927 lines its pull request added.
+
+**What remains, and it is a byte cost, not a line cost.** In the new layout, the verbatim `usage` copy is
+381,708 of that ledger's 629,344 bytes (60.7%). `usage.iterations[]` alone is 138,525 bytes (22.0%). It is
+walked so that "verbatim" stays true, and it repeats the numbers beside it. That cost was weighed and
+accepted for fidelity. Dropping either would change the schema, and it has not been done.
+
+**These are dated measurements, not properties of every ledger.** A run's size scales with its request
+count, so read the table as what one real run and one real project cost, not as a bound.
 
 ## Relationship to `pharn-cost-record/1`
 
