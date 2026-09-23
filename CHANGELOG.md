@@ -1635,6 +1635,26 @@ exists-then-read/write (CWE-367)`.
 
 ### Added
 
+- **The `/pharn-loop` Stop guard is wired in the shipped `settings.json`, and `require-loop-record.cjs`
+  joins the write-guard control surface** (`SKILLS_VERSION` 6.11.1 → **6.12.0**, minor: a newly shipped
+  product `.claude/` capability — the Stop entry plus protecting the fourth hook. `MIN_CLI` is untouched)
+  ([`.claude/settings.json`](./.claude/settings.json),
+  [`.claude/hooks/protect-trusted-paths.cjs`](./.claude/hooks/protect-trusted-paths.cjs),
+  [`.claude/hooks/set-writes-scope.cjs`](./.claude/hooks/set-writes-scope.cjs),
+  [`.dev/features/loop-stop-guard/`](./.dev/features/loop-stop-guard/)).
+  - **Wiring.** One matcher-less `Stop` hook in exec form (`command` + `args`, `timeout: 10`), anchored on
+    `${CLAUDE_PROJECT_DIR}` — the exact entry `hook-wiring.test.cjs` already bound. A new Claude Code
+    session loads it; an existing install whose `settings.json` the installer preserved still needs the
+    entry by hand (`pharn update` never edits that file).
+  - **Control surface.** `DEFAULT_PROTECTED` / `CONTROL_SURFACE` / `reconcile-ignore.json`
+    `always_reconciled.exact` now include `require-loop-record.cjs` (six exact entries), so a Write/Edit
+    to the Stop guard is denied the same way as the three write hooks. Applied by a human outside the
+    agent loop (fix #2), then verified live: Edit → exit 2.
+  - **Trusted docs.** `LIMITS.md` §7 names the fail-open Stop bound; `CONSTITUTION.md` names the wired
+    `Stop` guard beside the two `PreToolUse` write-guards.
+  - **Docs.** README's "as of `6.11.1` … lands inert" clause is retired; `CLAUDE.md` and
+    `pharn/floor/README.md` say four hook scripts.
+
 - **A `Stop` hook refuses to end a turn while an unattended `/pharn-loop` run in this session has no record**
   (`SKILLS_VERSION` 6.10.0 → **6.11.0**, minor: a newly shipped product hook and a new `/pharn-loop`
   capability. `MIN_CLI` is untouched, and **the hook ships INERT until a human wires it**)

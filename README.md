@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.11.1-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.12.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -196,8 +196,10 @@ not active.
 
 `require-loop-record.cjs` is not a write guard. It is a `Stop` hook: while an unattended `/pharn-loop` run
 in the session has written no `LOOP.md`, it refuses to let the turn end, a bounded number of times per run,
-and it fails open. It does nothing unless your settings register it under `Stop`. As of `6.11.1` the
-`settings.json` PHARN ships does not register it, so it lands inert.
+and it fails open. It does nothing unless your settings register it under `Stop`. As of `6.12.0` the
+`settings.json` PHARN ships registers it (matcher-less, exec form). An existing install whose
+`settings.json` the installer preserved still needs that entry copied by hand — `pharn update` never
+edits it.
 
 Copy the wiring **as it ships**, anchored on the project-directory placeholder:
 

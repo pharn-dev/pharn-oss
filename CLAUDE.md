@@ -115,8 +115,9 @@ new layout; it converts a silent half-install into a clean refusal, which is the
    change cannot be merged without the human owner's approval. **It also protects the two guards' own
    control surface** — **both** settings files that wire the hooks (`.claude/settings.json` and
    `.claude/settings.local.json`, which is loaded too and can wire or override the same hooks), the
-   three hook scripts (`protect-trusted-paths.cjs`, `enforce-writes-scope.cjs`,
-   `set-writes-scope.cjs`), **and the writes-scope guard's own INPUT, `.pharn/writes-scope.json`**.
+   four hook scripts (`protect-trusted-paths.cjs`, `enforce-writes-scope.cjs`,
+   `set-writes-scope.cjs`, `require-loop-record.cjs`), **and the writes-scope guard's own INPUT,
+   `.pharn/writes-scope.json`**.
    Each hook is re-read fresh on every tool call, so a write to one would disarm that guard on the very
    next write; and the scope file is the list `enforce-writes-scope.cjs` reads to decide **every**
    write, so a Write-tool edit of it was a self-escalation — that hook guards it with one byte-exact
@@ -128,10 +129,7 @@ new layout; it converts a silent half-install into a clean refusal, which is the
    unaffected because it writes via `fs.writeFileSync`, which `PreToolUse` never sees. Deliberately the
    one file, **not** `.pharn/**` — the rest is disposable runtime scratch stages legitimately write.
    `.claude/commands/**` and the hooks' own `*.test.cjs` are deliberately **not** protected — the
-   commands are edited every increment. **Nor is the fourth hook script**, the `/pharn-loop` Stop guard
-   `require-loop-record.cjs` (6.11.0): protecting it would mean editing a hook-protected file, and it is a
-   FAIL-OPEN, advisory guard that a Bash `--close` can already disarm. A Bash edit to it is still caught by
-   `reconcile`, because `.claude/hooks/*` is always-reconciled. It is a named human follow-up. **Bounded, and stated:** this covers the
+   commands are edited every increment. **Bounded, and stated:** this covers the
    Write/Edit/MultiEdit/NotebookEdit surface only — the live `PreToolUse` matcher in
    `.claude/settings.json`, which both hooks re-test in their own code; Bash-tool writes bypass
    `PreToolUse` hooks entirely, exactly as for the trusted docs.
@@ -333,14 +331,14 @@ node pharn/floor/check-loop-fresh.mjs --feature <name> --base <40-hex> (--iter <
 # (cosmetic, anthropics/claude-code#34600; `additionalContext` is the documented non-error alternative).
 # WHAT IT CANNOT DO (verbatim from its header): make a model do work; judge a record; tell a real record from
 # a fabricated one (`touch LOOP.md` satisfies it); act when Claude Code does not start it (LIMITS.md §7);
-# reach an existing install except by hand. It ships INERT: `.claude/settings.json` is protected, so the exact
-# exec-form, matcher-less entry is staged for a human in .dev/features/loop-stop-guard/settings-patch/APPLY.md,
-# and hook-wiring.test.cjs binds the committed file to that entry the moment it is applied. SESSION BINDING IS
-# OBSERVED, NOT PROBED: CLAUDE_CODE_SESSION_ID in a Bash call equals the session's id, but no live Stop event
-# was fired (that needs the human-applied wiring) — if the payload's id ever differs, the guard is INERT
-# (fail-open, silently useless), and follow-up `stop-guard-live-probe` checks it once wired. Inert-path cost:
-# ~0.03 ms in-process; a spawn is node's own startup (~70 ms). Exits for a person: `--close <name>`, interrupt,
-# or unwire — a model reaches the first and third through Bash too (LIMITS.md §6).
+# reach an existing install except by hand (`pharn update` never edits settings.json). As of 6.12.0 the
+# shipped `.claude/settings.json` WIRES it (matcher-less, exec form, timeout 10); hook-wiring.test.cjs
+# binds the committed file to that entry. SESSION BINDING IS OBSERVED, NOT PROBED: CLAUDE_CODE_SESSION_ID
+# in a Bash call equals the session's id, but no live Stop event was fired until wiring landed — if the
+# payload's id ever differs, the guard is INERT (fail-open, silently useless), and follow-up
+# `stop-guard-live-probe` checks it once wired. Inert-path cost: ~0.03 ms in-process; a spawn is node's
+# own startup (~70 ms). Exits for a person: `--close <name>`, interrupt, or unwire — a model reaches the
+# first and third through Bash too (LIMITS.md §6).
 node .claude/hooks/require-loop-record.cjs --open <name> --cap <M>   # /pharn-loop Step 1a
 node .claude/hooks/require-loop-record.cjs --close <name>           # /pharn-loop Final step
 
@@ -787,7 +785,7 @@ the rule has to be the thing that holds.
   source files, and agents took it.
 
 - **The setter refuses to scope the guards themselves.** `set-writes-scope.cjs` exits non-zero and
-  writes nothing if the parsed scope names `.claude/settings.json` or one of the three hook scripts,
+  writes nothing if the parsed scope names `.claude/settings.json` or one of the four hook scripts,
   unless `--allow-claude-dir` is passed. A `PLAN.md` is untrusted input, so without this an increment
   could declare its way into disarming a guard. Use the flag only when the increment genuinely edits a
   guard; it is an argv flag, so no declared file can set it for itself. The check is **lexical** (it

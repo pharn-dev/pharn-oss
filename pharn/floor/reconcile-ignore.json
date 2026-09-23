@@ -16,10 +16,11 @@
       ".claude/settings.local.json",
       ".claude/hooks/protect-trusted-paths.cjs",
       ".claude/hooks/enforce-writes-scope.cjs",
-      ".claude/hooks/set-writes-scope.cjs"
+      ".claude/hooks/set-writes-scope.cjs",
+      ".claude/hooks/require-loop-record.cjs"
     ],
     "prefixes": ["pharn/floor/", ".dev/floor/"],
-    "parity": "The five `exact` entries are a deliberate COPY of CONTROL_SURFACE in .claude/hooks/set-writes-scope.cjs and of the corresponding tail of DEFAULT_PROTECTED in .claude/hooks/protect-trusted-paths.cjs. check-bash-reconcile.test.mjs pins all three set-equal; they must be updated together."
+    "parity": "The six `exact` entries are a deliberate COPY of CONTROL_SURFACE in .claude/hooks/set-writes-scope.cjs and of the corresponding tail of DEFAULT_PROTECTED in .claude/hooks/protect-trusted-paths.cjs. check-bash-reconcile.test.mjs pins all three set-equal; they must be updated together."
   },
 
   "pipeline_artifacts": {
