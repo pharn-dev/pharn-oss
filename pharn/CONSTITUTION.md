@@ -116,8 +116,9 @@ failure → STOP.
 and `/pharn-dev-*` command names this file in its frontmatter `reads:` and is instructed to load
 its contents as a trusted prefix before its own instructions, in the shape below. **No injector
 exists**: nothing on the floor performs the prepend and nothing verifies it happened. Read the
-live wiring, never this sentence — `.claude/settings.json` wires two `PreToolUse` write-guards
-and no prompt hook, and `/pharn-dev-eval` does not name this file at all. The **floor** half of
+live wiring, never this sentence — `.claude/settings.json` wires two `PreToolUse` write-guards,
+one `Stop` guard for `/pharn-loop`, and no prompt hook, and `/pharn-dev-eval` does not name this
+file at all. The **floor** half of
 this file's enforcement is the write-guard described below; the prefix is the advisory half.
 
 ```text

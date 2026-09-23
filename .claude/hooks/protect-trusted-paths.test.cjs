@@ -240,13 +240,14 @@ test("✧ blocks an ABSOLUTE path whose ROOT prefix is spelled in a different ca
   }
 });
 
-// --- F3: the guard's own control surface (settings.json + the three hook scripts) ---
+// --- F3: the guard's own control surface (settings.json + the four hook scripts) ---
 
 for (const p of [
   ".claude/settings.json",
   ".claude/hooks/protect-trusted-paths.cjs",
   ".claude/hooks/enforce-writes-scope.cjs",
   ".claude/hooks/set-writes-scope.cjs",
+  ".claude/hooks/require-loop-record.cjs",
 ]) {
   test(`blocks writes to the guards' own control surface: ${p}`, () => {
     const r = run({ tool_name: "Write", tool_input: { file_path: p } });

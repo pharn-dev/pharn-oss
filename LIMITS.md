@@ -295,6 +295,12 @@ read off the wiring:
 - **A PHARN install at a subpath of a repository, entered through a worktree of that repository**, reads a
   different scope record than its setter wrote, and falls back to the default-safe-set: friction, not a
   hole.
+- **The `/pharn-loop` Stop guard acts only when Claude Code starts it, and it fails OPEN.**
+  `require-loop-record.cjs` refuses a turn end, at most three times per run, while an unattended loop
+  run open in this session has no `LOOP.md`. It cannot make a model do work, cannot judge the record,
+  and is satisfied by any non-empty file. A hook that cannot start, times out, or crashes lets the turn
+  end, which is the safe direction for a guard that ends turns. Its wiring is exec form, so the
+  quote-character bound above does not apply to it.
 
 ---
 

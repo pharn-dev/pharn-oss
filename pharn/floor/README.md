@@ -101,8 +101,9 @@ The default set is the four trusted spec docs (`pharn/CONSTITUTION.md`, `pharn/A
 `THREAT-MODEL.md`, `LIMITS.md`), `CODEOWNERS` at each of the three locations GitHub honors (root,
 `.github/`, `docs/`) — the GitHub-layer write-guard itself — and **the two pre-write guards' own control
 surface**: both settings files that can wire the hooks (`.claude/settings.json` and
-`.claude/settings.local.json`) plus the three hook scripts
-(`protect-trusted-paths.cjs`, `enforce-writes-scope.cjs`, `set-writes-scope.cjs`). Each hook is re-read
+`.claude/settings.local.json`) plus the four hook scripts
+(`protect-trusted-paths.cjs`, `enforce-writes-scope.cjs`, `set-writes-scope.cjs`,
+`require-loop-record.cjs`). Each hook is re-read
 fresh on every tool call, so a write to one would disarm that guard on the very next write. Extend the
 set further with the `PHARN_PROTECTED` env var (comma-separated; an entry containing `/` is an exact
 repo-relative path, a bare name still matches that basename at any depth). Confirm it works:
@@ -123,7 +124,7 @@ echo '{"tool_name":"Write","tool_input":{"file_path":"README.md"}}' | node .clau
 ```
 
 The **setter** (`set-writes-scope.cjs`) is separate from both hooks: it refuses to _authorize_ those
-same four control paths at scope-set time — exits non-zero and writes nothing if the parsed scope names
+same control-surface paths at scope-set time — exits non-zero and writes nothing if the parsed scope names
 one, unless the operator passes `--allow-claude-dir`. That early refusal is not runtime enforcement;
 **`enforce-writes-scope.cjs`** enforces whatever scope was emitted on every write. `.claude/commands/**`
 and the hooks' own `*.test.cjs` are deliberately in neither protected set nor the refusal set.

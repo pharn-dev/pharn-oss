@@ -189,7 +189,7 @@ test("--from-plan over the real pharn-plan.md template exits 1 (its `## Files` `
 // --- F3: the setter REFUSES to authorize the write-guards' own control surface (fail-closed) ---
 // A declared `writes:` / `## Files` list is untrusted input (CONSTITUTION P2). Before this refusal, an
 // entry naming a hook emitted a scope that enforce-writes-scope.cjs honored, so an untrusted document
-// could authorize disarming a guard. The refusal is exact membership over the same four paths
+// could authorize disarming a guard. The refusal is exact membership over the same control-surface paths
 // protect-trusted-paths.cjs protects; --allow-claude-dir is the only opt-in.
 
 const CONTROL_SURFACE = [
@@ -198,6 +198,7 @@ const CONTROL_SURFACE = [
   ".claude/hooks/protect-trusted-paths.cjs",
   ".claude/hooks/enforce-writes-scope.cjs",
   ".claude/hooks/set-writes-scope.cjs",
+  ".claude/hooks/require-loop-record.cjs",
 ];
 
 function planWith(cwd, ...paths) {
@@ -479,7 +480,7 @@ test("✧ this file's own CONTROL_SURFACE literal (the third copy) matches the s
   assert.deepEqual([...CONTROL_SURFACE].sort(), [...arrayEntries(SETTER, "CONTROL_SURFACE")].sort());
 });
 
-test("✧ the control surface names exactly the wiring files plus the three hook scripts — no command, no test file", () => {
+test("✧ the control surface names exactly the wiring files plus the four hook scripts — no command, no test file", () => {
   // Pins the GATE-1 decision itself: `.claude/commands/**` and `*.test.cjs` must stay OUT, or the
   // self-hosting loop breaks (46 of 104 historical plans write a command file).
   const set = arrayEntries(SETTER, "CONTROL_SURFACE");
@@ -489,7 +490,7 @@ test("✧ the control surface names exactly the wiring files plus the three hook
   // BOTH settings files, not just the committed one: settings.local.json is loaded too and can wire or
   // override the same hooks, so covering only settings.json left the control surface half-open.
   assert.ok(set.includes(".claude/settings.local.json"), "the LOCAL wiring file must be covered too");
-  assert.equal(set.filter((p) => p.startsWith(".claude/hooks/") && p.endsWith(".cjs")).length, 3, "all three hooks");
+  assert.equal(set.filter((p) => p.startsWith(".claude/hooks/") && p.endsWith(".cjs")).length, 4, "all four hooks");
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────

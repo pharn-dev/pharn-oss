@@ -7,7 +7,7 @@
 //
 // Protected by default: the four trusted spec docs + CODEOWNERS, the GitHub-layer write-guard itself,
 // AND the two pre-write guards' own control surface — the settings files that WIRE the hooks
-// (.claude/settings.json and .claude/settings.local.json) plus the three hook scripts. Guarding
+// (.claude/settings.json and .claude/settings.local.json) plus the four hook scripts. Guarding
 // CODEOWNERS locally is "guarding the guard": if the agent could rewrite it, it could delete the
 // human-only review requirement and collapse the GitHub-layer trust control (P2). The .claude/ entries
 // turn that same idea on this hook itself: each hook file is re-read fresh on every tool call, so
@@ -348,6 +348,7 @@ const DEFAULT_PROTECTED = [
   ".claude/hooks/protect-trusted-paths.cjs",
   ".claude/hooks/enforce-writes-scope.cjs",
   ".claude/hooks/set-writes-scope.cjs",
+  ".claude/hooks/require-loop-record.cjs",
   // The writes-scope guard's INPUT (see the header). Deliberately this ONE file and not ".pharn/**":
   // the rest of .pharn/ is disposable runtime scratch that stages legitimately write, and the
   // product lessons-index cache lives there too. First entry naming a GENERATED file rather than a
