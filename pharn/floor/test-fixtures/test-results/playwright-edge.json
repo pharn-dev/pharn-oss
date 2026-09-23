@@ -1,0 +1,278 @@
+{
+  "config": {
+    "argv": [
+      "/usr/local/bin/node",
+      "/work/proj/node_modules/.bin/playwright",
+      "test"
+    ],
+    "configFile": "/work/proj/playwright.config.js",
+    "rootDir": "/work/proj/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/work/proj/test-results",
+        "repeatEach": 1,
+        "retries": 1,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "alpha",
+        "name": "alpha",
+        "testDir": "/work/proj/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/work/proj/.pharn/pharn-verify/gates/0-test.test-results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 4,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "edge.spec.js",
+      "file": "edge.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "AC-1: plain pass",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "alpha",
+              "projectName": "alpha",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T20:08:26.509Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "a282b9cd442c0b7559d9-0d6f22d04bdd5a7415d3",
+          "file": "edge.spec.js",
+          "line": 2,
+          "column": 1
+        },
+        {
+          "title": "AC-6: expected failure",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [
+                {
+                  "type": "fail",
+                  "location": {
+                    "file": "/work/proj/e2e/edge.spec.js",
+                    "line": 3,
+                    "column": 51
+                  }
+                }
+              ],
+              "expectedStatus": "failed",
+              "projectId": "alpha",
+              "projectName": "alpha",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 1,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m2\u001b[39m\nReceived: \u001b[31m1\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m2\u001b[39m\nReceived: \u001b[31m1\u001b[39m\n    at /work/proj/e2e/edge.spec.js:3:69",
+                    "location": {
+                      "file": "/work/proj/e2e/edge.spec.js",
+                      "column": 69,
+                      "line": 3
+                    },
+                    "snippet": "  1 | const { test, expect } = require(\"@playwright/test\");\n  2 | test(\"AC-1: plain pass\", async () => { expect(1).toBe(1); });\n> 3 | test(\"AC-6: expected failure\", async () => { test.fail(); expect(1).toBe(2); });\n    |                                                                     ^\n  4 | test(\"AC-7: flaky\", async ({}, testInfo) => { expect(testInfo.retry).toBe(1); });\n  5 |"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/work/proj/e2e/edge.spec.js",
+                        "column": 69,
+                        "line": 3
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m2\u001b[39m\nReceived: \u001b[31m1\u001b[39m\n\n  1 | const { test, expect } = require(\"@playwright/test\");\n  2 | test(\"AC-1: plain pass\", async () => { expect(1).toBe(1); });\n> 3 | test(\"AC-6: expected failure\", async () => { test.fail(); expect(1).toBe(2); });\n    |                                                                     ^\n  4 | test(\"AC-7: flaky\", async ({}, testInfo) => { expect(testInfo.retry).toBe(1); });\n  5 |\n    at /work/proj/e2e/edge.spec.js:3:69"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T20:08:26.528Z",
+                  "annotations": [
+                    {
+                      "type": "fail",
+                      "location": {
+                        "file": "/work/proj/e2e/edge.spec.js",
+                        "line": 3,
+                        "column": 51
+                      }
+                    }
+                  ],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/work/proj/test-results/edge-AC-6-expected-failure-alpha/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/work/proj/e2e/edge.spec.js",
+                    "column": 69,
+                    "line": 3
+                  }
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "a282b9cd442c0b7559d9-1469fc05befbee4710c8",
+          "file": "edge.spec.js",
+          "line": 3,
+          "column": 1
+        },
+        {
+          "title": "AC-7: flaky",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "alpha",
+              "projectName": "alpha",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 0,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m1\u001b[39m\nReceived: \u001b[31m0\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m1\u001b[39m\nReceived: \u001b[31m0\u001b[39m\n    at /work/proj/e2e/edge.spec.js:4:70",
+                    "location": {
+                      "file": "/work/proj/e2e/edge.spec.js",
+                      "column": 70,
+                      "line": 4
+                    },
+                    "snippet": "  2 | test(\"AC-1: plain pass\", async () => { expect(1).toBe(1); });\n  3 | test(\"AC-6: expected failure\", async () => { test.fail(); expect(1).toBe(2); });\n> 4 | test(\"AC-7: flaky\", async ({}, testInfo) => { expect(testInfo.retry).toBe(1); });\n    |                                                                      ^\n  5 |"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/work/proj/e2e/edge.spec.js",
+                        "column": 70,
+                        "line": 4
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m1\u001b[39m\nReceived: \u001b[31m0\u001b[39m\n\n  2 | test(\"AC-1: plain pass\", async () => { expect(1).toBe(1); });\n  3 | test(\"AC-6: expected failure\", async () => { test.fail(); expect(1).toBe(2); });\n> 4 | test(\"AC-7: flaky\", async ({}, testInfo) => { expect(testInfo.retry).toBe(1); });\n    |                                                                      ^\n  5 |\n    at /work/proj/e2e/edge.spec.js:4:70"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-23T20:08:26.535Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/work/proj/test-results/edge-AC-7-flaky-alpha/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/work/proj/e2e/edge.spec.js",
+                    "column": 70,
+                    "line": 4
+                  }
+                },
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 1,
+                  "startTime": "2026-09-23T20:08:26.727Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "flaky"
+            }
+          ],
+          "id": "a282b9cd442c0b7559d9-10cab5f93038382069dc",
+          "file": "edge.spec.js",
+          "line": 4,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-23T20:08:26.313Z",
+    "duration": 439.809,
+    "expected": 2,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 1
+  }
+}

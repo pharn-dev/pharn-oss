@@ -23,6 +23,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.15.0] - 2026-09-23
+
+### Added
+
+- 2026-09-23: **A per-test record for the `test` gate: which named tests passed, failed or were skipped,
+  derived by tested code from a JSON report the project's own test run writes.** `SKILLS_VERSION` 6.14.1 →
+  6.15.0 (MINOR: a new floor module and a new contract). `MIN_CLI` stays 0.5.0: no installed path moves.
+  ([`pharn/floor/test-results-core.mjs`](./pharn/floor/test-results-core.mjs),
+  [`pharn/floor/test-results-formats.mjs`](./pharn/floor/test-results-formats.mjs),
+  [`pharn/pharn-contracts/test-results-record.md`](./pharn/pharn-contracts/test-results-record.md),
+  [`.dev/features/test-results/`](./.dev/features/test-results/))
+  - **The gap.** The floor sees only whole-gate exit codes, so it cannot tell that one named test ran: a suite
+    exits 0 with `it.skip("AC-1: …")`. Honest trigger (P7): no dogfood run failed on this; it is the first item
+    of the maintainer's AC-delivery queue, and **no stage reads the record yet**. For every stamp the runner
+    writes, the verify and regress verdicts are unchanged; a stamp carrying a malformed `results_sha256` is now
+    refused, and the runner refuses a gate whose results path it cannot clear.
+  - **The runner.** `run-gates.mjs` now spawns every gate with `PHARN_TEST_RESULTS` set to that gate's own path
+    under `<out>` (a different file per gate), removes the path before the gate runs, and records
+    `runs[].results_sha256`: the sha256 of a regular file there, else `null`. The file is read through
+    `O_NOFOLLOW | O_NONBLOCK` and `fstat`, in chunks, so a symlink, FIFO or device is never followed or blocked
+    on. The field is optional: the stamp `SCHEMA` is unchanged and every existing stamp still validates; a
+    stamp carrying a malformed value is refused as `stamp-malformed`.
+  - **The record.** `testRecord({ stamp, outDir, gateId, root })` re-hashes the file against the stamp and
+    returns `{id, file, title, status}` per test, `counts`, and `suite_errors` (failures no test owns), or one of
+    eleven closed reasons. A project opts in with `pharn.config.json` `testResults: {"test": "vitest-json" |
+"playwright-json"}`. Both formats are built into their runner, and each adapter was checked against reports
+    captured from the real reporter (vitest 5.0.1, Playwright 1.63.0). CTRF (still pre-1.0) and Jest (no live
+    capture available) are recorded as not chosen.
+  - **Bounds.** "passed" means the reporter said so. The test script, the reporter config and
+    `pharn.config.json` are all editable by a build, so a forged report is possible; `results-exit-contradiction`
+    (a failed test or a suite error under exit 0) narrows that and does not close it. A flaky test or a
+    `test.fail()` voids the whole record rather than being read as a pass.
+  - **Protected edit left for a human:** `pharn/ARCHITECTURE.md` §4's contract list, in
+    `.dev/features/test-results/PROTECTED-FOLLOWUPS.md`.
+
 ## [6.14.1] - 2026-09-23
 
 ### Added

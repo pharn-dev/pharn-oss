@@ -19,6 +19,8 @@ import {
   LAPSE_CODES,
   RESERVED_REASON_CODES,
   logBasename,
+  RESULTS_ENV,
+  resultsFileName,
   STRUCTURAL_PREFIX,
   SCHEMA,
   STAGES,
@@ -486,6 +488,36 @@ test("validateStamp REFUSES each malformed shape with its OWN reason_code (L52: 
     const r = validateStamp(stamp);
     assert.equal(r.ok, false, `validateStamp accepted: ${why}`);
     assert.equal(r.reason_code, code, `wrong reason_code for ${why}`);
+  }
+});
+
+test("results_sha256 is OPTIONAL and additive: absent, null and a digest all validate; anything else is stamp-malformed", () => {
+  const withSha = (v) => {
+    const s = goodStamp();
+    s.runs[0] = { ...s.runs[0], results_sha256: v };
+    return s;
+  };
+  // A stamp written before the field existed — the good fixture carries no results_sha256 at all.
+  assert.ok(!Object.hasOwn(goodStamp().runs[0], "results_sha256"), "the control must be a pre-6.15 stamp");
+  assert.deepEqual(validateStamp(goodStamp()), { ok: true });
+  assert.deepEqual(validateStamp(withSha(null)), { ok: true });
+  assert.deepEqual(validateStamp(withSha("c".repeat(64))), { ok: true });
+  for (const bad of ["zz", "C".repeat(64), "c".repeat(63), 7, false, {}, `${"c".repeat(63)}\n`]) {
+    const r = validateStamp(withSha(bad));
+    assert.equal(r.ok, false, `accepted results_sha256 ${JSON.stringify(bad)}`);
+    assert.equal(r.reason_code, "stamp-malformed");
+  }
+});
+
+test("resultsFileName is the ONE copy of the results-file naming rule (L35), and RESULTS_ENV is its handover", () => {
+  assert.equal(RESULTS_ENV, "PHARN_TEST_RESULTS");
+  assert.equal(resultsFileName(0, "test"), "0-test.test-results.json");
+  assert.equal(resultsFileName(3, "format:check"), "3-format_check.test-results.json", "sanitized exactly like the logs");
+  assert.notEqual(resultsFileName(0, "test"), "results.json", "never the name that reads as a second store of the gate map");
+  for (const rel of ["pharn/floor/run-gates.mjs", "pharn/floor/test-results-core.mjs"]) {
+    const src = read(rel);
+    assert.ok(!src.includes(".test-results.json"), `${rel} re-spells the results file name instead of importing resultsFileName`);
+    assert.ok(src.includes("resultsFileName"), `${rel} does not use resultsFileName`);
   }
 });
 

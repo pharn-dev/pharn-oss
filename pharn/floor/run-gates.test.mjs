@@ -12,7 +12,22 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, symlinkSync, statSync, copyFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  existsSync,
+  rmSync,
+  symlinkSync,
+  statSync,
+  copyFileSync,
+  realpathSync,
+  chmodSync,
+} from "node:fs";
+import { createHash } from "node:crypto";
+import { RESULTS_ENV, resultsFileName } from "./gate-run-core.mjs";
+import { testRecord } from "./test-results-core.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
@@ -973,4 +988,256 @@ test("★ WIRING — /pharn-regress's COMMITTED base-side lines produce a base s
     r = sh(lines.verdict);
     assert.equal(r.status, 0, `the verdict no longer reproduces after the worktree removal: ${r.stdout}`);
   });
+});
+
+// ---------------------------------------------------------------------------------------------------
+// Per-test results (6.15.0): the env var, the per-gate file, and results_sha256.
+// ---------------------------------------------------------------------------------------------------
+
+/** A gate helper the tests install as a script: it acts on `process.env.PHARN_TEST_RESULTS` per its argv. */
+const RESULTS_GATE = `
+const fs = require("fs");
+const p = process.env.${RESULTS_ENV};
+const [mode, arg] = process.argv.slice(2);
+if (mode === "print") console.log(p + "|" + process.env.PHARN_PROBE);
+if (mode === "write") fs.writeFileSync(p, arg);
+if (mode === "copy") fs.writeFileSync(p, fs.readFileSync(arg));
+if (mode === "symlink") { fs.writeFileSync("target.json", "{}"); fs.symlinkSync(require("path").resolve("target.json"), p); }
+if (mode === "fifo") require("child_process").execFileSync("mkfifo", [p]);
+process.exit(Number(process.env.GATE_EXIT || 0));
+`;
+
+function withResultsRepo(scripts, fn) {
+  withRepo(
+    (dir) => {
+      writeFileSync(join(dir, "rgate.cjs"), RESULTS_GATE);
+      return fn(dir);
+    },
+    { scripts }
+  );
+}
+
+function drainWith(dir, env) {
+  for (let i = 0; i < 20; i++) {
+    // A bounded spawn: a runner that BLOCKS (the FIFO case) must fail this test, never hang it.
+    const r = cli(dir, runArgs(), { env: { ...process.env, ...env }, timeout: 60000 });
+    if (r.code === null) throw new Error("the runner did not finish within 60 s — it blocked");
+    if (r.code === 3 || r.code === 2) return r;
+  }
+  throw new Error("drain did not terminate");
+}
+
+test("the results env var reaches EVERY gate, points inside <out>, differs per gate, and the rest of the env is inherited", () => {
+  withResultsRepo({ test: "node rgate.cjs print", lint: "node rgate.cjs print" }, (dir) => {
+    assert.equal(cli(dir, initArgs()).code, 0);
+    assert.equal(drainWith(dir, { PHARN_PROBE: "kept" }).code, 3);
+    const outReal = realpathSync(join(dir, OUT));
+    const seen = [];
+    for (const [seq, id] of [
+      [0, "test"],
+      [1, "lint"],
+    ]) {
+      const line = readFileSync(join(dir, OUT, `${seq}-${id}.out`), "utf8")
+        .split("\n")
+        .find((l) => l.includes("|"));
+      const [value, probe] = line.trim().split("|");
+      assert.equal(value, join(outReal, resultsFileName(seq, id)), `${id}: the var is not this gate's own path inside <out>`);
+      assert.equal(probe, "kept", `${id}: the inherited environment was not passed through`);
+      seen.push(value);
+    }
+    assert.notEqual(seen[0], seen[1], "two gates were handed the same results path");
+  });
+});
+
+test("results_sha256 is the sha256 of the file a gate wrote, and null for a gate that wrote none", () => {
+  withResultsRepo({ test: "node rgate.cjs write results-bytes", lint: "node rgate.cjs none" }, (dir) => {
+    cli(dir, initArgs());
+    drainWith(dir, {});
+    const runs = stamp(dir).runs;
+    const byId = Object.fromEntries(runs.map((r) => [r.id, r]));
+    assert.equal(byId.test.results_sha256, createHash("sha256").update("results-bytes").digest("hex"));
+    assert.equal(byId.lint.results_sha256, null);
+    assert.equal(byId.reconcile.results_sha256, null);
+    assert.equal(byId.test.mutated, false, "writing the results file under <out> must not move the fingerprint");
+  });
+});
+
+test("a SYMLINK or a FIFO at the results path is never followed or blocked on — results_sha256 is null", () => {
+  for (const mode of ["symlink", "fifo"]) {
+    withResultsRepo({ test: `node rgate.cjs ${mode}` }, (dir) => {
+      cli(dir, initArgs());
+      const t0 = Date.now();
+      drainWith(dir, {});
+      assert.ok(Date.now() - t0 < 20000, `${mode}: the runner blocked`);
+      assert.equal(stamp(dir).runs.find((r) => r.id === "test").results_sha256, null, mode);
+    });
+  }
+});
+
+test("a STALE results file (a crashed attempt's, re-run without init's wipe) is cleared before the gate runs", () => {
+  withResultsRepo({ test: "node rgate.cjs none" }, (dir) => {
+    cli(dir, initArgs());
+    writeFileSync(join(dir, OUT, resultsFileName(0, "test")), '{"stale":true}');
+    drainWith(dir, {});
+    assert.equal(stamp(dir).runs.find((r) => r.id === "test").results_sha256, null, "the stale file was hashed as this run's");
+  });
+});
+
+test("a DIRECTORY left at the results path (a gate that ran `mkdir $PHARN_TEST_RESULTS`) is cleared, not refused", () => {
+  withResultsRepo({ test: "node rgate.cjs none" }, (dir) => {
+    cli(dir, initArgs());
+    const p = join(dir, OUT, resultsFileName(0, "test"));
+    mkdirSync(join(p, "nested"), { recursive: true });
+    assert.equal(drainWith(dir, {}).code, 3);
+    assert.equal(stamp(dir).runs.find((r) => r.id === "test").results_sha256, null);
+  });
+});
+
+test("a results path that STILL cannot be removed (permissions) is REFUSED as path-containment, never hashed", (t) => {
+  if (typeof process.getuid === "function" && process.getuid() === 0) return t.skip("root ignores directory permissions");
+  withResultsRepo({ test: "node rgate.cjs none" }, (dir) => {
+    cli(dir, initArgs());
+    // The lock lives in <out>, so <out> itself must stay writable (a read-only <out> is `lock-busy` first). An
+    // unremovable CHILD of a directory at the results path is what makes the recursive remove fail.
+    const locked = join(dir, OUT, resultsFileName(0, "test"), "locked");
+    mkdirSync(locked, { recursive: true });
+    writeFileSync(join(locked, "f"), "stale");
+    chmodSync(locked, 0o555);
+    try {
+      const r = cli(dir, runArgs());
+      assert.equal(r.code, 2);
+      assert.equal(r.json.reason_code, "path-containment");
+    } finally {
+      chmodSync(locked, 0o755);
+    }
+  });
+});
+
+test("an INHERITED PHARN_TEST_RESULTS is overridden — each gate sees only its own path", () => {
+  withResultsRepo({ test: "node rgate.cjs print" }, (dir) => {
+    cli(dir, initArgs());
+    drainWith(dir, { [RESULTS_ENV]: "/somewhere/else.json", PHARN_PROBE: "x" });
+    const line = readFileSync(join(dir, OUT, "0-test.out"), "utf8")
+      .split("\n")
+      .find((l) => l.includes("|"));
+    assert.equal(line.split("|")[0], join(realpathSync(join(dir, OUT)), resultsFileName(0, "test")));
+  });
+});
+
+test("END TO END — a gate that writes a real vitest report yields the exact per-test record through testRecord", () => {
+  const fixture = join(HERE, "test-fixtures", "test-results", "vitest.json");
+  withResultsRepo({ test: `node rgate.cjs copy ${fixture}` }, (dir) => {
+    writeFileSync(join(dir, "pharn.config.json"), JSON.stringify({ testResults: { test: "vitest-json" } }));
+    cli(dir, initArgs());
+    drainWith(dir, { GATE_EXIT: "1" }); // the captured run exited 1 (one test fails)
+    const s = stamp(dir);
+    const rec = testRecord({ stamp: s, outDir: join(dir, OUT), gateId: "test", root: dir });
+    assert.equal(rec.ok, true, rec.reason);
+    assert.equal(rec.exit, 1);
+    assert.deepEqual(rec.counts, { passed: 2, failed: 1, skipped: 2 });
+    // Control: the same stamp read as if the gate had exited 0 is the forgery signal.
+    const lie = JSON.parse(JSON.stringify(s));
+    lie.runs.find((r) => r.id === "test").exit = 0;
+    assert.equal(testRecord({ stamp: lie, outDir: join(dir, OUT), gateId: "test", root: dir }).reason_code, "results-exit-contradiction");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
+// Refusal paths the suite had not reached (added with 6.15.0 so the runner's line coverage clears 90%;
+// each case is one malformed input with the accepted input as its control — L34).
+// ---------------------------------------------------------------------------------------------------
+
+test("init REFUSES a malformed --gates string with its own reason_code (bad-gates), never a partial set", () => {
+  withRepo(
+    (dir) => {
+      const r = cli(dir, initArgs(["--gates", "npm test,,npm run lint"]));
+      assert.equal(r.code, 2);
+      assert.equal(r.json.reason_code, "bad-gates");
+      assert.equal(cli(dir, initArgs(["--gates", "npm test"])).code, 0, "control: a well-formed --gates is accepted");
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+test("regress head REFUSES an outside_eval_pairs entry that is not {expected, actual}, or not colocated", () => {
+  withRepo(
+    (dir) => {
+      const sj = join(dir, "scope.json");
+      const args = [
+        "init",
+        "--stage",
+        "regress",
+        "--side",
+        "head",
+        "--feature",
+        FEATURE,
+        "--out",
+        OUT,
+        "--discover",
+        "package.json",
+        "--scope-json",
+        "scope.json",
+      ];
+      const EXP = "cap/evals/expected/x.json";
+      for (const pair of ["cap/evals/expected/x.json", { expected: EXP }, { expected: EXP, actual: "elsewhere/findings.json" }]) {
+        writeFileSync(sj, JSON.stringify({ escaped: [], outside_tests: [], outside_eval_pairs: [pair] }));
+        const r = cli(dir, args);
+        assert.equal(r.code, 2, JSON.stringify(pair));
+        assert.equal(r.json.reason_code, "bad-scope-json", JSON.stringify(pair));
+      }
+      writeFileSync(
+        sj,
+        JSON.stringify({ escaped: [], outside_tests: [], outside_eval_pairs: [{ expected: EXP, actual: "cap/findings.json" }] })
+      );
+      const ok = cli(dir, args);
+      assert.equal(ok.code, 0, "control: a colocated pair is accepted");
+      assert.ok(ok.json.ids.includes(`structural:${EXP}`));
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+test("regress base REFUSES a --spec-from record that carries no gate entries (spec-mismatch)", () => {
+  withRepo(
+    (dir) => {
+      const head = join(dir, ".pharn", "head");
+      mkdirSync(head, { recursive: true });
+      writeFileSync(
+        join(head, "state.json"),
+        JSON.stringify({ stage: "regress", side: "head", feature: FEATURE, entries: [], runs: [], required: [] })
+      );
+      const r = cli(dir, [
+        "init",
+        "--stage",
+        "regress",
+        "--side",
+        "base",
+        "--feature",
+        FEATURE,
+        "--out",
+        ".pharn/base",
+        "--spec-from",
+        ".pharn/head",
+      ]);
+      assert.equal(r.code, 2);
+      assert.equal(r.json.reason_code, "spec-mismatch");
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+test("run --next REFUSES a glob-shaped file entry that reached the record (bad-scope-json), never runs it", () => {
+  withRepo(
+    (dir) => {
+      assert.equal(cli(dir, initArgs()).code, 0);
+      const statePath = join(dir, OUT, "state.json");
+      const st = JSON.parse(readFileSync(statePath, "utf8"));
+      st.entries[0].files = ["t/*.test.js"];
+      writeFileSync(statePath, JSON.stringify(st));
+      const r = cli(dir, runArgs());
+      assert.equal(r.code, 2);
+      assert.equal(r.json.reason_code, "bad-scope-json");
+    },
+    { scripts: { test: "true" } }
+  );
 });

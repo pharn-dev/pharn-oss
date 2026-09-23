@@ -149,6 +149,18 @@ export function logBasename(seq, id) {
   return `${seq}-${String(id).replace(/[^A-Za-z0-9._-]/g, "_")}`;
 }
 
+/** The ONE environment variable the runner hands every gate: the absolute path where that gate's test
+ *  reporter may write its machine-readable results (pharn-contracts/test-results-record.md). Same NAME for
+ *  every gate, a DIFFERENT value per gate, so a later gate can never overwrite an earlier one's file. */
+export const RESULTS_ENV = "PHARN_TEST_RESULTS";
+
+/** The file name of a gate's results file under `<out>/`: the log basename plus `.test-results.json`. ONE
+ *  copy (L35): run-gates.mjs passes it to the gate and hashes it; test-results-core.mjs reads it back.
+ *  Deliberately NOT `results.json` — that name would read as a second store of the gate map. */
+export function resultsFileName(seq, id) {
+  return `${logBasename(seq, id)}.test-results.json`;
+}
+
 /** Is `code` a member of the closed vocabulary? Used by the CLI and both checkers before emitting. */
 export function isReasonCode(code) {
   return REASON_SET.has(code);
@@ -481,6 +493,15 @@ export function validateStamp(stamp, expect = {}) {
     for (const k of ["fp_before", "fp_after"]) {
       if (!isCleanToken(r[k], 64) || !HEX64_RE.test(r[k]))
         return err("stamp-malformed", `stamp.runs[${i}].${k} must be a sha256 hex digest`);
+    }
+    // OPTIONAL and additive (6.15.0): checked only when present, so every stamp written before the field
+    // existed still validates. Present means `null` (no results file) or a sha256 digest — nothing else.
+    if (
+      Object.hasOwn(r, "results_sha256") &&
+      r.results_sha256 !== null &&
+      !(isCleanToken(r.results_sha256, 64) && HEX64_RE.test(r.results_sha256))
+    ) {
+      return err("stamp-malformed", `stamp.runs[${i}].results_sha256 must be null or a sha256 hex digest`);
     }
     // An entry that never ran is a stamp that must not have been finalized. Named separately from the
     // malformed class so check-loop-fresh.mjs routes it to "re-run the stage" (it is in LAPSE_CODES).
