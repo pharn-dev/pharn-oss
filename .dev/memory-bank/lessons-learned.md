@@ -2066,3 +2066,24 @@ The fix then modeled column-0 blocks. The next probe round found two new diverge
 - commit: `2bea57cb8ce0b536cb137208280b74760573f22f`
 - source: `.dev/features/spec-template/REVIEW.md` § Floor-gate findings, finding 1 (`pharn/floor/check-spec.mjs:43`) + § Iteration 2 findings N1 (`pharn/floor/spec-template-core.mjs:288`) and N2 (`pharn/floor/spec-template-core.mjs:149`)
 - promoted: 2026-09-23 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L57 — An explicit path list is not a scope for a config-driven tool — its config can ADD inputs, and root-anchored ignores do not cover nested checkouts
+
+type: tooling · concepts: [writes-scope, bash-escape, formatter, config-globs, live-measurement]
+
+**Lesson.** A remedy of the form "run the tool on exactly these paths" scopes nothing unless the tool treats argv as its WHOLE input. A config-driven tool can ADD inputs of its own: markdownlint-cli2 appends its config's `globs` to the paths it is given. Its `ignores` entries match only at the root, so a checkout nested under the root is not covered. So the argv can look scoped while the run is not, and the only reliable reading is the tool's own count of what it touched. Remedy: pass the flag that makes argv authoritative (`--no-globs` here), read the tool's own count (`Linting: N files`), and pin both with a negative control that shows the unflagged form over-reaching.
+
+**Measured, in `markdownlint-no-globs`.** Every per-stage format step ([[L13]]) and `/pharn-dev-build` Step 2b prescribed `markdownlint-cli2 --fix <own artifact>`, and called it "scoped to this stage's own artifact". Run read-only on one named file, it printed `Linting: 1340 files`. On 2026-09-23 (reported by the human) a Step 2b run rewrote 124 files inside another Claude session's worktree under `.claude/worktrees/`, two of them tracked test fixtures, because the root-anchored `node_modules` and `test-fixtures` ignores did not match there. With `--no-globs`: `Linting: 1 file`, every ignore still applied. The sweep found the same blind spot in a test: `capability-catalog-core.test.mjs` wrote a glob-free `--config` and still linted ~1341 files, because the cwd config's globs were added anyway.
+
+**Why it matters.** This is [[L19]]'s class recurring INSIDE the remedy [[L19]] and [[L16]] prescribed, and it survived for the same reason [[L19]] names: the mechanism was wrong and the result usually looked right. A fix on an already-clean repo changes nothing visible, so every gate stayed green while the reach was 1340 files. The test suite even asserted the flagless form was "a scoped path". Distinct from [[L26]] (config resolves by the FILE's path, so a copy is judged under different rules) and from [[L37]] (probe a quantifier instead of reading it). Here the quantifier was implicit in the argv itself, "these files and no others", and no one had stated it as a claim to probe.
+
+**Remedy (applied).** `--no-globs` on all ten command-prescribed invocations, pinned by a closure test over every command with a per-site mutation control, plus a premise test that executes the installed binary under this repo's config. `.claude/worktrees` was added to the config's `ignores` as a second layer.
+
+**Bound (P0).** The flag narrows the tool's reach and gates nothing. A Bash-run tool still passes neither write guard, so [[L19]] stays true. The closure pins a vocabulary, not a behavior. Other config-driven tools (`prettier --check .` was measured to descend into nested worktrees too) are not covered. That follow-up is named, not built.
+
+**Provenance.**
+
+- feature: `markdownlint-no-globs`
+- commit: `d96ef0350c2c43807c8fd8f2dd90a30350c01cfa` (working-tree dogfood built on this commit; uncommitted at promotion time)
+- source: `.dev/features/markdownlint-no-globs/REVIEW.md` § Proposed lesson candidate + `.dev/features/markdownlint-no-globs/PLAN.md` § The failure
+- promoted: 2026-09-23 via gated `/pharn-dev-memory-promote` (human-approved).

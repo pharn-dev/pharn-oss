@@ -8,6 +8,14 @@
   // LIMITS.md stay at root. pharn/floor/test-fixtures added alongside .dev/floor/test-fixtures (the
   // product fixtures relocated there; the variance fixture stayed under .dev/floor/test-fixtures).
   "ignores": [
+    // Other Claude Code sessions' worktrees. They are git-excluded (.git/info/exclude), not tracked, so
+    // this removes no repo file from lint coverage. Without it a bare `lint:md` in a main checkout reads
+    // every nested worktree, including its node_modules, because every entry here matches ONLY at the
+    // root: measured in a fixture holding this file, 5 files linted became 2. A `--fix` that went through
+    // the globs above rewrote 124 files inside one of them (2026-09-23). The command-prescribed runs now
+    // pass `--no-globs`, and this entry is the second layer behind that. Bound: it is tied to where Claude
+    // Code places worktrees today. If that location moves, the entry silently matches nothing.
+    ".claude/worktrees",
     "node_modules",
     ".dev/floor/test-fixtures",
     "pharn/floor/test-fixtures",

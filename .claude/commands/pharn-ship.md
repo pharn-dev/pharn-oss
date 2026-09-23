@@ -486,12 +486,17 @@ path. The observed failure that drove the mechanism belongs to `/pharn-memory-pr
 
    ```bash
    npx prettier --ignore-unknown --write pharn/features/<name>/BRIEFING.md
-   npx markdownlint-cli2 --fix pharn/features/<name>/BRIEFING.md
+   npx markdownlint-cli2 --no-globs --fix pharn/features/<name>/BRIEFING.md
    node pharn/floor/check-ship-briefing.mjs pharn/features/<name>/BRIEFING.md
    ```
 
    The formatting is advisory orchestration (mirrors Step 3's own format step below), scoped to this one
-   file only — never a repo-wide sweep (`lessons-learned.md` L19). `check-ship-briefing.mjs`'s exit code
+   file only — never a repo-wide sweep (`lessons-learned.md` L19). `--no-globs` is what makes the
+   markdownlint line honor that: markdownlint-cli2 ADDS the `globs` of any `.markdownlint-cli2.*` config in
+   the project to the path it is given, and without the flag it would fix every file those globs match. The
+   flag first shipped in markdownlint-cli2 0.12.0. How an older installed binary treats it has NOT been
+   measured; the likely reading is a pattern that matches nothing, which would leave the config's globs in
+   force. `check-ship-briefing.mjs`'s exit code
    is a **genuine floor verdict** (cross-file equality + shape, `pharn/pharn-contracts/ship-briefing.md`) —
    but **surface it as an annotation on the presented briefing, never as a gate**: a RED here (which should
    not occur, since every field was just derived from the same live sources the checker re-reads) means the

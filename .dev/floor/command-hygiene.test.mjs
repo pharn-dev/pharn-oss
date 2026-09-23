@@ -23,8 +23,11 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const COMMANDS_DIR = new URL("../../.claude/commands/", import.meta.url).pathname;
 
@@ -37,8 +40,11 @@ const SKIP_RE = /<!--\s*COMMAND-HYGIENE:SKIP-BEGIN[\s\S]*?COMMAND-HYGIENE:SKIP-E
  * Forbidden invocations. Each is checked PER LINE, and a line containing `xargs` is exempt — because the
  * correct scoped form ends in the same token as the incorrect bare one:
  *     WRONG: npx markdownlint-cli2 --fix                    (no paths -> config globs -> whole repo)
- *     RIGHT: … | xargs npx markdownlint-cli2 --fix          (paths arrive on argv from stdin)
- * A regex that cannot tell those apart would forbid the very form this repo standardized on.
+ *     RIGHT: … | xargs npx markdownlint-cli2 --no-globs --fix   (paths arrive on argv from stdin)
+ * A regex that cannot tell those apart would forbid the very form this repo standardized on. Note that a
+ * path on argv is NOT by itself a scope for markdownlint-cli2 — it ADDS its config's globs to the paths
+ * it is given — which is why the RIGHT form carries `--no-globs`; that half is pinned separately below
+ * (MARKDOWNLINT_SITES), because it applies to the xargs form this rule deliberately exempts.
  */
 const FORBIDDEN = [
   {
@@ -91,9 +97,12 @@ test("✧ the guard actually DISCRIMINATES — it flags the rejected forms and p
   // ACCEPTED — the forms this repo standardized on.
   assert.ok(!flags("npm run format:check"), "the read-only gate must NOT be flagged");
   assert.ok(!flags("npx prettier --ignore-unknown --write .dev/features/<name>/VERIFY.md"), "a scoped path must not be flagged");
-  assert.ok(!flags("npx markdownlint-cli2 --fix .dev/features/<name>/VERIFY.md"), "a scoped path must not be flagged");
+  assert.ok(!flags("npx markdownlint-cli2 --no-globs --fix .dev/features/<name>/VERIFY.md"), "a scoped path must not be flagged");
   assert.ok(!flags('  node -p "…" | xargs npx prettier --ignore-unknown --write'), "the xargs form must not be flagged");
-  assert.ok(!flags('  [ -n "$MD" ] && printf \'%s\\n\' "$MD" | xargs npx markdownlint-cli2 --fix'), "the xargs form must not be flagged");
+  assert.ok(
+    !flags('  [ -n "$MD" ] && printf \'%s\\n\' "$MD" | xargs npx markdownlint-cli2 --no-globs --fix'),
+    "the xargs form must not be flagged"
+  );
 });
 
 test("✧ the SKIP region is honored, and only inside its markers", () => {
@@ -167,6 +176,223 @@ for (const gate of STEP_2B_GATES.filter((g) => g.tool !== "prettier")) {
     );
   });
 }
+
+// ── Every markdownlint-cli2 invocation lints ONLY the files it names (`--no-globs`) ──────────────────
+//
+// THE FAILURE (P7, 2026-09-23: reported by the human, then re-measured). markdownlint-cli2 ADDS its
+// config's `globs` to the paths on argv. It does not replace them. `.markdownlint-cli2.jsonc` declares
+// `"globs": ["**/*.md", ".dev/**/*.md"]`. So `npx markdownlint-cli2 --fix <one file>`, the form every L13
+// format step prescribed as "scoped to this stage's own artifact", linted and FIXED every markdown file
+// those globs reach: `Linting: 1340 files` from this repo, measured. From a checkout holding other
+// sessions' worktrees it reached those too, because `ignores` entries match only at the root. One
+// /pharn-dev-build Step 2b run rewrote 124 files inside `.claude/worktrees/<other>/`, two of them tracked
+// test fixtures. That is L19 recurring INSIDE the remedy that L19 and L16 prescribed, and the ACCEPTED list
+// above had asserted the flagless form was "a scoped path". With `--no-globs` the same run prints
+// `Linting: 1 file`, and every `ignores` entry still applies.
+//
+// THE RULE covers EVERY invocation in EVERY command (L36: closure, not presence). Each invocation must
+// carry `--no-globs` after the tool name and before any shell comment. MARKDOWNLINT_SITES is the
+// enumeration (L29/L31), and the set of commands with a detected invocation must EQUAL it (L34). That
+// way the rule cannot pass over an empty domain, and the product half of the dev/product pair cannot be
+// the one that drops out.
+//
+// Honest scope (P0), the same narrow kind as FORBIDDEN above: this pins a VOCABULARY. An invocation is
+// recognized when the tool name (optionally `@<version>`) is followed by an argument-shaped token, or
+// when it sits path-less at the end of an `xargs` line. It is NOT recognized through a shell variable
+// (`$MDL --fix a.md`), through `node node_modules/…`, with the name split across lines, or under the
+// older `markdownlint` binary. `npm exec -- markdownlint-cli2 …` IS recognized. The enumeration catches
+// a site that STOPS being detected, never a new site written in an undetected spelling. It never proves
+// a run executed the line. And `--no-globs` narrows the tool's REACH; it gates nothing. A Bash-run tool
+// still passes neither write guard, so L19 stays true.
+const MARKDOWNLINT_SITES = [
+  "pharn-dev-build.md",
+  "pharn-dev-grill.md",
+  "pharn-dev-memory-promote.md",
+  "pharn-dev-plan.md",
+  "pharn-dev-regress.md",
+  "pharn-dev-review.md",
+  "pharn-dev-ship.md",
+  "pharn-dev-verify.md",
+  "pharn-memory-promote.md", // PRODUCT: read-only check over a USER's canon, through vendor/bin
+  "pharn-ship.md", // PRODUCT: the BRIEFING.md format step
+];
+
+// The tool name followed by an argument-shaped token: a flag, a `<placeholder>`, a quoted, `$`- or
+// backtick-expanded argument, a glob, a `\` continuation, or a path (a token holding `/` or ending
+// `.md`). Prose is left alone: `.markdownlint-cli2.jsonc`, a back-ticked `markdownlint-cli2`, the
+// `[ -x vendor/bin/markdownlint-cli2 ]` existence test, a version banner.
+const MDL_WITH_ARGS = /\bmarkdownlint-cli2(?:@[\w.-]+)?[ \t]+(?:[-<$"'`*\\]|[\w./*-]*(?:\/|\.md\b))/g;
+// The stdin route: paths arrive through `xargs`, so a path-less spelling at the line's end still names files.
+const MDL_XARGS_BARE = /\bxargs\b.*\bmarkdownlint-cli2(?:@[\w.-]+)?[ \t]*$/;
+const NO_GLOBS = /\s--no-globs(?![\w-])/;
+
+// One segment per invocation on the line: from its tool name to the next invocation or the line's end,
+// cut at a shell comment. That way the flag must belong to THIS invocation, and a trailing
+// `# … --no-globs` cannot satisfy it. A whole-line shell COMMENT is rationale, not a prescription (the
+// Step 2b precedent above).
+function markdownlintSegments(line) {
+  if (line.trimStart().startsWith("#")) return [];
+  const starts = [...line.matchAll(MDL_WITH_ARGS)].map((m) => m.index);
+  if (starts.length === 0 && MDL_XARGS_BARE.test(line)) starts.push(line.lastIndexOf("markdownlint-cli2"));
+  return starts.map((s, i) => line.slice(s, starts[i + 1] ?? line.length).split(/\s#/)[0]);
+}
+
+const lacksNoGlobs = (line) => markdownlintSegments(line).some((segment) => !NO_GLOBS.test(segment));
+
+// SKIP regions are blanked LINE-PRESERVINGLY, so a reported `file:line` stays true.
+function linePreservingBody(file) {
+  return readFileSync(join(COMMANDS_DIR, file), "utf8").replace(SKIP_RE, (m) => m.replace(/[^\n]/g, ""));
+}
+
+function markdownlintInvocations(body) {
+  return body.split(/\r?\n/).flatMap((text, i) => (markdownlintSegments(text).length > 0 ? [{ line: i + 1, text }] : []));
+}
+
+function unflaggedInvocations(corpus) {
+  const out = [];
+  for (const [file, body] of corpus) {
+    for (const { line, text } of markdownlintInvocations(body)) if (lacksNoGlobs(text)) out.push({ file, line, text });
+  }
+  return out;
+}
+
+const commandCorpus = () => new Map(commandFiles().map((f) => [f, linePreservingBody(f)]));
+
+test("✧ every markdownlint-cli2 invocation in a command carries --no-globs (closure over the corpus)", () => {
+  const offenders = unflaggedInvocations(commandCorpus()).map(({ file, line, text }) => `${file}:${line}\n      ${text.trim()}`);
+  assert.deepEqual(
+    offenders,
+    [],
+    `markdownlint-cli2 run WITHOUT --no-globs also lints and fixes every file its config globs reach:\n    ${offenders.join("\n    ")}`
+  );
+});
+
+test("✧ the commands that invoke markdownlint-cli2 are EXACTLY MARKDOWNLINT_SITES (non-vacuous, both surfaces)", () => {
+  const detected = [...commandCorpus()].filter(([, body]) => markdownlintInvocations(body).length > 0).map(([file]) => file);
+  assert.deepEqual(
+    detected,
+    [...MARKDOWNLINT_SITES].sort(),
+    "a command gained or lost a markdownlint-cli2 invocation: update MARKDOWNLINT_SITES"
+  );
+  assert.ok(
+    MARKDOWNLINT_SITES.some((f) => f.startsWith("pharn-dev-")) && MARKDOWNLINT_SITES.some((f) => !f.startsWith("pharn-dev-")),
+    "the enumeration must span BOTH surfaces (L31): the dev commands and the shipped product commands"
+  );
+});
+
+test("✧ the --no-globs rule DISCRIMINATES: it flags the incident's forms and passes the flagged ones", () => {
+  // L4: an authored assertion passes by construction. Pin the matcher's behavior on literal lines.
+  const REJECTED = [
+    "npx markdownlint-cli2 --fix .dev/features/<name>/PLAN.md", // the exact shape the L13 steps prescribed
+    `  [ -n "$MD" ] && printf '%s\\n' "$MD" | xargs npx markdownlint-cli2 --fix`, // the line that ran
+    "[ -x vendor/bin/markdownlint-cli2 ] && NODE_ENV=production vendor/bin/markdownlint-cli2 <canon-file>",
+    "npx markdownlint-cli2 README.md", // read-only is still reach: it REPORTS on every globbed file
+    "printf '%s\\n' \"$MD\" | xargs npx markdownlint-cli2", // path-less on the xargs route
+    "npx markdownlint-cli2@0.23.2 --fix a.md",
+    'npx markdownlint-cli2 "*.md"',
+    "npx markdownlint-cli2 \\",
+    "npm exec -- markdownlint-cli2 --fix a.md",
+    "Run `npx markdownlint-cli2 --fix <file>` over the artifact.", // a back-ticked prose prescription
+    "npx markdownlint-cli2 --fix a.md # not --no-globs", // the flag must not come from a comment
+    "npx markdownlint-cli2 --no-globs a.md && npx markdownlint-cli2 --fix b.md", // each invocation, not the line
+  ];
+  for (const line of REJECTED) assert.ok(lacksNoGlobs(line), `must be flagged: ${line}`);
+
+  const ACCEPTED = [
+    "npx markdownlint-cli2 --no-globs --fix .dev/features/<name>/PLAN.md",
+    `  [ -n "$MD" ] && printf '%s\\n' "$MD" | xargs npx markdownlint-cli2 --no-globs --fix`,
+    "[ -x vendor/bin/markdownlint-cli2 ] && NODE_ENV=production vendor/bin/markdownlint-cli2 --no-globs <canon-file>",
+    "npx markdownlint-cli2 --fix --no-globs a.md",
+  ];
+  for (const line of ACCEPTED)
+    assert.ok(markdownlintSegments(line).length > 0 && !lacksNoGlobs(line), `must be detected AND pass: ${line}`);
+
+  const NOT_INVOCATIONS = [
+    "  `.prettierignore`, `.markdownlint-cli2.jsonc`). Rationale: over the **outside** files",
+    "scoped `prettier` + `markdownlint-cli2` pass over `BRIEFING.md` all run through **Bash**, which",
+    "`vendor/bin/prettier` or `vendor/bin/markdownlint-cli2` is absent, skip that advisory check",
+    "npm run lint:md > /dev/null 2>&1; lm=$?",
+    "markdownlint-cli2 v0.23.2 (markdownlint v0.41.1)",
+    "  # list, GNU xargs runs the command ONCE WITH NO ARGUMENTS — and a bare `markdownlint-cli2 --fix`",
+    "npx markdownlint-cli2", // a bare whole-repo READ is `lint:md`'s shape; --no-globs would make it lint nothing
+  ];
+  for (const line of NOT_INVOCATIONS) assert.deepEqual(markdownlintSegments(line), [], `not an invocation: ${line}`);
+  assert.ok(lacksNoGlobs("npx markdownlint-cli2 --no-globsx --fix a.md"), "`--no-globs` must be a whole flag");
+});
+
+for (const site of MARKDOWNLINT_SITES) {
+  test(`✧ removing --no-globs from ${site} makes the closure name exactly that file (mutation control)`, () => {
+    // L4 over the REAL corpus: the rule must stop being green the moment one site loses the flag.
+    const corpus = commandCorpus();
+    corpus.set(site, corpus.get(site).replace(/[ \t]--no-globs(?![\w-])/g, ""));
+    const files = [...new Set(unflaggedInvocations(corpus).map((o) => o.file))];
+    assert.deepEqual(files, [site], `stripping --no-globs from ${site} must flag ${site} alone`);
+  });
+}
+
+// ── The PREMISE the rule rests on, EXECUTED rather than read off `--help` (L37/L45) ──────────────────
+//
+// The rule above is only worth pinning if `--no-globs` really does scope a run under THIS repo's
+// config and the INSTALLED binary. A tool upgrade or a config change could make that false while every
+// assertion above stayed green. So run it, read-only (never `--fix`). The positive half runs at the REAL
+// path (L26). The negative control and the worktree-ignore probe run in a scratch tree that holds this
+// config's BYTES, with `cwd` pinned on EVERY spawn: an unflagged run over the real repo costs ~5 s
+// (measured), and from a main checkout it would also read every other session's worktree, which is
+// the reach this section exists to remove. Measured cost of the whole test: ~1.5 s for six spawns.
+//
+// Honest scope: this pins the INSTALLED version's behavior over THIS config. It is SKIPPED where the dev
+// toolchain is absent (the stdlib-only `floor` workflow), and a skip exits 0, which is why
+// `check-verify.mjs` cannot tell a skipped premise from a proven one (L37).
+const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const MDL_BIN = join(REPO_ROOT, "node_modules", ".bin", "markdownlint-cli2");
+
+function lintedCount(args, cwd) {
+  const r = spawnSync(MDL_BIN, args, { cwd, encoding: "utf8" });
+  assert.ifError(r.error);
+  const m = /^Linting: (\d+) files?$/m.exec(r.stdout);
+  assert.ok(m, `no "Linting:" line from markdownlint-cli2 ${args.join(" ")} (cwd ${cwd}):\n${r.stdout}${r.stderr}`);
+  return Number(m[1]);
+}
+
+test(
+  "premise: --no-globs lints EXACTLY the named files under this repo's config, and .claude/worktrees is ignored",
+  { skip: !existsSync(MDL_BIN) && "dev toolchain not installed (missing markdownlint-cli2) — run `npm ci`" },
+  () => {
+    assert.equal(lintedCount(["--no-globs", "CLAUDE.md"], REPO_ROOT), 1, "one named file must be one linted file");
+    assert.equal(
+      lintedCount(["--no-globs", "LIMITS.md"], REPO_ROOT),
+      0,
+      "an `ignores` entry must still beat an explicit path, or --no-globs would put the trusted docs within a fixer's reach"
+    );
+
+    const root = mkdtempSync(join(tmpdir(), "pharn-mdl-premise-"));
+    try {
+      const config = readFileSync(join(REPO_ROOT, ".markdownlint-cli2.jsonc"), "utf8");
+      const cfg = join(root, ".markdownlint-cli2.jsonc");
+      writeFileSync(cfg, config);
+      for (const rel of ["a.md", "b.md", ".claude/worktrees/other/c.md", ".claude/worktrees/other/node_modules/pkg/README.md"]) {
+        mkdirSync(dirname(join(root, rel)), { recursive: true });
+        writeFileSync(join(root, rel), "# T\n\nx\n");
+      }
+      assert.equal(
+        lintedCount(["a.md"], root),
+        2,
+        "control: WITHOUT --no-globs one named file is not one file, because the globs are ADDED"
+      );
+      assert.equal(lintedCount(["--no-globs", "a.md"], root), 1, "WITH --no-globs: exactly the named file");
+      assert.equal(lintedCount([], root), 2, "a bare run (the `lint:md` shape) must not reach .claude/worktrees/**");
+
+      // The ignore's own negative control: the same tree without that one entry DOES reach the nested
+      // worktree, its node_modules included, since every `ignores` entry matches only at the root.
+      const without = config.replace(/^[ \t]*"\.claude\/worktrees",[ \t]*\n/m, "");
+      assert.notEqual(without, config, "`.claude/worktrees` must sit in .markdownlint-cli2.jsonc's ignores on a line of its own");
+      writeFileSync(cfg, without);
+      assert.equal(lintedCount([], root), 4, "control: without the entry a bare run lints the nested worktree's files too");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+);
 
 // ── The lessons-index wiring set: the same L29 shape, one domain over ────────────────────────────────
 //

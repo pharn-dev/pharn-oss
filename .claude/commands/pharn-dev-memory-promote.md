@@ -416,7 +416,7 @@ Immediately after writing it, and **before** ending the turn:
 
 ```bash
 npx prettier --ignore-unknown --check <canon-file>
-npx markdownlint-cli2 <canon-file>
+npx markdownlint-cli2 --no-globs <canon-file>
 ```
 
 Scoped to **this stage's own artifact** — `<canon-file>` is the one path Step 0 pinned. **Check-only**

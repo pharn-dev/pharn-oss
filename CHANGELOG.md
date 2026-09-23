@@ -23,6 +23,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.13.1] - 2026-09-23
+
+### Fixed
+
+- 2026-09-23: **Every `markdownlint-cli2` run a command prescribes now lints only the files it names
+  (`--no-globs`)** (`SKILLS_VERSION` 6.13.0 → **6.13.1**, patch: a correction to two shipped product
+  commands) ([`.claude/commands/pharn-ship.md`](./.claude/commands/pharn-ship.md),
+  [`.claude/commands/pharn-memory-promote.md`](./.claude/commands/pharn-memory-promote.md), eight
+  `pharn-dev-*` commands, [`.dev/floor/command-hygiene.test.mjs`](./.dev/floor/command-hygiene.test.mjs),
+  [`.markdownlint-cli2.jsonc`](./.markdownlint-cli2.jsonc),
+  [`.dev/features/markdownlint-no-globs/`](./.dev/features/markdownlint-no-globs/)).
+  - **The failure.** markdownlint-cli2 ADDS its config's `globs` to the paths it is given. It does not
+    replace them. This repo's config declares `**/*.md`, so `npx markdownlint-cli2 --fix <one file>`
+    linted and fixed every markdown file those globs reach. Measured: `Linting: 1340 files` for one named
+    file. That was the form every per-stage format step prescribed as "scoped to this stage's own
+    artifact" (`lessons-learned` L13). On 2026-09-23 a `/pharn-dev-build` Step 2b run rewrote 124 files
+    inside another Claude session's worktree under `.claude/worktrees/`, two of them tracked test
+    fixtures. The config's `ignores` did not stop it, because every entry there matches only at the
+    root. This is `lessons-learned` L19's class recurring inside the remedy that L19 and L16 prescribed.
+  - **Fix.** Ten invocations gain `--no-globs`. Eight run `--fix`: the seven dev format steps (plan,
+    grill, build Step 2b, regress, verify, review, ship) and `/pharn-ship`'s `BRIEFING.md` step. Two are
+    the read-only memory-promote checks, dev and product, which reported on every globbed file. Measured with the flag: `Linting: 1 file`. Every `ignores` entry
+    still applies, so the trusted docs stay out of reach (`--no-globs LIMITS.md` lints 0 files).
+    `.markdownlint-cli2.jsonc` also ignores `.claude/worktrees` (git-excluded, so no tracked file loses
+    coverage). A bare `npm run lint:md` in a main checkout therefore no longer reads other sessions'
+    worktrees.
+  - **Tests.**
+    - A closure test in `command-hygiene.test.mjs` requires `--no-globs` on every invocation in every
+      command. The flag must follow the tool name and come before any shell comment.
+    - The commands that invoke the tool must equal `MARKDOWNLINT_SITES`: ten files spanning both
+      surfaces.
+    - A discrimination test covers the incident's exact lines, and a mutation control strips the flag
+      from each real site in turn. Replayed against the pre-fix commands, the rule flags exactly the ten
+      old lines.
+    - A premise test runs the installed binary read-only. At the real path it checks 1 file and 0 files.
+      In a scratch tree holding this config's bytes, the negative control lints 2 without the flag and 1
+      with it, and a bare run skips `.claude/worktrees` (4 files once that entry is removed).
+    - The existing ACCEPTED list had asserted the flagless form was "a scoped path". It is re-stated
+      with the flag.
+  - **Also fixed, found by the sweep.** `capability-catalog-core.test.mjs`'s style test wrote a config
+    without globs and spawned `--config cfg file`. The cwd config's globs were still added, so it linted
+    ~1341 files (that spawn shape measured at 14.6 s; 0.45 s with the flag), and any lint issue anywhere in the tree failed it as "markdownlint flagged the
+    spliced README". It now passes `--no-globs` and asserts `Linting: 1 file`.
+  - **Not claimed, and named:**
+    - `--no-globs` narrows a tool's REACH and gates nothing. A Bash-run tool still passes neither write
+      guard, an explicit path into another worktree is still written, and L19 stays true.
+    - The test pins a vocabulary. An invocation through a shell variable, `node node_modules/…`, or a name
+      split across lines is not recognized.
+    - `--no-globs` first shipped in markdownlint-cli2 0.12.0. How an older binary in a user's project
+      treats it has NOT been measured, and both product commands say so.
+    - The premise test is skipped where the dev toolchain is absent, and a skip exits 0.
+    - The ignore is tied to where Claude Code places worktrees today.
+    - `prettier --check .` also descends into a nested `.claude/worktrees/` (measured). That is deferred
+      to a separate increment.
+
 ## [6.13.0] - 2026-09-23
 
 ### Added
