@@ -37,6 +37,7 @@
     "check:markers": "node .dev/floor/check-specified-markers.mjs .",
     "check:badge": "node .dev/floor/check-version-badge.mjs .",
     "check:changelog": "node .dev/floor/check-skills-version-recorded.mjs .",
+    "check:changelog-entry": "node .dev/floor/check-changelog-entry.mjs --merge-base origin/main .",
     "check:contributing": "node .dev/floor/check-contributing-gates.mjs .",
     "check:reconcile": "node pharn/floor/check-bash-reconcile.mjs --base .",
     "check": "npm run format:check && npm run lint && npm run lint:md && npm run docs:check && npm run check:markers && npm run check:badge && npm run check:changelog && npm run check:contributing && npm run check:reconcile && npm test"

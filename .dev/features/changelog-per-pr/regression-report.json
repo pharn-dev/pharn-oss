@@ -1,0 +1,49 @@
+{
+  "base": "392817f75deed50015ed4074662595514850e6d5",
+  "inside": [
+    ".claude/commands/pharn-dev-ship.md",
+    ".claude/hooks/require-loop-record.test.cjs",
+    ".dev/features/changelog-per-pr/GRILL.md",
+    ".dev/features/changelog-per-pr/PLAN.md",
+    ".dev/features/changelog-per-pr/REGRESSION.md",
+    ".dev/features/changelog-per-pr/REVIEW.md",
+    ".dev/features/changelog-per-pr/SHIP.md",
+    ".dev/features/changelog-per-pr/VERIFY.md",
+    ".dev/features/changelog-per-pr/regression-report.json",
+    ".dev/features/changelog-per-pr/verify-report.json",
+    ".dev/floor/changelog-core.mjs",
+    ".dev/floor/changelog-core.test.mjs",
+    ".dev/floor/check-changelog-entry.mjs",
+    ".dev/floor/check-changelog-entry.test.mjs",
+    ".dev/floor/check-skills-version-recorded.mjs",
+    ".dev/floor/check-skills-version-recorded.test.mjs",
+    ".dev/floor/command-hygiene.test.mjs",
+    ".dev/floor/test-fixtures/changelog-per-pr/base.md",
+    ".dev/floor/test-fixtures/changelog-per-pr/head.md",
+    ".dev/memory-bank/lessons-learned.md",
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    ".github/workflows/ci.yml",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    "docs/lessons-index.md",
+    "package.json"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

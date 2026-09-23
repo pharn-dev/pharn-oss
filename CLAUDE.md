@@ -96,8 +96,35 @@ new layout; it converts a silent half-install into a clean refusal, which is the
 - **Bump size (SemVer over the product surface):** **patch** = a correction/clarification to bytes that
   already shipped; **minor** = a newly shipped capability / command / checker; **major** = a breaking
   shape change (a contract / finding-shape / frontmatter change that invalidates existing installs).
-  Record the bump in the same CHANGELOG entry that describes the change (it may sit under
-  `[Unreleased]`).
+- **Every PR adds at least one new CHANGELOG entry and edits nothing already merged, because every merge
+  to `main` is a release** (pharn-cli installs the tip of `main`, and `pharn update` points users at
+  `CHANGELOG.md`).
+  - A PR that does **not** bump writes its entry under `## [Unreleased]`. The entry starts with its
+    authored date: `- YYYY-MM-DD:` and a space.
+  - A PR that **bumps** opens a section headed `## [X.Y.Z] - YYYY-MM-DD` directly above the previous
+    version's. It **moves** every `[Unreleased]` entry into that section, its own included (a date prefix
+    may stay or go), and records the bump there, so `[Unreleased]` holds nothing afterwards.
+  - The CHANGELOG is **append-only**:
+    - a released section is frozen whole: its entries, its group headings, and every line in it that
+      belongs to no entry;
+    - a correction is a new entry;
+    - a revert keeps the reverted entry and adds one saying so;
+    - a reverted bump rolls **forward** to a new version, never back to an old number;
+    - the one permitted edit to a merged entry is re-dating one that stays in `[Unreleased]`.
+
+  Two checks hold this, over one shared grammar (`.dev/floor/changelog-core.mjs`):
+  - `npm run check:changelog` holds the file's **shape** (in the `check` chain);
+  - `.dev/floor/check-changelog-entry.mjs` holds each PR's **diff** (in CI on pull requests; locally
+    `npm run check:changelog-entry`).
+
+  Both are **floor verdicts only where they run**. Direct pushes and admin merges bypass the per-PR one,
+  and neither proves an entry describes its change, or that a bump was needed. Details and costs:
+  `CONTRIBUTING.md`, "CHANGELOG entries".
+
+- **Cite the CHANGELOG by version section, never by line number:** `CHANGELOG [6.3.0]`, not
+  `CHANGELOG.md:1817`. Every entry added above a line moves it, so a line cite goes stale on the next PR.
+  `pharn/floor/gate-run-core.mjs:15` is the recorded instance, deferred to the next product-surface
+  increment because fixing it bumps.
 
 ## Hard constraints (these will bite you)
 
@@ -704,7 +731,9 @@ echo '{"tool_name":"Write","tool_input":{"file_path":"pharn/pharn-core/rules/x.m
   aggregate gate, and `npm test` runs
   `node --test` over the hook, product-floor, and dev-floor suites (`.claude/hooks/*.test.cjs` +
   `pharn/floor/*.test.mjs` + `.dev/floor/*.test.mjs`) — **green** at this writing; read the count live
-  (`npm test`), never assert it from this doc (P6).
+  (`npm test`), never assert it from this doc (P6). One CHANGELOG gate is deliberately **outside** the
+  chain: `npm run check:changelog-entry` (`.dev/floor/check-changelog-entry.mjs`, the per-PR diff) needs a
+  base to compare against. CI runs it on pull requests only, against the merge commit's first parent.
 - `node pharn/floor/validate.mjs .` reports `GREEN` over the product surface — the `pharn/pharn-review/*`
   code-review lenses, the `pharn/pharn-pipeline/grillers/*` grillers, and `pharn/pharn-core/seam-resolver/`,
   over the `pharn/pharn-contracts/{finding-shape,eval-format,seam-config}` contracts.

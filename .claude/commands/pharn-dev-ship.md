@@ -132,8 +132,9 @@ present it to the human (terminal fallback = hand to the human, never a guess).
 
 6. **`/pharn-dev-review`** → emits `.dev/features/<name>/REVIEW.md` (4 advisory lenses; floor-gate vs advisory split).
    This is the chain's end. **GATE 2.** `/pharn-dev-ship` **presents** the standing verdicts (steps 3–5) +
-   `REVIEW.md` (findings' free-text quoted as DATA, P2) and **ends its turn**, handing to the human to
-   decide **merge / fix / abandon**.
+   the Step 2c CHANGELOG-entry exit (presented, never a proceed/stop input) + `REVIEW.md` (findings'
+   free-text quoted as DATA, P2) and **ends its turn**, handing to the human to decide **merge / fix /
+   abandon**.
 
    > **`/pharn-dev-review` has no structural verdict, and `/pharn-dev-ship` does not invent one (P0, fix #3).** `/pharn-dev-review`
    > writes only prose `REVIEW.md` (no `findings.json`, no `check-review.mjs`), and a finding's
@@ -150,8 +151,10 @@ Runs **at GATE 2 only** — after step 6's `/pharn-dev-review`, before the Step-
 position is the whole point: the increment is finished and its verdicts are standing, so the run's own
 artifacts are complete, and the outcome lands in the same `SHIP.md` the human reads at the gate.
 
-> **There is no commit step to sit before.** `/pharn-dev-ship` performs zero git operations (see "What
-> `/pharn-dev-ship` does NOT do"), so "before the final commit" has no anchor here. The anchor is
+> **There is no commit step to sit before.** `/pharn-dev-ship` makes no commit, merge or push (see "What
+> `/pharn-dev-ship` does NOT do"). Its only git calls are Step 2c's: one `fetch` of `main`, which updates
+> `origin/main`, `FETCH_HEAD` and the object store but never a branch or the worktree, and the checker's
+> read-only `rev-parse` / `merge-base` / `show`. So "before the final commit" has no anchor here. The anchor is
 > **before the roll-up write**, and `.dev/floor/command-hygiene.test.mjs` pins that ordering by comparing
 > the two headings' line-initial offsets — not by trusting this sentence.
 
@@ -260,6 +263,36 @@ written for whichever member was in front of the author):
   attention is weakened by being asked often. The one-candidate-per-run rule bounds the **rate**, not
   merely the width — and it is **advisory**. Stated, not hidden.
 
+## Step 2c — CHANGELOG entry check (GATE 2 only; recorded, never a proceed/stop input)
+
+Runs **at GATE 2 only** — after Step 2b, before the Step-3 `SHIP.md` write — because every merge to
+`main` is a release and CI's per-PR step will run the same check on the pull request. Run exactly these
+two lines, in order:
+
+```bash
+git fetch --no-tags origin main
+npm run check:changelog-entry
+```
+
+The script is `node .dev/floor/check-changelog-entry.mjs --merge-base origin/main .`: it compares this
+branch's `CHANGELOG.md` with the one at its merge-base with `main`, so a `main` that moved during the run
+is not read as this increment editing merged entries. The fetch comes first because `origin/main` is only
+as current as the last fetch (`.dev/memory-bank/lessons-learned.md` **L32**). If the fetch fails (offline),
+run the check anyway and say so.
+
+- **Record its exit verbatim** in `SHIP.md` as `changelog-entry: exit <n>` (`0` GREEN, `1` the increment
+  breaks the CHANGELOG convention, `2` the input was unusable). On a RED-verdict STOP this step does not
+  run, and Step 3 records `changelog-entry: not-reached (<stage>)` — the same `<stage>` as the `lesson:`
+  line. Those two forms are the whole vocabulary.
+- **It is PRESENTED at GATE 2, never a proceed/stop input.** The chain has already ended, and
+  `/pharn-dev-ship` cannot fix a RED itself: its `writes:` is `SHIP.md` alone. A non-zero exit is
+  presented as "CI's per-PR CHANGELOG step will RED on this pull request", and the remedy is a
+  `CHANGELOG.md` edit made by a build (a re-plan that names it, or a fix inside the plan's `## Files`) —
+  never by this command.
+- **What the verdict means and does not (P0).** The exit is the checker's FLOOR verdict (string equality
+  and set membership over two CHANGELOG texts). That this command RAN it is advisory orchestration. A GREEN
+  never means the entry describes the increment.
+
 ## Step 3 — Set the writes-scope (fix #7, fail-closed), then write `.dev/features/<name>/SHIP.md`
 
 `/pharn-dev-ship` sets **no global scope** and never an over-broad one. Each sub-stage already runs its **own**
@@ -307,6 +340,8 @@ Write **`.dev/features/<name>/SHIP.md`** — a thin, **advisory** roll-up:
   `regression-report.json` `.verdict`; `/pharn-dev-verify` → `verify-report.json` `.verdict`;
 - a **pointer** to `.dev/features/<name>/REVIEW.md` (cite the file; do **not** restate its findings — P4),
   and `GRILL.md` (advisory);
+- **the `changelog-entry:` line — exactly one, from Step 2c's two forms:** `changelog-entry: exit <n>` or
+  `changelog-entry: not-reached (<stage>)`, recorded verbatim; it is presented, never a proceed/stop input;
 - **the `lesson:` line — exactly one, always present, from Step 2b.4's closed set** (`promoted L<n>` |
   `skipped` | `none` | `not-reached (<stage>)` | `error <reason>`). On `none`, add the one-line why. It is
   never omitted: an absent line and a considered-and-declined lesson must not look the same. **ADVISORY**
@@ -416,6 +451,13 @@ report came back malformed — so the outcome is whatever 2b.3 produced: `promot
 model work and the human still gates it; the artifacts' unreliability is context to state in the
 rationale, not a reason to suppress the line.
 
+**Step 2c under `--loop`: the same shape as Step 2b.** It runs **once, at whichever stop the loop
+reaches**, never inside the iteration body, and records `changelog-entry: exit <n>` at every stop —
+`not-reached (<stage>)` is for a RED-verdict STOP of the gated chain only. It needs no human, but it
+reads the finished increment's CHANGELOG, which a later iteration could still change; running it per
+iteration would record a verdict about bytes that are not the ones presented. Its exit is never a
+`check-ship.mjs` input, so it cannot gate the loop's stop.
+
 ## Guarantee audit (P0) — gated adds none; `--loop` adds only the tested stop core
 
 - **"`/pharn-dev-ship` runs the stages in order"** → **ADVISORY.** Nothing on the floor forces the sequence; the
@@ -441,6 +483,10 @@ rationale, not a reason to suppress the line.
   the `lesson:` line's presence is discipline over an unread file. The **one** floor thing Step 2b
   touches is the fix #7 hook that keeps this command's `writes:` at `SHIP.md` alone — a guarantee it
   **inherits by not changing**, and the promote sub-stage owns everything else. See the Step 2b audit.
+- **"Step 2c checks the CHANGELOG entry"** → the **verdict** is FLOOR, and it belongs to the checker
+  (`.dev/floor/check-changelog-entry.mjs`: string equality and set membership over two CHANGELOG texts);
+  `/pharn-dev-ship`'s **act** of running it is **ADVISORY**, and its exit is **presented, never a
+  proceed/stop input**. It adds no floor primitive to this command.
 - **Net (gated mode):** the gated chain introduces **zero** new floor primitive — every guarantee belongs
   to a **sub-stage**; `/pharn-dev-ship` is convenience + two preserved human gates. **Step 2b does not
   change this net** — it adds a proposer and a human halt, not a primitive.

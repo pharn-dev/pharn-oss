@@ -380,7 +380,10 @@ function cli(cwd, input, env = {}) {
 }
 
 test("CLI: blocks from a SUBDIRECTORY of the project (the root is found by the .git walk), exit 0 with JSON", () => {
-  withFixture({}, (root) => {
+  // The CLI judges the marker against the REAL clock (no `now` is injectable across a spawn), so the marker
+  // must be dated from the real clock too. Dated from the fixed NOW, this test expired 24 h after NOW — the
+  // hook's age ceiling — and failed on every branch from 2026-09-23T12:00Z (changelog-per-pr, R7).
+  withFixture({ startedAt: new Date(Date.now() - 60000).toISOString() }, (root) => {
     const sub = path.join(root, "pharn", "features", NAME);
     const r = cli(sub, payload());
     assert.equal(r.status, 0, "the guard never exits non-zero");

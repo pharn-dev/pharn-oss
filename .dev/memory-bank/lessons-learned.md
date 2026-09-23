@@ -2016,3 +2016,29 @@ never prove the defect absent.
 - source: `.dev/features/loop-freshness/REVIEW.md` § Proposed lesson candidate + § Advisory findings,
   finding 1 (`pharn/floor/run-gates.mjs:162`)
 - promoted: 2026-09-23 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L55 — A check that re-derives a renderer's structure must be probed against the renderer — fixtures written from the author's model certify that model
+
+type: floor · concepts: [differential-testing, verification-fidelity, parser-parity, false-green, review-recurrence]
+
+**Lesson.** When a floor check re-implements a renderer's or parser's notion of structure — here, "which lines does GitHub render as a heading, and which lines belong to a list item" — hand-written fixtures test the AUTHOR'S MODEL of the syntax, and they pass by construction wherever that model is wrong. Probe the check against a reference implementation, over a corpus that includes every committed version of the real file plus adversarial constructs. Probing only the constructs the author already thought of is not enough.
+
+**Measured, in `changelog-per-pr`.** The CHANGELOG grammar claimed to see what GitHub renders as a heading. It passed its own suites through four constructs where it did not:
+
+1. a fence opened inside a list item, which a column-0 line ends;
+2. a fence "closer" indented 4 columns, which is content, not a closer;
+3. an unclosed `<pre>` (HTML block type 1), which runs to EOF;
+4. a one-line `<!-->`, which is a complete block.
+
+Each let a PR hide a rendered heading, or the rest of the file, from both checks while every gate stayed GREEN. Three independent review rounds found them one at a time, each by rendering a probe with markdown-it (already present in `node_modules`) and comparing. One suite test asserted the wrong premise outright: it "proved" that a column-0 heading after an indented fence was hidden, which is exactly what GitHub does not do.
+
+**Why it matters.** This is [[L4]]'s mechanism (an authored fixture passes by construction) moved from a capability's output to a parser's input model. Every round's fix was correct and GREEN, and the next round still found a new construct, so "the tests pass" carried no information about the constructs nobody had written down. [[L36]] says a presence set is not a closed set. Here the missing closure is over the SYNTAX the check must agree with, and only a reference parser enumerates that. [[L37]] says a doc stating a guard's bounds must be probed against the guard; this is its twin for a guard's own model of its input.
+
+**Bound (P0), and the remedy's status per [[L46]].** No differential test was added in this increment. markdown-it is a transitive devDependency, and pinning a floor test to it would be a new dependency decision. The probes live only in that run's scratchpad, and REVIEW.md records their results. This is therefore a pending-remedy lesson, and the stated exceptions (setext, nested items, blockquotes, HTML types 6–7) remain places where the grammar and GitHub can differ.
+
+**Provenance.**
+
+- feature: `changelog-per-pr`
+- commit: `392817f75deed50015ed4074662595514850e6d5`
+- source: `.dev/features/changelog-per-pr/REVIEW.md` § Proposed lesson candidate + § Iteration 1 floor-gate finding `.dev/floor/changelog-core.mjs:150`, § Iteration 2 floor-gate findings `.dev/floor/changelog-core.mjs:205` and `:28`, § Iteration 3 advisory finding `.dev/floor/changelog-core.mjs:htmlOpener`
+- promoted: 2026-09-23 via gated `/pharn-dev-memory-promote` (human-approved).
