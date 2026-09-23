@@ -18,7 +18,7 @@ reads:
   ]
 writes: ["pharn/features/<name>/SPEC.md"]
 constitution_refs: ["P0", "P2", "P4", "P5", "P6", "P7"]
-version: "0.3.0"
+version: "0.4.0"
 ---
 
 # /pharn-spec — capture intent as a human-approved SPEC.md
@@ -111,13 +111,14 @@ findings (there is no `rule_id` for "intent quality"):
   text search). If there is no `package.json`, no own `test` key, or a `test` value containing npm's
   placeholder `no test specified`, warn that PHARN's gate discovery finds no `test` script, so nothing at
   verify runs tests for these criteria unless the project names its runner (pytest, `go test`, …) through
-  an explicit `--gates` entry. Say plainly what that means today: PHARN itself does not yet write or run
-  acceptance tests (that is a planned later increment, not shipped), so setting up the project's tests is
-  its own increment, best run first.
+  an explicit `--gates` entry. Say plainly what that means today: `/pharn-test` (6.17.0, standalone) can write
+  each criterion's test before the build, but nothing in PHARN runs them without the project's own runner, so
+  setting up the project's tests is its own increment, best run first.
 - **An `e2e` criterion** — for every criterion whose verify level is `e2e`, ask whether the project has an
   end-to-end runner. Say plainly that PHARN's gate discovery allowlist (`ALLOWLIST` in
-  `pharn/floor/gate-run-core.mjs`) has no e2e member, so an e2e suite runs at verify only if the project's
-  `test` script runs it, or an explicit `--gates` entry does.
+  `pharn/floor/gate-run-core.mjs`) discovers an e2e suite at verify only from a `test:e2e` or `e2e` script
+  (6.16.0), so without one it runs only if the project's `test` script runs it or an explicit `--gates` entry
+  does.
 - **Ambiguity** — a genuine ambiguity that cannot be settled without inventing intent becomes a
   **clarification marker** in `## Open Questions`, spelled as `pharn/pharn-contracts/spec-template.md`
   defines it (`[NEEDS CLARIFICATION: <question>]`), at most three. Everything else becomes an informed

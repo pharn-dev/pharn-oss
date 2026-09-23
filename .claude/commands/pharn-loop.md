@@ -37,7 +37,7 @@ reads:
   ]
 writes: ["pharn/features/<name>/SPEC.md", "pharn/features/<name>/LOOP.md"]
 constitution_refs: ["P0", "P2", "P3", "P5", "P6", "P7"]
-version: "0.8.0"
+version: "0.8.1"
 ---
 
 # /pharn-loop — run the product pipeline unattended to a floor-grade stop, then report what was done
@@ -591,7 +591,7 @@ const ok = (args) => { try { execFileSync("git", args, { stdio: "ignore", env })
 const rec = JSON.parse(fs.readFileSync(".pharn/writes-scope.json", "utf8"));
 if (rec.set_by !== "pharn/features/" + name + "/PLAN.md") process.exit(3);
 const scope = rec.scope;
-const artifacts = ["SPEC.md", "PLAN.md", "GRILL.md", "BUILD.md", "REGRESSION.md", "VERIFY.md", "regression-report.json", "verify-report.json", "LOOP.md", "cost.json", "RUN-REPORT.md"].map((f) => "pharn/features/" + name + "/" + f);
+const artifacts = ["SPEC.md", "PLAN.md", "AC-TESTS.md", "GRILL.md", "BUILD.md", "REGRESSION.md", "VERIFY.md", "regression-report.json", "verify-report.json", "LOOP.md", "cost.json", "RUN-REPORT.md"].map((f) => "pharn/features/" + name + "/" + f);
 const keep = [];
 for (const p of scope.concat(artifacts)) {
   const exists = fs.existsSync(p);

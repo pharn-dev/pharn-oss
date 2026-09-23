@@ -16,10 +16,12 @@ reads:
     "pharn/floor/check-spec.mjs",
     "pharn/floor/check-plan-lessons.mjs",
     "pharn/floor/check-lessons-index.mjs",
+    "pharn/floor/check-ac-tests.mjs",
+    "pharn/pharn-contracts/ac-tests.md",
   ]
-writes: ["pharn/features/<name>/PLAN.md"]
+writes: ["pharn/features/<name>/PLAN.md", "pharn/features/<name>/AC-TESTS.md"]
 constitution_refs: ["P0", "P2", "P4", "P5", "P6", "P7"]
-version: "0.3.0"
+version: "0.4.0"
 ---
 
 # /pharn-plan — plan from Approved, un-drifted intent
@@ -257,7 +259,7 @@ node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md memory-ban
 ```
 
 - **exit 0 (GREEN)** → the declaration is present, well-formed, every cited id resolves, and every cited
-  id is referenced in the plan body → end your turn.
+  id is referenced in the plan body → go to Step 4c.
 - **exit non-zero (RED)** → **fix the PLAN and re-run.** The message names the refusal: an absent field
   (add `applied_lessons`), a malformed value (`none` or `[L1, L2]`), `[]` (use `none`), a cited id
   with no matching lesson heading, or — sub-check (D) — a cited id the plan **body** never mentions. That
@@ -272,6 +274,71 @@ node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md memory-ban
 > floor forces this prose to run it. The declaration is **no longer self-attested**: `/pharn-grill` runs
 > the same checker against the same canon as a deterministic RED, so a stage that did **not** author the
 > field re-verifies it. And the checker still verifies the **declaration**, never the **application**.
+
+## Step 4c — Map every Acceptance Criterion to a test, in `AC-TESTS.md` (templated SPEC only)
+
+A SPEC whose frontmatter carries `spec_template` has ID'd Acceptance Criteria, each with one `verify:` level. For
+such a SPEC, this stage also decides **where each AC's test lives and what public target it drives**, because
+`/pharn-test` writes those tests BEFORE the build and a unit test written first needs its interface decided now.
+A **legacy** SPEC (no `spec_template`) has no AC ids and gets no mapping. Decide it by the checker's `--spec` mode,
+never by reading the SPEC, BEFORE writing anything:
+
+```bash
+node pharn/floor/check-ac-tests.mjs --spec pharn/features/<name>/SPEC.md
+```
+
+Exit **3** → legacy: skip the rest of this step. Exit **0** → continue. Exit **2** → the SPEC's Acceptance Criteria
+are unusable, so fix the SPEC via `/pharn-spec`.
+
+1. **Re-scope to the mapping file** (the setter resolves one `--target` per call):
+
+   ```bash
+   node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-plan.md --target pharn/features/<name>/AC-TESTS.md
+   ```
+
+2. **Write `pharn/features/<name>/AC-TESTS.md`** in the shape `pharn/pharn-contracts/ac-tests.md` defines (cite it,
+   do not restate — P4):
+
+   ```markdown
+   ---
+   spec_id: <name> # carried from the SPEC, exactly as in PLAN.md
+   spec_content_hash: <the SPEC's pinned hash, copied verbatim> # the same pin PLAN.md carries
+   ---
+
+   ## Files
+
+   - `<path/to/ac-test-file>` — the tests for AC-<n>
+
+   ## Mapping
+
+   - AC-<n> | <unit|integration|e2e> | `<path/to/ac-test-file>` | <public target>
+   ```
+
+   - **One mapping line per SPEC AC**, at that AC's own `verify:` level, naming the test file and the **public
+     target** the test drives: a URL plus a visible role or text for `e2e`; a route plus method for
+     `integration`; a module path, export and signature for `unit`.
+   - **`## Files` lists exactly the mapped test files**, and **none of them may appear in PLAN.md's `## Files`**.
+     That absence is what keeps the build's writes-scope (`--from-plan PLAN.md`) off the AC tests. Put
+     implementation files in PLAN.md and AC test files only here.
+   - Paths are plain repo-relative, never under `.pharn/` or `pharn/features/`, and never a placeholder or glob.
+   - Another feature's AC test file is theirs. Name a new file.
+
+3. **Check it (FLOOR)** and branch only on the exit code:
+
+   ```bash
+   node pharn/floor/check-ac-tests.mjs pharn/features/<name>/AC-TESTS.md pharn/features/<name>/SPEC.md pharn/features/<name>/PLAN.md
+   ```
+
+   - **0** → GREEN. **1** → the `RED — <kind>` lines name each problem. Fix AC-TESTS.md and re-run. If the fix is in
+     PLAN.md's `## Files` (an `in-plan-files` RED, for instance), first re-scope to PLAN.md with the Step 0 setter
+     line. Then edit it, re-run Step 4b, re-scope to AC-TESTS.md (step 1 above), and re-run this check. **2** → a
+     file is missing.
+   - **Map only NEW test files.** Nothing here checks that a mapped file does not already exist. An existing
+     project test mapped here would be rewritten by `/pharn-test`, and `/pharn-regress` would then treat it as the
+     feature's own and drop it from the regression comparison. That is a stated bound, not a check.
+   - **ADVISORY (P0):** the checker proves the mapping is complete and consistent, never that a target is a good
+     public interface. That is judgment, and the named follow-up `grill-ac-targets` would let `/pharn-grill`
+     interrogate it.
 
 **Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the audit sections for document layout only, and a reader who stops at the turn-end never reaches it.
 
@@ -316,8 +383,11 @@ chain to `/pharn-grill` or `/pharn-build` (later stages). **End your turn.**
   citation costs a line. **What it is NOT:** proof the lesson was read. A body line reading
   `L3: considered.` satisfies it. The check raises the **price** of a citation; it does not measure
   comprehension. Anything stronger is an eval, not a floor primitive.
-- **"It writes only `pharn/features/<name>/PLAN.md`"** → **FLOOR: hook (fix #7)** (`set-writes-scope.cjs` +
-  `enforce-writes-scope.cjs` pin the one declared path).
+- **"It writes only `pharn/features/<name>/PLAN.md` and `pharn/features/<name>/AC-TESTS.md`"** → **FLOOR: hook
+  (fix #7)** (`set-writes-scope.cjs` + `enforce-writes-scope.cjs` pin one declared path per `--target`).
+- **"Every Acceptance Criterion is mapped once, at its level, to a test file the build is not scoped to"** →
+  **FLOOR** (`check-ac-tests.mjs` — enum/regex/set membership, the SPEC pin shelled to
+  `check-plan-spec-agree.mjs`). NOT that each target is a good public interface (advisory).
 - **"The plan carries `spec_content_hash` forward"** → a **deterministic copy** of a floor-verified
   value into the PLAN.md frontmatter — checkable in principle; **not** independently floor-checked at
   this stage. The consumer that re-verifies spec↔plan is a later stage and **is built**:

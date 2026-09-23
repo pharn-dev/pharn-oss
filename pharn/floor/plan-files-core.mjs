@@ -1,12 +1,15 @@
 // pharn/floor/plan-files-core.mjs — the ONE implementation of a PLAN's `## Files` grammar.
 //
 // Floor infrastructure, NOT a Capability (no `role:`; it lives in the floor-ignored dir). It carries no
-// verdict and no exit code: it is a pure reader that two consumers share.
+// verdict and no exit code: it is a pure reader its consumers share.
 //
 //   • pharn/floor/check-build-complete.mjs — asks a STRUCTURAL question (does every CONCRETE declared
 //     path exist after the build?) and owns the RED.
 //   • pharn/floor/render-run-report.mjs — asks for each item's RAW LINE, to quote the declared purpose
 //     verbatim as untrusted DATA.
+//   • pharn/floor/check-ac-tests.mjs (6.17.0) — asks "would the build's scope cover this AC test file?", so it
+//     compares what `clean` + `isConcrete` leave, exactly as the setter scopes.
+//   • pharn/floor/ac-tests-lock.mjs (6.17.0) — the AC test files a lock pins.
 //
 // ── WHY A SHARED CORE, and not a second copy (L35) ───────────────────────────────────────────────────
 // The question "must the second copy exist?" is asked BEFORE choosing a remedy, never after. Here the
@@ -60,8 +63,11 @@
  * A byte-faithful copy of set-writes-scope.cjs's `clean`.
  */
 export function clean(entry) {
+  // `\s+`, not `\s*` — the setter's rule. With `\s*`, `src/a(b)` became `src/a` here while the setter kept
+  // `src/a(b)`, so the two disagreed about what a PLAN scopes; found by the pharn-test-stage review (6.17.0) and
+  // pinned by a parity case in check-build-complete.test.mjs.
   return String(entry)
-    .replace(/\s*\([^)]*\)\s*$/, "")
+    .replace(/\s+\([^)]*\)\s*$/, "")
     .trim();
 }
 
@@ -87,9 +93,13 @@ export function isConcrete(entry) {
  *      touched`) is its own heading and its paths are never scanned.
  *   2. CUE — a head-less prose exclusion intro, anchored to a NON-path, NON-blockquote line. A
  *      blockquote is explanatory commentary and is exempt; an authorized item's own description is a
- *      path-item and is exempt. Both exemptions are load-bearing: without them a narrative sentence
- *      between two path items silently TRUNCATED the authorized scope (fixed in the setter-cue-fix and
- *      plan-cue-continuation increments; this copy inherits the repaired rule, it does not re-derive it).
+ *      path-item and is exempt; and an INDENTED line while a path-item's body is still open (no blank line
+ *      since the item) is that item's own WRAPPED text and is exempt too. All three are load-bearing:
+ *      without them a narrative sentence between two path items silently TRUNCATED the authorized scope
+ *      (fixed in the setter-cue-fix and plan-cue-continuation increments). The third was MISSING from this
+ *      copy until 6.17.0 although this header claimed parity — so a wrapped description containing "out of
+ *      scope" ended this list while the setter kept going. Found by the pharn-test-stage grill; a ★ PARITY
+ *      case in check-build-complete.test.mjs now executes the setter against it.
  *
  * Boundary 2 is deliberately fail-CLOSED: on an ambiguous line the list ENDS, which blocks a build
  * rather than silently under-protecting it. Narrowing the cue would trade today's false positive for a
@@ -101,16 +111,22 @@ export function pathsFromPlanFiles(text) {
   if (start === -1) return { ok: false, reason: "no `## Files` heading" };
   const out = [];
   const entries = [];
+  let inPathItemBody = false;
   for (let i = start + 1; i < lines.length; i++) {
     const line = lines[i];
     // Boundary 1 — STRUCTURAL.
     if (/^\s{0,3}#{1,6}\s/.test(line)) break;
-    // Boundary 2 — CUE fallback, with the path-item and blockquote exemptions.
+    // Boundary 2 — CUE fallback, with the path-item, blockquote and wrapped-continuation exemptions (the
+    // setter's rule, set-writes-scope.cjs, byte for byte in behaviour).
     const isPathItem = /^\s*-\s+`[^`]+`/.test(line);
     const isBlockquote = /^\s*>/.test(line);
+    const isWrappedContinuation = inPathItemBody && !isPathItem && /^\s+\S/.test(line);
+    if (isPathItem) inPathItemBody = true;
+    else if (!line.trim()) inPathItemBody = false;
     if (
       !isPathItem &&
       !isBlockquote &&
+      !isWrappedContinuation &&
       /\bnot\W*(touch|writ|modif|edit|chang)|\bexplicitly\W*excluded|\bout\W*of\W*scope|\boff\W*limits/i.test(line)
     ) {
       break;

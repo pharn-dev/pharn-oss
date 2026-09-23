@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // pharn/floor/check-model-config.mjs — the deterministic PRODUCT-surface model/effort configuration
 // checker: `pharn.config.json`'s `models.stages` block VALIDATED, RESOLVED per stage, and held in
-// EQUALITY with the ten `/pharn-*` product commands' platform `model:` / `effort:` frontmatter.
+// EQUALITY with the eleven `/pharn-*` product commands' platform `model:` / `effort:` frontmatter.
 //
 // ── THE MECHANISM, read live rather than assumed (P6) ────────────────────────────────────────────────
 // Claude Code selects a command's model through STATIC FRONTMATTER and nothing else. `model:` accepts
@@ -22,7 +22,7 @@
 // NON-LLM, dependency-free (Node stdlib only). No network, no child_process, no eval, no dynamic import.
 //
 // ── Honest scope (P0) — what GREEN does and does NOT buy ─────────────────────────────────────────────
-// FLOOR: the config is shape/enum-valid; a stage resolves deterministically; and each of the ten product
+// FLOOR: the config is shape/enum-valid; a stage resolves deterministically; and each of the eleven product
 //   commands' static `model:` / `effort:` frontmatter EQUALS its config-resolved value, in both
 //   directions (no product command carries model/effort outside the map, no mapped command is missing).
 // NOT guaranteed — and these are real holes, not formalities:
@@ -67,7 +67,7 @@
 //   node pharn/floor/check-model-config.mjs resolve <stage> [--config <path>]
 //        print {"model":..,"effort":..} for <stage>, via the own-property pick with a `default` fallback
 //   node pharn/floor/check-model-config.mjs agreement [--config <path>] [--commands-dir <dir>]
-//        validate + BIDIRECTIONAL config↔frontmatter agreement over the ten product commands
+//        validate + BIDIRECTIONAL config↔frontmatter agreement over the eleven product commands
 //
 // Exit: 1 on any RED / unreadable / malformed; 0 otherwise (including the two GREEN-by-design
 // no-configuration states).
@@ -90,7 +90,14 @@ const PRODUCT_STAGES = {
   loop: "pharn-loop.md",
   review: "pharn-review.md",
   "memory-promote": "pharn-memory-promote.md",
+  // The one stage whose KEY is not its file stem (6.17.0): `test` would read as the `test` GATE id in the same
+  // pharn.config.json (`testResults.test`), so the stage is keyed `ac-test`. The map, not the file name, is the
+  // membership: the reverse pass below tests MAPPED_FILES, never a stem derived from a file name.
+  "ac-test": "pharn-test.md",
 };
+
+// The map's VALUES — the product command files the config governs. The reverse pass tests membership HERE.
+const MAPPED_FILES = new Set(Object.values(PRODUCT_STAGES));
 
 // Enums — every branch is a presence / enum / equality membership test (P5); the terminal fallback on any
 // non-member is a loud RED, never a guess. These mirror the Claude Code command-frontmatter surface.
@@ -304,7 +311,7 @@ function doAgreement(configPath, commandsDir) {
 
   // Forward pass (config → command), over the CLOSED product enumeration — every stage, whether it has
   // its own config entry or resolves through `default`. That is what makes the config the source of
-  // truth for all ten rather than only for the keys someone remembered to write down.
+  // truth for all eleven rather than only for the keys someone remembered to write down.
   const checked = [];
   for (const [stage, fileName] of Object.entries(PRODUCT_STAGES)) {
     const cmdPath = join(commandsDir, fileName);
@@ -351,7 +358,7 @@ function doAgreement(configPath, commandsDir) {
     const m = fileName.match(PRODUCT_CMD_RE);
     if (!m) continue;
     productSeen++;
-    if (Object.hasOwn(PRODUCT_STAGES, m[1])) continue; // covered by the forward pass
+    if (MAPPED_FILES.has(fileName)) continue; // covered by the forward pass (by FILE, so a key ≠ stem still maps)
     let text;
     try {
       text = readFileSync(join(commandsDir, fileName), "utf8");

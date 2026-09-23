@@ -75,7 +75,7 @@ clone.
 | `scope_snapshot`   | object \| `null` | A verbatim copy of `.pharn/writes-scope.json` at anchor time, or `null` when none was set                                                                                     |
 | `scope_amendments` | array            | Further scopes that came into force **during** the epoch, in call order. Empty on a fresh anchor; absent on a pre-5.1.0 record, read as `[]`                                  |
 | `entry_count`      | integer          | `Object.keys(entries).length` at write time                                                                                                                                   |
-| `entries`          | object           | Repo-relative path → SHA-256 of its bytes. A symlink whose target is not an openable regular file → SHA-256 of `symlink\0` + its raw link text (6.16.1, see "Symlinks" below) |
+| `entries`          | object           | Repo-relative path → SHA-256 of its bytes. A symlink whose target is not an openable regular file → SHA-256 of `symlink\0` + its raw link text (6.17.1, see "Symlinks" below) |
 
 **Why the scope is snapshotted rather than read live.** By reconciliation time
 `.pharn/writes-scope.json` holds a **later** stage's scope — it is one mutable record, global to the
@@ -117,7 +117,7 @@ Write-tool edit as a change with no way to separate the two. `check-regress.mjs 
 exactly that conflation, and lessons-learned **L17** is the record of it. The baseline is therefore
 _content-hash vs the last anchor_.
 
-**Symlinks (6.16.1).** `hashFile` opens a path, and an open FOLLOWS a link. Before 6.16.1, a link to a
+**Symlinks (6.17.1).** `hashFile` opens a path, and an open FOLLOWS a link. Before 6.17.1, a link to a
 directory, or a dangling link, therefore hashed as `null`. The anchor never recorded it, and the
 reconcile read it as unreadable, treated as changed (§3). Any repo that tracks such a link got a false
 `ESCAPE` on every run with zero writes. The measured case: a downstream project's 20 tracked
@@ -140,15 +140,15 @@ reconciles `CLEAN` and a **re-pointed** one is still a candidate. The rule, as i
 - **The text is hashed as raw bytes, never as a decoded string.** Two targets that differ only in invalid
   UTF-8 would decode to the same string, and re-pointing one to the other would go unseen. For a
   valid-UTF-8 target the digest equals SHA-256 of `"symlink\0" + text`.
-- **Not handled:** a link to a FIFO. The open blocks, just as it did before 6.16.1. No run has hit this, so
+- **Not handled:** a link to a FIFO. The open blocks, just as it did before 6.17.1. No run has hit this, so
   it is recorded here and not fixed (P7).
 - **Not seen through the link:** the files inside a linked directory. They are reconciled under their own
   tracked paths, and a target outside the repo is not descended.
 - **Not collision-free against a forger.** A regular file whose bytes are exactly `symlink\0<text>`
   hashes equal to that link. That takes deliberate forgery, which is outside the non-adversarial claim
   this record supports.
-- **The first reconcile after upgrading is NOT clean.** A baseline anchored by pre-6.16.1 code has no
-  entry for such a link, so the first reconcile of that epoch under 6.16.1 still reports it. The next
+- **The first reconcile after upgrading is NOT clean.** A baseline anchored by pre-6.17.1 code has no
+  entry for such a link, so the first reconcile of that epoch under 6.17.1 still reports it. The next
   anchor (the next `/pharn-*build`) records it. `version` stays `1`, because the record's keys and shape
   did not change. What changed is one kind of `entries` value.
 
@@ -189,9 +189,9 @@ authorizing scope; any statusless or unresolvable input. _Statusless = RED at wr
 **Unreadable during reconcile is a CANDIDATE, not only a warning.** A path the reconciler cannot hash
 (`hashFile` returns `null`) is treated as **changed**. It is judged like any other candidate, so it goes
 RED when the guards would deny it, and a `warnings[]` line names it either way. That is fail-closed on
-purpose: if it were only a warning, making a file unreadable would hide a denied change. (Before 6.16.1
+purpose: if it were only a warning, making a file unreadable would hide a denied change. (Before 6.17.1
 this section listed it under WARN; the checker had already been treating it as changed, and the row was
-corrected in 6.16.1.)
+corrected in 6.17.1.)
 
 **WARN** (`warnings[]`, verdict unaffected): a path present at anchor and absent now — a deletion is not
 a write; a baseline written by an **older** schema version — _legacy records tolerated at read._

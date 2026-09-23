@@ -44,8 +44,16 @@
       "BRIEFING.md",
       "LOOP.md",
       "cost.json",
-      "RUN-REPORT.md"
+      "RUN-REPORT.md",
+      "AC-TESTS.md"
     ]
+  },
+
+  "pre_anchor_artifacts": {
+    "why": "Pipeline artifacts written BEFORE /pharn-build's anchor and never legitimately changed after it: AC-TESTS.lock.json, which /pharn-test writes to pin the AC tests (6.17.0). It is in check-regress.mjs's PIPELINE_ARTIFACTS, because it legitimately changed since base, but deliberately NOT in `pipeline_artifacts.names`, so a build-window change to it stays VISIBLE to reconcile — a build that re-locked tests it rewrote would otherwise pass unseen. AC-TESTS.md itself IS exempt (in `pipeline_artifacts.names`): like PLAN.md it is a plan file that a re-plan after the anchor legitimately rewrites, and a stale lock is caught by ac-tests-lock.mjs --check. That is lessons-learned L39: one list read by two consumers asking different questions.",
+    "not_exempt": "Nothing reads this list to exempt a path. It exists so the parity tests can state the difference instead of forcing the two lists equal.",
+    "parity": "`pipeline_artifacts.names ∪ pre_anchor_artifacts.names` equals check-regress.mjs's PIPELINE_ARTIFACTS, and the two are disjoint — pinned by check-bash-reconcile.test.mjs and worktree-fingerprint.test.mjs.",
+    "names": ["AC-TESTS.lock.json"]
   },
 
   "exempt": {

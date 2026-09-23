@@ -16,7 +16,7 @@ reads:
   ]
 writes: ["pharn/features/<name>/REGRESSION.md", "pharn/features/<name>/regression-report.json"]
 constitution_refs: ["P0", "P2", "P3", "P4", "P5", "P6", "P7"]
-version: "0.3.0"
+version: "0.4.0"
 ---
 
 # /pharn-regress — detect regressions OUTSIDE the feature, in the user's codebase
@@ -161,7 +161,10 @@ node pharn/floor/check-plan-spec-agree.mjs pharn/features/<name>/PLAN.md pharn/f
      (the terminal fallback is a question, never a guess).
 2. **Inside (the changed scope).** `inside = git diff --name-only <base>` **plus** untracked-new files
    (`git ls-files --others --exclude-standard`). This is the set the feature was allowed to change.
-3. **Declared writes.** Read the feature's `pharn/features/<name>/PLAN.md` `## Files` back-tick paths — the exact
+3. **Declared writes.** Read the feature's `pharn/features/<name>/PLAN.md` `## Files` back-tick paths, **plus**, when
+   the feature has one, `pharn/features/<name>/AC-TESTS.md`'s `## Files` back-tick paths — the AC test files
+   `/pharn-test` wrote before the build under its own scope, which are that stage's declared writes, never the
+   build's escapes (6.17.0). The PLAN's `## Files` is the exact
    scope `/pharn-build` was pinned to (the **same** `## Files` the build used; `/pharn-regress` reuses that
    boundary, it does not invent a new one).
 4. **Partition (the floor helper, not you).** Pass both lists, the project's full test universe, and any
@@ -171,7 +174,7 @@ node pharn/floor/check-plan-spec-agree.mjs pharn/features/<name>/PLAN.md pharn/f
    mkdir -p .pharn/pharn-regress
    node pharn/floor/check-regress.mjs scope \
      --changed "<inside, comma-separated>" \
-     --declared "<PLAN.md ## Files paths>" \
+     --declared "<PLAN.md ## Files paths, plus AC-TESTS.md ## Files paths when that file exists>" \
      --tests "<the project's test files, expanded to real paths — comma-separated>" \
      --eval-pairs "<EXPECTED::ACTUAL committed eval pairs, if any>" \
      --feature "<name>" > .pharn/pharn-regress/scope.json
@@ -190,7 +193,8 @@ node pharn/floor/check-plan-spec-agree.mjs pharn/features/<name>/PLAN.md pharn/f
    `--feature` every product run REDs on the artifact the build itself just wrote. `--feature` exempts the
    closed set `SPEC.md`, `PLAN.md`, `GRILL.md`, `BUILD.md`, `REGRESSION.md`, `regression-report.json`,
    `VERIFY.md`, `verify-report.json`, `REVIEW.md`, `findings.json`, `SHIP.md`, `ship-record.json`,
-   `LOOP.md`, plus `lenses/<lens>/findings.json`; the four hook-protected trusted docs are exempt
+   `LOOP.md`, `AC-TESTS.md`, `AC-TESTS.lock.json`, plus `lenses/<lens>/findings.json`; the four hook-protected
+   trusted docs are exempt
    unconditionally, since the agent cannot write them. Everything else — a stray file in the feature dir,
    another feature's artifacts, every source path — is still a blocking escape, and each exemption is
    reported in the returned **`escape_exempt`** rather than silently dropped. A `--feature` that is not a
