@@ -2108,3 +2108,29 @@ type: floor · concepts: [temporal-state, referent-binding, append-only, snapsho
 - commit: `ccca36224923a827e593886342e82641f3b68458`
 - source: `.dev/features/cost-ledger-verify-tail/REVIEW.md` § Proposed lesson candidate + `.dev/features/cost-ledger-verify-tail/PLAN.md` § The defect (both on PR #252's branch `fix/cost-ledger-tail-and-compact-rows` at promotion time; `commit` is this branch's `HEAD`, per the command's rule)
 - promoted: 2026-09-23 via gated `/pharn-dev-memory-promote` (human-directed: the user instructed this promotion; the rendered entry was not shown to them before the write).
+
+## L59 — A call that FOLLOWS a symlink answers for the target, never for the link — L54 recurred in hashFile, where no fixture held a link
+
+type: floor · concepts: [symlink, follow-semantics, lesson-recurrence, floor-escalation, input-domain]
+
+**Lesson.** When a floor module decides something about an ENUMERATED path, and that path can be a symlink, any call that follows the link (open, stat, `existsSync`) answers for the TARGET. So the question "what is this link?" gets the target's facts: a directory, or nothing at all. Ask the link itself (`readlink`, `lstat`) before trusting a follow-call's verdict. And make the path kinds a fixture must cover an enumeration: regular file, link to a file, link to a directory, dangling link, looping link.
+
+**Measured, in `reconcile-symlink-hash`.** `pharn/floor/reconcile-baseline.mjs`'s `hashFile` opened each enumerated path with `openSync`, which follows a link:
+
+- A link to a directory reached `isFile()` and returned `null`.
+- A dangling link threw, and the catch returned `null`.
+
+The anchor therefore never recorded such a link, and `check-bash-reconcile.mjs` read it as "unreadable, treated as changed", so every run gave an `ESCAPE` with zero writes. Verify went `FAIL` and `/pharn-loop` stopped `STOP_TERMINAL`. Downstream, `pharn-starter` tracks 20 `.claude/skills/*` directory links, and twelve of its `STOP_TERMINAL` loop records name them. The defect shipped from 4.0.0 through 6.17.0. Before the fix, neither `reconcile-baseline.test.mjs` nor `check-bash-reconcile.test.mjs` contained a single symlink, so the input domain was "regular files" by omission. The fix (6.17.1) hashes such a link by its raw link text through `readlinkSync`, gated by a closed errno set, and adds a `PATH_KINDS` enumeration that every rule in the suite iterates.
+
+**Why it matters.** This is [[L54]]'s mechanism at a third floor site. The first two were `run-gates.mjs`'s `assertContained` and the first draft of `check-loop-fresh.mjs`'s ledger path. There a follow-call read a dangling link as absent. Here it read a directory link as unhashable. L54 closed with "a general check … is unbuilt", and [[L20]]'s bar had already been met at the second occurrence. So this recurrence is the unbuilt check's cost, not a new surprise. It also hid for a whole release line for the reason [[L41]] names: hermetic fixtures built only the kinds their author pictured, and production held the one kind they did not.
+
+**Remedy.** In any `pharn/floor/` module that stats, opens or hashes a path it did not create (an enumerated path, an operand, a state-root component), classify the link itself before acting on a follow-call's answer. Give the module's suite a `PATH_KINDS`-style enumeration that names the three link kinds (to a directory, dangling, looping), so the next module inherits the set rather than its author's picture of it ([[L29]], [[L52]]).
+
+**Bound (P0), and the remedy's status per [[L46]].** Only `reconcile-baseline.test.mjs` carries `PATH_KINDS` today. No check ranges over the other floor modules that touch the filesystem, so this is a pending-remedy lesson. A test that fails on a follow-call in any function that also handles an enumerated path would be a pattern over source text: it would pin the known shape, never prove the defect absent.
+
+**Provenance.**
+
+- feature: `reconcile-symlink-hash`
+- commit: `85bdaa373acc78480fb54872cf6974037a4d6bad`
+- source: `.dev/features/reconcile-symlink-hash/REVIEW.md` § Proposed lesson candidate + `.dev/features/reconcile-symlink-hash/PLAN.md` § The defect
+- promoted: 2026-09-24 via gated `/pharn-dev-memory-promote` (human-directed: the user instructed this promotion; the rendered entry was not shown to them before the write).
