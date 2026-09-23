@@ -2087,3 +2087,24 @@ type: tooling · concepts: [writes-scope, bash-escape, formatter, config-globs, 
 - commit: `d96ef0350c2c43807c8fd8f2dd90a30350c01cfa` (working-tree dogfood built on this commit; uncommitted at promotion time)
 - source: `.dev/features/markdownlint-no-globs/REVIEW.md` § Proposed lesson candidate + `.dev/features/markdownlint-no-globs/PLAN.md` § The failure
 - promoted: 2026-09-23 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L58 — A record bound to a live referent must ask which part of that referent may still change — L42 recurred as a snapshot count re-derived from a growing log
+
+type: floor · concepts: [temporal-state, referent-binding, append-only, snapshot-staleness, lesson-recurrence]
+
+**Lesson.** Binding a recorded value to its referent ([[L43]]) is only half a check when the referent is still being written. An equality re-derivation against a live, append-only source answers what the source says NOW, while the record captured what it said THEN ([[L42]]). Before comparing, split the referent into the part the record could see and the part written since: compare the first exactly, bound the second, and name the split in the contract.
+
+**Measured, in `cost-ledger-verify-tail`.** `run-scoped-token-accounting` (6.9.0) added `membership.excluded_requests` to `cost.json` and made `check-cost-ledger.mjs --verify-transcript` compare it by EQUALITY with a re-derivation from the session transcript. Its plan cited L43, not L42. `excluded_requests` counts every session request outside the run window, the tail after `run-stop` included, and a session goes on after the ledger is written: `/pharn-loop`'s own Step 6c commit is part of that tail. So every genuine ledger whose session continued went RED. The downstream instance: `pharn-starter`'s `org-slug-routing/cost.json` read "423 recorded, 508 re-derived", then 550, then 640 as that session kept running, while its rows and totals re-derived exactly the whole time.
+
+**Why it matters.** This is L42's class recurring after L42 was canon, and it arrived through L43's remedy. "Bind the value to its referent" does not ask whether the referent is still being written, so following it faithfully rebuilt the defect L42 names. It also stayed hidden: `--verify-transcript` is wired into no command, so the false RED surfaced only when someone ran it by hand while investigating an unrelated complaint about `cost.json`'s size.
+
+**Remedy.** When a check binds a recorded value to a live referent, name which part of the referent may change after the record was made. Compare the fixed part exactly and bound the growing part: here, the before-window count is exact and the post-`run-stop` tail `t` must satisfy `0 <= t <= live tail`. State the split in the contract. The cheapest place to catch it is the plan: a line citing L43 should ask L42's question in the same breath.
+
+**Bound (P0).** The range is weaker than equality and says so: an `excluded_requests` inflated up to the live total passes, and a test pins that. Closing it needs an emission timestamp in the ledger, which is a schema change and is deferred. "The before-window part is fixed" rests on a platform behaviour (append-only transcripts), not on a floor fact. This entry names no floor check: whether a referent is still being written is a judgment about the source, not a shape a membership test can see, so the remedy stays plan-time discipline.
+
+**Provenance.**
+
+- feature: `cost-ledger-verify-tail`
+- commit: `ccca36224923a827e593886342e82641f3b68458`
+- source: `.dev/features/cost-ledger-verify-tail/REVIEW.md` § Proposed lesson candidate + `.dev/features/cost-ledger-verify-tail/PLAN.md` § The defect (both on PR #252's branch `fix/cost-ledger-tail-and-compact-rows` at promotion time; `commit` is this branch's `HEAD`, per the command's rule)
+- promoted: 2026-09-23 via gated `/pharn-dev-memory-promote` (human-directed: the user instructed this promotion; the rendered entry was not shown to them before the write).

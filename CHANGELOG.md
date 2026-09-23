@@ -23,6 +23,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-09-23: **Lesson L58 promoted to `.dev/memory-bank/lessons-learned.md`: a record bound to a live referent
+  must ask which part of that referent may still change.** It is L42's class recurring after L42 was canon, this
+  time through L43's remedy: `check-cost-ledger.mjs --verify-transcript` compared `excluded_requests` by equality
+  with a transcript that keeps growing after the ledger is written, so every ledger whose session continued went
+  RED. The fix itself ships in `cost-ledger-verify-tail` (PR #252); this entry records only the lesson.
+  `docs/lessons-index.md` was regenerated with the narrow generator. Apparatus only, so there is no
+  `SKILLS_VERSION` bump.
+
 ## [6.14.0] - 2026-09-23
 
 ### Added
