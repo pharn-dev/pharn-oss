@@ -64,6 +64,18 @@
 //     /pharn-loop the logs accumulate under the git-ignored state root and nothing prunes them. Stated
 //     rather than discovered.
 //
+// ================================ PER-TEST RESULTS (6.15.0) ================================
+// Every gate is spawned with ONE extra environment variable, `PHARN_TEST_RESULTS` (gate-run-core's
+// RESULTS_ENV), valued with that gate's OWN absolute path under `<out>`, named by gate-run-core's
+// resultsFileName (one copy of the rule). A project's reporter config may write its results there. The rest of
+// the inherited environment is passed unchanged. The runner REMOVES that path before spawning — `init`'s wipe
+// does not cover a stale-lock re-run, which would otherwise hash the crashed attempt's file — and afterwards
+// records `results_sha256`: the sha256 of the path if it is a REGULAR file, else `null`. The file is read
+// through a descriptor opened O_NOFOLLOW|O_NONBLOCK and fstat-checked on that same descriptor, in fixed-size
+// chunks: a symlink, FIFO or device is never followed or blocked on, there is no check-then-use window, and a
+// large file costs no more memory than one chunk. The file is project-written and UNTRUSTED; the runner only
+// hashes it. What it MEANS is test-results-core.mjs's business (pharn-contracts/test-results-record.md).
+//
 // TRUST (P2): every operand is a path, an integer or a hex digest. Untrusted inputs — a `--gates`
 // string, a `--extra` array, a scope JSON — are shape-gated by gate-run-core.mjs before use and are
 // never eval'd, imported, or compiled into a RegExp.
@@ -84,16 +96,29 @@ import {
   mkdirSync,
   openSync,
   closeSync,
+  fstatSync,
+  readSync,
   readFileSync,
   writeFileSync,
   renameSync,
   rmSync,
   unlinkSync,
+  constants as fsConstants,
 } from "node:fs";
 import { resolve, join, sep } from "node:path";
 import { spawn, spawnSync, execFileSync } from "node:child_process";
 import { constants as osConstants } from "node:os";
-import { SCHEMA, STRUCTURAL_PREFIX, isReasonCode, resolveSet, completenessArgv, actualForExpected, logBasename } from "./gate-run-core.mjs";
+import {
+  SCHEMA,
+  STRUCTURAL_PREFIX,
+  RESULTS_ENV,
+  isReasonCode,
+  resolveSet,
+  completenessArgv,
+  actualForExpected,
+  logBasename,
+  resultsFileName,
+} from "./gate-run-core.mjs";
 import { fingerprint } from "./worktree-fingerprint.mjs";
 
 const STATE_ROOT = ".pharn";
@@ -200,6 +225,49 @@ function sha256File(file) {
     return createHash("sha256").update(readFileSync(file)).digest("hex");
   } catch {
     return null;
+  }
+}
+
+/** The sha256 of a project-written file IF it is a regular file, else `null` — never following a symlink,
+ *  never blocking on a FIFO, and never holding more than one chunk in memory. The type test is `fstat` on
+ *  the descriptor that is then read, so no name is checked and then used (CWE-367). */
+const RESULTS_OPEN_FLAGS = fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK;
+const HASH_CHUNK = 1 << 20;
+function sha256RegularFile(file) {
+  let fd;
+  try {
+    fd = openSync(file, RESULTS_OPEN_FLAGS);
+  } catch {
+    return null; // absent (ENOENT), a symlink (ELOOP), or unopenable — no file this record can bind to
+  }
+  try {
+    if (!fstatSync(fd).isFile()) return null;
+    const hash = createHash("sha256");
+    const buf = Buffer.alloc(HASH_CHUNK);
+    for (;;) {
+      const n = readSync(fd, buf, 0, HASH_CHUNK, null);
+      if (n === 0) break;
+      hash.update(buf.subarray(0, n));
+    }
+    return hash.digest("hex");
+  } catch {
+    return null;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/** Remove a gate's results path before the gate runs, so the hash taken afterwards can only describe a file
+ *  THIS run wrote. Absent is the normal case. Whatever sits there — a file, a symlink (removed, never
+ *  followed), or a directory a previous attempt's gate created — is removed recursively: the path is a fixed
+ *  basename inside `<out>`, which assertContained() already proved is inside the state root. Only a path that
+ *  still cannot be removed (a permissions failure) is refused, under `path-containment`, the code this file
+ *  already uses when it cannot prove a path is its own; it is never hashed. */
+function clearResultsPath(file) {
+  try {
+    rmSync(file, { recursive: true, force: true });
+  } catch (e) {
+    fail("path-containment", `cannot clear the results path ${file} before the gate runs: ${e.message}`);
   }
 }
 
@@ -505,7 +573,7 @@ function signalExit(signalName) {
   return Number.isInteger(n) ? 128 + n : 128;
 }
 
-function spawnGate(entry, cwd, outFile, errFile, timeoutMs) {
+function spawnGate(entry, cwd, outFile, errFile, resultsFile, timeoutMs) {
   return new Promise((done) => {
     let cmd;
     let argv;
@@ -535,7 +603,9 @@ function spawnGate(entry, cwd, outFile, errFile, timeoutMs) {
     let killTimer = null;
     let graceTimer = null;
 
-    const child = spawn(cmd, argv, { cwd, detached: true, stdio: ["ignore", fdOut, fdErr] });
+    // The inherited environment, plus exactly one variable: this gate's own results path.
+    const env = { ...process.env, [RESULTS_ENV]: resultsFile };
+    const child = spawn(cmd, argv, { cwd, env, detached: true, stdio: ["ignore", fdOut, fdErr] });
 
     const finish = (result) => {
       if (settled) return;
@@ -652,6 +722,8 @@ async function runNext(args) {
     const logBase = logBasename(next.seq, next.id);
     const outFile = join(outAbs, `${logBase}.out`);
     const errFile = join(outAbs, `${logBase}.err`);
+    const resultsFile = join(outAbs, resultsFileName(next.seq, next.id));
+    clearResultsPath(resultsFile);
 
     let exit;
     let timed_out = false;
@@ -672,7 +744,7 @@ async function runNext(args) {
       writeFileSync(outFile, "");
       writeFileSync(errFile, "");
     } else {
-      const res = await spawnGate(next, cwd, outFile, errFile, timeoutMs);
+      const res = await spawnGate(next, cwd, outFile, errFile, resultsFile, timeoutMs);
       if (res.spawnError) fail("usage-error", `gate ${next.id} could not be started: ${res.spawnError}`);
       exit = res.exit;
       timed_out = res.timed_out;
@@ -698,6 +770,7 @@ async function runNext(args) {
       fp_after: fpAfter.digest,
       stdout_sha256: sha256File(outFile),
       stderr_sha256: sha256File(errFile),
+      results_sha256: sha256RegularFile(resultsFile),
     });
 
     const remaining = rec.entries.length - rec.runs.length;

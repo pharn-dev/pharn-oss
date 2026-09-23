@@ -68,7 +68,8 @@ initialize at all.
       "fp_before": "<sha256>",
       "fp_after": "<sha256>",
       "stdout_sha256": "<sha256>",
-      "stderr_sha256": "<sha256>"
+      "stderr_sha256": "<sha256>",
+      "results_sha256": "<sha256> | null"
     }
   ],
   "aux": { "completeness": 0 }
@@ -77,17 +78,33 @@ initialize at all.
 
 ### Field notes
 
-| field              | meaning                                                                                        |
-| ------------------ | ---------------------------------------------------------------------------------------------- |
-| `schema`           | Exact match required. Bumped only on a breaking shape change.                                  |
-| `side`             | `base`/`head` for regress; **`null`** for verify. Enum-gated both ways.                        |
-| `head`             | `git rev-parse HEAD` at `init`, or `null` when the tree is not a git repo / HEAD is unborn.    |
-| `source`           | How the **source set** was resolved. `explicit` records the raw string in `source_raw`.        |
-| `style_skipped`    | True iff `--skip-style` actually removed a member of `STYLE_SET`. Never silent.                |
-| `required`         | The **source** ids coverage is checked against. Injected entries are not members.              |
-| `runs[].ran`       | `false` only with `reason: "no-files"` — a file-addressable gate with an empty file list.      |
-| `runs[].mutated`   | The gate changed the tree itself. **Recorded, never refused** — `reconcile` judges that write. |
-| `aux.completeness` | `check-build-complete.mjs`'s exit. **A sibling of `runs[]`, never a member.** See below.       |
+| field                   | meaning                                                                                        |
+| ----------------------- | ---------------------------------------------------------------------------------------------- |
+| `schema`                | Exact match required. Bumped only on a breaking shape change.                                  |
+| `side`                  | `base`/`head` for regress; **`null`** for verify. Enum-gated both ways.                        |
+| `head`                  | `git rev-parse HEAD` at `init`, or `null` when the tree is not a git repo / HEAD is unborn.    |
+| `source`                | How the **source set** was resolved. `explicit` records the raw string in `source_raw`.        |
+| `style_skipped`         | True iff `--skip-style` actually removed a member of `STYLE_SET`. Never silent.                |
+| `required`              | The **source** ids coverage is checked against. Injected entries are not members.              |
+| `runs[].ran`            | `false` only with `reason: "no-files"` — a file-addressable gate with an empty file list.      |
+| `runs[].mutated`        | The gate changed the tree itself. **Recorded, never refused** — `reconcile` judges that write. |
+| `aux.completeness`      | `check-build-complete.mjs`'s exit. **A sibling of `runs[]`, never a member.** See below.       |
+| `runs[].results_sha256` | Optional (6.15.0). The sha256 of the gate's results file, or `null`. See below.                |
+
+## Per-test results (`results_sha256`, 6.15.0)
+
+Every gate is spawned with one extra environment variable, `PHARN_TEST_RESULTS`, valued with that gate's own
+absolute path under `<out>` (`resultsFileName(seq, id)` in `gate-run-core.mjs`, the one copy of the rule). A
+project's reporter config may write a machine-readable results file there. The runner removes that path
+before the gate runs and afterwards records `results_sha256`: the sha256 of the path if it is a regular file,
+else `null`. It is recorded on **every** run, but only the gates `test-results-record.md` lets a project
+configure are ever read; on any other gate the hash means nothing.
+
+The field is **optional and additive**. `SCHEMA` is unchanged: `validateStamp` checks it only when present
+(`null` or a sha256 digest), so every stamp written before it still validates. A stamp carrying a
+**malformed** value is refused as `stamp-malformed` by all three `validateStamp` callers — a route reachable
+only by a forged or corrupted stamp, never by one the runner wrote. What the file means, and when it can be
+read, is `test-results-record.md`'s contract, not this one.
 
 ## Build-completeness is NOT a gate
 

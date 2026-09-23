@@ -309,6 +309,23 @@ node pharn/floor/run-gates.mjs init --stage verify|regress [--side base|head] --
 node pharn/floor/run-gates.mjs run --next --out <dir> --timeout-ms <N>
 node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 
+# PER-TEST RESULTS (added 6.15.0) — the runner hands EVERY gate one env var, PHARN_TEST_RESULTS, valued with
+# that gate's OWN absolute path under <out> (gate-run-core's resultsFileName, one copy); a project's reporter
+# config writes a machine-readable report there. The runner unlinks the path before the gate (a stale-lock
+# re-run is not covered by init's wipe) and records runs[].results_sha256 — sha256 of a REGULAR file, else
+# null — read through O_NOFOLLOW|O_NONBLOCK + fstat in chunks, so a symlink/FIFO/device is never followed or
+# blocked on. The field is OPTIONAL: SCHEMA is unchanged and a pre-6.15 stamp still validates; a malformed
+# value is stamp-malformed. `testRecord({stamp, outDir, gateId, root})` in pharn/floor/test-results-core.mjs
+# (NO CLI, no defaults — L41) derives {id, file, title, status ∈ passed|failed|skipped} from that file, opted
+# in by pharn.config.json `testResults: {"test": "vitest-json" | "playwright-json"}`; the adapters live in
+# test-results-formats.mjs (a reporter's format is its own axis, P3). Closed reasons (RECORD_REASONS), fail-closed
+# PER RECORD: one flaky test or test.fail() voids it. FLOOR: derived from the exact bytes the runner hashed
+# (a later write is results-hash-mismatch — L58). NOT provenance (L43): "passed" means the reporter said so,
+# and the test script, reporter config and pharn.config.json are all agent-editable; results-exit-contradiction
+# (a failed test or suite error under exit 0) narrows a forgery, never closes it. No stage reads the record in
+# 6.15.0: verdicts are unchanged for every stamp the runner writes, but a malformed results_sha256 is now
+# stamp-malformed and a results path the runner cannot clear is refused. Contract: pharn/pharn-contracts/test-results-record.md.
+
 # FRESHNESS — /pharn-loop reads a stop only from evidence that belongs to THIS tree (added 6.10.0).
 # THE RECORDED FAILURE (P7): CHANGELOG 6.3.0's unattended /pharn-loop run skipped /pharn-grill, /pharn-regress
 # and /pharn-verify and still wrote a floor-grade-looking decision. #222 re-derives a decision from the reports

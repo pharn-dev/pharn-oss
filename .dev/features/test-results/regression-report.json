@@ -1,0 +1,46 @@
+{
+  "base": "6ee6fc864f87058c8c3ed39abd475230ef0acab4",
+  "inside": [
+    ".dev/features/test-results/GRILL.md",
+    ".dev/features/test-results/PLAN.md",
+    ".dev/features/test-results/PROTECTED-FOLLOWUPS.md",
+    ".dev/features/test-results/REGRESSION.md",
+    ".dev/features/test-results/REVIEW.md",
+    ".dev/features/test-results/VERIFY.md",
+    ".dev/features/test-results/regression-report.json",
+    ".dev/features/test-results/verify-report.json",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/gate-run-core.mjs",
+    "pharn/floor/gate-run-core.test.mjs",
+    "pharn/floor/run-gates.mjs",
+    "pharn/floor/run-gates.test.mjs",
+    "pharn/floor/test-fixtures/test-results/playwright-edge.json",
+    "pharn/floor/test-fixtures/test-results/playwright.json",
+    "pharn/floor/test-fixtures/test-results/vitest.json",
+    "pharn/floor/test-results-core.mjs",
+    "pharn/floor/test-results-core.test.mjs",
+    "pharn/floor/test-results-formats.mjs",
+    "pharn/pharn-contracts/gate-run-record.md",
+    "pharn/pharn-contracts/test-results-record.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
