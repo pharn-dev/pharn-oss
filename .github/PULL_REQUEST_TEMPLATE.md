@@ -22,7 +22,8 @@ Closes #<!-- issue number -->
 - [ ] No constitutional principle (P0–P7) is violated.
 - [ ] If this adds a Capability: it has a `role:` and ships evals (`evals/cases/` + `evals/expected/`), and every `enforces` rule_id is produced by ≥1 eval case (P1).
 - [ ] Findings cite a file-qualified `rule_id`; no guarantee is claimed without a floor reduction, otherwise it is labeled `advisory` (P0).
-- [ ] `CHANGELOG.md` updated; `SKILLS_VERSION` bumped if the released surface changed.
+- [ ] CHANGELOG.md has at least one new entry (dated when it sits under `[Unreleased]`); a bump has its own `## [X.Y.Z] - YYYY-MM-DD` section
+- [ ] `SKILLS_VERSION` bumped if the released surface changed (no check enforces this — it is on you and the reviewer).
 
 ## Quality gates
 

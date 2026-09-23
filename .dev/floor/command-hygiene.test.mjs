@@ -476,8 +476,11 @@ for (const site of LESSON_EXTRACT_WIRING.filter((s) => s.wired)) {
     );
   });
 
-  // POSITION (the re-anchored "before the final commit" requirement). No ship/loop command performs any
-  // git operation, so the original anchor does not exist; the real one is "before the roll-up write".
+  // POSITION (the re-anchored "before the final commit" requirement). /pharn-dev-ship makes no commit,
+  // merge or push — its only git calls are Step 2c's fetch (which updates origin/main, never a branch) and
+  // the CHANGELOG checker's read-only rev-parse/merge-base/show — so the original anchor does not exist for
+  // it; the real one is "before the roll-up write". (/pharn-loop does commit, at its Step 6c — it is not a
+  // member of this wired set.)
   test(`✧ ${site.file} runs lesson-extract BEFORE the SHIP.md write step`, () => {
     const body = commandBody(site.file);
     const lesson = headingOffset(body, "Step 2b — lesson-extract");

@@ -48,6 +48,15 @@ jobs:
       - name: CHANGELOG version-record check
         if: ${{ always() && steps.install.outcome == 'success' }}
         run: npm run check:changelog
+      # Pull requests only: it compares the PR's CHANGELOG with its BASE, and a push to main has none.
+      # HEAD is GitHub's test merge commit, so HEAD^1 is the base this PR merges onto, by construction —
+      # deepening the fetch by one commit makes it readable. $GITHUB_SHA is the runner's own environment
+      # variable; nothing is interpolated into `run:`. Dependabot PRs add no entry and are exempt.
+      - name: CHANGELOG per-PR entry check
+        if: ${{ always() && steps.install.outcome == 'success' && github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' }}
+        run: |
+          git fetch --no-tags --depth=2 origin "$GITHUB_SHA"
+          node .dev/floor/check-changelog-entry.mjs --base-ref HEAD^1
       - name: CONTRIBUTING gate-chain check
         if: ${{ always() && steps.install.outcome == 'success' }}
         run: npm run check:contributing
