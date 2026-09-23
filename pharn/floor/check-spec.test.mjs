@@ -621,6 +621,13 @@ const RULE_CASES = [
         "an HTML comment opened in Intent and closed in Constraints",
         (b) => withSection(withSection(b, "Intent", "Users need export.\n\n<!-- a note"), "Constraints", "- A limit.\n-->"),
       ],
+      // `--!>` is NOT a CommonMark comment end (a browser accepts it; CommonMark keeps the block open), so the
+      // comment still hides the headings after it — the deliberate answer to CodeQL js/bad-tag-filter.
+      ["an HTML comment 'closed' only by --!>", (b) => withSection(b, "Intent", "Users need export.\n\n<!-- a note --!>")],
+      [
+        "a <PRE> block (upper case) closed only in a later section",
+        (b) => withSection(withSection(b, "Intent", "Users.\n\n<PRE>"), "Constraints", "- A limit.\n</PRE>"),
+      ],
       [
         "a <pre> block opened in Intent and closed inside an AC item",
         (b) =>

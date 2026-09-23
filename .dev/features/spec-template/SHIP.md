@@ -101,6 +101,24 @@ committed blobs. Re-anchoring under the plan's 15-path scope gives `check-bash-r
 such changes since the last `CLEAN` check were the two human-edited trusted docs, and the escape list
 shows that.
 
+## PR #251 — CI follow-up
+
+Every CI check passed except **CodeQL**. It raised one new alert, `js/bad-tag-filter` (high), at
+`pharn/floor/spec-template-core.mjs:154`, because the HTML-comment end regex `/-->/` does not also accept
+`--!>`. That rule is written for HTML **sanitizers**, and this code is not one. It decides which `##`
+headings a markdown renderer shows, and CommonMark ends an HTML-comment block only at `-->`. Probed with
+markdown-it (`html: true`): a comment "closed" only by `--!>` keeps the next `## Scope` hidden, which is
+what the checker says.
+
+Accepting `--!>` would therefore un-hide a heading the renderer hides (fail-open). The fix keeps the
+CommonMark behaviour and makes it explicit:
+
+- the end conditions are literal substring tests;
+- the reason is stated in `spanned()`'s header;
+- two new `section` RED fixtures pin it: a comment "closed" only by `--!>`, and an uppercase `<PRE>` block.
+
+`check-spec.test.mjs` passes 150/150.
+
 changelog-entry: exit 0
 
 lesson: promoted L56

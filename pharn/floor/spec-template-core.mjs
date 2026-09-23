@@ -131,6 +131,14 @@ function cleanScalar(v, maxLen) {
 // block it sits in. A fence closes on a line of the same character, at least as long, indented at most three
 // columns (CommonMark's rule for a top-level fence); a comment closes at the first `-->`; a raw block at its end
 // tag. An unclosed block runs to the end of the body, exactly as a renderer shows it.
+//
+// The end conditions are CommonMark's HTML-block end conditions, as literal substring tests: type 2 (a comment)
+// ends at a line containing `-->`, type 1 at `</pre>` / `</script>` / `</style>` / `</textarea>`. This is NOT an
+// HTML sanitizer and must not be read as one: `--!>`, which a browser's HTML parser also accepts as a comment
+// end, deliberately does NOT close the block, because CommonMark keeps such a block open — so the headings after
+// it are raw HTML text, not rendered headings. Accepting it would un-hide headings a renderer hides (fail-open).
+// Pinned by a test. (A CodeQL `js/bad-tag-filter` alert on the earlier `/-->/` regex was that sanitizer rule
+// applied to a structural checker; the behaviour it asked for is the wrong one here.)
 function spanned(lines) {
   const inside = new Array(lines.length).fill(-1);
   let open = null;
@@ -140,7 +148,7 @@ function spanned(lines) {
       if (open.fence) {
         const c = text.match(FENCE_CLOSE_RE);
         if (c && c[2][0] === open.fence[0] && c[2].length >= open.fence.length) open = null;
-      } else if (open.end.test(text)) {
+      } else if (open.end(text)) {
         open = null;
       }
       return;
@@ -151,12 +159,13 @@ function spanned(lines) {
       open = { line: i, fence: f[1] };
     } else if (COMMENT_OPEN_RE.test(text)) {
       // `<!-->` and `<!--->` close on their own line: CommonMark's closer may overlap the opener, so search from 2.
-      if (text.indexOf("-->", 2) === -1) open = { line: i, end: /-->/ };
+      if (text.indexOf("-->", 2) === -1) open = { line: i, end: (t) => t.includes("-->") };
     } else {
       const r = text.match(RAW_BLOCK_OPEN_RE);
       if (r) {
-        const end = new RegExp(`</${r[1]}>`, "i");
-        if (!end.test(text.slice(r[0].length))) open = { line: i, end };
+        const closer = `</${r[1].toLowerCase()}>`;
+        const end = (t) => t.toLowerCase().includes(closer);
+        if (!end(text.slice(r[0].length))) open = { line: i, end };
       }
     }
   });
