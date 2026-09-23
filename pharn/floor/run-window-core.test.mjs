@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import {
   runWindow,
   isMember,
+  isAfterWindow,
   tsMs,
   currentRunMarkers,
   UNKNOWN_REASONS,
@@ -164,4 +165,30 @@ test("currentRunMarkers: from the LATEST run-start by seq; null with no run-star
     currentRunMarkers([mk(1, "run-start", "2026-09-21T08:00:00.000Z"), mk(2, "run-start", null)]).map((m) => m.seq),
     [2]
   );
+});
+
+test("isAfterWindow: strictly after a KNOWN end only — the end itself is a member, and open/unknown windows have no 'after' (6.14.1)", () => {
+  const bounded = runWindow([mk(1, "run-start", "2026-09-21T10:00:00.000Z"), mk(2, "run-stop", "2026-09-21T11:00:00.000Z")], S);
+  const open = runWindow([mk(1, "run-start", "2026-09-21T10:00:00.000Z")], S);
+  const unknown = runWindow([], S);
+  assert.equal(bounded.status, "bounded");
+  assert.equal(open.status, "open");
+  assert.equal(unknown.status, "unknown");
+  // ONE table, one assertion loop (L29); each row an independent literal (L43).
+  const CASES = [
+    [bounded, "2026-09-21T11:00:00.000Z", false, "the end instant is a MEMBER, not after it"],
+    [bounded, "2026-09-21T11:00:00.001Z", true, "one millisecond past the end"],
+    [bounded, "2026-09-21T23:59:59Z", true, "later, at a different precision (compared as numbers)"],
+    [bounded, "2026-09-21T10:30:00.000Z", false, "inside the window"],
+    [bounded, "2026-09-21T09:00:00.000Z", false, "before the window is not after it"],
+    [bounded, null, false, "no timestamp is never after anything"],
+    [bounded, "yesterday", false, "an unparseable timestamp is never after anything"],
+    [open, "2030-01-01T00:00:00.000Z", false, "an OPEN window has no end"],
+    [unknown, "2030-01-01T00:00:00.000Z", false, "an UNKNOWN window has no end"],
+    [null, "2030-01-01T00:00:00.000Z", false, "no window at all"],
+  ];
+  assert.ok(CASES.filter((c) => c[2]).length >= 2 && CASES.filter((c) => !c[2]).length >= 2, "non-vacuity: both verdicts are exercised");
+  for (const [w, ts, want, why] of CASES) assert.equal(isAfterWindow(w, ts), want, why);
+  // The two predicates never both hold: a request is a member, after the window, or neither.
+  for (const [w, ts] of CASES) assert.ok(!(isMember(w, ts, S) && isAfterWindow(w, ts)), `member and after at once: ${ts}`);
 });

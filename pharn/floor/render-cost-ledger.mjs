@@ -66,10 +66,11 @@
 //     fresh clone can reproduce nothing.
 //
 // ── SIZE, measured and disclosed rather than discovered later ────────────────────────────────────────
-// A single 65-minute, one-iteration `STOP_GREEN` run emits ~393 KiB of pretty-printed JSON (275 rows;
-// 402,567 bytes measured). The verbatim `usage` copy is ~263 KiB of that, and `usage.iterations[]` —
-// walked per D1 — duplicates the numbers beside it. That cost was weighed at the plan gate and accepted
-// for fidelity; it is stated here so a reader meets it at the artifact rather than in a diff.
+// The measurements, in lines AND bytes, before and after the one-row-per-line layout (6.14.1,
+// `serializeLedger`), live in ONE place: `pharn/pharn-contracts/cost-ledger.md`, section "Size". This
+// header used to restate them and went stale the day the layout changed ([[L35]], [[L24]]). The verbatim
+// `usage` copy, including `usage.iterations[]` walked per D1, is the bulk of the remaining bytes. That was
+// weighed at the plan gate and accepted for fidelity.
 //
 // ── RELATIONSHIP TO `render-cost-record.mjs` (L35, answered rather than assumed) ─────────────────────
 // Transcript LOCATION and the recursive file walk are IMPORTED from it — one implementation, not a copy.
@@ -84,8 +85,10 @@
 //   node pharn/floor/render-cost-ledger.mjs <name> [--base <dir>] [--repo <dir>] [--session <id>]
 //                                           [--projects-dir <dir>] [--command <cmd>] [--base-sha <sha>]
 //                                           [--markers-base <dir>] [--stdout]
-// `--verify-transcript` in the checker passes the ledger's OWN recorded `markers[]` to `renderLedger`, so a
-// later invocation's appended markers cannot re-bound an already-written ledger.
+// `--verify-transcript` in the checker passes the ledger's OWN recorded `markers[]` to `deriveLedger`, so a
+// later invocation's appended markers cannot re-bound an already-written ledger. `deriveLedger` returns the
+// same ledger `renderLedger` does, plus the count of excluded requests AFTER the window's end, which the
+// checker needs because that part of `excluded_requests` keeps growing after emission (6.14.1).
 // Exit codes: 0 = a ledger was written (including an honest `unavailable` one); 2 = bad usage.
 
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
@@ -95,7 +98,7 @@ import { findTranscriptDirs, transcriptFiles } from "./render-cost-record.mjs";
 import { DEFAULT_BASE as MARKERS_DEFAULT_BASE, MARKER_KINDS, cleanScalar } from "./mark-phase.mjs";
 import { FM_RE, stripBom } from "./frontmatter-core.mjs";
 import { readShipOutcome, OUTCOME_SOURCE as SHIP_OUTCOME_SOURCE } from "./ship-outcome-core.mjs";
-import { runWindow, isMember, tsMs, MEMBERSHIP_METHOD } from "./run-window-core.mjs";
+import { runWindow, isMember, isAfterWindow, tsMs, MEMBERSHIP_METHOD } from "./run-window-core.mjs";
 
 /** What this emitter writes. `/2` adds the `membership` block and scopes every row to the run window. */
 export const SCHEMA = "pharn-cost-ledger/2";
@@ -483,17 +486,43 @@ function unavailableLedger({ name, command, baseSha, outcome, skills, markers, n
 }
 
 /** Build the ledger object. Pure over its inputs — no clock, no randomness. */
-export function renderLedger({
-  name,
-  command = DEFAULT_COMMAND,
-  baseSha = UNKNOWN_BASE_SHA,
-  repo = ".",
-  sessionId,
-  projectsDir,
-  markersBase = MARKERS_DEFAULT_BASE,
-  featureBase = FEATURE_BASE,
-  markers: suppliedMarkers,
-}) {
+export function renderLedger(opts) {
+  return deriveLedger(opts).ledger;
+}
+
+/**
+ * The ledger PLUS one number the ledger does not carry: how many of the excluded requests lie AFTER the
+ * window's end (`isAfterWindow`). The ledger itself is exactly `renderLedger`'s — same object, same bytes;
+ * nothing is added to the file.
+ *
+ * WHY THE SPLIT EXISTS (6.14.1, a real failure): `membership.excluded_requests` is a count AT EMISSION of
+ * two parts that age differently. The transcript is append-only, so the part before the window is fixed
+ * once the window is, and the part after its end grows for as long as the session continues — the
+ * emission's own turn, then the stop's commit, then whatever the session does next. `check-cost-ledger.mjs
+ * --verify-transcript` needs the split to compare the fixed part exactly and the growing part as a bound.
+ * Recording the split in the file instead would change `membership`'s closed key set, a breaking contract
+ * change with no observed need.
+ */
+export function deriveLedger(opts) {
+  const stats = { excludedAfterWindow: 0 };
+  const ledger = buildLedger(opts, stats);
+  return { ledger, excludedAfterWindow: stats.excludedAfterWindow };
+}
+
+function buildLedger(
+  {
+    name,
+    command = DEFAULT_COMMAND,
+    baseSha = UNKNOWN_BASE_SHA,
+    repo = ".",
+    sessionId,
+    projectsDir,
+    markersBase = MARKERS_DEFAULT_BASE,
+    featureBase = FEATURE_BASE,
+    markers: suppliedMarkers,
+  },
+  stats
+) {
   // A supplied list (the checker's `--verify-transcript`) re-derives under the RECORDED boundary; absent,
   // the live markers file is read. Both pass through the same normalization.
   const markers = suppliedMarkers === undefined ? readMarkers(join(markersBase, name, "markers.jsonl")) : normalizeMarkers(suppliedMarkers);
@@ -586,6 +615,9 @@ export function renderLedger({
       // request repeated across lines is counted once here too.
       if (!isMember(win, ts, sid)) {
         excluded++;
+        // The part of the exclusion that keeps GROWING after emission (see `deriveLedger`). Counted, never
+        // emitted: the file's `excluded_requests` stays the one sum it always was.
+        if (isAfterWindow(win, ts)) stats.excludedAfterWindow++;
         continue;
       }
       // Both observed agent-id spellings, in a fixed precedence (L36 — a parameterized value acquires
@@ -717,6 +749,48 @@ export function buildViews(requests) {
   };
 }
 
+/** The two FACT arrays (the contract's "record facts, derive views"), written one element per line. Every
+ *  other value in the file is a derived view or scalar metadata and stays pretty-printed. */
+export const ROW_ARRAYS = Object.freeze(["markers", "requests"]);
+
+/**
+ * THE ONE serialization of a ledger, used by BOTH CLI output paths (the file write and `--stdout`).
+ *
+ * Pretty-printed at a 2-space indent, exactly like `JSON.stringify(ledger, null, 2)`, except the
+ * `ROW_ARRAYS`: each of their elements is `JSON.stringify(element)` on its own line. An empty one stays
+ * `[]`. `JSON.parse` of the result equals `JSON.parse` of the old form, key order included.
+ *
+ * WHY (6.14.1, a real failure): a downstream `/pharn-loop` ledger of 630 rows was 33,051 lines, about 52
+ * per row, because every row's nested `usage` object was expanded. That was 33,051 of the 38,927 lines
+ * its PR added. The size had been disclosed in bytes; the cost that hurt was lines in a diff. The measured
+ * before and after live in `cost-ledger.md` ("Size"), not here ([[L35]]).
+ *
+ * "One element per line" means per `\n`-delimited line. `JSON.stringify` escapes `\n` and every C0
+ * control, so no value can split a row. It leaves U+2028, U+2029 and U+0085 RAW, and some editors and diff
+ * viewers draw those as line breaks. `cleanScalar` admits them, so a bounded identity field can carry one.
+ * Stated, not escaped: escaping them would change no parse but would add a second rule to keep.
+ *
+ * Deterministic: no clock, no randomness, no locale. Top-level keys go in the ledger's own insertion
+ * order, which `buildLedger` fixes. A key whose value `JSON.stringify` would omit is omitted here too, and a
+ * row element that stringifies to `undefined` becomes `null`, as it would inside a JSON array.
+ */
+export function serializeLedger(ledger) {
+  const entries = [];
+  for (const key of Object.keys(ledger)) {
+    const value = ledger[key];
+    if (value === undefined || typeof value === "function" || typeof value === "symbol") continue;
+    let body;
+    if (ROW_ARRAYS.includes(key) && Array.isArray(value) && value.length > 0) {
+      const rows = value.map((el, i) => `    ${JSON.stringify(el) ?? "null"}${i < value.length - 1 ? "," : ""}`);
+      body = `[\n${rows.join("\n")}\n  ]`;
+    } else {
+      body = JSON.stringify(value, null, 2).replace(/\n/g, "\n  ");
+    }
+    entries.push(`  ${JSON.stringify(key)}: ${body}`);
+  }
+  return entries.length === 0 ? "{}\n" : `{\n${entries.join(",\n")}\n}\n`;
+}
+
 /** The compact per-stage table `/pharn-loop` Step 7 prints. The FILE is the record; this screen copy is
  *  advisory and is regenerated from the same rows, never typed. */
 export function table(ledger) {
@@ -795,7 +869,8 @@ function main(argv) {
     ...(opts.base === null ? {} : { featureBase: opts.base }),
   });
 
-  const json = JSON.stringify(ledger, null, 2) + "\n";
+  // ONE serialization for both output paths (L41): the file and `--stdout` cannot drift apart.
+  const json = serializeLedger(ledger);
   if (opts.stdout) {
     process.stdout.write(json);
     return 0;

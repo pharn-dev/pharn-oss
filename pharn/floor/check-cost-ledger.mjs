@@ -55,7 +55,9 @@
 //     about what membership MEANS, only about whether a stored row satisfies it.
 //     BOUND (P0, L43): this proves the rows agree with the RECORDED markers. It cannot prove the markers
 //     describe the run, nor that `excluded_requests` is the true count — only `--verify-transcript` binds
-//     either to the transcript, and only while it exists.
+//     either to the transcript, and only while it exists. Even then `excluded_requests` is bound as a
+//     RANGE, not a value: exact for the requests before the window, an upper bound for those after its
+//     end, because that tail keeps growing after emission (`checkExcludedAgainstTranscript`, 6.14.1).
 //  LEGACY: a `pharn-cost-ledger/1` file is validated under its OWN closed key set and rules, never
 //     retroactively REDed for lacking `membership`, and gets one WARN: its totals are SESSION-scoped and
 //     may include activity outside the run. Reinterpreting them as run-scoped would silently rewrite
@@ -103,7 +105,7 @@ import {
   OUTCOME_KEYS,
   isTokenLeaf,
   buildViews,
-  renderLedger,
+  deriveLedger,
 } from "./render-cost-ledger.mjs";
 import { MARKER_KINDS, cleanScalar } from "./mark-phase.mjs";
 import { runWindow, isMember, MEMBERSHIP_METHOD, MEMBERSHIP_STATUSES, UNKNOWN_REASONS } from "./run-window-core.mjs";
@@ -409,7 +411,7 @@ export function checkLedger(led, opts = {}) {
   } else if (opts.verifyTranscript) {
     // Re-derive under the RECORDED boundary: the file's own `markers[]` and `membership.session`, never
     // the live markers file, so a later invocation's appended run-start cannot re-bound this ledger.
-    const live = renderLedger({
+    const { ledger: live, excludedAfterWindow } = deriveLedger({
       name: led.name,
       command: led.command,
       baseSha: led.base_sha,
@@ -429,15 +431,62 @@ export function checkLedger(led, opts = {}) {
         red(`--verify-transcript: requests[] does not match the transcript (${a.length} recorded, ${b.length} re-derived)`);
       } else if (!sameTokens(led.totals.tokens, live.totals.tokens)) {
         red("--verify-transcript: totals do not match a re-derivation from the transcript");
-      } else if ((led.membership?.excluded_requests ?? null) !== (live.membership?.excluded_requests ?? null)) {
-        red(
-          `--verify-transcript: membership.excluded_requests does not match the transcript (${led.membership?.excluded_requests} recorded, ${live.membership?.excluded_requests} re-derived)`
+      } else {
+        checkExcludedAgainstTranscript(
+          led.membership?.excluded_requests ?? null,
+          live.membership?.excluded_requests ?? null,
+          excludedAfterWindow
         );
       }
     }
   }
 
   return { reds: [...reds], warns: [...warns] };
+}
+
+/**
+ * `--verify-transcript`'s comparison of `membership.excluded_requests`, as a RANGE (6.14.1).
+ *
+ * THE RECORDED FAILURE (P7): a downstream `/pharn-loop` ledger went RED here with "423 recorded, 508
+ * re-derived" while its rows and totals re-derived exactly, and the re-derived number kept climbing on every
+ * run. The recorded value is a count AT EMISSION of two parts. The transcript is append-only, so the part
+ * BEFORE the window is fixed once the window is. The part AFTER its end grows for as long as the session
+ * continues. The emission's own turn is already in it, and so is the stop's commit and everything the
+ * session does next. An equality test on the sum therefore failed every genuine ledger whose session had
+ * written anything since. [[L42]]: the re-derivation answers "what is it NOW", the file recorded "what was it
+ * THEN", and the tail is the one input that legitimately changed between them.
+ *
+ * THE RULE. With `live` the re-derived total and `after` its after-window part, a genuine value is
+ * `before + t` for some `0 <= t <= after`, where `before = live - after`. So it must lie in `[before, live]`.
+ * Below `before` is RED: the fixed part alone exceeds it. Above `live` is RED: the transcript never held
+ * that many. `null` on either side (an unknown window) keeps the old equality. The caller WARNs and returns
+ * before reaching here in that case, so the branch is a guard, not a path.
+ *
+ * BOUND (P0), stated in the WARN as well as here: this is EXACT for the part before the window and only an
+ * UPPER BOUND for the tail. An inflated value up to `live` passes, and a test pins that. Pinning the tail
+ * exactly would need the emission's own moment in the file, which is a schema change. The before-window
+ * part being fixed rests on the transcript being append-only and every record being stamped when written
+ * (`isAfterWindow`'s bound); that is a platform behaviour, observed, not a floor fact.
+ */
+function checkExcludedAgainstTranscript(recorded, live, after) {
+  if (recorded === null || live === null) {
+    if (recorded !== live) {
+      red(`--verify-transcript: membership.excluded_requests does not match the transcript (${recorded} recorded, ${live} re-derived)`);
+    }
+    return;
+  }
+  const before = live - after;
+  if (!Number.isInteger(recorded) || recorded < before || recorded > live) {
+    red(
+      `--verify-transcript: membership.excluded_requests does not match the transcript (${recorded} recorded; re-derived ${before} before the window + ${after} after its end, so a genuine value lies in [${before}, ${live}])`
+    );
+    return;
+  }
+  if (recorded !== live) {
+    warn(
+      `--verify-transcript: the session continued after the run — excluded_requests (${recorded}) is below the re-derived ${live} because ${after} request(s) now lie after the window's end; it is exact only for the ${before} before the window, and an inflated value up to ${live} would also pass`
+    );
+  }
 }
 
 /** RULE 8 — see the header. Uses the SHARED `run-window-core.mjs`; restates none of it. */
