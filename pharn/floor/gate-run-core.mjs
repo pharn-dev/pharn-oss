@@ -62,11 +62,19 @@
  *  remedy is quantified over a set, the ENUMERATION is the deliverable). Nothing below hardcodes a member.
  *  ---------------------------------------------------------------------------------------------- */
 
-/** The project-gate allowlist, IN RUN ORDER. A deliberate single copy of the set both commands' Step
- *  3a/4a enumerate in prose (pharn-verify.md:184-186, pharn-regress.md:219-221); those prose copies are
- *  retired to a citation of this constant, and a closure parity test pins that neither drifts (L35: when
- *  one fact is stored twice, retire the second copy — a sync check is a third thing to keep in sync). */
-export const ALLOWLIST = Object.freeze(["test", "lint", "format:check", "lint:md", "typecheck", "type-check", "build"]);
+/** The project-gate allowlist, IN RUN ORDER. The commands keep prose copies because a user reads the command:
+ *  the brace-delimited enumeration in /pharn-verify's Step 3a and /pharn-regress's Step 4a, pinned member for
+ *  member by a ✧ parity test (gate-run-core.test.mjs), which also pins regress's "minus the e2e ids" clause to
+ *  E2E_SET. /pharn-ship's former third copy is retired to a citation (L35). */
+export const ALLOWLIST = Object.freeze(["test", "lint", "format:check", "lint:md", "typecheck", "type-check", "build", "test:e2e", "e2e"]);
+
+/** The END-TO-END subset (6.16.0), last in ALLOWLIST so an e2e gate runs after `build`. Discovered like every
+ *  other member — only when the project has the script — and DISCOVERED at `/pharn-verify` only: resolveSet
+ *  drops these from a DISCOVERED regress source (an explicit `--gates` string is never filtered) (a base-side e2e run doubles an expensive stage, and a red e2e gate already
+ *  fails verify's absolute threshold). If a project defines BOTH, both run, exactly as `typecheck` and
+ *  `type-check` do; a project whose `test:e2e` just calls `e2e` should drop one of the two scripts. Starting
+ *  servers and installing browsers stay the project script's job. */
+export const E2E_SET = Object.freeze(["test:e2e", "e2e"]);
 
 /** The style/format subset eligible for /pharn-regress's config-touch skip. NOT eligible: every other
  *  allowlist member, because a typecheck/build flip over outside files is possible with no config change
@@ -359,7 +367,9 @@ export function orderEntries(sourceEntries, extraEntries, withReconcile) {
  *
  *  verify  : set ⊇ source
  *  regress : set ⊇ source ∖ STYLE_SET (style gates are droppable via --skip-style; the config-touch rule
- *            itself stays ADVISORY and `style_skipped` is recorded so the drop is never silent)
+ *            itself stays ADVISORY and `style_skipped` is recorded so the drop is never silent). A DISCOVERED
+ *            regress source never contains an E2E_SET member (a fixed rule, not a flag); an explicit
+ *            `--gates` string is the caller's choice and is never filtered.
  *  ---------------------------------------------------------------------------------------------- */
 export function resolveSet({ stage, side = null, gates = null, scripts = null, extras = null, skipStyle = false, feature }) {
   if (!STAGES.includes(stage)) return err("usage-error", `--stage must be one of ${STAGES.join(" | ")}`);
@@ -375,6 +385,7 @@ export function resolveSet({ stage, side = null, gates = null, scripts = null, e
   let source;
   let sourceKind;
   let sourceRaw = null;
+  let e2eExcluded = [];
   if (gates !== null && gates !== undefined) {
     const p = parseGatesSpec(gates);
     if (!p.ok) return p;
@@ -384,6 +395,12 @@ export function resolveSet({ stage, side = null, gates = null, scripts = null, e
   } else {
     source = discoverGates(scripts);
     sourceKind = "discover";
+    // e2e runs at /pharn-verify only. Filtered HERE, before the emptiness test below, so an e2e-only manifest
+    // is `empty-source-set` at regress (its no-gates stop) rather than a run with nothing in it (L34).
+    if (stage === "regress") {
+      e2eExcluded = source.filter((e) => E2E_SET.includes(e.id)).map((e) => e.id);
+      source = source.filter((e) => !E2E_SET.includes(e.id));
+    }
   }
 
   // The EMPTY-SOURCE refusal, and it is deliberately computed on `source` BEFORE any injection (L34).
@@ -391,7 +408,12 @@ export function resolveSet({ stage, side = null, gates = null, scripts = null, e
   // for free and this refusal would be unreachable — the vacuous pass aimed at the one condition that
   // must route to the existing no-gates stop.
   if (source.length === 0) {
-    return err("empty-source-set", "no gates: --gates was not supplied and the allowlist ∩ package.json scripts is empty");
+    return err(
+      "empty-source-set",
+      e2eExcluded.length
+        ? `no gates: at regress the allowlist ∩ package.json scripts holds only the e2e gates (${e2eExcluded.join(", ")}), which regress never discovers`
+        : "no gates: --gates was not supplied and the allowlist ∩ package.json scripts is empty"
+    );
   }
 
   const ex = parseExtras(extras);
@@ -413,7 +435,12 @@ export function resolveSet({ stage, side = null, gates = null, scripts = null, e
     kept = source.filter((e) => !STYLE_SET.includes(e.id));
     styleSkipped = kept.length !== source.length;
     if (kept.length === 0) {
-      return err("empty-source-set", "--skip-style removed every discovered gate, leaving nothing to run");
+      return err(
+        "empty-source-set",
+        e2eExcluded.length
+          ? `--skip-style removed every style gate and regress never discovers the e2e gates (${e2eExcluded.join(", ")}), leaving nothing to run`
+          : "--skip-style removed every discovered gate, leaving nothing to run"
+      );
     }
   }
 
@@ -427,6 +454,8 @@ export function resolveSet({ stage, side = null, gates = null, scripts = null, e
       source: sourceKind,
       source_raw: sourceRaw,
       style_skipped: styleSkipped,
+      // The e2e ids the regress rule dropped — reported by `init`, never written into the stamp.
+      e2e_excluded: e2eExcluded,
       required: kept.map((e) => e.id),
       entries,
     },

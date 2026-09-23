@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
   ALLOWLIST,
+  E2E_SET,
   STYLE_SET,
   RESERVED_IDS,
   REASON_CODES,
@@ -122,6 +123,7 @@ test("✧ L34 — every enumeration under test is NON-EMPTY (the per-member rule
   for (const [label, set] of [
     ["ALLOWLIST", ALLOWLIST],
     ["STYLE_SET", STYLE_SET],
+    ["E2E_SET", E2E_SET],
     ["RESERVED_IDS", RESERVED_IDS],
     ["REASON_CODES", REASON_CODES],
     ["STAGES", STAGES],
@@ -224,6 +226,12 @@ test("✧ L31/L35 PARITY — the ALLOWLIST prose in BOTH commands matches the co
       .filter(Boolean);
     assert.deepEqual(listed, [...ALLOWLIST], `${rel}'s prose allowlist diverged from gate-run-core ALLOWLIST`);
   }
+});
+test("✧ L31/L35 PARITY — /pharn-regress's 'minus the e2e ids' clause names exactly E2E_SET, in both places", () => {
+  const text = read(".claude/commands/pharn-regress.md");
+  const want = `minus the e2e ids ${E2E_SET.map((e) => `\`${e}\``).join(" and ")}`;
+  assert.ok(text.includes(want), `pharn-regress.md no longer says "${want}"`);
+  assert.equal(text.split("(minus the e2e ids)").length - 1, 1, "the determinism audit's shorthand clause is gone");
 });
 
 test("✧ L52 PARITY — the feature-slug grammar agrees across all THREE copies", () => {
@@ -419,7 +427,9 @@ test("--skip-style removes EVERY STYLE_SET member and records style_skipped (L52
   assert.ok(r.ok);
   assert.equal(r.spec.style_skipped, true);
   for (const s of STYLE_SET) assert.ok(!r.spec.required.includes(s), `${s} survived --skip-style`);
-  for (const a of ALLOWLIST.filter((x) => !STYLE_SET.includes(x))) {
+  // E2E_SET members are excluded from EVERY discovered regress source (6.16.0), --skip-style or not, so the
+  // non-style set this flag must keep is ALLOWLIST minus STYLE_SET minus E2E_SET.
+  for (const a of ALLOWLIST.filter((x) => !STYLE_SET.includes(x) && !E2E_SET.includes(x))) {
     assert.ok(r.spec.required.includes(a), `--skip-style wrongly dropped the non-style gate ${a}`);
   }
   // `style_skipped` is FALSE when the flag removed nothing — it records what happened, not what was asked.
@@ -598,4 +608,77 @@ test("SHA_RE and FEATURE_SLUG_RE are anchored (a crafted value cannot pass by pr
   assert.equal(SHA_RE.test(`x${"0".repeat(40)}`), false);
   assert.ok(FEATURE_SLUG_RE.test("gate-run-stamp"));
   assert.equal(FEATURE_SLUG_RE.test("gate/run"), false);
+});
+
+// ---------------------------------------------------------------------------------------------------
+// The e2e gate (6.16.0): discovered only when the script exists, after `build`, at verify only.
+// ---------------------------------------------------------------------------------------------------
+
+/** The allowlist exactly as it stood before 6.16.0 — the byte-identical-when-absent control. */
+const PRE_E2E_ALLOWLIST = ["test", "lint", "format:check", "lint:md", "typecheck", "type-check", "build"];
+
+test("E2E_SET ⊂ ALLOWLIST, LAST in it, and disjoint from STYLE_SET and RESERVED_IDS (every member)", () => {
+  for (const e of E2E_SET) {
+    assert.ok(ALLOWLIST.includes(e), `${e} is not in ALLOWLIST`);
+    assert.ok(!STYLE_SET.includes(e), `${e} is a style gate`);
+    assert.ok(!RESERVED_IDS.includes(e), `${e} is reserved`);
+  }
+  assert.deepEqual(ALLOWLIST.slice(-E2E_SET.length), [...E2E_SET], "the e2e ids must be the LAST allowlist members");
+  assert.deepEqual(ALLOWLIST.slice(0, ALLOWLIST.length - E2E_SET.length), PRE_E2E_ALLOWLIST, "the pre-6.16 members moved");
+});
+
+test("ABSENT → the resolved gate set is unchanged: every pre-6.16 member resolves to exactly the pre-6.16 set, both stages", () => {
+  const scripts = Object.fromEntries(PRE_E2E_ALLOWLIST.map((id) => [id, "x"]));
+  const v = resolveSet({ stage: "verify", feature: "demo", scripts });
+  assert.deepEqual(v.spec.required, PRE_E2E_ALLOWLIST);
+  assert.deepEqual(
+    v.spec.entries.map((e) => e.id),
+    [...PRE_E2E_ALLOWLIST, "reconcile"]
+  );
+  const r = resolveSet({ stage: "regress", side: "head", feature: "demo", scripts });
+  assert.deepEqual(r.spec.required, PRE_E2E_ALLOWLIST);
+});
+
+test("PRESENT → each e2e script is discovered at verify, as `npm run <id>`, AFTER build (L52: every member)", () => {
+  for (const e of E2E_SET) {
+    const v = resolveSet({ stage: "verify", feature: "demo", scripts: { test: "x", build: "x", [e]: "x" } });
+    assert.ok(v.ok);
+    assert.deepEqual(
+      v.spec.entries.map((x) => x.id),
+      ["test", "build", e, "reconcile"]
+    );
+    assert.deepEqual(v.spec.entries.find((x) => x.id === e).argv, ["npm", "run", e]);
+  }
+  // Both present → both run, in ALLOWLIST order (the typecheck/type-check precedent: no precedence rule).
+  const both = resolveSet({ stage: "verify", feature: "demo", scripts: { e2e: "x", "test:e2e": "x", test: "x" } });
+  assert.deepEqual(both.spec.required, ["test", "test:e2e", "e2e"]);
+});
+
+test("REGRESS never discovers an e2e gate, on either side (every member); an e2e-only manifest is empty-source-set", () => {
+  for (const side of SIDES) {
+    for (const e of E2E_SET) {
+      const r = resolveSet({ stage: "regress", side, feature: "demo", scripts: { test: "x", [e]: "x" } });
+      assert.ok(r.ok);
+      assert.deepEqual(r.spec.required, ["test"], `${side}: ${e} reached a regress source`);
+    }
+    const only = resolveSet({ stage: "regress", side, feature: "demo", scripts: { "test:e2e": "x", e2e: "x" } });
+    assert.equal(only.reason_code, "empty-source-set", `${side}: an e2e-only regress source must route to the no-gates stop`);
+    assert.match(only.reason, /only the e2e gates \(test:e2e, e2e\)/, "the refusal must say WHY the set is empty");
+  }
+  // Control: the SAME e2e-only manifest resolves at verify.
+  assert.deepEqual(resolveSet({ stage: "verify", feature: "demo", scripts: { "test:e2e": "x", e2e: "x" } }).spec.required, [...E2E_SET]);
+  // The drop is REPORTED (init prints it), per member, and nothing is reported at verify or when absent.
+  for (const e of E2E_SET) {
+    const r = resolveSet({ stage: "regress", side: "head", feature: "demo", scripts: { test: "x", [e]: "x" } });
+    assert.deepEqual(r.spec.e2e_excluded, [e]);
+    assert.deepEqual(resolveSet({ stage: "verify", feature: "demo", scripts: { test: "x", [e]: "x" } }).spec.e2e_excluded, []);
+  }
+  assert.deepEqual(resolveSet({ stage: "regress", side: "head", feature: "demo", scripts: { test: "x" } }).spec.e2e_excluded, []);
+  // --skip-style + only e2e left: the refusal names BOTH causes, never blames --skip-style alone.
+  const styleAndE2e = resolveSet({ stage: "regress", side: "head", feature: "demo", scripts: { lint: "x", e2e: "x" }, skipStyle: true });
+  assert.equal(styleAndE2e.reason_code, "empty-source-set");
+  assert.match(styleAndE2e.reason, /regress never discovers the e2e gates \(e2e\)/);
+  // An EXPLICIT --gates string naming an e2e command is the caller's choice and is kept at regress.
+  const explicit = resolveSet({ stage: "regress", side: "head", feature: "demo", gates: "npm run test:e2e::test:e2e" });
+  assert.deepEqual(explicit.spec.required, ["test:e2e"]);
 });

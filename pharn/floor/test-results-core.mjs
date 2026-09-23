@@ -43,15 +43,16 @@
 import { createHash } from "node:crypto";
 import { closeSync, fstatSync, openSync, readFileSync, readSync, realpathSync, constants as fsConstants } from "node:fs";
 import { join, resolve } from "node:path";
-import { resultsFileName, validateStamp } from "./gate-run-core.mjs";
+import { E2E_SET, resultsFileName, validateStamp } from "./gate-run-core.mjs";
 import { RECORD_STATUSES, RESULTS_FORMATS, parseResults, shown } from "./test-results-formats.mjs";
 
 /** The config file and key a project opts in with: `{"testResults": {"<gate-id>": "<format>"}}`. */
 export const CONFIG_FILE = "pharn.config.json";
 export const CONFIG_KEY = "testResults";
 
-/** The gate ids a `testResults` key may name. CLOSED: a key outside it makes the block `config-invalid`. */
-export const RESULTS_GATES = Object.freeze(["test"]);
+/** The gate ids a `testResults` key may name: `test` and the e2e gates (gate-run-core's E2E_SET, imported, never
+ *  restated — L35). CLOSED: a key outside it makes the block `config-invalid`. */
+export const RESULTS_GATES = Object.freeze(["test", ...E2E_SET]);
 
 /** The CLOSED reason vocabulary of a refused record. Separate from gate-run-core's REASON_CODES: those are
  *  the RUNNER's refusals, these are the reasons a per-test view cannot be given. Sorted; both closure

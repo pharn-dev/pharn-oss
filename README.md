@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.15.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.16.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -455,12 +455,18 @@ A gate's exit code says whether the whole suite passed, not whether one named te
 a skipped test. PHARN can also read a per-test record — each test's id, file, title and `passed`, `failed` or
 `skipped` — from a JSON report your test runner writes. Nothing in the pipeline reads it yet.
 
-To turn it on, name your reporter's format for the `test` gate in `pharn.config.json`. The formats are
-`vitest-json` and `playwright-json`, both built into their runner, so there is nothing to install:
+To turn it on, name your reporter's format for each gate in `pharn.config.json`. The gates are `test` and the
+e2e gates (`test:e2e`, `e2e`); the formats are `vitest-json` and `playwright-json`, both built into their
+runner, so there is nothing to install:
 
 ```json
-{ "testResults": { "test": "vitest-json" } }
+{ "testResults": { "test": "vitest-json", "test:e2e": "playwright-json" } }
 ```
+
+An e2e gate exists only when your `package.json` has a `test:e2e` or `e2e` script. `/pharn-verify` runs it after
+`build`, last among your project's gates; `/pharn-regress` never discovers it (a gate you name yourself with
+`--gates` still runs). It gets the same per-gate time limit as every other gate (540 s), and
+under `/pharn-loop` it runs on every iteration. Starting servers and installing browsers stay your script's job.
 
 Then have the reporter write to the path PHARN passes in `PHARN_TEST_RESULTS`. PHARN sets that variable only
 while its own stages run your gates, so an ordinary test run is unchanged. With vitest:

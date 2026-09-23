@@ -190,7 +190,7 @@ test("✧ L36 CLOSURE — every reason literal the two modules emit is a RECORD_
 });
 
 test("the gate/format sets are the ones this increment ships", () => {
-  assert.deepEqual([...RESULTS_GATES], ["test"]);
+  assert.deepEqual([...RESULTS_GATES], ["test", "test:e2e", "e2e"]);
   assert.deepEqual([...RESULTS_FORMATS], ["playwright-json", "vitest-json"]);
   assert.deepEqual([...RECORD_STATUSES], ["passed", "failed", "skipped"]);
 });
@@ -482,8 +482,8 @@ test("config-invalid — each malformed shape (L52), incl. a gate key outside RE
     "[]",
     { [CONFIG_KEY]: "vitest-json" },
     { [CONFIG_KEY]: [] },
-    { [CONFIG_KEY]: { "test:e2e": "playwright-json" } },
-    { [CONFIG_KEY]: { test: "vitest-json", lint: "vitest-json" } },
+    { [CONFIG_KEY]: { lint: "vitest-json" } },
+    { [CONFIG_KEY]: { test: "vitest-json", build: "vitest-json" } },
     { [CONFIG_KEY]: { test: "jest-json" } },
     { [CONFIG_KEY]: { test: "VITEST-JSON" } },
     '{"testResults": {"__proto__": "vitest-json"}}',
@@ -500,6 +500,16 @@ test("config-invalid — a config path that exists but cannot be read is never r
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("e2e gates (6.16.0) are configurable beside `test`, each with its own format", () => {
+  const cfg = readResultsConfig(
+    JSON.stringify({ [CONFIG_KEY]: { test: "vitest-json", "test:e2e": "playwright-json", e2e: "playwright-json" } })
+  );
+  assert.ok(cfg.ok, cfg.reason);
+  assert.deepEqual(formatFor(cfg, "test:e2e"), { ok: true, format: "playwright-json" });
+  assert.deepEqual(formatFor(cfg, "e2e"), { ok: true, format: "playwright-json" });
+  assert.deepEqual(formatFor(cfg, "test"), { ok: true, format: "vitest-json" });
 });
 
 test("L15 — prototype names are never a configured gate", () => {

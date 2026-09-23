@@ -317,7 +317,10 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # blocked on. The field is OPTIONAL: SCHEMA is unchanged and a pre-6.15 stamp still validates; a malformed
 # value is stamp-malformed. `testRecord({stamp, outDir, gateId, root})` in pharn/floor/test-results-core.mjs
 # (NO CLI, no defaults — L41) derives {id, file, title, status ∈ passed|failed|skipped} from that file, opted
-# in by pharn.config.json `testResults: {"test": "vitest-json" | "playwright-json"}`; the adapters live in
+# in by pharn.config.json `testResults: {"test" | "test:e2e" | "e2e": "vitest-json" | "playwright-json"}` (the e2e
+# gates, E2E_SET, since 6.16.0: discovered from a test:e2e/e2e script, run after build at /pharn-verify — resolveSet
+# drops them from a DISCOVERED regress source (an explicit --gates string is not filtered), so an e2e-only manifest
+# is empty-source-set there); the adapters live in
 # test-results-formats.mjs (a reporter's format is its own axis, P3). Closed reasons (RECORD_REASONS), fail-closed
 # PER RECORD: one flaky test or test.fail() voids it. FLOOR: derived from the exact bytes the runner hashed
 # (a later write is results-hash-mismatch — L58). NOT provenance (L43): "passed" means the reporter said so,
