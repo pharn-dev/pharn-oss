@@ -1975,3 +1975,44 @@ occurrences.
 - commit: `51b8f476f1599cb1a6eb3287e6dacc81dc3c1215`
 - source: `.dev/features/gate-run-stamp/REVIEW.md` § Proposed lesson candidate
 - promoted: 2026-09-22 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L54 — `existsSync` is not an absence test inside a containment check — a dangling symlink reads as absent
+
+type: floor · concepts: [path-containment, symlink, absence-test, dangling-link, lesson-recurrence]
+
+**Lesson.** A containment walk that refuses symlinks must test each path component with `lstat`, and
+treat an `lstat` ENOENT as the only proof that the component is absent. `existsSync` is not that proof.
+It stats, stat FOLLOWS a link, and so a DANGLING symlink reads as absent. The walk stops early, the
+component is never lstat'ed, and the later `mkdirSync` / `appendFileSync` goes through the link. There
+are two occurrences, in two floor files:
+
+1. `pharn/floor/run-gates.mjs`'s `assertContained` (shipped in #230). Its own comment states the right
+   rule, "lstat, never stat: stat FOLLOWS the link", and then it guards the loop with
+   `if (!existsSync(cur)) break;`, which is a stat. Probed during `loop-freshness`:
+   `--out .pharn/linked/gates` with `.pharn/linked` dangling passed containment, and `mkdirSync` then
+   threw an uncaught ENOENT. The result was exit 2 with a stack trace and no `path-containment`
+   reason_code. It failed closed (nothing was written outside the state root, measured), but not the way
+   the contract promises.
+2. The first draft of `check-loop-fresh.mjs`'s budget-ledger path (#242) used the same `existsSync`
+   guard. Its own dangling-link test caught it before it shipped, and the fix is `lstatOrNull`.
+
+**Why it matters.** The first instance sat beside a comment that states the rule correctly, so the
+defect is not ignorance of symlink semantics. It is that `existsSync` does not read as a stat, which is
+[[L25]]'s shape (a rationale trusted for a case it does not name) inside a single function. The second
+was written in the same repo while the first was live. By [[L20]]'s bar, a remedy that reduces to
+"remember that `existsSync` follows links" has now failed twice.
+
+**Bound (P0), and the remedy's status per [[L46]].** This entry adds no checker, so it is a
+pending-remedy lesson. The fix for (1) is the named follow-up `run-gates-dangling-link-containment`:
+`lstat` with a try/catch in `assertContained`, plus a dangling-component case in its CONTAINMENT test. A
+general check (for example, a test that fails on `existsSync` in any function that also calls
+`isSymbolicLink()`) is unbuilt. It would be a pattern over source text, so it would pin the known shape,
+never prove the defect absent.
+
+**Provenance.**
+
+- feature: `loop-freshness`
+- commit: `8760e28da1cb52c96292464ae358ec13dd7e6368`
+- source: `.dev/features/loop-freshness/REVIEW.md` § Proposed lesson candidate + § Advisory findings,
+  finding 1 (`pharn/floor/run-gates.mjs:162`)
+- promoted: 2026-09-23 via gated `/pharn-dev-memory-promote` (human-approved).

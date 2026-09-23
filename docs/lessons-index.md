@@ -10,7 +10,7 @@ lessons to fetch; canon stays the source of truth and the floor's verification t
 applied, without fetching its full `## L<n>` entry from canon, is the P0 disease. "The index was
 consulted" never means "the relevant lessons were read".
 
-53 lessons · 53 tagged · 0 malformed · 0 untagged · ~37710 tokens total
+54 lessons · 54 tagged · 0 malformed · 0 untagged · ~38406 tokens total
 
 Columns: `id | type | concepts | title | promoted | ~tokens`. `-` is rendered in THREE columns
 and does NOT mean the same thing in each — read it against the column it sits in. In `type`/`concepts`:
@@ -77,4 +77,5 @@ L50 | process  | doc-drift,enumeration,referent-binding,sweep-scope,lesson-recur
 L51 | floor    | dead-code-removal,input-domain,test-blindspot,false-green,lookup-rewrite                    | A guard deleted as "now unreachable" is unreachable only under the reasoning that deleted it | 2026-09-21 | ~785
 L52 | process  | lesson-recurrence,test-blindspot,enumeration,remedy-design,false-green                      | A lesson whose remedy is "write a test" is satisfied by writing it for the wrong member of the set | 2026-09-21 | ~1058
 L53 | process  | lesson-recurrence,floor-escalation,unbuilt-remedy,plan-shape,detection-path                 | A lesson whose remedy is an unbuilt floor check is eventually caught by unrelated tooling — and a detection that depends on a coincidence is not a remedy | 2026-09-22 | ~832
+L54 | floor    | path-containment,symlink,absence-test,dangling-link,lesson-recurrence                       | `existsSync` is not an absence test inside a containment check — a dangling symlink reads as absent | 2026-09-23 | ~696
 ```
