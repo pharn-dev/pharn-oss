@@ -45,6 +45,12 @@ lesson: promoted L57
 
 deferred: none
 
+**Merge note (after GATE 2, when merging into `main`).** The follow-up "Scope markdownlint --fix to named files
+only" merged first as pull request 254 (6.13.1). It promoted its own L57 for the same incident, with the remedy applied. This
+branch's L57 duplicated it, so the merge keeps `main`'s entry and drops this branch's. The canon L57 is therefore
+the text from pull request 254, and it describes the same lesson the human accepted here. `docs/lessons-index.md` follows `main`.
+This increment's `SKILLS_VERSION` stays 6.14.0 and its CHANGELOG section now sits above `[6.13.1]`.
+
 ## Incident, recorded
 
 The build's pinned `markdownlint-cli2 --fix` line rewrote 124 files in another session's worktree: 2 tracked

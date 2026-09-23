@@ -10,7 +10,7 @@ lessons to fetch; canon stays the source of truth and the floor's verification t
 applied, without fetching its full `## L<n>` entry from canon, is the P0 disease. "The index was
 consulted" never means "the relevant lessons were read".
 
-57 lessons · 57 tagged · 0 malformed · 0 untagged · ~40635 tokens total
+57 lessons · 57 tagged · 0 malformed · 0 untagged · ~40858 tokens total
 
 Columns: `id | type | concepts | title | promoted | ~tokens`. `-` is rendered in THREE columns
 and does NOT mean the same thing in each — read it against the column it sits in. In `type`/`concepts`:
@@ -80,5 +80,5 @@ L53 | process  | lesson-recurrence,floor-escalation,unbuilt-remedy,plan-shape,de
 L54 | floor    | path-containment,symlink,absence-test,dangling-link,lesson-recurrence                          | `existsSync` is not an absence test inside a containment check — a dangling symlink reads as absent | 2026-09-23 | ~696
 L55 | floor    | differential-testing,verification-fidelity,parser-parity,false-green,review-recurrence         | A check that re-derives a renderer's structure must be probed against the renderer — fixtures written from the author's model certify that model | 2026-09-23 | ~813
 L56 | floor    | differential-testing,parser-parity,stated-bound,lesson-recurrence,false-green,floor-escalation | A parser model's stated LIMITS come from the same model — L55 recurred in the first increment to cite it, in its bound and then in its fix | 2026-09-23 | ~765
-L57 | tooling  | bash-escape,formatter,writes-scope,config-globs,lesson-recurrence                              | A formatter's config can widen an explicit file list — `markdownlint-cli2 --fix <file>` fixes every path its config globs name | 2026-09-23 | ~651
+L57 | tooling  | writes-scope,bash-escape,formatter,config-globs,live-measurement                               | An explicit path list is not a scope for a config-driven tool — its config can ADD inputs, and root-anchored ignores do not cover nested checkouts | 2026-09-23 | ~874
 ```

@@ -499,14 +499,20 @@ test(
       assert.ifError(pretty.error);
       assert.equal(pretty.status, 0, `prettier would rewrite the spliced README:\n${pretty.stdout}${pretty.stderr}`);
 
-      // Reuse the repo's rule set (minus its repo-wide globs) so these assertions cannot drift from it.
+      // Reuse the repo's rule set so these assertions cannot drift from it. Leaving the globs out of
+      // `cfg` does NOT scope the run on its own: markdownlint-cli2 still reads the cwd's own
+      // .markdownlint-cli2.jsonc and ADDS its `**/*.md` globs to the named path. Measured: `--config cfg
+      // file` linted 1341 files in ~5 s, so any lint issue anywhere in the tree, including another
+      // session's worktree, failed this test as "markdownlint flagged the spliced README".
+      // `--no-globs` scopes the run, and the `Linting: 1 file` assertion pins that it did.
       const jsonc = readFileSync(join(REPO_ROOT, ".markdownlint-cli2.jsonc"), "utf8");
       const rules = JSON.parse(jsonc.replace(/^\s*\/\/.*$/gm, "").replace(/,(\s*[}\]])/g, "$1")).config;
       const cfg = join(root, ".markdownlint-cli2.jsonc");
       writeFileSync(cfg, JSON.stringify({ config: rules }));
-      const mdl = spawnSync(devBin("markdownlint-cli2"), ["--config", cfg, file], { encoding: "utf8" });
+      const mdl = spawnSync(devBin("markdownlint-cli2"), ["--config", cfg, "--no-globs", file], { encoding: "utf8" });
       assert.ifError(mdl.error);
       assert.equal(mdl.status, 0, `markdownlint flagged the spliced README:\n${mdl.stdout}${mdl.stderr}`);
+      assert.match(mdl.stdout, /^Linting: 1 file$/m, `the style check must lint ONLY the spliced README:\n${mdl.stdout}`);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

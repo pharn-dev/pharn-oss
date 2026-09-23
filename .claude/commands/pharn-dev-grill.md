@@ -252,7 +252,7 @@ Immediately after writing it, and **before** ending the turn:
 
 ```bash
 npx prettier --ignore-unknown --write .dev/features/<name>/GRILL.md
-npx markdownlint-cli2 --fix .dev/features/<name>/GRILL.md
+npx markdownlint-cli2 --no-globs --fix .dev/features/<name>/GRILL.md
 ```
 
 Scoped to **this stage's own artifact** — never a repo-wide formatter, whose writes escape the fix #7
