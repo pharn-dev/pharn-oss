@@ -561,7 +561,20 @@ function startRecord(spec, outAbs, cwd, args, opts = {}) {
     cwd,
   };
   writeAtomic(join(outAbs, "state.json"), JSON.stringify(record, null, 2));
-  emit({ ok: true, stage: spec.stage, side: spec.side, feature: spec.feature, source: spec.source, ids: spec.entries.map((e) => e.id) }, 0);
+  // `e2e_excluded` makes the regress e2e rule's drop visible to the caller (it renders it in REGRESSION.md); a
+  // base side copies the head spec and reports none of its own.
+  emit(
+    {
+      ok: true,
+      stage: spec.stage,
+      side: spec.side,
+      feature: spec.feature,
+      source: spec.source,
+      ids: spec.entries.map((e) => e.id),
+      e2e_excluded: spec.e2e_excluded ?? [],
+    },
+    0
+  );
 }
 
 /** ------------------------------------------------------------------------------------------------

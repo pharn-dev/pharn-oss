@@ -1,0 +1,45 @@
+{
+  "base": "4db8eaea67f92335a83c7fb1347e69c2c87432e6",
+  "inside": [
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-regress.md",
+    ".claude/commands/pharn-ship.md",
+    ".claude/commands/pharn-verify.md",
+    ".dev/features/e2e-gate/GRILL.md",
+    ".dev/features/e2e-gate/PLAN.md",
+    ".dev/features/e2e-gate/REGRESSION.md",
+    ".dev/features/e2e-gate/REVIEW.md",
+    ".dev/features/e2e-gate/VERIFY.md",
+    ".dev/features/e2e-gate/regression-report.json",
+    ".dev/features/e2e-gate/verify-report.json",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/gate-run-core.mjs",
+    "pharn/floor/gate-run-core.test.mjs",
+    "pharn/floor/run-gates.mjs",
+    "pharn/floor/run-gates.test.mjs",
+    "pharn/floor/test-results-core.mjs",
+    "pharn/floor/test-results-core.test.mjs",
+    "pharn/pharn-contracts/gate-run-record.md",
+    "pharn/pharn-contracts/test-results-record.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

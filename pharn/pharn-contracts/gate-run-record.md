@@ -120,9 +120,12 @@ gate — it already is one today.
 ## Ordering and coverage
 
 - **Order:** the source ids (ALLOWLIST order, or the explicit token order), then `structural:*` sorted,
-  then `reconcile` **last** so it judges any tree write an earlier gate made.
+  then `reconcile` **last** so it judges any tree write an earlier gate made. The e2e ids (`E2E_SET`:
+  `test:e2e`, `e2e`, 6.16.0) are the last ALLOWLIST members, so a discovered e2e gate runs after `build`.
 - **Coverage:** `runs` ⊇ `required`. For regress, `required` is the source set minus `STYLE_SET` when
-  `--skip-style` was passed.
+  `--skip-style` was passed, and a **discovered** regress source never contains an `E2E_SET` member (a fixed
+  rule, not a flag; an explicit `--gates` string is not filtered). An e2e-only manifest is therefore
+  `empty-source-set` at regress.
 - **Reserved ids:** `reconcile` and `completeness`. The `structural:` prefix belongs to `--extra` only.
 - **`<actual>` is derived, never supplied:** a `structural:<expected>` entry's argv resolves `<actual>` as
   the `findings.json` colocated with the capability directory that owns `<expected>`, per

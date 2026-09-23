@@ -1241,3 +1241,112 @@ test("run --next REFUSES a glob-shaped file entry that reached the record (bad-s
     { scripts: { test: "true" } }
   );
 });
+
+// ---------------------------------------------------------------------------------------------------
+// The e2e gate end to end (6.16.0): discovered from the manifest, run after `build`, its own results file,
+// and a red e2e gate fails verify exactly like a red `test` gate.
+// ---------------------------------------------------------------------------------------------------
+
+test("E2E END TO END — `test` and `test:e2e` each write their own report; each record derives; the test record is untouched", () => {
+  const vitest = join(HERE, "test-fixtures", "test-results", "vitest.json");
+  const playwright = join(HERE, "test-fixtures", "test-results", "playwright.json");
+  withResultsRepo(
+    { test: `node rgate.cjs copy ${vitest}`, build: "node rgate.cjs none", "test:e2e": `node rgate.cjs copy ${playwright}` },
+    (dir) => {
+      writeFileSync(
+        join(dir, "pharn.config.json"),
+        JSON.stringify({ testResults: { test: "vitest-json", "test:e2e": "playwright-json" } })
+      );
+      const init = cli(dir, initArgs());
+      assert.deepEqual(init.json.ids, ["test", "build", "test:e2e", "reconcile"], "the e2e gate must run AFTER build");
+      drainWith(dir, { GATE_EXIT: "1" }); // both captured runs exited 1
+      const s = stamp(dir);
+      const byId = Object.fromEntries(s.runs.map((r) => [r.id, r]));
+      assert.notEqual(byId.test.results_sha256, byId["test:e2e"].results_sha256, "the two gates share a results file");
+      for (const [seq, id] of [
+        [0, "test"],
+        [2, "test:e2e"],
+      ]) {
+        assert.ok(existsSync(join(dir, OUT, resultsFileName(seq, id))), `${id}'s own results file is missing`);
+      }
+      const unit = testRecord({ stamp: s, outDir: join(dir, OUT), gateId: "test", root: dir });
+      const e2e = testRecord({ stamp: s, outDir: join(dir, OUT), gateId: "test:e2e", root: dir });
+      assert.equal(unit.ok, true, unit.reason);
+      assert.equal(unit.format, "vitest-json");
+      assert.deepEqual(unit.counts, { passed: 2, failed: 1, skipped: 2 }, "the e2e gate changed the test gate's record");
+      assert.equal(e2e.ok, true, e2e.reason);
+      assert.equal(e2e.format, "playwright-json");
+      assert.deepEqual(e2e.counts, { passed: 4, failed: 2, skipped: 2 });
+    }
+  );
+});
+
+test("E2E VERDICT — a red e2e gate fails verify exactly like a red test gate (check-verify --stamp)", () => {
+  const CHECK_VERIFY = join(HERE, "check-verify.mjs");
+  for (const [redId, scripts] of [
+    ["test:e2e", { test: "true", "test:e2e": 'node -e "process.exit(1)"' }],
+    ["test", { test: 'node -e "process.exit(1)"', "test:e2e": "true" }],
+    [null, { test: "true", "test:e2e": "true" }],
+  ]) {
+    withRepo(
+      (dir) => {
+        cli(dir, initArgs());
+        drain(dir);
+        const r = spawnSync(process.execPath, [CHECK_VERIFY, "--stamp", join(dir, OUT, "stamp.json"), "--feature", FEATURE], {
+          cwd: dir,
+          encoding: "utf8",
+        });
+        // The fixture repo has no pharn/floor/, so the injected `reconcile` gate is red in EVERY case, which makes
+        // the overall verdict FAIL regardless. The claim under test is over the PROJECT gates, and the all-green
+        // control below proves the filtered list is not empty for free.
+        const projectRed = JSON.parse(r.stdout).failing_gates.filter((g) => g !== "reconcile");
+        assert.deepEqual(projectRed, redId === null ? [] : [redId]);
+      },
+      { scripts }
+    );
+  }
+});
+
+test("E2E AT REGRESS (runner level) — the head init drops an e2e script, prints it as e2e_excluded, and the base copies the set", () => {
+  withRepo(
+    (dir) => {
+      writeFileSync(join(dir, "scope.json"), JSON.stringify({ escaped: [], outside_tests: ["t/a.test.js"], outside_eval_pairs: [] }));
+      const head = cli(dir, [
+        "init",
+        "--stage",
+        "regress",
+        "--side",
+        "head",
+        "--feature",
+        FEATURE,
+        "--out",
+        ".pharn/head",
+        "--discover",
+        "package.json",
+        "--scope-json",
+        "scope.json",
+      ]);
+      assert.equal(head.code, 0, head.raw);
+      assert.deepEqual(head.json.ids, ["test"]);
+      assert.deepEqual(head.json.e2e_excluded, ["test:e2e"]);
+      const base = cli(dir, [
+        "init",
+        "--stage",
+        "regress",
+        "--side",
+        "base",
+        "--feature",
+        FEATURE,
+        "--out",
+        ".pharn/base",
+        "--spec-from",
+        ".pharn/head",
+      ]);
+      assert.equal(base.code, 0, base.raw);
+      assert.deepEqual(base.json.ids, ["test"], "the base side must copy the head set, e2e excluded");
+      // The stamp shape is untouched: the report lives in init's output only.
+      assert.ok(!Object.hasOwn(JSON.parse(readFileSync(join(dir, ".pharn/head/state.json"), "utf8")), "e2e_excluded"));
+    },
+    { scripts: { test: "true", "test:e2e": "true" } }
+  );
+});

@@ -268,9 +268,11 @@ ran at its Step 4** —
 - when building **PHARN-shaped capabilities** (the dogfood — PHARN builds PHARN), that gate is
   `node pharn/floor/validate.mjs .` (identical to `/pharn-dev-ship`);
 - for a **general user project**, it is the gate **discovered the same way `/pharn-build` Step 4 /
-  `/pharn-verify` Step 3a discover it** — explicit `--gates`, else the closed allowlist
-  `{ test, lint, format:check, lint:md, typecheck, type-check, build }` ∩ the project's `package.json`
-  scripts, else **ask the human** (reused, NOT hard-coded `validate.mjs`, P3).
+  `/pharn-verify` Step 3a discover it** — explicit `--gates`, else the closed allowlist (`ALLOWLIST` in
+  `pharn/floor/gate-run-core.mjs`, cited rather than copied) ∩ the project's `package.json` scripts, else
+  **ask the human** (reused, NOT hard-coded `validate.mjs`, P3). **Advisory:** `/pharn-build` Step 4 names its
+  gate in prose, so nothing enforces which allowlist members it runs; the e2e gates in the allowlist are
+  discovered by `/pharn-verify`'s runner, not by this build gate.
 
 `0` → **proceed**; non-zero → **STOP**, present the RED floor, hand to the human. **Fail-closed:** if
 `/pharn-build` **refused before** its floor gate (missing `PLAN.md`/`SPEC.md`, a plan with no parseable

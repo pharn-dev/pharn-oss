@@ -20,7 +20,7 @@ reads:
   ]
 writes: ["pharn/features/<name>/VERIFY.md", "pharn/features/<name>/verify-report.json"]
 constitution_refs: ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7"]
-version: "0.2.0"
+version: "0.3.0"
 ---
 
 # /pharn-verify — did the feature get built CORRECTLY, in the user's codebase?
@@ -181,7 +181,7 @@ yields ≥1 gate wins) — **the same rule `/pharn-regress` uses (P3, reused):**
    token is `command::gate-id` (id defaults to the command).
 2. **Else, membership over a FIXED script-name set in `package.json` `scripts`** (or the project's
    equivalent manifest): intersect the present scripts with the closed allowlist
-   **`{ test, lint, format:check, lint:md, typecheck, type-check, build }`**. This is **pure set
+   **`{ test, lint, format:check, lint:md, typecheck, type-check, build, test:e2e, e2e }`**. This is **pure set
    membership**, not a judgment about "what counts as a check."
 3. **Else (no `--gates`, no recognized scripts)** → **HALT and ask the human** which deterministic gates
    to run (terminal fallback is a question, never a guess).
@@ -195,6 +195,18 @@ yields ≥1 gate wins) — **the same rule `/pharn-regress` uses (P3, reused):**
 
 Do **not** "discover whatever checks the project has" by inspection — that would be LLM classification
 driving a branch (P5 forbidden). The set is the allowlist ∩ present scripts, or the explicit `--gates`.
+
+> **The e2e gates (`test:e2e`, `e2e` — `E2E_SET` in `pharn/floor/gate-run-core.mjs`) are discovered here and at
+> no other stage.** They are discovered like every other member, only when the project has the script, and run
+> last among the project gates, after `build` (eval-pair gates and `reconcile` still follow); a failing `build`
+> does not stop them (a failing gate is data). A red e2e gate fails
+> this stage exactly like a red `test` gate. Starting servers and installing browsers are the script's job.
+> Three costs, stated rather than discovered: an e2e suite is bounded by the same per-gate `--timeout-ms`
+> (540 s) as every other gate, so a longer one cannot be gated by this runner; a project that defines **both**
+> scripts runs both (the `typecheck`/`type-check` precedent), so if `test:e2e` merely calls `e2e`, drop one;
+> and under `/pharn-loop` this stage runs every iteration, so the e2e suite does too. `/pharn-regress` never
+> discovers them (an explicit `--gates` string there is run as written). Per-test results for an e2e gate work as for `test`
+> (`pharn/pharn-contracts/test-results-record.md`).
 
 ### 3b — Add one `structural:<expected>` gate per committed eval pair the feature ships (membership, P5)
 
@@ -567,7 +579,7 @@ gate === 0`), never on model judgment. This is what "verified" means — full st
   membership), the fix #7 setter/hook (Step 0). **No LLM classification drives any branch** — there is no "does this look verified/complete" layer; the verdict is
   `every gate exit 0` then the `--complete` precedence, both integer comparisons.
 - **Gate discovery is a fixed membership test, not classification (Step 3a):** explicit `--gates`, else the
-  closed allowlist `{ test, lint, format:check, lint:md, typecheck, type-check, build }` ∩ the project's
+  closed allowlist `{ test, lint, format:check, lint:md, typecheck, type-check, build, test:e2e, e2e }` ∩ the project's
   present scripts, else **ask the human** (reused verbatim from `/pharn-regress`). **Eval-pair discovery
   (Step 3b)** is likewise filesystem membership over `<capDir>/evals/expected/*.json` ↔ committed
   `findings.json` — absent pair → no gate, never a guess.

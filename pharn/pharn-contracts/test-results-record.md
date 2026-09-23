@@ -32,8 +32,10 @@ A project names the reporter format for each gate in `pharn.config.json`:
 { "testResults": { "test": "vitest-json" } }
 ```
 
-- **Keys** are gate ids from a closed set, `RESULTS_GATES` (`test` in 6.15.0). A key outside it makes the whole
-  block `config-invalid`.
+- **Keys** are gate ids from a closed set, `RESULTS_GATES`: `test`, plus the e2e gates `test:e2e` and `e2e`
+  (6.16.0, `E2E_SET` in `gate-run-core.mjs`). A key outside it makes the whole block `config-invalid`. An e2e
+  gate is discovered at `/pharn-verify` only, so its record exists on a verify stamp — or on a regress stamp only
+  when the caller named the gate in an explicit `--gates` string (never read there).
 - **Values** name only the format, from a closed set, `RESULTS_FORMATS`:
 
 | format            | reporter                              | notes                                     |

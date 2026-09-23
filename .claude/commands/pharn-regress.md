@@ -16,7 +16,7 @@ reads:
   ]
 writes: ["pharn/features/<name>/REGRESSION.md", "pharn/features/<name>/regression-report.json"]
 constitution_refs: ["P0", "P2", "P3", "P4", "P5", "P6", "P7"]
-version: "0.2.1"
+version: "0.3.0"
 ---
 
 # /pharn-regress — detect regressions OUTSIDE the feature, in the user's codebase
@@ -226,13 +226,23 @@ gate set by a **fixed rule**, in order (first that yields ≥1 gate wins):
    token is `command::gate-id` (id defaults to the command).
 2. **Else, membership over a FIXED script-name set in `package.json` `scripts`** (or the project's
    equivalent manifest): intersect the present scripts with the closed allowlist
-   **`{ test, lint, format:check, lint:md, typecheck, type-check, build }`**. This is **pure set
-   membership**, not a judgment about "what counts as a check."
+   **`{ test, lint, format:check, lint:md, typecheck, type-check, build, test:e2e, e2e }`**, **minus the e2e ids `test:e2e` and `e2e`**, which this stage never discovers (below).
+   This is **pure set membership**, not a judgment about "what counts as a check."
 3. **Else (no `--gates`, no recognized scripts)** → **HALT and ask the human** which deterministic gates
    to run (terminal fallback is a question, never a guess).
 
 Do **not** "discover whatever checks the project has" by inspection — that would be LLM classification
 driving a branch (P5 forbidden). The set is the allowlist ∩ present scripts, or the explicit `--gates`.
+
+> **The e2e gates are verify-only, by a fixed rule in the runner.** `resolveSet` drops every `E2E_SET` member
+> (`test:e2e`, `e2e`) from a **discovered** regress source, on both sides (the base copies the head spec), so the
+> stamp's `required` never holds one. A base-side e2e run would double an already expensive stage, and a red e2e
+> gate already fails `/pharn-verify`'s absolute threshold. **The bound:** a regression only an e2e test catches
+> is a verify FAIL, never a regress finding. A project whose only discoverable scripts are e2e scripts gets
+> `empty-source-set` here — the no-gates HALT above. An explicit `--gates` string naming an e2e command is your
+> choice and is run as written. **The drop is never silent:** the head side's `init` prints `e2e_excluded` (the
+> ids it dropped), and `REGRESSION.md` names them as "not run at regress (verify-only)" — copied from that
+> output, never inferred from `package.json`.
 
 ### 4b — Run BOTH sides through the RUNNER (you never type a gate id or capture an exit code)
 
@@ -438,7 +448,7 @@ human reads the report and the verdict's exit code decides the stage.
   setter/hook (Step 0). **No LLM classification drives any branch** — there is no "does this look broken"
   layer (a flipped gate IS a regression).
 - **Gate discovery is a fixed membership test, not classification (Step 4a):** explicit `--gates`, else the
-  closed allowlist `{ test, lint, format:check, lint:md, typecheck, type-check, build }` ∩ the project's
+  closed allowlist `{ test, lint, format:check, lint:md, typecheck, type-check, build, test:e2e, e2e }` (minus the e2e ids) ∩ the project's
   present scripts, else **ask the human**. **Gate classification** (Step 4b) is likewise membership over
   fixed id-sets, with the conservative default = always-run cross-file (never skip when unsure).
 - Terminal fallbacks are always a **question**, never a guess: an unresolvable base (detached / shallow / no

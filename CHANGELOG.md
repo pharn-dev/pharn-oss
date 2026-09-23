@@ -23,6 +23,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.16.0] - 2026-09-23
+
+### Added
+
+- 2026-09-23: **An e2e gate: `/pharn-verify` now discovers a project's `test:e2e` or `e2e` script, runs it after
+  `build`, and can read its per-test results.** `SKILLS_VERSION` 6.15.0 → 6.16.0 (MINOR: a new gate the product discovers). `MIN_CLI`
+  stays 0.5.0. ([`pharn/floor/gate-run-core.mjs`](./pharn/floor/gate-run-core.mjs),
+  [`.claude/commands/pharn-verify.md`](./.claude/commands/pharn-verify.md),
+  [`.dev/features/e2e-gate/`](./.dev/features/e2e-gate/))
+  - **The gap.** Gate discovery was `ALLOWLIST ∩ package.json scripts`, and the allowlist stopped at `build`, so
+    a project's e2e suite never ran. Honest trigger (P7): item 2 of the maintainer's AC-delivery queue, not a
+    dogfood failure. **Not closed here:** nothing yet links an acceptance criterion's `verify: e2e` level to this
+    gate, and a project with no e2e script still has nothing to run such a criterion.
+  - **The rule.** `E2E_SET = ["test:e2e", "e2e"]` joins the end of `ALLOWLIST`. An e2e gate is discovered only
+    when the script exists, runs after `build` (last among the project gates; eval-pair gates and `reconcile`
+    still follow), and a red one fails verify like a red `test` gate. If a project
+    defines both scripts, both run (the `typecheck` / `type-check` precedent). `/pharn-regress` never discovers
+    them: `resolveSet` drops them from a discovered regress source, so a regression only an e2e test catches is
+    a verify FAIL, not a regress finding, and an e2e-only manifest is `empty-source-set` at regress (its refusal
+    says so). An explicit `--gates` string is not filtered. The drop is reported, not silent: the regress head
+    side's `run-gates.mjs init` prints `e2e_excluded`, which `REGRESSION.md` names; the stamp shape is unchanged.
+  - **Per-test results.** `RESULTS_GATES` is now `test` plus `E2E_SET`, so `pharn.config.json` can name
+    `"test:e2e": "playwright-json"`; each gate writes its own results file.
+  - **Costs, stated.** An e2e suite gets the same per-gate 540 s limit as every gate; under `/pharn-loop` it runs
+    every iteration. With no e2e script, the resolved gate set (ids, argv, order, `required`) is unchanged from
+    6.15.0; the stamps themselves are not byte-identical (their fingerprints hash the installed floor files).
+  - **Commands.** `/pharn-verify` 0.3.0 and `/pharn-regress` 0.3.0 name the e2e ids and the exclusion.
+    `/pharn-ship`'s third literal copy of the allowlist is replaced by a citation of `ALLOWLIST`, and
+    `/pharn-loop`'s S4 row now covers an e2e-only project at regress.
+
 ## [6.15.0] - 2026-09-23
 
 ### Added
