@@ -1,5 +1,5 @@
 {
-  "_models_stages_note": "models.stages is the SOURCE OF TRUTH the ten /pharn-* commands' static model:/effort: frontmatter is held to by pharn/floor/check-model-config.mjs. It is NOT a runtime control: nothing reads this block to select a model, and nothing observes what a stage actually ran under. Bounds: LIMITS.md section 8.",
+  "_models_stages_note": "models.stages is the SOURCE OF TRUTH the eleven /pharn-* commands' static model:/effort: frontmatter is held to by pharn/floor/check-model-config.mjs. It is NOT a runtime control: nothing reads this block to select a model, and nothing observes what a stage actually ran under. Bounds: LIMITS.md section 8.",
   "models": {
     "stages": {
       "default": { "model": "sonnet", "effort": "high" },
@@ -12,7 +12,8 @@
       "ship": { "model": "sonnet", "effort": "high" },
       "loop": { "model": "sonnet", "effort": "high" },
       "review": { "model": "opus", "effort": "high" },
-      "memory-promote": { "model": "opus", "effort": "high" }
+      "memory-promote": { "model": "opus", "effort": "high" },
+      "ac-test": { "model": "opus", "effort": "high" }
     }
   },
   "ship": { "requireAttestation": false }

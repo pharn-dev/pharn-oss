@@ -63,6 +63,7 @@
 
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { matchFrontmatter, stripBom } from "./frontmatter-core.mjs";
 
 export const TEMPLATE_KEY = "spec_template";
 // Exactly `spec_template:` at a line start — the one spelling the field parser reads, so `spec_template :` is a
@@ -274,9 +275,13 @@ function inOrder(text, words) {
   return true;
 }
 
-// Rule 2 — the Acceptance Criteria grammar. Pushes findings; returns the number of items parsed.
-function checkAcceptanceCriteria(sec, out) {
+// The Acceptance Criteria ITEM PARSE — the one parser (6.17.0 extracted it from rule 2 so specAcceptanceCriteria()
+// reads the SAME items check-spec.mjs checks; PHARN's own build-loop lesson L6 / the brief's "one parser").
+// Returns the items (id, file line, raw lines), the bold-id token count, and the line numbers that are not part of
+// any item (rule 2 REDs each).
+function parseAcItems(sec) {
   const items = [];
+  const strays = [];
   let tokens = 0;
   for (const { n, text } of sec.lines) {
     tokens += (text.match(AC_TOKEN_RE) || []).length;
@@ -288,10 +293,27 @@ function checkAcceptanceCriteria(sec, out) {
     } else if (items.length && CONTINUATION_RE.test(text)) {
       items[items.length - 1].lines.push(text);
     } else {
-      // CLOSURE (L36): a column-0 paragraph, a `1.` / `*` / `+` item, a heading below h2, an item indented by one
-      // space, or any text before the first item is not part of an AC item, so it is a RED, never absorbed.
-      out.push(["ac", `line ${n}: not an AC item start (\`- **AC-<n>**\`), an indented continuation of one, or blank`]);
+      strays.push(n);
     }
+  }
+  return { items, strays, tokens };
+}
+
+// An item's verify line(s) and the level they name: `level` is a VERIFY_LEVELS member only when there is exactly
+// one verify-like line and it has the one accepted spelling; otherwise `null`.
+function verifyOf(item) {
+  const verify = item.lines.slice(1).filter((l) => VERIFY_LIKE_RE.test(l));
+  const vm = verify.length === 1 ? verify[0].match(VERIFY_RE) : null;
+  return { count: verify.length, level: vm && VERIFY_LEVELS.includes(vm[1]) ? vm[1] : null };
+}
+
+// Rule 2 — the Acceptance Criteria grammar. Pushes findings; returns the number of items parsed.
+function checkAcceptanceCriteria(sec, out) {
+  const { items, strays, tokens } = parseAcItems(sec);
+  for (const n of strays) {
+    // CLOSURE (L36): a column-0 paragraph, a `1.` / `*` / `+` item, a heading below h2, an item indented by one
+    // space, or any text before the first item is not part of an AC item, so it is a RED, never absorbed.
+    out.push(["ac", `line ${n}: not an AC item start (\`- **AC-<n>**\`), an indented continuation of one, or blank`]);
   }
   if (items.length === 0) {
     out.push(["ac", `\`## Acceptance Criteria\` (line ${sec.line}) holds no AC item — at least one \`- **AC-<n>**\` item is required`]);
@@ -308,20 +330,17 @@ function checkAcceptanceCriteria(sec, out) {
   for (const item of items) {
     if (seen.has(item.id)) out.push(["ac", `line ${item.n}: AC-${item.id} is a duplicate id`]);
     seen.add(item.id);
-    const verify = item.lines.slice(1).filter((l) => VERIFY_LIKE_RE.test(l));
-    if (verify.length !== 1) {
+    const verify = verifyOf(item);
+    if (verify.count !== 1) {
       out.push([
         "ac",
-        `line ${item.n}: AC-${item.id} has ${verify.length} verify line(s) — exactly one \`  - verify: <level>\` continuation is required`,
+        `line ${item.n}: AC-${item.id} has ${verify.count} verify line(s) — exactly one \`  - verify: <level>\` continuation is required`,
       ]);
-    } else {
-      const vm = verify[0].match(VERIFY_RE);
-      if (!vm || !VERIFY_LEVELS.includes(vm[1])) {
-        out.push([
-          "ac",
-          `line ${item.n}: AC-${item.id}'s verify line is not \`  - verify: <level>\` with level in {${VERIFY_LEVELS.join(", ")}}`,
-        ]);
-      }
+    } else if (verify.level === null) {
+      out.push([
+        "ac",
+        `line ${item.n}: AC-${item.id}'s verify line is not \`  - verify: <level>\` with level in {${VERIFY_LEVELS.join(", ")}}`,
+      ]);
     }
     const text = item.lines.filter((l) => !VERIFY_LIKE_RE.test(l)).join("\n");
     if (!inOrder(text, ["Given", "When", "Then"])) {
@@ -329,6 +348,32 @@ function checkAcceptanceCriteria(sec, out) {
     }
   }
   return items.length;
+}
+
+/**
+ * A templated SPEC's Acceptance Criteria as DATA (6.17.0): each item's id (`AC-<n>`) and its `verify:` level, read
+ * through the SAME item parser rule 2 checks with (parseAcItems / verifyOf) — so the ids this returns are the ids
+ * check-spec.mjs counted, never a second reading of the section.
+ *
+ * Pure: the SPEC's full text in, no filesystem. A SPEC with no frontmatter, or without a `spec_template` line, is
+ * LEGACY: `{templated: false, items: []}` — a legacy SPEC has no AC ids. A templated SPEC whose Acceptance Criteria
+ * section is absent, hidden or duplicated yields `items: []` and `sections` ≠ 1, which check-spec.mjs REDs on its
+ * own; a caller that needs ids must treat that as unusable rather than as "no criteria". An item whose verify line
+ * is malformed carries `level: null`.
+ *
+ * @param {string} text  the SPEC.md source
+ * @returns {{templated: boolean, sections: number, items: {id: string, level: string|null, line: number}[]}}
+ */
+export function specAcceptanceCriteria(text) {
+  const src = stripBom(String(text));
+  const fmMatch = matchFrontmatter(src);
+  if (!fmMatch || !isTemplated({}, fmMatch[1])) return { templated: false, sections: 0, items: [] };
+  const body = src.slice(fmMatch[0].length);
+  const firstLine = (fmMatch[0].match(/\n/g) || []).length + 1;
+  const acs = sectionsOf(body, firstLine).sections.filter((s) => s.name === "acceptance criteria");
+  if (acs.length !== 1) return { templated: true, sections: acs.length, items: [] };
+  const items = parseAcItems(acs[0]).items.map((it) => ({ id: `AC-${it.id}`, level: verifyOf(it).level, line: it.n }));
+  return { templated: true, sections: 1, items };
 }
 
 // Rule 4 — a non-goal under `## Scope`: a column-0 `**Out of scope…**` label followed by at least one entry, either

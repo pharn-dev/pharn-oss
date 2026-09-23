@@ -123,6 +123,11 @@ const PIPELINE_ARTIFACTS = [
   "cost.json",
   "LOOP.md",
   "RUN-REPORT.md",
+  // Written BEFORE the build (by /pharn-plan and /pharn-test, 6.17.0): exempt HERE because they changed since base by
+  // design. For RECONCILE, AC-TESTS.md is exempt like PLAN.md (a re-plan rewrites it), but the LOCK is not —
+  // reconcile-ignore.json lists it under `pre_anchor_artifacts`.
+  "AC-TESTS.md",
+  "AC-TESTS.lock.json",
 ];
 
 // /pharn-review writes one findings.json per lens, NESTED: pharn/features/<name>/lenses/<lens>/findings.json.

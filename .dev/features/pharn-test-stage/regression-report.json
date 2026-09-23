@@ -1,0 +1,58 @@
+{
+  "base": "7e9ed526a450c06218be4fa9aeeb505228be30fd",
+  "inside": [
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-plan.md",
+    ".claude/commands/pharn-regress.md",
+    ".claude/commands/pharn-spec.md",
+    ".claude/commands/pharn-test.md",
+    ".dev/features/pharn-test-stage/GRILL.md",
+    ".dev/features/pharn-test-stage/PLAN.md",
+    ".dev/features/pharn-test-stage/PROTECTED-FOLLOWUPS.md",
+    ".dev/features/pharn-test-stage/REGRESSION.md",
+    ".dev/features/pharn-test-stage/REVIEW.md",
+    ".dev/features/pharn-test-stage/VERIFY.md",
+    ".dev/features/pharn-test-stage/regression-report.json",
+    ".dev/features/pharn-test-stage/verify-report.json",
+    ".dev/floor/check-config.mjs",
+    ".dev/floor/command-hygiene.test.mjs",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn.config.json",
+    "pharn/features/README.md",
+    "pharn/floor/ac-tests-lock.mjs",
+    "pharn/floor/ac-tests-lock.test.mjs",
+    "pharn/floor/check-ac-tests.mjs",
+    "pharn/floor/check-ac-tests.test.mjs",
+    "pharn/floor/check-bash-reconcile.test.mjs",
+    "pharn/floor/check-build-complete.test.mjs",
+    "pharn/floor/check-model-config.mjs",
+    "pharn/floor/check-model-config.test.mjs",
+    "pharn/floor/check-regress.mjs",
+    "pharn/floor/plan-files-core.mjs",
+    "pharn/floor/reconcile-ignore.json",
+    "pharn/floor/spec-template-core.mjs",
+    "pharn/floor/worktree-fingerprint.mjs",
+    "pharn/floor/worktree-fingerprint.test.mjs",
+    "pharn/pharn-contracts/ac-tests.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

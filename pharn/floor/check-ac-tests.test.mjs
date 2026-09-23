@@ -1,0 +1,416 @@
+// pharn/floor/check-ac-tests.test.mjs — the AC-tests mapping checker's suite, plus specAcceptanceCriteria()
+// (spec-template-core.mjs), which exists for this checker.
+//
+// Every RED kind has ONE mutation of the passing world that trips it and no other kind (L34/L52), with the passing
+// world as its non-vacuity control; `no-files` is the one kind that cannot be isolated (a mapping line whose file is
+// not listed is also `unlisted-file`), and its test says so. The last test asserts that every KINDS member was
+// reached (L36). The ★ HOOK test runs the REAL writes-scope setter and pre-write guard: a build scoped by PLAN.md is
+// denied a Write to an AC test file, which is the property the `in-plan-files` kind exists to protect.
+
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { KINDS, LEVELS, MAPPING_RE, badPath, checkMapping, mappingOf } from "./check-ac-tests.mjs";
+import { specAcceptanceCriteria } from "./spec-template-core.mjs";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const CHECK = join(HERE, "check-ac-tests.mjs");
+const CHECK_SPEC = join(HERE, "check-spec.mjs");
+const SETTER = join(HERE, "..", "..", ".claude", "hooks", "set-writes-scope.cjs");
+const ENFORCER = join(HERE, "..", "..", ".claude", "hooks", "enforce-writes-scope.cjs");
+const TEMPLATE = readFileSync(join(HERE, "..", "pharn-contracts", "templates", "spec-template.md"), "utf8");
+const REF = spawnSync(process.execPath, [CHECK_SPEC, "--template-ref", "pharn-default"], { encoding: "utf8" }).stdout.trim();
+const NAME = "demo";
+const UNIT = "tests/ac/demo.unit.test.js";
+const E2E = "tests/ac/demo.e2e.spec.js";
+
+/** A templated SPEC from the SHIPPED template: AC-1 at `unit`, AC-2 at `e2e`; Approved + pinned unless `draft`. */
+function specText({ draft = false, legacy = false } = {}) {
+  let t = TEMPLATE.replace(/<!--\s*pharn:guidance[\s\S]*?-->\n?/g, "")
+    .replace("spec_id: <name>", `spec_id: ${NAME}`)
+    .replace("<the line check-spec.mjs --resolve-template-ref prints>", REF)
+    .replace("<unit | integration | e2e>", "unit")
+    .replace(/<[^>\n]+>/g, "filled");
+  t = t.replace("  - verify: unit\n", "  - verify: unit\n- **AC-2** Given a user When they reset Then a mail is sent\n  - verify: e2e\n");
+  if (legacy) t = t.replace(/^spec_template:.*\n/m, "");
+  if (draft) return t;
+  const tmp = mkdtempSync(join(tmpdir(), "act-spec-"));
+  try {
+    writeFileSync(join(tmp, "SPEC.md"), t);
+    const hash = spawnSync(process.execPath, [CHECK_SPEC, "--hash", join(tmp, "SPEC.md")], { encoding: "utf8" }).stdout.trim();
+    return t.replace("state: Draft", "state: Approved").replace('spec_content_hash: ""', `spec_content_hash: ${hash}`);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+const SPEC = specText();
+const HASH = SPEC.match(/^spec_content_hash: ([0-9a-f]{64})$/m)[1];
+
+function acTests({ hash = HASH, files = [UNIT, E2E], mapping } = {}) {
+  const rows = mapping ?? [
+    `- AC-1 | unit | \`${UNIT}\` | src/demo.js#reset(token): Promise<void>`,
+    `- AC-2 | e2e | \`${E2E}\` | /reset — button "Reset password"`,
+  ];
+  return [
+    "---",
+    `spec_id: ${NAME}`,
+    `spec_content_hash: ${hash}`,
+    "---",
+    "",
+    "# AC tests — demo",
+    "",
+    "## Files",
+    "",
+    ...files.map((f) => `- \`${f}\` — an AC test`),
+    "",
+    "## Mapping",
+    "",
+    ...rows,
+    "",
+  ].join("\n");
+}
+function planText(files = ["src/demo.js"]) {
+  return [
+    "---",
+    `spec_id: ${NAME}`,
+    `spec_content_hash: ${HASH}`,
+    "applied_lessons: none",
+    "---",
+    "",
+    "## Files",
+    "",
+    ...files.map((f) => `- \`${f}\` — x`),
+    "",
+  ].join("\n");
+}
+
+/** A project root holding the feature; `others` is `{feature: AC-TESTS.md text}` for other feature dirs. */
+function world({ spec = SPEC, ac = acTests(), plan = planText(), others = {} } = {}) {
+  const root = mkdtempSync(join(tmpdir(), "act-"));
+  const dir = join(root, "pharn", "features", NAME);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "SPEC.md"), spec);
+  writeFileSync(join(dir, "AC-TESTS.md"), ac);
+  writeFileSync(join(dir, "PLAN.md"), plan);
+  for (const [f, text] of Object.entries(others)) {
+    mkdirSync(join(root, "pharn", "features", f), { recursive: true });
+    writeFileSync(join(root, "pharn", "features", f, "AC-TESTS.md"), text);
+  }
+  return root;
+}
+function run(root, extra = []) {
+  const f = (n) => `pharn/features/${NAME}/${n}`;
+  const r = spawnSync(process.execPath, [CHECK, f("AC-TESTS.md"), f("SPEC.md"), f("PLAN.md"), ...extra], { cwd: root, encoding: "utf8" });
+  const kinds = [...new Set([...r.stdout.matchAll(/^RED — ([a-z-]+):/gm)].map((m) => m[1]))].sort();
+  return { code: r.status, out: r.stdout, kinds };
+}
+const REACHED = new Set();
+function onlyKind(opts, kind, extra) {
+  const root = world(opts);
+  try {
+    const r = run(root, extra);
+    assert.equal(r.code, 1, r.out);
+    assert.deepEqual(r.kinds, [kind], `expected ONLY ${kind}:\n${r.out}`);
+    REACHED.add(kind);
+    return r;
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------
+// specAcceptanceCriteria — the AC ids as data, through check-spec's own parser.
+// ---------------------------------------------------------------------------------------------------
+
+test("specAcceptanceCriteria: a templated SPEC → its AC ids and verify levels, in order", () => {
+  const r = specAcceptanceCriteria(SPEC);
+  assert.equal(r.templated, true);
+  assert.equal(r.sections, 1);
+  assert.deepEqual(
+    r.items.map((i) => [i.id, i.level]),
+    [
+      ["AC-1", "unit"],
+      ["AC-2", "e2e"],
+    ]
+  );
+});
+
+test("specAcceptanceCriteria agrees with check-spec.mjs's own AC count (one parser, not two)", () => {
+  const tmp = mkdtempSync(join(tmpdir(), "act-agree-"));
+  try {
+    writeFileSync(join(tmp, "SPEC.md"), SPEC);
+    const r = spawnSync(process.execPath, [CHECK_SPEC, join(tmp, "SPEC.md")], { encoding: "utf8" });
+    assert.equal(r.status, 0, r.stdout);
+    const counted = Number(r.stdout.match(/(\d+) AC item\(s\)/)[1]);
+    assert.equal(specAcceptanceCriteria(SPEC).items.length, counted);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("specAcceptanceCriteria: legacy (no spec_template, or no frontmatter) → no ids; a duplicated section → sections 2, no ids", () => {
+  assert.deepEqual(specAcceptanceCriteria(specText({ legacy: true })), { templated: false, sections: 0, items: [] });
+  assert.deepEqual(specAcceptanceCriteria("## Acceptance Criteria\n- **AC-1** Given a When b Then c\n  - verify: unit\n"), {
+    templated: false,
+    sections: 0,
+    items: [],
+  });
+  const dup = SPEC + "\n## Acceptance Criteria\n\n- **AC-3** Given a When b Then c\n  - verify: unit\n";
+  const r = specAcceptanceCriteria(dup);
+  assert.equal(r.sections, 2);
+  assert.deepEqual(r.items, []);
+  // A malformed verify line carries level null (the shipped template's placeholder example is one).
+  assert.equal(specAcceptanceCriteria(TEMPLATE.replace(/<!--\s*pharn:guidance[\s\S]*?-->\n?/g, "")).items[0].level, null);
+});
+
+// ---------------------------------------------------------------------------------------------------
+// The checker — control, then one mutation per kind.
+// ---------------------------------------------------------------------------------------------------
+
+test("control: the passing world is GREEN (every mutation below starts here)", () => {
+  const root = world();
+  try {
+    const r = run(root);
+    assert.equal(r.code, 0, r.out);
+    assert.match(r.out, /^GREEN — 2 AC\(s\) mapped/m);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("legacy-spec — in FULL mode a mapping for a SPEC without spec_template is RED (the key was removed after mapping)", () => {
+  onlyKind({ spec: specText({ legacy: true }) }, "legacy-spec");
+});
+
+test("--spec mode decides templated vs legacy BEFORE any mapping exists: 0 / 3 / 2", () => {
+  const root = world();
+  try {
+    const f = (n) => `pharn/features/${NAME}/${n}`;
+    const spec = (text) => {
+      writeFileSync(join(root, f("SPEC.md")), text);
+      return spawnSync(process.execPath, [CHECK, "--spec", f("SPEC.md")], { cwd: root, encoding: "utf8" });
+    };
+    const t = spec(SPEC);
+    assert.equal(t.status, 0, t.stdout);
+    assert.match(t.stdout, /TEMPLATED — 2 AC\(s\): AC-1 \(unit\), AC-2 \(e2e\)/);
+    assert.equal(spec(specText({ legacy: true })).status, 3);
+    assert.equal(spec(SPEC + "\n## Acceptance Criteria\n\n- **AC-3** Given a When b Then c\n  - verify: unit\n").status, 2);
+    assert.equal(spawnSync(process.execPath, [CHECK, "--spec", "nope.md"], { cwd: root }).status, 2);
+    assert.equal(spawnSync(process.execPath, [CHECK, "--spec"], { cwd: root }).status, 2);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("pin — a stale spec_content_hash, and a Draft SPEC (the shelled chain refuses both)", () => {
+  onlyKind({ ac: acTests({ hash: "0".repeat(64) }) }, "pin");
+  onlyKind({ spec: specText({ draft: true }) }, "pin");
+});
+
+test("malformed-line — a line under ## Mapping outside the grammar", () => {
+  const rows = [`- AC-1 | unit | \`${UNIT}\` | t`, `- AC-2 | e2e | \`${E2E}\` | t`, "- AC-1 unit tests/x.js"];
+  onlyKind({ ac: acTests({ mapping: rows }) }, "malformed-line");
+});
+
+test("missing-ac — a SPEC AC with no line (its file removed too, so nothing else trips)", () => {
+  onlyKind({ ac: acTests({ files: [UNIT], mapping: [`- AC-1 | unit | \`${UNIT}\` | t`] }) }, "missing-ac");
+});
+
+test("duplicate-ac — the same AC mapped twice", () => {
+  const rows = [`- AC-1 | unit | \`${UNIT}\` | t`, `- AC-1 | unit | \`${UNIT}\` | u`, `- AC-2 | e2e | \`${E2E}\` | t`];
+  onlyKind({ ac: acTests({ mapping: rows }) }, "duplicate-ac");
+});
+
+test("unknown-ac — a mapped id the SPEC does not have", () => {
+  const rows = [`- AC-1 | unit | \`${UNIT}\` | t`, `- AC-2 | e2e | \`${E2E}\` | t`, `- AC-9 | unit | \`${UNIT}\` | t`];
+  onlyKind({ ac: acTests({ mapping: rows }) }, "unknown-ac");
+});
+
+test("level-mismatch — AC-2 mapped at unit where the SPEC says e2e", () => {
+  const rows = [`- AC-1 | unit | \`${UNIT}\` | t`, `- AC-2 | unit | \`${E2E}\` | t`];
+  onlyKind({ ac: acTests({ mapping: rows }) }, "level-mismatch");
+});
+
+test("unlisted-file — a mapped file missing from ## Files", () => {
+  onlyKind({ ac: acTests({ files: [UNIT] }) }, "unlisted-file");
+});
+
+test("unmapped-file — a ## Files entry no line maps", () => {
+  onlyKind({ ac: acTests({ files: [UNIT, E2E, "tests/ac/helper.js"] }) }, "unmapped-file");
+});
+
+test("in-plan-files — a test file in PLAN.md ## Files, where the build would be scoped to it", () => {
+  onlyKind({ plan: planText(["src/demo.js", UNIT]) }, "in-plan-files");
+});
+
+test("in-plan-files compares what the SETTER scopes: a `(gated)` annotation and a case variant are both caught", () => {
+  // The review's blocking probe: the setter strips ` (gated)` and APFS folds case, so both would let the build write
+  // the AC test while a raw string compare passed.
+  onlyKind({ plan: planText(["src/demo.js", `${UNIT} (gated)`]) }, "in-plan-files");
+  onlyKind({ plan: planText(["src/demo.js", UNIT.replace("tests/", "Tests/")]) }, "in-plan-files");
+  // Control: a DIFFERENT file with a parenthesised name is not the AC test file.
+  const root = world({ plan: planText(["src/demo.js", "src/demo(unit).js"]) });
+  try {
+    assert.equal(run(root).code, 0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("claimed-elsewhere — another feature's AC-TESTS.md already owns the file (default --features-dir, L41)", () => {
+  const other = acTests({ files: [E2E], mapping: [] }).replace(`spec_id: ${NAME}`, "spec_id: other");
+  const r = onlyKind({ others: { other } }, "claimed-elsewhere");
+  assert.match(r.out, /feature "other"/);
+});
+
+test("claimed-elsewhere honours an explicit --features-dir, and a dir outside it is not consulted", () => {
+  const other = acTests({ files: [E2E], mapping: [] });
+  const root = world({ others: { other } });
+  const empty = mkdtempSync(join(tmpdir(), "act-empty-"));
+  try {
+    assert.equal(run(root, ["--features-dir", empty]).code, 0, "a features dir with no other feature cannot claim the file");
+    assert.deepEqual(run(root, ["--features-dir", join(root, "pharn", "features")]).kinds, ["claimed-elsewhere"]);
+    assert.equal(run(root, ["--features-dir"]).code, 2, "a flag with no value is unusable, never a guess");
+    assert.equal(
+      run(root, ["--features-dir", join(root, "no-such-dir")]).code,
+      2,
+      "a missing features dir would make claimed-elsewhere vacuous"
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(empty, { recursive: true, force: true });
+  }
+});
+
+test("bad-path — every rejected shape (L52), each listed AND mapped so nothing else trips", () => {
+  for (const p of [
+    "tests/<x>.js",
+    "tests/*.js",
+    "/abs/x.test.js",
+    "./tests/x.test.js",
+    "tests/../x.test.js",
+    "tests//x.test.js",
+    "tests/dir/",
+    ".pharn/x.test.js",
+    "pharn/features/demo/x.test.js",
+  ]) {
+    const rows = [`- AC-1 | unit | \`${p}\` | t`, `- AC-2 | e2e | \`${E2E}\` | t`];
+    onlyKind({ ac: acTests({ files: [p, E2E], mapping: rows }) }, "bad-path");
+  }
+  assert.equal(badPath("tests/ac/x.test.js"), null, "control: a plain repo-relative path is fine");
+});
+
+test("no-files — no ## Files list (it cannot be isolated: every mapped file is then also unlisted)", () => {
+  const root = world({ ac: acTests().replace(/## Files\n\n(- .*\n)+/, "") });
+  try {
+    const r = run(root);
+    assert.equal(r.code, 1);
+    assert.ok(r.kinds.includes("no-files"), r.out);
+    assert.deepEqual(r.kinds, ["no-files", "unlisted-file"]);
+    REACHED.add("no-files");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a missing ## Mapping section is malformed-line; a SPEC whose AC section is duplicated is refused, never read as 'nothing to map'", () => {
+  const noMap = checkMapping({
+    acTestsText: acTests().replace(/## Mapping[\s\S]*$/, ""),
+    specText: SPEC,
+    planText: planText(),
+    others: [],
+  });
+  assert.ok(noMap.findings.some((f) => f.kind === "malformed-line"));
+  const dup = SPEC + "\n## Acceptance Criteria\n\n- **AC-3** Given a When b Then c\n  - verify: unit\n";
+  const r = checkMapping({ acTestsText: acTests(), specText: dup, planText: planText(), others: [] });
+  assert.ok(r.findings.some((f) => f.kind === "missing-ac" && /absent, duplicated or empty/.test(f.detail)));
+});
+
+test("a second ## Mapping section is malformed-line (only one is read)", () => {
+  onlyKind({ ac: acTests() + "\n## Mapping\n\n- AC-1 | unit | `x.js` | t\n" }, "malformed-line");
+});
+
+test("unusable input → exit 2: a missing file, and bad usage", () => {
+  const root = world();
+  try {
+    rmSync(join(root, "pharn", "features", NAME, "PLAN.md"));
+    assert.equal(run(root).code, 2);
+    assert.equal(spawnSync(process.execPath, [CHECK], { cwd: root }).status, 2);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the mapping grammar: MAPPING_RE and mappingOf over every level (L52), stopping at the next heading", () => {
+  for (const level of LEVELS) assert.match(`- AC-1 | ${level} | \`t.js\` | x`, MAPPING_RE);
+  for (const bad of [
+    "- AC-01 | unit | `t.js` | x",
+    "- AC-1 | smoke | `t.js` | x",
+    "- AC-1 | unit | t.js | x",
+    "- AC-1 | unit | `t.js` |",
+  ]) {
+    assert.doesNotMatch(bad, MAPPING_RE, bad);
+  }
+  const m = mappingOf("## Mapping\n\n- AC-1 | unit | `a.js` | x\n\n## Next\n- AC-2 | unit | `b.js` | y\n");
+  assert.deepEqual(
+    m.rows.map((r) => r.id),
+    ["AC-1"]
+  );
+  assert.deepEqual(mappingOf("no section"), { present: false, rows: [], malformed: [], extraSections: 0 });
+});
+
+// ---------------------------------------------------------------------------------------------------
+// ★ HOOK — the property `in-plan-files` protects, through the REAL setter and pre-write guard.
+// ---------------------------------------------------------------------------------------------------
+
+test("★ HOOK — a build scoped --from-plan PLAN.md is DENIED a Write to an AC test file; --from-plan AC-TESTS.md allows it", () => {
+  const root = world();
+  try {
+    execFileSync("git", ["init", "-q", "."], { cwd: root });
+    const env = { ...process.env, CLAUDE_PROJECT_DIR: root };
+    const setScope = (file) =>
+      assert.equal(spawnSync(process.execPath, [SETTER, "--from-plan", `pharn/features/${NAME}/${file}`], { cwd: root, env }).status, 0);
+    const write = (p) =>
+      spawnSync(process.execPath, [ENFORCER], {
+        cwd: root,
+        env,
+        input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: join(root, p) } }),
+        encoding: "utf8",
+      }).status;
+    setScope("PLAN.md"); // the build's scope (pharn-build.md Step 0)
+    assert.equal(write(UNIT), 2, "the build was allowed to write an AC test file");
+    assert.equal(write("src/demo.js"), 0, "control: the build may write its own file");
+    setScope("AC-TESTS.md"); // /pharn-test's scope
+    assert.equal(write(UNIT), 0, "/pharn-test was denied its own test file");
+    assert.equal(write("src/demo.js"), 2, "/pharn-test was allowed an implementation file");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------------------------------
+// Closure (L36): every kind literal the checker emits is a member, and every member was reached above.
+// ---------------------------------------------------------------------------------------------------
+
+test("✧ L36 CLOSURE — every kind literal in check-ac-tests.mjs is a KINDS member", () => {
+  const src = readFileSync(CHECK, "utf8");
+  const found = new Set([...src.matchAll(/\bred\("([a-z-]+)"/g)].map((m) => m[1]));
+  found.add("pin");
+  assert.ok(found.size > 5);
+  assert.deepEqual(
+    [...found].filter((k) => !KINDS.includes(k)),
+    []
+  );
+  assert.deepEqual([...KINDS].sort(), [...KINDS], "KINDS is sorted");
+});
+
+test("✧ L36 REVERSE CLOSURE — every KINDS member was reached by a test in this file", () => {
+  assert.deepEqual(
+    KINDS.filter((k) => !REACHED.has(k)),
+    []
+  );
+});

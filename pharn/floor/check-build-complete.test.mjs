@@ -213,6 +213,54 @@ test("★ PARITY: `declared` equals set-writes-scope.cjs's `--from-plan` scope o
 // own `.cjs` suite, so this copy carried a twice-wrong rule with nothing ranging over it (L31 — the
 // second copy is where the obligation drops). This closes that, and does it as a PARITY case so the two
 // implementations are held to the same answer rather than merely each to itself.
+test("★ PARITY: clean() strips only a SPACE-separated trailing annotation, exactly as the setter does (6.17.0)", () => {
+  const root = mkdtempSync(join(tmpdir(), "pharn-complete-"));
+  try {
+    const plan = join(root, "PLAN.md");
+    writeFileSync(
+      plan,
+      ["# PLAN — clean fixture", "", "## Files", "", "- `src/a(b)` — no space: part of the name", "- `src/c.mjs (gated)` — x", ""].join(
+        "\n"
+      )
+    );
+    const s = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
+    assert.equal(s.status, 0, `setter failed: ${s.stderr}`);
+    const scope = JSON.parse(readFileSync(join(root, ".pharn", "writes-scope.json"), "utf8")).scope.sort();
+    const declared = [...json(run([plan, root])).declared].sort();
+    assert.deepEqual(declared, scope, "the core and the setter disagreed about a parenthesised name");
+    assert.deepEqual(scope, ["src/a(b)", "src/c.mjs"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("★ PARITY: a WRAPPED path-item description containing the cue does NOT truncate either parser (6.17.0)", () => {
+  // The rule the setter had and this core lacked: an indented line while a path-item's body is open is that
+  // item's own wrapped text. Mutation control: the SAME words after a blank line are a cue in both.
+  const root = mkdtempSync(join(tmpdir(), "pharn-complete-"));
+  try {
+    const plan = join(root, "PLAN.md");
+    const write = (lines) => writeFileSync(plan, ["# PLAN — wrap fixture", "", "## Files", "", ...lines, ""].join("\n"));
+    const both = () => {
+      const s = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
+      assert.equal(s.status, 0, `setter failed: ${s.stderr}`);
+      const scope = JSON.parse(readFileSync(join(root, ".pharn", "writes-scope.json"), "utf8")).scope;
+      return { scope: [...scope].sort(), declared: [...json(run([plan, root])).declared].sort() };
+    };
+    write(["- `src/a.mjs` — the adapter; everything the SPEC calls", "  out of scope stays untouched", "- `src/b.mjs` — y"]);
+    const wrapped = both();
+    assert.deepEqual(wrapped.declared, wrapped.scope, "the two parsers disagreed about a wrapped description");
+    assert.deepEqual(wrapped.scope, ["src/a.mjs", "src/b.mjs"], "a wrapped description truncated the list");
+    // Control: separated by a blank line, the same words are a head-less cue — both parsers stop.
+    write(["- `src/a.mjs` — the adapter", "", "  out of scope stays untouched", "- `src/b.mjs` — y"]);
+    const cue = both();
+    assert.deepEqual(cue.declared, cue.scope);
+    assert.deepEqual(cue.scope, ["src/a.mjs"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("★ PARITY: a head-less exclusion CUE truncates both parsers, and its two exemptions do not", () => {
   const root = mkdtempSync(join(tmpdir(), "pharn-complete-"));
   try {

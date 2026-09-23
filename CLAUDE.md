@@ -282,8 +282,10 @@ node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
 # build, not at review. `reconcile` is the opposite case and IS a gate, exactly as it is today.
 # THE FINGERPRINT'S TWO EXCLUSIONS answer a DIFFERENT question from reconcile-ignore.json's (L39): reconcile
 # asks "may this change after the build anchor?", this asks "does a change here alter what the gates
-# judged?". They diverge on SPEC/PLAN/GRILL/BUILD.md, which reconcile exempts and this INCLUDES. A partition
-# test pins EXCLUDED u INCLUDED == reconcile-ignore.json pipeline_artifacts.names, so a new pipeline artifact
+# judged?". They diverge on SPEC/PLAN/GRILL/BUILD.md, which reconcile exempts and this INCLUDES (and, since
+# 6.17.0, AC-TESTS.md / AC-TESTS.lock.json, which this INCLUDES and reconcile does NOT exempt either — they are
+# `pre_anchor_artifacts`, written before the build's anchor). A partition test pins EXCLUDED u INCLUDED ==
+# reconcile-ignore.json pipeline_artifacts.names u pre_anchor_artifacts.names, so a new pipeline artifact
 # fails CI until someone classifies it for both consumers — and its bound is L43's: it certifies the three
 # stores AGREE, never that the set is correct. `.pharn/` is excluded EXPLICITLY and that is load-bearing in
 # THIS increment, not only the next: enumerate() derives exclusion from git-ignore, so in an install that
@@ -328,6 +330,26 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # (a failed test or suite error under exit 0) narrows a forgery, never closes it. No stage reads the record in
 # 6.15.0: verdicts are unchanged for every stamp the runner writes, but a malformed results_sha256 is now
 # stamp-malformed and a results path the runner cannot clear is refused. Contract: pharn/pharn-contracts/test-results-record.md.
+
+# AC TESTS BEFORE THE BUILD (added 6.17.0) — /pharn-test writes each Acceptance Criterion's test BEFORE /pharn-build,
+# from the Approved SPEC, the PLAN and pharn/features/<name>/AC-TESTS.md, which /pharn-plan writes (Step 4c, templated
+# SPEC only): frontmatter spec_id + spec_content_hash, `## Files` = exactly the test files (it is /pharn-test's
+# --from-plan scope), `## Mapping` = one `- AC-<n> | <level> | `<file>` | <public target>` line per AC. check-ac-tests.mjs
+# REDs on a closed kind set (missing/duplicate/unknown AC, level-mismatch, unlisted/unmapped file, in-plan-files — the
+# build's scope would cover it —, claimed-elsewhere, bad-path, no-files, malformed-line, pin via the SHELLED
+# check-plan-spec-agree.mjs); exit 0/1/2. ac-tests-lock.mjs --write/--check pins the tests in
+# AC-TESTS.lock.json (schema ac-tests-lock/1, closed keys, red_run/test_infra reserved for later stages); --check
+# names a PATH, never content. AC-TESTS.md and the lock are PIPELINE_ARTIFACTS (regress-exempt); for reconcile
+# AC-TESTS.md is exempt like PLAN.md (a re-plan rewrites it) but the LOCK is `pre_anchor_artifacts` (NOT exempt).
+# Paths are compared as the setter SCOPES them (clean + isConcrete, case-folded). `--spec <SPEC.md>` decides
+# templated (0) / legacy (3) before any mapping exists; in full mode a legacy SPEC with a mapping is RED.
+# /pharn-regress's --declared is PLAN `## Files` u AC-TESTS.md `## Files`. BOUNDS: the build exclusion holds for the
+# PLAN.md checked (a later PLAN edit reopens it; /pharn-build does not re-check in 6.17.0); /pharn-test runs before the
+# reconcile anchor, so its own Bash writes are not reconciled; the tests' quality and "read only SPEC/PLAN" are
+# advisory. Standalone in 6.17.0: /pharn-ship and /pharn-loop do not call it. Contract: pharn/pharn-contracts/ac-tests.md.
+node pharn/floor/check-ac-tests.mjs <AC-TESTS.md> <SPEC.md> <PLAN.md> [--features-dir <dir>]
+node pharn/floor/check-ac-tests.mjs --spec <SPEC.md>
+node pharn/floor/ac-tests-lock.mjs (--write | --check) <name> [--base <features-dir>]
 
 # FRESHNESS — /pharn-loop reads a stop only from evidence that belongs to THIS tree (added 6.10.0).
 # THE RECORDED FAILURE (P7): CHANGELOG 6.3.0's unattended /pharn-loop run skipped /pharn-grill, /pharn-regress
@@ -631,10 +653,11 @@ node pharn/floor/check-lessons-index.mjs [target-dir] [--verdict]
 node .dev/floor/check-provenance.mjs <candidate.json> <canon-file.md>
 
 # PRODUCT-surface twin of check-config (below), but NOT a copy-pair: hold pharn.config.json's
-# `models.stages` in EQUALITY with the TEN /pharn-* product commands' platform `model:`/`effort:`
+# `models.stages` in EQUALITY with the ELEVEN /pharn-* product commands' platform `model:`/`effort:`
 # frontmatter. Same three modes (validate | resolve <stage> | agreement) and the same primitive #3, over a
 # DIFFERENT closed map (PRODUCT_STAGES: spec plan grill build regress verify ship loop review
-# memory-promote), a DIFFERENT filename prefix, and a DIFFERENT fresh-install posture. The DISTINCT
+# memory-promote ac-test — `ac-test` is the one key that is not its file stem, `pharn-test.md`, so the reverse
+# pass tests the map's FILE names), a DIFFERENT filename prefix, and a DIFFERENT fresh-install posture. The DISTINCT
 # BASENAME is deliberate: unlike check-provenance / lessons-index-core, the two files share almost no
 # substance, so no ✧ shared-constant obligation set is implied.
 # MECHANISM, read live (P6): Claude Code selects a command's model from STATIC FRONTMATTER and nothing
@@ -674,7 +697,7 @@ node pharn/floor/check-model-config.mjs [validate | resolve <stage> | agreement]
 #   (2) the pharn.config.json the INSTALLER writes into a USER's project — skillsVersion + the exact
 #       installed commit, which `pharn status` / `pharn update` compare against SKILLS_VERSION.
 # `models.stages` is NO LONGER dev-apparatus-only: since 3.2.0 the SAME map is the source of truth for
-# the ten PRODUCT commands' frontmatter (check-model-config.mjs, above). This checker therefore scopes
+# the eleven PRODUCT commands' frontmatter (check-model-config.mjs, above). This checker therefore scopes
 # its agreement to a CLOSED `DEV_WIRED` set {plan, build, review} rather than "every non-default config
 # stage" — otherwise a product-only key (`spec`, `loop`) would send it looking for a pharn-dev-spec.md
 # that does not exist and RED a correct repo. A materialized set, NOT a filesystem probe: an existence
@@ -750,7 +773,7 @@ echo '{"tool_name":"Edit","tool_input":{"file_path":"pharn/CONSTITUTION.md"}}' |
 echo '{"tool_name":"Write","tool_input":{"file_path":"pharn/pharn-core/rules/x.md"}}' | node .claude/hooks/protect-trusted-paths.cjs  # → exit 0, allowed
 ```
 
-- **Slash commands `/pharn-dev-plan`, `/pharn-dev-build`, `/pharn-dev-review`** (`.claude/commands/*.md`) are the core workflow. **Command-naming convention (dev/product boundary):** build-apparatus commands carry the **`pharn-dev-`** prefix (contributor tooling — `pharn-dev-plan` / `-build` / `-grill` / `-regress` / `-verify` / `-review` / `-ship` / `-memory-promote` / `-eval`); **product** commands carry **`pharn-`** without `-dev-` (what a PHARN user runs — `/pharn-spec` / `-plan` / `-grill` / `-build` / `-regress` / `-verify` / `-ship` / `-review` / `-loop` / `-memory-promote`, now built). The split is by **name (prefix)**, since `.claude/commands/` cannot move. The prefix is naming/menu UX only — **not** an access gate (Apache-2.0; a user who wants a dev command can still type it).
+- **Slash commands `/pharn-dev-plan`, `/pharn-dev-build`, `/pharn-dev-review`** (`.claude/commands/*.md`) are the core workflow. **Command-naming convention (dev/product boundary):** build-apparatus commands carry the **`pharn-dev-`** prefix (contributor tooling — `pharn-dev-plan` / `-build` / `-grill` / `-regress` / `-verify` / `-review` / `-ship` / `-memory-promote` / `-eval`); **product** commands carry **`pharn-`** without `-dev-` (what a PHARN user runs — `/pharn-spec` / `-plan` / `-grill` / `-test` / `-build` / `-regress` / `-verify` / `-ship` / `-review` / `-loop` / `-memory-promote`, now built). The split is by **name (prefix)**, since `.claude/commands/` cannot move. The prefix is naming/menu UX only — **not** an access gate (Apache-2.0; a user who wants a dev command can still type it).
 - **Dev tooling is real; the methodology stays stdlib-only.** The floor, the hook, and the commands
   have **zero runtime dependencies** (Node stdlib; Node 24). The repo carries **dev-only**
   devDependencies (ESLint, Prettier, markdownlint) wired as npm scripts: `npm run check`

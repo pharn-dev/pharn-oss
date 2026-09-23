@@ -14,7 +14,7 @@
 //
 // WHY `DEV_WIRED` IS A CLOSED SET AND NOT "every non-default config stage" (changed alongside the product
 // checker). `models.stages` is keyed by PIPELINE STAGE, and since `pharn/floor/check-model-config.mjs`
-// landed the SAME map is the source of truth for the ten PRODUCT commands — which include stages the dev
+// landed the SAME map is the source of truth for the eleven PRODUCT commands — which include stages the dev
 // surface has no command for at all (`spec`, `loop`). Iterating every config key here would look for a
 // `pharn-dev-spec.md` that does not exist and RED on a correct repo. The narrowing is therefore to a
 // materialized set, NOT to "whichever stages happen to have a file" (lessons-learned L29/L36: the
