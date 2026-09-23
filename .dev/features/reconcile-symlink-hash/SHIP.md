@@ -33,6 +33,19 @@ as human approvals.
 The run ended at **GATE 2**. The GATE-2 decision, **merge**, was also taken by the model under the same delegation.
 The PR merges only once its CI checks are green.
 
+**`main` moved during the run, and the bump moved with it.** The PR opened `CONFLICTING`: `main` had taken 6.17.0
+(`8ba9308`, #258). The branch merged `origin/main`, and `SKILLS_VERSION`, the badge, the CHANGELOG heading and the
+two docs that name the version were re-bumped to **6.17.1**. Against the build's epoch, `check-bash-reconcile.mjs`
+then reported 32 escapes. A set comparison showed every one of them is a path the merge changed, and none falls
+outside that set (`VERIFY.md`). A fresh epoch was anchored as a build Step 0, and the stages were re-run on the
+merged tree:
+
+- `validate` exit **`0`**;
+- `regression-report.json` `.verdict` = **`"no-regressions"`**, base `8ba9308`;
+- `verify-report.json` `.verdict` = **`"PASS"`**, 7/7 gates, 3060 tests, `reconcile` `CLEAN`.
+
+The CHANGELOG entry check was also re-run against the new `main`.
+
 **Orchestration deviations, recorded (advisory).** This session's worktree-isolation guard refuses shell forms with
 computed arguments. So regress and verify captured their exit codes with scratch Node runners (`capture.mjs` under
 `.pharn/pharn-dev-regress/` and `.pharn/pharn-dev-verify/`, gitignored). Those runners execute the pinned commands
