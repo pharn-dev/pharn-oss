@@ -163,3 +163,29 @@ export function isMember(win, ts, sid) {
   if (open === null || t < open) return false;
   return win.endMs === null || t <= win.endMs;
 }
+
+/**
+ * Does a request with timestamp `ts` lie AFTER the end of `win`? True only for a KNOWN window that HAS an
+ * end (a `run-stop`), a parseable timestamp, and a time STRICTLY later than that end. The end itself is a
+ * member, not after it. An open window has no end, so nothing is after it, and an unparseable timestamp
+ * is never after anything.
+ *
+ * WHY (6.13.1, a real failure): the transcript is append-only, so the requests a window excludes split
+ * into two parts that behave differently over time. The part BEFORE the window is fixed once the window is.
+ * The part AFTER its end keeps growing for as long as the session continues. `check-cost-ledger.mjs
+ * --verify-transcript` compared the sum of both, recorded at emission, with the sum re-derived later, and
+ * REDded every genuine ledger whose session went on. This is the ONE definition of "after", imported by the
+ * emitter (which counts the part) and never re-spelled ([[L35]]).
+ *
+ * Session binding is deliberately NOT consulted: a request of an unbound session that is timestamped after
+ * the end is still tail, because it too was written after the window closed.
+ *
+ * BOUND (P0): "written after" rests on the platform stamping each record when it writes it. A record
+ * appended later with NO parseable timestamp, or with one at or before the end, is not tail — it lands in
+ * the fixed part, and a re-derivation then counts it there. Not observed; stated, not corrected.
+ */
+export function isAfterWindow(win, ts) {
+  if (!win || win.status === "unknown" || win.endMs === null || win.endMs === undefined) return false;
+  const t = tsMs(ts);
+  return t !== null && t > win.endMs;
+}

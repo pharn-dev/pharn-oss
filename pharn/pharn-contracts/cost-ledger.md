@@ -111,37 +111,37 @@ tagged `pharn-loop`**, with no sub-stage named anywhere. The field is therefore 
 the keys above, no more and no fewer, asserted in **both** directions. A per-member presence set would be
 satisfied by a variant spelling of any member; closure is what makes a variant fail.
 
-| field                                                               | shape                                                                     | class                                      |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------ |
-| `schema`                                                            | `pharn-cost-ledger/2` (or the legacy `/1`, see Compatibility)             | FLOOR (enum)                               |
-| `name`                                                              | the feature slug                                                          | FLOOR (present)                            |
-| `command`                                                           | the emitting command — `/pharn-loop` or `/pharn-ship`                     | FLOOR (present)                            |
-| `base_sha`                                                          | the run's base SHA, or the literal `unknown`                              | FLOOR (present)                            |
-| `outcome`                                                           | `{decision, iterations, source, blocked?}`, or `null` — see below         | FLOOR (shape, rule 7)                      |
-| `skills_version`                                                    | the version string, or `null`                                             | FLOOR (shape)                              |
-| `skills_version_source`                                             | `pharn.config.json` \| `SKILLS_VERSION` \| `unknown`                      | FLOOR (enum)                               |
-| `claude_code_versions`                                              | sorted distinct `version` values seen on the records                      | FLOOR (array)                              |
-| `sessions`                                                          | sorted distinct session ids                                               | FLOOR (array)                              |
-| `window_start` / `_end`                                             | ISO timestamps from the **records' own** values, or `null`                | FLOOR (from data)                          |
-| `coverage`                                                          | `partial` \| `unavailable` — **there is no `complete`**                   | FLOOR (enum)                               |
-| `dedup_key`                                                         | the literal `requestId`                                                   | FLOOR (enum)                               |
-| `attribution.method`                                                | the versioned method name                                                 | FLOOR (enum)                               |
-| `pricing_note`                                                      | must state the file carries tokens, never prices                          | FLOOR (regex)                              |
-| `markers[].seq`                                                     | integers, **strictly increasing**                                         | FLOOR (integer compare)                    |
-| `markers[].kind`                                                    | `run-start` \| `stage-start` \| `orchestrator` \| `run-stop`              | FLOOR (enum)                               |
-| `requests[].request_id`                                             | non-empty, **unique across the array**                                    | FLOOR (set membership)                     |
-| `requests[].usage`                                                  | every leaf: number \| bool \| null \| a short token                       | FLOOR (enum-regex)                         |
-| `requests[].model`                                                  | a bounded identity token (<=128 chars, no control char, no path)          | FLOOR (enum-regex)                         |
-| `requests[].attribution_skill` / `agent_id`                         | the same bound, or `null`                                                 | FLOOR (enum-regex)                         |
-| `requests[].tokens.*`                                               | the six classes, each a number                                            | FLOOR (shape)                              |
-| `requests[].sidechain`                                              | a boolean                                                                 | FLOOR (shape)                              |
-| `requests[].stage/iteration`                                        | the derived VIEW                                                          | **ADVISORY** (see below)                   |
-| `totals` / `by_model` / `by_stage_iteration_model` / `unattributed` | equal to a recompute from `requests[]`                                    | FLOOR (recompute + equality)               |
-| `dropped[]`                                                         | key paths of leaves the leaf rule refused                                 | FLOOR (array)                              |
-| `membership`                                                        | closed `{method, status, reason, session, start, end, excluded_requests}` | FLOOR (shape + recompute)                  |
-| `membership.status/reason/start/end`                                | equal to `runWindow()` recomputed over the file's own `markers[]`         | FLOOR (recompute + equality)               |
-| every `requests[]` row                                              | a MEMBER of that recomputed window                                        | FLOOR (ordering test)                      |
-| `membership.excluded_requests`                                      | an integer (known window) or `null` (unknown) — its VALUE                 | **ADVISORY** without `--verify-transcript` |
+| field                                                               | shape                                                                     | class                                                                 |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `schema`                                                            | `pharn-cost-ledger/2` (or the legacy `/1`, see Compatibility)             | FLOOR (enum)                                                          |
+| `name`                                                              | the feature slug                                                          | FLOOR (present)                                                       |
+| `command`                                                           | the emitting command — `/pharn-loop` or `/pharn-ship`                     | FLOOR (present)                                                       |
+| `base_sha`                                                          | the run's base SHA, or the literal `unknown`                              | FLOOR (present)                                                       |
+| `outcome`                                                           | `{decision, iterations, source, blocked?}`, or `null` — see below         | FLOOR (shape, rule 7)                                                 |
+| `skills_version`                                                    | the version string, or `null`                                             | FLOOR (shape)                                                         |
+| `skills_version_source`                                             | `pharn.config.json` \| `SKILLS_VERSION` \| `unknown`                      | FLOOR (enum)                                                          |
+| `claude_code_versions`                                              | sorted distinct `version` values seen on the records                      | FLOOR (array)                                                         |
+| `sessions`                                                          | sorted distinct session ids                                               | FLOOR (array)                                                         |
+| `window_start` / `_end`                                             | ISO timestamps from the **records' own** values, or `null`                | FLOOR (from data)                                                     |
+| `coverage`                                                          | `partial` \| `unavailable` — **there is no `complete`**                   | FLOOR (enum)                                                          |
+| `dedup_key`                                                         | the literal `requestId`                                                   | FLOOR (enum)                                                          |
+| `attribution.method`                                                | the versioned method name                                                 | FLOOR (enum)                                                          |
+| `pricing_note`                                                      | must state the file carries tokens, never prices                          | FLOOR (regex)                                                         |
+| `markers[].seq`                                                     | integers, **strictly increasing**                                         | FLOOR (integer compare)                                               |
+| `markers[].kind`                                                    | `run-start` \| `stage-start` \| `orchestrator` \| `run-stop`              | FLOOR (enum)                                                          |
+| `requests[].request_id`                                             | non-empty, **unique across the array**                                    | FLOOR (set membership)                                                |
+| `requests[].usage`                                                  | every leaf: number \| bool \| null \| a short token                       | FLOOR (enum-regex)                                                    |
+| `requests[].model`                                                  | a bounded identity token (<=128 chars, no control char, no path)          | FLOOR (enum-regex)                                                    |
+| `requests[].attribution_skill` / `agent_id`                         | the same bound, or `null`                                                 | FLOOR (enum-regex)                                                    |
+| `requests[].tokens.*`                                               | the six classes, each a number                                            | FLOOR (shape)                                                         |
+| `requests[].sidechain`                                              | a boolean                                                                 | FLOOR (shape)                                                         |
+| `requests[].stage/iteration`                                        | the derived VIEW                                                          | **ADVISORY** (see below)                                              |
+| `totals` / `by_model` / `by_stage_iteration_model` / `unattributed` | equal to a recompute from `requests[]`                                    | FLOOR (recompute + equality)                                          |
+| `dropped[]`                                                         | key paths of leaves the leaf rule refused                                 | FLOOR (array)                                                         |
+| `membership`                                                        | closed `{method, status, reason, session, start, end, excluded_requests}` | FLOOR (shape + recompute)                                             |
+| `membership.status/reason/start/end`                                | equal to `runWindow()` recomputed over the file's own `markers[]`         | FLOOR (recompute + equality)                                          |
+| every `requests[]` row                                              | a MEMBER of that recomputed window                                        | FLOOR (ordering test)                                                 |
+| `membership.excluded_requests`                                      | an integer (known window) or `null` (unknown) — its VALUE                 | **ADVISORY** without `--verify-transcript`; with it, a RANGE (rule 6) |
 
 **`outcome` is copied VERBATIM from the `LOOP.md` envelope** (`pharn/pharn-contracts/loop-record.md` —
 cited, not restated, P4), read from the `---`-fenced frontmatter only and never grepped from the body. The
@@ -200,6 +200,13 @@ window ([[L34]]).
 
 **`excluded_requests`** counts the deduped session requests that fell outside a known window. It is
 the minimum needed to explain an exclusion. No excluded-token aggregate and no session ledger is kept.
+
+**It is a count taken AT EMISSION, and one of its two parts keeps growing after that.** The transcript is
+append-only, so the requests before the window are fixed once the window is. The requests after the
+window's end are not. The emission's own turn is already among them, and the session goes on writing: the
+stop's commit, the summary, and whatever the session does next. A later re-derivation therefore finds the
+same before-window count and a larger after-window one. `--verify-transcript` checks this field as a range
+for that reason (rule 6). The split itself is never written into the file.
 
 **The start boundary, and why `/pharn-ship` needs a pending one.** `/pharn-loop` names its feature
 before `/pharn-spec` runs, so its `run-start` already precedes spec work. `/pharn-ship` cannot: the
@@ -267,7 +274,19 @@ total as run-scoped would silently reinterpret historical data.
    outside it. **Bound ([[L43]]):** this binds the rows to the RECORDED markers, never to the transcript.
    `--verify-transcript` re-derives the rows and `excluded_requests` under the same recorded markers,
    never the live markers file, so a later invocation cannot re-bound an old ledger. It works only while
-   the transcript exists.
+   the transcript exists. The rows and the totals must match exactly. `excluded_requests` is checked as a
+   **range**. Let `before` and `after` be the re-derived counts before the window and after its end. A
+   genuine value is `before + t` for some `0 <= t <= after`, so it must lie in `[before, before + after]`.
+   Anything outside that range is RED. **Bound (added 6.13.1, after the equality form REDded a genuine
+   downstream ledger whose session had continued):**
+   - The range is exact for the part before the window and only an upper bound for the tail. An inflated
+     value up to `before + after` passes. The checker WARNs whenever it accepts a value below the
+     re-derived total, so the bound travels with the verdict.
+   - "The part before the window is fixed" rests on three platform behaviours, observed and not floor
+     facts: the transcript is append-only, every record is timestamped when it is written, and dedup keeps a
+     request id's first occurrence in file order.
+   - An OPEN window has no end. A continued session therefore adds MEMBERS, and `requests[]` REDs. Both
+     emitters write `run-stop` before emitting, and the checker WARNs an open window.
 
 **"No message content and no home paths are in the file" is a CONSEQUENCE of rules 1–4, not a
 detector.** Message bodies are never read, so none can appear; `cwd` and `gitBranch` are never copied, so

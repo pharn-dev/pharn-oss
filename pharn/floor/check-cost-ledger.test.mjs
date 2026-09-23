@@ -661,3 +661,229 @@ test("--verify-transcript on an UNKNOWN ledger WARNs that it certified nothing �
     warns.join(" | ")
   );
 });
+
+// ===================================================================================================
+// --verify-transcript over a session that CONTINUED after the run (6.13.1).
+//
+// THE RECORDED FAILURE (P7): a downstream `/pharn-loop` ledger (630 rows, `excluded_requests: 423`) went
+// RED under `--verify-transcript` with "423 recorded, 508 re-derived", and the number kept moving. The
+// rows and totals re-derived exactly. The transcript is append-only, so the exclusion is two parts: the
+// requests BEFORE the window, fixed once the window is, and the requests AFTER its end, which keep coming
+// for as long as the session goes on (the emission's own turn, the loop's commit, the conversation after
+// it). An equality check on the sum failed every real stop. [[L42]]: the re-derivation answers "what is it
+// NOW", the recorded value answered "what was it THEN", and the tail is the one input that legitimately
+// changed between them.
+//
+// EVERY EXPECTATION IS AN INDEPENDENT LITERAL, counted from the committed fixture by hand, never asked of
+// the code under test ([[L43]]). `single-session.jsonl` carries 12 deduped requests; the window below is
+// 08:36:00 → 08:40:00, so 3 fall BEFORE it (08:35:42, :46, :59), 5 INSIDE (08:36:05 … 08:37:02) and 4
+// AFTER its end (08:41:05 … 08:43:03). `session-continued.jsonl` then appends 3 more deduped requests
+// (4 lines — one response written twice), all after the end.
+// ===================================================================================================
+
+import { readFileSync } from "node:fs";
+
+const TAIL_FIXTURE = join(FIXTURES, "session-continued.jsonl");
+const MID_START = "2026-09-21T08:36:00.000Z";
+const MID_STOP = "2026-09-21T08:40:00.000Z";
+const BEFORE = 3;
+const INSIDE = 5;
+const AFTER_AT_EMISSION = 4;
+const APPENDED = 3;
+
+/** Stage the real fixture with a window in its MIDDLE, emit the ledger, and hand back a function that
+ *  continues the session by appending the committed tail to the staged transcript. `stop: false` leaves
+ *  the window OPEN. */
+function midRun({ stop = true } = {}) {
+  const root = mkdtempSync(join(tmpdir(), "check-cl-tail-"));
+  const proj = join(root, "projects", "p");
+  mkdirSync(proj, { recursive: true });
+  const transcript = join(proj, `${REAL_SESSION}.jsonl`);
+  copyFileSync(join(FIXTURES, "single-session.jsonl"), transcript);
+  const mdir = join(root, "cost", "feat");
+  mkdirSync(mdir, { recursive: true });
+  const markers = [{ seq: 1, kind: "run-start", stage: null, iteration: null, ts: MID_START, session_id: REAL_SESSION }];
+  if (stop) markers.push({ seq: 2, kind: "run-stop", stage: null, iteration: null, ts: MID_STOP, session_id: REAL_SESSION });
+  writeFileSync(join(mdir, "markers.jsonl"), markers.map((m) => JSON.stringify(m)).join("\n") + "\n");
+  const projectsDir = join(root, "projects");
+  const opts = { name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase: join(root, "cost") };
+  const led = renderLedger(opts);
+  const continueSession = () => appendFileSync(transcript, readFileSync(TAIL_FIXTURE, "utf8"));
+  // The live count under the ledger's OWN recorded markers — what the checker re-derives.
+  const liveExcluded = () => renderLedger({ ...opts, markers: led.markers }).membership.excluded_requests;
+  return { root, led, projectsDir, continueSession, liveExcluded };
+}
+
+const verify = (led, projectsDir) => checkLedger(led, { verifyTranscript: true, projectsDir });
+const CONTINUED_WARN = /--verify-transcript: the session continued after the run/;
+const EXCLUDED_RED = /--verify-transcript: membership\.excluded_requests does not match the transcript/;
+
+test("--verify-transcript: a session that CONTINUED after the run is GREEN — the tail grew, nothing was wrong (6.13.1)", () => {
+  const { led, projectsDir, continueSession, liveExcluded } = midRun();
+  // NON-VACUITY (L34): each part of the split is non-empty, or the range would be degenerate.
+  assert.equal(led.requests.length, INSIDE);
+  assert.equal(led.membership.status, "bounded");
+  assert.equal(led.membership.excluded_requests, BEFORE + AFTER_AT_EMISSION);
+  continueSession();
+  assert.equal(liveExcluded(), BEFORE + AFTER_AT_EMISSION + APPENDED, "precondition: the appended tail really moved the live count");
+  const { reds, warns } = verify(led, projectsDir);
+  assert.deepEqual(reds, [], "a genuine ledger whose session went on must not RED");
+  assert.equal(warns.filter((w) => CONTINUED_WARN.test(w)).length, 1, `exactly one continuation WARN, got: ${warns.join(" | ")}`);
+});
+
+test("--verify-transcript: excluded_requests is a RANGE [before, live] — each edge and one past it, EXECUTED (L29/L37)", () => {
+  const { led, projectsDir, continueSession } = midRun();
+  continueSession();
+  const LIVE = BEFORE + AFTER_AT_EMISSION + APPENDED;
+  // ONE materialised table; the loop below is the only assertion site (L29).
+  const TABLE = [
+    { label: "one below the before-window count", value: BEFORE - 1, red: true },
+    { label: "the before-window count (lower edge)", value: BEFORE, red: false },
+    { label: "the genuine emission value", value: BEFORE + AFTER_AT_EMISSION, red: false },
+    { label: "the live total (upper edge) — THE STATED BOUND: an inflated value up to it passes", value: LIVE, red: false },
+    { label: "one above the live total", value: LIVE + 1, red: true },
+  ];
+  assert.equal(TABLE.length, 5, "non-vacuity: both edges, one past each, and the genuine value");
+  for (const row of TABLE) {
+    const l = clone(led);
+    l.membership.excluded_requests = row.value;
+    assert.deepEqual(redsOf(l), [], `${row.label}: internally a count is just a count (the L43 bound) — only verify can judge it`);
+    const reds = verify(l, projectsDir).reds;
+    assert.equal(
+      reds.some((r) => EXCLUDED_RED.test(r)),
+      row.red,
+      `${row.label} (${row.value}): expected ${row.red ? "RED" : "GREEN"}, got: ${reds.join(" | ")}`
+    );
+    if (row.red) {
+      assert.ok(
+        reds.some(
+          (r) =>
+            r.includes(`re-derived ${BEFORE} before the window + ${AFTER_AT_EMISSION + APPENDED} after its end`) &&
+            r.includes(`[${BEFORE}, ${LIVE}]`)
+        ),
+        `${row.label}: the RED must name both parts and the range, got: ${reds.join(" | ")}`
+      );
+    }
+  }
+});
+
+test("--verify-transcript: an IMMEDIATE verify (nothing appended) matches exactly and says nothing about a continuation", () => {
+  const { led, projectsDir } = midRun();
+  const { reds, warns } = verify(led, projectsDir);
+  assert.deepEqual(reds, []);
+  assert.ok(!warns.some((w) => CONTINUED_WARN.test(w)), `no continuation WARN when recorded == live, got: ${warns.join(" | ")}`);
+  const over = clone(led);
+  over.membership.excluded_requests += 1;
+  assert.ok(
+    verify(over, projectsDir).reds.some((r) => EXCLUDED_RED.test(r)),
+    "above the live total is RED, continued or not"
+  );
+});
+
+test("--verify-transcript: an OPEN window has no end, so nothing is 'after' it and the range collapses to equality", () => {
+  const { led, projectsDir, continueSession } = midRun({ stop: false });
+  assert.equal(led.membership.status, "open");
+  assert.equal(led.membership.excluded_requests, BEFORE, "open: only the 3 before the start are excluded");
+  assert.equal(led.requests.length, INSIDE + AFTER_AT_EMISSION);
+  assert.deepEqual(verify(led, projectsDir).reds, []);
+  for (const v of [BEFORE - 1, BEFORE + 1]) {
+    const l = clone(led);
+    l.membership.excluded_requests = v;
+    assert.ok(
+      verify(l, projectsDir).reds.some((r) => EXCLUDED_RED.test(r)),
+      `open window: ${v} must RED — the range is [${BEFORE}, ${BEFORE}]`
+    );
+  }
+  // THE DEFERRED RESIDUAL, pinned rather than hidden: an open window absorbs the appended requests as
+  // members, so a continued session REDs on the ROWS. Both emitters write run-stop before emitting.
+  continueSession();
+  const reds = verify(led, projectsDir).reds;
+  assert.ok(
+    reds.some((r) => /requests\[\] does not match the transcript \(9 recorded, 12 re-derived\)/.test(r)),
+    `an open window's rows grow with the session — the named residual, got: ${reds.join(" | ")}`
+  );
+});
+
+test("--verify-transcript on a continued session through the CLI: exit 0, the WARN printed (the production path, L41)", () => {
+  const { root, led, projectsDir, continueSession } = midRun();
+  continueSession();
+  const p = join(root, "cost.json");
+  writeFileSync(p, JSON.stringify(led, null, 2));
+  const r = run([p, "--verify-transcript", "--projects-dir", projectsDir]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /^WARN — --verify-transcript: the session continued after the run/m);
+  assert.match(r.stdout, /^GREEN —/m);
+});
+
+// ---------------------------------------------------------------- the emitter is untouched by the split
+
+import { cpSync } from "node:fs";
+import { deriveLedger } from "./render-cost-ledger.mjs";
+
+const SUB_SESSION = "00000000-0000-4000-8000-00000000cafe";
+
+/** EVERY ledger shape the emitter produces from the committed fixtures, in ONE table (L29): a bounded window
+ *  with a tail, an open one, an unknown one, subagent transcripts with a sidechain tail, and the two
+ *  transcript-absence shells. `after` is an INDEPENDENT literal counted from the fixture timestamps (L43). */
+function emitterCases() {
+  const cases = [];
+  const stage = (label, { fixture, session, markers, after }) => {
+    const root = mkdtempSync(join(tmpdir(), "check-cl-derive-"));
+    const projectsDir = join(root, "projects");
+    mkdirSync(join(projectsDir, "p"), { recursive: true });
+    if (fixture === "single") copyFileSync(join(FIXTURES, "single-session.jsonl"), join(projectsDir, "p", `${REAL_SESSION}.jsonl`));
+    if (fixture === "subagents") cpSync(join(FIXTURES, "with-subagents"), join(projectsDir, "p"), { recursive: true });
+    const mdir = join(root, "cost", "feat");
+    mkdirSync(mdir, { recursive: true });
+    if (markers) writeFileSync(join(mdir, "markers.jsonl"), markers.map((m) => JSON.stringify(m)).join("\n") + "\n");
+    cases.push({ label, after, opts: { name: "feat", sessionId: session, projectsDir, markersBase: join(root, "cost") } });
+  };
+  const m = (seq, kind, ts, session_id) => ({ seq, kind, stage: null, iteration: null, ts, session_id });
+  stage("single-session, bounded mid window", {
+    fixture: "single",
+    session: REAL_SESSION,
+    markers: [m(1, "run-start", MID_START, REAL_SESSION), m(2, "run-stop", MID_STOP, REAL_SESSION)],
+    after: 4,
+  });
+  stage("single-session, open mid window", {
+    fixture: "single",
+    session: REAL_SESSION,
+    markers: [m(1, "run-start", MID_START, REAL_SESSION)],
+    after: 0,
+  });
+  stage("single-session, no markers (unknown)", { fixture: "single", session: REAL_SESSION, markers: null, after: 0 });
+  stage("subagents, bounded before the two sidechain requests", {
+    fixture: "subagents",
+    session: SUB_SESSION,
+    markers: [m(1, "run-start", "2026-09-21T09:59:00.000Z", SUB_SESSION), m(2, "run-stop", "2026-09-21T10:10:30.000Z", SUB_SESSION)],
+    after: 2,
+  });
+  stage("no session id (unavailable shell)", { fixture: "single", session: null, markers: null, after: 0 });
+  stage("no transcript for the session (unavailable shell)", {
+    fixture: "none",
+    session: REAL_SESSION,
+    markers: [m(1, "run-start", MID_START, REAL_SESSION), m(2, "run-stop", MID_STOP, REAL_SESSION)],
+    after: 0,
+  });
+  return cases;
+}
+
+test("deriveLedger returns renderLedger's ledger BYTE-FOR-BYTE, plus the after-window count — over every fixture shape (L29)", () => {
+  const cases = emitterCases();
+  assert.equal(cases.length, 6, "non-vacuity (L34): the table must range over every shape it names");
+  assert.ok(
+    cases.some((c) => c.after > 0),
+    "non-vacuity: at least one case must actually have a tail"
+  );
+  for (const c of cases) {
+    const d = deriveLedger(c.opts);
+    const r = renderLedger(c.opts);
+    assert.equal(JSON.stringify(d.ledger, null, 2), JSON.stringify(r, null, 2), `${c.label}: the emitted ledger must not move`);
+    assert.equal(d.excludedAfterWindow, c.after, `${c.label}: after-window count`);
+    assert.ok(
+      d.ledger.membership.excluded_requests === null || d.excludedAfterWindow <= d.ledger.membership.excluded_requests,
+      `${c.label}: the tail is a PART of the exclusion, never more than it`
+    );
+    assert.ok(!("excludedAfterWindow" in d.ledger), `${c.label}: the count is never written into the file`);
+  }
+});

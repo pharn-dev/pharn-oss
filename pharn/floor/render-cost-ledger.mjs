@@ -84,8 +84,10 @@
 //   node pharn/floor/render-cost-ledger.mjs <name> [--base <dir>] [--repo <dir>] [--session <id>]
 //                                           [--projects-dir <dir>] [--command <cmd>] [--base-sha <sha>]
 //                                           [--markers-base <dir>] [--stdout]
-// `--verify-transcript` in the checker passes the ledger's OWN recorded `markers[]` to `renderLedger`, so a
-// later invocation's appended markers cannot re-bound an already-written ledger.
+// `--verify-transcript` in the checker passes the ledger's OWN recorded `markers[]` to `deriveLedger`, so a
+// later invocation's appended markers cannot re-bound an already-written ledger. `deriveLedger` returns the
+// same ledger `renderLedger` does, plus the count of excluded requests AFTER the window's end, which the
+// checker needs because that part of `excluded_requests` keeps growing after emission (6.13.1).
 // Exit codes: 0 = a ledger was written (including an honest `unavailable` one); 2 = bad usage.
 
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
@@ -95,7 +97,7 @@ import { findTranscriptDirs, transcriptFiles } from "./render-cost-record.mjs";
 import { DEFAULT_BASE as MARKERS_DEFAULT_BASE, MARKER_KINDS, cleanScalar } from "./mark-phase.mjs";
 import { FM_RE, stripBom } from "./frontmatter-core.mjs";
 import { readShipOutcome, OUTCOME_SOURCE as SHIP_OUTCOME_SOURCE } from "./ship-outcome-core.mjs";
-import { runWindow, isMember, tsMs, MEMBERSHIP_METHOD } from "./run-window-core.mjs";
+import { runWindow, isMember, isAfterWindow, tsMs, MEMBERSHIP_METHOD } from "./run-window-core.mjs";
 
 /** What this emitter writes. `/2` adds the `membership` block and scopes every row to the run window. */
 export const SCHEMA = "pharn-cost-ledger/2";
@@ -483,17 +485,43 @@ function unavailableLedger({ name, command, baseSha, outcome, skills, markers, n
 }
 
 /** Build the ledger object. Pure over its inputs — no clock, no randomness. */
-export function renderLedger({
-  name,
-  command = DEFAULT_COMMAND,
-  baseSha = UNKNOWN_BASE_SHA,
-  repo = ".",
-  sessionId,
-  projectsDir,
-  markersBase = MARKERS_DEFAULT_BASE,
-  featureBase = FEATURE_BASE,
-  markers: suppliedMarkers,
-}) {
+export function renderLedger(opts) {
+  return deriveLedger(opts).ledger;
+}
+
+/**
+ * The ledger PLUS one number the ledger does not carry: how many of the excluded requests lie AFTER the
+ * window's end (`isAfterWindow`). The ledger itself is exactly `renderLedger`'s — same object, same bytes;
+ * nothing is added to the file.
+ *
+ * WHY THE SPLIT EXISTS (6.13.1, a real failure): `membership.excluded_requests` is a count AT EMISSION of
+ * two parts that age differently. The transcript is append-only, so the part before the window is fixed
+ * once the window is, and the part after its end grows for as long as the session continues — the
+ * emission's own turn, then the stop's commit, then whatever the session does next. `check-cost-ledger.mjs
+ * --verify-transcript` needs the split to compare the fixed part exactly and the growing part as a bound.
+ * Recording the split in the file instead would change `membership`'s closed key set, a breaking contract
+ * change with no observed need.
+ */
+export function deriveLedger(opts) {
+  const stats = { excludedAfterWindow: 0 };
+  const ledger = buildLedger(opts, stats);
+  return { ledger, excludedAfterWindow: stats.excludedAfterWindow };
+}
+
+function buildLedger(
+  {
+    name,
+    command = DEFAULT_COMMAND,
+    baseSha = UNKNOWN_BASE_SHA,
+    repo = ".",
+    sessionId,
+    projectsDir,
+    markersBase = MARKERS_DEFAULT_BASE,
+    featureBase = FEATURE_BASE,
+    markers: suppliedMarkers,
+  },
+  stats
+) {
   // A supplied list (the checker's `--verify-transcript`) re-derives under the RECORDED boundary; absent,
   // the live markers file is read. Both pass through the same normalization.
   const markers = suppliedMarkers === undefined ? readMarkers(join(markersBase, name, "markers.jsonl")) : normalizeMarkers(suppliedMarkers);
@@ -586,6 +614,9 @@ export function renderLedger({
       // request repeated across lines is counted once here too.
       if (!isMember(win, ts, sid)) {
         excluded++;
+        // The part of the exclusion that keeps GROWING after emission (see `deriveLedger`). Counted, never
+        // emitted: the file's `excluded_requests` stays the one sum it always was.
+        if (isAfterWindow(win, ts)) stats.excludedAfterWindow++;
         continue;
       }
       // Both observed agent-id spellings, in a fixed precedence (L36 — a parameterized value acquires

@@ -23,6 +23,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.14.1] - 2026-09-23
+
 ### Added
 
 - 2026-09-23: **Lesson L58 promoted to `.dev/memory-bank/lessons-learned.md`: a record bound to a live referent
@@ -32,6 +34,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   RED. The fix itself ships in `cost-ledger-verify-tail` (PR #252); this entry records only the lesson.
   `docs/lessons-index.md` was regenerated with the narrow generator. Apparatus only, so there is no
   `SKILLS_VERSION` bump.
+
+### Fixed
+
+- 2026-09-23: **`check-cost-ledger.mjs --verify-transcript` no longer REDs a genuine ledger whose session
+  continued after the run** (`SKILLS_VERSION` 6.14.0 → **6.14.1**, patch: a correction to a shipped floor
+  checker and its contract)
+  ([`pharn/floor/check-cost-ledger.mjs`](./pharn/floor/check-cost-ledger.mjs),
+  [`pharn/pharn-contracts/cost-ledger.md`](./pharn/pharn-contracts/cost-ledger.md),
+  [`.dev/features/cost-ledger-verify-tail/`](./.dev/features/cost-ledger-verify-tail/)).
+  - **The failure, from a downstream project.** A `/pharn-loop` ledger committed in `pharn-starter`
+    (`pharn-cost-ledger/2`, 630 rows, `excluded_requests: 423`) went RED with
+    `excluded_requests does not match the transcript (423 recorded, 508 re-derived)`. The rows and totals
+    re-derived exactly, and the re-derived count kept rising between runs. Re-run with 6.13.0's checker
+    here it read 550, then 640. `excluded_requests` is counted at emission. It covers two parts:
+    - the requests before the window (422 here), which stay fixed because the transcript is append-only;
+    - the requests after the window's end. That part was 1 at emission, the emission's own turn, and it
+      keeps growing while the session continues (the stop's commit, the conversation after it).
+
+    The equality check therefore failed every real stop.
+
+  - **Fix.** The emitter counts, without writing it, how many excluded requests lie after the window's end
+    (`isAfterWindow` in `run-window-core.mjs`; `deriveLedger` returns it next to the unchanged ledger). The
+    checker accepts `excluded_requests` in `[before, before + after]` and REDs outside that range. The rows
+    and totals are still compared exactly. **Nothing in `cost.json` changes:** the same schema, key set and
+    bytes. A ledger written by an earlier version needs no re-emission. The downstream ledger now verifies
+    GREEN with one WARN.
+  - **Bound, stated in the contract and in a WARN.** The range is exact for the before-window part and
+    only an upper bound for the tail, so an inflated value up to the live total passes, and a test pins
+    that. Pinning the tail exactly would need the emission's moment in the file, which is a schema change,
+    deferred. An OPEN window (no `run-stop`) still REDs a continued session on its rows. Both emitters
+    write `run-stop` first, so that residual is named, not fixed.
+  - **Tests.** A committed tail fixture (`fixtures/cost-ledger/session-continued.jsonl`) is appended after
+    emission. The continued-session case was RED on the unfixed checker (`7 recorded, 10 re-derived`)
+    before the fix. One table executes both edges of the range and one value past each. `deriveLedger` is
+    pinned byte-for-byte to `renderLedger` over six fixture shapes.
+  - Only 1 of the 14 ledgers that `pharn-starter` has committed is `/2`. The other 13 are legacy `/1`
+    files, and `--verify-transcript` still declines those with a WARN, as before.
+  - First opened as 6.13.1 in #252; #254 took 6.13.1 and #253 took 6.14.0 on `main` before it merged,
+    so it was rebased and re-bumped to 6.14.1.
 
 ## [6.14.0] - 2026-09-23
 
