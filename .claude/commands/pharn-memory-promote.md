@@ -405,7 +405,7 @@ Immediately after writing it, and **before** ending the turn:
 
 ```bash
 [ -x vendor/bin/prettier ] && NODE_ENV=production vendor/bin/prettier --ignore-unknown --check <canon-file>
-[ -x vendor/bin/markdownlint-cli2 ] && NODE_ENV=production vendor/bin/markdownlint-cli2 <canon-file>
+[ -x vendor/bin/markdownlint-cli2 ] && NODE_ENV=production vendor/bin/markdownlint-cli2 --no-globs <canon-file>
 ```
 
 Scoped to **this stage's own artifact** — `<canon-file>` is the one path Step 0 pinned. **Check-only**
@@ -416,7 +416,10 @@ file**; promote's target is the **shared, historical, provenance-carrying canon*
 through **Bash** is not gated by fix #7 at all (the pre-write hook sees `Write|Edit|MultiEdit` only), so an
 auto-fixer here has a within-file blast radius over entries this run never touched. If either
 `vendor/bin/prettier` or `vendor/bin/markdownlint-cli2` is absent, skip that advisory check — it never
-blocks.
+blocks. `--no-globs` keeps the markdownlint check on `<canon-file>` alone: markdownlint-cli2 otherwise ADDS
+the `globs` of any `.markdownlint-cli2.*` config in the project to the path it is given, and reports on
+every file they match, which would show findings from unrelated files as if they were in canon. The flag
+first shipped in markdownlint-cli2 0.12.0. How an older vendored binary treats it has NOT been measured.
 
 ### Step 6b — Refresh the lessons index (ADVISORY; only when the target was `lessons-learned.md`)
 

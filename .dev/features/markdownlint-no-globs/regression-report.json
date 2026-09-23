@@ -1,0 +1,52 @@
+{
+  "base": "d96ef0350c2c43807c8fd8f2dd90a30350c01cfa",
+  "inside": [
+    ".claude/commands/pharn-dev-build.md",
+    ".claude/commands/pharn-dev-grill.md",
+    ".claude/commands/pharn-dev-memory-promote.md",
+    ".claude/commands/pharn-dev-plan.md",
+    ".claude/commands/pharn-dev-regress.md",
+    ".claude/commands/pharn-dev-review.md",
+    ".claude/commands/pharn-dev-ship.md",
+    ".claude/commands/pharn-dev-verify.md",
+    ".claude/commands/pharn-memory-promote.md",
+    ".claude/commands/pharn-ship.md",
+    ".dev/features/markdownlint-no-globs/GRILL.md",
+    ".dev/features/markdownlint-no-globs/PLAN.md",
+    ".dev/floor/capability-catalog-core.test.mjs",
+    ".dev/floor/command-hygiene.test.mjs",
+    ".markdownlint-cli2.jsonc",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION"
+  ],
+  "outside_gates": {
+    "format:check": {
+      "base": 0,
+      "head": 0
+    },
+    "lint": {
+      "base": 0,
+      "head": 0
+    },
+    "lint:md": {
+      "base": 0,
+      "head": 0
+    },
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
