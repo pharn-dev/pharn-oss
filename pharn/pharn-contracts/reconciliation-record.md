@@ -67,15 +67,15 @@ clone.
 }
 ```
 
-| Field              | Type             | Meaning                                                                                                                                      |
-| ------------------ | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `version`          | integer          | Schema version. A **newer** version than the reader is `INCONCLUSIVE`; an **older** one is tolerated at read and reported in `warnings[]`    |
-| `epoch`            | ISO-8601         | When this epoch opened                                                                                                                       |
-| `anchored_by`      | string           | A label passed as `--by`. **Advisory** — it is argv, so it is a description, never an authorization                                          |
-| `scope_snapshot`   | object \| `null` | A verbatim copy of `.pharn/writes-scope.json` at anchor time, or `null` when none was set                                                    |
-| `scope_amendments` | array            | Further scopes that came into force **during** the epoch, in call order. Empty on a fresh anchor; absent on a pre-5.1.0 record, read as `[]` |
-| `entry_count`      | integer          | `Object.keys(entries).length` at write time                                                                                                  |
-| `entries`          | object           | Repo-relative path → SHA-256 of its bytes                                                                                                    |
+| Field              | Type             | Meaning                                                                                                                                                                       |
+| ------------------ | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`          | integer          | Schema version. A **newer** version than the reader is `INCONCLUSIVE`; an **older** one is tolerated at read and reported in `warnings[]`                                     |
+| `epoch`            | ISO-8601         | When this epoch opened                                                                                                                                                        |
+| `anchored_by`      | string           | A label passed as `--by`. **Advisory** — it is argv, so it is a description, never an authorization                                                                           |
+| `scope_snapshot`   | object \| `null` | A verbatim copy of `.pharn/writes-scope.json` at anchor time, or `null` when none was set                                                                                     |
+| `scope_amendments` | array            | Further scopes that came into force **during** the epoch, in call order. Empty on a fresh anchor; absent on a pre-5.1.0 record, read as `[]`                                  |
+| `entry_count`      | integer          | `Object.keys(entries).length` at write time                                                                                                                                   |
+| `entries`          | object           | Repo-relative path → SHA-256 of its bytes. A symlink whose target is not an openable regular file → SHA-256 of `symlink\0` + its raw link text (6.16.1, see "Symlinks" below) |
 
 **Why the scope is snapshotted rather than read live.** By reconciliation time
 `.pharn/writes-scope.json` holds a **later** stage's scope — it is one mutable record, global to the
@@ -117,6 +117,41 @@ Write-tool edit as a change with no way to separate the two. `check-regress.mjs 
 exactly that conflation, and lessons-learned **L17** is the record of it. The baseline is therefore
 _content-hash vs the last anchor_.
 
+**Symlinks (6.16.1).** `hashFile` opens a path, and an open FOLLOWS a link. Before 6.16.1, a link to a
+directory, or a dangling link, therefore hashed as `null`. The anchor never recorded it, and the
+reconcile read it as unreadable, treated as changed (§3). Any repo that tracks such a link got a false
+`ESCAPE` on every run with zero writes. The measured case: a downstream project's 20 tracked
+`.claude/skills/*` directory links, which ended each of its `/pharn-loop` runs `STOP_TERMINAL`. Such a link
+is now hashed by its **link text**, which is what git stores for a mode-120000 entry, so an unchanged link
+reconciles `CLEAN` and a **re-pointed** one is still a candidate. The rule, as implemented and tested:
+
+| The path                                                                           | Its `entries` value                    |
+| ---------------------------------------------------------------------------------- | -------------------------------------- |
+| a regular file                                                                     | SHA-256 of its bytes                   |
+| a symlink to a regular file                                                        | SHA-256 of the **target's** bytes      |
+| a symlink to a directory or a device (the open succeeds, not a regular file)       | SHA-256 of `symlink\0` + raw link text |
+| a symlink whose target does not resolve: open fails `ENOENT` / `ENOTDIR` / `ELOOP` | SHA-256 of `symlink\0` + raw link text |
+| a symlink whose open fails any other way (`EACCES` above all)                      | absent, so it is a candidate           |
+| a plain directory, a gitlink, a special file, a vanished path                      | absent, so it is a candidate           |
+
+- **The errno set is closed on purpose.** A link to an **unreadable** file stays absent, and so stays a
+  candidate. If its text were hashed instead, making the target unreadable would hide a change to a
+  denied file, which is exactly what the unreadable-is-changed rule (§3) exists to prevent.
+- **The text is hashed as raw bytes, never as a decoded string.** Two targets that differ only in invalid
+  UTF-8 would decode to the same string, and re-pointing one to the other would go unseen. For a
+  valid-UTF-8 target the digest equals SHA-256 of `"symlink\0" + text`.
+- **Not handled:** a link to a FIFO. The open blocks, just as it did before 6.16.1. No run has hit this, so
+  it is recorded here and not fixed (P7).
+- **Not seen through the link:** the files inside a linked directory. They are reconciled under their own
+  tracked paths, and a target outside the repo is not descended.
+- **Not collision-free against a forger.** A regular file whose bytes are exactly `symlink\0<text>`
+  hashes equal to that link. That takes deliberate forgery, which is outside the non-adversarial claim
+  this record supports.
+- **The first reconcile after upgrading is NOT clean.** A baseline anchored by pre-6.16.1 code has no
+  entry for such a link, so the first reconcile of that epoch under 6.16.1 still reports it. The next
+  anchor (the next `/pharn-*build`) records it. `version` stays `1`, because the record's keys and shape
+  did not change. What changed is one kind of `entries` value.
+
 ## 2. The verdict — `pharn/floor/check-bash-reconcile.mjs` stdout
 
 ```json
@@ -151,9 +186,15 @@ Callers branch on **set membership over this enum, or on the exit code** — nev
 **RED** (`ESCAPE` / `INCONCLUSIVE`): a denied candidate; a control-surface path changed with no
 authorizing scope; any statusless or unresolvable input. _Statusless = RED at write._
 
+**Unreadable during reconcile is a CANDIDATE, not only a warning.** A path the reconciler cannot hash
+(`hashFile` returns `null`) is treated as **changed**. It is judged like any other candidate, so it goes
+RED when the guards would deny it, and a `warnings[]` line names it either way. That is fail-closed on
+purpose: if it were only a warning, making a file unreadable would hide a denied change. (Before 6.16.1
+this section listed it under WARN; the checker had already been treating it as changed, and the row was
+corrected in 6.16.1.)
+
 **WARN** (`warnings[]`, verdict unaffected): a path present at anchor and absent now — a deletion is not
-a write; a path unreadable during reconcile; a baseline written by an **older** schema version —
-_legacy records tolerated at read._
+a write; a baseline written by an **older** schema version — _legacy records tolerated at read._
 
 ## 4. The ignore/exempt data — `pharn/floor/reconcile-ignore.json`
 

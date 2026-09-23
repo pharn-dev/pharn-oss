@@ -51,6 +51,11 @@
 //   • CONTENT ONLY — a chmod-only change is invisible (inherited from hashFile, which hashes bytes).
 //   • A submodule gitlink is not descended (git reports the gitlink path; hashFile returns null for a
 //     directory, recorded as absent).
+//   • A symlink whose target is not an openable regular file (a directory, a dangling or looping link) is
+//     hashed by its LINK TEXT, inherited from hashFile since 6.16.1, so re-pointing one moves the digest.
+//     Before 6.16.1 such a link hashed as absent, so on a tree that holds one, a fingerprint written by an
+//     older install differs from a fresh one. A stamp straddling that upgrade reads as tree-moved, never as
+//     fresh: the fail-closed direction.
 //   • An excluded artifact can still be READ by a whole-repo style gate in a project that lints
 //     `pharn/features/**` (lessons-learned L23), so a later change to it is invisible to this hash while
 //     remaining visible to that gate. Stated, not solved.

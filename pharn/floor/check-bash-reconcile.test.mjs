@@ -8,7 +8,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, cpSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, cpSync, rmSync, symlinkSync, unlinkSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -692,4 +692,54 @@ test("★ activeFeatureSlug reads the OPENING snapshot only — an amendment can
   // the pipeline-artifact exemption to another slug.
   assert.equal(activeFeatureSlug({ set_by: "pharn/features/real/PLAN.md" }), "real");
   assert.equal(activeFeatureSlug({ set_by: PROMOTE }), null, "a command path names no feature");
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────
+// SYMLINKS — the downstream false ESCAPE, end to end (.dev/features/reconcile-symlink-hash/PLAN.md).
+// A repo tracking a symlink to a directory reconciled as ESCAPE on EVERY run with zero writes, because
+// hashFile returned null for it: the anchor never recorded it and the reconcile read it as "unreadable,
+// treated as changed". Measured downstream as 20 `.claude/skills/*` links ending each /pharn-loop
+// STOP_TERMINAL. The fixture mirrors that shape: a tracked directory link and a dangling one, under a
+// build scope that does not cover them.
+
+function repoWithLinks() {
+  const dir = makeRepo();
+  mkdirSync(join(dir, "vendored/skill-a"), { recursive: true });
+  writeFileSync(join(dir, "vendored/skill-a/SKILL.md"), "skill\n");
+  mkdirSync(join(dir, ".claude/skills"), { recursive: true });
+  symlinkSync("../../vendored/skill-a", join(dir, ".claude/skills/skill-a"));
+  symlinkSync("../../vendored/gone", join(dir, ".claude/skills/dangling"));
+  execFileSync("git", ["add", "-A"], { cwd: dir, stdio: "pipe" });
+  execFileSync("git", ["commit", "-q", "-m", "links"], { cwd: dir, stdio: "pipe" });
+  setScope(dir, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  return dir;
+}
+
+test("★ an UNCHANGED tracked directory symlink and a dangling one reconcile CLEAN — no false ESCAPE", () => {
+  const dir = repoWithLinks();
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.json.verdict, "CLEAN");
+  assert.deepEqual(r.json.escapes, []);
+  assert.ok(
+    !r.json.warnings.some((w) => /treated as changed/.test(w)),
+    `no link may read as unreadable: ${JSON.stringify(r.json.warnings)}`
+  );
+});
+
+test("★ NON-VACUITY (L34): RE-POINTING a tracked directory symlink is still an ESCAPE naming exactly it", () => {
+  // The mirror of the test above, same fixture. Without it, a checker that simply stopped looking at links
+  // would satisfy the CLEAN case.
+  const dir = repoWithLinks();
+  unlinkSync(join(dir, ".claude/skills/skill-a"));
+  symlinkSync("../../vendored", join(dir, ".claude/skills/skill-a"));
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.equal(r.json.verdict, "ESCAPE");
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    [".claude/skills/skill-a"],
+    "exactly the re-pointed link — not the untouched dangling one, not none"
+  );
 });

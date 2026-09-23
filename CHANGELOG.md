@@ -23,6 +23,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.16.1] - 2026-09-24
+
+### Fixed
+
+- 2026-09-24: **The Bash-write reconciler no longer reports an unchanged tracked directory symlink as an
+  escape.** A repo that tracks a symlink to a directory, or a dangling one, got a `reconcile` `ESCAPE` on every
+  `/pharn-verify` with zero writes. The verdict was `FAIL`, so `/pharn-loop` stopped `STOP_TERMINAL` and made no
+  commit. `hashFile` now hashes such a link by its link text, which is what git stores for it. An unchanged
+  link reconciles `CLEAN`, and a re-pointed one is still an `ESCAPE`. `SKILLS_VERSION` 6.16.0 → 6.16.1 is a patch:
+  shipped floor bytes changed, and the baseline's keys and `version` did not.
+  ([`pharn/floor/reconcile-baseline.mjs`](./pharn/floor/reconcile-baseline.mjs),
+  [`pharn/pharn-contracts/reconciliation-record.md`](./pharn/pharn-contracts/reconciliation-record.md),
+  [`.dev/features/reconcile-symlink-hash/`](./.dev/features/reconcile-symlink-hash/))
+  - **The failure, from a downstream project.** `pharn-starter` tracks 20 `.claude/skills/*` symlinks to
+    directories. At least eight of its `/pharn-loop` runs ended `STOP_TERMINAL` on those links. `openSync`
+    follows a link, so `hashFile` saw a directory and returned `null`. The anchor then never recorded the link,
+    and the reconcile read it as "unreadable, treated as changed". This has been the behavior since the
+    reconciler shipped in 4.0.0. The project patched its installed copy, and its next `pharn update` overwrote
+    the patch with this repo's unfixed file, so the fix belongs here.
+  - **Which links, exactly.** The new rule applies to a link whose open succeeds on something that is not a
+    regular file (a directory, a device), and to a link whose open fails with `ENOENT`, `ENOTDIR` or `ELOOP`
+    (the target resolves to nothing). The set is closed, and `EACCES` is deliberately not in it. A link to an
+    unreadable file stays unhashable, so it is still treated as changed, and making a target unreadable cannot
+    hide a change to it. A link to a regular file keeps its content hash, as before.
+  - **Compatible with the downstream patch.** For any valid-UTF-8 target the digest is
+    `sha256("symlink\0" + text)`, the formula that patch used, so its own tests pass again after
+    `pharn update`. The text is hashed as raw bytes, so two targets that differ only in invalid UTF-8 stay
+    distinct. A string read would have merged them.
+  - **After updating, the first run can still fail once.** An epoch anchored by older code has no entry for
+    such a link, so its first reconcile under 6.16.1 still reports the link. The next `/pharn-*build` anchors
+    again and records it. The worktree fingerprint also moves on a tree that holds such a link, so a
+    `/pharn-loop` freshness stamp written before the update reads as tree-moved and re-runs verify. It never
+    reads as fresh.
+  - **Also corrected in the contract.** `reconciliation-record.md` §3 listed "a path unreadable during
+    reconcile" under WARN ("verdict unaffected"). The checker has treated such a path as changed since that
+    rule's review fix. The row now says so.
+
 ## [6.16.0] - 2026-09-23
 
 ### Added
