@@ -57,7 +57,7 @@
 //     describe the run, nor that `excluded_requests` is the true count — only `--verify-transcript` binds
 //     either to the transcript, and only while it exists. Even then `excluded_requests` is bound as a
 //     RANGE, not a value: exact for the requests before the window, an upper bound for those after its
-//     end, because that tail keeps growing after emission (`checkExcludedAgainstTranscript`, 6.13.1).
+//     end, because that tail keeps growing after emission (`checkExcludedAgainstTranscript`, 6.14.1).
 //  LEGACY: a `pharn-cost-ledger/1` file is validated under its OWN closed key set and rules, never
 //     retroactively REDed for lacking `membership`, and gets one WARN: its totals are SESSION-scoped and
 //     may include activity outside the run. Reinterpreting them as run-scoped would silently rewrite
@@ -445,7 +445,7 @@ export function checkLedger(led, opts = {}) {
 }
 
 /**
- * `--verify-transcript`'s comparison of `membership.excluded_requests`, as a RANGE (6.13.1).
+ * `--verify-transcript`'s comparison of `membership.excluded_requests`, as a RANGE (6.14.1).
  *
  * THE RECORDED FAILURE (P7): a downstream `/pharn-loop` ledger went RED here with "423 recorded, 508
  * re-derived" while its rows and totals re-derived exactly, and the re-derived number kept climbing on every

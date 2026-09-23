@@ -170,7 +170,7 @@ export function isMember(win, ts, sid) {
  * member, not after it. An open window has no end, so nothing is after it, and an unparseable timestamp
  * is never after anything.
  *
- * WHY (6.13.1, a real failure): the transcript is append-only, so the requests a window excludes split
+ * WHY (6.14.1, a real failure): the transcript is append-only, so the requests a window excludes split
  * into two parts that behave differently over time. The part BEFORE the window is fixed once the window is.
  * The part AFTER its end keeps growing for as long as the session continues. `check-cost-ledger.mjs
  * --verify-transcript` compared the sum of both, recorded at emission, with the sum re-derived later, and

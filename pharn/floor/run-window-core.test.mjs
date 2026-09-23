@@ -167,7 +167,7 @@ test("currentRunMarkers: from the LATEST run-start by seq; null with no run-star
   );
 });
 
-test("isAfterWindow: strictly after a KNOWN end only — the end itself is a member, and open/unknown windows have no 'after' (6.13.1)", () => {
+test("isAfterWindow: strictly after a KNOWN end only — the end itself is a member, and open/unknown windows have no 'after' (6.14.1)", () => {
   const bounded = runWindow([mk(1, "run-start", "2026-09-21T10:00:00.000Z"), mk(2, "run-stop", "2026-09-21T11:00:00.000Z")], S);
   const open = runWindow([mk(1, "run-start", "2026-09-21T10:00:00.000Z")], S);
   const unknown = runWindow([], S);

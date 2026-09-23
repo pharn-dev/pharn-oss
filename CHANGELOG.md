@@ -38,7 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - 2026-09-23: **`cost.json` writes each request and each marker on one line.** A downstream ledger drops from
-  33,051 lines to 823, and the parsed JSON is unchanged. This PR's `SKILLS_VERSION` 6.13.0 → 6.13.1 patch
+  33,051 lines to 823, and the parsed JSON is unchanged. This PR's `SKILLS_VERSION` 6.14.0 → 6.14.1 patch
   covers it: shipped emitter bytes changed, and no ledger content did.
   ([`pharn/floor/render-cost-ledger.mjs`](./pharn/floor/render-cost-ledger.mjs),
   [`pharn/pharn-contracts/cost-ledger.md`](./pharn/pharn-contracts/cost-ledger.md),
@@ -67,7 +67,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     emissions are compared for byte-identity. The checker and the run-report reader both accept the
     written file.
   - **Bounds and deferrals.**
-    - A ledger committed before 6.13.1 keeps its old layout until its feature is emitted again. That one
+    - A ledger committed before 6.14.1 keeps its old layout until its feature is emitted again. That one
       re-emission rewrites the whole file once.
     - `JSON.stringify` leaves U+2028, U+2029 and U+0085 raw. "One line" means one `\n`-delimited line.
     - The verbatim `usage` copy is still 60.7% of that ledger's bytes, and `usage.iterations[]` alone is

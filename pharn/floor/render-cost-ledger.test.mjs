@@ -1338,7 +1338,7 @@ test("SOURCE SELECTION (6.9.1): a /pharn-ship ledger NEVER copies a LOOP.md left
 });
 
 // ===================================================================================================
-// THE ON-DISK LAYOUT (6.13.1): the two FACT arrays, one element per `\n`-delimited line.
+// THE ON-DISK LAYOUT (6.14.1): the two FACT arrays, one element per `\n`-delimited line.
 //
 // THE RECORDED FAILURE (P7): a downstream `/pharn-loop` ledger (630 rows) committed 33,051 lines, about
 // 52 per request row, because the emitter wrote `JSON.stringify(ledger, null, 2)`, which expands every
@@ -1405,7 +1405,7 @@ function boundedWithStages() {
   return { root, projectsDir, markersBase };
 }
 
-test("LAYOUT (6.13.1): the CLI writes every request and every marker on ONE \\n-delimited line", () => {
+test("LAYOUT (6.14.1): the CLI writes every request and every marker on ONE \\n-delimited line", () => {
   const { projectsDir, markersBase } = boundedWithStages();
   const out = mkdtempSync(join(tmpdir(), "cost-ledger-layout-"));
   const r = run([

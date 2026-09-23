@@ -277,7 +277,7 @@ total as run-scoped would silently reinterpret historical data.
    the transcript exists. The rows and the totals must match exactly. `excluded_requests` is checked as a
    **range**. Let `before` and `after` be the re-derived counts before the window and after its end. A
    genuine value is `before + t` for some `0 <= t <= after`, so it must lie in `[before, before + after]`.
-   Anything outside that range is RED. **Bound (added 6.13.1, after the equality form REDded a genuine
+   Anything outside that range is RED. **Bound (added 6.14.1, after the equality form REDded a genuine
    downstream ledger whose session had continued):**
    - The range is exact for the part before the window and only an upper bound for the tail. An inflated
      value up to `before + after` passes. The checker WARNs whenever it accepts a value below the
@@ -436,7 +436,7 @@ every aggregate is recomputable from its own rows.
 
 ## Size, disclosed rather than discovered
 
-**The layout (since 6.13.1).** The file is pretty-printed at a 2-space indent, except the two FACT arrays,
+**The layout (since 6.14.1).** The file is pretty-printed at a 2-space indent, except the two FACT arrays,
 `markers[]` and `requests[]`. Each of their elements is written as one JSON value on one `\n`-delimited line.
 An empty fact array is `[]`. The derived views stay pretty-printed, because they are what a person reads to
 learn the cost. `JSON.parse` of the file is exactly what it was under the old layout, key order included.

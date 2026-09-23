@@ -663,7 +663,7 @@ test("--verify-transcript on an UNKNOWN ledger WARNs that it certified nothing �
 });
 
 // ===================================================================================================
-// --verify-transcript over a session that CONTINUED after the run (6.13.1).
+// --verify-transcript over a session that CONTINUED after the run (6.14.1).
 //
 // THE RECORDED FAILURE (P7): a downstream `/pharn-loop` ledger (630 rows, `excluded_requests: 423`) went
 // RED under `--verify-transcript` with "423 recorded, 508 re-derived", and the number kept moving. The
@@ -718,7 +718,7 @@ const verify = (led, projectsDir) => checkLedger(led, { verifyTranscript: true, 
 const CONTINUED_WARN = /--verify-transcript: the session continued after the run/;
 const EXCLUDED_RED = /--verify-transcript: membership\.excluded_requests does not match the transcript/;
 
-test("--verify-transcript: a session that CONTINUED after the run is GREEN — the tail grew, nothing was wrong (6.13.1)", () => {
+test("--verify-transcript: a session that CONTINUED after the run is GREEN — the tail grew, nothing was wrong (6.14.1)", () => {
   const { led, projectsDir, continueSession, liveExcluded } = midRun();
   // NON-VACUITY (L34): each part of the split is non-empty, or the range would be degenerate.
   assert.equal(led.requests.length, INSIDE);

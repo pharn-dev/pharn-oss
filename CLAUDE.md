@@ -439,7 +439,7 @@ node pharn/floor/check-loop-decision.mjs <LOOP.md>
 # of numbers), so it is a BASH write outside fix #7 (L19), declared in the plan and exempted by name in
 # reconcile-ignore.json. Transcript location + the walk are IMPORTED from render-cost-record.mjs, not copied
 # (L35); a ✧ parity test pins the two to agree on totals with the class-name mapping asserted explicitly.
-# SIZE, disclosed rather than discovered — in LINES as well as bytes since 6.13.1. Lines in a PR diff were
+# SIZE, disclosed rather than discovered — in LINES as well as bytes since 6.14.1. Lines in a PR diff were
 # the cost that hurt: the old fully pretty-printed layout spent about 52 lines per request row. The emitter's
 # `serializeLedger` now writes the two FACT arrays (markers[], requests[]) one element per `\n`-delimited
 # line and pretty-prints the rest, and the parse is unchanged. The dated before/after measurements (lines and
