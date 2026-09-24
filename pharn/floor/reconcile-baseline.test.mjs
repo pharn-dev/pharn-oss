@@ -4,13 +4,35 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  rmSync,
+  existsSync,
+  symlinkSync,
+  unlinkSync,
+  chmodSync,
+  openSync,
+  closeSync,
+} from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
-import { enumerate, hashFile, snapshotScope, buildRecord, RECORD_VERSION, RECORD_PATH, SCOPE_PATH } from "./reconcile-baseline.mjs";
+import {
+  enumerate,
+  hashFile,
+  snapshotScope,
+  buildRecord,
+  LINK_TEXT_ERRNOS,
+  RECORD_VERSION,
+  RECORD_PATH,
+  SCOPE_PATH,
+} from "./reconcile-baseline.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ANCHOR = join(HERE, "reconcile-baseline.mjs");
@@ -117,23 +139,190 @@ test("★ hashFile hashes what it INSPECTED — no check-then-reopen-by-name (CW
   // claim its own header makes. The fix is structural: one descriptor, opened once, fstat'd and read
   // through that same fd. Pinned by reading the source, because the race window is not reachable
   // deterministically from a test — an assertion that "raced correctly" would be a flake, not a proof.
+  //
+  // The rule is a CLOSURE over every path-addressed `*Sync(abs` call in the region, not a list of the two
+  // calls someone thought to forbid (L36). The region runs from `hashFile` to `snapshotScope`, so it holds
+  // the link-text helper too: `readlinkSync(abs` is the ONE sanctioned second call. It reads a property of
+  // the NAME in one syscall and never hashes bytes it did not inspect. A `statSync(abs` or
+  // `readFileSync(abs` added later fails here without a new rule. Comments are stripped first, because the
+  // rationale above the function quotes calls it does not make.
   const src = readFileSync(join(HERE, "reconcile-baseline.mjs"), "utf8");
   const body = src.slice(src.indexOf("export function hashFile"), src.indexOf("export function snapshotScope"));
-  assert.match(body, /openSync\(/, "must open a descriptor");
-  assert.match(body, /fstatSync\(fd\)/, "must stat the DESCRIPTOR, not the path");
-  assert.match(body, /readFileSync\(fd\)/, "must read the DESCRIPTOR, not the path");
-  assert.ok(!/statSync\(abs\)/.test(body), "a path-based stat here is the TOCTOU pattern this replaced");
-  assert.ok(!/readFileSync\(abs\)/.test(body), "a path-based read here reopens by name — the race");
-  assert.match(body, /closeSync\(fd\)/, "the descriptor must be released on every path");
+  const code = body.replace(/\/\/.*$/gm, "");
+  assert.deepEqual(
+    code.match(/\b\w+Sync\(abs\b/g),
+    ["openSync(abs", "readlinkSync(abs"],
+    "one open, and the link-text read — every other operation must address the fd"
+  );
+  assert.match(code, /fstatSync\(fd\)/, "must stat the DESCRIPTOR, not the path");
+  assert.match(code, /readFileSync\(fd\)/, "must read the DESCRIPTOR, not the path");
+  assert.match(code, /readlinkSync\(abs, \{ encoding: "buffer" \}\)/, "the link text is hashed as raw BYTES, never a decoded string");
+  assert.match(code, /closeSync\(fd\)/, "the descriptor must be released on every path");
 });
 
 test("hashFile does not leak descriptors across many calls", () => {
   const dir = makeRepo();
   const target = join(dir, "tracked.md");
+  symlinkSync("ignored", join(dir, "dir-link"));
   const first = hashFile(target);
   for (let i = 0; i < 300; i++) hashFile(target);
   for (let i = 0; i < 300; i++) hashFile(join(dir, "nope.md")); // the throwing path releases too
-  assert.equal(hashFile(target), first, "still readable after 600 opens — nothing was leaked");
+  for (let i = 0; i < 300; i++) hashFile(join(dir, "dir-link")); // an OPENED fd that falls back to link text
+  assert.equal(hashFile(target), first, "still readable after 900 opens — nothing was leaked");
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────
+// SYMLINKS — hashFile's answer for EVERY kind of path `git ls-files --cached --others` can hand it.
+// Trigger: .dev/features/reconcile-symlink-hash/PLAN.md. A tracked directory symlink returned null, so the
+// anchor never recorded it and every reconcile reported it as a Bash escape; downstream that ended every
+// /pharn-loop run STOP_TERMINAL with zero writes.
+//
+// The set is materialized ONCE and every rule below iterates it (L29, L52). The kind the downstream failure
+// was about is one row among nine, not the whole suite. `linkText` marks a kind hashed by its link text;
+// `expect` gives the answer for the others.
+
+const sha = (...parts) => parts.reduce((h, p) => h.update(p), createHash("sha256")).digest("hex");
+const IS_ROOT = typeof process.getuid === "function" && process.getuid() === 0;
+
+const PATH_KINDS = [
+  {
+    kind: "regular file",
+    make: (d) => (writeFileSync(join(d, "f.txt"), "hello"), "f.txt"),
+    expect: () => sha("hello"),
+  },
+  {
+    kind: "symlink to a regular file",
+    make: (d) => (writeFileSync(join(d, "t.txt"), "target bytes"), symlinkSync("t.txt", join(d, "l")), "l"),
+    expect: () => sha("target bytes"),
+  },
+  {
+    kind: "symlink to a directory",
+    linkText: "sub",
+    make: (d) => (mkdirSync(join(d, "sub")), symlinkSync("sub", join(d, "l")), "l"),
+  },
+  {
+    kind: "dangling symlink",
+    linkText: "nowhere",
+    make: (d) => (symlinkSync("nowhere", join(d, "l")), "l"),
+  },
+  {
+    kind: "symlink through a regular file",
+    linkText: "t.txt/inner",
+    make: (d) => (writeFileSync(join(d, "t.txt"), "x"), symlinkSync("t.txt/inner", join(d, "l")), "l"),
+  },
+  {
+    kind: "symlink loop",
+    linkText: "l",
+    make: (d) => (symlinkSync("l", join(d, "l")), "l"),
+  },
+  {
+    kind: "plain directory",
+    make: (d) => (mkdirSync(join(d, "sub")), "sub"),
+    expect: () => null,
+  },
+  {
+    kind: "missing path",
+    make: () => "absent",
+    expect: () => null,
+  },
+  {
+    // FAIL-CLOSED, and the one place this diverges from the downstream patch: a link whose target cannot
+    // be read stays null, so it stays a reconcile candidate. Hashing its text would let "make the target
+    // unreadable" silence a change to a denied file.
+    kind: "symlink to an unreadable regular file",
+    skip: IS_ROOT && "root reads a mode-000 file, so the unreadable state cannot be built",
+    make: (d) => (writeFileSync(join(d, "t.txt"), "secret"), chmodSync(join(d, "t.txt"), 0o000), symlinkSync("t.txt", join(d, "l")), "l"),
+    expect: () => null,
+  },
+];
+
+function scratch() {
+  const dir = mkdtempSync(join(tmpdir(), "pharn-hash-kind-"));
+  made.push(dir);
+  return dir;
+}
+
+const expected = (k) => (k.linkText !== undefined ? sha(`symlink\0${k.linkText}`) : k.expect());
+
+for (const k of PATH_KINDS) {
+  test(`★ PATH_KINDS — ${k.kind}: ${k.linkText !== undefined ? "hashed by its link text" : "unchanged rule"}`, { skip: k.skip }, () => {
+    const dir = scratch();
+    const abs = join(dir, k.make(dir));
+    assert.equal(hashFile(abs), expected(k));
+    assert.equal(hashFile(abs), expected(k), "hashing is stable across calls");
+  });
+}
+
+test("★ every link-text kind: RE-POINTING the link changes the digest — detection is kept, not exempted", () => {
+  const kinds = PATH_KINDS.filter((k) => k.linkText !== undefined);
+  assert.ok(kinds.length >= 4, "non-vacuity (L34): the rule must range over the link-text kinds");
+  for (const k of kinds) {
+    const dir = scratch();
+    const abs = join(dir, k.make(dir));
+    const before = hashFile(abs);
+    unlinkSync(abs);
+    symlinkSync("somewhere-else", abs);
+    assert.notEqual(hashFile(abs), before, `${k.kind}: a re-pointed link must read as changed`);
+  }
+});
+
+test("✧ LINK_TEXT_ERRNOS is CLOSED over the kinds that exercise it — no member without a row, no row without a member", () => {
+  // The fallback fires on errno MEMBERSHIP (P5). Each code is read here from the live `openSync` on the
+  // built path, never typed from memory. So a code added to the module with no PATH_KINDS row fails, and so
+  // does a row whose code the module does not accept (L36: closure, not per-member presence).
+  const raised = new Set();
+  let unreadable = null;
+  for (const k of PATH_KINDS) {
+    if (k.skip) continue;
+    const dir = scratch();
+    const abs = join(dir, k.make(dir));
+    try {
+      closeSync(openSync(abs, "r"));
+    } catch (e) {
+      if (k.linkText !== undefined) raised.add(e.code);
+      else if (k.kind === "symlink to an unreadable regular file") unreadable = e.code;
+    }
+  }
+  assert.deepEqual([...raised].sort(), [...LINK_TEXT_ERRNOS].sort());
+  assert.ok(Object.isFrozen(LINK_TEXT_ERRNOS), "the set is data, not a mutable list a caller can widen");
+  if (!IS_ROOT) assert.ok(!LINK_TEXT_ERRNOS.includes(unreadable), `an unreadable target (${unreadable}) must never fall back to link text`);
+});
+
+test("★ downstream compatibility: a valid-UTF-8 link hashes exactly sha256('symlink\\0' + text)", () => {
+  // pharn-starter shipped this formula as a local patch (its PR #93) and pins it in its own tests; a
+  // baseline it anchored with that patch must reconcile consistently with this module.
+  const dir = scratch();
+  symlinkSync("nowhere", join(dir, "dangling"));
+  assert.equal(hashFile(join(dir, "dangling")), createHash("sha256").update("symlink\0nowhere").digest("hex"));
+});
+
+test("★ a non-UTF-8 link target is hashed by its raw bytes — two targets that decode alike stay distinct", (t) => {
+  // Both targets decode to "a�" as a UTF-8 string. A string read would hash them EQUAL, so re-pointing
+  // one to the other would go unseen (GRILL finding 1).
+  const dir = scratch();
+  const one = Buffer.from([0x61, 0xff]);
+  const two = Buffer.from([0x61, 0xfe]);
+  try {
+    symlinkSync(one, join(dir, "one"));
+    symlinkSync(two, join(dir, "two"));
+  } catch (e) {
+    t.skip(`this filesystem refuses a non-UTF-8 link target (${e.code})`);
+    return;
+  }
+  assert.equal(one.toString("utf8"), two.toString("utf8"), "premise: the two targets decode to the same string");
+  assert.equal(hashFile(join(dir, "one")), sha("symlink\0", one));
+  assert.notEqual(hashFile(join(dir, "one")), hashFile(join(dir, "two")));
+});
+
+test("★ the ANCHOR records a tracked directory symlink and a dangling one — the entries the false ESCAPE lacked", () => {
+  const dir = makeRepo();
+  symlinkSync("ignored", join(dir, "dir-link"));
+  symlinkSync("nowhere", join(dir, "dangling"));
+  execFileSync("git", ["add", "dir-link", "dangling"], { cwd: dir, stdio: "pipe" });
+  const rec = buildRecord(dir, "t").record;
+  assert.equal(rec.entries["dir-link"], sha("symlink\0ignored"));
+  assert.equal(rec.entries["dangling"], sha("symlink\0nowhere"));
+  assert.equal(rec.entry_count, Object.keys(rec.entries).length);
 });
 
 test("★ the same bytes hash the same; one changed byte changes the digest", () => {

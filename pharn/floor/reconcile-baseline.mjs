@@ -55,6 +55,7 @@ import {
   openSync,
   fstatSync,
   closeSync,
+  readlinkSync,
 } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -107,14 +108,48 @@ export function enumerate(baseDir) {
 // it inspected cannot support the claim its own header makes. Caught by CodeQL on the PR that introduced
 // it (js/file-system-race, high), not by review. `open` → `fstat` → `read` on the SAME fd closes it:
 // after openSync the descriptor is bound to one inode, and fstatSync/readFileSync both address the fd.
+//
+// A SYMLINK WHOSE TARGET IS NOT AN OPENABLE REGULAR FILE is hashed by its own LINK TEXT — what git itself
+// stores for a mode-120000 entry. `openSync` FOLLOWS a link, so a link to a directory used to reach the
+// `isFile()` test and return null, and a dangling one threw and returned null. The anchor then never
+// recorded the link, and the reconciler read every such tracked link as "unreadable, treated as changed":
+// a false ESCAPE on EVERY run of a repo that tracks one, with zero writes. Measured downstream, 20 tracked
+// `.claude/skills/*` directory links turned each /pharn-loop run terminal
+// (.dev/features/reconcile-symlink-hash/PLAN.md).
+//
+//   • WHICH failures fall back is a CLOSED errno set (P5), not "any error". ENOENT / ENOTDIR / ELOOP mean
+//     the target resolves to nothing, so the link text is the only thing there is to hash. EACCES above
+//     all is deliberately NOT a member: a link to an unreadable file stays null, and so stays a candidate.
+//     Hashing its text instead would let "make the target unreadable" silence a change to a denied file —
+//     the evasion the reconciler's "unreadable is treated as changed" rule exists to refuse.
+//   • readlinkSync(abs) is the one path-addressed call after the open, reached only when the fd names no
+//     regular file or the open failed. It reads a property of the NAME in one syscall, so it never hashes
+//     bytes other than the ones it inspected. A plain directory, a gitlink or a special file answers EINVAL
+//     there and stays null, exactly as before.
+//   • The text is read as a BUFFER and hashed raw. A string read would decode it as UTF-8, and two targets
+//     differing only in invalid bytes would decode to the same U+FFFD string and hash equal, so re-pointing
+//     one to the other would go unseen. For every valid-UTF-8 target the digest is byte-identical to
+//     sha256("symlink\0" + text), the formula a downstream install shipped as a local patch.
+//   • A symlink to a REGULAR file keeps its content hash (the target's bytes, through the one fd above).
+//
+// BOUNDS, stated: the files INSIDE a linked directory are not seen through the link — they are reconciled
+// under their own tracked paths, and a target outside the repo is not descended. A regular file whose bytes
+// are exactly `symlink\0<text>` hashes equal to that link; that takes a deliberate forgery, which the
+// reconciliation contract already places outside its non-adversarial claim. A baseline anchored by the code
+// before this rule has no entry for such a link, so the FIRST reconcile of that epoch still reports it;
+// the next anchor records it.
+export const LINK_TEXT_ERRNOS = Object.freeze(["ENOENT", "ENOTDIR", "ELOOP"]);
+
 export function hashFile(abs) {
   let fd;
   try {
     fd = openSync(abs, "r");
-    if (!fstatSync(fd).isFile()) return null; // a directory or special file is not a hashable entry
+    if (!fstatSync(fd).isFile()) return hashLinkText(abs); // a directory / special file: only a link's text
     return createHash("sha256").update(readFileSync(fd)).digest("hex");
-  } catch {
-    return null; // unreadable / vanished between enumeration and read — recorded as absent, never guessed
+  } catch (e) {
+    // A target that resolves to nothing is hashable only as a link's text. Every other failure — unreadable,
+    // or vanished between enumeration and read — is recorded as absent, never guessed.
+    return LINK_TEXT_ERRNOS.includes(e?.code) ? hashLinkText(abs) : null;
   } finally {
     if (fd !== undefined) {
       try {
@@ -123,6 +158,19 @@ export function hashFile(abs) {
         /* already closed / invalid — nothing to reclaim */
       }
     }
+  }
+}
+
+// sha256 of `symlink\0` + a link's raw target bytes, or null when the name is not a symlink (EINVAL) or
+// is gone. The prefix separates the digest domain from a plain content hash of the same bytes.
+function hashLinkText(abs) {
+  try {
+    return createHash("sha256")
+      .update("symlink\0")
+      .update(readlinkSync(abs, { encoding: "buffer" }))
+      .digest("hex");
+  } catch {
+    return null;
   }
 }
 

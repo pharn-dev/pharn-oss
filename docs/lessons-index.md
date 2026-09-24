@@ -10,7 +10,7 @@ lessons to fetch; canon stays the source of truth and the floor's verification t
 applied, without fetching its full `## L<n>` entry from canon, is the P0 disease. "The index was
 consulted" never means "the relevant lessons were read".
 
-58 lessons · 58 tagged · 0 malformed · 0 untagged · ~41743 tokens total
+59 lessons · 59 tagged · 0 malformed · 0 untagged · ~42675 tokens total
 
 Columns: `id | type | concepts | title | promoted | ~tokens`. `-` is rendered in THREE columns
 and does NOT mean the same thing in each — read it against the column it sits in. In `type`/`concepts`:
@@ -82,4 +82,5 @@ L55 | floor    | differential-testing,verification-fidelity,parser-parity,false-
 L56 | floor    | differential-testing,parser-parity,stated-bound,lesson-recurrence,false-green,floor-escalation | A parser model's stated LIMITS come from the same model — L55 recurred in the first increment to cite it, in its bound and then in its fix | 2026-09-23 | ~765
 L57 | tooling  | writes-scope,bash-escape,formatter,config-globs,live-measurement                               | An explicit path list is not a scope for a config-driven tool — its config can ADD inputs, and root-anchored ignores do not cover nested checkouts | 2026-09-23 | ~874
 L58 | floor    | temporal-state,referent-binding,append-only,snapshot-staleness,lesson-recurrence               | A record bound to a live referent must ask which part of that referent may still change — L42 recurred as a snapshot count re-derived from a growing log | 2026-09-23 | ~885
+L59 | floor    | symlink,follow-semantics,lesson-recurrence,floor-escalation,input-domain                       | A call that FOLLOWS a symlink answers for the target, never for the link — L54 recurred in hashFile, where no fixture held a link | 2026-09-24 | ~932
 ```
