@@ -1600,6 +1600,7 @@ const STUCK_POINTS = [
   { id: "S9", blocked: "stage-refused" },
   { id: "S10", blocked: "unlisted-ask" },
   { id: "S11", blocked: "stale-evidence" },
+  { id: "S12", blocked: "no-test-runner" }, // 6.19.0: /pharn-test's preflight found a level with no runner
 ];
 // The one non-member spelling the closure admits: the command's own placeholder in generic prose.
 const BLOCKED_PLACEHOLDER = "<id>";
@@ -1699,7 +1700,7 @@ function forbiddenGitOffenders(body) {
 }
 
 test("✧ L34 — the /pharn-loop sets are non-empty and well-formed (the rules below cannot pass vacuously)", () => {
-  assert.equal(STUCK_POINTS.length, 12, "the stuck-point table is S1–S11 plus S6b");
+  assert.equal(STUCK_POINTS.length, 13, "the stuck-point table is S1–S12 plus S6b");
   assert.equal(new Set(STUCK_POINTS.map((s) => s.id)).size, STUCK_POINTS.length, "duplicate stuck-point id");
   assert.ok(COMMIT_OUTCOMES.length > 0, "the commit-outcome set is empty");
   assert.ok(fencedLines(commandBody(LOOP_FILE)).length > 0, `found no fenced lines in ${LOOP_FILE} — the fence scan broke`);
@@ -1940,7 +1941,7 @@ const PHASE_MARKER_WIRING = [
     file: "pharn-loop.md",
     // The loop marks pharn-spec: it resolves `<name>` at S2 and marks run-start there, before the spec
     // stage runs.
-    stages: ["pharn-spec", "pharn-plan", "pharn-grill", "pharn-build", "pharn-regress", "pharn-verify"],
+    stages: ["pharn-spec", "pharn-plan", "pharn-grill", "pharn-test", "pharn-build", "pharn-regress", "pharn-verify"],
     iterated: ["pharn-build", "pharn-regress", "pharn-verify"],
     // The loop's iteration count is a RUNTIME value under a `--max-iter` cap, so the command pins the
     // PLACEHOLDER and the agent substitutes it. Pinning `\d+` here would be wrong for this command.
@@ -1955,7 +1956,7 @@ const PHASE_MARKER_WIRING = [
     // run: Step 1 records a session-keyed `--pending-start` that the named run-start adopts (pinned
     // below). The spec's requests are therefore run members in the `unattributed` stage bucket. A rule
     // demanding a `pharn-spec` stage marker here would demand an impossible one.
-    stages: ["pharn-plan", "pharn-grill", "pharn-build", "pharn-regress", "pharn-verify"],
+    stages: ["pharn-plan", "pharn-grill", "pharn-test", "pharn-build", "pharn-regress", "pharn-verify"],
     iterated: ["pharn-build", "pharn-regress", "pharn-verify"],
     // Ship does not iterate: it runs the chain once, with AT MOST ONE build-completion retry. So its
     // iteration numbers are LITERAL — 1 in the chain, 2 in the Step-2b retry — and a `<N>` placeholder

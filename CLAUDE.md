@@ -347,9 +347,9 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # templated (0) / legacy (3) / bootstrap (4, 6.18.0) before any mapping exists; in full mode a legacy or test-infra
 # SPEC with a mapping is RED.
 # /pharn-regress's --declared is PLAN `## Files` u AC-TESTS.md `## Files`. BOUNDS: the build exclusion holds for the
-# PLAN.md checked (a later PLAN edit reopens it; /pharn-build does not re-check in 6.17.0); /pharn-test runs before the
+# PLAN.md checked (a later PLAN edit reopens it until /pharn-build re-checks it first thing — since 6.19.0, via check-test-stage); /pharn-test runs before the
 # reconcile anchor, so its own Bash writes are not reconciled; the tests' quality and "read only SPEC/PLAN" are
-# advisory. Standalone: /pharn-ship and /pharn-loop do not call it yet. Contract: pharn/pharn-contracts/ac-tests.md.
+# advisory. Since 6.19.0 /pharn-ship and /pharn-loop run it (below). Contract: pharn/pharn-contracts/ac-tests.md.
 #
 # THE RED RUN (added 6.18.0) — /pharn-test RUNS the AC tests before the build and requires each to FAIL, so a test
 # that cannot fail, is never collected or is skipped cannot pass unnoticed. check-red-run.mjs --preflight: every AC's
@@ -383,6 +383,24 @@ node pharn/floor/ac-tests-lock.mjs --check <name> [--require-red-run [--allow-bo
 node pharn/floor/check-red-run.mjs --preflight --ac-tests <AC-TESTS.md> --discover <package.json> --root <dir>
 node pharn/floor/check-red-run.mjs --verdict --ac-tests <AC-TESTS.md> --out <dir> --root <dir>
 
+# THE TEST-STAGE GATE (added 6.19.0) — did the test stage complete for this feature's CURRENT SPEC and PLAN? ONE checker,
+# read by /pharn-build (Step 0, BEFORE its scope set and anchor, so a refusal leaves neither), /pharn-ship and
+# /pharn-loop (after /pharn-test, between grill and build), and check-loop-fresh.mjs check I (after every build and at
+# the commit gate). It SHELLS the checkers above and owns only the branch: `--spec` 0 → the full mapping check + a
+# test-first lock with `--check --require-red-run` → READY test-first; 4 → a bootstrap lock with
+# `--allow-bootstrap` → READY bootstrap; 3 → no AC-TESTS.md and no lock → NOT-APPLICABLE legacy-spec. Else
+# `RED <reason>` ∈ {spec-unusable, no-mapping, mapping-red, no-lock, lock-red, lock-unusable, lock-mode-mismatch,
+# legacy-with-mapping, mode-not-allowed}; `--require-test-first` (passed by /pharn-loop and check-loop-fresh) turns any
+# other pass into mode-not-allowed — the loop's policy in the checker; lock-mode-mismatch exists because a test-first lock's own --check never reads SPEC.md. Children
+# run in the caller's cwd (test paths resolve there). BOUNDS: NOT-APPLICABLE is decided by spec_template, which the pin
+# does not cover — /pharn-loop (which never writes a legacy SPEC) refuses it as S9; tree identity, not recency; a
+# pinned test rewritten by a mutating gate after the red run is a STOP in the loop, never a re-run (/pharn-test cannot
+# re-run after the build). /pharn-loop's S12 `blocked: no-test-runner` is decided by its own pinned
+# check-red-run --preflight exit, never by relayed text, and its Step 6c commit stages the lock and every pinned test
+# (exit 4, `not committed: stage failed`, if one is not a regular, non-ignored file). Exit: 0 READY/NOT-APPLICABLE ·
+# 1 RED · 2 unusable. Contract: pharn/pharn-contracts/ac-tests.md, "The test-stage gate".
+node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-test-first]
+
 # FRESHNESS — /pharn-loop reads a stop only from evidence that belongs to THIS tree (added 6.10.0).
 # THE RECORDED FAILURE (P7): CHANGELOG 6.3.0's unattended /pharn-loop run skipped /pharn-grill, /pharn-regress
 # and /pharn-verify and still wrote a floor-grade-looking decision. #222 re-derives a decision from the reports
@@ -399,7 +417,7 @@ node pharn/floor/check-red-run.mjs --verdict --ac-tests <AC-TESTS.md> --out <dir
 #   --stamp / check-regress.mjs verdict reproduces the report's FLOOR fields (STOP report-verdict-mismatch) ·
 #   H base stamp head == --base (STOP) · F verify stamp {algo, final} == the live fingerprint (RERUN verify
 #   tree-moved-since-verify) · G regress head final == verify init (RERUN regress) · I (--front) the three
-#   front checkers exit 0 and GRILL.md exists (STOP front-stage-red).
+#   front checkers exit 0, GRILL.md exists and check-test-stage exits 0 (6.19.0) (STOP front-stage-red).
 # THE BUDGET IS A COUNTER, NOT PROSE: .pharn/pharn-loop/<name>/freshness.jsonl, one row per authorized re-run,
 # --max-reruns (default 1) per (iter, stage), then STOP rerun-budget-exhausted; --commit-gate never re-runs and
 # never writes a row (a RERUN-class cause becomes STOP with its own code). The ledger path is lstat-checked
@@ -984,7 +1002,8 @@ injected downstream as instructions. **No guaranteed decision ever rests on a ta
 markdown there is no `import` to lint, so "no sibling imports" is enforced best-effort by a grep in
 the floor plus the review agent.
 
-**The pipeline spine** is `spec → plan → grill → build → regress → verify → ship`, each stage emitting
+**The pipeline spine** is `spec → plan → grill → test → build → regress → verify → ship` (`test` since 6.19.0;
+`pharn/ARCHITECTURE.md §6` lists it once a human applies the pending protected edit), each stage emitting
 a typed artifact carrying `spec_id` (+ the plan additionally pins `spec_content_hash`).
 
 ## Conventions when building PHARN capabilities

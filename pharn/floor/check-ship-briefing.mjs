@@ -17,7 +17,7 @@
 //
 // ── Honest scope (P0) — the split this file must never blur ───────────────────────────────────────────
 // FLOOR (what the exit code guarantees): the frontmatter fields are shape-valid, and each field that has a
-//   live source (SPEC.md / regression-report.json / verify-report.json / GRILL.md, resolved as SIBLINGS
+//   live source (SPEC.md / regression-report.json / verify-report.json / GRILL.md / AC-TESTS.lock.json, resolved as SIBLINGS
 //   of the given BRIEFING.md, never a separate `--base` argument) EQUALS what that source currently says.
 //   All of it is ARCHITECTURE §2 primitive #3 (enum/regex/equality).
 // ADVISORY (what it can NEVER check): that the `## Why this design` section's CONTENT — quoted or
@@ -30,7 +30,7 @@
 // ── Duplication, not import (P3 — no sibling import; a documented, tested-for divergence, matching
 //    check-plan-spec-agree.mjs's readValue precedent) ──────────────────────────────────────────────────
 // The field-reading logic below (readHeaderField's dual PLAN/SPEC-shape parse, the JSON verdict reader,
-// the GRILL verdict-line scan) AND the frontmatter scalar codec (`yamlScalar` / `isQuotedScalar` /
+// the GRILL verdict-line scan, the AC-tests lock's `mode` reader — 6.19.0) AND the frontmatter scalar codec (`yamlScalar` / `isQuotedScalar` /
 // `yamlUnscalar`) are DUPLICATED from `render-ship-briefing.mjs`, not imported. The two must read a field
 // the SAME way for "equals its source" to mean anything; `check-ship-briefing.test.mjs` carries ✧ PARITY
 // tests asserting both copies agree on a shared fixture set, so a future edit to one side that silently
@@ -207,6 +207,30 @@ function red(kind, detail) {
 
 // Exported for the ✧ per-field tests: they assert every yamlScalar-emitted field survives the
 // render→read round trip, which requires reading the envelope the way `gate()` does.
+/** The two `mode` values an AC-tests lock carries — DUPLICATED from render-ship-briefing.mjs, with a ✧ parity test. */
+export const AC_TESTS_MODES = new Set(["bootstrap", "test-first"]);
+
+/** `ac_tests_mode`'s live source — DUPLICATED from render-ship-briefing.mjs readAcTestsMode (✧ parity-tested). */
+export function readAcTestsMode(dir) {
+  const path = join(dir, "AC-TESTS.lock.json");
+  if (!existsSync(path)) return "n/a";
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return "n/a";
+  }
+  if (parsed === null || typeof parsed !== "object" || !Object.hasOwn(parsed, "mode")) return "n/a";
+  return AC_TESTS_MODES.has(parsed.mode) ? parsed.mode : "n/a";
+}
+
+/** Contract 0.2.0 (6.19.0) added `ac_tests_mode`. A briefing rendered before it (0.1.x) has no such field and still
+ *  checks; one at 0.2.0 or later must carry it. Numeric compare over a version already shape-checked as semver. */
+function carriesAcTestsMode(version) {
+  const [major, minor] = version.split(".").map(Number);
+  return major > 0 || minor >= 2;
+}
+
 export function readEnvelope(text) {
   const m = text.match(FM_RE);
   if (!m) return null;
@@ -279,7 +303,13 @@ function gate(briefingPath) {
   const version = fields.get("briefing_contract_version");
   if (!(cleanScalar(version, 32) && /^\d+\.\d+\.\d+$/.test(version))) {
     red("shape", `\`briefing_contract_version\` must be a semver string, got ${JSON.stringify(version)}`);
+  } else if (carriesAcTestsMode(version) && !fields.has("ac_tests_mode")) {
+    red("envelope", `missing required frontmatter field \`ac_tests_mode\` (briefing_contract_version ${version} carries it)`);
   }
+
+  const acTestsMode = fields.has("ac_tests_mode") ? fields.get("ac_tests_mode") : null;
+  if (acTestsMode !== null && acTestsMode !== "n/a" && !AC_TESTS_MODES.has(acTestsMode))
+    red("shape", `\`ac_tests_mode\` not in {${[...AC_TESTS_MODES].join(", ")}, n/a}, got ${JSON.stringify(acTestsMode)}`);
 
   if (reds.length) return fail2(briefingPath);
 
@@ -334,6 +364,12 @@ function gate(briefingPath) {
       `\`verify_verdict\` = ${JSON.stringify(verifyVerdict)} but verify-report.json currently reads ${JSON.stringify(liveVerify)}`
     );
 
+  if (acTestsMode !== null) {
+    const liveMode = readAcTestsMode(dir);
+    if (acTestsMode !== liveMode)
+      red("stale", `\`ac_tests_mode\` = ${JSON.stringify(acTestsMode)} but AC-TESTS.lock.json currently reads ${JSON.stringify(liveMode)}`);
+  }
+
   // ── (3) The `## Why this design` heading + ADVISORY marker exactness ─────────────────────────────────
   const body = text.slice((text.match(FM_RE) || [""])[0].length);
   const whyLines = body.split(/\r?\n/).filter((l) => /^##[ \t]+Why this design/i.test(l));
@@ -355,7 +391,7 @@ function gate(briefingPath) {
   if (reds.length) return fail2(briefingPath);
   console.log(
     `GREEN — ${briefingPath}: envelope well-shaped; spec_id/spec_state, grill_verdict, regress_verdict, ` +
-      `and verify_verdict all match their live sibling sources. NOTE (P0): this proves the COPIES agree ` +
+      `verify_verdict and (when carried) ac_tests_mode all match their live sibling sources. NOTE (P0): this proves the COPIES agree ` +
       `with their sources right now — never that the briefing is a faithful or sufficient summary.`
   );
   return 0;

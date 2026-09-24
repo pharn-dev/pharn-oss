@@ -44,22 +44,24 @@ briefing: # pharn/features/<name>/BRIEFING.md — a markdown file with `---`-fen
   grill_verdict: "<verbatim ADVISORY VERDICT line from GRILL.md>" | "n/a"
   regress_verdict: "no-regressions" | "regressions" | "inconclusive" | "n/a"
   verify_verdict: "PASS" | "FAIL" | "INCOMPLETE" | "INCONCLUSIVE" | "n/a"
+  ac_tests_mode: "test-first" | "bootstrap" | "n/a" # 0.2.0 — AC-TESTS.lock.json's `mode`
   rendered_at_commit: "<git sha, 7-40 hex>" | "unknown" # `unknown` when HEAD cannot be resolved
-  briefing_contract_version: "0.1.0" # this contract's own version, for forward compatibility
+  briefing_contract_version: "0.2.0" # this contract's own version, for forward compatibility
 ```
 
 ## Field shape + trust classes
 
-| field                       | shape (FLOOR — enum/regex)                                   | trust                                                                                                                                                                  |
-| --------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `feature`                   | non-empty, control-char-free, `<=128` chars                  | trusted (a path-derived slug)                                                                                                                                          |
-| `spec_id`                   | non-empty control-char-free string, OR the literal `n/a`     | **value** shape-gated; the value's TRUTH is the SPEC's, not re-verified here                                                                                           |
-| `spec_state`                | `Approved` \| `n/a`                                          | trusted (enum)                                                                                                                                                         |
-| `grill_verdict`             | control-char-free, `<=256` chars, OR the literal `n/a`       | **quoted from GRILL.md**; GRILL.md's own free text is `trust: untrusted` — this field is a VERBATIM COPY, so it inherits that tag even though its shape is regex-gated |
-| `regress_verdict`           | `no-regressions` \| `regressions` \| `inconclusive` \| `n/a` | trusted (enum, copied from `regression-report.json`)                                                                                                                   |
-| `verify_verdict`            | `PASS` \| `FAIL` \| `INCOMPLETE` \| `INCONCLUSIVE` \| `n/a`  | trusted (enum, copied from `verify-report.json`)                                                                                                                       |
-| `rendered_at_commit`        | `^[0-9a-f]{7,40}$` or the literal `unknown`                  | trusted (regex; `unknown` is an honest absence, never a fabricated SHA — mirrors `check-provenance.mjs`'s `COMMIT_RE`)                                                 |
-| `briefing_contract_version` | `^\d+\.\d+\.\d+$`                                            | trusted (regex)                                                                                                                                                        |
+| field                       | shape (FLOOR — enum/regex)                                   | trust                                                                                                                                                                         |
+| --------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `feature`                   | non-empty, control-char-free, `<=128` chars                  | trusted (a path-derived slug)                                                                                                                                                 |
+| `spec_id`                   | non-empty control-char-free string, OR the literal `n/a`     | **value** shape-gated; the value's TRUTH is the SPEC's, not re-verified here                                                                                                  |
+| `spec_state`                | `Approved` \| `n/a`                                          | trusted (enum)                                                                                                                                                                |
+| `grill_verdict`             | control-char-free, `<=256` chars, OR the literal `n/a`       | **quoted from GRILL.md**; GRILL.md's own free text is `trust: untrusted` — this field is a VERBATIM COPY, so it inherits that tag even though its shape is regex-gated        |
+| `regress_verdict`           | `no-regressions` \| `regressions` \| `inconclusive` \| `n/a` | trusted (enum, copied from `regression-report.json`)                                                                                                                          |
+| `verify_verdict`            | `PASS` \| `FAIL` \| `INCOMPLETE` \| `INCONCLUSIVE` \| `n/a`  | trusted (enum, copied from `verify-report.json`)                                                                                                                              |
+| `ac_tests_mode`             | `test-first` \| `bootstrap` \| `n/a`                         | trusted (enum, copied from `AC-TESTS.lock.json` `mode`; `n/a` when there is no lock or it has no `mode`). Required from `0.2.0`; a `0.1.x` briefing has none and still checks |
+| `rendered_at_commit`        | `^[0-9a-f]{7,40}$` or the literal `unknown`                  | trusted (regex; `unknown` is an honest absence, never a fabricated SHA — mirrors `check-provenance.mjs`'s `COMMIT_RE`)                                                        |
+| `briefing_contract_version` | `^\d+\.\d+\.\d+$`                                            | trusted (regex)                                                                                                                                                               |
 
 `grill_verdict` is the one field whose **shape** is floor-gated but whose **content class** is inherited
 untrusted DATA (it quotes GRILL.md's own advisory verdict line, which is itself model-authored prose) —
@@ -75,7 +77,8 @@ as the equality check that produced it (see "The rule of the contract" below).
 - `## Why this design` — EITHER a verbatim quote of a PLAN.md design-rationale section (a byte-for-byte
   substring of the committed `PLAN.md`), OR the fenced ADVISORY paragraph described above, OR the honest
   line `_No design-decision section found in PLAN.md — see PLAN.md directly._` when neither applies.
-- `## Verdicts` — a table of the four report-derived frontmatter fields, each with a pointer to its source
+- `## Verdicts` — a table of the four report-derived frontmatter fields plus `ac_tests_mode` (the `test` row, 0.2.0),
+  each with a pointer to its source
   file (never restated content, P4).
 - `## Pointers` — paths to `PLAN.md` / `GRILL.md` / `REGRESSION.md` / `VERIFY.md` / `BUILD.md` (citations
   only).
@@ -86,7 +89,8 @@ as the equality check that produced it (see "The rule of the contract" below).
   1. **envelope shape** — every frontmatter field matches the table above (else `malformed`);
   2. **cross-file equality** — `spec_state`/`spec_id` (when not `n/a`) equal the current SPEC.md's own
      values; `regress_verdict` equals `regression-report.json`'s `.verdict`; `verify_verdict` equals
-     `verify-report.json`'s `.verdict` (else `stale` — the same content-hash-adjacent idea as
+     `verify-report.json`'s `.verdict`; `ac_tests_mode`, when carried, equals `AC-TESTS.lock.json`'s `mode` — a
+     copy of the recorded mode, never "the lock still holds" (`check-test-stage.mjs`) (else `stale` — the same content-hash-adjacent idea as
      `ship-record.md`'s `record_hash`, applied field-by-field instead of as one hash, so a reader can
      verify any single line independently without recomputing the whole document);
   3. **the ADVISORY marker, when present, is exact** — never truncated, never silently dropped.

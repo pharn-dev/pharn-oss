@@ -1,5 +1,5 @@
 ---
-description: "Run the PRODUCT pipeline in order so a PHARN user need not re-type or memorize it: /pharn-spec → [human approves the SPEC] → /pharn-plan → /pharn-grill → /pharn-build → /pharn-regress → /pharn-verify → [human decides merge/fix/abandon]. The seventh, terminal pipeline stage (pharn/ARCHITECTURE.md §6), realized as a GATED meta-orchestrator over stages 1–6 — the agent INVOKES each stage (advisory); WHETHER to proceed past a stage is read from that stage's STRUCTURAL floor verdict (check-spec-approved exit; /pharn-grill's TWO exits — check-plan-spec-agree AND check-plan-lessons, both read, since a run that reads only the chain would proceed past a stale applied_lessons declaration; the build project-gate exit, regression-report.json .verdict, verify-report.json .verdict), NEVER the agent's judgment. Reuses the six product stage commands and their existing floor checkers; reimplements none. Two human gates — SPEC approval (Draft→Approved) and the post-verify decision — are NON-NEGOTIABLE; NO --yolo, NO self-approval. Gated mode with at most ONE bounded build-completion retry on an INCOMPLETE verify (Step 2b — a single re-build, NOT a loop; the ≤1 bound is structural, the firing reads /pharn-verify's deterministic INCOMPLETE verdict); --loop is still a separate follow-up increment (the bounded auto-iteration capability itself ships today as the separate /pharn-loop command). At GATE 2 (Step 2c), also renders `pharn/features/<name>/BRIEFING.md` — a deterministic, cross-file-verified 'what/why/does-it-match' summary assembled by pharn/floor/render-ship-briefing.mjs from committed sources (never a self-issued seal, never a GATE-2 precondition; see pharn/pharn-contracts/ship-briefing.md). FLOOR verdicts; ADVISORY orchestration. '/pharn-ship reached the end' NEVER means 'the feature is good' — it means the deterministic gates passed and the human approved intent (P0)."
+description: "Run the PRODUCT pipeline in order so a PHARN user need not re-type or memorize it: /pharn-spec → [human approves the SPEC] → /pharn-plan → /pharn-grill → /pharn-test → /pharn-build → /pharn-regress → /pharn-verify → [human decides merge/fix/abandon]. The eighth, terminal pipeline stage (pharn/ARCHITECTURE.md §6 names seven until a human adds `test` there), realized as a GATED meta-orchestrator over stages 1–7 — the agent INVOKES each stage (advisory); WHETHER to proceed past a stage is read from that stage's STRUCTURAL floor verdict (check-spec-approved exit; /pharn-grill's TWO exits — check-plan-spec-agree AND check-plan-lessons, both read, since a run that reads only the chain would proceed past a stale applied_lessons declaration; /pharn-test's check-test-stage.mjs exit (6.19.0 — the AC tests written and shown to fail before the build, or a bootstrap/legacy SPEC); the build project-gate exit, regression-report.json .verdict, verify-report.json .verdict), NEVER the agent's judgment. Reuses the seven product stage commands and their existing floor checkers; reimplements none. Two human gates — SPEC approval (Draft→Approved) and the post-verify decision — are NON-NEGOTIABLE; NO --yolo, NO self-approval. Gated mode with at most ONE bounded build-completion retry on an INCOMPLETE verify (Step 2b — a single re-build, NOT a loop; the ≤1 bound is structural, the firing reads /pharn-verify's deterministic INCOMPLETE verdict); --loop is still a separate follow-up increment (the bounded auto-iteration capability itself ships today as the separate /pharn-loop command). At GATE 2 (Step 2c), also renders `pharn/features/<name>/BRIEFING.md` — a deterministic, cross-file-verified 'what/why/does-it-match' summary assembled by pharn/floor/render-ship-briefing.mjs from committed sources (never a self-issued seal, never a GATE-2 precondition; see pharn/pharn-contracts/ship-briefing.md). FLOOR verdicts; ADVISORY orchestration. '/pharn-ship reached the end' NEVER means 'the feature is good' — it means the deterministic gates passed and the human approved intent (P0)."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -21,6 +21,7 @@ reads:
     "pharn/floor/check-spec-approved.mjs",
     "pharn/floor/check-plan-spec-agree.mjs",
     "pharn/floor/check-plan-lessons.mjs",
+    "pharn/floor/check-test-stage.mjs",
     "pharn/floor/validate.mjs",
     "pharn/floor/check-attestation.mjs",
     "pharn/floor/render-cost-record.mjs",
@@ -37,15 +38,16 @@ reads:
   ]
 writes: ["pharn/features/<name>/SHIP.md", "pharn/features/<name>/ship-record.json", "pharn/features/<name>/BRIEFING.md"]
 constitution_refs: ["P0", "P2", "P5", "P6", "P7"]
-version: "0.6.0"
+version: "0.7.0"
 ---
 
 # /pharn-ship — run the product pipeline, end at a human gate
 
 You are the **orchestrator**. You run PHARN's **product** pipeline in order so the user does not re-type or
-memorize the sequence — `/pharn-spec → [human approves] → /pharn-plan → /pharn-grill → /pharn-build →
-/pharn-regress → /pharn-verify → [human decides]` (the pipeline spine, `pharn/ARCHITECTURE.md §6`; `/pharn-ship`
-is the terminal stage 7, realized as an orchestrator over stages 1–6). You **reuse** the existing product
+memorize the sequence — `/pharn-spec → [human approves] → /pharn-plan → /pharn-grill → /pharn-test → /pharn-build →
+/pharn-regress → /pharn-verify → [human decides]` (the pipeline spine; `pharn/ARCHITECTURE.md §6` names it without
+`test` until a human applies that trusted doc's pending edit; `/pharn-ship` is the terminal stage 8, realized as an
+orchestrator over stages 1–7). You **reuse** the existing product
 stage commands and **reimplement none of them**: you **invoke** each stage and **read its structural
 verdict** to decide proceed-or-stop. You always end by **stopping for the human** — never by deciding the
 work is "good."
@@ -53,7 +55,7 @@ work is "good."
 > **This is a PRODUCT command (`pharn-`, not `pharn-dev-`).** It is the UX a PHARN **user** runs to ship
 > their own feature, distinct from the build loop's `/pharn-dev-ship` (which orchestrates building PHARN
 > itself). It **reuses `/pharn-dev-ship`'s gated verdict-reading pattern** — cited, not restated (P4) —
-> retargeted to the six **product** stages, whose artifacts live on the product side of the boundary:
+> retargeted to the seven **product** stages, whose artifacts live on the product side of the boundary:
 > root `pharn/features/<name>/…` (`pharn/features/README.md`), never `.dev/`.
 >
 > **Two clocks, stated honestly (the `/pharn-regress` / `/pharn-verify` discipline).** RUNNING the stages
@@ -118,7 +120,7 @@ passes it to `/pharn-spec`. The chain starts at **intent**, not at an existing s
 - **`<name>` is resolved once, by `/pharn-spec`** (a kebab-case slug for the feature; if the invocation is
   ambiguous, `/pharn-spec` asks the human — P5). **`/pharn-ship` then threads that exact slug as the explicit
   `<name>` / `--feature <name>` argument into every subsequent stage invocation** (`/pharn-plan`,
-  `/pharn-grill`, `/pharn-build`, `/pharn-regress`, `/pharn-verify`, and its own `SHIP.md`). All stages must
+  `/pharn-grill`, `/pharn-test`, `/pharn-build`, `/pharn-regress`, `/pharn-verify`, and its own `SHIP.md`). All stages must
   operate on the **same** `pharn/features/<name>/…` the SPEC created; never let a stage re-resolve or re-ask and
   drift to a different slug.
 - **Open the cost ledger's marker file** — the `run-start` boundary — **as soon as `/pharn-spec` has
@@ -174,7 +176,7 @@ before it, and that is exactly the number a reader wants. See Step 3a's own pres
    > **Turn semantics.** A stage's own "end your turn" applies when it is run **standalone**. Under
    > `/pharn-ship`, perform the stage's work, **capture its verdict, then CONTINUE** the orchestration —
    > except at a human gate. `/pharn-ship` ends its turn **only** at GATE 1, GATE 2, or a STOP. So on SPEC
-   > approval, steps 2–7 below run in **one continued turn** until GATE 2 or a STOP.
+   > approval, steps 2–8 below run in **one continued turn** until GATE 2 or a STOP.
 
    **Structural backstop (on resume, before `/pharn-plan`):** confirm the SPEC is Approved + un-drifted —
 
@@ -248,6 +250,34 @@ stops regardless of what it raised.
 **The honest bound (P0):** a GREEN lessons stop means the **declaration** is well-formed, never that
 the lessons were applied. Never write that the grill verified the plan's lesson application.
 
+1. **`/pharn-test <name>`** (6.19.0) → writes each Acceptance Criterion's test into the files `AC-TESTS.md` maps, runs
+   them before any implementation exists, and records the red run in `pharn/features/<name>/AC-TESTS.lock.json` — or a
+   bootstrap lock for a `spec_kind: test-infra` SPEC, or nothing for a legacy SPEC.
+
+   ```bash
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-test
+   ```
+
+   …run the stage… then, on return:
+
+   ```bash
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
+   ```
+
+**Verdict read (FLOOR)** — the test-stage gate, the same verdict `/pharn-build` re-reads first thing in its Step 0:
+
+```bash
+node pharn/floor/check-test-stage.mjs <name>
+```
+
+`0` → **proceed**, and keep the first line's token for `SHIP.md` (`READY test-first` / `READY bootstrap` /
+`NOT-APPLICABLE legacy-spec`). Non-zero → **STOP**, present the `RED <reason>` line, hand to the human. Run here
+**without** `--unattended`: when a criterion's level has no test runner, `/pharn-test` ASKS the human whether to run a
+test-setup increment first; relay that question as the STOP's presentation. The chain stops either way — `/pharn-ship`
+never starts that setup run itself, and never continues to `/pharn-build` past a RED gate. The red run is a
+precondition of the build, not a verdict on it, so it is **not** a GATE-2 verdict (`ship-outcome-core.mjs`
+`VERDICT_STAGES` stays regress + verify); a run that stops here is recorded `stop:pharn-test`.
+
 1. **`/pharn-build`** → writes the user's code + a thin `pharn/features/<name>/BUILD.md`.
 
    ```bash
@@ -261,7 +291,7 @@ the lessons were applied. Never write that the grill verified the plan's lesson 
    ```
 
 `/pharn-build` re-checks
-the chain (the 2nd enforcing consumer) and the fix #7 writes-scope itself, and **HALTs on a RED floor** at
+the chain (the 3rd enforcing consumer, after grill and `/pharn-test`) and the fix #7 writes-scope itself, and **HALTs on a RED floor** at
 its Step 4. **Verdict read (FLOOR):** the exit code of the **same deterministic project gate `/pharn-build`
 ran at its Step 4** —
 
@@ -322,7 +352,7 @@ emits this machine artifact) → **STOP**, present, hand to the human. The advis
 **NOT** a proceed input — a verifier finding never flips the verdict (fix #3, `pharn/ARCHITECTURE.md §7`).
 
 1. **GATE 2 — post-verify decision.** On a `PASS` verify, this is the chain's end. `/pharn-ship` **presents**
-   the standing verdicts (steps 1–6) + the `GRILL.md` / `REGRESSION.md` / `VERIFY.md` (and `BUILD.md`)
+   the standing verdicts (steps 1–7) + the `GRILL.md` / `REGRESSION.md` / `VERIFY.md` (and `BUILD.md`)
    free-text quoted as DATA (P2), **plus the per-stage token table and `check-cost-ledger.mjs`'s verdict
    from Step 3a** (see its presentation rule), then — after writing `SHIP.md` (Step 3) and emitting the
    ledger + report (Step 3a) — **ends its turn**, handing to the
@@ -330,15 +360,15 @@ emits this machine artifact) → **STOP**, present, hand to the human. The advis
    `/pharn-dev-review` is not a §6 spine stage — lenses live in `pharn-review`, §4); the product spine ends at
    `verify`, and the human's ship **decision** is what `pharn/ARCHITECTURE.md §6` names "ship".
 
-**The spec→plan hash chain is read at grill (step 3) and re-enforced structurally inside build, regress, and
-verify** (the 2nd/3rd/4th enforcing consumers). A chain that breaks after grill surfaces as a RED build floor
-(step 4 STOP), a missing `regression-report.json` (step 5 fail-closed STOP), or an `INCONCLUSIVE`
-`verify-report.json` (step 6 STOP) — so "the chain held at each consuming stage" is covered by the stages'
+**The spec→plan hash chain is read at grill (step 3) and re-enforced structurally inside test, build, regress, and
+verify** (the 2nd/3rd/4th/5th enforcing consumers). A chain that breaks after grill surfaces as a RED test-stage gate
+(step 4 STOP), a RED build floor (step 5 STOP), a missing `regression-report.json` (step 6 fail-closed STOP), or an
+`INCONCLUSIVE` `verify-report.json` (step 7 STOP) — so "the chain held at each consuming stage" is covered by the stages'
 own `.verdict`s, not re-implemented here.
 
 ## Step 2b — The single build-completion retry (INCOMPLETE only; EXACTLY once, no loop)
 
-**Only reachable from a step-6 `.verdict == "INCOMPLETE"`** — every gate is green but the build is
+**Only reachable from a step-7 `.verdict == "INCOMPLETE"`** — every gate is green but the build is
 incomplete (a plan-declared `## Files` path is absent; `.completeness.missing[]` names it). This is the
 **one** retryable verify outcome; `FAIL` and `INCONCLUSIVE` are **never** retried — a real gate failure
 **beats** incompleteness in `check-verify.mjs`'s precedence, so a genuine bug can never masquerade as
@@ -395,7 +425,7 @@ incomplete (a plan-declared `## Files` path is absent; `.completeness.missing[]`
 **What the retry does and does NOT guarantee (P0) — stated honestly:**
 
 - **Bounded firing.** It fires only for a **pure** incompleteness. If the missing file **also** reddens a
-  whole-repo gate (a test imports it), step 6 is `FAIL`, not `INCOMPLETE`, and the retry does **not** fire —
+  whole-repo gate (a test imports it), step 7 is `FAIL`, not `INCOMPLETE`, and the retry does **not** fire —
   the human decides. So it covers "declared path silently absent," **not** "absent AND breaking a gate."
 - **Transient-only value.** The retry re-invokes the **same advisory `/pharn-build`** that produced the
   incomplete result; it helps **only** when the first incompleteness was **transient** (an interrupted /
@@ -412,7 +442,7 @@ incomplete (a plan-declared `## Files` path is absent; `.completeness.missing[]`
 
 ## Step 2c — Render the GATE-2 briefing artifact (`BRIEFING.md`)
 
-Reached only after a `PASS` verify (step 6) — the same point step 7 reads the standing verdicts. Before
+Reached only after a `PASS` verify (step 7) — the same point step 8 reads the standing verdicts. Before
 writing anything, scope this step's own artifact. **The setter resolves exactly one `--target` per call
 and OVERWRITES `.pharn/writes-scope.json`**, so `/pharn-ship` — which declares **three** placeholder
 `writes:` paths (`SHIP.md`, `ship-record.json`, `BRIEFING.md`) — scopes **each artifact to itself
@@ -605,7 +635,8 @@ Write **`pharn/features/<name>/SHIP.md`** — a thin, **advisory** roll-up:
   - `/pharn-regress` `.verdict`s, and whether it then reached GATE 2 or STOPped (never a second retry);
 - **each structural verdict read, verbatim:** `/pharn-spec` → `check-spec-approved.mjs` exit (Approved);
   `/pharn-grill` → **both** its exits: `check-plan-spec-agree.mjs` (chain GREEN) **and**
-  `check-plan-lessons.mjs` (declaration GREEN); `/pharn-build` → the project-gate exit;
+  `check-plan-lessons.mjs` (declaration GREEN); `/pharn-test` → `check-test-stage.mjs`'s token (`ac-tests: test-first`,
+  `ac-tests: bootstrap`, or `ac-tests: not-applicable (legacy spec)` — never silent); `/pharn-build` → the project-gate exit;
   `/pharn-regress` → `regression-report.json` `.verdict`; `/pharn-verify` → `verify-report.json` `.verdict`
   (incl. `INCOMPLETE`, with `.completeness.missing[]` quoted as DATA);
 - a **pointer** to `pharn/features/<name>/GRILL.md` / `REGRESSION.md` / `VERIFY.md` (cite the files; do **not**
@@ -879,10 +910,10 @@ the `check-ship.mjs` cap.
 
 ## Guarantee audit (P0) — gated `/pharn-ship` adds ZERO new floor primitive
 
-- **"`/pharn-ship` runs the six stages in order"** → **ADVISORY.** Nothing on the floor forces the sequence;
+- **"`/pharn-ship` runs the seven stages in order"** → **ADVISORY.** Nothing on the floor forces the sequence;
   the agent invokes each stage.
 - **"`/pharn-ship` proceeds only past a proceed floor verdict"** → the **verdicts** are FLOOR (each stage's
-  own checker: `check-spec-approved` / `check-plan-spec-agree` / `check-plan-lessons` exits, `regression-report.json` /
+  own checker: `check-spec-approved` / `check-plan-spec-agree` / `check-plan-lessons` / `check-test-stage` exits, `regression-report.json` /
   `verify-report.json` `.verdict`, the build project-gate exit — `pharn/ARCHITECTURE.md §2` primitive #3);
   `/pharn-ship`'s **act** of reading them and stopping is **ADVISORY orchestration** — the same two-clocks
   split as `/pharn-regress` and `/pharn-verify` themselves.
@@ -1048,8 +1079,8 @@ the `check-ship.mjs` cap.
 ## A doc-reconciliation `/pharn-ship` surfaces (reported, never agent-edited)
 
 `pharn/ARCHITECTURE.md §6` names **"ship"** as the **terminal pipeline stage** (artifact `ship-report` =
-decision + `PHARN ✓ reviewed` seal). `/pharn-ship` **aligns**: it realizes stage 7 as a meta-orchestrator
-over stages 1–6 that brings the human to that ship **decision** at GATE 2. The one honest divergence
+decision + `PHARN ✓ reviewed` seal). `/pharn-ship` **aligns**: it realizes the terminal stage (8, counting `test`,
+which §6 does not list yet) as a meta-orchestrator over stages 1–7 that brings the human to that ship **decision** at GATE 2. The one honest divergence
 (identical to what `/pharn-dev-ship` already surfaces): `/pharn-ship` **does not automate the decision or the
 seal** — `SHIP.md` records that the chain ran + its floor verdicts; the decision + seal are the **human's**
 GATE-2 call, which `/pharn-ship` deliberately does **not** automate. No conflict to file; `pharn/ARCHITECTURE.md`

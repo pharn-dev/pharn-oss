@@ -5,8 +5,8 @@
 // Non-LLM, dependency-free (Node stdlib + `git rev-parse`, the same subprocess convention
 // `check-provenance.mjs`'s command-side caller uses to fill `commit`). Every enum-gated frontmatter field
 // is a VERBATIM COPY of a value already present in a committed source file — SPEC.md/PLAN.md frontmatter,
-// `regression-report.json`, `verify-report.json`, or GRILL.md's own verdict line — never restated from
-// memory, never generated. This file NEVER calls an LLM. It is the floor reduction of
+// `regression-report.json`, `verify-report.json`, `AC-TESTS.lock.json`'s `mode` (6.19.0), or GRILL.md's own
+// verdict line — never restated from memory, never generated. This file NEVER calls an LLM. It is the floor reduction of
 // `pharn/pharn-contracts/ship-briefing.md`'s "IS: a verbatim copy" half (cited, not restated — P4).
 //
 // WHAT THIS FILE DOES NOT DO: it does not write `BRIEFING.md` itself — it prints the rendered markdown to
@@ -287,6 +287,26 @@ export function yamlUnscalar(raw) {
   return raw.slice(1, -1).replace(/\\([\\"])/g, "$1");
 }
 
+/** The two `mode` values an AC-tests lock carries (pharn-contracts/ac-tests.md). */
+export const AC_TESTS_MODES = new Set(["bootstrap", "test-first"]);
+
+/** `ac_tests_mode` (6.19.0): `AC-TESTS.lock.json`'s `mode`, copied verbatim when it is a member of AC_TESTS_MODES;
+ *  `n/a` when the lock is absent, unreadable, not JSON, or carries no member (an `ac-tests-lock/1` lock has no
+ *  `mode`). A COPY of the recorded mode — whether the lock still holds is `check-test-stage.mjs`'s question, and
+ *  whether a red run happened is `ac-tests-lock.mjs --require-red-run`'s; this field answers neither. */
+export function readAcTestsMode(dir) {
+  const path = join(dir, "AC-TESTS.lock.json");
+  if (!existsSync(path)) return "n/a";
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return "n/a";
+  }
+  if (parsed === null || typeof parsed !== "object" || !Object.hasOwn(parsed, "mode")) return "n/a";
+  return AC_TESTS_MODES.has(parsed.mode) ? parsed.mode : "n/a";
+}
+
 export function readJsonVerdict(path, enumSet) {
   if (!existsSync(path)) return "n/a";
   let parsed;
@@ -356,6 +376,7 @@ export function renderBriefing(name, opts = {}) {
 
   const regressVerdict = readJsonVerdict(join(dir, "regression-report.json"), REGRESS_ENUM);
   const verifyVerdict = readJsonVerdict(join(dir, "verify-report.json"), VERIFY_ENUM);
+  const acTestsMode = readAcTestsMode(dir);
 
   const decision = findDecisionSection(planBody);
   const needsAdvisoryParagraph = decision === undefined;
@@ -374,8 +395,9 @@ export function renderBriefing(name, opts = {}) {
     `grill_verdict: ${yamlScalar(grillVerdict)}`,
     `regress_verdict: ${yamlScalar(regressVerdict)}`,
     `verify_verdict: ${yamlScalar(verifyVerdict)}`,
+    `ac_tests_mode: ${yamlScalar(acTestsMode)}`,
     `rendered_at_commit: ${yamlScalar(commit)}`,
-    `briefing_contract_version: "0.1.0"`,
+    `briefing_contract_version: "0.2.0"`,
     "---",
   ].join("\n");
 
@@ -407,6 +429,7 @@ export function renderBriefing(name, opts = {}) {
     "| stage | verdict | source |",
     "| --- | --- | --- |",
     `| grill | ${grillVerdict} | \`${dir}/GRILL.md\` |`,
+    `| test | mode: ${acTestsMode} (recorded, not a verdict) | \`${dir}/AC-TESTS.lock.json\` |`,
     `| regress | ${regressVerdict} | \`${dir}/regression-report.json\` |`,
     `| verify | ${verifyVerdict} | \`${dir}/verify-report.json\` |`,
     "",
