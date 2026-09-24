@@ -22,7 +22,7 @@ reads:
   ]
 writes: ["<AC test files: AC-TESTS.md ## Files, via --from-plan>", "pharn/features/<name>/AC-TESTS.lock.json"]
 constitution_refs: ["P0", "P1", "P2", "P3", "P5", "P6", "P7"]
-version: "0.3.0"
+version: "0.4.0"
 ---
 
 # /pharn-test — write the Acceptance Criteria's tests before the build, and show they fail
@@ -181,7 +181,12 @@ node pharn/floor/ac-tests-lock.mjs --check <name>
 ```
 
 `--write` records every test file's sha256, AC-TESTS.md's digest and the SPEC pin (`pharn/pharn-contracts/ac-tests.md`,
-"The lock"), with `red_run: null`. The write goes through `fs` in a Bash-run script, so the `PreToolUse` guards never
+"The lock"), with `red_run: null` — and, since 6.20.0, the **test-infrastructure pin** (`test_infra`, lock schema
+`ac-tests-lock/3`): the `package.json` scripts of the gates your levels map to (with their `pre`/`post` scripts), their
+`testResults` formats, and the root runner configs in a closed name set ("The test-infrastructure pin"). The pin is
+taken now, BEFORE the red run, so the red run runs under it; `/pharn-verify`'s AC gate later reads a changed pin as
+`test-infra-changed`. Set up the runner and its per-test results BEFORE this step, never after it. `--write` refuses
+an infrastructure it cannot pin (an unparseable `package.json`, a symlinked runner config) — HALT on it. The write goes through `fs` in a Bash-run script, so the `PreToolUse` guards never
 see it (`LIMITS.md §6`). It is declared here and in `writes:`, and it lands only on the lock path. `--check` must
 print GREEN.
 

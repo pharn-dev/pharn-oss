@@ -23,6 +23,60 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.20.0] - 2026-09-24
+
+### Added
+
+- 2026-09-24: **`/pharn-verify` now checks every Acceptance Criterion, not only whole gates: an AC gate in its FLOOR
+  verdict, the test-infrastructure pin it needs, and `/pharn-loop` behaviour that iterates on an undelivered AC and
+  stops when the AC evidence itself changed.** `SKILLS_VERSION` 6.19.0 → 6.20.0 (MINOR: a new checker, a new lock
+  section and new loop behaviour). `MIN_CLI` stays 0.5.0: no installed path moves, and pharn-cli copies
+  `pharn/floor/` whole.
+  ([`pharn/floor/ac-gate-core.mjs`](./pharn/floor/ac-gate-core.mjs),
+  [`pharn/floor/test-infra-core.mjs`](./pharn/floor/test-infra-core.mjs),
+  [`pharn/pharn-contracts/ac-tests.md`](./pharn/pharn-contracts/ac-tests.md),
+  [`.dev/features/verify-ac-gate/`](./.dev/features/verify-ac-gate/))
+  - **Why.** Until now verify's verdict came from whole-gate exit codes, and nothing there knew an AC existed, so a
+    loop could end GREEN with a criterion's test deleted, skipped or never collected. Honest trigger (P7): item 6 of
+    the maintainer's AC-delivery queue — the requirement the queue exists for.
+  - **The gate.** `check-verify.mjs --stamp … --ac-gate` (the pinned `/pharn-verify` Step 5 line) runs
+    `ac-gate-core.mjs` over the head run's per-test records. An AC is delivered = a locked, once-red test titled
+    `AC-<n>:`, in a file mapped to AC-n, passed on the head run. PHARN does not judge whether that test captures the
+    AC's intent. Matching is file-scoped through red-run-core's `observeAc`, now the one copy both stages call, so
+    another feature's `AC-1:` never counts.
+  - **Three reason classes, closure-tested as a partition.** Delivery (`ac-untested`, `ac-not-passed`, `ac-skipped`)
+    adds `ac-delivery` to `failing_gates`, and the loop iterates. Evidence (`ac-tests-modified`, `ac-never-red`,
+    `test-infra-changed`, `test-infra-unpinned`) adds `ac-evidence`, and `check-loop.mjs` stops. Item 01's record
+    reasons make an otherwise-green verify INCONCLUSIVE, never a PASS; a red gate beats that. Both ids are reserved
+    gate ids and never enter `gates`. A legacy SPEC reads `not-applicable (legacy spec)` in the report — unless AC
+    evidence sits beside it, which is `ac-tests-modified`. A `spec_kind: test-infra` SPEC gets BOOTSTRAP evidence,
+    labelled weaker.
+  - **The test-infrastructure pin.** `ac-tests-lock.mjs --write` now writes schema `ac-tests-lock/3` with a
+    `test_infra` section, taken before the red run. It holds the level gates' `package.json` script values with their
+    `pre`/`post` scripts, their `testResults` formats, and root `vitest`/`vite`/`playwright`/`jest` configs in a closed
+    name set. `--check` and the gate recompute it, and the gate also requires each level gate to have run as the pinned
+    `npm run <id>`. Not caught, stated in full once in `test-infra-core.mjs` and restated in the contract: among others,
+    a setup file a config imports, env-driven config, script chaining, `.npmrc`, `tsconfig`, the runner's version. A `/2` test-first
+    lock is refused by the test-stage gate BEFORE the build, where re-running `/pharn-test` is still cheap. The lock's check is split into pure named parts, so `check-verify.mjs` still spawns nothing.
+    `specVerdict` moves into `spec-template-core.mjs` so `check-ac-tests.mjs --spec` and the gate read one function.
+  - **The loop.** `check-loop.mjs` stops terminally on `ac-evidence` and names the predicate in a new closed
+    `terminal_cause` (`unmeasured` | `ac-evidence` | `reconcile`). The AC reading wins over `reconcile` when a Bash
+    edit of a pinned test trips both. `check-loop-fresh.mjs` changes three ways: check E re-derives verify WITH
+    `--ac-gate` and compares `ac_gate` (deferring to F when the tree moved, since the gate reads the live tree); J
+    re-hashes the per-test results files (without following a link); and a test-stage RED at check I gets its own code, `ac-evidence-invalid` (a crash or exit 2 stays `front-stage-red`).
+    Both routes map to the new stuck point **S13, `blocked: ac-evidence-invalid`**, recorded as an ordinary blocked
+    stop. The grill found that without check I's own code the brief's main case ended at S11 instead. The rebuild now
+    receives `ac_gate.acs[]` as quoted data.
+  - **Reports.** `verify-report.json` carries an `ac_gate` block with the per-AC table (`verify-report.md`).
+    `RUN-REPORT.md`'s `## Verdicts` renders it as a fenced DATA block. `VERIFY.md` fences it too, and `SHIP.md` carries
+    the gate's verdict line and cites the code-rendered table rather than retyping it.
+  - **Migration and cost, stated.** A feature whose lock is `/2` (6.18/6.19) has no pin, so verify reports
+    `test-infra-unpinned` until it goes back through `/pharn-test`. Once the build exists, that means setting the
+    build aside first, because the red run would now pass. One flaky test, `test.fail()` or duplicate id anywhere in
+    the suite voids the per-test record and makes verify INCONCLUSIVE.
+  - **Protected docs.** `pharn/ARCHITECTURE.md`, `THREAT-MODEL.md` and `LIMITS.md` need edits only a human can make;
+    they are listed in `.dev/features/verify-ac-gate/PROTECTED-FOLLOWUPS.md`.
+
 ## [6.19.0] - 2026-09-24
 
 ### Added

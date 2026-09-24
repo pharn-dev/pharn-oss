@@ -65,7 +65,8 @@ test("--write then --check is GREEN; the lock's shape is the closed key set, dig
     );
     for (const f of lock.files) assert.equal(f.sha256, sha256RegularFile(join(root, f.path)));
     assert.equal(lock.red_run, null);
-    assert.equal(lock.test_infra, null);
+    // no package.json and no runner config in this world: the pin records the level and nothing else
+    assert.deepEqual(lock.test_infra, { levels: ["unit"], gates: [], configs: [] });
     assert.equal(lockShapeError(lock, NAME), null);
     const r = cli(root, ["--check", NAME]); // the DEFAULT --base, exercised (L41)
     assert.equal(r.code, 0, r.out);
@@ -141,7 +142,7 @@ test("--write REFUSES (exit 2): a listed file missing, a symlinked test file, no
     assert.equal(cli(root, ["--write", "Bad Name"]).code, 2, "a non-slug name");
     assert.equal(cli(root, ["--frobnicate", NAME]).code, 2, "bad usage");
     assert.equal(cli(root, ["--write", NAME, "--base"]).code, 2, "--base with no value");
-    assert.equal(buildLock(NAME, join(root, "nowhere")).ok, false, "an absent AC-TESTS.md");
+    assert.equal(buildLock(NAME, join(root, "nowhere"), root).ok, false, "an absent AC-TESTS.md");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -228,12 +229,12 @@ const redRunFor = (lock) => ({
   acs: [{ id: "AC-1", tests: ["tests/ac/one.test.js::AC-1: t"] }],
 });
 
-test("/2: --write writes mode test-first with bootstrap null; a well-formed red_run bound to the files checks GREEN", () => {
+test("/3: --write writes mode test-first with bootstrap null; a well-formed red_run bound to the files checks GREEN", () => {
   const root = world();
   try {
     cli(root, ["--write", NAME]);
     const lock = lockOf(root);
-    assert.equal(lock.schema, "ac-tests-lock/2");
+    assert.equal(lock.schema, "ac-tests-lock/3");
     assert.equal(lock.mode, "test-first");
     assert.equal(lock.bootstrap, null);
     writeLockJson(root, { ...lock, red_run: redRunFor(lock) });
@@ -270,12 +271,13 @@ test("/1 locks are still read and checked GREEN, and never pass --require-red-ru
     const { mode, bootstrap, ...rest } = lockOf(root);
     assert.equal(mode, "test-first");
     assert.equal(bootstrap, null);
+    rest.test_infra = null; // a 6.17.0 lock never carried the pin
     writeLockJson(root, { ...rest, schema: "ac-tests-lock/1" });
     assert.equal(cli(root, ["--check", NAME]).code, 0, "a 6.17.0 lock still checks");
     const r = cli(root, ["--check", NAME, "--require-red-run"]);
     assert.equal(r.code, 1, r.out);
     assert.match(r.out, /ac-tests-lock\/1, which has no red run/);
-    assert.equal(cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]).code, 2, "a red run is recorded on a /2 lock only");
+    assert.equal(cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]).code, 2, "a red run is recorded on a /3 lock only");
     writeLockJson(root, { ...rest, schema: "ac-tests-lock/1", mode: "test-first" });
     assert.equal(cli(root, ["--check", NAME]).code, 2, "a /1 lock with /2's keys is not the /1 shape");
   } finally {
@@ -406,7 +408,7 @@ test("bootstrap: --write-bootstrap records mode bootstrap, no mapping, no files,
     assert.match(w.out, /BOOTSTRAP .* WEAKER than test-first/);
     const lock = lockOf(root);
     assert.deepEqual(lock, {
-      schema: "ac-tests-lock/2",
+      schema: "ac-tests-lock/3",
       feature: NAME,
       mode: "bootstrap",
       spec: { spec_id: NAME, spec_content_hash: pinOf(spec) },
@@ -517,6 +519,105 @@ test("bootstrap shape: mapping, files, red_run, bootstrap each closed (exit 2 on
       writeLockJson(root, bad);
       assert.equal(cli(root, ["--check", NAME]).code, 2, why);
     }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── the test-infrastructure pin (6.20.0, schema /3) ──────────────────────────────────────────────────────────
+
+/** A world with a package.json `test` script, a vitest-json results config and a root vitest config. */
+function infraWorld() {
+  const root = world();
+  writeFileSync(join(root, "package.json"), JSON.stringify({ scripts: { test: "vitest run", lint: "eslint ." } }));
+  writeFileSync(join(root, "pharn.config.json"), JSON.stringify({ testResults: { test: "vitest-json" } }));
+  writeFileSync(join(root, "vitest.config.ts"), "export default {}\n");
+  return root;
+}
+
+test("/3 --write pins the test infrastructure; --check REDs a changed script, config or results format, naming it", () => {
+  const cases = [
+    [
+      "the test script",
+      (root) => writeFileSync(join(root, "package.json"), JSON.stringify({ scripts: { test: "vitest run --passWithNoTests" } })),
+      /test infrastructure changed — gate test: its package\.json script changed/,
+    ],
+    [
+      "the runner config",
+      (root) => writeFileSync(join(root, "vitest.config.ts"), "export default { test: {} }\n"),
+      /test infrastructure changed — vitest\.config\.ts: the runner config changed/,
+    ],
+    [
+      "the results format",
+      (root) => writeFileSync(join(root, "pharn.config.json"), JSON.stringify({ testResults: {} })),
+      /test infrastructure changed — gate test: its testResults format changed/,
+    ],
+  ];
+  for (const [why, mutate, re] of cases) {
+    const root = infraWorld();
+    try {
+      const w = cli(root, ["--write", NAME]);
+      assert.equal(w.code, 0, w.out);
+      assert.match(w.out, /the test infrastructure: 1 gate\(s\), 1 runner config\(s\)/);
+      const lock = lockOf(root);
+      assert.deepEqual(lock.test_infra.gates, [{ id: "test", script: "vitest run", pre: null, post: null, results: "vitest-json" }]);
+      const g = cli(root, ["--check", NAME]);
+      assert.equal(g.code, 0, g.out);
+      assert.match(g.out, /the test-infrastructure pin holds/);
+      mutate(root);
+      const r = cli(root, ["--check", NAME]);
+      assert.equal(r.code, 1, `${why}: ${r.out}`);
+      assert.match(r.out, re, why);
+      assert.ok(!r.out.includes("passWithNoTests"), `${why}: the script text leaked`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("/3 --write REFUSES a test infrastructure it cannot pin: a symlinked runner config, an unparseable package.json, no mapping", () => {
+  const root = infraWorld();
+  try {
+    rmSync(join(root, "vitest.config.ts"));
+    writeFileSync(join(root, "real.ts"), "x");
+    symlinkSync(join(root, "real.ts"), join(root, "vitest.config.ts"));
+    let w = cli(root, ["--write", NAME]);
+    assert.equal(w.code, 2, w.out);
+    assert.match(w.out, /cannot be pinned: vitest\.config\.ts is a symlink/);
+    rmSync(join(root, "vitest.config.ts"));
+    writeFileSync(join(root, "package.json"), "{");
+    w = cli(root, ["--write", NAME]);
+    assert.equal(w.code, 2, w.out);
+    assert.match(w.out, /package\.json is not valid JSON/);
+    writeFileSync(join(root, "package.json"), "{}");
+    writeFileSync(join(root, "pharn/features/demo/AC-TESTS.md"), acTests().replace(/## Mapping[\s\S]*$/, ""));
+    w = cli(root, ["--write", NAME]);
+    assert.equal(w.code, 2, w.out);
+    assert.match(w.out, /no usable `## Mapping`/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("/2 is still read: GREEN with --require-red-run, saying it has no pin; a red run is never recorded on it; /3 test-first requires the pin", () => {
+  const root = infraWorld();
+  try {
+    cli(root, ["--write", NAME]);
+    const lock = lockOf(root);
+    writeLockJson(root, { ...lock, schema: "ac-tests-lock/2", test_infra: null, red_run: redRunFor(lock) });
+    const r = cli(root, ["--check", NAME, "--require-red-run"]);
+    assert.equal(r.code, 0, r.out);
+    assert.match(r.out, /no test-infrastructure pin \(ac-tests-lock\/2\)/);
+    writeLockJson(root, { ...lock, schema: "ac-tests-lock/2", test_infra: null });
+    const rec = cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]);
+    assert.equal(rec.code, 2, rec.out);
+    assert.match(rec.out, /ac-tests-lock\/2 test-first; a red run is recorded on an ac-tests-lock\/3 test-first lock/);
+    writeLockJson(root, { ...lock, test_infra: null });
+    const u = cli(root, ["--check", NAME]);
+    assert.equal(u.code, 2, u.out);
+    assert.match(u.out, /test_infra is not exactly/);
+    writeLockJson(root, { ...lock, schema: "ac-tests-lock/2" });
+    assert.match(cli(root, ["--check", NAME]).out, /test_infra must be null under ac-tests-lock\/2 test-first/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

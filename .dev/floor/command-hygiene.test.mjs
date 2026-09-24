@@ -1601,6 +1601,7 @@ const STUCK_POINTS = [
   { id: "S10", blocked: "unlisted-ask" },
   { id: "S11", blocked: "stale-evidence" },
   { id: "S12", blocked: "no-test-runner" }, // 6.19.0: /pharn-test's preflight found a level with no runner
+  { id: "S13", blocked: "ac-evidence-invalid" }, // 6.20.0: the AC evidence changed or is missing — a rebuild cannot fix it
 ];
 // The one non-member spelling the closure admits: the command's own placeholder in generic prose.
 const BLOCKED_PLACEHOLDER = "<id>";
@@ -1700,7 +1701,7 @@ function forbiddenGitOffenders(body) {
 }
 
 test("✧ L34 — the /pharn-loop sets are non-empty and well-formed (the rules below cannot pass vacuously)", () => {
-  assert.equal(STUCK_POINTS.length, 13, "the stuck-point table is S1–S12 plus S6b");
+  assert.equal(STUCK_POINTS.length, 14, "the stuck-point table is S1–S13 plus S6b");
   assert.equal(new Set(STUCK_POINTS.map((s) => s.id)).size, STUCK_POINTS.length, "duplicate stuck-point id");
   assert.ok(COMMIT_OUTCOMES.length > 0, "the commit-outcome set is empty");
   assert.ok(fencedLines(commandBody(LOOP_FILE)).length > 0, `found no fenced lines in ${LOOP_FILE} — the fence scan broke`);
@@ -2249,14 +2250,24 @@ test("✧ the dev twins stay FLAG-LESS — no dev command invokes the runner or 
   assert.deepEqual(strays, [], `a dev command picked up the gate-run surface: ${strays.join(", ")}`);
 });
 
-test("✧ verify's Step-6 verbatim-field list NAMES `gate_run`, so the additive block is not dropped", () => {
+test("✧ verify's Step-6 verbatim-field list NAMES `gate_run` and `ac_gate`, so neither additive block is dropped", () => {
   const body = commandBody("pharn-verify.md");
   assert.match(
     body,
-    /`feature` \/ `gates` \/ `verdict` \/ `failing_gates` \/ `gate_run` fields are `check-verify\.mjs`'s stdout \*\*verbatim\*\*/,
-    "verify Step 6 must list gate_run among the verbatim fields, or the block is silently dropped from the report"
+    /`feature` \/ `gates` \/ `verdict` \/ `failing_gates` \/ `gate_run` \/ `ac_gate` fields are `check-verify\.mjs`'s stdout \*\*verbatim\*\*/,
+    "verify Step 6 must list gate_run and ac_gate among the verbatim fields, or a block is silently dropped from the report (grill G7a)"
   );
   assert.match(body, /"reason_code":/, "verify's fail-closed artifact shape must carry reason_code");
+});
+
+test("✧ verify's pinned verdict line passes --ac-gate (6.20.0) — the flag check-loop-fresh.mjs re-derives the report with", () => {
+  const lines = [];
+  for (const block of fencedBlocks(commandBody("pharn-verify.md"))) {
+    for (const l of block.lines) if (/^\s*node pharn\/floor\/check-verify\.mjs /.test(l.text)) lines.push(l.text.trim());
+  }
+  assert.deepEqual(lines, ["node pharn/floor/check-verify.mjs --stamp .pharn/pharn-verify/gates/stamp.json --feature <name> --ac-gate"]);
+  // and the freshness checker's own re-run passes the same flag, so the two cannot drift apart (L45)
+  assert.match(readFileSync(join(REPO_ROOT, "pharn/floor/check-loop-fresh.mjs"), "utf8"), /"--feature", ctx\.feature, "--ac-gate"\]/);
 });
 
 test("✧ the `--complete` hand-pass is RETIRED from the wired commands (completeness comes from the stamp)", () => {

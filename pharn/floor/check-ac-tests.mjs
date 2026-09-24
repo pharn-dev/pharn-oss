@@ -51,7 +51,7 @@ import { readFileSync, readdirSync, lstatSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { specAcceptanceCriteria } from "./spec-template-core.mjs";
+import { specAcceptanceCriteria, specVerdict } from "./spec-template-core.mjs";
 import { clean, pathsFromPlanFiles } from "./plan-files-core.mjs";
 import { badPath, mappingOf, scopeKey } from "./ac-tests-core.mjs";
 
@@ -238,32 +238,9 @@ function main(argv) {
       console.log("usage: check-ac-tests.mjs --spec <SPEC.md>");
       return 2;
     }
-    // Precedence, fixed (grill G10): unreadable 2 → legacy 3 → invalid spec_kind 2 → no usable criteria 2 →
-    // test-infra 4 → templated 0.
-    const spec = specAcceptanceCriteria(readOrExit(args[1], "SPEC.md"));
-    if (!spec.templated) {
-      console.log("LEGACY — the SPEC has no `spec_template`: no AC ids, so no AC-TESTS.md is written");
-      return 3;
-    }
-    if (spec.kind === null) {
-      console.log("UNUSABLE — the SPEC's `spec_kind` is not one of {feature, test-infra} — run check-spec.mjs");
-      return 2;
-    }
-    if (spec.sections !== 1 || spec.items.length === 0) {
-      console.log("UNUSABLE — the SPEC's `## Acceptance Criteria` is absent, duplicated or empty — run check-spec.mjs");
-      return 2;
-    }
-    if (spec.kind === "test-infra") {
-      if (spec.items.some((i) => i.level === null)) {
-        console.log("UNUSABLE — a criterion's verify level is malformed, so the bootstrap levels are unknown — run check-spec.mjs");
-        return 2;
-      }
-      const levels = [...new Set(spec.items.map((i) => i.level))].sort();
-      console.log(`BOOTSTRAP — spec_kind: test-infra; no AC-TESTS.md; the lock records levels: ${levels.join(", ")}`);
-      return 4;
-    }
-    console.log(`TEMPLATED — ${spec.items.length} AC(s): ${spec.items.map((i) => `${i.id} (${i.level ?? "malformed level"})`).join(", ")}`);
-    return 0;
+    const v = specVerdict(readOrExit(args[1], "SPEC.md"));
+    console.log(v.line);
+    return v.code;
   }
   const fd = args.indexOf("--features-dir");
   let featuresDir = null;

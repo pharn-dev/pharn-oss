@@ -411,6 +411,44 @@ export function specAcceptanceCriteria(text) {
   return { templated: true, kind, sections: 1, items };
 }
 
+/**
+ * THE one reading of a SPEC's AC mode — check-ac-tests.mjs `--spec` prints it, and /pharn-verify's AC gate
+ * (ac-gate-core.mjs) imports it, so the CLI and the gate cannot disagree (L35). It lives here, beside the parser it
+ * reads, because no floor module imports a `check-*.mjs` CLI. Precedence, fixed (grill G10): legacy 3 → invalid spec_kind 2 → no
+ * usable criteria 2 → test-infra 4 (a malformed level is 2) → templated 0. An unreadable file is the caller's (2).
+ * @returns {{token: "LEGACY"|"UNUSABLE"|"BOOTSTRAP"|"TEMPLATED", code: number, line: string, items: {id: string, level: string|null}[], levels: string[]|null}}
+ */
+export function specVerdict(text) {
+  const spec = specAcceptanceCriteria(text);
+  const out = (token, code, line, levels = null) => ({
+    token,
+    code,
+    line,
+    items: spec.items.map((i) => ({ id: i.id, level: i.level })),
+    levels,
+  });
+  if (!spec.templated) return out("LEGACY", 3, "LEGACY — the SPEC has no `spec_template`: no AC ids, so no AC-TESTS.md is written");
+  if (spec.kind === null)
+    return out("UNUSABLE", 2, "UNUSABLE — the SPEC's `spec_kind` is not one of {feature, test-infra} — run check-spec.mjs");
+  if (spec.sections !== 1 || spec.items.length === 0)
+    return out("UNUSABLE", 2, "UNUSABLE — the SPEC's `## Acceptance Criteria` is absent, duplicated or empty — run check-spec.mjs");
+  if (spec.kind === "test-infra") {
+    if (spec.items.some((i) => i.level === null))
+      return out(
+        "UNUSABLE",
+        2,
+        "UNUSABLE — a criterion's verify level is malformed, so the bootstrap levels are unknown — run check-spec.mjs"
+      );
+    const levels = [...new Set(spec.items.map((i) => i.level))].sort();
+    return out("BOOTSTRAP", 4, `BOOTSTRAP — spec_kind: test-infra; no AC-TESTS.md; the lock records levels: ${levels.join(", ")}`, levels);
+  }
+  return out(
+    "TEMPLATED",
+    0,
+    `TEMPLATED — ${spec.items.length} AC(s): ${spec.items.map((i) => `${i.id} (${i.level ?? "malformed level"})`).join(", ")}`
+  );
+}
+
 // Rule 4 — a non-goal under `## Scope`: a column-0 `**Out of scope…**` label followed by at least one entry, either
 // on the label's own line or as a list line before the next column-0 `**` label or the section's end.
 function hasOutOfScopeEntry(sec) {

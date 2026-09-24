@@ -99,7 +99,10 @@ field by **copying that emitted value verbatim**, never by re-typing it. `CONTIN
 sub-stage needed a decision the run may not guess), it does **not** consult `check-loop.mjs`, whose inputs
 could be a previous iteration's stale reports. The record then carries `decision: INCONCLUSIVE` (an enum
 member) plus the extra frontmatter key `blocked: <id>`. Extra keys are ignored by the checker (below), so
-`blocked:` gates nothing; it exists so a reader can tell a blocked stop from a malformed-report stop. For
+`blocked:` gates nothing; it exists so a reader can tell a blocked stop from a malformed-report stop. **S13**
+(`blocked: ac-evidence-invalid`, 6.20.0) is reached two ways — `check-loop-fresh.mjs` refusing the test stage's
+evidence (`reason_code` `ac-evidence-invalid`) or `check-loop.mjs` stopping with `terminal_cause: ac-evidence` —
+and is recorded the same way on both: as a blocked stop, `decision: INCONCLUSIVE` plus the key. One row, one shape. For
 such a record `iterations` is the iteration in progress, 1-based, and a stop before the first build counts
 as `1`. A stop before `pharn/features/<name>/` exists writes no record at all. A blocked stop's `cap` is
 whatever `--max-iter` value the run entered with (or the default), but nothing reads it there — see below.
@@ -123,8 +126,11 @@ conflates the two.
 **`STOP_TERMINAL` changed meaning in `SKILLS_VERSION` 6.0.0, and the record carries no version field.**
 Records written before 6.0.0 used it for any real red — a verify `FAIL`, an inconclusive verdict, or a
 regression. From 6.0.0 a `FAIL` or a regression is retried, and `STOP_TERMINAL` means only an inconclusive
-verdict or a reconcile red. Nothing branches on a prior record's `decision` (a later run reads only its
-`## Handoff`), so no version field is added; read an older record's `decision` with its date in mind.
+verdict or a reconcile red. From 6.20.0 `check-loop.mjs` also stops terminally on an **AC-evidence red** (verify's
+AC gate found the AC tests, their lock or their test infrastructure changed after `/pharn-test`) and names which
+predicate fired in a closed `terminal_cause` — but `/pharn-loop` records THAT stop as the blocked stop S13 (below),
+so no record carries `STOP_TERMINAL` for it. Nothing branches on a prior record's `decision` (a later run reads only
+its `## Handoff`), so no version field is added; read an older record's `decision` with its date in mind.
 
 **`commit` — `unknown` is an honest absence, not a value.** `/pharn-loop` captures the SHA with
 `git rev-parse HEAD` at the moment it writes the record. That is **before** the loop's own commit: on a

@@ -29,14 +29,20 @@ The verify-report is `pharn/features/<name>/verify-report.json` (product) / `.de
 ## What this artifact IS and IS NOT (P0 — the honesty bar)
 
 - **IS:** a machine-readable record of **which named gates ran and what they exited with**, plus the
-  deterministic verdict computed from those exit codes alone.
+  deterministic verdict computed from those exit codes — and, with `check-verify.mjs --ac-gate` (6.20.0), from the
+  AC gate's reading of the per-test records and the AC-test lock.
 - **IS NOT** a claim that the feature is **correct**. `verdict: "PASS"` means exactly _"every gate in
-  `gates` exited 0"_ — never _"the feature works"_. A defect no gate covers is invisible here, and the
+  `gates` exited 0"_ — plus, when the report carries an `ac_gate` block, _"the AC gate passed or is
+  not-applicable"_ — never _"the feature works"_. A defect no gate covers is invisible here, and the
   report says nothing about it.
 - **IS NOT** influenced by the advisory `verifiers` layer. The verdict is computed **before** verifier
-  findings are merged in, and `pharn/floor/check-verify.mjs`'s only inputs are the gate→exit-code map and
-  the optional completeness integer — it cannot receive a verifier finding (fix #3,
-  `pharn/ARCHITECTURE.md §7`). A verifier saying "looks good" is not a guarantee; one raising a concern is
+  findings are merged in, and `pharn/floor/check-verify.mjs`'s inputs are the gate→exit-code map, the
+  optional completeness integer and — with `--ac-gate` (6.20.0) — the per-test records the project's reporter
+  wrote plus the AC-test lock; it cannot receive a verifier finding (fix #3, `pharn/ARCHITECTURE.md §7`).
+- **IS**, since 6.20.0 and for a test-first SPEC, a record of **whether every Acceptance Criterion was delivered**
+  on this run (the `ac_gate` block, below; a `spec_kind: test-infra` SPEC gets only the weaker bootstrap evidence,
+  and a legacy SPEC is recorded not-applicable) — and **IS NOT** a judgment that those tests capture the criteria's
+  intent. A verifier saying "looks good" is not a guarantee; one raising a concern is
   a flag for the human, not a block.
 
 ## The object
@@ -59,10 +65,11 @@ The verify-report is `pharn/features/<name>/verify-report.json` (product) / `.de
 | `feature`       | the increment's slug, or `null`                                                                                                                                                          | `check-verify.mjs` (from `--feature`)                               | ADVISORY — no floor op reads it            |
 | `gates`         | flat `{ "<gate-id>": <int exit code> }`, keys sorted                                                                                                                                     | `check-verify.mjs`                                                  | ADVISORY — no floor op reads it            |
 | `verdict`       | **enum** — see the table below                                                                                                                                                           | `check-verify.mjs`                                                  | **FLOOR-RELEVANT** — enum-gated by 4 sites |
-| `failing_gates` | array of the `gates` keys whose value is non-zero                                                                                                                                        | `check-verify.mjs`                                                  | ADVISORY — no floor op reads it            |
+| `failing_gates` | array of the `gates` keys whose value is non-zero, plus `ac-delivery` / `ac-evidence` when the AC gate is red (6.20.0 — these two never enter `gates`)                                   | `check-verify.mjs`                                                  | read by `check-loop.mjs` on a FAIL (below) |
 | `completeness`  | `{ declared: [], skipped: [], missing: [], complete: bool, verdict: str, note: str }`, OPTIONAL — members vary by emitter; treat any subset as valid                                     | the command, from `pharn/floor/check-build-complete.mjs`'s stdout   | ADVISORY — no floor op reads it            |
 | `verifiers`     | `{ registered: <int>, findings: [], note: str }`, OPTIONAL — `findings` and `note` are each optional; zero verifiers ship today, so no committed report exercises a non-empty `findings` | the command, from `pharn/floor/count-verifiers.mjs` + each verifier | ADVISORY — no floor op reads it            |
 | `reason`        | a diagnostic sentence, present only on `INCONCLUSIVE`                                                                                                                                    | `check-verify.mjs`                                                  | ADVISORY — no floor op reads it            |
+| `ac_gate`       | the AC gate's block, OPTIONAL — present when `check-verify.mjs` ran with `--ac-gate` (below)                                                                                             | `check-verify.mjs` (`ac-gate-core.mjs`)                             | compared by `check-loop-fresh.mjs` check E |
 
 **Trust (P2).** Every field except one carries deterministic-tool output — gate-id strings, integer exit
 codes, path strings: the enum-gated / floor-verifiable class. The exceptions are **free text and inherit
@@ -99,7 +106,9 @@ costs a reader.
 - **FLOOR consumers — exactly the four above. Three read `verdict` and nothing else; `check-loop.mjs`
   also reads `failing_gates`, and only when `verdict` is `FAIL`.** It tests that array for **exact
   membership** of the gate id `reconcile` — a reconcile red is never retried, because a retry re-anchors
-  the reconciliation baseline and would erase the detected escape — and refuses a `FAIL` report whose
+  the reconciliation baseline and would erase the detected escape — and, since 6.20.0, of `ac-evidence` (the AC
+  evidence changed or is missing; a rebuild cannot restore it), reporting which fired in its closed
+  `terminal_cause`; `ac-delivery` is an ordinary, retried red. It refuses a `FAIL` report whose
   `failing_gates` is not an array of strings (`INCONCLUSIVE`, exit 2). Gate ids are deterministic-tool
   output, so no free-text field is read. The three-checker half is a measurement, not a reading of their
   source: see `## How the "only`verdict`" claim was verified`.
@@ -217,7 +226,50 @@ additionally carries:
 - **The bound (L43):** a stamp certifies **internal consistency, never provenance** — a self-consistent
   fabricated stamp passes. **`gate_run` has one machine consumer:** `check-loop-fresh.mjs` requires
   `gate_run.stamp_sha256` to equal the sha256 of the verify stamp on disk and re-derives
-  `verdict` / `failing_gates` / `gates` from that stamp. It is agreement with the stamp and the live tree,
+  `verdict` / `failing_gates` / `gates` (and, since 6.20.0, `ac_gate`) from that stamp — with `--ac-gate`, which also
+  reads the live lock and tests, so over a moved tree only `gates` is compared and the rest defers to its staleness
+  check. It is agreement with the stamp and the live tree,
   never a guarantee about who wrote either.
 
 Full shape: `pharn/pharn-contracts/gate-run-record.md` (cited, not restated — P4).
+
+## The additive `ac_gate` block (6.20.0)
+
+`/pharn-verify` runs `check-verify.mjs --stamp … --ac-gate`, which adds the AC gate's verdict
+(`pharn/floor/ac-gate-core.mjs`; the rules are `pharn/pharn-contracts/ac-tests.md`, "The AC gate" — cited, not
+restated, P4):
+
+```json
+{
+  "ac_gate": {
+    "mode": "test-first | bootstrap | not-applicable | null",
+    "verdict": "PASS | FAIL | INCONCLUSIVE | NOT-APPLICABLE",
+    "reason": "a sentence on NOT-APPLICABLE; on INCONCLUSIVE the first unmeasured AC and its reason, or why the SPEC is unusable; else null",
+    "evidence": [{ "reason": "ac-tests-modified", "detail": "tests/ac/reset.unit.test.ts changed since the lock was written" }],
+    "acs": [
+      {
+        "id": "AC-1",
+        "level": "unit",
+        "tests": ["tests/ac/reset.unit.test.ts::reset › AC-1: resets the password"],
+        "status": "passed",
+        "reason": null,
+        "detail": ""
+      }
+    ],
+    "note": "an AC is delivered = a locked, once-red test titled AC-<n>:, in a file mapped to AC-<n>, passed on this head run. …"
+  }
+}
+```
+
+- **The per-AC table:** one `acs[]` row per SPEC criterion — id, level, the matched test ids, `status` (what the head
+  run reported: `passed` \| `failed` \| `skipped` \| `none` \| `unavailable`) and `reason` (`null` = delivered).
+  `evidence[]` holds the feature-wide evidence reds. Every `reason` is a member of the gate's closed set.
+- **How it reaches the verdict:** an evidence red adds `ac-evidence` to `failing_gates`, a delivery red adds
+  `ac-delivery`; either makes the verdict `FAIL`. An unmeasurable gate over otherwise-green gates is `INCONCLUSIVE`
+  with no `reason_code`. `NOT-APPLICABLE` (a legacy SPEC) changes nothing, and is in the report so a reader sees it.
+- **Bound to the checker in the loop:** `check-loop-fresh.mjs` re-derives the report WITH `--ac-gate` and requires
+  `ac_gate` to equal the re-derivation (over an unmoved tree), so the table a report shows is the one the checker
+  computes — agreement, never provenance (L43).
+- **Trust (P2):** test ids and titles come from the project's reporter; `detail` strings name paths from the
+  agent-editable lock. Both are untrusted DATA — renderers fence them (`RUN-REPORT.md`, `VERIFY.md`), and no stage
+  follows them.

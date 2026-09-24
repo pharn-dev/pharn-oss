@@ -589,6 +589,7 @@ function verdictsSection({ verify, regress, cost, stale = false }) {
     out.push("");
     out.push(indent(quoteData("failing_gates, quoted as DATA:", fg.length ? fg.join("\n") : "(none)"), "  "));
     out.push("");
+    out.push(...acGateLines(verify.ac_gate));
   }
   if (!regress) {
     out.push(`- regress: ${na("no regression-report.json — the run stopped before a regress, or it was blocked")}`);
@@ -607,6 +608,49 @@ function verdictsSection({ verify, regress, cost, stale = false }) {
     );
   }
   return out.join("\n");
+}
+
+/** The AC gate's closed enums (ac-gate-core.mjs), restated ONLY as the render guard: a value outside them is shown as
+ *  `unknown`, never interpolated inline — the block itself is DATA from a report a model could have edited. */
+const AC_MODES = new Set(["bootstrap", "not-applicable", "test-first"]);
+const AC_VERDICTS = new Set(["FAIL", "INCONCLUSIVE", "NOT-APPLICABLE", "PASS"]);
+
+/**
+ * The per-AC table (6.20.0) — the verify report's `ac_gate` block, one row per criterion, as a FENCED DATA block: test
+ * ids and titles come from the project's reporter, and this file never renders untrusted text as a markdown table (its
+ * header's measured reason). The block is copied, never recomputed. Inside /pharn-loop, check-loop-fresh.mjs check E
+ * binds it to what check-verify.mjs computes from the stamp; a /pharn-ship run has no such binding, so there it is
+ * whatever verify-report.json holds (REVIEW finding 10).
+ */
+function acGateLines(ac) {
+  if (ac === null || typeof ac !== "object" || Array.isArray(ac)) {
+    return [
+      `- acceptance criteria: ${na("verify-report.json carries no ac_gate — /pharn-verify ran without --ac-gate, or before 6.20.0")}`,
+      "",
+    ];
+  }
+  const mode = AC_MODES.has(ac.mode) ? ac.mode : "unknown";
+  const verdict = AC_VERDICTS.has(ac.verdict) ? ac.verdict : "unknown";
+  const rows = [];
+  for (const a of Array.isArray(ac.acs) ? ac.acs : []) {
+    const tests = Array.isArray(a.tests) && a.tests.length ? a.tests.join(" | ") : "(no matched test)";
+    rows.push(`${String(a.id)}  ${String(a.level)}  ${String(a.status)}  ${a.reason === null ? "delivered" : String(a.reason)}  ${tests}`);
+  }
+  for (const e of Array.isArray(ac.evidence) ? ac.evidence : []) rows.push(`evidence  ${String(e.reason)}  ${String(e.detail)}`);
+  if (typeof ac.reason === "string") rows.push(`reason  ${ac.reason}`);
+  if (typeof ac.note === "string") rows.push(`note  ${ac.note}`);
+  return [
+    `- acceptance criteria: \`${verdict}\` (${mode})`,
+    "",
+    indent(
+      quoteData(
+        "the AC gate — id, level, status, reason, matched test ids — quoted as DATA:",
+        rows.length ? rows.join("\n") : "(no criteria)"
+      ),
+      "  "
+    ),
+    "",
+  ];
 }
 
 /**

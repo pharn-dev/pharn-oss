@@ -12,7 +12,8 @@
 //   /verify has a FLOOR layer (deterministic gates: `npm test` / `validate` / `check-structural` /
 //   `lint`) and an ADVISORY layer (`role: verifier` capabilities — LLM judgment). "verified" MUST mean
 //   "the floor gates passed," NOT "a verifier judged it OK." So this helper computes the verdict from the
-//   gate EXIT CODES ALONE — it never receives, reads, or is influenced by any verifier finding. The
+//   gate EXIT CODES — plus, WITH `--ac-gate`, the AC gate's verdict over the per-test records (below) — and it
+//   never receives, reads, or is influenced by any verifier finding. The
 //   command appends verifier findings to the report AFTER this helper has emitted the verdict; they
 //   ANNOTATE, they never flip the number. A verifier saying "looks good" is not a guarantee; a verifier
 //   raising a concern is a flag for the human, not a deterministic block.
@@ -21,7 +22,10 @@
 // failures), this is an ABSOLUTE threshold: are ALL gates green NOW? No baseline, no comparison, no
 // exclusion — a separate axis of change, hence a separate file (P3).
 //
-// VERDICT (ARCHITECTURE §2 primitive #3 — an exit-code / enum threshold):
+// VERDICT (ARCHITECTURE §2 primitive #3 — an exit-code / enum threshold). This table is the verdict WITHOUT
+// `--ac-gate`; with it, FAIL also fires with every gate at 0 when the AC gate is red, PASS also needs the AC gate to
+// pass (or be NOT-APPLICABLE), and an unmeasurable AC gate over green gates is INCONCLUSIVE — the precedence is in
+// the `--ac-gate` section below:
 //   FAIL          iff ANY gate exit code !== 0 (the offenders are named in failing_gates[]). A real gate
 //                 failure ALWAYS wins over incompleteness (precedence below), so /ship never blindly
 //                 rebuilds over a genuine bug.
@@ -45,17 +49,32 @@
 //   its VERIFY_VERDICTS set would treat it as unknown → INCONCLUSIVE, fail-closed — bounded, not silent.)
 //
 // HONEST SCOPE (P0/P7): the verdict is a deterministic function of the gate exit codes the command
-// captures. "verified" therefore means EXACTLY "the named gates passed" — NOT "the feature is correct."
+// captures — and, with `--ac-gate`, of the AC gate's reading of the per-test records and the lock. "verified"
+// therefore means EXACTLY "the named gates passed" (plus, with `--ac-gate` over a test-first SPEC, "every AC's
+// locked, once-red test passed") — NOT "the feature is correct."
 // Correctness beyond what those gates check is the ADVISORY verifier layer's concern, and that layer
 // never gates this number. Said plainly, not hidden.
 //
-// TRUST (P2): every operand is produced by deterministic tooling — gate-ids (strings) and exit codes
-// (ints): the enum-gated / floor-verifiable class. The `--feature` value is a path/name string. NO
-// free-text (`problem`/`evidence`) is ever read — the helper's INPUT cannot even carry a verifier
-// finding (its sole input is the gate→exit-code map + the feature name). Inputs are JSON.parsed and used
-// ONLY as string/int operands — never eval'd, executed, spawned, imported, or sent anywhere. No child
-// process, no network. The verdict is therefore PROVABLY independent of any tainted field: no guaranteed
-// decision rests on a tainted field.
+// TRUST (P2): without `--ac-gate`, every operand is produced by deterministic tooling — gate-ids (strings) and
+// exit codes (ints): the enum-gated / floor-verifiable class. The `--feature` value is a path/name string. NO
+// verifier finding (`problem`/`evidence`) is ever read — the helper's INPUT cannot even carry one. Inputs are
+// JSON.parsed and used ONLY as string/int operands — never eval'd, executed, spawned, imported, or sent anywhere.
+// No child process, no network. WITH `--ac-gate` (6.20.0) that is no longer the whole input, and saying otherwise
+// would be the P0 disease (grill G8): the verdict ALSO depends on per-test ids, titles and statuses the project's
+// own reporter wrote, and on the lock, the test files, package.json and pharn.config.json — all agent-editable.
+// They are UNTRUSTED DATA: compared as strings, hashed, copied into the report as data, never interpreted; the AC
+// gate (ac-gate-core.mjs) spawns nothing, so this file still spawns nothing. No verifier finding reaches it either way.
+//
+// THE OPT-IN `--ac-gate` (6.20.0, requires --stamp) — the AC GATE, ac-gate-core.mjs, folded into the FLOOR verdict.
+// It adds an `ac_gate` block and, when red, one or two RESERVED ids to failing_gates (gate-run-core.mjs RESERVED_IDS —
+// they never enter `gates`, which stays the runner's map): `ac-evidence` (the AC evidence is changed or missing —
+// check-loop.mjs stops on it) and `ac-delivery` (an AC is not delivered yet — the loop iterates). Precedence:
+//   1. any gate red OR any AC failing id → FAIL (a real gate failure BEATS an unmeasurable AC gate, for the reason it
+//      beats INCOMPLETE — the red gate is the actionable fact, and FAIL can never reach a green stop);
+//   2. else the AC gate unmeasurable (a per-test record refused, or the SPEC unusable) → INCONCLUSIVE, exit 2 — fatal,
+//      never a PASS, and with no reason_code, so check-loop-fresh.mjs never routes it as an orchestration lapse;
+//   3. else INCOMPLETE / completeness-inconclusive / PASS, unchanged. A legacy SPEC's NOT-APPLICABLE changes nothing
+//      but is IN the report, never silent. The root is the invoking directory; the per-test files sit beside the stamp.
 //
 // THE OPT-IN `--stamp` SURFACE (gate-run-stamp increment) — WHERE THE MAP COMES FROM, not what it means:
 //   Without `--stamp` this file behaves BYTE-IDENTICALLY to before: it reads the positional results.json
@@ -80,7 +99,7 @@
 //
 // Usage:
 //   node pharn/floor/check-verify.mjs <results.json> [--feature <name>] [--complete <int>]
-//   node pharn/floor/check-verify.mjs --stamp <stamp.json> --feature <name> [--complete <int>]
+//   node pharn/floor/check-verify.mjs --stamp <stamp.json> --feature <name> [--complete <int>] [--ac-gate]
 //     results.json : a flat { "<gate-id>": <exit-code int>, ... } map written by the command, one entry
 //                    per FLOOR gate it ran (e.g. "test", "validate", "lint", "structural:<expected>").
 //     --stamp      : OPTIONAL — a gate-run-record written by run-gates.mjs. MUTUALLY EXCLUSIVE with the
@@ -88,12 +107,15 @@
 //     --complete   : OPTIONAL — the exit code of pharn/floor/check-build-complete.mjs (0/1/2). Omit for the
 //                    legacy 3-valued behavior.
 //
-// Exit: 0 PASS · 1 FAIL (>=1 gate non-zero) · 2 INCONCLUSIVE / bad input — FAIL-CLOSED (P5) ·
+// Exit: 0 PASS · 1 FAIL (>=1 gate non-zero, or with --ac-gate an AC failing id) · 2 INCONCLUSIVE / bad input —
+//       FAIL-CLOSED (P5) ·
 //       3 INCOMPLETE (gates green but the build is incomplete; only reachable WITH `--complete 1`).
 
 import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { dirname } from "node:path";
 import { validateStamp, stampToMap, completenessFromStamp, gateRunBlock } from "./gate-run-core.mjs";
+import { DELIVERY_REASONS, EVIDENCE_REASONS, FAILING_IDS, evaluateAcGate } from "./ac-gate-core.mjs";
 
 // --- emit one JSON document to stdout, then exit. The command captures this verbatim. ---
 function emit(obj, code) {
@@ -150,6 +172,7 @@ function main() {
   const resultsPath = positional[0];
   const feature = flag(argv, "--feature") ?? null;
   const stampPath = flag(argv, "--stamp");
+  const acGate = argv.includes("--ac-gate");
 
   // OPTIONAL build-completeness input (ship-completion-retry): `--complete <int>` = check-build-complete's
   // exit (0 complete · 1 incomplete · 2/other inconclusive). ABSENT ⇒ "n/a" ⇒ legacy 3-valued behavior. A
@@ -170,6 +193,20 @@ function main() {
   //     rather than to a terminal stop — which it can only do because the code is an enum and not prose. ---
   let stampMap = null;
   let gate_run = null;
+  let ac_gate = null;
+  if (acGate && stampPath === undefined) {
+    emit(
+      {
+        feature,
+        gates: {},
+        verdict: "INCONCLUSIVE",
+        failing_gates: [],
+        reason: "--ac-gate requires --stamp (the per-test records are the stamp's)",
+        reason_code: "usage-error",
+      },
+      2
+    );
+  }
   if (stampPath !== undefined) {
     if (resultsPath !== undefined) {
       emit(
@@ -263,6 +300,7 @@ function main() {
     completeSource = `stamp.aux.completeness ${auxComplete} (${stampPath})`;
     stampMap = stampToMap(parsed);
     gate_run = gateRunBlock(parsed, createHash("sha256").update(raw).digest("hex"));
+    if (acGate) ac_gate = evaluateAcGate({ feature, stamp: parsed, outDir: dirname(stampPath), root: process.cwd() });
   }
 
   const res = stampMap !== null ? { ok: true, value: stampMap } : readResultsMap(resultsPath, "results.json");
@@ -289,9 +327,31 @@ function main() {
   //   4. else → PASS (gates green ∧ completeness complete-or-n/a).
   // When --complete is ABSENT (completeStatus "n/a"), branches 2–3 are dead ⇒ the emitted object AND exit
   // are byte-identical to the legacy {PASS, FAIL} behavior (regression-guarded by the test suite).
-  const extra = gate_run ? { gate_run } : {};
+  const extra = { ...(gate_run ? { gate_run } : {}), ...(ac_gate ? { ac_gate } : {}) };
+  // The AC gate's failing ids (6.20.0). Absent --ac-gate this adds nothing, so the flag-less and --stamp outputs are
+  // byte-identical to before (the existing fixture set asserts it).
+  if (ac_gate) {
+    const reasons = [...ac_gate.evidence.map((e) => e.reason), ...ac_gate.acs.map((a) => a.reason).filter((r) => r !== null)];
+    if (reasons.some((r) => EVIDENCE_REASONS.includes(r))) failing.push(FAILING_IDS.evidence);
+    if (reasons.some((r) => DELIVERY_REASONS.includes(r))) failing.push(FAILING_IDS.delivery);
+    failing.sort();
+  }
   if (failing.length) {
     emit({ feature, gates, verdict: "FAIL", failing_gates: failing, ...extra }, 1);
+  }
+  if (ac_gate && ac_gate.verdict === "INCONCLUSIVE") {
+    const first = ac_gate.acs.find((a) => a.reason !== null);
+    emit(
+      {
+        feature,
+        gates,
+        verdict: "INCONCLUSIVE",
+        failing_gates: [],
+        reason: `AC gate unmeasurable — ${ac_gate.reason ?? (first ? `${first.id}: ${first.reason}` : "no reason")}`,
+        ...extra,
+      },
+      2
+    );
   }
   if (completeStatus === "incomplete") {
     emit({ feature, gates, verdict: "INCOMPLETE", failing_gates: [], ...extra }, 3);

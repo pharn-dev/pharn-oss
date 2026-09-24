@@ -171,6 +171,28 @@ export function bindStamp({ stamp, rows, feature, root }) {
 }
 
 /**
+ * THE MATCH RULE, one copy (L35): the red run's verdict and /pharn-verify's AC gate (ac-gate-core.mjs) both call it.
+ * Over the per-test records of `gateIds` (`recordOf(gateId)` → a test-results-core.mjs testRecord), an entry belongs to
+ * AC `id` when its `file` EQUALS one of `files` — exactly, no case-folding — and its LEAF title starts `<id>:`. Never a
+ * suite-wide title match: other features' AC tests share the suite and reuse the ids. EVERY observation is kept — one
+ * per (gate, test) — never one status per test id: two e2e gates can report the same id, and keying by id let the later
+ * gate's `failed` overwrite the earlier one's `passed` (REVIEW finding 1). The first refused record stops the walk and
+ * is returned by name.
+ * @returns {{refused: {gate: string, reason_code: string, reason: string} | null, observations: {gate: string, id: string, status: string}[]}}
+ */
+export function observeAc({ id, files, gateIds, recordOf }) {
+  const observations = [];
+  for (const gateId of gateIds) {
+    const rec = recordOf(gateId);
+    if (!rec.ok) return { refused: { gate: gateId, reason_code: rec.reason_code, reason: rec.reason }, observations: [] };
+    for (const t of rec.tests) {
+      if (files.includes(t.file) && t.title.startsWith(`${id}:`)) observations.push({ gate: gateId, id: t.id, status: t.status });
+    }
+  }
+  return { refused: null, observations };
+}
+
+/**
  * THE VERDICT over a bound stamp. Each AC gets `reason: null` (red, as required) or one RED_RUN_REASONS member, and
  * the matched test ids (untrusted data, sorted, unique).
  * @returns {{green: boolean, acs: {id: string, level: string, file: string, reason: string|null, detail: string, tests: string[]}[], gates: {gate: string, results_sha256: string}[]}}
@@ -192,26 +214,14 @@ export function verdict({ rows, stamp, outDir, root }) {
       ac.detail = `the run has none of ${LEVEL_GATES[row.level].join(", ")}`;
       continue;
     }
-    // EVERY observation is kept — one per (gate, test) — never one status per test id: two e2e gates can report the
-    // same id, and keying by id let the later gate's `failed` overwrite the earlier one's `passed` (REVIEW finding 1).
-    const statuses = [];
-    const ids = new Set();
-    for (const gateId of gateIds) {
-      const rec = recordOf(gateId);
-      if (!rec.ok) {
-        ac.reason = rec.reason_code;
-        ac.detail = `gate ${gateId}: ${rec.reason}`;
-        break;
-      }
-      for (const t of rec.tests) {
-        if (t.file === row.file && t.title.startsWith(`${row.id}:`)) {
-          statuses.push(t.status);
-          ids.add(t.id);
-        }
-      }
+    const obs = observeAc({ id: row.id, files: [row.file], gateIds, recordOf });
+    if (obs.refused) {
+      ac.reason = obs.refused.reason_code;
+      ac.detail = `gate ${obs.refused.gate}: ${obs.refused.reason}`;
+      continue;
     }
-    if (ac.reason !== null) continue;
-    ac.tests = [...ids].sort();
+    const statuses = obs.observations.map((o) => o.status);
+    ac.tests = [...new Set(obs.observations.map((o) => o.id))].sort();
     const count = (status) => statuses.filter((x) => x === status).length;
     if (statuses.length === 0) {
       ac.reason = "ac-test-not-collected";

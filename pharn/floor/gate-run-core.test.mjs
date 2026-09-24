@@ -266,6 +266,17 @@ test("STYLE_SET ⊂ ALLOWLIST, and RESERVED_IDS is disjoint from ALLOWLIST (ever
 // parseGatesSpec
 // ---------------------------------------------------------------------------------------------------
 
+test("6.20.0 — the AC gate's failing ids are RESERVED: --gates refuses `ac-delivery` and `ac-evidence` as gate ids", () => {
+  for (const id of ["ac-delivery", "ac-evidence", "reconcile", "completeness"]) {
+    assert.ok(RESERVED_IDS.includes(id), id);
+    const r = parseGatesSpec(`npm test::${id}`);
+    assert.equal(r.ok, false, id);
+    assert.equal(r.reason_code, "bad-gates");
+    assert.match(r.reason, /RESERVED/);
+  }
+  assert.ok(REASON_CODES.includes("ac-evidence-invalid"), "check-loop-fresh check I's own code is a member");
+});
+
 test("parseGatesSpec accepts `cmd::id` and bare `cmd`, defaulting the id to the command", () => {
   const r = parseGatesSpec("npm run foo::foo, make check");
   assert.ok(r.ok);
