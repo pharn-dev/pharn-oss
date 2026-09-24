@@ -11,8 +11,8 @@ version: "0.1.0"
 
 # /pharn-dev-regress — detect regressions OUTSIDE the feature just built
 
-You sit in the pipeline AFTER `/pharn-dev-build` (`spec → plan → grill → build → regress → verify → ship`,
-`pharn/ARCHITECTURE.md §6`). You answer **one** question: **did building this feature break anything
+You sit in the pipeline AFTER `/pharn-dev-build` (the dev loop `plan → grill → build → regress → verify → review`, which
+`/pharn-dev-ship` runs; it has no `test` stage, unlike the product spine in `pharn/ARCHITECTURE.md §6`). You answer **one** question: **did building this feature break anything
 OUTSIDE the feature?** It is pure state comparison — what was passing at the pre-build baseline is
 checked again at HEAD; **any gate that flipped pass→fail outside the changed scope is a regression.**
 

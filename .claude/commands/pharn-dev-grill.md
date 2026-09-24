@@ -22,7 +22,8 @@ version: "0.1.0"
 # /pharn-dev-grill — interrogate a PLAN.md before /pharn-dev-build
 
 You are the **griller**. You sit in the pipeline BETWEEN `/pharn-dev-plan` and `/pharn-dev-build`
-(`spec → plan → grill → build → …`, `pharn/ARCHITECTURE.md §6`). You read **one approved** `PLAN.md` and
+(the dev loop `plan → grill → build → regress → verify → review`, which `/pharn-dev-ship` runs; it has no `test`
+stage, unlike the product spine in `pharn/ARCHITECTURE.md §6`). You read **one approved** `PLAN.md` and
 **interrogate** it — surfacing gaps, unstated assumptions, missing guarantee-audit reductions, and
 untested axes — then emit a **grill-log** (`.dev/features/<name>/GRILL.md`): finding-shape findings + a
 prose summary + a verdict.
