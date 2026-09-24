@@ -139,8 +139,12 @@ same control-surface paths at scope-set time — exits non-zero and writes nothi
 one, unless the operator passes `--allow-claude-dir`. That early refusal is not runtime enforcement;
 **`enforce-writes-scope.cjs`** enforces whatever scope was emitted on every write. `.claude/commands/**`
 and the hooks' own `*.test.cjs` are deliberately in neither protected set nor the refusal set.
-**Bounded, and stated (P0):** the two `PreToolUse` hooks cover the `Write|Edit|MultiEdit` surface only
-— Bash-tool writes bypass them entirely, for these paths exactly as for the trusted docs.
+**Bounded, and stated (P0):** the two `PreToolUse` hooks cover the `Write|Edit|MultiEdit|NotebookEdit` surface
+only — Bash-tool writes bypass them entirely, for these paths exactly as for the trusted docs. Such a write is
+**detected, not prevented**: `/pharn-build` anchors a content-hash baseline and `/pharn-verify` runs
+`check-bash-reconcile.mjs`, which fails verify when a changed path is one the live guards would have denied —
+for a non-adversarial writer only, since the baseline is unauthenticated state a Bash write can also reach
+(`../pharn-contracts/reconciliation-record.md`, `LIMITS.md §6`).
 
 ## Honest scope (P0, P7)
 

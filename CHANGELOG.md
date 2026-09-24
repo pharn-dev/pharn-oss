@@ -23,6 +23,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.20.3] - 2026-09-24
+
+### Fixed
+
+- 2026-09-24: **The hand-written docs catch up with 6.17.0–6.20.2 in the places no generated-region check covers.**
+  A docs audit of the last ~30 commits found these sentences stale. `docs:check`, `check:badge`, `check:contributing`
+  and `check:markers` were all green, because none of them reads this prose. `SKILLS_VERSION` 6.20.2 → 6.20.3 (PATCH:
+  `pharn/floor/README.md` ships; no behaviour, contract shape or frontmatter changes). `MIN_CLI` stays 0.5.0.
+  ([`.dev/features/docs-catchup-6-20-3/`](./.dev/features/docs-catchup-6-20-3/))
+  - `README.md`: "How the workflow works" gains the Test stage, and its Verify line now names the acceptance-criteria
+    check. The Commands intro names the two standalone commands instead of the stale "Six of the other eight". The
+    spec-pin row of the Guaranteed table lists `test` among the re-verifiers, matching "The pipeline" in the same
+    file. "Design docs" no longer says only two trusted docs are copied into an install; all four have been copied
+    since `@pharn-dev/pharn` 0.4.0. The artifact lists name `AC-TESTS.md` and `AC-TESTS.lock.json`. "The pipeline"
+    says what `/pharn-verify` reads for the acceptance-criteria check. The Guaranteed table gains two rows, each
+    with its bound: the test-stage gate (6.19.0) and the AC gate (6.20.0).
+  - `SECURITY.md`: the security surface names the scope setter and the `/pharn-loop` `Stop` guard, besides the two
+    write guards. The write-guard-bypass scope covers every path `protect-trusted-paths.cjs` protects and the
+    writes-scope guard, and it says that a Bash write on its own is outside both hooks by design.
+  - `pharn/floor/README.md`: the hooks' bound names `NotebookEdit` and says a Bash write is detected at verify
+    (since 4.0.0), not prevented.
+  - `pharn-dev-grill`, `pharn-dev-regress` and `pharn-dev-verify` quoted a spine without `test` and cited
+    `pharn/ARCHITECTURE.md §6` for it. They now name the dev loop they run in, which has no test stage.
+  - **Not here, deliberately:** `CLAUDE.md` (current through 6.20.2) and the open `stop-guard-live-probe` follow-up,
+    which `CLAUDE.md` already describes as open.
+
 ## [6.20.2] - 2026-09-24
 
 ### Fixed

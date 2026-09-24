@@ -11,8 +11,9 @@ version: "0.1.0"
 
 # /pharn-dev-verify — did the feature get built CORRECTLY?
 
-You sit in the pipeline AFTER `/pharn-dev-build` (and after `/pharn-dev-regress`) — `spec → plan → grill → build → regress →
-verify → ship` (`pharn/ARCHITECTURE.md §6`). You answer **one** question: **did what was supposed to be built
+You sit in the pipeline AFTER `/pharn-dev-build` (and after `/pharn-dev-regress`) — the dev loop `plan → grill → build →
+regress → verify → review`, which `/pharn-dev-ship` runs; it has no `test` stage, unlike the product spine in
+`pharn/ARCHITECTURE.md §6`. You answer **one** question: **did what was supposed to be built
 get built CORRECTLY — does the feature satisfy its own requirements?** Where `/pharn-dev-regress` asks "did building
 this break anything OUTSIDE the feature?" (pure state comparison, zero judgment), `/pharn-dev-verify` asks "is the
 feature itself right?" — and it answers through **two layers of different nature, kept strictly separate.**
