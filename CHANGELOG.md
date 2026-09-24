@@ -23,6 +23,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.20.2] - 2026-09-24
+
+### Fixed
+
+- 2026-09-24: **The four trusted docs catch up with 6.14.0–6.20.1: the spine names `test`, verify's AC gate and the
+  project SPEC template are described, and statements that had gone false are corrected.** `SKILLS_VERSION` 6.20.1 →
+  6.20.2 (PATCH: corrections and clarifications to shipped bytes; no new capability). `MIN_CLI` stays 0.5.0. The
+  trusted-doc edits were applied by a human (the files are hook-protected against the agent) from
+  `.dev/features/protected-docs-6-20-2/proposed/`, which consolidates the `PROTECTED-FOLLOWUPS.md` files of
+  test-results, pharn-test-stage, pharn-test-red, wire-pharn-test and verify-ac-gate, and the #251/#253 plans.
+  ([`.dev/features/protected-docs-6-20-2/`](./.dev/features/protected-docs-6-20-2/))
+  - **`pharn/ARCHITECTURE.md`.**
+    - §4 lists `test-results-record` and `ac-tests` among the contracts, and `review` among the commands.
+    - §5 restores the seam-record line #186 dropped, which had left a code span unclosed.
+    - §6's spine and table add `test`, and the verify row describes the AC gate.
+    - Two §6 Keystone sentences are corrected: "four downstream stages re-verify" (false since `/pharn-test`
+      joined them) and the literal-`spec_id` sentence.
+    - The content hash moves from `edc3d07d…ce091a5d2c` to
+      `4950796f5342df20a298fe22812e45dec3c15317592bd2358a31e149d2dc1c7f`; no dev plan was open.
+  - **`LIMITS.md`.**
+    - §8's "ten" product stages (false since 6.17.0) takes an open form.
+    - §1d limits the AC-grammar sentence to `check-spec.mjs` and states the project template's Bash limits.
+    - §5, §6 and §8 correct three stale asides.
+    - A new §9 states the limits of the AC evidence.
+  - **`THREAT-MODEL.md`.** The project SPEC template becomes surface 9 (§2, §3). §4 item 2 no longer says a Bash write
+    to a trusted path goes undetected (false since 4.0.0).
+  - **`pharn/CONSTITUTION.md`.** "The agent cannot write to" the four docs now says through which tools. The
+    unqualified form was the claim `LIMITS.md §6` strikes.
+  - **Also updated:** `/pharn-build`, `/pharn-ship` and CLAUDE.md drop the sentences that deferred to this pending
+    edit.
+
 ## [6.20.1] - 2026-09-24
 
 ### Fixed
