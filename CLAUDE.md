@@ -1030,8 +1030,8 @@ injected downstream as instructions. **No guaranteed decision ever rests on a ta
 markdown there is no `import` to lint, so "no sibling imports" is enforced best-effort by a grep in
 the floor plus the review agent.
 
-**The pipeline spine** is `spec → plan → grill → test → build → regress → verify → ship` (`test` since 6.19.0;
-`pharn/ARCHITECTURE.md §6` lists it once a human applies the pending protected edit), each stage emitting
+**The pipeline spine** is `spec → plan → grill → test → build → regress → verify → ship` (`test` since 6.19.0,
+`pharn/ARCHITECTURE.md §6`), each stage emitting
 a typed artifact carrying `spec_id` (+ the plan additionally pins `spec_content_hash`).
 
 ## Conventions when building PHARN capabilities

@@ -1,0 +1,225 @@
+@@@ pharn/ARCHITECTURE.md
+<<<
+                             gate-run-record, spec-template (+ templates/spec-template.md, the
+                             default SPEC template it defines).
+===
+                             gate-run-record, test-results-record, ac-tests, spec-template
+                             (+ templates/spec-template.md, the default SPEC template it defines;
+                             a project may supply its own at pharn.spec-template.md).
+>>>
+@@@ pharn/ARCHITECTURE.md
+<<<
+.claude/commands/                              the stages: pharn-spec … pharn-ship (+ loop, memory-promote)
+===
+.claude/commands/                              the stages: pharn-spec … pharn-ship (+ loop, review, memory-promote)
+>>>
+@@@ pharn/ARCHITECTURE.md
+<<<
+content-hash primitive is `spec_content_hash`)_**.** A seam = `{name, framework, runtime, packages[],
+seam once through a confidence-gated chain
+===
+content-hash primitive is `spec_content_hash`)_**.** A seam = `{name, framework, runtime, packages[],
+resolution, resolved_via, pinned_at, content_hash}`. The agnostic resolver resolves each needed
+seam once through a confidence-gated chain
+>>>
+@@@ pharn/ARCHITECTURE.md
+<<<
+`spec → plan → grill → build → regress → verify → ship`. Each stage emits a **typed artifact**
+linking back to the spec:
+
+| stage   | artifact             | key field                                    |
+| ------- | -------------------- | -------------------------------------------- |
+| spec    | `SPEC.md`            | intent (Draft → Approved) + `spec_template` (provenance) |
+| plan | `PLAN.md` | `spec_id` **+ `spec_content_hash`** (fix #4) + `applied_lessons` (floor-shaped: `none` \| `[L<n>…]`; content advisory) |
+| grill   | grill-log            | findings vs plan                             |
+| build   | `BUILD.md`           | per-phase results                            |
+| regress | regression-report    | regressions outside the feature              |
+| verify  | verify-report        | compliance per verifier                      |
+| ship    | ship-report          | decision + `PHARN ✓ reviewed` seal           |
+===
+`spec → plan → grill → test → build → regress → verify → ship`. Each stage emits a **typed artifact**
+linking back to the spec:
+
+| stage   | artifact             | key field                                    |
+| ------- | -------------------- | -------------------------------------------- |
+| spec    | `SPEC.md`            | intent (Draft → Approved) + `spec_template` (provenance; a templated SPEC's criteria are `AC-<n>` items, one verify level each) + optional `spec_kind` (hashed into the approval pin, 6.18.0) |
+| plan | `PLAN.md` | `spec_id` **+ `spec_content_hash`** (fix #4) + `applied_lessons` (floor-shaped: `none` \| `[L<n>…]`; content advisory) |
+| grill   | grill-log            | findings vs plan                             |
+| test    | `AC-TESTS.lock.json` | the spec pin + the AC tests' digests + the test-infrastructure pin (6.20.0) + the red-run evidence: each AC's test failed before the build (6.18.0) — or a bootstrap record for a `spec_kind: test-infra` SPEC |
+| build   | `BUILD.md`           | per-phase results                            |
+| regress | regression-report    | regressions outside the feature              |
+| verify  | verify-report        | `verdict` from the floor gates' exit codes + the AC gate (`ac_gate`, 6.20.0): every AC's locked, once-red test passed on the head run — bootstrap evidence for `spec_kind: test-infra`, not-applicable for a legacy SPEC; verifier findings annotate, never flip it (fix #3) |
+| ship    | ship-report          | decision + `PHARN ✓ reviewed` seal           |
+
+`test` writes each Acceptance Criterion's test before `build`, into files the build's writes-scope
+excludes, and requires each to fail; its mapping, `AC-TESTS.md`, is written by `plan` for a templated
+SPEC, and a legacy SPEC gets neither. `build` runs `pharn/floor/check-test-stage.mjs` first and refuses
+without that evidence (6.19.0) — obeying it is command discipline, and `/pharn-loop` re-reads it after
+every build. Shape and bounds: `pharn-contracts/ac-tests.md` (cited, not restated — P4; `LIMITS.md §9`).
+>>>
+@@@ pharn/ARCHITECTURE.md
+<<<
+asserts and four downstream stages re-verify. A literal `spec_id` field appears in `PLAN.md` and
+`BRIEFING.md`; the other artifacts carry the identity positionally.
+===
+asserts and every downstream stage from `grill` to `verify` re-verifies. A literal `spec_id` field
+appears in `PLAN.md`, `AC-TESTS.md`, `AC-TESTS.lock.json` and `BRIEFING.md`, among others; the rest
+carry the identity positionally.
+>>>
+@@@ THREAT-MODEL.md
+<<<
+   `.claude/commands/pharn-review.md` Step 3b — cited, not restated (P4).
+===
+   `.claude/commands/pharn-review.md` Step 3b — cited, not restated (P4).
+9. **the project's SPEC template** — `pharn.spec-template.md` at the project root (6.14.0). Its guidance
+   comments are instructions `/pharn-spec` follows when it writes a SPEC, including under
+   `--model-approve` in an unattended `/pharn-loop`, where no human reads the SPEC before it is planned.
+   A write to it is therefore a **persistent instruction channel** into every later SPEC — the
+   memory-poisoning shape (3), aimed at intent instead of lessons. It is **trusted by path**, which is why
+   the path is a constant rather than a `pharn.config.json` value. Stated in full, with its bounds, at
+   `pharn/pharn-contracts/spec-template.md`, "The project template" — cited, not restated (P4).
+>>>
+@@@ THREAT-MODEL.md
+<<<
+**No primitive is specified or planned for this row** |
+===
+**No primitive is specified or planned for this row** |
+| project SPEC template   | one fixed path, never read from config — a configurable pointer would itself be unguarded, agent-writable state; `check-spec.mjs` validates a MINIMUM shape before printing its reference and never authenticates the guidance text | pre-write hook — `protect-trusted-paths.cjs` denies it by path, whether or not the file exists, on `Write`/`Edit`/`MultiEdit`/`NotebookEdit` only. A `Bash` write reaches it and is detected only inside a build's anchor-to-verify window, which opens after `/pharn-spec` ran, and only for a non-adversarial writer on a file that is not git-ignored (`LIMITS.md §1d`, §6). A change landed by a merge, a pull or a human editor is obeyed as-is |
+>>>
+@@@ THREAT-MODEL.md
+<<<
+   surface — the four tools the live matcher names. A `Bash` write reaches every one of these paths and
+   is neither denied nor detected; it rests on the Claude Code permission layer, which gates commands,
+   not paths, and is not a PHARN floor primitive (residual — `LIMITS.md §6`)._
+===
+   surface — the four tools the live matcher names. A `Bash` write reaches every one of these paths and
+   is not denied — preventing it rests on the Claude Code permission layer, which gates commands, not
+   paths, and is not a PHARN floor primitive. Since 4.0.0 such a write is **detected** after the fact
+   when it lands inside a build's anchor-to-verify window (`check-bash-reconcile.mjs`, as in item 7);
+   outside that window it is neither denied nor detected (residual — `LIMITS.md §6`)._
+>>>
+@@@ LIMITS.md
+<<<
+A related bound on the same checker: a valid AC grammar means the AC is PHRASED testably — not that
+any test exists, runs, or passes. The template rules are opt-in by the `spec_template` frontmatter
+key; a SPEC without it validates under the legacy four-section rule.
+===
+A related bound on the same checker: a valid AC grammar means the AC is PHRASED testably — not that
+any test exists, runs, or passes. That bound is `check-spec.mjs`'s, not the pipeline's: for a
+templated SPEC that is not `spec_kind: test-infra`, `/pharn-test` writes each criterion's test before
+the build and requires it to fail, `/pharn-build` refuses without that evidence, and `/pharn-verify`'s
+AC gate requires each locked, once-red test to pass on the head run (6.17.0–6.20.0) — separate checks,
+bounded in §9. The template rules are opt-in by the `spec_template` frontmatter key; a SPEC without it
+validates under the legacy four-section rule, and the AC stages report it not-applicable.
+
+The template `/pharn-spec` fills may be the project's own, `pharn.spec-template.md` at the project root
+(6.14.0), and its guidance comments are instructions. `protect-trusted-paths.cjs` denies it by path,
+like the trusted docs — on the `Write`/`Edit`/`MultiEdit`/`NotebookEdit` surface only; a `Bash` write
+reaches it (§6). `check-bash-reconcile.mjs` detects such a write only when it lands inside a build's
+anchor-to-verify window and the file is not git-ignored, and only from a non-adversarial writer: the
+path is not always-reconciled, so a writer who also rewrites its baseline entry gets a silent `CLEAN`.
+That window opens after `/pharn-spec` ran, so a write that steered the current SPEC is never detected
+by the run it steered. A change landed by a merge, a pull or a human editor is obeyed as-is.
+>>>
+@@@ LIMITS.md
+<<<
+- **There is no configured sink.** `pharn.config.json` carries only model/stage settings and
+  `ship.requireAttestation`; `pharn/pharn-contracts/seam-config.md` names no telemetry concept. A
+===
+- **There is no configured sink.** `pharn.config.json` has no telemetry key — the nearest, since
+  6.15.0, is `testResults`, which names a test reporter's format, not a sink — and
+  `pharn/pharn-contracts/seam-config.md` names no telemetry concept. A
+>>>
+@@@ LIMITS.md
+<<<
+  path the plan's `## Files` did not declare, and is the only thing in the tree that can surface such a
+  write after the fact. Four bounds, every one stated in that checker's own header: it fires only if
+  `/pharn-regress` runs; it compares _changed since base_, not _written by the build_; it carries
+  closed-enum exemptions for the pipeline's own artifacts; and a plan that edits its own `## Files`
+  defeats it. A smoke alarm, never the guard.
+===
+  path the plan's `## Files` did not declare (since 6.17.0 `/pharn-regress` also declares
+  `AC-TESTS.md`'s), and before 4.0.0 was the only thing in the tree that could surface such a
+  write after the fact. Four bounds, every one stated in that checker's own header: it fires only if
+  `/pharn-regress` runs; it compares _changed since base_, not _written by the build_; it carries
+  closed-enum exemptions for the pipeline's own artifacts; and a plan that edits its own `## Files`
+  (or its `AC-TESTS.md`) defeats it. A smoke alarm, never the guard.
+>>>
+@@@ LIMITS.md
+<<<
+`pharn.config.json`'s `models.stages` block declares a `model` and an `effort` for each of the ten
+product stages, and `pharn/floor/check-model-config.mjs` holds that block in EQUALITY with the ten
+`/pharn-*` commands' static `model:` / `effort:` frontmatter, in both directions. That check is real and
+===
+`pharn.config.json`'s `models.stages` block declares a `model` and an `effort` for each product stage,
+and `pharn/floor/check-model-config.mjs` holds that block in EQUALITY with the product `/pharn-*`
+commands' static `model:` / `effort:` frontmatter, in both directions (the set is that checker's
+`PRODUCT_STAGES` map — read it there). That check is real and
+>>>
+@@@ LIMITS.md
+<<<
+  that `pharn.config.json` is unread — that file **is** read at run time, by
+  `.claude/hooks/enforce-writes-scope.cjs` (`skillsVersion`, to choose its fail-closed posture) and by
+  `pharn/floor/check-bash-reconcile.mjs` (which copies it into a probe sandbox). The block is a source of
+===
+  that `pharn.config.json` is unread — that file **is** read at run time, by
+  `.claude/hooks/enforce-writes-scope.cjs` (`skillsVersion`, to choose its fail-closed posture), by
+  `pharn/floor/check-bash-reconcile.mjs` (which copies it into a probe sandbox), and by others since
+  (`testResults`, read by `pharn/floor/test-results-core.mjs`, 6.15.0). The block is a source of
+>>>
+@@@ LIMITS.md
+<<<
+<!-- §8 was drafted in .dev/features/model-routing-limit and applied by a human (SKILLS_VERSION 6.4.1). -->
+===
+<!-- §8 was drafted in .dev/features/model-routing-limit and applied by a human (SKILLS_VERSION 6.4.1). -->
+
+---
+
+## 9. The Acceptance-Criteria evidence is agreement, not provenance
+
+For a templated SPEC the pipeline carries floor evidence about each Acceptance Criterion
+(`pharn/pharn-contracts/ac-tests.md`): a red run shows each criterion's test collected and `failed` before
+the build; `AC-TESTS.lock.json` pins the tests, the mapping, the spec pin and the test infrastructure
+(content-hash); `check-test-stage.mjs` reads that evidence before the build; and `/pharn-verify`'s AC gate
+does not PASS unless each criterion's locked, once-red test `passed` on the head run. Each checker's
+verdict is floor (enum membership over the per-test record, content-hash); obeying it is command
+discipline, as everywhere (§1d). What the verdicts certify is narrower than "the criteria are met".
+
+- **Struck claim:** "a `PASS` from `/pharn-verify` means every Acceptance Criterion is satisfied" — or any
+  reading of the AC gate as evidence about the behaviour rather than about a test's recorded status.
+- **True statement:** `passed` and `failed` are the project reporter's words, read from a file the
+  project's own test run wrote. PHARN does not re-run or re-judge a test, and does not judge whether a
+  test captures its criterion's intent. A test that failed before the build on a typo in its own body
+  reads the same as one that failed for the missing behaviour.
+- **Agreement, never provenance.** The tests, the reporter config, the `package.json` scripts and
+  `pharn.config.json` are agent-editable. `results-exit-contradiction`, the lock and the
+  test-infrastructure pin NARROW a forged report and never close it: a self-consistent fabricated lock,
+  stamp and results set over the live tree passes. The pin also does not see, among others, a setup file
+  a config imports, configuration read from the environment, script chaining, npm's own configuration or
+  the runner's version (`pharn/floor/test-infra-core.mjs` states the full list).
+- **Weaker and absent evidence are reported, never hidden.** A `spec_kind: test-infra` SPEC gets
+  BOOTSTRAP evidence: no test was locked or shown red, and `spec_kind` sits inside the approval pin §1d
+  already calls forgeable. A legacy SPEC gets no AC evidence, and verify reports it `not-applicable`.
+  What makes a SPEC legacy is the absence of `spec_template`, which the approval pin does not cover, so a
+  templated SPEC whose key is removed, with its `AC-TESTS.md` and lock deleted, reads legacy without
+  drift. `/pharn-loop` refuses that (`--require-test-first`); under `/pharn-ship` it reaches the human at
+  GATE 2 as `ac-tests: not-applicable (legacy spec)`.
+- **The test stage runs before the reconcile window.** `/pharn-test` runs before `/pharn-build`'s anchor,
+  so its own `Bash` writes are not reconciled (§6); from the anchor on, the lock and the AC tests are
+  visible to reconcile.
+
+Closing the provenance gap needs the tests run, and their results captured, where the build cannot
+write — harness-layer, the same category as §6's sandbox and §1d's out-of-band approval signal. Like
+§6 and §8, this is a limit, not one of §1's four.
+
+<!-- §9 was drafted from .dev/features/verify-ac-gate/PROTECTED-FOLLOWUPS.md (queue item 07) and applied by a human (SKILLS_VERSION 6.20.2). -->
+>>>
+@@@ pharn/CONSTITUTION.md
+<<<
+(P2): the agent cannot write to `CONSTITUTION.md`, `ARCHITECTURE.md`, `THREAT-MODEL.md`, or
+`LIMITS.md`. The principle (P0) and the floor (the hook) are the same idea applied to this file.
+===
+(P2): the agent cannot write to `CONSTITUTION.md`, `ARCHITECTURE.md`, `THREAT-MODEL.md`, or
+`LIMITS.md` through the `Write`/`Edit`/`MultiEdit`/`NotebookEdit` tools — a `Bash` write reaches them
+(`LIMITS.md §6`). The principle (P0) and the floor (the hook) are the same idea applied to this file.
+>>>

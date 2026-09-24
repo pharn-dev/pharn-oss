@@ -18,13 +18,13 @@ reads:
   ]
 writes: ["<user-code files named in the plan's ## Files (Phase-1, via --from-plan — not from this list)>", "pharn/features/<name>/BUILD.md"]
 constitution_refs: ["P0", "P2", "P3", "P4", "P5", "P6", "P7"]
-version: "0.2.0"
+version: "0.2.1"
 ---
 
 # /pharn-build — build the user's code from an Approved, un-drifted plan, within the plan's scope
 
 You are the **build stage** of the product pipeline (`spec → plan → grill → test → build → regress → verify →
-ship`; `pharn/ARCHITECTURE.md §6` names it without `test` until a human applies that trusted doc's pending edit). You
+ship`, `pharn/ARCHITECTURE.md §6`). You
 sit AFTER `/pharn-test` and turn an **approved** `pharn/features/<name>/PLAN.md`
 into the **user's actual code** — you are the **first** product stage that writes the user's implementation
 files, not a methodology artifact. Three things make that safe, and **all are REUSED floor mechanisms — you
