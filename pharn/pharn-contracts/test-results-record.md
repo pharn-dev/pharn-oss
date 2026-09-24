@@ -19,7 +19,8 @@ tested code from a file the project's own test run writes, never typed by a mode
 log output.
 
 **Honest trigger (P7).** No dogfood run failed on this. It was built at the maintainer's direction, for a gap
-demonstrable on any project. In 6.15.0 **no stage reads the record**. For every stamp the runner writes, the
+demonstrable on any project. In 6.15.0 no stage read the record; since 6.18.0 **one does** — `/pharn-test`'s red run
+(`check-red-run.mjs`, `ac-tests.md`), where a refused record is a RED by its own reason. For every stamp the runner writes, the
 verify and regress verdicts are unchanged; what did change is that a stamp carrying a malformed
 `results_sha256` is refused (`gate-run-record.md`, "Per-test results"), and the runner refuses to run a gate
 whose results path it cannot clear.

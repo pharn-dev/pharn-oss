@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { LOCK_KEYS, SCHEMA, buildLock, lockShapeError, sha256RegularFile } from "./ac-tests-lock.mjs";
+import { LOCK_KEYS, SCHEMA, buildLock, filesDigest, lockShapeError, sha256RegularFile } from "./ac-tests-lock.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, "ac-tests-lock.mjs");
@@ -211,6 +211,312 @@ test("--write resets red_run / test_infra to null: a rewrite means the tests cha
     writeFileSync(path, JSON.stringify({ ...lockOf(root), red_run: { stale: true } }));
     cli(root, ["--write", NAME]);
     assert.equal(lockOf(root).red_run, null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── 6.18.0: schema /2, the red_run section, --require-red-run, /1 still read, and the bootstrap mode ────────────
+
+const lockPathOf = (root) => join(root, "pharn", "features", NAME, "AC-TESTS.lock.json");
+const writeLockJson = (root, lock) => writeFileSync(lockPathOf(root), JSON.stringify(lock));
+/** A well-formed red_run for the world's lock, bound to its files. */
+const redRunFor = (lock) => ({
+  stamp_sha256: H,
+  files_sha256: filesDigest(lock.files),
+  gates: [{ gate: "test", results_sha256: H }],
+  acs: [{ id: "AC-1", tests: ["tests/ac/one.test.js::AC-1: t"] }],
+});
+
+test("/2: --write writes mode test-first with bootstrap null; a well-formed red_run bound to the files checks GREEN", () => {
+  const root = world();
+  try {
+    cli(root, ["--write", NAME]);
+    const lock = lockOf(root);
+    assert.equal(lock.schema, "ac-tests-lock/2");
+    assert.equal(lock.mode, "test-first");
+    assert.equal(lock.bootstrap, null);
+    writeLockJson(root, { ...lock, red_run: redRunFor(lock) });
+    const r = cli(root, ["--check", NAME, "--require-red-run"]);
+    assert.equal(r.code, 0, r.out);
+    assert.match(r.out, /red_run recorded for 1 AC/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("--check REDs a red_run no longer bound to the files, or naming other ACs than the mapping (grill G8)", () => {
+  const root = world();
+  try {
+    cli(root, ["--write", NAME]);
+    const lock = lockOf(root);
+    writeLockJson(root, { ...lock, red_run: { ...redRunFor(lock), files_sha256: "b".repeat(64) } });
+    let r = cli(root, ["--check", NAME]);
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /red_run is not bound to the lock's files/);
+    writeLockJson(root, { ...lock, red_run: { ...redRunFor(lock), acs: [{ id: "AC-2", tests: ["t"] }] } });
+    r = cli(root, ["--check", NAME]);
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /red_run's ACs are not AC-TESTS\.md's mapped ACs/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("/1 locks are still read and checked GREEN, and never pass --require-red-run", () => {
+  const root = world();
+  try {
+    cli(root, ["--write", NAME]);
+    const { mode, bootstrap, ...rest } = lockOf(root);
+    assert.equal(mode, "test-first");
+    assert.equal(bootstrap, null);
+    writeLockJson(root, { ...rest, schema: "ac-tests-lock/1" });
+    assert.equal(cli(root, ["--check", NAME]).code, 0, "a 6.17.0 lock still checks");
+    const r = cli(root, ["--check", NAME, "--require-red-run"]);
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /ac-tests-lock\/1, which has no red run/);
+    assert.equal(cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]).code, 2, "a red run is recorded on a /2 lock only");
+    writeLockJson(root, { ...rest, schema: "ac-tests-lock/1", mode: "test-first" });
+    assert.equal(cli(root, ["--check", NAME]).code, 2, "a /1 lock with /2's keys is not the /1 shape");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("/2 shape: each red_run / mode / bootstrap violation is unusable (exit 2), never a verdict (L52)", () => {
+  const root = world();
+  try {
+    cli(root, ["--write", NAME]);
+    const good = lockOf(root);
+    const rr = redRunFor(good);
+    for (const [why, red_run, extra = {}] of [
+      ["red_run extra key", { ...rr, extra: 1 }],
+      ["red_run stamp not hex", { ...rr, stamp_sha256: "x" }],
+      ["red_run files not hex", { ...rr, files_sha256: "x" }],
+      ["gates empty", { ...rr, gates: [] }],
+      ["a gate outside the results gates", { ...rr, gates: [{ gate: "lint", results_sha256: H }] }],
+      ["a gate entry extra key", { ...rr, gates: [{ gate: "test", results_sha256: H, x: 1 }] }],
+      [
+        "gates unsorted",
+        {
+          ...rr,
+          gates: [
+            { gate: "test", results_sha256: H },
+            { gate: "e2e", results_sha256: H },
+          ],
+        },
+      ],
+      ["acs empty", { ...rr, acs: [] }],
+      ["an ac id outside AC-<n>", { ...rr, acs: [{ id: "AC-0", tests: ["t"] }] }],
+      ["an ac with no tests", { ...rr, acs: [{ id: "AC-1", tests: [] }] }],
+      ["a test id with a control char", { ...rr, acs: [{ id: "AC-1", tests: ["a\u0007b"] }] }],
+      ["tests unsorted", { ...rr, acs: [{ id: "AC-1", tests: ["b", "a"] }] }],
+      [
+        "acs out of AC-number order",
+        {
+          ...rr,
+          acs: [
+            { id: "AC-10", tests: ["t"] },
+            { id: "AC-2", tests: ["t"] },
+          ],
+        },
+      ],
+      ["mode outside the set", null, { mode: "fast" }],
+      ["test-first with a bootstrap section", null, { bootstrap: { spec_kind: "test-infra", levels: ["unit"] } }],
+    ]) {
+      const bad = { ...good, red_run, ...extra };
+      writeLockJson(root, bad);
+      assert.equal(cli(root, ["--check", NAME]).code, 2, why);
+      assert.notEqual(lockShapeError(bad, NAME), null, why);
+    }
+    const sorted = {
+      ...good,
+      red_run: {
+        ...rr,
+        acs: [
+          { id: "AC-2", tests: ["t"] },
+          { id: "AC-10", tests: ["t"] },
+        ],
+      },
+    };
+    assert.equal(lockShapeError(sorted, NAME), null, "control: AC-2 before AC-10 is AC-number order");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("usage: --require-red-run only with --check; --record-red-run needs --out; a flag in place of <name>", () => {
+  const root = world();
+  try {
+    assert.equal(cli(root, ["--write", NAME, "--require-red-run"]).code, 2);
+    assert.equal(cli(root, ["--record-red-run", NAME]).code, 2);
+    assert.equal(cli(root, ["--check", "--require-red-run"]).code, 2);
+    assert.equal(cli(root, ["--record-red-run", NAME, "--out", ".pharn/none"]).code, 2, "no lock yet");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── bootstrap ─────────────────────────────────────────────────────────────────────────────────────────────
+
+// A bootstrap lock is written and checked only over an Approved, un-drifted SPEC (check-spec-approved.mjs, shelled —
+// REVIEW finding 3), so these SPECs are REAL: the shipped template filled, the pin computed by check-spec --hash.
+const CHECK_SPEC = join(HERE, "check-spec.mjs");
+const TEMPLATE = readFileSync(join(HERE, "..", "pharn-contracts", "templates", "spec-template.md"), "utf8");
+const TEMPLATE_REF = spawnSync(process.execPath, [CHECK_SPEC, "--template-ref", "pharn-default"], { encoding: "utf8" }).stdout.trim();
+/** A templated SPEC whose criteria are at `levels`; `kind` null writes no spec_kind line; `approve` pins it. */
+function specOf({ kind = "test-infra", levels = ["unit", "e2e"], legacy = false, approve = true, salt = "" } = {}) {
+  let t = TEMPLATE.replace(/<!--\s*pharn:guidance[\s\S]*?-->\n?/g, "")
+    .replace("spec_id: <name>", `spec_id: ${NAME}`)
+    .replace("<the line check-spec.mjs --resolve-template-ref prints>", TEMPLATE_REF)
+    .replace("<unit | integration | e2e>", levels[0])
+    .replace(/<[^>\n]+>/g, `filled${salt}`);
+  const extra = levels
+    .slice(1)
+    .map((l, i) => `- **AC-${i + 2}** Given a project When its tests run Then results are written\n  - verify: ${l}\n`)
+    .join("");
+  t = t.replace(`  - verify: ${levels[0]}\n`, `  - verify: ${levels[0]}\n${extra}`);
+  if (legacy) t = t.replace(/^spec_template:.*\n/m, "");
+  if (kind !== null) t = t.replace(/^(spec_id: .*\n)/m, `$1spec_kind: ${kind}\n`);
+  if (!approve) return t;
+  const tmp = mkdtempSync(join(tmpdir(), "acl-spec-"));
+  try {
+    writeFileSync(join(tmp, "SPEC.md"), t);
+    const hash = spawnSync(process.execPath, [CHECK_SPEC, "--hash", join(tmp, "SPEC.md")], { encoding: "utf8" }).stdout.trim();
+    return t.replace("state: Draft", "state: Approved").replace('spec_content_hash: ""', `spec_content_hash: ${hash}`);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+const pinOf = (spec) => spec.match(/^spec_content_hash: ([0-9a-f]{64})$/m)[1];
+function bootWorld(spec = specOf()) {
+  const root = mkdtempSync(join(tmpdir(), "aclb-"));
+  mkdirSync(join(root, "pharn", "features", NAME), { recursive: true });
+  writeFileSync(join(root, "pharn", "features", NAME, "SPEC.md"), spec);
+  return root;
+}
+const setSpec = (root, text) => writeFileSync(join(root, "pharn", "features", NAME, "SPEC.md"), text);
+
+test("bootstrap: --write-bootstrap records mode bootstrap, no mapping, no files, the SPEC's levels; --check GREEN", () => {
+  const spec = specOf();
+  const root = bootWorld(spec);
+  try {
+    const w = cli(root, ["--write-bootstrap", NAME]);
+    assert.equal(w.code, 0, w.out);
+    assert.match(w.out, /BOOTSTRAP .* WEAKER than test-first/);
+    const lock = lockOf(root);
+    assert.deepEqual(lock, {
+      schema: "ac-tests-lock/2",
+      feature: NAME,
+      mode: "bootstrap",
+      spec: { spec_id: NAME, spec_content_hash: pinOf(spec) },
+      mapping: null,
+      files: [],
+      bootstrap: { spec_kind: "test-infra", levels: ["e2e", "unit"] },
+      red_run: null,
+      test_infra: null,
+    });
+    const c = cli(root, ["--check", NAME]);
+    assert.equal(c.code, 0, c.out);
+    assert.match(c.out, /BOOTSTRAP .* no AC test ran before the build/);
+    // REVIEW finding 2: a bootstrap lock has no red run, so --require-red-run REDs it unless the caller accepts it
+    const strict = cli(root, ["--check", NAME, "--require-red-run"]);
+    assert.equal(strict.code, 1, strict.out);
+    assert.match(strict.out, /BOOTSTRAP lock: no red run exists/);
+    assert.equal(cli(root, ["--check", NAME, "--require-red-run", "--allow-bootstrap"]).code, 0);
+    assert.equal(cli(root, ["--check", NAME, "--allow-bootstrap"]).code, 2, "--allow-bootstrap only qualifies --require-red-run");
+    assert.equal(cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]).code, 2, "a bootstrap lock has no red run to record");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("bootstrap --check REDs: the kind flipped, the pin changed, the levels changed, an AC-TESTS.md appeared (L52)", () => {
+  for (const [why, mutate, re] of [
+    ["kind removed", (root) => setSpec(root, specOf({ kind: null })), /no longer `spec_kind: test-infra`/],
+    ["pin changed (re-approved over another body)", (root) => setSpec(root, specOf({ salt: "-v2" })), /spec_content_hash changed/],
+    [
+      "the SPEC drifted (body edited, not re-pinned)",
+      (root) => setSpec(root, specOf().replace("## Intent\n", "## Intent\n\nAn edit after approval.\n")),
+      /not an Approved, un-drifted SPEC/,
+    ],
+    ["levels changed", (root) => setSpec(root, specOf({ levels: ["unit"] })), /criteria levels changed/],
+    [
+      "a mapping appeared",
+      (root) => writeFileSync(join(root, "pharn", "features", NAME, "AC-TESTS.md"), acTests()),
+      /exists, but a bootstrap/,
+    ],
+  ]) {
+    const root = bootWorld();
+    try {
+      assert.equal(cli(root, ["--write-bootstrap", NAME]).code, 0);
+      mutate(root);
+      const r = cli(root, ["--check", NAME]);
+      assert.equal(r.code, 1, `${why}: ${r.out}`);
+      assert.match(r.out, re, why);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+  const root = bootWorld();
+  try {
+    assert.equal(cli(root, ["--write-bootstrap", NAME]).code, 0);
+    rmSync(join(root, "pharn", "features", NAME, "SPEC.md"));
+    const r = cli(root, ["--check", NAME]);
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /SPEC\.md is not readable/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("--write-bootstrap REFUSES: a feature SPEC, a legacy one, an AC-TESTS.md present, no pin, a malformed level, no SPEC", () => {
+  for (const [why, spec, extra] of [
+    ["a feature SPEC", specOf({ kind: null })],
+    ["an explicit feature", specOf({ kind: "feature" })],
+    ["a legacy SPEC", specOf({ legacy: true })],
+    ["an invalid kind", specOf({ kind: "library" })],
+    ["a Draft (no pin)", specOf({ approve: false })],
+    ["a Draft carrying an invented pin", specOf({ approve: false }).replace('spec_content_hash: ""', `spec_content_hash: ${H}`)],
+    ["a malformed level", specOf({ levels: ["unit", "smoke"] })],
+    ["an AC-TESTS.md present", specOf(), (root) => writeFileSync(join(root, "pharn", "features", NAME, "AC-TESTS.md"), acTests())],
+  ]) {
+    const root = bootWorld(spec);
+    try {
+      if (extra) extra(root);
+      const r = cli(root, ["--write-bootstrap", NAME]);
+      assert.equal(r.code, 2, `${why}: ${r.out}`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+  const root = mkdtempSync(join(tmpdir(), "aclb-"));
+  try {
+    assert.equal(cli(root, ["--write-bootstrap", NAME]).code, 2, "no SPEC.md");
+    assert.equal(cli(root, ["--write-bootstrap", "Bad Name"]).code, 2, "a non-slug name");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("bootstrap shape: mapping, files, red_run, bootstrap each closed (exit 2 on a violation)", () => {
+  const root = bootWorld();
+  try {
+    cli(root, ["--write-bootstrap", NAME]);
+    const good = lockOf(root);
+    for (const [why, bad] of [
+      ["a mapping", { ...good, mapping: { path: "x", sha256: H } }],
+      ["files", { ...good, files: [{ path: "x", sha256: H }] }],
+      ["a red_run", { ...good, red_run: {} }],
+      ["bootstrap extra key", { ...good, bootstrap: { ...good.bootstrap, x: 1 } }],
+      ["bootstrap kind", { ...good, bootstrap: { ...good.bootstrap, spec_kind: "feature" } }],
+      ["levels empty", { ...good, bootstrap: { ...good.bootstrap, levels: [] } }],
+      ["a level outside the set", { ...good, bootstrap: { ...good.bootstrap, levels: ["smoke"] } }],
+      ["levels unsorted", { ...good, bootstrap: { ...good.bootstrap, levels: ["unit", "e2e"] } }],
+    ]) {
+      writeLockJson(root, bad);
+      assert.equal(cli(root, ["--check", NAME]).code, 2, why);
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

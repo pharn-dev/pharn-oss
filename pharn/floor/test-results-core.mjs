@@ -9,8 +9,9 @@
 // The floor sees only whole-gate exit codes (run-gates.mjs; gate-run-record.md). It cannot say whether ONE
 // named test ran and passed: a suite exits 0 with `it.skip("AC-1: …")`. This module is the deterministic
 // per-test view later stages need. HONEST TRIGGER (P7): no dogfood run failed on this; it was built at the
-// maintainer's direction (the AC-delivery queue) for a gap demonstrable on any project. No stage reads the
-// record in 6.15.0. That does NOT mean nothing else moved: for every stamp the runner writes, the verdicts are
+// maintainer's direction (the AC-delivery queue) for a gap demonstrable on any project. No stage read the
+// record in 6.15.0; since 6.18.0 /pharn-test's red run does (red-run-core.mjs), where a refused record is a RED by
+// its own reason. That does NOT mean nothing else moved: for every stamp the runner writes, the verdicts are
 // unchanged, but validateStamp now refuses a MALFORMED `results_sha256` (a forged or corrupted stamp) as
 // `stamp-malformed` on all three verdict paths, and the runner refuses to run a gate whose results path it
 // cannot clear (gate-run-record.md, "Per-test results").

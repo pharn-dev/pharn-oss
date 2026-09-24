@@ -1,5 +1,5 @@
 ---
-description: "Turn a user's prose intent into a structured, human-approved pharn/features/<name>/SPEC.md — the head of the product pipeline (spec → plan → grill → build → regress → verify → ship) and the versioned record of INTENT every downstream stage reads. INTERROGATES the intent for gaps (advisory — never gates), EMITS a Draft SPEC.md by filling the RESOLVED template — the project's own pharn.spec-template.md at the project root when it exists and validates, else the shipped default pharn/pharn-contracts/templates/spec-template.md (both defined by pharn/pharn-contracts/spec-template.md; an existing but invalid project template is a stop, never a fallback) — then HALTS for explicit human approval; only on approval does it flip Draft → Approved, assign a spec_id, and pin the approved intent with a content-hash (fix #4). FLOOR (deterministic, pharn/floor/check-spec.mjs): required-section PRESENCE, the Draft|Approved state enum, spec_id presence, and — when Approved — spec_content_hash == sha256(body); and, for a SPEC that declares `spec_template` (every SPEC this command writes from the template — opt-in by that key, so a SPEC without it is validated as before), the template's shape: Assumptions required, each template section at most once, ID'd acceptance criteria phrased Given/When/Then with exactly one verify level each, at most three clarification markers and none once Approved, a non-empty out-of-scope list, no leftover guidance comment, and a well-formed template reference. A valid AC grammar means the criteria are PHRASED testably — never that any test exists, runs, or passes. ADVISORY/HUMAN: whether the intent is clear/complete/wise — the human owns that, and owns the Draft → Approved gate. The model NEVER self-approves. '/pharn-spec produced it' NEVER means 'the intent is sound' (P0). ONE EXCEPTION to self-approval: under --model-approve, meant for /pharn-loop's unattended run (nothing prevents a user from passing it), the model pins the spec itself and records approved_by: model — never presented as a human's approval."
+description: "Turn a user's prose intent into a structured, human-approved pharn/features/<name>/SPEC.md — the head of the product pipeline (spec → plan → grill → build → regress → verify → ship) and the versioned record of INTENT every downstream stage reads. INTERROGATES the intent for gaps (advisory — never gates), EMITS a Draft SPEC.md by filling the RESOLVED template — the project's own pharn.spec-template.md at the project root when it exists and validates, else the shipped default pharn/pharn-contracts/templates/spec-template.md (both defined by pharn/pharn-contracts/spec-template.md; an existing but invalid project template is a stop, never a fallback) — then HALTS for explicit human approval; only on approval does it flip Draft → Approved, assign a spec_id, and pin the approved intent with a content-hash (fix #4). FLOOR (deterministic, pharn/floor/check-spec.mjs): required-section PRESENCE, the Draft|Approved state enum, spec_id presence, and — when Approved — spec_content_hash == sha256(body), with a `spec_kind:` line hashed in front when present; and, for a SPEC that declares `spec_template` (every SPEC this command writes from the template — opt-in by that key, so a SPEC without it is validated as before), the template's shape: Assumptions required, each template section at most once, ID'd acceptance criteria phrased Given/When/Then with exactly one verify level each, at most three clarification markers and none once Approved, a non-empty out-of-scope list, no leftover guidance comment, a well-formed template reference, and at most one valid `spec_kind` (`feature` | `test-infra` — the setup increment /pharn-test records a bootstrap lock for; never written under --model-approve). A valid AC grammar means the criteria are PHRASED testably — never that any test exists, runs, or passes. ADVISORY/HUMAN: whether the intent is clear/complete/wise — the human owns that, and owns the Draft → Approved gate. The model NEVER self-approves. '/pharn-spec produced it' NEVER means 'the intent is sound' (P0). ONE EXCEPTION to self-approval: under --model-approve, meant for /pharn-loop's unattended run (nothing prevents a user from passing it), the model pins the spec itself and records approved_by: model — never presented as a human's approval."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -18,7 +18,7 @@ reads:
   ]
 writes: ["pharn/features/<name>/SPEC.md"]
 constitution_refs: ["P0", "P2", "P4", "P5", "P6", "P7"]
-version: "0.4.0"
+version: "0.5.0"
 ---
 
 # /pharn-spec — capture intent as a human-approved SPEC.md
@@ -46,13 +46,13 @@ Load the trusted prefix and obey it for the whole run:
 
 - **FLOOR — deterministic; the only guarantees** (`pharn/floor/check-spec.mjs`, primitives #3 + #2): (1) the
   `SPEC.md` carries the **required sections**; (2) `state ∈ {Draft, Approved}`; (3) `spec_id` is present (the §6
-  root identity every downstream artifact carries); (4) **when `Approved`**, `spec_content_hash == sha256(body)`
+  root identity every downstream artifact carries); (4) **when `Approved`**, `spec_content_hash == sha256(body)` (with a `spec_kind:` line hashed in front when present)
   — the content-hash pin (fix #4) that makes post-approval intent drift **detectable, not silent**; (5) **for
   a SPEC whose frontmatter declares `spec_template`** — every SPEC this command fills from the template — the
-  seven template rules `pharn/pharn-contracts/spec-template.md` defines (cited, not restated — P4): the
+  eight template rules `pharn/pharn-contracts/spec-template.md` defines (cited, not restated — P4): the
   required and at-most-once sections, the acceptance-criteria grammar, the clarification-marker limits, a
-  non-goal under Scope, non-empty optional sections, no leftover guidance comment, and a well-formed template
-  reference. **Opt-in by that key:** a SPEC without it is validated exactly as before, so (5) holds only while
+  non-goal under Scope, non-empty optional sections, no leftover guidance comment, a well-formed template
+  reference, and at most one valid `spec_kind`. **Opt-in by that key:** a SPEC without it is validated exactly as before, so (5) holds only while
   the key is there.
 - **ADVISORY / HUMAN — never a guarantee.** Whether the intent is **clear / complete / wise** is the human's
   call. Interrogation (Step 2) **surfaces** concerns; it **never gates**. And the **Draft → Approved transition
@@ -111,9 +111,13 @@ findings (there is no `rule_id` for "intent quality"):
   text search). If there is no `package.json`, no own `test` key, or a `test` value containing npm's
   placeholder `no test specified`, warn that PHARN's gate discovery finds no `test` script, so nothing at
   verify runs tests for these criteria unless the project names its runner (pytest, `go test`, …) through
-  an explicit `--gates` entry. Say plainly what that means today: `/pharn-test` (6.17.0, standalone) can write
-  each criterion's test before the build, but nothing in PHARN runs them without the project's own runner, so
-  setting up the project's tests is its own increment, best run first.
+  an explicit `--gates` entry. Say plainly what that means today: `/pharn-test` writes each criterion's test before
+  the build and RUNS it, requiring it to fail, and it stops with `ac-level-unavailable` when a criterion's level has
+  no runner with per-test results (6.18.0). So setting up the project's tests is its own increment, best run first.
+  **Offer to spec that setup increment instead**: a SPEC with `spec_kind: test-infra` in its frontmatter (Step 3),
+  whose criteria describe the runner and its per-test results. `/pharn-test` records a **bootstrap** lock for it —
+  no tests before the build, which is weaker than test-first, and the record says so
+  (`pharn/pharn-contracts/spec-template.md`, "`spec_kind`").
 - **An `e2e` criterion** — for every criterion whose verify level is `e2e`, ask whether the project has an
   end-to-end runner. Say plainly that PHARN's gate discovery allowlist (`ALLOWLIST` in
   `pharn/floor/gate-run-core.mjs`) discovers an e2e suite at verify only from a `test:e2e` or `e2e` script
@@ -125,7 +129,8 @@ findings (there is no `rule_id` for "intent quality"):
   guess, written as one line in `## Assumptions`, where a reader can challenge it.
 
 **Under `--model-approve` nobody can answer** (Step 4a). Each of the warnings and questions above becomes
-an `## Assumptions` line instead of a question. Write a marker only where guessing would invent intent;
+an `## Assumptions` line instead of a question. The setup-increment offer is NOT taken: under `--model-approve`
+never write `spec_kind: test-infra` (Step 4a). Write a marker only where guessing would invent intent;
 a marker left in the Draft blocks the model's approval (Step 4a).
 
 This is `/pharn-dev-grill` aimed at **intent** instead of a plan. It **helps the user sharpen** the spec before
@@ -165,6 +170,9 @@ command does not repeat it (P4).
    - `spec_id: <name>` is the **root identity** (derived deterministically from the human-chosen `<name>`,
      P5); `state: Draft`; `spec_content_hash: ""` (a Draft is unpinned by design); `spec_template:` the line
      step 1 printed, verbatim.
+   - `spec_kind: test-infra` **only** when the human chose the setup increment Step 2 offered — the increment
+     that sets up the project's test runner and per-test results. Otherwise write no `spec_kind` line (absent
+     means `feature`). Never under `--model-approve` (Step 4a).
    - Replace every `<placeholder>` from the user's intent, informed by Step 2. Follow each section's guidance
      comment for what belongs there and what does not.
    - Write each acceptance criterion in the template's shape, one `- **AC-<n>** Given … When … Then …` item
@@ -214,6 +222,9 @@ render the form and do not wait:
 - If the Draft still carries a clarification marker, do **not** approve. Leave it `Draft` and report back
   that the run is **blocked on clarification**, naming the marked questions. The caller stops (for
   `/pharn-loop` that is its stop `blocked: needs-clarification`); nobody answers them on the user's behalf.
+- If the Draft carries `spec_kind: test-infra`, do **not** approve. Report back that the run is blocked: a
+  bootstrap increment — the one kind of SPEC whose tests do not run before the build — is approved by a human,
+  never by the model on the user's behalf.
 - Otherwise, with Step 3's Draft GREEN, go straight to Step 5, and in Step 5's frontmatter edit also add
   `approved_by: model`.
 
@@ -240,9 +251,10 @@ final — do not edit the sections after this):
    ```
 
 2. **Edit the frontmatter:** set `state: Approved` and `spec_content_hash:` to the hash from step 1. Under
-   `--model-approve`, also add `approved_by: model`. (The hash ranges over the **body**, which is
-   frontmatter-independent — so flipping `state`, writing the hash and adding `approved_by` do not move it.)
-3. **Re-validate** — this must be **GREEN** (now `Approved` **and** `spec_content_hash == sha256(body)`):
+   `--model-approve`, also add `approved_by: model`. (The hash ranges over the **body** — plus a `spec_kind:` line
+   when the SPEC carries one, which is why that line is written in Step 3, before the hash — so flipping `state`,
+   writing the hash and adding `approved_by` do not move it. Changing `spec_kind` after this does: it is drift.)
+3. **Re-validate** — this must be **GREEN** (now `Approved` **and** `spec_content_hash` equal to the pin `--hash` printed):
 
    ```bash
    node pharn/floor/check-spec.mjs pharn/features/<name>/SPEC.md
@@ -267,9 +279,10 @@ thing — it lands **one** human-approved, pinned spec. It does **not** chain to
 - **"`state ∈ {Draft, Approved}`"** → **FLOOR** (`check-spec.mjs`, enum).
 - **"`spec_id` is present (the §6 root identity)"** → **FLOOR** (`check-spec.mjs`, presence).
 - **"The approved intent is pinned; later body drift is detectable"** → **FLOOR** (`check-spec.mjs`,
-  `spec_content_hash == sha256(body)` when `Approved` — content-hash, fix #4).
+  `spec_content_hash` equal to the pin — `sha256(body)`, with a `spec_kind:` line hashed in front when present — when
+  `Approved` — content-hash, fix #4).
 - **"A SPEC declaring `spec_template` has the template's shape"** → **FLOOR** (`check-spec.mjs`, presence /
-  regex / count / id membership — the seven rules of `pharn/pharn-contracts/spec-template.md`).
+  regex / count / id membership — the eight rules of `pharn/pharn-contracts/spec-template.md`).
   **Bounded three ways:** the rules are **opt-in** by the key, so a SPEC without it bypasses them; the
   acceptance-criteria grammar proves each criterion is **phrased** testably, never that a test exists,
   runs, or passes; and the grammar is read line by line, not by a markdown parser.

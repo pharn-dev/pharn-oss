@@ -22,7 +22,7 @@
 // step ASKS for is the one that gets skipped — here the step asks for nothing).
 //
 // ===================================== PATH RESOLUTION =====================================
-// EVERY path operand — `--out`, `--spec-from`, `--discover`, `--scope-json` — resolves against the
+// EVERY path operand — `--out`, `--spec-from`, `--discover`, `--scope-json`, `--ac-tests` — resolves against the
 // directory the runner is INVOKED from, and containment is checked against THAT directory's `.pharn/`.
 // `--cwd` changes exactly two things: where the gates EXECUTE, and which tree is fingerprinted (and whose
 // HEAD is recorded). It never moves the runner's own records.
@@ -84,6 +84,13 @@
 //   node pharn/floor/run-gates.mjs init --stage verify|regress [--side base|head] --feature <name>
 //        --out <dir> [--cwd <dir>] [--base <featureBase>] [--discover <package.json>] [--gates "<c>[::<id>],…"]
 //        [--extra <json-array>] [--scope-json <file>] [--skip-style] [--spec-from <dir>]
+//   node pharn/floor/run-gates.mjs init --stage ac-test --feature <name> --out <dir> --discover <package.json>
+//        --ac-tests <pharn/features/<name>/AC-TESTS.md> [--cwd <dir>]
+//     /pharn-test's RED RUN (6.18.0). The set is selected BY ID from the mapping's levels (gate-run-core.mjs
+//     LEVEL_GATES), and each gate is handed exactly the mapped files of its levels: unit/integration to `test`,
+//     e2e to each e2e gate. The mapping is read by ac-tests-core.mjs `acRowsOf` — the grammar's one home, the one
+//     check-ac-tests.mjs checks with (L35) — so a file the mapping checker would refuse (a leading `-` a runner
+//     would read as a flag, a glob, an absolute path) never reaches a gate's argv.
 //   node pharn/floor/run-gates.mjs run --next --out <dir> --timeout-ms <N>
 //
 // Exit: init  0 ok · 2 runner error (reason_code) · 3 empty SOURCE set (nothing written)
@@ -105,7 +112,7 @@ import {
   unlinkSync,
   constants as fsConstants,
 } from "node:fs";
-import { resolve, join, sep } from "node:path";
+import { basename, dirname, resolve, join, sep } from "node:path";
 import { spawn, spawnSync, execFileSync } from "node:child_process";
 import { constants as osConstants } from "node:os";
 import {
@@ -120,6 +127,7 @@ import {
   resultsFileName,
 } from "./gate-run-core.mjs";
 import { fingerprint } from "./worktree-fingerprint.mjs";
+import { acRowsOf } from "./ac-tests-core.mjs";
 
 const STATE_ROOT = ".pharn";
 /** Grace between SIGTERM and SIGKILL, and the pid-reuse margin on a stale lock. */
@@ -398,6 +406,24 @@ function readScopeJson(file) {
   return { ok: true, tests, pairs };
 }
 
+/** `--ac-tests`: THIS feature's mapping rows (its directory is named `--feature`), read by ac-tests-core.mjs acRowsOf,
+ *  or a refusal. Anything else is `usage-error`: the mapping is checked by check-ac-tests.mjs before the run, so a
+ *  refusal here is a caller that skipped it. */
+function readAcRows(file, feature) {
+  const abs = resolve(file);
+  if (basename(dirname(abs)) !== feature) {
+    return { ok: false, reason: `--ac-tests ${JSON.stringify(file)} is not feature ${JSON.stringify(feature)}'s mapping` };
+  }
+  let text;
+  try {
+    text = readFileSync(abs, "utf8");
+  } catch (e) {
+    return { ok: false, reason: `--ac-tests is not readable (${file}): ${e.code ?? e.message}` };
+  }
+  const rows = acRowsOf(text);
+  return rows.ok ? rows : { ok: false, reason: `--ac-tests ${JSON.stringify(file)}: ${rows.reason}` };
+}
+
 function runInit(args) {
   const cwd = flag(args, "--cwd") ?? ".";
   const out = flag(args, "--out");
@@ -450,6 +476,24 @@ function runInit(args) {
     return startRecord(spec, outAbs, cwd, args);
   }
 
+  let acRows = null;
+  if (stage === "ac-test") {
+    // Refused by PRESENCE, value or not: `--side` because the resolve below passes `side: null` for every non-regress
+    // stage, `--base` because nothing at ac-test reads it, and `--gates` / `--extra` / `--skip-style` so a flag with
+    // a missing or flag-shaped value is refused too, not only one the resolve would see.
+    for (const f of ["--scope-json", "--spec-from", "--side", "--base", "--gates", "--extra", "--skip-style"]) {
+      if (has(args, f)) fail("usage-error", `${f} does not apply to --stage ac-test`);
+    }
+    if (!flag(args, "--discover")) fail("usage-error", "--stage ac-test requires --discover <package.json>");
+    const acTests = flag(args, "--ac-tests");
+    if (!acTests) fail("usage-error", "--stage ac-test requires --ac-tests <AC-TESTS.md>");
+    const r = readAcRows(acTests, feature);
+    if (!r.ok) fail("usage-error", r.reason);
+    acRows = r.rows;
+  } else if (has(args, "--ac-tests")) {
+    fail("usage-error", "--ac-tests applies to --stage ac-test only");
+  }
+
   const discover = flag(args, "--discover");
   let scripts = null;
   if (discover) {
@@ -466,6 +510,7 @@ function runInit(args) {
     extras: flag(args, "--extra") ?? null,
     skipStyle: has(args, "--skip-style"),
     feature,
+    acRows,
   });
   if (!res.ok) {
     // The empty SOURCE set is the ONE refusal that writes no state and exits 3, so the invoking command
@@ -598,7 +643,9 @@ function spawnGate(entry, cwd, outFile, errFile, resultsFile, timeoutMs) {
       const base = entry.argv ?? [];
       cmd = base[0];
       argv = base.slice(1);
-      if (entry.id === "test" && (entry.files ?? []).length) argv = [...argv, "--", ...entry.files];
+      // Files follow `--`. Before 6.18.0 only `test` ever carried files; the ac-test stage hands the e2e gates their
+      // mapped files too, so the rule is "an argv gate carrying files", which changes nothing for verify or regress.
+      if ((entry.files ?? []).length) argv = [...argv, "--", ...entry.files];
     }
 
     let fdOut;
@@ -750,6 +797,11 @@ async function runNext(args) {
     if (glob !== undefined)
       fail("bad-scope-json", `gate ${next.id} carries a glob-shaped file entry ${JSON.stringify(glob)}; expand it first`);
 
+    // ac-test: every entry carries its mapped files by construction (gate-run-core.mjs acFilesFor). An empty list
+    // would run the whole suite (L16), so a record that lost them is refused rather than run.
+    if (rec.stage === "ac-test" && (next.files ?? []).length === 0) {
+      fail("usage-error", `ac-test gate ${next.id} carries no mapped files — re-run init`);
+    }
     if (needsFiles && next.files.length === 0 && rec.stage === "regress") {
       exit = 0;
       ran = false;
@@ -835,7 +887,7 @@ async function main(argv) {
       ok: false,
       reason_code: "usage-error",
       reason:
-        'usage: run-gates.mjs init --stage verify|regress [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--base <featureBase>] [--discover <package.json>] [--gates "<c>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>] | run --next --out <dir> --timeout-ms <N>',
+        'usage: run-gates.mjs init --stage verify|regress [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--base <featureBase>] [--discover <package.json>] [--gates "<c>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>] | init --stage ac-test --feature <name> --out <dir> --discover <package.json> --ac-tests <AC-TESTS.md> [--cwd <dir>] | run --next --out <dir> --timeout-ms <N>',
     },
     2
   );

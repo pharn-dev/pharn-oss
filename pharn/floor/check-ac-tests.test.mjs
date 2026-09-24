@@ -29,7 +29,7 @@ const UNIT = "tests/ac/demo.unit.test.js";
 const E2E = "tests/ac/demo.e2e.spec.js";
 
 /** A templated SPEC from the SHIPPED template: AC-1 at `unit`, AC-2 at `e2e`; Approved + pinned unless `draft`. */
-function specText({ draft = false, legacy = false } = {}) {
+function specText({ draft = false, legacy = false, kind = null } = {}) {
   let t = TEMPLATE.replace(/<!--\s*pharn:guidance[\s\S]*?-->\n?/g, "")
     .replace("spec_id: <name>", `spec_id: ${NAME}`)
     .replace("<the line check-spec.mjs --resolve-template-ref prints>", REF)
@@ -37,6 +37,8 @@ function specText({ draft = false, legacy = false } = {}) {
     .replace(/<[^>\n]+>/g, "filled");
   t = t.replace("  - verify: unit\n", "  - verify: unit\n- **AC-2** Given a user When they reset Then a mail is sent\n  - verify: e2e\n");
   if (legacy) t = t.replace(/^spec_template:.*\n/m, "");
+  // A `spec_kind:` line goes in BEFORE the pin is computed: the pin covers it (check-spec.mjs pinHash, 6.18.0).
+  if (kind !== null) t = t.replace(/^(spec_id: .*\n)/m, `$1spec_kind: ${kind}\n`);
   if (draft) return t;
   const tmp = mkdtempSync(join(tmpdir(), "act-spec-"));
   try {
@@ -153,9 +155,10 @@ test("specAcceptanceCriteria agrees with check-spec.mjs's own AC count (one pars
 });
 
 test("specAcceptanceCriteria: legacy (no spec_template, or no frontmatter) → no ids; a duplicated section → sections 2, no ids", () => {
-  assert.deepEqual(specAcceptanceCriteria(specText({ legacy: true })), { templated: false, sections: 0, items: [] });
+  assert.deepEqual(specAcceptanceCriteria(specText({ legacy: true })), { templated: false, kind: "feature", sections: 0, items: [] });
   assert.deepEqual(specAcceptanceCriteria("## Acceptance Criteria\n- **AC-1** Given a When b Then c\n  - verify: unit\n"), {
     templated: false,
+    kind: "feature",
     sections: 0,
     items: [],
   });
@@ -184,6 +187,63 @@ test("control: the passing world is GREEN (every mutation below starts here)", (
 
 test("legacy-spec — in FULL mode a mapping for a SPEC without spec_template is RED (the key was removed after mapping)", () => {
   onlyKind({ spec: specText({ legacy: true }) }, "legacy-spec");
+});
+
+test("specAcceptanceCriteria reports the kind: absent → feature, test-infra, and null for an invalid value", () => {
+  assert.equal(specAcceptanceCriteria(SPEC).kind, "feature");
+  assert.equal(specAcceptanceCriteria(specText({ kind: "test-infra" })).kind, "test-infra");
+  assert.equal(specAcceptanceCriteria(specText({ kind: "feature" })).kind, "feature");
+  assert.equal(specAcceptanceCriteria(specText({ draft: true, kind: "library" })).kind, null);
+});
+
+test("spec-kind — in FULL mode a mapping for a `spec_kind: test-infra` SPEC is RED (re-approved, so the pin holds)", () => {
+  const spec = specText({ kind: "test-infra" });
+  const hash = spec.match(/^spec_content_hash: ([0-9a-f]{64})$/m)[1];
+  assert.notEqual(hash, HASH, "the pin covers the kind, so the test-infra SPEC pins differently");
+  const r = onlyKind({ spec, ac: acTests({ hash }) }, "spec-kind");
+  assert.match(r.out, /bootstrap increment/);
+});
+
+test("spec-kind — an INVALID kind REDs as spec-kind, and the pin with it (check-spec's rule 8 fails the shelled chain)", () => {
+  const root = world({ spec: specText({ kind: "library" }) });
+  try {
+    const r = run(root);
+    assert.equal(r.code, 1, r.out);
+    assert.deepEqual(r.kinds, ["pin", "spec-kind"], r.out);
+    assert.match(r.out, /not one of \{feature, test-infra\}/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("--spec exit 4 — a test-infra SPEC is BOOTSTRAP with its levels; precedence 2 → 3 → 2 (kind) → 2 (criteria) → 4 → 0 (grill G10)", () => {
+  const root = world();
+  try {
+    const f = (n) => `pharn/features/${NAME}/${n}`;
+    const spec = (text) => {
+      writeFileSync(join(root, f("SPEC.md")), text);
+      return spawnSync(process.execPath, [CHECK, "--spec", f("SPEC.md")], { cwd: root, encoding: "utf8" });
+    };
+    const b = spec(specText({ kind: "test-infra" }));
+    assert.equal(b.status, 4, b.stdout);
+    assert.match(b.stdout, /^BOOTSTRAP — spec_kind: test-infra; no AC-TESTS\.md; the lock records levels: e2e, unit$/m);
+    assert.equal(spec(specText({ kind: "feature" })).status, 0, "an explicit feature is templated");
+    // legacy wins over the kind: a legacy SPEC has no AC ids either way
+    assert.equal(spec(specText({ legacy: true, kind: "test-infra" })).status, 3);
+    const inv = spec(specText({ kind: "library" }));
+    assert.equal(inv.status, 2, inv.stdout);
+    assert.match(inv.stdout, /spec_kind/);
+    // an invalid kind outranks missing criteria; a test-infra SPEC with no usable criteria is unusable, not bootstrap
+    const noAc = (k) => specText({ draft: true, kind: k }).replace(/## Acceptance Criteria[\s\S]*?(?=\n## )/, "");
+    assert.match(spec(noAc("library")).stdout, /spec_kind/);
+    assert.equal(spec(noAc("test-infra")).status, 2);
+    const badLevel = specText({ draft: true, kind: "test-infra" }).replace("  - verify: e2e\n", "  - verify: smoke\n");
+    const bl = spec(badLevel);
+    assert.equal(bl.status, 2, bl.stdout);
+    assert.match(bl.stdout, /verify level is malformed/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("--spec mode decides templated vs legacy BEFORE any mapping exists: 0 / 3 / 2", () => {
@@ -297,6 +357,9 @@ test("bad-path — every rejected shape (L52), each listed AND mapped so nothing
     "tests/dir/",
     ".pharn/x.test.js",
     "pharn/features/demo/x.test.js",
+    // grill G4: the red run hands mapped files to a runner as argv, and `--` stops npm's parsing, not the runner's
+    "-u",
+    "--config=evil.js",
   ]) {
     const rows = [`- AC-1 | unit | \`${p}\` | t`, `- AC-2 | e2e | \`${E2E}\` | t`];
     onlyKind({ ac: acTests({ files: [p, E2E], mapping: rows }) }, "bad-path");

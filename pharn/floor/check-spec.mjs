@@ -13,7 +13,8 @@
 //
 // Honest scope (P0): it guarantees a SPEC.md carries the REQUIRED SECTIONS, a VALID state enum, a present
 // spec_id, and — when Approved — a spec_content_hash that EQUALS sha256(body), taken with line endings folded
-// to LF (see bodyHash). It does NOT — cannot — judge
+// to LF (see bodyHash), with a `spec_kind:` line hashed in front when the frontmatter carries one (see pinHash).
+// It does NOT — cannot — judge
 // whether the INTENT is clear, complete, or wise: that is the human's advisory call, owned by the approval
 // halt in /pharn-spec. "passed check-spec" must NEVER read as "the intent is sound" — that conflation is the
 // P0 disease this repo exists to prevent.
@@ -45,7 +46,8 @@
 //                                                      with no spec_id prints an EMPTY line at exit 0; the
 //                                                      caller REDs on the empty value.
 //   node pharn/floor/check-spec.mjs --hash <SPEC.md>    print sha256(body) to stdout (line endings folded to
-//                                                      LF — see bodyHash) — the value /pharn-spec pins
+//                                                      LF — see bodyHash; a `spec_kind:` line is hashed in
+//                                                      front of the body — see pinHash) — the value /pharn-spec pins
 //                                                      into spec_content_hash on approval. SINGLE source of
 //                                                      body-extraction AND of the fold, so the pin and the
 //                                                      validate-time recompute can never disagree.
@@ -105,6 +107,7 @@ import {
   foldName,
   validateTemplate,
   PROJECT_TEMPLATE_ID,
+  specKindLines,
 } from "./spec-template-core.mjs";
 
 // Enums / shapes — every branch is a presence / enum / hash-equality membership test (P5); the terminal
@@ -195,6 +198,24 @@ function bodyHash(body) {
   return createHash("sha256").update(body.replace(/\r\n/g, "\n")).digest("hex");
 }
 
+// THE PIN (6.18.0): the body hash, EXCEPT that a SPEC whose frontmatter carries a line starting `spec_kind:` hashes
+// that raw line (CR removed) plus "\n" in front of the body. The kind decides whether /pharn-test writes failing
+// tests first (`feature`) or records a bootstrap lock (`test-infra`), so it is part of the approved intent: flipping
+// an Approved feature SPEC to `test-infra` without re-approving is drift (grill G2). A SPEC with no such line hashes
+// exactly as bodyHash — no pin written before 6.18.0 moves, which is what keeps this additive. The lines are read by
+// spec-template-core.mjs specKindLines(), the SAME reading specKindOf() decides the kind from (G9), so what counts
+// as the kind and what the pin covers cannot diverge. Every other frontmatter key stays outside the pin, as before.
+// Bound, unchanged by this: a self-consistent rewrite of the SPEC and its pin passes — the pin detects drift, it
+// does not authenticate an approver.
+function pinHash(raw, body) {
+  const kind = specKindLines(raw)
+    .map((l) => `${l}\n`)
+    .join("");
+  return createHash("sha256")
+    .update(kind + body.replace(/\r\n/g, "\n"))
+    .digest("hex");
+}
+
 // The lowercased text of each `## ` (exactly h2) heading in the body — the first-match parse mechanism from
 // check-provenance.mjs's existingIds, re-implemented in-file (no sibling import, P3). `### foo` (h3) does not
 // match (the `\s+` after `##` rejects a third `#`).
@@ -222,7 +243,8 @@ function fail() {
   return 1;
 }
 
-// --- --hash mode: emit sha256(body), the value /pharn-spec writes into spec_content_hash on approval. ---
+// --- --hash mode: emit the pin (pinHash: sha256(body), a `spec_kind:` line in front when present), the value
+// /pharn-spec writes into spec_content_hash on approval. ---
 function emitHash(specPath) {
   const text = readText(specPath, "SPEC.md");
   if (text === undefined) {
@@ -234,7 +256,7 @@ function emitHash(specPath) {
     console.error(`check-spec: no YAML frontmatter in ${specPath} — cannot locate the body to hash`);
     return 1;
   }
-  process.stdout.write(bodyHash(parsed.body) + "\n");
+  process.stdout.write(pinHash(parsed.raw, parsed.body) + "\n");
   return 0;
 }
 
@@ -328,14 +350,15 @@ function validate(specPath) {
     if (!headings.includes(want)) red("section", `missing required \`## ${titleCase(want)}\` section`);
   }
 
-  // (4) when Approved: spec_content_hash present, well-formed, AND equals sha256(body) — the content-hash pin
+  // (4) when Approved: spec_content_hash present, well-formed, AND equals pinHash (sha256(body), with a `spec_kind:`
+  //     line in front when present) — the content-hash pin
   //     (fix #4). A Draft is not yet pinned, so its hash is not checked. A post-approval body edit that does
   //     not re-pin makes the recompute diverge → a deterministic RED (drift is loud, not silent).
   if (fm.state === "Approved") {
     const h = fm.spec_content_hash || "";
     if (!HASH_RE.test(h)) {
       red("pin", `an Approved spec needs spec_content_hash matching ${HASH_RE} (a sha256), got ${JSON.stringify(h)}`);
-    } else if (h !== bodyHash(body)) {
+    } else if (h !== pinHash(raw, body)) {
       red("pin", "spec_content_hash does not equal the body hash — the approved intent drifted (re-approve to re-pin)");
     }
   }
@@ -347,7 +370,7 @@ function validate(specPath) {
   let tpl = null;
   if (templated) {
     const firstLine = (text.slice(0, text.length - body.length).match(/\n/g) || []).length + 1;
-    tpl = checkTemplate({ fm, body, firstLine, baseRequired: REQUIRED_SECTIONS });
+    tpl = checkTemplate({ fm, raw, body, firstLine, baseRequired: REQUIRED_SECTIONS });
     for (const f of tpl.findings) red(f.kind, f.detail);
   }
 

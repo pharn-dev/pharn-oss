@@ -500,7 +500,7 @@ test("✧ L3: the BOM strip is not a masking layer — a frontmatter-less file s
 // The spec-template rules (pharn/pharn-contracts/spec-template.md) — opt-in by the `spec_template` key.
 //
 // What these tests are, stated before they are trusted (P0):
-//   - RULE_CASES is the ONE enumeration of the seven rule kinds (PHARN's own build-loop lesson L29), and every
+//   - RULE_CASES is the ONE enumeration of the eight rule kinds (PHARN's own build-loop lesson L29), and every
 //     mutant in it must RED with ITS rule's kind and no other, against a base fixture that is GREEN (the
 //     control, L34) — so each RED is attributable, never an accident of a second defect.
 //   - The shipped-template probe fills the REAL template and requires GREEN. It binds the template to the
@@ -558,11 +558,12 @@ function withSection(body, heading, content) {
 }
 const acWith = (content) => (b) => withSection(b, "Acceptance Criteria", content);
 
-function makeT({ state = "Draft", hash, body = T_BODY, template = REF } = {}) {
+function makeT({ state = "Draft", hash, body = T_BODY, template = REF, kind } = {}) {
   let fm = "---\nspec_id: my-feature\n";
   fm += `state: ${state}\n`;
   if (hash !== undefined) fm += `spec_content_hash: ${hash}\n`;
   if (template !== undefined) fm += `spec_template: ${template}\n`;
+  if (kind !== undefined) fm += `spec_kind: ${kind}\n`;
   return fm + "---\n" + body;
 }
 const approvedT = (body) => makeT({ state: "Approved", hash: bodyHash(body), body });
@@ -749,13 +750,26 @@ const RULE_CASES = [
       ["a U+2028 inside the key line", `${REF}\u2028x`],
     ],
   },
+  {
+    // 6.18.0. Every value here keeps the line starting `spec_kind:`, so it IS the key and must be a member.
+    kind: "spec-kind",
+    specKind: [
+      ["an unknown value", "library"],
+      ["an empty value", ""],
+      ["a quoted member", '"test-infra"'],
+      ["a case variant", "Test-Infra"],
+      ["two spec_kind lines", "test-infra\nspec_kind: feature"],
+      ["a stray CR inside the value", "test-infra\r x"],
+      ["a U+2028 inside the value", "test-infra\u2028"],
+    ],
+  },
 ];
 
-test("✧ L34 — RULE_CASES covers all seven kinds, each with at least one mutant", () => {
+test("✧ L34 — RULE_CASES covers all eight kinds, each with at least one mutant", () => {
   const kinds = RULE_CASES.map((r) => r.kind);
-  assert.deepEqual(kinds, ["section", "ac", "clarification", "out-of-scope", "optional-section", "guidance", "template"]);
+  assert.deepEqual(kinds, ["section", "ac", "clarification", "out-of-scope", "optional-section", "guidance", "template", "spec-kind"]);
   for (const r of RULE_CASES) {
-    const n = (r.cases?.length ?? 0) + (r.approved?.length ?? 0) + (r.template?.length ?? 0);
+    const n = (r.cases?.length ?? 0) + (r.approved?.length ?? 0) + (r.template?.length ?? 0) + (r.specKind?.length ?? 0);
     assert.ok(n > 0, `${r.kind} has no mutant`);
   }
 });
@@ -776,7 +790,55 @@ for (const r of RULE_CASES) {
   for (const [label, value] of r.template ?? []) {
     test(`RULE ${r.kind}: spec_template with ${label} → RED ${r.kind} only`, () => expectOnly(runWith(makeT({ template: value })), label));
   }
+  for (const [label, value] of r.specKind ?? []) {
+    test(`RULE ${r.kind}: spec_kind with ${label} → RED ${r.kind} only`, () => expectOnly(runWith(makeT({ kind: value })), label));
+  }
 }
+
+// ── spec_kind (6.18.0): the members are GREEN, a legacy SPEC is untouched, and the PIN covers the line ──────────
+
+test("spec_kind members are GREEN on a templated SPEC; a near-miss spelling is not the key (a feature)", () => {
+  for (const kind of ["feature", "test-infra", "test-infra  ", "\ttest-infra"]) {
+    const r = runWith(makeT({ kind }));
+    assert.equal(r.status, 0, `${JSON.stringify(kind)}: ${r.stdout}`);
+  }
+  const near = makeT().replace(`spec_template: ${REF}\n`, `spec_template: ${REF}\nspec_kind : library\n`);
+  assert.equal(runWith(near).status, 0, "`spec_kind :` is not the key, so its value is never judged");
+});
+
+test("spec_kind on a LEGACY SPEC is untouched by the template rules (no rule applies without spec_template)", () => {
+  const r = runWith(makeSpec().replace("---\n", "---\nspec_kind: library\n"));
+  assert.equal(r.status, 0, r.stdout);
+  assert.match(r.stdout, /^GREEN — spec valid; state "Draft"; 4 required sections present$/m);
+});
+
+test("THE PIN covers a spec_kind line: --hash = sha256(line + body); no line → sha256(body) exactly as before", () => {
+  const plain = runWith(makeT(), { hashMode: true }).stdout.trim();
+  assert.equal(plain, bodyHash(T_BODY), "a SPEC without the key pins exactly as before 6.18.0");
+  const infra = runWith(makeT({ kind: "test-infra" }), { hashMode: true }).stdout.trim();
+  assert.equal(infra, bodyHash(`spec_kind: test-infra\n${T_BODY}`));
+  assert.notEqual(infra, plain);
+  // a CR at the end of the key line is folded like the body's line endings
+  const crlf = makeT({ kind: "test-infra" }).replace("spec_kind: test-infra\n", "spec_kind: test-infra\r\n");
+  assert.equal(runWith(crlf, { hashMode: true }).stdout.trim(), infra);
+});
+
+test("THE PIN: flipping an Approved SPEC's kind — adding, changing or removing the line — is drift (grill G2)", () => {
+  const featurePin = runWith(makeT(), { hashMode: true }).stdout.trim();
+  const infraPin = runWith(makeT({ kind: "test-infra" }), { hashMode: true }).stdout.trim();
+  const approved = (kind, hash) => makeT({ state: "Approved", hash, kind });
+  assert.equal(runWith(approved(undefined, featurePin)).status, 0, "control: the Approved feature SPEC is GREEN");
+  assert.equal(runWith(approved("test-infra", infraPin)).status, 0, "control: the Approved test-infra SPEC is GREEN");
+  for (const [why, spec] of [
+    ["a feature SPEC flipped to test-infra after approval", approved("test-infra", featurePin)],
+    ["a test-infra SPEC flipped to feature", approved("feature", infraPin)],
+    ["a test-infra SPEC whose line was removed", approved(undefined, infraPin)],
+  ]) {
+    const r = runWith(spec);
+    assert.equal(r.status, 1, `${why}: ${r.stdout}`);
+    assert.deepEqual([...new Set(redKinds(r.stdout))], ["pin"], `${why}: ${r.stdout}`);
+  }
+});
 
 test("a RED names a line number and an AC id, never the body text (P2)", () => {
   const secret = "SECRET-PROSE-SHOULD-NOT-ECHO";
@@ -1444,4 +1506,14 @@ test("the REAL hook denies every PreToolUse write tool on the project template, 
   const own = { tool_name: "Write", tool_input: { file_path: `vendor/${PROJECT_FILE}`, content: "x" } };
   const ok = spawnSync(process.execPath, [HOOK], { input: JSON.stringify(own), encoding: "utf8", cwd: REPO });
   assert.equal(ok.status, 0, ok.stderr);
+});
+
+test("templates validate WITH or WITHOUT a spec_kind line: a project template carrying one resolves", () => {
+  const own = DEFAULT_TEXT.replace(/^(spec_id: .*\n)/m, "$1spec_kind: test-infra\n");
+  assert.notEqual(own, DEFAULT_TEXT, "precondition: the line went in");
+  withProject({ setup: withProjectText(own) }, ({ run }) => {
+    const r = run("--resolve-template-ref");
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout, `project@sha256:${sha(own)}\n`);
+  });
 });

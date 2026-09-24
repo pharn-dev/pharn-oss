@@ -76,6 +76,16 @@ export const ALLOWLIST = Object.freeze(["test", "lint", "format:check", "lint:md
  *  servers and installing browsers stay the project script's job. */
 export const E2E_SET = Object.freeze(["test:e2e", "e2e"]);
 
+/** ac-test: which DISCOVERED gate ids run an AC test of each verify level (pharn-contracts/ac-tests.md, "The red
+ *  run"). A membership table, never a classification (P5): `unit` and `integration` tests run under the project's
+ *  `test` script, `e2e` tests under whichever E2E_SET members exist. Its keys are the spec-template's closed level
+ *  set, pinned equal to check-ac-tests.mjs LEVELS by a test (L29). */
+export const LEVEL_GATES = Object.freeze({
+  unit: Object.freeze(["test"]),
+  integration: Object.freeze(["test"]),
+  e2e: E2E_SET,
+});
+
 /** The style/format subset eligible for /pharn-regress's config-touch skip. NOT eligible: every other
  *  allowlist member, because a typecheck/build flip over outside files is possible with no config change
  *  (inside -> outside import edges), so skipping one would hide a real regression. */
@@ -174,8 +184,11 @@ export function isReasonCode(code) {
   return REASON_SET.has(code);
 }
 
-/** The two stages and the two regress sides — enum-gated, fail-closed on anything else. */
-export const STAGES = Object.freeze(["verify", "regress"]);
+/** The three stages and the two regress sides — enum-gated, fail-closed on anything else. `ac-test` (6.18.0) is
+ *  /pharn-test's RED RUN: the AC tests, run before the build, whose per-test record check-red-run.mjs judges.
+ *  Every stamp reader that is not that one asserts its own stage (`validateStamp`'s `expect.stage`), so an
+ *  `ac-test` stamp handed to /pharn-verify or /pharn-regress is `stage-mismatch`, never a verdict. */
+export const STAGES = Object.freeze(["verify", "regress", "ac-test"]);
 export const SIDES = Object.freeze(["base", "head"]);
 
 /** The stamp schema id. Bumped only on a breaking shape change (pharn-contracts/gate-run-record.md). */
@@ -371,7 +384,7 @@ export function orderEntries(sourceEntries, extraEntries, withReconcile) {
  *            regress source never contains an E2E_SET member (a fixed rule, not a flag); an explicit
  *            `--gates` string is the caller's choice and is never filtered.
  *  ---------------------------------------------------------------------------------------------- */
-export function resolveSet({ stage, side = null, gates = null, scripts = null, extras = null, skipStyle = false, feature }) {
+export function resolveSet({ stage, side = null, gates = null, scripts = null, extras = null, skipStyle = false, feature, acRows = null }) {
   if (!STAGES.includes(stage)) return err("usage-error", `--stage must be one of ${STAGES.join(" | ")}`);
   if (stage === "regress") {
     if (!SIDES.includes(side)) return err("usage-error", `--side must be one of ${SIDES.join(" | ")} for --stage regress`);
@@ -381,6 +394,8 @@ export function resolveSet({ stage, side = null, gates = null, scripts = null, e
   if (!isCleanToken(feature, 64) || !FEATURE_SLUG_RE.test(feature)) {
     return err("usage-error", `--feature must be a plain slug matching ${FEATURE_SLUG_RE}`);
   }
+  if (stage === "ac-test") return resolveAcTest({ gates, scripts, extras, skipStyle, feature, acRows });
+  if (acRows !== null) return err("usage-error", "--ac-tests applies to --stage ac-test only");
 
   let source;
   let sourceKind;
@@ -462,6 +477,75 @@ export function resolveSet({ stage, side = null, gates = null, scripts = null, e
   };
 }
 
+/** ------------------------------------------------------------------------------------------------
+ *  ac-test: the RED RUN's set, selected BY ID from the mapping (`acRows`, the parsed `## Mapping` rows of
+ *  AC-TESTS.md: `{id, level, file}`). The model names nothing: the levels the mapping needs pick the DISCOVERED
+ *  ids through LEVEL_GATES, and each gate is handed exactly the mapped files of its levels (acFilesFor) through
+ *  the positional file append — so one unrelated flaky test elsewhere in an e2e suite cannot void the record
+ *  (grill G6). No `reconcile` (the red run is not a verify), no `--gates` (a command string would put the model
+ *  back in charge of the set), no `--extra`, no `--skip-style`. No `build` either: an e2e runner that needs a
+ *  built or served app must build or serve it itself (Playwright's `webServer`) — a stated bound.
+ *
+ *  A level whose gates are all undiscovered is `coverage-violation`: the set cannot cover the mapping. The
+ *  command runs check-red-run.mjs --preflight first, which says the same thing as the closed
+ *  `ac-level-unavailable` line; this refusal is what stops a caller that skipped it.
+ *  ---------------------------------------------------------------------------------------------- */
+/** The mapped files an ac-test gate runs: every row whose level maps to `gateId`, sorted, unique. ONE copy — the
+ *  runner hands these to the gate and red-run-core.mjs requires the stamp's `files` to equal them (grill G1). */
+export function acFilesFor(acRows, gateId) {
+  return [...new Set(acRows.filter((r) => LEVEL_GATES[r.level].includes(gateId)).map((r) => r.file))].sort();
+}
+
+function resolveAcTest({ gates, scripts, extras, skipStyle, feature, acRows }) {
+  if (gates !== null && gates !== undefined)
+    return err("usage-error", "--gates does not apply to --stage ac-test (the set is the mapping's)");
+  if (extras !== null && extras !== undefined) return err("usage-error", "--extra does not apply to --stage ac-test");
+  if (skipStyle) return err("usage-error", "--skip-style does not apply to --stage ac-test");
+  if (!Array.isArray(acRows) || acRows.length === 0)
+    return err("usage-error", "--stage ac-test requires --ac-tests <AC-TESTS.md> with mapping rows");
+  for (const r of acRows) {
+    if (
+      r === null ||
+      typeof r !== "object" ||
+      !Object.hasOwn(LEVEL_GATES, r.level) ||
+      !isCleanToken(r.file, 1024) ||
+      !isCleanToken(r.id, 32)
+    ) {
+      return err("usage-error", "an --ac-tests mapping row is not {id, level ∈ unit|integration|e2e, file}");
+    }
+  }
+  const discovered = discoverGates(scripts);
+  const have = new Set(discovered.map((e) => e.id));
+  const needed = new Set();
+  const uncovered = [];
+  for (const r of acRows) {
+    const ids = LEVEL_GATES[r.level].filter((id) => have.has(id));
+    if (ids.length === 0) uncovered.push(`${r.id} (${r.level})`);
+    for (const id of ids) needed.add(id);
+  }
+  if (uncovered.length) {
+    return err(
+      "coverage-violation",
+      `no discovered gate runs ${uncovered.join(", ")} — package.json has none of the level's scripts (run check-red-run.mjs --preflight)`
+    );
+  }
+  const kept = discovered.filter((e) => needed.has(e.id)).map((e) => ({ ...e, files: acFilesFor(acRows, e.id) }));
+  return {
+    ok: true,
+    spec: {
+      stage: "ac-test",
+      side: null,
+      feature,
+      source: "discover",
+      source_raw: null,
+      style_skipped: false,
+      e2e_excluded: [],
+      required: kept.map((e) => e.id),
+      entries: orderEntries(kept, [], false),
+    },
+  };
+}
+
 /** The coverage predicate, re-checked by the CHECKERS from the stamp — never trusted from the writer.
  *  Returns the missing ids, so the caller can name them. */
 export function coverageGap(stamp) {
@@ -481,7 +565,7 @@ export function validateStamp(stamp, expect = {}) {
     return err("stamp-malformed", `stamp.schema must be ${JSON.stringify(SCHEMA)}, got ${JSON.stringify(stamp.schema)}`);
   if (!STAGES.includes(stamp.stage)) return err("stamp-malformed", `stamp.stage must be one of ${STAGES.join(" | ")}`);
   if (stamp.stage === "regress" ? !SIDES.includes(stamp.side) : stamp.side !== null) {
-    return err("stamp-malformed", "stamp.side must be base|head for regress and null for verify");
+    return err("stamp-malformed", "stamp.side must be base|head for regress and null for every other stage");
   }
   if (!isCleanToken(stamp.feature, 64) || !FEATURE_SLUG_RE.test(stamp.feature)) {
     return err("stamp-malformed", "stamp.feature must be a plain slug");

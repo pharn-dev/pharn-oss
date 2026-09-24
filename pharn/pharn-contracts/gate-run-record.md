@@ -43,7 +43,7 @@ initialize at all.
 ```json
 {
   "schema": "gate-run-record/1",
-  "stage": "verify | regress",
+  "stage": "verify | regress | ac-test",
   "side": "base | head | null",
   "feature": "<slug>",
   "head": "<40-hex> | null",
@@ -126,6 +126,13 @@ gate — it already is one today.
   `--skip-style` was passed, and a **discovered** regress source never contains an `E2E_SET` member (a fixed
   rule, not a flag; an explicit `--gates` string is not filtered). An e2e-only manifest is therefore
   `empty-source-set` at regress.
+- **`ac-test` (6.18.0), `/pharn-test`'s red run:** `--ac-tests <AC-TESTS.md>` and `--discover` are required, and
+  `--gates`, `--extra`, `--skip-style`, `--scope-json`, `--spec-from` and `--side` are refused. The set is the
+  discovered ids the mapping's levels need (`LEVEL_GATES`: `unit`/`integration` → `test`, `e2e` → `E2E_SET`), in
+  ALLOWLIST order; a level with no discovered gate is `coverage-violation`. Each entry carries the mapped files of
+  its levels (`acFilesFor`), appended after `--`, and an entry with none is refused rather than run. No
+  `reconcile`, no `aux.completeness`. Every other stamp reader asserts its own stage, so an `ac-test` stamp is
+  `stage-mismatch` there. What the stamp's per-test records decide is `ac-tests.md`'s contract.
 - **Reserved ids:** `reconcile` and `completeness`. The `structural:` prefix belongs to `--extra` only.
 - **`<actual>` is derived, never supplied:** a `structural:<expected>` entry's argv resolves `<actual>` as
   the `findings.json` colocated with the capability directory that owns `<expected>`, per

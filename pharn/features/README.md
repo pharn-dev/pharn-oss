@@ -9,7 +9,9 @@ Each increment a **PHARN user** runs through the product pipeline gets one folde
 regress → verify → ship`)
 - `AC-TESTS.md` and `AC-TESTS.lock.json` (6.17.0) — for a templated SPEC, `/pharn-plan` maps each Acceptance
   Criterion to a test file and public target in `AC-TESTS.md`, and `/pharn-test` writes those tests before the
-  build and pins them in the lock (`pharn/pharn-contracts/ac-tests.md`)
+  build and pins them in the lock (`pharn/pharn-contracts/ac-tests.md`). Since 6.18.0 it also runs them before the
+  build, requires each to fail, and records that red run in the lock; a `spec_kind: test-infra` SPEC gets a
+  bootstrap lock instead, with no tests and no run
 
 This mirrors `.dev/features/` — but for the **product loop**, not the build loop. The split is the
 dev/product boundary made structural:

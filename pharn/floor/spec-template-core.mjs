@@ -20,13 +20,13 @@
 // carried the key and was validated on the legacy path (REVIEW finding R3). A SPEC with no line starting
 // `spec_template:` is LEGACY and never reaches this file.
 //
-// THE SEVEN RULES, one RED kind each: `section`, `ac`, `clarification`, `out-of-scope`, `optional-section`,
-// `guidance`, `template`. All are presence / regex / count / Map-membership tests over STRUCTURE — never over what
+// THE EIGHT RULES, one RED kind each: `section`, `ac`, `clarification`, `out-of-scope`, `optional-section`,
+// `guidance`, `template`, `spec-kind` (6.18.0). All are presence / regex / count / Map-membership tests over STRUCTURE — never over what
 // the intent means (P5, P2). A finding names a FILE LINE NUMBER, an AC id, or a value's LENGTH, never the text on
 // a line: the SPEC body is untrusted DATA, and a RED must not become a channel for it.
 //
 // Honest bounds (P0), each also stated in the contract:
-//   - OPT-IN. A SPEC with no `spec_template` line bypasses all seven rules. /pharn-spec writing the key is command
+//   - OPT-IN. A SPEC with no `spec_template` line bypasses all eight rules. /pharn-spec writing the key is command
 //     prose — advisory. A near-miss spelling (`spec-template:`, `Spec_Template:`) is also legacy.
 //   - PHRASED, NOT TESTED. A valid AC grammar means each criterion is PHRASED testably. It never means a test
 //     exists, runs, or passes, nor that the Then is observable on the public surface (advisory).
@@ -66,6 +66,37 @@ import { dirname, join } from "node:path";
 import { matchFrontmatter, stripBom } from "./frontmatter-core.mjs";
 
 export const TEMPLATE_KEY = "spec_template";
+
+/** `spec_kind` (6.18.0): what the SPEC's increment IS, for /pharn-test (pharn-contracts/spec-template.md,
+ *  "`spec_kind`"). Absent means `feature`: /pharn-test writes the AC tests and requires them red before the build.
+ *  `test-infra` is the increment that sets the test runner up, which cannot have failing tests first, so /pharn-test
+ *  records a BOOTSTRAP lock instead — weaker, and the lock says so.
+ *
+ *  ONE READING (grill G9): the key is read from the RAW frontmatter lines that start `spec_kind:` exactly, never
+ *  through a field parser, so what counts as the kind and what check-spec.mjs's pin covers cannot diverge. A
+ *  near-miss spelling (`spec_kind :`, `Spec_Kind:`) is not the key: the SPEC is `feature`, the stricter mode. */
+export const SPEC_KIND_KEY = "spec_kind";
+export const SPEC_KINDS = Object.freeze(["feature", "test-infra"]);
+const SPEC_KIND_LINE_RE = /^spec_kind:/;
+
+/** The raw frontmatter lines starting `spec_kind:`, a trailing CR removed. check-spec.mjs hashes exactly these
+ *  (grill G2: the pin covers the kind), so flipping it after approval is drift. */
+export function specKindLines(rawFrontmatter) {
+  return String(rawFrontmatter)
+    .split("\n")
+    .map((l) => l.replace(/\r$/, ""))
+    .filter((l) => SPEC_KIND_LINE_RE.test(l));
+}
+
+/** The SPEC's kind: `feature` with no `spec_kind:` line, the member its one line names, else `null` (two lines, or
+ *  a value outside SPEC_KINDS once spaces and tabs are trimmed — a stray CR, U+2028 or quote included). */
+export function specKindOf(rawFrontmatter) {
+  const lines = specKindLines(rawFrontmatter);
+  if (lines.length === 0) return "feature";
+  if (lines.length > 1) return null;
+  const v = lines[0].slice(SPEC_KIND_KEY.length + 1).replace(/^[ \t]+|[ \t]+$/g, "");
+  return SPEC_KINDS.includes(v) ? v : null;
+}
 // Exactly `spec_template:` at a line start — the one spelling the field parser reads, so `spec_template :` is a
 // near-miss (legacy), like `spec-template:`. `m`: ^ also matches after \r, U+2028 and U+2029.
 const TEMPLATE_KEY_LINE_RE = /^spec_template:/m;
@@ -362,18 +393,22 @@ function checkAcceptanceCriteria(sec, out) {
  * is malformed carries `level: null`.
  *
  * @param {string} text  the SPEC.md source
- * @returns {{templated: boolean, sections: number, items: {id: string, level: string|null, line: number}[]}}
+ * `kind` is specKindOf() over the frontmatter: `feature`, `test-infra`, or `null` for an invalid value (a legacy SPEC
+ * reports `feature`: it has no AC ids either way).
+ *
+ * @returns {{templated: boolean, kind: string|null, sections: number, items: {id: string, level: string|null, line: number}[]}}
  */
 export function specAcceptanceCriteria(text) {
   const src = stripBom(String(text));
   const fmMatch = matchFrontmatter(src);
-  if (!fmMatch || !isTemplated({}, fmMatch[1])) return { templated: false, sections: 0, items: [] };
+  if (!fmMatch || !isTemplated({}, fmMatch[1])) return { templated: false, kind: "feature", sections: 0, items: [] };
+  const kind = specKindOf(fmMatch[1]);
   const body = src.slice(fmMatch[0].length);
   const firstLine = (fmMatch[0].match(/\n/g) || []).length + 1;
   const acs = sectionsOf(body, firstLine).sections.filter((s) => s.name === "acceptance criteria");
-  if (acs.length !== 1) return { templated: true, sections: acs.length, items: [] };
+  if (acs.length !== 1) return { templated: true, kind, sections: acs.length, items: [] };
   const items = parseAcItems(acs[0]).items.map((it) => ({ id: `AC-${it.id}`, level: verifyOf(it).level, line: it.n }));
-  return { templated: true, sections: 1, items };
+  return { templated: true, kind, sections: 1, items };
 }
 
 // Rule 4 — a non-goal under `## Scope`: a column-0 `**Out of scope…**` label followed by at least one entry, either
@@ -392,13 +427,14 @@ function hasOutOfScopeEntry(sec) {
 }
 
 /**
- * The seven template rules over one parsed SPEC.
- * @param {{fm: object, body: string, firstLine: number, baseRequired: string[]}} spec
+ * The eight template rules over one parsed SPEC.
+ * @param {{fm: object, raw: string, body: string, firstLine: number, baseRequired: string[]}} spec
  *   `firstLine` is the FILE line number of the body's first line; `baseRequired` is check-spec.mjs's base
- *   section set, which that checker already REDs by its own (legacy) loop.
+ *   section set, which that checker already REDs by its own (legacy) loop. `raw` is the frontmatter block's text,
+ *   which rule 8 reads (never the parsed `fm` — see SPEC_KIND_KEY).
  * @returns {{findings: {kind: string, detail: string}[], id: string, acCount: number, required: number}}
  */
-export function checkTemplate({ fm, body, firstLine, baseRequired }) {
+export function checkTemplate({ fm, raw, body, firstLine, baseRequired }) {
   const out = [];
   const required = [...baseRequired, ...TEMPLATE_EXTRA_REQUIRED];
   const templateSections = [...required, ...TEMPLATE_OPTIONAL];
@@ -478,6 +514,17 @@ export function checkTemplate({ fm, body, firstLine, baseRequired }) {
     ]);
   } else if (!TEMPLATES.has(m[1])) {
     out.push(["template", `${TEMPLATE_KEY} names unknown template "${m[1]}" — known: {${knownTemplateIds().join(", ")}}`]);
+  }
+
+  // Rule 8 (`spec-kind`): at most one `spec_kind:` line, naming a SPEC_KINDS member. The value is never echoed.
+  const kindLines = specKindLines(raw);
+  if (kindLines.length > 1) {
+    out.push(["spec-kind", `${kindLines.length} \`${SPEC_KIND_KEY}:\` lines — at most one is allowed`]);
+  } else if (specKindOf(raw) === null) {
+    out.push([
+      "spec-kind",
+      `${SPEC_KIND_KEY} (${kindLines[0].length - SPEC_KIND_KEY.length - 1} chars) is not one of {${SPEC_KINDS.join(", ")}} — delete the line for a feature`,
+    ]);
   }
 
   return { findings: out.map(([kind, detail]) => ({ kind, detail })), id: m ? m[1] : "", acCount, required: required.length };

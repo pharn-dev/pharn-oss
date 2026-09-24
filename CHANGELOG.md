@@ -23,8 +23,65 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.18.0] - 2026-09-24
+
 ### Added
 
+- 2026-09-24: **`/pharn-test` runs the AC tests it wrote BEFORE the build and requires each to fail, recording that
+  red run in the lock; a level with no runner stops it; a `spec_kind: test-infra` SPEC gets a bootstrap lock.**
+  `SKILLS_VERSION` 6.17.1 → 6.18.0 (MINOR: a new checker, a new runner stage and a new lock schema). `MIN_CLI` stays
+  0.5.0: no installed path moves, and pharn-cli copies `pharn/floor/` whole (test files and fixtures excepted), so
+  the three new modules ship on `pharn update`.
+  ([`pharn/floor/check-red-run.mjs`](./pharn/floor/check-red-run.mjs),
+  [`pharn/floor/red-run-core.mjs`](./pharn/floor/red-run-core.mjs),
+  [`pharn/floor/ac-tests-core.mjs`](./pharn/floor/ac-tests-core.mjs),
+  [`pharn/pharn-contracts/ac-tests.md`](./pharn/pharn-contracts/ac-tests.md),
+  [`.dev/features/pharn-test-red/`](./.dev/features/pharn-test-red/))
+  - **Why.** 6.17.0's `/pharn-test` wrote and locked the tests but never ran them, so a test that cannot fail, is
+    never collected, or is skipped passed unnoticed. Honest trigger (P7): item 4 of the maintainer's AC-delivery
+    queue.
+  - **The red run.** `run-gates.mjs init --stage ac-test --ac-tests <AC-TESTS.md>` (`STAGES` gains `ac-test`)
+    selects the gates BY ID from the mapping's levels (`LEVEL_GATES` in `gate-run-core.mjs`: `unit`/`integration` →
+    `test`, `e2e` → `test:e2e`/`e2e`) and hands each gate exactly its mapped files after `--`; `--gates`, `--extra`,
+    `--skip-style`, `--scope-json`, `--spec-from` and `--side` are refused, and a level with no discovered gate is
+    `coverage-violation`. An argv gate carrying files now appends them whatever its id (only `test` ever carried
+    any, so verify and regress are unchanged).
+  - **The verdict** (`check-red-run.mjs --verdict`, logic in `red-run-core.mjs`): per AC, over the per-test record
+    of every gate its level maps to, entries whose `file` EQUALS the mapped file and whose LEAF title starts
+    `AC-<n>:` — `ac-test-not-collected`, `ac-test-passes-before-build` (no escape hatch), `ac-test-skipped`,
+    `ac-level-unavailable`, and 6.15.0's record refusals by their own names. It is bound to the run: the stamp
+    validates as `ac-test` for the feature, each run's files equal the mapping's, and the live worktree fingerprint
+    equals the stamp's final one. Its model of "not collected" was measured on a real vitest 5.0.1 run
+    (`pharn/floor/test-fixtures/test-results/vitest-red.json`): a test that `await import()`s its missing target is
+    collected and failed; the same test with a top-level import is a file-level failure with nothing collected. So
+    `/pharn-test` (0.2.0) writes unit/integration AC tests with the import inside the test body.
+  - **No runner.** `check-red-run.mjs --preflight` requires every AC's level to have a discovered gate with per-test
+    results configured for each of its gates, else `ac-level-unavailable: AC-<n> (<level>)` and a closed last line,
+    `blocked: no-test-runner — …; suggested: /pharn-ship "…(spec_kind: test-infra)"`. `/pharn-test` asks
+    interactively and prints that line under its new `--unattended` flag; it never starts a nested run.
+  - **The lock, `ac-tests-lock/2`.** Adds `mode` (`test-first` | `bootstrap`) and `bootstrap`; `/1` is still read.
+    `--record-red-run <name> --out <dir>` re-derives the verdict and writes `red_run` (`stamp_sha256`,
+    `files_sha256` — bound to the lock's `files`, re-checked by `--check` —, each gate's results digest, the matched
+    test ids per AC). `--check --require-red-run` asks "did a red run happen"; plain `--check` never meant that, and a
+    bootstrap lock fails it unless `--allow-bootstrap` is passed too.
+  - **Bootstrap.** An optional SPEC frontmatter key, `spec_kind` ∈ {`feature` (absent), `test-infra`}: rule 8
+    (`spec-kind`) of the spec template, read from the raw frontmatter lines. `check-ac-tests.mjs --spec` exits 4 for
+    it, `/pharn-plan` (0.5.0) writes no mapping, and `ac-tests-lock.mjs --write-bootstrap` records the SPEC's pin and
+    levels, over a SPEC it re-checks as Approved and un-drifted (`check-spec-approved.mjs`, shelled) — weaker than
+    test-first, and the lock says so. **The approval pin now covers a `spec_kind:` line** (`check-spec.mjs` hashes
+    it in front of the body when present), so an Approved feature SPEC cannot become a bootstrap one without the pin
+    moving — drift at every chain check; a self-consistent re-pin still passes. A SPEC without the line pins exactly
+    as before, so no existing pin moves.
+    `/pharn-spec` (0.5.0) offers the setup increment when it warns of a missing runner and never writes
+    `test-infra` under `--model-approve`.
+  - **Also:** the mapping grammar moved from `check-ac-tests.mjs` into `ac-tests-core.mjs` (re-exported), because
+    no floor module imports a `check-*.mjs` CLI; `badPath` refuses a file led by `-`, which a runner would read as
+    a flag; a mapping for a `test-infra` SPEC is a new `spec-kind` RED.
+  - **Bounds, stated.** "Failed" is the runner's status: a test failing on its own typo reads the same as one
+    failing for the missing behaviour. Agreement, not provenance: a self-consistent forged results file and stamp
+    over the live tree pass. The stamp and results digests are recorded, not re-checkable once the next run wipes
+    `.pharn/pharn-test/gates`. The red run does not run `build`. Still standalone: `/pharn-ship` and `/pharn-loop`
+    do not call `/pharn-test`.
 - 2026-09-24: **Lesson L59 promoted to `.dev/memory-bank/lessons-learned.md`: a call that follows a symlink answers
   for the target, never for the link.** It is L54's mechanism at a third floor site. `hashFile` opened each
   enumerated path with `openSync`, so a tracked directory symlink hashed as `null` and every reconcile reported it

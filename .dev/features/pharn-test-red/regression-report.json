@@ -1,0 +1,59 @@
+{
+  "base": "8ba9308fa27ab247edce3becce79edd22bccc708",
+  "inside": [
+    ".claude/commands/pharn-plan.md",
+    ".claude/commands/pharn-spec.md",
+    ".claude/commands/pharn-test.md",
+    ".dev/features/pharn-test-red/GRILL.md",
+    ".dev/features/pharn-test-red/PLAN.md",
+    ".dev/features/pharn-test-red/PROTECTED-FOLLOWUPS.md",
+    ".dev/features/pharn-test-red/REGRESSION.md",
+    ".dev/features/pharn-test-red/VERIFY.md",
+    ".dev/features/pharn-test-red/regression-report.json",
+    ".dev/features/pharn-test-red/verify-report.json",
+    ".dev/floor/command-hygiene.test.mjs",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/features/README.md",
+    "pharn/floor/ac-tests-core.mjs",
+    "pharn/floor/ac-tests-lock.mjs",
+    "pharn/floor/ac-tests-lock.test.mjs",
+    "pharn/floor/check-ac-tests.mjs",
+    "pharn/floor/check-ac-tests.test.mjs",
+    "pharn/floor/check-red-run.mjs",
+    "pharn/floor/check-red-run.test.mjs",
+    "pharn/floor/check-spec.mjs",
+    "pharn/floor/check-spec.test.mjs",
+    "pharn/floor/gate-run-core.mjs",
+    "pharn/floor/gate-run-core.test.mjs",
+    "pharn/floor/red-run-core.mjs",
+    "pharn/floor/run-gates.mjs",
+    "pharn/floor/run-gates.test.mjs",
+    "pharn/floor/spec-template-core.mjs",
+    "pharn/floor/test-fixtures/test-results/vitest-red.json",
+    "pharn/floor/test-results-core.mjs",
+    "pharn/pharn-contracts/ac-tests.md",
+    "pharn/pharn-contracts/gate-run-record.md",
+    "pharn/pharn-contracts/spec-template.md",
+    "pharn/pharn-contracts/test-results-record.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
