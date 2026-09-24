@@ -2139,11 +2139,13 @@ test("✧ every emitting command emits the LEDGER and the REPORT, and checks the
 const GATE_RUN_WIRING = [
   { file: "pharn-verify.md", stage: "verify", out: ".pharn/pharn-verify/gates" },
   { file: "pharn-regress.md", stage: "regress", out: ".pharn/pharn-regress/head" },
+  // 6.18.0: /pharn-test's red run. Its pinned lines are also EXECUTED by pharn/floor/check-red-run.test.mjs (L45).
+  { file: "pharn-test.md", stage: "ac-test", out: ".pharn/pharn-test/gates" },
 ];
 
 test("✧ L34 — the gate-run wiring set is NON-EMPTY (every rule below would otherwise be vacuous)", () => {
   assert.ok(GATE_RUN_WIRING.length > 0, "GATE_RUN_WIRING is empty");
-  assert.equal(GATE_RUN_WIRING.length, 2, "non-vacuity: the wired set is counted, not merely iterated");
+  assert.equal(GATE_RUN_WIRING.length, 3, "non-vacuity: the wired set is counted, not merely iterated");
 });
 
 test("✧ no fenced block in a gate-run-wired command CAPTURES an exit code by hand (`<var>=$?`)", () => {

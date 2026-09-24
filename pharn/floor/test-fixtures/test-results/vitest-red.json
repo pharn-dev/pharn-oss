@@ -1,0 +1,108 @@
+{
+  "numTotalTestSuites": 4,
+  "numPassedTestSuites": 1,
+  "numFailedTestSuites": 3,
+  "numPendingTestSuites": 0,
+  "numTotalTests": 4,
+  "numPassedTests": 2,
+  "numFailedTests": 1,
+  "numPendingTests": 1,
+  "numTodoTests": 0,
+  "snapshot": {
+    "added": 0,
+    "failure": false,
+    "filesAdded": 0,
+    "filesRemoved": 0,
+    "filesRemovedList": [],
+    "filesUnmatched": 0,
+    "filesUpdated": 0,
+    "matched": 0,
+    "total": 0,
+    "unchecked": 0,
+    "uncheckedKeysByFile": [],
+    "unmatched": 0,
+    "updated": 0,
+    "didUpdate": false
+  },
+  "startTime": 1790205562502,
+  "success": false,
+  "testResults": [
+    {
+      "assertionResults": [],
+      "startTime": 1790205562502,
+      "endTime": 1790205562502,
+      "status": "failed",
+      "message": "Cannot find module '../../src/reset.js' imported from /work/proj/tests/ac/demo.static.test.js",
+      "name": "/work/proj/tests/ac/demo.static.test.js"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "reset"
+          ],
+          "fullName": "reset AC-1: resets the password",
+          "status": "failed",
+          "title": "AC-1: resets the password",
+          "duration": 4.562957999999995,
+          "failureMessages": [
+            "Error: Cannot find module '/src/reset.js' imported from /work/proj/tests/ac/demo.unit.test.js\n    at reviveInvokeError (file:///work/proj/node_modules/vite/dist/node/module-runner.js:540:14)\n    at Object.invoke (file:///work/proj/node_modules/vite/dist/node/module-runner.js:556:33)\n    at processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at VitestModuleRunner.getModuleInformation (file:///work/proj/node_modules/vite/dist/node/module-runner.js:1210:7)\n    at request (file:///work/proj/node_modules/vite/dist/node/module-runner.js:1227:83)\n    at /work/proj/tests/ac/demo.unit.test.js:4:31\n    at file:///work/proj/node_modules/vitest/dist/chunks/run.C5UmxDPh.js:2783:20"
+          ],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "reset"
+          ],
+          "fullName": "reset AC-2: already true",
+          "status": "passed",
+          "title": "AC-2: already true",
+          "duration": 0.25620899999999835,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        },
+        {
+          "ancestorTitles": [
+            "reset"
+          ],
+          "fullName": "reset AC-3: later",
+          "status": "skipped",
+          "title": "AC-3: later",
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1790205562606,
+      "endTime": 1790205562611.256,
+      "status": "failed",
+      "message": "",
+      "name": "/work/proj/tests/ac/demo.unit.test.js"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [],
+          "fullName": "AC-1: another feature's test",
+          "status": "passed",
+          "title": "AC-1: another feature's test",
+          "duration": 0.7531669999999906,
+          "failureMessages": [],
+          "meta": {},
+          "tags": [],
+          "benchmarks": []
+        }
+      ],
+      "startTime": 1790205562605,
+      "endTime": 1790205562605.7532,
+      "status": "passed",
+      "message": "",
+      "name": "/work/proj/tests/ac/other.unit.test.js"
+    }
+  ]
+}

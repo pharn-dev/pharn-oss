@@ -898,7 +898,16 @@ test("the regress PAIR end to end through a real git worktree: the base stamp la
 // ---------------------------------------------------------------------------------------------------
 
 const REGRESS_CMD = join(HERE, "..", "..", ".claude", "commands", "pharn-regress.md");
-const FLOOR_MODULES = ["run-gates.mjs", "gate-run-core.mjs", "worktree-fingerprint.mjs", "reconcile-baseline.mjs", "check-regress.mjs"];
+const FLOOR_MODULES = [
+  "run-gates.mjs",
+  "gate-run-core.mjs",
+  "worktree-fingerprint.mjs",
+  "reconcile-baseline.mjs",
+  "check-regress.mjs",
+  // run-gates.mjs reads `--ac-tests` through ac-tests-core.mjs (6.18.0), which reads `## Files` through plan-files-core.
+  "ac-tests-core.mjs",
+  "plan-files-core.mjs",
+];
 
 /** Fenced blocks of a command, as arrays of lines. */
 function fencedBlocks(text) {
@@ -1349,4 +1358,141 @@ test("E2E AT REGRESS (runner level) — the head init drops an e2e script, print
     },
     { scripts: { test: "true", "test:e2e": "true" } }
   );
+});
+
+// ---------------------------------------------------------------------------------------------------
+// --stage ac-test (6.18.0) — /pharn-test's red run
+// ---------------------------------------------------------------------------------------------------
+
+const AC_PATH = `pharn/features/${FEATURE}/AC-TESTS.md`;
+const acMapping = (rows) =>
+  ["---", `spec_id: ${FEATURE}`, `spec_content_hash: ${"a".repeat(64)}`, "---", "", "## Mapping", "", ...rows, ""].join("\n");
+const AC_ROWS_OK = [
+  "- AC-1 | unit | `tests/ac/u.test.js` | t",
+  "- AC-2 | integration | `tests/ac/i.test.js` | t",
+  "- AC-3 | e2e | `tests/e2e/x.spec.js` | t",
+];
+/** Each gate records its argv under .pharn/ (outside the fingerprint) and exits 1 — the red run's normal shape. */
+const RECORDER = (id) =>
+  `node -e "require('fs').writeFileSync('.pharn/argv-${id}.json', JSON.stringify(process.argv.slice(1))); process.exit(1)"`;
+const acInit = (extra = []) => [
+  "init",
+  "--stage",
+  "ac-test",
+  "--feature",
+  FEATURE,
+  "--out",
+  OUT,
+  "--discover",
+  "package.json",
+  "--ac-tests",
+  AC_PATH,
+  ...extra,
+];
+function withAcRepo(fn, { rows = AC_ROWS_OK, scripts } = {}) {
+  return withRepo(
+    (dir) => {
+      mkdirSync(join(dir, ".pharn"), { recursive: true });
+      writeFileSync(join(dir, AC_PATH), acMapping(rows));
+      return fn(dir);
+    },
+    { scripts: scripts ?? { test: RECORDER("test"), "test:e2e": RECORDER("e2e"), lint: RECORDER("lint"), build: RECORDER("build") } }
+  );
+}
+
+test("ac-test: init selects exactly the levels' gates and each gate receives exactly its mapped files after `--`", () => {
+  withAcRepo((dir) => {
+    const init = cli(dir, acInit());
+    assert.equal(init.code, 0, init.raw);
+    const calls = drain(dir);
+    assert.equal(calls.at(-1).code, 3, JSON.stringify(calls.map((c) => c.json)));
+    const st = stamp(dir);
+    assert.equal(st.stage, "ac-test");
+    assert.deepEqual(st.required, ["test", "test:e2e"], "lint and build are discovered but no level needs them");
+    assert.deepEqual(
+      st.runs.map((r) => [r.id, r.files, r.exit]),
+      [
+        ["test", ["tests/ac/i.test.js", "tests/ac/u.test.js"], 1],
+        ["test:e2e", ["tests/e2e/x.spec.js"], 1],
+      ]
+    );
+    assert.ok(!st.runs.some((r) => r.id === "reconcile"), "no reconcile at ac-test");
+    assert.equal(st.aux.completeness, null, "no completeness capture at ac-test");
+    const argvOf = (id) => JSON.parse(readFileSync(join(dir, `.pharn/argv-${id}.json`), "utf8"));
+    assert.deepEqual(argvOf("test"), ["tests/ac/i.test.js", "tests/ac/u.test.js"]);
+    assert.deepEqual(argvOf("e2e"), ["tests/e2e/x.spec.js"], "the e2e gate is file-restricted too (grill G6)");
+    assert.ok(!existsSync(join(dir, ".pharn/argv-lint.json")), "lint never ran");
+  });
+});
+
+test("ac-test: init REFUSES each flag that would put the set back in a caller's hands, and each bad --ac-tests (grill G4/G5)", () => {
+  withAcRepo((dir) => {
+    writeFileSync(join(dir, "scope.json"), "{}");
+    for (const [why, args] of [
+      ["--gates", acInit(["--gates", "npm test::test"])],
+      ["--extra", acInit(["--extra", "[]"])],
+      ["--skip-style", acInit(["--skip-style"])],
+      ["--side", acInit(["--side", "head"])],
+      ["--scope-json", acInit(["--scope-json", "scope.json"])],
+      ["--spec-from", acInit(["--spec-from", OUT])],
+      ["--base", acInit(["--base", "pharn/features"])],
+      ["--gates with a flag-shaped value", acInit(["--gates", "--x"])],
+      ["--extra with no value", acInit(["--extra"])],
+      ["no --ac-tests", ["init", "--stage", "ac-test", "--feature", FEATURE, "--out", OUT, "--discover", "package.json"]],
+      ["no --discover", ["init", "--stage", "ac-test", "--feature", FEATURE, "--out", OUT, "--ac-tests", AC_PATH]],
+      [
+        "another feature's mapping",
+        ["init", "--stage", "ac-test", "--feature", "other", "--out", OUT, "--discover", "package.json", "--ac-tests", AC_PATH],
+      ],
+      ["an unreadable mapping", acInit().map((a) => (a === AC_PATH ? `pharn/features/${FEATURE}/NOPE.md` : a))],
+      ["--ac-tests at verify", [...initArgs(), "--ac-tests", AC_PATH]],
+    ]) {
+      const r = cli(dir, args);
+      assert.equal(r.code, 2, `${why}: ${r.raw}`);
+      assert.equal(r.json.reason_code, "usage-error", why);
+    }
+    assert.equal(cli(dir, acInit()).code, 0, "control: the same repo inits cleanly");
+  });
+  for (const [why, rows] of [
+    ["a leading `-` file", ["- AC-1 | unit | `-u` | t"]],
+    ["a --config file", ["- AC-1 | unit | `--config=evil.js` | t"]],
+    ["a malformed line", ["- AC-1 | unit | tests/x.js | t"]],
+    ["no rows", []],
+  ]) {
+    withAcRepo(
+      (dir) => {
+        const r = cli(dir, acInit());
+        assert.equal(r.code, 2, `${why}: ${r.raw}`);
+        assert.equal(r.json.reason_code, "usage-error", why);
+      },
+      { rows }
+    );
+  }
+});
+
+test("ac-test: a level with no discovered gate refuses init (coverage-violation), nothing written", () => {
+  withAcRepo(
+    (dir) => {
+      const r = cli(dir, acInit());
+      assert.equal(r.code, 2, r.raw);
+      assert.equal(r.json.reason_code, "coverage-violation");
+      assert.match(r.json.reason, /AC-3 \(e2e\)/);
+      assert.ok(!existsSync(join(dir, OUT, "state.json")));
+    },
+    { scripts: { test: RECORDER("test") } }
+  );
+});
+
+test("ac-test: a record whose entry lost its files is refused at run, never run with an empty list (L16)", () => {
+  withAcRepo((dir) => {
+    assert.equal(cli(dir, acInit()).code, 0);
+    const statePath = join(dir, OUT, "state.json");
+    const st = JSON.parse(readFileSync(statePath, "utf8"));
+    st.entries[0].files = [];
+    writeFileSync(statePath, JSON.stringify(st));
+    const r = cli(dir, runArgs());
+    assert.equal(r.code, 2, r.raw);
+    assert.match(r.json.reason, /carries no mapped files/);
+    assert.ok(!existsSync(join(dir, ".pharn/argv-test.json")), "the gate never ran");
+  });
 });

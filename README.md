@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.17.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.18.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -246,19 +246,19 @@ available on their own when you want to inspect or drive one step manually. The 
 `/pharn-review` and `/pharn-memory-promote` — are standalone: neither is a pipeline stage, and neither is
 invoked by `/pharn-loop` or `/pharn-ship`.
 
-| Command                 | Use it when you want to...                                                                                                                                                       |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/pharn-loop`           | Run the full workflow unattended: the model approves the spec, iterates build → regress → verify to a deterministic stop, commits a green result to a local branch, and reports. |
-| `/pharn-ship`           | Run the full workflow once, then present the ship record and briefing at the final human decision gate.                                                                          |
-| `/pharn-review`         | Run code-review lenses in parallel over any code and merge their structured findings deterministically. This is standalone; it is not a pipeline stage.                          |
-| `/pharn-spec`           | Convert prose intent into a structured `SPEC.md`, surface gaps, and stop for approval before implementation.                                                                     |
-| `/pharn-plan`           | Convert an approved `SPEC.md` into a `PLAN.md` with declared files and declared promoted lessons.                                                                                |
-| `/pharn-grill`          | Challenge the plan before code exists and re-check the spec/plan hash chain.                                                                                                     |
-| `/pharn-test`           | Write each acceptance criterion's test before the build, into the files `/pharn-plan` mapped in `AC-TESTS.md`, and pin them. Standalone in this release.                         |
-| `/pharn-build`          | Implement the plan after setting the active write scope from `PLAN.md`.                                                                                                          |
-| `/pharn-regress`        | Re-run existing project suites and record regressions outside the feature.                                                                                                       |
-| `/pharn-verify`         | Check build artifacts and completeness signals, including declared concrete paths that were never created.                                                                       |
-| `/pharn-memory-promote` | Promote one lesson into `memory-bank/` through a gated provenance check.                                                                                                         |
+| Command                 | Use it when you want to...                                                                                                                                                                          |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/pharn-loop`           | Run the full workflow unattended: the model approves the spec, iterates build → regress → verify to a deterministic stop, commits a green result to a local branch, and reports.                    |
+| `/pharn-ship`           | Run the full workflow once, then present the ship record and briefing at the final human decision gate.                                                                                             |
+| `/pharn-review`         | Run code-review lenses in parallel over any code and merge their structured findings deterministically. This is standalone; it is not a pipeline stage.                                             |
+| `/pharn-spec`           | Convert prose intent into a structured `SPEC.md`, surface gaps, and stop for approval before implementation.                                                                                        |
+| `/pharn-plan`           | Convert an approved `SPEC.md` into a `PLAN.md` with declared files and declared promoted lessons.                                                                                                   |
+| `/pharn-grill`          | Challenge the plan before code exists and re-check the spec/plan hash chain.                                                                                                                        |
+| `/pharn-test`           | Write each acceptance criterion's test before the build, into the files `/pharn-plan` mapped in `AC-TESTS.md`, run them and require each to fail, and pin the evidence. Standalone in this release. |
+| `/pharn-build`          | Implement the plan after setting the active write scope from `PLAN.md`.                                                                                                                             |
+| `/pharn-regress`        | Re-run existing project suites and record regressions outside the feature.                                                                                                                          |
+| `/pharn-verify`         | Check build artifacts and completeness signals, including declared concrete paths that were never created.                                                                                          |
+| `/pharn-memory-promote` | Promote one lesson into `memory-bank/` through a gated provenance check.                                                                                                                            |
 
 The command names are generated and drift-guarded in the [inventory below](#pharn-builds-pharn); the
 one-line descriptions in this table are hand-written and are not.
@@ -454,7 +454,7 @@ already approved.
 
 A gate's exit code says whether the whole suite passed, not whether one named test ran: a suite exits 0 with
 a skipped test. PHARN can also read a per-test record — each test's id, file, title and `passed`, `failed` or
-`skipped` — from a JSON report your test runner writes. Nothing in the pipeline reads it yet.
+`skipped` — from a JSON report your test runner writes. `/pharn-test` reads it (below); verify does not yet.
 
 To turn it on, name your reporter's format for each gate in `pharn.config.json`. The gates are `test` and the
 e2e gates (`test:e2e`, `e2e`); the formats are `vitest-json` and `playwright-json`, both built into their
@@ -502,6 +502,35 @@ What the record can and cannot tell you is in `pharn/pharn-contracts/test-result
 means your reporter said so. A single flaky test or expected failure (`test.fail()`) voids the whole record rather
 than being counted as a pass. `pharn.config.json` is not write-protected, so review changes to it like changes to your test script.
 
+### Acceptance-criteria tests, before the build
+
+For a SPEC filled from the template, `/pharn-plan` maps each acceptance criterion to a test file and the public
+interface it drives (`AC-TESTS.md`), and `/pharn-test` writes those tests **before** `/pharn-build`, into files the
+build is not allowed to write. Since 6.18.0 it also **runs** them and requires every criterion's test to **fail**:
+a test that cannot fail, is never collected, or is skipped would otherwise pass unnoticed. The evidence — which
+tests failed, bound to the files it pinned — goes into the committed `AC-TESTS.lock.json`. It is standalone in
+this release: `/pharn-ship` and `/pharn-loop` do not call it yet.
+
+What it needs from your project:
+
+- **A runner for each criterion's level, with per-test results.** `unit` and `integration` criteria run under your
+  `test` script, `e2e` ones under `test:e2e` or `e2e`, and each of those gates needs its reporter configured as in
+  [Per-test results](#per-test-results). Without them `/pharn-test` stops before writing anything and says which
+  criterion has no runner. Set the runner up first, as its own increment: a SPEC with `spec_kind: test-infra` in its
+  frontmatter gets a **bootstrap** lock instead — no tests before the build, which is weaker, and the lock says so.
+- **Tests that import their target inside the test body.** Before the build the module under test does not exist.
+  `await import("../src/reset.js")` inside the test makes that a failed test, which is what the red run wants; a
+  top-level `import` makes the whole file fail to load, so none of its tests is collected, and the red run refuses
+  that as the wrong reason. `/pharn-test` writes them this way. A runner that type-checks each file as it loads it
+  (ts-jest with diagnostics on, for example) fails the file anyway; use its transpile-only mode.
+- **An e2e runner that serves the app itself.** The red run does not run `build`; Playwright's `webServer` option
+  is the usual way.
+
+A criterion's test that already **passes** before the build is refused, with no override: either the test is
+vacuous, or the behaviour exists and the criterion restates it. What the red run proves is limited to what the
+record shows. "Failed" is the runner's status, so a test that fails on a typo of its own reads the same as one
+that fails because the feature is missing. Details: `pharn/pharn-contracts/ac-tests.md`.
+
 ---
 
 ## PHARN builds PHARN
@@ -523,7 +552,7 @@ byte-for-byte by `npm run docs:check`, so it cannot quietly drift from what is a
 - **Product commands — 11** (`.claude/commands/`): `/pharn-build`, `/pharn-grill`, `/pharn-loop`, `/pharn-memory-promote`, `/pharn-plan`, `/pharn-regress`, `/pharn-review`, `/pharn-ship`, `/pharn-spec`, `/pharn-test`, `/pharn-verify`.
 - **Dev-apparatus commands — 9** (`.claude/commands/`): `/pharn-dev-build`, `/pharn-dev-eval`, `/pharn-dev-grill`, `/pharn-dev-memory-promote`, `/pharn-dev-plan`, `/pharn-dev-regress`, `/pharn-dev-review`, `/pharn-dev-ship`, `/pharn-dev-verify`.
 - **Hook scripts — 4** (`.claude/hooks/`): `enforce-writes-scope.cjs`, `protect-trusted-paths.cjs`, `require-loop-record.cjs`, `set-writes-scope.cjs`.
-- **Floor checkers — 73** `.mjs` files under `pharn/floor/` (tests excluded).
+- **Floor checkers — 76** `.mjs` files under `pharn/floor/` (tests excluded).
 
 <!-- CURRENT-STATE:END -->
 

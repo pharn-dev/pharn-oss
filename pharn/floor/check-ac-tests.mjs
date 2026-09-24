@@ -39,8 +39,9 @@
 //     two levels above AC-TESTS.md, i.e. `pharn/features` for `pharn/features/<name>/AC-TESTS.md`).
 //
 //   node pharn/floor/check-ac-tests.mjs --spec <SPEC.md>
-//     decide BEFORE any mapping exists whether the SPEC has AC ids: exit 0 templated (prints the ids and levels),
-//     3 legacy, 2 unusable. /pharn-plan and /pharn-test branch on it.
+//     decide BEFORE any mapping exists what the SPEC gets: exit 0 templated (prints the ids and levels), 3 legacy,
+//     4 bootstrap (`spec_kind: test-infra`, 6.18.0 — no mapping; prints the levels the lock records), 2 unusable.
+//     /pharn-plan and /pharn-test branch on it.
 //
 // Exit (full mode): 0 GREEN · 1 RED (every kind, legacy-spec included: a mapping for a SPEC without
 //       `spec_template` means the key was removed after mapping — it sits outside the body hash, so the pin cannot
@@ -48,10 +49,11 @@
 
 import { readFileSync, readdirSync, lstatSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { basename, dirname, join, resolve, posix } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { specAcceptanceCriteria } from "./spec-template-core.mjs";
-import { clean, isConcrete, pathsFromPlanFiles } from "./plan-files-core.mjs";
+import { clean, pathsFromPlanFiles } from "./plan-files-core.mjs";
+import { badPath, mappingOf, scopeKey } from "./ac-tests-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHECK_PLAN_SPEC_AGREE = join(HERE, "check-plan-spec-agree.mjs");
@@ -68,65 +70,19 @@ export const KINDS = Object.freeze([
   "missing-ac",
   "no-files",
   "pin",
+  "spec-kind",
   "unknown-ac",
   "unlisted-file",
   "unmapped-file",
 ]);
 
-/** The verify levels a mapping line may name — the spec-template's closed set. */
-export const LEVELS = Object.freeze(["unit", "integration", "e2e"]);
+export { LEVELS, MAPPING_RE, badPath, mappingOf, scopeKey } from "./ac-tests-core.mjs";
 
-/** One mapping line: `- AC-<n> | <level> | `<test file>` | <public target>`. */
-export const MAPPING_RE = /^- (AC-[1-9][0-9]*) \| (unit|integration|e2e) \| `([^`\s][^`]*)` \| (\S.*)$/;
-
-const MAPPING_HEADING_RE = /^##\s+Mapping\s*$/;
-
-/** What the writes-scope setter would scope for a `## Files` entry (plan-files-core's copy of its rule), then
- *  case-folded for comparison. `null` for an entry the setter drops (a placeholder or glob). */
-export function scopeKey(entry) {
-  const c = clean(entry);
-  return isConcrete(c) ? c.toLowerCase() : null;
-}
-const H2_OR_ABOVE_RE = /^\s{0,3}#{1,2}\s/;
 const SHOWN = 80;
 
 function shown(v) {
   const t = String(v);
   return JSON.stringify(t.length > SHOWN ? `${t.slice(0, SHOWN)}…` : t);
-}
-
-/** The lines under `## Mapping`, up to the next `#`/`##` heading. Blank lines are skipped; every other line must
- *  match MAPPING_RE. Returns the parsed rows and the file line numbers of the lines that did not. */
-export function mappingOf(text) {
-  const lines = String(text).split(/\r?\n/);
-  const start = lines.findIndex((l) => MAPPING_HEADING_RE.test(l));
-  if (start === -1) return { present: false, rows: [], malformed: [], extraSections: 0 };
-  const extraSections = lines.filter((l) => MAPPING_HEADING_RE.test(l)).length - 1;
-  const rows = [];
-  const malformed = [];
-  for (let i = start + 1; i < lines.length; i++) {
-    const line = lines[i];
-    if (H2_OR_ABOVE_RE.test(line)) break;
-    if (line.trim() === "") continue;
-    const m = line.match(MAPPING_RE);
-    if (!m) {
-      malformed.push(i + 1);
-      continue;
-    }
-    rows.push({ line: i + 1, id: m[1], level: m[2], file: m[3], target: m[4] });
-  }
-  return { present: true, rows, malformed, extraSections };
-}
-
-/** Why a `## Files` entry cannot be an AC test file path, or null when it can. */
-export function badPath(p) {
-  if (/[<>*?]/.test(p)) return "a placeholder or glob (the writes-scope setter drops it)";
-  if (p.startsWith("/")) return "absolute";
-  if (p !== posix.normalize(p) || p.endsWith("/") || p.startsWith("./") || p.split("/").includes(".."))
-    return "not a normalized repo-relative path";
-  if (p === ".pharn" || p.startsWith(".pharn/")) return "under .pharn/, which is always writable and git-ignored";
-  if (p.startsWith("pharn/features/")) return "under pharn/features/, the pipeline's own artifact tree";
-  return null;
 }
 
 /**
@@ -148,6 +104,18 @@ export function checkMapping({ acTestsText, specText, planText, others }) {
       "the SPEC has no `spec_template`, yet a mapping exists — the key was removed after mapping (it is outside the body hash, so the pin cannot see it)"
     );
     return { legacy: true, findings };
+  }
+  if (spec.kind !== "feature") {
+    // A test-infra SPEC is a bootstrap increment with no mapping (its lock is written by --write-bootstrap). A mapping
+    // here means the kind changed after mapping — the pin covers the kind (check-spec.mjs pinHash), so `pin` REDs
+    // too unless the SPEC was re-approved.
+    red(
+      "spec-kind",
+      spec.kind === null
+        ? "the SPEC's `spec_kind` is not one of {feature, test-infra} — run check-spec.mjs"
+        : "the SPEC is `spec_kind: test-infra`, a bootstrap increment: it gets no AC-TESTS.md mapping"
+    );
+    return { legacy: false, findings };
   }
   if (spec.sections !== 1 || spec.items.length === 0) {
     // check-spec.mjs REDs this shape itself; here it is refused rather than read as "no criteria to map" (L34).
@@ -270,14 +238,29 @@ function main(argv) {
       console.log("usage: check-ac-tests.mjs --spec <SPEC.md>");
       return 2;
     }
+    // Precedence, fixed (grill G10): unreadable 2 → legacy 3 → invalid spec_kind 2 → no usable criteria 2 →
+    // test-infra 4 → templated 0.
     const spec = specAcceptanceCriteria(readOrExit(args[1], "SPEC.md"));
     if (!spec.templated) {
       console.log("LEGACY — the SPEC has no `spec_template`: no AC ids, so no AC-TESTS.md is written");
       return 3;
     }
+    if (spec.kind === null) {
+      console.log("UNUSABLE — the SPEC's `spec_kind` is not one of {feature, test-infra} — run check-spec.mjs");
+      return 2;
+    }
     if (spec.sections !== 1 || spec.items.length === 0) {
       console.log("UNUSABLE — the SPEC's `## Acceptance Criteria` is absent, duplicated or empty — run check-spec.mjs");
       return 2;
+    }
+    if (spec.kind === "test-infra") {
+      if (spec.items.some((i) => i.level === null)) {
+        console.log("UNUSABLE — a criterion's verify level is malformed, so the bootstrap levels are unknown — run check-spec.mjs");
+        return 2;
+      }
+      const levels = [...new Set(spec.items.map((i) => i.level))].sort();
+      console.log(`BOOTSTRAP — spec_kind: test-infra; no AC-TESTS.md; the lock records levels: ${levels.join(", ")}`);
+      return 4;
     }
     console.log(`TEMPLATED — ${spec.items.length} AC(s): ${spec.items.map((i) => `${i.id} (${i.level ?? "malformed level"})`).join(", ")}`);
     return 0;

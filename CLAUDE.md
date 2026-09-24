@@ -299,7 +299,7 @@ node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
 # their content; logs are bounded per stage by init's recreate of <out> and are otherwise unbounded across
 # /pharn-loop iterations. The runner writes ONLY inside the state root (containment-checked, no symlink
 # component), so it needs NO reconcile-ignore.json exemption. EVERY path operand (--out, --spec-from,
-# --discover, --scope-json) resolves against the INVOKING directory, whose `.pharn/` is that state root;
+# --discover, --scope-json, --ac-tests) resolves against the INVOKING directory, whose `.pharn/` is that state root;
 # --cwd moves only where gates RUN and which tree is fingerprinted (6.9.3 — before it, init resolved --out
 # and --spec-from against --cwd while `run --next` did not, so /pharn-regress's base side, the one --cwd
 # caller, failed at init with spec-mismatch; its pinned lines are now EXECUTED by run-gates.test.mjs). Contract:
@@ -308,6 +308,7 @@ node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
 # existing no-gates HALT, and to /pharn-loop's unattended S4 `blocked: no-gates`) ·
 # run 0 an entry ran (a FAILING GATE IS DATA, not a runner error) | 2 runner error | 3 nothing left.
 node pharn/floor/run-gates.mjs init --stage verify|regress [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--discover <package.json>] [--gates "<cmd>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>]
+node pharn/floor/run-gates.mjs init --stage ac-test --feature <name> --out <dir> --discover <package.json> --ac-tests <AC-TESTS.md> [--cwd <dir>]   # 6.18.0, /pharn-test's red run
 node pharn/floor/run-gates.mjs run --next --out <dir> --timeout-ms <N>
 node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 
@@ -327,9 +328,10 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # PER RECORD: one flaky test or test.fail() voids it. FLOOR: derived from the exact bytes the runner hashed
 # (a later write is results-hash-mismatch — L58). NOT provenance (L43): "passed" means the reporter said so,
 # and the test script, reporter config and pharn.config.json are all agent-editable; results-exit-contradiction
-# (a failed test or suite error under exit 0) narrows a forgery, never closes it. No stage reads the record in
-# 6.15.0: verdicts are unchanged for every stamp the runner writes, but a malformed results_sha256 is now
-# stamp-malformed and a results path the runner cannot clear is refused. Contract: pharn/pharn-contracts/test-results-record.md.
+# (a failed test or suite error under exit 0) narrows a forgery, never closes it. No stage read the record in
+# 6.15.0 (verify/regress verdicts are unchanged for every stamp the runner writes, but a malformed results_sha256
+# is stamp-malformed and a results path the runner cannot clear is refused); since 6.18.0 /pharn-test's red run
+# reads it (below). Contract: pharn/pharn-contracts/test-results-record.md.
 
 # AC TESTS BEFORE THE BUILD (added 6.17.0) — /pharn-test writes each Acceptance Criterion's test BEFORE /pharn-build,
 # from the Approved SPEC, the PLAN and pharn/features/<name>/AC-TESTS.md, which /pharn-plan writes (Step 4c, templated
@@ -337,19 +339,49 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # --from-plan scope), `## Mapping` = one `- AC-<n> | <level> | `<file>` | <public target>` line per AC. check-ac-tests.mjs
 # REDs on a closed kind set (missing/duplicate/unknown AC, level-mismatch, unlisted/unmapped file, in-plan-files — the
 # build's scope would cover it —, claimed-elsewhere, bad-path, no-files, malformed-line, pin via the SHELLED
-# check-plan-spec-agree.mjs); exit 0/1/2. ac-tests-lock.mjs --write/--check pins the tests in
-# AC-TESTS.lock.json (schema ac-tests-lock/1, closed keys, red_run/test_infra reserved for later stages); --check
-# names a PATH, never content. AC-TESTS.md and the lock are PIPELINE_ARTIFACTS (regress-exempt); for reconcile
+# check-plan-spec-agree.mjs, and since 6.18.0 spec-kind); exit 0/1/2. ac-tests-lock.mjs --write/--check pins the tests
+# in AC-TESTS.lock.json (schema ac-tests-lock/2 since 6.18.0, /1 still read; closed keys per mode; test_infra reserved
+# for a later stage); --check names a PATH, never content. The mapping grammar lives in ac-tests-core.mjs. AC-TESTS.md and the lock are PIPELINE_ARTIFACTS (regress-exempt); for reconcile
 # AC-TESTS.md is exempt like PLAN.md (a re-plan rewrites it) but the LOCK is `pre_anchor_artifacts` (NOT exempt).
 # Paths are compared as the setter SCOPES them (clean + isConcrete, case-folded). `--spec <SPEC.md>` decides
-# templated (0) / legacy (3) before any mapping exists; in full mode a legacy SPEC with a mapping is RED.
+# templated (0) / legacy (3) / bootstrap (4, 6.18.0) before any mapping exists; in full mode a legacy or test-infra
+# SPEC with a mapping is RED.
 # /pharn-regress's --declared is PLAN `## Files` u AC-TESTS.md `## Files`. BOUNDS: the build exclusion holds for the
 # PLAN.md checked (a later PLAN edit reopens it; /pharn-build does not re-check in 6.17.0); /pharn-test runs before the
 # reconcile anchor, so its own Bash writes are not reconciled; the tests' quality and "read only SPEC/PLAN" are
-# advisory. Standalone in 6.17.0: /pharn-ship and /pharn-loop do not call it. Contract: pharn/pharn-contracts/ac-tests.md.
+# advisory. Standalone: /pharn-ship and /pharn-loop do not call it yet. Contract: pharn/pharn-contracts/ac-tests.md.
+#
+# THE RED RUN (added 6.18.0) — /pharn-test RUNS the AC tests before the build and requires each to FAIL, so a test
+# that cannot fail, is never collected or is skipped cannot pass unnoticed. check-red-run.mjs --preflight: every AC's
+# level has a DISCOVERED gate (gate-run-core LEVEL_GATES: unit/integration → test, e2e → E2E_SET) with per-test
+# results configured for EVERY such gate, else `ac-level-unavailable: AC-<n> (<level>)` and a closed last line
+# `blocked: no-test-runner — …; suggested: /pharn-ship "…(spec_kind: test-infra)"` (/pharn-test --unattended prints it;
+# interactive asks; never a nested run). run-gates --stage ac-test selects the gates BY ID from the levels and hands
+# each its mapped files after `--` (--gates/--extra/--skip-style/--scope-json/--spec-from/--side refused; no
+# reconcile, no build). check-red-run.mjs --verdict (red-run-core.mjs): per AC, over the record of every gate its level
+# maps to, entries whose `file` EQUALS the mapped file (not case-folded) and whose LEAF title starts `AC-<n>:` —
+# ≥1 (else ac-test-not-collected), none passed (ac-test-passes-before-build — NO escape hatch), none skipped
+# (ac-test-skipped); item 01's record refusals are REDs by name. BOUND to the run: validateStamp as ac-test for the
+# feature, each run's files == the mapping's, LIVE fingerprint == stamp.fingerprint.final (the lock and the tests are
+# in it). The convention it rests on: unit/integration AC tests `await import()` their target INSIDE the test body —
+# a top-level import of a not-yet-built module is a file load failure, i.e. not collected (measured on real vitest
+# 5.0.1: pharn/floor/test-fixtures/test-results/vitest-red.json). ac-tests-lock.mjs --record-red-run re-derives the
+# verdict and writes `red_run` {stamp_sha256, files_sha256, gates, acs}; `--check --require-red-run` is the question
+# "did a red run happen" (plain --check GREEN never means that) — a bootstrap lock FAILS it unless the caller also passes
+# --allow-bootstrap (only /pharn-test's Step B does), and a bootstrap lock is written/checked only over an Approved,
+# un-drifted SPEC (check-spec-approved.mjs, shelled). BOOTSTRAP: SPEC frontmatter `spec_kind: test-infra`
+# (spec-template rule 8; the PIN covers a spec_kind line — check-spec pinHash — so flipping it after approval is
+# drift) → no mapping, no tests, no run; --write-bootstrap records mode bootstrap + the SPEC's levels — WEAKER, and
+# the lock says so. BOUNDS: "failed" is the record's status (a test failing on its own typo reads the same —
+# advisory); agreement, not provenance (a self-consistent forged results file + stamp over the live tree passes);
+# stamp/results digests are recorded, not re-checkable after the next init wipes <out>.
 node pharn/floor/check-ac-tests.mjs <AC-TESTS.md> <SPEC.md> <PLAN.md> [--features-dir <dir>]
 node pharn/floor/check-ac-tests.mjs --spec <SPEC.md>
-node pharn/floor/ac-tests-lock.mjs (--write | --check) <name> [--base <features-dir>]
+node pharn/floor/ac-tests-lock.mjs (--write | --write-bootstrap) <name> [--base <features-dir>]
+node pharn/floor/ac-tests-lock.mjs --record-red-run <name> --out <dir> [--base <features-dir>]
+node pharn/floor/ac-tests-lock.mjs --check <name> [--require-red-run [--allow-bootstrap]] [--base <features-dir>]
+node pharn/floor/check-red-run.mjs --preflight --ac-tests <AC-TESTS.md> --discover <package.json> --root <dir>
+node pharn/floor/check-red-run.mjs --verdict --ac-tests <AC-TESTS.md> --out <dir> --root <dir>
 
 # FRESHNESS — /pharn-loop reads a stop only from evidence that belongs to THIS tree (added 6.10.0).
 # THE RECORDED FAILURE (P7): CHANGELOG 6.3.0's unattended /pharn-loop run skipped /pharn-grill, /pharn-regress

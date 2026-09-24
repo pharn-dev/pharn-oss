@@ -123,11 +123,42 @@ a per-feature template choice, and more than one project template.
 | `state`             | `Draft` or `Approved` (unchanged)                                                              |
 | `spec_content_hash` | `""` in a Draft; the body's digest once Approved (unchanged — the pin, fix #4)                 |
 | `spec_template`     | `<id>@sha256:<64 lowercase hex>`, copied verbatim from `check-spec.mjs --resolve-template-ref` |
+| `spec_kind`         | optional (6.18.0): `test-infra`, or `feature` — absent means `feature`. See below              |
 
 `spec_template` is **provenance only**. It records which template a SPEC was filled from and that
 template's digest at the time. No check compares the digest with the template file, by design, so editing
 the template never REDs a SPEC that was already approved. The frontmatter sits outside the body hash, so
 writing this key moves no pin.
+
+### `spec_kind` (6.18.0)
+
+What the SPEC's increment **is**, for `/pharn-test` (`ac-tests.md`):
+
+- **`feature`** (the default; write no line): `/pharn-test` writes each criterion's test before the build and
+  requires it to fail first — test-first.
+- **`test-infra`**: the increment that sets up the project's test runner and per-test results. It cannot have
+  failing tests first, so `/pharn-test` records a **bootstrap** lock instead: no tests, no run — weaker, and the
+  lock says so. `/pharn-spec` offers this when it warns that a runner is missing, and never writes it under
+  `--model-approve` — command prose, **advisory**: no check sees who chose the key.
+
+The key is read from the **raw** frontmatter lines that start `spec_kind:` exactly
+(`spec-template-core.mjs` `specKindLines` / `specKindOf`). A near-miss spelling (`spec_kind :`, `Spec_Kind:`) is not
+the key, so that SPEC is a `feature`, the stricter mode. On a templated SPEC, rule 8 REDs a second `spec_kind:`
+line, or a value that is not a member once spaces and tabs are trimmed (a quoted value, a stray CR or U+2028
+included). A legacy SPEC's `spec_kind` is not validated: a legacy SPEC has no AC ids either way.
+
+**The pin covers it.** Unlike every other frontmatter key, a `spec_kind:` line is part of the approved intent: it
+decides whether the criteria are tested first. So when the frontmatter carries one, `check-spec.mjs` hashes that raw
+line (CR removed) followed by `\n` in front of the body. A SPEC without the line hashes exactly as before 6.18.0, so
+no existing pin moves. Adding, changing or removing the line after approval is **drift** — RED at every stage that
+checks the chain. Where a command says "the body hash", read "the pin": for a SPEC with a `spec_kind:` line, it
+covers that line too. **Bound:** a self-consistent rewrite of the SPEC and its pin passes, as it always has.
+
+**A template may carry the key.** `validateTemplate` accepts a template with or without a `spec_kind:` line, by design,
+so a project template carrying `spec_kind: test-infra` would start every Draft filled from it as a bootstrap SPEC.
+What stands between that and an approved bootstrap is `/pharn-spec`'s instruction to write the key only when the human
+chose the setup increment, and the human approval itself — both advisory. Review a template change that adds the
+key like any change to the template.
 
 ## Sections
 
@@ -204,6 +235,7 @@ outside the criteria. An edge case that matters **is** a criterion.
 | 5   | an optional section that is present has a non-blank line                                        | `optional-section` | presence                  |
 | 6   | no guidance comment remains                                                                     | `guidance`         | regex                     |
 | 7   | `spec_template` is control-character-free, matches `<id>@sha256:<64-hex>`, and names a known id | `template`         | regex + membership        |
+| 8   | at most one `spec_kind:` line, naming `feature` or `test-infra`                                 | `spec-kind`        | count + membership        |
 
 Rules 2 and 4 are skipped when their section is missing, hidden or duplicated, because rule 1 (or the
 legacy section check) already reports it. A RED names a file line number, an AC id or a value's length,
@@ -215,7 +247,8 @@ never the text itself, because the SPEC body is untrusted data (P2).
   verdict never depends on what the intent means, and an instruction-looking sentence in the body cannot
   change it.
 - **ARE NOT a test of the criteria.** A valid grammar means each criterion is **phrased** testably. It
-  never means a test exists, runs, or passes. PHARN writes and runs no acceptance tests today.
+  never means a test exists, runs, or passes. `/pharn-test` writes and runs acceptance tests before the build
+  (`ac-tests.md`), and that is a separate check with its own bounds.
 - **ARE NOT a CommonMark parser.** The criteria grammar is read line by line and is stricter than
   CommonMark: an unindented continuation line, which CommonMark would accept, is a RED. Which headings
   exist is decided by a small model of the blocks that can hide one, opened at column 0 (fenced code, an

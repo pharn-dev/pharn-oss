@@ -37,6 +37,8 @@ import {
   completenessArgv,
   orderEntries,
   resolveSet,
+  LEVEL_GATES,
+  acFilesFor,
   coverageGap,
   validateStamp,
   stampToMap,
@@ -681,4 +683,99 @@ test("REGRESS never discovers an e2e gate, on either side (every member); an e2e
   // An EXPLICIT --gates string naming an e2e command is the caller's choice and is kept at regress.
   const explicit = resolveSet({ stage: "regress", side: "head", feature: "demo", gates: "npm run test:e2e::test:e2e" });
   assert.deepEqual(explicit.spec.required, ["test:e2e"]);
+});
+
+// ---------------------------------------------------------------------------------------------------
+// ac-test (6.18.0) — /pharn-test's red run: the set is selected BY ID from the mapping's levels.
+// ---------------------------------------------------------------------------------------------------
+
+const AC_ROWS = [
+  { id: "AC-1", level: "unit", file: "tests/ac/b.unit.test.js" },
+  { id: "AC-2", level: "integration", file: "tests/ac/a.int.test.js" },
+  { id: "AC-3", level: "e2e", file: "tests/e2e/reset.spec.js" },
+  { id: "AC-4", level: "unit", file: "tests/ac/b.unit.test.js" },
+];
+const ALL_SCRIPTS = Object.fromEntries(ALLOWLIST.map((id) => [id, "x"]));
+
+test("✧ L29 — LEVEL_GATES's keys are the mapping's closed level set; every value is a subset of the ALLOWLIST", async () => {
+  const { LEVELS } = await import("./ac-tests-core.mjs");
+  assert.deepEqual(Object.keys(LEVEL_GATES).sort(), [...LEVELS].sort());
+  for (const [level, ids] of Object.entries(LEVEL_GATES)) {
+    assert.ok(ids.length > 0, `${level} maps to no gate`);
+    for (const id of ids) assert.ok(ALLOWLIST.includes(id), `${level} → ${id} is not an allowlisted gate`);
+  }
+  assert.deepEqual([...LEVEL_GATES.e2e], [...E2E_SET]);
+  assert.ok(STAGES.includes("ac-test"));
+});
+
+test("ac-test: every allowlisted script discovered, only the levels' gates are kept, each with its mapped files", () => {
+  const r = resolveSet({ stage: "ac-test", feature: "demo", scripts: ALL_SCRIPTS, acRows: AC_ROWS });
+  assert.equal(r.ok, true, r.reason);
+  assert.deepEqual(r.spec.required, ["test", "test:e2e", "e2e"], "style, typecheck and build are not selected");
+  assert.deepEqual(
+    r.spec.entries.map((e) => [e.id, e.files, e.seq]),
+    [
+      ["test", ["tests/ac/a.int.test.js", "tests/ac/b.unit.test.js"], 0],
+      ["test:e2e", ["tests/e2e/reset.spec.js"], 1],
+      ["e2e", ["tests/e2e/reset.spec.js"], 2],
+    ]
+  );
+  assert.ok(!r.spec.entries.some((e) => e.id === "reconcile"), "the red run is not a verify: no reconcile");
+  assert.equal(r.spec.side, null);
+  assert.equal(r.spec.source, "discover");
+  // only unit rows → only `test`; only e2e rows → only the discovered e2e gate
+  const unitOnly = resolveSet({ stage: "ac-test", feature: "demo", scripts: ALL_SCRIPTS, acRows: [AC_ROWS[0]] });
+  assert.deepEqual(unitOnly.spec.required, ["test"]);
+  const e2eOnly = resolveSet({ stage: "ac-test", feature: "demo", scripts: { e2e: "x", test: "x" }, acRows: [AC_ROWS[2]] });
+  assert.deepEqual(e2eOnly.spec.required, ["e2e"]);
+});
+
+test("acFilesFor: sorted, unique, and only the rows whose level maps to the gate", () => {
+  assert.deepEqual(acFilesFor(AC_ROWS, "test"), ["tests/ac/a.int.test.js", "tests/ac/b.unit.test.js"]);
+  assert.deepEqual(acFilesFor(AC_ROWS, "e2e"), ["tests/e2e/reset.spec.js"]);
+  assert.deepEqual(acFilesFor(AC_ROWS, "lint"), []);
+});
+
+test("ac-test: a level with no discovered gate is coverage-violation naming the ACs (never a silently smaller set — L34)", () => {
+  const r = resolveSet({ stage: "ac-test", feature: "demo", scripts: { test: "x" }, acRows: AC_ROWS });
+  assert.equal(r.ok, false);
+  assert.equal(r.reason_code, "coverage-violation");
+  assert.match(r.reason, /AC-3 \(e2e\)/);
+  assert.doesNotMatch(r.reason, /AC-1/);
+  const none = resolveSet({ stage: "ac-test", feature: "demo", scripts: null, acRows: AC_ROWS });
+  assert.equal(none.reason_code, "coverage-violation");
+});
+
+test("ac-test REFUSES --gates, --extra, --skip-style, --side, no/empty/bad rows; --ac-tests rows on another stage (grill G5)", () => {
+  const base = { stage: "ac-test", feature: "demo", scripts: ALL_SCRIPTS, acRows: AC_ROWS };
+  for (const [why, over] of [
+    ["--gates", { gates: "npm test::test" }],
+    ["--extra", { extras: "[]" }],
+    ["--skip-style", { skipStyle: true }],
+    ["--side", { side: "head" }],
+    ["no rows", { acRows: null }],
+    ["empty rows", { acRows: [] }],
+    ["a row with an unknown level", { acRows: [{ id: "AC-1", level: "smoke", file: "x" }] }],
+    ["a row with no file", { acRows: [{ id: "AC-1", level: "unit" }] }],
+    ["a row that is not an object", { acRows: ["AC-1"] }],
+    ["a bad feature", { feature: "../x" }],
+  ]) {
+    const r = resolveSet({ ...base, ...over });
+    assert.equal(r.ok, false, why);
+    assert.equal(r.reason_code, "usage-error", why);
+  }
+  assert.equal(resolveSet(base).ok, true, "control: the same call without the mutation resolves");
+  for (const stage of ["verify", "regress"]) {
+    const r = resolveSet({ stage, side: stage === "regress" ? "head" : null, feature: "demo", scripts: ALL_SCRIPTS, acRows: AC_ROWS });
+    assert.equal(r.reason_code, "usage-error", `${stage} with --ac-tests rows`);
+  }
+});
+
+test("validateStamp accepts an ac-test stamp (side null) and refuses one with a side; other readers see stage-mismatch", () => {
+  const s = goodStamp({ stage: "ac-test", required: ["test"] });
+  s.runs = s.runs.filter((r) => r.id !== "reconcile");
+  assert.deepEqual(validateStamp(s), { ok: true });
+  assert.equal(validateStamp({ ...s, side: "head" }).reason_code, "stamp-malformed");
+  assert.equal(validateStamp(s, { stage: "verify" }).reason_code, "stage-mismatch");
+  assert.equal(validateStamp(s, { stage: "regress" }).reason_code, "stage-mismatch");
 });
