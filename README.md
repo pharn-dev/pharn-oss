@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.19.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.20.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -263,7 +263,7 @@ invoked by `/pharn-loop` or `/pharn-ship`.
 | `/pharn-test`           | Write each acceptance criterion's test before the build, into the files `/pharn-plan` mapped in `AC-TESTS.md`, run them and require each to fail, and pin the evidence. Runs between `/pharn-grill` and `/pharn-build` in `/pharn-ship` and `/pharn-loop`. |
 | `/pharn-build`          | Implement the plan after setting the active write scope from `PLAN.md`.                                                                                                                                                                                    |
 | `/pharn-regress`        | Re-run existing project suites and record regressions outside the feature.                                                                                                                                                                                 |
-| `/pharn-verify`         | Check build artifacts and completeness signals, including declared concrete paths that were never created.                                                                                                                                                 |
+| `/pharn-verify`         | Check build artifacts and completeness signals, including declared concrete paths that were never created, and that every acceptance criterion's locked, once-red test passed.                                                                             |
 | `/pharn-memory-promote` | Promote one lesson into `memory-bank/` through a gated provenance check.                                                                                                                                                                                   |
 
 The command names are generated and drift-guarded in the [inventory below](#pharn-builds-pharn); the
@@ -539,6 +539,30 @@ vacuous, or the behaviour exists and the criterion restates it. What the red run
 record shows. "Failed" is the runner's status, so a test that fails on a typo of its own reads the same as one
 that fails because the feature is missing. Details: `pharn/pharn-contracts/ac-tests.md`.
 
+### What verify proves about acceptance criteria
+
+Since 6.20.0 `/pharn-verify` checks each criterion, not only whole gates. **An AC is delivered = a locked, once-red
+test titled `AC-n:`, in a file mapped to AC-n, passed on the head run. PHARN does not judge whether that test fully
+captures the AC's intent.** The match is by file, so another feature's `AC-1:` in the same suite never counts. The
+verify report carries a per-AC table (id, level, matched tests, status, reason), and `RUN-REPORT.md` shows it.
+
+- **An AC not delivered yet** (its test is missing from the run, failed, or skipped) fails verify, and `/pharn-loop`
+  builds again, like any failing gate.
+- **AC evidence that changed** fails verify and stops `/pharn-loop` (`blocked: ac-evidence-invalid`): a pinned test
+  or the lock was edited, the tests were never shown red, or the test infrastructure moved. Another build cannot fix
+  that. `/pharn-test` now also pins what runs the tests: the level gates' `package.json` scripts (with their
+  `pre`/`post` scripts), their `testResults` format, and root `vitest`/`vite`/`playwright`/`jest` config files. What
+  it does not see — a setup file a config imports, environment-driven configuration, a chained script, `.npmrc`,
+  `tsconfig`, the runner's version, and more — is listed in `pharn/pharn-contracts/ac-tests.md`. After the
+  build, re-running `/pharn-test` means setting the build aside first, because its red run would now pass.
+- **A feature locked before 6.20.0** has no infrastructure pin, and verify reports `test-infra-unpinned` until it goes
+  back through `/pharn-test` that way.
+- **A per-test record that cannot be read** makes verify inconclusive, never a pass. One flaky test, `test.fail()`,
+  or duplicate test name anywhere in the suite voids the record.
+- **A SPEC not filled from the template** is reported `not-applicable (legacy spec)` in the report, not silently
+  passed. A `spec_kind: test-infra` SPEC gets **bootstrap** evidence: the level's gate ran and reported at least one
+  passed test. That is weaker, and the report says so.
+
 ---
 
 ## PHARN builds PHARN
@@ -560,7 +584,7 @@ byte-for-byte by `npm run docs:check`, so it cannot quietly drift from what is a
 - **Product commands — 11** (`.claude/commands/`): `/pharn-build`, `/pharn-grill`, `/pharn-loop`, `/pharn-memory-promote`, `/pharn-plan`, `/pharn-regress`, `/pharn-review`, `/pharn-ship`, `/pharn-spec`, `/pharn-test`, `/pharn-verify`.
 - **Dev-apparatus commands — 9** (`.claude/commands/`): `/pharn-dev-build`, `/pharn-dev-eval`, `/pharn-dev-grill`, `/pharn-dev-memory-promote`, `/pharn-dev-plan`, `/pharn-dev-regress`, `/pharn-dev-review`, `/pharn-dev-ship`, `/pharn-dev-verify`.
 - **Hook scripts — 4** (`.claude/hooks/`): `enforce-writes-scope.cjs`, `protect-trusted-paths.cjs`, `require-loop-record.cjs`, `set-writes-scope.cjs`.
-- **Floor checkers — 77** `.mjs` files under `pharn/floor/` (tests excluded).
+- **Floor checkers — 79** `.mjs` files under `pharn/floor/` (tests excluded).
 
 <!-- CURRENT-STATE:END -->
 

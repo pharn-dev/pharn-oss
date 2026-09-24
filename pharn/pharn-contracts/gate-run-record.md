@@ -133,7 +133,9 @@ gate — it already is one today.
   its levels (`acFilesFor`), appended after `--`, and an entry with none is refused rather than run. No
   `reconcile`, no `aux.completeness`. Every other stamp reader asserts its own stage, so an `ac-test` stamp is
   `stage-mismatch` there. What the stamp's per-test records decide is `ac-tests.md`'s contract.
-- **Reserved ids:** `reconcile` and `completeness`. The `structural:` prefix belongs to `--extra` only.
+- **Reserved ids:** `reconcile` and `completeness` (the runner's), and `ac-delivery` and `ac-evidence` (6.20.0 — the ids
+  `check-verify.mjs --ac-gate` adds to a verify report's `failing_gates`, which `check-loop.mjs` reads by exact
+  membership; a real gate carrying one would be read as the AC gate). The `structural:` prefix belongs to `--extra` only.
 - **`<actual>` is derived, never supplied:** a `structural:<expected>` entry's argv resolves `<actual>` as
   the `findings.json` colocated with the capability directory that owns `<expected>`, per
   `finding-shape.md`'s emission contract. A supplied or mismatched `<actual>` is refused, so the one
@@ -152,6 +154,9 @@ a terminal stop. The set is defined once in `gate-run-core.mjs` (`REASON_CODES`)
   report or stamp carrying one of these is re-run, under `/pharn-loop`'s counted budget. Every other
   member is a stop: a stamp that exists and is **wrong** is evidence to stop on, never to paper over.
 - **`RESERVED_REASON_CODES`** — members kept with no emitter, each with its reason. It is **empty** today.
+- **`ac-evidence-invalid`** (6.20.0) is `check-loop-fresh.mjs` check I's code for a test stage whose gate returned a
+  RED verdict (exit 1, a `RED` token) — so `/pharn-loop` maps it to stuck point S13, not S11. The three other front
+  checks, and a test-stage gate that exits 2 or crashes, keep `front-stage-red`.
 
 The closure is tested **both ways** (**L36** — a per-member presence set is not a closed set): every literal
 the modules emit is a member, **and** every member has an emitter or a reserved entry. The second direction

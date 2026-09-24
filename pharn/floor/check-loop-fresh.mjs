@@ -29,15 +29,19 @@
 //                                                                               · non-member RERUN report-malformed
 //   C  each stamp exists and validateStamp passes for its stage/side/feature  → missing / lapse RERUN · otherwise STOP
 //   D  each report's gate_run.stamp_sha256 = sha256(the stamp's raw bytes)    → RERUN · report-stamp-unbound
-//   J  every recorded stdout/stderr sha256 = sha256(its log on disk)          → STOP  · output-hash-mismatch
-//   E  a LIVE re-run of check-verify.mjs / check-regress.mjs reproduces the
-//      report's FLOOR fields                                                  → STOP  · report-verdict-mismatch
+//   J  every recorded stdout/stderr sha256 = sha256(its log on disk), and
+//      every recorded results_sha256 = sha256(its per-test results file)     → STOP  · output-hash-mismatch
+//   E  a LIVE re-run of check-verify.mjs --ac-gate / check-regress.mjs
+//      reproduces the report's FLOOR fields, the AC gate's block included
+//      (6.20.0) — deferred to F when the live tree is not the verify stamp's  → STOP  · report-verdict-mismatch
 //   H  the regress BASE stamp's `head` = --base                               → STOP  · base-head-mismatch
 //   F  the verify stamp's fingerprint {algo, final} = the live tree now        → RERUN verify · tree-moved-since-verify
 //   G  the regress HEAD stamp's final = the verify stamp's init (same algo)    → RERUN regress · regress-verify-tree-mismatch
 //   I  (--front) check-spec-approved, check-plan-spec-agree, check-plan-lessons
-//      exit 0, GRILL.md exists, and check-test-stage --require-test-first
-//      exits 0 (6.19.0)                                                       → STOP  · front-stage-red
+//      exit 0 and GRILL.md exists                                             → STOP  · front-stage-red
+//      check-test-stage --require-test-first exits 0 (6.19.0)                 → STOP  · ac-evidence-invalid (6.20.0) on
+//                                                                             its RED (exit 1); front-stage-red on exit 2
+//                                                                             or a crash, which is no evidence at all
 //
 // The ORDER is load-bearing: the fabrication checks (J, E, H) run BEFORE the staleness checks (F, G), so a
 // forged report STOPS the run instead of being "refreshed" by a re-run that would overwrite the evidence.
@@ -105,8 +109,9 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
-import { FEATURE_SLUG_RE, SHA_RE, LAPSE_CODES, isReasonCode, validateStamp, logBasename } from "./gate-run-core.mjs";
+import { FEATURE_SLUG_RE, SHA_RE, LAPSE_CODES, isReasonCode, validateStamp, logBasename, resultsFileName } from "./gate-run-core.mjs";
 import { fingerprint } from "./worktree-fingerprint.mjs";
+import { sha256RegularFile } from "./test-infra-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -147,10 +152,14 @@ const VERIFY_VERDICTS = new Set(["PASS", "FAIL", "INCOMPLETE", "INCONCLUSIVE"]);
 const REGRESS_VERDICTS = new Set(["no-regressions", "regressions", "inconclusive"]);
 const LAPSE_SET = new Set(LAPSE_CODES);
 
+/** The verify fields that depend on the stamp ALONE — compared even when the tree has moved. */
+export const STAMP_ONLY_FIELDS = Object.freeze(["gates"]);
+
 /** The report fields each live re-derivation must reproduce: what check-loop.mjs reads (`failing_gates`
- *  decides a reconcile red) plus the verbatim spine the stage copies from its checker. */
+ *  decides a reconcile or an AC-evidence red) plus the verbatim spine the stage copies from its checker — for verify
+ *  that includes the AC gate's block (6.20.0), so the per-AC table a report shows is the one the checker computes. */
 export const COMPARED_FIELDS = Object.freeze({
-  verify: Object.freeze(["verdict", "failing_gates", "gates"]),
+  verify: Object.freeze(["verdict", "failing_gates", "gates", "ac_gate"]),
   regress: Object.freeze(["verdict", "regressions", "pre_existing", "outside_gates"]),
 });
 
@@ -448,6 +457,22 @@ function checkJ(ctx) {
           });
         }
       }
+      // The per-test results file (6.15.0) is evidence the AC gate reads (6.20.0): a recorded digest must still be the
+      // file's, or E's re-derivation would read a verdict mismatch where the truth is an edited results file (grill G6).
+      if (typeof run.results_sha256 === "string") {
+        const file = resultsFileName(run.seq, run.id);
+        // Read as the runner and test-results-core read it — O_NOFOLLOW|O_NONBLOCK, a regular file only (REVIEW
+        // finding 7, L59): a symlink or a FIFO swapped in here is a mismatch, never followed or blocked on.
+        if (sha256RegularFile(join(dir, file)) !== run.results_sha256) {
+          return failure({
+            check: "J",
+            action: "stop",
+            stage: s.stage,
+            reason_code: "output-hash-mismatch",
+            reason: `the ${s.key} stamp's results_sha256 for gate ${JSON.stringify(run.id)} does not match ${file} on disk — the per-test results were edited or removed after the runner hashed them`,
+          });
+        }
+      }
     }
   }
   return { ok: true };
@@ -466,9 +491,18 @@ function rerunChecker(ctx, script, args) {
 }
 
 function checkE(ctx) {
-  const v = rerunChecker(ctx, CHECKERS.verify, ["--stamp", ctx.stamps.verify.path, "--feature", ctx.feature]);
+  // `--ac-gate` ALWAYS (6.20.0): /pharn-verify's pinned Step 5 passes it, so a report produced without it — or with its
+  // AC block edited — cannot be reproduced here.
+  const v = rerunChecker(ctx, CHECKERS.verify, ["--stamp", ctx.stamps.verify.path, "--feature", ctx.feature, "--ac-gate"]);
   if (!v.ok) return { ok: false, unusable: true, reason: v.reason };
-  for (const f of COMPARED_FIELDS.verify) {
+  // The AC gate reads the LIVE tree (the lock, the tests, the pinned infrastructure), so once the tree has moved a
+  // re-derivation of the fields it decides can differ for a reason that is staleness, not fabrication. Then only
+  // `gates` — a pure function of the stamp — is compared here, and the rest DEFERS to F, which names the real cause as
+  // a re-run (grill G6, L58). With the tree unmoved, any difference is the report's own.
+  const fp = fingerprint(ctx.repo, { feature: ctx.feature });
+  const sf = ctx.stamps.verify.value.fingerprint;
+  const treeMoved = !fp.ok || sf.algo !== fp.algo || sf.final !== fp.digest;
+  for (const f of treeMoved ? STAMP_ONLY_FIELDS : COMPARED_FIELDS.verify) {
     if (canonical(v.value[f]) !== canonical(ctx.reports.verify[f])) {
       return failure({
         check: "E",
@@ -585,6 +619,9 @@ function checkI(ctx) {
   // never approves a test-infra one, so a bootstrap or legacy reading here means the SPEC changed around the gate.
   const t = spawnSync(process.execPath, [CHECKERS.testStage, ctx.feature, "--require-test-first"], { cwd: ctx.repo, encoding: "utf8" });
   if (t.error) return { ok: false, unusable: true, reason: `could not run check-test-stage: ${t.error.message}` };
+  // Exit 2 (unusable) or a crash is not evidence that the AC tests changed, so it keeps front-stage-red (S11) — only a
+  // RED verdict (exit 1) is ac-evidence-invalid (REVIEW finding 5: a child crash read as S13 would send a person to
+  // set the build aside for nothing).
   if (t.status !== 0) {
     // The first line's closed token (`RED <reason>`), plus the first RED line a child printed — for a lock RED that is
     // the lock script's own line, naming a path from the lock: a TRUNCATED, UNTRUSTED string (the lock is an
@@ -594,15 +631,16 @@ function checkI(ctx) {
     const lines = String(t.stdout ?? "").split("\n");
     const token = lines[0].split(" — ")[0];
     const childRed = (lines.find((l) => /^\s+RED — /.test(l)) ?? "").trim().slice(0, 200);
-    return failure({
-      check: "I",
-      action: "stop",
-      stage: "front",
-      reason_code: "front-stage-red",
-      reason:
-        `check-test-stage exits ${t.status} (${token})${childRed ? ` [${childRed}]` : ""} — /pharn-test's evidence does not hold ` +
-        "for this tree, and it cannot be re-run after the build: a re-plan, or a person",
-    });
+    const reason =
+      `check-test-stage exits ${t.status} (${token})${childRed ? ` [${childRed}]` : ""} — /pharn-test's evidence does not hold ` +
+      "for this tree, and /pharn-test cannot be re-run over a built tree: set the build aside and re-run it, re-plan, or a person";
+    // Its OWN code (6.20.0, grill G1) for a RED verdict: this is where a Bash-edited pinned test or a changed test
+    // infrastructure meets the loop, before check-loop.mjs ever reads verify's AC gate — /pharn-loop maps it to S13.
+    if (t.status === 1 && /^RED /.test(token)) {
+      return failure({ check: "I", action: "stop", stage: "front", reason_code: "ac-evidence-invalid", reason });
+    }
+    // Exit 2 or a crash is no evidence about the AC tests at all: it stays front-stage-red (S11).
+    return failure({ check: "I", action: "stop", stage: "front", reason_code: "front-stage-red", reason });
   }
   return { ok: true };
 }

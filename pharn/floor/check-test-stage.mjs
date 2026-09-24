@@ -17,6 +17,9 @@
 // In both non-legacy branches the lock's recorded `mode` must MATCH the SPEC's (`lock-mode-mismatch`): a test-first
 // lock's own `--check` never reads SPEC.md, so without it a SPEC re-approved as test-infra beside an old test-first
 // lock read `READY bootstrap` (grill G1).
+// A test-first lock must also carry the test-infrastructure pin (6.20.0, schema `ac-tests-lock/3`): a `/2` or `/1`
+// lock that the lock script checks GREEN is `lock-red` here, BEFORE the build, because /pharn-verify's AC gate would
+// fail it as `test-infra-unpinned` after one — when re-running /pharn-test means setting the build aside.
 //
 // THE ONE BOUND ON "NOT-APPLICABLE", stated (grill G2): it is decided by `spec_template`, which the approval pin does
 // not cover (spec-template.md, "Opt-in"). Removing that key AND deleting both AC-TESTS.md and the lock reads legacy.
@@ -109,6 +112,20 @@ function lockModeOf(path) {
   return typeof v.mode === "string" ? v.mode : null;
 }
 
+/** Does the lock carry the test-infrastructure pin (`test_infra`, schema `ac-tests-lock/3`, 6.20.0)? Read only after
+ *  the lock script checked it GREEN, so the shape is already known good. REVIEW finding 8: a `/2` or `/1` test-first
+ *  lock with a red run passes the lock's own `--check --require-red-run`, and /pharn-verify's AC gate then fails it
+ *  as `test-infra-unpinned` — after a build that re-running /pharn-test would have to set aside. Refused HERE, before
+ *  the build, where re-running /pharn-test is still cheap. */
+function lockPinned(path) {
+  try {
+    const v = JSON.parse(readFileSync(path, "utf8"));
+    return v !== null && typeof v === "object" && v.test_infra !== null && typeof v.test_infra === "object";
+  } catch {
+    return false;
+  }
+}
+
 /** Map a lock `--check` result onto the gate's vocabulary. */
 function fromLock(lock, readyToken, readyDetail) {
   if (lock.status === 0) return ready(readyToken, readyDetail, lock.lines);
@@ -183,7 +200,15 @@ function decide({ name, base, cwd }) {
     return red("lock-mode-mismatch", `the SPEC is a feature SPEC but the lock is a ${recorded} lock — re-run /pharn-test`);
   }
   const lock = run(AC_TESTS_LOCK, ["--check", name, "--require-red-run", ...baseArgs], cwd);
-  return fromLock(lock, "READY test-first", "the mapping holds and the lock records a red run over the pinned tests");
+  const r = fromLock(lock, "READY test-first", "the mapping holds and the lock records a red run over the pinned tests");
+  if (r.code === 0 && !lockPinned(resolve(cwd, lockFile))) {
+    return red(
+      "lock-red",
+      "the lock carries no test-infrastructure pin (written before 6.20.0) — re-run /pharn-test before the build",
+      lock.lines
+    );
+  }
+  return r;
 }
 
 export function main(argv) {

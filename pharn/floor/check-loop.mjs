@@ -12,8 +12,9 @@
 //   human between iterations — so its termination is safety-critical and MUST be floor, not agent
 //   judgment. This helper reduces the stop to deterministic operations: (1) enum membership over the two
 //   FLOOR verdicts the existing stages already emit — /pharn-verify's `.verdict` and /pharn-regress's
-//   `.verdict`; (2) on a verify FAIL only, exact array membership of the gate key `reconcile` in
-//   /pharn-verify's `.failing_gates`; and (3) an integer `iter >= cap` compare. The agent OBEYS the exit
+//   `.verdict`; (2) on a verify FAIL only, exact array membership of the gate key `reconcile` — and, since 6.20.0,
+//   of the AC gate's reserved id `ac-evidence` — in /pharn-verify's `.failing_gates`; and (3) an integer `iter >= cap`
+//   compare. The agent OBEYS the exit
 //   code (advisory COMPLIANCE, exactly as it obeys check-verify).
 //
 // A SIBLING OF check-ship.mjs, NOT AN OVERLOAD OF IT (P3 — one axis per file):
@@ -38,12 +39,23 @@
 //             malformed argv, or v === FAIL with `fg` not an array of strings)
 //                                                     → INCONCLUSIVE  exit 2  (FAIL-CLOSED, P5)
 //   v === "INCONCLUSIVE"  OR  r === "inconclusive"     → STOP_TERMINAL exit 4  (nothing was measured)
+//   v === "FAIL"  ∧  fg includes "ac-evidence"          → STOP_TERMINAL exit 4  (AC evidence changed or missing)
 //   v === "FAIL"  ∧  fg includes "reconcile"            → STOP_TERMINAL exit 4  (a detected escape)
 //   v === "PASS"  ∧  r === "no-regressions"            → STOP_GREEN    exit 0  (converged)
 //   a measurable red (v ∈ {FAIL, INCOMPLETE} or r === "regressions") ∧ iter <  cap
 //                                                     → CONTINUE      exit 3  (retry, under cap)
 //   a measurable red                                  ∧ iter >= cap
 //                                                     → STOP_CAP      exit 1  (bounded: cap hit)
+//
+// WHY AN AC-EVIDENCE RED IS TERMINAL (6.20.0): check-verify.mjs `--ac-gate` adds `ac-evidence` when the AC evidence
+// itself is changed or missing — a pinned test or the lock changed, no red run binds the tests, the test infrastructure
+// moved or was never pinned. A rebuild cannot restore evidence taken BEFORE the build, so a retry would spend the
+// iterations and reach STOP_CAP for nothing. It is checked BEFORE reconcile because a Bash edit of a pinned test trips
+// both (the AC tests are outside the build's scope, so reconcile reports the write), and the AC reading is the more
+// specific one. A DELIVERY red (`ac-delivery`) is an ordinary measurable red: it is retried like any failing gate.
+//
+// `terminal_cause` (6.20.0) names WHICH terminal predicate fired — a CLOSED member of TERMINAL_CAUSES, or null for any
+// other decision — so /pharn-loop maps `ac-evidence` to its stuck point S13 by membership, never by reading `reason`.
 //
 // WHY AN INCONCLUSIVE VERDICT IS TERMINAL: the stage could not measure, so a fix has nothing to be judged
 // against and a retry would spend an iteration blind (P5 fail-closed). The checker's OWN exit-2
@@ -69,7 +81,7 @@
 //   node pharn/floor/check-loop.mjs <verify-report.json> <regression-report.json> --iter <N> --cap <M>
 //
 // Exit: 0 STOP_GREEN · 1 STOP_CAP · 2 INCONCLUSIVE (bad input, fail-closed) · 3 CONTINUE ·
-//       4 STOP_TERMINAL (an inconclusive verdict or a reconcile red — stop, never retried).
+//       4 STOP_TERMINAL (an inconclusive verdict, an AC-evidence red or a reconcile red — stop, never retried).
 
 import { readFileSync, existsSync } from "node:fs";
 
@@ -82,6 +94,12 @@ const REGRESS_VERDICTS = new Set(["no-regressions", "regressions", "inconclusive
 // The one verify gate whose red is never retried — the literal key /pharn-verify writes for
 // check-bash-reconcile.mjs's exit code. Matched by exact membership, never by substring.
 const RECONCILE_GATE = "reconcile";
+
+// The AC gate's evidence id (check-verify.mjs `--ac-gate`, reserved in gate-run-core.mjs RESERVED_IDS). Exact membership.
+const AC_EVIDENCE_GATE = "ac-evidence";
+
+/** Which terminal predicate fired, in precedence order. Closed; the suite asserts it both ways (L36). */
+const TERMINAL_CAUSES = Object.freeze(["unmeasured", "ac-evidence", "reconcile"]);
 
 // --- emit one JSON document to stdout, then exit. The command captures this verbatim. ---
 function emit(obj, code) {
@@ -169,6 +187,7 @@ function main() {
         iter: null,
         cap: null,
         decision: "INCONCLUSIVE",
+        terminal_cause: null,
         reason: parsed.reason,
       },
       2
@@ -194,6 +213,7 @@ function main() {
         iter: iterR.ok ? iterR.value : null,
         cap: capR.ok ? capR.value : null,
         decision: "INCONCLUSIVE",
+        terminal_cause: null,
         reason: bad.reason,
       },
       2
@@ -208,20 +228,32 @@ function main() {
   // Design C. Four deterministic predicates over the two verdict enums + one exact array membership:
   const floorGreen = v === "PASS" && r === "no-regressions"; // converged
   const unmeasured = v === "INCONCLUSIVE" || r === "inconclusive"; // a stage could not measure
+  const acEvidenceRed = v === "FAIL" && gatesR.gates.includes(AC_EVIDENCE_GATE); // AC evidence changed or missing
   const reconcileRed = v === "FAIL" && gatesR.gates.includes(RECONCILE_GATE); // a detected escape
   // measurableRed === (v ∈ {FAIL, INCOMPLETE} || r === "regressions") — not named as its own const
   // because, by the precedence below, it is exactly what remains once the three predicates above are
   // false (proof in the trailing comment).
 
   let decision, code, reason;
+  let terminal_cause = null;
   if (unmeasured) {
     decision = "STOP_TERMINAL";
     code = 4;
+    terminal_cause = "unmeasured";
     reason = `terminal: nothing was measured (verify ${v}, regress ${r}) — a retry would be blind; stop`;
+  } else if (acEvidenceRed) {
+    // A rebuild cannot restore evidence taken before the build (the red run), so a retry buys nothing.
+    decision = "STOP_TERMINAL";
+    code = 4;
+    terminal_cause = "ac-evidence";
+    reason =
+      `terminal: the ${AC_EVIDENCE_GATE} gate is red (verify FAIL) — the AC evidence itself changed or is missing, and a rebuild ` +
+      `cannot restore it${reconcileRed ? `; the ${RECONCILE_GATE} gate is red too` : ""}; stop`;
   } else if (reconcileRed) {
     // A retry would re-anchor the reconciliation baseline in /pharn-build Step 0 and erase this detection.
     decision = "STOP_TERMINAL";
     code = 4;
+    terminal_cause = "reconcile";
     reason = `terminal: the ${RECONCILE_GATE} gate is red (verify FAIL) — a retry would re-anchor and erase the detected escape; stop`;
   } else if (floorGreen) {
     decision = "STOP_GREEN";
@@ -239,7 +271,10 @@ function main() {
     reason = `cap reached: measurable red (verify ${v}, regress ${r}) and iter ${iter} >= cap ${cap} without floor-GREEN — stop`;
   }
 
-  emit({ verify_verdict: v, regress_verdict: r, floor_green: floorGreen, iter, cap, decision, reason }, code);
+  // Closed by construction: a cause outside TERMINAL_CAUSES cannot be emitted (the suite also scans the literals).
+  if (terminal_cause !== null && !TERMINAL_CAUSES.includes(terminal_cause))
+    throw new Error(`internal: ${terminal_cause} is not a terminal cause`);
+  emit({ verify_verdict: v, regress_verdict: r, floor_green: floorGreen, iter, cap, decision, terminal_cause, reason }, code);
 }
 
 main();

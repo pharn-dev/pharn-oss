@@ -5,9 +5,11 @@
 // Every digest in the lock is computed HERE, never typed by a model (PHARN's own build-loop lesson L22). One lock per
 // feature, with NAMED sections, so later stages extend this record instead of adding a second one (L35).
 //
-// SCHEMA `ac-tests-lock/2` (6.18.0) is what `--write` and `--write-bootstrap` write; `ac-tests-lock/1` (6.17.0) is
-// still READ and checked, and never passes `--require-red-run`. One closed key set per schema:
-//   schema     "ac-tests-lock/2"
+// SCHEMA `ac-tests-lock/3` (6.20.0) is what `--write` and `--write-bootstrap` write; `ac-tests-lock/2` (6.18.0) and
+// `ac-tests-lock/1` (6.17.0) are still READ and checked — a /1 lock never passes `--require-red-run`, and neither
+// carries the test-infrastructure pin (the AC gate reads that as `test-infra-unpinned`). /2 and /3 share one closed key
+// set; /3 differs only in `test_infra`:
+//   schema     "ac-tests-lock/3"
 //   feature    the slug
 //   mode       "test-first" (the AC tests were written before the build and must fail first) | "bootstrap" (a
 //              `spec_kind: test-infra` SPEC: no tests before the build — WEAKER, and the record says so)
@@ -19,9 +21,12 @@
 //              which a later stage's post-build evidence is judged against
 //   red_run    null, or (test-first only) the red-run evidence `--record-red-run` writes:
 //              { stamp_sha256, files_sha256, gates: [{ gate, results_sha256 }], acs: [{ id, tests: [...] }] }
-//   test_infra null — reserved for the test-infrastructure pin a later stage adds
-// `--write` always resets `red_run` to null: a rewrite means the tests changed, so evidence about the old ones is
-// stale by construction.
+//   test_infra test-first (/3) { levels, gates, configs } — the TEST-INFRASTRUCTURE PIN test-infra-core.mjs computes:
+//              the mapped levels, the package.json scripts and testResults formats of their gates, and the root runner
+//              configs in a closed name set · bootstrap, /2 and /1 null
+// `--write` always resets `red_run` to null and re-takes the pin: a rewrite means the tests changed, so evidence about
+// the old ones is stale by construction. The pin is taken at `--write`, BEFORE the red run, so the red run runs under
+// the pinned infrastructure and `--record-red-run` (which requires `--check` GREEN) refuses a pin that no longer holds.
 //
 // THE RED RUN'S EVIDENCE (grill G1/G8). `--record-red-run` re-derives the verdict itself (red-run-core.mjs — never a
 // model's report), requires `--check` GREEN and the stamp BOUND to this mapping and the live tree, and records only
@@ -31,8 +36,10 @@
 // run) answers it only when the caller also passes `--allow-bootstrap`. A bootstrap lock is written and checked only
 // over an Approved, un-drifted SPEC (check-spec-approved.mjs, shelled).
 //
-// FLOOR (primitive #2, content-hash): `--check` recomputes every recorded digest and the set of `## Files` paths
-// and REDs naming the PATH, never the file's content. NOT GUARANTEED (P0): that the tests are good or right, that
+// FLOOR (primitive #2, content-hash): `--check` recomputes every recorded digest, the set of `## Files` paths and the
+// test-infrastructure pin, and REDs naming the PATH or gate id, never the file's content. The check is composed of
+// named PURE parts (testFirstReds, redRunReds, pinReds, bootstrapReds) so /pharn-verify's AC gate (ac-gate-core.mjs) can
+// classify each into one reason without spawning; checkLock is their union plus the bootstrap approval spawn. NOT GUARANTEED (P0): that the tests are good or right, that
 // `/pharn-test` wrote them from SPEC + PLAN alone, or who wrote the lock — it is a file in the writable tree, and a
 // self-consistent rewrite passes (L43). What `--check` proves is that the files on disk are the ones recorded.
 //
@@ -48,14 +55,15 @@
 //     project root), exactly as the writes-scope setter resolves them.
 //
 // Exit: --write  0 written · 2 refused (bad usage, AC-TESTS.md missing / not a regular file / no pin / no
-//                  `## Files`, a listed file missing or not a regular file)
+//                  `## Files` / no usable `## Mapping`, a listed file missing or not a regular file, a test
+//                  infrastructure that cannot be pinned — an unparseable package.json, a symlinked runner config)
 //       --write-bootstrap  0 written · 2 refused (the SPEC is not Approved and un-drifted, is not
 //                  `spec_kind: test-infra`, has no usable criteria, or an AC-TESTS.md exists)
 //       --record-red-run  0 recorded · 1 the red run is not GREEN, or `--check` is RED (nothing written) ·
 //                  2 unusable (no lock, a bootstrap or /1 lock, no finished stamp, a stamp not bound to the mapping)
 //       --check  0 GREEN · 1 RED (a pinned file or AC-TESTS.md changed, went missing or is no longer a regular
 //                  file; a `## Files` entry added or dropped; the spec pin changed; `red_run` no longer bound to
-//                  `files`; bootstrap: the SPEC's pin, kind or levels changed, or an AC-TESTS.md appeared;
+//                  `files`; /3 test-first: the test-infrastructure pin no longer holds; bootstrap: the SPEC's pin, kind or levels changed, or an AC-TESTS.md appeared;
 //                  `--require-red-run`: a test-first lock with no `red_run`, any /1 lock, and a bootstrap lock unless
 //                  `--allow-bootstrap`; bootstrap: the SPEC is no longer Approved and un-drifted) · 2 unusable (bad
 //                  usage, no lock, a lock that is not JSON or not the closed shape)
@@ -63,17 +71,7 @@
 // moves only where AC-TESTS.md and the lock live, and the mapping path is compared resolved, never as spelled.
 
 import { createHash } from "node:crypto";
-import {
-  closeSync,
-  fstatSync,
-  openSync,
-  readFileSync,
-  readSync,
-  realpathSync,
-  renameSync,
-  writeFileSync,
-  constants as fsConstants,
-} from "node:fs";
+import { readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -83,9 +81,14 @@ import { LEVELS, acRowsOf } from "./ac-tests-core.mjs";
 import { specAcceptanceCriteria } from "./spec-template-core.mjs";
 import { RESULTS_GATES } from "./test-results-core.mjs";
 import { evaluateRedRun } from "./red-run-core.mjs";
+import { computeTestInfra, pinShapeError, sha256RegularFile, testInfraReds } from "./test-infra-core.mjs";
+
+export { sha256RegularFile };
 
 /** The schema `--write` / `--write-bootstrap` write. */
-export const SCHEMA = "ac-tests-lock/2";
+export const SCHEMA = "ac-tests-lock/3";
+/** The 6.18.0 schema: /3's keys, no test-infrastructure pin. Still read and checked. */
+export const SCHEMA_V2 = "ac-tests-lock/2";
 /** The 6.17.0 schema, still read and checked. */
 export const SCHEMA_V1 = "ac-tests-lock/1";
 export const MODES = Object.freeze(["bootstrap", "test-first"]);
@@ -104,32 +107,6 @@ const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const AC_ID_RE = /^AC-[1-9][0-9]*$/;
 const MAX_TEST_ID = 4096;
 const HEX64_RE = /^[0-9a-f]{64}$/;
-const OPEN_FLAGS = fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK;
-const CHUNK = 1 << 20;
-
-/** sha256 of a REGULAR file, read without following a link or blocking; `null` for anything else or absent. */
-export function sha256RegularFile(path) {
-  let fd;
-  try {
-    fd = openSync(path, OPEN_FLAGS);
-  } catch {
-    return null;
-  }
-  try {
-    if (!fstatSync(fd).isFile()) return null;
-    const h = createHash("sha256");
-    const buf = Buffer.alloc(CHUNK);
-    for (;;) {
-      const n = readSync(fd, buf, 0, CHUNK, null);
-      if (n === 0) break;
-      h.update(buf.subarray(0, n));
-    }
-    return h.digest("hex");
-  } finally {
-    closeSync(fd);
-  }
-}
-
 /** One frontmatter scalar by exact key, quotes and an inline comment stripped. */
 function scalar(raw, key) {
   for (const line of raw.split(/\r?\n/)) {
@@ -143,13 +120,15 @@ function scalar(raw, key) {
   return null;
 }
 
-/** Build the lock object for feature `name` (pure over the files it reads). Returns `{ok, lock}` or a refusal. */
-export function buildLock(name, base) {
+/** AC-TESTS.md's recorded facts — its spec pin, its `## Files` digests, its own digest, and the mapped levels — without
+ *  the test-infrastructure pin. Returns `{ok, spec, files, mapping, levels}` or a refusal. `levels` is null when the
+ *  `## Mapping` is not usable (acRowsOf); only `buildLock` needs it. */
+function mappingFacts(name, base, root) {
   if (typeof name !== "string" || !SLUG_RE.test(name)) return { ok: false, reason: `<name> must be a plain slug matching ${SLUG_RE}` };
   const mappingPath = join(base, name, MAPPING_NAME);
   let text;
   try {
-    text = readFileSync(mappingPath, "utf8");
+    text = readFileSync(resolve(root, mappingPath), "utf8");
   } catch (e) {
     return { ok: false, reason: `${mappingPath} is not readable: ${e.code ?? e.message}` };
   }
@@ -163,35 +142,49 @@ export function buildLock(name, base) {
   if (!parsed.ok || parsed.value.length === 0) return { ok: false, reason: `${mappingPath} has no \`## Files\` entries` };
   const files = [];
   for (const path of [...new Set(parsed.value)].sort()) {
-    const sha256 = sha256RegularFile(path);
+    const sha256 = sha256RegularFile(resolve(root, path));
     if (sha256 === null) return { ok: false, reason: `${path} (listed in ${MAPPING_NAME}) is missing or not a regular file` };
     files.push({ path, sha256 });
   }
-  const mappingSha = sha256RegularFile(mappingPath);
+  const mappingSha = sha256RegularFile(resolve(root, mappingPath));
   if (mappingSha === null) return { ok: false, reason: `${mappingPath} is not a regular file (a symlink is refused)` };
+  const rows = acRowsOf(text);
+  const levels = rows.ok ? [...new Set(rows.rows.map((r) => r.level))].sort() : null;
+  return { ok: true, spec: { spec_id, spec_content_hash }, files, mapping: { path: mappingPath, sha256: mappingSha }, levels };
+}
+
+/** Build the test-first lock for feature `name`: AC-TESTS.md's facts plus the test-infrastructure pin over the tree at
+ *  `root` (test-infra-core.mjs). Returns `{ok, lock}` or a refusal. `root` is required (L41). */
+export function buildLock(name, base, root) {
+  if (typeof root !== "string" || root === "") throw new TypeError("buildLock: `root` must be a non-empty string");
+  const f = mappingFacts(name, base, root);
+  if (!f.ok) return f;
+  if (f.levels === null) return { ok: false, reason: `${f.mapping.path} has no usable \`## Mapping\` — run check-ac-tests.mjs` };
+  const pin = computeTestInfra({ root, levels: f.levels });
+  if (!pin.ok) return { ok: false, reason: `the test infrastructure cannot be pinned: ${pin.reason}` };
   return {
     ok: true,
     lock: {
       schema: SCHEMA,
       feature: name,
       mode: "test-first",
-      spec: { spec_id, spec_content_hash },
-      mapping: { path: mappingPath, sha256: mappingSha },
-      files,
+      spec: f.spec,
+      mapping: f.mapping,
+      files: f.files,
       bootstrap: null,
       red_run: null,
-      test_infra: null,
+      test_infra: pin.pin,
     },
   };
 }
 
 /** Read SPEC.md's pin and its bootstrap facts: `{ok, spec, kind, levels}` or a refusal. The kind and the levels come
  *  from spec-template-core.mjs — the readings check-spec.mjs and check-ac-tests.mjs use — never re-parsed here. */
-function readSpecFacts(name, base) {
+export function readSpecFacts(name, base, root) {
   const specPath = join(base, name, SPEC_NAME);
   let text;
   try {
-    text = readFileSync(specPath, "utf8");
+    text = readFileSync(resolve(root, specPath), "utf8");
   } catch (e) {
     return { ok: false, reason: `${specPath} is not readable: ${e.code ?? e.message}` };
   }
@@ -210,26 +203,27 @@ function readSpecFacts(name, base) {
 /** Is SPEC.md Approved and un-drifted? SHELLED to check-spec-approved.mjs (P3 — the one implementation of that
  *  verdict), because a bootstrap lock has no AC-TESTS.md for check-ac-tests.mjs to bind the pin through (REVIEW
  *  finding 3: without this, a Draft with an invented pin got a GREEN bootstrap lock). A reason, or null. */
-function specApprovalError(name, base) {
+function specApprovalError(name, base, root) {
   const specPath = join(base, name, SPEC_NAME);
-  const r = spawnSync(process.execPath, [CHECK_SPEC_APPROVED, specPath], { encoding: "utf8" });
+  const r = spawnSync(process.execPath, [CHECK_SPEC_APPROVED, resolve(root, specPath)], { encoding: "utf8" });
   if (r.error) return `could not run check-spec-approved.mjs: ${r.error.message}`;
   return r.status === 0 ? null : `${specPath} is not an Approved, un-drifted SPEC (check-spec-approved.mjs exit ${r.status})`;
 }
 
 /** The BOOTSTRAP lock for a `spec_kind: test-infra` SPEC: no mapping, no files, no red run — the levels the setup
  *  increment is for, and SPEC.md's pin. Refuses when the SPEC is not test-infra, or when an AC-TESTS.md exists. */
-export function buildBootstrapLock(name, base) {
+export function buildBootstrapLock(name, base, root) {
+  if (typeof root !== "string" || root === "") throw new TypeError("buildBootstrapLock: `root` must be a non-empty string");
   if (typeof name !== "string" || !SLUG_RE.test(name)) return { ok: false, reason: `<name> must be a plain slug matching ${SLUG_RE}` };
-  const facts = readSpecFacts(name, base);
+  const facts = readSpecFacts(name, base, root);
   if (!facts.ok) return facts;
-  const approval = specApprovalError(name, base);
+  const approval = specApprovalError(name, base, root);
   if (approval) return { ok: false, reason: approval };
   if (facts.kind !== "test-infra")
     return { ok: false, reason: `the SPEC is not \`spec_kind: test-infra\` (${facts.kind ?? "an invalid spec_kind"}) — use --write` };
   if (facts.levels === null)
     return { ok: false, reason: "the SPEC's Acceptance Criteria are absent or a verify level is malformed — run check-spec.mjs" };
-  if (readFileSafe(join(base, name, MAPPING_NAME)) !== null)
+  if (readFileSafe(resolve(root, join(base, name, MAPPING_NAME))) !== null)
     return { ok: false, reason: `a bootstrap increment has no ${MAPPING_NAME}, but one exists` };
   return {
     ok: true,
@@ -320,8 +314,8 @@ function filesShapeError(files) {
 export function lockShapeError(lock, name) {
   if (lock === null || typeof lock !== "object" || Array.isArray(lock)) return "the lock is not a JSON object";
   const v1 = lock.schema === SCHEMA_V1;
-  if (!v1 && lock.schema !== SCHEMA)
-    return `schema is ${JSON.stringify(lock.schema)}, not ${JSON.stringify(SCHEMA)} or ${JSON.stringify(SCHEMA_V1)}`;
+  if (!v1 && lock.schema !== SCHEMA && lock.schema !== SCHEMA_V2)
+    return `schema is ${JSON.stringify(lock.schema)}, not one of ${[SCHEMA, SCHEMA_V2, SCHEMA_V1].map((x) => JSON.stringify(x)).join(", ")}`;
   const keys = v1 ? LOCK_KEYS_V1 : LOCK_KEYS;
   if (!exactKeys(lock, keys)) return `the lock's keys are {${Object.keys(lock).sort().join(", ")}}, not {${keys.join(", ")}}`;
   if (lock.feature !== name) return `the lock is for feature ${JSON.stringify(lock.feature)}, not ${JSON.stringify(name)}`;
@@ -331,9 +325,14 @@ export function lockShapeError(lock, name) {
     !HEX64_RE.test(lock.spec.spec_content_hash ?? "")
   )
     return "spec is not exactly {spec_id, spec_content_hash}";
-  if (lock.test_infra !== null) return `test_infra must be null under ${lock.schema}`;
   const mode = v1 ? "test-first" : lock.mode;
   if (!MODES.includes(mode)) return `mode is ${JSON.stringify(lock.mode)}, not one of {${MODES.join(", ")}}`;
+  // The pin exists only on a /3 test-first lock, and there it is REQUIRED — a /3 test-first lock without it would
+  // read as "pinned" to a reader that checks the schema alone.
+  if (lock.schema === SCHEMA && mode === "test-first") {
+    const pe = pinShapeError(lock.test_infra);
+    if (pe) return pe;
+  } else if (lock.test_infra !== null) return `test_infra must be null under ${lock.schema} ${mode}`;
   if (mode === "bootstrap") {
     if (lock.mapping !== null) return "a bootstrap lock's mapping must be null";
     if (!Array.isArray(lock.files) || lock.files.length !== 0) return "a bootstrap lock's files must be []";
@@ -369,57 +368,59 @@ function canon(p) {
   }
 }
 
-/** Compare a BOOTSTRAP lock with SPEC.md: the pin, the kind and the levels it recorded, and no AC-TESTS.md. */
-function checkBootstrap(lock, name, base) {
+/** A lock's mode: `test-first` for a /1 lock (it had no other), else its `mode` field. */
+export function modeOf(lock) {
+  return lock.schema === SCHEMA_V1 ? "test-first" : lock.mode;
+}
+
+/** PURE: a BOOTSTRAP lock against SPEC.md — the pin, the kind and the levels it recorded, and no AC-TESTS.md. The
+ *  approval half (a spawn) is checkLock's, not this part's. */
+export function bootstrapReds(lock, name, base, root) {
   const reds = [];
-  const facts = readSpecFacts(name, base);
+  const facts = readSpecFacts(name, base, root);
   if (!facts.ok) return [facts.reason];
-  const approval = specApprovalError(name, base);
-  if (approval) reds.push(approval);
   if (facts.kind !== "test-infra") reds.push(`${SPEC_NAME} is no longer \`spec_kind: test-infra\` — the bootstrap lock does not apply`);
   if (facts.spec.spec_id !== lock.spec.spec_id || facts.spec.spec_content_hash !== lock.spec.spec_content_hash)
     reds.push(`${SPEC_NAME}'s spec_id / spec_content_hash changed since the lock was written`);
   if (JSON.stringify(facts.levels) !== JSON.stringify(lock.bootstrap.levels))
     reds.push(`${SPEC_NAME}'s criteria levels changed since the lock was written`);
-  if (readFileSafe(join(base, name, MAPPING_NAME)) !== null)
+  if (readFileSafe(resolve(root, join(base, name, MAPPING_NAME))) !== null)
     reds.push(`${join(base, name, MAPPING_NAME)} exists, but a bootstrap increment has no mapping`);
   return reds;
 }
 
-/** Compare a recorded lock with the tree. Returns the RED lines (empty = GREEN). Each names a PATH, never content.
- *  `requireRedRun`: a test-first lock must carry `red_run` (a /1 lock never can), and a BOOTSTRAP lock — which has no
- *  red run at all — fails it too unless `allowBootstrap` says the caller accepts the weaker evidence (REVIEW finding 2:
- *  exit 0 must never let a caller mistake a bootstrap for a recorded red run). */
-export function checkLock(lock, name, base, { requireRedRun = false, allowBootstrap = false } = {}) {
-  if (lock.schema === SCHEMA && lock.mode === "bootstrap") {
-    const reds = checkBootstrap(lock, name, base);
-    if (requireRedRun && !allowBootstrap) {
-      reds.push("the lock is a BOOTSTRAP lock: no red run exists — pass --allow-bootstrap only where a bootstrap is accepted");
-    }
-    return reds;
-  }
+/** PURE: a TEST-FIRST lock's files half — AC-TESTS.md's bytes and path, every pinned test file, the `## Files` set, and
+ *  the spec pin AC-TESTS.md carries. Each RED names a PATH, never content. */
+export function testFirstReds(lock, name, base, root) {
   const reds = [];
-  const fresh = buildLock(name, base);
+  const fresh = mappingFacts(name, base, root);
   const mappingPath = join(base, name, MAPPING_NAME);
-  if (sha256RegularFile(mappingPath) !== lock.mapping.sha256) reds.push(`${mappingPath} changed since the lock was written`);
-  if (canon(lock.mapping.path) !== canon(mappingPath))
+  if (sha256RegularFile(resolve(root, mappingPath)) !== lock.mapping.sha256) reds.push(`${mappingPath} changed since the lock was written`);
+  if (canon(resolve(root, lock.mapping.path)) !== canon(resolve(root, mappingPath)))
     reds.push(`the lock's mapping path ${JSON.stringify(lock.mapping.path)} is not ${mappingPath}`);
   const recorded = new Map(lock.files.map((f) => [f.path, f.sha256]));
   for (const [path, sha] of recorded) {
-    const now = sha256RegularFile(path);
+    const now = sha256RegularFile(resolve(root, path));
     if (now === null) reds.push(`${path} is missing or no longer a regular file`);
     else if (now !== sha) reds.push(`${path} changed since the lock was written`);
   }
   // The set of test files is part of the pin: a `## Files` entry added or removed without a rewrite is a RED.
-  const listed = pathsFromPlanFiles(readFileSafe(mappingPath) ?? "");
+  const listed = pathsFromPlanFiles(readFileSafe(resolve(root, mappingPath)) ?? "");
   const now = new Set(listed.ok ? listed.value : []);
   for (const p of now) if (!recorded.has(p)) reds.push(`${p} is in ${MAPPING_NAME} \`## Files\` but not in the lock`);
   for (const p of recorded.keys()) if (!now.has(p)) reds.push(`${p} is in the lock but no longer in ${MAPPING_NAME} \`## Files\``);
-  if (fresh.ok && fresh.lock.spec.spec_content_hash !== lock.spec.spec_content_hash)
+  if (fresh.ok && fresh.spec.spec_content_hash !== lock.spec.spec_content_hash)
     reds.push(`${MAPPING_NAME}'s spec_content_hash changed since the lock was written`);
+  return reds;
+}
+
+/** PURE: a test-first lock's `red_run` — bound to the lock's files and to the mapped ACs when present; with
+ *  `requireRedRun`, present at all. */
+export function redRunReds(lock, name, base, root, { requireRedRun = false } = {}) {
+  const reds = [];
   if (lock.red_run) {
     if (lock.red_run.files_sha256 !== filesDigest(lock.files)) reds.push("red_run is not bound to the lock's files (files_sha256 differs)");
-    const mapped = [...new Set(mappingIds(readFileSafe(mappingPath) ?? ""))];
+    const mapped = [...new Set(mappingIds(readFileSafe(resolve(root, join(base, name, MAPPING_NAME))) ?? ""))];
     if (JSON.stringify(lock.red_run.acs.map((a) => a.id)) !== JSON.stringify(mapped))
       reds.push(`red_run's ACs are not ${MAPPING_NAME}'s mapped ACs`);
   }
@@ -431,6 +432,33 @@ export function checkLock(lock, name, base, { requireRedRun = false, allowBootst
     );
   }
   return reds;
+}
+
+/** PURE: the test-infrastructure pin, recomputed over `root` (test-infra-core.mjs). A lock with no pin (/2, /1) has
+ *  nothing to hold here — the AC gate names that absence `test-infra-unpinned`; `--check` does not. */
+export function pinReds(lock, root) {
+  if (lock.test_infra === null) return [];
+  return testInfraReds({ recorded: lock.test_infra, root }).map((d) => `test infrastructure changed — ${d}`);
+}
+
+/** Compare a recorded lock with the tree. Returns the RED lines (empty = GREEN). Each names a PATH or a gate id, never
+ *  content. The union of the pure parts above, plus the bootstrap APPROVAL spawn. `requireRedRun`: a test-first lock
+ *  must carry `red_run` (a /1 lock never can), and a BOOTSTRAP lock — which has no red run at all — fails it too unless
+ *  `allowBootstrap` says the caller accepts the weaker evidence (REVIEW finding 2: exit 0 must never let a caller
+ *  mistake a bootstrap for a recorded red run). Test-file paths and the pin resolve against the current directory. */
+export function checkLock(lock, name, base, { requireRedRun = false, allowBootstrap = false, root } = {}) {
+  if (typeof root !== "string" || root === "") throw new TypeError("checkLock: `root` must be a non-empty string");
+  if (modeOf(lock) === "bootstrap") {
+    const facts = readSpecFacts(name, base, root);
+    const approval = facts.ok ? specApprovalError(name, base, root) : null;
+    const reds = bootstrapReds(lock, name, base, root);
+    if (approval) reds.unshift(approval);
+    if (requireRedRun && !allowBootstrap) {
+      reds.push("the lock is a BOOTSTRAP lock: no red run exists — pass --allow-bootstrap only where a bootstrap is accepted");
+    }
+    return reds;
+  }
+  return [...testFirstReds(lock, name, base, root), ...redRunReds(lock, name, base, root, { requireRedRun }), ...pinReds(lock, root)];
 }
 
 /** The mapped AC ids in AC-number order (the order `red_run.acs` is written in). */
@@ -482,12 +510,14 @@ function recordRedRun(name, base, lockPath, out) {
   }
   const lock = loaded.lock;
   if (lock.schema !== SCHEMA || lock.mode !== "test-first") {
+    // A /2 test-first lock has no test-infrastructure pin, so a red run recorded on it could never pass /pharn-verify's
+    // AC gate (`test-infra-unpinned`): refused here, where re-running --write is still cheap.
     console.log(
       `UNUSABLE — ${lockPath} is ${lock.schema}${lock.mode ? ` ${lock.mode}` : ""}; a red run is recorded on an ${SCHEMA} test-first lock — re-run --write`
     );
     return 2;
   }
-  const reds = checkLock(lock, name, base);
+  const reds = checkLock(lock, name, base, { root: process.cwd() });
   if (reds.length) {
     printReds(reds, "AC-tests lock check(s)");
     return 1;
@@ -546,7 +576,7 @@ function main(argv) {
   if (args.includes("--allow-bootstrap") && !args.includes("--require-red-run")) return usage();
   const lockPath = join(base, name, LOCK_NAME);
   if (mode === "--write" || mode === "--write-bootstrap") {
-    const built = mode === "--write" ? buildLock(name, base) : buildBootstrapLock(name, base);
+    const built = mode === "--write" ? buildLock(name, base, process.cwd()) : buildBootstrapLock(name, base, process.cwd());
     if (!built.ok) {
       console.log(`UNUSABLE — ${built.reason}`);
       return 2;
@@ -554,7 +584,8 @@ function main(argv) {
     writeLock(lockPath, built.lock);
     console.log(
       mode === "--write"
-        ? `WROTE — ${lockPath}: ${built.lock.files.length} test file(s) pinned against ${MAPPING_NAME}`
+        ? `WROTE — ${lockPath}: ${built.lock.files.length} test file(s) pinned against ${MAPPING_NAME}, and the test infrastructure: ` +
+            `${built.lock.test_infra.gates.length} gate(s), ${built.lock.test_infra.configs.length} runner config(s)`
         : `WROTE — ${lockPath}: BOOTSTRAP (spec_kind: test-infra) for level(s) ${built.lock.bootstrap.levels.join(", ")} — no tests before the build, WEAKER than test-first`
     );
     return 0;
@@ -571,6 +602,7 @@ function main(argv) {
   }
   const lock = loaded.lock;
   const reds = checkLock(lock, name, base, {
+    root: process.cwd(),
     requireRedRun: args.includes("--require-red-run"),
     allowBootstrap: args.includes("--allow-bootstrap"),
   });
@@ -578,7 +610,7 @@ function main(argv) {
     printReds(reds, "AC-tests lock check(s)");
     return 1;
   }
-  if (lock.schema === SCHEMA && lock.mode === "bootstrap") {
+  if (modeOf(lock) === "bootstrap") {
     console.log(
       `GREEN — ${lockPath}: BOOTSTRAP for level(s) ${lock.bootstrap.levels.join(", ")}; SPEC.md still test-infra with the same pin. ` +
         `NOTE (P0): no AC test ran before the build — weaker than test-first.`
@@ -586,8 +618,9 @@ function main(argv) {
     return 0;
   }
   const red = lock.red_run ? `; red_run recorded for ${lock.red_run.acs.length} AC(s)` : "; no red_run recorded";
+  const infra = lock.test_infra ? "; the test-infrastructure pin holds" : `; no test-infrastructure pin (${lock.schema})`;
   console.log(
-    `GREEN — ${lockPath}: ${lock.files.length} test file(s) and ${MAPPING_NAME} match the lock${red}. NOTE (P0): the files are the recorded ones — never that the tests are right.`
+    `GREEN — ${lockPath}: ${lock.files.length} test file(s) and ${MAPPING_NAME} match the lock${red}${infra}. NOTE (P0): the files are the recorded ones — never that the tests are right.`
   );
   return 0;
 }

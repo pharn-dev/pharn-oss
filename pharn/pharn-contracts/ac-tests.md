@@ -150,7 +150,7 @@ the script.
 
 ```json
 {
-  "schema": "ac-tests-lock/2",
+  "schema": "ac-tests-lock/3",
   "feature": "<name>",
   "mode": "test-first",
   "spec": { "spec_id": "<name>", "spec_content_hash": "<sha256>" },
@@ -163,13 +163,20 @@ the script.
     "gates": [{ "gate": "test", "results_sha256": "<sha256>" }],
     "acs": [{ "id": "AC-1", "tests": ["tests/ac/reset.unit.test.ts::reset › AC-1: resets the password"] }]
   },
-  "test_infra": null
+  "test_infra": {
+    "levels": ["unit"],
+    "gates": [{ "id": "test", "script": "vitest run", "pre": null, "post": null, "results": "vitest-json" }],
+    "configs": [{ "path": "vitest.config.ts", "sha256": "<sha256>" }]
+  }
 }
 ```
 
 - The key set is **closed at every level**, per schema and mode. A lock that breaks it is unusable (exit 2), never
-  a verdict. `ac-tests-lock/1` (6.17.0: no `mode`, no `bootstrap`, `red_run` and `test_infra` null) is still read
-  and checked. `test_infra` stays `null` under `/2`; the stage that fills it bumps the schema.
+  a verdict. `ac-tests-lock/3` (6.20.0) is what `--write` and `--write-bootstrap` write; `/2` (6.18.0) and `/1` (6.17.0:
+  no `mode`, no `bootstrap`) are still read and checked. `test_infra` is REQUIRED on a `/3` test-first lock and `null`
+  everywhere else — a bootstrap lock, and every `/2` and `/1` lock. The mode is read from `mode` (`/1`: test-first),
+  never from the schema, so a `/2` bootstrap lock stays a bootstrap lock. `--record-red-run` writes only on a `/3`
+  test-first lock: a red run recorded on a lock with no pin could never pass the AC gate.
 - **`files`** is sorted by path and names every `## Files` entry. Each must be a regular file, and so must
   AC-TESTS.md: a missing file or a symlink refuses the write. Test-file paths resolve against the current directory
   (the project root); the mapping path is compared by its real location, never as spelled.
@@ -180,12 +187,39 @@ the script.
   `red_run` to `null`, because a rewrite means the tests changed.
 - `--check` REDs, naming the path and never the content, when AC-TESTS.md changed, a test file changed, went missing
   or stopped being a regular file, a `## Files` entry was added or dropped, the spec pin changed, `red_run` is no
-  longer bound to `files` (its `files_sha256` differs), or `red_run` names other ACs than the mapping.
+  longer bound to `files` (its `files_sha256` differs), `red_run` names other ACs than the mapping, or (`/3`) the
+  test-infrastructure pin no longer holds (below).
   **`--require-red-run`** additionally REDs a test-first lock with no `red_run`, any `/1` lock, and a **bootstrap**
   lock — which has no red run at all — unless **`--allow-bootstrap`** is passed too. So exit 0 from
   `--require-red-run` alone means a recorded red run; with `--allow-bootstrap` it means a recorded red run OR a
   bootstrap lock, and the caller that passes it has said it accepts the weaker evidence. `--check` alone being GREEN
   never means a red run happened.
+
+### The test-infrastructure pin — `test_infra` (6.20.0)
+
+The lock pins the test FILES; this pins what RUNS them, so a pinned test cannot pass because its runner changed.
+`--write` takes it (before the red run, which therefore runs under it) and `--check` and the AC gate recompute it from
+the live tree and compare EXACTLY. Computed by `pharn/floor/test-infra-core.mjs`:
+
+- **`levels`** — the mapped levels the pin was taken for, so a recompute ranges over the same candidate gates.
+- **`gates`** — for each gate its levels map to (`test` for unit/integration, `test:e2e`/`e2e` for e2e) that
+  `package.json` `scripts` HAS: the script's value, its `pre<id>` / `post<id>` values (npm runs them implicitly;
+  `null` when absent), and the `testResults` format read for it — or `not-configured` / `config-invalid` in its place.
+  Not the whole `package.json`: dependencies legitimately change in a build.
+- **`configs`** — every entry at the project ROOT named `vitest.config`, `vitest.workspace`, `vite.config`,
+  `playwright.config` or `jest.config` with a js/mjs/cjs/ts/mts/cts/json extension, hashed without following a link.
+  A symlinked or non-regular one cannot be pinned: `--write` refuses it, and a recompute reads it as a change.
+
+A difference names the gate id or the config path, never the script's text. **What it does NOT catch, stated:** a
+setup or helper file the config imports; configuration read from the environment; a config outside the root or
+under another name; a `jest` key inside `package.json`; `tsconfig`; script CHAINING (`"test": "npm run test:unit"`
+pins the one line, not what `test:unit` runs); npm's own configuration (a project `.npmrc`'s `script-shell` or
+`node-options` changes what `npm run test` executes without touching a pinned byte); the runner's own version. A change it catches reads
+`test-infra-changed` whether or not it was legitimate. **The remedy is a person, and it costs the build:** once the
+build exists, `/pharn-test`'s red run reads `ac-test-passes-before-build` and has no escape hatch, so re-running it
+means setting the build aside first (revert or stash it), or re-planning. **Migration, stated:** a feature whose lock
+is `/2` (written by 6.18 or 6.19) carries no pin, so 6.20's verify reports `test-infra-unpinned` for it until that is
+done.
 
 ### Bootstrap — a `spec_kind: test-infra` SPEC
 
@@ -213,11 +247,11 @@ Did the test stage complete for this feature's CURRENT SPEC and PLAN? One checke
 (first thing, before its scope and anchor), `/pharn-ship`, `/pharn-loop` and `check-loop-fresh.mjs` (check I, after
 every build and at the commit gate) all read it. It SHELLS the checkers above and owns only the branch:
 
-| SPEC (`check-ac-tests.mjs --spec`) | the gate requires                                                                                   | token (exit 0)               |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------- |
-| templated (0)                      | AC-TESTS.md present, the full mapping check GREEN, a `test-first` lock, `--check --require-red-run` | `READY test-first`           |
-| bootstrap (4)                      | a `bootstrap` lock, `--check --require-red-run --allow-bootstrap`                                   | `READY bootstrap`            |
-| legacy (3)                         | no AC-TESTS.md and no lock                                                                          | `NOT-APPLICABLE legacy-spec` |
+| SPEC (`check-ac-tests.mjs --spec`) | the gate requires                                                                                                                                                                                  | token (exit 0)               |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| templated (0)                      | AC-TESTS.md present, the full mapping check GREEN, a `test-first` lock, `--check --require-red-run`, and (6.20.0) the lock carries the test-infrastructure pin — a `/2` or `/1` lock is `lock-red` | `READY test-first`           |
+| bootstrap (4)                      | a `bootstrap` lock, `--check --require-red-run --allow-bootstrap`                                                                                                                                  | `READY bootstrap`            |
+| legacy (3)                         | no AC-TESTS.md and no lock                                                                                                                                                                         | `NOT-APPLICABLE legacy-spec` |
 
 Otherwise the first line is `RED <reason>` (exit 1), `<reason>` ∈ {`spec-unusable`, `no-mapping`, `mapping-red`,
 `no-lock`, `lock-red`, `lock-unusable`, `lock-mode-mismatch`, `legacy-with-mapping`, `mode-not-allowed`}; exit 2 is
@@ -242,6 +276,47 @@ reads SPEC.md: without it, a SPEC re-approved as `test-infra` beside an old test
 - **An abandoned `/pharn-loop` run** leaves its AC-TESTS.md and tests behind; a retry in `<slug>-2` then REDs
   `claimed-elsewhere` at `/pharn-plan` until a person removes them.
 
+## The AC gate — `/pharn-verify`'s delivery check (6.20.0)
+
+`pharn/floor/ac-gate-core.mjs`, run by `check-verify.mjs --stamp … --ac-gate` (`/pharn-verify` Step 5), answers the
+question this whole contract exists for: **was every Acceptance Criterion delivered on the head verify run?** An AC is
+delivered = **a locked, once-red test titled `AC-<n>:`, in a file mapped to AC-n, passed on the head run.** PHARN does
+not judge whether that test fully captures the AC's intent. The ACs are the SPEC's: one the mapping does not cover
+has no locked test at all.
+
+Matching is FILE-SCOPED, by the red run's own rule (`red-run-core.mjs` `observeAc`, one copy): for AC-n, only entries
+whose `file` EQUALS a file mapped to AC-n and whose LEAF title starts `AC-<n>:` — never a suite-wide title match,
+because every earlier feature's AC tests are in the same suite and reuse the ids.
+
+| SPEC       | reason                | when                                                                                                                                   | class      |
+| ---------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| feature    | `ac-untested`         | no matching entry, or a test the red run recorded red for AC-n is not reported at all                                                  | delivery   |
+| feature    | `ac-not-passed`       | a matching entry `failed`                                                                                                              | delivery   |
+| feature    | `ac-skipped`          | a matching entry `skipped` (none failed)                                                                                               | delivery   |
+| feature    | `ac-tests-modified`   | the lock is missing, unusable or not test-first; its files, mapping or spec pin do not hold; or the SPEC's pin is not the lock's       | evidence   |
+| feature    | `ac-never-red`        | no `red_run`, or one no longer bound to the lock; a matched test the red run never recorded red for that AC; an AC with no mapping row | evidence   |
+| feature    | `test-infra-changed`  | the pin does not hold; or a level gate did not run as the pinned `npm run <id>` (`source: discover`, no shell)                         | evidence   |
+| feature    | `test-infra-unpinned` | the lock carries no pin (`/2`, `/1`)                                                                                                   | evidence   |
+| feature    | item 01's reason      | a level gate is absent from the head run, or its per-test record is refused                                                            | unmeasured |
+| test-infra | `ac-untested`         | the level's gate did not run as discovered, its results are `not-configured`, or it reported no passed test                            | delivery   |
+| test-infra | `ac-tests-modified`   | the lock is not a bootstrap lock whose SPEC half holds                                                                                 | evidence   |
+| legacy     | `ac-tests-modified`   | an AC-TESTS.md or a lock exists beside it (`spec_template` was removed after the tests were pinned)                                    | evidence   |
+| legacy     | —                     | otherwise: **not-applicable (legacy spec)**, stated in the report, never silently green                                                | —          |
+
+The three classes are a partition (closure-tested). **Evidence** adds `ac-evidence` to verify's `failing_gates` —
+FAIL, and `/pharn-loop` stops (`check-loop.mjs` `terminal_cause: ac-evidence`, stuck point S13): a rebuild cannot
+restore evidence taken before it. **Delivery** adds `ac-delivery` — FAIL, which the loop iterates on. **Unmeasured**
+over otherwise-green gates is INCONCLUSIVE, never a PASS; a red gate beats it. `spec_kind: test-infra` evidence is
+**BOOTSTRAP** — each level's gate ran as discovered and reported at least one passed test — and the report says it is
+weaker than test-first. The report's `ac_gate` block carries the per-AC table (`verify-report.md`); its test ids and
+titles are untrusted DATA: the report names them, and no stage follows them.
+
+**Bounded, and stated (P0):** "passed" is the reporter's word, and the tests, the reporter config and
+`pharn.config.json` are agent-editable — the lock and the pin NARROW that and never close it; AGREEMENT, never
+provenance (a self-consistent forged lock + stamp + results set over the live tree passes); the pin's own gaps
+(above); and a per-test record is refused WHOLE on one flaky test, one `test.fail`, or one duplicate id anywhere in
+the suite, so such a suite makes the gate unmeasured until it is fixed.
+
 ## Artifacts, regress and reconcile
 
 `AC-TESTS.md` and `AC-TESTS.lock.json` are pipeline artifacts (`check-regress.mjs` `PIPELINE_ARTIFACTS`), so
@@ -265,7 +340,9 @@ leaves the lock stale is caught by `ac-tests-lock.mjs --check`.
   collected and `failed` in a run bound to the mapping and the tree (enum membership over the per-test record, plus
   the fingerprint), and the lock's `red_run` is bound to its `files` (content-hash); the test-stage gate's verdict
   over all of these (enum membership over the SPEC's mode, the rest shelled). Obeying that gate is command
-  discipline; `/pharn-loop` re-reads it after every build.
+  discipline; `/pharn-loop` re-reads it after every build. Since 6.20.0: the test infrastructure is pinned
+  (content-hash + exact comparison), and `/pharn-verify`'s AC gate decides delivery on the head run (enum membership
+  over the per-test record, plus the content-hash checks above).
 - **Bounded:** the build exclusion holds for the PLAN.md the checker read. An edit to PLAN.md after `/pharn-test`
   reopens it until something re-checks; since 6.19.0 `/pharn-build` does, first thing (the test-stage gate, below). A Bash write bypasses every
   write hook (`LIMITS.md §6`), and `/pharn-test` runs before the reconcile anchor, so its own Bash writes are not

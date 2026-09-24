@@ -27,6 +27,7 @@ import {
   symlinkSync,
   appendFileSync,
   unlinkSync,
+  realpathSync,
 } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -34,7 +35,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fingerprint, ALGO } from "./worktree-fingerprint.mjs";
-import { SCHEMA, LAPSE_CODES, REASON_CODES, logBasename } from "./gate-run-core.mjs";
+import { SCHEMA, LAPSE_CODES, REASON_CODES, logBasename, resultsFileName } from "./gate-run-core.mjs";
 import { filesDigest } from "./ac-tests-lock.mjs";
 import {
   evaluate,
@@ -47,6 +48,7 @@ import {
   LEDGER_FILE,
   EXIT,
   COMPARED_FIELDS,
+  STAMP_ONLY_FIELDS,
 } from "./check-loop-fresh.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -89,6 +91,9 @@ function writeFront(proj) {
     `---\nspec_id: ${FEATURE}\nspec_content_hash: ${h}\napplied_lessons: none\n---\n\n## Files\n\n- \`a.txt\` — a\n`
   );
   writeFileSync(join(fd, "GRILL.md"), "# GRILL\n");
+  // The project's test infrastructure, BEFORE --write takes its pin (6.20.0): the `test` script and its results format.
+  writeFileSync(join(proj, "package.json"), JSON.stringify({ name: "fixture", scripts: { test: "vitest run" } }));
+  writeFileSync(join(proj, "pharn.config.json"), JSON.stringify({ testResults: { test: "vitest-json" } }));
   writeFileSync(
     join(fd, "AC-TESTS.md"),
     `---\nspec_id: ${FEATURE}\nspec_content_hash: ${h}\n---\n\n## Files\n\n- \`${AC_TEST}\` — t\n\n## Mapping\n\n- AC-1 | unit | \`${AC_TEST}\` | src/x.js#f(): void\n`
@@ -136,14 +141,36 @@ function withRepo(fn, opts) {
 }
 
 /** Write one stamp and its logs under `<proj>/<stampRel>`'s directory. */
+/** A vitest-json report of AC-1's test, as the reporter would write it at `proj` — under the path ITS process saw, the
+ *  realpath of its cwd (`/private/var/…` on macOS, not the `/var/…` mkdtemp returns). */
+function vitestDoc(proj, status) {
+  return JSON.stringify({
+    testResults: [
+      {
+        name: join(realpathSync(proj), AC_TEST),
+        status,
+        assertionResults: [{ ancestorTitles: [], title: "AC-1: t", fullName: "AC-1: t", status }],
+      },
+    ],
+  });
+}
+
 function writeStamp(proj, stampRel, { stage, side, head, init, final, runs, completeness = null }) {
   const out = join(proj, dirname(stampRel));
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
-  const rec = runs.map(([id, exit], seq) => {
+  const rec = runs.map(([id, exit, acStatus], seq) => {
     const b = logBasename(seq, id);
     writeFileSync(join(out, `${b}.out`), `out ${id} ${exit}\n`);
     writeFileSync(join(out, `${b}.err`), "");
+    // The verify `test` gate writes its per-test results (6.15.0), which the AC gate reads (6.20.0): AC-1's test,
+    // passed when the gate exited 0 unless a third element says otherwise.
+    let results_sha256 = null;
+    if (stage === "verify" && id === "test") {
+      const doc = vitestDoc(proj, acStatus ?? (exit === 0 ? "passed" : "failed"));
+      writeFileSync(join(out, resultsFileName(seq, id)), doc);
+      results_sha256 = sha256(Buffer.from(doc));
+    }
     return {
       seq,
       id,
@@ -152,13 +179,14 @@ function writeStamp(proj, stampRel, { stage, side, head, init, final, runs, comp
       timed_out: false,
       mutated: false,
       reason: null,
-      argv: ["true"],
+      argv: id === "reconcile" ? ["true"] : ["npm", "run", id],
       shell: null,
       files: [],
       fp_before: init,
       fp_after: final,
       stdout_sha256: sha256(readFileSync(join(out, `${b}.out`))),
       stderr_sha256: sha256(readFileSync(join(out, `${b}.err`))),
+      results_sha256,
     };
   });
   // fp chain: every run sees the same tree (init === final in every fixture below).
@@ -236,7 +264,7 @@ function iterate(
       runs: verifyRuns,
       completeness: 0,
     });
-    const rep = runChecker(proj, "check-verify.mjs", ["--stamp", join(proj, DEFAULT_STAMPS.verify), "--feature", FEATURE]);
+    const rep = runChecker(proj, "check-verify.mjs", ["--stamp", join(proj, DEFAULT_STAMPS.verify), "--feature", FEATURE, "--ac-gate"]);
     rep.completeness = { complete: true, missing: [], skipped: [] };
     rep.verifiers = { registered: 0, findings: [] };
     writeFileSync(join(fd, "verify-report.json"), JSON.stringify(rep, null, 2));
@@ -265,7 +293,9 @@ test("✧ L34/L52 — the check set is exactly A–J in evaluation order, fabric
   assert.ok(
     CHECKS.indexOf("J") < CHECKS.indexOf("F") && CHECKS.indexOf("E") < CHECKS.indexOf("F") && CHECKS.indexOf("H") < CHECKS.indexOf("G")
   );
-  assert.deepEqual(COMPARED_FIELDS.verify, ["verdict", "failing_gates", "gates"]);
+  assert.deepEqual(COMPARED_FIELDS.verify, ["verdict", "failing_gates", "gates", "ac_gate"]);
+  assert.deepEqual(STAMP_ONLY_FIELDS, ["gates"]);
+  assert.ok(STAMP_ONLY_FIELDS.every((f) => COMPARED_FIELDS.verify.includes(f)));
   assert.deepEqual(COMPARED_FIELDS.regress, ["verdict", "regressions", "pre_existing", "outside_gates"]);
   assert.ok(LAPSE_CODES.length > 0 && LAPSE_CODES.every((c) => REASON_CODES.includes(c)));
 });
@@ -510,6 +540,134 @@ test("J — an edited, appended-to or pruned gate log STOPS (output-hash-mismatc
   });
 });
 
+test("J — an edited or removed per-test RESULTS file STOPS output-hash-mismatch (6.20.0), never a verdict mismatch at E", () => {
+  withRepo((r) => {
+    iterate(r);
+    const file = join(r.proj, dirname(DEFAULT_STAMPS.verify), resultsFileName(0, "test"));
+    const keep = readFileSync(file);
+    writeFileSync(file, keep.toString().replace('"passed"', '"failed"'));
+    let res = evaluate(args(r));
+    expect(res, { code: EXIT.STOP, verdict: "STOP", reason_code: "output-hash-mismatch" });
+    assert.equal(res.doc.checks.J, "fail");
+    assert.match(res.doc.reason, /results_sha256 for gate "test"/);
+    unlinkSync(file);
+    expect(evaluate(args(r)), { code: EXIT.STOP, verdict: "STOP", reason_code: "output-hash-mismatch" });
+    writeFileSync(file, keep);
+    expect(evaluate(args(r)), { code: EXIT.FRESH, verdict: "FRESH" });
+  });
+});
+
+test("E defers to F when the tree moved (grill G6): the AC gate reads the live tree, so staleness is a RERUN — but a forged `gates` still STOPS", () => {
+  withRepo((r) => {
+    iterate(r);
+    const p = reportPath(r, "verify-report.json");
+    const keep = readFileSync(p);
+    // the tree moves after verify: the AC gate's re-derivation now reads a different lock/test world
+    writeFileSync(join(r.proj, AC_TEST), "moved after verify\n");
+    let res = evaluate(args(r));
+    expect(res, { code: EXIT.RERUN, verdict: "RERUN", reason_code: "tree-moved-since-verify", stage: "verify" });
+    assert.equal(res.doc.checks.E, "pass", "E deferred instead of calling staleness a fabrication");
+    // control: `gates` depends on the stamp ALONE, so a forgery of it is caught even over a moved tree
+    const v = JSON.parse(keep);
+    writeJ(p, { ...v, gates: { ...v.gates, reconcile: 1 } });
+    res = evaluate(args(r));
+    expect(res, { code: EXIT.STOP, verdict: "STOP", reason_code: "report-verdict-mismatch" });
+    // and over an UNMOVED tree the AC block is compared too: an edited per-AC table is a fabrication
+    git(r.root, "checkout", "--", ".");
+    writeFileSync(p, keep);
+    expect(evaluate(args(r)), { code: EXIT.FRESH, verdict: "FRESH" });
+    writeJ(p, { ...v, ac_gate: { ...v.ac_gate, acs: v.ac_gate.acs.map((a) => ({ ...a, tests: ["forged"] })) } });
+    expect(evaluate(args(r)), { code: EXIT.STOP, verdict: "STOP", reason_code: "report-verdict-mismatch" });
+  });
+});
+
+test("★ END TO END (6.20.0) — an undelivered AC iterates, the fix stops GREEN, and a Bash-edited pinned test is S13 with no commit", () => {
+  const CHECK_LOOP = join(HERE, "check-loop.mjs");
+  const DECISION = join(HERE, "check-loop-decision.mjs");
+  withRepo((r) => {
+    const fd = join(r.proj, FEATURE_BASE, FEATURE);
+    const loop = (iter) => {
+      const out = spawnSync(
+        process.execPath,
+        [CHECK_LOOP, join(fd, "verify-report.json"), join(fd, "regression-report.json"), "--iter", String(iter), "--cap", "3"],
+        { encoding: "utf8" }
+      );
+      return { code: out.status, doc: JSON.parse(out.stdout) };
+    };
+    const verify = () => JSON.parse(readFileSync(join(fd, "verify-report.json"), "utf8"));
+
+    // 1. The build has not delivered AC-1: the test gate fails and AC-1's own test failed.
+    iterate(r, {
+      verifyRuns: [
+        ["test", 1],
+        ["reconcile", 0],
+      ],
+    });
+    expect(evaluate(args(r, ["--front"])), { code: EXIT.FRESH, verdict: "FRESH" }); // the pinned freshness line first (L45)
+    assert.equal(verify().verdict, "FAIL");
+    assert.deepEqual(verify().failing_gates, ["ac-delivery", "test"]);
+    assert.equal(verify().ac_gate.acs[0].reason, "ac-not-passed");
+    let d = loop(1);
+    assert.equal(d.doc.decision, "CONTINUE", "an undelivered AC is a measurable red: the loop iterates");
+    assert.equal(d.doc.terminal_cause, null);
+
+    // 1b. The headline case (REVIEW finding 6): every real gate GREEN, AC-1's test SKIPPED — only the AC gate is red.
+    iterate(r, {
+      verifyRuns: [
+        ["test", 0, "skipped"],
+        ["reconcile", 0],
+      ],
+    });
+    expect(evaluate(args(r, ["--front"])), { code: EXIT.FRESH, verdict: "FRESH" });
+    assert.deepEqual(verify().failing_gates, ["ac-delivery"]);
+    assert.deepEqual(verify().gates, { reconcile: 0, test: 0 });
+    d = loop(1);
+    assert.equal(d.doc.decision, "CONTINUE");
+
+    // 2. The fix: AC-1's test passes on the head run.
+    iterate(r);
+    expect(evaluate(args(r, ["--front"])), { code: EXIT.FRESH, verdict: "FRESH" });
+    assert.equal(verify().verdict, "PASS");
+    assert.equal(verify().ac_gate.verdict, "PASS");
+    d = loop(2);
+    assert.equal(d.doc.decision, "STOP_GREEN");
+    expect(evaluate([...args(r, ["--front"]).filter((a, i, all) => a !== "--iter" && all[i - 1] !== "--iter"), "--commit-gate"]), {
+      code: EXIT.FRESH,
+      verdict: "FRESH",
+    });
+
+    // 3. A pinned test edited through Bash after the red run. It is outside the build's scope, so reconcile is red too.
+    writeFileSync(join(r.proj, AC_TEST), 'test("AC-1: t", () => {});\n');
+    iterate(r, {
+      verifyRuns: [
+        ["test", 0],
+        ["reconcile", 1],
+      ],
+    });
+    assert.deepEqual(verify().failing_gates, ["ac-evidence", "reconcile"]);
+    assert.equal(verify().ac_gate.evidence[0].reason, "ac-tests-modified");
+    // the decision-time freshness line meets it first — S13, never S11 (grill G1)
+    const fresh = evaluate(args(r, ["--front"]));
+    expect(fresh, { code: EXIT.STOP, verdict: "STOP", reason_code: "ac-evidence-invalid" });
+    // and past check I, the stop core itself stops terminally on the evidence, never STOP_GREEN, never a retry
+    d = loop(1);
+    assert.equal(d.code, 4);
+    assert.equal(d.doc.decision, "STOP_TERMINAL");
+    assert.equal(d.doc.terminal_cause, "ac-evidence");
+    // the Step 6c commit gate refuses too — a STOP, never a re-run
+    const commitArgs = [...args(r, ["--front"]).filter((a, i, all) => a !== "--iter" && all[i - 1] !== "--iter"), "--commit-gate"];
+    expect(evaluate(commitArgs), { code: EXIT.STOP, verdict: "STOP", reason_code: "ac-evidence-invalid" });
+    // no commit: a record forged to STOP_GREEN over these reports is not re-derivable, so Step 6c refuses it
+    writeFileSync(
+      join(fd, "LOOP.md"),
+      "---\ndecision: STOP_GREEN\niterations: 1\ncommit: unknown\ndate: 2026-09-24\ncap: 3\n---\n\n## Handoff\n\n### investigated\n\nx\n\n### learned\n\ny\n\n### next_steps\n\nz\n"
+    );
+    const dec = spawnSync(process.execPath, [DECISION, join(fd, "LOOP.md")], { encoding: "utf8" });
+    assert.equal(dec.status, 1, dec.stdout);
+    assert.match(dec.stdout, /STOP_TERMINAL/);
+  });
+});
+
 test("E — LAPSE vs FABRICATION: a report whose floor fields disagree with a live re-derivation STOPS", () => {
   withRepo((r) => {
     // A reconcile red: the verify report says FAIL with failing_gates ["reconcile"] — STOP_TERMINAL for the
@@ -523,6 +681,7 @@ test("E — LAPSE vs FABRICATION: a report whose floor fields disagree with a li
     const p = reportPath(r, "verify-report.json");
     const keep = readFileSync(p);
     assert.deepEqual(JSON.parse(keep).failing_gates, ["reconcile"], "precondition: the honest report names the reconcile red");
+    assert.equal(JSON.parse(keep).ac_gate.verdict, "PASS", "precondition: AC-1 is delivered, so the forgery below is the only difference");
     expect(evaluate(args(r)), { code: EXIT.FRESH, verdict: "FRESH" });
     for (const forge of [
       (v) => ({ ...v, failing_gates: [] }),
@@ -648,7 +807,7 @@ test("I — with --front, a Draft SPEC, a broken chain, a bad lessons declaratio
   });
 });
 
-test("I — the test stage (6.19.0): stale /pharn-test evidence STOPS front-stage-red, run from --repo, never a RERUN", () => {
+test("I — the test stage: stale /pharn-test evidence STOPS ac-evidence-invalid (6.20.0, S13), run from --repo, never a RERUN", () => {
   for (const sub of [null, "app"]) {
     withRepo(
       (r) => {
@@ -665,6 +824,15 @@ test("I — the test stage (6.19.0): stale /pharn-test evidence STOPS front-stag
           ],
           ["a pinned test rewritten after the red run", () => writeFileSync(join(r.proj, AC_TEST), "weakened\n"), "RED lock-red"],
           [
+            "the pinned test script changed (the test-infrastructure pin, 6.20.0)",
+            () =>
+              writeFileSync(
+                join(r.proj, "package.json"),
+                JSON.stringify({ name: "fixture", scripts: { test: "vitest run --passWithNoTests" } })
+              ),
+            "RED lock-red",
+          ],
+          [
             "the SPEC re-read as legacy (spec_template removed)",
             () => {
               const spec = join(fd, "SPEC.md");
@@ -676,10 +844,10 @@ test("I — the test stage (6.19.0): stale /pharn-test evidence STOPS front-stag
           mutate();
           iterate(r); // the mutation moved the tree: re-take the evidence so I is the ONLY failing check
           const res = evaluate(args(r, ["--front"]));
-          expect(res, { code: EXIT.STOP, verdict: "STOP", reason_code: "front-stage-red" });
+          expect(res, { code: EXIT.STOP, verdict: "STOP", reason_code: "ac-evidence-invalid" });
           assert.equal(res.doc.checks.I, "fail", why);
           assert.ok(res.doc.reason.includes(`(${token})`), `${why}: ${res.doc.reason}`);
-          assert.match(res.doc.reason, /cannot be re-run after the build: a re-plan, or a person/);
+          assert.match(res.doc.reason, /cannot be re-run over a built tree: set the build aside and re-run it, re-plan, or a person/);
           assert.equal(res.doc.stage_to_rerun, null, "never a re-run");
           // restore the READY world for the next mutation
           git(r.root, "checkout", "--", ".");
@@ -827,30 +995,23 @@ test("a project rooted in a git SUBDIRECTORY is judged on its own subtree", () =
 // ---------------------------------------------------------------------------------------------------
 
 const LOOP_CMD = join(HERE, "..", "..", ".claude", "commands", "pharn-loop.md");
-const FLOOR_MODULES = [
-  "check-loop-fresh.mjs",
-  "gate-run-core.mjs",
-  "worktree-fingerprint.mjs",
-  "reconcile-baseline.mjs",
-  "check-verify.mjs",
-  "check-regress.mjs",
-  "check-spec-approved.mjs",
-  "check-spec.mjs",
-  "spec-template-core.mjs",
-  "check-plan-spec-agree.mjs",
-  "check-plan-lessons.mjs",
-  "frontmatter-core.mjs",
-  // check I's test-stage gate (6.19.0) and the import closure of what it shells over a templated feature: the mode
-  // and mapping checks, and the lock script (whose red-run core reads per-test records).
-  "check-test-stage.mjs",
-  "check-ac-tests.mjs",
-  "ac-tests-core.mjs",
-  "plan-files-core.mjs",
-  "ac-tests-lock.mjs",
-  "red-run-core.mjs",
-  "test-results-core.mjs",
-  "test-results-formats.mjs",
-];
+/** The floor modules the pinned calls need in the fixture: the CLOSURE, from check-loop-fresh.mjs, of every sibling
+ *  `.mjs` a module names in a string literal — an import or a spawned checker alike. Computed, never listed by hand:
+ *  a hand list went stale twice (6.19.0, 6.20.0), and a module missing from it crashes a shelled child, which the
+ *  caller reads as an ordinary RED (L29 — the enumeration is the deliverable). */
+const FLOOR_MODULES = (() => {
+  const seen = new Set();
+  const queue = ["check-loop-fresh.mjs"];
+  while (queue.length) {
+    const m = queue.shift();
+    if (seen.has(m)) continue;
+    seen.add(m);
+    for (const [, dep] of readFileSync(join(HERE, m), "utf8").matchAll(/["'](?:\.\/)?([a-z0-9-]+\.mjs)["']/g)) {
+      if (!dep.endsWith(".test.mjs") && existsSync(join(HERE, dep))) queue.push(dep);
+    }
+  }
+  return [...seen].sort();
+})();
 
 function pinnedLoopLines() {
   const lines = readFileSync(LOOP_CMD, "utf8")
@@ -889,6 +1050,38 @@ test("★ WIRING — both pinned /pharn-loop calls, executed in a fixture: FRESH
       p = sh(pin.commit);
       assert.equal(p.status, 4, "the commit gate must STOP, never offer a re-run");
       assert.equal(JSON.parse(p.stdout).reason_code, "tree-moved-since-verify");
+    },
+    {
+      extra: (proj) => {
+        mkdirSync(join(proj, "pharn/floor"), { recursive: true });
+        for (const m of FLOOR_MODULES) copyFileSync(join(HERE, m), join(proj, "pharn/floor", m));
+      },
+    }
+  );
+});
+
+test("★ WIRING — check I routes only a RED test stage to ac-evidence-invalid; a crashed one stays front-stage-red (REVIEW finding 5)", () => {
+  const pin = pinnedLoopLines();
+  withRepo(
+    (r) => {
+      // the test-stage gate's own child is gone, so it cannot run: exit 2, never evidence that the AC tests changed
+      unlinkSync(join(r.proj, "pharn/floor/check-ac-tests.mjs"));
+      iterate(r); // re-take the evidence over the tree without it, so I is the only failing check
+      const out = pin.decision.replaceAll("'<name>'", `'${FEATURE}'`).replaceAll("'<base sha>'", `'${r.base}'`).replaceAll("<N>", "1");
+      const p = spawnSync("sh", ["-c", out], { cwd: r.proj, encoding: "utf8" });
+      assert.equal(p.status, 4, p.stdout + p.stderr);
+      const doc = JSON.parse(p.stdout);
+      assert.equal(doc.checks.I, "fail");
+      assert.equal(doc.reason_code, "front-stage-red", doc.reason);
+      assert.match(doc.reason, /check-test-stage exits 2/);
+      // and the case the RED-token condition exists for: the gate ITSELF crashing with exit 1 and no token
+      writeFileSync(join(r.proj, "pharn/floor/check-test-stage.mjs"), "process.exit(1);\n");
+      iterate(r);
+      const q = spawnSync("sh", ["-c", out], { cwd: r.proj, encoding: "utf8" });
+      assert.equal(q.status, 4, q.stdout + q.stderr);
+      const crashed = JSON.parse(q.stdout);
+      assert.equal(crashed.reason_code, "front-stage-red", crashed.reason);
+      assert.match(crashed.reason, /check-test-stage exits 1 \(\)/);
     },
     {
       extra: (proj) => {

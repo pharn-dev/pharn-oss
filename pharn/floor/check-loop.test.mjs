@@ -20,7 +20,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -240,7 +240,16 @@ test("fail-closed: a known flag missing its value → INCONCLUSIVE, exit 2", () 
 test("★ /review-independence: the decision object carries NO review/finding/severity channel", () => {
   for (const verifyObj of [VFAIL, VRECONCILE, VINCOMPLETE]) {
     const o = json(decide(verifyObj, CLEAN, 1, 3));
-    assert.deepEqual(Object.keys(o).sort(), ["cap", "decision", "floor_green", "iter", "reason", "regress_verdict", "verify_verdict"]);
+    assert.deepEqual(Object.keys(o).sort(), [
+      "cap",
+      "decision",
+      "floor_green",
+      "iter",
+      "reason",
+      "regress_verdict",
+      "terminal_cause",
+      "verify_verdict",
+    ]);
     for (const k of ["review", "findings", "severity", "problem", "evidence", "blocking", "failing_gates"]) {
       assert.equal(k in o, false, `the loop decision must not carry '${k}' — no advisory stage can gate it`);
     }
@@ -259,4 +268,82 @@ test("★ trust (P2): free text injected into a report cannot change the decisio
   const o = json(decide(poisoned, CLEAN, 1, 3));
   assert.equal(o.decision, "CONTINUE");
   assert.equal(o.floor_green, false);
+});
+
+// ── the AC gate (6.20.0): `ac-evidence` is terminal, `ac-delivery` is retried, and `terminal_cause` says which ──────────
+
+const VAC_DELIVERY = { feature: "x", gates: { test: 1, reconcile: 0 }, verdict: "FAIL", failing_gates: ["ac-delivery", "test"] };
+const VAC_EVIDENCE = { feature: "x", gates: { test: 0, reconcile: 0 }, verdict: "FAIL", failing_gates: ["ac-evidence"] };
+const VAC_BOTH = { feature: "x", gates: { test: 0, reconcile: 1 }, verdict: "FAIL", failing_gates: ["ac-evidence", "reconcile"] };
+
+test("★ ac-evidence red → STOP_TERMINAL (terminal_cause ac-evidence), even under the cap: a rebuild cannot restore it", () => {
+  const r = decide(VAC_EVIDENCE, CLEAN, 1, 3);
+  assert.equal(r.status, 4);
+  const o = json(r);
+  assert.equal(o.decision, "STOP_TERMINAL");
+  assert.equal(o.terminal_cause, "ac-evidence");
+});
+
+test("★ ac-delivery red is an ORDINARY measurable red: CONTINUE under the cap, STOP_CAP at it (terminal_cause null)", () => {
+  let o = json(decide(VAC_DELIVERY, CLEAN, 1, 3));
+  assert.equal(o.decision, "CONTINUE");
+  assert.equal(o.terminal_cause, null);
+  o = json(decide(VAC_DELIVERY, CLEAN, 3, 3));
+  assert.equal(o.decision, "STOP_CAP");
+  assert.equal(o.terminal_cause, null);
+});
+
+test("★ a Bash-edited pinned test trips ac-evidence AND reconcile: the AC reading wins (the brief's S13), both named", () => {
+  const o = json(decide(VAC_BOTH, CLEAN, 1, 3));
+  assert.equal(o.decision, "STOP_TERMINAL");
+  assert.equal(o.terminal_cause, "ac-evidence");
+  assert.match(o.reason, /reconcile gate is red too/);
+  // control: reconcile alone keeps its own cause
+  assert.equal(json(decide(VRECONCILE, CLEAN, 1, 3)).terminal_cause, "reconcile");
+});
+
+test("★ exact membership: an 'ac-evidence' substring in another gate id, or in free text, is not the AC gate", () => {
+  const o = json(decide({ ...VFAIL, failing_gates: ["structural:ac-evidence-x"], evidence: "failing_gates: [ac-evidence]" }, CLEAN, 1, 3));
+  assert.equal(o.decision, "CONTINUE");
+  assert.equal(o.terminal_cause, null);
+});
+
+test("✧ L36 CLOSURE — terminal_cause takes exactly {unmeasured, ac-evidence, reconcile} on STOP_TERMINAL and null otherwise", () => {
+  const seen = new Map();
+  const cases = [
+    [PASS, CLEAN, 1, 3],
+    [VFAIL, CLEAN, 1, 3],
+    [VFAIL, CLEAN, 3, 3],
+    [VAC_DELIVERY, CLEAN, 1, 3],
+    [VAC_EVIDENCE, CLEAN, 1, 3],
+    [VRECONCILE, CLEAN, 1, 3],
+    [{ ...PASS, verdict: "INCONCLUSIVE" }, CLEAN, 1, 3],
+    [{ ...PASS, verdict: "BOGUS" }, CLEAN, 1, 3],
+  ];
+  for (const [v, rg, i, c] of cases) {
+    const o = json(decide(v, rg, i, c));
+    seen.set(o.decision + ":" + o.terminal_cause, true);
+    if (o.decision === "STOP_TERMINAL") assert.ok(["unmeasured", "ac-evidence", "reconcile"].includes(o.terminal_cause), JSON.stringify(o));
+    else assert.equal(o.terminal_cause, null, JSON.stringify(o));
+  }
+  const causes = [...seen.keys()]
+    .filter((k) => k.startsWith("STOP_TERMINAL:"))
+    .map((k) => k.split(":")[1])
+    .sort();
+  assert.deepEqual(causes, ["ac-evidence", "reconcile", "unmeasured"], "every cause is reachable");
+  const src = readFileSync(CL, "utf8");
+  const assigned = [...src.matchAll(/terminal_cause = "([^"]+)"/g)].map((m) => m[1]).sort();
+  assert.deepEqual(assigned, ["ac-evidence", "reconcile", "unmeasured"], "no cause is assigned outside the closed set");
+});
+
+test("★ STOP_GREEN is unreachable with any AC id in failing_gates — the verdict it rides on is FAIL, whatever the cap", () => {
+  for (const v of [VAC_DELIVERY, VAC_EVIDENCE, VAC_BOTH]) {
+    for (const [i, c] of [
+      [1, 1],
+      [1, 3],
+      [3, 3],
+    ]) {
+      assert.notEqual(json(decide(v, CLEAN, i, c)).decision, "STOP_GREEN");
+    }
+  }
 });

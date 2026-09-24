@@ -91,8 +91,11 @@ export const LEVEL_GATES = Object.freeze({
  *  (inside -> outside import edges), so skipping one would hide a real regression. */
 export const STYLE_SET = Object.freeze(["lint", "format:check", "lint:md"]);
 
-/** Ids the runner owns. A source set may not contain one, and `--extra` may not introduce one. */
-export const RESERVED_IDS = Object.freeze(["reconcile", "completeness"]);
+/** Ids no gate may carry: `reconcile` and `completeness` are the runner's; `ac-delivery` and `ac-evidence` (6.20.0) are
+ *  the failing ids check-verify.mjs `--ac-gate` adds to `failing_gates` for the AC gate, and check-loop.mjs reads
+ *  `ac-evidence` by exact membership — so a real gate named that would be read as the AC gate. A source set may not
+ *  contain one, and `--extra` may not introduce one. */
+export const RESERVED_IDS = Object.freeze(["reconcile", "completeness", "ac-delivery", "ac-evidence"]);
 
 /** The `structural:` prefix belongs to `--extra` entries alone. */
 export const STRUCTURAL_PREFIX = "structural:";
@@ -104,6 +107,7 @@ export const STRUCTURAL_PREFIX = "structural:";
  *  is a member, AND every member has an emitter or an entry in RESERVED_REASON_CODES — the second
  *  direction is what let `output-hash-mismatch` sit here with no emitter for a whole release line. */
 export const REASON_CODES = Object.freeze([
+  "ac-evidence-invalid",
   "bad-extra",
   "bad-gates",
   "bad-scope-json",
@@ -261,7 +265,7 @@ export function parseGatesSpec(raw) {
     if (cut !== -1 && id === "") return err("bad-gates", `--gates token ${JSON.stringify(tok)} has an empty id after '::'`);
     if (!isCleanToken(id, 256)) return err("bad-gates", `--gates id ${JSON.stringify(id)} is not a clean token`);
     if (RESERVED_IDS.includes(id)) {
-      return err("bad-gates", `--gates id ${JSON.stringify(id)} is RESERVED (the runner owns ${RESERVED_IDS.join(", ")})`);
+      return err("bad-gates", `--gates id ${JSON.stringify(id)} is RESERVED (${RESERVED_IDS.join(", ")} are never gate ids)`);
     }
     if (id.startsWith(STRUCTURAL_PREFIX)) {
       return err(

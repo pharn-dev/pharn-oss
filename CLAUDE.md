@@ -387,7 +387,7 @@ node pharn/floor/check-red-run.mjs --verdict --ac-tests <AC-TESTS.md> --out <dir
 # read by /pharn-build (Step 0, BEFORE its scope set and anchor, so a refusal leaves neither), /pharn-ship and
 # /pharn-loop (after /pharn-test, between grill and build), and check-loop-fresh.mjs check I (after every build and at
 # the commit gate). It SHELLS the checkers above and owns only the branch: `--spec` 0 → the full mapping check + a
-# test-first lock with `--check --require-red-run` → READY test-first; 4 → a bootstrap lock with
+# test-first lock with `--check --require-red-run` AND (6.20.0) the test-infra pin → READY test-first; 4 → a bootstrap lock with
 # `--allow-bootstrap` → READY bootstrap; 3 → no AC-TESTS.md and no lock → NOT-APPLICABLE legacy-spec. Else
 # `RED <reason>` ∈ {spec-unusable, no-mapping, mapping-red, no-lock, lock-red, lock-unusable, lock-mode-mismatch,
 # legacy-with-mapping, mode-not-allowed}; `--require-test-first` (passed by /pharn-loop and check-loop-fresh) turns any
@@ -400,6 +400,32 @@ node pharn/floor/check-red-run.mjs --verdict --ac-tests <AC-TESTS.md> --out <dir
 # (exit 4, `not committed: stage failed`, if one is not a regular, non-ignored file). Exit: 0 READY/NOT-APPLICABLE ·
 # 1 RED · 2 unusable. Contract: pharn/pharn-contracts/ac-tests.md, "The test-stage gate".
 node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-test-first]
+
+# THE AC GATE (added 6.20.0) — was every Acceptance Criterion DELIVERED on the head verify run? pharn/floor/ac-gate-core.mjs,
+# folded into /pharn-verify's FLOOR verdict by check-verify.mjs --stamp … --ac-gate (Step 5's pinned line; the flag
+# requires --stamp, the root is the invoking directory, the per-test files sit beside the stamp). An AC is delivered =
+# a locked, once-red test titled AC-<n>:, in a file mapped to AC-n, passed on the head run — matched FILE-SCOPED by
+# red-run-core.mjs observeAc (the one copy), so another feature's AC-1: never counts; PHARN does not judge whether the
+# test captures the AC's intent. The SPEC's ACs are the set (an unmapped AC is ac-never-red). Reasons, a closed
+# partition: DELIVERY {ac-untested, ac-not-passed, ac-skipped} → failing_gates += ac-delivery (FAIL; /pharn-loop
+# iterates); EVIDENCE {ac-tests-modified, ac-never-red, test-infra-changed, test-infra-unpinned} → += ac-evidence (FAIL;
+# check-loop.mjs STOP_TERMINAL with terminal_cause ac-evidence → S13 blocked: ac-evidence-invalid); item 01's record
+# reasons → INCONCLUSIVE over green gates (a red gate beats it; no reason_code). Both ids are RESERVED_IDS and never
+# enter `gates`. Legacy SPEC → NOT-APPLICABLE, stated (with AC evidence beside it → ac-tests-modified); spec_kind:
+# test-infra → BOOTSTRAP, weaker, labelled. THE TEST-INFRA PIN (lock schema ac-tests-lock/3, test-infra-core.mjs,
+# written by --write BEFORE the red run): the level gates' package.json script VALUES + pre/post scripts + testResults
+# formats, and root vitest/vite/playwright/jest config files in a CLOSED name set; the gate also requires each level
+# gate to have run as the pinned `npm run <id>`. NOT caught, stated ONCE in test-infra-core.mjs's header (restated in
+# the contract): a setup file a config imports, env-driven config, script chaining, .npmrc, tsconfig, and more. /2 and /1 locks are still read (mode, never schema, decides bootstrap) and read
+# test-infra-unpinned at verify — the remedy sets the build aside and re-runs /pharn-test (its red run cannot pass over
+# a built tree). IN THE LOOP: check-loop-fresh E re-derives WITH --ac-gate and compares ac_gate (deferring to F when
+# the tree moved — the gate reads the live tree; `gates` alone is still compared); J re-hashes per-test results files;
+# check I's test-stage RED (exit 1, a RED token) is its own code, ac-evidence-invalid → S13 (the other front checks,
+# and a test-stage exit 2 or crash, keep front-stage-red).
+# BOUNDS: "passed" is the reporter's word; agreement, never provenance (L43); one flaky test, test.fail() or duplicate
+# id anywhere voids the record (INCONCLUSIVE). check-verify.mjs still spawns nothing. Contract: pharn/pharn-contracts/
+# ac-tests.md "The AC gate" + verify-report.md "The additive ac_gate block".
+node pharn/floor/check-verify.mjs --stamp <stamp.json> --feature <name> --ac-gate
 
 # FRESHNESS — /pharn-loop reads a stop only from evidence that belongs to THIS tree (added 6.10.0).
 # THE RECORDED FAILURE (P7): CHANGELOG 6.3.0's unattended /pharn-loop run skipped /pharn-grill, /pharn-regress
@@ -417,7 +443,8 @@ node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-
 #   --stamp / check-regress.mjs verdict reproduces the report's FLOOR fields (STOP report-verdict-mismatch) ·
 #   H base stamp head == --base (STOP) · F verify stamp {algo, final} == the live fingerprint (RERUN verify
 #   tree-moved-since-verify) · G regress head final == verify init (RERUN regress) · I (--front) the three
-#   front checkers exit 0, GRILL.md exists and check-test-stage exits 0 (6.19.0) (STOP front-stage-red).
+#   front checkers exit 0, GRILL.md exists and check-test-stage exits 0 (6.19.0) (STOP front-stage-red; since
+#   6.20.0 a check-test-stage RED is STOP ac-evidence-invalid, which /pharn-loop maps to S13).
 # THE BUDGET IS A COUNTER, NOT PROSE: .pharn/pharn-loop/<name>/freshness.jsonl, one row per authorized re-run,
 # --max-reruns (default 1) per (iter, stage), then STOP rerun-budget-exhausted; --commit-gate never re-runs and
 # never writes a row (a RERUN-class cause becomes STOP with its own code). The ledger path is lstat-checked

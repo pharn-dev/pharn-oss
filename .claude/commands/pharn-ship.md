@@ -38,7 +38,7 @@ reads:
   ]
 writes: ["pharn/features/<name>/SHIP.md", "pharn/features/<name>/ship-record.json", "pharn/features/<name>/BRIEFING.md"]
 constitution_refs: ["P0", "P2", "P5", "P6", "P7"]
-version: "0.7.0"
+version: "0.8.0"
 ---
 
 # /pharn-ship — run the product pipeline, end at a human gate
@@ -638,7 +638,11 @@ Write **`pharn/features/<name>/SHIP.md`** — a thin, **advisory** roll-up:
   `check-plan-lessons.mjs` (declaration GREEN); `/pharn-test` → `check-test-stage.mjs`'s token (`ac-tests: test-first`,
   `ac-tests: bootstrap`, or `ac-tests: not-applicable (legacy spec)` — never silent); `/pharn-build` → the project-gate exit;
   `/pharn-regress` → `regression-report.json` `.verdict`; `/pharn-verify` → `verify-report.json` `.verdict`
-  (incl. `INCOMPLETE`, with `.completeness.missing[]` quoted as DATA);
+  (incl. `INCOMPLETE`, with `.completeness.missing[]` quoted as DATA) and its AC gate, `.ac_gate.verdict` +
+  `.ac_gate.mode` (6.20.0 — `PASS` / `FAIL` / `INCONCLUSIVE` / `NOT-APPLICABLE`, and `bootstrap` said as weaker);
+  **the per-AC table is cited, never retyped** — point at `RUN-REPORT.md`'s `## Verdicts` (rendered by code from the
+  same block) and `VERIFY.md`, because a model-retyped table of test ids is exactly what a floor verdict must not rest
+  on (L22);
 - a **pointer** to `pharn/features/<name>/GRILL.md` / `REGRESSION.md` / `VERIFY.md` (cite the files; do **not**
   restate their findings — P4), and to **`pharn/features/<name>/BRIEFING.md`** (Step 2c) — the same rule applies:
   cite it, never restate it, and never describe it as more than what `pharn-contracts/ship-briefing.md`

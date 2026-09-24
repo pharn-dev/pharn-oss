@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { KINDS, LEVELS, MAPPING_RE, badPath, checkMapping, mappingOf } from "./check-ac-tests.mjs";
-import { specAcceptanceCriteria } from "./spec-template-core.mjs";
+import { specAcceptanceCriteria, specVerdict } from "./spec-template-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHECK = join(HERE, "check-ac-tests.mjs");
@@ -241,6 +241,25 @@ test("--spec exit 4 — a test-infra SPEC is BOOTSTRAP with its levels; preceden
     const bl = spec(badLevel);
     assert.equal(bl.status, 2, bl.stdout);
     assert.match(bl.stdout, /verify level is malformed/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("✧ L35 — specVerdict IS the --spec reading: the CLI prints its line and exits its code, for every token", () => {
+  const root = world();
+  try {
+    const path = join(root, "pharn", "features", NAME, "SPEC.md");
+    const seen = new Set();
+    for (const text of [SPEC, specText({ legacy: true }), specText({ kind: "test-infra" }), specText({ kind: "library" })]) {
+      writeFileSync(path, text);
+      const v = specVerdict(text);
+      const r = spawnSync(process.execPath, [CHECK, "--spec", path], { encoding: "utf8" });
+      assert.equal(r.status, v.code, v.line);
+      assert.equal(r.stdout.trim(), v.line);
+      seen.add(v.token);
+    }
+    assert.deepEqual([...seen].sort(), ["BOOTSTRAP", "LEGACY", "TEMPLATED", "UNUSABLE"], "every token was exercised");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

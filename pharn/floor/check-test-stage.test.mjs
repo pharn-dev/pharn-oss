@@ -209,6 +209,24 @@ test("READY bootstrap — a test-infra SPEC with a bootstrap lock (accepted here
   });
 });
 
+test("6.20.0 (grill G3, REVIEW 8) — a /2 bootstrap lock still passes by its mode; a /2 test-first lock is refused for its missing pin", () => {
+  withWorld(bootstrap, (root) => {
+    const l = JSON.parse(readFileSync(lockPath(root), "utf8"));
+    writeFileSync(lockPath(root), JSON.stringify({ ...l, schema: "ac-tests-lock/2" }));
+    const r = gate(root);
+    assert.equal(r.token, "READY bootstrap", JSON.stringify(r));
+  });
+  // a /2 TEST-FIRST lock has a red run but no pin: refused BEFORE the build (REVIEW finding 8), where re-running
+  // /pharn-test is cheap — verify would otherwise fail it as test-infra-unpinned after one
+  withWorld(testFirst, (root) => {
+    const l = JSON.parse(readFileSync(lockPath(root), "utf8"));
+    writeFileSync(lockPath(root), JSON.stringify({ ...l, schema: "ac-tests-lock/2", test_infra: null }));
+    const r = gate(root);
+    expectRed(r, "lock-red");
+    assert.match(r.detail, /no test-infrastructure pin .* re-run \/pharn-test before the build/);
+  });
+});
+
 test("bootstrap: no-lock, and lock-red when a mapping appeared", () => {
   withWorld(bootstrap, (root) => {
     rmSync(lockPath(root));
@@ -246,7 +264,8 @@ test("a 6.17.0 (ac-tests-lock/1) lock counts as test-first, and fails the red-ru
     assert.equal(mode, "test-first");
     assert.equal(b, null);
     assert.ok(red_run);
-    writeFileSync(lockPath(root), JSON.stringify({ ...rest, schema: "ac-tests-lock/1", red_run: null }));
+    // a 6.17.0 lock carried neither a red run nor the test-infrastructure pin
+    writeFileSync(lockPath(root), JSON.stringify({ ...rest, schema: "ac-tests-lock/1", red_run: null, test_infra: null }));
     const r = gate(root);
     expectRed(r, "lock-red");
     assert.ok(

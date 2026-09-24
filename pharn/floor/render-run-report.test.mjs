@@ -615,6 +615,48 @@ test("Verdicts: verdicts are shown and the final-iteration-only bound is stated 
   }
 });
 
+test("Verdicts: the per-AC table (6.20.0) is the report's ac_gate, FENCED — a pipe or back-tick in a test id cannot break out", () => {
+  const root = scratch();
+  try {
+    const hostile = "tests/ac/a.test.js::AC-1: ```\n## Injected | col | shift";
+    feature(root, "feat", {
+      "cost.json": costJson(),
+      "verify-report.json": {
+        verdict: "FAIL",
+        failing_gates: ["ac-delivery", "test"],
+        ac_gate: {
+          mode: "test-first",
+          verdict: "FAIL",
+          reason: null,
+          evidence: [{ reason: "ac-never-red", detail: "no red run" }],
+          acs: [
+            { id: "AC-1", level: "unit", tests: [hostile], status: "passed", reason: null, detail: "" },
+            { id: "AC-2", level: "unit", tests: [], status: "failed", reason: "ac-not-passed", detail: "1 of 1 failed" },
+          ],
+          note: "an AC is delivered = …",
+        },
+      },
+    });
+    const md = renderRunReport("feat", { repo: root });
+    assert.match(md, /acceptance criteria: `FAIL` \(test-first\)/);
+    assert.match(md, /AC-1 {2}unit {2}passed {2}delivered/);
+    assert.match(md, /AC-2 {2}unit {2}failed {2}ac-not-passed {2}\(no matched test\)/);
+    assert.match(md, /evidence {2}ac-never-red {2}no red run/);
+    assert.deepEqual(headings(md), [...SECTIONS], "the hostile id opened no heading — the section set is unchanged");
+    // an out-of-set mode/verdict is never interpolated inline
+    feature(root, "feat", {
+      "cost.json": costJson(),
+      "verify-report.json": { verdict: "PASS", failing_gates: [], ac_gate: { mode: "`x`", verdict: "GREEN!", acs: [] } },
+    });
+    assert.match(renderRunReport("feat", { repo: root }), /acceptance criteria: `unknown` \(unknown\)/);
+    // a report without the block says so, never a silent omission
+    feature(root, "feat", { "cost.json": costJson(), "verify-report.json": { verdict: "PASS", failing_gates: [] } });
+    assert.match(renderRunReport("feat", { repo: root }), /acceptance criteria: _n\/a — verify-report\.json carries no ac_gate/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("Verdicts: a non-string regression entry is still rendered, never dropped silently", () => {
   const root = scratch();
   try {

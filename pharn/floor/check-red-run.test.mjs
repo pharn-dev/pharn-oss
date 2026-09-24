@@ -19,7 +19,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resultsFileName } from "./gate-run-core.mjs";
 import { CONFIG_FILE, CONFIG_KEY } from "./test-results-core.mjs";
-import { OWN_REASONS, RED_RUN_REASONS, bindStamp, blockedLine, evaluateRedRun, preflight, verdict } from "./red-run-core.mjs";
+import { OWN_REASONS, RED_RUN_REASONS, bindStamp, blockedLine, evaluateRedRun, observeAc, preflight, verdict } from "./red-run-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, "check-red-run.mjs");
@@ -696,4 +696,30 @@ test("✧ L36 CLOSURE — every reason literal red-run-core.mjs assigns is a RED
 
 test("✧ L36 REVERSE CLOSURE — every OWN reason, and the two item-01 reasons the brief names, was reached here", () => {
   for (const r of [...OWN_REASONS, "not-configured", "results-unavailable"]) assert.ok(REACHED.has(r), `${r} was never reached`);
+});
+
+test("✧ L35 — observeAc is the ONE match rule (the red run and /pharn-verify's AC gate share it): file-scoped, leaf-title, every observation kept", () => {
+  const rec = (tests) => ({ ok: true, tests });
+  const t = (file, title, status, id = `${file}::${title}`) => ({ id, file, title, status });
+  const records = {
+    "test:e2e": rec([t(UNIT, "AC-1: a", "passed"), t(OTHER, "AC-1: a", "passed"), t(UNIT, "AC-10: x", "failed")]),
+    e2e: rec([t(UNIT, "AC-1: a", "failed")]),
+  };
+  const obs = observeAc({ id: "AC-1", files: [UNIT], gateIds: ["test:e2e", "e2e"], recordOf: (g) => records[g] });
+  assert.equal(obs.refused, null);
+  assert.deepEqual(
+    obs.observations.map((o) => [o.gate, o.status]),
+    [
+      ["test:e2e", "passed"],
+      ["e2e", "failed"],
+    ],
+    "both gates' observations of the same id are kept; OTHER's and AC-10's are not AC-1's"
+  );
+  const refused = observeAc({
+    id: "AC-1",
+    files: [UNIT],
+    gateIds: ["e2e"],
+    recordOf: () => ({ ok: false, reason_code: "results-unavailable", reason: "r" }),
+  });
+  assert.deepEqual(refused, { refused: { gate: "e2e", reason_code: "results-unavailable", reason: "r" }, observations: [] });
 });
