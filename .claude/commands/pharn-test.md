@@ -1,5 +1,5 @@
 ---
-description: "Write each Acceptance Criterion's test BEFORE the build, then RUN them and require each to FAIL — a product-pipeline stage that runs after /pharn-grill and before /pharn-build, standalone in this release (the orchestrated chain does not call it yet). It reads the Approved SPEC, the PLAN and the AC-tests MAPPING /pharn-plan wrote (pharn/features/<name>/AC-TESTS.md), writes one or more tests per AC into exactly the files the mapping names, each test's own title starting `AC-<n>:` and importing its target inside the test body, pins them with a script-written AC-TESTS.lock.json, runs them through run-gates.mjs --stage ac-test (gates selected by id from the levels, each handed its mapped files), and records the red run in the lock. FLOOR (deterministic): the SPEC is Approved and un-drifted (check-spec-approved.mjs, the pin covering spec_kind), the spec→plan chain holds (check-plan-spec-agree.mjs), the mapping is complete and consistent (check-ac-tests.mjs; `--spec` exits 3 legacy, 4 bootstrap); every AC's level has a runner with per-test results (check-red-run.mjs --preflight — else ac-level-unavailable: ask, or with --unattended print the closed `blocked: no-test-runner` line, never a nested run); every AC's test was collected and FAILED before the build, matched by mapped file and leaf title over a run bound to the mapping and the live tree (check-red-run.mjs --verdict, re-derived by ac-tests-lock.mjs --record-red-run, no escape hatch for a pass); the writes-scope (fix #7) lets this stage write ONLY the mapped test files and the lock — a Bash write bypasses both hooks. A `spec_kind: test-infra` SPEC gets a BOOTSTRAP lock instead: no tests, no run — weaker, and recorded as such. ADVISORY: the tests themselves — whether they assert the AC's Then on the declared public target, and fail for the missing behaviour rather than a typo — are model work. '/pharn-test wrote tests and they failed' NEVER means 'the tests are right' (P0)."
+description: "Write each Acceptance Criterion's test BEFORE the build, then RUN them and require each to FAIL — a product-pipeline stage that runs after /pharn-grill and before /pharn-build; /pharn-ship and /pharn-loop (with --unattended) run it there (6.19.0), and /pharn-build refuses without its evidence (check-test-stage.mjs). It reads the Approved SPEC, the PLAN and the AC-tests MAPPING /pharn-plan wrote (pharn/features/<name>/AC-TESTS.md), writes one or more tests per AC into exactly the files the mapping names, each test's own title starting `AC-<n>:` and importing its target inside the test body, pins them with a script-written AC-TESTS.lock.json, runs them through run-gates.mjs --stage ac-test (gates selected by id from the levels, each handed its mapped files), and records the red run in the lock. FLOOR (deterministic): the SPEC is Approved and un-drifted (check-spec-approved.mjs, the pin covering spec_kind), the spec→plan chain holds (check-plan-spec-agree.mjs), the mapping is complete and consistent (check-ac-tests.mjs; `--spec` exits 3 legacy, 4 bootstrap); every AC's level has a runner with per-test results (check-red-run.mjs --preflight — else ac-level-unavailable: ask, or with --unattended print the closed `blocked: no-test-runner` line, never a nested run); every AC's test was collected and FAILED before the build, matched by mapped file and leaf title over a run bound to the mapping and the live tree (check-red-run.mjs --verdict, re-derived by ac-tests-lock.mjs --record-red-run, no escape hatch for a pass); the writes-scope (fix #7) lets this stage write ONLY the mapped test files and the lock — a Bash write bypasses both hooks. A `spec_kind: test-infra` SPEC gets a BOOTSTRAP lock instead: no tests, no run — weaker, and recorded as such. ADVISORY: the tests themselves — whether they assert the AC's Then on the declared public target, and fail for the missing behaviour rather than a typo — are model work. '/pharn-test wrote tests and they failed' NEVER means 'the tests are right' (P0)."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -22,7 +22,7 @@ reads:
   ]
 writes: ["<AC test files: AC-TESTS.md ## Files, via --from-plan>", "pharn/features/<name>/AC-TESTS.lock.json"]
 constitution_refs: ["P0", "P1", "P2", "P3", "P5", "P6", "P7"]
-version: "0.2.0"
+version: "0.3.0"
 ---
 
 # /pharn-test — write the Acceptance Criteria's tests before the build, and show they fail
@@ -34,8 +34,10 @@ build wrote the tests, it could write tests that fit its own implementation. So 
 and the build is not allowed to touch them. Then you **run** them, before the build, and require every AC's test to
 **fail**: a test that cannot fail, is never collected, or is skipped would otherwise pass unnoticed.
 
-> **This is a PRODUCT command (`pharn-`, not `pharn-dev-`).** In this release it runs **standalone**: `/pharn-ship`
-> and `/pharn-loop` do not yet call it. Contract: `pharn/pharn-contracts/ac-tests.md` (cite it, do not restate — P4).
+> **This is a PRODUCT command (`pharn-`, not `pharn-dev-`).** Since 6.19.0 `/pharn-ship` runs it between
+> `/pharn-grill` and `/pharn-build`, `/pharn-loop` runs it there with `--unattended`, and `/pharn-build` refuses to
+> build until `check-test-stage.mjs` reads this stage's evidence as complete. Run standalone, it does the same work.
+> Contract: `pharn/pharn-contracts/ac-tests.md` (cite it, do not restate — P4).
 >
 > **The honest claim (P0).** The stage **guarantees** it writes only the mapped test files (fix #7), only from a
 > current Approved SPEC and a mapping that is complete and consistent (three floor checkers); that every AC's test
@@ -278,8 +280,8 @@ evidence a later verify stage requires is named in the contract. Run the Final s
   Bash write bypasses the hook (`LIMITS.md §6`).
 - **"The build cannot write an AC test file"** → **FLOOR: hook**, for the PLAN.md `check-ac-tests.mjs` read: the
   file is not in PLAN.md `## Files`, and the build's scope is `--from-plan PLAN.md`. **Bounded, and stated:** an
-  edit to PLAN.md after this stage reopens it until something re-checks. `/pharn-build` does not re-run the mapping
-  check in this release.
+  edit to PLAN.md after this stage reopens it until something re-checks — and since 6.19.0 `/pharn-build` re-checks
+  it first thing (`check-test-stage.mjs` shells the full mapping check), so such a PLAN is refused before any write.
 - **"Every AC's test was collected and failed before the build"** → **FLOOR: enum membership** over the per-test
   record of the gates the AC's level maps to (`check-red-run.mjs`), matched by mapped file and leaf title, over a
   run bound to the mapping and the live tree (`fingerprint`). **Bounded:** "failed" is the record's status — a

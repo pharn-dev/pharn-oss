@@ -23,6 +23,55 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.19.0] - 2026-09-24
+
+### Added
+
+- 2026-09-24: **`/pharn-test` is wired into both chains between `/pharn-grill` and `/pharn-build`, and the order is
+  enforced: `/pharn-build` refuses until one new checker, `check-test-stage.mjs`, reads the test stage's evidence as
+  complete.** `SKILLS_VERSION` 6.18.0 → 6.19.0 (MINOR: a new checker and new orchestration). `MIN_CLI` stays 0.5.0: no
+  installed path moves, and pharn-cli copies `pharn/floor/` whole.
+  ([`pharn/floor/check-test-stage.mjs`](./pharn/floor/check-test-stage.mjs),
+  [`pharn/pharn-contracts/ac-tests.md`](./pharn/pharn-contracts/ac-tests.md),
+  [`.dev/features/wire-pharn-test/`](./.dev/features/wire-pharn-test/))
+  - **Why.** 6.17.0–6.18.0's `/pharn-test` was standalone, and an order that only a command narrates is the gate that
+    gets skipped (PHARN's own lessons L5/L30). Honest trigger (P7): item 5 of the maintainer's AC-delivery queue.
+  - **The gate.** `check-test-stage.mjs <name>` shells the existing checkers and owns only the branch on the SPEC's
+    mode: templated → the full mapping check against the CURRENT SPEC and PLAN plus a test-first lock that records a
+    red run → `READY test-first`; `spec_kind: test-infra` → a bootstrap lock → `READY bootstrap`; legacy with no
+    mapping and no lock → `NOT-APPLICABLE legacy-spec`. Otherwise `RED <reason>` from a closed set, including
+    `lock-mode-mismatch` (a test-first lock's own check never reads SPEC.md, so a SPEC re-approved as test-infra beside
+    an old test-first lock used to pass). `--require-test-first` puts a caller's policy in the checker: any other pass
+    becomes `RED mode-not-allowed`.
+  - **`/pharn-build` (0.2.0)** runs it FIRST, before its scope set and reconciliation anchor, and refuses on a RED. It
+    passes on a rebuild: the lock pins only the tests. It closes 6.17.0's stated bound: a PLAN edited after
+    `/pharn-test` to scope the build to a test file is now refused before any write.
+  - **`/pharn-ship` (0.7.0)** runs `/pharn-test` and reads the gate; the chain stops on a RED, and a missing runner is
+    `/pharn-test`'s own question, relayed. `SHIP.md` records `ac-tests: …`.
+  - **`/pharn-loop` (0.9.0)**: the front is plan → grill → test (`--unattended`). New stuck point **S12**
+    `blocked: no-test-runner`, decided by its own pinned `check-red-run.mjs --preflight` (never by relayed text), with
+    the suggested setup command copied into `### next_steps`. Every other test-stage failure, and `NOT-APPLICABLE`
+    (the loop never writes a legacy SPEC), is S9 — the loop reads the gate with `--require-test-first`, and
+    `check-loop-fresh.mjs` check I re-reads it the same way after every build and at the commit gate: stale test evidence is a STOP, never a re-run. Step 6c now stages the lock and every
+    pinned test, and refuses to commit (`stage failed`) when the lock or a test it pins is not a regular, non-ignored file. The record's
+    `## Outcome` gains `ac-tests:`. **Also fixed there:** the builder's ignored-path filter never fired — it ran
+    `git check-ignore` under `GIT_LITERAL_PATHSPECS=1`, which that command refuses (exit 128) — so an ignored plan path
+    failed `git add` instead of being dropped. It now runs without that variable; the builder is executed by a test.
+  - **The GATE-2 briefing (contract 0.2.0)** gains `ac_tests_mode`, copied from the lock's `mode` and cross-verified;
+    a 0.1.x briefing without it still checks.
+  - **The spine** is `spec → plan → grill → test → build → regress → verify → ship` in every product command, the
+    README and CLAUDE.md, and the stage ordinals and pin-consumer counts are renumbered.
+    `pharn/ARCHITECTURE.md` §6 is protected; its edit waits for a human (`PROTECTED-FOLLOWUPS.md`).
+  - **Why MINOR, and what changes for a feature in flight.** No contract, finding shape or frontmatter changes shape,
+    and no install breaks. What changes is a precondition. A templated feature planned before 6.17.0 (no mapping), or
+    tested under 6.17.0 (its lock records no red run), is now refused by `/pharn-build` until it goes back through
+    `/pharn-plan` and `/pharn-test`. One already partly built without them must first revert that implementation:
+    a red run over existing behaviour reads `ac-test-passes-before-build`, and there is no override.
+  - **Bounds, stated.** Obeying the gate is command discipline; the loop re-reads it rather than trusting the front.
+    `NOT-APPLICABLE` is decided by `spec_template`, which the approval pin does not cover. The gate checks tree
+    identity, not recency. An abandoned loop run leaves its mapping and tests behind, so a retry REDs
+    `claimed-elsewhere` at `/pharn-plan` until a person removes them.
+
 ## [6.18.0] - 2026-09-24
 
 ### Added

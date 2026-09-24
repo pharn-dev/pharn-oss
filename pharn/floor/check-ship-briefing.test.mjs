@@ -362,6 +362,7 @@ const EMITTED_FIELDS = [
   { field: "regress_verdict", quote_reachable: false, source: "regression-report.json, enum-closed" },
   { field: "verify_verdict", quote_reachable: false, source: "verify-report.json, enum-closed" },
   { field: "rendered_at_commit", quote_reachable: false, source: "git rev-parse — hex, or the literal `unknown`" },
+  { field: "ac_tests_mode", quote_reachable: false, source: "AC-TESTS.lock.json `mode`, enum-closed (6.19.0)" },
 ];
 
 const CODEC_CORPUS = [
@@ -584,5 +585,107 @@ test("⟲ an over-long value is still length-guarded AFTER decoding — the boun
     }
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── ac_tests_mode (6.19.0, briefing contract 0.2.0) ──────────────────────────────────────────────────────
+
+const V2_FM = (mode) =>
+  GOOD_FM.replace('briefing_contract_version: "0.1.0"', 'briefing_contract_version: "0.2.0"').replace(
+    'rendered_at_commit: "abcdef1"',
+    mode === null ? 'rendered_at_commit: "abcdef1"' : `ac_tests_mode: "${mode}"\nrendered_at_commit: "abcdef1"`
+  );
+const lockOf = (mode) => JSON.stringify({ schema: "ac-tests-lock/2", mode });
+
+test("ac_tests_mode: GREEN when it equals the live lock's mode, and n/a with no lock", () => {
+  for (const [mode, lock] of [
+    ["test-first", lockOf("test-first")],
+    ["bootstrap", lockOf("bootstrap")],
+    ["n/a", null],
+  ]) {
+    const dir = scratchDir();
+    try {
+      writeGoodFixture(dir);
+      writeFileSync(join(dir, "BRIEFING.md"), V2_FM(mode) + "\n" + GOOD_BODY);
+      if (lock !== null) writeFileSync(join(dir, "AC-TESTS.lock.json"), lock);
+      const r = run(join(dir, "BRIEFING.md"));
+      assert.equal(r.status, 0, `${mode}: ${r.stdout}`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test("ac_tests_mode: RED stale when the lock disagrees, RED shape off the enum, RED envelope when a 0.2.0 briefing omits it", () => {
+  for (const [why, fm, lock, re] of [
+    [
+      "stale mode",
+      V2_FM("test-first"),
+      lockOf("bootstrap"),
+      /`ac_tests_mode` = "test-first" but AC-TESTS\.lock\.json currently reads "bootstrap"/,
+    ],
+    ["stale: the lock is gone", V2_FM("test-first"), null, /currently reads "n\/a"/],
+    ["shape", V2_FM("maybe"), lockOf("test-first"), /`ac_tests_mode` not in/],
+    ["envelope", V2_FM(null), lockOf("test-first"), /missing required frontmatter field `ac_tests_mode`/],
+  ]) {
+    const dir = scratchDir();
+    try {
+      writeGoodFixture(dir);
+      writeFileSync(join(dir, "BRIEFING.md"), fm + "\n" + GOOD_BODY);
+      if (lock !== null) writeFileSync(join(dir, "AC-TESTS.lock.json"), lock);
+      const r = run(join(dir, "BRIEFING.md"));
+      assert.equal(r.status, 1, `${why}: ${r.stdout}`);
+      assert.match(r.stdout, re, why);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test("✧ parity: readAcTestsMode agrees between both copies over every lock state", () => {
+  const cases = [
+    ["test-first", lockOf("test-first")],
+    ["bootstrap", lockOf("bootstrap")],
+    ["/1 (no mode)", JSON.stringify({ schema: "ac-tests-lock/1" })],
+    ["non-member", lockOf("fast")],
+    ["not JSON", "{nope"],
+    ["an array", "[]"],
+    ["null", "null"],
+    ["inherited mode", JSON.stringify(Object.create({ mode: "test-first" }))],
+    ["absent", null],
+  ];
+  const seen = new Set();
+  for (const [why, content] of cases) {
+    const dir = scratchDir();
+    try {
+      if (content !== null) writeFileSync(join(dir, "AC-TESTS.lock.json"), content);
+      const a = renderer.readAcTestsMode(dir);
+      assert.equal(checker.readAcTestsMode(dir), a, why);
+      seen.add(a);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+  assert.deepEqual([...seen].sort(), ["bootstrap", "n/a", "test-first"], "non-vacuity: every outcome was produced");
+  assert.deepEqual([...checker.AC_TESTS_MODES].sort(), [...renderer.AC_TESTS_MODES].sort());
+});
+
+test("⟲ a rendered 0.2.0 briefing carries ac_tests_mode and a `test` row, and CHECKS GREEN against its live lock", () => {
+  const base = scratchDir();
+  try {
+    const r = renderWith(base, "feat", {
+      "PLAN.md": ["---", 'spec_id: "FEAT-1"', "---", "", "## Files", "", "- a.mjs — x", ""].join("\n"),
+      "AC-TESTS.lock.json": lockOf("test-first"),
+    });
+    assert.equal(r.ok, true);
+    assert.match(r.markdown, /^ac_tests_mode: "test-first"$/m);
+    assert.match(r.markdown, /^briefing_contract_version: "0\.2\.0"$/m);
+    assert.match(r.markdown, /^\| test \| mode: test-first \(recorded, not a verdict\) \| `.*AC-TESTS\.lock\.json` \|$/m);
+    const path = join(base, "feat", "BRIEFING.md");
+    writeFileSync(path, r.markdown);
+    const c = run(path);
+    assert.equal(c.status, 0, c.stdout);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
   }
 });

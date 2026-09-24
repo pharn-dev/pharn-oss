@@ -5,8 +5,8 @@ Each increment a **PHARN user** runs through the product pipeline gets one folde
 
 - `SPEC.md` — intent (Draft → Approved), the root artifact every downstream stage carries `spec_id` from
   (`ARCHITECTURE.md §6`)
-- the downstream product-pipeline artifacts as the user runs each stage (`spec → plan → grill → build →
-regress → verify → ship`)
+- the downstream product-pipeline artifacts as the user runs each stage (`spec → plan → grill → test →
+build → regress → verify → ship`)
 - `AC-TESTS.md` and `AC-TESTS.lock.json` (6.17.0) — for a templated SPEC, `/pharn-plan` maps each Acceptance
   Criterion to a test file and public target in `AC-TESTS.md`, and `/pharn-test` writes those tests before the
   build and pins them in the lock (`pharn/pharn-contracts/ac-tests.md`). Since 6.18.0 it also runs them before the

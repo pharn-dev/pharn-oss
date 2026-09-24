@@ -36,7 +36,8 @@
 //   F  the verify stamp's fingerprint {algo, final} = the live tree now        → RERUN verify · tree-moved-since-verify
 //   G  the regress HEAD stamp's final = the verify stamp's init (same algo)    → RERUN regress · regress-verify-tree-mismatch
 //   I  (--front) check-spec-approved, check-plan-spec-agree, check-plan-lessons
-//      exit 0, and GRILL.md exists                                           → STOP  · front-stage-red
+//      exit 0, GRILL.md exists, and check-test-stage --require-test-first
+//      exits 0 (6.19.0)                                                       → STOP  · front-stage-red
 //
 // The ORDER is load-bearing: the fabrication checks (J, E, H) run BEFORE the staleness checks (F, G), so a
 // forged report STOPS the run instead of being "refreshed" by a re-run that would overwrite the evidence.
@@ -69,6 +70,10 @@
 //     modification is caught by `reconcile` — run from the same worktree. That is circular, not a guarantee
 //     (the check-bash-reconcile.mjs bound, inherited).
 //   • Whether the front stages did real WORK: GRILL.md presence is membership only.
+//   • That /pharn-test ran in THIS run. check-test-stage.mjs (6.19.0) certifies that its evidence holds for the files
+//     on disk — the mapping agrees with the SPEC and PLAN, the lock pins the tests and records a red run (or a bootstrap,
+//     or the SPEC is legacy). Stale test evidence is a STOP, never a RERUN: this check runs after the build, when the
+//     implementation exists, so a re-run of /pharn-test would read `ac-test-passes-before-build` by construction.
 //   • Phase markers are not consulted.
 //
 // Check J's one legitimate-looking trip, named so it is not a mystery stop: a gate that leaves a DETACHED
@@ -113,6 +118,7 @@ const CHECKERS = Object.freeze({
   specApproved: join(HERE, "check-spec-approved.mjs"),
   planSpecAgree: join(HERE, "check-plan-spec-agree.mjs"),
   planLessons: join(HERE, "check-plan-lessons.mjs"),
+  testStage: join(HERE, "check-test-stage.mjs"),
 });
 
 /** The product feature root. ONE literal in this module, pinned by a closure test (L52). */
@@ -574,6 +580,30 @@ function checkI(ctx) {
       reason_code: "front-stage-red",
       reason: "GRILL.md is absent — /pharn-grill did not run",
     });
+  // The test stage (6.19.0), run from the project root because the lock resolves test paths against the cwd.
+  // `--require-test-first`: the loop's policy, in the checker (REVIEW finding 2) — it never writes a legacy SPEC and
+  // never approves a test-infra one, so a bootstrap or legacy reading here means the SPEC changed around the gate.
+  const t = spawnSync(process.execPath, [CHECKERS.testStage, ctx.feature, "--require-test-first"], { cwd: ctx.repo, encoding: "utf8" });
+  if (t.error) return { ok: false, unusable: true, reason: `could not run check-test-stage: ${t.error.message}` };
+  if (t.status !== 0) {
+    // The first line's closed token (`RED <reason>`), plus the first RED line a child printed — for a lock RED that is
+    // the lock script's own line, naming a path from the lock: a TRUNCATED, UNTRUSTED string (the lock is an
+    // agent-editable file), never a test's content, and JSON-escaped in the output. A mutating gate (an inline snapshot, a
+    // `--fix` linter) can rewrite a pinned test after the red run, and /pharn-test cannot be re-run after the build,
+    // so the remedy named is a re-plan or a person (grill G9).
+    const lines = String(t.stdout ?? "").split("\n");
+    const token = lines[0].split(" — ")[0];
+    const childRed = (lines.find((l) => /^\s+RED — /.test(l)) ?? "").trim().slice(0, 200);
+    return failure({
+      check: "I",
+      action: "stop",
+      stage: "front",
+      reason_code: "front-stage-red",
+      reason:
+        `check-test-stage exits ${t.status} (${token})${childRed ? ` [${childRed}]` : ""} — /pharn-test's evidence does not hold ` +
+        "for this tree, and it cannot be re-run after the build: a re-plan, or a person",
+    });
+  }
   return { ok: true };
 }
 

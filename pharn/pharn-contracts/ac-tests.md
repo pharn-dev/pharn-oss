@@ -2,7 +2,7 @@
 name: ac-tests
 trust: trusted
 layer: pharn-contracts
-purpose: "Single source of truth for a feature's Acceptance-Criteria tests written BEFORE the build: the AC-TESTS.md mapping /pharn-plan writes and /pharn-test is scoped by, the rules pharn/floor/check-ac-tests.mjs enforces over it, the red run that shows each AC's test fails before the build (pharn/floor/check-red-run.mjs), and the AC-TESTS.lock.json pharn/floor/ac-tests-lock.mjs writes to pin the tests and record that evidence — or, for a spec_kind: test-infra SPEC, a bootstrap lock. Schema only, zero behavior (P3, pharn/ARCHITECTURE.md §4)."
+purpose: "Single source of truth for a feature's Acceptance-Criteria tests written BEFORE the build: the AC-TESTS.md mapping /pharn-plan writes and /pharn-test is scoped by, the rules pharn/floor/check-ac-tests.mjs enforces over it, the red run that shows each AC's test fails before the build (pharn/floor/check-red-run.mjs), the AC-TESTS.lock.json pharn/floor/ac-tests-lock.mjs writes to pin the tests and record that evidence — or, for a spec_kind: test-infra SPEC, a bootstrap lock — and the test-stage gate (pharn/floor/check-test-stage.mjs) /pharn-build, /pharn-ship, /pharn-loop and check-loop-fresh.mjs read. Schema only, zero behavior (P3, pharn/ARCHITECTURE.md §4)."
 ---
 
 # Contract — ac-tests
@@ -18,8 +18,9 @@ from the Approved SPEC, the PLAN and a mapping, and the build may not modify the
 mapping and the lock that pins the result.
 
 **Honest trigger (P7):** the maintainer's decision (the AC-delivery queue), not a dogfood failure. Since 6.18.0 the
-stage also RUNS the tests it writes, before the build, and requires each to fail (the red run, below). It still runs
-standalone: `/pharn-ship` and `/pharn-loop` do not call it.
+stage also RUNS the tests it writes, before the build, and requires each to fail (the red run, below). Since 6.19.0
+`/pharn-ship` and `/pharn-loop` run it between `/pharn-grill` and `/pharn-build`, and the build refuses without it
+(the test-stage gate, below).
 
 ## `pharn/features/<name>/AC-TESTS.md` — the mapping
 
@@ -206,6 +207,41 @@ cannot become a bootstrap one without the pin moving, which every chain check re
 floor sees a re-pin, not an approver — `check-spec.mjs --hash` plus a frontmatter edit re-pins, and a self-consistent
 re-pin (with a matching re-plan) passes.
 
+## The test-stage gate — `check-test-stage.mjs <name> [--base <dir>]` (6.19.0)
+
+Did the test stage complete for this feature's CURRENT SPEC and PLAN? One checker answers it, and `/pharn-build`
+(first thing, before its scope and anchor), `/pharn-ship`, `/pharn-loop` and `check-loop-fresh.mjs` (check I, after
+every build and at the commit gate) all read it. It SHELLS the checkers above and owns only the branch:
+
+| SPEC (`check-ac-tests.mjs --spec`) | the gate requires                                                                                   | token (exit 0)               |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------- |
+| templated (0)                      | AC-TESTS.md present, the full mapping check GREEN, a `test-first` lock, `--check --require-red-run` | `READY test-first`           |
+| bootstrap (4)                      | a `bootstrap` lock, `--check --require-red-run --allow-bootstrap`                                   | `READY bootstrap`            |
+| legacy (3)                         | no AC-TESTS.md and no lock                                                                          | `NOT-APPLICABLE legacy-spec` |
+
+Otherwise the first line is `RED <reason>` (exit 1), `<reason>` ∈ {`spec-unusable`, `no-mapping`, `mapping-red`,
+`no-lock`, `lock-red`, `lock-unusable`, `lock-mode-mismatch`, `legacy-with-mapping`, `mode-not-allowed`}; exit 2 is
+unusable input. `--require-test-first` makes any pass other than `READY test-first` a `RED mode-not-allowed`:
+`/pharn-loop` and `check-loop-fresh.mjs` pass it, because the loop never writes a legacy SPEC or approves a
+`test-infra` one, so its policy is in the checker rather than in its prose. The
+child checker's own lines follow, indented. `lock-mode-mismatch` exists because a `test-first` lock's `--check` never
+reads SPEC.md: without it, a SPEC re-approved as `test-infra` beside an old test-first lock read `READY bootstrap`. An
+`ac-tests-lock/1` lock counts as test-first and fails the red-run requirement.
+
+- **It passes on a rebuild:** the lock pins only the AC tests, and the mapping check reads SPEC, PLAN and AC-TESTS.md,
+  none of which the build may write. A gate that rewrites a pinned test (an inline snapshot, a `--fix` linter) turns
+  it RED, and `/pharn-test` cannot be re-run after the build — its red run would read `ac-test-passes-before-build`.
+  So `/pharn-loop` treats stale test evidence as a STOP, never a re-run.
+- **`NOT-APPLICABLE` is decided by `spec_template`, which the approval pin does not cover** (`spec-template.md`,
+  "Opt-in"). Removing that key and deleting AC-TESTS.md and the lock makes a templated SPEC read legacy. A legacy SPEC
+  beside either file is RED; `/pharn-loop`, whose `/pharn-spec` always fills the template, refuses `NOT-APPLICABLE`.
+- **Tree identity, not recency:** a lock from an earlier run over the same files passes; the gate never proves
+  `/pharn-test` ran in THIS run.
+- **Features planned before 6.17.0, or tested under it, are refused** until `/pharn-plan` writes a mapping and
+  `/pharn-test` records a red run. One already partly built without them must first revert that implementation.
+- **An abandoned `/pharn-loop` run** leaves its AC-TESTS.md and tests behind; a retry in `<slug>-2` then REDs
+  `claimed-elsewhere` at `/pharn-plan` until a person removes them.
+
 ## Artifacts, regress and reconcile
 
 `AC-TESTS.md` and `AC-TESTS.lock.json` are pipeline artifacts (`check-regress.mjs` `PIPELINE_ARTIFACTS`), so
@@ -227,9 +263,11 @@ leaves the lock stale is caught by `ac-tests-lock.mjs --check`.
   content-hash through the shelled chain check); `/pharn-test` can write only the mapped files, and the build's
   scope excludes them (the fix #7 hook); the lock pins the files as written (content-hash); every AC's test was
   collected and `failed` in a run bound to the mapping and the tree (enum membership over the per-test record, plus
-  the fingerprint), and the lock's `red_run` is bound to its `files` (content-hash).
+  the fingerprint), and the lock's `red_run` is bound to its `files` (content-hash); the test-stage gate's verdict
+  over all of these (enum membership over the SPEC's mode, the rest shelled). Obeying that gate is command
+  discipline; `/pharn-loop` re-reads it after every build.
 - **Bounded:** the build exclusion holds for the PLAN.md the checker read. An edit to PLAN.md after `/pharn-test`
-  reopens it until something re-checks; `/pharn-build` does not re-check in 6.17.0. A Bash write bypasses every
+  reopens it until something re-checks; since 6.19.0 `/pharn-build` does, first thing (the test-stage gate, below). A Bash write bypasses every
   write hook (`LIMITS.md §6`), and `/pharn-test` runs before the reconcile anchor, so its own Bash writes are not
   reconciled.
 - **Advisory:** that the tests are right, assert the AC's Then, or drive a good public target; that `/pharn-test`

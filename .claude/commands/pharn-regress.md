@@ -1,5 +1,5 @@
 ---
-description: "Detect regressions OUTSIDE the just-built feature in the USER's codebase — the fifth product-pipeline stage (spec → plan → grill → build → regress → verify → ship). Re-run the project's existing deterministic suite (its tests / type-check / lint) over the area OUTSIDE the feature's declared scope at the pre-build BASELINE and at HEAD, and flag any gate that flipped pass→fail. The verdict is a deterministic exit-code comparison (pharn/floor/check-regress.mjs) — ZERO LLM-judge in its core: a flipped gate IS a regression, full stop. ALSO re-verifies the spec→plan hash chain (pharn/floor/check-plan-spec-agree.mjs) as the THIRD downstream consumer (after grill, build), so the inside/outside scope boundary is derived from a current, un-drifted plan. Emits pharn/features/<name>/regression-report.json (machine) + pharn/features/<name>/REGRESSION.md (human). FLOOR verdict; ADVISORY orchestration. '/pharn-regress produced a report' NEVER means 'nothing broke' — it catches exactly what the project's deterministic suite catches, nothing more, but deterministically (P0)."
+description: "Detect regressions OUTSIDE the just-built feature in the USER's codebase — the sixth product-pipeline stage (spec → plan → grill → test → build → regress → verify → ship). Re-run the project's existing deterministic suite (its tests / type-check / lint) over the area OUTSIDE the feature's declared scope at the pre-build BASELINE and at HEAD, and flag any gate that flipped pass→fail. The verdict is a deterministic exit-code comparison (pharn/floor/check-regress.mjs) — ZERO LLM-judge in its core: a flipped gate IS a regression, full stop. ALSO re-verifies the spec→plan hash chain (pharn/floor/check-plan-spec-agree.mjs) as the FOURTH downstream consumer (after grill, test, build), so the inside/outside scope boundary is derived from a current, un-drifted plan. Emits pharn/features/<name>/regression-report.json (machine) + pharn/features/<name>/REGRESSION.md (human). FLOOR verdict; ADVISORY orchestration. '/pharn-regress produced a report' NEVER means 'nothing broke' — it catches exactly what the project's deterministic suite catches, nothing more, but deterministically (P0)."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -21,7 +21,7 @@ version: "0.4.0"
 
 # /pharn-regress — detect regressions OUTSIDE the feature, in the user's codebase
 
-You are the **regress stage** of the product pipeline (`spec → plan → grill → build → regress → verify →
+You are the **regress stage** of the product pipeline (`spec → plan → grill → test → build → regress → verify →
 ship`, `pharn/ARCHITECTURE.md §6`). You sit AFTER `/pharn-build` and BEFORE a future `/pharn-verify`, and you
 answer **one** question, deterministically: **did building this feature break anything OUTSIDE the
 feature's declared scope?** It is pure state comparison — what was passing at the pre-build baseline is
@@ -61,8 +61,8 @@ that re-run; it is a different, narrower guarantee:
   1. **The regression verdict** — `pharn/floor/check-regress.mjs` (`scope` partition + `verdict` exit-code
      comparison; `pharn/ARCHITECTURE.md §2` primitive #3). The whole regression core reduces to it.
   2. **The spec→plan hash chain, re-verified here** — `pharn/floor/check-plan-spec-agree.mjs` (content-hash
-     equality + the `state == Approved` enum; primitives #2 + #3). You are the **THIRD** downstream
-     consumer that enforces `/pharn-spec`'s pin (grill first, build second). It is load-bearing here: the
+     equality + the `state == Approved` enum; primitives #2 + #3). You are the **FOURTH** downstream
+     consumer that enforces `/pharn-spec`'s pin (grill, then `/pharn-test`, then build). It is load-bearing here: the
      inside/outside **scope boundary** is derived from the PLAN's `## Files`, so it is trustworthy only if
      the plan is current — a spec that drifted after build makes the plan (and its `## Files`) stale and
      the partition wrong. Cited, not restated (P4).
@@ -148,7 +148,7 @@ node pharn/floor/check-plan-spec-agree.mjs pharn/features/<name>/PLAN.md pharn/f
   - **missing / malformed carried hash** in the PLAN → **re-plan via `/pharn-plan`**.
 
   Never relax, skip, or work around the gate — it is the floor reduction of the §6 Keystone (fix #4),
-  cited, not restated (P4). You are the **third** enforcing consumer of the pin; it is enforced
+  cited, not restated (P4). You are the **fourth** enforcing consumer of the pin; it is enforced
   **repeatedly**, not once.
 
 ## Step 3 — Resolve the base + partition inside/outside (deterministic; live, P6)
@@ -404,7 +404,7 @@ human reads the report and the verdict's exit code decides the stage.
   `## Files` vs the changed set, `check-regress.mjs scope` (primitive #3). An escaped path is a blocking
   fix#7 finding, not a guess.
 - **"It builds its verdict only from a current Approved, un-drifted plan"** → **FLOOR**: content-hash
-  equality + `state == Approved` enum, `check-plan-spec-agree.mjs` (primitives #2 + #3) — the **third**
+  equality + `state == Approved` enum, `check-plan-spec-agree.mjs` (primitives #2 + #3) — the **fourth**
   enforcement of `/pharn-spec`'s pin.
 - **"It writes only its two declared artifacts"** → **FLOOR: hook (fix #7)** (`set-writes-scope.cjs` +
   `enforce-writes-scope.cjs`).

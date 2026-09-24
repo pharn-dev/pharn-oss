@@ -35,6 +35,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fingerprint, ALGO } from "./worktree-fingerprint.mjs";
 import { SCHEMA, LAPSE_CODES, REASON_CODES, logBasename } from "./gate-run-core.mjs";
+import { filesDigest } from "./ac-tests-lock.mjs";
 import {
   evaluate,
   parseArgs,
@@ -58,20 +59,53 @@ function git(dir, ...args) {
   return execFileSync("git", args, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 }
 
-/** A SPEC/PLAN/GRILL front that the three front checkers accept: an Approved SPEC pinned by its body hash,
- *  a PLAN carrying that hash and `applied_lessons: none`, and a GRILL.md. */
+const CHECK_SPEC = join(HERE, "check-spec.mjs");
+const LOCK_CLI = join(HERE, "ac-tests-lock.mjs");
+const TEMPLATE = readFileSync(join(HERE, "..", "pharn-contracts", "templates", "spec-template.md"), "utf8");
+const TEMPLATE_REF = spawnSync(process.execPath, [CHECK_SPEC, "--template-ref", "pharn-default"], { encoding: "utf8" }).stdout.trim();
+const AC_TEST = "tests/ac/demo.unit.test.js";
+
+/** The front a /pharn-loop run leaves (6.19.0): a TEMPLATED SPEC filled from the shipped template and pinned by
+ *  `check-spec.mjs --hash`, a PLAN carrying that pin and `applied_lessons: none`, a GRILL.md, and a COMPLETE test
+ *  stage — AC-TESTS.md mapping AC-1 to one test file, and a lock `ac-tests-lock.mjs --write` wrote, carrying a red run
+ *  bound to its files. So check I's `check-test-stage --require-test-first` reads READY test-first (REVIEW finding 3:
+ *  before this the fixture was a legacy SPEC, and the loop's real path through check I was never exercised). */
 function writeFront(proj) {
   const fd = join(proj, FEATURE_BASE, FEATURE);
   mkdirSync(fd, { recursive: true });
-  let body = "\n";
-  for (const h of ["Intent", "Scope", "Acceptance Criteria", "Constraints"]) body += `## ${h}\n\nfiller\n\n`;
-  const h = sha256(body);
-  writeFileSync(join(fd, "SPEC.md"), `---\nspec_id: ${FEATURE}\nstate: Approved\nspec_content_hash: ${h}\n---\n${body}`);
+  const draft = TEMPLATE.replace(/<!--\s*pharn:guidance[\s\S]*?-->\n?/g, "")
+    .replace("spec_id: <name>", `spec_id: ${FEATURE}`)
+    .replace("<the line check-spec.mjs --resolve-template-ref prints>", TEMPLATE_REF)
+    .replace("<unit | integration | e2e>", "unit")
+    .replace(/<[^>\n]+>/g, "filled");
+  writeFileSync(join(fd, "SPEC.md"), draft);
+  const h = spawnSync(process.execPath, [CHECK_SPEC, "--hash", join(fd, "SPEC.md")], { encoding: "utf8" }).stdout.trim();
+  writeFileSync(
+    join(fd, "SPEC.md"),
+    draft.replace("state: Draft", "state: Approved").replace('spec_content_hash: ""', `spec_content_hash: ${h}`)
+  );
   writeFileSync(
     join(fd, "PLAN.md"),
     `---\nspec_id: ${FEATURE}\nspec_content_hash: ${h}\napplied_lessons: none\n---\n\n## Files\n\n- \`a.txt\` — a\n`
   );
   writeFileSync(join(fd, "GRILL.md"), "# GRILL\n");
+  writeFileSync(
+    join(fd, "AC-TESTS.md"),
+    `---\nspec_id: ${FEATURE}\nspec_content_hash: ${h}\n---\n\n## Files\n\n- \`${AC_TEST}\` — t\n\n## Mapping\n\n- AC-1 | unit | \`${AC_TEST}\` | src/x.js#f(): void\n`
+  );
+  mkdirSync(join(proj, "tests", "ac"), { recursive: true });
+  writeFileSync(join(proj, AC_TEST), 'test("AC-1: t", async () => { await import("../../src/x.js"); });\n');
+  const w = spawnSync(process.execPath, [LOCK_CLI, "--write", FEATURE], { cwd: proj, encoding: "utf8" });
+  assert.equal(w.status, 0, `fixture: ac-tests-lock --write: ${w.stdout}`);
+  const lockPath = join(fd, "AC-TESTS.lock.json");
+  const lock = JSON.parse(readFileSync(lockPath, "utf8"));
+  lock.red_run = {
+    stamp_sha256: "a".repeat(64),
+    files_sha256: filesDigest(lock.files),
+    gates: [{ gate: "test", results_sha256: "b".repeat(64) }],
+    acs: [{ id: "AC-1", tests: [`${AC_TEST}::AC-1: t`] }],
+  };
+  writeFileSync(lockPath, JSON.stringify(lock, null, 2));
 }
 
 /** A committed project. `sub` puts the PROJECT in a subdirectory of the git repo (the install-at-a-subpath
@@ -614,6 +648,51 @@ test("I — with --front, a Draft SPEC, a broken chain, a bad lessons declaratio
   });
 });
 
+test("I — the test stage (6.19.0): stale /pharn-test evidence STOPS front-stage-red, run from --repo, never a RERUN", () => {
+  for (const sub of [null, "app"]) {
+    withRepo(
+      (r) => {
+        iterate(r);
+        expect(evaluate(args(r, ["--front"])), { code: EXIT.FRESH, verdict: "FRESH" }); // control: READY test-first
+        const fd = join(r.proj, FEATURE_BASE, FEATURE);
+        const lockPath = join(fd, "AC-TESTS.lock.json");
+        const keepLock = readFileSync(lockPath, "utf8");
+        for (const [why, mutate, token] of [
+          [
+            "the lock records no red run",
+            () => spawnSync(process.execPath, [LOCK_CLI, "--write", FEATURE], { cwd: r.proj }),
+            "RED lock-red",
+          ],
+          ["a pinned test rewritten after the red run", () => writeFileSync(join(r.proj, AC_TEST), "weakened\n"), "RED lock-red"],
+          [
+            "the SPEC re-read as legacy (spec_template removed)",
+            () => {
+              const spec = join(fd, "SPEC.md");
+              writeFileSync(spec, readFileSync(spec, "utf8").replace(/^spec_template:.*\n/m, ""));
+            },
+            "RED legacy-with-mapping",
+          ],
+        ]) {
+          mutate();
+          iterate(r); // the mutation moved the tree: re-take the evidence so I is the ONLY failing check
+          const res = evaluate(args(r, ["--front"]));
+          expect(res, { code: EXIT.STOP, verdict: "STOP", reason_code: "front-stage-red" });
+          assert.equal(res.doc.checks.I, "fail", why);
+          assert.ok(res.doc.reason.includes(`(${token})`), `${why}: ${res.doc.reason}`);
+          assert.match(res.doc.reason, /cannot be re-run after the build: a re-plan, or a person/);
+          assert.equal(res.doc.stage_to_rerun, null, "never a re-run");
+          // restore the READY world for the next mutation
+          git(r.root, "checkout", "--", ".");
+          writeFileSync(lockPath, keepLock);
+          iterate(r);
+          expect(evaluate(args(r, ["--front"])), { code: EXIT.FRESH, verdict: "FRESH" });
+        }
+      },
+      { sub }
+    );
+  }
+});
+
 // ---------------------------------------------------------------------------------------------------
 // The budget — a counter, not prose
 // ---------------------------------------------------------------------------------------------------
@@ -761,6 +840,16 @@ const FLOOR_MODULES = [
   "check-plan-spec-agree.mjs",
   "check-plan-lessons.mjs",
   "frontmatter-core.mjs",
+  // check I's test-stage gate (6.19.0) and the import closure of what it shells over a templated feature: the mode
+  // and mapping checks, and the lock script (whose red-run core reads per-test records).
+  "check-test-stage.mjs",
+  "check-ac-tests.mjs",
+  "ac-tests-core.mjs",
+  "plan-files-core.mjs",
+  "ac-tests-lock.mjs",
+  "red-run-core.mjs",
+  "test-results-core.mjs",
+  "test-results-formats.mjs",
 ];
 
 function pinnedLoopLines() {

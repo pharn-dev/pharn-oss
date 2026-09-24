@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.18.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.19.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -116,12 +116,18 @@ Then open Claude Code in the same project and run the full loop:
 /pharn-loop implement password reset with a one-time token
 ```
 
-`/pharn-loop` runs spec → plan → grill → build → regress → verify **unattended**. The model approves its
-own spec, repeats build → regress → verify until a deterministic stop — green, the `--max-iter` cap, or a
+`/pharn-loop` runs spec → plan → grill → test → build → regress → verify **unattended**. The model approves its
+own spec, writes each acceptance criterion's test and shows it fails before any code exists, repeats build →
+regress → verify until a deterministic stop — green, the `--max-iter` cap, or a
 result it must not retry — commits a green result to a new local branch (never pushed or merged), and
 ends with a summary of what was done. When it reaches a point that needs a human decision, it stops and
 says what it needs instead of guessing. On any stop other than a committed green result it reverts its
 own spec approval — a procedural step, so an aborted run can skip it.
+
+The test stage needs your project's test runner and its per-test results: a `test` script (and a `test:e2e` or
+`e2e` script for end-to-end criteria) whose reporter writes JSON to the path PHARN passes
+([Per-test results](#per-test-results)). Without them the run stops with `blocked: no-test-runner` and suggests a
+setup increment to run first.
 
 To approve the spec yourself and decide merge, fix, or abandon at the end, use the one-pass run with
 both human gates:
@@ -246,19 +252,19 @@ available on their own when you want to inspect or drive one step manually. The 
 `/pharn-review` and `/pharn-memory-promote` — are standalone: neither is a pipeline stage, and neither is
 invoked by `/pharn-loop` or `/pharn-ship`.
 
-| Command                 | Use it when you want to...                                                                                                                                                                          |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/pharn-loop`           | Run the full workflow unattended: the model approves the spec, iterates build → regress → verify to a deterministic stop, commits a green result to a local branch, and reports.                    |
-| `/pharn-ship`           | Run the full workflow once, then present the ship record and briefing at the final human decision gate.                                                                                             |
-| `/pharn-review`         | Run code-review lenses in parallel over any code and merge their structured findings deterministically. This is standalone; it is not a pipeline stage.                                             |
-| `/pharn-spec`           | Convert prose intent into a structured `SPEC.md`, surface gaps, and stop for approval before implementation.                                                                                        |
-| `/pharn-plan`           | Convert an approved `SPEC.md` into a `PLAN.md` with declared files and declared promoted lessons.                                                                                                   |
-| `/pharn-grill`          | Challenge the plan before code exists and re-check the spec/plan hash chain.                                                                                                                        |
-| `/pharn-test`           | Write each acceptance criterion's test before the build, into the files `/pharn-plan` mapped in `AC-TESTS.md`, run them and require each to fail, and pin the evidence. Standalone in this release. |
-| `/pharn-build`          | Implement the plan after setting the active write scope from `PLAN.md`.                                                                                                                             |
-| `/pharn-regress`        | Re-run existing project suites and record regressions outside the feature.                                                                                                                          |
-| `/pharn-verify`         | Check build artifacts and completeness signals, including declared concrete paths that were never created.                                                                                          |
-| `/pharn-memory-promote` | Promote one lesson into `memory-bank/` through a gated provenance check.                                                                                                                            |
+| Command                 | Use it when you want to...                                                                                                                                                                                                                                 |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/pharn-loop`           | Run the full workflow unattended: the model approves the spec, iterates build → regress → verify to a deterministic stop, commits a green result to a local branch, and reports.                                                                           |
+| `/pharn-ship`           | Run the full workflow once, then present the ship record and briefing at the final human decision gate.                                                                                                                                                    |
+| `/pharn-review`         | Run code-review lenses in parallel over any code and merge their structured findings deterministically. This is standalone; it is not a pipeline stage.                                                                                                    |
+| `/pharn-spec`           | Convert prose intent into a structured `SPEC.md`, surface gaps, and stop for approval before implementation.                                                                                                                                               |
+| `/pharn-plan`           | Convert an approved `SPEC.md` into a `PLAN.md` with declared files and declared promoted lessons.                                                                                                                                                          |
+| `/pharn-grill`          | Challenge the plan before code exists and re-check the spec/plan hash chain.                                                                                                                                                                               |
+| `/pharn-test`           | Write each acceptance criterion's test before the build, into the files `/pharn-plan` mapped in `AC-TESTS.md`, run them and require each to fail, and pin the evidence. Runs between `/pharn-grill` and `/pharn-build` in `/pharn-ship` and `/pharn-loop`. |
+| `/pharn-build`          | Implement the plan after setting the active write scope from `PLAN.md`.                                                                                                                                                                                    |
+| `/pharn-regress`        | Re-run existing project suites and record regressions outside the feature.                                                                                                                                                                                 |
+| `/pharn-verify`         | Check build artifacts and completeness signals, including declared concrete paths that were never created.                                                                                                                                                 |
+| `/pharn-memory-promote` | Promote one lesson into `memory-bank/` through a gated provenance check.                                                                                                                                                                                   |
 
 The command names are generated and drift-guarded in the [inventory below](#pharn-builds-pharn); the
 one-line descriptions in this table are hand-written and are not.
@@ -382,12 +388,12 @@ See [`LIMITS.md`](./LIMITS.md) for the full set of bounds.
 
 ## The pipeline
 
-Seven typed stages, each emitting a typed artifact:
+Eight typed stages, each emitting a typed artifact:
 
 ```mermaid
 flowchart LR
     S["spec"] --> G1{{"SPEC approved<br/>(by the model under /pharn-loop)"}}
-    G1 --> P["plan"] --> GR["grill"] --> B["build"] --> R["regress"] --> V["verify"]
+    G1 --> P["plan"] --> GR["grill"] --> T["test"] --> B["build"] --> R["regress"] --> V["verify"]
     V -- "measurable red, under the cap<br/>(/pharn-loop only)" --> B
     V -- "green, cap reached,<br/>or a red it must not retry" --> G2{{"human decides<br/>merge / fix / abandon<br/>(/pharn-loop: after its summary)"}}
     G2 --> SH["ship"]
@@ -395,8 +401,8 @@ flowchart LR
 
 **What binds the chain is the SPEC→PLAN content-hash, not a field on every artifact and not a
 stage-to-stage handoff.** Identity travels as the feature slug — `spec_id` ≡ `<name>` ≡ the feature
-directory — and `check-plan-spec-agree.mjs` re-verifies the pin at **four** downstream stages (grill,
-build, regress, verify). A literal `spec_id` field appears in `SPEC.md` (the root identity, read by
+directory — and `check-plan-spec-agree.mjs` re-verifies the pin at **five** downstream stages (grill,
+test, build, regress, verify). A literal `spec_id` field appears in `SPEC.md` (the root identity, read by
 `check-spec.mjs --spec-id`), `PLAN.md` and `BRIEFING.md` — not on every artifact.
 
 Stages do **not** each read the previous one's output. `/pharn-regress` reads the plan to derive the
@@ -508,8 +514,10 @@ For a SPEC filled from the template, `/pharn-plan` maps each acceptance criterio
 interface it drives (`AC-TESTS.md`), and `/pharn-test` writes those tests **before** `/pharn-build`, into files the
 build is not allowed to write. Since 6.18.0 it also **runs** them and requires every criterion's test to **fail**:
 a test that cannot fail, is never collected, or is skipped would otherwise pass unnoticed. The evidence — which
-tests failed, bound to the files it pinned — goes into the committed `AC-TESTS.lock.json`. It is standalone in
-this release: `/pharn-ship` and `/pharn-loop` do not call it yet.
+tests failed, bound to the files it pinned — goes into the committed `AC-TESTS.lock.json`. Since 6.19.0
+`/pharn-ship` and `/pharn-loop` run it between `/pharn-grill` and `/pharn-build`, and `/pharn-build` refuses to start
+until `check-test-stage.mjs` reads that evidence as complete. A feature planned or tested before 6.19.0 has to go
+back through `/pharn-plan` and `/pharn-test` before it builds.
 
 What it needs from your project:
 
@@ -552,7 +560,7 @@ byte-for-byte by `npm run docs:check`, so it cannot quietly drift from what is a
 - **Product commands — 11** (`.claude/commands/`): `/pharn-build`, `/pharn-grill`, `/pharn-loop`, `/pharn-memory-promote`, `/pharn-plan`, `/pharn-regress`, `/pharn-review`, `/pharn-ship`, `/pharn-spec`, `/pharn-test`, `/pharn-verify`.
 - **Dev-apparatus commands — 9** (`.claude/commands/`): `/pharn-dev-build`, `/pharn-dev-eval`, `/pharn-dev-grill`, `/pharn-dev-memory-promote`, `/pharn-dev-plan`, `/pharn-dev-regress`, `/pharn-dev-review`, `/pharn-dev-ship`, `/pharn-dev-verify`.
 - **Hook scripts — 4** (`.claude/hooks/`): `enforce-writes-scope.cjs`, `protect-trusted-paths.cjs`, `require-loop-record.cjs`, `set-writes-scope.cjs`.
-- **Floor checkers — 76** `.mjs` files under `pharn/floor/` (tests excluded).
+- **Floor checkers — 77** `.mjs` files under `pharn/floor/` (tests excluded).
 
 <!-- CURRENT-STATE:END -->
 

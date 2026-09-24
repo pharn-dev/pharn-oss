@@ -1,5 +1,5 @@
 ---
-description: "Build the USER's code from an approved pharn/features/<name>/PLAN.md — the fourth product-pipeline stage (spec → plan → grill → build → regress → verify → ship), and the FIRST stage that writes the user's implementation files (not a methodology artifact). TWO floor gates, both REUSED (no new floor primitive). (1) HASH-CHAIN GATE (deterministic, pharn/floor/check-plan-spec-agree.mjs — REUSING check-spec-approved.mjs + check-spec.mjs --hash): /pharn-build is the SECOND downstream consumer that RE-VERIFIES the spec→plan pin (grill was first) — the PLAN's carried spec_content_hash MUST still equal the current Approved, un-drifted SPEC's body hash, else the plan is stale → REFUSE (re-plan / re-approve). The chain is re-checked at BUILD time, not trusted-once. (2) WRITES-SCOPE (fix #7, set-writes-scope.cjs --from-plan + enforce-writes-scope.cjs): the build writes ONLY the paths the plan's `## Files` authorizes — now LOAD-BEARING on the USER's codebase; a write the plan did not authorize is DENIED at the floor; fail-closed if the plan declares no parseable scope. ADVISORY: the implementation itself (HOW the code is written, whether it is correct or faithful to the plan's intent) is model judgment — downstream /pharn-regress + /pharn-verify + human review check that. '/pharn-build produced code' NEVER means 'the code is correct' (P0)."
+description: "Build the USER's code from an approved pharn/features/<name>/PLAN.md — the fifth product-pipeline stage (spec → plan → grill → test → build → regress → verify → ship), and the FIRST stage that writes the user's implementation files (not a methodology artifact). THREE floor gates, all REUSED checkers (no new floor primitive). (1) HASH-CHAIN GATE (deterministic, pharn/floor/check-plan-spec-agree.mjs — REUSING check-spec-approved.mjs + check-spec.mjs --hash): /pharn-build is the THIRD downstream consumer that RE-VERIFIES the spec→plan pin (grill first, /pharn-test second) — the PLAN's carried spec_content_hash MUST still equal the current Approved, un-drifted SPEC's body hash, else the plan is stale → REFUSE (re-plan / re-approve). The chain is re-checked at BUILD time, not trusted-once. (2) WRITES-SCOPE (fix #7, set-writes-scope.cjs --from-plan + enforce-writes-scope.cjs): the build writes ONLY the paths the plan's `## Files` authorizes — now LOAD-BEARING on the USER's codebase; a write the plan did not authorize is DENIED at the floor; fail-closed if the plan declares no parseable scope. (3) TEST-STAGE GATE (6.19.0, pharn/floor/check-test-stage.mjs — shelling check-ac-tests.mjs and ac-tests-lock.mjs): the Acceptance Criteria's tests were written and shown to FAIL before the build (a lock with a red run over the pinned tests, whose mapping still agrees with the current SPEC and PLAN), or the SPEC is a bootstrap (spec_kind: test-infra) or legacy one — else REFUSE (run /pharn-test). ADVISORY: the implementation itself (HOW the code is written, whether it is correct or faithful to the plan's intent) is model judgment — downstream /pharn-regress + /pharn-verify + human review check that. '/pharn-build produced code' NEVER means 'the code is correct' (P0)."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -11,27 +11,29 @@ reads:
     "pharn/ARCHITECTURE.md",
     "pharn/features/<name>/PLAN.md",
     "pharn/floor/check-plan-spec-agree.mjs",
+    "pharn/floor/check-test-stage.mjs",
     ".claude/hooks/set-writes-scope.cjs",
     ".claude/hooks/enforce-writes-scope.cjs",
     "<the user's target repo>",
   ]
 writes: ["<user-code files named in the plan's ## Files (Phase-1, via --from-plan — not from this list)>", "pharn/features/<name>/BUILD.md"]
 constitution_refs: ["P0", "P2", "P3", "P4", "P5", "P6", "P7"]
-version: "0.1.1"
+version: "0.2.0"
 ---
 
 # /pharn-build — build the user's code from an Approved, un-drifted plan, within the plan's scope
 
-You are the **build stage** of the product pipeline (`spec → plan → grill → build → regress → verify →
-ship`, `pharn/ARCHITECTURE.md §6`). You sit AFTER `/pharn-grill` and turn an **approved** `pharn/features/<name>/PLAN.md`
+You are the **build stage** of the product pipeline (`spec → plan → grill → test → build → regress → verify →
+ship`; `pharn/ARCHITECTURE.md §6` names it without `test` until a human applies that trusted doc's pending edit). You
+sit AFTER `/pharn-test` and turn an **approved** `pharn/features/<name>/PLAN.md`
 into the **user's actual code** — you are the **first** product stage that writes the user's implementation
-files, not a methodology artifact. Two things make that safe, and **both are REUSED floor mechanisms — you
-add no new floor primitive**:
+files, not a methodology artifact. Three things make that safe, and **all are REUSED floor mechanisms — you
+add no new floor primitive** (the third, the test-stage gate, runs first, in Step 0):
 
 - **FLOOR gate 1 — the spec→plan hash chain, re-verified at build time.** Before writing any code you
   re-run `pharn/floor/check-plan-spec-agree.mjs` (the same checker `/pharn-grill` uses): the PLAN's carried
   `spec_content_hash` must still equal the **current** Approved, un-drifted SPEC's body hash. You are the
-  **SECOND** downstream consumer that enforces `/pharn-spec`'s pin (grill was the first) — **grill passing is
+  **THIRD** downstream consumer that enforces `/pharn-spec`'s pin (grill first, `/pharn-test` second) — **grill passing is
   not permission to build forever**; the spec could have changed between grill and build, so build
   re-checks. A broken / stale chain → **RED → REFUSE** (re-plan / re-approve).
 - **FLOOR gate 2 — the writes-scope, derived from the plan, now bounding the USER's code (fix #7).** You set
@@ -64,10 +66,12 @@ Load the trusted prefix and obey it for the whole run:
 
 ## The two layers, stated explicitly (P0)
 
-- **FLOOR — the guarantees, both REUSED (no new primitive):** (1) the hash chain
+- **FLOOR — the guarantees, all REUSED (no new primitive):** (1) the hash chain
   (`check-plan-spec-agree.mjs` — content-hash equality + the `state == Approved` enum, primitives #2 + #3);
   (2) the writes-scope (`set-writes-scope.cjs --from-plan` + `enforce-writes-scope.cjs` — a hook, primitive
-  #1); and (3) the floor staying GREEN (`validate.mjs` / the user's project gate — enum / regex).
+  #1); (3) the floor staying GREEN (`validate.mjs` / the user's project gate — enum / regex); and (4) the
+  test-stage gate (`check-test-stage.mjs`, 6.19.0 — enum membership over the SPEC's mode + the content-hash checks
+  it shells).
 - **ADVISORY — never a guarantee.** The **implementation** — HOW the user's code is written, whether it is
   correct, complete, or faithful to the plan's intent — is **model judgment**. `/pharn-build` helps write
   code that follows the plan; the downstream stages (`regress → verify`) and human review check whether it
@@ -79,12 +83,39 @@ Load the trusted prefix and obey it for the whole run:
   _obeying_ it (refusing) is command discipline — so you MUST hard-stop on a non-zero setter exit (Step 0),
   never rely on a leftover scope to save you.
 
-## Step 0 — Resolve `<name>`, then set the writes-scope from the plan (fix #7, fail-closed)
+## Step 0 — Resolve `<name>`, pass the test-stage gate, then set the writes-scope from the plan (fix #7, fail-closed)
 
 1. **Resolve the feature `<name>`** — the kebab-case slug of the feature being built, from the invocation.
    It must be an **existing** `pharn/features/<name>/` holding a `PLAN.md` **and** a `SPEC.md`. Ambiguous → **ask
    the human** (P5 terminal fallback is a question, never a guess).
-2. **Set the scope from the plan's `## Files`** before any write. The **scope source is a `## Files` heading
+2. **The test-stage gate (FLOOR — refuse-or-proceed; 6.19.0) — FIRST, before any scope or anchor.** The Acceptance
+   Criteria's tests are written and shown to FAIL **before** you build (`/pharn-test`), into files your scope
+   excludes. That order is enforced here, not narrated. It is read-only, and it runs before the setter and the
+   anchor below so that a refusal leaves no scope and no reconciliation epoch behind:
+
+   ```bash
+   node pharn/floor/check-test-stage.mjs <name>
+   ```
+
+   Branch **only** on the exit code (P5). Its first line is a closed token; copy it into `BUILD.md` (Step 5):
+
+   - **exit 0** → continue. `READY test-first` (the mapping agrees with the current SPEC and PLAN, and the lock
+     records a red run over the pinned tests), `READY bootstrap` (a `spec_kind: test-infra` SPEC — no test ran
+     first, which is weaker, and the lock says so), or `NOT-APPLICABLE legacy-spec` (a SPEC without
+     `spec_template` has no AC ids).
+   - **exit 1** → **HALT. Do not build.** Report the `RED <reason>` line and its remedy: `no-mapping` /
+     `mapping-red` → re-plan via `/pharn-plan`, then `/pharn-test`; `no-lock` / `lock-red` / `lock-unusable` /
+     `lock-mode-mismatch` → run `/pharn-test`; `spec-unusable` / `legacy-with-mapping` → fix the SPEC via
+     `/pharn-spec`. A feature planned before 6.17.0 or tested under it (a 6.17.0 lock records no red run) is refused
+     until it goes through `/pharn-plan` and `/pharn-test`; one already partly built without them must first revert
+     that implementation, because a red run over existing behaviour reads `ac-test-passes-before-build`. Never write
+     or edit an AC test to get past this — they are outside your scope by design (`pharn/pharn-contracts/ac-tests.md`).
+   - **exit 2** → **HALT** (unusable input).
+
+   The gate also passes on a **rebuild** (a `/pharn-loop` iteration 2+, `/pharn-ship`'s Step 2b retry): the lock
+   pins only the AC tests, and the mapping check reads SPEC, PLAN and AC-TESTS.md, none of which you may write.
+
+3. **Set the scope from the plan's `## Files`** before any write. The **scope source is a `## Files` heading
    whose list items lead with a back-tick path** (`` - `path` ``); the hardened extractor takes only those
    and excludes any "not touched" / "out of scope" subsection:
 
@@ -154,8 +185,8 @@ node pharn/floor/check-plan-spec-agree.mjs pharn/features/<name>/PLAN.md pharn/f
   - **missing / malformed carried hash** in the PLAN → **re-plan via `/pharn-plan`**.
 
   Never relax, skip, or work around the gate. It is the floor reduction of the §6 Keystone (a plan made
-  against a moved spec is stale, detectably — fix #4) — cited, not restated (P4). You are the **second**
-  enforcing consumer of the pin (after `/pharn-grill`): the pin is enforced **repeatedly**, not once.
+  against a moved spec is stale, detectably — fix #4) — cited, not restated (P4). You are the **third**
+  enforcing consumer of the pin (after `/pharn-grill` and `/pharn-test`): the pin is enforced **repeatedly**, not once.
 
 ## Step 2b — Discover the user's installed skills (ADVISORY context; enumeration is deterministic, gates nothing)
 
@@ -278,7 +309,7 @@ node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/phar
 ```
 
 Then write a **thin, advisory** `pharn/features/<name>/BUILD.md` recording: which plan was built; the chain-gate
-result (GREEN, by `check-plan-spec-agree.mjs`); the fix #7 scope that was set (the authorized paths); the
+result (GREEN, by `check-plan-spec-agree.mjs`); the test-stage gate's token (Step 0, verbatim); the fix #7 scope that was set (the authorized paths); the
 floor status (GREEN); and the files written. It is **never** a self-issued "correct" / "done" / `PHARN ✓
 reviewed` seal (the §6 ship-stage seal is the **human's** post-review decision downstream, not
 `/pharn-build`'s). End with the honest line: _"built within the named scope from a current approved plan —
@@ -291,8 +322,17 @@ this is NOT a judgment that the code is correct; that is `/pharn-regress` / `/ph
 ## Guarantee audit (P0) — the honest split
 
 - **"It builds only from a current Approved, un-drifted plan"** → **FLOOR**: content-hash equality + the
-  `state == Approved` enum, via `check-plan-spec-agree.mjs` (reused). The **second** enforcement of
-  `/pharn-spec`'s pin, after `/pharn-grill`.
+  `state == Approved` enum, via `check-plan-spec-agree.mjs` (reused). The **third** enforcement of
+  `/pharn-spec`'s pin, after `/pharn-grill` and `/pharn-test`.
+- **"It does not build before the test stage completed"** → **FLOOR** verdict (`check-test-stage.mjs`: enum
+  membership over the SPEC's mode + the content-hash checks it shells — the mapping against the current SPEC and
+  PLAN, the lock against the pinned tests and its red run). **Obeying it is ADVISORY** command discipline (L5/L30):
+  a model that skips Step 0's gate builds anyway. `/pharn-loop` re-reads the same verdict after the build
+  (`check-loop-fresh.mjs` check I), so a skipped gate there surfaces as a STOP. Not provenance: a lock from an
+  earlier run over the same files passes. **And one bound on `NOT-APPLICABLE`:** it is decided by `spec_template`,
+  which the approval pin does not cover, so removing that key AND deleting both AC-TESTS.md and the lock makes a
+  templated SPEC read legacy and pass here; `/pharn-loop`, which never writes a legacy SPEC, refuses
+  `NOT-APPLICABLE` for that reason.
 - **"A broken / stale chain stops the build"** → **FLOOR** (the checker's exit code). **"`/pharn-build`
   invokes the gate and obeys it"** → **ADVISORY** command orchestration (two clocks).
 - **"It writes only within the plan's declared scope"** → **FLOOR: hook (fix #7)**
