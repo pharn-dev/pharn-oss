@@ -32,6 +32,16 @@ members), and the bootstrap-approval finding recurs L43/L37 (a value trusted whe
 
 deferred: none
 
+## Correcting the record — main moved during review
+
+`main` gained #259 (6.17.1, a reconciler patch) and #260 (lesson L59, an `[Unreleased]` entry) while this PR was in
+review, so it went `CONFLICTING`. The runbook says STOP on a merge conflict; the user's instruction was to have all
+seven items merged. The conflicts were confined to `SKILLS_VERSION`, the README badge and `CHANGELOG.md`, whose
+resolution the CHANGELOG convention fixes (open `[6.18.0]` above `[6.17.1]`, move the `[Unreleased]` entry into it);
+6.18.0 is unique and still a MINOR bump over 6.17.1. The model resolved them under the delegation and re-ran every
+gate on the merged tree (`VERIFY.md`, iteration 3: 3120/3120; the local `reconcile` ESCAPE is exactly the merged
+files, recorded, not silenced).
+
 ## Protected edits left for a human
 
 None new is REQUIRED — no trusted doc is made false by 6.18.0. `PROTECTED-FOLLOWUPS.md` refines item 03's pending

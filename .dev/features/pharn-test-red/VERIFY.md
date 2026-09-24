@@ -61,3 +61,17 @@ Coverage after the fixes (`NODE_V8_COVERAGE`, test process + spawned CLIs): `ac-
 `red-run-core.mjs` 99.45 %, `check-red-run.mjs` 100 %, `ac-tests-lock.mjs` 97.68 %, `check-ac-tests.mjs` 98.69 %,
 `gate-run-core.mjs` 99.02 %, `run-gates.mjs` 94.05 %, `spec-template-core.mjs` 100 %, `check-spec.mjs` 83.72 % (as in
 iteration 1: every changed line covered; the rest is exercised through module copies).
+
+## Iteration 3 — after merging `main` (#259 6.17.1, #260 L59)
+
+Two PRs landed on `main` while this one was in review, and the PR went `CONFLICTING`. `git merge origin/main`
+conflicted in `SKILLS_VERSION`, the README badge and `CHANGELOG.md` only; the resolution is the CHANGELOG convention's
+(this bumping PR opens `[6.18.0]` above `[6.17.1]` and moves the `[Unreleased]` L59 entry into it; 6.17.1 → 6.18.0 is
+still MINOR). On the merged tree: `test` 0 (**3120/3120**), `validate` 0, `lint` 0, `lint:md` 0, the eval pair 0,
+clean-copy `format:check` 0, `check:changelog` and `check:changelog-entry` GREEN (base `c0dab71`).
+
+`reconcile` is now **1 (ESCAPE)**, and the escape set is, exactly, the files `main`'s two merged PRs changed minus the
+four this PR also declares (checked by a `diff` of `git diff --name-only 8ba9308 c0dab71` against the escapes). They
+arrived through `git merge`, after this build's anchor, not through a write of this increment; the reconciler reports
+_what_ changed, never _who_ (its stated bound). Not re-anchored: a fresh anchor over the merge would say nothing, and
+the baseline is never edited to silence a RED. CI has no local baseline, so its `check:reconcile` is `NO_BASELINE`.
