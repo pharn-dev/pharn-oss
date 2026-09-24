@@ -134,7 +134,8 @@ this file's enforcement is the write-guard described below; the prefix is the ad
 
 The deterministic backstop for this file's own integrity is `.claude/hooks/protect-trusted-paths.cjs`
 (P2): the agent cannot write to `CONSTITUTION.md`, `ARCHITECTURE.md`, `THREAT-MODEL.md`, or
-`LIMITS.md`. The principle (P0) and the floor (the hook) are the same idea applied to this file.
+`LIMITS.md` through the `Write`/`Edit`/`MultiEdit`/`NotebookEdit` tools — a `Bash` write reaches them
+(`LIMITS.md §6`). The principle (P0) and the floor (the hook) are the same idea applied to this file.
 
 ## Violation finding shape
 

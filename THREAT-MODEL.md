@@ -63,6 +63,13 @@ memory, is an agent operating on hostile input. The concrete surface:
    hostile skill that talks a lens out of reporting a real finding is invisible, because a suppressed
    finding never reaches the human. Stated in full, with its carve-out, at
    `.claude/commands/pharn-review.md` Step 3b — cited, not restated (P4).
+9. **the project's SPEC template** — `pharn.spec-template.md` at the project root (6.14.0). Its guidance
+   comments are instructions `/pharn-spec` follows when it writes a SPEC, including under
+   `--model-approve` in an unattended `/pharn-loop`, where no human reads the SPEC before it is planned.
+   A write to it is therefore a **persistent instruction channel** into every later SPEC — the
+   memory-poisoning shape (3), aimed at intent instead of lessons. It is **trusted by path**, which is why
+   the path is a constant rather than a `pharn.config.json` value. Stated in full, with its bounds, at
+   `pharn/pharn-contracts/spec-template.md`, "The project template" — cited, not restated (P4).
 
 ---
 
@@ -80,6 +87,7 @@ Every answer reduces to the floor (P0) or is labeled a limit (`LIMITS.md`).
 | community Capability    | `kind` is a **privilege level**: community = markdown-only, no `.cjs`; cannot declare trusted-write or off-allowlist egress | `seal`-gating enforced (validate.mjs); markdown-only/no-`.cjs` and trusted-write pre-write hook + pre-egress (specified; ships with the guarded surface) |
 | cross-model response    | egress-fenced + response returns in an untrusted fence + advisory-only (never gates ship)                                   | pre-egress (specified; ships with the guarded surface) + enum gate |
 | user-installed skill    | Enumerated deterministically, then fed to three stages as untrusted DATA. **Partial bound only:** for a lens whose `pharn/floor/lens-scanner-map.json` entry names a scanner, that scanner's MATCH is a regex verdict a skill cannot erase — but that covers only that it matched, never that the lens REPORTS it, and it does not exist at all for the scanner-less entries (read that membership from the map, not from here). See `.claude/commands/pharn-review.md` Step 3b | enum/regex — **ENUMERATION ONLY** (`scan-installed-skills.mjs`), and it **GATES NOTHING**: no proceed/stop/scope in any stage reads its output. **No primitive is specified or planned for this row** |
+| project SPEC template   | one fixed path, never read from config — a configurable pointer would itself be unguarded, agent-writable state; `check-spec.mjs` validates a MINIMUM shape before printing its reference and never authenticates the guidance text | pre-write hook — `protect-trusted-paths.cjs` denies it by path, whether or not the file exists, on `Write`/`Edit`/`MultiEdit`/`NotebookEdit` only. A `Bash` write reaches it and is detected only inside a build's anchor-to-verify window, which opens after `/pharn-spec` ran, and only for a non-adversarial writer on a file that is not git-ignored (`LIMITS.md §1d`, §6). A change landed by a merge, a pull or a human editor is obeyed as-is |
 
 ---
 
@@ -96,8 +104,10 @@ The red-team's verdict: a **single disease in five places — "written in the co
 2. **Trust-by-location without write-protection** — trusted source files are write-protected by a
    hook (`ARCHITECTURE.md §7`, fix #2). _Closed against the Write/Edit/MultiEdit/**NotebookEdit**
    surface — the four tools the live matcher names. A `Bash` write reaches every one of these paths and
-   is neither denied nor detected; it rests on the Claude Code permission layer, which gates commands,
-   not paths, and is not a PHARN floor primitive (residual — `LIMITS.md §6`)._
+   is not denied — preventing it rests on the Claude Code permission layer, which gates commands, not
+   paths, and is not a PHARN floor primitive. Since 4.0.0 such a write is **detected** after the fact
+   when it lands inside a build's anchor-to-verify window (`check-bash-reconcile.mjs`, as in item 7);
+   outside that window it is neither denied nor detected (residual — `LIMITS.md §6`)._
 3. **Deterministic gate over probabilistic severity** — split into floor-gate (blocks guaranteed
    invariants from actual content) vs advisory-gate (reads LLM severity, never sole basis for a
    guaranteed block) (fix #3). _Closed by separation; the advisory half is labeled, not "fixed."_

@@ -131,13 +131,14 @@ pharn/floor/                                   the floor (§2): checkers, scanne
 pharn/pharn-contracts   L-1  schemas only, ZERO behavior: finding-shape (incl. severity enum),
                              eval-format, seam-config, loop-record, ship-briefing, ship-record,
                              cost-ledger, reconciliation-record, regression-report, verify-report,
-                             gate-run-record, spec-template (+ templates/spec-template.md, the
-                             default SPEC template it defines).
+                             gate-run-record, test-results-record, ac-tests, spec-template
+                             (+ templates/spec-template.md, the default SPEC template it defines;
+                             a project may supply its own at pharn.spec-template.md).
                              Everything depends on this.
   └─ pharn-core          L0   seam-resolver — the seam MECHANISM, framework-agnostic.
        ├─ pharn-pipeline      grillers (plan-time interrogation, one axis each)
        └─ pharn-review        lenses (post-build review, one hunt each)
-.claude/commands/                              the stages: pharn-spec … pharn-ship (+ loop, memory-promote)
+.claude/commands/                              the stages: pharn-spec … pharn-ship (+ loop, review, memory-promote)
 ```
 
 - `pharn-contracts` is a separate **bottom**, not a leaf. This fixes the v1 inversion where the
@@ -190,6 +191,7 @@ is what stops an injected code comment from flipping a guaranteed block.
 **Seam + seam-record + content-hash** _(specified; ships with the guarded surface — no
 `seam-record.json` is written and no `ai_docs` pin is read by any shipped code today; the live
 content-hash primitive is `spec_content_hash`)_**.** A seam = `{name, framework, runtime, packages[],
+resolution, resolved_via, pinned_at, content_hash}`. The agnostic resolver resolves each needed
 seam once through a confidence-gated chain (official skill → pinned ai_docs → model → fetch+pin →
 ask; terminal fallback is **ask**, P5) and pins it to `seam-record.json` by commit hash **and
 content hash**. Re-resolve only on a MAJOR bump of a pinned package. A re-fetch that changes
@@ -225,24 +227,32 @@ human-readable canonical markdown or JSON.
 
 ## 6. The pipeline spine
 
-`spec → plan → grill → build → regress → verify → ship`. Each stage emits a **typed artifact**
+`spec → plan → grill → test → build → regress → verify → ship`. Each stage emits a **typed artifact**
 linking back to the spec:
 
 | stage   | artifact             | key field                                    |
 | ------- | -------------------- | -------------------------------------------- |
-| spec    | `SPEC.md`            | intent (Draft → Approved) + `spec_template` (provenance) |
+| spec    | `SPEC.md`            | intent (Draft → Approved) + `spec_template` (provenance; a templated SPEC's criteria are `AC-<n>` items, one verify level each) + optional `spec_kind` (hashed into the approval pin, 6.18.0) |
 | plan | `PLAN.md` | `spec_id` **+ `spec_content_hash`** (fix #4) + `applied_lessons` (floor-shaped: `none` \| `[L<n>…]`; content advisory) |
 | grill   | grill-log            | findings vs plan                             |
+| test    | `AC-TESTS.lock.json` | the spec pin + the AC tests' digests + the test-infrastructure pin (6.20.0) + the red-run evidence: each AC's test failed before the build (6.18.0) — or a bootstrap record for a `spec_kind: test-infra` SPEC |
 | build   | `BUILD.md`           | per-phase results                            |
 | regress | regression-report    | regressions outside the feature              |
-| verify  | verify-report        | compliance per verifier                      |
+| verify  | verify-report        | `verdict` from the floor gates' exit codes + the AC gate (`ac_gate`, 6.20.0): every AC's locked, once-red test passed on the head run — bootstrap evidence for `spec_kind: test-infra`, not-applicable for a legacy SPEC; verifier findings annotate, never flip it (fix #3) |
 | ship    | ship-report          | decision + `PHARN ✓ reviewed` seal           |
+
+`test` writes each Acceptance Criterion's test before `build`, into files the build's writes-scope
+excludes, and requires each to fail; its mapping, `AC-TESTS.md`, is written by `plan` for a templated
+SPEC, and a legacy SPEC gets neither. `build` runs `pharn/floor/check-test-stage.mjs` first and refuses
+without that evidence (6.19.0) — obeying it is command discipline, and `/pharn-loop` re-reads it after
+every build. Shape and bounds: `pharn-contracts/ac-tests.md` (cited, not restated — P4; `LIMITS.md §9`).
 
 **Keystone:** `SPEC.md` is the root artifact and every downstream artifact is bound to it. **The
 binding is the feature slug, not a field on every artifact** — `spec_id` ≡ `<name>` ≡ the
 `pharn/features/<name>/` directory that holds the whole chain, an identity `pharn/floor/check-plan-spec-agree.mjs`
-asserts and four downstream stages re-verify. A literal `spec_id` field appears in `PLAN.md` and
-`BRIEFING.md`; the other artifacts carry the identity positionally.
+asserts and every downstream stage from `grill` to `verify` re-verifies. A literal `spec_id` field
+appears in `PLAN.md`, `AC-TESTS.md`, `AC-TESTS.lock.json` and `BRIEFING.md`, among others; the rest
+carry the identity positionally.
 But **`spec_id` binds identity, not content** — so the plan also pins `spec_content_hash` (fix #4,
 reusing the seam-record content-hash mechanism). If the spec is edited after the plan, the hash
 diverges and it is **detectable, not silent**. This is what makes the intent → diff → finding →
