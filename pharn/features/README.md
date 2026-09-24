@@ -11,7 +11,10 @@ build → regress → verify → ship`)
   Criterion to a test file and public target in `AC-TESTS.md`, and `/pharn-test` writes those tests before the
   build and pins them in the lock (`pharn/pharn-contracts/ac-tests.md`). Since 6.18.0 it also runs them before the
   build, requires each to fail, and records that red run in the lock; a `spec_kind: test-infra` SPEC gets a
-  bootstrap lock instead, with no tests and no run
+  bootstrap lock instead, with no tests and no run. Since 6.19.0 `/pharn-build` refuses to start without that
+  evidence; since 6.20.0 the lock also pins the test infrastructure (the test scripts, the per-test results
+  format and the root runner configs), and `/pharn-verify` checks each criterion's test on the head run — the
+  per-criterion table is the `ac_gate` block of `verify-report.json`
 
 This mirrors `.dev/features/` — but for the **product loop**, not the build loop. The split is the
 dev/product boundary made structural:

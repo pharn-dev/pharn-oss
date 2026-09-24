@@ -11,10 +11,12 @@
 // per-test view later stages need. HONEST TRIGGER (P7): no dogfood run failed on this; it was built at the
 // maintainer's direction (the AC-delivery queue) for a gap demonstrable on any project. No stage read the
 // record in 6.15.0; since 6.18.0 /pharn-test's red run does (red-run-core.mjs), where a refused record is a RED by
-// its own reason. That does NOT mean nothing else moved: for every stamp the runner writes, the verdicts are
-// unchanged, but validateStamp now refuses a MALFORMED `results_sha256` (a forged or corrupted stamp) as
-// `stamp-malformed` on all three verdict paths, and the runner refuses to run a gate whose results path it
-// cannot clear (gate-run-record.md, "Per-test results").
+// its own reason; and since 6.20.0 /pharn-verify's AC gate does (ac-gate-core.mjs via check-verify.mjs
+// --ac-gate), so a verify verdict computed with that flag DEPENDS on the record — a refused one is INCONCLUSIVE
+// over green gates. The regress verdict, and a verify verdict computed without the flag, are unchanged for every
+// stamp the runner writes; what did move on all three verdict paths is that validateStamp refuses a MALFORMED
+// `results_sha256` (a forged or corrupted stamp) as `stamp-malformed`, and the runner refuses to run a gate
+// whose results path it cannot clear (gate-run-record.md, "Per-test results").
 //
 // ================================ WHAT A RECORD IS, AND IS NOT ================================
 // A DERIVED VIEW, never stored (L35): the raw results file under `<out>` is the single store, and the gate's

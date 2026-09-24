@@ -23,6 +23,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.20.1] - 2026-09-24
+
+### Fixed
+
+- 2026-09-24: **The docs that 6.20.0 left stale now say what it does: `/pharn-verify` reads the per-test record,
+  the lock is schema `/3` with a real test-infrastructure pin, and `/pharn-loop` stops on changed AC evidence.**
+  `SKILLS_VERSION` 6.20.0 → 6.20.1 (PATCH: corrections to shipped bytes; no behaviour, contract shape or frontmatter
+  changes). `MIN_CLI` stays 0.5.0.
+  ([`.dev/features/docs-catchup-6-20-1/`](./.dev/features/docs-catchup-6-20-1/))
+  - **Now false, corrected:**
+    - `pharn/pharn-contracts/test-results-record.md` and the header of `pharn/floor/test-results-core.mjs` said the
+      verify verdict is unchanged by the per-test record. Since 6.20.0 it depends on the record whenever
+      `check-verify.mjs` runs with `--ac-gate`, which `/pharn-verify` always passes. The regress verdict, and a verify
+      verdict computed without the flag, are still unchanged.
+    - `README.md` said verify does not yet read the record.
+    - `CLAUDE.md` described lock schema `/2` with `test_infra` "reserved for a later stage".
+  - **Incomplete, completed:** `README.md`'s list of reds `/pharn-loop` never retries now names the AC-evidence stop
+    (`blocked: ac-evidence-invalid`). `pharn/features/README.md`'s AC-tests entry now covers the 6.19.0 build
+    precondition, the 6.20.0 pin and the verify report's `ac_gate` table.
+  - **Not here, deliberately:** the four trusted docs (human-only; queue item 07's text covers them), and the four
+    sentences in `pharn-build.md`, `pharn-ship.md` and `CLAUDE.md` that defer to that pending protected edit. They
+    stay true until a human applies it.
+
 ## [6.20.0] - 2026-09-24
 
 ### Added

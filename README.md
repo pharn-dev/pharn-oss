@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.20.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.20.1-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -416,8 +416,9 @@ decisions inside the pipeline are read from the deterministic verdicts emitted b
 
 `/pharn-loop` runs the same chain without either human gate. The model approves the spec, and the build →
 regress → verify middle repeats until a deterministic stop: green, the iteration cap, or a red it must not
-retry (an inconclusive result, or a reconcile red — a retry would re-anchor the baseline and erase the
-detected escape). Before it reads that stop, and again before it commits, `check-loop-fresh.mjs` checks that
+retry (an inconclusive result; a reconcile red — a retry would re-anchor the baseline and erase the
+detected escape; or, since 6.20.0, acceptance-criterion evidence that changed after `/pharn-test`, which another
+build cannot restore — `blocked: ac-evidence-invalid`). Before it reads that stop, and again before it commits, `check-loop-fresh.mjs` checks that
 the evidence belongs to the tree: each report must be its checker's output from a stamp that validates, bound
 to it by hash, and the verify stamp must describe the live tree. A skipped or stale stage is re-run inside
 the same iteration under a counted budget. A forged verdict or a spent budget ends the run as a recorded
@@ -460,7 +461,8 @@ already approved.
 
 A gate's exit code says whether the whole suite passed, not whether one named test ran: a suite exits 0 with
 a skipped test. PHARN can also read a per-test record — each test's id, file, title and `passed`, `failed` or
-`skipped` — from a JSON report your test runner writes. `/pharn-test` reads it (below); verify does not yet.
+`skipped` — from a JSON report your test runner writes. `/pharn-test` reads it, and since 6.20.0 so does
+`/pharn-verify`'s acceptance-criteria check (both below).
 
 To turn it on, name your reporter's format for each gate in `pharn.config.json`. The gates are `test` and the
 e2e gates (`test:e2e`, `e2e`); the formats are `vitest-json` and `playwright-json`, both built into their

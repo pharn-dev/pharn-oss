@@ -19,11 +19,13 @@ tested code from a file the project's own test run writes, never typed by a mode
 log output.
 
 **Honest trigger (P7).** No dogfood run failed on this. It was built at the maintainer's direction, for a gap
-demonstrable on any project. In 6.15.0 no stage read the record; since 6.18.0 **one does** — `/pharn-test`'s red run
-(`check-red-run.mjs`, `ac-tests.md`), where a refused record is a RED by its own reason. For every stamp the runner writes, the
-verify and regress verdicts are unchanged; what did change is that a stamp carrying a malformed
-`results_sha256` is refused (`gate-run-record.md`, "Per-test results"), and the runner refuses to run a gate
-whose results path it cannot clear.
+demonstrable on any project. In 6.15.0 no stage read the record. Since 6.18.0 `/pharn-test`'s red run reads it
+(`check-red-run.mjs`, `ac-tests.md`), where a refused record is a RED by its own reason; since 6.20.0 `/pharn-verify`'s
+AC gate reads it too (`check-verify.mjs --ac-gate`, `ac-tests.md` "The AC gate"), so a verify verdict computed with
+that flag depends on the record — a refused one is `INCONCLUSIVE` over otherwise-green gates. The regress verdict,
+and a verify verdict computed without the flag, are unchanged for every stamp the runner writes; what also changed
+is that a stamp carrying a malformed `results_sha256` is refused (`gate-run-record.md`, "Per-test results"), and the
+runner refuses to run a gate whose results path it cannot clear.
 
 ## Opting in
 

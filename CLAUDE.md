@@ -331,7 +331,8 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # (a failed test or suite error under exit 0) narrows a forgery, never closes it. No stage read the record in
 # 6.15.0 (verify/regress verdicts are unchanged for every stamp the runner writes, but a malformed results_sha256
 # is stamp-malformed and a results path the runner cannot clear is refused); since 6.18.0 /pharn-test's red run
-# reads it (below). Contract: pharn/pharn-contracts/test-results-record.md.
+# reads it, and since 6.20.0 /pharn-verify's AC gate does (check-verify.mjs --ac-gate — with that flag the verify
+# verdict DEPENDS on the record; both below). Contract: pharn/pharn-contracts/test-results-record.md.
 
 # AC TESTS BEFORE THE BUILD (added 6.17.0) — /pharn-test writes each Acceptance Criterion's test BEFORE /pharn-build,
 # from the Approved SPEC, the PLAN and pharn/features/<name>/AC-TESTS.md, which /pharn-plan writes (Step 4c, templated
@@ -340,8 +341,8 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # REDs on a closed kind set (missing/duplicate/unknown AC, level-mismatch, unlisted/unmapped file, in-plan-files — the
 # build's scope would cover it —, claimed-elsewhere, bad-path, no-files, malformed-line, pin via the SHELLED
 # check-plan-spec-agree.mjs, and since 6.18.0 spec-kind); exit 0/1/2. ac-tests-lock.mjs --write/--check pins the tests
-# in AC-TESTS.lock.json (schema ac-tests-lock/2 since 6.18.0, /1 still read; closed keys per mode; test_infra reserved
-# for a later stage); --check names a PATH, never content. The mapping grammar lives in ac-tests-core.mjs. AC-TESTS.md and the lock are PIPELINE_ARTIFACTS (regress-exempt); for reconcile
+# in AC-TESTS.lock.json (schema ac-tests-lock/3 since 6.20.0 — /2 and /1 still read; closed keys per mode; test_infra
+# is the test-infrastructure pin, see THE AC GATE below); --check names a PATH, never content. The mapping grammar lives in ac-tests-core.mjs. AC-TESTS.md and the lock are PIPELINE_ARTIFACTS (regress-exempt); for reconcile
 # AC-TESTS.md is exempt like PLAN.md (a re-plan rewrites it) but the LOCK is `pre_anchor_artifacts` (NOT exempt).
 # Paths are compared as the setter SCOPES them (clean + isConcrete, case-folded). `--spec <SPEC.md>` decides
 # templated (0) / legacy (3) / bootstrap (4, 6.18.0) before any mapping exists; in full mode a legacy or test-infra
