@@ -2135,7 +2135,22 @@ The anchor therefore never recorded such a link, and `check-bash-reconcile.mjs` 
 - source: `.dev/features/reconcile-symlink-hash/REVIEW.md` § Proposed lesson candidate + `.dev/features/reconcile-symlink-hash/PLAN.md` § The defect
 - promoted: 2026-09-24 via gated `/pharn-dev-memory-promote` (human-directed: the user instructed this promotion; the rendered entry was not shown to them before the write).
 
-## L60 — A gitignored path is still in markdownlint-cli2's reach — every tool that writes markdown into the checkout reddens a local lint:md, and one ignores entry per writer recurs
+## L60 — A non-vacuity proof is per ASSERTED PROPERTY, not per loop — a mutant alphabet that cannot violate a property, or an anchor that was never found, leaves that assertion unfalsifiable while the count still passes
+
+type: process · concepts: [non-vacuity, test-blindspot, false-green, mutation-testing]
+
+**Lesson.** Two ★ tests in one increment passed with the exact defect they are named for put back, in an increment that cited [[L34]], [[L36]] and [[L52]] and got each of them right. (1) A closure test walked every node of three JSON inputs, replaced each with `null` and `{"toString":1}`, counted its renders, and asserted two properties per mutant: the render completes, and no mutant becomes structure (a heading). Its mutant alphabet could violate the first and never the second, because neither value can carry a newline; with the inline-verdict guard undone in a scratch copy, the test stayed green. (2) A wiring test sliced a command file between two `indexOf` anchors and checked that a token appeared in the slice. An anchor that is not found returns -1, `slice` then runs to the end of the file, and the presence check passes on text from a different step: renaming the anchor heading, or moving the token into the wrong branch, stayed green. Both tests had non-empty domains and correct counts; what neither had was an input that could make THAT assertion fail. Remedy: for every property a test asserts, name the mutant or edit that must turn it red and run it once (a negative control per property, not per loop); assert every anchor is found before slicing on it; and when one test asserts several properties, check that the mutant alphabet reaches each of them.
+
+**Why it matters.** [[L34]] asks whether the domain is empty, [[L36]] whether an enumeration is closed, [[L52]] whether the test covers the right member — and an author can satisfy all three and still ship an assertion no input can falsify, because each of them is a question about the SET the test ranges over, and this is a question about each ASSERTION inside it. A test with two assertions and one kind of mutant is a proof of one property and a decoration on the other, and nothing distinguishes the two at review time: both are green, both are named, and the count proves the loop ran. It was caught by an independent review that re-introduced each defect in a scratch copy, which is the remedy applied by hand; the fixes now carry that control inside the suite (a newline-bearing mutant plus a fence-aware structure check with its own control; anchor assertions plus per-branch placement checks, each measured to fail on its drift). **Honest trigger (P7):** two instances in ONE increment, by one author, caught before merge — by [[L20]]'s bar a first occurrence of this shape rather than a second, promoted at the human's explicit choice at the ship-stage lesson gate, as [[L36]] and [[L47]] were.
+
+**Provenance.**
+
+- feature: `review-leftovers-0924`
+- commit: `cf9089763b5b68d820858117b7f79faecc32cb23` (working-tree increment built on this commit; uncommitted at promotion time)
+- source: `.dev/features/review-leftovers-0924/REVIEW.md` "L-eval (P1)" (the findings at `render-run-report.test.mjs:791` and `check-spec.test.mjs:926`)
+- promoted: 2026-09-25 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L61 — A gitignored path is still in markdownlint-cli2's reach — every tool that writes markdown into the checkout reddens a local lint:md, and one ignores entry per writer recurs
 
 type: tooling · concepts: [style-gates, whole-repo-scope, config-globs, presence-vs-closure, lesson-recurrence]
 
@@ -2164,4 +2179,4 @@ Either must be reconciled with the config's per-entry `.pharn/` zone note, which
 - feature: `markdownlint-ignore-agents`
 - commit: `0eb19bea288d0064539f054aa0581194f08db48f`
 - source: `.dev/features/markdownlint-ignore-agents/REVIEW.md` § Advisory findings (rule_id P7, `.markdownlint-cli2.jsonc:27`) + § Proposed lesson candidate
-- promoted: 2026-09-25 via gated `/pharn-dev-memory-promote` (human-approved).
+- promoted: 2026-09-25 via gated `/pharn-dev-memory-promote` (human-approved). Accepted as L60; renumbered L61 when merging `origin/main`, where PR #274 had promoted a different L60 first. Re-checked with `check-provenance.mjs` as L61 before this write.

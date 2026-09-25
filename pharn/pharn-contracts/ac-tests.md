@@ -72,7 +72,7 @@ without joining the build's scope, and a second extractor would mean editing a p
 
 | kind                | RED when                                                                                                                                                       |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `legacy-spec`       | the SPEC has no `spec_template` (exit **3**, checked first)                                                                                                    |
+| `legacy-spec`       | the SPEC has no `spec_template` (checked first; exits **1** like every kind here — exit **3** is `--spec` mode's)                                              |
 | `pin`               | `check-plan-spec-agree.mjs <AC-TESTS.md> <SPEC.md>` REDs: exit 1 with its `RED —` line (Draft, drifted, stale or mislabeled); a crash is no verdict (below)    |
 | `spec-kind`         | the SPEC is `spec_kind: test-infra` (a bootstrap increment has no mapping), or its `spec_kind` is invalid, or its body opens with a `spec_kind:` line (6.20.7) |
 | `malformed-line`    | a non-blank line under `## Mapping` does not match, or there is no `## Mapping`                                                                                |
@@ -229,8 +229,10 @@ the script.
 
 ### The test-infrastructure pin — `test_infra` (6.20.0)
 
-The lock pins the test FILES; this pins what RUNS them, so a pinned test cannot pass because its runner changed.
-`--write` takes it (before the red run, which therefore runs under it) and `--check` and the AC gate recompute it from
+The lock pins the test FILES; this pins the parts of what RUNS them listed below, so a change to one of THOSE parts
+is a `--check` RED ("test infrastructure changed — …", which the test-stage gate reads as `lock-red`) and reads
+`test-infra-changed` at the AC gate, and the test's pass no longer counts. It is not the whole runner: what the pin
+does not see is stated after the list. `--write` takes it (before the red run, which therefore runs under it) and `--check` and the AC gate recompute it from
 the live tree and compare EXACTLY. Computed by `pharn/floor/test-infra-core.mjs`:
 
 - **`levels`** — the mapped levels the pin was taken for, so a recompute ranges over the same candidate gates.

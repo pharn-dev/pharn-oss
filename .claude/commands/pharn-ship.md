@@ -1091,8 +1091,8 @@ the `check-ship.mjs` cap.
 ## A doc-reconciliation `/pharn-ship` surfaces (reported, never agent-edited)
 
 `pharn/ARCHITECTURE.md §6` names **"ship"** as the **terminal pipeline stage** (artifact `ship-report` =
-decision + `PHARN ✓ reviewed` seal). `/pharn-ship` **aligns**: it realizes the terminal stage (8, counting `test`,
-which §6 does not list yet) as a meta-orchestrator over stages 1–7 that brings the human to that ship **decision** at GATE 2. The one honest divergence
+decision + `PHARN ✓ reviewed` seal). `/pharn-ship` **aligns**: it realizes §6's terminal stage as a
+meta-orchestrator over every stage before it, and brings the human to that ship **decision** at GATE 2. The one honest divergence
 (identical to what `/pharn-dev-ship` already surfaces): `/pharn-ship` **does not automate the decision or the
 seal** — `SHIP.md` records that the chain ran + its floor verdicts; the decision + seal are the **human's**
 GATE-2 call, which `/pharn-ship` deliberately does **not** automate. No conflict to file; `pharn/ARCHITECTURE.md`

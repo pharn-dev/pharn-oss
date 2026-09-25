@@ -48,7 +48,7 @@ Load the trusted prefix and obey it for the whole run:
   `SPEC.md` carries the **required sections**; (2) `state ∈ {Draft, Approved}`; (3) `spec_id` is present (the §6
   root identity every downstream artifact carries); (4) **when `Approved`**, `spec_content_hash == sha256(body)` (with a `spec_kind:` line hashed in front when present)
   — the content-hash pin (fix #4) that makes post-approval intent drift **detectable, not silent** — and, for every
-  SPEC in every state, a body whose first line starts `spec_kind:` is a `pin` RED, because it would pin exactly like
+  SPEC in every state, a body whose first line starts `spec_kind:` is a `kind-in-body` RED, because it would pin exactly like
   the key in the frontmatter (6.20.7, `pharn/pharn-contracts/spec-template.md`, "`spec_kind`"); (5) **for
   a SPEC whose frontmatter declares `spec_template`** — every SPEC this command fills from the template — the
   eight template rules `pharn/pharn-contracts/spec-template.md` defines (cited, not restated — P4): the
@@ -176,7 +176,7 @@ command does not repeat it (P4).
      that sets up the project's test runner and per-test results. Otherwise write no `spec_kind` line (absent
      means `feature`). Never under `--model-approve` (Step 4a). The line goes **in the frontmatter**, never as the
      body's first line below the closing `---`: there it would pin exactly like the frontmatter key, so
-     `check-spec.mjs` REDs it (`pin`).
+     `check-spec.mjs` REDs it (`kind-in-body`).
    - Replace every `<placeholder>` from the user's intent, informed by Step 2. Follow each section's guidance
      comment for what belongs there and what does not.
    - Write each acceptance criterion in the template's shape, one `- **AC-<n>** Given … When … Then …` item
@@ -192,9 +192,11 @@ node pharn/floor/check-spec.mjs pharn/features/<name>/SPEC.md
 ```
 
 A structurally-valid Draft is **GREEN**. If **RED**, **fix the structure** and re-run; do not proceed to
-approval with a RED draft. Each RED names its kind: `frontmatter`, `state`, `spec_id`, `section`, `pin`, `ac`,
-`clarification`, `out-of-scope`, `optional-section`, `guidance`, `template` or `spec-kind`. On a Draft, `pin` means
-the body's first line starts `spec_kind:`: move the line into the frontmatter or change the body's first line. The template kinds are
+approval with a RED draft. Each RED names its kind (the token between `RED —` and `failed:`): `frontmatter`,
+`state`, `spec_id`, `section`, `kind-in-body`, `ac`, `clarification`, `out-of-scope`, `optional-section`, `guidance`,
+`template` or `spec-kind`. `kind-in-body` means the body's first line starts `spec_kind:`: move the line into the
+frontmatter or change the body's first line. (`pin` cannot fire on a Draft: the hash is checked only once
+`Approved`.) The template kinds are
 defined in `pharn/pharn-contracts/spec-template.md`. (`check-spec.mjs` owns this verdict; you do not
 re-decide it — P0.)
 
@@ -265,11 +267,11 @@ final — do not edit the sections after this):
    node pharn/floor/check-spec.mjs pharn/features/<name>/SPEC.md
    ```
 
-   If it is RED, read the kind. A `pin` RED about `spec_content_hash` (malformed, or not equal to the body hash)
-   means the pin is wrong: recompute and re-write the hash; never relax the check or hand-edit the body to match a
-   stale hash. A `pin` RED whose detail says the body's first line starts `spec_kind:` is not fixed by any hash (the
-   two layouts share one pin); treat it like **any other kind**. **Any other kind** (for example
-   `clarification`, a marker that survived) means the body is not approvable: set the frontmatter back to
+   If it is RED, read each RED's kind — the exact token between `RED —` and `failed:`, never the detail after it.
+   When **every** RED's kind is `pin` (`spec_content_hash` malformed, or not equal to the body hash), the pin is
+   wrong: recompute and re-write the hash; never relax the check or hand-edit the body to match a stale hash. When
+   **any** RED has another kind (for example `clarification`, a marker that survived, or `kind-in-body`, which no
+   hash can fix because the two layouts share one pin), the body is not approvable: set the frontmatter back to
    `state: Draft` and `spec_content_hash: ""` (and remove `approved_by` if you added it), then return to
    Step 4. Under `--model-approve`, report back blocked instead, as Step 4a says.
 

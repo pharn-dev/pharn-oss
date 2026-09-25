@@ -29,7 +29,7 @@ condition gave exit 1 with 19 MD025 errors (`regression-report.json`: `lint:md` 
 
 changelog-entry: exit 0
 
-lesson: promoted L60
+lesson: promoted L61
 
 deferred: none
 
@@ -43,10 +43,22 @@ deferred: none
 - **Environment, outside the diff.** `.agents/` was copied into this worktree for measurement. It is gitignored
   and is still present. `.pharn/pharn-dev-ship/pr-body.md`, the merged PR #273's body left by the previous run
   here, was moved to the session scratchpad; `lint:md` had read it too (one MD038).
-- **The promotion widened the diff.** It added `.dev/memory-bank/lessons-learned.md` (L60) and the regenerated
+- **The promotion widened the diff.** It added `.dev/memory-bank/lessons-learned.md` (L61) and the regenerated
   `docs/lessons-index.md`. Both are apparatus or generated repo-meta, so `SKILLS_VERSION` still does not move.
   `check-bash-reconcile` stayed CLEAN after the promotion, with the canon write amended into the epoch and the
   index exempted by name.
+
+## After GATE 2 — the human said "merge"
+
+- Committed as `eb1b01e`, then merged `origin/main` (`ee81d47`) without a force-push. `CHANGELOG.md`: main's
+  `[6.21.2]` section and everything below it are byte-identical to `origin/main`, with this entry in
+  `[Unreleased]` above them.
+- **Lesson id collision.** #274 had promoted its own L60. Main's L60 was kept byte-for-byte: canon was first
+  resolved to exactly `origin/main`'s bytes (`cmp` equal). This run's candidate was then re-run through
+  `check-provenance.mjs` as **L61** (GREEN) and appended through the hook-gated Edit tool, with its body
+  byte-equal to the accepted candidate. The entry's `promoted:` line records the renumbering.
+  `docs/lessons-index.md` was regenerated (61 lessons, `check-lessons-index` GREEN).
+- The `lesson:` line above reads the id from the `## L61` heading in canon.
 
 Chain ran; the named floor verdicts are as shown — this is NOT a judgment that the increment is good or wise;
 that is the human's call at the post-review gate.

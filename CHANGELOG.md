@@ -51,6 +51,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     which the config's zone note rejects, so it was not taken. The next untracked directory an importer writes
     needs its own entry.
 
+## [6.21.2] - 2026-09-25
+
+### Fixed
+
+- 2026-09-25: **Six verified leftovers from the 2026-09-24 review of `7e9ed52..b31e540`, fixed as one patch, each
+  re-verified against live code first.** `SKILLS_VERSION` 6.21.1 → 6.21.2 (PATCH: corrections to shipped bytes; no
+  contract shape, installed path or lock moves). `MIN_CLI` stays 0.5.0.
+  ([`.dev/features/review-leftovers-0924/`](./.dev/features/review-leftovers-0924/))
+  - **`render-run-report.mjs` no longer crashes on a malformed value in a report.** A `null` entry in
+    `ac_gate.acs` or `ac_gate.evidence` threw a TypeError. That exited 1, outside the documented exits 0/2, and no
+    `RUN-REPORT.md` was written. The same crash was measured at other sites too: `String()` throws on a parsed
+    `{"toString": 1}` (in `verdict`, `failing_gates`, `outcome.iterations`, the run-window values and the token
+    cells), and a `null` token row threw. A value the renderer reads from `cost.json`, `verify-report.json` or
+    `regression-report.json` is now either type- or membership-checked first, or stringified by one helper,
+    `dataText`. `dataText` is byte-identical to `String()` for every JSON primitive, `Infinity` included, and prints
+    JSON text for an object or array. An entry that is not an object renders as a marker row, never dropped. A value
+    nested too deep to stringify renders a fixed marker. The width loop no longer spreads one argument per row, which
+    threw near 200,000 rows. A suite test walks every node of a fixture that populates every section, and replaces
+    each with `null`, with `{"toString": 1}` and with a newline-bearing string. Each mutant must render and must add
+    no heading. A field no fixture carries is not mutated, and the module header says so.
+  - **A report's `verdict` is inline only when it is an enum member.** Any other value renders `unknown`, with the
+    value quoted as DATA. Before, a verdict string carrying a newline rendered as a duplicate `## Briefing` or a
+    forged `# RUN REPORT` title (found by the grill, probed).
+  - **`base_sha` reaches `git` only as a commit id** (7 to 64 hex digits, either case: full, abbreviated or
+    uppercase). Before, any string went into `git diff --name-only <base>` as an argument, and `--output=<file>` made
+    git write that file (probed). A newline in it also went into an inline span. Found while checking the header's own
+    inline-span claim. **Narrowed, stated:** a symbolic ref (`HEAD`, a branch name) used to produce a diff and now
+    renders "not a commit id". `/pharn-loop` and `/pharn-ship` record `git rev-parse HEAD` or `unknown`, so neither
+    is affected.
+  - **`pharn/pharn-contracts/ac-tests.md` stops claiming more than the test-infrastructure pin does.** "A pinned test
+    cannot pass because its runner changed" contradicted the same section's "does NOT catch" list and `LIMITS.md`.
+    Now the contract says a change to one of the PINNED parts is a `--check` RED (the test-stage gate's `lock-red`)
+    and reads `test-infra-changed` at the AC gate. It also says the pin is not the whole runner.
+  - **The full-mode `check-ac-tests.mjs` table no longer says `legacy-spec` exits 3.** Every full-mode kind exits 1.
+    Exit 3 is `--spec` mode's. Its `KINDS` comment is corrected the same way.
+  - **`/pharn-ship`'s §6 note no longer says §6 "does not list `test` yet".** It has listed `test` since 6.20.2.
+  - **`gate-run-core.mjs` cites by name, not by line number.** All fifteen of its line cites had drifted but one,
+    `pharn-ship.md:315-321` among them. They now name the step, block or const they mean. The consumer list that
+    backed "additive" is dated to 6.8.0, and names `check-loop-fresh.mjs`. `check-plan-spec-agree.mjs` had one more
+    stale cite, fixed the same way.
+  - **Apparatus, no bump: lesson L60 promoted** to `.dev/memory-bank/lessons-learned.md` through the gated
+    `/pharn-dev-memory-promote`, human-approved: a non-vacuity proof is per asserted PROPERTY, not per loop. It comes
+    from this increment's own review, which found two new ★ tests that still passed with their defect put back. Both
+    are fixed, and each fix was measured to fail on its drift. `docs/lessons-index.md` is regenerated.
+
+### Changed
+
+- 2026-09-25: **`check-spec.mjs` reports a SPEC body that opens with a `spec_kind:` line under its own RED kind,
+  `kind-in-body`.** From 6.20.7 it shared `pin` with a hash mismatch, so `/pharn-spec`'s re-validate step told the two
+  apart by the detail text. Now `pin` means only a malformed or drifted hash, and the step branches on kind membership:
+  it recomputes the hash when every RED is `pin`, and returns the SPEC to Draft when any other kind appears. The new
+  name shares no prefix with `pin`, so no loose match can take one for the other. Which SPECs are RED is unchanged.
+  The only reader of the kind token is `/pharn-spec`, which ships in this release. A test runs the checker and
+  requires the command to name the kinds it emits.
+
 ## [6.21.1] - 2026-09-25
 
 ### Fixed
