@@ -88,6 +88,16 @@ export function specKindLines(rawFrontmatter) {
     .filter((l) => SPEC_KIND_LINE_RE.test(l));
 }
 
+/** Does the SPEC body OPEN with a `spec_kind:` line? Tested after the line-ending fold the pin applies (`\r\n` → `\n`,
+ *  check-spec.mjs pinHash), with the same SPEC_KIND_LINE_RE specKindLines uses, and no `m` flag, so only the body's
+ *  first line counts. Such a body pins exactly like the same line in the frontmatter (the argument is in check-spec.mjs's
+ *  pinHash comment and pharn-contracts/spec-template.md, "`spec_kind`"), so check-spec.mjs REDs it (`pin`) and
+ *  specAcceptanceCriteria reports the kind as unusable. The fold cannot change the answer (the prefix holds no CR or
+ *  LF); it is applied so the predicate reads exactly the string the pin hashes. */
+export function kindLineOpensBody(body) {
+  return SPEC_KIND_LINE_RE.test(String(body).replace(/\r\n/g, "\n"));
+}
+
 /** The SPEC's kind: `feature` with no `spec_kind:` line, the member its one line names, else `null` (two lines, or
  *  a value outside SPEC_KINDS once spaces and tabs are trimmed — a stray CR, U+2028 or quote included). */
 export function specKindOf(rawFrontmatter) {
@@ -394,28 +404,31 @@ function checkAcceptanceCriteria(sec, out) {
  *
  * @param {string} text  the SPEC.md source
  * `kind` is specKindOf() over the frontmatter: `feature`, `test-infra`, or `null` for an invalid value (a legacy SPEC
- * reports `feature`: it has no AC ids either way).
+ * reports `feature`: it has no AC ids either way). `kindInBody` is kindLineOpensBody() over the body (`false` with no
+ * frontmatter): when it holds, a templated SPEC's `kind` is `null` too, because the approval pin cannot tell that body
+ * from the same line in the frontmatter, so no AC mode may be read from it (6.20.7). A legacy SPEC keeps `feature`.
  *
- * @returns {{templated: boolean, kind: string|null, sections: number, items: {id: string, level: string|null, line: number}[]}}
+ * @returns {{templated: boolean, kind: string|null, kindInBody: boolean, sections: number, items: {id: string, level: string|null, line: number}[]}}
  */
 export function specAcceptanceCriteria(text) {
   const src = stripBom(String(text));
   const fmMatch = matchFrontmatter(src);
-  if (!fmMatch || !isTemplated({}, fmMatch[1])) return { templated: false, kind: "feature", sections: 0, items: [] };
-  const kind = specKindOf(fmMatch[1]);
-  const body = src.slice(fmMatch[0].length);
+  const body = fmMatch ? src.slice(fmMatch[0].length) : "";
+  const kindInBody = fmMatch ? kindLineOpensBody(body) : false;
+  if (!fmMatch || !isTemplated({}, fmMatch[1])) return { templated: false, kind: "feature", kindInBody, sections: 0, items: [] };
+  const kind = kindInBody ? null : specKindOf(fmMatch[1]);
   const firstLine = (fmMatch[0].match(/\n/g) || []).length + 1;
   const acs = sectionsOf(body, firstLine).sections.filter((s) => s.name === "acceptance criteria");
-  if (acs.length !== 1) return { templated: true, kind, sections: acs.length, items: [] };
+  if (acs.length !== 1) return { templated: true, kind, kindInBody, sections: acs.length, items: [] };
   const items = parseAcItems(acs[0]).items.map((it) => ({ id: `AC-${it.id}`, level: verifyOf(it).level, line: it.n }));
-  return { templated: true, kind, sections: 1, items };
+  return { templated: true, kind, kindInBody, sections: 1, items };
 }
 
 /**
  * THE one reading of a SPEC's AC mode — check-ac-tests.mjs `--spec` prints it, and /pharn-verify's AC gate
  * (ac-gate-core.mjs) imports it, so the CLI and the gate cannot disagree (L35). It lives here, beside the parser it
- * reads, because no floor module imports a `check-*.mjs` CLI. Precedence, fixed (grill G10): legacy 3 → invalid spec_kind 2 → no
- * usable criteria 2 → test-infra 4 (a malformed level is 2) → templated 0. An unreadable file is the caller's (2).
+ * reads, because no floor module imports a `check-*.mjs` CLI. Precedence, fixed (grill G10): legacy 3 → invalid spec_kind 2 (or a
+ * body that opens with a `spec_kind:` line, 6.20.7 — kindInBody) → no usable criteria 2 → test-infra 4 (a malformed level is 2) → templated 0. An unreadable file is the caller's (2).
  * @returns {{token: "LEGACY"|"UNUSABLE"|"BOOTSTRAP"|"TEMPLATED", code: number, line: string, items: {id: string, level: string|null}[], levels: string[]|null}}
  */
 export function specVerdict(text) {
@@ -429,7 +442,13 @@ export function specVerdict(text) {
   });
   if (!spec.templated) return out("LEGACY", 3, "LEGACY — the SPEC has no `spec_template`: no AC ids, so no AC-TESTS.md is written");
   if (spec.kind === null)
-    return out("UNUSABLE", 2, "UNUSABLE — the SPEC's `spec_kind` is not one of {feature, test-infra} — run check-spec.mjs");
+    return out(
+      "UNUSABLE",
+      2,
+      spec.kindInBody
+        ? "UNUSABLE — the SPEC's body opens with a `spec_kind:` line, which the approval pin cannot tell from the frontmatter key — run check-spec.mjs"
+        : "UNUSABLE — the SPEC's `spec_kind` is not one of {feature, test-infra} — run check-spec.mjs"
+    );
   if (spec.sections !== 1 || spec.items.length === 0)
     return out("UNUSABLE", 2, "UNUSABLE — the SPEC's `## Acceptance Criteria` is absent, duplicated or empty — run check-spec.mjs");
   if (spec.kind === "test-infra") {

@@ -116,7 +116,9 @@ export function checkMapping({ acTestsText, specText, planText, others }) {
     red(
       "spec-kind",
       spec.kind === null
-        ? "the SPEC's `spec_kind` is not one of {feature, test-infra} — run check-spec.mjs"
+        ? spec.kindInBody
+          ? "the SPEC's body opens with a `spec_kind:` line, which the approval pin cannot tell from the frontmatter key — run check-spec.mjs"
+          : "the SPEC's `spec_kind` is not one of {feature, test-infra} — run check-spec.mjs"
         : "the SPEC is `spec_kind: test-infra`, a bootstrap increment: it gets no AC-TESTS.md mapping"
     );
     return { legacy: false, findings };

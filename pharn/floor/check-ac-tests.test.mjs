@@ -156,10 +156,17 @@ test("specAcceptanceCriteria agrees with check-spec.mjs's own AC count (one pars
 });
 
 test("specAcceptanceCriteria: legacy (no spec_template, or no frontmatter) → no ids; a duplicated section → sections 2, no ids", () => {
-  assert.deepEqual(specAcceptanceCriteria(specText({ legacy: true })), { templated: false, kind: "feature", sections: 0, items: [] });
+  assert.deepEqual(specAcceptanceCriteria(specText({ legacy: true })), {
+    templated: false,
+    kind: "feature",
+    kindInBody: false,
+    sections: 0,
+    items: [],
+  });
   assert.deepEqual(specAcceptanceCriteria("## Acceptance Criteria\n- **AC-1** Given a When b Then c\n  - verify: unit\n"), {
     templated: false,
     kind: "feature",
+    kindInBody: false,
     sections: 0,
     items: [],
   });
@@ -195,6 +202,78 @@ test("specAcceptanceCriteria reports the kind: absent → feature, test-infra, a
   assert.equal(specAcceptanceCriteria(specText({ kind: "test-infra" })).kind, "test-infra");
   assert.equal(specAcceptanceCriteria(specText({ kind: "feature" })).kind, "feature");
   assert.equal(specAcceptanceCriteria(specText({ draft: true, kind: "library" })).kind, null);
+});
+
+// ── 6.20.7 layout A: the `spec_kind:` line moved from the frontmatter to the body's first line. The pin cannot tell the
+// two apart (check-spec.mjs pinHash), so every AC-mode reading refuses layout A instead of reading a mode from it.
+/** Move a SPEC's frontmatter `spec_kind:` line to the body's first line, keeping every other byte (and the pin). */
+function bodyOpensWithKind(text) {
+  const line = text.match(/^spec_kind: .*\n/m)[0];
+  const t = text.replace(line, "");
+  const end = t.indexOf("\n---\n", 3) + "\n---\n".length;
+  return t.slice(0, end) + line + t.slice(end);
+}
+
+test("layout A — specAcceptanceCriteria: a templated body opening with `spec_kind:` has kind null (kindInBody); legacy keeps feature", () => {
+  const b = specText({ kind: "test-infra" });
+  const a = bodyOpensWithKind(b);
+  assert.equal(a.match(/^spec_content_hash: (\S+)$/m)[1], b.match(/^spec_content_hash: (\S+)$/m)[1], "the move keeps the pin");
+  assert.deepEqual(
+    (({ kind, kindInBody }) => ({ kind, kindInBody }))(specAcceptanceCriteria(a)),
+    { kind: null, kindInBody: true },
+    "layout A: no mode is read from it"
+  );
+  assert.deepEqual((({ kind, kindInBody }) => ({ kind, kindInBody }))(specAcceptanceCriteria(b)), {
+    kind: "test-infra",
+    kindInBody: false,
+  });
+  assert.deepEqual((({ kind, kindInBody }) => ({ kind, kindInBody }))(specAcceptanceCriteria(SPEC)), {
+    kind: "feature",
+    kindInBody: false,
+  });
+  const legacyA = bodyOpensWithKind(specText({ legacy: true, kind: "test-infra" }));
+  assert.deepEqual((({ templated, kind, kindInBody }) => ({ templated, kind, kindInBody }))(specAcceptanceCriteria(legacyA)), {
+    templated: false,
+    kind: "feature",
+    kindInBody: true,
+  });
+});
+
+test("layout A — --spec: both moves leave the usable readings (B → A is BOOTSTRAP 4 → UNUSABLE 2; A → B is 2 → 4); legacy stays 3", () => {
+  const root = world();
+  try {
+    const f = (n) => `pharn/features/${NAME}/${n}`;
+    const spec = (text) => {
+      writeFileSync(join(root, f("SPEC.md")), text);
+      return spawnSync(process.execPath, [CHECK, "--spec", f("SPEC.md")], { cwd: root, encoding: "utf8" });
+    };
+    for (const kind of ["test-infra", "feature"]) {
+      const b = specText({ kind });
+      const inFm = spec(b);
+      assert.equal(inFm.status, kind === "test-infra" ? 4 : 0, inFm.stdout);
+      const inBody = spec(bodyOpensWithKind(b));
+      assert.equal(inBody.status, 2, inBody.stdout);
+      assert.equal(
+        inBody.stdout.trim(),
+        "UNUSABLE — the SPEC's body opens with a `spec_kind:` line, which the approval pin cannot tell from the frontmatter key — run check-spec.mjs"
+      );
+    }
+    assert.equal(spec(bodyOpensWithKind(specText({ legacy: true, kind: "test-infra" }))).status, 3, "legacy is read before the kind");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("layout A — FULL mode: a mapping for it REDs spec-kind (the layout named) and pin (check-spec REDs it through the shelled chain)", () => {
+  const root = world({ spec: bodyOpensWithKind(specText({ kind: "feature" })) });
+  try {
+    const r = run(root);
+    assert.equal(r.code, 1, r.out);
+    assert.deepEqual(r.kinds, ["pin", "spec-kind"], r.out);
+    assert.match(r.out, /body opens with a `spec_kind:` line/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("spec-kind — in FULL mode a mapping for a `spec_kind: test-infra` SPEC is RED (re-approved, so the pin holds)", () => {
@@ -252,7 +331,13 @@ test("✧ L35 — specVerdict IS the --spec reading: the CLI prints its line and
   try {
     const path = join(root, "pharn", "features", NAME, "SPEC.md");
     const seen = new Set();
-    for (const text of [SPEC, specText({ legacy: true }), specText({ kind: "test-infra" }), specText({ kind: "library" })]) {
+    for (const text of [
+      SPEC,
+      specText({ legacy: true }),
+      specText({ kind: "test-infra" }),
+      specText({ kind: "library" }),
+      bodyOpensWithKind(specText({ kind: "test-infra" })),
+    ]) {
       writeFileSync(path, text);
       const v = specVerdict(text);
       const r = spawnSync(process.execPath, [CHECK, "--spec", path], { encoding: "utf8" });

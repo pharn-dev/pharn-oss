@@ -24,9 +24,10 @@ line is the switch, tested on the raw frontmatter text: an empty value still sel
 a key line the field parser cannot read (one holding a stray CR, U+2028 or U+2029). In both cases rule 7
 then REDs the value.
 
-A SPEC **without** the key is **legacy**. `check-spec.mjs` validates it exactly as it did before this
-contract existed: the four sections Intent, Scope, Acceptance Criteria and Constraints, the state enum,
-`spec_id`, and the content-hash pin when Approved. No rule here can RED it.
+A SPEC **without** the key is **legacy**. None of the template rules below applies to it. `check-spec.mjs`
+validates the four sections Intent, Scope, Acceptance Criteria and Constraints, the state enum, `spec_id`, and
+the content-hash pin when Approved. The pin carries one layout rule of its own (6.20.7, "The pin covers it"
+under `spec_kind`), and that rule applies to every SPEC, legacy included.
 
 `/pharn-spec` writes the key on every SPEC it creates from the template. That is command prose, so it is
 **advisory**: deleting the key (or misspelling it, for example `spec-template:`) puts a SPEC back on the
@@ -153,6 +154,21 @@ line (CR removed) followed by `\n` in front of the body. A SPEC without the line
 no existing pin moves. Adding, changing or removing the line after approval is **drift** — RED at every stage that
 checks the chain. Where a command says "the body hash", read "the pin": for a SPEC with a `spec_kind:` line, it
 covers that line too. **Bound:** a self-consistent rewrite of the SPEC and its pin passes, as it always has.
+
+**The body may not open with a `spec_kind:` line (6.20.7).** The pin hashes the kind lines and then the body, with no
+separator, so a body whose first line starts `spec_kind:` pins exactly like the same SPEC with that line in the
+frontmatter. Before 6.20.7, moving the line between the two changed the kind (feature ↔ test-infra) while the pin
+stayed equal, so no chain check saw it. `check-spec.mjs` now REDs that layout, for every SPEC and in every state, with
+kind `pin`; a Draft is caught before it can be approved. `check-ac-tests.mjs --spec` reads such a templated SPEC as unusable
+(exit 2), because no AC mode may be read from it. **Why forbidding that one layout is enough:** a kind line always
+starts at column 0 with `spec_kind:` and holds no line break, so reading the hashed text from its start, every line
+that opens with `spec_kind:` must be a kind line, and the reading stops exactly where the body begins, as long as the
+body does not itself open with `spec_kind:`. That gives exactly one split into kind lines and body. A body whose first
+line is blank, or starts with a space before `spec_kind:`, is therefore not ambiguous and validates normally. The
+remedy the RED names is to move the line into the frontmatter (a `test-infra` SPEC) or to change the body's first line
+(a `feature` SPEC). **Bound:** a SPEC approved in that layout before 6.20.7 REDs from then on. After the move, its pin
+is unchanged, because that is the collision itself, so the re-approval the remedy asks for is **advisory**: the floor
+makes the ambiguous layout unusable, but it cannot make a person re-approve.
 
 **A template may carry the key.** `validateTemplate` accepts a template with or without a `spec_kind:` line, by design,
 so a project template carrying `spec_kind: test-infra` would start every Draft filled from it as a bootstrap SPEC.

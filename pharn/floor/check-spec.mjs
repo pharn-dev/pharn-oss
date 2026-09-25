@@ -32,8 +32,9 @@
 // THE SPEC-TEMPLATE RULES live in ./spec-template-core.mjs (P3: they change when the TEMPLATE changes; this file
 // changes when §6's pin/state contract does), and pharn/pharn-contracts/spec-template.md defines them. This file
 // only decides WHETHER they apply — isTemplated(): the frontmatter carries a `spec_template` line — and turns
-// their findings into REDs. A SPEC without that line is LEGACY and takes exactly the code path it took before
-// the rules existed: no new RED, the same GREEN line. Their bounds (opt-in, phrased-not-tested, which headings
+// their findings into REDs. A SPEC without that line is LEGACY: none of those rules applies to it, so it gets no
+// template-rule RED and the same GREEN line. The pin's layout rule (see pinHash) is §6's, not a template rule, and
+// applies to every SPEC. Their bounds (opt-in, phrased-not-tested, which headings
 // count, the line grammar, provenance only) are stated once, in the core's header, and in the contract.
 //
 // Usage:
@@ -108,6 +109,7 @@ import {
   validateTemplate,
   PROJECT_TEMPLATE_ID,
   specKindLines,
+  kindLineOpensBody,
 } from "./spec-template-core.mjs";
 
 // Enums / shapes — every branch is a presence / enum / hash-equality membership test (P5); the terminal
@@ -175,6 +177,17 @@ function bodyHash(body) {
 // as the kind and what the pin covers cannot diverge. Every other frontmatter key stays outside the pin, as before.
 // Bound, unchanged by this: a self-consistent rewrite of the SPEC and its pin passes — the pin detects drift, it
 // does not authenticate an approver.
+//
+// WHY THE SPLIT IS UNIQUE (6.20.7), and the one layout it needs forbidden. The hashed string is K + B: K is the kind
+// lines, and each is a `split("\n")` piece (so it holds no LF) that starts at column 0 with `spec_kind:` and is hashed
+// with one trailing "\n"; B is the folded body. Read the string from its start. While it opens with `spec_kind:`, the
+// text up to the next "\n" can only be a kind line, so the reading is forced. If B does not itself open with
+// `spec_kind:`, the reading stops exactly where K ends, and the string gives one (K, B) and no other. A body whose first
+// line DOES start `spec_kind:` breaks that: moving the line between the body and the frontmatter keeps the pin while
+// changing the kind (feature ↔ test-infra, without re-approval). So validate() REDs that layout (`pin`) for every SPEC,
+// and kindLineOpensBody() — the same regex specKindLines uses — is the one test for it. A body that opens with a
+// blank line, or with ` spec_kind:` (a leading space), is not ambiguous: the reading stops at its first character.
+// No pin moves: this function is unchanged, and no SPEC in the forbidden layout can pass validation.
 function pinHash(raw, body) {
   const kind = specKindLines(raw)
     .map((l) => `${l}\n`)
@@ -316,6 +329,18 @@ function validate(specPath) {
   const headings = headingsOf(body);
   for (const want of REQUIRED_SECTIONS) {
     if (!headings.includes(want)) red("section", `missing required \`## ${titleCase(want)}\` section`);
+  }
+
+  // (3b) every SPEC, every state: the body may not open with a `spec_kind:` line — the one layout the pin cannot tell
+  //      from the same line in the frontmatter (see pinHash). A Draft is caught before approval. The detail is fixed
+  //      text: the line's value is never echoed (P2).
+  if (kindLineOpensBody(body)) {
+    red(
+      "pin",
+      "the body's first line starts `spec_kind:`, so the approval pin cannot tell it from the frontmatter key — " +
+        "move the line into the frontmatter (a test-infra SPEC) or change the body's first line (a feature SPEC); " +
+        "an Approved SPEC must then be re-approved"
+    );
   }
 
   // (4) when Approved: spec_content_hash present, well-formed, AND equals pinHash (sha256(body), with a `spec_kind:`
