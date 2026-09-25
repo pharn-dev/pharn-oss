@@ -2,8 +2,8 @@
 
 - spec_content_hash: 4950796f5342df20a298fe22812e45dec3c15317592bd2358a31e149d2dc1c7f # fix #4
 - applied_lessons: [L1, L3, L7, L17, L18, L19, L22, L24, L25, L26, L27, L29, L31, L34, L35, L36, L37, L38, L39, L41, L42, L43, L44, L45, L50, L54, L57, L62]
-- increment: In an installed project (`pharn.config.json` carries `skillsVersion` at the judged root), `enforce-writes-scope.cjs` stops denying ordinary edits when no scope is set and no PHARN run is open — it then denies only PHARN's installed surface (`pharn/**` except `pharn/features/**`, `.claude/**`, `pharn.config.json`) and allows paths outside every git tree — while an open-run marker keeps today's fail-closed default, a malformed scope record denies everything, and `reconcile-baseline.mjs --anchor` refuses to open an epoch with no scope.
-- layer(s): floor / hooks (`.claude/hooks/enforce-writes-scope.cjs`, `set-writes-scope.cjs` — human-applied patch); product floor (`pharn/floor/run-marker.mjs` NEW, `reconcile-baseline.mjs`, `check-bash-reconcile.mjs`); contract (`pharn/pharn-contracts/reconciliation-record.md`); product commands (`.claude/commands/pharn-*.md`); shipped docs (`pharn/floor/README.md`; `LIMITS.md` — human-applied); repo-meta (`CLAUDE.md`, `README.md`, `CHANGELOG.md`, `SKILLS_VERSION`). No `role:` capability.
+- increment: In an installed project (`pharn.config.json` carries `skillsVersion` at the judged root), `enforce-writes-scope.cjs` stops denying ordinary edits when no scope is set and no PHARN run is open — it then denies PHARN's installed surface (`pharn/**` except `pharn/features/**`, `.claude/**`, `pharn.config.json`) and its own input `.pharn/writes-scope.json`, allows every other path inside the project, and allows a path outside the project only when it lies in no git tree (`protect-trusted-paths.cjs` still denies its own set) — while an open-run marker keeps today's fail-closed default, a malformed scope record denies everything, and `reconcile-baseline.mjs --anchor` refuses to open an epoch with no scope.
+- layer(s): floor / hooks (`.claude/hooks/enforce-writes-scope.cjs`, `set-writes-scope.cjs` — human-applied patch); product floor (`pharn/floor/run-marker.mjs` NEW, `reconcile-baseline.mjs`, `check-bash-reconcile.mjs`); contracts (`pharn/pharn-contracts/reconciliation-record.md`, `finding-shape.md`); product commands (`.claude/commands/pharn-*.md`); shipped docs (`pharn/floor/README.md`; `LIMITS.md` — human-applied); repo-meta (`CLAUDE.md`, `README.md`, `CHANGELOG.md`, `SKILLS_VERSION`). No `role:` capability.
 - constitution_refs: [P0, P2, P3, P5, P6, P7]
 - stage model: plan — model routed via Agent subagent; effort not routed
 
@@ -63,8 +63,13 @@ cited below as D1–D9 and are fixed.
   `run-start --adopt-pending` once `<name>` exists, `run-stop` in Step 3a; its turn ends at GATE 1.
 - `/pharn-review` sets **no** scope and states its fix #7 guarantee as "writes only inside
   `pharn/features/**` or `.pharn/**`", which rests entirely on the fail-closed default (Step 0). Every other
-  product command sets a scope in its first step. `/pharn-review` has no turn-end instruction; Step 6b is its
-  last procedure step.
+  product command sets a scope before its own Write-tool writes (the stages in their first step; the two
+  orchestrators before each artifact they write). `/pharn-review` has no turn-end instruction; Step 6b is its
+  last procedure step, and it asks the human at Step 0, Step 1 and Step 1b.
+- `/pharn-ship`'s release pointer to its Final step sits at the end of Step 3b, and the command itself says a
+  reader "cannot tell … whether a stopped run reaches attestation at all" (Step 3a); Step 3a is the one step it
+  states runs on every exit that ends the run. `/pharn-spec` holds its own SPEC-only scope through the GATE-1
+  halt, until its Final step.
 - `set-writes-scope.cjs` writes its record at `process.cwd()`, not at the hook's root; `--clear` prints
   "fail-closed default-safe-set active".
 - `reconcile-baseline.mjs --anchor` prints `(none set — fail-closed default)` and records
@@ -82,15 +87,19 @@ cited below as D1–D9 and are fixed.
     example); the Final step of 11 product commands ("absence of a scope file = the fail-closed
     default-safe-set"); `/pharn-review` Step 0; `/pharn-loop` Final step ("a present `LOOP.md` and the 24 h
     ceiling both make the guard inert" — true of the Stop guard only);
-    `pharn/pharn-contracts/reconciliation-record.md` §5 ("two runtime signals"); `set-writes-scope.cjs`
-    (the `--clear` message and header) and `enforce-writes-scope.cjs` (header) via the patch; `LIMITS.md §7`
-    and one phrase in §8 ("to choose its fail-closed posture") via the patch.
+    `pharn/pharn-contracts/reconciliation-record.md` §5 ("two runtime signals");
+    `pharn/pharn-contracts/finding-shape.md`'s emission audit ("`enforce-writes-scope.cjs` reads exactly one
+    input — `.pharn/writes-scope.json`", and a `/pharn-review` lens writes under "the active scope (or the
+    fail-closed default)") — added at grill (G5); `set-writes-scope.cjs` (the `--clear` message and header)
+    and `enforce-writes-scope.cjs` (header) via the patch; `LIMITS.md §7`, one phrase in §8 ("to choose its
+    fail-closed posture") and §1d's "re-gate every downstream write … regardless of `state`" (added at grill,
+    G6: a universal quantifier the permissive posture falsifies for a write made outside a run) via the patch.
   - **stays true, unchanged, with the reason:** `pharn/pharn-contracts/spec-template.md` ("in an install the
     fail-closed write guard's default denies it" — the shipped template is under `pharn/**`, reserved);
     `THREAT-MODEL.md §4` item 7 and `pharn/ARCHITECTURE.md §3.1/§7` (about a DECLARED `writes:` scope, which
-    is enforced unchanged); `LIMITS.md §1d` ("a forged approval unlocks no floor-gated capability" — writing
-    outside a run is not gated for anyone, so an approval unlocks nothing new); `SECURITY.md` ("allow a write
-    outside the active scope"); `CONTRIBUTING.md` and the `pharn-dev-*` commands (dev posture unchanged).
+    is enforced unchanged); `SECURITY.md` ("allow a write outside the active scope" — with no scope set there
+    is no active scope to be outside of; reason added at grill, G10); `CONTRIBUTING.md` and the `pharn-dev-*` commands (dev posture
+    unchanged).
 
 ## Design
 
@@ -122,8 +131,10 @@ The posture is read at the judged root (`ROOT`, unchanged since 6.1.0):
 
 ### 2. What "a run is open" means (D3)
 
-A run is open iff, at ROOT, some `<dir>/<name>/active.json` exists (`lstat`, never followed) whose
-modification time is within 24 h of now (§4), for `<dir>` in the closed set:
+A run is open when, at ROOT, some `<dir>/<name>/active.json` exists (`lstat`, never followed) whose
+modification time is within 24 h of now (§4), for `<dir>` in the closed set below — and also whenever the
+scan cannot tell (an error other than absence counts as open; see "Errors fail closed" — wording amended at
+grill, G12):
 
 - `.pharn/pharn-loop` — the existing loop marker, owned by `require-loop-record.cjs`, unchanged;
 - `.pharn/pharn-review` — NEW, `/pharn-review` (see Decisions for GATE 1);
@@ -163,27 +174,40 @@ modification time is within 24 h of now (§4), for `<dir>` in the closed set:
 - Exports `RUN_MARKER_COMMANDS`, `markerPath()`, `openRun({root, command, name, sessionId, now})` and
   `closeRun({root, command, name})`, with `root` required and no default. The reconcile probe (§8) and the
   tests use these, so no second writer exists.
-- **Placement in `/pharn-ship`:**
-  - `node pharn/floor/run-marker.mjs --open pharn-ship '<name>'` immediately after
-    `mark-phase.mjs --name '<name>' --kind run-start --adopt-pending` in Step 1, the moment `/pharn-spec` has
-    resolved `<name>` and before the GATE-1 turn ends;
-  - `node pharn/floor/run-marker.mjs --close pharn-ship '<name>'` in the Final step, after
-    `set-writes-scope.cjs --clear`.
+- **Placement in `/pharn-ship`** (amended at grill — G1, G2):
+  - `node pharn/floor/run-marker.mjs --open pharn-ship '<name>'` immediately after the GATE-1 resume
+    backstop `node pharn/floor/check-spec-approved.mjs pharn/features/<name>/SPEC.md` exits 0, and before
+    `/pharn-plan`'s `stage-start` marker. Not at naming: until GATE 1 resolves, `/pharn-spec` holds its own
+    SPEC-only scope, so a marker there adds no protection, and an abandoned or "Keep as Draft" GATE 1 would
+    hold the whole tree fail-closed for 24 h — the trigger's own complaint in a new form. Everything after the
+    backstop runs in one continued turn until GATE 2 or a STOP, so a single `--open` covers every
+    between-stage window;
+  - `node pharn/floor/run-marker.mjs --close pharn-ship '<name>'` in **Step 3a**, directly after
+    `mark-phase.mjs --name '<name>' --kind run-stop`. Not in the Final step: Step 3a is the one step the
+    command states runs on **every exit that ends the run** (GATE 2 and every STOP) and is positioned before
+    Step 3b for exactly that reason, while the Final step is reached through a pointer at the end of Step 3b,
+    whose reachability on a STOP path the command itself calls ambiguous. Every write after Step 3a is made
+    under an explicit scope (Step 3's `SHIP.md`, Step 3b's `ship-record.json`/`SHIP.md`), so closing there
+    opens no unscoped window. A STOP before the backstop closes a marker that was never opened — `--close`
+    is idempotent.
 
-  The Final step is stated to run on **every exit that ends the run** — GATE 2 and every STOP, including a
-  Step 3b STOP — which Step 3 and Step 3a already route through.
-
-- **Placement in `/pharn-review`:** `--open pharn-review '<name>'` at the end of Step 0, after the
-  leftover-scope release and once `<name>` is resolved; a new `## Step 7 — Close the run` directly after
-  Step 6b (the last procedure step; the command has no turn-end instruction), stated to run on every exit
-  after Step 0, including an early refusal.
+- **Placement in `/pharn-review`** (amended at grill — G3): `--open pharn-review '<name>'` immediately before
+  Step 3 — after every ask-the-human point (Step 0's `<name>`, Step 1's target, Step 1b's `--target`) and
+  before the first step that puts untrusted code or skill content into the context (Steps 3, 3b, 4). A new
+  `## Step 7 — Close the run` directly after Step 6b (the last procedure step; the command has no turn-end
+  instruction), stated to run on every exit after the open, including an early refusal. Opening at Step 0
+  would leave an unanswered question at Step 1 holding the tree fail-closed for 24 h.
 - **ADVISORY (P0), stated in each command.** Both lines are Bash calls outside the `PreToolUse` gate (L19). A
   run that skips `--open` runs under the permissive default between its own scoped steps. One that skips
   `--close` leaves a marker that holds the fail-closed default for at most 24 h. Neither fails the run.
-- **The pre-naming window is not covered**, for `/pharn-ship` (`/pharn-spec`'s discovery) and `/pharn-loop`
-  (S1–S4) alike: no marker can exist before `<name>`. Neither writes through the Write tool there. A bound.
-- **GATE 1 "Keep as Draft" does not close the ship run.** The run is waiting, not ended; if the human never
-  resumes it, the 24 h ceiling or the deny message's close command ends it.
+- **The windows before the open are not covered by a marker**, and each is stated: `/pharn-ship` before its
+  GATE-1 backstop (covered instead by `/pharn-spec`'s own scope, held through the halt), `/pharn-loop`'s
+  S1–S4 (no marker can exist before `<name>`, and nothing is written through the Write tool there), and
+  `/pharn-review`'s Steps 0–1b (deterministic Bash steps and questions, before any untrusted content). A
+  bound.
+- **GATE 1 opens no run.** A ship that never passes its backstop — "Keep as Draft", an unanswered form, an
+  abandoned session — leaves no marker at all. The one wait inside an open ship run is Step 3b's attestation
+  halt, which comes after Step 3a has already closed it.
 - `/pharn-loop` gains one sentence in Step 1a (the same marker also holds the write guard's fail-closed
   default in an install) and a correction in its Final step (for the write guard, only `--close` or the
   24 h ceiling releases a leftover marker; a present `LOOP.md` does not).
@@ -223,9 +247,24 @@ run.
   the two build stages" rules keep their meaning; they iterate the new bodies too (L29).
 - **Dev and unsignalled messages are byte-identical to today's**, not only their verdicts (D1): every new
   sentence is conditional on `ctx.install`. The build measures it by running the HEAD hook and the new hook
-  over the enforce test matrix and diffing stderr for every dev and unsignalled case (0 differences
-  expected, recorded in `BUILD.md`). The stale-scope bullet's "narrower than the fail-closed default" gets an
-  install-only variant ("narrower than the guard's default").
+  over the §1 path list × {dev, unsignalled} × {no scope, scope set, malformed} and diffing stderr (0
+  differences expected, recorded in `BUILD.md`). It is also held **permanently** (amended at grill — G8): the
+  enforce test pins the full stderr of three dev-posture denials — in-repo with no scope, in-repo under a set
+  scope, out-of-root — as exact strings captured from the HEAD hook, so a later edit that changes a dev
+  message fails CI instead of passing a one-time measurement. The stale-scope bullet's "narrower than the
+  fail-closed default" gets an install-only variant ("narrower than the guard's default").
+
+### 5b. A guard error denies (amended at grill — G7)
+
+The new decision path adds filesystem calls (the marker scan, the malformed-record `lstat`) and string work
+(the fold, the new bodies). An uncaught throw there would end the hook with exit 1, which Claude Code treats
+as a non-blocking error — the write would proceed, a fail-OPEN (the hook header's own warning, and L62's
+crash-read-as-verdict shape). So the whole decision loop runs inside a `try/catch` whose `catch` DENIES with
+exit 2 and a fixed message ("the writes-scope guard failed while deciding; the write is denied — fail-closed"),
+in every posture. This changes dev-posture behavior on an error path only: a crash that used to let the write
+through now denies it, which is the posture the dev default already has. Bound, stated: no fixture can make the
+current code throw on demand, so the wrapper is pinned by a source-shape test (the decision loop sits inside a
+`try` whose `catch` calls `deny`) — presence, not a demonstrated catch.
 
 ### 6. Malformed scope record → deny everything (D4)
 
@@ -290,26 +329,36 @@ first". An explicit `{"scope": []}` is a scope and anchors. Both shipped callers
   labelled dev-repo or in-run, with the install-outside-a-run exit beside it.
 - The Final step of the 11 setter-invoking product commands (plus `/pharn-review`'s Step 0): two phrases
   re-worded so they hold in every posture. The `pharn-dev-*` commands are untouched.
-- `LIMITS.md §7` (+ one phrase in §8) and the two hook edits travel in the patch. `THREAT-MODEL.md` and
+- `LIMITS.md §7`, §1d and one phrase in §8, and the two hook edits, travel in the patch. `THREAT-MODEL.md` and
   `pharn/ARCHITECTURE.md` are byte-identical (see Discovery).
+- `pharn/pharn-contracts/finding-shape.md` (added at grill — G5): "reads exactly one input" becomes "reads
+  exactly one SCOPE input — `.pharn/writes-scope.json` — beside the signals that choose its default
+  (`pharn.config.json`, `.dev/floor/`, and in an installed project the run markers)", and the lens sentence
+  becomes "(or, with no scope set, the default — fail-closed while `/pharn-review`'s run marker is open)".
 
-**Draft of the `LIMITS.md` change** (the build may tighten wording; the facts are fixed here for the grill):
+**Draft of the `LIMITS.md` change** (the build may tighten wording; the facts are fixed here, and the grill
+corrected two quantifiers — G4, G6):
 
 - the subpath bullet gains: "…and, because that root carries no `skillsVersion`, it keeps the fail-closed
   default outside a run as well: friction, not a hole."
 - a new bullet: "**In an installed project, `enforce-writes-scope.cjs` is fail-closed only while PHARN is
   working (6.23.0).** With no scope set and no open `/pharn-ship`, `/pharn-loop` or `/pharn-review` run, it
-  denies only PHARN's installed surface — `pharn/**` except `pharn/features/**`, `.claude/**` and
-  `pharn.config.json`, matched case-folded — and allows every other path, including one outside every git
-  tree; a path inside another git tree stays denied. `protect-trusted-paths.cjs` is unchanged. A run is open
-  while `.pharn/<pharn-loop|pharn-ship|pharn-review>/<name>/active.json` exists with a modification time within
-  24 h. Those markers are written and removed through `Bash` (§6), so a run that skips `--open` is unguarded
-  between its stages, a crashed run's marker keeps every session in the tree fail-closed for up to 24 h
-  unless it is closed, and `touch` extends it. The posture needs `skillsVersion` at the root the guard judges.
-  A malformed `.pharn/writes-scope.json` denies every write in an installed project. Outside a run, an edit
-  the guard allows between a manual `/pharn-build` and `/pharn-verify` is still judged by
-  `check-bash-reconcile.mjs` against the build's recorded scope and reads as an escape, as an editor edit
-  does."
+  denies PHARN's installed surface — `pharn/**` except `pharn/features/**`, `.claude/**` and
+  `pharn.config.json`, matched case-folded — and its own input `.pharn/writes-scope.json`, and allows every
+  other path inside the project. Outside the project it allows a path that lies in no git tree, such as
+  Claude Code's own memory folder, and denies one inside another git tree. `protect-trusted-paths.cjs` is
+  unchanged and still denies its own set in every posture. A run is open while
+  `.pharn/<pharn-loop|pharn-ship|pharn-review>/<name>/active.json` exists with a modification time within
+  24 h, or while the guard cannot read those directories. The markers are written and removed through `Bash`
+  (§6), so a run that skips `--open` is unguarded between its stages, a crashed run's marker keeps every
+  session in the tree fail-closed for up to 24 h unless it is closed, and `touch` extends it. The posture
+  needs `skillsVersion` at the root the guard judges. A malformed `.pharn/writes-scope.json` denies every
+  write in an installed project. Outside a run, an edit the guard allows between a manual `/pharn-build` and
+  `/pharn-verify` is still judged by `check-bash-reconcile.mjs` against the build's recorded scope, and reads
+  as an escape, as an editor edit does."
+- §1d: after "re-gate every downstream write issued through the `Write`/`Edit`/`MultiEdit`/`NotebookEdit`
+  tool surface and network call regardless of `state`", add "— in an installed project, while a scope is set
+  or a PHARN run is open; outside both, the writes-scope guard no longer gates ordinary paths (§7)".
 - §8: "(`skillsVersion`, to choose its fail-closed posture)" → "(`skillsVersion`, to choose its posture)".
 
 ### 11. Version (D9)
@@ -321,7 +370,28 @@ affects a caller that anchors with no scope, while every shipped caller sets one
 `settings.json` is unchanged, so an install needs no wiring edit. A sibling phase (`stage-regress-script`)
 also bumps; whichever merges second renumbers (by diff, never by memory).
 
-## Decisions for GATE 1 (beyond or interpreting the brief — each overridable)
+**How `pharn update` reaches an install — ADVISORY, not verified this run** (amended at grill — G9): per the
+roadmap's 0.1 pre-check (pharn-cli 0.5.0 @765eec4, recorded 2026-09-25, not re-measured here), `pharn update`
+re-copies commands, `*.cjs` hooks and `pharn/floor/` per file, lands new files, keeps a user-edited file unless
+`--force`, and never writes `settings.json`. That is pharn-cli's behavior, outside this repository, so the
+CHANGELOG states it as the CLI's documented behavior, not as a floor fact.
+
+**The CHANGELOG migration note carries exactly these points** (pinned here so the build does not improvise
+them):
+
+- nothing to wire: the hooks change, `settings.json` does not;
+- an install whose `pharn-ship.md` or `pharn-review.md` was edited locally keeps the old command under
+  `pharn update`, so it never opens a run marker and those runs are unguarded between their stages — re-take
+  the shipped command, or add the two pinned lines;
+- a malformed `.pharn/writes-scope.json` now denies every write in an installed project —
+  `node .claude/hooks/set-writes-scope.cjs --clear` releases it;
+- `reconcile-baseline.mjs --anchor` now refuses (exit 2) with no scope set; every shipped caller sets one
+  first, so only a caller outside PHARN's commands is affected;
+- rollback: reverting 6.23.0 restores the fail-closed default everywhere; a leftover
+  `.pharn/pharn-ship/` or `.pharn/pharn-review/` marker is inert, because nothing in the older tree reads
+  those directories (the loop marker is unchanged and keeps its Stop-guard meaning).
+
+## Decisions for GATE 1 (beyond or interpreting the brief — all four accepted at GATE 1)
 
 1. **`/pharn-review` opens a run marker.** It is not in D3's list, but its stated fix #7 guarantee rests on the
    fail-closed default, and it is the one product command that sets no scope while reading untrusted code
@@ -345,6 +415,7 @@ also bumps; whichever merges second renumbers (by diff, never by memory).
 - `pharn/floor/check-bash-reconcile.mjs` — EDIT. The probe's third signal, the export, the header (§8) — layer product floor
 - `pharn/floor/check-bash-reconcile.test.mjs` — EDIT. No-scope cases rebuilt as legacy baselines; the ★ probe-marker parity — layer product floor tests
 - `pharn/pharn-contracts/reconciliation-record.md` — EDIT. `scope_snapshot`, the anchor refusal, three signals — layer contract
+- `pharn/pharn-contracts/finding-shape.md` — EDIT. The emission audit's "reads exactly one input" and the `/pharn-review` lens sentence (§10, grill G5) — layer contract
 - `pharn/floor/README.md` — EDIT. The enforce section's postures and examples — layer shipped doc
 - `.claude/hooks/enforce-writes-scope.test.cjs` — EDIT. The posture table as one matrix; markers; the stale rule; the fold; the two new bodies; per-branch remedy reachability; the ✧ `toKey` copy pin — layer hook tests
 - `.claude/hooks/set-writes-scope.test.cjs` — EDIT. The new `--clear` message — layer hook tests
@@ -386,8 +457,9 @@ also bumps; whichever merges second renumbers (by diff, never by memory).
 
 1. `/pharn-dev-build` Step 0 as written: the setter from this PLAN, then `--anchor` (the old anchor; §9 lands
    in this same build).
-2. Write the agent files above, and the three `handoff/` sources (the two full hook files and
-   `limits-edits.json`).
+2. **Before** writing the new hook, capture the three golden dev-posture deny messages (§5, grill G8) from the
+   current in-tree hook — it is still HEAD's — into the enforce test. Then write the agent files above and the
+   three `handoff/` sources (the two full hook files and `limits-edits.json`).
 3. Format only this build's own files: `npx prettier --ignore-unknown --write <the written paths>`, and
    `npx markdownlint-cli2 --no-globs --fix <the written .md paths>` — never over the tree (L57).
 4. `npm run docs:generate` — a declared Bash write; it changes only README's generated inventory
@@ -401,8 +473,8 @@ also bumps; whichever merges second renumbers (by diff, never by memory).
      exit 1);
    - `git add` those paths and makes a throwaway commit (author `pharn-verify <verify@localhost>`);
    - runs `npm run check` in the worktree and records each gate's exit;
-   - runs the HEAD hook and the new hook over the dev/unsignalled rows of the enforce matrix and counts stderr
-     differences (§5, expected 0);
+   - runs the HEAD hook and the new hook over the §1 path list × {dev, unsignalled} × {no scope, scope set,
+     malformed} and counts stderr differences (§5, expected 0);
    - writes `git diff HEAD~1 HEAD -- .claude/hooks/enforce-writes-scope.cjs .claude/hooks/set-writes-scope.cjs LIMITS.md`
      to `proposed/human-only.patch`, and each file's sha256 (node `crypto`) to `proposed/human-only.sha256`
      as `<hex>  <path>`;
@@ -428,14 +500,19 @@ also bumps; whichever merges second renumbers (by diff, never by memory).
    against the still-unpatched hooks. This is the floor reporting un-applied human-only state, not a defect
    (the `hook-cwd-anchoring` precedent). **The chain STOPS here for the human.**
 4. **The human reads `proposed/human-only.patch`, then runs
-   `sh .dev/features/writes-scope-run-only/proposed/apply.sh` on the phase branch:**
+   `sh .dev/features/writes-scope-run-only/proposed/apply.sh` inside the BUILD stage's worktree** (GATE-1
+   amendment, below). That worktree holds the baseline the build anchored, so the checkpoint has the epoch it
+   is meant to protect. The orchestrator first fast-forwards that worktree to the phase branch
+   (`git merge --ff-only writes-scope-run-only`) so the apply commit lands on top of the chain; the only files
+   that merge brings in are the regress and verify stages' own artifacts, which reconcile exempts as the
+   active feature's pipeline artifacts. It then advances the phase branch to the apply commit.
 
    ```sh
    #!/bin/sh
    set -eu
    F=.dev/features/writes-scope-run-only/proposed
    [ "$(git branch --show-current)" != "main" ] || { echo "apply.sh: refusing to commit the guard change on main" >&2; exit 1; }
-   node pharn/floor/check-bash-reconcile.mjs --base .
+   node pharn/floor/check-bash-reconcile.mjs --base . --require-baseline
    git apply --check "$F/human-only.patch"
    git apply "$F/human-only.patch"
    if ! { shasum -a 256 -c "$F/human-only.sha256" && node --test .claude/hooks/enforce-writes-scope.test.cjs .claude/hooks/set-writes-scope.test.cjs .claude/hooks/protect-trusted-paths.test.cjs .claude/hooks/hook-wiring.test.cjs .claude/hooks/writes-scope-release.test.cjs pharn/floor/run-marker.test.mjs pharn/floor/check-bash-reconcile.test.mjs pharn/floor/reconcile-baseline.test.mjs; }; then
@@ -449,9 +526,14 @@ also bumps; whichever merges second renumbers (by diff, never by memory).
    echo "apply.sh: applied, tested and committed - resume at /pharn-dev-verify"
    ```
 
-   - **The checkpoint drops the precedent's `--require-baseline`**, deliberately: the stage agents run in
-     separate worktrees, each with its own `.pharn/`, so the checkout where the human runs this may hold no
-     baseline. `ESCAPE` (1) and `INCONCLUSIVE` (2) still stop it; `NO_BASELINE` and `CLEAN` (0) proceed.
+   - **The checkpoint keeps the precedent's `--require-baseline`** (GATE-1 amendment by the orchestrator,
+     2026-09-25). The plan as approved had dropped it on the grounds that the stage agents run in separate
+     worktrees, each with its own `.pharn/`; running `apply.sh` in the build stage's worktree removes that
+     concern, so the build's epoch must reconcile `CLEAN` before the re-anchor, and an absent baseline stops
+     the script (`INCONCLUSIVE`) instead of proceeding.
+   - **Verify reads a baseline only where one was anchored** — the build's worktree, re-anchored there by this
+     script. A verify run in another worktree reads `INCONCLUSIVE` under `--require-baseline`. That is an
+     orchestration constraint, stated here; the remedy is never to delete or hand-edit a baseline.
    - Tests run on the applied bytes, with restore-on-failure, so unverified guard bytes never stay live.
    - The path-scoped commit carries the human's authorship and clears the control-surface HEAD comparison.
    - Setter, then anchor (L38) — and the anchor now REQUIRES the scope the setter just wrote (§9).
@@ -462,7 +544,8 @@ also bumps; whichever merges second renumbers (by diff, never by memory).
 
 - `pharn/pharn-contracts/reconciliation-record.md` — amended (§8, §9); no baseline is deleted or hand-edited
   anywhere in this plan.
-- `pharn/pharn-contracts/finding-shape.md` — unchanged; reconcile findings keep their shape.
+- `pharn/pharn-contracts/finding-shape.md` — the finding object is unchanged and reconcile findings keep
+  their shape; only its emission audit's two sentences about the guard's inputs are corrected (§10, G5).
 - No new contract for the run marker (P7): the guard reads only a path and an age, and the writer's header is
   its spec, the `require-loop-record.cjs` precedent.
 
@@ -479,7 +562,12 @@ No `role:` capability is added, so no eval pair is owed. The tests:
 - **Markers**: each real writer (`run-marker.mjs --open` for both commands, `require-loop-record.cjs --open`)
   flips the install no-scope verdict for `src/x.js` 0 → 2, and `--close` flips it back; a marker under
   `.pharn/pharn-foo/` is ignored (negative control); a marker as a directory and as a dangling link count; one
-  aged 25 h (via `utimesSync`) and one dated 25 h ahead are ignored, one aged 23 h counts.
+  aged 25 h (via `utimesSync`) and one dated 25 h ahead are ignored, one aged 23 h counts; an unreadable state
+  directory (`chmod 000`, skipped when the suite runs as root) counts as a run open (grill G14).
+- **D1, held permanently** (grill G8): the full stderr of three dev-posture denials, captured from the HEAD
+  hook, pinned as exact strings.
+- **A guard error denies** (grill G7): a source-shape pin that the decision loop sits inside a `try` whose
+  `catch` calls `deny` — presence only, stated as such (§5b).
 - **Fold**: `PHARN/Floor/x.mjs` and `.CLAUDE/x` are denied in the permissive posture; `✧ toKey()` byte-equal
   to `protect-trusted-paths.cjs`'s.
 - **Deny bodies**: per-branch present/absent over the §5 table, through `everyDenyMessage()`; a marker name
@@ -493,17 +581,23 @@ No `role:` capability is added, so no eval pair is owed. The tests:
 - **Writer**: open/close/idempotence, refusals (`pharn-loop`, a bad name, a symlinked component, extra argv),
   the CLI's cwd root exercised by a spawn (L41), `openRun()` rejects a missing `root`.
 - **Wiring** (`command-hygiene.test.mjs`): exactly one open and one close line in `pharn-ship.md` and
-  `pharn-review.md`, ordered as §3 says, no other command invokes `run-marker.mjs`, with drop/misplace
-  mutation controls; **executed** from the committed text by `run-marker.test.mjs` (L45).
+  `pharn-review.md`, ordered as §3 says (ship: open after the GATE-1 `check-spec-approved.mjs` backstop and
+  before `/pharn-plan`'s `stage-start`, close after Step 3a's `run-stop`; review: open after Step 1b's last
+  ask point and before Step 3, close in Step 7), no other command invokes `run-marker.mjs`, with
+  drop/misplace mutation controls; **executed** from the committed text by `run-marker.test.mjs` (L45).
 - **Closure** (`writes-scope-release.test.cjs`): no `pharn-*` (non-dev) command contains "absence of a scope
   file = the fail-closed default-safe-set".
 - **Setter**: the `--clear` message pin.
 
 ## Guarantee audit (P0)
 
-- "In an installed project with no scope and no open run, `enforce-writes-scope.cjs` denies only PHARN's
-  installed surface" → **floor: hook** (primitive #1) over folded path membership (#3); probed at build. For
-  `Write|Edit|MultiEdit|NotebookEdit` only — Bash is outside both hooks (`LIMITS.md §6`).
+- "In an installed project with no scope and no open run, `enforce-writes-scope.cjs` denies PHARN's
+  installed surface and `.pharn/writes-scope.json`, allows every other in-project path, and allows an
+  out-of-project path only in no git tree" → **floor: hook** (primitive #1) over folded path membership (#3);
+  probed at build, the excluded members included (grill G4). For `Write|Edit|MultiEdit|NotebookEdit` only —
+  Bash is outside both hooks (`LIMITS.md §6`) — and `protect-trusted-paths.cjs` still denies its own set.
+- "A guard error denies" → **floor: hook**, for the throws the wrapper catches; pinned by source shape only
+  (§5b).
 - "While a run is open, the default is today's fail-closed set" → **floor: hook**, given a marker. **That a
   marker exists while a run is running is ADVISORY**: markers are Bash-written command prose (L19).
 - "The ship, review and loop commands open and close their markers" → **advisory**; the wiring tests prove
@@ -514,8 +608,9 @@ No `role:` capability is added, so no eval pair is owed. The tests:
 - "`--anchor` refuses without a scope" → **floor: enum/shape check** (#3) with a fail-closed exit.
 - "reconcile's default probe answers with the in-run default" → **floor by delegation** (it executes the real
   hook), pinned by the ★ parity test; its reach is bounded by L42 (legacy and no-baseline paths only).
-- "The dev posture is unchanged byte-for-byte" → **tested** (the matrix rows) and **measured once** (§5);
-  not a floor guarantee beyond those cases.
+- "The dev posture is unchanged byte-for-byte" → **tested** (the matrix rows and three golden messages) and
+  **measured once** over the wider list (§5); not a floor guarantee beyond those cases. The one deliberate
+  dev-posture change is on an error path: a crash now denies (§5b).
 - "Tree-wide markers" → a design property of the hook's read, stated with its L38 cost.
 
 ## Trust audit (P2)
@@ -525,10 +620,18 @@ No `role:` capability is added, so no eval pair is owed. The tests:
   suggested command. Marker CONTENT is never read by the guard.
 - **The scope record**: a malformed one now denies instead of falling back (install); nothing from it is
   echoed.
-- **`pharn.config.json` `skillsVersion`** remains the posture signal. In an install it becomes reserved (the
-  Write tool cannot edit it outside a scope). A Bash write can still flip a posture — adding `skillsVersion`
-  in the dev repo would make it an install — outside the gate by design, and visible to reconcile (a tracked
-  file).
+- **`pharn.config.json` `skillsVersion`** remains the posture signal, and **the direction of an accidental
+  flip reverses in this increment** (grill G11). Today, adding `skillsVersion` to this dev repo's config
+  makes the guard STRICTER, and a contributor notices at once. After it, the same edit makes the dev repo an
+  install, which is PERMISSIVE outside a run — and the dev commands open no run markers — so the guard
+  loosens silently. No checker reads `skillsVersion` in this repo's config (checked: neither
+  `check-config.mjs` nor `check-model-config.mjs` does). The Write tool reaches the file only through a scope
+  that names it, a Bash write reaches it anyway, and reconcile sees it (a tracked file). Recorded as follow-up
+  `dev-posture-pin` (below), not built (P7).
+- **Closing a run marker grants nothing Bash does not already grant.** The deny message offers the close
+  command for a stale run; an injected instruction could name it too. It is a Bash call, and an actor holding
+  Bash can already write any path directly (`LIMITS.md §6`), so the remedy adds no power. The message says
+  never to close a run you are executing, and prints each marker's age so the reader can tell stale from live.
 - **Hard links**: a hard link into the reserved surface is not resolved by `realpath`, so the permissive
   posture judges it by its own name. Creating one needs Bash. A bound.
 
@@ -547,7 +650,23 @@ cannot tell (a scan error, a torn record), it fails closed.
   `--clear`). Only markers gained a ceiling.
 - `run-marker-open-failure` — `--open` failing is advisory in all three commands; whether a run should STOP
   when it cannot mark itself open is left for a real failure.
+- `dev-posture-pin` (grill G11) — a one-assertion test that this repository's own tree computes the dev
+  posture (no `skillsVersion` in its `pharn.config.json`, `.dev/floor/` present), so an accidental flip to the
+  now-permissive install posture fails CI. Not built: no observed failure (P7).
+- `reconcile-import-crash-label` (grill G13) — `check-bash-reconcile.mjs` gains a second static import
+  (`run-marker.mjs`); a module that cannot load makes node exit 1, which is the checker's `ESCAPE` code. That
+  fails the stage in the safe direction but names the wrong cause — the class `check-loop-fresh.mjs` closed in
+  6.21.1 with a dynamic import. Not changed here (the existing `reconcile-baseline.mjs` import already has it).
+
+## GATE 1 record
+
+**APPROVED on 2026-09-25 by the orchestrator** — a model decision made under the maintainer's 2026-09-25
+delegation ("Deliver all things … when all check green merge pull request"), **not a human approval**. The four
+"Decisions for GATE 1" were accepted as written. One amendment was made at the gate: `apply.sh` keeps
+`--require-baseline`, and the human runs it inside the build stage's worktree (Chain sequencing, step 4).
+`/pharn-dev-grill` then amended this plan in place for the findings recorded in `GRILL.md`: G1–G9, G11, G12
+and G14 amended, G10 a sharpened classification, G13 a named follow-up. Each changed line names its finding.
 
 ## Open questions (HALT)
 
-- none. The four "Decisions for GATE 1" above are decided in this plan and overridable at the gate.
+- none.
