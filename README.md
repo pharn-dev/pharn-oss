@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.21.2-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.22.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -473,8 +473,13 @@ a skipped test. PHARN can also read a per-test record — each test's id, file, 
 `/pharn-verify`'s acceptance-criteria check (both below).
 
 To turn it on, name your reporter's format for each gate in `pharn.config.json`. The gates are `test` and the
-e2e gates (`test:e2e`, `e2e`); the formats are `vitest-json` and `playwright-json`, both built into their
-runner, so there is nothing to install:
+e2e gates (`test:e2e`, `e2e`). The formats:
+
+- `vitest-json`, `jest-json` and `playwright-json` are each their runner's own built-in report, so there is
+  nothing to install.
+- `pharn-json` is a neutral format PHARN defines. Use it for any other runner.
+
+For example:
 
 ```json
 { "testResults": { "test": "vitest-json", "test:e2e": "playwright-json" } }
@@ -514,9 +519,38 @@ module.exports = defineConfig({
 });
 ```
 
+With Jest (`"test": "jest-json"`), which has no config option for its JSON report, add the flags in the script.
+The `${…:+…}` form adds them only while the variable is set:
+
+```json
+{
+  "scripts": {
+    "test": "jest ${PHARN_TEST_RESULTS:+--json \"--outputFile=$PHARN_TEST_RESULTS\"}"
+  }
+}
+```
+
+That form needs a POSIX shell. On Windows npm runs scripts under `cmd.exe`, which hands the text to Jest
+unexpanded. Things to know about Jest:
+
+- Name `jest-json`, not `vitest-json`. `vitest-json` also parses Jest's report, because vitest copies its shape. But
+  it skips Jest's retry and `test.failing` fields, so under it those tests read as passes.
+- The record was checked on Jest 29.7.0 and 30.5.2. A report from a Jest that does not write `invocations` is
+  refused rather than guessed.
+- Jest reads the file arguments PHARN passes as path patterns, so a similarly named test file can run too, and its
+  tests enter the record. Jest's `--runTestsByPath` makes them exact paths.
+- Keep Jest's configuration in a `jest.config.*` file. The lock's test-infrastructure pin covers that file, but
+  not a `jest` key inside `package.json`.
+
+For any other runner, write a small reporter that emits `pharn-json`. The schema, with an example, is in
+`pharn/pharn-contracts/test-results-record.md`, "The neutral format".
+
 What the record can and cannot tell you is in `pharn/pharn-contracts/test-results-record.md`. In short, "passed"
-means your reporter said so. A single flaky test or expected failure (`test.fail()`) voids the whole record rather
-than being counted as a pass. `pharn.config.json` is not write-protected, so review changes to it like changes to your test script.
+means your reporter said so. A flaky test or an expected failure that the report marks voids the whole record
+rather than being counted as a pass: Playwright's `flaky` and `test.fail()`, Jest's pass on a retry, and Jest 30's
+`test.failing`. One the report does not mark reads as a pass. Measured cases are vitest's `test.fails` and pass on
+a retry, and Jest 29's `test.failing`. `pharn.config.json` is not write-protected, so review changes to it like
+changes to your test script.
 
 ### Acceptance-criteria tests, before the build
 
@@ -539,8 +573,11 @@ What it needs from your project:
 - **Tests that import their target inside the test body.** Before the build the module under test does not exist.
   `await import("../src/reset.js")` inside the test makes that a failed test, which is what the red run wants; a
   top-level `import` makes the whole file fail to load, so none of its tests is collected, and the red run refuses
-  that as the wrong reason. `/pharn-test` writes them this way. A runner that type-checks each file as it loads it
-  (ts-jest with diagnostics on, for example) fails the file anyway; use its transpile-only mode.
+  that as the wrong reason. `/pharn-test` writes them this way. The form must be one your runner can run, or the
+  test fails before and after the build alike. Plain Jest in its default CommonJS mode cannot run an in-body
+  `await import()`, so there `/pharn-test` uses `require()` inside the test; Jest's ESM mode is the reverse. A
+  runner that type-checks each file as it loads it (ts-jest with diagnostics on, for example) fails the file anyway;
+  use its transpile-only mode.
 - **An e2e runner that serves the app itself.** The red run does not run `build`; Playwright's `webServer` option
   is the usual way.
 
@@ -567,8 +604,9 @@ verify report carries a per-AC table (id, level, matched tests, status, reason),
   build, re-running `/pharn-test` means setting the build aside first, because its red run would now pass.
 - **A feature locked before 6.20.0** has no infrastructure pin, and verify reports `test-infra-unpinned` until it goes
   back through `/pharn-test` that way.
-- **A per-test record that cannot be read** makes verify inconclusive, never a pass. One flaky test, `test.fail()`,
-  or duplicate test name anywhere in the suite voids the record.
+- **A per-test record that cannot be read** makes verify inconclusive, never a pass. One flaky test or expected
+  failure that the report marks, or a duplicate test name, anywhere in the suite voids the record (see
+  [Per-test results](#per-test-results)).
 - **A SPEC not filled from the template** is reported `not-applicable (legacy spec)` in the report, not silently
   passed. A `spec_kind: test-infra` SPEC gets **bootstrap** evidence: the level's gate ran and reported at least one
   passed test. That is weaker, and the report says so.

@@ -41,8 +41,9 @@
 // BOUNDS (P0), each stated where a reader meets the claim: "passed" is the reporter's word — the tests, the reporter
 // config and pharn.config.json are agent-editable, which the lock and the pin NARROW and never close; AGREEMENT, never
 // provenance (L43) — a self-consistent fabricated lock + stamp + results set over the live tree passes; a record is
-// refused whole on one flaky test, one `test.fail`, or one duplicate id anywhere in the suite (item 01), which makes the
-// gate unmeasured; the pin's own gaps are test-infra-core.mjs's header. The gate does NOT re-check that the SPEC is
+// refused whole on one flaky test or expected failure the report MARKS, or one duplicate id, anywhere in the suite
+// (item 01), which makes the gate unmeasured — an unmarked one (vitest `test.fails` or pass on retry, Jest 29's
+// `test.failing`) reads as its raw status (test-results-record.md); the pin's own gaps are test-infra-core.mjs's header. The gate does NOT re-check that the SPEC is
 // still Approved — it reads the SPEC's pin, never its `state`. Since 6.20.5 a test-first SPEC whose pin cannot be
 // read (no `spec_id` or `spec_content_hash` line, an empty one, a value that is not 64 hex — a Draft usually has one
 // of these) is `ac-tests-modified`, an EVIDENCE reason: verify FAIL and /pharn-loop S13; before, the comparison was

@@ -320,12 +320,18 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # blocked on. The field is OPTIONAL: SCHEMA is unchanged and a pre-6.15 stamp still validates; a malformed
 # value is stamp-malformed. `testRecord({stamp, outDir, gateId, root})` in pharn/floor/test-results-core.mjs
 # (NO CLI, no defaults — L41) derives {id, file, title, status ∈ passed|failed|skipped} from that file, opted
-# in by pharn.config.json `testResults: {"test" | "test:e2e" | "e2e": "vitest-json" | "playwright-json"}` (the e2e
+# in by pharn.config.json `testResults: {"test" | "test:e2e" | "e2e": "jest-json" | "pharn-json" | "playwright-json" |
+# "vitest-json"}` (jest-json and pharn-json since 6.22.0: Jest's built-in `--json` report, checked on Jest 29.7.0 and
+# 30.5.2, and PHARN's own neutral schema `pharn-test-results/1`, closed in both directions, for any other runner; JUnit
+# and CTRF were measured and not chosen, in test-results-formats.mjs's header; a Jest report still PARSES under
+# vitest-json, which skips Jest's retry/failing markers — follow-up vitest-json-refuses-jest-shape) (the e2e
 # gates, E2E_SET, since 6.16.0: discovered from a test:e2e/e2e script, run after build at /pharn-verify — resolveSet
 # drops them from a DISCOVERED regress source (an explicit --gates string is not filtered), so an e2e-only manifest
 # is empty-source-set there); the adapters live in
 # test-results-formats.mjs (a reporter's format is its own axis, P3). Closed reasons (RECORD_REASONS), fail-closed
-# PER RECORD: one flaky test or test.fail() voids it. FLOOR: derived from the exact bytes the runner hashed
+# PER RECORD: one flaky test or expected failure the report MARKS voids it (Playwright flaky/test.fail(), Jest's
+# invocations > 1 and Jest 30's failing: true); an UNMARKED one reads as its raw status — vitest test.fails and pass on
+# retry, Jest 29's test.failing, each measured and pinned. FLOOR: derived from the exact bytes the runner hashed
 # (a later write is results-hash-mismatch — L58). NOT provenance (L43): "passed" means the reporter said so,
 # and the test script, reporter config and pharn.config.json are all agent-editable; results-exit-contradiction
 # (a failed test or suite error under exit 0) narrows a forgery, never closes it. No stage read the record in
@@ -366,9 +372,12 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # ≥1 (else ac-test-not-collected), none passed (ac-test-passes-before-build — NO escape hatch), none skipped
 # (ac-test-skipped); item 01's record refusals are REDs by name. BOUND to the run: validateStamp as ac-test for the
 # feature, each run's files == the mapping's, LIVE fingerprint == stamp.fingerprint.final (the lock and the tests are
-# in it). The convention it rests on: unit/integration AC tests `await import()` their target INSIDE the test body —
+# in it). The convention it rests on: unit/integration AC tests import their target INSIDE the test body —
 # a top-level import of a not-yet-built module is a file load failure, i.e. not collected (measured on real vitest
-# 5.0.1: pharn/floor/test-fixtures/test-results/vitest-red.json). ac-tests-lock.mjs --record-red-run re-derives the
+# 5.0.1: pharn/floor/test-fixtures/test-results/vitest-red.json, and Jest 30.5.2: jest-red.json). The in-body FORM must
+# be one the runner's module mode can run, or it fails before AND after the build and the red run cannot tell (6.22.0,
+# measured): `await import()` under vitest, Jest ESM mode, babel-jest+preset-env and next/jest; `require()` under plain
+# CommonJS Jest, where `await import()` stays red forever (jest-after.json). ac-tests-lock.mjs --record-red-run re-derives the
 # verdict and writes `red_run` {stamp_sha256, files_sha256, gates, acs}; `--check --require-red-run` is the question
 # "did a red run happen" (plain --check GREEN never means that) — a bootstrap lock FAILS it unless the caller also passes
 # --allow-bootstrap (only /pharn-test's Step B does), and a bootstrap lock is written/checked only over an Approved,
@@ -437,8 +446,9 @@ node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-
 # ac-gate-core, so the checker's own load graph does not grow); J re-hashes per-test results files;
 # check I's test-stage RED (exit 1, a RED token) is its own code, ac-evidence-invalid → S13 (the other front checks,
 # and a test-stage exit 2 or crash, keep front-stage-red).
-# BOUNDS: "passed" is the reporter's word; agreement, never provenance (L43); one flaky test, test.fail() or duplicate
-# id anywhere voids the record (INCONCLUSIVE). check-verify.mjs still spawns nothing. Contract: pharn/pharn-contracts/
+# BOUNDS: "passed" is the reporter's word; agreement, never provenance (L43); one flaky test or expected failure the
+# report MARKS, or a duplicate id, anywhere voids the record (INCONCLUSIVE) — an unmarked one reads as its raw status
+# (test-results-record.md). check-verify.mjs still spawns nothing. Contract: pharn/pharn-contracts/
 # ac-tests.md "The AC gate" + verify-report.md "The additive ac_gate block".
 node pharn/floor/check-verify.mjs --stamp <stamp.json> --feature <name> --ac-gate
 

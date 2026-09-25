@@ -29,9 +29,10 @@
 //     reporter config and the `test` script are project code a build can edit, so a forged file is possible;
 //     `results-exit-contradiction` (a failed test or a suite error under exit 0) narrows that, it does not
 //     close it. "passed" means the project's reporter said so — PHARN does not re-run or re-judge a test.
-//   • FAIL-CLOSED PER RECORD: any refusal voids the whole record. One flaky test, one `test.fail()`, one
-//     duplicate title, or a `testResults` key outside RESULTS_GATES makes the answer a reason, not a partial
-//     list.
+//   • FAIL-CLOSED PER RECORD: any refusal voids the whole record. One flaky test or expected failure the report
+//     MARKS (test-results-formats.mjs names which formats mark which), one duplicate title, or a `testResults` key
+//     outside RESULTS_GATES makes the answer a reason, not a partial list. One the report does NOT mark — vitest's
+//     `test.fails` or pass on retry, Jest 29's `test.failing` (measured) — reads as its raw status.
 //   • An `ok` record may hold ZERO tests (a run that ran none). A consumer that needs tests must assert
 //     non-emptiness itself (L34).
 //

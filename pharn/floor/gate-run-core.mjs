@@ -495,7 +495,8 @@ export function resolveSet({ stage, side = null, gates = null, scripts = null, e
  *  AC-TESTS.md: `{id, level, file}`). The model names nothing: the levels the mapping needs pick the DISCOVERED
  *  ids through LEVEL_GATES, and each gate is handed exactly the mapped files of its levels (acFilesFor) through
  *  the positional file append — so one unrelated flaky test elsewhere in an e2e suite cannot void the record
- *  (grill G6). No `reconcile` (the red run is not a verify), no `--gates` (a command string would put the model
+ *  (grill G6). Bounded (6.22.0 review): Jest and Playwright read those positional arguments as PATTERNS, not exact
+ *  paths, so a similarly named test file can run too and its tests enter the record (test-results-record.md). No `reconcile` (the red run is not a verify), no `--gates` (a command string would put the model
  *  back in charge of the set), no `--extra`, no `--skip-style`. No `build` either: an e2e runner that needs a
  *  built or served app must build or serve it itself (Playwright's `webServer`) — a stated bound.
  *
