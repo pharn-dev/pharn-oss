@@ -306,7 +306,11 @@ because every earlier feature's AC tests are in the same suite and reuse the ids
 The three classes are a partition (closure-tested). **Evidence** adds `ac-evidence` to verify's `failing_gates` —
 FAIL, and `/pharn-loop` stops (`check-loop.mjs` `terminal_cause: ac-evidence`, stuck point S13): a rebuild cannot
 restore evidence taken before it. **Delivery** adds `ac-delivery` — FAIL, which the loop iterates on. **Unmeasured**
-over otherwise-green gates is INCONCLUSIVE, never a PASS; a red gate beats it. `spec_kind: test-infra` evidence is
+over otherwise-green gates is INCONCLUSIVE, never a PASS; a red gate beats it. **Over an incomplete build** (6.20.4)
+delivery and unmeasured readings yield to INCOMPLETE — the retryable verdict, never green — while a red gate and
+evidence still read FAIL (`verify-report.md`, "Over an incomplete build"). `test-infra-changed` for a level gate that
+"did not run as the pinned `npm run <id>`" is, when the stamp's source is explicit, `/pharn-verify`'s own `--gates`:
+its detail says so, and the remedy is to re-run `/pharn-verify` without `--gates` (`pharn-verify.md` Step 3a). `spec_kind: test-infra` evidence is
 **BOOTSTRAP** — each level's gate ran as discovered and reported at least one passed test — and the report says it is
 weaker than test-first. The report's `ac_gate` block carries the per-AC table (`verify-report.md`); its test ids and
 titles are untrusted DATA: the report names them, and no stage follows them.

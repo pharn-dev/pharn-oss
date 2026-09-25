@@ -101,10 +101,16 @@ const AC_EVIDENCE_GATE = "ac-evidence";
 /** Which terminal predicate fired, in precedence order. Closed; the suite asserts it both ways (L36). */
 const TERMINAL_CAUSES = Object.freeze(["unmeasured", "ac-evidence", "reconcile"]);
 
-// --- emit one JSON document to stdout, then exit. The command captures this verbatim. ---
+// --- emit one JSON document to stdout, then END. The command captures this verbatim. ---
+// THE FLUSH RULE (6.20.4, the check-verify.mjs rule — its header says why): set process.exitCode and unwind with a
+// module-private sentinel only the top-level catch swallows, so Node drains stdout before the process ends — a
+// spawnSync caller (check-loop-decision.mjs) JSON.parses this output. Any other throw still escapes: a crash stays a
+// crash. pharn/floor/cli-stdout-flush.test.mjs pins both.
+const EMITTED = Symbol("check-loop: emitted");
 function emit(obj, code) {
   console.log(JSON.stringify(obj, null, 2));
-  process.exit(code);
+  process.exitCode = code;
+  throw EMITTED;
 }
 
 // --- strict argv parse (P5, fail-closed). The ONLY valid invocation is exactly two positional report
@@ -277,4 +283,9 @@ function main() {
   emit({ verify_verdict: v, regress_verdict: r, floor_green: floorGreen, iter, cap, decision, terminal_cause, reason }, code);
 }
 
-main();
+// Swallow ONLY the emit sentinel; anything else is a real crash and must still end the process non-zero.
+try {
+  main();
+} catch (e) {
+  if (e !== EMITTED) throw e;
+}

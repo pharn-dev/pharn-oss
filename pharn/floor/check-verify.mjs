@@ -24,14 +24,16 @@
 //
 // VERDICT (ARCHITECTURE §2 primitive #3 — an exit-code / enum threshold). This table is the verdict WITHOUT
 // `--ac-gate`; with it, FAIL also fires with every gate at 0 when the AC gate is red, PASS also needs the AC gate to
-// pass (or be NOT-APPLICABLE), and an unmeasurable AC gate over green gates is INCONCLUSIVE — the precedence is in
-// the `--ac-gate` section below:
+// pass (or be NOT-APPLICABLE), and an unmeasurable AC gate over green gates is INCONCLUSIVE — except over an
+// incomplete build, where only a real gate or AC EVIDENCE beats INCOMPLETE (6.20.4) — the precedence is in the
+// `--ac-gate` section below:
 //   FAIL          iff ANY gate exit code !== 0 (the offenders are named in failing_gates[]). A real gate
 //                 failure ALWAYS wins over incompleteness (precedence below), so /ship never blindly
 //                 rebuilds over a genuine bug.
-//   INCOMPLETE    iff all gates green AND the OPTIONAL build-completeness input says the build is
-//                 incomplete (`--complete 1`) — exit 3, a DISTINCT non-terminal signal (like check-ship's
-//                 exit-3 CONTINUE; 0/1/2 keep their PASS/FAIL/INCONCLUSIVE meaning). This is the
+//   INCOMPLETE    iff all gates green (and, with `--ac-gate`, no AC EVIDENCE reason) AND the OPTIONAL
+//                 build-completeness input says the build is incomplete (`--complete 1`) — exit 3, a
+//                 DISTINCT non-terminal signal (like check-ship's exit-3 CONTINUE; 0/1/2 keep their
+//                 PASS/FAIL/INCONCLUSIVE meaning). This is the
 //                 retryable-by-/ship verdict, kept apart from FAIL.
 //   PASS          iff EVERY gate exit code === 0 AND completeness is complete-or-not-supplied.
 //   INCONCLUSIVE  iff the results map is missing / empty / not a { "<gate-id>": <int> } object, OR the
@@ -68,13 +70,20 @@
 // THE OPT-IN `--ac-gate` (6.20.0, requires --stamp) — the AC GATE, ac-gate-core.mjs, folded into the FLOOR verdict.
 // It adds an `ac_gate` block and, when red, one or two RESERVED ids to failing_gates (gate-run-core.mjs RESERVED_IDS —
 // they never enter `gates`, which stays the runner's map): `ac-evidence` (the AC evidence is changed or missing —
-// check-loop.mjs stops on it) and `ac-delivery` (an AC is not delivered yet — the loop iterates). Precedence:
-//   1. any gate red OR any AC failing id → FAIL (a real gate failure BEATS an unmeasurable AC gate, for the reason it
-//      beats INCOMPLETE — the red gate is the actionable fact, and FAIL can never reach a green stop);
-//   2. else the AC gate unmeasurable (a per-test record refused, or the SPEC unusable) → INCONCLUSIVE, exit 2 — fatal,
+// check-loop.mjs stops on it) and `ac-delivery` (an AC is not delivered yet — the loop iterates). Precedence (the full
+// seven-step order is at the verdict code in main()):
+//   1. any real gate red → FAIL (a real gate failure BEATS an unmeasurable AC gate, for the reason it beats INCOMPLETE —
+//      the red gate is the actionable fact, and FAIL can never reach a green stop); the AC ids are named beside it;
+//   2. else any AC EVIDENCE reason → FAIL (a rebuild cannot restore evidence taken before it, so it beats INCOMPLETE);
+//   3. else the build incomplete → INCOMPLETE (6.20.4) — over a partial tree an AC that is not delivered yet, or an AC
+//      gate that could not measure, is the expected reading, INCOMPLETE is never green, and the bounded rebuild's
+//      re-verify re-measures the gate. Before 6.20.4 steps 4–5 came first, so a partly built feature read FAIL and
+//      /pharn-ship Step 2b's single rebuild (reachable only from INCOMPLETE) could not fire;
+//   4. else any AC DELIVERY reason → FAIL;
+//   5. else the AC gate unmeasurable (a per-test record refused, or the SPEC unusable) → INCONCLUSIVE, exit 2 — fatal,
 //      never a PASS, and with no reason_code, so check-loop-fresh.mjs never routes it as an orchestration lapse;
-//   3. else INCOMPLETE / completeness-inconclusive / PASS, unchanged. A legacy SPEC's NOT-APPLICABLE changes nothing
-//      but is IN the report, never silent. The root is the invoking directory; the per-test files sit beside the stamp.
+//   6. else completeness-inconclusive / PASS, unchanged. A legacy SPEC's NOT-APPLICABLE changes nothing but is IN the
+//      report, never silent. The root is the invoking directory; the per-test files sit beside the stamp.
 //
 // THE OPT-IN `--stamp` SURFACE (gate-run-stamp increment) — WHERE THE MAP COMES FROM, not what it means:
 //   Without `--stamp` this file behaves BYTE-IDENTICALLY to before: it reads the positional results.json
@@ -117,7 +126,14 @@ import { dirname } from "node:path";
 import { validateStamp, stampToMap, completenessFromStamp, gateRunBlock } from "./gate-run-core.mjs";
 import { DELIVERY_REASONS, EVIDENCE_REASONS, FAILING_IDS, evaluateAcGate } from "./ac-gate-core.mjs";
 
-// --- emit one JSON document to stdout, then exit. The command captures this verbatim. ---
+// --- emit one JSON document to stdout, then END. The command captures this verbatim. ---
+// THE FLUSH RULE (6.20.4): emit sets process.exitCode and unwinds with EMITTED, a module-private sentinel that only
+// the top-level catch below swallows; the process then ends naturally, after Node has drained stdout. Ending with an
+// immediate exit call instead dropped queued writes, and on a platform whose piped stdout is asynchronous (darwin)
+// every document past the pipe's 64 KiB buffer was cut short for a spawnSync caller — check-loop-fresh.mjs check E
+// JSON.parses this output, and the 6.20.0 ac_gate block is unbounded. Any OTHER throw still escapes, so a crash stays a
+// crash (exit non-zero, stack on stderr). pharn/floor/cli-stdout-flush.test.mjs pins both.
+const EMITTED = Symbol("check-verify: emitted");
 function emit(obj, code) {
   console.log(JSON.stringify(obj, null, 2));
   // The BOUND, on stdout and not only in the header, so a reader of a run's output sees it without
@@ -127,7 +143,8 @@ function emit(obj, code) {
       "NOTE (P0): a gate-run stamp certifies INTERNAL CONSISTENCY, never provenance — a self-consistent fabricated stamp passes."
     );
   }
-  process.exit(code);
+  process.exitCode = code;
+  throw EMITTED;
 }
 
 // --- read a flag value (`--flag value`) from an argv slice; undefined if absent. ---
@@ -319,25 +336,45 @@ function main() {
     if (code !== 0) failing.push(id);
   }
 
-  // Verdict precedence (P0/P5) — each emit() exits, so these read as guarded branches:
-  //   1. ANY gate red → FAIL (a real failure ALWAYS beats incompleteness — an INCOMPLETE, retryable
-  //      verdict is never emitted while a real gate is red, so /ship never rebuilds over a real bug).
-  //   2. else completeness "incomplete" → INCOMPLETE (exit 3, distinct so /ship can retry ONLY this).
-  //   3. else completeness "inconclusive" → INCONCLUSIVE (fail-closed; cannot assert completeness).
-  //   4. else → PASS (gates green ∧ completeness complete-or-n/a).
-  // When --complete is ABSENT (completeStatus "n/a"), branches 2–3 are dead ⇒ the emitted object AND exit
-  // are byte-identical to the legacy {PASS, FAIL} behavior (regression-guarded by the test suite).
+  // Verdict precedence (P0/P5) — each emit() ends the run, so these read as guarded branches:
+  //   1. ANY real gate red → FAIL (a real failure ALWAYS beats incompleteness — an INCOMPLETE, retryable
+  //      verdict is never emitted while a real gate is red, so /ship never rebuilds over a real bug). The AC gate's
+  //      failing ids, when it has any, are named beside the red gates.
+  //   2. else (--ac-gate) any AC EVIDENCE reason → FAIL `ac-evidence` — evidence taken before the build cannot be
+  //      restored by a rebuild, so it must beat INCOMPLETE too.
+  //   3. else completeness "incomplete" → INCOMPLETE (exit 3, distinct so /ship can retry ONLY this). Since 6.20.4 it
+  //      also beats an AC gate that is red for DELIVERY reasons only, or UNMEASURABLE: over a partial tree "not
+  //      delivered yet" and "could not measure" are the expected readings of an unfinished build (the runner, its
+  //      reporter config or the code under test may be among the missing paths). INCOMPLETE is never green — the
+  //      bounded rebuild's re-verify re-measures the AC gate from scratch — and before 6.20.4 this position made
+  //      INCOMPLETE unreachable under --ac-gate, which /pharn-verify always passes. The ac_gate block stays in the report.
+  //   4. else (--ac-gate) any AC DELIVERY reason → FAIL `ac-delivery`.
+  //   5. else (--ac-gate) the AC gate unmeasurable → INCONCLUSIVE (below).
+  //   6. else completeness "inconclusive" → INCONCLUSIVE (fail-closed; cannot assert completeness).
+  //   7. else → PASS (gates green ∧ completeness complete-or-n/a ∧, with --ac-gate, the AC gate PASS or NOT-APPLICABLE).
+  // When --complete is ABSENT (completeStatus "n/a"), branches 3 and 6 are dead, and without --ac-gate branches 2, 4
+  // and 5 are ⇒ the emitted object AND exit are byte-identical to the legacy {PASS, FAIL} behavior (regression-guarded
+  // by the test suite).
   const extra = { ...(gate_run ? { gate_run } : {}), ...(ac_gate ? { ac_gate } : {}) };
   // The AC gate's failing ids (6.20.0). Absent --ac-gate this adds nothing, so the flag-less and --stamp outputs are
   // byte-identical to before (the existing fixture set asserts it).
+  const acIds = [];
   if (ac_gate) {
     const reasons = [...ac_gate.evidence.map((e) => e.reason), ...ac_gate.acs.map((a) => a.reason).filter((r) => r !== null)];
-    if (reasons.some((r) => EVIDENCE_REASONS.includes(r))) failing.push(FAILING_IDS.evidence);
-    if (reasons.some((r) => DELIVERY_REASONS.includes(r))) failing.push(FAILING_IDS.delivery);
-    failing.sort();
+    if (reasons.some((r) => EVIDENCE_REASONS.includes(r))) acIds.push(FAILING_IDS.evidence);
+    if (reasons.some((r) => DELIVERY_REASONS.includes(r))) acIds.push(FAILING_IDS.delivery);
   }
   if (failing.length) {
-    emit({ feature, gates, verdict: "FAIL", failing_gates: failing, ...extra }, 1);
+    emit({ feature, gates, verdict: "FAIL", failing_gates: [...failing, ...acIds].sort(), ...extra }, 1);
+  }
+  if (acIds.includes(FAILING_IDS.evidence)) {
+    emit({ feature, gates, verdict: "FAIL", failing_gates: [...acIds].sort(), ...extra }, 1);
+  }
+  if (completeStatus === "incomplete") {
+    emit({ feature, gates, verdict: "INCOMPLETE", failing_gates: [], ...extra }, 3);
+  }
+  if (acIds.length) {
+    emit({ feature, gates, verdict: "FAIL", failing_gates: [...acIds].sort(), ...extra }, 1);
   }
   if (ac_gate && ac_gate.verdict === "INCONCLUSIVE") {
     const first = ac_gate.acs.find((a) => a.reason !== null);
@@ -352,9 +389,6 @@ function main() {
       },
       2
     );
-  }
-  if (completeStatus === "incomplete") {
-    emit({ feature, gates, verdict: "INCOMPLETE", failing_gates: [], ...extra }, 3);
   }
   if (completeStatus === "inconclusive") {
     emit(
@@ -372,4 +406,9 @@ function main() {
   emit({ feature, gates, verdict: "PASS", failing_gates: [], ...extra }, 0);
 }
 
-main();
+// Swallow ONLY the emit sentinel; anything else is a real crash and must still end the process non-zero.
+try {
+  main();
+} catch (e) {
+  if (e !== EMITTED) throw e;
+}
