@@ -287,6 +287,10 @@ evidence a later verify stage requires is named in the contract. Run the Final s
   file is not in PLAN.md `## Files`, and the build's scope is `--from-plan PLAN.md`. **Bounded, and stated:** an
   edit to PLAN.md after this stage reopens it until something re-checks — and since 6.19.0 `/pharn-build` re-checks
   it first thing (`check-test-stage.mjs` shells the full mapping check), so such a PLAN is refused before any write.
+  **And the build cannot write an AC test file only up to this fold:** "not in PLAN.md `## Files`" is decided under
+  NFC and full case folding, the write guard's own fold (since 6.20.5; before, a lowercase-only comparison let an NFD
+  or `ſ` spelling of the file through). A filesystem equivalence wider than that fold (Windows trailing dots, say) is
+  not modelled, and that the fold matches APFS's own folding is **ADVISORY** — it was never measured against it.
 - **"Every AC's test was collected and failed before the build"** → **FLOOR: enum membership** over the per-test
   record of the gates the AC's level maps to (`check-red-run.mjs`), matched by mapped file and leaf title, over a
   run bound to the mapping and the live tree (`fingerprint`). **Bounded:** "failed" is the record's status — a

@@ -44,7 +44,9 @@
 // self-consistent rewrite passes (L43). What `--check` proves is that the files on disk are the ones recorded.
 //
 // TRUST (P2): the test files are hashed, never read as text; AC-TESTS.md is parsed only for two frontmatter scalars
-// and its `## Files` paths (the same parser the writes-scope setter's rule is held to).
+// (frontmatter-core.mjs `readField`, the reading check-spec.mjs uses: last-wins, quote before comment) and its
+// `## Files` paths as the writes-scope setter scopes them (ac-tests-core.mjs `scopedPath`: `clean`, then
+// `isConcrete` — the setter's rule, held to it by a parity test). `files[].path` is that scoped spelling (6.20.5).
 //
 // Usage:
 //   node pharn/floor/ac-tests-lock.mjs --write <name> [--base <features-dir>]
@@ -75,9 +77,9 @@ import { readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { matchFrontmatter } from "./frontmatter-core.mjs";
+import { matchFrontmatter, readField } from "./frontmatter-core.mjs";
 import { pathsFromPlanFiles } from "./plan-files-core.mjs";
-import { LEVELS, acRowsOf } from "./ac-tests-core.mjs";
+import { LEVELS, acRowsOf, scopedPath } from "./ac-tests-core.mjs";
 import { specAcceptanceCriteria } from "./spec-template-core.mjs";
 import { RESULTS_GATES } from "./test-results-core.mjs";
 import { evaluateRedRun } from "./red-run-core.mjs";
@@ -107,17 +109,33 @@ const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const AC_ID_RE = /^AC-[1-9][0-9]*$/;
 const MAX_TEST_ID = 4096;
 const HEX64_RE = /^[0-9a-f]{64}$/;
-/** One frontmatter scalar by exact key, quotes and an inline comment stripped. */
-function scalar(raw, key) {
-  for (const line of raw.split(/\r?\n/)) {
-    const m = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
-    if (m && m[1] === key)
-      return m[2]
-        .replace(/(^|\s)#.*$/, "")
-        .trim()
-        .replace(/^["']|["']$/g, "");
+/** A frontmatter file's `spec_id` / `spec_content_hash`, read with frontmatter-core.mjs's `readField` — the reading
+ *  check-spec.mjs and check-plan-spec-agree.mjs use: LAST-wins across a duplicated key, the quote resolved before an
+ *  inline comment. Until 6.20.5 a private `scalar()` read the FIRST copy, so a SPEC re-approved by appending a new pin
+ *  kept its bootstrap lock GREEN, and an AC-TESTS.md with stale-then-current pins locked the stale one. */
+function pinOf(text) {
+  const fm = matchFrontmatter(text);
+  return fm ? { spec_id: readField(fm[1], "spec_id"), spec_content_hash: readField(fm[1], "spec_content_hash") } : {};
+}
+
+/** AC-TESTS.md's `## Files` as the writes-scope setter scopes them (ac-tests-core.mjs `scopedPath`: `clean`, then
+ *  `isConcrete`), de-duplicated and sorted — `{ok, paths}` — or a refusal naming the first entry the setter would drop.
+ *  Until 6.20.5 the lock pinned the RAW entry, so `tests/a.test.js (new)` — GREEN at check-ac-tests and scoped by the
+ *  setter as the bare path — made `--write` refuse "… (new) is missing". */
+function scopedFilesOf(text) {
+  const parsed = pathsFromPlanFiles(text);
+  if (!parsed.ok || parsed.value.length === 0) return { ok: false, reason: "has no `## Files` entries" };
+  const paths = [];
+  for (const entry of parsed.value) {
+    const p = scopedPath(entry);
+    if (p === null)
+      return {
+        ok: false,
+        reason: `has a \`## Files\` entry ${JSON.stringify(entry.slice(0, 80))} that is a placeholder or glob — run check-ac-tests.mjs`,
+      };
+    paths.push(p);
   }
-  return null;
+  return { ok: true, paths: [...new Set(paths)].sort() };
 }
 
 /** AC-TESTS.md's recorded facts — its spec pin, its `## Files` digests, its own digest, and the mapped levels — without
@@ -132,16 +150,14 @@ function mappingFacts(name, base, root) {
   } catch (e) {
     return { ok: false, reason: `${mappingPath} is not readable: ${e.code ?? e.message}` };
   }
-  const fm = matchFrontmatter(text);
-  const spec_id = fm ? scalar(fm[1], "spec_id") : null;
-  const spec_content_hash = fm ? scalar(fm[1], "spec_content_hash") : null;
+  const { spec_id, spec_content_hash } = pinOf(text);
   if (!spec_id || !spec_content_hash || !HEX64_RE.test(spec_content_hash)) {
     return { ok: false, reason: `${mappingPath} carries no spec_id / 64-hex spec_content_hash frontmatter` };
   }
-  const parsed = pathsFromPlanFiles(text);
-  if (!parsed.ok || parsed.value.length === 0) return { ok: false, reason: `${mappingPath} has no \`## Files\` entries` };
+  const scoped = scopedFilesOf(text);
+  if (!scoped.ok) return { ok: false, reason: `${mappingPath} ${scoped.reason}` };
   const files = [];
-  for (const path of [...new Set(parsed.value)].sort()) {
+  for (const path of scoped.paths) {
     const sha256 = sha256RegularFile(resolve(root, path));
     if (sha256 === null) return { ok: false, reason: `${path} (listed in ${MAPPING_NAME}) is missing or not a regular file` };
     files.push({ path, sha256 });
@@ -188,9 +204,7 @@ export function readSpecFacts(name, base, root) {
   } catch (e) {
     return { ok: false, reason: `${specPath} is not readable: ${e.code ?? e.message}` };
   }
-  const fm = matchFrontmatter(text);
-  const spec_id = fm ? scalar(fm[1], "spec_id") : null;
-  const spec_content_hash = fm ? scalar(fm[1], "spec_content_hash") : null;
+  const { spec_id, spec_content_hash } = pinOf(text);
   if (!spec_id || !spec_content_hash || !HEX64_RE.test(spec_content_hash)) {
     return { ok: false, reason: `${specPath} carries no spec_id / 64-hex spec_content_hash (is it Approved?)` };
   }
@@ -404,9 +418,16 @@ export function testFirstReds(lock, name, base, root) {
     if (now === null) reds.push(`${path} is missing or no longer a regular file`);
     else if (now !== sha) reds.push(`${path} changed since the lock was written`);
   }
-  // The set of test files is part of the pin: a `## Files` entry added or removed without a rewrite is a RED.
+  // The set of test files is part of the pin: a `## Files` entry added or removed without a rewrite is a RED. Each
+  // entry is compared as the setter scopes it (scopedPath) — the spelling `--write` recorded; one the setter would
+  // drop (a placeholder or glob) is named.
   const listed = pathsFromPlanFiles(readFileSafe(resolve(root, mappingPath)) ?? "");
-  const now = new Set(listed.ok ? listed.value : []);
+  const now = new Set();
+  for (const entry of listed.ok ? listed.value : []) {
+    const p = scopedPath(entry);
+    if (p === null) reds.push(`${MAPPING_NAME} \`## Files\` entry ${JSON.stringify(entry.slice(0, 80))} is a placeholder or glob`);
+    else now.add(p);
+  }
   for (const p of now) if (!recorded.has(p)) reds.push(`${p} is in ${MAPPING_NAME} \`## Files\` but not in the lock`);
   for (const p of recorded.keys()) if (!now.has(p)) reds.push(`${p} is in the lock but no longer in ${MAPPING_NAME} \`## Files\``);
   if (fresh.ok && fresh.spec.spec_content_hash !== lock.spec.spec_content_hash)

@@ -622,3 +622,92 @@ test("/2 is still read: GREEN with --require-red-run, saying it has no pin; a re
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// ── 6.20.5: the lock reads a frontmatter field and a `## Files` path the way the rest of the floor does ──────────
+// Each case is a review repro turned into a suite test (the repros imported the MAIN checkout, so they could not
+// exercise a fix). L52: both paths of the reader finding (bootstrap and test-first) and both path findings.
+
+/** Insert `line` directly above the frontmatter's current `spec_content_hash:` line. */
+const pinLineAbove = (spec, line) => spec.replace(/^spec_content_hash: /m, `${line}\nspec_content_hash: `);
+
+test("6.20.5 bootstrap: a SPEC re-approved by APPENDING a new pin under the old one is a --check RED (was GREEN)", () => {
+  const first = specOf();
+  const root = bootWorld(first);
+  try {
+    assert.equal(cli(root, ["--write-bootstrap", NAME]).code, 0);
+    // The body changes and is re-approved, but the OLD pin line is left above the new one. check-spec reads the LAST
+    // copy, so the SPEC is Approved and un-drifted — and the lock must read that same copy.
+    const changed = pinLineAbove(specOf({ salt: "-2" }), `spec_content_hash: ${pinOf(first)}`);
+    setSpec(root, changed);
+    const approved = spawnSync(
+      process.execPath,
+      [join(HERE, "check-spec-approved.mjs"), join(root, "pharn", "features", NAME, "SPEC.md")],
+      {
+        encoding: "utf8",
+      }
+    );
+    assert.equal(approved.status, 0, `precondition: check-spec-approved reads the appended pin: ${approved.stdout}`);
+    const r = cli(root, ["--check", NAME, "--require-red-run", "--allow-bootstrap"]);
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /spec_id \/ spec_content_hash changed since the lock was written/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('6.20.5 bootstrap: a Draft\'s leftover `spec_content_hash: ""` line above the real pin no longer refuses the write', () => {
+  const spec = specOf();
+  const root = bootWorld(pinLineAbove(spec, 'spec_content_hash: ""'));
+  try {
+    const w = cli(root, ["--write-bootstrap", NAME]);
+    assert.equal(w.code, 0, w.out);
+    assert.equal(lockOf(root).spec.spec_content_hash, pinOf(spec), "the lock records the pin check-spec approved");
+    assert.equal(cli(root, ["--check", NAME, "--require-red-run", "--allow-bootstrap"]).code, 0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("6.20.5 test-first: AC-TESTS.md with stale-then-current pins locks the CURRENT one (the one the chain check reads)", () => {
+  const root = world();
+  const stale = "b".repeat(64);
+  try {
+    const p = join(root, "pharn", "features", NAME, "AC-TESTS.md");
+    writeFileSync(p, acTests().replace(`spec_content_hash: ${H}`, `spec_content_hash: ${stale}\nspec_content_hash: ${H}`));
+    assert.equal(cli(root, ["--write", NAME]).code, 0);
+    assert.equal(lockOf(root).spec.spec_content_hash, H);
+    assert.equal(cli(root, ["--check", NAME]).code, 0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("6.20.5 test-first: a `## Files` entry with a ` (…)` annotation is locked as the path the setter scopes", () => {
+  const root = world();
+  try {
+    const p = join(root, "pharn", "features", NAME, "AC-TESTS.md");
+    writeFileSync(p, acTests().replace("`tests/ac/one.test.js`", "`tests/ac/one.test.js (new)`"));
+    const w = cli(root, ["--write", NAME]);
+    assert.equal(w.code, 0, `the setter scopes the bare path, so --write must too: ${w.out}`);
+    assert.deepEqual(
+      lockOf(root).files.map((f) => f.path),
+      FILES
+    );
+    assert.equal(cli(root, ["--check", NAME]).code, 0, "and --check compares the ## Files set in the same spelling");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("6.20.5: a `## Files` entry the setter would drop (placeholder or glob) refuses --write by name", () => {
+  const root = world();
+  try {
+    const p = join(root, "pharn", "features", NAME, "AC-TESTS.md");
+    writeFileSync(p, acTests().replace("`tests/ac/two.spec.js`", "`tests/ac/<name>.spec.js`"));
+    const w = cli(root, ["--write", NAME]);
+    assert.equal(w.code, 2, w.out);
+    assert.match(w.out, /placeholder or glob — run check-ac-tests\.mjs/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

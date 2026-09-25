@@ -23,6 +23,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.20.5] - 2026-09-25
+
+### Fixed
+
+- 2026-09-25: **`/pharn-test`'s lock and mapping checker now read a path and a frontmatter value the way the rest of
+  the floor does.** This fixes five review findings, each reproduced by a script, and each script is now a suite test.
+  `SKILLS_VERSION` 6.20.4 → 6.20.5 (PATCH: corrections to shipped checkers; the lock schema and the finding kinds are
+  unchanged). `MIN_CLI` stays 0.5.0. ([`.dev/features/ac-tests-agreement/`](./.dev/features/ac-tests-agreement/))
+  - **One frontmatter value reader.** `ac-tests-lock.mjs`'s private `scalar()` read the FIRST copy of a duplicated key
+    and stripped a whitespace-preceded `#` comment before resolving a quote. `check-spec.mjs` and `check-plan-spec-agree.mjs` read the
+    LAST copy, quote first. Fail-open: a `spec_kind: test-infra` SPEC re-approved by APPENDING a new
+    `spec_content_hash:` line under the old one kept its bootstrap lock GREEN, `check-test-stage` READY and the AC gate
+    PASS. Fail-closed: an AC-TESTS.md with stale-then-current pins locked the stale one, and `/pharn-verify` then
+    reported `ac-tests-modified` (→ `/pharn-loop` S13) forever. `frontmatter-core.mjs` now exports `readValue` and
+    `readField` (last-wins). The two private copies in `check-spec.mjs` and `check-plan-spec-agree.mjs` were MOVED
+    there byte-for-byte (L35: retire a second copy rather than bind it). **This refactor preserves their behaviour:**
+    every existing test of both passes unchanged, and a new parity test EXECUTES both CLIs over duplicated, quoted and
+    commented keys against `readField`. Nothing refuses a duplicated key itself; every reader now takes the same copy.
+  - **The AC gate no longer skips an unreadable SPEC pin.** When `readSpecFacts` could not read the pin, the
+    comparison was skipped and the gate could PASS. It is now `ac-tests-modified`, an evidence reason: verify FAIL and
+    `/pharn-loop` S13. Bound, stated in the module header and the contract: the gate reads the pin, never `state`, so
+    a Draft that still carries the locked pin passes here, and `/pharn-verify`'s chain check refuses it.
+  - **The lock pins the path the setter scopes.** `--write` hashed the RAW `## Files` entry, so
+    `` `tests/ac/a.test.js (new)` `` (GREEN at `check-ac-tests`, scoped by the setter as the bare path) refused the
+    write. `ac-tests-core.mjs` gains `scopedPath` (`clean` + `isConcrete`, imported, never re-derived), and the lock
+    pins and checks through it.
+  - **Mapping cells are byte-identical to their `## Files` entry.** The check matched a cell after folding, while the
+    runner, the red run and the AC gate use it verbatim. So a cell differing only by case, or ending in a space inside
+    the back-ticks, passed and was never collected. `MAPPING_RE` now refuses edge whitespace (a `malformed-line`, and
+    a refusal in `acRowsOf` for every consumer), and a fold-only match is `unlisted-file`, naming the entry to copy.
+  - **The path fold is the write guard's.** `scopeKey` only lowercased, so an NFD spelling of an AC test file, or `ſ`
+    for `s`, passed `in-plan-files` / `claimed-elsewhere`, and on APFS the build could overwrite the pinned test. It now
+    folds with `spec-template-core.mjs`'s `foldName`: NFC plus full case folding. `/pharn-test`'s "the build cannot
+    write an AC test file" says it holds only up to this fold, and that the fold was never measured against APFS
+    (ADVISORY).
+  - **`AC-TESTS.lock.json` is prettier-exempt, and so is every other machine-written JSON pipeline artifact.**
+    `.prettierignore` gains the lock, `assignments.json` and `findings.json`. A test-first dogfood run here had failed
+    its own `format:check`. A new ★ test in `check-regress.test.mjs` classifies every `.json` member of
+    `PIPELINE_ARTIFACTS` as machine- or model-written, and requires each machine-written one to be listed. Bound:
+    `.prettierignore` does not ship, so a user's own formatter gate over `pharn/features/` is not covered.
+  - `run-gates.test.mjs`'s copied-floor list is now the import closure of its roots. It had been a hand list, and the
+    new `spec-template-core` import crashed the pinned head init.
+  - Planned as 6.20.4. The parallel `verify-ac-gate-fixes` increment merged first as 6.20.4, so this rebased onto it
+    and took the next PATCH. The two touch `ac-gate-core.mjs` and `ac-tests.md` in different places, and git merged
+    both without a conflict.
+  - **What an existing install sees change:** (a) a lock written by ≤6.20.4 over an AC-TESTS.md with duplicated pin
+    lines recorded the first value and now REDs; re-run `/pharn-test` to re-lock. (b) A bootstrap lock over a SPEC
+    re-approved by appending a pin now REDs, which is the fix; re-run `/pharn-test`. (c) A mapping cell that differs
+    from its `## Files` entry by case, Unicode form or edge whitespace was GREEN and now REDs at `check-ac-tests`, so
+    `check-test-stage` refuses the build. Such a cell was never collected; spell it as listed.
+
 ## [6.20.4] - 2026-09-25
 
 ### Fixed
