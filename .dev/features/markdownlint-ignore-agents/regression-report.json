@@ -1,0 +1,41 @@
+{
+  "base": "0eb19bea288d0064539f054aa0581194f08db48f",
+  "inside": [
+    ".dev/features/markdownlint-ignore-agents/GRILL.md",
+    ".dev/features/markdownlint-ignore-agents/PLAN.md",
+    ".dev/floor/command-hygiene.test.mjs",
+    ".markdownlint-cli2.jsonc",
+    "CHANGELOG.md"
+  ],
+  "outside_gates": {
+    "format:check": {
+      "base": 0,
+      "head": 0
+    },
+    "lint": {
+      "base": 0,
+      "head": 0
+    },
+    "lint:md": {
+      "base": 1,
+      "head": 0
+    },
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [
+    "lint:md"
+  ],
+  "verdict": "no-regressions"
+}

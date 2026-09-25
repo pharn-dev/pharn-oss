@@ -23,6 +23,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Fixed
+
+- 2026-09-25: **A bare `npm run lint:md` no longer reads Codex's gitignored `.agents/` import**
+  ([`.markdownlint-cli2.jsonc`](./.markdownlint-cli2.jsonc),
+  [`.dev/floor/command-hygiene.test.mjs`](./.dev/floor/command-hygiene.test.mjs),
+  [`.dev/features/markdownlint-ignore-agents/`](./.dev/features/markdownlint-ignore-agents/)). Repo-meta and
+  apparatus only, so `SKILLS_VERSION` does not move.
+  - **The failure.** Codex's "import from Claude Code" writes `.agents/skills/*/SKILL.md`. `.gitignore` excludes
+    it (`/.agents/`), so CI never has it. markdownlint-cli2 does not read `.gitignore`, and `**/*.md` descends
+    into dot-directories. Each SKILL.md nests a whole command, H1 included, under the importer's own H1. So in a
+    checkout holding the import, `lint:md` reported MD025 once per file and exited 1: measured 19 errors over
+    19 files. Every local `/pharn-dev-verify` there went RED on `lint:md` and had to measure in a clean copy.
+    This is the 6.13.1 `.claude/worktrees` problem, for a second untracked directory.
+  - **Fix.** `".agents"` joins `ignores`, the same shape as `.claude/worktrees`. The directory is untracked
+    (`git ls-files .agents` is empty), so no repo file loses lint coverage. Measured in a worktree holding
+    all 19 files: `lint:md` exit 0, 0 issues.
+  - **Test.** A premise test in `command-hygiene.test.mjs` runs the installed binary in a scratch tree that holds
+    this config's bytes and a nested SKILL.md with the MD025 shape. A bare run lints 1 file. With the `".agents"`
+    line removed it lints 2. Under the previous config the same scratch tree linted 2 files and exited 1 on
+    MD025.
+  - **Not changed, and why.** `.prettierignore` gets no twin entry. Prettier 3 reads `.gitignore` by default,
+    `prettier --file-info` reports these files ignored, and they are prettier-clean anyway. `/AGENTS.md` lints
+    clean and `/.codex/` holds no markdown, so neither is listed.
+  - **Bound.** The entry matches only at the root, and it is tied to where the importer writes today.
+    markdownlint-cli2's `gitignore` option would cover the whole class. It would also exclude all of `.pharn/`,
+    which the config's zone note rejects, so it was not taken. The next untracked directory an importer writes
+    needs its own entry.
+
 ## [6.21.1] - 2026-09-25
 
 ### Fixed
