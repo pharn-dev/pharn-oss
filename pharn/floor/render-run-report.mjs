@@ -45,8 +45,13 @@
 // reach.
 //
 // ── THE EXCEPTION, named because the sentence above was FALSE as a universal ─────────────────────────
-// TWO kinds of untrusted value are rendered as INLINE CODE SPANS, not fences: a FILE PATH in a `## Files`
-// bullet, and a `verdict` token. `/pharn-dev-review` found the unqualified claim and probed it: a
+// ONE kind of UNCHECKED untrusted value is rendered as an INLINE CODE SPAN, not a fence: a FILE PATH in a
+// `## Files` bullet. Every other untrusted value that appears inline passed a closed test first: the command
+// (COMMAND_RE), `base_sha` (COMMIT_RE, 6.21.2) and the verdict tokens (their enums). (A `verdict` token was a
+// second UNCHECKED kind until 6.21.2, and a verdict string CAN carry a newline — probed: `"PASS\n\n## Briefing…"`
+// rendered a duplicate `## Briefing`. Since 6.21.2 a verdict is rendered inline only when it is a member of its
+// closed enum; any other value renders `unknown` and is quoted in a fence.)
+// `/pharn-dev-review` found the unqualified claim and probed it: a
 // back-tick-bearing path (legal on every filesystem, and NOT part of git's C-quoting set) renders
 // `- `we`ird.ts` — …` with its span broken. The claim was widened from ONE measured value (the pipe in
 // `model`, genuinely fenced) to every untrusted region — [[L37]]'s recipe is to probe an EXCLUDED member
@@ -57,6 +62,22 @@
 // smuggled through a file row, the section-closure assertion still holds, and the report gates nothing
 // either way. Fencing each path would cost a five-line block per file and make the list unreadable for a
 // defect that garbles one row. What is NOT acceptable is the unqualified sentence, so it is qualified.
+//
+// ── A VALUE READ FROM JSON IS TYPE-CHECKED OR GOES THROUGH dataText() (6.21.2) ───────────────────────
+// `cost.json`, `verify-report.json` and `regression-report.json` are parsed HERE, so any field can hold any
+// JSON value. `String()` is not total over that domain: on a parsed object whose own `toString` is not
+// callable (`{"toString": 1}`) it throws "Cannot convert object to primitive value", and a template literal or
+// `Array#join` over it throws the same; a `null` entry in an array throws on the first property read. Both
+// exited 1 with no report written — outside the exits documented below (a review finding, reproduced at
+// 6.21.0 in `acGateLines`, `verdictsSection`, `outcomeSection`, `measurementLabel` and `tokensSection`). So a
+// JSON value this file renders is either type- or membership-checked first (`typeof … === "string"`, an enum,
+// COMMIT_RE) or goes through dataText(), and every array of entries is guarded element by element: a malformed
+// entry is RENDERED as a marker row, never dropped (L34). BOUND, stated: the domain is those three files —
+// `markers.jsonl` and `LOOP.md` are parsed by imported readers (render-cost-ledger.mjs, loop-record-core.mjs) —
+// and the suite's closure test walks the nodes of ONE fixture that populates every section, so a field no
+// fixture carries is not mutated. Size is covered as MEASURED, not as a universal: a value nested 20,000 deep
+// and 250,000 token rows render and exit 0 (both are suite tests); exhausting memory or another engine limit
+// by sheer size is not claimed.
 //
 // ── The CHECK 5 preamble is load-bearing, not boilerplate (L10) ──────────────────────────────────────
 // `pharn/features/**` is on `validate.mjs`'s SCANNED surface (`EXCLUDE_SEGMENTS` excludes `.dev/` and
@@ -135,6 +156,31 @@ export function quoteData(label, text) {
   const f = fenceFor(body);
   return [`${label}`, "", `${f}text`, body, f].join("\n");
 }
+
+/** Any value from a parsed JSON input as text — never a throw (see the header). A primitive goes through `String()`,
+ *  so it is byte-identical to `String()` BY CONSTRUCTION (`Infinity` from `1e999` included — `JSON.stringify` would
+ *  print `null`). Only a non-null object or array is JSON text, where `String()` printed `[object Object]` or threw.
+ *  `JSON.parse` accepts a nesting depth `JSON.stringify` cannot walk (measured: RangeError at 10,000 levels), so that
+ *  one call is guarded and a too-deep value renders a fixed marker. */
+export function dataText(v) {
+  if (v === null || typeof v !== "object") return String(v);
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return "(value nested too deeply to render)";
+  }
+}
+
+/** A JSON object that is not an array — the only shape an entry of a report's entry array may have. */
+const isRecord = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+
+/** A git commit id, full or abbreviated (7–64 hex digits, either case — git accepts all of them, measured), the only
+ *  `base_sha` this file hands to git or renders inline. `base_sha` is a cost.json value, and before 6.21.2 any string
+ *  went into `git diff --name-only <base>` as an argument — measured: `--output=<file>` made git WRITE that file — and
+ *  into an inline span, where a newline opens a heading. No member can start with `-` or hold a newline. NARROWED,
+ *  stated: a symbolic ref (`HEAD`, a branch name) used to produce a diff and now renders `n/a`; no emitting command
+ *  writes one (`/pharn-loop` and `/pharn-ship` record `git rev-parse HEAD`, or `unknown`). */
+const COMMIT_RE = /^[0-9a-fA-F]{7,64}$/;
 
 /** File text from disk, or `null` when it is absent or unreadable. */
 export function readTextOrNull(path) {
@@ -282,7 +328,7 @@ function outcomeSection(cost, absentReason = null) {
   const o = cost.outcome;
   const rows = [
     ["decision", o && typeof o.decision === "string" ? o.decision : "unknown"],
-    ["iterations", o && o.iterations !== null && o.iterations !== undefined ? String(o.iterations) : "unknown"],
+    ["iterations", o && o.iterations !== null && o.iterations !== undefined ? dataText(o.iterations) : "unknown"],
     ["blocked", o && typeof o.blocked === "string" ? o.blocked : "none"],
     ["base", typeof cost.base_sha === "string" ? cost.base_sha : "unknown"],
     ["command", typeof cost.command === "string" ? cost.command : "unknown"],
@@ -379,10 +425,10 @@ function measurementLabel(cost) {
   const m = cost.membership;
   const facts = [
     `status             ${status}`,
-    `window start       ${m.start ?? "none"}`,
-    `window end         ${m.end ?? (status === "open" ? "OPEN (no run-stop)" : "none")}`,
-    `selected session   ${m.session ?? "none"}`,
-    `excluded requests  ${m.excluded_requests === null || m.excluded_requests === undefined ? "n/a — nothing was measured" : m.excluded_requests}`,
+    `window start       ${dataText(m.start ?? "none")}`,
+    `window end         ${dataText(m.end ?? (status === "open" ? "OPEN (no run-stop)" : "none"))}`,
+    `selected session   ${dataText(m.session ?? "none")}`,
+    `excluded requests  ${m.excluded_requests === null || m.excluded_requests === undefined ? "n/a — nothing was measured" : dataText(m.excluded_requests)}`,
   ].join("\n");
   const note = typeof cost.coverage_note === "string" && cost.coverage_note ? cost.coverage_note : "(none recorded)";
   if (status === "unknown") {
@@ -436,30 +482,36 @@ function tokensSection(cost, absentReason = null) {
     return [...label, "", na(why)].join("\n");
   }
   const head = ["stage", "iter", "model", "reqs", ...TOKEN_CLASSES];
-  const body = rows.map((t) => [
-    String(t.stage ?? "(unattributed)"),
-    String(t.iteration ?? "-"),
-    String(t.model ?? "unknown"),
-    String(t.requests ?? 0),
-    ...TOKEN_CLASSES.map((c) => String((t.tokens && t.tokens[c]) ?? 0)),
-  ]);
+  // A row that is not an object is RENDERED as a marker, never dropped and never read (a `null` row threw here).
+  const body = rows.map((t) =>
+    isRecord(t)
+      ? [
+          dataText(t.stage ?? "(unattributed)"),
+          dataText(t.iteration ?? "-"),
+          dataText(t.model ?? "unknown"),
+          dataText(t.requests ?? 0),
+          ...TOKEN_CLASSES.map((c) => dataText((t.tokens && t.tokens[c]) ?? 0)),
+        ]
+      : ["(not a row)", "-", "-", "-", ...TOKEN_CLASSES.map(() => "-")]
+  );
   const totals = cost.totals ?? {};
   const unattr = cost.unattributed ?? {};
   body.push([
     "TOTAL",
     "-",
     "-",
-    String(totals.requests ?? 0),
-    ...TOKEN_CLASSES.map((c) => String((totals.tokens && totals.tokens[c]) ?? 0)),
+    dataText(totals.requests ?? 0),
+    ...TOKEN_CLASSES.map((c) => dataText((totals.tokens && totals.tokens[c]) ?? 0)),
   ]);
   body.push([
     "unattributed",
     "-",
     "-",
-    String(unattr.requests ?? 0),
-    ...TOKEN_CLASSES.map((c) => String((unattr.tokens && unattr.tokens[c]) ?? 0)),
+    dataText(unattr.requests ?? 0),
+    ...TOKEN_CLASSES.map((c) => dataText((unattr.tokens && unattr.tokens[c]) ?? 0)),
   ]);
-  const widths = head.map((h, i) => Math.max(h.length, ...body.map((r) => r[i].length)));
+  // A loop, not `Math.max(...column)`: spreading one argument per row threw a RangeError near 200k rows (GRILL G1).
+  const widths = head.map((h, i) => body.reduce((w, r) => Math.max(w, r[i].length), h.length));
   const fmt = (r) =>
     r
       .map((c, i) => (i <= 2 ? c.padEnd(widths[i]) : c.padStart(widths[i])))
@@ -487,6 +539,11 @@ function filesSection({ cost, repo, planEntries, dirtyBefore, dirtyNote, absentR
   if (!base) return na("no cost.json, so no base SHA to diff against");
   if (base === "unknown") {
     return na("`base_sha` is the literal `unknown` — the run recorded an honest absence, so no diff is computable");
+  }
+  // Membership BEFORE git sees it: an argument that is not a commit id could be a git OPTION (see COMMIT_RE). The
+  // value is not echoed — it is untrusted and failed its shape.
+  if (!COMMIT_RE.test(base)) {
+    return na("`base_sha` is not a commit id (7 to 64 hex digits), so it is never handed to git and no diff is computed");
   }
   const changed = git(repo, ["diff", "--name-only", base]);
   const untracked = git(repo, ["ls-files", "--others", "--exclude-standard"]);
@@ -584,30 +641,42 @@ function verdictsSection({ verify, regress, cost, stale = false }) {
   if (!verify) {
     out.push(`- verify: ${na("no verify-report.json — the run stopped before a verify, or it was blocked")}`);
   } else {
-    out.push(`- verify: \`${String(verify.verdict ?? "unknown")}\``);
+    out.push(...verdictLines("verify", verify.verdict, VERIFY_VERDICTS));
     const fg = Array.isArray(verify.failing_gates) ? verify.failing_gates : [];
     out.push("");
-    out.push(indent(quoteData("failing_gates, quoted as DATA:", fg.length ? fg.join("\n") : "(none)"), "  "));
+    out.push(indent(quoteData("failing_gates, quoted as DATA:", fg.length ? fg.map(dataText).join("\n") : "(none)"), "  "));
     out.push("");
     out.push(...acGateLines(verify.ac_gate));
   }
   if (!regress) {
     out.push(`- regress: ${na("no regression-report.json — the run stopped before a regress, or it was blocked")}`);
   } else {
-    out.push(`- regress: \`${String(regress.verdict ?? "unknown")}\``);
+    out.push(...verdictLines("regress", regress.verdict, REGRESS_VERDICTS));
     const rg = Array.isArray(regress.regressions) ? regress.regressions : [];
     out.push("");
-    out.push(
-      indent(
-        quoteData(
-          "regressions, quoted as DATA:",
-          rg.length ? rg.map((r) => (typeof r === "string" ? r : JSON.stringify(r))).join("\n") : "(none)"
-        ),
-        "  "
-      )
-    );
+    out.push(indent(quoteData("regressions, quoted as DATA:", rg.length ? rg.map(dataText).join("\n") : "(none)"), "  "));
   }
   return out.join("\n");
+}
+
+/** The two reports' closed verdict enums (check-verify.mjs, check-regress.mjs), restated ONLY as the render guard, as
+ *  AC_VERDICTS is below. A verdict is the one untrusted value this section puts in an INLINE span, and a string can
+ *  carry a newline an inline span cannot hold (the header's EXCEPTION), so only a member is rendered inline. A THIRD
+ *  copy (check-loop.mjs and check-ship.mjs keep their own; none is exported), accepted because drift fails SAFE: a
+ *  verdict added upstream renders `unknown` here, with its value quoted — never inline, never dropped. */
+const VERIFY_VERDICTS = new Set(["FAIL", "INCOMPLETE", "INCONCLUSIVE", "PASS"]);
+const REGRESS_VERDICTS = new Set(["inconclusive", "no-regressions", "regressions"]);
+
+/** `- <name>: \`<verdict>\`` for a member; `unknown` for an absent verdict, as before 6.21.2; and for any other value,
+ *  `unknown` plus the value quoted as DATA in a fence — shown, never dropped, never inline. */
+function verdictLines(name, value, members) {
+  if (typeof value === "string" && members.has(value)) return [`- ${name}: \`${value}\``];
+  if (value === undefined || value === null) return [`- ${name}: \`unknown\``];
+  return [
+    `- ${name}: \`unknown\` — the report's \`verdict\` is not one of {${[...members].join(", ")}}`,
+    "",
+    indent(quoteData("verdict, quoted as DATA:", dataText(value)), "  "),
+  ];
 }
 
 /** The AC gate's closed enums (ac-gate-core.mjs), restated ONLY as the render guard: a value outside them is shown as
@@ -632,11 +701,21 @@ function acGateLines(ac) {
   const mode = AC_MODES.has(ac.mode) ? ac.mode : "unknown";
   const verdict = AC_VERDICTS.has(ac.verdict) ? ac.verdict : "unknown";
   const rows = [];
+  // An entry that is not an object is RENDERED as a marker row, never read (a `null` entry threw here — the review's
+  // finding) and never dropped (a malformed entry and an absent one must not look the same, L34).
   for (const a of Array.isArray(ac.acs) ? ac.acs : []) {
-    const tests = Array.isArray(a.tests) && a.tests.length ? a.tests.join(" | ") : "(no matched test)";
-    rows.push(`${String(a.id)}  ${String(a.level)}  ${String(a.status)}  ${a.reason === null ? "delivered" : String(a.reason)}  ${tests}`);
+    if (!isRecord(a)) {
+      rows.push(`(not an AC entry)  ${dataText(a)}`);
+      continue;
+    }
+    const tests = Array.isArray(a.tests) && a.tests.length ? a.tests.map(dataText).join(" | ") : "(no matched test)";
+    rows.push(
+      `${dataText(a.id)}  ${dataText(a.level)}  ${dataText(a.status)}  ${a.reason === null ? "delivered" : dataText(a.reason)}  ${tests}`
+    );
   }
-  for (const e of Array.isArray(ac.evidence) ? ac.evidence : []) rows.push(`evidence  ${String(e.reason)}  ${String(e.detail)}`);
+  for (const e of Array.isArray(ac.evidence) ? ac.evidence : []) {
+    rows.push(isRecord(e) ? `evidence  ${dataText(e.reason)}  ${dataText(e.detail)}` : `evidence  (not an evidence entry)  ${dataText(e)}`);
+  }
   if (typeof ac.reason === "string") rows.push(`reason  ${ac.reason}`);
   if (typeof ac.note === "string") rows.push(`note  ${ac.note}`);
   return [

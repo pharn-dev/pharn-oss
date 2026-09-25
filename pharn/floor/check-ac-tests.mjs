@@ -77,7 +77,8 @@ import { childCrashedLine, crashedDetail, shelledVerdict } from "./shelled-verdi
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHECK_PLAN_SPEC_AGREE = join(HERE, "check-plan-spec-agree.mjs");
 
-/** The closed set of RED kinds (plus `legacy-spec`, which is its own exit code). */
+/** The closed set of RED kinds. In full mode every one exits 1, `legacy-spec` included; exit 3 is `--spec` mode's
+ *  legacy verdict (specVerdict), never this set's. */
 export const KINDS = Object.freeze([
   "bad-path",
   "claimed-elsewhere",
