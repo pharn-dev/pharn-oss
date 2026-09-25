@@ -11,6 +11,13 @@ This stage ran **three times**, every run `no-regressions` with every gate 0 on 
 2. Against `8eec2d7` (6.20.6, #269) after the first rebase.
 3. Against `67b7b8b` (6.20.7, #270) after the second rebase and the two GATE-2 review fixes — the run recorded below.
 
+**After it: a third rebase, onto `66ca79c` (6.20.8, #271).** This stage was not re-run against that base. On the
+final tree, `npm run check` exited 0, so every test file passed, including all 99 outside ones, and `validate` and
+the structural eval pair exited 0. With every gate at 0 on the head side, a pass→fail flip is impossible whatever
+the base read, so `regressions` would be empty. That is an inference from the head-side exits, not a
+`check-regress.mjs` verdict. The verdict below is the `67b7b8b` one, verbatim, and CI re-runs the suite on the
+merge commit.
+
 ## Partition (from `check-regress.mjs scope --feature test-infra-plan-scope`, exit 0)
 
 - **Inside (18 paths):** every path changed since the base, including this feature's `REVIEW.md`. Each is declared

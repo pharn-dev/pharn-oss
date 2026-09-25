@@ -1,8 +1,9 @@
 # SHIP — test-infra-plan-scope
 
 `/pharn-dev-ship` (gated mode, not `--loop`), run in an isolated worktree for the review-fix group B. The branch is
-`review-fix/test-infra-plan-scope`. It started at `7bcd7a8` (6.20.5), was rebased onto `8eec2d7` (6.20.6, #269), and
-then onto `67b7b8b` (6.20.7, #270). It ships `SKILLS_VERSION` **6.21.0** (MINOR).
+`review-fix/test-infra-plan-scope`. It started at `7bcd7a8` (6.20.5) and was rebased three times: onto `8eec2d7`
+(6.20.6, #269), onto `67b7b8b` (6.20.7, #270), and finally onto `66ca79c` (6.20.8, #271). It ships
+`SKILLS_VERSION` **6.21.0** (MINOR).
 
 ## Stages, in order, and where the run ended
 
@@ -20,7 +21,7 @@ then onto `67b7b8b` (6.20.7, #270). It ships `SKILLS_VERSION` **6.21.0** (MINOR)
 
 The run ended at **GATE 2**.
 
-## The rebases (main moved twice during the run)
+## The rebases (main moved three times during the run)
 
 - **Onto `8eec2d7` (6.20.6).** `SKILLS_VERSION`, the README badge and the CHANGELOG conflicted; `[6.21.0]` was
   re-inserted above `[6.20.6]` and renumbered. Main's new crashed-child test in `check-test-stage.test.mjs` then
@@ -31,6 +32,26 @@ The run ended at **GATE 2**.
   sections are byte-identical, and the `[6.21.0]` text is unchanged except for its bump line (6.20.7 → 6.21.0). A
   double blank line from the re-insertion was fixed (`16cb080`). All suites touching the changed modules passed
   (417/417) before regress and verify re-ran.
+- **Onto `66ca79c` (6.20.8), after this roll-up was first written.**
+  - **Conflicts.** The same three version files, plus `check-red-run.test.mjs`, where #271 and this branch each
+    appended a test at the end. Both tests were kept, 28/28. The `[6.21.0]` text is unchanged except its bump line
+    (6.20.8 → 6.21.0), and main's sections are byte-identical. `16cb080` became redundant (the re-insertion now
+    writes one blank line) and was skipped as empty. None of this branch's fixtures embed the retired fingerprint
+    ALGO literal; the one occurrence is #271's own test of the old ALGO.
+  - **Reconcile.** The pre-rebase epoch, read with #271's reconciler, reported `ESCAPE` on 23 paths. A script
+    checked each one: all 23 are files main changed between `67b7b8b` and `66ca79c` (the rebase's diff), and none
+    is among this branch's changed files. So the epoch was re-anchored after the plan's scope setter, as after the
+    earlier rebases.
+  - **Evidence on the final tree** (the stage reports above were measured at `67b7b8b` and are kept verbatim):
+    - the affected suites, mine plus every suite #271 touched: 693/693;
+    - `npm run check` **exit 0** — every stage in its `&&` chain passed, including `test` with 3281 tests, 3279
+      passing and the same 2 environment skips;
+    - `validate` exit 0, `structural` exit 0;
+    - `check-bash-reconcile --require-baseline` exit 0, `CLEAN`;
+    - `check:changelog-entry` exit 0 against `66ca79c`.
+
+    Together these cover every verify gate. Regress was not re-run as a stage. With every gate at 0 on the head
+    side, no pass→fail flip is possible whatever the base read. CI re-runs the suite on the merge commit.
 
 ## GATE 1 — plan acceptance (a model decision under delegation, NOT a human approval)
 

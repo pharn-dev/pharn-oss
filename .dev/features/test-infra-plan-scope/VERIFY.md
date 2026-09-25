@@ -5,6 +5,18 @@ review fixes (`3b5e696`) in. The machine report, `verify-report.json`, carries `
 verbatim (compared field-for-field after writing) plus the advisory `verifiers` block. An earlier run on `36e09c7`
 (based on 6.20.6) also read PASS, every gate 0; this run supersedes it.
 
+**After this report: one more rebase, onto `66ca79c` (6.20.8, #271).** This stage was not re-run as a runner; the
+report below stays the `67b7b8b` run verbatim. Every one of its gates was re-checked on the final tree:
+
+- `npm run check` exit 0. Its `&&` chain covers `format:check`, `lint`, `lint:md` and `test` (3281 tests: 3279
+  passing, the same 2 environment skips).
+- `validate` exit 0.
+- `structural:…expected-injection-comment.json` exit 0.
+- `check-bash-reconcile --require-baseline` exit 0, `CLEAN`, over an epoch re-anchored after that rebase.
+
+`SHIP.md`, "The rebases", records why the pre-rebase epoch read `ESCAPE`: exactly the 23 files the rebase brought
+in, none of them this branch's.
+
 ## Floor gates (exit codes)
 
 | gate                                                                                       | exit |
