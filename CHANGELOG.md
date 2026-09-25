@@ -23,6 +23,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.23.0] - 2026-09-26
+
+### Added
+
+- 2026-09-26: **In an installed project, the write guard is fail-closed only while PHARN is working.**
+  Before this, `enforce-writes-scope.cjs`'s no-scope default in an installed project
+  (`pharn.config.json` carries `skillsVersion`) denied everything outside `pharn/features/**` and
+  `.pharn/**` — including a user's own ordinary source, and Claude Code's own memory folder outside the
+  project — even with no PHARN command running. A user reported exactly that: Claude was blocked from
+  editing their own code with no `/pharn-*` command open. With no scope set and no `/pharn-ship`,
+  `/pharn-loop` or `/pharn-review` run open, the guard now instead denies only PHARN's own installed
+  surface (`pharn/**` except `pharn/features/**`, `.claude/**`, `pharn.config.json`, matched case-folded)
+  plus its own input `.pharn/writes-scope.json`, and allows every other in-project path; outside the
+  project it allows a path that lies in no git tree and still denies one inside another. A run is open
+  while `.pharn/<pharn-loop|pharn-review|pharn-ship>/<name>/active.json` exists (presence + a 24h age
+  ceiling only — the guard never parses a marker) — `/pharn-ship` and `/pharn-review` open and close
+  theirs with the new `pharn/floor/run-marker.mjs`; `/pharn-loop` keeps its existing marker with no second
+  writer. A **malformed** `.pharn/writes-scope.json` now denies **every** write in an installed project,
+  rather than falling back to a default. The dev and unsignalled postures are unchanged, byte-for-byte.
+  `reconcile-baseline.mjs --anchor` now refuses (exit 2, nothing written) when there is no usable scope to
+  snapshot, so a build can no longer open an epoch no scope could ever clear. Roadmap Phase 0.2, approved
+  by the maintainer 2026-09-25.
+  `SKILLS_VERSION` 6.22.0 → 6.23.0. `MIN_CLI` stays 0.5.0: nothing is relocated, and a CLI that copies
+  `pharn/floor/` per file lands the new script.
+  ([`.dev/features/writes-scope-run-only/`](./.dev/features/writes-scope-run-only/))
+  - **Migration.** Nothing to wire — the hooks change, `settings.json` does not. An install whose
+    `pharn-ship.md` or `pharn-review.md` was edited locally keeps the old command under `pharn update`, so
+    it never opens a run marker and those runs are unguarded between their own stages; re-take the shipped
+    command, or add the two pinned `run-marker.mjs` lines by hand. A malformed `.pharn/writes-scope.json`
+    now denies every write in an installed project — `node .claude/hooks/set-writes-scope.cjs --clear`
+    releases it. `reconcile-baseline.mjs --anchor` now refuses (exit 2) with no scope set; every shipped
+    caller sets one first, so only a caller outside PHARN's own commands is affected.
+  - **Rollback.** Reverting 6.23.0 restores the fail-closed default everywhere; a leftover
+    `.pharn/pharn-ship/` or `.pharn/pharn-review/` marker is inert, because nothing in the older tree
+    reads those directories (the loop marker is unchanged and keeps its Stop-guard meaning).
+
 ## [6.22.0] - 2026-09-25
 
 ### Added

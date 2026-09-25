@@ -82,17 +82,24 @@ case `pharn/features/<name>/` is created for it.
 > `pharn/features/<name>/findings.json`, a `Write` to `pharn/features/<name>/lenses/<lens>/findings.json` and one to
 > `pharn/features/<name>/REVIEW.md` **both exit 2**.
 >
-> **fix #7 still applies here — through the fail-closed DEFAULT, not through a declared scope.** With no
+> **fix #7 still applies here — through the fail-closed DEFAULT, not through a declared scope — and, since
+> 6.23.0, that default's WIDTH depends on a run marker THIS command must open before it matters.** With no
 > scope file, `enforce-writes-scope.cjs` permits its install safe-set — `pharn/features/**` — **plus
 > `.pharn/**`, which is composed into the allow-list unconditionally** and is therefore NOT "the same set
 > this command's `writes:` declares". Measured, not read off the source (L37 — a guard's bounds must be
-> probed, and the universal quantifier is where the drift lands): with no scope file, a `Write` to
-> `pharn/features/<name>/findings.json` exits 0 and one to `.pharn/anything.json` **also exits 0**. So the honest
-> guarantee is **"this command writes only inside `pharn/features/**` or `.pharn/**`"** — WIDER than its own
-> `writes: ["pharn/features/**"]` declaration, and wider still than "exactly the three artifact paths". Every
-> tighter claim is wrong, which is why this is written at its real width. The one member excluded from
-> that width, named rather than left to a reader to discover: `.pharn/writes-scope.json`, the guard's own
-> input, is denied by name regardless of scope.
+> probed, and the universal quantifier is where the drift lands): with no scope file AND a run marker open,
+> a `Write` to `pharn/features/<name>/findings.json` exits 0 and one to `.pharn/anything.json` **also exits 0**.
+> So the honest guarantee is **"this command writes only inside `pharn/features/**` or `.pharn/**`"** —
+> WIDER than its own `writes: ["pharn/features/**"]` declaration, and wider still than "exactly the three
+> artifact paths". Every tighter claim is wrong, which is why this is written at its real width. **The
+> guarantee holds ONLY WHILE THE RUN MARKER BELOW IS OPEN** — in an installed project with no scope AND no
+> run open, the guard's default is instead the newer PERMISSIVE one, which is wider still (denies only
+> PHARN's own installed surface). That is exactly why Step 2, below, opens this command's own run marker
+> before Step 3 — the first step that puts untrusted reviewed code into context — so every Write-tool write
+> this command performs (Steps 4–6b) is made with a run open, and the guarantee above is the one that
+> actually holds for them. The one member excluded from that width regardless of posture, named rather than
+> left to a reader to discover: `.pharn/writes-scope.json`, the guard's own input, is denied by name
+> regardless of scope or run state.
 
 ## Step 1 — Resolve the review TARGET deterministically (its provenance is explicit)
 
@@ -153,6 +160,25 @@ This prints `{"registered":<int>,"lenses":[<path>,…]}` — the `role: lens` ca
 `---`-fenced frontmatter only (a `role: lens` in prose/a code block, or the `/pharn-dev-review`
 command's own frontmatter under the excluded `.claude/commands/`, never registers). **This set is the
 lenses you run — membership is FLOOR** (`pharn/ARCHITECTURE.md §2` primitive #3), not your choice.
+
+**Open the run marker (6.23.0, D3) — now, after every ask-the-human point above (Step 0's `<name>`, Step
+1's target, Step 1b's `--target`) and before Step 3, the first step that puts untrusted reviewed code (or,
+at Step 3b, skill content) into context:**
+
+```bash
+node pharn/floor/run-marker.mjs --open pharn-review '<name>'
+```
+
+This is what makes the width Step 0 states above ("this command writes only inside `pharn/features/**` or
+`.pharn/**`") the one that actually holds for `/pharn-review`'s own writes-scope guarantee, in an
+**installed** project: it holds `enforce-writes-scope.cjs`'s fail-closed default standing for every step
+from here through Step 6b's self-check, so a lens subagent this command spawns cannot escape it either
+(the marker's read is tree-wide, not per-session — `CLAUDE.md`, "Writes-scope"). Opening it any earlier
+would leave an unanswered question above holding the whole tree fail-closed for 24 h; opening it later
+would leave untrusted content in context before the guard is guaranteed strict. **ADVISORY (P0):** a Bash
+call outside the `PreToolUse` gate (L19) — skipping it leaves this run unguarded between its own steps in
+an installed project with no scope; in the dev/unsignalled posture this line changes nothing observable.
+**Step 7, below, closes it on every exit after this point, including an early refusal.**
 
 ## Step 3 — Per-lens SLICE (ADVISORY): the scanner-prefilter
 
@@ -353,6 +379,20 @@ editing the artifact hides exactly the disagreement worth seeing.
 > passes on every happy path. Its value is that the record becomes **falsifiable by a consumer who did
 > not run the emitter**, plus detection of a hand-edited or stale record and of emitter drift. It is
 > never evidence that a review was adequate.
+
+## Step 7 — Close the run (6.23.0, D3)
+
+**Run this on EVERY exit after Step 2 opened the run marker, including an early refusal** — this command
+has no turn-end instruction otherwise, and this is its last procedure step:
+
+```bash
+node pharn/floor/run-marker.mjs --close pharn-review '<name>'
+```
+
+It removes `.pharn/pharn-review/<name>/active.json`. **ADVISORY (P0):** a Bash call outside the
+`PreToolUse` gate (L19) — an early abort skips it, and a leftover marker degrades safely: it holds an
+installed project's fail-closed default standing for at most 24 h, never longer. Never close a run you
+are still executing.
 
 ## Guarantee audit (P0)
 

@@ -127,13 +127,28 @@ echo '{"tool_name":"Write","tool_input":{"file_path":"docs/ARCHITECTURE.md"}}' |
 ```
 
 **`enforce-writes-scope.cjs` (fix #7)** is the runtime scope-enforcement hook: it denies any write
-outside the active scope in `.pharn/writes-scope.json` (fail-closed to a default-safe-set when none is
-set). Confirm it works:
+outside the active scope in `.pharn/writes-scope.json`. With no scope set, the default depends on the
+tree (6.23.0): a dev checkout or an unsignalled tree stays fail-closed to a default-safe-set, byte for
+byte, as before. An **installed** project (`pharn.config.json` carries a non-empty `skillsVersion`) is
+fail-closed to the same default-safe-set **only while a `/pharn-ship`, `/pharn-loop` or `/pharn-review`
+run is open** (a marker under `.pharn/<command>/<name>/active.json`, written by `pharn/floor/run-marker.mjs`
+or, for the loop, `require-loop-record.cjs`); outside an open run it instead denies only PHARN's own
+installed surface — `pharn/**` except `pharn/features/**`, `.claude/**` and `pharn.config.json` — and
+allows the rest, including your ordinary source. A malformed `.pharn/writes-scope.json` denies EVERY
+write in an installed project rather than falling back to either default. Confirm it works:
 
 ```bash
-echo '{"tool_name":"Write","tool_input":{"file_path":"pharn/floor/x.mjs"}}' | node .claude/hooks/enforce-writes-scope.cjs  # → exit 2, denied (no scope; fail-closed)
+echo '{"tool_name":"Write","tool_input":{"file_path":"pharn/floor/x.mjs"}}' | node .claude/hooks/enforce-writes-scope.cjs  # → exit 2, denied (no scope; fail-closed dev-repo default)
 echo '{"tool_name":"Write","tool_input":{"file_path":"README.md"}}' | node .claude/hooks/enforce-writes-scope.cjs  # → exit 2, denied (root file outside default-safe-set)
+# In an INSTALLED project (pharn.config.json has skillsVersion) with NO scope and NO run open, the SAME
+# root file is instead ALLOWED — the new permissive default (6.23.0) denies only PHARN's own surface:
+echo '{"tool_name":"Write","tool_input":{"file_path":"README.md"}}' | node .claude/hooks/enforce-writes-scope.cjs  # → exit 0 there, not exit 2 as above
 ```
+
+**`pharn/floor/run-marker.mjs`** writes and removes the `/pharn-ship` / `/pharn-review` run markers the
+guard above reads (`--open <pharn-ship|pharn-review> <name>` / `--close <pharn-ship|pharn-review> <name>`);
+`/pharn-loop` keeps its own marker, written by `require-loop-record.cjs`. Presence and age only (24 h,
+symmetric) — the guard never parses a marker's contents.
 
 The **setter** (`set-writes-scope.cjs`) is separate from both hooks: it refuses to _authorize_ those
 same control-surface paths at scope-set time — exits non-zero and writes nothing if the parsed scope names

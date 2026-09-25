@@ -150,7 +150,12 @@ absent ⇒ `M = 3`). A config-file cap key is deferred (P7): `check-loop.mjs` re
    ```
 
    This writes `.pharn/pharn-loop/<name>/active.json`, binding the run to this session's
-   `CLAUDE_CODE_SESSION_ID`. While it is open, the `Stop` hook `.claude/hooks/require-loop-record.cjs`
+   `CLAUDE_CODE_SESSION_ID`. **Since 6.23.0 this SAME marker also holds `enforce-writes-scope.cjs`'s
+   fail-closed default standing in an installed project** — the write guard reads only its presence and
+   age (never its `session_id` or any other content), so an installed project's default stays today's
+   fail-closed set for as long as this marker is fresh, exactly as it does for `/pharn-ship` and
+   `/pharn-review`'s markers (`CLAUDE.md`, "Writes-scope"). While it is open, the `Stop` hook
+   `.claude/hooks/require-loop-record.cjs`
    refuses to let this session's turn end until `pharn/features/<name>/LOOP.md` exists — up to three times
    per run, then it allows the end and tells the person the run ended without a record. **A blocked stop is
    a valid record**, so the way to end a run that cannot continue is Step 6b's blocked record, never a
@@ -972,9 +977,12 @@ the default permits start being denied in later sessions, with nothing naming th
 sits outside the `PreToolUse` gate entirely (PHARN's own build-loop lesson **L19**) — nothing on
 the floor forces it, and an early abort skips it. It degrades safely: the next command's first-step
 **set** overwrites a leftover scope, which is exactly today's behavior. The floor guarantee is
-unchanged and belongs to the **reader**, not to this step — **absence of a scope file = the
-fail-closed default-safe-set**. Never write "the command cleaned up"; write that it **declares** the
-release step.
+unchanged and belongs to the **reader**, not to this step. **Absence of a scope file no longer means one
+posture (6.23.0):** in a dev checkout or an unsignalled tree it is still the fail-closed
+default-safe-set; in an **installed** project (`pharn.config.json` carries `skillsVersion`) it is
+fail-closed the same way only while a `/pharn-ship`, `/pharn-loop` or `/pharn-review` run is open —
+outside a run it instead denies only PHARN's own installed surface and allows the rest (`CLAUDE.md`,
+"Writes-scope"). Never write "the command cleaned up"; write that it **declares** the release step.
 
 **Then close the run for the Stop guard** — after every write, and after the Step 7 summary is written:
 
@@ -983,5 +991,9 @@ node .claude/hooks/require-loop-record.cjs --close '<name>'
 ```
 
 It removes `.pharn/pharn-loop/<name>/active.json`. **ADVISORY**, exactly as the release above: an early
-abort skips it, and a leftover marker degrades safely — a present `LOOP.md` and the 24 h ceiling both make
-the guard inert.
+abort skips it, and a leftover marker degrades safely for the **Stop guard** — a present `LOOP.md` and the
+24 h ceiling both make THAT guard inert. **For the write guard this is narrower (6.23.0): only `--close` or
+the 24 h ceiling releases a leftover marker — a present `LOOP.md` does NOT**, because
+`enforce-writes-scope.cjs` reads only the marker's presence and age (§2 above), never the feature
+directory's contents. So in an **installed** project a leftover loop marker keeps PHARN's own installed
+surface fail-closed for up to 24 h after a run that forgot to close it, even once `LOOP.md` exists.

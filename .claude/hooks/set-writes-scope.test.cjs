@@ -528,6 +528,23 @@ test("--clear removes a present scope and reports it", () => {
   assert.match(r.stdout, /writes-scope cleared/);
 });
 
+// 6.23.0 (D4 in the plan): the --clear message no longer claims a SINGLE posture — the default it returns
+// control to is fail-closed everywhere EXCEPT an installed project outside an open PHARN run, where it is
+// the newer permissive one. Pinned against the SHIPPED hook path (not a handoff/ copy), so this test is
+// expected to be RED until the human applies the pending hook patch, and GREEN after — exactly like the
+// enforce-writes-scope.test.cjs golden dev-posture pins.
+test("★ 6.23.0: the --clear message no longer claims a single fail-closed posture, either way", () => {
+  const cwd = tmp();
+  seedScope(cwd, { scope: [".dev/features/demo/SHIP.md"], set_by: "x.md", set_at: "t" });
+  const r1 = setter(cwd, "--clear");
+  assert.doesNotMatch(r1.stdout, /fail-closed default-safe-set active/, "the old unqualified claim must be gone");
+  assert.match(r1.stdout, /installed project outside an open PHARN run/i);
+
+  const r2 = setter(cwd, "--clear"); // the absent-file (idempotent) branch carries the same qualifier
+  assert.doesNotMatch(r2.stdout, /fail-closed default-safe-set active/);
+  assert.match(r2.stdout, /installed project outside an open PHARN run/i);
+});
+
 test("--clear is IDEMPOTENT: with no scope file it still exits 0 (a last step must be safe to re-run)", () => {
   const cwd = tmp();
   const r = setter(cwd, "--clear");

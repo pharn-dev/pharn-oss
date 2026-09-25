@@ -102,3 +102,44 @@ test("✧ a command that never sets a scope is NOT required to release one (the 
     assert.ok(!linesOf(f).some((l) => CLEAR_LINE.test(l)), `${f} sets no scope, so it should not declare a release`);
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// CLOSURE (6.23.0): no PRODUCT command keeps the retracted "one posture" phrase.
+//
+// Before 6.23.0, "absence of a scope file = the fail-closed default-safe-set" was true in EVERY posture,
+// so every setter-invoking command's Final step said so verbatim. Since 6.23.0 that is false for an
+// INSTALLED project outside an open PHARN run (the default there is the newer, more permissive one — see
+// `enforce-writes-scope.cjs`'s own header and `CLAUDE.md`, "Writes-scope"). The eleven PRODUCT commands
+// were reworded; the `pharn-dev-*` commands were deliberately left untouched, because the DEV posture is
+// unchanged byte-for-byte (D1) and the retracted phrase stays TRUE for them.
+//
+// Honest scope, the same narrow kind as every rule above: this pins that the STRING is absent from the
+// product surface. It cannot prove a reworded sentence is itself accurate — only that the specific
+// overclaim this increment retracts does not silently reappear on the surface it no longer describes.
+const RETRACTED_PHRASE = "absence of a scope file = the fail-closed default-safe-set";
+
+// The phrase legitimately wraps across a markdown line inside `**…**` emphasis (`the\nfail-closed`), so
+// the check normalizes whitespace (runs of spaces/newlines -> one space) before matching — a formatting
+// change must not make this rule silently stop seeing the phrase it exists to catch.
+function hasRetractedPhrase(f) {
+  return linesOf(f).join(" ").replace(/\s+/g, " ").includes(RETRACTED_PHRASE);
+}
+
+test("✧ CLOSURE: no product (`pharn-*`, non-`pharn-dev-*`) command contains the retracted one-posture phrase", () => {
+  const offenders = commandFiles()
+    .filter((f) => !f.startsWith("pharn-dev-"))
+    .filter(hasRetractedPhrase);
+  assert.deepEqual(offenders, [], `these product commands still claim a single fail-closed posture: ${offenders.join(", ")}`);
+});
+
+test("✧ CONTROL: every pharn-dev-* command KEEPS the phrase — the dev posture is unchanged, and the retraction must not overreach", () => {
+  const devCommands = commandFiles().filter((f) => f.startsWith("pharn-dev-") && linesOf(f).some((l) => SET_LINE.test(l)));
+  assert.ok(devCommands.length > 0, "expected at least one dev setter-invoking command as the control case");
+  const missing = devCommands.filter((f) => !hasRetractedPhrase(f));
+  assert.deepEqual(missing, [], `these dev commands lost the phrase, though the dev posture did not change: ${missing.join(", ")}`);
+});
+
+test("✧ the product surface is NON-VACUOUS for the closure rule — at least one product command sets a scope", () => {
+  const productSetters = commandFiles().filter((f) => !f.startsWith("pharn-dev-") && linesOf(f).some((l) => SET_LINE.test(l)));
+  assert.ok(productSetters.length >= 8, `expected the product setter-invoking corpus to be non-trivial, got ${productSetters.length}`);
+});

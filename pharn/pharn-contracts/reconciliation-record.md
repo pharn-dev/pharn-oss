@@ -53,6 +53,13 @@ Written by `pharn/floor/reconcile-baseline.mjs --anchor`. Gitignored (it lives u
 **disposable**: absent means "no epoch has been opened", which is the honest normal state of a fresh
 clone.
 
+**Since 6.23.0, `--anchor` REFUSES to open an epoch with no usable scope to snapshot (D6).** When
+`snapshotScope()` returns `null` — an absent or unusable `.pharn/writes-scope.json` — the command exits 2
+and writes nothing, with a message naming the remedy (run the stage's own scope-setter first). An
+explicit `{"scope": []}` **is** a scope (an authorization to write nothing) and anchors normally. Both
+shipped callers (`/pharn-build`, `/pharn-dev-build`) already run their own Step-0 setter immediately
+before this call, so the refusal reaches only a caller that anchors out of order.
+
 ```json
 {
   "version": 1,
@@ -67,15 +74,15 @@ clone.
 }
 ```
 
-| Field              | Type             | Meaning                                                                                                                                                                                            |
-| ------------------ | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `version`          | integer          | Schema version. A **newer** version than the reader is `INCONCLUSIVE`; an **older** one is tolerated at read and reported in `warnings[]`                                                          |
-| `epoch`            | ISO-8601         | When this epoch opened                                                                                                                                                                             |
-| `anchored_by`      | string           | A label passed as `--by`. **Advisory** — it is argv, so it is a description, never an authorization                                                                                                |
-| `scope_snapshot`   | object \| `null` | A verbatim copy of `.pharn/writes-scope.json` at anchor time, or `null` when none was set                                                                                                          |
-| `scope_amendments` | array            | Further scopes that came into force **during** the epoch, in call order. Empty on a fresh anchor; absent on a pre-5.1.0 record, read as `[]`                                                       |
-| `entry_count`      | integer          | `Object.keys(entries).length` at write time                                                                                                                                                        |
-| `entries`          | object           | Repo-relative path → SHA-256 of its bytes. A symlink → SHA-256 of `symlink\0` + its raw link text, whatever its target (6.17.1 for a non-file target, 6.20.8 for every link; see "Symlinks" below) |
+| Field              | Type             | Meaning                                                                                                                                                                                                   |
+| ------------------ | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`          | integer          | Schema version. A **newer** version than the reader is `INCONCLUSIVE`; an **older** one is tolerated at read and reported in `warnings[]`                                                                 |
+| `epoch`            | ISO-8601         | When this epoch opened                                                                                                                                                                                    |
+| `anchored_by`      | string           | A label passed as `--by`. **Advisory** — it is argv, so it is a description, never an authorization                                                                                                       |
+| `scope_snapshot`   | object \| `null` | A verbatim copy of `.pharn/writes-scope.json` at anchor time. An object; `null` only in a baseline anchored before 6.23.0 — since then `--anchor` REFUSES rather than write a `null` snapshot (D6, above) |
+| `scope_amendments` | array            | Further scopes that came into force **during** the epoch, in call order. Empty on a fresh anchor; absent on a pre-5.1.0 record, read as `[]`                                                              |
+| `entry_count`      | integer          | `Object.keys(entries).length` at write time                                                                                                                                                               |
+| `entries`          | object           | Repo-relative path → SHA-256 of its bytes. A symlink → SHA-256 of `symlink\0` + its raw link text, whatever its target (6.17.1 for a non-file target, 6.20.8 for every link; see "Symlinks" below)        |
 
 **Why the scope is snapshotted rather than read live.** By reconciliation time
 `.pharn/writes-scope.json` holds a **later** stage's scope — it is one mutable record, global to the
@@ -247,8 +254,11 @@ it.
   #2) composed with path/enum membership (primitive #3). No model judgment.
 - **"denied is decided by the real guards"** → **FLOOR, by delegation**: the checker **executes**
   `protect-trusted-paths.cjs`, and for the no-scope default it executes `enforce-writes-scope.cjs` in a
-  probe sandbox reproducing only the two runtime signals its `defaultSafeSet()` reads. The default set
-  is never copied.
+  probe sandbox reproducing THREE runtime signals (6.23.0, up from two): a `pharn.config.json`
+  `skillsVersion`, `.dev/floor/` presence, and a FRESH run marker (written by `run-marker.mjs`'s own
+  `openRun()`), so the probe always answers with the STRICT, in-run default rather than the newer
+  install-posture permissive one — the only defensible answer for a probe with no write history to
+  consult (§8's L42 bound, unchanged). The default set is never copied.
 - **"the explicit-scope match agrees with the hook"** → **ADVISORY-BOUNDED**: that one matcher is a
   faithful copy, pinned by an example-based parity test — not a proof of equivalence. The two must be
   updated together.

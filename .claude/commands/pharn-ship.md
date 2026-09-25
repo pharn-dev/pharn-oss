@@ -190,6 +190,22 @@ before it, and that is exactly the number a reader wants. See Step 3a's own pres
    human halt above, and `/pharn-plan`'s own first gate re-checks the same condition — so a Draft can **never**
    flow to build even if the halt were somehow skipped.
 
+   **Open the run marker (6.23.0, D3) — immediately after the backstop exits 0, before `/pharn-plan`'s own
+   `stage-start` marker:**
+
+   ```bash
+   node pharn/floor/run-marker.mjs --open pharn-ship '<name>'
+   ```
+
+   This is what holds `enforce-writes-scope.cjs`'s fail-closed default standing in an **installed** project
+   for every between-stage window from here to Step 3a's close, below — see `CLAUDE.md`, "Writes-scope".
+   Not opened at naming (Step 1): until this backstop resolves, `/pharn-spec` holds its own SPEC-only scope
+   through the GATE-1 halt, so a marker there would add no protection, and an abandoned or "Keep as Draft"
+   GATE 1 would hold the whole tree fail-closed for 24 h — the very trigger this relaxation exists to fix,
+   in a new form. **ADVISORY (P0):** a Bash call outside the `PreToolUse` gate (L19) — a run that skips this
+   line is simply unguarded between its own scoped steps; in the dev/unsignalled posture, and whenever a
+   scope is set, this line changes nothing observable.
+
 2. **`/pharn-plan`** → writes `pharn/features/<name>/PLAN.md`.
 
    ```bash
@@ -683,6 +699,20 @@ resolve that question — it simply does not depend on the answer.
    node pharn/floor/mark-phase.mjs --name '<name>' --kind run-stop
    ```
 
+   **Then close the write-guard run marker (6.23.0, D3) — directly after the line above, on EVERY exit
+   that reaches this step (GATE 2 and every STOP):**
+
+   ```bash
+   node pharn/floor/run-marker.mjs --close pharn-ship '<name>'
+   ```
+
+   Positioned here rather than the Final step for the same reason `mark-phase.mjs --kind run-stop` is:
+   this is the one step the command states runs on every exit that ends the run, and every write after it
+   is made under an explicit scope (Step 3's `SHIP.md`, Step 3b's `ship-record.json`/`SHIP.md`), so closing
+   here opens no unscoped window. A STOP before the GATE-1 backstop closes a marker that was never opened
+   — `--close` is idempotent. **ADVISORY (P0):** a Bash call outside the `PreToolUse` gate (L19); skipping
+   it leaves the fail-closed default standing for at most 24 h. Never close a run you are still executing.
+
 2. **Capture the base SHA, in ONE block that prints it.** Substitute the printed value literally as
    `<base sha>` into step 3 — never carry it in a shell variable, because each fenced block runs as its
    own shell and a variable set here is empty there (**L44**):
@@ -1115,6 +1145,9 @@ the default permits start being denied in later sessions, with nothing naming th
 sits outside the `PreToolUse` gate entirely (PHARN's own build-loop lesson **L19**) — nothing on
 the floor forces it, and an early abort skips it. It degrades safely: the next command's first-step
 **set** overwrites a leftover scope, which is exactly today's behavior. The floor guarantee is
-unchanged and belongs to the **reader**, not to this step — **absence of a scope file = the
-fail-closed default-safe-set**. Never write "the command cleaned up"; write that it **declares** the
-release step.
+unchanged and belongs to the **reader**, not to this step. **Absence of a scope file no longer means one
+posture (6.23.0):** in a dev checkout or an unsignalled tree it is still the fail-closed
+default-safe-set; in an **installed** project (`pharn.config.json` carries `skillsVersion`) it is
+fail-closed the same way only while a `/pharn-ship`, `/pharn-loop` or `/pharn-review` run is open —
+outside a run it instead denies only PHARN's own installed surface and allows the rest (`CLAUDE.md`,
+"Writes-scope"). Never write "the command cleaned up"; write that it **declares** the release step.

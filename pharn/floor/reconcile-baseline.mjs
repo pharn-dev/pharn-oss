@@ -38,11 +38,20 @@
 // `.pharn/` scratch, `runs/**` and `node_modules/` cost nothing. Anchoring proves NOTHING about the
 // bytes it records: it states what was there, never that it was correct or that a human approved it.
 //
+// --ANCHOR REFUSES WITH NO USABLE SCOPE (D6, 6.23.0). `snapshotScope()` returning `null` — absent or an
+// unusable `.pharn/writes-scope.json` — now means `--anchor` writes NOTHING and exits 2, rather than
+// opening an epoch whose `scope_snapshot` a later reconcile cannot use to authorize anything. An explicit
+// `{"scope": []}` IS a scope (an authorization to write nothing) and anchors normally. Both shipped
+// callers (`/pharn-build`, `/pharn-dev-build`) already run their own Step-0 setter immediately before this
+// call, so this only refuses a caller that anchors out of order or against a plan with no parseable
+// `## Files` — exactly the caller that would otherwise anchor a baseline no scope could ever clear.
+//
 // Usage:
 //   node pharn/floor/reconcile-baseline.mjs --anchor [--base <dir>] [--by <label>]
 //   node pharn/floor/reconcile-baseline.mjs --show   [--base <dir>]
 //
-// Exit: 0 ok · 2 unusable input / git unavailable / write failed — FAIL-CLOSED (P5). Never a silent pass.
+// Exit: 0 ok · 2 unusable input / git unavailable / no usable scope to snapshot (D6) / write failed —
+// FAIL-CLOSED (P5). Never a silent pass.
 
 import {
   readFileSync,
@@ -389,6 +398,13 @@ function main(argv) {
 
   const built = buildRecord(root, by);
   if (!built.ok) die(built.reason);
+  // D6 (6.23.0): --anchor REFUSES to open an epoch with no usable scope to snapshot. Before this, a
+  // build that skipped its own Step-0 setter (or ran it against a plan with no parseable `## Files`)
+  // still anchored successfully with `scope_snapshot: null`, and the checker's no-scope delegation
+  // silently absorbed the gap. `{"scope": []}` IS a scope (an explicit "write nothing") and anchors.
+  if (built.record.scope_snapshot === null) {
+    die("no usable writes-scope at .pharn/writes-scope.json — run the stage's scope-setter first");
+  }
   const abs = resolve(root, RECORD_PATH);
   try {
     mkdirSync(dirname(abs), { recursive: true });
