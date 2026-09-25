@@ -402,8 +402,10 @@ node pharn/floor/check-red-run.mjs --verdict --ac-tests <AC-TESTS.md> --out <dir
 # check-red-run --preflight exit, never by relayed text, and its Step 6c commit stages the lock and every pinned test
 # (exit 4, `not committed: stage failed`, if one is not a regular, non-ignored file). Exit: 0 READY/NOT-APPLICABLE ·
 # 1 RED · 2 unusable — including (6.20.6) a child that CRASHED: exit 1 without its closing `RED — ` stdout line, which
-# before read as that child's RED (S13 in the loop); a crash one level further down is still read by the child as its
-# own RED (bound in the contract). Contract: pharn/pharn-contracts/ac-tests.md, "The test-stage gate".
+# before read as that child's RED (S13 in the loop); and (6.21.1) a child reporting that a checker IT shells crashed —
+# exit 2 with `UNUSABLE child-crashed — …` first (check-plan-spec-agree under check-ac-tests, check-spec-approved under
+# ac-tests-lock; one rule, pharn/floor/shelled-verdict-core.mjs). A crash one level further down is still read by its
+# parent as its own RED (bound in the contract). Contract: pharn/pharn-contracts/ac-tests.md, "The test-stage gate".
 node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-test-first]
 
 # THE AC GATE (added 6.20.0) — was every Acceptance Criterion DELIVERED on the head verify run? pharn/floor/ac-gate-core.mjs,
@@ -473,7 +475,12 @@ node pharn/floor/check-verify.mjs --stamp <stamp.json> --feature <name> --ac-gat
 # itself; the ledger is unauthenticated `.pharn/` state Bash reaches (LIMITS.md §6); GRILL.md presence is
 # membership only; markers are not consulted. A gate whose DETACHED descendant keeps writing its log after
 # exit trips J — named, not a mystery. Mutating gates do NOT trip F: F compares verify's FINAL fingerprint.
-# Exit: 0 FRESH · 1 RERUN `stage_to_rerun` · 2 INCONCLUSIVE (unusable input, fail-closed) · 4 STOP.
+# Exit: 0 FRESH · 1 RERUN `stage_to_rerun` · 2 INCONCLUSIVE (unusable input, fail-closed) · 4 STOP. Since 6.21.1
+# check-loop-fresh.mjs is a CLI entry with NO static import that loads the checker (pharn/floor/loop-fresh-core.mjs) with
+# import(): a module that cannot load, a throw while checking, or a result outside the checker's contract is
+# INCONCLUSIVE `checker-crashed` (S11), not node's exit 1 — which is the RERUN code — with no JSON. The result check
+# reads the SERIALIZED document (JSON drops an undefined key). Residuals (the entry file itself unloadable, a forced
+# process exit, an unsettled top-level await, a signal) are in check-loop-fresh.mjs's header.
 node pharn/floor/check-loop-fresh.mjs --feature <name> --base <40-hex> (--iter <N> | --commit-gate) [--front] [--repo <dir>] [--verify-stamp <p>] [--regress-head-stamp <p>] [--regress-base-stamp <p>] [--max-reruns <R>]
 
 # The /pharn-loop STOP GUARD (added 6.11.0) — a turn end during an open unattended run requires a record.

@@ -1,0 +1,53 @@
+{
+  "base": "cf9089763b5b68d820858117b7f79faecc32cb23",
+  "inside": [
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-plan.md",
+    ".claude/commands/pharn-ship.md",
+    ".claude/commands/pharn-test.md",
+    ".dev/features/crash-routing/BUILD.md",
+    ".dev/features/crash-routing/GRILL.md",
+    ".dev/features/crash-routing/PLAN.md",
+    ".dev/features/crash-routing/REGRESSION.md",
+    ".dev/features/crash-routing/VERIFY.md",
+    ".dev/features/crash-routing/regression-report.json",
+    ".dev/features/crash-routing/verify-report.json",
+    ".dev/floor/command-hygiene.test.mjs",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/ac-tests-lock.mjs",
+    "pharn/floor/ac-tests-lock.test.mjs",
+    "pharn/floor/check-ac-tests.mjs",
+    "pharn/floor/check-ac-tests.test.mjs",
+    "pharn/floor/check-loop-fresh.mjs",
+    "pharn/floor/check-loop-fresh.test.mjs",
+    "pharn/floor/check-test-stage.mjs",
+    "pharn/floor/check-test-stage.test.mjs",
+    "pharn/floor/gate-run-core.mjs",
+    "pharn/floor/gate-run-core.test.mjs",
+    "pharn/floor/loop-fresh-core.mjs",
+    "pharn/floor/shelled-verdict-core.mjs",
+    "pharn/floor/shelled-verdict-core.test.mjs",
+    "pharn/pharn-contracts/ac-tests.md",
+    "pharn/pharn-contracts/gate-run-record.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

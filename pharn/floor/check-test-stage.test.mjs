@@ -660,3 +660,103 @@ describe("6.21.0 — the test-infrastructure pin reaches the gate from both ends
     });
   });
 });
+
+// ── 6.21.1 — a crash one level BELOW a child is UNUSABLE too (the `nested-child-crash` follow-up) ────────────────────
+// Appended as one block. Each child reads the checker IT shells as a verdict and reports that checker's crash as exit 2
+// with `UNUSABLE child-crashed — …` first; the gate reads that as UNUSABLE, never as `mapping-red` / `lock-red` /
+// `lock-unusable`. The L40 controls: the same grandchild exiting 1 WITH its RED line is still the child's RED.
+
+const GRANDCHILD_CRASHES = [
+  {
+    label: "check-plan-spec-agree.mjs throws only over AC-TESTS.md (the input-dependent case check-loop-fresh cannot pre-empt)",
+    world: testFirst,
+    breakIt: (f) =>
+      inject(
+        join(f, "check-plan-spec-agree.mjs"),
+        "function main() {",
+        'function main() {\n  if (String(process.argv[2]).endsWith("AC-TESTS.md")) throw new Error("simulated crash");'
+      ),
+    child: "check-ac-tests.mjs",
+  },
+  {
+    label: "check-plan-spec-agree.mjs is missing",
+    world: testFirst,
+    breakIt: (f) => unlinkSync(join(f, "check-plan-spec-agree.mjs")),
+    child: "check-ac-tests.mjs",
+  },
+  {
+    label: "check-spec-approved.mjs throws at load under a bootstrap lock",
+    world: bootstrap,
+    breakIt: (f) => writeFileSync(join(f, "check-spec-approved.mjs"), 'throw new Error("simulated module-load failure");\n'),
+    child: "ac-tests-lock.mjs",
+  },
+];
+
+test("6.21.1 — a crashed GRANDCHILD is UNUSABLE, exit 2 — never the child's RED (the mapping AND the lock branch)", () => {
+  for (const { label, world, breakIt, child } of GRANDCHILD_CRASHES) {
+    withWorld(world, (root) => {
+      const run = (copy) =>
+        spawnSync(process.execPath, [join(copy, "pharn", "floor", "check-test-stage.mjs"), NAME], { cwd: root, encoding: "utf8" });
+      const intact = floorCopy();
+      try {
+        assert.equal(run(intact).status, 0, `${label}: control — the intact copy passes the same world`);
+      } finally {
+        rmSync(intact, { recursive: true, force: true });
+      }
+      const copy = floorCopy();
+      try {
+        breakIt(join(copy, "pharn", "floor"));
+        const r = run(copy);
+        assert.equal(r.status, 2, `${label}: ${r.stdout}`);
+        const [first, ...rest] = r.stdout.split("\n");
+        assert.match(first, new RegExp(`^UNUSABLE — ${child.replace(".", "\\.")} reports that a checker it shells crashed`), label);
+        assert.ok(
+          rest.some((l) => /^ {2}UNUSABLE child-crashed — /.test(l)),
+          `${label}: the child's report follows, indented`
+        );
+        assert.doesNotMatch(first, /^RED /, label);
+      } finally {
+        rmSync(copy, { recursive: true, force: true });
+      }
+    });
+  }
+});
+
+test("6.21.1 control (L40) — the grandchild exiting 1 WITH its RED line is still the child's RED: mapping-red, lock-red", () => {
+  withWorld(testFirst, (root) => {
+    // a stale pin in AC-TESTS.md: check-plan-spec-agree REDs it with its line
+    const text = readFileSync(join(fd(root), "AC-TESTS.md"), "utf8");
+    writeFileSync(
+      join(fd(root), "AC-TESTS.md"),
+      text.replace(/^spec_content_hash: [0-9a-f]{64}$/m, `spec_content_hash: ${"0".repeat(64)}`)
+    );
+    const r = gate(root);
+    expectRed(r, "mapping-red");
+    assert.ok(
+      r.child.some((l) => /RED — pin: /.test(l)),
+      JSON.stringify(r.child)
+    );
+  });
+  withWorld(bootstrap, (root) => {
+    // a SPEC edited after approval: check-spec-approved REDs the drift with its line; the lock's recorded pin still agrees
+    const spec = readFileSync(join(fd(root), "SPEC.md"), "utf8");
+    writeFileSync(join(fd(root), "SPEC.md"), `${spec}\nedited after approval\n`);
+    const r = gate(root);
+    expectRed(r, "lock-red");
+    assert.ok(
+      r.child.some((l) => /is not an Approved, un-drifted SPEC/.test(l)),
+      JSON.stringify(r.child)
+    );
+  });
+});
+
+test("6.21.1 — only exit 2 WITH the token FIRST is a crash report: every other exit 2 keeps its RED (lock-unusable, mapping-red)", () => {
+  withWorld(testFirst, (root) => {
+    writeFileSync(lockPath(root), "{ not json");
+    expectRed(gate(root), "lock-unusable");
+  });
+  withWorld(testFirst, (root) => {
+    unlinkSync(join(fd(root), "PLAN.md"));
+    expectRed(gate(root), "mapping-red");
+  });
+});

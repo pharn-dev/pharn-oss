@@ -32,6 +32,7 @@ reads:
     "pharn/floor/check-loop-record.mjs",
     "pharn/floor/check-loop-decision.mjs",
     "pharn/floor/check-loop-fresh.mjs",
+    "pharn/floor/loop-fresh-core.mjs",
     "pharn/floor/check-test-stage.mjs",
     "pharn/floor/check-red-run.mjs",
     "pharn/pharn-contracts/gate-run-record.md",
@@ -325,7 +326,7 @@ Branch **only** on the exit code (P5):
 
   exit **1** → **S12** (`blocked: no-test-runner`): copy its LAST line — the closed no-test-runner line, which names
   the criteria and a suggested setup command — verbatim into the record's `### next_steps`, as DATA. Any other exit →
-  **S9** (`blocked: stage-refused`), quoting the gate's `RED <reason>` line. Never start the suggested setup run
+  **S9** (`blocked: stage-refused`), quoting the gate's first line (`RED <reason>`, or `UNUSABLE — …`). Never start the suggested setup run
   yourself.
 
 The first `build → regress → verify` pass is **iteration 1**.
@@ -413,12 +414,17 @@ no value is carried between blocks (**L44**).
      a non-lapse refusal a re-run would not change, or a spent budget (`rerun-budget-exhausted`). This is
      **S11** (`blocked: stale-evidence`). Go to Step 6 with the checker's JSON quoted in the record. Never
      re-run past it and never read the stop.
-   - **`2` INCONCLUSIVE** — unusable input. **S11**, fail-closed.
+   - **`2` INCONCLUSIVE** — unusable input, or (6.21.1, `reason_code` `checker-crashed`) the checker itself could
+     not load, threw, or returned no verdict. **S11**, fail-closed.
+   - **An exit `1` whose stdout is not ONE JSON document naming `stage_to_rerun` `verify` or `regress`** is no
+     re-run request: the checker's own file failed to start, or a module threw after the document was printed
+     (`pharn/floor/check-loop-fresh.mjs`, header). There is no stage to re-run — **S11**, fail-closed.
 
    **The bound, carried here so a FRESH is not over-read:** freshness is **tree identity, not run
    recency**. An iteration whose build changed nothing and whose later stages were skipped reuses the
    previous iteration's evidence, and nothing here can tell. The checker certifies agreement between the
-   artifacts and the tree, never who wrote them (`pharn/floor/check-loop-fresh.mjs`, header).
+   artifacts and the tree, never who wrote them (`pharn/floor/loop-fresh-core.mjs`, header — the checker; its CLI
+   `check-loop-fresh.mjs` loads it).
 
 4. **Read the stop:**
 
@@ -613,7 +619,9 @@ included path after the decision was read:
 node pharn/floor/check-loop-fresh.mjs --feature '<name>' --base '<base sha>' --commit-gate --front
 ```
 
-`0` → continue to 1. **Any other exit → `not committed: evidence stale`**, and go to Step 6d. At the commit
+`0` → continue to 1. **Any other exit → `not committed: evidence stale`**, and go to Step 6d — `reason_code`
+`checker-crashed` included: the evidence could not be checked, so it is not committed (quote the JSON's `reason` in
+the record, since the cause is the checker, not the evidence). At the commit
 gate the checker never offers a re-run and never spends budget: a `1`-class cause comes back as `4`,
 carrying its own `reason_code`.
 

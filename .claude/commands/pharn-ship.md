@@ -271,7 +271,8 @@ node pharn/floor/check-test-stage.mjs <name>
 ```
 
 `0` → **proceed**, and keep the first line's token for `SHIP.md` (`READY test-first` / `READY bootstrap` /
-`NOT-APPLICABLE legacy-spec`). Non-zero → **STOP**, present the `RED <reason>` line, hand to the human. Run here
+`NOT-APPLICABLE legacy-spec`). Non-zero → **STOP**, present the gate's first line (`RED <reason>`, or `UNUSABLE — …`
+when a checker could not give a verdict), hand to the human. Run here
 **without** `--unattended`: when a criterion's level has no test runner, `/pharn-test` ASKS the human whether to run a
 test-setup increment first; relay that question as the STOP's presentation. The chain stops either way — `/pharn-ship`
 never starts that setup run itself, and never continues to `/pharn-build` past a RED gate. The red run is a

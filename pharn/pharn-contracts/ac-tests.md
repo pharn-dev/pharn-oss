@@ -73,7 +73,7 @@ without joining the build's scope, and a second extractor would mean editing a p
 | kind                | RED when                                                                                                                                                       |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `legacy-spec`       | the SPEC has no `spec_template` (exit **3**, checked first)                                                                                                    |
-| `pin`               | `check-plan-spec-agree.mjs <AC-TESTS.md> <SPEC.md>` is non-zero (Draft, drifted, stale or mislabeled)                                                          |
+| `pin`               | `check-plan-spec-agree.mjs <AC-TESTS.md> <SPEC.md>` REDs: exit 1 with its `RED —` line (Draft, drifted, stale or mislabeled); a crash is no verdict (below)    |
 | `spec-kind`         | the SPEC is `spec_kind: test-infra` (a bootstrap increment has no mapping), or its `spec_kind` is invalid, or its body opens with a `spec_kind:` line (6.20.7) |
 | `malformed-line`    | a non-blank line under `## Mapping` does not match, or there is no `## Mapping`                                                                                |
 | `missing-ac`        | a SPEC AC has no mapping line, or the SPEC's Acceptance Criteria section is absent or duplicated                                                               |
@@ -100,6 +100,13 @@ FLOOR (enum/regex over the folded name); what the build then does to a named man
 Exit **0** GREEN · **1** RED (every kind; a `legacy-spec` here means a mapping exists for a SPEC whose
 `spec_template` was removed — it sits outside the body hash, so the pin cannot see it) · **2** unusable input (a
 named file absent or unreadable, a `--features-dir` that is not a directory, bad usage).
+
+**A crash of the chain check is no verdict on the pin (6.21.1).** The checker reads `check-plan-spec-agree.mjs`'s
+result with `shelled-verdict-core.mjs`: exit 1 with its `RED —` line is the `pin` RED, and anything else non-zero (exit
+1 without the line, another code, a signal, a spawn error) is a CRASH. With no RED kind, the checker then exits **2**
+and its FIRST line is `UNUSABLE child-crashed — …`, which the test-stage gate (below) reads as unusable. Beside a RED
+kind the exit stays **1** — a definite RED is a verdict whatever the pin would have said — and the crash is named on a
+line before the closing `RED — N … failed`.
 
 `check-ac-tests.mjs --spec <SPEC.md>` decides **before any mapping exists** what a SPEC gets: **0** templated (prints
 the ids and levels), **3** legacy, **4** bootstrap (`spec_kind: test-infra`; prints the levels the bootstrap lock
@@ -268,7 +275,9 @@ SPEC.md, and `bootstrap: { "spec_kind": "test-infra", "levels": [...] }` — the
 bootstrap lock has no AC-TESTS.md through which `check-ac-tests.mjs` could bind the pin), is not `test-infra`, or has
 an unusable level, and refuses when an AC-TESTS.md exists. `--check` of a bootstrap lock re-runs the same approval
 check and REDs a SPEC no longer Approved and un-drifted, a changed pin, kind or level set, and an AC-TESTS.md that
-appeared.
+appeared. Since 6.21.1 the approval check's result is read as a verdict (`shelled-verdict-core.mjs`): a crash of it is
+no verdict, never "not Approved". `--write-bootstrap` then refuses with `UNUSABLE child-crashed — …` (exit 2), and
+`--check` exits 2 with that FIRST line unless another RED holds, which keeps exit 1 and names the crash.
 
 **This is WEAKER than test-first, and the record says so:** nothing showed a test failing before the build. What a
 later verify stage will require instead: after the build, the level's gate is discovered, runs, and reports at least
@@ -297,11 +306,17 @@ Otherwise the first line is `RED <reason>` (exit 1), `<reason>` ∈ {`spec-unusa
 `no-lock`, `lock-red`, `lock-unusable`, `lock-mode-mismatch`, `legacy-with-mapping`, `mode-not-allowed`}; exit 2 is
 unusable input — including, since 6.20.6, a child checker that CRASHED: it exited 1 (node's code for an uncaught
 throw or a module that failed to load) without its closing `RED —` line, which both children print before every
-exit-1 return. Before 6.20.6 a crash read as that child's RED, which `/pharn-loop` stops on as S13. The bound: this
-looks one level down only — a checker a child itself shells (`check-plan-spec-agree.mjs` for the mapping's pin,
-`check-spec-approved.mjs` for a bootstrap lock) is read by that child as its own RED; `check-loop-fresh.mjs` check I
-runs both over SPEC.md and PLAN.md first, so only an input-dependent crash of `check-plan-spec-agree.mjs` over
-AC-TESTS.md still reads as `RED mapping-red`. `--require-test-first` makes any pass other than `READY test-first` a `RED mode-not-allowed`:
+exit-1 return. Before 6.20.6 a crash read as that child's RED, which `/pharn-loop` stops on as S13. **Since 6.21.1 the
+same holds one level further down:** each child reads the checker IT shells (`check-plan-spec-agree.mjs` for the
+mapping's pin, `check-spec-approved.mjs` for a bootstrap lock) as a verdict, and reports its crash as exit 2 with
+`UNUSABLE child-crashed — …` FIRST when it has no RED of its own (above). The gate reads exit 2 with that line as
+unusable; every other exit 2 keeps its RED (`mapping-red` for an unreadable input, `lock-unusable` for a malformed
+lock). **The bound, one level further:** a crash below THOSE checkers is read by its parent as that parent's own RED
+(`check-plan-spec-agree.mjs` over `check-spec-approved.mjs` or `check-spec.mjs`; `check-spec-approved.mjs` over
+`check-spec.mjs`), so it still arrives as `mapping-red` or `lock-red`. Under `/pharn-loop`, `check-loop-fresh.mjs` check I
+runs `check-spec-approved.mjs` and `check-plan-spec-agree.mjs` over the same SPEC.md first, and every deeper call has an
+identical twin there, so only a crash those runs do not reproduce (resource exhaustion, a race) reaches the gate as a
+RED. Outside the loop the gate runs first, and such a crash is still a refusal, with the wrong remedy named. `--require-test-first` makes any pass other than `READY test-first` a `RED mode-not-allowed`:
 `/pharn-loop` and `check-loop-fresh.mjs` pass it, because the loop never writes a legacy SPEC or approves a
 `test-infra` one, so its policy is in the checker rather than in its prose. The
 child checker's own lines follow, indented. `lock-mode-mismatch` exists because a `test-first` lock's `--check` never

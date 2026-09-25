@@ -6,9 +6,9 @@
 // held, never because one was skipped (L34). Each check is then broken ALONE, and repaired, so every
 // failing test names exactly one cause (GRILL finding 4).
 //
-// Most tests call `evaluate()` in-process, because `--experimental-test-coverage` cannot see a subprocess;
-// the defaults test and the ★ WIRING test drive the real CLI, because the property there is what a pinned
-// command line produces (L41, L45).
+// Most tests call `evaluate()` in-process (from loop-fresh-core.mjs), because `--experimental-test-coverage`
+// cannot see a subprocess; the defaults test, the ★ WIRING tests and the 6.21.1 crash tests drive the real CLI
+// (check-loop-fresh.mjs, the entry), because the property there is what a pinned command line produces (L41, L45).
 //
 // NOTE, and it is the L43 proof rather than a shortcut: none of these stamps comes from a real gate run.
 // They are self-consistent FABRICATIONS over the live tree, and the checker certifies them FRESH. That is
@@ -50,10 +50,12 @@ import {
   EXIT,
   COMPARED_FIELDS,
   stampDerivedMismatch,
-} from "./check-loop-fresh.mjs";
+} from "./loop-fresh-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+/** The CLI every caller runs — the entry, which loads loop-fresh-core.mjs dynamically (6.21.1). */
 const CLI = join(HERE, "check-loop-fresh.mjs");
+const CORE = join(HERE, "loop-fresh-core.mjs");
 const FEATURE = "demo";
 const sha256 = (b) => createHash("sha256").update(b).digest("hex");
 const OTHER_SHA = "b".repeat(40);
@@ -307,9 +309,10 @@ test("✧ L34/L52 — the check set is exactly A–J in evaluation order, fabric
   assert.ok(LAPSE_CODES.length > 0 && LAPSE_CODES.every((c) => REASON_CODES.includes(c)));
 });
 
-test("✧ L52 — the feature root is ONE literal in the module source (no second copy of the default)", () => {
-  const src = readFileSync(CLI, "utf8");
-  assert.equal(src.match(/"pharn\/features"/g).length, 1);
+test("✧ L52 — the feature root is ONE literal across the checker's two files (no second copy of the default)", () => {
+  const count = (file) => (readFileSync(file, "utf8").match(/"pharn\/features"/g) ?? []).length;
+  assert.equal(count(CORE), 1, "the core defines FEATURE_BASE once");
+  assert.equal(count(CLI), 0, "the entry carries no copy of it");
 });
 
 // ---------------------------------------------------------------------------------------------------
@@ -1285,7 +1288,8 @@ test("★ WIRING — check I routes only a RED test stage to ac-evidence-invalid
       const out0 = pin.decision.replaceAll("'<name>'", `'${FEATURE}'`).replaceAll("'<base sha>'", `'${r.base}'`).replaceAll("<N>", "1");
       // 6.20.6 (2026-09-24 review finding 2): the lock child CRASHES at run time — exit 1 like its RED, but no RED line. A
       // RUN-TIME throw in its --check path, never a load failure: this checker imports test-infra-core.mjs itself, so a
-      // load failure there would crash it before check I runs (grill R2, the `loop-fresh-load-crash` follow-up).
+      // load failure there would stop it before check I runs (grill R2) — since 6.21.1 as INCONCLUSIVE `checker-crashed`,
+      // exercised by the load-crash tests at the end of this file.
       const lockSrc = join(r.proj, "pharn/floor/ac-tests-lock.mjs");
       const original = readFileSync(lockSrc, "utf8");
       const anchor = 'requireRedRun: args.includes("--require-red-run"),';
@@ -1382,4 +1386,365 @@ test("★ UPGRADE STRADDLE — a stamp fingerprinted with the previous ALGO is n
       assert.doesNotMatch(res.doc.reason, /different tree/, "the digests are equal — the tree did not change");
     });
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// 6.21.1 — THE CHECKER'S OWN CRASH (the `loop-fresh-load-crash` follow-up, .dev/features/crash-routing/). Appended as
+// one block. check-loop-fresh.mjs is now an entry with no static import: it loads loop-fresh-core.mjs dynamically and
+// maps a failure to load it, a throw while it runs, or a result outside its contract to INCONCLUSIVE `checker-crashed`,
+// exit 2. Before, each of these exited node's 1 — this checker's RERUN — with an EMPTY stdout.
+import { cpSync } from "node:fs";
+
+/** The product floor (no tests, no fixtures) with pharn-contracts beside it, copied so ONE module can be broken. */
+function floorCopy() {
+  const dir = mkdtempSync(join(tmpdir(), "clf-floor-"));
+  cpSync(HERE, join(dir, "pharn", "floor"), {
+    recursive: true,
+    filter: (src) => !src.endsWith(".test.mjs") && !src.includes("test-fixtures"),
+  });
+  cpSync(join(HERE, "..", "pharn-contracts"), join(dir, "pharn", "pharn-contracts"), { recursive: true });
+  return dir;
+}
+
+/** The core's STATIC load closure — `import …` and `export … from` — computed from source (never hand-listed — L29). Spawned checkers are NOT in it on
+ *  purpose: their crash is E's unusable re-derivation (`usage-error`), a different path. */
+function staticClosure(start = "loop-fresh-core.mjs") {
+  const seen = new Set();
+  const queue = [start];
+  while (queue.length) {
+    const m = queue.shift();
+    if (seen.has(m)) continue;
+    seen.add(m);
+    for (const [, dep] of readFileSync(join(HERE, m), "utf8").matchAll(
+      /^(?:import\s(?:[^;"']*?\sfrom\s)?|export\s[^;"']*?\sfrom\s)["']\.\/([a-z0-9-]+\.mjs)["']/gm
+    )) {
+      queue.push(dep);
+    }
+  }
+  return [...seen].sort();
+}
+
+/** L29: the ways a module can fail to load — the likeliest shapes of a partial update included. */
+const LOAD_MODES = [
+  ["throws at load", (f) => appendFileSync(f, '\nthrow new Error("simulated module-load failure");\n')],
+  ["is missing", (f) => unlinkSync(f)],
+  ["has a syntax error", (f) => appendFileSync(f, "\nexport const = ;\n")],
+  ["exports nothing (an older copy)", (f) => writeFileSync(f, "export {};\n")],
+];
+
+function expectCrashDoc(r, label, copy) {
+  assert.equal(r.status, EXIT.INCONCLUSIVE, `${label}: exit ${r.status}\n${r.stdout}${r.stderr}`);
+  const doc = JSON.parse(r.stdout);
+  assert.deepEqual(
+    {
+      verdict: doc.verdict,
+      reason_code: doc.reason_code,
+      stage_to_rerun: doc.stage_to_rerun,
+      checks: doc.checks,
+      reruns_used: doc.reruns_used,
+    },
+    { verdict: "INCONCLUSIVE", reason_code: "checker-crashed", stage_to_rerun: null, checks: null, reruns_used: null },
+    label
+  );
+  assert.doesNotMatch(r.stderr, /NOTE \(P0\)/, `${label}: the bound's NOTE is for a verdict only`);
+  if (copy) {
+    for (const p of [copy, realpathSync(copy)]) assert.ok(!doc.reason.includes(p), `${label}: a machine path in reason: ${doc.reason}`);
+  }
+  return doc;
+}
+
+test("6.21.1 — a checker that cannot LOAD is INCONCLUSIVE `checker-crashed`, exit 2: every module of its static graph × every mode", () => {
+  const graph = staticClosure();
+  for (const m of ["loop-fresh-core.mjs", "gate-run-core.mjs", "worktree-fingerprint.mjs", "test-infra-core.mjs"]) {
+    assert.ok(graph.includes(m), `the computed graph must hold ${m}: ${graph}`);
+  }
+  assert.ok(
+    !graph.includes("check-verify.mjs") && !graph.includes("check-loop-fresh.mjs"),
+    `spawned checkers and the entry are outside it: ${graph}`
+  );
+  const copy = floorCopy();
+  try {
+    const cli = join(copy, "pharn", "floor", "check-loop-fresh.mjs");
+    const argv = ["--feature", FEATURE, "--base", "0".repeat(40), "--iter", "1", "--repo", copy];
+    const control = spawnSync(process.execPath, [cli, ...argv], { encoding: "utf8" });
+    assert.equal(control.status, EXIT.RERUN, `control: the intact copy gives its ordinary verdict: ${control.stdout}`);
+    assert.equal(JSON.parse(control.stdout).reason_code, "report-missing");
+    rmSync(join(copy, ".pharn"), { recursive: true, force: true });
+    let cases = 0;
+    for (const m of graph) {
+      for (const [mode, breakIt] of LOAD_MODES) {
+        const file = join(copy, "pharn", "floor", m);
+        const keep = readFileSync(file);
+        breakIt(file);
+        try {
+          expectCrashDoc(spawnSync(process.execPath, [cli, ...argv], { encoding: "utf8" }), `${m} ${mode}`, copy);
+          cases++;
+        } finally {
+          writeFileSync(file, keep);
+        }
+      }
+    }
+    assert.equal(cases, graph.length * LOAD_MODES.length);
+    assert.equal(existsSync(join(copy, ".pharn")), false, "no crash wrote a budget-ledger row");
+  } finally {
+    rmSync(copy, { recursive: true, force: true });
+  }
+});
+
+test("6.21.1 — a result OUTSIDE the checker's contract is `checker-crashed` too: never exit 0, never a RERUN without its document", () => {
+  const DOC = (verdict) => `{ verdict: "${verdict}", stage_to_rerun: null, reason_code: null, reason: "x", checks: {}, reruns_used: null }`;
+  const STUBS = [
+    ["returns {}", "export const evaluate = () => ({});"],
+    ["returns an undefined code", "export const evaluate = () => ({ code: undefined, doc: {} });"],
+    ["returns FRESH's code with a STOP document", `export const evaluate = () => ({ code: 0, doc: ${DOC("STOP")} });`],
+    ["returns RERUN's code with a document missing keys", 'export const evaluate = () => ({ code: 1, doc: { verdict: "RERUN" } });'],
+    ["returns an array document", "export const evaluate = () => ({ code: 0, doc: [] });"],
+    ["returns an exit code outside the set", `export const evaluate = () => ({ code: 3, doc: ${DOC("STOP")} });`],
+    ["throws a non-Error at load", "throw undefined;"],
+    ["throws a non-Error while checking", "export const evaluate = () => { throw null; };"],
+    // REVIEW finding 1: judged on the SERIALIZED document — JSON drops an undefined key, and a null stage names none
+    [
+      "returns a RERUN whose stage_to_rerun is undefined (JSON drops the key)",
+      `export const evaluate = () => ({ code: 1, doc: { ...${DOC("RERUN")}, stage_to_rerun: undefined } });`,
+    ],
+    ["returns a RERUN whose stage_to_rerun is null", `export const evaluate = () => ({ code: 1, doc: ${DOC("RERUN")} });`],
+    // REVIEW finding 2: the crash path itself must not throw
+    ["throws a value with no string form at load", "throw Object.create(null);"],
+    ["throws a value with no string form while checking", "export const evaluate = () => { throw Object.create(null); };"],
+    [
+      "returns a document JSON cannot serialize",
+      `export const evaluate = () => ({ code: 0, doc: { ...${DOC("FRESH")}, checks: { n: 1n } } });`,
+    ],
+    [
+      "throws in a microtask while it loads",
+      `queueMicrotask(() => { throw new Error("micro"); });\nexport const evaluate = () => ({ code: 0, doc: ${DOC("FRESH")} });`,
+    ],
+    ["throws a 1,000-character message (bounded)", `export const evaluate = () => { throw new Error("m".repeat(1000)); };`],
+  ];
+  const copy = floorCopy();
+  try {
+    const cli = join(copy, "pharn", "floor", "check-loop-fresh.mjs");
+    const core = join(copy, "pharn", "floor", "loop-fresh-core.mjs");
+    // control: a stub keeping the contract passes straight through — the check does not reject everything
+    writeFileSync(core, `export const evaluate = () => ({ code: 0, doc: ${DOC("FRESH")} });`);
+    const ok = spawnSync(process.execPath, [cli], { encoding: "utf8" });
+    assert.equal(ok.status, EXIT.FRESH, ok.stdout + ok.stderr);
+    assert.equal(JSON.parse(ok.stdout).verdict, "FRESH");
+    assert.match(ok.stderr, /NOTE \(P0\)/);
+    // control: a RERUN naming its stage passes through as exit 1 with its document
+    writeFileSync(core, `export const evaluate = () => ({ code: 1, doc: { ...${DOC("RERUN")}, stage_to_rerun: "verify" } });`);
+    const rerun = spawnSync(process.execPath, [cli], { encoding: "utf8" });
+    assert.equal(rerun.status, EXIT.RERUN, rerun.stdout + rerun.stderr);
+    assert.equal(JSON.parse(rerun.stdout).stage_to_rerun, "verify");
+    for (const [label, stub] of STUBS) {
+      writeFileSync(core, `${stub}\n`);
+      const doc = expectCrashDoc(spawnSync(process.execPath, [cli], { encoding: "utf8" }), label, copy);
+      assert.ok(doc.reason.length < 500, `${label}: the reason is bounded (${doc.reason.length})`);
+    }
+    // A throw scheduled AFTER the verdict is printed: the printed document stands, and the exit is still INCONCLUSIVE
+    // (they disagree, fail-closed — the header says so).
+    writeFileSync(
+      core,
+      `export const evaluate = () => { setTimeout(() => { throw new Error("late"); }, 5); return { code: 0, doc: ${DOC("FRESH")} }; };\n`
+    );
+    const late = spawnSync(process.execPath, [cli], { encoding: "utf8" });
+    assert.equal(late.status, EXIT.INCONCLUSIVE, late.stdout + late.stderr);
+    assert.equal(JSON.parse(late.stdout).verdict, "FRESH", "ONE document on stdout — the one printed before the throw");
+  } finally {
+    rmSync(copy, { recursive: true, force: true });
+  }
+});
+
+test("6.21.1 — machine paths in a crash `reason`: the working directory reads `.`, even with spaces in it (REVIEW finding 5)", () => {
+  const copy = floorCopy();
+  const spaced = mkdtempSync(join(tmpdir(), "clf dir with spaces "));
+  try {
+    writeFileSync(join(spaced, ".pharn"), "not a directory\n");
+    const r = spawnSync(
+      process.execPath,
+      [join(copy, "pharn", "floor", "check-loop-fresh.mjs"), "--feature", FEATURE, "--base", "0".repeat(40), "--iter", "1", "--repo", "."],
+      { cwd: spaced, encoding: "utf8" }
+    );
+    const doc = expectCrashDoc(r, "the ledger's mkdir throws under a spaced directory", spaced);
+    assert.match(doc.reason, /mkdir '\.\/\.pharn\/pharn-loop\/demo'/, doc.reason);
+  } finally {
+    rmSync(copy, { recursive: true, force: true });
+    rmSync(spaced, { recursive: true, force: true });
+  }
+});
+
+test("✧ L35 — the entry's restated facts agree with the core (exit codes, verdict per code, document keys); it has NO static import", () => {
+  const src = readFileSync(CLI, "utf8");
+  // Both static forms load a module before any line runs: `import …` and `export … from` (REVIEW finding 4 — restoring the
+  // old exports with `export * from "./loop-fresh-core.mjs"` would re-open the gap). The mutation control proves the
+  // pattern sees the second form.
+  const STATIC_LOAD = /^\s*(?:import\s|export\s[^;]*?\sfrom\s)/m;
+  assert.doesNotMatch(src, STATIC_LOAD, "a static load would re-open the gap: its failure is not catchable");
+  assert.match(`${src}\nexport * from "./loop-fresh-core.mjs";\n`, STATIC_LOAD, "mutation control: a re-export is caught");
+  assert.match(src, /await import\("\.\/loop-fresh-core\.mjs"\)/);
+  const verdictOf = Object.fromEntries(
+    [...src.match(/VERDICT_OF = Object\.freeze\(\{([^}]*)\}\)/)[1].matchAll(/(\d+): "([A-Z]+)"/g)].map(([, code, verdict]) => [
+      verdict,
+      Number(code),
+    ])
+  );
+  assert.deepEqual(verdictOf, { ...EXIT });
+  const keys = JSON.parse(src.match(/DOC_KEYS = Object\.freeze\((\[[^\]]*\])\)/)[1]);
+  // Hermetic (REVIEW finding 3): an INCONCLUSIVE, and a STOP from --commit-gate over an empty temp repo — the commit gate
+  // never writes the budget ledger, so nothing lands in the source tree.
+  const empty = mkdtempSync(join(tmpdir(), "clf-keys-"));
+  try {
+    const stop = evaluate(["--feature", FEATURE, "--base", "0".repeat(40), "--commit-gate", "--repo", empty]);
+    assert.equal(stop.code, EXIT.STOP, JSON.stringify(stop.doc));
+    for (const r of [evaluate(["--bogus"]), stop]) assert.deepEqual(keys, Object.keys(r.doc));
+    assert.equal(existsSync(join(empty, ".pharn")), false);
+  } finally {
+    rmSync(empty, { recursive: true, force: true });
+  }
+});
+
+test("6.21.1 — the core run directly refuses (exit 2, nothing on stdout): it is not a CLI, and exit 0 would read as FRESH", () => {
+  const r = spawnSync(process.execPath, [CORE, "--feature", FEATURE, "--base", "0".repeat(40), "--iter", "1"], { encoding: "utf8" });
+  assert.equal(r.status, EXIT.INCONCLUSIVE);
+  assert.equal(r.stdout, "");
+  assert.match(r.stderr, /run pharn\/floor\/check-loop-fresh\.mjs/);
+});
+
+const copyFloorModules = (proj) => {
+  mkdirSync(join(proj, "pharn/floor"), { recursive: true });
+  for (const m of FLOOR_MODULES) copyFileSync(join(HERE, m), join(proj, "pharn/floor", m));
+};
+
+test("★ WIRING (6.21.1) — through both pinned /pharn-loop lines, a module that cannot load and a throw while checking are INCONCLUSIVE, never RERUN", () => {
+  const pin = pinnedLoopLines();
+  withRepo(
+    (r) => {
+      const sh = (line) =>
+        spawnSync(
+          "sh",
+          ["-c", line.replaceAll("'<name>'", `'${FEATURE}'`).replaceAll("'<base sha>'", `'${r.base}'`).replaceAll("<N>", "1")],
+          {
+            cwd: r.proj,
+            encoding: "utf8",
+          }
+        );
+      iterate(r);
+      for (const line of [pin.decision, pin.commit]) assert.equal(sh(line).status, EXIT.FRESH, `control: ${line}`);
+      const infra = join(r.proj, "pharn/floor/test-infra-core.mjs");
+      const keep = readFileSync(infra);
+      appendFileSync(infra, '\nthrow new Error("simulated module-load failure");\n');
+      for (const line of [pin.decision, pin.commit]) expectCrashDoc(sh(line), `load failure at ${line}`, r.proj);
+      writeFileSync(infra, keep);
+      // A throw while checking, from input alone: `.pharn` is a regular file, so the stamps read as missing (a RERUN) and
+      // the budget ledger's mkdir throws ENOTDIR. The commit gate never writes the ledger, so it cannot reach this throw.
+      rmSync(join(r.proj, ".pharn"), { recursive: true, force: true });
+      writeFileSync(join(r.proj, ".pharn"), "not a directory\n");
+      const doc = expectCrashDoc(sh(pin.decision), "the ledger's mkdir throws", r.proj);
+      assert.match(doc.reason, /threw while checking: ENOTDIR/);
+    },
+    { extra: copyFloorModules }
+  );
+});
+
+test("★ WIRING (6.21.1) — an input-dependent crash of check-plan-spec-agree over AC-TESTS.md is front-stage-red (S11), never ac-evidence-invalid (S13)", () => {
+  const pin = pinnedLoopLines();
+  withRepo(
+    (r) => {
+      const agree = join(r.proj, "pharn/floor/check-plan-spec-agree.mjs");
+      const src = readFileSync(agree, "utf8");
+      assert.equal(src.split("function main() {").length, 2, "the anchor moved — update this test");
+      writeFileSync(
+        agree,
+        src.replace(
+          "function main() {",
+          'function main() {\n  if (String(process.argv[2]).endsWith("AC-TESTS.md")) throw new Error("simulated crash");'
+        )
+      );
+      iterate(r); // over the tree with the injected module, so check I is the only one that can fail
+      const out = pin.decision.replaceAll("'<name>'", `'${FEATURE}'`).replaceAll("'<base sha>'", `'${r.base}'`).replaceAll("<N>", "1");
+      const p = spawnSync("sh", ["-c", out], { cwd: r.proj, encoding: "utf8" });
+      assert.equal(p.status, EXIT.STOP, p.stdout + p.stderr);
+      const doc = JSON.parse(p.stdout);
+      assert.equal(doc.checks.I, "fail");
+      assert.equal(doc.reason_code, "front-stage-red", doc.reason);
+      assert.match(doc.reason, /check-test-stage exits 2 \(UNUSABLE\)/);
+    },
+    { extra: copyFloorModules }
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// 6.21.1 — THE STRADDLE FOR AN AC-FAILED REPORT (6.20.8's review: the straddle block above pins a PASSing report only).
+// Each world's report is produced by the REAL check-verify --ac-gate (L55) and FAILS on the AC gate. Each is also run as
+// an older checker could have worded its AC block (a changed `detail`) with every stamp-derived field honest: over a
+// straddled stamp E must compare only what the stamp alone decides, so both pass E and re-run at F — never a
+// report-verdict-mismatch STOP. With E's algo clause removed, the reworded variant STOPs (measured at build, BUILD.md).
+test("★ UPGRADE STRADDLE (6.21.1) — an honest pre-upgrade report that FAILED on the AC gate re-runs, never STOPs as a forgery", async (t) => {
+  const OLD = "worktree-fingerprint/1+sha256";
+  assert.notEqual(ALGO, OLD);
+  const WORLDS = [
+    {
+      name: "delivery only (ac-delivery)",
+      opts: {
+        verifyRuns: [
+          ["test", 0, "skipped"],
+          ["reconcile", 0],
+        ],
+      },
+      ids: ["ac-delivery"],
+    },
+    {
+      name: "delivery with a red gate (ac-delivery, test)",
+      opts: {
+        verifyRuns: [
+          ["test", 1],
+          ["reconcile", 0],
+        ],
+      },
+      ids: ["ac-delivery", "test"],
+    },
+    { name: "evidence (ac-evidence)", edit: true, opts: {}, ids: ["ac-evidence"] },
+  ];
+  const reworded = (rep) => ({
+    ...rep,
+    ac_gate: {
+      ...rep.ac_gate,
+      acs: rep.ac_gate.acs.map((a) => ({ ...a, detail: `older wording: ${a.detail}` })),
+      evidence: (rep.ac_gate.evidence ?? []).map((e) => ({ ...e, detail: `older wording: ${e.detail}` })),
+    },
+  });
+  for (const w of WORLDS) {
+    await t.test(w.name, () => {
+      withRepo((r) => {
+        if (w.edit) writeFileSync(join(r.proj, AC_TEST), "edited after the red run\n");
+        iterate(r, w.opts);
+        const stampPath = join(r.proj, DEFAULT_STAMPS.verify);
+        const stamp = readJ(stampPath);
+        stamp.fingerprint.algo = OLD;
+        writeJ(stampPath, stamp);
+        const rep = runChecker(r.proj, "check-verify.mjs", ["--stamp", stampPath, "--feature", FEATURE, "--ac-gate"]);
+        rep.completeness = { complete: true, missing: [], skipped: [] };
+        rep.verifiers = { registered: 0, findings: [] };
+        assert.equal(rep.verdict, "FAIL", "precondition: the report FAILED");
+        assert.deepEqual(rep.failing_gates, w.ids, "precondition: on the AC gate");
+        let iter = 0;
+        for (const [variant, report] of [
+          ["as today's checker writes it", rep],
+          ["as an older checker worded its AC block", reworded(rep)],
+        ]) {
+          writeJ(reportPath(r, "verify-report.json"), report);
+          const it = evaluate(["--feature", FEATURE, "--base", r.base, "--iter", String(++iter), "--repo", r.proj]);
+          assert.equal(it.code, EXIT.RERUN, `${variant}: ${JSON.stringify(it.doc)}`);
+          assert.equal(it.doc.reason_code, "tree-moved-since-verify", `${variant}: ${it.doc.reason}`);
+          assert.equal(it.doc.stage_to_rerun, "verify");
+          assert.equal(it.doc.checks.E, "pass", `${variant}: E read an honest report as a forgery`);
+          assert.match(it.doc.reason, /fingerprinted with worktree-fingerprint\/1\+sha256, the live tree with/);
+          const cg = evaluate(["--feature", FEATURE, "--base", r.base, "--repo", r.proj, "--commit-gate"]);
+          assert.equal(cg.code, EXIT.STOP, variant);
+          assert.equal(cg.doc.reason_code, "tree-moved-since-verify", `${variant}: ${cg.doc.reason}`);
+          assert.equal(cg.doc.checks.E, "pass", variant);
+        }
+      });
+    });
+  }
 });
