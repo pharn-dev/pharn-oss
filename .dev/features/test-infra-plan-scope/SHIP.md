@@ -97,6 +97,17 @@ The orchestrator merges; this run does not.
   when the module's importer set grows (6.20.6's crashed-child test, above). It was caught by the test's own
   child-name assertion, so this is a first occurrence, below L20's bar.
 
+## Commit ids cited above, before and after the rebases
+
+The run records were written between rebases, so they cite the commit ids of their time. On the final branch (based
+on `66ca79c`):
+
+- `ffc6f1c` (the crashed-child test re-point) is `2a69e5d`;
+- `3b5e696` (the two GATE-2 review fixes) is `f960806`;
+- `16cb080` (the CHANGELOG blank line) was dropped as empty, because the last rebase's re-insertion already wrote
+  one blank line;
+- `36e09c7` and `20ef275` were the pre-rebase tree states the two verify runs measured.
+
 ## Protected docs
 
 No trusted-doc change was needed. `LIMITS.md` §AC evidence defers "what the pin does not see" to
