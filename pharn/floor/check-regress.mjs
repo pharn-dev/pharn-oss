@@ -177,7 +177,12 @@ function isPipelineArtifact(file, feature) {
   return false;
 }
 
-// --- emit one JSON document to stdout, then exit. The command captures this verbatim. ---
+// --- emit one JSON document to stdout, then END. The command captures this verbatim. ---
+// THE FLUSH RULE (6.20.4, the check-verify.mjs rule — its header says why): set process.exitCode and unwind with a
+// module-private sentinel only the top-level catch swallows, so Node drains stdout before the process ends — a
+// spawnSync caller (check-loop-fresh.mjs check E) JSON.parses this output. Any other throw still escapes: a crash
+// stays a crash. pharn/floor/cli-stdout-flush.test.mjs pins both.
+const EMITTED = Symbol("check-regress: emitted");
 function emit(obj, code) {
   console.log(JSON.stringify(obj, null, 2));
   // The BOUND, on stdout and not only in the header (lessons-learned L43, in check-cost-ledger.mjs's
@@ -187,7 +192,8 @@ function emit(obj, code) {
       "NOTE (P0): a gate-run stamp certifies INTERNAL CONSISTENCY, never provenance — a self-consistent fabricated stamp passes."
     );
   }
-  process.exit(code);
+  process.exitCode = code;
+  throw EMITTED;
 }
 
 // --- comma/newline list -> normalized, de-duplicated path array. -----------------------------------
@@ -597,4 +603,9 @@ function main() {
   );
 }
 
-main();
+// Swallow ONLY the emit sentinel; anything else is a real crash and must still end the process non-zero.
+try {
+  main();
+} catch (e) {
+  if (e !== EMITTED) throw e;
+}

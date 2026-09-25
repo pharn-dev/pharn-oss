@@ -344,8 +344,9 @@ absolute all-green-at-HEAD `.verdict` — belt-and-suspenders.)_
 
 **Verdict read (FLOOR):**
 that file's `.verdict` (the `check-verify.mjs` output). `"PASS"` (every gate green ∧ build complete) →
-**proceed** to GATE 2. `"INCOMPLETE"` (all gates green but a plan-declared `## Files` path is absent —
-`.completeness.missing[]` names it) → **the single build-completion retry (Step 2b), EXACTLY once**.
+**proceed** to GATE 2. `"INCOMPLETE"` (all gates green and no AC evidence red, but a plan-declared `## Files` path
+is absent — `.completeness.missing[]` names it; an AC not delivered yet, or an AC gate that could not measure the
+partial tree, rides along in `.ac_gate`) → **the single build-completion retry (Step 2b), EXACTLY once**.
 `"FAIL"` (a real gate red — offenders in `.failing_gates[]`; a real failure **beats** incompleteness, so
 this is **never** retried) or `"INCONCLUSIVE"` (fail-closed — e.g. a RED chain; `/pharn-verify` **always**
 emits this machine artifact) → **STOP**, present, hand to the human. The advisory `verifiers` block is
@@ -371,9 +372,12 @@ own `.verdict`s, not re-implemented here.
 **Only reachable from a step-7 `.verdict == "INCOMPLETE"`** — every gate is green but the build is
 incomplete (a plan-declared `## Files` path is absent; `.completeness.missing[]` names it). This is the
 **one** retryable verify outcome; `FAIL` and `INCONCLUSIVE` are **never** retried — a real gate failure
-**beats** incompleteness in `check-verify.mjs`'s precedence, so a genuine bug can never masquerade as
-`INCOMPLETE` and trigger a blind rebuild. This is a **narrow, bounded** convenience, **not** `--loop`
-(which is still a separate, deferred increment).
+**beats** incompleteness in `check-verify.mjs`'s precedence, and so does an AC **evidence** red (a rebuild cannot
+restore evidence taken before it), so a genuine bug can never masquerade as `INCOMPLETE` and trigger a blind
+rebuild. **Since 6.20.4 an AC that is merely not delivered yet, or an AC gate that could not measure the partial
+tree, does not block it** — before, `/pharn-verify`'s AC gate was consulted first, so this step could not fire at
+all; the retry's re-verify measures the AC gate again from scratch, and it proceeds only on `PASS`. This is a
+**narrow, bounded** convenience, **not** `--loop` (which is still a separate, deferred increment).
 
 **The retry, EXACTLY once (a straight-line block with NO back-edge — the ≤1 bound is structural):**
 
@@ -426,7 +430,10 @@ incomplete (a plan-declared `## Files` path is absent; `.completeness.missing[]`
 
 - **Bounded firing.** It fires only for a **pure** incompleteness. If the missing file **also** reddens a
   whole-repo gate (a test imports it), step 7 is `FAIL`, not `INCOMPLETE`, and the retry does **not** fire —
-  the human decides. So it covers "declared path silently absent," **not** "absent AND breaking a gate."
+  the human decides. So it covers "declared path silently absent," **not** "absent AND breaking a gate." The AC
+  gate follows the same split (6.20.4): changed AC evidence is `FAIL` and never retried, while an AC not delivered
+  yet — typically a `spec_kind: test-infra` build whose runner is among the missing paths — rides along in
+  `.ac_gate` and is re-measured by the retry's re-verify.
 - **Transient-only value.** The retry re-invokes the **same advisory `/pharn-build`** that produced the
   incomplete result; it helps **only** when the first incompleteness was **transient** (an interrupted /
   truncated build). A **systematically** unbuildable plan simply re-produces the gap and **STOPs** — the

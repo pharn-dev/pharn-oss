@@ -138,6 +138,16 @@ function ranAsPinned(stamp, run) {
   );
 }
 
+/** WHY a level gate did not run as pinned, in the words a reader can act on (6.20.4). The explicit case is named
+ *  because its remedy differs from every other evidence reason's: it is /pharn-verify's own `--gates`, so a re-run
+ *  without it helps, and setting the build aside does not. `stamp.source` is an enum validateStamp checked; no argv
+ *  string is echoed. Only the detail moves — the reason, its class and the verdict are unchanged. */
+function notPinnedWhy(stamp) {
+  return stamp.source !== "discover"
+    ? `the stamp's gate source is ${JSON.stringify(stamp.source)} (an explicit /pharn-verify --gates run) — re-run /pharn-verify without --gates`
+    : "it ran with a shell or a command other than the discovered one";
+}
+
 function verdictOf(evidence, acs) {
   const reasons = [...evidence.map((e) => e.reason), ...acs.map((a) => a.reason).filter((r) => r !== null)];
   for (const r of reasons) if (!AC_GATE_REASONS.includes(r)) throw new Error(`internal: ${r} is not an AC_GATE_REASONS member`);
@@ -267,7 +277,7 @@ function testFirst({ feature, spec, stamp, root, recordOf }) {
     return ac;
   });
   for (const id of [...unpinnedRuns].sort())
-    add("test-infra-changed", `gate ${id} did not run as the pinned \`npm run ${id}\` (an explicit --gates command, or a shell)`);
+    add("test-infra-changed", `gate ${id} did not run as the pinned \`npm run ${id}\` — ${notPinnedWhy(stamp)}`);
   return block("test-first", evidence, acs);
 }
 
@@ -290,10 +300,14 @@ function bootstrap({ feature, spec, stamp, root, recordOf }) {
     const gateIds = LEVEL_GATES[level].filter((id) => ran.some((r) => r.id === id));
     let out;
     if (gateIds.length === 0) {
+      // A level gate that DID run, just not as discovered, is not "the runner is not delivered yet" — say which.
+      const unpinned = LEVEL_GATES[level].filter((id) => stamp.runs.some((r) => r.id === id));
       out = {
         status: "none",
         reason: "ac-untested",
-        detail: `no discovered ${LEVEL_GATES[level].join(" or ")} gate ran — the runner is not delivered yet`,
+        detail: unpinned.length
+          ? `the ${unpinned.join(", ")} gate ran, but not as the discovered \`npm run <id>\` — ${notPinnedWhy(stamp)}`
+          : `no discovered ${LEVEL_GATES[level].join(" or ")} gate ran — the runner is not delivered yet`,
       };
     } else {
       let passed = 0;

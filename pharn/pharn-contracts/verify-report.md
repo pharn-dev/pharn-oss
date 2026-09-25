@@ -267,6 +267,14 @@ restated, P4):
 - **How it reaches the verdict:** an evidence red adds `ac-evidence` to `failing_gates`, a delivery red adds
   `ac-delivery`; either makes the verdict `FAIL`. An unmeasurable gate over otherwise-green gates is `INCONCLUSIVE`
   with no `reason_code`. `NOT-APPLICABLE` (a legacy SPEC) changes nothing, and is in the report so a reader sees it.
+- **Over an incomplete build (6.20.4):** a red real gate still makes the verdict `FAIL`, and so does an evidence red —
+  a rebuild cannot restore evidence taken before it. Otherwise an incomplete build (`aux.completeness` 1) is
+  `INCOMPLETE`, exit 3, with `failing_gates: []`, even when the AC gate is red for delivery reasons only or could not
+  measure: over a partial tree those are the expected readings. The `ac_gate` block stays in the report. `INCOMPLETE`
+  is never a green verdict: `/pharn-ship` Step 2b's single rebuild re-runs `/pharn-verify`, which measures the AC gate
+  again from scratch, and `/pharn-loop` iterates. Before 6.20.4 the AC gate was consulted first, so `INCOMPLETE` could
+  not arise under `--ac-gate` at all and Step 2b could not fire. The full order is `check-verify.mjs`'s precedence
+  comment (cited, not restated — P4).
 - **Bound to the checker in the loop:** `check-loop-fresh.mjs` re-derives the report WITH `--ac-gate` and requires
   `ac_gate` to equal the re-derivation (over an unmoved tree), so the table a report shows is the one the checker
   computes — agreement, never provenance (L43).

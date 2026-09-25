@@ -411,8 +411,13 @@ node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-
 # partition: DELIVERY {ac-untested, ac-not-passed, ac-skipped} → failing_gates += ac-delivery (FAIL; /pharn-loop
 # iterates); EVIDENCE {ac-tests-modified, ac-never-red, test-infra-changed, test-infra-unpinned} → += ac-evidence (FAIL;
 # check-loop.mjs STOP_TERMINAL with terminal_cause ac-evidence → S13 blocked: ac-evidence-invalid); item 01's record
-# reasons → INCONCLUSIVE over green gates (a red gate beats it; no reason_code). Both ids are RESERVED_IDS and never
-# enter `gates`. Legacy SPEC → NOT-APPLICABLE, stated (with AC evidence beside it → ac-tests-modified); spec_kind:
+# reasons → INCONCLUSIVE over green gates (a red gate beats it; no reason_code). OVER AN INCOMPLETE BUILD (6.20.4):
+# only a red real gate or an EVIDENCE reason beats INCOMPLETE — delivery and unmeasured readings yield to it (the
+# ac_gate block stays in the report), because before 6.20.4 the AC gate came first and INCOMPLETE was unreachable
+# under --ac-gate, which /pharn-verify always passes, so /pharn-ship Step 2b's rebuild could not fire. A level gate run
+# through an explicit --gates is test-infra-changed (test-first) / ac-untested (bootstrap) BY DESIGN; its detail names
+# the explicit source and /pharn-verify Step 3a says not to pass --gates for such a feature. Both ids are
+# RESERVED_IDS and never enter `gates`. Legacy SPEC → NOT-APPLICABLE, stated (with AC evidence beside it → ac-tests-modified); spec_kind:
 # test-infra → BOOTSTRAP, weaker, labelled. THE TEST-INFRA PIN (lock schema ac-tests-lock/3, test-infra-core.mjs,
 # written by --write BEFORE the red run): the level gates' package.json script VALUES + pre/post scripts + testResults
 # formats, and root vitest/vite/playwright/jest config files in a CLOSED name set; the gate also requires each level
@@ -502,6 +507,12 @@ node .claude/hooks/require-loop-record.cjs --close <name>           # /pharn-loo
 # `head` == --base, and the two sides' SPECS agree. Both reports gain an ADDITIVE, ADVISORY `gate_run` block
 # and a `reason_code` on fail-closed exits — verified safe by READING all seven consumers, none of which
 # validates a closed top-level key set.
+# THE FLUSH RULE (6.20.4): check-verify, check-regress, check-loop and check-red-run END by setting
+# process.exitCode (the first three unwind with a module-private sentinel only their top-level catch swallows) —
+# never by an immediate exit, which dropped queued stdout: on darwin a piped verdict was cut at 64 KiB, and
+# check-loop-fresh.mjs check E JSON.parses check-verify's through spawnSync. A crash still exits non-zero.
+# pharn/floor/cli-stdout-flush.test.mjs pins the set statically (the platform-independent guard) and round-trips
+# >64 KiB through a pipe (which discriminates only where piped stdout is asynchronous — not on CI's Linux).
 node pharn/floor/check-verify.mjs --stamp <stamp.json> --feature <name>
 node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --base <40-hex> [--inside <list>]
 

@@ -132,7 +132,7 @@ function world({ levels = ["unit", "unit"], mapped = null } = {}) {
 }
 
 /** A finalized verify stamp over `runs` ([{id, exit, results?, argv?, shell?}]); results files land in `outDir`. */
-function stampOf(w, runs, { source = "discover" } = {}) {
+function stampOf(w, runs, { source = "discover", complete = 0 } = {}) {
   const rec = runs.map((g, seq) => {
     let results_sha256 = null;
     if (g.results != null) {
@@ -170,7 +170,7 @@ function stampOf(w, runs, { source = "discover" } = {}) {
     fingerprint: { algo: "x", init: A, final: A },
     required: runs.map((g) => g.id).filter((id) => id !== "reconcile"),
     runs: rec,
-    aux: { completeness: 0 },
+    aux: { completeness: complete },
   };
 }
 
@@ -528,12 +528,13 @@ test("an unusable SPEC is INCONCLUSIVE with no mode; an unreadable one too; ever
 
 // ── check-verify.mjs --ac-gate, end to end ────────────────────────────────────────────────────────────────────
 
-function verifyCli(w, runs, extra = []) {
-  const stamp = stampOf(w, runs);
+function verifyCli(w, runs, extra = [], { complete = 0, source } = {}) {
+  const stamp = stampOf(w, runs, { complete, source });
   const path = join(w.outDir, "stamp.json");
   writeFileSync(path, JSON.stringify(stamp));
   const r = spawnSync(process.execPath, [CHECK_VERIFY, "--stamp", path, "--feature", NAME, ...extra], { cwd: w.root, encoding: "utf8" });
-  return { code: r.status, doc: JSON.parse(r.stdout) };
+  // stdout is a PIPE here, exactly as in check-loop-fresh.mjs check E, so a document cut at 64 KiB fails JSON.parse.
+  return { code: r.status, doc: JSON.parse(r.stdout), bytes: Buffer.byteLength(r.stdout) };
 }
 
 test("★ check-verify --ac-gate: the AC verdict joins the FLOOR verdict — delivery and evidence ids, and PASS only when every AC is delivered", () => {
@@ -638,6 +639,147 @@ test("★ STOP_GREEN's precondition is unreachable for EVERY AC reason: check-ve
       if (expectId) assert.ok(r.doc.failing_gates.includes(expectId), `${reason}: ${JSON.stringify(r.doc.failing_gates)}`);
       else assert.equal(r.doc.verdict, "INCONCLUSIVE", reason);
     });
+  }
+});
+
+// ── check-verify --ac-gate × build-completeness (6.20.4 — INCOMPLETE was unreachable under --ac-gate) ──────────────
+
+/**
+ * THE PRECEDENCE, as data (L29 — the enumeration is the deliverable). Every cell of AC class × aux.completeness × the
+ * state of one real gate (`lint`), with the verdict and failing_gates check-verify --ac-gate must emit. Before 6.20.4
+ * the delivery and unmeasured rows over completeness 1 read FAIL / INCONCLUSIVE, so /pharn-ship Step 2b's rebuild
+ * (reachable only from INCOMPLETE) could not fire. L41: every --ac-gate fixture before this one used completeness 0.
+ */
+const PRECEDENCE = {
+  "none/0/green": ["PASS", []],
+  "none/1/green": ["INCOMPLETE", []],
+  "none/2/green": ["INCONCLUSIVE", []],
+  "none/0/red": ["FAIL", ["lint"]],
+  "none/1/red": ["FAIL", ["lint"]], // GATE-1 condition 3: a red real gate beats INCOMPLETE under --ac-gate
+  "none/2/red": ["FAIL", ["lint"]],
+  "delivery/0/green": ["FAIL", ["ac-delivery"]],
+  "delivery/1/green": ["INCOMPLETE", []], // the fix: not delivered yet, over a partial tree
+  "delivery/2/green": ["FAIL", ["ac-delivery"]],
+  "delivery/0/red": ["FAIL", ["ac-delivery", "lint"]],
+  "delivery/1/red": ["FAIL", ["ac-delivery", "lint"]], // GATE-1 condition 3
+  "delivery/2/red": ["FAIL", ["ac-delivery", "lint"]],
+  "evidence/0/green": ["FAIL", ["ac-evidence"]],
+  "evidence/1/green": ["FAIL", ["ac-evidence"]], // a rebuild cannot restore evidence: it beats INCOMPLETE
+  "evidence/2/green": ["FAIL", ["ac-evidence"]],
+  "evidence/0/red": ["FAIL", ["ac-evidence", "lint"]],
+  "evidence/1/red": ["FAIL", ["ac-evidence", "lint"]], // GATE-1 condition 3
+  "evidence/2/red": ["FAIL", ["ac-evidence", "lint"]],
+  "unmeasured/0/green": ["INCONCLUSIVE", []],
+  "unmeasured/1/green": ["INCOMPLETE", []], // the fix, option A (GATE 1): could-not-measure over a partial tree
+  "unmeasured/2/green": ["INCONCLUSIVE", []],
+  "unmeasured/0/red": ["FAIL", ["lint"]],
+  "unmeasured/1/red": ["FAIL", ["lint"]], // GATE-1 condition 3
+  "unmeasured/2/red": ["FAIL", ["lint"]],
+};
+const EXIT_OF = { PASS: 0, FAIL: 1, INCONCLUSIVE: 2, INCOMPLETE: 3 };
+
+test("★ check-verify --ac-gate PRECEDENCE over every AC class × completeness × real-gate cell (INCOMPLETE reachable again)", () => {
+  // One world per AC class; the `test` run that puts the gate in that class, over a green or red `lint`.
+  const classes = {
+    none: (w) => ({ id: "test", results: vitestDoc(w.root, w.results) }),
+    delivery: (w) => ({ id: "test", results: vitestDoc(w.root, setStatus(w.results, FILE(1), "AC-1: t", "skipped")) }),
+    evidence: (w) => (writeFileSync(join(w.root, FILE(1)), "edited\n"), { id: "test", results: vitestDoc(w.root, w.results) }),
+    unmeasured: () => ({ id: "test" }), // no per-test results → results-unavailable
+  };
+  const seen = new Set();
+  for (const [cls, testRun] of Object.entries(classes)) {
+    withWorld({}, (w) => {
+      const run = testRun(w);
+      for (const complete of [0, 1, 2]) {
+        for (const gate of ["green", "red"]) {
+          const key = `${cls}/${complete}/${gate}`;
+          const [verdict, failing] = PRECEDENCE[key];
+          const runs = [run, { id: "lint", exit: gate === "red" ? 1 : 0 }, { id: "reconcile" }];
+          const r = verifyCli(w, runs, ["--ac-gate"], { complete });
+          assert.equal(r.doc.verdict, verdict, `${key}: ${JSON.stringify(r.doc)}`);
+          assert.equal(r.code, EXIT_OF[verdict], key);
+          assert.deepEqual(r.doc.failing_gates, failing, key);
+          assert.ok(r.doc.ac_gate && typeof r.doc.ac_gate.verdict === "string", `${key}: the ac_gate block is kept`);
+          seen.add(key);
+        }
+      }
+    });
+  }
+  assert.deepEqual([...seen].sort(), Object.keys(PRECEDENCE).sort(), "every cell of the table was run");
+});
+
+test("★ the review's repro: a partly built spec_kind: test-infra feature reads INCOMPLETE, so Step 2b's rebuild can fire", () => {
+  const w = bootWorld(["unit"]);
+  try {
+    // `lint` is green; the `test` script is not written yet (no level gate ran); check-build-complete said 1.
+    let r = verifyCli(w, [{ id: "lint" }, { id: "reconcile" }], ["--ac-gate"], { complete: 1 });
+    assert.equal(r.code, 3, JSON.stringify(r.doc));
+    assert.equal(r.doc.verdict, "INCOMPLETE");
+    assert.deepEqual(r.doc.failing_gates, []);
+    assert.equal(r.doc.ac_gate.mode, "bootstrap");
+    assert.deepEqual(
+      r.doc.ac_gate.acs.map((a) => [a.id, a.reason]),
+      [["AC-1", "ac-untested"]],
+      "the AC reading stays in the report"
+    );
+    // the SAME tree, complete: the not-delivered AC is an ordinary delivery FAIL, unchanged
+    r = verifyCli(w, [{ id: "lint" }, { id: "reconcile" }], ["--ac-gate"], { complete: 0 });
+    assert.equal(r.code, 1);
+    assert.deepEqual(r.doc.failing_gates, ["ac-delivery"]);
+  } finally {
+    w.done();
+  }
+});
+
+test("★ a >64 KiB --ac-gate report reaches a PIPE whole (the check-loop-fresh check E shape: spawnSync + JSON.parse)", () => {
+  // The review's repro-big-acgate shape: 12 ACs × 40 parametrized tests with realistic long titles.
+  const NAC = 12;
+  const PER = 40;
+  withWorld({ levels: Array.from({ length: NAC }, () => "unit") }, (w) => {
+    const title = (id, k) => `${id}: Given a cart holding item #${k} and a logged-in customer When the customer pays Then an order exists`;
+    const lock = JSON.parse(readFileSync(w.lockPath, "utf8"));
+    lock.red_run.acs = w.ids.map((id) => ({
+      id,
+      tests: Array.from({ length: PER }, (_, k) => tid(FILE(id.slice(3)), title(id, k))).sort(),
+    }));
+    writeFileSync(w.lockPath, JSON.stringify(lock, null, 2));
+    const results = w.ids.flatMap((id) =>
+      Array.from({ length: PER }, (_, k) => ({ file: FILE(id.slice(3)), title: title(id, k), status: "passed" }))
+    );
+    const r = verifyCli(w, [{ id: "test", results: vitestDoc(w.root, results) }, { id: "reconcile" }], ["--ac-gate"]);
+    assert.equal(r.code, 0, `verdict ${r.doc.verdict}`);
+    assert.equal(r.doc.verdict, "PASS");
+    assert.ok(r.bytes > 65536, `the report must exceed the 64 KiB pipe buffer to test anything (${r.bytes} bytes)`);
+    assert.equal(r.doc.ac_gate.acs.length, NAC);
+    for (const ac of r.doc.ac_gate.acs) assert.equal(ac.tests.length, PER, ac.id);
+  });
+});
+
+test("★ an explicit --gates run NAMES itself in the detail (test-first and bootstrap); a shell or other argv does not", () => {
+  withWorld({}, (w) => {
+    const doc = vitestDoc(w.root, w.results);
+    const explicit = gateOf(w, { runs: [{ id: "test", results: doc }, { id: "reconcile" }], source: "explicit" });
+    only(explicit, "test-infra-changed", "FAIL");
+    assert.match(explicit.evidence[0].detail, /gate source is "explicit" .*re-run \/pharn-verify without --gates/);
+    const argv = gateOf(w, { runs: [{ id: "test", results: doc, argv: ["npx", "vitest", "run"] }, { id: "reconcile" }] });
+    only(argv, "test-infra-changed", "FAIL");
+    assert.doesNotMatch(argv.evidence[0].detail, /--gates/, "a discovered run never blames --gates");
+    assert.match(argv.evidence[0].detail, /shell or a command other than the discovered one/);
+  });
+  const b = bootWorld(["unit"]);
+  try {
+    const passed = vitestDoc(b.root, [{ file: "a.test.js", title: "t", status: "passed" }]);
+    const at = (runs, source) => evaluateAcGate({ feature: NAME, stamp: stampOf(b, runs, { source }), outDir: b.outDir, root: b.root });
+    const explicit = at([{ id: "test", results: passed }, { id: "reconcile" }], "explicit");
+    only(explicit, "ac-untested", "FAIL");
+    assert.match(explicit.acs[0].detail, /the test gate ran, but not as the discovered .*re-run \/pharn-verify without --gates/);
+    const argv = at([{ id: "test", results: passed, argv: ["npx", "vitest"] }, { id: "reconcile" }], "discover");
+    assert.doesNotMatch(argv.acs[0].detail, /--gates/);
+    assert.match(argv.acs[0].detail, /ran, but not as the discovered/);
+    const none = at([{ id: "lint" }, { id: "reconcile" }], "discover");
+    assert.match(none.acs[0].detail, /the runner is not delivered yet/, "no level gate ran at all: unchanged");
+  } finally {
+    b.done();
   }
 });
 

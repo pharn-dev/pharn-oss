@@ -109,4 +109,8 @@ export function main(argv) {
   return usage();
 }
 
-if (import.meta.main) process.exit(main(process.argv));
+// THE FLUSH RULE (6.20.4, the check-verify.mjs rule — its header says why): set the exit code and let the process end
+// naturally, so Node drains stdout first. Ending with an immediate exit call cut a piped stdout at 64 KiB on darwin,
+// and `--verdict` lists every failed test per AC. A throw inside main() is uncaught, so a crash stays a crash.
+// pharn/floor/cli-stdout-flush.test.mjs pins both.
+if (import.meta.main) process.exitCode = main(process.argv);

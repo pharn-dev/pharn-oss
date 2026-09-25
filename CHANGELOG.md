@@ -23,6 +23,55 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.20.4] - 2026-09-25
+
+### Fixed
+
+- 2026-09-25: **`/pharn-verify` under the 6.20.0 AC gate: INCOMPLETE is reachable again, a large verdict survives a
+  pipe, and Step 3a stops recommending the `--gates` form the AC gate reads as changed test infrastructure.** Three
+  verified review findings, one increment (`.dev/features/verify-ac-gate-fixes/`).
+  - **INCOMPLETE was unreachable under `--ac-gate`** (`pharn/floor/check-verify.mjs`). The AC gate's failing ids and
+    its INCONCLUSIVE were consulted before build-completeness, and `/pharn-verify` Step 5 always passes `--ac-gate`.
+    So a partly built `spec_kind: test-infra` feature (`lint` green, the `test` script not written yet) read
+    `FAIL ["ac-delivery"]`, and `/pharn-ship` Step 2b's single bounded rebuild, reachable only from `INCOMPLETE`,
+    could not fire. The new order: a red real gate → FAIL; an AC evidence reason → FAIL (a rebuild cannot restore
+    evidence taken before it); an incomplete build → **INCOMPLETE**, even when the AC gate is red for delivery reasons
+    only or could not measure; then the delivery FAIL, the unmeasured INCONCLUSIVE, completeness-inconclusive and
+    PASS, as before. The `ac_gate` block stays in the INCOMPLETE report. **Decided at GATE 1 (option A):** INCOMPLETE
+    also outranks an unmeasurable AC gate, because INCOMPLETE is never green, it spends at most one bounded rebuild
+    or loop iteration before the re-measured verdict stands, and it removes the bootstrap dead end (a configured
+    `testResults` whose reporter config is still missing reads `results-unavailable`, not delivery). **Without
+    `--ac-gate` the output is byte-identical** — the existing EQUIVALENCE and flag-less tests are unchanged and green.
+    Updated with it: the precedence comments, `verify-report.md` ("Over an incomplete build"), `ac-tests.md`,
+    `pharn-verify.md` (Step 3d, Step 5, the guarantee audit) and `pharn-ship.md` (the step-7 read, Step 2b).
+  - **A verdict past 64 KiB was cut short through a pipe** (`check-verify.mjs`, `check-regress.mjs`,
+    `check-loop.mjs`, `check-red-run.mjs`). Each printed and then exited at once, dropping queued stdout; on darwin a
+    piped stdout is asynchronous, so everything past the pipe buffer was lost (measured: 65,536 of 75,785 bytes for
+    12 ACs × 40 parametrized tests). `check-loop-fresh.mjs` check E re-runs `check-verify --ac-gate` through
+    `spawnSync` and `JSON.parse`s it, so such a feature read INCONCLUSIVE — `/pharn-loop` S11 — on every iteration
+    and at the commit gate. The three `emit`-style CLIs now set `process.exitCode` and unwind with a module-private
+    sentinel their top-level catch swallows (any other throw still escapes: a crash stays a crash, exit 1 with its
+    stack); `check-red-run.mjs` sets `process.exitCode = main(argv)`. **Bounded, and stated:** the set is the four
+    CLIs whose stdout a floor caller parses, plus the one the review named — a presence set (L36), so a future caller
+    that starts parsing another CLI's output owes it the same change; the platform-independent guard is a static pin
+    (no code line calls `process.exit(`), while the >64 KiB pipe round-trips discriminate only where piped stdout is
+    asynchronous (CI's Linux may not truncate at all, so each round-trip reports its measured negative control);
+    `spawnSync`'s 1 MiB default `maxBuffer` is not raised — past it the child is killed and `check-loop-fresh.mjs`
+    reads INCONCLUSIVE naming the checker (fail-closed; ~6,600 AC tests in one feature at the measured size).
+  - **Step 3a recommended an explicit `--gates`, which the AC gate reads as changed test infrastructure**
+    (`.claude/commands/pharn-verify.md`). Since 6.20.0 a level gate counts only when it ran as the discovered
+    `npm run <id>`, so `--gates` made a test-first feature `test-infra-changed` (FAIL `ac-evidence`, `/pharn-loop`'s
+    terminal S13) and every AC of a bootstrap feature `ac-untested`, and the Step 5 remedy (set the build aside,
+    re-run `/pharn-test`) could not help. The checker is right and unchanged in its reasons; the command now says not
+    to pass `--gates` for a feature with AC evidence, drops the PHARN-dogfood instruction to pass it, and gives this
+    branch its own remedy (re-run `/pharn-verify` without `--gates`). `pharn/floor/ac-gate-core.mjs` changes only the
+    free-text `detail`: it names the stamp's explicit gate source when that is the cause (test-first and bootstrap),
+    and a bootstrap level gate that ran but not as discovered no longer reads "the runner is not delivered yet".
+  - **One-time upgrade cost:** a `/pharn-loop` run that straddles this release — a verify report written by 6.20.3,
+    re-derived by 6.20.4 at `check-loop-fresh.mjs` check E — can stop with `report-verdict-mismatch` (S11) where the
+    verdict or an `ac_gate` detail moved; re-running `/pharn-verify` clears it. SKILLS_VERSION 6.20.3 → 6.20.4
+    (patch: corrections to shipped bytes); `MIN_CLI` unchanged.
+
 ## [6.20.3] - 2026-09-24
 
 ### Fixed
