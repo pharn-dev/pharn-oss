@@ -116,7 +116,8 @@ a test on a refusal:
 - `check-plan-spec-agree.mjs` non-zero → **`chain-red`**: the PLAN was made against other intent (`/pharn-plan`).
 - `check-ac-tests.mjs` (full) exit **1** → **`mapping-red`**: quote its `RED — <kind>` lines. The remedy is a re-plan
   (`/pharn-plan` owns AC-TESTS.md).
-- `check-ac-tests.mjs` exit **2** → **`mapping-unusable`**: a file is missing or unreadable.
+- `check-ac-tests.mjs` exit **2** → **`mapping-unusable`**: a file is missing or unreadable, or (6.21.1) the chain check
+  it shells crashed — its first line is then `UNUSABLE child-crashed — …`, no verdict on the pin.
 
 ## Step 2b — Is there a runner for every AC's level? (FLOOR — before a single test is written)
 
@@ -272,7 +273,8 @@ node pharn/floor/ac-tests-lock.mjs --check <name> --require-red-run --allow-boot
 ```
 
 A non-zero `--write-bootstrap` → **`bootstrap-refused`** (the SPEC is not Approved and un-drifted — the script
-re-runs `check-spec-approved.mjs` itself —, is not test-infra, or an AC-TESTS.md exists). `--allow-bootstrap` is the
+re-runs `check-spec-approved.mjs` itself —, is not test-infra, or an AC-TESTS.md exists; or, 6.21.1, that approval
+check crashed: `UNUSABLE child-crashed — …`, no verdict on the SPEC). `--allow-bootstrap` is the
 one place this command accepts a lock with no red run; `--require-red-run` alone refuses a bootstrap lock, so a later
 stage cannot mistake one for a recorded red run. The lock records `mode: bootstrap`, the SPEC's pin and its criteria levels. **This is WEAKER than
 test-first, and the record says so:** nothing showed a test failing before the build. The stronger post-build

@@ -2266,8 +2266,9 @@ test("✧ verify's pinned verdict line passes --ac-gate (6.20.0) — the flag ch
     for (const l of block.lines) if (/^\s*node pharn\/floor\/check-verify\.mjs /.test(l.text)) lines.push(l.text.trim());
   }
   assert.deepEqual(lines, ["node pharn/floor/check-verify.mjs --stamp .pharn/pharn-verify/gates/stamp.json --feature <name> --ac-gate"]);
-  // and the freshness checker's own re-run passes the same flag, so the two cannot drift apart (L45)
-  assert.match(readFileSync(join(REPO_ROOT, "pharn/floor/check-loop-fresh.mjs"), "utf8"), /"--feature", ctx\.feature, "--ac-gate"\]/);
+  // and the freshness checker's own re-run passes the same flag, so the two cannot drift apart (L45). The checker's
+  // code lives in loop-fresh-core.mjs since 6.21.1; check-loop-fresh.mjs is the entry that loads it.
+  assert.match(readFileSync(join(REPO_ROOT, "pharn/floor/loop-fresh-core.mjs"), "utf8"), /"--feature", ctx\.feature, "--ac-gate"\]/);
 });
 
 test("✧ the `--complete` hand-pass is RETIRED from the wired commands (completeness comes from the stamp)", () => {

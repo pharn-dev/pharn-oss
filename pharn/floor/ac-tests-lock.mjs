@@ -34,7 +34,8 @@
 // and results digests are RECORDED, not re-checkable, because the next run-gates `init` wipes `<out>`. `--check`
 // GREEN does not mean a red run happened — `--require-red-run` is the question that does, and a bootstrap lock (no red
 // run) answers it only when the caller also passes `--allow-bootstrap`. A bootstrap lock is written and checked only
-// over an Approved, un-drifted SPEC (check-spec-approved.mjs, shelled).
+// over an Approved, un-drifted SPEC (check-spec-approved.mjs, shelled; since 6.21.1 its result is read as a verdict by
+// shelled-verdict-core.mjs, so a crash of that check is no verdict — `UNUSABLE child-crashed — …` — never a RED).
 //
 // FLOOR (primitive #2, content-hash): `--check` recomputes every recorded digest, the set of `## Files` paths and the
 // test-infrastructure pin, and REDs naming the PATH or gate id, never the file's content. The check is composed of
@@ -60,7 +61,8 @@
 //                  `## Files` / no usable `## Mapping`, a listed file missing or not a regular file, a test
 //                  infrastructure that cannot be pinned — an unparseable package.json, a symlinked runner config)
 //       --write-bootstrap  0 written · 2 refused (the SPEC is not Approved and un-drifted, is not
-//                  `spec_kind: test-infra`, has no usable criteria, or an AC-TESTS.md exists)
+//                  `spec_kind: test-infra`, has no usable criteria, or an AC-TESTS.md exists; or, since 6.21.1, the
+//                  approval check crashed — first line `UNUSABLE child-crashed — …`)
 //       --record-red-run  0 recorded · 1 the red run is not GREEN, or `--check` is RED (nothing written) ·
 //                  2 unusable (no lock, a bootstrap or /1 lock, no finished stamp, a stamp not bound to the mapping)
 //       --check  0 GREEN · 1 RED (a pinned file or AC-TESTS.md changed, went missing or is no longer a regular
@@ -68,7 +70,9 @@
 //                  `files`; /3 test-first: the test-infrastructure pin no longer holds; bootstrap: the SPEC's pin, kind or levels changed, or an AC-TESTS.md appeared;
 //                  `--require-red-run`: a test-first lock with no `red_run`, any /1 lock, and a bootstrap lock unless
 //                  `--allow-bootstrap`; bootstrap: the SPEC is no longer Approved and un-drifted) · 2 unusable (bad
-//                  usage, no lock, a lock that is not JSON or not the closed shape)
+//                  usage, no lock, a lock that is not JSON or not the closed shape; or, since 6.21.1, a bootstrap
+//                  lock with no RED whose approval check crashed — first line `UNUSABLE child-crashed — …`, which
+//                  check-test-stage.mjs reads as UNUSABLE; beside a RED the exit stays 1 and the crash is named)
 // Test-file paths resolve against the CURRENT directory (the project root), as the setter resolves them; `--base`
 // moves only where AC-TESTS.md and the lock live, and the mapping path is compared resolved, never as spelled.
 
@@ -84,6 +88,7 @@ import { specAcceptanceCriteria } from "./spec-template-core.mjs";
 import { RESULTS_GATES } from "./test-results-core.mjs";
 import { evaluateRedRun } from "./red-run-core.mjs";
 import { computeTestInfra, pinShapeError, sha256RegularFile, testInfraReds } from "./test-infra-core.mjs";
+import { childCrashedLine, crashedDetail, shelledVerdict } from "./shelled-verdict-core.mjs";
 
 export { sha256RegularFile };
 
@@ -216,12 +221,17 @@ export function readSpecFacts(name, base, root) {
 
 /** Is SPEC.md Approved and un-drifted? SHELLED to check-spec-approved.mjs (P3 — the one implementation of that
  *  verdict), because a bootstrap lock has no AC-TESTS.md for check-ac-tests.mjs to bind the pin through (REVIEW
- *  finding 3: without this, a Draft with an invented pin got a GREEN bootstrap lock). A reason, or null. */
-function specApprovalError(name, base, root) {
+ *  finding 3: without this, a Draft with an invented pin got a GREEN bootstrap lock). `{red, crash}`, both null when
+ *  it is. Since 6.21.1 the result is read as a VERDICT (shelled-verdict-core.mjs): a crash is no verdict on the
+ *  approval, never a RED — check-test-stage.mjs reads this script's RED as `lock-red`, which /pharn-loop stops on as
+ *  S13. */
+function specApproval(name, base, root) {
   const specPath = join(base, name, SPEC_NAME);
   const r = spawnSync(process.execPath, [CHECK_SPEC_APPROVED, resolve(root, specPath)], { encoding: "utf8" });
-  if (r.error) return `could not run check-spec-approved.mjs: ${r.error.message}`;
-  return r.status === 0 ? null : `${specPath} is not an Approved, un-drifted SPEC (check-spec-approved.mjs exit ${r.status})`;
+  const verdict = shelledVerdict(r);
+  if (verdict === "green") return { red: null, crash: null };
+  if (verdict === "red") return { red: `${specPath} is not an Approved, un-drifted SPEC (check-spec-approved.mjs exit 1)`, crash: null };
+  return { red: null, crash: crashedDetail("check-spec-approved.mjs", r, "the SPEC's approval was not checked") };
 }
 
 /** The BOOTSTRAP lock for a `spec_kind: test-infra` SPEC: no mapping, no files, no red run — the levels the setup
@@ -231,8 +241,9 @@ export function buildBootstrapLock(name, base, root) {
   if (typeof name !== "string" || !SLUG_RE.test(name)) return { ok: false, reason: `<name> must be a plain slug matching ${SLUG_RE}` };
   const facts = readSpecFacts(name, base, root);
   if (!facts.ok) return facts;
-  const approval = specApprovalError(name, base, root);
-  if (approval) return { ok: false, reason: approval };
+  const approval = specApproval(name, base, root);
+  if (approval.crash) return { ok: false, crashed: true, reason: approval.crash };
+  if (approval.red) return { ok: false, reason: approval.red };
   if (facts.kind !== "test-infra")
     return { ok: false, reason: `the SPEC is not \`spec_kind: test-infra\` (${facts.kind ?? "an invalid spec_kind"}) — use --write` };
   if (facts.levels === null)
@@ -462,24 +473,29 @@ export function pinReds(lock, root) {
   return testInfraReds({ recorded: lock.test_infra, root }).map((d) => `test infrastructure changed — ${d}`);
 }
 
-/** Compare a recorded lock with the tree. Returns the RED lines (empty = GREEN). Each names a PATH or a gate id, never
- *  content. The union of the pure parts above, plus the bootstrap APPROVAL spawn. `requireRedRun`: a test-first lock
- *  must carry `red_run` (a /1 lock never can), and a BOOTSTRAP lock — which has no red run at all — fails it too unless
+/** Compare a recorded lock with the tree. Returns `{reds, crash}`: the RED lines (empty = GREEN), each naming a PATH or
+ *  a gate id, never content; and, for a BOOTSTRAP lock whose approval check crashed (6.21.1), that crash's detail —
+ *  no verdict on the approval, never a RED. The union of the pure parts above, plus the bootstrap APPROVAL spawn; a
+ *  test-first lock spawns nothing, so its `crash` is always null. `requireRedRun`: a test-first lock must carry
+ *  `red_run` (a /1 lock never can), and a BOOTSTRAP lock — which has no red run at all — fails it too unless
  *  `allowBootstrap` says the caller accepts the weaker evidence (REVIEW finding 2: exit 0 must never let a caller
  *  mistake a bootstrap for a recorded red run). Test-file paths and the pin resolve against the current directory. */
 export function checkLock(lock, name, base, { requireRedRun = false, allowBootstrap = false, root } = {}) {
   if (typeof root !== "string" || root === "") throw new TypeError("checkLock: `root` must be a non-empty string");
   if (modeOf(lock) === "bootstrap") {
     const facts = readSpecFacts(name, base, root);
-    const approval = facts.ok ? specApprovalError(name, base, root) : null;
+    const approval = facts.ok ? specApproval(name, base, root) : { red: null, crash: null };
     const reds = bootstrapReds(lock, name, base, root);
-    if (approval) reds.unshift(approval);
+    if (approval.red) reds.unshift(approval.red);
     if (requireRedRun && !allowBootstrap) {
       reds.push("the lock is a BOOTSTRAP lock: no red run exists — pass --allow-bootstrap only where a bootstrap is accepted");
     }
-    return reds;
+    return { reds, crash: approval.crash };
   }
-  return [...testFirstReds(lock, name, base, root), ...redRunReds(lock, name, base, root, { requireRedRun }), ...pinReds(lock, root)];
+  return {
+    reds: [...testFirstReds(lock, name, base, root), ...redRunReds(lock, name, base, root, { requireRedRun }), ...pinReds(lock, root)],
+    crash: null,
+  };
 }
 
 /** The mapped AC ids in AC-number order (the order `red_run.acs` is written in). */
@@ -516,8 +532,11 @@ function loadLock(lockPath, name) {
   return { ok: true, lock };
 }
 
-function printReds(reds, what) {
+/** The RED lines and the closing summary. A crash beside them (6.21.1) is named before the summary, never counted: the
+ *  REDs are a verdict whatever the crashed check would have said. */
+function printReds(reds, what, crash = null) {
   for (const r of reds) console.log(`RED — ${r}`);
+  if (crash) console.log(childCrashedLine(crash));
   console.log(`\nRED — ${reds.length} ${what} failed`);
 }
 
@@ -538,7 +557,8 @@ function recordRedRun(name, base, lockPath, out) {
     );
     return 2;
   }
-  const reds = checkLock(lock, name, base, { root: process.cwd() });
+  // A test-first lock's check spawns nothing, so it has no crash to report (checkLock returns `crash: null` for it).
+  const { reds } = checkLock(lock, name, base, { root: process.cwd() });
   if (reds.length) {
     printReds(reds, "AC-tests lock check(s)");
     return 1;
@@ -599,7 +619,7 @@ function main(argv) {
   if (mode === "--write" || mode === "--write-bootstrap") {
     const built = mode === "--write" ? buildLock(name, base, process.cwd()) : buildBootstrapLock(name, base, process.cwd());
     if (!built.ok) {
-      console.log(`UNUSABLE — ${built.reason}`);
+      console.log(built.crashed ? childCrashedLine(built.reason) : `UNUSABLE — ${built.reason}`);
       return 2;
     }
     writeLock(lockPath, built.lock);
@@ -622,14 +642,19 @@ function main(argv) {
     return 2;
   }
   const lock = loaded.lock;
-  const reds = checkLock(lock, name, base, {
+  const { reds, crash } = checkLock(lock, name, base, {
     root: process.cwd(),
     requireRedRun: args.includes("--require-red-run"),
     allowBootstrap: args.includes("--allow-bootstrap"),
   });
   if (reds.length) {
-    printReds(reds, "AC-tests lock check(s)");
+    printReds(reds, "AC-tests lock check(s)", crash);
     return 1;
+  }
+  if (crash) {
+    // No RED and no approval verdict: unusable, the report FIRST — check-test-stage.mjs reads it there (6.21.1).
+    console.log(childCrashedLine(crash));
+    return 2;
   }
   if (modeOf(lock) === "bootstrap") {
     console.log(
