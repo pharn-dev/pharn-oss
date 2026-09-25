@@ -23,6 +23,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.20.6] - 2026-09-25
+
+### Fixed
+
+- 2026-09-25: **`/pharn-loop`'s freshness checker stops a forged verify report after the tree moves, and a crashed
+  test-stage child no longer reads as stale AC evidence.** Two verified review findings. `SKILLS_VERSION` 6.20.5 →
+  6.20.6 (PATCH: both restore behaviour the shipped headers and CHANGELOG [6.20.0] already promised; no contract shape,
+  frontmatter or command step changes). `MIN_CLI` stays 0.5.0.
+  ([`.dev/features/loop-fresh-integrity/`](./.dev/features/loop-fresh-integrity/))
+  - `pharn/floor/check-loop-fresh.mjs`, check E: since 6.20.0, once the live tree differed from the verify stamp, E
+    compared only `gates`. So a `verify-report.json` forged to `PASS` with `failing_gates: []` over a stamp with a red
+    gate, followed by any edit, read `RERUN tree-moved-since-verify`. The re-run then overwrote the forgery, so it was
+    never named. At the commit gate it read `STOP tree-moved-since-verify`. Over a moved tree E now re-derives WITHOUT
+    `--ac-gate`, a pure function of the stamp, and compares what the stamp alone decides (`stampDerivedMismatch`):
+    `gates`, `failing_gates` without the two AC ids, and the verdict (`FAIL` whenever any id fails, else the
+    stamp-only verdict or `INCONCLUSIVE`). A forgery there is `STOP report-verdict-mismatch` in both modes. Only the AC
+    part (the one part that reads the live tree) still defers to check F. A forgery confined to it is re-run, never
+    trusted, and the commit gate stops on it; that bound is stated in the header and in
+    `pharn-contracts/verify-report.md`. The relation accepts both check-verify `--ac-gate` precedences, 6.20.0's and
+    6.20.4's (INCOMPLETE outranks a delivery-only or unmeasurable AC gate). A differential test runs the real
+    check-verify both ways over an enumerated set of honest worlds, so a later precedence change is re-checked
+    against it.
+  - `pharn/floor/gate-run-core.mjs` names the AC half of `RESERVED_IDS` as `AC_RESERVED_IDS` (value unchanged). E
+    takes the AC ids from there rather than importing `ac-gate-core.mjs`, which would have added five modules to the
+    checker's own load graph. A test pins `AC_RESERVED_IDS` to the AC gate's `FAILING_IDS`.
+  - `pharn/floor/check-test-stage.mjs`: a child checker that crashed (an uncaught throw or a module that failed to
+    load, which is node's exit 1, the same code as the child's RED) was reported as `RED lock-red` or
+    `RED mapping-red`. check-loop-fresh check I then routed it to `ac-evidence-invalid` (/pharn-loop S13: "set the
+    build aside and re-run /pharn-test"). It now reads exit 1 as a RED only when the child printed its closing
+    `RED —` line on stdout, which a test pins for every exit-1 return in both children. Otherwise it reports
+    `UNUSABLE`, exit 2, which check I keeps as `front-stage-red` (S11) and /pharn-build, /pharn-ship and /pharn-loop
+    already refuse on. Stated bound: a crash one level further down (a checker a child itself shells) is still read by
+    that child as its own RED; only an input-dependent crash of `check-plan-spec-agree.mjs` over AC-TESTS.md escapes
+    check I's own earlier runs.
+  - Prose that described check E as always re-deriving with `--ac-gate`, or a crash as a RED, now matches:
+    `pharn-contracts/verify-report.md`, `pharn-contracts/ac-tests.md`, `pharn-loop.md`, `pharn-verify.md` and
+    `CLAUDE.md`.
+  - **Not here, named follow-ups:** `loop-fresh-load-crash`: check-loop-fresh's own load failure exits node's 1,
+    which is its RERUN code, with no JSON. That is also where the review's cited trigger (an unloadable
+    `test-infra-core.mjs`) actually lands. `nested-child-crash` is the grandchild case above.
+
 ## [6.20.5] - 2026-09-25
 
 ### Fixed

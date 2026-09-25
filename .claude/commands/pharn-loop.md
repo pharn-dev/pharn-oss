@@ -783,14 +783,17 @@ Then **end your turn**. Do not ask a question, do not push, do not merge, do not
   membership of `ac-evidence` in `failing_gates` when verify is `FAIL` → `STOP_TERMINAL` with `terminal_cause`
   `ac-evidence`; `ac-delivery` is an ordinary red; tested, including a report that trips both it and `reconcile`).
   Both ids are `check-verify.mjs --ac-gate`'s, and `check-loop-fresh.mjs` re-derives the report WITH that flag and
-  compares its `ac_gate` block, so a report that drops an AC red does not reach this decision. **Bounded:** the same
+  compares its `ac_gate` block over an unchanged tree — after an edit, when the AC gate's inputs are gone, that part
+  re-runs `/pharn-verify` instead and the commit gate stops — so a report that drops an AC red does not reach this
+  decision. **Bounded:** the same
   bounds as the AC gate itself (`pharn/floor/ac-gate-core.mjs`); and the S13 mapping is command prose over those two
   closed tokens (ADVISORY), like every other row.
 - **"A reconcile red is never retried"** → **FLOOR** (`check-loop.mjs`: exact membership of `reconcile` in
   `failing_gates` when verify is `FAIL`, tested). The key is no longer the model's to write: the runner
   injects `reconcile` with a fixed argv and checks coverage (`gate-run-record.md`), and
-  `check-loop-fresh.mjs` requires the report's `failing_gates` to equal what `check-verify.mjs` computes
-  from that stamp now, and the stamp to describe the live tree. A report that DROPS `reconcile` from
+  `check-loop-fresh.mjs` requires the report's `failing_gates` (without the two AC ids, once the tree has
+  moved — 6.20.6) to equal what `check-verify.mjs` computes from that stamp now, and the stamp to describe the live
+  tree. A report that DROPS `reconcile` from
   `failing_gates` is a `report-verdict-mismatch` stop. The residual is forgery of the stamp itself (below).
 - **"The stop is read only from evidence about THIS tree, and a stale or skipped stage is re-run"** →
   **FLOOR** (`check-loop-fresh.mjs`, tested — content-hash + enum membership + a live re-derivation via

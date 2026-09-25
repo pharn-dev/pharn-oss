@@ -6,7 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -501,6 +501,89 @@ test("★ WIRING — /pharn-loop's Step 6c staging builder, EXECUTED: stages the
   } finally {
     rmSync(repo, { recursive: true, force: true });
   }
+});
+
+// ── a CRASHED child is unusable, never its RED (6.20.6, 2026-09-24 review finding 2) ─────────────────────────────────
+
+/** The product floor (no tests, no fixtures) with pharn-contracts beside it, copied so ONE module can be broken. */
+function floorCopy() {
+  const dir = mkdtempSync(join(tmpdir(), "cts-floor-"));
+  cpSync(HERE, join(dir, "pharn", "floor"), {
+    recursive: true,
+    filter: (src) => !src.endsWith(".test.mjs") && !src.includes("test-fixtures"),
+  });
+  cpSync(join(HERE, "..", "pharn-contracts"), join(dir, "pharn", "pharn-contracts"), { recursive: true });
+  return dir;
+}
+/** Replace ONE exact source anchor in a copied module; a missing anchor fails loudly (the source moved on). */
+function inject(file, anchor, replacement) {
+  const src = readFileSync(file, "utf8");
+  assert.equal(src.split(anchor).length, 2, `the anchor must occur exactly once in ${file}`);
+  writeFileSync(file, src.replace(anchor, replacement));
+}
+const CRASHES = [
+  [
+    "the lock child's dependency throws at load",
+    "ac-tests-lock.mjs",
+    (f) => appendFileSync(join(f, "test-infra-core.mjs"), "\nthrow new Error('simulated module-load failure');\n"),
+  ],
+  ["the lock child's dependency is missing", "ac-tests-lock.mjs", (f) => unlinkSync(join(f, "test-infra-core.mjs"))],
+  [
+    "the mapping child throws at run time (after its --spec answer)",
+    "check-ac-tests.mjs",
+    (f) =>
+      inject(
+        join(f, "check-ac-tests.mjs"),
+        "const { findings } = checkMapping(",
+        "throw new Error('simulated crash'); const { findings } = checkMapping("
+      ),
+  ],
+];
+
+test("a CRASHED child (exit 1 with no RED line) is UNUSABLE, exit 2 — never read as its RED (lock AND mapping branch)", () => {
+  withWorld(testFirst, (root) => {
+    const run = (copy) =>
+      spawnSync(process.execPath, [join(copy, "pharn", "floor", "check-test-stage.mjs"), NAME, "--require-test-first"], {
+        cwd: root,
+        encoding: "utf8",
+      });
+    const intact = floorCopy();
+    try {
+      const ok = run(intact);
+      assert.equal(ok.status, 0, `control: the intact copy passes the same world: ${ok.stdout}`);
+      assert.match(ok.stdout.split("\n")[0], /^READY test-first — /);
+    } finally {
+      rmSync(intact, { recursive: true, force: true });
+    }
+    for (const [label, child, breakIt] of CRASHES) {
+      const copy = floorCopy();
+      try {
+        breakIt(join(copy, "pharn", "floor"));
+        const r = run(copy);
+        assert.equal(r.status, 2, `${label}: ${r.stdout}`);
+        const first = r.stdout.split("\n")[0];
+        assert.match(first, new RegExp(`^UNUSABLE — ${child.replace(".", "\\.")} exited 1 without its closing RED line`), label);
+        assert.doesNotMatch(first, /^RED /, label);
+      } finally {
+        rmSync(copy, { recursive: true, force: true });
+      }
+    }
+  });
+});
+
+test("✧ L29 CLOSURE — every `return 1` in both shelled children prints its `RED — ` line first (what the crash rule rests on)", () => {
+  let sites = 0;
+  for (const child of ["check-ac-tests.mjs", "ac-tests-lock.mjs"]) {
+    const lines = readFileSync(join(HERE, child), "utf8").split("\n");
+    assert.doesNotMatch(lines.join("\n"), /process\.exit\(1\)|exitCode\s*=\s*1/, `${child}: an exit-1 route outside \`return 1\``);
+    lines.forEach((l, i) => {
+      if (!/^\s*return 1;/.test(l)) return;
+      sites++;
+      const before = lines.slice(Math.max(0, i - 8), i).join("\n");
+      assert.match(before, /printReds\(|RED — /, `${child}:${i + 1} returns 1 without printing a RED line first`);
+    });
+  }
+  assert.ok(sites >= 4, `the scan found the exit-1 sites (${sites})`);
 });
 
 // ── closure (L36) ───────────────────────────────────────────────────────────────────────────────────────

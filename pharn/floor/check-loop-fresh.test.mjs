@@ -35,8 +35,9 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fingerprint, ALGO } from "./worktree-fingerprint.mjs";
-import { SCHEMA, LAPSE_CODES, REASON_CODES, logBasename, resultsFileName } from "./gate-run-core.mjs";
+import { SCHEMA, LAPSE_CODES, REASON_CODES, AC_RESERVED_IDS, RESERVED_IDS, logBasename, resultsFileName } from "./gate-run-core.mjs";
 import { filesDigest } from "./ac-tests-lock.mjs";
+import { FAILING_IDS } from "./ac-gate-core.mjs";
 import {
   evaluate,
   parseArgs,
@@ -48,7 +49,7 @@ import {
   LEDGER_FILE,
   EXIT,
   COMPARED_FIELDS,
-  STAMP_ONLY_FIELDS,
+  stampDerivedMismatch,
 } from "./check-loop-fresh.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -164,10 +165,11 @@ function writeStamp(proj, stampRel, { stage, side, head, init, final, runs, comp
     writeFileSync(join(out, `${b}.out`), `out ${id} ${exit}\n`);
     writeFileSync(join(out, `${b}.err`), "");
     // The verify `test` gate writes its per-test results (6.15.0), which the AC gate reads (6.20.0): AC-1's test,
-    // passed when the gate exited 0 unless a third element says otherwise.
+    // passed when the gate exited 0 unless a third element says otherwise; `malformed` is a hash-consistent file no
+    // adapter can read — the AC gate's UNMEASURABLE reading (6.20.6 tests).
     let results_sha256 = null;
     if (stage === "verify" && id === "test") {
-      const doc = vitestDoc(proj, acStatus ?? (exit === 0 ? "passed" : "failed"));
+      const doc = acStatus === "malformed" ? "{ not json" : vitestDoc(proj, acStatus ?? (exit === 0 ? "passed" : "failed"));
       writeFileSync(join(out, resultsFileName(seq, id)), doc);
       results_sha256 = sha256(Buffer.from(doc));
     }
@@ -225,6 +227,7 @@ function iterate(
       ["reconcile", 0],
     ],
     regressRuns = [["test", 0]],
+    completeness = 0,
   } = {}
 ) {
   const { proj, base } = r;
@@ -262,7 +265,7 @@ function iterate(
       init: fp.digest,
       final: fp.digest,
       runs: verifyRuns,
-      completeness: 0,
+      completeness,
     });
     const rep = runChecker(proj, "check-verify.mjs", ["--stamp", join(proj, DEFAULT_STAMPS.verify), "--feature", FEATURE, "--ac-gate"]);
     rep.completeness = { complete: true, missing: [], skipped: [] };
@@ -294,8 +297,12 @@ test("✧ L34/L52 — the check set is exactly A–J in evaluation order, fabric
     CHECKS.indexOf("J") < CHECKS.indexOf("F") && CHECKS.indexOf("E") < CHECKS.indexOf("F") && CHECKS.indexOf("H") < CHECKS.indexOf("G")
   );
   assert.deepEqual(COMPARED_FIELDS.verify, ["verdict", "failing_gates", "gates", "ac_gate"]);
-  assert.deepEqual(STAMP_ONLY_FIELDS, ["gates"]);
-  assert.ok(STAMP_ONLY_FIELDS.every((f) => COMPARED_FIELDS.verify.includes(f)));
+  // The AC ids E subtracts over a moved tree (6.20.6): gate-run-core's named half, which must AGREE with the AC gate's
+  // own FAILING_IDS (L43 — two stores of one fact, pinned), sit inside RESERVED_IDS, and never include a real gate id.
+  assert.ok(Object.isFrozen(AC_RESERVED_IDS));
+  assert.deepEqual([...AC_RESERVED_IDS].sort(), Object.values(FAILING_IDS).sort());
+  assert.ok(AC_RESERVED_IDS.every((id) => RESERVED_IDS.includes(id)));
+  assert.ok(!AC_RESERVED_IDS.includes("reconcile"), "reconcile is a real verify gate — never subtracted");
   assert.deepEqual(COMPARED_FIELDS.regress, ["verdict", "regressions", "pre_existing", "outside_gates"]);
   assert.ok(LAPSE_CODES.length > 0 && LAPSE_CODES.every((c) => REASON_CODES.includes(c)));
 });
@@ -578,6 +585,201 @@ test("E defers to F when the tree moved (grill G6): the AC gate reads the live t
     expect(evaluate(args(r)), { code: EXIT.FRESH, verdict: "FRESH" });
     writeJ(p, { ...v, ac_gate: { ...v.ac_gate, acs: v.ac_gate.acs.map((a) => ({ ...a, tests: ["forged"] })) } });
     expect(evaluate(args(r)), { code: EXIT.STOP, verdict: "STOP", reason_code: "report-verdict-mismatch" });
+  });
+});
+
+// ── E over a MOVED tree compares what the stamp alone decides (6.20.6, 2026-09-24 review finding 1) ────────────────────
+
+/** Each world: the verify evidence it is built from, and the forgeries of its STAMP-DERIVED part — every one must STOP
+ *  over a moved tree in both modes (L29: the set is the deliverable, iterated below). */
+const MOVED_TREE_WORLDS = [
+  {
+    name: "a red test gate (honest FAIL [ac-delivery, test]) — the review's forgery",
+    opts: {
+      verifyRuns: [
+        ["test", 1],
+        ["reconcile", 0],
+      ],
+    },
+    forgeries: [
+      (v) => ({ ...v, verdict: "PASS", failing_gates: [] }),
+      (v) => ({ ...v, failing_gates: ["ac-delivery"] }),
+      (v) => ({ ...v, verdict: "INCOMPLETE", failing_gates: [] }),
+      (v) => ({ ...v, failing_gates: "test" }),
+    ],
+  },
+  {
+    name: "a reconcile red (honest FAIL [reconcile])",
+    opts: {
+      verifyRuns: [
+        ["test", 0],
+        ["reconcile", 1],
+      ],
+    },
+    forgeries: [(v) => ({ ...v, failing_gates: [] }), (v) => ({ ...v, verdict: "PASS", failing_gates: [] })],
+  },
+  {
+    name: "an incomplete build (honest INCOMPLETE [])",
+    opts: { completeness: 1 },
+    forgeries: [(v) => ({ ...v, verdict: "PASS" })],
+  },
+  {
+    name: "a green iteration (honest PASS [])",
+    opts: {},
+    forgeries: [(v) => ({ ...v, verdict: "PASS", failing_gates: ["ac-delivery"] }), (v) => ({ ...v, verdict: "FAIL" })],
+  },
+];
+
+test("E over a MOVED tree: a forgery of anything the stamp alone decides STOPs report-verdict-mismatch (iteration AND commit gate); the honest report still re-runs", () => {
+  withRepo((r) => {
+    let iter = 0;
+    const at = (extra) => ["--feature", FEATURE, "--base", r.base, "--repo", r.proj, ...extra];
+    const p = reportPath(r, "verify-report.json");
+    for (const w of MOVED_TREE_WORLDS) {
+      git(r.root, "checkout", "--", ".");
+      iterate(r, w.opts);
+      const keep = readFileSync(p);
+      writeFileSync(join(r.proj, "a.txt"), `moved under ${w.name}\n`);
+      // the honest report over the moved tree: staleness, re-run (a fresh --iter each, so the budget never decides)
+      let res = evaluate(at(["--iter", String(++iter)]));
+      expect(res, { code: EXIT.RERUN, verdict: "RERUN", reason_code: "tree-moved-since-verify", stage: "verify" });
+      assert.equal(res.doc.checks.E, "pass", `${w.name}: E let the honest report through`);
+      expect(evaluate(at(["--commit-gate"])), { code: EXIT.STOP, verdict: "STOP", reason_code: "tree-moved-since-verify" });
+      for (const forge of w.forgeries) {
+        writeJ(p, forge(JSON.parse(keep)));
+        res = evaluate(at(["--iter", String(++iter)]));
+        expect(res, { code: EXIT.STOP, verdict: "STOP", reason_code: "report-verdict-mismatch" });
+        assert.equal(res.doc.checks.E, "fail", `${w.name}: the forgery was named by E`);
+        expect(evaluate(at(["--commit-gate"])), { code: EXIT.STOP, verdict: "STOP", reason_code: "report-verdict-mismatch" });
+      }
+      writeFileSync(p, keep);
+    }
+  });
+});
+
+test("THE STATED RESIDUAL: a forgery confined to the AC part over a moved tree is re-run (never trusted), and the commit gate stops", () => {
+  withRepo((r) => {
+    // the AC gate could not measure (a hash-consistent malformed results file): honest INCONCLUSIVE over green gates
+    iterate(r, {
+      verifyRuns: [
+        ["test", 0, "malformed"],
+        ["reconcile", 0],
+      ],
+    });
+    const p = reportPath(r, "verify-report.json");
+    assert.equal(readJ(p).verdict, "INCONCLUSIVE", "precondition: the AC gate is unmeasurable");
+    writeJ(p, { ...readJ(p), verdict: "PASS" });
+    expect(evaluate(args(r)), { code: EXIT.STOP, verdict: "STOP", reason_code: "report-verdict-mismatch" });
+    writeFileSync(join(r.proj, "a.txt"), "moved\n");
+    expect(evaluate(args(r)), { code: EXIT.RERUN, verdict: "RERUN", reason_code: "tree-moved-since-verify", stage: "verify" });
+    expect(evaluate(["--feature", FEATURE, "--base", r.base, "--repo", r.proj, "--commit-gate"]), {
+      code: EXIT.STOP,
+      verdict: "STOP",
+      reason_code: "tree-moved-since-verify",
+    });
+  });
+});
+
+test("stampDerivedMismatch — each field named; the GATE-1 merge-order pins accept BOTH check-verify precedences", () => {
+  const gates = { reconcile: 0, test: 0 };
+  const incomplete = { gates, failing_gates: [], verdict: "INCOMPLETE" };
+  // over an INCOMPLETE stamp: group C's precedence (INCOMPLETE outranks a delivery-only or unmeasurable AC gate) and
+  // 6.20.0's (a delivery red is FAIL, an unmeasurable gate INCONCLUSIVE) are both honest; PASS is not
+  assert.equal(stampDerivedMismatch({ gates, failing_gates: [], verdict: "INCOMPLETE" }, incomplete), null);
+  assert.equal(stampDerivedMismatch({ gates, failing_gates: ["ac-delivery"], verdict: "FAIL" }, incomplete), null);
+  assert.equal(stampDerivedMismatch({ gates, failing_gates: [], verdict: "INCONCLUSIVE" }, incomplete), null);
+  assert.equal(stampDerivedMismatch({ gates, failing_gates: [], verdict: "PASS" }, incomplete), "verdict");
+  const pass = { gates, failing_gates: [], verdict: "PASS" };
+  const red = { gates: { reconcile: 0, test: 1 }, failing_gates: ["test"], verdict: "FAIL" };
+  for (const [report, stampOnly, want] of [
+    [{ gates: { reconcile: 0, test: 1 }, failing_gates: [], verdict: "PASS" }, pass, "gates"],
+    [{ gates, failing_gates: "none", verdict: "PASS" }, pass, "failing_gates"],
+    [{ gates, failing_gates: ["bogus"], verdict: "FAIL" }, pass, "failing_gates"],
+    [{ ...red, failing_gates: [] }, red, "failing_gates"],
+    [{ ...red, failing_gates: ["ac-delivery"] }, red, "failing_gates"],
+    [{ ...red, verdict: "PASS" }, red, "verdict"],
+    [{ gates, failing_gates: [], verdict: "FAIL" }, pass, "verdict"],
+    [{ gates, failing_gates: ["ac-evidence"], verdict: "PASS" }, pass, "verdict"],
+    [{ ...red, failing_gates: ["ac-delivery", "ac-evidence", "test"] }, red, null],
+    [{ gates, failing_gates: ["ac-evidence"], verdict: "FAIL" }, pass, null],
+    [{ gates, failing_gates: [], verdict: "INCONCLUSIVE" }, pass, null],
+    [pass, pass, null],
+    // stated bound: a hand-made stamp whose GATE is named like an AC id reads as a mismatch — a STOP, fail-closed
+    [
+      { gates: { "ac-delivery": 1 }, failing_gates: ["ac-delivery"], verdict: "FAIL" },
+      { gates: { "ac-delivery": 1 }, failing_gates: ["ac-delivery"], verdict: "FAIL" },
+      "failing_gates",
+    ],
+  ]) {
+    assert.equal(stampDerivedMismatch(report, stampOnly), want, JSON.stringify(report));
+  }
+});
+
+test("✧ DIFFERENTIAL (L55) — the relation holds for EVERY honest report the REAL check-verify produces, with and without --ac-gate", () => {
+  withRepo((r) => {
+    const fp = fingerprint(r.proj, { feature: FEATURE });
+    const head = git(r.proj, "rev-parse", "HEAD");
+    const stampPath = join(r.proj, DEFAULT_STAMPS.verify);
+    const verify = (extra) => runChecker(r.proj, "check-verify.mjs", ["--stamp", stampPath, "--feature", FEATURE, ...extra]);
+    const worlds = [];
+    for (const testExit of [0, 1])
+      for (const completeness of [0, 1])
+        for (const ac of ["passed", "skipped", "malformed", "evidence"])
+          worlds.push({
+            runs: [
+              ["test", testExit, ac === "evidence" ? undefined : ac],
+              ["reconcile", 0],
+            ],
+            completeness,
+            evidence: ac === "evidence",
+          });
+    worlds.push({
+      runs: [
+        ["test", 0],
+        ["reconcile", 1],
+      ],
+      completeness: 0,
+      evidence: false,
+    });
+    const seen = { withAc: new Set(), flagless: new Set(), ac: new Set(), ids: new Set(), forgedPasses: 0, forgedStops: 0 };
+    const pristine = readFileSync(join(r.proj, AC_TEST));
+    for (const w of worlds) {
+      writeFileSync(join(r.proj, AC_TEST), w.evidence ? "edited after the red run\n" : pristine);
+      writeStamp(r.proj, DEFAULT_STAMPS.verify, {
+        stage: "verify",
+        side: null,
+        head,
+        init: fp.digest,
+        final: fp.digest,
+        runs: w.runs,
+        completeness: w.completeness,
+      });
+      const withAc = verify(["--ac-gate"]);
+      const flagless = verify([]);
+      assert.equal(
+        stampDerivedMismatch(withAc, flagless),
+        null,
+        `an HONEST report read as a mismatch: ${JSON.stringify({ w, withAc: [withAc.verdict, withAc.failing_gates], flagless: [flagless.verdict, flagless.failing_gates] })}`
+      );
+      seen.withAc.add(withAc.verdict);
+      seen.flagless.add(flagless.verdict);
+      seen.ac.add(withAc.ac_gate?.verdict);
+      for (const id of withAc.failing_gates) seen.ids.add(id);
+      // negative control: the review's forgery is caught exactly when the STAMP alone says not-PASS — else it is the
+      // stated AC-only residual (re-run at F, never trusted)
+      const caught = stampDerivedMismatch({ ...withAc, verdict: "PASS", failing_gates: [] }, flagless) !== null;
+      assert.equal(caught, flagless.verdict !== "PASS", JSON.stringify(w));
+      if (caught) seen.forgedStops++;
+      else if (withAc.verdict !== "PASS") seen.forgedPasses++;
+    }
+    writeFileSync(join(r.proj, AC_TEST), pristine);
+    // L34 — non-vacuous: every verdict class and both AC ids were actually produced, and both control outcomes seen
+    for (const v of ["PASS", "FAIL", "INCOMPLETE", "INCONCLUSIVE"])
+      assert.ok(seen.withAc.has(v), `no world produced ${v} with --ac-gate: ${[...seen.withAc]}`);
+    for (const v of ["PASS", "FAIL", "INCOMPLETE"]) assert.ok(seen.flagless.has(v), `no world produced ${v} flag-less`);
+    for (const v of ["PASS", "FAIL", "INCONCLUSIVE"]) assert.ok(seen.ac.has(v), `no world produced an AC gate ${v}: ${[...seen.ac]}`);
+    for (const id of [...AC_RESERVED_IDS, "test", "reconcile"]) assert.ok(seen.ids.has(id), `no world failed ${id}`);
+    assert.ok(seen.forgedStops > 0 && seen.forgedPasses > 0, JSON.stringify(seen));
   });
 });
 
@@ -997,8 +1199,8 @@ test("a project rooted in a git SUBDIRECTORY is judged on its own subtree", () =
 const LOOP_CMD = join(HERE, "..", "..", ".claude", "commands", "pharn-loop.md");
 /** The floor modules the pinned calls need in the fixture: the CLOSURE, from check-loop-fresh.mjs, of every sibling
  *  `.mjs` a module names in a string literal — an import or a spawned checker alike. Computed, never listed by hand:
- *  a hand list went stale twice (6.19.0, 6.20.0), and a module missing from it crashes a shelled child, which the
- *  caller reads as an ordinary RED (L29 — the enumeration is the deliverable). */
+ *  a hand list went stale twice (6.19.0, 6.20.0), and a module missing from it crashes a shelled child — which the
+ *  caller read as an ordinary RED until 6.20.6, and reads as UNUSABLE since (L29 — the enumeration is the deliverable). */
 const FLOOR_MODULES = (() => {
   const seen = new Set();
   const queue = ["check-loop-fresh.mjs"];
@@ -1050,6 +1252,22 @@ test("★ WIRING — both pinned /pharn-loop calls, executed in a fixture: FRESH
       p = sh(pin.commit);
       assert.equal(p.status, 4, "the commit gate must STOP, never offer a re-run");
       assert.equal(JSON.parse(p.stdout).reason_code, "tree-moved-since-verify");
+      // 6.20.6 (2026-09-24 review finding 1), through the pinned lines: the review's forgery — PASS [] over a stamp with a red
+      // gate — then any edit. Before the fix this read RERUN / STOP tree-moved-since-verify; now E names it at both.
+      iterate(r, {
+        verifyRuns: [
+          ["test", 1],
+          ["reconcile", 0],
+        ],
+      });
+      const rp = reportPath(r, "verify-report.json");
+      writeJ(rp, { ...readJ(rp), verdict: "PASS", failing_gates: [] });
+      writeFileSync(join(r.proj, "a.txt"), "moved after the forgery\n");
+      for (const line of [pin.decision, pin.commit]) {
+        p = sh(line);
+        assert.equal(p.status, 4, p.stdout);
+        assert.equal(JSON.parse(p.stdout).reason_code, "report-verdict-mismatch", line);
+      }
     },
     {
       extra: (proj) => {
@@ -1064,6 +1282,23 @@ test("★ WIRING — check I routes only a RED test stage to ac-evidence-invalid
   const pin = pinnedLoopLines();
   withRepo(
     (r) => {
+      const out0 = pin.decision.replaceAll("'<name>'", `'${FEATURE}'`).replaceAll("'<base sha>'", `'${r.base}'`).replaceAll("<N>", "1");
+      // 6.20.6 (2026-09-24 review finding 2): the lock child CRASHES at run time — exit 1 like its RED, but no RED line. A
+      // RUN-TIME throw in its --check path, never a load failure: this checker imports test-infra-core.mjs itself, so a
+      // load failure there would crash it before check I runs (grill R2, the `loop-fresh-load-crash` follow-up).
+      const lockSrc = join(r.proj, "pharn/floor/ac-tests-lock.mjs");
+      const original = readFileSync(lockSrc, "utf8");
+      const anchor = 'requireRedRun: args.includes("--require-red-run"),';
+      assert.equal(original.split(anchor).length, 2, "the --check path's anchor moved — update this test");
+      writeFileSync(lockSrc, original.replace(anchor, 'requireRedRun: (() => { throw new Error("simulated crash"); })(),'));
+      iterate(r);
+      const c = spawnSync("sh", ["-c", out0], { cwd: r.proj, encoding: "utf8" });
+      assert.equal(c.status, 4, c.stdout + c.stderr);
+      const crash = JSON.parse(c.stdout);
+      assert.equal(crash.checks.I, "fail");
+      assert.equal(crash.reason_code, "front-stage-red", crash.reason);
+      assert.match(crash.reason, /check-test-stage exits 2 \(UNUSABLE\)/);
+      writeFileSync(lockSrc, original);
       // the test-stage gate's own child is gone, so it cannot run: exit 2, never evidence that the AC tests changed
       unlinkSync(join(r.proj, "pharn/floor/check-ac-tests.mjs"));
       iterate(r); // re-take the evidence over the tree without it, so I is the only failing check

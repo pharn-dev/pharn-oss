@@ -31,9 +31,11 @@
 //   D  each report's gate_run.stamp_sha256 = sha256(the stamp's raw bytes)    → RERUN · report-stamp-unbound
 //   J  every recorded stdout/stderr sha256 = sha256(its log on disk), and
 //      every recorded results_sha256 = sha256(its per-test results file)     → STOP  · output-hash-mismatch
-//   E  a LIVE re-run of check-verify.mjs --ac-gate / check-regress.mjs
-//      reproduces the report's FLOOR fields, the AC gate's block included
-//      (6.20.0) — deferred to F when the live tree is not the verify stamp's  → STOP  · report-verdict-mismatch
+//   E  a LIVE re-run of check-verify.mjs / check-regress.mjs reproduces the
+//      report's FLOOR fields — with --ac-gate, the AC gate's block included
+//      (6.20.0), over an unmoved tree; over a moved one (6.20.6) the flag-less
+//      run, and what the STAMP alone decides (stampDerivedMismatch) — the AC
+//      part alone defers to F                                              → STOP  · report-verdict-mismatch
 //   H  the regress BASE stamp's `head` = --base                               → STOP  · base-head-mismatch
 //   F  the verify stamp's fingerprint {algo, final} = the live tree now        → RERUN verify · tree-moved-since-verify
 //   G  the regress HEAD stamp's final = the verify stamp's init (same algo)    → RERUN regress · regress-verify-tree-mismatch
@@ -41,10 +43,15 @@
 //      exit 0 and GRILL.md exists                                             → STOP  · front-stage-red
 //      check-test-stage --require-test-first exits 0 (6.19.0)                 → STOP  · ac-evidence-invalid (6.20.0) on
 //                                                                             its RED (exit 1); front-stage-red on exit 2
-//                                                                             or a crash, which is no evidence at all
+//                                                                             — how check-test-stage reports a crashed
+//                                                                             child since 6.20.6 — or its own crash,
+//                                                                             neither of which is evidence at all
 //
 // The ORDER is load-bearing: the fabrication checks (J, E, H) run BEFORE the staleness checks (F, G), so a
-// forged report STOPS the run instead of being "refreshed" by a re-run that would overwrite the evidence.
+// forged report STOPS the run instead of being "refreshed" by a re-run that would overwrite the evidence. Over a
+// moved tree that holds for everything the stamp alone decides; a forgery confined to the AC part (the one part that
+// reads the live tree) cannot be told from staleness there, so it is re-run at F — never trusted, and a STOP at the
+// commit gate.
 //
 // A RERUN becomes a STOP `rerun-budget-exhausted` once `--max-reruns` rows exist in the budget ledger for
 // that (iter, stage); under `--commit-gate` every RERUN becomes a STOP carrying its own code, because at
@@ -58,7 +65,8 @@
 //   • the regress head stamp describes the same tree the verify stamp started from (G — content-hash);
 //   • the regress base stamp is the loop's own base SHA (H);
 //   • the recorded gate logs are the logs on disk (J — content-hash);
-//   • an orchestration-lapse code re-runs the stage and a fabricated verdict stops the run (B / E).
+//   • an orchestration-lapse code re-runs the stage and a fabricated verdict stops the run (B / E) — over a moved
+//     tree, every part of it the stamp alone decides (the AC part re-runs instead, above).
 //
 // NOT COVERED, each stated rather than discovered:
 //   • FORGERY. Stamps, reports, logs and the budget ledger all live in the writable tree, which `Bash`
@@ -79,6 +87,10 @@
 //     or the SPEC is legacy). Stale test evidence is a STOP, never a RERUN: this check runs after the build, when the
 //     implementation exists, so a re-run of /pharn-test would read `ac-test-passes-before-build` by construction.
 //   • Phase markers are not consulted.
+//   • ITS OWN LOAD FAILURE. A static import that cannot load (a partial update, say) makes this checker exit node's 1
+//     — its own RERUN code — with no JSON, which /pharn-loop's exit-1 branch cannot read. That is also where a broken
+//     test-infra-core.mjs lands, since this file imports it. The AC ids come from gate-run-core.mjs, not ac-gate-core.mjs,
+//     so as not to widen that graph (grill R2). Named follow-up `loop-fresh-load-crash`.
 //
 // Check J's one legitimate-looking trip, named so it is not a mystery stop: a gate that leaves a DETACHED
 // descendant holding its log fd (the runner kills the group only on timeout) can append after the runner
@@ -109,7 +121,16 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
-import { FEATURE_SLUG_RE, SHA_RE, LAPSE_CODES, isReasonCode, validateStamp, logBasename, resultsFileName } from "./gate-run-core.mjs";
+import {
+  FEATURE_SLUG_RE,
+  SHA_RE,
+  LAPSE_CODES,
+  AC_RESERVED_IDS,
+  isReasonCode,
+  validateStamp,
+  logBasename,
+  resultsFileName,
+} from "./gate-run-core.mjs";
 import { fingerprint } from "./worktree-fingerprint.mjs";
 import { sha256RegularFile } from "./test-infra-core.mjs";
 
@@ -152,9 +173,6 @@ const VERIFY_VERDICTS = new Set(["PASS", "FAIL", "INCOMPLETE", "INCONCLUSIVE"]);
 const REGRESS_VERDICTS = new Set(["no-regressions", "regressions", "inconclusive"]);
 const LAPSE_SET = new Set(LAPSE_CODES);
 
-/** The verify fields that depend on the stamp ALONE — compared even when the tree has moved. */
-export const STAMP_ONLY_FIELDS = Object.freeze(["gates"]);
-
 /** The report fields each live re-derivation must reproduce: what check-loop.mjs reads (`failing_gates`
  *  decides a reconcile or an AC-evidence red) plus the verbatim spine the stage copies from its checker — for verify
  *  that includes the AC gate's block (6.20.0), so the per-AC table a report shows is the one the checker computes. */
@@ -162,6 +180,33 @@ export const COMPARED_FIELDS = Object.freeze({
   verify: Object.freeze(["verdict", "failing_gates", "gates", "ac_gate"]),
   regress: Object.freeze(["verdict", "regressions", "pre_existing", "outside_gates"]),
 });
+
+/**
+ * Over a MOVED tree (6.20.6 — the 2026-09-24 review's finding 1, .dev/features/loop-fresh-integrity/): E cannot re-derive what the AC gate saw — it read the lock, the tests
+ * and the per-test record of a tree that no longer exists — so it compares only what the verify STAMP ALONE decides
+ * and defers the AC part to F (L58: compare the fixed part exactly, defer the part that may still change).
+ * `stampOnly` is `check-verify.mjs --stamp` WITHOUT `--ac-gate`: a pure function of the stamp (its gates and
+ * `aux.completeness`). Returns the first field whose stamp-derived part the report contradicts, or null.
+ *
+ * The invariant relied on, stated once: the AC gate can only ADD an AC id to `failing_gates` (the verdict is then
+ * FAIL) or leave the verdict unmeasured (INCONCLUSIVE) or unchanged — it never removes a gate offender and never
+ * upgrades the stamp-only verdict. That holds for check-verify's 6.20.0 precedence AND for the precedence in which
+ * INCOMPLETE outranks a delivery-only or unmeasurable AC gate (`failing_gates` [] and the stamp-only INCOMPLETE). A
+ * differential test re-checks it against the REAL check-verify over an enumerated set of honest worlds.
+ *
+ * Stated bounds: a forgery confined to the AC part (dropping `ac-delivery`, say) passes here and is RE-RUN at F —
+ * never trusted, and a STOP at the commit gate — because it cannot be told from staleness without the old tree. A
+ * stamp whose gate is NAMED `ac-delivery` (only a hand-made one: the runner refuses reserved ids) reads as a mismatch —
+ * a STOP, fail-closed.
+ */
+export function stampDerivedMismatch(report, stampOnly) {
+  if (canonical(report.gates) !== canonical(stampOnly.gates)) return "gates";
+  if (!Array.isArray(report.failing_gates)) return "failing_gates";
+  const gateFailing = report.failing_gates.filter((id) => !AC_RESERVED_IDS.includes(id));
+  if (canonical(gateFailing) !== canonical(stampOnly.failing_gates)) return "failing_gates";
+  const allowed = report.failing_gates.length > 0 ? ["FAIL"] : [stampOnly.verdict, "INCONCLUSIVE"];
+  return allowed.includes(report.verdict) ? null : "verdict";
+}
 
 /** ------------------------------------------------------------------------------------------------
  *  Helpers.
@@ -491,27 +536,35 @@ function rerunChecker(ctx, script, args) {
 }
 
 function checkE(ctx) {
-  // `--ac-gate` ALWAYS (6.20.0): /pharn-verify's pinned Step 5 passes it, so a report produced without it — or with its
-  // AC block edited — cannot be reproduced here.
-  const v = rerunChecker(ctx, CHECKERS.verify, ["--stamp", ctx.stamps.verify.path, "--feature", ctx.feature, "--ac-gate"]);
-  if (!v.ok) return { ok: false, unusable: true, reason: v.reason };
   // The AC gate reads the LIVE tree (the lock, the tests, the pinned infrastructure), so once the tree has moved a
-  // re-derivation of the fields it decides can differ for a reason that is staleness, not fabrication. Then only
-  // `gates` — a pure function of the stamp — is compared here, and the rest DEFERS to F, which names the real cause as
-  // a re-run (grill G6, L58). With the tree unmoved, any difference is the report's own.
+  // re-derivation of the fields it decides can differ for a reason that is staleness, not fabrication (grill G6, L58).
   const fp = fingerprint(ctx.repo, { feature: ctx.feature });
   const sf = ctx.stamps.verify.value.fingerprint;
   const treeMoved = !fp.ok || sf.algo !== fp.algo || sf.final !== fp.digest;
-  for (const f of treeMoved ? STAMP_ONLY_FIELDS : COMPARED_FIELDS.verify) {
-    if (canonical(v.value[f]) !== canonical(ctx.reports.verify[f])) {
-      return failure({
-        check: "E",
-        action: "stop",
-        stage: "verify",
-        reason_code: "report-verdict-mismatch",
-        reason: `verify-report.json's ${f} is not what check-verify.mjs computes from the verify stamp now — the report was not produced from that stamp`,
-      });
-    }
+  // Unmoved: `--ac-gate` (6.20.0) — /pharn-verify's pinned Step 5 passes it, so a report produced without it, or with
+  // its AC block edited, cannot be reproduced here, and every field is compared. Moved (6.20.6): the flag-less run, a
+  // pure function of the stamp, and only what the stamp alone decides is compared — gates, the non-AC failing ids and
+  // the verdict rule — so a forged verdict STOPS before F instead of being "refreshed" by its re-run (the 2026-09-24 review's finding 1).
+  // Two literal argv arrays, not a spread: the unmoved one must visibly carry the flag /pharn-verify's pinned line
+  // passes (command-hygiene.test.mjs pins it, L45).
+  const argv = treeMoved
+    ? ["--stamp", ctx.stamps.verify.path, "--feature", ctx.feature]
+    : ["--stamp", ctx.stamps.verify.path, "--feature", ctx.feature, "--ac-gate"];
+  const v = rerunChecker(ctx, CHECKERS.verify, argv);
+  if (!v.ok) return { ok: false, unusable: true, reason: v.reason };
+  const bad = treeMoved
+    ? stampDerivedMismatch(ctx.reports.verify, v.value)
+    : COMPARED_FIELDS.verify.find((f) => canonical(v.value[f]) !== canonical(ctx.reports.verify[f]));
+  if (bad) {
+    return failure({
+      check: "E",
+      action: "stop",
+      stage: "verify",
+      reason_code: "report-verdict-mismatch",
+      reason: treeMoved
+        ? `verify-report.json's ${bad} contradicts what the verify stamp ALONE decides (check-verify.mjs --stamp without --ac-gate) — over a moved tree only the AC part may differ, and this is not it`
+        : `verify-report.json's ${bad} is not what check-verify.mjs computes from the verify stamp now — the report was not produced from that stamp`,
+    });
   }
   const baseHead = ctx.stamps.regressBase.value.head;
   const g = rerunChecker(ctx, CHECKERS.regress, [

@@ -399,7 +399,9 @@ node pharn/floor/check-red-run.mjs --verdict --ac-tests <AC-TESTS.md> --out <dir
 # re-run after the build). /pharn-loop's S12 `blocked: no-test-runner` is decided by its own pinned
 # check-red-run --preflight exit, never by relayed text, and its Step 6c commit stages the lock and every pinned test
 # (exit 4, `not committed: stage failed`, if one is not a regular, non-ignored file). Exit: 0 READY/NOT-APPLICABLE ·
-# 1 RED · 2 unusable. Contract: pharn/pharn-contracts/ac-tests.md, "The test-stage gate".
+# 1 RED · 2 unusable — including (6.20.6) a child that CRASHED: exit 1 without its closing `RED — ` stdout line, which
+# before read as that child's RED (S13 in the loop); a crash one level further down is still read by the child as its
+# own RED (bound in the contract). Contract: pharn/pharn-contracts/ac-tests.md, "The test-stage gate".
 node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-test-first]
 
 # THE AC GATE (added 6.20.0) — was every Acceptance Criterion DELIVERED on the head verify run? pharn/floor/ac-gate-core.mjs,
@@ -424,8 +426,10 @@ node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-
 # gate to have run as the pinned `npm run <id>`. NOT caught, stated ONCE in test-infra-core.mjs's header (restated in
 # the contract): a setup file a config imports, env-driven config, script chaining, .npmrc, tsconfig, and more. /2 and /1 locks are still read (mode, never schema, decides bootstrap) and read
 # test-infra-unpinned at verify — the remedy sets the build aside and re-runs /pharn-test (its red run cannot pass over
-# a built tree). IN THE LOOP: check-loop-fresh E re-derives WITH --ac-gate and compares ac_gate (deferring to F when
-# the tree moved — the gate reads the live tree; `gates` alone is still compared); J re-hashes per-test results files;
+# a built tree). IN THE LOOP: check-loop-fresh E re-derives WITH --ac-gate and compares ac_gate (when the tree moved,
+# 6.20.6: it re-derives WITHOUT the flag and compares what the stamp alone decides — gates, the non-AC failing ids and
+# the verdict rule — so only the AC part defers to F; the AC ids come from gate-run-core AC_RESERVED_IDS, not from
+# ac-gate-core, so the checker's own load graph does not grow); J re-hashes per-test results files;
 # check I's test-stage RED (exit 1, a RED token) is its own code, ac-evidence-invalid → S13 (the other front checks,
 # and a test-stage exit 2 or crash, keep front-stage-red).
 # BOUNDS: "passed" is the reporter's word; agreement, never provenance (L43); one flaky test, test.fail() or duplicate
