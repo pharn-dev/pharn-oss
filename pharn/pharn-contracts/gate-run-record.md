@@ -202,4 +202,13 @@ release line; `check-loop-fresh.mjs`'s log check is now its emitter.
 - The fingerprint is **content-only** (a chmod-only change is invisible), does not descend a submodule
   gitlink, and excludes `.pharn/` plus the active feature's post-build artifacts — a set of its **own**,
   deliberately not `reconcile-ignore.json`'s, because the two answer different questions (**L39**).
-  Measured on this repository: 1925 paths, ~463 ms cold and ~75–85 ms warm.
+  Measured on this repository (re-measured 2026-09-25 for 6.20.8): 2230 paths, ~442 ms for the first
+  in-process call and ~73–75 ms warm.
+- **Symlinks are hashed by their link text** (every link since 6.20.8; the fingerprint hashes through the
+  reconciler's `hashFile`). Re-pointing a link moves the digest; a change to a link's target moves it only
+  through the target's own entry, so a gate that reads **through** a link to a file outside the reconciled
+  set (outside the repo, or git-ignored) is not re-run when that file changes.
+- **`fingerprint.algo` moved to `worktree-fingerprint/2+sha256` in 6.20.8.** The algo is not part of the
+  digest, so an unchanged tree can fingerprint equal under both: a stamp written before the upgrade is
+  refused by every consumer's `algo` comparison (freshness F and G, the red-run binding), each naming both
+  algos — one re-run for a stamp in flight, the fail-closed direction.

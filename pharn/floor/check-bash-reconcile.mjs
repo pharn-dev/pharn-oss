@@ -70,7 +70,9 @@
 // ================================== THE BOUNDS, STATED, NOT HIDDEN ==================================
 //  1. THE RECONCILED SET is `tracked ∪ untracked-not-ignored`. A git-ignored path is INVISIBLE — by
 //     design (it is what makes `.pharn/` scratch, `runs/**` and `node_modules/` free) and by consequence
-//     (a Bash write there is never reported). See pharn/floor/reconcile-ignore.json.
+//     (a Bash write there is never reported). See pharn/floor/reconcile-ignore.json. A symlink is reconciled as
+//     the LINK (its text, since 6.20.8), never as its target: a write through it lands on the target's own
+//     path, and a target outside the set (outside the repo, or ignored) is not seen through the link.
 //  2. THE WINDOW is anchor -> reconcile (build -> verify). A write before the anchor is baked into the
 //     baseline and is invisible; a later anchor RESETS, which is why anchoring is at build ONLY.
 //  3. ONE WORKTREE. Two agent sessions sharing a tree share `.pharn/`, so a second session's writes can
@@ -427,6 +429,15 @@ function main(argv) {
 
   // The recorded scope that authorizes `rel`, or null. FIRST match wins and the snapshot is first, so a
   // later amendment can never re-attribute a path the opening scope already covered.
+  //
+  // A SYMLINK is judged here by its OWN path, as text, and since 6.20.8 that is correct rather than a mismatch
+  // with the live guard (which `realpath`s a Write's target first): hashFile records every link by its LINK
+  // TEXT, so a link is a candidate only when the LINK changed, while a write THROUGH it changes — and is judged
+  // under — the target's own path, exactly the path the guard judges. Before 6.20.8 a link to a regular file
+  // carried its target's bytes, so an in-scope edit of the target made the link a candidate and a false ESCAPE.
+  // Residual, stated: a RE-POINTED link that no recorded scope names still gets the uniform "would have DENIED"
+  // sentence below. The guards cannot see a re-point at all (a Write writes through the link), so for a link
+  // re-pointed to an in-scope target that sentence describes this scope match, not a decision a guard made.
   const authorizingScope = (rel) => recordedScopes.find((s) => matchesAny(rel, s.scope)) ?? null;
 
   let sandbox = null;

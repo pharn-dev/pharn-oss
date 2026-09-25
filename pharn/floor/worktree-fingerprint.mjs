@@ -53,18 +53,33 @@
 //   • CONTENT ONLY — a chmod-only change is invisible (inherited from hashFile, which hashes bytes).
 //   • A submodule gitlink is not descended (git reports the gitlink path; hashFile returns null for a
 //     directory, recorded as absent).
-//   • A symlink whose target is not an openable regular file (a directory, a dangling or looping link) is
-//     hashed by its LINK TEXT, inherited from hashFile since 6.17.1, so re-pointing one moves the digest.
-//     Before 6.17.1 such a link hashed as absent, so on a tree that holds one, a fingerprint written by an
-//     older install differs from a fresh one. A stamp straddling that upgrade reads as tree-moved, never as
-//     fresh: the fail-closed direction.
+//   • EVERY symlink is hashed by its LINK TEXT, inherited from hashFile (6.17.1 for a link whose target is not
+//     an openable regular file; 6.20.8 for a link to a regular file, too). Re-pointing any link moves the
+//     digest, even between two targets with identical bytes. A change to a link's TARGET moves it only through
+//     the target's own entry — so a gate that reads THROUGH a link to a file outside the reconciled set (outside
+//     the repo, or git-ignored) is not re-run when that file changes. Stated, not solved: such a file is outside
+//     the set exactly as any other path there is.
+//   • UPGRADES, and why ALGO moved to /2 in 6.20.8. 6.17.1 changed what is hashed WITHOUT bumping ALGO (recorded
+//     then as a decision): a stamp straddling it read as tree-moved on a tree holding such a link, and as fresh
+//     elsewhere. 6.20.8 changed it again, so this time ALGO bumped, and a golden digest in
+//     worktree-fingerprint.test.mjs now fails any change to what is hashed that does not bump it. ALGO is NOT part
+//     of the digest — on a link-free tree a /1 and a /2 digest are EQUAL — so it is every consumer's `algo`
+//     COMPARISON that refuses a pre-upgrade stamp: check-loop-fresh.mjs F (RERUN tree-moved-since-verify) and G
+//     (RERUN regress-verify-tree-mismatch), whose reasons name both algos; E, which reads an algo mismatch as a
+//     moved tree (it compares only what the stamp alone decides, so an honest report passes it and F names the
+//     cause); red-run-core.mjs bindStamp (refused, naming both). The cost is one re-run for a stamp in flight across the upgrade — the
+//     fail-closed direction. A stamp straddling it MID-stage (init under /1, a later `run --next` under /2) breaks
+//     the fp chain on a link-bearing tree (refused tree-changed-between-gates) and otherwise carries /1, which the
+//     comparisons above refuse.
 //   • An excluded artifact can still be READ by a whole-repo style gate in a project that lints
 //     `pharn/features/**` (lessons-learned L23), so a later change to it is invisible to this hash while
 //     remaining visible to that gate. Stated, not solved.
 //   • MEASURED on this repo rather than asserted (lessons-learned L24 — a bound inherited from a
-//     superseded implementation is an unbacked claim): 1925 paths, ~463 ms cold and ~75-85 ms warm over
-//     three consecutive runs with an identical digest. Two fingerprints per gate across ~10 gates is
-//     roughly 1.5-9 s added to a verify run. Re-measure if the enumeration changes.
+//     superseded implementation is an unbacked claim). Re-measured 2026-09-25 for 6.20.8's hashFile (a
+//     no-follow open per path, readlink only for a link): 2230 paths, ~442 ms for the first in-process call
+//     and ~73-75 ms warm, identical digest across runs (the earlier 1925-path measurement read ~463 ms
+//     cold and ~75-85 ms warm). Two fingerprints per gate across ~10 gates is roughly 1.5-9 s added to a
+//     verify run. Re-measure if the enumeration or hashFile changes.
 //   • NOT a `git status` dirty-set. That would need `assume-unchanged` and `skip-worktree` handling, and
 //     it answers "changed since HEAD" rather than "changed since the previous gate".
 //
@@ -80,8 +95,10 @@ import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 
 /** The algorithm identity, recorded in every stamp. Bump on ANY change to what is hashed or how the
  *  digest is composed — check-loop-fresh.mjs compares digests across runs (and refuses a stamp whose
- *  algo differs from the live one), so an unversioned change would read as a tree mutation. */
-export const ALGO = "worktree-fingerprint/1+sha256";
+ *  algo differs from the live one), so an unversioned change would read as a tree mutation. Pinned: the
+ *  golden digest in worktree-fingerprint.test.mjs is keyed by this value (/2 since 6.20.8 — every symlink
+ *  hashed by its link text; see the header's UPGRADES bound). */
+export const ALGO = "worktree-fingerprint/2+sha256";
 
 /** The scratch namespace the runner itself writes. See exclusion (1) in the header. */
 export const STATE_ROOT_SEGMENT = ".pharn/";

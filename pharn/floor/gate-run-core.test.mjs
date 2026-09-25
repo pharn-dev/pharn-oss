@@ -82,7 +82,7 @@ function goodStamp(over = {}) {
     source_raw: null,
     style_skipped: false,
     finalized: true,
-    fingerprint: { algo: "worktree-fingerprint/1+sha256", init: A, final: B },
+    fingerprint: { algo: "worktree-fingerprint/2+sha256", init: A, final: B },
     required: ["test"],
     runs: [
       {
@@ -611,7 +611,7 @@ test("stampToMap / completenessFromStamp / coverageGap / gateRunBlock", () => {
   assert.deepEqual(gateRunBlock(s, "deadbeef"), {
     stamp_sha256: "deadbeef",
     source: "discover",
-    fingerprint: { algo: "worktree-fingerprint/1+sha256", final: "b".repeat(64) },
+    fingerprint: { algo: "worktree-fingerprint/2+sha256", final: "b".repeat(64) },
   });
 });
 

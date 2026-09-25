@@ -8,7 +8,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, cpSync, rmSync, symlinkSync, unlinkSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, cpSync, rmSync, symlinkSync, unlinkSync, chmodSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -764,4 +764,145 @@ test("★ NON-VACUITY (L34): RE-POINTING a tracked directory symlink is still an
     [".claude/skills/skill-a"],
     "exactly the re-pointed link — not the untouched dangling one, not none"
   );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────
+// SYMLINKS TO REGULAR FILES (6.20.8, .dev/features/reconcile-symlink-target/PLAN.md). Up to 6.20.7 hashFile
+// FOLLOWED such a link and recorded the TARGET's bytes under the LINK's path, which the explicit-scope matcher
+// judges as text — while the live guard `realpath`s a Write's target first. So a tracked CLAUDE.md -> AGENTS.md
+// under a scope of [AGENTS.md] reported a false ESCAPE on CLAUDE.md for an edit the guard ALLOWS. Every link is
+// hashed by its link text now; each CLEAN case below has an ESCAPE mirror on the same fixture (L34), and the
+// guard is EXECUTED in the fixture rather than assumed (L37 — the reconciler never runs it for an explicit
+// scope, so without these assertions "agrees with the guard" would rest on nothing in this suite).
+
+function repoWithAgentsLink() {
+  const dir = makeRepo();
+  writeFileSync(join(dir, "AGENTS.md"), "agents v1\n");
+  writeFileSync(join(dir, "OTHER.md"), "agents v1\n"); // the same bytes as AGENTS.md, on purpose
+  symlinkSync("AGENTS.md", join(dir, "CLAUDE.md"));
+  execFileSync("git", ["add", "-A"], { cwd: dir, stdio: "pipe" });
+  execFileSync("git", ["commit", "-q", "-m", "agents link"], { cwd: dir, stdio: "pipe" });
+  setScope(dir, ["AGENTS.md"]);
+  assert.equal(anchor(dir).status, 0);
+  return dir;
+}
+
+/** The fixture's OWN copy of the live scope guard, asked about a Write — exit 0 allows, 2 denies. */
+function guardAllows(dir, path) {
+  const r = spawnSync(process.execPath, [join(dir, ".claude/hooks/enforce-writes-scope.cjs")], {
+    input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: path } }),
+    cwd: dir,
+    encoding: "utf8",
+  });
+  assert.ok(r.status === 0 || r.status === 2, `the guard answered neither allow nor deny: ${r.status} ${r.stderr}`);
+  return r.status === 0;
+}
+
+test("★ CLAUDE.md -> AGENTS.md, scope [AGENTS.md]: an edit of AGENTS.md is CLEAN — the guard allows it, and so does the reconciler", () => {
+  const dir = repoWithAgentsLink();
+  // The guard, executed (L37): it resolves the link, so a Write to EITHER name is allowed; OTHER.md is the control.
+  assert.equal(guardAllows(dir, "AGENTS.md"), true);
+  assert.equal(guardAllows(dir, "CLAUDE.md"), true, "the live guard realpaths CLAUDE.md to AGENTS.md");
+  assert.equal(guardAllows(dir, "OTHER.md"), false, "control: the guard does deny an out-of-scope path");
+  writeFileSync(join(dir, "AGENTS.md"), "agents v2\n"); // the build's edit, made through Bash
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.json.verdict, "CLEAN", "up to 6.20.7 this was ESCAPE on CLAUDE.md, 'writes-scope (snapshot)'");
+  assert.deepEqual(r.json.escapes, []);
+  assert.ok(!r.json.warnings.some((w) => /treated as changed/.test(w)), JSON.stringify(r.json.warnings));
+});
+
+test("★ NON-VACUITY (L34): CLAUDE.md RE-POINTED to OTHER.md — identical bytes — is an ESCAPE naming exactly CLAUDE.md", () => {
+  // Unseen through 6.20.7: the link hashed its target's BYTES, and both targets hold the same bytes.
+  const dir = repoWithAgentsLink();
+  unlinkSync(join(dir, "CLAUDE.md"));
+  symlinkSync("OTHER.md", join(dir, "CLAUDE.md"));
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    ["CLAUDE.md"]
+  );
+});
+
+test("★ NON-VACUITY (L34): an edit THROUGH a link to an OUT-of-scope target is an ESCAPE naming the TARGET, not the link", () => {
+  const dir = repoWithAgentsLink();
+  writeFileSync(join(dir, "NOTES.md"), "notes v1\n");
+  symlinkSync("NOTES.md", join(dir, "notes-link"));
+  execFileSync("git", ["add", "-A"], { cwd: dir, stdio: "pipe" });
+  execFileSync("git", ["commit", "-q", "-m", "notes link"], { cwd: dir, stdio: "pipe" });
+  assert.equal(anchor(dir).status, 0);
+  assert.equal(guardAllows(dir, "notes-link"), false, "the guard judges the link by its target, NOTES.md — out of scope");
+  writeFileSync(join(dir, "notes-link"), "notes v2\n"); // written THROUGH the link
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    ["NOTES.md"],
+    "attributed to the path the bytes live at — the one the guard would have judged"
+  );
+});
+
+test("★ a tracked link to a file OUTSIDE the repo whose content changes is CLEAN — not a change to any repo path", () => {
+  const dir = repoWithAgentsLink();
+  const outside = mkdtempSync(join(tmpdir(), "pharn-recon-outside-"));
+  made.push(outside);
+  writeFileSync(join(outside, "shared.md"), "shared v1\n");
+  symlinkSync(join(outside, "shared.md"), join(dir, "shared-link"));
+  execFileSync("git", ["add", "-A"], { cwd: dir, stdio: "pipe" });
+  execFileSync("git", ["commit", "-q", "-m", "outside link"], { cwd: dir, stdio: "pipe" });
+  assert.equal(anchor(dir).status, 0);
+  writeFileSync(join(outside, "shared.md"), "shared v2\n");
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.json.verdict, "CLEAN", "up to 6.20.7 the link carried the outside file's bytes and read as changed");
+});
+
+test("★ L51 boundary: a link's in-repo target made UNREADABLE after a change is still a candidate — the TARGET, not the link", (t) => {
+  // 6.17.1 guarded this evasion on the LINK's entry (LINK_TEXT_ERRNOS excluded EACCES). The link is never opened
+  // now, so the guard lives on the target's own entry: unreadable is treated as changed there.
+  if (typeof process.getuid === "function" && process.getuid() === 0) {
+    t.skip("root reads a mode-000 file, so the unreadable state cannot be built");
+    return;
+  }
+  const dir = repoWithAgentsLink();
+  writeFileSync(join(dir, "NOTES.md"), "notes v1\n");
+  symlinkSync("NOTES.md", join(dir, "notes-link"));
+  execFileSync("git", ["add", "-A"], { cwd: dir, stdio: "pipe" });
+  execFileSync("git", ["commit", "-q", "-m", "notes link"], { cwd: dir, stdio: "pipe" });
+  assert.equal(anchor(dir).status, 0);
+  writeFileSync(join(dir, "NOTES.md"), "notes v2 — then hidden\n");
+  chmodSync(join(dir, "NOTES.md"), 0o000);
+  try {
+    const r = check(dir, ["--require-baseline"]);
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.deepEqual(
+      r.json.escapes.map((e) => e.file),
+      ["NOTES.md"]
+    );
+    assert.ok(
+      r.json.warnings.some((w) => w === "unreadable during reconcile, treated as changed: NOTES.md"),
+      JSON.stringify(r.json.warnings)
+    );
+  } finally {
+    chmodSync(join(dir, "NOTES.md"), 0o644);
+  }
+});
+
+test("★ UPGRADE (GATE-1 note 2): a baseline anchored before 6.20.8 — the link carrying its TARGET's digest — is FLAGGED, never passed", () => {
+  // RECORD_VERSION stays 1, so nothing marks such a baseline. What makes the straddle fail CLOSED is the digest
+  // inequality itself: the pre-6.20.8 entry is sha256(target bytes), the live one sha256("symlink\0" + text).
+  const dir = repoWithAgentsLink();
+  const rec = JSON.parse(readFileSync(join(dir, RECORD_PATH), "utf8"));
+  rec.entries["CLAUDE.md"] = createHash("sha256").update("agents v1\n").digest("hex"); // what 6.20.7 recorded
+  writeFileSync(join(dir, RECORD_PATH), JSON.stringify(rec, null, 2) + "\n");
+  const r = check(dir, ["--require-baseline"]); // nothing changed since the anchor
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    ["CLAUDE.md"],
+    "the one-epoch cost, stated in the contract and the CHANGELOG: the next anchor records the link text"
+  );
+  assert.equal(anchor(dir).status, 0);
+  assert.equal(check(dir, ["--require-baseline"]).json.verdict, "CLEAN", "…and a fresh anchor clears it");
 });

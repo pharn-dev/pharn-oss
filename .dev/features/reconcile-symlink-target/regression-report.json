@@ -1,0 +1,47 @@
+{
+  "base": "8eec2d7e6f18744a63789b3dda97bbf75f45361e",
+  "inside": [
+    ".dev/features/reconcile-symlink-target/GRILL.md",
+    ".dev/features/reconcile-symlink-target/PLAN.md",
+    ".dev/features/reconcile-symlink-target/REGRESSION.md",
+    ".dev/features/reconcile-symlink-target/VERIFY.md",
+    ".dev/features/reconcile-symlink-target/regression-report.json",
+    ".dev/features/reconcile-symlink-target/verify-report.json",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/check-bash-reconcile.mjs",
+    "pharn/floor/check-bash-reconcile.test.mjs",
+    "pharn/floor/check-loop-fresh.mjs",
+    "pharn/floor/check-loop-fresh.test.mjs",
+    "pharn/floor/check-red-run.test.mjs",
+    "pharn/floor/check-regress.test.mjs",
+    "pharn/floor/check-verify.test.mjs",
+    "pharn/floor/gate-run-core.test.mjs",
+    "pharn/floor/reconcile-baseline.mjs",
+    "pharn/floor/reconcile-baseline.test.mjs",
+    "pharn/floor/red-run-core.mjs",
+    "pharn/floor/test-results-core.test.mjs",
+    "pharn/floor/worktree-fingerprint.mjs",
+    "pharn/floor/worktree-fingerprint.test.mjs",
+    "pharn/pharn-contracts/gate-run-record.md",
+    "pharn/pharn-contracts/reconciliation-record.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

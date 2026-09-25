@@ -72,7 +72,7 @@ function stampWith(testRun = {}) {
     source_raw: null,
     style_skipped: false,
     finalized: true,
-    fingerprint: { algo: "worktree-fingerprint/1+sha256", init: A, final: B },
+    fingerprint: { algo: "worktree-fingerprint/2+sha256", init: A, final: B },
     required: ["test"],
     runs: [
       {

@@ -164,7 +164,11 @@ export function bindStamp({ stamp, rows, feature, root }) {
   }
   const fp = fingerprint(root, { feature });
   if (!fp.ok) return { ok: false, reason: `cannot fingerprint the tree: ${fp.reason}` };
-  if (fp.algo !== stamp.fingerprint.algo || fp.digest !== stamp.fingerprint.final) {
+  if (fp.algo !== stamp.fingerprint.algo) {
+    // A stamp from before an ALGO bump (worktree-fingerprint.mjs, UPGRADES) — refused by name, never as a tree change.
+    return { ok: false, reason: `the red run was fingerprinted with ${stamp.fingerprint.algo}, the live tree with ${fp.algo} — re-run it` };
+  }
+  if (fp.digest !== stamp.fingerprint.final) {
     return { ok: false, reason: "the tree changed since the red run (a test file, the mapping or the lock) — re-run it" };
   }
   return { ok: true };

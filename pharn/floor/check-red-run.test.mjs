@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import { resultsFileName } from "./gate-run-core.mjs";
 import { CONFIG_FILE, CONFIG_KEY } from "./test-results-core.mjs";
 import { OWN_REASONS, RED_RUN_REASONS, bindStamp, blockedLine, evaluateRedRun, observeAc, preflight, verdict } from "./red-run-core.mjs";
+import { ALGO, fingerprint } from "./worktree-fingerprint.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, "check-red-run.mjs");
@@ -722,4 +723,32 @@ test("✧ L35 — observeAc is the ONE match rule (the red run and /pharn-verify
     recordOf: () => ({ ok: false, reason_code: "results-unavailable", reason: "r" }),
   });
   assert.deepEqual(refused, { refused: { gate: "e2e", reason_code: "results-unavailable", reason: "r" }, observations: [] });
+});
+
+// ── the fingerprint ALGO bump (6.20.8, .dev/features/reconcile-symlink-target/PLAN.md) ────────────────────────────
+// ALGO is not part of the digest: an unchanged tree fingerprints to the SAME digest under /1 and /2. So a red run
+// stamped before the bump is refused by the algo comparison, and the refusal must say so — "the tree changed" would be
+// false. The control binds the identical stamp under the live ALGO, so the refusal is caused by the algo alone (L34).
+test("bindStamp refuses a red run fingerprinted with a previous ALGO even when its digest equals the live tree's — naming both", () => {
+  const s = scratch();
+  try {
+    execFileSync("git", ["init", "-q", "."], { cwd: s.root });
+    writeFileSync(join(s.root, "package.json"), JSON.stringify({ scripts: { test: "x" } }));
+    const rows = [row("AC-1", UNIT)];
+    const fp = fingerprint(s.root, { feature: "demo" });
+    assert.ok(fp.ok, fp.reason);
+    const base = makeStamp(s.outDir, [{ id: "test", files: [UNIT], results: null }]);
+    const at = (algo) => ({
+      ...base,
+      fingerprint: { algo, init: fp.digest, final: fp.digest },
+      runs: base.runs.map((r) => ({ ...r, fp_before: fp.digest, fp_after: fp.digest })),
+    });
+    assert.deepEqual(bindStamp({ stamp: at(ALGO), rows, feature: "demo", root: s.root }), { ok: true }, "control: the live ALGO binds");
+    const old = bindStamp({ stamp: at("worktree-fingerprint/1+sha256"), rows, feature: "demo", root: s.root });
+    assert.equal(old.ok, false);
+    assert.match(old.reason, /fingerprinted with worktree-fingerprint\/1\+sha256, the live tree with worktree-fingerprint\/2\+sha256/);
+    assert.doesNotMatch(old.reason, /tree changed/, "the digests are equal — the tree did not change");
+  } finally {
+    s.done();
+  }
 });

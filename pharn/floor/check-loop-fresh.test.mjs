@@ -1326,3 +1326,60 @@ test("★ WIRING — check I routes only a RED test stage to ac-evidence-invalid
     }
   );
 });
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// THE FINGERPRINT ALGO BUMP (6.20.8, .dev/features/reconcile-symlink-target/PLAN.md) — self-contained on purpose,
+// appended as one block. ALGO is NOT part of the digest, so an unchanged tree fingerprints EQUAL under /1 and /2:
+// what refuses a stamp written before the upgrade is the `algo` comparison, never the digest. Each case writes one
+// ordinary iteration, rewrites ONE stamp's algo to the previous token, and regenerates that stamp's report through
+// the real checker (so the D binding holds and F or G is what decides). Fail-closed, and the reason names both.
+test("★ UPGRADE STRADDLE — a stamp fingerprinted with the previous ALGO is never FRESH, even with an equal digest", async (t) => {
+  const OLD = "worktree-fingerprint/1+sha256";
+  assert.notEqual(ALGO, OLD, "premise: ALGO was bumped past the token this block simulates");
+  const retag = (r, rel) => {
+    const p = join(r.proj, rel);
+    const s = JSON.parse(readFileSync(p, "utf8"));
+    s.fingerprint.algo = OLD;
+    writeFileSync(p, JSON.stringify(s, null, 2));
+    return p;
+  };
+
+  await t.test("F: the verify stamp → RERUN verify, tree-moved-since-verify, naming both algos", () => {
+    withRepo((r) => {
+      iterate(r);
+      const stamp = retag(r, DEFAULT_STAMPS.verify);
+      const rep = runChecker(r.proj, "check-verify.mjs", ["--stamp", stamp, "--feature", FEATURE, "--ac-gate"]);
+      rep.completeness = { complete: true, missing: [], skipped: [] };
+      rep.verifiers = { registered: 0, findings: [] };
+      writeFileSync(join(r.proj, FEATURE_BASE, FEATURE, "verify-report.json"), JSON.stringify(rep, null, 2));
+      const res = evaluate(["--feature", FEATURE, "--base", r.base, "--iter", "1", "--repo", r.proj]);
+      assert.equal(res.code, EXIT.RERUN, JSON.stringify(res.doc));
+      assert.equal(res.doc.reason_code, "tree-moved-since-verify", res.doc.reason);
+      assert.equal(res.doc.stage_to_rerun, "verify");
+      assert.match(res.doc.reason, /fingerprinted with worktree-fingerprint\/1\+sha256, the live tree with/);
+    });
+  });
+
+  await t.test("G: the regress head stamp → RERUN regress, regress-verify-tree-mismatch, naming both algos", () => {
+    withRepo((r) => {
+      iterate(r);
+      const head = retag(r, DEFAULT_STAMPS.regressHead);
+      const rep = runChecker(r.proj, "check-regress.mjs", [
+        "verdict",
+        "--base-stamp",
+        join(r.proj, DEFAULT_STAMPS.regressBase),
+        "--head-stamp",
+        head,
+        "--base",
+        r.base,
+      ]);
+      writeFileSync(join(r.proj, FEATURE_BASE, FEATURE, "regression-report.json"), JSON.stringify(rep, null, 2));
+      const res = evaluate(["--feature", FEATURE, "--base", r.base, "--iter", "1", "--repo", r.proj]);
+      assert.equal(res.code, EXIT.RERUN, JSON.stringify(res.doc));
+      assert.equal(res.doc.reason_code, "regress-verify-tree-mismatch", res.doc.reason);
+      assert.equal(res.doc.stage_to_rerun, "regress");
+      assert.match(res.doc.reason, /fingerprinted with worktree-fingerprint\/1\+sha256, the verify stamp with/);
+      assert.doesNotMatch(res.doc.reason, /different tree/, "the digests are equal — the tree did not change");
+    });
+  });
+});
