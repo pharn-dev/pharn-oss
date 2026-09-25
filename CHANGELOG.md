@@ -23,6 +23,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.20.7] - 2026-09-25
+
+### Fixed
+
+- 2026-09-25: **A SPEC can no longer switch between `feature` and `test-infra` without its approval pin moving.**
+  Before this release, moving the `spec_kind:` line from the frontmatter to the body's first line, or back, kept the
+  same pin. This fixes one review finding (CONFIRMED, low severity), and its reproduction is now a suite test.
+  `SKILLS_VERSION` 6.20.6 → 6.20.7 (PATCH: a correction to a shipped checker; no pin moves, and no contract shape,
+  finding shape or frontmatter key changes). `MIN_CLI` stays 0.5.0.
+  ([`.dev/features/spec-pin-kind-ambiguity/`](./.dev/features/spec-pin-kind-ambiguity/))
+  - **The collision.** `check-spec.mjs` `pinHash` (6.18.0) hashes each frontmatter `spec_kind:` line plus a line
+    break, then the body, with no separator. So an Approved feature SPEC whose body opened with
+    `spec_kind: test-infra` had exactly the pin of the same SPEC with that line in the frontmatter. `check-spec.mjs` and
+    `check-spec-approved.mjs` stayed GREEN across the move, while `check-ac-tests.mjs --spec` went from TEMPLATED (0) to
+    BOOTSTRAP (4). The reverse move collided too. Nothing re-asked for approval, which is the flip the 6.18.0 pin
+    change was added to catch.
+  - **The fix moves no pin.** `check-spec.mjs` now REDs, with kind `pin`, any SPEC whose body's first line starts
+    `spec_kind:`. It does so for every SPEC, templated or legacy, and in every state, so a Draft is caught before it can
+    be approved. `pinHash` and `--hash` are unchanged. With that one layout forbidden, the hashed text splits into kind
+    lines and body in exactly one way, because a kind line always starts at column 0 with `spec_kind:`. The argument
+    is written once, in the `pinHash` comment and in `pharn-contracts/spec-template.md` under "`spec_kind`". A body
+    whose first line is blank, or starts with a space, is not ambiguous and still validates.
+  - **Every AC-mode reading agrees.** `spec-template-core.mjs` gains `kindLineOpensBody()`, the one test for the
+    layout. `specAcceptanceCriteria()` gains `kindInBody`, and reports the kind of a templated SPEC in that layout as
+    `null`. So `check-ac-tests.mjs --spec` (and the AC gate, which reads the same verdict) exits 2 UNUSABLE with its own
+    message, `checkMapping` REDs `spec-kind` naming the layout, and `check-test-stage.mjs` reads `spec-unusable`. A
+    legacy SPEC still reads LEGACY 3, because its kind is never read. `ac-tests-lock.mjs` is unchanged: its bootstrap
+    paths already refuse a `null` kind, and its test-first paths never read the kind.
+  - **Docs.** `pharn-contracts/spec-template.md` states the rule. Its legacy paragraph no longer says "No rule here can
+    RED it". `pharn-contracts/ac-tests.md` names the new unusable cause. `/pharn-spec` now says the key goes in the
+    frontmatter, lists `pin` and `spec-kind` among the Draft's RED kinds, and no longer tells the approval step to
+    recompute the hash for a layout `pin` RED, which no hash can fix. Five sentences promising that a legacy SPEC is
+    "validated exactly as before" were narrowed to the template rules: in the contract, `check-spec.mjs`'s header,
+    `/pharn-spec` twice, and `pharn/floor/README.md`.
+  - **Bound, stated:** a SPEC approved in that layout before 6.20.7 REDs after `pharn update`. The remedy, moving the
+    line or changing the body's first line, leaves the pin unchanged in the move case, because that is the collision
+    itself. So the re-approval the RED asks for is advisory: the floor makes the layout unusable, but it cannot make a
+    person re-approve. As before, a self-consistent rewrite of a SPEC and its pin passes.
+
 ## [6.20.6] - 2026-09-25
 
 ### Fixed

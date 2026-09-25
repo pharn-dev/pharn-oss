@@ -34,7 +34,8 @@ grammar, clarification markers). `--resolve-template-ref` prints the value `/pha
 key: the project's own `pharn.spec-template.md` when it exists and validates, else the shipped default. Once a
 project template exists, every failure is a refusal (exit 1), never a fallback. `--template-path <id>` prints
 the file to fill, and `--template-ref <id>` names one template directly. Every template is validated before its
-reference is printed. A SPEC without the key is validated exactly as before. A valid acceptance-criteria grammar means the
+reference is printed. A SPEC without the key gets none of the template rules; the pin's layout rule (a body may
+not open with a `spec_kind:` line, 6.20.7) applies to every SPEC. A valid acceptance-criteria grammar means the
 criteria are **phrased** testably, never that any test exists, runs, or passes.
 
 ## Run the validator

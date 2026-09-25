@@ -70,22 +70,22 @@ without joining the build's scope, and a second extractor would mean editing a p
 
 ## The checker — `check-ac-tests.mjs <AC-TESTS.md> <SPEC.md> <PLAN.md> [--features-dir <dir>]`
 
-| kind                | RED when                                                                                                                   |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `legacy-spec`       | the SPEC has no `spec_template` (exit **3**, checked first)                                                                |
-| `pin`               | `check-plan-spec-agree.mjs <AC-TESTS.md> <SPEC.md>` is non-zero (Draft, drifted, stale or mislabeled)                      |
-| `spec-kind`         | the SPEC is `spec_kind: test-infra` (a bootstrap increment has no mapping), or its `spec_kind` is invalid                  |
-| `malformed-line`    | a non-blank line under `## Mapping` does not match, or there is no `## Mapping`                                            |
-| `missing-ac`        | a SPEC AC has no mapping line, or the SPEC's Acceptance Criteria section is absent or duplicated                           |
-| `duplicate-ac`      | an AC has more than one mapping line                                                                                       |
-| `unknown-ac`        | a mapped id is not a SPEC AC                                                                                               |
-| `level-mismatch`    | a mapped level differs from the SPEC's `verify:` level                                                                     |
-| `unlisted-file`     | a mapped file is not in `## Files`                                                                                         |
-| `unmapped-file`     | a `## Files` entry is mapped by no line                                                                                    |
-| `in-plan-files`     | a test file is in PLAN.md `## Files`, so the build would be scoped to it                                                   |
-| `claimed-elsewhere` | another feature's AC-TESTS.md `## Files` already names the file                                                            |
-| `no-files`          | there is no `## Files`, or it names nothing                                                                                |
-| `bad-path`          | a `## Files` entry is a placeholder or glob, absolute, led by `-`, not normalized, or under `.pharn/` or `pharn/features/` |
+| kind                | RED when                                                                                                                                                       |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `legacy-spec`       | the SPEC has no `spec_template` (exit **3**, checked first)                                                                                                    |
+| `pin`               | `check-plan-spec-agree.mjs <AC-TESTS.md> <SPEC.md>` is non-zero (Draft, drifted, stale or mislabeled)                                                          |
+| `spec-kind`         | the SPEC is `spec_kind: test-infra` (a bootstrap increment has no mapping), or its `spec_kind` is invalid, or its body opens with a `spec_kind:` line (6.20.7) |
+| `malformed-line`    | a non-blank line under `## Mapping` does not match, or there is no `## Mapping`                                                                                |
+| `missing-ac`        | a SPEC AC has no mapping line, or the SPEC's Acceptance Criteria section is absent or duplicated                                                               |
+| `duplicate-ac`      | an AC has more than one mapping line                                                                                                                           |
+| `unknown-ac`        | a mapped id is not a SPEC AC                                                                                                                                   |
+| `level-mismatch`    | a mapped level differs from the SPEC's `verify:` level                                                                                                         |
+| `unlisted-file`     | a mapped file is not in `## Files`                                                                                                                             |
+| `unmapped-file`     | a `## Files` entry is mapped by no line                                                                                                                        |
+| `in-plan-files`     | a test file is in PLAN.md `## Files`, so the build would be scoped to it                                                                                       |
+| `claimed-elsewhere` | another feature's AC-TESTS.md `## Files` already names the file                                                                                                |
+| `no-files`          | there is no `## Files`, or it names nothing                                                                                                                    |
+| `bad-path`          | a `## Files` entry is a placeholder or glob, absolute, led by `-`, not normalized, or under `.pharn/` or `pharn/features/`                                     |
 
 Exit **0** GREEN · **1** RED (every kind; a `legacy-spec` here means a mapping exists for a SPEC whose
 `spec_template` was removed — it sits outside the body hash, so the pin cannot see it) · **2** unusable input (a
@@ -93,7 +93,8 @@ named file absent or unreadable, a `--features-dir` that is not a directory, bad
 
 `check-ac-tests.mjs --spec <SPEC.md>` decides **before any mapping exists** what a SPEC gets: **0** templated (prints
 the ids and levels), **3** legacy, **4** bootstrap (`spec_kind: test-infra`; prints the levels the bootstrap lock
-records), **2** unusable. Precedence, fixed: unreadable 2 → legacy 3 → an invalid `spec_kind` 2 → an absent,
+records), **2** unusable. Precedence, fixed: unreadable 2 → legacy 3 → an invalid `spec_kind`, or a body that opens with a `spec_kind:` line
+(6.20.7; `spec-template.md`, "`spec_kind`"), 2 → an absent,
 duplicated or empty Acceptance Criteria section (or, for bootstrap, a malformed level) 2 → bootstrap 4 → templated 0.
 `/pharn-plan` and `/pharn-test` branch on it.
 
@@ -251,7 +252,9 @@ later verify stage will require instead: after the build, the level's gate is di
 one collected `passed` test with per-test results available.
 
 `spec_kind` is covered by the SPEC's approval pin (`spec-template.md`, "`spec_kind`"), so an Approved feature SPEC
-cannot become a bootstrap one without the pin moving, which every chain check reports as drift. **Bounded:** the
+that passes `check-spec.mjs` cannot become a bootstrap one without the pin moving, which every chain check reports as
+drift. Before 6.20.7, moving the key between the frontmatter and the body's first line kept the pin; that layout is
+now RED at `check-spec.mjs` and unusable (2) at `--spec`. **Bounded:** the
 floor sees a re-pin, not an approver — `check-spec.mjs --hash` plus a frontmatter edit re-pins, and a self-consistent
 re-pin (with a matching re-plan) passes.
 
