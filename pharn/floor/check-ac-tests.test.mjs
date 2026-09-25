@@ -560,6 +560,110 @@ test("★ HOOK — a build scoped --from-plan PLAN.md is DENIED a Write to an AC
   }
 });
 
+// ── 6.21.0: the test infrastructure /pharn-test pins stays out of PLAN.md's `## Files` ─────────────────────────────
+
+const infraKinds = (r) => [...new Set(r.findings.map((f) => f.kind))].sort();
+
+test("test-infra-in-plan — a root runner config in PLAN.md `## Files` (the review's repro: vite.config.ts, then the build edits it)", () => {
+  const r = onlyKind({ plan: planText(["src/demo.js", "vite.config.ts"]) }, "test-infra-in-plan");
+  assert.match(r.out, /names "vite\.config\.ts", a root runner config \/pharn-test pins before the build/);
+  assert.match(r.out, /`spec_kind: test-infra` increment first \(via \/pharn-ship\)/, "the remedy is named");
+  // Every spelling the setter would scope to the root file is caught — the ones the ★ HOOK test below proves open it.
+  for (const spelling of ["Vite.config.ts", "vite.config.ts (new alias)", "jest.config.cjs", "VITEST.WORKSPACE.JSON"]) {
+    onlyKind({ plan: planText(["src/demo.js", spelling]) }, "test-infra-in-plan");
+  }
+});
+
+test("test-infra-in-plan is NOT raised for an entry that cannot reach the root config: nested, `./`-led, glob, placeholder", () => {
+  for (const entry of ["web/vite.config.ts", "./vite.config.ts", "*.config.ts", "<runner config>", "tsconfig.json"]) {
+    const r = checkMapping({ acTestsText: acTests(), specText: SPEC, planText: planText(["src/demo.js", entry]), others: [] });
+    assert.deepEqual(infraKinds(r), [], JSON.stringify(entry));
+    assert.deepEqual(r.notes, [], JSON.stringify(entry));
+  }
+});
+
+test("NOTE, never a RED — package.json / pharn.config.json in PLAN.md stay exit 0, with one advisory NOTE each", () => {
+  for (const manifest of ["package.json", "pharn.config.json", "Package.json (add a dependency)"]) {
+    const root = world({ plan: planText(["src/demo.js", manifest]) });
+    try {
+      const r = run(root);
+      assert.equal(r.code, 0, r.out);
+      assert.deepEqual(r.kinds, []);
+      const notes = r.out.split("\n").filter((l) => l.startsWith("NOTE — "));
+      assert.equal(notes.length, 1, r.out);
+      assert.match(notes[0], /the build may change it \(a dependency, say\), but not the level gates' scripts/);
+      assert.match(notes[0], /ADVISORY: this checker cannot see which part the build will change\./);
+      assert.match(r.out, /^GREEN — /m);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+  // On the RED path the NOTE prints too, and the exit code is the RED's own.
+  const root = world({ plan: planText(["src/demo.js", "vite.config.ts", "package.json"]) });
+  try {
+    const r = run(root);
+    assert.equal(r.code, 1);
+    assert.deepEqual(r.kinds, ["test-infra-in-plan"]);
+    assert.equal(r.out.split("\n").filter((l) => l.startsWith("NOTE — ")).length, 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a bootstrap (`spec_kind: test-infra`) SPEC is the REMEDY, so its PLAN may name the config: checkMapping never reaches the check", () => {
+  const spec = specText({ kind: "test-infra" });
+  const r = checkMapping({ acTestsText: acTests(), specText: spec, planText: planText(["vite.config.ts", "package.json"]), others: [] });
+  assert.deepEqual(infraKinds(r), ["spec-kind"], "only the mapping-for-a-bootstrap RED, never test-infra-in-plan");
+  assert.deepEqual(r.notes, []);
+});
+
+// The six PLAN spellings the plan-time probe measured (PLAN.md D2), each run through the REAL setter and write guard:
+// the kind fires for exactly the rows whose scope opens a root runner config to the build. The write targets are the
+// two root spellings; on APFS `Vite.config.ts` IS the existing `vite.config.ts` (why the name is matched folded). The
+// set is the probed one — it does not certify every possible spelling (L37).
+const HOOK_ROWS = [
+  ["vite.config.ts", true],
+  ["vite.config.ts (new alias)", true],
+  ["Vite.config.ts", true],
+  ["./vite.config.ts", false],
+  ["*.config.ts", false],
+  ["web/vite.config.ts", false],
+];
+
+test("★ HOOK — the RED is load-bearing: over the six probed spellings it fires exactly when the build could write a root config", () => {
+  for (const [entry, opens] of HOOK_ROWS) {
+    const root = world({ plan: planText(["src/demo.js", entry]) });
+    try {
+      execFileSync("git", ["init", "-q", "."], { cwd: root });
+      const env = { ...process.env, CLAUDE_PROJECT_DIR: root };
+      assert.equal(spawnSync(process.execPath, [SETTER, "--from-plan", `pharn/features/${NAME}/PLAN.md`], { cwd: root, env }).status, 0);
+      const writable = ["vite.config.ts", "Vite.config.ts"].filter(
+        (target) =>
+          spawnSync(process.execPath, [ENFORCER], {
+            cwd: root,
+            env,
+            input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: join(root, target) } }),
+            encoding: "utf8",
+          }).status === 0
+      );
+      assert.equal(
+        writable.length > 0,
+        opens,
+        `${entry}: the build's Write to a root config spelling (allowed: ${JSON.stringify(writable)})`
+      );
+      assert.equal(
+        infraKinds(
+          checkMapping({ acTestsText: acTests(), specText: SPEC, planText: planText(["src/demo.js", entry]), others: [] })
+        ).includes("test-infra-in-plan"),
+        opens,
+        `${entry}: the kind fires exactly when the build could write a root config`
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
 // ---------------------------------------------------------------------------------------------------
 // Closure (L36): every kind literal the checker emits is a member, and every member was reached above.
 // ---------------------------------------------------------------------------------------------------

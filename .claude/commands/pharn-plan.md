@@ -325,6 +325,16 @@ for such a SPEC is a `spec-kind` RED. Exit **0** → continue. Exit **2** → th
      implementation files in PLAN.md and AC test files only here.
    - Paths are plain repo-relative, never under `.pharn/` or `pharn/features/`, and never a placeholder or glob.
    - Another feature's AC test file is theirs. Name a new file.
+   - **The test infrastructure stays out of PLAN.md's `## Files` too** (6.21.0). `/pharn-test` pins it before the
+     build — the root runner configs, and the level gates' `package.json` scripts and `testResults` formats
+     (`pharn/pharn-contracts/ac-tests.md`, "The test-infrastructure pin") — so a build that changes it reads
+     `test-infra-changed` at `/pharn-verify`, and `/pharn-loop` stops (S13) with no rebuild that clears it. A root
+     runner config (`vite.config.ts`, `vitest.config.mjs`, …) in PLAN.md is a **`test-infra-in-plan`** RED. When
+     the feature genuinely needs a runner, config or test-script change, **split it**: spec that change as a
+     `spec_kind: test-infra` increment first (through `/pharn-ship` — `/pharn-loop` never approves one), then plan
+     this feature without it. `package.json` / `pharn.config.json` may stay (a dependency is an ordinary build
+     change); the checker prints an **advisory** `NOTE —` line for them and never changes its exit code, because it
+     cannot see which part of the file the build will change.
 
 3. **Check it (FLOOR)** and branch only on the exit code:
 
@@ -333,7 +343,7 @@ for such a SPEC is a `spec-kind` RED. Exit **0** → continue. Exit **2** → th
    ```
 
    - **0** → GREEN. **1** → the `RED — <kind>` lines name each problem. Fix AC-TESTS.md and re-run. If the fix is in
-     PLAN.md's `## Files` (an `in-plan-files` RED, for instance), first re-scope to PLAN.md with the Step 0 setter
+     PLAN.md's `## Files` (an `in-plan-files` or `test-infra-in-plan` RED, for instance), first re-scope to PLAN.md with the Step 0 setter
      line. Then edit it, re-run Step 4b, re-scope to AC-TESTS.md (step 1 above), and re-run this check. **2** → a
      file is missing.
    - **Map only NEW test files.** Nothing here checks that a mapped file does not already exist. An existing
@@ -391,6 +401,10 @@ chain to `/pharn-grill` or `/pharn-build` (later stages). **End your turn.**
 - **"Every Acceptance Criterion is mapped once, at its level, to a test file the build is not scoped to"** →
   **FLOOR** (`check-ac-tests.mjs` — enum/regex/set membership, the SPEC pin shelled to
   `check-plan-spec-agree.mjs`). NOT that each target is a good public interface (advisory).
+- **"No root runner config the lock pins is in the build's scope"** (6.21.0) → **FLOOR** (`check-ac-tests.mjs`
+  `test-infra-in-plan` — enum/regex over the folded name, through `test-infra-core.mjs`'s own predicate). NOT
+  whether the build changes the pinned `package.json` scripts or `testResults` formats when the plan names those
+  files — the `NOTE —` line is **advisory**, and the pin itself compares them at `/pharn-verify` (late).
 - **"The plan carries `spec_content_hash` forward"** → a **deterministic copy** of a floor-verified
   value into the PLAN.md frontmatter — checkable in principle; **not** independently floor-checked at
   this stage. The consumer that re-verifies spec↔plan is a later stage and **is built**:

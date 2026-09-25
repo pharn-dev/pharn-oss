@@ -340,7 +340,9 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # --from-plan scope), `## Mapping` = one `- AC-<n> | <level> | `<file>` | <public target>` line per AC. check-ac-tests.mjs
 # REDs on a closed kind set (missing/duplicate/unknown AC, level-mismatch, unlisted/unmapped file, in-plan-files — the
 # build's scope would cover it —, claimed-elsewhere, bad-path, no-files, malformed-line, pin via the SHELLED
-# check-plan-spec-agree.mjs, and since 6.18.0 spec-kind); exit 0/1/2. ac-tests-lock.mjs --write/--check pins the tests
+# check-plan-spec-agree.mjs, since 6.18.0 spec-kind, and since 6.21.0 test-infra-in-plan — a ROOT runner config the lock's
+# test-infra pin covers named in PLAN.md `## Files`, matched through test-infra-core.mjs's own isRunnerConfigName;
+# package.json / pharn.config.json there print an ADVISORY `NOTE —` line and never change the exit code); exit 0/1/2. ac-tests-lock.mjs --write/--check pins the tests
 # in AC-TESTS.lock.json (schema ac-tests-lock/3 since 6.20.0 — /2 and /1 still read; closed keys per mode; test_infra
 # is the test-infrastructure pin, see THE AC GATE below); --check names a PATH, never content. The mapping grammar lives in ac-tests-core.mjs. AC-TESTS.md and the lock are PIPELINE_ARTIFACTS (regress-exempt); for reconcile
 # AC-TESTS.md is exempt like PLAN.md (a re-plan rewrites it) but the LOCK is `pre_anchor_artifacts` (NOT exempt).
@@ -422,7 +424,8 @@ node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-
 # RESERVED_IDS and never enter `gates`. Legacy SPEC → NOT-APPLICABLE, stated (with AC evidence beside it → ac-tests-modified); spec_kind:
 # test-infra → BOOTSTRAP, weaker, labelled. THE TEST-INFRA PIN (lock schema ac-tests-lock/3, test-infra-core.mjs,
 # written by --write BEFORE the red run): the level gates' package.json script VALUES + pre/post scripts + testResults
-# formats, and root vitest/vite/playwright/jest config files in a CLOSED name set; the gate also requires each level
+# formats, and root vitest/vite/playwright/jest config files in a CLOSED name set (matched FOLDED since 6.21.0 — on
+# APFS a `Vitest.config.mjs` is the runner's config); the gate also requires each level
 # gate to have run as the pinned `npm run <id>`. NOT caught, stated ONCE in test-infra-core.mjs's header (restated in
 # the contract): a setup file a config imports, env-driven config, script chaining, .npmrc, tsconfig, and more. /2 and /1 locks are still read (mode, never schema, decides bootstrap) and read
 # test-infra-unpinned at verify — the remedy sets the build aside and re-runs /pharn-test (its red run cannot pass over

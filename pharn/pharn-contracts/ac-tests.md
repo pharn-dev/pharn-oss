@@ -87,6 +87,16 @@ without joining the build's scope, and a second extractor would mean editing a p
 | `no-files`          | there is no `## Files`, or it names nothing                                                                                                                    |
 | `bad-path`          | a `## Files` entry is a placeholder or glob, absolute, led by `-`, not normalized, or under `.pharn/` or `pharn/features/`                                     |
 
+**One more kind, since 6.21.0 — `test-infra-in-plan`:** a PLAN.md `## Files` entry that, as the setter scopes it, is a
+ROOT runner config the test-infrastructure pin covers (below). Every write the build could make there changes the
+pin, so the plan could never reach green: `/pharn-verify` would read `test-infra-changed`. The remedy is to split the
+runner change into a `spec_kind: test-infra` increment first. The name test is `test-infra-core.mjs`'s own predicate,
+imported, never a second regex. **`package.json` and `pharn.config.json` in PLAN.md are NOT a RED:** the checker
+prints one **advisory** `NOTE —` line per such entry and **never changes its exit code**. It can see that the plan
+names the file, but not WHICH part of it the build will change, and a dependency is an ordinary build change. The
+pinned script values and `testResults` formats are still compared at `/pharn-verify`, late. The classification is
+FLOOR (enum/regex over the folded name); what the build then does to a named manifest is not.
+
 Exit **0** GREEN · **1** RED (every kind; a `legacy-spec` here means a mapping exists for a SPEC whose
 `spec_template` was removed — it sits outside the body hash, so the pin cannot see it) · **2** unusable input (a
 named file absent or unreadable, a `--features-dir` that is not a directory, bad usage).
@@ -223,18 +233,31 @@ the live tree and compare EXACTLY. Computed by `pharn/floor/test-infra-core.mjs`
   Not the whole `package.json`: dependencies legitimately change in a build.
 - **`configs`** — every entry at the project ROOT named `vitest.config`, `vitest.workspace`, `vite.config`,
   `playwright.config` or `jest.config` with a js/mjs/cjs/ts/mts/cts/json extension, hashed without following a link.
-  A symlinked or non-regular one cannot be pinned: `--write` refuses it, and a recompute reads it as a change.
+  A symlinked or non-regular one cannot be pinned: `--write` refuses it, and a recompute reads it as a change. Since
+  6.21.0 the name is matched **folded** (NFC + full case folding, the fold `scopeKey` and the write guard use): vite
+  and vitest look their config up by the lowercase name, so on a case-insensitive volume `Vitest.config.mjs` IS the
+  runner's config. Before 6.21.0 it was loaded and never pinned. The recorded `path` is the on-disk spelling.
 
 A difference names the gate id or the config path, never the script's text. **What it does NOT catch, stated:** a
-setup or helper file the config imports; configuration read from the environment; a config outside the root or
-under another name; a `jest` key inside `package.json`; `tsconfig`; script CHAINING (`"test": "npm run test:unit"`
-pins the one line, not what `test:unit` runs); npm's own configuration (a project `.npmrc`'s `script-shell` or
-`node-options` changes what `npm run test` executes without touching a pinned byte); the runner's own version. A change it catches reads
-`test-infra-changed` whether or not it was legitimate. **The remedy is a person, and it costs the build:** once the
-build exists, `/pharn-test`'s red run reads `ac-test-passes-before-build` and has no escape hatch, so re-running it
-means setting the build aside first (revert or stash it), or re-planning. **Migration, stated:** a feature whose lock
-is `/2` (written by 6.18 or 6.19) carries no pin, so 6.20's verify reports `test-infra-unpinned` for it until that is
-done.
+setup or helper file the config imports; configuration read from the environment; a config outside the root, or under
+a name outside the closed set (the fold is the modelled equivalence: a name a filesystem folds beyond it is not caught,
+and one it folds beyond the filesystem is pinned anyway — so on a case-SENSITIVE filesystem a `Vitest.config.mjs` the
+runner does not load is still pinned, fail-closed); a `jest` key inside `package.json`; `tsconfig`; script CHAINING
+(`"test": "npm run test:unit"` pins the one line, not what `test:unit` runs); npm's own configuration (a project
+`.npmrc`'s `script-shell` or `node-options` changes what `npm run test` executes without touching a pinned byte); the
+runner's own version. A change it catches reads `test-infra-changed` whether or not it was legitimate. **The remedy is
+a person, and it costs the build:** once the build exists, `/pharn-test`'s red run reads
+`ac-test-passes-before-build` and has no escape hatch, so re-running it means setting the build aside first (revert
+or stash it), or re-planning. **When the change IS the feature's intent** — the build had to change the runner, its
+config or a test script — re-running `/pharn-test` cannot help: the rebuild makes the same change and the gate reads it
+again. Re-plan instead: the change goes into a `spec_kind: test-infra` increment first (through `/pharn-ship`), and the
+feature is planned after it. Since 6.21.0 `check-ac-tests.mjs` refuses that plan up front for a root runner config
+(`test-infra-in-plan`, above); for the level gates' scripts and `testResults` it can only print an advisory NOTE.
+**Migration, stated:** a feature whose lock is `/2` (written by 6.18 or 6.19) carries no pin, so 6.20's verify reports
+`test-infra-unpinned` for it until that is done. Since 6.21.0 a `/3` lock written while a case-variant runner config
+already sat at the root did not pin it, and a recompute now reads `<path>: a runner config was added` (`lock-red`,
+`test-infra-changed`) — fail-closed, with the same remedy; a 6.21 lock that records such a path is `lock-unusable` to a
+6.20.x floor, whose shape check does not fold.
 
 ### Bootstrap — a `spec_kind: test-infra` SPEC
 
@@ -285,10 +308,15 @@ child checker's own lines follow, indented. `lock-mode-mismatch` exists because 
 reads SPEC.md: without it, a SPEC re-approved as `test-infra` beside an old test-first lock read `READY bootstrap`. An
 `ac-tests-lock/1` lock counts as test-first and fails the red-run requirement.
 
-- **It passes on a rebuild:** the lock pins only the AC tests, and the mapping check reads SPEC, PLAN and AC-TESTS.md,
-  none of which the build may write. A gate that rewrites a pinned test (an inline snapshot, a `--fix` linter) turns
-  it RED, and `/pharn-test` cannot be re-run after the build — its red run would read `ac-test-passes-before-build`.
-  So `/pharn-loop` treats stale test evidence as a STOP, never a re-run.
+- **It passes on a rebuild that left what the lock pins alone.** The mapping check reads SPEC, PLAN and AC-TESTS.md,
+  none of which the build may write. The lock pins the AC tests and the test infrastructure; "The
+  test-infrastructure pin" (above) is the list. The mapping check keeps the AC tests (`in-plan-files`) and every root
+  runner config (`test-infra-in-plan`, 6.21.0) out of the build's scope. It cannot keep out the level gates'
+  `package.json` scripts or the `testResults` formats when the plan names `package.json` or `pharn.config.json` for
+  another reason, so a build that changes those turns the gate RED. So does a gate that rewrites a pinned file — a
+  test (an inline snapshot, a `--fix` linter) or a runner config (a formatter or `--fix` linter run over the root).
+  `/pharn-test` cannot be re-run after the build — its red run would read `ac-test-passes-before-build`. So
+  `/pharn-loop` treats stale test evidence as a STOP, never a re-run.
 - **`NOT-APPLICABLE` is decided by `spec_template`, which the approval pin does not cover** (`spec-template.md`,
   "Opt-in"). Removing that key and deleting AC-TESTS.md and the lock makes a templated SPEC read legacy. A legacy SPEC
   beside either file is RED; `/pharn-loop`, whose `/pharn-spec` always fills the template, refuses `NOT-APPLICABLE`.
@@ -372,7 +400,9 @@ leaves the lock stale is caught by `ac-tests-lock.mjs --check`.
   over all of these (enum membership over the SPEC's mode, the rest shelled). Obeying that gate is command
   discipline; `/pharn-loop` re-reads it after every build. Since 6.20.0: the test infrastructure is pinned
   (content-hash + exact comparison), and `/pharn-verify`'s AC gate decides delivery on the head run (enum membership
-  over the per-test record, plus the content-hash checks above).
+  over the per-test record, plus the content-hash checks above). Since 6.21.0: no root runner config the pin covers
+  is in the build's scope when the mapping check is GREEN (`test-infra-in-plan`, enum/regex over the folded name,
+  composed with the fix #7 hook, which scopes only concrete `## Files` entries).
 - **Bounded:** the build exclusion holds for the PLAN.md the checker read. An edit to PLAN.md after `/pharn-test`
   reopens it until something re-checks; since 6.19.0 `/pharn-build` does, first thing (the test-stage gate, below). A Bash write bypasses every
   write hook (`LIMITS.md §6`), and `/pharn-test` runs before the reconcile anchor, so its own Bash writes are not

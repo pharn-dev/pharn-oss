@@ -26,6 +26,14 @@
 // it must be BYTE-IDENTICAL to a cleaned `## Files` entry, because the runner, the red run and the AC gate use
 // the cell verbatim — a cell that matched only after folding was never collected (6.20.5).
 //
+// THE TEST INFRASTRUCTURE STAYS OUT OF THE BUILD'S SCOPE TOO (6.21.0, `test-infra-in-plan`): `/pharn-test` pins the root
+// runner configs and the level gates' scripts BEFORE the build (test-infra-core.mjs), so a PLAN.md `## Files` entry the
+// setter would scope to a root runner config certifies a build whose own in-scope edit reads `test-infra-changed` at
+// `/pharn-verify` — no rebuild clears it. The entry is classified by test-infra-core's testInfraPathKind (the pin's own
+// predicate, imported — never a second regex). `package.json` / `pharn.config.json` get an ADVISORY `NOTE —` line and
+// no RED, never changing the exit code: the build may legitimately change a dependency, and this checker cannot see
+// WHICH part of the file the build will change (the pinned script values are still compared at verify).
+//
 // NOT GUARANTEED (P0), each stated:
 //   • that the tests are good, assert the AC's Then, or target the right public interface — model work
 //     (`/pharn-test`), advisory; the target column is checked for PRESENCE only;
@@ -58,6 +66,7 @@ import { fileURLToPath } from "node:url";
 import { specAcceptanceCriteria, specVerdict } from "./spec-template-core.mjs";
 import { clean, pathsFromPlanFiles } from "./plan-files-core.mjs";
 import { badPath, mappingOf, scopeKey } from "./ac-tests-core.mjs";
+import { testInfraPathKind } from "./test-infra-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHECK_PLAN_SPEC_AGREE = join(HERE, "check-plan-spec-agree.mjs");
@@ -75,6 +84,7 @@ export const KINDS = Object.freeze([
   "no-files",
   "pin",
   "spec-kind",
+  "test-infra-in-plan",
   "unknown-ac",
   "unlisted-file",
   "unmapped-file",
@@ -92,7 +102,7 @@ function shown(v) {
 /**
  * The pure check (no chain check, no filesystem beyond what the caller passes).
  * @param {{acTestsText: string, specText: string, planText: string, others: {feature: string, files: string[]}[]}} input
- * @returns {{legacy: boolean, findings: {kind: string, detail: string}[]}}
+ * @returns {{legacy: boolean, findings: {kind: string, detail: string}[], notes: string[]}}
  */
 export function checkMapping({ acTestsText, specText, planText, others }) {
   const findings = [];
@@ -107,7 +117,7 @@ export function checkMapping({ acTestsText, specText, planText, others }) {
       "legacy-spec",
       "the SPEC has no `spec_template`, yet a mapping exists — the key was removed after mapping (it is outside the body hash, so the pin cannot see it)"
     );
-    return { legacy: true, findings };
+    return { legacy: true, findings, notes: [] };
   }
   if (spec.kind !== "feature") {
     // A test-infra SPEC is a bootstrap increment with no mapping (its lock is written by --write-bootstrap). A mapping
@@ -121,7 +131,7 @@ export function checkMapping({ acTestsText, specText, planText, others }) {
           : "the SPEC's `spec_kind` is not one of {feature, test-infra} — run check-spec.mjs"
         : "the SPEC is `spec_kind: test-infra`, a bootstrap increment: it gets no AC-TESTS.md mapping"
     );
-    return { legacy: false, findings };
+    return { legacy: false, findings, notes: [] };
   }
   if (spec.sections !== 1 || spec.items.length === 0) {
     // check-spec.mjs REDs this shape itself; here it is refused rather than read as "no criteria to map" (L34).
@@ -198,6 +208,23 @@ export function checkMapping({ acTestsText, specText, planText, others }) {
     if (k !== null && planKeys.has(k)) red("in-plan-files", `${shown(f)} is in PLAN.md \`## Files\`, so the build would be scoped to it`);
   }
 
+  // The test infrastructure the lock pins stays out of the build's scope too (6.21.0): a root runner config in PLAN.md
+  // is RED — every write the build could make there changes the pin; a manifest is an advisory NOTE only.
+  const notes = [];
+  for (const entry of plan.ok ? plan.value : []) {
+    const kind = testInfraPathKind(entry);
+    if (kind === "config") {
+      red(
+        "test-infra-in-plan",
+        `PLAN.md \`## Files\` names ${shown(entry)}, a root runner config /pharn-test pins before the build — the build's edit would read test-infra-changed at /pharn-verify; put the runner change in a \`spec_kind: test-infra\` increment first (via /pharn-ship), then plan this feature without it`
+      );
+    } else if (kind === "manifest") {
+      notes.push(
+        `PLAN.md \`## Files\` names ${shown(entry)}: the build may change it (a dependency, say), but not the level gates' scripts, their pre/post scripts or the \`testResults\` formats /pharn-test pinned — that reads test-infra-changed at /pharn-verify. ADVISORY: this checker cannot see which part the build will change.`
+      );
+    }
+  }
+
   // Feature ownership: no other feature's AC-TESTS.md claims the same file.
   const owner = new Map();
   for (const o of others) {
@@ -211,7 +238,7 @@ export function checkMapping({ acTestsText, specText, planText, others }) {
     if (k !== null && owner.has(k)) red("claimed-elsewhere", `${shown(f)} is already an AC test file of feature ${shown(owner.get(k))}`);
   }
 
-  return { legacy: false, findings };
+  return { legacy: false, findings, notes };
 }
 
 /** Every OTHER feature directory's AC-TESTS.md `## Files`, read from `featuresDir`. A directory without one, or
@@ -286,7 +313,7 @@ function main(argv) {
   const self = basename(dirname(resolve(acPath)));
   const others = otherFeatures(featuresDir ?? dirname(dirname(resolve(acPath))), self);
 
-  const { findings } = checkMapping({ acTestsText, specText, planText, others });
+  const { findings, notes } = checkMapping({ acTestsText, specText, planText, others });
   // The SPEC pin, SHELLED (P3): AC-TESTS.md carries spec_id + spec_content_hash exactly as PLAN.md does.
   const chain = spawnSync(process.execPath, [CHECK_PLAN_SPEC_AGREE, acPath, specPath], { encoding: "utf8" });
   if (chain.status !== 0) {
@@ -295,16 +322,23 @@ function main(argv) {
       detail: `AC-TESTS.md's spec_id/spec_content_hash do not match the current Approved, un-drifted SPEC (check-plan-spec-agree.mjs exit ${chain.status})`,
     });
   }
+  // A NOTE never changes the exit code (advisory, P0); it prints on the RED and the GREEN path alike. On the RED path it
+  // goes BEFORE the closing summary, so the closing line stays the `RED — ` line check-test-stage.mjs reads a verdict by.
+  const printNotes = () => {
+    for (const n of notes) console.log(`NOTE — ${n}`);
+  };
   if (findings.length) {
     for (const f of findings) console.log(`RED — ${f.kind}: ${f.detail}`);
+    printNotes();
     console.log(`\nRED — ${findings.length} AC-tests mapping check(s) failed`);
     return 1;
   }
   const rows = mappingOf(acTestsText).rows.length;
   console.log(
     `GREEN — ${rows} AC(s) mapped once each at the SPEC's level; every test file listed, none in PLAN.md \`## Files\` (as the setter scopes ` +
-      `it), none claimed by another feature; the SPEC pin holds. NOTE (P0): this checks the MAPPING, never that the tests are good.`
+      `it), none claimed by another feature, no root runner config in PLAN.md; the SPEC pin holds. NOTE (P0): this checks the MAPPING, never that the tests are good.`
   );
+  printNotes();
   return 0;
 }
 

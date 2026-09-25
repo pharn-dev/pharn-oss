@@ -112,8 +112,15 @@ Load the trusted prefix and obey it for the whole run:
      or edit an AC test to get past this — they are outside your scope by design (`pharn/pharn-contracts/ac-tests.md`).
    - **exit 2** → **HALT** (unusable input).
 
-   The gate also passes on a **rebuild** (a `/pharn-loop` iteration 2+, `/pharn-ship`'s Step 2b retry): the lock
-   pins only the AC tests, and the mapping check reads SPEC, PLAN and AC-TESTS.md, none of which you may write.
+   The gate also passes on a **rebuild** (a `/pharn-loop` iteration 2+, `/pharn-ship`'s Step 2b retry) **that left
+   what the lock pins alone**. The mapping check reads SPEC, PLAN and AC-TESTS.md, none of which you may write; the
+   lock pins the AC tests AND the test infrastructure (`pharn/pharn-contracts/ac-tests.md`, "The test-infrastructure
+   pin" — that section is the list). The AC tests and every root runner config are outside your scope by construction:
+   `check-ac-tests.mjs` REDs a PLAN whose `## Files` names either (`in-plan-files`, `test-infra-in-plan`, 6.21.0).
+   `package.json` and `pharn.config.json` are not — a plan may name them to change a dependency. **So never change the
+   level gates' scripts (`test`, `test:e2e`, `e2e`), their `pre`/`post` scripts or the `testResults` formats, even
+   when the plan names the file:** that reads `lock-red` here and `test-infra-changed` at `/pharn-verify`, and no
+   rebuild clears it.
 
 3. **Set the scope from the plan's `## Files`** before any write. The **scope source is a `## Files` heading
    whose list items lead with a back-tick path** (`` - `path` ``); the hardened extractor takes only those
