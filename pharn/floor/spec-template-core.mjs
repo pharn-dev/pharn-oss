@@ -91,7 +91,7 @@ export function specKindLines(rawFrontmatter) {
 /** Does the SPEC body OPEN with a `spec_kind:` line? Tested after the line-ending fold the pin applies (`\r\n` → `\n`,
  *  check-spec.mjs pinHash), with the same SPEC_KIND_LINE_RE specKindLines uses, and no `m` flag, so only the body's
  *  first line counts. Such a body pins exactly like the same line in the frontmatter (the argument is in check-spec.mjs's
- *  pinHash comment and pharn-contracts/spec-template.md, "`spec_kind`"), so check-spec.mjs REDs it (`pin`) and
+ *  pinHash comment and pharn-contracts/spec-template.md, "`spec_kind`"), so check-spec.mjs REDs it (`kind-in-body`) and
  *  specAcceptanceCriteria reports the kind as unusable. The fold cannot change the answer (the prefix holds no CR or
  *  LF); it is applied so the predicate reads exactly the string the pin hashes. */
 export function kindLineOpensBody(body) {

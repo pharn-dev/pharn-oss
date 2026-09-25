@@ -36,6 +36,7 @@ import {
   parsePorcelain,
   unquoteC,
   git,
+  dataText,
 } from "./render-run-report.mjs";
 import { FEATURE_BASE, TOKEN_CLASSES } from "./render-cost-ledger.mjs";
 import { fenceFor } from "./loop-record-core.mjs";
@@ -671,6 +672,314 @@ test("Verdicts: a non-string regression entry is still rendered, never dropped s
   }
 });
 
+// ── 6.21.1: the renderer never throws on a JSON value (L51 — the FULL input domain) ────────────────────
+//
+// The review's finding: a `null` entry in `ac_gate.acs` / `ac_gate.evidence` threw a TypeError, exit 1, and no
+// RUN-REPORT.md was written. The same class was measured at five more sites (a `{"toString": 1}` object makes
+// `String()` throw; a `null` token row). The SET these tests range over, named (L52): every node of the three JSON
+// inputs this module parses (`cost.json`, `verify-report.json`, `regression-report.json`) × {`null`,
+// `{"toString":1}`}, plus a `null` appended to every array — walked from the fixture, not listed by hand (L36).
+
+const HOSTILE = () => JSON.parse('{"toString": 1}');
+/** The CLI, run from the repo root (the `cli` helper below is declared later in this file). */
+const runCli = (args) => spawnSync("node", [CLI, ...args], { cwd: REPO, encoding: "utf8" });
+
+test("★ the reported case, through the CLI WRITE path: a `null` in ac_gate.acs, in ac_gate.evidence and in the token rows → exit 0, the report written, each as a marker row", () => {
+  const root = scratch();
+  try {
+    const ledger = costJson();
+    ledger.by_stage_iteration_model = [null, ...ledger.by_stage_iteration_model];
+    feature(root, "feat", {
+      "cost.json": ledger,
+      "verify-report.json": {
+        verdict: "FAIL",
+        failing_gates: ["ac-delivery"],
+        ac_gate: {
+          mode: "test-first",
+          verdict: "FAIL",
+          reason: null,
+          acs: [null, { id: "AC-1", level: "unit", tests: ["t.test.js::AC-1: ok"], status: "passed", reason: null, detail: "" }],
+          evidence: [null, { reason: "ac-never-red", detail: "no red run" }],
+        },
+      },
+    });
+    const r = runCli(["feat", "--repo", root]);
+    assert.equal(r.status, 0, r.stderr);
+    const md = readFileSync(join(root, "pharn", "features", "feat", "RUN-REPORT.md"), "utf8");
+    assert.match(md, /\(not an AC entry\) {2}null/);
+    assert.match(md, /evidence {2}\(not an evidence entry\) {2}null/);
+    assert.match(md, /\(not a row\)/);
+    // the well-formed entries beside them still render — a guard, not a truncation
+    assert.match(md, /AC-1 {2}unit {2}passed {2}delivered {2}t\.test\.js::AC-1: ok/);
+    assert.match(md, /evidence {2}ac-never-red {2}no red run/);
+    assert.match(md, /pharn-build/);
+    assert.deepEqual(headings(md), [...SECTIONS]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("dataText: byte-identical to String() for every JSON primitive (±Infinity from 1e999 included); JSON text for an object or array; a marker for a value too deep to stringify", () => {
+  const primitives = ["", "x", "a\nb", 0, -0, 1.5, 1e21, JSON.parse("1e999"), JSON.parse("-1e999"), true, false, null, undefined];
+  assert.equal(primitives.length, 13, "non-vacuity: the primitive set is counted");
+  for (const v of primitives) assert.equal(dataText(v), String(v), `dataText(${String(v)})`);
+  // the objects String() cannot render — the control proves each one DOES throw in String()
+  const hostile = [HOSTILE(), [HOSTILE()]];
+  for (const v of hostile) {
+    assert.throws(() => String(v), TypeError, "control: String() throws on this value");
+    assert.equal(dataText(v), JSON.stringify(v));
+  }
+  assert.equal(dataText(JSON.parse('{"a":{"toString":1}}')), '{"a":{"toString":1}}', "nested: JSON text, not [object Object]");
+  assert.equal(dataText({ a: 1 }), '{"a":1}');
+  assert.equal(dataText([1, "b"]), '[1,"b"]');
+  // JSON.parse accepts a depth JSON.stringify cannot walk (GRILL G2): the one guarded call
+  const deep = JSON.parse("[".repeat(20000) + "]".repeat(20000));
+  assert.throws(() => JSON.stringify(deep), RangeError, "control: the depth really overflows JSON.stringify");
+  assert.equal(dataText(deep), "(value nested too deeply to render)");
+});
+
+/** A `/2` ledger with a BOUNDED membership, so measurementLabel's window values are on the rendered path (GRILL G4:
+ *  the default costJson() is `/1` and never reaches them). `base_sha` stays `unknown`, so no render spawns git. */
+const domainInputs = () => ({
+  "cost.json": costJson({
+    schema: "pharn-cost-ledger/2",
+    membership: {
+      status: "bounded",
+      start: "2026-09-25T10:00:00.000Z",
+      end: "2026-09-25T11:00:00.000Z",
+      session: "sess-1",
+      excluded_requests: 4,
+    },
+    coverage_note: "measured inside the window",
+  }),
+  "verify-report.json": {
+    verdict: "FAIL",
+    failing_gates: ["ac-delivery", "test"],
+    ac_gate: {
+      mode: "test-first",
+      verdict: "FAIL",
+      reason: "one AC is not delivered",
+      note: "an AC is delivered = …",
+      acs: [
+        { id: "AC-1", level: "unit", tests: ["a.test.js::AC-1: x"], status: "passed", reason: null, detail: "" },
+        { id: "AC-2", level: "e2e", tests: [], status: "failed", reason: "ac-not-passed", detail: "1 of 1 failed" },
+      ],
+      evidence: [{ reason: "ac-never-red", detail: "no red run" }],
+    },
+  },
+  "regression-report.json": { verdict: "regressions", regressions: ["format:check", { gate: "test", was: 0, now: 1 }] },
+});
+
+/** Every node below the root, as a key/index path. */
+function nodePaths(v, path = []) {
+  const out = [];
+  if (v !== null && typeof v === "object") {
+    for (const k of Object.keys(v)) {
+      const p = [...path, Array.isArray(v) ? Number(k) : k];
+      out.push(p, ...nodePaths(v[k], p));
+    }
+  }
+  return out;
+}
+const at = (v, path) => path.reduce((t, k) => t[k], v);
+function withValue(v, path, value) {
+  const c = structuredClone(v);
+  at(c, path.slice(0, -1))[path.at(-1)] = value;
+  return c;
+}
+
+/** The report's level-1 and level-2 headings as a CommonMark reader sees them: lines inside a back-tick fence are
+ *  code, not structure. `headings()` above is line-based and cannot see a fence, so it would flag a heading-shaped
+ *  line QUOTED as DATA (REVIEW finding 4: the closure's structure check needs mutants that can carry a newline, and
+ *  those land in fences). An approximation of CommonMark, enough for this file's own output: a fence opens on a line
+ *  of 0–3 spaces and ≥3 back-ticks and closes on a run at least as long; a heading is 0–3 spaces, `#` or `##`. */
+function structure(md) {
+  const out = [];
+  let fence = 0;
+  for (const line of md.split("\n")) {
+    const f = line.match(/^ {0,3}(`{3,})/);
+    if (fence) {
+      if (f && f[1].length >= fence && /^ {0,3}`+\s*$/.test(line)) fence = 0;
+      continue;
+    }
+    if (f) {
+      fence = f[1].length;
+      continue;
+    }
+    if (/^ {0,3}#{1,2}(\s|$)/.test(line)) out.push(line.trim());
+  }
+  return out;
+}
+const STRUCTURE = (name) => [`# RUN REPORT — ${name}`, ...SECTIONS];
+/** A string mutant that WOULD become structure if any site rendered it outside a fence. */
+const NEWLINE_MUTANT = "x\n## Injected\n# Forged";
+
+test("structure(): a fenced heading-shaped line is code, an unfenced one is structure (the detector's own control)", () => {
+  assert.deepEqual(structure("# T\n## A\n```text\n## fenced\n# fenced\n```\n  ## B\n  ````text\n  ## deep\n  ````\n"), [
+    "# T",
+    "## A",
+    "## B",
+  ]);
+});
+
+test('★ DOMAIN CLOSURE: every node of the three JSON inputs, replaced by `null`, by {"toString":1} and by a newline-bearing string, and a `null` appended to every array — every render completes, and no mutant becomes structure', () => {
+  const root = scratch();
+  try {
+    const inputs = domainInputs();
+    const render = () => renderRunReport("feat", { repo: root, markersBase: join(root, "no-markers") });
+    feature(root, "feat", inputs);
+    const control = render();
+    assert.deepEqual(structure(control), STRUCTURE("feat"));
+    // the structure assertion CAN fail (REVIEW finding 4): one unfenced injected line changes it
+    assert.notDeepEqual(structure(`${control}\n${NEWLINE_MUTANT}`), STRUCTURE("feat"));
+    // the control reaches every block the mutants target (L34: a closure over paths never rendered proves nothing)
+    for (const re of [
+      /window start {7}2026-09-25T10:00:00\.000Z/,
+      /pharn-build/,
+      /TOTAL/,
+      /AC-2 {2}e2e {2}failed/,
+      /evidence {2}ac-never-red/,
+      /format:check/,
+      /- verify: `FAIL`/,
+      /- regress: `regressions`/,
+    ]) {
+      assert.match(control, re);
+    }
+    // the KNOWN crash sites (measured at 6.21.0) must be among the walked paths, so the walk cannot silently lose one
+    const walked = new Set(Object.entries(inputs).flatMap(([file, v]) => nodePaths(v).map((p) => `${file}:${p.join(".")}`)));
+    for (const site of [
+      "cost.json:outcome.iterations",
+      "cost.json:membership.start",
+      "cost.json:membership.end",
+      "cost.json:membership.session",
+      "cost.json:membership.excluded_requests",
+      "cost.json:by_stage_iteration_model.0",
+      "cost.json:by_stage_iteration_model.0.stage",
+      "cost.json:totals.requests",
+      "verify-report.json:verdict",
+      "verify-report.json:failing_gates.0",
+      "verify-report.json:ac_gate.acs.0",
+      "verify-report.json:ac_gate.acs.0.tests.0",
+      "verify-report.json:ac_gate.evidence.0",
+      "verify-report.json:ac_gate.evidence.0.reason",
+      "regression-report.json:verdict",
+      "regression-report.json:regressions.0",
+    ]) {
+      assert.ok(walked.has(site), `the walk misses the known crash site ${site}`);
+    }
+    let renders = 0;
+    let expected = 0;
+    for (const [file, value] of Object.entries(inputs)) {
+      const paths = nodePaths(value);
+      const arrays = [[], ...paths].filter((p) => Array.isArray(p.length ? at(value, p) : value));
+      expected += paths.length * 3 + arrays.length;
+      const mutants = [
+        ...paths.flatMap((p) => [
+          [p, withValue(value, p, null)],
+          [p, withValue(value, p, HOSTILE())],
+          [p, withValue(value, p, NEWLINE_MUTANT)],
+        ]),
+        ...arrays.map((p) => [p, withValue(value, [...p, at(value, p).length], null)]),
+      ];
+      for (const [p, m] of mutants) {
+        feature(root, "feat", { [file]: JSON.stringify(m) });
+        const md = render();
+        renders++;
+        assert.deepEqual(structure(md), STRUCTURE("feat"), `${file}:${p.join(".")}: a mutant became structure`);
+      }
+      feature(root, "feat", { [file]: value }); // restore before the next file's mutants
+    }
+    assert.equal(renders, expected);
+    assert.ok(renders > 150, `non-vacuity: ${renders} renders`);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a verdict STRING outside its enum is never inline: a newline in it cannot open a heading or forge a title (GRILL G5)", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", {
+      "cost.json": costJson(),
+      "verify-report.json": { verdict: "PASS\n\n## Briefing\n\ninjected", failing_gates: [] },
+      "regression-report.json": { verdict: "x\n# RUN REPORT — forged", regressions: [] },
+    });
+    const md = renderRunReport("feat", { repo: root });
+    assert.deepEqual(headings(md), [...SECTIONS]);
+    assert.equal(md.split("\n").filter((l) => /^# /.test(l)).length, 1);
+    assert.match(md, /- verify: `unknown` — the report's `verdict` is not one of \{FAIL, INCOMPLETE, INCONCLUSIVE, PASS\}/);
+    assert.match(md, /- regress: `unknown` — the report's `verdict` is not one of/);
+    assert.match(md, /injected/, "shown as DATA, never dropped");
+    // members still render inline, and an absent verdict still reads `unknown` without a quote block
+    feature(root, "feat", {
+      "verify-report.json": { verdict: "INCOMPLETE", failing_gates: [] },
+      "regression-report.json": { regressions: [] },
+    });
+    const ok = renderRunReport("feat", { repo: root });
+    assert.match(ok, /- verify: `INCOMPLETE`\n/);
+    assert.match(ok, /- regress: `unknown`\n/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("base_sha is handed to git only when it is a commit id: `--output=<file>` no longer makes git write that file, and a newline cannot open a heading", () => {
+  const root = scratch();
+  try {
+    const base = gitRepo(root);
+    const target = join(root, "pwned.txt");
+    const refused = [`--output=${target}`, `${"a".repeat(40)}\n## Injected`, "HEAD", "main", "abc123", `-${"a".repeat(40)}`];
+    for (const b of refused) {
+      feature(root, "feat", { "cost.json": costJson({ base_sha: b }) });
+      const md = renderRunReport("feat", { repo: root });
+      assert.ok(!existsSync(target), `git wrote ${target} for base_sha ${JSON.stringify(b)}`);
+      assert.match(md, /`base_sha` is not a commit id \(7 to 64 hex digits\)/, JSON.stringify(b));
+      assert.deepEqual(structure(md), STRUCTURE("feat"), JSON.stringify(b));
+      const files = md.slice(md.indexOf("## Files"), md.indexOf("## Verdicts"));
+      assert.ok(!files.includes("Injected") && !files.includes("--output"), files);
+    }
+    // every commit-id spelling git accepts still reaches git and renders the diff: full, uppercase, abbreviated
+    writeFileSync(join(root, "new.ts"), "x");
+    for (const b of [base, base.toUpperCase(), base.slice(0, 7)]) {
+      feature(root, "feat", { "cost.json": costJson({ base_sha: b }) });
+      const md = renderRunReport("feat", { repo: root });
+      assert.match(md, new RegExp(`Changed since \`${b}\``), b);
+      assert.match(md, /- `new\.ts`/, b);
+    }
+    // control: the same git call DOES write the file when handed that argument directly
+    execFileSync("git", ["diff", "--name-only", `--output=${target}`], { cwd: root });
+    assert.ok(existsSync(target), "control: git's --output option writes a file");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("size, as MEASURED (GRILL G1): a value nested 20,000 deep and 250,000 token rows render and exit 0 through the CLI", () => {
+  const root = scratch();
+  try {
+    const deep = "[".repeat(20000) + "]".repeat(20000);
+    const ledger = costJson();
+    ledger.by_stage_iteration_model = Array.from({ length: 250000 }, (_, i) => ({
+      stage: "s",
+      iteration: i,
+      model: "m",
+      requests: 1,
+      tokens: {},
+    }));
+    feature(root, "feat", {
+      "cost.json": JSON.stringify(ledger),
+      "verify-report.json": `{"verdict": ${deep}, "failing_gates": [${deep}], "ac_gate": {"mode": "test-first", "verdict": "FAIL", "acs": [{"id": ${deep}, "tests": [${deep}]}], "evidence": [${deep}]}}`,
+    });
+    const r = runCli(["feat", "--repo", root]);
+    assert.equal(r.status, 0, r.stderr.slice(0, 500));
+    const md = readFileSync(join(root, "pharn", "features", "feat", "RUN-REPORT.md"), "utf8");
+    assert.match(md, /\(value nested too deeply to render\)/);
+    assert.match(md, /249999/, "the last row rendered");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 // ── the Tokens section ───────────────────────────────────────────────────────────────────────────────
 
 test("Tokens: every class, every row, the totals and the unattributed bucket are shown", () => {
@@ -829,7 +1138,12 @@ test("★ F1 REGRESSION: the header's fencing claim is QUALIFIED, and names its 
   assert.ok(!/every region carrying untrusted text is a FENCED BLOCK/.test(src), "the unqualified universal must not return");
   assert.match(src, /every MULTI-LINE region carrying untrusted text is a FENCED BLOCK/);
   assert.match(src, /THE EXCEPTION, named because the sentence above was FALSE as a universal/);
-  assert.match(src, /INLINE CODE SPANS, not fences/);
+  // 6.21.1 narrowed the exception from TWO kinds (paths, verdict tokens) to ONE: a verdict string can carry a newline,
+  // so a verdict is inline only when it is an enum member (GRILL G5). The narrowing must stay named.
+  assert.match(src, /ONE kind of UNCHECKED untrusted value is rendered as an INLINE CODE SPAN, not a fence: a FILE PATH/);
+  assert.match(src, /Every other untrusted value that appears inline passed a closed test first/);
+  const flat = src.replace(/\n\/\/ ?/g, " "); // wrap-tolerant: a re-wrapped comment must not break the pin
+  assert.match(flat, /a verdict is rendered inline only when it is a member of its closed enum/);
 });
 
 test("F1: a back-tick-bearing path is still RENDERED — the exception is cosmetic, not a drop", () => {

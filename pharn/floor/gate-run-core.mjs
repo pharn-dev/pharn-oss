@@ -10,7 +10,8 @@
 // the JSON by hand; regress's Step 4b instructed the model to "record `0`" for an empty test set and to
 // "assemble each side into a flat map". So both the KEYS (which gates are in the set) and the VALUES
 // (their exit codes) were model-authored, and the checkers judged whatever map they were handed — which
-// their own usage blocks say plainly (check-verify.mjs:60-65, check-regress.mjs:40-49).
+// their own usage blocks say plainly (the `Usage:` blocks of check-verify.mjs and check-regress.mjs: `results.json`
+// is "a flat … map written by the command").
 //
 // The failure is recorded, not hypothetical. CHANGELOG [6.3.0]: a dogfooded, unattended /pharn-loop
 // run "skipped /pharn-grill, /pharn-regress and /pharn-verify entirely, hand-executed the equivalent work
@@ -46,9 +47,10 @@
 // SIBLING of `runs[]`, never a member. check-verify.mjs reads it onto its EXISTING `--complete` path.
 // Folding it into the gates map would make an incomplete build a red GATE, so the verdict would be FAIL
 // (exit 1) and INCOMPLETE (exit 3) would become UNREACHABLE — which silently disables /pharn-ship Step
-// 2b's single bounded rebuild (pharn-ship.md:315-321, reachable only from INCOMPLETE) and collapses
-// check-loop.mjs's `v ∈ {FAIL, INCOMPLETE}` distinction (check-loop.mjs:43,79). `reconcile` is the
-// opposite case and IS a gate — it already is one today (pharn-verify.md:234-235).
+// 2b's single bounded rebuild (/pharn-ship "Step 2b — The single build-completion retry", reachable only from
+// INCOMPLETE) and collapses check-loop.mjs's `v ∈ {FAIL, INCOMPLETE}` distinction (its DECISION table and
+// VERIFY_VERDICTS). `reconcile` is the opposite case and IS a gate — it already is one today (/pharn-verify Step 3c:
+// "The runner injects `reconcile` itself, always LAST").
 //
 // TRUST (P2): every operand here is a string or an integer from deterministic tooling — gate ids, exit
 // codes, hex digests, paths. Gate stdout/stderr are UNTRUSTED free text and this module never reads
@@ -203,7 +205,7 @@ export const SIDES = Object.freeze(["base", "head"]);
 export const SCHEMA = "gate-run-record/1";
 
 /** A feature slug: one path segment, no traversal, no separators.
- *  A THIRD copy of a grammar already at mark-phase.mjs:60 and render-run-report.mjs:97 — neither exports
+ *  A THIRD copy of a grammar already in mark-phase.mjs (NAME_RE) and render-run-report.mjs (SLUG_RE) — neither exports
  *  it, so it cannot be imported today, and inventing a shared home for it is a different increment.
  *  gate-run-core.test.mjs carries a ✧ parity test reading all three module sources and requiring the
  *  three literals to agree; FOLLOW-UP, named rather than implied: fold the copy-set into one export. */
@@ -305,7 +307,7 @@ export function discoverGates(scripts) {
  *  `--extra` — model-supplied structural gates, narrowly shaped. The ONLY extra form is
  *  `structural:<expected>`, and its argv is DERIVED here, never supplied (GRILL R5): `<actual>` is the
  *  `findings.json` colocated with the capability directory that owns `<expected>`, per
- *  pharn-contracts/finding-shape.md's emission contract and matching pharn-verify.md:199-215 today.
+ *  pharn-contracts/finding-shape.md's emission contract and matching /pharn-verify Step 3b today.
  *  Leaving `<actual>` to the caller would keep a model-typed operand inside the one feature-specific
  *  gate — the exact thing this module exists to remove.
  *  ---------------------------------------------------------------------------------------------- */
@@ -679,10 +681,11 @@ export function completenessFromStamp(stamp) {
   return isInt(aux.completeness) ? aux.completeness : null;
 }
 
-/** The advisory `gate_run` block both reports carry. Additive: every live consumer of those reports
- *  reads named fields only (verified by reading each: check-loop.mjs:133, check-ship.mjs:139-140,
- *  check-loop-decision.mjs:171-172, check-ship-briefing.mjs:323,330, render-ship-briefing.mjs:357-358,
- *  render-run-report.mjs:571-572, ship-outcome-core.mjs:117,182-183 — none validates a closed key set). */
+/** The advisory `gate_run` block both reports carry. It was additive: when 6.8.0 added it, every consumer of those
+ *  reports then read named fields only (verified by reading each: check-loop.mjs, check-ship.mjs,
+ *  check-loop-decision.mjs, check-ship-briefing.mjs, render-ship-briefing.mjs, render-run-report.mjs,
+ *  ship-outcome-core.mjs — none validated a closed key set); check-loop-fresh.mjs (6.10.0) reads
+ *  `gate_run.stamp_sha256` by name. A consumer added since is not covered by either reading. */
 export function gateRunBlock(stamp, stampSha256) {
   return {
     stamp_sha256: stampSha256,

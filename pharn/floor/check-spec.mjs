@@ -184,7 +184,9 @@ function bodyHash(body) {
 // text up to the next "\n" can only be a kind line, so the reading is forced. If B does not itself open with
 // `spec_kind:`, the reading stops exactly where K ends, and the string gives one (K, B) and no other. A body whose first
 // line DOES start `spec_kind:` breaks that: moving the line between the body and the frontmatter keeps the pin while
-// changing the kind (feature ↔ test-infra, without re-approval). So validate() REDs that layout (`pin`) for every SPEC,
+// changing the kind (feature ↔ test-infra, without re-approval). So validate() REDs that layout for every SPEC, with its
+// own kind `kind-in-body` (6.21.1; it shared `pin` with a hash mismatch before, so /pharn-spec told the two apart by
+// detail text — now `pin` means only a wrong or malformed hash, and the command branches on the kind token),
 // and kindLineOpensBody() — the same regex specKindLines uses — is the one test for it. A body that opens with a
 // blank line, or with ` spec_kind:` (a leading space), is not ambiguous: the reading stops at its first character.
 // No pin moves: this function is unchanged, and no SPEC in the forbidden layout can pass validation.
@@ -332,11 +334,12 @@ function validate(specPath) {
   }
 
   // (3b) every SPEC, every state: the body may not open with a `spec_kind:` line — the one layout the pin cannot tell
-  //      from the same line in the frontmatter (see pinHash). A Draft is caught before approval. The detail is fixed
-  //      text: the line's value is never echoed (P2).
+  //      from the same line in the frontmatter (see pinHash). A Draft is caught before approval. Its kind is
+  //      `kind-in-body`, never `pin`: no hash fixes this layout, so /pharn-spec must not route it to "recompute the
+  //      hash". The detail is fixed text: the line's value is never echoed (P2).
   if (kindLineOpensBody(body)) {
     red(
-      "pin",
+      "kind-in-body",
       "the body's first line starts `spec_kind:`, so the approval pin cannot tell it from the frontmatter key — " +
         "move the line into the frontmatter (a test-infra SPEC) or change the body's first line (a feature SPEC); " +
         "an Approved SPEC must then be re-approved"

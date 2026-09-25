@@ -61,7 +61,8 @@ import { dirname, join } from "node:path";
 import { FM_RE, readField, stripBom } from "./frontmatter-core.mjs";
 
 // Resolve the sibling CLIs RELATIVE TO THIS FILE (import.meta.url), never the cwd — so the chain check
-// behaves identically no matter where /pharn-grill is invoked from (mirrors check-spec-approved.mjs:47-48).
+// behaves identically no matter where /pharn-grill is invoked from (mirrors check-spec-approved.mjs, which resolves
+// check-spec.mjs the same way).
 const here = dirname(fileURLToPath(import.meta.url));
 const CHECK_SPEC_APPROVED = join(here, "check-spec-approved.mjs");
 const CHECK_SPEC = join(here, "check-spec.mjs");

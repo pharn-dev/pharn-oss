@@ -870,27 +870,95 @@ for (const kind of ["test-infra", "feature"]) {
     const b = approvedRun(inFm);
     assert.equal(b.status, 0, b.stdout + b.stderr);
     // A → B and B → A: whichever side a move starts from, layout A never validates, so no GREEN SPEC changes its kind
-    // while keeping its pin. Exactly the `pin` kind; check-spec-approved (which shells check-spec) refuses it too.
+    // while keeping its pin. Exactly the `kind-in-body` kind (6.21.1 — `pin` before it; `pin` now means only a hash
+    // RED); check-spec-approved (which shells check-spec) refuses it too.
     const r = runWith(inBody);
     assert.equal(r.status, 1, r.stdout);
-    assert.deepEqual(redKinds(r.stdout), ["pin"], r.stdout);
-    assert.match(r.stdout, /RED — pin failed: the body's first line starts `spec_kind:`/);
+    assert.deepEqual(redKinds(r.stdout), ["kind-in-body"], r.stdout);
+    assert.match(r.stdout, /RED — kind-in-body failed: the body's first line starts `spec_kind:`/);
     const a = approvedRun(inBody);
     assert.notEqual(a.status, 0, `check-spec-approved must refuse layout A: ${a.stdout}`);
   });
 }
 
-test("THE PIN's layout rule applies to every SPEC: a Draft (caught before approval) and a LEGACY SPEC in layout A RED `pin`", () => {
+test("THE PIN's layout rule applies to every SPEC: a Draft (caught before approval) and a LEGACY SPEC in layout A RED `kind-in-body`", () => {
   const draft = runWith(makeT({ body: `spec_kind: test-infra\n${T_BODY}` }));
   assert.equal(draft.status, 1, draft.stdout);
-  assert.deepEqual(redKinds(draft.stdout), ["pin"]);
+  assert.deepEqual(redKinds(draft.stdout), ["kind-in-body"]);
   const legacyBody = `spec_kind: test-infra\n${BODY}`;
   const legacy = runWith(makeSpec({ body: legacyBody }));
   assert.equal(legacy.status, 1, legacy.stdout);
-  assert.deepEqual(redKinds(legacy.stdout), ["pin"]);
+  assert.deepEqual(redKinds(legacy.stdout), ["kind-in-body"]);
   const legacyApproved = runWith(makeSpec({ state: "Approved", hash: bodyHash(legacyBody), body: legacyBody }));
   assert.equal(legacyApproved.status, 1, legacyApproved.stdout);
-  assert.deepEqual(redKinds(legacyApproved.stdout), ["pin"]);
+  assert.deepEqual(redKinds(legacyApproved.stdout), ["kind-in-body"]);
+});
+
+// ── 6.21.1: the layout RED has its OWN kind, so `pin` means exactly one thing (a malformed or drifted hash) and
+// /pharn-spec's re-validate step branches on kind MEMBERSHIP (P5, L6) instead of the detail text. The two kinds share
+// no prefix, so no loose match on `pin` can take one for the other (GRILL G8).
+test("the two pin-side kinds are disjoint: a hash RED is only `pin`, the layout is only `kind-in-body`, both together are both, in emission order", () => {
+  const infraPin = bodyHash(`spec_kind: test-infra\n${T_BODY}`);
+  // a drifted hash, no layout problem → exactly `pin`
+  const drifted = runWith(makeT({ state: "Approved", hash: "0".repeat(64) }));
+  assert.equal(drifted.status, 1, drifted.stdout);
+  assert.deepEqual(redKinds(drifted.stdout), ["pin"]);
+  // a malformed hash → exactly `pin`
+  const malformed = runWith(makeT({ state: "Approved", hash: "not-a-hash" }));
+  assert.deepEqual(redKinds(malformed.stdout), ["pin"]);
+  // layout A whose pin matches (the collision) → exactly `kind-in-body`
+  const collided = runWith(makeT({ state: "Approved", hash: infraPin, body: `spec_kind: test-infra\n${T_BODY}` }));
+  assert.deepEqual(redKinds(collided.stdout), ["kind-in-body"]);
+  // layout A with a wrong hash → both, the layout first ((3b) runs before (4)); /pharn-spec routes this to Draft,
+  // because not every RED is `pin`
+  const both = runWith(makeT({ state: "Approved", hash: "0".repeat(64), body: `spec_kind: test-infra\n${T_BODY}` }));
+  assert.equal(both.status, 1, both.stdout);
+  assert.deepEqual(redKinds(both.stdout), ["kind-in-body", "pin"]);
+  assert.ok(!"kind-in-body".startsWith("pin") && !"pin".startsWith("kind-in-body"), "the kinds share no prefix");
+});
+
+// ★ WIRING (L45): the kind lives in the checker, but the branch that obeys it lives in /pharn-spec's prose. Run the
+// checker on each shape, take the kind it EMITS, and require the command's re-validate step to name it as a
+// back-ticked token (exact: `pin` inside backticks never matches `kind-in-body`), and the Draft step to name the layout
+// kind. A checker rename the command does not follow fails here, not in a user's run.
+test("★ WIRING — /pharn-spec's Draft and re-validate steps name exactly the kinds check-spec emits for a hash RED and the layout RED", () => {
+  // whitespace-flattened, so a re-wrapped sentence cannot move an anchor
+  const cmd = readFileSync(PHARN_SPEC_CMD, "utf8").replace(/\s+/g, " ");
+  // Every anchor must be FOUND — an absent one makes slice() return the empty string or the rest of the file, and the
+  // checks below would then pass or fail for the wrong reason (REVIEW finding 5).
+  const between = (text, from, to) => {
+    const a = text.indexOf(from);
+    assert.notEqual(a, -1, `anchor not found: ${from}`);
+    const b = text.indexOf(to, a + from.length);
+    assert.notEqual(b, -1, `anchor not found after ${from}: ${to}`);
+    return text.slice(a, b);
+  };
+  const draftStep = between(cmd, "Each RED names its kind", "## Step 4 — Render");
+  const revalidate = between(cmd, "3. **Re-validate**", "**Before ending your turn");
+  // the re-validate rule's two branches, each its own region: every RED `pin` → recompute; any other kind → Draft
+  const recompute = between(revalidate, "When **every** RED's kind is", "When **any** RED has another kind");
+  const toDraft = between(revalidate, "When **any** RED has another kind", "Step 4. Under `--model-approve`");
+  const names = (text, kind) => text.includes("`" + kind + "`");
+  const hashKinds = redKinds(runWith(makeT({ state: "Approved", hash: "0".repeat(64) })).stdout);
+  const layoutKinds = redKinds(runWith(makeT({ body: `spec_kind: test-infra\n${T_BODY}` })).stdout);
+  assert.deepEqual(hashKinds, ["pin"]);
+  assert.deepEqual(layoutKinds, ["kind-in-body"]);
+  // the hash kind routes to recompute and only there; the layout kind routes to Draft and never to recompute
+  for (const k of hashKinds) {
+    assert.ok(names(recompute, k), `the recompute branch never names \`${k}\``);
+    assert.ok(!names(toDraft, k), `the Draft branch names the hash kind \`${k}\``);
+  }
+  for (const k of layoutKinds) {
+    assert.ok(names(toDraft, k), `the Draft branch never names \`${k}\``);
+    assert.ok(!names(recompute, k), `the recompute branch names \`${k}\`, which no hash can fix`);
+    assert.ok(names(draftStep, k), `the Draft step never names \`${k}\``);
+  }
+  // the branch reads the kind token, never the detail after it
+  assert.ok(!/detail says/.test(revalidate), "the re-validate step still branches on the detail text");
+  // negative controls, one per property (REVIEW finding 5): the layout kind moved into the recompute branch, or
+  // dropped from the Draft step, is each detected by the predicate that guards it
+  assert.equal(names(recompute.replace("`pin`", "`pin` or `kind-in-body`"), "kind-in-body"), true, "control: a moved kind is seen");
+  assert.equal(names(draftStep.replaceAll("`kind-in-body`", "`pin`"), "kind-in-body"), false, "control: a dropped kind is seen");
 });
 
 test("THE PIN's layout rule is exactly the FIRST body line at column 0: a blank first line or a leading space is GREEN, with a pin of its own", () => {
@@ -915,7 +983,7 @@ test("THE PIN's layout rule is exactly the FIRST body line at column 0: a blank 
 test("THE PIN's layout rule reads the body after the pin's CRLF fold: a CRLF first line REDs; kindLineOpensBody is anchored at the start", () => {
   const r = runWith(makeT({ body: `spec_kind: test-infra\r\n${T_BODY.replace(/\n/g, "\r\n")}` }));
   assert.equal(r.status, 1, r.stdout);
-  assert.deepEqual(redKinds(r.stdout), ["pin"]);
+  assert.deepEqual(redKinds(r.stdout), ["kind-in-body"]);
   assert.equal(kindLineOpensBody("spec_kind: test-infra\r\n## Intent\r\n"), true);
   assert.equal(kindLineOpensBody("spec_kind:"), true);
   for (const body of [
