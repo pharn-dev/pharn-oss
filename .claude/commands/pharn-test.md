@@ -154,9 +154,19 @@ file:
   `const { resetPassword } = await import("../../src/reset.js")` — never at the top of the file. Before the build
   the module does not exist: a top-level import makes the whole FILE fail to load, so its tests are **not
   collected**, which the red run refuses as the wrong reason (`ac-test-not-collected`). Inside the body, the missing
-  module is a collected, **failed** test. Measured on a real vitest run (`pharn/pharn-contracts/ac-tests.md`).
+  module is a collected, **failed** test. Measured on real vitest and Jest runs (`pharn/pharn-contracts/ac-tests.md`).
+  **Use the in-body form the runner's module mode can run.** A form it cannot run fails before the build AND
+  after it, and the red run cannot tell that from the right failure:
+  - under **vitest**, use `await import(…)`;
+  - under **Jest in ESM mode** (`"type": "module"` in `package.json` and `--experimental-vm-modules` in the test
+    command), use `await import(…)`;
+  - under **Jest otherwise** (its default CommonJS mode), use `const { resetPassword } = require("../../src/reset.js")`.
+    Plain Jest cannot run an in-body `await import()` there, even once the target exists; `require()` was measured to
+    work with and without a transform (babel-jest, `next/jest`).
+
   **Bound:** a runner that type-checks each file at load (ts-jest with diagnostics on, say) still fails the file on
   a missing module; the remedy is the runner's transpile-only mode, which is the project's setup, not this stage's.
+
 - **Assert the AC's Then**, observed through the **declared public target**: a URL and a visible role or text for
   `e2e`, a route and method for `integration`, a module path, export and signature for `unit`. Test behaviour a
   user of that target can see. Never test private internals.

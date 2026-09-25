@@ -1,9 +1,11 @@
 // pharn/floor/test-results-core.test.mjs — the per-test record's suite, over BOTH modules
 // (test-results-core.mjs and test-results-formats.mjs).
 //
-// The format fixtures are CAPTURED from the real reporters (vitest 5.0.1, @playwright/test 1.63.0), with only
-// their absolute paths rewritten to the placeholder root `/work/proj` (lessons-learned L4/L55: an authored
-// fixture certifies its author's model; a capture certifies the reporter). Every refusal test is ONE mutation
+// The format fixtures are CAPTURED from the real reporters (vitest 5.0.1, @playwright/test 1.63.0, Jest 30.5.2 and
+// 29.7.0), with only their absolute paths rewritten to the placeholder root `/work/proj` (and the capture's own
+// scratch directory to `/work/scratch`) — lessons-learned L4/L55: an authored fixture certifies its author's model; a
+// capture certifies the reporter. The `pharn-json` documents are AUTHORED, and that is not the same defect: PHARN
+// owns that format, so its contract is the reference, and one test parses the contract's own example. Every refusal test is ONE mutation
 // of a passing case, with the passing case as its non-vacuity control (L34), and every rule over a set is
 // tested per member (L52). The last test asserts that every RECORD_REASONS member was actually reached by a
 // test in this file (L36, the reverse closure).
@@ -36,9 +38,13 @@ import {
 import {
   FORMAT_REFUSALS,
   MAX_DEPTH,
+  PHARN_RESULTS_SCHEMA,
+  PHARN_TEST_KEYS,
+  PHARN_TOP_KEYS,
   RECORD_STATUSES,
   RESULTS_FORMATS,
   SHOWN_CHARS,
+  isCleanResultsPath,
   parseResults,
   relativeFile,
   shown,
@@ -156,6 +162,19 @@ function pwDoc(tests, { errors = [], rootDir = "/work/proj/e2e" } = {}) {
   };
 }
 
+/** A Jest assertion: vitest's shape plus the two fields Jest carries (`invocations` always, `failing` on Jest 30). */
+const ja = (title, status, extra = {}) => ({ ...va(title, status), invocations: 1, failing: false, ...extra });
+
+/** A `pharn-json` document over `tests` (each `[file, path[], status]`). */
+function pharnDoc(tests, suiteErrors = 0) {
+  return {
+    schema: PHARN_RESULTS_SCHEMA,
+    suite_errors: suiteErrors,
+    tests: tests.map(([file, path, status]) => ({ file, path, status })),
+  };
+}
+const PHARN_OK = () => pharnDoc([["tests/a.test.js", ["checkout", "AC-1: sums"], "passed"]]);
+
 // ---------------------------------------------------------------------------------------------------
 // The closed sets.
 // ---------------------------------------------------------------------------------------------------
@@ -191,8 +210,12 @@ test("✧ L36 CLOSURE — every reason literal the two modules emit is a RECORD_
 
 test("the gate/format sets are the ones this increment ships", () => {
   assert.deepEqual([...RESULTS_GATES], ["test", "test:e2e", "e2e"]);
-  assert.deepEqual([...RESULTS_FORMATS], ["playwright-json", "vitest-json"]);
+  assert.deepEqual([...RESULTS_FORMATS], ["jest-json", "pharn-json", "playwright-json", "vitest-json"]);
+  assert.deepEqual([...RESULTS_FORMATS].sort(), [...RESULTS_FORMATS], "RESULTS_FORMATS stays sorted");
   assert.deepEqual([...RECORD_STATUSES], ["passed", "failed", "skipped"]);
+  assert.equal(PHARN_RESULTS_SCHEMA, "pharn-test-results/1");
+  assert.deepEqual([...PHARN_TOP_KEYS], ["schema", "suite_errors", "tests"]);
+  assert.deepEqual([...PHARN_TEST_KEYS], ["file", "path", "status"]);
 });
 
 // ---------------------------------------------------------------------------------------------------
@@ -270,7 +293,11 @@ test("playwright-edge capture (real retries run: an expected failure + a flaky t
 test("every status an adapter emits over the captures is a RECORD_STATUSES member", () => {
   for (const [name, fmt] of [
     ["vitest", "vitest-json"],
+    ["vitest-fails", "vitest-json"],
     ["playwright", "playwright-json"],
+    ["jest", "jest-json"],
+    ["jest-red", "jest-json"],
+    ["jest-after", "jest-json"],
   ]) {
     const p = parseResults(fmt, JSON.parse(fixture(name)), ROOTS);
     assert.ok(p.ok);
@@ -323,7 +350,401 @@ test("playwright status map: expected/passed, unexpected, skipped map; flaky and
 });
 
 test("parseResults refuses a format outside RESULTS_FORMATS loudly (a programming error, never a guess)", () => {
-  assert.throws(() => parseResults("jest-json", vitestDoc([]), ROOTS), /not a member of RESULTS_FORMATS/);
+  for (const f of ["junit-xml", "ctrf-json", "JEST-JSON", "toString", ""]) {
+    assert.throws(() => parseResults(f, vitestDoc([]), ROOTS), /not a member of RESULTS_FORMATS/, f);
+  }
+  // Control (L60): every member dispatches — none reaches the not-a-member throw.
+  for (const f of RESULTS_FORMATS) assert.doesNotThrow(() => parseResults(f, {}, ROOTS), f);
+});
+
+// ---------------------------------------------------------------------------------------------------
+// jest-json (6.22.0) — over the Jest 30.5.2 and 29.7.0 captures.
+// ---------------------------------------------------------------------------------------------------
+
+const JEST_CFG = { [CONFIG_KEY]: { test: "jest-json" } };
+
+test("jest capture (30.5.2) → the exact record: nested describe, leaf title, pending/todo → skipped, a load failure", () => {
+  const r = scenario({ config: JEST_CFG, bytes: fixture("jest") }); // the real run exited 1 (AC-3 fails)
+  assert.equal(r.ok, true, r.reason);
+  assert.equal(r.format, "jest-json");
+  assert.equal(r.suite_errors, 1, "tests/broken.test.js threw at load: a file failure no test owns");
+  assert.deepEqual(r.counts, { passed: 2, failed: 1, skipped: 2 });
+  const f = "/work/proj/tests/math.test.js"; // the placeholder root is not this scenario's root: kept absolute
+  assert.deepEqual(r.tests, [
+    { id: `${f}::AC-1: adds numbers`, file: f, title: "AC-1: adds numbers", status: "passed" },
+    { id: `${f}::checkout › AC-3: rejects empty cart`, file: f, title: "AC-3: rejects empty cart", status: "failed" },
+    { id: `${f}::checkout › AC-4: applies coupon`, file: f, title: "AC-4: applies coupon", status: "skipped" },
+    { id: `${f}::checkout › AC-5: handles tax`, file: f, title: "AC-5: handles tax", status: "skipped" },
+    { id: `${f}::checkout › totals › AC-2: sums line items`, file: f, title: "AC-2: sums line items", status: "passed" },
+  ]);
+  // Parsed against ITS root, every file is relative to the project.
+  const p = parseResults("jest-json", JSON.parse(fixture("jest")), ROOTS);
+  assert.ok(p.ok);
+  assert.ok(p.entries.every((e) => e.file === "tests/math.test.js"));
+  // The raw statuses the mapping rests on are the capture's own, not the model's (L55).
+  const raw = JSON.parse(fixture("jest")).testResults.flatMap((t) => t.assertionResults.map((a) => a.status));
+  assert.deepEqual([...new Set(raw)].sort(), ["failed", "passed", "pending", "todo"]);
+});
+
+test("jest-edge capture (30.5.2, exit 0) → test.failing and a pass on retry each refuse; each has a control (L60)", () => {
+  const doc = JSON.parse(fixture("jest-edge"));
+  const as = doc.testResults[0].assertionResults;
+  assert.deepEqual(
+    as.map((a) => [a.title, a.status, a.invocations, a.failing]),
+    [
+      ["AC-6: known bug still fails", "passed", 1, true],
+      ["AC-8: passes on the second attempt", "passed", 2, false],
+      ["AC-9: plain pass", "passed", 1, false],
+    ],
+    "the capture's layout changed — the cases below pin the wrong entries"
+  );
+  const first = scenario({ config: JEST_CFG, bytes: fixture("jest-edge"), run: { exit: 0 } });
+  expectReason(first, "unknown-status");
+  assert.match(first.reason, /assertionResults\[0\].*test\.failing/);
+  // Control for the `failing` property: the SAME entry with failing:false is not refused on that ground.
+  const noFailing = structuredClone(doc);
+  noFailing.testResults[0].assertionResults[0].failing = false;
+  noFailing.testResults[0].assertionResults.splice(1, 1); // drop the retry, so nothing else refuses
+  assert.equal(parseResults("jest-json", noFailing, ROOTS).ok, true);
+  // Remove the expected failure: the retry pass is what refuses now.
+  as.splice(0, 1);
+  const second = scenario({ config: JEST_CFG, bytes: JSON.stringify(doc), run: { exit: 0 } });
+  expectReason(second, "unknown-status");
+  assert.match(second.reason, /retry \(2 invocations\)/);
+  // Control for the retry property: the same entry with invocations:1 is an ordinary pass.
+  const once = structuredClone(doc);
+  once.testResults[0].assertionResults[0].invocations = 1;
+  assert.equal(parseResults("jest-json", once, ROOTS).ok, true);
+  // Remove it too: the plain pass left in the capture is an ok record.
+  as.splice(0, 1);
+  const third = scenario({ config: JEST_CFG, bytes: JSON.stringify(doc), run: { exit: 0 } });
+  assert.equal(third.ok, true, third.reason);
+  assert.deepEqual(third.counts, { passed: 1, failed: 0, skipped: 0 });
+});
+
+test("jest29-edge capture (29.7.0) — STATED BOUND: no `failing` field, so a test.failing reads `passed`; its retry still refuses", () => {
+  const doc = JSON.parse(fixture("jest29-edge"));
+  const as = doc.testResults[0].assertionResults;
+  assert.ok(
+    as.every((a) => !Object.hasOwn(a, "failing")),
+    "Jest 29.7.0 emits no `failing` key — the bound's evidence"
+  );
+  assert.equal(as[1].title, "AC-8: passes on the second attempt");
+  const first = scenario({ config: JEST_CFG, bytes: fixture("jest29-edge"), run: { exit: 0 } });
+  expectReason(first, "unknown-status");
+  assert.match(first.reason, /assertionResults\[1\].*retry/, "the retry is refused on Jest 29 too; the expected failure is NOT");
+  as.splice(1, 1);
+  const r = scenario({ config: JEST_CFG, bytes: JSON.stringify(doc), run: { exit: 0 } });
+  assert.equal(r.ok, true, r.reason);
+  assert.equal(r.tests.find((t) => t.title === "AC-6: known bug still fails").status, "passed", "the unmarked expected failure");
+});
+
+test("jest-after capture — the plain-Jest trap: an in-body `await import` stays FAILED after the target exists", () => {
+  const before = parseResults("jest-json", JSON.parse(fixture("jest-red")), ROOTS);
+  const after = parseResults("jest-json", JSON.parse(fixture("jest-after")), ROOTS);
+  assert.ok(before.ok && after.ok);
+  const unit = "tests/ac/demo.unit.test.js";
+  const status = (p, title) => p.entries.find((e) => e.file === unit && e.title === title).status;
+  assert.equal(status(before, "AC-1: resets the password"), "failed");
+  assert.equal(status(after, "AC-1: resets the password"), "passed", "require() in the body: red before, green after");
+  assert.equal(status(before, "AC-4: resets via dynamic import"), "failed");
+  assert.equal(status(after, "AC-4: resets via dynamic import"), "failed", "await import() under plain Jest: red forever");
+  // Before the build, the top-level require is a file no test owns (not collected); after it, it is collected.
+  assert.equal(before.suiteErrors, 1);
+  assert.equal(after.suiteErrors, 0);
+});
+
+test("jest status map: each mapped member, and each unmapped member refuses (L52)", () => {
+  for (const [raw, want] of [
+    ["passed", "passed"],
+    ["failed", "failed"],
+    ["skipped", "skipped"],
+    ["pending", "skipped"],
+    ["todo", "skipped"],
+  ]) {
+    const p = parseResults("jest-json", vitestDoc([ja("t", raw)]), ROOTS);
+    assert.ok(p.ok, raw);
+    assert.equal(p.entries[0].status, want, raw);
+  }
+  for (const raw of ["disabled", "focused", "constructor", "PASSED", ""]) {
+    assert.equal(parseResults("jest-json", vitestDoc([ja("t", raw)]), ROOTS).reason_code, "unknown-status", raw);
+  }
+});
+
+test("jest per-assertion fields: each malformed `invocations` / `failing`, and where each ordinary value lands (L52/L60)", () => {
+  const withA = (extra) => vitestDoc([ja("t", "passed", extra)]);
+  const noInvocations = withA({});
+  delete noInvocations.testResults[0].assertionResults[0].invocations;
+  assert.equal(parseResults("jest-json", noInvocations, ROOTS).reason_code, "results-malformed", "invocations absent");
+  for (const invocations of [0, -1, 1.5, "1", null]) {
+    assert.equal(parseResults("jest-json", withA({ invocations }), ROOTS).reason_code, "results-malformed", `invocations ${invocations}`);
+  }
+  for (const failing of ["true", 1, null]) {
+    assert.equal(parseResults("jest-json", withA({ failing }), ROOTS).reason_code, "results-malformed", `failing ${failing}`);
+  }
+  // Controls: an absent `failing` (Jest 29) and `false` are ordinary; `invocations: 1` is ordinary.
+  const noFailing = withA({});
+  delete noFailing.testResults[0].assertionResults[0].failing;
+  assert.equal(parseResults("jest-json", noFailing, ROOTS).ok, true);
+  assert.equal(parseResults("jest-json", withA({ failing: false, invocations: 1 }), ROOTS).ok, true);
+  // Only a PASS is refused for either reason: a test.failing whose body passed is reported failed (measured on
+  // Jest 30.5.2 in this increment's discovery), and is a failed test, as Playwright's `unexpected` is.
+  const rows = [
+    ["failed", { failing: true }, "failed"],
+    ["pending", { failing: true }, "skipped"],
+    ["failed", { invocations: 3 }, "failed"],
+    ["pending", { invocations: 2 }, "skipped"],
+  ];
+  for (const [raw, extra, want] of rows) {
+    const p = parseResults("jest-json", vitestDoc([ja("t", raw, extra)]), ROOTS);
+    assert.ok(p.ok, `${raw} ${JSON.stringify(extra)}: ${p.reason}`);
+    assert.equal(p.entries[0].status, want);
+  }
+  for (const extra of [{ failing: true }, { invocations: 2 }, { invocations: 3, failing: false }]) {
+    assert.equal(parseResults("jest-json", withA(extra), ROOTS).reason_code, "unknown-status", JSON.stringify(extra));
+  }
+});
+
+test("vitest-fails capture (5.0.1) — STATED BOUND: test.fails and a pass on retry are both plain `passed`, unrefusable", () => {
+  const p = parseResults("vitest-json", JSON.parse(fixture("vitest-fails")), ROOTS);
+  assert.ok(p.ok, p.reason);
+  assert.deepEqual(
+    p.entries.map((e) => [e.title, e.status]),
+    [
+      ["AC-12: known bug still fails", "passed"],
+      ["AC-13: passes on the second attempt", "passed"],
+    ]
+  );
+});
+
+// ---------------------------------------------------------------------------------------------------
+// pharn-json (6.22.0) — PHARN's own schema, closed in both directions (L36).
+// ---------------------------------------------------------------------------------------------------
+
+const PHARN_CFG = { [CONFIG_KEY]: { test: "pharn-json" } };
+
+test("pharn-json → the exact record; an absolute path under the root is relativized; the leaf title is path's last", () => {
+  const doc = pharnDoc([
+    ["tests/a.test.js", ["checkout", "totals", "AC-2: sums"], "passed"],
+    ["tests/a.test.js", ["AC-1: loads"], "failed"],
+    ["tests/b.test.js", ["AC-3: later"], "skipped"],
+  ]);
+  const r = scenario({ config: PHARN_CFG, bytes: JSON.stringify(doc), run: { exit: 1 } });
+  assert.equal(r.ok, true, r.reason);
+  assert.equal(r.format, "pharn-json");
+  assert.deepEqual(r.counts, { passed: 1, failed: 1, skipped: 1 });
+  assert.deepEqual(r.tests, [
+    { id: "tests/a.test.js::AC-1: loads", file: "tests/a.test.js", title: "AC-1: loads", status: "failed" },
+    { id: "tests/a.test.js::checkout › totals › AC-2: sums", file: "tests/a.test.js", title: "AC-2: sums", status: "passed" },
+    { id: "tests/b.test.js::AC-3: later", file: "tests/b.test.js", title: "AC-3: later", status: "skipped" },
+  ]);
+  const abs = parseResults("pharn-json", pharnDoc([["/work/proj/tests/a.test.js", ["t"], "passed"]]), ROOTS);
+  assert.equal(abs.entries[0].file, "tests/a.test.js");
+});
+
+test("pharn-json L34 — `tests: []` is an ok record with zero tests", () => {
+  const r = scenario({ config: PHARN_CFG, bytes: JSON.stringify(pharnDoc([])), run: { exit: 0 } });
+  assert.equal(r.ok, true, r.reason);
+  assert.deepEqual(r.tests, []);
+});
+
+test("pharn-json suite_errors — recorded under exit ≠ 0, a contradiction under exit 0", () => {
+  const doc = JSON.stringify(pharnDoc([["tests/a.test.js", ["t"], "passed"]], 2));
+  const r = scenario({ config: PHARN_CFG, bytes: doc, run: { exit: 1 } });
+  assert.equal(r.ok, true, r.reason);
+  assert.equal(r.suite_errors, 2);
+  expectReason(scenario({ config: PHARN_CFG, bytes: doc, run: { exit: 0 } }), "results-exit-contradiction");
+});
+
+test("pharn-json — a status outside RECORD_STATUSES is unknown-status, never mapped", () => {
+  for (const status of ["flaky", "PASSED", "pending", "todo", "constructor", ""]) {
+    const p = parseResults("pharn-json", pharnDoc([["tests/a.test.js", ["t"], status]]), ROOTS);
+    assert.equal(p.reason_code, "unknown-status", status);
+  }
+  expectReason(
+    scenario({ config: PHARN_CFG, bytes: JSON.stringify(pharnDoc([["tests/a.test.js", ["t"], "flaky"]])), run: { exit: 0 } }),
+    "unknown-status"
+  );
+});
+
+test("pharn-json results-malformed — each violation of the schema, ONE mutation of the valid document each (L52)", () => {
+  assert.equal(parseResults("pharn-json", PHARN_OK(), ROOTS).ok, true, "control");
+  const mutate = (fn) => {
+    const d = PHARN_OK();
+    fn(d, d.tests[0]);
+    return d;
+  };
+  const cases = [
+    ["not an object", () => []],
+    ["schema absent", () => mutate((d) => delete d.schema)],
+    ["schema /2", () => mutate((d) => (d.schema = "pharn-test-results/2"))],
+    ["schema case", () => mutate((d) => (d.schema = "PHARN-TEST-RESULTS/1"))],
+    ["schema number", () => mutate((d) => (d.schema = 1))],
+    ["suite_errors absent", () => mutate((d) => delete d.suite_errors)],
+    ["suite_errors negative", () => mutate((d) => (d.suite_errors = -1))],
+    ["suite_errors fraction", () => mutate((d) => (d.suite_errors = 1.5))],
+    ["suite_errors string", () => mutate((d) => (d.suite_errors = "0"))],
+    ["suite_errors null", () => mutate((d) => (d.suite_errors = null))],
+    ["extra top-level key", () => mutate((d) => (d.suiteErrors = 0))],
+    ["extra top-level __proto__ (L15)", () => JSON.parse(`{"schema":"${PHARN_RESULTS_SCHEMA}","suite_errors":0,"tests":[],"__proto__":1}`)],
+    ["tests absent", () => mutate((d) => delete d.tests)],
+    ["tests not an array", () => mutate((d) => (d.tests = {}))],
+    ["a test not an object", () => mutate((d) => (d.tests = [null]))],
+    ["a test an array", () => mutate((d) => (d.tests = [[]]))],
+    ["extra per-test key", () => mutate((_d, t) => (t.title = "AC-1: sums"))],
+    [
+      "extra per-test __proto__ (L15)",
+      () =>
+        JSON.parse(
+          `{"schema":"${PHARN_RESULTS_SCHEMA}","suite_errors":0,"tests":[{"file":"a.js","path":["t"],"status":"passed","__proto__":1}]}`
+        ),
+    ],
+    ["file absent", () => mutate((_d, t) => delete t.file)],
+    ["path absent", () => mutate((_d, t) => delete t.path)],
+    ["status absent", () => mutate((_d, t) => delete t.status)],
+    ["file number", () => mutate((_d, t) => (t.file = 1))],
+    ["path empty", () => mutate((_d, t) => (t.path = []))],
+    ["path a string", () => mutate((_d, t) => (t.path = "AC-1: sums"))],
+    ["path empty element", () => mutate((_d, t) => (t.path = ["checkout", ""]))],
+    ["path non-string element", () => mutate((_d, t) => (t.path = ["checkout", 1]))],
+    ["status number", () => mutate((_d, t) => (t.status = 1))],
+    ["status null", () => mutate((_d, t) => (t.status = null))],
+  ];
+  for (const [label, make] of cases) {
+    assert.equal(parseResults("pharn-json", make(), ROOTS).reason_code, "results-malformed", label);
+  }
+  // The schema check comes first, so a later version is named as such, not as a key mismatch. The document ALSO
+  // carries an extra key, so only schema-first ordering can produce the /2 message (L60 — review mutation M39).
+  const laterVersion = mutate((d) => {
+    d.schema = "pharn-test-results/2";
+    d.extra = 1;
+  });
+  assert.match(parseResults("pharn-json", laterVersion, ROOTS).reason, /pharn-test-results\/2/);
+  // A MISSING key is named as missing by the key check itself, at both levels — not left to a later type check
+  // that happens to share the reason code (L60 — review mutation M13).
+  assert.match(
+    parseResults(
+      "pharn-json",
+      mutate((d) => delete d.suite_errors),
+      ROOTS
+    ).reason,
+    /missing key\(s\) "suite_errors"/
+  );
+  assert.match(
+    parseResults(
+      "pharn-json",
+      mutate((_d, t) => delete t.status),
+      ROOTS
+    ).reason,
+    /missing key\(s\) "status"/
+  );
+  expectReason(
+    scenario({ config: PHARN_CFG, bytes: JSON.stringify(mutate((d) => delete d.schema)), run: { exit: 0 } }),
+    "results-malformed"
+  );
+});
+
+test("shown() is TOTAL — a parsed value whose String() throws is quoted, never thrown (6.22.0 review, each crash site)", () => {
+  const hostile = JSON.parse('{"toString":1}');
+  assert.throws(() => String(hostile), TypeError, "control: the value really does make String() throw");
+  for (const v of [hostile, [hostile], JSON.parse('{"valueOf":1,"toString":1}')]) {
+    assert.doesNotThrow(() => shown(v));
+    assert.equal(typeof shown(v), "string");
+  }
+  assert.equal(shown(hostile), JSON.stringify("[object Object]"));
+  // Crash site 1: a pharn-json `schema` (plain, and inside an array) is a refusal, not a throw.
+  for (const schema of ['{"toString":1}', '[{"toString":1}]']) {
+    const doc = JSON.parse(`{"schema":${schema},"suite_errors":0,"tests":[]}`);
+    assert.equal(parseResults("pharn-json", doc, ROOTS).reason_code, "results-malformed", schema);
+  }
+  expectReason(
+    scenario({ config: PHARN_CFG, bytes: '{"schema":{"toString":1},"suite_errors":0,"tests":[]}', run: { exit: 0 } }),
+    "results-malformed"
+  );
+  // Crash site 2: readResultsConfig quotes a `testResults` format value the same way.
+  expectReason(readResultsConfig('{"testResults":{"test":{"toString":1}}}'), "config-invalid");
+  expectReason(scenario({ config: '{"testResults":{"test":[{"toString":1}]}}', bytes: PASSING }), "config-invalid");
+});
+
+test("pharn-json file — absolute or a CLEAN relative POSIX path; each unclean shape refuses BY NAME (L52/L60)", () => {
+  for (const good of ["tests/a.test.js", "a.js", "a.b/c.test.js", "/abs/tests/a.test.js", "tests/.config/a.js"]) {
+    assert.equal(isCleanResultsPath(good), true, good);
+    assert.equal(parseResults("pharn-json", pharnDoc([[good, ["t"], "passed"]]), ROOTS).ok, true, good);
+  }
+  for (const bad of [
+    "",
+    "./tests/a.test.js",
+    "tests/../a.test.js",
+    "tests//a.test.js",
+    "tests/./a.test.js",
+    "tests\\a.test.js",
+    "/",
+    "tests/a.test.js/",
+    "a\0b",
+    "..",
+    ".",
+  ]) {
+    assert.equal(isCleanResultsPath(bad), false, JSON.stringify(bad));
+    const p = parseResults("pharn-json", pharnDoc([[bad, ["t"], "passed"]]), ROOTS);
+    assert.equal(p.reason_code, "results-malformed", JSON.stringify(bad));
+    assert.match(p.reason, /clean relative POSIX path/, JSON.stringify(bad));
+  }
+  assert.equal(isCleanResultsPath(7), false);
+});
+
+/** The contract's own `pharn-json` example: the fenced ```json block under its heading (anchors asserted — L60). */
+function contractExample() {
+  const md = readFileSync(join(HERE, "..", "pharn-contracts", "test-results-record.md"), "utf8");
+  const heading = md.indexOf("\n## The neutral format (`pharn-json`)\n");
+  assert.notEqual(heading, -1, "the contract's pharn-json heading is gone — this test lost its anchor");
+  const open = md.indexOf("\n```json\n", heading);
+  const next = md.indexOf("\n## ", heading + 1);
+  assert.ok(open !== -1 && (next === -1 || open < next), "no ```json example under the pharn-json heading");
+  const close = md.indexOf("\n```\n", open + 1);
+  assert.notEqual(close, -1, "the example's fence never closes");
+  return JSON.parse(md.slice(open + "\n```json\n".length, close));
+}
+
+test("✧ the contract's pharn-json example parses as an ok record — the documented schema and the adapter agree", () => {
+  const doc = contractExample();
+  const p = parseResults("pharn-json", doc, ROOTS);
+  assert.equal(p.ok, true, p.reason);
+  assert.ok(p.entries.length > 0, "the example must carry at least one test (L34)");
+  assert.equal(doc.schema, PHARN_RESULTS_SCHEMA);
+});
+
+/** Per format: the evidence that parses under it. Captures for the three reporters; the contract example for the
+ *  format PHARN owns. Refusal-shaped captures (the edge ones) are not listed: they are evidence for refusals. */
+const FORMAT_EVIDENCE = {
+  "jest-json": () => ["jest", "jest-red", "jest-after"].map((n) => [n, JSON.parse(fixture(n))]),
+  "pharn-json": () => [["contract example", contractExample()]],
+  "playwright-json": () => [["playwright", JSON.parse(fixture("playwright"))]],
+  "vitest-json": () => ["vitest", "vitest-red", "vitest-fails"].map((n) => [n, JSON.parse(fixture(n))]),
+};
+
+test("✧ L29/L36 — every RESULTS_FORMATS member has evidence, and the evidence discriminates the formats (L60)", () => {
+  assert.deepEqual(Object.keys(FORMAT_EVIDENCE).sort(), [...RESULTS_FORMATS], "FORMAT_EVIDENCE must range over exactly RESULTS_FORMATS");
+  for (const [own, evidence] of Object.entries(FORMAT_EVIDENCE)) {
+    for (const [name, doc] of evidence()) {
+      const mine = parseResults(own, doc, ROOTS);
+      assert.equal(mine.ok, true, `${name} under ${own}: ${mine.reason}`);
+      assert.ok(mine.entries.length > 0, `${name} carries no test`);
+      for (const other of RESULTS_FORMATS.filter((f) => f !== own)) {
+        const theirs = parseResults(other, doc, ROOTS);
+        // The ONE designed overlap: Jest's report IS the shape vitest's reporter copies, so a Jest capture parses
+        // under vitest-json (which reads fewer fields). The reverse is refused — that is the discriminating control.
+        if (own === "jest-json" && other === "vitest-json") {
+          assert.equal(theirs.ok, true, `${name} under vitest-json`);
+          continue;
+        }
+        assert.equal(theirs.ok, false, `${name} (${own}) must not parse as ${other}`);
+      }
+    }
+  }
+  // The control the overlap above leaves: a vitest capture under jest-json refuses on the missing Jest field.
+  const v = parseResults("jest-json", JSON.parse(fixture("vitest")), ROOTS);
+  assert.equal(v.reason_code, "results-malformed");
+  assert.match(v.reason, /invocations/);
 });
 
 // ---------------------------------------------------------------------------------------------------
@@ -476,7 +897,7 @@ test("not-configured — no config file, no testResults key, or the gate not nam
   expectReason(scenario({ config: { [CONFIG_KEY]: {} }, bytes: PASSING }), "not-configured");
 });
 
-test("config-invalid — each malformed shape (L52), incl. a gate key outside RESULTS_GATES and jest-json", () => {
+test("config-invalid — each malformed shape (L52), incl. a gate key outside RESULTS_GATES and a format outside RESULTS_FORMATS", () => {
   for (const config of [
     "{not json",
     "[]",
@@ -484,8 +905,10 @@ test("config-invalid — each malformed shape (L52), incl. a gate key outside RE
     { [CONFIG_KEY]: [] },
     { [CONFIG_KEY]: { lint: "vitest-json" } },
     { [CONFIG_KEY]: { test: "vitest-json", build: "vitest-json" } },
-    { [CONFIG_KEY]: { test: "jest-json" } },
+    { [CONFIG_KEY]: { test: "junit-xml" } },
+    { [CONFIG_KEY]: { test: "ctrf-json" } },
     { [CONFIG_KEY]: { test: "VITEST-JSON" } },
+    { [CONFIG_KEY]: { test: "JEST-JSON" } },
     '{"testResults": {"__proto__": "vitest-json"}}',
   ]) {
     expectReason(scenario({ config, bytes: PASSING }), "config-invalid");
@@ -670,6 +1093,11 @@ test("unknown-status — through testRecord, for each format", () => {
       bytes: JSON.stringify(pwDoc([["p", "flaky", "passed"]])),
       run: { exit: 0 },
     }),
+    "unknown-status"
+  );
+  expectReason(scenario({ config: JEST_CFG, bytes: JSON.stringify(vitestDoc([ja("t", "focused")])), run: { exit: 0 } }), "unknown-status");
+  expectReason(
+    scenario({ config: PHARN_CFG, bytes: JSON.stringify(pharnDoc([["tests/a.test.js", ["t"], "skip"]])), run: { exit: 0 } }),
     "unknown-status"
   );
 });

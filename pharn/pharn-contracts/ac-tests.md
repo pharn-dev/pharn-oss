@@ -166,11 +166,22 @@ cannot fail, is never collected, or is skipped would otherwise pass unnoticed.
   the feature, each run's files equal the mapping's for that gate, and the live worktree fingerprint equals the
   stamp's final one (the lock and the test files are in it), so a test edited after the run, or a lock rewritten,
   is refused.
-- **The convention it rests on.** A unit or integration AC test imports its target **inside the test body**
-  (`await import(…)`). Before the build the module does not exist, and a top-level import makes the whole file
-  fail to load, so nothing in it is collected. Measured on a real vitest 5.0.1 run
-  (`pharn/floor/test-fixtures/test-results/vitest-red.json`). **Bound:** a runner that type-checks each file at load
-  (ts-jest with diagnostics on) still fails the file; its transpile-only mode is the project's setup.
+- **The convention it rests on.** A unit or integration AC test imports its target **inside the test body**.
+  Before the build the module does not exist, and a top-level import makes the whole file fail to load, so nothing
+  in it is collected. Measured on a real vitest 5.0.1 run
+  (`pharn/floor/test-fixtures/test-results/vitest-red.json`) and a real Jest 30.5.2 run (`jest-red.json`).
+  **The in-body form must be one the runner's module mode can run**, because a form it cannot run fails before
+  the build AND after it. The red run cannot tell that failure from the right one, so such a test passes the red
+  run and then fails verify. Measured 2026-09-25 (Jest 30.5.2):
+  - `await import(…)` works under vitest; under Jest's ESM mode; and under a Jest setup that rewrites
+    `import()` (babel-jest with `@babel/preset-env`, and `next/jest` from Next.js 16.3.6).
+  - Under **plain Jest in its default CommonJS mode**, `await import(…)` fails with "A dynamic import callback was
+    invoked without --experimental-vm-modules" even once the target exists (`jest-after.json`). There, use
+    `require(…)` inside the body.
+  - `require(…)` is not defined in an ES module, so it fails the same way under Jest's ESM mode.
+
+  **Bound:** a runner that type-checks each file at load (ts-jest with diagnostics on) still fails the file; its
+  transpile-only mode is the project's setup.
 
 ## `pharn/features/<name>/AC-TESTS.lock.json` — the lock
 
@@ -386,8 +397,10 @@ titles are untrusted DATA: the report names them, and no stage follows them.
 **Bounded, and stated (P0):** "passed" is the reporter's word, and the tests, the reporter config and
 `pharn.config.json` are agent-editable — the lock and the pin NARROW that and never close it; AGREEMENT, never
 provenance (a self-consistent forged lock + stamp + results set over the live tree passes); the pin's own gaps
-(above); and a per-test record is refused WHOLE on one flaky test, one `test.fail`, or one duplicate id anywhere in
-the suite, so such a suite makes the gate unmeasured until it is fixed. The gate reads the SPEC's pin, never its
+(above); and a per-test record is refused WHOLE on one flaky test or expected failure the report marks, or one
+duplicate id, anywhere in the suite, so such a suite makes the gate unmeasured until it is fixed. One the report
+does not mark (vitest `test.fails` or pass on retry, Jest 29's `test.failing`) reads as its raw status
+(`test-results-record.md`). The gate reads the SPEC's pin, never its
 `state`: a SPEC whose pin cannot be read is `ac-tests-modified` (6.20.5 — before, the comparison was skipped), but a
 SPEC reverted to Draft that still carries a readable pin equal to the lock's passes here; `/pharn-verify`'s chain
 check and `/pharn-loop`'s freshness check I refuse it.

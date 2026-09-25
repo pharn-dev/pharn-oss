@@ -170,6 +170,43 @@ test("ac-test-skipped — AC-3's test is skipped", () => {
   onlyReason(verdictOf([row("AC-3", UNIT)]), "ac-test-skipped");
 });
 
+// ── the same verdicts over a REAL Jest 30.5.2 capture (6.22.0, jest-json) ────────────────────────────────────
+// test-fixtures/test-results/jest-red.json holds vitest-red.json's layout: `demo.unit.test.js` with AC-1 importing
+// its missing target through `require()` INSIDE the test, AC-2 passing, AC-3 skipped, and AC-4 importing it through
+// `await import()` inside the test; `demo.static.test.js` requiring it at the TOP; `other.unit.test.js` another
+// feature's passing `AC-1:`. Paths sanitized to /work/proj (L4/L55).
+
+const JEST_FIXTURE = readFileSync(join(HERE, "test-fixtures", "test-results", "jest-red.json"), "utf8");
+const JEST_CFG = { [CONFIG_KEY]: { test: "jest-json" } };
+const jestVerdict = (rows) =>
+  verdictOf(rows, {
+    config: JEST_CFG,
+    gates: (root) => [
+      { id: "test", files: [...new Set(rows.map((r) => r.file))].sort(), results: JEST_FIXTURE.replaceAll("/work/proj", root) },
+    ],
+  });
+
+test("jest-json GREEN — AC-1's in-body require() is collected and failed: the convention works on a real Jest run", () => {
+  const v = jestVerdict([row("AC-1", UNIT)]);
+  assert.equal(v.green, true, JSON.stringify(v.acs));
+  assert.deepEqual(v.acs[0].tests, [`${UNIT}::reset › AC-1: resets the password`]);
+});
+
+test("jest-json — a TOP-LEVEL require is not collected, another feature's AC-1 is ignored, a skip is a skip", () => {
+  onlyReason(jestVerdict([row("AC-1", STATIC)]), "ac-test-not-collected");
+  onlyReason(jestVerdict([row("AC-1", OTHER)]), "ac-test-passes-before-build");
+  onlyReason(jestVerdict([row("AC-2", UNIT)]), "ac-test-passes-before-build");
+  onlyReason(jestVerdict([row("AC-3", UNIT)]), "ac-test-skipped");
+});
+
+test("jest-json — STATED BOUND: an in-body `await import()` under plain Jest fails for the WRONG reason and still reads GREEN", () => {
+  // Measured: it fails because plain Jest cannot run a dynamic import without --experimental-vm-modules, and it still
+  // fails after the target exists (test-results-core.test.mjs, over jest-after.json). The verdict reads status only,
+  // so it cannot tell — which is why /pharn-test's convention names the form each module mode can run.
+  const v = jestVerdict([row("AC-4", UNIT)]);
+  assert.equal(v.green, true, JSON.stringify(v.acs));
+});
+
 test("not-configured — no per-test results configured is a RED here, by item 01's own name", () => {
   onlyReason(verdictOf([row("AC-1", UNIT)], { config: null }), "not-configured");
 });

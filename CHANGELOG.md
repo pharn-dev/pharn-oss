@@ -23,8 +23,74 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.22.0] - 2026-09-25
+
+### Added
+
+- 2026-09-25: **Two new per-test results formats: `jest-json` (Jest's built-in `--json` report) and `pharn-json` (a
+  framework-neutral schema PHARN owns).** Before this, `RESULTS_FORMATS` held only `vitest-json` and
+  `playwright-json`, and nothing named a format for Jest, the usual React/Next.js setup. Jest's report is the shape
+  vitest copies, so `vitest-json` did parse it (and still does), but without Jest's retry and `test.failing`
+  markers: under `vitest-json` both read as passes. A Jest project now names `jest-json`. Refusing a Jest report
+  under `vitest-json` would change existing installs' verdicts, so it is the named follow-up
+  `vitest-json-refuses-jest-shape`. Built at the maintainer's direction, not after a dogfood failure.
+  `SKILLS_VERSION` 6.21.2 → 6.22.0. `MIN_CLI` stays 0.5.0: no installed path moves.
+  ([`.dev/features/neutral-test-results/`](./.dev/features/neutral-test-results/))
+  - **`jest-json`** reads Jest's `--json --outputFile` report, the shape vitest's `json` reporter copies. It shares
+    one walker and one status map with `vitest-json`. Jest adds two fields the adapter checks, fail-closed:
+    - `invocations` is required, so a report without it is `results-malformed`. A pass with more than one
+      invocation passed only on a retry, and is `unknown-status`, like Playwright's `flaky`.
+    - `failing: true` on a pass is an expected failure (`test.failing`), and is `unknown-status`, like Playwright's
+      `test.fail()`.
+
+    The adapter was checked against reports captured from Jest 30.5.2 and 29.7.0, and no other version is claimed.
+    Jest 29 writes no `failing` field, so there a `test.failing` reads as its raw status. A test over the Jest 29
+    capture pins that.
+
+  - **`pharn-json`** (schema `pharn-test-results/1`) is the route for any other runner, through a reporter the
+    project writes. Its keys are closed in both directions (an extra key, including `__proto__`, and a missing key
+    are both refused). `suite_errors` is required, `status` is exactly the record's own set, and `file` must be
+    absolute or a clean relative POSIX path, so a `./tests/a.test.js` is refused by name instead of never matching a
+    mapped path. The schema and an example are in `test-results-record.md`, "The neutral format", and a test parses
+    that example.
+  - **Why not JUnit XML or CTRF**, both measured this run. JUnit is not one format: `jest-junit` 17.0.0 drops a file
+    that fails to load (unless its `reportTestSuiteErrors` option is set) and reports `test.todo` as a pass, and producers disagree on where the file and the test's
+    own title go. It would also need an XML parser in the floor. CTRF is still pre-1.0 (`ctrf` 0.3.0, 0.0.x
+    reporters).
+  - **The AC-test convention now names the in-body import form per module mode** (`/pharn-test`, `ac-tests.md`,
+    README). Measured: under plain Jest in its default CommonJS mode, an in-body `await import()` fails with "A
+    dynamic import callback was invoked without --experimental-vm-modules" before the build AND after it. The red
+    run cannot tell that from the right failure, so such a test would pass the red run and fail verify for ever, and
+    `/pharn-loop` would iterate to its cap. The rule is now:
+    - `require()` under CommonJS Jest (measured plain, with babel-jest + `@babel/preset-env`, and with `next/jest`
+      from Next.js 16.3.6);
+    - `await import()` under vitest and Jest's ESM mode, where `require` is not defined.
+  - **README** gains a Jest recipe (a script that adds `--json --outputFile` only while `PHARN_TEST_RESULTS` is
+    set), with its bounds: it needs a POSIX shell; Jest reads file arguments as path patterns (`--runTestsByPath`
+    makes them exact); and a `jest` key in `package.json` is outside the test-infrastructure pin, so
+    `jest.config.*` is the place to configure Jest.
+  - New captured fixtures: `jest.json`, `jest-edge.json`, `jest29-edge.json`, `jest-red.json`, `jest-after.json`,
+    `vitest-fails.json`.
+
 ### Fixed
 
+- 2026-09-25: **A crafted results document or config crashed a checker instead of being refused.** `shown()`, which
+  quotes an untrusted value into a refusal reason, called `String(v)`, and that throws on parsed JSON such as
+  `{"toString":1}`. So a `pharn-json` document with such a `schema`, or a `pharn.config.json` whose `testResults`
+  format is such a value (the latter since 6.15.0), threw. `check-red-run.mjs` and `check-verify.mjs` then died with
+  node's exit 1, which is their RED/FAIL code, and printed no verdict. `shown()` is now total, and each crash site
+  has a test. Found by this increment's independent review.
+- 2026-09-25: **"One flaky test or `test.fail()` voids the record" was an overclaim at seven sites; it now says which
+  reports mark the case.**
+  - The sites: `test-results-core.mjs`, `ac-gate-core.mjs`, `ac-tests.md`, README (twice) and CLAUDE.md (twice).
+  - Measured on vitest 5.0.1: `test.fails` and a pass on retry are both reported plain `passed`, with no marker, so
+    the record reads them as passes. Jest 29's `test.failing` is the same.
+  - Each case is pinned by a test over its capture (`vitest-fails.json`, `jest29-edge.json`).
+  - Detecting vitest's retry (its only trace is a non-empty `failureMessages`) is left as the named follow-up
+    `vitest-retry-pass-detect`, because it changes the verdict for existing vitest installs.
+- 2026-09-25: **`test-results-record.md` said "Pinning the test-infra files is a named follow-up".** That pin shipped in
+  6.20.0. The bullet now cites it, and names what it does not cover: a `jest` key inside `package.json`. The named
+  follow-up for that gap is `test-infra-pin-package-jest-key`.
 - 2026-09-25: **A bare `npm run lint:md` no longer reads Codex's gitignored `.agents/` import**
   ([`.markdownlint-cli2.jsonc`](./.markdownlint-cli2.jsonc),
   [`.dev/floor/command-hygiene.test.mjs`](./.dev/floor/command-hygiene.test.mjs),
