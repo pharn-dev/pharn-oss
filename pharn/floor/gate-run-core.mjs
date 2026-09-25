@@ -95,7 +95,11 @@ export const STYLE_SET = Object.freeze(["lint", "format:check", "lint:md"]);
  *  the failing ids check-verify.mjs `--ac-gate` adds to `failing_gates` for the AC gate, and check-loop.mjs reads
  *  `ac-evidence` by exact membership — so a real gate named that would be read as the AC gate. A source set may not
  *  contain one, and `--extra` may not introduce one. */
-export const RESERVED_IDS = Object.freeze(["reconcile", "completeness", "ac-delivery", "ac-evidence"]);
+/** The AC half of RESERVED_IDS, named (6.20.6): the ids the AC gate adds to verify's `failing_gates`. ac-gate-core.mjs
+ *  FAILING_IDS names the same two (a test pins that they agree). Named HERE so check-loop-fresh.mjs can subtract them
+ *  without loading the AC gate's module graph, whose load failure would crash it (grill R2). */
+export const AC_RESERVED_IDS = Object.freeze(["ac-delivery", "ac-evidence"]);
+export const RESERVED_IDS = Object.freeze(["reconcile", "completeness", ...AC_RESERVED_IDS]);
 
 /** The `structural:` prefix belongs to `--extra` entries alone. */
 export const STRUCTURAL_PREFIX = "structural:";

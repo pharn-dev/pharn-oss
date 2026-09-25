@@ -29,8 +29,19 @@
 // OUTPUT: the FIRST line is one closed token — `READY test-first` | `READY bootstrap` | `NOT-APPLICABLE legacy-spec`
 // (exit 0) or `RED <reason>` (exit 1), <reason> ∈ TEST_STAGE_REASONS — followed by the child checker's own lines,
 // indented, as diagnosis. Exit 2 = unusable (bad usage, a child that could not be spawned or returned an unknown
-// code). A child that CRASHES (a module-load failure, an uncaught throw) exits 1 — the same code as its RED — so it
-// reads as that RED: fail-closed, but named by the child's reason rather than as a crash.
+// code, or — since 6.20.6 — a child that CRASHED). A crash (a module-load failure, an uncaught throw) exits node's 1,
+// the same code as the child's RED, so the two are told apart by the child's `RED — ` line on stdout: both children
+// print one before every exit-1 return (a ✧ test pins it over their sources), and a crash prints none. Before 6.20.6 a
+// crash read as that RED, which check-loop-fresh.mjs routes to /pharn-loop's S13 — "set the build aside and re-run
+// /pharn-test" — for a fault that says nothing about the tests (2026-09-24 review, finding 2 —
+// .dev/features/loop-fresh-integrity/).
+// THE BOUND: this looks one level down only. A checker a child itself SHELLS is read by that child as its own RED:
+// check-ac-tests.mjs turns any non-zero exit of check-plan-spec-agree.mjs into a `pin` RED, and ac-tests-lock.mjs does
+// the same with check-spec-approved.mjs (bootstrap only). check-loop-fresh.mjs check I runs both over SPEC.md/PLAN.md
+// first, so a load-time crash, or a crash over those inputs, is its front-stage-red before this gate runs; an
+// input-dependent crash of check-plan-spec-agree.mjs over AC-TESTS.md still reads as `RED mapping-red` (named
+// follow-up `nested-child-crash`). A spoofed `RED — ` line (a child's stdout can echo lock-derived text) can only
+// restore the pre-6.20.6 RED — fail-closed — never a pass.
 //
 // `--require-test-first` is a caller's POLICY, in tested code: any pass other than `READY test-first` becomes
 // `RED mode-not-allowed`. /pharn-loop and check-loop-fresh.mjs pass it — the loop never writes a legacy SPEC and never
@@ -83,11 +94,22 @@ function present(path) {
   }
 }
 
+/** `redLine`: did the child print a `RED — ` line on STDOUT? Both children print one before every exit-1 return (a ✧
+ *  test pins it over their sources), so an exit 1 WITHOUT one is node's own code for an uncaught throw or a module that
+ *  failed to load — a crash, no verdict (the 2026-09-24 review, above). Read over the FULL stdout, line-anchored, never over the
+ *  merged and truncated diagnosis lines, where stderr could push the line out or match instead (grill R4). */
 function run(script, args, cwd) {
   const r = spawnSync(process.execPath, [script, ...args], { cwd, encoding: "utf8" });
   const lines = `${r.stdout ?? ""}${r.stderr ?? ""}`.split("\n").filter((l) => l.trim() !== "");
-  return { status: r.error ? null : r.status, lines: lines.slice(-MAX_CHILD_LINES) };
+  return { status: r.error ? null : r.status, redLine: /^RED — /m.test(r.stdout ?? ""), lines: lines.slice(-MAX_CHILD_LINES) };
 }
+
+/** A child that exited 1 without its closing RED line: unusable (exit 2), never the child's RED. */
+const crashed = (script, child) =>
+  unusable(
+    `${script} exited 1 without its closing RED line — it crashed (an uncaught throw or a module that failed to load), which is no verdict about the evidence`,
+    child
+  );
 
 const red = (reason, detail, child = null) => {
   if (!TEST_STAGE_REASONS.includes(reason)) throw new Error(`internal: ${reason} is not a TEST_STAGE_REASONS member`);
@@ -129,6 +151,7 @@ function lockPinned(path) {
 /** Map a lock `--check` result onto the gate's vocabulary. */
 function fromLock(lock, readyToken, readyDetail) {
   if (lock.status === 0) return ready(readyToken, readyDetail, lock.lines);
+  if (lock.status === 1 && !lock.redLine) return crashed("ac-tests-lock.mjs", lock.lines);
   if (lock.status === 1) return red("lock-red", "the lock does not hold for the files on disk, or records no red run", lock.lines);
   if (lock.status === 2) return red("lock-unusable", "the lock is missing, not JSON, or not the closed shape", lock.lines);
   return unusable(`ac-tests-lock.mjs exited ${lock.status}`, lock.lines);
@@ -185,10 +208,11 @@ function decide({ name, base, cwd }) {
   if (!present(resolve(cwd, mapping))) return red("no-mapping", `${mapping} is absent — /pharn-plan writes it for a templated SPEC`);
   const full = run(CHECK_AC_TESTS, [mapping, spec, plan], cwd);
   if (full.status !== 0) {
+    if (full.status === 1 && !full.redLine) return crashed("check-ac-tests.mjs", full.lines);
     if (full.status === 1 || full.status === 2) {
       return red(
         "mapping-red",
-        "the mapping no longer agrees with the current SPEC and PLAN (or a file it names is unreadable)",
+        "the mapping no longer agrees with the current SPEC and PLAN (or one of AC-TESTS.md, SPEC.md, PLAN.md is unreadable)",
         full.lines
       );
     }

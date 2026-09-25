@@ -226,9 +226,12 @@ additionally carries:
 - **The bound (L43):** a stamp certifies **internal consistency, never provenance** — a self-consistent
   fabricated stamp passes. **`gate_run` has one machine consumer:** `check-loop-fresh.mjs` requires
   `gate_run.stamp_sha256` to equal the sha256 of the verify stamp on disk and re-derives
-  `verdict` / `failing_gates` / `gates` (and, since 6.20.0, `ac_gate`) from that stamp — with `--ac-gate`, which also
-  reads the live lock and tests, so over a moved tree only `gates` is compared and the rest defers to its staleness
-  check. It is agreement with the stamp and the live tree,
+  `verdict` / `failing_gates` / `gates` (and, since 6.20.0, `ac_gate`) from that stamp — with `--ac-gate` over an
+  unmoved tree. The AC gate reads the live lock and tests, so over a MOVED tree (6.20.6) it re-derives from the stamp
+  alone (`check-verify.mjs --stamp` without `--ac-gate`) and compares what that decides: `gates`, `failing_gates`
+  without the two AC ids, and the verdict — `FAIL` whenever any id fails, else the stamp-only verdict or
+  `INCONCLUSIVE`. Only the AC part defers to its staleness check, so a forgery confined to it is re-run, never trusted.
+  It is agreement with the stamp and the live tree,
   never a guarantee about who wrote either.
 
 Full shape: `pharn/pharn-contracts/gate-run-record.md` (cited, not restated — P4).
@@ -275,8 +278,9 @@ restated, P4):
   again from scratch, and `/pharn-loop` iterates. Before 6.20.4 the AC gate was consulted first, so `INCOMPLETE` could
   not arise under `--ac-gate` at all and Step 2b could not fire. The full order is `check-verify.mjs`'s precedence
   comment (cited, not restated — P4).
-- **Bound to the checker in the loop:** `check-loop-fresh.mjs` re-derives the report WITH `--ac-gate` and requires
-  `ac_gate` to equal the re-derivation (over an unmoved tree), so the table a report shows is the one the checker
+- **Bound to the checker in the loop:** `check-loop-fresh.mjs` re-derives the report WITH `--ac-gate` over an unmoved
+  tree and requires `ac_gate` to equal the re-derivation (over a moved tree it re-derives from the stamp alone and the
+  AC part is re-run instead, 6.20.6), so the table a report shows is the one the checker
   computes — agreement, never provenance (L43).
 - **Trust (P2):** test ids and titles come from the project's reporter; `detail` strings name paths from the
   agent-editable lock. Both are untrusted DATA — renderers fence them (`RUN-REPORT.md`, `VERIFY.md`), and no stage

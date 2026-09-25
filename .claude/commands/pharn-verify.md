@@ -551,7 +551,8 @@ cite, don't restate), with **no new contract file** and **no authored verifier**
   is the reporter's word; the pin names what it does not catch (`pharn/pharn-contracts/ac-tests.md`, "The
   test-infrastructure pin" — a setup file a config imports, env-driven config, script chaining, `.npmrc`, and more); a self-consistent fabricated lock + stamp + results set passes (L43); and
   PHARN does not judge whether a test captures its AC's intent. That this command passed `--ac-gate` is orchestration
-  (ADVISORY) — `/pharn-loop`'s freshness check re-derives the report with it, which narrows that inside the loop only.
+  (ADVISORY) — `/pharn-loop`'s freshness check re-derives the report with it while the tree is unchanged (after an
+  edit it re-derives from the stamp alone and re-runs this stage), which narrows that inside the loop only.
 - **"The named deterministic gates passed"** → **FLOOR** (absolute exit-code threshold, `check-verify.mjs`,
   `pharn/ARCHITECTURE.md §2` primitive #3). The verdict rests entirely on the helper comparing integers (`every
 gate === 0`), never on model judgment. This is what "verified" means — full stop. A **real guarantee**,

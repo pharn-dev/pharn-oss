@@ -269,7 +269,13 @@ every build and at the commit gate) all read it. It SHELLS the checkers above an
 
 Otherwise the first line is `RED <reason>` (exit 1), `<reason>` ∈ {`spec-unusable`, `no-mapping`, `mapping-red`,
 `no-lock`, `lock-red`, `lock-unusable`, `lock-mode-mismatch`, `legacy-with-mapping`, `mode-not-allowed`}; exit 2 is
-unusable input. `--require-test-first` makes any pass other than `READY test-first` a `RED mode-not-allowed`:
+unusable input — including, since 6.20.6, a child checker that CRASHED: it exited 1 (node's code for an uncaught
+throw or a module that failed to load) without its closing `RED —` line, which both children print before every
+exit-1 return. Before 6.20.6 a crash read as that child's RED, which `/pharn-loop` stops on as S13. The bound: this
+looks one level down only — a checker a child itself shells (`check-plan-spec-agree.mjs` for the mapping's pin,
+`check-spec-approved.mjs` for a bootstrap lock) is read by that child as its own RED; `check-loop-fresh.mjs` check I
+runs both over SPEC.md and PLAN.md first, so only an input-dependent crash of `check-plan-spec-agree.mjs` over
+AC-TESTS.md still reads as `RED mapping-red`. `--require-test-first` makes any pass other than `READY test-first` a `RED mode-not-allowed`:
 `/pharn-loop` and `check-loop-fresh.mjs` pass it, because the loop never writes a legacy SPEC or approves a
 `test-infra` one, so its policy is in the checker rather than in its prose. The
 child checker's own lines follow, indented. `lock-mode-mismatch` exists because a `test-first` lock's `--check` never
