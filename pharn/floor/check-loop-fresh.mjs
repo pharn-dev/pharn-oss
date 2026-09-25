@@ -633,7 +633,12 @@ function checkG(ctx) {
       action: "rerun",
       stage: "regress",
       reason_code: "regress-verify-tree-mismatch",
-      reason: "the regress head stamp did not end on the tree /pharn-verify started from — regress judged a different tree",
+      // Name the algorithms when they are what differs (a stamp from before an ALGO bump — worktree-fingerprint.mjs,
+      // UPGRADES): the digests of an unchanged tree can be EQUAL across algos, so "a different tree" would be false.
+      reason:
+        h.algo !== v.algo
+          ? `the regress head stamp was fingerprinted with ${h.algo}, the verify stamp with ${v.algo}`
+          : "the regress head stamp did not end on the tree /pharn-verify started from — regress judged a different tree",
     });
   }
   return { ok: true };

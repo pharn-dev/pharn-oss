@@ -490,7 +490,7 @@ function mkRegressStamp(gates, side, over = {}) {
     source_raw: null,
     style_skipped: false,
     finalized: true,
-    fingerprint: { algo: "worktree-fingerprint/1+sha256", init: A64, final: B64 },
+    fingerprint: { algo: "worktree-fingerprint/2+sha256", init: A64, final: B64 },
     required: ids,
     runs,
     aux: {},

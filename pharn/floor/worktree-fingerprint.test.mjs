@@ -8,7 +8,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, rmSync, readFileSync, symlinkSync, unlinkSync } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
@@ -310,6 +310,129 @@ test("the CLI entry point is exercised — a default no test reaches is a defaul
     } finally {
       rmSync(bad, { recursive: true, force: true });
     }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// SYMLINKS (6.20.8, .dev/features/reconcile-symlink-target/PLAN.md) — the fingerprint hashes through hashFile,
+// which now hashes EVERY link by its link text. The same trees as the reconciler's cases; every "unchanged" case
+// is paired with a "moves" control on the same fixture (L34).
+
+/** repo() plus a tracked CLAUDE.md -> AGENTS.md, OTHER.md with the same bytes, a directory link, a dangling link,
+ *  and a link to a file outside the repo. Returns the outside file's path too. */
+function linkRepo() {
+  const r = repo();
+  const outside = mkdtempSync(join(tmpdir(), "wfp-outside-"));
+  writeFileSync(join(outside, "shared.md"), "shared v1\n");
+  writeFileSync(join(r.dir, "AGENTS.md"), "agents v1\n");
+  writeFileSync(join(r.dir, "OTHER.md"), "agents v1\n");
+  mkdirSync(join(r.dir, "vendored"));
+  writeFileSync(join(r.dir, "vendored/SKILL.md"), "skill\n");
+  symlinkSync("AGENTS.md", join(r.dir, "CLAUDE.md"));
+  symlinkSync("vendored", join(r.dir, "dir-link"));
+  symlinkSync("gone", join(r.dir, "dangling"));
+  symlinkSync(join(outside, "shared.md"), join(r.dir, "shared-link"));
+  r.git("add", "-A");
+  r.git("commit", "-qm", "links");
+  return {
+    ...r,
+    outside,
+    done: () => (rmSync(r.dir, { recursive: true, force: true }), rmSync(outside, { recursive: true, force: true })),
+  };
+}
+
+test("★ links: editing AGENTS.md moves the digest (control) — through AGENTS.md's own entry", () => {
+  const r = linkRepo();
+  try {
+    const before = r.fp();
+    writeFileSync(join(r.dir, "AGENTS.md"), "agents v2\n");
+    assert.notEqual(r.fp(), before, "control: an edit of a tracked file moves the fingerprint");
+  } finally {
+    r.done();
+  }
+});
+
+test("★ links: RE-POINTING CLAUDE.md between two same-content files moves the digest (unmoved through 6.20.7)", () => {
+  const r = linkRepo();
+  try {
+    const before = r.fp();
+    unlinkSync(join(r.dir, "CLAUDE.md"));
+    symlinkSync("OTHER.md", join(r.dir, "CLAUDE.md"));
+    assert.notEqual(r.fp(), before);
+  } finally {
+    r.done();
+  }
+});
+
+test("★ links: a change to a link's target OUTSIDE the repo leaves the digest unchanged — it is not a repo change", () => {
+  const r = linkRepo();
+  try {
+    const before = r.fp();
+    writeFileSync(join(r.outside, "shared.md"), "shared v2\n");
+    assert.equal(r.fp(), before, "up to 6.20.7 the link carried the outside file's bytes and moved the digest");
+    unlinkSync(join(r.dir, "shared-link"));
+    symlinkSync(join(r.outside, "elsewhere.md"), join(r.dir, "shared-link"));
+    assert.notEqual(r.fp(), before, "control: re-pointing that same link moves it");
+  } finally {
+    r.done();
+  }
+});
+
+test("links: a directory link and a dangling link are stable untouched and move on re-point (the 6.17.1 treatment, kept)", () => {
+  const r = linkRepo();
+  try {
+    const before = r.fp();
+    assert.equal(r.fp(), before, "stable over an unchanged tree");
+    unlinkSync(join(r.dir, "dir-link"));
+    symlinkSync("pharn", join(r.dir, "dir-link"));
+    const afterDir = r.fp();
+    assert.notEqual(afterDir, before, "a re-pointed directory link moves it");
+    unlinkSync(join(r.dir, "dangling"));
+    symlinkSync("gone-elsewhere", join(r.dir, "dangling"));
+    assert.notEqual(r.fp(), afterDir, "a re-pointed dangling link moves it");
+  } finally {
+    r.done();
+  }
+});
+
+// ✧ GOLDEN — "Bump ALGO on ANY change to what is hashed" as a TEST, not a sentence. 6.17.1 changed what is hashed
+// without bumping it; 6.20.8 changed it again (L20: the recurrence earns a check). One fixed tree holding every
+// link kind has ONE recorded digest per ALGO: a change to hashing that moves this tree's digest fails here until
+// ALGO is bumped and a digest recorded for it. BOUND, stated: a change invisible on THIS tree is not caught.
+// The /2 value was cross-checked when recorded by recomputing it by hand from the documented composition (sorted
+// `len \0 path \0 sha256 \0` triples; a link contributes sha256("symlink\0" + text)), not copied from the output.
+const GOLDEN = Object.freeze({
+  "worktree-fingerprint/2+sha256": "95c9ef03cb8a321936a6cbd47b23acf8d83a73bad2decc1e416f0cc5ec2a6e22",
+});
+
+function goldenTree() {
+  const dir = mkdtempSync(join(tmpdir(), "wfp-golden-"));
+  const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe" });
+  git("init", "-q", ".");
+  writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+  writeFileSync(join(dir, "a.txt"), "a\n");
+  mkdirSync(join(dir, "sub"));
+  writeFileSync(join(dir, "sub/f.txt"), "f\n");
+  symlinkSync("a.txt", join(dir, "file-link"));
+  symlinkSync("sub", join(dir, "dir-link"));
+  symlinkSync("nowhere", join(dir, "dangling"));
+  return dir;
+}
+
+test("✧ GOLDEN: the digest of a fixed tree holding every link kind is the one recorded for the live ALGO", () => {
+  const dir = goldenTree();
+  try {
+    const r = fingerprint(dir);
+    assert.ok(r.ok, r.reason);
+    assert.equal(r.paths, 6, "the fixture's reconciled set (untracked, not ignored) is exactly its six paths");
+    assert.ok(Object.hasOwn(GOLDEN, ALGO), `no golden digest recorded for ${ALGO} — record one when bumping ALGO`);
+    assert.equal(
+      r.digest,
+      GOLDEN[ALGO],
+      "what the fingerprint hashes changed without an ALGO bump — bump ALGO and record the new digest (worktree-fingerprint.mjs, UPGRADES)"
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

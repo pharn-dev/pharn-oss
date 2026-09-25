@@ -23,6 +23,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.20.8] - 2026-09-25
+
+### Fixed
+
+- 2026-09-25: **The Bash-write reconciler no longer reports a false `ESCAPE` on a symlink whose target the build was
+  allowed to edit. Every symlink is now hashed by its link text, and nothing follows a link.** This fixes a verified
+  review finding, reproduced before the fix and now a suite test. `SKILLS_VERSION` 6.20.7 → 6.20.8 (PATCH: a correction
+  to shipped checkers; the baseline record's keys and `version` are unchanged). `MIN_CLI` stays 0.5.0.
+  ([`.dev/features/reconcile-symlink-target/`](./.dev/features/reconcile-symlink-target/))
+  - **The defect.** `pharn/floor/reconcile-baseline.mjs` `hashFile` opened a link to a regular file with a plain
+    `openSync`, which FOLLOWS it, and recorded the TARGET's bytes under the LINK's path. `check-bash-reconcile.mjs`
+    judges an explicit writes-scope against that path as text, while the live guard `enforce-writes-scope.cjs`
+    `realpath`s a Write's target first. Take a tracked `CLAUDE.md -> AGENTS.md`, a PLAN `## Files` of `[AGENTS.md]`,
+    and a build that edits `AGENTS.md`. The guard allows a Write to both names, yet `--require-baseline` reported
+    `ESCAPE` on `CLAUDE.md`, "writes-scope (snapshot)", with a finding saying the guards "would have DENIED a write to
+    it". `/pharn-verify` then failed and `/pharn-loop` stopped `STOP_TERMINAL` on a correct build.
+  - **The fix.** `hashFile` opens with `O_RDONLY | O_NOFOLLOW | O_NONBLOCK` first, the repo's no-follow read idiom, so
+    a regular file is hashed through one descriptor. Only when that open fails does it ask `readlinkSync`, the call
+    that answers for the name itself. Every symlink is hashed as `sha256("symlink\0" + raw link text)`, whatever it
+    points at: a file, a directory, a FIFO, an unreadable file, or nothing. A link's entry now changes only when the
+    link changes. A write THROUGH it changes the target's own entry, judged under the target's own path, which is the
+    path the guard judges. The same fix newly catches a re-point between two files with identical bytes. It also stops
+    reporting a change to a file OUTSIDE the repo, reached through a tracked link, as a change to a repo path. A link to
+    a FIFO, a hazard 6.17.1 recorded as not handled, is never opened.
+  - **Removed:** the exported `LINK_TEXT_ERRNOS` (`["ENOENT", "ENOTDIR", "ELOOP"]`). It named which FOLLOW failures
+    fell back to link text, and nothing follows a link now. Its `EACCES` exclusion ("make the target unreadable to hide
+    a change") now lives on the TARGET's own entry: an unreadable target hashes as absent, so it is still a candidate.
+    A test pins this.
+  - **Residual, stated:** a RE-POINTED link that no recorded scope names still gets the finding's uniform "would have
+    DENIED" sentence. The guards cannot see a re-point at all, because a Write writes through a link. For a link
+    re-pointed to an in-scope target, that sentence therefore describes the scope match, not a decision a guard made.
+    Where the platform lacks `O_NOFOLLOW` (Windows), the open still follows a link, and a link to a regular file keeps
+    the pre-6.20.8 rule. `O_NOFOLLOW` governs the final path component only.
+  - **Upgrading, the one-time cost (fail-closed in both stores).** A reconcile baseline anchored before 6.20.8 holds a
+    link to a regular file under its TARGET's digest. The first reconcile of that epoch therefore reports the link as
+    changed: a candidate, and an `ESCAPE` when no recorded scope names it. The next `/pharn-*build` anchor records the
+    text. The worktree fingerprint's `ALGO` moves from `worktree-fingerprint/1+sha256` to `/2+sha256`, because 6.17.1
+    changed what is hashed without a bump and this change is the second one. `ALGO` is not part of the digest, so a
+    stamp written before the upgrade is refused by the `algo` comparison even where the digest is unchanged.
+    `check-loop-fresh.mjs` F answers `RERUN tree-moved-since-verify`, G answers `RERUN regress-verify-tree-mismatch`,
+    and `red-run-core.mjs` `bindStamp` refuses. G's and `bindStamp`'s reasons now name both algos instead of claiming
+    the tree changed. The cost is one re-run for evidence in flight across the upgrade. A stamp that straddles it
+    MID-stage is refused `tree-changed-between-gates` on a link-bearing tree, and otherwise by the comparisons above.
+  - **Pinned:** a `PATH_KINDS` closure (a row is hashed by link text if and only if `lstat` says it is a link); the
+    same-content re-point; an edit through a link moving only the target's entry, in the tree and out of it; the
+    `CWE-367` source pin, now also requiring `O_NOFOLLOW` and forbidding a branch on the open's errno. End-to-end, the
+    `CLAUDE.md -> AGENTS.md` fixture EXECUTES its own copy of `enforce-writes-scope.cjs`, which allows `CLAUDE.md` and
+    `AGENTS.md` and denies the `OTHER.md` control, and the reconciler agrees with it. The same fixture pins its three
+    `ESCAPE` mirrors, the out-of-repo link, the unreadable target, and the upgrade being flagged, never passed. A
+    GOLDEN fingerprint digest, keyed by `ALGO` and cross-checked by hand, now fails any change to what is hashed that
+    does not bump `ALGO`. The fingerprint was re-measured: 2230 paths, ~442 ms first call, ~73–75 ms warm.
+
 ## [6.20.7] - 2026-09-25
 
 ### Fixed

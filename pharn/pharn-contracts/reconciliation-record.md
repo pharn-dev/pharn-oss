@@ -67,15 +67,15 @@ clone.
 }
 ```
 
-| Field              | Type             | Meaning                                                                                                                                                                       |
-| ------------------ | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `version`          | integer          | Schema version. A **newer** version than the reader is `INCONCLUSIVE`; an **older** one is tolerated at read and reported in `warnings[]`                                     |
-| `epoch`            | ISO-8601         | When this epoch opened                                                                                                                                                        |
-| `anchored_by`      | string           | A label passed as `--by`. **Advisory** — it is argv, so it is a description, never an authorization                                                                           |
-| `scope_snapshot`   | object \| `null` | A verbatim copy of `.pharn/writes-scope.json` at anchor time, or `null` when none was set                                                                                     |
-| `scope_amendments` | array            | Further scopes that came into force **during** the epoch, in call order. Empty on a fresh anchor; absent on a pre-5.1.0 record, read as `[]`                                  |
-| `entry_count`      | integer          | `Object.keys(entries).length` at write time                                                                                                                                   |
-| `entries`          | object           | Repo-relative path → SHA-256 of its bytes. A symlink whose target is not an openable regular file → SHA-256 of `symlink\0` + its raw link text (6.17.1, see "Symlinks" below) |
+| Field              | Type             | Meaning                                                                                                                                                                                            |
+| ------------------ | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`          | integer          | Schema version. A **newer** version than the reader is `INCONCLUSIVE`; an **older** one is tolerated at read and reported in `warnings[]`                                                          |
+| `epoch`            | ISO-8601         | When this epoch opened                                                                                                                                                                             |
+| `anchored_by`      | string           | A label passed as `--by`. **Advisory** — it is argv, so it is a description, never an authorization                                                                                                |
+| `scope_snapshot`   | object \| `null` | A verbatim copy of `.pharn/writes-scope.json` at anchor time, or `null` when none was set                                                                                                          |
+| `scope_amendments` | array            | Further scopes that came into force **during** the epoch, in call order. Empty on a fresh anchor; absent on a pre-5.1.0 record, read as `[]`                                                       |
+| `entry_count`      | integer          | `Object.keys(entries).length` at write time                                                                                                                                                        |
+| `entries`          | object           | Repo-relative path → SHA-256 of its bytes. A symlink → SHA-256 of `symlink\0` + its raw link text, whatever its target (6.17.1 for a non-file target, 6.20.8 for every link; see "Symlinks" below) |
 
 **Why the scope is snapshotted rather than read live.** By reconciliation time
 `.pharn/writes-scope.json` holds a **later** stage's scope — it is one mutable record, global to the
@@ -117,40 +117,63 @@ Write-tool edit as a change with no way to separate the two. `check-regress.mjs 
 exactly that conflation, and lessons-learned **L17** is the record of it. The baseline is therefore
 _content-hash vs the last anchor_.
 
-**Symlinks (6.17.1).** `hashFile` opens a path, and an open FOLLOWS a link. Before 6.17.1, a link to a
+**Symlinks (6.17.1, 6.20.8).** `hashFile` used to open every path, and a plain open FOLLOWS a link. Before 6.17.1, a link to a
 directory, or a dangling link, therefore hashed as `null`. The anchor never recorded it, and the
 reconcile read it as unreadable, treated as changed (§3). Any repo that tracks such a link got a false
 `ESCAPE` on every run with zero writes. The measured case: a downstream project's 20 tracked
 `.claude/skills/*` directory links, which ended each of its `/pharn-loop` runs `STOP_TERMINAL`. Such a link
-is now hashed by its **link text**, which is what git stores for a mode-120000 entry, so an unchanged link
-reconciles `CLEAN` and a **re-pointed** one is still a candidate. The rule, as implemented and tested:
+was then hashed by its **link text**, which is what git stores for a mode-120000 entry, so an unchanged
+link reconciles `CLEAN` and a **re-pointed** one is still a candidate.
 
-| The path                                                                           | Its `entries` value                    |
-| ---------------------------------------------------------------------------------- | -------------------------------------- |
-| a regular file                                                                     | SHA-256 of its bytes                   |
-| a symlink to a regular file                                                        | SHA-256 of the **target's** bytes      |
-| a symlink to a directory or a device (the open succeeds, not a regular file)       | SHA-256 of `symlink\0` + raw link text |
-| a symlink whose target does not resolve: open fails `ENOENT` / `ENOTDIR` / `ELOOP` | SHA-256 of `symlink\0` + raw link text |
-| a symlink whose open fails any other way (`EACCES` above all)                      | absent, so it is a candidate           |
-| a plain directory, a gitlink, a special file, a vanished path                      | absent, so it is a candidate           |
+**Every link, 6.20.8.** 6.17.1 left one kind on the old rule: a link to a **regular file** was still
+opened, the open followed it, and the **target's** bytes were recorded under the **link's** path. The
+explicit-scope match (§2) judges that path as text, while the live guard `realpath`s a Write's target
+first — so with a tracked `CLAUDE.md -> AGENTS.md` and a scope of `[AGENTS.md]`, an edit of `AGENTS.md`
+that the guard **allows** was reported as an `ESCAPE` on `CLAUDE.md`, "writes-scope (snapshot)". Now every
+link is hashed by its text and **nothing follows a link**: `hashFile` opens with `O_NOFOLLOW` first (a
+regular file is hashed through that one descriptor), and only when that open fails asks `readlink`, the
+call that answers for the name itself. A link's entry therefore changes only when the **link** changes;
+a write **through** it changes the target's own entry and is judged under the target's own path — the
+path the guard judges. The rule, as implemented and tested:
 
-- **The errno set is closed on purpose.** A link to an **unreadable** file stays absent, and so stays a
-  candidate. If its text were hashed instead, making the target unreadable would hide a change to a
-  denied file, which is exactly what the unreadable-is-changed rule (§3) exists to prevent.
+| The path                                                                   | Its `entries` value                    |
+| -------------------------------------------------------------------------- | -------------------------------------- |
+| a regular file                                                             | SHA-256 of its bytes                   |
+| a symlink — to a file, a directory, a FIFO, an unreadable file, or nothing | SHA-256 of `symlink\0` + raw link text |
+| an unreadable regular file (`EACCES`)                                      | absent, so it is a candidate           |
+| a plain directory, a gitlink, a special file, a vanished path              | absent, so it is a candidate           |
+
+- **Where the unreadable-is-changed rule (§3) now lives.** Up to 6.20.7 a link to an unreadable file stayed
+  absent, so "make the target unreadable" could not hide a change behind the link. The link is never
+  opened now, so that protection sits on the **target's own entry**: an unreadable target is absent, and so
+  a candidate, under its own path.
+- **What it newly sees, and what it no longer does.** A link re-pointed between two files with identical
+  bytes is now a candidate (it was not, when the entry was the bytes). A change to a file **outside** the
+  repo, or git-ignored, reached through a tracked link is no longer read as a change to the link's path:
+  such a target is outside the reconciled set exactly as any other path there is.
+- **A re-pointed link is judged under its own path**, so the scope must name the link path itself. The
+  guards cannot see a re-point at all (a Write writes **through** a link), so for a link re-pointed to an
+  in-scope target the finding's uniform "would have DENIED" sentence describes the scope match, not a
+  decision a guard made. Stated, not reworded: no run has hit it (P7).
 - **The text is hashed as raw bytes, never as a decoded string.** Two targets that differ only in invalid
   UTF-8 would decode to the same string, and re-pointing one to the other would go unseen. For a
   valid-UTF-8 target the digest equals SHA-256 of `"symlink\0" + text`.
-- **Not handled:** a link to a FIFO. The open blocks, just as it did before 6.17.1. No run has hit this, so
-  it is recorded here and not fixed (P7).
+- **No-follow means the FINAL component.** `O_NOFOLLOW` governs the last path component only; an ancestor
+  directory swapped for a link after enumeration is still followed, as before. Where the platform has no
+  `O_NOFOLLOW` (Windows), the open follows a link and a link to a regular file hashes by its target's bytes
+  — the pre-6.20.8 rule. A **link to a FIFO**, the hazard 6.17.1 recorded as not handled, is never opened
+  now, and a FIFO swapped in for a path after enumeration opens `O_NONBLOCK` and fails the regular-file test.
 - **Not seen through the link:** the files inside a linked directory. They are reconciled under their own
   tracked paths, and a target outside the repo is not descended.
 - **Not collision-free against a forger.** A regular file whose bytes are exactly `symlink\0<text>`
   hashes equal to that link. That takes deliberate forgery, which is outside the non-adversarial claim
   this record supports.
-- **The first reconcile after upgrading is NOT clean.** A baseline anchored by pre-6.17.1 code has no
-  entry for such a link, so the first reconcile of that epoch under 6.17.1 still reports it. The next
-  anchor (the next `/pharn-*build`) records it. `version` stays `1`, because the record's keys and shape
-  did not change. What changed is one kind of `entries` value.
+- **The first reconcile after an upgrade is NOT clean — flagged, never passed.** A baseline anchored by
+  pre-6.17.1 code has no entry for a directory or dangling link, and one anchored by code before 6.20.8
+  holds a link to a regular file under its **target's** digest. Either way the first reconcile of that
+  epoch reports the link as changed: a candidate, and an `ESCAPE` when no recorded scope names it
+  (pinned by a test). The next anchor (the next `/pharn-*build`) records the text. `version` stays `1`,
+  because the record's keys and shape did not change. What changed is one kind of `entries` value.
 
 ## 2. The verdict — `pharn/floor/check-bash-reconcile.mjs` stdout
 

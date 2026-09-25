@@ -56,6 +56,7 @@ import {
   fstatSync,
   closeSync,
   readlinkSync,
+  constants as fsConstants,
 } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -109,47 +110,71 @@ export function enumerate(baseDir) {
 // it (js/file-system-race, high), not by review. `open` → `fstat` → `read` on the SAME fd closes it:
 // after openSync the descriptor is bound to one inode, and fstatSync/readFileSync both address the fd.
 //
-// A SYMLINK WHOSE TARGET IS NOT AN OPENABLE REGULAR FILE is hashed by its own LINK TEXT — what git itself
-// stores for a mode-120000 entry. `openSync` FOLLOWS a link, so a link to a directory used to reach the
-// `isFile()` test and return null, and a dangling one threw and returned null. The anchor then never
-// recorded the link, and the reconciler read every such tracked link as "unreadable, treated as changed":
-// a false ESCAPE on EVERY run of a repo that tracks one, with zero writes. Measured downstream, 20 tracked
-// `.claude/skills/*` directory links turned each /pharn-loop run terminal
-// (.dev/features/reconcile-symlink-hash/PLAN.md).
+// EVERY SYMLINK IS HASHED BY ITS OWN LINK TEXT (6.20.8) — what git itself stores for a mode-120000 entry,
+// whatever the target is: a regular file, a directory, a FIFO, or nothing. NOTHING HERE FOLLOWS A LINK.
+// 6.17.1 did this for links whose target is not an openable regular file (a directory or dangling link read
+// as null, so every run of a repo tracking one reported a false ESCAPE — .dev/features/reconcile-symlink-hash/).
 //
-//   • WHICH failures fall back is a CLOSED errno set (P5), not "any error". ENOENT / ENOTDIR / ELOOP mean
-//     the target resolves to nothing, so the link text is the only thing there is to hash. EACCES above
-//     all is deliberately NOT a member: a link to an unreadable file stays null, and so stays a candidate.
-//     Hashing its text instead would let "make the target unreadable" silence a change to a denied file —
-//     the evasion the reconciler's "unreadable is treated as changed" rule exists to refuse.
-//   • readlinkSync(abs) is the one path-addressed call after the open, reached only when the fd names no
-//     regular file or the open failed. It reads a property of the NAME in one syscall, so it never hashes
-//     bytes other than the ones it inspected. A plain directory, a gitlink or a special file answers EINVAL
-//     there and stays null, exactly as before.
+// WHY THE REST FOLLOWED (6.20.8, reproduced before the fix): a link to a REGULAR FILE was still opened with a
+// plain `openSync`, which FOLLOWS it, so the TARGET's bytes were recorded under the LINK's path. With a tracked
+// `CLAUDE.md -> AGENTS.md` and a writes-scope of [AGENTS.md], an edit of AGENTS.md moved the CLAUDE.md entry
+// too; check-bash-reconcile.mjs judges that entry by its path, as text, and reported `ESCAPE … writes-scope
+// (snapshot)` on CLAUDE.md — while the live guard, which `realpath`s a target first, ALLOWS a Write to both
+// paths. Hashed by its text, a link's entry changes only when the LINK changes (re-pointed, created, removed);
+// a write THROUGH it changes the target's own entry, judged under the target's own path, which is the path the
+// guard judges. Two further consequences of following go with it: a re-point between two files with identical
+// bytes is now seen, and a change to a file OUTSIDE the repo, reached through a tracked link, no longer reads
+// as a change to a repo path. (lessons-learned L59: a call that follows a link answers for the target.)
+//
+//   • THE ORDER: an `O_NOFOLLOW` open FIRST, `readlink` only when that open FAILS. A no-follow open never
+//     answers for a link's target: on a link it fails (ELOOP on Linux and darwin). So a regular file is hashed
+//     through its fd and never reaches `readlink`: no EINVAL throw per file (measured at grill time, 35.7 ms vs
+//     49.6 ms of classification over 2220 paths) and no dependence on which errno a platform raises. After a
+//     failed open the branch asks `readlink`, the one call that answers for the NAME; it never reads the errno.
+//   • `O_NONBLOCK` is the repo's no-follow read idiom (check-spec.mjs, run-gates.mjs): a FIFO swapped in after
+//     enumeration opens without blocking and fails `isFile()`. git never enumerates a FIFO (measured), so it
+//     matters only for such a race; a LINK to a FIFO is never opened at all.
+//   • readlinkSync(abs) is the one path-addressed call after the open, reached only when the open failed. It
+//     reads a property of the NAME in one syscall, so it never hashes bytes other than the ones it inspected.
+//     A name that is not a link answers EINVAL and stays null — above all an UNREADABLE regular file (EACCES
+//     at the open), which therefore stays a reconcile candidate. That is where 6.17.1's "make the target
+//     unreadable to hide a change" guard now lives: on the TARGET's own entry, no longer on the link's
+//     (lessons-learned L51 — re-justified against the new input domain, and tested; LINK_TEXT_ERRNOS, the
+//     errno set that described which FOLLOW failures fell back to link text, went with the following).
 //   • The text is read as a BUFFER and hashed raw. A string read would decode it as UTF-8, and two targets
 //     differing only in invalid bytes would decode to the same U+FFFD string and hash equal, so re-pointing
 //     one to the other would go unseen. For every valid-UTF-8 target the digest is byte-identical to
 //     sha256("symlink\0" + text), the formula a downstream install shipped as a local patch.
-//   • A symlink to a REGULAR file keeps its content hash (the target's bytes, through the one fd above).
 //
-// BOUNDS, stated: the files INSIDE a linked directory are not seen through the link — they are reconciled
-// under their own tracked paths, and a target outside the repo is not descended. A regular file whose bytes
-// are exactly `symlink\0<text>` hashes equal to that link; that takes a deliberate forgery, which the
-// reconciliation contract already places outside its non-adversarial claim. A baseline anchored by the code
-// before this rule has no entry for such a link, so the FIRST reconcile of that epoch still reports it;
-// the next anchor records it.
-export const LINK_TEXT_ERRNOS = Object.freeze(["ENOENT", "ENOTDIR", "ELOOP"]);
+// BOUNDS, stated:
+//   • A change to a link's TARGET is seen only under the target's own path, and only while that path is in the
+//     reconciled set: a target outside the repo, or git-ignored, is outside the set like any other path there.
+//     The files inside a linked directory are reconciled under their own tracked paths. The worktree
+//     fingerprint hashes through this function, so the same holds for it.
+//   • `O_NOFOLLOW` governs the FINAL path component only. An ancestor directory swapped for a link after
+//     enumeration is still followed by both calls, as before 6.20.8. Where `O_NOFOLLOW` does not exist (`?? 0`,
+//     Windows) the open follows a link, and a link to a regular file hashes by its target's bytes — the
+//     pre-6.20.8 rule. CI and every measured run are POSIX.
+//   • A regular file whose bytes are exactly `symlink\0<text>` hashes equal to that link. That takes a deliberate
+//     forgery, which the reconciliation contract already places outside its non-adversarial claim.
+//   • A baseline anchored before 6.20.8 recorded a link to a regular file under its TARGET's digest, so the first
+//     reconcile of that epoch reports the link as changed: a candidate, and an ESCAPE when no recorded scope
+//     names it. Never a silent pass; the next anchor records the text. RECORD_VERSION stays 1, as in 6.17.1:
+//     the record's keys and shape did not change, one kind of `entries` value did.
+// The open flags for a read that never follows the final component, never blocks on a FIFO, and degrades to a
+// plain read where a platform lacks a constant (the check-spec.mjs idiom).
+const NO_FOLLOW_READ = fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0);
 
 export function hashFile(abs) {
   let fd;
   try {
-    fd = openSync(abs, "r");
-    if (!fstatSync(fd).isFile()) return hashLinkText(abs); // a directory / special file: only a link's text
+    fd = openSync(abs, NO_FOLLOW_READ);
+    if (!fstatSync(fd).isFile()) return null; // a directory, FIFO or device — a link never gets here (not followed)
     return createHash("sha256").update(readFileSync(fd)).digest("hex");
-  } catch (e) {
-    // A target that resolves to nothing is hashable only as a link's text. Every other failure — unreadable,
-    // or vanished between enumeration and read — is recorded as absent, never guessed.
-    return LINK_TEXT_ERRNOS.includes(e?.code) ? hashLinkText(abs) : null;
+  } catch {
+    // The no-follow open failed: the name is a symlink (hashed by its text), or it is unreadable / gone (null,
+    // so a candidate). readlink decides which — never the open's errno.
+    return hashLinkText(abs);
   } finally {
     if (fd !== undefined) {
       try {
