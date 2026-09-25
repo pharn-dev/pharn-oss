@@ -2149,3 +2149,18 @@ type: process · concepts: [non-vacuity, test-blindspot, false-green, mutation-t
 - commit: `cf9089763b5b68d820858117b7f79faecc32cb23` (working-tree increment built on this commit; uncommitted at promotion time)
 - source: `.dev/features/review-leftovers-0924/REVIEW.md` "L-eval (P1)" (the findings at `render-run-report.test.mjs:791` and `check-spec.test.mjs:926`)
 - promoted: 2026-09-25 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L61 — A value quoted into a refusal reason must go through a function that cannot throw — `String(v)` throws on parsed JSON, and a refusal that throws is read as a verdict
+
+type: floor · concepts: [refusal-path, untrusted-input, total-function, crash-as-verdict, fail-closed]
+
+**Lesson.** A floor checker that parses untrusted JSON and quotes a raw value into its refusal reason must quote it through a function that cannot throw. `String(v)` is not one: `JSON.parse('{"toString":1}')` yields an object whose `String()` raises TypeError, and so does an array holding one. In 6.22.0's review, `shown()` in `pharn/floor/test-results-formats.mjs` did exactly that. It is the helper every per-test-results refusal quotes through, so two inputs threw instead of being refused: a `pharn-json` document with such a `schema`, and (since 6.15.0) a `pharn.config.json` whose `testResults` format is such a value. Nothing up the stack caught it, so `check-red-run.mjs` and `check-verify.mjs` died with node's exit 1, their own RED/FAIL code, and printed no verdict. Remedy: make the quoting helper total (catch, and fall back to `Object.prototype.toString.call(v)`, which JSON cannot override). Then give every call site that can reach it with a non-string a test built from `{"toString":1}`, with a control asserting that the value really does make `String()` throw.
+
+**Why it matters.** The refusal path is the code least exercised with hostile values. Tests feed it wrong-SHAPED documents (a number where a string goes), which it quotes fine, so a suite of refusal tests certifies the formatter over exactly the inputs that cannot break it. That is [[L60]]'s per-property question, aimed at the error path. A throwing refusal is not fail-closed in the sense the floor needs: exit 1 is a verdict code in these CLIs, so the crash reads as RED with no reason. 6.20.6 and 6.21.1 fixed the same shape for crashing children, but this is distinct: there the crash was in a child's load, and here it is inside the function that renders the refusal itself. **Honest trigger (P7):** one observed instance of this mechanism (two call sites, one shipped since 6.15.0), found by an independent review before merge. It was promoted at the human's choice at the ship-stage lesson gate.
+
+**Provenance.**
+
+- feature: `neutral-test-results`
+- commit: `61946606571e63c989bed77943148912a6279c23`
+- source: `.dev/features/neutral-test-results/REVIEW.md` § Advisory findings → Important, first finding (`pharn/floor/test-results-formats.mjs:296`) + § Proposed lesson candidate
+- promoted: 2026-09-25 via gated `/pharn-dev-memory-promote` (human-approved).
