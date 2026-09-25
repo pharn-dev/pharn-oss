@@ -1,14 +1,21 @@
 # REGRESSION — ac-tests-agreement
 
-**Base:** `137abd3088ac7bd079561be4c5ffc7a2e66aec21`. The working tree was dirty (a working-tree build), so
-`base = HEAD` by the command's deterministic rule. The machine report, `regression-report.json`, is
-`check-regress.mjs verdict`'s stdout, copied verbatim.
+**Base (final run):** `22f002aa608b59be042fd6e9e879bf17aa29c730`, i.e. `origin/main` after #267. The branch was rebased
+onto it and committed, so the tree was clean and `base = merge-base HEAD origin/main` by the command's deterministic
+rule. The machine report, `regression-report.json`, is that run's `check-regress.mjs verdict` stdout, copied
+verbatim.
+
+This stage ran **three times**, all with the same verdict, `no-regressions`, and every gate 0 on both sides:
+
+1. Against `137abd3` (dirty tree, `base = HEAD`) after the build.
+2. Again after the GATE-2 fix to `check-spec.mjs`.
+3. Against `22f002a` after the rebase — the run recorded below.
 
 ## Partition (from `check-regress.mjs scope --feature ac-tests-agreement`, exit 0)
 
-- **Inside (22 paths):** every changed or untracked path. Each is declared in PLAN.md `## Files`, so nothing escaped the
-  build's scope (`escaped: []`, `escape_exempt: []`).
-- **Outside gates:** 96 test files, the one committed eval pair
+- **Inside (27 paths):** every path changed since the base. Each is declared in PLAN.md `## Files`, so nothing escaped
+  the build's scope (`escaped: []`, `escape_exempt: []`).
+- **Outside gates:** 97 test files, the one committed eval pair
   (`pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json` ↔
   `.dev/features/trust-fence/findings.json`, confirmed readable before its exit code was recorded), `validate`, and
   the three style gates. The style gates run because `.prettierignore`, a shared style config, is inside.
@@ -17,7 +24,7 @@
 
 | gate                                                                                       | base | head |
 | ------------------------------------------------------------------------------------------ | ---- | ---- |
-| `tests` (96 outside test files)                                                            | 0    | 0    |
+| `tests` (97 outside test files)                                                            | 0    | 0    |
 | `validate`                                                                                 | 0    | 0    |
 | `structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json` | 0    | 0    |
 | `format:check`                                                                             | 0    | 0    |

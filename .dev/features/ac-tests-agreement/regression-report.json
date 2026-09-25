@@ -1,10 +1,15 @@
 {
-  "base": "137abd3088ac7bd079561be4c5ffc7a2e66aec21",
+  "base": "22f002aa608b59be042fd6e9e879bf17aa29c730",
   "inside": [
     ".claude/commands/pharn-test.md",
     ".dev/features/ac-tests-agreement/BUILD.md",
     ".dev/features/ac-tests-agreement/GRILL.md",
     ".dev/features/ac-tests-agreement/PLAN.md",
+    ".dev/features/ac-tests-agreement/REGRESSION.md",
+    ".dev/features/ac-tests-agreement/REVIEW.md",
+    ".dev/features/ac-tests-agreement/VERIFY.md",
+    ".dev/features/ac-tests-agreement/regression-report.json",
+    ".dev/features/ac-tests-agreement/verify-report.json",
     ".prettierignore",
     "CHANGELOG.md",
     "README.md",
