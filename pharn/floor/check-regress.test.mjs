@@ -210,6 +210,40 @@ test("★ recurrence guard: the enum covers EVERY pharn/features/<name>/ artifac
   assert.deepEqual(missing, [], `PIPELINE_ARTIFACTS is missing artifact(s) the commands declare: ${missing}`);
 });
 
+test("★ ENUMERATION (L23/L29): every machine-written JSON pipeline artifact is in .prettierignore — a new one fails until classified", () => {
+  // THE RECORDED FAILURE (6.20.5): AC-TESTS.lock.json is JSON.stringify(…, null, 2) output that `prettier --check`
+  // rejects, and it was the one machine-written pipeline artifact .prettierignore did not list — a test-first dogfood
+  // run here failed its own `format:check`. The rule is quantified over a SET, so the set is materialized: every
+  // `.json` member of PIPELINE_ARTIFACTS, parsed from source, must be CLASSIFIED below (closure), and every
+  // machine-written one must be ignored. A new JSON artifact fails here until someone decides which it is.
+  const src = readFileSync(join(here, "check-regress.mjs"), "utf8");
+  const block = src.match(/const PIPELINE_ARTIFACTS = \[([\s\S]*?)\n\];/);
+  assert.ok(block, "PIPELINE_ARTIFACTS must be parseable from check-regress.mjs");
+  const json = [...block[1].matchAll(/"([^"]+\.json)"/g)].map((m) => m[1]).sort();
+  // name → the floor module that writes it (the command's verbatim copy of that module's stdout, for the two reports)
+  const MACHINE_WRITTEN = {
+    "AC-TESTS.lock.json": "ac-tests-lock.mjs",
+    "assignments.json": "render-review-assignments.mjs",
+    "cost.json": "render-cost-ledger.mjs",
+    "findings.json": "merge-findings.mjs",
+    "regression-report.json": "check-regress.mjs",
+    "verify-report.json": "check-verify.mjs",
+  };
+  // name → why it is not machine-written (so the ignore rule does not apply)
+  const MODEL_WRITTEN = { "ship-record.json": "/pharn-ship writes it with the Write tool; only record_hash is computed" };
+  assert.deepEqual(
+    json,
+    [...Object.keys(MACHINE_WRITTEN), ...Object.keys(MODEL_WRITTEN)].sort(),
+    "every .json pipeline artifact is classified, and nothing else is"
+  );
+  assert.ok(json.length >= 7, `non-vacuity: found ${json.length} JSON artifacts`);
+  const ignored = new Set(readFileSync(join(here, "..", "..", ".prettierignore"), "utf8").split(/\r?\n/));
+  for (const [name, writer] of Object.entries(MACHINE_WRITTEN)) {
+    assert.match(readFileSync(join(here, writer), "utf8"), /JSON\.stringify\(/, `${writer} must be the machine writer it is classified as`);
+    assert.ok(ignored.has(`pharn/features/*/${name}`), `.prettierignore must list pharn/features/*/${name} (written by ${writer})`);
+  }
+});
+
 // --- D3: a space is a legal filename character and `git diff --name-only` does not quote it. Splitting
 // --changed on whitespace turned ONE real path into TWO tokens which the exempt sets then absorbed.
 

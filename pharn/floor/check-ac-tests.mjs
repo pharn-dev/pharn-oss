@@ -18,9 +18,13 @@
 //     "Approved, un-drifted, and this mapping was made against it" has exactly one implementation.
 // The `## Files` of both files are read by plan-files-core.mjs — the SAME rule the build's writes-scope setter
 // applies, held to it by ★ parity tests — and every path is compared AS THE SETTER SCOPES IT: `clean` (strip a
-// trailing ` (…)` annotation), then `isConcrete`, then case-folded, because APFS is case-insensitive. So
-// `in-plan-files` asks exactly "would the build be scoped to this file?". Comparing the raw text let a PLAN entry
-// `tests/ac/a.test.js (gated)` through while the setter scoped the bare path (the review's blocking finding).
+// trailing ` (…)` annotation), then `isConcrete`, then FOLDED — NFC and full case folding (ac-tests-core.mjs
+// scopeKey, the write guard's fold), because APFS is case- and normalization-insensitive. So `in-plan-files` asks
+// exactly "would the build be scoped to this file?". Comparing the raw text let a PLAN entry
+// `tests/ac/a.test.js (gated)` through while the setter scoped the bare path (the review's blocking finding); a
+// lowercase-only fold let an NFD or `ſ` spelling through (6.20.5). A MAPPING CELL is held to the opposite rule:
+// it must be BYTE-IDENTICAL to a cleaned `## Files` entry, because the runner, the red run and the AC gate use
+// the cell verbatim — a cell that matched only after folding was never collected (6.20.5).
 //
 // NOT GUARANTEED (P0), each stated:
 //   • that the tests are good, assert the AC's Then, or target the right public interface — model work
@@ -127,12 +131,9 @@ export function checkMapping({ acTestsText, specText, planText, others }) {
   const files = pathsFromPlanFiles(acTestsText);
   const fileList = (files.ok ? files.value : []).map(clean);
   if (fileList.length === 0) red("no-files", "AC-TESTS.md has no `## Files` list naming at least one test file");
-  const fileKeys = new Set();
   for (const f of fileList) {
     const why = badPath(f);
     if (why) red("bad-path", `\`## Files\` entry ${shown(f)} is ${why}`);
-    const k = scopeKey(f);
-    if (k !== null) fileKeys.add(k);
   }
 
   const mapping = mappingOf(acTestsText);
@@ -152,7 +153,15 @@ export function checkMapping({ acTestsText, specText, planText, others }) {
   for (const [id, n] of count) {
     if (n > 1) red("duplicate-ac", `${id} has ${n} mapping lines — exactly one is allowed`);
   }
-  const mappedKeys = new Set();
+  // A cell is matched to `## Files` BYTE-EXACTLY (the cleaned entry): the runner, the red run and the AC gate all
+  // consume the cell verbatim, so a cell that equals an entry only after folding names a path no test is reported
+  // under. The fold still decides whether to SAY so — the detail then names the entry to copy.
+  const listedByKey = new Map();
+  for (const f of fileList) {
+    const k = scopeKey(f);
+    if (k !== null && !listedByKey.has(k)) listedByKey.set(k, f);
+  }
+  const mappedCells = new Set();
   for (const r of mapping.rows) {
     if (!specLevel.has(r.id)) {
       red("unknown-ac", `line ${r.line}: ${r.id} is not an Acceptance Criterion of the SPEC`);
@@ -162,16 +171,21 @@ export function checkMapping({ acTestsText, specText, planText, others }) {
         `line ${r.line}: ${r.id} is mapped at \`${r.level}\` but the SPEC says \`${specLevel.get(r.id) ?? "a malformed level"}\``
       );
     }
-    const k = scopeKey(r.file);
-    if (k !== null) mappedKeys.add(k);
+    mappedCells.add(r.file);
     // A placeholder/glob listed in `## Files` too is already a bad-path there; one that is NOT listed is unlisted.
-    const listedVerbatim = k === null && fileList.includes(clean(r.file));
-    if (!listedVerbatim && (k === null || !fileKeys.has(k)))
-      red("unlisted-file", `line ${r.line}: ${shown(r.file)} is not in AC-TESTS.md \`## Files\``);
+    if (!fileList.includes(r.file)) {
+      const k = scopeKey(r.file);
+      const near = k === null ? undefined : listedByKey.get(k);
+      red(
+        "unlisted-file",
+        near === undefined
+          ? `line ${r.line}: ${shown(r.file)} is not in AC-TESTS.md \`## Files\``
+          : `line ${r.line}: ${shown(r.file)} differs from the \`## Files\` entry ${shown(near)} only in letter case or Unicode form — spell the cell byte-for-byte as listed (the runner and the red run use it verbatim)`
+      );
+    }
   }
   for (const f of fileList) {
-    const k = scopeKey(f);
-    if (k !== null && !mappedKeys.has(k)) red("unmapped-file", `\`## Files\` entry ${shown(f)} is mapped by no AC line`);
+    if (scopeKey(f) !== null && !mappedCells.has(f)) red("unmapped-file", `\`## Files\` entry ${shown(f)} is mapped by no AC line`);
   }
 
   // The build exclusion: what the setter would scope from PLAN.md names none of them (case-folded).

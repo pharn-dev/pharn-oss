@@ -43,17 +43,24 @@ spec_content_hash: <the SPEC's pinned hash — the same value PLAN.md carries>
 ```
 
 - **Frontmatter:** `spec_id` and `spec_content_hash`, exactly the fields `check-plan-spec-agree.mjs` reads, so the
-  mapping is bound to the current Approved SPEC by the same checker that binds PLAN.md.
+  mapping is bound to the current Approved SPEC by the same checker that binds PLAN.md. Every reader — the chain
+  check, `check-spec.mjs`, the lock — reads a field with `readField` in `frontmatter-core.mjs` (6.20.5): the
+  **last** copy of a duplicated key wins, and a quote is resolved before an inline comment (a whitespace-preceded
+  `#`) is stripped.
+  Nothing refuses the duplicate itself; what changed is that no reader takes a different copy.
 - **`## Files`:** exactly the test files, one back-tick path per list item. It is `/pharn-test`'s writes-scope
   (`set-writes-scope.cjs --from-plan AC-TESTS.md`), read by the same `## Files` rule as a PLAN
   (`plan-files-core.mjs`, held to the setter by a parity test).
 - **`## Mapping`:** one line per AC, matching
 
   ```text
-  ^- (AC-[1-9][0-9]*) \| (unit|integration|e2e) \| `([^`\s][^`]*)` \| (\S.*)$
+  ^- (AC-[1-9][0-9]*) \| (unit|integration|e2e) \| `([^`\s](?:[^`]*[^`\s])?)` \| (\S.*)$
   ```
 
-  The id and level come from the SPEC; the file is a `## Files` entry. The **public target** is the interface the
+  The id and level come from the SPEC; the file is a `## Files` entry, spelled **byte-for-byte** as that entry is
+  scoped (after the setter's `clean`) — no whitespace at either edge of the cell (6.20.5), and no difference in letter
+  case or Unicode form, because the runner, the red run and the AC gate use the cell verbatim. A cell that matched
+  only after folding was never collected; it is now `unlisted-file`, whose detail names the entry to copy. The **public target** is the interface the
   test drives: a URL plus a visible role or text for `e2e`, a route plus method for `integration`, a module path,
   export and signature for `unit`. A unit test written first needs that interface decided before the build, which
   is why the target is the plan's job. The floor checks the target only for presence.
@@ -95,8 +102,13 @@ lives in `pharn/floor/ac-tests-core.mjs`, which the checker, the runner and the 
 
 **Paths are compared as the writes-scope setter scopes them:** each `## Files` entry of AC-TESTS.md, PLAN.md and
 every other feature goes through the setter's `clean` (a trailing `(…)` annotation is stripped) and `isConcrete`,
-and the comparison is case-folded, because APFS is case-insensitive. A PLAN entry `tests/ac/a.test.js (gated)` or
-`Tests/ac/a.test.js` is therefore `in-plan-files`. A second `## Mapping` section is `malformed-line`.
+and the comparison is folded — NFC, then full case folding (`toUpperCase().toLowerCase()`, the write guard's fold
+without its Windows trailing dot/space strip; 6.20.5, before which it only lowercased) — because APFS is case- and
+normalization-insensitive. A PLAN entry `tests/ac/a.test.js (gated)`, `Tests/ac/a.test.js`, an NFD spelling of a
+non-ASCII name, or `ſ` for `s` is therefore `in-plan-files`. **Bounds:** the fold is the modelled equivalence; one a
+filesystem applies beyond it is not caught (fail-open), one it applies beyond the filesystem over-reports (fail-closed),
+and it was never measured against APFS's own folding table. Two `## Files` entries of ONE AC-TESTS.md that differ only
+by fold name one file on APFS, and nothing REDs the pair. A second `## Mapping` section is `malformed-line`.
 AC ids and levels are read by `specAcceptanceCriteria()` in `spec-template-core.mjs`, through the same item parser
 `check-spec.mjs` checks with.
 
@@ -177,7 +189,9 @@ the script.
   everywhere else — a bootstrap lock, and every `/2` and `/1` lock. The mode is read from `mode` (`/1`: test-first),
   never from the schema, so a `/2` bootstrap lock stays a bootstrap lock. `--record-red-run` writes only on a `/3`
   test-first lock: a red run recorded on a lock with no pin could never pass the AC gate.
-- **`files`** is sorted by path and names every `## Files` entry. Each must be a regular file, and so must
+- **`files`** is sorted by path and names every `## Files` entry **as the setter scopes it** — `clean`, then
+  `isConcrete` (6.20.5; before, the raw entry was pinned, so `tests/a.test.js (new)` refused the write). An entry the
+  setter would drop (a placeholder or glob) refuses the write and is a `--check` RED. Each must be a regular file, and so must
   AC-TESTS.md: a missing file or a symlink refuses the write. Test-file paths resolve against the current directory
   (the project root); the mapping path is compared by its real location, never as spelled.
 - **`red_run`** is written only by `--record-red-run`, which re-derives the verdict itself, requires `--check` GREEN
@@ -288,20 +302,20 @@ Matching is FILE-SCOPED, by the red run's own rule (`red-run-core.mjs` `observeA
 whose `file` EQUALS a file mapped to AC-n and whose LEAF title starts `AC-<n>:` — never a suite-wide title match,
 because every earlier feature's AC tests are in the same suite and reuse the ids.
 
-| SPEC       | reason                | when                                                                                                                                   | class      |
-| ---------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| feature    | `ac-untested`         | no matching entry, or a test the red run recorded red for AC-n is not reported at all                                                  | delivery   |
-| feature    | `ac-not-passed`       | a matching entry `failed`                                                                                                              | delivery   |
-| feature    | `ac-skipped`          | a matching entry `skipped` (none failed)                                                                                               | delivery   |
-| feature    | `ac-tests-modified`   | the lock is missing, unusable or not test-first; its files, mapping or spec pin do not hold; or the SPEC's pin is not the lock's       | evidence   |
-| feature    | `ac-never-red`        | no `red_run`, or one no longer bound to the lock; a matched test the red run never recorded red for that AC; an AC with no mapping row | evidence   |
-| feature    | `test-infra-changed`  | the pin does not hold; or a level gate did not run as the pinned `npm run <id>` (`source: discover`, no shell)                         | evidence   |
-| feature    | `test-infra-unpinned` | the lock carries no pin (`/2`, `/1`)                                                                                                   | evidence   |
-| feature    | item 01's reason      | a level gate is absent from the head run, or its per-test record is refused                                                            | unmeasured |
-| test-infra | `ac-untested`         | the level's gate did not run as discovered, its results are `not-configured`, or it reported no passed test                            | delivery   |
-| test-infra | `ac-tests-modified`   | the lock is not a bootstrap lock whose SPEC half holds                                                                                 | evidence   |
-| legacy     | `ac-tests-modified`   | an AC-TESTS.md or a lock exists beside it (`spec_template` was removed after the tests were pinned)                                    | evidence   |
-| legacy     | —                     | otherwise: **not-applicable (legacy spec)**, stated in the report, never silently green                                                | —          |
+| SPEC       | reason                | when                                                                                                                                                         | class      |
+| ---------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| feature    | `ac-untested`         | no matching entry, or a test the red run recorded red for AC-n is not reported at all                                                                        | delivery   |
+| feature    | `ac-not-passed`       | a matching entry `failed`                                                                                                                                    | delivery   |
+| feature    | `ac-skipped`          | a matching entry `skipped` (none failed)                                                                                                                     | delivery   |
+| feature    | `ac-tests-modified`   | the lock is missing, unusable or not test-first; its files, mapping or spec pin do not hold; or the SPEC's pin is not the lock's, or cannot be read (6.20.5) | evidence   |
+| feature    | `ac-never-red`        | no `red_run`, or one no longer bound to the lock; a matched test the red run never recorded red for that AC; an AC with no mapping row                       | evidence   |
+| feature    | `test-infra-changed`  | the pin does not hold; or a level gate did not run as the pinned `npm run <id>` (`source: discover`, no shell)                                               | evidence   |
+| feature    | `test-infra-unpinned` | the lock carries no pin (`/2`, `/1`)                                                                                                                         | evidence   |
+| feature    | item 01's reason      | a level gate is absent from the head run, or its per-test record is refused                                                                                  | unmeasured |
+| test-infra | `ac-untested`         | the level's gate did not run as discovered, its results are `not-configured`, or it reported no passed test                                                  | delivery   |
+| test-infra | `ac-tests-modified`   | the lock is not a bootstrap lock whose SPEC half holds                                                                                                       | evidence   |
+| legacy     | `ac-tests-modified`   | an AC-TESTS.md or a lock exists beside it (`spec_template` was removed after the tests were pinned)                                                          | evidence   |
+| legacy     | —                     | otherwise: **not-applicable (legacy spec)**, stated in the report, never silently green                                                                      | —          |
 
 The three classes are a partition (closure-tested). **Evidence** adds `ac-evidence` to verify's `failing_gates` —
 FAIL, and `/pharn-loop` stops (`check-loop.mjs` `terminal_cause: ac-evidence`, stuck point S13): a rebuild cannot
@@ -319,7 +333,10 @@ titles are untrusted DATA: the report names them, and no stage follows them.
 `pharn.config.json` are agent-editable — the lock and the pin NARROW that and never close it; AGREEMENT, never
 provenance (a self-consistent forged lock + stamp + results set over the live tree passes); the pin's own gaps
 (above); and a per-test record is refused WHOLE on one flaky test, one `test.fail`, or one duplicate id anywhere in
-the suite, so such a suite makes the gate unmeasured until it is fixed.
+the suite, so such a suite makes the gate unmeasured until it is fixed. The gate reads the SPEC's pin, never its
+`state`: a SPEC whose pin cannot be read is `ac-tests-modified` (6.20.5 — before, the comparison was skipped), but a
+SPEC reverted to Draft that still carries a readable pin equal to the lock's passes here; `/pharn-verify`'s chain
+check and `/pharn-loop`'s freshness check I refuse it.
 
 ## Artifacts, regress and reconcile
 

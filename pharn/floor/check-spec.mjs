@@ -95,7 +95,7 @@
 import { closeSync, constants, fstatSync, lstatSync, openSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
-import { FM_RE, stripBom } from "./frontmatter-core.mjs";
+import { FIELD_LINE_RE, FM_RE, readValue, stripBom } from "./frontmatter-core.mjs";
 import {
   H2_RE,
   isTemplated,
@@ -121,42 +121,10 @@ function red(kind, detail) {
   reds.push({ kind, detail });
 }
 
-function stripQuotes(v) {
-  return v.replace(/^["']|["']$/g, "");
-}
-
-// Strip a YAML inline comment from an UNQUOTED scalar: a `#` at the value's start, or preceded by
-// whitespace, opens a comment running to end of line. A `#` with NO preceding whitespace (`feat#3`) is NOT
-// a comment and survives byte-exact — what YAML says, and what keeps an id containing a hash character
-// intact. Deterministic; no LLM. WHY this exists: the command templates document their machine fields with a
-// trailing `# …` note, so a field written exactly as documented was being read WITH the note glued on, and a
-// 64-hex pin then failed its own enum-gate — a false RED on a correct file.
-function stripComment(v) {
-  return v.replace(/(^|\s)#.*$/, "").trim();
-}
-
-// Read one frontmatter field VALUE. THE QUOTE COMES FIRST, and that order is the part to get right: a
-// QUOTED scalar's interior is taken verbatim up to its closing quote, and whatever follows that quote (a
-// real trailing comment) is discarded. Doing it the other way — strip ` #…`, then the quotes — eats the
-// closing quote of a value that legitimately contains ` #` (`"a # b"` → `a`, corrupted). Resolving the
-// quote first gets BOTH shapes right: `"a # b"` keeps its hash, and `"FEAT-1" # note` drops the note.
-// parseSpec stores EVERY field, not just the three this checker gates, so an unrelated quoted field must
-// survive intact.
-//
-// Honestly bounded (P0): a pragmatic frontmatter reader, NOT a YAML library. The closing quote is found by
-// a plain scan, so a value containing an ESCAPED quote (`"a\"b"`) ends at the escape rather than at the
-// real terminator, and an UNTERMINATED quote falls through to the unquoted path rather than guess at an
-// interior. No template here emits either shape, and both fail toward a visibly wrong value that the
-// id/hash gates reject — never toward a silent pass.
-function readValue(raw) {
-  const v = raw.trim();
-  const q = v[0];
-  if (q === '"' || q === "'") {
-    const end = v.indexOf(q, 1);
-    if (end > 0) return v.slice(1, end);
-  }
-  return stripQuotes(stripComment(v));
-}
+// A frontmatter field VALUE is read by `readValue` in frontmatter-core.mjs — the quote resolved first, then an
+// unquoted ` #` comment stripped — and a field LINE is matched by its `FIELD_LINE_RE`. Both lived here as private
+// copies until 6.20.5 and were MOVED there byte-for-byte, so check-plan-spec-agree.mjs and ac-tests-lock.mjs read
+// every field exactly as this checker does (L35).
 
 function titleCase(s) {
   return s.replace(/\b\w/g, (c) => c.toUpperCase());
@@ -171,7 +139,7 @@ function parseSpec(text) {
   if (!m) return null;
   const fm = {};
   for (const line of m[1].split(/\r?\n/)) {
-    const kv = line.match(/^([A-Za-z_][\w-]*):[ \t]*(.*)$/);
+    const kv = line.match(FIELD_LINE_RE);
     if (kv) fm[kv[1]] = readValue(kv[2]);
   }
   return { fm, raw: m[1], body: text.slice(m[0].length) };

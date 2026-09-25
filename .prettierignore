@@ -47,6 +47,18 @@ pharn/features/*/cost.json
 # and the conflict would land on `/pharn-verify`, a gate `/pharn-loop` itself owns.
 pharn/features/*/RUN-REPORT.md
 
+# The other machine-written JSON pipeline artifacts, on the SAME reasoning (L23): each is one floor module's
+# `JSON.stringify(…, null, 2)` output, and that layout expands a short array of strings over several lines where
+# prettier wants it inline. AC-TESTS.lock.json (ac-tests-lock.mjs) is written by /pharn-test BEFORE the build and
+# outside its scope, so a test-first dogfood run here failed its own `format:check` at verify, and a lock committed
+# by /pharn-loop Step 6c reddened `npm run check` (review finding, 6.20.5). assignments.json
+# (render-review-assignments.mjs) fails the same way; findings.json (merge-findings.mjs, objects only) passes today
+# and is listed before a primitive array makes it fail. check-regress.test.mjs's ★ enumeration requires every
+# machine-written `.json` member of PIPELINE_ARTIFACTS to appear here.
+pharn/features/*/AC-TESTS.lock.json
+pharn/features/*/assignments.json
+pharn/features/*/findings.json
+
 # The committed cost-ledger transcript fixtures are JSONL — one record per line, byte-exact. Prettier
 # does not understand `.jsonl`, and `--ignore-unknown` skips it; this entry makes the intent explicit so
 # a future formatter that DOES understand it cannot silently re-wrap the fixture the parity test pins.

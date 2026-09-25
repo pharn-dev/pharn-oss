@@ -10,10 +10,13 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { FM_RE, stripBom, matchFrontmatter } from "./frontmatter-core.mjs";
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { tmpdir } from "node:os";
+import { FM_RE, stripBom, matchFrontmatter, readField, readValue } from "./frontmatter-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BOM = "﻿";
@@ -116,4 +119,102 @@ test("✧ the consumer list is not empty and names only files that exist", () =>
 test("✧ this core holds no literal BOM character — it would be invisible in every diff", () => {
   const src = readFileSync(join(HERE, "frontmatter-core.mjs"), "utf8");
   assert.ok(!src.includes(BOM), "frontmatter-core.mjs must express the BOM as an escape, never as a literal");
+});
+
+// ── The ONE value reader (6.20.5): readValue / readField ─────────────────────────────────────────────────
+
+test("readValue: the quote is resolved BEFORE an inline comment; an unquoted ` #` opens a comment, `feat#3` does not", () => {
+  assert.equal(readValue(' "a # b" '), "a # b");
+  assert.equal(readValue('"FEAT-1" # note'), "FEAT-1");
+  assert.equal(readValue("feat-1 # note"), "feat-1");
+  assert.equal(readValue("feat#3"), "feat#3");
+  assert.equal(readValue("'single'"), "single");
+  assert.equal(readValue(""), "");
+});
+
+test("readField: LAST-wins across a duplicated key, exact key match, undefined when absent", () => {
+  assert.equal(readField("spec_id: old\nspec_id: new", "spec_id"), "new");
+  assert.equal(readField('spec_id: "x"\r\nspec_id: y # c', "spec_id"), "y", "CRLF-tolerant, and the last copy wins");
+  assert.equal(readField("spec_ids: a\nspec_id2: b", "spec_id"), undefined, "a key is matched exactly, never by prefix");
+  assert.equal(readField("a: 1", "spec_id"), undefined);
+  assert.equal(readField('spec_content_hash: ""\nspec_content_hash: ' + "a".repeat(64), "spec_content_hash"), "a".repeat(64));
+});
+
+// ✧ PARITY, EXECUTED (L52 — the set is named): the consumers that read a SPEC/PLAN pin field are check-spec.mjs (its
+// parseSpec, observable through --spec-id and --state), check-plan-spec-agree.mjs (its readCarried, observable through
+// its exit) and ac-tests-lock.mjs (covered behaviourally in ac-tests-lock.test.mjs). Both CLIs run as child
+// processes here, over the same duplicated / quoted / commented variants, and must read what readField reads.
+const VARIANTS = [
+  ["spec_id: old\nspec_id: new", "spec_id"],
+  ['spec_id: "a # b"', "spec_id"],
+  ["spec_id: feat-1 # note", "spec_id"],
+  ['spec_id: "feat-2" # note', "spec_id"],
+  ["spec_id: feat#3", "spec_id"],
+  ['spec_id: "x"\nspec_id: y # c', "spec_id"],
+  ["state: Draft\nstate: Approved # ratified", "state"],
+  ["state: Approved\nstate: Draft", "state"],
+];
+
+test("✧ PARITY: check-spec.mjs --spec-id / --state read every variant exactly as readField does", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fm-parity-"));
+  try {
+    for (const [block, key] of VARIANTS) {
+      const p = join(dir, "SPEC.md");
+      writeFileSync(p, `---\n${block}\n---\n\n## Intent\n\nx\n`);
+      const r = spawnSync(process.execPath, [join(HERE, "check-spec.mjs"), key === "state" ? "--state" : "--spec-id", p], {
+        encoding: "utf8",
+      });
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(r.stdout, `${readField(block, key)}\n`, `check-spec and readField disagree on ${JSON.stringify(block)}`);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("✧ PARITY: check-plan-spec-agree.mjs accepts a PLAN exactly when readField reads the SPEC's id and pin from it", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fm-parity-"));
+  try {
+    const body = "\n## Intent\n\nwhat and why\n\n## Scope\n\nfiller\n\n## Acceptance Criteria\n\nfiller\n\n## Constraints\n\nfiller\n\n";
+    const H = createHash("sha256").update(body).digest("hex");
+    const stale = "b".repeat(64);
+    writeFileSync(join(dir, "SPEC.md"), `---\nspec_id: my-feature\nstate: Approved\nspec_content_hash: ${H}\n---\n${body}`);
+    const plans = [
+      `spec_id: my-feature\nspec_content_hash: ${stale}\nspec_content_hash: ${H}`, // stale then current → current
+      `spec_id: my-feature\nspec_content_hash: ${H}\nspec_content_hash: ${stale}`, // current then stale → stale
+      `spec_id: my-feature\nspec_content_hash: "${H}" # carried`,
+      `spec_id: other\nspec_id: my-feature\nspec_content_hash: ${H}`,
+      `spec_id: my-feature\nspec_id: other\nspec_content_hash: ${H}`,
+      `spec_id: "my-feature" # note\nspec_content_hash: ${H} # note`,
+    ];
+    let accepted = 0;
+    for (const block of plans) {
+      writeFileSync(join(dir, "PLAN.md"), `---\n${block}\n---\n\n## Approach\n\nimplement it.\n`);
+      const r = spawnSync(process.execPath, [join(HERE, "check-plan-spec-agree.mjs"), join(dir, "PLAN.md"), join(dir, "SPEC.md")], {
+        encoding: "utf8",
+      });
+      const expected = readField(block, "spec_id") === "my-feature" && readField(block, "spec_content_hash") === H;
+      assert.equal(r.status === 0, expected, `check-plan-spec-agree and readField disagree on ${JSON.stringify(block)}: ${r.stdout}`);
+      if (expected) accepted++;
+    }
+    assert.ok(accepted >= 2 && accepted < plans.length, "non-vacuity: both an accepted and a refused variant");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("✧ CLOSURE: no other non-test floor module declares its own frontmatter value reader", () => {
+  // The three readers this retired (check-spec's and check-plan-spec-agree's readValue, ac-tests-lock's scalar) were
+  // named functions; a re-introduced copy under either name fails here. BOUND: a reader under ANOTHER name is not
+  // ranged over (the ship-briefing pair's stripQuotes reads other artifacts and is out of scope).
+  const offenders = [];
+  for (const f of readdirSync(HERE).filter((n) => n.endsWith(".mjs") && !n.endsWith(".test.mjs") && n !== "frontmatter-core.mjs")) {
+    if (/\bfunction\s+(readValue|scalar)\s*\(/.test(readFileSync(join(HERE, f), "utf8"))) offenders.push(f);
+  }
+  assert.deepEqual(offenders, [], "read a frontmatter field with frontmatter-core.mjs readField / readValue");
+  assert.match(
+    readFileSync(join(HERE, "frontmatter-core.mjs"), "utf8"),
+    /export function readValue\(/,
+    "non-vacuity: the pattern finds the core's own"
+  );
 });

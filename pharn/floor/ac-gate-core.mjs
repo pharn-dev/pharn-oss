@@ -43,8 +43,11 @@
 // provenance (L43) — a self-consistent fabricated lock + stamp + results set over the live tree passes; a record is
 // refused whole on one flaky test, one `test.fail`, or one duplicate id anywhere in the suite (item 01), which makes the
 // gate unmeasured; the pin's own gaps are test-infra-core.mjs's header. The gate does NOT re-check that the SPEC is
-// still Approved: a SPEC reverted to Draft with its lock intact passes here, and /pharn-verify Step 2's chain check
-// and /pharn-loop's freshness check I are what refuse it.
+// still Approved — it reads the SPEC's pin, never its `state`. Since 6.20.5 a test-first SPEC whose pin cannot be
+// read (no `spec_id` or `spec_content_hash` line, an empty one, a value that is not 64 hex — a Draft usually has one
+// of these) is `ac-tests-modified`, an EVIDENCE reason: verify FAIL and /pharn-loop S13; before, the comparison was
+// skipped and the gate could PASS. A SPEC reverted to Draft that still carries a readable pin equal to the lock's
+// still passes here, and /pharn-verify Step 2's chain check and /pharn-loop's freshness check I are what refuse it.
 //
 // TRUST (P2): test ids and titles are untrusted DATA from the project's reporter; lock paths come from an
 // agent-editable file. Both are compared as strings and copied into the report as data — the report NAMES them, and
@@ -199,7 +202,11 @@ function testFirst({ feature, spec, stamp, root, recordOf }) {
     const files = testFirstReds(lock, feature, DEFAULT_BASE, root);
     if (files.length) add("ac-tests-modified", `${files[0]}${files.length > 1 ? ` (+${files.length - 1} more)` : ""}`);
     const facts = readSpecFacts(feature, DEFAULT_BASE, root);
-    if (facts.ok && facts.spec.spec_content_hash !== lock.spec.spec_content_hash)
+    // Fail-closed (6.20.5): a SPEC whose pin cannot be read cannot be shown to be the one the tests were locked
+    // against. This used to SKIP the comparison, so a pin the reader refused (a Draft leftover line, say) read PASS.
+    if (!facts.ok)
+      add("ac-tests-modified", `${SPEC_NAME}'s pin cannot be read (${facts.reason}) — not the SPEC the tests were locked against`);
+    else if (facts.spec.spec_content_hash !== lock.spec.spec_content_hash)
       add("ac-tests-modified", `${SPEC_NAME}'s spec_content_hash is not the one the tests were locked against`);
     if (!lock.red_run)
       add("ac-never-red", `the lock (${lock.schema}) records no red run — the AC tests were never shown to fail before the build`);

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // pharn/floor/ac-tests-core.mjs — the AC-tests MAPPING grammar, pure: the closed level set, the mapping line regex,
-// the `## Mapping` reader, the test-file path rule and the setter-equivalent comparison key. Contract:
-// pharn/pharn-contracts/ac-tests.md.
+// the `## Mapping` reader, the test-file path rule, the path the setter scopes (`scopedPath`) and its folded
+// comparison key (`scopeKey`). Contract: pharn/pharn-contracts/ac-tests.md.
 //
 // WHY A CORE (P3): three modules read the mapping — check-ac-tests.mjs (the mapping check), run-gates.mjs (the red
 // run's `--ac-tests`) and red-run-core.mjs (the per-AC verdict). No floor module imports a `check-*.mjs` CLI, so the
@@ -12,20 +12,32 @@
 
 import { posix } from "node:path";
 import { clean, isConcrete } from "./plan-files-core.mjs";
+import { foldName } from "./spec-template-core.mjs";
 
 /** The verify levels a mapping line may name — the spec-template's closed set. */
 export const LEVELS = Object.freeze(["unit", "integration", "e2e"]);
 
-/** One mapping line: `- AC-<n> | <level> | `<test file>` | <public target>`. */
-export const MAPPING_RE = /^- (AC-[1-9][0-9]*) \| (unit|integration|e2e) \| `([^`\s][^`]*)` \| (\S.*)$/;
+/** One mapping line: `- AC-<n> | <level> | `<test file>` | <public target>`. The file cell has no whitespace at
+ *  either edge (6.20.5: a trailing one was admitted, and a cell `tests/a.test.js ` then reached the runner and the
+ *  red-run match as a path no test file has), so every consumer receives the cell exactly as `## Files` lists it. */
+export const MAPPING_RE = /^- (AC-[1-9][0-9]*) \| (unit|integration|e2e) \| `([^`\s](?:[^`]*[^`\s])?)` \| (\S.*)$/;
 
 const MAPPING_HEADING_RE = /^##\s+Mapping\s*$/;
 
-/** What the writes-scope setter would scope for a `## Files` entry (plan-files-core's copy of its rule), then
- *  case-folded for comparison. `null` for an entry the setter drops (a placeholder or glob). */
-export function scopeKey(entry) {
+/** The path the writes-scope setter scopes for a `## Files` entry — `clean` (a trailing ` (…)` annotation and edge
+ *  whitespace stripped), then `isConcrete` — or `null` for an entry the setter drops (a placeholder or glob). Both
+ *  rules are plan-files-core's copy of the setter's, held to it by a parity test; never re-derived here. */
+export function scopedPath(entry) {
   const c = clean(entry);
-  return isConcrete(c) ? c.toLowerCase() : null;
+  return isConcrete(c) ? c : null;
+}
+
+/** scopedPath, then FOLDED for comparison: NFC and full case folding — spec-template-core's `foldName`, the fold the
+ *  write guard's toKey applies (minus its Windows trailing dot/space strip). Before 6.20.5 this only lowercased, so
+ *  an NFD spelling, or `ſ` for `s`, of an AC test file passed `in-plan-files` while APFS resolved both to one file. */
+export function scopeKey(entry) {
+  const p = scopedPath(entry);
+  return p === null ? null : foldName(p);
 }
 
 const H2_OR_ABOVE_RE = /^\s{0,3}#{1,2}\s/;

@@ -898,16 +898,24 @@ test("the regress PAIR end to end through a real git worktree: the base stamp la
 // ---------------------------------------------------------------------------------------------------
 
 const REGRESS_CMD = join(HERE, "..", "..", ".claude", "commands", "pharn-regress.md");
-const FLOOR_MODULES = [
-  "run-gates.mjs",
-  "gate-run-core.mjs",
-  "worktree-fingerprint.mjs",
-  "reconcile-baseline.mjs",
-  "check-regress.mjs",
-  // run-gates.mjs reads `--ac-tests` through ac-tests-core.mjs (6.18.0), which reads `## Files` through plan-files-core.
-  "ac-tests-core.mjs",
-  "plan-files-core.mjs",
-];
+// The ROOTS are the modules the pinned lines invoke; everything they import is DERIVED, never typed. The list was a
+// hand list until 6.20.5, when ac-tests-core.mjs began importing spec-template-core.mjs (→ frontmatter-core.mjs) and
+// the copied floor crashed the shelled head init — the same staleness check-loop-fresh.test.mjs's FLOOR_MODULES
+// closure was written to end after it went stale twice (L29: the enumeration is the deliverable).
+const FLOOR_ROOTS = ["run-gates.mjs", "reconcile-baseline.mjs", "check-regress.mjs"];
+const FLOOR_MODULES = (() => {
+  const seen = new Set();
+  const queue = [...FLOOR_ROOTS];
+  while (queue.length) {
+    const m = queue.shift();
+    if (seen.has(m)) continue;
+    seen.add(m);
+    for (const [, dep] of readFileSync(join(HERE, m), "utf8").matchAll(/["'](?:\.\/)?([a-z0-9-]+\.mjs)["']/g)) {
+      if (!dep.endsWith(".test.mjs") && existsSync(join(HERE, dep))) queue.push(dep);
+    }
+  }
+  return [...seen].sort();
+})();
 
 /** Fenced blocks of a command, as arrays of lines. */
 function fencedBlocks(text) {

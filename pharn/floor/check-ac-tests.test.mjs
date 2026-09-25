@@ -16,6 +16,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { KINDS, LEVELS, MAPPING_RE, badPath, checkMapping, mappingOf } from "./check-ac-tests.mjs";
 import { specAcceptanceCriteria, specVerdict } from "./spec-template-core.mjs";
+import { acRowsOf, scopeKey, scopedPath } from "./ac-tests-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHECK = join(HERE, "check-ac-tests.mjs");
@@ -495,4 +496,62 @@ test("✧ L36 REVERSE CLOSURE — every KINDS member was reached by a test in th
     KINDS.filter((k) => !REACHED.has(k)),
     []
   );
+});
+
+// ── 6.20.5: every consumer gets the path the setter scoped; the fold is the write guard's ─────────────────────────
+
+const kindsOf = (r) => [...new Set(r.findings.map((f) => f.kind))].sort();
+const mapRows = (unitCell) => [`- AC-1 | unit | \`${unitCell}\` | src/demo.js#reset()`, `- AC-2 | e2e | \`${E2E}\` | /reset — "Reset"`];
+
+test("6.20.5: a mapping cell that differs from its `## Files` entry only by case is unlisted-file, naming the entry to copy", () => {
+  const cell = "tests/ac/Demo.unit.test.js";
+  const r = checkMapping({ acTestsText: acTests({ mapping: mapRows(cell) }), specText: SPEC, planText: planText(), others: [] });
+  assert.deepEqual(kindsOf(r), ["unlisted-file", "unmapped-file"]);
+  assert.match(
+    r.findings.find((f) => f.kind === "unlisted-file").detail,
+    /entry "tests\/ac\/demo\.unit\.test\.js" only in letter case or Unicode form — spell the cell byte-for-byte/
+  );
+  // Why it matters: the consumers read the cell VERBATIM, so this cell could never match the file the setter scoped.
+  assert.equal(acRowsOf(acTests({ mapping: mapRows(cell) })).rows[0].file, cell);
+  // Control: the exact spelling is GREEN.
+  assert.deepEqual(kindsOf(checkMapping({ acTestsText: acTests(), specText: SPEC, planText: planText(), others: [] })), []);
+});
+
+test("6.20.5: a mapping cell with whitespace at its edge is malformed-line, and reaches no consumer", () => {
+  const text = acTests({ mapping: mapRows(`${UNIT} `) });
+  assert.doesNotMatch(`- AC-1 | unit | \`${UNIT} \` | x`, MAPPING_RE, "a trailing space inside the back-ticks");
+  assert.doesNotMatch(`- AC-1 | unit | \` ${UNIT}\` | x`, MAPPING_RE, "a leading one (refused before 6.20.5 too)");
+  assert.match(`- AC-1 | unit | \`${UNIT}\` | x`, MAPPING_RE, "control");
+  assert.match("- AC-1 | unit | `a` | x", MAPPING_RE, "a one-character path still matches");
+  assert.ok(kindsOf(checkMapping({ acTestsText: text, specText: SPEC, planText: planText(), others: [] })).includes("malformed-line"));
+  assert.equal(acRowsOf(text).ok, false, "run-gates / red-run-core / the AC gate refuse it too");
+});
+
+test("6.20.5: scopeKey folds like the write guard — NFC and full case folding — pinned by value, not by its implementation", () => {
+  const nfc = "tests/ac/café.test.js";
+  const nfd = "tests/ac/café.test.js";
+  assert.notEqual(nfc, nfd, "precondition: two byte spellings");
+  assert.equal(scopeKey(nfd), scopeKey(nfc));
+  assert.equal(scopeKey("teſts/ac/a.test.js"), "tests/ac/a.test.js", "ſ (U+017F) folds to s");
+  assert.equal(scopeKey("Tests/AC/A.test.js (gated)"), "tests/ac/a.test.js", "cleaned, then folded");
+  assert.equal(scopeKey("tests/ac/<x>.test.js"), null, "a placeholder is dropped, as the setter drops it");
+  assert.equal(scopedPath("tests/ac/A.test.js (new)"), "tests/ac/A.test.js", "scopedPath cleans but never folds");
+});
+
+test("6.20.5: NFD, ſ and case spellings of an AC test file are in-plan-files, and claimed-elsewhere in another feature", () => {
+  const nfcFile = "tests/ac/café.unit.test.js";
+  const nfdFile = "tests/ac/café.unit.test.js";
+  const ac = acTests({ files: [nfcFile, E2E], mapping: mapRows(nfcFile) });
+  assert.deepEqual(kindsOf(checkMapping({ acTestsText: ac, specText: SPEC, planText: planText(), others: [] })), [], "control: GREEN");
+  for (const spelling of [nfdFile, "teſts/ac/café.unit.test.js", "Tests/AC/CAFÉ.unit.test.js"]) {
+    const inPlan = checkMapping({ acTestsText: ac, specText: SPEC, planText: planText(["src/demo.js", spelling]), others: [] });
+    assert.deepEqual(kindsOf(inPlan), ["in-plan-files"], `PLAN.md naming ${JSON.stringify(spelling)} would scope the build to the AC test`);
+    const elsewhere = checkMapping({
+      acTestsText: ac,
+      specText: SPEC,
+      planText: planText(),
+      others: [{ feature: "other", files: [spelling] }],
+    });
+    assert.deepEqual(kindsOf(elsewhere), ["claimed-elsewhere"], `another feature claiming ${JSON.stringify(spelling)}`);
+  }
 });

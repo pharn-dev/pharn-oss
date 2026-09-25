@@ -1,0 +1,61 @@
+{
+  "base": "22f002aa608b59be042fd6e9e879bf17aa29c730",
+  "inside": [
+    ".claude/commands/pharn-test.md",
+    ".dev/features/ac-tests-agreement/BUILD.md",
+    ".dev/features/ac-tests-agreement/GRILL.md",
+    ".dev/features/ac-tests-agreement/PLAN.md",
+    ".dev/features/ac-tests-agreement/REGRESSION.md",
+    ".dev/features/ac-tests-agreement/REVIEW.md",
+    ".dev/features/ac-tests-agreement/VERIFY.md",
+    ".dev/features/ac-tests-agreement/regression-report.json",
+    ".dev/features/ac-tests-agreement/verify-report.json",
+    ".prettierignore",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/ac-gate-core.mjs",
+    "pharn/floor/ac-gate-core.test.mjs",
+    "pharn/floor/ac-tests-core.mjs",
+    "pharn/floor/ac-tests-lock.mjs",
+    "pharn/floor/ac-tests-lock.test.mjs",
+    "pharn/floor/check-ac-tests.mjs",
+    "pharn/floor/check-ac-tests.test.mjs",
+    "pharn/floor/check-plan-spec-agree.mjs",
+    "pharn/floor/check-regress.test.mjs",
+    "pharn/floor/check-spec.mjs",
+    "pharn/floor/frontmatter-core.mjs",
+    "pharn/floor/frontmatter-core.test.mjs",
+    "pharn/floor/run-gates.test.mjs",
+    "pharn/pharn-contracts/ac-tests.md"
+  ],
+  "outside_gates": {
+    "format:check": {
+      "base": 0,
+      "head": 0
+    },
+    "lint": {
+      "base": 0,
+      "head": 0
+    },
+    "lint:md": {
+      "base": 0,
+      "head": 0
+    },
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

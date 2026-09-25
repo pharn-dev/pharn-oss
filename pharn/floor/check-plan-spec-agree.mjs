@@ -17,11 +17,13 @@
 // (CONTENT). The SPEC side of both is SHELLED, so the state-enum, the body hash, and the spec_id all come
 // from check-spec.mjs and cannot drift from what it just verified.
 //
-// The PLAN side is a LOCAL parse (P3, no sibling import), and its readValue is a DUPLICATE of
-// check-spec.mjs's. So "one source of truth" is TRUE of the SPEC half and merely INTENDED of the PLAN half:
-// the two agreeing is a CONVENTION that tests DETECT, never a floor op that PREVENTS divergence. Said
-// plainly because collapsing the two halves into one confident sentence is exactly the P0 disease — an
-// earlier draft of this header claimed the parses "can never drift", which was false of the duplicated one.
+// The PLAN side is a LOCAL parse of the PLAN's frontmatter, but since 6.20.5 its VALUE reader is not a copy:
+// `readField` / `readValue` come from frontmatter-core.mjs, the same `readValue` check-spec.mjs's parseSpec
+// uses (until then this file carried a private DUPLICATE, moved there byte-for-byte). So the two halves read a
+// field VALUE with ONE implementation. What stays local is this file's choice of the frontmatter block (FM_RE)
+// and of the key — agreement there is still a CONVENTION the tests DETECT (frontmatter-core.test.mjs executes
+// both CLIs over duplicated, quoted and commented keys), never a floor op that PREVENTS divergence. Said
+// plainly because an earlier draft of this header claimed the parses "can never drift", which was false.
 //
 // WHY IDENTITY as well as content: the content pin alone lets a PLAN name spec A while carrying spec B's body
 // hash — the hash matches, the chain reads GREEN, and the record is MISLABELED. Pinning the body without
@@ -56,7 +58,7 @@ import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { FM_RE, stripBom } from "./frontmatter-core.mjs";
+import { FM_RE, readField, stripBom } from "./frontmatter-core.mjs";
 
 // Resolve the sibling CLIs RELATIVE TO THIS FILE (import.meta.url), never the cwd — so the chain check
 // behaves identically no matter where /pharn-grill is invoked from (mirrors check-spec-approved.mjs:47-48).
@@ -66,35 +68,10 @@ const CHECK_SPEC = join(here, "check-spec.mjs");
 
 const HASH_RE = /^[0-9a-f]{64}$/; // a SHA-256 hex digest — the enum-gate applied to BOTH hashes (P2/P5)
 
-function stripQuotes(v) {
-  return v.replace(/^["']|["']$/g, "");
-}
-
-// A YAML inline comment on an UNQUOTED scalar: `#` at the value's start or preceded by whitespace, running
-// to end of line. `feat#3` (no preceding whitespace) is NOT a comment and survives byte-exact. Duplicated
-// from check-spec.mjs deliberately — no sibling import (P3), the precedent stripQuotes above already sets.
-function stripComment(v) {
-  return v.replace(/(^|\s)#.*$/, "").trim();
-}
-
-// Read one frontmatter field VALUE, quote-aware. THE QUOTE COMES FIRST: a quoted scalar's interior is taken
-// up to its closing quote and a real trailing comment after it is discarded, so `"a # b"` keeps its hash
-// while `"FEAT-1" # note` drops the note. Stripping ` #…` first would eat the closing quote of the former.
-// Kept byte-identical to check-spec.mjs's readValue so the PLAN side and the SPEC side agree on what a
-// field VALUE is — a quoted id must compare equal across both parses. That agreement is a DUPLICATED
-// function, so it is a convention the tests DETECT, not a floor op that PREVENTS divergence (see header).
-function readValue(raw) {
-  const v = raw.trim();
-  const q = v[0];
-  if (q === '"' || q === "'") {
-    const end = v.indexOf(q, 1);
-    if (end > 0) return v.slice(1, end);
-  }
-  return stripQuotes(stripComment(v));
-}
-
 // Extract ONE carried frontmatter field from the PLAN (or undefined when there is no frontmatter / no such
-// line), using check-spec.mjs's exact key/value parse so the two never disagree on what a field is.
+// line), using check-spec.mjs's exact key/value parse so the two never disagree on what a field is — since
+// 6.20.5 literally the same code: frontmatter-core.mjs's `readField` (key grammar) and `readValue` (quote
+// first, then an unquoted ` #` comment), which this file carried as private copies until then.
 // Deterministic; no LLM. Parameterized by key rather than copied twice: both carried fields are read the
 // SAME way by construction, so a future change to the parse cannot fix one reader and miss the other.
 //
@@ -107,12 +84,7 @@ function readValue(raw) {
 function readCarried(text, key) {
   const m = text.match(FM_RE);
   if (!m) return undefined;
-  let found;
-  for (const line of m[1].split(/\r?\n/)) {
-    const kv = line.match(/^([A-Za-z_][\w-]*):[ \t]*(.*)$/);
-    if (kv && kv[1] === key) found = readValue(kv[2]);
-  }
-  return found;
+  return readField(m[1], key);
 }
 
 // The PLAN's carried CONTENT pin (fix #4) — what the spec body hashed to when the plan was made.

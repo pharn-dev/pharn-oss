@@ -813,3 +813,56 @@ test("✧ CLOSURE — every reason literal the module emits is a member, and eve
   assert.deepEqual(strays, [], `emitted outside AC_GATE_REASONS: ${strays.join(", ")}`);
   for (const r of [...DELIVERY_REASONS, ...EVIDENCE_REASONS]) assert.ok(REACHED.has(r), `no fixture reached ${r} (L52)`);
 });
+
+// ── 6.20.5: the SPEC's pin is read the way check-spec reads it, and an unreadable one is evidence, not a skip ──────
+
+const specPath = (w) => join(w.fd, "SPEC.md");
+const editSpec = (w, fn) => writeFileSync(specPath(w), fn(readFileSync(specPath(w), "utf8")));
+
+test("6.20.5: a test-first SPEC whose pin cannot be read is ac-tests-modified (was: the comparison was SKIPPED and the gate PASSED)", () => {
+  withWorld({}, (w) => {
+    editSpec(w, (t) => t.replace(/^spec_content_hash: [0-9a-f]{64}$/m, 'spec_content_hash: ""'));
+    const g = gateOf(w);
+    assert.deepEqual(reasonsOf(g), ["ac-tests-modified"], JSON.stringify(g, null, 1));
+    assert.equal(g.verdict, "FAIL");
+    assert.match(g.evidence[0].detail, /pin cannot be read/);
+  });
+});
+
+test("6.20.5: a duplicated pin is read LAST-wins, as check-spec reads it — a stale line above is ignored, a changed one below is not", () => {
+  withWorld({}, (w) => {
+    const real = readFileSync(specPath(w), "utf8").match(/^spec_content_hash: ([0-9a-f]{64})$/m)[1];
+    editSpec(w, (t) => t.replace(`spec_content_hash: ${real}`, `spec_content_hash: ${"b".repeat(64)}\nspec_content_hash: ${real}`));
+    assert.equal(gateOf(w).verdict, "PASS", "the stale copy ABOVE the real pin is not the one check-spec reads");
+    editSpec(w, (t) => t.replace(`spec_content_hash: ${real}`, `spec_content_hash: ${real}\nspec_content_hash: ${"c".repeat(64)}`));
+    assert.deepEqual(reasonsOf(gateOf(w)), ["ac-tests-modified"], "a different pin BELOW the real one is the effective pin");
+  });
+});
+
+test("6.20.5 BOUND, pinned: the gate reads the pin, never `state` — a Draft that still carries the locked pin passes HERE", () => {
+  // Stated in ac-gate-core.mjs's header: /pharn-verify's chain check and /pharn-loop's freshness check I refuse it.
+  withWorld({}, (w) => {
+    editSpec(w, (t) => t.replace("state: Approved", "state: Draft"));
+    assert.equal(gateOf(w).verdict, "PASS");
+  });
+});
+
+test("6.20.5 bootstrap: a SPEC re-approved by APPENDING a new pin under the old one is ac-tests-modified (was a bootstrap PASS)", () => {
+  const w = bootWorld();
+  try {
+    const old = readFileSync(join(w.fd, "SPEC.md"), "utf8").match(/^spec_content_hash: ([0-9a-f]{64})$/m)[1];
+    // The re-approval check-spec sees: a new pin line appended under the old one (last-wins reads the new one).
+    editSpec(w, (t) => t.replace(`spec_content_hash: ${old}`, `spec_content_hash: ${old}\nspec_content_hash: ${"d".repeat(64)}`));
+    const doc = vitestDoc(w.root, [{ file: "src/any.test.js", title: "works", status: "passed" }]);
+    const g = evaluateAcGate({
+      feature: NAME,
+      stamp: stampOf(w, [{ id: "test", results: doc }, { id: "reconcile" }]),
+      outDir: w.outDir,
+      root: w.root,
+    });
+    assert.notEqual(g.verdict, "PASS", JSON.stringify(g, null, 1));
+    assert.ok(reasonsOf(g).includes("ac-tests-modified"), JSON.stringify(g, null, 1));
+  } finally {
+    w.done();
+  }
+});
