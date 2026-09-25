@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.20.8-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.21.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -129,7 +129,10 @@ own spec approval — a procedural step, so an aborted run can skip it.
 The test stage needs your project's test runner and its per-test results: a `test` script (and a `test:e2e` or
 `e2e` script for end-to-end criteria) whose reporter writes JSON to the path PHARN passes
 ([Per-test results](#per-test-results)). Without them the run stops with `blocked: no-test-runner` and suggests a
-setup increment to run first.
+setup increment to run first. The same split applies when a feature must change the runner itself: its config at
+the project root, its test script, or its results format. PHARN pins those before the build, so plan that change as
+its own setup increment first, run through `/pharn-ship`. `/pharn-plan` refuses a plan that names a root runner
+config.
 
 To approve the spec yourself and decide merge, fix, or abandon at the end, use the one-pass run with
 both human gates:

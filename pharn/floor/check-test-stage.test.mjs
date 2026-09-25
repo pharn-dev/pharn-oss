@@ -600,3 +600,49 @@ test("✧ L36 CLOSURE — every red(...) literal in the module is a TEST_STAGE_R
 test("✧ L36 REVERSE CLOSURE — every TEST_STAGE_REASONS member was reached by a test above", () => {
   for (const r of TEST_STAGE_REASONS) assert.ok(REACHED.has(r), `${r} was never reached`);
 });
+
+// ── 6.21.0 (review finding, group B): the test infrastructure /pharn-test pins, end to end ─────────────────────────
+// Its own describe block, appended, so a parallel edit of the tests above rebases trivially. The review's repro: a
+// PLAN naming `vite.config.ts` passed every plan-time check, /pharn-test pinned the config, and the build's in-scope
+// edit then made this gate `lock-red` (and /pharn-verify `test-infra-changed`, /pharn-loop S13) with no path to green.
+import { describe } from "node:test";
+
+describe("6.21.0 — the test-infrastructure pin reaches the gate from both ends", () => {
+  test("a PLAN naming a root runner config is RED mapping-red BEFORE any build could edit it (test-infra-in-plan)", () => {
+    withWorld(testFirst, (root) => {
+      const spec = readFileSync(join(fd(root), "SPEC.md"), "utf8");
+      writeFileSync(join(fd(root), "PLAN.md"), planText(pinOf(spec), ["src/demo.js", "vite.config.ts"]));
+      const r = gate(root);
+      expectRed(r, "mapping-red");
+      assert.ok(
+        r.child.some((l) => /test-infra-in-plan/.test(l)),
+        JSON.stringify(r.child)
+      );
+    });
+  });
+
+  test("a runner config appearing after the lock — lowercase or a case variant — is RED lock-red (the pin holds both)", () => {
+    for (const name of ["vite.config.ts", "Vitest.config.ts"]) {
+      withWorld(testFirst, (root) => {
+        assert.equal(gate(root).token, "READY test-first", "precondition");
+        writeFileSync(join(root, name), "export default { test: { passWithNoTests: true } }\n");
+        const r = gate(root);
+        expectRed(r, "lock-red");
+        assert.ok(
+          r.child.some((l) => l.includes(`${name}: a runner config was added`)),
+          JSON.stringify(r.child)
+        );
+      });
+    }
+  });
+
+  test("a PLAN naming package.json keeps READY — the manifest is an advisory NOTE, never a RED", () => {
+    withWorld(testFirst, (root) => {
+      const spec = readFileSync(join(fd(root), "SPEC.md"), "utf8");
+      writeFileSync(join(fd(root), "PLAN.md"), planText(pinOf(spec), ["src/demo.js", "package.json"]));
+      const r = gate(root);
+      assert.equal(r.code, 0, JSON.stringify(r));
+      assert.equal(r.token, "READY test-first");
+    });
+  });
+});

@@ -19,19 +19,33 @@
 //            implicitly (null when absent — grill G4); `results` is the `testResults` format test-results-core.mjs reads for that id, or its
 //            refusal code (`not-configured` | `config-invalid`). Not the whole package.json: dependencies
 //            legitimately change in a build.
-//   configs  { path, sha256 } for every entry at the project ROOT whose name is in a CLOSED set (CONFIG_NAME_RE):
+//   configs  { path, sha256 } for every entry at the project ROOT whose name is in a CLOSED set (isRunnerConfigName):
 //            vitest.config, vitest.workspace, vite.config, playwright.config or jest.config, with a js/mjs/cjs/ts/
-//            mts/cts/json extension. Hashed WITHOUT following a link (O_NOFOLLOW): a matching entry that is not a
-//            regular file — a symlink, a directory — cannot be pinned, and says so (L59: a call that follows a link
-//            answers for the target, never for the link).
+//            mts/cts/json extension — matched FOLDED (NFC + full case folding, spec-template-core's foldName, the fold
+//            the write guard and ac-tests-core's scopeKey use; 6.21.0). Why folded: vite and vitest find their config
+//            by an existence check of the LOWERCASE name, so on a case-insensitive volume (APFS) `Vitest.config.mjs`
+//            IS the runner's config — the review measured real vitest 5.0.1 loading one — and before 6.21.0 it was
+//            never pinned. The recorded `path` is the on-disk spelling. Hashed WITHOUT following a link (O_NOFOLLOW): a
+//            matching entry that is not a regular file — a symlink, a directory — cannot be pinned, and says so (L59:
+//            a call that follows a link answers for the target, never for the link).
+//
+// THE SAME PREDICATE AT PLAN TIME (6.21.0): testInfraPathKind() classifies a PLAN.md `## Files` entry as the writes-scope
+// setter scopes it — `config` (a root runner config: check-ac-tests.mjs REDs it as `test-infra-in-plan`, because every
+// write the build could make there changes the pin) or `manifest` (package.json / pharn.config.json: an advisory NOTE
+// only — the build may legitimately change a dependency, and the checker cannot see which part will change). One
+// predicate, one list of manifest names (PIN_MANIFESTS), imported; never a second regex (L35/L36).
 //
 // WHAT IT DOES NOT CATCH (P0) — stated here in full, restated in the contract, cited elsewhere: a setup or helper file the config
-// imports; configuration read from the environment; a config outside the project root or under another name; a
-// `jest` key inside package.json; tsconfig; script CHAINING (`"test": "npm run test:unit"` pins the one line, not what
-// `test:unit` runs); npm's own configuration (a project `.npmrc`'s `script-shell` or `node-options` changes what
-// `npm run test` executes without touching a pinned byte); the runner's own version (dependencies are deliberately
-// out). This list is the one copy; pharn/pharn-contracts/ac-tests.md restates it and every other surface cites that. A change
-// it does catch is `test-infra-changed` whether or not it was legitimate — the remedy is a human re-running /pharn-test.
+// imports; configuration read from the environment; a config outside the project root, or under another name than the
+// closed set (a name the modelled fold does not reach is not caught — fail-open; one it folds beyond the filesystem is
+// pinned anyway — fail-closed, e.g. on a case-SENSITIVE filesystem a `Vitest.config.mjs` the runner does NOT load is
+// still pinned); a `jest` key inside package.json; tsconfig; script CHAINING (`"test": "npm run test:unit"` pins the one
+// line, not what `test:unit` runs); npm's own configuration (a project `.npmrc`'s `script-shell` or `node-options`
+// changes what `npm run test` executes without touching a pinned byte); the runner's own version (dependencies are
+// deliberately out). This list is the one copy; pharn/pharn-contracts/ac-tests.md restates it and every other surface
+// cites that. A change it does catch is `test-infra-changed` whether or not it was legitimate. The remedy is a human:
+// for an ACCIDENTAL change, set the build aside and re-run /pharn-test; for an INTENDED one, re-running /pharn-test
+// cannot help (the rebuild makes the change again) — split it into a `spec_kind: test-infra` increment first.
 // And it is AGREEMENT, never provenance (L43): a lock rewritten to match a changed tree passes.
 //
 // TRUST (P2): script values and config bytes are untrusted DATA — compared and hashed, never interpreted. A
@@ -40,14 +54,44 @@
 import { createHash } from "node:crypto";
 import { closeSync, fstatSync, lstatSync, openSync, readdirSync, readFileSync, readSync, constants as fsConstants } from "node:fs";
 import { join } from "node:path";
-import { LEVELS } from "./ac-tests-core.mjs";
+import { LEVELS, scopedPath } from "./ac-tests-core.mjs";
 import { LEVEL_GATES, discoverGates } from "./gate-run-core.mjs";
-import { formatFor, loadResultsConfig } from "./test-results-core.mjs";
+import { foldName } from "./spec-template-core.mjs";
+import { CONFIG_FILE, formatFor, loadResultsConfig } from "./test-results-core.mjs";
 import { RESULTS_FORMATS } from "./test-results-formats.mjs";
 
-/** The closed set of root config names the pin covers. */
+/** The closed set of root config names the pin covers, in FOLDED (lowercase) form — test it only through
+ *  isRunnerConfigName, which folds the name first. */
 export const CONFIG_NAME_RE =
   /^(?:vitest\.config|vitest\.workspace|vite\.config|playwright\.config|jest\.config)\.(?:js|mjs|cjs|ts|mts|cts|json)$/;
+/** The npm manifest the level gates' scripts are read from. */
+export const MANIFEST_FILE = "package.json";
+/** The root files the pin reads VALUES from (the level gates' scripts; the `testResults` formats) — as opposed to the
+ *  runner configs it hashes whole. */
+export const PIN_MANIFESTS = Object.freeze([MANIFEST_FILE, CONFIG_FILE]);
+
+/** Is `name` (one path segment) a runner config name the pin covers? Folded, so a case or Unicode-form variant of a
+ *  member is a member (the one predicate — the listing, the shape check and the plan-time check all use it). */
+export function isRunnerConfigName(name) {
+  return typeof name === "string" && CONFIG_NAME_RE.test(foldName(name));
+}
+
+/**
+ * Classify a PLAN.md `## Files` entry, read as the writes-scope setter scopes it (ac-tests-core scopedPath: annotation
+ * stripped, placeholders/globs dropped): `"config"` — a ROOT runner config the pin hashes; `"manifest"` — a root file
+ * the pin reads values from (PIN_MANIFESTS, folded); `null` — anything else, including a dropped entry and any path
+ * with a `/` (not at the root: the write guard matches a scope entry literally, so `./vite.config.ts` does not let the
+ * build write the root file).
+ * @param {string} entry
+ * @returns {"config" | "manifest" | null}
+ */
+export function testInfraPathKind(entry) {
+  const p = typeof entry === "string" ? scopedPath(entry) : null;
+  if (p === null || p.includes("/")) return null;
+  if (isRunnerConfigName(p)) return "config";
+  const k = foldName(p);
+  return PIN_MANIFESTS.some((m) => foldName(m) === k) ? "manifest" : null;
+}
 /** A pinned gate's `results` value: a format, or the refusal that stood in for one when the pin was taken. */
 export const RESULTS_VALUES = Object.freeze([...RESULTS_FORMATS, "config-invalid", "not-configured"].sort());
 /** `test_infra`'s closed key sets (L36). */
@@ -93,7 +137,7 @@ export function candidateGates(levels) {
 function readScripts(root) {
   let text;
   try {
-    text = readFileSync(join(root, "package.json"), "utf8");
+    text = readFileSync(join(root, MANIFEST_FILE), "utf8");
   } catch (e) {
     if (e && e.code === "ENOENT") return { ok: true, scripts: null };
     return { ok: false, reason: `package.json is unreadable (${e && e.code ? e.code : "error"})` };
@@ -148,7 +192,7 @@ export function computeTestInfra({ root, levels }) {
     return { ok: false, reason: `the project root cannot be listed (${e && e.code ? e.code : "error"})` };
   }
   const configs = [];
-  for (const path of names.filter((n) => CONFIG_NAME_RE.test(n)).sort()) {
+  for (const path of names.filter(isRunnerConfigName).sort()) {
     const sha256 = sha256RegularFile(join(root, path));
     if (sha256 === null) {
       let kind = "not a regular file";
@@ -187,7 +231,7 @@ export function pinShapeError(pin) {
   if (!sortedUnique(pin.gates.map((g) => g.id))) return "test_infra.gates is not unique and sorted by id";
   if (!Array.isArray(pin.configs)) return "test_infra.configs is not an array";
   for (const c of pin.configs) {
-    if (!exactKeys(c, CONFIG_KEYS) || typeof c.path !== "string" || !CONFIG_NAME_RE.test(c.path) || !HEX64_RE.test(c.sha256 ?? ""))
+    if (!exactKeys(c, CONFIG_KEYS) || !isRunnerConfigName(c.path) || !HEX64_RE.test(c.sha256 ?? ""))
       return "a test_infra.configs entry is not exactly {path in the closed config set, sha256}";
   }
   if (!sortedUnique(pin.configs.map((c) => c.path))) return "test_infra.configs is not unique and sorted by path";

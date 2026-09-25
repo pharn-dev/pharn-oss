@@ -4,12 +4,16 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   CONFIG_NAME_RE,
   PIN_KEYS,
+  PIN_MANIFESTS,
+  isRunnerConfigName,
+  testInfraPathKind,
   RESULTS_VALUES,
   candidateGates,
   computeTestInfra,
@@ -157,21 +161,87 @@ test("each change is named by gate id or path, never by script text (P2), and ea
   });
 });
 
-test("the closed config-name set: the five runner bases × seven extensions at the root, nothing else", () => {
+test("the closed config-name set: the five runner bases × seven extensions at the root, nothing else — matched FOLDED (6.21.0)", () => {
   for (const base of ["vitest.config", "vitest.workspace", "vite.config", "playwright.config", "jest.config"]) {
-    for (const ext of ["js", "mjs", "cjs", "ts", "mts", "cts", "json"]) assert.ok(CONFIG_NAME_RE.test(`${base}.${ext}`), `${base}.${ext}`);
+    for (const ext of ["js", "mjs", "cjs", "ts", "mts", "cts", "json"]) {
+      assert.ok(isRunnerConfigName(`${base}.${ext}`), `${base}.${ext}`);
+      assert.ok(CONFIG_NAME_RE.test(`${base}.${ext}`), `the regex holds the folded (lowercase) spelling: ${base}.${ext}`);
+    }
   }
-  for (const n of [
-    "vitest.config",
-    "vitest.config.jsx",
-    "my.vitest.config.ts",
-    "vitest.setup.ts",
-    "tsconfig.json",
-    "jest.config.ts.bak",
-    "VITEST.CONFIG.TS",
-  ]) {
-    assert.ok(!CONFIG_NAME_RE.test(n), n);
+  for (const n of ["vitest.config", "vitest.config.jsx", "my.vitest.config.ts", "vitest.setup.ts", "tsconfig.json", "jest.config.ts.bak"]) {
+    assert.ok(!isRunnerConfigName(n), n);
   }
+  // 6.21.0 REVERSES the old assertion that `VITEST.CONFIG.TS` is NOT a member, deliberately: vite/vitest look their
+  // config up by the lowercase name, so on a case-insensitive volume a case variant IS the runner's config.
+  for (const n of ["VITEST.CONFIG.TS", "Vitest.config.mjs", "vite.config.TS", "Playwright.Config.ts", "viteſt.config.ts"]) {
+    assert.ok(isRunnerConfigName(n), n);
+  }
+  assert.ok(isRunnerConfigName("vite.config.ts".normalize("NFD")), "an NFD spelling (identical for ASCII) is a member");
+  assert.equal(isRunnerConfigName(null), false);
+  assert.equal(isRunnerConfigName(undefined), false);
+});
+
+// ── 6.21.0: a case-variant config is pinned (finding 2) — ONE spelling per directory, so APFS and CI's Linux agree ──
+
+test("6.21.0: a case-variant runner config added after the pin is `a runner config was added` (the review's repro)", () => {
+  withWorld({ files: {} }, (root) => {
+    const pin = pinOf(root);
+    assert.deepEqual(pin.configs, [], "precondition: no config when the pin was taken");
+    writeFileSync(join(root, "Vitest.config.ts"), "export default { test: { passWithNoTests: true } }\n");
+    assert.deepEqual(testInfraReds({ recorded: pin, root }), ["Vitest.config.ts: a runner config was added"]);
+  });
+  withWorld({ files: { "Vitest.config.mjs": "export default {}\n" } }, (root) => {
+    const pin = pinOf(root);
+    assert.deepEqual(
+      pin.configs.map((c) => c.path),
+      ["Vitest.config.mjs"],
+      "a case-variant config present at pin time is pinned under its on-disk spelling"
+    );
+    assert.equal(pinShapeError(pin), null, "and a pin recording that spelling is shape-valid");
+    writeFileSync(join(root, "Vitest.config.mjs"), "export default { test: { include: ['nomatch/**'] } }\n");
+    assert.deepEqual(testInfraReds({ recorded: pin, root }), ["Vitest.config.mjs: the runner config changed"]);
+  });
+});
+
+test("6.21.0: testInfraPathKind reads a PLAN `## Files` entry as the setter scopes it — root config, manifest, or nothing", () => {
+  const cases = [
+    ["vite.config.ts", "config"],
+    ["Vite.config.ts", "config"],
+    ["vite.config.ts (new alias)", "config"],
+    ["jest.config.cjs", "config"],
+    ["vitest.workspace.json", "config"],
+    ["package.json", "manifest"],
+    ["Package.json", "manifest"],
+    ["pharn.config.json (testResults unchanged)", "manifest"],
+    ["./vite.config.ts", null], // the write guard matches it literally: it does not open the root file to the build
+    ["web/vite.config.ts", null], // not at the root — not pinned
+    ["packages/a/package.json", null],
+    ["*.config.ts", null], // a glob: the setter drops it
+    ["<config>", null], // a placeholder: the setter drops it
+    ["src/demo.js", null],
+    ["tsconfig.json", null],
+    ["", null],
+  ];
+  for (const [entry, kind] of cases) assert.equal(testInfraPathKind(entry), kind, JSON.stringify(entry));
+  assert.equal(testInfraPathKind(null), null);
+  assert.deepEqual(PIN_MANIFESTS, ["package.json", "pharn.config.json"]);
+});
+
+test("✧ L36 CLOSURE — every non-test floor module tests the config-name regex only through isRunnerConfigName (one copy)", () => {
+  const floor = dirname(fileURLToPath(import.meta.url));
+  const modules = readdirSync(floor).filter((f) => f.endsWith(".mjs") && !f.endsWith(".test.mjs"));
+  assert.ok(modules.length > 20, "precondition: the floor was enumerated");
+  const hits = [];
+  for (const f of modules) {
+    const src = readFileSync(join(floor, f), "utf8");
+    for (const m of src.matchAll(/CONFIG_NAME_RE\.test\(/g)) hits.push(`${f}@${m.index}`);
+    if (f !== "test-infra-core.mjs" && /\/\^\(\?:vitest\\\.config/.test(src)) hits.push(`${f}: a second copy of the regex`);
+  }
+  assert.equal(hits.length, 1, JSON.stringify(hits));
+  assert.match(hits[0], /^test-infra-core\.mjs@/);
+  const core = readFileSync(join(floor, "test-infra-core.mjs"), "utf8");
+  assert.match(core, /return typeof name === "string" && CONFIG_NAME_RE\.test\(foldName\(name\)\);/, "the one use folds first");
+  assert.match(readFileSync(join(floor, "check-ac-tests.mjs"), "utf8"), /import \{ testInfraPathKind \} from "\.\/test-infra-core\.mjs";/);
 });
 
 test("REFUSED, never hashed through: a symlinked or non-regular config (L59); an unparseable or non-string manifest", () => {

@@ -23,6 +23,66 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.21.0] - 2026-09-25
+
+### Added
+
+- 2026-09-25: **`/pharn-plan` now refuses a plan whose build would change the test infrastructure `/pharn-test` pins.**
+  This fixes three review findings on the 6.20.0 test-infrastructure pin, each reproduced by a script and each script
+  now a suite test. `SKILLS_VERSION` 6.20.8 → 6.21.0. `MIN_CLI` stays 0.5.0: no installed path moves.
+  ([`.dev/features/test-infra-plan-scope/`](./.dev/features/test-infra-plan-scope/))
+  - **A new `check-ac-tests.mjs` RED kind, `test-infra-in-plan`.** It fires when PLAN.md's `## Files` names a ROOT
+    runner config the lock pins (`vite.config.ts`, `vitest.config.mjs`, …), read as the writes-scope setter scopes the
+    entry. Before it, such a plan was GREEN, `/pharn-test` pinned the config, and the build's in-scope edit read
+    `lock-red` at the test-stage gate and `test-infra-changed` at `/pharn-verify`. `/pharn-loop` then stopped at S13,
+    and the prescribed remedy looped: re-running `/pharn-test` re-pinned the old config and the rebuild edited it again.
+    The remedy is now named where the plan is written: put the runner change in a `spec_kind: test-infra` increment
+    first, through `/pharn-ship`. The name test is `test-infra-core.mjs`'s own `isRunnerConfigName`, imported, not a
+    second regex. A closure test checks that no other floor module tests the regex. A test runs the real setter and
+    write guard: the kind fires exactly for the PLAN entries that let the build write the root file (`./vite.config.ts`
+    does not).
+  - **`package.json` and `pharn.config.json` in PLAN.md print an advisory `NOTE —` line, never a RED.** The exit code
+    is unchanged. The checker can see that the plan names the file, not which part the build will change, and adding
+    a dependency is an ordinary build change. The pinned script values and `testResults` formats are still compared at
+    `/pharn-verify`, late. On the RED path the NOTE lines print before the closing `RED —` line, which is the line
+    6.20.6's `check-test-stage.mjs` tells a verdict from a crash by.
+  - **Why MINOR, when `[3.0.0]` and `[4.0.0]` went MAJOR for a new check.** Those two were versioned MAJOR against the
+    letter of CLAUDE.md's rule because each "can RED a previously-green run". That reading does not apply here, for
+    three reasons. First, every plan the new kind catches could already never reach green: the build's edit reads
+    `test-infra-changed`, an evidence red that no rebuild clears. Second, the one previously-passable case, a plan
+    naming a config its build never touches, is fixed by deleting that line. Third, nothing changes shape: the lock
+    stays `ac-tests-lock/3`, AC-TESTS.md's grammar and every exit code are unchanged, and nothing reads the kind name
+    (`check-test-stage.mjs` maps any exit 1 that carries a `RED —` line to `mapping-red`). This is the classification
+    `[6.19.0]` and `[6.20.0]` used in the same pipeline.
+  - **What changes for a feature in flight.** A feature whose PLAN.md already names a root runner config is now
+    `RED mapping-red` at `/pharn-build` Step 0 (the test-stage gate re-runs the mapping check). Re-plan: delete the
+    line, or split the change out as above.
+
+### Fixed
+
+- 2026-09-25: **The pin now catches a runner config whose name differs only in case, and two shipped sentences no
+  longer say a rebuild cannot reach the pin.**
+  - **Config names are matched folded** (NFC + full case folding, the fold `scopeKey` and the write guard already use).
+    vite and vitest find their config by an existence check of the lowercase name, so on a case-insensitive volume
+    `Vitest.config.mjs` IS the runner's config. The review measured real vitest 5.0.1 loading one with
+    `include: ["nomatch/**"]`: it ran no tests and exited 0. Before this fix that file was never pinned, so no
+    `test-infra-changed` was reported. The listing, the lock's shape check and the new plan check share the one
+    predicate. **Consequences, stated:** a `/3` lock written while such a config already sat at the root now reads
+    `<path>: a runner config was added` (`lock-red`, `test-infra-changed`). That is fail-closed, and the remedy is
+    re-running `/pharn-test` with the build set aside. On a case-SENSITIVE filesystem a case-variant name the runner
+    does not load is pinned anyway, also fail-closed. A 6.21 lock recording such a path is `lock-unusable` to a 6.20.x
+    floor.
+  - **`pharn/pharn-contracts/ac-tests.md` and `/pharn-build`'s "the lock pins only the AC tests" were false since
+    6.20.0.** Both now say that a rebuild passes the test-stage gate when it leaves what the lock pins alone, and they
+    point to the pin section for the list. `/pharn-build` is told never to change the level gates' scripts, their
+    pre/post scripts or `testResults`, even when the plan names the file. The contract also names a verify-time gate
+    that rewrites a pinned runner config. The contract and `test-infra-core.mjs` now split the remedy: set the build
+    aside for an accidental change, re-plan for an intended one.
+  - **`/pharn-test`'s interactive no-runner question offers only `/pharn-ship`.** It used to offer `/pharn-loop` too,
+    which cannot run that setup increment: `/pharn-spec --model-approve` never approves a `spec_kind: test-infra`
+    SPEC, and `--require-test-first` turns its bootstrap lock into `RED mode-not-allowed`. A test pins that this
+    question and the unattended `blocked:` line suggest the same single command.
+
 ## [6.20.8] - 2026-09-25
 
 ### Fixed

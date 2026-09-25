@@ -752,3 +752,17 @@ test("bindStamp refuses a red run fingerprinted with a previous ALGO even when i
     s.done();
   }
 });
+
+// ── 6.21.0 (review finding, group B): both no-runner branches offer the ONE route that can run a setup increment ────
+test("the interactive no-runner question and blockedLine's `suggested:` name exactly /pharn-ship — never /pharn-loop", () => {
+  // Why /pharn-loop is excluded, each half executed elsewhere: check-test-stage.test.mjs pins that --require-test-first
+  // (what /pharn-loop passes) turns READY bootstrap into RED mode-not-allowed, and /pharn-spec --model-approve never
+  // approves a `spec_kind: test-infra` Draft. So the route the two branches offer must be the same single command.
+  const cmds = (s) => [...new Set([...s.matchAll(/\/pharn-[a-z-]+/g)].map((m) => m[0]))].sort();
+  const text = readFileSync(PHARN_TEST_CMD, "utf8");
+  const bullet = text.match(/^- \*\*interactive\*\* \(no `--unattended`\): ASK — _"([\s\S]*?)"_/m);
+  assert.ok(bullet, "the interactive ASK bullet is present");
+  assert.deepEqual(cmds(bullet[1]), ["/pharn-ship"], `the question offers: ${JSON.stringify(bullet[1])}`);
+  const line = blockedLine([{ id: "AC-1", level: "unit" }]);
+  assert.deepEqual(cmds(line.slice(line.indexOf("suggested:"))), ["/pharn-ship"], line);
+});
