@@ -2149,3 +2149,34 @@ type: process · concepts: [non-vacuity, test-blindspot, false-green, mutation-t
 - commit: `cf9089763b5b68d820858117b7f79faecc32cb23` (working-tree increment built on this commit; uncommitted at promotion time)
 - source: `.dev/features/review-leftovers-0924/REVIEW.md` "L-eval (P1)" (the findings at `render-run-report.test.mjs:791` and `check-spec.test.mjs:926`)
 - promoted: 2026-09-25 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L61 — A gitignored path is still in markdownlint-cli2's reach — every tool that writes markdown into the checkout reddens a local lint:md, and one ignores entry per writer recurs
+
+type: tooling · concepts: [style-gates, whole-repo-scope, config-globs, presence-vs-closure, lesson-recurrence]
+
+**Lesson.** git and prettier 3 skip a gitignored path by default. markdownlint-cli2 does not: its `**/*.md` glob descends into dot-directories, and it reads no ignore file unless configured to. So any tool that writes markdown into an untracked path of a checkout turns a whole-repo `lint:md` RED in that checkout. That covers another session's worktree, an importer's output, and a stage's own scratch. CI has none of those files and stays green. Remedying each writer with one more `ignores` entry works, and it recurs, because the entry is added only after the next writer has already reddened someone's `/pharn-dev-verify`.
+
+**Measured, in `markdownlint-ignore-agents`.** One run in one worktree hit two writers at once:
+
+- Codex's "import from Claude Code" `.agents/skills/*/SKILL.md` (gitignored as `/.agents/`) gave 19 MD025 errors, one per file, because each file nests a command's H1 under the importer's own.
+- A PR body the previous `/pharn-dev-ship` run left at `.pharn/pharn-dev-ship/pr-body.md` gave one MD038.
+
+6.13.1 had already added `.claude/worktrees` for the same reason. This increment added `.agents` as a second directory entry and moved the scratch file aside. A probe in a scratch git repo on markdownlint-cli2 0.23.2 tested the tool's `"gitignore": true` option. It skips the paths `.gitignore` lists (`.agents/`, `.pharn/`). It still lints a path excluded only through `.git/info/exclude`, which is how `.claude/worktrees` is excluded here. So that option alone does not close the class either.
+
+**Why it matters.** [[L11]] names the symptom: a whole-repo style gate RED on a file that is not the feature's. Here the file is not even the repo's, and CI cannot reproduce the RED. It surfaces only as a local detour ("measure in a clean copy") that each run pays and records. [[L36]] names the shape of the remedy: a per-member presence set is not closed, and the next member arrives under a name nobody listed. [[L57]] covered one member's reach, nested checkouts. This entry is about the class.
+
+**Remedy (not applied — pending, per [[L46]]).** Close the class instead of adding members. Two options:
+
+- Lint the TRACKED set (`git ls-files`), which drops `.gitignore` and `.git/info/exclude` paths alike.
+- Enable the tool's `gitignore` option and keep the `.claude/worktrees` entry beside it.
+
+Either must be reconciled with the config's per-entry `.pharn/` zone note, which today calls re-adding a `.pharn/` entry "the intended cycle". It must also be reconciled with CI, which runs the same `lint:md` script. Until then, when `lint:md` goes RED locally, first check whether every failing path is untracked.
+
+**Bound (P0).** Measured on one tool version and three writers. The `gitignore` probe was one scratch repository, and another markdownlint-cli2 version may read ignore files differently. Nothing detects the next untracked writer, and this lesson is the only record of the class.
+
+**Provenance.**
+
+- feature: `markdownlint-ignore-agents`
+- commit: `0eb19bea288d0064539f054aa0581194f08db48f`
+- source: `.dev/features/markdownlint-ignore-agents/REVIEW.md` § Advisory findings (rule_id P7, `.markdownlint-cli2.jsonc:27`) + § Proposed lesson candidate
+- promoted: 2026-09-25 via gated `/pharn-dev-memory-promote` (human-approved). Accepted as L60; renumbered L61 when merging `origin/main`, where PR #274 had promoted a different L60 first. Re-checked with `check-provenance.mjs` as L61 before this write.
