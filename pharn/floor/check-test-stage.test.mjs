@@ -521,22 +521,32 @@ function inject(file, anchor, replacement) {
   assert.equal(src.split(anchor).length, 2, `the anchor must occur exactly once in ${file}`);
   writeFileSync(file, src.replace(anchor, replacement));
 }
+// The lock cases break a module ONLY the lock child loads (red-run-core.mjs): since 6.21.0 check-ac-tests.mjs imports
+// test-infra-core.mjs too, so breaking that one crashes the mapping child's `--spec` call first — the fourth case,
+// whose first line names that call instead (still UNUSABLE, exit 2, never a RED). An optional fourth element is the
+// expected first line when it is not the crashed-child line.
 const CRASHES = [
   [
     "the lock child's dependency throws at load",
     "ac-tests-lock.mjs",
-    (f) => appendFileSync(join(f, "test-infra-core.mjs"), "\nthrow new Error('simulated module-load failure');\n"),
+    (f) => appendFileSync(join(f, "red-run-core.mjs"), "\nthrow new Error('simulated module-load failure');\n"),
   ],
-  ["the lock child's dependency is missing", "ac-tests-lock.mjs", (f) => unlinkSync(join(f, "test-infra-core.mjs"))],
+  ["the lock child's dependency is missing", "ac-tests-lock.mjs", (f) => unlinkSync(join(f, "red-run-core.mjs"))],
   [
     "the mapping child throws at run time (after its --spec answer)",
     "check-ac-tests.mjs",
     (f) =>
       inject(
         join(f, "check-ac-tests.mjs"),
-        "const { findings } = checkMapping(",
-        "throw new Error('simulated crash'); const { findings } = checkMapping("
+        "const { findings, notes } = checkMapping(",
+        "throw new Error('simulated crash'); const { findings, notes } = checkMapping("
       ),
+  ],
+  [
+    "a dependency BOTH children load throws at load (test-infra-core.mjs, shared since 6.21.0)",
+    "check-ac-tests.mjs",
+    (f) => appendFileSync(join(f, "test-infra-core.mjs"), "\nthrow new Error('simulated module-load failure');\n"),
+    /^UNUSABLE — check-ac-tests\.mjs --spec exited 1/,
   ],
 ];
 
@@ -555,14 +565,18 @@ test("a CRASHED child (exit 1 with no RED line) is UNUSABLE, exit 2 — never re
     } finally {
       rmSync(intact, { recursive: true, force: true });
     }
-    for (const [label, child, breakIt] of CRASHES) {
+    for (const [label, child, breakIt, expected] of CRASHES) {
       const copy = floorCopy();
       try {
         breakIt(join(copy, "pharn", "floor"));
         const r = run(copy);
         assert.equal(r.status, 2, `${label}: ${r.stdout}`);
         const first = r.stdout.split("\n")[0];
-        assert.match(first, new RegExp(`^UNUSABLE — ${child.replace(".", "\\.")} exited 1 without its closing RED line`), label);
+        assert.match(
+          first,
+          expected ?? new RegExp(`^UNUSABLE — ${child.replace(".", "\\.")} exited 1 without its closing RED line`),
+          label
+        );
         assert.doesNotMatch(first, /^RED /, label);
       } finally {
         rmSync(copy, { recursive: true, force: true });

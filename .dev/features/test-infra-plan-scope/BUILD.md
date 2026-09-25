@@ -40,6 +40,23 @@ anchored AFTER the setter (`--by pharn-dev-build`, 2230 paths). **Floor: `node p
 - Suites, with this increment's tests: `test-infra-core` 11/11, `check-ac-tests` 41/41, `check-test-stage` 30/30,
   `check-red-run` 27/27 (109 across the four, re-run after formatting).
 
+## Amended during the rebase onto `8eec2d7` (6.20.6, PR #269)
+
+- Main's 6.20.6 made `check-test-stage.mjs` read a child's exit 1 without a `RED —` line as a crash (exit 2). The
+  NOTE lines on `check-ac-tests.mjs`'s RED path now print BEFORE the closing `RED — N … failed` summary, so the
+  closing line stays the RED line (main's ✧ L29 source pin was already satisfied; this keeps its wording true).
+- Main's crashed-child test broke `test-infra-core.mjs` to crash the LOCK child. Since this increment
+  `check-ac-tests.mjs` imports it too, so the mapping child's `--spec` call crashed first and the test read
+  `UNUSABLE — check-ac-tests.mjs --spec exited 1` (still exit 2, never a RED — the property held; the attribution
+  moved). Measured the two children's static import closures: only `ac-tests-lock.mjs`, `red-run-core.mjs`,
+  `reconcile-baseline.mjs` and `worktree-fingerprint.mjs` load in the lock child alone. The lock cases now break
+  `red-run-core.mjs` (a direct import of the lock child; the parent imports only node builtins), the mapping case's
+  anchor follows the renamed line, and a fourth case pins the shared-dependency crash. `check-test-stage.test.mjs`
+  32/32.
+- Conflicts resolved: `SKILLS_VERSION` and the README badge → 6.21.0; `CHANGELOG.md` taken from main (its `[6.20.6]`
+  byte-identical) with the `[6.21.0]` section re-inserted above it (renumbered "6.20.6 → 6.21.0"). `CLAUDE.md`,
+  `ac-tests.md` and `check-test-stage.test.mjs` merged without conflict; both sides kept.
+
 ## Deviation (advisory orchestration, recorded)
 
 Step 2b's pinned shell form (`xargs`, `$VAR` capture) is refused by this isolated worktree's Bash guard. The same

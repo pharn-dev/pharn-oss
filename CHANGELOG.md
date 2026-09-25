@@ -45,7 +45,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     is unchanged. The checker can see that the plan names the file, not which part the build will change, and adding
     a dependency is an ordinary build change. The pinned script values and `testResults` formats are still compared at
     `/pharn-verify`, late. On the RED path the NOTE lines print before the closing `RED —` line, which is the line
-    6.20.6's `check-test-stage.mjs` tells a verdict from a crash by.
+    6.20.6's `check-test-stage.mjs` tells a verdict from a crash by. Because `check-ac-tests.mjs` now loads
+    `test-infra-core.mjs` too, a load failure there surfaces as `UNUSABLE — check-ac-tests.mjs --spec exited 1`
+    instead of naming `ac-tests-lock.mjs`: still exit 2, never a RED. 6.20.6's crashed-child test gains that case, and
+    its lock cases now break `red-run-core.mjs`, a module only the lock child loads.
   - **Why MINOR, when `[3.0.0]` and `[4.0.0]` went MAJOR for a new check.** Those two were versioned MAJOR against the
     letter of CLAUDE.md's rule because each "can RED a previously-green run". That reading does not apply here, for
     three reasons. First, every plan the new kind catches could already never reach green: the build's edit reads
