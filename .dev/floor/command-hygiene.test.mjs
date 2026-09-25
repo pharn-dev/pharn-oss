@@ -394,6 +394,36 @@ test(
   }
 );
 
+// `.agents` is the second untracked directory in `ignores`: Codex's "import from Claude Code" output, excluded by
+// `.gitignore` (`/.agents/`), so CI never has it. The probe above covers `.claude/worktrees` only, so it says
+// nothing about this entry (L52: a test for the member it is about). The failure it pins (2026-09-25): with the
+// import present, a bare `lint:md` reported MD025 on every `.agents/skills/*/SKILL.md`, because each nests a
+// command's H1 under the importer's own. The scratch SKILL.md reproduces that shape. The directory sits at the
+// scratch root, where the importer writes it and where an `ignores` entry matches (L57).
+test(
+  "premise: a bare lint:md run does not reach .agents (Codex's gitignored import)",
+  { skip: !existsSync(MDL_BIN) && "dev toolchain not installed (missing markdownlint-cli2) — run `npm ci`" },
+  () => {
+    const root = mkdtempSync(join(tmpdir(), "pharn-mdl-agents-"));
+    try {
+      const config = readFileSync(join(REPO_ROOT, ".markdownlint-cli2.jsonc"), "utf8");
+      const cfg = join(root, ".markdownlint-cli2.jsonc");
+      writeFileSync(cfg, config);
+      writeFileSync(join(root, "a.md"), "# T\n\nx\n");
+      mkdirSync(join(root, ".agents", "skills", "s"), { recursive: true });
+      writeFileSync(join(root, ".agents", "skills", "s", "SKILL.md"), "# Importer\n\n## Command Template\n\n# Command\n");
+      assert.equal(lintedCount([], root), 1, "a bare run (the `lint:md` shape) must not reach .agents/**");
+
+      const without = config.replace(/^[ \t]*"\.agents",[ \t]*\n/m, "");
+      assert.notEqual(without, config, "`.agents` must sit in .markdownlint-cli2.jsonc's ignores on a line of its own");
+      writeFileSync(cfg, without);
+      assert.equal(lintedCount([], root), 2, "control: without the entry a bare run lints .agents/** too");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+);
+
 // ── The lessons-index wiring set: the same L29 shape, one domain over ────────────────────────────────
 //
 // The lessons index has TWO wiring sites per surface: a plan stage must CHECK the index is fresh before

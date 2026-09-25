@@ -16,6 +16,15 @@
     // pass `--no-globs`, and this entry is the second layer behind that. Bound: it is tied to where Claude
     // Code places worktrees today. If that location moves, the entry silently matches nothing.
     ".claude/worktrees",
+    // Codex's "import from Claude Code" output. `.gitignore` excludes it (`/.agents/`, beside `/AGENTS.md`
+    // and `/.codex/`), so it is untracked and this removes no repo file from lint coverage. This tool does
+    // not read `.gitignore`, and `**/*.md` descends into dot-directories. Each `.agents/skills/*/SKILL.md`
+    // nests a whole command, H1 included, under the importer's own H1, so a bare `lint:md` in a checkout
+    // holding the import went RED on MD025 once per file. The count is in CHANGELOG, not here, because the
+    // importer decides it. Prettier needs no twin entry: it reads `.gitignore` by default. `/AGENTS.md`
+    // linted clean and `/.codex/` held no markdown, so neither is listed. Bound: this matches only at the
+    // root, as the `.gitignore` line does, and is tied to where the importer writes today.
+    ".agents",
     "node_modules",
     ".dev/floor/test-fixtures",
     "pharn/floor/test-fixtures",
