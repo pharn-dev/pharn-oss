@@ -744,3 +744,117 @@ test("6.20.5: NFD, ſ and case spellings of an AC test file are in-plan-files, a
     assert.deepEqual(kindsOf(elsewhere), ["claimed-elsewhere"], `another feature claiming ${JSON.stringify(spelling)}`);
   }
 });
+
+// ── 6.21.1 — a CRASH of the chain check is no verdict on the pin (the `nested-child-crash` follow-up) ──────────────
+// Appended as one block. Each crash mode breaks the copied check-plan-spec-agree.mjs; the L40 controls vary the
+// condition, not the member: the intact copy is GREEN, and the same checker exiting 1 WITH its line is still `pin`.
+import { cpSync, unlinkSync } from "node:fs";
+
+/** The product floor (no tests, no fixtures) with pharn-contracts beside it, copied so ONE checker can be broken. */
+function floorCopy() {
+  const dir = mkdtempSync(join(tmpdir(), "act-floor-"));
+  cpSync(HERE, join(dir, "pharn", "floor"), {
+    recursive: true,
+    filter: (src) => !src.endsWith(".test.mjs") && !src.includes("test-fixtures"),
+  });
+  cpSync(join(HERE, "..", "pharn-contracts"), join(dir, "pharn", "pharn-contracts"), { recursive: true });
+  return dir;
+}
+const AGREE = (copy) => join(copy, "pharn", "floor", "check-plan-spec-agree.mjs");
+/** L29: the set of ways the shelled chain check can crash — each must read as no verdict, never as `pin`. */
+const CHAIN_CRASHES = [
+  [
+    "throws only when handed AC-TESTS.md (input-dependent: check-loop-fresh's run over PLAN.md still passes)",
+    (copy) => {
+      const src = readFileSync(AGREE(copy), "utf8");
+      assert.equal(src.split("function main() {").length, 2, "the anchor moved — update this test");
+      writeFileSync(
+        AGREE(copy),
+        src.replace(
+          "function main() {",
+          'function main() {\n  if (String(process.argv[2]).endsWith("AC-TESTS.md")) throw new Error("simulated crash");'
+        )
+      );
+    },
+  ],
+  ["throws at load", (copy) => writeFileSync(AGREE(copy), 'throw new Error("simulated module-load failure");\n')],
+  ["is missing", (copy) => unlinkSync(AGREE(copy))],
+  ["exits 1 with no output", (copy) => writeFileSync(AGREE(copy), "process.exit(1);\n")],
+  [
+    "exits with a code outside its contract, a RED line printed",
+    (copy) => writeFileSync(AGREE(copy), 'console.log("RED — x"); process.exit(3);\n'),
+  ],
+];
+function runCopy(copy, root) {
+  const f = (n) => `pharn/features/${NAME}/${n}`;
+  const r = spawnSync(
+    process.execPath,
+    [join(copy, "pharn", "floor", "check-ac-tests.mjs"), f("AC-TESTS.md"), f("SPEC.md"), f("PLAN.md")],
+    {
+      cwd: root,
+      encoding: "utf8",
+    }
+  );
+  return { code: r.status, out: r.stdout, kinds: [...new Set([...r.stdout.matchAll(/^RED — ([a-z-]+):/gm)].map((m) => m[1]))].sort() };
+}
+function withCopy(breakIt, fn) {
+  const copy = floorCopy();
+  try {
+    if (breakIt) breakIt(copy);
+    return fn(copy);
+  } finally {
+    rmSync(copy, { recursive: true, force: true });
+  }
+}
+
+test("6.21.1: a crashed chain check with no other RED is exit 2, the `UNUSABLE child-crashed` line FIRST — never a `pin` RED", () => {
+  const root = world();
+  try {
+    withCopy(null, (copy) => assert.equal(runCopy(copy, root).code, 0, "control: the intact copy is GREEN over the same world"));
+    for (const [label, breakIt] of CHAIN_CRASHES) {
+      withCopy(breakIt, (copy) => {
+        const r = runCopy(copy, root);
+        assert.equal(r.code, 2, `${label}: ${r.out}`);
+        assert.match(r.out.split("\n")[0], /^UNUSABLE child-crashed — check-plan-spec-agree\.mjs (exited|was killed|could not)/, label);
+        assert.match(r.out.split("\n")[0], /the SPEC pin was not checked$/, label);
+        assert.doesNotMatch(r.out, /^RED — /m, `${label}: no RED line at all`);
+      });
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("6.21.1: beside a definite RED the exit stays 1 — the RED kinds without `pin`, the crash named before the closing line", () => {
+  const root = world({ ac: acTests({ files: [UNIT], mapping: [`- AC-1 | unit | \`${UNIT}\` | t`] }) });
+  try {
+    withCopy(CHAIN_CRASHES[0][1], (copy) => {
+      const r = runCopy(copy, root);
+      assert.equal(r.code, 1, r.out);
+      assert.deepEqual(r.kinds, ["missing-ac"], "the definite RED, and no pin");
+      const lines = r.out.trimEnd().split("\n");
+      assert.match(lines[0], /^RED — missing-ac: /, "the first line is the RED, never the token");
+      assert.ok(
+        lines.some((l) => l.startsWith("UNUSABLE child-crashed — check-plan-spec-agree.mjs")),
+        "the crash is named"
+      );
+      assert.equal(lines.at(-1), "RED — 1 AC-tests mapping check(s) failed", "the closing line counts the REDs only");
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("6.21.1 control (L40): the same chain check exiting 1 WITH its RED line is still the `pin` RED, never a crash", () => {
+  const root = world({ ac: acTests({ hash: "0".repeat(64) }) });
+  try {
+    withCopy(null, (copy) => {
+      const r = runCopy(copy, root);
+      assert.equal(r.code, 1, r.out);
+      assert.deepEqual(r.kinds, ["pin"]);
+      assert.doesNotMatch(r.out, /child-crashed/);
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

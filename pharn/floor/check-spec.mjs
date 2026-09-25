@@ -185,7 +185,7 @@ function bodyHash(body) {
 // `spec_kind:`, the reading stops exactly where K ends, and the string gives one (K, B) and no other. A body whose first
 // line DOES start `spec_kind:` breaks that: moving the line between the body and the frontmatter keeps the pin while
 // changing the kind (feature ↔ test-infra, without re-approval). So validate() REDs that layout for every SPEC, with its
-// own kind `kind-in-body` (6.21.1; it shared `pin` with a hash mismatch before, so /pharn-spec told the two apart by
+// own kind `kind-in-body` (6.21.2; it shared `pin` with a hash mismatch before, so /pharn-spec told the two apart by
 // detail text — now `pin` means only a wrong or malformed hash, and the command branches on the kind token),
 // and kindLineOpensBody() — the same regex specKindLines uses — is the one test for it. A body that opens with a
 // blank line, or with ` spec_kind:` (a leading space), is not ambiguous: the reading stops at its first character.

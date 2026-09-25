@@ -15,7 +15,9 @@
 //   • the mapping lines' grammar, the closed level enum, and set equalities between the SPEC's AC ids, the
 //     mapping's ids, AC-TESTS.md `## Files`, PLAN.md `## Files` and every other feature's AC-TESTS.md `## Files`;
 //   • the SPEC pin: `check-plan-spec-agree.mjs <AC-TESTS.md> <SPEC.md>` — SHELLED, never re-implemented (P3), so
-//     "Approved, un-drifted, and this mapping was made against it" has exactly one implementation.
+//     "Approved, un-drifted, and this mapping was made against it" has exactly one implementation. Its result is read
+//     as a VERDICT (shelled-verdict-core.mjs, 6.21.1): exit 1 with its `RED — ` line is the `pin` RED; anything else
+//     non-zero is a CRASH — no verdict on the pin, reported below, never a `pin` RED.
 // The `## Files` of both files are read by plan-files-core.mjs — the SAME rule the build's writes-scope setter
 // applies, held to it by ★ parity tests — and every path is compared AS THE SETTER SCOPES IT: `clean` (strip a
 // trailing ` (…)` annotation), then `isConcrete`, then FOLDED — NFC and full case folding (ac-tests-core.mjs
@@ -57,7 +59,10 @@
 //
 // Exit (full mode): 0 GREEN · 1 RED (every kind, legacy-spec included: a mapping for a SPEC without
 //       `spec_template` means the key was removed after mapping — it sits outside the body hash, so the pin cannot
-//       see it) · 2 unusable input (a named file absent/unreadable, a missing --features-dir, bad usage).
+//       see it) · 2 unusable input (a named file absent/unreadable, a missing --features-dir, bad usage) — and, since
+//       6.21.1, the chain check CRASHED while no kind is RED: the FIRST line is then `UNUSABLE child-crashed — …`,
+//       which check-test-stage.mjs reads as UNUSABLE. With a RED kind the exit stays 1 and the crash is named on a
+//       line before the closing `RED — N … failed`.
 
 import { readFileSync, readdirSync, lstatSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -67,6 +72,7 @@ import { specAcceptanceCriteria, specVerdict } from "./spec-template-core.mjs";
 import { clean, pathsFromPlanFiles } from "./plan-files-core.mjs";
 import { badPath, mappingOf, scopeKey } from "./ac-tests-core.mjs";
 import { testInfraPathKind } from "./test-infra-core.mjs";
+import { childCrashedLine, crashedDetail, shelledVerdict } from "./shelled-verdict-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHECK_PLAN_SPEC_AGREE = join(HERE, "check-plan-spec-agree.mjs");
@@ -315,14 +321,20 @@ function main(argv) {
   const others = otherFeatures(featuresDir ?? dirname(dirname(resolve(acPath))), self);
 
   const { findings, notes } = checkMapping({ acTestsText, specText, planText, others });
-  // The SPEC pin, SHELLED (P3): AC-TESTS.md carries spec_id + spec_content_hash exactly as PLAN.md does.
+  // The SPEC pin, SHELLED (P3): AC-TESTS.md carries spec_id + spec_content_hash exactly as PLAN.md does. Since 6.21.1
+  // its result is read as a VERDICT (shelled-verdict-core.mjs): `pin` only when the chain check REDs. A crash is no
+  // verdict on the pin, never a `pin` RED — check-test-stage.mjs reads this checker's RED as `mapping-red`, which
+  // /pharn-loop stops on as S13.
   const chain = spawnSync(process.execPath, [CHECK_PLAN_SPEC_AGREE, acPath, specPath], { encoding: "utf8" });
-  if (chain.status !== 0) {
+  const pin = shelledVerdict(chain);
+  if (pin === "red") {
     findings.unshift({
       kind: "pin",
       detail: `AC-TESTS.md's spec_id/spec_content_hash do not match the current Approved, un-drifted SPEC (check-plan-spec-agree.mjs exit ${chain.status})`,
     });
   }
+  const crash =
+    pin === "crashed" ? childCrashedLine(crashedDetail("check-plan-spec-agree.mjs", chain, "the SPEC pin was not checked")) : null;
   // A NOTE never changes the exit code (advisory, P0); it prints on the RED and the GREEN path alike. On the RED path it
   // goes BEFORE the closing summary, so the closing line stays the `RED — ` line check-test-stage.mjs reads a verdict by.
   const printNotes = () => {
@@ -330,9 +342,17 @@ function main(argv) {
   };
   if (findings.length) {
     for (const f of findings) console.log(`RED — ${f.kind}: ${f.detail}`);
+    // A definite RED is a verdict whatever the pin would have said: the crash is named, never counted (6.21.1).
+    if (crash) console.log(crash);
     printNotes();
     console.log(`\nRED — ${findings.length} AC-tests mapping check(s) failed`);
     return 1;
+  }
+  if (crash) {
+    // No RED and no pin verdict: unusable, the report FIRST — check-test-stage.mjs reads it there (6.21.1).
+    console.log(crash);
+    printNotes();
+    return 2;
   }
   const rows = mappingOf(acTestsText).rows.length;
   console.log(

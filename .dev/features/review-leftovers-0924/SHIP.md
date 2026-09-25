@@ -61,3 +61,29 @@ Pointers: `GRILL.md` (advisory), `REVIEW.md` (advisory), `BUILD.md`, `REGRESSION
 _The chain ran, and the named floor verdicts are as shown. This is NOT a judgment that the increment is good or wise.
 That call belongs to the post-review gate, held here by the orchestrator under the delegation quoted above. The
 merge waits for the user._
+
+## After the PR opened: `main` moved, renumbered to 6.21.2
+
+PR #274 reported `CONFLICTING`: #273 (`crash-routing`) merged to `main` as **6.21.1** after this increment's base.
+`origin/main` was merged into the branch. No force-push was needed, and #273's L-ids are untouched: canon on `main`
+had no L60. Two conflicts were resolved:
+
+- `ac-tests.md` table: this increment's `legacy-spec` row plus #273's `pin` row.
+- `CHANGELOG.md`: #273's `[6.21.1]` section kept byte-for-byte, and this increment's entries moved into a new
+  `[6.21.2]` above it.
+
+`SKILLS_VERSION` and the badge are now **6.21.2**. Every `6.21.1` this increment added was renumbered: 12 lines, found
+by diffing against `origin/main`, not from memory. The one kept is the entry's "6.21.1 → 6.21.2". Re-verified on the
+merged tree:
+
+- #273's own exit-2 path, a crash with no RED kind, keeps "every full-mode kind exits 1" true;
+- the product-surface line-cite sweep still finds only the historical and example classes;
+- every script of `npm run check` exits 0 (`test` 3317/3317), except two:
+  - raw `lint:md`, the environment-only `.agents/` red;
+  - `check:reconcile`, which reports **26 escapes, every one a file #273 changed** (checked by set difference:
+    0 outside #273's diff).
+
+  Those are the merge's own writes, which the build's epoch cannot attribute. CI has no baseline, so it reads
+  `NO_BASELINE`. The baseline was not edited or deleted.
+
+- `validate` GREEN; `check:changelog` and the badge GREEN.

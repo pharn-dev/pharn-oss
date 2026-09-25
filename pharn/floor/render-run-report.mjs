@@ -47,9 +47,9 @@
 // ── THE EXCEPTION, named because the sentence above was FALSE as a universal ─────────────────────────
 // ONE kind of UNCHECKED untrusted value is rendered as an INLINE CODE SPAN, not a fence: a FILE PATH in a
 // `## Files` bullet. Every other untrusted value that appears inline passed a closed test first: the command
-// (COMMAND_RE), `base_sha` (COMMIT_RE, 6.21.1) and the verdict tokens (their enums). (A `verdict` token was a
-// second UNCHECKED kind until 6.21.1, and a verdict string CAN carry a newline — probed: `"PASS\n\n## Briefing…"`
-// rendered a duplicate `## Briefing`. Since 6.21.1 a verdict is rendered inline only when it is a member of its
+// (COMMAND_RE), `base_sha` (COMMIT_RE, 6.21.2) and the verdict tokens (their enums). (A `verdict` token was a
+// second UNCHECKED kind until 6.21.2, and a verdict string CAN carry a newline — probed: `"PASS\n\n## Briefing…"`
+// rendered a duplicate `## Briefing`. Since 6.21.2 a verdict is rendered inline only when it is a member of its
 // closed enum; any other value renders `unknown` and is quoted in a fence.)
 // `/pharn-dev-review` found the unqualified claim and probed it: a
 // back-tick-bearing path (legal on every filesystem, and NOT part of git's C-quoting set) renders
@@ -63,7 +63,7 @@
 // either way. Fencing each path would cost a five-line block per file and make the list unreadable for a
 // defect that garbles one row. What is NOT acceptable is the unqualified sentence, so it is qualified.
 //
-// ── A VALUE READ FROM JSON IS TYPE-CHECKED OR GOES THROUGH dataText() (6.21.1) ───────────────────────
+// ── A VALUE READ FROM JSON IS TYPE-CHECKED OR GOES THROUGH dataText() (6.21.2) ───────────────────────
 // `cost.json`, `verify-report.json` and `regression-report.json` are parsed HERE, so any field can hold any
 // JSON value. `String()` is not total over that domain: on a parsed object whose own `toString` is not
 // callable (`{"toString": 1}`) it throws "Cannot convert object to primitive value", and a template literal or
@@ -175,7 +175,7 @@ export function dataText(v) {
 const isRecord = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
 /** A git commit id, full or abbreviated (7–64 hex digits, either case — git accepts all of them, measured), the only
- *  `base_sha` this file hands to git or renders inline. `base_sha` is a cost.json value, and before 6.21.1 any string
+ *  `base_sha` this file hands to git or renders inline. `base_sha` is a cost.json value, and before 6.21.2 any string
  *  went into `git diff --name-only <base>` as an argument — measured: `--output=<file>` made git WRITE that file — and
  *  into an inline span, where a newline opens a heading. No member can start with `-` or hold a newline. NARROWED,
  *  stated: a symbolic ref (`HEAD`, a branch name) used to produce a diff and now renders `n/a`; no emitting command
@@ -667,7 +667,7 @@ function verdictsSection({ verify, regress, cost, stale = false }) {
 const VERIFY_VERDICTS = new Set(["FAIL", "INCOMPLETE", "INCONCLUSIVE", "PASS"]);
 const REGRESS_VERDICTS = new Set(["inconclusive", "no-regressions", "regressions"]);
 
-/** `- <name>: \`<verdict>\`` for a member; `unknown` for an absent verdict, as before 6.21.1; and for any other value,
+/** `- <name>: \`<verdict>\`` for a member; `unknown` for an absent verdict, as before 6.21.2; and for any other value,
  *  `unknown` plus the value quoted as DATA in a fence — shown, never dropped, never inline. */
 function verdictLines(name, value, members) {
   if (typeof value === "string" && members.has(value)) return [`- ${name}: \`${value}\``];

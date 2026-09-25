@@ -58,6 +58,7 @@ const EMITTING_MODULES = [
   "pharn/floor/check-verify.mjs",
   "pharn/floor/check-regress.mjs",
   "pharn/floor/check-loop-fresh.mjs",
+  "pharn/floor/loop-fresh-core.mjs",
 ];
 function emittedReasonCodes() {
   const found = new Set();

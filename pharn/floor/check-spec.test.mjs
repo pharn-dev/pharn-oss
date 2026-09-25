@@ -870,7 +870,7 @@ for (const kind of ["test-infra", "feature"]) {
     const b = approvedRun(inFm);
     assert.equal(b.status, 0, b.stdout + b.stderr);
     // A → B and B → A: whichever side a move starts from, layout A never validates, so no GREEN SPEC changes its kind
-    // while keeping its pin. Exactly the `kind-in-body` kind (6.21.1 — `pin` before it; `pin` now means only a hash
+    // while keeping its pin. Exactly the `kind-in-body` kind (6.21.2 — `pin` before it; `pin` now means only a hash
     // RED); check-spec-approved (which shells check-spec) refuses it too.
     const r = runWith(inBody);
     assert.equal(r.status, 1, r.stdout);
@@ -894,7 +894,7 @@ test("THE PIN's layout rule applies to every SPEC: a Draft (caught before approv
   assert.deepEqual(redKinds(legacyApproved.stdout), ["kind-in-body"]);
 });
 
-// ── 6.21.1: the layout RED has its OWN kind, so `pin` means exactly one thing (a malformed or drifted hash) and
+// ── 6.21.2: the layout RED has its OWN kind, so `pin` means exactly one thing (a malformed or drifted hash) and
 // /pharn-spec's re-validate step branches on kind MEMBERSHIP (P5, L6) instead of the detail text. The two kinds share
 // no prefix, so no loose match on `pin` can take one for the other (GRILL G8).
 test("the two pin-side kinds are disjoint: a hash RED is only `pin`, the layout is only `kind-in-body`, both together are both, in emission order", () => {

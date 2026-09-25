@@ -711,3 +711,135 @@ test("6.20.5: a `## Files` entry the setter would drop (placeholder or glob) ref
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// ── 6.21.1 — the lock script reads its approval check as a VERDICT (the `nested-child-crash` follow-up) ─────────────
+// Appended as one block. A crash of check-spec-approved.mjs is no verdict on the approval, never a RED; the L40 control
+// is the same checker exiting 1 WITH its line (a drifted SPEC), which must still be the RED.
+import { cpSync, existsSync, unlinkSync } from "node:fs";
+
+function floorCopy() {
+  const dir = mkdtempSync(join(tmpdir(), "acl-floor-"));
+  cpSync(HERE, join(dir, "pharn", "floor"), {
+    recursive: true,
+    filter: (src) => !src.endsWith(".test.mjs") && !src.includes("test-fixtures"),
+  });
+  cpSync(join(HERE, "..", "pharn-contracts"), join(dir, "pharn", "pharn-contracts"), { recursive: true });
+  return dir;
+}
+const APPROVED = (copy) => join(copy, "pharn", "floor", "check-spec-approved.mjs");
+/** L29: the ways the shelled approval check can crash. */
+const APPROVAL_CRASHES = [
+  ["throws at load", (copy) => writeFileSync(APPROVED(copy), 'throw new Error("simulated module-load failure");\n')],
+  ["is missing", (copy) => unlinkSync(APPROVED(copy))],
+  ["exits 1 with no output", (copy) => writeFileSync(APPROVED(copy), "process.exit(1);\n")],
+];
+const copyCli = (copy, root, args) => {
+  const r = spawnSync(process.execPath, [join(copy, "pharn", "floor", "ac-tests-lock.mjs"), ...args], { cwd: root, encoding: "utf8" });
+  return { code: r.status, out: r.stdout };
+};
+function withBroken(breakIt, fn) {
+  const copy = floorCopy();
+  try {
+    breakIt(copy);
+    return fn(copy);
+  } finally {
+    rmSync(copy, { recursive: true, force: true });
+  }
+}
+const CHECK_ARGS = ["--check", NAME, "--require-red-run", "--allow-bootstrap"];
+
+test("6.21.1 bootstrap --check: a crashed approval check with no RED is exit 2, `UNUSABLE child-crashed` FIRST — never a RED", () => {
+  const root = bootWorld();
+  try {
+    assert.equal(cli(root, ["--write-bootstrap", NAME]).code, 0, "fixture: the real floor writes the bootstrap lock");
+    assert.equal(cli(root, CHECK_ARGS).code, 0, "control: the intact floor checks it GREEN");
+    for (const [label, breakIt] of APPROVAL_CRASHES) {
+      withBroken(breakIt, (copy) => {
+        const r = copyCli(copy, root, CHECK_ARGS);
+        assert.equal(r.code, 2, `${label}: ${r.out}`);
+        assert.match(
+          r.out.split("\n")[0],
+          /^UNUSABLE child-crashed — check-spec-approved\.mjs .* the SPEC's approval was not checked$/,
+          label
+        );
+        assert.doesNotMatch(r.out, /^RED — /m, label);
+      });
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("6.21.1 bootstrap --check: beside a definite RED the exit stays 1, the crash named before the closing line", () => {
+  const root = bootWorld();
+  try {
+    assert.equal(cli(root, ["--write-bootstrap", NAME]).code, 0);
+    setSpec(root, specOf({ kind: null }));
+    withBroken(APPROVAL_CRASHES[0][1], (copy) => {
+      const r = copyCli(copy, root, CHECK_ARGS);
+      assert.equal(r.code, 1, r.out);
+      const lines = r.out.trimEnd().split("\n");
+      assert.match(lines[0], /^RED — .*no longer `spec_kind: test-infra`/);
+      assert.ok(
+        lines.some((l) => l.startsWith("UNUSABLE child-crashed — check-spec-approved.mjs")),
+        r.out
+      );
+      assert.doesNotMatch(r.out, /is not an Approved, un-drifted SPEC/, "the crash is never counted as the approval RED");
+      const reds = lines.filter((l) => l.startsWith("RED — ")).length - 1;
+      assert.ok(reds >= 1, "at least the kind RED");
+      assert.equal(lines.at(-1), `RED — ${reds} AC-tests lock check(s) failed`, "the closing line counts the REDs only");
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("6.21.1 --write-bootstrap: a crashed approval check refuses with `UNUSABLE child-crashed`, and writes no lock", () => {
+  const root = bootWorld();
+  try {
+    for (const [label, breakIt] of APPROVAL_CRASHES) {
+      withBroken(breakIt, (copy) => {
+        const r = copyCli(copy, root, ["--write-bootstrap", NAME]);
+        assert.equal(r.code, 2, `${label}: ${r.out}`);
+        assert.match(r.out, /^UNUSABLE child-crashed — check-spec-approved\.mjs /, label);
+        assert.doesNotMatch(r.out, /is not an Approved, un-drifted SPEC/, `${label}: the SPEC is not blamed`);
+        assert.equal(existsSync(join(root, "pharn", "features", NAME, "AC-TESTS.lock.json")), false, label);
+      });
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("6.21.1 control (L40): the approval check exiting 1 WITH its line (a drifted SPEC) is still the RED, at --check and --write-bootstrap", () => {
+  const spec = specOf();
+  const root = bootWorld(spec);
+  try {
+    assert.equal(cli(root, ["--write-bootstrap", NAME]).code, 0);
+    setSpec(root, `${spec}\nedited after approval\n`);
+    const c = cli(root, CHECK_ARGS);
+    assert.equal(c.code, 1, c.out);
+    assert.match(c.out, /^RED — pharn\/features\/demo\/SPEC\.md is not an Approved, un-drifted SPEC \(check-spec-approved\.mjs exit 1\)$/m);
+    assert.doesNotMatch(c.out, /child-crashed/);
+    unlinkSync(join(root, "pharn", "features", NAME, "AC-TESTS.lock.json"));
+    const w = cli(root, ["--write-bootstrap", NAME]);
+    assert.equal(w.code, 2, w.out);
+    assert.match(w.out, /^UNUSABLE — .*is not an Approved, un-drifted SPEC/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("6.21.1: --record-red-run over a lock that checks RED exits 1 and records nothing (checkLock's return is {reds, crash})", () => {
+  const root = world();
+  try {
+    assert.equal(cli(root, ["--write", NAME]).code, 0);
+    writeFileSync(join(root, FILES[0]), "edited after the lock\n");
+    const r = cli(root, ["--record-red-run", NAME, "--out", ".pharn/pharn-test/gates"]);
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /^RED — tests\/ac\/one\.test\.js changed since the lock was written$/m);
+    assert.equal(lockOf(root).red_run, null, "nothing recorded");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

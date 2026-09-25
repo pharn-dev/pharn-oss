@@ -159,7 +159,7 @@ covers that line too. **Bound:** a self-consistent rewrite of the SPEC and its p
 separator, so a body whose first line starts `spec_kind:` pins exactly like the same SPEC with that line in the
 frontmatter. Before 6.20.7, moving the line between the two changed the kind (feature ↔ test-infra) while the pin
 stayed equal, so no chain check saw it. `check-spec.mjs` now REDs that layout, for every SPEC and in every state, with
-its own kind `kind-in-body` (6.21.1; from 6.20.7 it shared `pin` with a hash mismatch, which no hash can fix here), so
+its own kind `kind-in-body` (6.21.2; from 6.20.7 it shared `pin` with a hash mismatch, which no hash can fix here), so
 `pin` means only a malformed or drifted hash; a Draft is caught before it can be approved. `check-ac-tests.mjs --spec` reads such a templated SPEC as unusable
 (exit 2), because no AC mode may be read from it. **Why forbidding that one layout is enough:** a kind line always
 starts at column 0 with `spec_kind:` and holds no line break, so reading the hashed text from its start, every line

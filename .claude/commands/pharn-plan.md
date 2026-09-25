@@ -345,7 +345,8 @@ for such a SPEC is a `spec-kind` RED. Exit **0** → continue. Exit **2** → th
    - **0** → GREEN. **1** → the `RED — <kind>` lines name each problem. Fix AC-TESTS.md and re-run. If the fix is in
      PLAN.md's `## Files` (an `in-plan-files` or `test-infra-in-plan` RED, for instance), first re-scope to PLAN.md with the Step 0 setter
      line. Then edit it, re-run Step 4b, re-scope to AC-TESTS.md (step 1 above), and re-run this check. **2** → a
-     file is missing.
+     file is missing or unreadable, or (6.21.1) the chain check it shells crashed (`UNUSABLE child-crashed — …`):
+     no verdict — HALT and report it.
    - **Map only NEW test files.** Nothing here checks that a mapped file does not already exist. An existing
      project test mapped here would be rewritten by `/pharn-test`, and `/pharn-regress` would then treat it as the
      feature's own and drop it from the regression comparison. That is a stated bound, not a check.

@@ -157,6 +157,12 @@ a terminal stop. The set is defined once in `gate-run-core.mjs` (`REASON_CODES`)
 - **`ac-evidence-invalid`** (6.20.0) is `check-loop-fresh.mjs` check I's code for a test stage whose gate returned a
   RED verdict (exit 1, a `RED` token) — so `/pharn-loop` maps it to stuck point S13, not S11. The three other front
   checks, and a test-stage gate that exits 2 or crashes, keep `front-stage-red`.
+- **`checker-crashed`** (6.21.1) is `check-loop-fresh.mjs`'s code when the freshness checker itself could not load,
+  threw, or returned a result outside its contract. Its CLI loads `loop-fresh-core.mjs` with a dynamic import, so each
+  of these is `INCONCLUSIVE`, exit 2 (`/pharn-loop` S11), not node's exit 1, which is the checker's RERUN — outside
+  the residuals the entry's header names (its own file unloadable, a forced process exit, a top-level await that
+  never settles, a signal). It is not
+  in `LAPSE_CODES`: a crash is no verdict, so a re-run is never offered on it.
 
 The closure is tested **both ways** (**L36** — a per-member presence set is not a closed set): every literal
 the modules emit is a member, **and** every member has an emitter or a reserved entry. The second direction

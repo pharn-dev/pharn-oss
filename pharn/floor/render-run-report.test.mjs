@@ -672,7 +672,7 @@ test("Verdicts: a non-string regression entry is still rendered, never dropped s
   }
 });
 
-// ── 6.21.1: the renderer never throws on a JSON value (L51 — the FULL input domain) ────────────────────
+// ── 6.21.2: the renderer never throws on a JSON value (L51 — the FULL input domain) ────────────────────
 //
 // The review's finding: a `null` entry in `ac_gate.acs` / `ac_gate.evidence` threw a TypeError, exit 1, and no
 // RUN-REPORT.md was written. The same class was measured at five more sites (a `{"toString": 1}` object makes
@@ -1138,7 +1138,7 @@ test("★ F1 REGRESSION: the header's fencing claim is QUALIFIED, and names its 
   assert.ok(!/every region carrying untrusted text is a FENCED BLOCK/.test(src), "the unqualified universal must not return");
   assert.match(src, /every MULTI-LINE region carrying untrusted text is a FENCED BLOCK/);
   assert.match(src, /THE EXCEPTION, named because the sentence above was FALSE as a universal/);
-  // 6.21.1 narrowed the exception from TWO kinds (paths, verdict tokens) to ONE: a verdict string can carry a newline,
+  // 6.21.2 narrowed the exception from TWO kinds (paths, verdict tokens) to ONE: a verdict string can carry a newline,
   // so a verdict is inline only when it is an enum member (GRILL G5). The narrowing must stay named.
   assert.match(src, /ONE kind of UNCHECKED untrusted value is rendered as an INLINE CODE SPAN, not a fence: a FILE PATH/);
   assert.match(src, /Every other untrusted value that appears inline passed a closed test first/);

@@ -23,12 +23,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.21.1] - 2026-09-25
+## [6.21.2] - 2026-09-25
 
 ### Fixed
 
 - 2026-09-25: **Six verified leftovers from the 2026-09-24 review of `7e9ed52..b31e540`, fixed as one patch, each
-  re-verified against live code first.** `SKILLS_VERSION` 6.21.0 → 6.21.1 (PATCH: corrections to shipped bytes; no
+  re-verified against live code first.** `SKILLS_VERSION` 6.21.1 → 6.21.2 (PATCH: corrections to shipped bytes; no
   contract shape, installed path or lock moves). `MIN_CLI` stays 0.5.0.
   ([`.dev/features/review-leftovers-0924/`](./.dev/features/review-leftovers-0924/))
   - **`render-run-report.mjs` no longer crashes on a malformed value in a report.** A `null` entry in
@@ -77,6 +77,74 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   name shares no prefix with `pin`, so no loose match can take one for the other. Which SPECs are RED is unchanged.
   The only reader of the kind token is `/pharn-spec`, which ships in this release. A test runs the checker and
   requires the command to name the kinds it emits.
+
+## [6.21.1] - 2026-09-25
+
+### Fixed
+
+- 2026-09-25: **A checker that crashed is no longer read as a verdict: not `/pharn-loop`'s freshness checker, and not a
+  checker one level below the test-stage gate.** Two follow-ups 6.20.6 named (`loop-fresh-load-crash`,
+  `nested-child-crash`), plus a straddle test 6.20.8's review asked for. Each was reproduced before the fix, and each
+  reproduction is now a suite test. `SKILLS_VERSION` 6.21.0 → 6.21.1 (PATCH: corrections to shipped checkers' crash
+  routing; no contract, finding or frontmatter shape changes). `MIN_CLI` stays 0.5.0: no installed path moves, and the
+  installer copies `pharn/floor/` whole minus tests, so both new modules reach every install. The build was planned,
+  grilled by an inline pass and an independent read-only agent, and built in one `/pharn-dev-ship` increment.
+  ([`.dev/features/crash-routing/`](./.dev/features/crash-routing/))
+  - **`check-loop-fresh.mjs` is now a CLI entry with no static import.** Before, it imported three sibling modules
+    statically. A module that failed to load (a partial update, a `test-infra-core.mjs` that throws or is missing)
+    ended the process with node's exit 1, which is this checker's RERUN, and an EMPTY stdout. So `/pharn-loop`'s exit-1
+    branch was told to re-run a stage and given none to re-run. An uncaught throw did the same, and it is reachable
+    from input alone: a `.pharn` that is a regular file makes the budget ledger's `mkdir` throw `ENOTDIR`. The checker
+    moved unchanged into **`pharn/floor/loop-fresh-core.mjs`**. The entry, at the same path, so no pinned command
+    line changes, loads it with `import()` and runs it. It maps a failure to load it, a throw while it runs, and a
+    result outside its contract to **`INCONCLUSIVE`, `reason_code` `checker-crashed`, exit 2**. That is `/pharn-loop`
+    S11, fail-closed. The contract is judged on the SERIALIZED document the entry prints, because JSON drops an
+    undefined key: an exit code outside `{0, 1, 2, 4}`, a document without exactly the checker's keys, a verdict that is
+    not its code's, or a RERUN naming no stage. A throw a module schedules asynchronously is caught by process-level
+    handlers. Before the document is printed it becomes the crash document; after, the printed document stands and the
+    exit is still 2. The crash path cannot itself throw (a thrown value with no string form, a document JSON cannot
+    serialize). The document's `checks` is `null` then, the stack goes to stderr, and machine paths in `reason` are
+    shortened (the working directory → `.`, the home directory → `~`, any other absolute path → `…/<basename>`)
+    because the loop copies this JSON into a committed record. `checker-crashed` joins `gate-run-core.mjs`'s closed
+    `REASON_CODES`, outside `LAPSE_CODES`. The core run directly exits 2 rather than 0, which a caller could read as
+    FRESH. **Consequence:** `check-loop-fresh.mjs` exports nothing now; an importer of `evaluate` and its constants
+    uses `loop-fresh-core.mjs` (only this repo's test did).
+  - **What the entry cannot catch, stated in its header:** the entry file itself missing or unparseable (node's
+    exit 1), a module that ends the process, a top-level await that never settles (exit 13), a signal, and, in the
+    `reason`, a machine path outside the working and home directories that contains a space. For the first,
+    `/pharn-loop`'s exit-1 branch gains one sentence: an exit 1 without ONE JSON document naming `stage_to_rerun`
+    `verify` or `regress` is S11. That is command prose, so advisory. At the commit gate a `checker-crashed` is still
+    `not committed: evidence stale`, with its `reason` quoted.
+  - **The test-stage gate's children now read the checker THEY shell as a verdict.** `check-ac-tests.mjs` turned ANY
+    non-zero exit of `check-plan-spec-agree.mjs` into a `pin` RED, and `ac-tests-lock.mjs` did the same with
+    `check-spec-approved.mjs` for a bootstrap lock. A crash that happened only while reading AC-TESTS.md therefore read
+    as `RED mapping-red` at `check-test-stage.mjs`, which check-loop-fresh check I routes to `ac-evidence-invalid`
+    (S13: "set the build aside and re-run /pharn-test") for a fault that says nothing about the tests. The rule is now
+    in one place, **`pharn/floor/shelled-verdict-core.mjs`**: a shelled checker whose contract is exit 0 or exit 1
+    with a `RED —` line gave a verdict only in those two shapes, and anything else is a crash. That covers exit 1
+    without the line, another code, a signal and a spawn error. With no RED of its own, the child exits 2 with
+    **`UNUSABLE child-crashed — …`** as its FIRST line, and `check-test-stage.mjs` reads that as UNUSABLE (exit 2,
+    S11 in the loop). Every other exit 2 keeps its RED. A child WITH a definite RED still exits 1 and names the crash
+    on a line before its closing summary: a RED is a verdict whatever the crashed check would have said.
+    `--write-bootstrap` no longer blames the SPEC for a crashed approval check. `check-test-stage.mjs`'s 6.20.6
+    `^RED —` rule moved into the same module, its one sibling import. `ac-tests-lock.mjs`'s `checkLock` returns
+    `{reds, crash}` now; its two callers are in that file, and a test runs `--record-red-run` over a RED lock.
+  - **The bound, one level further, is stated rather than closed.** A crash below THOSE checkers is read by its parent
+    as its own RED. `check-plan-spec-agree.mjs` reads a crashed `check-spec-approved.mjs` or `check-spec.mjs` that
+    way, and `check-spec-approved.mjs` reads `check-spec.mjs` the same way. In the loop, check I runs those checkers
+    over the same SPEC.md first, so only a crash that does not reproduce there still arrives as a RED. Outside the loop
+    it is a refusal with the wrong remedy named. A `RED —` line lost to a darwin pipe cut or to `spawnSync`'s
+    `maxBuffer` reads as a crash: no verdict, never a pass.
+  - **The fingerprint-upgrade straddle is now tested for a report that FAILED on the AC gate** (6.20.8's review
+    finding). Three worlds, each produced by the real `check-verify.mjs --ac-gate`: delivery only, delivery with a red
+    gate, and evidence. Each is also run as an older checker could have worded its AC block. At the iteration each
+    passes E and re-runs verify at F, and at the commit gate each stops `tree-moved-since-verify`, never
+    `report-verdict-mismatch`. Removing E's `algo` clause (a scratch mutation, measured and recorded in the feature's
+    BUILD.md) turns every world into a false forgery STOP.
+  - **Docs moved with the code:** `ac-tests.md` (the `pin` row, the checker's and the bootstrap exits, the test-stage
+    gate's bound), `gate-run-record.md` (`checker-crashed`), `/pharn-loop` (the INCONCLUSIVE and exit-1 lines, S9's
+    quote, `reads:`), `/pharn-test`, `/pharn-plan` and `/pharn-ship` (what an exit 2 or a STOP presents), and
+    `CLAUDE.md`.
 
 ## [6.21.0] - 2026-09-25
 

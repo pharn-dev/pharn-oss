@@ -99,7 +99,8 @@ export const STYLE_SET = Object.freeze(["lint", "format:check", "lint:md"]);
  *  contain one, and `--extra` may not introduce one. */
 /** The AC half of RESERVED_IDS, named (6.20.6): the ids the AC gate adds to verify's `failing_gates`. ac-gate-core.mjs
  *  FAILING_IDS names the same two (a test pins that they agree). Named HERE so check-loop-fresh.mjs can subtract them
- *  without loading the AC gate's module graph, whose load failure would crash it (grill R2). */
+ *  without loading the AC gate's module graph: a load failure there would stop the freshness check (grill R2) — since
+ *  6.21.1 as INCONCLUSIVE `checker-crashed` rather than node's exit 1, and a smaller graph still fails less often. */
 export const AC_RESERVED_IDS = Object.freeze(["ac-delivery", "ac-evidence"]);
 export const RESERVED_IDS = Object.freeze(["reconcile", "completeness", ...AC_RESERVED_IDS]);
 
@@ -119,6 +120,7 @@ export const REASON_CODES = Object.freeze([
   "bad-scope-json",
   "base-head-mismatch",
   "base-not-sha",
+  "checker-crashed",
   "coverage-violation",
   "empty-source-set",
   "entry-not-run",
@@ -151,7 +153,8 @@ export const REASON_CODES = Object.freeze([
  *  The contract named the first three; `entry-not-run` joins them because validateStamp names it
  *  separately from the malformed class for exactly this routing (a runner that stopped mid-drain), and
  *  `lock-busy` because two runner invocations contending is orchestration, not input. Deliberately NOT
- *  here: `usage-error` (it also covers a hand-passed `--complete` disagreeing with the stamp), every
+ *  here: `usage-error` (it also covers a hand-passed `--complete` disagreeing with the stamp), `checker-crashed`
+ *  (6.21.1 — the freshness checker could not load or threw: no verdict, so fail-closed, never a re-run), every
  *  `*-mismatch` / `stamp-malformed` / `coverage-violation` / `reconcile-not-last` (a stamp that exists and
  *  is WRONG is evidence to stop on), and `path-containment` / `bad-*` (configuration a re-run reproduces). */
 export const LAPSE_CODES = Object.freeze([
