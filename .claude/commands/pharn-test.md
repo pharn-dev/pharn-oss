@@ -131,11 +131,10 @@ gate the level needs has no per-test results configured (`pharn.config.json` `te
 
 - **interactive** (no `--unattended`): ASK — _"This project has no `<level>` test runner, or no per-test results for
   it. Run a test-setup increment (`spec_kind: test-infra`) first via `/pharn-ship`?"_ — and **stop this feature's
-  run either way**. Never continue to the build, and never start that setup run yourself. Offer `/pharn-ship` only:
-  `/pharn-loop` cannot carry that increment — its `/pharn-spec --model-approve` never approves a `spec_kind:
-test-infra` SPEC, and it reads the test stage with `check-test-stage.mjs --require-test-first`, which turns the
-  bootstrap lock such an increment records into `RED mode-not-allowed`. The unattended line below suggests the same
-  single command.
+  run either way**. Never continue to the build, and never start that setup run yourself. Offer `/pharn-ship` only.
+  `/pharn-loop` cannot carry that increment: its `/pharn-spec --model-approve` never approves a test-infra SPEC, and
+  it reads the test stage with `check-test-stage.mjs --require-test-first`, which turns the bootstrap lock such an
+  increment records into `RED mode-not-allowed`. The unattended line below suggests the same single command.
 - **`--unattended`**: print the checker's LAST line **verbatim** — it is the closed
   `blocked: no-test-runner — <AC-n (level), …>; suggested: <command>` line an orchestrator maps — and stop. **Never
   start a nested run.**

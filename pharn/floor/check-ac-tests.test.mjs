@@ -617,29 +617,46 @@ test("a bootstrap (`spec_kind: test-infra`) SPEC is the REMEDY, so its PLAN may 
   assert.deepEqual(r.notes, []);
 });
 
-test("★ HOOK — the RED is load-bearing: a PLAN naming vite.config.ts opens it to the build; `./vite.config.ts` does not", () => {
-  for (const [entry, allowed] of [
-    ["vite.config.ts", true],
-    ["./vite.config.ts", false],
-  ]) {
+// The six PLAN spellings the plan-time probe measured (PLAN.md D2), each run through the REAL setter and write guard:
+// the kind fires for exactly the rows whose scope opens a root runner config to the build. The write targets are the
+// two root spellings; on APFS `Vite.config.ts` IS the existing `vite.config.ts` (why the name is matched folded). The
+// set is the probed one — it does not certify every possible spelling (L37).
+const HOOK_ROWS = [
+  ["vite.config.ts", true],
+  ["vite.config.ts (new alias)", true],
+  ["Vite.config.ts", true],
+  ["./vite.config.ts", false],
+  ["*.config.ts", false],
+  ["web/vite.config.ts", false],
+];
+
+test("★ HOOK — the RED is load-bearing: over the six probed spellings it fires exactly when the build could write a root config", () => {
+  for (const [entry, opens] of HOOK_ROWS) {
     const root = world({ plan: planText(["src/demo.js", entry]) });
     try {
       execFileSync("git", ["init", "-q", "."], { cwd: root });
       const env = { ...process.env, CLAUDE_PROJECT_DIR: root };
       assert.equal(spawnSync(process.execPath, [SETTER, "--from-plan", `pharn/features/${NAME}/PLAN.md`], { cwd: root, env }).status, 0);
-      const status = spawnSync(process.execPath, [ENFORCER], {
-        cwd: root,
-        env,
-        input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: join(root, "vite.config.ts") } }),
-        encoding: "utf8",
-      }).status;
-      assert.equal(status, allowed ? 0 : 2, `${entry}: the build's Write to vite.config.ts`);
+      const writable = ["vite.config.ts", "Vite.config.ts"].filter(
+        (target) =>
+          spawnSync(process.execPath, [ENFORCER], {
+            cwd: root,
+            env,
+            input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: join(root, target) } }),
+            encoding: "utf8",
+          }).status === 0
+      );
+      assert.equal(
+        writable.length > 0,
+        opens,
+        `${entry}: the build's Write to a root config spelling (allowed: ${JSON.stringify(writable)})`
+      );
       assert.equal(
         infraKinds(
           checkMapping({ acTestsText: acTests(), specText: SPEC, planText: planText(["src/demo.js", entry]), others: [] })
         ).includes("test-infra-in-plan"),
-        allowed,
-        `${entry}: the kind fires exactly when the build could write the file`
+        opens,
+        `${entry}: the kind fires exactly when the build could write a root config`
       );
     } finally {
       rmSync(root, { recursive: true, force: true });

@@ -38,9 +38,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     and the prescribed remedy looped: re-running `/pharn-test` re-pinned the old config and the rebuild edited it again.
     The remedy is now named where the plan is written: put the runner change in a `spec_kind: test-infra` increment
     first, through `/pharn-ship`. The name test is `test-infra-core.mjs`'s own `isRunnerConfigName`, imported, not a
-    second regex. A closure test checks that no other floor module tests the regex. A test runs the real setter and
-    write guard: the kind fires exactly for the PLAN entries that let the build write the root file (`./vite.config.ts`
-    does not).
+    second regex. A closure test checks that no other floor module tests the regex. A test runs six PLAN spellings
+    through the real setter and write guard: the kind fires for exactly the ones that let the build write a root
+    config (`vite.config.ts`, `vite.config.ts (new alias)`, `Vite.config.ts`), and not for `./vite.config.ts`,
+    `*.config.ts` or `web/vite.config.ts`. That is the probed set, not every possible spelling.
   - **`package.json` and `pharn.config.json` in PLAN.md print an advisory `NOTE —` line, never a RED.** The exit code
     is unchanged. The checker can see that the plan names the file, not which part the build will change, and adding
     a dependency is an ordinary build change. The pinned script values and `testResults` formats are still compared at
