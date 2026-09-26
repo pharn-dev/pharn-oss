@@ -8,7 +8,8 @@
 - roadmap: Phase 1.2 of the token-reduction roadmap (maintainer-approved 2026-09-25)
 - base: `main` at `1524c6f` (SKILLS_VERSION 6.23.0, MIN_CLI 0.5.0). This increment bumps to **6.24.0** (minor: new floor scripts, a rewritten product command, a new registry entry). The sibling phases `writes-scope-run-only` (0.2) and `ship-quick-mode` (3.1) also bump; whichever merges later renumbers and reconciles.
 - stage model: plan — opus — set by the maintainer's instruction; routed via Agent subagent; effort not routed
-- gate1: PENDING — delegated to the orchestrator (the maintainer's 2026-09-25 delegation). Open questions Q1–Q6 below each carry a recommendation.
+- gate1: APPROVED on 2026-09-26. This is a MODEL decision by the orchestrator under the maintainer's 2026-09-25 delegation, NOT a human approval. Q1–Q6 were resolved as recommended and are recorded under "Open questions (HALT)". Conditions: (1) the unchanged regress suite stays green, byte for byte in its assertions (G3); (2) the completeness-crash behaviour change is named in the CHANGELOG and in `/pharn-ship`'s Step 2b text (G15).
+- grill: `.dev/features/stage-verify-script/GRILL.md` (19 advisory concerns, G1–G19). Every one is folded in below, each with its named test; the map of 6.23.0's review defect classes is its own section.
 
 ## Applied lessons
 
@@ -23,16 +24,16 @@
 - **L22** — the command pins literal lines only: the setter, the fresh invocation, the question re-invocation template, the resume line and the release. No technique is described in prose.
 - **L23** — `VERIFY.md` becomes machine-rendered and quotes untrusted text (a gate id, a PLAN-derived path, a checker's reason), so `pharn/features/*/VERIFY.md` joins `.prettierignore` and `.markdownlint-cli2.jsonc` beside `REGRESSION.md` and `RUN-REPORT.md`. `verify-report.json` is already listed in `.prettierignore`.
 - **L24** — bounds are measured, not inherited: `count-verifiers.mjs .` took 0.32 s on this repo this run; the build measures the ★ WIRING run's wall time and records it in `BUILD.md` (6.23.0's review A5 found that measurement discarded with `void`).
-- **L25** — the rationale comments that assert the old story are re-derived, not carried: `ship-outcome-core.mjs`'s "UNCHANGED, at its full original width, for `/pharn-verify`", `stage-exit-core.mjs`'s "Phase 1.2's stage-verify.mjs next", `loop-fresh-core.mjs`'s "pharn-verify.md Step 3c" and "pinned Step 5", `gate-run-core.mjs`'s three verify step cites, `ac-gate-core.mjs`'s "Step 2's chain check", and `count-verifiers.mjs`'s "/verify Step 2".
+- **L25** — the rationale comments that assert the old story are re-derived, not carried: `ship-outcome-core.mjs`'s "UNCHANGED, at its full original width, for `/pharn-verify`", `stage-exit-core.mjs`'s "Phase 1.2's stage-verify.mjs next", `loop-fresh-core.mjs`'s "pharn-verify.md Step 3c" and "pinned Step 5", `gate-run-core.mjs`'s three verify step cites, `ac-gate-core.mjs`'s "Step 2's chain check", `count-verifiers.mjs`'s "/verify Step 2", and `check-verify.mjs`'s header, which says the command runs the gates, discovers verifiers, writes the artifacts and merges completeness (lines 7-8, 17 and 46; G13).
 - **L27** — the thin command's `2` bullet states, per branch, what has already happened when `unusable` fires, and every `refused` bullet names a remedy reachable from its own reason code (6.23.0's review M3 and N1 were this class).
 - **L29** — the verify vocabulary is one registry entry that every rule iterates: the builders, the validator, the closure test over the script's emitted literals, and the loop-mapping closure. `STAGE_SCRIPT_WIRING` becomes a two-member set whose rules iterate both members.
 - **L30** — the thin command asks the model to run no gate and no checker: every gate, the chain check, the verifier count and the verdict run inside the script.
-- **L31** — two copy-pairs are answered in writing. (1) `stage-regress.mjs` and `stage-verify.mjs` would otherwise duplicate the argv rules, the containment walk, the drain and the budget clock that 6.23.0's review repaired one by one (M7a/b/c, A4, A3); Q1 recommends one shared owner, `pharn/floor/stage-runtime.mjs`. (2) `/pharn-dev-verify` stays a prose flow, named as the follow-up `dev-verify-stage-script`.
+- **L31** — two copy-pairs are answered in writing. (1) `stage-regress.mjs` and `stage-verify.mjs` would otherwise duplicate the argv rules, the containment walk, the drain and the budget clock that 6.23.0's review repaired one by one (M7a/b/c, A4, A3); GATE 1 chose one shared owner (Q1), `pharn/floor/stage-runtime.mjs`, under G3's constraints. (2) `/pharn-dev-verify` stays a prose flow, named as the follow-up `dev-verify-stage-script`.
 - **L33** — four forward-looking sentences expire the moment this lands, and each is in `## Files`: `stage-exit.md`'s purpose line ("a future stage-verify.mjs"), its "Why it exists" paragraph, `stage-exit-core.mjs`'s header and registry comment, and `CLAUDE.md`'s stage-regress entry ("a future stage-verify.mjs (roadmap Phase 1.2) reuses it").
 - **L34** — every new set pins its size (the verify registry, `STAGE_SCRIPT_WIRING`, the `VERIFY.md` enumeration sites); an empty eval-pair set passes no `--extra` at all, and the renderer states "no criteria" or "no gates" explicitly rather than leaving a section empty.
 - **L35** — one owner per fact: `VERIFY_PATHS` in the new core, with `loop-fresh-core.mjs`'s `DEFAULT_STAMPS.verify` derived from it; the pairing rule stays `gate-run-core.mjs`'s `actualForExpected`; quoting stays `quote-core.mjs`; the chain read stays `shelled-verdict-core.mjs`; and, under Q1, the stage-script mechanics get one owner instead of two copies.
 - **L36** — the progress record is closed in both directions (every required key present, no extra key); the composed report refuses a checker key that collides with a merged advisory key; a closure test collects every `reason_code` literal the script emits and requires registry membership, with a variant-spelling control.
-- **L37** — every quantified sentence this increment writes is probed with a member expected to be excluded, and the probes are listed in the Guarantee audit for the build to run and record. The writes-scope claim was probed at plan time: the real setter and the real guard, exit codes recorded under "The thin command".
+- **L37** — every quantified sentence this increment writes is probed with a member expected to be excluded, and the probes are listed in the Guarantee audit for the build to run and record. The writes-scope claim was probed at plan time: the real setter and the real guard, exit codes recorded under "The thin command". The grill then read the code behind five more claims and narrowed or re-designed each (G1, G2, G3, G8, G10).
 - **L38** — the one-run-per-worktree bound is stated: a fresh start clears `.pharn/pharn-verify/`, so a second `/pharn-verify` started in the same worktree destroys the first run's in-progress state, as `run-gates.mjs init` already does to its own `<out>`.
 - **L40** — the plan-time scope probe varied the attributed condition: the same probe with no scope file allows `VERIFY.md` (exit 0), so the deny comes from the set scope, not from a default.
 - **L41** — `--timeout-ms` is required with no default; `--budget-ms` has no default (absent = unbudgeted) and one test drives the absent path; `count-verifiers.mjs` is always invoked with an explicit `.` target.
@@ -42,9 +43,9 @@
 - **L47** — the expired "a future stage-verify.mjs" is replaced by an open form ("the registry is keyed by stage; each stage script adds its own entry"), never by a new closed count such as "the two stages".
 - **L50** — the sweep is by referent: every cite of a `/pharn-verify` step number or of "verify's discovery is command prose", on every surface, is classified under Discovery, including the ones that stay true.
 - **L52** — each remedy names its set: one question round trip per verify question code, one ★ assertion per consumer check the stage must satisfy (C, D, E, F, J), and one refusal test per registered `refused` and `unusable` code the script can reach.
-- **L54** — containment is an `lstat` walk where `lstat`'s ENOENT is the only proof of absence, re-run on `--resume` (6.23.0's A4); the tests cover a live link, a dangling link and a symlinked feature directory.
+- **L54** — containment is an `lstat` walk where `lstat`'s ENOENT is the only proof of absence, re-run on `--resume` (6.23.0's A4) and immediately before every write into the feature directory (G9); the tests cover a live link, a dangling link, a symlinked feature directory, and one swapped in during the drain.
 - **L57** — this stage's own format step runs `prettier --ignore-unknown --write` and `markdownlint-cli2 --no-globs --fix` over this PLAN path only; the build does the same over its named files.
-- **L60** — every ★ test names the edit that must turn it red and runs it: the wiring test's dropped `--timeout-ms` mutant, the budget test's old-clock mutant, the closure test's variant spelling, and every anchor asserted found before slicing.
+- **L60** — every ★ test names the edit that must turn it red and runs it: the wiring test's dropped `--timeout-ms` mutant, the budget test's old-clock mutant, the kill test's dropped drain checkpoint, the enumeration test's dropped site, the closure test's variant spelling, and every anchor asserted found before slicing (G6, G17).
 - **L62** — every child reason quoted into a stage-exit `detail` or into `VERIFY.md` goes through `dataText` (total); a `{"toString":1}` case is tested, with a control asserting that `String()` really throws on it.
 
 ## Why (P7 — the measured trigger)
@@ -80,10 +81,27 @@ Measured on the command at `1524c6f`, re-derivable by reading it:
   - F1, options not deep-checked → already closed in `stage-exit-core.mjs` (`optionsMatchRegistry`); verify's
     registry entry inherits it, and the tests carry forged-label and forged-argv controls for verify's
     options;
-  - M7a/b/c, argv rules diverging from the runner's → one shared owner (Q1);
+  - M7a/b/c, argv rules diverging from the runner's → one shared owner (GATE 1's Q1, under G3);
   - the recurring "claims stronger than the code" (the REVIEW's lesson candidate: F1, F2, A6, M1, M2, then
     N1, N2 and the A3 comment) → the Guarantee audit lists every new quantified sentence with the probe the
     build must run and record.
+
+  The full class-by-class map, with each class's design-out and named test, is its own section below ("The
+  6.23.0 review's defect classes — design-out map").
+
+- **Read by the grill** (`GRILL.md`), each shaping an amendment:
+  - `stage-regress.mjs`'s `phaseFreshEarly` swallows every unlink error (`catch { /* absent — the normal case */ }`),
+    so an unremovable earlier report survives silently (G2);
+  - `stage-regress.test.mjs` matches two `detail` texts, `/--budget-ms requires a value/` (`:521`) and the
+    runner's `parallel calls are refused` (`:736`), and its ★ WIRING fixture derives the floor closure from
+    `"<name>.mjs"` string literals, transitively (`:1055-1066`) (G3);
+  - `check-verify.mjs:320` evaluates the AC gate with `root: process.cwd()`, an absolute path (G10);
+  - `/pharn-ship` runs no freshness check: only `/pharn-loop`'s `check-loop-fresh` F binds a report to the
+    live tree (G1);
+  - regress's `computeEvalPairs` lists tracked files only (`git ls-files -z`), and today's verify prose says
+    "the committed expected finding arrays" (G4);
+  - `resolveSet` refuses an empty source before it parses `--extra`, and its explicit `--gates` branch returns
+    `parseGatesSpec`'s own result, the style skip being regress-only (`gate-run-core.mjs:419-475`).
 - **`/pharn-verify` at `1524c6f`** does, in prose: resolve `<name>`; set the scope to `verify-report.json`;
   read PLAN and SPEC; shell `check-plan-spec-agree.mjs` (on RED, write a fail-closed `INCONCLUSIVE`
   report); discover eval pairs from the PLAN's `## Files` by hand; `run-gates.mjs init --stage verify … --discover package.json [--gates] [--extra]`;
@@ -135,7 +153,9 @@ Measured on the command at `1524c6f`, re-derivable by reading it:
     Step 3b); `ac-gate-core.mjs` (":51" Step 2); `count-verifiers.mjs` (":4" "/verify Step 2");
     `ship-outcome-core.mjs` (the verify residual); `CLAUDE.md` (the AC-gate entry's "Step 5's pinned line" and
     "`/pharn-verify` Step 3a says"; the run-gates entry's pinned-lines sentence; the stage-regress entry's
-    "a future stage-verify.mjs").
+    "a future stage-verify.mjs"); `check-verify.mjs` (":7-8", ":17" and ":46", "the command" as the one that
+    runs the gates, discovers verifiers, writes the artifacts, appends verifier findings and merges
+    completeness — G13); `verify-report.md` (":27", ":69" and ":70", "the command" as the producer — G13).
   - **stays true, unchanged, with the reason:** `gate-run-core.mjs:9` and `CLAUDE.md`'s "verify's Step 3c
     captured five exit codes" (history, in the past tense); `run-gates.mjs:517` ("an interactive HALT under
     /pharn-verify" — the no-gates question is relayed interactively); `pharn/floor/README.md:81` and `:145`
@@ -174,13 +194,18 @@ as a transient copy; the verdict lives in `verify-report.json`, so `done` with `
 raised before the first slow step.
 
 1. **fresh**, in this order:
-   1. `--feature` must parse as a slug (`FEATURE_SLUG_RE`), else `unusable usage-error` with `feature: null`.
-      Nothing has been removed.
+   1. `--feature` must parse as a slug (`FEATURE_SLUG_RE`, imported from `gate-run-core.mjs`, its one owner —
+      never re-declared, G12), else `unusable usage-error` with `feature: null`. Nothing has been removed.
    2. The `lstat` containment walk over `.pharn`, `.pharn/pharn-verify` and `pharn/features/<name>`, else
       `unusable path-containment`. Nothing has been removed.
-   3. Remove THIS feature's earlier `verify-report.json` and `VERIFY.md` (ENOENT is the normal case).
+   3. Remove THIS feature's earlier `verify-report.json` and `VERIFY.md`. **Only `ENOENT` is absence (G2):**
+      any other error from the unlink propagates — a crash, never a verdict — so no refusal and no
+      `unusable` can be emitted after a removal that failed, and "every stop from here on has removed the
+      earlier report" stays true. Regress's own catch-all is unchanged (Q1 keeps its CLI behaviour) and is
+      the named follow-up `regress-stale-unlink-swallow`.
    4. Clear `.pharn/pharn-verify/` (containment already proven), unlinking the progress record
-      `stage.json` first. **This is earlier than regress, on purpose:** every flag after `--feature` is
+      `stage.json` first; as in step 3, any error other than absence propagates (G2). **This is earlier than
+      regress, on purpose:** every flag after `--feature` is
       validated after this clear, so a `usage-error` there cannot leave an earlier run's progress record beside
       a removed report for an out-of-flow `--resume` to revive (regress's N1 state). An exit before this step
       (a pre-slug `usage-error`, `path-containment`) removes nothing, so the earlier run's report and record
@@ -219,8 +244,12 @@ raised before the first slow step.
    code, so the exit alone is never read as a verdict. Then re-read `.pharn/pharn-verify/gates/completeness.json`
    from disk (a `--resume` has nothing else), run `checkCompleteness` on it again, and compose the report
    (below); a capture that fails the check is `unusable child-crashed`.
-8. **render**: write `verify-report.json` and then `VERIFY.md` atomically (a tmp file under
-   `.pharn/pharn-verify/`, then `rename`), remove the progress record, and exit `done`.
+8. **render**: re-run the containment walk (G9), then write `verify-report.json` and then `VERIFY.md`
+   atomically (a tmp file under `.pharn/pharn-verify/`, then `rename`), remove the progress record, and exit
+   `done`. **Every write into the feature directory is preceded by a containment walk** — these two and the
+   refusal render — so a feature directory swapped for a symlink during the drain is refused
+   (`unusable path-containment`), never written through. The residual narrows from about 570 s (6.23.0's
+   still-open A4 residual) to the gap between that walk and the `rename`, named.
 
 **Checker INCONCLUSIVE is a verdict, not a refusal.** When `check-verify.mjs` itself returns INCONCLUSIVE (a
 stamp that does not validate, an unmeasurable AC gate, inconclusive completeness), the script writes that
@@ -240,14 +269,19 @@ composition, the render and the writes). Those must fit the remaining 30 s.
 `unusable progress-malformed`; any other flag, a flag without its value, or a stray token →
 `unusable usage-error`. It re-runs the containment walk before anything else (A4). A hard kill leaves the
 record at the phase it interrupted and `--resume` re-runs that phase: a gate through `run-gates.mjs`'s
-stale-lock recovery, or the verdict and render, which are idempotent over the durable stamp. A kill before
-"drain" leaves no record of this run → `no-progress`, and the caller starts fresh.
+stale-lock recovery, or the verdict and render, re-derived from the same durable stamp. **Narrowed (G8):**
+the verdict also reads live files the AC gate needs (the lock, the SPEC and the mapping in the feature
+directory), so a resume over an unchanged tree reproduces the interrupted run's report, and a resume after
+the tree moved may not. In `/pharn-loop`, `check-loop-fresh` F catches a moved tree; `/pharn-ship` has no
+such check. A kill before "drain" leaves no record of this run → `no-progress`, and the caller starts fresh.
 
 ### The closed rules — `pharn/floor/stage-verify-core.mjs` (pure; imports only `gate-run-core.mjs`)
 
 - **VERIFY_PATHS** — `{root: ".pharn/pharn-verify", gates: ".pharn/pharn-verify/gates", stageJson: ".pharn/pharn-verify/stage.json"}`,
   the one owner of the stage's scratch layout. `loop-fresh-core.mjs`'s `DEFAULT_STAMPS.verify` is derived from it.
-- **PHASES** and **RESUMABLE_PHASES** (`drain`, `verdict`).
+- **PHASES** and **RESUMABLE_PHASES** (`drain`, `verdict`). **Closed against the call sites (G11):** the phase
+  literals the script passes to its checkpoint writer are exactly `RESUMABLE_PHASES` (a closure test), so no
+  resumable phase can go unpersisted — 6.23.0's M9 crash.
 - **PROGRESS_SCHEMA** `pharn-stage-verify-progress/1` and `validateProgress`, closed in both directions over
   `{schema, feature, timeoutMs, budgetMs, phase, verifiers: {registered, verifiers}}`.
 - **EVAL_PAIR_RULE** — `featureEvalPairs({declared, listing})`. A committed eval pair the feature ships is an
@@ -258,8 +292,13 @@ stale-lock recovery, or the verdict and render, which are idempotent over the du
   listing is tracked plus untracked-not-ignored (a new capability's evals are untracked at verify time and
   must count); a declared glob above the capability directory (`src/**`) does not select it — declare the
   directory or a file inside it; a path holding `*` is refused by the runner's `parseExtras` (`bad-extra`,
-  then `unusable child-refused`), never mangled. Today's prose rule said "for each capability directory the
-  feature declares" and left the matching to the model; this is that rule made membership.
+  then `unusable child-refused`), never mangled. **A disclosed semantic change, not "the old rule made
+  membership" (G4):** today's prose pairs "the committed **expected** finding arrays" with "that capability's
+  committed `findings.json`" and leaves the matching to the model. This rule also admits
+  untracked-not-ignored files, because a capability the build just wrote is untracked at verify time, so the
+  literal "committed" reading gave it no `structural:` gate. It is listed under Behaviour changes and in
+  CHANGELOG [6.24.0]. Regress's `computeEvalPairs` stays tracked-only; the two differ on purpose, and no
+  reason for regress's choice is asserted here beyond what its code does.
 - **VERDICT_EXIT** `{PASS: 0, FAIL: 1, INCONCLUSIVE: 2, INCOMPLETE: 3}` and `classifyVerdict({status, stdout})`.
 - **checkCompleteness(text)** — the capture parses as one JSON object with `complete` a boolean and `missing`
   and `skipped` arrays of strings; anything else (the measured crash's empty file included) is a refusal the
@@ -275,17 +314,33 @@ stale-lock recovery, or the verdict and render, which are idempotent over the du
   only `gate-run-core.mjs`, already in the freshness checker's graph. A test pins the import list, with an
   injected-import control.
 
-### The shared stage runtime — `pharn/floor/stage-runtime.mjs` (execution helpers, no CLI; Q1)
+### The shared stage runtime — `pharn/floor/stage-runtime.mjs` (execution helpers, no CLI; GATE 1 Q1)
 
-The mechanics both stage scripts need, lifted byte-for-byte out of `stage-regress.mjs` so each has one owner:
-`flag`/`has`; `parseTimeoutMs`, `parseBudgetMs` and `parseResumeArgv` (M7a/b/c); `lstatSafe` and
-`containmentWalk` (L54); `atomicWrite(tmpDir, relPath, bytes)`; `gitSync` and `nulList`;
-`makeBudget({timeoutMs, budgetMs}, invocationStart)` over `mayStartSlowStep`; and `drainGates`, which RETURNS
-`done` / `budget` / `refused` instead of emitting, so each script keeps its own emit wrappers and reason codes.
-Imports: node builtins and `stage-exit-core.mjs`. `stage-regress.mjs` imports these and deletes its copies;
-its behaviour at the CLI is unchanged, and its existing suite, which drives only the CLI, is the evidence.
-If GATE 1 chooses per-script copies instead, this file and the `stage-regress.mjs` edit drop out, and
-`stage-verify.test.mjs` gains an executed cross-copy test (Q1).
+The mechanics both stage scripts need, **extracted from `stage-regress.mjs` and refactored to return a result
+instead of emitting** (G3 — "byte-for-byte" could not hold: `parseRestOfArgv`, `drain` and `containmentGuard`
+call `emitUnusable` inline), so each has one owner: `flag`/`has`; `parseTimeoutMs`, `parseBudgetMs` and
+`parseResumeArgv` (M7a/b/c); `lstatSafe` and `containmentWalk` (L54); `atomicWrite(tmpDir, relPath, bytes)`;
+`gitSync` and `nulList`; `makeBudget({timeoutMs, budgetMs}, invocationStart)` over `mayStartSlowStep`; and
+`drainGates`, which RETURNS `done` / `budget` / `refused` instead of emitting, so each script keeps its own
+emit wrappers and reason codes. Imports: node builtins and `stage-exit-core.mjs`. `stage-regress.mjs` imports
+these and deletes its copies.
+
+**GATE 1's condition — the unchanged regress suite stays green, byte for byte in its assertions — binds the
+refactor in three ways (G3), each read in the code:**
+
+1. **Every `detail` text survives verbatim.** `stage-regress.test.mjs:521` matches `/--budget-ms requires a value/`,
+   and `:736` matches the runner's `parallel calls are refused` passed through a `child-refused` detail.
+2. **The fixture closure still reaches every module.** The suite's ★ WIRING fixture copies the floor closure the
+   regex `["'](?:\.\/)?([a-z0-9-]+\.mjs)["']` finds, transitively, from `stage-regress.mjs` (`:1055-1066`). So
+   `stage-runtime.mjs` is imported as `"./stage-runtime.mjs"`, and any child it spawns is named in that literal
+   form (`join(HERE, "run-gates.mjs")`) or passed in by its caller.
+3. **Regress's order does not move:** `phaseFreshEarly` before `parseRestOfArgv`, the lock pass-through, and the
+   drain's exit-3 idempotent repeat.
+
+The evidence is recorded, not asserted: `BUILD.md` records `node --test pharn/floor/stage-regress.test.mjs` run
+before and after the lift with the same pass count, and `git diff --exit-code 1524c6f -- pharn/floor/stage-regress.test.mjs`
+→ exit 0. `stage-runtime.test.mjs` adds a closure-parity test: the same regex, run over `stage-regress.mjs`,
+reaches `stage-runtime.mjs` and every module it names; mutant: a computed import path → red.
 
 ### The report and the render
 
@@ -333,10 +388,17 @@ expired. The closed `verify` vocabulary:
   Its `resume.argv` is the original argv, unchanged: the question fires only when `--gates` was absent, since
   an explicit `--gates` never reaches an empty source set (an empty token is `bad-gates`).
 - **`/pharn-loop`'s mapping for verify** (a paragraph beside regress's, same rule): `question no-gates` → S4;
-  `refused` and `unusable` → S9; a crash → S9; `continue` is handled inside `/pharn-verify`.
-- **`stage-exit.md`** gains the verify vocabulary, verify's timing of what an `unusable` has already removed,
-  the verify line of the question section, the verify mapping, and verify's checkpoint and clock sentences.
-  Its purpose line and "Why it exists" drop the expired future tense (L33, L47).
+  `refused` and `unusable` → S9; a crash → S9; `continue` is handled inside `/pharn-verify`. **With an A7-style
+  disclosure (G5)** — as of 6.24.0 these stop at S9 where they did not before:
+  - a crashed `check-build-complete.mjs` (`unusable child-crashed`). Before, it read INCOMPLETE, which
+    `check-loop.mjs` CONTINUEs — a rebuild iteration, up to the cap;
+  - a runner refusal, a lapse included (`unusable child-refused`). Before, a fail-closed report that
+    `check-loop-fresh` read;
+  - an unparseable `## Files` (`refused plan-files-unparseable`).
+- **`stage-exit.md`** gains the verify vocabulary, verify's timing of what an `unusable` has already removed
+  (G16's branches), the verify line of the question section, the verify mapping, and verify's checkpoint and
+  clock sentences. Its M6 residual (`done.verdict` and `continue.phase` accept any string) names verify too
+  (G14). Its purpose line and "Why it exists" drop the expired future tense (L33, L47).
 
 ### The thin command — `.claude/commands/pharn-verify.md`
 
@@ -365,10 +427,15 @@ expired. The closed `verify` vocabulary:
   ```
 
 - **Branch on the exit code only:**
-  - `0` done → report the report's `verdict` (a `FAIL` is a FAIL) and point at `VERIFY.md`; write nothing;
-  - `2` unusable → present `detail` as quoted DATA and stop, with what already happened per branch (before
-    the slug or at containment: nothing; any later stop: the earlier report and the scratch are gone, and
-    from "init" on this run's own scratch may exist; a `--resume`'s own stop: nothing);
+  - `0` done → report the REPORT's `verdict` — never the stage-exit object's transient copy (G14) — (a `FAIL`
+    is a FAIL) and point at `VERIFY.md`; write nothing;
+  - `2` unusable → present `detail` as quoted DATA and stop, with what already happened per branch (G16):
+    - before the slug parses, or at `path-containment`: nothing was removed, so an earlier report and an
+      earlier progress record survive together;
+    - any later `unusable`: the earlier report and the scratch are gone, and from `init` on this run's
+      `gates/` may exist;
+    - a `--resume`'s own stop removes nothing, but may follow gates it ran, whose logs stay;
+    - a failed removal is a crash (below), never a `2`;
   - `3` refused → present the refusal, its rendered `VERIFY.md`, and its remedy: `missing-artifact` →
     `/pharn-plan` or `/pharn-spec`; `chain-red` → re-plan via `/pharn-plan`, or re-approve via `/pharn-spec`
     when the SPEC change is intended; `plan-files-unparseable` → fix the PLAN's `## Files` via `/pharn-plan`;
@@ -391,9 +458,11 @@ expired. The closed `verify` vocabulary:
   findings never reach the verdict); the reference section (the brace allowlist
   **`{ test, lint, format:check, lint:md, typecheck, type-check, build, test:e2e, e2e }`** that
   `gate-run-core.test.mjs` pins, the e2e clause, the `--gates`-and-the-AC-gate caveat, the eval-pair rule in one
-  sentence, and the runner-injected `reconcile` gate with its fixed argv `check-bash-reconcile.mjs --base . --require-baseline`,
+  sentence (saying that an untracked pair under a declared capability directory counts, G4), and the runner-injected `reconcile` gate with its fixed argv `check-bash-reconcile.mjs --base . --require-baseline`,
   which the `check-bash-reconcile.test.mjs` pin reads); the guarantee, trust and determinism audits; the named
-  limits.
+  limits. **"Condensed" is where 6.23.0 dropped named limits and remedies (M3) and the DATA label (M4), so
+  it is pinned (G7):** `command-hygiene.test.mjs`'s `NAMED_LIMITS` requires each anchor phrase, listed
+  under Evals, to survive in the thin command.
 - **The Final step** releases the scope with the byte-identical `node .claude/hooks/set-writes-scope.cjs --clear`,
   and the "Before ending your turn, run the release step" pointer sits above the last turn-end. Its prose uses
   none of the phrase the 0.2 sibling retracts.
@@ -401,48 +470,49 @@ expired. The closed `verify` vocabulary:
 
 ## Files
 
-- `pharn/floor/stage-verify.mjs` — NEW. The stage CLI: argv, containment, git, the shelled checkers, the budget loop, the report composition call, atomic artifact writes, the stage-exit JSON — layer pharn/floor
+- `pharn/floor/stage-verify.mjs` — NEW. The stage CLI: argv, containment (also before every write into the feature directory, G9), git, the shelled checkers, the budget loop, the report composition call, atomic artifact writes, the stage-exit JSON; only `ENOENT` counts as absence when it removes earlier output (G2); `FEATURE_SLUG_RE` imported from `gate-run-core.mjs` (G12) — layer pharn/floor
 - `pharn/floor/stage-verify-core.mjs` — NEW, pure, imports only `gate-run-core.mjs`: VERIFY_PATHS, PHASES, RESUMABLE_PHASES, the progress schema and validator, EVAL_PAIR_RULE, VERDICT_EXIT, classifyVerdict, checkCompleteness, composeReport — layer pharn/floor
 - `pharn/floor/render-verify.mjs` — NEW, pure, no CLI, imports `quote-core.mjs`: `VERIFY.md` from the report JSON, and a refusal render — layer pharn/floor
-- `pharn/floor/stage-runtime.mjs` — NEW (Q1): the stage-script mechanics with one owner (argv rules, containment walk, atomic write, git helpers, budget tracker, drain loop) — layer pharn/floor
-- `pharn/floor/stage-regress.mjs` — EDIT (Q1): import the shared mechanics from `stage-runtime.mjs` and delete its local copies; CLI behaviour identical — layer pharn/floor
+- `pharn/floor/stage-runtime.mjs` — NEW (GATE 1 Q1): the stage-script mechanics with one owner (argv rules, containment walk, atomic write, git helpers, budget tracker, drain loop), extracted and refactored to return results; imported as `"./stage-runtime.mjs"` and naming every child it spawns in `"<name>.mjs"` literal form (G3) — layer pharn/floor
+- `pharn/floor/stage-regress.mjs` — EDIT (GATE 1 Q1): import the shared mechanics from `stage-runtime.mjs` and delete its local copies; CLI behaviour identical, every `detail` text preserved verbatim, phase order unchanged (G3) — layer pharn/floor
+- `pharn/floor/check-verify.mjs` — EDIT, comments only (G13): header lines 7-8, 17 and 46 re-pointed from "the command" to `stage-verify.mjs`; the code, the verdict table and the flush pattern `cli-stdout-flush.test.mjs` pins are untouched — layer pharn/floor
 - `pharn/floor/stage-exit-core.mjs` — EDIT: the `verify` registry entry; header and registry comment re-derived (L33) — layer pharn/floor
 - `pharn/floor/loop-fresh-core.mjs` — EDIT: `DEFAULT_STAMPS.verify` derived from `VERIFY_PATHS`; the two step cites re-pointed — layer pharn/floor
 - `pharn/floor/gate-run-core.mjs` — EDIT, comments only: the three `/pharn-verify` step cites re-pointed — layer pharn/floor
 - `pharn/floor/ac-gate-core.mjs` — EDIT, comment only: "Step 2's chain check" re-pointed at the script's chain phase — layer pharn/floor
 - `pharn/floor/count-verifiers.mjs` — EDIT, comment only: its caller is now `stage-verify.mjs` — layer pharn/floor
 - `pharn/floor/ship-outcome-core.mjs` — EDIT, comment only: the stale-report residual narrowed for `/pharn-verify` too — layer pharn/floor
-- `pharn/pharn-contracts/stage-exit.md` — EDIT: the verify vocabulary, verify's unusable timing, the question line, the loop mapping, checkpoints and clock; the expired future tense re-derived — layer pharn-contracts
-- `pharn/pharn-contracts/verify-report.md` — EDIT: the writer is `stage-verify.mjs`; the two advisory blocks merged by code; no report on a refusal; the stale-report removal — layer pharn-contracts
+- `pharn/pharn-contracts/stage-exit.md` — EDIT: the verify vocabulary, verify's unusable timing (G16's branches), the question line, the loop mapping with its A7 disclosure (G5), checkpoints and clock, the M6 residual naming verify (G14); the expired future tense re-derived — layer pharn-contracts
+- `pharn/pharn-contracts/verify-report.md` — EDIT: the writer is `stage-verify.mjs` (lines 27, 69 and 70 re-pointed, G13); the two advisory blocks merged by code; no report on a refusal; the stale-report removal and its residual — layer pharn-contracts
 - `pharn/pharn-contracts/ac-tests.md` — EDIT: the two `/pharn-verify` step cites re-pointed — layer pharn-contracts
 - `.claude/commands/pharn-verify.md` — REWRITE: the thin caller above — product command
-- `.claude/commands/pharn-loop.md` — EDIT: verify's stage-exit mapping paragraph beside regress's — product command
-- `.claude/commands/pharn-ship.md` — EDIT: step 5's discovery cite, step 7's missing-report STOP and its residual, the chain paragraph, Step 2c's comparison sentence, and the guarantee-audit discovery bullet — product command
+- `.claude/commands/pharn-loop.md` — EDIT: verify's stage-exit mapping paragraph beside regress's, with the A7-style disclosure of the new S9 stops (G5) — product command
+- `.claude/commands/pharn-ship.md` — EDIT: step 5's discovery cite; step 7's missing-report STOP, its residual, and the freshness binding (G1: `.verdict` is read only after `/pharn-verify` ended `done` in THIS run); the same binding on Step 2b's re-read; Step 2b's crash sentence (GATE 1 condition 2, G15); the chain paragraph; Step 2c's comparison sentence; the guarantee-audit discovery bullet and the new advisory binding line — product command
 - `.claude/commands/pharn-regress.md` — EDIT: the reference sentence that calls verify's discovery command prose — product command
-- `pharn/floor/stage-verify.test.mjs` — NEW: end-to-end fixture repos, ★ WIRING, ★ loop-fresh over real stage outputs, budget and resume, the question round trip, refusals, containment, the closure over emitted codes
-- `pharn/floor/stage-verify-core.test.mjs` — NEW: every rule with members and non-members, the progress validator's closure, composeReport, classifyVerdict, the load-graph pin
-- `pharn/floor/render-verify.test.mjs` — NEW: the render per verdict and refusal, hostile text inert, L62, no absolute path, CHECK 5 via the real `validate.mjs`, the ★ `VERIFY.md` enumeration, a style probe
-- `pharn/floor/stage-runtime.test.mjs` — NEW (Q1): the argv rules, the containment walk's link kinds, the budget tracker, the drain's three outcomes, and a one-owner pin over both stage scripts
+- `pharn/floor/stage-verify.test.mjs` — NEW: end-to-end fixture repos, ★ WIRING, ★ loop-fresh over real stage outputs, budget and resume, ★ Kill, the question round trip, refusals, containment (the in-drain swap, G9), the unremovable-report crash (G2), the parked-verdict byte-identity (G8), the checkpoint closure (G11), a `runCli` helper validating every emitted object (G6), the closure over emitted codes
+- `pharn/floor/stage-verify-core.test.mjs` — NEW: every rule with members and non-members, the progress validator's closure, composeReport, classifyVerdict, checkCompleteness, the load-graph pin, the no-redeclared-slug-regex pin (G12)
+- `pharn/floor/render-verify.test.mjs` — NEW: the render per verdict and refusal and the A6 matrix (G6), hostile text inert, L62, script-supplied paths relative with the absolute-reason control (G10), CHECK 5 via the real `validate.mjs`, the ★ `VERIFY.md` enumeration with its dropped-site mutant, a style probe with pre-clean and `t.after()` (G17)
+- `pharn/floor/stage-runtime.test.mjs` — NEW (GATE 1 Q1): the argv rules, the containment walk's link kinds, the budget tracker, the drain's three outcomes, a one-owner pin over both stage scripts, and the closure-parity test over the regress suite's literal regex (G3)
 - `pharn/floor/stage-exit-core.test.mjs` — EDIT: `STAGES` is `["regress", "verify"]`; verify's vocabulary exact; F1 controls for verify's question; cross-stage isolation
 - `pharn/floor/run-gates.test.mjs` — EDIT, header comment only: `/pharn-verify`'s pinned lines are now executed by `stage-verify.test.mjs`
-- `.dev/floor/command-hygiene.test.mjs` — EDIT: GATE_RUN_WIRING 2 → 1; STAGE_SCRIPT_WIRING 1 → 2 with per-stage patterns, per-stage no-direct-invocation lists and per-stage A1 probes; the loop-mapping closure per stage; the three verify pins re-pointed at the script; RULE B's message
+- `.dev/floor/command-hygiene.test.mjs` — EDIT: GATE_RUN_WIRING 2 → 1; STAGE_SCRIPT_WIRING 1 → 2 with per-stage patterns, per-stage no-direct-invocation lists and per-stage A1 probes; the loop-mapping closure per stage, each anchor asserted found and the mutant run through the same `mappingNamesCode` (G17); `NAMED_LIMITS` over `pharn-verify.md` plus the `pharn-ship.md` and `pharn-loop.md` pins (G7); the three verify pins re-pointed at the script; RULE B's message
 - `.prettierignore` — `pharn/features/*/VERIFY.md` (L23)
 - `.markdownlint-cli2.jsonc` — `pharn/features/*/VERIFY.md` (L23)
 - `SKILLS_VERSION` — 6.23.0 → 6.24.0
-- `CHANGELOG.md` — a new `## [6.24.0]` section (`[Unreleased]` is empty at base) stating the weaker and the stronger claim and every behaviour change listed below
-- `README.md` — the shields badge to 6.24.0 and the regenerated CURRENT-STATE region (`npm run docs:generate`; floor checkers 86 → 90 with Q1, 89 without)
+- `CHANGELOG.md` — a new `## [6.24.0]` section (`[Unreleased]` is empty at base) stating the weaker and the stronger claim and every behaviour change listed below, the completeness-crash change named explicitly (GATE 1 condition 2)
+- `README.md` — the shields badge to 6.24.0 and the regenerated CURRENT-STATE region (`npm run docs:generate`; floor checkers 86 → 90)
 - `CLAUDE.md` — a Commands entry for `stage-verify.mjs`; the run-gates, AC-gate and stage-regress entries' verify sentences re-pointed
-- `.dev/features/stage-verify-script/BUILD.md` — the build's own record: the measurements, the probes with their exit codes, the command's byte size
+- `.dev/features/stage-verify-script/BUILD.md` — the build's own record: the measurements, the probes with their exit codes, the command's byte size, and the regress suite before and after the lift (G3); each line reports a command already run, with the exit code it printed, and nothing is recorded ahead of its run (G18)
 
 ### Explicitly not touched
 
 - `.claude/commands/pharn-dev-verify.md` and the dev floor keep their prose flow (follow-up `dev-verify-stage-script`).
 - `pharn/ARCHITECTURE.md`, `LIMITS.md`, `THREAT-MODEL.md`, `pharn/CONSTITUTION.md`, `CODEOWNERS`, `.claude/settings*.json`, the four hook scripts and `pharn.spec-template.md` are human-only; this increment needs no change to any of them (the §4 contract list gains no entry, since no new contract is added).
-- `pharn/floor/check-verify.mjs`, `run-gates.mjs`, `check-build-complete.mjs` and `check-loop.mjs` keep their bytes: the script only shells them.
+- `pharn/floor/run-gates.mjs`, `check-build-complete.mjs` and `check-loop.mjs` keep their bytes: the script only shells them. `check-verify.mjs` keeps its code; only its header comments move (G13, in `## Files`).
 - `pharn/floor/check-bash-reconcile.test.mjs` needs no edit: the thin command's reference section still names the reconcile gate's fixed argv, and the executed binding (the stamp's last run is `reconcile` with `--require-baseline`) moves into `stage-verify.test.mjs`.
 - `pharn/floor/gate-run-core.test.mjs` needs no edit: the thin command keeps the brace allowlist.
 - `pharn/floor/check-loop-fresh.test.mjs` needs no edit: its floor-module closure is derived from string literals and it uses `DEFAULT_STAMPS` symbolically.
-- `pharn/floor/stage-regress.test.mjs` needs no edit: it drives only the CLI, so it is the unchanged evidence for the Q1 refactor.
+- `pharn/floor/stage-regress.test.mjs` is not edited, by GATE 1's condition: it drives only the CLI, so it is the unchanged evidence for the Q1 refactor, and `BUILD.md` records `git diff --exit-code 1524c6f` over it (G3).
 - `.claude/hooks/writes-scope-release.test.cjs` needs no edit: its sets are derived from the corpus and `pharn-verify.md` stays in both.
 - `pharn/floor/README.md` needs no edit: its two verify sentences stay true.
 - `MIN_CLI` stays 0.5.0: no installed path moves.
@@ -470,8 +540,9 @@ module ships a `*.test.mjs`, and every ★ test names the edit that turns it red
   checker fields deep-equal a fresh `check-verify.mjs --stamp … --feature … --ac-gate` (E); `gate_run.stamp_sha256`
   equals the stamp's sha256 (D); every log hash matches (J); the stamp sits at `DEFAULT_STAMPS.verify` and
   validates (C); `fingerprint.final` equals the live fingerprint after the render (F); the last run is
-  `reconcile` with `--require-baseline` in its argv. Control: the same line with `--timeout-ms` dropped does not
-  reach `done`. The wall time is measured and recorded (L24).
+  `reconcile` with `--require-baseline` in its argv; the `done` object's `verdict` equals the report's (G14).
+  Control: the same line with `--timeout-ms` dropped does not reach `done`. The wall time goes out through
+  `t.diagnostic` and into `BUILD.md`, never `void` (L24, G6).
 - **★ LOOP-FRESH over REAL outputs:** run `stage-regress.mjs` and then `stage-verify.mjs` over one fixture and
   run `check-loop-fresh.mjs --feature … --base … --iter 1` → `FRESH`, with A, B, C, D, J, E, H, F and G each
   asserted `pass`. Control: an edit to a tracked file after verify turns F into a RERUN.
@@ -480,29 +551,52 @@ module ships a `*.test.mjs`, and every ★ test names the edit that turns it red
   `completeness.missing` naming it; a PLAN whose `## Files` holds only globs → `done`, `INCONCLUSIVE`, the reason
   carried; a legacy SPEC → `ac_gate` `NOT-APPLICABLE`, and `VERIFY.md` says "not-applicable (legacy spec)".
 - **Eval pairs:** a declared capability directory with `evals/expected/x.json` and `findings.json` → a
-  `structural:` entry in the stamp; the same pair untracked still counts; an undeclared capability's pair, a
-  pair with no `findings.json`, and a declared glob above the directory → no entry.
+  `structural:` entry in the stamp; the same pair untracked still counts (the disclosed G4 change); an
+  undeclared capability's pair, a pair with no `findings.json`, and a declared glob above the directory → no
+  entry.
 - **Refusals:** `missing-artifact`, `chain-red`, `plan-files-unparseable` → exit 3, `VERIFY.md` rendered,
-  **no** `verify-report.json`.
-- **Stale output:** an earlier report and `VERIFY.md` are gone after every exit that follows the slug and
-  containment point (`chain-red`, `missing-artifact`, `no-gates`, a bad `--timeout-ms`, `child-refused`), and
-  both survive a pre-slug `usage-error` and a `path-containment` refusal (the named residual). An earlier
-  run's `.pharn/pharn-verify/stage.json` is gone after a bad `--timeout-ms` (the N1 difference from regress).
-- **Question:** no `package.json` and no `--gates` → exit 4; the object validates; re-invoking the EMITTED
-  object's `resume.argv` plus its first option's `argv`, through the shipped `substituteArgv`, reaches `done`
-  (6.23.0's N5 fidelity note, applied).
+  **no** `verify-report.json`, and no gate log under `.pharn/pharn-verify/gates/` (raised before the first slow
+  step, G6).
+- **Stale output, branch by branch (G16):** an earlier report and `VERIFY.md` are gone after every exit that
+  follows the slug and containment point (`chain-red`, `missing-artifact`, `no-gates`, a bad `--timeout-ms`,
+  `child-refused`), and both survive a pre-slug `usage-error` and a `path-containment` refusal (the named
+  residual G1 answers), together with an earlier progress record. An earlier run's
+  `.pharn/pharn-verify/stage.json` is gone after a bad `--timeout-ms` (the N1 difference from regress). A
+  `--resume` that runs a gate and then meets a runner refusal leaves that gate's log.
+- **Removal failure (G2):** `verify-report.json` pre-created as a non-empty directory → exit 1, no stage-exit
+  document, and no gate log. Mutant: the catch-all restored → the run reaches the drain before failing at the
+  render's `rename`, so a gate log exists and the test goes red.
+- **Question:** no `package.json` and no `--gates` → exit 4; the object validates; `resume.argv` deep-equals the
+  invocation's argv and holds no `--gates` (A2, N3); no gate log exists; `--resume` after it → `no-progress`
+  (nothing before the drain leaves a record); re-invoking the EMITTED object's `resume.argv` plus its first
+  option's `argv`, through the shipped `substituteArgv`, reaches `done` (6.23.0's N5 fidelity note, applied).
 - **Containment and resume:** a symlinked `.pharn`, a dangling one, a symlinked `.pharn/pharn-verify`, and a
   symlinked feature directory → `path-containment` with nothing written through the link; a feature directory
-  swapped for a link between a `continue` and `--resume` → `path-containment`; `--resume` with no record →
-  `no-progress`; with a malformed record, or one naming a phase outside RESUMABLE_PHASES → `progress-malformed`;
+  swapped for a link between a `continue` and `--resume` → `path-containment`; **the in-drain swap (G9):** a
+  fixture gate replaces `pharn/features/<name>` with a symlink to an outside directory during the drain →
+  `unusable path-containment` at the render, nothing written through the link (mutant: drop the pre-write walk
+  → files appear in the outside directory); `--resume` with no record → `no-progress`; with a malformed record,
+  or one naming ANY `PHASES` member outside `RESUMABLE_PHASES`, each tested (G11) → `progress-malformed`;
   `--resume --gates x`, `--resume --budget-ms`, `--resume --budget-ms 100 100` → `usage-error`.
+- **Checkpoint closure (G11):** the phase literals `stage-verify.mjs` passes to its checkpoint writer are
+  exactly `RESUMABLE_PHASES`; mutant: a third literal → red.
+- **Parked verdict (G8):** after a completed run, a hand-built progress record parked at `verdict` (passing
+  `validateProgress`) → `--resume` → `done`, with `verify-report.json` byte-identical. Control: a pinned AC
+  test file edited before the resume → the report differs, which demonstrates the narrowed bound.
+- **`runCli` (G6):** one helper runs the CLI for every test above and asserts that stdout is exactly one JSON
+  document that `validateStageExit` accepts — or, on the crash tests, that no document was printed.
 - **Argv (M7):** `--timeout-ms 50` and a 10-digit value → `usage-error` up front; a trailing `--budget-ms` →
   `usage-error`; an unknown flag and a positional → `usage-error`.
 - **★ Budget:** `--budget-ms 1` over three or more gates → exit 5 repeatedly, every invocation advancing
   exactly one slow step, and `--resume` reaches the same `verdict`, `failing_gates`, `gates` and `ac_gate` as an
-  unbudgeted run. The clock: a PATH shim that makes only `git ls-files` slow shows the opening work is charged
-  (a 2 s window stops the second gate; a 60 s control reaches `done`); the old-clock mutant turns it red.
-- **★ Kill mid-drain:** a SIGKILL while a gate runs leaves the record at `drain`; `--resume` reaches `done`.
+  unbudgeted run EXECUTED IN THE SAME TEST over the same fixture, with none of its gates skipped (G6; 6.23.0's
+  A5 titled a comparison it never ran). The clock: a PATH shim that makes only `git ls-files` slow shows the
+  opening work is charged (a 2 s window stops the second gate; a 60 s control reaches `done`); the old-clock
+  mutant turns it red.
+- **★ Kill mid-drain (G6):** the fixture gate writes a start marker, then sleeps; the test polls for the marker —
+  never a fixed delay, which is how 6.23.0's 800 ms kill test flaked — then SIGKILLs the process group, asserts
+  the record's phase is `drain`, and `--resume` → `done`. Mutant: drop the drain-top checkpoint → `--resume`
+  answers `no-progress`.
 - **Verifiers:** a fixture with one `role: verifier` markdown file → `verifiers.registered` 1 with the note, the
   deferral line in `VERIFY.md`, and the same verdict as the zero-verifier control (verifiers never flip it).
 - **Crash paths:** a fixture floor whose `check-build-complete.mjs` throws → `unusable child-crashed`, never an
@@ -516,18 +610,27 @@ module ships a `*.test.mjs`, and every ★ test names the edit that turns it red
   and a verdict outside the set; checkCompleteness over each of the checker's real output shapes (complete,
   incomplete, inconclusive) and the non-members (empty text, a JSON array, `complete` as a string, a non-string
   inside `missing`, `{"toString":1}` — L62); composeReport's key order, its collision refusal, and the note only
-  when `registered > 0`; the load graph is exactly `gate-run-core.mjs`, with an injected-import control.
-- **Render:** one fixture per verdict and per refusal; a hostile gate id, missing path and reason (fence runs,
-  a fake heading, an inline link) stay inside fences; L62 cases with the `String()` control; no rendered
-  outcome matches `ABS_PATH_RE` (imported by the test only); the real `validate.mjs` stays GREEN over a render
-  quoting `rule_id:` and `problem:`, and the no-preamble control goes RED; ★ ENUMERATION — `VERIFY.md` is named
-  in `PIPELINE_ARTIFACTS`, `reconcile-ignore.json`, `EXCLUDED_ARTIFACTS`, `/pharn-loop`'s staging list,
-  `.prettierignore` and `.markdownlint-cli2.jsonc` (six sites, counted); a style probe that self-skips without
-  `node_modules`.
-- **Runtime (Q1):** each argv rule over members and non-members; the containment walk over a regular path, a
-  live link, a dangling link and a file component; the budget tracker at `elapsed + N === B` and `+1`; the drain's
-  three outcomes; a pin that neither stage script defines `containmentWalk`, `lstatSafe`, `makeBudget` or the
-  argv rules itself.
+  when `registered > 0`; the load graph is exactly `gate-run-core.mjs`, with an injected-import control; none
+  of the four new modules declares `FEATURE_SLUG_RE =` (G12; mutant: a local declaration → red).
+- **Render:** one fixture per verdict and per refusal; **the A6 matrix (G6)** — a FAIL plus incomplete report
+  renders both the FAIL line and the missing paths, a PASS renders no "missing" line, the verifier deferral
+  line appears only when `registered > 0`, and the bootstrap and legacy AC lines only for those modes; a hostile
+  gate id, missing path and reason (fence runs, a fake heading, an inline link) stay inside fences; L62 cases
+  with the `String()` control; **scoped to what the script supplies (G10)** — the stage-exit object's `report`
+  and `render` paths, the render's fixed text and every argv operand the script builds never match
+  `ABS_PATH_RE` (imported by the test only), with a control where a checker reason carrying an absolute path
+  renders inside a fence, as given; the real `validate.mjs` stays GREEN over a render quoting `rule_id:` and
+  `problem:`, and the no-preamble control goes RED; ★ ENUMERATION — `VERIFY.md` is named in
+  `PIPELINE_ARTIFACTS`, `reconcile-ignore.json`, `EXCLUDED_ARTIFACTS`, `/pharn-loop`'s staging list,
+  `.prettierignore` and `.markdownlint-cli2.jsonc` (six sites, counted; mutant: one site dropped → red, G6); a
+  style probe that self-skips without `node_modules` and follows `render-regression.test.mjs`'s pre-clean and
+  `t.after()` on its own named directory (G17; 6.23.0's M11).
+- **Runtime (GATE 1 Q1):** each argv rule over members and non-members; the containment walk over a regular
+  path, a live link, a dangling link and a file component; the budget tracker at `elapsed + N === B` and `+1`; the
+  drain's three outcomes; a pin that neither stage script defines `containmentWalk`, `lstatSafe`, `makeBudget` or
+  the argv rules itself; **the closure-parity test (G3)** — the regress suite's own regex
+  `["'](?:\.\/)?([a-z0-9-]+\.mjs)["']`, run transitively over `stage-regress.mjs`, reaches `stage-runtime.mjs` and
+  every module it names (mutant: a computed import path → red).
 - **stage-exit-core:** `STAGES` is exactly `["regress", "verify"]`; the verify vocabulary is exact; forged-label,
   forged-argv, extra-key, added-option and removed-option controls for verify's `no-gates`; a regress-only code
   (`scope-escaped`) is not a verify member and a verify question is not a regress question with verify's text.
@@ -535,8 +638,25 @@ module ships a `*.test.mjs`, and every ★ test names the edit that turns it red
   `pharn-verify.md` invokes none of `run-gates.mjs`, `check-verify.mjs`, `check-plan-spec-agree.mjs`,
   `check-build-complete.mjs`, `count-verifiers.mjs` and `check-structural.mjs` directly, and the A1 scope
   EXECUTED for verify (VERIFY.md, verify-report.json and `src/x.js` denied; `.pharn/pharn-verify/x.json`
-  allowed; the no-scope control); the loop-mapping closure runs per stage with a mutant control; the verdict-line
-  pin reads the script's check-verify argv (`--stamp`, `--feature`, `--ac-gate`) and never a `--complete`.
+  allowed; the no-scope control); the loop-mapping closure runs per stage, finding each paragraph by its own
+  anchor ("`/pharn-verify`'s stage-exit mapping" beside regress's), asserting each anchor found before slicing,
+  with the mutant control run through the same `mappingNamesCode` (G17; 6.23.0's M12); the verdict-line pin
+  reads the script's check-verify argv (`--stamp`, `--feature`, `--ac-gate`) and never a `--complete`.
+- **`NAMED_LIMITS` (G7; 6.23.0's M3, M4):** a closed, counted list (L34) of anchor phrases `pharn-verify.md`
+  must contain, each with a delete-the-anchor mutant:
+  - "correctness residual", "absolute-threshold residual", "Whole-repo", "The suite is the ceiling", "Single HEAD
+    run";
+  - "git-ignored" (the reconcile bound) and `test-infra-changed` (the `--gates` caveat);
+  - "no verifiers registered — floor gates only." and "deferred" (the verifier runner);
+  - "feature NOT verified", `/pharn-plan` and `/pharn-spec` (the refusal remedies);
+  - "as quoted DATA" (the `2` bullet) and "never `--resume`" (the `4` bullet);
+  - "neither prevented nor detected" (the weaker write claim) and "NOT a claim" (feature correctness struck).
+
+  The negative pin: the phrase the 0.2 sibling retracts does not appear. Beside it: `pharn-ship.md` step 7 names
+  the `done`-exit condition (G1), and its Step 2b names `child-crashed` (G15); `pharn-loop.md`'s verify
+  paragraph names `child-crashed` and `child-refused` (G5). Not duplicated: the reconcile argv and
+  `--require-baseline`, already pinned by `check-bash-reconcile.test.mjs`. **Bound (L36):** a presence set over
+  the limits the grill named; it cannot discover a limit nobody listed.
 
 ## Guarantee audit (P0)
 
@@ -558,9 +678,24 @@ Each claim carries its reduction, and each quantified sentence names the probe t
   `ac_gate` was edited fails E.
 - "A report on disk means `check-verify.mjs` ran for it" → **narrowed, not a guarantee**: every `refused` stop,
   and every `unusable` stop at or after the slug and containment point, removes the earlier report first and
-  writes none. Probe: each named refusal and a post-slug `usage-error` leave no report. **The residual:** a stop
-  before the slug parses, `path-containment` itself, or a genuine crash can leave an earlier report — exactly
-  why `/pharn-ship` tests the current file's `.verdict`, and the same residual regress carries.
+  writes none. It holds because only `ENOENT` counts as absence (G2): a removal that fails for any other reason
+  is a crash before any refusal could be emitted. Probes: each named refusal and a post-slug `usage-error`
+  leave no report; the unremovable-report test crashes with no gate run. **The residual:** a stop before the
+  slug parses, `path-containment` itself, or a genuine crash can leave an earlier report — the same residual
+  regress carries, and the reason for the next line.
+- "`/pharn-ship` reads a verdict this run produced" (G1) → **advisory**: step 7 and Step 2b's re-read accept
+  `.verdict` only when `/pharn-verify` ended `done` in THIS run (its pinned line or its last `--resume` exited
+  `0`). The orchestrating model reads its own exit code; the `.verdict` membership test stays **floor**. The
+  residual is a model that skips the exit check. `/pharn-ship` has no freshness check of its own (only
+  `/pharn-loop`'s `check-loop-fresh` F binds a report to the live tree). Pinned as present by G7's set; the
+  regress half is the follow-up `ship-regress-exit-binding`.
+- "Containment holds for every write into the feature directory" (G9) → **tested code**: a walk immediately
+  before each write. The residual is the gap between that walk and the `rename`, named; before, it was the
+  whole drain, about 570 s.
+- "A resume reproduces the interrupted run's report" (G8) → **narrowed**: from the same stamp and an
+  unchanged tree only. The verdict also reads live files, so a moved tree may differ; `check-loop-fresh` F
+  catches that in the loop, and nothing does in `/pharn-ship`. Probe: the parked-verdict byte-identity test and
+  its edited-test control.
 - "`VERIFY.md` is rendered from the JSON" → tested deterministic code; it gates nothing (**advisory** content).
 - "While the script runs, no Write-tool write lands outside `.pharn/**`" → **floor: hook** (fix #7), probed at
   plan time (above) and by the executed hygiene test. STRONGER than before, when the scope admitted the two
@@ -600,8 +735,11 @@ Each claim carries its reduction, and each quantified sentence names the probe t
   command comes from PLAN or SPEC text.
 - **The render.** Every untrusted value sits inside a fence computed longer than any back-tick run in it; closed
   values render inline only after a membership test; the fixed preamble keeps CHECK 5 GREEN over any quoted
-  text (L10). No absolute path the script supplies appears: every path handed to a child or the renderer is
-  repo-relative. A user's own `--gates` text renders as given, so that is the stated bound, as in regress.
+  text (L10). **Scoped to what the script supplies (G10):** no absolute path the script supplies appears, since
+  every path it hands to a child or the renderer is repo-relative. Two bounds are stated rather than hidden:
+  a user's own `--gates` text renders as given, as in regress; and a checker's own reason renders as given,
+  fenced — `check-verify.mjs` evaluates the AC gate with an absolute `root` (`process.cwd()`, `:320`), and
+  nothing here establishes that no reason quotes a path built from it.
 - **The question object.** Fixed text and the user's own argv only.
 - **Residual.** A human or model reading `VERIFY.md`'s quoted text is the accepted, bounded residual
   (`LIMITS.md §2`, `THREAT-MODEL.md §5`). Nothing gates on it.
@@ -630,8 +768,8 @@ Each claim carries its reduction, and each quantified sentence names the probe t
 | `ship-outcome-core.mjs`                               | `verdict`                                                                                                        | unchanged logic; its residual narrows for verify                                                                                                                      |
 | `render-run-report.mjs`                               | `verdict`, `failing_gates`, `ac_gate`                                                                            | verbatim; an absent report already renders "the run stopped before a verify, or it was blocked"                                                                       |
 | `render-ship-briefing.mjs`, `check-ship-briefing.mjs` | `verdict`                                                                                                        | verbatim                                                                                                                                                              |
-| `/pharn-ship` step 7 and Step 2b                      | `.verdict`, `.failing_gates[]`, `.completeness.missing[]`, `.ac_gate`                                            | all kept; `INCOMPLETE` passes through, so Step 2b fires; a refusal is the missing-report STOP (the text is updated)                                                   |
-| `/pharn-loop`                                         | the stage's outcome; Step 5 hands `.failing_gates[]`, `.completeness.missing[]`, `.ac_gate.acs[]` to the rebuild | the verify mapping paragraph; the fields are kept                                                                                                                     |
+| `/pharn-ship` step 7 and Step 2b                      | `.verdict`, `.failing_gates[]`, `.completeness.missing[]`, `.ac_gate`                                            | all kept; `INCOMPLETE` passes through, so Step 2b fires; a refusal is the missing-report STOP, and `.verdict` is read only after a `done` exit in this run (G1)       |
+| `/pharn-loop`                                         | the stage's outcome; Step 5 hands `.failing_gates[]`, `.completeness.missing[]`, `.ac_gate.acs[]` to the rebuild | the verify mapping paragraph with its A7 disclosure (G5); the fields are kept                                                                                         |
 
 ## Behaviour changes, disclosed (each goes into CHANGELOG [6.24.0])
 
@@ -648,12 +786,21 @@ Each claim carries its reduction, and each quantified sentence names the probe t
   `/pharn-verify` reaches it (Q6).
 - **A crashed `check-build-complete.mjs` stops the stage before any gate runs** (`unusable child-crashed`).
   Before, the stamp's `aux.completeness` read node's exit 1 as "incomplete" (probed under Discovery), the
-  verdict read `INCOMPLETE`, and `/pharn-ship` Step 2b answered it with its one bounded rebuild. The runner is
-  unchanged, so `/pharn-dev-verify` and any direct `check-verify.mjs` caller keep the old reading (named
-  follow-up).
+  verdict read `INCOMPLETE`, and `/pharn-ship` Step 2b answered it with its one bounded rebuild. Under
+  `/pharn-loop` it was a CONTINUE, a rebuild iteration up to the cap; now it is S9 (G5). Accepted at GATE 1 as
+  disclosed, on the condition that CHANGELOG [6.24.0] and `/pharn-ship`'s Step 2b text both name it (G15). The
+  runner is unchanged, so `/pharn-dev-verify` and any direct `check-verify.mjs` caller keep the old reading
+  (named follow-up).
+- **New `/pharn-loop` S9 stops (G5; 6.23.0's A7 class).** A crashed completeness checker, a runner refusal
+  (a lapse included), and an unparseable `## Files` stop at S9. `pharn-loop.md`'s verify mapping paragraph says so.
+- **`/pharn-ship` reads the verify verdict only after a `done` exit in this run (G1).** Stricter than before:
+  an earlier run's report left by a pre-slug, containment or crash stop no longer reaches GATE 2.
+- **A removal that fails for any reason other than absence is a crash (G2)**, never a swallowed error.
 - **Registered verifiers are counted and none is run** (Q4).
 - **The eval-pair discovery is a rule, not a judgment**, so a PLAN that names no file under a capability
-  directory gets no `structural:` gate for it.
+  directory gets no `structural:` gate for it. **And the rule admits untracked pairs (G4):** an untracked
+  `(expected, findings.json)` pair under a declared capability directory now gets a `structural:` gate. The old
+  text said "committed", which, read literally, gave a just-built capability none.
 
 ## Success measure — tool calls before vs after
 
@@ -689,7 +836,13 @@ release).
 - **`ship-quick-mode` (3.1):** it edits `pharn-verify.md`'s first paragraph ("in a full run, `/pharn-regress`
   (a `/pharn-ship --quick` run starts no `/pharn-regress` …)") and bumps its version to 0.4.1. The later merge
   carries that sentence into the thin command's opening paragraph and keeps version 0.5.0 or higher. Its
-  `ship-outcome-core.mjs` header rewrite and this plan's one-comment edit overlap in the same header.
+  `ship-outcome-core.mjs` header rewrite and this plan's one-comment edit overlap in the same header. Its
+  `/pharn-ship --quick` path runs `/pharn-verify`, so G1's `done`-exit binding applies there as well; the later
+  merge carries it into the quick path's verify read.
+- **RULE B lands exactly on its pinned floor (G19).** This plan drops RULE B's domain from 6 to 5, the
+  pinned floor (`>= 5`). A sibling that removes a second placeholder `writes:` path from any of the five
+  remaining commands fails RULE B's non-vacuity test at merge, so the later merge re-measures the domain. The
+  test's message ("ship + the regress/verify pairs") is reworded in this plan's `command-hygiene.test.mjs` edit.
 
 ## Deferred — named, not dropped
 
@@ -706,32 +859,65 @@ release).
   (P7).
 - `architecture-contract-list-stage-exit` (from 6.23.0, unchanged).
 - Retiring the allowlist prose copy (kept, with its parity test).
+- `regress-stale-unlink-swallow` (from this grill, G2): `stage-regress.mjs`'s `phaseFreshEarly` swallows every
+  unlink error, so an unremovable earlier `regression-report.json` survives silently under 6.23.0's narrowed F2
+  claim. Not fixed here, because GATE 1's Q1 keeps regress's CLI behaviour unchanged.
+- `ship-regress-exit-binding` (from this grill, G1): `/pharn-ship` step 6 still reads `regression-report.json`'s
+  `.verdict` without binding it to a `done` exit in this run. The same residual G1 closes for verify, left to
+  regress's own increment.
+
+## The 6.23.0 review's defect classes — design-out map
+
+Every class 6.23.0's review found (all three rounds, `.dev/features/stage-regress-script/REVIEW.md`), with where
+this plan designs it out and the test that holds it. Built from `GRILL.md`'s map, and now fully folded in.
+
+| class (6.23.0 finding)                               | designed out by                                                                                                                                   | named test                                                                                                            |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| F1 — options not checked against the registry        | verify's entry inherits `optionsMatchRegistry`                                                                                                    | stage-exit-core: forged-label, forged-argv, extra-key, added- and removed-option controls on verify's `no-gates`      |
+| F2 — `/pharn-ship` reads a stale report              | fresh removes the report and scratch after the slug and containment; Q3; only `ENOENT` is absence (G2); ship binds its read to a `done` exit (G1) | Stale output; Removal failure; the `NAMED_LIMITS` step-7 pin                                                          |
+| A1 — the question branch dead-ends                   | the `4` bullet pins the fresh-style template; `--resume` only under `5`                                                                           | Question (emitted object, shipped `substituteArgv`); STAGE_SCRIPT_WIRING's single resume line; "never `--resume`" pin |
+| A2 — the question fires wrongly or can't be answered | the predicate is the runner's own empty source set; `resume.argv` never holds `--gates`                                                           | Question (`resume.argv` deep-equals the invocation argv)                                                              |
+| A3 — a kill loses the run; the clock starts late     | checkpoints at the top of `drain` and `verdict`; clock from the top of `runFresh`/`runResume`                                                     | ★ Kill (dropped-checkpoint mutant); ★ Budget (clock shim, old-clock mutant)                                           |
+| A4 — `--resume` skips containment                    | the walk re-runs on every `--resume` and before every write (G9)                                                                                  | Containment and resume (swap between `continue` and `--resume`; the in-drain swap)                                    |
+| A5 — ★ tests assert less than their titles           | each ★ asserts its title and names its red-turning edit (G6)                                                                                      | ★ WIRING, ★ Budget, ★ Kill, ★ ENUMERATION, `runCli`                                                                   |
+| A6 — the render asserts what it did not observe      | the render reads the report JSON alone                                                                                                            | Render (the A6 matrix)                                                                                                |
+| A7 — new loop stops not disclosed                    | the disclosure in `pharn-loop.md` and CHANGELOG (G5)                                                                                              | the per-stage mapping closure; the `pharn-loop.md` pin                                                                |
+| M1 — gate ids inline, claimed fenced                 | every gate id is fenced                                                                                                                           | Render (hostile gate id)                                                                                              |
+| M2 — "never an absolute path"                        | the claim is scoped to what the script supplies (G10)                                                                                             | Render (script-supplied paths; the absolute-reason control)                                                           |
+| M3, M4 — named limits and the DATA label dropped     | a closed presence set over the condensed command (G7)                                                                                             | `NAMED_LIMITS`                                                                                                        |
+| M5, N1 — `unusable` wording ahead of the code        | the clear precedes argv validation; the `2` bullet follows the code (G16)                                                                         | Stale output, branch by branch                                                                                        |
+| M6 — any string as `done.verdict`                    | the command reads the report's verdict; the residual names verify (G14)                                                                           | ★ WIRING (`done.verdict` equals the report's)                                                                         |
+| M7 — argv rules diverge from the runner's            | one shared owner (GATE 1 Q1)                                                                                                                      | Argv (M7); Runtime                                                                                                    |
+| M8 — a second slug regex                             | imported from `gate-run-core.mjs` (G12)                                                                                                           | Core (no-redeclaration pin)                                                                                           |
+| M9 — resumable phases never persisted                | the resumable set equals the checkpointed set (G11)                                                                                               | Checkpoint closure; every non-resumable phase → `progress-malformed`                                                  |
+| M10 — a GATE-1 condition never reached               | both GATE 1 conditions carried into Files and pinned (G15)                                                                                        | `BUILD.md`'s regress-suite record (G3); the Step 2b `child-crashed` pin                                               |
+| M11 — a probe writes into the live repo              | pre-clean plus `t.after()` on a named directory (G17)                                                                                             | Render (the style probe)                                                                                              |
+| M12 — the discriminator re-implements the predicate  | the mutant runs the same `mappingNamesCode` (G17)                                                                                                 | command-hygiene (the per-stage closure)                                                                               |
+| N2 — "idempotent" overclaimed                        | narrowed to "the same stamp over an unchanged tree" (G8)                                                                                          | Parked verdict (byte identity; the edited-test control)                                                               |
+| N3 — `resume.argv` described too broadly             | verify's is the original argv, unchanged                                                                                                          | Question (the equality assertion)                                                                                     |
+| N4 — a record asserted a run before it ran           | `BUILD.md` records only runs that happened, with their exit codes (G18)                                                                           | none possible (a narrative record); the review re-executes the probes (L37)                                           |
+| N5 — round trips built from REGISTRY                 | the emitted object and the shipped `substituteArgv`                                                                                               | Question                                                                                                              |
+| N6 — unprobed quantified claims                      | each new claim paired with its probe; the grill narrowed five (G1, G2, G3, G8, G10)                                                               | the Guarantee audit's probes                                                                                          |
+| N7 — a leftover survives the fresh start             | none needed: verify has no worktree, and the clear removes `<out>`                                                                                | — (checked, no finding)                                                                                               |
+| containment TOCTOU (A4's residual)                   | a containment walk before every write (G9)                                                                                                        | the in-drain swap                                                                                                     |
+| a kill mid-clear                                     | step 4 unlinks the record first; the window is named                                                                                              | — (named residual)                                                                                                    |
+| the fixed 800 ms kill flake                          | the kill waits for the gate's own start marker (G6)                                                                                               | ★ Kill                                                                                                                |
 
 ## Open questions (HALT)
 
-Each carries a recommendation; GATE 1 is the orchestrator's, under the maintainer's delegation.
+None open. All six were resolved at GATE 1 on 2026-09-26, by the orchestrator's MODEL decision under the
+maintainer's delegation (not a human approval), each as this plan recommended:
 
-- **Q1 — one owner for the stage-script mechanics, or two copies?** (a) Recommended: `pharn/floor/stage-runtime.mjs`,
-  lifted out of `stage-regress.mjs`, which then imports it; the regress suite, unchanged, is the evidence.
-  (b) Per-script copies plus an executed cross-copy test in `stage-verify.test.mjs` over the shared refusal cases.
-  Why (a): the copied helpers are exactly the ones 6.23.0's review repaired one at a time (M7a/b/c, A4, A3), and
-  L31 records that the second copy of a pair is where such an obligation is dropped. Cost of (a): the diff reaches
-  a script that shipped yesterday.
-- **Q2 — the report's bytes.** The brief says "the checker's own bytes". Today's command merges `completeness` and
-  `verifiers` into the checker's JSON, `verify-report.md`'s object shows both, and `/pharn-ship` and `/pharn-loop`
-  read `.completeness.missing[]`. (a) Recommended: the checker's object verbatim plus those two blocks, merged by
-  tested code. (b) The checker's exact bytes, with the two blocks moved to `VERIFY.md` only: a contract change,
-  and two consumer reads to re-point.
-- **Q3 — does a refusal still write a fail-closed report?** (a) Recommended: no. A report exists only when the
-  checker ran, symmetric with regress and with the contract's `refused` row ("no machine report"), and
-  `/pharn-ship`'s missing-report rule already STOPs. (b) Keep today's script-written `INCONCLUSIVE` chain-red report,
-  which is not the checker's output and needs a per-stage exception in the contract.
-- **Q4 — registered verifiers when the runner is deferred.** (a) Recommended: count them, record
-  `registered` with a fixed note, run none, and let the verdict stand (verifiers never flip it). (b) Refuse with an
-  `unusable` code. (c) Ask with a `question`. (b) and (c) would block verify on an advisory layer.
-- **Q5 — runner lapses inside the stage.** (a) Recommended: `unusable child-refused` → S9, disclosed, as regress
-  does. (b) A new closed code the loop re-runs once (`stage-exit-runner-lapse-rerun`); no observed lapse motivates
-  it (P7).
-- **Q6 — the pinned numbers and the `plan-files-unparseable` refusal.** Recommended: keep regress's
-  `--timeout-ms 540000 --budget-ms 570000` (the per-gate limit README already documents), and refuse an unparseable
-  `## Files` rather than silently running with no eval pairs, which would be a coverage loss.
+- **Q1 → a shared `pharn/floor/stage-runtime.mjs`**, extracted from `stage-regress.mjs`, which then imports it.
+  **Condition:** the unchanged regress suite stays green, byte for byte in its assertions (G3 carries it into
+  the design, `## Files` and `BUILD.md`).
+- **Q2 → the checker's object verbatim**, plus the `completeness` and `verifiers` blocks, merged by tested code
+  (`composeReport`).
+- **Q3 → a refusal writes no `verify-report.json`**, symmetric with regress and the contract's `refused` row.
+- **Q4 → registered verifiers are counted** and recorded with a fixed note; none is run, and the verdict stands.
+- **Q5 → a runner lapse is `unusable child-refused`, mapped to S9**, and disclosed (Behaviour changes, G5).
+- **Q6 → `--timeout-ms 540000 --budget-ms 570000` are kept**, and an unparseable `## Files` is refused
+  (`refused plan-files-unparseable`).
+- **The completeness-crash behaviour change is accepted as disclosed**, on the condition that CHANGELOG
+  [6.24.0] and `/pharn-ship`'s Step 2b text both name it (G15 carries it into `## Files` and the pin set).
+- **Grill amendments folded in:** G1–G19 from `GRILL.md`, each at the section it changes, with its named test.
