@@ -268,6 +268,21 @@ an unattended `/pharn-loop` iteration can now stop here — most commonly a `pac
 lockfile (small projects and libraries often have none), or a feature whose test universe is genuinely
 empty. See CHANGELOG [6.23.0] for the full disclosure.
 
+**`/pharn-verify`'s stage-exit mapping (since `stage-verify-script`, 6.26.0).** `/pharn-verify` is now a thin
+caller of `pharn/floor/stage-verify.mjs`, which reports through the same protocol and maps by the same rule; a
+closure test requires every `verify` `question` code to be named here:
+
+- `question no-gates` → **S4** (no `--gates`, and no allowlisted script or no `package.json` — S4's own trigger);
+- `refused` (`missing-artifact`, `chain-red`, `plan-files-unparseable`) and `unusable` → **S9**;
+- a crash (an exit outside `{0, 2, 3, 4, 5}`) → **S9**;
+- `continue` is handled **inside** `/pharn-verify` (it re-runs the pinned resume line itself) and never reaches the
+  loop as a stuck point; a `done` exit's verdict is read from `verify-report.json` by `check-loop.mjs`, as before.
+- **New S9 stops as of 6.26.0 (the A7 disclosure, GRILL G5):** a crashed `check-build-complete.mjs` is `unusable
+child-crashed` (before, it read `INCOMPLETE`, which `check-loop.mjs` CONTINUEs — a rebuild iteration, up to the
+  cap); a runner refusal, a lapse included, is `unusable child-refused` (before, a fail-closed report that
+  `check-loop-fresh.mjs` B could route to one re-run); and an unparseable `## Files` is `refused
+plan-files-unparseable` (before, the gates ran and the verdict read `INCONCLUSIVE`). See CHANGELOG [6.26.0].
+
 **S9 and S11 are different failures, and the difference decides the row.** S9 is a stage that **says** it
 refused. S11 is evidence on disk that does not match the tree, whatever the stages said: a skipped or
 half-run stage, a report or stamp from an earlier iteration, or a report its own stamp does not reproduce.
@@ -355,7 +370,9 @@ commit message and the summary name the mode after it.
    node pharn/floor/check-regress.mjs scope --changed "<inside, comma-separated>" --declared "<PLAN.md ## Files paths, plus AC-TESTS.md ## Files paths when that file exists>" --feature "<name>"
    ```
 
-   Branch **only** on the exit code (P5): `0` → verify. `1` → **S9** (`blocked: stage-refused`): a changed path is
+   Branch **only** on the exit code (P5): `0` → verify — `/pharn-verify` exactly as a full iteration runs it, with
+   its stage-start and orchestrator markers as written: the thin caller of `pharn/floor/stage-verify.mjs` (6.26.0),
+   whose exit maps by Step 2's `/pharn-verify` stage-exit mapping. `1` → **S9** (`blocked: stage-refused`): a changed path is
    outside the declared writes — the row a full run's `/pharn-regress` `scope-escaped` refusal maps to, with the same
    remedy (declare the path through a re-plan, or revert the change). Any other exit → **S9**, fail-closed. Running the
    listing and the line, and assembling their inputs, is **ADVISORY** (a named follow-up, `quick-scope-inputs-by-code`,
@@ -397,22 +414,22 @@ commit message and the summary name the mode after it.
 **Every question a quick run can meet, mapped to Step 2** (one enumeration, L29 — the rows not named here are
 unchanged):
 
-| source                                | question or outcome                                                                      | row                         |
-| ------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------- |
-| `/pharn-spec --quick --model-approve` | thin intent                                                                              | S6                          |
-| `/pharn-spec --quick --model-approve` | a clarification marker left in the Draft                                                 | S6b                         |
-| `/pharn-spec --quick --model-approve` | more than three criteria, or one observable only end-to-end                              | **S6c**                     |
-| `/pharn-spec --quick --model-approve` | a refused template                                                                       | S9                          |
-| the Step-3 kind read                  | a non-zero exit, or any token but `quick`                                                | **S6c**                     |
-| `/pharn-grill <name> --quick`         | its eligibility refusal (kind ≠ `quick`), or either floor stop RED                       | S9                          |
-| `/pharn-test --unattended`            | no runner with per-test results (`check-red-run --preflight` exit 1) / any other refusal | S12 / S9                    |
-| `/pharn-build`                        | seam config / plan ambiguity / seam `ask` / a refusal                                    | S5 / S7 / S8 / S9           |
-| the scope check (item 5)              | exit 1 (escaped), or any other non-zero exit                                             | **S9**                      |
-| `/pharn-verify`                       | no gates / a refusal / another ask                                                       | S4 / S9 / S10               |
-| `check-loop-fresh.mjs`                | RERUN `verify`                                                                           | re-run inside the iteration |
-| `check-loop-fresh.mjs`                | RERUN `regress`                                                                          | **S11**                     |
-| `check-loop-fresh.mjs`                | STOP `empty-source-set` / `ac-evidence-invalid` / any other; INCONCLUSIVE                | S4 / S13 / S11; S11         |
-| `check-loop.mjs`                      | exit 4, `terminal_cause` `ac-evidence`                                                   | S13                         |
+| source                                           | question or outcome                                                                      | row                         |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------- | --------------------------- |
+| `/pharn-spec --quick --model-approve`            | thin intent                                                                              | S6                          |
+| `/pharn-spec --quick --model-approve`            | a clarification marker left in the Draft                                                 | S6b                         |
+| `/pharn-spec --quick --model-approve`            | more than three criteria, or one observable only end-to-end                              | **S6c**                     |
+| `/pharn-spec --quick --model-approve`            | a refused template                                                                       | S9                          |
+| the Step-3 kind read                             | a non-zero exit, or any token but `quick`                                                | **S6c**                     |
+| `/pharn-grill <name> --quick`                    | its eligibility refusal (kind ≠ `quick`), or either floor stop RED                       | S9                          |
+| `/pharn-test --unattended`                       | no runner with per-test results (`check-red-run --preflight` exit 1) / any other refusal | S12 / S9                    |
+| `/pharn-build`                                   | seam config / plan ambiguity / seam `ask` / a refusal                                    | S5 / S7 / S8 / S9           |
+| the scope check (item 5)                         | exit 1 (escaped), or any other non-zero exit                                             | **S9**                      |
+| `/pharn-verify` (its stage-exit mapping, Step 2) | `question no-gates` / `refused`, `unusable` or a crash (`continue` it handles itself)    | S4 / S9                     |
+| `check-loop-fresh.mjs`                           | RERUN `verify`                                                                           | re-run inside the iteration |
+| `check-loop-fresh.mjs`                           | RERUN `regress`                                                                          | **S11**                     |
+| `check-loop-fresh.mjs`                           | STOP `empty-source-set` / `ac-evidence-invalid` / any other; INCONCLUSIVE                | S4 / S13 / S11; S11         |
+| `check-loop.mjs`                                 | exit 4, `terminal_cause` `ac-evidence`                                                   | S13                         |
 
 **A full run that meets `STOP_GREEN_QUICK`** — its SPEC reads quick although the run was invoked without `--quick`,
 a deviation `/pharn-spec` refuses at its own Step 4a — **does not commit.** A full run's Step 6c commits only

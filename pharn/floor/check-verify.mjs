@@ -4,8 +4,9 @@
 // Floor/eval infrastructure — NOT a Capability (no `role:`; the floor capability count stays 1, exactly
 // like pharn/floor/check-regress.mjs / floor/check-variance.mjs / pharn/floor/check-structural.mjs, which live in
 // this floor-ignored dir). It owns the WHOLE deterministic verdict of /verify so the maximum surface is
-// in tested Node, not in the command's Bash. The command (.claude/commands/verify.md) owns only the I/O
-// side-effects (running the gates, discovering verifiers, writing artifacts); this helper computes the
+// in tested Node. Its product caller is pharn/floor/stage-verify.mjs (6.26.0, stage-verify-script), which owns
+// the I/O side-effects (running the gates through run-gates.mjs, counting verifiers, composing and writing the
+// artifacts); the dev twin /pharn-dev-verify still runs them from its command prose. This helper computes the
 // pass/fail verdict and emits the machine verify-report spine.
 //
 // THE TWO LAYERS, AND WHY THIS FILE IS THE FLOOR ONE (ARCHITECTURE §7 fix #3):
@@ -14,7 +15,7 @@
 //   "the floor gates passed," NOT "a verifier judged it OK." So this helper computes the verdict from the
 //   gate EXIT CODES — plus, WITH `--ac-gate`, the AC gate's verdict over the per-test records (below) — and it
 //   never receives, reads, or is influenced by any verifier finding. The
-//   command appends verifier findings to the report AFTER this helper has emitted the verdict; they
+//   caller (stage-verify.mjs) appends verifier findings to the report AFTER this helper has emitted the verdict; they
 //   ANNOTATE, they never flip the number. A verifier saying "looks good" is not a guarantee; a verifier
 //   raising a concern is a flag for the human, not a deterministic block.
 //
@@ -43,14 +44,15 @@
 // THE OPTIONAL `--complete <int>` INPUT (ship-completion-retry increment):
 //   /verify runs pharn/floor/check-build-complete.mjs over the PLAN's `## Files` and passes ITS exit code here
 //   (0 complete · 1 incomplete · 2 inconclusive). This helper reads ONLY that integer — never the
-//   missing-path list (the command merges that into the report's `.completeness` block). `--complete`
+//   missing-path list (stage-verify.mjs's composeReport merges that into the report's `.completeness` block;
+//   the dev twin's command prose does it by hand). `--complete`
 //   is OPTIONAL: ABSENT ⇒ the legacy 3-valued behavior byte-for-byte ({feature, gates, verdict,
 //   failing_gates}, verdict ∈ {PASS, FAIL, INCONCLUSIVE}), so dev /pharn-dev-verify (which passes no
 //   --complete) and check-ship.mjs are PROVABLY unaffected — an INCOMPLETE verdict cannot arise without
 //   the flag, and check-ship never receives the flag. (If an INCOMPLETE report ever reached check-ship,
 //   its VERIFY_VERDICTS set would treat it as unknown → INCONCLUSIVE, fail-closed — bounded, not silent.)
 //
-// HONEST SCOPE (P0/P7): the verdict is a deterministic function of the gate exit codes the command
+// HONEST SCOPE (P0/P7): the verdict is a deterministic function of the gate exit codes its caller
 // captures — and, with `--ac-gate`, of the AC gate's reading of the per-test records and the lock. "verified"
 // therefore means EXACTLY "the named gates passed" (plus, with `--ac-gate` over a test-first SPEC, "every AC's
 // locked, once-red test passed") — NOT "the feature is correct."

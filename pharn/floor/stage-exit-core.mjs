@@ -1,9 +1,9 @@
 // pharn/floor/stage-exit-core.mjs — the SHARED stage-exit contract, `pharn-contracts/stage-exit.md`'s
-// code half. Every stage script (pharn/floor/stage-regress.mjs today; Phase 1.2's stage-verify.mjs next)
-// emits exactly one JSON object per exit, built and validated through this module, so the envelope, the
-// exit-code table and the closed reason_code / question vocabularies exist in ONE place rather than being
-// re-typed per stage (P3 — the registry is KEYED BY STAGE precisely so a second stage is a new key, not a
-// new file).
+// code half. Every stage script (pharn/floor/stage-regress.mjs since 6.23.0, pharn/floor/stage-verify.mjs
+// since 6.26.0) emits exactly one JSON object per exit, built and validated through this module, so the
+// envelope, the exit-code table and the closed reason_code / question vocabularies exist in ONE place rather
+// than being re-typed per stage (P3 — the registry is KEYED BY STAGE, and each stage script adds its own
+// entry rather than a new file).
 //
 // Floor infrastructure, NOT a Capability (no `role:`; it lives in the floor-ignored dir). Pure: no
 // filesystem, no child_process, no network, no clock, no randomness.
@@ -49,8 +49,8 @@
 //
 // ==================================== THE BUDGET DECISION (GRILL G5) ====================================
 // `mayStartSlowStep` lives HERE, not in a stage-specific core, because it drives the shared `continue`
-// status and Phase 1.2's verify runner reuses it UNCHANGED rather than importing a sibling stage's core or
-// copying the rule (L35). The FIRST slow step of an invocation always starts (L58 — a script must make
+// status and every stage script reuses it UNCHANGED (through `stage-runtime.mjs`'s budget tracker) rather
+// than importing a sibling stage's core or copying the rule (L35). The FIRST slow step of an invocation always starts (L58 — a script must make
 // progress on every invocation, and it is what keeps partition -> head init -> the first head gate
 // contiguous); after that, a step starts only while `elapsed + timeoutMs <= budgetMs`. With `budgetMs`
 // absent (a code caller, never a Bash-tool caller — roadmap 2.1/2.2), nothing is budgeted.
@@ -215,7 +215,7 @@ function optionsMatchRegistry(candidate, registryOptions) {
 }
 
 /** ------------------------------------------------------------------------------------------------
- *  THE PER-STAGE REGISTRY. Keyed by stage (P3 — Phase 1.2 adds `verify` as a new key, touching nothing
+ *  THE PER-STAGE REGISTRY. Keyed by stage (P3 — each stage script adds its own key, touching nothing
  *  below). Every question's text and every option's label are FIXED here; a stage script never composes
  *  one at runtime.
  *  ---------------------------------------------------------------------------------------------- */
@@ -297,6 +297,43 @@ export const REGISTRY = Object.freeze({
       "no-feature",
       "path-containment",
       "unrepresentable-path",
+      "git-failed",
+      "child-crashed",
+      "child-refused",
+      "no-progress",
+      "progress-malformed",
+    ]),
+  }),
+  // stage-verify-script (6.26.0): `/pharn-verify`'s vocabulary. ONE question — verify has no base, no install and
+  // no test partition to ask about — and it fires only on the runner's own empty source set (`run-gates.mjs init`
+  // exit 3), which an explicit `--gates` never reaches, so the answer's `--gates` is the only one on the re-run.
+  verify: Object.freeze({
+    question: Object.freeze({
+      // Verify's one cause (no --gates, and no allowlisted script or no package.json), plus the caveat the AC gate
+      // makes true: a level gate named through --gates is not the discovered `npm run <id>` the AC-test lock pinned.
+      "no-gates": Object.freeze({
+        question:
+          "No deterministic gate was found to run: no --gates was given, and package.json is absent or declares none " +
+          "of the allowlisted gate scripts. For a SPEC written from the template, gates named with --gates are read by " +
+          "the AC gate as not the discovered `npm run <id>` (test-infra-changed for a test-first SPEC, ac-untested for a " +
+          "spec_kind: test-infra one), so adding the missing script to package.json is the better answer there. Which " +
+          "gates should run, if any?",
+        options: Object.freeze([
+          Object.freeze({
+            id: "gates",
+            label: "Name the gates explicitly",
+            argv: Object.freeze(["--gates", "<value>"]),
+            value: Object.freeze({ kind: "gates-spec" }),
+          }),
+          Object.freeze({ id: "stop", label: "Stop — there is nothing to run", argv: null, value: null }),
+        ]),
+      }),
+    }),
+    refused: Object.freeze(["missing-artifact", "chain-red", "plan-files-unparseable"]),
+    unusable: Object.freeze([
+      "usage-error",
+      "no-feature",
+      "path-containment",
       "git-failed",
       "child-crashed",
       "child-refused",
