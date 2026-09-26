@@ -228,3 +228,84 @@ that instruction; every minor finding was fixed unless noted DEFERRED below with
 `node pharn/floor/validate.mjs .` → GREEN (36 capabilities). `npm run check` → exit 0 (see `REGRESSION.md`
 / `VERIFY.md` for the GATE-2 re-run notes and the live test count). `/pharn-dev-regress` and
 `/pharn-dev-verify` were each re-run in full over the fixed tree.
+
+**N4 (recorded at the re-review, 2026-09-26; the paragraph above is left as written).** At `6feee30` the
+last sentence above was not yet true for `/pharn-dev-verify`: the fix round handed off before running it,
+as the orchestrator itself reported. The verify re-run happened afterwards, in the opus review agent's
+worktree (VERIFY.md, "Re-run after GATE 2 fix (6feee30)"), which is what makes the sentence true after the
+fact. It is kept rather than rewritten, because the history is the record.
+
+## GATE 2 round 2 — the last review fixes (2026-09-26)
+
+- **Who and how.** The **reviewer** made these fixes, in its own worktree, at the orchestrator's GATE-2
+  direction: round 2 was decided FIX-then-SHIP by the orchestrator under the maintainer's delegation, a
+  MODEL decision and not a human one.
+- **Model.** opus, set by the maintainer's instruction and overriding `pharn.config.json`'s sonnet for
+  build. Model routed via Agent subagent; effort not routed.
+- **Anchor.** A fresh reconcile epoch was anchored after the PLAN's setter, before the first edit
+  (`--by stage-regress-script-gate2-round2`).
+- **Method.** Each item below was first reproduced on the unchanged code, and each new test was then
+  proven to turn red under its named mutant, reverted afterwards.
+
+### Dispositions
+
+- **A3 (kill during `git worktree add`) — CODE FIX, chosen over narrowing.**
+  - `stage-regress.mjs` gains `clearBaseWorktree()`: `git worktree remove --force --force`, then `rm -rf`
+    the path, then `git worktree prune`. It is run by the fresh start and by the "worktree" phase before
+    every `add`.
+  - Measured first: a real hard kill mid-checkout leaves the worktree LOCKED "initializing" by git
+    itself. A single `--force` refuses it, and a plain re-`add` fails.
+  - New test: a smudge filter slows the checkout, the whole process group is SIGKILLed mid-`add`, and
+    `--resume` must reach `done` (mutant: drop the call in the "worktree" phase → `git-failed`).
+- **A3 (the budget clock) — CODE FIX.**
+  - `invocationStart` is now taken first in `runFresh`/`runResume` and passed to `makeBudget`, so the
+    opening fast work is charged. The old clock started after head init, so PLAN.md:134's bound did not
+    hold.
+  - New test: a PATH shim makes only `git status --porcelain` sleep 3 s; under a 2 s window the fresh
+    invocation must `continue` at "drain-head"; control: a 60 s window runs to `done` (mutant: restore
+    the old clock → red).
+  - The remaining uncounted work (node startup, the post-slow-step fast work) is stated in `stage-exit.md`
+    and `pharn-regress.md`.
+- **N7 (new at round 2) — CODE FIX, same helper.**
+  - GRILL G4's render promises "the next fresh start removes the leftover worktree". For a LOCKED leftover
+    — G4's own scenario — that next start failed `git-failed` (measured): its single `--force` failed, then
+    its `rm -rf` left a locked registration that `prune` does not clear.
+  - The G4 test now runs that next fresh start and requires `done`. Either call site alone clears it, so
+    the red-turning edit is dropping both (measured with each mutant).
+- **N2 (cleanup/render re-run) — CODE FIX.** "cleanup" now reports success when its `worktree remove`
+  fails AND no directory is left, pruning the stale registration.
+  - A deliberately locked worktree (present) is still reported, and never force-unlocked at the end of a
+    run.
+  - New test: a render crash into a read-only feature directory, then `--resume` must render no cleanup
+    failure (mutant: the old condition → red). It is skipped under root, where the permission cannot bite.
+- **N1 — DOC FIX** (`stage-exit.md` `unusable` bullet, `pharn-regress.md` `2` bullet). A `usage-error`
+  from any flag but `--feature` removes the stale report but not an earlier run's scratch or progress
+  record. An out-of-flow `--resume` revives that run, and the command now restricts `--resume` to `5` or a
+  Bash-tool timeout.
+- **N3 — DOC FIX** (`stage-exit.md`, `pharn-regress.md`). A question's `resume.argv` is the original argv
+  MINUS the flags that question replaces (`--tests` for `tests-unresolved`).
+  - Probed: an explicit `--gates` never reaches `no-gates` (an empty token → `child-refused`).
+- **M3 — DOC FIX.** The rebuilt-`## Files` blind spot now sits beside the `scope-escaped` remedy in both
+  the command and the contract, and no longer only in the `check-regress.mjs` comment.
+- **M6 — DOC FIX (still deferred, reason corrected).** `REGISTRY` already holds per-stage vocabularies. The
+  real cost of closing it is two more second copies, each needing a parity pin; the deferral rests on P7
+  alone.
+- **Command routing added:** a Bash-tool timeout now routes to one `--resume`, and the budget-clock bound
+  is a named limit.
+- **A test timing flake, found by this round's verify re-run and fixed.**
+  - The first full `npm test` failed 1 of 3453. The failure was round 1's "A3 — a hard SIGKILL mid-run"
+    test: it killed the CLI after a FIXED 800 ms and assumed the run had reached "drain-head" by then.
+  - Under that loaded run (141 s wall, against 83 s earlier) it had not, so no checkpoint existed yet.
+  - The test now polls until the install step has started (`install.out` exists), which is the state its
+    own comment describes, with a 60 s cap.
+  - This is a test-only change: the script's path before the first checkpoint is untouched this round.
+    `/pharn-dev-verify` was then re-run in full on the final tree.
+- **Two last prose edits to `pharn-regress.md`, then one more full verify.**
+  - M3's second half, from the re-review: the `missing-artifact` remedy now names `/pharn-plan` and
+    `/pharn-spec`.
+  - The new Bash-timeout branch's "a kill before drain-head → `no-progress`" is narrowed. It excepts a kill
+    inside "fresh" itself, before the scratch clear, where an earlier run's record survives (the N1
+    residual), and it states why a Bash-tool timeout does not land there.
+  - The standing verify is the attempt after these edits (VERIFY.md). Regress was not re-run for them:
+    prose only, no code.
+- **CHANGELOG [6.23.0]:** one sub-bullet on resume-after-kill and the clock. `SKILLS_VERSION` stays 6.23.0.

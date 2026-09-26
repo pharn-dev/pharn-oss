@@ -7,6 +7,9 @@
 - **verdict: blocked-with-2-floor-findings** (plus advisory: 1 blocking-severity, 6 important, 12 minor)
 - **re-review after the GATE-2 fixes (`6feee30`): GREEN**. There are 0 open floor-gate findings. Advisory
   items still open: A3 (partly), M3 (partly), and 4 new minor findings (N1–N4). See the last section.
+- **after GATE-2 round 2: GREEN, 0 open floor-gate findings.** A3, M3, N1, N2, N3 and N7 are
+  verified-fixed; N4 is recorded; M6 is narrowed-ok. Three minor residuals remain open (N5, the
+  containment TOCTOU, a kill mid-clear). See "GATE-2 round 2" at the end.
 
 ## Step 1 — floor first (P0)
 
@@ -526,3 +529,78 @@ No finding **regressed**.
   - Each fell to a single probe.
   - That makes the candidate above a third-plus occurrence, which strengthens its L20 case for the
     promote gate.
+
+## GATE-2 round 2 — the reviewer's own fixes, and their dispositions (opus)
+
+- **Who and how.** The reviewer made these fixes itself, in its own worktree, at the orchestrator's GATE-2
+  direction: FIX-then-SHIP, a MODEL decision under the maintainer's delegation, not a human one.
+- **Model.** opus, by the maintainer's instruction, overriding `pharn.config.json`. Model routed via Agent
+  subagent; effort not routed.
+- **The bound on this section.** Fixer and reviewer are the same agent, so this is a SELF-review. It
+  reports nothing read-only. Every disposition rests on a behavior reproduced on the unchanged code
+  first, then an executed test, and for code a mutant that turns the test red (each reverted afterwards).
+- **Floor.** `validate.mjs .` → GREEN.
+  - `/pharn-dev-regress`, re-run over the WHOLE increment from its merge-base `767bf61` with all 6 gates
+    (style included): `no-regressions`.
+  - `/pharn-dev-verify`: third attempt PASS, all 7 gates, 3453/3453, and `reconcile` CLEAN over a fresh
+    round-2 epoch.
+  - Attempt 1 FAILed on a round-1 test's fixed 800 ms wait (see below). Attempt 2 passed but preceded two
+    prose edits. REGRESSION.md and VERIFY.md record every attempt.
+
+### Dispositions
+
+- **A3, the kill during `git worktree add` — verified-fixed, by a code change rather than a narrowing.**
+  - Measured first: a real group SIGKILL mid-checkout leaves the worktree LOCKED "initializing" by git
+    itself, a single `--force` refuses it, and `--resume` failed `git-failed`.
+  - Now `clearBaseWorktree()` (a double `--force`, `rm -rf`, `prune`) runs before every `add`.
+  - The new test kills a real `add` mid-checkout and resumes it to `done`. Mutant (drop the call) →
+    `git-failed`.
+- **A3, the budget clock — verified-fixed (code).**
+  - `elapsed` now starts at the top of `runFresh`/`runResume`.
+  - New test: a PATH shim makes only `git status --porcelain` take 3 s, and a 2 s window must stop the
+    second head gate; control: a 60 s window runs to `done`. Mutant (the old clock) → red.
+  - Still uncounted, and named in `stage-exit.md` and `pharn-regress.md`: node startup, and the fast work
+    after the last permitted slow step.
+- **M3 — verified-fixed (docs), both halves.**
+  - The rebuilt-`## Files` blind spot now sits beside the `scope-escaped` remedy in the command AND the
+    contract, not only in `check-regress.mjs`'s comment.
+  - The `missing-artifact` remedy names `/pharn-plan` and `/pharn-spec`.
+- **N1 — verified-fixed (docs).** Both texts now follow the code's order: a `usage-error` after the slug
+  removes the stale report but not an earlier run's scratch or progress record. The out-of-flow
+  `--resume` revival is named, and the command limits `--resume` to a `5` or a Bash-tool timeout.
+- **N2 — verified-fixed (code).**
+  - "cleanup" reports success when the removal fails and no directory is left.
+  - Test: a render crash into a read-only feature directory, then `--resume` renders no failure. Mutant →
+    red; the test is skipped under root.
+  - A present, deliberately locked worktree is still reported, as GRILL G4 intends.
+- **N3 — verified-fixed (docs).**
+  - Wording: "the original argv MINUS the flags the question replaces", with `--tests` named for
+    `tests-unresolved`.
+  - Probed: an explicit `--gates` never reaches `no-gates` (an empty token → `child-refused`).
+- **N4 — recorded.** BUILD.md carries a note, and its history is left as written.
+- **M6 — narrowed-ok.** The Residual's reason is corrected: `REGISTRY` already holds per-stage
+  vocabularies, and the real cost of closing it is two more parity-pinned copies. It is still deferred,
+  on P7 alone.
+- **N7 — NEW, found this round; verified-fixed.**
+  - GRILL G4's render promises that "the next fresh start removes the leftover worktree". For G4's own
+    LOCKED leftover it failed `git-failed` (measured), because the fresh start's single `--force` left a
+    locked registration behind.
+  - The same helper fixes it, and the G4 test now runs that next start to `done`.
+  - Either call site alone clears it, so the red-turning edit is dropping both (measured).
+- **Added so the A3 fix is reachable.** The command now routes a Bash-tool timeout to one `--resume`, and
+  its "a kill before drain-head → `no-progress`" line excepts a kill inside "fresh"'s first moments.
+- **A test timing flake, fixed.** Round 1's SIGKILL test killed after a fixed 800 ms. It now waits for the
+  install to start; the 3-run repeat and the full suite are green.
+
+### Still open (all minor, advisory)
+
+- **N5.** A5's round-trip tests take the option from `REGISTRY` and substitute through a local helper,
+  instead of using the emitted object's `options` and the shipped `substituteArgv`.
+- **The containment TOCTOU (A4's residual).** Containment is walked once at an invocation's start, and the
+  writes come up to about 570 s later. It is unchanged, and not introduced by any round.
+- **A kill mid-clear.** A kill inside "fresh" before its scratch clear (or mid-`clearBaseWorktree` of a
+  previous run's leftover) can leave an earlier run's record for a `--resume` to revive. That is the N1
+  residual, now named in the command and the contract.
+- **Recurrence of the lesson candidate.** This round's own new claims were probed before they were
+  written: the explicit-`--gates` sentence, "either call site alone", the clock, and the kill-mid-`add`
+  resume.

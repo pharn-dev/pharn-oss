@@ -82,6 +82,56 @@ windows, and neither substitutes for the other.
   A `CLEAN` means no escape was detected, never that none occurred
   (`pharn/pharn-contracts/reconciliation-record.md`).
 
+## Re-run after GATE-2 round 2 — the standing run
+
+- **What changed.** GATE-2 round 2 changed code (`stage-regress.mjs`, `stage-regress.test.mjs`) and
+  prose (the contract, the command, CHANGELOG [6.23.0]). BUILD.md, "GATE 2 round 2", lists it.
+- **Model.** opus, by the maintainer's instruction, overriding `pharn.config.json`'s sonnet for verify.
+  Model routed via Agent subagent; effort not routed.
+- **How the gates ran.** Through the same node runner, with the same gate set and order and `reconcile`
+  last.
+
+### Two attempts, both recorded
+
+1. **First attempt: FAIL (`test` exit 1, 3452/3453).** The one failure was a round-1 test's fixed 800 ms
+   wait before a kill, which a loaded run (141 s wall) outran; the test assumed the run had reached its
+   first checkpoint by then. The test was fixed to wait for the install step, under the build's scope,
+   because the verify scope denied the edit, as it should. BUILD.md, "A test timing flake", has the
+   details. All other gates were 0, and `reconcile` was CLEAN.
+2. **Second attempt: PASS** (all 7 gates 0, 3453/3453). After it, two prose-only edits to
+   `pharn-regress.md` (BUILD.md, "Two last prose edits") made the tree differ from what it verified.
+3. **Third attempt, on the final tree: PASS.** This is the standing verify. The table below is its
+   capture.
+
+### Gate table (round-2 re-run, third attempt — the standing one)
+
+| gate                                                                 | exit |
+| -------------------------------------------------------------------- | ---- |
+| `test` (`npm test`, 3453 tests: 3453 pass, 0 fail, 0 skipped)        | 0    |
+| `validate` (`node pharn/floor/validate.mjs .`)                       | 0    |
+| `lint` (`npm run lint`)                                              | 0    |
+| `format:check` (`npm run format:check`)                              | 0    |
+| `lint:md` (`npm run lint:md`)                                        | 0    |
+| `structural:…/expected-injection-comment.json`                       | 0    |
+| `reconcile` (`check-bash-reconcile.mjs --base . --require-baseline`) | 0    |
+
+### Verdict (round-2 re-run)
+
+**VERIFIED: floor gates PASS.** `check-verify.mjs` → exit 0, `"verdict": "PASS"`, `failing_gates`: none.
+`verify-report.json` is that output plus the advisory `verifiers` block, byte-identical again. No
+verifiers registered — floor gates only (re-read this run).
+
+### Reconcile (round 2)
+
+This round anchored a fresh epoch before its first edit, after the PLAN's setter:
+`reconcile-baseline.mjs --anchor --by stage-regress-script-gate2-round2`, 2324 paths, 35 scope entries.
+The gate reported
+`{"verdict":"CLEAN","epoch":"2026-09-26T08:42:12.538Z","anchored_by":"stage-regress-script-gate2-round2","reconciled":5,"escapes":[]}`.
+
+- The five reconciled paths are this round's in-scope edits.
+- `BUILD.md`, `REGRESSION.md` and `regression-report.json` are exempt by name as pipeline artifacts.
+- The window is anchor to this gate: this round only. The two epochs above cover the earlier windows.
+
 ---
 
 **verified = the named gates passed; this is NOT a guarantee of correctness beyond what those gates

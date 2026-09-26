@@ -45,14 +45,25 @@ requires must be present, and no key outside that status's set may appear.
   report.
 - **`question`** adds `reason_code`, `question`, `options`, `resume`. Nothing new; nothing slow has run.
 - **`continue`** adds `phase`, `resume`. The progress record exists; re-run `resume.argv`.
-- **`unusable`** adds `reason_code`, `detail`. What already happened depends on WHEN it fires (GATE 2,
-  M5 — the old "nothing new" line overclaimed this for every member): a stop before the feature slug
-  parses and the containment walk passes (`usage-error` with `feature: null`, or `path-containment`
-  itself) removes and writes nothing. A stop at or after that point has already removed this feature's
-  own stale prior report AND any other run's leftover `.pharn/pharn-regress/` scratch (the script's
-  "fresh" phase, GRILL G14) — and, from "worktree" onward, may have already created NEW state: a
-  base-commit checkout, install logs, gate stamps. None of that is a verdict; only a `done` exit's
-  `report` file is one.
+- **`unusable`** adds `reason_code`, `detail`. What already happened depends on WHEN it fires (GATE 2
+  M5, corrected in round 2 as N1 — the first correction still overclaimed the cleanup). For `regress`, in
+  the script's own order:
+  - **Before the feature slug parses and the containment walk passes** (`usage-error` with
+    `feature: null`, or `path-containment` itself), nothing has been removed or written.
+  - **A `usage-error` from the rest of argv** (`--timeout-ms`, `--budget-ms`, a mutually exclusive pair, …)
+    fires AFTER this feature's stale prior report was removed but BEFORE the scratch clear. So an earlier
+    run's `.pharn/pharn-regress/` scratch survives it: its progress record and its base worktree. An
+    out-of-flow `--resume` would then revive that earlier run from its own record (measured). The thin
+    command runs `--resume` only after a `continue` exit, so that revival is reachable only outside the
+    documented flow.
+  - **Every later stop** (`no-feature` onward) has removed the stale report AND cleared `.pharn/pharn-regress/`
+    (GRILL G14: one run per worktree at a time, so another run's in-progress record goes with it). From
+    "drain-head" onward the stop may have written NEW state: this run's own progress record (a checkpoint is
+    persisted at the top of every phase from "drain-head" through "verdict"), a base-commit checkout, install
+    logs, gate stamps.
+  - None of that is a verdict; only a `done` exit's `report` file is one.
+  - A `--resume` invocation's own `unusable` (`no-progress`, `progress-malformed`, `path-containment`, its
+    `usage-error`) removes nothing.
 
 ## The exit-code table
 
@@ -78,8 +89,16 @@ spliced into them — the object carries **no untrusted free text**.
 
 An option is `{id, label, argv, value}`:
 
-- `argv` — the flag delta to **append** to the ORIGINAL fresh invocation's `resume.argv`, with the literal
-  token `"<value>"` replaced by the human's answer. `argv: null` means "stop, do not re-invoke".
+- `argv` — the flag delta to **append** to the question's `resume.argv`, with the literal token `"<value>"`
+  replaced by the human's answer. `argv: null` means "stop, do not re-invoke". A question's `resume.argv` is
+  the ORIGINAL fresh invocation's argv MINUS the flags that question replaces (N3, GATE-2 round 2): for
+  `tests-unresolved` any `--tests <value>` pair is removed, because the original `--tests` is exactly what
+  did not resolve, and a repeated flag is read first-occurrence-wins (`--tests` beside `--no-tests` is a
+  `usage-error`). The other three `regress` questions remove nothing, because each fires only when the flag
+  it asks for was absent: `base-unresolved` without `--base`, and `install-unresolved` without `--install`
+  or `--no-install`. `no-gates` never follows an explicit `--gates`: that value is not style- or
+  e2e-filtered, so it either yields at least one gate or the runner refuses it (an empty token →
+  `unusable child-refused`, probed).
 - `value` — `null` (the option carries no answer, e.g. `--no-tests`) or `{kind}`, `kind` one of the closed
   `VALUE_KINDS`:
 
@@ -107,6 +126,14 @@ Keyed by stage; `regress` is the only member today.
 - **`question`** — `base-unresolved`, `no-gates` (its fixed text names all three causes a discovered set
   can empty into), `install-unresolved`, `tests-unresolved`.
 - **`refused`** — `missing-artifact`, `chain-red`, `plan-files-unparseable`, `scope-escaped`.
+  - **The `scope-escaped` remedy has a named blind spot (M3, GATE-2 round 2).** The remedy is to declare
+    the escaped path in `PLAN.md`'s `## Files` via `/pharn-plan`, or to revert the change. But `scope`
+    exempts this feature's own `PLAN.md` from the escape check (`--feature`, lessons L17), so a `PLAN.md`
+    whose `## Files` was rewritten to authorize a path already written — by the build, or by anyone after
+    it — then reads as declared, not escaped. Nothing else catches it: `check-plan-spec-agree.mjs` reads
+    only the PLAN's `spec_content_hash`, which a `## Files` edit does not move. A widening therefore rests
+    on a human reading that `PLAN.md` diff. The deterministic remedy, comparing the base and HEAD
+    `## Files`, is a follow-up named in `check-regress.mjs`'s honest-scope block.
 - **`unusable`** — `usage-error`, `no-feature`, `path-containment`, `unrepresentable-path`, `git-failed`,
   `child-crashed`, `child-refused`, `no-progress`, `progress-malformed`.
 
@@ -144,6 +171,30 @@ budgeted and the script runs to completion. `continue`'s own `resume.argv` is al
 resumed invocation reads everything else it needs from its own progress record, so the resume line itself
 carries no state.
 
+**The clock, stated exactly (GATE-2 round 2).** For `regress`, `elapsed` is measured from the top of the
+invocation's own entry point (`runFresh`/`runResume`), so a fresh invocation's opening fast work counts
+against the budget: argv, containment, the chain check, the base, the partition and head init. Before
+round 2 the clock started after head init, and that work went uncharged. Two bounds remain, named:
+
+- node's own startup and module loading before the entry point are not counted;
+- the fast work after the last permitted slow step is unbudgeted: `run --next`'s fingerprints, the
+  worktree checkout, base init, the verdict and the render.
+
+So the pinned `--timeout-ms 540000 --budget-ms 570000` keeps a run under the 600 s Bash cap only while
+that uncounted work fits the remaining 30 s. A second or later slow step ends by budget time 570 s. When
+the first slow step is the long one, it starts after the opening work and runs up to 540 s.
+
+**A kill mid-invocation (GATE-2 round 2).** For `regress`, a progress record is persisted at the top of
+every phase from "drain-head" through "verdict". A hard kill (a harness timeout, say) therefore leaves the
+record at the phase it interrupted, and `--resume` re-runs that phase from its start. That includes a kill
+during `git worktree add`: git leaves that worktree locked and half-populated, and the script
+force-removes it before re-adding (measured, and tested by killing a real `add` mid-checkout). What a kill
+still costs:
+
+- the interrupted phase's own work is repeated (a gate through `run-gates.mjs`'s stale-lock recovery, an
+  install from scratch);
+- the killed process group's orphans are `run-gates.mjs`'s existing named bound.
+
 ## Guarantee audit (P0)
 
 - **"The exit code names the status"** → **floor**: enum (the closed `{0,2,3,4,5}` table; anything else is
@@ -175,11 +226,20 @@ stage script shells (`check-regress.mjs`, `check-plan-spec-agree.mjs`), cited in
 and never re-derived here.
 
 **`done.verdict` and `continue.phase` accept any non-empty string (M6, GATE 2 review — named, not closed
-here).** Unlike `options[]`, neither is checked against a per-stage enum: `verdict` is the checker's own
-`check-regress.mjs verdict` output (an open string as far as THIS contract is concerned — the checker's own
-contract, `regression-report.md`, owns that vocabulary), and `phase` is a stage's own phase name, which
-this contract deliberately keeps generic across stages (P3 — closing it here would mean either threading a
-per-stage phase enum into this shared module, the exact per-stage-knowledge split `REGISTRY` exists to
-avoid, or hard-coding one stage's phase names into a module every future stage script shares). No `Fix:`
-was named for this finding, and no real failure motivates building one now (P7) — it is recorded so a
-reader does not mistake the silence for an oversight.
+here).** Unlike `options[]`, neither is checked against a per-stage enum.
+
+- `verdict` is the checker's own `check-regress.mjs verdict` output, whose vocabulary
+  `regression-report.md` owns.
+- `phase` is the stage's own phase name, whose `regress` set `stage-regress-core.mjs` owns.
+
+**The reason for deferring, corrected in GATE-2 round 2.** An earlier version said that closing this would
+put per-stage knowledge into this shared module, "the split `REGISTRY` exists to avoid". That was wrong.
+`REGISTRY` exists to HOLD per-stage vocabularies, keyed by stage (the `regress` question, refused and
+unusable sets). A per-stage verdict list and continue-phase list would follow the same pattern.
+
+What closing it would actually cost: `stage-exit-core.mjs` imports nothing, so each list would be a second
+copy of a vocabulary another module owns, and each would need a parity test against its owner (the M8
+precedent).
+
+No real failure motivates that now (P7). The deferral is recorded so the silence reads as a decision, not
+an oversight.

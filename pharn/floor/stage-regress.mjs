@@ -21,7 +21,8 @@
 // ==================================== THE BUDGET (`--budget-ms`) ====================================
 // A slow step (the base-commit INSTALL, or one gate `run --next`) starts only if it is the FIRST slow step
 // of THIS invocation, or `elapsed + timeoutMs <= budgetMs` (`stage-exit-core.mjs`'s `mayStartSlowStep`,
-// shared with a future verify stage script). Otherwise the script PERSISTS its progress
+// shared with a future verify stage script), `elapsed` measured from the top of `runFresh`/`runResume`
+// (see makeBudget: the opening fast work counts). Otherwise the script PERSISTS its progress
 // (`.pharn/pharn-regress/stage.json`, `stage-regress-core.mjs`'s `PROGRESS_SCHEMA`) and exits 5
 // `continue`. With no `--budget-ms` (a code caller), nothing is budgeted.
 //
@@ -199,6 +200,27 @@ function nulList(stdout) {
 }
 
 /** ------------------------------------------------------------------------------------------------
+ *  The base worktree's ONE clearing rule (A3 and N7, GATE-2 round 2), run by the fresh start AND by the
+ *  "worktree" phase before every `add`. `--force` is passed TWICE because a leftover can be LOCKED, and a
+ *  single `--force` refuses a locked worktree ("use 'remove -f -f' to override", measured):
+ *    • git itself locks a worktree "initializing" while `git worktree add` checks it out, so a hard kill
+ *      mid-add leaves it locked and half-populated (measured, with a slow smudge filter);
+ *    • GRILL G4's own scenario is a worktree someone locked on purpose.
+ *  Before this rule the fresh start's single `--force` failed on such a leftover, then its `rm -rf` of the
+ *  scratch root deleted the directory under a registration that stayed LOCKED — which `git worktree prune`
+ *  does not clear — so the next plain `add` failed ("use 'add -f -f' to override"), measured. The
+ *  directory is then removed outright (an unregistered leftover), and `prune` clears any unlocked
+ *  registration whose directory is gone. Every step is best-effort: an absent worktree is the normal case.
+ *  The path is this stage's own scratch, never a user worktree, and containment has already been walked
+ *  over `.pharn` and `.pharn/pharn-regress` (a symlink at `base` itself is removed as a link, never
+ *  followed). */
+function clearBaseWorktree() {
+  gitSync(["worktree", "remove", "--force", "--force", REGRESS_PATHS.base]);
+  rmSync(REGRESS_PATHS.base, { recursive: true, force: true });
+  gitSync(["worktree", "prune"]);
+}
+
+/** ------------------------------------------------------------------------------------------------
  *  The comma/newline list grammar `check-regress.mjs` parses (GRILL "unrepresentable-path"): a path
  *  containing a comma or a newline cannot be represented in that grammar and must be REFUSED, never
  *  mangled or silently split.
@@ -338,11 +360,10 @@ function phaseFreshEarly(feature) {
  *  without having falsified "no earlier verdict survives", which phaseFreshEarly already discharged.
  *  ---------------------------------------------------------------------------------------------- */
 function phaseFreshLate(cfg) {
-  // A leftover registered base worktree, pruned; then the scratch directory is cleared. One run per
-  // worktree at a time (GRILL G14) — a second fresh start destroys the first run's in-progress record,
-  // matching run-gates.mjs init's own recreate of <out>.
-  gitSync(["worktree", "remove", "--force", REGRESS_PATHS.base]);
-  gitSync(["worktree", "prune"]);
+  // A leftover base worktree — locked or not — is cleared (clearBaseWorktree); then the scratch directory
+  // is cleared. One run per worktree at a time (GRILL G14) — a second fresh start destroys the first run's
+  // in-progress record, matching run-gates.mjs init's own recreate of <out>.
+  clearBaseWorktree();
   rmSync(REGRESS_PATHS.root, { recursive: true, force: true });
   mkdirSync(REGRESS_PATHS.root, { recursive: true });
 
@@ -662,9 +683,16 @@ function persistProgress(state) {
  *  step must recurse back into `runPhases` after its promise settles, and a fresh `invocationStart`/
  *  `slowSteps` pair created on that re-entry would silently reset the "first slow step of THIS
  *  invocation" clock mid-invocation — exactly the bug `mayStartSlowStep`'s contract forbids. `runFresh`/
- *  `runResume` create ONE tracker and thread it through every call and every recursive continuation. */
-function makeBudget(state) {
-  const invocationStart = Date.now();
+ *  `runResume` create ONE tracker and thread it through every call and every recursive continuation.
+ *
+ *  THE CLOCK (GATE-2 round 2): `invocationStart` is taken by the CALLER as its very first statement, so
+ *  `elapsed` counts the invocation's own opening fast work — for a fresh run: argv, containment, the chain
+ *  check, base resolution, the partition and head init — against the budget. Module loading before
+ *  `runFresh`/`runResume` is still not counted (a named bound: node startup plus this file's imports).
+ *  Before round 2 the clock started HERE, after head init, so that opening work was never charged: with
+ *  the pinned 540000/570000 a second slow step could still start at wall time (opening work) + 30 s and
+ *  end past the 600 s Bash cap. PLAN.md:134's wall-time bound assumed a process-start clock. */
+function makeBudget(state, invocationStart) {
   let slowSteps = 0;
   return {
     may: () =>
@@ -684,13 +712,19 @@ function runPhases(state, budget) {
   // A3 (GATE 2 review) — persist a checkpoint at the TOP of every phase from here through "verdict", not
   // only at a budget-exhausted `continue`. PLAN.md:140 promised "a harness kill … leaves the record at
   // that step. --resume re-runs it"; before this fix the record was written ONLY at the three
-  // budget-exhausted call sites, so a hard kill anywhere else (mid-`git worktree add`, mid-install before
-  // its OWN budget check, mid-base-init, or after "drain-base" finishes but before the verdict is
-  // computed) lost the whole run — every completed gate included — and `--resume` failed `git-failed`
-  // over a base worktree that already existed. "cleanup" and "render" are DELIBERATELY excluded (M9):
-  // both are synchronous, idempotent to redo from "verdict" (re-running `check-regress.mjs verdict` over
-  // the same, already-durable stamps reproduces the same report), and neither is ever a legitimate
-  // resume target — see `RESUMABLE_PHASES`.
+  // budget-exhausted call sites, so a hard kill anywhere else lost the whole run, every completed gate
+  // included. The checkpoint alone did NOT make a kill mid-`git worktree add` resumable (round 1 claimed it
+  // did; measured otherwise at the re-review): the record then names "worktree", and a plain `add` fails on
+  // the half-created, git-LOCKED leftover. GATE-2 round 2 closes that — the "worktree" phase clears the path
+  // first (clearBaseWorktree), which makes the phase safe to re-run; `stage-regress.test.mjs` kills a real
+  // `add` mid-checkout and resumes it to `done`.
+  // What a kill still costs, stated: the phase it interrupted re-runs from its start (a gate through
+  // run-gates.mjs's own stale-lock recovery, the install from scratch in the existing worktree), and the
+  // killed process group's orphans are run-gates.mjs's existing named bound.
+  // "cleanup" and "render" are DELIBERATELY excluded (M9): the record stays parked at "verdict" until the
+  // run ends, so a kill in either re-runs verdict, cleanup and render. That is safe to redo: the verdict is
+  // re-derived from the same, already-durable stamps, and cleanup reports success when no worktree is left
+  // behind (N2, round 2 — before it, a re-run reported a removal failure that had not happened).
   if (state.phase === "drain-head") {
     persistProgress(state);
     if (drain(state, budget, REGRESS_PATHS.head) === "budget") {
@@ -701,6 +735,7 @@ function runPhases(state, budget) {
 
   if (state.phase === "worktree") {
     persistProgress(state);
+    clearBaseWorktree(); // a no-op on a fresh run; on a resumed one, clears a half-added, locked leftover (A3)
     const r = gitSync(["worktree", "add", "--detach", REGRESS_PATHS.base, state.base]);
     if (!r.ok)
       emitUnusable(state.feature, "git-failed", `git worktree add --detach ${REGRESS_PATHS.base} ${state.base} failed: ${r.stderr}`);
@@ -809,8 +844,17 @@ function runPhases(state, budget) {
   }
 
   if (state.phase === "cleanup") {
+    // A SINGLE `--force`, on purpose: a worktree someone LOCKED is left in place and reported (GRILL G4) —
+    // the end of a run never force-unlocks it. The NEXT fresh start clears it (clearBaseWorktree's double
+    // force); before GATE-2 round 2 that next start failed on it instead (N7).
+    // N2 (round 2): a failed removal with NO directory left behind is not a failure. That is a re-run of
+    // this phase after a kill or crash in "render" (the record stays parked at "verdict"), where the earlier
+    // invocation already removed the worktree; `prune` clears any stale registration.
     const r = gitSync(["worktree", "remove", "--force", REGRESS_PATHS.base]);
-    state.cleanupResult = r.ok ? { ok: true } : { ok: false, error: r.stderr || "git worktree remove failed" };
+    const left = lstatSafe(REGRESS_PATHS.base);
+    const gone = left.ok && left.stat === null;
+    if (!r.ok && gone) gitSync(["worktree", "prune"]);
+    state.cleanupResult = r.ok || gone ? { ok: true } : { ok: false, error: r.stderr || "git worktree remove failed" };
     state.phase = "render";
   }
 
@@ -844,6 +888,7 @@ function runPhases(state, budget) {
  *  FRESH entry point.
  *  ---------------------------------------------------------------------------------------------- */
 function runFresh(args) {
+  const invocationStart = Date.now(); // the budget clock — FIRST, so the opening fast work is charged (makeBudget)
   const feature = extractFeature(args);
   phaseFreshEarly(feature); // F2/GRILL G1 — containment + stale-report removal, before any other argv check
   const cfg = parseRestOfArgv(args, feature);
@@ -865,13 +910,14 @@ function runFresh(args) {
     cleanupResult: null,
     phase: "drain-head",
   };
-  return runPhases(state, makeBudget(state));
+  return runPhases(state, makeBudget(state, invocationStart));
 }
 
 /** ------------------------------------------------------------------------------------------------
  *  RESUME entry point. Accepts ONLY --budget-ms; reads everything else from the progress record.
  *  ---------------------------------------------------------------------------------------------- */
 function runResume(args) {
+  const invocationStart = Date.now(); // the budget clock — FIRST (makeBudget)
   // M7(c) — iterate BY INDEX, not by value: `args.indexOf(a)` always finds the FIRST occurrence of that
   // exact string, so a stray DUPLICATE number (e.g. `--resume --budget-ms 100 100`) wrongly read the
   // first "100"'s preceding token for every later "100" too, letting a genuine extra positional argument
@@ -911,7 +957,7 @@ function runResume(args) {
   const state = { ...parsed };
   delete state.schema;
   if (budgetOverride !== undefined) state.budgetMs = budgetOverride;
-  return runPhases(state, makeBudget(state));
+  return runPhases(state, makeBudget(state, invocationStart));
 }
 
 async function main(argv) {

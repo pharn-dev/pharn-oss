@@ -105,6 +105,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     base still precede it), and it names the actual count of gates classified `pre_existing`, never an
     unconditional "every base gate went red". Read by no machine consumer either way. This increment
     neither creates nor closes it (amendment A2).
+  - **Resuming after a kill, and the budget clock (GATE-2 review rounds 1–2).**
+    - The script persists its progress at the top of every phase from `drain-head` through `verdict`, not
+      only at a budget stop. So a hard kill (a Bash-tool timeout, say) leaves a checkpoint, and `--resume`
+      re-runs only the interrupted phase. The command now routes a Bash-tool timeout to that one resume.
+    - That includes a kill during the base worktree's `git worktree add`. git leaves the new worktree
+      locked and half-populated, and the script now removes it with a double `--force` before re-adding;
+      a test kills a real `add` mid-checkout and resumes it to `done`.
+    - The same clearing lets the next fresh start remove a base worktree someone locked, which it
+      previously failed on with `git-failed`.
+    - A resumed run no longer reports a worktree-removal failure that did not happen.
+    - The budget's `elapsed` now starts at the top of the invocation, so its opening fast work counts
+      against `--budget-ms`. Node's startup, and the fast work after the last permitted slow step, stay
+      uncounted — a named bound in `stage-exit.md`.
 
 ## [6.22.0] - 2026-09-25
 

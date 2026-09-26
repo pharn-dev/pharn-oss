@@ -8,7 +8,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, symlinkSync, copyFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, symlinkSync, copyFileSync, chmodSync } from "node:fs";
 import { execFileSync, spawnSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -704,7 +704,15 @@ test("A3 — a hard SIGKILL mid-run, under an unexhausted budget, still leaves a
       [CLI, "--feature", FEATURE, "--timeout-ms", "60000", "--budget-ms", "600000", "--base", base, "--install", "sleep 3 && true"],
       { cwd: dir, env: CLEAN_ENV, stdio: "ignore" }
     );
-    await new Promise((resolve) => setTimeout(resolve, 800)); // well past drain-head/worktree; mid-"sleep 3"
+    // Wait for the INSTALL to have started (spawnGate opens install.out first), so the kill lands mid-"sleep
+    // 3", past drain-head and worktree, by construction. A fixed 800 ms sleep here was a timing assumption:
+    // under a loaded full `npm test` (GATE-2 round 2's verify re-run, 141 s wall) the run had not yet reached
+    // drain-head's first checkpoint at 800 ms, and this test failed for that reason alone.
+    const t0 = Date.now();
+    while (!existsSync(join(dir, REGRESS_PATHS.root, "install.out")) && Date.now() - t0 < 60000) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    assert.ok(existsSync(join(dir, REGRESS_PATHS.root, "install.out")), "the run never reached the install step within 60 s");
     child.kill("SIGKILL");
     await new Promise((resolve) => child.once("exit", resolve));
 
@@ -737,6 +745,132 @@ test("A3 — a hard SIGKILL mid-run, under an unexhausted budget, still leaves a
     // reached by killing the stage script directly; give it time to exit on its own before cleanup.
     await new Promise((resolve) => setTimeout(resolve, 2500));
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// A3 (GATE-2 round 2) — the kill window the re-review measured still open after round 1: a hard kill DURING
+// `git worktree add`. git locks the new worktree "initializing" while it checks the files out, so the kill
+// leaves it registered, LOCKED and half-populated; the record names "worktree", and a plain re-`add` failed
+// `git-failed` ("already exists"). The checkout is made slow with a smudge filter on one committed file, and
+// the whole process group is killed, as a harness kill would. The edit that turns this red: dropping
+// `clearBaseWorktree()` from the "worktree" phase (measured: exit 2 `git-failed`).
+test("A3 (round 2) — a hard kill DURING `git worktree add` leaves git's own lock; --resume clears it and reaches done", async () => {
+  const { dir } = repo();
+  try {
+    writeFileSync(join(dir, ".gitattributes"), "*.slow filter=slow\n");
+    writeFileSync(join(dir, "x.slow"), "x\n");
+    execFileSync("git", ["add", "-A"], { cwd: dir });
+    execFileSync("git", ["commit", "-q", "-m", "slow checkout"], { cwd: dir });
+    const base = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
+    execFileSync("git", ["config", "filter.slow.clean", "cat"], { cwd: dir });
+    execFileSync("git", ["config", "filter.slow.smudge", "sleep 30; cat"], { cwd: dir });
+    writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport function id(x){return x;}\n");
+
+    const child = spawn(process.execPath, [CLI, ...freshArgs(base)], { cwd: dir, env: CLEAN_ENV, stdio: "ignore", detached: true });
+    const t0 = Date.now();
+    while (!existsSync(join(dir, REGRESS_PATHS.base)) && Date.now() - t0 < 30000) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000)); // inside the smudge filter's sleep: mid-checkout
+    process.kill(-child.pid, "SIGKILL");
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const rec = JSON.parse(readFileSync(join(dir, REGRESS_PATHS.stageJson), "utf8"));
+    assert.equal(rec.phase, "worktree", "the kill must land in the worktree phase — the scenario under test");
+    assert.match(
+      execFileSync("git", ["worktree", "list", "--porcelain"], { cwd: dir, encoding: "utf8" }),
+      /pharn-regress\/base[\s\S]*?\nlocked/,
+      "precondition: git left the half-added worktree LOCKED"
+    );
+
+    execFileSync("git", ["config", "--unset", "filter.slow.smudge"], { cwd: dir }); // the re-add must not sleep again
+    const r = cli(dir, ["--resume"]);
+    assert.equal(r.code, 0, r.raw);
+    assert.equal(r.json.status, "done");
+    assert.equal(r.json.verdict, "no-regressions");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// N2 (GATE-2 round 2) — "cleanup" and "render" re-run from a record parked at "verdict". A render that
+// crashes AFTER cleanup already removed the worktree (the feature directory made read-only) leaves the
+// record at "verdict"; the resumed run's cleanup finds nothing left to remove. Before round 2 it reported
+// "removing the base worktree FAILED" for a removal that had succeeded (measured).
+test("N2 (round 2) — a render crash after cleanup: the resumed run reports NO cleanup failure", (t) => {
+  if (typeof process.getuid === "function" && process.getuid() === 0) {
+    t.skip("root ignores directory write permissions, so the render cannot be made to fail this way");
+    return;
+  }
+  const { dir, base } = repo();
+  const featureDir = join(dir, FEATURES, FEATURE);
+  try {
+    writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport function id(x){return x;}\n");
+    chmodSync(featureDir, 0o555);
+    let r = cli(dir, freshArgs(base));
+    assert.equal(r.code, 1, `the render into a read-only feature directory must crash — the scenario under test: ${r.raw}`);
+    assert.ok(!existsSync(join(dir, REGRESS_PATHS.base)), "precondition: cleanup removed the worktree before render crashed");
+    assert.equal(JSON.parse(readFileSync(join(dir, REGRESS_PATHS.stageJson), "utf8")).phase, "verdict");
+
+    chmodSync(featureDir, 0o755);
+    r = cli(dir, ["--resume"]);
+    assert.equal(r.code, 0, r.raw);
+    assert.equal(r.json.status, "done");
+    assert.doesNotMatch(readFileSync(join(dir, r.json.render), "utf8"), /removing the base worktree FAILED/);
+  } finally {
+    chmodSync(featureDir, 0o755);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// THE BUDGET CLOCK (GATE-2 round 2) — `elapsed` is measured from the top of runFresh, so the opening fast
+// work counts. A PATH shim makes exactly one call slow: phaseBase's `git status --porcelain` (no --base, a
+// dirty tree). With a 2 s window (budget − timeout), 3 s of opening work alone forbids the SECOND head gate,
+// so the fresh invocation continues at "drain-head". Under the pre-round-2 clock (started after head init),
+// elapsed after a sub-second first gate fits the window and the second gate started (the edit that turns
+// this red: moving `invocationStart` back into makeBudget). Control: the same shim under a 60 s window runs
+// through to `done`, so the stop above is the budget's, not the shim's.
+test("budget clock (round 2) — the opening fast work counts against --budget-ms", () => {
+  const shimDir = mkdtempSync(join(tmpdir(), "sr-gitshim-"));
+  const realGit = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
+  writeFileSync(
+    join(shimDir, "git"),
+    `#!/bin/sh\nif [ "$#" -eq 2 ] && [ "$1" = status ] && [ "$2" = --porcelain ]; then sleep 3; fi\nexec "${realGit}" "$@"\n`
+  );
+  chmodSync(join(shimDir, "git"), 0o755);
+  const env = { ...CLEAN_ENV, PATH: `${shimDir}:${CLEAN_ENV.PATH}` };
+  const run = (dir, budgetMs) => {
+    const r = spawnSync(
+      process.execPath,
+      [CLI, "--feature", FEATURE, "--timeout-ms", "30000", "--budget-ms", String(budgetMs), "--no-install"],
+      { cwd: dir, encoding: "utf8", env }
+    );
+    let json = null;
+    try {
+      json = JSON.parse(r.stdout);
+    } catch {
+      /* a crash path */
+    }
+    return { code: r.status, json, raw: (r.stdout || "") + (r.stderr || "") };
+  };
+  const dirs = [];
+  try {
+    for (const budgetMs of [32000, 90000]) {
+      const { dir } = repo({ scripts: { test: "node --test", typecheck: "true" } });
+      dirs.push(dir);
+      writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport function id(x){return x;}\n");
+      const r = run(dir, budgetMs);
+      if (budgetMs === 32000) {
+        assert.equal(r.code, 5, r.raw);
+        assert.equal(r.json.phase, "drain-head", "3 s of opening work alone must exhaust a 2 s window after the first gate");
+      } else {
+        assert.equal(r.code, 0, `control: a 60 s window must run through: ${r.raw}`);
+        assert.equal(r.json.status, "done");
+      }
+    }
+  } finally {
+    for (const d of dirs) rmSync(d, { recursive: true, force: true });
+    rmSync(shimDir, { recursive: true, force: true });
   }
 });
 
@@ -798,6 +932,21 @@ test("GRILL G4: a LOCKED base worktree cannot be removed (needs a second --force
     assert.match(readFileSync(join(dir, r.json.render), "utf8"), /removing the base worktree FAILED/);
     // The verdict itself is UNAFFECTED by the cleanup failure.
     assert.equal(r.json.verdict, "no-regressions");
+
+    // N7 (GATE-2 round 2) — the render promises "the next fresh start removes the leftover worktree". Before
+    // clearBaseWorktree, that next start's single --force failed on the still-LOCKED leftover, its rm -rf then
+    // deleted the directory under a locked registration prune does not clear, and the plain `add` failed
+    // `git-failed` (measured). The worktree is still locked here: this run is that next fresh start. The edit
+    // that turns this red is dropping clearBaseWorktree from BOTH call sites — the fresh start's and the
+    // "worktree" phase's — because either one alone clears this leftover (measured with each mutant).
+    assert.match(
+      execFileSync("git", ["worktree", "list", "--porcelain"], { cwd: dir, encoding: "utf8" }),
+      /pharn-regress\/base[\s\S]*?\nlocked/,
+      "precondition: the leftover base worktree is still locked when the next fresh start begins"
+    );
+    const next = cli(dir, freshArgs(base));
+    assert.equal(next.code, 0, next.raw);
+    assert.equal(next.json.status, "done");
   } finally {
     try {
       execFileSync("git", ["worktree", "unlock", REGRESS_PATHS.base], { cwd: dir, stdio: "ignore" });
