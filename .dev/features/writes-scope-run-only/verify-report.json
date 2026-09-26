@@ -6,10 +6,10 @@
     "lint:md": 0,
     "reconcile": 0,
     "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": 0,
-    "test": 1,
+    "test": 0,
     "validate": 0
   },
-  "verdict": "FAIL",
-  "failing_gates": ["test"],
+  "verdict": "PASS",
+  "failing_gates": [],
   "verifiers": { "registered": 0, "findings": [] }
 }

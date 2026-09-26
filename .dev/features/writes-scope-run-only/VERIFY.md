@@ -1,4 +1,44 @@
-# VERIFY — writes-scope-run-only (after the re-review fixes, R1–R4)
+# VERIFY — writes-scope-run-only
+
+## After the human apply: VERIFY PASSES (the standing verdict)
+
+- stage: `/pharn-dev-verify` — opus — set by the maintainer's instruction, overriding pharn.config.json's
+  sonnet for build/regress/verify; routed via Agent subagent; effort not routed
+- run: at `093ad54`, the maintainer's own commit of the reviewed patch (`feat(hooks): the write guard is
+fail-closed only while PHARN is working (human-applied)`), made by `proposed/apply.sh` in this worktree
+  after it fast-forwarded to `e607bcb`. That commit sits on top of the re-check. The working tree was clean.
+  `shasum -a 256 -c proposed/human-only.sha256` reads OK for all three human-only files, so the bytes that
+  landed are the bytes the runner verified.
+- epoch: `apply.sh` re-ran the PLAN setter and re-anchored after its commit, `--by
+writes-scope-run-only-apply`, epoch `2026-09-26T12:40:34.400Z` over 2339 paths. So
+  `reconcile --require-baseline` had a baseline to read.
+- how it ran: Step 1's pinned gates as one node runner under `.pharn/pharn-dev-verify/` (argv arrays, exit
+  codes only), then `check-verify.mjs .pharn/pharn-dev-verify/results.json --feature writes-scope-run-only`
+
+| gate                                                                                         | exit |
+| -------------------------------------------------------------------------------------------- | ---- |
+| `test` (`npm test` — the full hermetic suite, 3581 tests)                                    | 0    |
+| `validate` (`pharn/floor/validate.mjs .`)                                                    | 0    |
+| `lint` (`npm run lint` — eslint)                                                             | 0    |
+| `format:check` (`npm run format:check` — prettier, whole-repo)                               | 0    |
+| `lint:md` (`npm run lint:md` — markdownlint, whole-repo)                                     | 0    |
+| `structural:…/expected-injection-comment.json` (the trust-fence committed eval pair)         | 0    |
+| `reconcile` (`check-bash-reconcile.mjs --require-baseline` — the fix #7 Bash-write detector) | 0    |
+
+`check-verify.mjs` exited **0**, `"verdict": "PASS"`, `"failing_gates": []`. `npm test` reported `tests 3581,
+pass 3581, fail 0` (0 cancelled, skipped or todo). The 41 tests the runs below expected to fail assert the
+patched guard, and they now run against the patched hooks and pass. `reconcile` read `CLEAN` under the
+apply epoch, with 0 paths reconciled: the tree is still at the state `apply.sh` anchored.
+
+`verify-report.json` now holds this run: its `feature`, `gates`, `verdict` and `failing_gates` deep-equal
+the helper's output, and `verifiers` reads `registered: 0`. The expected-FAIL runs below are kept as
+written. Their report is in git history at `d24b282`, with the same gate map except `"test": 1`, `"verdict":
+"FAIL"` and `"failing_gates": ["test"]`.
+
+## Earlier runs, kept: the designed expected-FAIL before the human apply
+
+The three sections below are the records written before the apply, unchanged except for one heading, which
+now says which run its gate table belongs to.
 
 ## The reconcile reading before the merge of `origin/main` (recorded first, before anything moved)
 
@@ -35,7 +75,7 @@ the epoch is re-opened after the merge (see below) — and this reading is what 
 - how it ran: Step 1's pinned gates as one node runner under `.pharn/pharn-dev-verify/` (argv arrays,
   exit codes only), then `check-verify.mjs .pharn/pharn-dev-verify/results.json --feature writes-scope-run-only`
 
-## Gate → exit code
+## Gate → exit code, before the human apply (after the re-review fixes)
 
 | gate                                                                                         | exit |
 | -------------------------------------------------------------------------------------------- | ---- |
@@ -161,18 +201,16 @@ No Bash write in this pass reached a path the live guards would have denied. The
 in-repo file, a `sed -i` in `enforce-writes-scope.test.cjs`, is one of the 10 and is inside the scope
 (`BUILD.md` declares it).
 
-## Verifiers
+## Verifiers (both runs)
 
 No verifiers registered — floor gates only. `node pharn/floor/count-verifiers.mjs .` →
-`{"registered":0,"verifiers":[]}`. `verify-report.json` needed no rewrite. Its `feature`, `gates`,
-`verdict` and `failing_gates` deep-equal this run's `check-verify.mjs` output, and its `verifiers` block
-reads `registered: 0`.
+`{"registered":0,"verifiers":[]}`, read again for the run after the apply.
 
-## The honest residual
+## The honest residual (both runs)
 
 Verified = the named gates passed; this is NOT a guarantee of correctness beyond what those gates check —
-verifier concerns are advisory help, not assurance. Here the claim is narrower still: `test` did **not** pass,
-by design, because the human-only half of this increment has not been applied. The floor verdict, `FAIL`, is
-the correct deterministic reading of the tree as it stands. It should read `PASS` once `proposed/apply.sh`
-lands the patch in this worktree and this stage re-runs there (`/pharn-dev-verify` again, not
-`/pharn-dev-regress` — L17).
+verifier concerns are advisory help, not assurance. Before the human apply, `test` did **not** pass, by
+design: the human-only half of this increment had not been applied, and `FAIL` was the correct
+deterministic reading of that tree. These records said it should read `PASS` once `proposed/apply.sh` landed
+the patch in this worktree and this stage re-ran there (`/pharn-dev-verify` again, not `/pharn-dev-regress` —
+L17). It did land, as `093ad54`, and the re-run reads `PASS`.
