@@ -263,6 +263,21 @@ an unattended `/pharn-loop` iteration can now stop here — most commonly a `pac
 lockfile (small projects and libraries often have none), or a feature whose test universe is genuinely
 empty. See CHANGELOG [6.23.0] for the full disclosure.
 
+**`/pharn-verify`'s stage-exit mapping (since `stage-verify-script`, 6.26.0).** `/pharn-verify` is now a thin
+caller of `pharn/floor/stage-verify.mjs`, which reports through the same protocol and maps by the same rule; a
+closure test requires every `verify` `question` code to be named here:
+
+- `question no-gates` → **S4** (no `--gates`, and no allowlisted script or no `package.json` — S4's own trigger);
+- `refused` (`missing-artifact`, `chain-red`, `plan-files-unparseable`) and `unusable` → **S9**;
+- a crash (an exit outside `{0, 2, 3, 4, 5}`) → **S9**;
+- `continue` is handled **inside** `/pharn-verify` (it re-runs the pinned resume line itself) and never reaches the
+  loop as a stuck point; a `done` exit's verdict is read from `verify-report.json` by `check-loop.mjs`, as before.
+- **New S9 stops as of 6.26.0 (the A7 disclosure, GRILL G5):** a crashed `check-build-complete.mjs` is `unusable
+child-crashed` (before, it read `INCOMPLETE`, which `check-loop.mjs` CONTINUEs — a rebuild iteration, up to the
+  cap); a runner refusal, a lapse included, is `unusable child-refused` (before, a fail-closed report that
+  `check-loop-fresh.mjs` B could route to one re-run); and an unparseable `## Files` is `refused
+plan-files-unparseable` (before, the gates ran and the verdict read `INCONCLUSIVE`). See CHANGELOG [6.26.0].
+
 **S9 and S11 are different failures, and the difference decides the row.** S9 is a stage that **says** it
 refused. S11 is evidence on disk that does not match the tree, whatever the stages said: a skipped or
 half-run stage, a report or stamp from an earlier iteration, or a report its own stamp does not reproduce.
@@ -289,7 +304,7 @@ agent** — on the model `models.stages` resolves for it. **The model is routed;
 takes no effort, so a routed stage runs at the effort it inherits. The protocol is
 `pharn/floor/stage-agent-core.mjs`'s header, cited here, not restated (P4). Here `/pharn-spec`, `/pharn-plan`,
 `/pharn-grill`, `/pharn-test` and `/pharn-build` (every iteration) are routed. `/pharn-regress` and
-`/pharn-verify` run inline by policy, exactly as before 6.27.0, so the stage-exit mapping above is unchanged.
+`/pharn-verify` run inline by policy, exactly as before 6.27.0, so their stage-exit mappings above are unchanged.
 
 Each routed stage carries its pinned lines in this order, and you run them in this order:
 
