@@ -49,8 +49,8 @@
 // (exit 1) and INCOMPLETE (exit 3) would become UNREACHABLE — which silently disables /pharn-ship Step
 // 2b's single bounded rebuild (/pharn-ship "Step 2b — The single build-completion retry", reachable only from
 // INCOMPLETE) and collapses check-loop.mjs's `v ∈ {FAIL, INCOMPLETE}` distinction (its DECISION table and
-// VERIFY_VERDICTS). `reconcile` is the opposite case and IS a gate — it already is one today (/pharn-verify Step 3c:
-// "The runner injects `reconcile` itself, always LAST").
+// VERIFY_VERDICTS). `reconcile` is the opposite case and IS a gate — `orderEntries` below injects it itself, always
+// LAST, for every verify run (since 6.26.0 through pharn/floor/stage-verify.mjs, which the thin /pharn-verify pins).
 //
 // TRUST (P2): every operand here is a string or an integer from deterministic tooling — gate ids, exit
 // codes, hex digests, paths. Gate stdout/stderr are UNTRUSTED free text and this module never reads
@@ -65,9 +65,9 @@
  *  ---------------------------------------------------------------------------------------------- */
 
 /** The project-gate allowlist, IN RUN ORDER. The commands keep prose copies because a user reads the command:
- *  the brace-delimited enumeration in /pharn-verify's Step 3a and /pharn-regress's "Reference — gate discovery
- *  and classification" section (since 6.23.0's stage-regress-script moved the discovery LOGIC into tested code,
- *  this prose copy is now informational only, not a branch the command itself takes), pinned member for
+ *  the brace-delimited enumeration in the "Reference" sections of /pharn-verify and /pharn-regress (since
+ *  6.23.0's stage-regress-script and 6.26.0's stage-verify-script moved the discovery LOGIC into tested code,
+ *  both prose copies are informational only, not a branch either command takes), pinned member for
  *  member by a ✧ parity test (gate-run-core.test.mjs), which also pins regress's "minus the e2e ids" clause to
  *  E2E_SET. /pharn-ship's former third copy is retired to a citation (L35). */
 export const ALLOWLIST = Object.freeze(["test", "lint", "format:check", "lint:md", "typecheck", "type-check", "build", "test:e2e", "e2e"]);
@@ -312,7 +312,8 @@ export function discoverGates(scripts) {
  *  `--extra` — model-supplied structural gates, narrowly shaped. The ONLY extra form is
  *  `structural:<expected>`, and its argv is DERIVED here, never supplied (GRILL R5): `<actual>` is the
  *  `findings.json` colocated with the capability directory that owns `<expected>`, per
- *  pharn-contracts/finding-shape.md's emission contract and matching /pharn-verify Step 3b today.
+ *  pharn-contracts/finding-shape.md's emission contract — the same pairing stage-verify-core.mjs's EVAL_PAIR_RULE
+ *  applies when it chooses which expected paths to hand in (6.26.0).
  *  Leaving `<actual>` to the caller would keep a model-typed operand inside the one feature-specific
  *  gate — the exact thing this module exists to remove.
  *  ---------------------------------------------------------------------------------------------- */

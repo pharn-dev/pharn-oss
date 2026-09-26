@@ -2,7 +2,7 @@
 name: stage-exit
 trust: trusted
 layer: pharn-contracts
-purpose: "Single source of truth for the stage-exit protocol a stage SCRIPT (pharn/floor/stage-regress.mjs today; a future stage-verify.mjs) uses to report its outcome: the JSON envelope, the exit-code table, and the closed question/answer round trip. Schema only, zero behavior (P3, pharn/ARCHITECTURE.md §4). Code half: pharn/floor/stage-exit-core.mjs."
+purpose: "Single source of truth for the stage-exit protocol a stage SCRIPT (pharn/floor/stage-regress.mjs, pharn/floor/stage-verify.mjs) uses to report its outcome: the JSON envelope, the exit-code table, and the closed question/answer round trip. The registry is keyed by stage; each stage script adds its own entry. Schema only, zero behavior (P3, pharn/ARCHITECTURE.md §4). Code half: pharn/floor/stage-exit-core.mjs."
 ---
 
 # Contract — stage-exit
@@ -18,8 +18,9 @@ and into a tested script, `pharn/floor/stage-regress.mjs`. A script that can pau
 structured question, or refuse needs **one** way to say so — otherwise each new stage script would invent
 its own shape, and a thin command reading it would re-derive a protocol from prose again, which is the
 exact class of defect `pharn/floor/gate-run-record.md` closed for the gate-run stamp (P7, cited not
-restated). This contract is that one shape, **keyed by stage** so a second stage script (roadmap Phase
-1.2's `stage-verify.mjs`) adds a registry entry, not a new file.
+restated). This contract is that one shape, **keyed by stage**: each stage script adds its own registry entry,
+not a new file — `stage-verify-script` (6.26.0) added `verify` that way. The mechanics both scripts share (the
+argv rules, the containment walk, the budget tracker, the drain) live once, in `pharn/floor/stage-runtime.mjs`.
 
 ## The envelope
 
@@ -29,7 +30,7 @@ Every deliberate exit prints **exactly one** `pharn-stage-exit/1` JSON object on
 {
   "schema": "pharn-stage-exit/1",
   "status": "done | refused | question | continue | unusable",
-  "stage": "regress",
+  "stage": "regress | verify",
   "feature": "<slug> | null"
 }
 ```
@@ -64,6 +65,23 @@ requires must be present, and no key outside that status's set may appear.
   - None of that is a verdict; only a `done` exit's `report` file is one.
   - A `--resume` invocation's own `unusable` (`no-progress`, `progress-malformed`, `path-containment`, its
     `usage-error`) removes nothing.
+  - **A removal that fails** for any reason other than absence is a crash (exit 1, no document), never a `2`
+    (since 6.26.0's GATE 2 fix — both stage scripts remove through `stage-runtime.mjs`'s `removeIfPresent`, where
+    only `ENOENT` is absence). Before, `regress` swallowed every unlink error, so an unremovable earlier
+    `regression-report.json` survived beside a later `unusable`, and the two bullets above did not hold for it.
+
+  For `verify` (6.26.0), in the script's own order — the stage's scratch is cleared BEFORE the rest of argv is
+  validated, which is the one difference from `regress` above (the removal rule is the same, shared):
+  - **Before the slug parses, or at `path-containment` itself**, nothing has been removed: an earlier
+    `verify-report.json`, `VERIFY.md` and progress record survive together.
+  - **Any later `unusable`** (a `usage-error` from the rest of argv included) has removed THIS feature's earlier
+    report and render AND cleared `.pharn/pharn-verify/`, its progress record first. From the runner's `init` on,
+    this run's `gates/` may exist, and from "drain" on this run's own progress record.
+  - **A `--resume`'s own stop** removes nothing, but may follow gates it ran, whose logs stay.
+  - **A removal that fails** for any reason other than absence is a crash (exit 1, no document), never a `2` — so
+    no refusal and no `unusable` can follow a removal that did not happen.
+  - The one window left for an earlier run's record to outlive its removed report: a kill between the report
+    removal and the record's unlink.
 
 ## The exit-code table
 
@@ -98,7 +116,9 @@ An option is `{id, label, argv, value}`:
   it asks for was absent: `base-unresolved` without `--base`, and `install-unresolved` without `--install`
   or `--no-install`. `no-gates` never follows an explicit `--gates`: that value is not style- or
   e2e-filtered, so it either yields at least one gate or the runner refuses it (an empty token →
-  `unusable child-refused`, probed).
+  `unusable child-refused`, probed). `verify`'s one question, `no-gates`, removes nothing either: it fires only
+  on the runner's own empty source set, which an explicit `--gates` never reaches, so its `resume.argv` is the
+  original argv, unchanged.
 - `value` — `null` (the option carries no answer, e.g. `--no-tests`) or `{kind}`, `kind` one of the closed
   `VALUE_KINDS`:
 
@@ -121,7 +141,7 @@ answer on re-invocation** — a shape check on an argv flag is not a one-time tr
 
 ## The `regress` vocabulary
 
-Keyed by stage; `regress` is the only member today.
+Keyed by stage; `regress` and `verify` are its members.
 
 - **`question`** — `base-unresolved`, `no-gates` (its fixed text names all three causes a discovered set
   can empty into), `install-unresolved`, `tests-unresolved`.
@@ -145,6 +165,30 @@ Step 2 table, not restated here):
 - `refused` and `unusable` → S9;
 - a crash (an exit outside the table) → S9;
 - `continue` is handled inside the thin command (it re-runs the resume line) and never reaches the loop.
+
+## The `verify` vocabulary (6.26.0, `stage-verify-script`)
+
+- **`question`** — `no-gates` only. Its fixed text names verify's one cause (no `--gates`, and `package.json` absent
+  or declaring none of the allowlisted scripts) and the caveat the AC gate makes true: for a SPEC written from the
+  template, a gate named with `--gates` is not the discovered `npm run <id>` the AC-test lock pinned
+  (`test-infra-changed` / `ac-untested`), so adding the missing script is the better answer there. Options:
+  `--gates <value>` (`gates-spec`) or stop.
+- **`refused`** — `missing-artifact`, `chain-red`, `plan-files-unparseable`. Each writes `VERIFY.md` naming the
+  refusal and **no** `verify-report.json`.
+- **`unusable`** — `usage-error`, `no-feature`, `path-containment`, `git-failed`, `child-crashed`, `child-refused`,
+  `no-progress`, `progress-malformed`. `child-crashed` covers a shelled checker that crashed (the chain check, the
+  verifier count, the verdict call whose exit disagrees with its printed verdict) AND a completeness capture that
+  is not the checker's shape — a crashed `check-build-complete.mjs` is refused here, before any gate runs, never
+  read as an incomplete build. `child-refused` is the runner refusing, a lapse (`lock-busy`,
+  `tree-changed-between-gates`, …) included: inside one script those lapses need a concurrent process or an
+  external writer, so stopping is the fail-closed direction.
+
+`/pharn-loop`'s mapping for `verify` follows the same rule as `regress`: `question no-gates` → S4; `refused` and
+`unusable` → S9; a crash → S9; `continue` is handled inside the thin command. **New S9 stops as of 6.26.0 (the A7
+disclosure):** a crashed completeness checker (before, it read `INCOMPLETE`, which `check-loop.mjs` CONTINUEs — a
+rebuild iteration, up to the cap), a runner refusal with a lapse included (before, a fail-closed report
+`check-loop-fresh.mjs` B could route to one re-run), and an unparseable `## Files` (before, the gates ran and the
+verdict read `INCONCLUSIVE`).
 
 ## The `regress` install command (GATE 1 Q3 — M10, GATE 2 review: this table had gone missing here)
 
@@ -184,6 +228,11 @@ So the pinned `--timeout-ms 540000 --budget-ms 570000` keeps a run under the 600
 that uncounted work fits the remaining 30 s. A second or later slow step ends by budget time 570 s. When
 the first slow step is the long one, it starts after the opening work and runs up to 540 s.
 
+For `verify` the clock is the same (`stage-runtime.mjs`'s `makeBudget`, one owner for both stages), the opening
+work is argv, containment, the removal, the chain check, the eval-pair listing, the verifier count and the
+runner's `init`, and the only slow steps are the gates. The unbudgeted tail after the last permitted gate is
+`run --next`'s fingerprints, the verdict call, the report composition, the render and the writes.
+
 **A kill mid-invocation (GATE-2 round 2).** For `regress`, a progress record is persisted at the top of
 every phase from "drain-head" through "verdict". A hard kill (a harness timeout, say) therefore leaves the
 record at the phase it interrupted, and `--resume` re-runs that phase from its start. That includes a kill
@@ -194,6 +243,13 @@ still costs:
 - the interrupted phase's own work is repeated (a gate through `run-gates.mjs`'s stale-lock recovery, an
   install from scratch);
 - the killed process group's orphans are `run-gates.mjs`'s existing named bound.
+
+For `verify`, the record is persisted at the top of "drain" and of "verdict" — exactly its resumable phases, a set
+a test pins equal to the checkpoint call sites — and it stays parked at "verdict" through "render". A resume
+re-derives the verdict from the same durable stamp: over an UNCHANGED tree it reproduces the interrupted run's
+report, but the AC gate also reads live files (the lock, the SPEC, the mapping), so after the tree moved it may
+not. `/pharn-loop`'s `check-loop-fresh.mjs` F catches a moved tree; `/pharn-ship` has no such check. A kill
+before "drain" leaves no record of that run, and `--resume` answers `no-progress`.
 
 ## Guarantee audit (P0)
 
@@ -222,15 +278,17 @@ This contract governs the **shape** of a stage's exit, never whether the stage's
 correct. A stage script that fabricates a self-consistent `done` object with a wrong `verdict` value still
 validates against this contract — `validateStageExit` checks structure and registry membership, never that
 the reported outcome matches reality. That guarantee, where it exists at all, belongs to the checkers a
-stage script shells (`check-regress.mjs`, `check-plan-spec-agree.mjs`), cited in each stage's own command
-and never re-derived here.
+stage script shells (`check-regress.mjs`, `check-verify.mjs`, `check-plan-spec-agree.mjs`), cited in each
+stage's own command and never re-derived here.
 
 **`done.verdict` and `continue.phase` accept any non-empty string (M6, GATE 2 review — named, not closed
-here).** Unlike `options[]`, neither is checked against a per-stage enum.
+here), for EVERY stage, `verify` included (6.26.0).** Unlike `options[]`, neither is checked against a
+per-stage enum.
 
-- `verdict` is the checker's own `check-regress.mjs verdict` output, whose vocabulary
-  `regression-report.md` owns.
-- `phase` is the stage's own phase name, whose `regress` set `stage-regress-core.mjs` owns.
+- `verdict` is the checker's own output — `check-regress.mjs verdict`'s, whose vocabulary
+  `regression-report.md` owns, and `check-verify.mjs`'s, whose vocabulary `verify-report.md` owns. The thin
+  commands read the REPORT's verdict, never this transient copy.
+- `phase` is the stage's own phase name, whose sets `stage-regress-core.mjs` and `stage-verify-core.mjs` own.
 
 **The reason for deferring, corrected in GATE-2 round 2.** An earlier version said that closing this would
 put per-stage knowledge into this shared module, "the split `REGISTRY` exists to avoid". That was wrong.

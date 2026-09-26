@@ -23,6 +23,101 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.26.0] - 2026-09-26
+
+### Added
+
+- 2026-09-26: **`/pharn-verify` becomes a THIN CALLER of one tested stage script, `pharn/floor/stage-verify.mjs`, on
+  6.23.0's shared stage-exit contract; the stage-script mechanics move into one shared owner,
+  `pharn/floor/stage-runtime.mjs`.** `SKILLS_VERSION` 6.25.0 → 6.26.0. `MIN_CLI` stays 0.5.0: no installed path
+  relocates and no existing frontmatter or contract shape breaks.
+  ([`.dev/features/stage-verify-script/`](./.dev/features/stage-verify-script/))
+  - **Why (P7, Phase 1.1's measured trigger).** A user's own `/pharn-ship` `cost.json` ledgers put PHARN's own stages
+    at ~48% of relative cost on large features and ~81% on small fixes. 6.23.0 removed regress's share;
+    `/pharn-verify` was the other stage whose deterministic work ran as one model turn per step: 14 + d + G + P tool
+    calls (G project gates, P eval-pair gates, d the eval-pair discovery) over a 55,683-byte prompt. The thin command
+    is 4 + k calls (the constitution read, the setter, the pinned line, one resume per `continue`, the release) over
+    18,418 bytes.
+  - **`pharn/floor/stage-verify.mjs`** (new) runs every deterministic step through eight named phases (`fresh` →
+    `chain` → `pairs` → `verifiers` → `init` → `drain` → `verdict` → `render`): the `lstat` containment walk; the
+    removal of THIS feature's earlier `verify-report.json`/`VERIFY.md` and the stage's scratch right after the slug
+    and the walk (only `ENOENT` counts as absence — a removal that fails is a crash, never a verdict); the chain check
+    (`check-plan-spec-agree.mjs`, read so a crash is never a RED); the eval pairs; the verifier count
+    (`count-verifiers.mjs`); the gates through `run-gates.mjs`; the verdict (`check-verify.mjs --stamp … --ac-gate`,
+    read only when its exit AGREES with its printed verdict — a crash exits 1, FAIL's own code); the report
+    composition; and the atomic writes, each preceded by a containment walk, so a feature directory swapped for a
+    symlink during the drain is refused instead of written through. It reuses 6.23.0's budget-and-resume protocol
+    (`--budget-ms`, exit 5 `continue`, `--resume`), checkpointing the top of `drain` and `verdict`.
+  - **`pharn/floor/stage-verify-core.mjs`** (new, pure; imports only `gate-run-core.mjs`) holds the closed rules:
+    `VERIFY_PATHS` (the one owner of `.pharn/pharn-verify/`, from which `loop-fresh-core.mjs`'s
+    `DEFAULT_STAMPS.verify` is now derived), `PHASES`/`RESUMABLE_PHASES`, the progress record
+    `pharn-stage-verify-progress/1` (closed in both directions), `EVAL_PAIR_RULE`, `VERDICT_EXIT`/`classifyVerdict`,
+    `checkCompleteness`, and `composeReport` (the checker's object verbatim, key order kept, then the `completeness`
+    and `verifiers` blocks — a colliding checker key is refused, never overwritten).
+  - **`pharn/floor/render-verify.mjs`** (new, pure) renders `VERIFY.md` from the report JSON alone: every untrusted
+    value (a gate id, a PLAN-derived path, a checker's reason) inside a computed fence, closed-set values inline
+    only after a membership test, and a fixed preamble naming the enum-gated / untrusted split, so a quoted
+    `rule_id:`/`problem:` pair cannot turn `validate.mjs` CHECK 5 RED. `pharn/features/*/VERIFY.md` joins
+    `.prettierignore` and `.markdownlint-cli2.jsonc` beside `REGRESSION.md`.
+  - **`pharn/floor/stage-runtime.mjs`** (new) is the ONE owner of the mechanics both stage scripts need: the argv
+    rules 6.23.0's review repaired (`--timeout-ms`'s 3-9 digits, a value-less `--budget-ms`, the by-index
+    `--resume` scan), the containment walk, the stale-output removal (`removeIfPresent`: only `ENOENT` is absence),
+    the atomic write, the git helpers, the budget tracker and the drain loop — each RETURNING a result or throwing,
+    so every script keeps its own emit wrappers, reason codes and detail wording. `stage-regress.mjs` imports them
+    and deletes its copies; the unchanged `stage-regress.test.mjs` passes 44/44 before and after the lift, and every
+    existing detail text is kept. Its CLI behaviour changes in exactly one case, below under Changed: a stale-report
+    removal that fails is now a crash there too.
+  - **`stage-exit-core.mjs`** gains the `verify` registry key — question `no-gates` (its fixed text carries the AC
+    gate's `--gates` caveat); refused `missing-artifact`, `chain-red`, `plan-files-unparseable`; unusable
+    `usage-error`, `no-feature`, `path-containment`, `git-failed`, `child-crashed`, `child-refused`, `no-progress`,
+    `progress-malformed` — and `pharn-contracts/stage-exit.md` documents it, verify's `unusable` timing, its
+    checkpoints and clock, and names verify in the `done.verdict` residual.
+  - **The weaker claim, stated plainly.** Before, fix #7's hook PREVENTED a Write-tool write outside the two verify
+    artifacts. Now the script writes them through `fs`, reached via Bash (L19), and AFTER this stage's own
+    `reconcile` gate — so, unlike regress, a stray write by the script is neither prevented nor detected. The
+    mitigation is the small, literal write set and its tests; it is tested code, not a floor claim.
+  - **The stronger claim.** While the script runs, the command's writes-scope is `.pharn/pharn-verify/stage.json`,
+    which resolves to `.pharn/**` alone, so no Write-tool write may land outside `.pharn/**` — probed with the real
+    setter and guard (`command-hygiene.test.mjs`'s `STAGE_SCRIPT_WIRING`, now a two-member set).
+
+### Changed
+
+- 2026-09-26: **`/pharn-verify`'s behaviour changes in 6.26.0, each disclosed** (`stage-verify-script`):
+  - **A crashed `check-build-complete.mjs` stops the stage before any gate runs** (`unusable child-crashed`). Before,
+    the runner's `aux.completeness` read node's exit 1 as "incomplete", the verdict read `INCOMPLETE`, `/pharn-ship`
+    Step 2b answered it with its one bounded rebuild, and `/pharn-loop` CONTINUEd (a rebuild iteration, up to the
+    cap). Now it is `/pharn-ship`'s step-7 STOP and `/pharn-loop`'s S9. `run-gates.mjs` is unchanged, so
+    `/pharn-dev-verify` and any direct `check-verify.mjs` caller keep the old reading (follow-up
+    `run-gates-completeness-crash`).
+  - **A refusal writes no `verify-report.json`** (a RED chain, a missing artifact, an unparseable `## Files`). Before,
+    the command wrote a fail-closed `INCONCLUSIVE` report on a RED chain.
+  - **A runner refusal inside the stage — a lapse such as `lock-busy` included — is `unusable child-refused`**, so
+    `/pharn-loop` stops at S9. Before, a fail-closed report carried the runner's `reason_code`, and
+    `check-loop-fresh.mjs` B could route a lapse to one re-run (follow-up `stage-exit-runner-lapse-rerun`).
+  - **An unparseable PLAN `## Files` is refused at verify** (`plan-files-unparseable`). Before, the gates ran and the
+    verdict read `INCONCLUSIVE` through completeness.
+  - **New `/pharn-loop` S9 stops**, the three above; `pharn-loop.md`'s new verify mapping paragraph says so.
+  - **`/pharn-ship` reads the verify verdict only after `/pharn-verify` ended `done` in the same run** (step 7 and
+    Step 2b's re-read). Stricter: an earlier run's report left by a pre-slug, containment or crash stop no longer
+    reaches GATE 2. The regress half is the follow-up `ship-regress-exit-binding`.
+  - **A stale-report removal that fails for any reason other than absence is a crash** (exit 1, no document), never a
+    swallowed error — in `/pharn-verify` from the start and, since this increment's GATE 2 fix, in `/pharn-regress`
+    too, through the shared `removeIfPresent`. Before, `stage-regress.mjs` swallowed every unlink error, so an
+    unremovable earlier `regression-report.json` survived beside a later `unusable` (a bad `--timeout-ms` exited 2
+    over it), which falsified "every stop after the slug leaves no report" in `stage-exit.md` and `/pharn-ship`
+    step 6. This closes the follow-up `regress-stale-unlink-swallow`; `stage-runtime.test.mjs` runs the regress CLI
+    over such a report, with a catch-all mutant.
+  - **Registered verifiers are counted, and none is run**; the live verifier runner stays deferred.
+  - **The eval-pair discovery is a rule, not a judgment**, so a PLAN that names no file under a capability directory
+    gets no `structural:` gate for it — and the rule admits an UNTRACKED, NOT git-ignored `(expected, findings.json)`
+    pair under a declared capability directory. The old text said "committed", which, read literally, gave a
+    just-built capability none. Regress's own pair discovery stays tracked-only. Two bounds, both fail-open: a
+    git-ignored pair gets no gate, and neither does a declared path that differs from the tree only in letter case
+    (the rule compares exactly, while on a case-insensitive volume the completeness check counts that path present).
+  - Also named, not built: `dev-verify-stage-script` (`/pharn-dev-verify` keeps its prose flow),
+    `count-verifiers-flush-rule`, and `regress-resume-budget-value` (`stage-regress.mjs`'s `--resume` still accepts a
+    value-less trailing `--budget-ms`, as in 6.23.0; `stage-verify.mjs` refuses it).
+
 ## [6.25.0] - 2026-09-26
 
 ### Added

