@@ -153,7 +153,13 @@ The key is read from the **raw** frontmatter lines that start `spec_kind:` exact
 the key, so that SPEC is a `feature`, the stricter mode. On a templated SPEC, rule 8 REDs a second `spec_kind:`
 line, or a value that is not a member once spaces and tabs are trimmed (a quoted value, a stray CR or U+2028
 included). A legacy SPEC's `spec_kind` is not validated: a legacy SPEC has no AC ids either way — a legacy SPEC
-is therefore never quick.
+is therefore never quick **while it stays legacy**. That bound is stated, not closed: `spec_template` sits outside
+the pin (provenance only, above), so adding a `spec_template:` line to an Approved legacy SPEC that already carries
+an inert `spec_kind: quick` line makes it templated and quick without re-approval — the pin covers the `spec_kind:`
+line either way, so if the SPEC also holds the template rules `check-spec-approved` stays exit 0 while
+`--spec-kind` moves from `feature` to `quick`. The same path turns a legacy `spec_kind: test-infra` line into a
+bootstrap SPEC. The pin is deliberately unchanged here; putting the presence of the `spec_template` line into it
+is a possible follow-up.
 
 **`check-spec.mjs --spec-kind <SPEC.md>`** prints the kind as data: `feature`, `test-infra` or `quick` for a
 templated SPEC; an empty line (exit 0) when the value is unusable (two lines, a non-member, or the
@@ -169,9 +175,11 @@ in every state, so a Draft is caught before approval and every downstream `check
 re-checks it. **Why these two bounds** (the maintainer's 2026-09-25 decision, recorded here so neither
 reads as a magic number): quick mode keeps test-first evidence and drops the regression check
 (`/pharn-ship`'s `## Quick mode`), so what it may carry is a change whose evidence is a few fast tests —
-three criteria bound the change a human approves at GATE 1, and an `e2e` criterion needs the slowest gate
-and its own runner, which is exactly what quick mode exists to let a small change avoid. A larger or
-end-to-end change takes the full pipeline. **Sections, decided:** a quick SPEC omits no required section
+three criteria bound the change a human approves at GATE 1, and an `e2e` criterion would need its test
+written and run red at `/pharn-test` through the project's end-to-end runner, the slowest test level and one
+that needs a runner of its own, which is what the quick bound keeps out of the run. It does **not** keep the
+project's own end-to-end gates out: `/pharn-verify` still discovers and runs a `test:e2e` / `e2e` script in a
+quick run, exactly as in a full one. A larger or end-to-end change takes the full pipeline. **Sections, decided:** a quick SPEC omits no required section
 and writes no optional section — the same shape a `feature` SPEC uses; nothing about being quick shortens
 Intent, Scope, Constraints or Assumptions, because quick mode runs no regression check, so Scope's
 out-of-scope list is the only written statement of what the change must not touch.

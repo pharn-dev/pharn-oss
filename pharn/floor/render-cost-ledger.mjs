@@ -342,8 +342,8 @@ export function readMarkers(markersFile) {
  * `--verify-transcript` passes a ledger's recorded `markers[]`). Unknown kinds and non-numeric `seq` are
  * dropped; `origin` survives only as the literal `pending` that `mark-phase.mjs` writes on adoption; `mode`
  * (6.23.0) survives only as a `MARKER_MODES` member, the same pattern — a garbage value is dropped, which
- * `ship-outcome-core.mjs`'s `runMode()` then reads as `"full"` (either misreading under-claims, never
- * over-claims: see that module's header).
+ * `ship-outcome-core.mjs`'s `runMode()` then reads as `"full"`, the safe direction: a full reading needs a
+ * regress stage-start a quick run never writes (that module's header, "A SKIPPED OR WRONG MODE MARKER").
  */
 export function normalizeMarkers(list) {
   const out = [];

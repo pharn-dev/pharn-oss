@@ -263,7 +263,8 @@ deltas, in step order — every other line of Steps 1–3b and the Final step ru
    unchanged.
 4. **The test and build steps:** unchanged (D4).
 5. **The regress step: skipped.** No `/pharn-regress`, no markers for it, no `regression-report.json` read (D5). A
-   one-line pointer is added at that step.
+   one-line pointer is added at that step. _(Amended at GATE 2 — review F3: its scope check is KEPT, as a new
+   command item 7 between this one and verify; the command's items 7–11 became 8–12.)_
 6. **The verify step:** unchanged. `PASS` → GATE 2; `INCOMPLETE` → Step 2b; `FAIL`/`INCONCLUSIVE` → STOP.
 7. **Step 2b:** re-build (iteration 2), then re-verify (iteration 2). The regress re-run and its two markers are
    skipped. Proceed only on re-verify `PASS`; anything else STOPs; still no second retry.
@@ -305,7 +306,8 @@ gates stay, and what it skips is listed".
   - `verdictApplicability` uses the run's stages and additionally returns `{mode, stages}`.
   - `deriveShipOutcome`: quick ∧ `current` ∧ verify `PASS` → **`gate2-quick`**. The regression verdict is never
     consulted in quick mode, so a report left on disk by an earlier run is ignored. Full mode is byte-for-byte as
-    today. Stops keep `stop:<stage>` in both modes; the mode is read from `markers[]`, and no `outcome.mode` key
+    today. _(Superseded at GATE 2: conditions (a) and (b) apply in both modes, and change the full-mode table only
+    on marker trails a compliant run never writes.)_ Stops keep `stop:<stage>` in both modes; the mode is read from `markers[]`, and no `outcome.mode` key
     is added, because the key set is closed in `check-cost-ledger` rule 7 and an old checker would RED it.
   - `GATE2_QUICK = "gate2-quick"`; `SHIP_DECISION_RE = ^(gate2|gate2-quick|undetermined|stop:…)$`;
     `SHIP_DECISION_FORMS` gains the member `gate2-quick` (`parameterized: false`, `floor: true`), whose `means`
@@ -316,7 +318,9 @@ gates stay, and what it skips is listed".
     the tests), so no reader takes it for `gate2`; the contract and the preamble say "`gate2-quick` is not `gate2`".
 - **Either misreading under-claims, never over-claims.** A quick run whose `--mode quick` marker was skipped reads
   as full: it has no regress stage-start, so its outcome is `stop:pharn-verify`, never `gate2`. A full run whose
-  run-start wrongly says quick yields `gate2-quick`, which claims no regress verdict at all.
+  run-start wrongly says quick yields `gate2-quick`, which claims no regress verdict at all. _(Superseded at
+  GATE 2 — review F1: true only for a WRITTEN run-start; a SKIPPED one joined an unclosed earlier run's window
+  and derived `gate2`. Re-derived with applicability conditions (a) and (b); see "Amended at GATE 2".)_
 - `render-run-report.mjs` (the renderer is not run in quick mode, but a manual render of a quick ledger is legal
   input, and the contract's two promises must hold for it):
   - the `## Outcome` preamble gains a `gate2-quick` bullet, and its "only verdicts of this run" sentence names the
@@ -421,7 +425,7 @@ gates stay, and what it skips is listed".
   git apply "$F/human-only.patch"
   if ! { shasum -a 256 -c "$F/human-only.sha256" && node pharn/floor/validate.mjs . && node .dev/floor/check-specified-markers.mjs . && node --test .dev/floor/hash-doc.test.mjs; }; then
     git checkout -- LIMITS.md pharn/ARCHITECTURE.md
-    echo "apply.sh: FAILED - both files were restored from HEAD; nothing was committed" >&2
+    echo "apply.sh: FAILED - both files were restored from the index (git checkout --), which is HEAD unless you staged edits to them; nothing was committed" >&2
     exit 1
   fi
   git commit -q -m "docs(trusted): quick mode in LIMITS.md and ARCHITECTURE.md (human-applied)" -- LIMITS.md pharn/ARCHITECTURE.md
@@ -517,6 +521,61 @@ where. The GRILL ids are cited at each site.
 - **G11** — §8: the rollback bound.
 - **G12** — the header and `## Applied lessons`: L31 and L38, which the body already applied, are declared.
 
+## Amended at GATE 2 (review fixes) — 2026-09-26
+
+`/pharn-dev-review` (`REVIEW.md`) returned three floor findings (F1–F3) and seven advisory ones. GATE 2 was
+decided **FIX** by the orchestrator under the maintainer's delegation. Each fix below names the plan text it
+supersedes; the superseded sentences are marked in place ("superseded at GATE 2"), never silently rewritten.
+
+- **F1 — the "either misreading under-claims" argument was false.** Probed with the marker's VALUE altered,
+  never with it ABSENT: a quick run whose run-start was skipped after an unclosed earlier run derived `gate2`
+  from that run's `pharn-regress@1`. Fixed on the floor, in `ship-outcome-core.mjs` `verdictApplicability`, in
+  BOTH modes: **(a)** a verdict stage-start counts only after the same iteration's latest `pharn-build`
+  stage-start; **(b)** a stage other than a verdict stage started twice at one iteration in the current run
+  is a boundary that cannot be established → `unknown` → `undetermined` (verdict stages exempt: `/pharn-loop`'s
+  freshness re-run repeats them, and a loop ledger with no `LOOP.md` reaches this derivation). This
+  supersedes §5's "Full mode is byte-for-byte as today": the full-mode table changes only on marker trails a
+  compliant run never writes (a verdict stage with no build before it; a repeated non-verdict stage). The
+  sentence is re-derived everywhere it appears (`ship-outcome-core.mjs`, `cost-ledger.md`, `pharn-ship.md`,
+  `CLAUDE.md`, `render-cost-ledger.mjs`, CHANGELOG, the patch), with two bounds named: it holds for the
+  markers the command prescribes, and an earlier run that left only its run-start is byte-identical to
+  resuming it (its mode is read — `stop:pharn-verify` or `gate2-quick`, never `gate2`). The patch text says
+  `gate2-quick` "is not `gate2`" instead of "never `gate2`".
+- **F2 — the first-token rule was stated as an impossibility.** It is labelled ADVISORY at every site
+  (`pharn-ship.md`, `pharn-spec.md`, `pharn-grill.md`, README, CHANGELOG), with the floor backstop (the
+  approved, pinned `spec_kind: quick`, read by `check-spec-approved` + `--spec-kind`) and its bound (the floor
+  sees the SPEC, never the invocation). A guarantee-audit bullet is added. This supersedes the Determinism
+  audit's "`--quick` is the first argument token" as a membership test.
+- **F3 — quick mode dropped a fix #7 control unnamed.** Kept instead: `## Quick mode` gains item 7 — run
+  `check-regress.mjs scope` (inputs by `/pharn-regress`'s Step 3 rules, `--feature <name>`; no base worktree,
+  no install, no gate) before `/pharn-verify` and STOP on `escaped`; Step 2b re-runs it between the re-build
+  and the re-verify. Items 7–11 become 8–12. It is named KEPT in the trade text (`/pharn-spec` Step 4, the
+  section intro, README, CHANGELOG, the LIMITS patch) and in `SHIP.md`. This supersedes the Guarantee
+  audit's "`check-regress scope`'s smoke alarm does not run either". A ★ test plants a stray before the
+  anchor and shows reconcile CLEAN while the committed quick scope line exits 1. It costs one call on a
+  quick run's happy path (one more in Step 2b), so "Showing the saving"'s `/pharn-ship` row nets 8, not 9.
+- **Stale full-run artifacts** (advisory): quick mode never points at or links an earlier run's
+  `REGRESSION.md`, `regression-report.json`, `BRIEFING.md` or `RUN-REPORT.md` — Step 3's full-mode pointers
+  are omitted and a fixed line says any such file predates the run; `render-run-report.mjs`'s `## Briefing`
+  says "not part of this run" for a quick ledger. **Labelled, not removed:** removal would delete files
+  another stage owns (possibly committed history) through an undeclared Bash write.
+- **Promised tests built:** the ★ WIRING test executing the committed quick run-start line (with the full
+  line as its control), the quick Step-2b cases, and the G11 rollback sentence in the CHANGELOG. `SHIP.md`
+  and `ship-record.json` record `mode` in full-mode Step 3/3b too (Decision 9). `BUILD.md`'s "no other
+  deviation" line is corrected.
+- **The `spec_template`-outside-the-pin residual** is named in `spec-template.md` and `pharn-ship.md`; the pin
+  is unchanged.
+- **Wording:** "pre-existing checker" (`--spec-kind` is new and gates in quick mode); the `e2e` rationale
+  (the bound keeps an e2e red run out of `/pharn-test`, not the project's e2e gates out of `/pharn-verify`);
+  the counts "fourth form", "BOTH", "NINE", "eight rules" → open forms; the dangling "Quick mode"
+  cross-refs; `pharn-verify.md`'s "you sit after `/pharn-regress`" (a quick run has none);
+  `make-patch.mjs` now runs `git apply --check` on stdin BEFORE writing the patch, so its header's "nothing
+  written" holds; `apply.sh`'s failure message says the files are restored from the index, which is what
+  `git checkout --` does (the pinned block in §7 below is updated to match, byte for byte).
+- **Files added to `## Files`:** `.claude/commands/pharn-verify.md` (one sentence) — moved out of "Explicitly
+  not touched". The setter is re-run and the scope amended onto the open reconcile epoch
+  (`reconcile-baseline.mjs --amend-scope`).
+
 ## Files
 
 - `.dev/features/ship-quick-mode/PLAN.md` — this plan — layer dev artifact
@@ -537,6 +596,7 @@ where. The GRILL ids are cited at each site.
 - `.claude/commands/pharn-ship.md` — EDIT. The `## Quick mode` section, the pointers, the `SHIP.md` mode lines, the sweep edits, description, `reads:`, version — layer product command
 - `.claude/commands/pharn-grill.md` — EDIT. The `--quick` mode (eligibility, skips, the quick `GRILL.md`), description, version — layer product command
 - `.claude/commands/pharn-spec.md` — EDIT. `--quick` (fit checks, `spec_kind: quick`, the `--model-approve` stop), the kind enumeration, the `quick` RED kind, the "eight rules" sweep, description, version — layer product command
+- `.claude/commands/pharn-verify.md` — EDIT (added at GATE 2). One sentence: `/pharn-verify` follows `/pharn-regress` only in a full run; version patch — layer product command
 - `pharn/floor/check-spec.test.mjs` — EDIT. Rule 9 in RULE_CASES and its controls, the kind members, the pin over `quick`, `--spec-kind` cases, ★ WIRING for the two pinned `--spec-kind` lines, the Draft step naming `quick` — layer product floor tests
 - `pharn/floor/check-ac-tests.test.mjs` — EDIT. A quick SPEC is TEMPLATED (0) and its mapping GREEN; `test-infra` + mapping still RED; the enumerated message — layer product floor tests
 - `pharn/floor/check-test-stage.test.mjs` — EDIT. A quick world reads READY test-first, with and without `--require-test-first` — layer product floor tests
@@ -563,7 +623,7 @@ where. The GRILL ids are cited at each site.
 - `pharn/CONSTITUTION.md`, `THREAT-MODEL.md`, `CODEOWNERS`, `.claude/settings.json`, `.claude/settings.local.json`, the four hook scripts, `pharn.spec-template.md` — human-only and byte-identical.
 - `MIN_CLI` — stays `0.5.0`.
 - `pharn/pharn-contracts/templates/spec-template.md` — it names no kind; `/pharn-spec` writes the line.
-- `.claude/commands/pharn-loop.md`, `pharn-regress.md`, `pharn-verify.md`, `pharn-test.md`, `pharn-plan.md`, `pharn-build.md` — no quick behaviour there (the loop is Phase 3.2).
+- `.claude/commands/pharn-loop.md`, `pharn-regress.md`, `pharn-test.md`, `pharn-plan.md`, `pharn-build.md` — no quick behaviour there (the loop is Phase 3.2). (`pharn-verify.md` moved to `## Files` at GATE 2 for one sentence.)
 - `.claude/commands/pharn-dev-*.md` — no dev quick mode.
 - `pharn/floor/reconcile-ignore.json`, `worktree-fingerprint.mjs`, `check-regress.mjs` — no new pipeline artifact.
 
@@ -676,11 +736,13 @@ No `role:` capability is added, so no eval pair is owed. The tests, each with a 
   prose). The hygiene pins prove the prose says so, never that a run did it.
 - "A quick ledger never claims a regress check" → **floor relative to the recorded markers**: `gate2-quick` rests on
   one verdict enum; `gate2` still needs a regress stage-start and `no-regressions`. The mode is a marker, **advisory**
-  (Bash-written, L19), and either misreading under-claims (§5). Agreement, never provenance (L43).
+  (Bash-written, L19), and either misreading under-claims (§5). Agreement, never provenance (L43). _(Superseded at
+  GATE 2 — review F1: re-derived as "a skipped or wrong mode marker never yields `gate2`", with two bounds.)_
 - "What quick mode does not check" → **stated, not guarded**: regressions outside the feature (no base comparison;
   `check-regress scope`'s smoke alarm does not run either, though the verify-time `reconcile` gate does), the plan
   interrogation, and the two artifacts. `SHIP.md`'s list is advisory prose; the ledger's markers and outcome are the
-  machine record.
+  machine record. _(Superseded at GATE 2 — review F3: the scope check is KEPT; its exit is floor, running it is
+  advisory.)_
 - "The change is small" → **not a claim**. Nothing measures it; a human chose the flag and the kind.
 - "The human-only patch keeps green every gate that reads `LIMITS.md` and `pharn/ARCHITECTURE.md`" → **floor, at
   apply time**. `apply.sh` runs `validate`, `check:markers` and `hash-doc.test` on the applied bytes, and restores
@@ -696,7 +758,9 @@ No `role:` capability is added, so no eval pair is owed. The tests, each with a 
 - **The mode flag is not read from the description** (grill G3). The `<increment description>` is untrusted prose
   (`/pharn-ship`'s Trust section). If `--quick` were recognized anywhere in the arguments, a pasted third-party text
   containing it could switch a run into the mode that skips the regression check. The flag counts only as the first
-  token; everywhere else it is description text, passed on as DATA.
+  token; everywhere else it is description text, passed on as DATA. _(GATE 2, review F2: that rule is ADVISORY —
+  the orchestrating model applies it; the floor backstop is the SPEC's pinned kind, which cannot tell a typed
+  `--quick` from a misread one.)_
 - **`apply.sh` runs with the human's privileges**, so it is pinned verbatim in this reviewed plan (§7, grill G4) and
   the human reads `human-only.patch` before running it (`APPLY.md`).
 - **Outputs.** The quick `GRILL.md` is fixed text plus two floor results and holds no untrusted free text. `SHIP.md`'s
@@ -708,7 +772,8 @@ No `role:` capability is added, so no eval pair is owed. The tests, each with a 
 
 - Every new branch is a membership test: `--quick` is the first argument token (one position, never a scan of the
   description — grill G3); `--spec-kind` prints exactly `quick`; the current run-start's `mode` equals `quick`; the
-  kind is in `TEST_FIRST_KINDS`.
+  kind is in `TEST_FIRST_KINDS`. _(GATE 2, review F2: the first-token test is one the MODEL applies — advisory,
+  not a floor membership test; the other three are floor.)_
 - Every terminal fallback stops and names a remedy: a non-quick SPEC under `--quick`, `/pharn-grill --quick` on a
   non-quick SPEC, and `--quick` with `--model-approve`. None guesses.
 

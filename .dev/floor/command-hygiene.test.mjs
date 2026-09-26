@@ -2018,8 +2018,9 @@ for (const cmd of PHASE_MARKER_WIRING) {
     // `/pharn-ship --quick`) is the QUICK ALTERNATIVE to the command's one named full-mode run-start —
     // command prose carries BOTH lines (the full one, and the quick one inside `## Quick mode`), so it is
     // excluded here too and pinned separately by QUICK_MODE_WIRING below. This is the "count the run-start
-    // lines WITHOUT --mode" carve-out CLAUDE.md's Writes-scope section documents: it keeps this rule's
-    // "exactly one run-start" the FULL-MODE pin, unchanged in strength.
+    // lines WITHOUT --mode" carve-out `.dev/features/ship-quick-mode/PLAN.md` §6 records (this comment and
+    // QUICK_MODE_WIRING's header are its only other statements): it keeps this rule's "exactly one
+    // run-start" the FULL-MODE pin, unchanged in strength.
     const calls = (body.match(MARK_PHASE) ?? []).filter((c) => !/--pending-start/.test(c) && !/--mode\b/.test(c));
     assert.ok(calls.length > 0, `non-vacuity: ${cmd.file} must carry mark-phase invocations`);
 
@@ -2170,7 +2171,7 @@ test("✧ every emitting command emits the LEDGER and the REPORT, and checks the
 // A shorter spine for a small change trades checks for cost (the maintainer's 2026-09-25 decision, the
 // AC-delivery queue's Phase 3.1). Command prose now carries BOTH the full-mode named run-start (pinned
 // above, unaffected — PHASE_MARKER_WIRING and ADOPTION exclude a `--mode`-bearing line by the carve-out
-// documented in CLAUDE.md's "Writes-scope" section) AND a QUICK alternative inside `## Quick mode`; this
+// `.dev/features/ship-quick-mode/PLAN.md` §6 records) AND a QUICK alternative inside `## Quick mode`; this
 // set is that alternative's OWN obligations, materialized once (L29) rather than folded into either set
 // above — the same reason LESSONS_SWEEP_WIRING and PLAN_LESSONS_WIRING stay separate sets despite sharing
 // a domain.
@@ -2254,9 +2255,15 @@ const QUICK_SKIP_POINTERS = [
     re: /`\/pharn-regress`[\s\S]*?SKIPPED\s+entirely in Quick mode — see `## Quick mode` above/,
   },
   { site: "Step 2b heading", re: /In Quick mode the regress re-run and its two markers are SKIPPED — see `## Quick mode`/ },
-  { site: "Step 2c heading", re: /SKIPPED entirely in Quick mode — see `## Quick mode` item 9 above\. `BRIEFING\.md`'s only reader/ },
-  { site: "Step 2d heading", re: /SKIPPED entirely in Quick mode — see `## Quick mode` item 9 above\. Its only input/ },
-  { site: "Step 3a item 4", re: /SKIPPED in Quick mode — see `## Quick mode` item 11 above/ },
+  { site: "Step 2c heading", re: /SKIPPED entirely in Quick mode — see `## Quick mode` item 10 above\. `BRIEFING\.md`'s only reader/ },
+  { site: "Step 2d heading", re: /SKIPPED entirely in Quick mode — see `## Quick mode` item 10 above\. Its only input/ },
+  { site: "Step 3a item 4", re: /SKIPPED in Quick mode — see `## Quick mode` item 12 above/ },
+  // GATE 2 (review F3): the regress site also points at the scope check quick mode KEEPS, and Step 2b at its re-run.
+  {
+    site: "the regress stage item's kept scope check",
+    re: /Quick mode runs this stage's scope check itself, from\s+`## Quick mode` item 7/,
+  },
+  { site: "Step 2b's kept scope check", re: /with the kept scope check \(item 7\) between them/ },
 ];
 
 for (const pointer of QUICK_SKIP_POINTERS) {
@@ -2275,6 +2282,8 @@ test("✧ QUICK MODE: pharn-spec.md pins the literal spec_kind: quick and its St
   const body = commandBody("pharn-spec.md");
   assert.match(body, /spec_kind: quick/);
   assert.match(body, /looks for no\s*\n\s*regression outside the feature and does not interrogate the plan/);
+  // GATE 2 (review F3): the sentence the human reads before approving names the check quick mode KEEPS.
+  assert.match(body, /does not interrogate the plan; it still stops on a changed file\s+outside the plan's declared files/);
 });
 
 test("✧ QUICK MODE: SHIP.md's quick bullet names its three items (grill G10)", () => {
@@ -2291,6 +2300,165 @@ test("✧ QUICK MODE: both pharn-ship.md and pharn-spec.md state --quick is read
       /recognized only as the FIRST TOKEN of the arguments/,
       `${file} must state --quick is recognized only as the first token`
     );
+  }
+});
+
+// ── GATE 2 review fixes (2026-09-26) — each pin names the finding it holds, and each has a control below ────
+
+/** F2: the first-token rule is labelled ADVISORY where it is stated, with the SPEC named as the backstop. */
+const FIRST_TOKEN_ADVISORY = [
+  { file: "pharn-ship.md", re: /This rule is ADVISORY \(P0\): it is an instruction to you, the\s+orchestrating model\./ },
+  { file: "pharn-ship.md", re: /The floor backstop is the SPEC, never the invocation:/ },
+  { file: "pharn-ship.md", re: /_"`--quick` is read only as the first token of the arguments"_ → \*\*ADVISORY\*\*/ },
+  { file: "pharn-spec.md", re: /This\s+rule is ADVISORY \(P0\) — an instruction to you; nothing on the floor parses the invocation\./ },
+  { file: "pharn-grill.md", re: /That rule is\s+\*\*ADVISORY\*\* \(an instruction to you; nothing parses the invocation\)/ },
+];
+
+test("✧ QUICK MODE (GATE-2 F2): the first-token rule is labelled ADVISORY, and the SPEC is named as its floor backstop", () => {
+  assert.equal(FIRST_TOKEN_ADVISORY.length, 5, "NON-VACUITY (L34)");
+  for (const site of FIRST_TOKEN_ADVISORY) assert.match(commandBody(site.file), site.re, site.file);
+  // The impossibility wording the review struck must not come back (F2's evidence line, verbatim).
+  assert.doesNotMatch(commandBody("pharn-ship.md"), /can never switch a run into this mode/);
+});
+
+/** F3: the scope check quick mode KEEPS — the pinned line, its STOP, its re-run and its SHIP.md record. */
+const QUICK_SCOPE_LINE =
+  'node pharn/floor/check-regress.mjs scope --changed "<inside, comma-separated>" --declared "<PLAN.md ## Files paths, plus AC-TESTS.md ## Files paths when that file exists>" --feature "<name>"';
+
+test("✧ QUICK MODE (GATE-2 F3): ## Quick mode keeps the scope check — the pinned line once, its STOP, its re-run, and SHIP.md's record", () => {
+  const section = quickModeSection();
+  const lines = commandBody("pharn-ship.md")
+    .split(/\r?\n/)
+    .map((l) => l.trim());
+  assert.equal(lines.filter((l) => l === QUICK_SCOPE_LINE).length, 1, "the quick scope line appears exactly once in pharn-ship.md");
+  assert.ok(section.includes(QUICK_SCOPE_LINE), "…and it sits inside ## Quick mode");
+  assert.match(section, /7\. \*\*The scope check: KEPT — run it before `\/pharn-verify`\.\*\*/);
+  assert.match(section, /`1` → \*\*STOP\*\*:\s+a changed path is outside the declared writes/);
+  assert.match(section, /the scope\s+check \(item 7\) runs again between the re-build and the re-verify/);
+  assert.match(section, /\*\*Kept:\*\* the\s+scope check \(item 7\) — a changed file outside the plan's `## Files` still stops the run/);
+  assert.match(section, /the scope\s+check's result verbatim \(`scope: clean`, item 7\)/);
+});
+
+test("✧ QUICK MODE (GATE-2 review): SHIP.md never points at another run's REGRESSION.md / BRIEFING.md / RUN-REPORT.md", () => {
+  const section = quickModeSection();
+  assert.match(section, /\*\*Never point at another run's artifacts\.\*\*/);
+  assert.match(
+    section,
+    /_"Any `REGRESSION\.md`, `regression-report\.json`, `BRIEFING\.md` or\s+`RUN-REPORT\.md` in this directory predates this run and is not part of it\."_/
+  );
+  assert.match(section, /They are \*\*labelled, not\s+removed\*\*/, "the choice between removing and labelling is stated");
+  // The full-mode Step 3 carries the pointer back, so a reader of Step 3 alone learns the carve-out.
+  assert.match(commandBody("pharn-ship.md"), /\*\*the run's mode\*\* \(6\.23\.0\): `mode: full`, or `mode: quick`/);
+});
+
+// ★ F3, EXECUTED (L45): a stray written BEFORE the build's reconcile anchor is invisible to check-bash-reconcile
+// (it covers anchor → verify only), and the committed quick scope line is what stops the run. The fixture is a
+// throwaway git repo carrying the REAL guards, exactly as check-bash-reconcile.test.mjs builds its own.
+test("★ QUICK MODE (GATE-2 F3): a stray planted before the anchor passes reconcile, and the committed quick scope line STOPs on it", () => {
+  const FLOOR = join(REPO_ROOT, "pharn", "floor");
+  const dir = mkdtempSync(join(tmpdir(), "hyg-quick-scope-"));
+  try {
+    const git = (...a) => {
+      const r = spawnSync("git", a, { cwd: dir, encoding: "utf8" });
+      assert.equal(r.status, 0, `git ${a.join(" ")}: ${r.stderr}`);
+      return r.stdout;
+    };
+    git("init", "-q");
+    git("config", "user.email", "t@example.invalid");
+    git("config", "user.name", "t");
+    writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+    mkdirSync(join(dir, ".claude", "hooks"), { recursive: true });
+    for (const h of ["protect-trusted-paths.cjs", "enforce-writes-scope.cjs", "set-writes-scope.cjs"]) {
+      writeFileSync(join(dir, ".claude", "hooks", h), readFileSync(join(REPO_ROOT, ".claude", "hooks", h)));
+    }
+    mkdirSync(join(dir, "src"), { recursive: true });
+    writeFileSync(join(dir, "src", "a.js"), "export const a = 1;\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "seed");
+
+    // /pharn-test-stage time: a Bash write OUTSIDE the plan's scope, before the build's anchor.
+    writeFileSync(join(dir, "src", "stray.js"), "written before the anchor\n");
+    // /pharn-build Step 0: the scope the plan declares, then the anchor.
+    mkdirSync(join(dir, ".pharn"), { recursive: true });
+    writeFileSync(join(dir, ".pharn", "writes-scope.json"), JSON.stringify({ scope: ["src/a.js"], set_by: "PLAN.md" }) + "\n");
+    const anchor = spawnSync(process.execPath, [join(FLOOR, "reconcile-baseline.mjs"), "--anchor", "--base", dir, "--by", "test"], {
+      encoding: "utf8",
+    });
+    assert.equal(anchor.status, 0, anchor.stderr);
+    // The build writes its one declared file.
+    writeFileSync(join(dir, "src", "a.js"), "export const a = 2;\n");
+
+    // /pharn-verify's reconcile gate: CLEAN — the stray predates the anchor, so it is outside the window.
+    const reconcile = spawnSync(process.execPath, [join(FLOOR, "check-bash-reconcile.mjs"), "--base", dir, "--require-baseline"], {
+      encoding: "utf8",
+    });
+    assert.equal(reconcile.status, 0, `reconcile is blind to a pre-anchor stray: ${reconcile.stdout}${reconcile.stderr}`);
+
+    // Quick mode item 7, the COMMITTED line: inside = git diff --name-only <base> + untracked (base = HEAD, an
+    // uncommitted working-tree build), declared = the plan's ## Files.
+    const inside = [...git("diff", "--name-only", "HEAD").split("\n"), ...git("ls-files", "--others", "--exclude-standard").split("\n")]
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .sort();
+    assert.deepEqual(inside, ["src/a.js", "src/stray.js"], "fixture sanity: the build's own change and the pre-anchor stray");
+    // The line is read out of ## Quick mode as COMMITTED (L45), never re-typed here; the pin test above binds it.
+    const committed = quickModeSection()
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("node pharn/floor/check-regress.mjs scope"));
+    assert.equal(committed.length, 1, "## Quick mode must carry exactly one scope line to execute");
+    const run = (declared) =>
+      spawnSync(
+        "sh",
+        [
+          "-c",
+          committed[0]
+            .replace("pharn/floor/check-regress.mjs", join(FLOOR, "check-regress.mjs"))
+            .replace("<inside, comma-separated>", inside.join(","))
+            .replace("<PLAN.md ## Files paths, plus AC-TESTS.md ## Files paths when that file exists>", declared)
+            .replace("<name>", "feat"),
+        ],
+        { cwd: dir, encoding: "utf8" }
+      );
+    const stop = run("src/a.js");
+    assert.equal(stop.status, 1, `the quick scope line must STOP on the stray: ${stop.stdout}${stop.stderr}`);
+    assert.deepEqual(JSON.parse(stop.stdout).escaped, ["src/stray.js"]);
+    // CONTROL: the same run with the stray declared too is clean — the STOP above is the stray, not the line.
+    const clean = run("src/a.js,src/stray.js");
+    assert.equal(clean.status, 0, `${clean.stdout}${clean.stderr}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("✧ QUICK MODE (GATE-2) mutation controls: each new pin fails when its text is broken (L60)", () => {
+  const ship = commandBody("pharn-ship.md");
+  const spec = commandBody("pharn-spec.md");
+  const cases = [
+    // F2: drop the ADVISORY label at its first site in pharn-ship.md.
+    [
+      ship,
+      "This rule is ADVISORY (P0): it is an instruction to you, the",
+      "This rule is binding: it is an instruction to you, the",
+      FIRST_TOKEN_ADVISORY[0].re,
+    ],
+    // F3: drop the pinned scope line's --feature flag.
+    [
+      ship,
+      ' --feature "<name>"\n   ```\n\n   Branch **only**',
+      "\n   ```\n\n   Branch **only**",
+      new RegExp(QUICK_SCOPE_LINE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+    ],
+    // F3: drop the KEPT clause from the trade sentence.
+    [spec, "; it still stops on a changed file", ".", /does not interrogate the plan; it still stops on a changed file/],
+    // Stale artifacts: drop the fixed line.
+    [ship, "predates this run and is not part of it.", "is kept.", /predates this run and is not part of it\./],
+  ];
+  assert.equal(cases.length, 4, "NON-VACUITY (L34)");
+  for (const [body, find, replace, re] of cases) {
+    assert.ok(body.includes(find), `fixture sanity: the anchor ${JSON.stringify(find.slice(0, 40))} must exist`);
+    assert.match(body, re, "the unbroken text must match its pin");
+    assert.doesNotMatch(body.replace(find, replace), re, `breaking ${JSON.stringify(find.slice(0, 40))} must fail its pin`);
   }
 });
 
@@ -2319,11 +2487,11 @@ test("✧ QUICK MODE mutation controls: each asserted property fails when broken
 
   // (4) drop one skip pointer (Step 3a item 4's) -> that pointer's own rule must stop matching.
   const droppedPointer = shipBody.replace(
-    "4. **Render the human-readable run report** _(SKIPPED in Quick mode — see `## Quick mode` item 11 above;\n   items 1–3 above still run, so `cost.json` is kept)_:",
+    "4. **Render the human-readable run report** _(SKIPPED in Quick mode — see `## Quick mode` item 12 above;\n   items 1–3 above still run, so `cost.json` is kept)_:",
     "4. **Render the human-readable run report:**"
   );
   assert.notEqual(droppedPointer, shipBody, "fixture sanity: the mutation must change the body");
-  assert.doesNotMatch(droppedPointer, /SKIPPED in Quick mode — see `## Quick mode` item 11 above/);
+  assert.doesNotMatch(droppedPointer, /SKIPPED in Quick mode — see `## Quick mode` item 12 above/);
 
   // (5) add a second quick run-start -> the exactly-once-in-the-corpus rule must fail.
   const doubled = `${shipBody}\n\`\`\`bash\nnode pharn/floor/mark-phase.mjs --name '<name>' --kind run-start --adopt-pending --mode quick\n\`\`\`\n`;

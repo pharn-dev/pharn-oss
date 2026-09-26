@@ -33,12 +33,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   cost on three small fixes, `/pharn-regress` alone ~63% of that. `--quick` runs a `spec_kind: quick` mini-SPEC
   (1–3 acceptance criteria, each `unit` or `integration` — never `e2e`) through **both** human gates, the grill's
   two floor stops **without** its interrogation, test-first AC evidence exactly as a `feature` SPEC gets, the
-  build, and `/pharn-verify` — and it **skips** `/pharn-regress`, `BRIEFING.md` and `RUN-REPORT.md`. Its ledger
-  outcome is `gate2-quick`, **never** `gate2`: every consumer compares `decision` by equality, so neither can be
-  mistaken for the other. Quick mode is not `--yolo` — both gates stay, and `SHIP.md`'s `## Not checked in quick
-mode` list names exactly what was skipped. `SKILLS_VERSION` 6.22.0 → 6.23.0 (minor: a newly shipped mode, a SPEC
-  kind, a CLI print mode and a marker flag; nothing invalidates an install). `MIN_CLI` stays 0.5.0: no installed
-  path moves. ([`.dev/features/ship-quick-mode/`](./.dev/features/ship-quick-mode/))
+  build, `/pharn-regress`'s scope check (kept) and `/pharn-verify` — and it **skips** `/pharn-regress`'s
+  base-and-head comparison, `BRIEFING.md` and `RUN-REPORT.md`. Its ledger outcome is `gate2-quick`, which is not
+  `gate2`: every consumer compares `decision` by equality, so neither can be mistaken for the other. Quick mode is
+  not `--yolo` — both gates stay, and `SHIP.md`'s `## Not checked in quick mode` list names each step that was
+  skipped. `SKILLS_VERSION` 6.22.0 → 6.23.0 (minor: a newly shipped mode, a SPEC kind, a CLI print mode and a
+  marker flag; nothing invalidates an install). `MIN_CLI` stays 0.5.0: no installed path moves. **The one direction
+  that does not read back:** an install rolled back below 6.23.0 reads a `spec_kind: quick` SPEC as a rule-8 RED
+  (`quick` is not a member there), so that SPEC stops passing `check-spec-approved`; a pre-6.23.0 renderer shows a
+  `gate2-quick` decision without its preamble bullet; and no pre-6.23.0 checker REDs such a ledger.
+  ([`.dev/features/ship-quick-mode/`](./.dev/features/ship-quick-mode/))
   - **`spec_kind: quick`** joins `feature` and `test-infra` (`spec-template-core.mjs` `SPEC_KINDS`). `feature` and
     `quick` are grouped as `TEST_FIRST_KINDS` — the kinds `/pharn-test` treats test-first — with `SPEC_KINDS`
     exactly `TEST_FIRST_KINDS ∪ {test-infra}`, disjoint, so a fourth kind must be classified before it is
@@ -48,7 +52,7 @@ mode` list names exactly what was skipped. `SKILLS_VERSION` 6.22.0 → 6.23.0 (m
     same AC-evidence gates a feature SPEC does.
   - **`check-spec.mjs --spec-kind <SPEC.md>`** — a new print mode beside `--state` and `--spec-id`: prints
     `feature` | `test-infra` | `quick` for a templated SPEC, an empty line (exit 0) when the kind is unusable, and
-    `feature` for a legacy SPEC (a legacy SPEC is therefore never quick). `/pharn-ship`'s GATE-1 backstop and
+    `feature` for a legacy SPEC (so a legacy SPEC is never quick while it stays legacy). `/pharn-ship`'s GATE-1 backstop and
     `/pharn-grill --quick`'s eligibility check both shell this mode, so the printed token and the approval pin's
     own reading of the kind can never disagree.
   - **`mark-phase.mjs --mode <m>`** — run-start only, `m` in the new closed `MARKER_MODES` (`{"quick"}`); refused
@@ -62,14 +66,34 @@ mode` list names exactly what was skipped. `SKILLS_VERSION` 6.22.0 → 6.23.0 (m
     `["pharn-regress", "pharn-verify"]` (full) or `["pharn-verify"]` (quick) — demanding a regress stage-start for
     quick mode would make `gate2-quick` unreachable, since a quick run never starts `/pharn-regress`. The
     regression verdict is **never consulted** for `gate2-quick`, so a `regression-report.json` left on disk by an
-    earlier full run cannot manufacture it. `SHIP_DECISION_FORMS` gains the `gate2-quick` member (closure-tested,
-    five forms total). Either misreading under-claims, never over-claims: a skipped `--mode quick` marker reads as
-    full (so the outcome is `stop:pharn-verify`, never `gate2`), and a full run wrongly marked quick yields
-    `gate2-quick` at most, never the stronger `gate2`.
+    earlier full run cannot manufacture it. `SHIP_DECISION_FORMS` gains the `gate2-quick` member (closure-tested).
+  - **Verdict applicability, tightened in BOTH modes (GATE-2 review finding F1).** A quick run whose run-start
+    line was skipped, after an earlier run that never wrote its run-stop, joined that run's window — iteration
+    numbers restart at 1 in every run, so the earlier `pharn-regress@1` completed the pair for the quick run's own
+    `pharn-verify@1`, and the derivation returned the FLOOR decision `gate2` over a regress check that never ran
+    on this build. Two conditions close it: (a) a verdict stage-start counts only after the same iteration's
+    latest `pharn-build` stage-start; (b) a stage other than a verdict stage started twice at one iteration in the
+    current run is a boundary that cannot be established, so the outcome is `undetermined` (the verdict stages are
+    exempt: `/pharn-loop`'s freshness re-run starts them again inside one iteration). A full run's outcome changes
+    only on marker trails a compliant run never writes. So **a skipped or wrong mode marker never yields `gate2`**:
+    a quick run-start written without `--mode quick` reads as full and has no regress stage-start
+    (`stop:pharn-verify`); a skipped quick run-start reads `undetermined`; a full run wrongly marked quick yields
+    `gate2-quick` at most. Two bounds are stated in `ship-outcome-core.mjs`'s header: this holds for the markers the
+    command prescribes, and an earlier run that left only its run-start is byte-identical to resuming it, so its
+    mode is read (`stop:pharn-verify` or `gate2-quick`, never `gate2`).
   - **`render-run-report.mjs`**: the `## Outcome` preamble gains a `gate2-quick` bullet stating it is not `gate2`;
     for a quick ship ledger, `## Verdicts` renders the regress line as "not part of this run: a quick
-    `/pharn-ship` run starts no `/pharn-regress`" — read from the run's own mode, never from whether a
-    `regression-report.json` happens to exist on disk.
+    `/pharn-ship` run starts no `/pharn-regress`", and `## Briefing` never links a `BRIEFING.md` (quick mode renders
+    none, so a file of that name is an earlier run's) — both read from the run's own mode, never from which files
+    happen to exist on disk.
+  - **The scope check is kept (GATE-2 review finding F3).** Skipping `/pharn-regress` would also have skipped
+    `check-regress.mjs scope`, the check that sees a changed path outside the plan's `## Files` made before the
+    build's reconcile anchor (a `/pharn-test`-stage Bash write, say — `check-bash-reconcile.mjs` covers anchor →
+    verify only). A quick run now runs that partition itself before `/pharn-verify` (and again inside Step 2b),
+    with `/pharn-regress`'s own inputs and no base worktree, install or gate run, and STOPs on `escaped`.
+  - **Another run's artifacts are never pointed at.** A feature directory an earlier full run used can still hold
+    its `REGRESSION.md`, `regression-report.json`, `BRIEFING.md` and `RUN-REPORT.md`; a quick run's `SHIP.md`
+    omits every pointer to them and says they predate the run. They are labelled, not removed.
   - **`/pharn-grill <name> --quick`** still owns its artifact (P3): an eligibility check (the pinned `--spec-kind`
     line) refuses outright — writing nothing — unless the SPEC is `spec_kind: quick`; the two floor stops (the
     spec→plan hash chain, the `applied_lessons` re-verification) run unchanged; the interrogation and the griller
@@ -79,11 +103,16 @@ mode` list names exactly what was skipped. `SKILLS_VERSION` 6.22.0 → 6.23.0 (m
   - **`/pharn-spec --quick <description>`** adds three fit checks to its interrogation (at most three criteria,
     none `e2e`-only, a `test` runner PHARN can find), writes `spec_kind: quick`, and — at Step 4 — names the trade
     at the gate that approves it: one fixed sentence before the approval question says a quick SPEC skips the
-    regression check and the plan interrogation. `--quick` with `--model-approve` reports back blocked and writes
-    nothing quick; no shipped command passes both.
-  - **`--quick` is recognized only as the FIRST TOKEN of the arguments**, in `/pharn-ship` and `/pharn-spec` alike
-    — never scanned out of the untrusted `<description>` prose, so a pasted description containing the substring
-    `--quick` can never switch a run's mode (P2).
+    regression check and the plan interrogation, and still stops on a changed file outside the plan's declared
+    files. `--quick` with `--model-approve` reports back blocked and writes nothing quick; no shipped command
+    passes both.
+  - **`--quick` counts only as the FIRST TOKEN of the arguments**, in `/pharn-ship` and `/pharn-spec` alike —
+    never scanned out of the untrusted `<description>` prose (P2). **That rule is ADVISORY** (GATE-2 review
+    finding F2): the orchestrating model applies it, and nothing on the floor parses the invocation. The floor
+    backstop is the SPEC — the short spine runs only once `check-spec-approved.mjs` exits 0 and `--spec-kind`
+    prints `quick` from the pinned frontmatter — and its bound is stated: it cannot tell a typed `--quick` from a
+    misread one over a SPEC a human already approved as quick. A legacy SPEC is never quick only while it stays
+    legacy: `spec_template` sits outside the pin, and that residual is named in the contract, not closed.
   - **The human-only trusted-doc patch** (`LIMITS.md §3a`, `pharn/ARCHITECTURE.md §6`) is generated by the
     committed `.dev/features/ship-quick-mode/handoff/make-patch.mjs` and applied by the human via
     `proposed/apply.sh` at GATE 2, after the last `/pharn-dev-verify` and before merge — the build's own chain

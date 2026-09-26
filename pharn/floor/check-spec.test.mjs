@@ -595,7 +595,7 @@ test("--spec-kind: unreadable and no-frontmatter both exit 1 with a stderr reaso
 // The spec-template rules (pharn/pharn-contracts/spec-template.md) — opt-in by the `spec_template` key.
 //
 // What these tests are, stated before they are trusted (P0):
-//   - RULE_CASES is the ONE enumeration of the eight rule kinds (PHARN's own build-loop lesson L29), and every
+//   - RULE_CASES is the ONE enumeration of the template rule kinds (PHARN's own build-loop lesson L29), and every
 //     mutant in it must RED with ITS rule's kind and no other, against a base fixture that is GREEN (the
 //     control, L34) — so each RED is attributable, never an accident of a second defect.
 //   - The shipped-template probe fills the REAL template and requires GREEN. It binds the template to the
@@ -880,7 +880,7 @@ const RULE_CASES = [
   },
 ];
 
-test("✧ L34 — RULE_CASES covers all NINE kinds (an open form — 6.23.0 added `quick`), each with at least one mutant", () => {
+test("✧ L34 — RULE_CASES covers every template RED kind (an open form, L47 — 6.23.0 added `quick`), each with at least one mutant", () => {
   const kinds = RULE_CASES.map((r) => r.kind);
   assert.deepEqual(kinds, [
     "section",

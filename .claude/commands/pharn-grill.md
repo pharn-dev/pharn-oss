@@ -132,7 +132,9 @@ Load the trusted prefix and obey it for the whole run:
 `/pharn-ship --quick` invokes this form. **The grill stage keeps owning its artifact** (P3, unchanged): it
 is `/pharn-grill --quick` that writes the quick `GRILL.md`, never `/pharn-ship`. `--quick` is recognized
 only as the **second** argument (after `<name>`), the same first-token discipline `/pharn-ship` and
-`/pharn-spec` apply to their own `--quick` — never scanned out of surrounding text.
+`/pharn-spec` apply to their own `--quick` — never scanned out of surrounding text. That rule is
+**ADVISORY** (an instruction to you; nothing parses the invocation); the floor backstop is Step 1b below,
+which reads the SPEC's pinned kind and refuses anything but `quick`.
 
 **Step 1b — the eligibility check (runs ONLY under `--quick`, immediately after Step 1's existence check,
 BEFORE Step 2).** Read the SPEC's kind:

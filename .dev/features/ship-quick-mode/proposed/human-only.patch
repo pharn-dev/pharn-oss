@@ -1,8 +1,8 @@
 diff --git a/LIMITS.md b/LIMITS.md
-index 55ddb69..21ec339 100644
+index 55ddb69..5dea328 100644
 --- a/LIMITS.md
 +++ b/LIMITS.md
-@@ -122,10 +122,20 @@ State these honestly; do not pretend tiered loading solves them.
+@@ -122,10 +122,24 @@ State these honestly; do not pretend tiered loading solves them.
  
  A 3-line typo fix still fans out to every lens, each loading its rules + the diff. Tiered loading
  optimizes _within_ one assembly (don't load all rules at once); it does **nothing** about fan-out
@@ -13,31 +13,36 @@ index 55ddb69..21ec339 100644
  
 +> **The manual flag is `/pharn-ship --quick` (6.23.0), and it trades checks for cost.** A human chooses it for
 +> a `spec_kind: quick` SPEC: one to three acceptance criteria, each verified at `unit` or `integration`. It
-+> keeps both human gates, the grill's two floor stops, the test-first evidence for those criteria and
-+> `/pharn-verify` with its AC gate, and it does not check three things: **no regression outside the feature is
-+> looked for** (`/pharn-regress` does not run, so nothing compares base and head); **nobody interrogates the
-+> plan** (`/pharn-grill --quick` runs its floor stops and no griller); and **no `BRIEFING.md` or
-+> `RUN-REPORT.md`** is written (`cost.json` is). Its ledger outcome is `gate2-quick`, never `gate2`. Nothing
-+> measures whether a change is small: the kind and the flag are what a person chose, and a quick SPEC run
-+> without the flag takes the full pipeline. There is still no AUTOMATIC proportionality, and `/pharn-review`'s
-+> lens fan-out is unchanged.
++> keeps both human gates, the grill's two floor stops, the test-first evidence for those criteria,
++> `/pharn-regress`'s scope check (a changed file outside the plan's `## Files` still stops the run) and
++> `/pharn-verify` with its AC gate. It leaves out: **the regression check** — no regression outside the feature
++> is looked for, because nothing compares base and head; **the plan interrogation** — `/pharn-grill --quick`
++> runs its floor stops and no griller; and **`BRIEFING.md` and `RUN-REPORT.md`** (`cost.json` is still
++> written). Its ledger outcome is `gate2-quick`, which is not `gate2`: `gate2` needs a `pharn-regress`
++> stage-start, which a quick run never writes (the bounds of trusting those Bash-written markers are in
++> `pharn-contracts/cost-ledger.md`). The `--quick` flag is read by the orchestrating model, so honoring it is
++> advisory; what backs it is the SPEC's approved, pinned `spec_kind: quick`. Nothing measures whether a
++> change is small: the kind and the flag are what a person chose, and a quick SPEC run without the flag takes
++> the full pipeline. There is still no AUTOMATIC proportionality, and `/pharn-review`'s lens fan-out is
++> unchanged.
 +
  ### 3b. Rule overlap × stages
  
  The same rule file (`security.md`) is loaded into context 3–4× across a feature's life (security
 diff --git a/pharn/ARCHITECTURE.md b/pharn/ARCHITECTURE.md
-index 816ebfa..0bdda36 100644
+index 816ebfa..b0ffd13 100644
 --- a/pharn/ARCHITECTURE.md
 +++ b/pharn/ARCHITECTURE.md
-@@ -247,6 +247,12 @@ SPEC, and a legacy SPEC gets neither. `build` runs `pharn/floor/check-test-stage
+@@ -247,6 +247,13 @@ SPEC, and a legacy SPEC gets neither. `build` runs `pharn/floor/check-test-stage
  without that evidence (6.19.0) — obeying it is command discipline, and `/pharn-loop` re-reads it after
  every build. Shape and bounds: `pharn-contracts/ac-tests.md` (cited, not restated — P4; `LIMITS.md §9`).
  
 +**Quick mode** (`/pharn-ship --quick`, 6.23.0) runs a shorter spine for a small change: a `spec_kind: quick`
 +SPEC (one to three criteria, each `unit` or `integration`), `plan`, the grill's floor stops without its
-+interrogation, `test`, `build` and `verify` as above, and **no `regress`**, so nothing looks for a
-+regression outside the feature. Both human gates stay, and the ledger outcome is `gate2-quick`, never
-+`gate2`. Bounds: `LIMITS.md §3a`; shape: `pharn-contracts/spec-template.md`, `pharn-contracts/cost-ledger.md`.
++interrogation, `test`, `build`, `regress`'s scope check alone, and `verify` as above — **no `regress` base
++comparison**, so nothing looks for a regression outside the feature. Both human gates stay, and the ledger
++outcome is `gate2-quick`, which is not `gate2`. Bounds: `LIMITS.md §3a`; shape:
++`pharn-contracts/spec-template.md`, `pharn-contracts/cost-ledger.md`.
 +
  **Keystone:** `SPEC.md` is the root artifact and every downstream artifact is bound to it. **The
  binding is the feature slug, not a field on every artifact** — `spec_id` ≡ `<name>` ≡ the

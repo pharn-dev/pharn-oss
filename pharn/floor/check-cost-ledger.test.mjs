@@ -104,15 +104,25 @@ function quickShipLedger() {
         session_id: null,
         mode: "quick",
       }),
+      // A compliant quick run starts its build before its verify, and since 6.23.0's GATE-2 fix a verify
+      // stage-start counts only AFTER the same iteration's latest pharn-build stage-start (ship-outcome-core).
       JSON.stringify({
         seq: 2,
+        kind: "stage-start",
+        stage: "pharn-build",
+        iteration: 1,
+        ts: "2026-09-21T08:10:00.000Z",
+        session_id: null,
+      }),
+      JSON.stringify({
+        seq: 3,
         kind: "stage-start",
         stage: "pharn-verify",
         iteration: 1,
         ts: "2026-09-21T08:30:00.000Z",
         session_id: null,
       }),
-      JSON.stringify({ seq: 3, kind: "run-stop", stage: null, iteration: null, ts: "2026-09-21T09:59:00.000Z", session_id: null }),
+      JSON.stringify({ seq: 4, kind: "run-stop", stage: null, iteration: null, ts: "2026-09-21T09:59:00.000Z", session_id: null }),
     ].join("\n") + "\n"
   );
   return renderLedger({

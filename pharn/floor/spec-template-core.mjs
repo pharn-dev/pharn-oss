@@ -28,7 +28,7 @@
 // a line: the SPEC body is untrusted DATA, and a RED must not become a channel for it.
 //
 // Honest bounds (P0), each also stated in the contract:
-//   - OPT-IN. A SPEC with no `spec_template` line bypasses all eight rules. /pharn-spec writing the key is command
+//   - OPT-IN. A SPEC with no `spec_template` line bypasses every template rule. /pharn-spec writing the key is command
 //     prose — advisory. A near-miss spelling (`spec-template:`, `Spec_Template:`) is also legacy.
 //   - PHRASED, NOT TESTED. A valid AC grammar means each criterion is PHRASED testably. It never means a test
 //     exists, runs, or passes, nor that the Then is observable on the public surface (advisory).
@@ -91,8 +91,10 @@ export const TEST_FIRST_KINDS = Object.freeze(["feature", "quick"]);
  *  once (L35), so the constants have exactly one owner. `/pharn-ship --quick` trades checks for cost: it
  *  keeps test-first evidence and drops the regression check, so what it may carry is a change whose
  *  evidence is a FEW FAST tests — three criteria bound the change a human approves at GATE 1, and an `e2e`
- *  criterion needs the slowest gate and its own runner, which is exactly what quick mode exists to avoid. A
- *  larger or end-to-end change takes the full pipeline. */
+ *  criterion would need its test written and run red at `/pharn-test` through the end-to-end runner (the
+ *  slowest level, with a runner of its own), which the quick bound keeps out. It does NOT keep the project's
+ *  own e2e gates out: `/pharn-verify` still discovers and runs them in a quick run. A larger or end-to-end
+ *  change takes the full pipeline. */
 export const QUICK_KIND = "quick";
 export const QUICK_MAX_ACS = 3;
 export const QUICK_LEVELS = Object.freeze(["unit", "integration"]);
@@ -421,8 +423,8 @@ function checkAcceptanceCriteria(sec, out) {
  * is malformed carries `level: null`.
  *
  * @param {string} text  the SPEC.md source
- * `kind` is specKindOf() over the frontmatter: `feature`, `test-infra`, or `null` for an invalid value (a legacy SPEC
- * reports `feature`: it has no AC ids either way). `kindInBody` is kindLineOpensBody() over the body (`false` with no
+ * `kind` is specKindOf() over the frontmatter: a `SPEC_KINDS` member (`feature`, `test-infra` or `quick`), or `null`
+ * for an invalid value (a legacy SPEC reports `feature`: it has no AC ids either way). `kindInBody` is kindLineOpensBody() over the body (`false` with no
  * frontmatter): when it holds, a templated SPEC's `kind` is `null` too, because the approval pin cannot tell that body
  * from the same line in the frontmatter, so no AC mode may be read from it (6.20.7). A legacy SPEC keeps `feature`.
  *
@@ -510,7 +512,7 @@ function hasOutOfScopeEntry(sec) {
 }
 
 /**
- * The eight template rules over one parsed SPEC.
+ * The template rules (an open form — L47) over one parsed SPEC.
  * @param {{fm: object, raw: string, body: string, firstLine: number, baseRequired: string[]}} spec
  *   `firstLine` is the FILE line number of the body's first line; `baseRequired` is check-spec.mjs's base
  *   section set, which that checker already REDs by its own (legacy) loop. `raw` is the frontmatter block's text,

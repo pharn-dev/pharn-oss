@@ -66,7 +66,7 @@ increment a committed paper trail:
   unattended `/pharn-loop`, approves for you and records as the model's approval).
 - `PLAN.md` — the agent's implementation plan and declared write scope.
 - `GRILL.md` — pre-build interrogation of the plan (a `/pharn-ship --quick` run's `GRILL.md` records only
-  its two floor stops and explicitly did not interrogate — see "Quick mode" below).
+  its two floor stops and explicitly did not interrogate — see `--quick` under [Quick start](#quick-start)).
 - `AC-TESTS.md`, `AC-TESTS.lock.json` — which test covers each acceptance criterion, and the pinned evidence
   that each of those tests failed before the build.
 - `BUILD.md`, `REGRESSION.md`, `VERIFY.md`, `SHIP.md` — what changed, what ran, what passed, what did
@@ -145,15 +145,18 @@ both human gates:
 
 For a small, well-scoped change, `--quick` (6.23.0) runs a shorter spine — both human gates, a
 `spec_kind: quick` mini-SPEC of 1–3 criteria, the grill's two floor stops without its interrogation,
-test-first evidence and `/pharn-verify` — and skips `/pharn-regress`, the plan interrogation, `BRIEFING.md`
-and `RUN-REPORT.md`. Its ship record names exactly what it did not check.
+test-first evidence and `/pharn-verify` — and skips `/pharn-regress`'s base-and-head comparison, the plan
+interrogation, `BRIEFING.md` and `RUN-REPORT.md`. Its ship record lists what it did not check, and a changed
+file outside the plan's declared files still stops the run (`/pharn-regress`'s scope check is kept).
 
 ```text
 /pharn-ship --quick fix the off-by-one in the pagination cursor
 ```
 
-`--quick` is read only as the first token of the arguments, so it can never be triggered from inside your
-description.
+`--quick` counts only as the first token of the arguments. That rule is an instruction to the orchestrating
+model, not a parser, so it is advisory. The deterministic backstop is the SPEC: quick mode first reads the
+approved, pinned `spec_kind` and stops on anything but `quick`, so a misread `--quick` over a full SPEC meets
+that stop. It cannot tell a typed `--quick` from a misread one over a SPEC you already approved as quick.
 
 Every stage is also available as its own command; see [Commands](#commands).
 
@@ -275,7 +278,7 @@ two are standalone: neither is a pipeline stage, and neither is invoked by `/pha
 | Command                 | Use it when you want to...                                                                                                                                                                                                                                 |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/pharn-loop`           | Run the full workflow unattended: the model approves the spec, iterates build → regress → verify to a deterministic stop, commits a green result to a local branch, and reports.                                                                           |
-| `/pharn-ship`           | Run the full workflow once, then present the ship record and briefing at the final human decision gate. `--quick` (6.23.0) runs a shorter spine for a small change and skips `/pharn-regress`.                                                             |
+| `/pharn-ship`           | Run the full workflow once, then present the ship record and briefing at the final human decision gate. `--quick` (6.23.0) runs a shorter spine for a small change and skips `/pharn-regress`'s base comparison.                                           |
 | `/pharn-review`         | Run code-review lenses in parallel over any code and merge their structured findings deterministically. This is standalone; it is not a pipeline stage.                                                                                                    |
 | `/pharn-spec`           | Convert prose intent into a structured `SPEC.md`, surface gaps, and stop for approval before implementation.                                                                                                                                               |
 | `/pharn-plan`           | Convert an approved `SPEC.md` into a `PLAN.md` with declared files and declared promoted lessons.                                                                                                                                                          |
@@ -756,8 +759,9 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   guessing what it spent: `/pharn-loop` and `/pharn-ship` write `cost.json` and `RUN-REPORT.md` into the
   feature directory, with tokens broken down per stage, iteration and model. That is a measurement, not a
   reduction — it tells you the bill, it does not make the run cheaper. For an actual reduction on a small,
-  well-scoped change, `/pharn-ship --quick` (6.23.0) is the manual lever: it drops `/pharn-regress` (a
-  whole base-and-head suite run), the plan interrogation, and the briefing/run-report renders. There is no
+  well-scoped change, `/pharn-ship --quick` (6.23.0) is the manual lever: it drops `/pharn-regress`'s
+  base-and-head suite run (its scope check still runs), the plan interrogation, and the briefing/run-report
+  renders. There is no
   automatic proportionality — nothing measures whether a change is "small" — the flag and the SPEC kind are
   a human's choice, and a change too large for it takes the full pipeline.
 - **Packaging is still pre-release shaped.** There are no GitHub releases or git tags yet; the installer

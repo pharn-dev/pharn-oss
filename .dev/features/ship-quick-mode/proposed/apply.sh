@@ -12,7 +12,7 @@ git apply --check "$F/human-only.patch"
 git apply "$F/human-only.patch"
 if ! { shasum -a 256 -c "$F/human-only.sha256" && node pharn/floor/validate.mjs . && node .dev/floor/check-specified-markers.mjs . && node --test .dev/floor/hash-doc.test.mjs; }; then
   git checkout -- LIMITS.md pharn/ARCHITECTURE.md
-  echo "apply.sh: FAILED - both files were restored from HEAD; nothing was committed" >&2
+  echo "apply.sh: FAILED - both files were restored from the index (git checkout --), which is HEAD unless you staged edits to them; nothing was committed" >&2
   exit 1
 fi
 git commit -q -m "docs(trusted): quick mode in LIMITS.md and ARCHITECTURE.md (human-applied)" -- LIMITS.md pharn/ARCHITECTURE.md

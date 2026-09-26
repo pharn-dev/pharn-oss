@@ -1353,7 +1353,8 @@ test("Verdicts: a quick ship ledger renders regress as NOT PART OF THIS RUN, eve
         outcome: { decision: "gate2-quick", iterations: 1, source: "verdicts+markers" },
         markers: [
           { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-01-01T00:00:00.000Z", session_id: "s", mode: "quick" },
-          { seq: 2, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-01-01T00:00:01.000Z", session_id: "s" },
+          { seq: 2, kind: "stage-start", stage: "pharn-build", iteration: 1, ts: "2026-01-01T00:00:00.500Z", session_id: "s" },
+          { seq: 3, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-01-01T00:00:01.000Z", session_id: "s" },
         ],
       }),
       "verify-report.json": { verdict: "PASS" },
@@ -1364,6 +1365,41 @@ test("Verdicts: a quick ship ledger renders regress as NOT PART OF THIS RUN, eve
     const md = renderRunReport("feat", { repo: root });
     assert.match(md, /- regress: not part of this run: a quick `\/pharn-ship` run starts no `\/pharn-regress`/);
     assert.doesNotMatch(md, /- regress: `no-regressions`/, "the report on disk must NEVER be shown as this run's regress verdict");
+    assert.doesNotMatch(md, /NOT FROM THIS RUN|CANNOT BE BOUND/, "the quick run's own verify is current: no exclusion label");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Briefing (GATE-2 review): a quick ship ledger NEVER links a BRIEFING.md on disk — it predates this run; a full ledger still does", () => {
+  const quickMarkers = [
+    { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-01-01T00:00:00.000Z", session_id: "s", mode: "quick" },
+    { seq: 2, kind: "stage-start", stage: "pharn-build", iteration: 1, ts: "2026-01-01T00:00:00.500Z", session_id: "s" },
+    { seq: 3, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-01-01T00:00:01.000Z", session_id: "s" },
+  ];
+  const briefingOf = (md) => md.split("## Briefing")[1].split("## What the run ran into")[0];
+  for (const onDisk of [true, false]) {
+    const root = scratch();
+    try {
+      feature(root, "feat", {
+        "cost.json": shipCost({ outcome: { decision: "gate2-quick", iterations: 1, source: "verdicts+markers" }, markers: quickMarkers }),
+        "verify-report.json": { verdict: "PASS" },
+        // An EARLIER full run's briefing, left in the directory — quick mode renders none of its own.
+        ...(onDisk ? { "BRIEFING.md": "# BRIEFING — feat\n\nregress: no-regressions\n" } : {}),
+      });
+      const b = briefingOf(renderRunReport("feat", { repo: root }));
+      assert.match(b, /not part of this run: a quick `\/pharn-ship` run renders no `BRIEFING\.md`/, `onDisk=${onDisk}`);
+      assert.doesNotMatch(b, /\]\(\.\/BRIEFING\.md\)/, `onDisk=${onDisk}: a quick run's report must never link a BRIEFING.md`);
+      assert.equal(/written by an EARLIER run/.test(b), onDisk, `onDisk=${onDisk}: the earlier file is named only when it exists`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+  // CONTROL: the same directory under a FULL ship ledger links the briefing, as before 6.23.0.
+  const root = scratch();
+  try {
+    feature(root, "feat", { "cost.json": shipCost(), "BRIEFING.md": "# BRIEFING — feat\n" });
+    assert.match(briefingOf(renderRunReport("feat", { repo: root })), /\[`BRIEFING\.md`\]\(\.\/BRIEFING\.md\) — the GATE-2 briefing/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -1711,11 +1747,14 @@ function shipRun(root, markers) {
 test("INTEGRATION: APPLICABLE ship evidence → gate2, and the verdicts are shown WITHOUT an exclusion label", () => {
   const root = scratch();
   try {
+    // A compliant run builds first: since 6.23.0 a verdict stage-start counts only after the same
+    // iteration's latest pharn-build stage-start (ship-outcome-core, condition (a)).
     const r = shipRun(root, [
       { seq: 1, kind: "run-start", ts: "2026-09-22T10:00:00.000Z" },
-      { seq: 2, kind: "stage-start", stage: "pharn-regress", iteration: 1, ts: "2026-09-22T10:00:10.000Z" },
-      { seq: 3, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-09-22T10:00:20.000Z" },
-      { seq: 4, kind: "run-stop", ts: "2026-09-22T10:01:00.000Z" },
+      { seq: 2, kind: "stage-start", stage: "pharn-build", iteration: 1, ts: "2026-09-22T10:00:05.000Z" },
+      { seq: 3, kind: "stage-start", stage: "pharn-regress", iteration: 1, ts: "2026-09-22T10:00:10.000Z" },
+      { seq: 4, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-09-22T10:00:20.000Z" },
+      { seq: 5, kind: "run-stop", ts: "2026-09-22T10:01:00.000Z" },
     ]);
     assert.equal(r.led.outcome.decision, "gate2");
     assert.match(r.outcome, /decision\s+gate2/);
@@ -1897,11 +1936,14 @@ test("F2: a FAILED emission leaves the previous run's cost.json — the report r
       }) + "\n"
     );
     const mb = join(root, ".pharn", "cost"); // the DEFAULT markers location under --repo (no flag below)
+    // A compliant run 1 builds first (since 6.23.0 a verdict stage-start counts only after the same
+    // iteration's latest pharn-build stage-start — ship-outcome-core, condition (a)).
     const run1 = [
       { seq: 1, kind: "run-start", ts: "2026-09-22T08:00:00.000Z" },
-      { seq: 2, kind: "stage-start", stage: "pharn-regress", iteration: 1, ts: "2026-09-22T08:01:00.000Z" },
-      { seq: 3, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-09-22T08:02:00.000Z" },
-      { seq: 4, kind: "run-stop", ts: "2026-09-22T08:30:00.000Z" },
+      { seq: 2, kind: "stage-start", stage: "pharn-build", iteration: 1, ts: "2026-09-22T08:00:30.000Z" },
+      { seq: 3, kind: "stage-start", stage: "pharn-regress", iteration: 1, ts: "2026-09-22T08:01:00.000Z" },
+      { seq: 4, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-09-22T08:02:00.000Z" },
+      { seq: 5, kind: "run-stop", ts: "2026-09-22T08:30:00.000Z" },
     ];
     markersAt(mb, "feat", run1);
     feature(root, "feat", {
@@ -1917,8 +1959,8 @@ test("F2: a FAILED emission leaves the previous run's cost.json — the report r
     // Run 2 starts (a new run-start), stops at grill, and its emission FAILS (bad usage → exit 2).
     markersAt(mb, "feat", [
       ...run1,
-      { seq: 5, kind: "run-start", ts: "2026-09-22T10:00:00.000Z" },
-      { seq: 6, kind: "stage-start", stage: "pharn-grill", ts: "2026-09-22T10:01:00.000Z" },
+      { seq: 6, kind: "run-start", ts: "2026-09-22T10:00:00.000Z" },
+      { seq: 7, kind: "stage-start", stage: "pharn-grill", ts: "2026-09-22T10:01:00.000Z" },
     ]);
     assert.equal(emitCli(root, "feat", mb, ["--command", "/pharn-ship", "--base-sah", "x"]).status, 2);
     md = renderRunReport("feat", { repo: root }); // NO markersBase: the default path (L41)

@@ -46,19 +46,33 @@
 // The set is written down IN FULL here, before any assertion was authored against it, because L36's
 // recorded instance is a five-member vocabulary that shipped with the enumeration in the same diff and
 // still acquired a second spelling of one member. `SHIP_DECISION_FORMS` is that enumeration; the suite
-// iterates it and additionally holds `SHIP_DECISION_RE` as a CLOSURE over the emitted stem, so a fourth
-// form fails rather than merely going untested.
+// iterates it and additionally holds `SHIP_DECISION_RE` as a CLOSURE over the emitted stem, so a form
+// outside the vocabulary fails rather than merely going untested.
 //
-// ── APPLICABILITY — the verdicts must belong to THIS run (added 6.9.1) ───────────────────────────────
+// ── APPLICABILITY — the verdicts must belong to THIS run (added 6.9.1; tightened 6.23.0) ─────────────
 // Until 6.9.1 `gate2` needed only "markers exist" + two green `.verdict`s read from the feature
 // directory, and nothing bound either report to the run being reported. REACHED THROUGH SUPPORTED USE,
 // not a probe of the pure function: `/pharn-spec` resumes an existing `<name>` (its Step 1.1, an
 // instruction), so a second `/pharn-ship` on the same feature appends a new `run-start`, STOPs at grill,
 // and the PREVIOUS run's green reports — still on disk, since no code invalidates them — derived
 // `gate2`. Now the verdicts count only when `verdictApplicability()` says `current`: the CURRENT run
-// (`run-window-core.mjs`'s `currentRunMarkers`, the one definition) carries a `stage-start` for BOTH
-// `pharn-regress` and `pharn-verify` at the run's LATEST recorded iteration, so a new invocation's run
+// (`run-window-core.mjs`'s `currentRunMarkers`, the one definition) carries a `stage-start` for EVERY
+// member of its stage set (`verdictStages(mode)` — `pharn-regress` and `pharn-verify` in a full run,
+// `pharn-verify` alone in a quick one) at the run's LATEST recorded iteration, so a new invocation's run
 // cannot inherit an old pair, and a Step 2b retry that started iteration 2 cannot inherit iteration 1's.
+// TWO MORE CONDITIONS since 6.23.0 (GATE-2 review finding F1: a quick run whose run-start was SKIPPED,
+// after an earlier run that never wrote its run-stop, derived `gate2` from that earlier run's regress
+// stage-start and report — iteration numbers restart at 1 in every run, so the earlier `pharn-regress@1`
+// completed the pair for this run's `pharn-verify@1`):
+//   (a) ORDER — a verdict stage-start counts only when it FOLLOWS (by `seq`) the latest `pharn-build`
+//       stage-start of the same iteration in the current run. With no such build there is no build for a
+//       verdict to be about, and the reports are not current.
+//   (b) NO REPEAT — a stage other than a verdict stage started twice at one iteration in the current run
+//       means two invocations' markers ran together (a skipped run-start), so the run's boundary is not
+//       established: `unknown`, hence `undetermined`, never a verdict. A VERDICT stage is exempt because
+//       `/pharn-loop`'s freshness re-run legitimately starts `pharn-verify` / `pharn-regress` again inside
+//       one iteration, and a loop ledger with no `LOOP.md` falls through to this derivation; `/pharn-ship`
+//       itself starts every (stage, iteration) at most once.
 // When the run window itself is `unknown` the outcome is `undetermined` — neither a failed check nor an
 // invented stop stage.
 // STRENGTH, stated: exact RELATIVE TO THE RECORDED MARKERS (enum + ordering), and the markers are
@@ -82,11 +96,24 @@
 // (`currentRunMarkers(...)[0]`), by exact equality at read time — an EARLIER run's quick run-start never
 // makes the current run quick, and vice versa. `verdictStages()` is the one place the stage SET forks:
 // full mode needs both `pharn-regress` and `pharn-verify`; quick mode needs `pharn-verify` alone.
-// EITHER MISREADING UNDER-CLAIMS, NEVER OVER-CLAIMS (stated because it is the safe-failure argument for
-// trusting a Bash-written marker at all): a quick run whose `--mode quick` marker was skipped reads as
-// full, so it has no regress stage-start and its outcome is `stop:pharn-verify`, never `gate2`. A full run
-// whose run-start wrongly carries `mode: "quick"` yields `gate2-quick` at most, which claims no regression
-// verdict at all — never the stronger `gate2` a full run's own regress stage would have earned.
+// A SKIPPED OR WRONG MODE MARKER NEVER YIELDS `gate2` — the safe-failure argument for trusting a
+// Bash-written marker at all. Re-derived at GATE 2 (review F1), because its first form was probed only with
+// the marker's VALUE altered, never with the marker ABSENT:
+//   • a quick run-start written WITHOUT `--mode quick` reads as full; the run starts no `/pharn-regress`, so
+//     the regress stage-start `gate2` needs is missing and the outcome is `stop:pharn-verify`;
+//   • a quick run whose run-start was SKIPPED joins the previous run's window. After a closed run, its first
+//     stage marker follows a run-stop (run-window-core's rule: `unknown`, so `undetermined`). After an
+//     unclosed one, its own `pharn-plan` / `pharn-grill` / `pharn-test` / `pharn-build` stage-starts repeat
+//     that run's (condition (b): `undetermined`), and a regress stage-start the earlier run wrote before
+//     this run's build never counts (condition (a));
+//   • a full run whose run-start wrongly carries `mode: "quick"` yields `gate2-quick` at most, which claims
+//     no regression verdict — never the stronger `gate2` a full run's own regress stage would have earned.
+// TWO BOUNDS, stated rather than closed: (1) all of the above is relative to the markers the command
+// PRESCRIBES — a run that skips its stage-starts as well as its run-start is not covered (markers are
+// advisory, L19); (2) an earlier run that left NOTHING but its run-start (a halt at GATE 1) is
+// byte-identical to resuming that same run, so the joined trail is read as one run with THAT run-start's
+// mode — `stop:pharn-verify` after a full one, `gate2-quick` after a quick one, never `gate2` — and every
+// stage and verdict marker in it is this run's own.
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -119,6 +146,14 @@ export const VERDICT_STAGES = Object.freeze(["pharn-regress", "pharn-verify"]);
  *  VERDICT_STAGES and then pruned by hand. */
 export const QUICK_VERDICT_STAGES = Object.freeze(["pharn-verify"]);
 
+/** The stage whose latest same-iteration `stage-start` a verdict `stage-start` must FOLLOW to count (6.23.0,
+ *  condition (a) in the header) — the `--stage` token both `/pharn-ship` and `/pharn-loop` write. */
+export const BUILD_STAGE = "pharn-build";
+
+/** The `reason` of an `unknown` applicability that condition (b) decides, not the run window (6.23.0). */
+export const REPEATED_STAGE_REASON =
+  "a stage other than a verdict stage was started twice at one iteration in the current run — the markers may span two invocations whose second run-start was skipped";
+
 /** `"quick"` iff the CURRENT run's run-start marker carries `mode === QUICK_MODE` (exact equality, read at
  *  THIS call — see the header); else `"full"`, the terminal fallback (P5, never a guess). Reads only
  *  `currentRunMarkers(...)[0]` — the SAME "current run" definition `verdictApplicability` and
@@ -149,8 +184,8 @@ export const OUTCOME_SOURCE = "verdicts+markers";
  *  trusting a file anyone can edit. Fail-closed: a token that does not match becomes `unknown`. */
 const STAGE_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
-/** CLOSURE over every `decision` this module can emit. A sixth form (the vocabulary is five members as of
- *  6.23.0) fails this, which is the whole point of a closure over a presence set (L36). */
+/** CLOSURE over every `decision` this module can emit. A form outside the vocabulary fails this, which is the
+ *  whole point of a closure over a presence set (L36) — the count lives in the suite's closure test, not here. */
 export const SHIP_DECISION_RE = /^(gate2|gate2-quick|undetermined|stop:[a-z0-9][a-z0-9-]{0,63})$/;
 
 /**
@@ -196,7 +231,7 @@ export const SHIP_DECISION_FORMS = Object.freeze([
     parameterized: false,
     floor: false,
     means:
-      "markers exist but the run's boundary cannot be established (run-window unknown), so no verdict can be bound to this run — not a failed check, not a stop stage",
+      "markers exist but the run's boundary cannot be established (the run window is unknown, or — 6.23.0 — the current run starts a non-verdict stage twice at one iteration, which a skipped run-start leaves behind), so no verdict can be bound to this run — not a failed check, not a stop stage",
   }),
 ]);
 
@@ -277,20 +312,45 @@ export function deriveShipOutcome({ markers, verifyVerdict, regressVerdict }) {
   };
 }
 
+/** A marker's iteration as the applicability test compares it: the integer, or `null` for none. */
+const iterationOf = (m) => (Number.isInteger(m?.iteration) ? m.iteration : null);
+
+/**
+ * Condition (b) in the header: does the current run start a stage OTHER than a verdict stage twice at one
+ * iteration? `/pharn-ship` starts every (stage, iteration) at most once, so a repeat is what a skipped
+ * run-start leaves when two invocations' markers run together. The verdict stages are exempt because
+ * `/pharn-loop`'s freshness re-run starts them again inside one iteration, and a loop ledger with no
+ * `LOOP.md` reaches this derivation. A stage token is compared as written (a non-string counts as `null`),
+ * so a malformed marker can only ADD a repeat — the fail-closed direction.
+ */
+function repeatsAStage(current) {
+  const seen = new Set();
+  for (const m of current) {
+    if (m?.kind !== "stage-start" || VERDICT_STAGES.includes(m.stage)) continue;
+    const key = JSON.stringify([typeof m.stage === "string" ? m.stage : null, iterationOf(m)]);
+    if (seen.has(key)) return true;
+    seen.add(key);
+  }
+  return false;
+}
+
 /**
  * Do the verdict report(s) on disk belong to THIS run's latest attempt? Read from the recorded markers
  * only — never from the reports' mtimes or contents ([[L42]], [[L6]]).
  *
- *  - `unknown`    — the run window cannot be established (`runWindow(markers, null)` is `unknown`).
+ *  - `unknown`    — the run window cannot be established (`runWindow(markers, null)` is `unknown`), or
+ *                   (6.23.0, condition (b)) the current run starts a non-verdict stage twice at one
+ *                   iteration (`REPEATED_STAGE_REASON`).
  *  - `current`    — the current run carries a `stage-start` for EVERY member of its stage set
  *                   (`verdictStages(mode)` — `VERDICT_STAGES` full, `QUICK_VERDICT_STAGES` quick) at the
- *                   run's LATEST recorded iteration (a run with no iterations: null == null).
+ *                   run's LATEST recorded iteration (a run with no iterations: null == null), each one
+ *                   AFTER (by `seq`) that iteration's latest `pharn-build` stage-start (6.23.0, condition (a)).
  *  - `not-in-run` — otherwise: the reports were produced by an earlier invocation, or by an earlier
- *                   attempt that a later iteration has superseded.
+ *                   attempt that a later iteration has superseded, or before this run's own build.
  *
  * Returns `{status, reason, latestIteration, mode, stages}`. `mode` and `stages` (6.23.0) are computed from
  * the markers regardless of window status, so a caller can label a report even under `unknown`. PURE. See
- * the header for the residual this cannot see.
+ * the header for the residuals this cannot see.
  */
 export function verdictApplicability(markers) {
   const mode = runMode(markers);
@@ -298,17 +358,27 @@ export function verdictApplicability(markers) {
   const win = runWindow(markers, null);
   if (win.status === "unknown") return { status: APPLICABILITY.UNKNOWN, reason: win.reason, latestIteration: null, mode, stages };
   const current = currentRunMarkers(markers) ?? [];
+  if (repeatsAStage(current)) return { status: APPLICABILITY.UNKNOWN, reason: REPEATED_STAGE_REASON, latestIteration: null, mode, stages };
   const latestIteration = recordedIterations(current);
-  const missing = stages.filter(
-    (stage) =>
-      !current.some(
-        (m) => m?.kind === "stage-start" && m.stage === stage && (Number.isInteger(m.iteration) ? m.iteration : null) === latestIteration
-      )
-  );
+  const at = latestIteration === null ? "" : ` at its latest iteration (${latestIteration})`;
+  const startsAtLatest = (stage) =>
+    current.filter((m) => m?.kind === "stage-start" && m.stage === stage && iterationOf(m) === latestIteration);
+  const builds = startsAtLatest(BUILD_STAGE);
+  if (builds.length === 0) {
+    return {
+      status: APPLICABILITY.NOT_IN_RUN,
+      reason: `the current run has no ${BUILD_STAGE} stage-start${at}, so no verdict stage-start can follow this run's own build`,
+      latestIteration,
+      mode,
+      stages,
+    };
+  }
+  const buildSeq = Math.max(...builds.map((m) => m.seq));
+  const missing = stages.filter((stage) => !startsAtLatest(stage).some((m) => m.seq > buildSeq));
   if (missing.length === 0) return { status: APPLICABILITY.CURRENT, reason: null, latestIteration, mode, stages };
   return {
     status: APPLICABILITY.NOT_IN_RUN,
-    reason: `the current run has no stage-start for ${missing.join(" and ")}${latestIteration === null ? "" : ` at its latest iteration (${latestIteration})`}`,
+    reason: `the current run has no stage-start for ${missing.join(" and ")} after its latest ${BUILD_STAGE} stage-start${at}`,
     latestIteration,
     mode,
     stages,

@@ -346,9 +346,11 @@ checker computes either, so there is nothing to re-derive against.
   token failed the grammar. The token is re-tested at READ time, not trusted from the writer: the
   markers file is ordinary state under `.pharn/` that a Bash write reaches (`LIMITS.md §6`).
 
-- **`undetermined`** — markers exist, but the run's own boundary cannot be established from them (the
-  run window is `unknown`, see "Run membership"). No verdict can then be bound to this run, so the outcome
-  is neither a failed check nor a stop stage.
+- **`undetermined`** — markers exist, but the run's own boundary cannot be established from them: the
+  run window is `unknown` (see "Run membership"), or — since 6.23.0 — the current run starts a stage other
+  than `pharn-regress` / `pharn-verify` twice at one iteration, which is what a skipped run-start leaves
+  when two invocations' markers run together. No verdict can then be bound to this run, so the outcome is
+  neither a failed check nor a stop stage.
 
 **The verdicts count only when they belong to THIS run (added 6.9.1; the stage SET they need forked by
 mode in 6.23.0).** The applicability test now reads the run's own mode first (`ship-outcome-core.mjs`
@@ -360,11 +362,30 @@ latest `run-start`, the same definition `run-window-core.mjs` uses for membershi
 set, the reports on disk were left by an earlier invocation or superseded by a later attempt, and they are
 excluded. The `stop:<stage>` name and `iterations` are also read from the current run only. **Why:**
 `/pharn-spec` resumes an existing `<name>`, so a second `/pharn-ship` over the same feature used to derive
-`gate2` from the PREVIOUS run's green reports after STOPping at grill. **Either misreading under-claims,
-never over-claims:** a quick run whose `--mode quick` marker was skipped reads as full, so with no
-`pharn-regress` stage-start its outcome is `stop:pharn-verify`, never `gate2`; a full run whose run-start
-wrongly carries `mode: "quick"` yields `gate2-quick` at most, which claims no regression verdict at all —
-never the stronger `gate2` a genuine full run's own green regress would have earned.
+`gate2` from the PREVIOUS run's green reports after STOPping at grill.
+
+**Two more conditions (6.23.0, the GATE-2 review of quick mode).** (a) **Order:** a verdict stage-start
+counts only when it follows the latest `pharn-build` stage-start of the same iteration in the current run;
+with no such build the reports are not current. (b) **No repeat:** a stage other than a verdict stage
+started twice at one iteration makes the outcome `undetermined` (above). `/pharn-ship` starts every
+(stage, iteration) at most once; the verdict stages are exempt because `/pharn-loop`'s freshness re-run
+starts them again inside one iteration, and a loop ledger with no `LOOP.md` reaches this derivation.
+**Why:** iteration numbers restart at 1 in every run, so a quick run whose run-start was skipped, after an
+earlier run that never wrote its run-stop, joined that run's window, and the earlier `pharn-regress@1`
+completed the pair for its own `pharn-verify@1`: the derivation returned `gate2` over a regress check that
+never ran on this build. A full run is affected only on marker trails a compliant run never writes.
+
+**A skipped or wrong mode marker never yields `gate2`.** A quick run-start written without `--mode quick`
+reads as full, and the run starts no `/pharn-regress`, so its outcome is `stop:pharn-verify`. A quick run
+whose run-start was skipped joins the previous run's window: after a closed run its first stage marker
+follows a run-stop (membership `unknown`), and after an unclosed one its own stage-starts repeat that run's
+(condition (b)), so the outcome is `undetermined` either way, and an earlier regress stage-start that
+precedes this run's build never counts (condition (a)). A full run whose run-start wrongly carries
+`mode: "quick"` yields `gate2-quick` at most, which claims no regression verdict. **Two bounds:** this is
+relative to the markers the command prescribes — a run that also skips its stage-starts is not covered —
+and an earlier run that left nothing but its run-start (a halt at GATE 1) is byte-identical to resuming
+that same run, so its run-start's mode is read: `stop:pharn-verify` after a full one, `gate2-quick` after a
+quick one, never `gate2`.
 
 **Strength:** the rule is exact relative to the RECORDED markers (enum + ordering), and the markers are
 advisory. It never uses a file's mtime or its mere existence. **The residual, at its true width:** a
@@ -385,7 +406,9 @@ unqualified current verdict. **For a quick ship ledger (6.23.0) it additionally 
 as "not part of this run: a quick `/pharn-ship` run starts no `/pharn-regress`"** — read from the run's own
 mode (`runMode()` over `cost.markers[]`), never from whether a `regression-report.json` happens to exist on
 disk: a report left by an EARLIER full run over the same feature directory must never be shown as this
-quick run's regress verdict, even when that report reads `no-regressions`.
+quick run's regress verdict, even when that report reads `no-regressions`. **By the same rule its
+`## Briefing` never links a `BRIEFING.md`** (quick mode renders none, so a file of that name is an earlier
+run's); it says "not part of this run" instead.
 
 `outcome` is `null` when there are no markers at all — no evidence a run happened. That is a real state,
 not a failure, and it is what a fresh or abandoned run renders.

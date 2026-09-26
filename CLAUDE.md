@@ -640,14 +640,20 @@ node pharn/floor/check-cost-ledger.mjs <cost.json> [--verify-transcript]
 # SPEC's spec_kind — a quick SPEC may still run the full pipeline) — a FULL run needs BOTH pharn-regress and
 # pharn-verify stage-starts in the CURRENT run (latest run-start, run-window-core's one definition) at its
 # latest iteration; a QUICK run needs pharn-verify ALONE, because it never starts pharn-regress. Either way
-# an earlier run's green reports left on disk no longer count, and a /pharn-ship ledger never copies a
+# each counts only AFTER that iteration's latest pharn-build stage-start, and a non-verdict stage started
+# twice at one iteration (what a SKIPPED run-start leaves when two invocations' markers run together) is
+# `undetermined` — both added at 6.23.0's GATE 2 (review F1: a quick run whose run-start was skipped, after
+# an unclosed earlier run, derived gate2 from that run's regress@1, since iterations restart at 1). An
+# earlier run's green reports left on disk no longer count, and a /pharn-ship ledger never copies a
 # LOOP.md (source chosen by --command). Residual, pinned by a test: a stage that starts then refuses leaves
 # the old report, which is accepted. The stage token is re-tested at READ time, never trusted from
 # the writer, because markers.jsonl is ordinary .pharn/ state a Bash write reaches (LIMITS.md §6).
-# EITHER MISREADING UNDER-CLAIMS, NEVER OVER-CLAIMS: a quick run whose --mode quick marker was skipped reads
-# as full, so with no pharn-regress stage-start its outcome is stop:pharn-verify, never gate2. A full run
-# whose run-start wrongly carries mode: "quick" yields gate2-quick at most, never the stronger gate2 a
-# genuine full run's own green regress would have earned.
+# A SKIPPED OR WRONG MODE MARKER NEVER YIELDS gate2: a quick run-start written without --mode quick reads as
+# full and has no regress stage-start (stop:pharn-verify); a skipped quick run-start joins the previous
+# run's window, which reads `undetermined` (its stage markers follow that run's run-stop, or repeat its
+# stage-starts); a full run wrongly marked quick yields gate2-quick at most. BOUNDS (the module header):
+# relative to the markers the command prescribes, and an earlier run that left only its run-start is read
+# as that run resumed, so its mode decides (stop:pharn-verify or gate2-quick, never gate2).
 # `outcome` is null when there are no markers — no evidence a run happened, which is a real state.
 # NOT RE-DERIVABLE, stated rather than glossed: /pharn-loop has check-loop-decision.mjs; ship has no
 # equivalent and none is claimed, because a ship stop is a human gate or an orchestrator STOP and no
@@ -1083,8 +1089,9 @@ the floor plus the review agent.
 **The pipeline spine** is `spec → plan → grill → test → build → regress → verify → ship` (`test` since 6.19.0,
 `pharn/ARCHITECTURE.md §6`), each stage emitting
 a typed artifact carrying `spec_id` (+ the plan additionally pins `spec_content_hash`) — for a **full**
-run; `/pharn-ship --quick` (6.23.0) runs a shorter spine over a `spec_kind: quick` mini-SPEC and skips
-`regress` entirely (see "Quick mode" below).
+run; `/pharn-ship --quick` (6.23.0) runs a shorter spine over a `spec_kind: quick` mini-SPEC, skips
+`regress`'s base-and-head comparison and keeps only its scope check (`.claude/commands/pharn-ship.md`,
+`## Quick mode`).
 
 ## Conventions when building PHARN capabilities
 

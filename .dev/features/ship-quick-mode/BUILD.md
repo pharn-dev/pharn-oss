@@ -150,7 +150,43 @@ this worktree.
   reworded (`"spec_kind: feature"` / `"{feature, test-infra}"`); `ship-outcome-core.test.mjs`'s closure test
   asserted the OLD count of 4 `SHIP_DECISION_FORMS`. All three were updated to the plan's own stated new
   wording/count — never relaxed or removed — the moment `npm test` named them, before proceeding further.
-- Everything else matches the plan as amended after grill; no other deviation.
+- ~~Everything else matches the plan as amended after grill; no other deviation.~~ **Corrected at GATE 2
+  (2026-09-26) — that line was false.** `/pharn-dev-review` found four things PLAN.md and GRILL.md promised
+  that this build did not deliver: the ★ WIRING test that executes the committed quick run-start line into
+  `gate2-quick` with the full line as its control (PLAN "Evals", Outcome); the quick Step-2b applicability
+  cases; the CHANGELOG rollback sentence GRILL G11 marked FIXED; and `mode: full` / `ship-record.json`'s
+  `mode` in full-mode Step 3/3b (Decision 9 lived only in a parenthetical inside `## Quick mode`). All four
+  were built by the GATE-2 review-fix pass; see "GATE 2 — review fixes" below. A fifth, found while correcting
+  this line and **not** built: PLAN.md's Build procedure step 7 says this file records the structural call
+  counts re-derived on the build's HEAD, and it does not. They remain PLAN.md's figures at `767bf61`
+  (`/pharn-ship` 42 full → 33 quick), unre-counted; the GATE-2 scope check (review F3) adds one call to a
+  quick run's happy path (and one more inside Step 2b), so `/pharn-ship`'s own saving is 8 net, not 9.
+
+## GATE 2 — review fixes (2026-09-26)
+
+Stage model: opus — set by the maintainer's instruction, overriding pharn.config.json's sonnet for
+build/regress/verify; routed via Agent subagent; effort not routed. Built from `PLAN.md`'s "Amended at GATE 2
+(review fixes)" section, in a fresh worktree fast-forwarded to `2071a97`, with the setter re-run from the
+amended plan and the reconcile baseline anchored `--by ship-quick-mode-opus-fixes`, then amended
+(`--amend-scope`) when `.claude/commands/pharn-verify.md` joined `## Files`.
+
+- **F1** — `ship-outcome-core.mjs` `verdictApplicability`: conditions (a) ORDER and (b) NO REPEAT. Seven
+  existing fixtures modelled a compliant run with no `pharn-build` stage-start before its verdict stages
+  (`ship-outcome-core`, `render-cost-ledger`, `render-run-report`, `check-cost-ledger` suites); each gained the
+  build marker a real run writes, and the "★ RESIDUAL, PINNED" test keeps pinning its residual on that trail.
+  New tests: the reviewer's repro (→ `undetermined`), (a) alone, (b) per stage with the verdict-stage controls,
+  a 22-shape enumeration of earlier runs under a skipped quick run-start (all `undetermined`/`stop:*`, each
+  with a `gate2-quick` control), the named residual, quick Step 2b, and the ★ WIRING test. Mutation-probed
+  (L60): removing (b) reds the repro, (b) and enumeration tests; removing (a)'s order or its build requirement
+  reds the (a) and Step-2b tests.
+- **F2** — the first-token rule is labelled ADVISORY with its floor backstop and bound (`pharn-ship.md`,
+  `pharn-spec.md`, `pharn-grill.md`, README, CHANGELOG); a guarantee-audit bullet added.
+- **F3** — `## Quick mode` item 7 keeps `check-regress.mjs scope` (Step 2b re-runs it); items renumbered;
+  named KEPT in the trade text and `SHIP.md`. A ★ hygiene test plants a stray before the anchor and runs the
+  committed line.
+- **Advisory** — stale-artifact labelling (`SHIP.md` + the renderer's `## Briefing`); the `spec_template`
+  residual; the wording items; `make-patch.mjs` checks on stdin before writing; `apply.sh`'s message.
+- The regenerated patch's sums and new ARCHITECTURE pin are recorded in `proposed/APPLY.md` and `VERIFY.md`.
 
 ## Open issues for `/pharn-dev-regress` and `/pharn-dev-verify`
 

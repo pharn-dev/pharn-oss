@@ -921,11 +921,13 @@ test("outcome FALLBACK: with no LOOP.md the ledger carries the DERIVED ship outc
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "verify-report.json"), '{"verdict":"PASS"}');
   writeFileSync(join(dir, "regression-report.json"), '{"verdict":"no-regressions"}');
-  // Since 6.9.1 the verdicts count only when BOTH stages started in the current run (applicability).
+  // Since 6.9.1 the verdicts count only when BOTH stages started in the current run (applicability), and
+  // since 6.23.0 only AFTER that iteration's latest pharn-build stage-start (ship-outcome-core, condition (a)).
   const mb = writeMarkers(out, "feat", [
     { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2025-12-31T23:59:00.000Z", session_id: "s1" },
-    { seq: 2, kind: "stage-start", stage: "pharn-regress", iteration: 1, ts: "2025-12-31T23:59:30.000Z", session_id: "s1" },
-    { seq: 3, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-01-01T00:00:00.000Z", session_id: "s1" },
+    { seq: 2, kind: "stage-start", stage: "pharn-build", iteration: 1, ts: "2025-12-31T23:59:15.000Z", session_id: "s1" },
+    { seq: 3, kind: "stage-start", stage: "pharn-regress", iteration: 1, ts: "2025-12-31T23:59:30.000Z", session_id: "s1" },
+    { seq: 4, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-01-01T00:00:00.000Z", session_id: "s1" },
   ]);
   const r = run([
     "feat",
@@ -961,7 +963,8 @@ test("outcome FALLBACK, quick (6.23.0): a --quick run's run-start (mode: quick) 
   writeFileSync(join(dir, "regression-report.json"), '{"verdict":"regressions"}');
   const mb = writeMarkers(out, "feat", [
     { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2025-12-31T23:59:00.000Z", session_id: "s1", mode: "quick" },
-    { seq: 2, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-01-01T00:00:00.000Z", session_id: "s1" },
+    { seq: 2, kind: "stage-start", stage: "pharn-build", iteration: 1, ts: "2025-12-31T23:59:30.000Z", session_id: "s1" },
+    { seq: 3, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-01-01T00:00:00.000Z", session_id: "s1" },
   ]);
   const r = run([
     "feat",
@@ -1426,10 +1429,13 @@ test("SOURCE SELECTION (6.9.1): a /pharn-ship ledger NEVER copies a LOOP.md left
   writeFileSync(join(dir, "LOOP.md"), "---\ndecision: STOP_CAP\niterations: 3\n---\n\n# LOOP\n");
   writeFileSync(join(dir, "verify-report.json"), '{"verdict":"PASS"}');
   writeFileSync(join(dir, "regression-report.json"), '{"verdict":"no-regressions"}');
+  // A compliant run starts its build first: since 6.23.0 a verdict stage-start counts only after the same
+  // iteration's latest pharn-build stage-start (ship-outcome-core, condition (a)).
   const markersBase = writeMarkers(root, "feat", [
     marker(1, "run-start", null, null, "2020-01-01T00:00:00.000Z"),
-    marker(2, "stage-start", "pharn-regress", 1, "2020-01-01T00:01:00.000Z"),
-    marker(3, "stage-start", "pharn-verify", 1, "2020-01-01T00:02:00.000Z"),
+    marker(2, "stage-start", "pharn-build", 1, "2020-01-01T00:00:30.000Z"),
+    marker(3, "stage-start", "pharn-regress", 1, "2020-01-01T00:01:00.000Z"),
+    marker(4, "stage-start", "pharn-verify", 1, "2020-01-01T00:02:00.000Z"),
   ]);
   const common = { name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase, repo: out, featureBase: "f" };
   const ship = renderLedger({ ...common, command: "/pharn-ship" });

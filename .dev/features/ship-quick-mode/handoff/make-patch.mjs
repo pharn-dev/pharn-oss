@@ -38,7 +38,9 @@
 //           ARCHITECTURE pin (for APPLY.md).
 //       1 — a `find` matched zero or >1 times, a preservation/CHECK-5/no-CR assertion failed, the §4
 //           completeness assertion failed, or `git apply --check` refused the assembled patch. Nothing is
-//           written on the trusted-doc/patch side; a partially written scratch dir is removed either way.
+//           written on the trusted-doc/patch side — the check reads the patch from stdin, before either
+//           proposed/ file is written (a GATE-2 review fix: it used to write the patch first) — and a
+//           partially written scratch dir is removed either way.
 
 import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync, lstatSync, existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -134,20 +136,27 @@ function main() {
     "breadth and change size. You pay the most for what there is the most of (small changes). This is\n" +
     "the largest practical token problem and it is not yet solved.\n";
 
+  // GATE-2 review fixes (2026-09-26): F1 — "never `gate2`" becomes "is not `gate2`" with the reason and where its
+  // marker bounds live; F2 — the flag is read by the orchestrating model (advisory), backed by the SPEC's pinned
+  // kind; F3 — `/pharn-regress`'s scope check is KEPT, and the list is an open form ("It leaves out:"), not a count.
   const LIMITS_REPLACE =
     "_breadth_. You pay the most for what there is the most of (small changes). This is\n" +
     "the largest practical token problem and it is not yet solved.\n" +
     "\n" +
     "> **The manual flag is `/pharn-ship --quick` (6.23.0), and it trades checks for cost.** A human chooses it for\n" +
     "> a `spec_kind: quick` SPEC: one to three acceptance criteria, each verified at `unit` or `integration`. It\n" +
-    "> keeps both human gates, the grill's two floor stops, the test-first evidence for those criteria and\n" +
-    "> `/pharn-verify` with its AC gate, and it does not check three things: **no regression outside the feature is\n" +
-    "> looked for** (`/pharn-regress` does not run, so nothing compares base and head); **nobody interrogates the\n" +
-    "> plan** (`/pharn-grill --quick` runs its floor stops and no griller); and **no `BRIEFING.md` or\n" +
-    "> `RUN-REPORT.md`** is written (`cost.json` is). Its ledger outcome is `gate2-quick`, never `gate2`. Nothing\n" +
-    "> measures whether a change is small: the kind and the flag are what a person chose, and a quick SPEC run\n" +
-    "> without the flag takes the full pipeline. There is still no AUTOMATIC proportionality, and `/pharn-review`'s\n" +
-    "> lens fan-out is unchanged.\n";
+    "> keeps both human gates, the grill's two floor stops, the test-first evidence for those criteria,\n" +
+    "> `/pharn-regress`'s scope check (a changed file outside the plan's `## Files` still stops the run) and\n" +
+    "> `/pharn-verify` with its AC gate. It leaves out: **the regression check** — no regression outside the feature\n" +
+    "> is looked for, because nothing compares base and head; **the plan interrogation** — `/pharn-grill --quick`\n" +
+    "> runs its floor stops and no griller; and **`BRIEFING.md` and `RUN-REPORT.md`** (`cost.json` is still\n" +
+    "> written). Its ledger outcome is `gate2-quick`, which is not `gate2`: `gate2` needs a `pharn-regress`\n" +
+    "> stage-start, which a quick run never writes (the bounds of trusting those Bash-written markers are in\n" +
+    "> `pharn-contracts/cost-ledger.md`). The `--quick` flag is read by the orchestrating model, so honoring it is\n" +
+    "> advisory; what backs it is the SPEC's approved, pinned `spec_kind: quick`. Nothing measures whether a\n" +
+    "> change is small: the kind and the flag are what a person chose, and a quick SPEC run without the flag takes\n" +
+    "> the full pipeline. There is still no AUTOMATIC proportionality, and `/pharn-review`'s lens fan-out is\n" +
+    "> unchanged.\n";
 
   let limitsEdited = applyOnce(limitsOriginal, LIMITS_FIND, LIMITS_REPLACE, "LIMITS.md §3a");
 
@@ -160,9 +169,10 @@ function main() {
     "\n" +
     "**Quick mode** (`/pharn-ship --quick`, 6.23.0) runs a shorter spine for a small change: a `spec_kind: quick`\n" +
     "SPEC (one to three criteria, each `unit` or `integration`), `plan`, the grill's floor stops without its\n" +
-    "interrogation, `test`, `build` and `verify` as above, and **no `regress`**, so nothing looks for a\n" +
-    "regression outside the feature. Both human gates stay, and the ledger outcome is `gate2-quick`, never\n" +
-    "`gate2`. Bounds: `LIMITS.md §3a`; shape: `pharn-contracts/spec-template.md`, `pharn-contracts/cost-ledger.md`.\n" +
+    "interrogation, `test`, `build`, `regress`'s scope check alone, and `verify` as above — **no `regress` base\n" +
+    "comparison**, so nothing looks for a regression outside the feature. Both human gates stay, and the ledger\n" +
+    "outcome is `gate2-quick`, which is not `gate2`. Bounds: `LIMITS.md §3a`; shape:\n" +
+    "`pharn-contracts/spec-template.md`, `pharn-contracts/cost-ledger.md`.\n" +
     "\n" +
     "**Keystone:**";
 
@@ -275,13 +285,16 @@ function main() {
   }
 
   const patchText = diffSections.join("");
-  writeFileSync(join(PROPOSED, "human-only.patch"), patchText);
 
-  // ── 7. git apply --check against the REAL working tree (writes nothing) ───────────────────────────
-  const check = spawnSync("git", ["apply", "--check", join(PROPOSED, "human-only.patch")], { cwd: REPO, encoding: "utf8" });
+  // ── 7. git apply --check against the REAL working tree, on STDIN (writes nothing) ─────────────────
+  // The check runs BEFORE either proposed/ file is written (GATE-2 review): a refused patch leaves the previous
+  // patch and sums pair untouched, so the header's "nothing is written on the patch side" holds, and a fresh
+  // patch can never sit beside a stale sums file. `git apply` reads a patch from stdin when given `-`.
+  const check = spawnSync("git", ["apply", "--check", "-"], { cwd: REPO, input: patchText, encoding: "utf8" });
   if (check.status !== 0) fail(`git apply --check refused the assembled patch: ${check.stderr || check.stdout}`);
 
-  // ── 8. Write proposed/human-only.sha256 (shasum -c format) from the IN-MEMORY edited texts ────────
+  // ── 8. Write the patch, then proposed/human-only.sha256 (shasum -c format) from the IN-MEMORY texts ─
+  writeFileSync(join(PROPOSED, "human-only.patch"), patchText);
   const sha256Lines = files.map((f) => `${hashDoc(f.after)}  ${f.realPath}\n`).join("");
   writeFileSync(join(PROPOSED, "human-only.sha256"), sha256Lines);
 

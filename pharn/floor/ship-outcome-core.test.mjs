@@ -17,9 +17,11 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import {
   GATE2,
   GATE2_QUICK,
@@ -222,7 +224,8 @@ test("runMode: quick iff the CURRENT run's run-start carries mode === quick; an 
   assert.equal(runMode(quickRun()), "quick");
   assert.equal(runMode(fullRun()), "full");
   assert.equal(runMode([]), "full");
-  // Garbage/near-miss values read as full — the safe, under-claiming direction (the header states it).
+  // Garbage/near-miss values read as full — the safe direction: a full reading needs a regress stage-start,
+  // which a quick run never writes (the header's "A SKIPPED OR WRONG MODE MARKER NEVER YIELDS gate2").
   for (const bad of ["QUICK", "Quick", "fast", 1, true, ""]) {
     assert.equal(runMode([marker(1, "run-start", null, null, bad)]), "full", `mode=${JSON.stringify(bad)} must read as full`);
   }
@@ -282,15 +285,313 @@ test("a quick run's outcome with a `regressions` report on disk must still deriv
   assert.equal(derive(quickRun(), "PASS", "regressions").decision, GATE2_QUICK);
 });
 
-test("EITHER MISREADING UNDER-CLAIMS, NEVER OVER-CLAIMS", () => {
-  // A quick run whose --mode quick marker was skipped: reads as full, so with no regress stage-start its
-  // outcome is stop:pharn-verify, never gate2.
-  const skippedMode = quickRun().map((m) => (m.kind === "run-start" ? { ...m, mode: undefined } : m));
-  assert.equal(derive(skippedMode, "PASS", "no-regressions").decision, `${STOP_PREFIX}pharn-verify`);
-  // A full run whose run-start wrongly carries mode: "quick": yields gate2-quick at most, never the
-  // stronger gate2 a genuine full run with a green regress would have earned.
+test("A SKIPPED OR WRONG MODE MARKER NEVER YIELDS gate2 — the value altered (the header's first and third bullets)", () => {
+  // A quick run-start written WITHOUT --mode quick: reads as full, so with no regress stage-start its outcome
+  // is stop:pharn-verify, never gate2.
+  const noMode = quickRun().map((m) => (m.kind === "run-start" ? { ...m, mode: undefined } : m));
+  assert.equal(derive(noMode, "PASS", "no-regressions").decision, `${STOP_PREFIX}pharn-verify`);
+  // A full run whose run-start wrongly carries mode: "quick": yields gate2-quick at most, never the stronger
+  // gate2 a genuine full run with a green regress would have earned.
   const wronglyQuick = fullRun().map((m) => (m.kind === "run-start" ? { ...m, mode: "quick" } : m));
   assert.equal(derive(wronglyQuick, "PASS", "no-regressions").decision, GATE2_QUICK);
+});
+
+// ── the marker ABSENT, not merely altered (6.23.0 GATE-2 review finding F1) ─────────────────────────────
+//
+// The test above only ever changed the run-start's VALUE. F1 removed the marker: a quick run whose run-start
+// line was skipped JOINS the previous run's window, and when that run never wrote its run-stop, its
+// `pharn-regress@1` completed the pair for the quick run's own `pharn-verify@1` — the derivation returned the
+// FLOOR decision gate2 over a regress check that never ran on this build. Two conditions close it (the
+// module header, APPLICABILITY): (a) a verdict stage-start counts only after the same iteration's latest
+// pharn-build stage-start; (b) a non-verdict stage started twice at one iteration is a boundary that cannot
+// be established → undetermined.
+
+import { BUILD_STAGE, REPEATED_STAGE_REASON } from "./ship-outcome-core.mjs";
+import { normalizeMarkers, readMarkers } from "./render-cost-ledger.mjs";
+
+/** The markers a `--quick` ship run's prose prescribes AFTER its run-start, starting at `seq` — the run-start
+ *  itself is omitted on purpose: these are the trails of a run whose run-start line was skipped. */
+const quickTail = (seq) => [
+  marker(seq, "stage-start", "pharn-plan"),
+  marker(seq + 1, "orchestrator"),
+  marker(seq + 2, "stage-start", "pharn-grill"),
+  marker(seq + 3, "orchestrator"),
+  marker(seq + 4, "stage-start", "pharn-test"),
+  marker(seq + 5, "orchestrator"),
+  marker(seq + 6, "stage-start", "pharn-build", 1),
+  marker(seq + 7, "orchestrator"),
+  marker(seq + 8, "stage-start", "pharn-verify", 1),
+  marker(seq + 9, "orchestrator"),
+  marker(seq + 10, "run-stop"),
+];
+
+test("★ REVIEW F1 REPRO: a quick run whose run-start was SKIPPED after an UNCLOSED full run never derives gate2", () => {
+  const dir = greenDir(); // verify PASS (this run's) + a STALE no-regressions left by the earlier run
+  try {
+    // The reviewer's exact trail, through the same normalization the emitter applies.
+    const markers = normalizeMarkers([
+      marker(1, "run-start"),
+      marker(2, "stage-start", "pharn-plan"),
+      marker(3, "stage-start", "pharn-build", 1),
+      marker(4, "stage-start", "pharn-regress", 1), // the earlier run, interrupted: no run-stop
+      marker(5, "stage-start", "pharn-plan"), // the quick run, its run-start skipped
+      marker(6, "stage-start", "pharn-build", 1),
+      marker(7, "stage-start", "pharn-verify", 1),
+      marker(8, "run-stop"),
+    ]);
+    const o = readShipOutcome(dir, markers);
+    assert.equal(o.decision, UNDETERMINED, "before the GATE-2 fix this was the FLOOR decision gate2");
+    assert.equal(o.iterations, null);
+    assert.equal(verdictApplicability(markers).reason, REPEATED_STAGE_REASON);
+
+    // The reviewer's two controls, unchanged in outcome: an earlier run that DID close → undetermined (a stage
+    // marker after a run-stop), and a quick run-start written without --mode → stop:pharn-verify.
+    const closed = normalizeMarkers([
+      marker(1, "run-start"),
+      marker(2, "stage-start", "pharn-plan"),
+      marker(3, "stage-start", "pharn-build", 1),
+      marker(4, "stage-start", "pharn-regress", 1),
+      marker(5, "run-stop"),
+      marker(6, "stage-start", "pharn-plan"),
+      marker(7, "stage-start", "pharn-build", 1),
+      marker(8, "stage-start", "pharn-verify", 1),
+      marker(9, "run-stop"),
+    ]);
+    assert.equal(readShipOutcome(dir, closed).decision, UNDETERMINED);
+    const withRunStartNoMode = normalizeMarkers([
+      marker(1, "run-start"),
+      marker(2, "stage-start", "pharn-plan"),
+      marker(3, "stage-start", "pharn-build", 1),
+      marker(4, "stage-start", "pharn-verify", 1),
+      marker(5, "run-stop"),
+    ]);
+    assert.equal(readShipOutcome(dir, withRunStartNoMode).decision, `${STOP_PREFIX}pharn-verify`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("★ condition (a) ORDER: a verdict stage-start counts only AFTER the same iteration's latest pharn-build stage-start", () => {
+  assert.equal(BUILD_STAGE, "pharn-build");
+  // Condition (a) ALONE, with no repeat for (b) to see: an earlier regress stage-start that precedes this run's
+  // build no longer completes the pair — the shape of F1 once the repeated markers are gone.
+  const regressFirst = [
+    marker(1, "run-start"),
+    marker(2, "stage-start", "pharn-regress", 1),
+    marker(3, "stage-start", "pharn-build", 1),
+    marker(4, "stage-start", "pharn-verify", 1),
+  ];
+  assert.equal(derive(regressFirst, "PASS", "no-regressions").decision, `${STOP_PREFIX}pharn-verify`);
+  assert.match(
+    verdictApplicability(regressFirst).reason,
+    /no stage-start for pharn-regress after its latest pharn-build stage-start at its latest iteration \(1\)/
+  );
+
+  // No build at the latest iteration at all → nothing for a verdict to be about.
+  const noBuild = [marker(1, "run-start"), marker(2, "stage-start", "pharn-regress", 1), marker(3, "stage-start", "pharn-verify", 1)];
+  assert.equal(derive(noBuild, "PASS", "no-regressions").decision, `${STOP_PREFIX}pharn-verify`);
+  assert.match(verdictApplicability(noBuild).reason, /no pharn-build stage-start at its latest iteration \(1\)/);
+
+  // The same rule in quick mode: a verify stage-start BEFORE the build is not this build's verify.
+  const quickEarly = [
+    marker(1, "run-start", null, null, "quick"),
+    marker(2, "stage-start", "pharn-verify", 1),
+    marker(3, "stage-start", "pharn-build", 1),
+  ];
+  assert.equal(derive(quickEarly, "PASS", null).decision, `${STOP_PREFIX}pharn-build`);
+
+  // POSITIVE CONTROLS: the same markers in the order a run writes them.
+  const ordered = [
+    marker(1, "run-start"),
+    marker(2, "stage-start", "pharn-build", 1),
+    marker(3, "stage-start", "pharn-regress", 1),
+    marker(4, "stage-start", "pharn-verify", 1),
+  ];
+  assert.equal(derive(ordered, "PASS", "no-regressions").decision, GATE2);
+  const quickOrdered = [
+    marker(1, "run-start", null, null, "quick"),
+    marker(2, "stage-start", "pharn-build", 1),
+    marker(3, "stage-start", "pharn-verify", 1),
+  ];
+  assert.equal(derive(quickOrdered, "PASS", null).decision, GATE2_QUICK);
+});
+
+test("★ condition (b) NO REPEAT: a non-verdict stage started twice at one iteration → undetermined; a repeated VERDICT stage is not a repeat", () => {
+  // Every non-verdict stage a ship or loop run starts, repeated once at its own iteration.
+  const repeats = [
+    ["pharn-spec", null],
+    ["pharn-plan", null],
+    ["pharn-grill", null],
+    ["pharn-test", null],
+    ["pharn-build", 1],
+  ];
+  assert.equal(repeats.length, 5, "NON-VACUITY (L34)");
+  for (const [stage, iteration] of repeats) {
+    // Appended TWICE, so the pair repeats whether or not fullRun() already started that stage.
+    const m = [...fullRun(), marker(12, "stage-start", stage, iteration), marker(13, "stage-start", stage, iteration)];
+    const o = derive(m, "PASS", "no-regressions");
+    assert.equal(o.decision, UNDETERMINED, `${stage}@${iteration} started twice`);
+    assert.equal(o.iterations, null);
+    assert.equal(verdictApplicability(m).status, APPLICABILITY.UNKNOWN);
+    assert.equal(verdictApplicability(m).reason, REPEATED_STAGE_REASON);
+  }
+  // CONTROLS. /pharn-loop's freshness re-run starts a VERDICT stage again inside one iteration, after the build —
+  // not a repeat; and Step 2b's build at iteration 2 is a different (stage, iteration) pair.
+  for (const verdictStage of VERDICT_STAGES) {
+    assert.equal(
+      derive([...fullRun(), marker(12, "stage-start", verdictStage, 1)], "PASS", "no-regressions").decision,
+      GATE2,
+      verdictStage
+    );
+  }
+  const retry = [
+    ...fullRun(),
+    marker(12, "stage-start", "pharn-build", 2),
+    marker(13, "stage-start", "pharn-regress", 2),
+    marker(14, "stage-start", "pharn-verify", 2),
+  ];
+  assert.equal(derive(retry, "PASS", "no-regressions").decision, GATE2);
+});
+
+test("★ a quick run that SKIPPED its run-start never inherits an earlier run: undetermined or stop:*, never gate2 or gate2-quick", () => {
+  // Every earlier-run shape a compliant run can leave with at least one stage-start: each prefix of a full and
+  // a quick run, closed (run-stop written) or not. Materialized once and iterated (L29).
+  const FULL = [
+    ["pharn-plan", null],
+    ["pharn-grill", null],
+    ["pharn-test", null],
+    ["pharn-build", 1],
+    ["pharn-regress", 1],
+    ["pharn-verify", 1],
+  ];
+  const QUICK = FULL.filter(([s]) => s !== "pharn-regress");
+  const shapes = [];
+  for (const [mode, stages] of [
+    [undefined, FULL],
+    ["quick", QUICK],
+  ]) {
+    for (let k = 1; k <= stages.length; k++) {
+      for (const closed of [false, true]) {
+        const ms = [marker(1, "run-start", null, null, mode)];
+        stages.slice(0, k).forEach(([stage, iteration], i) => ms.push(marker(2 + i, "stage-start", stage, iteration)));
+        if (closed) ms.push(marker(ms.length + 1, "run-stop"));
+        shapes.push({ label: `${mode ?? "full"} earlier run, ${k} stage(s), ${closed ? "closed" : "unclosed"}`, ms });
+      }
+    }
+  }
+  assert.equal(shapes.length, 22, "NON-VACUITY (L34): 6 full + 5 quick prefixes, each closed and unclosed");
+  for (const { label, ms } of shapes) {
+    const joined = [...ms, ...quickTail(ms.length + 1)];
+    for (const [v, r] of [
+      ["PASS", "no-regressions"],
+      ["PASS", "regressions"],
+      ["FAIL", "no-regressions"],
+    ]) {
+      const d = derive(joined, v, r).decision;
+      assert.ok(d === UNDETERMINED || d.startsWith(STOP_PREFIX), `${label}, verify=${v} regress=${r}: got ${d}`);
+    }
+    // CONTROL: the same quick run WITH its run-start is a run of its own and reaches gate2-quick.
+    const own = [...ms, marker(ms.length + 1, "run-start", null, null, "quick"), ...quickTail(ms.length + 2)];
+    assert.equal(derive(own, "PASS", "regressions").decision, GATE2_QUICK, `${label}: control`);
+  }
+});
+
+test("RESIDUAL, PINNED: an earlier run that left ONLY its run-start is byte-identical to resuming it — its mode is read, never gate2", () => {
+  // A GATE-1 halt writes a run-start and no stage-start. A later quick run that skips its own run-start leaves a
+  // trail no marker rule can tell from that SAME run resumed (the "RESUME" test below). Everything after the
+  // run-start is this run's own; only the run-start's mode is inherited. Pinned so a change is deliberate.
+  const tail = quickTail(2);
+  assert.equal(derive([marker(1, "run-start", null, null, "quick"), ...tail], "PASS", "no-regressions").decision, GATE2_QUICK);
+  assert.equal(derive([marker(1, "run-start"), ...tail], "PASS", "no-regressions").decision, `${STOP_PREFIX}pharn-verify`);
+});
+
+test("quick Step 2b: iteration 2's build supersedes iteration 1's verify; the retry's own verify, after it, is current", () => {
+  // The retry has started building at iteration 2, so iteration 1's PASS is not this attempt's.
+  const started = [...quickRun(), marker(10, "stage-start", "pharn-build", 2)];
+  assert.equal(derive(started, "PASS", null).decision, `${STOP_PREFIX}pharn-build`);
+  assert.equal(verdictApplicability(started).latestIteration, 2);
+  // POSITIVE: the re-verify at iteration 2, after the re-build.
+  const done = [...started, marker(11, "orchestrator"), marker(12, "stage-start", "pharn-verify", 2)];
+  const o = derive(done, "PASS", "regressions");
+  assert.equal(o.decision, GATE2_QUICK, "no regress verdict is read at iteration 2 either");
+  assert.equal(o.iterations, 2);
+  // A re-verify that PRECEDES the re-build is not the retry's verify (condition (a)).
+  const early = [...quickRun(), marker(10, "stage-start", "pharn-verify", 2), marker(11, "stage-start", "pharn-build", 2)];
+  assert.equal(derive(early, "PASS", null).decision, `${STOP_PREFIX}pharn-build`);
+});
+
+// ── ★ WIRING (L45): the COMMITTED /pharn-ship lines, executed, read back through the emitter's own reader ──
+
+const REPO = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const SHIP_CMD = join(REPO, ".claude", "commands", "pharn-ship.md");
+
+/** The ONE line of pharn-ship.md matching `re` — asserted unique, so a second copy or a rewording fails. */
+function shipLine(re, label) {
+  const hits = readFileSync(SHIP_CMD, "utf8")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => re.test(l));
+  assert.equal(hits.length, 1, `expected ONE pinned ${label} line in pharn-ship.md, found ${hits.length}`);
+  return hits[0];
+}
+
+/** Run the given committed lines, `<name>` substituted, in a scratch cwd whose `pharn/` links to this repo's;
+ *  return the markers the emitter would read. No session id, so no pending start is adopted. */
+function runCommitted(lines) {
+  const cwd = mkdtempSync(join(tmpdir(), "pharn-ship-wiring-"));
+  try {
+    symlinkSync(join(REPO, "pharn"), join(cwd, "pharn"));
+    const env = { ...process.env };
+    delete env.CLAUDE_CODE_SESSION_ID;
+    for (const line of lines) {
+      const r = spawnSync("sh", ["-c", line.replaceAll("'<name>'", "'wiring-feat'")], { cwd, env, encoding: "utf8" });
+      assert.equal(r.status, 0, `${line}\n${r.stdout}${r.stderr}`);
+    }
+    return readMarkers(join(cwd, ".pharn", "cost", "wiring-feat", "markers.jsonl"));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
+test("★ WIRING — the committed QUICK run-start, build and verify lines derive gate2-quick; the committed FULL run-start line does not", () => {
+  const quickStart = shipLine(
+    /^node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind run-start --adopt-pending --mode quick$/,
+    "quick run-start"
+  );
+  const fullStart = shipLine(/^node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind run-start --adopt-pending$/, "full run-start");
+  const build1 = shipLine(
+    /^node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind stage-start --stage pharn-build --iteration 1$/,
+    "build@1"
+  );
+  const verify1 = shipLine(
+    /^node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind stage-start --stage pharn-verify --iteration 1$/,
+    "verify@1"
+  );
+  const dir = greenDir(); // verify PASS + a no-regressions report on disk
+  try {
+    const quick = runCommitted([quickStart, build1, verify1]);
+    assert.equal(quick[0].mode, "quick", "the committed quick line must write mode: quick, and the reader must keep it");
+    assert.equal(readShipOutcome(dir, quick).decision, GATE2_QUICK);
+    // CONTROL: the committed FULL run-start over the same stage lines — no regress stage-start, so never gate2.
+    const full = runCommitted([fullStart, build1, verify1]);
+    assert.equal(full[0].mode, undefined, "the full line writes no mode key");
+    assert.equal(readShipOutcome(dir, full).decision, `${STOP_PREFIX}pharn-verify`);
+    // NEGATIVE CONTROL: the quick line with a value outside MARKER_MODES is refused (exit 2) and writes nothing.
+    const cwd = mkdtempSync(join(tmpdir(), "pharn-ship-wiring-bad-"));
+    try {
+      symlinkSync(join(REPO, "pharn"), join(cwd, "pharn"));
+      const r = spawnSync("sh", ["-c", quickStart.replace("--mode quick", "--mode fast").replaceAll("'<name>'", "'wiring-feat'")], {
+        cwd,
+        encoding: "utf8",
+      });
+      assert.equal(r.status, 2, r.stderr);
+      assert.deepEqual(readMarkers(join(cwd, ".pharn", "cost", "wiring-feat", "markers.jsonl")), []);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("SHIP_DECISION_RE closure rejects near-misses of gate2-quick", () => {
@@ -547,12 +848,17 @@ test("★ RESIDUAL, PINNED (GRILL finding 1): a stage that STARTED and then REFU
   // correct. Closing it needs a report-side run identity or a lifecycle invalidation in /pharn-ship.
   const dir = greenDir(); // run 1's PASS / no-regressions, never overwritten
   try {
+    // Run 2 is COMPLIANT in its markers — it builds, then starts regress and verify — and both of those refuse
+    // before rewriting a report. (Before 6.23.0 this fixture carried no pharn-build stage-start; since the
+    // GATE-2 fix a verdict stage-start counts only after the same iteration's build, so the residual is pinned
+    // on the trail a real run leaves.)
     const run2 = [
       ...run1(),
       marker(8, "run-start"),
-      marker(9, "stage-start", "pharn-regress", 1),
-      marker(10, "stage-start", "pharn-verify", 1),
-      marker(11, "run-stop"),
+      marker(9, "stage-start", "pharn-build", 1),
+      marker(10, "stage-start", "pharn-regress", 1),
+      marker(11, "stage-start", "pharn-verify", 1),
+      marker(12, "run-stop"),
     ];
     assert.equal(readShipOutcome(dir, run2).decision, GATE2, "the named residual: refusal-after-start is invisible to markers");
   } finally {

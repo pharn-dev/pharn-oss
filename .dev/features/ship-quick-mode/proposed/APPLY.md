@@ -25,7 +25,8 @@ That prints a summary of what changes and where, without touching anything. Then
 3. `git apply --check` then `git apply` the patch.
 4. Re-runs, on the **applied bytes**: `shasum -a 256 -c human-only.sha256`, `pharn/floor/validate.mjs .`,
    `.dev/floor/check-specified-markers.mjs .`, and `.dev/floor/hash-doc.test.mjs`. Any failure restores
-   both files from `HEAD` (`git checkout -- LIMITS.md pharn/ARCHITECTURE.md`) and commits nothing.
+   both files from the **index** (`git checkout -- LIMITS.md pharn/ARCHITECTURE.md` — `HEAD`'s content
+   unless you had staged edits to either file) and commits nothing.
 5. On success, commits **only** `LIMITS.md` and `pharn/ARCHITECTURE.md`, with the message
    `docs(trusted): quick mode in LIMITS.md and ARCHITECTURE.md (human-applied)`.
 
@@ -43,7 +44,9 @@ would leave `main`'s `LIMITS.md §3a` claim false for however long that gap last
 Applying the patch changes `sha256(pharn/ARCHITECTURE.md)` (folded, `.dev/floor/hash-doc.mjs`'s reading):
 
 - **Old pin:** `4950796f5342df20a298fe22812e45dec3c15317592bd2358a31e149d2dc1c7f`
-- **New pin (this patch, `stage-exit: absent`):** `0e34408a42e23d4e5d7194728ad958ad1cf65efd6a9bf2c4d9318773bd4e3b27`
+- **New pin (this patch, `stage-exit: absent`, regenerated at GATE 2 on 2026-09-26 after the review fixes):**
+  `7b02b45caf4dfeb8aa2bf6192042024d871708fa9095921735525091b8eff6e3` (the pre-review patch's pin,
+  `0e34408a…`, is superseded — its §3a/§6 text carried the review's F1–F3 wording)
 
 If the §4 line is later included (because a sibling's `stage-exit.md` has landed by the time this patch is
 regenerated), the new pin will differ from the one printed above — always read it from the generator's own
