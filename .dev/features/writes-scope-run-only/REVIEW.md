@@ -297,3 +297,201 @@ The first important finding must be decided first, because it changes the patch 
 
 **Verdict: blocked-with-1-floor-finding.** 2 important findings (security-relevant) and 8 minor findings, all advisory,
 are for the human to weigh.
+
+## Re-review of the final patch (opus)
+
+- stage: `/pharn-dev-review`, re-review — model routed via Agent subagent; effort not routed
+- reviewed: the branch at `d869cc8`, which includes:
+  - the fix commits `fd1c387` and `67847e5`;
+  - the merge of `main` (#277), the renumber to 6.24.0 and the regenerated patch.
+
+  `proposed/human-only.patch` was applied at that commit to a detached scratch worktree under
+  `.pharn/pharn-dev-review/` (since removed), never to the live files.
+
+- **Floor: GREEN.** `node pharn/floor/validate.mjs .` prints `FLOOR: GREEN — 36 capabilities checked` and exits 0.
+- **The patch is intact and its tests pass.** `git apply --check` and `git apply` are clean, and
+  `shasum -a 256 -c human-only.sha256` gives OK for all three files. Against the patched copy:
+  - the eight `apply.sh` suites pass 472/472;
+  - the full `npm test` passes 3570/3570.
+- **Record note.** The renumber commit `d869cc8` changed two version cites inside the first review's findings, from
+  6.23.0 to 6.24.0. No other byte of the first review changed.
+
+**Verdict: blocked-with-1-floor-finding (a new one, R1). The patch is NOT safe to apply as it stands.** Every finding of
+the first review is fixed or narrowed, verified by execution. The re-review found one new floor gap in the D2 root
+matching, and it needs one more regeneration of the patch.
+
+### Status of the first review's findings (each repro re-executed against the patched hook)
+
+- **Blocking (a), a dangling link into the reserved surface — verified-fixed.**
+  - `src/evil-cmd` and `src/evil-floor` go from 0 to 2.
+  - Also denied:
+    - a two-hop dangling chain;
+    - a dangling directory component;
+    - an absolute dangling link to a home dotfile;
+    - a dangling link to `.pharn/writes-scope.json`;
+    - `src/deep/../x.mjs` through an existing link (the kernel writes `pharn/floor/x.mjs`);
+    - every temp-root link back into the project's reserved surface.
+- **Blocking (b), the fold widening the `pharn/features/` exception — verified-fixed.** `pharn/features./x.md`,
+  `"pharn/features /x.md"` and `pharn/Features/x.md` exit 2. The control `pharn/features/x/SPEC.md` exits 0.
+- **Important 1, breadth outside the project — verified-fixed**, per the maintainer's D2. The probes are listed below.
+- **Important 2, a planted file at a run-state path — narrowed-ok for `/pharn-ship` and `/pharn-review`, still open for
+  `/pharn-loop` (new finding R2).**
+  - A file at the state directory now counts as a scan error, and the guard denies.
+  - `run-marker.mjs --open` exits 2 for all three plants (`.pharn/pharn-review`, `.pharn/pharn-review/feat` and
+    `.pharn`).
+  - Both commands STOP on a non-zero `--open`, and their pinned lines are executed whole against a planted file.
+- **Minor 1, D1 messages for object-shaped malformed records — verified-fixed.** 196 of 196 cases give an identical
+  verdict and stderr to HEAD (7 record shapes × 14 paths × dev and unsignalled).
+- **Minor 2, the install stale reason and the scan-error message — verified-fixed** by execution:
+  - the stale bullet now gives the install reason;
+  - a scan error names `.pharn/pharn-ship` in its own block.
+- **Minor 3, doc quantifiers — verified-fixed.**
+  - The README bullet now says the out-of-project allowance is new in 6.24.0.
+  - `pharn/floor/README.md` names the scope file, backslashes and D2.
+  - `finding-shape.md` calls the open advisory, and says a failed open STOPs.
+- **Minor 4, the `pharn-loop.md` wrong set and the phantom §2 — verified-fixed.**
+- **Minor 5, test gaps — verified-fixed** for every gap named:
+  - symlink kinds in the permissive and dev postures;
+  - a non-directory state path;
+  - a `{}` golden;
+  - a forced-throw test and a deny-throw test;
+  - `pinnedLine()` executing the whole line, with a `|| true` mutation control.
+
+  Nothing covers the two new findings below.
+
+- **Minor 6, marker names in deny messages — verified-fixed.** A crafted name never reaches the message; only the fixed
+  state directory is named.
+- **Minor 7, fail-closed robustness — verified-fixed.**
+  - The probe checks `openRun()`'s result: a refusal throws, and the caller emits INCONCLUSIVE.
+  - A throw inside `deny()` now exits 2 through the `uncaughtException` backstop, while an allow stays 0.
+- **Minor 8, the `VERIFY.md` counts — verified-fixed** (re-rendered).
+- **Pre-existing FIFO hang — verified-fixed.** With a FIFO at the scope-record path, install exits 2 in 49 ms, and dev
+  falls back in 81 ms.
+- **The session-start files note — verified-fixed.** `CLAUDE.md`, `AGENTS.md` and `.mcp.json` are now named in
+  LIMITS §7, CLAUDE.md, the README and the CHANGELOG.
+
+### D2 and the backslash rule, executed (install, no scope, no run; decision only outside the sandboxes)
+
+- **Allowed:**
+  - `~/.claude/projects/<p>/memory/note.md`;
+  - `os.tmpdir()/x` and `/tmp/x`;
+  - the session scratchpad.
+- **Denied:**
+  - Claude Code's user-level files: `~/.claude/settings.json`, `~/.claude.json`, `~/.claude/hooks/x`;
+  - other home files: `~/.zshrc`, `~/.ssh/authorized_keys`, `~/Library/LaunchAgents/x.plist`;
+  - a path in another git tree under `/tmp`;
+  - the project root, both absolute and `.`;
+  - near-misses of the memory folder:
+    - the memory directory itself;
+    - `projects/memory/x.md` (no `<seg>`);
+    - `projects/p/MEMORY/x.md`;
+    - `memory/../../../settings.json`;
+    - `~/.CLAUDE/...`;
+    - `memory/a\b.md`;
+  - `/tmp/../Users/<me>/.zshrc`.
+- **Case variants of `/tmp`.** `/TMP/x` is allowed, and on APFS it names `/tmp`. `/Private/Tmp/x` is denied, an
+  over-block.
+- **Symlinked memory directories.** `memory -> <project>/.claude/commands` and `memory -> ~/.ssh` are both denied.
+- **CLAUDE_CONFIG_DIR.**
+  - Set to `<project>/.claude`, its memory folder is reserved and denied, and `~/.claude` stops being a root.
+  - Set to `<project>`, the in-project rules apply.
+  - A relative value resolves inside the project.
+- **Temp-root links into another git tree or `~/.ssh`** are denied.
+- **Backslashes.** In the permissive posture, `src\x.js`, `pharn/features/a\b/../../floor/x.mjs` and
+  `.claude/commands/x\..\..\..\src\y.md` are denied.
+- **Dev and unsignalled.**
+  - No verdict moved toward allow.
+  - The dual resolution moves only the symlink cases, and only toward deny, as documented:
+    - `pharn/features/evil`, a dangling link, goes from 0 to 2;
+    - `pharn/features/fl/../x.md` goes from 0 to 2.
+- **Noted, not a finding (it follows D2's own wording).** `<seg>` admits every project's memory folder. A write made
+  outside a run in one project can therefore reach another project's Claude memory, which that project's sessions load
+  as instructions.
+
+### New findings
+
+#### Floor-gate (blocking)
+
+```yaml
+- type: FINDING
+  rule_id: "P0"
+  severity: blocking
+  file: ".dev/features/writes-scope-run-only/proposed/human-only.patch:869"
+  problem: 'R1. The permissive allow for out-of-project paths is decided on path.relative(ROOT, real), a case-sensitive string comparison, and both resolutions keep the caller''s spelling: Node''s JS realpathSync does not canonicalise case, while realpathSync.native does. So a project that lives under a temp root and has no .git entry (ROOT comes from CLAUDE_PROJECT_DIR, a supported install) can be written through a case-variant spelling of its own root. The path reads as outside the project and under /tmp, so it is allowed, while APFS writes into the project: .claude/commands/, pharn/floor/ (an EXISTING floor checker is overwritten) and pharn.config.json itself. protect-trusted-paths.cjs folds its root prefix (lesson #1 in its header) and still denies its own set; the reserved list of enforce-writes-scope.cjs does not. With a .git at the project root the same paths are judged other-tree, because lstat finds .git case-insensitively, and denied. The patched LIMITS §7 says the reserved surface is denied "matched case-folded" and that the project root is never an allowed out-of-project path, and names no residual for this. The same class plausibly covers an NFC/NFD variant of a non-ASCII project path (unmeasured).'
+  evidence: 'Install under the session temp root, with no VCS entry and CLAUDE_PROJECT_DIR set to it, no scope and no run. With the exact spelling, enforce exits 2 for .claude/commands/pharn-evil.md, pharn/floor/x.mjs, pharn.config.json and the existing pharn/floor/check-verify.mjs. The same paths under .../TMPPROJ-NOGIT/... give enforce 0 and protect 0, and the variant names the same inode. With a .git directory at the root, enforce exits 2 for all of them. realpathSync(".../TMPPROJ-NOGIT/.claude") keeps TMPPROJ-NOGIT; realpathSync.native returns tmpproj-nogit.'
+```
+
+Fix, in the patch, either of:
+
+- in `resolvePhysicalTarget` use `fs.realpathSync.native`, so pass 2 judges the on-disk spelling (measured above to
+  return the project's own case);
+- or, before allowing an out-of-project path, deny it when its `toKey()` equals or lies under `toKey(ROOT)`.
+
+Practical severity is **low**. It needs a PHARN install without `.git` under the OS temp directory or `/tmp`, on a
+case-insensitive volume. It blocks for the same reason the first review's blocking finding did: a trusted doc states a
+floor guarantee the hook does not deliver for one input class, and here that class reaches the floor's own checkers.
+
+#### Advisory
+
+```yaml
+- type: FINDING
+  rule_id: "P0"
+  severity: important
+  file: ".claude/commands/pharn-loop.md:149"
+  problem: 'R2. The first review''s planted-file vector is closed for /pharn-ship and /pharn-review, but not for /pharn-loop, the unattended command. The Write tool reaches .pharn/** in every posture, and <name> is the SPEC slug, derived from the task text. A regular file planted at .pharn/pharn-loop/<name> makes Step 1a''s snapshot line fail (mkdir -p). It also makes require-loop-record.cjs --open crash with exit 1 and a stack trace, because its mkdirSync is unguarded (line 308). pharn-loop.md has no STOP rule for either failure (it says a run that skips the open "is simply unguarded"). The guard skips a non-directory entry at the <name> level. So in an installed project every window between the loop''s stages runs under the permissive default, and the Stop guard is inert as well. LIMITS §7 and the CHANGELOG say only that /pharn-ship and /pharn-review stop; the loop''s case is named nowhere as a residual.'
+  evidence: 'In an install sandbox with CLAUDE_PROJECT_DIR set to it, .pharn/pharn-loop/feat was planted as a file. node .claude/hooks/require-loop-record.cjs --open feat --cap 3 exits 1, with first stderr line "node:fs:1348". The patched guard then allows src/x.js (exit 0), which HEAD denied.'
+```
+
+Fix, agent-side, with no patch change:
+
+- make a non-zero exit of the Step 1a snapshot line or of the `--open` line stop the loop, as a stuck point that names
+  the path;
+- pin it with an executed-line test, as for ship and review.
+
+A guard-side alternative: count a non-directory entry at the `<name>` level as a run open when its name is a slug. A
+`.DS_Store` fails the slug grammar, so it stays skipped.
+
+```yaml
+- type: FINDING
+  rule_id: "P0"
+  severity: minor
+  file: ".dev/features/writes-scope-run-only/proposed/human-only.patch:95"
+  problem: 'R3. The patched header says "Every other posture is an ALLOW list over the unfolded path, which a backslash cannot widen." The allow list is matched against the path with \ rewritten to / (fromRoot in judge(), unchanged from HEAD), so a backslash does widen it: a root-level file whose NAME spells an allowed directory is allowed. The behaviour is pre-existing and harmless on a / system, where such a name aliases no other file, but the sentence is false.'
+  evidence: 'Dev posture, no scope: pharn\features\x.md gives HEAD 0 and patched 0, and the write creates a root-level entry named pharn\features\x.md. Install with scope ["src/**"]: src\x.js gives 0 in both hooks.'
+```
+
+Fix: reword the sentence ("there a backslash can only create a file whose name contains one; it cannot reach another
+file"). This is a patch change, so fold it into R1's regeneration.
+
+```yaml
+- type: FINDING
+  rule_id: "P6"
+  severity: minor
+  file: "CHANGELOG.md:66"
+  problem: 'R4. The [6.24.0] "Review fixes" item wraps "exit 1." so that "1." starts a line. CommonMark lets an ordered list that starts at 1 interrupt a paragraph, so the entry renders "...instead of crashing with exit" followed by a numbered list, and drops the exit code the sentence is about. A merged entry is frozen, so it has to be rewrapped before merge.'
+  evidence: 'This repo''s own markdown-it renders: "...instead of crashing with exit <ol><li>The <code>pharn/features/</code> exception no longer widens ...".'
+```
+
+### Does the patch need regenerating?
+
+**Yes, once more, before the human applies it.**
+
+- **In the patch:**
+  - R1, either as the one-line fix or as a named residual in LIMITS §7 (LIMITS is in the patch too);
+  - R3's sentence.
+- **Agent-side, before merge:** R2, the loop STOP rule and its test, and R4, the CHANGELOG rewrap.
+
+Everything else in the patch was verified by execution.
+
+### Lesson candidate, extended
+
+R1 is a fourth measured instance of the candidate above.
+
+- **The flip:** `path.relative`'s case-sensitive "outside the project" reading was fail-closed while every
+  out-of-project path was denied. It fails open once one out-of-project root is allowed.
+- **Already fixed elsewhere:** `protect-trusted-paths.cjs` had recorded and fixed this exact failure for its own set
+  (lesson #1 in its header, "the ROOT prefix must be folded too").
+- **Why it recurred:** a sibling guard did not inherit the fix.
+
+**Re-review verdict: blocked-with-1-floor-finding.** R1 blocks. R2 (important, security-relevant), R3 and R4 are
+advisory, for the human to weigh.
