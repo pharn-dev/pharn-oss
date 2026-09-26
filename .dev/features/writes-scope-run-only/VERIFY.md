@@ -1,4 +1,4 @@
-# VERIFY — writes-scope-run-only (after merge + renumber)
+# VERIFY — writes-scope-run-only (after the re-review fixes, R1–R4)
 
 ## The reconcile reading before the merge of `origin/main` (recorded first, before anything moved)
 
@@ -27,8 +27,11 @@ the epoch is re-opened after the merge (see below) — and this reading is what 
 
 - stage: `/pharn-dev-verify` — opus — set by the maintainer's instruction, overriding pharn.config.json's
   sonnet for build/regress/verify; routed via Agent subagent; effort not routed
-- run: after the merge of `origin/main` (`1524c6f`) and the renumber to 6.24.0, in the fix pass's own
-  worktree, under the re-opened epoch — so `reconcile --require-baseline` had a baseline to read
+- run: after the re-review fixes (`BUILD.md`, "After the re-review (R1–R4, 2026-09-26)"), over the working
+  tree at `b9d2de5` with those fixes and the regenerated patch not yet committed, in the fix pass's own
+  worktree and under the epoch re-opened after the merge — so `reconcile --require-baseline` had a baseline
+  to read. The run before it, after the merge and the renumber, gave the same verdict with 36 expected
+  failures; this one has 41, the five new ones being the R1 tests.
 - how it ran: Step 1's pinned gates as one node runner under `.pharn/pharn-dev-verify/` (argv arrays,
   exit codes only), then `check-verify.mjs .pharn/pharn-dev-verify/results.json --feature writes-scope-run-only`
 
@@ -36,7 +39,7 @@ the epoch is re-opened after the merge (see below) — and this reading is what 
 
 | gate                                                                                         | exit |
 | -------------------------------------------------------------------------------------------- | ---- |
-| `test` (`npm test` — the full hermetic suite, 3570 tests)                                    | 1    |
+| `test` (`npm test` — the full hermetic suite, 3581 tests)                                    | 1    |
 | `validate` (`pharn/floor/validate.mjs .`)                                                    | 0    |
 | `lint` (`npm run lint` — eslint)                                                             | 0    |
 | `format:check` (`npm run format:check` — prettier, whole-repo)                               | 0    |
@@ -52,23 +55,28 @@ designs for.** The new and changed hook and floor tests assert the PATCHED write
 human-only and still hold their pre-patch bytes here, which since the merge are `main`'s bytes. The patch is
 `proposed/human-only.patch`.
 
-**The failures are exactly the expected ones.** `npm test` reported `tests 3570, pass 3534, fail 36`. The 36
-failing names are set-equal to the list measured against the unpatched hooks before the merge. The only
-difference is the two titles that name this phase's version, which were renumbered from 6.23.0 to 6.24.0.
-No other test in the suite failed, including the 116 tests the merge brought in.
+**The failures are exactly the expected ones.** `npm test` reported `tests 3581, pass 3540, fail 41`. The 41
+failing names are set-equal to the expected list:
+
+- the 36 of the post-merge run, with one title renamed because its claim became false (the B1 dev-posture
+  test, which had called itself "the one verdict change there besides a guard error");
+- the five new R1 tests, each of which asserts the patched guard.
+
+No other test in the suite failed. The six other new tests pass here, unpatched: the R1 dev-posture D1 pin
+and R2's five executed-line tests.
 
 | file                                          | failing | total in file |
 | --------------------------------------------- | ------- | ------------- |
-| `.claude/hooks/enforce-writes-scope.test.cjs` | 30      | 143           |
-| `pharn/floor/run-marker.test.mjs`             | 4       | 38            |
+| `.claude/hooks/enforce-writes-scope.test.cjs` | 35      | 149           |
+| `pharn/floor/run-marker.test.mjs`             | 4       | 43            |
 | `pharn/floor/check-bash-reconcile.test.mjs`   | 1       | 54            |
 | `.claude/hooks/set-writes-scope.test.cjs`     | 1       | 46            |
 
-**Each of the 36 passes against the patched copy.** The verification runner ran its full `npm test` over
-the merged, renumbered tree with the patched hooks and `LIMITS.md` at their real paths. It passed
-3570/3570, and the aggregate `npm run check` exited 0 there (`BUILD.md`, "After merge + renumber").
+**Each of the 41 passes against the patched copy.** The verification runner ran its full `npm test` over
+this tree with the patched hooks and `LIMITS.md` at their real paths. It passed 3581/3581, and the aggregate
+`npm run check` exited 0 there (`BUILD.md`, "After the re-review (R1–R4, 2026-09-26)").
 
-The 36, by name:
+The 41, by name:
 
 - `.claude/hooks/set-writes-scope.test.cjs` — ★ 6.24.0: the --clear message no longer claims a single
   fail-closed posture, either way
@@ -82,7 +90,8 @@ The 36, by name:
   - ★ the require-loop-record.cjs marker under .pharn/pharn-loop/ ALSO flips the write guard — no third
     writer needed
 - `.claude/hooks/enforce-writes-scope.test.cjs`:
-  - ★ B1 in the DEV posture too — the one verdict change there besides a guard error, and it is toward deny
+  - ★ B1 in the DEV posture too — a verdict change there, and it is toward deny (renamed; it had said "the
+    one verdict change there besides a guard error")
   - ★ B1: the review's dangling-link repros are DENIED, and a dangling link to an ordinary path is not
   - ★ BACKSLASH (install, no scope, no run): a path containing `\` is denied — each of these reached a
     reserved file
@@ -126,16 +135,31 @@ The 36, by name:
     is true
   - ★ minor 6: a FORCED throw inside the decision exits 2 with the fixed message — dev and install
   - ✧ PIN: enforce-writes-scope.cjs's toKey() is byte-equal to protect-trusted-paths.cjs's
+  - NEW (R1): ★ R1: the re-review's repro — a case variant of the project's own path is DENIED, never
+    allowed as a temp-root path
+  - NEW (R1): ★ R1: with a .git at the project root, a variant spelling gets the SAME alias body — never
+    'another git tree'
+  - NEW (R1): ★ R1: a Unicode-form variant (NFC for an NFD directory) is the project too; a trailing-dot
+    SIBLING is denied as well — the accepted over-block
+  - NEW (R1): ★ R1: resolution (2) reads the ON-DISK spelling — a dangling link to another spelling of the
+    project's floor lands inside the project
+  - NEW (R1): ✧ PIN: resolution (2) realpaths NATIVELY — resolvePhysicalTarget() and its start,
+    realpathOr() (re-review R1)
 
 **Every other gate is GREEN.** `reconcile` read `CLEAN` under the re-opened epoch, with 0 escapes and no
 warnings.
 
-- It reconciled 3 paths: `proposed/APPLY.md`, `proposed/human-only.patch` and `proposed/human-only.sha256`.
-  All three are inside the declared scope.
-- It exempted the stage artifacts this chain writes as pipeline artifacts: `BUILD.md`, `REGRESSION.md`,
-  `REVIEW.md` and `regression-report.json`.
+- It reconciled 10 paths, each inside the declared scope:
+  - `.claude/commands/pharn-loop.md`;
+  - the two changed test files, `enforce-writes-scope.test.cjs` and `run-marker.test.mjs`;
+  - `CHANGELOG.md`, `CLAUDE.md`, `README.md` and `pharn/floor/README.md`;
+  - `proposed/APPLY.md`, `proposed/human-only.patch` and `proposed/human-only.sha256`.
+- It exempted the stage artifacts this chain writes as pipeline artifacts: `BUILD.md`, `PLAN.md`,
+  `REGRESSION.md`, `REVIEW.md`, `VERIFY.md` and `regression-report.json`.
 
-No Bash write in this pass reached a path the live guards would have denied.
+No Bash write in this pass reached a path the live guards would have denied. The one Bash edit of an
+in-repo file, a `sed -i` in `enforce-writes-scope.test.cjs`, is one of the 10 and is inside the scope
+(`BUILD.md` declares it).
 
 ## Verifiers
 

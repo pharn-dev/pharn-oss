@@ -825,3 +825,42 @@ A model decision under the maintainer's delegation, not a human approval, record
   posture — but a pre-existing symlink whose NAME contains a backslash can still make that walk miss a
   trusted doc, so the same review of that file is follow-up `protect-backslash-separator` (not in this patch:
   the plan leaves that hook untouched).
+
+### Re-review rulings and fixes (orchestrator, 2026-09-26)
+
+`REVIEW.md`, "Re-review of the final patch", blocked the patch (R1) and named three advisory findings. The
+orchestrator ruled GATE 2 is FIX, under the maintainer's delegation (a model decision, recorded as given),
+and set each fix:
+
+- **R1 (blocking) — another spelling of the project's own path.** `path.relative(ROOT, target)` compares
+  spellings exactly, and the JS `fs.realpathSync` keeps the caller's letter case and Unicode form (measured:
+  `fs.realpathSync.native` returns the on-disk spelling for both, and `process.cwd()` in a child started
+  from a case-variant spelling returns the on-disk one). So a case variant of a temp-root project with no
+  `.git` read as outside the project, and the temp-root allow admitted it. Two defences, kept together as
+  defence in depth, both in the hook patch:
+  - resolution (2) and its start realpath NATIVELY, so they judge the on-disk spelling;
+  - in the install posture, a target outside `ROOT` as spelled whose folded key (`toKey()`) equals or lies
+    under `toKey(ROOT)` is denied as the project's own path — an `in-repo` variant body, which offers
+    neither the out-of-project allow nor the Bash scratch remedy.
+
+  The costs, stated in the hook header, `LIMITS.md §7`, `CLAUDE.md` and the CHANGELOG: an ordinary path
+  written under another spelling of the project is denied too; a sibling named like the project plus a
+  trailing dot is denied (on APFS it is another directory); and in the dev and unsignalled postures a path
+  spelled differently from an existing directory is now also judged at its on-disk spelling — a verdict
+  change there, toward deny only. Those postures keep their pre-6.24.0 message for a variant spelling of
+  the root (D1): the alias body is install-only.
+
+- **R2 (important) — `/pharn-loop` did not stop on a failed marker open.** Fixed agent-side, the writer
+  (`require-loop-record.cjs`, human-only) unchanged: a non-zero Step 1a snapshot line or `--open` line is
+  a STOP mapped to the existing row **S9** (`blocked: stage-refused`). Why S9: it is decided by an exit code,
+  as S9's other triggers are, and it refuses to go on without a precondition, as S9's missing artifact
+  does; `/pharn-regress`'s stage-exit mapping already sends a pinned script's crash to S9. S3's
+  `no-git-base` names the git base, S10 is the closure row for a sub-stage's ask-the-human instruction, and
+  S11 needs a stage that claimed to run. `pharn/floor/run-marker.test.mjs` executes both pinned lines,
+  whole, against a file planted at `.pharn`, `.pharn/pharn-loop` and `.pharn/pharn-loop/<name>`, after a
+  control run with nothing planted.
+- **R3 (minor)** — the hook header's backslash sentence is reworded: in every other posture a backslash can
+  widen the allow list only to a new file whose own name contains one, which aliases no other file on a `/`
+  system.
+- **R4 (minor)** — the `[6.24.0]` CHANGELOG entry is rewrapped so `1.` no longer starts a line (CommonMark
+  read it as a numbered list and dropped the exit code); rendered and checked with this repo's markdown-it.

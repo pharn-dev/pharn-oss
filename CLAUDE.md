@@ -271,7 +271,10 @@ node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
 # default standing for at most 24h. Both commands STOP when `--open` exits non-zero (GATE-2 review, S1: a
 # FILE planted at `.pharn`, `.pharn/<command>` or `.pharn/<command>/<name>` used to crash the writer with
 # exit 1 and a stack trace, and neither command stopped); run-marker.test.mjs EXECUTES each command's pinned
-# line — the WHOLE line, so a suffix like `|| true` is caught — against such a planted file. No new contract
+# line — the WHOLE line, so a suffix like `|| true` is caught — against such a planted file. `/pharn-loop`,
+# which never calls this script, STOPs the same way (S9) when its own Step 1a snapshot line or its
+# `require-loop-record.cjs --open` line exits non-zero — that writer is a human-only hook and still crashes
+# with exit 1 on a planted file (re-review R2); run-marker.test.mjs executes those two lines too. No new contract
 # (P7): the guard reads only a path and an age, and this script's own header is its spec, the
 # require-loop-record.cjs precedent. Exit: 0 ok · 2 refusal on ANY failure, never a crash; no marker written.
 node pharn/floor/run-marker.mjs --open <pharn-review|pharn-ship> <name>
@@ -1053,7 +1056,9 @@ the rule has to be the thing that holds.
   **Outside the project** it then allows exactly two places, the maintainer's GATE-2 decision (D2,
   2026-09-26): Claude Code's memory folders, `<claude-config-dir>/projects/*/memory/**` (`$CLAUDE_CONFIG_DIR`
   when set, else `~/.claude`), and the temp roots, `os.tmpdir()` and `/tmp` — never a path inside another git
-  tree, never the project root itself; every other out-of-project path (dotfiles, `~/.ssh`,
+  tree, never the project root itself, and never another SPELLING of the project's own path (a different
+  letter case, Unicode form or trailing dot/space, which on a case-insensitive volume reaches the project's
+  own files: it is denied as the project's own — re-review R1); every other out-of-project path (dotfiles, `~/.ssh`,
   `~/.claude/settings*.json`, `~/.claude.json`, `~/.claude/hooks/`) stays denied, as every one was before
   6.24.0. A **malformed** `.pharn/writes-scope.json` (present, or not confirmable as absent, but not a readable
   regular file whose JSON is a plain object with an array `scope`) denies **every** write in an installed
@@ -1063,8 +1068,9 @@ the rule has to be the thing that holds.
 - **Every write is judged at every target it can reach (6.24.0, every posture).** The guard resolves a path
   twice — the pre-6.24.0 way (`path.resolve()`, then the realpath of the nearest existing ancestor), judged
   first over every path so every old denial keeps its old message, and the filesystem's way (segment by
-  segment, a DANGLING symlink followed to the target it names, `..` applied to a symlink's REAL parent) — and
-  denies if either target is denied (GATE-2 review, B1). The second resolution splits on `/` only on a `/`
+  segment, each existing directory at its ON-DISK spelling via `fs.realpathSync.native` — re-review R1 — a
+  DANGLING symlink followed to the target it names, `..` applied to a symlink's REAL parent) — and denies if
+  either target is denied (GATE-2 review, B1). The second resolution splits on `/` only on a `/`
   system: the first handoff of this fix copied protect-trusted-paths.cjs's `\`-as-separator reading, and
   that made `pharn/features/a\b/../../floor/x.mjs` resolve inside `pharn/features/` while the kernel wrote
   `pharn/floor/x.mjs` — measured in the dev posture too, before it shipped.
@@ -1079,13 +1085,15 @@ the rule has to be the thing that holds.
   `pharn/floor/run-marker.mjs --open|--close <command> <name>`, which exits 2 on every failure (a planted
   file included) and never crashes, and both commands **STOP** when `--open` exits non-zero; `/pharn-loop`
   keeps its existing marker, written by `.claude/hooks/require-loop-record.cjs`, with no second writer
-  (L35). Both are Bash calls outside the `PreToolUse` gate (L19) — ADVISORY: a run that skips `--open` is
+  (L35), and **STOPs** (S9) when its Step 1a snapshot or that marker's `--open` exits non-zero (re-review
+  R2). All of these are Bash calls outside the `PreToolUse` gate (L19) — ADVISORY: a run that skips `--open` is
   unguarded between its own scoped steps, and one that skips `--close` leaves the fail-closed default
   standing for at most 24 h. Tree-wide, not per-session — the scope record is already one per tree (L38),
   and a subagent a command spawns must be covered by the marker its own orchestrator opened. In a dev
   checkout or an unsignalled tree the guard never reads these markers, the default is the pre-6.24.0 one, and
   every deny message the old hook printed is byte-identical; the only verdict changes there are toward deny
-  (a write through a symlink is also judged at the target it reaches, and a guard error denies).
+  (a write through a symlink is also judged at the target it reaches, a path spelled differently from an
+  existing directory is also judged at that directory's on-disk spelling, and a guard error denies).
 - **The root every scope entry is relative to is NOT the hook process's cwd (6.1.0).** It is the first
   directory, walking up from Claude's current directory, that holds a `.git` entry or is
   `$CLAUDE_PROJECT_DIR`. A session working from a subdirectory therefore still gets the repo root and the
@@ -1100,7 +1108,9 @@ the rule has to be the thing that holds.
   - **in-repo** — declare the path and re-run the setter; in an installed project it may ALSO list any
     open run marker(s) and their close commands, but only when the path would become writable once BOTH
     the scope is released AND the run is closed — never for a reserved path, and never for the scope file
-    itself, since neither becomes writable that way;
+    itself, since neither becomes writable that way. Its **alias** variant (an installed project, a path that
+    is another spelling of the project's own — re-review R1) says so and offers only "spell it as the project
+    does" or a human write: no scope entry can name that spelling, and it is NOT scratch, so never Bash;
   - **outside every git tree** (the agent scratchpad under `/private/tmp`, say) — no `writes:` entry can
     express it and neither can the fail-closed default, so the only routes are putting the file inside the
     repo, or, **for genuinely temporary/scratch files and only those**, writing it through **Bash**, which

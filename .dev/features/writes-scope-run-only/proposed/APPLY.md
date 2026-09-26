@@ -6,19 +6,23 @@ else the plan names has already been written, formatted and committed by the age
 `writes-scope-run-only` branch. This folder is what carries the three files' change to a human to apply, by
 hand, from here.
 
-**This is the THIRD version of the patch, and the only one to apply.** The first (commit `6b349f8`) was
-reviewed before anyone applied it, and `REVIEW.md` blocked it. The second (commit `67847e5`) carried the
-GATE-2 fixes (`PLAN.md`, "Amended at GATE 2" and "As built — the GATE-2 fix pass") and was numbered 6.23.0.
-Then `stage-regress-script` (#277, `1524c6f`) merged to `main` first and released 6.23.0, so this branch
-merged `origin/main` and renumbered by diff to **6.24.0**. This patch is the second one with its version
-strings renumbered (25 added lines: hook comments, the setter comment and `LIMITS.md §7`) and nothing else:
-turning every `6.24.0` in the three new files back into `6.23.0` reproduces the second patch's
-`human-only.sha256` digests exactly. If you kept a copy of either earlier patch, discard it:
-`human-only.sha256` pins only the new bytes, so `apply.sh` refuses the old ones.
+**This is the FOURTH version of the patch, and the only one to apply.** Each earlier one was reviewed or
+superseded before anyone applied it:
 
-The three human-only files are byte-identical on `767bf61` (where the fix pass started) and `1524c6f`, so
-the merge did not move the lines this patch applies to; the runner regenerated it against the merged tree
-and `git apply --check` passes there.
+1. The first (commit `6b349f8`) was blocked by `REVIEW.md`.
+2. The second (commit `67847e5`) carried the GATE-2 fixes (`PLAN.md`, "Amended at GATE 2" and "As built —
+   the GATE-2 fix pass") and was numbered 6.23.0.
+3. The third (commit `d869cc8`) was the second renumbered to **6.24.0**, after `stage-regress-script` (#277,
+   `1524c6f`) merged to `main` first and released 6.23.0. `REVIEW.md`'s "Re-review of the final patch"
+   blocked it (R1).
+4. This one adds the re-review fixes (`PLAN.md`, "Re-review rulings and fixes"): the R1 fix in the hook,
+   the R3 comment, and `LIMITS.md §7` sentences for R1 and for `/pharn-loop`'s new STOP (R2, whose fix is
+   agent-side).
+
+If you kept a copy of any earlier patch, discard it: `human-only.sha256` pins only the new bytes, so
+`apply.sh` refuses the old ones. The three human-only files are byte-identical on `767bf61` (where the fix
+pass started) and `1524c6f`, so the merge did not move the lines this patch applies to; the runner
+generated it against the merged tree, and `git apply --check` passes there.
 
 ## What to read first
 
@@ -39,6 +43,11 @@ and `git apply --check` passes there.
    - **Anything other than a directory at a run-state path counts as a run open** (important finding 2).
    - The messages: the scan-error sentence, the install stale-scope reason, a non-slug marker name never
      rendered, the `{}` record keeping its origin line.
+   - **Another spelling of the project's own path is the project's own** (re-review R1). A case or Unicode
+     variant of the project's path read as outside the project, so a temp-root project with no `.git`
+     could be written through it — `pharn/floor/` included. Now the filesystem's resolution reads each
+     existing directory's on-disk spelling, and an installed project denies a path whose folded spelling
+     falls under the project's own, with its own message.
 
    `LIMITS.md §7` gains five bullets that state all of this, with its bounds.
 

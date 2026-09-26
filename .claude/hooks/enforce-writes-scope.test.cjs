@@ -978,6 +978,14 @@ function installDenyMessages() {
   const scoped = seedInstalledProject(tmp());
   setScope(scoped, ["only/this.md"]);
   out.push({ branch: "in-repo (install, scope set)", msg: denyText(scoped, "src/x.js") });
+  // Re-review R1: another spelling of the project's own path, denied as the project's own.
+  const alias = seedInstalledProject(tmp());
+  const aliasReal = fs.realpathSync(alias);
+  const aliasBase = require("node:path").basename(aliasReal);
+  out.push({
+    branch: "in-repo (install, alias)",
+    msg: denyText(alias, join(require("node:path").dirname(aliasReal), aliasBase.toUpperCase(), "src", "x.js")),
+  });
   return out;
 }
 
@@ -2066,7 +2074,7 @@ test("★ B1 control from the review: a symlink to an EXISTING reserved file is 
   assert.equal(hook(cwd, "src/live-config").status, 2);
 });
 
-test("★ B1 in the DEV posture too — the one verdict change there besides a guard error, and it is toward deny", () => {
+test("★ B1 in the DEV posture too — a verdict change there, and it is toward deny", () => {
   // HEAD judged this at the link's own name (pharn/features/evil — inside the safe-set) and ALLOWED it, while
   // the write created .dev/floor/new.mjs. Now the second resolution judges the target and denies.
   const cwd = seedDevRepo(tmp());
@@ -2120,6 +2128,124 @@ test(
     assert.equal(hook(cwd, "pharn/features/a\\b.md").status, 0, "control: a backslash FILE inside pharn/features/ is inside it");
   }
 );
+
+// ── R1 (re-review) — another spelling of the project's own path is never an out-of-project path ─────────
+//
+// The re-review's repro: an installed project under a temp root, with no `.git` (so its root comes from
+// CLAUDE_PROJECT_DIR), no scope and no run. A path that spelled the project's own directory with another
+// letter case read as OUTSIDE the project — `path.relative()` compares spellings exactly — and the temp-root
+// allow admitted it, while APFS wrote into the project's `pharn/floor/`. Every assertion below rests on a
+// lexical fold, so it holds on a case-sensitive volume too (there the variant names another directory, and
+// denying it is the accepted over-block); the one assertion that needs the volume to fold case is guarded.
+
+// The sandbox's own directory, re-spelled: "upper" upper-cases every letter, "mixed" alternates upper and
+// lower case. mkdtemp names start `pharn-ws-`, so both always differ from the original, and from each other
+// — asserted, not assumed.
+function respell(dir, mode) {
+  const real = fs.realpathSync(dir);
+  const base = require("node:path").basename(real);
+  const out = mode === "upper" ? base.toUpperCase() : [...base].map((c, i) => (i % 2 ? c.toLowerCase() : c.toUpperCase())).join("");
+  assert.notEqual(out, base, "premise: the respelling differs from the directory's own name");
+  if (mode !== "upper") assert.notEqual(out, base.toUpperCase(), "premise: the mixed spelling is not the upper one");
+  return join(require("node:path").dirname(real), out);
+}
+
+const TMP_NO_GIT = !inAnyGitTree(os.tmpdir());
+const ALIAS_CUE = /another SPELLING of this project's own path/;
+
+test(
+  "★ R1: the re-review's repro — a case variant of the project's own path is DENIED, never allowed as a temp-root path",
+  { skip: !TMP_NO_GIT && "the OS temp directory lies in a git tree here" },
+  () => {
+    const cwd = seedInstalledProject(tmp());
+    for (const d of [".claude/commands", "pharn/floor", "src"]) fs.mkdirSync(join(cwd, d), { recursive: true });
+    fs.writeFileSync(join(cwd, "pharn", "floor", "check-verify.mjs"), "// stands in for an EXISTING floor checker\n");
+    const real = fs.realpathSync(cwd);
+    const env = { CLAUDE_PROJECT_DIR: real };
+    for (const rel of [".claude/commands/pharn-evil.md", "pharn/floor/x.mjs", "pharn/floor/check-verify.mjs", "pharn.config.json"]) {
+      assert.equal(hookEnv(cwd, join(real, rel), env).status, 2, `the project's own spelling: ${rel}`);
+      for (const mode of ["upper", "mixed"]) {
+        const r = hookEnv(cwd, join(respell(cwd, mode), rel), env);
+        assert.equal(r.status, 2, `${mode} spelling: ${rel}`);
+        assert.match(r.stderr, ALIAS_CUE, `${mode} spelling: ${rel} — the alias body`);
+        assert.doesNotMatch(r.stderr, /write it with the Bash tool/, `${mode} spelling: ${rel} — never the Bash scratch remedy`);
+      }
+    }
+    // An ORDINARY path: allowed as the project spells it, denied under another spelling — the accepted cost
+    // of refusing to guess, whose remedy the message names (spell it as the project does).
+    assert.equal(hookEnv(cwd, join(real, "src", "x.js"), env).status, 0, "control: ordinary source, the project's own spelling");
+    assert.equal(hookEnv(cwd, join(respell(cwd, "upper"), "src", "x.js"), env).status, 2, "ordinary source, another spelling");
+  }
+);
+
+test("★ R1: with a .git at the project root, a variant spelling gets the SAME alias body — never 'another git tree'", () => {
+  const cwd = seedInstalledProject(tmp());
+  fs.mkdirSync(join(cwd, ".git"));
+  fs.mkdirSync(join(cwd, "pharn", "floor"), { recursive: true });
+  const r = hook(cwd, join(respell(cwd, "upper"), "pharn", "floor", "x.mjs"));
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, ALIAS_CUE);
+  assert.doesNotMatch(r.stderr, OTHER_TREE_CUE);
+});
+
+test(
+  "★ R1: a Unicode-form variant (NFC for an NFD directory) is the project too; a trailing-dot SIBLING is denied as well — the accepted over-block",
+  { skip: !TMP_NO_GIT && "the OS temp directory lies in a git tree here" },
+  () => {
+    const parent = fs.realpathSync(tmp());
+    const cwd = join(parent, "projét"); // NFD: `e` + a combining acute accent
+    fs.mkdirSync(join(cwd, "pharn", "floor"), { recursive: true });
+    seedInstalledProject(cwd);
+    const env = { CLAUDE_PROJECT_DIR: fs.realpathSync(cwd) };
+    const nfc = hookEnv(cwd, join(parent, "projét", "pharn", "floor", "x.mjs"), env); // NFC: one precomposed letter
+    assert.equal(nfc.status, 2, "the NFC spelling of the project's own floor");
+    assert.match(nfc.stderr, ALIAS_CUE);
+    // toKey() strips a trailing dot per segment, so `<project>.` folds onto the project. On APFS that is a
+    // DIFFERENT directory under a temp root, which the permissive posture would otherwise allow — denied here.
+    const sibling = seedInstalledProject(tmp());
+    const dot = hookEnv(sibling, `${fs.realpathSync(sibling)}./src/x.js`, { CLAUDE_PROJECT_DIR: fs.realpathSync(sibling) });
+    assert.equal(dot.status, 2, "a trailing-dot sibling of the project");
+    assert.match(dot.stderr, ALIAS_CUE);
+  }
+);
+
+test("★ R1 leaves the DEV posture's message alone (D1): a variant spelling there still gets the pre-6.24.0 out-of-root body", () => {
+  const cwd = seedDevRepo(tmp());
+  const r = hook(cwd, join(respell(cwd, "upper"), "pharn", "floor", "x.mjs"));
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, OUT_OF_ROOT_CUE);
+  assert.doesNotMatch(r.stderr, ALIAS_CUE);
+});
+
+test("★ R1: resolution (2) reads the ON-DISK spelling — a dangling link to another spelling of the project's floor lands inside the project", () => {
+  const cwd = seedInstalledProject(tmp());
+  for (const d of ["src", "pharn/floor"]) fs.mkdirSync(join(cwd, d), { recursive: true });
+  const variant = respell(cwd, "upper");
+  fs.symlinkSync(join(variant, "pharn", "floor", "new.mjs"), join(cwd, "src", "evil-case")); // absolute, dangling
+  const r = hook(cwd, "src/evil-case");
+  assert.equal(r.status, 2, "denied on every volume");
+  if (fs.existsSync(variant)) {
+    // A case-insensitive volume: only a NATIVE realpath turns the link's spelling into the project's own, so
+    // the second resolution is judged inside the project (`pharn/floor/new.mjs`, reserved). The JS realpath
+    // keeps the link's spelling, and the target would reach the alias body instead.
+    assert.match(r.stderr, /src\/evil-case -> pharn\/floor\/new\.mjs/);
+    assert.doesNotMatch(r.stderr, ALIAS_CUE);
+  } else {
+    assert.match(r.stderr, ALIAS_CUE, "a case-sensitive volume: the variant is another directory, denied as an alias");
+  }
+});
+
+test("✧ PIN: resolution (2) realpaths NATIVELY — resolvePhysicalTarget() and its start, realpathOr() (re-review R1)", () => {
+  const src = fs.readFileSync(HOOK, "utf8");
+  const body = (name) => {
+    const m = src.match(new RegExp(`function ${name}\\(p\\) \\{[\\s\\S]*?\\n\\}`));
+    assert.ok(m, `expected a \`function ${name}(p) { … }\``);
+    return m[0];
+  };
+  assert.match(body("resolvePhysicalTarget"), /fs\.realpathSync\.native\(next\)/);
+  assert.doesNotMatch(body("resolvePhysicalTarget"), /fs\.realpathSync\(/, "no JS realpath inside resolution (2)");
+  assert.match(body("realpathOr"), /fs\.realpathSync\.native\(p\)/);
+});
 
 // ── S1 — something other than a directory at a run-state path counts as a run open ─────────────────────
 
@@ -2252,4 +2378,5 @@ test("★ L27 per branch: each 6.24.0 remedy is PRESENT in its own case and ABSE
   assert.deepEqual(where(/that default allows ordinary project paths/), ["in-repo (install, scope set)"]);
   assert.deepEqual(where(/This path qualifies/), ["out-of-root (install, run open)"]);
   assert.deepEqual(where(/this path does not qualify/), ["out-of-root (install, not qualifying)"]);
+  assert.deepEqual(where(/another SPELLING of this project's own path/), ["in-repo (install, alias)"]);
 });

@@ -360,7 +360,7 @@ test("✧ WIRING: no command OTHER than pharn-ship.md / pharn-review.md invokes 
   }
 });
 
-test("✧ WIRING: pharn-loop.md's existing --open/--close lines still work unchanged (mutation control: the loop is untouched)", () => {
+test("✧ WIRING: pharn-loop.md's existing --open/--close lines still work unchanged (the loop's marker writer is untouched)", () => {
   const openLine = pinnedLine("pharn-loop.md", /node \.claude\/hooks\/require-loop-record\.cjs --open '<name>' --cap <M>/)
     .replace("<name>", "demo-run")
     .replace("<M>", "3");
@@ -485,6 +485,66 @@ for (const { file, command, next } of [
     assert.ok(stop > open && stop < nextAt, "the STOP branch must follow the open line, before the next step");
   });
 }
+
+// ------------------------------------------------------------------------------------------- ✧ WIRING: /pharn-loop's run-state lines STOP on a planted file — EXECUTED (re-review R2)
+
+// The loop's marker writer is require-loop-record.cjs, a human-only hook left unchanged: a FILE planted at
+// .pharn/pharn-loop/<name> makes it exit 1 with a stack trace. So the command STOPs (S9) on ANY non-zero exit
+// of its Step 1a snapshot line and of its --open line. Both lines are EXECUTED here, whole, in a git sandbox —
+// a control run with nothing planted must succeed, so a failure below is the plant's — against a FILE at each
+// of the three places the Write tool can put one. Neither proves a run obeyed the branch (P0).
+const LOOP_SNAPSHOT_RE =
+  /mkdir -p \.pharn\/pharn-loop\/<name> && git status --porcelain -uall > \.pharn\/pharn-loop\/<name>\/pre-run-status\.txt/;
+const LOOP_OPEN_RE = /node \.claude\/hooks\/require-loop-record\.cjs --open '<name>' --cap <M>/;
+const LOOP_PLANTS = [[".pharn"], [".pharn", "pharn-loop"], [".pharn", "pharn-loop", "demo-run"]];
+
+function gitSandbox() {
+  const dir = tmp();
+  const r = spawnSync("git", ["init", "-q"], { cwd: dir, encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  mkdirSync(join(dir, "pharn", "features", "demo-run"), { recursive: true });
+  return dir;
+}
+
+function loopLines() {
+  return {
+    snap: pinnedLine("pharn-loop.md", LOOP_SNAPSHOT_RE).replaceAll("<name>", "demo-run"),
+    open: pinnedLine("pharn-loop.md", LOOP_OPEN_RE).replace("<name>", "demo-run").replace("<M>", "3"),
+  };
+}
+
+test("✧ WIRING (R2): pharn-loop.md's pinned snapshot and --open lines, executed with NOTHING planted, succeed (control)", () => {
+  const { snap, open } = loopLines();
+  const dir = gitSandbox();
+  const s = runShellLine(dir, snap);
+  assert.equal(s.status, 0, s.stderr);
+  const o = runShellLine(dir, open);
+  assert.equal(o.status, 0, o.stderr);
+});
+
+for (const at of LOOP_PLANTS) {
+  test(`✧ WIRING (R2): with a FILE planted at ${at.join("/")}, pharn-loop.md's snapshot line AND its --open line both exit non-zero`, () => {
+    const { snap, open } = loopLines();
+    const dir = gitSandbox();
+    plant(dir, at);
+    assert.notEqual(runShellLine(dir, snap).status, 0, "the snapshot line the STOP branch reads must fail here");
+    assert.notEqual(runShellLine(dir, open).status, 0, "the --open line the STOP branch reads must fail here");
+  });
+}
+
+test("✧ WIRING (R2): pharn-loop.md STOPs as S9 after EACH of the two lines, before the next step, and says why S9", () => {
+  const body = readFileSync(join(COMMANDS_DIR, "pharn-loop.md"), "utf8");
+  const snapAt = body.search(LOOP_SNAPSHOT_RE);
+  const openAt = body.search(LOOP_OPEN_RE);
+  const ledgerAt = body.indexOf("node pharn/floor/mark-phase.mjs --name '<name>' --kind run-start");
+  assert.ok(snapAt >= 0 && snapAt < openAt && openAt < ledgerAt, "anchors, in order");
+  const stop1 = body.indexOf("**Non-zero → STOP**", snapAt);
+  const stop2 = body.indexOf("**Non-zero → STOP**", openAt);
+  assert.ok(stop1 > snapAt && stop1 < openAt, "a STOP between the snapshot line and the --open line");
+  assert.ok(stop2 > openAt && stop2 < ledgerAt, "a STOP between the --open line and the cost-ledger step");
+  for (const at of [stop1, stop2]) assert.match(body.slice(at, at + 200), /\bS9\b[\s\S]*`blocked: stage-refused`/);
+  assert.match(body, /\*\*Why Step 1a's snapshot and `--open` lines stop as S9/);
+});
 
 test("✧ pinnedLine() executes the WHOLE line — an appended `|| true` would be caught (mutation control)", () => {
   const dir = tmp();

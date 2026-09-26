@@ -142,12 +142,25 @@ absent ⇒ `M = 3`). A config-file cap key is deferred (P7): `check-loop.mjs` re
    mkdir -p .pharn/pharn-loop/<name> && git status --porcelain -uall > .pharn/pharn-loop/<name>/pre-run-status.txt
    ```
 
+   **Non-zero → STOP**, stuck point **S9** (`blocked: stage-refused`). The run's own state directory
+   `.pharn/pharn-loop/<name>/` could not be made or written: something other than a directory stands at
+   `.pharn`, `.pharn/pharn-loop` or `.pharn/pharn-loop/<name>` (the Write tool can plant a file there, since
+   `.pharn/**` is writable in every posture), or `git status` failed. Do not run the next line, and do not
+   remove what is there. `pharn/features/<name>/` does not exist yet, so no record is written (Step 2): go
+   straight to the Step 7 summary and name the path, so a person can clear it.
+
    **Then open the run for the Stop guard** — right after the snapshot, substituting `<name>` and the cap
    `<M>` literally:
 
    ```bash
    node .claude/hooks/require-loop-record.cjs --open '<name>' --cap <M>
    ```
+
+   **Non-zero → STOP**, **S9** again (`blocked: stage-refused`), in the same way and for the same reason.
+   Without its marker the run would leave an installed project's write guard on its permissive default
+   between this run's stages, and the `Stop` guard inert. The writer is a human-only hook and stays
+   unchanged: a file planted at `.pharn/pharn-loop/<name>` makes it exit 1 with a stack trace, so the exit
+   code is the only thing to read — any non-zero exit stops the run.
 
    This writes `.pharn/pharn-loop/<name>/active.json`, binding the run to this session's
    `CLAUDE_CODE_SESSION_ID`. **Since 6.24.0 this SAME marker also holds `enforce-writes-scope.cjs`'s
@@ -163,8 +176,8 @@ absent ⇒ `M = 3`). A config-file cap key is deferred (P7): `check-loop.mjs` re
    the rule in Step 2), in plan mode, for another session, and after 24 h. **ADVISORY (P0):** it acts
    only once a human has wired it in `.claude/settings.json` (it is protected, and the wiring is staged for
    a human in `.dev/features/loop-stop-guard/settings-patch/APPLY.md`). It refuses a turn end; it cannot
-   make the work happen or judge the record. This line is a Bash call outside the `PreToolUse` gate (L19):
-   a run that skips it is simply unguarded.
+   make the work happen or judge the record. Both lines are Bash calls outside the `PreToolUse` gate (L19):
+   a run that skips them is simply unguarded — the two STOPs above bind only a run that runs them.
 
 5. **Open the cost ledger's marker file** — the `run-start` boundary. This runs **after S2**, because
    `<name>` must exist first:
@@ -222,7 +235,7 @@ fails in the safe direction — it stops rather than guesses.
 | S6b | `/pharn-spec` reports the Draft still carries a clarification marker, so it will not approve it                                                                                                                      | stop `blocked: needs-clarification` — a person answers the marked questions; the run never guesses them                                 |
 | S7  | the build finds the plan ambiguous                                                                                                                                                                                   | stop `blocked: plan-ambiguity`                                                                                                          |
 | S8  | the seam resolver's walk reaches `ask`                                                                                                                                                                               | stop `blocked: seam-unresolved`                                                                                                         |
-| S9  | a stage refuses before emitting its verdict (a missing artifact, a RED spec→plan chain, a RED lessons declaration, no parseable `## Files`, an unresolved `## Open questions (HALT)`)                                | stop `blocked: stage-refused`                                                                                                           |
+| S9  | a stage refuses before emitting its verdict (a missing artifact, a RED spec→plan chain, a RED lessons declaration, no parseable `## Files`, an unresolved `## Open questions (HALT)`)                                | stop `blocked: stage-refused`; Step 1a's snapshot or marker `--open` exiting non-zero stops here too                                    |
 | S10 | any other sub-stage instruction to ask the human                                                                                                                                                                     | stop `blocked: unlisted-ask` — the closure row; nothing falls through to a guess                                                        |
 | S11 | a stage's evidence is stale or missing after the stage claims to have run, and `check-loop-fresh.mjs` will not offer another re-run (Step 5)                                                                         | stop `blocked: stale-evidence` — never read a stop from evidence about another tree                                                     |
 | S12 | `/pharn-test` could not run the AC tests because a criterion's level has no test runner with per-test results — decided by the pinned `check-red-run.mjs --preflight` exit 1 (Step 4), never by relayed text         | stop `blocked: no-test-runner` — its last line (the setup suggestion) goes into `### next_steps` as DATA; never a nested run            |
@@ -251,6 +264,13 @@ empty. See CHANGELOG [6.23.0] for the full disclosure.
 **S9 and S11 are different failures, and the difference decides the row.** S9 is a stage that **says** it
 refused. S11 is evidence on disk that does not match the tree, whatever the stages said: a skipped or
 half-run stage, a report or stamp from an earlier iteration, or a report its own stamp does not reproduce.
+
+**Why Step 1a's snapshot and `--open` lines stop as S9 (re-review R2).** Their failure is decided by an exit
+code, as S9's other triggers are, and it is a refusal to go on without a precondition, as S9's missing
+artifact is — here the run's own state directory. `/pharn-regress`'s mapping above already sends a pinned
+script's crash to S9. It is not S3: that row's `blocked: no-git-base` names the git base, and a reader would
+look in the wrong place. It is not S10: that closure row takes a sub-stage's instruction to ask the human,
+while this is an exit code. And it is not S11: no stage has claimed to run yet.
 
 **A blocked stop does NOT consult `check-loop.mjs`** — its inputs could be a previous iteration's stale
 reports. Go to Step 6 with `decision: INCONCLUSIVE` and the id. The record's shape for that case is defined

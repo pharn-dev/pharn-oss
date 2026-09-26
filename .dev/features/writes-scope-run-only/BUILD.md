@@ -332,3 +332,121 @@ The new patch and the previous one are both 1013 lines long. They differ in 28 l
 the renumbered copy after the merge: every REVIEW repro, the D2 cases and the backslash cases, **49/49 as
 expected**, with a D1 sweep of 0 differences over 28. The runner removed its own `verify-wt`. The scratch
 worktree was then removed, and the runner deleted.
+
+## After the re-review (R1–R4, 2026-09-26)
+
+- stage model: opus — set by the maintainer's instruction, overriding pharn.config.json's sonnet for
+  build/regress/verify; routed via Agent subagent; effort not routed
+- input: `REVIEW.md`, "Re-review of the final patch" (at `b9d2de5`): blocked-with-1-floor-finding (R1), plus
+  R2 (important), R3 and R4 (minor). The orchestrator ruled GATE 2 is FIX, under the maintainer's delegation,
+  and set each fix (`PLAN.md`, "Re-review rulings and fixes").
+- scope: the PLAN setter (36 paths) before the first write. The reconciliation epoch is still the one
+  anchored after the merge (`--by writes-scope-run-only-post-merge`); nothing was re-anchored.
+- floor: `node pharn/floor/validate.mjs .` → **GREEN** (36 capabilities)
+
+### The four fixes
+
+- **R1 (blocking).** First reproduced against the hook of the committed, pre-R1 patch, applied in a
+  throwaway worktree. The project was `tmpproj-nogit` under the OS temp directory, with no `.git`, and
+  `CLAUDE_PROJECT_DIR` set; there was no scope and no run. Each of `.claude/commands/pharn-evil.md`,
+  `pharn/floor/x.mjs`, the existing `pharn/floor/check-verify.mjs` and `pharn.config.json` exited 2 as the
+  project spells it, and **0** under `TMPPROJ-NOGIT/…`. On this volume the variant names the same
+  directory. The fixed hook exits 2 for all eight. Two measurements decided the fix:
+  - `fs.realpathSync.native` returns the on-disk spelling for both a case variant and an NFC variant of an
+    NFD name, while `fs.realpathSync` keeps the caller's;
+  - `process.cwd()` in a child started from a case-variant directory returns the on-disk spelling. So
+    `ROOT` is in the on-disk spelling, and a natively resolved target compares correctly against it.
+
+  The fix has two parts, as ruled, kept together as defence in depth:
+  - resolution (2) and its starting point realpath natively;
+  - in the install posture, a target outside `ROOT` as spelled whose `toKey()` equals or lies under
+    `toKey(ROOT)` is denied as the project's own path. That is a new `in-repo` variant body, which offers
+    only "spell it as the project does" and a human write, never Bash. The first draft of that body named
+    the root inside a FIX bullet; the suite's command-citation extractor read `/private` there as a slash
+    command, so the root now appears only in WHY.
+
+  One header sentence became false with the native resolution and was corrected: "a path that does not run
+  through a symlink resolves to the same target both ways". A case-variant spelling of an existing
+  directory now resolves differently in the two passes.
+
+- **R2 (important).** The fix is in `pharn-loop.md`: a non-zero Step 1a snapshot line or `--open` line
+  STOPs as **S9**. The row choice is justified in the command and in `PLAN.md`. `run-marker.test.mjs`
+  executes both pinned lines, whole, in a git sandbox:
+  - a control run with nothing planted: both exit 0;
+  - a file planted at `.pharn`, `.pharn/pharn-loop` or `.pharn/pharn-loop/demo-run`: both exit 1 each time.
+
+  A position pin places each STOP between its line and the next step. The writer, `require-loop-record.cjs`,
+  is unchanged.
+
+- **R3 (minor).** The hook header's backslash sentence is reworded, in the patch.
+- **R4 (minor).** The `[6.24.0]` entry is rewrapped so that `exit 1.` stays together. Rendered with this
+  repo's markdown-it, the section now has no `<ol>`, and `exit 1.` survives. The CHANGELOG sections from
+  `[6.23.0]` down, and its preamble, are still byte-identical to `origin/main`'s.
+
+The docs that state the rule were updated with it: `CLAUDE.md`, `README.md`, `pharn/floor/README.md`, the
+CHANGELOG, `APPLY.md` and, in the patch, `LIMITS.md §7`. Two things drove that:
+
+- the new alias rule and its over-block;
+- the new toward-deny case in the dev and unsignalled postures. Every sentence that enumerated that
+  posture's verdict changes would otherwise have undercounted them.
+
+Two test titles changed because their claims became false:
+
+- `★ B1 in the DEV posture too — a verdict change there, and it is toward deny` (it had said "the one
+  verdict change there besides a guard error");
+- `✧ WIRING: pharn-loop.md's existing --open/--close lines still work unchanged (the loop's marker writer
+is untouched)` (it had said "the loop is untouched").
+
+**Declared, not hidden:** one mixed-case respelling in `enforce-writes-scope.test.cjs` was switched with a
+`sed -i` Bash edit rather than the Edit tool. The path is inside the declared scope, so the guard would have
+allowed the same edit through the Edit tool, and reconcile reads it as in scope. Every other in-repo write
+went through the Write and Edit tools.
+
+### The handoff, the runner and the regenerated patch
+
+`handoff/` was recreated as the scratch worktree `.pharn/pharn-dev-build/handoff-wt`, which is the
+committed patch applied at `b9d2de5`. The R1 and R3 edits and the `LIMITS.md` sentences were applied there
+as exact find/replace blocks, each required to match once: 14 in the hook and 3 in `LIMITS.md`.
+`set-writes-scope.cjs` is unchanged. The runner was rewritten from the PLAN's procedure and run once:
+
+| gate                 | exit | note                                                                          |
+| -------------------- | ---- | ----------------------------------------------------------------------------- |
+| `format:check`       | 0    |                                                                               |
+| `lint`               | 0    |                                                                               |
+| `lint:md`            | 0    |                                                                               |
+| `docs:check`         | 0    |                                                                               |
+| `check:markers`      | 0    |                                                                               |
+| `check:badge`        | 0    |                                                                               |
+| `check:changelog`    | 0    |                                                                               |
+| `check:contributing` | 0    |                                                                               |
+| `check:reconcile`    | 0    | not counted: a never-anchored worktree reads `NO_BASELINE`                    |
+| `test`               | 0    | **3581/3581**, against the PATCHED hooks (3570 + 11 new tests)                |
+| `npm run check`      | 0    | the aggregate, as one chain                                                   |
+| D1 message sweep     | 0    | 0 differences over 196 (2 postures × 7 record shapes × 14 paths), HEAD vs new |
+
+`proposed/human-only.sha256`:
+
+```text
+04eba260a76b4fbf341cfee7712ef4482986886bcca901d1b12c745809ccc0b1  .claude/hooks/enforce-writes-scope.cjs
+42e6db9fc605ab495c7903aa4069e42b35c2630db83948292cb8619857248331  .claude/hooks/set-writes-scope.cjs
+24628cb91e36c9ba5ae880aadfdbbd21dd3fe631e37a27e7ffe311b727fc9fe9  LIMITS.md
+```
+
+The setter's digest is unchanged from the previous patch. `git apply --check` exits 0 against this
+worktree's live files.
+
+The behavioural probe covers every earlier REVIEW repro, D2, the backslash cases, and now R1 and R2. It ran
+against the patched copy: **74/74 as expected**, and a D1 sweep of 0 differences over 28. Its R1 rows:
+
+- the repro's four paths, exact and under two case variants;
+- the ordinary-source over-block, and its control;
+- a `.git` root, whose variant gets the alias body, not "another git tree";
+- the NFC spelling of an NFD project;
+- the trailing-dot sibling;
+- the dangling link to a variant floor path, which on this case-insensitive volume lands at
+  `-> pharn/floor/new.mjs`;
+- the dev posture, whose message is byte-identical to HEAD's.
+
+Its R2 rows are the loop's two lines, with nothing planted and with each of the three plants. The R1
+sandboxes lived under the OS temp directory, because the vector needs a temp root with no git tree above
+it, and were removed after the run. The scratch worktree was then removed, and the runner deleted.

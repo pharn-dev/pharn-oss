@@ -130,7 +130,8 @@ echo '{"tool_name":"Write","tool_input":{"file_path":"docs/ARCHITECTURE.md"}}' |
 outside the active scope in `.pharn/writes-scope.json`. With no scope set, the default depends on the
 tree (6.24.0): a dev checkout or an unsignalled tree stays fail-closed to the same default-safe-set as
 before, and every denial it made before carries the same message; the only verdict changes there are
-toward deny (a write through a symlink is also judged at the target the filesystem reaches, and a guard
+toward deny (a write through a symlink is also judged at the target the filesystem reaches, a path spelled
+differently from an existing directory is also judged at that directory's on-disk spelling, and a guard
 error denies). An **installed** project (`pharn.config.json` carries a non-empty `skillsVersion`) is
 fail-closed to the same default-safe-set **only while a `/pharn-ship`, `/pharn-loop` or `/pharn-review`
 run is open** (a marker under `.pharn/<command>/<name>/active.json`, written by `pharn/floor/run-marker.mjs`
@@ -139,7 +140,9 @@ surface — `pharn/**` except `pharn/features/**`, `.claude/**` and `pharn.confi
 — plus `.pharn/writes-scope.json` and any path containing a backslash, and allows every other path inside
 the project, including your ordinary source. Outside the project it then allows only Claude Code's memory
 folders (`<claude-config-dir>/projects/*/memory/**`) and the temp roots (the OS temp directory and `/tmp`),
-never a path inside another git tree; every other out-of-project path stays denied. A malformed
+never a path inside another git tree, and never another spelling of the project's own path (a different
+letter case or Unicode form reaches the project's own files on a case-insensitive volume, so it is denied as
+the project's own); every other out-of-project path stays denied. A malformed
 `.pharn/writes-scope.json` denies EVERY write in an installed project rather than falling back to either
 default. Confirm it works:
 

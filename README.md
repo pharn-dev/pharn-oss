@@ -700,14 +700,17 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   `.pharn/writes-scope.json`. **Outside the project** the permissive default allows only two places — Claude
   Code's own memory folders (`<claude-config-dir>/projects/*/memory/**`, where the config dir is
   `$CLAUDE_CONFIG_DIR` or `~/.claude`) and the temp roots (the OS temp directory and `/tmp`) — and never a
-  path inside another git tree. This is **new in 6.24.0**: before it, every out-of-project path was denied,
+  path inside another git tree, nor another spelling of the project's own path: a different letter case or
+  Unicode form reaches the project's own files on a case-insensitive volume, so such a path is denied as the
+  project's own. This is **new in 6.24.0**: before it, every out-of-project path was denied,
   as it still is in every other posture. Every other out-of-project path stays denied, including your
   dotfiles, `~/.ssh`, `~/.claude/settings.json`, `~/.claude.json` and `~/.claude/hooks/`.
   `protect-trusted-paths.cjs` is unchanged and still denies its own set (the trusted docs, `CODEOWNERS`,
   the guards' own control surface, your SPEC template) in every posture, regardless of any scope. A
   **malformed** `.pharn/writes-scope.json` now denies **every** write in an installed project, rather than
-  falling back to a default. The markers are written and removed through **Bash**: `/pharn-ship` and
-  `/pharn-review` stop when opening theirs fails, but a run that skips the step leaves the install unguarded
+  falling back to a default. The markers are written and removed through **Bash**: `/pharn-ship`,
+  `/pharn-review` and `/pharn-loop` stop when opening theirs fails (the loop also when its pre-run snapshot
+  does), but a run that skips the step leaves the install unguarded
   between stages, anything other than a directory at a run-state path (`.pharn/pharn-review`, say) holds the
   narrow default until someone removes it, and a crashed run's leftover marker holds the
   narrow default for up to 24 h unless it is closed or ages out. Clearing the scope

@@ -1,14 +1,17 @@
-# REGRESSION — writes-scope-run-only (after merge + renumber)
+# REGRESSION — writes-scope-run-only (after the re-review fixes, R1–R4)
 
 - stage: `/pharn-dev-regress` — opus — set by the maintainer's instruction, overriding pharn.config.json's
   sonnet for build/regress/verify; routed via Agent subagent; effort not routed
-- run: after `origin/main` (`1524c6f`, #277) was merged into this branch and this phase was renumbered to
-  6.24.0 (`BUILD.md`, "After merge + renumber"). It ran over the working tree, with the merge committed
-  and the regenerated patch not yet committed. The human has not yet applied `proposed/human-only.patch`,
-  which is the order `PLAN.md`'s chain sequencing sets (regress before the apply).
-- base: `1524c6ff90844ee17457ca9450a7abb894a7b1f1`. This is `git merge-base HEAD origin/main`, which after
-  the merge is `main`'s tip. It is the base the orchestrator named. #277's own changes are on both sides,
-  so the comparison covers this phase's changes on top of today's `main`.
+- run: after the re-review fixes (`BUILD.md`, "After the re-review (R1–R4, 2026-09-26)"), over the working
+  tree at `b9d2de5` with the fixes and the regenerated patch not yet committed. It re-ran because R2 changed
+  `.claude/commands/pharn-loop.md`, which is outside the hook patch and is not a comment-only change. The
+  human has not yet applied `proposed/human-only.patch`, which is the order `PLAN.md`'s chain sequencing
+  sets (regress before the apply). The earlier run, after the merge and the renumber, gave the same verdict.
+  Its `regression-report.json` is byte-identical to this one's, because the base, the inside set and every
+  gate exit are unchanged.
+- base: `1524c6ff90844ee17457ca9450a7abb894a7b1f1`. This is `git merge-base HEAD origin/main`, which is
+  `main`'s tip. #277's own changes are on both sides, so the comparison covers this phase's changes on top
+  of today's `main`.
 - inside: 40 paths, this phase's own changes. They are the 11 product `.claude/commands/*.md`, 3 hook test
   files, the feature's own pipeline artifacts and `proposed/*`, `.dev/floor/command-hygiene.test.mjs`,
   `CHANGELOG.md`, `CLAUDE.md`, `README.md`, `SKILLS_VERSION`, `pharn/floor/README.md`, the edited and new
