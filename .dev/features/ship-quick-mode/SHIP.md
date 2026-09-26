@@ -154,4 +154,37 @@ deferred:
     deleted.
 - **`npm run check:changelog-entry`**, re-run after the apply, exited 0.
 
+## After merging main (#279, 6.24.1)
+
+`cost-dedup-completed-usage` merged into `main` as 6.24.1 (`b9b6a03`, #279) while this branch's PR (#280) was open.
+`origin/main` was merged into the branch on opus: a real merge, no rebase, no force, and the merge commit carries
+these records too. #279 touches no trusted doc: `shasum -a 256 -c proposed/human-only.sha256` still passes, and the
+ARCHITECTURE pin stays `d831d30d…`. Four conflicts, each resolved by hand:
+
+- `CHANGELOG.md`: main's `## [6.24.1]` kept byte-for-byte (checked: it and every line below it, the header and
+  `[Unreleased]` match `origin/main`). This phase's `## [6.25.0]` sits directly above it, and its bump line now
+  reads `6.24.1 → 6.25.0`.
+- `SKILLS_VERSION`: 6.25.0. This branch's version stays above main's 6.24.1.
+- `README.md`: the badge stays `pharn-6.25.0`, and it still agrees with `SKILLS_VERSION`.
+- `pharn/floor/render-cost-ledger.mjs`, the import block: main's `findTranscriptDirs, sessionRequests` from
+  `transcript-core.mjs` (#279's completed-usage reader) is kept beside this phase's `MARKER_MODES` from
+  `mark-phase.mjs`. The rest of the file merged cleanly, and its delta from main is this phase's `mode`
+  normalization only.
+- Also merged cleanly, with both sides intact:
+  - `pharn-ship.md`, `CLAUDE.md` and `cost-ledger.md`: #279's "One row per request" wording sits beside the quick
+    mode, `gate2-quick` and applicability text.
+  - `check-cost-ledger.test.mjs` and `render-cost-ledger.test.mjs`.
+- "The previous version" lines this branch added now say 6.24.1: the CHANGELOG bump line, and `PLAN.md` §8, its
+  `## Files` entry and `BUILD.md`'s "What landed". Main's released lines are untouched.
+
+**Verdicts on the merged tree** (the setter re-run from `PLAN.md`, then
+`reconcile-baseline.mjs --anchor --by ship-quick-mode-after-merge-6.24.1`, 2368 paths):
+
+- `validate` GREEN, 36 capabilities;
+- `/pharn-dev-regress` → **`no-regressions`**: base `b9b6a03`, 47 inside, no escape, 101 outside tests, every gate
+  0 → 0;
+- `/pharn-dev-verify` → **`PASS`**: all seven gates 0, `test` 3686/3686, and `reconcile` CLEAN;
+- `npm run check` exit 0;
+- `npm run check:changelog-entry` exit 0, against `b9b6a03`.
+
 chain ran; the named floor verdicts are as shown — this is NOT a judgment that the increment is good or wise; that is the human's call at the post-review gate.
