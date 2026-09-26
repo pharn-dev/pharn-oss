@@ -1,5 +1,38 @@
 # VERIFY — ship-quick-mode
 
+## After merging main (#279, 6.24.1) (2026-09-26)
+
+### VERIFIED: floor gates PASS
+
+This ran on the committed merge: `origin/main` (`b9b6a03`, `cost-dedup-completed-usage`, 6.24.1) merged into the
+applied tree `eec6535`. The only uncommitted changes at run time were this chain's `REGRESSION.md` and
+`regression-report.json`. That merge commit was then amended to add only this chain's records, so the code this run
+measured is the code on the branch. `shasum -a 256 -c proposed/human-only.sha256` still passes, because #279 touched no
+trusted doc. Stage model: opus — set by the maintainer's instruction, overriding pharn.config.json's sonnet for
+build/regress/verify; routed via Agent subagent; effort not routed.
+
+| gate                                                                                        | exit |
+| ------------------------------------------------------------------------------------------- | ---- |
+| `test` (`npm test`, hermetic suite incl. the feature's own `*.test.*` — 3686/3686 passing)  | 0    |
+| `validate` (`node pharn/floor/validate.mjs .`, structural floor over the product surface)   | 0    |
+| `lint` (eslint, whole-repo)                                                                 | 0    |
+| `format:check` (prettier, whole-repo)                                                       | 0    |
+| `lint:md` (markdownlint, whole-repo)                                                        | 0    |
+| `structural:…/expected-injection-comment.json` (the committed trust-fence eval pair)        | 0    |
+| `reconcile` (`check-bash-reconcile.mjs --require-baseline`, the fix #7 Bash-write detector) | 0    |
+
+**`check-verify.mjs` → `PASS`, exit 0, `failing_gates: []`.** A scratch Node runner under
+`.pharn/pharn-dev-verify/` captured the gate map with argv arrays, and code recorded the exit codes. It was deleted
+afterwards. `verify-report.json` needed no rewrite: this run's stdout equals its `feature` / `gates` / `verdict` /
+`failing_gates`, and the verifiers block is unchanged (`registered: 0`).
+
+**Reconciliation.** Before the merge, the `ship-quick-mode-after-apply` epoch read `CLEAN` (0 paths reconciled).
+After it, the setter was re-run from `PLAN.md` and the epoch re-opened with
+`reconcile-baseline.mjs --anchor --by ship-quick-mode-after-merge-6.24.1` (2368 paths). The merge was committed
+before this run, as at the earlier merges. `reconcile` read **`CLEAN`**: epoch `2026-09-26T17:56:37.549Z`, 0 paths
+reconciled, **no escape**. No verifiers are registered, so this was floor gates only. The honest residual is
+unchanged: verified means the named gates passed, never more.
+
 ## After the human apply at GATE 2 (2026-09-26)
 
 ### VERIFIED: floor gates PASS

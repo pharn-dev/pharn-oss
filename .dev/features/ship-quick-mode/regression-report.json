@@ -1,5 +1,5 @@
 {
-  "base": "ec06f7bf143dca457c776f852d6981f02099db10",
+  "base": "b9b6a03ad8390c5d42901fae7988c44ca58344ee",
   "inside": [
     ".claude/commands/pharn-grill.md",
     ".claude/commands/pharn-ship.md",
@@ -10,6 +10,7 @@
     ".dev/features/ship-quick-mode/PLAN.md",
     ".dev/features/ship-quick-mode/REGRESSION.md",
     ".dev/features/ship-quick-mode/REVIEW.md",
+    ".dev/features/ship-quick-mode/SHIP.md",
     ".dev/features/ship-quick-mode/VERIFY.md",
     ".dev/features/ship-quick-mode/handoff/make-patch.mjs",
     ".dev/features/ship-quick-mode/proposed/APPLY.md",
@@ -21,8 +22,10 @@
     ".dev/floor/command-hygiene.test.mjs",
     "CHANGELOG.md",
     "CLAUDE.md",
+    "LIMITS.md",
     "README.md",
     "SKILLS_VERSION",
+    "pharn/ARCHITECTURE.md",
     "pharn/floor/README.md",
     "pharn/floor/ac-gate-core.mjs",
     "pharn/floor/ac-gate-core.test.mjs",

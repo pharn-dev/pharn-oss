@@ -1,5 +1,43 @@
 # REGRESSION — ship-quick-mode
 
+## After merging main (#279, 6.24.1) (2026-09-26)
+
+- **Run:** after `origin/main` (`b9b6a03`, `cost-dedup-completed-usage`, 6.24.1) was merged in. It ran on the
+  committed merge, over the human-applied trusted docs, with a clean tree at run time. That merge commit was then
+  amended to add only this chain's records, so the code this run measured is the code on the branch. Stage model: opus
+  — set by the maintainer's instruction, overriding pharn.config.json's sonnet for build/regress/verify; routed via
+  Agent subagent; effort not routed.
+- **Base:** `b9b6a03ad8390c5d42901fae7988c44ca58344ee`, which is `origin/main` and, the tree being clean, also
+  `git merge-base HEAD origin/main`, the command's own rule.
+
+**REGRESSIONS: none — no deterministically-detectable breakage outside the feature.** Verdict
+`no-regressions` (`check-regress.mjs verdict`, exit 0; `regression-report.json` is its stdout, byte-identical).
+
+### Partition
+
+- **Declared** (`PLAN.md` `## Files`, unchanged): 38 paths.
+- **Inside** (`git diff --name-only <base>` + untracked): 47 paths, all declared or exempted. `--feature
+ship-quick-mode` exempts seven of this feature's own artifacts: `GRILL.md`, `REGRESSION.md`, `REVIEW.md`,
+  `SHIP.md`, `VERIFY.md`, `regression-report.json` and `verify-report.json`. The two hook-protected trusted docs
+  are exempted too: `LIMITS.md` and `pharn/ARCHITECTURE.md`, the maintainer's apply (`fb8bf5b`).
+- **Escaped:** none (`check-regress.mjs scope` exit 0, `escaped: []`).
+- **Outside tests:** 101 files, the 111 tracked `*.test.mjs` / `*.test.cjs` minus the 10 inside. #279 added
+  `transcript-core.test.mjs`.
+- **Outside eval pairs:** 1, the trust-fence pair, both paths confirmed readable.
+
+### Gate table (base → head)
+
+| gate                                                                | base | head | verdict |
+| ------------------------------------------------------------------- | ---- | ---- | ------- |
+| `tests` (the 101 outside files, one `node --test` over the list)    | 0    | 0    | clean   |
+| `validate` (`node pharn/floor/validate.mjs .`, whole-repo)          | 0    | 0    | clean   |
+| `structural:…/expected-injection-comment.json` (`check-structural`) | 0    | 0    | clean   |
+
+**`regressions: []` · `pre_existing: []`.** The style gates were skipped by the config-touch rule: `inside` touches
+none of the four shared style configs. The baseline was obtained as in the runs below: a scratch runner,
+`git archive` under `.pharn/pharn-dev-regress/snap/base/` with `GIT_CEILING_DIRECTORIES`, and the snapshot removed
+before the HEAD run. The honest residual is unchanged: this catches what the suite catches, nothing more.
+
 ## After the final merge of main (2026-09-26)
 
 - **Run:** after `origin/main` (`ec06f7b`, `writes-scope-run-only`, 6.24.0) was merged in and this phase was

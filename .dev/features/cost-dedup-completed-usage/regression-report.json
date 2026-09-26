@@ -1,0 +1,52 @@
+{
+  "base": "767bf61f493f73c859a9820a01bddcb8f4f40a8d",
+  "inside": [
+    ".claude/commands/pharn-ship.md",
+    ".dev/features/cost-dedup-completed-usage/BUILD.md",
+    ".dev/features/cost-dedup-completed-usage/GRILL.md",
+    ".dev/features/cost-dedup-completed-usage/PLAN.md",
+    ".dev/features/cost-dedup-completed-usage/REGRESSION.md",
+    ".dev/features/cost-dedup-completed-usage/REVIEW.md",
+    ".dev/features/cost-dedup-completed-usage/SHIP.md",
+    ".dev/features/cost-dedup-completed-usage/VERIFY.md",
+    ".dev/features/cost-dedup-completed-usage/regression-report.json",
+    ".dev/features/cost-dedup-completed-usage/verify-report.json",
+    ".dev/measurements/cost-dedup-usage-2026-09-26.md",
+    ".dev/measurements/token-cost-2026-08-18.md",
+    ".dev/memory-bank/lessons-learned.md",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "docs/lessons-index.md",
+    "pharn/floor/check-cost-ledger.mjs",
+    "pharn/floor/check-cost-ledger.test.mjs",
+    "pharn/floor/fixtures/cost-ledger/usage-snapshots/00000000-0000-4000-8000-00000000beef.jsonl",
+    "pharn/floor/fixtures/cost-ledger/usage-snapshots/00000000-0000-4000-8000-00000000beef/subagents/agent-fff3333333333333.jsonl",
+    "pharn/floor/render-cost-ledger.mjs",
+    "pharn/floor/render-cost-ledger.test.mjs",
+    "pharn/floor/render-cost-record.mjs",
+    "pharn/floor/render-cost-record.test.mjs",
+    "pharn/floor/transcript-core.mjs",
+    "pharn/floor/transcript-core.test.mjs",
+    "pharn/pharn-contracts/cost-ledger.md",
+    "pharn/pharn-contracts/ship-record.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
