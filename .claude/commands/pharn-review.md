@@ -93,13 +93,14 @@ case `pharn/features/<name>/` is created for it.
 > WIDER than its own `writes: ["pharn/features/**"]` declaration, and wider still than "exactly the three
 > artifact paths". Every tighter claim is wrong, which is why this is written at its real width. **The
 > guarantee holds ONLY WHILE THE RUN MARKER BELOW IS OPEN** — in an installed project with no scope AND no
-> run open, the guard's default is instead the newer PERMISSIVE one, which is wider still (denies only
-> PHARN's own installed surface). That is exactly why Step 2, below, opens this command's own run marker
-> before Step 3 — the first step that puts untrusted reviewed code into context — so every Write-tool write
-> this command performs (Steps 4–6b) is made with a run open, and the guarantee above is the one that
-> actually holds for them. The one member excluded from that width regardless of posture, named rather than
-> left to a reader to discover: `.pharn/writes-scope.json`, the guard's own input, is denied by name
-> regardless of scope or run state.
+> run open, the guard's default is instead the newer PERMISSIVE one, which is wider still: it denies PHARN's
+> own installed surface and its own scope file, and allows the rest of the project, plus — outside it — only
+> Claude's memory folders and the temp roots. That is exactly why Step 2, below, opens this command's own run
+> marker before Step 3 — the first step that puts untrusted reviewed code into context — and STOPS if the
+> open fails, so in a run that executes that step every Write-tool write this command performs (Steps 4–6b)
+> is made with a run open, and the guarantee above is the one that holds for them. The one member excluded
+> from that width regardless of posture, named rather than left to a reader to discover:
+> `.pharn/writes-scope.json`, the guard's own input, is denied by name regardless of scope or run state.
 
 ## Step 1 — Resolve the review TARGET deterministically (its provenance is explicit)
 
@@ -168,6 +169,12 @@ at Step 3b, skill content) into context:**
 ```bash
 node pharn/floor/run-marker.mjs --open pharn-review '<name>'
 ```
+
+Branch **only** on its exit code (P5): `0` → continue to Step 3. **Non-zero → STOP** here, before Step 3:
+the run could not mark itself open, so in an installed project the write guard's default would be the
+permissive one while untrusted code is in context. Do not read the target. Report the line's `run-marker:`
+refusal to the human (it names the path and the error code — typically a file planted where a `.pharn/`
+directory belongs), run Step 7 (its `--close` is idempotent), and end the turn.
 
 This is what makes the width Step 0 states above ("this command writes only inside `pharn/features/**` or
 `.pharn/**`") the one that actually holds for `/pharn-review`'s own writes-scope guarantee, in an

@@ -241,7 +241,8 @@ node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 # (6.23.0, up from two): a pharn.config.json skillsVersion, .dev/floor/ presence, and a FRESH run marker
 # (written by run-marker.mjs's own openRun()), so the sandbox always answers with the STRICT in-run
 # default rather than the newer install-posture permissive one — the only defensible answer for a probe
-# with no write history to consult (L42). Exactly ONE matcher is duplicated (the
+# with no write history to consult (L42). The marker's openRun() result is CHECKED: a refused marker throws,
+# and the main-loop caller maps that to INCONCLUSIVE, never to a permissive probe. Exactly ONE matcher is duplicated (the
 # explicit-scope glob — undelegatable, since the hook reads the scope from disk) and a parity test RUNS
 # the real hook over shared cases. NOT git status: that answers changed-since-BASE, misses a write that
 # restores HEAD bytes, and counts every legitimate Edit — the exact conflation L17 records in
@@ -267,8 +268,12 @@ node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
 # `/pharn-review` opens just before Step 3 (after its last ask-the-human point) and closes in its own
 # Step 7. Both lines are Bash calls outside the PreToolUse gate (L19) — ADVISORY: a run that skips `--open`
 # is simply unguarded between its own scoped steps, and one that skips `--close` leaves the fail-closed
-# default standing for at most 24h. No new contract (P7): the guard reads only a path and an age, and this
-# script's own header is its spec, the require-loop-record.cjs precedent. Exit: 0 ok · 2 refusal, nothing written.
+# default standing for at most 24h. Both commands STOP when `--open` exits non-zero (GATE-2 review, S1: a
+# FILE planted at `.pharn`, `.pharn/<command>` or `.pharn/<command>/<name>` used to crash the writer with
+# exit 1 and a stack trace, and neither command stopped); run-marker.test.mjs EXECUTES each command's pinned
+# line — the WHOLE line, so a suffix like `|| true` is caught — against such a planted file. No new contract
+# (P7): the guard reads only a path and an age, and this script's own header is its spec, the
+# require-loop-record.cjs precedent. Exit: 0 ok · 2 refusal on ANY failure, never a crash; no marker written.
 node pharn/floor/run-marker.mjs --open <pharn-review|pharn-ship> <name>
 node pharn/floor/run-marker.mjs --close <pharn-review|pharn-ship> <name>
 
@@ -976,27 +981,49 @@ the rule has to be the thing that holds.
   `.claude/**`, and root files stay **denied** until an explicit `writes:` declaration names them. An
   **installed** project (`pharn.config.json` carries a non-empty `skillsVersion`) keeps that SAME
   fail-closed default-safe-set **only while a `/pharn-ship`, `/pharn-loop` or `/pharn-review` run is
-  open** (see the run-marker bullet below); **outside an open run it instead denies only PHARN's own
-  installed surface** — `pharn/**` except `pharn/features/**`, `.claude/**` and `pharn.config.json`
-  (matched case-folded) — plus `.pharn/writes-scope.json` itself, and allows every other in-project path,
-  including your ordinary source. A **malformed** `.pharn/writes-scope.json` (present but not a readable
-  file whose JSON is a plain object with an array `scope`) denies **every** write in an installed project,
-  `.pharn/**` included, rather than falling back to either default. A **set** scope is authoritative in
-  **every** posture — it replaces whichever default is live for non-`.pharn` zones — so
+  open** (see the run-marker bullet below); **outside an open run it instead denies PHARN's own installed
+  surface** — `pharn/**` except `pharn/features/**`, `.claude/**` and `pharn.config.json` (matched
+  case-folded; the `pharn/features/` exception is matched as WRITTEN, so a case or trailing-dot variant of it
+  is denied — GATE-2 review, B2) — plus `.pharn/writes-scope.json` itself and, on a `/` system, any path
+  containing a backslash (there a backslash is part of a file NAME, while the reserved-path fold reads it as
+  a separator — a deny list must not guess), and allows every other in-project path, including your ordinary
+  source and the files Claude Code loads at session start (`CLAUDE.md`, `AGENTS.md`, `.mcp.json`).
+  **Outside the project** it then allows exactly two places, the maintainer's GATE-2 decision (D2,
+  2026-09-26): Claude Code's memory folders, `<claude-config-dir>/projects/*/memory/**` (`$CLAUDE_CONFIG_DIR`
+  when set, else `~/.claude`), and the temp roots, `os.tmpdir()` and `/tmp` — never a path inside another git
+  tree, never the project root itself; every other out-of-project path (dotfiles, `~/.ssh`,
+  `~/.claude/settings*.json`, `~/.claude.json`, `~/.claude/hooks/`) stays denied, as every one was before
+  6.23.0. A **malformed** `.pharn/writes-scope.json` (present, or not confirmable as absent, but not a readable
+  regular file whose JSON is a plain object with an array `scope`) denies **every** write in an installed
+  project, `.pharn/**` included, rather than falling back to either default. A **set** scope is authoritative
+  in **every** posture — it replaces whichever default is live for non-`.pharn` zones — so
   `writes: [".dev/memory-bank/lessons-learned.md"]` unlocks exactly that file.
+- **Every write is judged at every target it can reach (6.23.0, every posture).** The guard resolves a path
+  twice — the pre-6.23.0 way (`path.resolve()`, then the realpath of the nearest existing ancestor), judged
+  first over every path so every old denial keeps its old message, and the filesystem's way (segment by
+  segment, a DANGLING symlink followed to the target it names, `..` applied to a symlink's REAL parent) — and
+  denies if either target is denied (GATE-2 review, B1). The second resolution splits on `/` only on a `/`
+  system: the first handoff of this fix copied protect-trusted-paths.cjs's `\`-as-separator reading, and
+  that made `pharn/features/a\b/../../floor/x.mjs` resolve inside `pharn/features/` while the kernel wrote
+  `pharn/floor/x.mjs` — measured in the dev posture too, before it shipped.
 - **A PHARN run, in an installed project, is what keeps the fail-closed default standing (6.23.0).** A
   run is open while `.pharn/<pharn-loop|pharn-review|pharn-ship>/<name>/active.json` exists (`lstat`,
   never followed — a torn file, a directory or a dangling link still counts) with a modification time
-  within 24 h of now in either direction, or while the guard cannot read one of those three state
-  directories (fail-closed on a scan error). The guard never parses a marker — presence and age only.
-  `/pharn-ship` and `/pharn-review` open and close theirs with `pharn/floor/run-marker.mjs --open|--close
-<command> <name>`; `/pharn-loop` keeps its existing marker, written by
-  `.claude/hooks/require-loop-record.cjs`, with no second writer (L35). Both are Bash calls outside the
-  `PreToolUse` gate (L19) — ADVISORY: a run that skips `--open` is unguarded between its own scoped steps,
-  and one that skips `--close` leaves the fail-closed default standing for at most 24 h. Tree-wide, not
-  per-session — the scope record is already one per tree (L38), and a subagent a command spawns must be
-  covered by the marker its own orchestrator opened. In a dev checkout or an unsignalled tree the guard
-  never reads these markers at all — dev/unsignalled behavior is unaffected, byte-for-byte.
+  within 24 h of now in either direction, or while one of those three state directories is present but is
+  not a readable directory — a FILE planted there (the Write tool can plant one; `.pharn/**` is always
+  writable) counts as a run open, fail-closed, until someone removes it (GATE-2 review, S1). A stray
+  non-directory ENTRY inside a real state directory (a `.DS_Store`) is not a run. The guard never parses a
+  marker — presence and age only. `/pharn-ship` and `/pharn-review` open and close theirs with
+  `pharn/floor/run-marker.mjs --open|--close <command> <name>`, which exits 2 on every failure (a planted
+  file included) and never crashes, and both commands **STOP** when `--open` exits non-zero; `/pharn-loop`
+  keeps its existing marker, written by `.claude/hooks/require-loop-record.cjs`, with no second writer
+  (L35). Both are Bash calls outside the `PreToolUse` gate (L19) — ADVISORY: a run that skips `--open` is
+  unguarded between its own scoped steps, and one that skips `--close` leaves the fail-closed default
+  standing for at most 24 h. Tree-wide, not per-session — the scope record is already one per tree (L38),
+  and a subagent a command spawns must be covered by the marker its own orchestrator opened. In a dev
+  checkout or an unsignalled tree the guard never reads these markers, the default is the pre-6.23.0 one, and
+  every deny message the old hook printed is byte-identical; the only verdict changes there are toward deny
+  (a write through a symlink is also judged at the target it reaches, and a guard error denies).
 - **The root every scope entry is relative to is NOT the hook process's cwd (6.1.0).** It is the first
   directory, walking up from Claude's current directory, that holds a `.git` entry or is
   `$CLAUDE_PROJECT_DIR`. A session working from a subdirectory therefore still gets the repo root and the
@@ -1016,8 +1043,9 @@ the rule has to be the thing that holds.
     express it and neither can the fail-closed default, so the only routes are putting the file inside the
     repo, or, **for genuinely temporary/scratch files and only those**, writing it through **Bash**, which
     `PreToolUse` never sees. **In an installed project outside an open run this is no longer categorical**:
-    a path in no git tree at all IS writable there under the permissive default, so the message says so
-    instead of claiming nothing can help;
+    a path under Claude Code's memory folders or a temp root, in no other git tree, IS writable there under
+    the permissive default (D2), so for such a path the message says so and names what is holding it (the
+    scope, an open run, or an unreadable run-state directory) instead of claiming nothing can help;
   - **inside a git tree that is not the one being judged** — another checkout or worktree, or the same
     repository outside this project's root. That is code, not scratch, so **the Bash route is not
     offered**: work from a session whose current directory is inside the project that owns the file
@@ -1027,7 +1055,9 @@ the rule has to be the thing that holds.
   - **reserved** (NEW, 6.23.0) — an installed project, no scope, no run open, and the path is PHARN's own
     installed surface (`pharn/**` except `pharn/features/**`, `.claude/**`, `pharn.config.json`): declare it
     in `writes:`, use `pharn update`, or a human edits it directly outside the agent — never Bash, and
-    never a stale-scope/stale-run bullet (there is neither);
+    never a stale-scope/stale-run bullet (there is neither). Its **backslash** variant (same posture, a path
+    containing `\` on a `/` system) says why the guard refuses to guess and offers only "spell it with `/`"
+    or a human write;
   - **malformed** (NEW, 6.23.0) — an installed project whose `.pharn/writes-scope.json` exists but is not a
     readable file with a plain-object, array-`scope` shape: release it (`--clear`) or let the running
     command's own first step replace it with a usable one — declaring the path in `writes:` alone does not

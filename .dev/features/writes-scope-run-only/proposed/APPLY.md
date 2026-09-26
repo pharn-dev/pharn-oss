@@ -3,31 +3,65 @@
 This build could not, and did not, touch the three human-only files that this increment changes:
 `.claude/hooks/enforce-writes-scope.cjs`, `.claude/hooks/set-writes-scope.cjs`, `LIMITS.md`. Everything
 else the plan names has already been written, formatted and committed by the agent, on the
-`writes-scope-run-only` branch, in the **build stage's own worktree**. This folder is what carries the
-three files' change to a human to apply, by hand, from here.
+`writes-scope-run-only` branch. This folder is what carries the three files' change to a human to apply, by
+hand, from here.
+
+**This is the SECOND patch.** The first one (commit `6b349f8`) was reviewed before anyone applied it, and
+`REVIEW.md` blocked it. It was regenerated after the GATE-2 fixes (`PLAN.md`, "Amended at GATE 2" and "As
+built — the GATE-2 fix pass"). If you kept a copy of the first patch, discard it: `human-only.sha256` pins
+only the new bytes, so `apply.sh` refuses the old ones.
+
+## Before you apply: `main` moved during the fix pass
+
+`origin/main` is now `1524c6f` (#277, `/pharn-regress` as a stage script), which released **6.23.0**. This
+branch still says 6.23.0, so it must renumber to 6.24.0 before it merges (merge `origin/main`, renumber by
+diff). The three human-only files are byte-identical on `767bf61` and `1524c6f`, so this patch still applies
+after that merge. But **25 added lines of this patch name "6.23.0"** — hook comments, the setter comment,
+and `LIMITS.md §7`. So decide before running `apply.sh`:
+
+- regenerate the patch after the renumber and apply that one; or
+- apply this one now and correct those lines later, which is a second human edit of the same three files.
 
 ## What to read first
 
 1. **`human-only.patch`** — the exact, unified diff the three files need. It is `git diff HEAD~1 HEAD`
-   taken inside a throwaway detached worktree the build verified against (`.pharn/pharn-dev-build/verify-wt`,
-   already removed) — never hand-typed. Read it like any other code review before applying it: it is the
-   actual guard logic that will decide every future write in every PHARN installation, in the posture this
-   plan approved.
+   taken inside a throwaway detached worktree the runner verified against (removed afterwards) — never
+   hand-typed. Read it like any other code review before applying it: it is the guard logic that will
+   decide every future write in every PHARN installation. What changed since the first patch, in the hook:
+   - **Outside the project**, in an installed project with no scope and no run, only two places are
+     allowed now — Claude Code's memory folders (`<claude-config-dir>/projects/*/memory/**`) and the temp
+     roots (the OS temp directory and `/tmp`), never inside another git tree. That is your D2 decision of
+     2026-09-26; the first patch allowed every path in no git tree.
+   - **Every path is judged at two targets** — the old `path.resolve()` one first, then the one the
+     filesystem reaches (a dangling symlink followed; `..` applied to a symlink's real parent) — and denied
+     if either is denied. This fixes the blocking finding (a).
+   - **A backslash path is denied in the permissive posture.** Found while verifying (a): read as a
+     separator, `\` let a write land in `.claude/commands/` or `pharn/floor/`.
+   - **The `pharn/features/` exception is matched as written** (blocking finding (b)).
+   - **Anything other than a directory at a run-state path counts as a run open** (important finding 2).
+   - The messages: the scan-error sentence, the install stale-scope reason, a non-slug marker name never
+     rendered, the `{}` record keeping its origin line.
+
+   `LIMITS.md §7` gains five bullets that state all of this, with its bounds.
+
 2. **`human-only.sha256`** — `shasum -a 256 -c` formatted digests of the three files' bytes **after** the
    patch is applied. `apply.sh` uses this to confirm the bytes that land are exactly the bytes that were
-   verified — not a hand-edited variant.
+   verified — not a hand-edited variant. It certifies that the patch and the runner agree; it is not a
+   signature (L43).
 3. This file, for what `apply.sh` actually does and where you resume afterward.
 
 ## What `apply.sh` does, in order
 
-Run it **from this worktree's root** (`sh .dev/features/writes-scope-run-only/proposed/apply.sh`) —
-**never from `main`**, and the script refuses on `main` by itself as a backstop:
+Run it **from the worktree the GATE-2 fix pass ran in** — that worktree holds the reconciliation baseline
+this checkpoint needs (anchored `--by writes-scope-run-only-opus-fixes`) — from its root:
+`sh .dev/features/writes-scope-run-only/proposed/apply.sh`. **Never from `main`**; the script refuses on
+`main` by itself as a backstop.
 
 1. **Refuses on `main`.**
 2. **Requires a clean reconciliation baseline** (`check-bash-reconcile.mjs --base . --require-baseline`).
-   This worktree's baseline was anchored by the build stage's Step 0, right after its own writes-scope was
-   set — that is the epoch this checkpoint protects, and an absent or dirty baseline stops the script
-   (`INCONCLUSIVE` / `ESCAPE`) rather than applying onto an unverified tree.
+   An absent or dirty baseline stops the script (`INCONCLUSIVE` / `ESCAPE`) rather than applying onto an
+   unverified tree. Run it in another worktree and it stops with `INCONCLUSIVE`; do not delete or hand-edit a
+   baseline to get past that.
 3. **`git apply --check`, then `git apply`** the patch — a normal, auditable `git apply` onto the three
    real paths, nothing more.
 4. **Verifies the applied bytes**: `shasum -a 256 -c` against `human-only.sha256`, **and** a live
@@ -47,19 +81,17 @@ working (human-applied)`.
 
 ## Where to resume
 
-**`/pharn-dev-verify`** (not `/pharn-dev-regress` — this build's own regress run already covered the
-outside-scope gates before this patch existed, and a committed hook script re-run through regress would
-read as a scope escape on the correct workflow). The build stage's `VERIFY.md` recorded that verify was
-**expected to FAIL on `test`** before this patch landed, because the new hook and floor tests assert the
-patched guard's behaviour against hooks that, until you run this script, are still the old ones. Once
-`apply.sh` finishes, `/pharn-dev-verify` re-run in this same worktree should find `test` GREEN — the
-patched bytes are the ones `apply.sh` just verified live.
+**`/pharn-dev-verify`** (not `/pharn-dev-regress` — the committed hook scripts would read as a scope escape
+there on the correct workflow, L17). The fix pass's own `VERIFY.md` records verify as **expected to FAIL on
+`test`** before this patch lands, and names every failing test: each asserts the patched guard against the
+still-unpatched hooks, and each passes against the patched copy. Once `apply.sh` finishes, `/pharn-dev-verify`
+re-run in this same worktree should find `test` GREEN.
 
 ## If something goes wrong
 
 - **The reconcile checkpoint refuses (`ESCAPE` or `INCONCLUSIVE`).** Do not delete or hand-edit the
   baseline to silence it — that is exactly the failure mode this checkpoint exists to catch. Investigate
-  what changed since the build's anchor first.
+  what changed since the anchor first.
 - **The verification step fails and the three files are restored.** Nothing was committed; re-run
   `apply.sh` after understanding why (a stale `node_modules`, a shell whose `shasum` differs, …). The
   patch and its checksums are unchanged by a failed attempt.

@@ -90,8 +90,10 @@ for "therefore guaranteed." The `MUST` above is a **three-way split**, not one b
   `writes:` is **parsed by nothing** and pins nothing — it is declared metadata that documents intent.
   **What IS floor-enforced** is the scope the invoking **command** set: a lens subagent spawned by
   `/pharn-review` writes under `pharn/features/**` because that is the active scope (or, with no scope
-  set, the default — fail-closed while `/pharn-review`'s own run marker is open, which it is for every
-  write this command makes), **not** because the lens declared a path. The guarantee is real but it belongs to the
+  set, the default — fail-closed while `/pharn-review`'s own run marker is open; the command opens it
+  before any untrusted content enters context and STOPS if the open fails, but that step is advisory
+  command prose, so a run that skips it writes under the install posture's permissive default), **not**
+  because the lens declared a path. The guarantee is real but it belongs to the
   command, and it is **coarser** than a per-Capability pin. Surfaced by an adversarial review
   (`capability-writes-never-bound-to-guard`, HIGH).
 - **Emitting it at all → advisory.** Nothing on the floor forces a Capability to declare or write

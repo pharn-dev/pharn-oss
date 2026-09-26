@@ -122,3 +122,119 @@ scope — never for a set scope, never for dev/unsignalled — per the "read onl
 ## Open issues for the human (beyond the designed verify STOP)
 
 None beyond what `proposed/APPLY.md` already states.
+
+## After GATE 2 fix (2026-09-26)
+
+- stage model: opus — set by the maintainer's instruction, overriding pharn.config.json's sonnet for
+  build/regress/verify; routed via Agent subagent; effort not routed
+- input: `REVIEW.md` at `a154214` (blocked-with-1-floor-finding: B1/B2, S1, D2, minors 1–9), the maintainer's
+  D2 decision (`PLAN.md`, "Amended at GATE 2"), and a partial sonnet fix pass handed off at `fd1c387`
+- scope: `set-writes-scope.cjs --from-plan` → 36 paths; `reconcile-baseline.mjs --anchor --by
+writes-scope-run-only-opus-fixes` → 2321 paths, anchored after the setter and before the first write.
+  `apply.sh`'s `--require-baseline` checkpoint reads this epoch, so the human runs it in this worktree.
+- floor: `node pharn/floor/validate.mjs .` → **GREEN** (36 capabilities), after `handoff/` was deleted
+
+### Disposition of every review finding
+
+| finding                                   | disposition                                                                                                                                                                                                                                                                                                                                                                         |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B1 (dangling-link leaf)                   | **Fixed, not as handed off.** The handed-off port read `\` as a separator (protect's reading), which let `pharn/features/a\b/../../floor/new.mjs` be judged inside `pharn/features/` in the dev posture too — measured, HEAD denied it. As built: every path is judged at the old `path.resolve()` target first and then at the filesystem's target, and denied if either is denied |
+| B2 (the fold widening the exception)      | Fixed (handoff, kept): the `pharn/features/` exception is tested on the unfolded path                                                                                                                                                                                                                                                                                               |
+| S1 (a planted file at a run-state path)   | Fixed. Guard: `lstat` each state directory; anything present that is not a directory is a scan error. The handoff had also made a non-directory `<name>` entry a scan error; reverted, per the review's `.DS_Store` caveat. Writer: `run-marker.mjs` exits 2 on every failure. Commands: `/pharn-ship` and `/pharn-review` STOP on a non-zero `--open`                              |
+| Important 1 → D2                          | Implemented as the maintainer set it: memory folders and the two temp roots only, never inside another git tree. The memory path must lie inside `memory/`; both roots resolve exactly as a write target does; the project root itself is never allowed                                                                                                                             |
+| Minor 1 (D1 messages)                     | Fixed (handoff, kept); `{}` golden pinned; the D1 sweep now covers 7 record shapes                                                                                                                                                                                                                                                                                                  |
+| Minor 2 (stale reason, scan-error)        | Fixed: the in-repo stale bullet's install variant; a scan-error block naming each unreadable state directory                                                                                                                                                                                                                                                                        |
+| Minor 3 (dangling "see below")            | Fixed (handoff, reworded again for D2)                                                                                                                                                                                                                                                                                                                                              |
+| Minor 4 (three overclaims)                | Fixed in `README.md`, `pharn/floor/README.md` and `finding-shape.md` — and a fourth "only" in `/pharn-review` Step 0                                                                                                                                                                                                                                                                |
+| Minor 5 (`pharn-loop.md` Final step)      | Fixed: names the whole-tree fail-closed default; the "§2 above" cite is gone                                                                                                                                                                                                                                                                                                        |
+| Minor 6 (guard-error test)                | Fixed: a `--require` preload makes `path.relative` throw → exit 2 (dev and install)                                                                                                                                                                                                                                                                                                 |
+| Minor 7 (marker names in the RUN block)   | Fixed: a non-slug name is never rendered; the review's two crafted names are pinned absent                                                                                                                                                                                                                                                                                          |
+| Minor 8 (probe ignores `openRun()`)       | Fixed: a refusal throws; the main-loop caller maps it to `INCONCLUSIVE` (source-shape pin — no fixture can make it refuse)                                                                                                                                                                                                                                                          |
+| Minor 9 (`VERIFY.md` counts)              | Discharged by this pass's `/pharn-dev-verify`, which re-renders `VERIFY.md`                                                                                                                                                                                                                                                                                                         |
+| P5 part 2 (`denyGuardError` stdout throw) | The handed-off `uncaughtException` backstop, reviewed and kept: it turns only an exit-1 crash into exit 2 and cannot touch an allow (`process.exit(0)`, nothing written). Both directions are tested                                                                                                                                                                                |
+| `pinnedLine()` end of line                | Fixed: it returns the whole shipped line; a mutation control shows an appended `\|\| true` changes the exit                                                                                                                                                                                                                                                                         |
+| NEW — backslash paths                     | Found while verifying B1. `toKey()` reads `\` as `/` and collapses `..`, so `.claude/commands/x\..\..\..\src\y.md` (a file inside `.claude/commands/`) folded to `src/y.md` and was allowed. The permissive posture now denies a path containing a backslash, with its own message                                                                                                  |
+
+### The runner (Build procedure step 5), after the fixes
+
+The first invocation's per-gate loop called `npm run "npm test"` for the chain's last element (a runner bug);
+the aggregate `npm run check` in that same invocation exited 0. The loop was fixed, two doc edits made after
+the first overlay were included, and the runner was run once more. Second invocation:
+
+| gate                 | exit | note                                                                               |
+| -------------------- | ---- | ---------------------------------------------------------------------------------- |
+| `format:check`       | 0    |                                                                                    |
+| `lint`               | 0    |                                                                                    |
+| `lint:md`            | 0    |                                                                                    |
+| `docs:check`         | 0    |                                                                                    |
+| `check:markers`      | 0    |                                                                                    |
+| `check:badge`        | 0    |                                                                                    |
+| `check:changelog`    | 0    |                                                                                    |
+| `check:contributing` | 0    |                                                                                    |
+| `check:reconcile`    | 0    | not counted: a never-anchored worktree reads `NO_BASELINE`                         |
+| `test`               | 0    | **3454/3454**, against the PATCHED hooks                                           |
+| `npm run check`      | 0    | the aggregate, as one chain                                                        |
+| D1 message sweep     | 0    | 0 differences over 196 (dev/unsignalled × 7 record shapes × 14 paths), HEAD vs new |
+
+`proposed/human-only.sha256` (identical across both invocations):
+
+```text
+6ddb72d0d3ed5d53a31ee936594e9409ba8d082ef6db9ff44d8394a52a528f9a  .claude/hooks/enforce-writes-scope.cjs
+1272d81b47e174014dbb13edc569a0f378e4f5c7f999b15b214e2f9b924c88a8  .claude/hooks/set-writes-scope.cjs
+c83b717c8c3eea3caa4c203b30253c2fbb750a3ec5038de7708a65a2a1ae0a20  LIMITS.md
+```
+
+Before `handoff/` was deleted: `git apply --check` is clean against this worktree's live files, and the
+patched copies are byte-identical to the handoff sources.
+
+### Behavioural verification — every review repro, the D2 cases, the new regressions
+
+Each probe ran HEAD's hook, the patched copy and a sandbox copy of `protect-trusted-paths.cjs`, with the
+root pinned by `CLAUDE_PROJECT_DIR`; home-directory paths are decision-only. **49/49 as expected**
+(combined = deny if either guard denies):
+
+- **B1:** `src/evil-cmd -> ../.claude/commands/pharn-evil.md` and `src/evil-floor -> ../pharn/floor/new.mjs`
+  (both absent) → DENY; the controls (dangling links to `.pharn/writes-scope.json` and
+  `.claude/settings.local.json`; `src/live-config -> ../pharn.config.json`) → DENY.
+- **B2:** `pharn/features./x.md`, `pharn/features /x.md`, `pharn/Features/x.md`,
+  `PHARN/Features/x/PLAN.md` → DENY; `pharn/features/x.md` → ALLOW.
+- **D2:** `~/.claude/settings.json`, `~/.claude.json`, `~/.claude/hooks/x.sh`, `~/.zshrc`,
+  `~/.ssh/authorized_keys`, `~/.gitconfig`, `~/Library/LaunchAgents/x.plist` → DENY;
+  `~/.claude/projects/x/memory/note.md`, `/tmp/…`, `<os.tmpdir()>/…` → ALLOW; a path in another git tree
+  and `/etc/…` → DENY; the project's `CLAUDE.md`, `AGENTS.md`, `.mcp.json` → ALLOW (D2's design; LIMITS §7
+  now says so).
+- **S1:** a FILE at `.pharn/pharn-review`, `.pharn/pharn-ship`, `.pharn/pharn-loop` or `.pharn` → `src/x.js`
+  DENY, and `run-marker.mjs --open` exits 2 with no stack trace (for `.pharn/pharn-loop`, the loop's own
+  writer is not this script); a FILE at `.pharn/pharn-review/feat` → `--open` exits 2 (the command STOPs)
+  while the guard reads a stray entry as no run.
+- **Backslash:** `a\b/../.claude/commands/evil.md`, `.claude/commands/x\..\..\..\src\y.md`,
+  `pharn/features/a\b/../../floor/new.mjs`, `pharn/features/a\b/../../CONSTITUTION.md`, `a\b/../LIMITS.md`
+  → DENY (install); `pharn/features/a\b/../../floor/new.mjs` → DENY and `pharn/features/a\b.md` → ALLOW
+  (dev).
+- **Minor 2:** a leftover scope gives the install stale reason, and removing it allows the write; a
+  `chmod 000` state directory names itself in an out-of-root denial. **Minor 6 / P5:** a forced
+  `path.relative` throw and a forced `stdout.write` throw each exit 2 (HEAD: 1); the same preload leaves an
+  allow at 0. **Minor 7:** the review's crafted names are absent from the message.
+
+### Hook cost (L24, measured here)
+
+End-to-end spawn, median of 40: dev posture HEAD 40.3 ms, patched 39.2 ms; install posture HEAD 45.1 ms,
+patched 37.6 ms. Node's startup dominates. The second resolution only runs when a path reaches a different
+target, which needs a symlink. The marker scan's cost is within the noise.
+
+### The designed verify STOP — the expected-fail list
+
+Against this worktree's still-unpatched hooks, exactly **36** tests fail. Each asserts the patched guard:
+
+- 30 in `.claude/hooks/enforce-writes-scope.test.cjs`;
+- 4 in `pharn/floor/run-marker.test.mjs`;
+- 1 in `pharn/floor/check-bash-reconcile.test.mjs`;
+- 1 in `.claude/hooks/set-writes-scope.test.cjs`.
+
+Against the patched copy the same files pass:
+
+- `enforce-writes-scope.test.cjs` 143/143;
+- the other seven `apply.sh` suites plus `command-hygiene.test.mjs`, 518/518, in a scratch worktree;
+- the runner's full `npm test`, 3454/3454.
+
+`VERIFY.md` names the 36.

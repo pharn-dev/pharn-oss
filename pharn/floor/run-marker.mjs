@@ -3,11 +3,12 @@
 //
 // WHY THIS EXISTS. Since 6.23.0, `enforce-writes-scope.cjs` relaxes its no-scope default in an
 // INSTALLED project (`pharn.config.json` carries a non-empty `skillsVersion`): with no scope set and no
-// PHARN run open, it denies only PHARN's own installed surface and allows the rest — see the hook's own
-// header. That relaxation must not stand open while a command is actually working with no declared
-// scope of its own (`/pharn-ship` between its own scoped writes, `/pharn-review`, which sets no scope at
-// all — see its command file). This is the writer of the marker the guard reads to tell "a run is
-// working" from "nothing is happening" in that install posture.
+// PHARN run open, it denies PHARN's own installed surface and its own scope file and allows the rest of
+// the project, plus — outside the project — only Claude's memory folders and the temp roots (the hook's
+// own header states the whole rule). That relaxation must not stand open while a command is actually
+// working with no declared scope of its own (`/pharn-ship` between its own scoped writes, `/pharn-review`,
+// which sets no scope at all — see its command file). This is the writer of the marker the guard reads to
+// tell "a run is working" from "nothing is happening" in that install posture.
 //
 // It writes and removes EXACTLY ONE schema, `pharn-run-active/1`, at
 // `<root>/.pharn/<command>/<name>/active.json`, for `<command>` in the CLOSED set `RUN_MARKER_COMMANDS`
@@ -59,7 +60,16 @@
 // `<command>` is Bash-run by `/pharn-ship` and `/pharn-review` — an ADVISORY call outside the
 // `PreToolUse` gate (lessons-learned L19): a run that skips `--open` is simply unguarded between its own
 // scoped steps, and one that skips `--close` leaves the fail-closed default standing for at most 24 h.
-// Exit 0 ok (nothing printed to stdout beyond a one-line confirmation) · 2 refusal, nothing written.
+// Both commands STOP when `--open` exits non-zero, so the exit code is the contract (GATE-2 review, S1).
+// Exit 0 ok (nothing printed to stdout beyond a one-line confirmation) · 2 refusal, no marker written.
+//
+// EVERY FAILURE IS EXIT 2, NEVER A CRASH (GATE-2 review, S1). A FILE planted where a directory belongs
+// (`.pharn`, `.pharn/<command>`, `.pharn/<command>/<name>` — the Write tool can plant one, since `.pharn/**`
+// is always writable) made `mkdirSync` throw, and the CLI exited 1 with a raw stack trace while this header
+// promised "0 ok · 2 refusal". openRun()/closeRun() now return every filesystem error as
+// `{ ok: false, reason }`, naming the operation, the marker's relative path and the error CODE only (never
+// the raw message), and main() turns any other throw into exit 2 as well. What a refusal leaves behind: a
+// failed `--open` writes no marker, though `mkdirSync` may already have created a directory on the way.
 
 import { lstatSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -127,9 +137,13 @@ export function openRun({ root, command, name, sessionId, now } = {}) {
   if (Number.isNaN(startedAt.getTime())) return { ok: false, reason: `invalid now: ${JSON.stringify(now)}` };
   const sid = typeof sessionId === "string" && sessionId !== "" ? sessionId : null;
   const marker = { schema: SCHEMA, command, name, session_id: sid, started_at: startedAt.toISOString() };
-  mkdirSync(dir, { recursive: true });
   const path = join(dir, MARKER);
-  writeFileSync(path, JSON.stringify(marker) + "\n");
+  try {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path, JSON.stringify(marker) + "\n");
+  } catch (e) {
+    return { ok: false, reason: fsReason("cannot write", command, name, e) };
+  }
   return { ok: true, path, marker };
 }
 
@@ -143,8 +157,19 @@ export function closeRun({ root, command, name } = {}) {
   if (symlinkOnPath(root, command, name)) {
     return { ok: false, reason: "refusing a marker path through a symlink" };
   }
-  rmSync(markerPath(root, command, name), { force: true });
+  try {
+    rmSync(markerPath(root, command, name), { force: true });
+  } catch (e) {
+    return { ok: false, reason: fsReason("cannot remove", command, name, e) };
+  }
   return { ok: true };
+}
+
+// A filesystem refusal, rendered from values this module already validated (the command is a member of the
+// closed enum, the name matched NAME_RE) plus the error CODE — a short token — never the raw message.
+function fsReason(what, command, name, e) {
+  const code = e && typeof e.code === "string" && /^[A-Z0-9_]{1,40}$/.test(e.code) ? e.code : "error";
+  return `${what} .pharn/${command}/${name}/${MARKER} (${code}) — check what is on that path under .pharn/ (a file where a directory belongs, or a permission) and fix it by hand; no marker was written or removed`;
 }
 
 function main(argv) {
@@ -156,11 +181,17 @@ function main(argv) {
     process.stderr.write("run-marker: usage: --open <command> <name> | --close <command> <name>\n");
     process.exit(2);
   }
-  const root = process.cwd();
-  const result =
-    mode === "--open"
-      ? openRun({ root, command, name, sessionId: process.env.CLAUDE_CODE_SESSION_ID, now: Date.now() })
-      : closeRun({ root, command, name });
+  let result;
+  try {
+    const root = process.cwd();
+    result =
+      mode === "--open"
+        ? openRun({ root, command, name, sessionId: process.env.CLAUDE_CODE_SESSION_ID, now: Date.now() })
+        : closeRun({ root, command, name });
+  } catch (e) {
+    const code = e && typeof e.code === "string" && /^[A-Z0-9_]{1,40}$/.test(e.code) ? e.code : "error";
+    result = { ok: false, reason: `unexpected failure (${code}); no marker was written or removed` };
+  }
   if (!result.ok) {
     process.stderr.write(`run-marker: ${result.reason}\n`);
     process.exit(2);

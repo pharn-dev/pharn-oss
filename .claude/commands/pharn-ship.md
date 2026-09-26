@@ -197,6 +197,12 @@ before it, and that is exactly the number a reader wants. See Step 3a's own pres
    node pharn/floor/run-marker.mjs --open pharn-ship '<name>'
    ```
 
+   Branch **only** on its exit code (P5): `0` → proceed to `/pharn-plan`. **Non-zero → STOP** before
+   `/pharn-plan`: the run could not mark itself open, so in an installed project the write guard's default
+   between the stages below would be the permissive one. Present the line's `run-marker:` refusal (it names
+   the path and the error code — typically a file planted where a `.pharn/` directory belongs) and hand to the
+   human. Like every STOP, it goes through Steps 3 and 3a; Step 3a's `--close` is idempotent.
+
    This is what holds `enforce-writes-scope.cjs`'s fail-closed default standing in an **installed** project
    for every between-stage window from here to Step 3a's close, below — see `CLAUDE.md`, "Writes-scope".
    Not opened at naming (Step 1): until this backstop resolves, `/pharn-spec` holds its own SPEC-only scope
@@ -204,7 +210,7 @@ before it, and that is exactly the number a reader wants. See Step 3a's own pres
    GATE 1 would hold the whole tree fail-closed for 24 h — the very trigger this relaxation exists to fix,
    in a new form. **ADVISORY (P0):** a Bash call outside the `PreToolUse` gate (L19) — a run that skips this
    line is simply unguarded between its own scoped steps; in the dev/unsignalled posture, and whenever a
-   scope is set, this line changes nothing observable.
+   scope is set, this line changes nothing observable. The STOP above binds only a run that executes the line.
 
 2. **`/pharn-plan`** → writes `pharn/features/<name>/PLAN.md`.
 

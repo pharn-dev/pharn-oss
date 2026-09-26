@@ -234,13 +234,17 @@ test("★ a marker under an UNKNOWN state directory is ignored (negative control
 
 const COMMANDS_DIR = join(REPO, ".claude", "commands");
 
-// Extract a fenced-code-block line matching `re`, substitute the placeholders, and return the literal
-// shell line this repo actually ships — never a line re-typed by hand (L45: pin what is EXECUTED).
+// Return the WHOLE shipped line that carries a match for `re` — exactly one such line must exist — so that
+// anything a later edit appends after the pinned text on that line (`|| true`, `; …`) is EXECUTED by the
+// tests below rather than silently dropped. The first version returned only the regex match, so an
+// appended `|| true` would have turned a failing --open into exit 0 in the command and never here (GATE-2
+// review, the P1 minor on pinnedLine). Leading indentation (a list item's code block) is trimmed; nothing
+// else is. L45: pin what is EXECUTED, never a line re-typed by hand.
 function pinnedLine(file, re) {
   const body = readFileSync(join(COMMANDS_DIR, file), "utf8");
-  const m = body.match(re);
-  assert.ok(m, `${file} must contain a line matching ${re}`);
-  return m[0];
+  const lines = body.split("\n").filter((l) => re.test(l));
+  assert.equal(lines.length, 1, `${file} must contain exactly one line matching ${re}`);
+  return lines[0].trim();
 }
 
 // The pinned lines are relative to a REPO checkout ("node pharn/floor/run-marker.mjs …", "node
@@ -392,4 +396,107 @@ test("★ a marker aged 23h still counts (inside the ceiling)", () => {
   const recent = new Date(Date.now() - 23 * 60 * 60 * 1000);
   utimesSync(p, recent, recent);
   assert.equal(hookAllows(dir, "src/x.js"), false, "a marker 23h old must still hold the fail-closed default");
+});
+
+// ------------------------------------------------------------------------------------------- ★ S1 (GATE-2 review): a planted file is a refusal, never a crash
+
+// Every place a FILE can stand where the writer needs a directory. The Write tool can create each of these
+// in an installed project (.pharn/** is always writable), which is what made them reachable.
+const PLANTS = [
+  { at: [".pharn"], command: "pharn-review", label: ".pharn itself" },
+  { at: [".pharn", "pharn-review"], command: "pharn-review", label: ".pharn/pharn-review" },
+  { at: [".pharn", "pharn-ship"], command: "pharn-ship", label: ".pharn/pharn-ship" },
+  { at: [".pharn", "pharn-review", "feat"], command: "pharn-review", label: ".pharn/pharn-review/feat" },
+];
+
+function plant(dir, at) {
+  mkdirSync(join(dir, ...at.slice(0, -1)), { recursive: true });
+  writeFileSync(join(dir, ...at), "planted\n");
+}
+
+test("★ S1: openRun() RETURNS a refusal for every planted file — it never throws", () => {
+  for (const { at, command, label } of PLANTS) {
+    const dir = tmp();
+    plant(dir, at);
+    let r;
+    assert.doesNotThrow(() => {
+      r = openRun({ root: dir, command, name: "feat" });
+    }, label);
+    assert.equal(r.ok, false, label);
+    assert.match(r.reason, /^cannot write \.pharn\/pharn-(review|ship)\/feat\/active\.json \([A-Z0-9_]+\)/, label);
+  }
+});
+
+test("★ S1: the CLI exits 2 — never 1, never a stack trace — for every planted file", () => {
+  for (const { at, command, label } of PLANTS) {
+    const dir = tmp();
+    plant(dir, at);
+    const r = cli(dir, "--open", command, "feat");
+    assert.equal(r.status, 2, `${label}: ${r.stderr}`);
+    assert.match(r.stderr, /^run-marker: cannot write /, label);
+    assert.doesNotMatch(r.stderr, /\n\s+at |node:fs/, `${label}: no raw stack trace`);
+  }
+});
+
+test("★ S1: --close under a planted file is a refusal (exit 2), not a crash", () => {
+  const dir = tmp();
+  plant(dir, [".pharn", "pharn-review"]);
+  const r = cli(dir, "--close", "pharn-review", "feat");
+  assert.equal(r.status, 2, r.stderr);
+  assert.match(r.stderr, /^run-marker: cannot remove /);
+});
+
+test("★ S1: the planted file that makes --open refuse ALSO makes the guard read the tree as run-open (install, no scope)", () => {
+  const dir = seedInstalled(tmp());
+  plant(dir, [".pharn", "pharn-review"]);
+  assert.equal(cli(dir, "--open", "pharn-review", "feat").status, 2);
+  assert.equal(hookAllows(dir, "src/x.js"), false, "a file where the state directory belongs is a scan error, i.e. fail-closed");
+});
+
+// ------------------------------------------------------------------------------------------- ✧ WIRING: a failed --open STOPS the command — EXECUTED
+
+// The command-side half of S1: both commands branch on the --open exit and STOP on non-zero. The pinned
+// line is EXECUTED here against a planted regular file, so the test proves the exit the STOP branch reads
+// is really non-zero; command-hygiene.test.mjs pins that the STOP sentence sits between the open line and
+// the next step. Neither proves a run obeyed the branch (P0).
+for (const { file, command, next } of [
+  {
+    file: "pharn-ship.md",
+    command: "pharn-ship",
+    next: "node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-plan",
+  },
+  { file: "pharn-review.md", command: "pharn-review", next: "## Step 3 —" },
+]) {
+  test(`✧ WIRING: ${file}'s pinned OPEN line, executed against a FILE planted at .pharn/${command}, exits non-zero`, () => {
+    const line = pinnedLine(file, new RegExp(`node pharn/floor/run-marker\\.mjs --open ${command} '<name>'`)).replace("<name>", "demo-run");
+    const dir = tmp();
+    plant(dir, [".pharn", command]);
+    const r = runShellLine(dir, line);
+    assert.notEqual(r.status, 0, `the line the STOP branch reads must fail here: ${r.stdout}${r.stderr}`);
+    assert.equal(r.status, 2);
+  });
+
+  test(`✧ WIRING: ${file} STOPS on a non-zero --open, and says so between the open line and the next step`, () => {
+    const body = readFileSync(join(COMMANDS_DIR, file), "utf8");
+    const open = body.indexOf(`node pharn/floor/run-marker.mjs --open ${command} '<name>'`);
+    const stop = body.indexOf("**Non-zero → STOP**", open);
+    const nextAt = body.indexOf(next, open);
+    assert.ok(open >= 0 && nextAt > open, "anchors");
+    assert.ok(stop > open && stop < nextAt, "the STOP branch must follow the open line, before the next step");
+  });
+}
+
+test("✧ pinnedLine() executes the WHOLE line — an appended `|| true` would be caught (mutation control)", () => {
+  const dir = tmp();
+  plant(dir, [".pharn", "pharn-review"]);
+  const line = pinnedLine("pharn-review.md", /node pharn\/floor\/run-marker\.mjs --open pharn-review '<name>'/).replace(
+    "<name>",
+    "demo-run"
+  );
+  assert.equal(runShellLine(dir, line).status, 2, "premise: the shipped line fails here");
+  assert.equal(
+    runShellLine(dir, `${line} || true`).status,
+    0,
+    "a suffix on the same line changes the exit — which is why the whole line is executed"
+  );
 });

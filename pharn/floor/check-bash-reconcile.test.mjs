@@ -389,6 +389,23 @@ test("★ PARITY: makeDefaultProbeSandbox()'s own run marker flips the REAL inst
   assert.equal(withoutMarkerResult.status, 0, "without the marker the same install-posture sandbox is permissive");
 });
 
+test("✧ the probe CHECKS openRun()'s result, and a refused marker can never reach a verdict (GATE-2 review, minor 8)", () => {
+  // No fixture can make openRun() refuse inside a fresh mkdtemp directory, so this is a SOURCE-SHAPE pin —
+  // presence and order, not a demonstrated refusal. What it pins: the result is read and a refusal throws
+  // (an install sandbox with no marker would answer with the PERMISSIVE default — the very fail-open the
+  // third signal exists to prevent), and the one caller outside a try maps that throw to INCONCLUSIVE, never
+  // to node's exit 1, which is this checker's ESCAPE code.
+  const src = readFileSync(CHECK, "utf8");
+  const body = src.slice(src.indexOf("export function makeDefaultProbeSandbox("), src.indexOf("function emit("));
+  assert.match(body, /const marker = openRun\(/, "the openRun() result must be captured");
+  assert.match(body, /if \(!marker\.ok\) throw /, "a refused marker must throw");
+  const call = src.indexOf("sandbox = makeDefaultProbeSandbox(root);");
+  assert.ok(call > 0, "the main-loop call site");
+  const around = src.slice(Math.max(0, call - 120), call + 400);
+  assert.match(around, /try \{/, "the call sits inside a try");
+  assert.match(around, /verdict: "INCONCLUSIVE"/, "whose catch emits INCONCLUSIVE");
+});
+
 test("✧ isAlwaysReconciled covers the prefixes as well as the exact members", () => {
   const data = loadIgnoreData(IGNORE_JSON);
   assert.ok(isAlwaysReconciled("pharn/floor/check-verify.mjs", data));

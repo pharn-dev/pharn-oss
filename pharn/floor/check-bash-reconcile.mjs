@@ -301,7 +301,11 @@ export function makeDefaultProbeSandbox(root) {
   }
   // The third signal: a fresh run marker, so an install-posture sandbox always reads as "a run is open".
   // Harmless (and unread) in a dev/unsignalled sandbox, where the hook never consults a marker at all.
-  openRun({ root: dir, command: "pharn-ship", name: "reconcile-probe", sessionId: null, now: Date.now() });
+  // Its RESULT is checked (GATE-2 review, minor 8): a refused open would leave an install sandbox with no
+  // marker, i.e. answering with the PERMISSIVE default — the fail-open this probe exists to avoid. A throw
+  // here reaches every caller as an unusable sandbox, which each one treats as fail-closed.
+  const marker = openRun({ root: dir, command: "pharn-ship", name: "reconcile-probe", sessionId: null, now: Date.now() });
+  if (!marker.ok) throw new Error(`reconcile probe sandbox: the run marker was refused (${marker.reason})`);
   return dir;
 }
 
@@ -496,7 +500,19 @@ function main(argv) {
       }
       continue;
     }
-    if (sandbox === null) sandbox = makeDefaultProbeSandbox(root);
+    if (sandbox === null) {
+      try {
+        sandbox = makeDefaultProbeSandbox(root);
+      } catch {
+        emit(
+          {
+            verdict: "INCONCLUSIVE",
+            reason: "could not build the default-probe sandbox — no verdict is read from a probe that may be permissive",
+          },
+          2
+        );
+      }
+    }
     const d = askHook(scopeHook, rel, sandbox);
     if (!d.ok) emit({ verdict: "INCONCLUSIVE", reason: d.reason }, 2);
     if (d.denied) escapes.push({ file: rel, denied_by: "writes-scope (fail-closed default)" });

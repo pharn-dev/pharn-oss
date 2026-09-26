@@ -1,10 +1,17 @@
-# VERIFY — writes-scope-run-only
+# VERIFY — writes-scope-run-only (after GATE 2 fix)
+
+- stage: `/pharn-dev-verify` — opus — set by the maintainer's instruction, overriding pharn.config.json's
+  sonnet for build/regress/verify; routed via Agent subagent; effort not routed
+- run: after the GATE-2 fix pass, in the fix pass's own worktree, whose reconciliation epoch was anchored
+  `--by writes-scope-run-only-opus-fixes` — so `reconcile --require-baseline` had a baseline to read
+- how it ran: Step 1's pinned gates as one node runner under `.pharn/pharn-dev-verify/` (argv arrays,
+  exit codes only), then `check-verify.mjs .pharn/pharn-dev-verify/results.json --feature writes-scope-run-only`
 
 ## Gate → exit code
 
 | gate                                                                                         | exit |
 | -------------------------------------------------------------------------------------------- | ---- |
-| `test` (`npm test` — the full hermetic suite, 3419 tests)                                    | 1    |
+| `test` (`npm test` — the full hermetic suite, 3454 tests)                                    | 1    |
 | `validate` (`pharn/floor/validate.mjs .`)                                                    | 0    |
 | `lint` (`npm run lint` — eslint)                                                             | 0    |
 | `format:check` (`npm run format:check` — prettier, whole-repo)                               | 0    |
@@ -14,50 +21,104 @@
 
 ## VERIFY FAILS: gate `test` red — stage FAILS
 
-`check-verify.mjs` exited **1**, `"verdict": "FAIL"`, `"failing_gates": ["test"]`. **This is the STOP the
-plan designs for, not a defect.** `.dev/features/writes-scope-run-only/PLAN.md`'s Chain-sequencing section states
-it explicitly: verify is _expected_ to FAIL on `test`, because the new/changed hook and product-floor test
-files assert the **patched** write-guard's behaviour against `.claude/hooks/enforce-writes-scope.cjs` and
-`.claude/hooks/set-writes-scope.cjs`, which — being two of the four human-only files — are still their
-**pre-patch** bytes in this worktree. The patch itself is staged at
-`.dev/features/writes-scope-run-only/proposed/` for a human to apply; `BUILD.md` records that the SAME 22
-tests were run to completion against the **patched** hooks (via the `handoff/` copies, before they were
-deleted) and were **all green** there — 118/120, 25/29, 52/53 and 45/46 respectively, with every one of
-the "missing" ones being exactly the pre-patch/post-patch difference, never a defect in the test itself.
+`check-verify.mjs` exited **1**, `"verdict": "FAIL"`, `"failing_gates": ["test"]`. **This is the STOP the plan
+designs for.** The new and changed hook and floor tests assert the PATCHED write guard against
+`.claude/hooks/enforce-writes-scope.cjs` and `.claude/hooks/set-writes-scope.cjs`, which are human-only and
+still hold their pre-patch bytes here. The patch is `proposed/human-only.patch`.
 
-**Confirmed: the failures are EXACTLY those expected tests, and nothing else.** `npm test`'s summary is
-`tests 3419, pass 3397, fail 22`, and the 22 are distributed exactly as:
+**The failures are exactly the expected ones.** `npm test`: `tests 3454, pass 3418, fail 36`. The 36 failing
+names are set-equal to the list measured against the unpatched hooks before this run, and no other test in
+the suite failed:
 
 | file                                          | failing | total in file |
 | --------------------------------------------- | ------- | ------------- |
-| `.claude/hooks/enforce-writes-scope.test.cjs` | 16      | 120           |
+| `.claude/hooks/enforce-writes-scope.test.cjs` | 30      | 143           |
+| `pharn/floor/run-marker.test.mjs`             | 4       | 38            |
+| `pharn/floor/check-bash-reconcile.test.mjs`   | 1       | 54            |
 | `.claude/hooks/set-writes-scope.test.cjs`     | 1       | 46            |
-| `pharn/floor/check-bash-reconcile.test.mjs`   | 1       | 53            |
-| `pharn/floor/run-marker.test.mjs`             | 4       | 29            |
 
-No other file in the ~3400-test suite has a single failure. Every one of the 22 is a test that spawns the
-**real, shipped** hook path (`.claude/hooks/enforce-writes-scope.cjs`) or asserts the new `--clear`
-message wording (`set-writes-scope.cjs`), and asserts the **new** (6.23.0) three-posture / run-marker
-behaviour this increment adds — behaviour that exists today only in `proposed/human-only.patch`, not yet
-in the shipped file. None of the 22 are pre-existing tests that regressed; all 22 are tests THIS build
-added or extended for the new behaviour (see `BUILD.md`'s "The probe of every quantified sentence" and
-`REGRESSION.md`'s confirmation that all 98 **outside** the feature's declared scope stayed green,
-base and head alike).
+**Each of the 36 passes against the patched copy:**
 
-**Every other gate is GREEN**, including `reconcile` (`CLEAN`, 32 paths reconciled, 3 exempted pipeline
-artifacts, 0 escapes) — the build's own writes-scope discipline held throughout, and no Bash write reached
-a path the live guards would have denied.
+- `enforce-writes-scope.test.cjs` passes 143/143 in a scratch worktree carrying the patched hooks at their real
+  paths.
+- The other seven suites `apply.sh` runs, plus `command-hygiene.test.mjs`, pass 518/518 there.
+- The verification runner's full `npm test` over the patched tree passed 3454/3454 (`BUILD.md`, "After GATE 2
+  fix").
+
+The 36, by name:
+
+- `.claude/hooks/set-writes-scope.test.cjs` — ★ 6.23.0: the --clear message no longer claims a single
+  fail-closed posture, either way
+- `pharn/floor/check-bash-reconcile.test.mjs` — ★ PARITY: makeDefaultProbeSandbox()'s own run marker flips
+  the REAL install-posture hook 0 -> 2
+- `pharn/floor/run-marker.test.mjs`:
+  - ★ NON-VACUITY (L34): opening EACH command's marker flips the install no-scope verdict for src/x.js
+    0 -> 2, and closing flips it back
+  - ★ a marker under an UNKNOWN state directory is ignored (negative control — the state-dir set is closed)
+  - ★ an aged marker (utimesSync) past 24h no longer holds the install default fail-closed
+  - ★ the require-loop-record.cjs marker under .pharn/pharn-loop/ ALSO flips the write guard — no third
+    writer needed
+- `.claude/hooks/enforce-writes-scope.test.cjs`:
+  - ★ B1 in the DEV posture too — the one verdict change there besides a guard error, and it is toward deny
+  - ★ B1: the review's dangling-link repros are DENIED, and a dangling link to an ordinary path is not
+  - ★ BACKSLASH (install, no scope, no run): a path containing `\` is denied — each of these reached a
+    reserved file
+  - ★ D2 bound, pinned rather than hidden: the temp root is read from TMPDIR, so an environment can widen it
+  - ★ D2: `<claude-config-dir>/projects/*/memory/**` is allowed outside the project; nothing else under the
+    config dir is
+  - ★ D2: the memory folder is allowed ONLY by the install posture's permissive default — never in dev,
+    never with a run open
+  - ★ D2: the temp roots — the OS temp directory and /tmp — are allowed outside the project
+  - ★ D2: with no CLAUDE_CONFIG_DIR the config dir is ~/.claude — the review's home-directory repros are all
+    DENIED
+  - ★ DENY BODY 'in-repo' (install, run open, no scope): the RUN block lists the marker and a close command
+  - ★ DENY BODY 'malformed': names the release/re-run remedy, never a bare 'declare it in writes:'
+  - ★ DENY BODY 'out-of-root' (install, SET scope, no run): still states the permissive fact, plus the
+    STALE-scope bullet
+  - ★ DENY BODY 'out-of-root' (install, run open): states the permissive-outside-a-run fact and offers the
+    RUN block
+  - ★ DENY BODY 'reserved': never offers Bash, never a stale-scope/stale-run bullet (there is neither)
+  - ★ L27 per branch: each 6.23.0 remedy is PRESENT in its own case and ABSENT from every other
+  - ★ MARKERS: a marker under an UNKNOWN state directory is ignored (negative control)
+  - ★ MARKERS: aged past 24h (either direction) is ignored; aged 23h still counts (symmetric ceiling)
+  - ★ MARKERS: an unreadable state directory ALSO counts when it is otherwise empty of runs (non-vacuity,
+    L34)
+  - ★ P5: when deny() ITSELF throws, the uncaughtException backstop still exits 2 — and it never touches an
+    allow
+  - ★ POSTURE MATRIX: install, MALFORMED scope -> deny EVERYTHING (D4), .pharn/\*\* and out-of-root included
+  - ★ POSTURE MATRIX: install, no scope, no run -> PERMISSIVE (in the project, denies PHARN's reserved
+    surface)
+  - ★ POSTURE MATRIX: the ROOT itself and an out-of-root/other-tree path, across postures
+  - ★ S1: `.pharn` itself planted as a FILE makes the scope record unconfirmable — malformed, deny
+    everything
+  - ★ S1: a stray non-directory ENTRY inside a real state directory is not a run (the review's .DS_Store
+    caveat)
+  - ★ `..` after an EXISTING symlink is applied to its REAL parent, as the kernel does
+  - ★ a guard error denies — SOURCE-SHAPE pin: the decision loop sits inside a try whose catch calls a deny
+    function
+  - ★ a marker directory name that FAILS the slug grammar is NEVER rendered — only its fixed state directory
+    is
+  - ★ minor 2: a scan error names the unreadable state directory — in-repo and out-of-root alike
+  - ★ minor 2: install, a leftover SET scope, no run — the stale bullet's REASON is the install one, and it
+    is true
+  - ★ minor 6: a FORCED throw inside the decision exits 2 with the fixed message — dev and install
+  - ✧ PIN: enforce-writes-scope.cjs's toKey() is byte-equal to protect-trusted-paths.cjs's
+
+**Every other gate is GREEN.** `reconcile` read `CLEAN`: 19 paths reconciled, 0 escapes; the stage artifacts
+this chain writes (`BUILD.md`, `PLAN.md`, `REGRESSION.md`, `regression-report.json`) were exempted as
+pipeline artifacts. It also carried two warnings, for the deleted `handoff/` sources (treated as changed,
+inside the declared scope). No Bash write in this pass reached a path the live guards would have denied.
 
 ## Verifiers
 
-No verifiers registered — floor gates only. `node pharn/floor/count-verifiers.mjs .` → `{"registered":0,"verifiers":[]}`.
+No verifiers registered — floor gates only. `node pharn/floor/count-verifiers.mjs .` →
+`{"registered":0,"verifiers":[]}`.
 
 ## The honest residual
 
 Verified = the named gates passed; this is NOT a guarantee of correctness beyond what those gates check —
-verifier concerns are advisory help, not assurance. Here it narrows further, honestly: `test` did **not**
-pass, by design, because the human-only half of this increment has not yet been applied. The floor
-verdict — `FAIL` — is the correct, deterministic reading of the tree exactly as it stands right now. It
-becomes `PASS` the moment `proposed/apply.sh` lands the patch and this stage is re-run in this same
-worktree (`/pharn-dev-verify` again, not `/pharn-dev-regress` — L17: a committed hook change would
-misread as a scope escape there).
+verifier concerns are advisory help, not assurance. Here the claim is narrower still: `test` did **not** pass,
+by design, because the human-only half of this increment has not been applied. The floor verdict, `FAIL`, is
+the correct deterministic reading of the tree as it stands. It should read `PASS` once `proposed/apply.sh`
+lands the patch in this worktree and this stage re-runs there (`/pharn-dev-verify` again, not
+`/pharn-dev-regress` — L17).

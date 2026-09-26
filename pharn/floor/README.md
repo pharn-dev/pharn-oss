@@ -128,20 +128,26 @@ echo '{"tool_name":"Write","tool_input":{"file_path":"docs/ARCHITECTURE.md"}}' |
 
 **`enforce-writes-scope.cjs` (fix #7)** is the runtime scope-enforcement hook: it denies any write
 outside the active scope in `.pharn/writes-scope.json`. With no scope set, the default depends on the
-tree (6.23.0): a dev checkout or an unsignalled tree stays fail-closed to a default-safe-set, byte for
-byte, as before. An **installed** project (`pharn.config.json` carries a non-empty `skillsVersion`) is
+tree (6.23.0): a dev checkout or an unsignalled tree stays fail-closed to the same default-safe-set as
+before, and every denial it made before carries the same message; the only verdict changes there are
+toward deny (a write through a symlink is also judged at the target the filesystem reaches, and a guard
+error denies). An **installed** project (`pharn.config.json` carries a non-empty `skillsVersion`) is
 fail-closed to the same default-safe-set **only while a `/pharn-ship`, `/pharn-loop` or `/pharn-review`
 run is open** (a marker under `.pharn/<command>/<name>/active.json`, written by `pharn/floor/run-marker.mjs`
-or, for the loop, `require-loop-record.cjs`); outside an open run it instead denies only PHARN's own
-installed surface — `pharn/**` except `pharn/features/**`, `.claude/**` and `pharn.config.json` — and
-allows the rest, including your ordinary source. A malformed `.pharn/writes-scope.json` denies EVERY
-write in an installed project rather than falling back to either default. Confirm it works:
+or, for the loop, `require-loop-record.cjs`); outside an open run it instead denies PHARN's own installed
+surface — `pharn/**` except `pharn/features/**`, `.claude/**` and `pharn.config.json`, matched case-folded
+— plus `.pharn/writes-scope.json` and any path containing a backslash, and allows every other path inside
+the project, including your ordinary source. Outside the project it then allows only Claude Code's memory
+folders (`<claude-config-dir>/projects/*/memory/**`) and the temp roots (the OS temp directory and `/tmp`),
+never a path inside another git tree; every other out-of-project path stays denied. A malformed
+`.pharn/writes-scope.json` denies EVERY write in an installed project rather than falling back to either
+default. Confirm it works:
 
 ```bash
 echo '{"tool_name":"Write","tool_input":{"file_path":"pharn/floor/x.mjs"}}' | node .claude/hooks/enforce-writes-scope.cjs  # → exit 2, denied (no scope; fail-closed dev-repo default)
 echo '{"tool_name":"Write","tool_input":{"file_path":"README.md"}}' | node .claude/hooks/enforce-writes-scope.cjs  # → exit 2, denied (root file outside default-safe-set)
 # In an INSTALLED project (pharn.config.json has skillsVersion) with NO scope and NO run open, the SAME
-# root file is instead ALLOWED — the new permissive default (6.23.0) denies only PHARN's own surface:
+# root file is instead ALLOWED — the new permissive default (6.23.0) does not deny an ordinary project file:
 echo '{"tool_name":"Write","tool_input":{"file_path":"README.md"}}' | node .claude/hooks/enforce-writes-scope.cjs  # → exit 0 there, not exit 2 as above
 ```
 

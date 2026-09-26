@@ -994,6 +994,8 @@ It removes `.pharn/pharn-loop/<name>/active.json`. **ADVISORY**, exactly as the 
 abort skips it, and a leftover marker degrades safely for the **Stop guard** — a present `LOOP.md` and the
 24 h ceiling both make THAT guard inert. **For the write guard this is narrower (6.23.0): only `--close` or
 the 24 h ceiling releases a leftover marker — a present `LOOP.md` does NOT**, because
-`enforce-writes-scope.cjs` reads only the marker's presence and age (§2 above), never the feature
-directory's contents. So in an **installed** project a leftover loop marker keeps PHARN's own installed
-surface fail-closed for up to 24 h after a run that forgot to close it, even once `LOOP.md` exists.
+`enforce-writes-scope.cjs` reads only the marker's presence and age, never the feature directory's
+contents (see the hook's own header, "RUN MARKERS ARE READ, NEVER PARSED"). So in an **installed** project
+a leftover loop marker keeps the WHOLE tree on the fail-closed default — with no scope set, only
+`pharn/features/**` and `.pharn/**` are writable, so your own source is blocked too — for up to 24 h after
+a run that forgot to close it, even once `LOOP.md` exists.

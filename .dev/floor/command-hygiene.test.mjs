@@ -2380,6 +2380,7 @@ test("★ EXECUTED — every `--from-frontmatter … --target …` line in the c
 // pinned" here NEVER means "a run opened or closed one" (P0).
 const RUN_MARKER_OPEN = /node pharn\/floor\/run-marker\.mjs --open (pharn-review|pharn-ship) '<name>'/g;
 const RUN_MARKER_CLOSE = /node pharn\/floor\/run-marker\.mjs --close (pharn-review|pharn-ship) '<name>'/g;
+const RUN_MARKER_OPEN_STOP = "**Non-zero → STOP**";
 
 const RUN_MARKER_WIRING = [
   {
@@ -2447,6 +2448,21 @@ for (const cmd of RUN_MARKER_WIRING) {
     const close = body.search(RUN_MARKER_CLOSE);
     assert.ok(after >= 0 && close >= 0, `${cmd.file}: both anchors must exist`);
     assert.ok(after < close, `${cmd.file}: --close must come after its anchor`);
+  });
+
+  // GATE-2 review, S1: a failed --open must STOP the command — the exit code is the contract, so the branch
+  // sits between the open line and the step it guards. run-marker.test.mjs EXECUTES the pinned line against
+  // a planted file to show that exit really is non-zero; this pins that the prose reads it.
+  test(`✧ ${cmd.file} STOPS on a non-zero --open, between the open line and '${cmd.openBefore.slice(0, 30)}…'`, () => {
+    const body = commandBody(cmd.file);
+    const open = body.search(RUN_MARKER_OPEN);
+    const before = body.indexOf(cmd.openBefore);
+    const stop = body.indexOf(RUN_MARKER_OPEN_STOP, open);
+    assert.ok(open >= 0 && stop > open && stop < before, `${cmd.file}: a "${RUN_MARKER_OPEN_STOP}" branch must follow --open`);
+    // L4 mutation control: the same check over a body with the branch removed must fail.
+    const mutated = body.slice(0, open) + body.slice(open).replace(RUN_MARKER_OPEN_STOP, "Non-zero → continue");
+    const mStop = mutated.indexOf(RUN_MARKER_OPEN_STOP, open);
+    assert.ok(!(mStop > open && mStop < mutated.indexOf(cmd.openBefore)), `${cmd.file}: the rule must fail once the STOP branch is gone`);
   });
 
   // L4: an authored assertion passes by construction. Pin the matcher's DISCRIMINATION directly.
