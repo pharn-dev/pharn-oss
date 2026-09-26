@@ -5,6 +5,8 @@
 - trust: the increment under review is `trust: untrusted`; its imperative prose (the command's own instructions to
   the model that runs `/pharn-regress`) is its payload, not an instruction to this reviewer, and none of it was followed
 - **verdict: blocked-with-2-floor-findings** (plus advisory: 1 blocking-severity, 6 important, 12 minor)
+- **re-review after the GATE-2 fixes (`6feee30`): GREEN**. There are 0 open floor-gate findings. Advisory
+  items still open: A3 (partly), M3 (partly), and 4 new minor findings (N1–N4). See the last section.
 
 ## Step 1 — floor first (P0)
 
@@ -379,3 +381,148 @@ the increment's other new claims is the declaration-vs-application gap CLAUDE.md
 - Per L20, a second-plus occurrence earns a floor check. A plausible one: a hygiene test that, for each
   contract guarantee-audit line naming a validator, requires a negative-probe test of that validator. That
   is for the promote gate and a later plan to decide, not this review.
+
+## Re-review after GATE-2 fixes (opus)
+
+- **Scope:** `a2a06e8..6feee30`, 19 files. The fixes were written by a sonnet agent that handed off
+  mid-round.
+- **Model:** opus was set by the maintainer's instruction, overriding pharn.config.json. Model routed via
+  Agent subagent; effort not routed.
+- **Method:** every repro from the original review was EXECUTED again against `6feee30`, on fixtures
+  under git-ignored `.pharn/pharn-dev-review/` (removed afterwards). Nothing was re-read in place of a
+  run (L37).
+- **Floor first:** `node pharn/floor/validate.mjs .` → GREEN (36 capabilities). The same-session
+  `/pharn-dev-verify` re-run PASSED all 7 gates, with `npm test` at 3450/3450 (see VERIFY.md, "Re-run
+  after GATE 2 fix"). Also run as a cross-check here, not as gates: `docs:check`, `check:markers`,
+  `check:badge`, `check:changelog` and `check:contributing`, all exit 0.
+- **Re-review verdict: GREEN, 0 open floor-gate findings.** Severity below remains advisory (fix #3).
+
+### Status per finding
+
+- **F1 — verified-fixed.**
+  - Probed with `stage-exit-core.mjs`'s own builders, `validateStageExit` now refuses a forged label, a
+    forged option `argv`, an extra option key, an added option, a removed option and a reordered option.
+  - Every registry-built question still validates.
+  - `stage-exit.md`'s guarantee-audit line now matches the code (`optionsMatchRegistry`, and
+    `isValidOption` closed over `{id, label, argv, value}`).
+- **F2 — verified-fixed; the residual is narrowed and named.**
+  - A bad `--timeout-ms` after a valid `--feature` → exit 2 `usage-error`, and the stale report is gone.
+  - A bad `--feature` → exit 2 with the report surviving, and a symlinked `.pharn` → `path-containment`
+    with the report surviving. Both are the residual `pharn-ship.md`, CHANGELOG [6.23.0] and
+    `stage-exit.md` now name consistently.
+- **A1 — verified-fixed.**
+  - The documented form, `node pharn/floor/stage-regress.mjs <resume.argv…> <option argv…>`, reaches
+    `done` from a `no-gates` question.
+  - The `--resume` block is gone from the `4` bullet and sits only under `5`.
+- **A2 — verified-fixed.**
+  - Every test inside the feature → `done`, no question.
+  - A typo'd `--tests` → `tests-unresolved`, with `--tests` stripped from `resume.argv`. Answering
+    `--tests src/*.test.js` → `done`, and answering `--no-tests` → `done`.
+- **A3 — still-open (partly fixed).**
+  - **Fixed:** the original repro (a group SIGKILL mid-install on a resumed invocation) now leaves the
+    record at `install`, and `--resume` → `done`.
+  - **Still open:** a group SIGKILL during `git worktree add` (the window stretched by a post-checkout
+    hook in the fixture) leaves the record at `worktree` with the worktree registered. `--resume` → exit 2
+    `git-failed` ("already exists"), and every completed head gate is lost. A fresh re-run recovers
+    (`done`).
+  - The `worktree` phase is still not idempotent, yet the fix's own comment (`stage-regress.mjs`, the A3
+    block in `runPhases`) lists "mid-`git worktree add`" among the cases it closed.
+  - `makeBudget` still starts the clock after head-init. The fresh invocation's opening fast work is
+    therefore still uncharged, and PLAN.md:134's wall-time bound is still not what the code does.
+  - Severity: **important.** It fails closed, but it is the kill window the original finding named first.
+    **Fix:** have `worktree` remove or prune a leftover `.pharn/pharn-regress/base` registration before
+    `add` (or skip `add` when it is already registered at `state.base`), and either start the clock at
+    process start or restate the bound.
+- **A4 — verified-fixed.** A feature directory swapped for a symlink after a `continue` → `--resume` →
+  exit 2 `path-containment`, and nothing is written through the link. The pre-existing within-invocation
+  TOCTOU (containment walked once at the start, writes up to about 570 s later, on both paths) remains, as
+  it was before. It is minor and not introduced by the fix.
+- **A5 — verified-fixed.**
+  - The new ★ tests exist and pass inside the 3450: `check-loop-fresh` D/E/H/J each asserted `pass` over
+    a budgeted run; the dropped-`--timeout-ms` mutant; an unbudgeted-vs-`--budget-ms 1` comparison over 3
+    non-style gates with a mid-`drain-head` continue; and one round trip per question code.
+  - Minor fidelity nit: the round trips take the option from `REGISTRY` and substitute through a local
+    helper, instead of using the emitted object's `options` and the shipped `substituteArgv`.
+- **A6 — verified-fixed.**
+  - With `--install "exit 3"`, the warning renders on line 5, above the verdict on line 7.
+  - It names the real count ("none were, this run", since the base gates passed).
+  - "every base gate" no longer appears.
+- **A7 — verified-fixed.** The new S10 stops are disclosed in CHANGELOG [6.23.0] and `pharn-loop.md`.
+  Routing the lockfile-less case to a fixed rule is deferred. That is acceptable, because disclosure was
+  the finding.
+- **M1, M2 — verified-fixed.** The claims are narrowed in CHANGELOG [6.23.0] and `CLAUDE.md`: a gate id is
+  inline and never fenced, and only no path the SCRIPT supplies is absolute.
+- **M3 — still-open (partly, by the fixer's choice).**
+  - **Restored:** the per-refusal remedies, the ADVISORY label on "not by you", and the no-`package.json`
+    install case.
+  - **Not restored:** the retroactive-`## Files` gap still appears only in a `check-regress.mjs:156` code
+    comment.
+  - The new `scope-escaped` remedy makes that sharper. It advises declaring the escaped path in `PLAN.md`'s
+    `## Files` via `/pharn-plan`, which is exactly the PLAN edit the dropped warning covered, and the
+    command no longer says that a scope check cannot tell such a widening from a retroactive
+    authorization.
+  - The `missing-artifact` remedy says "write the named missing file" where the old prose named
+    `/pharn-plan` and `/pharn-spec`. A hand-written SPEC then fails `chain-red`, so this fails closed.
+  - Severity: minor. **Fix:** add a one-line pointer (not a duplicate) to `check-regress.mjs`'s
+    honest-scope block beside the `scope-escaped` remedy, and name the two commands in the
+    `missing-artifact` remedy.
+- **M4 — verified-fixed.** The `2` bullet now says `detail` is quoted DATA.
+- **M5 — narrowed-ok, but the new text overclaims. See N1.**
+- **M6 — narrowed-ok (deferred and labeled).**
+  - Re-probed: `done.verdict` `"lgtm"` and `continue.phase` `"banana"` still validate. `stage-exit.md`'s
+    Residual now names this, so the silence reads as a decision.
+  - The stated rationale mischaracterizes `REGISTRY`. `REGISTRY` exists to hold per-stage vocabularies
+    inside the shared module (keyed by stage), not to keep them out of it. A per-stage verdict and phase
+    list would follow the same pattern. Minor.
+- **M7 — verified-fixed.** Re-probed:
+  - `--timeout-ms 50` → `usage-error` up front;
+  - a trailing `--budget-ms` → `usage-error`;
+  - `--resume --budget-ms 100 100` → `usage-error`.
+- **M8 — verified-fixed.** A parity test compares `.source` and `.flags` with `gate-run-core.mjs`'s export.
+- **M9 — verified-fixed.** A `render` or `cleanup` record → exit 2 `progress-malformed`. It is no longer a
+  `TypeError` crash.
+- **M10 — verified-fixed.** `stage-exit.md` carries the install table with its MEASURED/UNMEASURED labels.
+- **M11 — narrowed-ok.** A pre-clean and `t.after()` were added. The in-repo path is kept on purpose,
+  because it exercises the real ignore config.
+- **M12 — verified-fixed.** Both closure tests call the same `mappingNamesCode`.
+
+No finding **regressed**.
+
+### New findings introduced by the fixes (all advisory, all minor)
+
+- **N1 (P0) — the new `unusable` wording claims a cleanup that has not happened yet.**
+  - Files: `pharn/pharn-contracts/stage-exit.md` (the `unusable` bullet) and
+    `.claude/commands/pharn-regress.md` (the `2` bullet).
+  - They say a stop at or after the slug and containment point "has already removed … AND any other run's
+    leftover `.pharn/pharn-regress/` scratch".
+  - After the F2 reorder, a `usage-error` from `parseRestOfArgv` fires after `phaseFreshEarly`'s report
+    removal but before `phaseFreshLate`'s scratch clear.
+  - Probed: run A persisted a `continue` record. Run B then failed with a bad `--timeout-ms`, leaving the
+    report gone and run A's `stage.json` still on disk. An out-of-flow `--resume` revived run A to
+    `done`.
+  - The command prescribes `--resume` only after exit 5, so this stays advisory.
+  - **Fix:** clear `.pharn/pharn-regress/` in `phaseFreshEarly` too, or correct both sentences.
+- **N2 (P0) — "cleanup and render … idempotent to redo from verdict" is not quite true.**
+  - File: `stage-regress.mjs`, the A3/M9 comment in `runPhases`.
+  - Probed: the feature directory made read-only → the resumed run crashes in render after cleanup has
+    already removed the worktree, with the record parked at `verdict`. After restoring and `--resume` →
+    `done`, but `REGRESSION.md` now says "removing the base worktree FAILED" although the removal had
+    succeeded.
+  - **Fix:** treat an absent registration as cleanup success, or soften the comment.
+- **N3 (P0) — `resume.argv` is described too broadly.**
+  - Files: `.claude/commands/pharn-regress.md:120` and `stage-exit.md:81`.
+  - Both describe a question's `resume.argv` as "the ORIGINAL fresh invocation's" argv. For
+    `tests-unresolved` it is now that argv minus any `--tests` pair (`stripFlagPair`).
+  - The behavior is right; the sentence is too broad.
+- **N4 (P6) — BUILD.md asserted a verify re-run that had not happened.**
+  - At `6feee30`, BUILD.md's "Re-verification after the fixes" said `/pharn-dev-verify` was "re-run in full
+    over the fixed tree". It had not been, as the orchestrator itself reported.
+  - This re-run makes the sentence true after the fact. It is recorded because a stage artifact asserted
+    a run before it happened.
+- **N5 — A5's round-trip fidelity nit, above.**
+- **N6 — the lesson candidate recurred inside the fix pass.**
+  - Three new, unprobed claims were written: the A3 comment's "mid-`git worktree add`" (A3 above), N1's
+    "AND any other run's scratch", and N2's "idempotent".
+  - Each fell to a single probe.
+  - That makes the candidate above a third-plus occurrence, which strengthens its L20 case for the
+    promote gate.
