@@ -76,8 +76,8 @@ function setScope(dir, scope) {
 const anchor = (dir, extra = []) =>
   spawnSync(process.execPath, [ANCHOR, "--anchor", "--base", dir, "--by", "test", ...extra], { encoding: "utf8" });
 
-// D6 (6.23.0): the CLI now REFUSES --anchor with no usable scope, so `scope_snapshot: null` is reachable
-// going forward only as a LEGACY shape (a baseline anchored before 6.23.0). Built directly via the JS API
+// D6 (6.24.0): the CLI now REFUSES --anchor with no usable scope, so `scope_snapshot: null` is reachable
+// going forward only as a LEGACY shape (a baseline anchored before 6.24.0). Built directly via the JS API
 // — bypassing the CLI's new refusal — which is exactly the shape such a pre-existing baseline has on disk.
 function anchorLegacyNoScope(dir, by = "test") {
   const built = buildRecord(dir, by);
@@ -363,7 +363,7 @@ test("✧ every exempt entry names a writer, and the tracked exemption set stays
   assert.ok(raw.exempt.paths.length <= 3, "an exemption set that grows is the rule being swallowed — justify before raising");
 });
 
-// D7d / L42 (6.23.0) — the default probe sandbox now carries a THIRD signal, a fresh run marker, so an
+// D7d / L42 (6.24.0) — the default probe sandbox now carries a THIRD signal, a fresh run marker, so an
 // install-posture sandbox always answers with the STRICT in-run default rather than the newer permissive
 // one. Executed against the REAL hook (L37), not asserted from reading the source.
 test("★ PARITY: makeDefaultProbeSandbox()'s own run marker flips the REAL install-posture hook 0 -> 2", () => {

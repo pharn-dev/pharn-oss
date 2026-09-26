@@ -528,12 +528,12 @@ test("--clear removes a present scope and reports it", () => {
   assert.match(r.stdout, /writes-scope cleared/);
 });
 
-// 6.23.0 (D4 in the plan): the --clear message no longer claims a SINGLE posture — the default it returns
+// 6.24.0 (D4 in the plan): the --clear message no longer claims a SINGLE posture — the default it returns
 // control to is fail-closed everywhere EXCEPT an installed project outside an open PHARN run, where it is
 // the newer permissive one. Pinned against the SHIPPED hook path (not a handoff/ copy), so this test is
 // expected to be RED until the human applies the pending hook patch, and GREEN after — exactly like the
 // enforce-writes-scope.test.cjs golden dev-posture pins.
-test("★ 6.23.0: the --clear message no longer claims a single fail-closed posture, either way", () => {
+test("★ 6.24.0: the --clear message no longer claims a single fail-closed posture, either way", () => {
   const cwd = tmp();
   seedScope(cwd, { scope: [".dev/features/demo/SHIP.md"], set_by: "x.md", set_at: "t" });
   const r1 = setter(cwd, "--clear");

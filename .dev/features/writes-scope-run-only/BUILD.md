@@ -22,7 +22,8 @@ GATE-1 backstop, in Step 3a); `pharn-review.md` gained its own open line (before
 one sentence in Step 1a and a correction in its Final step. `CLAUDE.md` and `README.md` were updated
 (the "Writes-scope" section, the guarantee row, the "does not cover your source" bullet); the README's
 generated `## Current state` inventory now reads 82 floor checkers (was 81). `CHANGELOG.md` gained
-`## [6.23.0]`; `SKILLS_VERSION` 6.22.0 → 6.23.0.
+`## [6.24.0]`; `SKILLS_VERSION` 6.23.0 → 6.24.0 (built as 6.22.0 → 6.23.0 and renumbered after the merge of
+`main` — see "After merge + renumber", below).
 
 ## The human-only patch (NOT written by the agent)
 
@@ -238,3 +239,96 @@ Against the patched copy the same files pass:
 - the runner's full `npm test`, 3454/3454.
 
 `VERIFY.md` names the 36.
+
+## After merge + renumber (2026-09-26)
+
+- stage model: opus — set by the maintainer's instruction, overriding pharn.config.json's sonnet for
+  build/regress/verify; routed via Agent subagent; effort not routed
+- input: the orchestrator's GATE-2 rulings (`PLAN.md`, "GATE-2 rulings"). The backslash rule is approved.
+  `stage-regress-script` (#277) merged first and released 6.23.0, so this phase is 6.24.0.
+- merge: `origin/main` (`1524c6f`) merged into `67847e5` — a merge, not a rebase; merge base `767bf61`
+- floor: `node pharn/floor/validate.mjs .` → **GREEN**, after the merge and the renumber
+
+### The three conflicts, and how each was resolved
+
+- **`CHANGELOG.md`.** Main's `## [6.23.0]` section is kept byte for byte. So are everything below it and
+  the preamble above it; all three were compared with `1524c6f`'s bytes. This phase's entry moved into a
+  new `## [6.24.0] - 2026-09-26` section directly above main's. Its bump sentence now says
+  `6.23.0 → 6.24.0` and why the number changed.
+- **`README.md`.** The conflict was the generated `## Current state` line. It was regenerated with
+  `npm run docs:generate` and now reads 87 floor checkers. The badge merged cleanly, because both sides had
+  set it to 6.23.0, and was then renumbered to 6.24.0.
+- **`.claude/commands/pharn-regress.md`.** Main rewrote the command around `stage-regress.mjs`. It was
+  resolved to main's text, and this phase's Final-step rewording was applied to main's "Why this exists"
+  sentence.
+
+Git merged these without conflict:
+
+- `CLAUDE.md`;
+- `pharn-loop.md` and `pharn-ship.md`;
+- `.dev/floor/command-hygiene.test.mjs`, which keeps both phases' pins (main's `STAGE_SCRIPT_WIRING` and
+  this phase's).
+
+`writes-scope-release.test.cjs` was not touched by main. `SKILLS_VERSION` carried the same change on both
+sides and was then set to `6.24.0`.
+
+### The renumber
+
+Every `6.23.0` this phase had added was renumbered to `6.24.0`: **108 occurrences on 107 added lines**,
+found by `git diff origin/main -- . | grep '^+.*6\.23\.0'`. The 25 in `human-only.patch` were renumbered
+by regenerating the patch (below). Main's own `6.23.0` references are unchanged. An added line that still
+names `6.23.0` does so on purpose: it is a from-version (`6.23.0 → 6.24.0`) or a reference to main's
+release.
+
+### The reconcile epoch was re-opened
+
+The first epoch, `writes-scope-run-only-opus-fixes`, read `CLEAN` at `67847e5`, before the merge.
+`VERIFY.md` records that reading. On the merged tree the same epoch read `ESCAPE` with 30 escapes, and
+every one of them is a file #277 changed: the merge itself, not a write this phase made. So the PLAN setter
+was re-run, and `reconcile-baseline.mjs --anchor --by writes-scope-run-only-post-merge` re-anchored at
+2026-09-26T09:56:59.691Z (2345 paths). No baseline was edited or deleted.
+
+The merge was then committed at once, as `c0d33d7`, because reconcile compares the always-reconciled
+control surface with HEAD's committed blobs. Those are the hooks, the settings and every file under
+`pharn/floor/` and `.dev/floor/`. While the merge was uncommitted, HEAD was still `67847e5`, so main's
+floor files read as 17 control-surface escapes; once committed, the new epoch read `CLEAN`. That commit
+is amended with the regenerated patch and this stage's artifacts, so the branch gains one merge commit.
+
+### The regenerated patch
+
+`handoff/` was recreated from the committed patch in a scratch worktree at `c0d33d7`, and its 25 lines
+were renumbered there. The change is renumber-only: turning every `6.24.0` in the three new files back
+into `6.23.0` reproduces the previous `human-only.sha256` digests exactly. The runner then ran:
+
+| gate                 | exit | note                                                                          |
+| -------------------- | ---- | ----------------------------------------------------------------------------- |
+| `format:check`       | 0    |                                                                               |
+| `lint`               | 0    |                                                                               |
+| `lint:md`            | 0    |                                                                               |
+| `docs:check`         | 0    |                                                                               |
+| `check:markers`      | 0    |                                                                               |
+| `check:badge`        | 0    | badge `6.24.0` = `SKILLS_VERSION`                                             |
+| `check:changelog`    | 0    | newest section `## [6.24.0] - 2026-09-26`; 111 sections in order              |
+| `check:contributing` | 0    |                                                                               |
+| `check:reconcile`    | 0    | not counted: a never-anchored worktree reads `NO_BASELINE`                    |
+| `test`               | 0    | **3570/3570**, against the PATCHED hooks                                      |
+| `npm run check`      | 0    | the aggregate, as one chain                                                   |
+| D1 message sweep     | 0    | 0 differences over 196 (2 postures × 7 record shapes × 14 paths), HEAD vs new |
+
+`proposed/human-only.sha256`:
+
+```text
+6bbfa46894d61ff0a7b3c39af8166feda7bf5fbc2d5bcf25afd393077c20a658  .claude/hooks/enforce-writes-scope.cjs
+42e6db9fc605ab495c7903aa4069e42b35c2630db83948292cb8619857248331  .claude/hooks/set-writes-scope.cjs
+0de8c9f9ea9cfff1a7b11bbd9919392fd89c92a43d9ae7a7a733edd5e62244c5  LIMITS.md
+```
+
+The new patch and the previous one are both 1013 lines long. They differ in 28 lines:
+
+- 25 lines, each a `6.23.0 → 6.24.0` substitution;
+- 3 `index` lines, which carry the new blob ids.
+
+`git apply --check` exits 0 against this worktree's live files. The behavioural probe was re-run against
+the renumbered copy after the merge: every REVIEW repro, the D2 cases and the backslash cases, **49/49 as
+expected**, with a D1 sweep of 0 differences over 28. The runner removed its own `verify-wt`. The scratch
+worktree was then removed, and the runner deleted.

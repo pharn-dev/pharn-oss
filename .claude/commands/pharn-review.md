@@ -83,7 +83,7 @@ case `pharn/features/<name>/` is created for it.
 > `pharn/features/<name>/REVIEW.md` **both exit 2**.
 >
 > **fix #7 still applies here — through the fail-closed DEFAULT, not through a declared scope — and, since
-> 6.23.0, that default's WIDTH depends on a run marker THIS command must open before it matters.** With no
+> 6.24.0, that default's WIDTH depends on a run marker THIS command must open before it matters.** With no
 > scope file, `enforce-writes-scope.cjs` permits its install safe-set — `pharn/features/**` — **plus
 > `.pharn/**`, which is composed into the allow-list unconditionally** and is therefore NOT "the same set
 > this command's `writes:` declares". Measured, not read off the source (L37 — a guard's bounds must be
@@ -162,7 +162,7 @@ This prints `{"registered":<int>,"lenses":[<path>,…]}` — the `role: lens` ca
 command's own frontmatter under the excluded `.claude/commands/`, never registers). **This set is the
 lenses you run — membership is FLOOR** (`pharn/ARCHITECTURE.md §2` primitive #3), not your choice.
 
-**Open the run marker (6.23.0, D3) — now, after every ask-the-human point above (Step 0's `<name>`, Step
+**Open the run marker (6.24.0, D3) — now, after every ask-the-human point above (Step 0's `<name>`, Step
 1's target, Step 1b's `--target`) and before Step 3, the first step that puts untrusted reviewed code (or,
 at Step 3b, skill content) into context:**
 
@@ -387,7 +387,7 @@ editing the artifact hides exactly the disagreement worth seeing.
 > not run the emitter**, plus detection of a hand-edited or stale record and of emitter drift. It is
 > never evidence that a review was adequate.
 
-## Step 7 — Close the run (6.23.0, D3)
+## Step 7 — Close the run (6.24.0, D3)
 
 **Run this on EVERY exit after Step 2 opened the run marker, including an early refusal** — this command
 has no turn-end instruction otherwise, and this is its last procedure step:

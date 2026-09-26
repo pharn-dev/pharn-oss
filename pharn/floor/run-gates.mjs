@@ -30,8 +30,8 @@
 // Why, stated because the other reading was shipped and was wrong (lessons-learned L45): `init` used to
 // resolve `--out` and `--spec-from` against `--cwd`, while `run --next` — which takes no `--cwd` — resolved
 // `--out` against the invoking directory. The two subcommands therefore disagreed about where the record
-// lived whenever `--cwd` was not `.`, and the one caller that passes it (/pharn-regress Step 4b's base
-// side, `--cwd .pharn/pharn-regress/base`) failed at `init` with `spec-mismatch`, reading the head record
+// lived whenever `--cwd` was not `.`, and the one caller that passes it (`stage-regress.mjs`'s base side,
+// `--cwd .pharn/pharn-regress/base`) failed at `init` with `spec-mismatch`, reading the head record
 // from INSIDE the base worktree. Every test ran with the default `--cwd .`, so nothing saw it (L41).
 //
 // The corollary: `init` and every `run --next` for one `<out>` must be issued from the SAME directory.
@@ -631,6 +631,12 @@ function signalExit(signalName) {
   return Number.isInteger(n) ? 128 + n : 128;
 }
 
+/** Run one gate (or, since 6.23.0, any other command a stage script needs process-group-killed and
+ *  timed the same way — `stage-regress.mjs`'s INSTALL step, via the export below) in its own process
+ *  group. `resultsFile: null` means "no PHARN_TEST_RESULTS variable" — the install command is not a gate
+ *  with a per-test reporter, so nothing should tell it where to write one. EXPORTED (6.23.0,
+ *  stage-regress-script) so a stage script reuses this exact spawn/kill/log discipline rather than
+ *  re-implementing it (P3/P4 — one owner of "run a command, killed by timeout, in its own process group"). */
 function spawnGate(entry, cwd, outFile, errFile, resultsFile, timeoutMs) {
   return new Promise((done) => {
     let cmd;
@@ -663,8 +669,9 @@ function spawnGate(entry, cwd, outFile, errFile, resultsFile, timeoutMs) {
     let killTimer = null;
     let graceTimer = null;
 
-    // The inherited environment, plus exactly one variable: this gate's own results path.
-    const env = { ...process.env, [RESULTS_ENV]: resultsFile };
+    // The inherited environment, plus — when `resultsFile` is not null — exactly one variable: this
+    // gate's own results path. A `null` resultsFile (the install-command caller) sets no such variable.
+    const env = resultsFile === null ? { ...process.env } : { ...process.env, [RESULTS_ENV]: resultsFile };
     const child = spawn(cmd, argv, { cwd, env, detached: true, stdio: ["ignore", fdOut, fdErr] });
 
     const finish = (result) => {
@@ -900,4 +907,4 @@ if (import.meta.main) {
   });
 }
 
-export { assertContained, isStaleLock, signalExit, readScopeJson };
+export { assertContained, isStaleLock, signalExit, readScopeJson, spawnGate };

@@ -128,7 +128,7 @@ echo '{"tool_name":"Write","tool_input":{"file_path":"docs/ARCHITECTURE.md"}}' |
 
 **`enforce-writes-scope.cjs` (fix #7)** is the runtime scope-enforcement hook: it denies any write
 outside the active scope in `.pharn/writes-scope.json`. With no scope set, the default depends on the
-tree (6.23.0): a dev checkout or an unsignalled tree stays fail-closed to the same default-safe-set as
+tree (6.24.0): a dev checkout or an unsignalled tree stays fail-closed to the same default-safe-set as
 before, and every denial it made before carries the same message; the only verdict changes there are
 toward deny (a write through a symlink is also judged at the target the filesystem reaches, and a guard
 error denies). An **installed** project (`pharn.config.json` carries a non-empty `skillsVersion`) is
@@ -147,7 +147,7 @@ default. Confirm it works:
 echo '{"tool_name":"Write","tool_input":{"file_path":"pharn/floor/x.mjs"}}' | node .claude/hooks/enforce-writes-scope.cjs  # → exit 2, denied (no scope; fail-closed dev-repo default)
 echo '{"tool_name":"Write","tool_input":{"file_path":"README.md"}}' | node .claude/hooks/enforce-writes-scope.cjs  # → exit 2, denied (root file outside default-safe-set)
 # In an INSTALLED project (pharn.config.json has skillsVersion) with NO scope and NO run open, the SAME
-# root file is instead ALLOWED — the new permissive default (6.23.0) does not deny an ordinary project file:
+# root file is instead ALLOWED — the new permissive default (6.24.0) does not deny an ordinary project file:
 echo '{"tool_name":"Write","tool_input":{"file_path":"README.md"}}' | node .claude/hooks/enforce-writes-scope.cjs  # → exit 0 there, not exit 2 as above
 ```
 

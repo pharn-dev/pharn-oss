@@ -504,7 +504,8 @@ function runVerdict(positional, args) {
         2
       );
     }
-    // The set is decided ONCE and applied to both sides (/pharn-regress Step 4b). A spec divergence is
+    // The set is decided ONCE and applied to both sides (stage-regress.mjs's "head-init" phase, copied
+    // verbatim onto "base-init" via run-gates.mjs's `--spec-from`). A spec divergence is
     // caught here rather than surfacing later as a gate-set mismatch, so the reason names the cause.
     const bIds = b.stamp.runs.map((r) => r.id).join("\u0000");
     const hIds = h.stamp.runs.map((r) => r.id).join("\u0000");

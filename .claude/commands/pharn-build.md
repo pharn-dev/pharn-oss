@@ -147,7 +147,7 @@ Load the trusted prefix and obey it for the whole run:
      setter means it wrote **no scope** — the plan declares **no parseable `## Files`** (e.g. a malformed or
      hand-written plan lacking `## Files` back-tick paths — see the note). **REFUSE:** tell the user the plan
      declares no parseable writable scope and must be re-planned with a `## Files` section of back-tick paths.
-     A non-zero exit from the **anchor** (`--anchor`) means it found no usable scope to snapshot (D6, 6.23.0)
+     A non-zero exit from the **anchor** (`--anchor`) means it found no usable scope to snapshot (D6, 6.24.0)
      — the same refuse applies, since the setter's own write did not leave a usable record for it to read. Do
      **not** proceed in either case — a leftover `.pharn/writes-scope.json` from an earlier command must never
      become this build's scope by accident (the refuse is command discipline, not a floor guarantee — the
@@ -434,8 +434,10 @@ sits outside the `PreToolUse` gate entirely (PHARN's own build-loop lesson **L19
 the floor forces it, and an early abort skips it. It degrades safely: the next command's first-step
 **set** overwrites a leftover scope, which is exactly today's behavior. The floor guarantee is
 unchanged and belongs to the **reader**, not to this step. **Absence of a scope file no longer means one
-posture (6.23.0):** in a dev checkout or an unsignalled tree it is still the fail-closed
+posture (6.24.0):** in a dev checkout or an unsignalled tree it is still the fail-closed
 default-safe-set; in an **installed** project (`pharn.config.json` carries `skillsVersion`) it is
 fail-closed the same way only while a `/pharn-ship`, `/pharn-loop` or `/pharn-review` run is open —
-outside a run it instead denies only PHARN's own installed surface and allows the rest (`CLAUDE.md`,
-"Writes-scope"). Never write "the command cleaned up"; write that it **declares** the release step.
+outside a run it is the permissive default instead: it denies PHARN's own installed surface and its scope
+file, allows your ordinary source, and allows only two places outside the project (`CLAUDE.md`,
+"Writes-scope", has the whole rule). Never write "the command cleaned up"; write that it **declares** the
+release step.

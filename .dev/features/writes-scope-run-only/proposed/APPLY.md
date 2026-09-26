@@ -6,21 +6,19 @@ else the plan names has already been written, formatted and committed by the age
 `writes-scope-run-only` branch. This folder is what carries the three files' change to a human to apply, by
 hand, from here.
 
-**This is the SECOND patch.** The first one (commit `6b349f8`) was reviewed before anyone applied it, and
-`REVIEW.md` blocked it. It was regenerated after the GATE-2 fixes (`PLAN.md`, "Amended at GATE 2" and "As
-built — the GATE-2 fix pass"). If you kept a copy of the first patch, discard it: `human-only.sha256` pins
-only the new bytes, so `apply.sh` refuses the old ones.
+**This is the THIRD version of the patch, and the only one to apply.** The first (commit `6b349f8`) was
+reviewed before anyone applied it, and `REVIEW.md` blocked it. The second (commit `67847e5`) carried the
+GATE-2 fixes (`PLAN.md`, "Amended at GATE 2" and "As built — the GATE-2 fix pass") and was numbered 6.23.0.
+Then `stage-regress-script` (#277, `1524c6f`) merged to `main` first and released 6.23.0, so this branch
+merged `origin/main` and renumbered by diff to **6.24.0**. This patch is the second one with its version
+strings renumbered (25 added lines: hook comments, the setter comment and `LIMITS.md §7`) and nothing else:
+turning every `6.24.0` in the three new files back into `6.23.0` reproduces the second patch's
+`human-only.sha256` digests exactly. If you kept a copy of either earlier patch, discard it:
+`human-only.sha256` pins only the new bytes, so `apply.sh` refuses the old ones.
 
-## Before you apply: `main` moved during the fix pass
-
-`origin/main` is now `1524c6f` (#277, `/pharn-regress` as a stage script), which released **6.23.0**. This
-branch still says 6.23.0, so it must renumber to 6.24.0 before it merges (merge `origin/main`, renumber by
-diff). The three human-only files are byte-identical on `767bf61` and `1524c6f`, so this patch still applies
-after that merge. But **25 added lines of this patch name "6.23.0"** — hook comments, the setter comment,
-and `LIMITS.md §7`. So decide before running `apply.sh`:
-
-- regenerate the patch after the renumber and apply that one; or
-- apply this one now and correct those lines later, which is a second human edit of the same three files.
+The three human-only files are byte-identical on `767bf61` (where the fix pass started) and `1524c6f`, so
+the merge did not move the lines this patch applies to; the runner regenerated it against the merged tree
+and `git apply --check` passes there.
 
 ## What to read first
 
@@ -53,7 +51,8 @@ and `LIMITS.md §7`. So decide before running `apply.sh`:
 ## What `apply.sh` does, in order
 
 Run it **from the worktree the GATE-2 fix pass ran in** — that worktree holds the reconciliation baseline
-this checkpoint needs (anchored `--by writes-scope-run-only-opus-fixes`) — from its root:
+this checkpoint needs (re-anchored after the merge of `origin/main`, `--by writes-scope-run-only-post-merge`;
+`VERIFY.md` records why the first epoch was closed) — from its root:
 `sh .dev/features/writes-scope-run-only/proposed/apply.sh`. **Never from `main`**; the script refuses on
 `main` by itself as a backstop.
 

@@ -50,7 +50,7 @@
 // rule that a quantified claim is verified by EXECUTING the op, not by re-reading it):
 //   • trusted-path / canon / control-surface denial  -> EXECUTE .claude/hooks/protect-trusted-paths.cjs
 //   • the fail-closed DEFAULT, when no scope was set  -> EXECUTE .claude/hooks/enforce-writes-scope.cjs
-//     in a probe sandbox that reproduces THREE runtime signals (6.23.0, up from two): a
+//     in a probe sandbox that reproduces THREE runtime signals (6.24.0, up from two): a
 //     pharn.config.json `skillsVersion`, `.dev/floor/` presence, and a FRESH run marker (written by
 //     pharn/floor/run-marker.mjs's own openRun(), so the probe always answers with the STRICT, in-run
 //     default rather than the newer install-posture permissive one — see makeDefaultProbeSandbox()'s own
@@ -275,7 +275,7 @@ function askHookUnderScope(hookAbs, rel, root, scopeRecord) {
 }
 
 // Exported for the parity test. Reproduces THREE runtime signals `enforce-writes-scope.cjs`'s no-scope
-// decision reads (6.23.0 adds the third): `pharn.config.json` (copied), `.dev/floor/` (created), and a
+// decision reads (6.24.0 adds the third): `pharn.config.json` (copied), `.dev/floor/` (created), and a
 // FRESH run marker (written by run-marker.mjs's own openRun() — never a hand-built JSON blob, so this
 // probe cannot drift from what the real writer emits). The marker makes this sandbox answer with the
 // STRICT, in-run default whenever it represents an install: after D6 (reconcile-baseline.mjs §9) every

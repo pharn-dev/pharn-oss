@@ -190,7 +190,7 @@ before it, and that is exactly the number a reader wants. See Step 3a's own pres
    human halt above, and `/pharn-plan`'s own first gate re-checks the same condition — so a Draft can **never**
    flow to build even if the halt were somehow skipped.
 
-   **Open the run marker (6.23.0, D3) — immediately after the backstop exits 0, before `/pharn-plan`'s own
+   **Open the run marker (6.24.0, D3) — immediately after the backstop exits 0, before `/pharn-plan`'s own
    `stage-start` marker:**
 
    ```bash
@@ -351,7 +351,17 @@ absolute all-green-at-HEAD `.verdict` — belt-and-suspenders.)_
 `"inconclusive"` → **STOP**, present, hand to the human. **Fail-closed on a missing file:** on a RED chain
 `/pharn-regress` writes **only** `REGRESSION.md` (no verdict JSON), so a **missing
 `regression-report.json` → STOP** (present the RED-chain `REGRESSION.md`) — a membership test (present ∧
-`.verdict == "no-regressions"`), never a silent proceed.
+`.verdict == "no-regressions"`), never a silent proceed. **Since `stage-regress-script` (6.23.0), NARROWED
+here (F2, GATE 2 review — an earlier draft of this paragraph overclaimed this for every stop):** every
+`/pharn-regress` `refused` stop (a RED chain, a scope escape, a missing artifact), and every `unusable`
+stop raised AT OR AFTER the feature slug parses and the containment walk passes, leaves **no**
+`regression-report.json` on disk (`pharn/pharn-contracts/stage-exit.md`'s exit table), so the missing-file
+membership test above is the correct STOP for all of those. **The residual, named rather than hidden:** a
+stop BEFORE that point (a bad or missing `--feature`, or `path-containment` itself — `stage-regress.mjs`'s
+own "fresh" phase order), or a genuine crash, may leave an EARLIER run's report in place; this is exactly
+why the check above is a membership test on the CURRENT file's `.verdict`, never merely "no file was
+written this run" — and it is the same residual `ship-outcome-core.mjs` and `regression-report.md`
+correctly keep open.
 
 1. **`/pharn-verify`** → writes `pharn/features/<name>/verify-report.json` (+ `VERIFY.md`).
 
@@ -705,7 +715,7 @@ resolve that question — it simply does not depend on the answer.
    node pharn/floor/mark-phase.mjs --name '<name>' --kind run-stop
    ```
 
-   **Then close the write-guard run marker (6.23.0, D3) — directly after the line above, on EVERY exit
+   **Then close the write-guard run marker (6.24.0, D3) — directly after the line above, on EVERY exit
    that reaches this step (GATE 2 and every STOP):**
 
    ```bash
@@ -982,11 +992,14 @@ the `check-ship.mjs` cap.
   **structural/advisory** (a single block, no loop, no `check-ship`-style cap — Step 2b); and proceeding
   after the retry reads only `PASS` ∧ `no-regressions` (FLOOR verdicts). The retry **never** guarantees the
   rebuild works (advisory model work). It is **not** `--loop`.
-- **The post-build gate's DISCOVERY is advisory (honest, mirrors `/pharn-regress` / `/pharn-verify`).** The
-  build project-gate's **exit code** is FLOOR, but **which** gate to run for a non-PHARN project (`--gates`
-  → allowlist ∩ scripts → ask) is **advisory orchestration, untested by construction** (it lives in this
-  command's prose, exactly like `/pharn-regress`'s Step 4a / `/pharn-verify`'s Step 3a discovery). "Build
-  floor = FLOOR" refers to the **exit code**, not to the gate-selection — do not over-read it.
+- **The post-build gate's DISCOVERY is advisory (honest, mirrors `/pharn-verify`).** The build
+  project-gate's **exit code** is FLOOR, but **which** gate to run for a non-PHARN project (`--gates` →
+  allowlist ∩ scripts → ask) is **advisory orchestration, untested by construction** (it lives in this
+  command's prose, exactly like `/pharn-verify`'s Step 3a discovery). "Build floor = FLOOR" refers to the
+  **exit code**, not to the gate-selection — do not over-read it. **`/pharn-regress`'s own discovery is a
+  DIFFERENT, stronger case since `stage-regress-script` (6.23.0):** it moved out of command prose entirely
+  and into `pharn/floor/stage-regress-core.mjs`/`stage-regress.mjs`, tested code the command merely
+  invokes — so it is no longer the parallel this bullet's "untested by construction" describes.
 - **"The two human gates (SPEC approval, post-verify) are preserved"** → **ADVISORY** (command discipline).
   GATE 1 **is** `/pharn-spec`'s own halt; nothing on the floor forces a human to be asked. `/pharn-ship`
   preserves the gates **by construction**, backstopped (not replaced) by `/pharn-plan`'s deterministic
@@ -1152,8 +1165,10 @@ sits outside the `PreToolUse` gate entirely (PHARN's own build-loop lesson **L19
 the floor forces it, and an early abort skips it. It degrades safely: the next command's first-step
 **set** overwrites a leftover scope, which is exactly today's behavior. The floor guarantee is
 unchanged and belongs to the **reader**, not to this step. **Absence of a scope file no longer means one
-posture (6.23.0):** in a dev checkout or an unsignalled tree it is still the fail-closed
+posture (6.24.0):** in a dev checkout or an unsignalled tree it is still the fail-closed
 default-safe-set; in an **installed** project (`pharn.config.json` carries `skillsVersion`) it is
 fail-closed the same way only while a `/pharn-ship`, `/pharn-loop` or `/pharn-review` run is open —
-outside a run it instead denies only PHARN's own installed surface and allows the rest (`CLAUDE.md`,
-"Writes-scope"). Never write "the command cleaned up"; write that it **declares** the release step.
+outside a run it is the permissive default instead: it denies PHARN's own installed surface and its scope
+file, allows your ordinary source, and allows only two places outside the project (`CLAUDE.md`,
+"Writes-scope", has the whole rule). Never write "the command cleaned up"; write that it **declares** the
+release step.

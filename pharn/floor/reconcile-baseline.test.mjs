@@ -54,7 +54,7 @@ process.on("exit", () => {
   }
 });
 
-// D6 (6.23.0): --anchor now REFUSES with no usable scope to snapshot, so every happy-path anchor fixture
+// D6 (6.24.0): --anchor now REFUSES with no usable scope to snapshot, so every happy-path anchor fixture
 // below must set one first — exactly what both shipped callers (/pharn-build, /pharn-dev-build) already do.
 function seedScope(dir, scope) {
   mkdirSync(join(dir, ".pharn"), { recursive: true });
@@ -439,7 +439,7 @@ test("`anchored_by` is argv — a LABEL, never an authorization (stated in the c
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────
-// D6 (6.23.0) — --anchor REFUSES to open an epoch with no usable scope to snapshot.
+// D6 (6.24.0) — --anchor REFUSES to open an epoch with no usable scope to snapshot.
 
 test("★ D6: --anchor with NO scope file exits 2, names the remedy, and writes nothing", () => {
   const dir = makeRepo(); // no .pharn/writes-scope.json at all

@@ -351,8 +351,9 @@ node .claude/hooks/set-writes-scope.cjs --clear
 
 **ADVISORY (P0), and the bound is the point.** This is a Bash call outside the `PreToolUse` gate, so nothing forces
 it and an early abort skips it. It degrades safely: the next command's first-step **set** overwrites a leftover
-scope. **Absence of a scope file no longer means one posture (6.23.0):** in a dev checkout or an unsignalled tree
+scope. **Absence of a scope file no longer means one posture (6.24.0):** in a dev checkout or an unsignalled tree
 it is still the fail-closed default-safe-set; in an **installed** project (`pharn.config.json` carries
 `skillsVersion`) it is fail-closed the same way only while a `/pharn-ship`, `/pharn-loop` or `/pharn-review` run is
-open — outside a run it instead denies only PHARN's own installed surface and allows the rest (`CLAUDE.md`,
-"Writes-scope"). Never write "the command cleaned up"; write that it **declares** the release step.
+open — outside a run it is the permissive default instead: it denies PHARN's own installed surface and its scope
+file, allows your ordinary source, and allows only two places outside the project (`CLAUDE.md`, "Writes-scope",
+has the whole rule). Never write "the command cleaned up"; write that it **declares** the release step.

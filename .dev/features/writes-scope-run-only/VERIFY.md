@@ -1,9 +1,34 @@
-# VERIFY — writes-scope-run-only (after GATE 2 fix)
+# VERIFY — writes-scope-run-only (after merge + renumber)
+
+## The reconcile reading before the merge of `origin/main` (recorded first, before anything moved)
+
+At `67847e5`, with a clean working tree, `node pharn/floor/check-bash-reconcile.mjs --base . --require-baseline`
+exited **0**, `"verdict": "CLEAN"`: epoch `2026-09-26T08:26:59.272Z`, anchored by
+`writes-scope-run-only-opus-fixes`, 17 paths reconciled, 0 escapes. It exempted five of this feature's own
+pipeline artifacts (`BUILD.md`, `PLAN.md`, `REGRESSION.md`, `VERIFY.md`, `regression-report.json`) and warned
+twice, for the two deleted `handoff/` sources (inside the declared scope). This is the last reading of that
+epoch. The merge that follows brings #277's files in through `git`, which the epoch would read as escapes, so
+the epoch is re-opened after the merge (see below) — and this reading is what the old epoch said, kept.
+
+## The epoch was re-opened after the merge
+
+- **The old epoch on the merged tree.** It read `ESCAPE`, with 67 paths reconciled and 30 escapes. Every one
+  of the 30 is a file #277 changed: each is in `git diff --name-only 767bf61 1524c6f`. That is the merge,
+  not a write this phase made.
+- **The new epoch.** The PLAN setter was re-run (36 paths), then
+  `node pharn/floor/reconcile-baseline.mjs --anchor --by writes-scope-run-only-post-merge` ran. It opened
+  epoch `2026-09-26T09:56:59.691Z` over 2345 paths. No baseline was edited or deleted.
+- **Why the merge was committed straight away, as `c0d33d7`.** Reconcile compares the always-reconciled
+  control surface with HEAD's committed blobs: the hooks, the settings files, and every file under
+  `pharn/floor/` and `.dev/floor/`. While the merge was uncommitted, HEAD was still `67847e5`, so the new
+  epoch read `ESCAPE` with 17 escapes. Every one was a `pharn/floor/` or `.dev/floor/` file that #277
+  changed. After the commit it read `CLEAN`. That commit is amended with the regenerated patch and this
+  chain's artifacts, so the branch gains one merge commit.
 
 - stage: `/pharn-dev-verify` — opus — set by the maintainer's instruction, overriding pharn.config.json's
   sonnet for build/regress/verify; routed via Agent subagent; effort not routed
-- run: after the GATE-2 fix pass, in the fix pass's own worktree, whose reconciliation epoch was anchored
-  `--by writes-scope-run-only-opus-fixes` — so `reconcile --require-baseline` had a baseline to read
+- run: after the merge of `origin/main` (`1524c6f`) and the renumber to 6.24.0, in the fix pass's own
+  worktree, under the re-opened epoch — so `reconcile --require-baseline` had a baseline to read
 - how it ran: Step 1's pinned gates as one node runner under `.pharn/pharn-dev-verify/` (argv arrays,
   exit codes only), then `check-verify.mjs .pharn/pharn-dev-verify/results.json --feature writes-scope-run-only`
 
@@ -11,7 +36,7 @@
 
 | gate                                                                                         | exit |
 | -------------------------------------------------------------------------------------------- | ---- |
-| `test` (`npm test` — the full hermetic suite, 3454 tests)                                    | 1    |
+| `test` (`npm test` — the full hermetic suite, 3570 tests)                                    | 1    |
 | `validate` (`pharn/floor/validate.mjs .`)                                                    | 0    |
 | `lint` (`npm run lint` — eslint)                                                             | 0    |
 | `format:check` (`npm run format:check` — prettier, whole-repo)                               | 0    |
@@ -23,12 +48,14 @@
 
 `check-verify.mjs` exited **1**, `"verdict": "FAIL"`, `"failing_gates": ["test"]`. **This is the STOP the plan
 designs for.** The new and changed hook and floor tests assert the PATCHED write guard against
-`.claude/hooks/enforce-writes-scope.cjs` and `.claude/hooks/set-writes-scope.cjs`, which are human-only and
-still hold their pre-patch bytes here. The patch is `proposed/human-only.patch`.
+`.claude/hooks/enforce-writes-scope.cjs` and `.claude/hooks/set-writes-scope.cjs`. Those files are
+human-only and still hold their pre-patch bytes here, which since the merge are `main`'s bytes. The patch is
+`proposed/human-only.patch`.
 
-**The failures are exactly the expected ones.** `npm test`: `tests 3454, pass 3418, fail 36`. The 36 failing
-names are set-equal to the list measured against the unpatched hooks before this run, and no other test in
-the suite failed:
+**The failures are exactly the expected ones.** `npm test` reported `tests 3570, pass 3534, fail 36`. The 36
+failing names are set-equal to the list measured against the unpatched hooks before the merge. The only
+difference is the two titles that name this phase's version, which were renumbered from 6.23.0 to 6.24.0.
+No other test in the suite failed, including the 116 tests the merge brought in.
 
 | file                                          | failing | total in file |
 | --------------------------------------------- | ------- | ------------- |
@@ -37,17 +64,13 @@ the suite failed:
 | `pharn/floor/check-bash-reconcile.test.mjs`   | 1       | 54            |
 | `.claude/hooks/set-writes-scope.test.cjs`     | 1       | 46            |
 
-**Each of the 36 passes against the patched copy:**
-
-- `enforce-writes-scope.test.cjs` passes 143/143 in a scratch worktree carrying the patched hooks at their real
-  paths.
-- The other seven suites `apply.sh` runs, plus `command-hygiene.test.mjs`, pass 518/518 there.
-- The verification runner's full `npm test` over the patched tree passed 3454/3454 (`BUILD.md`, "After GATE 2
-  fix").
+**Each of the 36 passes against the patched copy.** The verification runner ran its full `npm test` over
+the merged, renumbered tree with the patched hooks and `LIMITS.md` at their real paths. It passed
+3570/3570, and the aggregate `npm run check` exited 0 there (`BUILD.md`, "After merge + renumber").
 
 The 36, by name:
 
-- `.claude/hooks/set-writes-scope.test.cjs` — ★ 6.23.0: the --clear message no longer claims a single
+- `.claude/hooks/set-writes-scope.test.cjs` — ★ 6.24.0: the --clear message no longer claims a single
   fail-closed posture, either way
 - `pharn/floor/check-bash-reconcile.test.mjs` — ★ PARITY: makeDefaultProbeSandbox()'s own run marker flips
   the REAL install-posture hook 0 -> 2
@@ -78,7 +101,7 @@ The 36, by name:
   - ★ DENY BODY 'out-of-root' (install, run open): states the permissive-outside-a-run fact and offers the
     RUN block
   - ★ DENY BODY 'reserved': never offers Bash, never a stale-scope/stale-run bullet (there is neither)
-  - ★ L27 per branch: each 6.23.0 remedy is PRESENT in its own case and ABSENT from every other
+  - ★ L27 per branch: each 6.24.0 remedy is PRESENT in its own case and ABSENT from every other
   - ★ MARKERS: a marker under an UNKNOWN state directory is ignored (negative control)
   - ★ MARKERS: aged past 24h (either direction) is ignored; aged 23h still counts (symmetric ceiling)
   - ★ MARKERS: an unreadable state directory ALSO counts when it is otherwise empty of runs (non-vacuity,
@@ -104,15 +127,22 @@ The 36, by name:
   - ★ minor 6: a FORCED throw inside the decision exits 2 with the fixed message — dev and install
   - ✧ PIN: enforce-writes-scope.cjs's toKey() is byte-equal to protect-trusted-paths.cjs's
 
-**Every other gate is GREEN.** `reconcile` read `CLEAN`: 19 paths reconciled, 0 escapes; the stage artifacts
-this chain writes (`BUILD.md`, `PLAN.md`, `REGRESSION.md`, `regression-report.json`) were exempted as
-pipeline artifacts. It also carried two warnings, for the deleted `handoff/` sources (treated as changed,
-inside the declared scope). No Bash write in this pass reached a path the live guards would have denied.
+**Every other gate is GREEN.** `reconcile` read `CLEAN` under the re-opened epoch, with 0 escapes and no
+warnings.
+
+- It reconciled 3 paths: `proposed/APPLY.md`, `proposed/human-only.patch` and `proposed/human-only.sha256`.
+  All three are inside the declared scope.
+- It exempted the stage artifacts this chain writes as pipeline artifacts: `BUILD.md`, `REGRESSION.md`,
+  `REVIEW.md` and `regression-report.json`.
+
+No Bash write in this pass reached a path the live guards would have denied.
 
 ## Verifiers
 
 No verifiers registered — floor gates only. `node pharn/floor/count-verifiers.mjs .` →
-`{"registered":0,"verifiers":[]}`.
+`{"registered":0,"verifiers":[]}`. `verify-report.json` needed no rewrite. Its `feature`, `gates`,
+`verdict` and `failing_gates` deep-equal this run's `check-verify.mjs` output, and its `verifiers` block
+reads `registered: 0`.
 
 ## The honest residual
 

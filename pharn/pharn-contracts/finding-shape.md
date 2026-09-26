@@ -84,7 +84,7 @@ for "therefore guaranteed." The `MUST` above is a **three-way split**, not one b
   did.** `enforce-writes-scope.cjs` reads exactly one SCOPE input — `.pharn/writes-scope.json` — beside
   the signals that choose its default when none is set (`pharn.config.json`'s `skillsVersion`,
   `.dev/floor/` presence, and, in an installed project, the run markers under `.pharn/pharn-*/` —
-  6.23.0). `.pharn/writes-scope.json` itself is written by `set-writes-scope.cjs` from a
+  6.24.0). `.pharn/writes-scope.json` itself is written by `set-writes-scope.cjs` from a
   **`--from-frontmatter <file>`** argument. **Every one of the corpus's `--from-frontmatter` call sites
   names a COMMAND file; not one names a Capability** (verified by enumerating them). So a Capability's
   `writes:` is **parsed by nothing** and pins nothing — it is declared metadata that documents intent.

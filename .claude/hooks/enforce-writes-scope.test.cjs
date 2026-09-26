@@ -81,7 +81,7 @@ test("no scope (install posture): .dev/features/ is DENIED", () => {
 
 test("no scope (install posture wins): .dev/floor/ + skillsVersion → pharn/pharn-review/ and .dev/features/ are DENIED", () => {
   const cwd = seedInstalledProject(seedDevRepo(tmp()));
-  // 6.23.0: `pharn/pharn-review/` is PHARN's reserved surface, denied in EVERY install state (with or
+  // 6.24.0: `pharn/pharn-review/` is PHARN's reserved surface, denied in EVERY install state (with or
   // without a run open) — but `.dev/features/foo/PLAN.md` is an ordinary project path, so testing "install
   // posture wins over the dev signal for TODAY'S DEFAULT" now needs a run open (today's default applies
   // only then; outside a run the install posture's PERMISSIVE default would allow it).
@@ -96,7 +96,7 @@ test("no scope (install posture): pharn/features/ scratch is still ALLOWED", () 
 
 test("no scope (install posture): legacy root features/ is DENIED (pre-5.0.0 layout)", () => {
   const cwd = seedInstalledProject(tmp());
-  // 6.23.0: this is TODAY'S default, which in the install posture now applies only while a PHARN run is
+  // 6.24.0: this is TODAY'S default, which in the install posture now applies only while a PHARN run is
   // open — outside a run this ordinary (non-reserved) path is writable under the newer permissive default.
   writeMarker(cwd, "pharn-ship", "demo");
   assert.equal(hook(cwd, "features/x/SPEC.md").status, 2);
@@ -951,12 +951,12 @@ function everyDenyMessage() {
     // rather than asserted separately, so every membership rule above ranges over it for free — which is
     // the shape L29 prescribes and the shape its own increment failed to apply the first time.
     { branch: "other-tree", msg: otherTreeDenyMessage() },
-    // 6.23.0 — the install-posture bodies and variants, so every rule here ranges over them too (L29).
+    // 6.24.0 — the install-posture bodies and variants, so every rule here ranges over them too (L29).
     ...installDenyMessages(),
   ];
 }
 
-// One rendering of every install-posture body and variant 6.23.0 adds (Design §5 of the plan).
+// One rendering of every install-posture body and variant 6.24.0 adds (Design §5 of the plan).
 function installDenyMessages() {
   const out = [];
   const reserved = seedInstalledProject(tmp());
@@ -1136,7 +1136,7 @@ test("subdirectory with NO scope, INSTALL posture: pharn/features/ only, judged 
   const repo = seedInstalledProject(gitRepo());
   const sub = join(repo, "docs");
   mkdirs(sub);
-  // 6.23.0: today's default (what this test exercises) applies in the install posture only while a PHARN
+  // 6.24.0: today's default (what this test exercises) applies in the install posture only while a PHARN
   // run is open — write the marker AT THE ROOT (where the guard reads it), not the subdirectory.
   writeMarker(repo, "pharn-ship", "demo");
   assert.equal(hookIn(sub, join(repo, "pharn", "features", "x", "SPEC.md"), null).status, 0);
@@ -1417,7 +1417,7 @@ test("deny message: the extractor ignores PATH segments, so the tests above are 
 });
 
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
-// 6.23.0 — THE THREE-POSTURE RELAXATION (D1–D9). Every test below runs against the SHIPPED hook path
+// 6.24.0 — THE THREE-POSTURE RELAXATION (D1–D9). Every test below runs against the SHIPPED hook path
 // (`HOOK`, above) — the still-unpatched `.claude/hooks/enforce-writes-scope.cjs` this file always tests.
 // That means EVERY test in this section is EXPECTED TO FAIL until the human applies
 // `.dev/features/writes-scope-run-only/proposed/human-only.patch`, and to PASS once they do — exactly the
@@ -1577,7 +1577,7 @@ test("★ POSTURE MATRIX: the ROOT itself and an out-of-root/other-tree path, ac
 test("★ the ROOT ITSELF ('.') is never allowed as an out-of-project write, in any posture", () => {
   // `relToRoot("")` maps the root itself to `null`, like a true out-of-root path. Before the GATE-2 fix the
   // permissive posture then ALLOWED it (a known quirk); the out-of-project allowance now excludes the root
-  // itself explicitly, so it is denied in every posture, as it was before 6.23.0.
+  // itself explicitly, so it is denied in every posture, as it was before 6.24.0.
   const cwd = seedInstalledProject(tmp());
   assert.equal(hook(cwd, ".").status, 2);
   assert.equal(hook(seedDevRepo(tmp()), ".").status, 2);
@@ -2237,7 +2237,7 @@ test("★ P5: when deny() ITSELF throws, the uncaughtException backstop still ex
 
 // ── L27 per branch, over the enumeration ─────────────────────────────────────────────────────────────────
 
-test("★ L27 per branch: each 6.23.0 remedy is PRESENT in its own case and ABSENT from every other", () => {
+test("★ L27 per branch: each 6.24.0 remedy is PRESENT in its own case and ABSENT from every other", () => {
   const all = everyDenyMessage();
   const where = (re) =>
     all

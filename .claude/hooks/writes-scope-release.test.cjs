@@ -104,14 +104,14 @@ test("✧ a command that never sets a scope is NOT required to release one (the 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
-// CLOSURE (6.23.0): no PRODUCT command keeps the retracted "one posture" phrase.
+// CLOSURE (6.24.0): no PRODUCT command keeps the retracted "one posture" phrase.
 //
-// Before 6.23.0, "absence of a scope file = the fail-closed default-safe-set" was true in EVERY posture,
-// so every setter-invoking command's Final step said so verbatim. Since 6.23.0 that is false for an
+// Before 6.24.0, "absence of a scope file = the fail-closed default-safe-set" was true in EVERY posture,
+// so every setter-invoking command's Final step said so verbatim. Since 6.24.0 that is false for an
 // INSTALLED project outside an open PHARN run (the default there is the newer, more permissive one — see
 // `enforce-writes-scope.cjs`'s own header and `CLAUDE.md`, "Writes-scope"). The eleven PRODUCT commands
-// were reworded; the `pharn-dev-*` commands were deliberately left untouched, because the DEV posture is
-// unchanged byte-for-byte (D1) and the retracted phrase stays TRUE for them.
+// were reworded; the `pharn-dev-*` commands were deliberately left untouched, because the DEV posture's
+// default is unchanged (D1) and the retracted phrase stays TRUE for them.
 //
 // Honest scope, the same narrow kind as every rule above: this pins that the STRING is absent from the
 // product surface. It cannot prove a reworded sentence is itself accurate — only that the specific

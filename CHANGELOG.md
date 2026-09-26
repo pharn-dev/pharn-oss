@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.23.0] - 2026-09-26
+## [6.24.0] - 2026-09-26
 
 ### Added
 
@@ -53,8 +53,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 --anchor` now refuses (exit 2, nothing written) when there is no usable scope to snapshot, so a build can
   no longer open an epoch no scope could ever clear. Roadmap Phase 0.2, approved by the maintainer
   2026-09-25.
-  `SKILLS_VERSION` 6.22.0 → 6.23.0. `MIN_CLI` stays 0.5.0: nothing is relocated, and a CLI that copies
-  `pharn/floor/` per file lands the new script.
+  `SKILLS_VERSION` 6.23.0 → 6.24.0 — this phase was numbered 6.23.0 until `stage-regress-script` (#277)
+  merged first and took that number, so it was renumbered by diff. `MIN_CLI` stays 0.5.0: nothing is
+  relocated, and a CLI that copies `pharn/floor/` per file lands the new script.
   ([`.dev/features/writes-scope-run-only/`](./.dev/features/writes-scope-run-only/))
   - **Review fixes, before release (GATE 2, 2026-09-26).** Every write is now judged at every target it can
     reach, in every posture: the old `path.resolve()` resolution first, then the filesystem's own (a
@@ -77,9 +78,105 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     `.pharn/pharn-ship` now holds an installed project fail-closed until it is removed by hand, and a path
     containing a backslash is refused outside a run. `reconcile-baseline.mjs --anchor` now refuses (exit 2) with no scope set; every shipped
     caller sets one first, so only a caller outside PHARN's own commands is affected.
-  - **Rollback.** Reverting 6.23.0 restores the fail-closed default everywhere; a leftover
+  - **Rollback.** Reverting 6.24.0 restores the fail-closed default everywhere; a leftover
     `.pharn/pharn-ship/` or `.pharn/pharn-review/` marker is inert, because nothing in the older tree
     reads those directories (the loop marker is unchanged and keeps its Stop-guard meaning).
+
+## [6.23.0] - 2026-09-26
+
+### Added
+
+- 2026-09-26: **`/pharn-regress` becomes a THIN CALLER of one tested stage script, `pharn/floor/stage-regress.mjs`,
+  and gains a shared stage-exit contract every future stage script reuses.** `SKILLS_VERSION` 6.22.0 → 6.23.0.
+  `MIN_CLI` stays 0.5.0: no installed path relocates and no existing frontmatter/contract shape breaks.
+  ([`.dev/features/stage-regress-script/`](./.dev/features/stage-regress-script/))
+  - **Why (P7, a measured trigger, not a hypothetical).** A user's own `/pharn-ship` `cost.json` ledgers
+    showed PHARN's own stages taking ~48% of relative cost on large features and ~81% on three small
+    fixes, with `/pharn-regress` alone ~63% of the small fixes. Today's command prescribed one Bash call
+    per gate per side plus ~20 setup/bookkeeping calls, each a full model turn re-reading a 36 KB prompt.
+  - **`pharn/floor/stage-regress.mjs`** (new) runs every deterministic step — argv, `lstat` containment,
+    git, the shelled checkers (`check-plan-spec-agree.mjs`, `check-regress.mjs`), the base-commit install,
+    and the atomic artifact writes — through 13 named phases (`fresh` → … → `render`), and solves the
+    600 s Bash-tool cap with a budget-and-resume protocol: a slow step (the install, or one gate) starts
+    only if it is the first of the invocation or the elapsed time plus its timeout still fits the budget;
+    otherwise the script persists its progress and exits `5` (`continue`) for the pinned `--resume` line to
+    pick up. `pharn/floor/stage-regress-core.mjs` (new, pure) holds the closed rules the old command's prose
+    described: which paths are test files, when the style/format gates are skippable (a shared-config
+    touch), which base-commit lockfile resolves the install command (npm measured; pnpm/yarn/bun labelled
+    UNMEASURED), and how the base ref resolves (`--base` / a dirty tree / `origin/main`'s merge-base /ask).
+  - **`pharn/pharn-contracts/stage-exit.md` + `pharn/floor/stage-exit-core.mjs`** (new): the ONE JSON
+    envelope every stage script emits — `{schema, status, stage, feature}` plus a closed per-status key
+    set (`done`/`refused`/`question`/`continue`/`unusable`) — and the exit-code table (`{0,2,3,4,5}`; `1`
+    included is always a crash, never a verdict). A `question`'s text and every option's label are FIXED,
+    registry-held strings per `(stage, reason_code)`; nothing untrusted is ever interpolated into one. The
+    registry is keyed by stage so a future `stage-verify.mjs` (roadmap Phase 1.2) adds an entry rather than
+    a new file.
+  - **`pharn/floor/render-regression.mjs`** (new, pure) renders `REGRESSION.md` from the verdict JSON, the
+    scope partition and the stage's progress — deterministic code, no longer model-typed prose. It quotes
+    every checker message as fenced DATA; a gate id is quoted inline (never fenced — always preceded by
+    fixed prose on the same line, so it can never sit at column 0 and be read as a heading). Every path
+    the script itself supplies is repo-relative, so `/pharn-loop`'s later commit of the file can never
+    carry an absolute path THAT SCRIPT SUPPLIED (GATE 2 review, M1/M2: narrowed from an earlier draft of
+    this entry, which overclaimed "as fenced DATA" for the gate id and "can never carry an absolute path"
+    without that qualifier — a human's own `--install`/`--gates` text still renders verbatim).
+  - **`pharn/floor/quote-core.mjs`** (new): `dataText`/`quoteData` moved byte-for-byte out of
+    `render-run-report.mjs`, which now re-exports them, so a second renderer can quote untrusted text
+    without pulling in the cost-ledger load graph.
+  - **`.claude/commands/pharn-regress.md`** (rewritten): pins one fresh line
+    (`--feature <name> --timeout-ms 540000 --budget-ms 570000`) and one resume line
+    (`--resume --budget-ms 570000`), and branches on the script's exit code only. Its writes-scope is set
+    to the strictest one the setter can express — `.pharn/pharn-regress/stage.json`, which resolves to
+    `.pharn/**` alone — so no Write-tool write may land outside it while the script runs; the script's own
+    artifact writes happen through `fs`, reached via Bash and stated as such (a **weaker** claim than
+    before for that one property, offset by the **stronger** always-`.pharn/**` scope guarantee).
+  - **`pharn/floor/run-gates.mjs`**: exports `spawnGate` (a `null` results path means no
+    `PHARN_TEST_RESULTS` variable) so the stage script's install step reuses the same
+    process-group/timeout/kill discipline instead of a second implementation.
+  - **`pharn/floor/loop-fresh-core.mjs`**: `DEFAULT_STAMPS.regressHead`/`regressBase` now derive from
+    `stage-regress-core.mjs`'s `REGRESS_PATHS`, the one owner of the stage's scratch layout.
+  - **`.claude/commands/pharn-loop.md`**: a new paragraph beside the stuck-point table maps a regress
+    stage-exit object onto it (`question no-gates` → S4; every other `question` → S10; `refused`/`unusable`
+    → S9; a crash → S9; `continue` stays inside `/pharn-regress`). **Disclosed here (GATE 2 review, A7):**
+    two of those `question` codes are NEW unattended-loop S10 stops that did not exist before this
+    increment, because the old command prose proceeded by model judgment in both cases: `install-unresolved`
+    (a `package.json` with no committed lockfile — common on small projects and libraries that never run
+    `npm ci` from CI) and `tests-unresolved` (a feature whose test universe is genuinely empty). A loop run
+    over either project shape now stops at S10 on its first iteration where it previously completed.
+  - **`.claude/commands/pharn-ship.md`**: the stale "`/pharn-regress`'s Step 4a" citation is corrected (its
+    gate discovery is tested code now, not command prose). **Narrowed here (GATE 2 review, F2 — an earlier
+    draft of this entry overclaimed this):** a sentence states that every `/pharn-regress` `refused` stop,
+    and every `unusable` stop raised at or after the feature slug parses and the containment walk passes,
+    leaves no `regression-report.json`; the residual — a stop before that point (a bad/missing `--feature`,
+    or `path-containment` itself), or a genuine crash — may leave an earlier run's report in place, which is
+    exactly why the existing missing-report → STOP check is a MEMBERSHIP test and not merely "no file was
+    written this run".
+  - **The weaker artifact-write claim, stated plainly:** before this change, fix #7's hook PREVENTED a
+    Write-tool write outside the two declared regress artifacts. Now the script writes them through `fs`,
+    outside that hook (an intentional, declared L19 pattern). A write anywhere else is DETECTED, never
+    PREVENTED, by `/pharn-verify`'s `reconcile` gate — unchanged from how every other Bash-write stage
+    script in this repo already works.
+  - **The unchanged bound, carried forward rather than closed:** `regress-failed-install-false-green`. A
+    failed base-commit install can turn a base gate red, so a gate that does is classified `pre_existing`
+    below rather than blamed on the feature, and the verdict JSON `/pharn-ship`/`/pharn-loop` read still says
+    `no-regressions` — a possible false green on exactly the gates the install broke. **Narrowed here (GATE
+    2 review, A6 — an earlier draft of this entry overclaimed "every base gate" and "first line"):** the
+    warning is rendered above `REGRESSION.md`'s verdict line (not literally its first line — the title and
+    base still precede it), and it names the actual count of gates classified `pre_existing`, never an
+    unconditional "every base gate went red". Read by no machine consumer either way. This increment
+    neither creates nor closes it (amendment A2).
+  - **Resuming after a kill, and the budget clock (GATE-2 review rounds 1–2).**
+    - The script persists its progress at the top of every phase from `drain-head` through `verdict`, not
+      only at a budget stop. So a hard kill (a Bash-tool timeout, say) leaves a checkpoint, and `--resume`
+      re-runs only the interrupted phase. The command now routes a Bash-tool timeout to that one resume.
+    - That includes a kill during the base worktree's `git worktree add`. git leaves the new worktree
+      locked and half-populated, and the script now removes it with a double `--force` before re-adding;
+      a test kills a real `add` mid-checkout and resumes it to `done`.
+    - The same clearing lets the next fresh start remove a base worktree someone locked, which it
+      previously failed on with `git-failed`.
+    - A resumed run no longer reports a worktree-removal failure that did not happen.
+    - The budget's `elapsed` now starts at the top of the invocation, so its opening fast work counts
+      against `--budget-ms`. Node's startup, and the fast work after the last permitted slow step, stay
+      uncounted — a named bound in `stage-exit.md`.
 
 ## [6.22.0] - 2026-09-25
 

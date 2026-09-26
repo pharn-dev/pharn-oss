@@ -1,5 +1,5 @@
 diff --git a/.claude/hooks/enforce-writes-scope.cjs b/.claude/hooks/enforce-writes-scope.cjs
-index 0d2313c..ca78815 100644
+index 0d2313c..6c8c35e 100644
 --- a/.claude/hooks/enforce-writes-scope.cjs
 +++ b/.claude/hooks/enforce-writes-scope.cjs
 @@ -4,19 +4,83 @@
@@ -15,15 +15,15 @@ index 0d2313c..ca78815 100644
 -// scope is denied, not laundered by an innocent-looking name. Residual: this resolves EXISTING symlink
 -// targets; a broken symlink (target absent) falls back to the lexical path — a narrow
 -// scope-escape-to-create, outside the reported committed-symlink vector and no worse than prior behavior.
-+// ============================== THREE POSTURES (6.23.0) ==============================
++// ============================== THREE POSTURES (6.24.0) ==============================
 +//
 +// Read at ROOT (below). FAIL-CLOSED remains the default everywhere a positive INSTALL signal is absent:
 +//
 +//   DEV posture (`.dev/floor/` present AND no `pharn.config.json` `skillsVersion`): the no-scope default,
-+//   the scope rules and every deny message are the pre-6.23.0 ones. Run markers are never read. Three
++//   the scope rules and every deny message are the pre-6.24.0 ones. Run markers are never read. Three
 +//   changes reach it, each in the DENY direction only: a write through a DANGLING symlink, or through a
 +//   symlink followed by `..`, is also judged at the target the filesystem reaches (see RESOLUTION, below);
-+//   and a guard error denies (see A GUARD ERROR DENIES). Every write the pre-6.23.0 hook denied is still
++//   and a guard error denies (see A GUARD ERROR DENIES). Every write the pre-6.24.0 hook denied is still
 +//   denied here, with a byte-identical message.
 +//
 +//   UNSIGNALLED posture (neither signal): the same as DEV, on its own smaller default-safe-set. A tree with
@@ -34,7 +34,7 @@ index 0d2313c..ca78815 100644
 +//   a set scope is authoritative, exactly as before. With NO scope set, the default depends on whether a
 +//   PHARN RUN is open (`scanRuns()` below):
 +//     - a run open (`.pharn/<pharn-loop|pharn-review|pharn-ship>/<name>/active.json` exists, lstat'd,
-+//       within 24h either direction, OR the scan cannot tell) → the pre-6.23.0 fail-closed default
++//       within 24h either direction, OR the scan cannot tell) → the pre-6.24.0 fail-closed default
 +//       (`pharn/features/**` + `.pharn/**`);
 +//     - no run open → PERMISSIVE. Inside the project it denies PHARN's own installed surface — `pharn/**`
 +//       except `pharn/features/**`, `.claude/**` and `pharn.config.json` (case-folded, see `toKey()` /
@@ -58,7 +58,7 @@ index 0d2313c..ca78815 100644
 +// Write-tool edit of it would be a self-escalation (see `set-writes-scope.cjs`'s CONTROL notion for the
 +// setter-side half of that story).
 +//
-+// A GUARD ERROR DENIES (6.23.0). The decision runs inside a `try` whose `catch` denies with a FIXED message,
++// A GUARD ERROR DENIES (6.24.0). The decision runs inside a `try` whose `catch` denies with a FIXED message,
 +// and a process-wide `uncaughtException` handler, registered before anything else runs, exits 2 for any
 +// throw outside it (the payload decode, or deny() itself failing while it writes). An uncaught throw used
 +// to exit 1, which Claude Code treats as NON-BLOCKING: the write proceeded, a fail-OPEN. The handler only
@@ -72,7 +72,7 @@ index 0d2313c..ca78815 100644
 +// on a free-text/tainted field — a marker's CONTENT is never read, only its existence and mtime).
 +//
 +// RESOLUTION — every path is judged at EVERY target it can reach, and the write is denied if ANY is denied.
-+//   (1) resolveWriteTarget(): the pre-6.23.0 resolution, byte-for-byte — `path.resolve()` (which collapses
++//   (1) resolveWriteTarget(): the pre-6.24.0 resolution, byte-for-byte — `path.resolve()` (which collapses
 +//       `..` LEXICALLY) then the realpath of the nearest existing ancestor. Judged FIRST, over every path
 +//       of the payload, so every write the old hook denied is denied with the old message.
 +//   (2) resolvePhysicalTarget(): the filesystem's resolution — segment by segment, `..` applied to the
@@ -86,7 +86,7 @@ index 0d2313c..ca78815 100644
 +//       both the dev and the install posture, before this was written (GATE-2 fix, 2026-09-26).
 +//   A path that does not run through a symlink resolves to the same target both ways, so it is judged once.
 +//
-+// BACKSLASHES (6.23.0, permissive posture only). The reserved-surface test folds the path with `toKey()`,
++// BACKSLASHES (6.24.0, permissive posture only). The reserved-surface test folds the path with `toKey()`,
 +// a deliberate copy of protect-trusted-paths.cjs's, and that fold reads `\` as `/` and collapses `..` — so
 +// on a `/` system `.claude/commands/x\..\..\..\src\y.md`, a file INSIDE `.claude/commands/`, folds to
 +// `src/y.md`. Under a deny list a normalisation that changes which file a path names can only fail open
@@ -101,7 +101,7 @@ index 0d2313c..ca78815 100644
  // workTreeRoot() is a DELIBERATE COPY of the function of the same name in protect-trusted-paths.cjs — a
  // shared module would be a new control-surface file. A ✧ test pins the two bodies byte-equal, and a
 -// parity matrix executes both hooks over the same fixtures (lessons-learned L31).
-+// parity matrix executes both hooks over the same fixtures (lessons-learned L31). toKey() (new in 6.23.0)
++// parity matrix executes both hooks over the same fixtures (lessons-learned L31). toKey() (new in 6.24.0)
 +// is a SECOND such deliberate copy, from the same file, for the same reason.
  //
  // Bounds, stated rather than implied (P0): a `.git` entry is trusted as a boundary without being verified
@@ -125,7 +125,7 @@ index 0d2313c..ca78815 100644
 -// the old message hinting that the cause was a run that already ended. The message therefore reports
 -// `set_by` / `set_at` and names the real remedy (`set-writes-scope.cjs --clear`). This is PROSE for a
 -// human — it changes no verdict, and nothing here is a new guarantee.
-+// RUN MARKERS ARE READ, NEVER PARSED (6.23.0). `scanRuns()` tests PRESENCE (`lstat`, never followed — a
++// RUN MARKERS ARE READ, NEVER PARSED (6.24.0). `scanRuns()` tests PRESENCE (`lstat`, never followed — a
 +// torn file, a directory, or a dangling link at that path still counts, fail-closed) and AGE (mtime within
 +// 24h of now, in EITHER direction — the same symmetric ceiling `require-loop-record.cjs`'s
 +// `AGE_CEILING_MS` uses for its own marker, so a loop run is "over" at the same age for both guards). The
@@ -149,7 +149,7 @@ index 0d2313c..ca78815 100644
 -// remedies anyway ("add it to `writes:`", "restart the command", "release the stale scope"), none of which
 -// is reachable, while the one route that does work for scratch — Bash, which PreToolUse never sees — went
 -// unnamed. That trained the exact bypass this guard exists to prevent, undirected.
-+// RESERVED MATCHING IS CASE-FOLDED (6.23.0). The permissive posture is a DENY list, and a case-variant
++// RESERVED MATCHING IS CASE-FOLDED (6.24.0). The permissive posture is a DENY list, and a case-variant
 +// spelling that misses a deny list is a fail-OPEN (on a case-insensitive/APFS volume, `PHARN/floor/x.mjs`
 +// IS `pharn/floor/x.mjs`). `toKey()` folds Unicode (NFC), strips a Windows trailing dot/space per segment,
 +// and case-folds via `toUpperCase().toLowerCase()` (full case folding, not `toLowerCase()` alone). The
@@ -168,7 +168,7 @@ index 0d2313c..ca78815 100644
 +// whichever default is live, so a command that finished and left `.pharn/writes-scope.json` behind is
 +// STRICTER than no scope at all: paths the default PERMITS start exiting 2 in later sessions, with nothing
 +// in the old message hinting that the cause was a run that already ended. The message therefore reports
-+// `set_by` / `set_at` and names the real remedy (`set-writes-scope.cjs --clear`); since 6.23.0, when an
++// `set_by` / `set_at` and names the real remedy (`set-writes-scope.cjs --clear`); since 6.24.0, when an
 +// OPEN RUN — not a scope — is what is holding the fail-closed default in an installed project, the message
 +// instead lists each open marker (path, age) and its own close command, or names the run-state directory
 +// it could not read. This is PROSE for a human — it changes no verdict, and nothing here is a new guarantee.
@@ -181,7 +181,7 @@ index 0d2313c..ca78815 100644
 +// ROOT-RELATIVITY SPLIT (why denyMessage() has FIVE bodies, up from three). Every scope entry — a declared
 +// `writes:` path or a DEFAULT_SAFE_SET glob — is ROOT-RELATIVE, so for a path relToRoot() cannot express
 +// that way NO scope can ever authorize the write. `in-repo` / `out-of-root` / `other-tree` are that
-+// original split. `reserved` and `malformed` are NEW (6.23.0), for the two denials that exist only in the
++// original split. `reserved` and `malformed` are NEW (6.24.0), for the two denials that exist only in the
 +// install posture and have NOTHING to do with a missing scope declaration — offering `writes:` advice for a
 +// malformed record would be locally well-formed and globally wrong, the exact defect the three-way split
 +// was created to stop recurring.
@@ -249,7 +249,7 @@ index 0d2313c..ca78815 100644
 -// tail. Deterministic; no LLM. A new file whose ancestors contain no symlink resolves to its lexical
 -// path, so ordinary in-scope writes are unaffected. A relative path is relative to the CWD — what the
 -// payload means — never to ROOT.
-+// RESOLUTION (1) — the pre-6.23.0 resolution, unchanged (see the header, RESOLUTION). Canonicalize a
++// RESOLUTION (1) — the pre-6.24.0 resolution, unchanged (see the header, RESOLUTION). Canonicalize a
 +// (possibly not-yet-existent) write target through symlinks: realpath the nearest existing ancestor —
 +// which resolves any committed symlink at any depth — then re-append the missing tail. Deterministic; no
 +// LLM. A new file whose ancestors contain no symlink resolves to its lexical path, so ordinary in-scope
@@ -367,14 +367,14 @@ index 0d2313c..ca78815 100644
  
  const SCOPE_FILE = ".pharn/writes-scope.json";
  
-+// The scope file's STATE: absent, malformed or valid. Before 6.23.0 absence and malformation were one
++// The scope file's STATE: absent, malformed or valid. Before 6.24.0 absence and malformation were one
 +// fallback; D4 needs them apart, because in the install posture a MALFORMED record denies everything while
 +// an ABSENT one takes the run-marker ladder. Only a clean ENOENT is absence: ENOTDIR (`.pharn` itself is a
 +// file) cannot confirm absence any more than any other error can, so it is malformed. The target must be
 +// a REGULAR file before it is read (statSync follows a link): a FIFO used to hang this hook, and a
 +// directory or a dangling link cannot be read anyway. A plain object is carried as `record` even when its
 +// `scope` is not an array, so the dev/unsignalled message keeps the origin line and the stale-scope
-+// bullet the pre-6.23.0 message showed for that exact shape (GATE-2 review, minor 1).
++// bullet the pre-6.24.0 message showed for that exact shape (GATE-2 review, minor 1).
 +function readScopeFileState() {
 +  const abs = path.resolve(ROOT, SCOPE_FILE);
 +  try {
@@ -401,7 +401,7 @@ index 0d2313c..ca78815 100644
 +  return { kind: "valid", record, scope: record.scope.filter((s) => typeof s === "string") };
 +}
 +
-+// ============================== run markers — presence + age only (6.23.0) ==============================
++// ============================== run markers — presence + age only (6.24.0) ==============================
 +const RUN_AGE_CEILING_MS = 24 * 60 * 60 * 1000;
 +// The closed set of state directories this guard reads, and how to CLOSE each one's marker. `pharn-loop`
 +// is owned by require-loop-record.cjs (unchanged); the other two are owned by pharn/floor/run-marker.mjs.
@@ -489,7 +489,7 @@ index 0d2313c..ca78815 100644
 +  );
 +}
 +
-+// ============================== reserved-path matching (6.23.0) — the permissive posture's deny list ===
++// ============================== reserved-path matching (6.24.0) — the permissive posture's deny list ===
 +// Fold a path to its comparison key: forward slashes, `./` and `a/../` collapsed, Unicode normalized,
 +// trailing dots/spaces stripped per segment, case folded. Lexical only — never a realpath. A DELIBERATE
 +// COPY of protect-trusted-paths.cjs's function of the same name (see the header) — pinned byte-equal.
@@ -701,7 +701,7 @@ index 0d2313c..ca78815 100644
 +
 +  // Not-inside-the-root: the scope has no jurisdiction here, so EVERY in-repo remedy is unreachable. Outside
 +  // the install posture — and inside it, for a path the permissive default would not allow either — the body
-+  // is the pre-6.23.0 one, whose "releasing the scope cannot change this verdict" is then true.
++  // is the pre-6.24.0 one, whose "releasing the scope cannot change this verdict" is then true.
 +  if (branch === "out-of-root") {
 +    const why = !install
 +      ? "Re-scoping, widening or releasing the scope cannot change this verdict.\n"
@@ -836,7 +836,7 @@ index 0d2313c..ca78815 100644
 +    } else if (scopeState.kind === "malformed" && install) {
 +      mode = "deny-all"; // D4 — the install posture only
 +    } else if (!install) {
-+      mode = "safeset"; // dev/unsignalled: the pre-6.23.0 fallback, absent or malformed alike
++      mode = "safeset"; // dev/unsignalled: the pre-6.24.0 fallback, absent or malformed alike
 +      record = scopeState.record || null;
 +    } else {
 +      runsInfo = scanRuns(ROOT); // install, no scope record: read only when it matters
@@ -881,7 +881,7 @@ index 0d2313c..ca78815 100644
 +      }
 +    };
 +
-+    // PASS 1 — resolution (1) over EVERY path first, so any write the pre-6.23.0 hook denied is denied here
++    // PASS 1 — resolution (1) over EVERY path first, so any write the pre-6.24.0 hook denied is denied here
 +    // with the same message. PASS 2 — resolution (2), only where it reaches a different target.
 +    const lexical = writePaths.map((p) => resolveWriteTarget(p));
 +    writePaths.forEach((p, i) => judge(p, lexical[i], false));
@@ -895,7 +895,7 @@ index 0d2313c..ca78815 100644
  }
  
 diff --git a/.claude/hooks/set-writes-scope.cjs b/.claude/hooks/set-writes-scope.cjs
-index 7bae08d..d9d48c2 100644
+index 7bae08d..33f86b0 100644
 --- a/.claude/hooks/set-writes-scope.cjs
 +++ b/.claude/hooks/set-writes-scope.cjs
 @@ -13,14 +13,21 @@
@@ -911,7 +911,7 @@ index 7bae08d..d9d48c2 100644
 -// refusal is louder than a silently-honored precedence rule. Absent file -> exit 0, no output change
 -// (idempotent), so a command's last step is safe to run twice or after an early abort.
 +// --clear DELETES .pharn/writes-scope.json, returning enforce-writes-scope.cjs to its DEFAULT. Since
-+// 6.23.0 that default is no longer always the fail-closed DEFAULT_SAFE_SET: in a dev checkout, an
++// 6.24.0 that default is no longer always the fail-closed DEFAULT_SAFE_SET: in a dev checkout, an
 +// unsignalled tree, or an installed project with a PHARN run open it is (unchanged); in an INSTALLED
 +// project with NO run open it is instead the newer, more permissive default (it denies PHARN's own
 +// installed surface and its own scope file and allows the rest of the project — the whole rule, including
@@ -940,7 +940,7 @@ index 7bae08d..d9d48c2 100644
      process.exit(0);
    }
 diff --git a/LIMITS.md b/LIMITS.md
-index 55ddb69..6ec2e85 100644
+index 55ddb69..fe5eff5 100644
 --- a/LIMITS.md
 +++ b/LIMITS.md
 @@ -77,7 +77,9 @@ but the gate's integrity here rests on _who may write the enum field_, and in pu
@@ -964,7 +964,7 @@ index 55ddb69..6ec2e85 100644
 +  root carries no `skillsVersion` of its own, it keeps the fail-closed default outside a run as well:
 +  friction, not a hole.
 +- **In an installed project, `enforce-writes-scope.cjs` is fail-closed only while PHARN is working
-+  (6.23.0).** With no scope set and no open `/pharn-ship`, `/pharn-loop` or `/pharn-review` run, it denies
++  (6.24.0).** With no scope set and no open `/pharn-ship`, `/pharn-loop` or `/pharn-review` run, it denies
 +  PHARN's installed surface — `pharn/**` except `pharn/features/**`, `.claude/**` and `pharn.config.json`,
 +  matched case-folded, with the `pharn/features/` exception matched as written, so a case or trailing-dot
 +  variant of it is denied — plus its own input `.pharn/writes-scope.json` and, on a system whose separator
@@ -973,12 +973,12 @@ index 55ddb69..6ec2e85 100644
 +  Claude Code loads at session start (`CLAUDE.md`, `AGENTS.md`, `.mcp.json`), so a write made outside a run
 +  can shape later runs. `protect-trusted-paths.cjs` is unchanged and still denies its own set in every
 +  posture.
-+- **Outside the project, that permissive default allows exactly two places (6.23.0, the maintainer's
++- **Outside the project, that permissive default allows exactly two places (6.24.0, the maintainer's
 +  GATE-2 decision).** A path under Claude Code's memory folders — `<claude-config-dir>/projects/*/memory/**`,
 +  where the config dir is `$CLAUDE_CONFIG_DIR` when set, else `~/.claude` — or under a temp root, the OS
 +  temp directory (`os.tmpdir()`, which honours `$TMPDIR`) or `/tmp`, and never one inside another git
 +  tree. Every other out-of-project path stays denied, as every out-of-project path was in every posture
-+  before 6.23.0: dotfiles, `~/.ssh`, `~/.claude/settings*.json`, `~/.claude.json`, `~/.claude/hooks/`,
++  before 6.24.0: dotfiles, `~/.ssh`, `~/.claude/settings*.json`, `~/.claude.json`, `~/.claude/hooks/`,
 +  LaunchAgents. The two roots are read from the hook's environment, so an environment that points
 +  `CLAUDE_CONFIG_DIR`, `HOME` or `TMPDIR` at a broad directory widens them.
 +- **A run is open while `.pharn/<pharn-loop|pharn-ship|pharn-review>/<name>/active.json` exists with a
@@ -989,7 +989,7 @@ index 55ddb69..6ec2e85 100644
 +  keeps every session in the tree fail-closed for up to 24 h unless it is closed, and `touch` extends it.
 +  The posture needs `skillsVersion` at the root the guard judges. A malformed `.pharn/writes-scope.json`
 +  denies every write in an installed project.
-+- **Every write is judged at every target it can reach (6.23.0), in every posture.** The guard resolves a
++- **Every write is judged at every target it can reach (6.24.0), in every posture.** The guard resolves a
 +  path both the way `path.resolve()` does and the way the filesystem does — following a dangling symlink
 +  to the target it names, and applying `..` to a symlink's real parent — and denies the write if either
 +  target is denied. In a dev checkout or an unsignalled tree that, and a guard error now denying instead

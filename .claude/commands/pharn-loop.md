@@ -150,7 +150,7 @@ absent ⇒ `M = 3`). A config-file cap key is deferred (P7): `check-loop.mjs` re
    ```
 
    This writes `.pharn/pharn-loop/<name>/active.json`, binding the run to this session's
-   `CLAUDE_CODE_SESSION_ID`. **Since 6.23.0 this SAME marker also holds `enforce-writes-scope.cjs`'s
+   `CLAUDE_CODE_SESSION_ID`. **Since 6.24.0 this SAME marker also holds `enforce-writes-scope.cjs`'s
    fail-closed default standing in an installed project** — the write guard reads only its presence and
    age (never its `session_id` or any other content), so an installed project's default stays today's
    fail-closed set for as long as this marker is fresh, exactly as it does for `/pharn-ship` and
@@ -227,6 +227,26 @@ fails in the safe direction — it stops rather than guesses.
 | S11 | a stage's evidence is stale or missing after the stage claims to have run, and `check-loop-fresh.mjs` will not offer another re-run (Step 5)                                                                         | stop `blocked: stale-evidence` — never read a stop from evidence about another tree                                                     |
 | S12 | `/pharn-test` could not run the AC tests because a criterion's level has no test runner with per-test results — decided by the pinned `check-red-run.mjs --preflight` exit 1 (Step 4), never by relayed text         | stop `blocked: no-test-runner` — its last line (the setup suggestion) goes into `### next_steps` as DATA; never a nested run            |
 | S13 | the AC evidence changed or is missing after `/pharn-test` — decided by `check-loop-fresh.mjs` `reason_code` `ac-evidence-invalid` or `check-loop.mjs` `terminal_cause` `ac-evidence` (Step 5), never by relayed text | stop `blocked: ac-evidence-invalid` — a rebuild cannot restore it; a person sets the build aside and re-runs `/pharn-test`, or re-plans |
+
+**`/pharn-regress`'s stage-exit mapping (since `stage-regress-script`, 6.23.0).** `/pharn-regress` is now a
+thin caller of `pharn/floor/stage-regress.mjs`, which reports one `pharn-stage-exit/1` object per exit
+(`pharn/pharn-contracts/stage-exit.md`). Its object maps onto the table above by a fixed rule, a closure
+test requires every `regress` `question` code to be named here:
+
+- `question no-gates` → **S4** (the reason the object's fixed text names covers what S4's own trigger
+  already says: no `--gates`, or the allowlist ∩ scripts empty or e2e-only, or every discovered gate
+  skipped by the config-touch rule);
+- every other `question` (`base-unresolved`, `install-unresolved`, `tests-unresolved`) → **S10**;
+- `refused` and `unusable` → **S9**;
+- a crash (an exit outside `{0, 2, 3, 4, 5}`) → **S9**;
+- `continue` is handled **inside** `/pharn-regress` (it re-runs the pinned resume line itself) and never
+  reaches the loop as a stuck point.
+
+**A7 (GATE 2 review): `install-unresolved` and `tests-unresolved` are NEW S10 stops as of 6.23.0.** The
+pre-6.23.0 command prose proceeded by model judgment in both cases; a project shape that used to complete
+an unattended `/pharn-loop` iteration can now stop here — most commonly a `package.json` with no committed
+lockfile (small projects and libraries often have none), or a feature whose test universe is genuinely
+empty. See CHANGELOG [6.23.0] for the full disclosure.
 
 **S9 and S11 are different failures, and the difference decides the row.** S9 is a stage that **says** it
 refused. S11 is evidence on disk that does not match the tree, whatever the stages said: a skipped or
@@ -978,11 +998,13 @@ sits outside the `PreToolUse` gate entirely (PHARN's own build-loop lesson **L19
 the floor forces it, and an early abort skips it. It degrades safely: the next command's first-step
 **set** overwrites a leftover scope, which is exactly today's behavior. The floor guarantee is
 unchanged and belongs to the **reader**, not to this step. **Absence of a scope file no longer means one
-posture (6.23.0):** in a dev checkout or an unsignalled tree it is still the fail-closed
+posture (6.24.0):** in a dev checkout or an unsignalled tree it is still the fail-closed
 default-safe-set; in an **installed** project (`pharn.config.json` carries `skillsVersion`) it is
 fail-closed the same way only while a `/pharn-ship`, `/pharn-loop` or `/pharn-review` run is open —
-outside a run it instead denies only PHARN's own installed surface and allows the rest (`CLAUDE.md`,
-"Writes-scope"). Never write "the command cleaned up"; write that it **declares** the release step.
+outside a run it is the permissive default instead: it denies PHARN's own installed surface and its scope
+file, allows your ordinary source, and allows only two places outside the project (`CLAUDE.md`,
+"Writes-scope", has the whole rule). Never write "the command cleaned up"; write that it **declares** the
+release step.
 
 **Then close the run for the Stop guard** — after every write, and after the Step 7 summary is written:
 
@@ -992,7 +1014,7 @@ node .claude/hooks/require-loop-record.cjs --close '<name>'
 
 It removes `.pharn/pharn-loop/<name>/active.json`. **ADVISORY**, exactly as the release above: an early
 abort skips it, and a leftover marker degrades safely for the **Stop guard** — a present `LOOP.md` and the
-24 h ceiling both make THAT guard inert. **For the write guard this is narrower (6.23.0): only `--close` or
+24 h ceiling both make THAT guard inert. **For the write guard this is narrower (6.24.0): only `--close` or
 the 24 h ceiling releases a leftover marker — a present `LOOP.md` does NOT**, because
 `enforce-writes-scope.cjs` reads only the marker's presence and age, never the feature directory's
 contents (see the hook's own header, "RUN MARKERS ARE READ, NEVER PARSED"). So in an **installed** project

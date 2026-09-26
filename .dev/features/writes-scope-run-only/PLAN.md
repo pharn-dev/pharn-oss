@@ -315,7 +315,7 @@ unusable record), with "no usable writes-scope at .pharn/writes-scope.json — r
 first". An explicit `{"scope": []}` is a scope and anchors. Both shipped callers (`/pharn-build`,
 `/pharn-dev-build`) set the scope first, and `check-bash-reconcile.test.mjs` already pins that order.
 `/pharn-build` Step 3's HALT sentence is widened to "a non-zero exit from either line". The contract's
-`scope_snapshot` row becomes "an object; `null` only in a baseline anchored before 6.23.0".
+`scope_snapshot` row becomes "an object; `null` only in a baseline anchored before 6.24.0".
 
 ### 10. Docs (D8)
 
@@ -324,7 +324,7 @@ first". An explicit `{"scope": []}` is a scope and anchors. Both shipped callers
   list names the run markers for an install (in this dev repo the guard never reads them). The Commands block
   gains `run-marker.mjs` and the anchor refusal, and "two runtime signals" becomes three.
 - `README.md`: the guarantee row and the "does not cover your source" bullet rewritten and probed (L37);
-  badge 6.23.0; the generated inventory regenerated.
+  badge 6.24.0; the generated inventory regenerated.
 - `pharn/floor/README.md`: the enforce section states the postures; the `README.md → exit 2` example is
   labelled dev-repo or in-run, with the install-outside-a-run exit beside it.
 - The Final step of the 11 setter-invoking product commands (plus `/pharn-review`'s Step 0): two phrases
@@ -342,7 +342,7 @@ corrected two quantifiers — G4, G6):
 - the subpath bullet gains: "…and, because that root carries no `skillsVersion`, it keeps the fail-closed
   default outside a run as well: friction, not a hole."
 - a new bullet: "**In an installed project, `enforce-writes-scope.cjs` is fail-closed only while PHARN is
-  working (6.23.0).** With no scope set and no open `/pharn-ship`, `/pharn-loop` or `/pharn-review` run, it
+  working (6.24.0).** With no scope set and no open `/pharn-ship`, `/pharn-loop` or `/pharn-review` run, it
   denies PHARN's installed surface — `pharn/**` except `pharn/features/**`, `.claude/**` and
   `pharn.config.json`, matched case-folded — and its own input `.pharn/writes-scope.json`, and allows every
   other path inside the project. Outside the project it allows a path that lies in no git tree, such as
@@ -363,12 +363,14 @@ corrected two quantifiers — G4, G6):
 
 ### 11. Version (D9)
 
-**Minor: 6.22.0 → 6.23.0** — a newly shipped floor script (`run-marker.mjs`) and a new guard posture. Not
+**Minor: 6.23.0 → 6.24.0** (planned as 6.22.0 → 6.23.0; renumbered by diff after `stage-regress-script`
+merged first as 6.23.0 — see "Amended at GATE 2") — a newly shipped floor script (`run-marker.mjs`) and a new guard posture. Not
 major: no contract, finding shape or frontmatter change invalidates an install, and the anchor refusal only
 affects a caller that anchors with no scope, while every shipped caller sets one first. **`MIN_CLI` stays
 0.5.0**: nothing is relocated, and a CLI that copies `pharn/floor/` per file lands the new script.
 `settings.json` is unchanged, so an install needs no wiring edit. A sibling phase (`stage-regress-script`)
-also bumps; whichever merges second renumbers (by diff, never by memory).
+also bumps; whichever merges second renumbers (by diff, never by memory). It merged first (#277, 6.23.0), so
+this phase renumbered to 6.24.0 (see "GATE-2 rulings", below).
 
 **How `pharn update` reaches an install — ADVISORY, not verified this run** (amended at grill — G9): per the
 roadmap's 0.1 pre-check (pharn-cli 0.5.0 @765eec4, recorded 2026-09-25, not re-measured here), `pharn update`
@@ -387,7 +389,7 @@ them):
   `node .claude/hooks/set-writes-scope.cjs --clear` releases it;
 - `reconcile-baseline.mjs --anchor` now refuses (exit 2) with no scope set; every shipped caller sets one
   first, so only a caller outside PHARN's commands is affected;
-- rollback: reverting 6.23.0 restores the fail-closed default everywhere; a leftover
+- rollback: reverting 6.24.0 restores the fail-closed default everywhere; a leftover
   `.pharn/pharn-ship/` or `.pharn/pharn-review/` marker is inert, because nothing in the older tree reads
   those directories (the loop marker is unchanged and keeps its Stop-guard meaning).
 
@@ -434,8 +436,8 @@ them):
 - `.claude/commands/pharn-memory-promote.md` — EDIT. Final-step phrasing — layer product command
 - `CLAUDE.md` — EDIT. "Writes-scope" and the Commands block (§10) — layer repo-meta
 - `README.md` — EDIT. Badge, guarantee row, the default bullet by hand; the generated inventory by `npm run docs:generate` (a Bash write) — layer repo-meta
-- `CHANGELOG.md` — EDIT. `## [6.23.0]` with the migration note (§11) — layer repo-meta
-- `SKILLS_VERSION` — EDIT. `6.22.0` → `6.23.0` — layer repo-meta
+- `CHANGELOG.md` — EDIT. `## [6.24.0]` with the migration note (§11) — layer repo-meta
+- `SKILLS_VERSION` — EDIT. `6.23.0` → `6.24.0` — layer repo-meta
 - `.dev/features/writes-scope-run-only/handoff/enforce-writes-scope.cjs` — NEW. Transient staging source for the patch, deleted after generation — layer dev artifact
 - `.dev/features/writes-scope-run-only/handoff/set-writes-scope.cjs` — NEW. Transient staging source — layer dev artifact
 - `.dev/features/writes-scope-run-only/handoff/limits-edits.json` — NEW. Transient: the `LIMITS.md` edits as `[{find, replace}]`, each `find` required to match exactly once — layer dev artifact
@@ -653,6 +655,12 @@ cannot tell (a scan error, a torn record), it fails closed.
 - `dev-posture-pin` (grill G11) — a one-assertion test that this repository's own tree computes the dev
   posture (no `skillsVersion` in its `pharn.config.json`, `.dev/floor/` present), so an accidental flip to the
   now-permissive install posture fails CI. Not built: no observed failure (P7).
+- `protect-backslash-separator` (GATE-2 fix pass, 2026-09-26) — `protect-trusted-paths.cjs`'s segment walk
+  reads `\` as a separator on every platform; on a `/` system a backslash is a file-name character. Its second
+  check, on the `path.resolve()` target, denied every backslash case measured in this increment, but a
+  pre-existing symlink whose NAME contains a backslash can still make the walk miss a trusted doc. The same
+  review `enforce-writes-scope.cjs` got here. Not built: that hook is human-only and outside this plan, and
+  there is no observed failure (P7).
 - `reconcile-import-crash-label` (grill G13) — `check-bash-reconcile.mjs` gains a second static import
   (`run-marker.mjs`); a module that cannot load makes node exit 1, which is the checker's `ESCAPE` code. That
   fails the stage in the safe direction but names the wrong cause — the class `check-loop-fresh.mjs` closed in
@@ -757,6 +765,19 @@ All nine minor items plus B1/B2/S1 are implemented in the `handoff/` copies befo
 and `proposed/human-only.sha256` are regenerated by a re-run of the verification runner (Build procedure step
 5), never by editing the live hooks or `LIMITS.md` directly.
 
+### GATE-2 rulings (orchestrator, 2026-09-26)
+
+A model decision under the maintainer's delegation, not a human approval, recorded as given:
+
+- **The backslash rule is APPROVED.** In the permissive posture — an installed project, no scope, no PHARN
+  run open — any path containing `\` is denied. It was added by the fix pass below (found while verifying B1)
+  and only ever adds denials.
+- **Merge order.** `stage-regress-script` (#277) merged first and released **6.23.0**, so this phase becomes
+  **6.24.0** and merges next; `ship-quick-mode` becomes 6.25.0 after it. This phase merged `origin/main`
+  (`1524c6f`) — a merge, not a rebase, so nothing is force-pushed — and renumbered every version string it
+  had added from 6.23.0 to 6.24.0, found by diff; main's own 6.23.0 references are unchanged.
+- **The follow-up `protect-backslash-separator`** is noted and not built here (Named follow-ups, above).
+
 ### As built — the GATE-2 fix pass (2026-09-26)
 
 - stage model: opus — set by the maintainer's instruction, overriding pharn.config.json's sonnet for
@@ -769,7 +790,7 @@ and `proposed/human-only.sha256` are regenerated by a re-run of the verification
     (allowed) while the kernel wrote `pharn/floor/new.mjs` — in the **dev** posture as well as the install
     one — and `a\b/../.claude/commands/evil.md` was allowed in the install posture and created a command
     file. HEAD denied all of them. As built, every path is judged at BOTH targets and denied if either is
-    denied: first the pre-6.23.0 resolution (`path.resolve()` + realpath of the nearest existing ancestor),
+    denied: first the pre-6.24.0 resolution (`path.resolve()` + realpath of the nearest existing ancestor),
     over every path, so every write HEAD denied is denied with HEAD's message; then the filesystem's own
     resolution (segment-wise, a dangling link followed, `..` applied to a symlink's real parent), splitting
     on the platform's separators only. In the dev and unsignalled postures the only verdict changes are

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// pharn/floor/run-marker.mjs — the /pharn-ship and /pharn-review RUN-MARKER writer (6.23.0, D3).
+// pharn/floor/run-marker.mjs — the /pharn-ship and /pharn-review RUN-MARKER writer (6.24.0, D3).
 //
-// WHY THIS EXISTS. Since 6.23.0, `enforce-writes-scope.cjs` relaxes its no-scope default in an
+// WHY THIS EXISTS. Since 6.24.0, `enforce-writes-scope.cjs` relaxes its no-scope default in an
 // INSTALLED project (`pharn.config.json` carries a non-empty `skillsVersion`): with no scope set and no
 // PHARN run open, it denies PHARN's own installed surface and its own scope file and allows the rest of
 // the project, plus — outside the project — only Claude's memory folders and the temp roots (the hook's
