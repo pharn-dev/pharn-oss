@@ -28,6 +28,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { REGISTRY } from "../../pharn/floor/stage-exit-core.mjs";
 
 const COMMANDS_DIR = new URL("../../.claude/commands/", import.meta.url).pathname;
 
@@ -2168,16 +2169,18 @@ test("✧ every emitting command emits the LEDGER and the REPORT, and checks the
 
 /** The product stages whose gate map comes from a gate-run stamp. A member added here inherits every
  *  rule; a command that starts using the runner and is NOT listed fails the closure test below. */
+// `pharn-regress.md` LEFT this set in 6.23.0 (`stage-regress-script`): it no longer invokes run-gates.mjs
+// directly — that call moved into `pharn/floor/stage-regress.mjs`, a tested script the command merely
+// pins ONE line to. Its own wiring is `STAGE_SCRIPT_WIRING`, below.
 const GATE_RUN_WIRING = [
   { file: "pharn-verify.md", stage: "verify", out: ".pharn/pharn-verify/gates" },
-  { file: "pharn-regress.md", stage: "regress", out: ".pharn/pharn-regress/head" },
   // 6.18.0: /pharn-test's red run. Its pinned lines are also EXECUTED by pharn/floor/check-red-run.test.mjs (L45).
   { file: "pharn-test.md", stage: "ac-test", out: ".pharn/pharn-test/gates" },
 ];
 
 test("✧ L34 — the gate-run wiring set is NON-EMPTY (every rule below would otherwise be vacuous)", () => {
   assert.ok(GATE_RUN_WIRING.length > 0, "GATE_RUN_WIRING is empty");
-  assert.equal(GATE_RUN_WIRING.length, 3, "non-vacuity: the wired set is counted, not merely iterated");
+  assert.equal(GATE_RUN_WIRING.length, 2, "non-vacuity: the wired set is counted, not merely iterated");
 });
 
 test("✧ no fenced block in a gate-run-wired command CAPTURES an exit code by hand (`<var>=$?`)", () => {
@@ -2278,6 +2281,129 @@ test("✧ the dev twins stay FLAG-LESS — no dev command invokes the runner or 
     if (/run-gates\.mjs|--base-stamp|--head-stamp|check-verify\.mjs --stamp/.test(body)) strays.push(file);
   }
   assert.deepEqual(strays, [], `a dev command picked up the gate-run surface: ${strays.join(", ")}`);
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// ✧ STAGE_SCRIPT_WIRING (stage-regress-script, 6.23.0) — `pharn-regress.md` is now a THIN CALLER of
+// `pharn/floor/stage-regress.mjs`. It left `GATE_RUN_WIRING` above because it no longer invokes the runner or
+// the checkers directly; this set pins what replaced that invocation surface: the two pinned stage-script
+// lines and their numbers, the absence of a direct runner/checker call, and the A1 writes-scope claim —
+// EXECUTED, not merely read off the command (the same L45 discipline `GATE_RUN_WIRING` and the `★ EXECUTED`
+// setter test hold everything else to).
+// ---------------------------------------------------------------------------------------------------------------
+
+const STAGE_SCRIPT_WIRING = [{ file: "pharn-regress.md", stage: "regress", target: ".pharn/pharn-regress/stage.json" }];
+
+test("✧ L34 — the stage-script wiring set is NON-EMPTY", () => {
+  assert.equal(STAGE_SCRIPT_WIRING.length, 1, "non-vacuity: the wired set is counted, not merely iterated");
+});
+
+test("✧ STAGE_SCRIPT_WIRING — pharn-regress.md pins exactly one fresh line and one resume line, with N < B < 600000", () => {
+  for (const { file } of STAGE_SCRIPT_WIRING) {
+    const lines = fencedLines(commandBody(file)).map((l) => l.text.trim());
+    const fresh = lines.filter((t) => /^node pharn\/floor\/stage-regress\.mjs --feature <name> --timeout-ms \d+ --budget-ms \d+$/.test(t));
+    const resume = lines.filter((t) => /^node pharn\/floor\/stage-regress\.mjs --resume --budget-ms \d+$/.test(t));
+    assert.equal(fresh.length, 1, `${file}: expected exactly one pinned fresh line, found ${fresh.length}`);
+    assert.equal(resume.length, 1, `${file}: expected exactly one pinned resume line, found ${resume.length}`);
+
+    const [, nStr, bStr] = fresh[0].match(/--timeout-ms (\d+) --budget-ms (\d+)/);
+    const [, bResumeStr] = resume[0].match(/--budget-ms (\d+)/);
+    const n = Number(nStr);
+    const b = Number(bStr);
+    assert.ok(n < b, `${file}: --timeout-ms (${n}) must be strictly under --budget-ms (${b})`);
+    assert.ok(b < 600000, `${file}: --budget-ms (${b}) must sit under Claude Code's 600000 ms Bash maximum`);
+    assert.equal(Number(bResumeStr), b, `${file}: the resume line's --budget-ms must match the fresh line's (${b})`);
+  }
+});
+
+test("✧ STAGE_SCRIPT_WIRING — pharn-regress.md invokes NEITHER run-gates.mjs NOR a checker directly (that moved into the script)", () => {
+  for (const { file } of STAGE_SCRIPT_WIRING) {
+    const body = commandBody(file);
+    assert.doesNotMatch(
+      body,
+      /node pharn\/floor\/(run-gates|check-regress|check-plan-spec-agree)\.mjs\b/,
+      `${file} still invokes a runner/checker directly — that surface belongs to stage-regress.mjs now`
+    );
+  }
+});
+
+test("✧ STAGE_SCRIPT_WIRING — the A1 scope, EXECUTED: the pinned setter line, then the LIVE guard, over pharn-regress.md's own target", () => {
+  const SETTER = new URL("../../.claude/hooks/set-writes-scope.cjs", import.meta.url).pathname;
+  const HOOK = new URL("../../.claude/hooks/enforce-writes-scope.cjs", import.meta.url).pathname;
+  const REPO = new URL("../../", import.meta.url).pathname;
+
+  const deny = (cwd, filePath) =>
+    spawnSync(process.execPath, [HOOK], {
+      input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: filePath } }),
+      cwd,
+      encoding: "utf8",
+    }).status;
+
+  for (const { file, target } of STAGE_SCRIPT_WIRING) {
+    const cwd = mkdtempSync(join(tmpdir(), "hyg-a1-"));
+    try {
+      // Run the PINNED setter line verbatim (the same `--from-frontmatter <cmd> --target <target>` shape
+      // the `★ EXECUTED` test above already runs for every command; this test adds the GUARD half).
+      const set = spawnSync(process.execPath, [SETTER, "--from-frontmatter", join(REPO, ".claude/commands", file), "--target", target], {
+        cwd,
+        encoding: "utf8",
+      });
+      assert.equal(set.status, 0, `${file}: the pinned setter line failed: ${set.stdout}${set.stderr}`);
+
+      assert.equal(deny(cwd, "pharn/features/demo/REGRESSION.md"), 2, `${file}: the scope must deny REGRESSION.md while the script runs`);
+      assert.equal(deny(cwd, "src/x.js"), 2, `${file}: the scope must deny an ordinary source path while the script runs`);
+      assert.equal(deny(cwd, ".pharn/pharn-regress/other.json"), 0, `${file}: .pharn/** must stay writable`);
+
+      // Control: the SAME probe with NO scope file must NOT deny REGRESSION.md — proving the deny above
+      // comes from the SET scope, not from the fail-closed default (which permits pharn/features/**).
+      rmSync(join(cwd, ".pharn", "writes-scope.json"), { force: true });
+      assert.equal(
+        deny(cwd, "pharn/features/demo/REGRESSION.md"),
+        0,
+        `${file}: with NO scope file, the default must NOT deny REGRESSION.md`
+      );
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// ✧ the /pharn-loop stage-exit mapping (stage-regress-script, 6.23.0) — CLOSURE over the regress `question`
+// vocabulary, so a new question code cannot ship without a row.
+// ---------------------------------------------------------------------------------------------------------------
+
+// M12 (GATE 2 review): the discriminator below used to re-implement the check as a separate `.filter()`
+// over a literal, so it could never catch a bug in the REAL predicate — only in its own reimplementation.
+// Extracted once, called by BOTH tests, so the discriminator genuinely exercises the same closure.
+function mappingNamesCode(mapping, code) {
+  return mapping.includes(`\`${code}\``) || mapping.includes(code);
+}
+
+function loopMapping() {
+  const body = commandBody("pharn-loop.md");
+  const mappingStart = body.indexOf("`/pharn-regress`'s stage-exit mapping");
+  assert.ok(mappingStart !== -1, "pharn-loop.md must carry the stage-exit mapping paragraph");
+  return body.slice(mappingStart, mappingStart + 1500);
+}
+
+test("✧ CLOSURE — every `regress` `question` reason_code is named in pharn-loop.md's stage-exit mapping paragraph", () => {
+  const mapping = loopMapping();
+  for (const code of Object.keys(REGISTRY.regress.question)) {
+    assert.ok(mappingNamesCode(mapping, code), `pharn-loop.md's mapping paragraph never names '${code}'`);
+  }
+});
+
+test("✧ CLOSURE discriminates — the SAME predicate, run over a mapping paragraph missing a code, fails (M12 fix)", () => {
+  const mutantMapping = "`question no-gates` -> S4; every other `question` -> S10.";
+  for (const code of ["base-unresolved", "install-unresolved", "tests-unresolved"]) {
+    assert.equal(mappingNamesCode(mutantMapping, code), false, `mappingNamesCode must reject a mapping missing '${code}'`);
+  }
+  // Positive control: the REAL, live document passes the SAME function every code the registry names.
+  const live = loopMapping();
+  for (const code of Object.keys(REGISTRY.regress.question)) {
+    assert.ok(mappingNamesCode(live, code), `the live document must still satisfy mappingNamesCode for '${code}'`);
+  }
 });
 
 test("✧ verify's Step-6 verbatim-field list NAMES `gate_run` and `ac_gate`, so neither additive block is dropped", () => {
