@@ -1,5 +1,50 @@
 # REGRESSION — stage-model-routing
 
+## After merging main (6.26.0, #281) (2026-09-27)
+
+- **Run:** on the committed merge `28bbc1a` (`origin/main` `008b24b`, `stage-verify-script`, merged in), with a clean
+  tree at run time, after the plan's scope was re-set and the reconciliation baseline re-anchored
+  (`--by stage-model-routing-merge-main`). Stage model: opus — set by the maintainer's instruction, overriding
+  pharn.config.json; routed via Agent subagent; effort not routed.
+- **Base:** `008b24b593ddb6b58fdacc1b60039ffb8f1fe70b`, the command's own rule on a clean tree:
+  `git merge-base HEAD origin/main`. So the comparison is exactly this phase's changes against the `main` it merges
+  into — the 6.26.0 changes are in the base.
+
+**REGRESSIONS: none — no deterministically-detectable breakage outside the feature.** Verdict `no-regressions`
+(`check-regress.mjs verdict`, exit 0; `regression-report.json` is its stdout, byte-identical — `cmp` clean).
+
+### Partition
+
+- **Declared** (`PLAN.md` `## Files`): 32 paths.
+- **Inside** (`git diff --name-only <base>` + untracked): 38 paths — the 32 declared paths plus six of this
+  feature's own pipeline artifacts, which `--feature stage-model-routing` exempts and reports in `escape_exempt`:
+  `GRILL.md`, `PLAN.md`, `REGRESSION.md`, `VERIFY.md`, `regression-report.json` and `verify-report.json`.
+- **Escaped:** none (`check-regress.mjs scope` exit 0, `escaped: []`).
+- **Outside tests:** 111 files — the 118 tracked `*.test.mjs` / `*.test.cjs` minus the 7 inside (the three new ones,
+  committed now, and `mark-phase`, `render-cost-ledger`, `ship-outcome-core`, `command-hygiene`). #281's new suites
+  (`stage-verify`, `stage-verify-core`, `stage-runtime`, `render-verify`) are outside, and ran on both sides.
+- **Outside eval pairs:** 1 — the trust-fence pair, both paths confirmed readable before its exit code was recorded.
+
+### Gate table (base → head)
+
+| gate                                                                | base | head | verdict |
+| ------------------------------------------------------------------- | ---- | ---- | ------- |
+| `tests` (the 111 outside files, one `node --test` over the list)    | 0    | 0    | clean   |
+| `validate` (`node pharn/floor/validate.mjs .`, whole-repo)          | 0    | 0    | clean   |
+| `structural:…/expected-injection-comment.json` (`check-structural`) | 0    | 0    | clean   |
+
+**`regressions: []` · `pre_existing: []`.** The style gates were skipped by the config-touch rule: `inside`
+touches none of `eslint.config.mjs`, `.prettierrc.json`, `.prettierignore`, `.markdownlint-cli2.jsonc` (#281 changed
+two of them, and that change is in the base, not inside).
+
+### How the baseline was obtained (orchestration — advisory)
+
+As in the run below: a scratch Node runner under `.pharn/pharn-dev-regress/` (argv arrays only, deleted after the
+stage), `git archive <base>` extracted under `.pharn/pharn-dev-regress/base/` with `GIT_CEILING_DIRECTORIES` set,
+and the snapshot removed before the HEAD run. The outside tests took 140 s at base and 300 s at head.
+
+## Before the merge — the build's run (kept for the audit trail)
+
 - **Run:** the build's run, on the uncommitted working tree the build left (HEAD `25a2599` plus the build's changes).
   Stage model: opus — set by the maintainer's instruction, overriding pharn.config.json; routed via Agent subagent;
   effort not routed.
@@ -9,9 +54,9 @@
   plan, grill and build — against the `main` it merges into.
 
 **REGRESSIONS: none — no deterministically-detectable breakage outside the feature.** Verdict `no-regressions`
-(`check-regress.mjs verdict`, exit 0; `regression-report.json` is its stdout, byte-identical — `cmp` clean).
+(`check-regress.mjs verdict`, exit 0). That run's `regression-report.json` was superseded by the run above.
 
-## Partition
+### Partition (before the merge)
 
 - **Declared** (`PLAN.md` `## Files`): 32 paths.
 - **Inside** (`git diff --name-only <base>` + untracked): 34 paths — the 32 declared paths plus this feature's own
@@ -23,7 +68,7 @@
 - **Outside eval pairs:** 1 — `pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json` ↔
   `.dev/features/trust-fence/findings.json`, both paths confirmed readable before its exit code was recorded.
 
-## Gate table (base → head)
+### Gate table (base → head, before the merge)
 
 | gate                                                                | base | head | verdict |
 | ------------------------------------------------------------------- | ---- | ---- | ------- |
@@ -31,10 +76,9 @@
 | `validate` (`node pharn/floor/validate.mjs .`, whole-repo)          | 0    | 0    | clean   |
 | `structural:…/expected-injection-comment.json` (`check-structural`) | 0    | 0    | clean   |
 
-**`regressions: []` · `pre_existing: []`.** The style gates were skipped by the config-touch rule: `inside`
-touches none of `eslint.config.mjs`, `.prettierrc.json`, `.prettierignore`, `.markdownlint-cli2.jsonc`.
+**`regressions: []` · `pre_existing: []`.** The style gates were skipped by the config-touch rule.
 
-## How the baseline was obtained (orchestration — advisory)
+### How the baseline was obtained (before the merge)
 
 The command's Bash (Steps 1–3) ran through a scratch Node runner under `.pharn/pharn-dev-regress/`, with argv arrays
 only, because this isolated worktree refuses shell variables, pipes and `xargs`; the runner is deleted after the
