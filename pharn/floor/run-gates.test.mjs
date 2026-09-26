@@ -4,9 +4,11 @@
 // imported. That is NOT the same as executing a command's PINNED line, and this header used to claim it
 // was: for a whole release line these tests passed hand-typed arguments, the one pinned line that passes
 // `--cwd` (/pharn-regress's base side) was never run, and it failed at `init` in every real run
-// (lessons-learned L45 — the invocation layer is covered only by executing the invocation). The ★ WIRING
-// test at the end executes /pharn-regress's committed lines; /pharn-verify's pinned lines are still
-// exercised only through equivalent hand-typed arguments. Refusal tests pair with a non-vacuity control so
+// (lessons-learned L45 — the invocation layer is covered only by executing the invocation). Both stages'
+// runner lines now live in tested stage scripts, and each script's suite EXECUTES its command's pinned line:
+// /pharn-regress's through stage-regress.test.mjs (6.23.0), /pharn-verify's through stage-verify.test.mjs
+// (6.26.0), whose ★ WIRING runs pharn-verify.md's committed line over a fixture carrying this runner.
+// Refusal tests pair with a non-vacuity control so
 // a green run means the rule fired and not that the runner refuses everything (L34), and rules over a set
 // iterate every member (L52).
 

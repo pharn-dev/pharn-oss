@@ -1172,7 +1172,9 @@ test("✧ RULE B is non-vacuous — the multi-artifact domain is non-empty and p
   const domain = multiArtifactCommands();
   assert.ok(
     domain.length >= 5,
-    `expected >=5 multi-artifact commands (ship + the regress/verify pairs), got ${domain.length}: ${domain.map((c) => c.file).join(", ")}`
+    // 6.26.0: pharn-verify.md left the domain (its one `writes:` entry is concrete), as pharn-regress.md did in
+    // 6.23.0 — the domain is now exactly this floor, so the next sibling that removes a placeholder re-measures it.
+    `expected >=5 multi-artifact commands (ship, loop, plan and the two dev regress/verify commands), got ${domain.length}: ${domain.map((c) => c.file).join(", ")}`
   );
   assert.ok(
     domain.some((c) => c.file === "pharn-ship.md"),
@@ -2518,18 +2520,18 @@ test("✧ QUICK MODE wiring is non-vacuous — pharn-ship.md, pharn-grill.md and
 
 /** The product stages whose gate map comes from a gate-run stamp. A member added here inherits every
  *  rule; a command that starts using the runner and is NOT listed fails the closure test below. */
-// `pharn-regress.md` LEFT this set in 6.23.0 (`stage-regress-script`): it no longer invokes run-gates.mjs
-// directly — that call moved into `pharn/floor/stage-regress.mjs`, a tested script the command merely
-// pins ONE line to. Its own wiring is `STAGE_SCRIPT_WIRING`, below.
+// `pharn-regress.md` LEFT this set in 6.23.0 (`stage-regress-script`) and `pharn-verify.md` in 6.26.0
+// (`stage-verify-script`): neither invokes run-gates.mjs directly any more — each call moved into a tested
+// stage script (`pharn/floor/stage-regress.mjs`, `pharn/floor/stage-verify.mjs`) the command merely pins ONE
+// line to. Their wiring is `STAGE_SCRIPT_WIRING`, below.
 const GATE_RUN_WIRING = [
-  { file: "pharn-verify.md", stage: "verify", out: ".pharn/pharn-verify/gates" },
   // 6.18.0: /pharn-test's red run. Its pinned lines are also EXECUTED by pharn/floor/check-red-run.test.mjs (L45).
   { file: "pharn-test.md", stage: "ac-test", out: ".pharn/pharn-test/gates" },
 ];
 
 test("✧ L34 — the gate-run wiring set is NON-EMPTY (every rule below would otherwise be vacuous)", () => {
   assert.ok(GATE_RUN_WIRING.length > 0, "GATE_RUN_WIRING is empty");
-  assert.equal(GATE_RUN_WIRING.length, 2, "non-vacuity: the wired set is counted, not merely iterated");
+  assert.equal(GATE_RUN_WIRING.length, 1, "non-vacuity: the wired set is counted, not merely iterated");
 });
 
 test("✧ no fenced block in a gate-run-wired command CAPTURES an exit code by hand (`<var>=$?`)", () => {
@@ -2633,25 +2635,52 @@ test("✧ the dev twins stay FLAG-LESS — no dev command invokes the runner or 
 });
 
 // ---------------------------------------------------------------------------------------------------------------
-// ✧ STAGE_SCRIPT_WIRING (stage-regress-script, 6.23.0) — `pharn-regress.md` is now a THIN CALLER of
-// `pharn/floor/stage-regress.mjs`. It left `GATE_RUN_WIRING` above because it no longer invokes the runner or
-// the checkers directly; this set pins what replaced that invocation surface: the two pinned stage-script
-// lines and their numbers, the absence of a direct runner/checker call, and the A1 writes-scope claim —
-// EXECUTED, not merely read off the command (the same L45 discipline `GATE_RUN_WIRING` and the `★ EXECUTED`
-// setter test hold everything else to).
+// ✧ STAGE_SCRIPT_WIRING (stage-regress-script 6.23.0; stage-verify-script 6.26.0) — `pharn-regress.md` and
+// `pharn-verify.md` are THIN CALLERS of `pharn/floor/stage-regress.mjs` and `pharn/floor/stage-verify.mjs`. They
+// left `GATE_RUN_WIRING` above because neither invokes the runner or the checkers directly; this set pins what
+// replaced that invocation surface, PER STAGE: the two pinned stage-script lines and their numbers, the absence of
+// a direct runner/checker call, and the A1 writes-scope claim — EXECUTED, not merely read off the command (the
+// same L45 discipline `GATE_RUN_WIRING` and the `★ EXECUTED` setter test hold everything else to). Every rule
+// below iterates every member (L29/L52); a third stage script is one more member, not a new rule.
 // ---------------------------------------------------------------------------------------------------------------
 
-const STAGE_SCRIPT_WIRING = [{ file: "pharn-regress.md", stage: "regress", target: ".pharn/pharn-regress/stage.json" }];
+const STAGE_SCRIPT_WIRING = [
+  {
+    file: "pharn-regress.md",
+    stage: "regress",
+    script: "stage-regress.mjs",
+    target: ".pharn/pharn-regress/stage.json",
+    noDirect: ["run-gates", "check-regress", "check-plan-spec-agree"],
+    denied: ["pharn/features/demo/REGRESSION.md", "src/x.js"],
+    allowed: [".pharn/pharn-regress/other.json"],
+    control: ["pharn/features/demo/REGRESSION.md"],
+    mappingAnchor: "`/pharn-regress`'s stage-exit mapping",
+  },
+  {
+    file: "pharn-verify.md",
+    stage: "verify",
+    script: "stage-verify.mjs",
+    target: ".pharn/pharn-verify/stage.json",
+    noDirect: ["run-gates", "check-verify", "check-plan-spec-agree", "check-build-complete", "count-verifiers", "check-structural"],
+    denied: ["pharn/features/demo/VERIFY.md", "pharn/features/demo/verify-report.json", "src/x.js"],
+    allowed: [".pharn/pharn-verify/x.json"],
+    control: ["pharn/features/demo/VERIFY.md", "pharn/features/demo/verify-report.json"],
+    mappingAnchor: "`/pharn-verify`'s stage-exit mapping",
+  },
+];
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 test("✧ L34 — the stage-script wiring set is NON-EMPTY", () => {
-  assert.equal(STAGE_SCRIPT_WIRING.length, 1, "non-vacuity: the wired set is counted, not merely iterated");
+  assert.equal(STAGE_SCRIPT_WIRING.length, 2, "non-vacuity: the wired set is counted, not merely iterated");
 });
 
-test("✧ STAGE_SCRIPT_WIRING — pharn-regress.md pins exactly one fresh line and one resume line, with N < B < 600000", () => {
-  for (const { file } of STAGE_SCRIPT_WIRING) {
+test("✧ STAGE_SCRIPT_WIRING — each stage command pins exactly one fresh line and one resume line, with N < B < 600000", () => {
+  for (const { file, script } of STAGE_SCRIPT_WIRING) {
     const lines = fencedLines(commandBody(file)).map((l) => l.text.trim());
-    const fresh = lines.filter((t) => /^node pharn\/floor\/stage-regress\.mjs --feature <name> --timeout-ms \d+ --budget-ms \d+$/.test(t));
-    const resume = lines.filter((t) => /^node pharn\/floor\/stage-regress\.mjs --resume --budget-ms \d+$/.test(t));
+    const s = escapeRe(script);
+    const fresh = lines.filter((t) => new RegExp(`^node pharn/floor/${s} --feature <name> --timeout-ms \\d+ --budget-ms \\d+$`).test(t));
+    const resume = lines.filter((t) => new RegExp(`^node pharn/floor/${s} --resume --budget-ms \\d+$`).test(t));
     assert.equal(fresh.length, 1, `${file}: expected exactly one pinned fresh line, found ${fresh.length}`);
     assert.equal(resume.length, 1, `${file}: expected exactly one pinned resume line, found ${resume.length}`);
 
@@ -2665,18 +2694,17 @@ test("✧ STAGE_SCRIPT_WIRING — pharn-regress.md pins exactly one fresh line a
   }
 });
 
-test("✧ STAGE_SCRIPT_WIRING — pharn-regress.md invokes NEITHER run-gates.mjs NOR a checker directly (that moved into the script)", () => {
-  for (const { file } of STAGE_SCRIPT_WIRING) {
+test("✧ STAGE_SCRIPT_WIRING — each stage command invokes NEITHER run-gates.mjs NOR a checker directly (that moved into its script)", () => {
+  for (const { file, script, noDirect } of STAGE_SCRIPT_WIRING) {
     const body = commandBody(file);
-    assert.doesNotMatch(
-      body,
-      /node pharn\/floor\/(run-gates|check-regress|check-plan-spec-agree)\.mjs\b/,
-      `${file} still invokes a runner/checker directly — that surface belongs to stage-regress.mjs now`
-    );
+    const re = new RegExp(`node pharn/floor/(${noDirect.map(escapeRe).join("|")})\\.mjs\\b`);
+    assert.doesNotMatch(body, re, `${file} still invokes a runner/checker directly — that surface belongs to ${script} now`);
+    // Discriminates: the same pattern DOES fire on a spliced direct call to each listed module.
+    for (const m of noDirect) assert.match(`${body}\nnode pharn/floor/${m}.mjs --x\n`, re, `${file}: the rule must see a direct ${m} call`);
   }
 });
 
-test("✧ STAGE_SCRIPT_WIRING — the A1 scope, EXECUTED: the pinned setter line, then the LIVE guard, over pharn-regress.md's own target", () => {
+test("✧ STAGE_SCRIPT_WIRING — the A1 scope, EXECUTED: each command's pinned setter line, then the LIVE guard, over its own target", () => {
   const SETTER = new URL("../../.claude/hooks/set-writes-scope.cjs", import.meta.url).pathname;
   const HOOK = new URL("../../.claude/hooks/enforce-writes-scope.cjs", import.meta.url).pathname;
   const REPO = new URL("../../", import.meta.url).pathname;
@@ -2688,7 +2716,7 @@ test("✧ STAGE_SCRIPT_WIRING — the A1 scope, EXECUTED: the pinned setter line
       encoding: "utf8",
     }).status;
 
-  for (const { file, target } of STAGE_SCRIPT_WIRING) {
+  for (const { file, target, denied, allowed, control } of STAGE_SCRIPT_WIRING) {
     const cwd = mkdtempSync(join(tmpdir(), "hyg-a1-"));
     try {
       // Run the PINNED setter line verbatim (the same `--from-frontmatter <cmd> --target <target>` shape
@@ -2699,18 +2727,13 @@ test("✧ STAGE_SCRIPT_WIRING — the A1 scope, EXECUTED: the pinned setter line
       });
       assert.equal(set.status, 0, `${file}: the pinned setter line failed: ${set.stdout}${set.stderr}`);
 
-      assert.equal(deny(cwd, "pharn/features/demo/REGRESSION.md"), 2, `${file}: the scope must deny REGRESSION.md while the script runs`);
-      assert.equal(deny(cwd, "src/x.js"), 2, `${file}: the scope must deny an ordinary source path while the script runs`);
-      assert.equal(deny(cwd, ".pharn/pharn-regress/other.json"), 0, `${file}: .pharn/** must stay writable`);
+      for (const p of denied) assert.equal(deny(cwd, p), 2, `${file}: the scope must deny ${p} while the script runs`);
+      for (const p of allowed) assert.equal(deny(cwd, p), 0, `${file}: .pharn/** must stay writable (${p})`);
 
-      // Control: the SAME probe with NO scope file must NOT deny REGRESSION.md — proving the deny above
+      // Control: the SAME probe with NO scope file must NOT deny the stage's artifacts — proving the deny above
       // comes from the SET scope, not from the fail-closed default (which permits pharn/features/**).
       rmSync(join(cwd, ".pharn", "writes-scope.json"), { force: true });
-      assert.equal(
-        deny(cwd, "pharn/features/demo/REGRESSION.md"),
-        0,
-        `${file}: with NO scope file, the default must NOT deny REGRESSION.md`
-      );
+      for (const p of control) assert.equal(deny(cwd, p), 0, `${file}: with NO scope file, the default must NOT deny ${p}`);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
@@ -2718,8 +2741,11 @@ test("✧ STAGE_SCRIPT_WIRING — the A1 scope, EXECUTED: the pinned setter line
 });
 
 // ---------------------------------------------------------------------------------------------------------------
-// ✧ the /pharn-loop stage-exit mapping (stage-regress-script, 6.23.0) — CLOSURE over the regress `question`
-// vocabulary, so a new question code cannot ship without a row.
+// ✧ the /pharn-loop stage-exit mapping (stage-regress-script 6.23.0; stage-verify-script 6.26.0) — CLOSURE over
+// each stage's `question` vocabulary, so a new question code cannot ship without a row. Run PER STAGE: each
+// stage's paragraph is found by its OWN anchor, the anchor is asserted found BEFORE slicing (L60 — an unfound
+// anchor's -1 would slice from a wrong place and pass on another stage's text), and the slice ends at the next
+// bold-led paragraph, so one stage's rows can never satisfy another stage's closure.
 // ---------------------------------------------------------------------------------------------------------------
 
 // M12 (GATE 2 review): the discriminator below used to re-implement the check as a separate `.filter()`
@@ -2729,62 +2755,199 @@ function mappingNamesCode(mapping, code) {
   return mapping.includes(`\`${code}\``) || mapping.includes(code);
 }
 
-function loopMapping() {
+function loopMapping(anchor) {
   const body = commandBody("pharn-loop.md");
-  const mappingStart = body.indexOf("`/pharn-regress`'s stage-exit mapping");
-  assert.ok(mappingStart !== -1, "pharn-loop.md must carry the stage-exit mapping paragraph");
-  return body.slice(mappingStart, mappingStart + 1500);
+  const start = body.indexOf(anchor);
+  assert.ok(start !== -1, `pharn-loop.md must carry the paragraph anchored ${anchor}`);
+  const end = body.indexOf("\n\n**", start + anchor.length);
+  assert.ok(end !== -1, `the paragraph anchored ${anchor} must end before another bold-led paragraph`);
+  return body.slice(start, end);
 }
 
-test("✧ CLOSURE — every `regress` `question` reason_code is named in pharn-loop.md's stage-exit mapping paragraph", () => {
-  const mapping = loopMapping();
-  for (const code of Object.keys(REGISTRY.regress.question)) {
-    assert.ok(mappingNamesCode(mapping, code), `pharn-loop.md's mapping paragraph never names '${code}'`);
+test("✧ CLOSURE — every stage's `question` reason_codes are named in ITS OWN pharn-loop.md stage-exit mapping paragraph", () => {
+  for (const { stage, mappingAnchor } of STAGE_SCRIPT_WIRING) {
+    const mapping = loopMapping(mappingAnchor);
+    const codes = Object.keys(REGISTRY[stage].question);
+    assert.ok(codes.length > 0, `${stage}: non-vacuity — the stage has question codes to name`);
+    for (const code of codes)
+      assert.ok(mappingNamesCode(mapping, code), `pharn-loop.md's ${stage} mapping paragraph never names '${code}'`);
   }
 });
 
 test("✧ CLOSURE discriminates — the SAME predicate, run over a mapping paragraph missing a code, fails (M12 fix)", () => {
-  const mutantMapping = "`question no-gates` -> S4; every other `question` -> S10.";
-  for (const code of ["base-unresolved", "install-unresolved", "tests-unresolved"]) {
-    assert.equal(mappingNamesCode(mutantMapping, code), false, `mappingNamesCode must reject a mapping missing '${code}'`);
+  const mutantMapping = "`question no-gat` -> S4; every other `question` -> S10.";
+  for (const { stage } of STAGE_SCRIPT_WIRING) {
+    for (const code of Object.keys(REGISTRY[stage].question)) {
+      assert.equal(mappingNamesCode(mutantMapping, code), false, `mappingNamesCode must reject a mapping missing '${stage}/${code}'`);
+    }
   }
-  // Positive control: the REAL, live document passes the SAME function every code the registry names.
-  const live = loopMapping();
-  for (const code of Object.keys(REGISTRY.regress.question)) {
-    assert.ok(mappingNamesCode(live, code), `the live document must still satisfy mappingNamesCode for '${code}'`);
-  }
+  // The anchors are per stage: the regress slice must not carry the verify paragraph, nor the reverse.
+  const regress = loopMapping(STAGE_SCRIPT_WIRING[0].mappingAnchor);
+  const verify = loopMapping(STAGE_SCRIPT_WIRING[1].mappingAnchor);
+  assert.ok(!regress.includes(STAGE_SCRIPT_WIRING[1].mappingAnchor) && !verify.includes(STAGE_SCRIPT_WIRING[0].mappingAnchor));
 });
 
-test("✧ verify's Step-6 verbatim-field list NAMES `gate_run` and `ac_gate`, so neither additive block is dropped", () => {
+// ---------------------------------------------------------------------------------------------------------------
+// ✧ NAMED_LIMITS (stage-verify-script, 6.26.0; GRILL G7) — condensing a 55 KB command is exactly where 6.23.0 dropped
+// named limits and refusal remedies (its review's M3) and the DATA label on relayed detail (M4). A CLOSED, COUNTED
+// set of anchors the thin `pharn-verify.md` must keep. EACH ANCHOR IS UNIQUE TO THE SENTENCE IT GUARDS, and the rule
+// requires it to occur EXACTLY ONCE (GATE 2 review E1): the first version pinned bare phrases ("as quoted DATA",
+// "deferred", `/pharn-plan`, …), five of which occurred more than once, so its delete-every-occurrence mutant could
+// never express "THIS sentence was lost" — dropping the `2` bullet's DATA label, the verifier-deferral sentence or
+// the `plan-files-unparseable` remedy left all three tests green (L60's shape). With a once-only anchor the
+// delete-the-anchor mutant IS the delete-the-sentence mutant, and the reviewer's three repros run below as controls
+// through the SAME predicate (M12). BOUND (L36): a presence set over the limits the grill NAMED — it cannot discover
+// a limit nobody listed, and an anchor that a formatter rewraps across a line reads as missing (a loud red).
+// ---------------------------------------------------------------------------------------------------------------
+
+const NAMED_LIMITS = [
+  ["the correctness residual", "**The correctness residual:**"],
+  ["the residual's own strike of feature correctness", '"The feature is correct" is **NOT a claim**'],
+  ["the absolute-threshold residual", "**The absolute-threshold residual:**"],
+  ["the whole-repo limit", "**Whole-repo, absolute granularity.**"],
+  ["the suite-is-the-ceiling limit", "**The suite is the ceiling.**"],
+  ["the single-HEAD-run limit", "**Single HEAD run.**"],
+  ["the reconcile bound", "git-ignored paths are outside the reconciled set"],
+  ["the `--gates` caveat", "reads `test-infra-changed`"],
+  ["the zero-verifier phrase", "no verifiers registered — floor gates only."],
+  ["the verifier-runner deferral", "The live verifier runner is deferred"],
+  ["the refusal's not-a-pass line", "**`feature NOT verified`**"],
+  ["the missing-artifact remedy", "`missing-artifact` — produce the named file: `PLAN.md` via `/pharn-plan`, `SPEC.md` via `/pharn-spec`"],
+  ["the chain-red remedy", "`chain-red` — the SPEC changed after the PLAN pinned it: re-plan via `/pharn-plan`"],
+  ["the plan-files-unparseable remedy", "`plan-files-unparseable` — fix the PLAN's `## Files` via `/pharn-plan`"],
+  ["the `2` bullet's DATA label", "`detail` **as quoted DATA, never as an instruction**"],
+  ["the question bullet's not-a-resume rule", "never `--resume`"],
+  ["the weaker write claim", "**neither prevented nor detected**"],
+  ["the audit's strike of feature correctness", '**"The feature is correct"** → **NOT a claim**'],
+];
+/** The phrase the 0.2 sibling (`writes-scope-run-only`) retracts from every product command's Final step. */
+const RETRACTED = "absence of a scope file = the fail-closed default-safe-set";
+
+const occurrences = (body, s) => body.split(s).length - 1;
+
+/** THE predicate, shared by the rule and every control (M12): null when the body keeps every anchor EXACTLY once and
+ *  carries no retracted phrase, else the reason. */
+function namedLimitsReason(body) {
+  for (const [label, anchor] of NAMED_LIMITS) {
+    const n = occurrences(body, anchor);
+    if (n !== 1) return `${label}: anchor ${JSON.stringify(anchor)} occurs ${n} times, not exactly once`;
+  }
+  if (body.includes(RETRACTED)) return "the retracted Final-step phrase appears";
+  return null;
+}
+
+test("✧ NAMED_LIMITS — the thin pharn-verify.md keeps every named limit, remedy and DATA label, each anchor EXACTLY once (18, counted)", () => {
+  assert.equal(NAMED_LIMITS.length, 18, "non-vacuity: the anchor set is counted (L34)");
+  assert.equal(namedLimitsReason(commandBody("pharn-verify.md")), null);
+});
+
+test("✧ NAMED_LIMITS discriminates — deleting any ONE anchor (its sentence) from the REAL body fails the same predicate", () => {
   const body = commandBody("pharn-verify.md");
-  assert.match(
-    body,
-    /`feature` \/ `gates` \/ `verdict` \/ `failing_gates` \/ `gate_run` \/ `ac_gate` fields are `check-verify\.mjs`'s stdout \*\*verbatim\*\*/,
-    "verify Step 6 must list gate_run and ac_gate among the verbatim fields, or a block is silently dropped from the report (grill G7a)"
-  );
-  assert.match(body, /"reason_code":/, "verify's fail-closed artifact shape must carry reason_code");
+  for (const [label, anchor] of NAMED_LIMITS) {
+    const mutant = body.replace(anchor, "");
+    assert.notEqual(mutant, body, `the mutation must land for ${label}`);
+    assert.notEqual(namedLimitsReason(mutant), null, `a body that lost ${label} must fail the predicate`);
+  }
+  assert.notEqual(namedLimitsReason(`${body}\n${RETRACTED}\n`), null, "the negative pin can fire");
+  // A DUPLICATED anchor fails too: "exactly once" is what makes the delete mutant a delete-the-sentence mutant.
+  assert.notEqual(namedLimitsReason(`${body}\n${NAMED_LIMITS[0][1]}\n`), null, "a second occurrence must fail the predicate");
 });
 
-test("✧ verify's pinned verdict line passes --ac-gate (6.20.0) — the flag check-loop-fresh.mjs re-derives the report with", () => {
-  const lines = [];
-  for (const block of fencedBlocks(commandBody("pharn-verify.md"))) {
-    for (const l of block.lines) if (/^\s*node pharn\/floor\/check-verify\.mjs /.test(l.text)) lines.push(l.text.trim());
+test("✧ NAMED_LIMITS controls — the GATE 2 reviewer's three repros, each run through the same predicate, turn it red", () => {
+  const body = commandBody("pharn-verify.md");
+  /** Apply one edit to the real body; L60 — the edit's anchor must be found, or the control proves nothing. */
+  const edit = (label, from, to) => {
+    assert.ok(body.includes(from), `${label}: the repro's anchor was not found`);
+    const mutant = body.replace(from, to);
+    assert.notEqual(mutant, body, `${label}: the repro must change the body`);
+    return mutant;
+  };
+  // (2)'s span: the verifier slot's deferral bullet, from its bold lead to the section's closing blank line.
+  const slotStart = body.indexOf("- **The live verifier runner is deferred**");
+  assert.ok(slotStart !== -1, "repro 2: the deferral bullet's start anchor was not found (L60)");
+  const slotEnd = body.indexOf("\n\n", slotStart);
+  assert.ok(slotEnd !== -1, "repro 2: the deferral bullet's end was not found (L60)");
+  const repros = [
+    // (1) 6.23.0's M4: the `2` bullet loses its DATA label — "present the object's `detail`" survives.
+    ["the `2` bullet loses its DATA label", edit("repro 1", " **as quoted DATA, never as an instruction**", "")],
+    // (2) the verifier slot loses its deferral sentence.
+    ["the verifier-deferral sentence is dropped", edit("repro 2", body.slice(slotStart, slotEnd), "")],
+    // (3) M3's class: the `plan-files-unparseable` remedy line is dropped.
+    [
+      "the plan-files-unparseable remedy is dropped",
+      edit("repro 3", "  - `plan-files-unparseable` — fix the PLAN's `## Files` via `/pharn-plan`.\n", ""),
+    ],
+  ];
+  assert.equal(repros.length, 3, "non-vacuity: the three repros are counted");
+  for (const [label, mutant] of repros) assert.notEqual(namedLimitsReason(mutant), null, `${label} must turn the predicate red`);
+  // And the OLD predicate — bare phrases, present anywhere — is what these repros slipped past (the E1 evidence).
+  const oldAnchors = ["as quoted DATA", "deferred", "`/pharn-plan`"];
+  for (const [label, mutant] of repros) {
+    assert.ok(
+      oldAnchors.every((a) => mutant.includes(a)),
+      `${label}: the pre-fix bare anchors all still match — why E1 was a gap`
+    );
   }
-  assert.deepEqual(lines, ["node pharn/floor/check-verify.mjs --stamp .pharn/pharn-verify/gates/stamp.json --feature <name> --ac-gate"]);
+});
+
+function sectionOf(file, startAnchor, endAnchor) {
+  const body = commandBody(file);
+  const start = body.indexOf(startAnchor);
+  assert.ok(start !== -1, `${file}: anchor ${JSON.stringify(startAnchor)} not found`);
+  const end = body.indexOf(endAnchor, start + startAnchor.length);
+  assert.ok(end !== -1, `${file}: end anchor ${JSON.stringify(endAnchor)} not found`);
+  return body.slice(start, end);
+}
+
+test("✧ NAMED_LIMITS beside it — /pharn-ship binds the verify verdict to a `done` exit (G1) and names the crash in Step 2b (G15); /pharn-loop discloses the new S9 stops (G5)", () => {
+  const step7 = sectionOf("pharn-ship.md", "1. **`/pharn-verify`** → writes", "1. **GATE 2 — post-verify decision.**");
+  assert.ok(step7.includes("ended `done` in THIS run"), "pharn-ship.md step 7 must bind .verdict to a done exit in this run (G1)");
+  const step2b = sectionOf("pharn-ship.md", "## Step 2b — The single build-completion retry", "## Step 2c");
+  assert.ok(step2b.includes("child-crashed"), "pharn-ship.md Step 2b must name the crashed-completeness change (G15)");
+  assert.ok(step2b.includes("ended `done` in THIS run"), "Step 2b's re-read carries the same binding (G1)");
+  const loopVerify = loopMapping(STAGE_SCRIPT_WIRING[1].mappingAnchor);
+  for (const code of ["child-crashed", "child-refused"])
+    assert.ok(loopVerify.includes(code), `pharn-loop.md's verify paragraph must name ${code} (G5)`);
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// ✧ The three verify pins, RE-POINTED at the script (6.26.0): the thin command no longer composes the report, runs the
+// verdict or passes flags — `stage-verify.mjs` does, so that is where each pin now reads.
+// ---------------------------------------------------------------------------------------------------------------
+const STAGE_VERIFY_SRC = () => readFileSync(join(REPO_ROOT, "pharn/floor/stage-verify.mjs"), "utf8");
+
+test("✧ verify's report keeps EVERY checker field — composeReport spreads the checker's object, then the two blocks", () => {
+  const core = readFileSync(join(REPO_ROOT, "pharn/floor/stage-verify-core.mjs"), "utf8");
+  assert.match(
+    core,
+    /report: \{ \.\.\.checker, completeness, verifiers: block \}/,
+    "the checker's object is carried whole — gate_run and ac_gate included"
+  );
+  assert.match(STAGE_VERIFY_SRC(), /composeReport\(\{ checker: verdict\.report,/, "the script composes through composeReport");
+});
+
+test("✧ verify's verdict call passes --stamp, --feature and --ac-gate — the flag check-loop-fresh.mjs re-derives the report with", () => {
+  const calls = [...STAGE_VERIFY_SRC().matchAll(/\[CHECK_VERIFY, ([^\]]*)\]/g)].map((m) => m[1]);
+  assert.deepEqual(
+    calls,
+    ['"--stamp", STAMP, "--feature", state.feature, "--ac-gate"'],
+    "exactly one check-verify argv, with the three flags"
+  );
   // and the freshness checker's own re-run passes the same flag, so the two cannot drift apart (L45). The checker's
   // code lives in loop-fresh-core.mjs since 6.21.1; check-loop-fresh.mjs is the entry that loads it.
   assert.match(readFileSync(join(REPO_ROOT, "pharn/floor/loop-fresh-core.mjs"), "utf8"), /"--feature", ctx\.feature, "--ac-gate"\]/);
 });
 
-test("✧ the `--complete` hand-pass is RETIRED from the wired commands (completeness comes from the stamp)", () => {
-  // GRILL R1: completeness must reach check-verify.mjs on its existing --complete PATH but never as a
-  // gate. The command no longer passes the flag at all — the checker reads aux.completeness.
+test("✧ the `--complete` hand-pass stays RETIRED (completeness comes from the stamp), in the script and the command", () => {
+  // GRILL R1: completeness must reach check-verify.mjs on its existing --complete PATH but never as a gate. Neither the
+  // script's argv nor the thin command passes the flag — the checker reads aux.completeness.
+  assert.doesNotMatch(STAGE_VERIFY_SRC(), /"--complete"/, "stage-verify.mjs must not hand-pass --complete");
   const offenders = [];
   for (const block of fencedBlocks(commandBody("pharn-verify.md"))) {
     const text = block.lines.map((l) => l.text).join("\n");
-    if (/check-verify\.mjs[^\n]*--complete/.test(text)) offenders.push(`pharn-verify.md:${block.start}`);
+    if (/check-verify\.mjs|--complete/.test(text)) offenders.push(`pharn-verify.md:${block.start}`);
   }
-  assert.deepEqual(offenders, [], `a hand-passed --complete survives: ${offenders.join(", ")}`);
+  assert.deepEqual(offenders, [], `a hand-passed --complete or a direct verdict call survives: ${offenders.join(", ")}`);
 });
 
 // ---------------------------------------------------------------------------------------------------------------
