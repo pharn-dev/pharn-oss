@@ -23,6 +23,80 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.24.2] - 2026-09-26
+
+### Fixed
+
+- 2026-09-26: **The cost tooling no longer crashes on a crafted transcript or `cost.json`, and no longer writes what
+  its own checker REDs.** Parsed JSON can put any value where a string or a count is expected, and `String()` is not
+  total over it: `{"toString":1}` and `[{"toString":1}]` make it throw, and so do `+`, a template literal, a relational
+  compare and `Object.fromEntries` (L62). REVIEW finding R11 of 6.24.1 found one crafted `requestId` or `message.model`
+  crashing both renderers. The whole class was measured before the fix, on constructed inputs only. No real
+  transcript or ledger has been seen to carry one.
+  - both renderers threw at the model and at each of the six usage counts, the ledger at the request id, and the
+    record at `attributionSkill`;
+  - a string count concatenated into a string total, a fraction or a negative entered the sum, and two `1e308`
+    overflowed the record's total to `null`;
+  - a `usage` nested 20,000 deep overflowed the emitter's stack. At 3,000 the emitter finished, and the checker then
+    overflowed on the ledger it wrote;
+  - an absolute-path id, session or version made the emitted ledger RED under its own rule 3;
+  - over its own input, `check-cost-ledger.mjs` had 20 distinct crash sites (every node of a GREEN ledger × four
+    hostile values × both modes). Each exited 1, its RED code, with no verdict line. S9, a `null` row under
+    `--verify-transcript`, was one of them.
+
+  `SKILLS_VERSION` 6.24.1 → 6.24.2 (PATCH: a correction to shipped bytes; one new internal module, no new command,
+  checker or contract shape). `MIN_CLI` stays 0.5.0: no installed path moves.
+  ([`.dev/features/cost-transcript-hostile-values/`](./.dev/features/cost-transcript-hostile-values/))
+  - **Every transcript value is tested before anything coerces it**, through one new module,
+    `pharn/floor/cost-value-core.mjs`. It holds `isIdentityToken`, rule 3's bound: 1 to 128 characters, no control
+    character, no absolute path. It also holds `isTokenCount`: a non-negative safe integer. `IDENTITY_MAX` and
+    `ABS_PATH_RE` move there from `render-cost-ledger.mjs` byte-for-byte, with no re-export.
+  - **Which lines are requests** (`transcript-core.mjs`, `sessionRequests()`): a line needs a plain-object usage and a
+    resolved id that satisfies rule 3's bound. A present `requestId` that fails never falls back to `message.id`. The
+    per-request selection ranks only by an admitted count. The module's named residual for R11 is removed.
+  - **The record block** counts a refused model under `unknown`, a refused `attributionSkill` under `(untagged)` and a
+    refused count as 0. Only a timestamp that parses joins its window. All of it is silent, since the block has no
+    `dropped` list.
+  - **The ledger** bounds `request_id`, `session_id` and each `claude_code_versions` entry by rule 3. It writes 0 for
+    a refused count, and it bounds its verbatim `usage` copy: no node deeper than `USAGE_MAX_DEPTH` (32), and no key
+    that is not a short token. `__proto__` is refused too: assigned on a plain object, that key set the prototype, and
+    the value vanished with nothing listed. Each refusal is listed in `dropped[]`. Run membership still reads the
+    session as before; only the emitted field is bounded. `normalizeTokens` now takes `(u, n, dropped)` and checks
+    both on every call.
+  - **The checker enforces every bound the contract gives the file:**
+    - the usage depth and key rules;
+    - rule 3 on `request_id`, `session_id`, `sessions[]` and `claude_code_versions[]`;
+    - counts as non-negative safe integers;
+    - a typed `stage` and `iteration`;
+    - a document depth bound, `WALK_MAX_DEPTH` (64).
+
+    It is also total over its own input, within stated bounds:
+    - Every value it prints goes through `shown()`, which moves byte-for-byte from `test-results-formats.mjs` to
+      `quote-core.mjs`. Every key goes through the same rule unless it is a short token. So a file can no longer
+      print a line of its own. A list names at most five members.
+    - The view recompute and `--verify-transcript` run only over input that passes their preconditions, and a RED
+      says so when they do not run.
+    - The marker-completeness WARN counts missing iterations instead of enumerating them. An `outcome.iterations` of
+      `2^53` had allocated about 2 GB before the process died.
+    - An unforeseen error is exit 2, never GREEN or RED. The process ends through `process.exitCode`, so a verdict
+      past a pipe's 64 KiB buffer is no longer dropped. The second grill measured a 689,620-byte WARN with no verdict
+      line after it.
+    - **Not claimed: time and memory.** Rule 6 is O(rows × markers), and a document that exhausts the heap ends with
+      no verdict.
+
+  - **Compatibility.** A ledger emitted before 6.24.2 from a transcript carrying a value 6.24.2 refuses is now RED,
+    `/1` included. That RED is correct: the values were never valid. A genuine transcript carries none. On 2026-09-26
+    one maintainer's local transcripts held 0 over 115,666 usage-bearing lines, and no `usage` deeper than 4.
+  - **Tests.** `cost-hostile-input.test.mjs` walks every node of both transcript line shapes, and every node of a GREEN
+    ledger, through hostile alphabets and both checker modes. It adds a forgery closure over every string node and
+    key. The measured crash sites are named cases. `cost-value-core.test.mjs` pins both predicates. Each asserted
+    property has a mutant, run once in a scratch copy and recorded in the feature's `BUILD.md`.
+  - **Named, not built:**
+    - `cost-ledger-dropped-row-index`: a `dropped[]` path's row index is taken before the rows are sorted;
+    - the window's string order on mixed-precision timestamps, which both renderers now share.
+
+    Two grills raised 21 advisory concerns between them. Their dispositions are in the feature's `PLAN.md`.
+
 ## [6.24.1] - 2026-09-26
 
 ### Fixed

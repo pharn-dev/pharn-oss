@@ -109,6 +109,16 @@ content, so it is never rewritten. In an older record, read those two classes as
   reproduces nothing — the `product-lessons-index` precedent's weakness, not the dev floor's byte-equality.
 - **`by_stage` keys are the platform's `attributionSkill`,** not PHARN's own accounting. A stage missing
   from `by_stage` means the platform did not tag those records, **not** that the stage did not run.
+- **Not a record of what it refused (6.24.2).** The transcript is untrusted, so every value passes a type and
+  domain test before the renderer uses it, with the same predicates as `cost.json`
+  (`pharn/floor/cost-value-core.mjs`):
+  - a line whose usage is not a plain object, or whose request id fails rule 3's bound, is not a request and is not
+    counted (`pharn-contracts/cost-ledger.md`, "Which transcript lines are requests");
+  - a model or `attributionSkill` that fails that bound counts under `unknown` or `(untagged)`;
+  - a count that is not a non-negative safe integer adds 0 to its class, so every `<int>` above holds;
+  - a timestamp joins the window only when it parses as ISO-8601.
+
+  All of it is **silent here**, because the block has no `dropped` list. `cost.json` lists each refusal.
 
 **A SECOND cost figure now sits beside this one, and which is which is stated here rather than left to
 be discovered.** Since the `/pharn-ship` cost-ledger wiring, a ship run also writes

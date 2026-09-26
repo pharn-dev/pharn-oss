@@ -43,12 +43,11 @@ import {
   PHARN_TOP_KEYS,
   RECORD_STATUSES,
   RESULTS_FORMATS,
-  SHOWN_CHARS,
   isCleanResultsPath,
   parseResults,
   relativeFile,
-  shown,
 } from "./test-results-formats.mjs";
+import { SHOWN_CHARS, shown } from "./quote-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIX = join(HERE, "test-fixtures", "test-results");

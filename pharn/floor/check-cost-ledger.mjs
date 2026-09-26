@@ -29,11 +29,21 @@
 //  2. EVERY `usage` LEAF is number | bool | null | a short token (`isTokenLeaf`, composed AFTER a
 //     control-char guard — L14). Arrays are walked (D1), not exempted. The predicate is IMPORTED from
 //     the emitter, not re-stated here: the two encodings used to be written separately and had ALREADY
-//     diverged (this copy omitted the path term), which is [[L31]] exactly.
+//     diverged (this copy omitted the path term), which is [[L31]] exactly. Since 6.24.2 the same rule
+//     also REDs a `usage` node deeper than `USAGE_MAX_DEPTH` and an object key `isUsageKey` refuses
+//     (`__proto__` among them), both imported from the emitter, which refuses the same two on write.
 //  2b. EVERY IDENTITY FIELD — `model`, `attribution_skill`, `agent_id` — is a bounded token (<=128
 //     chars, no control char, no path). The contract calls this rule 3; the numbering here is kept
 //     stable so this file's own older references still resolve. Added after `/pharn-dev-review` found
-//     the contract asserting this bound while NOTHING checked it (see `badIdentity`).
+//     the contract asserting this bound while NOTHING checked it (see `badIdentity`). Since 6.24.2 it
+//     also covers `request_id`, a row's `session_id` (nullable), and every element of `sessions[]` and
+//     `claude_code_versions[]`: the contract gained those bounds, and a bound the contract names must be
+//     one this file checks ([[L2]], GRILL R2-G2). The predicate is `isIdentityToken` (cost-value-core.mjs),
+//     the one the emitter applies.
+//  2c. (6.24.2) EVERY `tokens.<class>` is a non-negative safe integer (`isTokenCount`), where the rule
+//     used to be `Number.isFinite`. A row's `stage` is a string or null and its `iteration` a number or
+//     null: crash guards for the view recompute (RULE 6), which is why a fractional `iteration` from a
+//     crafted marker stays GREEN as before (GRILL R2-G8).
 //  3. NO STRING ANYWHERE in the file matches `ABS_PATH_RE` — every value, at every depth, including
 //     keys' values inside `markers[]` and `outcome`.
 //  4. `request_id`s are UNIQUE (set membership).
@@ -82,11 +92,38 @@
 // A missing phase marker is an ORCHESTRATION lapse (the marker call is Bash-invoked command prose,
 // outside the `PreToolUse` gate — L19), not a malformed artifact. It is reported as a WARN WITH A COUNT
 // and never silently merged into a neighbouring stage. Making it RED would fail a well-formed file for
-// something the file's writer did not do wrong.
+// something the file's writer did not do wrong. The missing iterations are COUNTED from the observed set
+// and the first few listed; `1..outcome.iterations` is never enumerated, because a crafted `2^53` there
+// allocated until the process died (GRILL R2-G3).
+//
+// ── TOTAL OVER ITS OWN INPUT (6.24.2), and what that does NOT cover ──────────────────────────────────
+// `cost.json` is agent-written, committed, untrusted input (P2). Until 6.24.2 twenty measured crash sites made
+// this file exit 1 — its RED code — with no verdict line, and raw file strings reached its verdict lines.
+// FLOOR, over the closures in cost-hostile-input.test.mjs: for every document they walk (every node of a GREEN
+// ledger × a hostile alphabet, and the right-typed extremes they add), in both modes, `checkLedger` returns and
+// the CLI prints exactly one verdict line, after any RED/WARN lines, and exits 0 or 1. How:
+//   * every value quoted into a RED or WARN goes through `shown()` (quote-core.mjs: total, JSON-escaped, cut to
+//     `SHOWN_CHARS`), every key through `keyText()`, and every list shows at most `LIST_MAX` members and a count;
+//   * the recursive walks stop at `WALK_MAX_DEPTH` (`usage` at `USAGE_MAX_DEPTH`), and an iterative probe REDs a
+//     document nested deeper, so no walk can exhaust the stack;
+//   * the view recompute and the re-derivation each run only over input that passes their shape preconditions,
+//     and say so in a RED when they do not run;
+//   * `main()` turns any unforeseen throw into exit 2 — unusable, never GREEN and never RED — so a crash is never
+//     read as a verdict ([[L62]]); and the file ends through `process.exitCode`, never an immediate exit, so a
+//     verdict past a pipe's buffer is not dropped (the 6.20.4 flush rule, pinned by this increment's own test:
+//     `cli-stdout-flush.test.mjs`'s set is the CLIs whose stdout a floor caller parses, and none parses this one).
+// A LINE is `\n`-delimited. `JSON.stringify` escapes `\n`, `\r` and every other C0 control, and leaves U+2028,
+// U+2029 and U+0085 raw, which some viewers draw as a line break — the bound `serializeLedger` states, stated here
+// too rather than escaped.
+// NOT CLAIMED, each named: TIME and MEMORY. RULE 8 re-tests every row against every current-run marker, so it is
+// O(rows × markers) (GRILL R2-G3 measured 22.9 s at 8,000 of each; real ledgers hold hundreds). A document large
+// enough to exhaust the heap ends the process with no verdict, and an abort cannot be caught. A module that fails
+// to load is outside `main()`'s catch. And a future message can still interpolate raw text: the quoting is a
+// property of today's sites, pinned by the ✎ FORGERY closure, not of every line anyone writes later.
 //
 // Usage:
 //   node pharn/floor/check-cost-ledger.mjs <cost.json> [--verify-transcript] [--projects-dir <dir>]
-// Exit codes: 0 = GREEN (possibly with WARNs); 1 = RED; 2 = unusable input.
+// Exit codes: 0 = GREEN (possibly with WARNs); 1 = RED; 2 = unusable input, or an internal error (no verdict).
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -101,22 +138,44 @@ import {
   TOKEN_CLASSES,
   TOP_LEVEL_KEYS,
   SKILLS_VERSION_SOURCES,
-  ABS_PATH_RE,
   ATTRIBUTION_METHOD,
-  IDENTITY_MAX,
   OUTCOME_SOURCES,
   OUTCOME_KEYS,
+  USAGE_MAX_DEPTH,
   isTokenLeaf,
+  isUsageKey,
   buildViews,
   deriveLedger,
 } from "./render-cost-ledger.mjs";
 import { MARKER_KINDS, cleanScalar } from "./mark-phase.mjs";
 import { runWindow, isMember, MEMBERSHIP_METHOD, MEMBERSHIP_STATUSES, UNKNOWN_REASONS } from "./run-window-core.mjs";
+import { ABS_PATH_RE, IDENTITY_MAX, isIdentityToken, isTokenCount } from "./cost-value-core.mjs";
+import { shown } from "./quote-core.mjs";
+import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 
 const reds = [];
 const warns = [];
 const red = (m) => reds.push(m);
 const warn = (m) => warns.push(m);
+
+/** The deepest node any walk over the document visits, counted from the document root (depth 0). The emitter's
+ *  deepest node is a `usage` leaf at most `USAGE_MAX_DEPTH` below `requests[i].usage`, so a GREEN ledger never comes
+ *  near it. A deeper node is a RED, found by `tooDeep()` without recursion, and the recursive walks stop here. */
+export const WALK_MAX_DEPTH = 64;
+
+/** The most members a list in one RED or WARN line names before it gives a count of the rest. */
+const LIST_MAX = 5;
+
+/** A KEY quoted into a verdict line: as-is when it is a short token (`isTokenLeaf`: no space, no control
+ *  character, no quote), else through `shown()`. So a plain key such as `membership` reads as before, and a crafted
+ *  one cannot start a line of its own (GRILL R2-G4). Total: `isTokenLeaf` refuses every non-string first. */
+const keyText = (k) => (isTokenLeaf(k) ? k : shown(k));
+
+/** `items`, at most `LIST_MAX` of them each through `fmt`, then a count of the rest (GRILL R2-G3). */
+const listText = (items, fmt) =>
+  `${items.slice(0, LIST_MAX).map(fmt).join(", ")}${items.length > LIST_MAX ? ` (+${items.length - LIST_MAX} more)` : ""}`;
+
+const isPlainObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
 /**
  * RULE 2b — an IDENTITY field (`model`, `attribution_skill`, `agent_id`).
@@ -126,32 +185,63 @@ const warn = (m) => warns.push(m);
  * NUL/BEL bytes and a newline carrying a forged `RED — …` line were each accepted GREEN, while the
  * contract asserted "the leaf-shape rule bounds what can land in them". It did not — that rule reaches
  * `usage` only. The rule is applied here so the sentence is TRUE rather than corrected downward.
+ * Since 6.24.2 the test is `isIdentityToken`, the emitter's own predicate, with identical behaviour.
  */
 function badIdentity(v, allowNull = true) {
   if (v === null || v === undefined) return !allowNull;
-  return !cleanScalar(v, IDENTITY_MAX) || ABS_PATH_RE.test(v);
+  return !isIdentityToken(v);
+}
+
+/**
+ * The first path, built from `keyText` segments, of a node deeper than `WALK_MAX_DEPTH`, or null. ITERATIVE — an
+ * explicit stack, never recursion — so a document nested past the call stack's limit (`JSON.parse` accepts one) is
+ * measured rather than walked into. The recursive walks below then stop at the bound.
+ */
+function tooDeep(root) {
+  const stack = [[root, "", 0]];
+  while (stack.length) {
+    const [value, path, depth] = stack.pop();
+    if (depth > WALK_MAX_DEPTH) return path || "(the document)";
+    if (Array.isArray(value)) {
+      for (let i = value.length - 1; i >= 0; i--) stack.push([value[i], `${path}[${i}]`, depth + 1]);
+    } else if (isPlainObject(value)) {
+      const keys = Object.keys(value);
+      for (let i = keys.length - 1; i >= 0; i--) {
+        stack.push([value[keys[i]], path ? `${path}.${keyText(keys[i])}` : keyText(keys[i]), depth + 1]);
+      }
+    }
+  }
+  return null;
 }
 
 /** RULE 3, applied to the WHOLE document at every depth. Exported so the test can range over committed
  *  FIXTURE bytes too — the guard the post-grill gate added, so a fixture is covered by the same rule as
- *  a ledger rather than by a description of how it was built. */
-export function findAbsolutePaths(value, path, hits) {
+ *  a ledger rather than by a description of how it was built. Since 6.24.2 each path segment is a
+ *  `keyText`, the value is quoted through `shown()`, and the walk stops at `WALK_MAX_DEPTH` — `tooDeep()`
+ *  reports anything deeper. `depth` defaults to 0 in this one place. */
+export function findAbsolutePaths(value, path, hits, depth = 0) {
+  if (depth > WALK_MAX_DEPTH) return hits;
   if (typeof value === "string") {
-    if (ABS_PATH_RE.test(value)) hits.push(`${path} = ${JSON.stringify(value.slice(0, 80))}`);
+    if (ABS_PATH_RE.test(value)) hits.push(`${path} = ${shown(value)}`);
     return hits;
   }
   if (Array.isArray(value)) {
-    value.forEach((v, i) => findAbsolutePaths(v, `${path}[${i}]`, hits));
+    value.forEach((v, i) => findAbsolutePaths(v, `${path}[${i}]`, hits, depth + 1));
     return hits;
   }
   if (value && typeof value === "object") {
-    for (const k of Object.keys(value)) findAbsolutePaths(value[k], path ? `${path}.${k}` : k, hits);
+    for (const k of Object.keys(value)) findAbsolutePaths(value[k], path ? `${path}.${keyText(k)}` : keyText(k), hits, depth + 1);
   }
   return hits;
 }
 
-/** RULE 2, over one `usage` subtree. */
-function checkUsageLeaves(value, path, bad) {
+/** RULE 2, over one `usage` subtree. `depth` counts from the `usage` object itself and defaults to 0 in this one
+ *  place: a node deeper than `USAGE_MAX_DEPTH`, and a key `isUsageKey` refuses, are out of domain (6.24.2). */
+function checkUsageLeaves(value, path, bad, depth = 0) {
+  if (depth > USAGE_MAX_DEPTH) {
+    bad.push(path);
+    return bad;
+  }
   if (value === null || typeof value === "number" || typeof value === "boolean") return bad;
   if (typeof value === "string") {
     // THE SHARED encoding, imported from the emitter — not a second statement of the same rule. The
@@ -160,11 +250,14 @@ function checkUsageLeaves(value, path, bad) {
     return bad;
   }
   if (Array.isArray(value)) {
-    value.forEach((v, i) => checkUsageLeaves(v, `${path}[${i}]`, bad));
+    value.forEach((v, i) => checkUsageLeaves(v, `${path}[${i}]`, bad, depth + 1));
     return bad;
   }
   if (typeof value === "object") {
-    for (const k of Object.keys(value)) checkUsageLeaves(value[k], `${path}.${k}`, bad);
+    for (const k of Object.keys(value)) {
+      if (!isUsageKey(k)) bad.push(`${path}.${keyText(k)}`);
+      else checkUsageLeaves(value[k], `${path}.${k}`, bad, depth + 1);
+    }
     return bad;
   }
   bad.push(path);
@@ -196,22 +289,22 @@ export function checkLedger(led, opts = {}) {
   const expected = new Set(legacy ? TOP_LEVEL_KEYS_V1 : TOP_LEVEL_KEYS);
   const extra = [...present].filter((k) => !expected.has(k)).sort();
   const missing = [...expected].filter((k) => !present.has(k)).sort();
-  if (extra.length) red(`top-level key set is not closed — unexpected key(s): ${extra.join(", ")}`);
-  if (missing.length) red(`top-level key set is not closed — missing key(s): ${missing.join(", ")}`);
+  if (extra.length) red(`top-level key set is not closed — unexpected key(s): ${listText(extra, keyText)}`);
+  if (missing.length) red(`top-level key set is not closed — missing key(s): ${listText(missing, keyText)}`);
 
   // ---- enums and scalar grammars ---------------------------------------------------------------
-  if (led.schema !== SCHEMA && !legacy)
-    red(`schema must be "${SCHEMA}" or the legacy "${LEGACY_SCHEMA}" (got ${JSON.stringify(led.schema)})`);
-  if (!COVERAGE.includes(led.coverage)) red(`coverage must be one of ${COVERAGE.join(" | ")} (got ${JSON.stringify(led.coverage)})`);
-  if (led.dedup_key !== "requestId") red(`dedup_key must be "requestId" (got ${JSON.stringify(led.dedup_key)})`);
+  // Every value quoted below goes through `shown()`: total, escaped, bounded (see the header).
+  if (led.schema !== SCHEMA && !legacy) red(`schema must be "${SCHEMA}" or the legacy "${LEGACY_SCHEMA}" (got ${shown(led.schema)})`);
+  if (!COVERAGE.includes(led.coverage)) red(`coverage must be one of ${COVERAGE.join(" | ")} (got ${shown(led.coverage)})`);
+  if (led.dedup_key !== "requestId") red(`dedup_key must be "requestId" (got ${shown(led.dedup_key)})`);
   if (!SKILLS_VERSION_SOURCES.includes(led.skills_version_source)) {
-    red(`skills_version_source must be one of ${SKILLS_VERSION_SOURCES.join(" | ")} (got ${JSON.stringify(led.skills_version_source)})`);
+    red(`skills_version_source must be one of ${SKILLS_VERSION_SOURCES.join(" | ")} (got ${shown(led.skills_version_source)})`);
   }
   if (led.skills_version_source === "unknown" && led.skills_version !== null) {
     red("skills_version_source is `unknown` but skills_version carries a value — an honest absence is null");
   }
   if (!led.attribution || led.attribution.method !== ATTRIBUTION_METHOD) {
-    red(`attribution.method must be "${ATTRIBUTION_METHOD}" (got ${JSON.stringify(led.attribution?.method)})`);
+    red(`attribution.method must be "${ATTRIBUTION_METHOD}" (got ${shown(led.attribution?.method)})`);
   }
   if (typeof led.pricing_note !== "string" || !/TOKENS ONLY/.test(led.pricing_note)) {
     red("pricing_note must be present and state that the file carries tokens, never prices");
@@ -222,16 +315,35 @@ export function checkLedger(led, opts = {}) {
   if (!Array.isArray(led.sessions)) red("sessions must be an array");
   if (!Array.isArray(led.claude_code_versions)) red("claude_code_versions must be an array");
 
+  // RULE 2b over the two list fields (6.24.2): each element a bounded identity token, as the emitter writes them.
+  for (const field of ["sessions", "claude_code_versions"]) {
+    if (!Array.isArray(led[field])) continue;
+    const bad = [];
+    led[field].forEach((v, i) => {
+      if (badIdentity(v, false)) bad.push(i);
+    });
+    if (bad.length) {
+      red(
+        `${field}[] holds ${bad.length} element(s) that are not bounded identity tokens (<=${IDENTITY_MAX} chars, no control chars, no path), at index ${listText(bad, String)}`
+      );
+    }
+  }
+
   // A price table must never appear, at any depth, under any key naming money.
   for (const k of Object.keys(led)) {
-    if (/price|cost_usd|usd|dollar/i.test(k)) red(`key ${JSON.stringify(k)} looks like a price field — this record carries tokens only`);
+    if (/price|cost_usd|usd|dollar/i.test(k)) red(`key ${shown(k)} looks like a price field — this record carries tokens only`);
   }
+
+  // ---- DEPTH: no node deeper than WALK_MAX_DEPTH (6.24.2) ----------------------------------------
+  // Found without recursion, so a document nested past the stack's limit is REPORTED, never walked into.
+  const deep = tooDeep(led);
+  if (deep !== null) red(`the document nests deeper than ${WALK_MAX_DEPTH} levels, at ${deep} — the walks below stop there`);
 
   // ---- RULE 3: no absolute path anywhere -------------------------------------------------------
   const pathHits = findAbsolutePaths(led, "", []);
   if (pathHits.length)
     red(
-      `absolute-path-shaped string(s) present: ${pathHits.slice(0, 5).join("; ")}${pathHits.length > 5 ? ` (+${pathHits.length - 5} more)` : ""}`
+      `absolute-path-shaped string(s) present: ${pathHits.slice(0, LIST_MAX).join("; ")}${pathHits.length > LIST_MAX ? ` (+${pathHits.length - LIST_MAX} more)` : ""}`
     );
 
   // ---- RULE 5: markers, strictly increasing seq ------------------------------------------------
@@ -242,9 +354,8 @@ export function checkLedger(led, opts = {}) {
         red(`markers[${i}] is not an object`);
         continue;
       }
-      if (!MARKER_KINDS.has(m.kind))
-        red(`markers[${i}].kind must be one of ${[...MARKER_KINDS].join(" | ")} (got ${JSON.stringify(m.kind)})`);
-      if (!Number.isInteger(m.seq)) red(`markers[${i}].seq must be an integer (got ${JSON.stringify(m.seq)})`);
+      if (!MARKER_KINDS.has(m.kind)) red(`markers[${i}].kind must be one of ${[...MARKER_KINDS].join(" | ")} (got ${shown(m.kind)})`);
+      if (!Number.isInteger(m.seq)) red(`markers[${i}].seq must be an integer (got ${shown(m.seq)})`);
       else if (prev !== null && m.seq <= prev) red(`markers[${i}].seq must be strictly increasing (${m.seq} follows ${prev})`);
       else prev = m.seq;
     }
@@ -256,6 +367,7 @@ export function checkLedger(led, opts = {}) {
   // `unavailable` ledger has one — so the guard is not "requests must be non-empty"; it is that an
   // empty `requests[]` must AGREE with the coverage enum and with every view. Silence and
   // asserted-silence are different claims, and only the second is a record.
+  let allViewable = false;
   if (Array.isArray(led.requests)) {
     if (led.requests.length === 0) {
       // Under `/2` an empty `partial` is an OBSERVED zero when the window is KNOWN; RULE 8 checks the
@@ -270,43 +382,81 @@ export function checkLedger(led, opts = {}) {
       }
     }
     const ids = new Set();
+    // RULE 6 recomputes the views from these rows, and `buildViews` reads each row's model, stage, iteration and
+    // tokens. A row is VIEWABLE only when those four pass the type rules below, so the recompute never meets a value
+    // it would coerce (6.24.2). Counted here, where the rules run: one definition, not a second predicate.
+    let unviewable = 0;
     for (const [i, r] of led.requests.entries()) {
-      if (!r || typeof r !== "object") {
+      if (!isPlainObject(r)) {
         red(`requests[${i}] is not an object`);
+        unviewable++;
         continue;
       }
       if (typeof r.request_id !== "string" || !r.request_id) red(`requests[${i}].request_id must be a non-empty string`);
-      else if (ids.has(r.request_id)) red(`requests[${i}].request_id is a duplicate: ${JSON.stringify(r.request_id)}`);
+      else if (ids.has(r.request_id)) red(`requests[${i}].request_id is a duplicate: ${shown(r.request_id)}`);
       else ids.add(r.request_id);
       if (typeof r.sidechain !== "boolean") red(`requests[${i}].sidechain must be a boolean`);
       if (typeof r.model !== "string" || !r.model) red(`requests[${i}].model must be a non-empty string`);
-      // RULE 2b — the three identity fields, bounded. `model` may not be null; the other two may.
-      if (badIdentity(r.model, false))
-        red(`requests[${i}].model is not a bounded identity token (<=${IDENTITY_MAX} chars, no control chars, no path)`);
-      if (badIdentity(r.attribution_skill))
-        red(`requests[${i}].attribution_skill is not a bounded identity token (<=${IDENTITY_MAX} chars, no control chars, no path)`);
-      if (badIdentity(r.agent_id))
-        red(`requests[${i}].agent_id is not a bounded identity token (<=${IDENTITY_MAX} chars, no control chars, no path)`);
+      // RULE 2b — the identity fields, bounded. `model` and `request_id` may not be null; the others may.
+      for (const [field, nullable] of [
+        ["request_id", false],
+        ["model", false],
+        ["session_id", true],
+        ["attribution_skill", true],
+        ["agent_id", true],
+      ]) {
+        if (badIdentity(r[field], nullable))
+          red(`requests[${i}].${field} is not a bounded identity token (<=${IDENTITY_MAX} chars, no control chars, no path)`);
+      }
       const badLeaves = checkUsageLeaves(r.usage, `requests[${i}].usage`, []);
       if (badLeaves.length)
-        red(`usage leaf out of domain (must be number | bool | null | short token): ${badLeaves.slice(0, 4).join(", ")}`);
+        red(
+          `usage leaf out of domain (a leaf must be number | bool | null | short token, a key a short token other than __proto__, and no node deeper than ${USAGE_MAX_DEPTH}): ${listText(badLeaves, (p) => p)}`
+        );
+      let viewable = typeof r.model === "string";
       for (const c of TOKEN_CLASSES) {
-        if (!Number.isFinite(r.tokens?.[c])) red(`requests[${i}].tokens.${c} must be a number`);
+        if (!isTokenCount(r.tokens?.[c])) {
+          red(`requests[${i}].tokens.${c} must be a number: a non-negative safe integer (got ${shown(r.tokens?.[c])})`);
+          viewable = false;
+        }
       }
+      if (!(r.stage === null || typeof r.stage === "string")) {
+        red(`requests[${i}].stage must be a string or null (got ${shown(r.stage)})`);
+        viewable = false;
+      }
+      if (!(r.iteration === null || typeof r.iteration === "number")) {
+        red(`requests[${i}].iteration must be a number or null (got ${shown(r.iteration)})`);
+        viewable = false;
+      }
+      if (!viewable) unviewable++;
     }
+    if (unviewable > 0) {
+      red(
+        `the views were NOT recomputed: ${unviewable} row(s) of requests[] fail a type rule above, so totals, by_model, by_stage_iteration_model and unattributed are unchecked`
+      );
+    }
+    allViewable = unviewable === 0;
   }
 
   // ---- RULE 6: every view recomputed from requests[] --------------------------------------------
-  if (Array.isArray(led.requests) && led.requests.every((r) => r && typeof r === "object" && r.tokens)) {
+  // Only when every row passed the type rules above (`allViewable`); every stored value quoted in a message goes
+  // through `tokenText`/`keyText`, and a stored view row that is not an object is tolerated, not read.
+  if (Array.isArray(led.requests) && allViewable) {
     const v = buildViews(led.requests);
     if (led.totals?.requests !== v.totals.requests || !sameTokens(led.totals?.tokens, v.totals.tokens)) {
-      red(`totals disagrees with a recompute from requests[] (stored ${led.totals?.requests} requests, recomputed ${v.totals.requests})`);
+      red(
+        `totals disagrees with a recompute from requests[] (stored ${tokenText(led.totals?.requests)} requests, recomputed ${v.totals.requests})`
+      );
     }
     if (led.unattributed?.requests !== v.unattributed.requests || !sameTokens(led.unattributed?.tokens, v.unattributed.tokens)) {
       red(
-        `unattributed disagrees with a recompute from requests[] (stored ${led.unattributed?.requests}, recomputed ${v.unattributed.requests})`
+        `unattributed disagrees with a recompute from requests[] (stored ${tokenText(led.unattributed?.requests)}, recomputed ${v.unattributed.requests})`
       );
     }
+    // A view row's KEY is compared field by field with `===`, and printed through `keyText`/`tokenText`, never
+    // through a template over a stored value (a crafted one threw, or forged a line — GRILL R2-G4).
+    const keyShown = (parts) =>
+      parts.map((p) => (p === null || p === undefined ? "" : Number.isFinite(p) ? String(p) : keyText(p))).join("/");
     const cmpView = (name, stored, want, keyOf) => {
       if (!Array.isArray(stored) || stored.length !== want.length) {
         red(
@@ -315,23 +465,24 @@ export function checkLedger(led, opts = {}) {
         return;
       }
       for (let i = 0; i < want.length; i++) {
+        const got = keyOf(stored[i]);
+        const exp = keyOf(want[i]);
         if (
-          keyOf(stored[i]) !== keyOf(want[i]) ||
-          stored[i].requests !== want[i].requests ||
-          !sameTokens(stored[i].tokens, want[i].tokens)
+          got.some((p, j) => p !== exp[j]) ||
+          stored[i]?.requests !== want[i].requests ||
+          !sameTokens(stored[i]?.tokens, want[i].tokens)
         ) {
-          red(`${name}[${i}] disagrees with a recompute from requests[] (${keyOf(stored[i])} vs ${keyOf(want[i])})`);
+          red(`${name}[${i}] disagrees with a recompute from requests[] (${keyShown(got)} vs ${keyShown(exp)})`);
           return;
         }
       }
     };
-    cmpView("by_model", led.by_model, v.by_model, (r) => r?.model);
-    cmpView(
-      "by_stage_iteration_model",
-      led.by_stage_iteration_model,
-      v.by_stage_iteration_model,
-      (r) => `${r?.stage ?? ""}/${r?.iteration ?? ""}/${r?.model}`
-    );
+    cmpView("by_model", led.by_model, v.by_model, (r) => [r?.model]);
+    cmpView("by_stage_iteration_model", led.by_stage_iteration_model, v.by_stage_iteration_model, (r) => [
+      r?.stage ?? null,
+      r?.iteration ?? null,
+      r?.model,
+    ]);
   }
 
   // ---- RULE 7: `outcome` SHAPE ------------------------------------------------------------------
@@ -360,17 +511,17 @@ export function checkLedger(led, opts = {}) {
         red(`outcome.decision must be a bounded, control-char-free string (<=${IDENTITY_MAX} chars)`);
       }
       if (!(o.iterations === null || Number.isInteger(o.iterations))) {
-        red(`outcome.iterations must be an integer or null (got ${JSON.stringify(o.iterations)})`);
+        red(`outcome.iterations must be an integer or null (got ${shown(o.iterations)})`);
       }
       if (!OUTCOME_SOURCES.includes(o.source)) {
-        red(`outcome.source must be one of ${OUTCOME_SOURCES.join(" | ")} (got ${JSON.stringify(o.source)})`);
+        red(`outcome.source must be one of ${OUTCOME_SOURCES.join(" | ")} (got ${shown(o.source)})`);
       }
       if (o.blocked !== undefined && !cleanScalar(o.blocked, IDENTITY_MAX)) {
         red(`outcome.blocked, when present, must be a bounded, control-char-free string (<=${IDENTITY_MAX} chars)`);
       }
-      for (const k of Object.keys(o)) {
-        if (!OUTCOME_KEYS.includes(k))
-          red(`outcome carries an unknown key ${JSON.stringify(k)} — the key set is closed to ${OUTCOME_KEYS.join(", ")}`);
+      const unknownKeys = Object.keys(o).filter((k) => !OUTCOME_KEYS.includes(k));
+      if (unknownKeys.length) {
+        red(`outcome carries an unknown key ${listText(unknownKeys, keyText)} — the key set is closed to ${OUTCOME_KEYS.join(", ")}`);
       }
     }
   }
@@ -382,11 +533,16 @@ export function checkLedger(led, opts = {}) {
   if (Array.isArray(led.markers) && led.outcome && Number.isInteger(led.outcome.iterations)) {
     const stageStarts = led.markers.filter((m) => m?.kind === "stage-start");
     const iters = new Set(stageStarts.map((m) => m.iteration).filter((n) => Number.isInteger(n)));
-    const missingIters = [];
-    for (let n = 1; n <= led.outcome.iterations; n++) if (!iters.has(n)) missingIters.push(n);
-    if (missingIters.length) {
+    // COUNTED, never enumerated (see the header): the recorded iterations inside [1, total] are subtracted from
+    // total, and the scan that lists the first missing ones stops after LIST_MAX finds, so it takes at most
+    // |iters| + LIST_MAX steps whatever `total` is (GRILL R2-G3: `2^53` here allocated until the process died).
+    const total = led.outcome.iterations;
+    const missingCount = Math.max(0, total - [...iters].filter((n) => n >= 1 && n <= total).length);
+    if (missingCount > 0) {
+      const first = [];
+      for (let n = 1; first.length < LIST_MAX && n <= total; n++) if (!iters.has(n)) first.push(n);
       warn(
-        `marker completeness: outcome.iterations is ${led.outcome.iterations} but no stage-start marker carries iteration(s) ${missingIters.join(", ")} — ${missingIters.length} boundary/boundaries unrecorded; those requests stay in their own bucket and are NOT merged into a neighbour`
+        `marker completeness: outcome.iterations is ${total} but no stage-start marker carries iteration(s) ${first.join(", ")}${missingCount > first.length ? ` (+${missingCount - first.length} more)` : ""} — ${missingCount} boundary/boundaries unrecorded; those requests stay in their own bucket and are NOT merged into a neighbour`
       );
     }
     if (!led.markers.some((m) => m?.kind === "run-start"))
@@ -414,12 +570,28 @@ export function checkLedger(led, opts = {}) {
   } else if (opts.verifyTranscript) {
     // Re-derive under the RECORDED boundary: the file's own `markers[]` and `membership.session`, never
     // the live markers file, so a later invocation's appended run-start cannot re-bound this ledger.
+    // PRECONDITIONS (6.24.2): the re-derivation reads `name` into a path, sorts the rows' ids, and quotes the
+    // session into a note this file prints. So it runs only over rows that are objects with string ids (S9: a
+    // `null` row crashed it), a `name` that is a feature slug, and a session — the one ACTUALLY passed, which is
+    // `membership.session`, else `sessions[0]` (GRILL R2-G4) — that is null or a bounded identity token.
+    const session = led.membership?.session ?? led.sessions?.[0] ?? null;
+    const notRun = !(Array.isArray(led.requests) && led.requests.every((r) => isPlainObject(r) && typeof r.request_id === "string"))
+      ? "requests[] is not an array of objects with a string request_id"
+      : typeof led.name !== "string" || !FEATURE_SLUG_RE.test(led.name)
+        ? "name is not a feature slug"
+        : session !== null && !isIdentityToken(session)
+          ? "the recorded session is not a bounded identity token"
+          : null;
+    if (notRun !== null) {
+      red(`--verify-transcript: not run — ${notRun}, so the rows were not re-derived from the transcript`);
+      return { reds: [...reds], warns: [...warns] };
+    }
     const { ledger: live, excludedAfterWindow } = deriveLedger({
       name: led.name,
       command: led.command,
       baseSha: led.base_sha,
       repo: opts.repo ?? ".",
-      sessionId: led.membership?.session ?? led.sessions?.[0] ?? null,
+      sessionId: session,
       projectsDir: opts.projectsDir,
       markers: Array.isArray(led.markers) ? led.markers : [],
     });
@@ -448,8 +620,9 @@ export function checkLedger(led, opts = {}) {
 /** The two token classes that can GROW across one request's transcript lines (see below). */
 export const GROWING_CLASSES = Object.freeze(["output", "output_thinking"]);
 
-/** A token value quoted into a verdict line — total over any input (L62): a non-number is never coerced. */
-const tokenText = (v) => (Number.isFinite(v) ? String(v) : "(not a number)");
+/** A number quoted into a verdict line — total over any input (L62): a finite number as itself, and anything else
+ *  through `shown()`, never coerced by a template (6.24.2: it printed "(not a number)", which hid the value). */
+const tokenText = (v) => (Number.isFinite(v) ? String(v) : shown(v));
 
 /**
  * `--verify-transcript`'s comparison of the ROWS, request by request and class by class (6.24.1). The id
@@ -485,7 +658,7 @@ function checkRowsAgainstTranscript(recorded, live) {
     for (const c of TOKEN_CLASSES) {
       const rec = r.tokens?.[c];
       const cur = l?.tokens?.[c];
-      const where = `${JSON.stringify(r.request_id)} ${c}: ${tokenText(rec)} recorded, ${tokenText(cur)} re-derived`;
+      const where = `${shown(r.request_id)} ${c}: ${tokenText(rec)} recorded, ${tokenText(cur)} re-derived`;
       if (!Number.isFinite(rec) || !Number.isFinite(cur)) fixed.push(where);
       else if (!GROWING_CLASSES.includes(c)) {
         if (rec !== cur) fixed.push(where);
@@ -533,16 +706,19 @@ function checkRowsAgainstTranscript(recorded, live) {
  * (`isAfterWindow`'s bound); that is a platform behaviour, observed, not a floor fact.
  */
 function checkExcludedAgainstTranscript(recorded, live, after) {
+  // `recorded` is read from the file, so it is quoted through `tokenText` and compared only once it is an integer.
   if (recorded === null || live === null) {
     if (recorded !== live) {
-      red(`--verify-transcript: membership.excluded_requests does not match the transcript (${recorded} recorded, ${live} re-derived)`);
+      red(
+        `--verify-transcript: membership.excluded_requests does not match the transcript (${recorded === null ? "null" : tokenText(recorded)} recorded, ${live} re-derived)`
+      );
     }
     return;
   }
   const before = live - after;
   if (!Number.isInteger(recorded) || recorded < before || recorded > live) {
     red(
-      `--verify-transcript: membership.excluded_requests does not match the transcript (${recorded} recorded; re-derived ${before} before the window + ${after} after its end, so a genuine value lies in [${before}, ${live}])`
+      `--verify-transcript: membership.excluded_requests does not match the transcript (${tokenText(recorded)} recorded; re-derived ${before} before the window + ${after} after its end, so a genuine value lies in [${before}, ${live}])`
     );
     return;
   }
@@ -563,17 +739,17 @@ function checkMembership(led) {
   const keys = Object.keys(m);
   const extra = keys.filter((k) => !MEMBERSHIP_KEYS.includes(k));
   const missing = MEMBERSHIP_KEYS.filter((k) => !keys.includes(k));
-  if (extra.length) red(`membership key set is not closed — unexpected key(s): ${extra.sort().join(", ")}`);
-  if (missing.length) red(`membership key set is not closed — missing key(s): ${missing.join(", ")}`);
-  if (m.method !== MEMBERSHIP_METHOD) red(`membership.method must be "${MEMBERSHIP_METHOD}" (got ${JSON.stringify(m.method)})`);
+  if (extra.length) red(`membership key set is not closed — unexpected key(s): ${listText(extra.sort(), keyText)}`);
+  if (missing.length) red(`membership key set is not closed — missing key(s): ${listText(missing, keyText)}`);
+  if (m.method !== MEMBERSHIP_METHOD) red(`membership.method must be "${MEMBERSHIP_METHOD}" (got ${shown(m.method)})`);
   if (!MEMBERSHIP_STATUSES.includes(m.status)) {
-    red(`membership.status must be one of ${MEMBERSHIP_STATUSES.join(" | ")} (got ${JSON.stringify(m.status)})`);
+    red(`membership.status must be one of ${MEMBERSHIP_STATUSES.join(" | ")} (got ${shown(m.status)})`);
     return;
   }
   if (m.session !== null && badIdentity(m.session)) red("membership.session is not a bounded identity token");
   if (m.status === "unknown") {
     if (!Object.values(UNKNOWN_REASONS).includes(m.reason))
-      red(`membership.reason is not a member of the closed reason set (got ${JSON.stringify(m.reason)})`);
+      red(`membership.reason is not a member of the closed reason set (got ${shown(m.reason)})`);
     if (m.excluded_requests !== null)
       red("membership.excluded_requests must be null when membership is unknown — nothing was measured, so nothing was excluded");
     if (led.coverage !== "unavailable")
@@ -583,9 +759,7 @@ function checkMembership(led) {
   } else {
     if (m.reason !== null) red("membership.reason must be null when the window is known");
     if (!Number.isInteger(m.excluded_requests) || m.excluded_requests < 0) {
-      red(
-        `membership.excluded_requests must be a non-negative integer when the window is known (got ${JSON.stringify(m.excluded_requests)})`
-      );
+      red(`membership.excluded_requests must be a non-negative integer when the window is known (got ${shown(m.excluded_requests)})`);
     }
     if (m.status === "open")
       warn(
@@ -597,9 +771,7 @@ function checkMembership(led) {
   const win = runWindow(normalizeMarkers(led.markers), m.session ?? null);
   for (const k of ["status", "reason", "start", "end"]) {
     if ((m[k] ?? null) !== (win[k] ?? null)) {
-      red(
-        `membership.${k} disagrees with a recompute from markers[] (stored ${JSON.stringify(m[k])}, recomputed ${JSON.stringify(win[k])})`
-      );
+      red(`membership.${k} disagrees with a recompute from markers[] (stored ${shown(m[k])}, recomputed ${shown(win[k])})`);
     }
   }
   if (!Array.isArray(led.requests)) return;
@@ -608,7 +780,7 @@ function checkMembership(led) {
     red(
       `${outside.length} request(s) lie OUTSIDE the recorded run window and are summed into the run's totals: ${outside
         .slice(0, 3)
-        .map((r) => JSON.stringify(r.request_id))
+        .map((r) => shown(r.request_id))
         .join(", ")}${outside.length > 3 ? ", …" : ""}`
     );
   }
@@ -644,11 +816,22 @@ function main(argv) {
   try {
     led = JSON.parse(readFileSync(file, "utf8"));
   } catch (e) {
-    process.stderr.write(`check-cost-ledger: cannot read or parse ${file} — ${e.message}\n`);
+    // The message is quoted: V8's JSON.parse message embeds the file's own text, newlines included (GRILL R2-G4).
+    process.stderr.write(`check-cost-ledger: cannot read or parse ${file} — ${shown(e?.message)}\n`);
     return 2; // unusable input is never GREEN by default (fail-closed, P5)
   }
 
-  const { reds: r, warns: w } = checkLedger(led, opts);
+  // THE BACKSTOP (6.24.2): an unforeseen throw while checking is exit 2 — unusable, no verdict — never node's exit
+  // 1, which is this file's RED code. The closures found no throw left to catch; this covers the member they did not
+  // reach (L62: a crash is never read as a verdict). The message is fixed text, so nothing from the file rides it.
+  let r;
+  let w;
+  try {
+    ({ reds: r, warns: w } = checkLedger(led, opts));
+  } catch {
+    process.stderr.write(`check-cost-ledger: internal error while checking ${file} — no verdict (exit 2: unusable, never GREEN or RED)\n`);
+    return 2;
+  }
   for (const m of w) console.log(`WARN — ${m}`);
   if (r.length) {
     for (const m of r) console.log(`RED — ${m}`);
@@ -667,5 +850,6 @@ function main(argv) {
   return 0;
 }
 
-// `import.meta.main` — NOT a `file://` + argv[1] compare (L25).
-if (import.meta.main) process.exit(main(process.argv.slice(2)));
+// `import.meta.main` — NOT a `file://` + argv[1] compare (L25). The exit code is SET, never forced: an immediate
+// exit drops stdout still queued for a pipe, which cut a large verdict off before its last line (6.24.2, GRILL R2-G3).
+if (import.meta.main) process.exitCode = main(process.argv.slice(2));
