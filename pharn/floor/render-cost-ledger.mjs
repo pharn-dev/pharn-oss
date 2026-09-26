@@ -52,14 +52,20 @@
 //     the fixed marker `<refused-key>` so the raw key never reaches the file. Both bounds keep the walk
 //     itself from exhausting the stack.
 //   * Every value copied or counted from the transcript passes a TYPE and DOMAIN test before anything
-//     coerces it (6.26.1, [[L62]]): `request_id`, `model`, `session_id`, `agent_id`, `attribution_skill`
-//     and each `claude_code_versions` entry must satisfy `isIdentityToken`, and each count `isTokenCount`
-//     (both cost-value-core.mjs). A refused value becomes its field's fallback (`unknown` for `model`,
-//     null or omission otherwise, 0 for a count) and its path is listed in `dropped[]`; an ABSENT value
-//     keeps its old fallback and is not listed. Which lines are requests is the reader's rule
-//     (`sessionRequests()`). RUN MEMBERSHIP IS NOT CHANGED BY THIS: it reads the session exactly as
-//     before (a string as itself, anything else as absent), and only the emitted `session_id` field is
-//     bounded, so a refused session string is still excluded by markers bound to another session.
+//     coerces it (6.26.1, [[L62]]). A line whose request id fails `isIdentityToken`, or whose usage is not
+//     a plain object, is not a request at all — the reader's rule (`sessionRequests()`) — so it leaves no
+//     row and no `dropped[]` entry, and it is not counted in `excluded_requests`. On a ROW (a request
+//     inside the run window), `model`, `session_id`, `agent_id`, `attribution_skill` and each
+//     `claude_code_versions` entry must satisfy `isIdentityToken`, and each count `isTokenCount` (both
+//     cost-value-core.mjs). A refused one becomes its field's fallback (`unknown` for `model`, null or
+//     omission otherwise, 0 for a count) and its path is listed in `dropped[]`; an ABSENT value keeps its old
+//     fallback and is not listed. A request outside the window is only counted, never emitted, so nothing
+//     about it is listed. A timestamp that does not parse makes the request a non-member: under a known
+//     window it is counted in `excluded_requests` and listed nowhere, and under an unknown one that field is
+//     null.
+//     RUN MEMBERSHIP IS NOT CHANGED BY THIS: it reads the session exactly as before (a string as itself,
+//     anything else as absent), and only the emitted `session_id` field is bounded, so a refused session
+//     string is still excluded by markers bound to another session.
 //   * No string anywhere in the emitted file matches `ABS_PATH_RE`.
 //   * Given the same transcript bytes AND the same markers bytes the output is byte-identical: no clock
 //     read, no randomness. `window_*` come from the records' own timestamps, never `Date.now()`.

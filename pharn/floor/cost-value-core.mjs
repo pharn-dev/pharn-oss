@@ -7,7 +7,8 @@
 // expected. `String()` is not total over it: `{"toString":1}` and `[{"toString":1}]` make it throw, and so do `+`, a
 // template literal, a relational compare and `Object.fromEntries` ([[L62]]). Until 6.26.1 the cost tooling coerced
 // first and bounded second, so one crafted line crashed both renderers and the checker's re-derivation. The order
-// is now the other way round: every value passes a TYPE and DOMAIN test here before anything coerces it.
+// is now the other way round: every transcript value the cost tooling reads passes a TYPE and DOMAIN test here
+// before anything coerces it.
 //
 // ── Its consumers, named so that a new one is a deliberate addition ──────────────────────────────────
 //   * transcript-core.mjs — which lines are requests: a request's id must be an identity token, and the per-request
@@ -33,9 +34,10 @@
 // ── Honest scope (P0) ────────────────────────────────────────────────────────────────────────────────
 // FLOOR (primitive #3): each predicate is a deterministic membership test, total over every JSON value. It never
 //   throws and never coerces. Pinned by cost-value-core.test.mjs.
-// NOT CLAIMED: that an admitted value is TRUE. An identity token is bounded in SHAPE only (length, control
-//   characters, an absolute path), never in meaning, so a crafted `req_…` id or a made-up model name passes. A token
-//   count is a non-negative safe integer, never proof that the platform consumed that many tokens.
+// NOT CLAIMED: that an admitted value is TRUE. An identity token is bounded in SHAPE only (length, C0 control
+//   characters and DEL, an absolute path), never in meaning, so a crafted `req_…` id or a made-up model name passes,
+//   and so does a C1 control (U+0080 to U+009F). A token count is a non-negative safe integer, never proof that the
+//   platform consumed that many tokens.
 
 import { cleanScalar } from "./mark-phase.mjs";
 

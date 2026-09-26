@@ -149,3 +149,122 @@ attributed to the named test rather than to an aborted file.
   precondition refuses the session, and the CLI prints no line starting `GREEN — forged`.
 - An unparseable file whose text carries the forged line → exit 2, with the parse error quoted through `shown()` and
   no stderr line starting `GREEN —`.
+
+## Fix pass — 2026-09-27 (GATE 2 → fix, integrate, commit locally)
+
+The sections above record the first build, as 6.24.2 on `b9b6a03`. This pass follows the maintainer's GATE 2 decision
+(`PLAN.md` decisions 8–10, and the section "Fix pass").
+
+### Integration, before the fixes
+
+- The first build was committed as `df2e880`, and L64 was promoted as `18c12a4`.
+- `origin/main` (`008b24b`, after #280 at 6.25.0 and #281 at 6.26.0) was merged in as `2c38d9a`:
+  - four conflicts, all textual: CHANGELOG, README, SKILLS_VERSION, and the contract's field table;
+  - every code file merged cleanly;
+  - 56 added lines in 14 files renumbered from 6.24.2 to 6.26.1, found by diff;
+  - the merged tree passed 439/439 in the cost suites and their neighbours before the merge was committed.
+- The plan's spec pin moved to `d831d30d…`. #280's `ARCHITECTURE.md` change touches nothing here.
+- The scope was set from the amended plan, and the epoch was re-anchored after the merge commit, so the merged files
+  from `main` are not in this pass's reconciliation window.
+
+### The review's findings, as built
+
+- **R1.** The three universal sentences are narrowed to the bounds this release adds. `skills_version` and
+  `window_start`/`_end` are relabelled ADVISORY in the field table.
+- **R2.** `ship-record.md`, the emitter header and the CHANGELOG now say which refusals `cost.json` lists and which
+  it does not. The L64 sweep, below, found the same claim in `render-cost-record.mjs`'s header as well, and it is
+  fixed too.
+- **R3.** "no C0 control character or DEL" is used in the CHANGELOG, contract rule 3, the field table, the Residual
+  section, the checker's identity messages and header, and `cost-value-core.mjs`'s header.
+- **R4.** New test 16. **R9.** New test 17, and `valText` replaces `tokenText` at every "(got …)" site.
+- **R5.** The CHANGELOG's headline and forgery sentence carry their bounds.
+- **R6.** The `outcome` row cites rule 5.
+- **R7.** `quote-core.mjs`'s LOAD GRAPH names the modules that gained it. The claim was checked by computing each
+  module's static import closure: `check-cost-ledger.mjs`, `test-results-formats.mjs`, `test-results-core.mjs`,
+  `check-verify.mjs`, `check-red-run.mjs` and `loop-fresh-core.mjs` all now load `quote-core.mjs` and
+  `loop-record-core.mjs`.
+- **R8.** `transcript-core.mjs`'s BOUND, the CHANGELOG and the plan's trust audit name the id-reuse vector.
+
+### L64, applied: every universal phrase in this increment's added prose, probed
+
+A scan of the added lines of the CHANGELOG section, both contracts and every touched module header, for "every",
+"each", "all", "any", "never", "only", "no longer", "whole" and "total", found these sentences wider than the code.
+Each is narrowed:
+
+- **CHANGELOG headline:** "no longer writes what its own checker REDs" → for the enumerated transcript values.
+- **"Every transcript value is tested"** → "every transcript value the tooling reads", in the CHANGELOG, the contract,
+  `ship-record.md` and `cost-value-core.mjs`.
+- **"A present `requestId` that fails never falls back"** → "present and not `null`". A JSON `null` does fall back,
+  because `??` reads it as absent. Fixed in the CHANGELOG, the contract and `transcript-core.mjs`.
+- **"A refused field … is listed"** → the identity fields on a request, a version, a count, a `usage` leaf or key.
+  The id is excluded, since a refused id makes the line not a request.
+- **"Every string or object it prints goes through `shown()`"** → "each value quoted from the file", in the
+  CHANGELOG, the contract and the checker header, with the one indirect case named: the re-derivation's WARN carries a
+  session only after rule 3 admits it.
+- **"An unforeseen error is exit 2" / "turns any unforeseen throw into exit 2"** → "while checking". A module that
+  fails to load is outside it.
+- **"A genuine transcript carries none"** → "no genuine transcript measured carries one".
+- **"Each asserted property has a mutant"** → the negative controls cover one mutant per property the plan names.
+- **`quote-core.mjs`'s consumer list** was stale after #281, which added `render-verify.mjs` and `stage-verify.mjs`.
+  It now names the rule ("each module that imports this file") instead of a list.
+- **`render-cost-record.mjs`'s "`cost.json` lists each one"** is the R2 claim the review had not listed.
+
+### Negative controls for the new tests (scratch copy)
+
+| id  | mutant                                          | killed by            |
+| --- | ----------------------------------------------- | -------------------- |
+| M29 | record: window compared as numbers (`tsMs`)     | 16 WINDOW ORDER (R4) |
+| M30 | checker: `valText` quotes every value (`shown`) | 17 TYPED VALUES (R9) |
+
+The unmutated copy passed both tests first. The total is 33 / 33 killed.
+
+### Gates, this pass
+
+- **Floor and read-only gates:** `validate` GREEN, and `format:check`, `lint`, `lint:md`, `docs:check`,
+  `check:markers`, `check:badge`, `check:changelog` and `check:contributing` exit 0 each.
+- **Cost suites:** 283 / 283 pass (cost-hostile-input with 43 tests, cost-value-core, check-cost-ledger, quote-core,
+  test-results-core, transcript-core and both renderers).
+- **The full suite** is `/pharn-dev-verify`'s `test` gate, run in this pass.
+
+### Deviation: an importer that arrived with the merge
+
+The first full-suite run of this pass gave 3,812 of 3,813: `pharn/floor/render-verify.test.mjs`, a file #281 added,
+failed to load. It imports `ABS_PATH_RE` from `render-cost-ledger.mjs`, and that module has not exported it since this
+increment moved it to `cost-value-core.mjs` with no re-export. The plan's importer sweep predates the merge, so it could
+not see the file ([[L52]]: the set is every importer, and a merge adds members).
+
+- The scope was released, the plan amended to declare the file (import line only) and re-set (22 paths). The widened
+  scope was recorded on the open epoch with `reconcile-baseline.mjs --amend-scope`, not a re-anchor, so the epoch's
+  earlier window stays in force.
+- The import moved; the file passes 19 / 19.
+- A re-sweep of the merged tree for any import of `ABS_PATH_RE`, `IDENTITY_MAX`, `shown` or `SHOWN_CHARS` from its old
+  home found no other.
+
+### Second iteration: the re-review's F1–F5
+
+The focused re-review of this pass (`REVIEW.md`, "Re-review") confirmed six of R1–R9 fixed and three partly fixed. It
+found five more sentences wider than the code, two of them blocking, all wording. Each is the L64 class again, now in
+the fix pass's own replacement sentences: a sentence probed only over the inputs its author pictured.
+
+- **F1.** `cost.json` covers only its run window, while the record reads the whole session. That is fixed in
+  `ship-record.md`, the record's header, the emitter's header, the contract and the CHANGELOG. Each now says a refusal
+  is listed only on a row. A refusal outside the window, or under an unknown one, is listed nowhere. `excluded_requests`
+  counts an unparseable timestamp only under a known window, and is `null` under an unknown one.
+- **F2.** The compatibility note now says "can now be RED", in the contract and the CHANGELOG. It names the case that
+  stays GREEN: the old emitter's `String()` turned a number, boolean or plain object model or id into a well-formed
+  token. Neither mode REDs such a model, and only `--verify-transcript` REDs such an id.
+- **F3.** The membership recompute message, the outside-window ids and the view-row key print through `valText`. Test
+  17 gains an assertion at each, and M30 still kills it.
+- **F4.** `quote-core.mjs` states the load-graph rule rather than a list, with four examples checked by static import
+  closure.
+- **F5.** `transcript-core.mjs` states the all-lines-refused case: the earliest line is selected, and both renderers
+  count that class as 0.
+- **L64 on these sentences.** One more was found and tightened before handing off: "never read field by field" is
+  wider than the code, which does read a non-member's model, timestamp and session before the membership test. It
+  now reads "only counted, never emitted".
+
+Gates after the iteration:
+
+- The affected suites pass 245 / 245, and M29 and M30 are still killed.
+- Formatting and lint are clean, `validate` is GREEN, and `docs:check`, `check:changelog` and `check:badge` exit 0.
+- The full suite is `/pharn-dev-verify`'s `test` gate.

@@ -33,13 +33,16 @@
 //     also REDs a `usage` node deeper than `USAGE_MAX_DEPTH` and an object key `isUsageKey` refuses
 //     (`__proto__` among them), both imported from the emitter, which refuses the same two on write.
 //  2b. EVERY IDENTITY FIELD — `model`, `attribution_skill`, `agent_id` — is a bounded token (<=128
-//     chars, no control char, no path). The contract calls this rule 3; the numbering here is kept
+//     chars, no C0 control char or DEL, no path). The contract calls this rule 3; the numbering here is kept
 //     stable so this file's own older references still resolve. Added after `/pharn-dev-review` found
 //     the contract asserting this bound while NOTHING checked it (see `badIdentity`). Since 6.26.1 it
 //     also covers `request_id`, a row's `session_id` (nullable), and every element of `sessions[]` and
-//     `claude_code_versions[]`: the contract gained those bounds, and a bound the contract names must be
-//     one this file checks ([[L2]], GRILL R2-G2). The predicate is `isIdentityToken` (cost-value-core.mjs),
-//     the one the emitter applies.
+//     `claude_code_versions[]`: the contract gained those bounds in 6.26.1, and every bound 6.26.1 added
+//     to the contract is one this file checks ([[L2]], GRILL R2-G2). That is scoped on purpose: the
+//     review of 6.26.1 (R1) found two OLDER field-table labels, `skills_version`'s shape and the
+//     `window_start`/`window_end` values, which no op here ever backed, and the contract now labels
+//     them ADVISORY. The predicate is `isIdentityToken` (cost-value-core.mjs), the one the emitter
+//     applies: 1 to 128 characters, no C0 control character or DEL, no path (a C1 control is admitted).
 //  2c. (6.26.1) EVERY `tokens.<class>` is a non-negative safe integer (`isTokenCount`), where the rule
 //     used to be `Number.isFinite`. A row's `stage` is a string or null and its `iteration` a number or
 //     null: crash guards for the view recompute (RULE 6), which is why a fractional `iteration` from a
@@ -102,13 +105,16 @@
 // FLOOR, over the closures in cost-hostile-input.test.mjs: for every document they walk (every node of a GREEN
 // ledger × a hostile alphabet, and the right-typed extremes they add), in both modes, `checkLedger` returns and
 // the CLI prints exactly one verdict line, after any RED/WARN lines, and exits 0 or 1. How:
-//   * every value quoted into a RED or WARN goes through `shown()` (quote-core.mjs: total, JSON-escaped, cut to
-//     `SHOWN_CHARS`), every key through `keyText()`, and every list shows at most `LIST_MAX` members and a count;
+//   * each value quoted from the file into a RED or WARN is printed by rule: a string or object through `shown()`
+//     (quote-core.mjs: total, JSON-escaped, cut to `SHOWN_CHARS`), a number, boolean or null as itself
+//     (`valText()`), and a key through `keyText()`. The one indirect case is the re-derivation's unavailable-transcript
+//     WARN, which prints the emitter's note, and that note carries a file value only after the session precondition
+//     below admitted it. Every list shows at most `LIST_MAX` members and a count;
 //   * the recursive walks stop at `WALK_MAX_DEPTH` (`usage` at `USAGE_MAX_DEPTH`), and an iterative probe REDs a
 //     document nested deeper, so no walk can exhaust the stack;
 //   * the view recompute and the re-derivation each run only over input that passes their shape preconditions,
 //     and say so in a RED when they do not run;
-//   * `main()` turns any unforeseen throw into exit 2 — unusable, never GREEN and never RED — so a crash is never
+//   * `main()` turns an unforeseen throw while checking into exit 2 — unusable, never GREEN and never RED — so a crash is never
 //     read as a verdict ([[L62]]); and the file ends through `process.exitCode`, never an immediate exit, so a
 //     verdict past a pipe's buffer is not dropped (the 6.20.4 flush rule, pinned by this increment's own test:
 //     `cli-stdout-flush.test.mjs`'s set is the CLIs whose stdout a floor caller parses, and none parses this one).
@@ -170,6 +176,12 @@ const LIST_MAX = 5;
  *  character, no quote), else through `shown()`. So a plain key such as `membership` reads as before, and a crafted
  *  one cannot start a line of its own (GRILL R2-G4). Total: `isTokenLeaf` refuses every non-string first. */
 const keyText = (k) => (isTokenLeaf(k) ? k : shown(k));
+
+/** A VALUE quoted into a verdict line with its type kept visible (REVIEW R9): a number, boolean, `null` or `undefined`
+ *  prints as itself, and a string, object or function goes through `shown()` — quoted, escaped, bounded. So `1.5` and
+ *  `"1.5"` read differently. Total (L62): `String()` only ever meets a primitive that is not a string, where it cannot
+ *  throw. It replaced `tokenText` in 6.26.1, which printed every non-number through `shown()`. */
+const valText = (v) => (v === null || (typeof v !== "string" && typeof v !== "object" && typeof v !== "function") ? String(v) : shown(v));
 
 /** `items`, at most `LIST_MAX` of them each through `fmt`, then a count of the rest (GRILL R2-G3). */
 const listText = (items, fmt) =>
@@ -293,18 +305,19 @@ export function checkLedger(led, opts = {}) {
   if (missing.length) red(`top-level key set is not closed — missing key(s): ${listText(missing, keyText)}`);
 
   // ---- enums and scalar grammars ---------------------------------------------------------------
-  // Every value quoted below goes through `shown()`: total, escaped, bounded (see the header).
-  if (led.schema !== SCHEMA && !legacy) red(`schema must be "${SCHEMA}" or the legacy "${LEGACY_SCHEMA}" (got ${shown(led.schema)})`);
-  if (!COVERAGE.includes(led.coverage)) red(`coverage must be one of ${COVERAGE.join(" | ")} (got ${shown(led.coverage)})`);
-  if (led.dedup_key !== "requestId") red(`dedup_key must be "requestId" (got ${shown(led.dedup_key)})`);
+  // A value quoted below goes through `valText()` (a number, boolean or null as itself, anything else through
+  // `shown()`) and a key through `shown()`: total, escaped, bounded (see the header).
+  if (led.schema !== SCHEMA && !legacy) red(`schema must be "${SCHEMA}" or the legacy "${LEGACY_SCHEMA}" (got ${valText(led.schema)})`);
+  if (!COVERAGE.includes(led.coverage)) red(`coverage must be one of ${COVERAGE.join(" | ")} (got ${valText(led.coverage)})`);
+  if (led.dedup_key !== "requestId") red(`dedup_key must be "requestId" (got ${valText(led.dedup_key)})`);
   if (!SKILLS_VERSION_SOURCES.includes(led.skills_version_source)) {
-    red(`skills_version_source must be one of ${SKILLS_VERSION_SOURCES.join(" | ")} (got ${shown(led.skills_version_source)})`);
+    red(`skills_version_source must be one of ${SKILLS_VERSION_SOURCES.join(" | ")} (got ${valText(led.skills_version_source)})`);
   }
   if (led.skills_version_source === "unknown" && led.skills_version !== null) {
     red("skills_version_source is `unknown` but skills_version carries a value — an honest absence is null");
   }
   if (!led.attribution || led.attribution.method !== ATTRIBUTION_METHOD) {
-    red(`attribution.method must be "${ATTRIBUTION_METHOD}" (got ${shown(led.attribution?.method)})`);
+    red(`attribution.method must be "${ATTRIBUTION_METHOD}" (got ${valText(led.attribution?.method)})`);
   }
   if (typeof led.pricing_note !== "string" || !/TOKENS ONLY/.test(led.pricing_note)) {
     red("pricing_note must be present and state that the file carries tokens, never prices");
@@ -324,7 +337,7 @@ export function checkLedger(led, opts = {}) {
     });
     if (bad.length) {
       red(
-        `${field}[] holds ${bad.length} element(s) that are not bounded identity tokens (<=${IDENTITY_MAX} chars, no control chars, no path), at index ${listText(bad, String)}`
+        `${field}[] holds ${bad.length} element(s) that are not bounded identity tokens (<=${IDENTITY_MAX} chars, no C0 control char or DEL, no path), at index ${listText(bad, String)}`
       );
     }
   }
@@ -354,8 +367,8 @@ export function checkLedger(led, opts = {}) {
         red(`markers[${i}] is not an object`);
         continue;
       }
-      if (!MARKER_KINDS.has(m.kind)) red(`markers[${i}].kind must be one of ${[...MARKER_KINDS].join(" | ")} (got ${shown(m.kind)})`);
-      if (!Number.isInteger(m.seq)) red(`markers[${i}].seq must be an integer (got ${shown(m.seq)})`);
+      if (!MARKER_KINDS.has(m.kind)) red(`markers[${i}].kind must be one of ${[...MARKER_KINDS].join(" | ")} (got ${valText(m.kind)})`);
+      if (!Number.isInteger(m.seq)) red(`markers[${i}].seq must be an integer (got ${valText(m.seq)})`);
       else if (prev !== null && m.seq <= prev) red(`markers[${i}].seq must be strictly increasing (${m.seq} follows ${prev})`);
       else prev = m.seq;
     }
@@ -406,7 +419,7 @@ export function checkLedger(led, opts = {}) {
         ["agent_id", true],
       ]) {
         if (badIdentity(r[field], nullable))
-          red(`requests[${i}].${field} is not a bounded identity token (<=${IDENTITY_MAX} chars, no control chars, no path)`);
+          red(`requests[${i}].${field} is not a bounded identity token (<=${IDENTITY_MAX} chars, no C0 control char or DEL, no path)`);
       }
       const badLeaves = checkUsageLeaves(r.usage, `requests[${i}].usage`, []);
       if (badLeaves.length)
@@ -416,16 +429,16 @@ export function checkLedger(led, opts = {}) {
       let viewable = typeof r.model === "string";
       for (const c of TOKEN_CLASSES) {
         if (!isTokenCount(r.tokens?.[c])) {
-          red(`requests[${i}].tokens.${c} must be a number: a non-negative safe integer (got ${shown(r.tokens?.[c])})`);
+          red(`requests[${i}].tokens.${c} must be a number: a non-negative safe integer (got ${valText(r.tokens?.[c])})`);
           viewable = false;
         }
       }
       if (!(r.stage === null || typeof r.stage === "string")) {
-        red(`requests[${i}].stage must be a string or null (got ${shown(r.stage)})`);
+        red(`requests[${i}].stage must be a string or null (got ${valText(r.stage)})`);
         viewable = false;
       }
       if (!(r.iteration === null || typeof r.iteration === "number")) {
-        red(`requests[${i}].iteration must be a number or null (got ${shown(r.iteration)})`);
+        red(`requests[${i}].iteration must be a number or null (got ${valText(r.iteration)})`);
         viewable = false;
       }
       if (!viewable) unviewable++;
@@ -440,23 +453,22 @@ export function checkLedger(led, opts = {}) {
 
   // ---- RULE 6: every view recomputed from requests[] --------------------------------------------
   // Only when every row passed the type rules above (`allViewable`); every stored value quoted in a message goes
-  // through `tokenText`/`keyText`, and a stored view row that is not an object is tolerated, not read.
+  // through `valText`/`keyText`, and a stored view row that is not an object is tolerated, not read.
   if (Array.isArray(led.requests) && allViewable) {
     const v = buildViews(led.requests);
     if (led.totals?.requests !== v.totals.requests || !sameTokens(led.totals?.tokens, v.totals.tokens)) {
       red(
-        `totals disagrees with a recompute from requests[] (stored ${tokenText(led.totals?.requests)} requests, recomputed ${v.totals.requests})`
+        `totals disagrees with a recompute from requests[] (stored ${valText(led.totals?.requests)} requests, recomputed ${v.totals.requests})`
       );
     }
     if (led.unattributed?.requests !== v.unattributed.requests || !sameTokens(led.unattributed?.tokens, v.unattributed.tokens)) {
       red(
-        `unattributed disagrees with a recompute from requests[] (stored ${tokenText(led.unattributed?.requests)}, recomputed ${v.unattributed.requests})`
+        `unattributed disagrees with a recompute from requests[] (stored ${valText(led.unattributed?.requests)}, recomputed ${v.unattributed.requests})`
       );
     }
-    // A view row's KEY is compared field by field with `===`, and printed through `keyText`/`tokenText`, never
+    // A view row's KEY is compared field by field with `===`, and printed through `keyText`/`valText`, never
     // through a template over a stored value (a crafted one threw, or forged a line — GRILL R2-G4).
-    const keyShown = (parts) =>
-      parts.map((p) => (p === null || p === undefined ? "" : Number.isFinite(p) ? String(p) : keyText(p))).join("/");
+    const keyShown = (parts) => parts.map((p) => (p === null || p === undefined ? "" : valText(p))).join("/");
     const cmpView = (name, stored, want, keyOf) => {
       if (!Array.isArray(stored) || stored.length !== want.length) {
         red(
@@ -511,10 +523,10 @@ export function checkLedger(led, opts = {}) {
         red(`outcome.decision must be a bounded, control-char-free string (<=${IDENTITY_MAX} chars)`);
       }
       if (!(o.iterations === null || Number.isInteger(o.iterations))) {
-        red(`outcome.iterations must be an integer or null (got ${shown(o.iterations)})`);
+        red(`outcome.iterations must be an integer or null (got ${valText(o.iterations)})`);
       }
       if (!OUTCOME_SOURCES.includes(o.source)) {
-        red(`outcome.source must be one of ${OUTCOME_SOURCES.join(" | ")} (got ${shown(o.source)})`);
+        red(`outcome.source must be one of ${OUTCOME_SOURCES.join(" | ")} (got ${valText(o.source)})`);
       }
       if (o.blocked !== undefined && !cleanScalar(o.blocked, IDENTITY_MAX)) {
         red(`outcome.blocked, when present, must be a bounded, control-char-free string (<=${IDENTITY_MAX} chars)`);
@@ -620,10 +632,6 @@ export function checkLedger(led, opts = {}) {
 /** The two token classes that can GROW across one request's transcript lines (see below). */
 export const GROWING_CLASSES = Object.freeze(["output", "output_thinking"]);
 
-/** A number quoted into a verdict line — total over any input (L62): a finite number as itself, and anything else
- *  through `shown()`, never coerced by a template (6.26.1: it printed "(not a number)", which hid the value). */
-const tokenText = (v) => (Number.isFinite(v) ? String(v) : shown(v));
-
 /**
  * `--verify-transcript`'s comparison of the ROWS, request by request and class by class (6.24.1). The id
  * sets are already equal when this runs. Returns true when nothing RED was found.
@@ -658,7 +666,7 @@ function checkRowsAgainstTranscript(recorded, live) {
     for (const c of TOKEN_CLASSES) {
       const rec = r.tokens?.[c];
       const cur = l?.tokens?.[c];
-      const where = `${shown(r.request_id)} ${c}: ${tokenText(rec)} recorded, ${tokenText(cur)} re-derived`;
+      const where = `${shown(r.request_id)} ${c}: ${valText(rec)} recorded, ${valText(cur)} re-derived`;
       if (!Number.isFinite(rec) || !Number.isFinite(cur)) fixed.push(where);
       else if (!GROWING_CLASSES.includes(c)) {
         if (rec !== cur) fixed.push(where);
@@ -706,11 +714,11 @@ function checkRowsAgainstTranscript(recorded, live) {
  * (`isAfterWindow`'s bound); that is a platform behaviour, observed, not a floor fact.
  */
 function checkExcludedAgainstTranscript(recorded, live, after) {
-  // `recorded` is read from the file, so it is quoted through `tokenText` and compared only once it is an integer.
+  // `recorded` is read from the file, so it is quoted through `valText` and compared only once it is an integer.
   if (recorded === null || live === null) {
     if (recorded !== live) {
       red(
-        `--verify-transcript: membership.excluded_requests does not match the transcript (${recorded === null ? "null" : tokenText(recorded)} recorded, ${live} re-derived)`
+        `--verify-transcript: membership.excluded_requests does not match the transcript (${valText(recorded)} recorded, ${live} re-derived)`
       );
     }
     return;
@@ -718,7 +726,7 @@ function checkExcludedAgainstTranscript(recorded, live, after) {
   const before = live - after;
   if (!Number.isInteger(recorded) || recorded < before || recorded > live) {
     red(
-      `--verify-transcript: membership.excluded_requests does not match the transcript (${tokenText(recorded)} recorded; re-derived ${before} before the window + ${after} after its end, so a genuine value lies in [${before}, ${live}])`
+      `--verify-transcript: membership.excluded_requests does not match the transcript (${valText(recorded)} recorded; re-derived ${before} before the window + ${after} after its end, so a genuine value lies in [${before}, ${live}])`
     );
     return;
   }
@@ -741,15 +749,15 @@ function checkMembership(led) {
   const missing = MEMBERSHIP_KEYS.filter((k) => !keys.includes(k));
   if (extra.length) red(`membership key set is not closed — unexpected key(s): ${listText(extra.sort(), keyText)}`);
   if (missing.length) red(`membership key set is not closed — missing key(s): ${listText(missing, keyText)}`);
-  if (m.method !== MEMBERSHIP_METHOD) red(`membership.method must be "${MEMBERSHIP_METHOD}" (got ${shown(m.method)})`);
+  if (m.method !== MEMBERSHIP_METHOD) red(`membership.method must be "${MEMBERSHIP_METHOD}" (got ${valText(m.method)})`);
   if (!MEMBERSHIP_STATUSES.includes(m.status)) {
-    red(`membership.status must be one of ${MEMBERSHIP_STATUSES.join(" | ")} (got ${shown(m.status)})`);
+    red(`membership.status must be one of ${MEMBERSHIP_STATUSES.join(" | ")} (got ${valText(m.status)})`);
     return;
   }
   if (m.session !== null && badIdentity(m.session)) red("membership.session is not a bounded identity token");
   if (m.status === "unknown") {
     if (!Object.values(UNKNOWN_REASONS).includes(m.reason))
-      red(`membership.reason is not a member of the closed reason set (got ${shown(m.reason)})`);
+      red(`membership.reason is not a member of the closed reason set (got ${valText(m.reason)})`);
     if (m.excluded_requests !== null)
       red("membership.excluded_requests must be null when membership is unknown — nothing was measured, so nothing was excluded");
     if (led.coverage !== "unavailable")
@@ -759,7 +767,7 @@ function checkMembership(led) {
   } else {
     if (m.reason !== null) red("membership.reason must be null when the window is known");
     if (!Number.isInteger(m.excluded_requests) || m.excluded_requests < 0) {
-      red(`membership.excluded_requests must be a non-negative integer when the window is known (got ${shown(m.excluded_requests)})`);
+      red(`membership.excluded_requests must be a non-negative integer when the window is known (got ${valText(m.excluded_requests)})`);
     }
     if (m.status === "open")
       warn(
@@ -771,7 +779,7 @@ function checkMembership(led) {
   const win = runWindow(normalizeMarkers(led.markers), m.session ?? null);
   for (const k of ["status", "reason", "start", "end"]) {
     if ((m[k] ?? null) !== (win[k] ?? null)) {
-      red(`membership.${k} disagrees with a recompute from markers[] (stored ${shown(m[k])}, recomputed ${shown(win[k])})`);
+      red(`membership.${k} disagrees with a recompute from markers[] (stored ${valText(m[k])}, recomputed ${valText(win[k])})`);
     }
   }
   if (!Array.isArray(led.requests)) return;
@@ -780,7 +788,7 @@ function checkMembership(led) {
     red(
       `${outside.length} request(s) lie OUTSIDE the recorded run window and are summed into the run's totals: ${outside
         .slice(0, 3)
-        .map((r) => shown(r.request_id))
+        .map((r) => valText(r.request_id))
         .join(", ")}${outside.length > 3 ? ", …" : ""}`
     );
   }

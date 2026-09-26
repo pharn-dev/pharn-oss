@@ -67,14 +67,21 @@
 // WHICH LINES ARE REQUESTS (6.26.1), FLOOR (primitive #3). A line is a usage-bearing record only when its
 //   `message.usage` is a plain object (not null, not an array, a string or a number), and its resolved id
 //   (`requestId`, else `message.id`, precedence unchanged) is a bounded identity token (`isIdentityToken`,
-//   cost-value-core.mjs). A present `requestId` that fails the test does NOT fall back to `message.id`: the line is
-//   malformed, and a fallback could split one request across two keys. A line failing either test is not a request,
-//   for every consumer. The selection ranks only by a count `isTokenCount` admits, so the selected line carries a
-//   count both renderers count. Each value is tested BEFORE anything coerces it: until 6.26.1 a crafted non-string
+//   cost-value-core.mjs). A `requestId` that is present and not null but fails the test does NOT fall back to
+//   `message.id`: the line is malformed, and a fallback could split one request across two keys. A null one counts
+//   as absent, as `??` reads it. A line failing either test is not a request,
+//   for every consumer. The selection ranks only by a count `isTokenCount` admits, so a line whose `output_tokens` is
+//   refused never outranks one whose count is admitted: the selected line carries an admitted `output_tokens`
+//   whenever any line of the request does. When none does, the earliest line is selected, and both renderers count
+//   that class as 0 for it. Each value is tested BEFORE anything coerces it: until 6.26.1 a crafted non-string
 //   id or model made a caller's `String()` throw ([[L62]]). BOUND: this decides which lines are requests and which
 //   line a request is counted at, nothing more. Each consumer bounds the fields it copies (see its header). A crafted
 //   line with a fresh, bounded id and right-typed usage is still a request, because nothing here can tell it from a
-//   real one.
+//   real one. The STRONGER vector, stated because it is the one that matters: a crafted line that REUSES a genuine
+//   request's id with a larger admitted `output_tokens` becomes that request's selected line, so its whole usage
+//   replaces the real one in both renderers, with nothing listed, and both checker modes stay GREEN
+//   (--verify-transcript re-reads the same bytes). That follows from the selection rule above (6.24.1) and predates
+//   6.26.1, which does not widen it; the transcript is agent-writable (`LIMITS.md §6`). Stated, not closed.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";

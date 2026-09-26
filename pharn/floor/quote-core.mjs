@@ -12,8 +12,7 @@
 // tie the cost checker to a module that changes when a reporter format does.
 //
 // ── WHY A SHARED CORE, and not a second copy (L35) ───────────────────────────────────────────────────
-// Every consumer (render-run-report.mjs, render-regression.mjs, test-results-formats.mjs,
-// test-results-core.mjs, check-cost-ledger.mjs) ships in `pharn/floor/`, so a user's
+// Every consumer — each module that imports this file — ships in `pharn/floor/`, so a user's
 // install carries them all or none — the dev/product split that forces the deliberate
 // `check-provenance.mjs` copy-pair does not apply here. Re-implementing the fence rule a second time
 // would create exactly the kind of pair L31 warns about: a second copy with nothing ranging over it.
@@ -22,6 +21,12 @@
 // The ONLY import is `fenceFor` from `loop-record-core.mjs`, which itself has ZERO imports. So importing
 // this module adds exactly one small, dependency-free module to a caller's load graph — in particular
 // `pharn/floor/stage-regress.mjs`'s, which must not drag in the cost-ledger graph just to quote a path.
+// Since 6.26.1 `shown` lives here, so this module and `loop-record-core.mjs` join two more kinds of load graph:
+// `check-cost-ledger.mjs`'s, which imports `shown` directly, and that of every module which loads
+// `test-results-formats.mjs`, directly or through another module — the verify and AC-test paths among them, for
+// example `check-verify.mjs`, `check-red-run.mjs`, `loop-fresh-core.mjs` and `check-ac-tests.mjs` (REVIEW R7 and
+// re-review F4 of 6.26.1). The rule, not a list, is the statement, because the set grows with every new importer. The
+// cost is those two small modules, and `quote-core.test.mjs`'s ★ LOAD GRAPH pins that it stays so.
 //
 // ── Honest scope (P0) ────────────────────────────────────────────────────────────────────────────────
 // `quoteData` makes a block of untrusted text INERT TO A COMMONMARK PARSER — a heading inside it cannot

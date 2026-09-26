@@ -852,6 +852,56 @@ test("15 a refused session STRING is still compared as itself: session-bound mar
   assert.ok(unbound.ledger.dropped.includes("requests[1].session_id"));
 });
 
+// ─── 16 WINDOW ORDER · 17 TYPED VALUES (the 6.26.1 review's R4 and R9) ────────────────────────────────
+
+test("16 WINDOW ORDER (REVIEW R4): the record and the ledger order a mixed-precision window the same way", () => {
+  // As strings `…:05.500Z` sorts BEFORE `…:05Z` ('.' < 'Z'); as numbers it is later. Both renderers order the window by
+  // the string (the contract's Residual names it), and this pins that they AGREE, whichever order that is.
+  const whole = "2026-09-26T10:00:05Z";
+  const fraction = "2026-09-26T10:00:05.500Z";
+  assert.equal([whole, fraction].sort()[0], fraction, "NON-VACUITY: the string order and the time order differ here");
+  const out = consumers(scratch([JSON.stringify(lineA("req_w1", whole)), JSON.stringify(lineA("req_w2", fraction))]));
+  assertCommon(out, "mixed precision");
+  assert.equal(out.ledger.requests.length, 2, "both lines are members of the run");
+  assert.deepEqual([out.record.window_start, out.record.window_end], [out.ledger.window_start, out.ledger.window_end]);
+});
+
+test("17 TYPED VALUES (REVIEW R9): a RED's '(got …)' keeps the value's type — a number, boolean or null unquoted, a string quoted", () => {
+  const { ledger } = baseLedger();
+  const redFor = (mutate, prefix) => {
+    const doc = structuredClone(ledger);
+    mutate(doc);
+    return checkLedger(doc).reds.find((r) => r.startsWith(prefix));
+  };
+  const iterations = (v) =>
+    redFor((d) => (d.outcome = { decision: "STOP_GREEN", iterations: v, source: "LOOP.md" }), "outcome.iterations must be");
+  assert.match(iterations(1.5), /\(got 1\.5\)$/);
+  assert.match(iterations("1.5"), /\(got "1\.5"\)$/, "the string stays distinguishable from the number");
+  assert.match(iterations(true), /\(got true\)$/);
+  assert.match(iterations({ a: 1 }), /\(got "\[object Object\]"\)$/, "an object still goes through shown()");
+  assert.match(
+    redFor((d) => (d.markers[0].seq = null), "markers[0].seq must be"),
+    /\(got null\)$/
+  );
+  // The other sites that quote a file value (re-review F3): the membership recompute, the ids of rows outside the
+  // window, and a view row's key. Each keeps a number unquoted and a string quoted.
+  assert.match(
+    redFor((d) => (d.membership.start = 5), "membership.start disagrees"),
+    /\(stored 5, recomputed "/
+  );
+  const outside = (id) =>
+    redFor((d) => {
+      d.requests[0].ts = "2026-09-26T09:00:00.000Z";
+      d.requests[0].request_id = id;
+    }, "1 request(s) lie OUTSIDE");
+  assert.match(outside(7), /summed into the run's totals: 7$/);
+  assert.match(outside("7"), /summed into the run's totals: "7"$/);
+  assert.match(
+    redFor((d) => (d.by_model[0].model = 5), "by_model[0] disagrees"),
+    /\(5 vs "/
+  );
+});
+
 // ─── ✧ ONE ADDRESS ───────────────────────────────────────────────────────────────────────────────────
 
 test("✧ ONE ADDRESS (L35): each moved name is exported from its new home only, never re-exported from the old one", async () => {

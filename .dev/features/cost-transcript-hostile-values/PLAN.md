@@ -1,7 +1,7 @@
 # PLAN — cost-transcript-hostile-values
 
-- spec_content_hash: 4950796f5342df20a298fe22812e45dec3c15317592bd2358a31e149d2dc1c7f
-- applied_lessons: [L2, L15, L29, L31, L33, L35, L36, L37, L41, L47, L50, L52, L60, L62, L63]
+- spec_content_hash: d831d30d399a37dc403080072763d13383de6f6f31875e7e8cb4eadeb642f4f4
+- applied_lessons: [L2, L15, L29, L31, L33, L35, L36, L37, L41, L47, L50, L52, L60, L62, L63, L64]
 - increment: The product floor's cost tooling stops crashing on a crafted input at every member this increment
   enumerates. It also stops emitting what its own checker REDs. That covers two inputs:
   - a Claude Code TRANSCRIPT, read by `transcript-core.mjs` for `render-cost-record.mjs`, `render-cost-ledger.mjs`
@@ -55,10 +55,31 @@ plan does not claim one.
 7. **Second grill.** `GRILL.md` round 2 raised 11 advisory concerns (R2-G1 to R2-G11). Each is folded in below
    ("Grill dispositions"). None needs a new choice from the maintainer: each is a correction inside the approved
    scope, or a remedy the grill offered. Adopting them adds six files to `## Files`. That growth is reported at GATE 2.
+8. **GATE 2 (2026-09-27): fix, integrate `main`, commit locally.** The chain reached GATE 2 green (verify PASS,
+   regress `no-regressions`). The independent review blocked on two wording findings (R1, R2) and raised seven
+   advisories. The maintainer chose "Fix + integrate, local only": fix R1 and R2 and every advisory (R3–R9), merge
+   `origin/main`, renumber, re-verify, and commit on this branch with no push and no PR. The fixes are the section
+   "Fix pass" below.
+9. **`main` moved twice; the version is 6.26.1.** #280 (6.25.0) and #281 (6.26.0) merged during the run.
+   - The reviewed state was committed first (`df2e880`), and `origin/main` (`008b24b`) was merged into it (`2c38d9a`).
+     The app's sync tool refused, because the merge touches sandbox-protected `.claude/commands/*`, so the merge ran
+     through git with the sandbox off for that one command. That is the route the maintainer chose for the same
+     refusal on 2026-09-26.
+   - Conflicts, all textual: CHANGELOG, README, SKILLS_VERSION, and the contract's field table (#280's
+     `markers[].mode` row). Every code file merged cleanly.
+   - Every `6.24.2` in this branch's added lines became `6.26.1`: 56 lines in 14 files, found by diffing against
+     `origin/main`. This plan and the other feature records keep 6.24.2 as history.
+   - `pharn/ARCHITECTURE.md` changed in #280 only: a contract-list entry (`stage-exit`) and a Quick-mode paragraph.
+     Neither touches the cost value domain. Its one link here is the ledger outcome `gate2-quick`, which rule 5
+     already admits. The spec pin moves to `d831d30d…`.
+   - A trial of `main` plus the reviewed state, in a scratch worktree, passed the full suite (3,691 pass, 0 fail),
+     #280's quick-mode ledger tests included. So the new checker rules RED no ledger #280 writes (R2-G5).
+10. **Lesson L64 promoted.** The review's candidate went through `/pharn-dev-memory-promote` (check-provenance GREEN,
+    maintainer accept) and was committed with its index (`18c12a4`).
 
 A live check this session (`git fetch`, `gh pr view 280`) found `origin/main` still at `b9b6a03`. Open PR #280
 (6.25.0) is `CONFLICTING`. If #280 merges first, this branch is rebased, re-pinned and renumbered at ship. The merge
-order is the maintainer's call at GATE 2 (R2-G5).
+order is the maintainer's call at GATE 2 (R2-G5). _(Superseded by decision 9: both #280 and #281 merged first.)_
 
 ## Measured this run (the evidence the decisions rest on)
 
@@ -214,6 +235,9 @@ length` (about 2 GB), or a `SIGABRT` under a small heap.
     of 4.
   - The refusals are per-line properties of bytes written once, so none of them moves a value into the
     still-growing part of the referent (L58).
+- L64 — promoted from this feature's own review (decision 10) and applied in its fix pass: every restatement of a bound
+  in the CHANGELOG, the contracts and the headers is grepped for and probed as a sentence of its own, not only the
+  primary sentence it summarizes (see "Fix pass").
 
 ## Files
 
@@ -330,6 +354,9 @@ length` (about 2 GB), or a `SIGABRT` under a small heap.
 - `pharn/floor/render-cost-ledger.test.mjs` — floor test, import lines only: `ABS_PATH_RE` now comes from
   `cost-value-core.mjs`.
 - `pharn/floor/render-regression.test.mjs` — floor test, import line only: the same move.
+- `pharn/floor/render-verify.test.mjs` — floor test (#281's file, merged in decision 9), import line only: the same
+  move. It arrived on `main` after this plan's importer sweep. The fix pass's full suite found it, and a re-sweep of the
+  merged tree found no other importer of a moved name.
 - `pharn/pharn-contracts/cost-ledger.md` — pharn-contracts. It gains:
   - which lines are requests (the id and `usage` rules, and no fallback), citing `sessionRequests()`;
   - the `tokens` domain, as a checker rule;
@@ -642,10 +669,12 @@ named tests red:
 
 - **The transcript is untrusted** input to three consumers.
   - Before: one crafted line crashed the measurement, or made the emitter write a ledger its own checker REDs.
-  - After: its reach is bounded per field (the table). Every refusal is listed in `dropped[]` in the ledger, and is
-    silent in the record.
-  - No new reach: a crafted line with a fresh bounded id can still add any right-typed usage. `cost.json` and the
-    `cost` block gate nothing (fix #3).
+  - After: its reach is bounded per field (the table). A refused value on a ledger row is listed in `dropped[]`. A
+    line refused as a whole, and any refusal on a request outside the run window, are listed nowhere, and the record
+    is silent throughout (re-review F1).
+  - No new reach: a crafted line with a fresh bounded id can still add any right-typed usage. A crafted line that
+    REUSES a genuine request's id with a larger admitted `output_tokens` replaces that request's usage, silently
+    (REVIEW R8; pre-existing, 6.24.1's max rule). `cost.json` and the `cost` block gate nothing (fix #3).
   - Membership is not widened. A refused session string is compared as itself, exactly as on HEAD, and only the
     emitted field is bounded (R2-G7). A non-string session binds every marker, as it already did on HEAD. That is a
     pre-existing property of an absent session, and it is not changed here.
@@ -698,7 +727,88 @@ Second grill (`GRILL.md`, round 2), each accepted:
 - R2-G11 → no non-owner module's prose spells the usage read or the id fallback. They cite `sessionRequests()`, and
   ✧ ONE OWNER stays green.
 
+## Fix pass (GATE 2 → fix, 2026-09-27)
+
+What each review finding (`REVIEW.md`) becomes. Every file touched is already in `## Files`.
+
+- **R1 (blocking, P0): "every bound the contract gives the file".**
+  - The three sentences are narrowed to the bounds this increment adds: the CHANGELOG bullet, the checker header's
+    rule 2b, and contract rule 3's L2 parenthesis.
+  - The two pre-existing FLOOR labels that no checker op backs are corrected in the field table.
+    `skills_version` becomes **ADVISORY**: its shape is unchecked, and the checker only REDs a value beside an
+    `unknown` source. `window_start`/`_end` becomes **ADVISORY**: not checked. This is a correction to shipped text,
+    not a new rule (P7): backing either with a check was not selected.
+- **R2 (blocking, P0): "`cost.json` lists each refusal".** `ship-record.md`, the emitter header and the CHANGELOG
+  bullet now say which refusals are listed and which are not:
+  - listed: an identity field, `version`, a count, a `usage` leaf or key;
+  - not listed: a line refused as a whole, which leaves no row and no entry and is not counted;
+  - an unparseable timestamp is counted in `excluded_requests` and listed nowhere.
+- **R3: "no control character".** Wherever it describes rule 3 it becomes "no C0 control character or DEL": the
+  CHANGELOG, the checker's identity RED messages, contract rule 3, the field table, the Residual section, and
+  `cost-value-core.mjs`'s header.
+- **R4: the window-order agreement is pinned by nothing.** New test 16 and its mutant.
+- **R5: two CHANGELOG sentences drop their bounds.** The headline is bounded to the inputs this release enumerates.
+  The forgery sentence carries the `\n` line definition.
+- **R6: "rule 7" means two rules.** The field table cites the contract's own numbers, so the `outcome` row becomes
+  rule 5.
+- **R7: the load graph grew unrecorded.** `quote-core.mjs`'s LOAD GRAPH paragraph names the modules that now load it
+  through `shown`.
+- **R8: the BOUND names the weaker vector.** `transcript-core.mjs`'s BOUND, and this plan's trust audit, name the
+  stronger one. A crafted line that REUSES a genuine request's id with a larger admitted `output_tokens` replaces that
+  request's usage in both renderers, silently, and both checker modes stay GREEN. It is pre-existing (6.24.1's max
+  rule), and it is stated, not closed.
+- **R9: `shown()` hides a value's type.** The checker's "(got …)" slots print a finite number, a boolean, `null` or
+  `undefined` as itself, unquoted, and a string or object through `shown()`. One helper, `valText`, replaces
+  `tokenText`. New test 17.
+- **A new importer from `main` ([[L52]]: the set is every importer, and a merge adds members).** #281's
+  `render-verify.test.mjs` imports `ABS_PATH_RE` from `render-cost-ledger.mjs`, which no longer exports it, so it
+  failed to load on the merged tree. Its import line moves to `cost-value-core.mjs`, and the file joins `## Files`.
+- **L64, applied.** Before handing off, the build greps the diff's CHANGELOG, contracts and headers for each bound's
+  key phrase ("every", "each", "no control", "a line", "lists", "never") and probes each hit as its own sentence. The
+  result is recorded in `BUILD.md`.
+
+New tests, in `cost-hostile-input.test.mjs`:
+
+- **Test 16, WINDOW ORDER (R4).** A transcript whose two in-window lines are stamped `…:05Z` and `…:05.500Z`: the
+  record's `window_start`/`window_end` equal the ledger's.
+- **Test 17, TYPED VALUES (R9).** `outcome.iterations` of `1.5` prints `(got 1.5)`, the string `"1.5"` prints
+  `(got "1.5")`, and `null` prints `(got null)`.
+
+New negative controls, run in a scratch copy and recorded in `BUILD.md`:
+
+| mutant (scratch copy only)                        | must turn red |
+| ------------------------------------------------- | ------------- |
+| record: window compared as numbers (`tsMs`)       | 16            |
+| checker: `valText` quotes numbers (`shown` again) | 17            |
+
+### The re-review of the fix pass (`REVIEW.md`, "Re-review"), and what each finding becomes
+
+The re-review confirmed R1, R3, R4, R5, R6 and R8 fixed, and R2, R7 and R9 partly fixed, and raised F1–F5. All five
+are wording, and each is the L64 class again: a sentence probed only over the inputs its author pictured.
+
+- **F1 (blocking, P0): "`cost.json` lists the record's refusals".** `cost.json` covers only requests inside its run
+  window, while the record reads the whole session. `ship-record.md`, the record's header, the emitter's header, the
+  contract and the CHANGELOG now say:
+  - a refused value is listed only on a row, that is a request inside the window;
+  - a refusal outside the window, or under an unknown window, is listed in neither artifact;
+  - `excluded_requests` counts an unparseable timestamp only under a known window, and is `null` under an unknown one.
+- **F2 (blocking, P0): the compatibility note's "is now RED".** The old emitter coerced a model and a request id
+  through `String()` before bounding them, so a number, boolean or plain object there became a well-formed token.
+  Both checker modes pass such a model, and plain mode passes such an id, which `--verify-transcript` REDs. The note,
+  in the contract and the CHANGELOG, now says "can now be RED", and names the coerced case that stays GREEN.
+- **F3: three sites still quote a number.** The membership recompute message, the outside-window ids and the view-row
+  key now print through `valText`. Test 17 gains an assertion at each, all covered by M30.
+- **F4: the load-graph list names 6 of 11.** `quote-core.mjs` states the rule instead: every module that loads
+  `test-results-formats.mjs`, directly or not, plus `check-cost-ledger.mjs`. Examples are marked as examples.
+- **F5: "the selected line carries a count both renderers count".** `transcript-core.mjs` now says that when every line
+  of a request carries a refused count, the earliest line is selected and both renderers count that class as 0.
+
+The re-review's lesson candidate, that L64 recurred in its own fix pass, is recorded in `REVIEW.md` and deferred.
+Step 2b carries one candidate per run, and L64 was this run's.
+
 ## Open questions (HALT)
 
 None open. The five form decisions and the re-plan approval came from the maintainer on 2026-09-26. The second
-grill's dispositions are corrections inside that approval, and they are reported at GATE 2.
+grill's dispositions are corrections inside that approval, and they are reported at GATE 2. The GATE 2 decision (fix,
+integrate, commit locally), the advisories to include (all) and the lesson (promote) came from the maintainer on
+2026-09-27.

@@ -34,7 +34,10 @@
 //   * a timestamp joins the window only when `tsMs` (run-window-core.mjs) parses it. The window is still ordered by
 //     the timestamp string, which is how the ledger orders its own window.
 //   No value is coerced before its test. SILENT, and stated: this block has no `dropped` list, so a refused value
-//   leaves no trace here. `cost.json` lists each one (`pharn/pharn-contracts/cost-ledger.md`).
+//   leaves no trace here. `cost.json` records only some, because it covers only the requests inside its run window
+//   while this block reads the whole session: a refused model, `attributionSkill` or count on a request inside a
+//   known window lands in its `dropped[]`, while a refusal outside that window (or under an unknown one), a line that
+//   is not a request, and a timestamp that does not parse are listed nowhere (`pharn/pharn-contracts/cost-ledger.md`).
 // ADVISORY / NARROWED, and stated:
 //   * THE REPORTED RUN IS THE ONE `CLAUDE_CODE_SESSION_ID` NAMES, and nothing here verifies that is this
 //     run. This is WEAKER than the cwd refusal it replaced (`transcript-core.mjs` says why that went),
