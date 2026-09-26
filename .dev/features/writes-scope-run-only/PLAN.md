@@ -670,3 +670,89 @@ and G14 amended, G10 a sharpened classification, G13 a named follow-up. Each cha
 ## Open questions (HALT)
 
 - none.
+
+## Amended at GATE 2 (2026-09-26)
+
+`/pharn-dev-review` (`REVIEW.md`, commit `a154214`) returned `blocked-with-1-floor-finding` plus 2 important
+and 8 minor findings. GATE 2 = **FIX** (orchestrator decision under the maintainer's 2026-09-25 delegation —
+not a human approval; the human still has not applied `proposed/human-only.patch`, held so review could run
+first). This section is a MAINTAINER DECISION given in chat 2026-09-26, recorded verbatim, that resolves
+REVIEW.md's first important finding (P2, `human-only.patch:616`, "every out-of-project no-git-tree path" — the
+permissive breadth GRILL.md:152 names as **D2**, "the relaxation itself is D2, the maintainer's decision"; the
+coordinator's relay also cites **D5**, which is not independently labeled by that name anywhere in this
+PLAN/GRILL — recorded as such rather than guessed at, P6):
+
+> Installed project, no scope, no run open: outside the project, the guard ALLOWS only (1) Claude's memory
+> folders, `<claude-config-dir>/projects/*/memory/**`, where claude-config-dir is `$CLAUDE_CONFIG_DIR` when
+> set, else `~/.claude`, both realpath'd; and (2) the temp/scratch roots: realpath(os.tmpdir()) and
+> realpath('/tmp'). Every other out-of-root path stays DENIED, exactly as today, with the out-of-root body.
+> That includes dotfiles, `~/.ssh`, `~/.claude/settings*.json`, `~/.claude.json`, `~/.claude/hooks/` and
+> LaunchAgents. A path inside another git tree stays denied even under those roots. Update the deny message,
+> LIMITS §7 in the patch, and CLAUDE.md to match.
+
+This REPLACES Design §1's install-row clause "out-of-root allowed unless inside another git tree" and the
+`### 7. Subpath install (D7c)`-adjacent LIMITS draft bullet's "allows a path that lies in no git tree, such as
+Claude Code's own memory folder" with the two-root allow-list above. The out-of-root branch of `denyMessage()`
+(Design §5) is reworded to name the two roots instead of "no git tree"; `openWithout` (ctx) now means
+"under one of the two allowed roots and not inside another git tree", never merely "outside every git tree".
+
+### Review fixes (all required before re-verify)
+
+- **B1 (blocking, patch:703)** — `resolveWriteTarget()`'s lexical fallback let a **dangling** symlink whose
+  final component cannot be `realpath`'d (`ENOENT`) fall back to its own unresolved name instead of resolving
+  through its link target. Fixed by porting `protect-trusted-paths.cjs`'s segment-wise `readlinkSync`
+  resolution (resolve every existing leading segment with `realpathSync`, then apply `readlinkSync` to the
+  final dangling component and re-join, repeating for a chained dangling link) into the patched
+  `enforce-writes-scope.cjs`, so `src/evil-cmd -> ../.claude/commands/pharn-evil.md` (absent) and
+  `src/evil-floor -> ../pharn/floor/new.mjs` both resolve to their reserved targets and are DENIED.
+- **B2 (blocking, patch:703)** — the `pharn/features/` exception was tested against the folded key, so
+  `pharn/features./x.md` and `"pharn/features /x.md"` folded to `pharn/features/x.md` and were wrongly
+  exempted. Fixed by testing the exception on the **raw** relative path: reserved iff
+  `key === "pharn.config.json" || key.startsWith(".claude/") || (key.startsWith("pharn/") &&
+!rel.startsWith("pharn/features/"))` — the fold can now only ever WIDEN the deny, never narrow it.
+- **S1 (important, patch:266)** — `scanRuns()` read `ENOTDIR` (a *file* planted at a run-state path) the same
+  as `ENOENT` ("no run"), and `openRun()`'s unguarded `mkdirSync`/`writeFileSync` threw uncaught on the same
+  planted file, crashing `run-marker.mjs --open` with exit 1 (Claude Code treats a non-zero non-2 hook exit as
+  non-blocking) and a raw stack trace. Fixed three ways: (1) `scanRuns()` folds `ENOTDIR` into the
+  `scanError = true` ("open") branch in both its `readdirSync(stateDir)` and `lstatSync(markerAbs)` catches,
+  alongside every error that is not `ENOENT`; (2) `openRun()`/`closeRun()` wrap their filesystem calls in
+  `try/catch` and return `{ok:false, reason}` instead of throwing, so the CLI's existing `!result.ok -> exit 2`
+  path is reached instead of an uncaught throw; (3) `.claude/commands/pharn-ship.md` and `pharn-review.md` are
+  edited so a non-zero exit from `run-marker.mjs --open` is an explicit STOP, not a continue.
+- **Minor 1 (D1 message parity, P0)** — `readScopeFileState()` returned a bare `{kind:"malformed"}` for a
+  parseable object lacking a valid `scope` array, dropping `set_by`/`set_at`, so the composed message lost
+  the "scope set by / stale" bullets HEAD's `loadRecord()`-based message keeps for that exact shape. Fixed:
+  return `{kind:"malformed", record: parsed}` and thread `record` into the `!install` (dev/unsignalled)
+  message path; a `{}` case is pinned as a golden message.
+- **Minor 2 (in-repo wording, P0)** — the in-repo deny body's "absence of a scope file = the fail-closed
+  default-safe-set" sentence is now false in the install posture outside a run. Fixed: the sentence is
+  conditional on `ctx.install`, mirroring the out-of-root branch's existing `openWithout` handling.
+- **Minor 3 (dangling reference, P0)** — the out-of-root body's "(see below)" pointed at nothing after the
+  wording pass. Fixed: replaced with the actual two-root sentence inline, no forward reference.
+- **Minor 4 (doc overclaims, P1)** — `README.md:697`, `pharn/floor/README.md:135` and
+  `pharn/pharn-contracts/finding-shape.md:93` each overstated the guard's reach (pre-existing text, sharpened
+  wording only where this increment already touches these files per `## Files`); corrected to the exact
+  posture/branch language used above.
+- **Minor 5 (pharn-loop.md:998, P1)** — cited the wrong fallback set and a nonexistent "§2 above"; corrected
+  to name the actual fail-closed default (`pharn/features/**` + `.pharn/**` writable) and point at this PLAN's
+  Design §2 rather than a section `pharn-loop.md` does not itself contain.
+- **Minor 6 (guard-error test, P2)** — added a behavioural test that forces the patched hook's decision loop
+  to throw (a preloaded module that makes a call inside the `try` throw) and asserts exit 2 with the fixed
+  fail-closed message, not just the source-shape presence pin Design §5b already had.
+- **Minor 7 (marker-name injection, P0)** — `runCloseSuggestion()` embedded `run.path`, which contains the raw
+  untrusted marker directory name, in the RUN block's suggested remedy line, reachable even though that name
+  fails the slug grammar (the "NOTE: … never instructions" framing sits above the RUN block and does not, by
+  construction, relabel text rendered below it as data). Fixed: for a name failing `RUN_NAME_RE`, the line
+  never interpolates `run.name` or `run.path` at all — it renders only the state directory and a count of
+  such entries ("remove that file by hand"), so the untrusted string is never emitted, not merely folded.
+- **Minor 8 (reconcile probe, P5)** — `makeDefaultProbeSandbox()` called `run-marker.mjs`'s `openRun()` without
+  checking its result; fixed to throw if `{ok:false}`, so a future regression in the writer fails the probe's
+  setup loudly instead of silently answering with the permissive (no-marker) default.
+- **Minor 9 (VERIFY.md counts, P6)** — `VERIFY.md:25` quoted stale first-pass numbers
+  ("118/120, 25/29, 52/53 and 45/46") that contradicted `BUILD.md`'s recorded final counts (120/120, 29/29,
+  53/53, 46/46 — all green against the patched hooks). Corrected on the GATE-2 re-verify pass to match
+  `BUILD.md`.
+
+All nine minor items plus B1/B2/S1 are implemented in the `handoff/` copies before `proposed/human-only.patch`
+and `proposed/human-only.sha256` are regenerated by a re-run of the verification runner (Build procedure step
+5), never by editing the live hooks or `LIMITS.md` directly.
