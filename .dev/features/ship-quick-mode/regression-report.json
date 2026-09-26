@@ -1,5 +1,5 @@
 {
-  "base": "1524c6ff90844ee17457ca9450a7abb894a7b1f1",
+  "base": "ec06f7bf143dca457c776f852d6981f02099db10",
   "inside": [
     ".claude/commands/pharn-grill.md",
     ".claude/commands/pharn-ship.md",

@@ -145,7 +145,7 @@ function main() {
     "_breadth_. You pay the most for what there is the most of (small changes). This is\n" +
     "the largest practical token problem and it is not yet solved.\n" +
     "\n" +
-    "> **The manual flag is `/pharn-ship --quick` (6.24.0), and it trades checks for cost.** A human chooses it for\n" +
+    "> **The manual flag is `/pharn-ship --quick` (6.25.0), and it trades checks for cost.** A human chooses it for\n" +
     "> a `spec_kind: quick` SPEC: one to three acceptance criteria, each verified at `unit` or `integration`. It\n" +
     "> keeps both human gates, the grill's two floor stops, the test-first evidence for those criteria,\n" +
     "> `/pharn-regress`'s scope check (a changed file outside the plan's `## Files` still stops the run, within\n" +
@@ -167,7 +167,7 @@ function main() {
   // the check — the safe direction — and no gate reads it, but a trusted doc must not say what is false.
   const LIMITS_S6_FIND = "  `/pharn-regress` runs; it compares _changed since base_, not _written by the build_; it carries\n";
   const LIMITS_S6_REPLACE =
-    "  `/pharn-regress` runs — or, since 6.24.0, `/pharn-ship --quick`'s item 7, which runs the same partition\n" +
+    "  `/pharn-regress` runs — or, since 6.25.0, `/pharn-ship --quick`'s item 7, which runs the same partition\n" +
     "  without the rest of that stage; it compares _changed since base_, not _written by the build_; it carries\n";
   limitsEdited = applyOnce(limitsEdited, LIMITS_S6_FIND, LIMITS_S6_REPLACE, "LIMITS.md §6");
 
@@ -178,7 +178,7 @@ function main() {
   const ARCH_S6_REPLACE =
     "every build. Shape and bounds: `pharn-contracts/ac-tests.md` (cited, not restated — P4; `LIMITS.md §9`).\n" +
     "\n" +
-    "**Quick mode** (`/pharn-ship --quick`, 6.24.0) runs a shorter spine for a small change: a `spec_kind: quick`\n" +
+    "**Quick mode** (`/pharn-ship --quick`, 6.25.0) runs a shorter spine for a small change: a `spec_kind: quick`\n" +
     "SPEC (one to three criteria, each `unit` or `integration`), `plan`, the grill's floor stops without its\n" +
     "interrogation, `test`, `build`, `regress`'s scope check alone, and `verify` as above — **no `regress` base\n" +
     "comparison**, so nothing looks for a regression outside the feature. Both human gates stay, and the ledger\n" +

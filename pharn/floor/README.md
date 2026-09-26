@@ -36,7 +36,7 @@ project template exists, every failure is a refusal (exit 1), never a fallback. 
 the file to fill, and `--template-ref <id>` names one template directly. Every template is validated before its
 reference is printed. A SPEC without the key gets none of the template rules; the pin's layout rule (a body may
 not open with a `spec_kind:` line, 6.20.7) applies to every SPEC. A valid acceptance-criteria grammar means the
-criteria are **phrased** testably, never that any test exists, runs, or passes. `--spec-kind <SPEC.md>` (6.24.0) prints
+criteria are **phrased** testably, never that any test exists, runs, or passes. `--spec-kind <SPEC.md>` (6.25.0) prints
 the SPEC's kind (`feature` | `test-infra` | `quick`, an empty line if unusable, `feature` for a legacy SPEC) — the
 same reading `/pharn-ship`'s GATE-1 backstop and `/pharn-grill --quick`'s eligibility check shell, never re-derived
 from frontmatter.
@@ -130,13 +130,37 @@ echo '{"tool_name":"Write","tool_input":{"file_path":"docs/ARCHITECTURE.md"}}' |
 ```
 
 **`enforce-writes-scope.cjs` (fix #7)** is the runtime scope-enforcement hook: it denies any write
-outside the active scope in `.pharn/writes-scope.json` (fail-closed to a default-safe-set when none is
-set). Confirm it works:
+outside the active scope in `.pharn/writes-scope.json`. With no scope set, the default depends on the
+tree (6.24.0): a dev checkout or an unsignalled tree stays fail-closed to the same default-safe-set as
+before, and every denial it made before carries the same message; the only verdict changes there are
+toward deny (a write through a symlink is also judged at the target the filesystem reaches, a path spelled
+differently from an existing directory is also judged at that directory's on-disk spelling, and a guard
+error denies). An **installed** project (`pharn.config.json` carries a non-empty `skillsVersion`) is
+fail-closed to the same default-safe-set **only while a `/pharn-ship`, `/pharn-loop` or `/pharn-review`
+run is open** (a marker under `.pharn/<command>/<name>/active.json`, written by `pharn/floor/run-marker.mjs`
+or, for the loop, `require-loop-record.cjs`); outside an open run it instead denies PHARN's own installed
+surface — `pharn/**` except `pharn/features/**`, `.claude/**` and `pharn.config.json`, matched case-folded
+— plus `.pharn/writes-scope.json` and any path containing a backslash, and allows every other path inside
+the project, including your ordinary source. Outside the project it then allows only Claude Code's memory
+folders (`<claude-config-dir>/projects/*/memory/**`) and the temp roots (the OS temp directory and `/tmp`),
+never a path inside another git tree, and never another spelling of the project's own path (a different
+letter case or Unicode form reaches the project's own files on a case-insensitive volume, so it is denied as
+the project's own); every other out-of-project path stays denied. A malformed
+`.pharn/writes-scope.json` denies EVERY write in an installed project rather than falling back to either
+default. Confirm it works:
 
 ```bash
-echo '{"tool_name":"Write","tool_input":{"file_path":"pharn/floor/x.mjs"}}' | node .claude/hooks/enforce-writes-scope.cjs  # → exit 2, denied (no scope; fail-closed)
+echo '{"tool_name":"Write","tool_input":{"file_path":"pharn/floor/x.mjs"}}' | node .claude/hooks/enforce-writes-scope.cjs  # → exit 2, denied (no scope; fail-closed dev-repo default)
 echo '{"tool_name":"Write","tool_input":{"file_path":"README.md"}}' | node .claude/hooks/enforce-writes-scope.cjs  # → exit 2, denied (root file outside default-safe-set)
+# In an INSTALLED project (pharn.config.json has skillsVersion) with NO scope and NO run open, the SAME
+# root file is instead ALLOWED — the new permissive default (6.24.0) does not deny an ordinary project file:
+echo '{"tool_name":"Write","tool_input":{"file_path":"README.md"}}' | node .claude/hooks/enforce-writes-scope.cjs  # → exit 0 there, not exit 2 as above
 ```
+
+**`pharn/floor/run-marker.mjs`** writes and removes the `/pharn-ship` / `/pharn-review` run markers the
+guard above reads (`--open <pharn-ship|pharn-review> <name>` / `--close <pharn-ship|pharn-review> <name>`);
+`/pharn-loop` keeps its own marker, written by `require-loop-record.cjs`. Presence and age only (24 h,
+symmetric) — the guard never parses a marker's contents.
 
 The **setter** (`set-writes-scope.cjs`) is separate from both hooks: it refuses to _authorize_ those
 same control-surface paths at scope-set time — exits non-zero and writes nothing if the parsed scope names

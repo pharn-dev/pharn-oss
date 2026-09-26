@@ -604,7 +604,7 @@ function applicabilityLabel(cost) {
       ? "established from its markers. The verdicts are shown only as diagnostics."
       : "earlier run or attempt. They are shown only as diagnostics, never as this run's verdicts.";
   // A HISTORICAL ledger may have STORED `gate2` from exactly these reports — one derived before 6.9.1's
-  // current-run rule, OR one derived after it but before 6.24.0's build-order and no-repeat conditions. The
+  // current-run rule, OR one derived after it but before 6.25.0's build-order and no-repeat conditions. The
   // label names no single rule as the one it predates (GATE-2 re-review N2: "predates this applicability rule
   // (6.9.1)" mis-dated a 6.20.0 ledger the new conditions exclude); the quoted reason below names the rule
   // that excludes it. Its stored value is never rewritten (compatibility), but the two sections must not
@@ -614,7 +614,7 @@ function applicabilityLabel(cost) {
       ? [
           "",
           "**The stored `gate2` above predates the applicability rules in force today** (6.9.1's current-run",
-          "rule; 6.24.0's build-order and no-repeat conditions — the reason below names the one that excludes",
+          "rule; 6.25.0's build-order and no-repeat conditions — the reason below names the one that excludes",
           "it) and rests on these same reports; it would not be derived as `gate2` today. It is kept as",
           "recorded, not rewritten.",
         ]
@@ -622,7 +622,7 @@ function applicabilityLabel(cost) {
   return [head, tail, ...legacy, "", quoteData("", `applicability  ${app.status}\nreason         ${app.reason ?? "none"}`).trimStart(), ""];
 }
 
-/** Is this ledger a QUICK `/pharn-ship` run's (6.24.0)? Read from the ledger's own recorded markers through the
+/** Is this ledger a QUICK `/pharn-ship` run's (6.25.0)? Read from the ledger's own recorded markers through the
  *  derivation's `runMode()` — never from which artifacts exist (L6). ONE definition for the two sections that
  *  branch on it, `## Verdicts` and `## Briefing` (L35). A stale or absent ledger is never quick: its markers
  *  are another run's, so the caller passes `null`. */
@@ -658,7 +658,7 @@ function verdictsSection({ verify, regress, cost, stale = false }) {
     out.push("");
     out.push(...acGateLines(verify.ac_gate));
   }
-  // A quick `/pharn-ship` run starts no `/pharn-regress` at all (6.24.0), so a `regression-report.json` on
+  // A quick `/pharn-ship` run starts no `/pharn-regress` at all (6.25.0), so a `regression-report.json` on
   // disk — left by an earlier full run over the same feature directory, say — is NEVER this run's regress
   // verdict. Read from the STRUCTURED location (the run's own mode, from its markers), never inferred from
   // whether a report happens to exist (L6) — the same discipline `outcome.source` already gets above.
@@ -762,7 +762,7 @@ function acGateLines(ac) {
  * rather than dropped, because a missing section and an absent artifact must not look the same ([[L34]]:
  * silence and asserted-silence are different claims).
  *
- * A QUICK `/pharn-ship` ledger (6.24.0) never links one: quick mode renders no `BRIEFING.md`, so a file of
+ * A QUICK `/pharn-ship` ledger (6.25.0) never links one: quick mode renders no `BRIEFING.md`, so a file of
  * that name beside the report was written by an EARLIER run over the same feature directory, and linking it
  * as "the GATE-2 briefing, rendered beside this report" would present that run's briefing — and the regress
  * verdict it carries — as this run's (GATE-2 review). Read from the run's own mode, from the ledger's

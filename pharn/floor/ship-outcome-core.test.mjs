@@ -48,8 +48,8 @@ const scratch = () => mkdtempSync(join(tmpdir(), "pharn-ship-outcome-"));
 
 /** A marker, shaped as `readMarkers()` hands them over. `ts`/`session_id` are irrelevant to this module
  *  — it reads `kind`, `stage` and `iteration` only — so they are present but unused, which keeps the
- *  fixture honest about the real record rather than a trimmed invention. `mode` (6.24.0) is omitted
- *  entirely unless given, exactly as a pre-6.24.0 marker (and a non-run-start marker) never carries it. */
+ *  fixture honest about the real record rather than a trimmed invention. `mode` (6.25.0) is omitted
+ *  entirely unless given, exactly as a pre-6.25.0 marker (and a non-run-start marker) never carries it. */
 const marker = (seq, kind, stage = null, iteration = null, mode) => ({
   seq,
   kind,
@@ -75,7 +75,7 @@ const fullRun = () => [
   marker(11, "orchestrator"),
 ];
 
-/** The marker trail a `--quick` ship run leaves (6.24.0): the run-start carries `mode: "quick"`, and there
+/** The marker trail a `--quick` ship run leaves (6.25.0): the run-start carries `mode: "quick"`, and there
  *  is no `pharn-regress` stage-start at all — a quick run never starts one. */
 const quickRun = () => [
   marker(1, "run-start", null, null, "quick"),
@@ -218,7 +218,7 @@ test("L36 CLOSURE: SHIP_DECISION_FORMS is the whole vocabulary, and every form i
   );
 });
 
-// ── quick mode (6.24.0) ──────────────────────────────────────────────────────────────────────────────
+// ── quick mode (6.25.0) ──────────────────────────────────────────────────────────────────────────────
 
 test("runMode: quick iff the CURRENT run's run-start carries mode === quick; an earlier run's mode never leaks forward", () => {
   assert.equal(runMode(quickRun()), "quick");
@@ -296,7 +296,7 @@ test("A SKIPPED OR WRONG MODE MARKER NEVER YIELDS gate2 — the value altered (t
   assert.equal(derive(wronglyQuick, "PASS", "no-regressions").decision, GATE2_QUICK);
 });
 
-// ── the marker ABSENT, not merely altered (6.24.0 GATE-2 review finding F1) ─────────────────────────────
+// ── the marker ABSENT, not merely altered (6.25.0 GATE-2 review finding F1) ─────────────────────────────
 //
 // The test above only ever changed the run-start's VALUE. F1 removed the marker: a quick run whose run-start
 // line was skipped JOINS the previous run's window, and when that run never wrote its run-stop, its
@@ -882,7 +882,7 @@ test("★ RESIDUAL, PINNED (GRILL finding 1): a stage that STARTED and then REFU
   const dir = greenDir(); // run 1's PASS / no-regressions, never overwritten
   try {
     // Run 2 is COMPLIANT in its markers — it builds, then starts regress and verify — and both of those refuse
-    // before rewriting a report. (Before 6.24.0 this fixture carried no pharn-build stage-start; since the
+    // before rewriting a report. (Before 6.25.0 this fixture carried no pharn-build stage-start; since the
     // GATE-2 fix a verdict stage-start counts only after the same iteration's build, so the residual is pinned
     // on the trail a real run leaves.)
     const run2 = [

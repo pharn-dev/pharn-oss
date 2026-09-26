@@ -1305,7 +1305,7 @@ test("Outcome: an absent or unrecognized source says so rather than picking a st
   }
 });
 
-// ── quick (6.24.0): a --quick ship ledger's outcome and regress line ────────────────────────────────────
+// ── quick (6.25.0): a --quick ship ledger's outcome and regress line ────────────────────────────────────
 
 test("Outcome preamble: the gate2-quick bullet is present and states gate2-quick is NOT gate2", () => {
   const root = scratch();
@@ -1395,7 +1395,7 @@ test("Briefing (GATE-2 review): a quick ship ledger NEVER links a BRIEFING.md on
       rmSync(root, { recursive: true, force: true });
     }
   }
-  // CONTROL: the same directory under a FULL ship ledger links the briefing, as before 6.24.0.
+  // CONTROL: the same directory under a FULL ship ledger links the briefing, as before 6.25.0.
   const root = scratch();
   try {
     feature(root, "feat", { "cost.json": shipCost(), "BRIEFING.md": "# BRIEFING — feat\n" });
@@ -1747,7 +1747,7 @@ function shipRun(root, markers) {
 test("INTEGRATION: APPLICABLE ship evidence → gate2, and the verdicts are shown WITHOUT an exclusion label", () => {
   const root = scratch();
   try {
-    // A compliant run builds first: since 6.24.0 a verdict stage-start counts only after the same
+    // A compliant run builds first: since 6.25.0 a verdict stage-start counts only after the same
     // iteration's latest pharn-build stage-start (ship-outcome-core, condition (a)).
     const r = shipRun(root, [
       { seq: 1, kind: "run-start", ts: "2026-09-22T10:00:00.000Z" },
@@ -2002,7 +2002,7 @@ test("F2: a FAILED emission leaves the previous run's cost.json — the report r
       }) + "\n"
     );
     const mb = join(root, ".pharn", "cost"); // the DEFAULT markers location under --repo (no flag below)
-    // A compliant run 1 builds first (since 6.24.0 a verdict stage-start counts only after the same
+    // A compliant run 1 builds first (since 6.25.0 a verdict stage-start counts only after the same
     // iteration's latest pharn-build stage-start — ship-outcome-core, condition (a)).
     const run1 = [
       { seq: 1, kind: "run-start", ts: "2026-09-22T08:00:00.000Z" },

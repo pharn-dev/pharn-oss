@@ -1,8 +1,8 @@
 diff --git a/LIMITS.md b/LIMITS.md
-index 55ddb69..88bdef4 100644
+index aa14aad..aeea061 100644
 --- a/LIMITS.md
 +++ b/LIMITS.md
-@@ -122,10 +122,24 @@ State these honestly; do not pretend tiered loading solves them.
+@@ -124,10 +124,24 @@ State these honestly; do not pretend tiered loading solves them.
  
  A 3-line typo fix still fans out to every lens, each loading its rules + the diff. Tiered loading
  optimizes _within_ one assembly (don't load all rules at once); it does **nothing** about fan-out
@@ -11,7 +11,7 @@ index 55ddb69..88bdef4 100644
 +_breadth_. You pay the most for what there is the most of (small changes). This is
  the largest practical token problem and it is not yet solved.
  
-+> **The manual flag is `/pharn-ship --quick` (6.24.0), and it trades checks for cost.** A human chooses it for
++> **The manual flag is `/pharn-ship --quick` (6.25.0), and it trades checks for cost.** A human chooses it for
 +> a `spec_kind: quick` SPEC: one to three acceptance criteria, each verified at `unit` or `integration`. It
 +> keeps both human gates, the grill's two floor stops, the test-first evidence for those criteria,
 +> `/pharn-regress`'s scope check (a changed file outside the plan's `## Files` still stops the run, within
@@ -29,18 +29,18 @@ index 55ddb69..88bdef4 100644
  ### 3b. Rule overlap × stages
  
  The same rule file (`security.md`) is loaded into context 3–4× across a feature's life (security
-@@ -254,7 +268,8 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
+@@ -256,7 +270,8 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
    path the plan's `## Files` did not declare (since 6.17.0 `/pharn-regress` also declares
    `AC-TESTS.md`'s), and before 4.0.0 was the only thing in the tree that could surface such a
    write after the fact. Four bounds, every one stated in that checker's own header: it fires only if
 -  `/pharn-regress` runs; it compares _changed since base_, not _written by the build_; it carries
-+  `/pharn-regress` runs — or, since 6.24.0, `/pharn-ship --quick`'s item 7, which runs the same partition
++  `/pharn-regress` runs — or, since 6.25.0, `/pharn-ship --quick`'s item 7, which runs the same partition
 +  without the rest of that stage; it compares _changed since base_, not _written by the build_; it carries
    closed-enum exemptions for the pipeline's own artifacts; and a plan that edits its own `## Files`
    (or its `AC-TESTS.md`) defeats it. A smoke alarm, never the guard.
  - **The only true prevention is OS-level sandboxing of the `Bash` process** — a filesystem jail, a
 diff --git a/pharn/ARCHITECTURE.md b/pharn/ARCHITECTURE.md
-index 816ebfa..fb11613 100644
+index 816ebfa..d479022 100644
 --- a/pharn/ARCHITECTURE.md
 +++ b/pharn/ARCHITECTURE.md
 @@ -131,7 +131,7 @@ pharn/floor/                                   the floor (§2): checkers, scanne
@@ -56,7 +56,7 @@ index 816ebfa..fb11613 100644
  without that evidence (6.19.0) — obeying it is command discipline, and `/pharn-loop` re-reads it after
  every build. Shape and bounds: `pharn-contracts/ac-tests.md` (cited, not restated — P4; `LIMITS.md §9`).
  
-+**Quick mode** (`/pharn-ship --quick`, 6.24.0) runs a shorter spine for a small change: a `spec_kind: quick`
++**Quick mode** (`/pharn-ship --quick`, 6.25.0) runs a shorter spine for a small change: a `spec_kind: quick`
 +SPEC (one to three criteria, each `unit` or `integration`), `plan`, the grill's floor stops without its
 +interrogation, `test`, `build`, `regress`'s scope check alone, and `verify` as above — **no `regress` base
 +comparison**, so nothing looks for a regression outside the feature. Both human gates stay, and the ledger

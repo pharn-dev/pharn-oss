@@ -21,9 +21,10 @@ import {
   isAlwaysReconciled,
   isPipelineArtifact,
   activeFeatureSlug,
+  makeDefaultProbeSandbox,
   VERDICTS,
 } from "./check-bash-reconcile.mjs";
-import { RECORD_PATH } from "./reconcile-baseline.mjs";
+import { RECORD_PATH, buildRecord } from "./reconcile-baseline.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..", "..");
@@ -74,6 +75,17 @@ function setScope(dir, scope) {
 }
 const anchor = (dir, extra = []) =>
   spawnSync(process.execPath, [ANCHOR, "--anchor", "--base", dir, "--by", "test", ...extra], { encoding: "utf8" });
+
+// D6 (6.24.0): the CLI now REFUSES --anchor with no usable scope, so `scope_snapshot: null` is reachable
+// going forward only as a LEGACY shape (a baseline anchored before 6.24.0). Built directly via the JS API
+// — bypassing the CLI's new refusal — which is exactly the shape such a pre-existing baseline has on disk.
+function anchorLegacyNoScope(dir, by = "test") {
+  const built = buildRecord(dir, by);
+  if (!built.ok) throw new Error(built.reason);
+  mkdirSync(dirname(join(dir, RECORD_PATH)), { recursive: true });
+  writeFileSync(join(dir, RECORD_PATH), JSON.stringify(built.record, null, 2) + "\n");
+  return built.record;
+}
 function check(dir, extra = []) {
   const r = spawnSync(process.execPath, [CHECK, "--base", dir, ...extra], { encoding: "utf8" });
   let json = null;
@@ -135,7 +147,7 @@ test("★ NON-VACUITY CONTROL (L34): the suite cannot pass by reporting everythi
 
 test("★ no-scope FAIL-CLOSED: with no scope set, the default is delegated to the live hook", () => {
   const dir = makeRepo({ devRepo: true }); // dev posture: pharn/features/**, .dev/features/**, pharn/pharn-*/**
-  assert.equal(anchor(dir).status, 0);
+  anchorLegacyNoScope(dir); // D6: a fresh CLI anchor now REFUSES with no scope — see the legacy helper above
   writeFileSync(join(dir, "pharn/features/allowed.md"), "inside the default safe-set\n");
   writeFileSync(join(dir, "ROOT-FILE.md"), "root files are denied by the default\n");
   const r = check(dir);
@@ -150,7 +162,7 @@ test("★ no-scope FAIL-CLOSED: with no scope set, the default is delegated to t
 test("★ no-scope: the INSTALL posture is delegated too — `.dev/features/**` is NOT in an install's default", () => {
   const dir = makeRepo({ devRepo: false }); // pharn.config.json carries skillsVersion => install posture
   mkdirSync(join(dir, ".dev/features"), { recursive: true });
-  assert.equal(anchor(dir).status, 0);
+  anchorLegacyNoScope(dir); // D6: a fresh CLI anchor now REFUSES with no scope — see the legacy helper above
   writeFileSync(join(dir, ".dev/features/x.md"), "dev-only path, install posture\n");
   const r = check(dir);
   assert.equal(r.status, 1, "an install's default does not admit .dev/features/**");
@@ -217,7 +229,7 @@ test("NO_BASELINE is GREEN by design, and --require-baseline turns it into a ref
 
 test("a malformed baseline is INCONCLUSIVE, never a reassuring CLEAN", () => {
   const dir = makeRepo();
-  assert.equal(anchor(dir).status, 0);
+  anchorLegacyNoScope(dir); // overwritten immediately below; only its directory matters here
   writeFileSync(join(dir, RECORD_PATH), "{ not json");
   assert.equal(check(dir).status, 2);
   writeFileSync(join(dir, RECORD_PATH), JSON.stringify({ version: 1, epoch: "x" }));
@@ -251,7 +263,7 @@ test("a DELETION is a warning, not an escape — nothing was written", () => {
 
 test("an absent guard is INCONCLUSIVE — no guard, no premise to reconcile against", () => {
   const dir = makeRepo();
-  assert.equal(anchor(dir).status, 0);
+  anchorLegacyNoScope(dir); // the guard-absence check runs before the baseline is even read
   rmSync(join(dir, ".claude/hooks/enforce-writes-scope.cjs"));
   const r = check(dir, ["--require-baseline"]);
   assert.equal(r.status, 2);
@@ -349,6 +361,49 @@ test("✧ every exempt entry names a writer, and the tracked exemption set stays
     assert.ok(typeof e.why === "string" && e.why.length > 0, `${e.path} has no why`);
   }
   assert.ok(raw.exempt.paths.length <= 3, "an exemption set that grows is the rule being swallowed — justify before raising");
+});
+
+// D7d / L42 (6.24.0) — the default probe sandbox now carries a THIRD signal, a fresh run marker, so an
+// install-posture sandbox always answers with the STRICT in-run default rather than the newer permissive
+// one. Executed against the REAL hook (L37), not asserted from reading the source.
+test("★ PARITY: makeDefaultProbeSandbox()'s own run marker flips the REAL install-posture hook 0 -> 2", () => {
+  const withMarker = makeDefaultProbeSandbox(makeRepo({ devRepo: false }));
+  const hookAbs = join(withMarker, ".claude", "hooks", "enforce-writes-scope.cjs");
+  // The sandbox itself has no hook copied in — copy the real one, exactly as askHookUnderScope() does.
+  mkdirSync(dirname(hookAbs), { recursive: true });
+  cpSync(join(REPO, ".claude/hooks/enforce-writes-scope.cjs"), hookAbs);
+  const withMarkerResult = spawnSync(process.execPath, [hookAbs], {
+    input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: "src/x.js" } }),
+    cwd: withMarker,
+    encoding: "utf8",
+  });
+  assert.equal(withMarkerResult.status, 2, "the probe's own marker must hold the strict default fail-closed");
+
+  // Non-vacuity control (L34): the SAME sandbox construction with the marker directory removed answers 0.
+  rmSync(join(withMarker, ".pharn", "pharn-ship"), { recursive: true, force: true });
+  const withoutMarkerResult = spawnSync(process.execPath, [hookAbs], {
+    input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: "src/x.js" } }),
+    cwd: withMarker,
+    encoding: "utf8",
+  });
+  assert.equal(withoutMarkerResult.status, 0, "without the marker the same install-posture sandbox is permissive");
+});
+
+test("✧ the probe CHECKS openRun()'s result, and a refused marker can never reach a verdict (GATE-2 review, minor 8)", () => {
+  // No fixture can make openRun() refuse inside a fresh mkdtemp directory, so this is a SOURCE-SHAPE pin —
+  // presence and order, not a demonstrated refusal. What it pins: the result is read and a refusal throws
+  // (an install sandbox with no marker would answer with the PERMISSIVE default — the very fail-open the
+  // third signal exists to prevent), and the one caller outside a try maps that throw to INCONCLUSIVE, never
+  // to node's exit 1, which is this checker's ESCAPE code.
+  const src = readFileSync(CHECK, "utf8");
+  const body = src.slice(src.indexOf("export function makeDefaultProbeSandbox("), src.indexOf("function emit("));
+  assert.match(body, /const marker = openRun\(/, "the openRun() result must be captured");
+  assert.match(body, /if \(!marker\.ok\) throw /, "a refused marker must throw");
+  const call = src.indexOf("sandbox = makeDefaultProbeSandbox(root);");
+  assert.ok(call > 0, "the main-loop call site");
+  const around = src.slice(Math.max(0, call - 120), call + 400);
+  assert.match(around, /try \{/, "the call sits inside a try");
+  assert.match(around, /verdict: "INCONCLUSIVE"/, "whose catch emits INCONCLUSIVE");
 });
 
 test("✧ isAlwaysReconciled covers the prefixes as well as the exact members", () => {

@@ -35,10 +35,11 @@ immediately after):
 - **Dev tests**: `.dev/floor/command-hygiene.test.mjs` (the `--mode` carve-out in `PHASE_MARKER_WIRING` and
   `ADOPTION`, the new `QUICK_MODE_WIRING` block with mutation controls).
 - **Repo-meta**: `CLAUDE.md` (the spine paragraph, the `mark-phase` usage line, the ship-outcome and
-  AC-tests comments), `README.md` (badge `6.24.0`, the paper-trail list, the `--quick` usage example, the
-  `/pharn-ship` commands-table row, the token-cost bullet), `CHANGELOG.md` (`## [6.24.0]`), `SKILLS_VERSION`
-  (`6.23.0` → `6.24.0`). _(Renumbered from 6.23.0 at the post-GATE-2 merge: `stage-regress-script` merged
-  as 6.23.0 first — PLAN.md, "Amended at GATE 2 (merge of main)".)_
+  AC-tests comments), `README.md` (badge `6.25.0`, the paper-trail list, the `--quick` usage example, the
+  `/pharn-ship` commands-table row, the token-cost bullet), `CHANGELOG.md` (`## [6.25.0]`), `SKILLS_VERSION`
+  (`6.24.0` → `6.25.0`). _(Renumbered twice: from 6.23.0 to 6.24.0 at the first GATE-2 merge, after
+  `stage-regress-script` merged as 6.23.0, and from 6.24.0 to 6.25.0 at the final merge, after
+  `writes-scope-run-only` merged as 6.24.0 — PLAN.md's two "Amended at GATE 2" merge sections.)_
 - **Dev artifacts (new)**: `handoff/make-patch.mjs` (the committed patch generator), `proposed/apply.sh`
   (pinned verbatim from PLAN.md §7), `proposed/APPLY.md`, `proposed/human-only.patch`,
   `proposed/human-only.sha256` — the last two are **Bash writes**, produced by running
@@ -234,6 +235,45 @@ re-anchored `--by ship-quick-mode-post-merge`.
 - **Committed before regress and verify.** `pharn/floor/` and `.dev/floor/` are always reconciled against `HEAD`'s
   blobs. Before the merge was committed, main's 15 floor files outside this plan's `## Files` read as escapes, so
   the merge commit came first. PLAN.md, "Amended at GATE 2 (merge of main)", has the set difference.
+
+## GATE 2 — the final merge of main, 6.25.0 (2026-09-26)
+
+Stage model: opus — set by the maintainer's instruction, overriding pharn.config.json's sonnet for
+build/regress/verify; routed via Agent subagent; effort not routed. Built from `PLAN.md`'s "Amended at GATE 2 (final
+merge of main)", in the same worktree. The pre-merge reconcile read `CLEAN` (the `ship-quick-mode-post-merge` epoch:
+33 paths reconciled, no escape). `origin/main` (`ec06f7b`, `writes-scope-run-only`, 6.24.0) was then merged in
+without a commit. The setter was re-run from this plan, and the baseline re-anchored
+`--by ship-quick-mode-final-merge` (2355 paths).
+
+- **Merge** — one textual conflict, `CHANGELOG.md`, resolved as PLAN.md records. A read-only scratch comparison
+  confirmed that main's `[6.24.0]` and everything below it, the header and `[Unreleased]` are byte-identical to
+  `origin/main`, with no conflict marker left.
+- **Both phases' behaviour** — `## Quick mode` items 3 and 12 place 0.2's run-marker `--open` (after the quick kind
+  read, with its STOP rule) and `--close` (Step 3a, every quick exit). Neither pinned line is duplicated.
+- **Renumber** 6.24.0 → 6.25.0 by diff: 127 of the 135 added lines that carried 6.24.0 (the escaped regex
+  included), plus two `pre-6.24` lines. Five history lines were kept, and the patch's three were regenerated.
+  `SKILLS_VERSION` and the README badge read 6.25.0.
+- **The regenerated patch.** `make-patch.mjs` exited 0 and printed `stage-exit: present` and the new pin
+  `d831d30d399a37dc403080072763d13383de6f6f31875e7e8cb4eadeb642f4f4`. `human-only.sha256`: `LIMITS.md`
+  `deea816cd5c3441a2b3924fbdbaa2e594961066e104e2963770eec41e48c2b19`, `pharn/ARCHITECTURE.md` the new pin.
+  `pharn/ARCHITECTURE.md` is unchanged on `main` since `1524c6f`; the pin moved only with the §6 paragraph's
+  version. The patch was applied to a full copy of the working tree under `.pharn/pharn-dev-build/scratch-apply/`
+  (2353 files; removed afterwards), and each check exited 0:
+  - `git apply --check` and `git apply`;
+  - `shasum -a 256 -c`: `LIMITS.md: OK`, `pharn/ARCHITECTURE.md: OK`;
+  - `validate` GREEN, 36 capabilities;
+  - `check-specified-markers` GREEN, 25 annotations;
+  - `hash-doc.test.mjs`;
+  - the hook, product-floor and dev-floor suites, 108 test files, run in the copy as a repository of its own
+    with the patch applied (4 tests skipped there).
+
+  `git diff --quiet -- LIMITS.md pharn/ARCHITECTURE.md` confirmed that the real trusted docs were untouched.
+
+- **The floor, after the merge, without the patch:** `node pharn/floor/validate.mjs .` GREEN (36 capabilities);
+  `npm test` 3663/3663, exit 0. Scoped `prettier --check` over this pass's files flagged only `PLAN.md`, which
+  was then formatted (two blank lines). Scoped `markdownlint-cli2 --no-globs` found no issue over its 13 markdown
+  files.
+- **Committed before regress and verify**, for the reason the section above gives.
 
 ## Open issues for `/pharn-dev-regress` and `/pharn-dev-verify`
 

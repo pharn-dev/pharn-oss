@@ -57,7 +57,7 @@
 //   is adopted by a later `/pharn-ship` `run-start` whose own `--pending-start` call was skipped, which
 //   WIDENS that run's window. Nothing here can tell the two apart; it is marker discipline, like every marker (L19).
 //
-// ── THE MODE (`--mode`, added 6.24.0 for `/pharn-ship --quick`) ─────────────────────────────────────────
+// ── THE MODE (`--mode`, added 6.25.0 for `/pharn-ship --quick`) ─────────────────────────────────────────
 // A run-start marker may carry `mode: "quick"`, recorded at the MOMENT THE RUN STARTS (L42 — capture at
 // the moment of the act, never re-derive from live state afterwards): the mode is a fact about how the
 // run WAS INVOKED, never re-derived later from the SPEC's `spec_kind` — a quick SPEC may still run the
@@ -66,7 +66,7 @@
 // value and for any `--kind` but `run-start` — a stage-start, orchestrator or run-stop marker records no
 // mode, because the mode is a property of the RUN, not of a stage inside it.
 // WITH NO `--mode` FLAG the marker carries no `mode` key at all — byte-identical to every marker written
-// before 6.24.0 (a closure test pins this). `ship-outcome-core.mjs`'s `runMode()` reads this field to
+// before 6.25.0 (a closure test pins this). `ship-outcome-core.mjs`'s `runMode()` reads this field to
 // decide `gate2` vs `gate2-quick`; `render-cost-ledger.mjs`'s `normalizeMarkers` keeps it only as a
 // `MARKER_MODES` member, the same pattern `origin: "pending"` already uses.
 //
@@ -85,7 +85,7 @@ import { tsMs } from "./run-window-core.mjs";
  *  object (L15 — an inherited `toString` would be both truthy and non-nullish). */
 export const MARKER_KINDS = new Set(["run-start", "stage-start", "orchestrator", "run-stop"]);
 
-/** The `--mode` vocabulary (6.24.0), a Set for the same reason. One member today: `/pharn-ship --quick`'s
+/** The `--mode` vocabulary (6.25.0), a Set for the same reason. One member today: `/pharn-ship --quick`'s
  *  run-start. Exported once (L35) — `render-cost-ledger.mjs`'s `normalizeMarkers` and
  *  `ship-outcome-core.mjs`'s `runMode` both read against this same set, never a re-spelled literal. */
 export const MARKER_MODES = new Set(["quick"]);
@@ -231,7 +231,7 @@ export function markPhase({
     session_id: sessionId,
   };
   if (pending) marker.origin = "pending";
-  // With NO `--mode` the marker carries no `mode` key at all (L41) — byte-identical to a pre-6.24.0 marker.
+  // With NO `--mode` the marker carries no `mode` key at all (L41) — byte-identical to a pre-6.25.0 marker.
   if (mode !== null) marker.mode = mode;
   appendFileSync(file, JSON.stringify(marker) + "\n");
   if (pending) {

@@ -316,7 +316,7 @@ test("PENDING is OPT-IN: a run-start WITHOUT --adopt-pending (every /pharn-loop 
   assert.equal(r.status, 2, "--adopt-pending on a non-run-start kind is a usage error");
 });
 
-// ---------------------------------------------------------------- --mode (6.24.0, /pharn-ship --quick)
+// ---------------------------------------------------------------- --mode (6.25.0, /pharn-ship --quick)
 
 test("--mode quick is accepted on run-start: recorded on disk and printed", () => {
   const base = mkdtempSync(join(tmpdir(), "mark-phase-mode-"));
@@ -344,7 +344,7 @@ test("--mode fast (outside MARKER_MODES) is refused on run-start too — exit 2,
   assert.equal(run(["--name", "feat", "--kind", "run-start", "--mode", "quick", "--base", base]).status, 0);
 });
 
-test("--mode absent: the marker carries NO mode key at all — byte-identical to a pre-6.24.0 marker (L41)", () => {
+test("--mode absent: the marker carries NO mode key at all — byte-identical to a pre-6.25.0 marker (L41)", () => {
   const base = mkdtempSync(join(tmpdir(), "mark-phase-mode-"));
   markPhase({ name: "feat", kind: "run-start", base });
   const [m] = lines(join(base, "feat", "markers.jsonl"));

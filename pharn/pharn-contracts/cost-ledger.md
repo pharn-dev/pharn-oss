@@ -129,7 +129,7 @@ satisfied by a variant spelling of any member; closure is what makes a variant f
 | `pricing_note`                                                      | must state the file carries tokens, never prices                          | FLOOR (regex)                                                         |
 | `markers[].seq`                                                     | integers, **strictly increasing**                                         | FLOOR (integer compare)                                               |
 | `markers[].kind`                                                    | `run-start` \| `stage-start` \| `orchestrator` \| `run-stop`              | FLOOR (enum)                                                          |
-| `markers[].mode`                                                    | (6.24.0) absent, or a `MARKER_MODES` member (today: `quick`)              | **ADVISORY** (a marker field — see "Mode" below)                      |
+| `markers[].mode`                                                    | (6.25.0) absent, or a `MARKER_MODES` member (today: `quick`)              | **ADVISORY** (a marker field — see "Mode" below)                      |
 | `requests[].request_id`                                             | non-empty, **unique across the array**                                    | FLOOR (set membership)                                                |
 | `requests[].usage`                                                  | every leaf: number \| bool \| null \| a short token                       | FLOOR (enum-regex)                                                    |
 | `requests[].model`                                                  | a bounded identity token (<=128 chars, no control char, no path)          | FLOOR (enum-regex)                                                    |
@@ -235,7 +235,7 @@ loop's window.
 - **Transcript timestamps are untrusted.** A crafted record can move itself into or out of the window.
   This is bounded: it affects a view that gates nothing.
 
-## Mode (added 6.24.0, `/pharn-ship --quick`)
+## Mode (added 6.25.0, `/pharn-ship --quick`)
 
 A run-start marker may carry `mode: "quick"` — recorded at the MOMENT THE RUN STARTS (the same
 capture-at-the-act discipline as every other marker field), never re-derived later from the SPEC's
@@ -243,7 +243,7 @@ capture-at-the-act discipline as every other marker field), never re-derived lat
 cannot tell a quick RUN from a full one. `render-cost-ledger.mjs`'s `normalizeMarkers` keeps the field only
 as a `MARKER_MODES` member — the same pattern `origin: "pending"` already uses — so a garbage value is
 dropped rather than copied, and `mark-phase.mjs` writes no key at all when `--mode` is absent, which keeps
-every pre-6.24.0 marker byte-identical. **No schema bump**: `check-cost-ledger.mjs`'s per-marker rule is
+every pre-6.25.0 marker byte-identical. **No schema bump**: `check-cost-ledger.mjs`'s per-marker rule is
 the closed `kind` enum only; it asserts no closed key set over a marker OBJECT, so an old checker reads a
 ledger carrying a `mode` key GREEN, unchanged.
 
@@ -320,7 +320,7 @@ by the checker rather than re-spelled:
 | `source`           | who writes it                                          | `decision` vocabulary                                                                   | strength                                |
 | ------------------ | ------------------------------------------------------ | --------------------------------------------------------------------------------------- | --------------------------------------- |
 | `LOOP.md`          | `/pharn-loop`, via its record                          | `check-loop.mjs`'s own tokens                                                           | **DECLARED** — re-derivable (see below) |
-| `verdicts+markers` | `/pharn-ship` always; any other command with no record | `gate2` \| `gate2-quick` (6.24.0) \| `stop:<stage>` \| `stop:unknown` \| `undetermined` | **DERIVED** — split, see below          |
+| `verdicts+markers` | `/pharn-ship` always; any other command with no record | `gate2` \| `gate2-quick` (6.25.0) \| `stop:<stage>` \| `stop:unknown` \| `undetermined` | **DERIVED** — split, see below          |
 
 **The declared form is re-derivable and the derived form is not, and that asymmetry is the point.** A
 `LOOP.md` decision is checked by `pharn/floor/check-loop-decision.mjs`, which re-runs `check-loop.mjs`
@@ -333,7 +333,7 @@ checker computes either, so there is nothing to re-derive against.
 - **`gate2` is FLOOR.** It means `verify-report.json` read `PASS` **and** `regression-report.json` read
   `no-regressions` — two enum values produced by tested non-LLM checkers. It says the run reached the
   human gate; it is **not** a judgment that the feature is good, which is the human's call.
-- **`gate2-quick` (6.24.0) is FLOOR TOO, over a SMALLER stage set.** It means `verify-report.json` read
+- **`gate2-quick` (6.25.0) is FLOOR TOO, over a SMALLER stage set.** It means `verify-report.json` read
   `PASS` on the run's OWN `pharn-verify` stage — the regression verdict is **never** consulted, because a
   `--quick` run starts no `/pharn-regress` at all. **`gate2-quick` is NOT `gate2`**: it names where the run
   ended first (`gate2`) and the mode second, and every consumer compares `decision` by equality, never by
@@ -347,13 +347,13 @@ checker computes either, so there is nothing to re-derive against.
   markers file is ordinary state under `.pharn/` that a Bash write reaches (`LIMITS.md §6`).
 
 - **`undetermined`** — markers exist, but the run's own boundary cannot be established from them: the
-  run window is `unknown` (see "Run membership"), or — since 6.24.0 — the current run starts a stage other
+  run window is `unknown` (see "Run membership"), or — since 6.25.0 — the current run starts a stage other
   than `pharn-regress` / `pharn-verify` twice at one iteration, which is what a skipped run-start can leave
   when two invocations' markers run together. No verdict can then be bound to this run, so the outcome is
   neither a failed check nor a stop stage.
 
 **The verdicts count only when they belong to THIS run (added 6.9.1; the stage SET they need forked by
-mode in 6.24.0).** The applicability test now reads the run's own mode first (`ship-outcome-core.mjs`
+mode in 6.25.0).** The applicability test now reads the run's own mode first (`ship-outcome-core.mjs`
 `runMode()`, from the run-start marker, never the SPEC): a **full** run's `gate2` requires that the CURRENT
 run carries a `stage-start` for BOTH `pharn-regress` and `pharn-verify` at its LATEST recorded iteration;
 a **quick** run's `gate2-quick` requires only `pharn-verify` — demanding `pharn-regress` there would make
@@ -364,7 +364,7 @@ excluded. The `stop:<stage>` name and `iterations` are also read from the curren
 `/pharn-spec` resumes an existing `<name>`, so a second `/pharn-ship` over the same feature used to derive
 `gate2` from the PREVIOUS run's green reports after STOPping at grill.
 
-**Two more conditions (6.24.0, the GATE-2 review of quick mode).** (a) **Order:** a verdict stage-start
+**Two more conditions (6.25.0, the GATE-2 review of quick mode).** (a) **Order:** a verdict stage-start
 counts only when it follows the latest `pharn-build` stage-start of the same iteration in the current run;
 with no such build the reports are not current. (b) **No repeat:** a stage other than a verdict stage
 started twice at one iteration makes the outcome `undetermined` (above). `/pharn-ship` starts every
@@ -406,7 +406,7 @@ reached no-`LOOP.md` fallback now also applies the applicability rule.
 
 `render-run-report.mjs` labels the `## Verdicts` section with the SAME applicability. It uses the same
 function over the ledger's own `markers[]`, so a report the outcome excluded never appears as an
-unqualified current verdict. **For a quick ship ledger (6.24.0) it additionally renders the regress line
+unqualified current verdict. **For a quick ship ledger (6.25.0) it additionally renders the regress line
 as "not part of this run: a quick `/pharn-ship` run starts no `/pharn-regress`"** — read from the run's own
 mode (`runMode()` over `cost.markers[]`), never from whether a `regression-report.json` happens to exist on
 disk: a report left by an EARLIER full run over the same feature directory must never be shown as this

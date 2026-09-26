@@ -79,7 +79,7 @@ test("a freshly emitted ledger is GREEN — the control that makes every RED bel
   assert.deepEqual(redsOf(led), [], "the emitter must satisfy its own checker");
 });
 
-// ── quick (6.24.0): a `--quick` ship ledger (a `mode` marker key, a `gate2-quick` decision) is GREEN ─────
+// ── quick (6.25.0): a `--quick` ship ledger (a `mode` marker key, a `gate2-quick` decision) is GREEN ─────
 // under the UNCHANGED checker — no schema bump, exactly as the design states: rule 7 checks
 // `outcome.decision` as a bounded token, never a closed vocabulary, and markers carry no closed key set.
 
@@ -104,7 +104,7 @@ function quickShipLedger() {
         session_id: null,
         mode: "quick",
       }),
-      // A compliant quick run starts its build before its verify, and since 6.24.0's GATE-2 fix a verify
+      // A compliant quick run starts its build before its verify, and since 6.25.0's GATE-2 fix a verify
       // stage-start counts only AFTER the same iteration's latest pharn-build stage-start (ship-outcome-core).
       JSON.stringify({
         seq: 2,

@@ -53,16 +53,21 @@ would leave `main`'s `LIMITS.md §3a` claim false for however long that gap last
 Applying the patch changes `sha256(pharn/ARCHITECTURE.md)` (folded, `.dev/floor/hash-doc.mjs`'s reading):
 
 - **Old pin:** `4950796f5342df20a298fe22812e45dec3c15317592bd2358a31e149d2dc1c7f`
-- **New pin (this patch, `stage-exit: present`, regenerated on 2026-09-26 after `main` was merged in and
-  the re-review's N1–N3 were fixed):** `044ee4fae3c26f2481f47721b376814f4864a78101230e9290af0d7fa7495fbe`.
-  It supersedes the two earlier pins, `0e34408a…` (before the review) and `7b02b45c…` (after the review
-  fixes, generated with `stage-exit: absent`).
+- **New pin (this patch, `stage-exit: present`, regenerated on 2026-09-26 at the final merge of `main`, at
+  6.25.0):** `d831d30d399a37dc403080072763d13383de6f6f31875e7e8cb4eadeb642f4f4`. `human-only.sha256`
+  carries it for `pharn/ARCHITECTURE.md`, and `deea816cd5c3441a2b3924fbdbaa2e594961066e104e2963770eec41e48c2b19`
+  for `LIMITS.md`. It supersedes three earlier pins: `0e34408a…` (before the review), `7b02b45c…` (after the
+  review fixes, generated with `stage-exit: absent`) and `044ee4fa…` (the first merge of `main`, at 6.24.0).
+  `writes-scope-run-only` (6.24.0) left `pharn/ARCHITECTURE.md` untouched, so this pin moved only because the
+  patch's own §6 paragraph now says 6.25.0. The `LIMITS.md` sum moved for the same reason, and because that
+  phase changed `LIMITS.md` in §1d, §7 and §8, outside every hunk this patch touches.
 
 A later regeneration prints its own pin; always read it from the generator's `new ARCHITECTURE pin: …`
 line printed at generation time, never from this document after a regeneration.
 
-**Any sibling plan that pinned the OLD hash must be re-pinned** after this merges (`writes-scope-run-only`
-pins `4950796f…` as of this writing; `stage-regress-script` has already merged) — one header-line edit, via
+**Any sibling plan that pinned the OLD hash must be re-pinned** after this merges (both `stage-regress-script`
+and `writes-scope-run-only` have already merged; a plan written later against `4950796f…` is the case) —
+one header-line edit, via
 `/pharn-dev-plan` or by hand, during that sibling's post-merge rebase. This is the same situation Q1's
 recommendation (a) accepted: the re-pin is cheap and the rebase is already a reconcile point.
 

@@ -177,8 +177,10 @@ narrow scope behind:
 node .claude/hooks/set-writes-scope.cjs --clear
 ```
 
-**Why this exists.** A **set** scope REPLACES `enforce-writes-scope.cjs`'s fail-closed default-safe-set, so
-a leftover scope from a finished run is **stricter** than no scope at all. **ADVISORY (P0):** this is
+**Why this exists.** A **set** scope REPLACES `enforce-writes-scope.cjs`'s default — the fail-closed
+default-safe-set, except in an **installed** project outside an open `/pharn-ship`, `/pharn-loop` or
+`/pharn-review` run, where the default is the permissive one (6.24.0; `CLAUDE.md`, "Writes-scope") — so a
+leftover scope from a finished run is **stricter** than no scope at all. **ADVISORY (P0):** this is
 agent-run orchestration through **Bash**, outside the `PreToolUse` gate (L19) — nothing on the floor
 forces it, and an early abort skips it; the next command's first-step **set** overwrites a leftover scope
 either way.

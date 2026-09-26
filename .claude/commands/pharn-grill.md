@@ -1,5 +1,5 @@
 ---
-description: "Interrogate an approved pharn/features/<name>/PLAN.md AND deterministically re-verify TWO things — the spec→plan hash chain and the plan's applied_lessons declaration — the third product-pipeline stage (spec → plan → grill → test → build → regress → verify → ship). It has TWO natures. FLOOR (deterministic, TWO stops): (1) pharn/floor/check-plan-spec-agree.mjs — which REUSES check-spec-approved.mjs + check-spec.mjs --hash — makes /pharn-grill the FIRST downstream consumer that RE-VERIFIES /pharn-spec's pin after /pharn-plan: the PLAN's carried spec_content_hash MUST equal the current Approved, un-drifted SPEC's body hash, else the plan was made against stale intent → a deterministic RED (re-plan / re-approve); (2) pharn/floor/check-plan-lessons.mjs makes it the FIRST stage that did NOT author applied_lessons to re-verify it — the field must still be present, well-formed (`none` | `[L<n>…]`), and every cited id must still resolve in the user's memory-bank canon, and every cited id must be referenced in the plan body (sub-check D — a citation costs a line, never proof it was read), else the declaration is stale → a deterministic RED. A project with NO memory-bank is unblocked by construction: `none` short-circuits before the file is read. ADVISORY (inherited from /pharn-dev-grill): interrogate the PLAN — gaps, unstated assumptions, missing guarantee-audit reductions, untested axes — and emit a grill-log (pharn/features/<name>/GRILL.md) of finding-shape findings. The interrogation NEVER blocks; those two checks are the ONLY deterministic stops. `/pharn-grill <name> --quick` (6.24.0) runs BOTH floor stops and skips the interrogation entirely, refusing outright unless the SPEC is spec_kind: quick. '/pharn-grill produced a GRILL.md' guarantees the chain held and the declaration was well-formed — it NEVER means 'the plan is good', and NEVER means the lessons were genuinely APPLIED (P0)."
+description: "Interrogate an approved pharn/features/<name>/PLAN.md AND deterministically re-verify TWO things — the spec→plan hash chain and the plan's applied_lessons declaration — the third product-pipeline stage (spec → plan → grill → test → build → regress → verify → ship). It has TWO natures. FLOOR (deterministic, TWO stops): (1) pharn/floor/check-plan-spec-agree.mjs — which REUSES check-spec-approved.mjs + check-spec.mjs --hash — makes /pharn-grill the FIRST downstream consumer that RE-VERIFIES /pharn-spec's pin after /pharn-plan: the PLAN's carried spec_content_hash MUST equal the current Approved, un-drifted SPEC's body hash, else the plan was made against stale intent → a deterministic RED (re-plan / re-approve); (2) pharn/floor/check-plan-lessons.mjs makes it the FIRST stage that did NOT author applied_lessons to re-verify it — the field must still be present, well-formed (`none` | `[L<n>…]`), and every cited id must still resolve in the user's memory-bank canon, and every cited id must be referenced in the plan body (sub-check D — a citation costs a line, never proof it was read), else the declaration is stale → a deterministic RED. A project with NO memory-bank is unblocked by construction: `none` short-circuits before the file is read. ADVISORY (inherited from /pharn-dev-grill): interrogate the PLAN — gaps, unstated assumptions, missing guarantee-audit reductions, untested axes — and emit a grill-log (pharn/features/<name>/GRILL.md) of finding-shape findings. The interrogation NEVER blocks; those two checks are the ONLY deterministic stops. `/pharn-grill <name> --quick` (6.25.0) runs BOTH floor stops and skips the interrogation entirely, refusing outright unless the SPEC is spec_kind: quick. '/pharn-grill produced a GRILL.md' guarantees the chain held and the declaration was well-formed — it NEVER means 'the plan is good', and NEVER means the lessons were genuinely APPLIED (P0)."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -127,7 +127,7 @@ Load the trusted prefix and obey it for the whole run:
 3. Read `pharn/pharn-contracts/finding-shape.md` so your interrogation's finding output conforms (cited, not
    restated — P4).
 
-## `--quick` mode (6.24.0) — `/pharn-grill <name> --quick`
+## `--quick` mode (6.25.0) — `/pharn-grill <name> --quick`
 
 `/pharn-ship --quick` invokes this form. **The grill stage keeps owning its artifact** (P3, unchanged): it
 is `/pharn-grill --quick` that writes the quick `GRILL.md`, never `/pharn-ship`. `--quick` is recognized
@@ -460,6 +460,11 @@ the default permits start being denied in later sessions, with nothing naming th
 sits outside the `PreToolUse` gate entirely (PHARN's own build-loop lesson **L19**) — nothing on
 the floor forces it, and an early abort skips it. It degrades safely: the next command's first-step
 **set** overwrites a leftover scope, which is exactly today's behavior. The floor guarantee is
-unchanged and belongs to the **reader**, not to this step — **absence of a scope file = the
-fail-closed default-safe-set**. Never write "the command cleaned up"; write that it **declares** the
+unchanged and belongs to the **reader**, not to this step. **Absence of a scope file no longer means one
+posture (6.24.0):** in a dev checkout or an unsignalled tree it is still the fail-closed
+default-safe-set; in an **installed** project (`pharn.config.json` carries `skillsVersion`) it is
+fail-closed the same way only while a `/pharn-ship`, `/pharn-loop` or `/pharn-review` run is open —
+outside a run it is the permissive default instead: it denies PHARN's own installed surface and its scope
+file, allows your ordinary source, and allows only two places outside the project (`CLAUDE.md`,
+"Writes-scope", has the whole rule). Never write "the command cleaned up"; write that it **declares** the
 release step.

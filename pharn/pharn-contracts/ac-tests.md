@@ -113,7 +113,7 @@ the ids and levels), **3** legacy, **4** bootstrap (`spec_kind: test-infra`; pri
 records), **2** unusable. Precedence, fixed: unreadable 2 → legacy 3 → an invalid `spec_kind`, or a body that opens with a `spec_kind:` line
 (6.20.7; `spec-template.md`, "`spec_kind`"), 2 → an absent,
 duplicated or empty Acceptance Criteria section (or, for bootstrap, a malformed level) 2 → bootstrap 4 → templated 0.
-`/pharn-plan` and `/pharn-test` branch on it. **A `spec_kind: quick` SPEC (6.24.0, `/pharn-ship --quick`) is
+`/pharn-plan` and `/pharn-test` branch on it. **A `spec_kind: quick` SPEC (6.25.0, `/pharn-ship --quick`) is
 TEMPLATED (0) and treated as `feature` throughout this contract** — the same mapping check, red run,
 test-stage gate and AC gate, reached through `TEST_FIRST_KINDS` (`spec-template-core.mjs`) rather than a
 literal `=== "feature"` test — a quick SPEC just carries fewer, narrower-leveled criteria (`spec-template.md`

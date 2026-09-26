@@ -505,7 +505,7 @@ test("✧ L3: the BOM strip is not a masking layer — a frontmatter-less file s
   }
 });
 
-// ── --spec-kind (6.24.0): the print mode beside --state and --spec-id ────────────────────────────────────
+// ── --spec-kind (6.25.0): the print mode beside --state and --spec-id ────────────────────────────────────
 
 test("--spec-kind: feature (no line) prints feature", () => {
   const r = runWith(makeSpec(), { specKindMode: true });
@@ -859,7 +859,7 @@ const RULE_CASES = [
     ],
   },
   {
-    // 6.24.0. A `spec_kind: quick` SPEC additionally bounds its Acceptance Criteria (rule 9).
+    // 6.25.0. A `spec_kind: quick` SPEC additionally bounds its Acceptance Criteria (rule 9).
     kind: "quick",
     quickBody: [
       [
@@ -880,7 +880,7 @@ const RULE_CASES = [
   },
 ];
 
-test("✧ L34 — RULE_CASES covers every template RED kind (an open form, L47 — 6.24.0 added `quick`), each with at least one mutant", () => {
+test("✧ L34 — RULE_CASES covers every template RED kind (an open form, L47 — 6.25.0 added `quick`), each with at least one mutant", () => {
   const kinds = RULE_CASES.map((r) => r.kind);
   assert.deepEqual(kinds, [
     "section",
@@ -929,7 +929,7 @@ for (const r of RULE_CASES) {
   }
 }
 
-// ── quick (6.24.0): controls proving rule 9 does NOT double-report a defect rule 1/2 already caught ────
+// ── quick (6.25.0): controls proving rule 9 does NOT double-report a defect rule 1/2 already caught ────
 
 test("RULE quick control: a malformed verify level REDs ac only (rule 9 skips a malformed level)", () => {
   const r = runWith(makeT({ kind: "quick", body: acWith("- **AC-1** Given a When b Then c\n  - verify: manual")(T_BODY) }));
@@ -955,7 +955,7 @@ test("quick control: 1-3 unit/integration criteria are GREEN", () => {
   assert.equal(r.status, 0, r.stdout + r.stderr);
 });
 
-// ── the partition invariant: SPEC_KINDS = TEST_FIRST_KINDS ∪ {test-infra}, disjoint (6.24.0) ────────────
+// ── the partition invariant: SPEC_KINDS = TEST_FIRST_KINDS ∪ {test-infra}, disjoint (6.25.0) ────────────
 
 test("✧ PARTITION: SPEC_KINDS is exactly TEST_FIRST_KINDS ∪ {test-infra}, and the two are disjoint", async () => {
   const { SPEC_KINDS, TEST_FIRST_KINDS } = await import("./spec-template-core.mjs");
@@ -964,7 +964,7 @@ test("✧ PARTITION: SPEC_KINDS is exactly TEST_FIRST_KINDS ∪ {test-infra}, an
   assert.deepEqual([...TEST_FIRST_KINDS].sort(), ["feature", "quick"]);
 });
 
-// ── the pin covers the kind: flipping feature <-> quick after approval is drift (6.24.0) ────────────────
+// ── the pin covers the kind: flipping feature <-> quick after approval is drift (6.25.0) ────────────────
 
 test("THE PIN: an Approved feature SPEC flipped to spec_kind: quick REDs pin (the kind is part of the pinned content)", () => {
   const featurePin = runWith(makeT(), { hashMode: true }).stdout.trim();
@@ -1146,7 +1146,7 @@ test("★ WIRING — /pharn-spec's Draft and re-validate steps name exactly the 
   assert.equal(names(draftStep.replaceAll("`kind-in-body`", "`pin`"), "kind-in-body"), false, "control: a dropped kind is seen");
 });
 
-// ── ★ WIRING (6.24.0): the --spec-kind line pinned in pharn-ship.md's GATE-1 backstop and pharn-grill.md's
+// ── ★ WIRING (6.25.0): the --spec-kind line pinned in pharn-ship.md's GATE-1 backstop and pharn-grill.md's
 // eligibility check, each exactly once, EXECUTED (never merely read) on a quick and a feature SPEC ──────
 
 for (const [label, cmdPath] of [
