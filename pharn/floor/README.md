@@ -36,7 +36,10 @@ project template exists, every failure is a refusal (exit 1), never a fallback. 
 the file to fill, and `--template-ref <id>` names one template directly. Every template is validated before its
 reference is printed. A SPEC without the key gets none of the template rules; the pin's layout rule (a body may
 not open with a `spec_kind:` line, 6.20.7) applies to every SPEC. A valid acceptance-criteria grammar means the
-criteria are **phrased** testably, never that any test exists, runs, or passes.
+criteria are **phrased** testably, never that any test exists, runs, or passes. `--spec-kind <SPEC.md>` (6.25.0) prints
+the SPEC's kind (`feature` | `test-infra` | `quick`, an empty line if unusable, `feature` for a legacy SPEC) — the
+same reading `/pharn-ship`'s GATE-1 backstop and `/pharn-grill --quick`'s eligibility check shell, never re-derived
+from frontmatter.
 
 ## Run the validator
 

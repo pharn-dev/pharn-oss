@@ -23,13 +23,14 @@ reads:
   ]
 writes: ["pharn/features/<name>/VERIFY.md", "pharn/features/<name>/verify-report.json"]
 constitution_refs: ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7"]
-version: "0.4.0"
+version: "0.4.1"
 ---
 
 # /pharn-verify — did the feature get built CORRECTLY, in the user's codebase?
 
 You are the **verify stage** of the product pipeline (`spec → plan → grill → test → build → regress → verify →
-ship`, `pharn/ARCHITECTURE.md §6`). You sit AFTER `/pharn-build` and `/pharn-regress`, and you answer **one**
+ship`, `pharn/ARCHITECTURE.md §6`). You sit AFTER `/pharn-build` and, in a full run, `/pharn-regress` (a
+`/pharn-ship --quick` run starts no `/pharn-regress`, so there you follow the build and its scope check), and you answer **one**
 question: **did what was supposed to be built get built CORRECTLY — does the feature satisfy its own
 requirements?** Where `/pharn-regress` asks "did building this break anything OUTSIDE the feature?" (a
 base↔HEAD state comparison, zero judgment), `/pharn-verify` asks "is the feature itself right NOW?" — and

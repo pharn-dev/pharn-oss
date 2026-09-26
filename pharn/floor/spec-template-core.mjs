@@ -20,13 +20,15 @@
 // carried the key and was validated on the legacy path (REVIEW finding R3). A SPEC with no line starting
 // `spec_template:` is LEGACY and never reaches this file.
 //
-// THE EIGHT RULES, one RED kind each: `section`, `ac`, `clarification`, `out-of-scope`, `optional-section`,
-// `guidance`, `template`, `spec-kind` (6.18.0). All are presence / regex / count / Map-membership tests over STRUCTURE — never over what
+// THE TEMPLATE RULES (an open form — L47: retracted by "the template rules", never re-counted as a new
+// number every time one is added), one RED kind each: `section`, `ac`, `clarification`, `out-of-scope`,
+// `optional-section`, `guidance`, `template`, `spec-kind` (6.18.0), `quick` (6.25.0). All are presence /
+// regex / count / Map-membership tests over STRUCTURE — never over what
 // the intent means (P5, P2). A finding names a FILE LINE NUMBER, an AC id, or a value's LENGTH, never the text on
 // a line: the SPEC body is untrusted DATA, and a RED must not become a channel for it.
 //
 // Honest bounds (P0), each also stated in the contract:
-//   - OPT-IN. A SPEC with no `spec_template` line bypasses all eight rules. /pharn-spec writing the key is command
+//   - OPT-IN. A SPEC with no `spec_template` line bypasses every template rule. /pharn-spec writing the key is command
 //     prose — advisory. A near-miss spelling (`spec-template:`, `Spec_Template:`) is also legacy.
 //   - PHRASED, NOT TESTED. A valid AC grammar means each criterion is PHRASED testably. It never means a test
 //     exists, runs, or passes, nor that the Then is observable on the public surface (advisory).
@@ -76,8 +78,26 @@ export const TEMPLATE_KEY = "spec_template";
  *  through a field parser, so what counts as the kind and what check-spec.mjs's pin covers cannot diverge. A
  *  near-miss spelling (`spec_kind :`, `Spec_Kind:`) is not the key: the SPEC is `feature`, the stricter mode. */
 export const SPEC_KIND_KEY = "spec_kind";
-export const SPEC_KINDS = Object.freeze(["feature", "test-infra"]);
+export const SPEC_KINDS = Object.freeze(["feature", "test-infra", "quick"]);
 const SPEC_KIND_LINE_RE = /^spec_kind:/;
+
+/** The `SPEC_KINDS` members `/pharn-test` treats test-first — it writes their AC tests and requires them
+ *  RED before the build. `SPEC_KINDS` is exactly `TEST_FIRST_KINDS ∪ {test-infra}`, disjoint (a fourth kind
+ *  fails a partition test until it is classified into one or the other, 6.25.0). */
+export const TEST_FIRST_KINDS = Object.freeze(["feature", "quick"]);
+
+/** The `spec_kind: quick` value, and the bounds a quick SPEC's Acceptance Criteria must hold to (6.25.0,
+ *  the maintainer's 2026-09-25 decision — see `pharn/pharn-contracts/spec-template.md`, "Rule 9"). Exported
+ *  once (L35), so the constants have exactly one owner. `/pharn-ship --quick` trades checks for cost: it
+ *  keeps test-first evidence and drops the regression check, so what it may carry is a change whose
+ *  evidence is a FEW FAST tests — three criteria bound the change a human approves at GATE 1, and an `e2e`
+ *  criterion would need its test written and run red at `/pharn-test` through the end-to-end runner (the
+ *  slowest level, with a runner of its own), which the quick bound keeps out. It does NOT keep the project's
+ *  own e2e gates out: `/pharn-verify` still discovers and runs them in a quick run. A larger or end-to-end
+ *  change takes the full pipeline. */
+export const QUICK_KIND = "quick";
+export const QUICK_MAX_ACS = 3;
+export const QUICK_LEVELS = Object.freeze(["unit", "integration"]);
 
 /** The raw frontmatter lines starting `spec_kind:`, a trailing CR removed. check-spec.mjs hashes exactly these
  *  (grill G2: the pin covers the kind), so flipping it after approval is drift. */
@@ -403,8 +423,8 @@ function checkAcceptanceCriteria(sec, out) {
  * is malformed carries `level: null`.
  *
  * @param {string} text  the SPEC.md source
- * `kind` is specKindOf() over the frontmatter: `feature`, `test-infra`, or `null` for an invalid value (a legacy SPEC
- * reports `feature`: it has no AC ids either way). `kindInBody` is kindLineOpensBody() over the body (`false` with no
+ * `kind` is specKindOf() over the frontmatter: a `SPEC_KINDS` member (`feature`, `test-infra` or `quick`), or `null`
+ * for an invalid value (a legacy SPEC reports `feature`: it has no AC ids either way). `kindInBody` is kindLineOpensBody() over the body (`false` with no
  * frontmatter): when it holds, a templated SPEC's `kind` is `null` too, because the approval pin cannot tell that body
  * from the same line in the frontmatter, so no AC mode may be read from it (6.20.7). A legacy SPEC keeps `feature`.
  *
@@ -447,7 +467,7 @@ export function specVerdict(text) {
       2,
       spec.kindInBody
         ? "UNUSABLE — the SPEC's body opens with a `spec_kind:` line, which the approval pin cannot tell from the frontmatter key — run check-spec.mjs"
-        : "UNUSABLE — the SPEC's `spec_kind` is not one of {feature, test-infra} — run check-spec.mjs"
+        : `UNUSABLE — the SPEC's \`spec_kind\` is not one of {${SPEC_KINDS.join(", ")}} — run check-spec.mjs`
     );
   if (spec.sections !== 1 || spec.items.length === 0)
     return out("UNUSABLE", 2, "UNUSABLE — the SPEC's `## Acceptance Criteria` is absent, duplicated or empty — run check-spec.mjs");
@@ -460,6 +480,14 @@ export function specVerdict(text) {
       );
     const levels = [...new Set(spec.items.map((i) => i.level))].sort();
     return out("BOOTSTRAP", 4, `BOOTSTRAP — spec_kind: test-infra; no AC-TESTS.md; the lock records levels: ${levels.join(", ")}`, levels);
+  }
+  // Explicit, no fall-through (6.25.0): every other branch above has already returned, so `spec.kind` here is a
+  // SPEC_KINDS member that is not `test-infra` — i.e. a TEST_FIRST_KINDS member, since SPEC_KINDS is exactly
+  // TEST_FIRST_KINDS ∪ {test-infra}, disjoint (a partition test pins it). The throw is unreachable given that
+  // invariant; it exists so a future kind added to SPEC_KINDS without a TEST_FIRST_KINDS/test-infra classification
+  // fails loudly here instead of silently reading as TEMPLATED.
+  if (!TEST_FIRST_KINDS.includes(spec.kind)) {
+    throw new Error(`internal: spec_kind ${JSON.stringify(spec.kind)} is a SPEC_KINDS member outside TEST_FIRST_KINDS ∪ {test-infra}`);
   }
   return out(
     "TEMPLATED",
@@ -484,7 +512,7 @@ function hasOutOfScopeEntry(sec) {
 }
 
 /**
- * The eight template rules over one parsed SPEC.
+ * The template rules (an open form — L47) over one parsed SPEC.
  * @param {{fm: object, raw: string, body: string, firstLine: number, baseRequired: string[]}} spec
  *   `firstLine` is the FILE line number of the body's first line; `baseRequired` is check-spec.mjs's base
  *   section set, which that checker already REDs by its own (legacy) loop. `raw` is the frontmatter block's text,
@@ -582,6 +610,29 @@ export function checkTemplate({ fm, raw, body, firstLine, baseRequired }) {
       "spec-kind",
       `${SPEC_KIND_KEY} (${kindLines[0].length - SPEC_KIND_KEY.length - 1} chars) is not one of {${SPEC_KINDS.join(", ")}} — delete the line for a feature`,
     ]);
+  }
+
+  // Rule 9 (`quick`, 6.25.0): on a SPEC whose kind is `quick`, at most QUICK_MAX_ACS criteria, each verified at a
+  // QUICK_LEVELS member. Skipped when the AC section is absent, hidden or duplicated (rule 1 already reports that)
+  // and, per item, when the level is malformed (rule 2 already reports that) — so each defect is reported once.
+  // Applies in every state (a Draft is caught before approval; every downstream check-spec-approved call re-checks
+  // it through checkTemplate). The value is read the SAME way rule 8 does (specKindOf over the raw frontmatter),
+  // never through the parsed `fm`.
+  if (ac && specKindOf(raw) === QUICK_KIND) {
+    const quickItems = parseAcItems(ac).items;
+    if (quickItems.length > QUICK_MAX_ACS) {
+      out.push(["quick", `${quickItems.length} criteria — a quick SPEC carries at most ${QUICK_MAX_ACS}`]);
+    }
+    for (const item of quickItems) {
+      const level = verifyOf(item).level;
+      if (level !== null && !QUICK_LEVELS.includes(level)) {
+        out.push([
+          "quick",
+          `line ${item.n}: AC-${item.id}'s verify level \`${level}\` is not allowed — a quick SPEC's criteria are ` +
+            `${QUICK_LEVELS.map((l) => `\`${l}\``).join(" or ")}`,
+        ]);
+      }
+    }
   }
 
   return { findings: out.map(([kind, detail]) => ({ kind, detail })), id: m ? m[1] : "", acCount, required: required.length };
