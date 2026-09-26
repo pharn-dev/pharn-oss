@@ -21,17 +21,29 @@
 // ==================================== THE BUDGET (`--budget-ms`) ====================================
 // A slow step (the base-commit INSTALL, or one gate `run --next`) starts only if it is the FIRST slow step
 // of THIS invocation, or `elapsed + timeoutMs <= budgetMs` (`stage-exit-core.mjs`'s `mayStartSlowStep`,
-// shared with a future verify stage script), `elapsed` measured from the top of `runFresh`/`runResume`
-// (see makeBudget: the opening fast work counts). Otherwise the script PERSISTS its progress
-// (`.pharn/pharn-regress/stage.json`, `stage-regress-core.mjs`'s `PROGRESS_SCHEMA`) and exits 5
+// shared with `stage-verify.mjs`), `elapsed` measured from the top of `runFresh`/`runResume`
+// (see `stage-runtime.mjs`'s makeBudget: the opening fast work counts). Otherwise the script PERSISTS its
+// progress (`.pharn/pharn-regress/stage.json`, `stage-regress-core.mjs`'s `PROGRESS_SCHEMA`) and exits 5
 // `continue`. With no `--budget-ms` (a code caller), nothing is budgeted.
+//
+// ==================================== THE SHARED MECHANICS (6.26.0) ====================================
+// The argv rules (`parseTimeoutMs`, `parseBudgetMs`, `parseResumeArgv`, `scanFlags`), the `lstat` containment
+// walk, the atomic write, the git helpers, the budget tracker and the drain loop moved into
+// `pharn/floor/stage-runtime.mjs` (stage-verify-script, GATE 1 Q1), their ONE owner, so `stage-verify.mjs` does
+// not copy the rules 6.23.0's review repaired one by one. They were extracted to RETURN results; this script keeps
+// its own emit wrappers, reason codes and detail wording, and its CLI behaviour — every detail text, the phase
+// order, the drain's exit-3 idempotent repeat — is unchanged (the unchanged `stage-regress.test.mjs` is that
+// evidence). ONE deliberate change, from the GATE 2 fix: the stale-output removal goes through the shared
+// `removeIfPresent`, so an unlink that fails for any reason other than absence is now a crash instead of a
+// swallowed error (the follow-up `regress-stale-unlink-swallow`, closed; `stage-runtime.test.mjs` holds it).
 //
 // ==================================== PHASES, IN ORDER (GRILL G1) ====================================
 // fresh -> chain -> base -> partition -> head-init -> drain-head -> worktree -> install -> base-init ->
 // drain-base -> verdict -> cleanup -> render (`stage-regress-core.mjs` PHASES — the ONE owner of this
 // order). "fresh" REMOVES this feature's earlier `regression-report.json`/`REGRESSION.md` BEFORE any step
 // that can fail, so a stage that stops before its verdict leaves no earlier verdict on disk; an argv
-// refusal (before containment passes) removes nothing.
+// refusal (before containment passes) removes nothing, and a removal that FAILS (anything but ENOENT) is a
+// crash — never a later refusal over a report that is still there.
 //
 // ============================== NO ABSOLUTE PATH TO A CHILD OR A RENDER (GRILL G10) ==============================
 // Every path this script hands to a shelled checker, to git, or to `render-regression.mjs` is
@@ -51,11 +63,27 @@
 //
 // Exit: 0 done · 2 unusable · 3 refused · 4 question · 5 continue · anything else (1 included) = CRASHED.
 
-import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync, unlinkSync } from "node:fs";
-import { dirname, join, sep } from "node:path";
-import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, unlinkSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { doneExit, refusedExit, unusableExit, continueExit, questionExit, mayStartSlowStep, EXIT_CODE } from "./stage-exit-core.mjs";
+import { doneExit, refusedExit, unusableExit, continueExit, questionExit, EXIT_CODE } from "./stage-exit-core.mjs";
+import {
+  flag,
+  has,
+  scanFlags,
+  parseTimeoutMs,
+  parseBudgetMs,
+  parseResumeArgv,
+  lstatSafe,
+  containmentWalk,
+  removeIfPresent,
+  atomicWrite,
+  gitSync,
+  nulList,
+  makeBudget,
+  drainGates,
+} from "./stage-runtime.mjs";
 import {
   REGRESS_PATHS,
   isTestFile,
@@ -102,17 +130,6 @@ function emitContinue(feature, phase, resumeArgv) {
   emit(continueExit({ stage: "regress", feature, phase, resumeArgv }));
 }
 
-/** ------------------------------------------------------------------------------------------------
- *  Small argv helpers (the run-gates.mjs pattern).
- *  ---------------------------------------------------------------------------------------------- */
-function flag(args, name) {
-  const i = args.indexOf(name);
-  return i !== -1 && i + 1 < args.length ? args[i + 1] : undefined;
-}
-function has(args, name) {
-  return args.includes(name);
-}
-
 /** A2 (GATE 2 review) — drop EVERY `name <value>` pair from `args`, used ONLY when building a
  *  `tests-unresolved` question's `resume.argv`: the original invocation's own `--tests` is exactly what
  *  did not resolve, so it must not survive into the answer round trip — appending `--no-tests` to a
@@ -131,34 +148,9 @@ function stripFlagPair(args, name) {
 }
 
 /** ------------------------------------------------------------------------------------------------
- *  CONTAINMENT (GRILL G54/L54) — an `lstat` ENOENT is the only proof of absence; a symlink at ANY
- *  component, or an unusable lstat result, refuses. Mirrors run-gates.mjs's `assertContained` in method,
- *  not by import: that function calls run-gates.mjs's OWN process.exit protocol, so this stage owns its
- *  own copy rather than conflating two different exit shapes.
+ *  CONTAINMENT (GRILL G54/L54) — the `lstat` walk itself (`containmentWalk`, `lstatSafe`) lives in
+ *  `stage-runtime.mjs`, its one owner; THIS stage's list of paths to walk, and its reason code, stay here.
  *  ---------------------------------------------------------------------------------------------- */
-function lstatSafe(p) {
-  try {
-    return { ok: true, stat: lstatSync(p) };
-  } catch (e) {
-    if (e && e.code === "ENOENT") return { ok: true, stat: null };
-    return { ok: false, reason: e.message };
-  }
-}
-
-function containmentWalk(rootAbs, targetAbs) {
-  if (targetAbs === rootAbs) return { ok: false, reason: `must not BE ${rootAbs}` };
-  if (!(targetAbs + sep).startsWith(rootAbs + sep)) return { ok: false, reason: `must resolve strictly inside ${rootAbs}` };
-  const rest = targetAbs.slice(rootAbs.length).split(sep).filter(Boolean);
-  let cur = rootAbs;
-  for (const part of [rootAbs, ...rest]) {
-    cur = part === rootAbs ? rootAbs : join(cur, part);
-    const r = lstatSafe(cur);
-    if (!r.ok) return { ok: false, reason: `cannot lstat ${cur}: ${r.reason}` };
-    if (r.stat === null) break; // truly absent — lstat's own ENOENT, never existsSync (L54)
-    if (r.stat.isSymbolicLink()) return { ok: false, reason: `refuses a path that traverses a symlink at ${cur}` };
-  }
-  return { ok: true };
-}
 
 /** A4 (GATE 2 review) — the SAME `lstat` walk `phaseFreshEarly` runs on a fresh invocation, factored out
  *  so `runResume` can re-run it too, WITHOUT any removal. Before this fix, `--resume` read the progress
@@ -174,29 +166,10 @@ function containmentGuard(feature) {
 
 /** ------------------------------------------------------------------------------------------------
  *  Atomic writes into a feature directory: a tmp sibling under the state root, then rename — so no stray
- *  tmp file ever lands in the feature directory itself.
+ *  tmp file ever lands in the feature directory itself (`stage-runtime.mjs`'s `atomicWrite`).
  *  ---------------------------------------------------------------------------------------------- */
 function atomicWriteIntoFeature(relPath, bytes) {
-  mkdirSync(REGRESS_PATHS.root, { recursive: true });
-  mkdirSync(dirname(relPath), { recursive: true });
-  const tmp = join(REGRESS_PATHS.root, `${relPath.replace(/[\\/]/g, "_")}.tmp-${process.pid}`);
-  writeFileSync(tmp, bytes);
-  renameSync(tmp, relPath);
-}
-
-/** ------------------------------------------------------------------------------------------------
- *  git helpers. Every call is an ARGUMENT VECTOR (never a shell string); paths never resolved absolute.
- *  ---------------------------------------------------------------------------------------------- */
-function gitSync(args) {
-  try {
-    return { ok: true, stdout: execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }) };
-  } catch (e) {
-    return { ok: false, error: e, stderr: e && e.stderr ? String(e.stderr) : "" };
-  }
-}
-
-function nulList(stdout) {
-  return stdout.split("\0").filter(Boolean);
+  atomicWrite(REGRESS_PATHS.root, relPath, bytes);
 }
 
 /** ------------------------------------------------------------------------------------------------
@@ -267,37 +240,18 @@ function parseRestOfArgv(args, feature) {
     "--no-tests",
   ]);
   const valueFlags = new Set(["--feature", "--timeout-ms", "--budget-ms", "--base", "--gates", "--install", "--tests"]);
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    if (!a.startsWith("--")) emitUnusable(feature, "usage-error", `unexpected positional argument ${JSON.stringify(a)}`);
-    if (!known.has(a)) emitUnusable(feature, "usage-error", `unrecognized flag ${JSON.stringify(a)}`);
-    if (valueFlags.has(a)) i++; // skip its value
-  }
+  const scan = scanFlags(args, known, valueFlags);
+  if (!scan.ok) emitUnusable(feature, "usage-error", scan.detail);
 
-  const timeoutRaw = flag(args, "--timeout-ms");
-  // M7(a) — 3-9 digits, matching run-gates.mjs `run --next`'s OWN --timeout-ms rule exactly, so a value
-  // this stage would accept but the runner would refuse deep into a run (after the worktree, the install,
-  // and possibly several gates have already run) is now caught immediately instead.
-  if (timeoutRaw === undefined || !/^\d{3,9}$/.test(timeoutRaw)) {
-    emitUnusable(
-      feature,
-      "usage-error",
-      "--timeout-ms is required and must be a 3-9 digit positive integer (matches run-gates.mjs run --next)"
-    );
-  }
-  const timeoutMs = Number(timeoutRaw);
+  // M7(a) and M7(b) — the shared rules (`stage-runtime.mjs`): `--timeout-ms` is `run --next`'s own 3-9 digit
+  // rule, and a TRAILING `--budget-ms` with no value is refused, never read as "unbudgeted".
+  const timeout = parseTimeoutMs(args);
+  if (!timeout.ok) emitUnusable(feature, "usage-error", timeout.detail);
+  const timeoutMs = timeout.value;
 
-  let budgetMs = null;
-  // M7(b) — a TRAILING `--budget-ms` with no value must not silently mean "unbudgeted": `flag()` returns
-  // `undefined` for a value-less trailing flag, indistinguishable from the flag being absent altogether.
-  if (has(args, "--budget-ms") && flag(args, "--budget-ms") === undefined) {
-    emitUnusable(feature, "usage-error", "--budget-ms requires a value");
-  }
-  const budgetRaw = flag(args, "--budget-ms");
-  if (budgetRaw !== undefined) {
-    if (!/^\d+$/.test(budgetRaw)) emitUnusable(feature, "usage-error", "--budget-ms must be a non-negative integer");
-    budgetMs = Number(budgetRaw);
-  }
+  const budget = parseBudgetMs(args);
+  if (!budget.ok) emitUnusable(feature, "usage-error", budget.detail);
+  const budgetMs = budget.value;
 
   if (has(args, "--install") && has(args, "--no-install")) {
     emitUnusable(feature, "usage-error", "--install and --no-install are mutually exclusive");
@@ -344,13 +298,13 @@ function parseRestOfArgv(args, feature) {
 function phaseFreshEarly(feature) {
   containmentGuard(feature);
 
-  // Stale-output removal, as early as it is now safe to do so (GRILL G1, narrowed by F2).
+  // Stale-output removal, as early as it is now safe to do so (GRILL G1, narrowed by F2). ONLY `ENOENT` is
+  // absence (`stage-runtime.mjs`'s `removeIfPresent`, since the 6.26.0 GATE 2 fix): any other unlink error
+  // propagates to the top-level catch — a crash, exit 1 with no document — so no refusal and no `unusable` can
+  // follow a removal that did not happen. Before, a catch-all swallowed it and an unremovable earlier report
+  // survived beside the later stop (the follow-up `regress-stale-unlink-swallow`, closed by this line).
   for (const rel of [`${FEATURES_DIR}/${feature}/regression-report.json`, `${FEATURES_DIR}/${feature}/REGRESSION.md`]) {
-    try {
-      unlinkSync(rel);
-    } catch {
-      /* absent — the normal case */
-    }
+    removeIfPresent(rel);
   }
 }
 
@@ -633,37 +587,21 @@ function phaseHeadInit(cfg, base, scope, tests) {
 }
 
 /** ------------------------------------------------------------------------------------------------
- *  THE DRAIN — repeat `run-gates.mjs run --next` until nothing remains, respecting the budget.
+ *  THE DRAIN — `stage-runtime.mjs`'s `drainGates` (the loop's one owner) repeats `run-gates.mjs run --next`
+ *  until nothing remains, respecting the budget; THIS wrapper keeps regress's own reason code and detail text.
+ *  Returns `"done"` or `"budget"` (caller must persist and exit 5 `continue`). Any runner error is a direct
+ *  `unusable child-refused` exit (never returned).
  *  ---------------------------------------------------------------------------------------------- */
-function drainOnce(outDir, timeoutMs) {
-  return spawnSync(process.execPath, [RUN_GATES, "run", "--next", "--out", outDir, "--timeout-ms", String(timeoutMs)], {
-    encoding: "utf8",
-  });
-}
-
-/** Returns `"done"` or `"budget"` (caller must persist and exit 5 `continue`). Any runner error is a
- *  direct `unusable child-refused` exit (never returned). */
 function drain(state, budget, outDir) {
-  for (;;) {
-    if (!budget.may()) return "budget";
-    const r = drainOnce(outDir, state.timeoutMs);
-    let parsed;
-    try {
-      parsed = JSON.parse(r.stdout || "");
-    } catch {
-      parsed = null;
-    }
-    if (r.status === 3) return "done"; // already finalized — an idempotent repeat
-    if (r.status !== 0 || parsed === null) {
-      emitUnusable(
-        state.feature,
-        "child-refused",
-        `run-gates.mjs run --next (${outDir}) refused: ${parsed ? parsed.reason : r.stderr || r.stdout}`
-      );
-    }
-    budget.spent();
-    if (parsed.finalized || parsed.remaining === 0) return "done";
+  const res = drainGates({ outDir, timeoutMs: state.timeoutMs, budget });
+  if (res.kind === "refused") {
+    emitUnusable(
+      state.feature,
+      "child-refused",
+      `run-gates.mjs run --next (${outDir}) refused: ${res.parsed ? res.parsed.reason : res.stderr || res.stdout}`
+    );
   }
+  return res.kind;
 }
 
 /** ------------------------------------------------------------------------------------------------
@@ -680,34 +618,18 @@ function persistProgress(state) {
 }
 
 /** ONE budget tracker per PROCESS INVOCATION (never per phase-machine re-entry): the async `install`
- *  step must recurse back into `runPhases` after its promise settles, and a fresh `invocationStart`/
- *  `slowSteps` pair created on that re-entry would silently reset the "first slow step of THIS
- *  invocation" clock mid-invocation — exactly the bug `mayStartSlowStep`'s contract forbids. `runFresh`/
- *  `runResume` create ONE tracker and thread it through every call and every recursive continuation.
+ *  step must recurse back into `runPhases` after its promise settles, and a fresh tracker created on that
+ *  re-entry would silently reset the "first slow step of THIS invocation" clock mid-invocation — exactly
+ *  the bug `mayStartSlowStep`'s contract forbids. `runFresh`/`runResume` create ONE tracker
+ *  (`stage-runtime.mjs`'s `makeBudget`) and thread it through every call and every recursive continuation.
  *
  *  THE CLOCK (GATE-2 round 2): `invocationStart` is taken by the CALLER as its very first statement, so
  *  `elapsed` counts the invocation's own opening fast work — for a fresh run: argv, containment, the chain
  *  check, base resolution, the partition and head init — against the budget. Module loading before
  *  `runFresh`/`runResume` is still not counted (a named bound: node startup plus this file's imports).
- *  Before round 2 the clock started HERE, after head init, so that opening work was never charged: with
- *  the pinned 540000/570000 a second slow step could still start at wall time (opening work) + 30 s and
- *  end past the 600 s Bash cap. PLAN.md:134's wall-time bound assumed a process-start clock. */
-function makeBudget(state, invocationStart) {
-  let slowSteps = 0;
-  return {
-    may: () =>
-      mayStartSlowStep({
-        elapsedMs: Date.now() - invocationStart,
-        timeoutMs: state.timeoutMs,
-        budgetMs: state.budgetMs,
-        slowStepsThisInvocation: slowSteps,
-      }),
-    spent: () => {
-      slowSteps++;
-    },
-  };
-}
-
+ *  Before round 2 the clock started after head init, so that opening work was never charged: with the
+ *  pinned 540000/570000 a second slow step could still start at wall time (opening work) + 30 s and end
+ *  past the 600 s Bash cap. */
 function runPhases(state, budget) {
   // A3 (GATE 2 review) — persist a checkpoint at the TOP of every phase from here through "verdict", not
   // only at a budget-exhausted `continue`. PLAN.md:140 promised "a harness kill … leaves the record at
@@ -918,23 +840,12 @@ function runFresh(args) {
  *  ---------------------------------------------------------------------------------------------- */
 function runResume(args) {
   const invocationStart = Date.now(); // the budget clock — FIRST (makeBudget)
-  // M7(c) — iterate BY INDEX, not by value: `args.indexOf(a)` always finds the FIRST occurrence of that
-  // exact string, so a stray DUPLICATE number (e.g. `--resume --budget-ms 100 100`) wrongly read the
-  // first "100"'s preceding token for every later "100" too, letting a genuine extra positional argument
-  // through as if it were the budget's own value.
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    if (a === "--resume") continue;
-    if (a === "--budget-ms") continue;
-    if (/^\d+$/.test(a) && args[i - 1] === "--budget-ms") continue;
-    emitUnusable(null, "usage-error", `--resume accepts only --budget-ms; got ${JSON.stringify(a)}`);
-  }
-  let budgetOverride;
-  const budgetRaw = flag(args, "--budget-ms");
-  if (budgetRaw !== undefined) {
-    if (!/^\d+$/.test(budgetRaw)) emitUnusable(null, "usage-error", "--budget-ms must be a non-negative integer");
-    budgetOverride = Number(budgetRaw);
-  }
+  // M7(c) — the by-index scan (`stage-runtime.mjs`'s `parseResumeArgv`): a stray DUPLICATE number
+  // (`--resume --budget-ms 100 100`) is refused, never read as the budget's own value. This stage applies
+  // parseResumeArgv ALONE, exactly as in 6.23.0 (see stage-runtime.mjs's header on the named difference).
+  const resume = parseResumeArgv(args);
+  if (!resume.ok) emitUnusable(null, "usage-error", resume.detail);
+  const budgetOverride = resume.budgetOverride;
 
   if (!existsSync(REGRESS_PATHS.stageJson)) {
     emitUnusable(null, "no-progress", `no progress record at ${REGRESS_PATHS.stageJson} — nothing to resume`);

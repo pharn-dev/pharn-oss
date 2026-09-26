@@ -124,9 +124,23 @@ State these honestly; do not pretend tiered loading solves them.
 
 A 3-line typo fix still fans out to every lens, each loading its rules + the diff. Tiered loading
 optimizes _within_ one assembly (don't load all rules at once); it does **nothing** about fan-out
-_breadth_. `quick-mode` exists as a manual flag; there is no automatic proportionality between
-breadth and change size. You pay the most for what there is the most of (small changes). This is
+_breadth_. You pay the most for what there is the most of (small changes). This is
 the largest practical token problem and it is not yet solved.
+
+> **The manual flag is `/pharn-ship --quick` (6.25.0), and it trades checks for cost.** A human chooses it for
+> a `spec_kind: quick` SPEC: one to three acceptance criteria, each verified at `unit` or `integration`. It
+> keeps both human gates, the grill's two floor stops, the test-first evidence for those criteria,
+> `/pharn-regress`'s scope check (a changed file outside the plan's `## Files` still stops the run, within
+> the bounds §6 states for that check) and `/pharn-verify` with its AC gate. It leaves out: **the regression
+> check** — no regression outside the feature is looked for, because nothing compares base and head; **the
+> plan interrogation** — `/pharn-grill --quick` runs its floor stops and no griller; and **`BRIEFING.md` and
+> `RUN-REPORT.md`** (`cost.json` is still written). Its ledger outcome is `gate2-quick`, which is not
+> `gate2`: `gate2` needs a `pharn-regress` stage-start, which a quick run never writes (the bounds of
+> trusting those Bash-written markers are in `pharn-contracts/cost-ledger.md`). The `--quick` flag is read by
+> the orchestrating model, so honoring it is advisory; what backs it is the SPEC's approved, pinned
+> `spec_kind: quick`. Nothing measures whether a change is small: the kind and the flag are what a person
+> chose, and a quick SPEC run without the flag takes the full pipeline. There is still no AUTOMATIC
+> proportionality, and `/pharn-review`'s lens fan-out is unchanged.
 
 ### 3b. Rule overlap × stages
 
@@ -256,7 +270,8 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
   path the plan's `## Files` did not declare (since 6.17.0 `/pharn-regress` also declares
   `AC-TESTS.md`'s), and before 4.0.0 was the only thing in the tree that could surface such a
   write after the fact. Four bounds, every one stated in that checker's own header: it fires only if
-  `/pharn-regress` runs; it compares _changed since base_, not _written by the build_; it carries
+  `/pharn-regress` runs — or, since 6.25.0, `/pharn-ship --quick`'s item 7, which runs the same partition
+  without the rest of that stage; it compares _changed since base_, not _written by the build_; it carries
   closed-enum exemptions for the pipeline's own artifacts; and a plan that edits its own `## Files`
   (or its `AC-TESTS.md`) defeats it. A smoke alarm, never the guard.
 - **The only true prevention is OS-level sandboxing of the `Bash` process** — a filesystem jail, a

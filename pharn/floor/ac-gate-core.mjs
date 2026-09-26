@@ -48,7 +48,8 @@
 // read (no `spec_id` or `spec_content_hash` line, an empty one, a value that is not 64 hex — a Draft usually has one
 // of these) is `ac-tests-modified`, an EVIDENCE reason: verify FAIL and /pharn-loop S13; before, the comparison was
 // skipped and the gate could PASS. A SPEC reverted to Draft that still carries a readable pin equal to the lock's
-// still passes here, and /pharn-verify Step 2's chain check and /pharn-loop's freshness check I are what refuse it.
+// still passes here, and /pharn-verify's chain phase (stage-verify.mjs, check-plan-spec-agree.mjs) and /pharn-loop's
+// freshness check I are what refuse it.
 //
 // TRUST (P2): test ids and titles are untrusted DATA from the project's reporter; lock paths come from an
 // agent-editable file. Both are compared as strings and copied into the report as data — the report NAMES them, and
@@ -196,7 +197,10 @@ function testFirst({ feature, spec, stamp, root, recordOf }) {
   let lock = null;
   if (!loaded.ok) add("ac-tests-modified", loaded.why);
   else if (modeOf(loaded.lock) !== "test-first")
-    add("ac-tests-modified", "the lock is a bootstrap lock, but the SPEC is spec_kind: feature — the tests were never pinned test-first");
+    add(
+      "ac-tests-modified",
+      "the lock is a bootstrap lock, but the SPEC is a test-first spec_kind (feature or quick) — the tests were never pinned test-first"
+    );
   else lock = loaded.lock;
 
   if (lock) {

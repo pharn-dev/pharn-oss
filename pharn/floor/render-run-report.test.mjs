@@ -1305,6 +1305,128 @@ test("Outcome: an absent or unrecognized source says so rather than picking a st
   }
 });
 
+// ── quick (6.25.0): a --quick ship ledger's outcome and regress line ────────────────────────────────────
+
+test("Outcome preamble: the gate2-quick bullet is present and states gate2-quick is NOT gate2", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", {
+      "cost.json": shipCost({
+        outcome: { decision: "gate2-quick", iterations: 1, source: "verdicts+markers" },
+        markers: [
+          { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-01-01T00:00:00.000Z", session_id: "s", mode: "quick" },
+        ],
+      }),
+    });
+    const md = renderRunReport("feat", { repo: root });
+    assert.match(md, /`gate2-quick` is \*\*FLOOR too/);
+    assert.match(md, /\*\*`gate2-quick` is NOT `gate2`\*\*/);
+    assert.match(md, /decision\s+gate2-quick/, "the fenced facts block must show the actual decision");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Outcome preamble CLOSURE: every SHIP_DECISION_FORMS member is named in the verdicts+markers preamble", async () => {
+  const { SHIP_DECISION_FORMS } = await import("./ship-outcome-core.mjs");
+  assert.ok(SHIP_DECISION_FORMS.length >= 5, "non-vacuity: the vocabulary must be non-empty for this loop to assert anything");
+  const root = scratch();
+  try {
+    feature(root, "feat", { "cost.json": shipCost() }); // shipCost()'s default source is verdicts+markers
+    const md = renderRunReport("feat", { repo: root });
+    for (const form of SHIP_DECISION_FORMS) {
+      // A parameterized form (`stop:<stage>`) is named by its FORM pattern, not a literal stage; every
+      // other form is named by its literal example.
+      const needle = form.parameterized ? form.form : form.example;
+      assert.ok(md.includes(needle), `the preamble must name the ${form.form} form (looked for ${JSON.stringify(needle)})`);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Verdicts: a quick ship ledger renders regress as NOT PART OF THIS RUN, even with a no-regressions report on disk", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", {
+      "cost.json": shipCost({
+        outcome: { decision: "gate2-quick", iterations: 1, source: "verdicts+markers" },
+        markers: [
+          { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-01-01T00:00:00.000Z", session_id: "s", mode: "quick" },
+          { seq: 2, kind: "stage-start", stage: "pharn-build", iteration: 1, ts: "2026-01-01T00:00:00.500Z", session_id: "s" },
+          { seq: 3, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-01-01T00:00:01.000Z", session_id: "s" },
+        ],
+      }),
+      "verify-report.json": { verdict: "PASS" },
+      // Left on disk by an EARLIER full run over the same feature directory — must never be shown as
+      // THIS (quick) run's regress verdict.
+      "regression-report.json": { verdict: "no-regressions" },
+    });
+    const md = renderRunReport("feat", { repo: root });
+    assert.match(md, /- regress: not part of this run: a quick `\/pharn-ship` run starts no `\/pharn-regress`/);
+    assert.doesNotMatch(md, /- regress: `no-regressions`/, "the report on disk must NEVER be shown as this run's regress verdict");
+    assert.doesNotMatch(md, /NOT FROM THIS RUN|CANNOT BE BOUND/, "the quick run's own verify is current: no exclusion label");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Briefing (GATE-2 review): a quick ship ledger NEVER links a BRIEFING.md on disk — it predates this run; a full ledger still does", () => {
+  const quickMarkers = [
+    { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-01-01T00:00:00.000Z", session_id: "s", mode: "quick" },
+    { seq: 2, kind: "stage-start", stage: "pharn-build", iteration: 1, ts: "2026-01-01T00:00:00.500Z", session_id: "s" },
+    { seq: 3, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-01-01T00:00:01.000Z", session_id: "s" },
+  ];
+  const briefingOf = (md) => md.split("## Briefing")[1].split("## What the run ran into")[0];
+  for (const onDisk of [true, false]) {
+    const root = scratch();
+    try {
+      feature(root, "feat", {
+        "cost.json": shipCost({ outcome: { decision: "gate2-quick", iterations: 1, source: "verdicts+markers" }, markers: quickMarkers }),
+        "verify-report.json": { verdict: "PASS" },
+        // An EARLIER full run's briefing, left in the directory — quick mode renders none of its own.
+        ...(onDisk ? { "BRIEFING.md": "# BRIEFING — feat\n\nregress: no-regressions\n" } : {}),
+      });
+      const b = briefingOf(renderRunReport("feat", { repo: root }));
+      assert.match(b, /not part of this run: a quick `\/pharn-ship` run renders no `BRIEFING\.md`/, `onDisk=${onDisk}`);
+      assert.doesNotMatch(b, /\]\(\.\/BRIEFING\.md\)/, `onDisk=${onDisk}: a quick run's report must never link a BRIEFING.md`);
+      assert.equal(/written by an EARLIER run/.test(b), onDisk, `onDisk=${onDisk}: the earlier file is named only when it exists`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+  // CONTROL: the same directory under a FULL ship ledger links the briefing, as before 6.25.0.
+  const root = scratch();
+  try {
+    feature(root, "feat", { "cost.json": shipCost(), "BRIEFING.md": "# BRIEFING — feat\n" });
+    assert.match(briefingOf(renderRunReport("feat", { repo: root })), /\[`BRIEFING\.md`\]\(\.\/BRIEFING\.md\) — the GATE-2 briefing/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Verdicts: a FULL ship ledger with a no-regressions report still shows it normally (control: quick is the only special case)", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", {
+      "cost.json": shipCost({
+        markers: [
+          { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-01-01T00:00:00.000Z", session_id: "s" },
+          { seq: 2, kind: "stage-start", stage: "pharn-regress", iteration: 1, ts: "2026-01-01T00:00:01.000Z", session_id: "s" },
+          { seq: 3, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-01-01T00:00:02.000Z", session_id: "s" },
+        ],
+      }),
+      "verify-report.json": { verdict: "PASS" },
+      "regression-report.json": { verdict: "no-regressions" },
+    });
+    const md = renderRunReport("feat", { repo: root });
+    assert.match(md, /- regress: `no-regressions`/);
+    assert.doesNotMatch(md, /not part of this run/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("Handoff: a command that writes no record says BY DESIGN, not 'missing'", () => {
   const root = scratch();
   try {
@@ -1625,11 +1747,14 @@ function shipRun(root, markers) {
 test("INTEGRATION: APPLICABLE ship evidence → gate2, and the verdicts are shown WITHOUT an exclusion label", () => {
   const root = scratch();
   try {
+    // A compliant run builds first: since 6.25.0 a verdict stage-start counts only after the same
+    // iteration's latest pharn-build stage-start (ship-outcome-core, condition (a)).
     const r = shipRun(root, [
       { seq: 1, kind: "run-start", ts: "2026-09-22T10:00:00.000Z" },
-      { seq: 2, kind: "stage-start", stage: "pharn-regress", iteration: 1, ts: "2026-09-22T10:00:10.000Z" },
-      { seq: 3, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-09-22T10:00:20.000Z" },
-      { seq: 4, kind: "run-stop", ts: "2026-09-22T10:01:00.000Z" },
+      { seq: 2, kind: "stage-start", stage: "pharn-build", iteration: 1, ts: "2026-09-22T10:00:05.000Z" },
+      { seq: 3, kind: "stage-start", stage: "pharn-regress", iteration: 1, ts: "2026-09-22T10:00:10.000Z" },
+      { seq: 4, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-09-22T10:00:20.000Z" },
+      { seq: 5, kind: "run-stop", ts: "2026-09-22T10:01:00.000Z" },
     ]);
     assert.equal(r.led.outcome.decision, "gate2");
     assert.match(r.outcome, /decision\s+gate2/);
@@ -1711,9 +1836,75 @@ test("REVIEW F1: a HISTORICAL ship ledger that stored gate2 from reports now jud
     assert.match(md.split("## Outcome")[1].split("## Tokens")[0], /decision\s+gate2/, "the stored value is NOT rewritten");
     const v = md.split("## Verdicts")[1];
     assert.match(v, /NOT FROM THIS RUN/);
-    assert.match(v, /stored `gate2` above predates this applicability rule/);
+    assert.match(v, /stored `gate2` above predates the applicability rules in force today/);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("REVIEW N2: a stored gate2 the build-order / no-repeat conditions exclude is NOT labelled as predating 6.9.1 — the reason names the rule", () => {
+  // Two trails an emitter from 6.9.1 until quick mode would have derived `gate2` from (both verdict stages started in the current
+  // run at its latest iteration) and today's conditions exclude: (a) ORDER — the verdict stages started BEFORE the
+  // build; (b) NO REPEAT — a build started twice at one iteration. Neither ledger predates 6.9.1, so the old label
+  // ("predates this applicability rule (6.9.1)") would have mis-dated both.
+  const m = (seq, kind, stage = null, iteration = null) => ({
+    seq,
+    kind,
+    stage,
+    iteration,
+    ts: `2026-09-22T09:00:${String(seq).padStart(2, "0")}.000Z`,
+    session_id: null,
+  });
+  const cases = [
+    {
+      label: "(a) verify and regress started before the build",
+      markers: [
+        m(1, "run-start"),
+        m(2, "stage-start", "pharn-regress", 1),
+        m(3, "stage-start", "pharn-verify", 1),
+        m(4, "stage-start", "pharn-build", 1),
+      ],
+      head: /NOT FROM THIS RUN — excluded from the outcome/,
+      reason:
+        /reason\s+the current run has no stage-start for pharn-regress and pharn-verify after its latest pharn-build stage-start at its latest iteration \(1\)/,
+    },
+    {
+      label: "(b) a build started twice at one iteration",
+      markers: [
+        m(1, "run-start"),
+        m(2, "stage-start", "pharn-build", 1),
+        m(3, "stage-start", "pharn-regress", 1),
+        m(4, "stage-start", "pharn-verify", 1),
+        m(5, "stage-start", "pharn-build", 1),
+      ],
+      head: /CANNOT BE BOUND TO THIS RUN — excluded from the outcome/,
+      reason: /reason\s+a stage other than a verdict stage was started twice at one iteration in the current run/,
+    },
+  ];
+  assert.equal(cases.length, 2, "NON-VACUITY (L34)");
+  for (const c of cases) {
+    const root = scratch();
+    try {
+      feature(root, "feat", {
+        "cost.json": costJson({
+          command: "/pharn-ship",
+          outcome: { decision: "gate2", iterations: 1, source: "verdicts+markers" },
+          markers: c.markers,
+        }),
+        "verify-report.json": { verdict: "PASS", failing_gates: [] },
+        "regression-report.json": { verdict: "no-regressions", regressions: [] },
+      });
+      const md = renderRunReport("feat", { repo: root });
+      assert.match(md.split("## Outcome")[1].split("## Tokens")[0], /decision\s+gate2/, `${c.label}: the stored value is NOT rewritten`);
+      const v = md.split("## Verdicts")[1];
+      assert.match(v, c.head, c.label);
+      assert.match(v, /stored `gate2` above predates the applicability rules in force today/, c.label);
+      assert.match(v, c.reason, `${c.label}: the quoted reason names the rule that excludes it`);
+      // NEGATIVE CONTROL (L4): the mis-dating wording must be gone, not merely joined by the new one.
+      assert.doesNotMatch(v, /predates this applicability rule \(6\.9\.1\)/, c.label);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   }
 });
 
@@ -1811,11 +2002,14 @@ test("F2: a FAILED emission leaves the previous run's cost.json — the report r
       }) + "\n"
     );
     const mb = join(root, ".pharn", "cost"); // the DEFAULT markers location under --repo (no flag below)
+    // A compliant run 1 builds first (since 6.25.0 a verdict stage-start counts only after the same
+    // iteration's latest pharn-build stage-start — ship-outcome-core, condition (a)).
     const run1 = [
       { seq: 1, kind: "run-start", ts: "2026-09-22T08:00:00.000Z" },
-      { seq: 2, kind: "stage-start", stage: "pharn-regress", iteration: 1, ts: "2026-09-22T08:01:00.000Z" },
-      { seq: 3, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-09-22T08:02:00.000Z" },
-      { seq: 4, kind: "run-stop", ts: "2026-09-22T08:30:00.000Z" },
+      { seq: 2, kind: "stage-start", stage: "pharn-build", iteration: 1, ts: "2026-09-22T08:00:30.000Z" },
+      { seq: 3, kind: "stage-start", stage: "pharn-regress", iteration: 1, ts: "2026-09-22T08:01:00.000Z" },
+      { seq: 4, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-09-22T08:02:00.000Z" },
+      { seq: 5, kind: "run-stop", ts: "2026-09-22T08:30:00.000Z" },
     ];
     markersAt(mb, "feat", run1);
     feature(root, "feat", {
@@ -1831,8 +2025,8 @@ test("F2: a FAILED emission leaves the previous run's cost.json — the report r
     // Run 2 starts (a new run-start), stops at grill, and its emission FAILS (bad usage → exit 2).
     markersAt(mb, "feat", [
       ...run1,
-      { seq: 5, kind: "run-start", ts: "2026-09-22T10:00:00.000Z" },
-      { seq: 6, kind: "stage-start", stage: "pharn-grill", ts: "2026-09-22T10:01:00.000Z" },
+      { seq: 6, kind: "run-start", ts: "2026-09-22T10:00:00.000Z" },
+      { seq: 7, kind: "stage-start", stage: "pharn-grill", ts: "2026-09-22T10:01:00.000Z" },
     ]);
     assert.equal(emitCli(root, "feat", mb, ["--command", "/pharn-ship", "--base-sah", "x"]).status, 2);
     md = renderRunReport("feat", { repo: root }); // NO markersBase: the default path (L41)

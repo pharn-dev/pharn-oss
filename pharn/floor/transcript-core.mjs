@@ -64,13 +64,13 @@
 // ONE OWNER ([[L35]]): nothing else in the product floor reads a transcript's usage. Until 6.24.1 the ledger
 //   carried its own copy of the reading loop. A closure test pins the two spellings both copies used, and
 //   it cannot see a third spelling (L36).
-// WHICH LINES ARE REQUESTS (6.24.2), FLOOR (primitive #3). A line is a usage-bearing record only when its
+// WHICH LINES ARE REQUESTS (6.26.1), FLOOR (primitive #3). A line is a usage-bearing record only when its
 //   `message.usage` is a plain object (not null, not an array, a string or a number), and its resolved id
 //   (`requestId`, else `message.id`, precedence unchanged) is a bounded identity token (`isIdentityToken`,
 //   cost-value-core.mjs). A present `requestId` that fails the test does NOT fall back to `message.id`: the line is
 //   malformed, and a fallback could split one request across two keys. A line failing either test is not a request,
 //   for every consumer. The selection ranks only by a count `isTokenCount` admits, so the selected line carries a
-//   count both renderers count. Each value is tested BEFORE anything coerces it: until 6.24.2 a crafted non-string
+//   count both renderers count. Each value is tested BEFORE anything coerces it: until 6.26.1 a crafted non-string
 //   id or model made a caller's `String()` throw ([[L62]]). BOUND: this decides which lines are requests and which
 //   line a request is counted at, nothing more. Each consumer bounds the fields it copies (see its header). A crafted
 //   line with a fresh, bounded id and right-typed usage is still a request, because nothing here can tell it from a
@@ -131,7 +131,7 @@ export function transcriptFiles(dir) {
 /**
  * A line's rank in the per-request selection: its `output_tokens` when `isTokenCount` admits it, else -1,
  * so a line carrying a real count outranks one that does not. Total over any input — a string, an object,
- * a fraction or a missing field never takes part in a numeric comparison (6.24.2: a count both renderers
+ * a fraction or a missing field never takes part in a numeric comparison (6.26.1: a count both renderers
  * would refuse can no longer be what selects a line).
  */
 const outputRank = (u) => (isTokenCount(u?.output_tokens) ? u.output_tokens : -1);

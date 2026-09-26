@@ -109,7 +109,7 @@ content, so it is never rewritten. In an older record, read those two classes as
   reproduces nothing — the `product-lessons-index` precedent's weakness, not the dev floor's byte-equality.
 - **`by_stage` keys are the platform's `attributionSkill`,** not PHARN's own accounting. A stage missing
   from `by_stage` means the platform did not tag those records, **not** that the stage did not run.
-- **Not a record of what it refused (6.24.2).** The transcript is untrusted, so every value passes a type and
+- **Not a record of what it refused (6.26.1).** The transcript is untrusted, so every value passes a type and
   domain test before the renderer uses it, with the same predicates as `cost.json`
   (`pharn/floor/cost-value-core.mjs`):
   - a line whose usage is not a plain object, or whose request id fails rule 3's bound, is not a request and is not

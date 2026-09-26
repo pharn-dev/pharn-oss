@@ -99,7 +99,7 @@ export const PHARN_TEST_KEYS = Object.freeze(["file", "path", "status"]);
 /** The deepest Playwright `describe` nesting accepted; deeper is `over-cap`. */
 export const MAX_DEPTH = 256;
 
-// `shown` and `SHOWN_CHARS` moved to quote-core.mjs in 6.24.2, byte-for-byte, so the cost checker quotes through the
+// `shown` and `SHOWN_CHARS` moved to quote-core.mjs in 6.26.1, byte-for-byte, so the cost checker quotes through the
 // same helper (GRILL R2-G6). Import them from there; this module does not re-export them ([[L35]]).
 
 /** Raw vitest / Jest status → record status. ONE map for both (their mapped vocabularies are identical). A `Map`,

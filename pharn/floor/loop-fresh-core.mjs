@@ -135,6 +135,7 @@ import {
 import { fingerprint } from "./worktree-fingerprint.mjs";
 import { sha256RegularFile } from "./test-infra-core.mjs";
 import { REGRESS_PATHS } from "./stage-regress-core.mjs";
+import { VERIFY_PATHS } from "./stage-verify-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -152,11 +153,13 @@ const CHECKERS = Object.freeze({
 /** The product feature root. ONE literal in this module, pinned by a closure test (L52). */
 export const FEATURE_BASE = "pharn/features";
 
-/** The stamp locations the two stage commands pin (pharn-verify.md Step 3c; the regress pair is DERIVED
- *  from stage-regress-core.mjs's REGRESS_PATHS — the one owner, since 6.23.0's stage-regress-script — so
- *  this file carries no second literal for `stage-regress.mjs`'s own scratch layout to drift from). */
+/** The stamp locations the two stage scripts write, each DERIVED from its stage core's path table — the one
+ *  owner of that stage's scratch layout: stage-verify-core.mjs's VERIFY_PATHS (6.26.0's stage-verify-script)
+ *  and stage-regress-core.mjs's REGRESS_PATHS (6.23.0's stage-regress-script) — so this file carries no second
+ *  literal for either script's layout to drift from. Both cores import only gate-run-core.mjs, already in
+ *  this module's graph, so each adds one small module to it. */
 export const DEFAULT_STAMPS = Object.freeze({
-  verify: ".pharn/pharn-verify/gates/stamp.json",
+  verify: `${VERIFY_PATHS.gates}/stamp.json`,
   regressHead: `${REGRESS_PATHS.head}/stamp.json`,
   regressBase: `${REGRESS_PATHS.baseGates}/stamp.json`,
 });
@@ -545,12 +548,13 @@ function checkE(ctx) {
   const fp = fingerprint(ctx.repo, { feature: ctx.feature });
   const sf = ctx.stamps.verify.value.fingerprint;
   const treeMoved = !fp.ok || sf.algo !== fp.algo || sf.final !== fp.digest;
-  // Unmoved: `--ac-gate` (6.20.0) — /pharn-verify's pinned Step 5 passes it, so a report produced without it, or with
-  // its AC block edited, cannot be reproduced here, and every field is compared. Moved (6.20.6): the flag-less run, a
-  // pure function of the stamp, and only what the stamp alone decides is compared — gates, the non-AC failing ids and
-  // the verdict rule — so a forged verdict STOPS before F instead of being "refreshed" by its re-run (the 2026-09-24 review's finding 1).
-  // Two literal argv arrays, not a spread: the unmoved one must visibly carry the flag /pharn-verify's pinned line
-  // passes (command-hygiene.test.mjs pins it, L45).
+  // Unmoved: `--ac-gate` (6.20.0) — /pharn-verify's stage script (stage-verify.mjs, 6.26.0) passes it on its verdict
+  // call, so a report produced without it, or with its AC block edited, cannot be reproduced here, and every field is
+  // compared. Moved (6.20.6): the flag-less run, a pure function of the stamp, and only what the stamp alone decides is
+  // compared — gates, the non-AC failing ids and the verdict rule — so a forged verdict STOPS before F instead of being
+  // "refreshed" by its re-run (the 2026-09-24 review's finding 1).
+  // Two literal argv arrays, not a spread: the unmoved one must visibly carry the flag stage-verify.mjs's verdict call
+  // passes (command-hygiene.test.mjs pins both, L45).
   const argv = treeMoved
     ? ["--stamp", ctx.stamps.verify.path, "--feature", ctx.feature]
     : ["--stamp", ctx.stamps.verify.path, "--feature", ctx.feature, "--ac-gate"];

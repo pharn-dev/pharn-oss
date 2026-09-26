@@ -107,7 +107,7 @@ import { join, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
 import { FEATURE_BASE, TOKEN_CLASSES, LEGACY_SCHEMA, SHIP_COMMAND, readMarkers, normalizeMarkers } from "./render-cost-ledger.mjs";
 import { DEFAULT_BASE as MARKERS_DEFAULT_BASE } from "./mark-phase.mjs";
-import { verdictApplicability, APPLICABILITY } from "./ship-outcome-core.mjs";
+import { verdictApplicability, APPLICABILITY, runMode } from "./ship-outcome-core.mjs";
 import { handoffSections, HANDOFF_SECTIONS } from "./loop-record-core.mjs";
 import { pathsFromPlanFiles } from "./plan-files-core.mjs";
 import { quoteData, dataText } from "./quote-core.mjs";
@@ -356,19 +356,29 @@ function outcomePreamble(cost, o) {
       "- `gate2` is **FLOOR**: it means `verify-report.json` read `PASS` **and**",
       "  `regression-report.json` read `no-regressions` — two enum values produced by tested non-LLM",
       "  checkers. Reaching GATE 2 hands the decision to a human; it is not itself a judgment.",
+      "- `gate2-quick` is **FLOOR too, over a SMALLER stage set**: a `--quick` run whose OWN `pharn-verify`",
+      "  stage-start read `PASS` at its latest iteration. **`gate2-quick` is NOT `gate2`** — quick mode",
+      "  starts no `/pharn-regress` at all, so no regression verdict is read, ever, for this decision; a",
+      "  `regression-report.json` left on disk by an earlier run is never consulted.",
       "- `stop:<stage>` is **ADVISORY** in its stage NAME: `<stage>` is the last `stage-start` marker,",
       "  and markers are written by Bash calls in command prose, outside the `PreToolUse` gate — so a",
       "  written marker does not mean the stage ran, nor the reverse. That the run did **not** meet the",
-      "  `gate2` test is a membership fact; which stage it stopped at rests on marker discipline.",
+      "  `gate2`/`gate2-quick` test is a membership fact; which stage it stopped at rests on marker",
+      "  discipline.",
       "- `stop:unknown` is the terminal fallback: markers exist but none is a `stage-start`.",
       "- `undetermined` means the run's own boundary could not be established from its markers, so no",
-      "  verdict could be bound to THIS run. It is neither a failed check nor a stop stage.",
+      "  verdict could be bound to THIS run — including a run that starts a non-verdict stage twice at one",
+      "  iteration, which is what a skipped run-start can leave behind. It is neither a failed check nor a",
+      "  stop stage.",
       "",
-      "**Only verdicts that belong to THIS run count.** `gate2` additionally requires that the current run",
-      "(from its latest `run-start`) STARTED both `pharn-regress` and `pharn-verify` at its latest iteration;",
-      "reports an earlier run or attempt left on disk are excluded. This is exact relative to the recorded",
-      "markers, which are themselves ADVISORY, and a stage that started but refused before rewriting its",
-      "report is NOT detected.",
+      "**Only verdicts that belong to THIS run count.** The stage set `gate2`/`gate2-quick` requires is the",
+      "run's OWN mode (read from its run-start marker, never from the SPEC): a FULL run must have STARTED",
+      "both `pharn-regress` and `pharn-verify` at its latest iteration; a QUICK run needs only",
+      "`pharn-verify` — quick mode never starts `/pharn-regress`, so demanding it would make `gate2-quick`",
+      "unreachable. Either way each one counts only AFTER that iteration's latest `pharn-build`",
+      "stage-start, and reports an earlier run or attempt left on disk are excluded. This is exact",
+      "relative to the recorded markers, which are themselves ADVISORY, and a stage that started but",
+      "refused before rewriting its report is NOT detected.",
       "",
       "**Neither form says the outcome was correct.** Unlike `/pharn-loop`, whose recorded decision",
       "`check-loop-decision.mjs` re-derives from its own cited reports, there is no equivalent",
@@ -593,17 +603,31 @@ function applicabilityLabel(cost) {
     app.status === APPLICABILITY.UNKNOWN
       ? "established from its markers. The verdicts are shown only as diagnostics."
       : "earlier run or attempt. They are shown only as diagnostics, never as this run's verdicts.";
-  // A HISTORICAL ledger (derived before 6.9.1) may have STORED `gate2` from exactly these reports. Its
-  // stored value is never rewritten (compatibility), but the two sections must not silently disagree.
+  // A HISTORICAL ledger may have STORED `gate2` from exactly these reports — one derived before 6.9.1's
+  // current-run rule, OR one derived after it but before 6.25.0's build-order and no-repeat conditions. The
+  // label names no single rule as the one it predates (GATE-2 re-review N2: "predates this applicability rule
+  // (6.9.1)" mis-dated a 6.20.0 ledger the new conditions exclude); the quoted reason below names the rule
+  // that excludes it. Its stored value is never rewritten (compatibility), but the two sections must not
+  // silently disagree.
   const legacy =
     cost.outcome && cost.outcome.decision === "gate2"
       ? [
           "",
-          "**The stored `gate2` above predates this applicability rule (6.9.1)** and rests on these same",
-          "reports; it would not be derived as `gate2` today. It is kept as recorded, not rewritten.",
+          "**The stored `gate2` above predates the applicability rules in force today** (6.9.1's current-run",
+          "rule; 6.25.0's build-order and no-repeat conditions — the reason below names the one that excludes",
+          "it) and rests on these same reports; it would not be derived as `gate2` today. It is kept as",
+          "recorded, not rewritten.",
         ]
       : [];
   return [head, tail, ...legacy, "", quoteData("", `applicability  ${app.status}\nreason         ${app.reason ?? "none"}`).trimStart(), ""];
+}
+
+/** Is this ledger a QUICK `/pharn-ship` run's (6.25.0)? Read from the ledger's own recorded markers through the
+ *  derivation's `runMode()` — never from which artifacts exist (L6). ONE definition for the two sections that
+ *  branch on it, `## Verdicts` and `## Briefing` (L35). A stale or absent ledger is never quick: its markers
+ *  are another run's, so the caller passes `null`. */
+function isQuickShip(cost) {
+  return Boolean(cost) && cost.command === SHIP_COMMAND && Array.isArray(cost.markers) && runMode(cost.markers) === "quick";
 }
 
 function verdictsSection({ verify, regress, cost, stale = false }) {
@@ -634,7 +658,13 @@ function verdictsSection({ verify, regress, cost, stale = false }) {
     out.push("");
     out.push(...acGateLines(verify.ac_gate));
   }
-  if (!regress) {
+  // A quick `/pharn-ship` run starts no `/pharn-regress` at all (6.25.0), so a `regression-report.json` on
+  // disk — left by an earlier full run over the same feature directory, say — is NEVER this run's regress
+  // verdict. Read from the STRUCTURED location (the run's own mode, from its markers), never inferred from
+  // whether a report happens to exist (L6) — the same discipline `outcome.source` already gets above.
+  if (isQuickShip(cost)) {
+    out.push("- regress: not part of this run: a quick `/pharn-ship` run starts no `/pharn-regress`");
+  } else if (!regress) {
     out.push(`- regress: ${na("no regression-report.json — the run stopped before a regress, or it was blocked")}`);
   } else {
     out.push(...verdictLines("regress", regress.verdict, REGRESS_VERDICTS));
@@ -731,9 +761,26 @@ function acGateLines(ac) {
  * and `/pharn-loop` never renders one at all. The section is emitted UNCONDITIONALLY with an honest `n/a`
  * rather than dropped, because a missing section and an absent artifact must not look the same ([[L34]]:
  * silence and asserted-silence are different claims).
+ *
+ * A QUICK `/pharn-ship` ledger (6.25.0) never links one: quick mode renders no `BRIEFING.md`, so a file of
+ * that name beside the report was written by an EARLIER run over the same feature directory, and linking it
+ * as "the GATE-2 briefing, rendered beside this report" would present that run's briefing — and the regress
+ * verdict it carries — as this run's (GATE-2 review). Read from the run's own mode, from the ledger's
+ * recorded markers, never from whether the file exists (L6) — the `## Verdicts` regress line's rule.
  */
-function briefingSection({ dir }) {
+function briefingSection({ dir, cost }) {
   const rel = join(dir, "BRIEFING.md");
+  if (isQuickShip(cost)) {
+    return [
+      "- `BRIEFING.md`: not part of this run: a quick `/pharn-ship` run renders no `BRIEFING.md`.",
+      ...(existsSync(rel)
+        ? [
+            "",
+            "The `BRIEFING.md` in this directory was written by an EARLIER run, so it is not linked here and describes no part of this run.",
+          ]
+        : []),
+    ].join("\n");
+  }
   if (!existsSync(rel)) {
     // The sentinel states THIS artifact's absence and nothing else. It must NOT explain the emitting
     // command's lifecycle: the earlier form read "<command> renders one only at GATE 2", which is false
@@ -917,7 +964,7 @@ export function renderRunReport(name, opts = {}) {
     "## Tokens — stage x iteration x model": tokensSection(cost, staleReason),
     "## Files": filesSection({ cost, repo, planEntries, dirtyBefore, dirtyNote, absentReason: staleReason }),
     "## Verdicts": verdictsSection({ verify, regress, cost: staleReason ? null : cost, stale: Boolean(staleReason) }),
-    "## Briefing": briefingSection({ dir }),
+    "## Briefing": briefingSection({ dir, cost: staleReason ? null : cost }),
     "## What the run ran into": handoffSection(loopText, cost),
   };
 

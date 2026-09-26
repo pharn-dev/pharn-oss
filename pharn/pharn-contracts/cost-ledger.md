@@ -70,7 +70,7 @@ tagged `pharn-loop`**, with no sub-stage named anywhere. The field is therefore 
   "dedup_key": "requestId",
   "attribution": { "method": "latest-marker-at-or-before-ts-same-session/1", "markers": 12 },
   "pricing_note": "TOKENS ONLY — …",
-  "markers": [{ "seq": 1, "kind": "run-start", "stage": null, "iteration": null, "ts": "…", "session_id": "…" }],
+  "markers": [{ "seq": 1, "kind": "run-start", "stage": null, "iteration": null, "ts": "…", "session_id": "…", "mode": "quick" }],
   "requests": [
     {
       "request_id": "req_…",
@@ -129,6 +129,7 @@ satisfied by a variant spelling of any member; closure is what makes a variant f
 | `pricing_note`                                                      | must state the file carries tokens, never prices                                                                                           | FLOOR (regex)                                                         |
 | `markers[].seq`                                                     | integers, **strictly increasing**                                                                                                          | FLOOR (integer compare)                                               |
 | `markers[].kind`                                                    | `run-start` \| `stage-start` \| `orchestrator` \| `run-stop`                                                                               | FLOOR (enum)                                                          |
+| `markers[].mode`                                                    | (6.25.0) absent, or a `MARKER_MODES` member (today: `quick`)                                                                               | **ADVISORY** (a marker field — see "Mode" below)                      |
 | `requests[].request_id`                                             | a rule-3 token, **unique across the array**                                                                                                | FLOOR (set membership + enum-regex)                                   |
 | `requests[].usage`                                                  | every leaf: number \| bool \| null \| a short token; every key a short token other than `__proto__`; no node deeper than `USAGE_MAX_DEPTH` | FLOOR (enum-regex + integer compare, rule 2)                          |
 | `requests[].model`                                                  | a bounded identity token (<=128 chars, no control char, no path)                                                                           | FLOOR (enum-regex)                                                    |
@@ -171,9 +172,9 @@ both cost renderers import.
 A request found in several files is one row, under the identity of the copy walked first: the parent's, for every
 fork observed.
 
-**Which transcript lines are requests, and what a refused value becomes (6.24.2).** The transcript is untrusted
+**Which transcript lines are requests, and what a refused value becomes (6.26.1).** The transcript is untrusted
 input, and parsed JSON can put any value where a string or a count is expected: `{"toString":1}` makes `String()`
-throw. Until 6.24.2 the emitter coerced first and bounded second, so one crafted line crashed both cost renderers.
+throw. Until 6.26.1 the emitter coerced first and bounded second, so one crafted line crashed both cost renderers.
 Now every value is tested for type and domain BEFORE anything coerces it, by the predicates in
 `pharn/floor/cost-value-core.mjs` (`isIdentityToken`, rule 3's bound; `isTokenCount`, rule 7's).
 
@@ -296,6 +297,23 @@ loop's window.
 - **Transcript timestamps are untrusted.** A crafted record can move itself into or out of the window.
   This is bounded: it affects a view that gates nothing.
 
+## Mode (added 6.25.0, `/pharn-ship --quick`)
+
+A run-start marker may carry `mode: "quick"` — recorded at the MOMENT THE RUN STARTS (the same
+capture-at-the-act discipline as every other marker field), never re-derived later from the SPEC's
+`spec_kind`: D7 lets a quick SPEC run the full pipeline (a human choice at GATE 1), so the kind alone
+cannot tell a quick RUN from a full one. `render-cost-ledger.mjs`'s `normalizeMarkers` keeps the field only
+as a `MARKER_MODES` member — the same pattern `origin: "pending"` already uses — so a garbage value is
+dropped rather than copied, and `mark-phase.mjs` writes no key at all when `--mode` is absent, which keeps
+every pre-6.25.0 marker byte-identical. **No schema bump**: `check-cost-ledger.mjs`'s per-marker rule is
+the closed `kind` enum only; it asserts no closed key set over a marker OBJECT, so an old checker reads a
+ledger carrying a `mode` key GREEN, unchanged.
+
+**ADVISORY, exactly like every other marker field (fix #7's bound restated, not widened): a `mode` on disk
+does not mean the run was invoked with `--quick`, and the reverse.** `ship-outcome-core.mjs`'s `runMode()`
+reads only the CURRENT run's run-start (`currentRunMarkers(...)[0]`), by exact equality — an EARLIER run's
+quick run-start never makes the current run quick, and vice versa.
+
 ## Compatibility with `pharn-cost-ledger/1`
 
 A `/1` file is **never rewritten, and never retroactively REDed for what `/2` added** — `membership` and the run
@@ -303,10 +321,10 @@ scope. `check-cost-ledger.mjs` validates it
 under its own closed key set and rules, and adds one WARN: its totals are SESSION-scoped and may include
 activity outside the run. `render-run-report.mjs` prints the same label. `--verify-transcript` declines
 a `/1` file with a WARN, because its rows are not re-derivable under the run-window rule. Reading a `/1`
-total as run-scoped would silently reinterpret historical data. The value rules 6.24.2 added apply to a `/1` file
+total as run-scoped would silently reinterpret historical data. The value rules 6.26.1 added apply to a `/1` file
 too (next note).
 
-**A ledger emitted before 6.24.2 from a transcript carrying a value 6.24.2 refuses is now RED, and that RED is
+**A ledger emitted before 6.26.1 from a transcript carrying a value 6.26.1 refuses is now RED, and that RED is
 correct.** Those values were never valid; the old emitter copied or summed them. Two ways it shows:
 
 - **The new rules RED it without `--verify-transcript`:** a `usage` deeper than `USAGE_MAX_DEPTH` or with a key
@@ -350,7 +368,7 @@ cache-write classes were equal under both rules on every measured request. For s
 2. **Every `usage` leaf is `number | bool | null | a short token`.** Anything else is **dropped and its
    key path listed** in `dropped[]` — never coerced, never stringified, never silently kept. **Arrays are
    WALKED, not exempted**: `usage.iterations[]` survives with its scalars, so `usage` is genuinely
-   verbatim. **Since 6.24.2 the copy is also bounded in depth and key shape:** no node deeper than
+   verbatim. **Since 6.26.1 the copy is also bounded in depth and key shape:** no node deeper than
    `USAGE_MAX_DEPTH` (32, counted from `usage` itself), and every key a short token other than `__proto__`, which
    assigned on a plain object sets its prototype and vanished with nothing listed ([[L15]]). The emitter drops and
    lists both, and the checker REDs both, importing the emitter's constant and predicate (`isUsageKey`).
@@ -358,10 +376,10 @@ cache-write classes were equal under both rules on every measured request. For s
    from an untrusted transcript into a **committed** artifact, so each must be ≤128 characters, free of
    control characters, and free of an absolute path. A refusal is **dropped and its key path listed** —
    `model` falls back to the literal `unknown`, the other two to `null`. **Never truncated**, which would
-   invent a value that was never in the transcript. **Since 6.24.2 the same bound covers `request_id`, a row's
+   invent a value that was never in the transcript. **Since 6.26.1 the same bound covers `request_id`, a row's
    `session_id` (nullable), and every element of `sessions[]` and `claude_code_versions[]`,** in the emitter and in
    the checker alike ([[L2]]: a bound named here is one the checker checks). The raw value is tested BEFORE any
-   coercion. Until 6.24.2 the emitter ran `String()` first, so a number was coerced into an admitted token and an
+   coercion. Until 6.26.1 the emitter ran `String()` first, so a number was coerced into an admitted token and an
    object threw.
 4. **No string anywhere in the file matches the absolute-path regex.** Every value, at every depth.
 5. **`outcome` is `null`, or matches its shape.** `decision` a bounded, control-char-free token;
@@ -403,18 +421,18 @@ cache-write classes were equal under both rules on every measured request. For s
    - An OPEN window has no end. A continued session therefore adds MEMBERS, and `requests[]` REDs. Both
      emitters write `run-stop` before emitting, and the checker WARNs an open window.
 
-7. **(6.24.2) Every count is a non-negative safe integer, and the view keys have a type.** Each
+7. **(6.26.1) Every count is a non-negative safe integer, and the view keys have a type.** Each
    `requests[].tokens.<class>` must satisfy `isTokenCount`: the emitter writes 0 for a refused count and lists it,
    so every row and every total is a sum of admitted counts, which never reaches `Infinity` and is exact below
    2^53. A row's `stage` is a string or `null` and its `iteration` a number or `null`. Those two are crash guards
    for the view recompute, not value rules: a fractional `iteration` from a crafted marker stays GREEN, as it was.
    The recompute runs only when every row passes them, and a RED says so when it does not.
-8. **(6.24.2) No node of the document is deeper than `WALK_MAX_DEPTH` (64).** The emitter's deepest node is a
+8. **(6.26.1) No node of the document is deeper than `WALK_MAX_DEPTH` (64).** The emitter's deepest node is a
    `usage` leaf at most `USAGE_MAX_DEPTH` below its row, so a well-formed ledger never comes near it. The checker
    finds a deeper node without recursion and names its path, and its recursive walks stop at the bound.
 
-**The checker is TOTAL over its own input (6.24.2), within stated bounds.** `cost.json` is agent-written,
-committed, untrusted input. Before 6.24.2, twenty measured crash sites made the checker exit 1, its RED code, with
+**The checker is TOTAL over its own input (6.26.1), within stated bounds.** `cost.json` is agent-written,
+committed, untrusted input. Before 6.26.1, twenty measured crash sites made the checker exit 1, its RED code, with
 no verdict line, and raw file strings reached its verdict lines.
 
 - **FLOOR, over the closures in `pharn/floor/cost-hostile-input.test.mjs`:** for every document they walk, the
@@ -445,10 +463,10 @@ implementation: **no regex proves it.** What is guaranteed is exactly what the r
 infer it. The enum is **closed at two members**, defined once in `render-cost-ledger.mjs` and _imported_
 by the checker rather than re-spelled:
 
-| `source`           | who writes it                                          | `decision` vocabulary                                         | strength                                |
-| ------------------ | ------------------------------------------------------ | ------------------------------------------------------------- | --------------------------------------- |
-| `LOOP.md`          | `/pharn-loop`, via its record                          | `check-loop.mjs`'s own tokens                                 | **DECLARED** — re-derivable (see below) |
-| `verdicts+markers` | `/pharn-ship` always; any other command with no record | `gate2` \| `stop:<stage>` \| `stop:unknown` \| `undetermined` | **DERIVED** — split, see below          |
+| `source`           | who writes it                                          | `decision` vocabulary                                                                   | strength                                |
+| ------------------ | ------------------------------------------------------ | --------------------------------------------------------------------------------------- | --------------------------------------- |
+| `LOOP.md`          | `/pharn-loop`, via its record                          | `check-loop.mjs`'s own tokens                                                           | **DECLARED** — re-derivable (see below) |
+| `verdicts+markers` | `/pharn-ship` always; any other command with no record | `gate2` \| `gate2-quick` (6.25.0) \| `stop:<stage>` \| `stop:unknown` \| `undetermined` | **DERIVED** — split, see below          |
 
 **The declared form is re-derivable and the derived form is not, and that asymmetry is the point.** A
 `LOOP.md` decision is checked by `pharn/floor/check-loop-decision.mjs`, which re-runs `check-loop.mjs`
@@ -461,26 +479,63 @@ checker computes either, so there is nothing to re-derive against.
 - **`gate2` is FLOOR.** It means `verify-report.json` read `PASS` **and** `regression-report.json` read
   `no-regressions` — two enum values produced by tested non-LLM checkers. It says the run reached the
   human gate; it is **not** a judgment that the feature is good, which is the human's call.
+- **`gate2-quick` (6.25.0) is FLOOR TOO, over a SMALLER stage set.** It means `verify-report.json` read
+  `PASS` on the run's OWN `pharn-verify` stage — the regression verdict is **never** consulted, because a
+  `--quick` run starts no `/pharn-regress` at all. **`gate2-quick` is NOT `gate2`**: it names where the run
+  ended first (`gate2`) and the mode second, and every consumer compares `decision` by equality, never by
+  prefix, so no reader takes it for the stronger form.
 - **`stop:<stage>` is ADVISORY in its stage NAME.** `<stage>` is the last `stage-start` marker, and
   markers are written by Bash calls in command prose, outside the `PreToolUse` gate — so a written
-  marker does not mean the stage ran, nor the reverse. That the run did **not** satisfy the `gate2`
-  test is a membership fact; _which_ stage it stopped at rests on marker discipline.
+  marker does not mean the stage ran, nor the reverse. That the run did **not** satisfy the `gate2`/
+  `gate2-quick` test is a membership fact; _which_ stage it stopped at rests on marker discipline.
 - **`stop:unknown` is the terminal fallback** — markers exist but none is a `stage-start`, or its stage
   token failed the grammar. The token is re-tested at READ time, not trusted from the writer: the
   markers file is ordinary state under `.pharn/` that a Bash write reaches (`LIMITS.md §6`).
 
-- **`undetermined`** — markers exist, but the run's own boundary cannot be established from them (the
-  run window is `unknown`, see "Run membership"). No verdict can then be bound to this run, so the outcome
-  is neither a failed check nor a stop stage.
+- **`undetermined`** — markers exist, but the run's own boundary cannot be established from them: the
+  run window is `unknown` (see "Run membership"), or — since 6.25.0 — the current run starts a stage other
+  than `pharn-regress` / `pharn-verify` twice at one iteration, which is what a skipped run-start can leave
+  when two invocations' markers run together. No verdict can then be bound to this run, so the outcome is
+  neither a failed check nor a stop stage.
 
-**The verdicts count only when they belong to THIS run (added 6.9.1).** `gate2` additionally requires
-that the CURRENT run carries a `stage-start` for BOTH `pharn-regress` and `pharn-verify` at its LATEST
-recorded iteration. The current run is the markers from the latest `run-start`, the same definition
-`run-window-core.mjs` uses for membership. Otherwise the reports on disk were left by an earlier
-invocation or superseded by a later attempt, and they are excluded. The `stop:<stage>` name and
-`iterations` are also read from the current run only. **Why:** `/pharn-spec` resumes an existing
-`<name>`, so a second `/pharn-ship` over the same feature used to derive `gate2` from the PREVIOUS run's
-green reports after STOPping at grill.
+**The verdicts count only when they belong to THIS run (added 6.9.1; the stage SET they need forked by
+mode in 6.25.0).** The applicability test now reads the run's own mode first (`ship-outcome-core.mjs`
+`runMode()`, from the run-start marker, never the SPEC): a **full** run's `gate2` requires that the CURRENT
+run carries a `stage-start` for BOTH `pharn-regress` and `pharn-verify` at its LATEST recorded iteration;
+a **quick** run's `gate2-quick` requires only `pharn-verify` — demanding `pharn-regress` there would make
+`gate2-quick` unreachable, since a quick run never starts one. The current run is the markers from the
+latest `run-start`, the same definition `run-window-core.mjs` uses for membership. Outside its own stage
+set, the reports on disk were left by an earlier invocation or superseded by a later attempt, and they are
+excluded. The `stop:<stage>` name and `iterations` are also read from the current run only. **Why:**
+`/pharn-spec` resumes an existing `<name>`, so a second `/pharn-ship` over the same feature used to derive
+`gate2` from the PREVIOUS run's green reports after STOPping at grill.
+
+**Two more conditions (6.25.0, the GATE-2 review of quick mode).** (a) **Order:** a verdict stage-start
+counts only when it follows the latest `pharn-build` stage-start of the same iteration in the current run;
+with no such build the reports are not current. (b) **No repeat:** a stage other than a verdict stage
+started twice at one iteration makes the outcome `undetermined` (above). `/pharn-ship` starts every
+(stage, iteration) at most once; the verdict stages are exempt because `/pharn-loop`'s freshness re-run
+starts them again inside one iteration, and a loop ledger with no `LOOP.md` reaches this derivation.
+**Why:** iteration numbers restart at 1 in every run, so a quick run whose run-start was skipped, after an
+earlier run that never wrote its run-stop, joined that run's window, and the earlier `pharn-regress@1`
+completed the pair for its own `pharn-verify@1`: the derivation returned `gate2` over a regress check that
+never ran on this build. A full run is affected only on marker trails a compliant run never writes.
+
+**A skipped or wrong mode marker never yields `gate2`.** A quick run-start written without `--mode quick`
+reads as full, and the run starts no `/pharn-regress`, so its outcome is `stop:pharn-verify`. A quick run
+whose run-start was skipped joins the previous run's window, and its outcome is `undetermined` or
+`stop:<stage>`, never `gate2`: after a closed run its first stage marker follows a run-stop (membership
+`unknown`, so `undetermined`); after an unclosed run that started a stage this run starts again, its own
+stage-starts repeat that run's (condition (b), `undetermined`); and after an unclosed run that started none
+of them — a `/pharn-loop` interrupted during `/pharn-spec` leaves only a `pharn-spec` stage-start, which
+`/pharn-ship` never writes — nothing repeats, the joined run reads as full, and with no regress stage-start
+after this build its outcome is `stop:pharn-verify`. An earlier regress stage-start that precedes this
+run's build never counts (condition (a)). A full run whose run-start wrongly carries
+`mode: "quick"` yields `gate2-quick` at most, which claims no regression verdict. **Two bounds:** this is
+relative to the markers the command prescribes — a run that also skips its stage-starts is not covered —
+and an earlier run that left nothing but its run-start (a halt at GATE 1) is byte-identical to resuming
+that same run, so its run-start's mode is read: `stop:pharn-verify` after a full one, `gate2-quick` after a
+quick one, never `gate2`.
 
 **Strength:** the rule is exact relative to the RECORDED markers (enum + ordering), and the markers are
 advisory. It never uses a file's mtime or its mere existence. **The residual, at its true width:** a
@@ -497,7 +552,13 @@ reached no-`LOOP.md` fallback now also applies the applicability rule.
 
 `render-run-report.mjs` labels the `## Verdicts` section with the SAME applicability. It uses the same
 function over the ledger's own `markers[]`, so a report the outcome excluded never appears as an
-unqualified current verdict.
+unqualified current verdict. **For a quick ship ledger (6.25.0) it additionally renders the regress line
+as "not part of this run: a quick `/pharn-ship` run starts no `/pharn-regress`"** — read from the run's own
+mode (`runMode()` over `cost.markers[]`), never from whether a `regression-report.json` happens to exist on
+disk: a report left by an EARLIER full run over the same feature directory must never be shown as this
+quick run's regress verdict, even when that report reads `no-regressions`. **By the same rule its
+`## Briefing` never links a `BRIEFING.md`** (quick mode renders none, so a file of that name is an earlier
+run's); it says "not part of this run" instead.
 
 `outcome` is `null` when there are no markers at all — no evidence a run happened. That is a real state,
 not a failure, and it is what a fresh or abandoned run renders.
@@ -657,7 +718,7 @@ window it records, which each already states.
 
 The transcript is **untrusted input**. `attribution_skill`, `model` and `agent_id` are copied from it into
 a committed artifact and are attacker-influencable in principle. So are `request_id`, `session_id` and each
-`claude_code_versions` entry, which since 6.24.2 carry the same bound. They key a **view**, never a gate, and
+`claude_code_versions` entry, which since 6.26.1 carry the same bound. They key a **view**, never a gate, and
 **rule 3 above** — not the `usage` leaf rule — is what bounds them: ≤128 characters, no control character,
 no path.
 
@@ -669,11 +730,11 @@ fix #3), but it is a channel into a durable artifact and it is not closed. State
 
 **Named follow-up, not built: `cost-ledger-dropped-row-index`.** A `dropped[]` path's row index is taken before the
 emitter sorts its rows by `ts`, so in a transcript spread over several files it can name the wrong row. Probed while
-planning 6.24.2 and not selected at its plan gate; the paths 6.24.2 added (`session_id`, `version`, `tokens.<class>`)
+planning 6.26.1 and not selected at its plan gate; the paths 6.26.1 added (`session_id`, `version`, `tokens.<class>`)
 inherit the same index.
 
 **Named, not changed: a window ordered as strings.** The ledger's `window_start`/`window_end` and its row order
-compare timestamps as strings, and since 6.24.2 the `pharn-cost-record/1` block's window does the same, after the same
+compare timestamps as strings, and since 6.26.1 the `pharn-cost-record/1` block's window does the same, after the same
 parse test. `…:00Z` sorts after `…:00.500Z`, so on mixed-precision timestamps both would order them wrongly.
 Membership and attribution compare numbers and are not affected. The platform writes one precision, so it has not
 been observed (P7).

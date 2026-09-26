@@ -2,10 +2,10 @@
 // token count must satisfy before a cost artifact carries or counts it. Node stdlib only, no network, no model call,
 // no clock. No CLI: it is imported.
 //
-// ── Why it exists (6.24.2) ───────────────────────────────────────────────────────────────────────────
+// ── Why it exists (6.26.1) ───────────────────────────────────────────────────────────────────────────
 // A Claude Code transcript is untrusted input (P2), and parsed JSON can put any value where a string or a count is
 // expected. `String()` is not total over it: `{"toString":1}` and `[{"toString":1}]` make it throw, and so do `+`, a
-// template literal, a relational compare and `Object.fromEntries` ([[L62]]). Until 6.24.2 the cost tooling coerced
+// template literal, a relational compare and `Object.fromEntries` ([[L62]]). Until 6.26.1 the cost tooling coerced
 // first and bounded second, so one crafted line crashed both renderers and the checker's re-derivation. The order
 // is now the other way round: every value passes a TYPE and DOMAIN test here before anything coerces it.
 //
@@ -41,7 +41,7 @@ import { cleanScalar } from "./mark-phase.mjs";
 
 /** The bound on the IDENTITY fields (`model`, `attribution_skill`, `agent_id`). Wider than a `usage`
  *  leaf because a model id is legitimately longer than a `service_tier` token, and still bounded.
- *  Since 6.24.2 it also bounds a request's id, its session and the platform version, in both renderers and in
+ *  Since 6.26.1 it also bounds a request's id, its session and the platform version, in both renderers and in
  *  check-cost-ledger.mjs. */
 export const IDENTITY_MAX = 128;
 

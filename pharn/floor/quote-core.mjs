@@ -7,7 +7,7 @@
 //
 // It holds the ONE-LINE form too: `shown` and `SHOWN_CHARS`, which quote an untrusted value inside a single line
 // of a refusal reason or a verdict. They were born in test-results-formats.mjs (6.22.0) and MOVED here
-// byte-for-byte in 6.24.2 (GRILL R2-G6), when check-cost-ledger.mjs needed the same quoting for its RED and WARN
+// byte-for-byte in 6.26.1 (GRILL R2-G6), when check-cost-ledger.mjs needed the same quoting for its RED and WARN
 // lines. A second quoter would be the pair [[L31]] warns about, and importing it from the results parser would
 // tie the cost checker to a module that changes when a reporter format does.
 //
