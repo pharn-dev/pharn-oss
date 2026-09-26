@@ -2482,3 +2482,129 @@ test("★ EXECUTED — every `--from-frontmatter … --target …` line in the c
     rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+// ── The run-marker WIRING (pharn/floor/run-marker.mjs, 6.24.0, D3) ─────────────────────────────────────
+//
+// A FIFTH set, separate from every one above for the reason L29 gives: this one ranges over WHICH
+// commands open/close a `/pharn-ship` / `/pharn-review` run marker, and WHERE — a different question from
+// the phase-marker (mark-phase.mjs), lessons-sweep, lessons-reverify and lesson-extract sets, none of
+// which this schema shares a writer with.
+//
+// WHY IT EXISTS (P7 — the recorded trigger). Since 6.24.0 `enforce-writes-scope.cjs`'s no-scope default
+// in an INSTALLED project depends on whether a PHARN run is open — see the hook's own header and
+// `CLAUDE.md`, "Writes-scope". `/pharn-ship` and `/pharn-review` are the two commands that can reach a
+// Write-tool write with no scope of their own active (ship between its scoped steps; review sets none at
+// all), so they are the two that must OPEN a marker before that matters and CLOSE it on every exit. A
+// third command opening one that `pharn-loop.md` (below) must NOT — its existing marker already covers
+// the same guard for free — is exactly the kind of drift L31 names for a deliberate small surface.
+//
+// Honest scope, the same narrow kind as every set above: these pin that the command PROSE carries the
+// exact invocation, in the right order relative to a named anchor. They CANNOT prove a run executed
+// either line, that the marker was actually written, or that the guard actually consulted it — that half
+// is EXECUTED (not merely read) by `pharn/floor/run-marker.test.mjs`'s own ✧ WIRING tests, which run the
+// pinned lines (substituting `<name>`) as real subprocesses against the real hook (L45). "The wiring is
+// pinned" here NEVER means "a run opened or closed one" (P0).
+const RUN_MARKER_OPEN = /node pharn\/floor\/run-marker\.mjs --open (pharn-review|pharn-ship) '<name>'/g;
+const RUN_MARKER_CLOSE = /node pharn\/floor\/run-marker\.mjs --close (pharn-review|pharn-ship) '<name>'/g;
+const RUN_MARKER_OPEN_STOP = "**Non-zero → STOP**";
+
+const RUN_MARKER_WIRING = [
+  {
+    file: "pharn-ship.md",
+    command: "pharn-ship",
+    openAfter: "node pharn/floor/check-spec-approved.mjs pharn/features/<name>/SPEC.md",
+    openBefore: "node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-plan",
+    closeAfter: "node pharn/floor/mark-phase.mjs --name '<name>' --kind run-stop",
+  },
+  {
+    file: "pharn-review.md",
+    command: "pharn-review",
+    openAfter: "## Step 1b",
+    openBefore: "## Step 3 —",
+    closeAfter: "## Step 6b",
+  },
+];
+
+test("✧ RUN-MARKER ENUMERATION is non-vacuous and CLOSED over the corpus — no third caller, no drop", () => {
+  assert.equal(RUN_MARKER_WIRING.length, 2, "expected exactly the two commands with no scope of their own active at a Write-tool write");
+  const enumerated = RUN_MARKER_WIRING.map((c) => c.file).sort();
+  assert.deepEqual([...new Set(enumerated)], enumerated, "no duplicate member");
+  const live = readdirSync(COMMANDS_DIR)
+    .filter((f) => f.endsWith(".md") && /node pharn\/floor\/run-marker\.mjs/.test(readFileSync(join(COMMANDS_DIR, f), "utf8")))
+    .sort();
+  assert.deepEqual(
+    live,
+    enumerated,
+    "every command invoking run-marker.mjs must be enumerated above — a new caller fails here, not silently"
+  );
+});
+
+test("✧ pharn-loop.md does NOT invoke run-marker.mjs — its existing marker already covers the guard (no second writer)", () => {
+  assert.doesNotMatch(
+    commandBody("pharn-loop.md"),
+    /run-marker\.mjs/,
+    "the loop keeps require-loop-record.cjs as its marker's one owner (L35)"
+  );
+});
+
+for (const cmd of RUN_MARKER_WIRING) {
+  test(`✧ ${cmd.file} opens exactly one ${cmd.command} run marker and closes exactly one, matching commands`, () => {
+    const body = commandBody(cmd.file);
+    const opens = [...body.matchAll(RUN_MARKER_OPEN)];
+    const closes = [...body.matchAll(RUN_MARKER_CLOSE)];
+    assert.equal(opens.length, 1, `${cmd.file}: expected exactly one --open line`);
+    assert.equal(closes.length, 1, `${cmd.file}: expected exactly one --close line`);
+    assert.equal(opens[0][1], cmd.command, `${cmd.file}: --open must name ${cmd.command}`);
+    assert.equal(closes[0][1], cmd.command, `${cmd.file}: --close must name ${cmd.command}`);
+  });
+
+  test(`✧ ${cmd.file}'s --open sits after '${cmd.openAfter.slice(0, 40)}…' and before '${cmd.openBefore.slice(0, 40)}…'`, () => {
+    const body = commandBody(cmd.file);
+    const after = body.indexOf(cmd.openAfter);
+    const open = body.search(RUN_MARKER_OPEN);
+    const before = body.indexOf(cmd.openBefore);
+    assert.ok(after >= 0 && open >= 0 && before >= 0, `${cmd.file}: all three anchors must exist`);
+    assert.ok(after < open, `${cmd.file}: --open must come after the resume/ask anchor`);
+    assert.ok(open < before, `${cmd.file}: --open must come before the next stage/step anchor`);
+  });
+
+  test(`✧ ${cmd.file}'s --close sits after '${cmd.closeAfter.slice(0, 40)}…', on the every-exit path`, () => {
+    const body = commandBody(cmd.file);
+    const after = body.indexOf(cmd.closeAfter);
+    const close = body.search(RUN_MARKER_CLOSE);
+    assert.ok(after >= 0 && close >= 0, `${cmd.file}: both anchors must exist`);
+    assert.ok(after < close, `${cmd.file}: --close must come after its anchor`);
+  });
+
+  // GATE-2 review, S1: a failed --open must STOP the command — the exit code is the contract, so the branch
+  // sits between the open line and the step it guards. run-marker.test.mjs EXECUTES the pinned line against
+  // a planted file to show that exit really is non-zero; this pins that the prose reads it.
+  test(`✧ ${cmd.file} STOPS on a non-zero --open, between the open line and '${cmd.openBefore.slice(0, 30)}…'`, () => {
+    const body = commandBody(cmd.file);
+    const open = body.search(RUN_MARKER_OPEN);
+    const before = body.indexOf(cmd.openBefore);
+    const stop = body.indexOf(RUN_MARKER_OPEN_STOP, open);
+    assert.ok(open >= 0 && stop > open && stop < before, `${cmd.file}: a "${RUN_MARKER_OPEN_STOP}" branch must follow --open`);
+    // L4 mutation control: the same check over a body with the branch removed must fail.
+    const mutated = body.slice(0, open) + body.slice(open).replace(RUN_MARKER_OPEN_STOP, "Non-zero → continue");
+    const mStop = mutated.indexOf(RUN_MARKER_OPEN_STOP, open);
+    assert.ok(!(mStop > open && mStop < mutated.indexOf(cmd.openBefore)), `${cmd.file}: the rule must fail once the STOP branch is gone`);
+  });
+
+  // L4: an authored assertion passes by construction. Pin the matcher's DISCRIMINATION directly.
+  test(`✧ the ${cmd.file} run-marker rule DISCRIMINATES — it fails once the invocations are removed`, () => {
+    const stripped = commandBody(cmd.file).replace(RUN_MARKER_OPEN, "<<removed>>").replace(RUN_MARKER_CLOSE, "<<removed>>");
+    assert.doesNotMatch(stripped, RUN_MARKER_OPEN, `${cmd.file}: the open matcher must not still pass once removed`);
+    assert.doesNotMatch(stripped, RUN_MARKER_CLOSE, `${cmd.file}: the close matcher must not still pass once removed`);
+  });
+}
+
+test("✧ neither run-marker command is scoped to `pharn-loop` — the CLI refuses it, and no command tries", () => {
+  for (const file of commandFiles()) {
+    assert.doesNotMatch(
+      commandBody(file),
+      /run-marker\.mjs --(open|close) pharn-loop\b/,
+      `${file}: pharn-loop is not a run-marker.mjs command`
+    );
+  }
+});

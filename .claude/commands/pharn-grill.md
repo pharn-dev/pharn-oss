@@ -410,6 +410,11 @@ the default permits start being denied in later sessions, with nothing naming th
 sits outside the `PreToolUse` gate entirely (PHARN's own build-loop lesson **L19**) — nothing on
 the floor forces it, and an early abort skips it. It degrades safely: the next command's first-step
 **set** overwrites a leftover scope, which is exactly today's behavior. The floor guarantee is
-unchanged and belongs to the **reader**, not to this step — **absence of a scope file = the
-fail-closed default-safe-set**. Never write "the command cleaned up"; write that it **declares** the
+unchanged and belongs to the **reader**, not to this step. **Absence of a scope file no longer means one
+posture (6.24.0):** in a dev checkout or an unsignalled tree it is still the fail-closed
+default-safe-set; in an **installed** project (`pharn.config.json` carries `skillsVersion`) it is
+fail-closed the same way only while a `/pharn-ship`, `/pharn-loop` or `/pharn-review` run is open —
+outside a run it is the permissive default instead: it denies PHARN's own installed surface and its scope
+file, allows your ordinary source, and allows only two places outside the project (`CLAUDE.md`,
+"Writes-scope", has the whole rule). Never write "the command cleaned up"; write that it **declares** the
 release step.

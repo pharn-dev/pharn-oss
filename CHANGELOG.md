@@ -23,6 +23,75 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.24.0] - 2026-09-26
+
+### Added
+
+- 2026-09-26: **In an installed project, the write guard is fail-closed only while PHARN is working.**
+  Before this, `enforce-writes-scope.cjs`'s no-scope default in an installed project
+  (`pharn.config.json` carries `skillsVersion`) denied everything outside `pharn/features/**` and
+  `.pharn/**` — including a user's own ordinary source, and Claude Code's own memory folder outside the
+  project — even with no PHARN command running. A user reported exactly that: Claude was blocked from
+  editing their own code with no `/pharn-*` command open. With no scope set and no `/pharn-ship`,
+  `/pharn-loop` or `/pharn-review` run open, the guard now instead denies PHARN's own installed surface
+  (`pharn/**` except `pharn/features/**`, `.claude/**`, `pharn.config.json`, matched case-folded, the
+  `pharn/features/` exception matched as written), its own input `.pharn/writes-scope.json`, and any path
+  containing a backslash on a `/` system, and allows every other in-project path — including the files
+  Claude Code loads at session start (`CLAUDE.md`, `AGENTS.md`, `.mcp.json`). Outside the project it allows
+  exactly two places, by the maintainer's decision of 2026-09-26: Claude Code's memory folders
+  (`<claude-config-dir>/projects/*/memory/**`, the config dir being `$CLAUDE_CONFIG_DIR` or `~/.claude`) and
+  the temp roots (the OS temp directory and `/tmp`), never inside another git tree and never as another
+  spelling of the project's own path; every other
+  out-of-project path — dotfiles, `~/.ssh`, `~/.claude/settings*.json`, `~/.claude.json`,
+  `~/.claude/hooks/` — stays denied. A run is open while
+  `.pharn/<pharn-loop|pharn-review|pharn-ship>/<name>/active.json` exists (presence + a 24h age ceiling
+  only — the guard never parses a marker), or while one of those state directories is not a readable
+  directory — `/pharn-ship` and `/pharn-review` open and close theirs with the new
+  `pharn/floor/run-marker.mjs` and STOP when the open fails; `/pharn-loop` keeps its existing marker with no
+  second writer, and STOPs too when its snapshot or open fails. A **malformed** `.pharn/writes-scope.json` now denies **every** write in an installed
+  project, rather than falling back to a default. In the dev and unsignalled postures the default and every
+  old deny message are unchanged; their only verdict changes move toward deny (below). `reconcile-baseline.mjs
+--anchor` now refuses (exit 2, nothing written) when there is no usable scope to snapshot, so a build can
+  no longer open an epoch no scope could ever clear. Roadmap Phase 0.2, approved by the maintainer
+  2026-09-25.
+  `SKILLS_VERSION` 6.23.0 → 6.24.0 — this phase was numbered 6.23.0 until `stage-regress-script` (#277)
+  merged first and took that number, so it was renumbered by diff. `MIN_CLI` stays 0.5.0: nothing is
+  relocated, and a CLI that copies `pharn/floor/` per file lands the new script.
+  ([`.dev/features/writes-scope-run-only/`](./.dev/features/writes-scope-run-only/))
+  - **Review fixes, before release (GATE 2, 2026-09-26).** Every write is now judged at every target it can
+    reach, in every posture: the old `path.resolve()` resolution first, then the filesystem's own (a
+    dangling symlink followed to the target it names, `..` applied to a symlink's real parent), denied if
+    either is denied — a dangling link to an absent `.claude/commands/` or `pharn/floor/` file had been
+    allowed, and created it. A FILE planted at a run-state directory now counts as a run open instead of
+    "no run", and `run-marker.mjs` exits 2 on it (and on every other failure) instead of crashing with
+    exit 1. The `pharn/features/` exception no longer widens under the case/trailing-dot fold. A guard error
+    denies, now also when the deny itself fails. A marker whose name is not a plain slug is never rendered in
+    a deny message. A FIFO at `.pharn/writes-scope.json` no longer hangs the guard. Found while verifying
+    those fixes and fixed with them: resolving `\` as a separator, as the companion trusted-path guard does,
+    let `pharn/features/a\b/../../floor/x.mjs` be judged inside `pharn/features/` while the kernel wrote
+    `pharn/floor/x.mjs`, in the dev posture as well.
+  - **Re-review fixes, before release (2026-09-26).** Another spelling of the project's own path — a
+    different letter case or Unicode form — read as a path OUTSIDE the project, so for a project under a temp
+    root with no `.git` the temp-root allow admitted a write that landed in the project's own `pharn/floor/`.
+    Such a path is now denied as the project's own, and the filesystem's resolution reads each existing
+    directory's on-disk spelling; in the dev and unsignalled postures that second change, too, only moves a
+    verdict toward deny. `/pharn-loop` now STOPs when its pre-run snapshot or its marker open fails, as
+    `/pharn-ship` and `/pharn-review` already did: a file planted at `.pharn/pharn-loop/<name>` had let a loop
+    run on without its marker, leaving an installed project on the permissive default between its stages.
+  - **Migration.** Nothing to wire — the hooks change, `settings.json` does not. An install whose
+    `pharn-ship.md` or `pharn-review.md` was edited locally keeps the old command under `pharn update`, so
+    it never opens a run marker and those runs are unguarded between their own stages; re-take the shipped
+    command, or add the two pinned `run-marker.mjs` lines by hand. A locally edited `pharn-loop.md` still
+    opens its marker, but does not stop when that fails. A malformed `.pharn/writes-scope.json`
+    now denies every write in an installed project — `node .claude/hooks/set-writes-scope.cjs --clear`
+    releases it. Anything other than a directory at `.pharn/pharn-loop`, `.pharn/pharn-review` or
+    `.pharn/pharn-ship` now holds an installed project fail-closed until it is removed by hand, and a path
+    containing a backslash is refused outside a run. `reconcile-baseline.mjs --anchor` now refuses (exit 2) with no scope set; every shipped
+    caller sets one first, so only a caller outside PHARN's own commands is affected.
+  - **Rollback.** Reverting 6.24.0 restores the fail-closed default everywhere; a leftover
+    `.pharn/pharn-ship/` or `.pharn/pharn-review/` marker is inert, because nothing in the older tree
+    reads those directories (the loop marker is unchanged and keeps its Stop-guard meaning).
+
 ## [6.23.0] - 2026-09-26
 
 ### Added

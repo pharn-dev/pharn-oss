@@ -50,9 +50,13 @@
 // rule that a quantified claim is verified by EXECUTING the op, not by re-reading it):
 //   • trusted-path / canon / control-surface denial  -> EXECUTE .claude/hooks/protect-trusted-paths.cjs
 //   • the fail-closed DEFAULT, when no scope was set  -> EXECUTE .claude/hooks/enforce-writes-scope.cjs
-//     in a probe sandbox that reproduces the two runtime signals its defaultSafeSet() reads (a
-//     pharn.config.json `skillsVersion`, and `.dev/floor/` presence) with NO scope file present. The
-//     default set is therefore never copied into this file, and a future change to it is inherited.
+//     in a probe sandbox that reproduces THREE runtime signals (6.24.0, up from two): a
+//     pharn.config.json `skillsVersion`, `.dev/floor/` presence, and a FRESH run marker (written by
+//     pharn/floor/run-marker.mjs's own openRun(), so the probe always answers with the STRICT, in-run
+//     default rather than the newer install-posture permissive one — see makeDefaultProbeSandbox()'s own
+//     header for why that is the only defensible answer for a probe with no write history to consult).
+//     No scope file is present in the sandbox either way. The default set is therefore never copied into
+//     this file, and a future change to it is inherited.
 //   • an EXPLICIT scope -> matched here, against the scope SNAPSHOTTED in the baseline.
 //
 // THE ONE DUPLICATION, bounded and pinned: globToRegExp below is a faithful copy of the matcher in
@@ -131,6 +135,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { enumerate, hashFile, RECORD_VERSION, RECORD_PATH } from "./reconcile-baseline.mjs";
+import { openRun } from "./run-marker.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const IGNORE_DATA_PATH = join(HERE, "reconcile-ignore.json");
@@ -231,9 +236,8 @@ function askHook(hookAbs, rel, cwd) {
   };
 }
 
-// --- the probe sandbox: reproduce ONLY the two runtime signals enforce-writes-scope.cjs's
-// --- defaultSafeSet() reads, with NO scope file, so the hook itself computes the fail-closed default.
-// Ask a hook how it would have answered under a RECORDED scope rather than the live one.
+// --- reuses makeDefaultProbeSandbox()'s runtime signals (below), then materializes a RECORDED scope on
+// --- top of them. Ask a hook how it would have answered under that scope rather than the live one.
 //
 // The only hook passed here is protect-trusted-paths.cjs. It resolves its guarded roots from its own module
 // path — plus, since hook-cwd-anchoring, the git work tree containing cwd when that tree shares a hook
@@ -270,7 +274,17 @@ function askHookUnderScope(hookAbs, rel, root, scopeRecord) {
   return askHook(join(dir, ".claude", "hooks", basename(hookAbs)), rel, dir);
 }
 
-function makeDefaultProbeSandbox(root) {
+// Exported for the parity test. Reproduces THREE runtime signals `enforce-writes-scope.cjs`'s no-scope
+// decision reads (6.24.0 adds the third): `pharn.config.json` (copied), `.dev/floor/` (created), and a
+// FRESH run marker (written by run-marker.mjs's own openRun() — never a hand-built JSON blob, so this
+// probe cannot drift from what the real writer emits). The marker makes this sandbox answer with the
+// STRICT, in-run default whenever it represents an install: after D6 (reconcile-baseline.mjs §9) every
+// NEW baseline records a scope, so this probe is reached only for a LEGACY baseline anchored with none,
+// or the no-baseline control-surface path — and the marker state at the moment of each PAST write is
+// recorded nowhere (lessons-learned L42), so replaying with TODAY's markers would give a NOW answer and
+// replaying with none would give the PERMISSIVE answer — fail-open exactly where this checker knows
+// least. The strict answer is therefore the only defensible one for a probe with no history to consult.
+export function makeDefaultProbeSandbox(root) {
   const dir = mkdtempSync(join(tmpdir(), "pharn-reconcile-"));
   const cfg = resolve(root, "pharn.config.json");
   if (existsSync(cfg)) {
@@ -285,6 +299,13 @@ function makeDefaultProbeSandbox(root) {
   } catch {
     /* not a dev repo */
   }
+  // The third signal: a fresh run marker, so an install-posture sandbox always reads as "a run is open".
+  // Harmless (and unread) in a dev/unsignalled sandbox, where the hook never consults a marker at all.
+  // Its RESULT is checked (GATE-2 review, minor 8): a refused open would leave an install sandbox with no
+  // marker, i.e. answering with the PERMISSIVE default — the fail-open this probe exists to avoid. A throw
+  // here reaches every caller as an unusable sandbox, which each one treats as fail-closed.
+  const marker = openRun({ root: dir, command: "pharn-ship", name: "reconcile-probe", sessionId: null, now: Date.now() });
+  if (!marker.ok) throw new Error(`reconcile probe sandbox: the run marker was refused (${marker.reason})`);
   return dir;
 }
 
@@ -479,7 +500,19 @@ function main(argv) {
       }
       continue;
     }
-    if (sandbox === null) sandbox = makeDefaultProbeSandbox(root);
+    if (sandbox === null) {
+      try {
+        sandbox = makeDefaultProbeSandbox(root);
+      } catch {
+        emit(
+          {
+            verdict: "INCONCLUSIVE",
+            reason: "could not build the default-probe sandbox — no verdict is read from a probe that may be permissive",
+          },
+          2
+        );
+      }
+    }
     const d = askHook(scopeHook, rel, sandbox);
     if (!d.ok) emit({ verdict: "INCONCLUSIVE", reason: d.reason }, 2);
     if (d.denied) escapes.push({ file: rel, denied_by: "writes-scope (fail-closed default)" });
