@@ -8,7 +8,7 @@
 //   * render-cost-record.mjs — the `pharn-cost-record/1` block embedded in `ship-record.json`;
 //   * render-cost-ledger.mjs — `cost.json`, and through the ledger's `deriveLedger`,
 //     check-cost-ledger.mjs --verify-transcript.
-// It was split out of render-cost-record.mjs in 6.22.1, when the per-request rule below gained its second
+// It was split out of render-cost-record.mjs in 6.24.1, when the per-request rule below gained its second
 // consumer. A renderer that also served as the transcript library had two reasons to change, and this is
 // the plan-files-core.mjs / ship-outcome-core.mjs precedent: two reasons, two files. No other module
 // re-exports these functions, so each has exactly one import address.
@@ -33,7 +33,7 @@
 // the lossy `a/b` vs `a-b` dirname collision, which a UUID key makes unreachable, and meanwhile reason 2
 // above made it fire on legitimate worktree runs.
 //
-// ── How its lines become requests (6.22.1) ───────────────────────────────────────────────────────────
+// ── How its lines become requests (6.24.1) ───────────────────────────────────────────────────────────
 // FLOOR (deterministic, primitive #3): lines are grouped per request (`requestId`, else `message.id`), and
 // each request is ONE entry. The grouping is LOAD-BEARING, not a nicety: the platform writes one API
 // request to the transcript as SEVERAL lines, so a line-by-line sum over-counts (2.34x on the 2026-08-18
@@ -47,7 +47,7 @@
 // So a request's `usage` is its line with the GREATEST `output_tokens`, the earliest such line on a tie,
 // and its identity and timestamp are its FIRST line's in walk order. What that makes a ledger row MEAN is
 // defined in `pharn/pharn-contracts/cost-ledger.md`, "One row per request" (cited, not restated — P4). The
-// reasons for the shape are these: the first line, which both renderers kept until 6.22.1, under-counts
+// reasons for the shape are these: the first line, which both renderers kept until 6.24.1, under-counts
 // `output` and `thinking`, and the last line miscounts the second and third shapes. A first line's
 // timestamp never moves once written, while the largest line can still change, and run membership and
 // stage attribution key on the timestamp. Nested subagent files are included, or fan-out cost would be
@@ -61,7 +61,7 @@
 //   reads it is counted at the largest line written so far, so a later read can find MORE output for it —
 //   which is why check-cost-ledger.mjs --verify-transcript bounds `output` and `output_thinking` rather than
 //   comparing them exactly ([[L58]], [[L63]]).
-// ONE OWNER ([[L35]]): nothing else in the product floor reads a transcript's usage. Until 6.22.1 the ledger
+// ONE OWNER ([[L35]]): nothing else in the product floor reads a transcript's usage. Until 6.24.1 the ledger
 //   carried its own copy of the reading loop. A closure test pins the two spellings both copies used, and
 //   it cannot see a third spelling (L36).
 // NAMED RESIDUAL, pre-existing and unchanged here: a crafted non-string `requestId` or `message.model` makes a

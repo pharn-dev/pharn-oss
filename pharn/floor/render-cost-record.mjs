@@ -12,13 +12,13 @@
 // renderer/caller split `render-ship-briefing.mjs` uses. Nor does it read a transcript itself: locating a
 // session's transcript, walking its files and turning its lines into requests all live in
 // `transcript-core.mjs`, imported and never re-stated ([[L35]]). This file changes for ONE reason (P3):
-// the shape of the `pharn-cost-record/1` block. Until 6.22.1 it also carried that transcript axis.
+// the shape of the `pharn-cost-record/1` block. Until 6.24.1 it also carried that transcript axis.
 //
 // ── Honest scope (P0) ────────────────────────────────────────────────────────────────────────────────
 // FLOOR (deterministic, primitive #3 + arithmetic): each request `sessionRequests()` returns is folded
 //   ONCE, at the usage that function selects. See `transcript-core.mjs`'s header for why a request's usage
 //   is its line with the most output tokens, and for the one ADVISORY assumption that rule rests on. Until
-//   6.22.1 this renderer kept each request's FIRST line, which under-counted `output` and `thinking`. Given
+//   6.24.1 this renderer kept each request's FIRST line, which under-counted `output` and `thinking`. Given
 //   the same transcript bytes the output is byte-identical: no clock read, no randomness.
 //   window_start/window_end come from the records' OWN timestamps (each request's first line), never from
 //   Date.now(). So it is pinnable by test.

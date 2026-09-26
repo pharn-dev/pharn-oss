@@ -12,7 +12,7 @@
 //
 // `--verify-transcript` is the referent-binding half: it re-derives `requests[]` from the live
 // transcript and compares them row by row, exactly on the classes that cannot grow and as recorded <=
-// re-derived on `output` / `output_thinking`, which can (6.22.1, `checkRowsAgainstTranscript`). That mode
+// re-derived on `output` / `output_thinking`, which can (6.24.1, `checkRowsAgainstTranscript`). That mode
 // is a genuine floor primitive and it is USABLE ONLY WHILE THE
 // TRANSCRIPT EXISTS — machine-local and perishable, since Claude Code prunes transcripts on its own
 // schedule and they are never committed. So the strong check cannot be a gate, and the gate cannot be
@@ -452,20 +452,20 @@ export const GROWING_CLASSES = Object.freeze(["output", "output_thinking"]);
 const tokenText = (v) => (Number.isFinite(v) ? String(v) : "(not a number)");
 
 /**
- * `--verify-transcript`'s comparison of the ROWS, request by request and class by class (6.22.1). The id
+ * `--verify-transcript`'s comparison of the ROWS, request by request and class by class (6.24.1). The id
  * sets are already equal when this runs. Returns true when nothing RED was found.
  *
  * WHY TWO CLASSES ARE BOUNDED AND NOT EQUAL ([[L58]], [[L63]]). A row's usage is its request's line with
  * the most output tokens (`transcript-core.mjs`), and a request still being written when the ledger was
  * emitted was recorded at the largest line written THEN. A later line can carry more `output` and more
- * `output_thinking`, so a re-derivation NOW can find more of them for a CORRECT ledger. Until 6.22.1 this
+ * `output_thinking`, so a re-derivation NOW can find more of them for a CORRECT ledger. Until 6.24.1 this
  * compared totals exactly, which was right while rows were each request's first line (fixed once written)
  * and became a false RED the moment the rule moved them to the largest line. The other four classes did not
  * differ across a request's selected and first line on any measured request, so they are compared exactly.
  *
  * THE RULE: each of the four other classes must be EQUAL; each growing class must satisfy recorded <=
  * re-derived. Above is RED, because the transcript never held that much. Below is a WARN naming the two causes
- * it cannot tell apart: a request in flight at emission, and a ledger written before 6.22.1, whose first-line
+ * it cannot tell apart: a request in flight at emission, and a ledger written before 6.24.1, whose first-line
  * rule under-counted.
  *
  * BOUND (P0), stated in the WARN as well as here: the growing classes are now exact only from ABOVE. Any
@@ -502,7 +502,7 @@ function checkRowsAgainstTranscript(recorded, live) {
   }
   if (below.length) {
     warn(
-      `--verify-transcript: ${below.length} row value(s) are BELOW what the transcript now holds (${some(below)}). Either the request was still being written when the ledger was emitted, or the ledger predates 6.22.1, whose first-line rule under-counted — this check cannot tell the two apart. The growing classes are bounded only from above, so a deflated value also lands here`
+      `--verify-transcript: ${below.length} row value(s) are BELOW what the transcript now holds (${some(below)}). Either the request was still being written when the ledger was emitted, or the ledger predates 6.24.1, whose first-line rule under-counted — this check cannot tell the two apart. The growing classes are bounded only from above, so a deflated value also lands here`
     );
   }
   return fixed.length === 0 && above.length === 0;

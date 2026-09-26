@@ -143,7 +143,7 @@ satisfied by a variant spelling of any member; closure is what makes a variant f
 | every `requests[]` row                                              | a MEMBER of that recomputed window                                        | FLOOR (ordering test)                                                 |
 | `membership.excluded_requests`                                      | an integer (known window) or `null` (unknown) — its VALUE                 | **ADVISORY** without `--verify-transcript`; with it, a RANGE (rule 6) |
 
-**One row per request, and which of its transcript lines each value comes from (6.22.1).** `dedup_key` names
+**One row per request, and which of its transcript lines each value comes from (6.24.1).** `dedup_key` names
 the grouping. The platform writes one API request to the transcript as several lines, sometimes in more than one
 file, and those lines need not carry the same usage:
 
@@ -269,8 +269,8 @@ activity outside the run. `render-run-report.mjs` prints the same label. `--veri
 a `/1` file with a WARN, because its rows are not re-derivable under the run-window rule. Reading a `/1`
 total as run-scoped would silently reinterpret historical data.
 
-**A ledger emitted before 6.22.1 under-counts `output` and `output_thinking`, and it is not rewritten.** Until
-6.22.1 both cost renderers kept each request's FIRST transcript line, and on current transcripts that line can carry
+**A ledger emitted before 6.24.1 under-counts `output` and `output_thinking`, and it is not rewritten.** Until
+6.24.1 both cost renderers kept each request's FIRST transcript line, and on current transcripts that line can carry
 an early, smaller output count and no thinking detail. The under-count lands wherever a request's FIRST line carries
 fewer output tokens than its largest. A request whose lines disagree only because of a zeroed re-append or a fork's
 copy was counted correctly, since its first line is its largest.
@@ -323,7 +323,7 @@ cache-write classes were equal under both rules on every measured request. For s
    the transcript exists. The request ids must match exactly, and each row is compared class by class:
    - **input, cache read and both cache writes must be EQUAL.** They did not differ across a request's first and
      selected line on any request measured.
-   - **`output` and `output_thinking` must satisfy recorded ≤ re-derived (6.22.1).** A row's usage is its
+   - **`output` and `output_thinking` must satisfy recorded ≤ re-derived (6.24.1).** A row's usage is its
      request's line with the most output tokens, and a request still being written at emission can grow afterwards.
    - **Above is RED:** the transcript never held that much.
    - **Below is a WARN** naming its two causes (the compatibility note above).
@@ -340,7 +340,7 @@ cache-write classes were equal under both rules on every measured request. For s
      re-derived total, so the bound travels with the verdict.
    - "The part before the window is fixed" rests on three platform behaviours, observed and not floor
      facts: the transcript is append-only, every record is timestamped when it is written, and a request's
-     timestamp is its first occurrence's in file order. Its `usage` may come from a later line (6.22.1), and
+     timestamp is its first occurrence's in file order. Its `usage` may come from a later line (6.24.1), and
      that moves no membership decision.
    - An OPEN window has no end. A continued session therefore adds MEMBERS, and `requests[]` REDs. Both
      emitters write `run-stop` before emitting, and the checker WARNs an open window.
@@ -531,7 +531,7 @@ count, so read the table as what one real run and one real project cost, not as 
 `pharn/floor/render-cost-record.mjs` emits an **aggregate** cost block embedded in `ship-record.json`;
 this contract describes a **standalone per-request** artifact. The two overlap, and they share one
 implementation of transcript location, the file walk and the per-request reader: `pharn/floor/transcript-core.mjs`,
-imported by both, never copied. Until 6.22.1 the reading loop was copied, and both copies kept each request's
+imported by both, never copied. Until 6.24.1 the reading loop was copied, and both copies kept each request's
 first line.
 
 **The overlap is recorded rather than resolved.** A ✧ parity test asserts the two agree on totals over the

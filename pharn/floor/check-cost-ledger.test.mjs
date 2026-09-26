@@ -911,14 +911,14 @@ test("deriveLedger returns renderLedger's ledger BYTE-FOR-BYTE, plus the after-w
 });
 
 // ===================================================================================================
-// --verify-transcript at each request's COMPLETED usage (6.22.1)
+// --verify-transcript at each request's COMPLETED usage (6.24.1)
 //
 // `fixtures/cost-ledger/usage-snapshots/` holds requests whose transcript lines disagree (described in
 // transcript-core.test.mjs). `--verify-transcript` reaches the one owner of the counting rule through
 // `deriveLedger`, and compares ROW by row: the four classes that do not grow across a request's lines
 // exactly, `output` / `output_thinking` as recorded <= re-derived ([[L58]], [[L63]]). Below is a WARN, not
 // a RED, because two causes share that signature: a request still being written when the ledger was
-// emitted (a CORRECT ledger), and a ledger the pre-6.22.1 first-line rule wrote. Above is RED.
+// emitted (a CORRECT ledger), and a ledger the pre-6.24.1 first-line rule wrote. Above is RED.
 // ===================================================================================================
 
 import { sanitizeUsage, normalizeTokens } from "./render-cost-ledger.mjs";
@@ -1005,7 +1005,7 @@ test("--verify-transcript quotes a request id, so a newline in it cannot forge a
   for (const f of [...reds, ...warns]) assert.ok(!/[\r\n]/.test(f), `a finding spans more than one line: ${JSON.stringify(f)}`);
 });
 
-test("--verify-transcript: a ledger the pre-6.22.1 FIRST-line rule wrote is internally GREEN and reads as the growth WARN — the two causes share a signature", () => {
+test("--verify-transcript: a ledger the pre-6.24.1 FIRST-line rule wrote is internally GREEN and reads as the growth WARN — the two causes share a signature", () => {
   const { led, projectsDir } = snapshotLedger();
   // Rebuild the 8, 8, 163 request's row the way the old emitter did: from its FIRST transcript line, through
   // the emitter's own `sanitizeUsage` / `normalizeTokens` — derived by the code that wrote old ledgers, not

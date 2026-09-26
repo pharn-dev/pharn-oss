@@ -90,7 +90,7 @@ row per request" (cited, not restated — P4). The block uses the same reader, `
 Nested subagent transcripts are included, or fan-out cost would be invisible. Given the same transcript bytes, the
 render is byte-identical.
 
-**A block rendered before 6.22.1 can under-count `output` and `thinking`.** The renderer then kept each request's
+**A block rendered before 6.24.1 can under-count `output` and `thinking`.** The renderer then kept each request's
 FIRST line. That under-counts wherever a request's first line carries fewer output tokens than its largest line. The
 other classes were equal under both rules on every request measured on 2026-09-26. The block sits inside attested
 content, so it is never rewritten. In an older record, read those two classes as a floor.

@@ -134,6 +134,7 @@ import {
 } from "./gate-run-core.mjs";
 import { fingerprint } from "./worktree-fingerprint.mjs";
 import { sha256RegularFile } from "./test-infra-core.mjs";
+import { REGRESS_PATHS } from "./stage-regress-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -151,11 +152,13 @@ const CHECKERS = Object.freeze({
 /** The product feature root. ONE literal in this module, pinned by a closure test (L52). */
 export const FEATURE_BASE = "pharn/features";
 
-/** The stamp locations the two stage commands pin (pharn-verify.md Step 3c, pharn-regress.md Step 4b). */
+/** The stamp locations the two stage commands pin (pharn-verify.md Step 3c; the regress pair is DERIVED
+ *  from stage-regress-core.mjs's REGRESS_PATHS — the one owner, since 6.23.0's stage-regress-script — so
+ *  this file carries no second literal for `stage-regress.mjs`'s own scratch layout to drift from). */
 export const DEFAULT_STAMPS = Object.freeze({
   verify: ".pharn/pharn-verify/gates/stamp.json",
-  regressHead: ".pharn/pharn-regress/head/stamp.json",
-  regressBase: ".pharn/pharn-regress/base-gates/stamp.json",
+  regressHead: `${REGRESS_PATHS.head}/stamp.json`,
+  regressBase: `${REGRESS_PATHS.baseGates}/stamp.json`,
 });
 
 /** The budget ledger's directory; the file is `<LEDGER_DIR>/<name>/freshness.jsonl`. /pharn-loop Step 1a

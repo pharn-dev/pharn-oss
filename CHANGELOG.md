@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.22.1] - 2026-09-26
+## [6.24.1] - 2026-09-26
 
 ### Fixed
 
@@ -34,7 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   thinking detail than its last: one measured request's three lines read 8, 8 and 163. Measured on 2026-09-26 over
   one maintainer's local transcripts (44,253 requests, Claude Code 2.1.234–2.1.281), first-line counting reported 66%
   of the output tokens and 58% of the thinking tokens. The input, cache-read and cache-write classes were equal under
-  both rules on every measured request. `SKILLS_VERSION` 6.22.0 → 6.22.1 (PATCH: a correction to shipped bytes; one new
+  both rules on every measured request. `SKILLS_VERSION` 6.24.0 → 6.24.1 (PATCH: a correction to shipped bytes; one new
   internal module, no new command, checker or contract shape). `MIN_CLI` stays 0.5.0: no installed path moves, and
   `pharn update` copies a new floor file like any other.
   ([`.dev/features/cost-dedup-completed-usage/`](./.dev/features/cost-dedup-completed-usage/))
@@ -61,7 +61,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     - Input, cache read and both cache writes must match exactly.
     - For `output` and `output_thinking`, a recorded value above the transcript is RED.
     - A recorded value below the transcript is a WARN naming its two indistinguishable causes: a request in flight at
-      emission, or a ledger written before 6.22.1.
+      emission, or a ledger written before 6.24.1.
     - **Bound:** those two classes are now exact only from above, so a deflated value passes with the WARN.
     - The checker quotes a request id through `JSON.stringify` in every line that prints one, including its two older
       lines for a duplicate id and a row outside the window. An id comes from the transcript and nothing bounds its
@@ -74,7 +74,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     `usage` is now the completed line's object, which carries keys the early line lacked (`output_tokens_details`,
     `server_tool_use`, `iterations[]`, `speed`).
   - **Existing records are not rewritten.** A `cost.json` ledger or a `ship-record.json` `cost` block written before
-    6.22.1 under-counts `output` and `output_thinking` (`thinking` in the record block) wherever a request's FIRST
+    6.24.1 under-counts `output` and `output_thinking` (`thinking` in the record block) wherever a request's FIRST
     line carried fewer output tokens than its largest. Its internal checks stay GREEN. While its transcript exists,
     `--verify-transcript` reports it in the growth WARN, not a RED. The WARN counts every such row value and names the
     first three. Re-emit while the transcript exists, or read those two classes as a floor. A ledger's `skills_version` indicates which rule wrote it. That is advisory:
@@ -102,6 +102,171 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
       sentence of it misstating the check. It was corrected before merge, on the maintainer's instruction, through
       the `Edit` tool under a promote-origin writes-scope: the route 3.1.2's L10 repair took, because a build's plan
       cannot authorize a canon write.
+
+## [6.24.0] - 2026-09-26
+
+### Added
+
+- 2026-09-26: **In an installed project, the write guard is fail-closed only while PHARN is working.**
+  Before this, `enforce-writes-scope.cjs`'s no-scope default in an installed project
+  (`pharn.config.json` carries `skillsVersion`) denied everything outside `pharn/features/**` and
+  `.pharn/**` — including a user's own ordinary source, and Claude Code's own memory folder outside the
+  project — even with no PHARN command running. A user reported exactly that: Claude was blocked from
+  editing their own code with no `/pharn-*` command open. With no scope set and no `/pharn-ship`,
+  `/pharn-loop` or `/pharn-review` run open, the guard now instead denies PHARN's own installed surface
+  (`pharn/**` except `pharn/features/**`, `.claude/**`, `pharn.config.json`, matched case-folded, the
+  `pharn/features/` exception matched as written), its own input `.pharn/writes-scope.json`, and any path
+  containing a backslash on a `/` system, and allows every other in-project path — including the files
+  Claude Code loads at session start (`CLAUDE.md`, `AGENTS.md`, `.mcp.json`). Outside the project it allows
+  exactly two places, by the maintainer's decision of 2026-09-26: Claude Code's memory folders
+  (`<claude-config-dir>/projects/*/memory/**`, the config dir being `$CLAUDE_CONFIG_DIR` or `~/.claude`) and
+  the temp roots (the OS temp directory and `/tmp`), never inside another git tree and never as another
+  spelling of the project's own path; every other
+  out-of-project path — dotfiles, `~/.ssh`, `~/.claude/settings*.json`, `~/.claude.json`,
+  `~/.claude/hooks/` — stays denied. A run is open while
+  `.pharn/<pharn-loop|pharn-review|pharn-ship>/<name>/active.json` exists (presence + a 24h age ceiling
+  only — the guard never parses a marker), or while one of those state directories is not a readable
+  directory — `/pharn-ship` and `/pharn-review` open and close theirs with the new
+  `pharn/floor/run-marker.mjs` and STOP when the open fails; `/pharn-loop` keeps its existing marker with no
+  second writer, and STOPs too when its snapshot or open fails. A **malformed** `.pharn/writes-scope.json` now denies **every** write in an installed
+  project, rather than falling back to a default. In the dev and unsignalled postures the default and every
+  old deny message are unchanged; their only verdict changes move toward deny (below). `reconcile-baseline.mjs
+--anchor` now refuses (exit 2, nothing written) when there is no usable scope to snapshot, so a build can
+  no longer open an epoch no scope could ever clear. Roadmap Phase 0.2, approved by the maintainer
+  2026-09-25.
+  `SKILLS_VERSION` 6.23.0 → 6.24.0 — this phase was numbered 6.23.0 until `stage-regress-script` (#277)
+  merged first and took that number, so it was renumbered by diff. `MIN_CLI` stays 0.5.0: nothing is
+  relocated, and a CLI that copies `pharn/floor/` per file lands the new script.
+  ([`.dev/features/writes-scope-run-only/`](./.dev/features/writes-scope-run-only/))
+  - **Review fixes, before release (GATE 2, 2026-09-26).** Every write is now judged at every target it can
+    reach, in every posture: the old `path.resolve()` resolution first, then the filesystem's own (a
+    dangling symlink followed to the target it names, `..` applied to a symlink's real parent), denied if
+    either is denied — a dangling link to an absent `.claude/commands/` or `pharn/floor/` file had been
+    allowed, and created it. A FILE planted at a run-state directory now counts as a run open instead of
+    "no run", and `run-marker.mjs` exits 2 on it (and on every other failure) instead of crashing with
+    exit 1. The `pharn/features/` exception no longer widens under the case/trailing-dot fold. A guard error
+    denies, now also when the deny itself fails. A marker whose name is not a plain slug is never rendered in
+    a deny message. A FIFO at `.pharn/writes-scope.json` no longer hangs the guard. Found while verifying
+    those fixes and fixed with them: resolving `\` as a separator, as the companion trusted-path guard does,
+    let `pharn/features/a\b/../../floor/x.mjs` be judged inside `pharn/features/` while the kernel wrote
+    `pharn/floor/x.mjs`, in the dev posture as well.
+  - **Re-review fixes, before release (2026-09-26).** Another spelling of the project's own path — a
+    different letter case or Unicode form — read as a path OUTSIDE the project, so for a project under a temp
+    root with no `.git` the temp-root allow admitted a write that landed in the project's own `pharn/floor/`.
+    Such a path is now denied as the project's own, and the filesystem's resolution reads each existing
+    directory's on-disk spelling; in the dev and unsignalled postures that second change, too, only moves a
+    verdict toward deny. `/pharn-loop` now STOPs when its pre-run snapshot or its marker open fails, as
+    `/pharn-ship` and `/pharn-review` already did: a file planted at `.pharn/pharn-loop/<name>` had let a loop
+    run on without its marker, leaving an installed project on the permissive default between its stages.
+  - **Migration.** Nothing to wire — the hooks change, `settings.json` does not. An install whose
+    `pharn-ship.md` or `pharn-review.md` was edited locally keeps the old command under `pharn update`, so
+    it never opens a run marker and those runs are unguarded between their own stages; re-take the shipped
+    command, or add the two pinned `run-marker.mjs` lines by hand. A locally edited `pharn-loop.md` still
+    opens its marker, but does not stop when that fails. A malformed `.pharn/writes-scope.json`
+    now denies every write in an installed project — `node .claude/hooks/set-writes-scope.cjs --clear`
+    releases it. Anything other than a directory at `.pharn/pharn-loop`, `.pharn/pharn-review` or
+    `.pharn/pharn-ship` now holds an installed project fail-closed until it is removed by hand, and a path
+    containing a backslash is refused outside a run. `reconcile-baseline.mjs --anchor` now refuses (exit 2) with no scope set; every shipped
+    caller sets one first, so only a caller outside PHARN's own commands is affected.
+  - **Rollback.** Reverting 6.24.0 restores the fail-closed default everywhere; a leftover
+    `.pharn/pharn-ship/` or `.pharn/pharn-review/` marker is inert, because nothing in the older tree
+    reads those directories (the loop marker is unchanged and keeps its Stop-guard meaning).
+
+## [6.23.0] - 2026-09-26
+
+### Added
+
+- 2026-09-26: **`/pharn-regress` becomes a THIN CALLER of one tested stage script, `pharn/floor/stage-regress.mjs`,
+  and gains a shared stage-exit contract every future stage script reuses.** `SKILLS_VERSION` 6.22.0 → 6.23.0.
+  `MIN_CLI` stays 0.5.0: no installed path relocates and no existing frontmatter/contract shape breaks.
+  ([`.dev/features/stage-regress-script/`](./.dev/features/stage-regress-script/))
+  - **Why (P7, a measured trigger, not a hypothetical).** A user's own `/pharn-ship` `cost.json` ledgers
+    showed PHARN's own stages taking ~48% of relative cost on large features and ~81% on three small
+    fixes, with `/pharn-regress` alone ~63% of the small fixes. Today's command prescribed one Bash call
+    per gate per side plus ~20 setup/bookkeeping calls, each a full model turn re-reading a 36 KB prompt.
+  - **`pharn/floor/stage-regress.mjs`** (new) runs every deterministic step — argv, `lstat` containment,
+    git, the shelled checkers (`check-plan-spec-agree.mjs`, `check-regress.mjs`), the base-commit install,
+    and the atomic artifact writes — through 13 named phases (`fresh` → … → `render`), and solves the
+    600 s Bash-tool cap with a budget-and-resume protocol: a slow step (the install, or one gate) starts
+    only if it is the first of the invocation or the elapsed time plus its timeout still fits the budget;
+    otherwise the script persists its progress and exits `5` (`continue`) for the pinned `--resume` line to
+    pick up. `pharn/floor/stage-regress-core.mjs` (new, pure) holds the closed rules the old command's prose
+    described: which paths are test files, when the style/format gates are skippable (a shared-config
+    touch), which base-commit lockfile resolves the install command (npm measured; pnpm/yarn/bun labelled
+    UNMEASURED), and how the base ref resolves (`--base` / a dirty tree / `origin/main`'s merge-base /ask).
+  - **`pharn/pharn-contracts/stage-exit.md` + `pharn/floor/stage-exit-core.mjs`** (new): the ONE JSON
+    envelope every stage script emits — `{schema, status, stage, feature}` plus a closed per-status key
+    set (`done`/`refused`/`question`/`continue`/`unusable`) — and the exit-code table (`{0,2,3,4,5}`; `1`
+    included is always a crash, never a verdict). A `question`'s text and every option's label are FIXED,
+    registry-held strings per `(stage, reason_code)`; nothing untrusted is ever interpolated into one. The
+    registry is keyed by stage so a future `stage-verify.mjs` (roadmap Phase 1.2) adds an entry rather than
+    a new file.
+  - **`pharn/floor/render-regression.mjs`** (new, pure) renders `REGRESSION.md` from the verdict JSON, the
+    scope partition and the stage's progress — deterministic code, no longer model-typed prose. It quotes
+    every checker message as fenced DATA; a gate id is quoted inline (never fenced — always preceded by
+    fixed prose on the same line, so it can never sit at column 0 and be read as a heading). Every path
+    the script itself supplies is repo-relative, so `/pharn-loop`'s later commit of the file can never
+    carry an absolute path THAT SCRIPT SUPPLIED (GATE 2 review, M1/M2: narrowed from an earlier draft of
+    this entry, which overclaimed "as fenced DATA" for the gate id and "can never carry an absolute path"
+    without that qualifier — a human's own `--install`/`--gates` text still renders verbatim).
+  - **`pharn/floor/quote-core.mjs`** (new): `dataText`/`quoteData` moved byte-for-byte out of
+    `render-run-report.mjs`, which now re-exports them, so a second renderer can quote untrusted text
+    without pulling in the cost-ledger load graph.
+  - **`.claude/commands/pharn-regress.md`** (rewritten): pins one fresh line
+    (`--feature <name> --timeout-ms 540000 --budget-ms 570000`) and one resume line
+    (`--resume --budget-ms 570000`), and branches on the script's exit code only. Its writes-scope is set
+    to the strictest one the setter can express — `.pharn/pharn-regress/stage.json`, which resolves to
+    `.pharn/**` alone — so no Write-tool write may land outside it while the script runs; the script's own
+    artifact writes happen through `fs`, reached via Bash and stated as such (a **weaker** claim than
+    before for that one property, offset by the **stronger** always-`.pharn/**` scope guarantee).
+  - **`pharn/floor/run-gates.mjs`**: exports `spawnGate` (a `null` results path means no
+    `PHARN_TEST_RESULTS` variable) so the stage script's install step reuses the same
+    process-group/timeout/kill discipline instead of a second implementation.
+  - **`pharn/floor/loop-fresh-core.mjs`**: `DEFAULT_STAMPS.regressHead`/`regressBase` now derive from
+    `stage-regress-core.mjs`'s `REGRESS_PATHS`, the one owner of the stage's scratch layout.
+  - **`.claude/commands/pharn-loop.md`**: a new paragraph beside the stuck-point table maps a regress
+    stage-exit object onto it (`question no-gates` → S4; every other `question` → S10; `refused`/`unusable`
+    → S9; a crash → S9; `continue` stays inside `/pharn-regress`). **Disclosed here (GATE 2 review, A7):**
+    two of those `question` codes are NEW unattended-loop S10 stops that did not exist before this
+    increment, because the old command prose proceeded by model judgment in both cases: `install-unresolved`
+    (a `package.json` with no committed lockfile — common on small projects and libraries that never run
+    `npm ci` from CI) and `tests-unresolved` (a feature whose test universe is genuinely empty). A loop run
+    over either project shape now stops at S10 on its first iteration where it previously completed.
+  - **`.claude/commands/pharn-ship.md`**: the stale "`/pharn-regress`'s Step 4a" citation is corrected (its
+    gate discovery is tested code now, not command prose). **Narrowed here (GATE 2 review, F2 — an earlier
+    draft of this entry overclaimed this):** a sentence states that every `/pharn-regress` `refused` stop,
+    and every `unusable` stop raised at or after the feature slug parses and the containment walk passes,
+    leaves no `regression-report.json`; the residual — a stop before that point (a bad/missing `--feature`,
+    or `path-containment` itself), or a genuine crash — may leave an earlier run's report in place, which is
+    exactly why the existing missing-report → STOP check is a MEMBERSHIP test and not merely "no file was
+    written this run".
+  - **The weaker artifact-write claim, stated plainly:** before this change, fix #7's hook PREVENTED a
+    Write-tool write outside the two declared regress artifacts. Now the script writes them through `fs`,
+    outside that hook (an intentional, declared L19 pattern). A write anywhere else is DETECTED, never
+    PREVENTED, by `/pharn-verify`'s `reconcile` gate — unchanged from how every other Bash-write stage
+    script in this repo already works.
+  - **The unchanged bound, carried forward rather than closed:** `regress-failed-install-false-green`. A
+    failed base-commit install can turn a base gate red, so a gate that does is classified `pre_existing`
+    below rather than blamed on the feature, and the verdict JSON `/pharn-ship`/`/pharn-loop` read still says
+    `no-regressions` — a possible false green on exactly the gates the install broke. **Narrowed here (GATE
+    2 review, A6 — an earlier draft of this entry overclaimed "every base gate" and "first line"):** the
+    warning is rendered above `REGRESSION.md`'s verdict line (not literally its first line — the title and
+    base still precede it), and it names the actual count of gates classified `pre_existing`, never an
+    unconditional "every base gate went red". Read by no machine consumer either way. This increment
+    neither creates nor closes it (amendment A2).
+  - **Resuming after a kill, and the budget clock (GATE-2 review rounds 1–2).**
+    - The script persists its progress at the top of every phase from `drain-head` through `verdict`, not
+      only at a budget stop. So a hard kill (a Bash-tool timeout, say) leaves a checkpoint, and `--resume`
+      re-runs only the interrupted phase. The command now routes a Bash-tool timeout to that one resume.
+    - That includes a kill during the base worktree's `git worktree add`. git leaves the new worktree
+      locked and half-populated, and the script now removes it with a double `--force` before re-adding;
+      a test kills a real `add` mid-checkout and resumes it to `done`.
+    - The same clearing lets the next fresh start remove a base worktree someone locked, which it
+      previously failed on with `git-failed`.
+    - A resumed run no longer reports a worktree-removal failure that did not happen.
+    - The budget's `elapsed` now starts at the top of the invocation, so its opening fast work counts
+      against `--budget-ms`. Node's startup, and the fast work after the last permitted slow step, stay
+      uncounted — a named bound in `stage-exit.md`.
 
 ## [6.22.0] - 2026-09-25
 

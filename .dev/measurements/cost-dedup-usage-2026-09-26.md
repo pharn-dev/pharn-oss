@@ -5,7 +5,7 @@
 still holds the transcripts.
 **Register:** follows `LIMITS.md` — what is measured is stated, what is not is named and bounded.
 
-This is the evidence behind the `cost-dedup-completed-usage` increment (6.22.1). It shows why
+This is the evidence behind the `cost-dedup-completed-usage` increment (6.24.1). It shows why
 `pharn/floor/transcript-core.mjs`'s `sessionRequests()` counts each request at its line with the greatest
 `output_tokens`, and takes the request's identity from its FIRST line. (The reader was first written in
 `render-cost-record.mjs` and moved at review; the embedded scripts below name the module as it was when they ran.) It also shows why two findings of
@@ -58,7 +58,7 @@ Input and cache fields are identical on all three lines. The maintainer's own co
 
 | rule, per request                         | output     | thinking   | input   | cache read     | cache write 5m | cache write 1h |
 | ----------------------------------------- | ---------- | ---------- | ------- | -------------- | -------------- | -------------- |
-| first line (the rule until 6.22.1)        | 25,703,622 | 9,469,497  | 232,414 | 14,352,722,236 | 150,553,862    | 125,844,583    |
+| first line (the rule until 6.24.1)        | 25,703,622 | 9,469,497  | 232,414 | 14,352,722,236 | 150,553,862    | 125,844,583    |
 | last line in walk order                   | 38,976,711 | 16,183,409 | 232,410 | 14,352,454,415 | 150,553,862    | 125,844,583    |
 | greatest `output_tokens`, earliest on tie | 38,996,675 | 16,190,248 | 232,414 | 14,352,722,236 | 150,553,862    | 125,844,583    |
 | greatest `output_tokens`, latest on tie   | 38,996,675 | 16,190,248 | 232,414 | 14,352,722,236 | 150,553,862    | 125,844,583    |

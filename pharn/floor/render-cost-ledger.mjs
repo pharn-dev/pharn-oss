@@ -42,7 +42,7 @@
 //     lines, 275 requests). The rows come from `transcript-core.mjs`'s `sessionRequests()`, imported and
 //     never re-stated ([[L35]]). What a row's values are is defined in `pharn/pharn-contracts/cost-ledger.md`,
 //     "One row per request". The core's header gives the measured transcript shapes and the one assumption
-//     the rule rests on. Until 6.22.1 this module read the transcript with its own copy of the loop, which
+//     the rule rests on. Until 6.24.1 this module read the transcript with its own copy of the loop, which
 //     kept each request's first line and under-counted `output` and `output_thinking`.
 //   * Every `usage` leaf is number | bool | null | a short token; anything else is DROPPED and its key
 //     path listed in `dropped[]`. Arrays are WALKED, not dropped (decision D1), so `usage` stays
@@ -77,7 +77,7 @@
 //
 // ── RELATIONSHIP TO `render-cost-record.mjs` (L35, answered rather than assumed) ─────────────────────
 // Both renderers read transcripts through `transcript-core.mjs` — location, the session's file selection and
-// the per-request reader, one implementation and not a copy. Until 6.22.1 the ledger imported only the
+// the per-request reader, one implementation and not a copy. Until 6.24.1 the ledger imported only the
 // location and the walk, from the record renderer: its reading loop was a second copy, and both copies kept
 // each request's first line. The ledger (`pharn-cost-ledger/2`) is nonetheless a distinct schema from the
 // shipped `pharn-cost-record/1`, and the overlap is real: the record is an aggregate block embedded in

@@ -16,7 +16,7 @@
 //   ★ MUTANT CONTROLS — each ★ assertion is shown to FAIL on the rule it rejects (L60): a first-line and a
 //     last-line copy of this module, each anchored exactly once.
 //   ✧ ONE OWNER — the transcript-usage read lives in exactly one product-floor module (L35), pinned over
-//     the two spellings both pre-6.22.1 copies used.
+//     the two spellings both pre-6.24.1 copies used.
 //   ⚑ LOOKUP — the directory is found by a filename test and never derived (render-cost-record.test.mjs
 //     keeps the render-level ⚑ tests, which exercise this lookup through `render()`).
 
@@ -84,7 +84,7 @@ test("transcriptFiles returns .jsonl only, sorted, and skips an unreadable subtr
   assert.deepEqual([...files].sort(), files);
 });
 
-// ─── ★ COMPLETED USAGE — the lines of one request need not agree (6.22.1) ────────────────────────────
+// ─── ★ COMPLETED USAGE — the lines of one request need not agree (6.24.1) ────────────────────────────
 //
 // `fixtures/cost-ledger/usage-snapshots/` is HAND-AUTHORED from records measured on real transcripts on
 // 2026-09-26 (.dev/measurements/cost-dedup-usage-2026-09-26.md). A, B and C copy the numbers and the usage
@@ -242,7 +242,7 @@ test("★ MUTANT CONTROL: a LAST-line rule reads the re-appended request as 0 an
 // ─── ✧ ONE OWNER ─────────────────────────────────────────────────────────────────────────────────────
 
 test("✧ ONE OWNER: exactly one product-floor module reads a transcript record's usage or spells the request-id fallback (L35)", () => {
-  // THE BOUND (L36): this pins two SPELLINGS — the ones both pre-6.22.1 copies used. A re-implementation
+  // THE BOUND (L36): this pins two SPELLINGS — the ones both pre-6.24.1 copies used. A re-implementation
   // under another spelling (destructuring, a helper, `||` for `??`) escapes it. It catches the shape of
   // the defect it answers: a second module growing its own copy of the reading loop.
   const USAGE_READ = /\bmessage\??\.usage\b/;

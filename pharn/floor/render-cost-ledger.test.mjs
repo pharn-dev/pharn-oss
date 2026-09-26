@@ -9,7 +9,7 @@
 //     ZERO sidechain records, so it structurally cannot exercise the subagent path — the L41/L34 blind
 //     spot, closed here rather than named and left.
 //   * `fixtures/cost-ledger/usage-snapshots/` — HAND-AUTHORED from three measured records whose transcript
-//     lines DISAGREE (6.22.1); described where the reader's own tests live, transcript-core.test.mjs.
+//     lines DISAGREE (6.24.1); described where the reader's own tests live, transcript-core.test.mjs.
 // (`session-continued.jsonl`, the fourth, is check-cost-ledger.test.mjs's.)
 //
 // THE FIXTURE GUARD (the post-grill gate's blocking finding). Every guard in this increment covers
@@ -77,7 +77,7 @@ function stageSubagents() {
   return { root, projectsDir: proj };
 }
 
-/** `usage-snapshots/`: requests whose transcript lines DISAGREE (6.22.1). Described where the rule's own
+/** `usage-snapshots/`: requests whose transcript lines DISAGREE (6.24.1). Described where the rule's own
  *  tests live, transcript-core.test.mjs; the ★ COMPLETED USAGE tests below pin the ledger's reading. */
 const SNAP_SESSION = "00000000-0000-4000-8000-00000000beef";
 
@@ -599,7 +599,7 @@ test("✧ PARITY: ledger totals equal render-cost-record totals over the SAME by
   // dimensions a price list charges for. Asserting the MAPPING binds the values to their referent
   // rather than letting two spellings drift silently (L43).
   //
-  // THE BOUND (L43), and it bit: agreement is all this proves. Until 6.22.1 both renderers kept each
+  // THE BOUND (L43), and it bit: agreement is all this proves. Until 6.24.1 both renderers kept each
   // request's FIRST transcript line and this test stayed GREEN while both under-counted output. It now
   // also ranges over `usage-snapshots`, whose lines disagree, and the ★ COMPLETED USAGE tests are what
   // bind the counted value to the transcript shapes actually seen.
@@ -640,7 +640,7 @@ test("✧ PARITY: ledger totals equal render-cost-record totals over the SAME by
   }
 });
 
-// ---------------------------------------------------------------- ★ completed usage (6.22.1)
+// ---------------------------------------------------------------- ★ completed usage (6.24.1)
 //
 // `fixtures/cost-ledger/usage-snapshots/` (described in transcript-core.test.mjs, where the rule's own
 // tests live) holds one request written as 8, 8, 163, one re-appended later with zeroed counts, and one

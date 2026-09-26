@@ -26,6 +26,12 @@ The regression-report is `pharn/features/<name>/regression-report.json` (product
 beside the human-facing `REGRESSION.md`. It is `pharn/floor/check-regress.mjs`'s **`verdict` subcommand**
 stdout **verbatim**; unlike the verify-report, the emitting command merges **nothing** into it.
 
+**Since `stage-regress-script` (6.23.0), the WRITER is `pharn/floor/stage-regress.mjs`, not the model.** The
+product stage script shells `check-regress.mjs verdict` and writes its stdout **bytes**, atomically (a tmp
+file under `.pharn/pharn-regress/`, then `rename`), so no stray tmp file lands in the feature directory.
+The dev twin (`/pharn-dev-regress`) is unchanged and still has the model write the same bytes by hand. The
+report is never re-serialized by either writer: what `check-regress.mjs` printed is what lands on disk.
+
 ## What this artifact IS and IS NOT (P0 — the honesty bar)
 
 - **IS:** a machine-readable record of a **base→head exit-code comparison** over the gates that ran
@@ -121,7 +127,9 @@ report reaches the same fail-closed state. Nothing anywhere reads an absent verd
   present `regressions[]` to a human at their gates, and `REGRESSION.md` renders `outside_gates`. These
   are **LLM-performed presentation reads**, not floor reads: they steer what a human is shown, never a
   deterministic branch. So "only `verdict` is read" is true **of the floor** and false as an unqualified
-  sentence.
+  sentence. **Since 6.23.0, the product `REGRESSION.md` itself is no longer model-written prose** — it is
+  rendered by `pharn/floor/render-regression.mjs`, deterministic code the stage script calls before
+  writing it (`pharn/pharn-contracts/stage-exit.md`). The dev twin's `REGRESSION.md` remains hand-written.
 
 ## Extra keys are IGNORED (deliberately not a closed-key object)
 
@@ -209,7 +217,13 @@ The verdict fields are **unchanged**; the report additionally carries a **per-si
   equal the sha256 of that side's stamp on disk, re-derives `verdict` / `regressions` / `pre_existing` /
   `outside_gates` from the two stamps, and requires the head stamp to have ended on the tree
   `/pharn-verify` started from. A `reason_code` in its `LAPSE_CODES` subset re-runs `/pharn-regress`.
-  On a RED spec→plan chain `/pharn-regress` writes no report, so an earlier report can survive on disk.
-  The head-final-equals-verify-init check catches that whenever the build moved the tree.
+  **Since 6.23.0, `stage-regress.mjs` removes THIS feature's earlier report in its very first phase
+  ("fresh"), before any step that can fail** — so a run that starts and then refuses (a RED spec→plan
+  chain, a scope escape, a missing artifact) leaves no earlier report on disk for a consumer to
+  misread as current (`pharn/pharn-contracts/stage-exit.md`'s `refused` row: "no machine report"). The
+  residual survives only for a malformed invocation refused before that removal step (`unusable`, whose
+  own row states "an argv refusal removes nothing") and, unchanged, for `/pharn-dev-regress`'s prose flow,
+  which is out of this increment's scope. The head-final-equals-verify-init check remains the backstop
+  whenever the build moved the tree regardless.
 
 Full shape: `pharn/pharn-contracts/gate-run-record.md` (cited, not restated — P4).

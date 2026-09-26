@@ -54,6 +54,13 @@ process.on("exit", () => {
   }
 });
 
+// D6 (6.24.0): --anchor now REFUSES with no usable scope to snapshot, so every happy-path anchor fixture
+// below must set one first — exactly what both shipped callers (/pharn-build, /pharn-dev-build) already do.
+function seedScope(dir, scope) {
+  mkdirSync(join(dir, ".pharn"), { recursive: true });
+  writeFileSync(join(dir, SCOPE_PATH), JSON.stringify({ scope, set_by: "pharn/features/x/PLAN.md", set_at: "T" }));
+}
+
 test("★ the reconciled set is tracked ∪ untracked-not-ignored — git-ignored paths are absent BY DERIVATION", () => {
   const dir = makeRepo();
   writeFileSync(join(dir, "untracked.md"), "b\n");
@@ -407,6 +414,7 @@ test("★ the same bytes hash the same; one changed byte changes the digest", ()
 
 test("--anchor writes a well-shaped record and reports its counts", () => {
   const dir = makeRepo();
+  seedScope(dir, ["tracked.md"]);
   const r = spawnSync(process.execPath, [ANCHOR, "--anchor", "--base", dir, "--by", "pharn-build"], { encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /reconcile baseline anchored: \d+ path\(s\)/);
@@ -419,6 +427,7 @@ test("--anchor writes a well-shaped record and reports its counts", () => {
 
 test("`anchored_by` is argv — a LABEL, never an authorization (stated in the contract)", () => {
   const dir = makeRepo();
+  seedScope(dir, ["tracked.md"]);
   spawnSync(process.execPath, [ANCHOR, "--anchor", "--base", dir, "--by", "totally-legit"], { encoding: "utf8" });
   const rec = JSON.parse(readFileSync(join(dir, RECORD_PATH), "utf8"));
   assert.equal(rec.anchored_by, "totally-legit");
@@ -427,6 +436,36 @@ test("`anchored_by` is argv — a LABEL, never an authorization (stated in the c
   const src = readFileSync(join(HERE, "check-bash-reconcile.mjs"), "utf8");
   const branching = /if\s*\([^)]*anchored_by/.test(src);
   assert.equal(branching, false, "the checker must not branch on anchored_by");
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────
+// D6 (6.24.0) — --anchor REFUSES to open an epoch with no usable scope to snapshot.
+
+test("★ D6: --anchor with NO scope file exits 2, names the remedy, and writes nothing", () => {
+  const dir = makeRepo(); // no .pharn/writes-scope.json at all
+  const r = spawnSync(process.execPath, [ANCHOR, "--anchor", "--base", dir, "--by", "pharn-build"], { encoding: "utf8" });
+  assert.equal(r.status, 2, r.stdout);
+  assert.match(r.stderr, /no usable writes-scope/);
+  assert.match(r.stderr, /scope-setter/);
+  assert.equal(existsSync(join(dir, RECORD_PATH)), false, "nothing is written on refusal");
+});
+
+test("★ D6: --anchor with a MALFORMED scope record exits 2 and writes nothing", () => {
+  const dir = makeRepo();
+  mkdirSync(join(dir, ".pharn"), { recursive: true });
+  writeFileSync(join(dir, SCOPE_PATH), "{ not json");
+  const r = spawnSync(process.execPath, [ANCHOR, "--anchor", "--base", dir, "--by", "pharn-build"], { encoding: "utf8" });
+  assert.equal(r.status, 2, r.stdout);
+  assert.equal(existsSync(join(dir, RECORD_PATH)), false);
+});
+
+test('★ D6: an EXPLICIT empty scope ({"scope": []}) IS a scope and anchors normally', () => {
+  const dir = makeRepo();
+  seedScope(dir, []);
+  const r = spawnSync(process.execPath, [ANCHOR, "--anchor", "--base", dir, "--by", "pharn-build"], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  const rec = JSON.parse(readFileSync(join(dir, RECORD_PATH), "utf8"));
+  assert.deepEqual(rec.scope_snapshot.scope, [], "an empty array is a REAL scope, not null");
 });
 
 test("fail-closed: a non-directory --base, a bad flag, and a non-git dir all exit 2", () => {

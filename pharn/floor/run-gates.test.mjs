@@ -21,12 +21,12 @@ import {
   rmSync,
   symlinkSync,
   statSync,
-  copyFileSync,
   realpathSync,
   chmodSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
 import { RESULTS_ENV, resultsFileName } from "./gate-run-core.mjs";
+import { spawnGate } from "./run-gates.mjs";
 import { testRecord } from "./test-results-core.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -886,125 +886,58 @@ test("the regress PAIR end to end through a real git worktree: the base stamp la
 });
 
 // ---------------------------------------------------------------------------------------------------
-// ★ WIRING — the COMMITTED /pharn-regress lines, executed (lessons-learned L45)
-//
-// The fix lives in this runner; the file that INVOKES it is `.claude/commands/pharn-regress.md`, and a
-// suite that only spawns the runner by path cannot see a gap between the two. So the pinned lines are
-// EXTRACTED from the command and run, one block per shell (L44), with only their placeholders substituted.
-//
-// Fixture-supplied, and named here rather than implied: `.pharn/pharn-regress/scope.json` (the Step-3
-// `scope` line's operands are placeholder LISTS, and that partition is not what this pins) and the floor
-// modules the lines invoke, copied into the fixture so `node pharn/floor/…` resolves as it does in a repo.
+// The ★ WIRING test that used to live here — extracting `/pharn-regress`'s pinned lines and executing
+// them — is RETIRED (stage-regress-script, 6.23.0): those lines moved OUT of `.claude/commands/pharn-regress.md`
+// and INTO `pharn/floor/stage-regress.mjs`, so there is no longer a command-prose invocation layer for this
+// runner's regress caller to go stale independently of. Its successor — extracting `pharn-regress.md`'s ONE
+// pinned line and executing it in a fixture — is `pharn/floor/stage-regress.test.mjs`'s own ★ WIRING test.
 // ---------------------------------------------------------------------------------------------------
 
-const REGRESS_CMD = join(HERE, "..", "..", ".claude", "commands", "pharn-regress.md");
-// The ROOTS are the modules the pinned lines invoke; everything they import is DERIVED, never typed. The list was a
-// hand list until 6.20.5, when ac-tests-core.mjs began importing spec-template-core.mjs (→ frontmatter-core.mjs) and
-// the copied floor crashed the shelled head init — the same staleness check-loop-fresh.test.mjs's FLOOR_MODULES
-// closure was written to end after it went stale twice (L29: the enumeration is the deliverable).
-const FLOOR_ROOTS = ["run-gates.mjs", "reconcile-baseline.mjs", "check-regress.mjs"];
-const FLOOR_MODULES = (() => {
-  const seen = new Set();
-  const queue = [...FLOOR_ROOTS];
-  while (queue.length) {
-    const m = queue.shift();
-    if (seen.has(m)) continue;
-    seen.add(m);
-    for (const [, dep] of readFileSync(join(HERE, m), "utf8").matchAll(/["'](?:\.\/)?([a-z0-9-]+\.mjs)["']/g)) {
-      if (!dep.endsWith(".test.mjs") && existsSync(join(HERE, dep))) queue.push(dep);
-    }
+// ---------------------------------------------------------------------------------------------------
+// spawnGate EXPORT (stage-regress-script, 6.23.0) — a stage script reuses the SAME process-group/timeout/
+// kill discipline rather than re-implementing it (P3/P4). `resultsFile: null` means "no PHARN_TEST_RESULTS
+// variable", the shape `stage-regress.mjs`'s own base-commit INSTALL step needs (it is not a gate with a
+// per-test reporter).
+// ---------------------------------------------------------------------------------------------------
+test("spawnGate is exported, and resultsFile: null means NO PHARN_TEST_RESULTS variable is set", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "rg-spawngate-"));
+  try {
+    const outFile = join(dir, "out.txt");
+    const errFile = join(dir, "err.txt");
+    const r = await spawnGate(
+      { shell: `node -e "console.log(process.env.${RESULTS_ENV} === undefined ? 'ABSENT' : 'PRESENT')"`, argv: null, files: [] },
+      dir,
+      outFile,
+      errFile,
+      null,
+      10000
+    );
+    assert.equal(r.exit, 0);
+    assert.equal(readFileSync(outFile, "utf8").trim(), "ABSENT", "a null resultsFile must set no PHARN_TEST_RESULTS variable");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
-  return [...seen].sort();
-})();
+});
 
-/** Fenced blocks of a command, as arrays of lines. */
-function fencedBlocks(text) {
-  const blocks = [];
-  let cur = null;
-  for (const line of text.split(/\r?\n/)) {
-    if (/^\s*```/.test(line)) {
-      if (cur) {
-        blocks.push(cur);
-        cur = null;
-      } else cur = [];
-      continue;
-    }
-    if (cur) cur.push(line);
+test("spawnGate: a NON-null resultsFile still sets PHARN_TEST_RESULTS to exactly that path (unchanged behavior)", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "rg-spawngate2-"));
+  try {
+    const outFile = join(dir, "out.txt");
+    const errFile = join(dir, "err.txt");
+    const resultsFile = join(dir, "results.json");
+    const r = await spawnGate(
+      { shell: `node -e "console.log(process.env.${RESULTS_ENV})"`, argv: null, files: [] },
+      dir,
+      outFile,
+      errFile,
+      resultsFile,
+      10000
+    );
+    assert.equal(r.exit, 0);
+    assert.equal(readFileSync(outFile, "utf8").trim(), resultsFile);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
-  return blocks;
-}
-
-/** Exactly ONE block matching `re`, as the text a shell receives. */
-function pinned(blocks, re, label) {
-  const hits = blocks.filter((b) => re.test(b.join("\n")));
-  assert.equal(hits.length, 1, `expected exactly one pinned ${label} block in pharn-regress.md, found ${hits.length}`);
-  return hits[0].join("\n");
-}
-
-test("★ WIRING — /pharn-regress's COMMITTED base-side lines produce a base stamp and a verdict (L45)", () => {
-  const blocks = fencedBlocks(readFileSync(REGRESS_CMD, "utf8"));
-  const lines = {
-    worktreeAdd: pinned(blocks, /^git worktree add --detach \.pharn\/pharn-regress\/base /m, "worktree add"),
-    headInit: pinned(blocks, /run-gates\.mjs init --stage regress --side head\b/, "head init"),
-    baseInit: pinned(blocks, /run-gates\.mjs init --stage regress --side base\b/, "base init"),
-    headDrain: pinned(blocks, /run-gates\.mjs run --next --out \.pharn\/pharn-regress\/head /, "head drain"),
-    baseDrain: pinned(blocks, /run-gates\.mjs run --next --out \.pharn\/pharn-regress\/base-gates /, "base drain"),
-    verdict: pinned(blocks, /check-regress\.mjs verdict/, "verdict"),
-    remove: pinned(blocks, /^git worktree remove --force \.pharn\/pharn-regress\/base\s*$/m, "worktree remove"),
-  };
-  assert.match(
-    lines.baseInit,
-    /--cwd \.pharn\/pharn-regress\/base\b/,
-    "the pinned base init no longer passes --cwd — this test pins the wrong line"
-  );
-
-  withBaseWorktree((dir, sha) => {
-    mkdirSync(join(dir, "pharn/floor"), { recursive: true });
-    for (const m of FLOOR_MODULES) copyFileSync(join(HERE, m), join(dir, "pharn/floor", m));
-    execFileSync("git", ["add", "-A"], { cwd: dir });
-    execFileSync("git", ["commit", "-qm", "floor"], { cwd: dir });
-    const base = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
-    assert.notEqual(base, sha, "precondition: the floor copy is committed, so the base worktree carries it");
-
-    const sub = (text) => {
-      const out = text
-        .replaceAll("<name>", FEATURE)
-        .replaceAll("<base SHA>", base)
-        .replaceAll("<the resolved 40-hex base SHA>", base)
-        .replaceAll("<inside, comma-separated>", "a.txt");
-      assert.doesNotMatch(out, /<[a-z][^>]*>/, `an unsubstituted placeholder remains in: ${out}`);
-      return out;
-    };
-    const sh = (text) => spawnSync("sh", ["-c", sub(text)], { cwd: dir, encoding: "utf8" });
-    const drainPinned = (text) => {
-      for (let i = 0; i < 10; i++) {
-        const r = sh(text);
-        assert.notEqual(r.status, 2, `a pinned drain hit a runner error: ${r.stdout}${r.stderr}`);
-        if (r.status === 3) return;
-      }
-      assert.fail("a pinned drain never reported nothing-left");
-    };
-
-    assert.equal(sh(lines.worktreeAdd).status, 0, "the pinned worktree line failed");
-    let r = sh(lines.headInit);
-    assert.equal(r.status, 0, `the pinned head init failed: ${r.stdout}`);
-    r = sh(lines.baseInit);
-    assert.equal(r.status, 0, `the pinned BASE init failed — the defect this increment repairs: ${r.stdout}`);
-    drainPinned(lines.headDrain);
-    drainPinned(lines.baseDrain);
-    // Negative control: nothing landed at the pre-fix location inside the worktree.
-    assert.ok(!existsSync(join(dir, ".pharn/pharn-regress/base/.pharn")), "a record was written inside the base worktree");
-
-    r = sh(lines.verdict);
-    assert.equal(r.status, 0, `the pinned verdict failed: ${r.stdout}`);
-    assert.equal(JSON.parse(r.stdout).verdict, "no-regressions");
-
-    // The stamp outlives the worktree Step 6 removes, so a later reader of the regress evidence finds it.
-    assert.equal(sh(lines.remove).status, 0, "the pinned worktree removal failed");
-    assert.ok(!existsSync(join(dir, ".pharn/pharn-regress/base")), "the worktree was not removed");
-    r = sh(lines.verdict);
-    assert.equal(r.status, 0, `the verdict no longer reproduces after the worktree removal: ${r.stdout}`);
-  });
 });
 
 // ---------------------------------------------------------------------------------------------------

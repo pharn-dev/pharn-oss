@@ -3,7 +3,7 @@
 // scratch "projects" tree, so nothing ever reads the real ~/.claude.
 //
 // The transcript reader itself — the lookup, the walk and `sessionRequests()` — lives in
-// `transcript-core.mjs` since 6.22.1, and its own tests are in `transcript-core.test.mjs`. This file tests
+// `transcript-core.mjs` since 6.24.1, and its own tests are in `transcript-core.test.mjs`. This file tests
 // the RECORD BLOCK built on it, and shows the block follows that one owner.
 //
 // The marked groups pin the things that would otherwise be silent forks:
@@ -11,7 +11,7 @@
 //     (2.34x on the 2026-08-18 corpus) and each request is counted ONCE. Those lines need NOT carry the
 //     same usage (measured 2026-09-26), so each request counts at the usage the reader selects. The ★
 //     COMPLETED USAGE group pins the block's totals over the fixture holding the three measured shapes. This
-//     is the single defect most likely to make every reported number quietly wrong — and until 6.22.1 it did.
+//     is the single defect most likely to make every reported number quietly wrong — and until 6.24.1 it did.
 //   ✧ ISOLATION — only the named session is read, a session id resolving to more than one transcript
 //     directory is REFUSED rather than guessed, and tool-results/ is never walked.
 //   ✦ DETERMINISM — rendering twice over unchanged bytes yields byte-identical output (no clock, no random).
@@ -385,7 +385,7 @@ test("✦ DETERMINISM: rendering twice over unchanged bytes is byte-identical", 
   assert.equal(JSON.stringify(call(root)), JSON.stringify(call(root)));
 });
 
-// ─── ★ COMPLETED USAGE — the record block over lines that disagree (6.22.1) ──────────────────────────
+// ─── ★ COMPLETED USAGE — the record block over lines that disagree (6.24.1) ──────────────────────────
 //
 // `fixtures/cost-ledger/usage-snapshots/` holds one request written as 8, 8, 163, one re-appended later with
 // zeroed counts, and one whose early line a forked subagent's transcript copies (described in full in

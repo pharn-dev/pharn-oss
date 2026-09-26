@@ -190,6 +190,28 @@ before it, and that is exactly the number a reader wants. See Step 3a's own pres
    human halt above, and `/pharn-plan`'s own first gate re-checks the same condition — so a Draft can **never**
    flow to build even if the halt were somehow skipped.
 
+   **Open the run marker (6.24.0, D3) — immediately after the backstop exits 0, before `/pharn-plan`'s own
+   `stage-start` marker:**
+
+   ```bash
+   node pharn/floor/run-marker.mjs --open pharn-ship '<name>'
+   ```
+
+   Branch **only** on its exit code (P5): `0` → proceed to `/pharn-plan`. **Non-zero → STOP** before
+   `/pharn-plan`: the run could not mark itself open, so in an installed project the write guard's default
+   between the stages below would be the permissive one. Present the line's `run-marker:` refusal (it names
+   the path and the error code — typically a file planted where a `.pharn/` directory belongs) and hand to the
+   human. Like every STOP, it goes through Steps 3 and 3a; Step 3a's `--close` is idempotent.
+
+   This is what holds `enforce-writes-scope.cjs`'s fail-closed default standing in an **installed** project
+   for every between-stage window from here to Step 3a's close, below — see `CLAUDE.md`, "Writes-scope".
+   Not opened at naming (Step 1): until this backstop resolves, `/pharn-spec` holds its own SPEC-only scope
+   through the GATE-1 halt, so a marker there would add no protection, and an abandoned or "Keep as Draft"
+   GATE 1 would hold the whole tree fail-closed for 24 h — the very trigger this relaxation exists to fix,
+   in a new form. **ADVISORY (P0):** a Bash call outside the `PreToolUse` gate (L19) — a run that skips this
+   line is simply unguarded between its own scoped steps; in the dev/unsignalled posture, and whenever a
+   scope is set, this line changes nothing observable. The STOP above binds only a run that executes the line.
+
 2. **`/pharn-plan`** → writes `pharn/features/<name>/PLAN.md`.
 
    ```bash
@@ -329,7 +351,17 @@ absolute all-green-at-HEAD `.verdict` — belt-and-suspenders.)_
 `"inconclusive"` → **STOP**, present, hand to the human. **Fail-closed on a missing file:** on a RED chain
 `/pharn-regress` writes **only** `REGRESSION.md` (no verdict JSON), so a **missing
 `regression-report.json` → STOP** (present the RED-chain `REGRESSION.md`) — a membership test (present ∧
-`.verdict == "no-regressions"`), never a silent proceed.
+`.verdict == "no-regressions"`), never a silent proceed. **Since `stage-regress-script` (6.23.0), NARROWED
+here (F2, GATE 2 review — an earlier draft of this paragraph overclaimed this for every stop):** every
+`/pharn-regress` `refused` stop (a RED chain, a scope escape, a missing artifact), and every `unusable`
+stop raised AT OR AFTER the feature slug parses and the containment walk passes, leaves **no**
+`regression-report.json` on disk (`pharn/pharn-contracts/stage-exit.md`'s exit table), so the missing-file
+membership test above is the correct STOP for all of those. **The residual, named rather than hidden:** a
+stop BEFORE that point (a bad or missing `--feature`, or `path-containment` itself — `stage-regress.mjs`'s
+own "fresh" phase order), or a genuine crash, may leave an EARLIER run's report in place; this is exactly
+why the check above is a membership test on the CURRENT file's `.verdict`, never merely "no file was
+written this run" — and it is the same residual `ship-outcome-core.mjs` and `regression-report.md`
+correctly keep open.
 
 1. **`/pharn-verify`** → writes `pharn/features/<name>/verify-report.json` (+ `VERIFY.md`).
 
@@ -683,6 +715,20 @@ resolve that question — it simply does not depend on the answer.
    node pharn/floor/mark-phase.mjs --name '<name>' --kind run-stop
    ```
 
+   **Then close the write-guard run marker (6.24.0, D3) — directly after the line above, on EVERY exit
+   that reaches this step (GATE 2 and every STOP):**
+
+   ```bash
+   node pharn/floor/run-marker.mjs --close pharn-ship '<name>'
+   ```
+
+   Positioned here rather than the Final step for the same reason `mark-phase.mjs --kind run-stop` is:
+   this is the one step the command states runs on every exit that ends the run, and every write after it
+   is made under an explicit scope (Step 3's `SHIP.md`, Step 3b's `ship-record.json`/`SHIP.md`), so closing
+   here opens no unscoped window. A STOP before the GATE-1 backstop closes a marker that was never opened
+   — `--close` is idempotent. **ADVISORY (P0):** a Bash call outside the `PreToolUse` gate (L19); skipping
+   it leaves the fail-closed default standing for at most 24 h. Never close a run you are still executing.
+
 2. **Capture the base SHA, in ONE block that prints it.** Substitute the printed value literally as
    `<base sha>` into step 3 — never carry it in a shell variable, because each fenced block runs as its
    own shell and a variable set here is empty there (**L44**):
@@ -947,11 +993,14 @@ the `check-ship.mjs` cap.
   **structural/advisory** (a single block, no loop, no `check-ship`-style cap — Step 2b); and proceeding
   after the retry reads only `PASS` ∧ `no-regressions` (FLOOR verdicts). The retry **never** guarantees the
   rebuild works (advisory model work). It is **not** `--loop`.
-- **The post-build gate's DISCOVERY is advisory (honest, mirrors `/pharn-regress` / `/pharn-verify`).** The
-  build project-gate's **exit code** is FLOOR, but **which** gate to run for a non-PHARN project (`--gates`
-  → allowlist ∩ scripts → ask) is **advisory orchestration, untested by construction** (it lives in this
-  command's prose, exactly like `/pharn-regress`'s Step 4a / `/pharn-verify`'s Step 3a discovery). "Build
-  floor = FLOOR" refers to the **exit code**, not to the gate-selection — do not over-read it.
+- **The post-build gate's DISCOVERY is advisory (honest, mirrors `/pharn-verify`).** The build
+  project-gate's **exit code** is FLOOR, but **which** gate to run for a non-PHARN project (`--gates` →
+  allowlist ∩ scripts → ask) is **advisory orchestration, untested by construction** (it lives in this
+  command's prose, exactly like `/pharn-verify`'s Step 3a discovery). "Build floor = FLOOR" refers to the
+  **exit code**, not to the gate-selection — do not over-read it. **`/pharn-regress`'s own discovery is a
+  DIFFERENT, stronger case since `stage-regress-script` (6.23.0):** it moved out of command prose entirely
+  and into `pharn/floor/stage-regress-core.mjs`/`stage-regress.mjs`, tested code the command merely
+  invokes — so it is no longer the parallel this bullet's "untested by construction" describes.
 - **"The two human gates (SPEC approval, post-verify) are preserved"** → **ADVISORY** (command discipline).
   GATE 1 **is** `/pharn-spec`'s own halt; nothing on the floor forces a human to be asked. `/pharn-ship`
   preserves the gates **by construction**, backstopped (not replaced) by `/pharn-plan`'s deterministic
@@ -1116,6 +1165,11 @@ the default permits start being denied in later sessions, with nothing naming th
 sits outside the `PreToolUse` gate entirely (PHARN's own build-loop lesson **L19**) — nothing on
 the floor forces it, and an early abort skips it. It degrades safely: the next command's first-step
 **set** overwrites a leftover scope, which is exactly today's behavior. The floor guarantee is
-unchanged and belongs to the **reader**, not to this step — **absence of a scope file = the
-fail-closed default-safe-set**. Never write "the command cleaned up"; write that it **declares** the
+unchanged and belongs to the **reader**, not to this step. **Absence of a scope file no longer means one
+posture (6.24.0):** in a dev checkout or an unsignalled tree it is still the fail-closed
+default-safe-set; in an **installed** project (`pharn.config.json` carries `skillsVersion`) it is
+fail-closed the same way only while a `/pharn-ship`, `/pharn-loop` or `/pharn-review` run is open —
+outside a run it is the permissive default instead: it denies PHARN's own installed surface and its scope
+file, allows your ordinary source, and allows only two places outside the project (`CLAUDE.md`,
+"Writes-scope", has the whole rule). Never write "the command cleaned up"; write that it **declares** the
 release step.
