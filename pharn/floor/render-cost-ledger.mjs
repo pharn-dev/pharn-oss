@@ -37,10 +37,13 @@
 //
 // ── Honest scope (P0) ────────────────────────────────────────────────────────────────────────────────
 // FLOOR (primitive #3 + arithmetic):
-//   * Records are deduplicated on `requestId`. LOAD-BEARING, not a nicety — one API response is written
-//     to the transcript as several lines repeating the SAME usage object. Measured on this repo's own
-//     `loop-decision-integrity` transcript: 552 raw assistant+usage records -> 275 deduped, a ~2.0x
-//     over-count avoided. (The 2026-08-18 measurement recorded 2.34x over its own window.)
+//   * One row per request, never per transcript line. LOAD-BEARING, not a nicety: the platform writes one
+//     API request as several lines (this repo's `loop-decision-integrity` transcript: 552 usage-bearing
+//     lines, 275 requests). The rows come from `transcript-core.mjs`'s `sessionRequests()`, imported and
+//     never re-stated ([[L35]]). What a row's values are is defined in `pharn/pharn-contracts/cost-ledger.md`,
+//     "One row per request". The core's header gives the measured transcript shapes and the one assumption
+//     the rule rests on. Until 6.22.1 this module read the transcript with its own copy of the loop, which
+//     kept each request's first line and under-counted `output` and `output_thinking`.
 //   * Every `usage` leaf is number | bool | null | a short token; anything else is DROPPED and its key
 //     path listed in `dropped[]`. Arrays are WALKED, not dropped (decision D1), so `usage` stays
 //     genuinely verbatim.
@@ -73,13 +76,18 @@
 // weighed at the plan gate and accepted for fidelity.
 //
 // ── RELATIONSHIP TO `render-cost-record.mjs` (L35, answered rather than assumed) ─────────────────────
-// Transcript LOCATION and the recursive file walk are IMPORTED from it — one implementation, not a copy.
-// `pharn-cost-ledger/1` is nonetheless a distinct schema from the shipped `pharn-cost-record/1`, and the
-// overlap is real: the record is an aggregate block embedded in `ship-record.json`, the ledger is a
-// standalone per-request artifact. L35's prior question ("must the second copy exist?") is answered YES
-// for now and NOT permanently — unifying them is the named `/pharn-ship` wiring follow-up. A ✧ parity
+// Both renderers read transcripts through `transcript-core.mjs` — location, the session's file selection and
+// the per-request reader, one implementation and not a copy. Until 6.22.1 the ledger imported only the
+// location and the walk, from the record renderer: its reading loop was a second copy, and both copies kept
+// each request's first line. The ledger (`pharn-cost-ledger/2`) is nonetheless a distinct schema from the
+// shipped `pharn-cost-record/1`, and the overlap is real: the record is an aggregate block embedded in
+// `ship-record.json`, the ledger is a standalone per-request artifact. L35's question ("must the second
+// copy exist?") was answered YES at a human gate in the `/pharn-ship` wiring increment. The contract's
+// "Relationship to `pharn-cost-record/1`" records why, and this header does not restate it. A ✧ parity
 // test asserts the two agree on totals over the same bytes, with the class-name mapping made explicit
-// (D4), so the pair cannot drift silently while both exist.
+// (D4), so the pair cannot drift silently while both exist. Agreement is ALL it proves ([[L43]]): it
+// stayed GREEN while both under-counted. The ★ per-request tests over
+// `fixtures/cost-ledger/usage-snapshots/` are what bind the rule to transcript shapes actually seen.
 //
 // Usage:
 //   node pharn/floor/render-cost-ledger.mjs <name> [--base <dir>] [--repo <dir>] [--session <id>]
@@ -94,7 +102,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { findTranscriptDirs, transcriptFiles } from "./render-cost-record.mjs";
+import { findTranscriptDirs, sessionRequests } from "./transcript-core.mjs";
 import { DEFAULT_BASE as MARKERS_DEFAULT_BASE, MARKER_KINDS, cleanScalar } from "./mark-phase.mjs";
 import { FM_RE, stripBom } from "./frontmatter-core.mjs";
 import { readShipOutcome, OUTCOME_SOURCE as SHIP_OUTCOME_SOURCE } from "./ship-outcome-core.mjs";
@@ -215,8 +223,6 @@ export const PRICING_NOTE =
   "price list. `output_thinking` is a SUBSET of `output`, not an additional class — do not sum all six. " +
   "Any figure so derived is LIST-PRICE EQUIVALENT: a subscription is not billed per token, so it is what " +
   "this usage would have cost at list, not what was charged.";
-
-const SYNTHETIC = "<synthetic>";
 
 /** The bound on the IDENTITY fields (`model`, `attribution_skill`, `agent_id`). Wider than a `usage`
  *  leaf because a model id is legitimately longer than a `service_tier` token, and still bounded. */
@@ -565,17 +571,16 @@ function buildLedger(
   }
 
   const projectDir = hits[0];
-  const files = transcriptFiles(projectDir).filter((f) => {
-    const rel = f.slice(projectDir.length + 1);
-    return rel === `${sessionId}.jsonl` || rel.startsWith(`${sessionId}/`);
-  });
+  // One entry per request, from the ONE owner of the counting rule (see the header). Nothing below reads
+  // a transcript line: identity and `ts` come from `record` (the request's first line), `usage` from the
+  // request's line with the most output tokens.
+  const { files, requests: read } = sessionRequests(projectDir, sessionId);
   // A hit means `<dir>/<sessionId>.jsonl` STATTED, not that a transcript is readable out of `<dir>`:
   // the two matchers disagree on some inputs, and the file can be unlinked between them. Without this,
   // such a run renders `partial` with zero rows — a measurement that never happened, reported as a
   // cheap one. This is L51's exact defect and it is kept deliberately.
   if (files.length === 0) return shell(`a transcript directory matched session ${sessionId}, but no transcript file under it was selected`);
 
-  const seen = new Set();
   const requests = [];
   let excluded = 0;
   const dropped = [];
@@ -584,70 +589,47 @@ function buildLedger(
   let start = null;
   let end = null;
 
-  for (const f of files) {
-    let text;
-    try {
-      text = readFileSync(f, "utf8");
-    } catch {
+  for (const { id, record: r, usage: u } of read) {
+    const model = r.message.model ?? "unknown";
+    const ts = typeof r.timestamp === "string" ? r.timestamp : null;
+    const sid = typeof r.sessionId === "string" ? r.sessionId : null;
+    // MEMBERSHIP first, attribution second — two decisions, two functions. A non-member is COUNTED and
+    // never emitted: not its usage, not its identity fields, not its version. The owner groups lines per
+    // request, so a request written on several lines is counted once here too.
+    if (!isMember(win, ts, sid)) {
+      excluded++;
+      // The part of the exclusion that keeps GROWING after emission (see `deriveLedger`). Counted, never
+      // emitted: the file's `excluded_requests` stays the one sum it always was.
+      if (isAfterWindow(win, ts)) stats.excludedAfterWindow++;
       continue;
     }
-    for (const line of text.split("\n")) {
-      if (!line) continue;
-      let r;
-      try {
-        r = JSON.parse(line);
-      } catch {
-        continue; // a torn final line while a session is live is expected, not an error
-      }
-      if (r?.type !== "assistant") continue;
-      const u = r.message?.usage;
-      if (!u) continue;
-      const model = r.message?.model ?? "unknown";
-      if (model === SYNTHETIC) continue; // not a real API call
-      const id = r.requestId ?? r.message?.id;
-      if (!id || seen.has(id)) continue; // THE dedup — load-bearing, see the header
-      seen.add(id);
-
-      const ts = typeof r.timestamp === "string" ? r.timestamp : null;
-      const sid = typeof r.sessionId === "string" ? r.sessionId : null;
-      // MEMBERSHIP first, attribution second — two decisions, two functions. A non-member is COUNTED and
-      // never emitted: not its usage, not its identity fields, not its version. Dedup ran above, so a
-      // request repeated across lines is counted once here too.
-      if (!isMember(win, ts, sid)) {
-        excluded++;
-        // The part of the exclusion that keeps GROWING after emission (see `deriveLedger`). Counted, never
-        // emitted: the file's `excluded_requests` stays the one sum it always was.
-        if (isAfterWindow(win, ts)) stats.excludedAfterWindow++;
-        continue;
-      }
-      // Both observed agent-id spellings, in a fixed precedence (L36 — a parameterized value acquires
-      // variant spellings, and a set pinned to the one its author saw certifies only that one).
-      const rawAgent = typeof r.agentId === "string" ? r.agentId : typeof r.attributionAgent === "string" ? r.attributionAgent : null;
-      const where = ts === null ? { stage: null, iteration: null } : attribute(markers, ts, sid);
-      const n = requests.length;
-      const row = {
-        request_id: String(id),
-        ts,
-        session_id: sid,
-        // The three identity fields are BOUNDED, not merely copied — see `sanitizeIdentity`. `model`
-        // falls back to the literal `unknown` (the `render-cost-record.mjs` spelling) because the field
-        // is required non-empty; the other two fall back to null, which is already their absent value.
-        model: sanitizeIdentity(String(model), `requests[${n}].model`, dropped, "unknown"),
-        sidechain: r.isSidechain === true,
-        agent_id: sanitizeIdentity(rawAgent, `requests[${n}].agent_id`, dropped),
-        attribution_skill: sanitizeIdentity(r.attributionSkill, `requests[${n}].attribution_skill`, dropped),
-        usage: sanitizeUsage(u, "usage", dropped),
-        tokens: normalizeTokens(u),
-        stage: where.stage,
-        iteration: where.iteration,
-      };
-      requests.push(row);
-      if (typeof r.version === "string") versions.add(r.version);
-      if (sid) sessions.add(sid);
-      if (ts !== null) {
-        if (start === null || ts < start) start = ts;
-        if (end === null || ts > end) end = ts;
-      }
+    // Both observed agent-id spellings, in a fixed precedence (L36 — a parameterized value acquires
+    // variant spellings, and a set pinned to the one its author saw certifies only that one).
+    const rawAgent = typeof r.agentId === "string" ? r.agentId : typeof r.attributionAgent === "string" ? r.attributionAgent : null;
+    const where = ts === null ? { stage: null, iteration: null } : attribute(markers, ts, sid);
+    const n = requests.length;
+    const row = {
+      request_id: String(id),
+      ts,
+      session_id: sid,
+      // The three identity fields are BOUNDED, not merely copied — see `sanitizeIdentity`. `model`
+      // falls back to the literal `unknown` (the `render-cost-record.mjs` spelling) because the field
+      // is required non-empty; the other two fall back to null, which is already their absent value.
+      model: sanitizeIdentity(String(model), `requests[${n}].model`, dropped, "unknown"),
+      sidechain: r.isSidechain === true,
+      agent_id: sanitizeIdentity(rawAgent, `requests[${n}].agent_id`, dropped),
+      attribution_skill: sanitizeIdentity(r.attributionSkill, `requests[${n}].attribution_skill`, dropped),
+      usage: sanitizeUsage(u, "usage", dropped),
+      tokens: normalizeTokens(u),
+      stage: where.stage,
+      iteration: where.iteration,
+    };
+    requests.push(row);
+    if (typeof r.version === "string") versions.add(r.version);
+    if (sid) sessions.add(sid);
+    if (ts !== null) {
+      if (start === null || ts < start) start = ts;
+      if (end === null || ts > end) end = ts;
     }
   }
 

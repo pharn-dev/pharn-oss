@@ -23,6 +23,86 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.22.1] - 2026-09-26
+
+### Fixed
+
+- 2026-09-26: **The cost renderers count each request at its completed usage, not at its first transcript line.** One
+  API request is written to the transcript as several lines. `render-cost-record.mjs` and `render-cost-ledger.mjs`
+  each kept the FIRST line per request id, and both headers said every line repeats the same usage object. On
+  current transcripts that no longer holds. A request's earlier lines can carry a smaller `output_tokens` and no
+  thinking detail than its last: one measured request's three lines read 8, 8 and 163. Measured on 2026-09-26 over
+  one maintainer's local transcripts (44,253 requests, Claude Code 2.1.234–2.1.281), first-line counting reported 66%
+  of the output tokens and 58% of the thinking tokens. The input, cache-read and cache-write classes were equal under
+  both rules on every measured request. `SKILLS_VERSION` 6.22.0 → 6.22.1 (PATCH: a correction to shipped bytes; one new
+  internal module, no new command, checker or contract shape). `MIN_CLI` stays 0.5.0: no installed path moves, and
+  `pharn update` copies a new floor file like any other.
+  ([`.dev/features/cost-dedup-completed-usage/`](./.dev/features/cost-dedup-completed-usage/))
+  - **The rule.** A request's usage is its line with the greatest `output_tokens`, the earliest such line on a tie.
+    Its identity and timestamp stay its FIRST line's, so run membership, stage attribution and row timestamps do not
+    move. The rule's one prose definition is `pharn/pharn-contracts/cost-ledger.md`, "One row per request". Three
+    alternatives were rejected, the first two on measurement and the third by reasoning:
+    - taking the selected line's timestamp would have moved 9,129 timestamps by up to 302 s;
+    - taking the LAST line fails on a request re-appended later with every count zeroed, and on a forked subagent's
+      copy of an early line, because both land last in walk order;
+    - a per-field maximum would assemble a usage object no line carried.
+  - **The rule's one assumption is advisory:** that the line with the most output tokens is the completed one. On
+    every measured request that carries a `stop_reason`, the largest line carries it. A request still being written
+    when a renderer runs is counted at the largest line written so far.
+  - **One owner, in a new module.** The session-file selection, the line filter and the counting rule each lived in
+    BOTH renderers. They now live once, in `pharn/floor/transcript-core.mjs`, with the transcript lookup and walk.
+    Both renderers import it; `check-cost-ledger.mjs --verify-transcript` reaches it through the ledger's
+    `deriveLedger`; the reader keeps no message body. `render-cost-record.mjs` keeps only the `pharn-cost-record/1`
+    block, so each file changes for one reason (P3).
+  - **`--verify-transcript` compares rows, and bounds the two classes that can grow.** An independent review found
+    and reproduced a false RED: a correct ledger emitted while one of its requests was still being written went RED
+    once that request completed, because a row's usage is now the largest line so far and the check compared totals
+    exactly. It now compares row by row.
+    - Input, cache read and both cache writes must match exactly.
+    - For `output` and `output_thinking`, a recorded value above the transcript is RED.
+    - A recorded value below the transcript is a WARN naming its two indistinguishable causes: a request in flight at
+      emission, or a ledger written before 6.22.1.
+    - **Bound:** those two classes are now exact only from above, so a deflated value passes with the WARN.
+    - The checker quotes a request id through `JSON.stringify` in every line that prints one, including its two older
+      lines for a duplicate id and a row outside the window. An id comes from the transcript and nothing bounds its
+      characters, so an id carrying a newline printed a verdict-shaped line of its own. The exit code never moved.
+  - **Two expired claims corrected** in both renderers' headers, both contracts, `/pharn-ship` Step 3b and
+    `CLAUDE.md`: "each line repeats the same usage object", and "subagent transcripts are stored disjointly". A forked
+    subagent's transcript can open with a copy of a parent line; it is still one request, counted under the identity
+    of the copy walked first.
+  - **What changes in a new ledger.** For a request whose lines disagree, the row's `tokens` rise and its verbatim
+    `usage` is now the completed line's object, which carries keys the early line lacked (`output_tokens_details`,
+    `server_tool_use`, `iterations[]`, `speed`).
+  - **Existing records are not rewritten.** A `cost.json` ledger or a `ship-record.json` `cost` block written before
+    6.22.1 under-counts `output` and `output_thinking` (`thinking` in the record block) wherever a request's FIRST
+    line carried fewer output tokens than its largest. Its internal checks stay GREEN. While its transcript exists,
+    `--verify-transcript` reports it in the growth WARN, not a RED. The WARN counts every such row value and names the
+    first three. Re-emit while the transcript exists, or read those two classes as a floor. A ledger's `skills_version` indicates which rule wrote it. That is advisory:
+    it records the configured version, not the code that ran.
+  - **Tests.** A committed fixture, `pharn/floor/fixtures/cost-ledger/usage-snapshots/`, is shaped from the three
+    measured records: the 8, 8, 163 request, a zeroed re-append, and a fork's copy of an early line. The reader's own
+    tests move with it to `transcript-core.test.mjs`. Mutant controls show:
+    - the first-line rule reading 8, and a last-line rule reading 0 and 9;
+    - the record block and the ledger each following a mutated owner.
+
+    A merged or per-field-max usage fails the "never assembled" test. A run window closing between one request's
+    first and last line keeps the request. The checker's tests cover a request completing after emission (GREEN with
+    the WARN), a first-line ledger (the WARN), a row above the transcript in either growing class (RED), a
+    mismatched fixed class (RED), and a request id carrying a newline (every finding stays one line).
+    A closure test pins the two spellings both old copies used to read transcript usage to one module. Another
+    spelling escapes it, and the test says so.
+
+  - **Apparatus, no bump:**
+    - The measurement is recorded in `.dev/measurements/cost-dedup-usage-2026-09-26.md`. The 2026-08-18 measurement
+      whose two findings expired carries a dated pointer to it.
+    - Lesson L63 was promoted to `.dev/memory-bank/lessons-learned.md` through the gated `/pharn-dev-memory-promote`,
+      human-approved: changing how a recorded value is derived can move it into the still-growing part of its
+      referent, so re-ask L58 of every existing exact re-derivation, including a checker the change leaves untouched.
+      It comes from this increment's own review. `docs/lessons-index.md` is regenerated. A second review found one
+      sentence of it misstating the check. It was corrected before merge, on the maintainer's instruction, through
+      the `Edit` tool under a promote-origin writes-scope: the route 3.1.2's L10 repair took, because a build's plan
+      cannot authorize a canon write.
+
 ## [6.22.0] - 2026-09-25
 
 ### Added

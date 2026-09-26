@@ -80,7 +80,7 @@ tagged `pharn-loop`**, with no sub-stage named anywhere. The field is therefore 
       "sidechain": false,
       "agent_id": null,
       "attribution_skill": "pharn-loop",
-      "usage": { "…": "copied from the record, leaf-filtered" },
+      "usage": { "…": "the request's line with the most output tokens, leaf-filtered" },
       "tokens": { "input": 2, "cache_write_5m": 0, "cache_write_1h": 44498, "cache_read": 28913, "output": 1046, "output_thinking": 726 },
       "stage": "pharn-build",
       "iteration": 1,
@@ -142,6 +142,33 @@ satisfied by a variant spelling of any member; closure is what makes a variant f
 | `membership.status/reason/start/end`                                | equal to `runWindow()` recomputed over the file's own `markers[]`         | FLOOR (recompute + equality)                                          |
 | every `requests[]` row                                              | a MEMBER of that recomputed window                                        | FLOOR (ordering test)                                                 |
 | `membership.excluded_requests`                                      | an integer (known window) or `null` (unknown) — its VALUE                 | **ADVISORY** without `--verify-transcript`; with it, a RANGE (rule 6) |
+
+**One row per request, and which of its transcript lines each value comes from (6.22.1).** `dedup_key` names
+the grouping. The platform writes one API request to the transcript as several lines, sometimes in more than one
+file, and those lines need not carry the same usage:
+
+- an earlier line can record fewer output tokens, and no thinking detail, than the last one;
+- a request can be written again later with its counts zeroed;
+- a forked subagent's transcript can open with a copy of an earlier line of a parent request.
+
+A row's identity fields and `ts` therefore come from the request's FIRST line in walk order. Its `usage` and
+`tokens` come from the request's line with the greatest `output_tokens`, the earliest such line on a tie. This
+paragraph defines the rule for the contracts and commands: `ship-record.md` and `/pharn-ship` cite it rather than
+restate it. `CLAUDE.md`, the cost modules' headers and the CHANGELOG entry summarize it, and where a summary differs,
+this paragraph governs. It has one implementation, `sessionRequests()` in `pharn/floor/transcript-core.mjs`, which
+both cost renderers import.
+`--verify-transcript` re-derives through the emitter.
+
+- **Floor:** the selection itself is an integer compare in a tested, deterministic reader.
+- **Advisory, and the rule's one assumption:** that the line with the most output tokens IS the request's completed
+  usage. It rests on a platform behaviour — no line of a request was seen recording more output than its completed
+  one — and on every request measured on 2026-09-26 that carried a `stop_reason`, the largest line carried one.
+- **Bound:** a request still being written when the ledger is emitted is recorded at the largest line written so
+  far, and a later line can carry more. That is why `--verify-transcript` compares `output` and `output_thinking` as
+  recorded ≤ re-derived instead of exactly (rule 6).
+
+A request found in several files is one row, under the identity of the copy walked first: the parent's, for every
+fork observed.
 
 **`outcome` is copied VERBATIM from the `LOOP.md` envelope** (`pharn/pharn-contracts/loop-record.md` —
 cited, not restated, P4), read from the `---`-fenced frontmatter only and never grepped from the body. The
@@ -242,6 +269,25 @@ activity outside the run. `render-run-report.mjs` prints the same label. `--veri
 a `/1` file with a WARN, because its rows are not re-derivable under the run-window rule. Reading a `/1`
 total as run-scoped would silently reinterpret historical data.
 
+**A ledger emitted before 6.22.1 under-counts `output` and `output_thinking`, and it is not rewritten.** Until
+6.22.1 both cost renderers kept each request's FIRST transcript line, and on current transcripts that line can carry
+an early, smaller output count and no thinking detail. The under-count lands wherever a request's FIRST line carries
+fewer output tokens than its largest. A request whose lines disagree only because of a zeroed re-append or a fork's
+copy was counted correctly, since its first line is its largest.
+Measured on 2026-09-26 over one maintainer's local transcripts (44,253 requests, Claude Code 2.1.234–2.1.281),
+first-line counting reported 66% of the output tokens and 58% of the thinking tokens. The input, cache-read and
+cache-write classes were equal under both rules on every measured request. For such a ledger:
+
+- **The internal checks stay GREEN.** It is still consistent with itself.
+- **`--verify-transcript` reports it with a WARN, not a RED.** For a `/2` ledger whose run window holds such a
+  request, and while its transcript exists, the WARN counts every row value whose `output` or `output_thinking` is below
+  what the transcript now holds, and names the first three. It cannot tell such a row from a correct ledger whose
+  request was still being written at emission, because both read as "recorded below re-derived" (rule 6). So the WARN
+  names both causes, and it never claims either. Re-emit while the transcript exists, or read those two classes as a floor.
+- **A `/1` ledger** is declined with a WARN, as above.
+- **Which rule wrote it:** the ledger's `skills_version` indicates it. That is ADVISORY: the field records the
+  configured version, never the bytes of the emitter that ran.
+
 ## The FLOOR rules on content, stated precisely (P0)
 
 > **The heading carries no count, deliberately.** It read "the four FLOOR rules" until rule 5 below was
@@ -274,17 +320,28 @@ total as run-scoped would silently reinterpret historical data.
    outside it. **Bound ([[L43]]):** this binds the rows to the RECORDED markers, never to the transcript.
    `--verify-transcript` re-derives the rows and `excluded_requests` under the same recorded markers,
    never the live markers file, so a later invocation cannot re-bound an old ledger. It works only while
-   the transcript exists. The rows and the totals must match exactly. `excluded_requests` is checked as a
-   **range**. Let `before` and `after` be the re-derived counts before the window and after its end. A
-   genuine value is `before + t` for some `0 <= t <= after`, so it must lie in `[before, before + after]`.
+   the transcript exists. The request ids must match exactly, and each row is compared class by class:
+   - **input, cache read and both cache writes must be EQUAL.** They did not differ across a request's first and
+     selected line on any request measured.
+   - **`output` and `output_thinking` must satisfy recorded ≤ re-derived (6.22.1).** A row's usage is its
+     request's line with the most output tokens, and a request still being written at emission can grow afterwards.
+   - **Above is RED:** the transcript never held that much.
+   - **Below is a WARN** naming its two causes (the compatibility note above).
+   - **Bound:** those two classes are exact only from above. A deflated value passes with the WARN, and pinning it
+     exactly would need the emission's moment in the file, a schema change. The totals follow from the rows, which
+     the `totals` recompute in the field table already binds.
+
+   `excluded_requests` is checked as a **range**. Let `before` and `after` be the re-derived counts before the
+   window and after its end. A genuine value is `before + t` for some `0 <= t <= after`, so it must lie in `[before, before + after]`.
    Anything outside that range is RED. **Bound (added 6.14.1, after the equality form REDded a genuine
    downstream ledger whose session had continued):**
    - The range is exact for the part before the window and only an upper bound for the tail. An inflated
      value up to `before + after` passes. The checker WARNs whenever it accepts a value below the
      re-derived total, so the bound travels with the verdict.
    - "The part before the window is fixed" rests on three platform behaviours, observed and not floor
-     facts: the transcript is append-only, every record is timestamped when it is written, and dedup keeps a
-     request id's first occurrence in file order.
+     facts: the transcript is append-only, every record is timestamped when it is written, and a request's
+     timestamp is its first occurrence's in file order. Its `usage` may come from a later line (6.22.1), and
+     that moves no membership decision.
    - An OPEN window has no end. A continued session therefore adds MEMBERS, and `requests[]` REDs. Both
      emitters write `run-stop` before emitting, and the checker WARNs an open window.
 
@@ -473,10 +530,14 @@ count, so read the table as what one real run and one real project cost, not as 
 
 `pharn/floor/render-cost-record.mjs` emits an **aggregate** cost block embedded in `ship-record.json`;
 this contract describes a **standalone per-request** artifact. The two overlap, and they share one
-implementation of transcript location and the file walk — imported, never copied.
+implementation of transcript location, the file walk and the per-request reader: `pharn/floor/transcript-core.mjs`,
+imported by both, never copied. Until 6.22.1 the reading loop was copied, and both copies kept each request's
+first line.
 
 **The overlap is recorded rather than resolved.** A ✧ parity test asserts the two agree on totals over the
 same bytes, with the class-name mapping made explicit, so they cannot drift silently while both exist.
+Agreement is all it proves ([[L43]]): it stayed GREEN while both under-counted output. What binds the counted
+value to the transcript are the per-request tests over line shapes seen on real transcripts.
 
 **"Must the second copy exist?" now has a settled answer, and it is YES — decided at a human gate during
 the `/pharn-ship` wiring increment this paragraph used to defer to.** [[L35]] asks that question before

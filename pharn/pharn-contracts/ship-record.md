@@ -82,11 +82,18 @@ cost: # OPTIONAL. Absent → the run predates the block or the record was hand-a
   by_model: { "<model-id>": { requests, tokens } }
 ```
 
-**What it IS:** a deterministic sum over the run's own session transcript. The dedup on `requestId` is
-**load-bearing, not a nicety** — the platform writes one API response as several transcript lines that each
-repeat the same usage object, so a naive sum over-counts (measured at **2.34×** over this repo's own build
-history). Nested subagent transcripts are stored **disjointly** from the parent and are included, or fan-out
-cost would be invisible. Given the same transcript bytes the render is byte-identical.
+**What it IS:** a deterministic sum over the run's own session transcript, one entry per request. The grouping on
+`requestId` is **load-bearing, not a nicety**. The platform writes one API request as several transcript lines, so a
+line-by-line sum over-counts (**2.34×** on this repo's build history, measured 2026-08-18). Those lines need not
+carry the same usage. Which line a request is counted at is defined once, in `pharn-contracts/cost-ledger.md` "One
+row per request" (cited, not restated — P4). The block uses the same reader, `pharn/floor/transcript-core.mjs`.
+Nested subagent transcripts are included, or fan-out cost would be invisible. Given the same transcript bytes, the
+render is byte-identical.
+
+**A block rendered before 6.22.1 can under-count `output` and `thinking`.** The renderer then kept each request's
+FIRST line. That under-counts wherever a request's first line carries fewer output tokens than its largest line. The
+other classes were equal under both rules on every request measured on 2026-09-26. The block sits inside attested
+content, so it is never rewritten. In an older record, read those two classes as a floor.
 
 **What it IS NOT — and these are the whole point (P0):**
 

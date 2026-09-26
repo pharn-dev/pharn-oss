@@ -38,6 +38,13 @@ Cache multipliers: read **0.1×**, 5-minute write **1.25×**, **1-hour write 2.0
    invisible; they are included.
 3. **`iterations[]` does not double-count.** Length distribution is `{0, 1}` only — top-level usage is authoritative.
 
+> **2026-09-26 — traps 1 and 2 no longer describe current transcripts. The measurement above is unchanged, and it
+> was true of its corpus.** The lines of one request can now carry DIFFERENT usage. An early line can record fewer
+> output tokens than the last one (8, 8, 163), and a request can be re-appended with its counts zeroed. A forked
+> subagent's transcript can also open with a copy of a parent line, so nested-file and parent-file request ids
+> intersect. Deduplication is still load-bearing; which line counts changed in 6.22.1. See
+> [`cost-dedup-usage-2026-09-26.md`](./cost-dedup-usage-2026-09-26.md).
+
 ---
 
 ## 1. Cost per delivered feature

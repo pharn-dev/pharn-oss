@@ -800,9 +800,10 @@ comprehension, correctness, or a self-issued seal — **attestation ≠ comprehe
    node pharn/floor/render-cost-record.mjs
    ```
 
-   Node stdlib only, no network, no model call. It deduplicates on `requestId` — **load-bearing**, since one
-   API response is written to the transcript as several lines repeating the same usage object — includes the
-   disjointly-stored subagent transcripts, and groups by the platform's recorded `attributionSkill`. It
+   Node stdlib only, no network, no model call. It counts each API request once — **load-bearing**, since one
+   request is written to the transcript as several lines that need not carry the same usage; which line counts is
+   defined in `pharn/pharn-contracts/cost-ledger.md`, "One row per request" (cited, not restated) — includes the nested subagent
+   transcripts, and groups by the platform's recorded `attributionSkill`. It
    **prints** the block; it never writes (fix #7 gates the write below, not the render). If it returns
    `coverage: "unavailable"`, embed that block verbatim — an honest absence is a member, never a reason to
    omit the key or to fabricate a figure.

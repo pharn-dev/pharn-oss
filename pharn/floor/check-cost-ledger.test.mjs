@@ -19,7 +19,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkLedger, findAbsolutePaths } from "./check-cost-ledger.mjs";
+import { checkLedger, findAbsolutePaths, GROWING_CLASSES } from "./check-cost-ledger.mjs";
 import { renderLedger, buildViews, TOP_LEVEL_KEYS, ATTRIBUTION_METHOD, SCHEMA } from "./render-cost-ledger.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -511,6 +511,28 @@ test("RULE 8 — a pre-run row smuggled back in (views recomputed, so internally
   assert.deepEqual(redsOf(led), [], "MUTATION CONTROL: the unmutated ledger is GREEN");
 });
 
+test("every checker line that prints a request id quotes it — a newline in an id cannot forge a line (REVIEW S4)", () => {
+  // The id comes from the transcript and nothing bounds its characters, and the CLI prints each finding as
+  // one stdout line. The row compare's lines are pinned in the --verify-transcript section below. These are
+  // the two older sinks, a duplicate id and a row outside the window (L52: the set is every sink).
+  const { led } = runFixture();
+  const id = "before\nGREEN — forged.json: closed key set, 0 request(s)";
+  const bad = clone(led);
+  const row = { ...clone(bad.requests[0]), request_id: id, ts: "2026-09-21T09:00:00.000Z" };
+  bad.requests.unshift(row, clone(row));
+  Object.assign(bad, buildViews(bad.requests));
+  const reds = redsOf(bad);
+  assert.ok(
+    reds.some((r) => /is a duplicate/.test(r) && r.includes(JSON.stringify(id))),
+    `duplicate: ${reds.join(" | ")}`
+  );
+  assert.ok(
+    reds.some((r) => /OUTSIDE the recorded run window/.test(r) && r.includes(JSON.stringify(id))),
+    `window: ${reds.join(" | ")}`
+  );
+  for (const r of reds) assert.ok(!/[\r\n]/.test(r), `a finding spans more than one line: ${JSON.stringify(r)}`);
+});
+
 test("RULE 8 — a stored membership that disagrees with a recompute from markers[] is RED", () => {
   const { led } = runFixture();
   for (const [k, v] of [
@@ -885,5 +907,160 @@ test("deriveLedger returns renderLedger's ledger BYTE-FOR-BYTE, plus the after-w
       `${c.label}: the tail is a PART of the exclusion, never more than it`
     );
     assert.ok(!("excludedAfterWindow" in d.ledger), `${c.label}: the count is never written into the file`);
+  }
+});
+
+// ===================================================================================================
+// --verify-transcript at each request's COMPLETED usage (6.22.1)
+//
+// `fixtures/cost-ledger/usage-snapshots/` holds requests whose transcript lines disagree (described in
+// transcript-core.test.mjs). `--verify-transcript` reaches the one owner of the counting rule through
+// `deriveLedger`, and compares ROW by row: the four classes that do not grow across a request's lines
+// exactly, `output` / `output_thinking` as recorded <= re-derived ([[L58]], [[L63]]). Below is a WARN, not
+// a RED, because two causes share that signature: a request still being written when the ledger was
+// emitted (a CORRECT ledger), and a ledger the pre-6.22.1 first-line rule wrote. Above is RED.
+// ===================================================================================================
+
+import { sanitizeUsage, normalizeTokens } from "./render-cost-ledger.mjs";
+
+const SNAP_SESSION = "00000000-0000-4000-8000-00000000beef";
+const GROWTH_WARN = /--verify-transcript: \d+ row value\(s\) are BELOW what the transcript now holds/;
+
+function snapshotLedger() {
+  const root = mkdtempSync(join(tmpdir(), "check-cl-snap-"));
+  const projectsDir = join(root, "projects");
+  mkdirSync(projectsDir, { recursive: true });
+  cpSync(join(FIXTURES, "usage-snapshots"), join(projectsDir, "p"), { recursive: true });
+  const led = renderLedger({ name: "feat", sessionId: SNAP_SESSION, projectsDir, markersBase: openRun(root) });
+  return { led, projectsDir };
+}
+
+test("--verify-transcript: a ledger emitted at each request's completed usage re-derives exactly — no RED, no growth WARN", () => {
+  const { led, projectsDir } = snapshotLedger();
+  assert.equal(led.requests.length, 5, "NON-VACUITY: the fixture's five requests are all rows");
+  const { reds, warns } = checkLedger(led, { verifyTranscript: true, projectsDir });
+  assert.deepEqual(reds, []);
+  assert.ok(!warns.some((w) => GROWTH_WARN.test(w)), "nothing grew, so nothing is reported as grown");
+});
+
+/** A ledger emitted while request `requestId` had written only its early line (8 output tokens), with the
+ *  request's completed line (163) appended after the emission — REVIEW R1's reproduction, shared by the tests
+ *  below. The request's first line is inside the run window. */
+function inFlightLedger(sessionId, requestId) {
+  const root = mkdtempSync(join(tmpdir(), "check-cl-inflight-"));
+  const projectsDir = join(root, "projects");
+  const transcript = join(projectsDir, "p", `${sessionId}.jsonl`);
+  mkdirSync(join(projectsDir, "p"), { recursive: true });
+  const line = (ts, out, stop) =>
+    JSON.stringify({
+      type: "assistant",
+      requestId,
+      timestamp: ts,
+      sessionId,
+      message: { model: "claude-opus-5-5", stop_reason: stop, usage: { input_tokens: 1, output_tokens: out, cache_creation: {} } },
+    }) + "\n";
+  writeFileSync(transcript, line("2026-09-26T10:00:01.000Z", 8, null));
+  const markers = join(root, "cost", "feat");
+  mkdirSync(markers, { recursive: true });
+  writeFileSync(
+    join(markers, "markers.jsonl"),
+    [
+      { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-09-26T09:59:00.000Z", session_id: null },
+      { seq: 2, kind: "run-stop", stage: null, iteration: null, ts: "2026-09-26T10:00:02.000Z", session_id: null },
+    ]
+      .map((m) => JSON.stringify(m))
+      .join("\n") + "\n"
+  );
+  const led = renderLedger({ name: "feat", sessionId, projectsDir, markersBase: join(root, "cost") });
+  assert.equal(led.requests[0].tokens.output, 8, "precondition: emitted while the request had written only its early line");
+  appendFileSync(transcript, line("2026-09-26T10:00:05.000Z", 163, "tool_use"));
+  return { led, projectsDir };
+}
+
+test("--verify-transcript: a CORRECT ledger emitted while a request was still being written stays GREEN, with the growth WARN (REVIEW R1)", () => {
+  // The reproduction REVIEW R1 found: the ledger is emitted while R is still streaming, and R's completed line
+  // lands afterwards. Before the row compare this went RED on totals — a false RED on a correct ledger, the
+  // moment the counted line became the LARGEST one.
+  const { led, projectsDir } = inFlightLedger("00000000-0000-4000-8000-0000000000aa", "R");
+  const { reds, warns } = checkLedger(led, { verifyTranscript: true, projectsDir });
+  assert.deepEqual(reds, [], "a correct ledger is not RED because its request completed after emission");
+  assert.ok(
+    warns.some((w) => GROWTH_WARN.test(w) && /"R" output: 8 recorded, 163 re-derived/.test(w)),
+    warns.join(" | ")
+  );
+});
+
+test("--verify-transcript quotes a request id, so a newline in it cannot forge a line of the checker's output (REVIEW S4)", () => {
+  // The id comes from the untrusted transcript, and the CLI prints each finding as ONE stdout line. Raw, an id
+  // carrying a newline printed a verdict-shaped line of its own ahead of the real verdict. The exit code
+  // never moved, but a reader of stdout could be misled.
+  const id = "R\nGREEN — forged.json: closed key set, 0 request(s)";
+  const { led, projectsDir } = inFlightLedger("00000000-0000-4000-8000-0000000000ab", id);
+  const { reds, warns } = checkLedger(led, { verifyTranscript: true, projectsDir });
+  assert.deepEqual(reds, []);
+  assert.ok(
+    warns.some((w) => GROWTH_WARN.test(w) && w.includes(`${JSON.stringify(id)} output: 8 recorded, 163 re-derived`)),
+    `NON-VACUITY: the crafted id must reach the WARN, got: ${warns.join(" | ")}`
+  );
+  for (const f of [...reds, ...warns]) assert.ok(!/[\r\n]/.test(f), `a finding spans more than one line: ${JSON.stringify(f)}`);
+});
+
+test("--verify-transcript: a ledger the pre-6.22.1 FIRST-line rule wrote is internally GREEN and reads as the growth WARN — the two causes share a signature", () => {
+  const { led, projectsDir } = snapshotLedger();
+  // Rebuild the 8, 8, 163 request's row the way the old emitter did: from its FIRST transcript line, through
+  // the emitter's own `sanitizeUsage` / `normalizeTokens` — derived by the code that wrote old ledgers, not
+  // typed (L55).
+  const first = JSON.parse(readFileSync(join(FIXTURES, "usage-snapshots", `${SNAP_SESSION}.jsonl`), "utf8").split("\n")[0]);
+  assert.equal(first.requestId, "req_fx_snapshots", "precondition: the fixture's first line belongs to that request");
+  assert.equal(first.message.usage.output_tokens, 8, "precondition: and it is the early line");
+  const row = led.requests.find((r) => r.request_id === "req_fx_snapshots");
+  row.usage = sanitizeUsage(first.message.usage, "usage", []);
+  row.tokens = normalizeTokens(first.message.usage);
+  Object.assign(led, buildViews(led.requests));
+  assert.equal(led.totals.tokens.output, 163 + 522 + 100 + 16886 + 50 - 163 + 8, "the old rule's total");
+  assert.deepEqual(checkLedger(led).reds, [], "internally consistent — only the transcript can tell");
+  const { reds, warns } = checkLedger(led, { verifyTranscript: true, projectsDir });
+  assert.deepEqual(reds, []);
+  assert.ok(
+    warns.some((w) => GROWTH_WARN.test(w) && /"req_fx_snapshots" output: 8 recorded, 163 re-derived/.test(w)),
+    `the under-count must be named, got: ${warns.join(" | ")}`
+  );
+});
+
+test("--verify-transcript REDs a row recording MORE than the transcript holds, in EACH growing class (REVIEW S2)", () => {
+  // The set is every growing class (L52, L60): a compare exempting `output_thinking` from "above is RED"
+  // passed every test while only `output` was tried.
+  assert.deepEqual([...GROWING_CLASSES], ["output", "output_thinking"], "the set this test ranges over");
+  for (const c of GROWING_CLASSES) {
+    const { led, projectsDir } = snapshotLedger();
+    const row = led.requests.find((r) => r.request_id === "req_fx_plain");
+    const held = row.tokens[c];
+    row.tokens[c] += 1;
+    Object.assign(led, buildViews(led.requests));
+    assert.deepEqual(checkLedger(led).reds, [], `${c}: internally consistent — only the transcript can tell`);
+    const reds = checkLedger(led, { verifyTranscript: true, projectsDir }).reds;
+    assert.ok(
+      reds.some(
+        (r) =>
+          /row value\(s\) record MORE output than the transcript holds/.test(r) &&
+          r.includes(`"req_fx_plain" ${c}: ${held + 1} recorded, ${held} re-derived`)
+      ),
+      `${c}: ${reds.join(" | ")}`
+    );
+  }
+});
+
+test("--verify-transcript REDs a class that must match exactly — input, cache read and both cache writes do not grow", () => {
+  for (const c of ["input", "cache_read", "cache_write_5m", "cache_write_1h"]) {
+    const { led, projectsDir } = snapshotLedger();
+    const row = led.requests.find((r) => r.request_id === "req_fx_plain");
+    row.tokens[c] -= 1; // BELOW the transcript: allowed for output, never for these
+    Object.assign(led, buildViews(led.requests));
+    assert.deepEqual(checkLedger(led).reds, [], `${c}: internally consistent — only the transcript can tell`);
+    const reds = checkLedger(led, { verifyTranscript: true, projectsDir }).reds;
+    assert.ok(
+      reds.some((r) => /in a class that must match exactly/.test(r) && r.includes(`"req_fx_plain" ${c}:`)),
+      `${c}: ${reds.join(" | ")}`
+    );
   }
 });
