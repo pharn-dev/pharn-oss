@@ -1172,7 +1172,7 @@ test("✧ RULE B is non-vacuous — the multi-artifact domain is non-empty and p
   const domain = multiArtifactCommands();
   assert.ok(
     domain.length >= 5,
-    // 6.24.0: pharn-verify.md left the domain (its one `writes:` entry is concrete), as pharn-regress.md did in
+    // 6.26.0: pharn-verify.md left the domain (its one `writes:` entry is concrete), as pharn-regress.md did in
     // 6.23.0 — the domain is now exactly this floor, so the next sibling that removes a placeholder re-measures it.
     `expected >=5 multi-artifact commands (ship, loop, plan and the two dev regress/verify commands), got ${domain.length}: ${domain.map((c) => c.file).join(", ")}`
   );
@@ -2017,8 +2017,14 @@ for (const cmd of PHASE_MARKER_WIRING) {
   test(`✧ ${cmd.file} brackets its run and every stage it runs`, () => {
     const body = commandBody(cmd.file);
     // A `--pending-start` call carries no --kind by design (it is a moment, not a marker); it is pinned
-    // by its own test below and excluded from the kind closure here.
-    const calls = (body.match(MARK_PHASE) ?? []).filter((c) => !/--pending-start/.test(c));
+    // by its own test below and excluded from the kind closure here. A `--mode` run-start (6.25.0,
+    // `/pharn-ship --quick`) is the QUICK ALTERNATIVE to the command's one named full-mode run-start —
+    // command prose carries BOTH lines (the full one, and the quick one inside `## Quick mode`), so it is
+    // excluded here too and pinned separately by QUICK_MODE_WIRING below. This is the "count the run-start
+    // lines WITHOUT --mode" carve-out `.dev/features/ship-quick-mode/PLAN.md` §6 records (this comment and
+    // QUICK_MODE_WIRING's header are its only other statements): it keeps this rule's "exactly one
+    // run-start" the FULL-MODE pin, unchanged in strength.
+    const calls = (body.match(MARK_PHASE) ?? []).filter((c) => !/--pending-start/.test(c) && !/--mode\b/.test(c));
     assert.ok(calls.length > 0, `non-vacuity: ${cmd.file} must carry mark-phase invocations`);
 
     const kindsSeen = calls.map((c) => (c.match(/--kind\s+(\S+)/) ?? [])[1]);
@@ -2099,7 +2105,10 @@ test("✧ ADOPTION is opt-in: ONLY the pending-start commands' named run-start c
   // /pharn-loop window. The flag must sit exactly where --pending-start does, and nowhere else.
   const pendingFiles = new Set(PENDING_START_WIRING.map((w) => w.file));
   for (const cmd of PHASE_MARKER_WIRING) {
-    const starts = (commandBody(cmd.file).match(MARK_PHASE) ?? []).filter((c) => /--kind run-start/.test(c));
+    // The QUICK run-start (6.25.0, carries --mode) is a SEPARATE line pinned by QUICK_MODE_WIRING below,
+    // which asserts it ALSO carries --adopt-pending (the same carve-out PHASE-MARKER ENUMERATION above
+    // documents) — excluded here so "exactly one named run-start" stays the full-mode pin.
+    const starts = (commandBody(cmd.file).match(MARK_PHASE) ?? []).filter((c) => /--kind run-start/.test(c) && !/--mode\b/.test(c));
     assert.equal(starts.length, 1, `${cmd.file}: exactly one named run-start`);
     assert.equal(
       /--adopt-pending/.test(starts[0]),
@@ -2160,6 +2169,346 @@ test("✧ every emitting command emits the LEDGER and the REPORT, and checks the
   }
 });
 
+// ── QUICK MODE WIRING (6.25.0, /pharn-ship --quick) — the same L29/L31/L36 shape, one domain over ─────
+//
+// A shorter spine for a small change trades checks for cost (the maintainer's 2026-09-25 decision, the
+// AC-delivery queue's Phase 3.1). Command prose now carries BOTH the full-mode named run-start (pinned
+// above, unaffected — PHASE_MARKER_WIRING and ADOPTION exclude a `--mode`-bearing line by the carve-out
+// `.dev/features/ship-quick-mode/PLAN.md` §6 records) AND a QUICK alternative inside `## Quick mode`; this
+// set is that alternative's OWN obligations, materialized once (L29) rather than folded into either set
+// above — the same reason LESSONS_SWEEP_WIRING and PLAN_LESSONS_WIRING stay separate sets despite sharing
+// a domain.
+//
+// Honest scope, the same narrow kind as every other set in this file: these pin that the command PROSE
+// carries the invocation / section / pointer / literal. They CANNOT prove a run executed it, that --quick
+// was actually passed, or that a skip was honored at runtime — "the wiring is pinned" NEVER means "a quick
+// run behaved this way" (P0).
+
+/** Every `mark-phase.mjs` invocation carrying `--mode` (there is exactly one such call today: the quick
+ *  run-start `/pharn-ship`'s `## Quick mode` section pins). */
+const MODE_MARK_PHASE = /node pharn\/floor\/mark-phase\.mjs[^\n]*--mode\b[^\n]*/g;
+
+test("✧ QUICK MODE: the quick run-start line appears exactly once in the corpus, in pharn-ship.md, with --adopt-pending", () => {
+  const hits = [];
+  for (const file of commandFiles()) {
+    for (const m of commandBody(file).match(MODE_MARK_PHASE) ?? []) hits.push({ file, line: m });
+  }
+  assert.deepEqual(
+    hits.map((h) => h.file),
+    ["pharn-ship.md"],
+    "the quick run-start line must appear EXACTLY ONCE in the corpus, and only in pharn-ship.md"
+  );
+  assert.match(hits[0].line, /--kind run-start/, "the --mode line must be a run-start (mode is run-start-only)");
+  assert.match(hits[0].line, /--adopt-pending/, "the quick run-start must still adopt the pending start, like the full one");
+});
+
+test("✧ QUICK MODE: every mark-phase.mjs --mode value in the corpus is EXACTLY --mode quick (closure, L36)", () => {
+  for (const file of commandFiles()) {
+    for (const m of commandBody(file).match(MODE_MARK_PHASE) ?? []) {
+      assert.match(m, /--mode quick(?!\S)/, `${file}: a --mode value other than the literal quick was found: ${m.trim()}`);
+    }
+  }
+});
+
+/** The `## Quick mode` section of pharn-ship.md, by HEADING OFFSET (L6: a structural fact from its
+ *  structured location, never `indexOf` over the body's prose) — both boundary anchors asserted FOUND
+ *  first (L60), so a renamed or removed heading fails loudly rather than silently slicing from/to the
+ *  wrong point. */
+function quickModeSection() {
+  const body = commandBody("pharn-ship.md");
+  const start = headingOffset(body, "Quick mode — `/pharn-ship --quick` (6.25.0)");
+  assert.ok(start >= 0, "pharn-ship.md must carry a line-initial `## Quick mode — …` heading");
+  const end = headingOffset(body, "Step 2 — Run the chain, branching ONLY on each stage's STRUCTURAL verdict (P5)");
+  assert.ok(end > start, "pharn-ship.md's `## Step 2 — …` heading must exist and follow `## Quick mode`");
+  return body.slice(start, end);
+}
+
+test("✧ QUICK MODE: pharn-ship.md's ## Quick mode section holds the --spec-kind line", () => {
+  assert.match(quickModeSection(), /node pharn\/floor\/check-spec\.mjs --spec-kind pharn\/features\/<name>\/SPEC\.md/);
+});
+
+// The skip set (L29): every full-mode item a quick run does NOT perform. Materialized once; each member's
+// regex is a phrase actually present in the section, not a paraphrase — so the rule fails the moment the
+// section stops naming that member, rather than merely stops naming it a particular way.
+const QUICK_SKIP_SET = [
+  { name: "/pharn-regress", re: /`\/pharn-regress`/ },
+  { name: "the Step-2b regress re-run", re: /regress re-run and its two markers are SKIPPED/ },
+  { name: "Step 2c (BRIEFING.md)", re: /Steps 2c and 2d: SKIPPED/ },
+  { name: "Step 2d (PR handoff)", re: /Steps 2c and 2d: SKIPPED/ },
+  { name: "Step 3a item 4 (RUN-REPORT.md)", re: /\(`render-run-report\.mjs`\) is SKIPPED/ },
+];
+
+test("✧ QUICK MODE: pharn-ship.md's ## Quick mode section names every member of the skip set (L29)", () => {
+  assert.equal(QUICK_SKIP_SET.length, 5, "non-vacuity: the skip-set enumeration is counted");
+  const section = quickModeSection();
+  for (const skip of QUICK_SKIP_SET) {
+    assert.match(section, skip.re, `## Quick mode must name ${skip.name} among what quick mode skips`);
+  }
+});
+
+test("✧ QUICK MODE: pharn-ship.md's ## Quick mode section states cost.json is kept", () => {
+  assert.match(quickModeSection(), /cost\.json.*is kept in quick mode/);
+});
+
+// Each skip SITE (as opposed to the ## Quick mode section's own summary) carries a one-line pointer back —
+// so a reader hitting the full-mode step directly, never having read ## Quick mode, still learns the delta.
+const QUICK_SKIP_POINTERS = [
+  {
+    site: "the regress stage item (Step 2)",
+    re: /`\/pharn-regress`[\s\S]*?SKIPPED\s+entirely in Quick mode — see `## Quick mode` above/,
+  },
+  { site: "Step 2b heading", re: /In Quick mode the regress re-run and its two markers are SKIPPED — see `## Quick mode`/ },
+  { site: "Step 2c heading", re: /SKIPPED entirely in Quick mode — see `## Quick mode` item 10 above\. `BRIEFING\.md`'s only reader/ },
+  { site: "Step 2d heading", re: /SKIPPED entirely in Quick mode — see `## Quick mode` item 10 above\. Its only input/ },
+  { site: "Step 3a item 4", re: /SKIPPED in Quick mode — see `## Quick mode` item 12 above/ },
+  // GATE 2 (review F3): the regress site also points at the scope check quick mode KEEPS, and Step 2b at its re-run.
+  {
+    site: "the regress stage item's kept scope check",
+    re: /Quick mode runs this stage's scope check itself, from\s+`## Quick mode` item 7/,
+  },
+  { site: "Step 2b's kept scope check", re: /with the kept scope check \(item 7\) between them/ },
+];
+
+for (const pointer of QUICK_SKIP_POINTERS) {
+  test(`✧ QUICK MODE: ${pointer.site} carries its one-line pointer to ## Quick mode`, () => {
+    assert.match(commandBody("pharn-ship.md"), pointer.re);
+  });
+}
+
+test("✧ QUICK MODE: pharn-grill.md pins its --spec-kind line and the skip literal", () => {
+  const body = commandBody("pharn-grill.md");
+  assert.match(body, /node pharn\/floor\/check-spec\.mjs --spec-kind pharn\/features\/<name>\/SPEC\.md/);
+  assert.match(body, /interrogation NOT performed — skipped by mode \(quick\)/);
+});
+
+test("✧ QUICK MODE: pharn-spec.md pins the literal spec_kind: quick and its Step-4 trade sentence", () => {
+  const body = commandBody("pharn-spec.md");
+  assert.match(body, /spec_kind: quick/);
+  assert.match(body, /looks for no\s*\n\s*regression outside the feature and does not interrogate the plan/);
+  // GATE 2 (review F3): the sentence the human reads before approving names the check quick mode KEEPS.
+  assert.match(body, /does not interrogate the plan; it still stops on a changed file\s+outside the plan's declared files/);
+});
+
+test("✧ QUICK MODE: SHIP.md's quick bullet names its three items (grill G10)", () => {
+  const section = quickModeSection();
+  assert.match(section, /regressions outside the feature/);
+  assert.match(section, /the plan interrogation/);
+  assert.match(section, /the briefing and the run report/);
+});
+
+test("✧ QUICK MODE: both pharn-ship.md and pharn-spec.md state --quick is read only as the first token (grill G3)", () => {
+  for (const file of ["pharn-ship.md", "pharn-spec.md"]) {
+    assert.match(
+      commandBody(file),
+      /recognized only as the FIRST TOKEN of the arguments/,
+      `${file} must state --quick is recognized only as the first token`
+    );
+  }
+});
+
+// ── GATE 2 review fixes (2026-09-26) — each pin names the finding it holds, and each has a control below ────
+
+/** F2: the first-token rule is labelled ADVISORY where it is stated, with the SPEC named as the backstop. */
+const FIRST_TOKEN_ADVISORY = [
+  { file: "pharn-ship.md", re: /This rule is ADVISORY \(P0\): it is an instruction to you, the\s+orchestrating model\./ },
+  { file: "pharn-ship.md", re: /The floor backstop is the SPEC, never the invocation:/ },
+  { file: "pharn-ship.md", re: /_"`--quick` is read only as the first token of the arguments"_ → \*\*ADVISORY\*\*/ },
+  { file: "pharn-spec.md", re: /This\s+rule is ADVISORY \(P0\) — an instruction to you; nothing on the floor parses the invocation\./ },
+  { file: "pharn-grill.md", re: /That rule is\s+\*\*ADVISORY\*\* \(an instruction to you; nothing parses the invocation\)/ },
+];
+
+test("✧ QUICK MODE (GATE-2 F2): the first-token rule is labelled ADVISORY, and the SPEC is named as its floor backstop", () => {
+  assert.equal(FIRST_TOKEN_ADVISORY.length, 5, "NON-VACUITY (L34)");
+  for (const site of FIRST_TOKEN_ADVISORY) assert.match(commandBody(site.file), site.re, site.file);
+  // The impossibility wording the review struck must not come back (F2's evidence line, verbatim).
+  assert.doesNotMatch(commandBody("pharn-ship.md"), /can never switch a run into this mode/);
+});
+
+/** F3: the scope check quick mode KEEPS — the pinned line, its STOP, its re-run and its SHIP.md record. */
+const QUICK_SCOPE_LINE =
+  'node pharn/floor/check-regress.mjs scope --changed "<inside, comma-separated>" --declared "<PLAN.md ## Files paths, plus AC-TESTS.md ## Files paths when that file exists>" --feature "<name>"';
+
+test("✧ QUICK MODE (GATE-2 F3): ## Quick mode keeps the scope check — the pinned line once, its STOP, its re-run, and SHIP.md's record", () => {
+  const section = quickModeSection();
+  const lines = commandBody("pharn-ship.md")
+    .split(/\r?\n/)
+    .map((l) => l.trim());
+  assert.equal(lines.filter((l) => l === QUICK_SCOPE_LINE).length, 1, "the quick scope line appears exactly once in pharn-ship.md");
+  assert.ok(section.includes(QUICK_SCOPE_LINE), "…and it sits inside ## Quick mode");
+  assert.match(section, /7\. \*\*The scope check: KEPT — run it before `\/pharn-verify`\.\*\*/);
+  assert.match(section, /`1` → \*\*STOP\*\*:\s+a changed path is outside the declared writes/);
+  assert.match(section, /the scope\s+check \(item 7\) runs again between the re-build and the re-verify/);
+  assert.match(section, /\*\*Kept:\*\* the\s+scope check \(item 7\) — a changed file outside the plan's `## Files` still stops the run/);
+  assert.match(section, /the scope\s+check's result verbatim \(`scope: clean`, item 7\)/);
+});
+
+test("✧ QUICK MODE (GATE-2 review): SHIP.md never points at another run's REGRESSION.md / BRIEFING.md / RUN-REPORT.md", () => {
+  const section = quickModeSection();
+  assert.match(section, /\*\*Never point at another run's artifacts\.\*\*/);
+  assert.match(
+    section,
+    /_"Any `REGRESSION\.md`, `regression-report\.json`, `BRIEFING\.md` or\s+`RUN-REPORT\.md` in this directory predates this run and is not part of it\."_/
+  );
+  assert.match(section, /They are \*\*labelled, not\s+removed\*\*/, "the choice between removing and labelling is stated");
+  // The full-mode Step 3 carries the pointer back, so a reader of Step 3 alone learns the carve-out.
+  assert.match(commandBody("pharn-ship.md"), /\*\*the run's mode\*\* \(6\.25\.0\): `mode: full`, or `mode: quick`/);
+});
+
+// ★ F3, EXECUTED (L45): a stray written BEFORE the build's reconcile anchor is invisible to check-bash-reconcile
+// (it covers anchor → verify only), and the committed quick scope line is what stops the run. The fixture is a
+// throwaway git repo carrying the REAL guards, exactly as check-bash-reconcile.test.mjs builds its own.
+test("★ QUICK MODE (GATE-2 F3): a stray planted before the anchor passes reconcile, and the committed quick scope line STOPs on it", () => {
+  const FLOOR = join(REPO_ROOT, "pharn", "floor");
+  const dir = mkdtempSync(join(tmpdir(), "hyg-quick-scope-"));
+  try {
+    const git = (...a) => {
+      const r = spawnSync("git", a, { cwd: dir, encoding: "utf8" });
+      assert.equal(r.status, 0, `git ${a.join(" ")}: ${r.stderr}`);
+      return r.stdout;
+    };
+    git("init", "-q");
+    git("config", "user.email", "t@example.invalid");
+    git("config", "user.name", "t");
+    writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+    mkdirSync(join(dir, ".claude", "hooks"), { recursive: true });
+    for (const h of ["protect-trusted-paths.cjs", "enforce-writes-scope.cjs", "set-writes-scope.cjs"]) {
+      writeFileSync(join(dir, ".claude", "hooks", h), readFileSync(join(REPO_ROOT, ".claude", "hooks", h)));
+    }
+    mkdirSync(join(dir, "src"), { recursive: true });
+    writeFileSync(join(dir, "src", "a.js"), "export const a = 1;\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "seed");
+
+    // /pharn-test-stage time: a Bash write OUTSIDE the plan's scope, before the build's anchor.
+    writeFileSync(join(dir, "src", "stray.js"), "written before the anchor\n");
+    // /pharn-build Step 0: the scope the plan declares, then the anchor.
+    mkdirSync(join(dir, ".pharn"), { recursive: true });
+    writeFileSync(join(dir, ".pharn", "writes-scope.json"), JSON.stringify({ scope: ["src/a.js"], set_by: "PLAN.md" }) + "\n");
+    const anchor = spawnSync(process.execPath, [join(FLOOR, "reconcile-baseline.mjs"), "--anchor", "--base", dir, "--by", "test"], {
+      encoding: "utf8",
+    });
+    assert.equal(anchor.status, 0, anchor.stderr);
+    // The build writes its one declared file.
+    writeFileSync(join(dir, "src", "a.js"), "export const a = 2;\n");
+
+    // /pharn-verify's reconcile gate: CLEAN — the stray predates the anchor, so it is outside the window.
+    const reconcile = spawnSync(process.execPath, [join(FLOOR, "check-bash-reconcile.mjs"), "--base", dir, "--require-baseline"], {
+      encoding: "utf8",
+    });
+    assert.equal(reconcile.status, 0, `reconcile is blind to a pre-anchor stray: ${reconcile.stdout}${reconcile.stderr}`);
+
+    // Quick mode item 7, the COMMITTED line: inside = git diff --name-only <base> + untracked (base = HEAD, an
+    // uncommitted working-tree build), declared = the plan's ## Files.
+    const inside = [...git("diff", "--name-only", "HEAD").split("\n"), ...git("ls-files", "--others", "--exclude-standard").split("\n")]
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .sort();
+    assert.deepEqual(inside, ["src/a.js", "src/stray.js"], "fixture sanity: the build's own change and the pre-anchor stray");
+    // The line is read out of ## Quick mode as COMMITTED (L45), never re-typed here; the pin test above binds it.
+    const committed = quickModeSection()
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("node pharn/floor/check-regress.mjs scope"));
+    assert.equal(committed.length, 1, "## Quick mode must carry exactly one scope line to execute");
+    const run = (declared) =>
+      spawnSync(
+        "sh",
+        [
+          "-c",
+          committed[0]
+            .replace("pharn/floor/check-regress.mjs", join(FLOOR, "check-regress.mjs"))
+            .replace("<inside, comma-separated>", inside.join(","))
+            .replace("<PLAN.md ## Files paths, plus AC-TESTS.md ## Files paths when that file exists>", declared)
+            .replace("<name>", "feat"),
+        ],
+        { cwd: dir, encoding: "utf8" }
+      );
+    const stop = run("src/a.js");
+    assert.equal(stop.status, 1, `the quick scope line must STOP on the stray: ${stop.stdout}${stop.stderr}`);
+    assert.deepEqual(JSON.parse(stop.stdout).escaped, ["src/stray.js"]);
+    // CONTROL: the same run with the stray declared too is clean — the STOP above is the stray, not the line.
+    const clean = run("src/a.js,src/stray.js");
+    assert.equal(clean.status, 0, `${clean.stdout}${clean.stderr}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("✧ QUICK MODE (GATE-2) mutation controls: each new pin fails when its text is broken (L60)", () => {
+  const ship = commandBody("pharn-ship.md");
+  const spec = commandBody("pharn-spec.md");
+  const cases = [
+    // F2: drop the ADVISORY label at its first site in pharn-ship.md.
+    [
+      ship,
+      "This rule is ADVISORY (P0): it is an instruction to you, the",
+      "This rule is binding: it is an instruction to you, the",
+      FIRST_TOKEN_ADVISORY[0].re,
+    ],
+    // F3: drop the pinned scope line's --feature flag.
+    [
+      ship,
+      ' --feature "<name>"\n   ```\n\n   Branch **only**',
+      "\n   ```\n\n   Branch **only**",
+      new RegExp(QUICK_SCOPE_LINE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+    ],
+    // F3: drop the KEPT clause from the trade sentence.
+    [spec, "; it still stops on a changed file", ".", /does not interrogate the plan; it still stops on a changed file/],
+    // Stale artifacts: drop the fixed line.
+    [ship, "predates this run and is not part of it.", "is kept.", /predates this run and is not part of it\./],
+  ];
+  assert.equal(cases.length, 4, "NON-VACUITY (L34)");
+  for (const [body, find, replace, re] of cases) {
+    assert.ok(body.includes(find), `fixture sanity: the anchor ${JSON.stringify(find.slice(0, 40))} must exist`);
+    assert.match(body, re, "the unbroken text must match its pin");
+    assert.doesNotMatch(body.replace(find, replace), re, `breaking ${JSON.stringify(find.slice(0, 40))} must fail its pin`);
+  }
+});
+
+test("✧ QUICK MODE mutation controls: each asserted property fails when broken (L60)", () => {
+  const shipBody = commandBody("pharn-ship.md");
+
+  // (1) drop --mode quick -> the quick run-start must disappear from MODE_MARK_PHASE detection.
+  const droppedMode = shipBody.replace(" --mode quick", "");
+  assert.notEqual(droppedMode, shipBody, "fixture sanity: the mutation must change the body");
+  assert.deepEqual(droppedMode.match(MODE_MARK_PHASE), null, "dropping --mode quick must remove the quick run-start from detection");
+
+  // (2) spell it --mode fast -> the closure-over-corpus rule must catch it.
+  const misspelled = shipBody.replace("--mode quick", "--mode fast");
+  const misspelledMatches = misspelled.match(MODE_MARK_PHASE) ?? [];
+  assert.ok(misspelledMatches.length > 0, "fixture sanity: the mutant line must still be detected as a --mode line");
+  assert.doesNotMatch(misspelledMatches[0], /--mode quick(?!\S)/, "a --mode fast line must fail the closure assertion");
+
+  // (3) move the --spec-kind line out of the ## Quick mode section -> the section-scoped test must miss it.
+  const specKindLine = "node pharn/floor/check-spec.mjs --spec-kind pharn/features/<name>/SPEC.md\n";
+  assert.ok(shipBody.includes(specKindLine), "fixture sanity: the real body must carry the line once");
+  const moved = shipBody.replace(specKindLine, "");
+  const startIdx = headingOffset(moved, "Quick mode — `/pharn-ship --quick` (6.25.0)");
+  const endIdx = headingOffset(moved, "Step 2 — Run the chain, branching ONLY on each stage's STRUCTURAL verdict (P5)");
+  assert.ok(startIdx >= 0 && endIdx > startIdx, "fixture sanity: both headings must survive the removal");
+  assert.doesNotMatch(moved.slice(startIdx, endIdx), /--spec-kind pharn\/features\/<name>\/SPEC\.md/);
+
+  // (4) drop one skip pointer (Step 3a item 4's) -> that pointer's own rule must stop matching.
+  const droppedPointer = shipBody.replace(
+    "4. **Render the human-readable run report** _(SKIPPED in Quick mode — see `## Quick mode` item 12 above;\n   items 1–3 above still run, so `cost.json` is kept)_:",
+    "4. **Render the human-readable run report:**"
+  );
+  assert.notEqual(droppedPointer, shipBody, "fixture sanity: the mutation must change the body");
+  assert.doesNotMatch(droppedPointer, /SKIPPED in Quick mode — see `## Quick mode` item 12 above/);
+
+  // (5) add a second quick run-start -> the exactly-once-in-the-corpus rule must fail.
+  const doubled = `${shipBody}\n\`\`\`bash\nnode pharn/floor/mark-phase.mjs --name '<name>' --kind run-start --adopt-pending --mode quick\n\`\`\`\n`;
+  const doubledHits = doubled.match(MODE_MARK_PHASE) ?? [];
+  assert.equal(doubledHits.length, 2, "a second quick run-start must be detected, breaking the exactly-once-in-the-corpus rule");
+});
+
+test("✧ QUICK MODE wiring is non-vacuous — pharn-ship.md, pharn-grill.md and pharn-spec.md all exist on disk", () => {
+  const present = new Set(commandFiles());
+  for (const file of ["pharn-ship.md", "pharn-grill.md", "pharn-spec.md"]) {
+    assert.ok(present.has(file), `${file} must exist for the QUICK MODE rules above to range over a real file`);
+  }
+});
+
 // ===================================================================================================
 // ✧ GATE-RUN WIRING — the floor input map must be produced by tested code, not typed by the model.
 //
@@ -2171,7 +2520,7 @@ test("✧ every emitting command emits the LEDGER and the REPORT, and checks the
 
 /** The product stages whose gate map comes from a gate-run stamp. A member added here inherits every
  *  rule; a command that starts using the runner and is NOT listed fails the closure test below. */
-// `pharn-regress.md` LEFT this set in 6.23.0 (`stage-regress-script`) and `pharn-verify.md` in 6.24.0
+// `pharn-regress.md` LEFT this set in 6.23.0 (`stage-regress-script`) and `pharn-verify.md` in 6.26.0
 // (`stage-verify-script`): neither invokes run-gates.mjs directly any more — each call moved into a tested
 // stage script (`pharn/floor/stage-regress.mjs`, `pharn/floor/stage-verify.mjs`) the command merely pins ONE
 // line to. Their wiring is `STAGE_SCRIPT_WIRING`, below.
@@ -2286,7 +2635,7 @@ test("✧ the dev twins stay FLAG-LESS — no dev command invokes the runner or 
 });
 
 // ---------------------------------------------------------------------------------------------------------------
-// ✧ STAGE_SCRIPT_WIRING (stage-regress-script 6.23.0; stage-verify-script 6.24.0) — `pharn-regress.md` and
+// ✧ STAGE_SCRIPT_WIRING (stage-regress-script 6.23.0; stage-verify-script 6.26.0) — `pharn-regress.md` and
 // `pharn-verify.md` are THIN CALLERS of `pharn/floor/stage-regress.mjs` and `pharn/floor/stage-verify.mjs`. They
 // left `GATE_RUN_WIRING` above because neither invokes the runner or the checkers directly; this set pins what
 // replaced that invocation surface, PER STAGE: the two pinned stage-script lines and their numbers, the absence of
@@ -2392,7 +2741,7 @@ test("✧ STAGE_SCRIPT_WIRING — the A1 scope, EXECUTED: each command's pinned 
 });
 
 // ---------------------------------------------------------------------------------------------------------------
-// ✧ the /pharn-loop stage-exit mapping (stage-regress-script 6.23.0; stage-verify-script 6.24.0) — CLOSURE over
+// ✧ the /pharn-loop stage-exit mapping (stage-regress-script 6.23.0; stage-verify-script 6.26.0) — CLOSURE over
 // each stage's `question` vocabulary, so a new question code cannot ship without a row. Run PER STAGE: each
 // stage's paragraph is found by its OWN anchor, the anchor is asserted found BEFORE slicing (L60 — an unfound
 // anchor's -1 would slice from a wrong place and pass on another stage's text), and the slice ends at the next
@@ -2439,7 +2788,7 @@ test("✧ CLOSURE discriminates — the SAME predicate, run over a mapping parag
 });
 
 // ---------------------------------------------------------------------------------------------------------------
-// ✧ NAMED_LIMITS (stage-verify-script, 6.24.0; GRILL G7) — condensing a 55 KB command is exactly where 6.23.0 dropped
+// ✧ NAMED_LIMITS (stage-verify-script, 6.26.0; GRILL G7) — condensing a 55 KB command is exactly where 6.23.0 dropped
 // named limits and refusal remedies (its review's M3) and the DATA label on relayed detail (M4). A CLOSED, COUNTED
 // set of anchors the thin `pharn-verify.md` must keep. EACH ANCHOR IS UNIQUE TO THE SENTENCE IT GUARDS, and the rule
 // requires it to occur EXACTLY ONCE (GATE 2 review E1): the first version pinned bare phrases ("as quoted DATA",
@@ -2562,7 +2911,7 @@ test("✧ NAMED_LIMITS beside it — /pharn-ship binds the verify verdict to a `
 });
 
 // ---------------------------------------------------------------------------------------------------------------
-// ✧ The three verify pins, RE-POINTED at the script (6.24.0): the thin command no longer composes the report, runs the
+// ✧ The three verify pins, RE-POINTED at the script (6.26.0): the thin command no longer composes the report, runs the
 // verdict or passes flags — `stage-verify.mjs` does, so that is where each pin now reads.
 // ---------------------------------------------------------------------------------------------------------------
 const STAGE_VERIFY_SRC = () => readFileSync(join(REPO_ROOT, "pharn/floor/stage-verify.mjs"), "utf8");
@@ -2643,5 +2992,131 @@ test("★ EXECUTED — every `--from-frontmatter … --target …` line in the c
     }
   } finally {
     rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+// ── The run-marker WIRING (pharn/floor/run-marker.mjs, 6.24.0, D3) ─────────────────────────────────────
+//
+// A FIFTH set, separate from every one above for the reason L29 gives: this one ranges over WHICH
+// commands open/close a `/pharn-ship` / `/pharn-review` run marker, and WHERE — a different question from
+// the phase-marker (mark-phase.mjs), lessons-sweep, lessons-reverify and lesson-extract sets, none of
+// which this schema shares a writer with.
+//
+// WHY IT EXISTS (P7 — the recorded trigger). Since 6.24.0 `enforce-writes-scope.cjs`'s no-scope default
+// in an INSTALLED project depends on whether a PHARN run is open — see the hook's own header and
+// `CLAUDE.md`, "Writes-scope". `/pharn-ship` and `/pharn-review` are the two commands that can reach a
+// Write-tool write with no scope of their own active (ship between its scoped steps; review sets none at
+// all), so they are the two that must OPEN a marker before that matters and CLOSE it on every exit. A
+// third command opening one that `pharn-loop.md` (below) must NOT — its existing marker already covers
+// the same guard for free — is exactly the kind of drift L31 names for a deliberate small surface.
+//
+// Honest scope, the same narrow kind as every set above: these pin that the command PROSE carries the
+// exact invocation, in the right order relative to a named anchor. They CANNOT prove a run executed
+// either line, that the marker was actually written, or that the guard actually consulted it — that half
+// is EXECUTED (not merely read) by `pharn/floor/run-marker.test.mjs`'s own ✧ WIRING tests, which run the
+// pinned lines (substituting `<name>`) as real subprocesses against the real hook (L45). "The wiring is
+// pinned" here NEVER means "a run opened or closed one" (P0).
+const RUN_MARKER_OPEN = /node pharn\/floor\/run-marker\.mjs --open (pharn-review|pharn-ship) '<name>'/g;
+const RUN_MARKER_CLOSE = /node pharn\/floor\/run-marker\.mjs --close (pharn-review|pharn-ship) '<name>'/g;
+const RUN_MARKER_OPEN_STOP = "**Non-zero → STOP**";
+
+const RUN_MARKER_WIRING = [
+  {
+    file: "pharn-ship.md",
+    command: "pharn-ship",
+    openAfter: "node pharn/floor/check-spec-approved.mjs pharn/features/<name>/SPEC.md",
+    openBefore: "node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-plan",
+    closeAfter: "node pharn/floor/mark-phase.mjs --name '<name>' --kind run-stop",
+  },
+  {
+    file: "pharn-review.md",
+    command: "pharn-review",
+    openAfter: "## Step 1b",
+    openBefore: "## Step 3 —",
+    closeAfter: "## Step 6b",
+  },
+];
+
+test("✧ RUN-MARKER ENUMERATION is non-vacuous and CLOSED over the corpus — no third caller, no drop", () => {
+  assert.equal(RUN_MARKER_WIRING.length, 2, "expected exactly the two commands with no scope of their own active at a Write-tool write");
+  const enumerated = RUN_MARKER_WIRING.map((c) => c.file).sort();
+  assert.deepEqual([...new Set(enumerated)], enumerated, "no duplicate member");
+  const live = readdirSync(COMMANDS_DIR)
+    .filter((f) => f.endsWith(".md") && /node pharn\/floor\/run-marker\.mjs/.test(readFileSync(join(COMMANDS_DIR, f), "utf8")))
+    .sort();
+  assert.deepEqual(
+    live,
+    enumerated,
+    "every command invoking run-marker.mjs must be enumerated above — a new caller fails here, not silently"
+  );
+});
+
+test("✧ pharn-loop.md does NOT invoke run-marker.mjs — its existing marker already covers the guard (no second writer)", () => {
+  assert.doesNotMatch(
+    commandBody("pharn-loop.md"),
+    /run-marker\.mjs/,
+    "the loop keeps require-loop-record.cjs as its marker's one owner (L35)"
+  );
+});
+
+for (const cmd of RUN_MARKER_WIRING) {
+  test(`✧ ${cmd.file} opens exactly one ${cmd.command} run marker and closes exactly one, matching commands`, () => {
+    const body = commandBody(cmd.file);
+    const opens = [...body.matchAll(RUN_MARKER_OPEN)];
+    const closes = [...body.matchAll(RUN_MARKER_CLOSE)];
+    assert.equal(opens.length, 1, `${cmd.file}: expected exactly one --open line`);
+    assert.equal(closes.length, 1, `${cmd.file}: expected exactly one --close line`);
+    assert.equal(opens[0][1], cmd.command, `${cmd.file}: --open must name ${cmd.command}`);
+    assert.equal(closes[0][1], cmd.command, `${cmd.file}: --close must name ${cmd.command}`);
+  });
+
+  test(`✧ ${cmd.file}'s --open sits after '${cmd.openAfter.slice(0, 40)}…' and before '${cmd.openBefore.slice(0, 40)}…'`, () => {
+    const body = commandBody(cmd.file);
+    const after = body.indexOf(cmd.openAfter);
+    const open = body.search(RUN_MARKER_OPEN);
+    const before = body.indexOf(cmd.openBefore);
+    assert.ok(after >= 0 && open >= 0 && before >= 0, `${cmd.file}: all three anchors must exist`);
+    assert.ok(after < open, `${cmd.file}: --open must come after the resume/ask anchor`);
+    assert.ok(open < before, `${cmd.file}: --open must come before the next stage/step anchor`);
+  });
+
+  test(`✧ ${cmd.file}'s --close sits after '${cmd.closeAfter.slice(0, 40)}…', on the every-exit path`, () => {
+    const body = commandBody(cmd.file);
+    const after = body.indexOf(cmd.closeAfter);
+    const close = body.search(RUN_MARKER_CLOSE);
+    assert.ok(after >= 0 && close >= 0, `${cmd.file}: both anchors must exist`);
+    assert.ok(after < close, `${cmd.file}: --close must come after its anchor`);
+  });
+
+  // GATE-2 review, S1: a failed --open must STOP the command — the exit code is the contract, so the branch
+  // sits between the open line and the step it guards. run-marker.test.mjs EXECUTES the pinned line against
+  // a planted file to show that exit really is non-zero; this pins that the prose reads it.
+  test(`✧ ${cmd.file} STOPS on a non-zero --open, between the open line and '${cmd.openBefore.slice(0, 30)}…'`, () => {
+    const body = commandBody(cmd.file);
+    const open = body.search(RUN_MARKER_OPEN);
+    const before = body.indexOf(cmd.openBefore);
+    const stop = body.indexOf(RUN_MARKER_OPEN_STOP, open);
+    assert.ok(open >= 0 && stop > open && stop < before, `${cmd.file}: a "${RUN_MARKER_OPEN_STOP}" branch must follow --open`);
+    // L4 mutation control: the same check over a body with the branch removed must fail.
+    const mutated = body.slice(0, open) + body.slice(open).replace(RUN_MARKER_OPEN_STOP, "Non-zero → continue");
+    const mStop = mutated.indexOf(RUN_MARKER_OPEN_STOP, open);
+    assert.ok(!(mStop > open && mStop < mutated.indexOf(cmd.openBefore)), `${cmd.file}: the rule must fail once the STOP branch is gone`);
+  });
+
+  // L4: an authored assertion passes by construction. Pin the matcher's DISCRIMINATION directly.
+  test(`✧ the ${cmd.file} run-marker rule DISCRIMINATES — it fails once the invocations are removed`, () => {
+    const stripped = commandBody(cmd.file).replace(RUN_MARKER_OPEN, "<<removed>>").replace(RUN_MARKER_CLOSE, "<<removed>>");
+    assert.doesNotMatch(stripped, RUN_MARKER_OPEN, `${cmd.file}: the open matcher must not still pass once removed`);
+    assert.doesNotMatch(stripped, RUN_MARKER_CLOSE, `${cmd.file}: the close matcher must not still pass once removed`);
+  });
+}
+
+test("✧ neither run-marker command is scoped to `pharn-loop` — the CLI refuses it, and no command tries", () => {
+  for (const file of commandFiles()) {
+    assert.doesNotMatch(
+      commandBody(file),
+      /run-marker\.mjs --(open|close) pharn-loop\b/,
+      `${file}: pharn-loop is not a run-marker.mjs command`
+    );
   }
 });

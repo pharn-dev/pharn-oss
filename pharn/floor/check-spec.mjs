@@ -59,6 +59,23 @@
 //                                                      shells this mode INSTEAD of parsing frontmatter
 //                                                      itself, so the gate cannot disagree with validate
 //                                                      about what `state` IS (see emitState).
+//   node pharn/floor/check-spec.mjs --spec-kind <SPEC.md>
+//                                                      print the SPEC's `spec_kind` (6.25.0) — a print mode
+//                                                      beside `--state` and `--spec-id`, spelling the
+//                                                      frontmatter KEY (`--spec-id` <-> `spec_id`), not
+//                                                      "kind", which in this checker already names a RED
+//                                                      kind. Prints `specAcceptanceCriteria(text).kind`:
+//                                                      `feature`, `test-infra` or `quick` for a templated
+//                                                      SPEC; an EMPTY line (exit 0) when the kind is
+//                                                      unusable (two `spec_kind:` lines, a non-member value,
+//                                                      or a body that opens with `spec_kind:`); and
+//                                                      `feature` for a LEGACY SPEC, whose `spec_kind` is
+//                                                      never validated, so no legacy SPEC is ever quick.
+//                                                      Unreadable or no frontmatter -> exit 1 with a stderr
+//                                                      reason, like the other print modes. `/pharn-ship` and
+//                                                      `/pharn-grill` shell this mode as their GATE-1
+//                                                      backstop and eligibility check, never re-deriving the
+//                                                      kind from frontmatter (P4).
 //   node pharn/floor/check-spec.mjs --template-ref <id> print `<id>@sha256:<digest>` for a KNOWN template
 //                                                      id — the value /pharn-spec writes into
 //                                                      `spec_template`. The digest is bodyHash() over the
@@ -110,6 +127,7 @@ import {
   PROJECT_TEMPLATE_ID,
   specKindLines,
   kindLineOpensBody,
+  specAcceptanceCriteria,
 } from "./spec-template-core.mjs";
 
 // Enums / shapes — every branch is a presence / enum / hash-equality membership test (P5); the terminal
@@ -299,6 +317,25 @@ function emitState(specPath) {
     return 1;
   }
   process.stdout.write((parsed.fm.state || "") + "\n");
+  return 0;
+}
+
+// --- --spec-kind mode: emit the SPEC's spec_kind (6.25.0) — see the usage comment above. ---
+// Mirrors emitState / emitSpecId / emitHash exactly: unreadable -> 1, no frontmatter -> 1, reporting the
+// collected RED to stderr on the unreadable path (L5). The ABSENT/UNUSABLE case is an EMPTY LINE at exit 0,
+// never `null` or a thrown value — specAcceptanceCriteria() never throws over a parsed SPEC.
+function emitSpecKind(specPath) {
+  const text = readText(specPath, "SPEC.md");
+  if (text === undefined) {
+    for (const r of reds) console.error(`check-spec: ${r.kind} failed: ${r.detail}`);
+    return 1;
+  }
+  const parsed = parseSpec(text);
+  if (!parsed) {
+    console.error(`check-spec: no YAML frontmatter in ${specPath} — cannot locate spec_kind`);
+    return 1;
+  }
+  process.stdout.write((specAcceptanceCriteria(text).kind ?? "") + "\n");
   return 0;
 }
 
@@ -556,6 +593,13 @@ function main() {
     }
     return emitState(args[1]);
   }
+  if (args[0] === "--spec-kind") {
+    if (!args[1]) {
+      console.error("check-spec: usage: node pharn/floor/check-spec.mjs --spec-kind <SPEC.md>");
+      return 1;
+    }
+    return emitSpecKind(args[1]);
+  }
   if (args[0] === "--template-ref") {
     if (!args[1]) {
       console.error("check-spec: usage: node pharn/floor/check-spec.mjs --template-ref <id>");
@@ -580,7 +624,7 @@ function main() {
   if (!args[0]) {
     console.log(
       "RED — usage: node pharn/floor/check-spec.mjs <SPEC.md>  (or --hash <SPEC.md> | --spec-id <SPEC.md> | --state <SPEC.md> | " +
-        "--template-ref <id> | --resolve-template-ref | --template-path <id>)"
+        "--spec-kind <SPEC.md> | --template-ref <id> | --resolve-template-ref | --template-path <id>)"
     );
     return 1;
   }

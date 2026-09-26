@@ -1,5 +1,5 @@
 ---
-description: "Verify a built feature in the USER's codebase — the seventh product-pipeline stage (spec → plan → grill → test → build → regress → verify → ship). Since 6.24.0 (stage-verify-script) this is a THIN CALLER: every deterministic step — argv, containment, the spec→plan chain re-check (pharn/floor/check-plan-spec-agree.mjs), the eval-pair discovery, the verifier count, the project's gates run ONCE at HEAD through pharn/floor/run-gates.mjs, the verdict, and the atomic artifact writes — lives in pharn/floor/stage-verify.mjs, and this command pins ONE line and branches on its EXIT CODE (pharn/pharn-contracts/stage-exit.md). FLOOR: the verdict is pharn/floor/check-verify.mjs's absolute exit-code threshold (PASS iff every gate exit 0) plus the AC GATE (check-verify.mjs --ac-gate): for a test-first SPEC every Acceptance Criterion must be DELIVERED on this head run — a locked, once-red test titled AC-<n>:, in a file mapped to AC-<n>, passed — or verify FAILS; a spec_kind: test-infra SPEC gets the weaker bootstrap evidence; a legacy SPEC is reported not-applicable, never silently green. ADVISORY: role: verifier capabilities are counted and none is run (the runner is deferred, P7); a verifier finding never flips the verdict (fix #3). Emits pharn/features/<name>/verify-report.json (machine) + pharn/features/<name>/VERIFY.md (human, rendered by pharn/floor/render-verify.mjs). '/pharn-verify verified it' means EXACTLY 'the named gates passed' and, for a test-first SPEC, 'every AC's locked, once-red test passed on this run' — NEVER 'the feature is correct'; PHARN does not judge whether a test captures its AC's intent (P0)."
+description: "Verify a built feature in the USER's codebase — the seventh product-pipeline stage (spec → plan → grill → test → build → regress → verify → ship). Since 6.26.0 (stage-verify-script) this is a THIN CALLER: every deterministic step — argv, containment, the spec→plan chain re-check (pharn/floor/check-plan-spec-agree.mjs), the eval-pair discovery, the verifier count, the project's gates run ONCE at HEAD through pharn/floor/run-gates.mjs, the verdict, and the atomic artifact writes — lives in pharn/floor/stage-verify.mjs, and this command pins ONE line and branches on its EXIT CODE (pharn/pharn-contracts/stage-exit.md). FLOOR: the verdict is pharn/floor/check-verify.mjs's absolute exit-code threshold (PASS iff every gate exit 0) plus the AC GATE (check-verify.mjs --ac-gate): for a test-first SPEC every Acceptance Criterion must be DELIVERED on this head run — a locked, once-red test titled AC-<n>:, in a file mapped to AC-<n>, passed — or verify FAILS; a spec_kind: test-infra SPEC gets the weaker bootstrap evidence; a legacy SPEC is reported not-applicable, never silently green. ADVISORY: role: verifier capabilities are counted and none is run (the runner is deferred, P7); a verifier finding never flips the verdict (fix #3). Emits pharn/features/<name>/verify-report.json (machine) + pharn/features/<name>/VERIFY.md (human, rendered by pharn/floor/render-verify.mjs). '/pharn-verify verified it' means EXACTLY 'the named gates passed' and, for a test-first SPEC, 'every AC's locked, once-red test passed on this run' — NEVER 'the feature is correct'; PHARN does not judge whether a test captures its AC's intent (P0)."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -22,10 +22,12 @@ version: "0.5.0"
 # /pharn-verify — did the feature get built CORRECTLY, in the user's codebase?
 
 You are the **verify stage** of the product pipeline (`spec → plan → grill → test → build → regress → verify →
-ship`, `pharn/ARCHITECTURE.md §6`). You answer **one** question: **did what was supposed to be built get built
-correctly — is the repo green with this feature in it, and was every Acceptance Criterion delivered?**
+ship`, `pharn/ARCHITECTURE.md §6`). You sit AFTER `/pharn-build` and, in a full run, `/pharn-regress` (a
+`/pharn-ship --quick` run starts no `/pharn-regress`, so there you follow the build and its scope check), and you
+answer **one** question: **did what was supposed to be built get built correctly — is the repo green with this
+feature in it, and was every Acceptance Criterion delivered?**
 
-**Since 6.24.0 you are a THIN CALLER.** Every deterministic step lives in `pharn/floor/stage-verify.mjs`, a tested
+**Since 6.26.0 you are a THIN CALLER.** Every deterministic step lives in `pharn/floor/stage-verify.mjs`, a tested
 script. **You do not re-implement any of it**: you run the one pinned line below, read the script's **exit code**,
 and — on a `question` — relay its text verbatim and re-run. `pharn/pharn-contracts/stage-exit.md` is the protocol
 this command summarizes.
@@ -147,10 +149,13 @@ scope behind:
 node .claude/hooks/set-writes-scope.cjs --clear
 ```
 
-**Why this exists.** A **set** scope REPLACES `enforce-writes-scope.cjs`'s fail-closed default-safe-set, so a
-leftover scope from a finished run is **stricter** than no scope at all. **ADVISORY (P0):** a Bash call outside the
-`PreToolUse` gate (L19) — nothing forces it, and an early abort skips it; the next command's first-step **set**
-overwrites a leftover scope either way.
+**Why this exists.** A **set** scope REPLACES `enforce-writes-scope.cjs`'s default — the fail-closed
+default-safe-set, except in an **installed** project outside an open `/pharn-ship`, `/pharn-loop` or
+`/pharn-review` run, where the default is the permissive one (6.24.0; `CLAUDE.md`, "Writes-scope") — so a
+leftover scope from a finished run is **stricter** than no scope at all. **ADVISORY (P0):** this is
+agent-run orchestration through **Bash**, outside the `PreToolUse` gate (L19) — nothing on the floor
+forces it, and an early abort skips it; the next command's first-step **set** overwrites a leftover scope
+either way.
 
 ## Reference — what the script runs (its own closed rules; informational)
 

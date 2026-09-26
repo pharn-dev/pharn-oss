@@ -1,5 +1,5 @@
 // pharn/floor/stage-verify-core.mjs — the PURE rules for the /pharn-verify stage script (stage-verify-script,
-// 6.24.0). No `child_process`, no filesystem, no network, no clock. The execution half lives in
+// 6.26.0). No `child_process`, no filesystem, no network, no clock. The execution half lives in
 // pharn/floor/stage-verify.mjs (P3, one axis per file: this module changes when a RULE changes, not when an
 // execution detail does).
 //
@@ -16,7 +16,7 @@
 //   phase literals the script passes to its checkpoint writer are pinned EQUAL to RESUMABLE_PHASES by a test
 //   (6.23.0's M9: a resumable phase the script never persisted crashed a resume).
 // • EVAL_PAIR_RULE (`featureEvalPairs`) — which committed-or-untracked eval pairs become `structural:` gates. Before
-//   6.24.0 this was command prose the model applied by judgment; see the function's own comment for the one
+//   6.26.0 this was command prose the model applied by judgment; see the function's own comment for the one
 //   disclosed semantic difference (untracked pairs count).
 // • VERDICT_EXIT / classifyVerdict — `check-verify.mjs`'s closed verdict→exit table. The script reads a verdict
 //   only when the exit AGREES with the printed verdict: node exits 1 on a crash, which is also FAIL's code, so the

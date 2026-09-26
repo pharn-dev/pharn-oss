@@ -131,7 +131,7 @@ pharn/floor/                                   the floor (§2): checkers, scanne
 pharn/pharn-contracts   L-1  schemas only, ZERO behavior: finding-shape (incl. severity enum),
                              eval-format, seam-config, loop-record, ship-briefing, ship-record,
                              cost-ledger, reconciliation-record, regression-report, verify-report,
-                             gate-run-record, test-results-record, ac-tests, spec-template
+                             gate-run-record, test-results-record, ac-tests, stage-exit, spec-template
                              (+ templates/spec-template.md, the default SPEC template it defines;
                              a project may supply its own at pharn.spec-template.md).
                              Everything depends on this.
@@ -246,6 +246,13 @@ excludes, and requires each to fail; its mapping, `AC-TESTS.md`, is written by `
 SPEC, and a legacy SPEC gets neither. `build` runs `pharn/floor/check-test-stage.mjs` first and refuses
 without that evidence (6.19.0) — obeying it is command discipline, and `/pharn-loop` re-reads it after
 every build. Shape and bounds: `pharn-contracts/ac-tests.md` (cited, not restated — P4; `LIMITS.md §9`).
+
+**Quick mode** (`/pharn-ship --quick`, 6.25.0) runs a shorter spine for a small change: a `spec_kind: quick`
+SPEC (one to three criteria, each `unit` or `integration`), `plan`, the grill's floor stops without its
+interrogation, `test`, `build`, `regress`'s scope check alone, and `verify` as above — **no `regress` base
+comparison**, so nothing looks for a regression outside the feature. Both human gates stay, and the ledger
+outcome is `gate2-quick`, which is not `gate2`. Bounds: `LIMITS.md §3a`; shape:
+`pharn-contracts/spec-template.md`, `pharn-contracts/cost-ledger.md`.
 
 **Keystone:** `SPEC.md` is the root artifact and every downstream artifact is bound to it. **The
 binding is the feature slug, not a field on every artifact** — `spec_id` ≡ `<name>` ≡ the

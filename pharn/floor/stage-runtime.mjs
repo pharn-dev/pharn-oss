@@ -1,7 +1,7 @@
-// pharn/floor/stage-runtime.mjs — the MECHANICS every stage script shares (stage-verify-script, 6.24.0; GATE 1
+// pharn/floor/stage-runtime.mjs — the MECHANICS every stage script shares (stage-verify-script, 6.26.0; GATE 1
 // Q1). No CLI, no emission, no reason codes: each helper RETURNS a result, and the calling stage script keeps its
 // own emit wrappers, its own reason codes and its own detail wording. Callers today: `stage-regress.mjs` (6.23.0)
-// and `stage-verify.mjs` (6.24.0).
+// and `stage-verify.mjs` (6.26.0).
 //
 // ================================ WHY ONE OWNER (L31, L35 — the recorded failure) ================================
 // 6.23.0's review repaired these rules one by one inside `stage-regress.mjs`: the `--timeout-ms` digit rule (M7a),

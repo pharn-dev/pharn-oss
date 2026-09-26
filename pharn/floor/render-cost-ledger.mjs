@@ -95,7 +95,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { findTranscriptDirs, transcriptFiles } from "./render-cost-record.mjs";
-import { DEFAULT_BASE as MARKERS_DEFAULT_BASE, MARKER_KINDS, cleanScalar } from "./mark-phase.mjs";
+import { DEFAULT_BASE as MARKERS_DEFAULT_BASE, MARKER_KINDS, MARKER_MODES, cleanScalar } from "./mark-phase.mjs";
 import { FM_RE, stripBom } from "./frontmatter-core.mjs";
 import { readShipOutcome, OUTCOME_SOURCE as SHIP_OUTCOME_SOURCE } from "./ship-outcome-core.mjs";
 import { runWindow, isMember, isAfterWindow, tsMs, MEMBERSHIP_METHOD } from "./run-window-core.mjs";
@@ -340,7 +340,10 @@ export function readMarkers(markersFile) {
 /**
  * The ONE marker normalization, applied to the file's lines AND to a caller-supplied list (the checker's
  * `--verify-transcript` passes a ledger's recorded `markers[]`). Unknown kinds and non-numeric `seq` are
- * dropped; `origin` survives only as the literal `pending` that `mark-phase.mjs` writes on adoption.
+ * dropped; `origin` survives only as the literal `pending` that `mark-phase.mjs` writes on adoption; `mode`
+ * (6.25.0) survives only as a `MARKER_MODES` member, the same pattern — a garbage value is dropped, which
+ * `ship-outcome-core.mjs`'s `runMode()` then reads as `"full"`, the safe direction: a full reading needs a
+ * regress stage-start a quick run never writes (that module's header, "A SKIPPED OR WRONG MODE MARKER").
  */
 export function normalizeMarkers(list) {
   const out = [];
@@ -355,6 +358,7 @@ export function normalizeMarkers(list) {
       session_id: typeof r.session_id === "string" ? r.session_id : null,
     };
     if (r.origin === "pending") m.origin = "pending";
+    if (typeof r.mode === "string" && MARKER_MODES.has(r.mode)) m.mode = r.mode;
     out.push(m);
   }
   return out.sort((a, b) => a.seq - b.seq);

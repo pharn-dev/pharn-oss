@@ -80,11 +80,11 @@ function vitestDoc(root, tests) {
  * infrastructure, a lock with a bound red run, and a head `test` run in which every AC test passed — beside ANOTHER
  * feature's passing `AC-1:`/`AC-2:` in the same suite.
  */
-function world({ levels = ["unit", "unit"], mapped = null } = {}) {
+function world({ levels = ["unit", "unit"], mapped = null, kind = null } = {}) {
   const root = mkdtempSync(join(tmpdir(), "acg-"));
   const fd = join(root, "pharn", "features", NAME);
   mkdirSync(fd, { recursive: true });
-  const h = writeSpec(join(fd, "SPEC.md"), { levels });
+  const h = writeSpec(join(fd, "SPEC.md"), { levels, kind });
   const ids = (mapped ?? levels.map((_, i) => i + 1)).map((n) => `AC-${n}`);
   writeFileSync(
     join(fd, "AC-TESTS.md"),
@@ -226,6 +226,23 @@ test("GREEN — every AC's locked, once-red test passed on the head run: PASS, t
   });
 });
 
+// ── quick (6.25.0): a spec_kind: quick SPEC takes the SAME test-first gate a feature SPEC does ──────────
+
+test("GREEN — a spec_kind: quick world reads test-first (mode) and PASS, exactly like a feature world", () => {
+  withWorld({ kind: "quick" }, (w) => {
+    const g = gateOf(w);
+    assert.equal(g.verdict, "PASS", JSON.stringify(g, null, 1));
+    assert.equal(g.mode, "test-first");
+    assert.deepEqual(g.evidence, []);
+  });
+});
+
+test("ac-not-passed — a quick world's AC-2 fails after the build, exactly as a feature world's would", () => {
+  withWorld({ kind: "quick" }, (w) =>
+    only(gateOf(w, { results: setStatus(w.results, FILE(2), "AC-2: t", "failed") }), "ac-not-passed", "FAIL")
+  );
+});
+
 test("ac-untested — AC-2's test was not reported (never collected, or deleted from the run)", () => {
   withWorld({}, (w) => only(gateOf(w, { results: w.results.filter((t) => t.file !== FILE(2)) }), "ac-untested", "FAIL"));
 });
@@ -299,7 +316,7 @@ test("ac-tests-modified — the lock is missing, unusable, or a bootstrap lock b
           })
         );
       },
-      /bootstrap lock, but the SPEC is spec_kind: feature/,
+      /bootstrap lock, but the SPEC is a test-first spec_kind \(feature or quick\)/,
     ],
     [
       "the SPEC's pin moved",

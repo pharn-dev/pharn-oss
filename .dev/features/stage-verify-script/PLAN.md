@@ -1,12 +1,12 @@
 # PLAN — stage-verify-script: `/pharn-verify` as one tested stage script, on 6.23.0's shared stage-exit contract
 
-- spec_content_hash: 4950796f5342df20a298fe22812e45dec3c15317592bd2358a31e149d2dc1c7f
+- spec_content_hash: d831d30d399a37dc403080072763d13383de6f6f31875e7e8cb4eadeb642f4f4
 - applied_lessons: [L1, L5, L6, L7, L8, L10, L19, L21, L22, L23, L24, L25, L27, L29, L30, L31, L33, L34, L35, L36, L37, L38, L40, L41, L43, L44, L45, L47, L50, L52, L54, L57, L60, L62]
 - increment: move every deterministic step of `/pharn-verify` into one tested script, `pharn/floor/stage-verify.mjs` (plus a pure core and a pure renderer), which writes `verify-report.json` from the verdict checker's own output and renders `VERIFY.md` from that JSON by code, reusing 6.23.0's stage-exit contract and its budget-and-resume protocol; add verify's entry to the stage-exit registry; make `.claude/commands/pharn-verify.md` a thin caller of the script.
 - layer(s): `pharn/floor/` (product floor), `pharn-contracts` (L-1, schemas only), the product command surface (`.claude/commands/pharn-*.md`)
 - constitution_refs: [P0, P1, P2, P3, P4, P5, P6, P7]
 - roadmap: Phase 1.2 of the token-reduction roadmap (maintainer-approved 2026-09-25)
-- base: `main` at `1524c6f` (SKILLS_VERSION 6.23.0, MIN_CLI 0.5.0). This increment bumps to **6.24.0** (minor: new floor scripts, a rewritten product command, a new registry entry). The sibling phases `writes-scope-run-only` (0.2) and `ship-quick-mode` (3.1) also bump; whichever merges later renumbers and reconciles.
+- base: `main` at `1524c6f` (SKILLS_VERSION 6.23.0, MIN_CLI 0.5.0). This increment bumps to **6.26.0** (minor: new floor scripts, a rewritten product command, a new registry entry). The sibling phases `writes-scope-run-only` (0.2) and `ship-quick-mode` (3.1) also bump; whichever merges later renumbers and reconciles. _(Renumbered once by diff, from 6.24.0 to 6.26.0, after `writes-scope-run-only` merged as 6.24.0 (`ec06f7b`) and `ship-quick-mode` was merged into this branch as 6.25.0 (`eec6535`, #280); `spec_content_hash` was re-pinned from `4950796f…` to `d831d30d…` at the same merge — see "Amended at GATE 2 (merge of 3.1)".)_
 - stage model: plan — opus — set by the maintainer's instruction; routed via Agent subagent; effort not routed
 - gate1: APPROVED on 2026-09-26. This is a MODEL decision by the orchestrator under the maintainer's 2026-09-25 delegation, NOT a human approval. Q1–Q6 were resolved as recommended and are recorded under "Open questions (HALT)". Conditions: (1) the unchanged regress suite stays green, byte for byte in its assertions (G3); (2) the completeness-crash behaviour change is named in the CHANGELOG and in `/pharn-ship`'s Step 2b text (G15).
 - grill: `.dev/features/stage-verify-script/GRILL.md` (19 advisory concerns, G1–G19). Every one is folded in below, each with its named test; the map of 6.23.0's review defect classes is its own section.
@@ -297,7 +297,7 @@ such check. A kill before "drain" leaves no record of this run → `no-progress`
   committed `findings.json`" and leaves the matching to the model. This rule also admits
   untracked-not-ignored files, because a capability the build just wrote is untracked at verify time, so the
   literal "committed" reading gave it no `structural:` gate. It is listed under Behaviour changes and in
-  CHANGELOG [6.24.0]. Regress's `computeEvalPairs` stays tracked-only; the two differ on purpose, and no
+  CHANGELOG [6.26.0]. Regress's `computeEvalPairs` stays tracked-only; the two differ on purpose, and no
   reason for regress's choice is asserted here beyond what its code does.
 - **VERDICT_EXIT** `{PASS: 0, FAIL: 1, INCONCLUSIVE: 2, INCOMPLETE: 3}` and `classifyVerdict({status, stdout})`.
 - **checkCompleteness(text)** — the capture parses as one JSON object with `complete` a boolean and `missing`
@@ -389,7 +389,7 @@ expired. The closed `verify` vocabulary:
   an explicit `--gates` never reaches an empty source set (an empty token is `bad-gates`).
 - **`/pharn-loop`'s mapping for verify** (a paragraph beside regress's, same rule): `question no-gates` → S4;
   `refused` and `unusable` → S9; a crash → S9; `continue` is handled inside `/pharn-verify`. **With an A7-style
-  disclosure (G5)** — as of 6.24.0 these stop at S9 where they did not before:
+  disclosure (G5)** — as of 6.26.0 these stop at S9 where they did not before:
   - a crashed `check-build-complete.mjs` (`unusable child-crashed`). Before, it read INCOMPLETE, which
     `check-loop.mjs` CONTINUEs — a rebuild iteration, up to the cap;
   - a runner refusal, a lapse included (`unusable child-refused`). Before, a fail-closed report that
@@ -498,9 +498,9 @@ expired. The closed `verify` vocabulary:
 - `.dev/floor/command-hygiene.test.mjs` — EDIT: GATE_RUN_WIRING 2 → 1; STAGE_SCRIPT_WIRING 1 → 2 with per-stage patterns, per-stage no-direct-invocation lists and per-stage A1 probes; the loop-mapping closure per stage, each anchor asserted found and the mutant run through the same `mappingNamesCode` (G17); `NAMED_LIMITS` over `pharn-verify.md` plus the `pharn-ship.md` and `pharn-loop.md` pins (G7); the three verify pins re-pointed at the script; RULE B's message
 - `.prettierignore` — `pharn/features/*/VERIFY.md` (L23)
 - `.markdownlint-cli2.jsonc` — `pharn/features/*/VERIFY.md` (L23)
-- `SKILLS_VERSION` — 6.23.0 → 6.24.0
-- `CHANGELOG.md` — a new `## [6.24.0]` section (`[Unreleased]` is empty at base) stating the weaker and the stronger claim and every behaviour change listed below, the completeness-crash change named explicitly (GATE 1 condition 2)
-- `README.md` — the shields badge to 6.24.0 and the regenerated CURRENT-STATE region (`npm run docs:generate`; floor checkers 86 → 90)
+- `SKILLS_VERSION` — 6.25.0 → 6.26.0 (planned as 6.23.0 → 6.24.0; renumbered at the merge of 3.1)
+- `CHANGELOG.md` — a new `## [6.26.0]` section (`[Unreleased]` is empty at base) stating the weaker and the stronger claim and every behaviour change listed below, the completeness-crash change named explicitly (GATE 1 condition 2)
+- `README.md` — the shields badge to 6.26.0 and the regenerated CURRENT-STATE region (`npm run docs:generate`; floor checkers 86 → 90, and 91 after the merge of 3.1, whose tree adds `run-marker.mjs`)
 - `CLAUDE.md` — a Commands entry for `stage-verify.mjs`; the run-gates, AC-gate and stage-regress entries' verify sentences re-pointed
 - `.dev/features/stage-verify-script/BUILD.md` — the build's own record: the measurements, the probes with their exit codes, the command's byte size, and the regress suite before and after the lift (G3); each line reports a command already run, with the exit code it printed, and nothing is recorded ahead of its run (G18)
 
@@ -771,7 +771,7 @@ Each claim carries its reduction, and each quantified sentence names the probe t
 | `/pharn-ship` step 7 and Step 2b                      | `.verdict`, `.failing_gates[]`, `.completeness.missing[]`, `.ac_gate`                                            | all kept; `INCOMPLETE` passes through, so Step 2b fires; a refusal is the missing-report STOP, and `.verdict` is read only after a `done` exit in this run (G1)       |
 | `/pharn-loop`                                         | the stage's outcome; Step 5 hands `.failing_gates[]`, `.completeness.missing[]`, `.ac_gate.acs[]` to the rebuild | the verify mapping paragraph with its A7 disclosure (G5); the fields are kept                                                                                         |
 
-## Behaviour changes, disclosed (each goes into CHANGELOG [6.24.0])
+## Behaviour changes, disclosed (each goes into CHANGELOG [6.26.0])
 
 - **A refusal writes no `verify-report.json`** (a RED chain, a missing artifact, an unparseable `## Files`).
   Before, the command wrote a fail-closed `INCONCLUSIVE` report on a RED chain. `/pharn-ship` still STOPs, now
@@ -788,7 +788,7 @@ Each claim carries its reduction, and each quantified sentence names the probe t
   Before, the stamp's `aux.completeness` read node's exit 1 as "incomplete" (probed under Discovery), the
   verdict read `INCOMPLETE`, and `/pharn-ship` Step 2b answered it with its one bounded rebuild. Under
   `/pharn-loop` it was a CONTINUE, a rebuild iteration up to the cap; now it is S9 (G5). Accepted at GATE 1 as
-  disclosed, on the condition that CHANGELOG [6.24.0] and `/pharn-ship`'s Step 2b text both name it (G15). The
+  disclosed, on the condition that CHANGELOG [6.26.0] and `/pharn-ship`'s Step 2b text both name it (G15). The
   runner is unchanged, so `/pharn-dev-verify` and any direct `check-verify.mjs` caller keep the old reading
   (named follow-up).
 - **New `/pharn-loop` S9 stops (G5; 6.23.0's A7 class).** A crashed completeness checker, a runner refusal
@@ -823,12 +823,13 @@ prompt of at most 20,000 bytes, from 5 fenced bash blocks (setter, fresh line, q
 release).
 
 **Recorded-run measure (outside this build).** The `pharn-verify` rows of `cost.json`'s
-`by_stage_iteration_model` view in the user's ledgers (roadmap 0.3), against a run after `pharn update` to 6.24.0.
+`by_stage_iteration_model` view in the user's ledgers (roadmap 0.3), against a run after `pharn update` to 6.26.0.
 
 ## Siblings in flight — reconciliation (whichever merges later)
 
 - **Version:** each sibling bumps to 6.23.0 from 6.22.0; this plan bumps 6.23.0 → 6.24.0. The later merge
-  renumbers by diff and moves `[Unreleased]` entries as the CHANGELOG rules require.
+  renumbers by diff and moves `[Unreleased]` entries as the CHANGELOG rules require. _(Outcome: both siblings
+  merged first, so this plan ships as 6.26.0 — "Amended at GATE 2 (merge of 3.1)".)_
 - **`writes-scope-run-only` (0.2):** it rewords every product command's Final step. The thin `pharn-verify.md`
   contains none of the phrase its closure test retracts, so it passes that test as written; the later merge
   applies whichever Final-step wording is newer. It also edits `check-bash-reconcile.test.mjs` and
@@ -921,3 +922,40 @@ maintainer's delegation (not a human approval), each as this plan recommended:
 - **The completeness-crash behaviour change is accepted as disclosed**, on the condition that CHANGELOG
   [6.24.0] and `/pharn-ship`'s Step 2b text both name it (G15 carries it into `## Files` and the pin set).
 - **Grill amendments folded in:** G1–G19 from `GRILL.md`, each at the section it changes, with its named test.
+
+## Amended at GATE 2 (merge of 3.1) — 2026-09-26
+
+`writes-scope-run-only` merged into `main` as 6.24.0 (`ec06f7b`, #278), and `ship-quick-mode` (roadmap Phase 3.1)
+is set to merge as 6.25.0 (#280, CI running when this merge was made). The orchestrator, under the maintainer's
+delegation, had this branch merge `ship-quick-mode` at `eec6535`, whose tree is what `main` will hold after #280's
+squash merge, instead of waiting for `main`, and ship as **6.26.0**. Stage model: opus — set by the maintainer's
+instruction, overriding pharn.config.json; routed via Agent subagent; effort not routed. No `## Files` entry changes;
+three of their descriptions now name 6.26.0.
+
+- **The merge (a merge, not a rebase):** `git merge --no-ff --no-commit ship-quick-mode`. Four textual conflicts,
+  resolved by hand:
+  - `CHANGELOG.md`: 3.1's `[6.25.0]` and main's `[6.24.0]` are kept byte for byte, checked: the file minus this
+    plan's section equals `ship-quick-mode`'s CHANGELOG exactly. This plan's entries moved into a new
+    `## [6.26.0] - 2026-09-26` above them; against the entry as built, only the heading, the `SKILLS_VERSION` line,
+    the "behaviour changes in" line and the command's byte count differ.
+  - `SKILLS_VERSION` and the README badge read 6.26.0; the CURRENT-STATE region was regenerated
+    (`npm run docs:generate`, floor checkers 91).
+  - `.claude/commands/pharn-verify.md`: the thin caller is kept (version 0.5.0), plus 3.1's sentence on where the
+    stage sits in a `/pharn-ship --quick` run and main's 6.24.0 posture wording in the Final step (the merged
+    `pharn-regress.md` form), so the command is now 18,418 bytes, still under the 20,000 target.
+  - Git merged the rest itself: `pharn-ship.md`, `pharn-loop.md`, `pharn-regress.md`, `command-hygiene.test.mjs`,
+    `CLAUDE.md`, `ac-gate-core.mjs`, `ship-outcome-core.mjs` and `ac-tests.md`. `## Quick mode` item 8 runs Step 2's
+    verify item "unchanged", so a quick run inherits the `done`-exit binding (G1).
+- **Renumbered 6.24.0 → 6.26.0 by diff** against `ship-quick-mode`, over added lines only, never main's own: 58
+  product, floor, test and meta lines, the CHANGELOG section and the version files, and nine forward-looking lines
+  of this plan. Kept: main's 6.24.0 posture sentence now in `pharn-verify.md`, this plan's GATE-1 record and its
+  sibling-reconciliation note (annotated with the outcome instead), `BUILD.md`'s five history lines (it gains a merge section instead), and `GRILL.md` (3 lines) and `REVIEW.md` (5), which are other
+  stages' records.
+- **Re-pinned**, per `.dev/features/ship-quick-mode/proposed/APPLY.md` ("any sibling plan that pinned the OLD hash
+  must be re-pinned"): the human-applied `fb8bf5b` moved `node .dev/floor/hash-doc.mjs pharn/ARCHITECTURE.md` from
+  `4950796f…` to `d831d30d399a37dc403080072763d13383de6f6f31875e7e8cb4eadeb642f4f4`. The header line above is the
+  one-line edit, made under `/pharn-dev-plan`'s own writes-scope.
+- **The merge is committed before the after-merge regress and verify**, as 3.1 did: `check-bash-reconcile.mjs`
+  reconciles `pharn/floor/` against `HEAD`'s blobs, and `HEAD` does not hold 3.1's and main's floor changes until
+  the merge commit exists. The regress base is `eec6535`, not `git merge-base HEAD origin/main` (`ec06f7b`), which
+  would count 3.1's own files as this plan's escapes. `BUILD.md` records the re-opened epoch and every verdict.

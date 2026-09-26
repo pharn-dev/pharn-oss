@@ -1,6 +1,6 @@
 // pharn/floor/stage-exit-core.mjs — the SHARED stage-exit contract, `pharn-contracts/stage-exit.md`'s
 // code half. Every stage script (pharn/floor/stage-regress.mjs since 6.23.0, pharn/floor/stage-verify.mjs
-// since 6.24.0) emits exactly one JSON object per exit, built and validated through this module, so the
+// since 6.26.0) emits exactly one JSON object per exit, built and validated through this module, so the
 // envelope, the exit-code table and the closed reason_code / question vocabularies exist in ONE place rather
 // than being re-typed per stage (P3 — the registry is KEYED BY STAGE, and each stage script adds its own
 // entry rather than a new file).
@@ -304,7 +304,7 @@ export const REGISTRY = Object.freeze({
       "progress-malformed",
     ]),
   }),
-  // stage-verify-script (6.24.0): `/pharn-verify`'s vocabulary. ONE question — verify has no base, no install and
+  // stage-verify-script (6.26.0): `/pharn-verify`'s vocabulary. ONE question — verify has no base, no install and
   // no test partition to ask about — and it fires only on the runner's own empty source set (`run-gates.mjs init`
   // exit 3), which an explicit `--gates` never reaches, so the answer's `--gates` is the only one on the re-run.
   verify: Object.freeze({

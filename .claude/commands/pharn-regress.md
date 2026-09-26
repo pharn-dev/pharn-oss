@@ -108,7 +108,7 @@ Read the printed `pharn-stage-exit/1` JSON object and branch on the **exit code 
   - every later `unusable` has removed the stale report and cleared that scratch, and from "drain-head"
     onward may have written new state: this run's own progress record, a base-commit checkout, install
     logs, gate stamps;
-  - a stale-report removal that FAILED (anything but absence) is a crash (below), never a `2` (since 6.24.0).
+  - a stale-report removal that FAILED (anything but absence) is a crash (below), never a `2` (since 6.26.0).
 
   None of it is a verdict. `pharn/pharn-contracts/stage-exit.md` states the full order.
 
@@ -178,8 +178,10 @@ narrow scope behind:
 node .claude/hooks/set-writes-scope.cjs --clear
 ```
 
-**Why this exists.** A **set** scope REPLACES `enforce-writes-scope.cjs`'s fail-closed default-safe-set, so
-a leftover scope from a finished run is **stricter** than no scope at all. **ADVISORY (P0):** this is
+**Why this exists.** A **set** scope REPLACES `enforce-writes-scope.cjs`'s default — the fail-closed
+default-safe-set, except in an **installed** project outside an open `/pharn-ship`, `/pharn-loop` or
+`/pharn-review` run, where the default is the permissive one (6.24.0; `CLAUDE.md`, "Writes-scope") — so a
+leftover scope from a finished run is **stricter** than no scope at all. **ADVISORY (P0):** this is
 agent-run orchestration through **Bash**, outside the `PreToolUse` gate (L19) — nothing on the floor
 forces it, and an early abort skips it; the next command's first-step **set** overwrites a leftover scope
 either way.
@@ -187,7 +189,7 @@ either way.
 ## Reference — gate discovery and classification (the script's own closed rules; informational)
 
 `stage-regress.mjs` resolves the gate set exactly once, the same way `/pharn-verify`'s stage script does
-(`stage-verify.mjs` since 6.24.0 — both through the runner's own rule): explicit `--gates` wins; else the closed allowlist
+(`stage-verify.mjs` since 6.26.0 — both through the runner's own rule): explicit `--gates` wins; else the closed allowlist
 **`{ test, lint, format:check, lint:md, typecheck, type-check, build, test:e2e, e2e }`** intersected with
 the project's own `package.json` `scripts`, **minus the e2e ids `test:e2e` and `e2e`**, which `/pharn-regress`
 never discovers (verify-only — a base-side e2e run would double an expensive stage, and a red e2e gate

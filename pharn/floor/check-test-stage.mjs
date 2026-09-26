@@ -246,7 +246,7 @@ function decide({ name, base, cwd }) {
   if (!present(resolve(cwd, lockFile))) return red("no-lock", `${lockFile} is absent — /pharn-test did not run`);
   const recorded = lockModeOf(resolve(cwd, lockFile));
   if (recorded !== null && recorded !== "test-first") {
-    return red("lock-mode-mismatch", `the SPEC is a feature SPEC but the lock is a ${recorded} lock — re-run /pharn-test`);
+    return red("lock-mode-mismatch", `the SPEC is a test-first SPEC but the lock is a ${recorded} lock — re-run /pharn-test`);
   }
   const lock = run(AC_TESTS_LOCK, ["--check", name, "--require-red-run", ...baseArgs], cwd);
   const r = fromLock(lock, "READY test-first", "the mapping holds and the lock records a red run over the pinned tests");

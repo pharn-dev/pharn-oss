@@ -4,7 +4,7 @@
 // Floor/eval infrastructure — NOT a Capability (no `role:`; the floor capability count stays 1, exactly
 // like pharn/floor/check-regress.mjs / floor/check-variance.mjs / pharn/floor/check-structural.mjs, which live in
 // this floor-ignored dir). It owns the WHOLE deterministic verdict of /verify so the maximum surface is
-// in tested Node. Its product caller is pharn/floor/stage-verify.mjs (6.24.0, stage-verify-script), which owns
+// in tested Node. Its product caller is pharn/floor/stage-verify.mjs (6.26.0, stage-verify-script), which owns
 // the I/O side-effects (running the gates through run-gates.mjs, counting verifiers, composing and writing the
 // artifacts); the dev twin /pharn-dev-verify still runs them from its command prose. This helper computes the
 // pass/fail verdict and emits the machine verify-report spine.

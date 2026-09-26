@@ -77,7 +77,9 @@ but the gate's integrity here rests on _who may write the enum field_, and in pu
 - **Backstop (floor):** a forged approval moves only the advisory _intent-approval_ signal; it unlocks
   no floor-gated capability — the pre-write / writes-scope hooks (and pre-egress, specified; ships with the guarded surface) re-gate every downstream
   write **issued through the `Write`/`Edit`/`MultiEdit`/`NotebookEdit` tool surface** and network call
-  regardless of `state`, and the human GATE-2 decision still stands between a built increment and merge.
+  regardless of `state` — in an installed project, while a scope is set or a PHARN run is open; outside
+  both, the writes-scope guard no longer gates ordinary project paths (§7) — and the human GATE-2 decision
+  still stands between a built increment and merge.
   The quantifier is bounded and the bound is load-bearing: a write issued through **`Bash`** is re-gated
   by neither hook, so this backstop covers that one tool surface and no other — **§6**.
   Closing the gate itself needs an out-of-band approval signal the Write tool
@@ -122,9 +124,23 @@ State these honestly; do not pretend tiered loading solves them.
 
 A 3-line typo fix still fans out to every lens, each loading its rules + the diff. Tiered loading
 optimizes _within_ one assembly (don't load all rules at once); it does **nothing** about fan-out
-_breadth_. `quick-mode` exists as a manual flag; there is no automatic proportionality between
-breadth and change size. You pay the most for what there is the most of (small changes). This is
+_breadth_. You pay the most for what there is the most of (small changes). This is
 the largest practical token problem and it is not yet solved.
+
+> **The manual flag is `/pharn-ship --quick` (6.25.0), and it trades checks for cost.** A human chooses it for
+> a `spec_kind: quick` SPEC: one to three acceptance criteria, each verified at `unit` or `integration`. It
+> keeps both human gates, the grill's two floor stops, the test-first evidence for those criteria,
+> `/pharn-regress`'s scope check (a changed file outside the plan's `## Files` still stops the run, within
+> the bounds §6 states for that check) and `/pharn-verify` with its AC gate. It leaves out: **the regression
+> check** — no regression outside the feature is looked for, because nothing compares base and head; **the
+> plan interrogation** — `/pharn-grill --quick` runs its floor stops and no griller; and **`BRIEFING.md` and
+> `RUN-REPORT.md`** (`cost.json` is still written). Its ledger outcome is `gate2-quick`, which is not
+> `gate2`: `gate2` needs a `pharn-regress` stage-start, which a quick run never writes (the bounds of
+> trusting those Bash-written markers are in `pharn-contracts/cost-ledger.md`). The `--quick` flag is read by
+> the orchestrating model, so honoring it is advisory; what backs it is the SPEC's approved, pinned
+> `spec_kind: quick`. Nothing measures whether a change is small: the kind and the flag are what a person
+> chose, and a quick SPEC run without the flag takes the full pipeline. There is still no AUTOMATIC
+> proportionality, and `/pharn-review`'s lens fan-out is unchanged.
 
 ### 3b. Rule overlap × stages
 
@@ -254,7 +270,8 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
   path the plan's `## Files` did not declare (since 6.17.0 `/pharn-regress` also declares
   `AC-TESTS.md`'s), and before 4.0.0 was the only thing in the tree that could surface such a
   write after the fact. Four bounds, every one stated in that checker's own header: it fires only if
-  `/pharn-regress` runs; it compares _changed since base_, not _written by the build_; it carries
+  `/pharn-regress` runs — or, since 6.25.0, `/pharn-ship --quick`'s item 7, which runs the same partition
+  without the rest of that stage; it compares _changed since base_, not _written by the build_; it carries
   closed-enum exemptions for the pipeline's own artifacts; and a plan that edits its own `## Files`
   (or its `AC-TESTS.md`) defeats it. A smoke alarm, never the guard.
 - **The only true prevention is OS-level sandboxing of the `Bash` process** — a filesystem jail, a
@@ -312,8 +329,52 @@ read off the wiring:
   guarded root — are denied, because those entries decide jurisdiction. A `Bash` write still reaches them
   (§6), and re-pointing a worktree's `.git` through `Bash` removes the trusted-file guard from that worktree.
 - **A PHARN install at a subpath of a repository, entered through a worktree of that repository**, reads a
-  different scope record than its setter wrote, and falls back to the default-safe-set: friction, not a
-  hole.
+  different scope record than its setter wrote, and falls back to the default-safe-set — and, because that
+  root carries no `skillsVersion` of its own, it keeps the fail-closed default outside a run as well:
+  friction, not a hole.
+- **In an installed project, `enforce-writes-scope.cjs` is fail-closed only while PHARN is working
+  (6.24.0).** With no scope set and no open `/pharn-ship`, `/pharn-loop` or `/pharn-review` run, it denies
+  PHARN's installed surface — `pharn/**` except `pharn/features/**`, `.claude/**` and `pharn.config.json`,
+  matched case-folded, with the `pharn/features/` exception matched as written, so a case or trailing-dot
+  variant of it is denied — plus its own input `.pharn/writes-scope.json` and, on a system whose separator
+  is `/`, any path containing a backslash: there a backslash is part of a file name, while the guards' path
+  folding reads it as a separator. It allows every other path inside the project, including the files
+  Claude Code loads at session start (`CLAUDE.md`, `AGENTS.md`, `.mcp.json`), so a write made outside a run
+  can shape later runs. `protect-trusted-paths.cjs` is unchanged and still denies its own set in every
+  posture.
+- **Outside the project, that permissive default allows exactly two places (6.24.0, the maintainer's
+  GATE-2 decision).** A path under Claude Code's memory folders — `<claude-config-dir>/projects/*/memory/**`,
+  where the config dir is `$CLAUDE_CONFIG_DIR` when set, else `~/.claude` — or under a temp root, the OS
+  temp directory (`os.tmpdir()`, which honours `$TMPDIR`) or `/tmp`, and never one inside another git
+  tree. Every other out-of-project path stays denied, as every out-of-project path was in every posture
+  before 6.24.0: dotfiles, `~/.ssh`, `~/.claude/settings*.json`, `~/.claude.json`, `~/.claude/hooks/`,
+  LaunchAgents. The two roots are read from the hook's environment, so an environment that points
+  `CLAUDE_CONFIG_DIR`, `HOME` or `TMPDIR` at a broad directory widens them. A different spelling of the
+  project's own path is never an out-of-project path: a path that matches the project's once letter case,
+  Unicode form and trailing dots/spaces are ignored reaches the project's own files on a case-insensitive
+  volume, so it is denied as the project's own (re-review R1) — and so is a sibling directory named like
+  the project plus a trailing dot, although on APFS that is another directory: an over-block.
+- **A run is open while `.pharn/<pharn-loop|pharn-ship|pharn-review>/<name>/active.json` exists with a
+  modification time within 24 h**, or while one of those three state directories is present but is not a
+  readable directory — a file planted there holds the tree fail-closed until someone removes it. The
+  markers are written and removed through `Bash` (§6). `/pharn-ship`, `/pharn-review` and `/pharn-loop`
+  stop when opening their marker fails (the loop also when its pre-run snapshot does), but a run that
+  skips the step is unguarded between its stages, a crashed run's marker
+  keeps every session in the tree fail-closed for up to 24 h unless it is closed, and `touch` extends it.
+  The posture needs `skillsVersion` at the root the guard judges. A malformed `.pharn/writes-scope.json`
+  denies every write in an installed project.
+- **Every write is judged at every target it can reach (6.24.0), in every posture.** The guard resolves a
+  path both the way `path.resolve()` does and the way the filesystem does — reading each existing
+  directory's on-disk spelling, following a dangling symlink to the target it names, and applying `..` to
+  a symlink's real parent — and denies the write if either target is denied. In a dev checkout or an
+  unsignalled tree that, and a guard error now denying instead of crashing open, are the only verdict
+  changes, and both move toward deny; the first includes a path spelled with another letter case or
+  Unicode form than an existing directory, now also judged at that directory's own spelling. A hard link
+  is not resolved,
+  so the permissive default judges it by its own name; creating one needs `Bash`.
+- **Outside a run, an edit the guard allows between a manual `/pharn-build` and `/pharn-verify` is still
+  judged by `check-bash-reconcile.mjs` against the build's recorded scope**, and reads as an escape, as an
+  editor edit does.
 - **The `/pharn-loop` Stop guard acts only when Claude Code starts it, and it fails OPEN.**
   `require-loop-record.cjs` refuses a turn end, at most three times per run, while an unattended loop
   run open in this session has no `LOOP.md`. It cannot make a model do work, cannot judge the record,
@@ -345,7 +406,7 @@ config's presence suggests.
   fixtures — a live sweep of the repository, which is weaker than a probe and is stated as such: a
   negative existential is not something executing a check can settle. This is **not** the broader claim
   that `pharn.config.json` is unread — that file **is** read at run time, by
-  `.claude/hooks/enforce-writes-scope.cjs` (`skillsVersion`, to choose its fail-closed posture), by
+  `.claude/hooks/enforce-writes-scope.cjs` (`skillsVersion`, to choose its posture), by
   `pharn/floor/check-bash-reconcile.mjs` (which copies it into a probe sandbox), and by others since
   (`testResults`, read by `pharn/floor/test-results-core.mjs`, 6.15.0). The block is a source of
   truth the frontmatter is held to, nothing more. PHARN does not attempt to apply a model and fall short;

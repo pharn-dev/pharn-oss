@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// pharn/floor/stage-verify.mjs — the /pharn-verify STAGE SCRIPT (stage-verify-script, 6.24.0). Every deterministic
+// pharn/floor/stage-verify.mjs — the /pharn-verify STAGE SCRIPT (stage-verify-script, 6.26.0). Every deterministic
 // step of the verify stage — argv validation, containment, the stale-output removal, the spec→plan chain check,
 // the eval-pair discovery, the verifier count, the gate run, the verdict, the report composition and the atomic
 // artifact writes — lives here, in TESTED CODE, instead of in `.claude/commands/pharn-verify.md`'s prose. The

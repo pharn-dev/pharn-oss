@@ -81,14 +81,19 @@ for "therefore guaranteed." The `MUST` above is a **three-way split**, not one b
 - **Declaring it → ADVISORY today, not floor-enforced.** This bullet previously claimed that once a
   Capability names `findings.json` in its `writes:` (`pharn/ARCHITECTURE.md §3.1`), the pre-write
   writes-scope guard "pins the path". **That is false, and the correction matters more than the claim
-  did.** `enforce-writes-scope.cjs` reads exactly one input — `.pharn/writes-scope.json` — which
-  `set-writes-scope.cjs` writes from a **`--from-frontmatter <file>`** argument. **Every one of the
-  corpus's `--from-frontmatter` call sites names a COMMAND file; not one names a Capability**
-  (verified by enumerating them). So a Capability's `writes:` is **parsed by nothing** and pins
-  nothing — it is declared metadata that documents intent.
+  did.** `enforce-writes-scope.cjs` reads exactly one SCOPE input — `.pharn/writes-scope.json` — beside
+  the signals that choose its default when none is set (`pharn.config.json`'s `skillsVersion`,
+  `.dev/floor/` presence, and, in an installed project, the run markers under `.pharn/pharn-*/` —
+  6.24.0). `.pharn/writes-scope.json` itself is written by `set-writes-scope.cjs` from a
+  **`--from-frontmatter <file>`** argument. **Every one of the corpus's `--from-frontmatter` call sites
+  names a COMMAND file; not one names a Capability** (verified by enumerating them). So a Capability's
+  `writes:` is **parsed by nothing** and pins nothing — it is declared metadata that documents intent.
   **What IS floor-enforced** is the scope the invoking **command** set: a lens subagent spawned by
-  `/pharn-review` writes under `pharn/features/**` because that is the active scope (or the fail-closed
-  default), **not** because the lens declared a path. The guarantee is real but it belongs to the
+  `/pharn-review` writes under `pharn/features/**` because that is the active scope (or, with no scope
+  set, the default — fail-closed while `/pharn-review`'s own run marker is open; the command opens it
+  before any untrusted content enters context and STOPS if the open fails, but that step is advisory
+  command prose, so a run that skips it writes under the install posture's permissive default), **not**
+  because the lens declared a path. The guarantee is real but it belongs to the
   command, and it is **coarser** than a per-Capability pin. Surfaced by an adversarial review
   (`capability-writes-never-bound-to-guard`, HIGH).
 - **Emitting it at all → advisory.** Nothing on the floor forces a Capability to declare or write

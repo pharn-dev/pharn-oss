@@ -70,22 +70,22 @@ without joining the build's scope, and a second extractor would mean editing a p
 
 ## The checker — `check-ac-tests.mjs <AC-TESTS.md> <SPEC.md> <PLAN.md> [--features-dir <dir>]`
 
-| kind                | RED when                                                                                                                                                       |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `legacy-spec`       | the SPEC has no `spec_template` (checked first; exits **1** like every kind here — exit **3** is `--spec` mode's)                                              |
-| `pin`               | `check-plan-spec-agree.mjs <AC-TESTS.md> <SPEC.md>` REDs: exit 1 with its `RED —` line (Draft, drifted, stale or mislabeled); a crash is no verdict (below)    |
-| `spec-kind`         | the SPEC is `spec_kind: test-infra` (a bootstrap increment has no mapping), or its `spec_kind` is invalid, or its body opens with a `spec_kind:` line (6.20.7) |
-| `malformed-line`    | a non-blank line under `## Mapping` does not match, or there is no `## Mapping`                                                                                |
-| `missing-ac`        | a SPEC AC has no mapping line, or the SPEC's Acceptance Criteria section is absent or duplicated                                                               |
-| `duplicate-ac`      | an AC has more than one mapping line                                                                                                                           |
-| `unknown-ac`        | a mapped id is not a SPEC AC                                                                                                                                   |
-| `level-mismatch`    | a mapped level differs from the SPEC's `verify:` level                                                                                                         |
-| `unlisted-file`     | a mapped file is not in `## Files`                                                                                                                             |
-| `unmapped-file`     | a `## Files` entry is mapped by no line                                                                                                                        |
-| `in-plan-files`     | a test file is in PLAN.md `## Files`, so the build would be scoped to it                                                                                       |
-| `claimed-elsewhere` | another feature's AC-TESTS.md `## Files` already names the file                                                                                                |
-| `no-files`          | there is no `## Files`, or it names nothing                                                                                                                    |
-| `bad-path`          | a `## Files` entry is a placeholder or glob, absolute, led by `-`, not normalized, or under `.pharn/` or `pharn/features/`                                     |
+| kind                | RED when                                                                                                                                                                                |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `legacy-spec`       | the SPEC has no `spec_template` (checked first; exits **1** like every kind here — exit **3** is `--spec` mode's)                                                                       |
+| `pin`               | `check-plan-spec-agree.mjs <AC-TESTS.md> <SPEC.md>` REDs: exit 1 with its `RED —` line (Draft, drifted, stale or mislabeled); a crash is no verdict (below)                             |
+| `spec-kind`         | the SPEC's `spec_kind` is outside `TEST_FIRST_KINDS` — e.g. `test-infra` (a bootstrap increment has no mapping) — or it is invalid, or its body opens with a `spec_kind:` line (6.20.7) |
+| `malformed-line`    | a non-blank line under `## Mapping` does not match, or there is no `## Mapping`                                                                                                         |
+| `missing-ac`        | a SPEC AC has no mapping line, or the SPEC's Acceptance Criteria section is absent or duplicated                                                                                        |
+| `duplicate-ac`      | an AC has more than one mapping line                                                                                                                                                    |
+| `unknown-ac`        | a mapped id is not a SPEC AC                                                                                                                                                            |
+| `level-mismatch`    | a mapped level differs from the SPEC's `verify:` level                                                                                                                                  |
+| `unlisted-file`     | a mapped file is not in `## Files`                                                                                                                                                      |
+| `unmapped-file`     | a `## Files` entry is mapped by no line                                                                                                                                                 |
+| `in-plan-files`     | a test file is in PLAN.md `## Files`, so the build would be scoped to it                                                                                                                |
+| `claimed-elsewhere` | another feature's AC-TESTS.md `## Files` already names the file                                                                                                                         |
+| `no-files`          | there is no `## Files`, or it names nothing                                                                                                                                             |
+| `bad-path`          | a `## Files` entry is a placeholder or glob, absolute, led by `-`, not normalized, or under `.pharn/` or `pharn/features/`                                                              |
 
 **One more kind, since 6.21.0 — `test-infra-in-plan`:** a PLAN.md `## Files` entry that, as the setter scopes it, is a
 ROOT runner config the test-infrastructure pin covers (below). Every write the build could make there changes the
@@ -113,7 +113,11 @@ the ids and levels), **3** legacy, **4** bootstrap (`spec_kind: test-infra`; pri
 records), **2** unusable. Precedence, fixed: unreadable 2 → legacy 3 → an invalid `spec_kind`, or a body that opens with a `spec_kind:` line
 (6.20.7; `spec-template.md`, "`spec_kind`"), 2 → an absent,
 duplicated or empty Acceptance Criteria section (or, for bootstrap, a malformed level) 2 → bootstrap 4 → templated 0.
-`/pharn-plan` and `/pharn-test` branch on it.
+`/pharn-plan` and `/pharn-test` branch on it. **A `spec_kind: quick` SPEC (6.25.0, `/pharn-ship --quick`) is
+TEMPLATED (0) and treated as `feature` throughout this contract** — the same mapping check, red run,
+test-stage gate and AC gate, reached through `TEST_FIRST_KINDS` (`spec-template-core.mjs`) rather than a
+literal `=== "feature"` test — a quick SPEC just carries fewer, narrower-leveled criteria (`spec-template.md`
+rule 9).
 
 The mapping grammar — the level set, the line regex, the `## Mapping` reader, the path rule and the comparison key —
 lives in `pharn/floor/ac-tests-core.mjs`, which the checker, the runner and the red-run verdict all import.
@@ -358,7 +362,7 @@ reads SPEC.md: without it, a SPEC re-approved as `test-infra` beside an old test
 ## The AC gate — `/pharn-verify`'s delivery check (6.20.0)
 
 `pharn/floor/ac-gate-core.mjs`, run by `check-verify.mjs --stamp … --ac-gate` (`/pharn-verify`'s verdict call, made
-by `pharn/floor/stage-verify.mjs` since 6.24.0), answers the
+by `pharn/floor/stage-verify.mjs` since 6.26.0), answers the
 question this whole contract exists for: **was every Acceptance Criterion delivered on the head verify run?** An AC is
 delivered = **a locked, once-red test titled `AC-<n>:`, in a file mapped to AC-n, passed on the head run.** PHARN does
 not judge whether that test fully captures the AC's intent. The ACs are the SPEC's: one the mapping does not cover

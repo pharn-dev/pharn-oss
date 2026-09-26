@@ -154,7 +154,7 @@ const CHECKERS = Object.freeze({
 export const FEATURE_BASE = "pharn/features";
 
 /** The stamp locations the two stage scripts write, each DERIVED from its stage core's path table — the one
- *  owner of that stage's scratch layout: stage-verify-core.mjs's VERIFY_PATHS (6.24.0's stage-verify-script)
+ *  owner of that stage's scratch layout: stage-verify-core.mjs's VERIFY_PATHS (6.26.0's stage-verify-script)
  *  and stage-regress-core.mjs's REGRESS_PATHS (6.23.0's stage-regress-script) — so this file carries no second
  *  literal for either script's layout to drift from. Both cores import only gate-run-core.mjs, already in
  *  this module's graph, so each adds one small module to it. */
@@ -548,7 +548,7 @@ function checkE(ctx) {
   const fp = fingerprint(ctx.repo, { feature: ctx.feature });
   const sf = ctx.stamps.verify.value.fingerprint;
   const treeMoved = !fp.ok || sf.algo !== fp.algo || sf.final !== fp.digest;
-  // Unmoved: `--ac-gate` (6.20.0) — /pharn-verify's stage script (stage-verify.mjs, 6.24.0) passes it on its verdict
+  // Unmoved: `--ac-gate` (6.20.0) — /pharn-verify's stage script (stage-verify.mjs, 6.26.0) passes it on its verdict
   // call, so a report produced without it, or with its AC block edited, cannot be reproduced here, and every field is
   // compared. Moved (6.20.6): the flag-less run, a pure function of the stamp, and only what the stamp alone decides is
   // compared — gates, the non-AC failing ids and the verdict rule — so a forged verdict STOPS before F instead of being

@@ -54,7 +54,7 @@ pharn/features/*/RUN-REPORT.md
 # first FAIL.
 pharn/features/*/REGRESSION.md
 
-# VERIFY.md — the SAME reasoning as REGRESSION.md above (L23, stage-verify-script 6.24.0):
+# VERIFY.md — the SAME reasoning as REGRESSION.md above (L23, stage-verify-script 6.26.0):
 # `pharn/floor/render-verify.mjs` renders it deterministically FROM `pharn/floor/stage-verify.mjs`, and it quotes
 # gate ids, PLAN-derived paths and a checker's own message verbatim — content the renderer does not control — so
 # gate-clean output is not achievable by construction, and the conflict would land on `/pharn-verify` itself.

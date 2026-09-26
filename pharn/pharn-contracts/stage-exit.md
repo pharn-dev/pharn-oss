@@ -19,7 +19,7 @@ structured question, or refuse needs **one** way to say so — otherwise each ne
 its own shape, and a thin command reading it would re-derive a protocol from prose again, which is the
 exact class of defect `pharn/floor/gate-run-record.md` closed for the gate-run stamp (P7, cited not
 restated). This contract is that one shape, **keyed by stage**: each stage script adds its own registry entry,
-not a new file — `stage-verify-script` (6.24.0) added `verify` that way. The mechanics both scripts share (the
+not a new file — `stage-verify-script` (6.26.0) added `verify` that way. The mechanics both scripts share (the
 argv rules, the containment walk, the budget tracker, the drain) live once, in `pharn/floor/stage-runtime.mjs`.
 
 ## The envelope
@@ -66,11 +66,11 @@ requires must be present, and no key outside that status's set may appear.
   - A `--resume` invocation's own `unusable` (`no-progress`, `progress-malformed`, `path-containment`, its
     `usage-error`) removes nothing.
   - **A removal that fails** for any reason other than absence is a crash (exit 1, no document), never a `2`
-    (since 6.24.0's GATE 2 fix — both stage scripts remove through `stage-runtime.mjs`'s `removeIfPresent`, where
+    (since 6.26.0's GATE 2 fix — both stage scripts remove through `stage-runtime.mjs`'s `removeIfPresent`, where
     only `ENOENT` is absence). Before, `regress` swallowed every unlink error, so an unremovable earlier
     `regression-report.json` survived beside a later `unusable`, and the two bullets above did not hold for it.
 
-  For `verify` (6.24.0), in the script's own order — the stage's scratch is cleared BEFORE the rest of argv is
+  For `verify` (6.26.0), in the script's own order — the stage's scratch is cleared BEFORE the rest of argv is
   validated, which is the one difference from `regress` above (the removal rule is the same, shared):
   - **Before the slug parses, or at `path-containment` itself**, nothing has been removed: an earlier
     `verify-report.json`, `VERIFY.md` and progress record survive together.
@@ -166,7 +166,7 @@ Step 2 table, not restated here):
 - a crash (an exit outside the table) → S9;
 - `continue` is handled inside the thin command (it re-runs the resume line) and never reaches the loop.
 
-## The `verify` vocabulary (6.24.0, `stage-verify-script`)
+## The `verify` vocabulary (6.26.0, `stage-verify-script`)
 
 - **`question`** — `no-gates` only. Its fixed text names verify's one cause (no `--gates`, and `package.json` absent
   or declaring none of the allowlisted scripts) and the caveat the AC gate makes true: for a SPEC written from the
@@ -184,7 +184,7 @@ Step 2 table, not restated here):
   external writer, so stopping is the fail-closed direction.
 
 `/pharn-loop`'s mapping for `verify` follows the same rule as `regress`: `question no-gates` → S4; `refused` and
-`unusable` → S9; a crash → S9; `continue` is handled inside the thin command. **New S9 stops as of 6.24.0 (the A7
+`unusable` → S9; a crash → S9; `continue` is handled inside the thin command. **New S9 stops as of 6.26.0 (the A7
 disclosure):** a crashed completeness checker (before, it read `INCOMPLETE`, which `check-loop.mjs` CONTINUEs — a
 rebuild iteration, up to the cap), a runner refusal with a lapse included (before, a fail-closed report
 `check-loop-fresh.mjs` B could route to one re-run), and an unparseable `## Files` (before, the gates ran and the
@@ -282,7 +282,7 @@ stage script shells (`check-regress.mjs`, `check-verify.mjs`, `check-plan-spec-a
 stage's own command and never re-derived here.
 
 **`done.verdict` and `continue.phase` accept any non-empty string (M6, GATE 2 review — named, not closed
-here), for EVERY stage, `verify` included (6.24.0).** Unlike `options[]`, neither is checked against a
+here), for EVERY stage, `verify` included (6.26.0).** Unlike `options[]`, neither is checked against a
 per-stage enum.
 
 - `verdict` is the checker's own output — `check-regress.mjs verdict`'s, whose vocabulary

@@ -71,7 +71,7 @@ test("REGISTRY: the regress vocabulary matches the plan's closed table exactly",
   assert.deepEqual(STAGES, ["regress", "verify"]);
 });
 
-test("REGISTRY: the verify vocabulary matches the stage-verify-script plan's closed table exactly (6.24.0)", () => {
+test("REGISTRY: the verify vocabulary matches the stage-verify-script plan's closed table exactly (6.26.0)", () => {
   assert.deepEqual(REGISTRY.verify.refused, ["missing-artifact", "chain-red", "plan-files-unparseable"]);
   assert.deepEqual(Object.keys(REGISTRY.verify.question), ["no-gates"]);
   assert.deepEqual(REGISTRY.verify.unusable, [
@@ -253,7 +253,7 @@ test("validateStageExit: rejects a bad schema, an unknown status, an unknown sta
   assert.equal(validateStageExit({ ...base, schema: "pharn-stage-exit/2" }).ok, false);
   assert.equal(validateStageExit({ ...base, status: "finished" }).ok, false);
   assert.equal(validateStageExit({ ...base, stage: "ship" }).ok, false, "ship is not a registered stage");
-  assert.equal(validateStageExit({ ...base, stage: "verify" }).ok, true, "verify is a registered stage since 6.24.0");
+  assert.equal(validateStageExit({ ...base, stage: "verify" }).ok, true, "verify is a registered stage since 6.26.0");
   assert.equal(validateStageExit({ ...base, feature: "Not_A_Slug!" }).ok, false);
   assert.equal(validateStageExit({ ...base, feature: null }).ok, true, "a null feature is legal (an argv refusal before <name> resolves)");
   assert.equal(validateStageExit(null).ok, false);
@@ -319,7 +319,7 @@ test("F1 — the registry's OWN untouched options object still validates (the po
   }
 });
 
-// ── F1 for VERIFY's `no-gates` (6.24.0) — the same five controls, on the new stage's own question ──────
+// ── F1 for VERIFY's `no-gates` (6.26.0) — the same five controls, on the new stage's own question ──────
 test("★ F1 (verify) — a forged label, a forged argv, an extra key, an added and a removed option each FAIL validateStageExit", () => {
   const q = questionExit({ stage: "verify", feature: "demo", reasonCode: "no-gates", resumeArgv: ["--feature", "demo"] });
   assert.equal(q.options.length, 2, "precondition: two registered options, so a removal is meaningful");

@@ -177,3 +177,32 @@ The orchestrator directed a small fix round under the maintainer's delegation. E
 - **The floor after GATE 2 fix.** `node pharn/floor/validate.mjs .` → exit 0, `FLOOR: GREEN — 36 capabilities checked`.
 - **The command's size after the fix.** `wc -c .claude/commands/pharn-verify.md` → 17,986 bytes, under the 20,000
   target. It is still 5 fenced bash blocks and 4 + k calls.
+
+## GATE 2 — the merge of 3.1 (`ship-quick-mode`, `eec6535`) and the renumber to 6.26.0
+
+The orchestrator, under the maintainer's delegation, directed this merge; `PLAN.md`, "Amended at GATE 2 (merge of
+3.1)", records the decisions. The lines above this section are history and keep 6.24.0. Every line below reports a
+command that ran.
+
+- **The merge.** `git merge --no-ff --no-commit ship-quick-mode` → exit 1 with four conflicts (`CHANGELOG.md`,
+  `SKILLS_VERSION`, `README.md`, `.claude/commands/pharn-verify.md`), resolved by hand under the plan scope
+  (`set-writes-scope.cjs --from-plan`, exit 0, 33 paths). The CHANGELOG was checked by a read-only script: the file
+  minus the new `[6.26.0]` section equals `git show ship-quick-mode:CHANGELOG.md` byte for byte, and that section
+  differs from `c9cd073`'s `[6.24.0]` in exactly four lines (the heading, the `SKILLS_VERSION` line, the byte count,
+  the "behaviour changes in" line).
+- **Renumbered by diff.** A read-only scan of `git diff ship-quick-mode`'s added lines found 83 naming 6.24; 58
+  product, floor, test and meta lines were renumbered to 6.26.0. What was kept is listed in `PLAN.md`'s amendment.
+  A re-scan afterwards leaves one outside the audit trail: main's own posture sentence in `pharn-verify.md`'s Final
+  step.
+- **`npm run docs:generate`** → exit 0 (floor checkers 91; `docs/capabilities/` unchanged).
+- **Re-pin.** `node .dev/floor/hash-doc.mjs pharn/ARCHITECTURE.md` → `d831d30d…` on the merged tree and `4950796f…`
+  on `c9cd073`'s copy; the PLAN header now carries `d831d30d…`, edited under `/pharn-dev-plan`'s scope.
+  `node pharn/floor/check-plan-lessons.mjs .dev/features/stage-verify-script/PLAN.md .dev/memory-bank/lessons-learned.md`
+  → exit 0, GREEN, 34 ids.
+- **The floor on the merged tree.** `node pharn/floor/validate.mjs .` → exit 0, `FLOOR: GREEN — 36 capabilities
+checked`.
+- **The suite on the merged tree, before the merge commit.** `npm test` → exit 0, tests 3759, pass 3759, fail 0.
+- **Style over every file edited in the merge.** `npx prettier --check`, `npx markdownlint-cli2 --no-globs` and
+  `npx eslint` over the explicit list → exit 0 each.
+- **The command's size after the merge.** `wc -c .claude/commands/pharn-verify.md` → 18,418 bytes, under the
+  20,000 target.

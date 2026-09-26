@@ -197,7 +197,10 @@ function testFirst({ feature, spec, stamp, root, recordOf }) {
   let lock = null;
   if (!loaded.ok) add("ac-tests-modified", loaded.why);
   else if (modeOf(loaded.lock) !== "test-first")
-    add("ac-tests-modified", "the lock is a bootstrap lock, but the SPEC is spec_kind: feature — the tests were never pinned test-first");
+    add(
+      "ac-tests-modified",
+      "the lock is a bootstrap lock, but the SPEC is a test-first spec_kind (feature or quick) — the tests were never pinned test-first"
+    );
   else lock = loaded.lock;
 
   if (lock) {

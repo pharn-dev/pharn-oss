@@ -13,14 +13,21 @@
 //   ... [--allow-claude-dir]                      # opt in to scoping the write-guards' own control surface
 //   node .claude/hooks/set-writes-scope.cjs --clear   # run as a command's LAST step, after every write
 //
-// --clear DELETES .pharn/writes-scope.json, returning enforce-writes-scope.cjs to its fail-closed
-// DEFAULT_SAFE_SET. It exists because a SET scope REPLACES that safe-set: a command that finished and
-// left its scope behind is STRICTER than the default, so ordinary later work is silently denied
-// (measured: with a leftover one-path scope, `pharn/features/**`, `.dev/features/**` and `pharn/pharn-*/**`
-// paths the default PERMITS all exit 2). It takes no --target and REFUSES to combine with
-// --from-plan / --from-frontmatter: clearing and setting in one call is always a mistake, and the
-// refusal is louder than a silently-honored precedence rule. Absent file -> exit 0, no output change
-// (idempotent), so a command's last step is safe to run twice or after an early abort.
+// --clear DELETES .pharn/writes-scope.json, returning enforce-writes-scope.cjs to its DEFAULT. Since
+// 6.24.0 that default is no longer always the fail-closed DEFAULT_SAFE_SET: in a dev checkout, an
+// unsignalled tree, or an installed project with a PHARN run open it is (unchanged); in an INSTALLED
+// project with NO run open it is instead the newer, more permissive default (it denies PHARN's own
+// installed surface and its own scope file and allows the rest of the project — the whole rule, including
+// the out-of-project half, is in `enforce-writes-scope.cjs`'s header and `CLAUDE.md`, "Writes-scope"). This command
+// never prints which one applies — it only removes the record — because computing that would duplicate
+// the hook's own posture/run-marker logic in a second place. It exists because a SET scope REPLACES
+// whichever default is live: a command that finished and left its scope behind is STRICTER than either
+// default, so ordinary later work is silently denied (measured, in the dev posture: with a leftover
+// one-path scope, `pharn/features/**`, `.dev/features/**` and `pharn/pharn-*/**` paths the default
+// PERMITS all exit 2). It takes no --target and REFUSES to combine with --from-plan / --from-frontmatter:
+// clearing and setting in one call is always a mistake, and the refusal is louder than a
+// silently-honored precedence rule. Absent file -> exit 0, no output change (idempotent), so a command's
+// last step is safe to run twice or after an early abort.
 //
 // TWO failure directions this flag must survive, both named because naming only one is how a partial
 // rationale narrows the next reader (.dev/memory-bank/lessons-learned.md L25):
@@ -308,8 +315,8 @@ function main() {
     }
     process.stdout.write(
       existed
-        ? "writes-scope cleared: .pharn/writes-scope.json removed -> fail-closed default-safe-set active\n"
-        : "writes-scope cleared: no active scope (already absent) -> fail-closed default-safe-set active\n"
+        ? 'writes-scope cleared: .pharn/writes-scope.json removed -> the guard\'s default now applies (fail-closed, except in an installed project outside an open PHARN run — CLAUDE.md, "Writes-scope")\n'
+        : 'writes-scope cleared: no active scope (already absent) -> the guard\'s default applies (fail-closed, except in an installed project outside an open PHARN run — CLAUDE.md, "Writes-scope")\n'
     );
     process.exit(0);
   }

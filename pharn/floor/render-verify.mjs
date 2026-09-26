@@ -4,7 +4,7 @@
 // write reached through Bash, outside fix #7 — L19, declared in the command).
 //
 // ================================ WHY THIS REPLACES MODEL-WRITTEN PROSE ================================
-// Before stage-verify-script (6.24.0), `/pharn-verify`'s Step 6 wrote `VERIFY.md` by hand from whatever the model
+// Before stage-verify-script (6.26.0), `/pharn-verify`'s Step 6 wrote `VERIFY.md` by hand from whatever the model
 // had just read — the class `render-regression.mjs` (6.23.0), `render-run-report.mjs` (6.6.0) and
 // `render-ship-briefing.mjs` closed for their own artifacts. Every line below is a deterministic function of the
 // report object (A6, 6.23.0's review: a render must not assert what its input does not say — so nothing here reads

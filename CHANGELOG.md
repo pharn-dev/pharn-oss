@@ -23,13 +23,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.24.0] - 2026-09-26
+## [6.26.0] - 2026-09-26
 
 ### Added
 
 - 2026-09-26: **`/pharn-verify` becomes a THIN CALLER of one tested stage script, `pharn/floor/stage-verify.mjs`, on
   6.23.0's shared stage-exit contract; the stage-script mechanics move into one shared owner,
-  `pharn/floor/stage-runtime.mjs`.** `SKILLS_VERSION` 6.23.0 → 6.24.0. `MIN_CLI` stays 0.5.0: no installed path
+  `pharn/floor/stage-runtime.mjs`.** `SKILLS_VERSION` 6.25.0 → 6.26.0. `MIN_CLI` stays 0.5.0: no installed path
   relocates and no existing frontmatter or contract shape breaks.
   ([`.dev/features/stage-verify-script/`](./.dev/features/stage-verify-script/))
   - **Why (P7, Phase 1.1's measured trigger).** A user's own `/pharn-ship` `cost.json` ledgers put PHARN's own stages
@@ -37,7 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     `/pharn-verify` was the other stage whose deterministic work ran as one model turn per step: 14 + d + G + P tool
     calls (G project gates, P eval-pair gates, d the eval-pair discovery) over a 55,683-byte prompt. The thin command
     is 4 + k calls (the constitution read, the setter, the pinned line, one resume per `continue`, the release) over
-    17,986 bytes.
+    18,418 bytes.
   - **`pharn/floor/stage-verify.mjs`** (new) runs every deterministic step through eight named phases (`fresh` →
     `chain` → `pairs` → `verifiers` → `init` → `drain` → `verdict` → `render`): the `lstat` containment walk; the
     removal of THIS feature's earlier `verify-report.json`/`VERIFY.md` and the stage's scratch right after the slug
@@ -82,7 +82,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- 2026-09-26: **`/pharn-verify`'s behaviour changes in 6.24.0, each disclosed** (`stage-verify-script`):
+- 2026-09-26: **`/pharn-verify`'s behaviour changes in 6.26.0, each disclosed** (`stage-verify-script`):
   - **A crashed `check-build-complete.mjs` stops the stage before any gate runs** (`unusable child-crashed`). Before,
     the runner's `aux.completeness` read node's exit 1 as "incomplete", the verdict read `INCOMPLETE`, `/pharn-ship`
     Step 2b answered it with its one bounded rebuild, and `/pharn-loop` CONTINUEd (a rebuild iteration, up to the
@@ -117,6 +117,186 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Also named, not built: `dev-verify-stage-script` (`/pharn-dev-verify` keeps its prose flow),
     `count-verifiers-flush-rule`, and `regress-resume-budget-value` (`stage-regress.mjs`'s `--resume` still accepts a
     value-less trailing `--budget-ms`, as in 6.23.0; `stage-verify.mjs` refuses it).
+
+## [6.25.0] - 2026-09-26
+
+### Added
+
+- 2026-09-26: **`/pharn-ship --quick` — a shorter product-pipeline spine for a small change, trading checks for
+  cost at the maintainer's explicit 2026-09-25 direction (not a dogfood failure).** A user reported that even a
+  tiny fix goes through the whole pipeline, and `cost.json` ledgers showed PHARN's own stages at ~81% of relative
+  cost on three small fixes, `/pharn-regress` alone ~63% of that. `--quick` runs a `spec_kind: quick` mini-SPEC
+  (1–3 acceptance criteria, each `unit` or `integration` — never `e2e`) through **both** human gates, the grill's
+  two floor stops **without** its interrogation, test-first AC evidence exactly as a `feature` SPEC gets, the
+  build, `/pharn-regress`'s scope check (kept) and `/pharn-verify` — and it **skips** `/pharn-regress`'s
+  base-and-head comparison, `BRIEFING.md` and `RUN-REPORT.md`. Its ledger outcome is `gate2-quick`, which is not
+  `gate2`: every consumer compares `decision` by equality, so neither can be mistaken for the other. Quick mode is
+  not `--yolo` — both gates stay, and `SHIP.md`'s `## Not checked in quick mode` list names each step that was
+  skipped. `SKILLS_VERSION` 6.24.0 → 6.25.0 (minor: a newly shipped mode, a SPEC kind, a CLI print mode and a
+  marker flag; nothing invalidates an install). `MIN_CLI` stays 0.5.0: no installed path moves. **The one direction
+  that does not read back:** an install rolled back below 6.25.0 reads a `spec_kind: quick` SPEC as a rule-8 RED
+  (`quick` is not a member there), so that SPEC stops passing `check-spec-approved`; a pre-6.25.0 renderer shows a
+  `gate2-quick` decision without its preamble bullet; and no pre-6.25.0 checker REDs such a ledger.
+  ([`.dev/features/ship-quick-mode/`](./.dev/features/ship-quick-mode/))
+  - **`spec_kind: quick`** joins `feature` and `test-infra` (`spec-template-core.mjs` `SPEC_KINDS`). `feature` and
+    `quick` are grouped as `TEST_FIRST_KINDS` — the kinds `/pharn-test` treats test-first — with `SPEC_KINDS`
+    exactly `TEST_FIRST_KINDS ∪ {test-infra}`, disjoint, so a fourth kind must be classified before it is
+    TEMPLATED. A new template rule 9 bounds a quick SPEC to at most 3 criteria, each at `unit` or `integration`;
+    every consumer that branches on the kind (`check-ac-tests.mjs`, `check-test-stage.mjs`, `ac-gate-core.mjs`) now
+    reads `TEST_FIRST_KINDS` membership rather than a literal `=== "feature"` test, so a quick SPEC gets the exact
+    same AC-evidence gates a feature SPEC does.
+  - **`check-spec.mjs --spec-kind <SPEC.md>`** — a new print mode beside `--state` and `--spec-id`: prints
+    `feature` | `test-infra` | `quick` for a templated SPEC, an empty line (exit 0) when the kind is unusable, and
+    `feature` for a legacy SPEC (so a legacy SPEC is never quick while it stays legacy). `/pharn-ship`'s GATE-1 backstop and
+    `/pharn-grill --quick`'s eligibility check both shell this mode, so the printed token and the approval pin's
+    own reading of the kind can never disagree.
+  - **`mark-phase.mjs --mode <m>`** — run-start only, `m` in the new closed `MARKER_MODES` (`{"quick"}`); refused
+    on any other `--kind` and for any other value, writing nothing. With no flag a marker carries no `mode` key at
+    all, byte-identical to every marker written before this. `render-cost-ledger.mjs`'s `normalizeMarkers` keeps
+    the field only as a `MARKER_MODES` member (the `origin: "pending"` precedent) — no schema bump, since an old
+    checker's per-marker rule is the closed `kind` enum only.
+  - **`ship-outcome-core.mjs`**: `runMode()` reads `"quick"` iff the CURRENT run's run-start carries
+    `mode === "quick"` (exact equality, read at derivation time) — an earlier run's quick run-start never makes
+    the current run quick, and the reverse. `verdictStages()` forks the applicability stage set by mode:
+    `["pharn-regress", "pharn-verify"]` (full) or `["pharn-verify"]` (quick) — demanding a regress stage-start for
+    quick mode would make `gate2-quick` unreachable, since a quick run never starts `/pharn-regress`. The
+    regression verdict is **never consulted** for `gate2-quick`, so a `regression-report.json` left on disk by an
+    earlier full run cannot manufacture it. `SHIP_DECISION_FORMS` gains the `gate2-quick` member (closure-tested).
+  - **Verdict applicability, tightened in BOTH modes (GATE-2 review finding F1).** A quick run whose run-start
+    line was skipped, after an earlier run that never wrote its run-stop, joined that run's window — iteration
+    numbers restart at 1 in every run, so the earlier `pharn-regress@1` completed the pair for the quick run's own
+    `pharn-verify@1`, and the derivation returned the FLOOR decision `gate2` over a regress check that never ran
+    on this build. Two conditions close it: (a) a verdict stage-start counts only after the same iteration's
+    latest `pharn-build` stage-start; (b) a stage other than a verdict stage started twice at one iteration in the
+    current run is a boundary that cannot be established, so the outcome is `undetermined` (the verdict stages are
+    exempt: `/pharn-loop`'s freshness re-run starts them again inside one iteration). A full run's outcome changes
+    only on marker trails a compliant run never writes. So **a skipped or wrong mode marker never yields `gate2`**:
+    a quick run-start written without `--mode quick` reads as full and has no regress stage-start
+    (`stop:pharn-verify`); a skipped quick run-start reads `undetermined` when its stage markers follow the earlier
+    run's run-stop or repeat one of its stage-starts, and `stop:<stage>` otherwise — an unclosed `/pharn-loop` that
+    started only `pharn-spec`, which `/pharn-ship` never marks, gives `stop:pharn-verify` (GATE-2 re-review N1: an
+    earlier wording said `undetermined` either way); a full run wrongly marked quick yields `gate2-quick` at most. Two bounds are stated in `ship-outcome-core.mjs`'s header: this holds for the markers the
+    command prescribes, and an earlier run that left only its run-start is byte-identical to resuming it, so its
+    mode is read (`stop:pharn-verify` or `gate2-quick`, never `gate2`).
+  - **`render-run-report.mjs`**: the `## Outcome` preamble gains a `gate2-quick` bullet stating it is not `gate2`;
+    for a quick ship ledger, `## Verdicts` renders the regress line as "not part of this run: a quick
+    `/pharn-ship` run starts no `/pharn-regress`", and `## Briefing` never links a `BRIEFING.md` (quick mode renders
+    none, so a file of that name is an earlier run's) — both read from the run's own mode, never from which files
+    happen to exist on disk. A stored `gate2` that today's applicability rules exclude is labelled as derived under
+    older rules — the 6.9.1 current-run rule, or conditions (a)/(b) above — never as predating 6.9.1 alone, which
+    mis-dated a 6.20.0 ledger (GATE-2 re-review N2).
+  - **The scope check is kept (GATE-2 review finding F3).** Skipping `/pharn-regress` would also have skipped
+    `check-regress.mjs scope`, the check that sees a changed path outside the plan's `## Files` made before the
+    build's reconcile anchor (a `/pharn-test`-stage Bash write, say — `check-bash-reconcile.mjs` covers anchor →
+    verify only). A quick run now runs that partition itself before `/pharn-verify` (and again inside Step 2b),
+    with `/pharn-regress`'s own inputs — resolved as `stage-regress.mjs`'s `base` and `partition` phases resolve
+    them (6.23.0), `git diff --no-renames` included — and no base worktree, install or gate run, and STOPs on
+    `escaped`.
+  - **Another run's artifacts are never pointed at.** A feature directory an earlier full run used can still hold
+    its `REGRESSION.md`, `regression-report.json`, `BRIEFING.md` and `RUN-REPORT.md`; a quick run's `SHIP.md`
+    omits every pointer to them and says they predate the run. They are labelled, not removed.
+  - **`/pharn-grill <name> --quick`** still owns its artifact (P3): an eligibility check (the pinned `--spec-kind`
+    line) refuses outright — writing nothing — unless the SPEC is `spec_kind: quick`; the two floor stops (the
+    spec→plan hash chain, the `applied_lessons` re-verification) run unchanged; the interrogation and the griller
+    plug-in slot are skipped entirely. The quick `GRILL.md` records both floor results, `mode: quick`, and the
+    pinned line `interrogation NOT performed — skipped by mode (quick)` — no `ADVISORY VERDICT` line and no
+    finding object, because nothing was interrogated.
+  - **`/pharn-spec --quick <description>`** adds three fit checks to its interrogation (at most three criteria,
+    none `e2e`-only, a `test` runner PHARN can find), writes `spec_kind: quick`, and — at Step 4 — names the trade
+    at the gate that approves it: one fixed sentence before the approval question says a quick SPEC skips the
+    regression check and the plan interrogation, and still stops on a changed file outside the plan's declared
+    files. `--quick` with `--model-approve` reports back blocked and writes nothing quick; no shipped command
+    passes both.
+  - **`--quick` counts only as the FIRST TOKEN of the arguments**, in `/pharn-ship` and `/pharn-spec` alike —
+    never scanned out of the untrusted `<description>` prose (P2). **That rule is ADVISORY** (GATE-2 review
+    finding F2): the orchestrating model applies it, and nothing on the floor parses the invocation. The floor
+    backstop is the SPEC — the short spine runs only once `check-spec-approved.mjs` exits 0 and `--spec-kind`
+    prints `quick` from the pinned frontmatter — and its bound is stated: it cannot tell a typed `--quick` from a
+    misread one over a SPEC a human already approved as quick. A legacy SPEC is never quick only while it stays
+    legacy: `spec_template` sits outside the pin, and that residual is named in the contract, not closed.
+  - **The human-only trusted-doc patch** (`LIMITS.md §3a` and `§6`, `pharn/ARCHITECTURE.md §6` and `§4`) is
+    generated by the committed `.dev/features/ship-quick-mode/handoff/make-patch.mjs` — `§6` of LIMITS because its
+    "fires only if `/pharn-regress` runs" went stale when quick mode began running the same scope partition
+    (GATE-2 re-review N3), and ARCHITECTURE `§4`'s contract list gains `stage-exit` now that `stage-regress-script`
+    (6.23.0) put that contract on `main` — and applied by the human via
+    `proposed/apply.sh` at GATE 2, after the last `/pharn-dev-verify` and before merge — the build's own chain
+    (`validate.mjs`, `check:markers`, `hash-doc.test.mjs`) stays green without the patch, probed rather than
+    asserted, because the generator checks the same three predicates on the edited text in memory before writing
+    the patch, and `apply.sh` re-runs them on the applied bytes.
+  - **Quick mode keeps the run marker `writes-scope-run-only` added (6.24.0).** A quick run opens it with Step 2's
+    unchanged line after the quick kind read, so a refused `--quick` opens none, and it stops before `/pharn-plan`
+    when the open fails, exactly as a full run does. It closes the marker in Step 3a, right after the run-stop
+    marker, on every quick exit.
+  - No dev twin: `/pharn-dev-ship` gets no `--quick` — apparatus, a stated non-obligation.
+
+## [6.24.0] - 2026-09-26
+
+### Added
+
+- 2026-09-26: **In an installed project, the write guard is fail-closed only while PHARN is working.**
+  Before this, `enforce-writes-scope.cjs`'s no-scope default in an installed project
+  (`pharn.config.json` carries `skillsVersion`) denied everything outside `pharn/features/**` and
+  `.pharn/**` — including a user's own ordinary source, and Claude Code's own memory folder outside the
+  project — even with no PHARN command running. A user reported exactly that: Claude was blocked from
+  editing their own code with no `/pharn-*` command open. With no scope set and no `/pharn-ship`,
+  `/pharn-loop` or `/pharn-review` run open, the guard now instead denies PHARN's own installed surface
+  (`pharn/**` except `pharn/features/**`, `.claude/**`, `pharn.config.json`, matched case-folded, the
+  `pharn/features/` exception matched as written), its own input `.pharn/writes-scope.json`, and any path
+  containing a backslash on a `/` system, and allows every other in-project path — including the files
+  Claude Code loads at session start (`CLAUDE.md`, `AGENTS.md`, `.mcp.json`). Outside the project it allows
+  exactly two places, by the maintainer's decision of 2026-09-26: Claude Code's memory folders
+  (`<claude-config-dir>/projects/*/memory/**`, the config dir being `$CLAUDE_CONFIG_DIR` or `~/.claude`) and
+  the temp roots (the OS temp directory and `/tmp`), never inside another git tree and never as another
+  spelling of the project's own path; every other
+  out-of-project path — dotfiles, `~/.ssh`, `~/.claude/settings*.json`, `~/.claude.json`,
+  `~/.claude/hooks/` — stays denied. A run is open while
+  `.pharn/<pharn-loop|pharn-review|pharn-ship>/<name>/active.json` exists (presence + a 24h age ceiling
+  only — the guard never parses a marker), or while one of those state directories is not a readable
+  directory — `/pharn-ship` and `/pharn-review` open and close theirs with the new
+  `pharn/floor/run-marker.mjs` and STOP when the open fails; `/pharn-loop` keeps its existing marker with no
+  second writer, and STOPs too when its snapshot or open fails. A **malformed** `.pharn/writes-scope.json` now denies **every** write in an installed
+  project, rather than falling back to a default. In the dev and unsignalled postures the default and every
+  old deny message are unchanged; their only verdict changes move toward deny (below). `reconcile-baseline.mjs
+--anchor` now refuses (exit 2, nothing written) when there is no usable scope to snapshot, so a build can
+  no longer open an epoch no scope could ever clear. Roadmap Phase 0.2, approved by the maintainer
+  2026-09-25.
+  `SKILLS_VERSION` 6.23.0 → 6.24.0 — this phase was numbered 6.23.0 until `stage-regress-script` (#277)
+  merged first and took that number, so it was renumbered by diff. `MIN_CLI` stays 0.5.0: nothing is
+  relocated, and a CLI that copies `pharn/floor/` per file lands the new script.
+  ([`.dev/features/writes-scope-run-only/`](./.dev/features/writes-scope-run-only/))
+  - **Review fixes, before release (GATE 2, 2026-09-26).** Every write is now judged at every target it can
+    reach, in every posture: the old `path.resolve()` resolution first, then the filesystem's own (a
+    dangling symlink followed to the target it names, `..` applied to a symlink's real parent), denied if
+    either is denied — a dangling link to an absent `.claude/commands/` or `pharn/floor/` file had been
+    allowed, and created it. A FILE planted at a run-state directory now counts as a run open instead of
+    "no run", and `run-marker.mjs` exits 2 on it (and on every other failure) instead of crashing with
+    exit 1. The `pharn/features/` exception no longer widens under the case/trailing-dot fold. A guard error
+    denies, now also when the deny itself fails. A marker whose name is not a plain slug is never rendered in
+    a deny message. A FIFO at `.pharn/writes-scope.json` no longer hangs the guard. Found while verifying
+    those fixes and fixed with them: resolving `\` as a separator, as the companion trusted-path guard does,
+    let `pharn/features/a\b/../../floor/x.mjs` be judged inside `pharn/features/` while the kernel wrote
+    `pharn/floor/x.mjs`, in the dev posture as well.
+  - **Re-review fixes, before release (2026-09-26).** Another spelling of the project's own path — a
+    different letter case or Unicode form — read as a path OUTSIDE the project, so for a project under a temp
+    root with no `.git` the temp-root allow admitted a write that landed in the project's own `pharn/floor/`.
+    Such a path is now denied as the project's own, and the filesystem's resolution reads each existing
+    directory's on-disk spelling; in the dev and unsignalled postures that second change, too, only moves a
+    verdict toward deny. `/pharn-loop` now STOPs when its pre-run snapshot or its marker open fails, as
+    `/pharn-ship` and `/pharn-review` already did: a file planted at `.pharn/pharn-loop/<name>` had let a loop
+    run on without its marker, leaving an installed project on the permissive default between its stages.
+  - **Migration.** Nothing to wire — the hooks change, `settings.json` does not. An install whose
+    `pharn-ship.md` or `pharn-review.md` was edited locally keeps the old command under `pharn update`, so
+    it never opens a run marker and those runs are unguarded between their own stages; re-take the shipped
+    command, or add the two pinned `run-marker.mjs` lines by hand. A locally edited `pharn-loop.md` still
+    opens its marker, but does not stop when that fails. A malformed `.pharn/writes-scope.json`
+    now denies every write in an installed project — `node .claude/hooks/set-writes-scope.cjs --clear`
+    releases it. Anything other than a directory at `.pharn/pharn-loop`, `.pharn/pharn-review` or
+    `.pharn/pharn-ship` now holds an installed project fail-closed until it is removed by hand, and a path
+    containing a backslash is refused outside a run. `reconcile-baseline.mjs --anchor` now refuses (exit 2) with no scope set; every shipped
+    caller sets one first, so only a caller outside PHARN's own commands is affected.
+  - **Rollback.** Reverting 6.24.0 restores the fail-closed default everywhere; a leftover
+    `.pharn/pharn-ship/` or `.pharn/pharn-review/` marker is inert, because nothing in the older tree
+    reads those directories (the loop marker is unchanged and keeps its Stop-guard meaning).
 
 ## [6.23.0] - 2026-09-26
 

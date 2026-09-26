@@ -26,7 +26,7 @@
 // progress (`.pharn/pharn-regress/stage.json`, `stage-regress-core.mjs`'s `PROGRESS_SCHEMA`) and exits 5
 // `continue`. With no `--budget-ms` (a code caller), nothing is budgeted.
 //
-// ==================================== THE SHARED MECHANICS (6.24.0) ====================================
+// ==================================== THE SHARED MECHANICS (6.26.0) ====================================
 // The argv rules (`parseTimeoutMs`, `parseBudgetMs`, `parseResumeArgv`, `scanFlags`), the `lstat` containment
 // walk, the atomic write, the git helpers, the budget tracker and the drain loop moved into
 // `pharn/floor/stage-runtime.mjs` (stage-verify-script, GATE 1 Q1), their ONE owner, so `stage-verify.mjs` does
@@ -299,7 +299,7 @@ function phaseFreshEarly(feature) {
   containmentGuard(feature);
 
   // Stale-output removal, as early as it is now safe to do so (GRILL G1, narrowed by F2). ONLY `ENOENT` is
-  // absence (`stage-runtime.mjs`'s `removeIfPresent`, since the 6.24.0 GATE 2 fix): any other unlink error
+  // absence (`stage-runtime.mjs`'s `removeIfPresent`, since the 6.26.0 GATE 2 fix): any other unlink error
   // propagates to the top-level catch — a crash, exit 1 with no document — so no refusal and no `unusable` can
   // follow a removal that did not happen. Before, a catch-all swallowed it and an unremovable earlier report
   // survived beside the later stop (the follow-up `regress-stale-unlink-swallow`, closed by this line).

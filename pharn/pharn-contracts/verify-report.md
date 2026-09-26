@@ -24,14 +24,14 @@ purpose: "Single source of truth for the machine verify-report — the pharn/fea
 The verify-report is `pharn/features/<name>/verify-report.json` (product) / `.dev/features/<name>/verify-report.json`
 (dev) — the machine half of the verify stage, written beside the human-facing `VERIFY.md`. Every field
 `pharn/floor/check-verify.mjs` prints is its stdout **verbatim**, key order kept; the advisory blocks are merged in
-afterwards. **Who merges them differs by surface, since 6.24.0 (`stage-verify-script`):** on the product surface the
+afterwards. **Who merges them differs by surface, since 6.26.0 (`stage-verify-script`):** on the product surface the
 writer is `pharn/floor/stage-verify.mjs`, which composes the report by tested code (`stage-verify-core.mjs`'s
 `composeReport`) and renders `VERIFY.md` from it (`render-verify.mjs`); the dev twin `/pharn-dev-verify` still merges
 them in its command prose.
 
 - **No report on a refusal.** A product `/pharn-verify` that refuses (a RED spec→plan chain, a missing `PLAN.md`
   or `SPEC.md`, an unparseable `## Files`) writes only `VERIFY.md` naming the refusal — no `verify-report.json`,
-  symmetric with regress and the stage-exit contract's `refused` row. Before 6.24.0 the command wrote a fail-closed
+  symmetric with regress and the stage-exit contract's `refused` row. Before 6.26.0 the command wrote a fail-closed
   `INCONCLUSIVE` report on a RED chain.
 - **The earlier report is removed first.** The script's "fresh" phase removes THIS feature's earlier
   `verify-report.json` and `VERIFY.md` right after the feature slug parses and the containment walk passes, and a
