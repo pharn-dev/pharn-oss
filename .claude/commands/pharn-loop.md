@@ -243,6 +243,21 @@ an unattended `/pharn-loop` iteration can now stop here — most commonly a `pac
 lockfile (small projects and libraries often have none), or a feature whose test universe is genuinely
 empty. See CHANGELOG [6.23.0] for the full disclosure.
 
+**`/pharn-verify`'s stage-exit mapping (since `stage-verify-script`, 6.24.0).** `/pharn-verify` is now a thin
+caller of `pharn/floor/stage-verify.mjs`, which reports through the same protocol and maps by the same rule; a
+closure test requires every `verify` `question` code to be named here:
+
+- `question no-gates` → **S4** (no `--gates`, and no allowlisted script or no `package.json` — S4's own trigger);
+- `refused` (`missing-artifact`, `chain-red`, `plan-files-unparseable`) and `unusable` → **S9**;
+- a crash (an exit outside `{0, 2, 3, 4, 5}`) → **S9**;
+- `continue` is handled **inside** `/pharn-verify` (it re-runs the pinned resume line itself) and never reaches the
+  loop as a stuck point; a `done` exit's verdict is read from `verify-report.json` by `check-loop.mjs`, as before.
+- **New S9 stops as of 6.24.0 (the A7 disclosure, GRILL G5):** a crashed `check-build-complete.mjs` is `unusable
+child-crashed` (before, it read `INCOMPLETE`, which `check-loop.mjs` CONTINUEs — a rebuild iteration, up to the
+  cap); a runner refusal, a lapse included, is `unusable child-refused` (before, a fail-closed report that
+  `check-loop-fresh.mjs` B could route to one re-run); and an unparseable `## Files` is `refused
+plan-files-unparseable` (before, the gates ran and the verdict read `INCONCLUSIVE`). See CHANGELOG [6.24.0].
+
 **S9 and S11 are different failures, and the difference decides the row.** S9 is a stage that **says** it
 refused. S11 is evidence on disk that does not match the tree, whatever the stages said: a skipped or
 half-run stage, a report or stamp from an earlier iteration, or a report its own stamp does not reproduce.

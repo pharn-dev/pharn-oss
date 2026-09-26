@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // pharn/floor/count-verifiers.mjs — deterministic verifier-MEMBERSHIP counter (CONSTITUTION P0/P5).
 //
-// Answers ONE structural question for /verify Step 2: which capabilities DECLARE `role: verifier`?
+// Answers ONE structural question for the verify stage — shelled by pharn/floor/stage-verify.mjs (6.24.0), which
+// parses its stdout, and by /pharn-dev-verify's command prose: which capabilities DECLARE `role: verifier`?
 // Membership is read ONLY from the `---`-fenced YAML frontmatter — never a substring grep over file
 // contents. A `role: verifier` string in PROSE or a fenced code block is DATA *about* verifiers, not a
 // declaration *of* one (the enum-gated / free-text split of ARCHITECTURE §8 / fix #1, applied to

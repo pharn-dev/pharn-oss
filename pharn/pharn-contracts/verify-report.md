@@ -22,9 +22,22 @@ purpose: "Single source of truth for the machine verify-report — the pharn/fea
 > the exact disease this repo exists to prevent.
 
 The verify-report is `pharn/features/<name>/verify-report.json` (product) / `.dev/features/<name>/verify-report.json`
-(dev) — the machine half of the verify stage, written beside the human-facing `VERIFY.md`. Its
-`feature` / `gates` / `verdict` / `failing_gates` fields are `pharn/floor/check-verify.mjs`'s stdout
-**verbatim**; the emitting command merges the advisory blocks in afterwards.
+(dev) — the machine half of the verify stage, written beside the human-facing `VERIFY.md`. Every field
+`pharn/floor/check-verify.mjs` prints is its stdout **verbatim**, key order kept; the advisory blocks are merged in
+afterwards. **Who merges them differs by surface, since 6.24.0 (`stage-verify-script`):** on the product surface the
+writer is `pharn/floor/stage-verify.mjs`, which composes the report by tested code (`stage-verify-core.mjs`'s
+`composeReport`) and renders `VERIFY.md` from it (`render-verify.mjs`); the dev twin `/pharn-dev-verify` still merges
+them in its command prose.
+
+- **No report on a refusal.** A product `/pharn-verify` that refuses (a RED spec→plan chain, a missing `PLAN.md`
+  or `SPEC.md`, an unparseable `## Files`) writes only `VERIFY.md` naming the refusal — no `verify-report.json`,
+  symmetric with regress and the stage-exit contract's `refused` row. Before 6.24.0 the command wrote a fail-closed
+  `INCONCLUSIVE` report on a RED chain.
+- **The earlier report is removed first.** The script's "fresh" phase removes THIS feature's earlier
+  `verify-report.json` and `VERIFY.md` right after the feature slug parses and the containment walk passes, and a
+  removal that fails for any reason other than absence is a crash, never a verdict. **The residual:** a stop before
+  that point (a bad slug, `path-containment`) or a genuine crash can leave an earlier run's report on disk, which is
+  why `/pharn-ship` reads `.verdict` only after `/pharn-verify` ended `done` in the same run.
 
 ## What this artifact IS and IS NOT (P0 — the honesty bar)
 
@@ -60,16 +73,16 @@ The verify-report is `pharn/features/<name>/verify-report.json` (product) / `.de
 
 ## Field shape + trust classes
 
-| field           | shape                                                                                                                                                                                    | who writes it                                                       | class                                      |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------ |
-| `feature`       | the increment's slug, or `null`                                                                                                                                                          | `check-verify.mjs` (from `--feature`)                               | ADVISORY — no floor op reads it            |
-| `gates`         | flat `{ "<gate-id>": <int exit code> }`, keys sorted                                                                                                                                     | `check-verify.mjs`                                                  | ADVISORY — no floor op reads it            |
-| `verdict`       | **enum** — see the table below                                                                                                                                                           | `check-verify.mjs`                                                  | **FLOOR-RELEVANT** — enum-gated by 4 sites |
-| `failing_gates` | array of the `gates` keys whose value is non-zero, plus `ac-delivery` / `ac-evidence` when the AC gate is red (6.20.0 — these two never enter `gates`)                                   | `check-verify.mjs`                                                  | read by `check-loop.mjs` on a FAIL (below) |
-| `completeness`  | `{ declared: [], skipped: [], missing: [], complete: bool, verdict: str, note: str }`, OPTIONAL — members vary by emitter; treat any subset as valid                                     | the command, from `pharn/floor/check-build-complete.mjs`'s stdout   | ADVISORY — no floor op reads it            |
-| `verifiers`     | `{ registered: <int>, findings: [], note: str }`, OPTIONAL — `findings` and `note` are each optional; zero verifiers ship today, so no committed report exercises a non-empty `findings` | the command, from `pharn/floor/count-verifiers.mjs` + each verifier | ADVISORY — no floor op reads it            |
-| `reason`        | a diagnostic sentence, present only on `INCONCLUSIVE`                                                                                                                                    | `check-verify.mjs`                                                  | ADVISORY — no floor op reads it            |
-| `ac_gate`       | the AC gate's block, OPTIONAL — present when `check-verify.mjs` ran with `--ac-gate` (below)                                                                                             | `check-verify.mjs` (`ac-gate-core.mjs`)                             | compared by `check-loop-fresh.mjs` check E |
+| field           | shape                                                                                                                                                                                    | who writes it                                                                                          | class                                      |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| `feature`       | the increment's slug, or `null`                                                                                                                                                          | `check-verify.mjs` (from `--feature`)                                                                  | ADVISORY — no floor op reads it            |
+| `gates`         | flat `{ "<gate-id>": <int exit code> }`, keys sorted                                                                                                                                     | `check-verify.mjs`                                                                                     | ADVISORY — no floor op reads it            |
+| `verdict`       | **enum** — see the table below                                                                                                                                                           | `check-verify.mjs`                                                                                     | **FLOOR-RELEVANT** — enum-gated by 4 sites |
+| `failing_gates` | array of the `gates` keys whose value is non-zero, plus `ac-delivery` / `ac-evidence` when the AC gate is red (6.20.0 — these two never enter `gates`)                                   | `check-verify.mjs`                                                                                     | read by `check-loop.mjs` on a FAIL (below) |
+| `completeness`  | `{ declared: [], skipped: [], missing: [], complete: bool, verdict: str, note: str }`, OPTIONAL — members vary by emitter; treat any subset as valid                                     | `stage-verify.mjs` (product) / the dev command, from `pharn/floor/check-build-complete.mjs`'s stdout   | ADVISORY — no floor op reads it            |
+| `verifiers`     | `{ registered: <int>, findings: [], note: str }`, OPTIONAL — `findings` and `note` are each optional; zero verifiers ship today, so no committed report exercises a non-empty `findings` | `stage-verify.mjs` (product) / the dev command, from `pharn/floor/count-verifiers.mjs` + each verifier | ADVISORY — no floor op reads it            |
+| `reason`        | a diagnostic sentence, present only on `INCONCLUSIVE`                                                                                                                                    | `check-verify.mjs`                                                                                     | ADVISORY — no floor op reads it            |
+| `ac_gate`       | the AC gate's block, OPTIONAL — present when `check-verify.mjs` ran with `--ac-gate` (below)                                                                                             | `check-verify.mjs` (`ac-gate-core.mjs`)                                                                | compared by `check-loop-fresh.mjs` check E |
 
 **Trust (P2).** Every field except one carries deterministic-tool output — gate-id strings, integer exit
 codes, path strings: the enum-gated / floor-verifiable class. The exceptions are **free text and inherit

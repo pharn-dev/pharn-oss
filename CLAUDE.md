@@ -303,7 +303,9 @@ node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
 # --cwd moves only where gates RUN and which tree is fingerprinted (6.9.3 — before it, init resolved --out
 # and --spec-from against --cwd while `run --next` did not, so /pharn-regress's base side, the one --cwd
 # caller, failed at init with spec-mismatch; its pinned lines are now EXECUTED by stage-regress.test.mjs, since
-# 6.23.0 moved them from pharn-regress.md's own prose into pharn/floor/stage-regress.mjs). Contract:
+# 6.23.0 moved them from pharn-regress.md's own prose into pharn/floor/stage-regress.mjs; /pharn-verify's runner lines
+# moved the same way in 6.24.0, into pharn/floor/stage-verify.mjs, whose ★ WIRING test executes pharn-verify.md's
+# pinned line). Contract:
 # pharn/pharn-contracts/gate-run-record.md. Ships: bumps SKILLS_VERSION.
 # Exit: init 0 ok | 2 runner error (closed reason_code) | 3 EMPTY SOURCE SET (nothing written; routes to the
 # existing no-gates HALT, and to /pharn-loop's unattended S4 `blocked: no-gates`) ·
@@ -419,7 +421,7 @@ node pharn/floor/check-red-run.mjs --verdict --ac-tests <AC-TESTS.md> --out <dir
 node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-test-first]
 
 # THE AC GATE (added 6.20.0) — was every Acceptance Criterion DELIVERED on the head verify run? pharn/floor/ac-gate-core.mjs,
-# folded into /pharn-verify's FLOOR verdict by check-verify.mjs --stamp … --ac-gate (Step 5's pinned line; the flag
+# folded into /pharn-verify's FLOOR verdict by check-verify.mjs --stamp … --ac-gate (stage-verify.mjs's verdict call; the flag
 # requires --stamp, the root is the invoking directory, the per-test files sit beside the stamp). An AC is delivered =
 # a locked, once-red test titled AC-<n>:, in a file mapped to AC-n, passed on the head run — matched FILE-SCOPED by
 # red-run-core.mjs observeAc (the one copy), so another feature's AC-1: never counts; PHARN does not judge whether the
@@ -432,7 +434,7 @@ node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-
 # ac_gate block stays in the report), because before 6.20.4 the AC gate came first and INCOMPLETE was unreachable
 # under --ac-gate, which /pharn-verify always passes, so /pharn-ship Step 2b's rebuild could not fire. A level gate run
 # through an explicit --gates is test-infra-changed (test-first) / ac-untested (bootstrap) BY DESIGN; its detail names
-# the explicit source and /pharn-verify Step 3a says not to pass --gates for such a feature. Both ids are
+# the explicit source and /pharn-verify's reference section says not to pass --gates for such a feature. Both ids are
 # RESERVED_IDS and never enter `gates`. Legacy SPEC → NOT-APPLICABLE, stated (with AC evidence beside it → ac-tests-modified); spec_kind:
 # test-infra → BOOTSTRAP, weaker, labelled. THE TEST-INFRA PIN (lock schema ac-tests-lock/3, test-infra-core.mjs,
 # written by --write BEFORE the red run): the level gates' package.json script VALUES + pre/post scripts + testResults
@@ -555,8 +557,9 @@ node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --b
 # included) = CRASHED, deliberately never chosen by an emission (mirrors 6.21.1's "a crash is not read as a
 # verdict"). A `question`'s text and every option's `label` are FIXED, registry-held strings per
 # `(stage, reason_code)` — nothing untrusted is ever interpolated. `mayStartSlowStep` (the shared budget decision:
-# a slow step starts on the invocation's first attempt, or while elapsed+timeout <= budget) lives here too, so a
-# future stage-verify.mjs (roadmap Phase 1.2) reuses it without importing a sibling stage's core.
+# a slow step starts on the invocation's first attempt, or while elapsed+timeout <= budget) lives here too, so every
+# stage script reuses it without importing a sibling stage's core. The registry is keyed by stage; each stage script
+# adds its own entry.
 # THE SCRIPT, `pharn/floor/stage-regress.mjs` (execution) + `pharn/floor/stage-regress-core.mjs` (pure rules):
 # 13 named phases in order (`fresh` -> `chain` -> `base` -> `partition` -> `head-init` -> `drain-head` ->
 # `worktree` -> `install` -> `base-init` -> `drain-base` -> `verdict` -> `cleanup` -> `render`). "fresh" removes
@@ -601,6 +604,35 @@ node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --b
 # (1 included) = crashed.
 node pharn/floor/stage-regress.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--base <ref>] [--gates "<cmd>[::<id>],…"] [--install "<cmd>" | --no-install] [--tests "<pathspec>,…" | --no-tests]
 node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
+
+# THE /pharn-verify STAGE SCRIPT (added 6.24.0, stage-verify-script) — the same move for verify: every deterministic
+# step of the stage in ONE tested script, so `.claude/commands/pharn-verify.md` is a THIN CALLER that pins one line
+# and branches on the script's EXIT CODE (the shared stage-exit.md protocol; verify's own registry entry — question
+# `no-gates`; refused `missing-artifact`/`chain-red`/`plan-files-unparseable`; unusable `usage-error`/`no-feature`/
+# `path-containment`/`git-failed`/`child-crashed`/`child-refused`/`no-progress`/`progress-malformed`). THE TRIGGER
+# (P7) is Phase 1.1's: the command prescribed 14 + d + G + P tool calls over a 55,683-byte prompt. PHASES
+# (stage-verify-core.mjs, the one owner): fresh -> chain -> pairs -> verifiers -> init -> drain -> verdict -> render.
+# "fresh" removes THIS feature's earlier verify-report.json/VERIFY.md and clears `.pharn/pharn-verify/` (the progress
+# record first) right after the slug and the lstat containment walk, BEFORE the rest of argv is validated; ONLY
+# ENOENT counts as absence, so a removal that fails is a crash, never a verdict. The verdict is
+# `check-verify.mjs --stamp … --ac-gate`, read only when its exit AGREES with its printed verdict (classifyVerdict —
+# a crash exits 1, FAIL's own code). The report is the checker's object verbatim plus the runner's `completeness`
+# capture (shape-checked: a crashed check-build-complete.mjs is `child-crashed` before any gate runs, never
+# INCOMPLETE — a disclosed behaviour change) and a `verifiers` block (counted, none run). A refusal writes NO
+# verify-report.json. EVAL_PAIR_RULE: one `structural:` gate per `<capDir>/evals/expected/<x>.json` whose colocated
+# findings.json exists, for a capability directory the PLAN declares — tracked OR untracked (disclosed). Every write
+# into the feature directory walks containment first. THE SHARED MECHANICS live once in pharn/floor/stage-runtime.mjs
+# (the argv rules, the containment walk, the atomic write, git helpers, the budget tracker, the drain) for both stage
+# scripts; regress's CLI behaviour is unchanged. THE WEAKER CLAIM, stated: the two artifacts are `fs` writes through
+# Bash (L19) AFTER this stage's own reconcile gate, so a stray write by the script is neither prevented nor
+# detected; the command's writes-scope is `.pharn/pharn-verify/stage.json` (it resolves to `.pharn/**` alone). BOUNDS:
+# a resume re-derives the verdict from the same stamp, but the AC gate reads live files, so a resume over a moved
+# tree may differ (check-loop-fresh F catches that in the loop; /pharn-ship has no such check, so it reads `.verdict`
+# only after a `done` exit in the same run). Contracts: pharn/pharn-contracts/stage-exit.md, verify-report.md.
+# Ships: bumps SKILLS_VERSION. Exit: 0 done · 2 unusable · 3 refused · 4 question · 5 continue · anything else
+# (1 included) = crashed.
+node pharn/floor/stage-verify.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--gates "<cmd>[::<id>],…"]
+node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 
 # Check the SHAPE of a loop-record — the pharn/features/<name>/LOOP.md that /pharn-loop writes at every stop.
 # Floor: the frontmatter envelope (`decision` in {STOP_GREEN, STOP_CAP, STOP_TERMINAL, INCONCLUSIVE};

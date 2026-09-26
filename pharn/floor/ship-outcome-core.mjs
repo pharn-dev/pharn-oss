@@ -73,9 +73,12 @@
 //   missing artifact) has ALREADY deleted the stale file, and this derivation cannot read it as current. The
 //   residual survives for regress only in the one case fresh-start removal precedes: a malformed invocation
 //   (`unusable`, e.g. a bad argv) refused BEFORE the stale-output removal step, where the exit table states
-//   plainly that "an argv refusal removes nothing" (`pharn-contracts/stage-exit.md`). It is UNCHANGED, at its
-//   full original width, for `/pharn-verify` (no such early removal exists there) and for a stage that never
-//   starts at all (no marker, so `verdictApplicability()` correctly excludes it on that ground instead).
+//   plainly that "an argv refusal removes nothing" (`pharn-contracts/stage-exit.md`). NARROWED the same way for
+//   `/pharn-verify` since `stage-verify-script` (6.24.0): `stage-verify.mjs`'s "fresh" phase removes THIS feature's
+//   earlier `verify-report.json` right after the slug and the containment walk, so every verify refusal and every
+//   later `unusable` stop leaves no report to accept; the residual survives there only for a stop before that
+//   point, and for a genuine crash. It is unchanged for a stage that never starts at all (no marker, so
+//   `verdictApplicability()` correctly excludes it on that ground instead).
 //
 // DETERMINISM (P5): no clock, no randomness. Every branch is a membership or grammar test, and the
 // terminal fallback is the explicit `unknown` stage token — never a guess, never a silently dropped

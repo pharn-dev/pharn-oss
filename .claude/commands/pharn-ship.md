@@ -298,8 +298,9 @@ ran at its Step 4** —
 
 - when building **PHARN-shaped capabilities** (the dogfood — PHARN builds PHARN), that gate is
   `node pharn/floor/validate.mjs .` (identical to `/pharn-dev-ship`);
-- for a **general user project**, it is the gate **discovered the same way `/pharn-build` Step 4 /
-  `/pharn-verify` Step 3a discover it** — explicit `--gates`, else the closed allowlist (`ALLOWLIST` in
+- for a **general user project**, it is the gate **discovered the same way `/pharn-build` Step 4 and
+  `/pharn-verify`'s stage script (`pharn/floor/stage-verify.mjs`, through the runner) discover it** — explicit
+  `--gates`, else the closed allowlist (`ALLOWLIST` in
   `pharn/floor/gate-run-core.mjs`, cited rather than copied) ∩ the project's `package.json` scripts, else
   **ask the human** (reused, NOT hard-coded `validate.mjs`, P3). **Advisory:** `/pharn-build` Step 4 names its
   gate in prose, so nothing enforces which allowlist members it runs; the e2e gates in the allowlist are
@@ -353,15 +354,21 @@ correctly keep open.
    node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
    ```
 
-**Verdict read (FLOOR):**
-that file's `.verdict` (the `check-verify.mjs` output). `"PASS"` (every gate green ∧ build complete) →
-**proceed** to GATE 2. `"INCOMPLETE"` (all gates green and no AC evidence red, but a plan-declared `## Files` path
-is absent — `.completeness.missing[]` names it; an AC not delivered yet, or an AC gate that could not measure the
-partial tree, rides along in `.ac_gate`) → **the single build-completion retry (Step 2b), EXACTLY once**.
-`"FAIL"` (a real gate red — offenders in `.failing_gates[]`; a real failure **beats** incompleteness, so
-this is **never** retried) or `"INCONCLUSIVE"` (fail-closed — e.g. a RED chain; `/pharn-verify` **always**
-emits this machine artifact) → **STOP**, present, hand to the human. The advisory `verifiers` block is
-**NOT** a proceed input — a verifier finding never flips the verdict (fix #3, `pharn/ARCHITECTURE.md §7`).
+**Verdict read (FLOOR), bound to THIS run (since 6.24.0, `stage-verify-script`):** read that file's `.verdict`
+(the `check-verify.mjs` output) **only** when `/pharn-verify` ended `done` in THIS run — its pinned line, or its
+last `--resume`, exited `0`. Any other ending — `2` (unusable), `3` (refused), an unanswered `4` (question), or a
+crash — is a **STOP**, whatever file is on disk: a refusal (a RED chain, a missing artifact, an unparseable
+`## Files`) writes **no** `verify-report.json`, and a stop before the feature slug parses, `path-containment`, or a
+crash can leave an EARLIER run's report in place. `/pharn-ship` has no freshness check of its own (only
+`/pharn-loop`'s `check-loop-fresh.mjs` F binds a report to the live tree), so this binding is what keeps an earlier
+run's `PASS` from reaching GATE 2. On a `done` exit: `"PASS"` (every gate green ∧ build complete) → **proceed** to
+GATE 2. `"INCOMPLETE"` (all gates green and no AC evidence red, but a plan-declared `## Files` path is absent —
+`.completeness.missing[]` names it; an AC not delivered yet, or an AC gate that could not measure the partial tree,
+rides along in `.ac_gate`) → **the single build-completion retry (Step 2b), EXACTLY once**. `"FAIL"` (a real gate
+red — offenders in `.failing_gates[]`; a real failure **beats** incompleteness, so this is **never** retried) or
+`"INCONCLUSIVE"` (fail-closed — e.g. a stamp the checker refused, or an AC gate that could not measure) → **STOP**,
+present, hand to the human. The advisory `verifiers` block is **NOT** a proceed input — a verifier finding never
+flips the verdict (fix #3, `pharn/ARCHITECTURE.md §7`).
 
 1. **GATE 2 — post-verify decision.** On a `PASS` verify, this is the chain's end. `/pharn-ship` **presents**
    the standing verdicts (steps 1–7) + the `GRILL.md` / `REGRESSION.md` / `VERIFY.md` (and `BUILD.md`)
@@ -374,9 +381,9 @@ emits this machine artifact) → **STOP**, present, hand to the human. The advis
 
 **The spec→plan hash chain is read at grill (step 3) and re-enforced structurally inside test, build, regress, and
 verify** (the 2nd/3rd/4th/5th enforcing consumers). A chain that breaks after grill surfaces as a RED test-stage gate
-(step 4 STOP), a RED build floor (step 5 STOP), a missing `regression-report.json` (step 6 fail-closed STOP), or an
-`INCONCLUSIVE` `verify-report.json` (step 7 STOP) — so "the chain held at each consuming stage" is covered by the stages'
-own `.verdict`s, not re-implemented here.
+(step 4 STOP), a RED build floor (step 5 STOP), a missing `regression-report.json` (step 6 fail-closed STOP), or a
+`/pharn-verify` that ended `3 refused` `chain-red` with no `verify-report.json` (step 7's not-`done` STOP) — so "the
+chain held at each consuming stage" is covered by the stages' own verdicts and exits, not re-implemented here.
 
 ## Step 2b — The single build-completion retry (INCOMPLETE only; EXACTLY once, no loop)
 
@@ -389,6 +396,11 @@ rebuild. **Since 6.20.4 an AC that is merely not delivered yet, or an AC gate th
 tree, does not block it** — before, `/pharn-verify`'s AC gate was consulted first, so this step could not fire at
 all; the retry's re-verify measures the AC gate again from scratch, and it proceeds only on `PASS`. This is a
 **narrow, bounded** convenience, **not** `--loop` (which is still a separate, deferred increment).
+
+**Since 6.24.0 a CRASHED completeness checker never reaches this step.** `/pharn-verify` reports a
+`check-build-complete.mjs` that crashed as `unusable child-crashed`, before any gate runs and with no report, so step
+7 STOPs on it. Before, the runner read the crash's exit 1 as "incomplete", the verdict read `INCOMPLETE`, and this
+step rebuilt over a checker fault that a rebuild cannot fix (CHANGELOG [6.24.0]).
 
 **The retry, EXACTLY once (a straight-line block with NO back-edge — the ≤1 bound is structural):**
 
@@ -429,7 +441,8 @@ all; the retry's re-verify measures the AC gate again from scratch, and it proce
    that cost twice as much rather than two builds — and the whole reason the retry is bounded at ≤1 is
    that a rebuild is expensive. The number is what makes that cost visible.
 
-3. **Re-read the two `.verdict`s ONCE and branch (P5, deterministic):**
+3. **Re-read the two `.verdict`s ONCE and branch (P5, deterministic)** — the re-verify's `.verdict` only when that
+   `/pharn-verify` ended `done` in THIS run, exactly as at step 7:
    - re-verify `.verdict == "PASS"` **∧** re-regress `.verdict == "no-regressions"` → **proceed to GATE 2**.
    - **anything else** — still `INCOMPLETE`, now `FAIL` / `INCONCLUSIVE`, a regression, **or** a retry
      sub-stage that refused / HALTed and produced **no fresh** `verify-report.json` /
@@ -464,7 +477,9 @@ Reached only after a `PASS` verify (step 7) — the same point step 8 reads the 
 writing anything, scope this step's own artifact. **The setter resolves exactly one `--target` per call
 and OVERWRITES `.pharn/writes-scope.json`**, so `/pharn-ship` — which declares **three** placeholder
 `writes:` paths (`SHIP.md`, `ship-record.json`, `BRIEFING.md`) — scopes **each artifact to itself
-immediately before writing it**, the same shape `/pharn-regress` and `/pharn-verify` already use:
+immediately before writing it**, the shape the dev twins `/pharn-dev-regress` and `/pharn-dev-verify` still use (the
+product `/pharn-regress` and `/pharn-verify` became thin callers scoped to their own scratch record in 6.23.0 and
+6.24.0, because their stage scripts write the artifacts):
 
 ```bash
 node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-ship.md --target pharn/features/<name>/BRIEFING.md
@@ -956,14 +971,19 @@ the `check-ship.mjs` cap.
   **structural/advisory** (a single block, no loop, no `check-ship`-style cap — Step 2b); and proceeding
   after the retry reads only `PASS` ∧ `no-regressions` (FLOOR verdicts). The retry **never** guarantees the
   rebuild works (advisory model work). It is **not** `--loop`.
-- **The post-build gate's DISCOVERY is advisory (honest, mirrors `/pharn-verify`).** The build
-  project-gate's **exit code** is FLOOR, but **which** gate to run for a non-PHARN project (`--gates` →
-  allowlist ∩ scripts → ask) is **advisory orchestration, untested by construction** (it lives in this
-  command's prose, exactly like `/pharn-verify`'s Step 3a discovery). "Build floor = FLOOR" refers to the
-  **exit code**, not to the gate-selection — do not over-read it. **`/pharn-regress`'s own discovery is a
-  DIFFERENT, stronger case since `stage-regress-script` (6.23.0):** it moved out of command prose entirely
-  and into `pharn/floor/stage-regress-core.mjs`/`stage-regress.mjs`, tested code the command merely
-  invokes — so it is no longer the parallel this bullet's "untested by construction" describes.
+- **The post-build gate's DISCOVERY is advisory (honest).** The build project-gate's **exit code** is FLOOR,
+  but **which** gate to run for a non-PHARN project (`--gates` → allowlist ∩ scripts → ask) is **advisory
+  orchestration, untested by construction** (it lives in this command's prose and `/pharn-build`'s). "Build
+  floor = FLOOR" refers to the **exit code**, not to the gate-selection — do not over-read it.
+  **`/pharn-regress`'s and `/pharn-verify`'s own discovery are a DIFFERENT, stronger case** since
+  `stage-regress-script` (6.23.0) and `stage-verify-script` (6.24.0): each moved out of command prose entirely
+  and into a tested stage script (`stage-regress.mjs`, `stage-verify.mjs`, both through `run-gates.mjs`) the
+  command merely invokes — so neither is the parallel this bullet's "untested by construction" describes.
+- **"`/pharn-ship` reads a verify verdict THIS run produced"** (since 6.24.0) → **ADVISORY.** Step 7 and Step 2b
+  accept `.verdict` only after `/pharn-verify` ended `done` in this run; the orchestrating model reads its own
+  exit code, and the `.verdict` membership test stays FLOOR. The residual is a model that skips the exit check.
+  The regress half (step 6 reads `regression-report.json` without that binding) is the named follow-up
+  `ship-regress-exit-binding`.
 - **"The two human gates (SPEC approval, post-verify) are preserved"** → **ADVISORY** (command discipline).
   GATE 1 **is** `/pharn-spec`'s own halt; nothing on the floor forces a human to be asked. `/pharn-ship`
   preserves the gates **by construction**, backstopped (not replaced) by `/pharn-plan`'s deterministic

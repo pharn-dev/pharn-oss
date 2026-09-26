@@ -185,8 +185,8 @@ either way.
 
 ## Reference — gate discovery and classification (the script's own closed rules; informational)
 
-`stage-regress.mjs` resolves the gate set exactly once, the same way `/pharn-verify` does (its Step 3a,
-which stays command prose): explicit `--gates` wins; else the closed allowlist
+`stage-regress.mjs` resolves the gate set exactly once, the same way `/pharn-verify`'s stage script does
+(`stage-verify.mjs` since 6.24.0 — both through the runner's own rule): explicit `--gates` wins; else the closed allowlist
 **`{ test, lint, format:check, lint:md, typecheck, type-check, build, test:e2e, e2e }`** intersected with
 the project's own `package.json` `scripts`, **minus the e2e ids `test:e2e` and `e2e`**, which `/pharn-regress`
 never discovers (verify-only — a base-side e2e run would double an expensive stage, and a red e2e gate

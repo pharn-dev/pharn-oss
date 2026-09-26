@@ -61,6 +61,11 @@
     // and it quotes a shelled checker's own message and a hostile gate id VERBATIM, so no MD rule can be
     // satisfied by construction over content the renderer does not control.
     "pharn/features/*/REGRESSION.md",
+    // VERIFY.md — the SAME reasoning as REGRESSION.md above (stage-verify-script, 6.24.0): deterministically
+    // rendered by pharn/floor/render-verify.mjs from pharn/floor/stage-verify.mjs, and it quotes gate ids,
+    // PLAN-derived paths and a checker's own message VERBATIM, so no MD rule can be satisfied by construction
+    // over content the renderer does not control.
+    "pharn/features/*/VERIFY.md",
     // Zone note, kept where the next editor of this list will need it: `.pharn/` is excluded ENTRY BY
     // ENTRY, never as a blanket `.pharn/`. The reason is structural rather than situational — the
     // directory holds the fix #7 writes-scope file and the product-index cache above alongside

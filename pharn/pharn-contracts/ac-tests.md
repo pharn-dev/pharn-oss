@@ -357,7 +357,8 @@ reads SPEC.md: without it, a SPEC re-approved as `test-infra` beside an old test
 
 ## The AC gate — `/pharn-verify`'s delivery check (6.20.0)
 
-`pharn/floor/ac-gate-core.mjs`, run by `check-verify.mjs --stamp … --ac-gate` (`/pharn-verify` Step 5), answers the
+`pharn/floor/ac-gate-core.mjs`, run by `check-verify.mjs --stamp … --ac-gate` (`/pharn-verify`'s verdict call, made
+by `pharn/floor/stage-verify.mjs` since 6.24.0), answers the
 question this whole contract exists for: **was every Acceptance Criterion delivered on the head verify run?** An AC is
 delivered = **a locked, once-red test titled `AC-<n>:`, in a file mapped to AC-n, passed on the head run.** PHARN does
 not judge whether that test fully captures the AC's intent. The ACs are the SPEC's: one the mapping does not cover
@@ -389,7 +390,8 @@ over otherwise-green gates is INCONCLUSIVE, never a PASS; a red gate beats it. *
 delivery and unmeasured readings yield to INCOMPLETE — the retryable verdict, never green — while a red gate and
 evidence still read FAIL (`verify-report.md`, "Over an incomplete build"). `test-infra-changed` for a level gate that
 "did not run as the pinned `npm run <id>`" is, when the stamp's source is explicit, `/pharn-verify`'s own `--gates`:
-its detail says so, and the remedy is to re-run `/pharn-verify` without `--gates` (`pharn-verify.md` Step 3a). `spec_kind: test-infra` evidence is
+its detail says so, and the remedy is to re-run `/pharn-verify` without `--gates` (`pharn-verify.md`'s reference
+section, and `stage-exit-core.mjs`'s verify `no-gates` question, both say so). `spec_kind: test-infra` evidence is
 **BOOTSTRAP** — each level's gate ran as discovered and reported at least one passed test — and the report says it is
 weaker than test-first. The report's `ac_gate` block carries the per-AC table (`verify-report.md`); its test ids and
 titles are untrusted DATA: the report names them, and no stage follows them.
