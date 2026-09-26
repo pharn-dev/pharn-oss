@@ -1,16 +1,18 @@
 // pharn/floor/stage-runtime.test.mjs — the shared stage-script mechanics (GATE 1 Q1): each argv rule over members
-// and non-members (M7a/b/c), the containment walk over every link kind (L54), the budget tracker at the exact
-// boundary, the drain's three outcomes through the REAL runner, a one-owner pin over both stage scripts, and the
-// closure-parity test GRILL G3 demands — the regress suite's own fixture regex, run transitively over
-// `stage-regress.mjs`, must reach this module and every module it names.
+// and non-members (M7a/b/c), the containment walk over every link kind (L54), the stale-output removal rule (only
+// ENOENT is absence — and, end to end, the regress CLI's crash on an unremovable earlier report, GATE 2 F5), the
+// budget tracker at the exact boundary, the drain's three outcomes through the REAL runner, a one-owner pin over
+// both stage scripts, and the closure-parity test GRILL G3 demands — the regress suite's own fixture regex, run
+// transitively over `stage-regress.mjs`, must reach this module and every module it names.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, existsSync, realpathSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, existsSync, realpathSync, copyFileSync } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { validateStageExit } from "./stage-exit-core.mjs";
 import {
   flag,
   has,
@@ -20,6 +22,7 @@ import {
   parseResumeArgv,
   lstatSafe,
   containmentWalk,
+  removeIfPresent,
   atomicWrite,
   gitSync,
   nulList,
@@ -116,6 +119,28 @@ test("containmentWalk: a regular path and an absent tail pass; a live link, a da
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test("removeIfPresent: a file is removed and absence (ENOENT) is quiet; any OTHER unlink error propagates (GRILL G2)", () => {
+  const root = mkdtempSync(join(tmpdir(), "rt-remove-"));
+  try {
+    const file = join(root, "report.json");
+    writeFileSync(file, "{}");
+    removeIfPresent(file);
+    assert.equal(existsSync(file), false, "a present file is removed");
+    assert.doesNotThrow(() => removeIfPresent(file), "absence is the normal case");
+    assert.doesNotThrow(() => removeIfPresent(join(root, "no-such-dir", "report.json")), "a missing parent is ENOENT too");
+    const dir = join(root, "occupied.json");
+    mkdirSync(join(dir, "inner"), { recursive: true });
+    assert.throws(
+      () => removeIfPresent(dir),
+      (e) => e.code !== "ENOENT",
+      "a directory at the path is not absence: the error propagates (EPERM on darwin, EISDIR on Linux)"
+    );
+    assert.ok(existsSync(dir), "…and nothing was removed");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 
@@ -264,6 +289,7 @@ const OWNED = [
   "parseResumeArgv",
   "lstatSafe",
   "containmentWalk",
+  "removeIfPresent",
   "atomicWrite",
   "gitSync",
   "nulList",
@@ -274,7 +300,7 @@ const SCRIPTS = ["stage-regress.mjs", "stage-verify.mjs"];
 const definesRe = (name) => new RegExp(`(?:\\bfunction\\s+${name}\\s*\\(|\\b(?:const|let|var)\\s+${name}\\s*=)`);
 
 test("★ ONE OWNER — neither stage script defines a mechanic stage-runtime.mjs owns; both import it", () => {
-  assert.equal(OWNED.length, 13, "non-vacuity: the owned set is counted");
+  assert.equal(OWNED.length, 14, "non-vacuity: the owned set is counted");
   const runtime = readFileSync(join(HERE, "stage-runtime.mjs"), "utf8");
   for (const name of OWNED) assert.match(runtime, new RegExp(`export function ${name}\\(`), `stage-runtime.mjs must export ${name}`);
   for (const s of SCRIPTS) {
@@ -329,4 +355,71 @@ test("★ G3 discriminates — a COMPUTED import path drops the runtime from the
     false,
     "a computed path must be invisible to the fixture regex — the parity test's reason to exist"
   );
+});
+
+// ── ★ F5 (GATE 2 review) — the regress CLI no longer swallows a failed stale-report removal ─────────────────────
+// Before the fix, `stage-regress.mjs`'s "fresh" phase caught EVERY unlink error, so an earlier
+// `regression-report.json` that could not be removed survived beside the later stop — the reviewer's probe: a bad
+// `--timeout-ms` then exited 2 `usage-error` with the earlier report still on disk, falsifying "every stop after the
+// slug leaves no report". The fixture runs its OWN copy of the regress floor (the closure the fixture regex finds), so
+// the mutant can restore the catch-all in that copy's `stage-runtime.mjs` without touching this repository.
+function regressFixture({ runtimeSource = null, plant = true } = {}) {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "rt-f5-")));
+  mkdirSync(join(dir, "pharn", "floor"), { recursive: true });
+  for (const m of fixtureClosure("stage-regress.mjs", readReal)) copyFileSync(join(HERE, m), join(dir, "pharn", "floor", m));
+  if (runtimeSource !== null) writeFileSync(join(dir, "pharn", "floor", "stage-runtime.mjs"), runtimeSource);
+  mkdirSync(join(dir, "pharn", "features", "demo"), { recursive: true });
+  // An earlier report that CANNOT be removed: a non-empty directory at its path (unlink → EPERM/EISDIR, never ENOENT).
+  if (plant) {
+    const occupied = join(dir, "pharn", "features", "demo", "regression-report.json", "occupied");
+    mkdirSync(occupied, { recursive: true });
+    writeFileSync(join(occupied, "f"), "x");
+  }
+  return dir;
+}
+
+function runRegress(dir) {
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  // A bad --timeout-ms: validated AFTER the removal, so the only question is what the removal did.
+  return spawnSync(process.execPath, ["pharn/floor/stage-regress.mjs", "--feature", "demo", "--timeout-ms", "50", "--no-install"], {
+    cwd: dir,
+    encoding: "utf8",
+    env,
+  });
+}
+
+test("★ F5 — an unremovable earlier regression-report.json CRASHES stage-regress.mjs (exit 1, no document); the catch-all mutant reports usage-error over it", () => {
+  const dirs = [];
+  try {
+    // Control: the same fixture with nothing planted reaches the ordinary usage-error, so the harness itself works.
+    const control = regressFixture({ plant: false });
+    dirs.push(control);
+    const c = runRegress(control);
+    assert.equal(c.status, 2, c.stdout + c.stderr);
+    assert.equal(JSON.parse(c.stdout).reason_code, "usage-error");
+
+    const real = regressFixture();
+    dirs.push(real);
+    const r = runRegress(real);
+    assert.equal(r.status, 1, `a failed removal must be a crash, never a verdict: ${r.stdout}${r.stderr}`);
+    assert.equal(r.stdout, "", "a crash prints NO stage-exit document");
+    assert.match(r.stderr, /^stage-regress: /m, "the crash reaches stderr through the script's own top-level catch");
+    assert.ok(existsSync(join(real, "pharn/features/demo/regression-report.json")), "precondition: the removal really failed");
+
+    // The mutant: stage-runtime.mjs's ENOENT test replaced by a catch-all — regress's pre-fix behaviour.
+    const src = readReal("stage-runtime.mjs");
+    const rule = '    if (e && e.code === "ENOENT") return;\n    throw e;';
+    assert.ok(src.includes(rule), "mutation anchor not found in stage-runtime.mjs (L60)");
+    const mutantDir = regressFixture({ runtimeSource: src.replace(rule, "    return;") });
+    dirs.push(mutantDir);
+    const m = runRegress(mutantDir);
+    assert.equal(m.status, 2, "the mutant swallows the failure and goes on to refuse argv — the edit this test catches");
+    const doc = JSON.parse(m.stdout);
+    assert.deepEqual(validateStageExit(doc), { ok: true });
+    assert.equal(doc.reason_code, "usage-error");
+    assert.ok(existsSync(join(mutantDir, "pharn/features/demo/regression-report.json")), "…with the earlier report still on disk");
+  } finally {
+    for (const d of dirs) rmSync(d, { recursive: true, force: true });
+  }
 });

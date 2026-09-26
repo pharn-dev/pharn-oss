@@ -8,7 +8,7 @@
 // a trailing `--budget-ms` with no value (M7b), the by-index `--resume` scan (M7c), `--resume` skipping the
 // containment walk (A4), and a budget clock that started late (A3). A second stage script that COPIED them would
 // have re-opened every one of those seams the day the two copies diverged. So the rules live here once, and both
-// scripts import them.
+// scripts import them — the stale-output removal rule (`removeIfPresent`, only ENOENT is absence) included.
 //
 // ============================== WHAT IS DELIBERATELY NOT HERE ==============================
 // • Emission. `stage-regress.mjs` and `stage-verify.mjs` each own their `emit` sentinel, their `emitUnusable`
@@ -34,7 +34,7 @@
 // output handed straight back to the caller. Nothing is evaluated; git and node run as argument vectors, never
 // as shell text.
 
-import { lstatSync, mkdirSync, writeFileSync, renameSync } from "node:fs";
+import { lstatSync, mkdirSync, writeFileSync, renameSync, unlinkSync } from "node:fs";
 import { dirname, join, sep } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -135,6 +135,24 @@ export function containmentWalk(rootAbs, targetAbs) {
     if (r.stat.isSymbolicLink()) return { ok: false, reason: `refuses a path that traverses a symlink at ${cur}` };
   }
   return { ok: true };
+}
+
+/** ------------------------------------------------------------------------------------------------
+ *  THE STALE-OUTPUT REMOVAL RULE (GRILL G2; one owner since the GATE 2 fix) — ONLY `ENOENT` is absence. Any other
+ *  unlink error (a directory at the path, a read-only parent) PROPAGATES: the caller crashes, exit 1 with no
+ *  document, which is never read as a verdict. So a stage that removes its earlier report and then stops with a
+ *  refusal or an `unusable` has really removed it — a swallowed error left the earlier report beside a later stop.
+ *  Both stage scripts remove their earlier artifacts through this helper, `stage-regress.mjs` since the GATE 2 fix
+ *  (before it, regress's own catch-all swallowed every unlink error — the follow-up `regress-stale-unlink-swallow`,
+ *  closed here).
+ *  ---------------------------------------------------------------------------------------------- */
+export function removeIfPresent(relPath) {
+  try {
+    unlinkSync(relPath);
+  } catch (e) {
+    if (e && e.code === "ENOENT") return;
+    throw e;
+  }
 }
 
 /** ------------------------------------------------------------------------------------------------

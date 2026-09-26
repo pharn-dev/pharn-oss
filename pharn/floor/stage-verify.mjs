@@ -62,7 +62,10 @@
 // stage's own `reconcile` gate ran, and no later stage reconciles. The mitigation is the small, literal write set
 // and its tests — tested code, not a floor claim.
 //
-// PATHS: every path this script hands a child or the renderer is REPO-RELATIVE, and none is resolved absolute here.
+// PATHS: every path this script hands a child or the renderer is REPO-RELATIVE. The one place it resolves paths
+// absolute is the containment walk (`join(process.cwd(), rel)`), and a `path-containment` refusal's `detail` can carry
+// such a path (GATE 2 review F2). That detail travels only to the caller — the thin command presents `detail` as
+// quoted DATA — and that exit writes no file.
 // TRUST (P2): the PLAN's `## Files` becomes only declared path strings (prefix operands of a membership test);
 // SPEC.md is hashed by the shelled checker and never read here; child stdout is parsed as JSON and only enums and
 // ints branch; every child value quoted into a `detail` goes through `dataText` (L62).
@@ -73,7 +76,7 @@
 //
 // Exit: 0 done · 2 unusable · 3 refused · 4 question · 5 continue · anything else (1 included) = CRASHED.
 
-import { existsSync, readFileSync, rmSync, unlinkSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -101,6 +104,7 @@ import {
   parseBudgetMs,
   parseResumeArgv,
   containmentWalk,
+  removeIfPresent,
   atomicWrite,
   gitSync,
   nulList,
@@ -164,16 +168,6 @@ function containmentGuard(feature) {
 function writeIntoFeature(feature, relPath, bytes) {
   containmentGuard(feature);
   atomicWrite(VERIFY_PATHS.root, relPath, bytes);
-}
-
-/** GRILL G2 — ONLY `ENOENT` is absence. Any other unlink error propagates, a crash before any verdict. */
-function removeIfPresent(relPath) {
-  try {
-    unlinkSync(relPath);
-  } catch (e) {
-    if (e && e.code === "ENOENT") return;
-    throw e;
-  }
 }
 
 function writeRefusedAndEmit(feature, reasonCode, detail) {

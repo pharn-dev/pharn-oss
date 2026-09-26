@@ -564,7 +564,8 @@ node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --b
 # 13 named phases in order (`fresh` -> `chain` -> `base` -> `partition` -> `head-init` -> `drain-head` ->
 # `worktree` -> `install` -> `base-init` -> `drain-base` -> `verdict` -> `cleanup` -> `render`). "fresh" removes
 # THIS feature's earlier regression-report.json/REGRESSION.md BEFORE any step that can fail, so a stop before the
-# verdict leaves no earlier verdict on disk; an argv refusal (before that point) removes nothing. The four CLOSED
+# verdict leaves no earlier verdict on disk; an argv refusal (before that point) removes nothing, and since 6.24.0 a
+# removal that FAILS for any reason but ENOENT is a crash (stage-runtime.mjs's removeIfPresent). The four CLOSED
 # rules moved out of command prose: TEST_FILE_RULE (vitest/Jest/`node --test` conventions), STYLE_CONFIG_RULE (the
 # config-touch skip for style/format gates), INSTALL_RULE (exactly one lockfile family at the BASE commit resolves
 # the install command — npm MEASURED, pnpm/yarn/bun UNMEASURED, labelled as such), BASE_RULE (`--base` / a dirty
@@ -620,15 +621,22 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 # capture (shape-checked: a crashed check-build-complete.mjs is `child-crashed` before any gate runs, never
 # INCOMPLETE — a disclosed behaviour change) and a `verifiers` block (counted, none run). A refusal writes NO
 # verify-report.json. EVAL_PAIR_RULE: one `structural:` gate per `<capDir>/evals/expected/<x>.json` whose colocated
-# findings.json exists, for a capability directory the PLAN declares — tracked OR untracked (disclosed). Every write
+# findings.json exists, for a capability directory the PLAN declares — committed, or untracked and NOT git-ignored
+# (disclosed). BOUND (GATE 2 review F3): a git-ignored pair gets no gate, and neither does a declared path that differs
+# from the tree only in letter case (the rule compares exactly, while on a case-insensitive volume the completeness
+# check counts that path present) — both fail open, fewer gates. Every write
 # into the feature directory walks containment first. THE SHARED MECHANICS live once in pharn/floor/stage-runtime.mjs
-# (the argv rules, the containment walk, the atomic write, git helpers, the budget tracker, the drain) for both stage
-# scripts; regress's CLI behaviour is unchanged. THE WEAKER CLAIM, stated: the two artifacts are `fs` writes through
+# (the argv rules, the containment walk, the stale-output removal, the atomic write, git helpers, the budget tracker,
+# the drain) for both stage scripts; regress's CLI behaviour is unchanged except that a stale-report removal that
+# FAILS (anything but ENOENT) is now a crash there too, never swallowed (GATE 2 F5; follow-up
+# regress-stale-unlink-swallow closed). THE WEAKER CLAIM, stated: the two artifacts are `fs` writes through
 # Bash (L19) AFTER this stage's own reconcile gate, so a stray write by the script is neither prevented nor
 # detected; the command's writes-scope is `.pharn/pharn-verify/stage.json` (it resolves to `.pharn/**` alone). BOUNDS:
 # a resume re-derives the verdict from the same stamp, but the AC gate reads live files, so a resume over a moved
-# tree may differ (check-loop-fresh F catches that in the loop; /pharn-ship has no such check, so it reads `.verdict`
-# only after a `done` exit in the same run). Contracts: pharn/pharn-contracts/stage-exit.md, verify-report.md.
+# tree may differ — check-loop-fresh F catches that in the loop; /pharn-ship has no such check, and a resume over a
+# moved tree still ends `done` (GATE 2 review F4). A SEPARATE residual: a stop before the slug and containment point,
+# or a crash, can leave an EARLIER run's report on disk; /pharn-ship answers that one by reading `.verdict` only after a
+# `done` exit in the same run. Contracts: pharn/pharn-contracts/stage-exit.md, verify-report.md.
 # Ships: bumps SKILLS_VERSION. Exit: 0 done · 2 unusable · 3 refused · 4 question · 5 continue · anything else
 # (1 included) = crashed.
 node pharn/floor/stage-verify.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--gates "<cmd>[::<id>],…"]

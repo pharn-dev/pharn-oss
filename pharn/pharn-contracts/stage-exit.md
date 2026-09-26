@@ -65,9 +65,13 @@ requires must be present, and no key outside that status's set may appear.
   - None of that is a verdict; only a `done` exit's `report` file is one.
   - A `--resume` invocation's own `unusable` (`no-progress`, `progress-malformed`, `path-containment`, its
     `usage-error`) removes nothing.
+  - **A removal that fails** for any reason other than absence is a crash (exit 1, no document), never a `2`
+    (since 6.24.0's GATE 2 fix — both stage scripts remove through `stage-runtime.mjs`'s `removeIfPresent`, where
+    only `ENOENT` is absence). Before, `regress` swallowed every unlink error, so an unremovable earlier
+    `regression-report.json` survived beside a later `unusable`, and the two bullets above did not hold for it.
 
   For `verify` (6.24.0), in the script's own order — the stage's scratch is cleared BEFORE the rest of argv is
-  validated, which is the one difference from `regress` above:
+  validated, which is the one difference from `regress` above (the removal rule is the same, shared):
   - **Before the slug parses, or at `path-containment` itself**, nothing has been removed: an earlier
     `verify-report.json`, `VERIFY.md` and progress record survive together.
   - **Any later `unusable`** (a `usage-error` from the rest of argv included) has removed THIS feature's earlier

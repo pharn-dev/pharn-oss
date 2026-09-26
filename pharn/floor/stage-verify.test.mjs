@@ -79,10 +79,15 @@ function specBody() {
 }
 
 /** L60 — every mutation asserts its anchor was found, so a renamed line fails the test instead of passing vacuously. */
-function mutate(src, from, to) {
-  assert.ok(src.includes(from), `mutation anchor not found in stage-verify.mjs: ${JSON.stringify(from.slice(0, 80))}`);
+function mutate(src, from, to, where = "stage-verify.mjs") {
+  assert.ok(src.includes(from), `mutation anchor not found in ${where}: ${JSON.stringify(from.slice(0, 80))}`);
   return src.replace(from, to);
 }
+
+/** The shared removal rule's one line a catch-all mutant replaces (stage-runtime.mjs's `removeIfPresent`, the one owner
+ *  since the GATE 2 fix). Used by both G2 mutants: verify's here, regress's in stage-runtime.test.mjs. */
+const RUNTIME_SRC = join(HERE, "stage-runtime.mjs");
+const REMOVAL_RULE = '    if (e && e.code === "ENOENT") return;\n    throw e;';
 
 /**
  * A throwaway project: a legacy (un-templated) approved SPEC, a PLAN pinning it, `src/`, its own floor closure and
@@ -514,13 +519,9 @@ test("★ G2 — an unremovable earlier report crashes (exit 1, no document, no 
     assert.equal(r.doc, null);
     assert.deepEqual(gateLogs(dir), [], "the crash comes before any gate");
   });
-  const src = readFileSync(CLI_SRC, "utf8");
-  const catchAll = mutate(
-    src,
-    '    if (e && e.code === "ENOENT") return;\n    throw e;\n  }\n}\n\nfunction writeRefusedAndEmit',
-    "    return;\n  }\n}\n\nfunction writeRefusedAndEmit"
-  );
-  withFixture({ cliSource: catchAll }, ({ dir }) => {
+  // The mutant: the shared rule's ENOENT test replaced by a catch-all, in the fixture's own stage-runtime.mjs.
+  const catchAll = mutate(readFileSync(RUNTIME_SRC, "utf8"), REMOVAL_RULE, "    return;", "stage-runtime.mjs");
+  withFixture({ floor: { "stage-runtime.mjs": catchAll } }, ({ dir }) => {
     plantDir(dir);
     const r = runCli(dir, fresh());
     assert.equal(r.code, 1, "the mutant still dies — at the render's rename, AFTER running every gate");

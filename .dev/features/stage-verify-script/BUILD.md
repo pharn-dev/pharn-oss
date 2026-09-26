@@ -122,7 +122,58 @@ All 33 `## Files` entries were written, and no path outside them (`git status --
 ## Open issues
 
 - The PLAN's named follow-ups stand: `dev-verify-stage-script`, `stage-exit-runner-lapse-rerun`,
-  `run-gates-completeness-crash`, `count-verifiers-flush-rule`, `regress-stale-unlink-swallow`,
-  `ship-regress-exit-binding`, plus `regress-resume-budget-value` (deviation 5).
+  `run-gates-completeness-crash`, `count-verifiers-flush-rule`, `ship-regress-exit-binding`, plus
+  `regress-resume-budget-value` (deviation 5). `regress-stale-unlink-swallow` is CLOSED by the GATE 2 fix below.
 - RULE B's multi-artifact domain now sits exactly on its pinned floor of 5 (G19); the next sibling that removes a
   placeholder re-measures it.
+
+## After GATE 2 fix (REVIEW.md at `14fd386`: GREEN, 0 floor findings; E1 important, F1–F5 minor)
+
+The orchestrator directed a small fix round under the maintainer's delegation. Every line reports a command that ran.
+
+- **Step 0.** `node pharn/floor/check-bash-reconcile.mjs --base . --require-baseline` over the reviewed tree → exit 0,
+  `CLEAN` (epoch `12:42:34Z`, 0 escapes), so the re-anchor erased nothing; then the plan-scope setter → exit 0, 33
+  paths, and `reconcile-baseline.mjs --anchor --by pharn-dev-build` → exit 0.
+- **E1 (important) — fixed.** `NAMED_LIMITS` now pins 18 anchors, each unique to the sentence it guards, and a
+  shared predicate requires each to occur EXACTLY once. The delete-the-anchor mutant therefore deletes the sentence.
+  A duplicated anchor fails too. The reviewer's three repros run as controls through the same predicate: dropping
+  the `2` bullet's DATA label, the verifier-deferral sentence, or the `plan-files-unparseable` remedy each turns it
+  red, while the pre-fix bare anchors still all match each mutant (asserted — the gap, demonstrated).
+  `node --test --test-name-pattern "NAMED_LIMITS|STAGE_SCRIPT_WIRING|RULE B|EXECUTED" .dev/floor/command-hygiene.test.mjs`
+  → pass 11, fail 0.
+- **F1 — fixed** (`pharn-verify.md`): the `2` bullet names this run's own progress record from the drain on (a runner
+  refusal leaves it at `drain`, a crashed verdict checker at `verdict`); the Bash-timeout bullet says a resume re-runs
+  from the phase the record names, and that a kill during the render re-runs the verdict as well.
+- **F2 — fixed** (`stage-verify.mjs` header): the containment walk is named as the one place the script resolves
+  absolute paths, and a `path-containment` detail can carry one — relayed to the caller as quoted DATA, no file
+  written.
+- **F3 — stated as a bound, no code change** (`pharn-verify.md`, `CLAUDE.md`, `stage-verify-core.mjs`'s rule comment,
+  CHANGELOG [6.24.0]): the pair must be committed, or untracked and not git-ignored; a git-ignored pair and a declared
+  path differing from the tree only in letter case get no gate — both fail open.
+- **F4 — fixed** (`CLAUDE.md`): the moved-tree resume bound and the stale-report residual are stated separately; a
+  resume over a moved tree still ends `done`, and `/pharn-ship`'s `done`-exit binding answers only the stale-report
+  one.
+- **F5 — the code fix was chosen, not the narrowing.** `removeIfPresent` (only `ENOENT` is absence) moved into
+  `stage-runtime.mjs`, its one owner, and `stage-regress.mjs`'s "fresh" phase now removes through it. Every existing
+  regress detail text is unchanged. `stage-verify.mjs` imports the same helper, and the ONE OWNER pin grows to 14.
+  - `node --test pharn/floor/stage-regress.test.mjs` → exit 0, tests 44, pass 44, fail 0.
+    `git diff --exit-code 1524c6f -- pharn/floor/stage-regress.test.mjs` → exit 0, so the suite file is still
+    byte-identical.
+  - New: `stage-runtime.test.mjs` "★ F5". The regress CLI runs over an unremovable earlier `regression-report.json`
+    (a non-empty directory) with a bad `--timeout-ms`, from a fixture copy of its floor:
+    - exit 1, no document, report still present;
+    - control with nothing planted: exit 2 `usage-error`;
+    - the catch-all mutant in the fixture's `stage-runtime.mjs`: exit 2 `usage-error` with the earlier report on
+      disk. That is the defect, so the test is red on it.
+  - Plus a `removeIfPresent` unit test. `node --test pharn/floor/stage-runtime.test.mjs` → pass 19, fail 0.
+  - `stage-verify.test.mjs`'s ★ G2 mutant now restores the catch-all in the fixture's `stage-runtime.mjs`.
+    `node --test pharn/floor/stage-verify.test.mjs` → exit 0, pass 28, fail 0.
+  - The reviewer's own probe, re-run: an earlier report under a read-only feature directory plus a bad `--timeout-ms`.
+    `stage-regress.mjs` → exit 1, stdout empty, stderr `EACCES … unlink`; before the fix it exited 2 over the report.
+    `stage-verify.mjs` → the same.
+  - `stage-exit.md` gains the regress failed-removal bullet ("the one difference" is the clear order again, and the
+    removal rule is shared). `pharn-ship.md` step 6 and `pharn-regress.md`'s `2` bullet say it too, and so do
+    CHANGELOG [6.24.0] and `CLAUDE.md`.
+- **The floor after GATE 2 fix.** `node pharn/floor/validate.mjs .` → exit 0, `FLOOR: GREEN — 36 capabilities checked`.
+- **The command's size after the fix.** `wc -c .claude/commands/pharn-verify.md` → 17,986 bytes, under the 20,000
+  target. It is still 5 fenced bash blocks and 4 + k calls.

@@ -37,7 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     `/pharn-verify` was the other stage whose deterministic work ran as one model turn per step: 14 + d + G + P tool
     calls (G project gates, P eval-pair gates, d the eval-pair discovery) over a 55,683-byte prompt. The thin command
     is 4 + k calls (the constitution read, the setter, the pinned line, one resume per `continue`, the release) over
-    17,276 bytes.
+    17,986 bytes.
   - **`pharn/floor/stage-verify.mjs`** (new) runs every deterministic step through eight named phases (`fresh` →
     `chain` → `pairs` → `verifiers` → `init` → `drain` → `verdict` → `render`): the `lstat` containment walk; the
     removal of THIS feature's earlier `verify-report.json`/`VERIFY.md` and the stage's scratch right after the slug
@@ -61,10 +61,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     `.prettierignore` and `.markdownlint-cli2.jsonc` beside `REGRESSION.md`.
   - **`pharn/floor/stage-runtime.mjs`** (new) is the ONE owner of the mechanics both stage scripts need: the argv
     rules 6.23.0's review repaired (`--timeout-ms`'s 3-9 digits, a value-less `--budget-ms`, the by-index
-    `--resume` scan), the containment walk, the atomic write, the git helpers, the budget tracker and the drain loop
-    — each RETURNING a result, so every script keeps its own emit wrappers, reason codes and detail wording.
-    `stage-regress.mjs` imports them and deletes its copies; its CLI behaviour is unchanged, and the unchanged
-    `stage-regress.test.mjs` passes 44/44 before and after the lift.
+    `--resume` scan), the containment walk, the stale-output removal (`removeIfPresent`: only `ENOENT` is absence),
+    the atomic write, the git helpers, the budget tracker and the drain loop — each RETURNING a result or throwing,
+    so every script keeps its own emit wrappers, reason codes and detail wording. `stage-regress.mjs` imports them
+    and deletes its copies; the unchanged `stage-regress.test.mjs` passes 44/44 before and after the lift, and every
+    existing detail text is kept. Its CLI behaviour changes in exactly one case, below under Changed: a stale-report
+    removal that fails is now a crash there too.
   - **`stage-exit-core.mjs`** gains the `verify` registry key — question `no-gates` (its fixed text carries the AC
     gate's `--gates` caveat); refused `missing-artifact`, `chain-red`, `plan-files-unparseable`; unusable
     `usage-error`, `no-feature`, `path-containment`, `git-failed`, `child-crashed`, `child-refused`, `no-progress`,
@@ -98,13 +100,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **`/pharn-ship` reads the verify verdict only after `/pharn-verify` ended `done` in the same run** (step 7 and
     Step 2b's re-read). Stricter: an earlier run's report left by a pre-slug, containment or crash stop no longer
     reaches GATE 2. The regress half is the follow-up `ship-regress-exit-binding`.
-  - **A removal that fails for any reason other than absence is a crash**, never a swallowed error. Regress's own
-    catch-all is unchanged (follow-up `regress-stale-unlink-swallow`).
+  - **A stale-report removal that fails for any reason other than absence is a crash** (exit 1, no document), never a
+    swallowed error — in `/pharn-verify` from the start and, since this increment's GATE 2 fix, in `/pharn-regress`
+    too, through the shared `removeIfPresent`. Before, `stage-regress.mjs` swallowed every unlink error, so an
+    unremovable earlier `regression-report.json` survived beside a later `unusable` (a bad `--timeout-ms` exited 2
+    over it), which falsified "every stop after the slug leaves no report" in `stage-exit.md` and `/pharn-ship`
+    step 6. This closes the follow-up `regress-stale-unlink-swallow`; `stage-runtime.test.mjs` runs the regress CLI
+    over such a report, with a catch-all mutant.
   - **Registered verifiers are counted, and none is run**; the live verifier runner stays deferred.
   - **The eval-pair discovery is a rule, not a judgment**, so a PLAN that names no file under a capability directory
-    gets no `structural:` gate for it — and the rule admits an UNTRACKED `(expected, findings.json)` pair under a
-    declared capability directory. The old text said "committed", which, read literally, gave a just-built
-    capability none. Regress's own pair discovery stays tracked-only.
+    gets no `structural:` gate for it — and the rule admits an UNTRACKED, NOT git-ignored `(expected, findings.json)`
+    pair under a declared capability directory. The old text said "committed", which, read literally, gave a
+    just-built capability none. Regress's own pair discovery stays tracked-only. Two bounds, both fail-open: a
+    git-ignored pair gets no gate, and neither does a declared path that differs from the tree only in letter case
+    (the rule compares exactly, while on a case-insensitive volume the completeness check counts that path present).
   - Also named, not built: `dev-verify-stage-script` (`/pharn-dev-verify` keeps its prose flow),
     `count-verifiers-flush-rule`, and `regress-resume-budget-value` (`stage-regress.mjs`'s `--resume` still accepts a
     value-less trailing `--budget-ms`, as in 6.23.0; `stage-verify.mjs` refuses it).

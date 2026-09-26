@@ -33,14 +33,17 @@
 // not copy the rules 6.23.0's review repaired one by one. They were extracted to RETURN results; this script keeps
 // its own emit wrappers, reason codes and detail wording, and its CLI behaviour — every detail text, the phase
 // order, the drain's exit-3 idempotent repeat — is unchanged (the unchanged `stage-regress.test.mjs` is that
-// evidence).
+// evidence). ONE deliberate change, from the GATE 2 fix: the stale-output removal goes through the shared
+// `removeIfPresent`, so an unlink that fails for any reason other than absence is now a crash instead of a
+// swallowed error (the follow-up `regress-stale-unlink-swallow`, closed; `stage-runtime.test.mjs` holds it).
 //
 // ==================================== PHASES, IN ORDER (GRILL G1) ====================================
 // fresh -> chain -> base -> partition -> head-init -> drain-head -> worktree -> install -> base-init ->
 // drain-base -> verdict -> cleanup -> render (`stage-regress-core.mjs` PHASES — the ONE owner of this
 // order). "fresh" REMOVES this feature's earlier `regression-report.json`/`REGRESSION.md` BEFORE any step
 // that can fail, so a stage that stops before its verdict leaves no earlier verdict on disk; an argv
-// refusal (before containment passes) removes nothing.
+// refusal (before containment passes) removes nothing, and a removal that FAILS (anything but ENOENT) is a
+// crash — never a later refusal over a report that is still there.
 //
 // ============================== NO ABSOLUTE PATH TO A CHILD OR A RENDER (GRILL G10) ==============================
 // Every path this script hands to a shelled checker, to git, or to `render-regression.mjs` is
@@ -74,6 +77,7 @@ import {
   parseResumeArgv,
   lstatSafe,
   containmentWalk,
+  removeIfPresent,
   atomicWrite,
   gitSync,
   nulList,
@@ -294,13 +298,13 @@ function parseRestOfArgv(args, feature) {
 function phaseFreshEarly(feature) {
   containmentGuard(feature);
 
-  // Stale-output removal, as early as it is now safe to do so (GRILL G1, narrowed by F2).
+  // Stale-output removal, as early as it is now safe to do so (GRILL G1, narrowed by F2). ONLY `ENOENT` is
+  // absence (`stage-runtime.mjs`'s `removeIfPresent`, since the 6.24.0 GATE 2 fix): any other unlink error
+  // propagates to the top-level catch — a crash, exit 1 with no document — so no refusal and no `unusable` can
+  // follow a removal that did not happen. Before, a catch-all swallowed it and an unremovable earlier report
+  // survived beside the later stop (the follow-up `regress-stale-unlink-swallow`, closed by this line).
   for (const rel of [`${FEATURES_DIR}/${feature}/regression-report.json`, `${FEATURES_DIR}/${feature}/REGRESSION.md`]) {
-    try {
-      unlinkSync(rel);
-    } catch {
-      /* absent — the normal case */
-    }
+    removeIfPresent(rel);
   }
 }
 

@@ -113,6 +113,9 @@ export function validateProgress(rec) {
  *     Regress's own pair discovery stays tracked-only; the two differ on purpose.
  *   • a declared glob ABOVE the capability directory (`src/**`) does not select it — declare the directory or a
  *     file inside it.
+ *   • a git-IGNORED pair is not in the listing, so it gets no gate; and the comparison is EXACT, so a declared path
+ *     that differs from the tree only in letter case selects nothing — while on a case-insensitive volume
+ *     `check-build-complete.mjs` counts that path present (GATE 2 review F3). Both fail open (fewer gates).
  *   • a listed path holding `*` is refused by the runner's `parseExtras` (`bad-extra`), never mangled here.
  *  ---------------------------------------------------------------------------------------------- */
 export const EXPECTED_RE = /\/evals\/expected\/[^/]+\.json$/;

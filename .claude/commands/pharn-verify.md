@@ -99,8 +99,9 @@ Read the printed `pharn-stage-exit/1` object and branch on the **exit code only*
   checker's message, git stderr or a path), and stop. What already happened depends on where it fired:
   - before the slug parses, or at `path-containment`: nothing was removed, so an earlier report and an earlier
     progress record survive together;
-  - any later `unusable`: the earlier report and the stage's scratch are gone, and from the runner's `init` on,
-    this run's `gates/` may exist;
+  - any later `unusable`: the earlier report and the earlier run's scratch are gone. From the runner's `init` on,
+    this run's `gates/` may exist, and from the drain on, this run's own progress record: a runner refusal in the
+    drain leaves it at `drain`, a crashed verdict checker at `verdict`;
   - a `--resume`'s own stop removes nothing, but may follow gates it ran, whose logs stay;
   - a removal that failed is a crash (below), never a `2`.
 - **`3` refused** — present the `reason_code`, the rendered `VERIFY.md` (it quotes the underlying message as DATA)
@@ -128,9 +129,10 @@ Read the printed `pharn-stage-exit/1` object and branch on the **exit code only*
 
 - **Anything else (`1` included)** — the script **crashed**; no document is guaranteed. Present what exists and
   stop. A crash is never read as a verdict.
-- **The Bash tool itself timed out** — run the resume line once, then branch as above. From the drain on, the script
-  checkpoints the top of each phase, so a resume re-runs only the phase the kill interrupted; a kill before the
-  drain left no record, and the resume answers `2 no-progress`.
+- **The Bash tool itself timed out** — run the resume line once, then branch as above. The script checkpoints the top
+  of the drain and of the verdict, so a resume re-runs from the phase the record names: a kill in the drain re-runs
+  the interrupted gate, and a kill during the render re-runs the verdict as well, because the record stays parked
+  at `verdict` until the run ends. A kill before the drain left no record, and the resume answers `2 no-progress`.
 
 **Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a
 **procedure** step, not reference material; it sits beneath the audit sections for document layout only, and a
@@ -165,7 +167,11 @@ overwrites a leftover scope either way.
   for such a feature; if a report already carries that reading, re-run without it.
 - **Eval pairs:** one `structural:<expected>` gate per `<capDir>/evals/expected/<x>.json` whose colocated
   `<capDir>/findings.json` exists, for each capability directory the PLAN's `## Files` declares; the pair may be
-  committed or untracked (a capability the build just wrote is untracked at verify time).
+  committed, or untracked and not git-ignored (a capability the build just wrote is untracked at verify time).
+  **Two bounds, both fail-open (fewer gates):** a git-ignored pair gets no gate; and a declared path that differs
+  from the tree only in letter case gets none either — the rule compares paths exactly, while on a case-insensitive
+  volume the completeness check counts such a path present, so the capability reads as built with no `structural:`
+  gate run for it.
 - **Completeness** is captured by the runner (`check-build-complete.mjs`) outside the gate map, so an incomplete
   build is `INCOMPLETE` (exit-3-as-verdict, `/pharn-ship` Step 2b's one retry), never a red gate. A crashed
   completeness checker is `unusable child-crashed` before any gate runs.

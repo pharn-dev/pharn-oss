@@ -71,9 +71,11 @@
 //   feature's earlier `regression-report.json` in its very first phase ("fresh"), before any step that can
 //   fail — so a regress attempt that starts and then REFUSES (a RED spec->plan chain, a scope escape, a
 //   missing artifact) has ALREADY deleted the stale file, and this derivation cannot read it as current. The
-//   residual survives for regress only in the one case fresh-start removal precedes: a malformed invocation
+//   residual survives for regress in the case fresh-start removal precedes: a malformed invocation
 //   (`unusable`, e.g. a bad argv) refused BEFORE the stale-output removal step, where the exit table states
-//   plainly that "an argv refusal removes nothing" (`pharn-contracts/stage-exit.md`). NARROWED the same way for
+//   plainly that "an argv refusal removes nothing" (`pharn-contracts/stage-exit.md`), and for a genuine crash —
+//   since 6.24.0 a removal that fails for any reason but ENOENT is one (before, it was swallowed, and a later
+//   refusal left the stale file in place). NARROWED the same way for
 //   `/pharn-verify` since `stage-verify-script` (6.24.0): `stage-verify.mjs`'s "fresh" phase removes THIS feature's
 //   earlier `verify-report.json` right after the slug and the containment walk, so every verify refusal and every
 //   later `unusable` stop leaves no report to accept; the residual survives there only for a stop before that

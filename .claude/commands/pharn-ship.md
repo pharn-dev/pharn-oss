@@ -335,9 +335,12 @@ here (F2, GATE 2 review — an earlier draft of this paragraph overclaimed this 
 `/pharn-regress` `refused` stop (a RED chain, a scope escape, a missing artifact), and every `unusable`
 stop raised AT OR AFTER the feature slug parses and the containment walk passes, leaves **no**
 `regression-report.json` on disk (`pharn/pharn-contracts/stage-exit.md`'s exit table), so the missing-file
-membership test above is the correct STOP for all of those. **The residual, named rather than hidden:** a
-stop BEFORE that point (a bad or missing `--feature`, or `path-containment` itself — `stage-regress.mjs`'s
-own "fresh" phase order), or a genuine crash, may leave an EARLIER run's report in place; this is exactly
+membership test above is the correct STOP for all of those. That holds since 6.24.0 for a removal that FAILS too:
+the stale-report removal treats only `ENOENT` as absence, so an unremovable earlier report is a crash, never a
+later `unusable` beside it (before 6.24.0 regress swallowed the failure). **The residual, named rather than
+hidden:** a stop BEFORE that point (a bad or missing `--feature`, or `path-containment` itself —
+`stage-regress.mjs`'s own "fresh" phase order), or a genuine crash — a failed removal included — may leave an
+EARLIER run's report in place; this is exactly
 why the check above is a membership test on the CURRENT file's `.verdict`, never merely "no file was
 written this run" — and it is the same residual `ship-outcome-core.mjs` and `regression-report.md`
 correctly keep open.

@@ -107,7 +107,8 @@ Read the printed `pharn-stage-exit/1` JSON object and branch on the **exit code 
     Bash-tool timeout (below);
   - every later `unusable` has removed the stale report and cleared that scratch, and from "drain-head"
     onward may have written new state: this run's own progress record, a base-commit checkout, install
-    logs, gate stamps.
+    logs, gate stamps;
+  - a stale-report removal that FAILED (anything but absence) is a crash (below), never a `2` (since 6.24.0).
 
   None of it is a verdict. `pharn/pharn-contracts/stage-exit.md` states the full order.
 
