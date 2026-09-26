@@ -1,5 +1,5 @@
 {
-  "base": "1524c6ff90844ee17457ca9450a7abb894a7b1f1",
+  "base": "2e5c2e3183c595c76abadde8878d1fa2e94d115e",
   "inside": [
     ".claude/commands/pharn-loop.md",
     ".claude/commands/pharn-regress.md",
@@ -40,7 +40,8 @@
     "pharn/floor/stage-verify.test.mjs",
     "pharn/pharn-contracts/ac-tests.md",
     "pharn/pharn-contracts/stage-exit.md",
-    "pharn/pharn-contracts/verify-report.md"
+    "pharn/pharn-contracts/verify-report.md",
+    ".dev/features/stage-verify-script/SHIP.md"
   ],
   "outside_gates": {
     "format:check": {
