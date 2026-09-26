@@ -302,7 +302,8 @@ node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
 # --discover, --scope-json, --ac-tests) resolves against the INVOKING directory, whose `.pharn/` is that state root;
 # --cwd moves only where gates RUN and which tree is fingerprinted (6.9.3 — before it, init resolved --out
 # and --spec-from against --cwd while `run --next` did not, so /pharn-regress's base side, the one --cwd
-# caller, failed at init with spec-mismatch; its pinned lines are now EXECUTED by run-gates.test.mjs). Contract:
+# caller, failed at init with spec-mismatch; its pinned lines are now EXECUTED by stage-regress.test.mjs, since
+# 6.23.0 moved them from pharn-regress.md's own prose into pharn/floor/stage-regress.mjs). Contract:
 # pharn/pharn-contracts/gate-run-record.md. Ships: bumps SKILLS_VERSION.
 # Exit: init 0 ok | 2 runner error (closed reason_code) | 3 EMPTY SOURCE SET (nothing written; routes to the
 # existing no-gates HALT, and to /pharn-loop's unattended S4 `blocked: no-gates`) ·
@@ -539,6 +540,58 @@ node .claude/hooks/require-loop-record.cjs --close <name>           # /pharn-loo
 # >64 KiB through a pipe (which discriminates only where piped stdout is asynchronous — not on CI's Linux).
 node pharn/floor/check-verify.mjs --stamp <stamp.json> --feature <name>
 node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --base <40-hex> [--inside <list>]
+
+# THE /pharn-regress STAGE SCRIPT (added 6.23.0, stage-regress-script) — every deterministic step of the regress
+# stage in ONE tested script, so `.claude/commands/pharn-regress.md` becomes a THIN CALLER: it pins one line and
+# branches on the script's EXIT CODE. THE RECORDED TRIGGER (P7): a user's own /pharn-ship cost.json ledgers showed
+# pharn's own stages at ~48% of relative cost on large features and ~81% on three small fixes, with /pharn-regress
+# alone ~63% of the small fixes — today's command prescribed one Bash call per gate per side plus ~20 setup calls,
+# each a full model turn re-reading a 36 KB prompt.
+# THE PROTOCOL is `pharn/pharn-contracts/stage-exit.md` + `pharn/floor/stage-exit-core.mjs`: ONE `pharn-stage-exit/1`
+# JSON object per exit — `{schema, status, stage, feature}` plus a status-specific closed key set (`done` adds
+# verdict/report/render; `refused` adds reason_code/render; `question` adds reason_code/question/options/resume;
+# `continue` adds phase/resume; `unusable` adds reason_code/detail) — CLOSED in both directions
+# (`validateStageExit`). EXIT CODES: 0 done · 2 unusable · 3 refused · 4 question · 5 continue · anything else (1
+# included) = CRASHED, deliberately never chosen by an emission (mirrors 6.21.1's "a crash is not read as a
+# verdict"). A `question`'s text and every option's `label` are FIXED, registry-held strings per
+# `(stage, reason_code)` — nothing untrusted is ever interpolated. `mayStartSlowStep` (the shared budget decision:
+# a slow step starts on the invocation's first attempt, or while elapsed+timeout <= budget) lives here too, so a
+# future stage-verify.mjs (roadmap Phase 1.2) reuses it without importing a sibling stage's core.
+# THE SCRIPT, `pharn/floor/stage-regress.mjs` (execution) + `pharn/floor/stage-regress-core.mjs` (pure rules):
+# 13 named phases in order (`fresh` -> `chain` -> `base` -> `partition` -> `head-init` -> `drain-head` ->
+# `worktree` -> `install` -> `base-init` -> `drain-base` -> `verdict` -> `cleanup` -> `render`). "fresh" removes
+# THIS feature's earlier regression-report.json/REGRESSION.md BEFORE any step that can fail, so a stop before the
+# verdict leaves no earlier verdict on disk; an argv refusal (before that point) removes nothing. The four CLOSED
+# rules moved out of command prose: TEST_FILE_RULE (vitest/Jest/`node --test` conventions), STYLE_CONFIG_RULE (the
+# config-touch skip for style/format gates), INSTALL_RULE (exactly one lockfile family at the BASE commit resolves
+# the install command — npm MEASURED, pnpm/yarn/bun UNMEASURED, labelled as such), BASE_RULE (`--base` / a dirty
+# tree / origin/main's merge-base / ask). `REGRESS_PATHS` is the ONE owner of the stage's `.pharn/pharn-regress/`
+# scratch layout; `loop-fresh-core.mjs`'s `DEFAULT_STAMPS.regressHead`/`regressBase` derive from it.
+# THE BUDGET (`--budget-ms`) solves the 600 s Bash-tool cap: a slow step (the base-commit install, or one gate)
+# starts only if it is the FIRST slow step of THIS invocation, or `elapsed + timeoutMs <= budgetMs`; otherwise the
+# script persists `.pharn/pharn-regress/stage.json` (schema `pharn-stage-regress-progress/1`) and exits 5
+# `continue`. `--resume` accepts ONLY `--budget-ms` and reads everything else from that record, so the resume line
+# carries no state (L44). With no `--budget-ms` (a code caller, never a Bash-tool caller), nothing is budgeted.
+# `pharn/floor/render-regression.mjs` (pure, no CLI) renders `REGRESSION.md` from the verdict JSON, the scope
+# partition and the stage's progress; it quotes a gate id or a checker's message as fenced DATA
+# (`pharn/floor/quote-core.mjs`'s `dataText`/`quoteData`, moved byte-for-byte out of `render-run-report.mjs` so a
+# second renderer does not drag in the cost-ledger load graph) and hands every path through repo-relative, so
+# `/pharn-loop`'s later commit of the file can never carry an absolute path.
+# THE WEAKER CLAIM, stated plainly: before 6.23.0, fix #7's hook PREVENTED a Write-tool write outside the two
+# declared regress artifacts. Now the script writes them through `fs`, reached via Bash and outside that hook
+# (L19, declared) — a write anywhere else is DETECTED, never PREVENTED, by `/pharn-verify`'s `reconcile` gate.
+# Offsetting it, STRONGER since 6.23.0: the command's writes-scope is set to the strictest one the setter can
+# express, `.pharn/pharn-regress/stage.json` (which resolves to `.pharn/**` alone, since `writes: []` is refused
+# by the setter), so no Write-tool write may land outside `.pharn/**` at all while the script runs — a real,
+# probed guarantee (`.dev/floor/command-hygiene.test.mjs`'s STAGE_SCRIPT_WIRING).
+# THE UNCHANGED, NAMED RESIDUAL: `regress-failed-install-false-green` (amendment A2, not built). A failed
+# base-commit install turns every base gate red, so every head red reads `pre_existing`, and the verdict JSON —
+# all `/pharn-ship`/`/pharn-loop` read — still says `no-regressions`: a false green on exactly the gates the
+# install broke. The only signal is `REGRESSION.md`'s first line, read by no machine consumer.
+# Ships: bumps SKILLS_VERSION. Exit: 0 done · 2 unusable · 3 refused · 4 question · 5 continue · anything else
+# (1 included) = crashed.
+node pharn/floor/stage-regress.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--base <ref>] [--gates "<cmd>[::<id>],…"] [--install "<cmd>" | --no-install] [--tests "<pathspec>,…" | --no-tests]
+node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 
 # Check the SHAPE of a loop-record — the pharn/features/<name>/LOOP.md that /pharn-loop writes at every stop.
 # Floor: the frontmatter envelope (`decision` in {STOP_GREEN, STOP_CAP, STOP_TERMINAL, INCONCLUSIVE};

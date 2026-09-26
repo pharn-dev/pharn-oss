@@ -329,7 +329,12 @@ absolute all-green-at-HEAD `.verdict` — belt-and-suspenders.)_
 `"inconclusive"` → **STOP**, present, hand to the human. **Fail-closed on a missing file:** on a RED chain
 `/pharn-regress` writes **only** `REGRESSION.md` (no verdict JSON), so a **missing
 `regression-report.json` → STOP** (present the RED-chain `REGRESSION.md`) — a membership test (present ∧
-`.verdict == "no-regressions"`), never a silent proceed.
+`.verdict == "no-regressions"`), never a silent proceed. **Since `stage-regress-script` (6.23.0), this
+holds more broadly, stated so "missing report → STOP" is not read as narrower than it is:** every
+`/pharn-regress` stop — `refused` (a RED chain, a scope escape, a missing artifact) or `unusable` (an
+argv/git/child failure) — leaves **no** `regression-report.json` on disk
+(`pharn/pharn-contracts/stage-exit.md`'s exit table), so the missing-file membership test above is the
+correct STOP for every one of them, not only the chain case.
 
 1. **`/pharn-verify`** → writes `pharn/features/<name>/verify-report.json` (+ `VERIFY.md`).
 
@@ -946,11 +951,14 @@ the `check-ship.mjs` cap.
   **structural/advisory** (a single block, no loop, no `check-ship`-style cap — Step 2b); and proceeding
   after the retry reads only `PASS` ∧ `no-regressions` (FLOOR verdicts). The retry **never** guarantees the
   rebuild works (advisory model work). It is **not** `--loop`.
-- **The post-build gate's DISCOVERY is advisory (honest, mirrors `/pharn-regress` / `/pharn-verify`).** The
-  build project-gate's **exit code** is FLOOR, but **which** gate to run for a non-PHARN project (`--gates`
-  → allowlist ∩ scripts → ask) is **advisory orchestration, untested by construction** (it lives in this
-  command's prose, exactly like `/pharn-regress`'s Step 4a / `/pharn-verify`'s Step 3a discovery). "Build
-  floor = FLOOR" refers to the **exit code**, not to the gate-selection — do not over-read it.
+- **The post-build gate's DISCOVERY is advisory (honest, mirrors `/pharn-verify`).** The build
+  project-gate's **exit code** is FLOOR, but **which** gate to run for a non-PHARN project (`--gates` →
+  allowlist ∩ scripts → ask) is **advisory orchestration, untested by construction** (it lives in this
+  command's prose, exactly like `/pharn-verify`'s Step 3a discovery). "Build floor = FLOOR" refers to the
+  **exit code**, not to the gate-selection — do not over-read it. **`/pharn-regress`'s own discovery is a
+  DIFFERENT, stronger case since `stage-regress-script` (6.23.0):** it moved out of command prose entirely
+  and into `pharn/floor/stage-regress-core.mjs`/`stage-regress.mjs`, tested code the command merely
+  invokes — so it is no longer the parallel this bullet's "untested by construction" describes.
 - **"The two human gates (SPEC approval, post-verify) are preserved"** → **ADVISORY** (command discipline).
   GATE 1 **is** `/pharn-spec`'s own halt; nothing on the floor forces a human to be asked. `/pharn-ship`
   preserves the gates **by construction**, backstopped (not replaced) by `/pharn-plan`'s deterministic

@@ -56,6 +56,11 @@
     // for a generated artifact, and no self-referential conflict with a gate /pharn-loop's own
     // /pharn-verify runs. Listed on reasoning, not after the first FAIL.
     "pharn/features/*/RUN-REPORT.md",
+    // REGRESSION.md — the SAME reasoning as RUN-REPORT.md above (stage-regress-script, 6.23.0):
+    // deterministically rendered by pharn/floor/render-regression.mjs from pharn/floor/stage-regress.mjs,
+    // and it quotes a shelled checker's own message and a hostile gate id VERBATIM, so no MD rule can be
+    // satisfied by construction over content the renderer does not control.
+    "pharn/features/*/REGRESSION.md",
     // Zone note, kept where the next editor of this list will need it: `.pharn/` is excluded ENTRY BY
     // ENTRY, never as a blanket `.pharn/`. The reason is structural rather than situational — the
     // directory holds the fix #7 writes-scope file and the product-index cache above alongside

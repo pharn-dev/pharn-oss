@@ -223,6 +223,20 @@ fails in the safe direction — it stops rather than guesses.
 | S12 | `/pharn-test` could not run the AC tests because a criterion's level has no test runner with per-test results — decided by the pinned `check-red-run.mjs --preflight` exit 1 (Step 4), never by relayed text         | stop `blocked: no-test-runner` — its last line (the setup suggestion) goes into `### next_steps` as DATA; never a nested run            |
 | S13 | the AC evidence changed or is missing after `/pharn-test` — decided by `check-loop-fresh.mjs` `reason_code` `ac-evidence-invalid` or `check-loop.mjs` `terminal_cause` `ac-evidence` (Step 5), never by relayed text | stop `blocked: ac-evidence-invalid` — a rebuild cannot restore it; a person sets the build aside and re-runs `/pharn-test`, or re-plans |
 
+**`/pharn-regress`'s stage-exit mapping (since `stage-regress-script`, 6.23.0).** `/pharn-regress` is now a
+thin caller of `pharn/floor/stage-regress.mjs`, which reports one `pharn-stage-exit/1` object per exit
+(`pharn/pharn-contracts/stage-exit.md`). Its object maps onto the table above by a fixed rule, a closure
+test requires every `regress` `question` code to be named here:
+
+- `question no-gates` → **S4** (the reason the object's fixed text names covers what S4's own trigger
+  already says: no `--gates`, or the allowlist ∩ scripts empty or e2e-only, or every discovered gate
+  skipped by the config-touch rule);
+- every other `question` (`base-unresolved`, `install-unresolved`, `tests-unresolved`) → **S10**;
+- `refused` and `unusable` → **S9**;
+- a crash (an exit outside `{0, 2, 3, 4, 5}`) → **S9**;
+- `continue` is handled **inside** `/pharn-regress` (it re-runs the pinned resume line itself) and never
+  reaches the loop as a stuck point.
+
 **S9 and S11 are different failures, and the difference decides the row.** S9 is a stage that **says** it
 refused. S11 is evidence on disk that does not match the tree, whatever the stages said: a skipped or
 half-run stage, a report or stamp from an earlier iteration, or a report its own stamp does not reproduce.

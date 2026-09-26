@@ -108,8 +108,16 @@ import { execFileSync } from "node:child_process";
 import { FEATURE_BASE, TOKEN_CLASSES, LEGACY_SCHEMA, SHIP_COMMAND, readMarkers, normalizeMarkers } from "./render-cost-ledger.mjs";
 import { DEFAULT_BASE as MARKERS_DEFAULT_BASE } from "./mark-phase.mjs";
 import { verdictApplicability, APPLICABILITY } from "./ship-outcome-core.mjs";
-import { handoffSections, fenceFor, HANDOFF_SECTIONS } from "./loop-record-core.mjs";
+import { handoffSections, HANDOFF_SECTIONS } from "./loop-record-core.mjs";
 import { pathsFromPlanFiles } from "./plan-files-core.mjs";
+import { quoteData, dataText } from "./quote-core.mjs";
+
+// `quoteData` and `dataText` are IMPORTED, not defined here (GRILL G6, stage-regress-script): they moved
+// byte-for-byte into `quote-core.mjs`, whose only import is `fenceFor` from `loop-record-core.mjs` (a
+// module with no imports of its own), so a second renderer (`render-regression.mjs`) can quote untrusted
+// text without pulling this file's cost-ledger load graph into its own. Re-exported here so this file's
+// own existing tests keep exercising the one implementation (L35 — one owner, one test suite).
+export { quoteData, dataText };
 
 // `FEATURE_BASE` and `TOKEN_CLASSES` are IMPORTED, never re-spelled. This module introduces ZERO new
 // defaults, which is the whole of L41's remedy here — there is no second literal for a relocation to
@@ -147,28 +155,6 @@ export function commandLabel(cost) {
 /** Rendered wherever an input is absent or unusable. One shape, so a reader learns it once. */
 export function na(reason) {
   return `_n/a — ${reason}_`;
-}
-
-/** Quote untrusted text as an inert fenced block (see the header). `label` names the source so a reader
- *  can tell DATA from this file's own prose. */
-export function quoteData(label, text) {
-  const body = String(text);
-  const f = fenceFor(body);
-  return [`${label}`, "", `${f}text`, body, f].join("\n");
-}
-
-/** Any value from a parsed JSON input as text — never a throw (see the header). A primitive goes through `String()`,
- *  so it is byte-identical to `String()` BY CONSTRUCTION (`Infinity` from `1e999` included — `JSON.stringify` would
- *  print `null`). Only a non-null object or array is JSON text, where `String()` printed `[object Object]` or threw.
- *  `JSON.parse` accepts a nesting depth `JSON.stringify` cannot walk (measured: RangeError at 10,000 levels), so that
- *  one call is guarded and a too-deep value renders a fixed marker. */
-export function dataText(v) {
-  if (v === null || typeof v !== "object") return String(v);
-  try {
-    return JSON.stringify(v);
-  } catch {
-    return "(value nested too deeply to render)";
-  }
 }
 
 /** A JSON object that is not an array — the only shape an entry of a report's entry array may have. */

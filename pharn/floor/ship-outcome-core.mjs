@@ -61,12 +61,21 @@
 // STRENGTH, stated: exact RELATIVE TO THE RECORDED MARKERS (enum + ordering), and the markers are
 //   ADVISORY (Bash-written command prose, L19). It never uses a file's mtime or its mere existence ([[L42]]).
 // THE RESIDUAL, at its true width: a marker proves a stage STARTED in this attempt, never that it
-//   REWROTE its report. A `/pharn-verify` (or `/pharn-regress`) that writes its stage-start and then
-//   REFUSES before emitting leaves the previous attempt's — or the previous run's — file in place, and
-//   this derivation accepts it. That applies to EVERY attempt, not only the retry (GRILL finding 1), and
-//   it is pinned by a test so it stays visible. Closing it needs a report-side run identity (a
-//   verify/regression-report contract change) or a lifecycle invalidation in `/pharn-ship` (an
-//   orchestration change) — both outside this increment by design.
+//   REWROTE its report. A `/pharn-verify` that writes its stage-start and then REFUSES before emitting
+//   leaves the previous attempt's — or the previous run's — file in place, and this derivation accepts it.
+//   That applies to EVERY attempt, not only the retry (GRILL finding 1), and it is pinned by a test so it
+//   stays visible. Closing it needs a report-side run identity (a verify-report contract change) or a
+//   lifecycle invalidation in `/pharn-ship` (an orchestration change) — both outside this increment by
+//   design.
+//   NARROWED for `/pharn-regress` since `stage-regress-script` (6.23.0): `stage-regress.mjs` removes THIS
+//   feature's earlier `regression-report.json` in its very first phase ("fresh"), before any step that can
+//   fail — so a regress attempt that starts and then REFUSES (a RED spec->plan chain, a scope escape, a
+//   missing artifact) has ALREADY deleted the stale file, and this derivation cannot read it as current. The
+//   residual survives for regress only in the one case fresh-start removal precedes: a malformed invocation
+//   (`unusable`, e.g. a bad argv) refused BEFORE the stale-output removal step, where the exit table states
+//   plainly that "an argv refusal removes nothing" (`pharn-contracts/stage-exit.md`). It is UNCHANGED, at its
+//   full original width, for `/pharn-verify` (no such early removal exists there) and for a stage that never
+//   starts at all (no marker, so `verdictApplicability()` correctly excludes it on that ground instead).
 //
 // DETERMINISM (P5): no clock, no randomness. Every branch is a membership or grammar test, and the
 // terminal fallback is the explicit `unknown` stage token — never a guess, never a silently dropped

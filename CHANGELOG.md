@@ -23,6 +23,72 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.23.0] - 2026-09-26
+
+### Added
+
+- 2026-09-26: **`/pharn-regress` becomes a THIN CALLER of one tested stage script, `pharn/floor/stage-regress.mjs`,
+  and gains a shared stage-exit contract every future stage script reuses.** `SKILLS_VERSION` 6.22.0 → 6.23.0.
+  `MIN_CLI` stays 0.5.0: no installed path relocates and no existing frontmatter/contract shape breaks.
+  ([`.dev/features/stage-regress-script/`](./.dev/features/stage-regress-script/))
+  - **Why (P7, a measured trigger, not a hypothetical).** A user's own `/pharn-ship` `cost.json` ledgers
+    showed PHARN's own stages taking ~48% of relative cost on large features and ~81% on three small
+    fixes, with `/pharn-regress` alone ~63% of the small fixes. Today's command prescribed one Bash call
+    per gate per side plus ~20 setup/bookkeeping calls, each a full model turn re-reading a 36 KB prompt.
+  - **`pharn/floor/stage-regress.mjs`** (new) runs every deterministic step — argv, `lstat` containment,
+    git, the shelled checkers (`check-plan-spec-agree.mjs`, `check-regress.mjs`), the base-commit install,
+    and the atomic artifact writes — through 13 named phases (`fresh` → … → `render`), and solves the
+    600 s Bash-tool cap with a budget-and-resume protocol: a slow step (the install, or one gate) starts
+    only if it is the first of the invocation or the elapsed time plus its timeout still fits the budget;
+    otherwise the script persists its progress and exits `5` (`continue`) for the pinned `--resume` line to
+    pick up. `pharn/floor/stage-regress-core.mjs` (new, pure) holds the closed rules the old command's prose
+    described: which paths are test files, when the style/format gates are skippable (a shared-config
+    touch), which base-commit lockfile resolves the install command (npm measured; pnpm/yarn/bun labelled
+    UNMEASURED), and how the base ref resolves (`--base` / a dirty tree / `origin/main`'s merge-base /ask).
+  - **`pharn/pharn-contracts/stage-exit.md` + `pharn/floor/stage-exit-core.mjs`** (new): the ONE JSON
+    envelope every stage script emits — `{schema, status, stage, feature}` plus a closed per-status key
+    set (`done`/`refused`/`question`/`continue`/`unusable`) — and the exit-code table (`{0,2,3,4,5}`; `1`
+    included is always a crash, never a verdict). A `question`'s text and every option's label are FIXED,
+    registry-held strings per `(stage, reason_code)`; nothing untrusted is ever interpolated into one. The
+    registry is keyed by stage so a future `stage-verify.mjs` (roadmap Phase 1.2) adds an entry rather than
+    a new file.
+  - **`pharn/floor/render-regression.mjs`** (new, pure) renders `REGRESSION.md` from the verdict JSON, the
+    scope partition and the stage's progress — deterministic code, no longer model-typed prose. It quotes
+    every gate id and checker message as fenced DATA and hands every path through repo-relative, so
+    `/pharn-loop`'s later commit of the file can never carry an absolute path.
+  - **`pharn/floor/quote-core.mjs`** (new): `dataText`/`quoteData` moved byte-for-byte out of
+    `render-run-report.mjs`, which now re-exports them, so a second renderer can quote untrusted text
+    without pulling in the cost-ledger load graph.
+  - **`.claude/commands/pharn-regress.md`** (rewritten): pins one fresh line
+    (`--feature <name> --timeout-ms 540000 --budget-ms 570000`) and one resume line
+    (`--resume --budget-ms 570000`), and branches on the script's exit code only. Its writes-scope is set
+    to the strictest one the setter can express — `.pharn/pharn-regress/stage.json`, which resolves to
+    `.pharn/**` alone — so no Write-tool write may land outside it while the script runs; the script's own
+    artifact writes happen through `fs`, reached via Bash and stated as such (a **weaker** claim than
+    before for that one property, offset by the **stronger** always-`.pharn/**` scope guarantee).
+  - **`pharn/floor/run-gates.mjs`**: exports `spawnGate` (a `null` results path means no
+    `PHARN_TEST_RESULTS` variable) so the stage script's install step reuses the same
+    process-group/timeout/kill discipline instead of a second implementation.
+  - **`pharn/floor/loop-fresh-core.mjs`**: `DEFAULT_STAMPS.regressHead`/`regressBase` now derive from
+    `stage-regress-core.mjs`'s `REGRESS_PATHS`, the one owner of the stage's scratch layout.
+  - **`.claude/commands/pharn-loop.md`**: a new paragraph beside the stuck-point table maps a regress
+    stage-exit object onto it (`question no-gates` → S4; every other `question` → S10; `refused`/`unusable`
+    → S9; a crash → S9; `continue` stays inside `/pharn-regress`).
+  - **`.claude/commands/pharn-ship.md`**: the stale "`/pharn-regress`'s Step 4a" citation is corrected (its
+    gate discovery is tested code now, not command prose), and a sentence states that every `/pharn-regress`
+    stop — not only a RED chain — leaves no `regression-report.json`, so the existing missing-report → STOP
+    membership test holds for all of them.
+  - **The weaker artifact-write claim, stated plainly:** before this change, fix #7's hook PREVENTED a
+    Write-tool write outside the two declared regress artifacts. Now the script writes them through `fs`,
+    outside that hook (an intentional, declared L19 pattern). A write anywhere else is DETECTED, never
+    PREVENTED, by `/pharn-verify`'s `reconcile` gate — unchanged from how every other Bash-write stage
+    script in this repo already works.
+  - **The unchanged bound, carried forward rather than closed:** `regress-failed-install-false-green`. A
+    failed base-commit install still turns every base gate red, so every head red still reads
+    `pre_existing`, and the verdict JSON `/pharn-ship`/`/pharn-loop` read still says `no-regressions` — a
+    false green on exactly the gates the install broke. The only signal is `REGRESSION.md`'s first line,
+    read by no machine consumer. This increment neither creates nor closes it (amendment A2).
+
 ## [6.22.0] - 2026-09-25
 
 ### Added

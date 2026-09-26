@@ -47,6 +47,13 @@ pharn/features/*/cost.json
 # and the conflict would land on `/pharn-verify`, a gate `/pharn-loop` itself owns.
 pharn/features/*/RUN-REPORT.md
 
+# REGRESSION.md — the SAME reasoning as RUN-REPORT.md above (L23, stage-regress-script 6.23.0):
+# `pharn/floor/render-regression.mjs` renders it deterministically FROM `stage-regress.mjs`, and it
+# quotes a shelled checker's own message and a hostile gate id verbatim — content the renderer does not
+# control — so gate-clean output is not achievable by construction. Listed on reasoning, not after the
+# first FAIL.
+pharn/features/*/REGRESSION.md
+
 # The other machine-written JSON pipeline artifacts, on the SAME reasoning (L23): each is one floor module's
 # `JSON.stringify(…, null, 2)` output, and that layout expands a short array of strings over several lines where
 # prettier wants it inline. AC-TESTS.lock.json (ac-tests-lock.mjs) is written by /pharn-test BEFORE the build and
