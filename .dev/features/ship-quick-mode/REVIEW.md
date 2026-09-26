@@ -347,3 +347,149 @@ removed the marker.
 The probes ran from `.pharn/pharn-dev-review/`. That covered the scratch worktree, a nested probe repo and four
 `node` probe scripts, and all of it was deleted before this file was written. `git status` is clean apart from this
 file.
+
+## Re-review after GATE-2 fixes (opus)
+
+- reviewed: `036393f` (`wip(ship-quick-mode): GATE-2 review fixes (opus)`), fast-forwarded from `2071a97`; the
+  sections above are the original review, left as written.
+- stage model: review — opus, set by the maintainer's 2026-09-26 instruction, overriding pharn.config.json; model
+  routed via Agent subagent; effort not routed.
+- verdict: **GREEN — 0 floor-gate findings open.**
+  - F1, F2 and F3 are verified-fixed, each repro re-executed against the real code.
+  - Every advisory is verified-fixed or narrowed-ok.
+  - Three new findings, all minor and advisory (N1–N3 below).
+
+### Floor, re-run
+
+- `node pharn/floor/validate.mjs .`: **GREEN**, 36 capabilities.
+- `npm test`: 3417 pass / 0 fail.
+- `format:check`, `lint`, `lint:md`, `docs:check`, `check:markers`, `check:badge`, `check:changelog`,
+  `check:contributing`, `check:reconcile` and `check:changelog-entry`: all GREEN.
+  - `lint` was RED once, on two `.js` files in my own probe repo under `.pharn/`. ESLint does not exclude
+    `.pharn/`, the same shape VERIFY.md records. It was GREEN once that scratch was deleted.
+- The live `pharn/ARCHITECTURE.md` pin is still `4950796f…`, and `check-plan-lessons` on the amended PLAN is GREEN
+  (34 ids).
+
+**The proposed patch, in a detached scratch worktree only** (removed afterwards):
+
+- `git apply --check` and `git apply` were clean, and `shasum -c` printed OK for both files.
+- On the patched bytes:
+  - `validate.mjs` GREEN;
+  - `check-specified-markers.mjs` GREEN, 25 annotations;
+  - `hash-doc.test.mjs` 11/11;
+  - the whole suite 3414 pass / 0 fail / 3 skipped (platform-conditional).
+- The new pin is `7b02b45c…`, the value `APPLY.md` records.
+- `stage-exit.md` is still absent, so the patch carries no §4 line, and `apply.sh` is byte-identical to the amended
+  PLAN's pinned block.
+- **Reproducible:** `make-patch.mjs` run on the unpatched scratch tree rewrote `proposed/` byte-for-byte (`git diff`
+  empty).
+- **Refusal:** run on an already-patched tree, it exits 1 ("find string matched 0 time(s)") and writes nothing. Both
+  `proposed/` files kept their sums, and no scratch was left behind.
+
+### Per-finding status
+
+| finding                                             | status         | re-executed evidence                                                                                                                                               |
+| --------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| F1 — a skipped quick run-start could derive `gate2` | verified-fixed | the original repro now gives `undetermined`; the compliant trails and mutation controls are below                                                                  |
+| F2 — first-token rule stated as an impossibility    | verified-fixed | ADVISORY at all four sites (and at `pharn-grill.md`), backstop and bound named, a guarantee-audit bullet; a hygiene pin forbids the struck sentence                |
+| F3 — a fix #7 control dropped unnamed               | verified-fixed | the committed item-7 line, run in a nested repo with a stray written before the anchor: reconcile CLEAN, item 7 exit 1 `escaped: ["src/stray.js"]`; control exit 0 |
+| stale full-run artifacts (`pharn-ship.md:237`)      | narrowed-ok    | labelled, not removed, and the reason is stated; the renderer's `## Briefing` for a quick ledger says "not part of this run"; the full-ledger control still links  |
+| BUILD.md "no other deviation" / promised tests      | verified-fixed | the ★ WIRING test executes the committed quick lines; the quick Step-2b cases, the G11 rollback sentence and `mode` in Step 3/3b exist; BUILD.md corrected         |
+| legacy SPEC via unpinned `spec_template`            | narrowed-ok    | re-run: exit 0 and `--spec-kind` `feature` → `quick`; the templated-flip control is exit 1; now stated in the contract, `## Quick mode`'s audit and the CHANGELOG  |
+| `pharn-ship.md:263` "pre-existing checker"          | verified-fixed | `--spec-kind` is named as the one new gating read                                                                                                                  |
+| `spec-template.md:173` e2e rationale                | verified-fixed | the contract and the constants comment say `/pharn-verify` still runs the project's e2e gates                                                                      |
+| dangling "Quick mode" refs / hygiene comments       | verified-fixed | `CLAUDE.md` and `README.md` now point at real anchors, and the test comments cite PLAN.md §6                                                                       |
+| stale wording                                       | verified-fixed | `ship-outcome-core.mjs:49`/`:59`, `spec-template-core.mjs:424`, the check-spec test title, `pharn-ship.md:175` ("third bullet") and `pharn-verify.md:32`           |
+| `make-patch.mjs:41` / `apply.sh` message            | verified-fixed | the check reads the patch from stdin before either file is written; the message says "restored from the index"                                                     |
+
+**F1, in depth.** The real `deriveShipOutcome` was run over `normalizeMarkers`.
+
+- **Compliant trails** — none reads `undetermined`:
+  - a full run → `gate2`, with the Step-2b retry → `gate2`;
+  - a quick run → `gate2-quick`, with the Step-2b retry → `gate2-quick`;
+  - a resumed full or quick `/pharn-ship` after a closed and after an unclosed full run → `gate2` / `gate2-quick`;
+  - resumed after a grill STOP → `gate2`;
+  - a `/pharn-loop` trail with two iterations and freshness re-runs of `verify@1` and `regress@2` → `gate2`. Those are
+    the only re-runs: `loop-fresh-core` names `verify` or `regress` as `stage_to_rerun`, never another stage, and both
+    are exempt from (b).
+- **What (b) now turns into `undetermined`:** only a deviation — a duplicated `build@1` line, say. That is the
+  under-claiming direction.
+- **The two stated bounds hold as written:**
+  - skipping every stage-start as well as the run-start yields a trail identical to a real full run (`gate2`);
+  - an earlier run that left only its run-start yields `gate2-quick` or `stop:pharn-verify`.
+- **Mutation controls (L60), each on a scratch copy of the module:**
+  - disabling (b) reds 3 tests — the repro, (b) and the 22-shape enumeration;
+  - disabling (a)'s order reds 2 — (a) and quick Step 2b;
+  - disabling (a)'s build requirement reds 1 — (a).
+
+**F3, in depth.**
+
+- **Placement:** item 7 runs after the build and before `/pharn-verify`, and Step 2b re-runs it between the re-build
+  and the re-verify. Its exits 1 and 2 both STOP.
+- **Inputs:** the same as `/pharn-regress`'s Step 3 (base, `inside`, the declared set, `--feature`), so its exemptions
+  and its exposure to an un-ignored `.pharn/` match full mode exactly.
+- It writes no marker, so no quick run carries a `pharn-regress` stage-start.
+
+### New findings (advisory — minor)
+
+```yaml
+- type: FINDING
+  rule_id: "P0"
+  severity: minor
+  file: "pharn/pharn-contracts/cost-ledger.md:382"
+  problem: "The re-derived bound says a skipped quick run-start reads undetermined 'either way', but an unclosed earlier run that repeats none of the quick run's stage-starts reads stop:pharn-verify: the safe direction, yet outside bound (2) as worded ('left nothing but its run-start'); the builder's own test title says 'undetermined or stop:*'."
+  evidence: "(condition (b)), so the outcome is `undetermined` either way"
+```
+
+N1 was probed with an unclosed `/pharn-loop` trail, `[run-start, stage-start pharn-spec]`, then a quick
+`/pharn-ship` over that feature directory with its run-start skipped. The result is `stop:pharn-verify`
+(`not-in-run`). "Never `gate2`" still holds.
+
+The same quantifier appears at:
+
+- `ship-outcome-core.mjs:107`
+- `pharn-ship.md:330`
+- `CLAUDE.md:653`
+- CHANGELOG [6.23.0]
+
+Fix: "`undetermined` or `stop:*`, never `gate2`", or widen bound (2) to "an earlier run none of whose stage-starts
+the new run repeats".
+
+```yaml
+- type: FINDING
+  rule_id: "P7"
+  severity: minor
+  file: "pharn/floor/render-run-report.mjs:626"
+  problem: "When 6.23.0's conditions (a)/(b) exclude a stored gate2, the report still says the ledger predates the 6.9.1 rule, so a 6.20.0 ledger is mis-dated."
+  evidence: "**The stored `gate2` above predates this applicability rule (6.9.1)** and rests on these same"
+```
+
+N2 was probed with a `skills_version: 6.20.0` ship ledger that stores `gate2` over a duplicated `build@1` marker. It
+renders "CANNOT BE BOUND TO THIS RUN" plus the 6.9.1 sentence. This is rare: it needs a deviating historical trail.
+
+Fix: "predates the applicability rules in force today (6.9.1, 6.23.0)".
+
+```yaml
+- type: FINDING
+  rule_id: "P7"
+  severity: minor
+  file: "LIMITS.md:256"
+  problem: "LIMITS §6 bounds check-regress.mjs scope as firing only if /pharn-regress runs; since F3 a quick run also runs it (item 7) without /pharn-regress, so the sentence now understates it, and the human-only patch touches only §3a, whose new 'still stops the run' does not point at §6's advisory, smoke-alarm bounds."
+  evidence: "Four bounds, every one stated in that checker's own header: it fires only if `/pharn-regress` runs;"
+```
+
+N3 is a trusted-doc sentence gone stale in the safe (understating) direction, so no gate reads it. Fix: before the
+human applies the patch, add one §6 edit to the generator — "(or `/pharn-ship --quick`'s item 7)" — and have §3a's
+scope-check clause cite §6's bounds. Otherwise, name it as owed by a later trusted-docs catch-up. A generator edit
+changes the pin and the sums, so it means regenerating.
+
+### Re-review scratch
+
+The re-review's probes also ran from `.pharn/pharn-dev-review/`, and all of it was deleted before this section was
+written:
+
+- the scratch worktree (patch applied, mutation controls);
+- a nested probe repo for F3;
+- five `node` probe scripts.
+
+`git status` is clean apart from this file.
