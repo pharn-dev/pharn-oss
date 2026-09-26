@@ -206,3 +206,34 @@ checked`.
   `npx eslint` over the explicit list → exit 0 each.
 - **The command's size after the merge.** `wc -c .claude/commands/pharn-verify.md` → 18,418 bytes, under the
   20,000 target.
+- That merge was committed as `c989084` (parents `c9cd073` and `eec6535`). The orchestrator then paused the round
+  before any verify, because `main` was about to move again.
+
+## GATE 2 — the final merge of `main` (`2e5c2e3`: 6.25.0, #280, on `b9b6a03`: 6.24.1, #279)
+
+The orchestrator directed this merge under the maintainer's delegation once #280 had squash-merged; the branch held
+3.1 only as of `eec6535`. At its instruction, the previous round's uncommitted stage records, which described the
+pre-merge tree, were discarded first with `git checkout --`. Every line below reports a command that ran.
+
+- **The merge.** `git fetch origin` → exit 0; `git merge --no-ff --no-commit origin/main` → exit 1, eleven conflicts.
+  The merge base is `ec06f7b`, because the squash commit does not descend from `eec6535`. Resolved as directed:
+  - six `.dev/features/ship-quick-mode/` records (add/add) and `pharn/floor/render-cost-ledger.mjs`: this branch
+    never changed them since `eec6535` (`git diff --stat eec6535 c989084` over them → empty), so main's version was
+    taken whole (`git checkout --theirs`);
+  - `.claude/commands/pharn-verify.md`: main's copy equals `eec6535`'s (`git diff --stat eec6535 origin/main` →
+    empty), and this branch's copy already carries that wording, so this branch's version was kept whole
+    (`git checkout --ours`);
+  - `CHANGELOG.md`: main's sections kept byte for byte, including `[6.25.0]` and the new `[6.24.1]`, with this
+    branch's `[6.26.0]` above them;
+  - `SKILLS_VERSION` and the README badge read 6.26.0; `npm run docs:generate` → exit 0 (floor checkers 92).
+- **Checked by a read-only script.** The CHANGELOG minus `[6.26.0]` equals `git show origin/main:CHANGELOG.md` byte
+  for byte, and `[6.26.0]` equals `c989084`'s. The merged tree differs from `origin/main` in exactly this branch's 40
+  files. For the 36 that main left alone since `eec6535`, the changed lines against main equal this branch's changed
+  lines against `eec6535`. The auto-merged `pharn-ship.md` and `CLAUDE.md` carry the same changed lines as before the
+  merge (77 and 52), and the README differs from main only in the badge and the checker count.
+- **The pin holds.** `node .dev/floor/hash-doc.mjs pharn/ARCHITECTURE.md` → `d831d30d…`, equal to the PLAN header;
+  `check-plan-lessons.mjs` → exit 0, GREEN, 34 ids. No re-pin and no renumber: main is at 6.25.0, and this branch
+  stays 6.26.0.
+- **The floor.** `node pharn/floor/validate.mjs .` → exit 0, `FLOOR: GREEN — 36 capabilities checked`.
+- **The suite before the merge commit.** `npm test` → exit 0, tests 3782, pass 3782, fail 0.
+- The merge is committed before the after-merge regress and verify; `VERIFY.md` records the re-opened epoch.

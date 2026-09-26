@@ -2,10 +2,16 @@
 // module directly (render-ship-briefing.mjs's export-for-testing convention); every test builds a fresh
 // scratch "projects" tree, so nothing ever reads the real ~/.claude.
 //
+// The transcript reader itself — the lookup, the walk and `sessionRequests()` — lives in
+// `transcript-core.mjs` since 6.24.1, and its own tests are in `transcript-core.test.mjs`. This file tests
+// the RECORD BLOCK built on it, and shows the block follows that one owner.
+//
 // The marked groups pin the things that would otherwise be silent forks:
-//   ★ DEDUP — one API response is written as SEVERAL transcript lines repeating the SAME usage object.
-//     Summing without deduping on requestId over-counts (2.34x on this repo's own history). This is the
-//     single defect most likely to make every reported number quietly wrong.
+//   ★ DEDUP — one API request is written as SEVERAL transcript lines, so summing every line over-counts
+//     (2.34x on the 2026-08-18 corpus) and each request is counted ONCE. Those lines need NOT carry the
+//     same usage (measured 2026-09-26), so each request counts at the usage the reader selects. The ★
+//     COMPLETED USAGE group pins the block's totals over the fixture holding the three measured shapes. This
+//     is the single defect most likely to make every reported number quietly wrong — and until 6.24.1 it did.
 //   ✧ ISOLATION — only the named session is read, a session id resolving to more than one transcript
 //     directory is REFUSED rather than guessed, and tool-results/ is never walked.
 //   ✦ DETERMINISM — rendering twice over unchanged bytes yields byte-identical output (no clock, no random).
@@ -23,10 +29,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { mkdtempSync, writeFileSync, mkdirSync, chmodSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, chmodSync, cpSync, readFileSync, readdirSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { render, aggregate, findTranscriptDirs, transcriptFiles, SCHEMA, COVERAGE } from "./render-cost-record.mjs";
+import { render, aggregate, SCHEMA, COVERAGE } from "./render-cost-record.mjs";
+import { findTranscriptDirs } from "./transcript-core.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CLI = join(here, "render-cost-record.mjs");
@@ -108,12 +115,6 @@ test("⚑ LOOKUP: a directory name containing dots-as-hyphens resolves", () => {
 test("⚑ LOOKUP: an underscore in the directory name resolves (the platform leaves `_` alone)", () => {
   const { root } = scratch({ dirName: DIR_UNDERSCORE, lines: [rec("r1", usage({ out: 5 }))] });
   assert.equal(call(root).tokens.output, 5);
-});
-
-test("⚑ LOOKUP: findTranscriptDirs returns the containing directory, and returns it SORTED", () => {
-  const { root, proj } = scratch({ lines: [rec("r1", usage())] });
-  assert.deepEqual(findTranscriptDirs(root, "s1"), [proj]);
-  assert.deepEqual(findTranscriptDirs(root, "nobody"), []);
 });
 
 test("⚑ LOOKUP: a transcript recording a DIFFERENT cwd is REPORTED, not refused", () => {
@@ -236,7 +237,7 @@ test("dedup falls back to message.id when requestId is absent", () => {
   assert.equal(o.tokens.output, 7);
 });
 
-test("nested subagent transcripts are INCLUDED — disjoint storage, else fan-out is invisible", () => {
+test("nested subagent transcripts are INCLUDED — else fan-out is invisible", () => {
   const { root } = scratch({
     lines: [rec("parent", usage({ out: 10 }))],
     nested: { "subagents/agent-a.jsonl": rec("child1", usage({ out: 5 })) + "\n" },
@@ -370,13 +371,6 @@ test("both shapes carry the schema and the dedup key", () => {
   }
 });
 
-test("transcriptFiles returns .jsonl only, sorted, and skips an unreadable subtree", () => {
-  const { proj } = scratch({ lines: [rec("r1", usage())], extra: { "notes.txt": "x" } });
-  const files = transcriptFiles(proj);
-  assert.ok(files.every((f) => f.endsWith(".jsonl")));
-  assert.deepEqual([...files].sort(), files);
-});
-
 test("aggregate over an empty directory yields zeros, not a throw", () => {
   const root = mkdtempSync(join(tmpdir(), "cost-record-"));
   const a = aggregate(root, "s1");
@@ -389,6 +383,77 @@ test("✦ DETERMINISM: rendering twice over unchanged bytes is byte-identical", 
     lines: [rec("r1", usage({ out: 10 }), { stage: "a" }), rec("r2", usage({ out: 5 }), { stage: "b" })],
   });
   assert.equal(JSON.stringify(call(root)), JSON.stringify(call(root)));
+});
+
+// ─── ★ COMPLETED USAGE — the record block over lines that disagree (6.24.1) ──────────────────────────
+//
+// `fixtures/cost-ledger/usage-snapshots/` holds one request written as 8, 8, 163, one re-appended later with
+// zeroed counts, and one whose early line a forked subagent's transcript copies (described in full in
+// transcript-core.test.mjs, where the reader's per-request tests live). These tests pin what the RECORD
+// BLOCK does with them: it is a consumer of the one owner, and L52's set is every consumer.
+
+const SNAP_SESSION = "00000000-0000-4000-8000-00000000beef";
+const SNAP_FIXTURE = join(here, "fixtures", "cost-ledger", "usage-snapshots");
+
+/** Stage the committed fixture under a literal project-directory name (the ⚑ LOOKUP convention). */
+function stageSnapshots() {
+  const root = mkdtempSync(join(tmpdir(), "cost-record-snap-"));
+  const proj = join(root, DIR_PLAIN);
+  cpSync(SNAP_FIXTURE, proj, { recursive: true });
+  return { root, proj };
+}
+
+/** The sums a max-output rule must produce, written as sums so a reader can check them by hand. */
+const MAX_RULE = Object.freeze({
+  requests: 5,
+  input_uncached: 2 + 2 + 3 + 32 + 4,
+  cache_write_1h: 764 + 100 + 23271,
+  cache_write_5m: 2129 + 200,
+  cache_read: 198172 + 223446 + 1000 + 231020 + 2000,
+  output: 163 + 522 + 100 + 16886 + 50,
+  thinking: 22 + 0 + 0 + 6839 + 10,
+});
+
+test("★ COMPLETED USAGE: the block counts each request at its line with the greatest output_tokens — 8, 8, 163 counts 163", () => {
+  const { root } = stageSnapshots();
+  const o = render({ sessionId: SNAP_SESSION, projectsDir: root });
+  assert.equal(o.coverage, "partial");
+  assert.equal(o.transcript_files, 2);
+  const { requests, ...tokens } = MAX_RULE;
+  assert.equal(o.requests, requests, "five requests across two files — C's fork copy is not a sixth");
+  assert.deepEqual(o.tokens, tokens);
+  assert.equal(o.window_start, "2026-09-26T10:00:00.901Z", "the window reads each request's FIRST line");
+});
+
+test("✦ DETERMINISM holds over the per-request selection: two files, disagreeing lines, rendered twice", () => {
+  const { root } = stageSnapshots();
+  const once = JSON.stringify(render({ sessionId: SNAP_SESSION, projectsDir: root }));
+  assert.equal(once, JSON.stringify(render({ sessionId: SNAP_SESSION, projectsDir: root })));
+});
+
+test("★ MUTANT CONTROL: the block FOLLOWS the owner — a first-line transcript-core.mjs makes it read 8 (L52, L60)", () => {
+  // The whole product floor is copied, then ONLY the owner's rule is mutated. If this renderer still carried
+  // its own copy of the reading loop, the mutated floor would count 163 like the control.
+  const source = readFileSync(join(here, "transcript-core.mjs"), "utf8");
+  const ANCHOR = "else if (outputRank(u) > outputRank(seen.usage)) seen.usage = u;";
+  assert.equal(source.split(ANCHOR).length, 2, "the rule's anchor must occur exactly once");
+  const mutant = source.replace(ANCHOR, "// MUTANT: the first line's usage is kept");
+  assert.notEqual(mutant, source);
+  const outputWith = (coreSource) => {
+    const dir = mkdtempSync(join(tmpdir(), "cost-record-floor-"));
+    for (const f of readdirSync(here)) {
+      if (f.endsWith(".mjs") && !f.endsWith(".test.mjs")) copyFileSync(join(here, f), join(dir, f));
+    }
+    writeFileSync(join(dir, "transcript-core.mjs"), coreSource);
+    const { root } = stageSnapshots();
+    const r = spawnSync(process.execPath, [join(dir, "render-cost-record.mjs"), "--session", SNAP_SESSION, "--projects-dir", root], {
+      encoding: "utf8",
+    });
+    assert.equal(r.status, 0, r.stderr);
+    return JSON.parse(r.stdout).tokens.output;
+  };
+  assert.equal(outputWith(source), MAX_RULE.output, "CONTROL: the unmutated copy runs and counts the completed lines");
+  assert.equal(outputWith(mutant), MAX_RULE.output - 163 + 8, "the mutated owner: nothing in the renderer compensates");
 });
 
 // ─── CLI ─────────────────────────────────────────────────────────────────────────────────────────────
