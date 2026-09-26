@@ -2373,20 +2373,37 @@ test("✧ STAGE_SCRIPT_WIRING — the A1 scope, EXECUTED: the pinned setter line
 // vocabulary, so a new question code cannot ship without a row.
 // ---------------------------------------------------------------------------------------------------------------
 
-test("✧ CLOSURE — every `regress` `question` reason_code is named in pharn-loop.md's stage-exit mapping paragraph", () => {
+// M12 (GATE 2 review): the discriminator below used to re-implement the check as a separate `.filter()`
+// over a literal, so it could never catch a bug in the REAL predicate — only in its own reimplementation.
+// Extracted once, called by BOTH tests, so the discriminator genuinely exercises the same closure.
+function mappingNamesCode(mapping, code) {
+  return mapping.includes(`\`${code}\``) || mapping.includes(code);
+}
+
+function loopMapping() {
   const body = commandBody("pharn-loop.md");
   const mappingStart = body.indexOf("`/pharn-regress`'s stage-exit mapping");
   assert.ok(mappingStart !== -1, "pharn-loop.md must carry the stage-exit mapping paragraph");
-  const mapping = body.slice(mappingStart, mappingStart + 1500);
+  return body.slice(mappingStart, mappingStart + 1500);
+}
+
+test("✧ CLOSURE — every `regress` `question` reason_code is named in pharn-loop.md's stage-exit mapping paragraph", () => {
+  const mapping = loopMapping();
   for (const code of Object.keys(REGISTRY.regress.question)) {
-    assert.ok(mapping.includes(`\`${code}\``) || mapping.includes(code), `pharn-loop.md's mapping paragraph never names '${code}'`);
+    assert.ok(mappingNamesCode(mapping, code), `pharn-loop.md's mapping paragraph never names '${code}'`);
   }
 });
 
-test("✧ CLOSURE discriminates — a mapping paragraph missing a code fails the scan", () => {
-  const mapping = "`question no-gates` -> S4; every other `question` -> S10.";
-  const missing = ["base-unresolved", "install-unresolved", "tests-unresolved"].filter((c) => !mapping.includes(c));
-  assert.deepEqual(missing, ["base-unresolved", "install-unresolved", "tests-unresolved"]);
+test("✧ CLOSURE discriminates — the SAME predicate, run over a mapping paragraph missing a code, fails (M12 fix)", () => {
+  const mutantMapping = "`question no-gates` -> S4; every other `question` -> S10.";
+  for (const code of ["base-unresolved", "install-unresolved", "tests-unresolved"]) {
+    assert.equal(mappingNamesCode(mutantMapping, code), false, `mappingNamesCode must reject a mapping missing '${code}'`);
+  }
+  // Positive control: the REAL, live document passes the SAME function every code the registry names.
+  const live = loopMapping();
+  for (const code of Object.keys(REGISTRY.regress.question)) {
+    assert.ok(mappingNamesCode(live, code), `the live document must still satisfy mappingNamesCode for '${code}'`);
+  }
 });
 
 test("✧ verify's Step-6 verbatim-field list NAMES `gate_run` and `ac_gate`, so neither additive block is dropped", () => {

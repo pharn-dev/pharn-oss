@@ -302,6 +302,20 @@ A closure test requires every `regress` question code to be named in that paragr
 - `pharn/floor/run-gates.test.mjs` — EDIT: retire the ★ WIRING test whose pinned lines moved from `pharn-regress.md` into code (its successor is in `stage-regress.test.mjs`), and add a `spawnGate` export test
 - `.dev/floor/command-hygiene.test.mjs` — EDIT: `pharn-regress.md` leaves GATE_RUN_WIRING (count 3 → 2); a new STAGE_SCRIPT_WIRING set pins the two stage lines, the numbers, the absence of direct runner and checker calls, and the A1 scope (the setter line executed, then the guard probed); the loop-mapping closure
 
+**Amended at GATE 2 (review fixes), 2026-09-26** — `REVIEW.md` returned `blocked-with-2-floor-findings`;
+GATE 2 was decided FIX (orchestrator, under the maintainer's delegation). Fixing F1/F2/A1–A7 and the
+12 minor findings needed no file outside the original list above, EXCEPT this increment's own dev-pipeline
+process artifacts, which `## Files` never listed in the first place (they are pipeline output, not product
+changes this plan declares) and which the fix-pass writes-scope (set from THIS file) would otherwise
+exclude:
+
+- `.dev/features/stage-regress-script/PLAN.md` — EDIT: this very amendment
+- `.dev/features/stage-regress-script/BUILD.md` — EDIT: the GATE 2 disposition of every finding
+- `.dev/features/stage-regress-script/REGRESSION.md` — EDIT: a re-run record after the GATE 2 fixes
+- `.dev/features/stage-regress-script/VERIFY.md` — EDIT: a re-run record after the GATE 2 fixes
+- `.dev/features/stage-regress-script/regression-report.json` — EDIT: re-run output
+- `.dev/features/stage-regress-script/verify-report.json` — EDIT: re-run output
+
 ### Explicitly not touched
 
 - `.claude/commands/pharn-dev-regress.md` and the dev floor stay as they are. The dev twin is out of scope (named follow-up below).

@@ -329,12 +329,17 @@ absolute all-green-at-HEAD `.verdict` — belt-and-suspenders.)_
 `"inconclusive"` → **STOP**, present, hand to the human. **Fail-closed on a missing file:** on a RED chain
 `/pharn-regress` writes **only** `REGRESSION.md` (no verdict JSON), so a **missing
 `regression-report.json` → STOP** (present the RED-chain `REGRESSION.md`) — a membership test (present ∧
-`.verdict == "no-regressions"`), never a silent proceed. **Since `stage-regress-script` (6.23.0), this
-holds more broadly, stated so "missing report → STOP" is not read as narrower than it is:** every
-`/pharn-regress` stop — `refused` (a RED chain, a scope escape, a missing artifact) or `unusable` (an
-argv/git/child failure) — leaves **no** `regression-report.json` on disk
-(`pharn/pharn-contracts/stage-exit.md`'s exit table), so the missing-file membership test above is the
-correct STOP for every one of them, not only the chain case.
+`.verdict == "no-regressions"`), never a silent proceed. **Since `stage-regress-script` (6.23.0), NARROWED
+here (F2, GATE 2 review — an earlier draft of this paragraph overclaimed this for every stop):** every
+`/pharn-regress` `refused` stop (a RED chain, a scope escape, a missing artifact), and every `unusable`
+stop raised AT OR AFTER the feature slug parses and the containment walk passes, leaves **no**
+`regression-report.json` on disk (`pharn/pharn-contracts/stage-exit.md`'s exit table), so the missing-file
+membership test above is the correct STOP for all of those. **The residual, named rather than hidden:** a
+stop BEFORE that point (a bad or missing `--feature`, or `path-containment` itself — `stage-regress.mjs`'s
+own "fresh" phase order), or a genuine crash, may leave an EARLIER run's report in place; this is exactly
+why the check above is a membership test on the CURRENT file's `.verdict`, never merely "no file was
+written this run" — and it is the same residual `ship-outcome-core.mjs` and `regression-report.md`
+correctly keep open.
 
 1. **`/pharn-verify`** → writes `pharn/features/<name>/verify-report.json` (+ `VERIFY.md`).
 

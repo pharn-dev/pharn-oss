@@ -237,6 +237,12 @@ test requires every `regress` `question` code to be named here:
 - `continue` is handled **inside** `/pharn-regress` (it re-runs the pinned resume line itself) and never
   reaches the loop as a stuck point.
 
+**A7 (GATE 2 review): `install-unresolved` and `tests-unresolved` are NEW S10 stops as of 6.23.0.** The
+pre-6.23.0 command prose proceeded by model judgment in both cases; a project shape that used to complete
+an unattended `/pharn-loop` iteration can now stop here — most commonly a `package.json` with no committed
+lockfile (small projects and libraries often have none), or a feature whose test universe is genuinely
+empty. See CHANGELOG [6.23.0] for the full disclosure.
+
 **S9 and S11 are different failures, and the difference decides the row.** S9 is a stage that **says** it
 refused. S11 is evidence on disk that does not match the tree, whatever the stages said: a skipped or
 half-run stage, a report or stamp from an earlier iteration, or a report its own stamp does not reproduce.

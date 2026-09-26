@@ -77,7 +77,10 @@ function isNonEmptyString(v) {
   return typeof v === "string" && v.length > 0;
 }
 
-const FEATURE_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+// M8 — a SEPARATE copy from gate-run-core.mjs's own FEATURE_SLUG_RE (this module imports NOTHING —
+// see the header — so it cannot import that one instead). EXPORTED so a parity test can compare the two
+// live regex objects rather than a re-typed literal; `stage-exit-core.test.mjs` pins them equal.
+export const FEATURE_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 /** ------------------------------------------------------------------------------------------------
  *  THE ENVELOPE + EXIT TABLE.
@@ -165,8 +168,13 @@ export function substituteArgv(argvTemplate, answer) {
   return argvTemplate.map((tok) => (tok === "<value>" ? answer : tok));
 }
 
+const OPTION_KEYS = Object.freeze(["id", "label", "argv", "value"]);
+
 function isValidOption(opt) {
   if (opt === null || typeof opt !== "object" || Array.isArray(opt)) return false;
+  // Closed in both directions (F1): exactly {id, label, argv, value} — no missing key, no extra one.
+  const keys = Object.keys(opt);
+  if (keys.length !== OPTION_KEYS.length || !OPTION_KEYS.every((k) => keys.includes(k))) return false;
   if (!isCleanToken(opt.id, 64)) return false;
   if (!isNonEmptyString(opt.label)) return false;
   if (opt.argv !== null && !(Array.isArray(opt.argv) && opt.argv.every((t) => typeof t === "string" && t.length > 0))) return false;
@@ -174,6 +182,34 @@ function isValidOption(opt) {
     if (typeof opt.value !== "object" || Array.isArray(opt.value)) return false;
     if (!VALUE_KINDS.includes(opt.value.kind)) return false;
     if (Object.keys(opt.value).length !== 1) return false; // closed: {kind} only
+  }
+  return true;
+}
+
+/** F1 — a shape-valid option is not enough: `id`, `label`, every `argv` token, and `value.kind` must
+ *  byte-equal the REGISTRY's own fixed option at the same position. A forged label, a forged argv, an
+ *  added option, or a removed option must all fail this, not merely `isValidOption`'s shape check. Options
+ *  are POSITIONAL (the registry's own array order), so this is a plain index-wise structural comparison —
+ *  no generic deep-equal is pulled in for a shape this narrow (id: string, label: string, argv: null |
+ *  string[], value: null | {kind}). */
+function optionsMatchRegistry(candidate, registryOptions) {
+  if (candidate.length !== registryOptions.length) return false;
+  for (let i = 0; i < candidate.length; i++) {
+    const c = candidate[i];
+    const r = registryOptions[i];
+    if (c.id !== r.id) return false;
+    if (c.label !== r.label) return false;
+    if (c.argv === null || r.argv === null) {
+      if (c.argv !== r.argv) return false;
+    } else {
+      if (c.argv.length !== r.argv.length) return false;
+      for (let j = 0; j < c.argv.length; j++) if (c.argv[j] !== r.argv[j]) return false;
+    }
+    if (c.value === null || r.value === null) {
+      if (c.value !== r.value) return false;
+    } else if (c.value.kind !== r.value.kind) {
+      return false;
+    }
   }
   return true;
 }
@@ -428,9 +464,14 @@ export function validateStageExit(obj) {
   }
   const entry = REGISTRY[obj.stage].question[obj.reason_code];
   if (obj.question !== entry.question) return { ok: false, reason: "question.question must be the FIXED text for this reason_code" };
-  if (!Array.isArray(obj.options) || obj.options.length === 0) return { ok: false, reason: "question.options must be a non-empty array" };
+  if (!Array.isArray(obj.options)) return { ok: false, reason: "question.options must be an array" };
   for (const opt of obj.options) {
     if (!isValidOption(opt)) return { ok: false, reason: `question.options entry is malformed: ${JSON.stringify(opt)}` };
+  }
+  // F1 — shape alone is not the floor claim: `options` must byte-equal the registry's OWN fixed option
+  // list for this (stage, reason_code) — every id/label/argv/value.kind, and no added or removed option.
+  if (!optionsMatchRegistry(obj.options, entry.options)) {
+    return { ok: false, reason: "question.options must deep-equal the registry's FIXED options for this reason_code" };
   }
   if (obj.resume === null || typeof obj.resume !== "object" || Array.isArray(obj.resume)) {
     return { ok: false, reason: "question.resume must be an object" };

@@ -54,9 +54,16 @@ test("PHASES: the 13 phases in execution order; RESUMABLE_PHASES is the drain-he
     "cleanup",
     "render",
   ]);
-  assert.deepEqual(RESUMABLE_PHASES, ["drain-head", "worktree", "install", "base-init", "drain-base", "verdict", "cleanup", "render"]);
+  assert.deepEqual(RESUMABLE_PHASES, ["drain-head", "worktree", "install", "base-init", "drain-base", "verdict"]);
   for (const p of ["fresh", "chain", "base", "partition", "head-init"]) {
     assert.ok(!RESUMABLE_PHASES.includes(p), `${p} must never be a persisted (resumable) phase`);
+  }
+  // M9 (GATE 2): "cleanup" and "render" are real PHASES, but the script never persists a record naming
+  // either — both run inline after "verdict", and the record stays parked at "verdict" until the whole
+  // tail finishes. A record naming them is therefore never legitimate, and must be refused.
+  for (const p of ["cleanup", "render"]) {
+    assert.ok(PHASES.includes(p), `${p} must still be a real execution phase`);
+    assert.ok(!RESUMABLE_PHASES.includes(p), `${p} is never persisted and must not be resumable (M9)`);
   }
 });
 
@@ -224,6 +231,10 @@ test("validateProgress: rejects a bad schema, a non-slug feature, a non-40-hex b
   assert.equal(validateProgress(validRecord({ base: "short" })).ok, false);
   assert.equal(validateProgress(validRecord({ phase: "fresh" })).ok, false, "fresh is never a resumable (persisted) phase");
   assert.equal(validateProgress(validRecord({ phase: "not-a-phase" })).ok, false);
+  // M9: "cleanup"/"render" are real PHASES but never a legitimate PERSISTED value — a record naming one
+  // (hand-edited, or from a defect elsewhere) must be refused cleanly, not crash a resumed run.
+  assert.equal(validateProgress(validRecord({ phase: "cleanup" })).ok, false, "cleanup must never validate as a resumable phase (M9)");
+  assert.equal(validateProgress(validRecord({ phase: "render" })).ok, false, "render must never validate as a resumable phase (M9)");
   assert.equal(validateProgress(null).ok, false);
   assert.equal(validateProgress([1, 2]).ok, false);
 });

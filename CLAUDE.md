@@ -573,10 +573,17 @@ node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --b
 # `continue`. `--resume` accepts ONLY `--budget-ms` and reads everything else from that record, so the resume line
 # carries no state (L44). With no `--budget-ms` (a code caller, never a Bash-tool caller), nothing is budgeted.
 # `pharn/floor/render-regression.mjs` (pure, no CLI) renders `REGRESSION.md` from the verdict JSON, the scope
-# partition and the stage's progress; it quotes a gate id or a checker's message as fenced DATA
-# (`pharn/floor/quote-core.mjs`'s `dataText`/`quoteData`, moved byte-for-byte out of `render-run-report.mjs` so a
-# second renderer does not drag in the cost-ledger load graph) and hands every path through repo-relative, so
-# `/pharn-loop`'s later commit of the file can never carry an absolute path.
+# partition and the stage's progress; a CHECKER'S MESSAGE (a chain-red/scope-escaped detail, a cleanup error, an
+# inconclusive reason) is quoted as FENCED DATA; a GATE ID is quoted INLINE, via `dataText` alone — never fenced,
+# and NARROWED here (M1, GATE 2 review — a prior version of this line overclaimed "as fenced DATA" for both): it
+# is always preceded by fixed prose on the same line so it can never sit at column 0 and be read as a heading, but
+# an inline link or raw HTML in an attacker-nameable id (a `structural:<path>` id, say) is NOT fenced away, only
+# kept off a line of its own. (`pharn/floor/quote-core.mjs`'s `dataText`/`quoteData`, moved byte-for-byte out of
+# `render-run-report.mjs` so a second renderer does not drag in the cost-ledger load graph.) Every path the SCRIPT
+# itself supplies is repo-relative, so `/pharn-loop`'s later commit of the file can never carry an absolute path
+# THAT SCRIPT SUPPLIED (M2, GATE 2: narrowed — a human's own `--install`/`--gates` text renders verbatim, and a
+# `--gates` id defaults to its own command string, so the render is not proof that NO absolute path can appear at
+# all, only that the script never introduces one).
 # THE WEAKER CLAIM, stated plainly: before 6.23.0, fix #7's hook PREVENTED a Write-tool write outside the two
 # declared regress artifacts. Now the script writes them through `fs`, reached via Bash and outside that hook
 # (L19, declared) — a write anywhere else is DETECTED, never PREVENTED, by `/pharn-verify`'s `reconcile` gate.
@@ -585,9 +592,11 @@ node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --b
 # by the setter), so no Write-tool write may land outside `.pharn/**` at all while the script runs — a real,
 # probed guarantee (`.dev/floor/command-hygiene.test.mjs`'s STAGE_SCRIPT_WIRING).
 # THE UNCHANGED, NAMED RESIDUAL: `regress-failed-install-false-green` (amendment A2, not built). A failed
-# base-commit install turns every base gate red, so every head red reads `pre_existing`, and the verdict JSON —
-# all `/pharn-ship`/`/pharn-loop` read — still says `no-regressions`: a false green on exactly the gates the
-# install broke. The only signal is `REGRESSION.md`'s first line, read by no machine consumer.
+# base-commit install CAN turn a base gate red, so a gate that does is classified `pre_existing`, and the
+# verdict JSON — all `/pharn-ship`/`/pharn-loop` read — still says `no-regressions`: a possible false green
+# on exactly the gates the install broke (NARROWED, GATE 2 review A6: not "every base gate", and the
+# warning renders above the verdict line, not literally REGRESSION.md's first line — see
+# render-regression.mjs). Read by no machine consumer either way.
 # Ships: bumps SKILLS_VERSION. Exit: 0 done · 2 unusable · 3 refused · 4 question · 5 continue · anything else
 # (1 included) = crashed.
 node pharn/floor/stage-regress.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--base <ref>] [--gates "<cmd>[::<id>],…"] [--install "<cmd>" | --no-install] [--tests "<pathspec>,…" | --no-tests]

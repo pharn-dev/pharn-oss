@@ -68,16 +68,35 @@ export function renderDone({ feature, base, report, scope, progress }) {
   const out = [];
   out.push(`# REGRESSION — ${feature}`, "");
   out.push(`base: \`${inline(base)}\``, "");
-  out.push(verdictLine(report.verdict, report.regressions), "");
 
-  if (progress.install.kind === "cmd" && progress.installResult && progress.installResult.ran && progress.installResult.exit !== 0) {
+  // A6 (GATE 2 review) — rendered ABOVE the verdict line, not six-plus lines below it: this is the ONLY
+  // signal of a failed base-commit install (no machine consumer reads it — the recorded, deliberately
+  // unclosed `regress-failed-install-false-green` bound), so a reader must see it BEFORE the headline
+  // "NO REGRESSIONS", never after. The "reads red" clause is CONDITIONED on the report's own
+  // `pre_existing`, never an unconditional "every base gate" — an install failure does not guarantee
+  // every base gate failed (it can fail fast before any gate even attempts to run, or a gate may not
+  // depend on the failed install step at all).
+  const installFailed =
+    progress.install.kind === "cmd" && progress.installResult && progress.installResult.ran && progress.installResult.exit !== 0;
+  if (installFailed) {
+    const preExisting = Array.isArray(report.pre_existing) ? report.pre_existing : [];
     out.push(
       `**THE BASE-COMMIT INSTALL FAILED** (exit ${progress.installResult.exit}${progress.installResult.timedOut ? ", timed out" : ""}) — ` +
-        "every base gate therefore reads red and is classified `pre_existing` below rather than blamed on the feature. " +
-        "This line is the ONLY signal of that failure; no machine consumer reads it (the recorded, deliberately unclosed " +
+        (preExisting.length
+          ? `base gates MAY read red as a result; the ${preExisting.length} gate(s) classified \`pre_existing\` below ` +
+            "(rather than blamed on the feature) could include ones this install failure caused to fail, not this feature's own change."
+          : "base gates MAY read red as a result and be classified `pre_existing` below rather than blamed on the feature — " +
+            "none were, this run.") +
+        " This line is the ONLY signal of that failure; no machine consumer reads it (the recorded, deliberately unclosed " +
         "`regress-failed-install-false-green` bound).",
       ""
     );
+  }
+
+  out.push(verdictLine(report.verdict, report.regressions), "");
+
+  if (installFailed) {
+    // Already rendered above, before the verdict — no redundant install-info line here.
   } else if (progress.install.kind === "none") {
     out.push(`install: none${progress.install.reason ? ` (${inline(progress.install.reason)})` : ""}`, "");
   } else {

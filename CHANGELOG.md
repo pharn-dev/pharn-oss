@@ -54,8 +54,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     a new file.
   - **`pharn/floor/render-regression.mjs`** (new, pure) renders `REGRESSION.md` from the verdict JSON, the
     scope partition and the stage's progress — deterministic code, no longer model-typed prose. It quotes
-    every gate id and checker message as fenced DATA and hands every path through repo-relative, so
-    `/pharn-loop`'s later commit of the file can never carry an absolute path.
+    every checker message as fenced DATA; a gate id is quoted inline (never fenced — always preceded by
+    fixed prose on the same line, so it can never sit at column 0 and be read as a heading). Every path
+    the script itself supplies is repo-relative, so `/pharn-loop`'s later commit of the file can never
+    carry an absolute path THAT SCRIPT SUPPLIED (GATE 2 review, M1/M2: narrowed from an earlier draft of
+    this entry, which overclaimed "as fenced DATA" for the gate id and "can never carry an absolute path"
+    without that qualifier — a human's own `--install`/`--gates` text still renders verbatim).
   - **`pharn/floor/quote-core.mjs`** (new): `dataText`/`quoteData` moved byte-for-byte out of
     `render-run-report.mjs`, which now re-exports them, so a second renderer can quote untrusted text
     without pulling in the cost-ledger load graph.
@@ -73,21 +77,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     `stage-regress-core.mjs`'s `REGRESS_PATHS`, the one owner of the stage's scratch layout.
   - **`.claude/commands/pharn-loop.md`**: a new paragraph beside the stuck-point table maps a regress
     stage-exit object onto it (`question no-gates` → S4; every other `question` → S10; `refused`/`unusable`
-    → S9; a crash → S9; `continue` stays inside `/pharn-regress`).
+    → S9; a crash → S9; `continue` stays inside `/pharn-regress`). **Disclosed here (GATE 2 review, A7):**
+    two of those `question` codes are NEW unattended-loop S10 stops that did not exist before this
+    increment, because the old command prose proceeded by model judgment in both cases: `install-unresolved`
+    (a `package.json` with no committed lockfile — common on small projects and libraries that never run
+    `npm ci` from CI) and `tests-unresolved` (a feature whose test universe is genuinely empty). A loop run
+    over either project shape now stops at S10 on its first iteration where it previously completed.
   - **`.claude/commands/pharn-ship.md`**: the stale "`/pharn-regress`'s Step 4a" citation is corrected (its
-    gate discovery is tested code now, not command prose), and a sentence states that every `/pharn-regress`
-    stop — not only a RED chain — leaves no `regression-report.json`, so the existing missing-report → STOP
-    membership test holds for all of them.
+    gate discovery is tested code now, not command prose). **Narrowed here (GATE 2 review, F2 — an earlier
+    draft of this entry overclaimed this):** a sentence states that every `/pharn-regress` `refused` stop,
+    and every `unusable` stop raised at or after the feature slug parses and the containment walk passes,
+    leaves no `regression-report.json`; the residual — a stop before that point (a bad/missing `--feature`,
+    or `path-containment` itself), or a genuine crash — may leave an earlier run's report in place, which is
+    exactly why the existing missing-report → STOP check is a MEMBERSHIP test and not merely "no file was
+    written this run".
   - **The weaker artifact-write claim, stated plainly:** before this change, fix #7's hook PREVENTED a
     Write-tool write outside the two declared regress artifacts. Now the script writes them through `fs`,
     outside that hook (an intentional, declared L19 pattern). A write anywhere else is DETECTED, never
     PREVENTED, by `/pharn-verify`'s `reconcile` gate — unchanged from how every other Bash-write stage
     script in this repo already works.
   - **The unchanged bound, carried forward rather than closed:** `regress-failed-install-false-green`. A
-    failed base-commit install still turns every base gate red, so every head red still reads
-    `pre_existing`, and the verdict JSON `/pharn-ship`/`/pharn-loop` read still says `no-regressions` — a
-    false green on exactly the gates the install broke. The only signal is `REGRESSION.md`'s first line,
-    read by no machine consumer. This increment neither creates nor closes it (amendment A2).
+    failed base-commit install can turn a base gate red, so a gate that does is classified `pre_existing`
+    below rather than blamed on the feature, and the verdict JSON `/pharn-ship`/`/pharn-loop` read still says
+    `no-regressions` — a possible false green on exactly the gates the install broke. **Narrowed here (GATE
+    2 review, A6 — an earlier draft of this entry overclaimed "every base gate" and "first line"):** the
+    warning is rendered above `REGRESSION.md`'s verdict line (not literally its first line — the title and
+    base still precede it), and it names the actual count of gates classified `pre_existing`, never an
+    unconditional "every base gate went red". Read by no machine consumer either way. This increment
+    neither creates nor closes it (amendment A2).
 
 ## [6.22.0] - 2026-09-25
 

@@ -84,6 +84,36 @@ test("renderDone: a failed base install is named on ITS OWN line, and pre-existi
   assert.match(md, /regress-failed-install-false-green/);
 });
 
+// A6 (GATE 2 review): the warning must render ABOVE the verdict line (not six-plus lines below it, where
+// a reader sees "NO REGRESSIONS" first and the caveat only afterward), and the "reads red" clause must be
+// CONDITIONED on the report's own pre_existing rather than an unconditional "every base gate".
+test("★ A6 — the failed-install warning renders BEFORE the verdict line, and never claims EVERY base gate went red", () => {
+  const withPreExisting = renderDone({
+    feature: "demo",
+    base: "a".repeat(40),
+    report: baseReport({ pre_existing: ["test", "lint"] }),
+    scope: baseScope(),
+    progress: baseProgress({ installResult: { ran: true, exit: 1, timedOut: false } }),
+  });
+  const warnIdx = withPreExisting.indexOf("THE BASE-COMMIT INSTALL FAILED");
+  const verdictIdx = withPreExisting.indexOf("NO REGRESSIONS");
+  assert.ok(warnIdx >= 0 && verdictIdx >= 0, "both the warning and the verdict must render");
+  assert.ok(warnIdx < verdictIdx, "the install-failure warning must render BEFORE the verdict line");
+  assert.doesNotMatch(withPreExisting, /every base gate/i, "must never claim EVERY base gate went red");
+  assert.match(withPreExisting, /2 gate\(s\) classified/, "must name the ACTUAL pre_existing count");
+
+  // No base gate happened to read red this run — the warning must say so honestly, not assume any did.
+  const withNonePreExisting = renderDone({
+    feature: "demo",
+    base: "a".repeat(40),
+    report: baseReport({ pre_existing: [] }),
+    scope: baseScope(),
+    progress: baseProgress({ installResult: { ran: true, exit: 1, timedOut: false } }),
+  });
+  assert.match(withNonePreExisting, /none were, this run/);
+  assert.doesNotMatch(withNonePreExisting, /every base gate/i);
+});
+
 test("renderDone: install none (no-manifest), and an UNMEASURED lockfile family is labeled honestly", () => {
   const noManifest = renderDone({
     feature: "demo",
@@ -255,6 +285,16 @@ test("style probe: a REGRESSION.md fixture under pharn/features/ is correctly ig
   }
   const rel = "pharn/features/render-regression-style-probe-tmp/REGRESSION.md";
   const abs = join(REPO, rel);
+  // M11 (GATE 2 review): this fixture MUST live at a real pharn/features/*/REGRESSION.md path for the
+  // probe to mean anything (the ignore globs it exercises are repo-relative, unlike render-run-report's
+  // own scratch() fixtures, which build STANDALONE throwaway repos for a different purpose). A killed run
+  // can therefore leave this untracked directory behind regardless of any cleanup code here — that is an
+  // unavoidable residual of any interruptible process, never fully closed by a try/finally alone. Two
+  // mitigations: (1) defensively clear any STALE leftover from a PREVIOUS killed run before writing, so
+  // repeated runs self-heal; (2) register the SAME cleanup via `t.after()` too, as a second path to it that
+  // does not depend on the `finally` block below being reached.
+  rmSync(dirname(abs), { recursive: true, force: true });
+  t.after(() => rmSync(dirname(abs), { recursive: true, force: true }));
   mkdirSync(dirname(abs), { recursive: true });
   writeFileSync(abs, "#REGRESSION\nunformatted   text   here\n");
   try {

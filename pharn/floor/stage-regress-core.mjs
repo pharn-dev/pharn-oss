@@ -96,7 +96,16 @@ export const PHASES = Object.freeze([
   "render",
 ]);
 
-export const RESUMABLE_PHASES = Object.freeze(PHASES.filter((p) => PHASES.indexOf(p) >= PHASES.indexOf("drain-head")));
+// M9 (GATE 2 review): "cleanup" and "render" are execution-machine phases, but the script never PERSISTS
+// either one — both complete inline, in the same invocation as "verdict", and the record is left parked
+// at "verdict" (never advanced past it) until the whole tail finishes and the record is removed (see
+// stage-regress.mjs's persistProgress call sites). A record naming either is therefore never a LEGITIMATE
+// one; admitting them here meant a hand-edited or otherwise-malformed record naming "render" crashed with
+// a raw TypeError instead of the clean, fail-closed `progress-malformed` every other malformed record
+// gets. Narrowed to the phases the script actually checkpoints.
+export const RESUMABLE_PHASES = Object.freeze(
+  PHASES.filter((p) => PHASES.indexOf(p) >= PHASES.indexOf("drain-head") && p !== "cleanup" && p !== "render")
+);
 
 /** ------------------------------------------------------------------------------------------------
  *  TEST_FILE_RULE (GRILL G15).

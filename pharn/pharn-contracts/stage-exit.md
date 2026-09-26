@@ -45,9 +45,14 @@ requires must be present, and no key outside that status's set may appear.
   report.
 - **`question`** adds `reason_code`, `question`, `options`, `resume`. Nothing new; nothing slow has run.
 - **`continue`** adds `phase`, `resume`. The progress record exists; re-run `resume.argv`.
-- **`unusable`** adds `reason_code`, `detail`. Nothing new. An argv refusal (before containment) removes
-  nothing; a later `unusable` removed only this feature's stale prior report, in the script's "fresh"
-  phase.
+- **`unusable`** adds `reason_code`, `detail`. What already happened depends on WHEN it fires (GATE 2,
+  M5 — the old "nothing new" line overclaimed this for every member): a stop before the feature slug
+  parses and the containment walk passes (`usage-error` with `feature: null`, or `path-containment`
+  itself) removes and writes nothing. A stop at or after that point has already removed this feature's
+  own stale prior report AND any other run's leftover `.pharn/pharn-regress/` scratch (the script's
+  "fresh" phase, GRILL G14) — and, from "worktree" onward, may have already created NEW state: a
+  base-commit checkout, install logs, gate stamps. None of that is a verdict; only a `done` exit's
+  `report` file is one.
 
 ## The exit-code table
 
@@ -114,6 +119,21 @@ Step 2 table, not restated here):
 - a crash (an exit outside the table) → S9;
 - `continue` is handled inside the thin command (it re-runs the resume line) and never reaches the loop.
 
+## The `regress` install command (GATE 1 Q3 — M10, GATE 2 review: this table had gone missing here)
+
+Read at the BASE commit, from exactly one lockfile family present there (`--install` overrides it
+entirely; no `package.json` at all needs no install):
+
+- `package-lock.json` or `npm-shrinkwrap.json` → `npm ci` — **MEASURED**.
+- `pnpm-lock.yaml` → `pnpm install --frozen-lockfile` — **UNMEASURED** (nobody has run this command from
+  this stage).
+- `yarn.lock` → `yarn install --frozen-lockfile` — **UNMEASURED**.
+- `bun.lock` or `bun.lockb` → `bun install --frozen-lockfile` — **UNMEASURED**.
+
+Zero or two-or-more families present → `question install-unresolved`. The same four lines, with the same
+labels, are the `INSTALL_RULE` table in `stage-regress-core.mjs`'s own header — this section cites that
+table rather than re-deriving it (P4), so the two never say something different.
+
 ## The budget (`--budget-ms`) and `continue`
 
 A **slow step** (a base-commit install, or one gate run) starts only if it is the FIRST slow step of the
@@ -130,8 +150,11 @@ carries no state.
   a crash, never guessed at).
 - **"A `question`/`refused`/`unusable` object's `reason_code` is a registered member"** → **floor**:
   `isReasonCode`/`validateStageExit`, enum membership.
-- **"The question's text and option labels are exactly the registry's fixed strings"** → **floor**: byte
-  equality against `REGISTRY`, checked by `validateStageExit`.
+- **"The question's text and every option's full shape — `id`, `label`, `argv`, `value.kind` — are exactly
+  the registry's fixed values, closed against an added, removed, or relabeled option"** → **floor**: byte
+  equality against `REGISTRY`, checked by `validateStageExit` (F1, GATE 2: a per-option shape check alone
+  was not this — `stage-exit-core.test.mjs` carries a forged-label, forged-argv, extra-key, added-option
+  and removed-option control for each).
 - **"The object carries no untrusted free text"** → holds for `question`/`continue` (fixed text +
   argv/phase strings the stage itself chose) and for `done` (a report/render **path**, never content). It
   does **not** hold for `refused.render`/`unusable.detail`'s **referenced content** — the render a
@@ -150,3 +173,13 @@ validates against this contract — `validateStageExit` checks structure and reg
 the reported outcome matches reality. That guarantee, where it exists at all, belongs to the checkers a
 stage script shells (`check-regress.mjs`, `check-plan-spec-agree.mjs`), cited in each stage's own command
 and never re-derived here.
+
+**`done.verdict` and `continue.phase` accept any non-empty string (M6, GATE 2 review — named, not closed
+here).** Unlike `options[]`, neither is checked against a per-stage enum: `verdict` is the checker's own
+`check-regress.mjs verdict` output (an open string as far as THIS contract is concerned — the checker's own
+contract, `regression-report.md`, owns that vocabulary), and `phase` is a stage's own phase name, which
+this contract deliberately keeps generic across stages (P3 — closing it here would mean either threading a
+per-stage phase enum into this shared module, the exact per-stage-knowledge split `REGISTRY` exists to
+avoid, or hard-coding one stage's phase names into a module every future stage script shares). No `Fix:`
+was named for this finding, and no real failure motivates building one now (P7) — it is recorded so a
+reader does not mistake the silence for an oversight.
