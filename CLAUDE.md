@@ -683,8 +683,15 @@ node pharn/floor/check-loop-decision.mjs <LOOP.md>
 # Step 6c commit, which stays gated on STOP_GREEN ∧ the decision re-derivation.
 # The EMITTER WRITES cost.json ITSELF (render-review-assignments precedent — a model never retypes hundreds
 # of numbers), so it is a BASH write outside fix #7 (L19), declared in the plan and exempted by name in
-# reconcile-ignore.json. Transcript location + the walk are IMPORTED from render-cost-record.mjs, not copied
-# (L35); a ✧ parity test pins the two to agree on totals with the class-name mapping asserted explicitly.
+# reconcile-ignore.json. Transcript location, the walk and the per-request reader `sessionRequests()` live in
+# pharn/floor/transcript-core.mjs (6.24.1), which BOTH renderers import, never copy (L35). The reader owns the
+# counting rule, defined in cost-ledger.md "One row per request": one entry per request, identity and timestamp
+# from its FIRST transcript line, usage from its line with the most output tokens, because one request's lines
+# need not carry the same usage (until 6.24.1 both renderers kept the first line and under-counted output). A
+# request can still be growing when a ledger is emitted, so --verify-transcript compares ROWS, with output and
+# output_thinking bounded as recorded <= re-derived (L58, L63). A ✧ parity test pins the two renderers to agree on
+# totals with the class-name mapping asserted explicitly. That is agreement only (L43): it stayed green while both
+# under-counted.
 # SIZE, disclosed rather than discovered — in LINES as well as bytes since 6.14.1. Lines in a PR diff were
 # the cost that hurt: the old fully pretty-printed layout spent about 52 lines per request row. The emitter's
 # `serializeLedger` now writes the two FACT arrays (markers[], requests[]) one element per `\n`-delimited

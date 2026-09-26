@@ -1,6 +1,6 @@
 // pharn/floor/render-cost-ledger.test.mjs — hermetic tests for the cost-ledger emitter.
 //
-// TWO COMMITTED FIXTURES, and their provenance is deliberately different:
+// THE COMMITTED FIXTURES THIS FILE STAGES, and their provenance is deliberately different:
 //   * `fixtures/cost-ledger/single-session.jsonl` — DERIVED from this repo's own `loop-decision-integrity`
 //     run, stripped to `usage` + ids. Real numbers, so the ✧ parity test below compares two
 //     implementations over bytes a platform actually wrote.
@@ -8,6 +8,9 @@
 //     transcript bytes are committed. It exists because the real `loop-decision-integrity` transcript has
 //     ZERO sidechain records, so it structurally cannot exercise the subagent path — the L41/L34 blind
 //     spot, closed here rather than named and left.
+//   * `fixtures/cost-ledger/usage-snapshots/` — HAND-AUTHORED from three measured records whose transcript
+//     lines DISAGREE (6.24.1); described where the reader's own tests live, transcript-core.test.mjs.
+// (`session-continued.jsonl`, the fourth, is check-cost-ledger.test.mjs's.)
 //
 // THE FIXTURE GUARD (the post-grill gate's blocking finding). Every guard in this increment covers
 // `cost.json`; none covered a committed `.jsonl` fixture, so "usage + ids only, no message content" was a
@@ -46,7 +49,7 @@ import {
 } from "./render-cost-ledger.mjs";
 import { OUTCOME_SOURCE as SHIP_OUTCOME_SOURCE } from "./ship-outcome-core.mjs";
 import { checkLedger, findAbsolutePaths } from "./check-cost-ledger.mjs";
-import { findTranscriptDirs, transcriptFiles } from "./render-cost-record.mjs";
+import { findTranscriptDirs, transcriptFiles } from "./transcript-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, "render-cost-ledger.mjs");
@@ -71,6 +74,18 @@ function stageSubagents() {
   const proj = join(root, "projects");
   mkdirSync(proj, { recursive: true });
   cpSync(join(FIXTURES, "with-subagents"), join(proj, "wt"), { recursive: true });
+  return { root, projectsDir: proj };
+}
+
+/** `usage-snapshots/`: requests whose transcript lines DISAGREE (6.24.1). Described where the rule's own
+ *  tests live, transcript-core.test.mjs; the ★ COMPLETED USAGE tests below pin the ledger's reading. */
+const SNAP_SESSION = "00000000-0000-4000-8000-00000000beef";
+
+function stageSnapshots() {
+  const root = mkdtempSync(join(tmpdir(), "cost-ledger-snap-"));
+  const proj = join(root, "projects");
+  mkdirSync(proj, { recursive: true });
+  cpSync(join(FIXTURES, "usage-snapshots"), join(proj, "wt"), { recursive: true });
   return { root, projectsDir: proj };
 }
 
@@ -126,7 +141,8 @@ test("one row per DEDUPED requestId — the dedup is load-bearing, not a nicety"
       isSidechain: false,
       message: { model: "m", usage: { input_tokens: 1, output_tokens: out, cache_creation: {}, output_tokens_details: {} } },
     });
-  // The same response written three times, as the platform really does it.
+  // One request written as three identical lines. The platform writes a request as several lines, and they
+  // need NOT be identical — the ★ COMPLETED USAGE tests below cover lines that disagree.
   writeFileSync(join(proj, "s1.jsonl"), [rec("r1", 10), rec("r1", 10), rec("r1", 10), rec("r2", 5)].join("\n") + "\n");
   const led = renderLedger({ name: "f", sessionId: "s1", projectsDir: join(root, "projects"), markersBase: openRun(root, "f") });
   assert.equal(led.requests.length, 2, "three lines for one request must collapse to one row");
@@ -188,7 +204,7 @@ test("D1 NON-VACUITY: dropped[] fires on a synthetic out-of-domain leaf", () => 
 
 // ---------------------------------------------------------------- D2: the subagent path
 
-test("D2: sidechain rows from disjoint nested files are included, with BOTH agent key spellings", () => {
+test("D2: sidechain rows from nested subagent files are included, with BOTH agent key spellings", () => {
   const { root, projectsDir } = stageSubagents();
   const led = renderLedger({ name: "feat", sessionId: SUB_SESSION, projectsDir, markersBase: openRun(root, "feat") });
   assert.equal(led.requests.length, 4, "2 parent + 2 subagent rows");
@@ -582,19 +598,11 @@ test("✧ PARITY: ledger totals equal render-cost-record totals over the SAME by
   // The two files name the classes differently on purpose: the ledger's names are 1:1 with the
   // dimensions a price list charges for. Asserting the MAPPING binds the values to their referent
   // rather than letting two spellings drift silently (L43).
-  const { root, projectsDir } = stageSingle();
-  // The record is SESSION-scoped (pharn-cost-record/1 is unchanged, D5); the ledger is RUN-scoped. They
-  // agree exactly when the run window contains the whole session, which is what this window is.
-  const mbAll = openRun(root, "x");
-  const record = JSON.parse(
-    execFileSync("node", [RECORD_CLI, "--session", REAL_SESSION, "--projects-dir", projectsDir], { encoding: "utf8" })
-  );
-  const ledger = JSON.parse(
-    execFileSync("node", [CLI, "x", "--stdout", "--session", REAL_SESSION, "--projects-dir", projectsDir, "--markers-base", mbAll], {
-      encoding: "utf8",
-    })
-  );
-
+  //
+  // THE BOUND (L43), and it bit: agreement is all this proves. Until 6.24.1 both renderers kept each
+  // request's FIRST transcript line and this test stayed GREEN while both under-counted output. It now
+  // also ranges over `usage-snapshots`, whose lines disagree, and the ★ COMPLETED USAGE tests are what
+  // bind the counted value to the transcript shapes actually seen.
   const MAPPING = {
     input: "input_uncached",
     cache_write_5m: "cache_write_5m",
@@ -608,11 +616,116 @@ test("✧ PARITY: ledger totals equal render-cost-record totals over the SAME by
     [...TOKEN_CLASSES].sort(),
     "the mapping must range over EVERY class, not the ones in front of the author (L29)"
   );
-  assert.equal(ledger.totals.requests, record.requests, "both dedup on requestId");
-  assert.ok(ledger.totals.requests > 0, "NON-VACUITY: a zero-request parity is vacuously true");
-  for (const [ours, theirs] of Object.entries(MAPPING)) {
-    assert.equal(ledger.totals.tokens[ours], record.tokens[theirs], `${ours} must equal render-cost-record's ${theirs}`);
+  for (const [label, stage, session] of [
+    ["single-session", stageSingle, REAL_SESSION],
+    ["usage-snapshots", stageSnapshots, SNAP_SESSION],
+  ]) {
+    const { root, projectsDir } = stage();
+    // The record is SESSION-scoped (pharn-cost-record/1 is unchanged, D5); the ledger is RUN-scoped. They
+    // agree exactly when the run window contains the whole session, which is what this window is.
+    const mbAll = openRun(root, "x");
+    const record = JSON.parse(
+      execFileSync("node", [RECORD_CLI, "--session", session, "--projects-dir", projectsDir], { encoding: "utf8" })
+    );
+    const ledger = JSON.parse(
+      execFileSync("node", [CLI, "x", "--stdout", "--session", session, "--projects-dir", projectsDir, "--markers-base", mbAll], {
+        encoding: "utf8",
+      })
+    );
+    assert.equal(ledger.totals.requests, record.requests, `${label}: both count one entry per request`);
+    assert.ok(ledger.totals.requests > 0, `${label}: NON-VACUITY: a zero-request parity is vacuously true`);
+    for (const [ours, theirs] of Object.entries(MAPPING)) {
+      assert.equal(ledger.totals.tokens[ours], record.tokens[theirs], `${label}: ${ours} must equal render-cost-record's ${theirs}`);
+    }
   }
+});
+
+// ---------------------------------------------------------------- ★ completed usage (6.24.1)
+//
+// `fixtures/cost-ledger/usage-snapshots/` (described in transcript-core.test.mjs, where the rule's own
+// tests live) holds one request written as 8, 8, 163, one re-appended later with zeroed counts, and one
+// whose early line a forked subagent's transcript copies. These tests pin what the LEDGER does with them:
+// the ledger is a consumer of the one owner, and L52's set is every consumer, not the owner alone.
+
+test("★ COMPLETED USAGE: the ledger row for the 8, 8, 163 request counts 163, and keeps its FIRST line's ts", () => {
+  const { root, projectsDir } = stageSnapshots();
+  const led = renderLedger({ name: "f", sessionId: SNAP_SESSION, projectsDir, markersBase: openRun(root, "f") });
+  const row = (id) => led.requests.find((r) => r.request_id === id);
+  assert.equal(led.requests.length, 5, "the fork's copy of C is not a sixth row");
+  assert.equal(row("req_fx_snapshots").tokens.output, 163, "not 8");
+  assert.equal(row("req_fx_snapshots").tokens.output_thinking, 22);
+  assert.equal(row("req_fx_snapshots").usage.output_tokens, 163, "the verbatim usage is the completed line's object");
+  assert.equal(row("req_fx_snapshots").ts, "2026-09-26T10:00:00.901Z", "the request's FIRST line, not its last (…:01.691)");
+  assert.equal(row("req_fx_reappended").tokens.output, 522, "not 0");
+  assert.equal(row("req_fx_reappended").tokens.input, 2);
+  assert.equal(row("req_fx_forked").tokens.output, 16886, "not 9");
+  assert.equal(row("req_fx_forked").sidechain, false, "the parent's identity: its line is walked first");
+  assert.equal(row("req_fx_forked").agent_id, null);
+  assert.equal(row("req_fx_subagent_own").sidechain, true);
+  assert.equal(row("req_fx_subagent_own").agent_id, "fff3333333333333");
+  assert.equal(led.totals.tokens.output, 163 + 522 + 100 + 16886 + 50);
+  assert.deepEqual(checkLedger(led).reds, [], "the emitted ledger is internally consistent");
+});
+
+test("★ MEMBERSHIP reads the FIRST line: a window closing between A's first and last line keeps A, at 163", () => {
+  // Discriminates identity-from-the-first-line: a reader that keyed the request on its selected (largest)
+  // line would read …:01.691, after the window's end, and exclude it.
+  const { root, projectsDir } = stageSnapshots();
+  const mb = writeMarkers(root, "f", [
+    marker(1, "run-start", null, null, "2026-09-26T09:59:00.000Z"),
+    marker(2, "run-stop", null, null, "2026-09-26T10:00:01.000Z"),
+  ]);
+  const led = renderLedger({ name: "f", sessionId: SNAP_SESSION, projectsDir, markersBase: mb });
+  assert.equal(led.membership.status, "bounded");
+  assert.deepEqual(
+    led.requests.map((r) => r.request_id),
+    ["req_fx_snapshots"],
+    "A's first line (…:00.901) is inside the window; its last (…:01.691) is not"
+  );
+  assert.equal(led.requests[0].tokens.output, 163, "a member is still counted at its completed usage");
+  assert.equal(led.membership.excluded_requests, 4);
+  assert.deepEqual(checkLedger(led).reds, []);
+});
+
+test("★ MUTANT CONTROL: the ledger's numbers FOLLOW the owner — a first-line owner makes the ledger read 8", () => {
+  // The whole product floor is copied, then ONLY the owner's rule is mutated. If the ledger still carried
+  // a second copy of the reading loop, the mutated copy would read 163 like the control (L35, L60).
+  const source = readFileSync(join(HERE, "transcript-core.mjs"), "utf8");
+  const ANCHOR = "else if (outputRank(u) > outputRank(seen.usage)) seen.usage = u;";
+  assert.equal(source.split(ANCHOR).length, 2, "the rule's anchor must occur exactly once");
+  const mutant = source.replace(ANCHOR, "// MUTANT: the first line's usage is kept");
+  assert.notEqual(mutant, source);
+  const floorWith = (coreSource) => {
+    const dir = mkdtempSync(join(tmpdir(), "cost-ledger-floor-"));
+    for (const f of readdirSync(HERE)) {
+      if (f.endsWith(".mjs") && !f.endsWith(".test.mjs")) copyFileSync(join(HERE, f), join(dir, f));
+    }
+    writeFileSync(join(dir, "transcript-core.mjs"), coreSource);
+    return dir;
+  };
+  const rowA = (floor) => {
+    const { root, projectsDir } = stageSnapshots();
+    const out = execFileSync(
+      "node",
+      [
+        join(floor, "render-cost-ledger.mjs"),
+        "f",
+        "--stdout",
+        "--session",
+        SNAP_SESSION,
+        "--projects-dir",
+        projectsDir,
+        "--markers-base",
+        openRun(root, "f"),
+        "--repo",
+        root,
+      ],
+      { encoding: "utf8" }
+    );
+    return JSON.parse(out).requests.find((r) => r.request_id === "req_fx_snapshots").tokens.output;
+  };
+  assert.equal(rowA(floorWith(source)), 163, "CONTROL: the unmutated copy runs and reads the completed line");
+  assert.equal(rowA(floorWith(mutant)), 8, "the mutated owner: nothing in the ledger compensates");
 });
 
 // ---------------------------------------------------------------- the committed-fixture guard

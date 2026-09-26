@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// pharn/floor/check-cost-ledger.mjs — the deterministic CHECKER for a `pharn-cost-ledger/1` record
-// (`pharn/pharn-contracts/cost-ledger.md`). Node stdlib only, no network, no model call.
+// pharn/floor/check-cost-ledger.mjs — the deterministic CHECKER for a `pharn-cost-ledger/2` record, and a
+// legacy `/1` one under its own rules (`pharn/pharn-contracts/cost-ledger.md`). Node stdlib only, no network,
+// no model call.
 //
 // ── WHAT THIS CERTIFIES, AND THE BOUND IS THE WHOLE POINT (P0, L43) ──────────────────────────────────
 // This checks the file's INTERNAL CONSISTENCY. It does NOT check that `requests[]` matches the
@@ -10,7 +11,9 @@
 // computed from those fabricated rows, is GREEN here. It is self-consistent and it is false.
 //
 // `--verify-transcript` is the referent-binding half: it re-derives `requests[]` from the live
-// transcript and compares. That mode is a genuine floor primitive and it is USABLE ONLY WHILE THE
+// transcript and compares them row by row, exactly on the classes that cannot grow and as recorded <=
+// re-derived on `output` / `output_thinking`, which can (6.24.1, `checkRowsAgainstTranscript`). That mode
+// is a genuine floor primitive and it is USABLE ONLY WHILE THE
 // TRANSCRIPT EXISTS — machine-local and perishable, since Claude Code prunes transcripts on its own
 // schedule and they are never committed. So the strong check cannot be a gate, and the gate cannot be
 // the strong check. Both facts are stated rather than one being quietly preferred.
@@ -273,7 +276,7 @@ export function checkLedger(led, opts = {}) {
         continue;
       }
       if (typeof r.request_id !== "string" || !r.request_id) red(`requests[${i}].request_id must be a non-empty string`);
-      else if (ids.has(r.request_id)) red(`requests[${i}].request_id is a duplicate: ${r.request_id}`);
+      else if (ids.has(r.request_id)) red(`requests[${i}].request_id is a duplicate: ${JSON.stringify(r.request_id)}`);
       else ids.add(r.request_id);
       if (typeof r.sidechain !== "boolean") red(`requests[${i}].sidechain must be a boolean`);
       if (typeof r.model !== "string" || !r.model) red(`requests[${i}].model must be a non-empty string`);
@@ -429,9 +432,7 @@ export function checkLedger(led, opts = {}) {
       const b = live.requests.map((r) => r.request_id).sort();
       if (a.length !== b.length || a.some((id, i) => id !== b[i])) {
         red(`--verify-transcript: requests[] does not match the transcript (${a.length} recorded, ${b.length} re-derived)`);
-      } else if (!sameTokens(led.totals.tokens, live.totals.tokens)) {
-        red("--verify-transcript: totals do not match a re-derivation from the transcript");
-      } else {
+      } else if (checkRowsAgainstTranscript(led.requests, live.requests)) {
         checkExcludedAgainstTranscript(
           led.membership?.excluded_requests ?? null,
           live.membership?.excluded_requests ?? null,
@@ -442,6 +443,69 @@ export function checkLedger(led, opts = {}) {
   }
 
   return { reds: [...reds], warns: [...warns] };
+}
+
+/** The two token classes that can GROW across one request's transcript lines (see below). */
+export const GROWING_CLASSES = Object.freeze(["output", "output_thinking"]);
+
+/** A token value quoted into a verdict line — total over any input (L62): a non-number is never coerced. */
+const tokenText = (v) => (Number.isFinite(v) ? String(v) : "(not a number)");
+
+/**
+ * `--verify-transcript`'s comparison of the ROWS, request by request and class by class (6.24.1). The id
+ * sets are already equal when this runs. Returns true when nothing RED was found.
+ *
+ * WHY TWO CLASSES ARE BOUNDED AND NOT EQUAL ([[L58]], [[L63]]). A row's usage is its request's line with
+ * the most output tokens (`transcript-core.mjs`), and a request still being written when the ledger was
+ * emitted was recorded at the largest line written THEN. A later line can carry more `output` and more
+ * `output_thinking`, so a re-derivation NOW can find more of them for a CORRECT ledger. Until 6.24.1 this
+ * compared totals exactly, which was right while rows were each request's first line (fixed once written)
+ * and became a false RED the moment the rule moved them to the largest line. The other four classes did not
+ * differ across a request's selected and first line on any measured request, so they are compared exactly.
+ *
+ * THE RULE: each of the four other classes must be EQUAL; each growing class must satisfy recorded <=
+ * re-derived. Above is RED, because the transcript never held that much. Below is a WARN naming the two causes
+ * it cannot tell apart: a request in flight at emission, and a ledger written before 6.24.1, whose first-line
+ * rule under-counted.
+ *
+ * BOUND (P0), stated in the WARN as well as here: the growing classes are now exact only from ABOVE. Any
+ * lower value passes with the WARN, a negative one included, because nothing here bounds the lower side.
+ * Pinning a value exactly would need the emission's own moment in the file, which is a schema change. That
+ * is also why `excluded_requests` is a range (6.14.1), but that range has a lower side and this compare has
+ * none. The rows do have a fixed lower part, the request's first line. A bound at it is named and not built,
+ * because no failure has been observed (P7).
+ */
+function checkRowsAgainstTranscript(recorded, live) {
+  const now = new Map(live.map((r) => [r.request_id, r]));
+  const fixed = [];
+  const above = [];
+  const below = [];
+  for (const r of recorded) {
+    const l = now.get(r.request_id);
+    for (const c of TOKEN_CLASSES) {
+      const rec = r.tokens?.[c];
+      const cur = l?.tokens?.[c];
+      const where = `${JSON.stringify(r.request_id)} ${c}: ${tokenText(rec)} recorded, ${tokenText(cur)} re-derived`;
+      if (!Number.isFinite(rec) || !Number.isFinite(cur)) fixed.push(where);
+      else if (!GROWING_CLASSES.includes(c)) {
+        if (rec !== cur) fixed.push(where);
+      } else if (rec > cur) above.push(where);
+      else if (rec < cur) below.push(where);
+    }
+  }
+  const some = (list) => `${list.slice(0, 3).join("; ")}${list.length > 3 ? `; +${list.length - 3} more` : ""}`;
+  if (fixed.length) {
+    red(`--verify-transcript: ${fixed.length} row value(s) do not match the transcript in a class that must match exactly: ${some(fixed)}`);
+  }
+  if (above.length) {
+    red(`--verify-transcript: ${above.length} row value(s) record MORE output than the transcript holds: ${some(above)}`);
+  }
+  if (below.length) {
+    warn(
+      `--verify-transcript: ${below.length} row value(s) are BELOW what the transcript now holds (${some(below)}). Either the request was still being written when the ledger was emitted, or the ledger predates 6.24.1, whose first-line rule under-counted — this check cannot tell the two apart. The growing classes are bounded only from above, so a deflated value also lands here`
+    );
+  }
+  return fixed.length === 0 && above.length === 0;
 }
 
 /**
@@ -544,7 +608,7 @@ function checkMembership(led) {
     red(
       `${outside.length} request(s) lie OUTSIDE the recorded run window and are summed into the run's totals: ${outside
         .slice(0, 3)
-        .map((r) => r.request_id)
+        .map((r) => JSON.stringify(r.request_id))
         .join(", ")}${outside.length > 3 ? ", …" : ""}`
     );
   }
