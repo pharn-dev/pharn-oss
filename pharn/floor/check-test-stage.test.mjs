@@ -124,6 +124,47 @@ test("READY test-first — the mapping holds against the current SPEC and PLAN, 
   });
 });
 
+// ── quick (6.23.0): a spec_kind: quick SPEC reads test-first, EXACTLY like a feature SPEC ───────────────
+
+/** The same READY test-first world, over a `spec_kind: quick` SPEC (1 AC at `unit`, already within the
+ *  quick bounds — no fixture change needed beyond the kind line). */
+function testFirstQuick() {
+  const root = mkdtempSync(join(tmpdir(), "cts-quick-"));
+  mkdirSync(fd(root), { recursive: true });
+  const spec = specText({ kind: "quick" });
+  writeFileSync(join(fd(root), "SPEC.md"), spec);
+  writeFileSync(join(fd(root), "PLAN.md"), planText(pinOf(spec)));
+  writeFileSync(join(fd(root), "AC-TESTS.md"), acTests(pinOf(spec)));
+  mkdirSync(join(root, "tests", "ac"), { recursive: true });
+  writeFileSync(join(root, UNIT), 'test("AC-1: resets", async () => { await import("../../src/demo.js"); });\n');
+  assert.equal(lockCli(root, ["--write", NAME]).status, 0, "fixture: --write");
+  const lock = JSON.parse(readFileSync(lockPath(root), "utf8"));
+  lock.red_run = {
+    stamp_sha256: "a".repeat(64),
+    files_sha256: filesDigest(lock.files),
+    gates: [{ gate: "test", results_sha256: "b".repeat(64) }],
+    acs: [{ id: "AC-1", tests: [`${UNIT}::AC-1: resets`] }],
+  };
+  writeFileSync(lockPath(root), JSON.stringify(lock, null, 2));
+  return root;
+}
+
+test("READY test-first — a quick world (spec_kind: quick) reads test-first, exactly as a feature SPEC does", () => {
+  withWorld(testFirstQuick, (root) => {
+    const r = gate(root);
+    assert.equal(r.code, 0, JSON.stringify(r));
+    assert.equal(r.token, "READY test-first");
+  });
+});
+
+test("READY test-first — a quick world ALSO satisfies --require-test-first (the loop's policy)", () => {
+  withWorld(testFirstQuick, (root) => {
+    const cli = spawnSync(process.execPath, [CLI, NAME, "--require-test-first"], { cwd: root, encoding: "utf8" });
+    assert.equal(cli.status, 0, cli.stdout + cli.stderr);
+    assert.match(cli.stdout.split("\n")[0], /^READY test-first — /);
+  });
+});
+
 test("mapping-red — a PLAN edited after /pharn-test that scopes the build to the test file (item 03's bound, closed)", () => {
   withWorld(testFirst, (root) => {
     const spec = readFileSync(join(fd(root), "SPEC.md"), "utf8");

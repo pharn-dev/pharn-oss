@@ -68,7 +68,7 @@ import { readFileSync, readdirSync, lstatSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { specAcceptanceCriteria, specVerdict } from "./spec-template-core.mjs";
+import { specAcceptanceCriteria, specVerdict, SPEC_KINDS, TEST_FIRST_KINDS } from "./spec-template-core.mjs";
 import { clean, pathsFromPlanFiles } from "./plan-files-core.mjs";
 import { badPath, mappingOf, scopeKey } from "./ac-tests-core.mjs";
 import { testInfraPathKind } from "./test-infra-core.mjs";
@@ -126,17 +126,18 @@ export function checkMapping({ acTestsText, specText, planText, others }) {
     );
     return { legacy: true, findings, notes: [] };
   }
-  if (spec.kind !== "feature") {
-    // A test-infra SPEC is a bootstrap increment with no mapping (its lock is written by --write-bootstrap). A mapping
-    // here means the kind changed after mapping — the pin covers the kind (check-spec.mjs pinHash), so `pin` REDs
-    // too unless the SPEC was re-approved.
+  if (!TEST_FIRST_KINDS.includes(spec.kind)) {
+    // A non-test-first SPEC (today: `test-infra`) is a bootstrap increment with no mapping (its lock is written by
+    // --write-bootstrap). A mapping here means the kind changed after mapping — the pin covers the kind
+    // (check-spec.mjs pinHash), so `pin` REDs too unless the SPEC was re-approved. `feature` and `quick` (6.23.0)
+    // are both TEST_FIRST_KINDS: a quick SPEC gets the SAME AC evidence as a feature SPEC, just fewer criteria.
     red(
       "spec-kind",
       spec.kind === null
         ? spec.kindInBody
           ? "the SPEC's body opens with a `spec_kind:` line, which the approval pin cannot tell from the frontmatter key — run check-spec.mjs"
-          : "the SPEC's `spec_kind` is not one of {feature, test-infra} — run check-spec.mjs"
-        : "the SPEC is `spec_kind: test-infra`, a bootstrap increment: it gets no AC-TESTS.md mapping"
+          : `the SPEC's \`spec_kind\` is not one of {${SPEC_KINDS.join(", ")}} — run check-spec.mjs`
+        : `the SPEC is \`spec_kind: ${spec.kind}\`, a bootstrap increment: it gets no AC-TESTS.md mapping`
     );
     return { legacy: false, findings, notes: [] };
   }

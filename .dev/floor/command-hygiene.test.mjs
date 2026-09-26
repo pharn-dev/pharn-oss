@@ -2014,8 +2014,13 @@ for (const cmd of PHASE_MARKER_WIRING) {
   test(`✧ ${cmd.file} brackets its run and every stage it runs`, () => {
     const body = commandBody(cmd.file);
     // A `--pending-start` call carries no --kind by design (it is a moment, not a marker); it is pinned
-    // by its own test below and excluded from the kind closure here.
-    const calls = (body.match(MARK_PHASE) ?? []).filter((c) => !/--pending-start/.test(c));
+    // by its own test below and excluded from the kind closure here. A `--mode` run-start (6.23.0,
+    // `/pharn-ship --quick`) is the QUICK ALTERNATIVE to the command's one named full-mode run-start —
+    // command prose carries BOTH lines (the full one, and the quick one inside `## Quick mode`), so it is
+    // excluded here too and pinned separately by QUICK_MODE_WIRING below. This is the "count the run-start
+    // lines WITHOUT --mode" carve-out CLAUDE.md's Writes-scope section documents: it keeps this rule's
+    // "exactly one run-start" the FULL-MODE pin, unchanged in strength.
+    const calls = (body.match(MARK_PHASE) ?? []).filter((c) => !/--pending-start/.test(c) && !/--mode\b/.test(c));
     assert.ok(calls.length > 0, `non-vacuity: ${cmd.file} must carry mark-phase invocations`);
 
     const kindsSeen = calls.map((c) => (c.match(/--kind\s+(\S+)/) ?? [])[1]);
@@ -2096,7 +2101,10 @@ test("✧ ADOPTION is opt-in: ONLY the pending-start commands' named run-start c
   // /pharn-loop window. The flag must sit exactly where --pending-start does, and nowhere else.
   const pendingFiles = new Set(PENDING_START_WIRING.map((w) => w.file));
   for (const cmd of PHASE_MARKER_WIRING) {
-    const starts = (commandBody(cmd.file).match(MARK_PHASE) ?? []).filter((c) => /--kind run-start/.test(c));
+    // The QUICK run-start (6.23.0, carries --mode) is a SEPARATE line pinned by QUICK_MODE_WIRING below,
+    // which asserts it ALSO carries --adopt-pending (the same carve-out PHASE-MARKER ENUMERATION above
+    // documents) — excluded here so "exactly one named run-start" stays the full-mode pin.
+    const starts = (commandBody(cmd.file).match(MARK_PHASE) ?? []).filter((c) => /--kind run-start/.test(c) && !/--mode\b/.test(c));
     assert.equal(starts.length, 1, `${cmd.file}: exactly one named run-start`);
     assert.equal(
       /--adopt-pending/.test(starts[0]),
@@ -2154,6 +2162,179 @@ test("✧ every emitting command emits the LEDGER and the REPORT, and checks the
       new RegExp(`render-cost-ledger\\.mjs '<name>' --command /${slug}\\b`),
       `${cmd.file} must pass --command /${slug} — a copied sibling value would mislabel every ledger it writes`
     );
+  }
+});
+
+// ── QUICK MODE WIRING (6.23.0, /pharn-ship --quick) — the same L29/L31/L36 shape, one domain over ─────
+//
+// A shorter spine for a small change trades checks for cost (the maintainer's 2026-09-25 decision, the
+// AC-delivery queue's Phase 3.1). Command prose now carries BOTH the full-mode named run-start (pinned
+// above, unaffected — PHASE_MARKER_WIRING and ADOPTION exclude a `--mode`-bearing line by the carve-out
+// documented in CLAUDE.md's "Writes-scope" section) AND a QUICK alternative inside `## Quick mode`; this
+// set is that alternative's OWN obligations, materialized once (L29) rather than folded into either set
+// above — the same reason LESSONS_SWEEP_WIRING and PLAN_LESSONS_WIRING stay separate sets despite sharing
+// a domain.
+//
+// Honest scope, the same narrow kind as every other set in this file: these pin that the command PROSE
+// carries the invocation / section / pointer / literal. They CANNOT prove a run executed it, that --quick
+// was actually passed, or that a skip was honored at runtime — "the wiring is pinned" NEVER means "a quick
+// run behaved this way" (P0).
+
+/** Every `mark-phase.mjs` invocation carrying `--mode` (there is exactly one such call today: the quick
+ *  run-start `/pharn-ship`'s `## Quick mode` section pins). */
+const MODE_MARK_PHASE = /node pharn\/floor\/mark-phase\.mjs[^\n]*--mode\b[^\n]*/g;
+
+test("✧ QUICK MODE: the quick run-start line appears exactly once in the corpus, in pharn-ship.md, with --adopt-pending", () => {
+  const hits = [];
+  for (const file of commandFiles()) {
+    for (const m of commandBody(file).match(MODE_MARK_PHASE) ?? []) hits.push({ file, line: m });
+  }
+  assert.deepEqual(
+    hits.map((h) => h.file),
+    ["pharn-ship.md"],
+    "the quick run-start line must appear EXACTLY ONCE in the corpus, and only in pharn-ship.md"
+  );
+  assert.match(hits[0].line, /--kind run-start/, "the --mode line must be a run-start (mode is run-start-only)");
+  assert.match(hits[0].line, /--adopt-pending/, "the quick run-start must still adopt the pending start, like the full one");
+});
+
+test("✧ QUICK MODE: every mark-phase.mjs --mode value in the corpus is EXACTLY --mode quick (closure, L36)", () => {
+  for (const file of commandFiles()) {
+    for (const m of commandBody(file).match(MODE_MARK_PHASE) ?? []) {
+      assert.match(m, /--mode quick(?!\S)/, `${file}: a --mode value other than the literal quick was found: ${m.trim()}`);
+    }
+  }
+});
+
+/** The `## Quick mode` section of pharn-ship.md, by HEADING OFFSET (L6: a structural fact from its
+ *  structured location, never `indexOf` over the body's prose) — both boundary anchors asserted FOUND
+ *  first (L60), so a renamed or removed heading fails loudly rather than silently slicing from/to the
+ *  wrong point. */
+function quickModeSection() {
+  const body = commandBody("pharn-ship.md");
+  const start = headingOffset(body, "Quick mode — `/pharn-ship --quick` (6.23.0)");
+  assert.ok(start >= 0, "pharn-ship.md must carry a line-initial `## Quick mode — …` heading");
+  const end = headingOffset(body, "Step 2 — Run the chain, branching ONLY on each stage's STRUCTURAL verdict (P5)");
+  assert.ok(end > start, "pharn-ship.md's `## Step 2 — …` heading must exist and follow `## Quick mode`");
+  return body.slice(start, end);
+}
+
+test("✧ QUICK MODE: pharn-ship.md's ## Quick mode section holds the --spec-kind line", () => {
+  assert.match(quickModeSection(), /node pharn\/floor\/check-spec\.mjs --spec-kind pharn\/features\/<name>\/SPEC\.md/);
+});
+
+// The skip set (L29): every full-mode item a quick run does NOT perform. Materialized once; each member's
+// regex is a phrase actually present in the section, not a paraphrase — so the rule fails the moment the
+// section stops naming that member, rather than merely stops naming it a particular way.
+const QUICK_SKIP_SET = [
+  { name: "/pharn-regress", re: /`\/pharn-regress`/ },
+  { name: "the Step-2b regress re-run", re: /regress re-run and its two markers are SKIPPED/ },
+  { name: "Step 2c (BRIEFING.md)", re: /Steps 2c and 2d: SKIPPED/ },
+  { name: "Step 2d (PR handoff)", re: /Steps 2c and 2d: SKIPPED/ },
+  { name: "Step 3a item 4 (RUN-REPORT.md)", re: /\(`render-run-report\.mjs`\) is SKIPPED/ },
+];
+
+test("✧ QUICK MODE: pharn-ship.md's ## Quick mode section names every member of the skip set (L29)", () => {
+  assert.equal(QUICK_SKIP_SET.length, 5, "non-vacuity: the skip-set enumeration is counted");
+  const section = quickModeSection();
+  for (const skip of QUICK_SKIP_SET) {
+    assert.match(section, skip.re, `## Quick mode must name ${skip.name} among what quick mode skips`);
+  }
+});
+
+test("✧ QUICK MODE: pharn-ship.md's ## Quick mode section states cost.json is kept", () => {
+  assert.match(quickModeSection(), /cost\.json.*is kept in quick mode/);
+});
+
+// Each skip SITE (as opposed to the ## Quick mode section's own summary) carries a one-line pointer back —
+// so a reader hitting the full-mode step directly, never having read ## Quick mode, still learns the delta.
+const QUICK_SKIP_POINTERS = [
+  {
+    site: "the regress stage item (Step 2)",
+    re: /`\/pharn-regress`[\s\S]*?SKIPPED\s+entirely in Quick mode — see `## Quick mode` above/,
+  },
+  { site: "Step 2b heading", re: /In Quick mode the regress re-run and its two markers are SKIPPED — see `## Quick mode`/ },
+  { site: "Step 2c heading", re: /SKIPPED entirely in Quick mode — see `## Quick mode` item 9 above\. `BRIEFING\.md`'s only reader/ },
+  { site: "Step 2d heading", re: /SKIPPED entirely in Quick mode — see `## Quick mode` item 9 above\. Its only input/ },
+  { site: "Step 3a item 4", re: /SKIPPED in Quick mode — see `## Quick mode` item 11 above/ },
+];
+
+for (const pointer of QUICK_SKIP_POINTERS) {
+  test(`✧ QUICK MODE: ${pointer.site} carries its one-line pointer to ## Quick mode`, () => {
+    assert.match(commandBody("pharn-ship.md"), pointer.re);
+  });
+}
+
+test("✧ QUICK MODE: pharn-grill.md pins its --spec-kind line and the skip literal", () => {
+  const body = commandBody("pharn-grill.md");
+  assert.match(body, /node pharn\/floor\/check-spec\.mjs --spec-kind pharn\/features\/<name>\/SPEC\.md/);
+  assert.match(body, /interrogation NOT performed — skipped by mode \(quick\)/);
+});
+
+test("✧ QUICK MODE: pharn-spec.md pins the literal spec_kind: quick and its Step-4 trade sentence", () => {
+  const body = commandBody("pharn-spec.md");
+  assert.match(body, /spec_kind: quick/);
+  assert.match(body, /looks for no\s*\n\s*regression outside the feature and does not interrogate the plan/);
+});
+
+test("✧ QUICK MODE: SHIP.md's quick bullet names its three items (grill G10)", () => {
+  const section = quickModeSection();
+  assert.match(section, /regressions outside the feature/);
+  assert.match(section, /the plan interrogation/);
+  assert.match(section, /the briefing and the run report/);
+});
+
+test("✧ QUICK MODE: both pharn-ship.md and pharn-spec.md state --quick is read only as the first token (grill G3)", () => {
+  for (const file of ["pharn-ship.md", "pharn-spec.md"]) {
+    assert.match(
+      commandBody(file),
+      /recognized only as the FIRST TOKEN of the arguments/,
+      `${file} must state --quick is recognized only as the first token`
+    );
+  }
+});
+
+test("✧ QUICK MODE mutation controls: each asserted property fails when broken (L60)", () => {
+  const shipBody = commandBody("pharn-ship.md");
+
+  // (1) drop --mode quick -> the quick run-start must disappear from MODE_MARK_PHASE detection.
+  const droppedMode = shipBody.replace(" --mode quick", "");
+  assert.notEqual(droppedMode, shipBody, "fixture sanity: the mutation must change the body");
+  assert.deepEqual(droppedMode.match(MODE_MARK_PHASE), null, "dropping --mode quick must remove the quick run-start from detection");
+
+  // (2) spell it --mode fast -> the closure-over-corpus rule must catch it.
+  const misspelled = shipBody.replace("--mode quick", "--mode fast");
+  const misspelledMatches = misspelled.match(MODE_MARK_PHASE) ?? [];
+  assert.ok(misspelledMatches.length > 0, "fixture sanity: the mutant line must still be detected as a --mode line");
+  assert.doesNotMatch(misspelledMatches[0], /--mode quick(?!\S)/, "a --mode fast line must fail the closure assertion");
+
+  // (3) move the --spec-kind line out of the ## Quick mode section -> the section-scoped test must miss it.
+  const specKindLine = "node pharn/floor/check-spec.mjs --spec-kind pharn/features/<name>/SPEC.md\n";
+  assert.ok(shipBody.includes(specKindLine), "fixture sanity: the real body must carry the line once");
+  const moved = shipBody.replace(specKindLine, "");
+  const startIdx = headingOffset(moved, "Quick mode — `/pharn-ship --quick` (6.23.0)");
+  const endIdx = headingOffset(moved, "Step 2 — Run the chain, branching ONLY on each stage's STRUCTURAL verdict (P5)");
+  assert.ok(startIdx >= 0 && endIdx > startIdx, "fixture sanity: both headings must survive the removal");
+  assert.doesNotMatch(moved.slice(startIdx, endIdx), /--spec-kind pharn\/features\/<name>\/SPEC\.md/);
+
+  // (4) drop one skip pointer (Step 3a item 4's) -> that pointer's own rule must stop matching.
+  const droppedPointer = shipBody.replace(
+    "4. **Render the human-readable run report** _(SKIPPED in Quick mode — see `## Quick mode` item 11 above;\n   items 1–3 above still run, so `cost.json` is kept)_:",
+    "4. **Render the human-readable run report:**"
+  );
+  assert.notEqual(droppedPointer, shipBody, "fixture sanity: the mutation must change the body");
+  assert.doesNotMatch(droppedPointer, /SKIPPED in Quick mode — see `## Quick mode` item 11 above/);
+
+  // (5) add a second quick run-start -> the exactly-once-in-the-corpus rule must fail.
+  const doubled = `${shipBody}\n\`\`\`bash\nnode pharn/floor/mark-phase.mjs --name '<name>' --kind run-start --adopt-pending --mode quick\n\`\`\`\n`;
+  const doubledHits = doubled.match(MODE_MARK_PHASE) ?? [];
+  assert.equal(doubledHits.length, 2, "a second quick run-start must be detected, breaking the exactly-once-in-the-corpus rule");
+});
+
+test("✧ QUICK MODE wiring is non-vacuous — pharn-ship.md, pharn-grill.md and pharn-spec.md all exist on disk", () => {
+  const present = new Set(commandFiles());
+  for (const file of ["pharn-ship.md", "pharn-grill.md", "pharn-spec.md"]) {
+    assert.ok(present.has(file), `${file} must exist for the QUICK MODE rules above to range over a real file`);
   }
 });
 

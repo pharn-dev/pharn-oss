@@ -79,6 +79,62 @@ test("a freshly emitted ledger is GREEN — the control that makes every RED bel
   assert.deepEqual(redsOf(led), [], "the emitter must satisfy its own checker");
 });
 
+// ── quick (6.23.0): a `--quick` ship ledger (a `mode` marker key, a `gate2-quick` decision) is GREEN ─────
+// under the UNCHANGED checker — no schema bump, exactly as the design states: rule 7 checks
+// `outcome.decision` as a bounded token, never a closed vocabulary, and markers carry no closed key set.
+
+function quickShipLedger() {
+  const root = mkdtempSync(join(tmpdir(), "check-cl-quick-"));
+  const proj = join(root, "projects", "p");
+  mkdirSync(proj, { recursive: true });
+  copyFileSync(join(FIXTURES, "single-session.jsonl"), join(proj, `${REAL_SESSION}.jsonl`));
+  mkdirSync(join(root, "pharn", "features", "feat"), { recursive: true });
+  writeFileSync(join(root, "pharn", "features", "feat", "verify-report.json"), JSON.stringify({ verdict: "PASS" }));
+  const markers = join(root, "cost", "feat");
+  mkdirSync(markers, { recursive: true });
+  writeFileSync(
+    join(markers, "markers.jsonl"),
+    [
+      JSON.stringify({
+        seq: 1,
+        kind: "run-start",
+        stage: null,
+        iteration: null,
+        ts: "2026-09-21T08:00:00.000Z",
+        session_id: null,
+        mode: "quick",
+      }),
+      JSON.stringify({
+        seq: 2,
+        kind: "stage-start",
+        stage: "pharn-verify",
+        iteration: 1,
+        ts: "2026-09-21T08:30:00.000Z",
+        session_id: null,
+      }),
+      JSON.stringify({ seq: 3, kind: "run-stop", stage: null, iteration: null, ts: "2026-09-21T09:59:00.000Z", session_id: null }),
+    ].join("\n") + "\n"
+  );
+  return renderLedger({
+    name: "feat",
+    command: "/pharn-ship",
+    repo: root,
+    sessionId: REAL_SESSION,
+    projectsDir: join(root, "projects"),
+    markersBase: join(root, "cost"),
+  });
+}
+
+test("a quick ship ledger (mode: quick run-start, decision: gate2-quick) is GREEN — no schema bump", () => {
+  const led = quickShipLedger();
+  assert.equal(led.command, "/pharn-ship");
+  assert.equal(led.outcome.decision, "gate2-quick");
+  assert.equal(led.markers[0].mode, "quick");
+  assert.equal(led.schema, SCHEMA, "still pharn-cost-ledger/2 — additive, no new schema version");
+  assert.ok(led.requests.length > 0, "NON-VACUITY");
+  assert.deepEqual(redsOf(led), [], "an OLD checker (rule 7 is a bounded-token check, never a closed vocabulary) reads this GREEN");
+});
+
 // ---------------------------------------------------------------- the mutation table
 
 /** ONE materialised table. A rule added later gets its control here and is covered by the loop below —

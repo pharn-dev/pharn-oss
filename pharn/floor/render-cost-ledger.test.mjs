@@ -30,6 +30,7 @@ import {
   sanitizeUsage,
   attribute,
   readMarkers,
+  normalizeMarkers,
   readOutcome,
   readSkillsVersion,
   table,
@@ -513,6 +514,40 @@ test("readMarkers on a missing file returns [] — the recovery case is a real s
   assert.deepEqual(readMarkers(join(tmpdir(), "definitely-absent-xyz", "markers.jsonl")), []);
 });
 
+// ── normalizeMarkers keeps `mode` only as a MARKER_MODES member (6.23.0) — the `origin` precedent ───────
+
+test('normalizeMarkers: mode: "quick" on a run-start survives normalization', () => {
+  const [m] = normalizeMarkers([
+    { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-01-01T00:00:00.000Z", session_id: null, mode: "quick" },
+  ]);
+  assert.equal(m.mode, "quick");
+});
+
+test("normalizeMarkers: every garbage mode value is DROPPED — no mode key at all", () => {
+  for (const bad of ["QUICK", "Quick", "fast", 1, true, "", null, {}]) {
+    const [m] = normalizeMarkers([
+      { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-01-01T00:00:00.000Z", session_id: null, mode: bad },
+    ]);
+    assert.equal("mode" in m, false, `mode=${JSON.stringify(bad)} must be dropped`);
+  }
+});
+
+test("normalizeMarkers: an absent mode key stays absent — byte-identical to a pre-6.23.0 marker", () => {
+  const [m] = normalizeMarkers([
+    { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-01-01T00:00:00.000Z", session_id: null },
+  ]);
+  assert.equal("mode" in m, false);
+});
+
+test("normalizeMarkers: mode survives on a NON-run-start marker too (this module reads only MARKER_MODES membership; the run-start-only rule is mark-phase.mjs's WRITE-time rule)", () => {
+  // Read-time normalization keeps any MARKER_MODES member regardless of kind — it does not re-derive
+  // mark-phase.mjs's write-time refusal, which is the shape that never reaches disk in the first place.
+  const [m] = normalizeMarkers([
+    { seq: 1, kind: "stage-start", stage: "pharn-build", iteration: 1, ts: "2026-01-01T00:00:00.000Z", session_id: null, mode: "quick" },
+  ]);
+  assert.equal(m.mode, "quick");
+});
+
 // ---------------------------------------------------------------- outcome + skills version
 
 test("outcome is read from the LOOP.md ENVELOPE only, never grepped from the body (L6)", () => {
@@ -913,6 +948,74 @@ test("outcome FALLBACK: with no LOOP.md the ledger carries the DERIVED ship outc
   assert.equal(led.command, "/pharn-ship");
   assert.equal(led.outcome.decision, "gate2");
   assert.equal(led.outcome.source, SHIP_OUTCOME_SOURCE);
+});
+
+test("outcome FALLBACK, quick (6.23.0): a --quick run's run-start (mode: quick) derives gate2-quick from verify PASS alone — NO pharn-regress stage-start needed, and its markers.mode survives into the ledger", () => {
+  const { projectsDir } = stageSingle();
+  const out = mkdtempSync(join(tmpdir(), "cost-ledger-derived-quick-"));
+  const dir = join(out, "f", "feat");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "verify-report.json"), '{"verdict":"PASS"}');
+  // A regression-report.json left on disk (e.g. by an earlier full run over the same feature dir) must be
+  // IGNORED for a quick run's outcome — quick mode never consults the regress verdict at all.
+  writeFileSync(join(dir, "regression-report.json"), '{"verdict":"regressions"}');
+  const mb = writeMarkers(out, "feat", [
+    { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2025-12-31T23:59:00.000Z", session_id: "s1", mode: "quick" },
+    { seq: 2, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-01-01T00:00:00.000Z", session_id: "s1" },
+  ]);
+  const r = run([
+    "feat",
+    "--repo",
+    out,
+    "--base",
+    "f",
+    "--markers-base",
+    mb,
+    "--command",
+    "/pharn-ship",
+    "--session",
+    REAL_SESSION,
+    "--projects-dir",
+    projectsDir,
+    "--stdout",
+  ]);
+  assert.equal(r.status, 0, r.stderr);
+  const led = JSON.parse(r.stdout);
+  assert.equal(led.command, "/pharn-ship");
+  assert.equal(led.outcome.decision, "gate2-quick");
+  assert.equal(led.outcome.source, SHIP_OUTCOME_SOURCE);
+  assert.equal(led.markers[0].mode, "quick", "the run-start's mode must survive into the ledger's own markers[]");
+});
+
+test("outcome FALLBACK, quick: a FULL run (no mode) with only pharn-verify started stays stop:pharn-verify, never gate2-quick", () => {
+  const { projectsDir } = stageSingle();
+  const out = mkdtempSync(join(tmpdir(), "cost-ledger-derived-full-noregress-"));
+  const dir = join(out, "f", "feat");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "verify-report.json"), '{"verdict":"PASS"}');
+  const mb = writeMarkers(out, "feat", [
+    { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2025-12-31T23:59:00.000Z", session_id: "s1" },
+    { seq: 2, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-01-01T00:00:00.000Z", session_id: "s1" },
+  ]);
+  const r = run([
+    "feat",
+    "--repo",
+    out,
+    "--base",
+    "f",
+    "--markers-base",
+    mb,
+    "--command",
+    "/pharn-ship",
+    "--session",
+    REAL_SESSION,
+    "--projects-dir",
+    projectsDir,
+    "--stdout",
+  ]);
+  assert.equal(r.status, 0, r.stderr);
+  const led = JSON.parse(r.stdout);
+  assert.equal(led.outcome.decision, "stop:pharn-verify");
 });
 
 test("OUTCOME_SOURCES is the closed two-member enum, defined once and shared with the checker", () => {

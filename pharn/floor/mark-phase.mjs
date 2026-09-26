@@ -57,9 +57,23 @@
 //   is adopted by a later `/pharn-ship` `run-start` whose own `--pending-start` call was skipped, which
 //   WIDENS that run's window. Nothing here can tell the two apart; it is marker discipline, like every marker (L19).
 //
+// ── THE MODE (`--mode`, added 6.23.0 for `/pharn-ship --quick`) ─────────────────────────────────────────
+// A run-start marker may carry `mode: "quick"`, recorded at the MOMENT THE RUN STARTS (L42 — capture at
+// the moment of the act, never re-derive from live state afterwards): the mode is a fact about how the
+// run WAS INVOKED, never re-derived later from the SPEC's `spec_kind` — a quick SPEC may still run the
+// full pipeline (a human choice at GATE 1), so the two are different facts. `MARKER_MODES` is the closed
+// vocabulary (today one member, `quick`); `--mode` is refused (exit 2, nothing written) for any other
+// value and for any `--kind` but `run-start` — a stage-start, orchestrator or run-stop marker records no
+// mode, because the mode is a property of the RUN, not of a stage inside it.
+// WITH NO `--mode` FLAG the marker carries no `mode` key at all — byte-identical to every marker written
+// before 6.23.0 (a closure test pins this). `ship-outcome-core.mjs`'s `runMode()` reads this field to
+// decide `gate2` vs `gate2-quick`; `render-cost-ledger.mjs`'s `normalizeMarkers` keeps it only as a
+// `MARKER_MODES` member, the same pattern `origin: "pending"` already uses.
+//
 // Usage:
 //   node pharn/floor/mark-phase.mjs --name <slug> --kind <kind> [--stage <s>] [--iteration <n>] [--base <dir>]
 //                                   [--adopt-pending]   (run-start only)
+//                                   [--mode <m>]        (run-start only; m in MARKER_MODES)
 //   node pharn/floor/mark-phase.mjs --pending-start [--base <dir>]
 // Exit codes: 0 = a marker (or the pending start) was written; 2 = bad usage (nothing written).
 
@@ -70,6 +84,14 @@ import { tsMs } from "./run-window-core.mjs";
 /** The marker vocabulary. A Set, so membership is `.has()` and no arbitrary key indexes a plain
  *  object (L15 — an inherited `toString` would be both truthy and non-nullish). */
 export const MARKER_KINDS = new Set(["run-start", "stage-start", "orchestrator", "run-stop"]);
+
+/** The `--mode` vocabulary (6.23.0), a Set for the same reason. One member today: `/pharn-ship --quick`'s
+ *  run-start. Exported once (L35) — `render-cost-ledger.mjs`'s `normalizeMarkers` and
+ *  `ship-outcome-core.mjs`'s `runMode` both read against this same set, never a re-spelled literal. */
+export const MARKER_MODES = new Set(["quick"]);
+
+/** The one `MARKER_MODES` member today. Referenced, never re-spelled (L41). */
+export const QUICK_MODE = "quick";
 
 /** The ONE definition of where markers live. Duplicating it at the CLI entry point is exactly the
  *  defect L41 records in `render-ship-briefing.mjs` — two copies of a default, one updated, the stale
@@ -193,6 +215,7 @@ export function markPhase({
   sessionId = null,
   now,
   adoptPending = false,
+  mode = null,
 }) {
   const dir = join(base, name);
   const file = join(dir, "markers.jsonl");
@@ -208,6 +231,8 @@ export function markPhase({
     session_id: sessionId,
   };
   if (pending) marker.origin = "pending";
+  // With NO `--mode` the marker carries no `mode` key at all (L41) — byte-identical to a pre-6.23.0 marker.
+  if (mode !== null) marker.mode = mode;
   appendFileSync(file, JSON.stringify(marker) + "\n");
   if (pending) {
     try {
@@ -224,13 +249,16 @@ function usage(msg) {
   process.stderr.write(
     "usage: node pharn/floor/mark-phase.mjs --name <slug> --kind <run-start|stage-start|orchestrator|run-stop>\n" +
       "                                      [--stage <s>] [--iteration <n>] [--base <dir>] [--adopt-pending]\n" +
+      "                                      [--mode <m>]   (run-start only; m in {" +
+      [...MARKER_MODES].join(", ") +
+      "})\n" +
       "       node pharn/floor/mark-phase.mjs --pending-start [--base <dir>]\n"
   );
   return 2;
 }
 
 function main(argv) {
-  const opts = { name: null, kind: null, stage: null, iteration: null, base: null, pending: false, adopt: false };
+  const opts = { name: null, kind: null, stage: null, iteration: null, base: null, pending: false, adopt: false, mode: null };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     if (k === "--pending-start") opts.pending = true;
@@ -240,14 +268,15 @@ function main(argv) {
     else if (k === "--stage") opts.stage = argv[++i];
     else if (k === "--iteration") opts.iteration = argv[++i];
     else if (k === "--base") opts.base = argv[++i];
+    else if (k === "--mode") opts.mode = argv[++i];
     else return usage(`unknown argument ${k}`);
   }
 
   const sessionId = process.env.CLAUDE_CODE_SESSION_ID ?? null;
   if (opts.pending) {
     // The pending start carries no name, stage or iteration: it is ONLY a moment, keyed by session.
-    if (opts.name !== null || opts.kind !== null || opts.stage !== null || opts.iteration !== null || opts.adopt) {
-      return usage("--pending-start takes no --name, --kind, --stage, --iteration or --adopt-pending");
+    if (opts.name !== null || opts.kind !== null || opts.stage !== null || opts.iteration !== null || opts.adopt || opts.mode !== null) {
+      return usage("--pending-start takes no --name, --kind, --stage, --iteration, --adopt-pending or --mode");
     }
     const p = writePendingStart({ ...(opts.base === null ? {} : { base: opts.base }), sessionId });
     if (p === null) return usage("CLAUDE_CODE_SESSION_ID cannot name a pending-start file");
@@ -256,6 +285,9 @@ function main(argv) {
   }
 
   if (opts.adopt && opts.kind !== "run-start") return usage("--adopt-pending applies to --kind run-start only");
+  // Fail-closed on the ARGV VALUE (P5, L62): the refusal names the vocabulary, never the untrusted argv string —
+  // an operator who mistypes `--mode fast` sees what IS allowed, never their own typo echoed back.
+  if (opts.mode !== null && opts.kind !== "run-start") return usage(`--mode applies to --kind run-start only`);
 
   // Every branch below is a membership or grammar test (P5). The terminal fallback is refuse.
   if (!cleanScalar(opts.name, 64) || !NAME_RE.test(opts.name)) return usage(`--name must match ${NAME_RE}`);
@@ -264,6 +296,9 @@ function main(argv) {
   }
   if (opts.stage !== null && (!cleanScalar(opts.stage, 64) || !STAGE_RE.test(opts.stage))) {
     return usage(`--stage must match ${STAGE_RE}`);
+  }
+  if (opts.mode !== null && !MARKER_MODES.has(opts.mode)) {
+    return usage(`--mode must be one of {${[...MARKER_MODES].join(", ")}}`);
   }
   let iteration = null;
   if (opts.iteration !== null) {
@@ -280,9 +315,10 @@ function main(argv) {
     ...(opts.base === null ? {} : { base: opts.base }),
     sessionId,
     adoptPending: opts.adopt,
+    mode: opts.mode,
   });
   process.stdout.write(
-    `marker ${m.seq}: ${m.kind}${m.stage ? ` ${m.stage}` : ""}${m.iteration ? ` iter=${m.iteration}` : ""} ${m.ts}${m.origin ? ` (adopted ${m.origin} start)` : ""}\n`
+    `marker ${m.seq}: ${m.kind}${m.stage ? ` ${m.stage}` : ""}${m.iteration ? ` iter=${m.iteration}` : ""} ${m.ts}${m.origin ? ` (adopted ${m.origin} start)` : ""}${m.mode ? ` (mode ${m.mode})` : ""}\n`
   );
   return 0;
 }

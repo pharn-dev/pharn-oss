@@ -107,7 +107,7 @@ import { join, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
 import { FEATURE_BASE, TOKEN_CLASSES, LEGACY_SCHEMA, SHIP_COMMAND, readMarkers, normalizeMarkers } from "./render-cost-ledger.mjs";
 import { DEFAULT_BASE as MARKERS_DEFAULT_BASE } from "./mark-phase.mjs";
-import { verdictApplicability, APPLICABILITY } from "./ship-outcome-core.mjs";
+import { verdictApplicability, APPLICABILITY, runMode } from "./ship-outcome-core.mjs";
 import { handoffSections, fenceFor, HANDOFF_SECTIONS } from "./loop-record-core.mjs";
 import { pathsFromPlanFiles } from "./plan-files-core.mjs";
 
@@ -370,19 +370,26 @@ function outcomePreamble(cost, o) {
       "- `gate2` is **FLOOR**: it means `verify-report.json` read `PASS` **and**",
       "  `regression-report.json` read `no-regressions` — two enum values produced by tested non-LLM",
       "  checkers. Reaching GATE 2 hands the decision to a human; it is not itself a judgment.",
+      "- `gate2-quick` is **FLOOR too, over a SMALLER stage set**: a `--quick` run whose OWN `pharn-verify`",
+      "  stage-start read `PASS` at its latest iteration. **`gate2-quick` is NOT `gate2`** — quick mode",
+      "  starts no `/pharn-regress` at all, so no regression verdict is read, ever, for this decision; a",
+      "  `regression-report.json` left on disk by an earlier run is never consulted.",
       "- `stop:<stage>` is **ADVISORY** in its stage NAME: `<stage>` is the last `stage-start` marker,",
       "  and markers are written by Bash calls in command prose, outside the `PreToolUse` gate — so a",
       "  written marker does not mean the stage ran, nor the reverse. That the run did **not** meet the",
-      "  `gate2` test is a membership fact; which stage it stopped at rests on marker discipline.",
+      "  `gate2`/`gate2-quick` test is a membership fact; which stage it stopped at rests on marker",
+      "  discipline.",
       "- `stop:unknown` is the terminal fallback: markers exist but none is a `stage-start`.",
       "- `undetermined` means the run's own boundary could not be established from its markers, so no",
       "  verdict could be bound to THIS run. It is neither a failed check nor a stop stage.",
       "",
-      "**Only verdicts that belong to THIS run count.** `gate2` additionally requires that the current run",
-      "(from its latest `run-start`) STARTED both `pharn-regress` and `pharn-verify` at its latest iteration;",
-      "reports an earlier run or attempt left on disk are excluded. This is exact relative to the recorded",
-      "markers, which are themselves ADVISORY, and a stage that started but refused before rewriting its",
-      "report is NOT detected.",
+      "**Only verdicts that belong to THIS run count.** The stage set `gate2`/`gate2-quick` requires is the",
+      "run's OWN mode (read from its run-start marker, never from the SPEC): a FULL run must have STARTED",
+      "both `pharn-regress` and `pharn-verify` at its latest iteration; a QUICK run needs only",
+      "`pharn-verify` — quick mode never starts `/pharn-regress`, so demanding it would make `gate2-quick`",
+      "unreachable. Reports an earlier run or attempt left on disk are excluded either way. This is exact",
+      "relative to the recorded markers, which are themselves ADVISORY, and a stage that started but",
+      "refused before rewriting its report is NOT detected.",
       "",
       "**Neither form says the outcome was correct.** Unlike `/pharn-loop`, whose recorded decision",
       "`check-loop-decision.mjs` re-derives from its own cited reports, there is no equivalent",
@@ -648,7 +655,14 @@ function verdictsSection({ verify, regress, cost, stale = false }) {
     out.push("");
     out.push(...acGateLines(verify.ac_gate));
   }
-  if (!regress) {
+  // A quick `/pharn-ship` run starts no `/pharn-regress` at all (6.23.0), so a `regression-report.json` on
+  // disk — left by an earlier full run over the same feature directory, say — is NEVER this run's regress
+  // verdict. Read from the STRUCTURED location (the run's own mode, from its markers), never inferred from
+  // whether a report happens to exist (L6) — the same discipline `outcome.source` already gets above.
+  const quickShip = Boolean(cost) && cost.command === SHIP_COMMAND && Array.isArray(cost.markers) && runMode(cost.markers) === "quick";
+  if (quickShip) {
+    out.push("- regress: not part of this run: a quick `/pharn-ship` run starts no `/pharn-regress`");
+  } else if (!regress) {
     out.push(`- regress: ${na("no regression-report.json — the run stopped before a regress, or it was blocked")}`);
   } else {
     out.push(...verdictLines("regress", regress.verdict, REGRESS_VERDICTS));

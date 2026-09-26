@@ -124,16 +124,16 @@ a per-feature template choice, and more than one project template.
 | `state`             | `Draft` or `Approved` (unchanged)                                                              |
 | `spec_content_hash` | `""` in a Draft; the body's digest once Approved (unchanged — the pin, fix #4)                 |
 | `spec_template`     | `<id>@sha256:<64 lowercase hex>`, copied verbatim from `check-spec.mjs --resolve-template-ref` |
-| `spec_kind`         | optional (6.18.0): `test-infra`, or `feature` — absent means `feature`. See below              |
+| `spec_kind`         | optional: `test-infra`, `quick` (6.23.0), or `feature` — absent means `feature`. See below     |
 
 `spec_template` is **provenance only**. It records which template a SPEC was filled from and that
 template's digest at the time. No check compares the digest with the template file, by design, so editing
 the template never REDs a SPEC that was already approved. The frontmatter sits outside the body hash, so
 writing this key moves no pin.
 
-### `spec_kind` (6.18.0)
+### `spec_kind` (6.18.0; `quick` added 6.23.0)
 
-What the SPEC's increment **is**, for `/pharn-test` (`ac-tests.md`):
+What the SPEC's increment **is**, for `/pharn-test` (`ac-tests.md`) and, since 6.23.0, for `/pharn-ship --quick`:
 
 - **`feature`** (the default; write no line): `/pharn-test` writes each criterion's test before the build and
   requires it to fail first — test-first.
@@ -141,12 +141,40 @@ What the SPEC's increment **is**, for `/pharn-test` (`ac-tests.md`):
   failing tests first, so `/pharn-test` records a **bootstrap** lock instead: no tests, no run — weaker, and the
   lock says so. `/pharn-spec` offers this when it warns that a runner is missing, and never writes it under
   `--model-approve` — command prose, **advisory**: no check sees who chose the key.
+- **`quick`** (6.23.0): a small change, run through `/pharn-ship --quick`. Written only under a `--quick`
+  invocation, never under `--model-approve` (the same non-obligation as `test-infra`). Like `feature`, a
+  quick SPEC gets test-first evidence — `/pharn-test` writes and runs its criteria's tests before the build
+  exactly as for a feature SPEC — so `spec-template-core.mjs` groups `feature` and `quick` together as
+  `TEST_FIRST_KINDS`; `SPEC_KINDS` is exactly `TEST_FIRST_KINDS ∪ {test-infra}`, disjoint, so a fourth kind
+  added later must be classified into one side or the other before it can be TEMPLATED.
 
 The key is read from the **raw** frontmatter lines that start `spec_kind:` exactly
 (`spec-template-core.mjs` `specKindLines` / `specKindOf`). A near-miss spelling (`spec_kind :`, `Spec_Kind:`) is not
 the key, so that SPEC is a `feature`, the stricter mode. On a templated SPEC, rule 8 REDs a second `spec_kind:`
 line, or a value that is not a member once spaces and tabs are trimmed (a quoted value, a stray CR or U+2028
-included). A legacy SPEC's `spec_kind` is not validated: a legacy SPEC has no AC ids either way.
+included). A legacy SPEC's `spec_kind` is not validated: a legacy SPEC has no AC ids either way — a legacy SPEC
+is therefore never quick.
+
+**`check-spec.mjs --spec-kind <SPEC.md>`** prints the kind as data: `feature`, `test-infra` or `quick` for a
+templated SPEC; an empty line (exit 0) when the value is unusable (two lines, a non-member, or the
+`kind-in-body` layout below); and `feature` for a legacy SPEC. `/pharn-ship`'s Step-2 GATE-1 backstop and
+`/pharn-grill --quick`'s eligibility check both shell this mode rather than re-reading the frontmatter, so
+the printed token and the pin's own reading of the kind can never disagree (P4).
+
+**Rule 9 (`quick`, 6.23.0).** On a templated SPEC whose kind is `quick`: at most `QUICK_MAX_ACS` (3)
+acceptance criteria, and each verified at a `QUICK_LEVELS` (`unit` or `integration`) member — never `e2e`.
+Skipped when the AC section is absent, hidden or duplicated (rule 1 already reports that) and, per item,
+when the verify level is malformed (rule 2 already reports that), so each defect is reported once. Applies
+in every state, so a Draft is caught before approval and every downstream `check-spec-approved` call
+re-checks it. **Why these two bounds** (the maintainer's 2026-09-25 decision, recorded here so neither
+reads as a magic number): quick mode keeps test-first evidence and drops the regression check
+(`/pharn-ship`'s `## Quick mode`), so what it may carry is a change whose evidence is a few fast tests —
+three criteria bound the change a human approves at GATE 1, and an `e2e` criterion needs the slowest gate
+and its own runner, which is exactly what quick mode exists to let a small change avoid. A larger or
+end-to-end change takes the full pipeline. **Sections, decided:** a quick SPEC omits no required section
+and writes no optional section — the same shape a `feature` SPEC uses; nothing about being quick shortens
+Intent, Scope, Constraints or Assumptions, because quick mode runs no regression check, so Scope's
+out-of-scope list is the only written statement of what the change must not touch.
 
 **The pin covers it.** Unlike every other frontmatter key, a `spec_kind:` line is part of the approved intent: it
 decides whether the criteria are tested first. So when the frontmatter carries one, `check-spec.mjs` hashes that raw
@@ -172,10 +200,11 @@ is unchanged, because that is the collision itself, so the re-approval the remed
 makes the ambiguous layout unusable, but it cannot make a person re-approve.
 
 **A template may carry the key.** `validateTemplate` accepts a template with or without a `spec_kind:` line, by design,
-so a project template carrying `spec_kind: test-infra` would start every Draft filled from it as a bootstrap SPEC.
-What stands between that and an approved bootstrap is `/pharn-spec`'s instruction to write the key only when the human
-chose the setup increment, and the human approval itself — both advisory. Review a template change that adds the
-key like any change to the template.
+so a project template carrying `spec_kind: test-infra` would start every Draft filled from it as a bootstrap SPEC —
+and, since 6.23.0, the same bound extends to `spec_kind: quick`: a project template carrying it starts every Draft
+as quick. What stands between that and an approved quick or bootstrap SPEC is `/pharn-spec`'s instruction to write
+the key only when the human chose that path (Step 4's trade sentence, for quick), and the human approval itself —
+both advisory. Review a template change that adds the key like any change to the template.
 
 ## Sections
 
@@ -241,7 +270,7 @@ outside the criteria. An edge case that matters **is** a criterion.
   the writer what belongs there. `/pharn-spec` removes every one when it writes the SPEC, and a comment
   that remains is a RED.
 
-## The rules (enforced by `pharn/floor/check-spec.mjs` through `pharn/floor/spec-template-core.mjs`)
+## The rules (an open form, 6.23.0 — enforced by `pharn/floor/check-spec.mjs` through `pharn/floor/spec-template-core.mjs`)
 
 | #   | rule                                                                                            | RED kind           | primitive                 |
 | --- | ----------------------------------------------------------------------------------------------- | ------------------ | ------------------------- |
@@ -252,11 +281,13 @@ outside the criteria. An edge case that matters **is** a criterion.
 | 5   | an optional section that is present has a non-blank line                                        | `optional-section` | presence                  |
 | 6   | no guidance comment remains                                                                     | `guidance`         | regex                     |
 | 7   | `spec_template` is control-character-free, matches `<id>@sha256:<64-hex>`, and names a known id | `template`         | regex + membership        |
-| 8   | at most one `spec_kind:` line, naming `feature` or `test-infra`                                 | `spec-kind`        | count + membership        |
+| 8   | at most one `spec_kind:` line, naming `feature`, `test-infra` or `quick`                        | `spec-kind`        | count + membership        |
+| 9   | (6.23.0) a `quick` SPEC: at most 3 criteria, each verified at `unit` or `integration`           | `quick`            | membership + count        |
 
 Rules 2 and 4 are skipped when their section is missing, hidden or duplicated, because rule 1 (or the
-legacy section check) already reports it. A RED names a file line number, an AC id or a value's length,
-never the text itself, because the SPEC body is untrusted data (P2).
+legacy section check) already reports it. Rule 9 is skipped for the same reason when the AC section is
+unusable, and per item when the level is malformed (rule 2 already reports that). A RED names a file line
+number, an AC id or a value's length, never the text itself, because the SPEC body is untrusted data (P2).
 
 ## What the rules ARE and are NOT (P0)
 

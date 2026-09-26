@@ -290,7 +290,7 @@ test("spec-kind — an INVALID kind REDs as spec-kind, and the pin with it (chec
     const r = run(root);
     assert.equal(r.code, 1, r.out);
     assert.deepEqual(r.kinds, ["pin", "spec-kind"], r.out);
-    assert.match(r.out, /not one of \{feature, test-infra\}/);
+    assert.match(r.out, /not one of \{feature, test-infra, quick\}/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -324,6 +324,70 @@ test("--spec exit 4 — a test-infra SPEC is BOOTSTRAP with its levels; preceden
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+// ── quick (6.23.0): a spec_kind: quick SPEC is TEST_FIRST_KINDS, exactly like feature ──────────────────
+
+/** A genuinely valid `spec_kind: quick` SPEC (unlike `specText({kind:"quick"})`, which keeps the shared
+ *  fixture's e2e AC-2 and would RED spec-template-core's own quick rule 9 under a full validate — this
+ *  checker's `--spec`/mapping logic does not run rule 9 itself, but the SHELLED `check-plan-spec-agree.mjs`
+ *  chain check does, via `check-spec-approved.mjs`, so a quick fixture used across the chain must satisfy it). */
+function quickSpecText() {
+  const t = specText({ draft: true, kind: "quick" }).replace("  - verify: e2e\n", "  - verify: integration\n");
+  const tmp = mkdtempSync(join(tmpdir(), "act-quick-spec-"));
+  try {
+    writeFileSync(join(tmp, "SPEC.md"), t);
+    const hash = spawnSync(process.execPath, [CHECK_SPEC, "--hash", join(tmp, "SPEC.md")], { encoding: "utf8" }).stdout.trim();
+    return t.replace("state: Draft", "state: Approved").replace('spec_content_hash: ""', `spec_content_hash: ${hash}`);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+test("--spec: a quick SPEC is TEMPLATED (0), exactly like feature", () => {
+  const root = world();
+  try {
+    const f = (n) => `pharn/features/${NAME}/${n}`;
+    writeFileSync(join(root, f("SPEC.md")), specText({ kind: "quick" }));
+    const r = spawnSync(process.execPath, [CHECK, "--spec", f("SPEC.md")], { cwd: root, encoding: "utf8" });
+    assert.equal(r.status, 0, r.stdout);
+    assert.match(r.stdout, /^TEMPLATED — /);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("full mode: a valid mapping over a quick SPEC is GREEN, exactly as for a feature SPEC", () => {
+  const quickSpec = quickSpecText();
+  const quickHash = quickSpec.match(/^spec_content_hash: ([0-9a-f]{64})$/m)[1];
+  const root = world({
+    spec: quickSpec,
+    ac: acTests({
+      hash: quickHash,
+      mapping: [`- AC-1 | unit | \`${UNIT}\` | src/demo.js#reset(): void`, `- AC-2 | integration | \`${E2E}\` | src/demo.js#send(): void`],
+    }),
+    plan: planText().replace(HASH, quickHash),
+  });
+  try {
+    const r = run(root);
+    assert.equal(r.code, 0, r.out);
+    assert.match(r.out, /^GREEN — /);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("full mode: a quick SPEC's mapping is checked the SAME WAY a feature SPEC's is — level-mismatch still fires", () => {
+  const quickSpec = quickSpecText();
+  const quickHash = quickSpec.match(/^spec_content_hash: ([0-9a-f]{64})$/m)[1];
+  onlyKind(
+    {
+      spec: quickSpec,
+      ac: acTests({ hash: quickHash, mapping: [`- AC-1 | integration | \`${UNIT}\` | x`, `- AC-2 | integration | \`${E2E}\` | y`] }),
+      plan: planText().replace(HASH, quickHash),
+    },
+    "level-mismatch"
+  );
 });
 
 test("✧ L35 — specVerdict IS the --spec reading: the CLI prints its line and exits its code, for every token", () => {

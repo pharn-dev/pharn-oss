@@ -67,12 +67,20 @@ function makeSpec({ spec_id = "my-feature", state = "Draft", hash, body = BODY, 
 }
 
 // Write the SPEC to a fresh temp dir, run the checker (default or --hash), clean up, return the spawn result.
-function runWith(specText, { hashMode = false, specIdMode = false, stateMode = false } = {}) {
+function runWith(specText, { hashMode = false, specIdMode = false, stateMode = false, specKindMode = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "pharn-spec-"));
   try {
     const specPath = join(dir, "SPEC.md");
     writeFileSync(specPath, specText);
-    const argv = hashMode ? ["--hash", specPath] : specIdMode ? ["--spec-id", specPath] : stateMode ? ["--state", specPath] : [specPath];
+    const argv = hashMode
+      ? ["--hash", specPath]
+      : specIdMode
+        ? ["--spec-id", specPath]
+        : stateMode
+          ? ["--state", specPath]
+          : specKindMode
+            ? ["--spec-kind", specPath]
+            : [specPath];
     return spawnSync(process.execPath, [CHECK, ...argv], { encoding: "utf8" });
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -497,6 +505,92 @@ test("✧ L3: the BOM strip is not a masking layer — a frontmatter-less file s
   }
 });
 
+// ── --spec-kind (6.23.0): the print mode beside --state and --spec-id ────────────────────────────────────
+
+test("--spec-kind: feature (no line) prints feature", () => {
+  const r = runWith(makeSpec(), { specKindMode: true });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.stdout, "feature\n");
+});
+
+test("--spec-kind: a templated SPEC prints test-infra / quick verbatim", () => {
+  for (const kind of ["test-infra", "quick"]) {
+    const dir = mkdtempSync(join(tmpdir(), "pharn-spec-kind-"));
+    try {
+      const p = join(dir, "SPEC.md");
+      writeFileSync(
+        p,
+        `---\nspec_id: x\nstate: Draft\nspec_template: pharn-default@sha256:${"a".repeat(64)}\nspec_kind: ${kind}\n---\n\n## Intent\n\nx\n`
+      );
+      const r = spawnSync(process.execPath, [CHECK, "--spec-kind", p], { encoding: "utf8" });
+      assert.equal(r.status, 0, r.stdout + r.stderr);
+      assert.equal(r.stdout, `${kind}\n`, `expected ${kind}`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test("--spec-kind: a LEGACY SPEC carrying spec_kind: quick (no spec_template) still prints feature", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pharn-spec-kind-legacy-"));
+  try {
+    const p = join(dir, "SPEC.md");
+    writeFileSync(p, "---\nspec_id: x\nstate: Draft\nspec_kind: quick\n---\n\n## Intent\n\nx\n");
+    const r = spawnSync(process.execPath, [CHECK, "--spec-kind", p], { encoding: "utf8" });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.equal(r.stdout, "feature\n", "a legacy SPEC's spec_kind is never validated — no legacy SPEC is ever quick");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("--spec-kind: an invalid value, and a body-first kind line, both print an EMPTY line at exit 0", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pharn-spec-kind-invalid-"));
+  try {
+    const invalid = join(dir, "invalid.md");
+    writeFileSync(
+      invalid,
+      "---\nspec_id: x\nstate: Draft\nspec_template: pharn-default@sha256:" +
+        "a".repeat(64) +
+        "\nspec_kind: library\n---\n\n## Intent\n\nx\n"
+    );
+    const r1 = spawnSync(process.execPath, [CHECK, "--spec-kind", invalid], { encoding: "utf8" });
+    assert.equal(r1.status, 0, r1.stdout + r1.stderr);
+    assert.equal(r1.stdout, "\n");
+
+    const bodyFirst = join(dir, "body-first.md");
+    writeFileSync(
+      bodyFirst,
+      "---\nspec_id: x\nstate: Draft\nspec_template: pharn-default@sha256:" + "a".repeat(64) + "\n---\nspec_kind: quick\n\n## Intent\n\nx\n"
+    );
+    const r2 = spawnSync(process.execPath, [CHECK, "--spec-kind", bodyFirst], { encoding: "utf8" });
+    assert.equal(r2.status, 0, r2.stdout + r2.stderr);
+    assert.equal(r2.stdout, "\n");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("--spec-kind: unreadable and no-frontmatter both exit 1 with a stderr reason", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pharn-spec-kind-unreadable-"));
+  try {
+    const missing = join(dir, "missing.md");
+    const r1 = spawnSync(process.execPath, [CHECK, "--spec-kind", missing], { encoding: "utf8" });
+    assert.equal(r1.status, 1);
+    assert.equal(r1.stdout, "");
+    assert.match(r1.stderr, /check-spec:/);
+
+    const nofm = join(dir, "nofm.md");
+    writeFileSync(nofm, "# no frontmatter\n");
+    const r2 = spawnSync(process.execPath, [CHECK, "--spec-kind", nofm], { encoding: "utf8" });
+    assert.equal(r2.status, 1);
+    assert.equal(r2.stdout, "");
+    assert.match(r2.stderr, /no YAML frontmatter/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════════
 // The spec-template rules (pharn/pharn-contracts/spec-template.md) — opt-in by the `spec_template` key.
 //
@@ -764,13 +858,48 @@ const RULE_CASES = [
       ["a U+2028 inside the value", "test-infra\u2028"],
     ],
   },
+  {
+    // 6.23.0. A `spec_kind: quick` SPEC additionally bounds its Acceptance Criteria (rule 9).
+    kind: "quick",
+    quickBody: [
+      [
+        "four criteria (over QUICK_MAX_ACS)",
+        (b) =>
+          withSection(
+            b,
+            "Acceptance Criteria",
+            [1, 2, 3, 4].map((n) => `- **AC-${n}** Given a When b Then c\n  - verify: unit`).join("\n")
+          ),
+      ],
+      ["an e2e criterion (outside QUICK_LEVELS)", acWith("- **AC-1** Given a When b Then c\n  - verify: e2e")],
+      [
+        "one e2e among otherwise-valid criteria",
+        acWith("- **AC-1** Given a When b Then c\n  - verify: unit\n- **AC-2** Given a When b Then c\n  - verify: e2e"),
+      ],
+    ],
+  },
 ];
 
-test("✧ L34 — RULE_CASES covers all eight kinds, each with at least one mutant", () => {
+test("✧ L34 — RULE_CASES covers all NINE kinds (an open form — 6.23.0 added `quick`), each with at least one mutant", () => {
   const kinds = RULE_CASES.map((r) => r.kind);
-  assert.deepEqual(kinds, ["section", "ac", "clarification", "out-of-scope", "optional-section", "guidance", "template", "spec-kind"]);
+  assert.deepEqual(kinds, [
+    "section",
+    "ac",
+    "clarification",
+    "out-of-scope",
+    "optional-section",
+    "guidance",
+    "template",
+    "spec-kind",
+    "quick",
+  ]);
   for (const r of RULE_CASES) {
-    const n = (r.cases?.length ?? 0) + (r.approved?.length ?? 0) + (r.template?.length ?? 0) + (r.specKind?.length ?? 0);
+    const n =
+      (r.cases?.length ?? 0) +
+      (r.approved?.length ?? 0) +
+      (r.template?.length ?? 0) +
+      (r.specKind?.length ?? 0) +
+      (r.quickBody?.length ?? 0);
     assert.ok(n > 0, `${r.kind} has no mutant`);
   }
 });
@@ -794,7 +923,63 @@ for (const r of RULE_CASES) {
   for (const [label, value] of r.specKind ?? []) {
     test(`RULE ${r.kind}: spec_kind with ${label} → RED ${r.kind} only`, () => expectOnly(runWith(makeT({ kind: value })), label));
   }
+  for (const [label, mutate] of r.quickBody ?? []) {
+    test(`RULE ${r.kind}: ${label} (kind: quick) → RED ${r.kind} only`, () =>
+      expectOnly(runWith(makeT({ kind: "quick", body: mutate(T_BODY) })), label));
+  }
 }
+
+// ── quick (6.23.0): controls proving rule 9 does NOT double-report a defect rule 1/2 already caught ────
+
+test("RULE quick control: a malformed verify level REDs ac only (rule 9 skips a malformed level)", () => {
+  const r = runWith(makeT({ kind: "quick", body: acWith("- **AC-1** Given a When b Then c\n  - verify: manual")(T_BODY) }));
+  assert.equal(r.status, 1, r.stdout);
+  assert.deepEqual([...new Set(redKinds(r.stdout))], ["ac"], `expected only ac, got ${r.stdout}`);
+});
+
+test("RULE quick control: a missing AC section REDs section only (rule 9 needs a real section to bound)", () => {
+  const r = runWith(makeT({ kind: "quick", body: acWith(null)(T_BODY) }));
+  assert.equal(r.status, 1, r.stdout);
+  assert.deepEqual([...new Set(redKinds(r.stdout))], ["section"], `expected only section, got ${r.stdout}`);
+});
+
+test("quick control: 1-3 unit/integration criteria are GREEN", () => {
+  const r = runWith(
+    makeT({
+      kind: "quick",
+      body: acWith(
+        "- **AC-1** Given a When b Then c\n  - verify: unit\n- **AC-2** Given a When b Then c\n  - verify: integration\n- **AC-3** Given a When b Then c\n  - verify: unit"
+      )(T_BODY),
+    })
+  );
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+});
+
+// ── the partition invariant: SPEC_KINDS = TEST_FIRST_KINDS ∪ {test-infra}, disjoint (6.23.0) ────────────
+
+test("✧ PARTITION: SPEC_KINDS is exactly TEST_FIRST_KINDS ∪ {test-infra}, and the two are disjoint", async () => {
+  const { SPEC_KINDS, TEST_FIRST_KINDS } = await import("./spec-template-core.mjs");
+  assert.deepEqual([...SPEC_KINDS].sort(), [...new Set([...TEST_FIRST_KINDS, "test-infra"])].sort());
+  assert.ok(!TEST_FIRST_KINDS.includes("test-infra"), "TEST_FIRST_KINDS and {test-infra} must be disjoint");
+  assert.deepEqual([...TEST_FIRST_KINDS].sort(), ["feature", "quick"]);
+});
+
+// ── the pin covers the kind: flipping feature <-> quick after approval is drift (6.23.0) ────────────────
+
+test("THE PIN: an Approved feature SPEC flipped to spec_kind: quick REDs pin (the kind is part of the pinned content)", () => {
+  const featurePin = runWith(makeT(), { hashMode: true }).stdout.trim();
+  const r = runWith(makeT({ state: "Approved", hash: featurePin, kind: "quick" }));
+  assert.equal(r.status, 1, r.stdout);
+  assert.ok(redKinds(r.stdout).includes("pin"), `expected a pin RED, got ${r.stdout}`);
+});
+
+test("THE PIN: an Approved quick SPEC flipped to feature (line removed) REDs pin", () => {
+  const quickBody = acWith("- **AC-1** Given a When b Then c\n  - verify: unit")(T_BODY);
+  const quickPin = runWith(makeT({ kind: "quick", body: quickBody }), { hashMode: true }).stdout.trim();
+  const r = runWith(makeT({ state: "Approved", hash: quickPin, body: quickBody })); // kind: undefined -> no spec_kind line
+  assert.equal(r.status, 1, r.stdout);
+  assert.ok(redKinds(r.stdout).includes("pin"), `expected a pin RED, got ${r.stdout}`);
+});
 
 // ── spec_kind (6.18.0): the members are GREEN, a legacy SPEC is untouched, and the PIN covers the line ──────────
 
@@ -960,6 +1145,49 @@ test("★ WIRING — /pharn-spec's Draft and re-validate steps name exactly the 
   assert.equal(names(recompute.replace("`pin`", "`pin` or `kind-in-body`"), "kind-in-body"), true, "control: a moved kind is seen");
   assert.equal(names(draftStep.replaceAll("`kind-in-body`", "`pin`"), "kind-in-body"), false, "control: a dropped kind is seen");
 });
+
+// ── ★ WIRING (6.23.0): the --spec-kind line pinned in pharn-ship.md's GATE-1 backstop and pharn-grill.md's
+// eligibility check, each exactly once, EXECUTED (never merely read) on a quick and a feature SPEC ──────
+
+for (const [label, cmdPath] of [
+  ["pharn-ship.md", join(REPO, ".claude", "commands", "pharn-ship.md")],
+  ["pharn-grill.md", join(REPO, ".claude", "commands", "pharn-grill.md")],
+]) {
+  test(`★ WIRING — ${label} pins exactly one --spec-kind line, executed on a quick and a feature SPEC`, () => {
+    const hits = readFileSync(cmdPath, "utf8")
+      .split(/\r?\n/)
+      .filter((l) => /node pharn\/floor\/check-spec\.mjs --spec-kind pharn\/features\/<name>\/SPEC\.md/.test(l));
+    assert.equal(hits.length, 1, `expected ONE pinned --spec-kind line in ${label}, found ${hits.length}`);
+    for (const [kind, expect] of [
+      ["quick", "quick"],
+      [undefined, "feature"],
+    ]) {
+      const dir = mkdtempSync(join(tmpdir(), "pharn-wiring-spec-kind-"));
+      try {
+        const specPath = join(dir, "SPEC.md");
+        writeFileSync(specPath, kind === undefined ? makeSpec() : makeT({ kind }));
+        const line = hits[0].trim().replace("pharn/features/<name>/SPEC.md", specPath);
+        const r = spawnSync("sh", ["-c", line], { cwd: REPO, encoding: "utf8" });
+        assert.equal(r.status, 0, r.stdout + r.stderr);
+        assert.equal(r.stdout, `${expect}\n`, `${label}, kind=${JSON.stringify(kind)}: expected ${expect}`);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+    // Negative control (mirrors the --resolve-template-ref precedent above): a misspelled flag must fail,
+    // so the positive results above are not vacuous.
+    const dir = mkdtempSync(join(tmpdir(), "pharn-wiring-spec-kind-bad-"));
+    try {
+      const specPath = join(dir, "SPEC.md");
+      writeFileSync(specPath, makeT({ kind: "quick" }));
+      const bad = hits[0].trim().replace("--spec-kind", "--spec-kine").replace("pharn/features/<name>/SPEC.md", specPath);
+      const r = spawnSync("sh", ["-c", bad], { cwd: REPO, encoding: "utf8" });
+      assert.notEqual(r.status, 0, "a misspelled --spec-kine flag must fail");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
 
 test("THE PIN's layout rule is exactly the FIRST body line at column 0: a blank first line or a leading space is GREEN, with a pin of its own", () => {
   const infraPin = bodyHash(`spec_kind: test-infra\n${T_BODY}`);

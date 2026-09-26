@@ -315,3 +315,65 @@ test("PENDING is OPT-IN: a run-start WITHOUT --adopt-pending (every /pharn-loop 
   const r = run(["--name", "feat", "--kind", "stage-start", "--stage", "pharn-plan", "--adopt-pending", "--base", base]);
   assert.equal(r.status, 2, "--adopt-pending on a non-run-start kind is a usage error");
 });
+
+// ---------------------------------------------------------------- --mode (6.23.0, /pharn-ship --quick)
+
+test("--mode quick is accepted on run-start: recorded on disk and printed", () => {
+  const base = mkdtempSync(join(tmpdir(), "mark-phase-mode-"));
+  const out = execFileSync("node", [CLI, "--name", "feat", "--kind", "run-start", "--mode", "quick", "--base", base], { encoding: "utf8" });
+  assert.match(out, /\(mode quick\)/);
+  const [m] = lines(join(base, "feat", "markers.jsonl"));
+  assert.equal(m.mode, "quick");
+});
+
+test("--mode is refused on every non-run-start kind — exit 2, nothing written (lstat proves it)", () => {
+  const base = mkdtempSync(join(tmpdir(), "mark-phase-mode-"));
+  for (const kind of [...MARKER_KINDS].filter((k) => k !== "run-start")) {
+    const r = run(["--name", "feat", "--kind", kind, "--mode", "quick", "--base", base]);
+    assert.equal(r.status, 2, `--mode with --kind ${kind} must be refused`);
+  }
+  assert.ok(!existsSync(join(base, "feat", "markers.jsonl")), "a refused --mode call must write NOTHING");
+});
+
+test("--mode fast (outside MARKER_MODES) is refused on run-start too — exit 2, nothing written", () => {
+  const base = mkdtempSync(join(tmpdir(), "mark-phase-mode-"));
+  const r = run(["--name", "feat", "--kind", "run-start", "--mode", "fast", "--base", base]);
+  assert.equal(r.status, 2);
+  assert.ok(!existsSync(join(base, "feat", "markers.jsonl")), "a refused --mode value must write NOTHING");
+  // MUTATION CONTROL: the same call with the one accepted value succeeds, so the refusal above is real.
+  assert.equal(run(["--name", "feat", "--kind", "run-start", "--mode", "quick", "--base", base]).status, 0);
+});
+
+test("--mode absent: the marker carries NO mode key at all — byte-identical to a pre-6.23.0 marker (L41)", () => {
+  const base = mkdtempSync(join(tmpdir(), "mark-phase-mode-"));
+  markPhase({ name: "feat", kind: "run-start", base });
+  const [m] = lines(join(base, "feat", "markers.jsonl"));
+  assert.equal("mode" in m, false);
+  // And through the real CLI, whose printed line must not claim a mode either.
+  const base2 = mkdtempSync(join(tmpdir(), "mark-phase-mode-cli-"));
+  const out = execFileSync("node", [CLI, "--name", "feat", "--kind", "run-start", "--base", base2], { encoding: "utf8" });
+  assert.doesNotMatch(out, /\(mode /);
+});
+
+test("--mode with --adopt-pending: the marker carries BOTH origin: pending and mode: quick", () => {
+  const base = mkdtempSync(join(tmpdir(), "mark-phase-mode-pending-"));
+  writePendingStart({ base, sessionId: SESS, now: new Date("2026-09-21T10:00:00.000Z") });
+  const m = markPhase({
+    name: "feat",
+    kind: "run-start",
+    base,
+    sessionId: SESS,
+    now: new Date("2026-09-21T10:07:00.000Z"),
+    adoptPending: true,
+    mode: "quick",
+  });
+  assert.equal(m.origin, "pending");
+  assert.equal(m.mode, "quick");
+  assert.equal(m.ts, "2026-09-21T10:00:00.000Z", "the adopted moment still wins, exactly as without --mode");
+});
+
+test("--pending-start refuses --mode, exactly as it refuses --name/--kind/--stage/--iteration/--adopt-pending", () => {
+  const base = mkdtempSync(join(tmpdir(), "mark-phase-mode-pending-cli-"));
+  const r = run(["--pending-start", "--mode", "quick", "--base", base]);
+  assert.equal(r.status, 2, "--pending-start with --mode is a usage error");
+});

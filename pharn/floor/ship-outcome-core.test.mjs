@@ -22,30 +22,40 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   GATE2,
+  GATE2_QUICK,
   STOP_PREFIX,
   UNKNOWN_STAGE,
   OUTCOME_SOURCE,
   SHIP_DECISION_RE,
   SHIP_DECISION_FORMS,
+  QUICK_VERDICT_STAGES,
+  VERDICT_STAGES,
   deriveShipOutcome,
   readShipOutcome,
   readVerdict,
   lastStartedStage,
   recordedIterations,
+  runMode,
+  verdictStages,
 } from "./ship-outcome-core.mjs";
+// `verdictApplicability` and `APPLICABILITY` are imported further below (this file's existing
+// APPLICABILITY section), and ES module imports hoist — importing the same binding twice is a
+// SyntaxError, so the quick-mode tests above reuse that later import rather than re-declaring it here.
 
 const scratch = () => mkdtempSync(join(tmpdir(), "pharn-ship-outcome-"));
 
 /** A marker, shaped as `readMarkers()` hands them over. `ts`/`session_id` are irrelevant to this module
  *  — it reads `kind`, `stage` and `iteration` only — so they are present but unused, which keeps the
- *  fixture honest about the real record rather than a trimmed invention. */
-const marker = (seq, kind, stage = null, iteration = null) => ({
+ *  fixture honest about the real record rather than a trimmed invention. `mode` (6.23.0) is omitted
+ *  entirely unless given, exactly as a pre-6.23.0 marker (and a non-run-start marker) never carries it. */
+const marker = (seq, kind, stage = null, iteration = null, mode) => ({
   seq,
   kind,
   stage,
   iteration,
   ts: `2026-09-22T00:00:${String(seq).padStart(2, "0")}.000Z`,
   session_id: "s1",
+  ...(mode !== undefined ? { mode } : {}),
 });
 
 /** The marker trail a full ship run leaves: run-start, then each stage bracketed by an orchestrator. */
@@ -61,6 +71,20 @@ const fullRun = () => [
   marker(9, "orchestrator"),
   marker(10, "stage-start", "pharn-verify", 1),
   marker(11, "orchestrator"),
+];
+
+/** The marker trail a `--quick` ship run leaves (6.23.0): the run-start carries `mode: "quick"`, and there
+ *  is no `pharn-regress` stage-start at all — a quick run never starts one. */
+const quickRun = () => [
+  marker(1, "run-start", null, null, "quick"),
+  marker(2, "stage-start", "pharn-spec"),
+  marker(3, "orchestrator"),
+  marker(4, "stage-start", "pharn-plan"),
+  marker(5, "orchestrator"),
+  marker(6, "stage-start", "pharn-build", 1),
+  marker(7, "orchestrator"),
+  marker(8, "stage-start", "pharn-verify", 1),
+  marker(9, "orchestrator"),
 ];
 
 const derive = (markers, verifyVerdict, regressVerdict) => deriveShipOutcome({ markers, verifyVerdict, regressVerdict });
@@ -162,10 +186,10 @@ test("every derived outcome carries the derived source — never the loop's", ()
 // ── the closed vocabulary (L36) ──────────────────────────────────────────────────────────────────────
 
 test("L36 CLOSURE: SHIP_DECISION_FORMS is the whole vocabulary, and every form is reachable", () => {
-  assert.equal(SHIP_DECISION_FORMS.length, 4, "non-vacuity + closure: losing or gaining a form must fail here");
+  assert.equal(SHIP_DECISION_FORMS.length, 5, "non-vacuity + closure: losing or gaining a form must fail here");
   assert.deepEqual(
     SHIP_DECISION_FORMS.map((f) => f.form),
-    ["gate2", "stop:<stage>", "stop:unknown", "undetermined"],
+    ["gate2", "gate2-quick", "stop:<stage>", "stop:unknown", "undetermined"],
     "equality, not per-member presence — a variant spelling of ANY member fails"
   );
 
@@ -173,22 +197,107 @@ test("L36 CLOSURE: SHIP_DECISION_FORMS is the whole vocabulary, and every form i
   // nothing can emit is a vocabulary for a function that does not exist.
   const produced = new Set([
     derive(fullRun(), "PASS", "no-regressions").decision,
+    derive(quickRun(), "PASS", "no-regressions").decision,
     derive(fullRun(), "FAIL", "no-regressions").decision,
     derive([marker(1, "run-start")], "FAIL", "x").decision,
     // A run whose boundary cannot be established: markers, but no run-start.
     derive([marker(1, "stage-start", "pharn-build", 1)], "PASS", "no-regressions").decision,
   ]);
-  assert.equal(produced.size, 4, "the four forms must be distinct and all reachable");
+  assert.equal(produced.size, 5, "the five forms must be distinct and all reachable");
   for (const d of produced) assert.match(d, SHIP_DECISION_RE);
 
   // Exactly one form is parameterized, and it is the one at risk of a variant spelling.
   assert.equal(SHIP_DECISION_FORMS.filter((f) => f.parameterized).length, 1);
-  // Exactly one form is FLOOR. The split is data the suite ranges over, not a sentence in a comment.
+  // Exactly two forms are FLOOR. The split is data the suite ranges over, not a sentence in a comment.
   assert.deepEqual(
     SHIP_DECISION_FORMS.filter((f) => f.floor).map((f) => f.form),
-    ["gate2"],
-    "only gate2 reduces to two sub-stage verdict enums; both stop: forms rest on marker discipline"
+    ["gate2", "gate2-quick"],
+    "gate2 and gate2-quick each reduce to tested non-LLM verdict enums; both stop: forms rest on marker discipline"
   );
+});
+
+// ── quick mode (6.23.0) ──────────────────────────────────────────────────────────────────────────────
+
+test("runMode: quick iff the CURRENT run's run-start carries mode === quick; an earlier run's mode never leaks forward", () => {
+  assert.equal(runMode(quickRun()), "quick");
+  assert.equal(runMode(fullRun()), "full");
+  assert.equal(runMode([]), "full");
+  // Garbage/near-miss values read as full — the safe, under-claiming direction (the header states it).
+  for (const bad of ["QUICK", "Quick", "fast", 1, true, ""]) {
+    assert.equal(runMode([marker(1, "run-start", null, null, bad)]), "full", `mode=${JSON.stringify(bad)} must read as full`);
+  }
+  // A LATER full run-start after an earlier quick one: the earlier quick mode must not leak forward.
+  const laterFull = [...quickRun(), marker(20, "run-start"), marker(21, "stage-start", "pharn-verify", 1)];
+  assert.equal(runMode(laterFull), "full");
+  // And the reverse: a later quick run-start after an earlier full one.
+  const laterQuick = [...fullRun(), marker(20, "run-start", null, null, "quick"), marker(21, "stage-start", "pharn-verify", 1)];
+  assert.equal(runMode(laterQuick), "quick");
+});
+
+test("verdictStages: full needs pharn-regress + pharn-verify; quick needs pharn-verify alone", () => {
+  assert.deepEqual(verdictStages("full"), VERDICT_STAGES);
+  assert.deepEqual(verdictStages("quick"), QUICK_VERDICT_STAGES);
+  assert.deepEqual(QUICK_VERDICT_STAGES, ["pharn-verify"]);
+});
+
+test("verdictApplicability carries {mode, stages} alongside status, for both the CURRENT and UNKNOWN branches", () => {
+  const cur = verdictApplicability(quickRun());
+  assert.equal(cur.mode, "quick");
+  assert.deepEqual(cur.stages, ["pharn-verify"]);
+  const unk = verdictApplicability([]);
+  assert.equal(unk.status, "unknown");
+  assert.equal(unk.mode, "full");
+  assert.deepEqual(unk.stages, VERDICT_STAGES);
+});
+
+test("gate2-quick: quick + current + verify PASS, regardless of any regress verdict on disk — it is NEVER consulted", () => {
+  const q = quickRun();
+  for (const regress of ["no-regressions", "regressions", "inconclusive", null, undefined]) {
+    assert.equal(derive(q, "PASS", regress).decision, GATE2_QUICK, `regress=${JSON.stringify(regress)} must not matter`);
+  }
+});
+
+test("a quick run whose verify did not PASS falls to stop:<stage>, never gate2-quick", () => {
+  for (const [v, r] of [
+    ["FAIL", "no-regressions"],
+    ["INCOMPLETE", null],
+    ["INCONCLUSIVE", null],
+    [null, null],
+  ]) {
+    const d = derive(quickRun(), v, r).decision;
+    assert.notEqual(d, GATE2_QUICK, `verify=${v}: must not be gate2-quick`);
+    assert.notEqual(d, GATE2, `verify=${v}: must not be gate2 either`);
+  }
+});
+
+test("a FULL run with no regress stage-start must NEVER derive gate2 (L37 probe)", () => {
+  const noRegress = fullRun().filter((m) => m.stage !== "pharn-regress");
+  const d = derive(noRegress, "PASS", "no-regressions").decision;
+  assert.notEqual(d, GATE2, "a full run's own regress stage-start is still required for gate2");
+  assert.notEqual(d, GATE2_QUICK, "and it must not silently read as a quick pass either");
+  assert.equal(d, `${STOP_PREFIX}pharn-verify`);
+});
+
+test("a quick run's outcome with a `regressions` report on disk must still derive gate2-quick (L37 probe)", () => {
+  assert.equal(derive(quickRun(), "PASS", "regressions").decision, GATE2_QUICK);
+});
+
+test("EITHER MISREADING UNDER-CLAIMS, NEVER OVER-CLAIMS", () => {
+  // A quick run whose --mode quick marker was skipped: reads as full, so with no regress stage-start its
+  // outcome is stop:pharn-verify, never gate2.
+  const skippedMode = quickRun().map((m) => (m.kind === "run-start" ? { ...m, mode: undefined } : m));
+  assert.equal(derive(skippedMode, "PASS", "no-regressions").decision, `${STOP_PREFIX}pharn-verify`);
+  // A full run whose run-start wrongly carries mode: "quick": yields gate2-quick at most, never the
+  // stronger gate2 a genuine full run with a green regress would have earned.
+  const wronglyQuick = fullRun().map((m) => (m.kind === "run-start" ? { ...m, mode: "quick" } : m));
+  assert.equal(derive(wronglyQuick, "PASS", "no-regressions").decision, GATE2_QUICK);
+});
+
+test("SHIP_DECISION_RE closure rejects near-misses of gate2-quick", () => {
+  for (const bad of ["gate2-Quick", "quick-gate2", "gate2_quick", "gate2-quick "]) {
+    assert.doesNotMatch(bad, SHIP_DECISION_RE, `${JSON.stringify(bad)} must NOT be in the vocabulary`);
+  }
+  assert.match(GATE2_QUICK, SHIP_DECISION_RE);
 });
 
 test("★ NEGATIVE CONTROL: the closure regex REJECTS the near-misses a closure exists to catch", () => {

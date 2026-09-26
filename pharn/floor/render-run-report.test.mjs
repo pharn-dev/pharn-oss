@@ -1305,6 +1305,92 @@ test("Outcome: an absent or unrecognized source says so rather than picking a st
   }
 });
 
+// ── quick (6.23.0): a --quick ship ledger's outcome and regress line ────────────────────────────────────
+
+test("Outcome preamble: the gate2-quick bullet is present and states gate2-quick is NOT gate2", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", {
+      "cost.json": shipCost({
+        outcome: { decision: "gate2-quick", iterations: 1, source: "verdicts+markers" },
+        markers: [
+          { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-01-01T00:00:00.000Z", session_id: "s", mode: "quick" },
+        ],
+      }),
+    });
+    const md = renderRunReport("feat", { repo: root });
+    assert.match(md, /`gate2-quick` is \*\*FLOOR too/);
+    assert.match(md, /\*\*`gate2-quick` is NOT `gate2`\*\*/);
+    assert.match(md, /decision\s+gate2-quick/, "the fenced facts block must show the actual decision");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Outcome preamble CLOSURE: every SHIP_DECISION_FORMS member is named in the verdicts+markers preamble", async () => {
+  const { SHIP_DECISION_FORMS } = await import("./ship-outcome-core.mjs");
+  assert.ok(SHIP_DECISION_FORMS.length >= 5, "non-vacuity: the vocabulary must be non-empty for this loop to assert anything");
+  const root = scratch();
+  try {
+    feature(root, "feat", { "cost.json": shipCost() }); // shipCost()'s default source is verdicts+markers
+    const md = renderRunReport("feat", { repo: root });
+    for (const form of SHIP_DECISION_FORMS) {
+      // A parameterized form (`stop:<stage>`) is named by its FORM pattern, not a literal stage; every
+      // other form is named by its literal example.
+      const needle = form.parameterized ? form.form : form.example;
+      assert.ok(md.includes(needle), `the preamble must name the ${form.form} form (looked for ${JSON.stringify(needle)})`);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Verdicts: a quick ship ledger renders regress as NOT PART OF THIS RUN, even with a no-regressions report on disk", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", {
+      "cost.json": shipCost({
+        outcome: { decision: "gate2-quick", iterations: 1, source: "verdicts+markers" },
+        markers: [
+          { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-01-01T00:00:00.000Z", session_id: "s", mode: "quick" },
+          { seq: 2, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-01-01T00:00:01.000Z", session_id: "s" },
+        ],
+      }),
+      "verify-report.json": { verdict: "PASS" },
+      // Left on disk by an EARLIER full run over the same feature directory — must never be shown as
+      // THIS (quick) run's regress verdict.
+      "regression-report.json": { verdict: "no-regressions" },
+    });
+    const md = renderRunReport("feat", { repo: root });
+    assert.match(md, /- regress: not part of this run: a quick `\/pharn-ship` run starts no `\/pharn-regress`/);
+    assert.doesNotMatch(md, /- regress: `no-regressions`/, "the report on disk must NEVER be shown as this run's regress verdict");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Verdicts: a FULL ship ledger with a no-regressions report still shows it normally (control: quick is the only special case)", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", {
+      "cost.json": shipCost({
+        markers: [
+          { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-01-01T00:00:00.000Z", session_id: "s" },
+          { seq: 2, kind: "stage-start", stage: "pharn-regress", iteration: 1, ts: "2026-01-01T00:00:01.000Z", session_id: "s" },
+          { seq: 3, kind: "stage-start", stage: "pharn-verify", iteration: 1, ts: "2026-01-01T00:00:02.000Z", session_id: "s" },
+        ],
+      }),
+      "verify-report.json": { verdict: "PASS" },
+      "regression-report.json": { verdict: "no-regressions" },
+    });
+    const md = renderRunReport("feat", { repo: root });
+    assert.match(md, /- regress: `no-regressions`/);
+    assert.doesNotMatch(md, /not part of this run/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("Handoff: a command that writes no record says BY DESIGN, not 'missing'", () => {
   const root = scratch();
   try {
