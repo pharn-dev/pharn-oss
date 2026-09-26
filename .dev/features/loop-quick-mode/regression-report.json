@@ -1,5 +1,5 @@
 {
-  "base": "2e5c2e3183c595c76abadde8878d1fa2e94d115e",
+  "base": "008b24b593ddb6b58fdacc1b60039ffb8f1fe70b",
   "inside": [
     ".claude/commands/pharn-grill.md",
     ".claude/commands/pharn-loop.md",
@@ -8,11 +8,15 @@
     ".dev/features/loop-quick-mode/BUILD.md",
     ".dev/features/loop-quick-mode/GRILL.md",
     ".dev/features/loop-quick-mode/PLAN.md",
+    ".dev/features/loop-quick-mode/REGRESSION.md",
+    ".dev/features/loop-quick-mode/VERIFY.md",
     ".dev/features/loop-quick-mode/handoff/make-patch.mjs",
     ".dev/features/loop-quick-mode/proposed/APPLY.md",
     ".dev/features/loop-quick-mode/proposed/apply.sh",
     ".dev/features/loop-quick-mode/proposed/human-only.patch",
     ".dev/features/loop-quick-mode/proposed/human-only.sha256",
+    ".dev/features/loop-quick-mode/regression-report.json",
+    ".dev/features/loop-quick-mode/verify-report.json",
     ".dev/floor/command-hygiene.test.mjs",
     "CHANGELOG.md",
     "CLAUDE.md",
