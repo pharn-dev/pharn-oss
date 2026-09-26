@@ -495,3 +495,89 @@ R1 is a fourth measured instance of the candidate above.
 
 **Re-review verdict: blocked-with-1-floor-finding.** R1 blocks. R2 (important, security-relevant), R3 and R4 are
 advisory, for the human to weigh.
+
+## Re-check of R1–R4 (opus)
+
+- stage: `/pharn-dev-review`, focused re-check — model routed via Agent subagent; effort not routed
+- reviewed: the branch at `d24b282`, which carries the builder's R1–R4 fixes and the regenerated patch.
+  `proposed/human-only.patch` was applied at that commit to a detached scratch worktree under
+  `.pharn/pharn-dev-review/` (since removed), never to the live files.
+- **Floor: GREEN.** `node pharn/floor/validate.mjs .` prints `FLOOR: GREEN — 36 capabilities checked` and exits 0.
+- **The patch is intact and its tests pass.** `git apply --check` and `git apply` are clean, and
+  `shasum -a 256 -c human-only.sha256` gives OK for all three files. Against the patched copy:
+  - the eight `apply.sh` suites pass 483/483;
+  - the full `npm test` passes 3581/3581.
+
+**Verdict: GREEN, 0 floor-gate findings. The patch is safe to apply as it stands.** All four findings of the
+re-review are fixed, each verified by execution, and the hunt below found no new fail-open.
+
+### Status of R1–R4
+
+- **R1 — verified-fixed.** The repro was re-executed exactly as found: an install under the session temp root, no
+  `.git`, ROOT from `CLAUDE_PROJECT_DIR`. Through a case-variant spelling of the root, these four now exit 2, although
+  the variant still names the same inode:
+  - `.claude/commands/pharn-evil.md`;
+  - `pharn/floor/x.mjs`;
+  - `pharn.config.json`;
+  - the existing `pharn/floor/check-verify.mjs`.
+
+  The fix has two layers:
+  - pass 2 resolves with `fs.realpathSync.native`, so it judges the on-disk spelling;
+  - in the install posture, pass 1 denies an out-of-project path whose folded key equals ROOT's or lies under it
+    (`aliasesRoot()`), with its own message.
+
+  The alias message names the spelling problem and offers no Bash route. Ordinary source reached through a variant
+  spelling is denied too: a deliberate over-block, since pass 1 decides first.
+
+- **R2 — verified-fixed.**
+  - `pharn-loop.md` Step 1a now STOPs as S9 after the snapshot line and again after the `--open` line.
+  - Both lines were executed from the committed text. With nothing planted, both exit 0. With a file planted at
+    `.pharn`, at `.pharn/pharn-loop` or at `.pharn/pharn-loop/<name>`, both exit 1.
+  - The loop's writer, a human-only hook, is unchanged and still exits 1 with a stack trace on a plant. The command
+    now reads that exit code and stops.
+  - LIMITS §7 now names all three commands.
+- **R3 — verified-fixed.** The header now says a backslash can widen an allow list, but only to a file whose own name
+  contains one. That is what the probe measured.
+- **R4 — verified-fixed.** `exit 1.` no longer starts a line, and this repo's markdown-it renders the [6.24.0] section
+  with no ordered list.
+
+### Hunt: what the R1 fix could have broken or opened
+
+Install posture, no scope, no run, unless stated otherwise.
+
+- **NFC and NFD.** Take a project named `rc-prój` in NFC. `pharn/floor/check-verify.mjs` and `.claude/commands/x.md`
+  are denied as aliases through each of three spellings of its root: NFD, upper-case NFC and upper-case NFD.
+- **Siblings whose folded key equals ROOT's.**
+  - `rc-proj-plain.` and `"rc-proj-plain "` are other directories on APFS. They are denied, as the header
+    documents: an over-block.
+  - The unrelated siblings `rc-proj-plain2`, `rc-proj-plai` and `RC-PROJ-PLAIN-2` stay allowed, so the temp-root
+    allow is intact.
+  - `<tmp>/other/../RC-PROJ-PLAIN/pharn/floor/x.mjs` is denied.
+- **A symlinked ROOT.**
+  - Through a temp-root link to the project, `pharn/floor/x.mjs` is denied and `src/x.js` is allowed.
+  - Through a case variant of that link, the write is denied.
+  - With the link as both cwd and `CLAUDE_PROJECT_DIR`, the verdicts are the in-project ones.
+- **`CLAUDE_PROJECT_DIR` given in a different case.** No verdict opens.
+  - From the project root, the stop never matches, so ROOT falls back to the cwd, which is the project. The verdicts
+    match those for the exact case.
+  - From a subdirectory, ROOT falls back to that subdirectory, which carries no posture signal, so the writes are
+    denied. This friction comes from the unchanged `workTreeRoot()`.
+  - Node's `process.cwd()` returns the on-disk spelling even when spawned in a variant. A variant spelling therefore
+    reaches the guard only as a model-typed path, which is denied as an alias.
+- **The D2 allows still work.**
+  - Allowed: the memory folder, `/tmp`, `os.tmpdir()` and a temp-root sibling of ROOT.
+  - Denied: `~/.claude/settings.json` and the project root.
+- **A firmlink spelling** (`/System/Volumes/Data/private/tmp/...`) reaches the project, and the native realpath keeps
+  that spelling. It is denied for every path, the project's own included, because it matches neither ROOT nor a temp
+  root by string. This is an over-block, not an opening.
+- **D1 — 196 of 196 identical to HEAD** (7 record shapes × 14 paths × dev and unsignalled). No verdict moved either
+  way, and no message changed.
+
+### New findings
+
+None.
+
+One case was not measured, because it needs Linux and root: a bind mount of the project under `/tmp`. Like a hard
+link, it would plausibly evade both layers. It is noted as a residual, not raised as a finding.
+
+**Re-check verdict: GREEN, 0 floor-gate findings. The patch is safe to apply as it stands.**
