@@ -37,9 +37,11 @@ immediately after):
 - **Repo-meta**: `CLAUDE.md` (the spine paragraph, the `mark-phase` usage line, the ship-outcome and
   AC-tests comments), `README.md` (badge `6.25.0`, the paper-trail list, the `--quick` usage example, the
   `/pharn-ship` commands-table row, the token-cost bullet), `CHANGELOG.md` (`## [6.25.0]`), `SKILLS_VERSION`
-  (`6.24.0` → `6.25.0`). _(Renumbered twice: from 6.23.0 to 6.24.0 at the first GATE-2 merge, after
+  (`6.24.1` → `6.25.0`). _(Renumbered twice: from 6.23.0 to 6.24.0 at the first GATE-2 merge, after
   `stage-regress-script` merged as 6.23.0, and from 6.24.0 to 6.25.0 at the final merge, after
-  `writes-scope-run-only` merged as 6.24.0 — PLAN.md's two "Amended at GATE 2" merge sections.)_
+  `writes-scope-run-only` merged as 6.24.0 — PLAN.md's two "Amended at GATE 2" merge sections. Then
+  `cost-dedup-completed-usage` merged as 6.24.1 (#279), which made 6.24.1 the version this bump starts from;
+  6.25.0 stayed — SHIP.md, "After merging main (#279, 6.24.1)".)_
 - **Dev artifacts (new)**: `handoff/make-patch.mjs` (the committed patch generator), `proposed/apply.sh`
   (pinned verbatim from PLAN.md §7), `proposed/APPLY.md`, `proposed/human-only.patch`,
   `proposed/human-only.sha256` — the last two are **Bash writes**, produced by running
