@@ -27,6 +27,7 @@ import {
   pendingFile,
   writePendingStart,
 } from "./mark-phase.mjs";
+import { AGENT_MODELS, INLINE_REASONS } from "./route-token-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, "mark-phase.mjs");
@@ -376,4 +377,81 @@ test("--pending-start refuses --mode, exactly as it refuses --name/--kind/--stag
   const base = mkdtempSync(join(tmpdir(), "mark-phase-mode-pending-cli-"));
   const r = run(["--pending-start", "--mode", "quick", "--base", base]);
   assert.equal(r.status, 2, "--pending-start with --mode is a usage error");
+});
+
+// ---------------------------------------------------------------- --route (6.27.0, stage-model-routing)
+
+test("--route is written on a stage-start: every route token is accepted, recorded on disk and printed", () => {
+  const base = mkdtempSync(join(tmpdir(), "mark-phase-route-"));
+  const tokens = [...AGENT_MODELS.map((m) => `agent:${m}`), ...INLINE_REASONS.map((r) => `inline:${r}`)];
+  assert.equal(tokens.length, 14, "L34: the whole grammar, not one member (L29)");
+  for (const t of tokens) {
+    const out = execFileSync(
+      "node",
+      [CLI, "--name", "feat", "--kind", "stage-start", "--stage", "pharn-plan", "--route", t, "--base", base],
+      {
+        encoding: "utf8",
+      }
+    );
+    assert.match(out, new RegExp(`\\(route ${t}\\)`));
+  }
+  const written = lines(join(base, "feat", "markers.jsonl"));
+  assert.equal(written.length, tokens.length);
+  assert.deepEqual(
+    written.map((m) => m.route),
+    tokens
+  );
+  // With an iteration too — the loop's build line carries both.
+  const m = markPhase({ name: "feat2", kind: "stage-start", stage: "pharn-build", iteration: 2, route: "agent:sonnet", base });
+  assert.deepEqual([m.iteration, m.route], [2, "agent:sonnet"]);
+});
+
+test("--route is refused on every kind but stage-start — exit 2, nothing written", () => {
+  const base = mkdtempSync(join(tmpdir(), "mark-phase-route-"));
+  for (const kind of [...MARKER_KINDS].filter((k) => k !== "stage-start")) {
+    const r = run(["--name", "feat", "--kind", kind, "--route", "agent:opus", "--base", base]);
+    assert.equal(r.status, 2, `--route with --kind ${kind} must be refused`);
+  }
+  assert.ok(!existsSync(join(base, "feat", "markers.jsonl")), "a refused --route call must write NOTHING");
+});
+
+test("--route with a token outside the grammar is refused — exit 2, nothing written, the value never echoed", () => {
+  const base = mkdtempSync(join(tmpdir(), "mark-phase-route-"));
+  for (const bad of ["agent:gpt", "agent:inherit", "inline:other", "Agent:opus", "agent:opus ", "agent:opus\n", "", "agent:"]) {
+    const r = run(["--name", "feat", "--kind", "stage-start", "--stage", "pharn-plan", "--route", bad, "--base", base]);
+    assert.equal(r.status, 2, `${JSON.stringify(bad)} must be refused`);
+    if (bad.length > 6) assert.ok(!r.stderr.includes(bad.trim()), "the refusal names the grammar's owner, never the argv value (L62)");
+  }
+  const trailing = run(["--name", "feat", "--kind", "stage-start", "--stage", "pharn-plan", "--base", base, "--route"]);
+  assert.equal(trailing.status, 2, "--route with no value");
+  assert.ok(!existsSync(join(base, "feat", "markers.jsonl")), "a refused --route value must write NOTHING");
+  // MUTATION CONTROL: the same call with a real token succeeds, so the refusals above are real.
+  assert.equal(
+    run(["--name", "feat", "--kind", "stage-start", "--stage", "pharn-plan", "--route", "inline:no-config", "--base", base]).status,
+    0
+  );
+});
+
+test("--route absent: the marker carries NO route key at all — byte-identical to a pre-6.27.0 marker (L41)", () => {
+  const base = mkdtempSync(join(tmpdir(), "mark-phase-route-"));
+  const at = new Date("2026-09-26T10:00:00.000Z");
+  markPhase({ name: "a", kind: "stage-start", stage: "pharn-plan", base, now: at });
+  markPhase({ name: "b", kind: "stage-start", stage: "pharn-plan", base, now: at, route: null });
+  const [a] = lines(join(base, "a", "markers.jsonl"));
+  assert.equal("route" in a, false);
+  assert.equal(readFileSync(join(base, "a", "markers.jsonl"), "utf8"), readFileSync(join(base, "b", "markers.jsonl"), "utf8"));
+  assert.equal(
+    readFileSync(join(base, "a", "markers.jsonl"), "utf8"),
+    '{"seq":1,"kind":"stage-start","stage":"pharn-plan","iteration":null,"ts":"2026-09-26T10:00:00.000Z","session_id":null}\n',
+    "the pre-6.27.0 bytes, exactly"
+  );
+  const out = execFileSync("node", [CLI, "--name", "c", "--kind", "stage-start", "--stage", "pharn-plan", "--base", base], {
+    encoding: "utf8",
+  });
+  assert.doesNotMatch(out, /\(route /);
+});
+
+test("--pending-start refuses --route", () => {
+  const base = mkdtempSync(join(tmpdir(), "mark-phase-route-pending-"));
+  assert.equal(run(["--pending-start", "--route", "agent:opus", "--base", base]).status, 2);
 });

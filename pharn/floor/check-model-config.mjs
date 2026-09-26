@@ -4,14 +4,18 @@
 // EQUALITY with the eleven `/pharn-*` product commands' platform `model:` / `effort:` frontmatter.
 //
 // ── THE MECHANISM, read live rather than assumed (P6) ────────────────────────────────────────────────
-// Claude Code selects a command's model through STATIC FRONTMATTER and nothing else. `model:` accepts
+// Claude Code selects a COMMAND's model through STATIC FRONTMATTER and nothing else. `model:` accepts
 // the `/model` values (`sonnet` | `opus` | `haiku` | `fable` | a full `claude-*` id | `inherit`) and
-// `effort:` accepts `low` | `medium` | `high` | `xhigh` | `max`. There is NO runtime routing hook: no
-// command can read a JSON file and switch its own model, and nothing reads the `models.stages` BLOCK
-// at run time — the FILE is read elsewhere (LIMITS.md §8). So `models.stages` cannot BE the runtime control — it can only be the
-// SOURCE OF TRUTH the static frontmatter is held to, which is what this checker enforces. Simulating
-// runtime routing (a command "consulting" the config in prose) would be the exact P0 disease: written in
-// the config, therefore believed guaranteed.
+// `effort:` accepts `low` | `medium` | `high` | `xhigh` | `max`. No command can read a JSON file and switch
+// its OWN model. So, for a stage a person invokes directly, `models.stages` is the SOURCE OF TRUTH the static
+// frontmatter is held to, which is what this checker's `agreement` mode enforces.
+// SINCE 6.27.0 THE BLOCK HAS A SECOND READER, at run time: `pharn/floor/stage-agent.mjs route` shells THIS
+// checker's `resolve <stage>` to pick the model a `/pharn-ship` or `/pharn-loop` STAGE AGENT is spawned on —
+// the Agent tool takes a `model` parameter (it takes no effort). The two readers ask different questions
+// (L39): the frontmatter agreement accepts `inherit` and `claude-*` ids and the Agent tool does not, so
+// `route` sends those stages inline, each with its own reason. Simulating routing in prose — a command
+// "consulting" the config — would still be the exact P0 disease: the route decision is tested code, and
+// what a routed stage was SERVED is read from the transcript (`cost.json`), never asserted from this file.
 //
 // ── Floor primitives (ARCHITECTURE §2) ───────────────────────────────────────────────────────────────
 // #3 (enum / regex / presence) throughout: every `model` is bounded to the Claude model namespace (the
@@ -29,10 +33,13 @@
 //   • THE STAGE IS NOT PROVEN TO HAVE RUN UNDER THAT MODEL. Model and effort are applied by the Claude
 //     Code platform, invisible to any hook, hash or enum. "check-model-config GREEN" must NEVER read as
 //     "/pharn-plan ran on opus". That conflation is what this repo exists to prevent.
-//   • TURN SCOPE. The platform states the override "applies for the rest of the current turn". So it
-//     takes effect when a human invokes the stage command DIRECTLY (`/pharn-plan`). A stage invoked as a
-//     STEP INSIDE `/pharn-ship` or `/pharn-loop` runs inside the ORCHESTRATOR's turn — those stages do
-//     NOT get per-stage routing, and this checker cannot see the difference.
+//   • TURN SCOPE — the frontmatter path's bound. The platform states the override "applies for the rest of
+//     the current turn". So it takes effect when a human invokes the stage command DIRECTLY (`/pharn-plan`).
+//     A stage run INLINE as a step inside `/pharn-ship` or `/pharn-loop` runs inside the ORCHESTRATOR's turn
+//     and does not get its frontmatter model: every stage the routing policy keeps inline, every routing
+//     fallback, and the orchestrators themselves. Since 6.27.0 a ROUTED stage gets its model from the Agent
+//     call instead (`stage-agent.mjs`); its EFFORT keeps this bound, because the Agent tool takes none. This
+//     checker cannot see any of it.
 //   • PLATFORM VETO. A value excluded by an organization's `availableModels` allowlist is not used, and
 //     in auto mode a model auto mode does not support is not used; the session silently keeps its
 //     current model. A GREEN here says nothing about either.

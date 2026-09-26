@@ -104,6 +104,7 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { findTranscriptDirs, sessionRequests } from "./transcript-core.mjs";
 import { DEFAULT_BASE as MARKERS_DEFAULT_BASE, MARKER_KINDS, MARKER_MODES, cleanScalar } from "./mark-phase.mjs";
+import { isRouteToken } from "./route-token-core.mjs";
 import { FM_RE, stripBom } from "./frontmatter-core.mjs";
 import { readShipOutcome, OUTCOME_SOURCE as SHIP_OUTCOME_SOURCE } from "./ship-outcome-core.mjs";
 import { runWindow, isMember, isAfterWindow, tsMs, MEMBERSHIP_METHOD } from "./run-window-core.mjs";
@@ -350,6 +351,11 @@ export function readMarkers(markersFile) {
  * (6.25.0) survives only as a `MARKER_MODES` member, the same pattern — a garbage value is dropped, which
  * `ship-outcome-core.mjs`'s `runMode()` then reads as `"full"`, the safe direction: a full reading needs a
  * regress stage-start a quick run never writes (that module's header, "A SKIPPED OR WRONG MODE MARKER").
+ * `route` (6.27.0) survives only as a valid route token (`isRouteToken`, from `route-token-core.mjs` — the
+ * grammar's one owner, which loads no routing policy), the same pattern again: a garbage value is dropped,
+ * so `cost.json`'s `markers[]` carries a stage's REQUESTED route next to its requests' SERVED `model`. No
+ * other re-derivation of `markers[]` reads it — run membership, attribution, the ship outcome and the run
+ * report's staleness identity are unchanged by it, and a test pins that (L63).
  */
 export function normalizeMarkers(list) {
   const out = [];
@@ -365,6 +371,7 @@ export function normalizeMarkers(list) {
     };
     if (r.origin === "pending") m.origin = "pending";
     if (typeof r.mode === "string" && MARKER_MODES.has(r.mode)) m.mode = r.mode;
+    if (isRouteToken(r.route)) m.route = r.route;
     out.push(m);
   }
   return out.sort((a, b) => a.seq - b.seq);

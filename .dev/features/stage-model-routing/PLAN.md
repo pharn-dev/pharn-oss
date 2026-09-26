@@ -388,6 +388,12 @@ independence. Each finding and where it was folded, in `GRILL.md`'s order:
 No finding changed the route, `ROUTE_POLICY`, the GATE-1 decisions or the human-only patch's scope. `## Files` grows by
 two (`route-token-core.mjs` and its test).
 
+- **The orchestrator ACCEPTS finding 1's contract change (2026-09-26), a MODEL decision under the maintainer's
+  2026-09-25 delegation, NOT a human one.** Finding 1 replaced "the orchestrator copies the rules into the Agent
+  prompt", the stage-agent contract approved at GATE 1, with the `brief` subcommand, which prints the rules to the
+  stage agent itself. Accepted because the orchestrator stops copying the rules and stops spending output tokens on
+  them, while neither the routing nor `ROUTE_POLICY` changes. Recorded by the build stage agent before `/pharn-dev-build`.
+
 ## Open questions (HALT) — all resolved at GATE 1
 
 Each was answered as recommended by the orchestrator under the maintainer's 2026-09-25 delegation (a model decision, not a human one):

@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.25.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.27.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -191,7 +191,8 @@ normal install adds:
   `LIMITS.md` at the root,
 - the deterministic floor, contracts, grillers, and review lenses under `pharn/`,
 - `pharn.config.json`, pinning the skills version and exact installed commit, and carrying the
-  `models.stages` block that sets each product command's model and effort (see
+  `models.stages` block that sets each product command's model and effort — and, since 6.27.0, the model
+  `/pharn-ship` and `/pharn-loop` request for each stage they run as a subagent (see
   [Current limitations](#current-limitations) for what that does and does not reach).
 
 ```text
@@ -649,7 +650,7 @@ byte-for-byte by `npm run docs:check`, so it cannot quietly drift from what is a
 - **Product commands — 11** (`.claude/commands/`): `/pharn-build`, `/pharn-grill`, `/pharn-loop`, `/pharn-memory-promote`, `/pharn-plan`, `/pharn-regress`, `/pharn-review`, `/pharn-ship`, `/pharn-spec`, `/pharn-test`, `/pharn-verify`.
 - **Dev-apparatus commands — 9** (`.claude/commands/`): `/pharn-dev-build`, `/pharn-dev-eval`, `/pharn-dev-grill`, `/pharn-dev-memory-promote`, `/pharn-dev-plan`, `/pharn-dev-regress`, `/pharn-dev-review`, `/pharn-dev-ship`, `/pharn-dev-verify`.
 - **Hook scripts — 4** (`.claude/hooks/`): `enforce-writes-scope.cjs`, `protect-trusted-paths.cjs`, `require-loop-record.cjs`, `set-writes-scope.cjs`.
-- **Floor checkers — 88** `.mjs` files under `pharn/floor/` (tests excluded).
+- **Floor checkers — 91** `.mjs` files under `pharn/floor/` (tests excluded).
 
 <!-- CURRENT-STATE:END -->
 
@@ -767,14 +768,17 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
 - **Several announced modules are not built.** `pharn-audits`, `pharn-skills-*`, `pharn-stack-*`, and the
   rest of `pharn-core` — the constitution engine, the agnostic rule set, and the memory-bank commands
   beyond promotion. What exists is what the generated inventory above lists.
-- **Per-stage model routing is static frontmatter, and it does not reach stages run inside an
-  orchestrator.** `pharn.config.json`'s `models.stages` is the source of truth for the eleven product
+- **Per-stage models are routed for most orchestrated stages, effort is not, and nothing proves what a
+  stage ran on.** `pharn.config.json`'s `models.stages` is the source of truth for the eleven product
   commands' `model:` / `effort:` frontmatter, and `pharn/floor/check-model-config.mjs` RED-fails when the
-  two disagree — but a green checker means those two files agree, never that `/pharn-plan` ran on Opus,
-  and nothing in PHARN observes what a stage actually ran under. Editing the config is therefore only
-  half the change: update the command frontmatter too, or the checker will tell you. The full bounds —
-  turn scope, the platform veto, and what deleting the block costs — are stated once, in
-  [`LIMITS.md`](./LIMITS.md) § 8.
+  two disagree — so editing the config is only half the change: update the command frontmatter too, or the
+  checker will tell you. Since 6.27.0 `/pharn-ship` and `/pharn-loop` also read the block at run time: each
+  stage their routing policy routes runs as a subagent on the model the block resolves for it. `/pharn-ship`'s
+  spec stage, every `/pharn-regress` and `/pharn-verify`, and any stage that falls back (no config, a
+  pre-0.7.0 block, `inherit`, a full model id) run on the orchestrator's model, and the run says why. Effort
+  is not routed. A green checker means two files agree, and a route records what was REQUESTED: `cost.json`
+  shows the model each request was served, which is evidence, never proof. The full bounds — turn scope, the
+  platform veto, and what deleting the block costs — are stated once, in [`LIMITS.md`](./LIMITS.md) § 8.
 - **It is token-hungry by construction.** `/pharn-grill` runs the grillers over your plan and
   `/pharn-review` fans every applicable lens out as its own parallel subagent; `/pharn-loop` repeats
   build → regress → verify up to the cap, unattended — each pass re-runs your suite at the base and at
