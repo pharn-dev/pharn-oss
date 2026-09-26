@@ -133,7 +133,8 @@ writing this key moves no pin.
 
 ### `spec_kind` (6.18.0; `quick` added 6.25.0)
 
-What the SPEC's increment **is**, for `/pharn-test` (`ac-tests.md`) and, since 6.25.0, for `/pharn-ship --quick`:
+What the SPEC's increment **is**, for `/pharn-test` (`ac-tests.md`), since 6.25.0 for `/pharn-ship --quick`, and since
+6.27.0 for `/pharn-loop`, whose stop table it chooses (`pharn/floor/loop-mode-core.mjs`):
 
 - **`feature`** (the default; write no line): `/pharn-test` writes each criterion's test before the build and
   requires it to fail first — test-first.
@@ -141,8 +142,10 @@ What the SPEC's increment **is**, for `/pharn-test` (`ac-tests.md`) and, since 6
   failing tests first, so `/pharn-test` records a **bootstrap** lock instead: no tests, no run — weaker, and the
   lock says so. `/pharn-spec` offers this when it warns that a runner is missing, and never writes it under
   `--model-approve` — command prose, **advisory**: no check sees who chose the key.
-- **`quick`** (6.25.0): a small change, run through `/pharn-ship --quick`. Written only under a `--quick`
-  invocation, never under `--model-approve` (the same non-obligation as `test-infra`). Like `feature`, a
+- **`quick`** (6.25.0): a small change, run through `/pharn-ship --quick` or, since 6.27.0, the unattended
+  `/pharn-loop --quick`. Written only under a `--quick` invocation; under `--model-approve` only together with
+  `--quick` (`/pharn-loop --quick`, where the model writes AND approves it) — command prose, **advisory**, like the
+  `test-infra` non-obligation. Like `feature`, a
   quick SPEC gets test-first evidence — `/pharn-test` writes and runs its criteria's tests before the build
   exactly as for a feature SPEC — so `spec-template-core.mjs` groups `feature` and `quick` together as
   `TEST_FIRST_KINDS`; `SPEC_KINDS` is exactly `TEST_FIRST_KINDS ∪ {test-infra}`, disjoint, so a fourth kind
@@ -163,9 +166,11 @@ is a possible follow-up.
 
 **`check-spec.mjs --spec-kind <SPEC.md>`** prints the kind as data: `feature`, `test-infra` or `quick` for a
 templated SPEC; an empty line (exit 0) when the value is unusable (two lines, a non-member, or the
-`kind-in-body` layout below); and `feature` for a legacy SPEC. `/pharn-ship`'s Step-2 GATE-1 backstop and
-`/pharn-grill --quick`'s eligibility check both shell this mode rather than re-reading the frontmatter, so
-the printed token and the pin's own reading of the kind can never disagree (P4).
+`kind-in-body` layout below); and `feature` for a legacy SPEC. Its readers — among them `/pharn-ship`'s Step-2
+GATE-1 backstop, `/pharn-grill --quick`'s eligibility check and `/pharn-loop --quick`'s Step-3 kind read — shell this
+mode rather than re-reading the frontmatter, and `loop-mode-core.mjs` (the loop's stop and freshness mode) calls the
+same function it prints (a parity test holds the two equal), so the printed token and the pin's own reading of the
+kind can never disagree (P4).
 
 **Rule 9 (`quick`, 6.25.0).** On a templated SPEC whose kind is `quick`: at most `QUICK_MAX_ACS` (3)
 acceptance criteria, and each verified at a `QUICK_LEVELS` (`unit` or `integration`) member — never `e2e`.
@@ -175,7 +180,9 @@ in every state, so a Draft is caught before approval and every downstream `check
 re-checks it. **Why these two bounds** (the maintainer's 2026-09-25 decision, recorded here so neither
 reads as a magic number): quick mode keeps test-first evidence and drops the regression check
 (`/pharn-ship`'s `## Quick mode`), so what it may carry is a change whose evidence is a few fast tests —
-three criteria bound the change a human approves at GATE 1, and an `e2e` criterion would need its test
+three criteria bound the change its approver approves (a human at `/pharn-ship`'s GATE 1; under
+`/pharn-loop --quick`, 6.27.0, the model — for whom this rule is the floor backstop on its own fit judgment), and an
+`e2e` criterion would need its test
 written and run red at `/pharn-test` through the project's end-to-end runner, the slowest test level and one
 that needs a runner of its own, which is what the quick bound keeps out of the run. It does **not** keep the
 project's own end-to-end gates out: `/pharn-verify` still discovers and runs a `test:e2e` / `e2e` script in a
@@ -212,7 +219,12 @@ so a project template carrying `spec_kind: test-infra` would start every Draft f
 and, since 6.25.0, the same bound extends to `spec_kind: quick`: a project template carrying it starts every Draft
 as quick. What stands between that and an approved quick or bootstrap SPEC is `/pharn-spec`'s instruction to write
 the key only when the human chose that path (Step 4's trade sentence, for quick), and the human approval itself —
-both advisory. Review a template change that adds the key like any change to the template.
+both advisory. **Under the unattended `/pharn-loop` (6.27.0) there is no human approval**, so the bound there is:
+without `--quick`, `/pharn-spec`'s Step 4a refuses to approve a Draft carrying `spec_kind: quick` (advisory);
+failing that, `check-spec-approved.mjs` exits non-zero on the unapproved Draft and the run stops (S9 — floor); and a
+model that approves it anyway ends on an uncommitted `STOP_GREEN_QUICK`, because a full run commits only
+`STOP_GREEN`. With `--quick`, the kind is the one the invoker asked for, and rule 9 still bounds the SPEC. Review a
+template change that adds the key like any change to the template.
 
 ## Sections
 

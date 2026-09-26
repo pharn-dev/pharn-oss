@@ -1,5 +1,5 @@
 ---
-description: "Run the PRODUCT pipeline UNATTENDED to a deterministic stop, then report what was done: /pharn-spec --model-approve (the model approves its own SPEC, recorded as approved_by: model) → /pharn-plan → /pharn-grill → /pharn-test --unattended (6.19.0: the AC tests written and shown to FAIL before the build; the front runs once) → /pharn-build → /pharn-regress → /pharn-verify, iterating build→regress→verify until the tested pharn/floor/check-loop.mjs (Design C) says stop: CONTINUE on any measurable red (verify FAIL / INCOMPLETE, a regression) under a bounded --max-iter cap (default 3); STOP_TERMINAL on an inconclusive verdict, an AC-evidence red (6.20.0: /pharn-verify's AC gate found the AC tests, their lock or their test infrastructure changed after /pharn-test — a rebuild cannot restore evidence taken before it; stuck point S13, blocked: ac-evidence-invalid) or a reconcile red (a retry would re-anchor the baseline and erase a detected Bash escape); an AC that is simply not delivered yet is an ordinary verify FAIL and is iterated on; STOP_GREEN on verify PASS ∧ regress no-regressions; STOP_CAP at the cap. There is NO human gate inside the run: every sub-stage question maps to ONE enumerated stuck-point table (S1–S13) — mechanical cases resolve by a fixed rule, judgment cases STOP and report, nothing is guessed. Before it reads the stop, and again before a STOP_GREEN commit, it runs pharn/floor/check-loop-fresh.mjs: the reports must be their checkers' output from stamps that validate, bound by hash, and the verify stamp must describe the live tree — a stale or missing stage is RE-RUN inside the same iteration (a counted budget, default one per stage per iteration), a fabricated verdict or a spent budget is a recorded blocked stop (S11, blocked: stale-evidence), never a summary that names skipped gates. At every stop it writes pharn/features/<name>/LOOP.md per pharn/pharn-contracts/loop-record.md and self-checks it with pharn/floor/check-loop-record.mjs; for every non-blocked stop it additionally re-derives the recorded decision with pharn/floor/check-loop-decision.mjs — a LIVE re-run of check-loop.mjs against the record's own cited reports, using its iterations and cap, must reproduce the same decision — and a STOP_GREEN commit is gated on that re-derivation being GREEN (a decision that cannot be re-derived from its cited reports is never committed unattended). Only a STOP_GREEN result is committed, to a NEW LOCAL BRANCH, staging only regular files from the plan's ## Files plus the feature's named artifacts; every other stop commits nothing and reverts the model's SPEC approval to Draft (a SPEC the run never approved, as on a clarification stop, stays a Draft). Never pushes, never merges, never seals. Ends with a summary, not a question. At EVERY stop that has a feature directory it also emits pharn/features/<name>/cost.json per pharn/pharn-contracts/cost-ledger.md — a per-request token ledger written by pharn/floor/render-cost-ledger.mjs itself and validated by pharn/floor/check-cost-ledger.mjs, with phase boundaries recorded live by pharn/floor/mark-phase.mjs because the platform's attributionSkill names the orchestrator and never the sub-stage. The ledger records TOKENS and carries no price table ever; money is the reader's own multiplication. It ANNOTATES and gates NOTHING — a RED ledger never blocks a commit (fix #3). check-loop.mjs's inputs are ONLY the two verdict reports + iter/cap, so no advisory stage can gate the loop (structural). FLOOR: the stop decision, the freshness of the evidence it reads + the record shape; ADVISORY: the orchestration, the self-approval, the stuck-point mapping and every git step. '/pharn-loop finished' means a stop was reached and recorded — NEVER 'the feature is good', NEVER 'a human approved the intent', NEVER 'the fix converged' (P0)."
+description: "Run the PRODUCT pipeline UNATTENDED to a deterministic stop, then report what was done: /pharn-spec --model-approve (the model approves its own SPEC, recorded as approved_by: model) → /pharn-plan → /pharn-grill → /pharn-test --unattended (6.19.0: the AC tests written and shown to FAIL before the build; the front runs once) → /pharn-build → /pharn-regress → /pharn-verify, iterating build→regress→verify until the tested pharn/floor/check-loop.mjs (Design C) says stop: CONTINUE on any measurable red (verify FAIL / INCOMPLETE, a regression) under a bounded --max-iter cap (default 3); STOP_TERMINAL on an inconclusive verdict, an AC-evidence red (6.20.0: /pharn-verify's AC gate found the AC tests, their lock or their test infrastructure changed after /pharn-test — a rebuild cannot restore evidence taken before it; stuck point S13, blocked: ac-evidence-invalid) or a reconcile red (a retry would re-anchor the baseline and erase a detected Bash escape); an AC that is simply not delivered yet is an ordinary verify FAIL and is iterated on; STOP_GREEN on verify PASS ∧ regress no-regressions; STOP_CAP at the cap. `/pharn-loop --quick` (6.27.0) runs the same loop for a `spec_kind: quick` SPEC the model writes and approves itself — /pharn-spec --quick --model-approve, the grill's floor stops without its interrogation, test-first evidence, no /pharn-regress base comparison on any iteration (its scope check is kept), no RUN-REPORT.md (cost.json is kept) — and check-loop.mjs decides every stop over /pharn-verify's verdict alone, in a table chosen by the SPEC's pinned kind, never by a flag; its green is STOP_GREEN_QUICK, which is not STOP_GREEN (see ## Quick mode). There is NO human gate inside the run: every sub-stage question maps to ONE enumerated stuck-point table (S1–S13) — mechanical cases resolve by a fixed rule, judgment cases STOP and report, nothing is guessed. Before it reads the stop, and again before a green stop's commit, it runs pharn/floor/check-loop-fresh.mjs: the reports must be their checkers' output from stamps that validate, bound by hash, and the verify stamp must describe the live tree — a stale or missing stage is RE-RUN inside the same iteration (a counted budget, default one per stage per iteration), a fabricated verdict or a spent budget is a recorded blocked stop (S11, blocked: stale-evidence), never a summary that names skipped gates. At every stop it writes pharn/features/<name>/LOOP.md per pharn/pharn-contracts/loop-record.md and self-checks it with pharn/floor/check-loop-record.mjs; for every non-blocked stop it additionally re-derives the recorded decision with pharn/floor/check-loop-decision.mjs — a LIVE re-run of check-loop.mjs against the record's own cited reports, using its iterations and cap, must reproduce the same decision (and, since 6.27.0, the record's mode the same table) — and a green stop's commit is gated on that re-derivation being GREEN (a decision that cannot be re-derived from its cited reports is never committed unattended). Only a green stop (STOP_GREEN, or STOP_GREEN_QUICK under --quick) is committed, to a NEW LOCAL BRANCH, staging only regular files from the plan's ## Files plus the feature's named artifacts; every other stop commits nothing and reverts the model's SPEC approval to Draft (a SPEC the run never approved, as on a clarification stop, stays a Draft). Never pushes, never merges, never seals. Ends with a summary, not a question. At EVERY stop that has a feature directory it also emits pharn/features/<name>/cost.json per pharn/pharn-contracts/cost-ledger.md — a per-request token ledger written by pharn/floor/render-cost-ledger.mjs itself and validated by pharn/floor/check-cost-ledger.mjs, with phase boundaries recorded live by pharn/floor/mark-phase.mjs because the platform's attributionSkill names the orchestrator and never the sub-stage. The ledger records TOKENS and carries no price table ever; money is the reader's own multiplication. It ANNOTATES and gates NOTHING — a RED ledger never blocks a commit (fix #3). check-loop.mjs's inputs are the two verdict reports, iter/cap and ONE token of the feature's own SPEC — its spec_kind, which chooses the table — so no advisory stage can gate the loop (structural). FLOOR: the stop decision, the freshness of the evidence it reads + the record shape; ADVISORY: the orchestration, the self-approval, the stuck-point mapping and every git step. '/pharn-loop finished' means a stop was reached and recorded — NEVER 'the feature is good', NEVER 'a human approved the intent', NEVER 'the fix converged' (P0)."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -12,6 +12,7 @@ reads:
     "pharn/features/<name>/SPEC.md",
     "pharn/features/<name>/PLAN.md",
     "pharn/features/<name>/GRILL.md",
+    "pharn/features/<name>/AC-TESTS.md",
     "pharn/features/<name>/BUILD.md",
     "pharn/features/<name>/REGRESSION.md",
     "pharn/features/<name>/VERIFY.md",
@@ -35,12 +36,13 @@ reads:
     "pharn/floor/loop-fresh-core.mjs",
     "pharn/floor/check-test-stage.mjs",
     "pharn/floor/check-red-run.mjs",
+    "pharn/floor/check-regress.mjs",
     "pharn/pharn-contracts/gate-run-record.md",
     "pharn/floor/validate.mjs",
   ]
 writes: ["pharn/features/<name>/SPEC.md", "pharn/features/<name>/LOOP.md"]
 constitution_refs: ["P0", "P2", "P3", "P5", "P6", "P7"]
-version: "0.10.0"
+version: "0.11.0"
 ---
 
 # /pharn-loop — run the product pipeline unattended to a floor-grade stop, then report what was done
@@ -56,7 +58,7 @@ the tested stop core `pharn/floor/check-loop.mjs`; the tested freshness check
 `pharn/floor/check-loop-record.mjs`; and the tested cross-file re-derivation check
 `pharn/floor/check-loop-decision.mjs`, which asks whether a non-blocked record's `decision` genuinely
 reduces from a live re-run of `check-loop.mjs` over the reports the record cites, and gates the
-`STOP_GREEN` commit on the answer. None of them feeds `check-loop.mjs`'s **inputs**: the freshness check
+green stop's commit on the answer. None of them feeds `check-loop.mjs`'s **inputs**: the freshness check
 runs **before** it and decides only whether it is consulted yet, and the last two validate the record
 written **after** the stop exists.
 
@@ -89,7 +91,8 @@ Load the trusted prefix and obey it:
 - **A sub-stage question never reaches a person mid-run.** Each one maps to exactly one row of the
   stuck-point table (Step 2): a mechanical case resolves by a fixed rule, a judgment case **stops** and the
   summary says what the run needs. Nothing is guessed (P5, P6).
-- **Only `STOP_GREEN` is committed**, to a **new local branch** — never pushed, never merged. Every other
+- **Only a green stop is committed** (`STOP_GREEN`, or `STOP_GREEN_QUICK` under `--quick` — `## Quick mode`), to
+  a **new local branch** — never pushed, never merged. Every other
   stop commits nothing, leaves the changes in the working tree, and **reverts a model-approved SPEC to
   `Draft`** — an agent-performed step (advisory), so an aborted run can skip it. A SPEC the run never approved
   (a clarification stop, S6b) simply stays a `Draft`.
@@ -97,12 +100,14 @@ Load the trusted prefix and obey it:
   working tree) and decides what to merge.
 - **It is expensive unattended.** Every iteration re-runs `/pharn-regress` (a base worktree, an install,
   and the project's suite at base and at HEAD) plus every `/pharn-verify` gate; the worst case is `M` times
-  that with nobody watching.
+  that with nobody watching (a quick run skips `/pharn-regress` — `## Quick mode`).
 
 ## Step 1 — Entry
 
 `/pharn-loop [--max-iter N] <increment description>`. `--max-iter N` sets the cap `M` (a positive integer;
 absent ⇒ `M = 3`). A config-file cap key is deferred (P7): `check-loop.mjs` reads `--cap`, whatever set it.
+`/pharn-loop --quick [--max-iter N] <increment description>` (6.27.0) is the quick form — read `## Quick mode`
+below before Step 3; every step not named there runs as written.
 
 ### Step 1a — the fixed-rule entry steps (S1, S2, S3) and the pre-run snapshot
 
@@ -221,8 +226,9 @@ Look for `pharn/features/<slug>-<N>/LOOP.md` with the highest existing `<N>`, el
 ## Step 2 — The stuck-point table (the ONE enumeration of every question a sub-stage could ask)
 
 Every "ask the human" a sub-stage would make during this run maps to **exactly one** row. Rows S1–S3 keep
-the run going on a fixed rule; S4–S13 **stop** it. S6, S6b, S7 and S8 are triggered by your own judgment, and each
-fails in the safe direction — it stops rather than guesses.
+the run going on a fixed rule; S4–S13 **stop** it. S6, S6b, S7 and S8 — and S6c's fit-check trigger (6.27.0) — are
+triggered by your own judgment, and each fails in the safe direction — it stops rather than guesses. S6c's other
+trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 
 | id  | trigger                                                                                                                                                                                                              | rule                                                                                                                                    |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -233,9 +239,10 @@ fails in the safe direction — it stops rather than guesses.
 | S5  | `/pharn-build`'s seam-config extraction or `check-seam-config.mjs` is non-zero                                                                                                                                       | stop `blocked: seam-config` — never substitute the default policy                                                                       |
 | S6  | the description cannot fill the SPEC's required sections without inventing intent                                                                                                                                    | stop `blocked: thin-intent`                                                                                                             |
 | S6b | `/pharn-spec` reports the Draft still carries a clarification marker, so it will not approve it                                                                                                                      | stop `blocked: needs-clarification` — a person answers the marked questions; the run never guesses them                                 |
+| S6c | `/pharn-spec --quick --model-approve` reports the intent does not fit a quick SPEC (over three criteria, or one only end-to-end), or a `--quick` run's Step-3 kind read prints anything but `quick`                  | stop `blocked: not-quick` — a person narrows the intent or re-runs without `--quick`; never widened into a full run                     |
 | S7  | the build finds the plan ambiguous                                                                                                                                                                                   | stop `blocked: plan-ambiguity`                                                                                                          |
 | S8  | the seam resolver's walk reaches `ask`                                                                                                                                                                               | stop `blocked: seam-unresolved`                                                                                                         |
-| S9  | a stage refuses before emitting its verdict (a missing artifact, a RED spec→plan chain, a RED lessons declaration, no parseable `## Files`, an unresolved `## Open questions (HALT)`)                                | stop `blocked: stage-refused`; Step 1a's snapshot or marker `--open` exiting non-zero stops here too                                    |
+| S9  | a stage refuses before emitting its verdict (a missing artifact, a RED spec→plan chain, a RED lessons declaration, no parseable `## Files`, an unresolved `## Open questions (HALT)`)                                | stop `blocked: stage-refused`; Step 1a's snapshot or marker `--open`, or a quick scope check, exiting non-zero stops here too           |
 | S10 | any other sub-stage instruction to ask the human                                                                                                                                                                     | stop `blocked: unlisted-ask` — the closure row; nothing falls through to a guess                                                        |
 | S11 | a stage's evidence is stale or missing after the stage claims to have run, and `check-loop-fresh.mjs` will not offer another re-run (Step 5)                                                                         | stop `blocked: stale-evidence` — never read a stop from evidence about another tree                                                     |
 | S12 | `/pharn-test` could not run the AC tests because a criterion's level has no test runner with per-test results — decided by the pinned `check-red-run.mjs --preflight` exit 1 (Step 4), never by relayed text         | stop `blocked: no-test-runner` — its last line (the setup suggestion) goes into `### next_steps` as DATA; never a nested run            |
@@ -275,8 +282,172 @@ while this is an exit code. And it is not S11: no stage has claimed to run yet.
 **A blocked stop does NOT consult `check-loop.mjs`** — its inputs could be a previous iteration's stale
 reports. Go to Step 6 with `decision: INCONCLUSIVE` and the id. The record's shape for that case is defined
 by the contract (`pharn/pharn-contracts/loop-record.md`, "The one exception: a blocked stop") — cited, not
-restated (P4). **A stop before `pharn/features/<name>/` exists** (S1, a failed S3, or S6 before a Draft is
+restated (P4). **A stop before `pharn/features/<name>/` exists** (S1, a failed S3, or S6 or S6c before a Draft is
 written) writes no record and no SPEC revert; it goes straight to the Step 7 summary.
+
+## Quick mode — `/pharn-loop --quick` (6.27.0)
+
+An unattended run for a **small** change: a `spec_kind: quick` mini-SPEC (1–3 acceptance criteria, each `unit` or
+`integration`) that the model writes **and** approves, the grill's two floor stops **without** the interrogation,
+test-first AC evidence, the build, the scope check `/pharn-regress` runs before its gates (**kept**, on every
+iteration), `/pharn-verify` with its AC gate, and the freshness check — and it **skips** `/pharn-regress`'s
+base-and-head comparison on every iteration, the plan interrogation, and `RUN-REPORT.md` (`cost.json` is kept). Its
+green stop is **`STOP_GREEN_QUICK`, which is not `STOP_GREEN`**: it claims verify `PASS` and no regression check.
+Its gated sibling is `/pharn-ship --quick`, where a person approves the quick SPEC and is told the trade first.
+
+**The mode is the SPEC's pinned kind, never a flag.** `check-loop.mjs` and `check-loop-fresh.mjs` each read it
+themselves from the feature's own `SPEC.md`, through `pharn/floor/loop-mode-core.mjs` — the one kind reading
+`check-spec.mjs --spec-kind` prints: a `quick` SPEC gets the verify-only stop table and the quick freshness column,
+any other SPEC the full ones. No argument selects a table (`check-loop.mjs` refuses every flag but `--iter` and
+`--cap`), so nothing you pass can widen or narrow what the stop reads.
+
+**`--quick` is recognized only as the FIRST TOKEN of the arguments** — never a scan of the description, which is
+untrusted prose (P2) — and it is removed before the description is passed on. **This rule is ADVISORY (P0): it is an
+instruction to you, the orchestrating model; nothing parses the invocation.** Its backstops are floor reads: item 2's
+kind read (a floor read this command obeys — advisory, like every branch here), and, independently, the stop itself,
+whose table is the SPEC's kind. **The bound is wider than `/pharn-ship --quick`'s:** under `--model-approve` the
+model writes AND approves the kind, so no person is told the trade before the run. The record (`mode: quick`), the
+commit message and the summary name the mode after it.
+
+**The deltas below, in step order — every other line of Steps 1–7 and the Final step runs exactly as written for a
+`--quick` invocation too; only what is listed here changes.**
+
+1. **Entry.** `/pharn-loop --quick [--max-iter N] <increment description>`. Step 1a runs unchanged, and writes no
+   mode marker: the loop's mode is the SPEC's kind, and a marker would be a second, unverified copy of it.
+
+2. **Step 3 — the SPEC.** Invoke `/pharn-spec --quick --model-approve <description>` in place of
+   `/pharn-spec --model-approve`. Its reports map as written — thin intent → **S6**, a clarification marker left in the
+   Draft → **S6b**, a refused template → **S9** — plus one: the intent does not fit a quick SPEC (more than three
+   criteria, or a criterion observable only end-to-end) → **S6c** (`blocked: not-quick`). After
+   `check-spec-approved.mjs` exits `0` (as written), read the kind:
+
+   ```bash
+   node pharn/floor/check-spec.mjs --spec-kind pharn/features/<name>/SPEC.md
+   ```
+
+   Proceed only on exit `0` **and** the exact printed token `quick`. Anything else (`feature`, `test-infra`, an empty
+   line, a non-zero exit) is **S6c** — the run never widens a quick request into a full one.
+
+3. **Step 4 — the grill.** Invoke `/pharn-grill <name> --quick` in place of `/pharn-grill`. It writes the quick
+   `GRILL.md` — `mode: quick`, both floor results, and no interrogation (`pharn-grill.md`'s own `--quick` section) —
+   and its markers and both exits (`check-plan-spec-agree` and `check-plan-lessons`) are read exactly as written; its
+   eligibility refusal (a kind other than `quick`) or either floor stop RED is **S9**. `/pharn-plan`,
+   `/pharn-test --unattended` and the Step-4 test-stage gate are unchanged: a quick SPEC is test-first exactly as a
+   `feature` SPEC is.
+
+4. **Step 5, sub-step 1 — the build.** Unchanged, except that from iteration 2 on only `verify-report.json`'s fields
+   are handed over as DATA: there is no regression report.
+
+5. **Step 5, sub-step 2 — `/pharn-regress` SKIPPED, its scope check KEPT.** No `/pharn-regress` and none of its
+   markers. After the build's orchestrator marker and before verify's stage-start, run the scope partition over this
+   iteration's tree. List the changed and untracked files against the loop's own base:
+
+   ```bash
+   git diff --name-only --no-renames '<base sha>'
+   git ls-files --others --exclude-standard
+   ```
+
+   `inside` = both lists, minus any path under `.pharn/` (the state root is never an escape); the declared set =
+   `PLAN.md`'s `## Files` paths plus `AC-TESTS.md`'s `## Files` paths — exactly the inputs `/pharn-regress`'s script
+   builds in its `partition` phase (`pharn/floor/stage-regress.mjs`; cited, not restated — P4). Then:
+
+   ```bash
+   node pharn/floor/check-regress.mjs scope --changed "<inside, comma-separated>" --declared "<PLAN.md ## Files paths, plus AC-TESTS.md ## Files paths when that file exists>" --feature "<name>"
+   ```
+
+   Branch **only** on the exit code (P5): `0` → verify. `1` → **S9** (`blocked: stage-refused`): a changed path is
+   outside the declared writes — the row a full run's `/pharn-regress` `scope-escaped` refusal maps to, with the same
+   remedy (declare the path through a re-plan, or revert the change). Any other exit → **S9**, fail-closed. Running the
+   listing and the line, and assembling their inputs, is **ADVISORY** (a named follow-up, `quick-scope-inputs-by-code`,
+   would build them by code); the exit is **FLOOR**. **The one divergence from the script's partition:** the listing
+   above prints without `-z`, so a path git C-quotes (a non-ASCII byte, a quote, a backslash or a control character)
+   reaches `--changed` quoted and reads as escaped — a false S9, never a false pass. A path containing a comma is split
+   by the line's list parse and reads as escaped too; the script's partition refuses such a path instead (`unusable`,
+   S9), so both modes stop there.
+
+6. **Step 5, sub-step 3 — freshness.** The same pinned line. The checker reads the SPEC's kind itself and applies its
+   quick column (`pharn/floor/loop-fresh-core.mjs`, header): the verify evidence alone for checks A–E and J, F and I as
+   in full mode, and G and H `skipped`. A RERUN naming `verify` re-runs verify inside the iteration, as written. **A
+   RERUN naming `regress` is S11** (`blocked: stale-evidence`): a quick run never runs `/pharn-regress`, and the
+   checker asks for it only when the SPEC no longer reads quick — a person inspects the SPEC.
+
+7. **Step 5, sub-step 4 — the stop.** The same pinned line; `check-loop.mjs` reads the kind itself. **Exit `0` is
+   `STOP_GREEN_QUICK`** — verify `PASS`, no regression verdict read. Every other exit, `terminal_cause` and row is as
+   written (`ac-evidence` → S13).
+
+8. **Step 6 — the record and the commit.** A quick run's green stop is `STOP_GREEN_QUICK`: Step 6a reverts on
+   anything else, and Step 6c commits on it with a GREEN `<decision-check>`. `LOOP.md` carries **`mode: quick`** on
+   every record, blocked ones included — written from the invocation, never copied from `check-loop.mjs`'s JSON (Step
+   6b's capture rules). Its body lists each iteration's verify verdict and scope result, and holds a
+   **`## Not checked in quick mode`** section naming, in this order:
+   - **regressions outside the feature** — no base comparison ran; the scope check did;
+   - **the plan interrogation** — `/pharn-grill --quick` ran its two floor stops only;
+   - **`RUN-REPORT.md`** — not rendered; `cost.json` is.
+
+   Step 6b's run-stop, ledger and ledger check run unchanged — **`cost.json` is kept** — and **its
+   `render-run-report.mjs` line is SKIPPED**. Step 6c's staging builder is unchanged: it keeps only regular files that
+   exist, so a quick run commits no `REGRESSION.md`, `regression-report.json` or `RUN-REPORT.md` — it never writes them,
+   and S2's fresh feature directory means no earlier run's copy is there to sweep in (a command rule, advisory).
+
+9. **Step 7 — the summary.** Name the mode and the not-checked list; report verify and the scope result per iteration
+   (there is no regress verdict); print the ledger table and say that no `RUN-REPORT.md` exists; and add to the honest
+   line: _"It ran in quick mode: no regression outside the feature was looked for, and the plan was not
+   interrogated."_
+
+**Every question a quick run can meet, mapped to Step 2** (one enumeration, L29 — the rows not named here are
+unchanged):
+
+| source                                | question or outcome                                                                      | row                         |
+| ------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------- |
+| `/pharn-spec --quick --model-approve` | thin intent                                                                              | S6                          |
+| `/pharn-spec --quick --model-approve` | a clarification marker left in the Draft                                                 | S6b                         |
+| `/pharn-spec --quick --model-approve` | more than three criteria, or one observable only end-to-end                              | **S6c**                     |
+| `/pharn-spec --quick --model-approve` | a refused template                                                                       | S9                          |
+| the Step-3 kind read                  | a non-zero exit, or any token but `quick`                                                | **S6c**                     |
+| `/pharn-grill <name> --quick`         | its eligibility refusal (kind ≠ `quick`), or either floor stop RED                       | S9                          |
+| `/pharn-test --unattended`            | no runner with per-test results (`check-red-run --preflight` exit 1) / any other refusal | S12 / S9                    |
+| `/pharn-build`                        | seam config / plan ambiguity / seam `ask` / a refusal                                    | S5 / S7 / S8 / S9           |
+| the scope check (item 5)              | exit 1 (escaped), or any other non-zero exit                                             | **S9**                      |
+| `/pharn-verify`                       | no gates / a refusal / another ask                                                       | S4 / S9 / S10               |
+| `check-loop-fresh.mjs`                | RERUN `verify`                                                                           | re-run inside the iteration |
+| `check-loop-fresh.mjs`                | RERUN `regress`                                                                          | **S11**                     |
+| `check-loop-fresh.mjs`                | STOP `empty-source-set` / `ac-evidence-invalid` / any other; INCONCLUSIVE                | S4 / S13 / S11; S11         |
+| `check-loop.mjs`                      | exit 4, `terminal_cause` `ac-evidence`                                                   | S13                         |
+
+**A full run that meets `STOP_GREEN_QUICK`** — its SPEC reads quick although the run was invoked without `--quick`,
+a deviation `/pharn-spec` refuses at its own Step 4a — **does not commit.** A full run's Step 6c commits only
+`STOP_GREEN`, so it ends uncommitted and reverted; `check-loop-record.mjs` REDs its record (`STOP_GREEN_QUICK`
+requires `mode: quick`, and the record carries the invocation's mode, full), and `check-loop-decision.mjs` REDs it
+too (`MODE_MISMATCH`: the table the SPEC's kind selects is quick). One wasted run, never an over-claim. Both REDs rest
+on Step 6b recording the invocation's mode and never "repairing" it: a record rewritten to `mode: quick` would turn
+both GREEN, and only Step 6c's advisory reading of "a green stop" would stand between the run and a commit over a
+regression report the quick table never read.
+
+**What quick mode claims, and what it does not (guarantee audit, P0):**
+
+- _"A quick loop's stop is decided over `/pharn-verify`'s verdict alone"_ → **FLOOR** (`check-loop.mjs`'s quick
+  table: enum membership over one verdict plus `iter >= cap`, tested). The regression report is not read.
+- _"The mode is the SPEC's pinned kind, never a flag"_ → the read is **FLOOR** (membership over the one kind reading;
+  no argument selects a table, tested). That the kind is the APPROVED, un-drifted one is **FLOOR** when
+  `check-loop-fresh.mjs` check I runs (the pin covers the kind line); that it runs before the stop is **ADVISORY**
+  orchestration — the same standing as the rest of the freshness wiring.
+- _"A full SPEC never skips the regression verdict"_ → **FLOOR**: any SPEC not positively quick reads full, and so does
+  a mode reader that cannot load (tested per member).
+- _"`STOP_GREEN_QUICK` ⇔ a quick SPEC"_ → **FLOOR** (tested both ways).
+- _"A quick run is tree-bound and checked for fabrication"_ → **FLOOR** (`check-loop-fresh.mjs` C, D, J, E and F over
+  the verify evidence, tested). Bounds unchanged: tree identity, not recency; agreement, never provenance.
+- _"A changed file outside the declared files stops a quick loop"_ → the exit is **FLOOR** (`check-regress.mjs
+scope`); running it and assembling its inputs are **ADVISORY** (item 5), bounded as `/pharn-regress`'s
+  `scope-escaped` remedy states — a plan that rewrites its own `## Files` defeats it.
+- _"`--quick` is read only as the first token"_ → **ADVISORY**; its backstops and their bound are above.
+- _"A quick loop commits only `STOP_GREEN_QUICK` with a GREEN decision check; a full run never commits it"_ → the
+  token and both record checks are **FLOOR**; the commit branch and Step 6b's capture are **ADVISORY** (command prose),
+  exactly as for `STOP_GREEN`.
+- _"No `RUN-REPORT.md`; `cost.json` kept"_ → **ADVISORY** (command prose). The hygiene pins prove the prose says so,
+  never that a run obeyed it.
+- _"No regression outside the feature is looked for"_ → a stated limit, not a claim. _"The change is small"_ → not a
+  claim: nothing measures it. The person who typed `--quick` chose the mode; the model wrote and approved the SPEC it
+  runs over.
 
 ## Step 3 — The SPEC, approved by the model through `/pharn-spec` (reused, not re-implemented)
 
@@ -286,8 +457,8 @@ written) writes no record and no SPEC revert; it goes straight to the Step 7 sum
 node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-spec
 ```
 
-Invoke `/pharn-spec --model-approve` with the threaded `<name>` and the description. Its Step 4a skips the
-approval form, pins the SPEC through its own Step 5 under its own writes-scope, and records
+Invoke `/pharn-spec --model-approve` with the threaded `<name>` and the description (a `--quick` run invokes the
+quick form instead, then reads the SPEC's kind — `## Quick mode` item 2). Its Step 4a skips the approval form, pins the SPEC through its own Step 5 under its own writes-scope, and records
 `approved_by: model`; on thin intent it reports back instead, which is S6, and on a clarification marker
 left in the Draft it reports back blocked on clarification, which is S6b. Then read the gate this run's
 plan stage will enforce anyway:
@@ -331,7 +502,8 @@ line needs is literal, so there is nothing to carry.
 
 Run `/pharn-plan` and `/pharn-grill` with the **same** structural verdict reads as `/pharn-ship` Step 2
 stages 2–3 — `check-spec-approved` at plan, **both** of grill's exits (`check-plan-spec-agree` and
-`check-plan-lessons`) — cited, not restated (P4). Two differences, stated:
+`check-plan-lessons`) — cited, not restated (P4); a `--quick` run invokes the grill's quick form (`## Quick mode`
+item 3). Two differences, stated:
 
 - **Every question a stage would ask maps to Step 2**, never to a person.
 - **A RED build project gate is NOT a stop here.** The loop proceeds to regress + verify, so the decision
@@ -402,7 +574,8 @@ no value is carried between blocks (**L44**).
    node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
    ```
 
-2. **`/pharn-regress --base <base sha>`**, then **`/pharn-verify`**. Both stages now run their gates
+2. **`/pharn-regress --base <base sha>`**, then **`/pharn-verify`**. _(`/pharn-regress` and its two markers are
+   SKIPPED in Quick mode: the scope check runs instead — `## Quick mode` item 5.)_ Both stages now run their gates
    through `pharn/floor/run-gates.mjs` and read the resulting **stamp**, so build-completeness reaches
    `check-verify.mjs` from the stamp's `aux.completeness` rather than from a hand-passed `--complete`
    (`pharn/pharn-contracts/gate-run-record.md`). The `INCOMPLETE` verdict this loop branches on at S-red
@@ -443,7 +616,8 @@ no value is carried between blocks (**L44**).
      front (SPEC, chain, lessons, `GRILL.md`, and the test stage — `check-test-stage.mjs`) still holds. Go to 4.
    - **`1` RERUN** — the JSON's `stage_to_rerun` (`verify` or `regress`) is stale or missing. Re-invoke that
      stage **inside this same iteration `<N>`**, with its own `mark-phase.mjs --iteration <N>` lines as in 2,
-     then run this step again. A re-run consumes **no** iteration. The checker has already recorded the
+     then run this step again. _(A quick run: a RERUN naming `regress` is **S11**, never a regress run —
+     `## Quick mode` item 6.)_ A re-run consumes **no** iteration. The checker has already recorded the
      re-run in `.pharn/pharn-loop/<name>/freshness.jsonl`. **A verify re-run can cascade into a regress
      re-run**: the new verify starts from the current tree, so a regress stamp from before the tree moved no
      longer matches it. That is one re-run per stage, not a second unexplained staleness. If the re-run
@@ -479,7 +653,8 @@ no value is carried between blocks (**L44**).
 
    Keep its JSON output — Step 6 copies `decision` from it. Branch **only** on the exit code (P5):
 
-   - **`0` `STOP_GREEN`** — verify `PASS` ∧ regress `no-regressions`. Go to Step 6.
+   - **`0` `STOP_GREEN`** — verify `PASS` ∧ regress `no-regressions`. Go to Step 6. **In a quick run exit `0` is
+     `STOP_GREEN_QUICK`** — verify `PASS` alone, no regression verdict read (`## Quick mode` item 7). Go to Step 6.
    - **`3` `CONTINUE`** — a measurable red (verify `FAIL` — an AC not delivered yet included — or `INCOMPLETE`, or a
      regression) and `N < M`.
      `N++`, back to 1.
@@ -500,9 +675,10 @@ those, with no review / finding / severity input.
 
 ## Step 6 — Stop handling, in this order
 
-### Step 6a — revert the model's approval unless the stop is `STOP_GREEN`
+### Step 6a — revert the model's approval unless the stop is green (`STOP_GREEN`, or `STOP_GREEN_QUICK` under `--quick`)
 
-If the decision is anything other than `STOP_GREEN` and `SPEC.md` is `Approved`, revert it. Key the revert on
+If the decision is anything other than a green stop — `STOP_GREEN`, or `STOP_GREEN_QUICK` in a `--quick` run — and
+`SPEC.md` is `Approved`, revert it. Key the revert on
 the **state**, not on the `approved_by: model` marker: S2 guaranteed this run created the feature directory, so
 any approval on that SPEC is this run's, marked or not.
 
@@ -521,7 +697,7 @@ GREEN (a valid Draft) → the record's `spec:` line is `reverted to Draft`, and 
 any stage reuses this SPEC. A non-zero setter, or a check still RED after one repair → `spec: revert failed`:
 carry the output into the summary and say the SPEC is **still approved by the model** — never report a revert
 that did not happen. `--amend-scope` exiting **2** with _"no baseline"_ is expected and harmless when no epoch
-is open. A `STOP_GREEN` whose commit later does not happen comes back here from Step 6d.
+is open. A green stop whose commit later does not happen comes back here from Step 6d.
 
 ### Step 6b — write the record, `pharn/features/<name>/LOOP.md`
 
@@ -531,13 +707,17 @@ node pharn/floor/reconcile-baseline.mjs --amend-scope   # IMMEDIATELY after the 
 ```
 
 **The record's shape is defined ONCE, in `pharn/pharn-contracts/loop-record.md`** — the envelope
-(`decision`, `iterations`, `commit`, `date`, plus the optional `cap`), the blocked-stop exception, and the
+(`decision`, `iterations`, `commit`, `date`, plus the optional `cap` and `mode`), the blocked-stop exception, and the
 mandatory `## Handoff` with exactly `### investigated`, `### learned`, `### next_steps`. Read the contract
 and follow its canonical template; do not re-derive the shape from this command (P4). This command's own
 capture rules:
 
 - **`decision`** is **copied verbatim** from the `check-loop.mjs` JSON kept in Step 5 — except on a blocked
   stop, which writes `INCONCLUSIVE` plus the `blocked:` key, as the contract states.
+- **`mode`** (6.27.0) records the run's **invocation**: write `mode: quick` on every record of a run invoked with
+  `--quick` as its first argument token, blocked records included, and write no `mode` line otherwise (absent means
+  `full`). It is **never copied from `check-loop.mjs`'s JSON**, whose `mode` is the table the SPEC's kind selected:
+  `check-loop-decision.mjs` compares the two, and a copy could never disagree with its own source.
 - **`commit`** is captured now, **before** any commit this run makes:
 
   ```bash
@@ -553,7 +733,7 @@ capture rules:
   cap-independent ones. A **blocked** stop may omit it (Step 2's table never consulted `check-loop.mjs`,
   so there is nothing for `cap` to help re-derive).
 - The body carries an **`## Outcome`** section with four lines, so the outcome survives on disk and not only
-  in the summary: `commit:` — one value from the Step 7 closed set (for `STOP_GREEN`, the expected
+  in the summary: `commit:` — one value from the Step 7 closed set (for a green stop, the expected
   `committed <branch>`; Step 6d rewrites it if the commit does not happen); `spec:` — `approved by the model`,
   `reverted to Draft`, `revert failed`, or `not approved` (a SPEC this run never approved, as on S6b); `blocked:` — the id, or `none`;
   `ac-tests:` — `test-first` (the Step-4 gate passed), `refused` (a stop AT the test stage: S12, or S9 from Step 4), or
@@ -571,8 +751,10 @@ node pharn/floor/check-loop-record.mjs pharn/features/<name>/LOOP.md
 
 Exit 0 → proceed. Exit 1 → fix the record and re-run **at most once**; if it is still RED, carry the
 checker's output into the summary verbatim and continue to the next check below. Never delete the content
-the check is about to make it pass. **The ≤1 repair bound is advisory** (`LIMITS.md §1d`) — command prose,
-not a counter.
+the check is about to make it pass. **A decision↔mode RED is never repaired by editing `mode`** (6.27.0): it means
+the invocation and the SPEC's kind disagree, so the record keeps the invocation, the RED goes into the summary
+verbatim, and the decision check below REDs too, so nothing is committed. **The ≤1 repair bound is advisory**
+(`LIMITS.md §1d`) — command prose, not a counter.
 
 **Then, on every NON-BLOCKED stop only, re-derive the decision:**
 
@@ -614,7 +796,8 @@ emitted this run" in the summary instead. The render below still runs. It detect
 the live markers and renders **STALE LEDGER**. This instruction is ADVISORY, and the renderer's comparison
 is the backstop.
 
-**Then render the human-readable run report**, on the same every-stop-with-a-feature-directory rule:
+**Then render the human-readable run report**, on the same every-stop-with-a-feature-directory rule _(SKIPPED in
+Quick mode — `## Quick mode` item 8; `cost.json` is still emitted above)_:
 
 ```bash
 node pharn/floor/render-run-report.mjs '<name>' --base pharn/features
@@ -629,7 +812,7 @@ none is authored by you.** Do not retype, summarize or "improve" the file — St
 tree exactly as it leaves every other artifact.
 
 **What this step does NOT do, and the distinction is load-bearing (P0).** `check-cost-ledger.mjs`'s exit
-code is **not** a proceed/stop input. It gates nothing: Step 6c's commit is gated on `STOP_GREEN` **and**
+code is **not** a proceed/stop input. It gates nothing: Step 6c's commit is gated on a green stop **and**
 `<decision-check>`, and nothing else. A RED ledger is reported in the summary verbatim and the run
 continues, because the ledger **annotates a run**; it never judges one (fix #3). Reading a cost record as
 a verdict would be the exact advisory-dressed-as-deterministic disease this repo exists to prevent.
@@ -640,12 +823,14 @@ writes `cost.json` **itself** — a model never retypes hundreds of numbers (the
 `pharn/floor/reconcile-ignore.json`, never described as gate-covered. A run that skips these lines simply
 has no ledger; nothing downstream fails.
 
-### Step 6c — commit, on `STOP_GREEN` AND a GREEN `<decision-check>` only
+### Step 6c — commit, on a green stop (`STOP_GREEN`, or `STOP_GREEN_QUICK` under `--quick`) AND a GREEN `<decision-check>` only
 
-Any other decision skips this step: no branch, no commit. **A `STOP_GREEN` whose `<decision-check>` (above)
+The green stop is `STOP_GREEN` in a run invoked without `--quick`, and `STOP_GREEN_QUICK` in a `--quick` run — never
+the other one (a full run that meets `STOP_GREEN_QUICK` does not commit: `## Quick mode`). Any other decision skips
+this step: no branch, no commit. **A green stop whose `<decision-check>` (above)
 was RED also skips this step** — `not committed: decision unverifiable` — this run's own record failed to
 re-derive from its own cited reports, so nothing is committed regardless of the `decision` token; go to
-Step 6d exactly as for any other non-committing outcome. Only on `STOP_GREEN` **with** a GREEN
+Step 6d exactly as for any other non-committing outcome. Only on a green stop **with** a GREEN
 `<decision-check>`, run these pinned lines in order (PHARN's own build-loop lesson **L22**: the invocation
 is the instruction, not a description of it).
 
@@ -739,10 +924,12 @@ go to Step 6d.
 
 ```bash
 GIT_LITERAL_PATHSPECS=1 git add -A --pathspec-from-file=.pharn/pharn-loop/<name>/stage.list --pathspec-file-nul
-GIT_LITERAL_PATHSPECS=1 git commit --pathspec-from-file=.pharn/pharn-loop/<name>/stage.list --pathspec-file-nul -m 'pharn-loop(<name>): STOP_GREEN after <N> iteration(s)' -m 'The SPEC was approved by the model (approved_by: model), not by a person. Nothing was merged or pushed; review this branch before merging.'
+GIT_LITERAL_PATHSPECS=1 git commit --pathspec-from-file=.pharn/pharn-loop/<name>/stage.list --pathspec-file-nul -m 'pharn-loop(<name>): <decision> after <N> iteration(s)' -m 'The SPEC was approved by the model (approved_by: model), not by a person. Nothing was merged or pushed; review this branch before merging.'
 ```
 
-A non-zero `git add` → `not committed: stage failed`; a non-zero `git commit` → `not committed: commit failed`;
+`<decision>` is substituted literally with the green token `check-loop.mjs` emitted — `STOP_GREEN`, or
+`STOP_GREEN_QUICK` in a `--quick` run — so the commit message names the mode (6.27.0). A non-zero `git add` →
+`not committed: stage failed`; a non-zero `git commit` → `not committed: commit failed`;
 either → Step 6d. The pathspec form commits **only** the listed paths, so anything the user had already staged
 stays staged and uncommitted. The repository's commit hooks run. **Never** retry with `--no-verify`, and never
 run `git push` or `git merge` — the branch is for a human to review.
@@ -753,7 +940,7 @@ the summary names `<original branch>` so the user can switch back.
 ### Step 6d — when the commit does not happen
 
 For `not committed: decision unverifiable`, `not committed: evidence stale`, `not committed: nothing staged`,
-`branch failed`, `stage failed` or `commit failed` on a `STOP_GREEN`:
+`branch failed`, `stage failed` or `commit failed` on a green stop:
 
 1. Undo exactly what happened, and nothing else. **`decision unverifiable` and `evidence stale` are caught
    before any staging or branch line runs** — nothing was ever staged and no branch exists — skip straight to 2, exactly
@@ -780,7 +967,8 @@ Report, plainly and without asking anything:
 
 - that the run **finished**, the `decision`, the iteration count, and the `blocked:` id if any — with what the
   run needs from a person to continue (the row's trigger, in one sentence);
-- the files changed, and the per-iteration verify / regress verdicts;
+- the files changed, and the per-iteration verify / regress verdicts (a quick run: its mode, the not-checked list,
+  and verify with the scope result per iteration — `## Quick mode` item 9);
 - **every stage re-run**, by stage and iteration, read from the budget ledger rather than from memory, and
   the final freshness verdict (`FRESH`, or the `reason_code` that blocked or stopped the commit):
 
@@ -801,7 +989,8 @@ Report, plainly and without asking anything:
 - **the run report**: print `pharn/features/<name>/RUN-REPORT.md`'s `## Tokens` table and its `## Files`
   list. **The FILE is the record; this screen copy is advisory** and is reproduced from it, never
   retyped. Name the path so the reader can open it. If no report was rendered (a stop before S2 has no
-  feature directory), say that plainly rather than omitting the line;
+  feature directory; a quick run renders none — `## Quick mode` item 8), say that plainly rather than omitting
+  the line;
 - **the cost ledger**: the per-stage table `render-cost-ledger.mjs` printed at Step 6b, verbatim, plus
   `check-cost-ledger.mjs`'s verdict (GREEN, any WARN, or a RED quoted verbatim). **The FILE is the
   record; this screen copy is advisory** — and both carry the same bound: the ledger reports **tokens**,
@@ -811,7 +1000,8 @@ Report, plainly and without asking anything:
 - the honest line: _"The run stopped at the floor-grade decision shown. The SPEC was approved by the model,
   not a person. This is not a judgment that the change is good; review the branch before merging."_ When
   the SPEC state is **not approved**, its second sentence reads instead: _"The SPEC was never approved;
-  it is a Draft waiting for a person."_
+  it is a Draft waiting for a person."_ A quick run adds: _"It ran in quick mode: no regression outside the
+  feature was looked for, and the plan was not interrogated."_
 
 **Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the audit sections for document layout only, and a reader who stops at the turn-end never reaches it.
 
@@ -821,7 +1011,9 @@ Then **end your turn**. Do not ask a question, do not push, do not merge, do not
 
 - **"The loop stops on the Design C table"** → **FLOOR** (`check-loop.mjs`: enum membership over the two
   verdicts + an `iter >= cap` compare, tested — `pharn/ARCHITECTURE.md §2` primitive #3). This is the decision
-  **given** its inputs.
+  **given** its inputs. Since 6.27.0 the table itself is chosen by membership over the SPEC's pinned kind: the quick
+  table (verify's verdict alone, green `STOP_GREEN_QUICK`) for a `quick` SPEC, the full one for every other
+  (`## Quick mode`, whose own audit bullets carry the quick claims).
 - **"The build does not run before the test stage completed, and the loop stops if that evidence stops holding"** →
   **FLOOR** verdict (`check-test-stage.mjs --require-test-first`, read at Step 4 and by `check-loop-fresh.mjs` check I
   after every build and at the commit gate; `/pharn-build`'s Step 0 reads it without the flag — enum membership over the
@@ -884,14 +1076,16 @@ Then **end your turn**. Do not ask a question, do not push, do not merge, do not
   so neither guard nor reconciler covers it.
 - **"A record the checker sees is well-shaped"** → **FLOOR** (`check-loop-record.mjs`, tested) — given a
   record handed to it. That one is written, and handed over, is advisory.
-- **"A committed `STOP_GREEN` record's `decision` was genuinely re-derived from the reports it cites"** →
+- **"A committed green record's `decision` was genuinely re-derived from the reports it cites"** →
   **FLOOR** (`check-loop-decision.mjs`, tested — `pharn/ARCHITECTURE.md §2` primitive #3, reusing
-  `check-loop.mjs`'s own output via `spawnSync`, never re-implementing its decision table). **Bounded,
+  `check-loop.mjs`'s own output via `spawnSync`, never re-implementing its decision table; since 6.27.0 the record's
+  `mode` must equal the table the SPEC's kind re-derives, `MODE_MISMATCH` otherwise — agreement between files, never
+  provenance). **Bounded,
   named, not hidden:** this proves the decision is **re-derivable** from the CITED reports — it does
   **not** prove those reports are themselves honest; a self-consistent fabricated `verify-report.json` /
   `regression-report.json` pair still passes **this** checker. Since `check-loop-fresh.mjs`, such a pair must
   also match stamps that validate, reproduce from them live, and describe the live tree. That narrows the
-  forgery to a self-consistent fabricated stamp set, and it does not close it. "A `STOP_GREEN` was
+  forgery to a self-consistent fabricated stamp set, and it does not close it. "A green stop was
   committed" now additionally means "its decision was not un-derived at commit time, and its evidence
   described the committed tree" — it never means "the reports were true." A **blocked** stop
   is exempt by construction (it never consulted `check-loop.mjs`), and a record from before this checker
@@ -906,14 +1100,17 @@ Then **end your turn**. Do not ask a question, do not push, do not merge, do not
   spellings are PRESENT and CLOSED in this file, and that no interactive-ask token appears — never that a run
   obeyed them.
 - **"The commit holds only regular files from the plan's `## Files` plus the named artifacts" / "only
-  `STOP_GREEN` commits" / "nothing is pushed or merged" / "a failed commit returns the checkout"** →
+  a green stop commits" / "nothing is pushed or merged" / "a failed commit returns the checkout"** →
   **ADVISORY** (Bash). The pinned lines are present, and the hygiene pins prove that no fenced line spells
   `git … push`, `git … merge`, `--no-verify` or a quoted `"push"` / `"merge"` argument, and that no fenced block
   reads a shell variable it did not assign — vocabulary checks, which a novel spelling still passes. Nothing on
-  the floor enforces any of it. The `STOP_GREEN` it branches on is FLOOR.
+  the floor enforces any of it. The green token it branches on (`STOP_GREEN`, or `STOP_GREEN_QUICK` under
+  `--quick`) is FLOOR.
 - **"No advisory stage can gate the loop" / "the record cannot affect the stop"** → **STRUCTURAL.**
-  `check-loop.mjs`'s input signature is `{verify-report.json, regression-report.json, iter, cap}` — no review,
-  finding, severity or record parameter.
+  `check-loop.mjs`'s inputs are the two verdict reports, `--iter` / `--cap`, and ONE token of the feature's own SPEC
+  — its `spec_kind`, read by the one kind reading from the `SPEC.md` beside the verify report — which chooses the
+  table (verify-only for `quick`, in which the regression report is not read at all). There is still no review,
+  finding, severity, record or fingerprint input.
 - **"A turn end during an open unattended run requires a record"** → **ADVISORY infrastructure, not a new
   floor primitive.** The `Stop` hook `.claude/hooks/require-loop-record.cjs` is deterministic (session
   equality, a plan-mode membership test, an age compare, file existence, a counter). It refuses the turn
@@ -927,8 +1124,9 @@ Then **end your turn**. Do not ask a question, do not push, do not merge, do not
 ## Trust (P2)
 
 - **Control flow reads ONLY deterministic-tool output** — `check-loop.mjs` exit code, the two `.verdict`
-  enums, `failing_gates` membership, and checker exit codes. **No stop, continue or stuck-point decision rests
-  on a free-text field.**
+  enums, `failing_gates` membership, checker exit codes, and (6.27.0) the SPEC's kind token, which the checkers
+  reduce from the SPEC to a closed member without interpreting its body. **No stop, continue or stuck-point decision
+  rests on a free-text field.**
 - **Untrusted prose now reaches an approved pin with no person reading it.** The description becomes an
   Approved SPEC, a PLAN, a writes-scope and code in one unattended turn, so instruction-looking content in it
   can steer what is built. Bounded by: fix #7 per build (though the scope itself derives from that input), the
@@ -968,7 +1166,8 @@ Then **end your turn**. Do not ask a question, do not push, do not merge, do not
   `reason_code` (`empty-source-set` → S4); a re-run is bounded by the checker's own counter, not by prose.
 - S1's regex, S2's directory test, S3's exit code, S4's empty-set test, S5 and S9's exit codes and heading
   presence, the staging filter (file test, `HEAD` tracking, `check-ignore`) and every commit outcome (exit
-  codes) are membership tests. S6, S6b, S7 and S8 are judgment-triggered and each ends in a **stop**, never a guess.
+  codes) are membership tests, and so is S6c's kind-read trigger (the printed token is `quick` or it is not).
+  S6, S6b, S7 and S8, and S6c's fit-check trigger, are judgment-triggered and each ends in a **stop**, never a guess.
 - The terminal fallback of every stuck point is a stop whose summary says what the run needs — P5's "ask the
   human", delivered when the run halts rather than mid-run.
 
@@ -982,11 +1181,12 @@ Then **end your turn**. Do not ask a question, do not push, do not merge, do not
   AC-evidence one is recorded as S13.
 - **No guess at a stuck point.** Every question maps to Step 2; judgment cases stop.
 - **No model approval left behind on a non-green stop — by procedure, not by the floor.** Every stop except a
-  committed `STOP_GREEN` reverts a SPEC the run approved (one it never approved stays a `Draft`); the revert is
-  agent-performed, so an aborted run can skip it.
+  committed green stop (`STOP_GREEN`, or `STOP_GREEN_QUICK` under `--quick`) reverts a SPEC the run approved (one it
+  never approved stays a `Draft`); the revert is agent-performed, so an aborted run can skip it.
 - **No unbounded iteration, and no promise of convergence.** The cap bounds the decision; whether a fix works
   is model work.
-- **No re-spec or re-plan inside the loop.** The loop iterates only `build → regress → verify`.
+- **No re-spec or re-plan inside the loop.** The loop iterates only `build → regress → verify` (a `--quick` run:
+  `build → verify`, with the scope check between them).
 - **No presenting the model's approval as a person's.** Every artifact and the summary say who approved.
 
 ## A doc-reconciliation `/pharn-loop` surfaces (reported, never agent-edited)

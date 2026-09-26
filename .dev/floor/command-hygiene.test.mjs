@@ -1626,6 +1626,7 @@ const STUCK_POINTS = [
   { id: "S5", blocked: "seam-config" },
   { id: "S6", blocked: "thin-intent" },
   { id: "S6b", blocked: "needs-clarification" }, // /pharn-spec left a clarification marker in the Draft (spec-template)
+  { id: "S6c", blocked: "not-quick" }, // 6.27.0: a --quick run's intent does not fit a quick SPEC, or its kind read is not quick
   { id: "S7", blocked: "plan-ambiguity" },
   { id: "S8", blocked: "seam-unresolved" },
   { id: "S9", blocked: "stage-refused" },
@@ -1732,7 +1733,7 @@ function forbiddenGitOffenders(body) {
 }
 
 test("✧ L34 — the /pharn-loop sets are non-empty and well-formed (the rules below cannot pass vacuously)", () => {
-  assert.equal(STUCK_POINTS.length, 14, "the stuck-point table is S1–S13 plus S6b");
+  assert.equal(STUCK_POINTS.length, 15, "the stuck-point table is S1–S13 plus S6b and S6c");
   assert.equal(new Set(STUCK_POINTS.map((s) => s.id)).size, STUCK_POINTS.length, "duplicate stuck-point id");
   assert.ok(COMMIT_OUTCOMES.length > 0, "the commit-outcome set is empty");
   assert.ok(fencedLines(commandBody(LOOP_FILE)).length > 0, `found no fenced lines in ${LOOP_FILE} — the fence scan broke`);
@@ -2504,6 +2505,331 @@ test("✧ QUICK MODE wiring is non-vacuous — pharn-ship.md, pharn-grill.md and
   const present = new Set(commandFiles());
   for (const file of ["pharn-ship.md", "pharn-grill.md", "pharn-spec.md"]) {
     assert.ok(present.has(file), `${file} must exist for the QUICK MODE rules above to range over a real file`);
+  }
+});
+
+// ── LOOP QUICK WIRING (6.27.0, /pharn-loop --quick) — the pair's second member (L31), materialized once (L29) ────────
+//
+// `/pharn-ship --quick` (above) and `/pharn-loop --quick` are a deliberate pair; .dev/features/loop-quick-mode/PLAN.md
+// Design §5 enumerates the pair's obligations with each side's answer. This set pins the LOOP's side in its command
+// prose: the section and its closing anchor; its three pinned lines — exactly once in the file, inside the section; the
+// quick invocations; the skip set and a pointer at each skip site; the green token at its three decisive sites; the
+// ADVISORY first-token label; the not-checked list; the record's `mode` capture and its no-repair rule (grill G1); the
+// /pharn-spec and /pharn-grill sides; and a CLOSURE — the section quotes none of the whole-file pinned literals other
+// suites read by first occurrence or by count (grill G7). The three pinned lines are EXECUTED further down (L45).
+//
+// Honest scope, as for every set in this file: prose PRESENCE and closure. It cannot prove a run read `--quick` as the
+// first token, skipped `/pharn-regress`, ran the scope line, or wrote `mode: quick` — "the wiring is pinned" NEVER means
+// "a quick loop behaved this way" (P0). What a quick loop's stop is decided by is check-loop.mjs's own tested table.
+
+const LOOP_QUICK_HEADING = "Quick mode — `/pharn-loop --quick` (6.27.0)";
+const LOOP_QUICK_NEXT = "Step 3 — The SPEC, approved by the model through `/pharn-spec` (reused, not re-implemented)";
+const LOOP_SPEC_KIND_LINE = "node pharn/floor/check-spec.mjs --spec-kind pharn/features/<name>/SPEC.md";
+const LOOP_GIT_LISTING = ["git diff --name-only --no-renames '<base sha>'", "git ls-files --others --exclude-standard"];
+
+/** pharn-loop.md's `## Quick mode` section, by HEADING OFFSET, both anchors asserted FOUND first (L60). */
+function loopQuickSection(body = commandBody(LOOP_FILE)) {
+  const start = headingOffset(body, LOOP_QUICK_HEADING);
+  assert.ok(start >= 0, "pharn-loop.md must carry a line-initial `## Quick mode — …` heading");
+  const end = headingOffset(body, LOOP_QUICK_NEXT);
+  assert.ok(end > start, "pharn-loop.md's `## Step 3 — …` heading must exist and follow `## Quick mode`");
+  return body.slice(start, end);
+}
+
+/** null when every pinned line appears exactly once in the file and inside the section, and the two listing lines are
+ *  adjacent in one fenced block; else why. */
+function loopQuickPinnedReason(body = commandBody(LOOP_FILE)) {
+  const section = loopQuickSection(body);
+  const lines = body.split(/\r?\n/).map((l) => l.trim());
+  for (const pinned of [LOOP_SPEC_KIND_LINE, ...LOOP_GIT_LISTING, QUICK_SCOPE_LINE]) {
+    const n = lines.filter((l) => l === pinned).length;
+    if (n !== 1) return `expected ${JSON.stringify(pinned)} exactly once in ${LOOP_FILE}, found ${n}`;
+    if (!section.split(/\r?\n/).some((l) => l.trim() === pinned)) return `${JSON.stringify(pinned)} is not inside ## Quick mode`;
+  }
+  const block = fencedBlocks(section).find((b) => b.lines.some((l) => l.text.trim() === LOOP_GIT_LISTING[0]));
+  const texts = block ? block.lines.map((l) => l.text.trim()) : [];
+  if (texts.join("\n") !== LOOP_GIT_LISTING.join("\n")) return "the two git listing lines must be one fenced block, in order, alone";
+  return null;
+}
+
+/** The skip set (L29), each member a phrase actually present in the section. */
+const LOOP_QUICK_SKIP_SET = [
+  { name: "/pharn-regress, its scope check kept", re: /`\/pharn-regress` SKIPPED, its scope check KEPT/ },
+  { name: "/pharn-regress's markers", re: /No `\/pharn-regress` and none of its\s+markers/ },
+  { name: "the render-run-report.mjs line", re: /its\s+`render-run-report\.mjs` line is SKIPPED/ },
+];
+
+/** A one-line pointer at each skip site outside the section (so a reader of the full-mode step learns the delta). */
+const LOOP_QUICK_POINTERS = [
+  {
+    site: "Step 5.2 (regress)",
+    re: /`\/pharn-regress` and its two markers are\s+SKIPPED in Quick mode: the scope check runs instead — `## Quick mode` item 5/,
+  },
+  {
+    site: "Step 5.3's RERUN bullet (S11)",
+    re: /A quick run: a RERUN naming `regress` is \*\*S11\*\*, never a regress run —\s+`## Quick mode` item 6/,
+  },
+  { site: "Step 6b's render line", re: /\(SKIPPED in\s+Quick mode — `## Quick mode` item 8; `cost\.json` is still emitted above\)/ },
+  { site: "Step 7's report bullet", re: /a quick run renders none — `## Quick mode` item 8/ },
+];
+
+/** STOP_GREEN_QUICK at the three decisive sites: the stop's exit-0 bullet, and the headings of Step 6a and Step 6c. */
+const LOOP_QUICK_GREEN_SITES = [
+  { site: "Step 5.4's exit-0 bullet", re: /\*\*In a quick run exit `0` is\s+`STOP_GREEN_QUICK`\*\*/ },
+  { site: "Step 6a's heading", re: /^### Step 6a — [^\n]*`STOP_GREEN_QUICK`/m },
+  { site: "Step 6c's heading", re: /^### Step 6c — [^\n]*`STOP_GREEN_QUICK`/m },
+];
+
+/** The section's other obligations, each a phrase present in it. */
+const LOOP_QUICK_SECTION_PINS = [
+  { what: "the /pharn-spec quick invocation", re: /`\/pharn-spec --quick --model-approve <description>`/ },
+  { what: "the /pharn-grill quick invocation", re: /`\/pharn-grill <name> --quick`/ },
+  { what: "cost.json is kept", re: /\*\*`cost\.json` is kept\*\*/ },
+  { what: "the first-token rule, first token only", re: /\*\*`--quick` is recognized only as the FIRST TOKEN of the arguments\*\*/ },
+  {
+    what: "the first-token rule labelled ADVISORY",
+    re: /\*\*This rule is ADVISORY \(P0\): it is an\s+instruction to you, the orchestrating model; nothing parses the invocation\.\*\*/,
+  },
+  { what: "the mode binding", re: /\*\*The mode is the SPEC's pinned kind, never a flag\.\*\*/ },
+  { what: "the not-checked heading", re: /\*\*`## Not checked in quick mode`\*\*/ },
+  {
+    what: "not checked: regressions outside the feature",
+    re: /- \*\*regressions outside the feature\*\* — no base comparison ran; the scope check did;/,
+  },
+  {
+    what: "not checked: the plan interrogation",
+    re: /- \*\*the plan interrogation\*\* — `\/pharn-grill --quick` ran its two floor stops only;/,
+  },
+  { what: "not checked: RUN-REPORT.md", re: /- \*\*`RUN-REPORT\.md`\*\* — not rendered; `cost\.json` is\./ },
+  { what: "a RERUN naming regress is S11", re: /\*\*A\s+RERUN naming `regress` is S11\*\*/ },
+  { what: "exit 0 is STOP_GREEN_QUICK", re: /\*\*Exit `0` is\s+`STOP_GREEN_QUICK`\*\*/ },
+];
+
+/** grill G1: Step 6b's capture bullet names the invocation and refuses the JSON copy; its repair rule excludes `mode`. */
+const LOOP_MODE_CAPTURE = [
+  { what: "the mode capture bullet names the invocation", re: /- \*\*`mode`\*\* \(6\.27\.0\) records the run's \*\*invocation\*\*/ },
+  { what: "…and is never copied from check-loop.mjs's JSON", re: /It is \*\*never copied from `check-loop\.mjs`'s JSON\*\*/ },
+  { what: "the ≤1 repair rule excludes mode", re: /\*\*A decision↔mode RED is never repaired by editing `mode`\*\*/ },
+];
+
+/** grill G7: the whole-file pinned literals other suites read by FIRST occurrence or by COUNT — none may sit in the
+ *  section, which precedes them all. RENDER_INVOCATION is render-run-report.test.mjs's own, copied here with a parity
+ *  assertion below (a test file cannot be imported without running its tests). */
+const RENDER_INVOCATION_COPY = /node pharn\/floor\/render-run-report\.mjs '<name>' --base pharn\/features/;
+const LOOP_QUICK_FORBIDDEN = [
+  { what: "the render-run-report invocation", re: RENDER_INVOCATION_COPY },
+  { what: "a check-loop-fresh.mjs line", re: /node pharn\/floor\/check-loop-fresh\.mjs/ },
+  { what: "a check-loop.mjs line", re: /node pharn\/floor\/check-loop\.mjs/ },
+  { what: "a mark-phase.mjs line", re: /node pharn\/floor\/mark-phase\.mjs/ },
+  { what: "the check-test-stage line", re: /node pharn\/floor\/check-test-stage\.mjs/ },
+];
+
+test("✧ LOOP QUICK: pharn-loop.md's ## Quick mode exists, and its three pinned lines appear exactly once — inside it", () => {
+  assert.equal(loopQuickPinnedReason(), null);
+});
+
+test("✧ LOOP QUICK: the section names every member of the skip set, and carries each of its own obligations (L29)", () => {
+  assert.equal(LOOP_QUICK_SKIP_SET.length, 3, "NON-VACUITY (L34)");
+  assert.equal(LOOP_QUICK_SECTION_PINS.length, 12, "NON-VACUITY (L34)");
+  const section = loopQuickSection();
+  for (const s of [...LOOP_QUICK_SKIP_SET, ...LOOP_QUICK_SECTION_PINS]) assert.match(section, s.re, s.name ?? s.what);
+});
+
+for (const p of LOOP_QUICK_POINTERS) {
+  test(`✧ LOOP QUICK: ${p.site} carries its one-line pointer to ## Quick mode`, () => {
+    assert.match(commandBody(LOOP_FILE), p.re);
+  });
+}
+
+for (const g of LOOP_QUICK_GREEN_SITES) {
+  test(`✧ LOOP QUICK: ${g.site} names STOP_GREEN_QUICK`, () => {
+    assert.match(commandBody(LOOP_FILE), g.re);
+  });
+}
+
+test("✧ LOOP QUICK (grill G1): Step 6b records the INVOCATION as `mode`, never the checker's JSON, and never repairs it", () => {
+  assert.equal(LOOP_MODE_CAPTURE.length, 3, "NON-VACUITY (L34)");
+  const body = commandBody(LOOP_FILE);
+  const step6b = body.indexOf("### Step 6b —");
+  const step6c = body.indexOf("### Step 6c —");
+  assert.ok(step6b > 0 && step6c > step6b, "both anchors must be found (L60)");
+  for (const c of LOOP_MODE_CAPTURE) assert.match(body.slice(step6b, step6c), c.re, c.what);
+});
+
+test("✧ LOOP QUICK (grill G7): ## Quick mode quotes NONE of the whole-file pinned literals other suites read first", () => {
+  // Parity: the copied regex is render-run-report.test.mjs's own, byte for byte.
+  const rr = readFileSync(join(REPO_ROOT, "pharn", "floor", "render-run-report.test.mjs"), "utf8");
+  assert.ok(
+    rr.includes(`const RENDER_INVOCATION = ${RENDER_INVOCATION_COPY.toString()};`),
+    "RENDER_INVOCATION_COPY must equal the suite's own"
+  );
+  const section = loopQuickSection();
+  for (const f of LOOP_QUICK_FORBIDDEN) assert.doesNotMatch(section, f.re, `## Quick mode must not quote ${f.what}`);
+  // …and each forbidden literal genuinely exists elsewhere in the file (non-vacuous: the closure guards a real pin).
+  const body = commandBody(LOOP_FILE);
+  for (const f of LOOP_QUICK_FORBIDDEN) assert.match(body, f.re, `${f.what} must exist in ${LOOP_FILE}`);
+});
+
+test("✧ LOOP QUICK: /pharn-spec refuses a quick misfit under --model-approve, and the 6.25.0 blocked sentence is gone (L33 closure)", () => {
+  const spec = commandBody("pharn-spec.md");
+  assert.match(spec, /report back \*\*blocked: the intent does not fit a\s+quick SPEC\*\*/);
+  assert.match(spec, /\*\*A Draft carrying `spec_kind: quick` is never approved under `--model-approve` without `--quick`\*\*/);
+  for (const file of commandFiles()) {
+    assert.doesNotMatch(commandBody(file), /No shipped command\s+passes both today/, `${file} still says no command passes both`);
+  }
+});
+
+test("✧ LOOP QUICK: /pharn-grill names /pharn-loop --quick as an invoker of its --quick form", () => {
+  assert.match(commandBody("pharn-grill.md"), /`\/pharn-ship --quick` and `\/pharn-loop --quick` \(6\.27\.0\) invoke this form/);
+});
+
+/** Every STOP_GREEN-prefixed token in `body` outside the closed pair (L36). */
+function stopGreenOffenders(body) {
+  return [...body.matchAll(/STOP_GREEN[A-Z_]*/g)].map((m) => m[0]).filter((t) => t !== "STOP_GREEN" && t !== "STOP_GREEN_QUICK");
+}
+
+test("✧ STOP_GREEN CLOSURE (L36): every STOP_GREEN-prefixed token in the command corpus is STOP_GREEN or STOP_GREEN_QUICK", () => {
+  let quick = 0;
+  for (const file of commandFiles()) {
+    const body = commandBody(file);
+    assert.deepEqual(stopGreenOffenders(body), [], file);
+    quick += (body.match(/STOP_GREEN_QUICK/g) ?? []).length;
+  }
+  assert.ok(quick > 0, "non-vacuous: the corpus names STOP_GREEN_QUICK");
+});
+
+test("✧ LOOP QUICK mutation controls: each pin fails when its text is broken (L60)", () => {
+  const body = commandBody(LOOP_FILE);
+  const section = loopQuickSection(body);
+  // the kind line dropped, and moved out of the section
+  const kindLine = `   ${LOOP_SPEC_KIND_LINE}\n`;
+  assert.ok(body.includes(kindLine), "fixture sanity: the kind line is in the body, indented in its list item");
+  assert.match(loopQuickPinnedReason(body.replace(kindLine, "")), /exactly once/);
+  const moved = body.replace(kindLine, "").replace(/^## Final step — /m, `${kindLine}\n## Final step — `);
+  assert.notEqual(moved, body.replace(kindLine, ""), "fixture sanity: the line was re-inserted after the section");
+  assert.match(loopQuickPinnedReason(moved), /not inside ## Quick mode/);
+  // a second quick scope line
+  assert.match(loopQuickPinnedReason(`${body}\n\`\`\`bash\n${QUICK_SCOPE_LINE}\n\`\`\`\n`), /exactly once/);
+  // a skip pointer dropped (Step 6b's render line)
+  const pointer = "_(SKIPPED in\nQuick mode — `## Quick mode` item 8; `cost.json` is still emitted above)_";
+  assert.ok(body.includes(pointer), "fixture sanity: the Step-6b pointer exists");
+  assert.doesNotMatch(body.replace(pointer, ""), LOOP_QUICK_POINTERS[2].re);
+  // STOP_GREEN_QUICK respelled STOP_GREEN_Q — the closure fires
+  assert.deepEqual(stopGreenOffenders(body.replace("STOP_GREEN_QUICK", "STOP_GREEN_Q")), ["STOP_GREEN_Q"]);
+  // the ADVISORY label dropped
+  const advisory = LOOP_QUICK_SECTION_PINS.find((p) => p.what === "the first-token rule labelled ADVISORY");
+  assert.doesNotMatch(section.replace("**This rule is ADVISORY (P0):", "**This rule is binding:"), advisory.re);
+  // the 6.25.0 sentence restored in pharn-spec.md
+  const restored = `${commandBody("pharn-spec.md")}\nNo shipped command passes both today.\n`;
+  assert.match(restored, /No shipped command\s+passes both today/);
+  // Step 6b's capture sentence, and its repair exclusion, each dropped (grill G1)
+  for (const [find, idx] of [
+    ["It is **never copied from `check-loop.mjs`'s JSON**", 1],
+    ["**A decision↔mode RED is never repaired by editing `mode`**", 2],
+  ]) {
+    assert.ok(body.includes(find), `fixture sanity: ${find} exists`);
+    assert.doesNotMatch(body.replace(find, "It may be edited"), LOOP_MODE_CAPTURE[idx].re);
+  }
+  // the render invocation pasted into ## Quick mode (grill G7)
+  const pasted = body.replace(
+    "**The deltas below, in step order",
+    "```bash\nnode pharn/floor/render-run-report.mjs '<name>' --base pharn/features\n```\n\n**The deltas below, in step order"
+  );
+  assert.notEqual(pasted, body, "fixture sanity: the paste landed");
+  assert.match(loopQuickSection(pasted), RENDER_INVOCATION_COPY, "the closure rule now sees the pasted literal");
+});
+
+// ★ EXECUTED (L45): the three COMMITTED lines of ## Quick mode, run as the command pins them.
+test("★ LOOP QUICK: the committed --spec-kind line prints quick over a quick SPEC and feature over a feature SPEC", () => {
+  const line = loopQuickSection()
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .find((l) => l === LOOP_SPEC_KIND_LINE);
+  assert.ok(line, "the committed line");
+  const spec = (kind) =>
+    `---\nspec_id: x\nstate: Approved\nspec_content_hash: ""\nspec_template: pharn-default@x\n${kind ? `spec_kind: ${kind}\n` : ""}---\n\n## Intent\n\nx\n`;
+  const dir = mkdtempSync(join(tmpdir(), "hyg-loop-kind-"));
+  try {
+    mkdirSync(join(dir, "pharn", "features", "demo"), { recursive: true });
+    const run = () =>
+      spawnSync(
+        "sh",
+        ["-c", line.replace("pharn/floor/check-spec.mjs", join(REPO_ROOT, "pharn", "floor", "check-spec.mjs")).replace("<name>", "demo")],
+        {
+          cwd: dir,
+          encoding: "utf8",
+        }
+      );
+    writeFileSync(join(dir, "pharn", "features", "demo", "SPEC.md"), spec("quick"));
+    let r = run();
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout, "quick\n");
+    writeFileSync(join(dir, "pharn", "features", "demo", "SPEC.md"), spec(null));
+    r = run();
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout, "feature\n", "a feature SPEC is not quick — the run stops at S6c");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("★ LOOP QUICK: the committed git listing + scope line STOP on a changed file outside the declared ones, and pass once it is declared", () => {
+  const dir = mkdtempSync(join(tmpdir(), "hyg-loop-scope-"));
+  try {
+    const git = (...a) => {
+      const r = spawnSync("git", a, { cwd: dir, encoding: "utf8" });
+      assert.equal(r.status, 0, `git ${a.join(" ")}: ${r.stderr}`);
+      return r.stdout;
+    };
+    git("init", "-q");
+    git("config", "user.email", "t@example.invalid");
+    git("config", "user.name", "t");
+    writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+    mkdirSync(join(dir, "src"), { recursive: true });
+    writeFileSync(join(dir, "src", "a.js"), "export const a = 1;\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "seed");
+    const base = git("rev-parse", "HEAD").trim(); // Step 1a's <base sha>
+    // the iteration's tree: the build's declared change, and one file the plan never named
+    writeFileSync(join(dir, "src", "a.js"), "export const a = 2;\n");
+    writeFileSync(join(dir, "src", "stray.js"), "outside the plan\n");
+    const section = loopQuickSection()
+      .split(/\r?\n/)
+      .map((l) => l.trim());
+    const listing = LOOP_GIT_LISTING.map((pinned) => section.find((l) => l === pinned));
+    assert.ok(listing.every(Boolean), "the committed listing lines");
+    const inside = listing
+      .flatMap((l) => {
+        const r = spawnSync("sh", ["-c", l.replace("<base sha>", base)], { cwd: dir, encoding: "utf8" });
+        assert.equal(r.status, 0, `${l}: ${r.stderr}`);
+        return r.stdout.split("\n");
+      })
+      .map((s) => s.trim())
+      .filter((s) => s && !s.startsWith(".pharn/"))
+      .sort();
+    assert.deepEqual(inside, ["src/a.js", "src/stray.js"], "fixture sanity: the listing finds both");
+    const scope = section.find((l) => l === QUICK_SCOPE_LINE);
+    assert.ok(scope, "the committed scope line");
+    const run = (declared) =>
+      spawnSync(
+        "sh",
+        [
+          "-c",
+          scope
+            .replace("pharn/floor/check-regress.mjs", join(REPO_ROOT, "pharn", "floor", "check-regress.mjs"))
+            .replace("<inside, comma-separated>", inside.join(","))
+            .replace("<PLAN.md ## Files paths, plus AC-TESTS.md ## Files paths when that file exists>", declared)
+            .replace("<name>", "demo"),
+        ],
+        { cwd: dir, encoding: "utf8" }
+      );
+    const stop = run("src/a.js");
+    assert.equal(stop.status, 1, `the scope line must STOP (S9) on the stray: ${stop.stdout}${stop.stderr}`);
+    assert.deepEqual(JSON.parse(stop.stdout).escaped, ["src/stray.js"]);
+    const clean = run("src/a.js,src/stray.js");
+    assert.equal(clean.status, 0, `CONTROL — declared, it passes: ${clean.stdout}${clean.stderr}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

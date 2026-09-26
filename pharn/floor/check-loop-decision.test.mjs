@@ -40,20 +40,33 @@ function loopRecord(fm) {
 }
 
 // Write a fixture feature directory: LOOP.md + optionally verify-report.json / regression-report.json
-// (a `null` report object means "do not write that file", to test a missing report).
-function withFixture(fm, verifyObj, regressObj, fn) {
+// (a `null` report object means "do not write that file", to test a missing report). `spec` (6.27.0), when given, is
+// written as SPEC.md beside the record — the file the re-run's check-loop.mjs reads its mode from.
+function withFixture(fm, verifyObj, regressObj, fn, spec = null) {
   const dir = mkdtempSync(join(tmpdir(), "pharn-loop-decision-"));
   try {
     const loopPath = join(dir, "LOOP.md");
     writeFileSync(loopPath, loopRecord(fm));
     if (verifyObj !== undefined && verifyObj !== null) writeFileSync(join(dir, "verify-report.json"), JSON.stringify(verifyObj));
     if (regressObj !== undefined && regressObj !== null) writeFileSync(join(dir, "regression-report.json"), JSON.stringify(regressObj));
+    if (spec !== null) writeFileSync(join(dir, "SPEC.md"), spec);
     const r = spawnSync(process.execPath, [CHECKER, loopPath], { encoding: "utf8" });
-    return fn({ status: r.status, out: (r.stdout || "") + (r.stderr || "") });
+    return fn({ status: r.status, out: (r.stdout || "") + (r.stderr || ""), loopPath });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 }
+
+// The minimal SPEC the one kind reading reads as `quick` / `feature` (loop-mode-core.test.mjs pins the reading over the
+// real template). `state` is a parameter: Step 6a reverts a non-green stop's SPEC to Draft BEFORE this check runs.
+const specText = (kind, state = "Approved") =>
+  `---\nspec_id: x\nstate: ${state}\nspec_content_hash: ${state === "Approved" ? "a".repeat(64) : '""'}\nspec_template: pharn-default@x\n` +
+  `${kind ? `spec_kind: ${kind}\n` : ""}${state === "Approved" ? "approved_by: model\n" : ""}---\n\n## Intent\n\nx\n`;
+const QUICK_SPEC = specText("quick");
+const FEATURE_SPEC = specText(null);
+const RECORD_CHECKER = join(here, "check-loop-record.mjs");
+/** The full record check-loop-record.mjs needs (the Handoff this checker never reads). */
+const withHandoff = (text) => `${text}\n## Handoff\n\n### investigated\n\na\n\n### learned\n\nb\n\n### next_steps\n\nc\n`;
 
 test("★ a genuine STOP_GREEN record whose cited reports agree → GREEN, exit 0", () => {
   withFixture({ decision: "STOP_GREEN", iterations: "1", cap: "3", commit: "abc1234", date: "2026-09-21" }, PASS, CLEAN, (r) => {
@@ -170,4 +183,176 @@ test("usage: extra positional argument → RED", () => {
   const r = spawnSync(process.execPath, [CHECKER, "a", "b"], { encoding: "utf8" });
   assert.notEqual(r.status, 0);
   assert.match(r.stdout, /usage:/);
+});
+
+// ── THE MODE (6.27.0, /pharn-loop --quick): the re-run reads the SPEC's kind; the record's `mode` must agree ─────────
+
+const REC = { iterations: "1", cap: "3", commit: "abc1234", date: "2026-09-26" };
+
+test("★ a quick STOP_GREEN_QUICK record over a quick fixture (no regression report at all) → GREEN", () => {
+  withFixture(
+    { decision: "STOP_GREEN_QUICK", mode: "quick", ...REC },
+    PASS,
+    null,
+    (r) => {
+      assert.equal(r.status, 0, r.out);
+      assert.match(r.out, /^GREEN —/);
+    },
+    QUICK_SPEC
+  );
+});
+
+test("★ L42/L58 — a quick STOP_CAP record over a SPEC REVERTED the Step-6a way (Draft, empty hash, no approved_by) → GREEN", () => {
+  withFixture(
+    { decision: "STOP_CAP", mode: "quick", iterations: "3", cap: "3", commit: "abc1234", date: "2026-09-26" },
+    VFAIL,
+    null,
+    (r) => {
+      assert.equal(r.status, 0, r.out);
+      assert.match(r.out, /re-derivable in mode quick/);
+    },
+    specText("quick", "Draft")
+  );
+});
+
+test("a quick STOP_CAP record with NO mode (absent reads full) → RED MODE_MISMATCH", () => {
+  withFixture(
+    { decision: "STOP_CAP", iterations: "3", cap: "3", commit: "abc1234", date: "2026-09-26" },
+    VFAIL,
+    null,
+    (r) => {
+      assert.equal(r.status, 1, r.out);
+      assert.match(r.out, /MODE_MISMATCH/);
+      assert.doesNotMatch(r.out, /DECISION_MISMATCH/, "the decision itself re-derives");
+    },
+    specText("quick", "Draft")
+  );
+});
+
+test("a record with mode: quick over a FEATURE SPEC → RED MODE_MISMATCH", () => {
+  withFixture(
+    { decision: "STOP_GREEN", mode: "quick", ...REC },
+    PASS,
+    CLEAN,
+    (r) => {
+      assert.equal(r.status, 1, r.out);
+      assert.match(r.out, /MODE_MISMATCH/);
+    },
+    FEATURE_SPEC
+  );
+});
+
+test("a STOP_GREEN record over a QUICK SPEC → RED DECISION_MISMATCH (the quick table's green is STOP_GREEN_QUICK)", () => {
+  withFixture(
+    { decision: "STOP_GREEN", mode: "quick", ...REC },
+    PASS,
+    CLEAN,
+    (r) => {
+      assert.equal(r.status, 1, r.out);
+      assert.match(r.out, /DECISION_MISMATCH/);
+      assert.match(r.out, /STOP_GREEN_QUICK/);
+    },
+    QUICK_SPEC
+  );
+});
+
+test("a BLOCKED quick record (blocked: not-quick) → GREEN, SKIPPED — its mode is shape-checked by check-loop-record.mjs only", () => {
+  withFixture(
+    { decision: "INCONCLUSIVE", blocked: "not-quick", mode: "quick", iterations: "1", commit: "unknown", date: "2026-09-26" },
+    undefined,
+    undefined,
+    (r) => {
+      assert.equal(r.status, 0, r.out);
+      assert.match(r.out, /SKIPPED/);
+    },
+    FEATURE_SPEC
+  );
+});
+
+test("★ D8's OWN RECORD (grill G1) — STOP_GREEN_QUICK, no mode, over a quick SPEC, as a run WITHOUT --quick writes it: RED here AND in check-loop-record.mjs", () => {
+  withFixture(
+    { decision: "STOP_GREEN_QUICK", ...REC },
+    PASS,
+    CLEAN,
+    (r) => {
+      assert.equal(r.status, 1, r.out);
+      assert.match(r.out, /MODE_MISMATCH/, "the invocation (full) and the SPEC's kind (quick) disagree");
+      assert.doesNotMatch(r.out, /DECISION_MISMATCH/, "the decision itself is what the quick table computes");
+      // The same record through the shape checker: the cross-field rule REDs it first.
+      writeFileSync(r.loopPath, withHandoff(loopRecord({ decision: "STOP_GREEN_QUICK", ...REC })));
+      const shape = spawnSync(process.execPath, [RECORD_CHECKER, r.loopPath], { encoding: "utf8" });
+      assert.equal(shape.status, 1, shape.stdout);
+      assert.match(shape.stdout, /requires `mode: quick`/);
+      // CONTROL: "repairing" it by writing mode: quick turns BOTH green — which is exactly why Step 6b never edits `mode`.
+      writeFileSync(r.loopPath, withHandoff(loopRecord({ decision: "STOP_GREEN_QUICK", mode: "quick", ...REC })));
+      assert.equal(spawnSync(process.execPath, [RECORD_CHECKER, r.loopPath], { encoding: "utf8" }).status, 0);
+      assert.equal(spawnSync(process.execPath, [CHECKER, r.loopPath], { encoding: "utf8" }).status, 0);
+    },
+    QUICK_SPEC
+  );
+});
+
+test("★ grill G3 — a quick GREEN line names mode quick and never cites regression-report.json; a full GREEN line names both reports", () => {
+  withFixture(
+    { decision: "STOP_GREEN_QUICK", mode: "quick", ...REC },
+    PASS,
+    CLEAN,
+    (r) => {
+      assert.equal(r.status, 0, r.out);
+      assert.match(r.out, /mode quick/);
+      assert.match(r.out, /verify-report\.json/);
+      assert.doesNotMatch(r.out, /regression-report\.json/, "the quick table never opened it, so the line never names it");
+    },
+    QUICK_SPEC
+  );
+  withFixture({ decision: "STOP_GREEN", ...REC }, PASS, CLEAN, (r) => {
+    assert.equal(r.status, 0, r.out);
+    assert.match(r.out, /mode full/);
+    assert.match(r.out, /verify-report\.json \+ .*regression-report\.json/);
+  });
+  // and a quick DECISION_MISMATCH line cites verify-report.json alone too
+  withFixture(
+    { decision: "STOP_CAP", mode: "quick", ...REC },
+    PASS,
+    CLEAN,
+    (r) => {
+      assert.match(r.out, /DECISION_MISMATCH/);
+      assert.doesNotMatch(r.out, /regression-report\.json/);
+    },
+    QUICK_SPEC
+  );
+});
+
+test("a malformed record mode → RED before any re-run (shape: cleanScalar + membership)", () => {
+  for (const bad of ["QUICK", "fast", "full,quick"]) {
+    withFixture({ decision: "STOP_GREEN", mode: bad, ...REC }, PASS, CLEAN, (r) => {
+      assert.equal(r.status, 1, r.out);
+      assert.match(r.out, /expected one of \{full, quick\}/);
+    });
+  }
+});
+
+test("✧ ENUM PARITY — every decision token is accepted by BOTH record checkers and refused by both outside the set (behavioural)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pharn-loop-decision-enum-"));
+  try {
+    const p = join(dir, "LOOP.md");
+    // A blocked record takes the shape path in check-loop-decision.mjs without a re-run, so each token's MEMBERSHIP is
+    // what decides there; STOP_GREEN_QUICK carries mode: quick, which check-loop-record.mjs requires.
+    const verdictOf = (checker, decision) => {
+      const fm = { decision, blocked: "no-slug", ...REC, ...(decision === "STOP_GREEN_QUICK" ? { mode: "quick" } : {}) };
+      writeFileSync(p, withHandoff(loopRecord(fm)));
+      const r = spawnSync(process.execPath, [checker, p], { encoding: "utf8" });
+      return { status: r.status, out: r.stdout };
+    };
+    for (const decision of ["STOP_GREEN", "STOP_GREEN_QUICK", "STOP_CAP", "STOP_TERMINAL", "INCONCLUSIVE"]) {
+      assert.equal(verdictOf(RECORD_CHECKER, decision).status, 0, `check-loop-record.mjs refused ${decision}`);
+      assert.doesNotMatch(verdictOf(CHECKER, decision).out, /expected one of/, `check-loop-decision.mjs refused ${decision}`);
+    }
+    for (const decision of ["CONTINUE", "STOP_GREEN_Q", "stop_green_quick"]) {
+      assert.equal(verdictOf(RECORD_CHECKER, decision).status, 1, `check-loop-record.mjs accepted ${decision}`);
+      assert.match(verdictOf(CHECKER, decision).out, /expected one of/, `check-loop-decision.mjs accepted ${decision}`);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

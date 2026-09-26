@@ -40,7 +40,7 @@ reads:
   ]
 writes: ["pharn/features/<name>/SHIP.md", "pharn/features/<name>/ship-record.json", "pharn/features/<name>/BRIEFING.md"]
 constitution_refs: ["P0", "P2", "P5", "P6", "P7"]
-version: "0.9.0"
+version: "0.10.0"
 ---
 
 # /pharn-ship — run the product pipeline, end at a human gate
@@ -1154,7 +1154,8 @@ comprehension, correctness, or a self-issued seal — **attestation ≠ comprehe
    - `unattested` → render **`· unattested`**. **If `requireAttestation` is `true`,** do **not** end the run
      here: **halt-and-ask** the human to attest (repeat step 3). This gate lives only in the human-run
      `/pharn-ship`; `/pharn-loop` never reaches attestation (it runs unattended, writes `LOOP.md`, commits
-     only a `STOP_GREEN` result to a new local branch for a human to review, and ends with a summary) — see
+     only a green stop — `STOP_GREEN`, or `STOP_GREEN_QUICK` under its `--quick` (6.27.0) — to a new local branch
+     for a human to review, and ends with a summary) — see
      `/pharn-loop`'s "What `/pharn-loop` does NOT do" note.
    - `stale` / `malformed` → a floor-detected inconsistency (record edited after attestation, or a
      shape-invalid block). **STOP** and present it to the human as DATA — never render it as attested, never
@@ -1179,7 +1180,8 @@ Then **end your turn** at the human gate. `/pharn-ship` does not merge, push, or
 > **The capability is NOT unavailable — it is a different command.** `/pharn-loop`
 > (`.claude/commands/pharn-loop.md`) **is built** and runs the product pipeline **unattended**: it
 > approves its own SPEC (recorded as `approved_by: model`), iterates the `build → regress → verify` middle
-> to a floor-grade stop, commits only a `STOP_GREEN` result to a new local branch, reverts its approval to
+> (`build → verify` under its `--quick`, 6.27.0) to a floor-grade stop, commits only a green stop (`STOP_GREEN`,
+> or `STOP_GREEN_QUICK` under `--quick`) to a new local branch, reverts its approval to
 > `Draft` on every other stop, and ends with a summary. It keeps **neither** of this command's human gates
 > — reach for `/pharn-ship` when you want to approve the intent yourself and decide at GATE 2. What does
 > not exist is a **`--loop` flag on `/pharn-ship`**. `/pharn-loop`'s stop core is the tested

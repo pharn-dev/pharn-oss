@@ -23,6 +23,75 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.27.0] - 2026-09-27
+
+### Added
+
+- 2026-09-27: **`/pharn-loop --quick` — the unattended loop for a `spec_kind: quick` SPEC, the roadmap's Phase 3.2 at
+  the maintainer's explicit 2026-09-25 direction (not a dogfood failure).** The cost trigger is 6.25.0's: `cost.json`
+  ledgers showed PHARN's stages at ~81% of relative cost on three small fixes, `/pharn-regress` ~63% of that, and
+  `/pharn-loop` runs `/pharn-regress` on EVERY iteration. `--quick` runs `/pharn-spec --quick --model-approve` (the
+  model writes AND approves the quick SPEC), `/pharn-grill <name> --quick` (its two floor stops, no interrogation),
+  the unchanged test-first stage, and then, per iteration, the build, `/pharn-regress`'s scope check (**kept**) and
+  `/pharn-verify` — **no** `/pharn-regress` base comparison on any iteration, and **no** `RUN-REPORT.md` (`cost.json`
+  is kept). Its green stop is **`STOP_GREEN_QUICK`, which is not `STOP_GREEN`**: every consumer compares `decision` by
+  equality, and the token carries its own claim — verify `PASS`, no regression verdict read. `SKILLS_VERSION`
+  6.25.0 → 6.27.0 (minor: a newly shipped mode, a new floor module, a new decision token and an optional record field;
+  6.26.0 is `stage-verify-script`'s, merging first — until it lands, this branch skips the number, which
+  `check:changelog` allows). `MIN_CLI` stays 0.5.0: no installed path moves. **The directions that do not read back:**
+  an install rolled back below 6.27.0 REDs a `LOOP.md` carrying `STOP_GREEN_QUICK` in both loop-record checkers, and
+  its `check-loop.mjs` reads a quick run as full (INCONCLUSIVE: no regression report); an older `check-cost-ledger.mjs`
+  still reads such a ledger GREEN (rule 7 is a bounded token, not a vocabulary).
+  ([`.dev/features/loop-quick-mode/`](./.dev/features/loop-quick-mode/))
+  - **The mode is the SPEC's pinned kind, never a flag — `pharn/floor/loop-mode-core.mjs` (new).** `loopModeOf` reads
+    `quick` iff the feature's `SPEC.md` reads `spec_kind: quick` through the one kind reading (`check-spec.mjs
+--spec-kind`'s — a parity test holds the two equal on every fixture), in ANY state (Step 6a's Draft revert
+    never touches the kind line), and `full` for everything else: no SPEC, an unreadable one, a legacy SPEC, an
+    invalid or doubled kind, a body-first kind line, any throw. Only a positive reading selects quick, so every doubt
+    fails toward the stricter table.
+  - **`check-loop.mjs` gains a verify-only table.** It reads the mode from the SPEC beside the verify report through
+    an `import()` whose failure reads full (D3). Quick: the regression report is never opened, present or not, stale
+    or fresh; verify `PASS` → `STOP_GREEN_QUICK` (exit 0), and every other row keeps its meaning. Full mode is
+    byte-identical to 6.25.0. The output gains `mode`; no argument selects a table (every flag but `--iter` / `--cap`
+    is still refused); the token is bound to the kind both ways, tested. The structural claim is restated at every
+    site that made it: the inputs are the two reports, `--iter` / `--cap` and ONE token of the SPEC — its
+    `spec_kind` — and still no review, finding, severity, record or fingerprint input.
+  - **`check-loop-fresh.mjs` gains a quick column**, read from the same kind: checks A, B, C, D, J and E read the
+    verify evidence alone, G and H read `skipped` (`QUICK_SKIPPED`), F and I run as in full mode — a quick run stays
+    tree-bound and checked for fabrication, and stale regress evidence on disk is never opened. The document gains
+    `mode` as its last key (null on a usage error or `checker-crashed`). A kind flipped after approval is caught
+    either way: to quick at check I (the pin covers the line), away from quick at check A (a `regress` re-run, which
+    the quick section maps to S11).
+  - **`LOOP.md` gains an optional `mode`** (absent = full) that records the run's INVOCATION, never a copy of
+    `check-loop.mjs`'s JSON (grill G1). `check-loop-record.mjs` checks its shape and ONE cross-field rule
+    (`STOP_GREEN_QUICK` requires `mode: quick`, `STOP_GREEN` forbids it); `check-loop-decision.mjs` requires it to
+    equal the mode its live re-run reports, else RED `MODE_MISMATCH`, and its lines cite `verify-report.json` alone
+    in quick mode (grill G3). So a run invoked without `--quick` over a quick SPEC (D8) ends on an uncommitted,
+    reverted `STOP_GREEN_QUICK`: a full run's Step 6c commits only `STOP_GREEN`, and both checkers RED its record.
+    Step 6b never "repairs" a decision↔mode RED by editing `mode`.
+  - **`/pharn-loop`'s `## Quick mode`** (before Step 3): the entry form and the ADVISORY first-token rule; the Step-3
+    kind read (`--spec-kind`, S6c on anything but `quick`); the grill's quick form; the scope check between each
+    build and verify (the git listing and `/pharn-ship --quick`'s scope line, pinned; exit 1 or any other non-zero →
+    S9 — named divergence: the listing reads without `-z`, so a C-quoted path is a false S9, never a false pass); a
+    RERUN naming `regress` → S11; `LOOP.md`'s `## Not checked in quick mode`; every question a quick run can meet,
+    mapped. A new stuck-point sub-row **S6c** (`blocked: not-quick`) keeps "S1–S13" true. No run-start mode marker:
+    the SPEC's kind is the mode, and a marker would be a second, unverified copy (L35).
+  - **`/pharn-spec --quick --model-approve` is allowed** (it was "report back blocked" in 6.25.0): a fit-check miss
+    (more than three criteria, or an `e2e`-only one) is refused as `blocked: the intent does not fit a quick SPEC`,
+    never widened; a missing `test` runner becomes an `## Assumptions` line (the test stage's preflight decides it,
+    S12); rule 9 stays the floor backstop. A Draft carrying `spec_kind: quick` is never approved under
+    `--model-approve` without `--quick` (the template-carries-the-key path, grill G5, now stated for the unattended
+    case in `spec-template.md`).
+  - **The human-only trusted-doc patch** — `LIMITS.md §3a` (the gated manual flag, and a paragraph for the
+    unattended one) and `§6` (the scope check also runs in every `/pharn-loop --quick` iteration) — is generated by
+    the committed `.dev/features/loop-quick-mode/handoff/make-patch.mjs` from the live `LIMITS.md` and applied by a
+    human at GATE 2 via `proposed/apply.sh`, after any sibling LIMITS patch merges first. `pharn/ARCHITECTURE.md` is
+    not touched, so the spec pin does not move (its §6 "Quick mode" paragraph is about `/pharn-ship --quick` and
+    stays true; the loop's line is the named catch-up `architecture-loop-quick-line`).
+  - **Named, not built:** `quick-scope-inputs-by-code` (the scope check's `--changed` / `--declared` built by code
+    with `-z`, for both quick modes) and `loop-quick-run-report`. No dev twin: `/pharn-dev-ship --loop` gets no quick
+    mode.
+
 ## [6.25.0] - 2026-09-26
 
 ### Added

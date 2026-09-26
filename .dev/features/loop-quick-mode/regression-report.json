@@ -1,0 +1,55 @@
+{
+  "base": "2e5c2e3183c595c76abadde8878d1fa2e94d115e",
+  "inside": [
+    ".claude/commands/pharn-grill.md",
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-ship.md",
+    ".claude/commands/pharn-spec.md",
+    ".dev/features/loop-quick-mode/BUILD.md",
+    ".dev/features/loop-quick-mode/GRILL.md",
+    ".dev/features/loop-quick-mode/PLAN.md",
+    ".dev/features/loop-quick-mode/handoff/make-patch.mjs",
+    ".dev/features/loop-quick-mode/proposed/APPLY.md",
+    ".dev/features/loop-quick-mode/proposed/apply.sh",
+    ".dev/features/loop-quick-mode/proposed/human-only.patch",
+    ".dev/features/loop-quick-mode/proposed/human-only.sha256",
+    ".dev/floor/command-hygiene.test.mjs",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/README.md",
+    "pharn/floor/check-loop-decision.mjs",
+    "pharn/floor/check-loop-decision.test.mjs",
+    "pharn/floor/check-loop-fresh.mjs",
+    "pharn/floor/check-loop-fresh.test.mjs",
+    "pharn/floor/check-loop-record.mjs",
+    "pharn/floor/check-loop-record.test.mjs",
+    "pharn/floor/check-loop.mjs",
+    "pharn/floor/check-loop.test.mjs",
+    "pharn/floor/loop-fresh-core.mjs",
+    "pharn/floor/loop-mode-core.mjs",
+    "pharn/floor/loop-mode-core.test.mjs",
+    "pharn/floor/render-run-report.mjs",
+    "pharn/pharn-contracts/cost-ledger.md",
+    "pharn/pharn-contracts/loop-record.md",
+    "pharn/pharn-contracts/spec-template.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

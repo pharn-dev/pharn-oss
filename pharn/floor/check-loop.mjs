@@ -13,9 +13,23 @@
 //   judgment. This helper reduces the stop to deterministic operations: (1) enum membership over the two
 //   FLOOR verdicts the existing stages already emit — /pharn-verify's `.verdict` and /pharn-regress's
 //   `.verdict`; (2) on a verify FAIL only, exact array membership of the gate key `reconcile` — and, since 6.20.0,
-//   of the AC gate's reserved id `ac-evidence` — in /pharn-verify's `.failing_gates`; and (3) an integer `iter >= cap`
-//   compare. The agent OBEYS the exit
-//   code (advisory COMPLIANCE, exactly as it obeys check-verify).
+//   of the AC gate's reserved id `ac-evidence` — in /pharn-verify's `.failing_gates`; (3) an integer `iter >= cap`
+//   compare; and (4, since 6.27.0) membership of ONE token of the feature's own SPEC, its `spec_kind`, which picks the
+//   table (below). The agent OBEYS the exit code (advisory COMPLIANCE, exactly as it obeys check-verify).
+//
+// THE MODE (6.27.0, `/pharn-loop --quick`) — the SPEC's pinned kind, never a flag. The table is chosen by
+//   pharn/floor/loop-mode-core.mjs's `loopModeOf`, read from the SPEC.md beside the verify report (the first positional's
+//   directory; in /pharn-loop that is the feature's own SPEC): `quick` iff that SPEC reads `spec_kind: quick` through the
+//   one kind reading `check-spec.mjs --spec-kind` prints, `full` for everything else. No argv names a SPEC or a mode —
+//   the parser below still refuses every flag but `--iter` and `--cap` — so a model cannot select the table by passing
+//   something (P5). The module is loaded with import() inside a `try`: a load failure or a throw reads `full`, the
+//   stricter table, so the quick machinery can only fail toward more evidence (D3) — here and in
+//   check-loop-decision.mjs's re-run of this file. (A /pharn-loop run meets check-loop-fresh.mjs first, which imports
+//   the same module statically and turns a failed load into INCONCLUSIVE `checker-crashed`, so a run stops at S11 in
+//   either mode before any stop is read — fail-closed, grill G8.) The mode is read in ANY state: /pharn-loop's Step 6a
+//   reverts a non-green stop's SPEC to Draft before Step 6b re-derives the stop, and the revert never touches the kind
+//   line (L42, L58). That the kind is the APPROVED, un-drifted one is check-loop-fresh.mjs check I's (the pin covers the
+//   line), which runs before this file at the decision and again at the commit gate.
 //
 // A SIBLING OF check-ship.mjs, NOT AN OVERLOAD OF IT (P3 — one axis per file):
 //   check-ship.mjs is the DEV loop's stop core (Design A): it CONTINUEs on ANY not-floor-green verdict up
@@ -25,16 +39,18 @@
 //   so folding them into one file would change the dev loop's Design A for a product-loop reason: two
 //   reasons to change one file. Hence a separate file, leaving check-ship.mjs and the dev loop unchanged.
 //
-// "/review NEVER GATES THE LOOP" IS STRUCTURAL, NOT DISCIPLINE (the core invariant):
-//   this helper's input signature is exactly { verify-report.json, regression-report.json, iter, cap }.
-//   It has NO `/review` parameter — it CANNOT receive a REVIEW.md, a finding, or an LLM-assigned
-//   severity (the product spine has no /review stage anyway). So "the loop stops on the two FLOOR
-//   verdicts alone" is true by construction, not by an agent promise.
+// "/review NEVER GATES THE LOOP" IS STRUCTURAL, NOT DISCIPLINE (the core invariant), restated exactly (6.27.0):
+//   this helper's inputs are the two verdict reports, `--iter` / `--cap`, and ONE token of the feature's own SPEC —
+//   its `spec_kind`, read by the one kind reading from the `SPEC.md` beside the verify report — which chooses the table
+//   (verify-only for `quick`, in which the regression report is not read at all). There is still no review, finding,
+//   severity, record or fingerprint input: it CANNOT receive a REVIEW.md, a finding, or an LLM-assigned severity (the
+//   product spine has no /review stage anyway). So "the loop stops on its FLOOR verdicts alone" is true by
+//   construction, not by an agent promise.
 //
 // DECISION — Design C, retry any measurable red except a reconcile red (ARCHITECTURE §2 primitive #3 —
 // enum membership + integer threshold). `v` = verify.verdict ∈ {PASS, FAIL, INCOMPLETE, INCONCLUSIVE};
 // `r` = regress.verdict ∈ {no-regressions, regressions, inconclusive}; `fg` = verify.failing_gates, read
-// ONLY when v === "FAIL". Precedence top-down:
+// ONLY when v === "FAIL". Precedence top-down — the FULL table (every SPEC that is not positively `quick`):
 //   bad input (missing/unparseable report, `.verdict` outside its enum, iter/cap not a positive integer,
 //             malformed argv, or v === FAIL with `fg` not an array of strings)
 //                                                     → INCONCLUSIVE  exit 2  (FAIL-CLOSED, P5)
@@ -46,6 +62,23 @@
 //                                                     → CONTINUE      exit 3  (retry, under cap)
 //   a measurable red                                  ∧ iter >= cap
 //                                                     → STOP_CAP      exit 1  (bounded: cap hit)
+//
+// The QUICK table (6.27.0 — the SPEC reads `spec_kind: quick`): the regression report is NEVER opened, present or
+// not, stale or fresh; `r` is null and `regress_verdict` is null in the output. Precedence top-down:
+//   bad verify input, or bad iter/cap/argv            → INCONCLUSIVE     exit 2
+//   v === "INCONCLUSIVE"                              → STOP_TERMINAL    exit 4  (unmeasured)
+//   v === "FAIL"  ∧  fg includes "ac-evidence"         → STOP_TERMINAL    exit 4  (ac-evidence)
+//   v === "FAIL"  ∧  fg includes "reconcile"           → STOP_TERMINAL    exit 4  (reconcile)
+//   v === "PASS"                                      → STOP_GREEN_QUICK exit 0  (verify PASS, no regression verdict)
+//   v ∈ {FAIL, INCOMPLETE}  ∧ iter <  cap             → CONTINUE         exit 3
+//   v ∈ {FAIL, INCOMPLETE}  ∧ iter >= cap             → STOP_CAP         exit 1
+//
+// STOP_GREEN_QUICK IS NOT STOP_GREEN (D4). It names where the run ended first and the mode second (6.25.0's
+// `gate2-quick` rule), and every consumer compares `decision` by EQUALITY: /pharn-loop's full Step 6c commits only
+// STOP_GREEN, its quick section only STOP_GREEN_QUICK, and the ledger copies the token verbatim, so it carries its own
+// claim — no regression verdict was read. The token is bound to the SPEC's kind at the floor: a quick SPEC never yields
+// STOP_GREEN and a full one never STOP_GREEN_QUICK (both pinned by tests). A run invoked without `--quick` over a quick
+// SPEC therefore ends on STOP_GREEN_QUICK, which a full run never commits (D8).
 //
 // WHY AN AC-EVIDENCE RED IS TERMINAL (6.20.0): check-verify.mjs `--ac-gate` adds `ac-evidence` when the AC evidence
 // itself is changed or missing — a pinned test or the lock changed, no red run binds the tests, the test infrastructure
@@ -70,20 +103,29 @@
 // HONEST SCOPE (P0/P7): this guarantees the loop's STOP CONDITION given its inputs — it guarantees NOTHING
 // about whether a rebuild CONVERGES (irreducible model work, advisory), and nothing about whether
 // /pharn-verify actually ran the reconcile gate (orchestration, advisory). A red whose cause lies outside
-// the plan's `## Files` cannot be fixed by a rebuild and simply runs to STOP_CAP.
+// the plan's `## Files` cannot be fixed by a rebuild and simply runs to STOP_CAP. In the quick table it guarantees
+// nothing about regressions outside the feature: none is looked for, and the token says so.
 //
 // TRUST (P2): every operand is produced by deterministic tooling — two `.verdict` enum strings, one array
-// of gate-id strings tested for exact membership, and two ints. NO free-text (`problem`/`evidence`), NO
-// /review input is ever read. Inputs are JSON.parsed and used ONLY as string/int operands — never eval'd,
-// executed, spawned, imported, or sent anywhere. No child process, no network.
+// of gate-id strings tested for exact membership, two ints, and the closed mode token loop-mode-core.mjs reduces the
+// SPEC to (its body is never interpreted here). NO free-text (`problem`/`evidence`), NO /review input is ever read.
+// Inputs are JSON.parsed and used ONLY as string/int operands — never eval'd, executed, spawned, or sent anywhere; the
+// one import() loads a fixed sibling path, never a path from input. No child process, no network.
 //
 // Usage:
 //   node pharn/floor/check-loop.mjs <verify-report.json> <regression-report.json> --iter <N> --cap <M>
+//   (the SPEC read for the mode is `<dirname of verify-report.json>/SPEC.md` — never an argument)
 //
-// Exit: 0 STOP_GREEN · 1 STOP_CAP · 2 INCONCLUSIVE (bad input, fail-closed) · 3 CONTINUE ·
-//       4 STOP_TERMINAL (an inconclusive verdict, an AC-evidence red or a reconcile red — stop, never retried).
+// Output: ONE JSON object {verify_verdict, regress_verdict, floor_green, iter, cap, mode, decision, terminal_cause,
+//   reason}; `mode` is "full" | "quick" (null only on an argv refusal, before any path is known); in quick mode
+//   `regress_verdict` is null and `floor_green` means verify PASS.
+//
+// Exit: 0 STOP_GREEN, or STOP_GREEN_QUICK in the quick table · 1 STOP_CAP · 2 INCONCLUSIVE (bad input, fail-closed) ·
+//       3 CONTINUE · 4 STOP_TERMINAL (an inconclusive verdict, an AC-evidence red or a reconcile red — stop, never
+//       retried).
 
 import { readFileSync, existsSync } from "node:fs";
+import { dirname } from "node:path";
 
 // The known verdict enums the two FLOOR stages emit. Unlike check-ship.mjs, VERIFY_VERDICTS INCLUDES
 // "INCOMPLETE", which /pharn-verify emits via `--complete`. A `.verdict` outside its set is malformed
@@ -179,10 +221,24 @@ function posInt(raw, name) {
   return { ok: true, value: n };
 }
 
-function main() {
+// --- THE MODE (6.27.0): loop-mode-core.mjs's `loopModeOf` over the verify report's own directory. Loaded with
+//     import() inside a `try`, so a module that cannot load, exports nothing, or throws reads "full" — the stricter
+//     table (D3). Only the exact token "quick" selects the quick table; anything else a mismatched module returns reads
+//     "full" too. No argument names a SPEC or a mode. ---
+async function readMode(verifyPath) {
+  try {
+    const { loopModeOf } = await import("./loop-mode-core.mjs");
+    return loopModeOf(dirname(verifyPath)) === "quick" ? "quick" : "full";
+  } catch {
+    return "full";
+  }
+}
+
+async function main() {
   const argv = process.argv.slice(2);
   // Strict, fail-closed argv parse (P5): a malformed invocation shape is bad input → INCONCLUSIVE (exit 2),
-  // the SAME handling as a bad operand below — never a silent decision.
+  // the SAME handling as a bad operand below — never a silent decision. It runs BEFORE the mode is read, so an
+  // argv refusal carries `mode: null` (no path is known yet).
   const parsed = parseArgs(argv);
   if (!parsed.ok) {
     emit(
@@ -192,6 +248,7 @@ function main() {
         floor_green: null,
         iter: null,
         cap: null,
+        mode: null,
         decision: "INCONCLUSIVE",
         terminal_cause: null,
         reason: parsed.reason,
@@ -200,8 +257,12 @@ function main() {
     );
   }
 
+  const mode = await readMode(parsed.positional[0]);
+  const quick = mode === "quick";
   const verify = readVerdict(parsed.positional[0], "verify-report.json", VERIFY_VERDICTS);
-  const regress = readVerdict(parsed.positional[1], "regression-report.json", REGRESS_VERDICTS);
+  // The QUICK table never opens the regression report — present or not, stale or fresh. `verdict: null` is not a
+  // member of REGRESS_VERDICTS, so no predicate below can read it as one.
+  const regress = quick ? { ok: true, verdict: null } : readVerdict(parsed.positional[1], "regression-report.json", REGRESS_VERDICTS);
   const iterR = posInt(parsed.iter, "iter");
   const capR = posInt(parsed.cap, "cap");
   // `failing_gates` is read ONLY on a verify FAIL; for every other verdict it stays unread, as before.
@@ -218,6 +279,7 @@ function main() {
         floor_green: null,
         iter: iterR.ok ? iterR.value : null,
         cap: capR.ok ? capR.value : null,
+        mode,
         decision: "INCONCLUSIVE",
         terminal_cause: null,
         reason: bad.reason,
@@ -230,9 +292,12 @@ function main() {
   const cap = capR.value;
   const v = verify.verdict;
   const r = regress.verdict;
+  // What the reason strings say was read: both verdicts in the full table, verify's alone in the quick one.
+  const read = quick ? `verify ${v}; quick table — no regression verdict read` : `verify ${v}, regress ${r}`;
 
-  // Design C. Four deterministic predicates over the two verdict enums + one exact array membership:
-  const floorGreen = v === "PASS" && r === "no-regressions"; // converged
+  // Design C. Four deterministic predicates over the verdict enums + one exact array membership. In the quick table
+  // `r` is null, so `unmeasured` reduces to verify's own INCONCLUSIVE and green is verify PASS alone.
+  const floorGreen = quick ? v === "PASS" : v === "PASS" && r === "no-regressions"; // converged
   const unmeasured = v === "INCONCLUSIVE" || r === "inconclusive"; // a stage could not measure
   const acEvidenceRed = v === "FAIL" && gatesR.gates.includes(AC_EVIDENCE_GATE); // AC evidence changed or missing
   const reconcileRed = v === "FAIL" && gatesR.gates.includes(RECONCILE_GATE); // a detected escape
@@ -246,7 +311,7 @@ function main() {
     decision = "STOP_TERMINAL";
     code = 4;
     terminal_cause = "unmeasured";
-    reason = `terminal: nothing was measured (verify ${v}, regress ${r}) — a retry would be blind; stop`;
+    reason = `terminal: nothing was measured (${read}) — a retry would be blind; stop`;
   } else if (acEvidenceRed) {
     // A rebuild cannot restore evidence taken before the build (the red run), so a retry buys nothing.
     decision = "STOP_TERMINAL";
@@ -261,31 +326,38 @@ function main() {
     code = 4;
     terminal_cause = "reconcile";
     reason = `terminal: the ${RECONCILE_GATE} gate is red (verify FAIL) — a retry would re-anchor and erase the detected escape; stop`;
+  } else if (floorGreen && quick) {
+    // The quick table's green: verify PASS, and NO regression verdict was read — a distinct token, never STOP_GREEN.
+    decision = "STOP_GREEN_QUICK";
+    code = 0;
+    reason = "floor-GREEN (quick table — the SPEC's spec_kind is quick): /pharn-verify PASS; no regression verdict was read — stop";
   } else if (floorGreen) {
     decision = "STOP_GREEN";
     code = 0;
     reason = "floor-GREEN: /pharn-verify PASS and /pharn-regress no-regressions — stop";
   } else if (iter < cap) {
     // Reachable ONLY on a measurable red: `unmeasured` false ⇒ v ∈ {PASS, FAIL, INCOMPLETE} ∧
-    // r ∈ {no-regressions, regressions}; `floorGreen` false ⇒ v !== PASS ∨ r === regressions.
+    // r ∈ {no-regressions, regressions} (full) or r null (quick); `floorGreen` false ⇒ v !== PASS ∨ r === regressions
+    // (full) or v !== PASS (quick).
     decision = "CONTINUE";
     code = 3;
-    reason = `measurable red (verify ${v}, regress ${r}) and iter ${iter} < cap ${cap} — iterate: one build pass, then re-verify`;
+    reason = `measurable red (${read}) and iter ${iter} < cap ${cap} — iterate: one build pass, then re-verify`;
   } else {
     decision = "STOP_CAP";
     code = 1;
-    reason = `cap reached: measurable red (verify ${v}, regress ${r}) and iter ${iter} >= cap ${cap} without floor-GREEN — stop`;
+    reason = `cap reached: measurable red (${read}) and iter ${iter} >= cap ${cap} without floor-GREEN — stop`;
   }
 
   // Closed by construction: a cause outside TERMINAL_CAUSES cannot be emitted (the suite also scans the literals).
   if (terminal_cause !== null && !TERMINAL_CAUSES.includes(terminal_cause))
     throw new Error(`internal: ${terminal_cause} is not a terminal cause`);
-  emit({ verify_verdict: v, regress_verdict: r, floor_green: floorGreen, iter, cap, decision, terminal_cause, reason }, code);
+  emit({ verify_verdict: v, regress_verdict: r, floor_green: floorGreen, iter, cap, mode, decision, terminal_cause, reason }, code);
 }
 
-// Swallow ONLY the emit sentinel; anything else is a real crash and must still end the process non-zero.
+// Swallow ONLY the emit sentinel; anything else is a real crash and must still end the process non-zero. `main` is
+// async (the mode's import()), so the sentinel arrives as the awaited rejection — caught here exactly as before.
 try {
-  main();
+  await main();
 } catch (e) {
   if (e !== EMITTED) throw e;
 }

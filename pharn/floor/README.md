@@ -38,8 +38,9 @@ reference is printed. A SPEC without the key gets none of the template rules; th
 not open with a `spec_kind:` line, 6.20.7) applies to every SPEC. A valid acceptance-criteria grammar means the
 criteria are **phrased** testably, never that any test exists, runs, or passes. `--spec-kind <SPEC.md>` (6.25.0) prints
 the SPEC's kind (`feature` | `test-infra` | `quick`, an empty line if unusable, `feature` for a legacy SPEC) — the
-same reading `/pharn-ship`'s GATE-1 backstop and `/pharn-grill --quick`'s eligibility check shell, never re-derived
-from frontmatter.
+one reading its callers shell (among them `/pharn-ship`'s GATE-1 backstop, `/pharn-grill --quick`'s eligibility check
+and `/pharn-loop --quick`'s Step-3 kind read), never re-derived from frontmatter; `loop-mode-core.mjs` (6.27.0) calls
+the same function to pick `/pharn-loop`'s stop table and freshness column.
 
 ## Run the validator
 

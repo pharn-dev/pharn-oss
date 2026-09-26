@@ -279,6 +279,12 @@ does not mean the run was invoked with `--quick`, and the reverse.** `ship-outco
 reads only the CURRENT run's run-start (`currentRunMarkers(...)[0]`), by exact equality — an EARLIER run's
 quick run-start never makes the current run quick, and vice versa.
 
+**`/pharn-loop --quick` (6.27.0) writes no mode marker.** The loop's mode is its feature SPEC's pinned `spec_kind`,
+which its stop core reads and its `LOOP.md` records (and `check-loop-decision.mjs` re-derives); a marker would be a
+second, unverified copy of it. The one reader such a marker would feed — the no-`LOOP.md` fallback derivation — reads
+a loop ledger as full, and with no `pharn-regress` stage-start after the build that is `stop:pharn-verify`: the
+under-claiming direction.
+
 ## Compatibility with `pharn-cost-ledger/1`
 
 A `/1` file is **never rewritten and never retroactively REDed.** `check-cost-ledger.mjs` validates it
@@ -378,6 +384,11 @@ by the checker rather than re-spelled:
 | ------------------ | ------------------------------------------------------ | --------------------------------------------------------------------------------------- | --------------------------------------- |
 | `LOOP.md`          | `/pharn-loop`, via its record                          | `check-loop.mjs`'s own tokens                                                           | **DECLARED** — re-derivable (see below) |
 | `verdicts+markers` | `/pharn-ship` always; any other command with no record | `gate2` \| `gate2-quick` (6.25.0) \| `stop:<stage>` \| `stop:unknown` \| `undetermined` | **DERIVED** — split, see below          |
+
+The `LOOP.md` source's vocabulary includes `STOP_GREEN_QUICK` (6.27.0, `/pharn-loop --quick`), which is **not**
+`STOP_GREEN` and claims no regression verdict: the emitter copies it verbatim, so a quick loop's ledger carries its
+own claim with no marker involved, and rule 7 — a bounded token, not a vocabulary — reads it GREEN in an older
+checker too.
 
 **The declared form is re-derivable and the derived form is not, and that asymmetry is the point.** A
 `LOOP.md` decision is checked by `pharn/floor/check-loop-decision.mjs`, which re-runs `check-loop.mjs`
