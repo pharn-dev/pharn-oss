@@ -60,7 +60,7 @@
 //                                                      itself, so the gate cannot disagree with validate
 //                                                      about what `state` IS (see emitState).
 //   node pharn/floor/check-spec.mjs --spec-kind <SPEC.md>
-//                                                      print the SPEC's `spec_kind` (6.23.0) — a print mode
+//                                                      print the SPEC's `spec_kind` (6.24.0) — a print mode
 //                                                      beside `--state` and `--spec-id`, spelling the
 //                                                      frontmatter KEY (`--spec-id` <-> `spec_id`), not
 //                                                      "kind", which in this checker already names a RED
@@ -320,7 +320,7 @@ function emitState(specPath) {
   return 0;
 }
 
-// --- --spec-kind mode: emit the SPEC's spec_kind (6.23.0) — see the usage comment above. ---
+// --- --spec-kind mode: emit the SPEC's spec_kind (6.24.0) — see the usage comment above. ---
 // Mirrors emitState / emitSpecId / emitHash exactly: unreadable -> 1, no frontmatter -> 1, reporting the
 // collected RED to stderr on the unreadable path (L5). The ABSENT/UNUSABLE case is an EMPTY LINE at exit 0,
 // never `null` or a thrown value — specAcceptanceCriteria() never throws over a parsed SPEC.

@@ -124,7 +124,7 @@ test("READY test-first — the mapping holds against the current SPEC and PLAN, 
   });
 });
 
-// ── quick (6.23.0): a spec_kind: quick SPEC reads test-first, EXACTLY like a feature SPEC ───────────────
+// ── quick (6.24.0): a spec_kind: quick SPEC reads test-first, EXACTLY like a feature SPEC ───────────────
 
 /** The same READY test-first world, over a `spec_kind: quick` SPEC (1 AC at `unit`, already within the
  *  quick bounds — no fixture change needed beyond the kind line). */

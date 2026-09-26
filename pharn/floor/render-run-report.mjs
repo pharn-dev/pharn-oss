@@ -108,8 +108,16 @@ import { execFileSync } from "node:child_process";
 import { FEATURE_BASE, TOKEN_CLASSES, LEGACY_SCHEMA, SHIP_COMMAND, readMarkers, normalizeMarkers } from "./render-cost-ledger.mjs";
 import { DEFAULT_BASE as MARKERS_DEFAULT_BASE } from "./mark-phase.mjs";
 import { verdictApplicability, APPLICABILITY, runMode } from "./ship-outcome-core.mjs";
-import { handoffSections, fenceFor, HANDOFF_SECTIONS } from "./loop-record-core.mjs";
+import { handoffSections, HANDOFF_SECTIONS } from "./loop-record-core.mjs";
 import { pathsFromPlanFiles } from "./plan-files-core.mjs";
+import { quoteData, dataText } from "./quote-core.mjs";
+
+// `quoteData` and `dataText` are IMPORTED, not defined here (GRILL G6, stage-regress-script): they moved
+// byte-for-byte into `quote-core.mjs`, whose only import is `fenceFor` from `loop-record-core.mjs` (a
+// module with no imports of its own), so a second renderer (`render-regression.mjs`) can quote untrusted
+// text without pulling this file's cost-ledger load graph into its own. Re-exported here so this file's
+// own existing tests keep exercising the one implementation (L35 — one owner, one test suite).
+export { quoteData, dataText };
 
 // `FEATURE_BASE` and `TOKEN_CLASSES` are IMPORTED, never re-spelled. This module introduces ZERO new
 // defaults, which is the whole of L41's remedy here — there is no second literal for a relocation to
@@ -147,28 +155,6 @@ export function commandLabel(cost) {
 /** Rendered wherever an input is absent or unusable. One shape, so a reader learns it once. */
 export function na(reason) {
   return `_n/a — ${reason}_`;
-}
-
-/** Quote untrusted text as an inert fenced block (see the header). `label` names the source so a reader
- *  can tell DATA from this file's own prose. */
-export function quoteData(label, text) {
-  const body = String(text);
-  const f = fenceFor(body);
-  return [`${label}`, "", `${f}text`, body, f].join("\n");
-}
-
-/** Any value from a parsed JSON input as text — never a throw (see the header). A primitive goes through `String()`,
- *  so it is byte-identical to `String()` BY CONSTRUCTION (`Infinity` from `1e999` included — `JSON.stringify` would
- *  print `null`). Only a non-null object or array is JSON text, where `String()` printed `[object Object]` or threw.
- *  `JSON.parse` accepts a nesting depth `JSON.stringify` cannot walk (measured: RangeError at 10,000 levels), so that
- *  one call is guarded and a too-deep value renders a fixed marker. */
-export function dataText(v) {
-  if (v === null || typeof v !== "object") return String(v);
-  try {
-    return JSON.stringify(v);
-  } catch {
-    return "(value nested too deeply to render)";
-  }
 }
 
 /** A JSON object that is not an array — the only shape an entry of a report's entry array may have. */
@@ -382,7 +368,7 @@ function outcomePreamble(cost, o) {
       "- `stop:unknown` is the terminal fallback: markers exist but none is a `stage-start`.",
       "- `undetermined` means the run's own boundary could not be established from its markers, so no",
       "  verdict could be bound to THIS run — including a run that starts a non-verdict stage twice at one",
-      "  iteration, which is what a skipped run-start leaves behind. It is neither a failed check nor a",
+      "  iteration, which is what a skipped run-start can leave behind. It is neither a failed check nor a",
       "  stop stage.",
       "",
       "**Only verdicts that belong to THIS run count.** The stage set `gate2`/`gate2-quick` requires is the",
@@ -617,20 +603,26 @@ function applicabilityLabel(cost) {
     app.status === APPLICABILITY.UNKNOWN
       ? "established from its markers. The verdicts are shown only as diagnostics."
       : "earlier run or attempt. They are shown only as diagnostics, never as this run's verdicts.";
-  // A HISTORICAL ledger (derived before 6.9.1) may have STORED `gate2` from exactly these reports. Its
-  // stored value is never rewritten (compatibility), but the two sections must not silently disagree.
+  // A HISTORICAL ledger may have STORED `gate2` from exactly these reports — one derived before 6.9.1's
+  // current-run rule, OR one derived after it but before 6.24.0's build-order and no-repeat conditions. The
+  // label names no single rule as the one it predates (GATE-2 re-review N2: "predates this applicability rule
+  // (6.9.1)" mis-dated a 6.20.0 ledger the new conditions exclude); the quoted reason below names the rule
+  // that excludes it. Its stored value is never rewritten (compatibility), but the two sections must not
+  // silently disagree.
   const legacy =
     cost.outcome && cost.outcome.decision === "gate2"
       ? [
           "",
-          "**The stored `gate2` above predates this applicability rule (6.9.1)** and rests on these same",
-          "reports; it would not be derived as `gate2` today. It is kept as recorded, not rewritten.",
+          "**The stored `gate2` above predates the applicability rules in force today** (6.9.1's current-run",
+          "rule; 6.24.0's build-order and no-repeat conditions — the reason below names the one that excludes",
+          "it) and rests on these same reports; it would not be derived as `gate2` today. It is kept as",
+          "recorded, not rewritten.",
         ]
       : [];
   return [head, tail, ...legacy, "", quoteData("", `applicability  ${app.status}\nreason         ${app.reason ?? "none"}`).trimStart(), ""];
 }
 
-/** Is this ledger a QUICK `/pharn-ship` run's (6.23.0)? Read from the ledger's own recorded markers through the
+/** Is this ledger a QUICK `/pharn-ship` run's (6.24.0)? Read from the ledger's own recorded markers through the
  *  derivation's `runMode()` — never from which artifacts exist (L6). ONE definition for the two sections that
  *  branch on it, `## Verdicts` and `## Briefing` (L35). A stale or absent ledger is never quick: its markers
  *  are another run's, so the caller passes `null`. */
@@ -666,7 +658,7 @@ function verdictsSection({ verify, regress, cost, stale = false }) {
     out.push("");
     out.push(...acGateLines(verify.ac_gate));
   }
-  // A quick `/pharn-ship` run starts no `/pharn-regress` at all (6.23.0), so a `regression-report.json` on
+  // A quick `/pharn-ship` run starts no `/pharn-regress` at all (6.24.0), so a `regression-report.json` on
   // disk — left by an earlier full run over the same feature directory, say — is NEVER this run's regress
   // verdict. Read from the STRUCTURED location (the run's own mode, from its markers), never inferred from
   // whether a report happens to exist (L6) — the same discipline `outcome.source` already gets above.
@@ -770,7 +762,7 @@ function acGateLines(ac) {
  * rather than dropped, because a missing section and an absent artifact must not look the same ([[L34]]:
  * silence and asserted-silence are different claims).
  *
- * A QUICK `/pharn-ship` ledger (6.23.0) never links one: quick mode renders no `BRIEFING.md`, so a file of
+ * A QUICK `/pharn-ship` ledger (6.24.0) never links one: quick mode renders no `BRIEFING.md`, so a file of
  * that name beside the report was written by an EARLIER run over the same feature directory, and linking it
  * as "the GATE-2 briefing, rendered beside this report" would present that run's briefing — and the regress
  * verdict it carries — as this run's (GATE-2 review). Read from the run's own mode, from the ledger's

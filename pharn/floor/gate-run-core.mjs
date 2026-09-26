@@ -65,7 +65,9 @@
  *  ---------------------------------------------------------------------------------------------- */
 
 /** The project-gate allowlist, IN RUN ORDER. The commands keep prose copies because a user reads the command:
- *  the brace-delimited enumeration in /pharn-verify's Step 3a and /pharn-regress's Step 4a, pinned member for
+ *  the brace-delimited enumeration in /pharn-verify's Step 3a and /pharn-regress's "Reference — gate discovery
+ *  and classification" section (since 6.23.0's stage-regress-script moved the discovery LOGIC into tested code,
+ *  this prose copy is now informational only, not a branch the command itself takes), pinned member for
  *  member by a ✧ parity test (gate-run-core.test.mjs), which also pins regress's "minus the e2e ids" clause to
  *  E2E_SET. /pharn-ship's former third copy is retired to a citation (L35). */
 export const ALLOWLIST = Object.freeze(["test", "lint", "format:check", "lint:md", "typecheck", "type-check", "build", "test:e2e", "e2e"]);

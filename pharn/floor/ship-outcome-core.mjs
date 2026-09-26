@@ -22,7 +22,7 @@
 // FLOOR (primitive #3, enum membership): `gate2` reduces to two sub-stage `.verdict` enums —
 //   `verify-report.json` `PASS` AND `regression-report.json` `no-regressions`. Both are produced by
 //   tested non-LLM checkers (`check-verify.mjs`, `check-regress.mjs`), and this module only tests
-//   membership over them. It NEVER re-computes a verdict and never overrides one. `gate2-quick` (6.23.0,
+//   membership over them. It NEVER re-computes a verdict and never overrides one. `gate2-quick` (6.24.0,
 //   `/pharn-ship --quick`) is the SAME KIND of floor reduction over a SMALLER stage set: `verify-report.json`
 //   `PASS` on the run's OWN `pharn-verify` stage-start, at its latest iteration — the regression verdict is
 //   NEVER consulted, because a quick run starts no `/pharn-regress` at all (`verdictStages`, below).
@@ -49,7 +49,7 @@
 // iterates it and additionally holds `SHIP_DECISION_RE` as a CLOSURE over the emitted stem, so a form
 // outside the vocabulary fails rather than merely going untested.
 //
-// ── APPLICABILITY — the verdicts must belong to THIS run (added 6.9.1; tightened 6.23.0) ─────────────
+// ── APPLICABILITY — the verdicts must belong to THIS run (added 6.9.1; tightened 6.24.0) ─────────────
 // Until 6.9.1 `gate2` needed only "markers exist" + two green `.verdict`s read from the feature
 // directory, and nothing bound either report to the run being reported. REACHED THROUGH SUPPORTED USE,
 // not a probe of the pure function: `/pharn-spec` resumes an existing `<name>` (its Step 1.1, an
@@ -60,7 +60,7 @@
 // member of its stage set (`verdictStages(mode)` — `pharn-regress` and `pharn-verify` in a full run,
 // `pharn-verify` alone in a quick one) at the run's LATEST recorded iteration, so a new invocation's run
 // cannot inherit an old pair, and a Step 2b retry that started iteration 2 cannot inherit iteration 1's.
-// TWO MORE CONDITIONS since 6.23.0 (GATE-2 review finding F1: a quick run whose run-start was SKIPPED,
+// TWO MORE CONDITIONS since 6.24.0 (GATE-2 review finding F1: a quick run whose run-start was SKIPPED,
 // after an earlier run that never wrote its run-stop, derived `gate2` from that earlier run's regress
 // stage-start and report — iteration numbers restart at 1 in every run, so the earlier `pharn-regress@1`
 // completed the pair for this run's `pharn-verify@1`):
@@ -78,18 +78,27 @@
 // STRENGTH, stated: exact RELATIVE TO THE RECORDED MARKERS (enum + ordering), and the markers are
 //   ADVISORY (Bash-written command prose, L19). It never uses a file's mtime or its mere existence ([[L42]]).
 // THE RESIDUAL, at its true width: a marker proves a stage STARTED in this attempt, never that it
-//   REWROTE its report. A `/pharn-verify` (or `/pharn-regress`) that writes its stage-start and then
-//   REFUSES before emitting leaves the previous attempt's — or the previous run's — file in place, and
-//   this derivation accepts it. That applies to EVERY attempt, not only the retry (GRILL finding 1), and
-//   it is pinned by a test so it stays visible. Closing it needs a report-side run identity (a
-//   verify/regression-report contract change) or a lifecycle invalidation in `/pharn-ship` (an
-//   orchestration change) — both outside this increment by design.
+//   REWROTE its report. A `/pharn-verify` that writes its stage-start and then REFUSES before emitting
+//   leaves the previous attempt's — or the previous run's — file in place, and this derivation accepts it.
+//   That applies to EVERY attempt, not only the retry (GRILL finding 1), and it is pinned by a test so it
+//   stays visible. Closing it needs a report-side run identity (a verify-report contract change) or a
+//   lifecycle invalidation in `/pharn-ship` (an orchestration change) — both outside this increment by
+//   design.
+//   NARROWED for `/pharn-regress` since `stage-regress-script` (6.23.0): `stage-regress.mjs` removes THIS
+//   feature's earlier `regression-report.json` in its very first phase ("fresh"), before any step that can
+//   fail — so a regress attempt that starts and then REFUSES (a RED spec->plan chain, a scope escape, a
+//   missing artifact) has ALREADY deleted the stale file, and this derivation cannot read it as current. The
+//   residual survives for regress only in the one case fresh-start removal precedes: a malformed invocation
+//   (`unusable`, e.g. a bad argv) refused BEFORE the stale-output removal step, where the exit table states
+//   plainly that "an argv refusal removes nothing" (`pharn-contracts/stage-exit.md`). It is UNCHANGED, at its
+//   full original width, for `/pharn-verify` (no such early removal exists there) and for a stage that never
+//   starts at all (no marker, so `verdictApplicability()` correctly excludes it on that ground instead).
 //
 // DETERMINISM (P5): no clock, no randomness. Every branch is a membership or grammar test, and the
 // terminal fallback is the explicit `unknown` stage token — never a guess, never a silently dropped
 // outcome.
 //
-// ── THE MODE (6.23.0, `/pharn-ship --quick`) ─────────────────────────────────────────────────────────
+// ── THE MODE (6.24.0, `/pharn-ship --quick`) ─────────────────────────────────────────────────────────
 // The mode is recorded on the run-start marker (`mark-phase.mjs --mode`), never re-derived from the
 // SPEC's `spec_kind`: D7 lets a quick SPEC run the full pipeline (a human choice at GATE 1), so the kind
 // alone cannot tell a quick RUN from a full one. `runMode()` reads only the CURRENT run's run-start
@@ -101,11 +110,17 @@
 // the marker's VALUE altered, never with the marker ABSENT:
 //   • a quick run-start written WITHOUT `--mode quick` reads as full; the run starts no `/pharn-regress`, so
 //     the regress stage-start `gate2` needs is missing and the outcome is `stop:pharn-verify`;
-//   • a quick run whose run-start was SKIPPED joins the previous run's window. After a closed run, its first
-//     stage marker follows a run-stop (run-window-core's rule: `unknown`, so `undetermined`). After an
-//     unclosed one, its own `pharn-plan` / `pharn-grill` / `pharn-test` / `pharn-build` stage-starts repeat
-//     that run's (condition (b): `undetermined`), and a regress stage-start the earlier run wrote before
-//     this run's build never counts (condition (a));
+//   • a quick run whose run-start was SKIPPED joins the previous run's window, and the outcome is
+//     `undetermined` or `stop:<stage>` — which one depends on what that run left, never `gate2`. After a
+//     closed run, its first stage marker follows a run-stop (run-window-core's rule: `unknown`, so
+//     `undetermined`). After an unclosed one that started any of `pharn-plan` / `pharn-grill` / `pharn-test`
+//     / `pharn-build`, this run's own stage-starts repeat it (condition (b): `undetermined`). After an
+//     unclosed one that started NONE of them — a `/pharn-loop` interrupted during `/pharn-spec` leaves only
+//     `[run-start, stage-start pharn-spec]`, and `/pharn-ship` never marks `pharn-spec` — nothing repeats,
+//     the joined run takes that run-start's mode (full: a loop writes no `--mode`), and with no
+//     `pharn-regress` stage-start after this build the outcome is `stop:pharn-verify` (GATE-2 re-review N1,
+//     pinned by a test). A regress stage-start the earlier run wrote before this run's build never counts
+//     (condition (a));
 //   • a full run whose run-start wrongly carries `mode: "quick"` yields `gate2-quick` at most, which claims
 //     no regression verdict — never the stronger `gate2` a full run's own regress stage would have earned.
 // TWO BOUNDS, stated rather than closed: (1) all of the above is relative to the markers the command
@@ -141,16 +156,16 @@ export const UNDETERMINED = "undetermined";
 /** The two stages whose reports the `gate2` test reads — `/pharn-ship`'s own `--stage` tokens. */
 export const VERDICT_STAGES = Object.freeze(["pharn-regress", "pharn-verify"]);
 
-/** The ONE stage a `gate2-quick` test reads (6.23.0): a `--quick` run starts no `/pharn-regress` at all, so
+/** The ONE stage a `gate2-quick` test reads (6.24.0): a `--quick` run starts no `/pharn-regress` at all, so
  *  requiring it would make `gate2-quick` unreachable by every quick run — never a stage set copied from
  *  VERDICT_STAGES and then pruned by hand. */
 export const QUICK_VERDICT_STAGES = Object.freeze(["pharn-verify"]);
 
-/** The stage whose latest same-iteration `stage-start` a verdict `stage-start` must FOLLOW to count (6.23.0,
+/** The stage whose latest same-iteration `stage-start` a verdict `stage-start` must FOLLOW to count (6.24.0,
  *  condition (a) in the header) — the `--stage` token both `/pharn-ship` and `/pharn-loop` write. */
 export const BUILD_STAGE = "pharn-build";
 
-/** The `reason` of an `unknown` applicability that condition (b) decides, not the run window (6.23.0). */
+/** The `reason` of an `unknown` applicability that condition (b) decides, not the run window (6.24.0). */
 export const REPEATED_STAGE_REASON =
   "a stage other than a verdict stage was started twice at one iteration in the current run — the markers may span two invocations whose second run-start was skipped";
 
@@ -231,7 +246,7 @@ export const SHIP_DECISION_FORMS = Object.freeze([
     parameterized: false,
     floor: false,
     means:
-      "markers exist but the run's boundary cannot be established (the run window is unknown, or — 6.23.0 — the current run starts a non-verdict stage twice at one iteration, which a skipped run-start leaves behind), so no verdict can be bound to this run — not a failed check, not a stop stage",
+      "markers exist but the run's boundary cannot be established (the run window is unknown, or — 6.24.0 — the current run starts a non-verdict stage twice at one iteration, which a skipped run-start can leave behind), so no verdict can be bound to this run — not a failed check, not a stop stage",
   }),
 ]);
 
@@ -298,7 +313,7 @@ export function deriveShipOutcome({ markers, verifyVerdict, regressVerdict }) {
   }
   // Every fact below comes from the CURRENT run only — an earlier invocation's stages are not this run's.
   const current = currentRunMarkers(markers);
-  // Quick mode (6.23.0): verify PASS alone reaches the gate — the regression verdict is NEVER consulted,
+  // Quick mode (6.24.0): verify PASS alone reaches the gate — the regression verdict is NEVER consulted,
   // so a `regression-report.json` left on disk by an earlier (or the base) run cannot manufacture `gate2`.
   const reachedGate2 =
     app.status === APPLICABILITY.CURRENT &&
@@ -339,16 +354,16 @@ function repeatsAStage(current) {
  * only — never from the reports' mtimes or contents ([[L42]], [[L6]]).
  *
  *  - `unknown`    — the run window cannot be established (`runWindow(markers, null)` is `unknown`), or
- *                   (6.23.0, condition (b)) the current run starts a non-verdict stage twice at one
+ *                   (6.24.0, condition (b)) the current run starts a non-verdict stage twice at one
  *                   iteration (`REPEATED_STAGE_REASON`).
  *  - `current`    — the current run carries a `stage-start` for EVERY member of its stage set
  *                   (`verdictStages(mode)` — `VERDICT_STAGES` full, `QUICK_VERDICT_STAGES` quick) at the
  *                   run's LATEST recorded iteration (a run with no iterations: null == null), each one
- *                   AFTER (by `seq`) that iteration's latest `pharn-build` stage-start (6.23.0, condition (a)).
+ *                   AFTER (by `seq`) that iteration's latest `pharn-build` stage-start (6.24.0, condition (a)).
  *  - `not-in-run` — otherwise: the reports were produced by an earlier invocation, or by an earlier
  *                   attempt that a later iteration has superseded, or before this run's own build.
  *
- * Returns `{status, reason, latestIteration, mode, stages}`. `mode` and `stages` (6.23.0) are computed from
+ * Returns `{status, reason, latestIteration, mode, stages}`. `mode` and `stages` (6.24.0) are computed from
  * the markers regardless of window status, so a caller can label a report even under `unknown`. PURE. See
  * the header for the residuals this cannot see.
  */

@@ -6,7 +6,7 @@
 - layer(s): product floor (`pharn/floor/`), `pharn-contracts` (L-1, schemas only), product commands (`.claude/commands/pharn-*.md`), shipped doc (`pharn/floor/README.md`), trusted docs (`LIMITS.md`, `pharn/ARCHITECTURE.md` — human-applied patch), repo-meta (`CLAUDE.md`, `README.md`, `CHANGELOG.md`, `SKILLS_VERSION`). No `role:` capability.
 - constitution_refs: [P0, P1, P2, P3, P5, P6, P7]
 - stage model: plan — model routed via Agent subagent; effort not routed · grill — model routed via Agent subagent; effort not routed
-- base: `main` at `767bf61` (SKILLS_VERSION 6.22.0, MIN_CLI 0.5.0). Bumps to **6.23.0** (minor). Both sibling phases also bump; whichever merges later renumbers by diff.
+- base: `main` at `767bf61` (SKILLS_VERSION 6.22.0, MIN_CLI 0.5.0). Bumps to **6.24.0** (minor). Both sibling phases also bump; whichever merges later renumbers by diff. _(Renumbered from 6.23.0 by diff after `stage-regress-script` merged as 6.23.0 (`1524c6f`); main merged in at GATE 2 — see "Amended at GATE 2 (merge of main)". PROVISIONAL: `writes-scope-run-only` is set to merge first as 6.24.0, after which this phase renumbers once more.)_
 - gate1: APPROVED 2026-09-26 — a model decision by the orchestrator under the maintainer's 2026-09-25 delegation, not a human approval. Q1 → (a); the decisions for GATE 1 accepted as written.
 - grill: amended after `/pharn-dev-grill` (`GRILL.md`, findings G1–G12); `## Amended after grill` lists what changed.
 
@@ -233,7 +233,7 @@ The grill stage keeps owning its artifact (P3); `/pharn-ship --quick` invokes `/
 
 ### 4. `/pharn-ship --quick` — the quick section (D2, D4–D8)
 
-A new section headed ``## Quick mode — `/pharn-ship --quick` (6.23.0)`` is placed **after Step 1 and before
+A new section headed ``## Quick mode — `/pharn-ship --quick` (6.24.0)`` is placed **after Step 1 and before
 Step 2** (PENDING_START needs Step 1's lines first). Step 1 gains a one-line pointer to it. **`--quick` is recognized
 only as the FIRST token of the arguments** (grill G3): anywhere else it is part of the description, which is
 untrusted prose (P2), so a pasted description that contains `--quick` can never switch a run into quick mode. The
@@ -355,7 +355,7 @@ gates stay, and what it skips is listed".
 - **Edits** (the build may tighten the wording; the facts are fixed here for the grill):
   - `LIMITS.md §3a`: keep the paragraph's first sentences (the fan-out problem), drop the false clause, and add:
 
-    > **The manual flag is `/pharn-ship --quick` (6.23.0), and it trades checks for cost.** A human chooses it for
+    > **The manual flag is `/pharn-ship --quick` (6.24.0), and it trades checks for cost.** A human chooses it for
     > a `spec_kind: quick` SPEC: one to three acceptance criteria, each verified at `unit` or `integration`. It
     > keeps both human gates, the grill's two floor stops, the test-first evidence for those criteria and
     > `/pharn-verify` with its AC gate, and it does not check three things: **no regression outside the feature is
@@ -368,7 +368,7 @@ gates stay, and what it skips is listed".
 
   - `pharn/ARCHITECTURE.md §6`, a paragraph after the `test` paragraph:
 
-    > **Quick mode** (`/pharn-ship --quick`, 6.23.0) runs a shorter spine for a small change: a `spec_kind: quick`
+    > **Quick mode** (`/pharn-ship --quick`, 6.24.0) runs a shorter spine for a small change: a `spec_kind: quick`
     > SPEC (one to three criteria, each `unit` or `integration`), `plan`, the grill's floor stops without its
     > interrogation, `test`, `build` and `verify` as above, and **no `regress`**, so nothing looks for a
     > regression outside the feature. Both human gates stay, and the ledger outcome is `gate2-quick`, never
@@ -380,7 +380,13 @@ gates stay, and what it skips is listed".
     name every `pharn/pharn-contracts/*.md` stem, else the generator exits 1 naming the missing ones. So the patch
     never carries a §4 line that disagrees with what merged: a contract that merged under another name, or any
     other contract §4 lacks, fails the generator loudly, naming the stem, and the fix is one edit to the
-    generator's list (grill G9 — the generator does not adapt on its own).
+    generator's list (grill G9 — the generator does not adapt on its own). _(Included since the merge of main:
+    `stage-regress-script` put `stage-exit.md` on `main` as 6.23.0, and the regeneration printed
+    `stage-exit: present` — "Amended at GATE 2 (merge of main)".)_
+
+  - `LIMITS.md §6` **(added at the GATE-2 re-review, N3)**: the scope check's first bound, "it fires only if
+    `/pharn-regress` runs", gains "— or, since 6.24.0, `/pharn-ship --quick`'s item 7, which runs the same partition
+    without the rest of that stage". Quick mode runs that partition itself, so the bound understated the check.
 
 - **Generator** `.dev/features/ship-quick-mode/handoff/make-patch.mjs`, committed so the orchestrator can regenerate
   after a sibling merge (a deviation from the precedent, which deleted its staging sources; the reason is the
@@ -412,9 +418,10 @@ gates stay, and what it skips is listed".
 
   ```sh
   #!/bin/sh
-  # apply.sh — the HUMAN-run apply step for .dev/features/ship-quick-mode: LIMITS.md §3a and pharn/ARCHITECTURE.md
-  # §6 (and §4 when stage-exit.md is present). Read proposed/human-only.patch first. Run from the repo root, on the
-  # phase branch, at GATE 2 after the last /pharn-dev-verify:  sh .dev/features/ship-quick-mode/proposed/apply.sh
+  # apply.sh — the HUMAN-run apply step for .dev/features/ship-quick-mode: LIMITS.md §3a and §6, and
+  # pharn/ARCHITECTURE.md §6 (and §4 when stage-exit.md is present). Read proposed/human-only.patch first. Run
+  # from the repo root, on the phase branch, at GATE 2 after the last /pharn-dev-verify:
+  #   sh .dev/features/ship-quick-mode/proposed/apply.sh
   set -eu
   F=.dev/features/ship-quick-mode/proposed
   EXPECT_STAGE_EXIT=absent # written by the build from make-patch.mjs's "stage-exit:" line
@@ -440,15 +447,15 @@ gates stay, and what it skips is listed".
 
 ### 8. Version (D12)
 
-**Minor, 6.22.0 → 6.23.0.** A newly shipped capability: a mode, a SPEC kind, a CLI print mode and a marker flag.
+**Minor, 6.23.0 → 6.24.0.** A newly shipped capability: a mode, a SPEC kind, a CLI print mode and a marker flag.
 Nothing invalidates an install. A SPEC without `quick` validates as before; every existing marker and ledger reads
 as before (the `mode` key and `gate2-quick` are additive, and old checkers accept both). **`MIN_CLI` stays 0.5.0**:
 no installed path moves, and a CLI that copies `pharn/floor/` and `.claude/commands/` per file lands every change.
 
-**The one direction that does not read back, stated (grill G11).** An install rolled back below 6.23.0 reads a
+**The one direction that does not read back, stated (grill G11).** An install rolled back below 6.24.0 reads a
 `spec_kind: quick` SPEC as a rule-8 RED (`quick` was not a member), so that SPEC stops passing
-`check-spec-approved` there. A pre-6.23 renderer shows a `gate2-quick` ledger's decision without its preamble
-bullet. No pre-6.23 checker REDs such a ledger. Forward compatibility is complete; backward, the SPEC kind is the one
+`check-spec-approved` there. A pre-6.24 renderer shows a `gate2-quick` ledger's decision without its preamble
+bullet. No pre-6.24 checker REDs such a ledger. Forward compatibility is complete; backward, the SPEC kind is the one
 casualty, and the CHANGELOG says so.
 
 ## Showing the saving
@@ -547,7 +554,8 @@ supersedes; the superseded sentences are marked in place ("superseded at GATE 2"
   sees the SPEC, never the invocation). A guarantee-audit bullet is added. This supersedes the Determinism
   audit's "`--quick` is the first argument token" as a membership test.
 - **F3 — quick mode dropped a fix #7 control unnamed.** Kept instead: `## Quick mode` gains item 7 — run
-  `check-regress.mjs scope` (inputs by `/pharn-regress`'s Step 3 rules, `--feature <name>`; no base worktree,
+  `check-regress.mjs scope` (inputs by `/pharn-regress`'s Step 3 rules _(superseded at the merge of main: that
+  Step 3 is now `stage-regress.mjs`'s `base` and `partition` phases, which item 7 cites)_, `--feature <name>`; no base worktree,
   no install, no gate) before `/pharn-verify` and STOP on `escaped`; Step 2b re-runs it between the re-build
   and the re-verify. Items 7–11 become 8–12. It is named KEPT in the trade text (`/pharn-spec` Step 4, the
   section intro, README, CHANGELOG, the LIMITS patch) and in `SHIP.md`. This supersedes the Guarantee
@@ -575,6 +583,62 @@ supersedes; the superseded sentences are marked in place ("superseded at GATE 2"
 - **Files added to `## Files`:** `.claude/commands/pharn-verify.md` (one sentence) — moved out of "Explicitly
   not touched". The setter is re-run and the scope amended onto the open reconcile epoch
   (`reconcile-baseline.mjs --amend-scope`).
+
+## Amended at GATE 2 (merge of main) — 2026-09-26
+
+The re-review of the fix pass (`REVIEW.md`, at `bbea1bb`) was GREEN with no floor finding and three new minor
+ones, N1–N3. The orchestrator decided, under the maintainer's delegation, to fix all three and merge `main` now.
+Stage model: opus — set by the maintainer's instruction, overriding pharn.config.json's sonnet for
+build/regress/verify; routed via Agent subagent; effort not routed. No `## Files` entry changes.
+
+- **N1 — "a skipped quick run-start reads `undetermined` either way" was too strong.** The re-review's probe: after
+  an unclosed `/pharn-loop` trail `[run-start, stage-start pharn-spec]`, a quick run whose run-start was skipped
+  repeats no stage, because `/pharn-ship` never marks `pharn-spec`. Condition (b) is silent, and the joined run
+  is full, by the loop's run-start, so it derives `stop:pharn-verify`. "Never `gate2`" still holds. Re-worded at
+  every site (`ship-outcome-core.mjs`'s header and its `undetermined` form, `cost-ledger.md`, `pharn-ship.md`,
+  `render-run-report.mjs`'s preamble, `CLAUDE.md`, CHANGELOG): `undetermined` when this run's stage markers follow
+  the earlier run's run-stop or repeat one of its stage-starts, and `stop:<stage>` otherwise. Pinned in
+  `ship-outcome-core.test.mjs`: the skipped-run-start enumeration gains the loop family (36 shapes) and asserts
+  that both `undetermined` and `stop:pharn-verify` are reached; a ★ N1 test runs the probe's exact trail, with a
+  control (the loop one stage further → `undetermined`).
+- **N2 — a stored `gate2` the new conditions exclude was labelled as predating 6.9.1.** `render-run-report.mjs` now
+  says it "predates the applicability rules in force today" (6.9.1's current-run rule; 6.24.0's build-order and
+  no-repeat conditions — the quoted reason names the rule that excludes it). `render-run-report.test.mjs` adds a
+  test over both conditions, with the old wording as a negative control.
+- **N3 — `LIMITS.md §6`'s "it fires only if `/pharn-regress` runs" went stale** when quick mode began running the
+  same partition (item 7). `make-patch.mjs` gains a §6 edit (step 2b, through `applyOnce` and the same in-memory
+  checks), so the human-only patch carries LIMITS §3a and §6 (§7 above).
+- **`origin/main` merged in (a merge, not a rebase).** `main` had merged `stage-regress-script` as 6.23.0
+  (`1524c6f`, #277). Two conflicts, both resolved by hand:
+  - `CHANGELOG.md`: main's `[6.23.0]` kept byte-for-byte, checked against `origin/main` (that section and
+    everything below it, the header and `[Unreleased]` are identical). This phase's entry sits in a new
+    `## [6.24.0] - 2026-09-26` above it.
+  - `pharn/floor/render-run-report.mjs`, the import block: main moved `quoteData` / `dataText` into
+    `quote-core.mjs`. Kept main's import and this phase's added `runMode`.
+- **Renumbered 6.23.0 → 6.24.0 by diff** against `origin/main`, over added lines only, never main's own: 121 lines,
+  plus one escaped regex (`6\.23\.0` in `command-hygiene.test.mjs`) that the literal scan missed. `SKILLS_VERSION`
+  and the README badge are bumped. Not renumbered: `GRILL.md` (1 line) and `REVIEW.md` (7), other stages' records
+  outside this build's scope, and `human-only.patch` (2), regenerated instead. **PROVISIONAL:**
+  `writes-scope-run-only` is set to merge first as 6.24.0, and this phase then renumbers once more, to 6.25.0.
+- **#277 made `/pharn-regress` a thin caller,** so `## Quick mode` item 7's "its Step 3 items 1–3" pointed at
+  nothing. Item 7 now cites the script's `base` and `partition` phases (`stage-regress.mjs`; `BASE_RULE` in
+  `stage-regress-core.mjs`) and gives `inside` as that phase computes it:
+  `git diff --name-only --no-renames <base>` plus untracked, minus `.pharn/`. Its pinned `check-regress.mjs scope`
+  line is unchanged. The quick
+  guarantee-audit bullet's "as `/pharn-regress`'s Step 3 states" now cites the Step 1 `scope-escaped` remedy, which
+  carries that bound today.
+- **The §4 line is now included.** `stage-exit.md` is on `main`, so the regeneration printed `stage-exit: present`.
+  `apply.sh` carries `EXPECT_STAGE_EXIT=present`, and its header names LIMITS §6. The new sums are `LIMITS.md`
+  `4284b68e…` and `pharn/ARCHITECTURE.md` `044ee4fa…`, which is the new ARCHITECTURE pin (old `4950796f…`). The
+  patch was applied to a scratch copy of the tree, never to the trusted docs. It applies, `shasum -c` passes, and
+  `validate`, `check:markers` and `hash-doc.test` pass on the applied bytes.
+- **The reconcile epoch.** Before the merge, the fix pass's epoch (`ship-quick-mode-opus-fixes`) read `CLEAN`: 24
+  paths reconciled, no escape. After the merge the setter was re-run from this PLAN, and the epoch was re-opened
+  with `reconcile-baseline.mjs --anchor --by ship-quick-mode-post-merge` (2338 paths). Until the merge was
+  committed, `check-bash-reconcile` reported 15 `pharn/floor/` files as escapes: main's floor changes since the
+  fork point, minus the three this plan also declares. That directory is always reconciled against `HEAD`'s
+  blobs, and `HEAD` did not yet hold the merge. So the merge was committed before the after-merge regress and
+  verify ran. No baseline was edited or deleted.
 
 ## Files
 
@@ -608,9 +672,9 @@ supersedes; the superseded sentences are marked in place ("superseded at GATE 2"
 - `pharn/floor/render-run-report.test.mjs` — EDIT. A quick ledger's outcome and regress line; the preamble names every decision form — layer product floor tests
 - `.dev/floor/command-hygiene.test.mjs` — EDIT. The PHASE_MARKER_WIRING carve-out, QUICK_MODE_WIRING, mutation controls — layer dev tests
 - `CLAUDE.md` — EDIT. The spine paragraph, the mark-phase usage line, the ship-outcome and AC-tests comments — layer repo-meta
-- `README.md` — EDIT. Badge 6.23.0, the paper-trail list (grill G6: a quick run's `GRILL.md` holds no interrogation, and it writes no `REGRESSION.md` and no `RUN-REPORT.md`, while `cost.json` is kept), the `--quick` usage, the commands row, the token-cost bullet — layer repo-meta
-- `CHANGELOG.md` — EDIT. `## [6.23.0]` (date of the build), moving any `[Unreleased]` entry — layer repo-meta
-- `SKILLS_VERSION` — EDIT. `6.22.0` → `6.23.0` — layer repo-meta
+- `README.md` — EDIT. Badge 6.24.0, the paper-trail list (grill G6: a quick run's `GRILL.md` holds no interrogation, and it writes no `REGRESSION.md` and no `RUN-REPORT.md`, while `cost.json` is kept), the `--quick` usage, the commands row, the token-cost bullet — layer repo-meta
+- `CHANGELOG.md` — EDIT. `## [6.24.0]` (date of the build), moving any `[Unreleased]` entry — layer repo-meta
+- `SKILLS_VERSION` — EDIT. `6.23.0` → `6.24.0` — layer repo-meta
 - `.dev/features/ship-quick-mode/handoff/make-patch.mjs` — NEW. The committed patch generator (§7) — layer dev artifact
 - `.dev/features/ship-quick-mode/proposed/human-only.patch` — NEW. Generated by `make-patch.mjs` (a Bash write) — layer dev artifact
 - `.dev/features/ship-quick-mode/proposed/human-only.sha256` — NEW. Generated by `make-patch.mjs` (a Bash write) — layer dev artifact

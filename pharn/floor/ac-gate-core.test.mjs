@@ -226,7 +226,7 @@ test("GREEN — every AC's locked, once-red test passed on the head run: PASS, t
   });
 });
 
-// ── quick (6.23.0): a spec_kind: quick SPEC takes the SAME test-first gate a feature SPEC does ──────────
+// ── quick (6.24.0): a spec_kind: quick SPEC takes the SAME test-first gate a feature SPEC does ──────────
 
 test("GREEN — a spec_kind: quick world reads test-first (mode) and PASS, exactly like a feature world", () => {
   withWorld({ kind: "quick" }, (w) => {

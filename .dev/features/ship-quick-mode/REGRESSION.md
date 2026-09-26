@@ -1,5 +1,55 @@
 # REGRESSION — ship-quick-mode
 
+## After the merge of main (2026-09-26)
+
+- **Run:** after `origin/main` (`1524c6f`, `stage-regress-script`, 6.23.0) was merged in and the re-review's N1–N3
+  were fixed. It ran on the committed merge, with a clean tree at run time and without the human-only patch. That
+  merge commit was then amended to add only this chain's three records (`REGRESSION.md`, `regression-report.json`
+  and `VERIFY.md`), so the code this run measured is the code on the branch. Stage model: opus — set by the maintainer's instruction, overriding pharn.config.json's sonnet for
+  build/regress/verify; routed via Agent subagent; effort not routed.
+- **Base:** `1524c6ff90844ee17457ca9450a7abb894a7b1f1`, which is `origin/main`, passed explicitly on the
+  orchestrator's instruction. After the merge it is also `git merge-base HEAD origin/main`, so the comparison is
+  exactly this phase's changes against the `main` it merges into.
+
+**REGRESSIONS: none — no deterministically-detectable breakage outside the feature.** Verdict
+`no-regressions` (`check-regress.mjs verdict`, exit 0; `regression-report.json` is its stdout, byte-identical).
+
+### Partition
+
+- **Declared** (`PLAN.md` `## Files`, unchanged by the merge): 38 paths.
+- **Inside** (`git diff --name-only <base>` + untracked): 44 paths. These are the 38 declared paths plus six of this
+  feature's own pipeline artifacts, which `--feature ship-quick-mode` exempts and reports in `escape_exempt`:
+  `GRILL.md`, `REGRESSION.md`, `REVIEW.md`, `VERIFY.md`, `regression-report.json` and `verify-report.json`.
+- **Escaped:** none (`check-regress.mjs scope` exit 0, `escaped: []`).
+- **Outside tests:** 99 files, the 109 tracked `*.test.mjs` / `*.test.cjs` minus the 10 inside. #277 added five
+  test files, so the count is up from 94.
+- **Outside eval pairs:** 1 — `pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json`
+  ↔ `.dev/features/trust-fence/findings.json`, both paths confirmed readable before its exit code was recorded.
+
+### Gate table (base → head)
+
+| gate                                                                | base | head | verdict |
+| ------------------------------------------------------------------- | ---- | ---- | ------- |
+| `tests` (the 99 outside files, one `node --test` over the list)     | 0    | 0    | clean   |
+| `validate` (`node pharn/floor/validate.mjs .`, whole-repo)          | 0    | 0    | clean   |
+| `structural:…/expected-injection-comment.json` (`check-structural`) | 0    | 0    | clean   |
+
+**`regressions: []` · `pre_existing: []`.** The style gates were skipped by the config-touch rule: `inside`
+touches none of `eslint.config.mjs`, `.prettierrc.json`, `.prettierignore`, `.markdownlint-cli2.jsonc`. #277
+changed two of them, but that change is in the base, not in this phase's diff.
+
+### How the baseline was obtained (orchestration — advisory)
+
+It was obtained as in the run below. A scratch Node runner under `.pharn/pharn-dev-regress/` used argv arrays only,
+and was deleted afterwards. `git archive <base>` was extracted under `.pharn/pharn-dev-regress/snap/base/`, with
+`GIT_CEILING_DIRECTORIES` set to its parent. The snapshot was removed before the HEAD run. The merge was committed
+before this run because `pharn/floor/` is reconciled against `HEAD`'s blobs (`PLAN.md`, "Amended at GATE 2 (merge
+of main)"). The committed tree is what both `/pharn-dev-regress` and `/pharn-dev-verify` measured.
+
+### The honest residual (P0/P7)
+
+Unchanged, and stated in the run below: this catches what the suite catches — nothing more.
+
 ## After GATE 2 fix (2026-09-26)
 
 - **Run:** after the GATE-2 review-fix pass, on the working tree over `2071a97` (the fixes uncommitted at run

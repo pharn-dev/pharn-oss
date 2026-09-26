@@ -48,8 +48,8 @@ const scratch = () => mkdtempSync(join(tmpdir(), "pharn-ship-outcome-"));
 
 /** A marker, shaped as `readMarkers()` hands them over. `ts`/`session_id` are irrelevant to this module
  *  — it reads `kind`, `stage` and `iteration` only — so they are present but unused, which keeps the
- *  fixture honest about the real record rather than a trimmed invention. `mode` (6.23.0) is omitted
- *  entirely unless given, exactly as a pre-6.23.0 marker (and a non-run-start marker) never carries it. */
+ *  fixture honest about the real record rather than a trimmed invention. `mode` (6.24.0) is omitted
+ *  entirely unless given, exactly as a pre-6.24.0 marker (and a non-run-start marker) never carries it. */
 const marker = (seq, kind, stage = null, iteration = null, mode) => ({
   seq,
   kind,
@@ -75,7 +75,7 @@ const fullRun = () => [
   marker(11, "orchestrator"),
 ];
 
-/** The marker trail a `--quick` ship run leaves (6.23.0): the run-start carries `mode: "quick"`, and there
+/** The marker trail a `--quick` ship run leaves (6.24.0): the run-start carries `mode: "quick"`, and there
  *  is no `pharn-regress` stage-start at all — a quick run never starts one. */
 const quickRun = () => [
   marker(1, "run-start", null, null, "quick"),
@@ -218,7 +218,7 @@ test("L36 CLOSURE: SHIP_DECISION_FORMS is the whole vocabulary, and every form i
   );
 });
 
-// ── quick mode (6.23.0) ──────────────────────────────────────────────────────────────────────────────
+// ── quick mode (6.24.0) ──────────────────────────────────────────────────────────────────────────────
 
 test("runMode: quick iff the CURRENT run's run-start carries mode === quick; an earlier run's mode never leaks forward", () => {
   assert.equal(runMode(quickRun()), "quick");
@@ -296,7 +296,7 @@ test("A SKIPPED OR WRONG MODE MARKER NEVER YIELDS gate2 — the value altered (t
   assert.equal(derive(wronglyQuick, "PASS", "no-regressions").decision, GATE2_QUICK);
 });
 
-// ── the marker ABSENT, not merely altered (6.23.0 GATE-2 review finding F1) ─────────────────────────────
+// ── the marker ABSENT, not merely altered (6.24.0 GATE-2 review finding F1) ─────────────────────────────
 //
 // The test above only ever changed the run-start's VALUE. F1 removed the marker: a quick run whose run-start
 // line was skipped JOINS the previous run's window, and when that run never wrote its run-stop, its
@@ -465,21 +465,26 @@ test("★ a quick run that SKIPPED its run-start never inherits an earlier run: 
     ["pharn-verify", 1],
   ];
   const QUICK = FULL.filter(([s]) => s !== "pharn-regress");
+  // A /pharn-loop run marks `pharn-spec` first (its Step 1), a stage /pharn-ship never marks — so its one-stage
+  // prefix is the trail the quick tail repeats NOTHING of (GATE-2 re-review N1).
+  const LOOP = [["pharn-spec", null], ...FULL];
   const shapes = [];
-  for (const [mode, stages] of [
-    [undefined, FULL],
-    ["quick", QUICK],
+  for (const [family, mode, stages] of [
+    ["full", undefined, FULL],
+    ["quick", "quick", QUICK],
+    ["loop", undefined, LOOP],
   ]) {
     for (let k = 1; k <= stages.length; k++) {
       for (const closed of [false, true]) {
         const ms = [marker(1, "run-start", null, null, mode)];
         stages.slice(0, k).forEach(([stage, iteration], i) => ms.push(marker(2 + i, "stage-start", stage, iteration)));
         if (closed) ms.push(marker(ms.length + 1, "run-stop"));
-        shapes.push({ label: `${mode ?? "full"} earlier run, ${k} stage(s), ${closed ? "closed" : "unclosed"}`, ms });
+        shapes.push({ label: `${family} earlier run, ${k} stage(s), ${closed ? "closed" : "unclosed"}`, ms });
       }
     }
   }
-  assert.equal(shapes.length, 22, "NON-VACUITY (L34): 6 full + 5 quick prefixes, each closed and unclosed");
+  assert.equal(shapes.length, 36, "NON-VACUITY (L34): 6 full + 5 quick + 7 loop prefixes, each closed and unclosed");
+  const seen = new Set();
   for (const { label, ms } of shapes) {
     const joined = [...ms, ...quickTail(ms.length + 1)];
     for (const [v, r] of [
@@ -488,12 +493,40 @@ test("★ a quick run that SKIPPED its run-start never inherits an earlier run: 
       ["FAIL", "no-regressions"],
     ]) {
       const d = derive(joined, v, r).decision;
+      seen.add(d);
       assert.ok(d === UNDETERMINED || d.startsWith(STOP_PREFIX), `${label}, verify=${v} regress=${r}: got ${d}`);
     }
     // CONTROL: the same quick run WITH its run-start is a run of its own and reaches gate2-quick.
     const own = [...ms, marker(ms.length + 1, "run-start", null, null, "quick"), ...quickTail(ms.length + 2)];
     assert.equal(derive(own, "PASS", "regressions").decision, GATE2_QUICK, `${label}: control`);
   }
+  // BOTH halves of "undetermined or stop:*" are REACHED over this enumeration — a disjunction whose second half no
+  // shape reaches would let the prose overclaim `undetermined` again unnoticed (the N1 defect).
+  assert.ok(seen.has(UNDETERMINED), "some earlier-run shape must yield undetermined");
+  assert.ok(seen.has(`${STOP_PREFIX}pharn-verify`), "some earlier-run shape must yield stop:pharn-verify");
+});
+
+test("★ REVIEW N1: a skipped quick run-start after an unclosed /pharn-loop that marked ONLY pharn-spec is stop:pharn-verify — never undetermined-by-repeat, never gate2", () => {
+  // The re-review's probe. The quick tail repeats nothing (condition (b) is silent — /pharn-ship never marks
+  // pharn-spec), no run-stop sits between the two (the window is known), so the joined run takes the LOOP's
+  // run-start mode — full, a loop writes no --mode — whose stage set needs a pharn-regress stage-start after this
+  // build. There is none, so the outcome is the stop stage, whatever the reports on disk say.
+  const loopTrail = [marker(1, "run-start"), marker(2, "stage-start", "pharn-spec"), marker(3, "orchestrator")];
+  const joined = normalizeMarkers([...loopTrail, ...quickTail(4)]);
+  for (const [v, r] of [
+    ["PASS", "no-regressions"],
+    ["PASS", "regressions"],
+    ["FAIL", "no-regressions"],
+  ]) {
+    assert.equal(derive(joined, v, r).decision, `${STOP_PREFIX}pharn-verify`, `verify=${v} regress=${r}`);
+  }
+  const app = verdictApplicability(joined);
+  assert.equal(app.status, APPLICABILITY.NOT_IN_RUN);
+  assert.equal(app.mode, "full", "the joined run is read with the loop's run-start mode");
+  // CONTROL: had the loop gone one stage further (pharn-plan), the quick tail repeats it → undetermined.
+  const further = normalizeMarkers([...loopTrail, marker(4, "stage-start", "pharn-plan"), ...quickTail(5)]);
+  assert.equal(derive(further, "PASS", "no-regressions").decision, UNDETERMINED);
+  assert.equal(verdictApplicability(further).reason, REPEATED_STAGE_REASON);
 });
 
 test("RESIDUAL, PINNED: an earlier run that left ONLY its run-start is byte-identical to resuming it — its mode is read, never gate2", () => {
@@ -849,7 +882,7 @@ test("★ RESIDUAL, PINNED (GRILL finding 1): a stage that STARTED and then REFU
   const dir = greenDir(); // run 1's PASS / no-regressions, never overwritten
   try {
     // Run 2 is COMPLIANT in its markers — it builds, then starts regress and verify — and both of those refuse
-    // before rewriting a report. (Before 6.23.0 this fixture carried no pharn-build stage-start; since the
+    // before rewriting a report. (Before 6.24.0 this fixture carried no pharn-build stage-start; since the
     // GATE-2 fix a verdict stage-start counts only after the same iteration's build, so the residual is pinned
     // on the trail a real run leaves.)
     const run2 = [

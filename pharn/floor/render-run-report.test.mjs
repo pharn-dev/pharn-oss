@@ -1305,7 +1305,7 @@ test("Outcome: an absent or unrecognized source says so rather than picking a st
   }
 });
 
-// ── quick (6.23.0): a --quick ship ledger's outcome and regress line ────────────────────────────────────
+// ── quick (6.24.0): a --quick ship ledger's outcome and regress line ────────────────────────────────────
 
 test("Outcome preamble: the gate2-quick bullet is present and states gate2-quick is NOT gate2", () => {
   const root = scratch();
@@ -1395,7 +1395,7 @@ test("Briefing (GATE-2 review): a quick ship ledger NEVER links a BRIEFING.md on
       rmSync(root, { recursive: true, force: true });
     }
   }
-  // CONTROL: the same directory under a FULL ship ledger links the briefing, as before 6.23.0.
+  // CONTROL: the same directory under a FULL ship ledger links the briefing, as before 6.24.0.
   const root = scratch();
   try {
     feature(root, "feat", { "cost.json": shipCost(), "BRIEFING.md": "# BRIEFING — feat\n" });
@@ -1747,7 +1747,7 @@ function shipRun(root, markers) {
 test("INTEGRATION: APPLICABLE ship evidence → gate2, and the verdicts are shown WITHOUT an exclusion label", () => {
   const root = scratch();
   try {
-    // A compliant run builds first: since 6.23.0 a verdict stage-start counts only after the same
+    // A compliant run builds first: since 6.24.0 a verdict stage-start counts only after the same
     // iteration's latest pharn-build stage-start (ship-outcome-core, condition (a)).
     const r = shipRun(root, [
       { seq: 1, kind: "run-start", ts: "2026-09-22T10:00:00.000Z" },
@@ -1836,9 +1836,75 @@ test("REVIEW F1: a HISTORICAL ship ledger that stored gate2 from reports now jud
     assert.match(md.split("## Outcome")[1].split("## Tokens")[0], /decision\s+gate2/, "the stored value is NOT rewritten");
     const v = md.split("## Verdicts")[1];
     assert.match(v, /NOT FROM THIS RUN/);
-    assert.match(v, /stored `gate2` above predates this applicability rule/);
+    assert.match(v, /stored `gate2` above predates the applicability rules in force today/);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("REVIEW N2: a stored gate2 the build-order / no-repeat conditions exclude is NOT labelled as predating 6.9.1 — the reason names the rule", () => {
+  // Two trails an emitter from 6.9.1 until quick mode would have derived `gate2` from (both verdict stages started in the current
+  // run at its latest iteration) and today's conditions exclude: (a) ORDER — the verdict stages started BEFORE the
+  // build; (b) NO REPEAT — a build started twice at one iteration. Neither ledger predates 6.9.1, so the old label
+  // ("predates this applicability rule (6.9.1)") would have mis-dated both.
+  const m = (seq, kind, stage = null, iteration = null) => ({
+    seq,
+    kind,
+    stage,
+    iteration,
+    ts: `2026-09-22T09:00:${String(seq).padStart(2, "0")}.000Z`,
+    session_id: null,
+  });
+  const cases = [
+    {
+      label: "(a) verify and regress started before the build",
+      markers: [
+        m(1, "run-start"),
+        m(2, "stage-start", "pharn-regress", 1),
+        m(3, "stage-start", "pharn-verify", 1),
+        m(4, "stage-start", "pharn-build", 1),
+      ],
+      head: /NOT FROM THIS RUN — excluded from the outcome/,
+      reason:
+        /reason\s+the current run has no stage-start for pharn-regress and pharn-verify after its latest pharn-build stage-start at its latest iteration \(1\)/,
+    },
+    {
+      label: "(b) a build started twice at one iteration",
+      markers: [
+        m(1, "run-start"),
+        m(2, "stage-start", "pharn-build", 1),
+        m(3, "stage-start", "pharn-regress", 1),
+        m(4, "stage-start", "pharn-verify", 1),
+        m(5, "stage-start", "pharn-build", 1),
+      ],
+      head: /CANNOT BE BOUND TO THIS RUN — excluded from the outcome/,
+      reason: /reason\s+a stage other than a verdict stage was started twice at one iteration in the current run/,
+    },
+  ];
+  assert.equal(cases.length, 2, "NON-VACUITY (L34)");
+  for (const c of cases) {
+    const root = scratch();
+    try {
+      feature(root, "feat", {
+        "cost.json": costJson({
+          command: "/pharn-ship",
+          outcome: { decision: "gate2", iterations: 1, source: "verdicts+markers" },
+          markers: c.markers,
+        }),
+        "verify-report.json": { verdict: "PASS", failing_gates: [] },
+        "regression-report.json": { verdict: "no-regressions", regressions: [] },
+      });
+      const md = renderRunReport("feat", { repo: root });
+      assert.match(md.split("## Outcome")[1].split("## Tokens")[0], /decision\s+gate2/, `${c.label}: the stored value is NOT rewritten`);
+      const v = md.split("## Verdicts")[1];
+      assert.match(v, c.head, c.label);
+      assert.match(v, /stored `gate2` above predates the applicability rules in force today/, c.label);
+      assert.match(v, c.reason, `${c.label}: the quoted reason names the rule that excludes it`);
+      // NEGATIVE CONTROL (L4): the mis-dating wording must be gone, not merely joined by the new one.
+      assert.doesNotMatch(v, /predates this applicability rule \(6\.9\.1\)/, c.label);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   }
 });
 
@@ -1936,7 +2002,7 @@ test("F2: a FAILED emission leaves the previous run's cost.json — the report r
       }) + "\n"
     );
     const mb = join(root, ".pharn", "cost"); // the DEFAULT markers location under --repo (no flag below)
-    // A compliant run 1 builds first (since 6.23.0 a verdict stage-start counts only after the same
+    // A compliant run 1 builds first (since 6.24.0 a verdict stage-start counts only after the same
     // iteration's latest pharn-build stage-start — ship-outcome-core, condition (a)).
     const run1 = [
       { seq: 1, kind: "run-start", ts: "2026-09-22T08:00:00.000Z" },

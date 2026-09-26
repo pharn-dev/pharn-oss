@@ -1,5 +1,58 @@
 # VERIFY — ship-quick-mode
 
+## After the merge of main (2026-09-26)
+
+### VERIFIED: floor gates PASS
+
+This ran on the committed merge: `origin/main` (`1524c6f`, `stage-regress-script`, 6.23.0) merged in, and the
+re-review's N1–N3 fixed. The only uncommitted changes at run time were this chain's `REGRESSION.md` and
+`regression-report.json`. That merge commit was then amended to add only those two and this file, so the code this
+run measured is the code on the branch. The human-only patch was not applied: `LIMITS.md` and `pharn/ARCHITECTURE.md` are
+byte-identical to `HEAD`, and the ARCHITECTURE pin is still `4950796f…`. Stage model: opus — set by the
+maintainer's instruction, overriding pharn.config.json's sonnet for build/regress/verify; routed via Agent
+subagent; effort not routed.
+
+| gate                                                                                        | exit |
+| ------------------------------------------------------------------------------------------- | ---- |
+| `test` (`npm test`, hermetic suite incl. the feature's own `*.test.*` — 3535/3535 passing)  | 0    |
+| `validate` (`node pharn/floor/validate.mjs .`, structural floor over the product surface)   | 0    |
+| `lint` (eslint, whole-repo)                                                                 | 0    |
+| `format:check` (prettier, whole-repo)                                                       | 0    |
+| `lint:md` (markdownlint, whole-repo)                                                        | 0    |
+| `structural:…/expected-injection-comment.json` (the committed trust-fence eval pair)        | 0    |
+| `reconcile` (`check-bash-reconcile.mjs --require-baseline`, the fix #7 Bash-write detector) | 0    |
+
+**`check-verify.mjs` → `PASS`, exit 0, `failing_gates: []`.** A scratch Node runner under
+`.pharn/pharn-dev-verify/` captured the gate map with argv arrays, and code recorded the exit codes. It was
+deleted afterwards. `verify-report.json` needed no rewrite. This run's `check-verify.mjs` stdout equals its
+`feature` / `gates` / `verdict` / `failing_gates`, and the verifiers block is unchanged (`registered: 0`).
+
+### Bash-reconciliation detail
+
+- **Before the merge**, the fix pass's epoch read `CLEAN`: epoch `2026-09-26T08:34:24.850Z`, anchored
+  `--by ship-quick-mode-opus-fixes`, 24 paths reconciled, no escape. This was recorded before `git merge`, then kept.
+- **After the merge**, the setter was re-run from `PLAN.md` and the epoch re-opened with
+  `reconcile-baseline.mjs --anchor --by ship-quick-mode-post-merge` (2338 paths). `reconcile` came back
+  **`CLEAN`**: epoch `2026-09-26T09:56:31.411Z`, 33 paths reconciled, **no escape**. Four pipeline artifacts were
+  exempted by name: `BUILD.md`, `PLAN.md`, `REGRESSION.md` and `regression-report.json`.
+- **The merge had to be committed first.** With the merge staged but uncommitted, the same check reported 15
+  escapes, one for each of main's `pharn/floor/` files that this plan does not declare. `pharn/floor/` and
+  `.dev/floor/` are reconciled against `HEAD`'s committed blobs, never against the baseline, and `HEAD` did not
+  yet hold the merge. Those 15 are exactly main's floor changes since the fork point, minus the three this plan
+  also declares (`PLAN.md`, "Amended at GATE 2 (merge of main)"). No baseline was edited or deleted.
+
+### Verifiers
+
+**No verifiers registered — floor gates only.** (`node pharn/floor/count-verifiers.mjs .` →
+`{"registered":0,"verifiers":[]}`.)
+
+### The honest residual (P0/P7)
+
+Verified = the named gates passed; this is **not** a guarantee of correctness beyond what those gates check —
+verifier concerns are advisory help, not assurance. The regenerated trusted-doc patch is not part of this
+verdict. It was applied to a scratch copy of the tree only (`BUILD.md`, "GATE 2 — the merge of main"). The
+gates that read those two files run on the applied bytes only inside `apply.sh`, at the human's GATE-2 apply.
+
 ## After GATE 2 fix (2026-09-26)
 
 ### VERIFIED: floor gates PASS

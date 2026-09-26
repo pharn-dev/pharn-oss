@@ -1,9 +1,8 @@
 # APPLY — the human-only step for `ship-quick-mode`
 
-This directory holds the patch that lands `LIMITS.md §3a` and `pharn/ARCHITECTURE.md §6` (and, if
-`pharn/pharn-contracts/stage-exit.md` exists at generation time, `§4` too) — the two edits this build could
-not make itself, because both files are Write/Edit/MultiEdit/NotebookEdit-denied (fix #2). Nothing in this
-directory is applied automatically. A human runs it.
+This directory holds the patch that lands `LIMITS.md §3a` and `§6`, and `pharn/ARCHITECTURE.md §6` and `§4` —
+the edits this build could not make itself, because both files are Write/Edit/MultiEdit/NotebookEdit-denied
+(fix #2). Nothing in this directory is applied automatically. A human runs it.
 
 ## What to read first
 
@@ -20,8 +19,8 @@ That prints a summary of what changes and where, without touching anything. Then
 
 1. Refuses on `main` (a trusted-doc commit belongs on the phase branch, merged normally).
 2. Confirms `pharn/pharn-contracts/stage-exit.md`'s presence matches what the patch was generated
-   against (`absent`, for this patch — see "The conditional §4 line" below); a mismatch means the tree
-   moved since generation and says to regenerate.
+   against (`present`, for this patch — see "The §4 line" below); a mismatch means the tree moved since
+   generation and says to regenerate.
 3. `git apply --check` then `git apply` the patch.
 4. Re-runs, on the **applied bytes**: `shasum -a 256 -c human-only.sha256`, `pharn/floor/validate.mjs .`,
    `.dev/floor/check-specified-markers.mjs .`, and `.dev/floor/hash-doc.test.mjs`. Any failure restores
@@ -29,6 +28,16 @@ That prints a summary of what changes and where, without touching anything. Then
    unless you had staged edits to either file) and commits nothing.
 5. On success, commits **only** `LIMITS.md` and `pharn/ARCHITECTURE.md`, with the message
    `docs(trusted): quick mode in LIMITS.md and ARCHITECTURE.md (human-applied)`.
+
+## What the patch changes
+
+- **`LIMITS.md §3a`** — drops the false "`quick-mode` exists as a manual flag" clause and adds the paragraph
+  on `/pharn-ship --quick`: what it keeps, what it leaves out, and that `gate2-quick` is not `gate2`.
+- **`LIMITS.md §6`** (added after the GATE-2 re-review, N3) — the scope check's first bound, "it fires
+  only if `/pharn-regress` runs", also names `/pharn-ship --quick`'s item 7, which runs the same partition.
+- **`pharn/ARCHITECTURE.md §6`** — one paragraph on quick mode, after the `test` paragraph.
+- **`pharn/ARCHITECTURE.md §4`** — `stage-exit` joins the `pharn-contracts` name list, before
+  `spec-template`.
 
 ## When to apply
 
@@ -44,37 +53,37 @@ would leave `main`'s `LIMITS.md §3a` claim false for however long that gap last
 Applying the patch changes `sha256(pharn/ARCHITECTURE.md)` (folded, `.dev/floor/hash-doc.mjs`'s reading):
 
 - **Old pin:** `4950796f5342df20a298fe22812e45dec3c15317592bd2358a31e149d2dc1c7f`
-- **New pin (this patch, `stage-exit: absent`, regenerated at GATE 2 on 2026-09-26 after the review fixes):**
-  `7b02b45caf4dfeb8aa2bf6192042024d871708fa9095921735525091b8eff6e3` (the pre-review patch's pin,
-  `0e34408a…`, is superseded — its §3a/§6 text carried the review's F1–F3 wording)
+- **New pin (this patch, `stage-exit: present`, regenerated on 2026-09-26 after `main` was merged in and
+  the re-review's N1–N3 were fixed):** `044ee4fae3c26f2481f47721b376814f4864a78101230e9290af0d7fa7495fbe`.
+  It supersedes the two earlier pins, `0e34408a…` (before the review) and `7b02b45c…` (after the review
+  fixes, generated with `stage-exit: absent`).
 
-If the §4 line is later included (because a sibling's `stage-exit.md` has landed by the time this patch is
-regenerated), the new pin will differ from the one printed above — always read it from the generator's own
-`new ARCHITECTURE pin: …` line printed at generation time, never from this document after a regeneration.
+A later regeneration prints its own pin; always read it from the generator's `new ARCHITECTURE pin: …`
+line printed at generation time, never from this document after a regeneration.
 
 **Any sibling plan that pinned the OLD hash must be re-pinned** after this merges (`writes-scope-run-only`
-and `stage-regress-script` both pin `4950796f…` as of this writing) — one header-line edit, via
+pins `4950796f…` as of this writing; `stage-regress-script` has already merged) — one header-line edit, via
 `/pharn-dev-plan` or by hand, during that sibling's post-merge rebase. This is the same situation Q1's
 recommendation (a) accepted: the re-pin is cheap and the rebase is already a reconcile point.
 
-## The conditional §4 line
+## The §4 line
 
-This patch was generated with `pharn/pharn-contracts/stage-exit.md` **absent**, so it does **not** touch
-`pharn/ARCHITECTURE.md §4`'s `pharn-contracts` name list. If `stage-regress-script` (which introduces
-`stage-exit.md`) merges **before** this phase does, `apply.sh`'s own presence check will refuse
-(`stage-exit.md is present, the patch expects absent`) rather than apply a now-stale patch. In that case:
+This patch was generated with `pharn/pharn-contracts/stage-exit.md` **present** — `stage-regress-script`
+put it on `main` as 6.23.0 — so it **does** add `stage-exit` to `pharn/ARCHITECTURE.md §4`'s
+`pharn-contracts` name list. The generator re-derives that list from the live file and checks it against
+`pharn/pharn-contracts/*.md` on disk before writing anything (grill G9): a contract that is on disk but not
+in the list, or listed but absent, makes it refuse loudly rather than ship a §4 line that disagrees with
+what merged.
+
+If `LIMITS.md` or `pharn/ARCHITECTURE.md` moves again before this applies (a sibling phase merges first),
+`git apply --check` or the sums refuse, and the remedy is to regenerate against the current tree:
 
 ```sh
 node .dev/features/ship-quick-mode/handoff/make-patch.mjs
 ```
 
-regenerates `human-only.patch` and `human-only.sha256` against the current tree — the generator re-derives
-the §4 name list from the live file and from `pharn/pharn-contracts/*.md` on disk, and includes the `§4`
-edit (`ac-tests, stage-exit, spec-template`) automatically once `stage-exit.md` exists. If neither phase's
-merge order lands `stage-exit.md` before this one applies, the `§4` line is owed by whichever phase merges
-**second** — regenerating this patch after that merge is the remedy either way, and the generator's own
-completeness assertion (grill G9) refuses loudly rather than silently if the `pharn-contracts` directory and
-its own §4 list ever disagree.
+It rewrites `human-only.patch` and `human-only.sha256` and prints `stage-exit: present|absent`;
+`apply.sh`'s `EXPECT_STAGE_EXIT` must match that printed value.
 
 ## The out-of-order case (L17, L38)
 

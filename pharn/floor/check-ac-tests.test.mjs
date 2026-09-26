@@ -326,7 +326,7 @@ test("--spec exit 4 — a test-infra SPEC is BOOTSTRAP with its levels; preceden
   }
 });
 
-// ── quick (6.23.0): a spec_kind: quick SPEC is TEST_FIRST_KINDS, exactly like feature ──────────────────
+// ── quick (6.24.0): a spec_kind: quick SPEC is TEST_FIRST_KINDS, exactly like feature ──────────────────
 
 /** A genuinely valid `spec_kind: quick` SPEC (unlike `specText({kind:"quick"})`, which keeps the shared
  *  fixture's e2e AC-2 and would RED spec-template-core's own quick rule 9 under a full validate — this

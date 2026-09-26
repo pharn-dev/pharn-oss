@@ -35,9 +35,10 @@ immediately after):
 - **Dev tests**: `.dev/floor/command-hygiene.test.mjs` (the `--mode` carve-out in `PHASE_MARKER_WIRING` and
   `ADOPTION`, the new `QUICK_MODE_WIRING` block with mutation controls).
 - **Repo-meta**: `CLAUDE.md` (the spine paragraph, the `mark-phase` usage line, the ship-outcome and
-  AC-tests comments), `README.md` (badge `6.23.0`, the paper-trail list, the `--quick` usage example, the
-  `/pharn-ship` commands-table row, the token-cost bullet), `CHANGELOG.md` (`## [6.23.0]`), `SKILLS_VERSION`
-  (`6.22.0` → `6.23.0`).
+  AC-tests comments), `README.md` (badge `6.24.0`, the paper-trail list, the `--quick` usage example, the
+  `/pharn-ship` commands-table row, the token-cost bullet), `CHANGELOG.md` (`## [6.24.0]`), `SKILLS_VERSION`
+  (`6.23.0` → `6.24.0`). _(Renumbered from 6.23.0 at the post-GATE-2 merge: `stage-regress-script` merged
+  as 6.23.0 first — PLAN.md, "Amended at GATE 2 (merge of main)".)_
 - **Dev artifacts (new)**: `handoff/make-patch.mjs` (the committed patch generator), `proposed/apply.sh`
   (pinned verbatim from PLAN.md §7), `proposed/APPLY.md`, `proposed/human-only.patch`,
   `proposed/human-only.sha256` — the last two are **Bash writes**, produced by running
@@ -187,6 +188,52 @@ amended plan and the reconcile baseline anchored `--by ship-quick-mode-opus-fixe
 - **Advisory** — stale-artifact labelling (`SHIP.md` + the renderer's `## Briefing`); the `spec_template`
   residual; the wording items; `make-patch.mjs` checks on stdin before writing; `apply.sh`'s message.
 - The regenerated patch's sums and new ARCHITECTURE pin are recorded in `proposed/APPLY.md` and `VERIFY.md`.
+
+## GATE 2 — the merge of main, and the re-review's N1–N3 (2026-09-26)
+
+Stage model: opus — set by the maintainer's instruction, overriding pharn.config.json's sonnet for
+build/regress/verify; routed via Agent subagent; effort not routed. Built from `PLAN.md`'s "Amended at GATE 2
+(merge of main)" section, in the same worktree: fast-forwarded to `bbea1bb`, then `origin/main` (`1524c6f`)
+merged in (a merge, not a rebase). The setter was re-run from this plan, and the reconcile baseline was
+re-anchored `--by ship-quick-mode-post-merge`.
+
+- **Merge** — two conflicts, `CHANGELOG.md` and `pharn/floor/render-run-report.mjs`'s import block, resolved as
+  PLAN.md records. A read-only scratch comparison confirmed that main's `[6.23.0]` and everything below it, the
+  header and `[Unreleased]` are byte-identical to `origin/main`, with no conflict marker left.
+- **Renumber** 6.23.0 → 6.24.0 by diff, over the added lines only: 121 lines, plus the escaped `6\.23\.0` regex in
+  `command-hygiene.test.mjs`. `SKILLS_VERSION` and the README badge moved to 6.24.0. `GRILL.md`, `REVIEW.md` and
+  main's own occurrences were left alone, and the patch was regenerated.
+- **N1** — the wording at every site PLAN.md lists. `ship-outcome-core.test.mjs`: the skipped-run-start enumeration
+  grows from 22 to 36 shapes with the loop family, and asserts that both `undetermined` and `stop:pharn-verify` are
+  reached. A ★ N1 test runs the probe's trail, with its control. Two more over-strong sites were found by searching
+  for the phrase, not from the review list: the `undetermined` form's `means` and `render-run-report.mjs`'s
+  preamble said a skipped run-start "leaves" the repeat, and both now say "can leave".
+- **N2** — `render-run-report.mjs`'s label for a stored `gate2` that today's rules exclude. The new test covers both
+  conditions, with the old wording as its negative control.
+- **N3** — `make-patch.mjs` step 2b, the `LIMITS.md §6` edit.
+- **Item 7's citation** — re-pointed at `stage-regress.mjs`'s `base` and `partition` phases, since #277 removed the
+  Step 3 it cited.
+- **The regenerated patch.** `make-patch.mjs` exited 0 and printed `stage-exit: present` and the new pin
+  `044ee4fae3c26f2481f47721b376814f4864a78101230e9290af0d7fa7495fbe`. `human-only.sha256`: `LIMITS.md`
+  `4284b68ed5538b4f10be7608d97158d067c4d57e2fb407b82442401666cc9859`, `pharn/ARCHITECTURE.md` the new pin. A
+  second run after formatting `make-patch.mjs` wrote byte-identical files. The patch was applied to a full copy of
+  the working tree under `.pharn/pharn-dev-build/scratch-apply/` (2338 files; removed afterwards), and each check
+  exited 0:
+  - `git apply --check` and `git apply`;
+  - `shasum -a 256 -c`: `LIMITS.md: OK`, `pharn/ARCHITECTURE.md: OK`;
+  - `validate` GREEN, 36 capabilities;
+  - `check-specified-markers` GREEN, 25 annotations;
+  - `hash-doc.test.mjs`.
+
+  `git diff --quiet -- LIMITS.md pharn/ARCHITECTURE.md` confirmed that the real trusted docs were untouched.
+
+- **The floor, after the merge, without the patch:** `node pharn/floor/validate.mjs .` GREEN (36 capabilities);
+  `npm test` 3535/3535, exit 0. Scoped `prettier --write` reformatted `make-patch.mjs` and
+  `render-run-report.test.mjs` (layout only). Scoped `markdownlint-cli2 --no-globs` found no issue over the 14
+  markdown files this pass touched.
+- **Committed before regress and verify.** `pharn/floor/` and `.dev/floor/` are always reconciled against `HEAD`'s
+  blobs. Before the merge was committed, main's 15 floor files outside this plan's `## Files` read as escapes, so
+  the merge commit came first. PLAN.md, "Amended at GATE 2 (merge of main)", has the set difference.
 
 ## Open issues for `/pharn-dev-regress` and `/pharn-dev-verify`
 

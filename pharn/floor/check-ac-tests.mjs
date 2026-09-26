@@ -129,7 +129,7 @@ export function checkMapping({ acTestsText, specText, planText, others }) {
   if (!TEST_FIRST_KINDS.includes(spec.kind)) {
     // A non-test-first SPEC (today: `test-infra`) is a bootstrap increment with no mapping (its lock is written by
     // --write-bootstrap). A mapping here means the kind changed after mapping — the pin covers the kind
-    // (check-spec.mjs pinHash), so `pin` REDs too unless the SPEC was re-approved. `feature` and `quick` (6.23.0)
+    // (check-spec.mjs pinHash), so `pin` REDs too unless the SPEC was re-approved. `feature` and `quick` (6.24.0)
     // are both TEST_FIRST_KINDS: a quick SPEC gets the SAME AC evidence as a feature SPEC, just fewer criteria.
     red(
       "spec-kind",

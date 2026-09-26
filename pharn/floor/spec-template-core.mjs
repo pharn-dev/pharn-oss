@@ -22,7 +22,7 @@
 //
 // THE TEMPLATE RULES (an open form — L47: retracted by "the template rules", never re-counted as a new
 // number every time one is added), one RED kind each: `section`, `ac`, `clarification`, `out-of-scope`,
-// `optional-section`, `guidance`, `template`, `spec-kind` (6.18.0), `quick` (6.23.0). All are presence /
+// `optional-section`, `guidance`, `template`, `spec-kind` (6.18.0), `quick` (6.24.0). All are presence /
 // regex / count / Map-membership tests over STRUCTURE — never over what
 // the intent means (P5, P2). A finding names a FILE LINE NUMBER, an AC id, or a value's LENGTH, never the text on
 // a line: the SPEC body is untrusted DATA, and a RED must not become a channel for it.
@@ -83,10 +83,10 @@ const SPEC_KIND_LINE_RE = /^spec_kind:/;
 
 /** The `SPEC_KINDS` members `/pharn-test` treats test-first — it writes their AC tests and requires them
  *  RED before the build. `SPEC_KINDS` is exactly `TEST_FIRST_KINDS ∪ {test-infra}`, disjoint (a fourth kind
- *  fails a partition test until it is classified into one or the other, 6.23.0). */
+ *  fails a partition test until it is classified into one or the other, 6.24.0). */
 export const TEST_FIRST_KINDS = Object.freeze(["feature", "quick"]);
 
-/** The `spec_kind: quick` value, and the bounds a quick SPEC's Acceptance Criteria must hold to (6.23.0,
+/** The `spec_kind: quick` value, and the bounds a quick SPEC's Acceptance Criteria must hold to (6.24.0,
  *  the maintainer's 2026-09-25 decision — see `pharn/pharn-contracts/spec-template.md`, "Rule 9"). Exported
  *  once (L35), so the constants have exactly one owner. `/pharn-ship --quick` trades checks for cost: it
  *  keeps test-first evidence and drops the regression check, so what it may carry is a change whose
@@ -481,7 +481,7 @@ export function specVerdict(text) {
     const levels = [...new Set(spec.items.map((i) => i.level))].sort();
     return out("BOOTSTRAP", 4, `BOOTSTRAP — spec_kind: test-infra; no AC-TESTS.md; the lock records levels: ${levels.join(", ")}`, levels);
   }
-  // Explicit, no fall-through (6.23.0): every other branch above has already returned, so `spec.kind` here is a
+  // Explicit, no fall-through (6.24.0): every other branch above has already returned, so `spec.kind` here is a
   // SPEC_KINDS member that is not `test-infra` — i.e. a TEST_FIRST_KINDS member, since SPEC_KINDS is exactly
   // TEST_FIRST_KINDS ∪ {test-infra}, disjoint (a partition test pins it). The throw is unreachable given that
   // invariant; it exists so a future kind added to SPEC_KINDS without a TEST_FIRST_KINDS/test-infra classification
@@ -612,7 +612,7 @@ export function checkTemplate({ fm, raw, body, firstLine, baseRequired }) {
     ]);
   }
 
-  // Rule 9 (`quick`, 6.23.0): on a SPEC whose kind is `quick`, at most QUICK_MAX_ACS criteria, each verified at a
+  // Rule 9 (`quick`, 6.24.0): on a SPEC whose kind is `quick`, at most QUICK_MAX_ACS criteria, each verified at a
   // QUICK_LEVELS member. Skipped when the AC section is absent, hidden or duplicated (rule 1 already reports that)
   // and, per item, when the level is malformed (rule 2 already reports that) — so each defect is reported once.
   // Applies in every state (a Draft is caught before approval; every downstream check-spec-approved call re-checks

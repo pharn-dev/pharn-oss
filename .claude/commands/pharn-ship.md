@@ -1,5 +1,5 @@
 ---
-description: "Run the PRODUCT pipeline in order so a PHARN user need not re-type or memorize it: /pharn-spec → [human approves the SPEC] → /pharn-plan → /pharn-grill → /pharn-test → /pharn-build → /pharn-regress → /pharn-verify → [human decides merge/fix/abandon]. The eighth, terminal pipeline stage (pharn/ARCHITECTURE.md §6), realized as a GATED meta-orchestrator over stages 1–7 — the agent INVOKES each stage (advisory); WHETHER to proceed past a stage is read from that stage's STRUCTURAL floor verdict (check-spec-approved exit; /pharn-grill's TWO exits — check-plan-spec-agree AND check-plan-lessons, both read, since a run that reads only the chain would proceed past a stale applied_lessons declaration; /pharn-test's check-test-stage.mjs exit (6.19.0 — the AC tests written and shown to fail before the build, or a bootstrap/legacy SPEC); the build project-gate exit, regression-report.json .verdict, verify-report.json .verdict), NEVER the agent's judgment. Reuses the seven product stage commands and their existing floor checkers; reimplements none. Two human gates — SPEC approval (Draft→Approved) and the post-verify decision — are NON-NEGOTIABLE; NO --yolo, NO self-approval. Gated mode with at most ONE bounded build-completion retry on an INCOMPLETE verify (Step 2b — a single re-build, NOT a loop; the ≤1 bound is structural, the firing reads /pharn-verify's deterministic INCOMPLETE verdict); --loop is still a separate follow-up increment (the bounded auto-iteration capability itself ships today as the separate /pharn-loop command). `/pharn-ship --quick` (6.23.0) runs a shorter spine for a `spec_kind: quick` SPEC (1–3 criteria) — both human gates, the grill's floor stops without its interrogation, test-first evidence, /pharn-regress's scope check and /pharn-verify, and no /pharn-regress base comparison; its ledger outcome is `gate2-quick`, which is not `gate2` (see ## Quick mode). At GATE 2 (Step 2c), also renders `pharn/features/<name>/BRIEFING.md` — a deterministic, cross-file-verified 'what/why/does-it-match' summary assembled by pharn/floor/render-ship-briefing.mjs from committed sources (never a self-issued seal, never a GATE-2 precondition; see pharn/pharn-contracts/ship-briefing.md). FLOOR verdicts; ADVISORY orchestration. '/pharn-ship reached the end' NEVER means 'the feature is good' — it means the deterministic gates passed and the human approved intent (P0)."
+description: "Run the PRODUCT pipeline in order so a PHARN user need not re-type or memorize it: /pharn-spec → [human approves the SPEC] → /pharn-plan → /pharn-grill → /pharn-test → /pharn-build → /pharn-regress → /pharn-verify → [human decides merge/fix/abandon]. The eighth, terminal pipeline stage (pharn/ARCHITECTURE.md §6), realized as a GATED meta-orchestrator over stages 1–7 — the agent INVOKES each stage (advisory); WHETHER to proceed past a stage is read from that stage's STRUCTURAL floor verdict (check-spec-approved exit; /pharn-grill's TWO exits — check-plan-spec-agree AND check-plan-lessons, both read, since a run that reads only the chain would proceed past a stale applied_lessons declaration; /pharn-test's check-test-stage.mjs exit (6.19.0 — the AC tests written and shown to fail before the build, or a bootstrap/legacy SPEC); the build project-gate exit, regression-report.json .verdict, verify-report.json .verdict), NEVER the agent's judgment. Reuses the seven product stage commands and their existing floor checkers; reimplements none. Two human gates — SPEC approval (Draft→Approved) and the post-verify decision — are NON-NEGOTIABLE; NO --yolo, NO self-approval. Gated mode with at most ONE bounded build-completion retry on an INCOMPLETE verify (Step 2b — a single re-build, NOT a loop; the ≤1 bound is structural, the firing reads /pharn-verify's deterministic INCOMPLETE verdict); --loop is still a separate follow-up increment (the bounded auto-iteration capability itself ships today as the separate /pharn-loop command). `/pharn-ship --quick` (6.24.0) runs a shorter spine for a `spec_kind: quick` SPEC (1–3 criteria) — both human gates, the grill's floor stops without its interrogation, test-first evidence, /pharn-regress's scope check and /pharn-verify, and no /pharn-regress base comparison; its ledger outcome is `gate2-quick`, which is not `gate2` (see ## Quick mode). At GATE 2 (Step 2c), also renders `pharn/features/<name>/BRIEFING.md` — a deterministic, cross-file-verified 'what/why/does-it-match' summary assembled by pharn/floor/render-ship-briefing.mjs from committed sources (never a self-issued seal, never a GATE-2 precondition; see pharn/pharn-contracts/ship-briefing.md). FLOOR verdicts; ADVISORY orchestration. '/pharn-ship reached the end' NEVER means 'the feature is good' — it means the deterministic gates passed and the human approved intent (P0)."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -105,7 +105,7 @@ self-approving mode — see "What `/pharn-ship` does NOT do".
 `/pharn-ship <increment description>`. The `<increment description>` is the feature intent; `/pharn-ship`
 passes it to `/pharn-spec`. The chain starts at **intent**, not at an existing spec or plan.
 
-> **`--quick` (6.23.0) is read only as the FIRST TOKEN of the arguments.** `/pharn-ship --quick <description>`
+> **`--quick` (6.24.0) is read only as the FIRST TOKEN of the arguments.** `/pharn-ship --quick <description>`
 > runs the shorter spine described in `## Quick mode` below; `/pharn-ship <description with --quick in it>`
 > does **not** — anywhere but the first position, treat `--quick` as part of the untrusted description (P2),
 > never as a mode switch. **ADVISORY:** this is an instruction to you, and nothing on the floor parses the
@@ -158,7 +158,7 @@ passes it to `/pharn-spec`. The chain starts at **intent**, not at an existing s
   skipped `run-start` does not fail the run, but the ledger then cannot bound it: its membership is
   `unknown` and it reports NO run usage, rather than the whole session's.
 
-## Quick mode — `/pharn-ship --quick` (6.23.0)
+## Quick mode — `/pharn-ship --quick` (6.24.0)
 
 A shorter spine for a **small** change: a `spec_kind: quick` mini-SPEC (1–3 acceptance criteria, each
 `unit` or `integration`) through **both** human gates, the grill's two floor stops **without** the
@@ -228,11 +228,13 @@ spec_kind: quick`. The remedy is to re-run `/pharn-ship <description>` **without
    fix #7 scope partition. `check-regress.mjs scope` is what sees a changed path outside the plan's
    `## Files` made **before** the build's reconcile anchor — a `/pharn-test`-stage Bash write, say —
    because `check-bash-reconcile.mjs` at `/pharn-verify` covers anchor → verify only. Resolve its inputs
-   exactly as `/pharn-regress`'s Step 3 items 1–3 do (cited, not restated — P4): the base (`--base <ref>`
-   if the invoker gave one, else `HEAD` for an uncommitted working-tree build, else
-   `git merge-base HEAD origin/main`, else ask the human); `inside` = `git diff --name-only <base>` plus
-   `git ls-files --others --exclude-standard`; and the declared writes = `PLAN.md`'s `## Files` paths plus
-   `AC-TESTS.md`'s `## Files` paths when that file exists. Then:
+   exactly as `/pharn-regress`'s script does in its `base` and `partition` phases
+   (`pharn/floor/stage-regress.mjs`; the base decision is `stage-regress-core.mjs`'s `BASE_RULE` — cited,
+   not restated, P4): the base (`--base <ref>` if the invoker gave one, else `HEAD` when the working tree is
+   dirty (an uncommitted build), else `git merge-base HEAD origin/main`, else ask the human); `inside` =
+   `git diff --name-only --no-renames <base>` plus `git ls-files --others --exclude-standard`, minus any path
+   under `.pharn/` (the state root is never an escape); and the declared writes = `PLAN.md`'s `## Files`
+   paths plus `AC-TESTS.md`'s `## Files` paths when that file exists. Then:
 
    ```bash
    node pharn/floor/check-regress.mjs scope --changed "<inside, comma-separated>" --declared "<PLAN.md ## Files paths, plus AC-TESTS.md ## Files paths when that file exists>" --feature "<name>"
@@ -244,8 +246,8 @@ spec_kind: quick`. The remedy is to re-run `/pharn-ship <description>` **without
    → **STOP**, fail-closed. This is the partition only: no base worktree, no dependency install, no gate
    run, no `--tests`, no `--eval-pairs`, and nothing but this branch reads its output. Running it is
    **ADVISORY** orchestration (a Bash call outside the `PreToolUse` gate, **L19**); its **exit code is
-   FLOOR** — primitive #3, the same path-set membership `/pharn-regress` reads at its Step 3. Record the
-   result for `SHIP.md` (item 11).
+   FLOOR** — primitive #3, the same path-set membership `/pharn-regress`'s script reads in its `partition`
+   phase. Record the result for `SHIP.md` (item 11).
 
 8. **The verify step: unchanged.** `PASS` → GATE 2 below; `INCOMPLETE` → Step 2b, with the regress re-run
    skipped (item 9); `FAIL` / `INCONCLUSIVE` → STOP.
@@ -316,8 +318,8 @@ looked for before deciding.
   `TEST_FIRST_KINDS` exactly as `feature` is.
 - _"A changed file outside the plan's `## Files` still stops a quick run"_ → the verdict is **FLOOR**
   (`check-regress.mjs scope`'s exit, path-set membership); running it is **ADVISORY** orchestration (item
-  7). Bounded exactly as `/pharn-regress`'s Step 3 states: a build that rewrites its own `PLAN.md`
-  `## Files` to authorize a path it already wrote is not caught.
+  7). Bounded exactly as `/pharn-regress`'s Step 1 states for a `scope-escaped` refusal: a build that
+  rewrites its own `PLAN.md` `## Files` to authorize a path it already wrote is not caught.
 - _"Quick mode skips `/pharn-regress`'s base comparison, the interrogation, `BRIEFING.md` and
   `RUN-REPORT.md`"_ → **ADVISORY** (command prose). No floor primitive enforces the omission — it is what
   this section instructs, and the hygiene pins prove the prose says so, never that a run obeyed it.
@@ -327,15 +329,17 @@ looked for before deciding.
   iteration's build **and** `no-regressions`. The mode itself is a Bash-written marker, **ADVISORY** — and
   **a skipped or wrong mode marker never yields `gate2`**: a quick run-start written without `--mode quick`
   reads as full and has no regress stage-start (`stop:pharn-verify`); a skipped quick run-start joins the
-  previous run's window, which reads `undetermined` (this run's stage markers follow that run's run-stop,
-  or repeat its stage-starts); a full run wrongly marked quick yields `gate2-quick` at most. Two bounds,
-  stated in `ship-outcome-core.mjs`'s header: this holds for the markers this command prescribes, and an
-  earlier run that left only its run-start is read as that same run resumed, so its mode decides
-  (`stop:pharn-verify` or `gate2-quick` — never `gate2`).
+  previous run's window, which reads `undetermined` when this run's stage markers follow that run's
+  run-stop or repeat one of its stage-starts, and `stop:<stage>` otherwise — an unclosed `/pharn-loop` that
+  started only `pharn-spec`, a stage this command never marks, is read as a full run with no regress
+  stage-start after this build, so `stop:pharn-verify`; a full run wrongly marked quick yields
+  `gate2-quick` at most. Two bounds, stated in `ship-outcome-core.mjs`'s header: this holds for the markers
+  this command prescribes, and an earlier run that left only its run-start is read as that same run
+  resumed, so its mode decides (`stop:pharn-verify` or `gate2-quick` — never `gate2`).
 - _"The change is small"_ → **not a claim**. Nothing measures it; a human chose the flag and the kind.
 
 Quick mode adds **one** new gating read, and it is named here rather than folded into "reused":
-`check-spec.mjs --spec-kind` (6.23.0) — a new print mode of an existing, tested checker, which full mode
+`check-spec.mjs --spec-kind` (6.24.0) — a new print mode of an existing, tested checker, which full mode
 never reads and which quick mode STOPs on (item 3). Every other verdict it reads (`check-spec-approved`,
 `check-plan-spec-agree`, `check-plan-lessons`, `check-test-stage`, the build project-gate,
 `check-regress.mjs scope` — `/pharn-regress`'s own partition — and `verify-report.json .verdict`) is a
@@ -524,7 +528,17 @@ absolute all-green-at-HEAD `.verdict` — belt-and-suspenders.)_
 `"inconclusive"` → **STOP**, present, hand to the human. **Fail-closed on a missing file:** on a RED chain
 `/pharn-regress` writes **only** `REGRESSION.md` (no verdict JSON), so a **missing
 `regression-report.json` → STOP** (present the RED-chain `REGRESSION.md`) — a membership test (present ∧
-`.verdict == "no-regressions"`), never a silent proceed.
+`.verdict == "no-regressions"`), never a silent proceed. **Since `stage-regress-script` (6.23.0), NARROWED
+here (F2, GATE 2 review — an earlier draft of this paragraph overclaimed this for every stop):** every
+`/pharn-regress` `refused` stop (a RED chain, a scope escape, a missing artifact), and every `unusable`
+stop raised AT OR AFTER the feature slug parses and the containment walk passes, leaves **no**
+`regression-report.json` on disk (`pharn/pharn-contracts/stage-exit.md`'s exit table), so the missing-file
+membership test above is the correct STOP for all of those. **The residual, named rather than hidden:** a
+stop BEFORE that point (a bad or missing `--feature`, or `path-containment` itself — `stage-regress.mjs`'s
+own "fresh" phase order), or a genuine crash, may leave an EARLIER run's report in place; this is exactly
+why the check above is a membership test on the CURRENT file's `.verdict`, never merely "no file was
+written this run" — and it is the same residual `ship-outcome-core.mjs` and `regression-report.md`
+correctly keep open.
 
 1. **`/pharn-verify`** → writes `pharn/features/<name>/verify-report.json` (+ `VERIFY.md`).
 
@@ -843,7 +857,7 @@ Write **`pharn/features/<name>/SHIP.md`** — a thin, **advisory** roll-up:
 
 - **which stages ran**, in order, and **where the run ended** (GATE 2, or which stage's non-proceed verdict
   STOPped it);
-- **the run's mode** (6.23.0): `mode: full`, or `mode: quick` for a `/pharn-ship --quick` run. In a quick run,
+- **the run's mode** (6.24.0): `mode: full`, or `mode: quick` for a `/pharn-ship --quick` run. In a quick run,
   `## Quick mode` item 11 replaces the `/pharn-regress` verdict and every pointer to `REGRESSION.md`,
   `BRIEFING.md` or `RUN-REPORT.md` below with its own lines — the scope check's result, the
   `## Not checked in quick mode` list, and the line saying any such file predates this run;
@@ -939,10 +953,10 @@ resolve that question — it simply does not depend on the answer.
    `run-start`) at its latest iteration to reach `gate2`; a **quick** run needs only `pharn-verify` to reach
    `gate2-quick` — it never starts `/pharn-regress`, so demanding one would make `gate2-quick`
    unreachable. Either way each counts only after that iteration's latest `pharn-build` stage-start
-   (6.23.0). So a previous run's green reports left in a
+   (6.24.0). So a previous run's green reports left in a
    resumed feature directory no longer read as this run's `gate2`/`gate2-quick`, and a run whose markers cannot bound it
    is `undetermined` — including a run that starts a stage other than regress/verify twice at one
-   iteration, which is what a skipped `run-start` leaves when two invocations' markers run together. A `LOOP.md` in the directory is never read here. This is exact relative to the
+   iteration, which is what a skipped `run-start` can leave when two invocations' markers run together. A `LOOP.md` in the directory is never read here. This is exact relative to the
    markers, which are advisory. A stage that starts and then refuses before rewriting its report is not
    detected (see the contract). `gate2` is **FLOOR**: it means
    `verify-report.json` read `PASS` **and** `regression-report.json` read `no-regressions`, two enums
@@ -1166,11 +1180,14 @@ the `check-ship.mjs` cap.
   **structural/advisory** (a single block, no loop, no `check-ship`-style cap — Step 2b); and proceeding
   after the retry reads only `PASS` ∧ `no-regressions` (FLOOR verdicts). The retry **never** guarantees the
   rebuild works (advisory model work). It is **not** `--loop`.
-- **The post-build gate's DISCOVERY is advisory (honest, mirrors `/pharn-regress` / `/pharn-verify`).** The
-  build project-gate's **exit code** is FLOOR, but **which** gate to run for a non-PHARN project (`--gates`
-  → allowlist ∩ scripts → ask) is **advisory orchestration, untested by construction** (it lives in this
-  command's prose, exactly like `/pharn-regress`'s Step 4a / `/pharn-verify`'s Step 3a discovery). "Build
-  floor = FLOOR" refers to the **exit code**, not to the gate-selection — do not over-read it.
+- **The post-build gate's DISCOVERY is advisory (honest, mirrors `/pharn-verify`).** The build
+  project-gate's **exit code** is FLOOR, but **which** gate to run for a non-PHARN project (`--gates` →
+  allowlist ∩ scripts → ask) is **advisory orchestration, untested by construction** (it lives in this
+  command's prose, exactly like `/pharn-verify`'s Step 3a discovery). "Build floor = FLOOR" refers to the
+  **exit code**, not to the gate-selection — do not over-read it. **`/pharn-regress`'s own discovery is a
+  DIFFERENT, stronger case since `stage-regress-script` (6.23.0):** it moved out of command prose entirely
+  and into `pharn/floor/stage-regress-core.mjs`/`stage-regress.mjs`, tested code the command merely
+  invokes — so it is no longer the parallel this bullet's "untested by construction" describes.
 - **"The two human gates (SPEC approval, post-verify) are preserved"** → **ADVISORY** (command discipline).
   GATE 1 **is** `/pharn-spec`'s own halt; nothing on the floor forces a human to be asked. `/pharn-ship`
   preserves the gates **by construction**, backstopped (not replaced) by `/pharn-plan`'s deterministic
@@ -1308,7 +1325,7 @@ the `check-ship.mjs` cap.
   stop with the `check-ship.mjs` cap) remains a separate deferred increment. Step 2b's retry is a **single,
   bounded** re-build fired **only** on an `INCOMPLETE` verify — **at most once**, **no** second retry, **no**
   iteration, and it **never** self-certifies the rebuild (still ends at GATE 2 / a STOP).
-- **`--quick` (6.23.0) is not `--yolo`.** Both human gates stay exactly as in a full run, and each step a
+- **`--quick` (6.24.0) is not `--yolo`.** Both human gates stay exactly as in a full run, and each step a
   quick run skips (`/pharn-regress`'s base-and-head comparison, the plan interrogation, `BRIEFING.md`,
   `RUN-REPORT.md`) is **named plainly** in `SHIP.md`'s `## Not checked in quick mode` list and in
   `## Quick mode` above — never silently dropped. `/pharn-regress`'s scope check is **kept** (item 7), and

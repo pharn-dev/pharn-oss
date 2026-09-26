@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// .dev/features/ship-quick-mode/handoff/make-patch.mjs — generate the HUMAN-ONLY patch for LIMITS.md §3a
-// and pharn/ARCHITECTURE.md §6 (and §4, conditionally) that this increment's build cannot write itself
+// .dev/features/ship-quick-mode/handoff/make-patch.mjs — generate the HUMAN-ONLY patch for LIMITS.md §3a and
+// §6 (the §6 line since the re-review's N3) and pharn/ARCHITECTURE.md §6 (and §4, conditionally) that this
+// increment's build cannot write itself
 // (fix #2 — the trusted docs are Write/Edit/MultiEdit/NotebookEdit-denied). Committed under `handoff/` — a
 // deliberate deviation from the precedent that deleted its staging sources — so the orchestrator can
 // RE-RUN it after a sibling phase merges and the ARCHITECTURE pin moves again (PLAN.md, "Chain sequencing"
@@ -139,26 +140,36 @@ function main() {
   // GATE-2 review fixes (2026-09-26): F1 — "never `gate2`" becomes "is not `gate2`" with the reason and where its
   // marker bounds live; F2 — the flag is read by the orchestrating model (advisory), backed by the SPEC's pinned
   // kind; F3 — `/pharn-regress`'s scope check is KEPT, and the list is an open form ("It leaves out:"), not a count.
+  // Re-review N3: the kept scope check points at §6's bounds for it, and §6 (below) names quick mode as a caller.
   const LIMITS_REPLACE =
     "_breadth_. You pay the most for what there is the most of (small changes). This is\n" +
     "the largest practical token problem and it is not yet solved.\n" +
     "\n" +
-    "> **The manual flag is `/pharn-ship --quick` (6.23.0), and it trades checks for cost.** A human chooses it for\n" +
+    "> **The manual flag is `/pharn-ship --quick` (6.24.0), and it trades checks for cost.** A human chooses it for\n" +
     "> a `spec_kind: quick` SPEC: one to three acceptance criteria, each verified at `unit` or `integration`. It\n" +
     "> keeps both human gates, the grill's two floor stops, the test-first evidence for those criteria,\n" +
-    "> `/pharn-regress`'s scope check (a changed file outside the plan's `## Files` still stops the run) and\n" +
-    "> `/pharn-verify` with its AC gate. It leaves out: **the regression check** — no regression outside the feature\n" +
-    "> is looked for, because nothing compares base and head; **the plan interrogation** — `/pharn-grill --quick`\n" +
-    "> runs its floor stops and no griller; and **`BRIEFING.md` and `RUN-REPORT.md`** (`cost.json` is still\n" +
-    "> written). Its ledger outcome is `gate2-quick`, which is not `gate2`: `gate2` needs a `pharn-regress`\n" +
-    "> stage-start, which a quick run never writes (the bounds of trusting those Bash-written markers are in\n" +
-    "> `pharn-contracts/cost-ledger.md`). The `--quick` flag is read by the orchestrating model, so honoring it is\n" +
-    "> advisory; what backs it is the SPEC's approved, pinned `spec_kind: quick`. Nothing measures whether a\n" +
-    "> change is small: the kind and the flag are what a person chose, and a quick SPEC run without the flag takes\n" +
-    "> the full pipeline. There is still no AUTOMATIC proportionality, and `/pharn-review`'s lens fan-out is\n" +
-    "> unchanged.\n";
+    "> `/pharn-regress`'s scope check (a changed file outside the plan's `## Files` still stops the run, within\n" +
+    "> the bounds §6 states for that check) and `/pharn-verify` with its AC gate. It leaves out: **the regression\n" +
+    "> check** — no regression outside the feature is looked for, because nothing compares base and head; **the\n" +
+    "> plan interrogation** — `/pharn-grill --quick` runs its floor stops and no griller; and **`BRIEFING.md` and\n" +
+    "> `RUN-REPORT.md`** (`cost.json` is still written). Its ledger outcome is `gate2-quick`, which is not\n" +
+    "> `gate2`: `gate2` needs a `pharn-regress` stage-start, which a quick run never writes (the bounds of\n" +
+    "> trusting those Bash-written markers are in `pharn-contracts/cost-ledger.md`). The `--quick` flag is read by\n" +
+    "> the orchestrating model, so honoring it is advisory; what backs it is the SPEC's approved, pinned\n" +
+    "> `spec_kind: quick`. Nothing measures whether a change is small: the kind and the flag are what a person\n" +
+    "> chose, and a quick SPEC run without the flag takes the full pipeline. There is still no AUTOMATIC\n" +
+    "> proportionality, and `/pharn-review`'s lens fan-out is unchanged.\n";
 
   let limitsEdited = applyOnce(limitsOriginal, LIMITS_FIND, LIMITS_REPLACE, "LIMITS.md §3a");
+
+  // ── 2b. LIMITS.md §6 (re-review N3): the scope check's first bound, "it fires only if `/pharn-regress` runs",
+  // went stale when quick mode began running the same partition itself (`## Quick mode` item 7). It understated
+  // the check — the safe direction — and no gate reads it, but a trusted doc must not say what is false.
+  const LIMITS_S6_FIND = "  `/pharn-regress` runs; it compares _changed since base_, not _written by the build_; it carries\n";
+  const LIMITS_S6_REPLACE =
+    "  `/pharn-regress` runs — or, since 6.24.0, `/pharn-ship --quick`'s item 7, which runs the same partition\n" +
+    "  without the rest of that stage; it compares _changed since base_, not _written by the build_; it carries\n";
+  limitsEdited = applyOnce(limitsEdited, LIMITS_S6_FIND, LIMITS_S6_REPLACE, "LIMITS.md §6");
 
   // ── 3. pharn/ARCHITECTURE.md §6: one paragraph after the `test` paragraph ──────────────────────────
   const ARCH_S6_FIND =
@@ -167,7 +178,7 @@ function main() {
   const ARCH_S6_REPLACE =
     "every build. Shape and bounds: `pharn-contracts/ac-tests.md` (cited, not restated — P4; `LIMITS.md §9`).\n" +
     "\n" +
-    "**Quick mode** (`/pharn-ship --quick`, 6.23.0) runs a shorter spine for a small change: a `spec_kind: quick`\n" +
+    "**Quick mode** (`/pharn-ship --quick`, 6.24.0) runs a shorter spine for a small change: a `spec_kind: quick`\n" +
     "SPEC (one to three criteria, each `unit` or `integration`), `plan`, the grill's floor stops without its\n" +
     "interrogation, `test`, `build`, `regress`'s scope check alone, and `verify` as above — **no `regress` base\n" +
     "comparison**, so nothing looks for a regression outside the feature. Both human gates stay, and the ledger\n" +

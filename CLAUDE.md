@@ -302,7 +302,8 @@ node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
 # --discover, --scope-json, --ac-tests) resolves against the INVOKING directory, whose `.pharn/` is that state root;
 # --cwd moves only where gates RUN and which tree is fingerprinted (6.9.3 — before it, init resolved --out
 # and --spec-from against --cwd while `run --next` did not, so /pharn-regress's base side, the one --cwd
-# caller, failed at init with spec-mismatch; its pinned lines are now EXECUTED by run-gates.test.mjs). Contract:
+# caller, failed at init with spec-mismatch; its pinned lines are now EXECUTED by stage-regress.test.mjs, since
+# 6.23.0 moved them from pharn-regress.md's own prose into pharn/floor/stage-regress.mjs). Contract:
 # pharn/pharn-contracts/gate-run-record.md. Ships: bumps SKILLS_VERSION.
 # Exit: init 0 ok | 2 runner error (closed reason_code) | 3 EMPTY SOURCE SET (nothing written; routes to the
 # existing no-gates HALT, and to /pharn-loop's unattended S4 `blocked: no-gates`) ·
@@ -354,7 +355,7 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # AC-TESTS.md is exempt like PLAN.md (a re-plan rewrites it) but the LOCK is `pre_anchor_artifacts` (NOT exempt).
 # Paths are compared as the setter SCOPES them (clean + isConcrete, case-folded). `--spec <SPEC.md>` decides
 # templated (0) / legacy (3) / bootstrap (4, 6.18.0) before any mapping exists; in full mode a legacy or test-infra
-# SPEC with a mapping is RED. A `spec_kind: quick` SPEC (6.23.0, /pharn-ship --quick) is TEMPLATED (0) and reaches
+# SPEC with a mapping is RED. A `spec_kind: quick` SPEC (6.24.0, /pharn-ship --quick) is TEMPLATED (0) and reaches
 # full mode exactly like `feature` — both are TEST_FIRST_KINDS members (spec-template-core.mjs), so the full-mode
 # gate REDs `spec-kind` on membership in that set, never a literal `=== "feature"` test.
 # /pharn-regress's --declared is PLAN `## Files` u AC-TESTS.md `## Files`. BOUNDS: the build exclusion holds for the
@@ -542,6 +543,67 @@ node .claude/hooks/require-loop-record.cjs --close <name>           # /pharn-loo
 node pharn/floor/check-verify.mjs --stamp <stamp.json> --feature <name>
 node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --base <40-hex> [--inside <list>]
 
+# THE /pharn-regress STAGE SCRIPT (added 6.23.0, stage-regress-script) — every deterministic step of the regress
+# stage in ONE tested script, so `.claude/commands/pharn-regress.md` becomes a THIN CALLER: it pins one line and
+# branches on the script's EXIT CODE. THE RECORDED TRIGGER (P7): a user's own /pharn-ship cost.json ledgers showed
+# pharn's own stages at ~48% of relative cost on large features and ~81% on three small fixes, with /pharn-regress
+# alone ~63% of the small fixes — today's command prescribed one Bash call per gate per side plus ~20 setup calls,
+# each a full model turn re-reading a 36 KB prompt.
+# THE PROTOCOL is `pharn/pharn-contracts/stage-exit.md` + `pharn/floor/stage-exit-core.mjs`: ONE `pharn-stage-exit/1`
+# JSON object per exit — `{schema, status, stage, feature}` plus a status-specific closed key set (`done` adds
+# verdict/report/render; `refused` adds reason_code/render; `question` adds reason_code/question/options/resume;
+# `continue` adds phase/resume; `unusable` adds reason_code/detail) — CLOSED in both directions
+# (`validateStageExit`). EXIT CODES: 0 done · 2 unusable · 3 refused · 4 question · 5 continue · anything else (1
+# included) = CRASHED, deliberately never chosen by an emission (mirrors 6.21.1's "a crash is not read as a
+# verdict"). A `question`'s text and every option's `label` are FIXED, registry-held strings per
+# `(stage, reason_code)` — nothing untrusted is ever interpolated. `mayStartSlowStep` (the shared budget decision:
+# a slow step starts on the invocation's first attempt, or while elapsed+timeout <= budget) lives here too, so a
+# future stage-verify.mjs (roadmap Phase 1.2) reuses it without importing a sibling stage's core.
+# THE SCRIPT, `pharn/floor/stage-regress.mjs` (execution) + `pharn/floor/stage-regress-core.mjs` (pure rules):
+# 13 named phases in order (`fresh` -> `chain` -> `base` -> `partition` -> `head-init` -> `drain-head` ->
+# `worktree` -> `install` -> `base-init` -> `drain-base` -> `verdict` -> `cleanup` -> `render`). "fresh" removes
+# THIS feature's earlier regression-report.json/REGRESSION.md BEFORE any step that can fail, so a stop before the
+# verdict leaves no earlier verdict on disk; an argv refusal (before that point) removes nothing. The four CLOSED
+# rules moved out of command prose: TEST_FILE_RULE (vitest/Jest/`node --test` conventions), STYLE_CONFIG_RULE (the
+# config-touch skip for style/format gates), INSTALL_RULE (exactly one lockfile family at the BASE commit resolves
+# the install command — npm MEASURED, pnpm/yarn/bun UNMEASURED, labelled as such), BASE_RULE (`--base` / a dirty
+# tree / origin/main's merge-base / ask). `REGRESS_PATHS` is the ONE owner of the stage's `.pharn/pharn-regress/`
+# scratch layout; `loop-fresh-core.mjs`'s `DEFAULT_STAMPS.regressHead`/`regressBase` derive from it.
+# THE BUDGET (`--budget-ms`) solves the 600 s Bash-tool cap: a slow step (the base-commit install, or one gate)
+# starts only if it is the FIRST slow step of THIS invocation, or `elapsed + timeoutMs <= budgetMs`; otherwise the
+# script persists `.pharn/pharn-regress/stage.json` (schema `pharn-stage-regress-progress/1`) and exits 5
+# `continue`. `--resume` accepts ONLY `--budget-ms` and reads everything else from that record, so the resume line
+# carries no state (L44). With no `--budget-ms` (a code caller, never a Bash-tool caller), nothing is budgeted.
+# `pharn/floor/render-regression.mjs` (pure, no CLI) renders `REGRESSION.md` from the verdict JSON, the scope
+# partition and the stage's progress; a CHECKER'S MESSAGE (a chain-red/scope-escaped detail, a cleanup error, an
+# inconclusive reason) is quoted as FENCED DATA; a GATE ID is quoted INLINE, via `dataText` alone — never fenced,
+# and NARROWED here (M1, GATE 2 review — a prior version of this line overclaimed "as fenced DATA" for both): it
+# is always preceded by fixed prose on the same line so it can never sit at column 0 and be read as a heading, but
+# an inline link or raw HTML in an attacker-nameable id (a `structural:<path>` id, say) is NOT fenced away, only
+# kept off a line of its own. (`pharn/floor/quote-core.mjs`'s `dataText`/`quoteData`, moved byte-for-byte out of
+# `render-run-report.mjs` so a second renderer does not drag in the cost-ledger load graph.) Every path the SCRIPT
+# itself supplies is repo-relative, so `/pharn-loop`'s later commit of the file can never carry an absolute path
+# THAT SCRIPT SUPPLIED (M2, GATE 2: narrowed — a human's own `--install`/`--gates` text renders verbatim, and a
+# `--gates` id defaults to its own command string, so the render is not proof that NO absolute path can appear at
+# all, only that the script never introduces one).
+# THE WEAKER CLAIM, stated plainly: before 6.23.0, fix #7's hook PREVENTED a Write-tool write outside the two
+# declared regress artifacts. Now the script writes them through `fs`, reached via Bash and outside that hook
+# (L19, declared) — a write anywhere else is DETECTED, never PREVENTED, by `/pharn-verify`'s `reconcile` gate.
+# Offsetting it, STRONGER since 6.23.0: the command's writes-scope is set to the strictest one the setter can
+# express, `.pharn/pharn-regress/stage.json` (which resolves to `.pharn/**` alone, since `writes: []` is refused
+# by the setter), so no Write-tool write may land outside `.pharn/**` at all while the script runs — a real,
+# probed guarantee (`.dev/floor/command-hygiene.test.mjs`'s STAGE_SCRIPT_WIRING).
+# THE UNCHANGED, NAMED RESIDUAL: `regress-failed-install-false-green` (amendment A2, not built). A failed
+# base-commit install CAN turn a base gate red, so a gate that does is classified `pre_existing`, and the
+# verdict JSON — all `/pharn-ship`/`/pharn-loop` read — still says `no-regressions`: a possible false green
+# on exactly the gates the install broke (NARROWED, GATE 2 review A6: not "every base gate", and the
+# warning renders above the verdict line, not literally REGRESSION.md's first line — see
+# render-regression.mjs). Read by no machine consumer either way.
+# Ships: bumps SKILLS_VERSION. Exit: 0 done · 2 unusable · 3 refused · 4 question · 5 continue · anything else
+# (1 included) = crashed.
+node pharn/floor/stage-regress.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--base <ref>] [--gates "<cmd>[::<id>],…"] [--install "<cmd>" | --no-install] [--tests "<pathspec>,…" | --no-tests]
+node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
+
 # Check the SHAPE of a loop-record — the pharn/features/<name>/LOOP.md that /pharn-loop writes at every stop.
 # Floor: the frontmatter envelope (`decision` in {STOP_GREEN, STOP_CAP, STOP_TERMINAL, INCONCLUSIVE};
 # `iterations` a positive integer; `commit` a git SHA or the literal `unknown`; `date` ISO YYYY-MM-DD; and,
@@ -616,8 +678,8 @@ node pharn/floor/check-loop-decision.mjs <LOOP.md>
 # usage | check 0 GREEN (WARNs possible) · 1 RED · 2 unusable input.
 node pharn/floor/mark-phase.mjs --name <slug> --kind <run-start|stage-start|orchestrator|run-stop> [--stage <s>] [--iteration <n>] [--base <dir>] [--mode <m>]
 node pharn/floor/mark-phase.mjs --pending-start [--base <dir>]   # ship only; its run-start adds --adopt-pending
-# `--mode` (6.23.0): run-start only, m in MARKER_MODES ({"quick"}) — /pharn-ship --quick's one caller. Absent
-# writes no `mode` key at all (byte-identical to pre-6.23.0). Read by ship-outcome-core.mjs's runMode(), never
+# `--mode` (6.24.0): run-start only, m in MARKER_MODES ({"quick"}) — /pharn-ship --quick's one caller. Absent
+# writes no `mode` key at all (byte-identical to pre-6.24.0). Read by ship-outcome-core.mjs's runMode(), never
 # re-derived from the SPEC's spec_kind (a quick SPEC may still run the full pipeline).
 node pharn/floor/render-cost-ledger.mjs <name> [--base <dir>] [--repo <dir>] [--session <id>] [--stdout]
 node pharn/floor/check-cost-ledger.mjs <cost.json> [--verify-transcript]
@@ -629,20 +691,20 @@ node pharn/floor/check-cost-ledger.mjs <cost.json> [--verify-transcript]
 # merely COPIES it; ship has no such record, so this DERIVES from the run's own verdict reports and phase
 # markers — NEVER SHIP.md prose, which is a roll-up ABOUT a run, not a declaration of one (L6).
 # TWO HALVES, never averaged (P0): `gate2` is FLOOR (verify PASS ∧ regress no-regressions — two enums from
-# tested non-LLM checkers); `gate2-quick` (6.23.0, /pharn-ship --quick) is FLOOR TOO, over a SMALLER stage
+# tested non-LLM checkers); `gate2-quick` (6.24.0, /pharn-ship --quick) is FLOOR TOO, over a SMALLER stage
 # set — verify PASS on the run's own pharn-verify stage ALONE, the regression verdict never consulted,
 # because a quick run starts no /pharn-regress at all; NOT `gate2` — every consumer compares `decision` by
 # equality, never by prefix. `stop:<stage>` is ADVISORY IN ITS STAGE NAME (the last stage-start marker,
 # Bash-written command prose — L19), though that the run MISSED the gate2/gate2-quick test is a membership
 # fact; `stop:unknown` is the terminal fallback; `undetermined` (6.9.1) = markers exist but the run window is
-# unknown, so no verdict can be bound to the run. APPLICABILITY (6.9.1; forked by MODE in 6.23.0): the stage
+# unknown, so no verdict can be bound to the run. APPLICABILITY (6.9.1; forked by MODE in 6.24.0): the stage
 # set a gate2-family test needs is the run's OWN mode (runMode(), read from the run-start marker, never the
 # SPEC's spec_kind — a quick SPEC may still run the full pipeline) — a FULL run needs BOTH pharn-regress and
 # pharn-verify stage-starts in the CURRENT run (latest run-start, run-window-core's one definition) at its
 # latest iteration; a QUICK run needs pharn-verify ALONE, because it never starts pharn-regress. Either way
 # each counts only AFTER that iteration's latest pharn-build stage-start, and a non-verdict stage started
-# twice at one iteration (what a SKIPPED run-start leaves when two invocations' markers run together) is
-# `undetermined` — both added at 6.23.0's GATE 2 (review F1: a quick run whose run-start was skipped, after
+# twice at one iteration (what a SKIPPED run-start can leave when two invocations' markers run together) is
+# `undetermined` — both added at 6.24.0's GATE 2 (review F1: a quick run whose run-start was skipped, after
 # an unclosed earlier run, derived gate2 from that run's regress@1, since iterations restart at 1). An
 # earlier run's green reports left on disk no longer count, and a /pharn-ship ledger never copies a
 # LOOP.md (source chosen by --command). Residual, pinned by a test: a stage that starts then refuses leaves
@@ -650,8 +712,10 @@ node pharn/floor/check-cost-ledger.mjs <cost.json> [--verify-transcript]
 # the writer, because markers.jsonl is ordinary .pharn/ state a Bash write reaches (LIMITS.md §6).
 # A SKIPPED OR WRONG MODE MARKER NEVER YIELDS gate2: a quick run-start written without --mode quick reads as
 # full and has no regress stage-start (stop:pharn-verify); a skipped quick run-start joins the previous
-# run's window, which reads `undetermined` (its stage markers follow that run's run-stop, or repeat its
-# stage-starts); a full run wrongly marked quick yields gate2-quick at most. BOUNDS (the module header):
+# run's window, which reads `undetermined` when its stage markers follow that run's run-stop or repeat one
+# of its stage-starts, and stop:<stage> otherwise (an unclosed /pharn-loop that started only pharn-spec,
+# which /pharn-ship never marks, reads as full with no regress after the build: stop:pharn-verify); a full
+# run wrongly marked quick yields gate2-quick at most. BOUNDS (the module header):
 # relative to the markers the command prescribes, and an earlier run that left only its run-start is read
 # as that run resumed, so its mode decides (stop:pharn-verify or gate2-quick, never gate2).
 # `outcome` is null when there are no markers — no evidence a run happened, which is a real state.
@@ -1089,7 +1153,7 @@ the floor plus the review agent.
 **The pipeline spine** is `spec → plan → grill → test → build → regress → verify → ship` (`test` since 6.19.0,
 `pharn/ARCHITECTURE.md §6`), each stage emitting
 a typed artifact carrying `spec_id` (+ the plan additionally pins `spec_content_hash`) — for a **full**
-run; `/pharn-ship --quick` (6.23.0) runs a shorter spine over a `spec_kind: quick` mini-SPEC, skips
+run; `/pharn-ship --quick` (6.24.0) runs a shorter spine over a `spec_kind: quick` mini-SPEC, skips
 `regress`'s base-and-head comparison and keeps only its scope check (`.claude/commands/pharn-ship.md`,
 `## Quick mode`).
 
