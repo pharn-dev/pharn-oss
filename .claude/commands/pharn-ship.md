@@ -24,6 +24,7 @@ reads:
     "pharn/floor/check-plan-lessons.mjs",
     "pharn/floor/check-test-stage.mjs",
     "pharn/floor/check-quick-scope.mjs",
+    "pharn/floor/quick-scope-core.mjs",
     "pharn/floor/validate.mjs",
     "pharn/floor/check-attestation.mjs",
     "pharn/floor/render-cost-record.mjs",
@@ -332,8 +333,10 @@ spec_kind: quick`. The remedy is to re-run `/pharn-ship <description>` **without
 
    Branch **only** on the exit code (P5): `0` (`escaped: []`) → proceed to `/pharn-verify`. `1` → **STOP**:
    a changed path is outside the declared writes (`escaped` names each one, with a blocking P0 fix #7
-   finding) — a scope breach, not a regression; present it and hand to the human. `2` (inconclusive — its
-   `reason_code` names why) or any other exit → **STOP**, fail-closed. This is the partition only: no base
+   finding) — a scope breach, not a regression; present it and hand to the human. An exit `1` that prints no JSON
+   document is the checker's own file failing to start (run from outside the project root, say): the same STOP,
+   with no breach to present. `2` (inconclusive — its `reason_code` names why; `crashed` since 6.28.0 for a
+   checker module that cannot load or throws) or any other exit → **STOP**, fail-closed. This is the partition only: no base
    worktree, no dependency install, no gate run, and nothing but this branch reads its output. Running it and
    substituting its two values are **ADVISORY** orchestration (a Bash call outside the `PreToolUse` gate,
    **L19**); its inputs are built by **tested code** and its **exit code is FLOOR** — primitive #3. Record the

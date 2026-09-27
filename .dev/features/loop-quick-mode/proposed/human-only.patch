@@ -1,5 +1,5 @@
 diff --git a/LIMITS.md b/LIMITS.md
-index aeea061..ea18bee 100644
+index 63374de..3ec25be 100644
 --- a/LIMITS.md
 +++ b/LIMITS.md
 @@ -127,7 +127,7 @@ optimizes _within_ one assembly (don't load all rules at once); it does **nothin
@@ -16,7 +16,7 @@ index aeea061..ea18bee 100644
  > chose, and a quick SPEC run without the flag takes the full pipeline. There is still no AUTOMATIC
  > proportionality, and `/pharn-review`'s lens fan-out is unchanged.
 +>
-+> **The unattended one is `/pharn-loop --quick` (6.27.0), and nobody is told the trade before it runs.** The model
++> **The unattended one is `/pharn-loop --quick` (6.28.0), and nobody is told the trade before it runs.** The model
 +> writes and approves the `spec_kind: quick` SPEC itself (`approved_by: model`), and `check-loop.mjs` decides every
 +> stop over `/pharn-verify`'s verdict alone. The decision's mode is that SPEC's pinned kind, never a flag, so a full
 +> SPEC still needs a regression verdict. It keeps the grill's floor stops, the test-first evidence, the scope check
@@ -35,7 +35,7 @@ index aeea061..ea18bee 100644
    write after the fact. Four bounds, every one stated in that checker's own header: it fires only if
 -  `/pharn-regress` runs — or, since 6.25.0, `/pharn-ship --quick`'s item 7, which runs the same partition
 -  without the rest of that stage; it compares _changed since base_, not _written by the build_; it carries
-+  `/pharn-regress` runs, or when `check-quick-scope.mjs` (6.27.0) applies that rule — for `/pharn-ship --quick`'s
++  `/pharn-regress` runs, or when `check-quick-scope.mjs` (6.28.0) applies that rule — for `/pharn-ship --quick`'s
 +  item 7 and for every `/pharn-loop --quick` iteration — to inputs it builds by code exactly as that stage's script
 +  does, without the rest of that stage; it compares _changed since base_, not _written by the build_; it carries
    closed-enum exemptions for the pipeline's own artifacts; and a plan that edits its own `## Files`

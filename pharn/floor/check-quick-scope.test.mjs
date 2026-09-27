@@ -12,19 +12,25 @@
 //   • Every refusal, by its closed `reason_code`, with a closure over the source (L36).
 //   • L35 — one owner: stage-regress.mjs takes both sets from scope-inputs.mjs, this checker decides with
 //     check-regress.mjs's `partitionScope`, and importing check-regress.mjs runs nothing.
-// The fixture is a throwaway git repo whose `pharn/floor` is a symlink to this directory, excluded through
-// `.git/info/exclude`, so a committed line runs byte for byte and git never lists the link.
+//   • R2 (the round-2 re-review) — a crash is exit 2 `crashed`, never 1: a module that cannot load, a throw while
+//     checking and a result outside the checker's contract, each in a COPIED floor broken on purpose, with the
+//     unbroken copy as the control; the entry's pinned second copies; and the residual, a run from outside the root.
+// The fixture is a throwaway git repo whose `pharn/floor` is a symlink to this directory (or, for R2, a copy of its
+// non-test files), excluded through `.git/info/exclude`, so a committed line runs byte for byte and git never lists it.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   appendFileSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
@@ -44,8 +50,18 @@ const OLD_LINE =
 
 const planText = (paths) => `# PLAN\n\n## Files\n\n${paths.map((p) => `- \`${p}\` — declared`).join("\n")}\n\n## Next\n\nx\n`;
 
-/** A git repo with a committed seed, the declared change applied, and the floor reachable at pharn/floor. */
-function makeRepo({ declared = ["src/x.js"], acTests = null } = {}) {
+/** Copy this directory's non-test module and data files into `to` — a floor a test may break without touching this one. */
+function copyFloor(to) {
+  mkdirSync(to, { recursive: true });
+  for (const f of readdirSync(HERE)) {
+    if (!/\.(mjs|cjs|json)$/.test(f) || f.includes(".test.")) continue;
+    if (statSync(join(HERE, f)).isFile()) copyFileSync(join(HERE, f), join(to, f));
+  }
+}
+
+/** A git repo with a committed seed, the declared change applied, and the floor reachable at pharn/floor — a symlink to
+ *  this directory, or (`copy: true`) a copy of it. */
+function makeRepo({ declared = ["src/x.js"], acTests = null, copy = false } = {}) {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "quick-scope-")));
   const git = (...a) => {
     const r = spawnSync("git", a, { cwd: dir, encoding: "utf8" });
@@ -58,7 +74,8 @@ function makeRepo({ declared = ["src/x.js"], acTests = null } = {}) {
   mkdirSync(join(dir, ".git", "info"), { recursive: true });
   appendFileSync(join(dir, ".git", "info", "exclude"), "/pharn/floor\n");
   mkdirSync(join(dir, "pharn", "features", "demo"), { recursive: true });
-  symlinkSync(HERE, join(dir, "pharn", "floor"), "dir");
+  if (copy) copyFloor(join(dir, "pharn", "floor"));
+  else symlinkSync(HERE, join(dir, "pharn", "floor"), "dir");
   mkdirSync(join(dir, "src"), { recursive: true });
   writeFileSync(join(dir, "src", "x.js"), "export const x = 1;\n");
   writeFileSync(join(dir, "src", "y.js"), "export const y = 1;\n");
@@ -334,7 +351,7 @@ test("a declared glob covers what it names and nothing else", () => {
 // ── Refusals, each by its closed reason_code ─────────────────────────────────────────────────────────────────
 
 test("refusals: every bad input exits 2 with its closed reason_code, never 0 or 1", async () => {
-  const { REASON_CODES } = await import("./check-quick-scope.mjs");
+  const { REASON_CODES } = await import("./quick-scope-core.mjs");
   const { dir, base, git } = makeRepo();
   try {
     const tree = git("rev-parse", "HEAD^{tree}").trim();
@@ -377,17 +394,17 @@ test("refusals: every bad input exits 2 with its closed reason_code, never 0 or 
   }
 });
 
-test("✧ CLOSURE (L36) — every reason_code the source emits is a member, and every member but `crashed` has an inconclusive() call", async () => {
-  const { REASON_CODES } = await import("./check-quick-scope.mjs");
+test("✧ CLOSURE (L36) — every reason_code the checker emits is a member, and every member but `crashed` has an inconclusive() call", async () => {
+  const { REASON_CODES } = await import("./quick-scope-core.mjs");
   assert.equal(REASON_CODES.length, 7, "NON-VACUITY (L34)");
-  const src = readFileSync(CLI, "utf8");
+  const src = readFileSync(join(HERE, "quick-scope-core.mjs"), "utf8");
   const emitted = new Set([...src.matchAll(/inconclusive\("([a-z-]+)"/g)].map((m) => m[1]));
   for (const code of emitted) assert.ok(REASON_CODES.includes(code), `an emitted code outside the set: ${code}`);
   for (const code of REASON_CODES) {
-    if (code === "crashed") assert.match(src, /reason_code: "crashed"/);
+    if (code === "crashed") assert.match(readFileSync(CLI, "utf8"), /const CRASHED = "crashed";/, "the entry reports a crash");
     else assert.ok(emitted.has(code), `a member no inconclusive() call emits: ${code}`);
   }
-  assert.ok(!emitted.has("crashed"), "a crash is reported by the top-level catch alone");
+  assert.ok(!emitted.has("crashed"), "a crash is reported by the entry alone, never by the checker");
 });
 
 // ── L35 — one owner of each fact ─────────────────────────────────────────────────────────────────────────────
@@ -397,7 +414,7 @@ test("✧ ONE OWNER — stage-regress.mjs takes both sets from scope-inputs.mjs;
   assert.match(stage, /import \{ declaredWrites, changedPaths \} from "\.\/scope-inputs\.mjs";/);
   assert.doesNotMatch(stage, /"--name-only"/, "stage-regress.mjs must not list the changed paths itself");
   assert.doesNotMatch(stage, /pathsFromPlanFiles\(/, "stage-regress.mjs must not parse `## Files` itself");
-  const mine = readFileSync(CLI, "utf8");
+  const mine = readFileSync(join(HERE, "quick-scope-core.mjs"), "utf8");
   assert.match(mine, /import \{ partitionScope, scopeFindings, normPath \} from "\.\/check-regress\.mjs";/);
   assert.match(mine, /import \{ declaredWrites, changedPaths \} from "\.\/scope-inputs\.mjs";/);
   assert.doesNotMatch(mine, /globMatch|matchesAny|isPipelineArtifact|TRUSTED_DOCS/, "the rule must not be re-implemented here");
@@ -461,4 +478,119 @@ test("scope-inputs.mjs — changedPaths reports a failed diff by which step fail
   assert.equal(none.ok, false);
   const some = declaredWrites(planText(["src/a.js", "src/a.js", "src/b.js (gated)"]), join(tmpdir(), "no-such-dir", "AC-TESTS.md"));
   assert.deepEqual(some, { ok: true, value: ["src/a.js", "src/b.js"] });
+});
+
+// ── R2 (round-2 re-review) — a crash is exit 2 `crashed`, never 1 (the escaped code) ───────────────────────────
+// Before the entry split, a module that failed to LOAD ended the process with node's own exit 1 and no document, and 1
+// is this checker's "escaped". Each case breaks a COPIED floor and runs pharn-loop.md's committed line in it; the
+// unbroken copy on the same tree is the control (exit 0 — the fixture's one declared change).
+
+/** Replace (`edit` a function of the old text) or delete (`edit` null) one file of the fixture's copied floor. */
+function breakFloor(dir, file, edit) {
+  const p = join(dir, "pharn", "floor", file);
+  if (edit === null) return unlinkSync(p);
+  const before = readFileSync(p, "utf8");
+  const after = edit(before);
+  assert.notEqual(after, before, `fixture sanity: the mutation must change ${file}`);
+  writeFileSync(p, after);
+}
+
+test("★ R2 — a module that cannot LOAD exits 2 `crashed` with its document, never 1", () => {
+  const line = committedLine("pharn-loop.md");
+  const cases = [
+    ["a syntax error in scope-inputs.mjs", "scope-inputs.mjs", () => "export const = ;\n"],
+    ["scope-inputs.mjs missing", "scope-inputs.mjs", null],
+    ["quick-scope-core.mjs missing", "quick-scope-core.mjs", null],
+  ];
+  for (const [label, file, edit] of cases) {
+    const { dir, base } = makeRepo({ copy: true });
+    try {
+      const control = runCommitted(line, dir, base);
+      assert.equal(control.status, 0, `CONTROL (${label}): the unbroken copy is clean: ${control.stdout}${control.stderr}`);
+      breakFloor(dir, file, edit);
+      const r = runCommitted(line, dir, base);
+      assert.equal(r.status, 2, `${label}: ${r.stdout}${r.stderr}`);
+      assert.equal(r.doc?.verdict, "inconclusive", `${label}: a document, not an empty stdout`);
+      assert.equal(r.doc.reason_code, "crashed", label);
+      assert.match(r.doc.reason, /could not load/, label);
+      if (file === "scope-inputs.mjs") {
+        // CONTROL (L60): the pre-R2 shape — an entry importing the same broken module STATICALLY — is node's exit 1
+        // with no document, the escaped code. This is what the entry split closes.
+        writeFileSync(join(dir, "pharn", "floor", "static-entry.mjs"), 'import "./scope-inputs.mjs";\nconsole.log("{}");\n');
+        const old = spawnSync(process.execPath, ["pharn/floor/static-entry.mjs"], { cwd: dir, encoding: "utf8" });
+        assert.deepEqual([old.status, old.stdout], [1, ""], `${label}: a static import exits 1, no document`);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test("★ R2 — a throw while checking exits 2 `crashed`", () => {
+  const { dir, base } = makeRepo({ copy: true });
+  try {
+    breakFloor(dir, "check-regress.mjs", (s) =>
+      s.replace("const undeclared = inside.filter(", 'throw new Error("thrown by the test"); const undeclared = inside.filter(')
+    );
+    const r = runCommitted(committedLine("pharn-loop.md"), dir, base);
+    assert.equal(r.status, 2, `${r.stdout}${r.stderr}`);
+    assert.equal(r.doc.reason_code, "crashed");
+    assert.match(r.doc.reason, /threw while checking: thrown by the test/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("★ R2 — a result outside the checker's contract exits 2 `crashed`, never the code it claimed", () => {
+  const results = [
+    ["exit 0 naming an escape", '{ code: 0, doc: { escaped: ["src/stray.js"] } }'],
+    ["exit 1 naming nothing", "{ code: 1, doc: { escaped: [] } }"],
+    ["exit 1 with no escaped array", '{ code: 1, doc: { verdict: "escaped" } }'],
+    ["an exit code outside 0, 1, 2", "{ code: 7, doc: { escaped: [] } }"],
+    ["exit 2 not inconclusive", '{ code: 2, doc: { verdict: "clean" } }'],
+    ["no document", "{ code: 0, doc: undefined }"],
+  ];
+  const { dir, base } = makeRepo({ copy: true });
+  const core = join(dir, "pharn", "floor", "quick-scope-core.mjs");
+  const original = readFileSync(core, "utf8");
+  try {
+    for (const [label, result] of results) {
+      writeFileSync(core, original);
+      breakFloor(dir, "quick-scope-core.mjs", (s) =>
+        s.replace("export function evaluate(args) {", `export function evaluate(args) {\n  return ${result};`)
+      );
+      const r = runCommitted(committedLine("pharn-loop.md"), dir, base);
+      assert.equal(r.status, 2, `${label}: ${r.stdout}${r.stderr}`);
+      assert.equal(r.doc.reason_code, "crashed", label);
+      assert.match(r.doc.reason, /returned no verdict/, label);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("✧ R2 — the entry has NO static import, and its two second copies (EXIT, the crash code) equal the checker's", async () => {
+  const src = readFileSync(CLI, "utf8");
+  assert.doesNotMatch(src, /^\s*import[\s{*'"]/m, "no static import statement");
+  assert.doesNotMatch(src, /^\s*export\s[^\n]*\sfrom\s/m, "no re-export");
+  assert.match(src, /await import\("\.\/quick-scope-core\.mjs"\)/, "the checker is loaded with import()");
+  const core = await import("./quick-scope-core.mjs");
+  const m = src.match(/const EXIT = Object\.freeze\(\{ clean: (\d), escaped: (\d), inconclusive: (\d) \}\);/);
+  assert.ok(m, "the entry's EXIT literal");
+  assert.deepEqual({ clean: Number(m[1]), escaped: Number(m[2]), inconclusive: Number(m[3]) }, { ...core.EXIT });
+  assert.match(src, /const CRASHED = "crashed";/);
+  assert.ok(core.REASON_CODES.includes("crashed"));
+});
+
+test("R2, the residual stated — the ENTRY file itself unloadable (a run from outside the project root) exits 1 with no document", () => {
+  const { dir, base } = makeRepo();
+  try {
+    // The pinned line names the entry relative to the project root, so from `src/` it names no file at all.
+    const r = runCommitted(committedLine("pharn-loop.md"), join(dir, "src"), base);
+    assert.equal(r.status, 1, "node's own exit for an entry path that names no file — NOT CAUGHT, and stated as such");
+    assert.equal(r.stdout, "", "no document; every caller stops on 1");
+    assert.match(r.stderr, /Cannot find module/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

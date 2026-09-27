@@ -1,146 +1,116 @@
 #!/usr/bin/env node
-// pharn/floor/check-quick-scope.mjs — the SCOPE CHECK the two quick modes keep (6.28.0, loop-quick-mode GATE 2, review
-// F1): `/pharn-ship --quick`'s item 7 and every `/pharn-loop --quick` iteration. It asks `/pharn-regress`'s partition
-// question without the rest of that stage: does every path changed since <base> fall inside the plan's declared writes,
-// or inside one of the closed exemptions? Exit 0 clean · 1 escaped · 2 inconclusive.
+// pharn/floor/check-quick-scope.mjs — the CLI of the SCOPE CHECK the two quick modes keep (6.28.0, loop-quick-mode GATE 2,
+// review F1): `/pharn-ship --quick`'s item 7 and every `/pharn-loop --quick` iteration. The checker — what it asks, the
+// recorded failure it answers, what it computes by code and what it does not do — is pharn/floor/quick-scope-core.mjs,
+// whose header is its spec. This file loads that module, runs it and prints the verdict.
 //
-// ============================== THE RECORDED FAILURE (P7), AND WHY THIS FILE EXISTS ==============================
-// 6.25.0's pinned line had the MODEL list the changed and declared paths and paste them into DOUBLE-QUOTED shell
-// arguments of `check-regress.mjs scope`. Inside "…" a shell still expands `$VAR`, `$(…)` and backticks, so in the
-// review's reproductions (`.dev/features/loop-quick-mode/REVIEW.md`, F1): a file named `src/$(touch INJECTED).js` ran
-// in the orchestrator's own shell; an untracked `src/x$Q.js` expanded to the declared `src/x.js` (exit 0, a false pass);
-// and a name holding a comma split into pieces that were each declared or exempt (exit 0 again). The same literal had
-// shipped in `/pharn-ship --quick` since 6.25.0; `/pharn-loop --quick` would have run it unattended.
+// WHY A SEPARATE ENTRY (the round-2 re-review, R2): node exits 1 when a module cannot load or a throw goes uncaught, and
+// 1 is this checker's ESCAPED. While the checker imported its siblings statically, a module that failed to load — a
+// scope-inputs.mjs with a syntax error, a missing one, a partial update — ended the process with exit 1 and no document,
+// so both callers read a crash as a scope escape. They stopped either way, but on a false reason, and the checker's own
+// claim ("a crash is caught as 2, never 1") was false. This file has NO static import, so nothing can fail before the
+// `try` below. It loads the checker with import(), runs it, and maps a module that cannot load, a throw while checking,
+// or a result outside the checker's contract to exit 2, `reason_code` `crashed` — inconclusive, fail-closed, never 1.
+// The contract is judged on the SERIALIZED document: an exit code other than 0, 1 or 2; a document that is not an
+// object; exit 0 without an empty `escaped` array; exit 1 without a non-empty one; exit 2 without `verdict`
+// `"inconclusive"`. So a mismatched module can never exit 0 (read as clean), and never exit 1 without naming what
+// escaped. A throw a loaded module schedules asynchronously is caught by process-level handlers: before the document is
+// printed it becomes the crash document; after, the exit becomes 2 and the printed document stands (fail-closed). The
+// pattern is check-loop-fresh.mjs's (6.21.1), trimmed to this checker's contract.
 //
-// THE FIX, by construction: the pinned line carries exactly two values — the feature slug and a resolved 40-hex base —
-// and this file validates both: the slug against gate-run-core.mjs's FEATURE_SLUG_RE (the loop's own S1 slug rule), the
-// base against SHA_RE AND `git rev-parse --verify --quiet <base>^{commit}`. Everything else is computed here, by code:
-//   • the declared writes and the changed paths by pharn/floor/scope-inputs.mjs — the ONE owner stage-regress.mjs's
-//     partition phase also calls (PLAN.md ∪ AC-TESTS.md `## Files`; `git diff --name-only --no-renames -z <base>` ∪
-//     `git ls-files -z --others --exclude-standard`, minus `.pharn/`);
-//   • the verdict by check-regress.mjs's exported `partitionScope` — the rule its `scope` CLI applies, with the same
-//     closed exemptions (this feature's pipeline artifacts, the four trusted docs) — L35, never a copy.
-// Paths travel as ARRAYS end to end: no shell, no comma/newline list grammar, no trim and no flag scan ever reads one.
-// The DECLARED patterns get check-regress.mjs's `normPath`, exactly as its `parseList` applies it; a git path gets
-// nothing, because a real file name may begin or end with a space.
+// Two facts are written HERE as well as in quick-scope-core.mjs, because this file must not load that module to read
+// them: the exit codes (its EXIT) and the crash `reason_code` (a member of its REASON_CODES). A test pins both.
 //
-// ================================ WHAT IT DOES NOT DO — stated, never implied (P0) ================================
-// • It compares CHANGED SINCE <base>, never WRITTEN BY THE BUILD (L17), and it carries check-regress.mjs's closed
-//   exemptions. A plan that rewrites its own `## Files` authorizes whatever it names — check-regress.mjs's header, and
-//   its named follow-up. A git-ignored path is never listed, so it is outside this partition.
-// • It LEAVES NO RECORD: its JSON goes to stdout, and nothing writes it anywhere. In /pharn-loop nothing downstream
-//   re-checks it (check-loop-fresh.mjs skips G and H in quick mode; the commit gate does not re-run it); /pharn-ship
-//   copies its result into SHIP.md, a model-written line.
-// • The only shell text left is the pinned line itself; the slug and the base reach it inside single quotes, and a
-//   caller that types anything else there is outside this file's reach (the loop's S1 slug rule; a SHA git printed).
-// • That a caller RUNS it, and obeys its exit code, is advisory orchestration (L19); the verdict is floor.
-//
-// TRUST (P2): git paths and `## Files` text are untrusted, attacker-nameable strings. They are compared as data and
-// printed only inside JSON (JSON.stringify escapes every control character); `problem` strings are free-text DATA.
-// Nothing is evaluated; git runs as an argument vector (stage-runtime.mjs's `gitSync`).
-//
-// THE FLUSH RULE (the check-verify.mjs rule): `emit` sets process.exitCode and unwinds with a module-private sentinel,
-// never an immediate exit, so a piped reader gets the whole document. An unexpected throw is caught at the top and
-// reported as inconclusive (`crashed`, exit 2) — never as exit 1, which means "escaped".
+// NOT CAUGHT, stated: THIS file missing, unreadable or not parseable — node's exit 1 with no document, which both callers
+// read as a stop. The pinned line names this file by a path relative to the project root, so a run from any other
+// directory is exactly this case (a test pins it). Also not caught: a module that ends the process itself (none does),
+// a top-level await in the graph that never settles (node exits 13), a kill by signal, and a stdout that cannot be
+// written.
 //
 // Usage: node pharn/floor/check-quick-scope.mjs --feature <name> --base <40-hex>   (from the repo root)
 // Exit: 0 clean · 1 escaped (a blocking P0 fix #7 finding per path) · 2 inconclusive, `reason_code` one of
 //       usage-error | base-not-commit | path-containment | plan-unreadable | plan-files-unparseable | git-failed | crashed.
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { FEATURE_SLUG_RE, SHA_RE } from "./gate-run-core.mjs";
-import { containmentWalk, gitSync } from "./stage-runtime.mjs";
-import { declaredWrites, changedPaths } from "./scope-inputs.mjs";
-import { partitionScope, scopeFindings, normPath } from "./check-regress.mjs";
+/** quick-scope-core.mjs EXIT, restated because that module cannot be imported here. Pinned by a test. */
+const EXIT = Object.freeze({ clean: 0, escaped: 1, inconclusive: 2 });
+/** The crash `reason_code`, a member of quick-scope-core.mjs REASON_CODES. Pinned by a test. */
+const CRASHED = "crashed";
 
-const FEATURES_DIR = "pharn/features";
-const FLAGS = new Set(["--feature", "--base"]);
-const USAGE = "usage: check-quick-scope.mjs --feature <name> --base <40-hex>";
-
-/** The closed refusal vocabulary (exported so the tests iterate it — L29). */
-export const REASON_CODES = Object.freeze([
-  "usage-error",
-  "base-not-commit",
-  "path-containment",
-  "plan-unreadable",
-  "plan-files-unparseable",
-  "git-failed",
-  "crashed",
-]);
-
-const EMITTED = Symbol("check-quick-scope: emitted");
-function emit(obj, code) {
-  console.log(JSON.stringify(obj, null, 2));
-  process.exitCode = code;
-  throw EMITTED;
-}
-function inconclusive(reasonCode, reason) {
-  emit({ verdict: "inconclusive", reason_code: reasonCode, reason }, 2);
-}
-
-/** Pairwise: every even position is a known flag seen once, followed by its value. Nothing else is accepted. */
-function parseArgs(args) {
-  const values = new Map();
-  for (let i = 0; i < args.length; i += 2) {
-    const a = args[i];
-    if (!FLAGS.has(a)) inconclusive("usage-error", `unexpected argument ${JSON.stringify(a)} — ${USAGE}`);
-    if (values.has(a)) inconclusive("usage-error", `${a} given twice — ${USAGE}`);
-    if (i + 1 >= args.length) inconclusive("usage-error", `${a} requires a value — ${USAGE}`);
-    values.set(a, args[i + 1]);
-  }
-  for (const f of FLAGS) if (!values.has(f)) inconclusive("usage-error", `${f} is required — ${USAGE}`);
-  return { feature: values.get("--feature"), base: values.get("--base") };
-}
-
-function main(argv) {
-  const { feature, base } = parseArgs(argv.slice(2));
-  if (!FEATURE_SLUG_RE.test(feature)) {
-    inconclusive("usage-error", `--feature must be a plain slug matching ${FEATURE_SLUG_RE}, got ${JSON.stringify(feature)}`);
-  }
-  if (!SHA_RE.test(base)) inconclusive("usage-error", `--base must be a resolved 40-hex commit SHA, got ${JSON.stringify(base)}`);
-  const rev = gitSync(["rev-parse", "--verify", "--quiet", `${base}^{commit}`]);
-  if (!rev.ok || rev.stdout.trim() !== base) inconclusive("base-not-commit", `--base ${base} does not name a commit in this repository`);
-
-  const cwd = process.cwd();
-  const featureDir = `${FEATURES_DIR}/${feature}`;
-  const walk = containmentWalk(cwd, join(cwd, featureDir));
-  if (!walk.ok) inconclusive("path-containment", `${featureDir}: ${walk.reason}`);
-
-  let planText;
+/** A thrown value's first line, total: `throw Object.create(null)` has no string form, and this path must not throw. */
+function firstLineOf(e) {
   try {
-    planText = readFileSync(`${featureDir}/PLAN.md`, "utf8");
+    return String(e?.message ?? e).split("\n")[0];
+  } catch {
+    return "a thrown value with no string form";
+  }
+}
+
+/** The inconclusive result for a checker that could not load, threw, or returned no verdict. Every value is a string,
+ *  so serializing it cannot throw; the error's first line is bounded. The full stack goes to stderr. */
+function crashed(what, e) {
+  const first = firstLineOf(e);
+  const doc = {
+    verdict: "inconclusive",
+    reason_code: CRASHED,
+    reason: `${what}: ${first.length > 300 ? `${first.slice(0, 300)}…` : first} — fail-closed, this is no verdict about the scope`,
+  };
+  return { code: EXIT.inconclusive, text: JSON.stringify(doc, null, 2), error: e };
+}
+
+/** Is the SERIALIZED document the one this exit code needs? Checked on the parsed-back text, never on the object. */
+function outsideContract(code, text) {
+  if (code !== EXIT.clean && code !== EXIT.escaped && code !== EXIT.inconclusive) return `exit code ${JSON.stringify(code)}`;
+  const doc = JSON.parse(text);
+  if (doc === null || typeof doc !== "object" || Array.isArray(doc)) return "a document that is not an object";
+  const escaped = Array.isArray(doc.escaped) ? doc.escaped : null;
+  if (code === EXIT.clean && (escaped === null || escaped.length !== 0)) return "exit 0 without an empty `escaped` array";
+  if (code === EXIT.escaped && (escaped === null || escaped.length === 0)) return "exit 1 without a non-empty `escaped` array";
+  if (code === EXIT.inconclusive && doc.verdict !== "inconclusive") return 'exit 2 without verdict "inconclusive"';
+  return null;
+}
+
+async function run(args) {
+  let core;
+  try {
+    core = await import("./quick-scope-core.mjs");
   } catch (e) {
-    inconclusive("plan-unreadable", `${featureDir}/PLAN.md cannot be read (${e && e.code ? e.code : "error"})`);
+    return crashed("the quick scope checker could not load (quick-scope-core.mjs or a module it imports)", e);
   }
-  const declaredRes = declaredWrites(planText, `${featureDir}/AC-TESTS.md`);
-  if (!declaredRes.ok) inconclusive("plan-files-unparseable", `${featureDir}/PLAN.md: ${declaredRes.reason}`);
-  const declared = [...new Set(declaredRes.value.map(normPath).filter(Boolean))];
-
-  const changed = changedPaths(base);
-  if (!changed.ok) {
-    const cmd = changed.which === "diff" ? "git diff --name-only --no-renames -z <base>" : "git ls-files -z --others --exclude-standard";
-    inconclusive("git-failed", `${cmd} failed: ${changed.stderr.trim()}`);
+  let r;
+  let text;
+  try {
+    r = core.evaluate(args);
+    text = JSON.stringify(r?.doc, null, 2);
+  } catch (e) {
+    return crashed("the quick scope checker threw while checking", e);
   }
-  const inside = changed.value;
-
-  const { escaped, escapeExempt } = partitionScope({ inside, declared, feature });
-  const doc = { feature, base, inside, declared, escaped, escape_exempt: escapeExempt };
-  if (escaped.length) emit({ ...doc, findings: scopeFindings(escaped) }, 1);
-  emit(doc, 0);
+  const why = typeof text === "string" ? outsideContract(r?.code, text) : "no document";
+  if (why) return crashed("the quick scope checker returned no verdict", new Error(`a result outside its contract: ${why}`));
+  return { code: r.code, text, error: null };
 }
 
 if (import.meta.main) {
-  try {
-    main(process.argv);
-  } catch (e) {
-    if (e !== EMITTED) {
-      // A bug, not a verdict: the stack goes to stderr, a fixed reason to stdout, and the exit is 2 — never 1.
-      console.error(e && e.stack ? e.stack : e);
-      console.log(
-        JSON.stringify({ verdict: "inconclusive", reason_code: "crashed", reason: "check-quick-scope.mjs threw; see stderr" }, null, 2)
-      );
-      process.exitCode = 2;
+  let printed = false;
+  const print = ({ code, text, error }) => {
+    printed = true;
+    process.exitCode = code;
+    console.log(text);
+    if (error) {
+      try {
+        console.error(error?.stack ?? firstLineOf(error));
+      } catch {
+        /* diagnosis only — the document and the exit code are already set */
+      }
     }
-  }
+  };
+  // A throw a loaded module schedules asynchronously lands outside run()'s `try`. Before the document is printed it is
+  // the crash document; after, the printed document stands on stdout and the exit is still inconclusive (fail-closed).
+  const late = (e) => {
+    if (!printed) print(crashed("the quick scope checker threw asynchronously", e));
+    else process.exitCode = EXIT.inconclusive;
+  };
+  process.on("uncaughtException", late);
+  process.on("unhandledRejection", late);
+  const result = await run(process.argv.slice(2));
+  if (!printed) print(result);
 }

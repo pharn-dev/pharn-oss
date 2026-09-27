@@ -430,13 +430,101 @@ Sizes after this round: `pharn-loop.md` 98,902 B (+1,154 B; `## Quick mode` 15,3
 Sizes: `pharn-loop.md` 112,241 B (the merge commit's 108,429 B + 3,812 B; `## Quick mode` 18,431 B, `## Running a
 stage` 5,716 B); `pharn-ship.md` 123,792 B.
 
+## Final prep — 2026-09-27
+
+- The round-2 re-review (`REVIEW.md` `## Round 2`, `49e1b65`) is GREEN with 0 floor-gate findings, and it raised three
+  minor findings, R1–R3. The orchestrator's final-prep decision folds all three. It is a model decision under the
+  maintainer's 2026-09-25 delegation, not a human one. Stage model: opus — set by the maintainer's instruction,
+  overriding pharn.config.json; routed via Agent subagent; effort not routed. Regress and verify are not run this
+  round: they run once, after 2.2 lands on `main` and the maintainer applies this patch.
+- `git merge --ff-only loop-quick-mode` → exit 0 (`8b2b8c3..49e1b65`).
+- `git merge --no-ff --no-commit stage-model-routing` (`0344ff1`, the maintainer's human-applied §8) → exit 0, clean.
+  The staged `LIMITS.md` is 2.2's blob `63374de`, byte for byte. Merge commit `6fca772`.
+- Step 0: `PLAN.md` gains `## Final-prep amendments` and one `## Files` path (43 → 44).
+  `set-writes-scope.cjs --from-plan` → exit 0, 44 paths.
+  `reconcile-baseline.mjs --anchor --by loop-quick-mode-final-prep` → exit 0, 2,426 paths, scope 44.
+
+### R1 — `apply.sh`'s dirty-`LIMITS.md` guard
+
+- 2.2's guard line goes in before `git apply --check`, with its comment and its failure message. A scratch parity check
+  (`.pharn/pharn-dev-build/apply-guard-parity.mjs`, exit 0) found the guard and the message each present once and
+  byte-identical to 2.2's, the guard ahead of the check, and no CR. `sh -n` → exit 0. `APPLY.md`'s steps gain the
+  refusal, and its restore text now says `HEAD`.
+- A drill in a throwaway clone of HEAD, with the working `apply.sh`, patch and sums dropped in
+  (`.pharn/pharn-dev-build/apply-drill.mjs`, exit 0):
+  - With an unstaged line appended to `LIMITS.md`: exit 1 with "refusing to start". The line survived and `HEAD` did
+    not move.
+  - With a clean `LIMITS.md`: exit 0, one commit touching `LIMITS.md` only (15 insertions, 3 deletions), and the
+    applied file hashes to the sums.
+  - The clone was deleted, and the live `LIMITS.md` was never written.
+
+### R2 — "a crash is caught as 2, never 1", made true
+
+- `pharn/floor/quick-scope-core.mjs` (NEW) holds the checker, moved out of `check-quick-scope.mjs`. `evaluate(args)`
+  returns `{code, doc}`, and any throw that is not its own verdict propagates.
+- `check-quick-scope.mjs` is now an entry with no static import, `check-loop-fresh.mjs`'s 6.21.1 pattern trimmed to this
+  contract. A load failure, a throw, or a result outside the contract is exit 2 `crashed`, with its document. Its
+  `EXIT` and its crash code are the two pinned second copies.
+- Named, not caught: the entry file itself unloadable, which is a run from outside the project root. That is node's
+  exit 1 with no document. A test pins it, and both commands' exit-1 branch now says so (`pharn-loop.md` item 5,
+  `pharn-ship.md` item 7).
+- `pharn/floor/check-quick-scope.test.mjs` → 33/33 (28 before). The five new tests:
+  - three load failures in a copied floor (a syntax error in `scope-inputs.mjs`, that file missing, the core missing),
+    each with the unbroken copy as the control and, for the first two, a static import of the same broken module
+    exiting 1 with no document;
+  - a throw while checking;
+  - six results outside the contract;
+  - the no-static-import and second-copy pins;
+  - the residual.
+- `CLAUDE.md`, the CHANGELOG [6.28.0] Fixed entry and the comments naming the checker's callers
+  (`check-regress.mjs`, `scope-inputs.mjs`, `stage-regress.mjs`) follow. Both commands' `reads:` gain the core.
+
+### R3 — the untracked nested repository, named
+
+- The claim is now named at `stage-regress.mjs`'s partition comment, in the CHANGELOG [6.28.0] Fixed entry, in
+  `CLAUDE.md`, in the core's header, and in PLAN's final-prep R3 bullet: git lists such a repository as `vendor/lib/`,
+  so a bare `vendor/lib` declaration reads `scope-escaped`, while `vendor/**` covers it.
+- `pharn/floor/stage-regress.test.mjs` gains two tests, both → exit 0, 2/2:
+  - the bare declaration → `refused scope-escaped` with `escaped: ["vendor/lib/"]`; the comma-list route as the control
+    exits 0 with `inside: ["vendor/lib"]`;
+  - `vendor/**` → `done/no-regressions`.
+
+### The patch
+
+- `node .dev/features/loop-quick-mode/handoff/make-patch.mjs` → exit 0, run once. It printed
+  `e7be1413b84f0198ced7e8f1dbc17b779d271a148e725b4b186685b7cd0bb5d7  LIMITS.md`, the value the round-2 review
+  computed in its clone.
+- A scratch check (`.pharn/pharn-dev-build/verify-patch.mjs`, exit 0):
+  - `git apply --check` exits 0, and `--stat` reads 15 insertions and 3 deletions;
+  - applied to a scratch copy, the file hashes to the sums;
+  - no CR appears in the patch, the sums, `apply.sh` or the applied file;
+  - `(6.28.0)` appears twice and `(6.27.0)` never;
+  - the hunks start at lines 127, 141 and 270, all before §8 (line 399);
+  - the live `LIMITS.md` is untouched.
+- `APPLY.md`'s "When to apply" gives the final-prep order: §8 is merged, this pair was regenerated against it (with
+  its sums line), it is applied after 2.2 lands on `main`, and the final regress and verify run after the apply, which
+  is its out-of-order case.
+
+### Gates, this round
+
+| command                                                            | exit | result                                                                  |
+| ------------------------------------------------------------------ | ---- | ----------------------------------------------------------------------- |
+| `node pharn/floor/validate.mjs .`                                  | 0    | `FLOOR: GREEN — 36 capabilities`                                        |
+| `npm run docs:generate`, then `npm run docs:check`                 | 0, 0 | README CURRENT-STATE: floor checkers 98 → 99; other regions unchanged   |
+| `npm test`                                                         | 0    | 4,007/4,007                                                             |
+| `npm run check`                                                    | 0    | every gate; `check:reconcile` CLEAN over the final-prep epoch, 16 paths |
+| `node .dev/floor/check-changelog-entry.mjs --merge-base 0344ff1 .` | 0    | GREEN — against 2.2, this PR opens only `## [6.28.0]`                   |
+
+Sizes: `pharn-loop.md` 112,538 B; `pharn-ship.md` 124,078 B.
+
 ## Open issues, named
 
 - `architecture-loop-quick-line`, `loop-quick-run-report`, `quick-size-signal` — pending, as the plan records.
   `quick-scope-inputs-by-code` is built (the GATE 2 round above); `regress-scope-list-grammar` is built for the decision
   (the coupling round above), leaving `regress-inside-echo-list`, new and pending.
-- The `stage-model-routing` coupling (Chain sequencing items 4 and 5) is built (the round above).
-- The final round owes: `make-patch.mjs` re-run against the `LIMITS.md` that carries 2.2's human-applied §8, then
-  `/pharn-dev-regress` and `/pharn-dev-verify` once over the tree `main` will hold.
+- The `stage-model-routing` coupling (Chain sequencing items 4 and 5) is built (the coupling round above).
+- Owed after this round: the maintainer applies `proposed/apply.sh` once 2.2 lands on `main`. Then `/pharn-dev-regress`
+  and `/pharn-dev-verify` run once over that tree, with the epoch re-opened first (`APPLY.md`).
 - `origin/main` at `008b24b` (6.26.0, `stage-verify-script`, #281) is merged in (`c9d279c`); `stage-model-routing` at
-  `5bf6b18` (6.27.0) is merged in (`51cf513`), and this increment is renumbered 6.28.0.
+  `5bf6b18` (6.27.0) is merged in (`51cf513`), and at `0344ff1` (its human-applied §8) in `6fca772`. This increment is
+  renumbered 6.28.0.

@@ -36,7 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `/pharn-verify` — **no** `/pharn-regress` base comparison on any iteration, and **no** `RUN-REPORT.md` (`cost.json`
   is kept). Its green stop is **`STOP_GREEN_QUICK`, which is not `STOP_GREEN`**: every consumer compares `decision` by
   equality, and the token carries its own claim — verify `PASS`, no regression verdict read. `SKILLS_VERSION`
-  6.27.0 → 6.28.0 (minor: a newly shipped mode, a new checker and two new floor modules, a new decision token and an
+  6.27.0 → 6.28.0 (minor: a newly shipped mode, a new checker and three new floor modules, a new decision token and an
   optional record field — plus the security correction under Fixed, below). `MIN_CLI` stays 0.5.0: no installed path
   moves. **The directions that do not read back:**
   an install rolled back below 6.28.0 REDs a `LOOP.md` carrying `STOP_GREEN_QUICK` in both loop-record checkers, and
@@ -116,6 +116,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   base, both validated by the checker, and nothing else. It builds both sets itself, through the new
   `pharn/floor/scope-inputs.mjs` — the one owner `/pharn-regress`'s script now calls for its own partition — and decides
   with `check-regress.mjs`'s newly exported `partitionScope`, so a path reaches no shell, comma list, trim or flag scan.
+  The checker itself is `pharn/floor/quick-scope-core.mjs` (new). `check-quick-scope.mjs` is an entry with no static
+  import, which loads it through `import()` (`check-loop-fresh.mjs`'s 6.21.1 pattern). So a module that cannot load, a
+  throw while checking, or a result outside the checker's contract exits 2 `crashed`, never 1, the escaped code (the
+  round-2 re-review's R2). Not caught, and stated: the entry file itself unloadable, as on a run from outside the
+  project root, is node's own exit 1 with no document, and both callers stop on it.
   `pharn/floor/check-quick-scope.test.mjs` executes both commands' committed lines against `$(…)`, backticks, `$Q`,
   commas, both quote kinds, a newline, a leading `-` and a trailing space: each exits 1 naming exactly that path, and
   no command runs. 6.25.0's line is the control — in the same fixture its canary file appears and `$Q` passes.
@@ -125,7 +130,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   false pass there, reproduced at that CLI. `stage-regress.mjs` now calls `partitionScope` in-process over the same
   arrays, which closes `regress-scope-list-grammar` in this release. `stage-regress.test.mjs` runs both names through
   the real script, with the comma-list CLI as the control, and pins the scope document byte-identical to that CLI's for
-  ordinary names. **Named, not built:** `regress-inside-echo-list`. The verdict call's `inside` echo is ADVISORY and
+  ordinary names. One ordinary-looking name moved (the round-2 re-review's R3): git lists an untracked nested repository
+  as `vendor/lib/`, with a trailing slash the CLI stripped. So a plan declaring the bare `vendor/lib` now reads
+  `scope-escaped`, which is stricter and is what the quick check already did, while `vendor/**` still covers it (tested
+  both ways). **Named, not built:** `regress-inside-echo-list`. The verdict call's `inside` echo is ADVISORY and
   read by no floor op, but it is still a comma list, so a comma or newline changed path is still refused
   (`unrepresentable-path`), fail-closed.
 

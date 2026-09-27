@@ -386,6 +386,47 @@ test("✧ PARITY: for ordinary names the in-process scope.json is byte-identical
   }
 });
 
+/** An untracked NESTED REPOSITORY at vendor/lib — a directory holding its own `.git`, which git lists as `vendor/lib/`. */
+function nestedRepo(dir) {
+  mkdirSync(join(dir, "vendor", "lib"), { recursive: true });
+  execFileSync("git", ["init", "-q", "."], { cwd: join(dir, "vendor", "lib"), stdio: "pipe" });
+  writeFileSync(join(dir, "vendor", "lib", "index.js"), "export const lib = 1;\n");
+}
+
+test("R3 (round-2 re-review): an untracked NESTED REPOSITORY keeps git's trailing slash — a bare-directory declaration no longer covers it", () => {
+  const { dir, base } = repo({ extraPlanLines: ["- `vendor/lib` — a vendored library, declared as the bare directory"] });
+  try {
+    nestedRepo(dir);
+    const r = cli(dir, freshArgs(base));
+    assert.equal(r.code, 3, r.raw);
+    assert.equal(r.json.reason_code, "scope-escaped");
+    const scope = JSON.parse(readFileSync(join(dir, REGRESS_PATHS.scopeJson), "utf8"));
+    assert.deepEqual(scope.escaped, ["vendor/lib/"], "git's own entry, its trailing slash kept");
+    // CONTROL — the pre-6.28.0 comma-list route stripped the slash, so the bare declaration covered the entry (exit 0):
+    // the one ordinary-looking name whose scope.json bytes, and verdict, moved. Stricter, and stated in the claim.
+    const old = oldListRoute(dir, scope.inside, scope.declared);
+    assert.equal(old.status, 0, old.stdout);
+    assert.deepEqual(JSON.parse(old.stdout).inside, ["vendor/lib"]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("R3: the same nested repository under a `vendor/**` declaration proceeds — a glob covers the slashed entry", () => {
+  const { dir, base } = repo({ extraPlanLines: ["- `vendor/**` — a vendored library"] });
+  try {
+    nestedRepo(dir);
+    const r = cli(dir, freshArgs(base));
+    assert.equal(r.code, 0, r.raw);
+    assert.equal(r.json.verdict, "no-regressions");
+    const scope = JSON.parse(readFileSync(join(dir, REGRESS_PATHS.scopeJson), "utf8"));
+    assert.deepEqual(scope.inside, ["vendor/lib/"]);
+    assert.deepEqual(scope.escaped, []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("done: the same `--declared` file, once the PLAN declares it, proceeds — the exact name matches its declaration (control)", () => {
   const { dir, base } = repo({ extraPlanLines: ["- `--declared` — a file named like a flag"] });
   try {

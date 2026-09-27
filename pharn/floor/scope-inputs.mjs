@@ -1,7 +1,8 @@
 // pharn/floor/scope-inputs.mjs — the regress partition's TWO INPUT SETS, computed by code: the declared writes and the
 // changed paths (6.28.0, loop-quick-mode GATE 2, review F1). ONE owner (L35): `stage-regress.mjs`'s partition phase and
-// `check-quick-scope.mjs` (the scope check `/pharn-ship --quick` and `/pharn-loop --quick` keep) both call these two
-// functions, so the quick modes compare exactly the sets `/pharn-regress`'s script compares, and nobody re-types either.
+// `quick-scope-core.mjs` (the checker behind `check-quick-scope.mjs`, the scope check `/pharn-ship --quick` and
+// `/pharn-loop --quick` keep) both call these two functions, so the quick modes compare exactly the sets
+// `/pharn-regress`'s script compares, and nobody re-types either.
 //
 // WHY IT EXISTS (the recorded failure, P7): 6.25.0's quick scope line had the MODEL list both sets and paste them into
 // double-quoted shell arguments. In the review's reproductions a file named `src/$(touch INJECTED).js` ran in the

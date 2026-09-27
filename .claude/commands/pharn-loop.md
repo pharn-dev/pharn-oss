@@ -39,6 +39,7 @@ reads:
     "pharn/floor/check-test-stage.mjs",
     "pharn/floor/check-red-run.mjs",
     "pharn/floor/check-quick-scope.mjs",
+    "pharn/floor/quick-scope-core.mjs",
     "pharn/pharn-contracts/gate-run-record.md",
     "pharn/floor/validate.mjs",
   ]
@@ -470,20 +471,22 @@ commit message and the summary name the mode after it.
    node pharn/floor/check-quick-scope.mjs --feature '<name>' --base '<base sha>'
    ```
 
-   **Never type a path into it** (6.28.0, GATE 2 security fix). The checker (`pharn/floor/check-quick-scope.mjs`,
-   header) validates the slug and that the base names a commit, then builds both sets itself through the one owner
-   `/pharn-regress`'s script also calls (`pharn/floor/scope-inputs.mjs`): the changed paths (`git diff` since
-   `<base sha>` plus untracked files, NUL-separated, minus `.pharn/`) and the declared writes (`PLAN.md`'s `## Files`
-   plus `AC-TESTS.md`'s). It decides with `check-regress.mjs`'s scope rule and its exemptions, so no path is parsed as
-   shell text or split by a list grammar: a name carrying `$(…)`, a backtick, a `$`, a comma, a quote, a newline or a
-   leading `-` is compared as the name git printed.
+   **Never type a path into it** (6.28.0, GATE 2 security fix). The checker (`pharn/floor/quick-scope-core.mjs`,
+   header, which that entry loads) validates the slug and that the base names a commit, then builds both sets itself
+   through the one owner `/pharn-regress`'s script also calls (`pharn/floor/scope-inputs.mjs`): the changed paths
+   (`git diff` since `<base sha>` plus untracked files, NUL-separated, minus `.pharn/`) and the declared writes
+   (`PLAN.md`'s `## Files` plus `AC-TESTS.md`'s). It decides with `check-regress.mjs`'s scope rule and its exemptions,
+   so no path is parsed as shell text or split by a list grammar: a name carrying `$(…)`, a backtick, a `$`, a comma, a
+   quote, a newline or a leading `-` is compared as the name git printed.
 
    Branch **only** on the exit code (P5): `0` → verify — `/pharn-verify` exactly as a full iteration runs it, with
    its stage-start and orchestrator markers as written: the thin caller of `pharn/floor/stage-verify.mjs` (6.26.0),
    whose exit maps by Step 2's `/pharn-verify` stage-exit mapping. `1` → **S9** (`blocked: stage-refused`): a changed path is
    outside the declared writes — the row a full run's `/pharn-regress` `scope-escaped` refusal maps to, with the same
-   remedy (declare the path through a re-plan, or revert the change). Any other exit (`2`, inconclusive — an unusable
-   slug or base, an unreadable or unparseable `PLAN.md`, a failed git call — or a crash) → **S9**, fail-closed.
+   remedy (declare the path through a re-plan, or revert the change); an exit `1` that prints no JSON document is the
+   checker's own file failing to start (a run from outside the project root) — the same S9, with nothing escaped to
+   name. Any other exit (`2`, inconclusive — an unusable slug or base, an unreadable or unparseable `PLAN.md`, a failed
+   git call, or `crashed`: a checker module that cannot load or throws — or a crash) → **S9**, fail-closed.
    Assembling the inputs is **tested code** and the exit is **FLOOR**; running the line, substituting its two values
    and obeying the exit are **ADVISORY**. **The bound, restated at GATE 2:** it compares changed since `<base sha>`,
    never written by the build; it carries `/pharn-regress`'s closed exemptions; a plan that rewrites its own

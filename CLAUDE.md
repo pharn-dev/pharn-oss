@@ -709,12 +709,19 @@ node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 # check-regress.mjs now runs its CLI only under `import.meta.main`. `regress-scope-list-grammar`, found by this fix, is
 # CLOSED in the same release: /pharn-regress's partition phase calls partitionScope in-process over the same arrays, so a
 # name with surrounding spaces or a lone changed path spelled `--declared` can no longer pass falsely there
-# (stage-regress.test.mjs runs both through the real script, the comma-list CLI as the control). NAMED RESIDUAL,
+# (stage-regress.test.mjs runs both through the real script, the comma-list CLI as the control). One ordinary-looking name
+# moved there (round-2 re-review R3): git lists an untracked nested repository as `vendor/lib/`, a trailing slash the
+# CLI stripped, so a bare `vendor/lib` declaration now reads scope-escaped (stricter; `vendor/**` covers it), as it
+# always did here. NAMED RESIDUAL,
 # `regress-inside-echo-list`: the verdict call's `inside` echo (ADVISORY, read by no floor op) is still a comma list, so a
 # comma or newline changed path is still refused (`unrepresentable-path`, fail-closed). BOUNDS: changed-since-base, not written-by-the-build
 # (L17); a plan that rewrites its own `## Files` defeats it; a git-ignored path is outside it; it LEAVES NO RECORD (in
-# /pharn-loop nothing downstream re-checks it). Exit: 0 clean · 1 escaped · 2 inconclusive (closed reason_code; a crash
-# is caught as 2, never 1).
+# /pharn-loop nothing downstream re-checks it). THE ENTRY (round-2 re-review R2): check-quick-scope.mjs has NO static
+# import and loads the checker, pharn/floor/quick-scope-core.mjs, through import() — check-loop-fresh.mjs's 6.21.1
+# pattern — so a module that cannot load, a throw while checking, or a result outside the checker's contract exits 2
+# `crashed`, never 1. NOT CAUGHT, and stated: the entry file itself unloadable (a run from outside the project root, where
+# the pinned relative path names no file) is node's own exit 1 with no document; both callers stop on 1.
+# Exit: 0 clean · 1 escaped · 2 inconclusive (closed reason_code, `crashed` included).
 node pharn/floor/check-quick-scope.mjs --feature <name> --base <40-hex>
 
 # Check the SHAPE of a loop-record — the pharn/features/<name>/LOOP.md that /pharn-loop writes at every stop.

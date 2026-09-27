@@ -19,11 +19,14 @@ plain unified diff against `LIMITS.md`.
 `sh .dev/features/loop-quick-mode/proposed/apply.sh`, run from the repo root:
 
 1. Refuses on `main` (a trusted-doc commit belongs on the phase branch, merged normally).
-2. `git apply --check`, then `git apply` the patch.
-3. Re-runs, on the **applied bytes**: `shasum -a 256 -c human-only.sha256`, `pharn/floor/validate.mjs .` and
-   `.dev/floor/check-specified-markers.mjs .`. Any failure restores `LIMITS.md` from the **index**
-   (`git checkout -- LIMITS.md` — `HEAD`'s content unless you had staged edits to it) and commits nothing.
-4. On success, commits **only** `LIMITS.md`, with the message
+2. Refuses to **start** while `LIMITS.md` has any unstaged or staged change, and touches nothing when it does
+   (`stage-model-routing`'s guard, carried here by the round-2 re-review's R1). Commit or discard your own edits first:
+   step 4's failure path restores the file with `git checkout --`, and that must only ever undo this patch.
+3. `git apply --check`, then `git apply` the patch.
+4. Re-runs, on the **applied bytes**: `shasum -a 256 -c human-only.sha256`, `pharn/floor/validate.mjs .` and
+   `.dev/floor/check-specified-markers.mjs .`. Any failure restores `LIMITS.md` to `HEAD` (`git checkout -- LIMITS.md`
+   — step 2 guarantees there was nothing else in it to lose) and commits nothing.
+5. On success, commits **only** `LIMITS.md`, with the message
    `docs(trusted): /pharn-loop --quick in LIMITS.md (human-applied)`.
 
 It carries no reconcile checkpoint or re-anchor: a GATE-2 apply follows the last `/pharn-dev-verify`, so no
@@ -45,15 +48,23 @@ reconciliation epoch is open for it to disturb.
 
 ## When to apply
 
-**At GATE 2, after the last `/pharn-dev-verify`, before this phase merges into `main`.** The chain from
-`/pharn-dev-grill` through `/pharn-dev-verify` runs, and is designed to run, **green without this patch**: the only
-readers of `LIMITS.md`'s bytes are `validate.mjs` CHECK 5 (the file holds neither `rule_id:` nor `problem:`) and
-`check:markers` (every registered marker string is byte-identical after the edit, which the generator asserts in
-memory) — `PLAN.md`, "Chain sequencing", item 1.
+**The order, as the orchestrator set it at final prep (2026-09-27):**
 
-**The LIMITS applies are sequenced by the orchestrator (GATE 1, note D).** The sibling `stage-model-routing` patches
-`LIMITS.md §8`. This patch is applied only after whichever sibling reached GATE 2 first has merged. Before applying,
-regenerate against the post-merge tree:
+1. `stage-model-routing`'s `LIMITS.md §8` first. That is done: the maintainer applied it (`0344ff1`), and this
+   branch merged it (`6fca772`), so the live `LIMITS.md` here is 2.2's post-§8 file.
+2. This pair was regenerated against that file. The sums line is
+   `e7be1413b84f0198ced7e8f1dbc17b779d271a148e725b4b186685b7cd0bb5d7  LIMITS.md`. Its three hunks sit before §8, and
+   `git apply --check` is clean.
+3. Apply this patch after `stage-model-routing` lands on `main`, on the phase branch.
+4. The final `/pharn-dev-regress` and `/pharn-dev-verify` then run once over the applied tree. That is the
+   out-of-order case below: re-open the reconciliation epoch before them.
+
+The chain from `/pharn-dev-grill` through `/pharn-dev-verify` also runs, and is designed to run, **green without this
+patch**: the only readers of `LIMITS.md`'s bytes are `validate.mjs` CHECK 5 (the file holds neither `rule_id:` nor
+`problem:`) and `check:markers` (every registered marker string is byte-identical after the edit, which the generator
+asserts in memory) — `PLAN.md`, "Chain sequencing", item 1.
+
+**If `LIMITS.md` moves again before the apply**, regenerate against the live tree:
 
 ```sh
 node .dev/features/loop-quick-mode/handoff/make-patch.mjs
@@ -68,8 +79,9 @@ from an earlier copy.
 
 ## The out-of-order case
 
-If the patch is applied **before** a `/pharn-dev-verify` (a re-run after a fix, say), the applied `LIMITS.md` change
-lands inside an open reconciliation epoch and `check-bash-reconcile.mjs` would report it. Re-open the epoch on the
+If the patch is applied **before** a `/pharn-dev-verify` (the final-prep order above does exactly that, and so does a
+re-run after a fix), the applied `LIMITS.md` change lands inside an open reconciliation epoch and
+`check-bash-reconcile.mjs` would report it. Re-open the epoch on the
 plan's own scope before resuming — the setter first, then the anchor (the order is load-bearing: the anchor snapshots
 the live scope, L38):
 

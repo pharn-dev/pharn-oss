@@ -74,7 +74,8 @@
 // THE SCOPE RULE IS ALSO AN EXPORT (6.28.0, loop-quick-mode GATE 2, review F1). `partitionScope` is the rule `scope`
 // applies, as a pure function over ARRAYS; `runScope` parses its two comma lists and calls it, so the CLI's output is
 // unchanged. pharn/floor/check-quick-scope.mjs — the scope check `/pharn-ship --quick` and `/pharn-loop --quick` keep —
-// calls it with arrays built by code from NUL-separated git listings, so a path there never passes through this CLI's
+// calls it, through its checker quick-scope-core.mjs, with arrays built by code from NUL-separated git listings, so a
+// path there never passes through this CLI's
 // list grammar. That grammar is lossy for an attacker-nameable path, and stated rather than hidden: a comma or newline
 // splits one path into two, surrounding spaces are trimmed, and a lone changed path spelled `--declared` is found by
 // the flag scan before the real flag — each can turn an undeclared path into a declared or exempt one (a false pass).
@@ -227,7 +228,8 @@ function parseList(s) {
 }
 
 // --- strip a leading "./" and trailing slashes; trim. Repo-relative, forward-slash. ---
-// Exported for check-quick-scope.mjs, which applies it to the DECLARED patterns exactly as `parseList` does here —
+// Exported for quick-scope-core.mjs (check-quick-scope.mjs's checker) and stage-regress.mjs, which apply it to the
+// DECLARED patterns exactly as `parseList` does here —
 // never to a git path, which may legitimately begin or end with a space.
 export function normPath(p) {
   return String(p).trim().replace(/^\.\//, "").replace(/\/+$/, "");
@@ -292,7 +294,7 @@ function flag(args, name) {
 }
 
 // ---------------------------------------------------------------------------------------------------
-// THE SCOPE RULE — pure, over arrays (exported; `runScope` below and check-quick-scope.mjs both call it).
+// THE SCOPE RULE — pure, over arrays (exported; `runScope` below, quick-scope-core.mjs and stage-regress.mjs call it).
 // `inside` is compared EXACTLY as given and `declared` entries are glob patterns (see globMatch); each caller parses its
 // own input into those two arrays. Returns the undeclared paths split into the REPORTED exempt set and the escaped set,
 // plus the OUTSIDE gate inputs.
@@ -635,7 +637,8 @@ function main() {
 }
 
 // Swallow ONLY the emit sentinel; anything else is a real crash and must still end the process non-zero. The CLI runs
-// only when this file is the entry point (6.28.0): check-quick-scope.mjs imports `partitionScope` and runs nothing here.
+// only when this file is the entry point (6.28.0): quick-scope-core.mjs and stage-regress.mjs import `partitionScope`
+// and run nothing here.
 if (import.meta.main) {
   try {
     main();

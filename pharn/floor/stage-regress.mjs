@@ -411,8 +411,8 @@ function phaseBase(cfg) {
  *  PHASE 4 — partition: build the four inputs, apply `check-regress.mjs`'s scope rule to them.
  *  ---------------------------------------------------------------------------------------------- */
 // The declared and changed sets come from `scope-inputs.mjs` (6.28.0, loop-quick-mode GATE 2): the ONE owner this phase
-// and `check-quick-scope.mjs` — the quick modes' scope check — both call (L35). This phase keeps its own refusals and
-// every detail string, byte for byte.
+// and `quick-scope-core.mjs` — the checker behind the quick modes' scope check — both call (L35). This phase keeps its
+// own refusals and every detail string, byte for byte.
 function readPlanDeclared(cfg, planPath, specPath) {
   void specPath;
   const planText = readFileSync(planPath, "utf8");
@@ -466,10 +466,14 @@ function computeEvalPairs(cfg) {
 // sets into comma lists for `check-regress.mjs scope`, whose list grammar trims each name and scans argv for its flags:
 // an undeclared ` src/x.js` read as the declared `src/x.js`, and a lone changed path named `--declared` was taken for the
 // flag, so either passed the scope check falsely. Now `partitionScope` — the rule that CLI applies, and the call
-// `check-quick-scope.mjs` makes — reads the sets as ARRAYS, each path exactly as git printed it; the declared patterns get
-// `normPath`, as that CLI's `parseList` gives them. The document written to scope.json has the keys, the order and (for an
-// ordinary name) the bytes that CLI printed, so run-gates.mjs, the verdict phase and render-regression.mjs read it
-// unchanged. Only the changed paths still meet `assertRepresentable`: the verdict call echoes them as a comma list.
+// `quick-scope-core.mjs` makes — reads the sets as ARRAYS, each path exactly as git printed it; the declared patterns get
+// `normPath`, as that CLI's `parseList` gives them. The document written to scope.json has the keys and the order that
+// CLI printed, so run-gates.mjs, the verdict phase and render-regression.mjs read it unchanged, and its bytes are that
+// CLI's for every name but one kind. NAMED, the round-2 re-review's R3: git lists an untracked nested repository (a
+// directory holding its own `.git`) as `vendor/lib/`, with a trailing slash, which the CLI's `normPath` stripped. So
+// scope.json and REGRESSION.md now carry the slash, and a PLAN declaring the bare `vendor/lib` no longer covers it — it is
+// `scope-escaped`, stricter than before and what check-quick-scope.mjs already did; `vendor/**` or `vendor/lib/**`
+// covers it. Only the changed paths still meet `assertRepresentable`: the verdict call echoes them as a comma list.
 function phasePartition(cfg, planPath, specPath, base) {
   const declared = readPlanDeclared(cfg, planPath, specPath);
   const inside = computeInside(cfg, base);
