@@ -4,10 +4,24 @@
 // budget tracker at the exact boundary, the drain's three outcomes through the REAL runner, a one-owner pin over
 // both stage scripts, and the closure-parity test GRILL G3 demands — the regress suite's own fixture regex, run
 // transitively over `stage-regress.mjs`, must reach this module and every module it names.
+// Since 6.28.3 (stage-git-maxbuffer): gitSync over a real listing past node's 1 MiB default, gitFailureDetail live and
+// total, and two static closures — ★ GIT CEILING over every shipped floor module's git spawns, and ★ GIT-FAILED DETAIL
+// over the stage scripts' `git-failed` emissions. Each closure states its bounds in its own section, below.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, existsSync, realpathSync, copyFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  existsSync,
+  realpathSync,
+  copyFileSync,
+  readdirSync,
+} from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
@@ -25,6 +39,7 @@ import {
   removeIfPresent,
   atomicWrite,
   gitSync,
+  gitFailureDetail,
   nulList,
   makeBudget,
   drainGates,
@@ -292,6 +307,7 @@ const OWNED = [
   "removeIfPresent",
   "atomicWrite",
   "gitSync",
+  "gitFailureDetail",
   "nulList",
   "makeBudget",
   "drainGates",
@@ -300,7 +316,7 @@ const SCRIPTS = ["stage-regress.mjs", "stage-verify.mjs"];
 const definesRe = (name) => new RegExp(`(?:\\bfunction\\s+${name}\\s*\\(|\\b(?:const|let|var)\\s+${name}\\s*=)`);
 
 test("★ ONE OWNER — neither stage script defines a mechanic stage-runtime.mjs owns; both import it", () => {
-  assert.equal(OWNED.length, 14, "non-vacuity: the owned set is counted");
+  assert.equal(OWNED.length, 15, "non-vacuity: the owned set is counted");
   const runtime = readFileSync(join(HERE, "stage-runtime.mjs"), "utf8");
   for (const name of OWNED) assert.match(runtime, new RegExp(`export function ${name}\\(`), `stage-runtime.mjs must export ${name}`);
   for (const s of SCRIPTS) {
@@ -432,4 +448,300 @@ test("★ F5 — an unremovable earlier regression-report.json CRASHES stage-reg
   } finally {
     for (const d of dirs) rmSync(d, { recursive: true, force: true });
   }
+});
+
+// ── ★ THE GIT OUTPUT CEILING (stage-git-maxbuffer, 6.28.3) — a listing past node's 1 MiB default ─────────────────────
+// L41: the limit no hermetic fixture reached, so only production met it. This fixture really crosses it and the code
+// under test is the real gitSync — no injected buffer anywhere. The stage suites cross it through each stage script.
+const LISTING_MIN_BYTES = (1 << 20) + (1 << 18); // 1.25 MiB: past node's 1 MiB default, with room to spare
+
+/** Empty files three 250-byte directory levels deep: each path is 766 bytes, so ~1,700 files list past
+ *  LISTING_MIN_BYTES (bytes are what maxBuffer counts, not files) while an absolute path stays under darwin's 1,024-byte
+ *  PATH_MAX. Returns the repo-relative paths and the exact length of their `-z` listing (each path plus its NUL). */
+function bigTree(root) {
+  const dir = ["big", "a".repeat(250), "b".repeat(250), "c".repeat(250)].join("/");
+  mkdirSync(join(root, dir), { recursive: true });
+  const paths = [];
+  let bytes = 0;
+  for (let i = 0; bytes <= LISTING_MIN_BYTES; i++) {
+    const p = `${dir}/${String(i).padStart(5, "0")}.txt`;
+    writeFileSync(join(root, p), "");
+    paths.push(p);
+    bytes += Buffer.byteLength(p) + 1;
+  }
+  return { paths, bytes };
+}
+
+test("★ gitSync — a `-z` listing past node's 1 MiB default comes back whole; the same call at the default buffer is ENOBUFS (L40)", () => {
+  const dir = runnerRepo();
+  try {
+    const { paths, bytes } = bigTree(dir);
+    const args = ["ls-files", "-z", "--others", "--exclude-standard"];
+    assert.ok(bytes > 1 << 20, `anchor (L60): the fixture lists ${bytes} bytes, past the 1 MiB default`);
+    // THE ATTRIBUTION CONTROL (L40): gitSync's call before 6.28.3 — the same options, no ceiling — over the same fixture.
+    assert.throws(
+      () => execFileSync("git", args, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }),
+      (e) => e.code === "ENOBUFS",
+      "at node's default buffer the same listing fails ENOBUFS — the stop the review reproduced"
+    );
+    const r = inDir(dir, () => gitSync(args));
+    assert.equal(r.ok, true, r.detail);
+    assert.equal(Buffer.byteLength(r.stdout), bytes, "every byte of the listing");
+    assert.deepEqual(nulList(r.stdout).sort(), [...paths].sort(), "every path, as git printed it");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("gitFailureDetail — a spawn error names node's code; git's own failure keeps its message and gains its exit status", () => {
+  // Live ENOENT: no git on PATH. The control: that call's raw stderr, which the detail quoted before 6.28.3, is empty.
+  const saved = process.env.PATH;
+  let noGit;
+  try {
+    process.env.PATH = join(tmpdir(), "pharn-no-such-dir-for-git");
+    noGit = gitSync(["--version"]);
+  } finally {
+    process.env.PATH = saved;
+  }
+  assert.equal(noGit.ok, false);
+  assert.equal(noGit.stderr, "", "control: the stderr the old detail quoted is empty");
+  assert.equal(noGit.detail, "node error ENOENT");
+
+  // Live non-zero exits in a repo, with a message and without one (`--quiet`).
+  const dir = runnerRepo();
+  try {
+    const said = inDir(dir, () => gitSync(["rev-parse", "--verify", "no-such-ref"]));
+    assert.equal(said.ok, false);
+    assert.match(said.detail, /^fatal: .+ \(git exited 128\)$/);
+    const quiet = inDir(dir, () => gitSync(["rev-parse", "--verify", "--quiet", "no-such-ref"]));
+    assert.equal(quiet.ok, false);
+    assert.equal(quiet.detail, "git exited 1");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  // Shapes a live run here cannot produce cheaply: ENOBUFS (each stage suite produces it live, through a mutant), a
+  // signal, a Buffer stderr, and an error carrying none of the fields.
+  assert.equal(gitFailureDetail({ code: "ENOBUFS", stderr: "", status: 0 }), "node error ENOBUFS: git's output exceeded the read buffer");
+  assert.equal(gitFailureDetail({ status: null, signal: "SIGKILL", stderr: "" }), "git was killed by SIGKILL");
+  assert.equal(gitFailureDetail({ stderr: Buffer.from("fatal: x\n"), status: 2 }), "fatal: x (git exited 2)");
+  assert.equal(gitFailureDetail(new Error("plain")), "git failed with no exit status, signal or error code");
+});
+
+test("gitFailureDetail is TOTAL (L62) — hostile and odd shapes yield text, never a throw", () => {
+  const hostileJson = JSON.parse('{"toString":1}');
+  assert.throws(() => String(hostileJson), TypeError, "control: String() really throws on this parsed-JSON shape");
+  const trap = new Proxy(
+    {},
+    {
+      get() {
+        throw new Error("read trap");
+      },
+    }
+  );
+  assert.throws(() => trap.stderr, /read trap/, "control: the Proxy really throws on a read");
+  const shapes = [
+    undefined,
+    null,
+    0,
+    "text",
+    [],
+    hostileJson,
+    { code: hostileJson },
+    { stderr: hostileJson },
+    { signal: hostileJson },
+    { status: "128" },
+    Object.create(null),
+    trap,
+  ];
+  // The label is the shape's INDEX: describing the Proxy (even Object.prototype.toString) reads a trapped property.
+  shapes.forEach((v, i) => {
+    let out;
+    assert.doesNotThrow(() => {
+      out = gitFailureDetail(v);
+    }, `shape #${i}`);
+    assert.equal(typeof out, "string", `shape #${i}`);
+    assert.ok(out.length > 0, `shape #${i}: never empty`);
+  });
+  assert.equal(gitFailureDetail(trap), "git failed (its error could not be read)");
+  assert.equal(gitFailureDetail({ status: "128" }), "git failed with no exit status, signal or error code", "a string is no exit status");
+});
+
+// ── ★ GIT CEILING — every git spawn in a shipped floor module that can print a listing carries a maxBuffer ──────────
+// (stage-git-maxbuffer, GATE 1 Q2.) The discipline was followed by three listing calls and missed by two — gitSync and
+// render-review-assignments.mjs's merge-base diff — so it is held here rather than left to a comment (L20, L25).
+// THE RULE, closed over the corpus (L36): every non-test pharn/floor/*.mjs is scanned for a child_process call whose
+// first argument is the string `git`, the call's full text is read, and `maxBuffer` must appear in it unless its first
+// literal subcommand is in BOUNDED. A variable argv (gitSync, render-run-report.mjs's `git()`) counts as a listing.
+// THE ENUMERATION (L29, L34): the spawns found must equal GIT_SPAWNS file by file, so a new or removed spawn fails until
+// it is listed here in the same diff.
+// BOUNDS, stated where the check lives (GATE 1 Q2; GRILL G1, G2):
+//   • PRESENCE, not magnitude: `maxBuffer: 1024` passes. gitSync's real ceiling is pinned by the crossing test above.
+//   • Only the spelling it finds: a call named execFileSync, spawnSync, execSync, execFile, spawn or exec whose first
+//     argument is the literal `"git"`, `'git'` or a backquoted git. A git run through a variable command name, a shell
+//     string, child_process reached another way, or a wrapper script is invisible to it.
+//   • The exemption is by NAME: `rev-parse --all` or `merge-base --all` prints more than one SHA and would still pass.
+//   • Comments: a match whose line holds `//` before it, or starts with `*`, is skipped. A real spawn after a `//`
+//     inside a string on the same line would be skipped (a false GREEN); a spawn quoted inside a block comment whose
+//     lines do not start with `*` would be counted (a false RED, which the pinned map exposes).
+const GIT_SPAWN_RE = /\b(?:execFileSync|spawnSync|execSync|execFile|spawn|exec)\(\s*(["'`])git\1/g;
+const BOUNDED = new Set(["rev-parse", "merge-base"]);
+const GIT_SPAWNS = {
+  "check-bash-reconcile.mjs": ["diff"],
+  "reconcile-baseline.mjs": ["ls-files"],
+  "render-review-assignments.mjs": ["merge-base", "rev-parse", "diff"],
+  "render-run-report.mjs": [null],
+  "render-ship-briefing.mjs": ["rev-parse"],
+  "run-gates.mjs": ["rev-parse"],
+  "stage-runtime.mjs": [null],
+};
+
+/** The source text of the call named at `start`, through the `)` that closes its `(` — string literals and comments
+ *  skipped, so a `)` inside either does not close it. Null when it never closes. */
+function callText(src, start) {
+  let depth = 0;
+  for (let i = src.indexOf("(", start); i >= 0 && i < src.length; i++) {
+    const c = src[i];
+    if (c === '"' || c === "'" || c === "`") {
+      for (i++; i < src.length && src[i] !== c; i++) if (src[i] === "\\") i++;
+      continue;
+    }
+    if (c === "/" && src[i + 1] === "/") {
+      const end = src.indexOf("\n", i);
+      if (end === -1) return null;
+      i = end;
+      continue;
+    }
+    if (c === "/" && src[i + 1] === "*") {
+      const end = src.indexOf("*/", i + 2);
+      if (end === -1) return null;
+      i = end + 1;
+      continue;
+    }
+    if (c === "(") depth++;
+    else if (c === ")" && --depth === 0) return src.slice(start, i + 1);
+  }
+  return null;
+}
+
+/** A match on a comment line — `//` before it on its line, or a line starting with `*` — is no call (bounds above). */
+function onCommentLine(src, index) {
+  const before = src.slice(src.lastIndexOf("\n", index) + 1, index);
+  return before.includes("//") || /^\s*\*/.test(before);
+}
+
+/** Every git spawn in `sources` ({file: text}), with its call text and its first literal subcommand (null: variable). */
+function scanSpawns(sources) {
+  const out = [];
+  for (const [file, src] of Object.entries(sources)) {
+    for (const m of src.matchAll(GIT_SPAWN_RE)) {
+      if (onCommentLine(src, m.index)) continue;
+      const text = callText(src, m.index);
+      const sub = text === null ? null : (text.match(/^\w+\(\s*["'`]git["'`]\s*,\s*\[\s*["']([^"']+)["']/)?.[1] ?? null);
+      out.push({ file, sub, text });
+    }
+  }
+  return out;
+}
+
+const ceilingViolations = (spawns) => spawns.filter((s) => s.text === null || (!BOUNDED.has(s.sub) && !/\bmaxBuffer\b/.test(s.text)));
+
+function floorSources() {
+  const out = {};
+  for (const f of readdirSync(HERE).sort()) {
+    if (f.endsWith(".mjs") && !f.endsWith(".test.mjs")) out[f] = readFileSync(join(HERE, f), "utf8");
+  }
+  return out;
+}
+
+test("★ GIT CEILING — every git spawn in a shipped floor module is listed, and each that can print a listing carries a maxBuffer", () => {
+  const spawns = scanSpawns(floorSources());
+  const map = {};
+  for (const s of spawns) (map[s.file] ??= []).push(s.sub);
+  assert.deepEqual(map, GIT_SPAWNS, "the enumeration (L29): list a new or removed git spawn here in the same diff");
+  assert.equal(spawns.length, 9, "non-vacuity (L34): the nine spawns the sweep found");
+  assert.deepEqual(
+    ceilingViolations(spawns).map((s) => `${s.file}: ${s.text}`),
+    [],
+    "a git spawn that can print a listing runs at node's 1 MiB default"
+  );
+  assert.match(spawns.find((s) => s.file === "stage-runtime.mjs").text, /maxBuffer: GIT_MAX_BUFFER/, "gitSync carries the ceiling");
+});
+
+test("★ GIT CEILING discriminates — each property has a falsifier (L60)", () => {
+  const real = floorSources();
+  const without = (file, anchor) => {
+    assert.ok(real[file].includes(anchor), `mutation anchor not found in ${file} (L60): ${anchor}`);
+    return { ...real, [file]: real[file].replace(anchor, "") };
+  };
+  // (a) gitSync without its ceiling, (b) the review emitter's diff without its ceiling: each is flagged, alone.
+  assert.deepEqual(
+    ceilingViolations(scanSpawns(without("stage-runtime.mjs", ", maxBuffer: GIT_MAX_BUFFER"))).map((s) => s.file),
+    ["stage-runtime.mjs"]
+  );
+  assert.deepEqual(
+    ceilingViolations(scanSpawns(without("render-review-assignments.mjs", "      maxBuffer: 1 << 28,\n"))).map((s) => `${s.file}:${s.sub}`),
+    ["render-review-assignments.mjs:diff"]
+  );
+  // (c) synthetic sources: the rule by subcommand (and a variable argv), a `)` string and a comment inside a call, and
+  // the comment-line skip.
+  const synthetic = scanSpawns({
+    "a.mjs": 'execFileSync("git", ["ls-files"], { cwd });\n',
+    "b.mjs": 'spawnSync("git", ["rev-parse", "HEAD"]);\n',
+    "c.mjs": 'execFileSync("git", ["diff", ")"], {\n  // a ) and an apostrophe\'s in a comment\n  maxBuffer: 1,\n});\n',
+    "d.mjs": "execFileSync('git', args, {});\n",
+    "e.mjs": '// execFile("git", [x]) in a comment\n * spawn("git", ["ls-files"]) in a block comment line\n',
+  });
+  assert.deepEqual(
+    synthetic.map((s) => `${s.file}:${s.sub}`),
+    ["a.mjs:ls-files", "b.mjs:rev-parse", "c.mjs:diff", "d.mjs:null"],
+    "four calls found; e.mjs's two comment lines are none"
+  );
+  assert.deepEqual(
+    ceilingViolations(synthetic).map((s) => s.file),
+    ["a.mjs", "d.mjs"],
+    "a listing and a variable argv without a ceiling"
+  );
+  assert.match(
+    synthetic.find((s) => s.file === "c.mjs").text,
+    /maxBuffer: 1,\n\}\)$/,
+    "the `)` string and the comment did not close the call"
+  );
+});
+
+// ── ★ GIT-FAILED DETAIL — every `git-failed` emission quotes gitSync's failure cause, never raw stderr ─────────────────
+// (stage-git-maxbuffer.) Before 6.28.3 each quoted `.stderr`, which an ENOBUFS left empty, so the stop named no cause.
+// The enumeration is the ten emissions (L29), counted per module (L34). BOUND: a lexical scan — an emission is a call to
+// `emitUnusable(` or `inconclusive(` whose text holds the literal "git-failed"; one built any other way is not seen.
+const DETAIL_SITES = { "stage-regress.mjs": 8, "stage-verify.mjs": 1, "quick-scope-core.mjs": 1 };
+const EMIT_RE = /\b(?:emitUnusable|inconclusive)\(/g;
+
+function gitFailedCalls(src) {
+  const out = [];
+  for (const m of src.matchAll(EMIT_RE)) {
+    if (onCommentLine(src, m.index)) continue;
+    const text = callText(src, m.index);
+    if (text !== null && text.includes('"git-failed"')) out.push(text);
+  }
+  return out;
+}
+
+test("★ GIT-FAILED DETAIL — every git-failed emission quotes `.detail` and never `.stderr`", () => {
+  for (const [file, n] of Object.entries(DETAIL_SITES)) {
+    const calls = gitFailedCalls(readFileSync(join(HERE, file), "utf8"));
+    assert.equal(calls.length, n, `${file}: ${n} git-failed emission(s)`);
+    for (const c of calls) {
+      assert.match(c, /\.detail\b/, `${file}: ${c}`);
+      assert.doesNotMatch(c, /\.stderr\b/, `${file}: ${c}`);
+    }
+  }
+});
+
+test("★ GIT-FAILED DETAIL discriminates — a `.detail` swapped back to `.stderr` is caught (L60)", () => {
+  const src = readFileSync(join(HERE, "stage-verify.mjs"), "utf8");
+  const anchor = "dataText(ls.detail)";
+  assert.ok(src.includes(anchor), "mutation anchor not found in stage-verify.mjs (L60)");
+  const [call] = gitFailedCalls(src.replace(anchor, "dataText(ls.stderr)"));
+  assert.match(call, /\.stderr\b/);
+  assert.doesNotMatch(call, /\.detail\b/, "the mutant fails the rule the test above applies");
 });

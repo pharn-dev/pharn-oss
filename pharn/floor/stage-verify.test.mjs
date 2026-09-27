@@ -350,6 +350,67 @@ test("verdict INCONCLUSIVE — a PLAN whose ## Files holds only globs carries th
   });
 });
 
+// ── ★ A LISTING PAST 1 MiB (stage-git-maxbuffer, 6.28.3) ─────────────────────────────────────────────────────────────
+// Before 6.28.3 gitSync ran at node's 1 MiB default, so phasePairs' whole-repo listing stopped this script `git-failed`
+// with nothing after the colon on any repo listing more (L41: no fixture here was that big). The fixture below is that
+// big, the code is the real script, and two controls pin the cause (L40, L60): phasePairs' own call at node's default buffer is
+// ENOBUFS over this tree, and a mutant with ONLY gitSync's ceiling removed stops where the review saw it — now naming
+// ENOBUFS. The mutant runs from a floor copied OUTSIDE the fixture, so the fixture's committed floor and its reconcile
+// anchor stay exactly as the real run needs them.
+const CEILING_OPT = ", maxBuffer: GIT_MAX_BUFFER";
+
+/** Paths three 250-byte directory levels deep — 766 bytes each — until their `-z` listing passes 1.25 MiB. Nothing is
+ *  written: the fixture's `committed` map writes them before its base commit. */
+function bigPaths() {
+  const dir = ["big", "a".repeat(250), "b".repeat(250), "c".repeat(250)].join("/");
+  const paths = [];
+  let bytes = 0;
+  for (let i = 0; bytes <= (1 << 20) + (1 << 18); i++) {
+    const p = `${dir}/${String(i).padStart(5, "0")}.txt`;
+    paths.push(p);
+    bytes += Buffer.byteLength(p) + 1;
+  }
+  return { paths, bytes };
+}
+
+test("★ LISTING — a committed tree listing past 1 MiB reaches done/PASS; the mutant without gitSync's ceiling stops git-failed naming ENOBUFS", () => {
+  const { paths, bytes } = bigPaths();
+  assert.ok(bytes > 1 << 20, `anchor (L60): the tree alone lists ${bytes} bytes, past node's 1 MiB default`);
+  withFixture({ committed: Object.fromEntries(paths.map((p) => [p, ""])) }, ({ dir }) => {
+    // THE ATTRIBUTION CONTROL (L40): phasePairs' call before 6.28.3 — the same options, no ceiling — over this fixture.
+    assert.throws(
+      () =>
+        execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], {
+          cwd: dir,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+        }),
+      (e) => e.code === "ENOBUFS",
+      "at node's default buffer this listing fails ENOBUFS"
+    );
+    // THE MUTANT: the floor closure with only gitSync's ceiling removed, outside the fixture.
+    const mut = realpathSync(mkdtempSync(join(tmpdir(), "sv-mut-")));
+    try {
+      for (const m of FLOOR_MODULES) copyFileSync(join(HERE, m), join(mut, m));
+      writeFileSync(join(mut, "stage-runtime.mjs"), mutate(readFileSync(RUNTIME_SRC, "utf8"), CEILING_OPT, "", "stage-runtime.mjs"));
+      const m = checked(
+        spawnSync(process.execPath, [join(mut, "stage-verify.mjs"), ...fresh()], { cwd: dir, encoding: "utf8", env: CLEAN_ENV })
+      );
+      assert.equal(m.code, 2, m.raw);
+      assert.equal(m.doc.reason_code, "git-failed");
+      assert.match(m.doc.detail, /^git ls-files -z --cached --others --exclude-standard failed: node error ENOBUFS: /);
+      assert.deepEqual(gateLogs(dir), [], "the mutant stops at phasePairs, before any gate");
+    } finally {
+      rmSync(mut, { recursive: true, force: true });
+    }
+    const r = runCli(dir, fresh());
+    assert.equal(r.code, 0, r.raw);
+    assert.equal(r.doc.status, "done");
+    assert.equal(r.doc.verdict, "PASS");
+    assert.equal(readReport(dir).verdict, "PASS");
+  });
+});
+
 // ── EVAL PAIRS (EVAL_PAIR_RULE, through the real runner) ────────────────────────────────────────────
 test("eval pairs — a declared capability's pair (tracked or untracked) becomes a structural: gate; nothing else does", () => {
   const pair = (cap, name) => ({ [`caps/${cap}/evals/expected/${name}.json`]: "[]\n", [`caps/${cap}/findings.json`]: "[]\n" });
