@@ -10,7 +10,7 @@ lessons to fetch; canon stays the source of truth and the floor's verification t
 applied, without fetching its full `## L<n>` entry from canon, is the P0 disease. "The index was
 consulted" never means "the relevant lessons were read".
 
-64 lessons · 64 tagged · 0 malformed · 0 untagged · ~46934 tokens total
+65 lessons · 65 tagged · 0 malformed · 0 untagged · ~47557 tokens total
 
 Columns: `id | type | concepts | title | promoted | ~tokens`. `-` is rendered in THREE columns
 and does NOT mean the same thing in each — read it against the column it sits in. In `type`/`concepts`:
@@ -88,4 +88,5 @@ L61 | tooling  | style-gates,whole-repo-scope,config-globs,presence-vs-closure,l
 L62 | floor    | refusal-path,untrusted-input,total-function,crash-as-verdict,fail-closed                       | A value quoted into a refusal reason must go through a function that cannot throw — `String(v)` throws on parsed JSON, and a refusal that throws is read as a verdict | 2026-09-25 | ~703
 L63 | floor    | temporal-state,referent-binding,append-only,derivation-change,lesson-recurrence                | A change to how a recorded value is DERIVED can move it into the still-growing part of its referent — L58 recurred through a checker the change left untouched | 2026-09-26 | ~992
 L64 | contract | universal-quantifier,doc-drift,guarantee-audit,restatement                                     | A bound's RESTATEMENT re-derives its quantifier — L37 recurred in the release note and a sibling contract, while the primary sentences it was applied to held | 2026-09-27 | ~803
+L65 | floor    | pinned-record,writes-scope,agreement,self-certification                                        | A pin is only as strong as the scope around its record — a stage allowed to write the record a later gate compares it against certifies itself | 2026-09-27 | ~623
 ```

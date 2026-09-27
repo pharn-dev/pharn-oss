@@ -5,7 +5,9 @@
 // world as its non-vacuity control; `no-files` is the one kind that cannot be isolated (a mapping line whose file is
 // not listed is also `unlisted-file`), and its test says so. The last test asserts that every KINDS member was
 // reached (L36). The ★ HOOK test runs the REAL writes-scope setter and pre-write guard: a build scoped by PLAN.md is
-// denied a Write to an AC test file, which is the property the `in-plan-files` kind exists to protect.
+// denied a Write to an AC test file, which is the property the `in-plan-files` kind exists to protect. 6.29.0 adds two
+// more: every measured PLAN spelling that opens the lock, AC-TESTS.md or a script-named reporter to the build is RED,
+// and the composed proof that `package.json` can stay an advisory NOTE once the lock is out of the build's scope.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -14,7 +16,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { KINDS, LEVELS, MAPPING_RE, badPath, checkMapping, mappingOf } from "./check-ac-tests.mjs";
+import { KINDS, LEVELS, LOCK_NAME, MAPPING_RE, badPath, checkMapping, mappingOf, ownArtifacts } from "./check-ac-tests.mjs";
+import { LOCK_NAME as LOCK_SCRIPT_NAME } from "./ac-tests-lock.mjs";
 import { specAcceptanceCriteria, specVerdict } from "./spec-template-core.mjs";
 import { acRowsOf, scopeKey, scopedPath } from "./ac-tests-core.mjs";
 
@@ -91,8 +94,9 @@ function planText(files = ["src/demo.js"]) {
   ].join("\n");
 }
 
-/** A project root holding the feature; `others` is `{feature: AC-TESTS.md text}` for other feature dirs. */
-function world({ spec = SPEC, ac = acTests(), plan = planText(), others = {} } = {}) {
+/** A project root holding the feature; `others` is `{feature: AC-TESTS.md text}` for other feature dirs; `files` is
+ *  `{path: body}` for anything else at the root (a package.json, a reporter). */
+function world({ spec = SPEC, ac = acTests(), plan = planText(), others = {}, files = {} } = {}) {
   const root = mkdtempSync(join(tmpdir(), "act-"));
   const dir = join(root, "pharn", "features", NAME);
   mkdirSync(dir, { recursive: true });
@@ -103,8 +107,16 @@ function world({ spec = SPEC, ac = acTests(), plan = planText(), others = {} } =
     mkdirSync(join(root, "pharn", "features", f), { recursive: true });
     writeFileSync(join(root, "pharn", "features", f, "AC-TESTS.md"), text);
   }
+  for (const [f, body] of Object.entries(files)) {
+    mkdirSync(dirname(join(root, f)), { recursive: true });
+    writeFileSync(join(root, f), body);
+  }
   return root;
 }
+/** THIS feature's AC artifacts as main() computes them for a run from the project root. */
+const ART = [`pharn/features/${NAME}/AC-TESTS.md`, `pharn/features/${NAME}/${LOCK_NAME}`];
+/** checkMapping with its two required 6.29.0 inputs defaulted to this world's (no script names a file). */
+const cm = (input) => checkMapping({ acArtifacts: ART, scriptFiles: [], ...input });
 function run(root, extra = []) {
   const f = (n) => `pharn/features/${NAME}/${n}`;
   const r = spawnSync(process.execPath, [CHECK, f("AC-TESTS.md"), f("SPEC.md"), f("PLAN.md"), ...extra], { cwd: root, encoding: "utf8" });
@@ -550,7 +562,7 @@ test("no-files — no ## Files list (it cannot be isolated: every mapped file is
 });
 
 test("a missing ## Mapping section is malformed-line; a SPEC whose AC section is duplicated is refused, never read as 'nothing to map'", () => {
-  const noMap = checkMapping({
+  const noMap = cm({
     acTestsText: acTests().replace(/## Mapping[\s\S]*$/, ""),
     specText: SPEC,
     planText: planText(),
@@ -558,7 +570,7 @@ test("a missing ## Mapping section is malformed-line; a SPEC whose AC section is
   });
   assert.ok(noMap.findings.some((f) => f.kind === "malformed-line"));
   const dup = SPEC + "\n## Acceptance Criteria\n\n- **AC-3** Given a When b Then c\n  - verify: unit\n";
-  const r = checkMapping({ acTestsText: acTests(), specText: dup, planText: planText(), others: [] });
+  const r = cm({ acTestsText: acTests(), specText: dup, planText: planText(), others: [] });
   assert.ok(r.findings.some((f) => f.kind === "missing-ac" && /absent, duplicated or empty/.test(f.detail)));
 });
 
@@ -640,7 +652,7 @@ test("test-infra-in-plan — a root runner config in PLAN.md `## Files` (the rev
 
 test("test-infra-in-plan is NOT raised for an entry that cannot reach the root config: nested, `./`-led, glob, placeholder", () => {
   for (const entry of ["web/vite.config.ts", "./vite.config.ts", "*.config.ts", "<runner config>", "tsconfig.json"]) {
-    const r = checkMapping({ acTestsText: acTests(), specText: SPEC, planText: planText(["src/demo.js", entry]), others: [] });
+    const r = cm({ acTestsText: acTests(), specText: SPEC, planText: planText(["src/demo.js", entry]), others: [] });
     assert.deepEqual(infraKinds(r), [], JSON.stringify(entry));
     assert.deepEqual(r.notes, [], JSON.stringify(entry));
   }
@@ -676,7 +688,7 @@ test("NOTE, never a RED — package.json / pharn.config.json in PLAN.md stay exi
 
 test("a bootstrap (`spec_kind: test-infra`) SPEC is the REMEDY, so its PLAN may name the config: checkMapping never reaches the check", () => {
   const spec = specText({ kind: "test-infra" });
-  const r = checkMapping({ acTestsText: acTests(), specText: spec, planText: planText(["vite.config.ts", "package.json"]), others: [] });
+  const r = cm({ acTestsText: acTests(), specText: spec, planText: planText(["vite.config.ts", "package.json"]), others: [] });
   assert.deepEqual(infraKinds(r), ["spec-kind"], "only the mapping-for-a-bootstrap RED, never test-infra-in-plan");
   assert.deepEqual(r.notes, []);
 });
@@ -716,15 +728,236 @@ test("★ HOOK — the RED is load-bearing: over the six probed spellings it fir
         `${entry}: the build's Write to a root config spelling (allowed: ${JSON.stringify(writable)})`
       );
       assert.equal(
-        infraKinds(
-          checkMapping({ acTestsText: acTests(), specText: SPEC, planText: planText(["src/demo.js", entry]), others: [] })
-        ).includes("test-infra-in-plan"),
+        infraKinds(cm({ acTestsText: acTests(), specText: SPEC, planText: planText(["src/demo.js", entry]), others: [] })).includes(
+          "test-infra-in-plan"
+        ),
         opens,
         `${entry}: the kind fires exactly when the build could write a root config`
       );
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  }
+});
+
+// ── 6.29.0 (H2): the build may be scoped neither to what it is judged by, nor to what the level gates run ───────────
+
+const LOCK = `pharn/features/${NAME}/${LOCK_NAME}`;
+const MAPPING = `pharn/features/${NAME}/AC-TESTS.md`;
+const REPORTER = "tools/pharn-reporter.mjs";
+/** A project whose `test` gate names a pharn-json reporter (the review's wB), with a chained script naming another file. */
+const REPORTER_FILES = {
+  "package.json": JSON.stringify({
+    scripts: { test: `vitest run --reporter=./${REPORTER} && npm run test:setup`, "test:setup": "node tools/setup.mjs", lint: "eslint ." },
+  }),
+  [REPORTER]: "export default class Reporter {}\n",
+};
+
+test("ac-artifact-in-plan — THIS feature's lock or AC-TESTS.md in PLAN.md `## Files` (the review's H2: the build re-pinned its own change)", () => {
+  const r = onlyKind({ plan: planText(["src/demo.js", LOCK]) }, "ac-artifact-in-plan");
+  assert.match(r.out, /names "pharn\/features\/demo\/AC-TESTS\.lock\.json", this feature's "AC-TESTS\.lock\.json"/);
+  assert.match(r.out, /the build may never be scoped to it; drop the entry/);
+  onlyKind({ plan: planText(["src/demo.js", MAPPING]) }, "ac-artifact-in-plan");
+  // every spelling the setter scopes to either file is RED — the fold over-reports a case variant the guard would deny
+  for (const spelling of [`${LOCK} (re-pinned)`, `pharn/features/Demo/ac-tests.lock.json`, `${MAPPING} (mapping)`]) {
+    onlyKind({ plan: planText(["src/demo.js", spelling]) }, "ac-artifact-in-plan");
+  }
+  // CONTROLS: spellings that open nothing to the build, and another feature's pair (this feature's pair only, P7)
+  for (const entry of [
+    `./${LOCK}`,
+    "pharn/features/*/AC-TESTS.lock.json",
+    "pharn/features/other/AC-TESTS.lock.json",
+    "pharn/features/other/AC-TESTS.md",
+  ]) {
+    const g = cm({ acTestsText: acTests(), specText: SPEC, planText: planText(["src/demo.js", entry]), others: [] });
+    assert.deepEqual(infraKinds(g), [], JSON.stringify(entry));
+  }
+});
+
+test("ac-artifact-in-plan: the pair is spelled relative to the invoking directory — the root the setter resolves entries against", () => {
+  const root = world();
+  try {
+    assert.deepEqual(ownArtifacts(MAPPING, root), [MAPPING, LOCK]);
+    assert.deepEqual(ownArtifacts(`./${MAPPING}`, root), [MAPPING, LOCK], "a ./-led argv");
+    assert.deepEqual(ownArtifacts(join(root, MAPPING), root), [MAPPING, LOCK], "an absolute argv inside the root");
+    assert.deepEqual(ownArtifacts("AC-TESTS.md", join(root, "pharn", "features", NAME)), ["AC-TESTS.md", LOCK_NAME]);
+    assert.deepEqual(
+      ownArtifacts(`features/${NAME}/AC-TESTS.md`, join(root, "pharn")),
+      [`features/${NAME}/AC-TESTS.md`, `features/${NAME}/${LOCK_NAME}`],
+      "from a subdirectory, as that directory spells it"
+    );
+    assert.ok(
+      ownArtifacts(join(root, MAPPING), join(root, "..")).every((p) => !p.startsWith("..")),
+      "from a parent directory"
+    );
+    mkdirSync(join(root, "elsewhere"));
+    assert.deepEqual(
+      ownArtifacts(join(root, MAPPING), join(root, "elsewhere")),
+      [`../${MAPPING}`, `../${LOCK}`],
+      "a mapping outside the invoking directory: `..`-led, which no setter scope entry opens"
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("✧ LOCK_NAME parity: check-ac-tests.mjs spells the lock exactly as ac-tests-lock.mjs does, without importing it", () => {
+  assert.equal(LOCK_NAME, LOCK_SCRIPT_NAME);
+  assert.doesNotMatch(readFileSync(CHECK, "utf8"), /from "\.\/ac-tests-lock\.mjs"/, "the mapping checker's load graph stays small");
+});
+
+test("checkMapping's 6.29.0 inputs are REQUIRED (L41): an omitted one would silently switch its RED off", () => {
+  const base = { acTestsText: acTests(), specText: SPEC, planText: planText(), others: [] };
+  assert.throws(() => checkMapping({ ...base, scriptFiles: [] }), /acArtifacts/);
+  assert.throws(() => checkMapping({ ...base, acArtifacts: ART }), /scriptFiles/);
+  assert.throws(() => checkMapping({ ...base, acArtifacts: "x", scriptFiles: [] }), /acArtifacts/);
+  assert.throws(() => checkMapping({ ...base, acArtifacts: ART, scriptFiles: [1] }), /scriptFiles/);
+  assert.deepEqual(checkMapping({ ...base, acArtifacts: ART, scriptFiles: [] }).findings, [], "control");
+});
+
+test("test-infra-in-plan — a file a level gate's script NAMES (the review's wB: the build wrote the reporter), absent ones too", () => {
+  const r = onlyKind({ plan: planText(["src/demo.js", REPORTER]), files: REPORTER_FILES }, "test-infra-in-plan");
+  assert.match(r.out, /names "tools\/pharn-reporter\.mjs", a file a level gate's script names \("tools\/pharn-reporter\.mjs"\)/);
+  assert.match(r.out, /`spec_kind: test-infra` increment first \(via \/pharn-ship\)/, "the remedy is named");
+  for (const spelling of [`${REPORTER} (new hook)`, "Tools/Pharn-Reporter.mjs", "tools/setup.mjs"]) {
+    onlyKind({ plan: planText(["src/demo.js", spelling]), files: REPORTER_FILES }, "test-infra-in-plan");
+  }
+  // CONTROLS: a `./`-led spelling opens nothing; a file no level gate's script reaches; the same plan with no package.json
+  for (const [entry, files] of [
+    [`./${REPORTER}`, REPORTER_FILES],
+    ["tools/other.mjs", REPORTER_FILES],
+    [REPORTER, {}],
+  ]) {
+    const root = world({ plan: planText(["src/demo.js", entry]), files });
+    try {
+      const g = run(root);
+      assert.equal(g.code, 0, `${entry}: ${g.out}`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("test-infra-in-plan — a root package-manager config (.npmrc: its script-shell runs every `npm run <gate>`)", () => {
+  const r = onlyKind({ plan: planText(["src/demo.js", ".npmrc"]) }, "test-infra-in-plan");
+  assert.match(r.out, /names "\.npmrc", a root package-manager config \/pharn-test pins before the build/);
+  onlyKind({ plan: planText(["src/demo.js", ".yarnrc.yml"]) }, "test-infra-in-plan");
+});
+
+test("a tree the pin cannot read is a NOTE at plan time, never a silent GREEN — /pharn-test's lock refuses the same tree", () => {
+  const root = world({ plan: planText(["src/demo.js", REPORTER]), files: { "package.json": "{ not json" } });
+  try {
+    const r = run(root);
+    assert.equal(r.code, 0, r.out);
+    assert.match(r.out, /^NOTE — the files the level gates' scripts name could not be read \(package\.json is not valid JSON/m);
+    assert.match(r.out, /none was checked against PLAN\.md `## Files`; \/pharn-test's lock refuses the same tree/);
+    // the GREEN line claims only what was checked (P0): it says the named files were NOT checked, never "none named"
+    assert.match(r.out, /^GREEN — .*\(the files a level gate's script names NOT checked — see the NOTE\)/m);
+    assert.doesNotMatch(r.out, /no file a level gate's script names/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+  // control: over a readable tree the GREEN line does make the claim
+  const ok = world({ files: REPORTER_FILES });
+  try {
+    const g = run(ok);
+    assert.equal(g.code, 0, g.out);
+    assert.match(g.out, /^GREEN — .*no file a level gate's script names, and neither this feature's AC-TESTS\.md nor its lock/m);
+  } finally {
+    rmSync(ok, { recursive: true, force: true });
+  }
+});
+
+/** Through the REAL setter and write guard: set the build's scope from PLAN.md, then ask which targets it may write. */
+function buildScopeAllows(root, targets) {
+  execFileSync("git", ["init", "-q", "."], { cwd: root });
+  const env = { ...process.env, CLAUDE_PROJECT_DIR: root };
+  assert.equal(spawnSync(process.execPath, [SETTER, "--from-plan", `pharn/features/${NAME}/PLAN.md`], { cwd: root, env }).status, 0);
+  return targets.filter(
+    (target) =>
+      spawnSync(process.execPath, [ENFORCER], {
+        cwd: root,
+        env,
+        input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: join(root, target) } }),
+        encoding: "utf8",
+      }).status === 0
+  );
+}
+
+// The PLAN spellings the plan-time probe measured (PLAN.md A1/A2), through the REAL setter and write guard, with the
+// files ON DISK as they are at build time (the lock and the reporter exist). `opens` is the MEASURED result: only the
+// exact and the annotated spellings open the file — the guard judges an existing file at its on-disk spelling, so a
+// case variant opens nothing on APFS either. The folded RED therefore over-reports those (fail-closed); what the test
+// holds is "every spelling that opens is RED", plus the table itself (L37 — the probed set, never every spelling).
+const ARTIFACT_HOOK_ROWS = [
+  [LOCK, true, true],
+  [`${LOCK} (pinned)`, true, true],
+  ["pharn/features/demo/ac-tests.lock.json", false, true],
+  ["pharn/features/Demo/AC-TESTS.lock.json", false, true],
+  [`./${LOCK}`, false, false],
+  ["pharn/features/*/AC-TESTS.lock.json", false, false],
+  [MAPPING, true, true],
+  [REPORTER, true, true],
+  [`${REPORTER} (x)`, true, true],
+  ["Tools/pharn-reporter.mjs", false, true],
+  ["tools/Pharn-Reporter.mjs", false, true],
+  [`./${REPORTER}`, false, false],
+];
+
+test("★ HOOK — every PLAN spelling that opens the lock, AC-TESTS.md or a script-named reporter to the build is RED (measured table)", () => {
+  for (const [entry, opens, isRed] of ARTIFACT_HOOK_ROWS) {
+    const root = world({ plan: planText(["src/demo.js", entry]), files: { ...REPORTER_FILES, [LOCK]: "{}\n" } });
+    try {
+      const writable = buildScopeAllows(root, [
+        LOCK,
+        MAPPING,
+        REPORTER,
+        "pharn/features/demo/ac-tests.lock.json",
+        "Tools/pharn-reporter.mjs",
+      ]);
+      assert.equal(writable.length > 0, opens, `${entry}: measured — the build may write ${JSON.stringify(writable)}`);
+      const r = run(root);
+      const red = r.kinds.includes("ac-artifact-in-plan") || r.kinds.includes("test-infra-in-plan");
+      assert.equal(red, isRed, `${entry}: ${r.out}`);
+      if (opens) assert.ok(red, `${entry} opens a file the build is judged by, and is NOT RED`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("★ HOOK composed — package.json stays an advisory NOTE: with the lock out of scope, a script edit the build may make is `--check` RED", () => {
+  const LOCK_CLI = join(HERE, "ac-tests-lock.mjs");
+  const files = {
+    "package.json": JSON.stringify({ scripts: { test: "vitest run" } }),
+    [UNIT]: 'test("AC-1: x", () => {});\n',
+    [E2E]: 'test("AC-2: y", () => {});\n',
+  };
+  // a GREEN plan naming package.json: exit 0 with its NOTE
+  let root = world({ plan: planText(["src/demo.js", "package.json"]), files });
+  try {
+    const g = run(root);
+    assert.equal(g.code, 0, g.out);
+    assert.match(g.out, /^NOTE — PLAN\.md `## Files` names "package\.json"/m);
+    const w = spawnSync(process.execPath, [LOCK_CLI, "--write", NAME], { cwd: root, encoding: "utf8" });
+    assert.equal(w.status, 0, w.stdout);
+    // the build's scope: package.json writable, the lock and AC-TESTS.md not
+    assert.deepEqual(buildScopeAllows(root, ["package.json", LOCK, MAPPING]), ["package.json"]);
+    // the build edits the test script (in scope) — the pin, unwritable to it, names the change
+    writeFileSync(join(root, "package.json"), JSON.stringify({ scripts: { test: "vitest run --passWithNoTests" } }));
+    const c = spawnSync(process.execPath, [LOCK_CLI, "--check", NAME], { cwd: root, encoding: "utf8" });
+    assert.equal(c.status, 1, c.stdout);
+    assert.match(c.stdout, /test infrastructure changed — gate test: its package\.json script changed/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+  // CONTROL: the same plan naming the lock too — the checker REDs it, and the guard WOULD have let the build write it
+  root = world({ plan: planText(["src/demo.js", "package.json", LOCK]), files: { ...files, [LOCK]: "{}\n" } });
+  try {
+    assert.deepEqual(run(root).kinds, ["ac-artifact-in-plan"]);
+    assert.deepEqual(buildScopeAllows(root, ["package.json", LOCK]), ["package.json", LOCK]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 
@@ -758,7 +991,7 @@ const mapRows = (unitCell) => [`- AC-1 | unit | \`${unitCell}\` | src/demo.js#re
 
 test("6.20.5: a mapping cell that differs from its `## Files` entry only by case is unlisted-file, naming the entry to copy", () => {
   const cell = "tests/ac/Demo.unit.test.js";
-  const r = checkMapping({ acTestsText: acTests({ mapping: mapRows(cell) }), specText: SPEC, planText: planText(), others: [] });
+  const r = cm({ acTestsText: acTests({ mapping: mapRows(cell) }), specText: SPEC, planText: planText(), others: [] });
   assert.deepEqual(kindsOf(r), ["unlisted-file", "unmapped-file"]);
   assert.match(
     r.findings.find((f) => f.kind === "unlisted-file").detail,
@@ -767,7 +1000,7 @@ test("6.20.5: a mapping cell that differs from its `## Files` entry only by case
   // Why it matters: the consumers read the cell VERBATIM, so this cell could never match the file the setter scoped.
   assert.equal(acRowsOf(acTests({ mapping: mapRows(cell) })).rows[0].file, cell);
   // Control: the exact spelling is GREEN.
-  assert.deepEqual(kindsOf(checkMapping({ acTestsText: acTests(), specText: SPEC, planText: planText(), others: [] })), []);
+  assert.deepEqual(kindsOf(cm({ acTestsText: acTests(), specText: SPEC, planText: planText(), others: [] })), []);
 });
 
 test("6.20.5: a mapping cell with whitespace at its edge is malformed-line, and reaches no consumer", () => {
@@ -776,7 +1009,7 @@ test("6.20.5: a mapping cell with whitespace at its edge is malformed-line, and 
   assert.doesNotMatch(`- AC-1 | unit | \` ${UNIT}\` | x`, MAPPING_RE, "a leading one (refused before 6.20.5 too)");
   assert.match(`- AC-1 | unit | \`${UNIT}\` | x`, MAPPING_RE, "control");
   assert.match("- AC-1 | unit | `a` | x", MAPPING_RE, "a one-character path still matches");
-  assert.ok(kindsOf(checkMapping({ acTestsText: text, specText: SPEC, planText: planText(), others: [] })).includes("malformed-line"));
+  assert.ok(kindsOf(cm({ acTestsText: text, specText: SPEC, planText: planText(), others: [] })).includes("malformed-line"));
   assert.equal(acRowsOf(text).ok, false, "run-gates / red-run-core / the AC gate refuse it too");
 });
 
@@ -795,11 +1028,11 @@ test("6.20.5: NFD, ſ and case spellings of an AC test file are in-plan-files, a
   const nfcFile = "tests/ac/café.unit.test.js";
   const nfdFile = "tests/ac/café.unit.test.js";
   const ac = acTests({ files: [nfcFile, E2E], mapping: mapRows(nfcFile) });
-  assert.deepEqual(kindsOf(checkMapping({ acTestsText: ac, specText: SPEC, planText: planText(), others: [] })), [], "control: GREEN");
+  assert.deepEqual(kindsOf(cm({ acTestsText: ac, specText: SPEC, planText: planText(), others: [] })), [], "control: GREEN");
   for (const spelling of [nfdFile, "teſts/ac/café.unit.test.js", "Tests/AC/CAFÉ.unit.test.js"]) {
-    const inPlan = checkMapping({ acTestsText: ac, specText: SPEC, planText: planText(["src/demo.js", spelling]), others: [] });
+    const inPlan = cm({ acTestsText: ac, specText: SPEC, planText: planText(["src/demo.js", spelling]), others: [] });
     assert.deepEqual(kindsOf(inPlan), ["in-plan-files"], `PLAN.md naming ${JSON.stringify(spelling)} would scope the build to the AC test`);
-    const elsewhere = checkMapping({
+    const elsewhere = cm({
       acTestsText: ac,
       specText: SPEC,
       planText: planText(),

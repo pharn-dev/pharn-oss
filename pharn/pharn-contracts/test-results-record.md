@@ -22,7 +22,8 @@ log output.
 demonstrable on any project. In 6.15.0 no stage read the record. Since 6.18.0 `/pharn-test`'s red run reads it
 (`check-red-run.mjs`, `ac-tests.md`), where a refused record is a RED by its own reason; since 6.20.0 `/pharn-verify`'s
 AC gate reads it too (`check-verify.mjs --ac-gate`, `ac-tests.md` "The AC gate"), so a verify verdict computed with
-that flag depends on the record — a refused one is `INCONCLUSIVE` over otherwise-green gates. The regress verdict,
+that flag depends on the record — a refused one is `INCONCLUSIVE` over otherwise-green gates, and since 6.29.0 so is
+an AC whose mapped file holds an anomaly. The regress verdict,
 and a verify verdict computed without the flag, are unchanged for every stamp the runner writes; what also changed
 is that a stamp carrying a malformed `results_sha256` is refused (`gate-run-record.md`, "Per-test results"), and the
 runner refuses to run a gate whose results path it cannot clear.
@@ -65,7 +66,8 @@ Three things to know about the Jest format:
   script (README, "Per-test results"). That `${…:+…}` form needs a POSIX shell.
 - **File arguments are patterns.** Jest reads the file arguments PHARN passes (`--stage ac-test` hands each gate its
   mapped files) as path patterns, not exact paths. So a similarly named test file can run too, and its tests enter
-  the record, where a flaky or duplicate one voids it. `--runTestsByPath` is Jest's exact-path mode.
+  the record, where a flaky or duplicate one is an anomaly (below) — reported, and deciding an AC only if it sits in a
+  file that AC maps. `--runTestsByPath` is Jest's exact-path mode.
 - **`invocations` is required.** Both measured versions write it on every test; a report without it is refused.
 
 Two neutral formats were weighed and not chosen (measured 2026-09-25):
@@ -121,6 +123,15 @@ Both behaviours are runner code pinned by tests, not a floor primitive.
       "title": "AC-2: sums line items",
       "status": "passed"
     }
+  ],
+  "anomalies": [
+    {
+      "id": "tests/other.test.js::handles 1",
+      "file": "tests/other.test.js",
+      "title": "handles 1",
+      "reason_code": "duplicate-test-id",
+      "reason": "2 tests share the id \"tests/other.test.js::handles 1\" — identity is ambiguous"
+    }
   ]
 }
 ```
@@ -147,7 +158,8 @@ or a refusal `{ "ok": false, "reason_code": "<member of RECORD_REASONS>", "reaso
 | `playwright-json` | `expected` with `expectedStatus: passed` | `unexpected` | `skipped`                    |
 | `pharn-json`      | `passed`                                 | `failed`     | `skipped`                    |
 
-Anything else is `unknown-status`, including a flaky test or an expected failure that the report marks:
+Anything else is an `unknown-status` ANOMALY (below), including a flaky test or an expected failure that the report
+marks:
 
 - **Playwright** — `flaky` (a pass only on a retry), and an expected failure (`test.fail()`, reported
   `expected` with `expectedStatus: failed`).
@@ -156,9 +168,10 @@ Anything else is `unknown-status`, including a flaky test or an expected failure
 
 Neither is a plain pass nor a plain fail. A `test.failing` whose body passed is reported `failed`, and is a failed
 test, as Playwright's `unexpected` is. A Jest report must carry `invocations` on every test, as both measured
-versions do; a report without it is `results-malformed`, whatever produced it.
+versions do; a report without it is `results-malformed`, whatever produced it — a malformed field refuses the
+DOCUMENT whatever the test's status.
 
-**What a report does not mark, it cannot refuse.** These were measured on real runs, and each is pinned by a test
+**What a report does not mark, it cannot flag.** These were measured on real runs, and each is pinned by a test
 over its capture:
 
 - vitest 5.0.1 reports `test.fails` and a pass on retry as a plain `passed`;
@@ -171,7 +184,15 @@ plain pass.
   (typically a file that could not be imported), each entry of Playwright's top-level `errors[]`, and
   `pharn-json`'s own `suite_errors`. Their messages are not read.
 - **`tests`** is sorted by `id`. It may be **empty**: an `ok` record with zero tests is a run that ran none, and
-  a consumer that needs tests must check for them itself.
+  a consumer that needs tests must check for them itself. `counts` range over `tests` alone.
+- **`anomalies`** (6.29.0) is sorted by `id`: every test whose status the report does not give plainly
+  (`unknown-status`, with the adapter's own cause as `reason`), and ONE `duplicate-test-id` entry per id two or more
+  tests share — whatever their statuses, since which status belongs to the id is ambiguous (never last-wins). Each is
+  `{ id, file, title, reason_code, reason }`, `reason_code` a member of `ANOMALY_REASONS`, and none is in `tests`. The
+  record stays `ok`: **the consumer decides what an anomaly means for it.** The red run and the AC gate read one as
+  their verdict only when it sits in a file an AC maps, in the record of a gate that AC's level reads, and report the
+  rest (`ac-tests.md`). Before 6.29.0 either case
+  anywhere in the suite refused the whole record.
 
 ## The neutral format (`pharn-json`)
 
@@ -203,40 +224,43 @@ The rules are strict, and each violation is `results-malformed` unless noted:
   by name, because it could never equal a mapped path.
 - **`path`** is a non-empty array of non-empty strings, the `describe` titles first and the test's own title last.
   The last element is the record's `title`.
-- **`status`** is `passed`, `failed` or `skipped`, and nothing else. Any other string is `unknown-status`, never
-  mapped.
+- **`status`** is `passed`, `failed` or `skipped`, and nothing else. Any other string is an `unknown-status`
+  anomaly, never mapped.
 
 `tests: []` is a valid document: a run that ran nothing. "passed" is the producer's word, exactly as for a
 built-in reporter.
 
 ## The closed reasons
 
-A refusal voids the **whole** record; there is no partial list.
+`RECORD_REASONS` is one closed set with two uses (6.29.0). **A refusal voids the whole record**; there is no partial
+list. **An anomaly does not:** its two codes (`ANOMALY_REASONS`) are carried per test on an `ok` record, and a
+consumer that reads one as its verdict names it by the same code.
 
-| reason_code                  | when                                                                                                                                                                          |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `stamp-invalid`              | `validateStamp` refuses the stamp                                                                                                                                             |
-| `gate-absent`                | the stamp has no run with that gate id                                                                                                                                        |
-| `not-configured`             | no `pharn.config.json`, no `testResults` key, or the gate is not named                                                                                                        |
-| `config-invalid`             | the config or the block is malformed, names a gate outside `RESULTS_GATES`, or a format outside `RESULTS_FORMATS`                                                             |
-| `results-unavailable`        | the gate timed out, the stamp predates the field, the gate wrote no file or did not run, or — despite a recorded hash — the file is absent, unopenable, or not a regular file |
-| `results-hash-mismatch`      | the file no longer hashes to `results_sha256`                                                                                                                                 |
-| `results-malformed`          | the file is not JSON, or not the format's shape (for Jest, a test without `invocations`; for `pharn-json`, any rule above)                                                    |
-| `over-cap`                   | over 32 MiB, over 100 000 tests, a test id over 4 096 UTF-16 code units, or Playwright `describe` nesting deeper than 256                                                     |
-| `unknown-status`             | a status outside the table above                                                                                                                                              |
-| `duplicate-test-id`          | two tests share an id (for example a title containing `" › "` that collides with a nested one)                                                                                |
-| `results-exit-contradiction` | the gate exited 0 but the file reports a failed test or a suite error                                                                                                         |
+| reason_code                  | kind    | when                                                                                                                                                                          |
+| ---------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stamp-invalid`              | refusal | `validateStamp` refuses the stamp                                                                                                                                             |
+| `gate-absent`                | refusal | the stamp has no run with that gate id                                                                                                                                        |
+| `not-configured`             | refusal | no `pharn.config.json`, no `testResults` key, or the gate is not named                                                                                                        |
+| `config-invalid`             | refusal | the config or the block is malformed, names a gate outside `RESULTS_GATES`, or a format outside `RESULTS_FORMATS`                                                             |
+| `results-unavailable`        | refusal | the gate timed out, the stamp predates the field, the gate wrote no file or did not run, or — despite a recorded hash — the file is absent, unopenable, or not a regular file |
+| `results-hash-mismatch`      | refusal | the file no longer hashes to `results_sha256`                                                                                                                                 |
+| `results-malformed`          | refusal | the file is not JSON, or not the format's shape (for Jest, a test without `invocations`; for `pharn-json`, any rule above)                                                    |
+| `over-cap`                   | refusal | over 32 MiB, over 100 000 tests, a test id over 4 096 UTF-16 code units, or Playwright `describe` nesting deeper than 256                                                     |
+| `results-exit-contradiction` | refusal | the gate exited 0 but the file reports a failed test (a duplicated or otherwise anomalous one included) or a suite error                                                      |
+| `unknown-status`             | anomaly | a test's status is outside the table above                                                                                                                                    |
+| `duplicate-test-id`          | anomaly | two or more tests share an id (for example a title containing `" › "` that collides with a nested one) — one entry for the id                                                 |
 
 The converse — a non-zero exit with every test passed — is **not** a contradiction: a coverage threshold, a
 type check or a lint step inside the `test` script can fail the script with every test green, and the gate
-already fails on its exit code.
+already fails on its exit code. An anomaly never hides a failure from that check: every `failed` test the file
+reports counts, a duplicated one included.
 
 ## Trust (P2)
 
 The results file is written by project code, so it is **untrusted data**, and so is everything the record
-copies out of it: `tests[].id`, `tests[].file`, `tests[].title`, and every refusal `reason`. Only `status`,
-`counts`, `suite_errors`, `exit`, `gate`, `format`, `results_sha256` and `reason_code` are drawn from closed sets
-or computed by PHARN. A consumer that shows a title or a reason to a model must fence it as quoted data, never
+copies out of it: `tests[].id`, `tests[].file`, `tests[].title`, the same three on `anomalies[]` with each anomaly's
+`reason`, and every refusal `reason`. Only `status`, `counts`, `suite_errors`, `exit`, `gate`, `format`,
+`results_sha256` and every `reason_code` are drawn from closed sets or computed by PHARN. A consumer that shows a title or a reason to a model must fence it as quoted data, never
 pass it as an instruction. A raw value quoted inside a `reason` is cut to 64 characters.
 
 ## What it proves, and what it does not (P0)
@@ -248,9 +272,13 @@ pass it as an instruction. A raw value quoted inside a `reason` is cut to 64 cha
   possible. `results-exit-contradiction` narrows that and does not close it. "passed" means the project's
   reporter said so; PHARN does not re-run or re-judge a test. Since 6.20.0 the lock's test-infrastructure pin
   (`ac-tests.md`, "The test-infrastructure pin") narrows it further for the AC gate. It covers the level gates'
-  scripts, their `testResults` formats and the root runner configs, and not a `jest` key inside `package.json`.
-  That pin's full list of what it does not catch is in that section.
+  scripts, their `testResults` formats and the root runner configs, and since 6.29.0 also the scripts those chain
+  to, the files they name (a `pharn-json` reporter included), the root package-manager configs and `package.json`'s
+  `jest` key. That pin's full list of what it does not catch is in that section — first, that code the build writes
+  runs inside the test process and can switch off the assertions or the reporter there.
 - **An unmarked expected failure or retry reads as a pass.** See "What a report does not mark", above.
+- **An anomaly's file is the reporter's word (6.29.0).** A consumer that reads anomalies per file trusts the file an
+  entry names, exactly as it trusts the status an entry names.
 - **A live referent.** A detached process started by the gate can still write the file after the runner hashed
   it. The record never follows such a write: it is refused as `results-hash-mismatch`.
 - **Regress records are partial, and unread.** On `/pharn-regress`'s sides the `test` gate receives only the

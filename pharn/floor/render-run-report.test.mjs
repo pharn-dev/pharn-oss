@@ -634,6 +634,7 @@ test("Verdicts: the per-AC table (6.20.0) is the report's ac_gate, FENCED — a 
             { id: "AC-1", level: "unit", tests: [hostile], status: "passed", reason: null, detail: "" },
             { id: "AC-2", level: "unit", tests: [], status: "failed", reason: "ac-not-passed", detail: "1 of 1 failed" },
           ],
+          unmapped_anomalies: [{ gate: "test", reason: "duplicate-test-id", count: 2, examples: [hostile] }],
           note: "an AC is delivered = …",
         },
       },
@@ -643,6 +644,11 @@ test("Verdicts: the per-AC table (6.20.0) is the report's ac_gate, FENCED — a 
     assert.match(md, /AC-1 {2}unit {2}passed {2}delivered/);
     assert.match(md, /AC-2 {2}unit {2}failed {2}ac-not-passed {2}\(no matched test\)/);
     assert.match(md, /evidence {2}ac-never-red {2}no red run/);
+    // 6.29.0 (M6): an anomaly outside the AC-mapped files is a row in the same fenced table, never a verdict
+    assert.match(
+      md,
+      /unmapped anomaly {2}test {2}duplicate-test-id {2}×2 {2}\["tests\/ac\/a\.test\.js::AC-1: ```\\n## Injected \| col \| shift"\]/
+    );
     assert.deepEqual(headings(md), [...SECTIONS], "the hostile id opened no heading — the section set is unchanged");
     // an out-of-set mode/verdict is never interpolated inline
     feature(root, "feat", {
@@ -700,6 +706,7 @@ test("★ the reported case, through the CLI WRITE path: a `null` in ac_gate.acs
           reason: null,
           acs: [null, { id: "AC-1", level: "unit", tests: ["t.test.js::AC-1: ok"], status: "passed", reason: null, detail: "" }],
           evidence: [null, { reason: "ac-never-red", detail: "no red run" }],
+          unmapped_anomalies: [null, { gate: "test", reason: "unknown-status", count: 1, examples: ["o.test.js::flaky"] }],
         },
       },
     });
@@ -708,6 +715,8 @@ test("★ the reported case, through the CLI WRITE path: a `null` in ac_gate.acs
     const md = readFileSync(join(root, "pharn", "features", "feat", "RUN-REPORT.md"), "utf8");
     assert.match(md, /\(not an AC entry\) {2}null/);
     assert.match(md, /evidence {2}\(not an evidence entry\) {2}null/);
+    assert.match(md, /unmapped anomaly {2}\(not an anomaly entry\) {2}null/);
+    assert.match(md, /unmapped anomaly {2}test {2}unknown-status {2}×1 {2}\["o\.test\.js::flaky"\]/);
     assert.match(md, /\(not a row\)/);
     // the well-formed entries beside them still render — a guard, not a truncation
     assert.match(md, /AC-1 {2}unit {2}passed {2}delivered {2}t\.test\.js::AC-1: ok/);

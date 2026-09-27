@@ -17,7 +17,9 @@
 // THE VERDICT, per AC (row `AC-<n> | <level> | <file>`), over the per-test record of EVERY gate its level maps to:
 //   • the gate is in the stamp, else `ac-level-unavailable`;
 //   • each such gate's record is available, else item 01's own reason (`not-configured`, `results-unavailable`, …),
-//     fatal here, by its own name;
+//     fatal here, by its own name; and no per-test ANOMALY of that record sits in the AC's mapped file, else the
+//     anomaly's own reason (`duplicate-test-id`, `unknown-status`) — an anomaly in any OTHER file is reported as a
+//     NOTE (`unmapped_anomalies`) and never decides the verdict (6.29.0);
 //   • entries MATCH when their `file` EQUALS the mapped file (exactly — no case-folding, fail-closed on a
 //     case-sensitive volume, grill G13) and their LEAF title starts `AC-<n>:` — never a suite-wide title match,
 //     because other features' AC tests share the suite and reuse the ids. Matches are unioned across the gates;
@@ -182,6 +184,12 @@ export function bindStamp({ stamp, rows, feature, root }) {
  * per (gate, test) — never one status per test id: two e2e gates can report the same id, and keying by id let the later
  * gate's `failed` overwrite the earlier one's `passed` (REVIEW finding 1). The first refused record stops the walk and
  * is returned by name.
+ *
+ * A PER-TEST ANOMALY (6.29.0, test-results-core.mjs ANOMALY_REASONS) refuses the AC only when its `file` EQUALS one of
+ * `files` — the same exact comparison the match uses — because a test there whose status cannot be read (a shared id,
+ * a flaky run the report marks, an expected failure) could be this AC's test: fail-closed where the verdict reads.
+ * Anywhere else it is not this AC's business and is skipped here; unmappedAnomalies() reports it. Before 6.29.0 one
+ * such test anywhere in the suite refused the whole record, and every AC with it.
  * @returns {{refused: {gate: string, reason_code: string, reason: string} | null, observations: {gate: string, id: string, status: string}[]}}
  */
 export function observeAc({ id, files, gateIds, recordOf }) {
@@ -189,6 +197,8 @@ export function observeAc({ id, files, gateIds, recordOf }) {
   for (const gateId of gateIds) {
     const rec = recordOf(gateId);
     if (!rec.ok) return { refused: { gate: gateId, reason_code: rec.reason_code, reason: rec.reason }, observations: [] };
+    const inMapped = rec.anomalies.find((a) => files.includes(a.file));
+    if (inMapped) return { refused: { gate: gateId, reason_code: inMapped.reason_code, reason: inMapped.reason }, observations: [] };
     for (const t of rec.tests) {
       if (files.includes(t.file) && t.title.startsWith(`${id}:`)) observations.push({ gate: gateId, id: t.id, status: t.status });
     }
@@ -196,10 +206,42 @@ export function observeAc({ id, files, gateIds, recordOf }) {
   return { refused: null, observations };
 }
 
+/** How many example ids an unmapped-anomaly entry carries. The count is exact; the examples only give a reader a
+ *  place to start, and a suite can hold thousands of parametrized duplicates, so the list stays bounded. */
+export const MAX_ANOMALY_EXAMPLES = 3;
+
+/**
+ * The per-test anomalies NO verdict read (6.29.0): over the `ok` records in `records` (a Map gate → testRecord, the
+ * records a red run or an AC gate actually read), those in no file a mapping row maps AT A LEVEL WHOSE GATES INCLUDE
+ * THAT GATE — exactly the ones observeAc never sees, since it reads a row's file only through its own level's gates —
+ * summarized as `[{gate, reason, count, examples}]`, sorted by gate then reason, `examples` the first
+ * MAX_ANOMALY_EXAMPLES ids in id order. `rows` is the mapping's `[{file, level}]` (`[]` for a bootstrap SPEC, which maps
+ * nothing). REPORTED, never verdict-bearing: every other anomaly is observeAc's refusal instead, so none is dropped.
+ * The ids are untrusted DATA from the project's reporter.
+ */
+export function unmappedAnomalies({ records, rows }) {
+  if (!Array.isArray(rows)) throw new TypeError("unmappedAnomalies: `rows` must be the mapping's [{file, level}] rows");
+  const decided = (gate, file) => rows.some((r) => r.file === file && (LEVEL_GATES[r.level] ?? []).includes(gate));
+  const groups = new Map();
+  for (const [gate, rec] of records) {
+    if (!rec || !rec.ok) continue;
+    for (const a of rec.anomalies) {
+      if (decided(gate, a.file)) continue;
+      const key = `${gate}\0${a.reason_code}`;
+      if (!groups.has(key)) groups.set(key, { gate, reason: a.reason_code, ids: [] });
+      groups.get(key).ids.push(a.id);
+    }
+  }
+  const cmp = (x, y) => (x < y ? -1 : x > y ? 1 : 0);
+  return [...groups.values()]
+    .sort((x, y) => cmp(x.gate, y.gate) || cmp(x.reason, y.reason))
+    .map((g) => ({ gate: g.gate, reason: g.reason, count: g.ids.length, examples: [...g.ids].sort(cmp).slice(0, MAX_ANOMALY_EXAMPLES) }));
+}
+
 /**
  * THE VERDICT over a bound stamp. Each AC gets `reason: null` (red, as required) or one RED_RUN_REASONS member, and
- * the matched test ids (untrusted data, sorted, unique).
- * @returns {{green: boolean, acs: {id: string, level: string, file: string, reason: string|null, detail: string, tests: string[]}[], gates: {gate: string, results_sha256: string}[]}}
+ * the matched test ids (untrusted data, sorted, unique). `unmapped_anomalies` reports, never decides (6.29.0).
+ * @returns {{green: boolean, acs: {id: string, level: string, file: string, reason: string|null, detail: string, tests: string[]}[], gates: {gate: string, results_sha256: string}[], unmapped_anomalies: {gate: string, reason: string, count: number, examples: string[]}[]}}
  */
 export function verdict({ rows, stamp, outDir, root }) {
   const records = new Map();
@@ -246,7 +288,8 @@ export function verdict({ rows, stamp, outDir, root }) {
     .filter(([, rec]) => rec.ok)
     .map(([gate, rec]) => ({ gate, results_sha256: rec.results_sha256 }))
     .sort((a, b) => (a.gate < b.gate ? -1 : 1));
-  return { green: acs.every((a) => a.reason === null), acs, gates };
+  const unmapped_anomalies = unmappedAnomalies({ records, rows });
+  return { green: acs.every((a) => a.reason === null), acs, gates, unmapped_anomalies };
 }
 
 /** Read `<out>/stamp.json`: the parsed stamp and the sha256 of its bytes, or a refusal. */

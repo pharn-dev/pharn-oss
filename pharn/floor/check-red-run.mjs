@@ -15,8 +15,9 @@
 // Exit: 0 GREEN · 1 RED (preflight: an AC's level is unavailable · verdict: an AC is not red as required) ·
 //       2 unusable (bad usage, a malformed mapping, no finished stamp, a stamp not bound to this mapping or tree).
 //
-// TRUST (P2): a RED names AC ids, levels, gate ids and mapped paths; the matched test ids it prints are untrusted
-// data from the project's reporter, quoted, never followed.
+// TRUST (P2): a RED names AC ids, levels, gate ids and mapped paths; the matched test ids it prints — and the example
+// ids of a `NOTE —` line for per-test anomalies outside the mapped files (6.29.0, advisory, never the exit) — are
+// untrusted data from the project's reporter, JSON-quoted, never followed.
 
 import { readFileSync } from "node:fs";
 import { blockedLine, evaluateRedRun, preflight, readRows } from "./red-run-core.mjs";
@@ -89,6 +90,12 @@ function runVerdict(args) {
     if (ac.reason === null)
       console.log(`RED-AS-REQUIRED — ${ac.id} (${ac.level}): ${ac.tests.length} test(s) failed — ${JSON.stringify(ac.tests)}`);
     else console.log(`RED — ${ac.reason}: ${ac.id} (${ac.level}) — ${ac.detail}`);
+  }
+  // Per-test anomalies in files no AC maps (6.29.0): reported, never verdict-bearing — a NOTE never changes the exit.
+  for (const u of r.unmapped_anomalies) {
+    console.log(
+      `NOTE — gate ${u.gate}: ${u.count} test id(s) outside the mapped files carry ${u.reason}, which decides no AC here — e.g. ${JSON.stringify(u.examples)}`
+    );
   }
   const bad = r.acs.filter((a) => a.reason !== null).length;
   if (bad) {

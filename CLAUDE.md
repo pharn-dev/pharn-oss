@@ -366,8 +366,11 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # drops them from a DISCOVERED regress source (an explicit --gates string is not filtered), so an e2e-only manifest
 # is empty-source-set there); the adapters live in
 # test-results-formats.mjs (a reporter's format is its own axis, P3). Closed reasons (RECORD_REASONS), fail-closed
-# PER RECORD: one flaky test or expected failure the report MARKS voids it (Playwright flaky/test.fail(), Jest's
-# invocations > 1 and Jest 30's failing: true); an UNMARKED one reads as its raw status — vitest test.fails and pass on
+# PER RECORD for its integrity (a refusal voids it); since 6.29.0 PER TEST for its anomalies (ANOMALY_REASONS): one
+# flaky test or expected failure the report MARKS (Playwright flaky/test.fail(), Jest's invocations > 1 and Jest 30's
+# failing: true) is an `unknown-status` entry in the record's `anomalies[]`, and every id two tests share is ONE
+# `duplicate-test-id` entry — never a test, never counted, the record still ok; the CONSUMER decides (below). Before
+# 6.29.0 one such test ANYWHERE voided the record. An UNMARKED one reads as its raw status — vitest test.fails and pass on
 # retry, Jest 29's test.failing, each measured and pinned. FLOOR: derived from the exact bytes the runner hashed
 # (a later write is results-hash-mismatch — L58). NOT provenance (L43): "passed" means the reporter said so,
 # and the test script, reporter config and pharn.config.json are all agent-editable; results-exit-contradiction
@@ -383,10 +386,17 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # --from-plan scope), `## Mapping` = one `- AC-<n> | <level> | `<file>` | <public target>` line per AC. check-ac-tests.mjs
 # REDs on a closed kind set (missing/duplicate/unknown AC, level-mismatch, unlisted/unmapped file, in-plan-files — the
 # build's scope would cover it —, claimed-elsewhere, bad-path, no-files, malformed-line, pin via the SHELLED
-# check-plan-spec-agree.mjs, since 6.18.0 spec-kind, and since 6.21.0 test-infra-in-plan — a ROOT runner config the lock's
-# test-infra pin covers named in PLAN.md `## Files`, matched through test-infra-core.mjs's own isRunnerConfigName;
-# package.json / pharn.config.json there print an ADVISORY `NOTE —` line and never change the exit code); exit 0/1/2. ac-tests-lock.mjs --write/--check pins the tests
-# in AC-TESTS.lock.json (schema ac-tests-lock/3 since 6.20.0 — /2 and /1 still read; closed keys per mode; test_infra
+# check-plan-spec-agree.mjs, since 6.18.0 spec-kind, since 6.21.0 test-infra-in-plan — a ROOT runner config the lock's
+# test-infra pin covers named in PLAN.md `## Files`, matched through test-infra-core.mjs's own isRunnerConfigName, and
+# since 6.29.0 also a root package-manager config (.npmrc/.yarnrc/.yarnrc.yml) or a file a level gate's script NAMES
+# (test-infra-core scriptNamedFiles over the tree — the review's H2 wB: a PLAN-scoped build wrote the pharn-json
+# reporter) —, and since 6.29.0 ac-artifact-in-plan — THIS feature's AC-TESTS.md or AC-TESTS.lock.json in PLAN.md (the
+# review's H2: a build scoped to the lock re-pinned its own change with every check green; LOCK_NAME is a literal,
+# parity-tested against ac-tests-lock.mjs, never imported); package.json / pharn.config.json there print an ADVISORY
+# `NOTE —` line and never change the exit code — every part of package.json the pin READS is still compared at verify
+# and cannot be re-pinned through the build's scope, a composition a ★ HOOK test executes; the parts it does not read
+# stay changeable, as the NOT-caught list states); exit 0/1/2. ac-tests-lock.mjs --write/--check pins the tests
+# in AC-TESTS.lock.json (schema ac-tests-lock/4 since 6.29.0 — /3, /2 and /1 still read; closed keys per mode; test_infra
 # is the test-infrastructure pin, see THE AC GATE below); --check names a PATH, never content. The mapping grammar lives in ac-tests-core.mjs. AC-TESTS.md and the lock are PIPELINE_ARTIFACTS (regress-exempt); for reconcile
 # AC-TESTS.md is exempt like PLAN.md (a re-plan rewrites it) but the LOCK is `pre_anchor_artifacts` (NOT exempt).
 # Paths are compared as the setter SCOPES them (clean + isConcrete, case-folded). `--spec <SPEC.md>` decides
@@ -409,7 +419,9 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # reconcile, no build). check-red-run.mjs --verdict (red-run-core.mjs): per AC, over the record of every gate its level
 # maps to, entries whose `file` EQUALS the mapped file (not case-folded) and whose LEAF title starts `AC-<n>:` —
 # ≥1 (else ac-test-not-collected), none passed (ac-test-passes-before-build — NO escape hatch), none skipped
-# (ac-test-skipped); item 01's record refusals are REDs by name. BOUND to the run: validateStamp as ac-test for the
+# (ac-test-skipped); item 01's record refusals are REDs by name, and (6.29.0) so is a per-test anomaly in a file mapped
+# to that AC — one in any other file is `unmapped_anomalies`, printed as `NOTE —` lines, never the exit (the review's M6:
+# a parametrized duplicate elsewhere had refused every AC). BOUND to the run: validateStamp as ac-test for the
 # feature, each run's files == the mapping's, LIVE fingerprint == stamp.fingerprint.final (the lock and the tests are
 # in it). The convention it rests on: unit/integration AC tests import their target INSIDE the test body —
 # a top-level import of a not-yet-built module is a file load failure, i.e. not collected (measured on real vitest
@@ -472,22 +484,36 @@ node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-
 # through an explicit --gates is test-infra-changed (test-first) / ac-untested (bootstrap) BY DESIGN; its detail names
 # the explicit source and /pharn-verify's reference section says not to pass --gates for such a feature. Both ids are
 # RESERVED_IDS and never enter `gates`. Legacy SPEC → NOT-APPLICABLE, stated (with AC evidence beside it → ac-tests-modified); spec_kind:
-# test-infra → BOOTSTRAP, weaker, labelled. THE TEST-INFRA PIN (lock schema ac-tests-lock/3, test-infra-core.mjs,
-# written by --write BEFORE the red run): the level gates' package.json script VALUES + pre/post scripts + testResults
-# formats, and root vitest/vite/playwright/jest config files in a CLOSED name set (matched FOLDED since 6.21.0 — on
-# APFS a `Vitest.config.mjs` is the runner's config); the gate also requires each level
-# gate to have run as the pinned `npm run <id>`. NOT caught, stated ONCE in test-infra-core.mjs's header (restated in
-# the contract): a setup file a config imports, env-driven config, script chaining, .npmrc, tsconfig, and more. /2 and /1 locks are still read (mode, never schema, decides bootstrap) and read
-# test-infra-unpinned at verify — the remedy sets the build aside and re-runs /pharn-test (its red run cannot pass over
-# a built tree). IN THE LOOP: check-loop-fresh E re-derives WITH --ac-gate and compares ac_gate (when the tree moved,
+# test-infra → BOOTSTRAP, weaker, labelled. THE TEST-INFRA PIN (lock schema ac-tests-lock/4 since 6.29.0,
+# test-infra-core.mjs, written by --write BEFORE the red run): the level gates' package.json script VALUES + pre/post
+# scripts + testResults formats, root vitest/vite/playwright/jest config files in a CLOSED name set (matched FOLDED since
+# 6.21.0 — on APFS a `Vitest.config.mjs` is the runner's config), and since 6.29.0 (the review's H2 + the GATE-1
+# amendment) every script a pinned value CHAINS to (transitively, own-property only, REFUSED past MAX_CHAIN_HOPS = 8),
+# every regular file a pinned value NAMES (script_files — a pharn-json reporter), package.json's `jest` key (a canonical
+# JSON digest, null when absent) and the root .npmrc/.yarnrc/.yarnrc.yml (hash only) — all through ONE closed literal
+# token pass (scriptTokens/scriptPathCandidates/chainedIds; never a shell parse; outputs after `>`, -o or an
+# --out… flag skipped); the gate also requires each level gate to have run as the pinned `npm run <id>`. NOT caught,
+# stated ONCE in test-infra-core.mjs's header (restated in the contract), FIRST the in-process bound: code the build
+# writes runs INSIDE the test process and can switch off the assertions or the reporter there (`assert.equal = () =>
+# {}` → verify PASS, measured) — so a green pin NEVER means the build could not forge the AC gate; then imports of a
+# pinned file, env-driven config and user/global npmrc, other package.json keys (mocha, ava, dependencies), chains the
+# rule does not read (npm-run-all, --prefix, bun), tsconfig, and more. STATED COSTS: a source file a test-reachable
+# script names literally (a bundler entry) is pinned too, and a committed .npmrc digest lets a low-entropy credential
+# in it be guessed offline. /2 and /1 locks are still read (mode, never schema, decides bootstrap) and read
+# test-infra-unpinned at verify, and (6.29.0) a /3 lock is judged by what it pinned, while what only /4 pins in the live
+# tree reads `unpinned` (--check RED, AC gate test-infra-unpinned) — the remedy sets the build aside and re-runs
+# /pharn-test (its red run cannot pass over a built tree). A /4 lock is lock-unusable to a pre-6.29.0 floor, never
+# GREEN (rolling back means re-running /pharn-test there). IN THE LOOP: check-loop-fresh E re-derives WITH --ac-gate and compares ac_gate (when the tree moved,
 # 6.20.6: it re-derives WITHOUT the flag and compares what the stamp alone decides — gates, the non-AC failing ids and
 # the verdict rule — so only the AC part defers to F; the AC ids come from gate-run-core AC_RESERVED_IDS, not from
 # ac-gate-core, so the checker's own load graph does not grow); J re-hashes per-test results files;
 # check I's test-stage RED (exit 1, a RED token) is its own code, ac-evidence-invalid → S13 (the other front checks,
 # and a test-stage exit 2 or crash, keep front-stage-red).
-# BOUNDS: "passed" is the reporter's word; agreement, never provenance (L43); one flaky test or expected failure the
-# report MARKS, or a duplicate id, anywhere voids the record (INCONCLUSIVE) — an unmarked one reads as its raw status
-# (test-results-record.md). check-verify.mjs still spawns nothing. Contract: pharn/pharn-contracts/
+# BOUNDS: "passed" is the reporter's word; agreement, never provenance (L43); since 6.29.0 a flaky test or expected
+# failure the report MARKS, or a duplicate id, makes UNMEASURED only an AC whose mapped file holds it (the anomaly's own
+# reason, INCONCLUSIVE) and is otherwise reported in ac_gate.unmapped_anomalies, read by no verdict — before, one
+# ANYWHERE voided the record; an unmarked one reads as its raw status (test-results-record.md); the file an anomaly
+# names is the reporter's word. check-verify.mjs still spawns nothing. Contract: pharn/pharn-contracts/
 # ac-tests.md "The AC gate" + verify-report.md "The additive ac_gate block".
 node pharn/floor/check-verify.mjs --stamp <stamp.json> --feature <name> --ac-gate
 

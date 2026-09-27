@@ -404,6 +404,74 @@ test("test-infra-unpinned — a lock written before 6.20.0 (/2) carries no pin; 
   });
 });
 
+/** Rewrite the world's lock as the /3 lock 6.20.0–6.28.x wrote: the same pin minus what only /4 records. */
+function toV3(w) {
+  const l = JSON.parse(readFileSync(w.lockPath, "utf8"));
+  const { levels, gates, configs } = l.test_infra;
+  writeFileSync(
+    w.lockPath,
+    JSON.stringify({ ...l, schema: "ac-tests-lock/3", test_infra: { levels, gates, configs: configs.filter((c) => c.path !== ".npmrc") } })
+  );
+}
+
+test("6.29.0 test-infra-changed — the build rewrote the pharn-json reporter the `test` script names (the review's wB), or .npmrc", () => {
+  const reporterWorld = (w) => {
+    // re-pin the world with a reporter the test script names, as /pharn-test's --write would have
+    writeFileSync(
+      join(w.root, "package.json"),
+      JSON.stringify({ name: "w", scripts: { test: "vitest run --reporter=./tools/pharn-reporter.mjs", lint: "eslint ." } })
+    );
+    mkdirSync(join(w.root, "tools"), { recursive: true });
+    writeFileSync(join(w.root, "tools", "pharn-reporter.mjs"), "export default class R {}\n");
+    writeFileSync(join(w.root, ".npmrc"), "fund=false\n");
+    const l = JSON.parse(readFileSync(w.lockPath, "utf8"));
+    const r = spawnSync(process.execPath, [LOCK_CLI, "--write", NAME], { cwd: w.root, encoding: "utf8" });
+    assert.equal(r.status, 0, r.stdout);
+    const fresh = JSON.parse(readFileSync(w.lockPath, "utf8"));
+    writeFileSync(w.lockPath, JSON.stringify({ ...fresh, red_run: l.red_run }));
+  };
+  withWorld({}, (w) => {
+    reporterWorld(w);
+    assert.equal(gateOf(w).verdict, "PASS", "control: the re-pinned world is GREEN");
+    writeFileSync(join(w.root, "tools", "pharn-reporter.mjs"), "export default class R { onFinished() { /* say passed */ } }\n");
+    const g = gateOf(w);
+    only(g, "test-infra-changed", "FAIL");
+    assert.match(g.evidence[0].detail, /tools\/pharn-reporter\.mjs: a file a level gate's script names changed/);
+    assert.ok(!g.evidence[0].detail.includes("say passed"), "the file's content is never echoed (P2)");
+  });
+  withWorld({}, (w) => {
+    reporterWorld(w);
+    writeFileSync(join(w.root, ".npmrc"), "script-shell=./forge.sh\n");
+    const g = gateOf(w);
+    only(g, "test-infra-changed", "FAIL");
+    assert.match(g.evidence[0].detail, /\.npmrc: the package-manager config changed/);
+  });
+});
+
+test("6.29.0 test-infra-unpinned — a /3 lock over a tree whose `test` gate names a file: unpinned, never a PASS; a /3 lock with nothing more still PASSes", () => {
+  withWorld({}, (w) => {
+    toV3(w);
+    assert.equal(gateOf(w).verdict, "PASS", "a /3 lock over a tree with nothing only /4 pins is judged by what it pinned");
+  });
+  withWorld({}, (w) => {
+    toV3(w);
+    writeFileSync(
+      join(w.root, "package.json"),
+      JSON.stringify({ name: "w", scripts: { test: "vitest run", pretest: "node tools/prep.mjs", lint: "eslint ." } })
+    );
+    // the pretest addition is itself a /3 change: both fields report, each under its own reason (L6)
+    mkdirSync(join(w.root, "tools"), { recursive: true });
+    writeFileSync(join(w.root, "tools", "prep.mjs"), "// prep\n");
+    const g = gateOf(w);
+    assert.equal(g.verdict, "FAIL");
+    assert.deepEqual(
+      g.evidence.map((e) => e.reason),
+      ["test-infra-changed", "test-infra-unpinned"]
+    );
+    assert.match(g.evidence[1].detail, /tools\/prep\.mjs: a level gate's script names it, and an ac-tests-lock\/3 pin does not cover it/);
+  });
+});
+
 // ── unmeasurable: item 01's reasons are fatal ─────────────────────────────────────────────────────────────────
 
 test("item 01's reason, fatal — the head `test` gate wrote no per-test results: INCONCLUSIVE, never a PASS", () => {
@@ -417,16 +485,66 @@ test("item 01's reason, fatal — the head `test` gate wrote no per-test results
   });
 });
 
-test("item 01's reason, fatal — no `test` gate in the head run is `gate-absent`; one flaky duplicate anywhere voids the record", () => {
+test("item 01's reason, fatal — no `test` gate in the head run is `gate-absent`", () => {
   withWorld({}, (w) => {
-    let g = gateOf(w, { runs: [{ id: "lint" }, { id: "reconcile" }] });
+    const g = gateOf(w, { runs: [{ id: "lint" }, { id: "reconcile" }] });
     assert.equal(g.verdict, "INCONCLUSIVE");
     assert.deepEqual([...new Set(reasonsOf(g))], ["gate-absent"]);
+    assert.deepEqual(g.unmapped_anomalies, []);
     REACHED.add("gate-absent");
-    // a duplicate test id in ANOTHER feature's file voids the whole record (grill G9 — the stated cost)
-    g = gateOf(w, { results: [...w.results, { file: OTHER, title: "AC-1: t", status: "passed" }] });
+  });
+});
+
+test("6.29.0 (M6) — an anomaly decides an AC only in a file that AC maps; elsewhere it is REPORTED, never verdict-bearing", () => {
+  withWorld({}, (w) => {
+    // A duplicate test id in ANOTHER feature's file. Before 6.29.0 it voided the whole record, so EVERY AC read
+    // INCONCLUSIVE (the review's M6 — a parametrized duplicate anywhere in the suite, and /pharn-loop stopped
+    // STOP_TERMINAL on every iteration). Now: PASS, the anomaly listed in unmapped_anomalies.
+    let g = gateOf(w, { results: [...w.results, { file: OTHER, title: "AC-1: t", status: "passed" }] });
+    assert.equal(g.verdict, "PASS", JSON.stringify(g, null, 1));
+    assert.deepEqual(reasonsOf(g), []);
+    assert.deepEqual(g.unmapped_anomalies, [{ gate: "test", reason: "duplicate-test-id", count: 1, examples: [tid(OTHER, "AC-1: t")] }]);
+    // an unmapped status elsewhere, the same
+    g = gateOf(w, { results: [...w.results, { file: OTHER, title: "helper", status: "disabled" }] });
+    assert.equal(g.verdict, "PASS");
+    assert.deepEqual(g.unmapped_anomalies, [{ gate: "test", reason: "unknown-status", count: 1, examples: [tid(OTHER, "helper")] }]);
+    // FAIL-CLOSED WHERE IT DECIDES (the control): the same duplicate in AC-1's mapped file makes AC-1 unmeasured —
+    // INCONCLUSIVE — and AC-2, whose file is clean, is still delivered.
+    g = gateOf(w, { results: [...w.results, { file: FILE(1), title: "AC-1: t", status: "passed" }] });
     assert.equal(g.verdict, "INCONCLUSIVE");
-    assert.deepEqual([...new Set(reasonsOf(g))], ["duplicate-test-id"]);
+    assert.deepEqual(reasonsOf(g), ["duplicate-test-id"]);
+    assert.equal(g.acs.find((a) => a.id === "AC-2").reason, null);
+    assert.deepEqual(g.unmapped_anomalies, []);
+    REACHED.add("duplicate-test-id");
+    // ANY anomaly in a mapped file does, whatever its title: an unmapped status beside AC-2's own test
+    g = gateOf(w, { results: [...w.results, { file: FILE(2), title: "helper", status: "disabled" }] });
+    assert.equal(g.verdict, "INCONCLUSIVE");
+    assert.deepEqual(reasonsOf(g), ["unknown-status"]);
+    assert.equal(g.acs.find((a) => a.id === "AC-2").reason, "unknown-status");
+    assert.match(g.acs.find((a) => a.id === "AC-2").detail, /gate test: .*"disabled"/);
+    REACHED.add("unknown-status");
+    // A delivery red still beats the reporting: AC-1 failing beside an anomaly elsewhere is FAIL, the anomaly still listed
+    g = gateOf(w, {
+      results: [
+        ...w.results.map((t) => (t.file === FILE(1) ? { ...t, status: "failed" } : t)),
+        { file: OTHER, title: "x", status: "disabled" },
+      ],
+    });
+    assert.equal(g.verdict, "FAIL");
+    assert.deepEqual(reasonsOf(g), ["ac-not-passed"]);
+    assert.equal(g.unmapped_anomalies.length, 1);
+  });
+});
+
+test("6.29.0 (M6) — unmapped_anomalies groups by gate and reason, counts every id, and quotes at most three examples", () => {
+  withWorld({}, (w) => {
+    const extra = ["e", "d", "c", "b", "a"].map((t) => ({ file: OTHER, title: t, status: "disabled" }));
+    const g = gateOf(w, { results: [...w.results, ...extra, { file: OTHER, title: "AC-2: t", status: "passed" }] });
+    assert.equal(g.verdict, "PASS");
+    assert.deepEqual(g.unmapped_anomalies, [
+      { gate: "test", reason: "duplicate-test-id", count: 1, examples: [tid(OTHER, "AC-2: t")] },
+      { gate: "test", reason: "unknown-status", count: 5, examples: [tid(OTHER, "a"), tid(OTHER, "b"), tid(OTHER, "c")] },
+    ]);
   });
 });
 

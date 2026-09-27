@@ -19,7 +19,18 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resultsFileName } from "./gate-run-core.mjs";
 import { CONFIG_FILE, CONFIG_KEY } from "./test-results-core.mjs";
-import { OWN_REASONS, RED_RUN_REASONS, bindStamp, blockedLine, evaluateRedRun, observeAc, preflight, verdict } from "./red-run-core.mjs";
+import {
+  MAX_ANOMALY_EXAMPLES,
+  OWN_REASONS,
+  RED_RUN_REASONS,
+  bindStamp,
+  blockedLine,
+  evaluateRedRun,
+  observeAc,
+  preflight,
+  unmappedAnomalies,
+  verdict,
+} from "./red-run-core.mjs";
 import { ALGO, fingerprint } from "./worktree-fingerprint.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -127,6 +138,39 @@ test("another feature's passing `AC-1:` in the same suite is IGNORED — the mat
   // control: the same id mapped to the OTHER file is a pass-before-build, so the GREEN above is not vacuous
   onlyReason(verdictOf([row("AC-1", OTHER)]), "ac-test-passes-before-build");
   assert.equal(verdictOf([row("AC-1", UNIT)]).green, true);
+});
+
+/** The captured report (rewritten to `root`) with `extra` assertion results appended to the file whose name ends `file`. */
+function reportWith(root, file, extra) {
+  const doc = JSON.parse(reportFor(root));
+  doc.testResults.find((t) => t.name.endsWith(file)).assertionResults.push(...extra);
+  return JSON.stringify(doc);
+}
+const va = (title, status, ancestorTitles = []) => ({ ancestorTitles, title, status, fullName: title });
+
+test("6.29.0 (M6) — an anomaly in ANOTHER file decides no AC: GREEN, and reported in unmapped_anomalies (was: every AC refused)", () => {
+  const dupElsewhere = (root) => [
+    { id: "test", files: [UNIT], results: reportWith(root, OTHER, [va("AC-1: another feature's test", "passed")]) },
+  ];
+  const v = verdictOf([row("AC-1", UNIT)], { gates: dupElsewhere });
+  assert.equal(v.green, true, JSON.stringify(v.acs));
+  assert.deepEqual(v.unmapped_anomalies, [
+    { gate: "test", reason: "duplicate-test-id", count: 1, examples: [`${OTHER}::AC-1: another feature's test`] },
+  ]);
+  // CONTROL (fail-closed where it decides): the same duplicate in the MAPPED file refuses AC-1, by the anomaly's own name
+  const dupMapped = (root) => [
+    { id: "test", files: [UNIT], results: reportWith(root, UNIT, [va("AC-1: resets the password", "failed", ["reset"])]) },
+  ];
+  const red = verdictOf([row("AC-1", UNIT)], { gates: dupMapped });
+  onlyReason(red, "duplicate-test-id");
+  assert.deepEqual(red.unmapped_anomalies, []);
+  // any anomaly in the mapped file does, whatever its title
+  onlyReason(
+    verdictOf([row("AC-1", UNIT)], {
+      gates: (root) => [{ id: "test", files: [UNIT], results: reportWith(root, UNIT, [va("helper", "disabled")]) }],
+    }),
+    "unknown-status"
+  );
 });
 
 test("ac-test-not-collected — the SAME test with a TOP-LEVEL import fails to load: a suite error, no assertion", () => {
@@ -513,6 +557,26 @@ test("END TO END: a GREEN red run is recorded in the lock, bound to its files; -
   }
 });
 
+test("END TO END (M6): a duplicate id in another feature's file prints a NOTE, never a RED — the red run is GREEN and recorded", () => {
+  const dir = project([["AC-1", "unit", UNIT]]);
+  try {
+    const doc = JSON.parse(FIXTURE);
+    doc.testResults.find((t) => t.name.endsWith(OTHER)).assertionResults.push(va("AC-1: another feature's test", "passed"));
+    writeFileSync(join(dir, "fixture.json"), JSON.stringify(doc));
+    const v = redRun(dir);
+    assert.equal(v.status, 0, v.stdout);
+    assert.match(v.stdout, /RED-AS-REQUIRED — AC-1 \(unit\)/);
+    assert.match(
+      v.stdout,
+      /^NOTE — gate test: 1 test id\(s\) outside the mapped files carry duplicate-test-id, which decides no AC here — e\.g\. \["tests\/ac\/other\.unit\.test\.js::AC-1: another feature's test"\]$/m
+    );
+    const rec = node(dir, LOCK, ["--record-red-run", "demo", "--out", OUT]);
+    assert.equal(rec.status, 0, rec.stdout);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("END TO END: the verdict REDs (and nothing is recorded) for a static-import AC and a passing one", () => {
   const dir = project([
     ["AC-1", "unit", STATIC],
@@ -737,7 +801,7 @@ test("✧ L36 REVERSE CLOSURE — every OWN reason, and the two item-01 reasons 
 });
 
 test("✧ L35 — observeAc is the ONE match rule (the red run and /pharn-verify's AC gate share it): file-scoped, leaf-title, every observation kept", () => {
-  const rec = (tests) => ({ ok: true, tests });
+  const rec = (tests, anomalies = []) => ({ ok: true, tests, anomalies });
   const t = (file, title, status, id = `${file}::${title}`) => ({ id, file, title, status });
   const records = {
     "test:e2e": rec([t(UNIT, "AC-1: a", "passed"), t(OTHER, "AC-1: a", "passed"), t(UNIT, "AC-10: x", "failed")]),
@@ -760,6 +824,56 @@ test("✧ L35 — observeAc is the ONE match rule (the red run and /pharn-verify
     recordOf: () => ({ ok: false, reason_code: "results-unavailable", reason: "r" }),
   });
   assert.deepEqual(refused, { refused: { gate: "e2e", reason_code: "results-unavailable", reason: "r" }, observations: [] });
+  // 6.29.0: a per-test anomaly refuses the AC only in a file the AC maps — the anomaly's own code and reason
+  const anomaly = (file) => ({ id: `${file}::dup`, file, title: "dup", reason_code: "duplicate-test-id", reason: "2 tests share the id" });
+  const inMapped = observeAc({
+    id: "AC-1",
+    files: [UNIT],
+    gateIds: ["e2e"],
+    recordOf: () => rec([t(UNIT, "AC-1: a", "failed")], [anomaly(UNIT)]),
+  });
+  assert.deepEqual(inMapped, {
+    refused: { gate: "e2e", reason_code: "duplicate-test-id", reason: "2 tests share the id" },
+    observations: [],
+  });
+  const elsewhere = observeAc({
+    id: "AC-1",
+    files: [UNIT],
+    gateIds: ["e2e"],
+    recordOf: () => rec([t(UNIT, "AC-1: a", "failed")], [anomaly(OTHER)]),
+  });
+  assert.equal(elsewhere.refused, null, "control: the same anomaly in another file decides nothing here");
+  assert.deepEqual(
+    elsewhere.observations.map((o) => o.status),
+    ["failed"]
+  );
+});
+
+test("6.29.0 unmappedAnomalies — every anomaly no observeAc call reads is reported: another file, or a mapped file under another level's gate", () => {
+  const anomaly = (file, id, reason_code = "unknown-status") => ({ id, file, title: id, reason_code, reason: "r" });
+  const records = new Map([
+    ["test", { ok: true, tests: [], anomalies: [anomaly(UNIT, `${UNIT}::a`), anomaly(OTHER, `${OTHER}::b`)] }],
+    // an e2e gate that also collected the unit-mapped file: observeAc reads UNIT only through the unit level's gates
+    ["test:e2e", { ok: true, tests: [], anomalies: [anomaly(UNIT, `${UNIT}::c`, "duplicate-test-id")] }],
+    ["e2e", { ok: false, reason_code: "results-unavailable", reason: "r" }],
+  ]);
+  const rows = [{ id: "AC-1", level: "unit", file: UNIT }];
+  assert.deepEqual(unmappedAnomalies({ records, rows }), [
+    { gate: "test", reason: "unknown-status", count: 1, examples: [`${OTHER}::b`] },
+    { gate: "test:e2e", reason: "duplicate-test-id", count: 1, examples: [`${UNIT}::c`] },
+  ]);
+  // a bootstrap SPEC maps nothing: every anomaly of every ok record is reported
+  assert.equal(
+    unmappedAnomalies({ records, rows: [] }).reduce((n, u) => n + u.count, 0),
+    3
+  );
+  // the examples are bounded, the count is not
+  const many = new Map([["test", { ok: true, tests: [], anomalies: [5, 4, 3, 2, 1].map((n) => anomaly(OTHER, `${OTHER}::${n}`)) }]]);
+  const [u] = unmappedAnomalies({ records: many, rows });
+  assert.equal(u.count, 5);
+  assert.equal(u.examples.length, MAX_ANOMALY_EXAMPLES);
+  assert.deepEqual(u.examples, [`${OTHER}::1`, `${OTHER}::2`, `${OTHER}::3`]);
+  assert.throws(() => unmappedAnomalies({ records, mappedFiles: [UNIT] }), TypeError, "rows are required (L41)");
 });
 
 // ── the fingerprint ALGO bump (6.20.8, .dev/features/reconcile-symlink-target/PLAN.md) ────────────────────────────

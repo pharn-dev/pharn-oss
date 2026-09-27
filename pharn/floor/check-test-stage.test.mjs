@@ -702,6 +702,57 @@ describe("6.21.0 — the test-infrastructure pin reaches the gate from both ends
   });
 });
 
+// ── 6.29.0 (H2): the gate the build reads first refuses a PLAN scoped to the lock, and a /3 lock the tree outgrew ─────
+describe("6.29.0 — the build can be scoped to neither the lock nor what the gates run; a /3 lock is judged honestly", () => {
+  test("a PLAN naming this feature's lock (or AC-TESTS.md) is RED mapping-red BEFORE any build could rewrite it (ac-artifact-in-plan)", () => {
+    for (const entry of [`pharn/features/${NAME}/AC-TESTS.lock.json`, `pharn/features/${NAME}/AC-TESTS.md`]) {
+      withWorld(testFirst, (root) => {
+        const spec = readFileSync(join(fd(root), "SPEC.md"), "utf8");
+        writeFileSync(join(fd(root), "PLAN.md"), planText(pinOf(spec), ["src/demo.js", entry]));
+        const r = gate(root);
+        expectRed(r, "mapping-red");
+        assert.ok(
+          r.child.some((l) => /ac-artifact-in-plan/.test(l)),
+          JSON.stringify(r.child)
+        );
+      });
+    }
+  });
+
+  /** Rewrite the world's lock as a /3 lock (its red run kept), then give the `test` gate a script that names a file. */
+  const toV3 = (root) => {
+    const lock = JSON.parse(readFileSync(lockPath(root), "utf8"));
+    const { levels, gates, configs } = lock.test_infra;
+    writeFileSync(lockPath(root), JSON.stringify({ ...lock, schema: "ac-tests-lock/3", test_infra: { levels, gates, configs } }, null, 2));
+  };
+
+  test("a /3 lock over a tree with nothing only /4 pins stays READY; one whose gate now runs an unpinned file is lock-red", () => {
+    withWorld(testFirst, (root) => {
+      toV3(root);
+      const ok = gate(root);
+      assert.equal(ok.token, "READY test-first", JSON.stringify(ok));
+    });
+    withWorld(testFirst, (root) => {
+      // the world has no package.json: add one whose `test` script names a runner file, and re-pin it as /3 would have
+      writeFileSync(join(root, "package.json"), JSON.stringify({ scripts: { test: "node tools/run.mjs" } }));
+      mkdirSync(join(root, "tools"), { recursive: true });
+      writeFileSync(join(root, "tools", "run.mjs"), "// runs the tests\n");
+      const lock = JSON.parse(readFileSync(lockPath(root), "utf8"));
+      assert.equal(lockCli(root, ["--write", NAME]).status, 0, "fixture: re-pin");
+      const fresh = JSON.parse(readFileSync(lockPath(root), "utf8"));
+      writeFileSync(lockPath(root), JSON.stringify({ ...fresh, red_run: lock.red_run }, null, 2));
+      assert.equal(gate(root).token, "READY test-first", "control: the /4 lock over that tree holds");
+      toV3(root);
+      const r = gate(root);
+      expectRed(r, "lock-red");
+      assert.ok(
+        r.child.some((l) => l.includes("test infrastructure unpinned — tools/run.mjs: a level gate's script names it")),
+        JSON.stringify(r.child)
+      );
+    });
+  });
+});
+
 // ── 6.21.1 — a crash one level BELOW a child is UNUSABLE too (the `nested-child-crash` follow-up) ────────────────────
 // Appended as one block. Each child reads the checker IT shells as a verdict and reports that checker's crash as exit 2
 // with `UNUSABLE child-crashed — …` first; the gate reads that as UNUSABLE, never as `mapping-red` / `lock-red` /

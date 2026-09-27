@@ -1,6 +1,7 @@
 // pharn/floor/test-results-formats.mjs — the per-FORMAT adapters for a project's test-results file. Each
-// adapter turns ONE format's JSON document into a flat list of `{file, path[], title, status}` entries plus
-// a count of suite-level errors, or refuses with a closed reason. This file changes when a FORMAT's definition
+// adapter turns ONE format's JSON document into a flat list of `{file, path[], title, status, anomaly}` entries
+// (`status` null and `anomaly` set for an entry whose status it cannot read — ENTRY_ANOMALIES) plus a count of
+// suite-level errors, or refuses the whole document with a closed reason (FORMAT_REFUSALS). This file changes when a FORMAT's definition
 // changes (a reporter's output, or PHARN's own neutral schema), and for no other reason (P3). The record's
 // semantics — the stamp binding, the caps, identity, duplicates, the exit-code cross-check — live in
 // test-results-core.mjs, which imports this file; this file imports nothing from it.
@@ -36,17 +37,24 @@
 //                  the two raw vocabularies map identically — L35)
 //   playwright     expected (with expectedStatus passed) → passed · unexpected → failed · skipped → skipped
 //   pharn-json     the record's own RECORD_STATUSES, verbatim — no mapping
-// Deliberately UNMAPPED, so they refuse: vitest/Jest `disabled` and `focused`; Playwright `flaky` (it passed only on
-// a retry) and an expected failure (`test.fail()`: status `expected`, expectedStatus `failed`) — neither is a plain
-// pass and neither is a plain fail. Jest adds the same two cases, read from its own fields: a `passed` test with
-// `failing: true` (a `test.failing` whose body failed, as declared) and a `passed` test with `invocations > 1` (it
-// passed only on a retry). A `test.failing` whose body PASSED is reported `failed`, and is a failed test — as
-// Playwright's `unexpected` is.
+// Deliberately UNMAPPED: vitest/Jest `disabled` and `focused`; Playwright `flaky` (it passed only on a retry) and an
+// expected failure (`test.fail()`: status `expected`, expectedStatus `failed`) — neither is a plain pass and neither
+// is a plain fail. Jest adds the same two cases, read from its own fields: a `passed` test with `failing: true` (a
+// `test.failing` whose body failed, as declared) and a `passed` test with `invocations > 1` (it passed only on a
+// retry). A `test.failing` whose body PASSED is reported `failed`, and is a failed test — as Playwright's
+// `unexpected` is.
 //
-// WHAT A REPORT DOES NOT MARK, IT CANNOT REFUSE — measured, not modelled (L56), each pinned by a test over its capture:
+// AN UNMAPPED STATUS IS A PER-TEST ANOMALY, NOT A REFUSAL OF THE DOCUMENT (6.29.0). The entry is kept with
+// `status: null` and `anomaly: {reason_code: "unknown-status", reason}` (ENTRY_ANOMALIES), and the record lists it
+// apart from the tests whose status it can read (test-results-core.mjs). Before 6.29.0 one such test ANYWHERE in the
+// suite refused the whole document, so an unrelated flaky test made every AC in the project unmeasurable; now the
+// consumer decides, and the red run and the AC gate refuse only over an anomaly in a file an AC maps
+// (red-run-core.mjs observeAc). A document whose SHAPE is wrong is still refused whole (FORMAT_REFUSALS).
+//
+// WHAT A REPORT DOES NOT MARK, IT CANNOT FLAG — measured, not modelled (L56), each pinned by a test over its capture:
 //   vitest 5.0.1   `test.fails` and a pass on retry are both reported plain `passed`
 //   Jest 29.7.0    has no `failing` field, so a `test.failing` is its raw status (its retries ARE marked)
-// So "an expected failure or a retry voids the record" holds only where the report says so.
+// So "an expected failure or a retry is an anomaly, never a pass" holds only where the report says so.
 //
 // ========================================== FILE AND TITLE ==========================================
 // `file` is made relative to the gate's root when the format gives an absolute path under it; otherwise it
@@ -85,8 +93,12 @@ export const RESULTS_FORMATS = Object.freeze(["jest-json", "pharn-json", "playwr
 /** The closed status set a record entry may carry. */
 export const RECORD_STATUSES = Object.freeze(["passed", "failed", "skipped"]);
 
-/** The refusals an adapter can return. test-results-core.mjs's RECORD_REASONS must contain each. */
-export const FORMAT_REFUSALS = Object.freeze(["over-cap", "results-malformed", "unknown-status"]);
+/** The refusals of a whole DOCUMENT an adapter can return. test-results-core.mjs's RECORD_REASONS must contain each. */
+export const FORMAT_REFUSALS = Object.freeze(["over-cap", "results-malformed"]);
+
+/** The anomalies an adapter can attach to ONE entry (its `anomaly.reason_code`), kept in the record apart from the
+ *  tests whose status it can read. test-results-core.mjs's ANOMALY_REASONS must contain each. */
+export const ENTRY_ANOMALIES = Object.freeze(["unknown-status"]);
 
 /** The one schema string a `pharn-json` document must carry. A later version is a new format member, never a
  *  reinterpretation of this one. */
@@ -124,8 +136,9 @@ function malformed(reason) {
   return { ok: false, reason_code: "results-malformed", reason };
 }
 
+/** A per-entry anomaly (an ENTRY_ANOMALIES member), never a refusal of the document. */
 function unknownStatus(reason) {
-  return { ok: false, reason_code: "unknown-status", reason };
+  return { reason_code: "unknown-status", reason };
 }
 
 function overCap(reason) {
@@ -155,23 +168,30 @@ export function isCleanResultsPath(p) {
 }
 
 /** Jest's per-assertion fields, beyond the shared shape: `invocations` (always emitted by the measured versions) and
- *  `failing` (Jest 30 only). `null` when the entry is an ordinary test; a refusal otherwise. */
+ *  `failing` (Jest 30 only). Their SHAPE is checked on every entry, whatever its status — a report whose fields are
+ *  malformed is refused whole — and a well-formed pair can mark an entry as an anomaly. Returns `{refusal}`,
+ *  `{anomaly}`, or `null` for an ordinary test. */
 function jestChecks(a, status, where) {
   if (!Number.isSafeInteger(a.invocations) || a.invocations < 1) {
-    return malformed(`${where} must carry a positive integer \`invocations\` (Jest 29.7.0 and 30.5.2 both emit it)`);
+    return { refusal: malformed(`${where} must carry a positive integer \`invocations\` (Jest 29.7.0 and 30.5.2 both emit it)`) };
   }
-  if (Object.hasOwn(a, "failing") && typeof a.failing !== "boolean") return malformed(`${where}.failing must be a boolean when present`);
+  if (Object.hasOwn(a, "failing") && typeof a.failing !== "boolean") {
+    return { refusal: malformed(`${where}.failing must be a boolean when present`) };
+  }
   if (status === "passed" && a.failing === true) {
-    return unknownStatus(`${where} is an expected failure (\`test.failing\`) — neither a plain pass nor a plain fail`);
+    return { anomaly: unknownStatus(`${where} is an expected failure (\`test.failing\`) — neither a plain pass nor a plain fail`) };
   }
   if (status === "passed" && a.invocations > 1) {
-    return unknownStatus(`${where} passed only on a retry (${a.invocations} invocations) — neither a plain pass nor a plain fail`);
+    return {
+      anomaly: unknownStatus(`${where} passed only on a retry (${a.invocations} invocations) — neither a plain pass nor a plain fail`),
+    };
   }
   return null;
 }
 
 /** vitest-json / jest-json: `testResults[].name` + `assertionResults[]`. `extra` is the format's per-assertion
- *  check (Jest's), or null. */
+ *  check (Jest's), or null. An entry's status outside the closed map, or an anomaly `extra` marks, is kept with
+ *  `status: null` and its `anomaly`; only a malformed document is refused. */
 function parseJestShape(doc, roots, extra) {
   if (!isPlainObject(doc) || !Array.isArray(doc.testResults)) {
     return malformed("expected a top-level object with a `testResults` array");
@@ -191,16 +211,27 @@ function parseJestShape(doc, roots, extra) {
       if (!isPlainObject(a) || typeof a.title !== "string" || typeof a.status !== "string" || !isStringArray(a.ancestorTitles)) {
         return malformed(`${where} must carry string \`title\`/\`status\` and a string \`ancestorTitles\` array`);
       }
-      const status = JEST_SHAPE_STATUS.get(a.status);
-      if (status === undefined) {
-        return unknownStatus(`${where} has status ${shown(a.status)}, outside the closed map`);
+      const mapped = JEST_SHAPE_STATUS.get(a.status);
+      const status = mapped === undefined ? null : mapped;
+      const path = [...a.ancestorTitles, a.title].filter(nonEmpty);
+      const checked = extra === null ? null : extra(a, status, where);
+      if (checked !== null && checked.refusal) return checked.refusal;
+      if (status === null) {
+        entries.push({
+          file,
+          path,
+          title: a.title,
+          status: null,
+          anomaly: unknownStatus(`${where} has status ${shown(a.status)}, outside the closed map`),
+        });
+        continue;
       }
-      if (extra !== null) {
-        const refused = extra(a, status, where);
-        if (refused !== null) return refused;
+      if (checked !== null && checked.anomaly) {
+        entries.push({ file, path, title: a.title, status: null, anomaly: checked.anomaly });
+        continue;
       }
       if (status === "failed") failedHere++;
-      entries.push({ file, path: [...a.ancestorTitles, a.title].filter(nonEmpty), title: a.title, status });
+      entries.push({ file, path, title: a.title, status, anomaly: null });
     }
     if (tr.status === "failed" && failedHere === 0) suiteErrors++;
   }
@@ -254,12 +285,14 @@ function parsePlaywright(doc, roots) {
           return malformed(`${where}.specs[${j}].tests[${k}] must carry string \`projectName\`/\`status\`/\`expectedStatus\``);
         }
         const status = playwrightStatus(t);
-        if (status === null) {
-          return unknownStatus(
-            `${where}.specs[${j}].tests[${k}] has status ${shown(t.status)} (expectedStatus ${shown(t.expectedStatus)}), outside the closed map`
-          );
-        }
-        entries.push({ file, path: [t.projectName, ...describes, spec.title].filter(nonEmpty), title: spec.title, status });
+        const path = [t.projectName, ...describes, spec.title].filter(nonEmpty);
+        const anomaly =
+          status === null
+            ? unknownStatus(
+                `${where}.specs[${j}].tests[${k}] has status ${shown(t.status)} (expectedStatus ${shown(t.expectedStatus)}), outside the closed map`
+              )
+            : null;
+        entries.push({ file, path, title: spec.title, status, anomaly });
       }
     }
     for (let c = children.length - 1; c >= 0; c--) {
@@ -312,10 +345,14 @@ function parsePharn(doc, roots) {
       return malformed(`${where}.path must be a non-empty array of non-empty strings, the test's own title last`);
     }
     if (typeof t.status !== "string") return malformed(`${where}.status must be a string`);
-    if (!RECORD_STATUSES.includes(t.status)) {
-      return unknownStatus(`${where} has status ${shown(t.status)}, outside {${RECORD_STATUSES.join(", ")}}`);
-    }
-    entries.push({ file: relativeFile(t.file, roots), path: [...t.path], title: t.path[t.path.length - 1], status: t.status });
+    const known = RECORD_STATUSES.includes(t.status);
+    entries.push({
+      file: relativeFile(t.file, roots),
+      path: [...t.path],
+      title: t.path[t.path.length - 1],
+      status: known ? t.status : null,
+      anomaly: known ? null : unknownStatus(`${where} has status ${shown(t.status)}, outside {${RECORD_STATUSES.join(", ")}}`),
+    });
   }
   return { ok: true, entries, suiteErrors: doc.suite_errors };
 }
