@@ -5,7 +5,7 @@
 // world as its non-vacuity control; `no-files` is the one kind that cannot be isolated (a mapping line whose file is
 // not listed is also `unlisted-file`), and its test says so. The last test asserts that every KINDS member was
 // reached (L36). The ★ HOOK test runs the REAL writes-scope setter and pre-write guard: a build scoped by PLAN.md is
-// denied a Write to an AC test file, which is the property the `in-plan-files` kind exists to protect. 6.30.0 adds two
+// denied a Write to an AC test file, which is the property the `in-plan-files` kind exists to protect. 6.31.0 adds two
 // more: every measured PLAN spelling that opens the lock, AC-TESTS.md or a script-named reporter to the build is RED,
 // and the composed proof that `package.json` can stay an advisory NOTE once the lock is out of the build's scope.
 
@@ -115,7 +115,7 @@ function world({ spec = SPEC, ac = acTests(), plan = planText(), others = {}, fi
 }
 /** THIS feature's AC artifacts as main() computes them for a run from the project root. */
 const ART = [`pharn/features/${NAME}/AC-TESTS.md`, `pharn/features/${NAME}/${LOCK_NAME}`];
-/** checkMapping with its two required 6.30.0 inputs defaulted to this world's (no script names a file). */
+/** checkMapping with its two required 6.31.0 inputs defaulted to this world's (no script names a file). */
 const cm = (input) => checkMapping({ acArtifacts: ART, scriptFiles: [], ...input });
 function run(root, extra = []) {
   const f = (n) => `pharn/features/${NAME}/${n}`;
@@ -740,7 +740,7 @@ test("★ HOOK — the RED is load-bearing: over the six probed spellings it fir
   }
 });
 
-// ── 6.30.0 (H2): the build may be scoped neither to what it is judged by, nor to what the level gates run ───────────
+// ── 6.31.0 (H2): the build may be scoped neither to what it is judged by, nor to what the level gates run ───────────
 
 const LOCK = `pharn/features/${NAME}/${LOCK_NAME}`;
 const MAPPING = `pharn/features/${NAME}/AC-TESTS.md`;
@@ -806,7 +806,7 @@ test("✧ LOCK_NAME parity: check-ac-tests.mjs spells the lock exactly as ac-tes
   assert.doesNotMatch(readFileSync(CHECK, "utf8"), /from "\.\/ac-tests-lock\.mjs"/, "the mapping checker's load graph stays small");
 });
 
-test("checkMapping's 6.30.0 inputs are REQUIRED (L41): an omitted one would silently switch its RED off", () => {
+test("checkMapping's 6.31.0 inputs are REQUIRED (L41): an omitted one would silently switch its RED off", () => {
   const base = { acTestsText: acTests(), specText: SPEC, planText: planText(), others: [] };
   assert.throws(() => checkMapping({ ...base, scriptFiles: [] }), /acArtifacts/);
   assert.throws(() => checkMapping({ ...base, acArtifacts: ART }), /scriptFiles/);

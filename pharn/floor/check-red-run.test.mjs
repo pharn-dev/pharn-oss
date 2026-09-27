@@ -148,7 +148,7 @@ function reportWith(root, file, extra) {
 }
 const va = (title, status, ancestorTitles = []) => ({ ancestorTitles, title, status, fullName: title });
 
-test("6.30.0 (M6) — an anomaly in ANOTHER file decides no AC: GREEN, and reported in unmapped_anomalies (was: every AC refused)", () => {
+test("6.31.0 (M6) — an anomaly in ANOTHER file decides no AC: GREEN, and reported in unmapped_anomalies (was: every AC refused)", () => {
   const dupElsewhere = (root) => [
     { id: "test", files: [UNIT], results: reportWith(root, OTHER, [va("AC-1: another feature's test", "passed")]) },
   ];
@@ -824,7 +824,7 @@ test("✧ L35 — observeAc is the ONE match rule (the red run and /pharn-verify
     recordOf: () => ({ ok: false, reason_code: "results-unavailable", reason: "r" }),
   });
   assert.deepEqual(refused, { refused: { gate: "e2e", reason_code: "results-unavailable", reason: "r" }, observations: [] });
-  // 6.30.0: a per-test anomaly refuses the AC only in a file the AC maps — the anomaly's own code and reason
+  // 6.31.0: a per-test anomaly refuses the AC only in a file the AC maps — the anomaly's own code and reason
   const anomaly = (file) => ({ id: `${file}::dup`, file, title: "dup", reason_code: "duplicate-test-id", reason: "2 tests share the id" });
   const inMapped = observeAc({
     id: "AC-1",
@@ -849,7 +849,7 @@ test("✧ L35 — observeAc is the ONE match rule (the red run and /pharn-verify
   );
 });
 
-test("6.30.0 unmappedAnomalies — every anomaly no observeAc call reads is reported: another file, or a mapped file under another level's gate", () => {
+test("6.31.0 unmappedAnomalies — every anomaly no observeAc call reads is reported: another file, or a mapped file under another level's gate", () => {
   const anomaly = (file, id, reason_code = "unknown-status") => ({ id, file, title: id, reason_code, reason: "r" });
   const records = new Map([
     ["test", { ok: true, tests: [], anomalies: [anomaly(UNIT, `${UNIT}::a`), anomaly(OTHER, `${OTHER}::b`)] }],

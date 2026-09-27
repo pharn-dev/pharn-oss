@@ -88,7 +88,7 @@ without joining the build's scope, and a second extractor would mean editing a p
 | `bad-path`          | a `## Files` entry is a placeholder or glob, absolute, led by `-`, not normalized, or under `.pharn/` or `pharn/features/`                                                              |
 
 **One more kind, since 6.21.0 — `test-infra-in-plan`:** a PLAN.md `## Files` entry that, as the setter scopes it, is a
-ROOT runner config the test-infrastructure pin covers (below) — since 6.30.0 also a root package-manager config it
+ROOT runner config the test-infrastructure pin covers (below) — since 6.31.0 also a root package-manager config it
 covers (`.npmrc`, `.yarnrc`, `.yarnrc.yml`), or a file a level gate's script NAMES (the token pass, below: the
 `pharn-json` reporter a `test` script loads, say). Every write the build could make there changes the pin, so the plan
 could never reach green: `/pharn-verify` would read `test-infra-changed`. The remedy is to split the change into a
@@ -101,14 +101,14 @@ advisory `NOTE —` instead of checking the named files (the GREEN line then say
 **advisory** `NOTE —` line per such entry and **never changes its exit code**. It can see that the plan names the
 file, but not WHICH part of it the build will change, and a dependency is an ordinary build change. Every part the
 pin reads there — the level gates' scripts and the scripts they chain to, the `jest` key, the `testResults` formats —
-is still compared at `/pharn-verify`, late; and since 6.30.0 the build's write scope cannot re-pin what it changed
+is still compared at `/pharn-verify`, late; and since 6.31.0 the build's write scope cannot re-pin what it changed
 there, because the lock is kept out of it (next paragraph) — a Bash rewrite of the lock is detected by reconcile, never
 prevented. A test executes that composition: a GREEN plan naming
 `package.json` gets a build scope that allows it and denies the lock, and the build's script edit reads
 `test-infra changed` at `--check`. The classification is FLOOR (enum/regex over the folded name); what the build then
 does to a named manifest is not.
 
-**And one more, since 6.30.0 — `ac-artifact-in-plan`:** a PLAN.md `## Files` entry that, as the setter scopes it
+**And one more, since 6.31.0 — `ac-artifact-in-plan`:** a PLAN.md `## Files` entry that, as the setter scopes it
 (folded), names THIS feature's `AC-TESTS.md` or `AC-TESTS.lock.json` — the mapping path on argv and the lock beside
 it, spelled relative to the invoking directory (the project root the setter resolves scope entries against). The lock
 is what the AC gate compares the tree with, and it pins AC-TESTS.md's bytes: a build scoped to the lock could re-pin
@@ -252,14 +252,14 @@ the script.
 ```
 
 - The key set is **closed at every level**, per schema and mode. A lock that breaks it is unusable (exit 2), never
-  a verdict. `ac-tests-lock/4` (6.30.0) is what `--write` and `--write-bootstrap` write; `/3` (6.20.0), `/2` (6.18.0)
+  a verdict. `ac-tests-lock/4` (6.31.0) is what `--write` and `--write-bootstrap` write; `/3` (6.20.0), `/2` (6.18.0)
   and `/1` (6.17.0: no `mode`, no `bootstrap`) are still read and checked. `test_infra` is REQUIRED on a `/4` or `/3`
   test-first lock, in THAT schema's shape (`/4`: `{levels, gates, chained, configs, script_files, jest}`; `/3`:
   `{levels, gates, configs}`), and `null` everywhere else — a bootstrap lock, and every `/2` and `/1` lock. The mode is
   read from `mode` (`/1`: test-first), never from the schema, so a `/2` bootstrap lock stays a bootstrap lock.
   `--record-red-run` writes only on a `/4` test-first lock: a red run recorded on a lock with no pin could never pass
   the AC gate, and one on a `/3` pin would be judged by less than this floor pins — re-running `--write` is cheap there.
-- **Rolling back, stated (6.30.0):** a floor older than 6.30.0 reads a `/4` lock as unusable — `lock-unusable` at the
+- **Rolling back, stated (6.31.0):** a floor older than 6.31.0 reads a `/4` lock as unusable — `lock-unusable` at the
   test-stage gate, `ac-tests-modified` at the AC gate (verify FAIL) — never as GREEN. A feature pinned under `/4` returns to an older floor
   only by re-running `/pharn-test` there, which writes that floor's schema.
 - **`files`** is sorted by path and names every `## Files` entry **as the setter scopes it** — `clean`, then
@@ -275,7 +275,7 @@ the script.
 - `--check` REDs, naming the path and never the content, when AC-TESTS.md changed, a test file changed, went missing
   or stopped being a regular file, a `## Files` entry was added or dropped, the spec pin changed, `red_run` is no
   longer bound to `files` (its `files_sha256` differs), `red_run` names other ACs than the mapping, (`/4`, `/3`) the
-  test-infrastructure pin no longer holds, or (`/3`, 6.30.0) the live tree has test infrastructure only `/4` pins
+  test-infrastructure pin no longer holds, or (`/3`, 6.31.0) the live tree has test infrastructure only `/4` pins
   ("test infrastructure unpinned — …", below).
   **`--require-red-run`** additionally REDs a test-first lock with no `red_run`, any `/1` lock, and a **bootstrap**
   lock — which has no red run at all — unless **`--allow-bootstrap`** is passed too. So exit 0 from
@@ -283,7 +283,7 @@ the script.
   bootstrap lock, and the caller that passes it has said it accepts the weaker evidence. `--check` alone being GREEN
   never means a red run happened.
 
-### The test-infrastructure pin — `test_infra` (6.20.0; `/4` since 6.30.0)
+### The test-infrastructure pin — `test_infra` (6.20.0; `/4` since 6.31.0)
 
 The lock pins the test FILES; this pins the parts of what RUNS them listed below, so a change to one of THOSE parts
 is a `--check` RED ("test infrastructure changed — …", which the test-stage gate reads as `lock-red`) and reads
@@ -368,14 +368,14 @@ or stash it), or re-planning. **When the change IS the feature's intent** — th
 config or a test script — re-running `/pharn-test` cannot help: the rebuild makes the same change and the gate reads it
 again. Re-plan instead: the change goes into a `spec_kind: test-infra` increment first (through `/pharn-ship`), and the
 feature is planned after it. `check-ac-tests.mjs` refuses that plan up front for a root runner config (6.21.0), a
-package-manager config and a script-named file (6.30.0) — `test-infra-in-plan`, above; for `package.json`'s scripts
+package-manager config and a script-named file (6.31.0) — `test-infra-in-plan`, above; for `package.json`'s scripts
 and `jest` key and for `testResults` it can only print an advisory NOTE, and the lock, out of the build's scope
 (`ac-artifact-in-plan`), is what makes that NOTE's late catch hold.
 **Migration, stated:** a feature whose lock is `/2` (written by 6.18 or 6.19) carries no pin, so 6.20's verify reports
 `test-infra-unpinned` for it until that is done. Since 6.21.0 a `/3` lock written while a case-variant runner config
 already sat at the root did not pin it, and a recompute now reads `<path>: a runner config was added` (`lock-red`,
 `test-infra-changed`) — fail-closed, with the same remedy; a 6.21 lock that records such a path is `lock-unusable` to a
-6.20.x floor, whose shape check does not fold. **Since 6.30.0 a `/3` lock is judged by what it pinned** (its runner
+6.20.x floor, whose shape check does not fold. **Since 6.31.0 a `/3` lock is judged by what it pinned** (its runner
 configs, not the package-manager configs it never recorded), and whatever the live tree has that only `/4` pins — a
 chained script, a script-named file, a package-manager config, a `jest` key — is reported `unpinned`, never `changed`:
 a `--check` RED ("test infrastructure unpinned — …", `lock-red`) and `test-infra-unpinned` at the AC gate, with the
@@ -442,7 +442,7 @@ reads SPEC.md: without it, a SPEC re-approved as `test-infra` beside an old test
   none of which the build may write. The lock pins the AC tests and the test infrastructure; "The
   test-infrastructure pin" (above) is the list. The mapping check keeps the AC tests (`in-plan-files`), every root
   runner config (`test-infra-in-plan`, 6.21.0), every root package-manager config and every file a level gate's
-  script names (6.30.0), and this feature's own AC-TESTS.md and lock (`ac-artifact-in-plan`, 6.30.0) out of the
+  script names (6.31.0), and this feature's own AC-TESTS.md and lock (`ac-artifact-in-plan`, 6.31.0) out of the
   build's scope. It cannot keep out the level gates' `package.json` scripts, the scripts they chain to, the `jest` key
   or the `testResults` formats when the plan names `package.json` or `pharn.config.json` for another reason, so a
   build that changes those turns the gate RED — and cannot re-pin them through its write scope, since the lock is out
@@ -482,8 +482,8 @@ because every earlier feature's AC tests are in the same suite and reuse the ids
 | feature    | `ac-tests-modified`   | the lock is missing, unusable or not test-first; its files, mapping or spec pin do not hold; or the SPEC's pin is not the lock's, or cannot be read (6.20.5) | evidence   |
 | feature    | `ac-never-red`        | no `red_run`, or one no longer bound to the lock; a matched test the red run never recorded red for that AC; an AC with no mapping row                       | evidence   |
 | feature    | `test-infra-changed`  | the pin does not hold; or a level gate did not run as the pinned `npm run <id>` (`source: discover`, no shell)                                               | evidence   |
-| feature    | `test-infra-unpinned` | the lock carries no pin (`/2`, `/1`); or (6.30.0) a `/3` pin, and the tree has what only `/4` pins                                                           | evidence   |
-| feature    | item 01's reason      | a level gate is absent from the head run, its per-test record is refused, or (6.30.0) a per-test anomaly sits in a file mapped to AC-n                       | unmeasured |
+| feature    | `test-infra-unpinned` | the lock carries no pin (`/2`, `/1`); or (6.31.0) a `/3` pin, and the tree has what only `/4` pins                                                           | evidence   |
+| feature    | item 01's reason      | a level gate is absent from the head run, its per-test record is refused, or (6.31.0) a per-test anomaly sits in a file mapped to AC-n                       | unmeasured |
 | test-infra | `ac-untested`         | the level's gate did not run as discovered, its results are `not-configured`, or it reported no passed test                                                  | delivery   |
 | test-infra | `ac-tests-modified`   | the lock is not a bootstrap lock whose SPEC half holds                                                                                                       | evidence   |
 | legacy     | `ac-tests-modified`   | an AC-TESTS.md or a lock exists beside it (`spec_template` was removed after the tests were pinned)                                                          | evidence   |
@@ -502,14 +502,14 @@ section, and `stage-exit-core.mjs`'s verify `no-gates` question, both say so). `
 weaker than test-first. The report's `ac_gate` block carries the per-AC table (`verify-report.md`); its test ids and
 titles are untrusted DATA: the report names them, and no stage follows them.
 
-**A per-test anomaly decides an AC only where that AC's tests live (6.30.0).** A test whose status the report does
+**A per-test anomaly decides an AC only where that AC's tests live (6.31.0).** A test whose status the report does
 not give plainly — a flaky test or an expected failure the report marks, any other status outside the closed map —
 and every test whose id another test shares are the record's `anomalies`, never its `tests`
 (`test-results-record.md`). The red run and the AC gate read them per AC, by the same `observeAc`: an anomaly in a
 file mapped to AC-n, in the record of a gate AC-n's level reads, makes AC-n unmeasured by the anomaly's own reason
 (`duplicate-test-id`, `unknown-status`) — fail-closed exactly where it could hide the AC's own test — and every other
 anomaly of a record the stage read is REPORTED, grouped by gate and reason with a count and up to three example ids
-(`unmapped_anomalies`; the red run prints it as `NOTE —` lines), and read by no verdict. Before 6.30.0 one anomaly ANYWHERE refused the whole record, so a parametrized duplicate in an
+(`unmapped_anomalies`; the red run prints it as `NOTE —` lines), and read by no verdict. Before 6.31.0 one anomaly ANYWHERE refused the whole record, so a parametrized duplicate in an
 unrelated file made every AC unmeasured and `/pharn-loop` stopped on every iteration. **Bounded:** the file an entry
 names is the reporter's word, so a report that puts an AC's own flaky test under another file's name moves its
 anomaly out of the verdict — as a report that calls it `passed` already could.
@@ -538,7 +538,7 @@ For **reconcile** the two differ, deliberately. `AC-TESTS.md` is exempt, like `P
 re-plan after `/pharn-build`'s anchor legitimately rewrites it. The **lock** is not exempt
 (`reconcile-ignore.json` `pre_anchor_artifacts`): it pins the tests, and nothing changes it after the anchor, so a
 build-window change to it, or to an AC test file, stays visible to `/pharn-verify`'s reconcile gate. A re-plan that
-leaves the lock stale is caught by `ac-tests-lock.mjs --check`. **Since 6.30.0 neither can be in the build's scope**
+leaves the lock stale is caught by `ac-tests-lock.mjs --check`. **Since 6.31.0 neither can be in the build's scope**
 (`ac-artifact-in-plan`), so a Write-tool rewrite of either is DENIED by the write guard, and a Bash rewrite of the lock
 is DETECTED by reconcile — before, a PLAN naming the lock scoped the build to it, reconcile read that write as
 in-scope, and a rewritten lock passed every check. Detected, never prevented, as for every Bash write
@@ -556,7 +556,7 @@ in-scope, and a rewritten lock passed every check. Detected, never prevented, as
   (content-hash + exact comparison), and `/pharn-verify`'s AC gate decides delivery on the head run (enum membership
   over the per-test record, plus the content-hash checks above). Since 6.21.0: no root runner config the pin covers
   is in the build's scope when the mapping check is GREEN (`test-infra-in-plan`, enum/regex over the folded name,
-  composed with the fix #7 hook, which scopes only concrete `## Files` entries). Since 6.30.0, composed the same way
+  composed with the fix #7 hook, which scopes only concrete `## Files` entries). Since 6.31.0, composed the same way
   and probed through the real setter and write guard over the measured spellings: neither this feature's AC-TESTS.md
   nor its lock (`ac-artifact-in-plan`), no root package-manager config, and — when the tree can be read (else a NOTE,
   and the GREEN line says so) — no file a level gate's script names under the closed token rule is in the build's scope; the pin also covers the scripts the level gates chain to, those
@@ -567,7 +567,7 @@ in-scope, and a rewritten lock passed every check. Detected, never prevented, as
   write hook (`LIMITS.md §6`), and `/pharn-test` runs before the reconcile anchor, so its own Bash writes are not
   reconciled. **`/pharn-verify` does not re-run the mapping check** (its chain phase is `check-plan-spec-agree.mjs`
   alone), so a run that ignores the plan check and the test-stage gate — both RED for a PLAN naming the lock — and
-  sets the build's scope itself still reaches a verify PASS over a build that re-pinned the lock (measured, 6.30.0).
+  sets the build's scope itself still reaches a verify PASS over a build that re-pinned the lock (measured, 6.31.0).
   Every shipped route reads the test-stage gate before the build, and `/pharn-loop` re-reads it after each one;
   obeying it is command discipline. Named follow-up: `verify-rechecks-test-stage`.
 - **Advisory:** that the tests are right, assert the AC's Then, or drive a good public target; that `/pharn-test`
@@ -577,7 +577,7 @@ in-scope, and a rewritten lock passed every check. Detected, never prevented, as
   them: a self-consistent rewrite of tests and lock passes, and so does a self-consistent forged results file and
   stamp over the live tree. The stamp and results digests in `red_run` are recorded, not re-checkable once the next
   run wipes `<out>`; only `files_sha256` is re-checked.
-- **Struck, and why (6.30.0):** "the build can no longer forge the AC gate" and "every script a gate runs is
+- **Struck, and why (6.31.0):** "the build can no longer forge the AC gate" and "every script a gate runs is
   pinned". Code the build writes runs inside the test process and can switch off the assertions or the reporter
   there (the in-process bound, first in the pin's NOT-caught list), and the token pass reads a closed literal rule,
   not every way a script can run another.

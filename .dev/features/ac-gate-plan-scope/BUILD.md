@@ -50,7 +50,7 @@ unpinned}`; `--record-red-run` only on `/4`; the rollback direction in the heade
 - `pharn/floor/render-verify.mjs`, `pharn/floor/render-run-report.mjs` — the unmapped anomalies as fenced DATA.
 
 **Docs:** `CLAUDE.md` (PER-TEST RESULTS, AC TESTS, THE RED RUN, THE AC GATE), `README.md` (badge, per-test results,
-pharn-json guidance, what verify proves, the costs), `CHANGELOG.md` (`[6.30.0]`), `SKILLS_VERSION` 6.30.0.
+pharn-json guidance, what verify proves, the costs), `CHANGELOG.md` (`[6.31.0]`), `SKILLS_VERSION` 6.31.0.
 
 **Tests** (every `*.test.mjs` the plan names): the token pass per clause and per closed-set member with controls, the
 L59 path-kind table, the jest canonical form, `/3` and `/4` shapes both ways, the migration's `{changed, unpinned}`, the
@@ -67,7 +67,7 @@ Every world is an install-like scratch project built by `.pharn/pharn-dev-plan/m
 (the "after" runs are under the session scratchpad's `after/`). Each "after" run forces its way past every RED the way
 the reviewer's did, so a later stage's verdict is visible too; a command that obeys the gates stops at the first RED.
 
-| world                             | before (6.28.2)                                           | after (6.30.0)                                                                                                                                                                            |
+| world                             | before (6.28.2)                                           | after (6.31.0)                                                                                                                                                                            |
 | --------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | wE — PLAN names the lock          | plan GREEN (NOTE); test-stage READY; verify **PASS**      | plan **RED** `ac-artifact-in-plan`; test-stage **RED** before the build; forced past both: verify PASS (A5's bound — `/pharn-verify` does not re-run the mapping check; "As built")       |
 | wB — PLAN names the reporter      | plan GREEN; verify **PASS** (the pin never read the file) | plan **RED** `test-infra-in-plan`; test-stage **RED**; forced past: `--check` **RED**, verify **FAIL** `ac-evidence`                                                                      |
@@ -133,7 +133,7 @@ refinement made after GATE 1; they are amendments to PLAN.md's design, recorded 
 
 GATE 2 = FIX (the orchestrator, delegated). Fixed, each at every site it appeared:
 
-- **F1** — the rollback verdict: a pre-6.30.0 AC gate reads a `/4` lock as `ac-tests-modified` (verify FAIL), not
+- **F1** — the rollback verdict: a pre-6.31.0 AC gate reads a `/4` lock as `ac-tests-modified` (verify FAIL), not
   INCONCLUSIVE (`ac-tests-lock.mjs`'s header, `ac-tests.md` "Rolling back", `PLAN.md` G5).
 - **F2** — README: the plan exclusion names the files, configs and lock; `package.json` stays plannable, and a change
   there to anything pinned fails verify.

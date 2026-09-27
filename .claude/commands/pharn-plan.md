@@ -273,13 +273,13 @@ for such a SPEC is a `spec-kind` RED. Exit **0** → continue. Exit **2** → th
      build (`pharn/pharn-contracts/ac-tests.md`, "The test-infrastructure pin"), so a build that changes it reads
      `test-infra-changed` at `/pharn-verify`, and `/pharn-loop` stops (S13) with no rebuild that clears it. A root
      runner or package-manager config (`vite.config.ts`, `.npmrc`, …) or a file a level gate's script names (a
-     `pharn-json` reporter, a runner script — 6.30.0) in PLAN.md is a **`test-infra-in-plan`** RED. When the
+     `pharn-json` reporter, a runner script — 6.31.0) in PLAN.md is a **`test-infra-in-plan`** RED. When the
      feature genuinely needs a runner, config or test-script change, **split it**: spec that change as a
      `spec_kind: test-infra` increment first (through `/pharn-ship` — `/pharn-loop` never approves one), then plan
      this feature without it. `package.json` / `pharn.config.json` may stay (a dependency is an ordinary build
      change); the checker prints an **advisory** `NOTE —` line for them and never changes its exit code, because it
      cannot see which part of the file the build will change.
-   - **Never name this feature's `AC-TESTS.md` or `AC-TESTS.lock.json` in PLAN.md** (6.30.0): the build is judged
+   - **Never name this feature's `AC-TESTS.md` or `AC-TESTS.lock.json` in PLAN.md** (6.31.0): the build is judged
      against the lock, so a build scoped to it could re-pin its own change — an **`ac-artifact-in-plan`** RED.
 
 3. **Check it (FLOOR)** and branch only on the exit code:

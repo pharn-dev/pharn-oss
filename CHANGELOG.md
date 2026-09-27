@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.30.0] - 2026-09-27
+## [6.31.0] - 2026-09-27
 
 ### Security
 
@@ -35,11 +35,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   rewrite the reporter, which the pin never read (same result). The GATE-1 review, under the maintainer's delegation,
   added three routes of the same kind — a chained script (`"test": "npm run test:unit"`), a root `.npmrc`'s
   `script-shell`, and `package.json`'s `jest` key — each measured before the fix (verify `PASS` for the first two; the
-  pin blind to the third). `SKILLS_VERSION` 6.29.0 → 6.30.0 (MINOR: a new checker kind, new pin members, lock schema
+  pin blind to the third). `SKILLS_VERSION` 6.30.0 → 6.31.0 (MINOR: a new checker kind, new pin members, lock schema
   `/4` with `/3` still read, a new record field — no install is invalidated, though an in-flight feature locked by
   6.20–6.29 whose level gates chain to a script, name a file, or read a `jest` key or a package-manager config reads RED
-  until `/pharn-test` re-runs: Migration, below; planned as 6.29.0 and renumbered at merge, since #290 released 6.29.0
-  first). `MIN_CLI` stays 0.5.0: no installed path moves.
+  until `/pharn-test` re-runs: Migration, below; planned as 6.29.0 and renumbered twice at merge,
+  since #290 released 6.29.0 and #292 released 6.30.0 first). `MIN_CLI` stays 0.5.0: no installed path moves.
   ([`.dev/features/ac-gate-plan-scope/`](./.dev/features/ac-gate-plan-scope/))
   - **`check-ac-tests.mjs` gains `ac-artifact-in-plan`:** a PLAN.md `## Files` entry the setter would scope to THIS
     feature's `AC-TESTS.md` or lock is RED (folded; the lock's name is a literal parity-tested against
@@ -61,7 +61,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     one over a tree the `/4` pin cannot be taken on at all (a symlinked `.npmrc` or named file) reads `changed`.
     `/pharn-verify` does not re-run the mapping check — a run that ignores both earlier REDs reaches verify PASS (a
     stated bound; follow-up `verify-rechecks-test-stage`).
-    `--record-red-run` writes only on `/4`. **Rolling back** below 6.30.0 reads a `/4` lock as unusable, never GREEN;
+    `--record-red-run` writes only on `/4`. **Rolling back** below 6.31.0 reads a `/4` lock as unusable, never GREEN;
     re-run `/pharn-test` under the older floor.
   - **Stated, not fixed (P0):** code the build writes runs INSIDE the test process and can switch off the assertions
     or the reporter there — `assert.equal = () => {}` in the only in-scope file still reads verify `PASS` with the

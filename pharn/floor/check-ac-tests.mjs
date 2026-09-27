@@ -32,7 +32,7 @@
 // runner configs and the level gates' scripts BEFORE the build (test-infra-core.mjs), so a PLAN.md `## Files` entry the
 // setter would scope to a root runner config certifies a build whose own in-scope edit reads `test-infra-changed` at
 // `/pharn-verify` — no rebuild clears it. The entry is classified by test-infra-core's testInfraPathKind (the pin's own
-// predicate, imported — never a second regex). Since 6.30.0 the kind also covers the root package-manager configs the
+// predicate, imported — never a second regex). Since 6.31.0 the kind also covers the root package-manager configs the
 // pin hashes (`.npmrc`, `.yarnrc`, `.yarnrc.yml`) and every file the level gates' scripts NAME (test-infra-core's
 // scriptNamedFiles over the tree at the invoking directory — the reporter a `pharn-json` gate loads, say; the review's
 // H2 wB: a build scoped to it wrote a reporter that said `passed`). `package.json` / `pharn.config.json` get an ADVISORY
@@ -40,7 +40,7 @@
 // checker cannot see WHICH part of the file the build will change — every part the pin reads (the level gates'
 // scripts, the scripts they chain to, the `jest` key, the `testResults` formats) is still compared at verify.
 //
-// THE FEATURE'S OWN AC ARTIFACTS STAY OUT OF THE BUILD'S SCOPE (6.30.0, `ac-artifact-in-plan`): a PLAN.md `## Files`
+// THE FEATURE'S OWN AC ARTIFACTS STAY OUT OF THE BUILD'S SCOPE (6.31.0, `ac-artifact-in-plan`): a PLAN.md `## Files`
 // entry the setter would scope to THIS feature's AC-TESTS.md or AC-TESTS.lock.json is RED. The lock is what the AC gate
 // compares the tree with — a build scoped to it re-pinned whatever it changed, with every floor check green (the
 // review's H2) — and it pins AC-TESTS.md's bytes, so the two go together. Both are named as the invoking directory
@@ -241,21 +241,21 @@ export function checkMapping({ acTestsText, specText, planText, others, acArtifa
     if (k !== null && planKeys.has(k)) red("in-plan-files", `${shown(f)} is in PLAN.md \`## Files\`, so the build would be scoped to it`);
   }
 
-  // The feature's own AC artifacts stay out of the build's scope (6.30.0): the lock is what the AC gate compares the tree
+  // The feature's own AC artifacts stay out of the build's scope (6.31.0): the lock is what the AC gate compares the tree
   // with, and it pins AC-TESTS.md — a build scoped to either could re-pin what it changed.
   const artifactKeys = new Map();
   for (const p of acArtifacts) {
     const k = scopeKey(p);
     if (k !== null) artifactKeys.set(k, p);
   }
-  // The files the level gates' scripts name (6.30.0), compared the same way.
+  // The files the level gates' scripts name (6.31.0), compared the same way.
   const namedKeys = new Map();
   for (const p of scriptFiles) {
     const k = scopeKey(p);
     if (k !== null) namedKeys.set(k, p);
   }
 
-  // The test infrastructure the lock pins stays out of the build's scope too (6.21.0): a root runner or (6.30.0)
+  // The test infrastructure the lock pins stays out of the build's scope too (6.21.0): a root runner or (6.31.0)
   // package-manager config in PLAN.md is RED — every write the build could make there changes the pin — and so is a
   // file a level gate's script names; a manifest is an advisory NOTE only.
   const notes = [];

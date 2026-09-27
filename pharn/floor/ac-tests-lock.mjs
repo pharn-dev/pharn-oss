@@ -5,7 +5,7 @@
 // Every digest in the lock is computed HERE, never typed by a model (PHARN's own build-loop lesson L22). One lock per
 // feature, with NAMED sections, so later stages extend this record instead of adding a second one (L35).
 //
-// SCHEMA `ac-tests-lock/4` (6.30.0) is what `--write` and `--write-bootstrap` write; `ac-tests-lock/3` (6.20.0),
+// SCHEMA `ac-tests-lock/4` (6.31.0) is what `--write` and `--write-bootstrap` write; `ac-tests-lock/3` (6.20.0),
 // `ac-tests-lock/2` (6.18.0) and `ac-tests-lock/1` (6.17.0) are still READ and checked — a /1 lock never passes
 // `--require-red-run`, /2 and /1 carry no test-infrastructure pin (the AC gate reads that as `test-infra-unpinned`), and
 // a /3 pin is judged by what it pinned, plus whatever the live tree has that only /4 pins (a chained script, a file a
@@ -31,7 +31,7 @@
 // `--write` always resets `red_run` to null and re-takes the pin: a rewrite means the tests changed, so evidence about
 // the old ones is stale by construction. The pin is taken at `--write`, BEFORE the red run, so the red run runs under
 // the pinned infrastructure and `--record-red-run` (which requires `--check` GREEN) refuses a pin that no longer holds.
-// ROLLING BACK (6.30.0): a floor older than 6.30.0 reads a /4 lock as unusable (`lock-unusable` at the test-stage gate,
+// ROLLING BACK (6.31.0): a floor older than 6.31.0 reads a /4 lock as unusable (`lock-unusable` at the test-stage gate,
 // `ac-tests-modified` at the AC gate — verify FAIL) — never as GREEN; a feature pinned under /4 returns to an older floor only by re-running
 // /pharn-test there, which writes its own schema.
 //
@@ -482,7 +482,7 @@ export function redRunReds(lock, name, base, root, { requireRedRun = false } = {
 
 /** PURE: the test-infrastructure pin, recomputed over `root` (test-infra-core.mjs): `{changed, unpinned}` — two fields,
  *  never one list split by prefix (L6). `changed`: what differs from the recorded pin. `unpinned` (a /3 pin only,
- *  6.30.0): what the live tree has that the /4 pin covers and the /3 pin never recorded. A lock with no pin (/2, /1)
+ *  6.31.0): what the live tree has that the /4 pin covers and the /3 pin never recorded. A lock with no pin (/2, /1)
  *  has nothing to hold here — the AC gate names that absence `test-infra-unpinned`; `--check` does not. */
 export function pinReds(lock, root) {
   if (lock.test_infra === null) return { changed: [], unpinned: [] };
@@ -577,7 +577,7 @@ function recordRedRun(name, base, lockPath, out) {
   const lock = loaded.lock;
   if (lock.schema !== SCHEMA || lock.mode !== "test-first") {
     // A /2 test-first lock has no test-infrastructure pin, so a red run recorded on it could never pass /pharn-verify's
-    // AC gate (`test-infra-unpinned`), and a /3 pin covers less than this floor pins (6.30.0): both refused here, where
+    // AC gate (`test-infra-unpinned`), and a /3 pin covers less than this floor pins (6.31.0): both refused here, where
     // re-running --write is still cheap.
     console.log(
       `UNUSABLE — ${lockPath} is ${lock.schema}${lock.mode ? ` ${lock.mode}` : ""}; a red run is recorded on an ${SCHEMA} test-first lock — re-run --write`

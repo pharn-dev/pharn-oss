@@ -22,7 +22,7 @@ log output.
 demonstrable on any project. In 6.15.0 no stage read the record. Since 6.18.0 `/pharn-test`'s red run reads it
 (`check-red-run.mjs`, `ac-tests.md`), where a refused record is a RED by its own reason; since 6.20.0 `/pharn-verify`'s
 AC gate reads it too (`check-verify.mjs --ac-gate`, `ac-tests.md` "The AC gate"), so a verify verdict computed with
-that flag depends on the record — a refused one is `INCONCLUSIVE` over otherwise-green gates, and since 6.30.0 so is
+that flag depends on the record — a refused one is `INCONCLUSIVE` over otherwise-green gates, and since 6.31.0 so is
 an AC whose mapped file holds an anomaly. The regress verdict,
 and a verify verdict computed without the flag, are unchanged for every stamp the runner writes; what also changed
 is that a stamp carrying a malformed `results_sha256` is refused (`gate-run-record.md`, "Per-test results"), and the
@@ -185,13 +185,13 @@ plain pass.
   `pharn-json`'s own `suite_errors`. Their messages are not read.
 - **`tests`** is sorted by `id`. It may be **empty**: an `ok` record with zero tests is a run that ran none, and
   a consumer that needs tests must check for them itself. `counts` range over `tests` alone.
-- **`anomalies`** (6.30.0) is sorted by `id`: every test whose status the report does not give plainly
+- **`anomalies`** (6.31.0) is sorted by `id`: every test whose status the report does not give plainly
   (`unknown-status`, with the adapter's own cause as `reason`), and ONE `duplicate-test-id` entry per id two or more
   tests share — whatever their statuses, since which status belongs to the id is ambiguous (never last-wins). Each is
   `{ id, file, title, reason_code, reason }`, `reason_code` a member of `ANOMALY_REASONS`, and none is in `tests`. The
   record stays `ok`: **the consumer decides what an anomaly means for it.** The red run and the AC gate read one as
   their verdict only when it sits in a file an AC maps, in the record of a gate that AC's level reads, and report the
-  rest (`ac-tests.md`). Before 6.30.0 either case
+  rest (`ac-tests.md`). Before 6.31.0 either case
   anywhere in the suite refused the whole record.
 
 ## The neutral format (`pharn-json`)
@@ -232,7 +232,7 @@ built-in reporter.
 
 ## The closed reasons
 
-`RECORD_REASONS` is one closed set with two uses (6.30.0). **A refusal voids the whole record**; there is no partial
+`RECORD_REASONS` is one closed set with two uses (6.31.0). **A refusal voids the whole record**; there is no partial
 list. **An anomaly does not:** its two codes (`ANOMALY_REASONS`) are carried per test on an `ok` record, and a
 consumer that reads one as its verdict names it by the same code.
 
@@ -272,12 +272,12 @@ pass it as an instruction. A raw value quoted inside a `reason` is cut to 64 cha
   possible. `results-exit-contradiction` narrows that and does not close it. "passed" means the project's
   reporter said so; PHARN does not re-run or re-judge a test. Since 6.20.0 the lock's test-infrastructure pin
   (`ac-tests.md`, "The test-infrastructure pin") narrows it further for the AC gate. It covers the level gates'
-  scripts, their `testResults` formats and the root runner configs, and since 6.30.0 also the scripts those chain
+  scripts, their `testResults` formats and the root runner configs, and since 6.31.0 also the scripts those chain
   to, the files they name (a `pharn-json` reporter included), the root package-manager configs and `package.json`'s
   `jest` key. That pin's full list of what it does not catch is in that section — first, that code the build writes
   runs inside the test process and can switch off the assertions or the reporter there.
 - **An unmarked expected failure or retry reads as a pass.** See "What a report does not mark", above.
-- **An anomaly's file is the reporter's word (6.30.0).** A consumer that reads anomalies per file trusts the file an
+- **An anomaly's file is the reporter's word (6.31.0).** A consumer that reads anomalies per file trusts the file an
   entry names, exactly as it trusts the status an entry names.
 - **A live referent.** A detached process started by the gate can still write the file after the runner hashed
   it. The record never follows such a write: it is refused as `results-hash-mismatch`.

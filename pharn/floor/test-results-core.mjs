@@ -33,12 +33,12 @@
 //     voids the whole record — a stamp that does not validate, a gate not in it, no or a malformed config (a
 //     `testResults` key outside RESULTS_GATES), a file that is absent, changed after the runner hashed it, malformed
 //     or over a cap, and a report that contradicts the gate's exit.
-//   • PER TEST for its ANOMALIES (6.30.0): a test whose status the report does not give plainly — one flaky test or
+//   • PER TEST for its ANOMALIES (6.31.0): a test whose status the report does not give plainly — one flaky test or
 //     expected failure the report MARKS (test-results-formats.mjs names which formats mark which), or any other status
 //     outside the closed map (`unknown-status`) — and every test whose id another test shares (`duplicate-test-id`)
 //     is listed in `anomalies` (ANOMALY_REASONS), never in `tests`, and the record stays `ok`. The CONSUMER decides
 //     what an anomaly means for it: the red run and the AC gate refuse an AC only when an anomaly sits in a file that
-//     AC maps (red-run-core.mjs observeAc) and report the rest. Before 6.30.0 one such test ANYWHERE voided the whole
+//     AC maps (red-run-core.mjs observeAc) and report the rest. Before 6.31.0 one such test ANYWHERE voided the whole
 //     record, so an unrelated parametrized duplicate made every AC of a project unmeasurable. One the report does NOT
 //     mark — vitest's `test.fails` or pass on retry, Jest 29's `test.failing` (measured) — still reads as its raw
 //     status.
@@ -86,7 +86,7 @@ export const RECORD_REASONS = Object.freeze([
   "unknown-status",
 ]);
 
-/** The PER-TEST anomaly codes (6.30.0) — a subset of RECORD_REASONS, carried on `anomalies[].reason_code`, never a
+/** The PER-TEST anomaly codes (6.31.0) — a subset of RECORD_REASONS, carried on `anomalies[].reason_code`, never a
  *  refusal of the record: `duplicate-test-id` (decided here) and the adapters' ENTRY_ANOMALIES. Sorted, closed. */
 export const ANOMALY_REASONS = Object.freeze(["duplicate-test-id", ...ENTRY_ANOMALIES].sort());
 

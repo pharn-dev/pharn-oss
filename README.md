@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.30.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.31.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -575,17 +575,17 @@ unexpanded. Things to know about Jest:
   refused rather than guessed.
 - Jest reads the file arguments PHARN passes as path patterns, so a similarly named test file can run too, and its
   tests enter the record. Jest's `--runTestsByPath` makes them exact paths.
-- The lock's test-infrastructure pin covers a `jest.config.*` file and, since 6.30.0, a `jest` key inside
+- The lock's test-infrastructure pin covers a `jest.config.*` file and, since 6.31.0, a `jest` key inside
   `package.json` too.
 
 For any other runner, write a small reporter that emits `pharn-json`. The schema, with an example, is in
 `pharn/pharn-contracts/test-results-record.md`, "The neutral format". Name the reporter file literally in the `test`
-script (`--reporter=./tools/pharn-reporter.mjs`, say): since 6.30.0 the lock pins every file a test script names
+script (`--reporter=./tools/pharn-reporter.mjs`, say): since 6.31.0 the lock pins every file a test script names
 that way, and a plan that puts it in the build's scope is refused.
 
 What the record can and cannot tell you is in `pharn/pharn-contracts/test-results-record.md`. In short, "passed"
 means your reporter said so. A flaky test or an expected failure that the report marks is never counted as a pass:
-Playwright's `flaky` and `test.fail()`, Jest's pass on a retry, and Jest 30's `test.failing`. Since 6.30.0 the record
+Playwright's `flaky` and `test.fail()`, Jest's pass on a retry, and Jest 30's `test.failing`. Since 6.31.0 the record
 lists such a test, and every test name two tests share, as an **anomaly** beside the tests it can read. An anomaly
 decides a criterion only when it sits in a file that criterion maps, and is reported otherwise — before, one anywhere
 in the suite voided the whole record. One the report does not mark reads as a pass. Measured cases are vitest's
@@ -639,7 +639,7 @@ verify report carries a per-AC table (id, level, matched tests, status, reason),
   or the lock was edited, the tests were never shown red, or the test infrastructure moved. Another build cannot fix
   that. `/pharn-test` now also pins what runs the tests: the level gates' `package.json` scripts (with their
   `pre`/`post` scripts), their `testResults` format, and root `vitest`/`vite`/`playwright`/`jest` config files — and,
-  since 6.30.0, the scripts those chain to (`npm run test:unit`), the files they name (your reporter, a runner
+  since 6.31.0, the scripts those chain to (`npm run test:unit`), the files they name (your reporter, a runner
   script), a `jest` key in `package.json`, and a root `.npmrc`/`.yarnrc`/`.yarnrc.yml`. A plan may not put the
   named files, those configs or the feature's own lock in the build's scope; it may still name `package.json` (a
   dependency is ordinary build work), and a change there to anything the lock pins fails verify. What the pin does not see — code the build writes can still
@@ -647,7 +647,7 @@ verify report carries a per-AC table (id, level, matched tests, status, reason),
   environment-driven configuration, a chain through another runner, `tsconfig` and the runner's version are unpinned
   too — is listed in `pharn/pharn-contracts/ac-tests.md`. After the build, re-running `/pharn-test` means setting the
   build aside first, because its red run would now pass.
-- **What the wider pin costs (6.30.0).** A source file a test script names literally is pinned too — a bundler entry
+- **What the wider pin costs (6.31.0).** A source file a test script names literally is pinned too — a bundler entry
   reached through `"pretest": "npm run build"`, a runner script — so a feature that edits it fails verify with
   `test-infra-changed`; name a directory, a glob or a config file there instead, as its own `spec_kind: test-infra`
   increment. The lock records a digest of `.npmrc`: keep registry credentials in an environment variable or your
@@ -655,12 +655,12 @@ verify report carries a per-AC table (id, level, matched tests, status, reason),
 - **A feature locked before 6.20.0** has no infrastructure pin, and verify reports `test-infra-unpinned` until it goes
   back through `/pharn-test` that way. **A feature locked by 6.20–6.29** keeps its lock; verify reports
   `test-infra-unpinned` only if its test scripts chain to another script, name a file, or read a `jest` key or a
-  package-manager config — the things only the 6.30.0 lock pins — and `test-infra-changed` if the 6.30.0 pin cannot be
-  taken over its tree at all (a symlinked `.npmrc` or named file, a chain deeper than 8 scripts), which no 6.30.0 lock
+  package-manager config — the things only the 6.31.0 lock pins — and `test-infra-changed` if the 6.31.0 pin cannot be
+  taken over its tree at all (a symlinked `.npmrc` or named file, a chain deeper than 8 scripts), which no 6.31.0 lock
   could record either.
 - **A per-test record that cannot be read** makes verify inconclusive, never a pass. A flaky test, an expected
   failure the report marks, or a duplicate test name makes a criterion inconclusive only when it sits in that
-  criterion's test file; anywhere else it is listed in the report and decides nothing (6.30.0 — see
+  criterion's test file; anywhere else it is listed in the report and decides nothing (6.31.0 — see
   [Per-test results](#per-test-results)).
 - **A SPEC not filled from the template** is reported `not-applicable (legacy spec)` in the report, not silently
   passed. A `spec_kind: test-infra` SPEC gets **bootstrap** evidence: the level's gate ran and reported at least one

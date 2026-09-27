@@ -414,7 +414,7 @@ function toV3(w) {
   );
 }
 
-test("6.30.0 test-infra-changed — the build rewrote the pharn-json reporter the `test` script names (the review's wB), or .npmrc", () => {
+test("6.31.0 test-infra-changed — the build rewrote the pharn-json reporter the `test` script names (the review's wB), or .npmrc", () => {
   const reporterWorld = (w) => {
     // re-pin the world with a reporter the test script names, as /pharn-test's --write would have
     writeFileSync(
@@ -448,7 +448,7 @@ test("6.30.0 test-infra-changed — the build rewrote the pharn-json reporter th
   });
 });
 
-test("6.30.0 test-infra-unpinned — a /3 lock over a tree whose `test` gate names a file: unpinned, never a PASS; a /3 lock with nothing more still PASSes", () => {
+test("6.31.0 test-infra-unpinned — a /3 lock over a tree whose `test` gate names a file: unpinned, never a PASS; a /3 lock with nothing more still PASSes", () => {
   withWorld({}, (w) => {
     toV3(w);
     assert.equal(gateOf(w).verdict, "PASS", "a /3 lock over a tree with nothing only /4 pins is judged by what it pinned");
@@ -495,9 +495,9 @@ test("item 01's reason, fatal — no `test` gate in the head run is `gate-absent
   });
 });
 
-test("6.30.0 (M6) — an anomaly decides an AC only in a file that AC maps; elsewhere it is REPORTED, never verdict-bearing", () => {
+test("6.31.0 (M6) — an anomaly decides an AC only in a file that AC maps; elsewhere it is REPORTED, never verdict-bearing", () => {
   withWorld({}, (w) => {
-    // A duplicate test id in ANOTHER feature's file. Before 6.30.0 it voided the whole record, so EVERY AC read
+    // A duplicate test id in ANOTHER feature's file. Before 6.31.0 it voided the whole record, so EVERY AC read
     // INCONCLUSIVE (the review's M6 — a parametrized duplicate anywhere in the suite, and /pharn-loop stopped
     // STOP_TERMINAL on every iteration). Now: PASS, the anomaly listed in unmapped_anomalies.
     let g = gateOf(w, { results: [...w.results, { file: OTHER, title: "AC-1: t", status: "passed" }] });
@@ -536,7 +536,7 @@ test("6.30.0 (M6) — an anomaly decides an AC only in a file that AC maps; else
   });
 });
 
-test("6.30.0 (M6) — unmapped_anomalies groups by gate and reason, counts every id, and quotes at most three examples", () => {
+test("6.31.0 (M6) — unmapped_anomalies groups by gate and reason, counts every id, and quotes at most three examples", () => {
   withWorld({}, (w) => {
     const extra = ["e", "d", "c", "b", "a"].map((t) => ({ file: OTHER, title: t, status: "disabled" }));
     const g = gateOf(w, { results: [...w.results, ...extra, { file: OTHER, title: "AC-2: t", status: "passed" }] });

@@ -180,7 +180,7 @@ node pharn/floor/ac-tests-lock.mjs --check <name>
 
 `--write` records every test file's sha256, AC-TESTS.md's digest and the SPEC pin (`pharn/pharn-contracts/ac-tests.md`,
 "The lock"), with `red_run: null` — and, since 6.20.0, the **test-infrastructure pin** (`test_infra`, lock schema
-`ac-tests-lock/4` since 6.30.0): the `package.json` scripts of the gates your levels map to (with their `pre`/`post`
+`ac-tests-lock/4` since 6.31.0): the `package.json` scripts of the gates your levels map to (with their `pre`/`post`
 scripts) and the scripts they chain to, their `testResults` formats, the files those scripts name (a `pharn-json`
 reporter, a runner script), `package.json`'s `jest` key, and the root runner and package-manager configs in a closed
 name set ("The test-infrastructure pin"). Set up the runner and its per-test results BEFORE this step, never after it.
@@ -211,7 +211,7 @@ node pharn/floor/check-red-run.mjs --verdict --ac-tests pharn/features/<name>/AC
 ```
 
 - exit **0** → every AC's test was collected and failed. Go to Step 6. A `NOTE —` line names a per-test anomaly in
-  a file no AC maps (6.30.0): it decides nothing here — quote it in your report as data.
+  a file no AC maps (6.31.0): it decides nothing here — quote it in your report as data.
 - exit **2** → **`red-run-unusable`**: no finished run, or a run not bound to this mapping and tree. Stop.
 - exit **1** → **`red-run-red`**: quote each `RED — <reason>: AC-<n>` line. The reasons are defined in
   `pharn/pharn-contracts/ac-tests.md`, "The red run" (cited, not restated — P4). What decides your next move:

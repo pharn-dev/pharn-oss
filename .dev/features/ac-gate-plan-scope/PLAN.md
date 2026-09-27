@@ -275,9 +275,9 @@ so the field is re-derived like the rest.
 - `pharn/floor/render-verify.test.mjs` — EDIT. `unmapped_anomalies` rendered fenced; absent renders nothing — layer product floor tests
 - `pharn/floor/render-run-report.test.mjs` — EDIT. The same for RUN-REPORT.md — layer product floor tests
 - `CLAUDE.md` — EDIT. The PER-TEST RESULTS, AC TESTS and AC GATE comment blocks (the kinds, the lock schema, the pin, the anomaly rule) — layer repo-meta
-- `README.md` — EDIT. The badge 6.30.0; the two sentences stating the whole-record rule; the pin list in "What verify proves"; the pharn-json reporter guidance — layer repo-meta
-- `CHANGELOG.md` — EDIT. `## [6.30.0] - 2026-09-27` above `## [6.29.0]` (renumbered from 6.29.0 at the merge of main) — layer repo-meta
-- `SKILLS_VERSION` — EDIT. `6.29.0` → `6.30.0` — layer repo-meta
+- `README.md` — EDIT. The badge 6.31.0; the two sentences stating the whole-record rule; the pin list in "What verify proves"; the pharn-json reporter guidance — layer repo-meta
+- `CHANGELOG.md` — EDIT. `## [6.31.0] - 2026-09-27` above `## [6.30.0]` (renumbered from 6.29.0, then 6.30.0, at the merges of main) — layer repo-meta
+- `SKILLS_VERSION` — EDIT. `6.30.0` → `6.31.0` — layer repo-meta
 
 ### Explicitly not touched by the agent
 
@@ -360,7 +360,7 @@ evidence (listed under `## Files`).
 
 ## Versioning
 
-- `SKILLS_VERSION` 6.29.0 → **6.30.0** (MINOR; planned as 6.28.2 → 6.29.0 and renumbered at the merge of `origin/main`, where #290 released 6.29.0): a newly shipped checker kind and pin member, a lock schema (`/4`, with
+- `SKILLS_VERSION` 6.30.0 → **6.31.0** (MINOR; planned as 6.28.2 → 6.29.0, renumbered to 6.30.0 at the merge of `origin/main` where #290 released 6.29.0, and to 6.31.0 where #292 released 6.30.0): a newly shipped checker kind and pin member, a lock schema (`/4`, with
   `/3` still read) and a per-test record field — no install is invalidated. `MIN_CLI` stays 0.5.0 (no installed path
   moves; a pre-0.5.0 CLI is refused already). Each edited product command's `version:` bumps its patch.
 - If another PR merges first, renumber by diffing ADDED lines against `origin/main`.
@@ -411,7 +411,7 @@ evidence (listed under `## Files`).
    comment says so, and that it is not measured beyond that). `MAX_ANOMALY_EXAMPLES = 3`: a report line, not a
    verdict — enough to locate the anomaly, bounded so a hostile report cannot grow VERIFY.md (its comment). The 256-level
    `jest` nesting cap was NOT built — see "As built", below.
-8. **(minor, P7) the README costs.** The README gains "What the wider pin costs (6.30.0)" (the source-entry cost and
+8. **(minor, P7) the README costs.** The README gains "What the wider pin costs (6.31.0)" (the source-entry cost and
    its remedy, the `.npmrc` credential advice), beside the widened pin list and the `/3`-lock reading.
 
 ## As built — where the build differs from this plan (reported at GATE 2)

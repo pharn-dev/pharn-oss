@@ -8,7 +8,7 @@
 // owns that format, so its contract is the reference, and one test parses the contract's own example. Every refusal test is ONE mutation
 // of a passing case, with the passing case as its non-vacuity control (L34), and every rule over a set is
 // tested per member (L52). The last test asserts that every RECORD_REASONS member was actually reached by a
-// test in this file (L36, the reverse closure) — as a refusal of the record or, for ANOMALY_REASONS (6.30.0), as a
+// test in this file (L36, the reverse closure) — as a refusal of the record or, for ANOMALY_REASONS (6.31.0), as a
 // per-test anomaly an ok record carries (`expectAnomaly`; `expectReason` refuses to count an anomaly code).
 
 import { test } from "node:test";
@@ -65,10 +65,10 @@ const REACHED = new Set();
 function expectReason(r, code) {
   assert.equal(r.ok, false, `expected refusal ${code}, got an ok record`);
   assert.equal(r.reason_code, code, `expected ${code}, got ${r.reason_code}: ${r.reason}`);
-  assert.ok(!ANOMALY_REASONS.includes(code), `${code} is a per-test anomaly since 6.30.0 — expectAnomaly, never a refusal`);
+  assert.ok(!ANOMALY_REASONS.includes(code), `${code} is a per-test anomaly since 6.31.0 — expectAnomaly, never a refusal`);
   REACHED.add(code);
 }
-/** 6.30.0: an ANOMALY is carried by an ok record — never a refusal of it — and each one names its reason_code. */
+/** 6.31.0: an ANOMALY is carried by an ok record — never a refusal of it — and each one names its reason_code. */
 function expectAnomaly(r, code) {
   assert.equal(r.ok, true, `expected an ok record carrying ${code}, got the refusal ${r.reason_code}: ${r.reason}`);
   assert.ok(
@@ -216,7 +216,7 @@ test("RECORD_REASONS is sorted and unique; FORMAT_REFUSALS ⊂ RECORD_REASONS", 
   for (const c of FORMAT_REFUSALS) assert.ok(RECORD_REASONS.includes(c), `${c} is an adapter refusal but not a RECORD_REASONS member`);
 });
 
-test("6.30.0 ANOMALY_REASONS: the per-test codes — sorted, ⊂ RECORD_REASONS, the adapters' ENTRY_ANOMALIES + duplicate-test-id, never a document refusal", () => {
+test("6.31.0 ANOMALY_REASONS: the per-test codes — sorted, ⊂ RECORD_REASONS, the adapters' ENTRY_ANOMALIES + duplicate-test-id, never a document refusal", () => {
   assert.deepEqual([...ANOMALY_REASONS], ["duplicate-test-id", "unknown-status"]);
   assert.deepEqual([...ENTRY_ANOMALIES], ["unknown-status"]);
   for (const c of ANOMALY_REASONS) assert.ok(RECORD_REASONS.includes(c), c);
@@ -312,7 +312,7 @@ test("playwright-edge capture (real retries run: an expected failure + a flaky t
     ["AC-1: plain pass", "AC-6: expected failure", "AC-7: flaky"],
     "the capture's layout changed — this test pins the wrong specs"
   );
-  // 6.30.0: the record stays ok; BOTH marked tests are anomalies, each with its own cause, and neither is a test.
+  // 6.31.0: the record stays ok; BOTH marked tests are anomalies, each with its own cause, and neither is a test.
   const r = scenario({ config: cfg, bytes: fixture("playwright-edge"), run: { exit: 0 } });
   expectAnomaly(r, "unknown-status");
   assert.deepEqual(
@@ -357,7 +357,7 @@ test("every status an adapter emits over the captures is a RECORD_STATUSES membe
 // Status maps — every member (L52).
 // ---------------------------------------------------------------------------------------------------
 
-test("vitest status map: each mapped member, and each unmapped member is an entry anomaly (6.30.0: never a refusal)", () => {
+test("vitest status map: each mapped member, and each unmapped member is an entry anomaly (6.31.0: never a refusal)", () => {
   for (const [raw, want] of [
     ["passed", "passed"],
     ["failed", "failed"],
@@ -1135,7 +1135,7 @@ test("results-exit-contradiction — Playwright suite errors under exit 0, end t
   assert.equal(ok.suite_errors, 1);
 });
 
-test("duplicate-test-id — two tests with one id: ONE anomaly for the id, never last-wins, the others still tests (6.30.0)", () => {
+test("duplicate-test-id — two tests with one id: ONE anomaly for the id, never last-wins, the others still tests (6.31.0)", () => {
   const r = scenario({
     bytes: JSON.stringify(vitestDoc([va("same", "passed"), va("same", "failed"), va("other", "passed")])),
     run: { exit: 1 },
@@ -1177,7 +1177,7 @@ test("duplicate-test-id — two tests with one id: ONE anomaly for the id, never
   assert.equal(FILE_SEP, "::");
 });
 
-test("6.30.0: a FAILED test hidden behind an anomaly is still a contradiction under exit 0 — an anomaly never hides a failure", () => {
+test("6.31.0: a FAILED test hidden behind an anomaly is still a contradiction under exit 0 — an anomaly never hides a failure", () => {
   // a duplicated id whose one copy failed, under exit 0: every failed ENTRY counts, a duplicated one included
   expectReason(
     scenario({ bytes: JSON.stringify(vitestDoc([va("same", "passed"), va("same", "failed")])), run: { exit: 0 } }),
@@ -1192,7 +1192,7 @@ test("6.30.0: a FAILED test hidden behind an anomaly is still a contradiction un
   expectAnomaly(scenario({ bytes: JSON.stringify(vitestDoc([va("t", "disabled")])), run: { exit: 0 } }), "unknown-status");
 });
 
-test("6.30.0: anomalies are sorted by id and carry exactly {id, file, title, reason_code, reason}; an ordinary record has none", () => {
+test("6.31.0: anomalies are sorted by id and carry exactly {id, file, title, reason_code, reason}; an ordinary record has none", () => {
   const r = scenario({
     bytes: JSON.stringify(vitestDoc([va("z", "disabled"), va("a", "focused"), va("m", "passed")])),
     run: { exit: 0 },
@@ -1229,7 +1229,7 @@ test("results-exit-contradiction — exit 0 with a failed test, and exit 0 with 
   expectReason(scenario({ bytes: JSON.stringify(doc), run: { exit: 0 } }), "results-exit-contradiction");
 });
 
-test("unknown-status — through testRecord, for each format: an ok record carrying the anomaly (6.30.0)", () => {
+test("unknown-status — through testRecord, for each format: an ok record carrying the anomaly (6.31.0)", () => {
   expectAnomaly(scenario({ bytes: JSON.stringify(vitestDoc([va("t", "disabled")])), run: { exit: 0 } }), "unknown-status");
   expectAnomaly(
     scenario({

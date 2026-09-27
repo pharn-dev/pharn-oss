@@ -1,6 +1,6 @@
 // pharn/floor/test-infra-core.test.mjs — the test-infrastructure pin's suite. Each kind of change is one mutation of a
 // pinned world that the diff names, and only that one (L52); the shape is closed at every level (L36); a symlinked config
-// or script-named file is refused, never hashed through (L59). 6.30.0: every member of the token pass's closed sets is
+// or script-named file is refused, never hashed through (L59). 6.31.0: every member of the token pass's closed sets is
 // reached, each rule clause with a control (L60), and the bounds the header states are PROBED, so a later widening of
 // the rule fails here until the header's NOT-caught list moves with it.
 
@@ -197,7 +197,7 @@ test("each change is named by gate id or path, never by script text (P2), and ea
   });
 });
 
-// ── 6.30.0: what a level gate RUNS — the scripts it chains to, the files its scripts name, the jest key, the package
+// ── 6.31.0: what a level gate RUNS — the scripts it chains to, the files its scripts name, the jest key, the package
 // manager's config (the review's H2 and the GATE-1 amendment) ────────────────────────────────────────────────────────
 
 const RICH = {
@@ -217,7 +217,7 @@ const RICH = {
   pkg: { jest: { testEnvironment: "node", reporters: ["default"] } },
 };
 
-test("6.30.0: the /4 pin — a chained script, the files the scripts name, the jest key and .npmrc, each recorded", () => {
+test("6.31.0: the /4 pin — a chained script, the files the scripts name, the jest key and .npmrc, each recorded", () => {
   withWorld(RICH, (root) => {
     const pin = pinOf(root);
     assert.deepEqual(pin.gates, [
@@ -246,7 +246,7 @@ test("6.30.0: the /4 pin — a chained script, the files the scripts name, the j
   });
 });
 
-test("6.30.0: each /4 change is named and trips only itself (L52) — never a script's text or a file's content (P2)", () => {
+test("6.31.0: each /4 change is named and trips only itself (L52) — never a script's text or a file's content (P2)", () => {
   const cases = [
     [
       "chained value changed",
@@ -347,7 +347,7 @@ test("6.30.0: each /4 change is named and trips only itself (L52) — never a sc
   }
 });
 
-test("6.30.0: the jest digest is canonical — object keys sorted at every level, array order kept, a __proto__ key a key", () => {
+test("6.31.0: the jest digest is canonical — object keys sorted at every level, array order kept, a __proto__ key a key", () => {
   const digest = (jestText) =>
     withWorld({ files: {} }, (root) => {
       writeFileSync(join(root, "package.json"), `{"scripts":{"test":"vitest run"},"jest":${jestText}}`);
@@ -367,7 +367,7 @@ test("6.30.0: the jest digest is canonical — object keys sorted at every level
   });
 });
 
-test("6.30.0 THE TOKEN PASS — scriptTokens splits on whitespace and ; & | ( ), and strips one pair of matching quotes", () => {
+test("6.31.0 THE TOKEN PASS — scriptTokens splits on whitespace and ; & | ( ), and strips one pair of matching quotes", () => {
   assert.deepEqual(scriptTokens("a  b\tc\nd"), ["a", "b", "c", "d"]);
   assert.deepEqual(scriptTokens("a;b&&c||d|e&f"), ["a", "b", "c", "d", "e", "f"]);
   assert.deepEqual(scriptTokens("(a) (b)"), ["a", "b"]);
@@ -376,7 +376,7 @@ test("6.30.0 THE TOKEN PASS — scriptTokens splits on whitespace and ; & | ( ),
   for (const v of [null, undefined, 1, {}, []]) assert.deepEqual(scriptTokens(v), [], JSON.stringify(v));
 });
 
-test("6.30.0 THE TOKEN PASS — scriptPathCandidates: every clause of the closed rule, each with a control (L60)", () => {
+test("6.31.0 THE TOKEN PASS — scriptPathCandidates: every clause of the closed rule, each with a control (L60)", () => {
   const is = (value, want, why) => assert.deepEqual(scriptPathCandidates(value), want, `${why}: ${JSON.stringify(value)}`);
   is("node tools/a.mjs", ["tools/a.mjs"], "a relative path with an executed extension");
   is("node ./tools/a.mjs", ["tools/a.mjs"], "a leading ./ is stripped");
@@ -426,7 +426,7 @@ test("6.30.0 THE TOKEN PASS — scriptPathCandidates: every clause of the closed
   is("node b.js a.js b.js", ["a.js", "b.js"], "sorted, unique");
 });
 
-test("6.30.0 THE TOKEN PASS — chainedIds: each package manager × each word of the closed sets (L60)", () => {
+test("6.31.0 THE TOKEN PASS — chainedIds: each package manager × each word of the closed sets (L60)", () => {
   assert.deepEqual(PACKAGE_MANAGERS, ["npm", "pnpm", "yarn"]);
   assert.deepEqual(RUN_WORDS, ["rum", "run", "run-script", "urn"]);
   assert.deepEqual(TEST_WORDS, ["t", "test", "tst"]);
@@ -460,7 +460,7 @@ test("6.30.0 THE TOKEN PASS — chainedIds: each package manager × each word of
   }
 });
 
-test("6.30.0 scriptWalk: transitive, own-property only (L15), cycles stop, pre/post walked, the hop bound REFUSES", () => {
+test("6.31.0 scriptWalk: transitive, own-property only (L15), cycles stop, pre/post walked, the hop bound REFUSES", () => {
   const walk = (scripts) =>
     scriptWalk({
       scripts,
@@ -516,7 +516,7 @@ test("6.30.0 scriptWalk: transitive, own-property only (L15), cycles stop, pre/p
   assert.deepEqual(scriptWalk({ scripts: ["x"], gates: [] }), { ok: true, chained: [], candidates: [] });
 });
 
-test("6.30.0: a script-named file is pinned only as a readable regular file — every other kind refuses or is skipped (L59)", () => {
+test("6.31.0: a script-named file is pinned only as a readable regular file — every other kind refuses or is skipped (L59)", () => {
   const base = { scripts: { test: "vitest run --reporter=./tools/r.mjs" }, results: { test: "pharn-json" }, files: { "real.mjs": "x\n" } };
   const rows = [
     ["a regular file", (r) => writeFileSync(join(r, "tools/r.mjs"), "x\n"), { pinned: true }],
@@ -566,7 +566,7 @@ test("6.30.0: a script-named file is pinned only as a readable regular file — 
   }
 });
 
-test("6.30.0: output-named and dependency files stay out; a SOURCE file a chain names literally IS pinned (the stated cost)", () => {
+test("6.31.0: output-named and dependency files stay out; a SOURCE file a chain names literally IS pinned (the stated cost)", () => {
   withWorld(
     {
       scripts: {
@@ -589,7 +589,7 @@ test("6.30.0: output-named and dependency files stay out; a SOURCE file a chain 
   );
 });
 
-test("6.30.0 STATED BOUNDS, probed — each is outside the pin today, so widening the rule fails here until the header moves", () => {
+test("6.31.0 STATED BOUNDS, probed — each is outside the pin today, so widening the rule fails here until the header moves", () => {
   const probes = [
     [
       "an import of a pinned file is not followed",
@@ -671,7 +671,7 @@ test("the closed config-name set: the five runner bases × seven extensions at t
   assert.equal(isRunnerConfigName(undefined), false);
 });
 
-test("6.30.0: the package-manager configs — .npmrc, .yarnrc, .yarnrc.yml, folded — are pinned configs, not runner configs", () => {
+test("6.31.0: the package-manager configs — .npmrc, .yarnrc, .yarnrc.yml, folded — are pinned configs, not runner configs", () => {
   assert.deepEqual(PACKAGE_MANAGER_CONFIGS, [".npmrc", ".yarnrc", ".yarnrc.yml"]);
   for (const n of [...PACKAGE_MANAGER_CONFIGS, ".NPMRC", ".Yarnrc.yml"]) {
     assert.ok(isPackageManagerConfigName(n), n);
@@ -729,7 +729,7 @@ test("6.21.0: testInfraPathKind reads a PLAN `## Files` entry as the setter scop
     ["vite.config.ts (new alias)", "config"],
     ["jest.config.cjs", "config"],
     ["vitest.workspace.json", "config"],
-    [".npmrc", "config"], // 6.30.0
+    [".npmrc", "config"], // 6.31.0
     [".NPMRC", "config"],
     [".yarnrc", "config"],
     [".yarnrc.yml (registry)", "config"],
@@ -753,7 +753,7 @@ test("6.21.0: testInfraPathKind reads a PLAN `## Files` entry as the setter scop
   assert.deepEqual(PIN_MANIFESTS, ["package.json", "pharn.config.json"]);
 });
 
-test("6.30.0: scriptNamedFiles — the PLAN-TIME reading: every named file that is not an existing directory, absent included", () => {
+test("6.31.0: scriptNamedFiles — the PLAN-TIME reading: every named file that is not an existing directory, absent included", () => {
   withWorld(
     {
       scripts: {
@@ -790,7 +790,7 @@ test("✧ L36 CLOSURE — every non-test floor module tests the config-name rege
     const src = readFileSync(join(HERE, f), "utf8");
     for (const m of src.matchAll(/CONFIG_NAME_RE\.test\(/g)) hits.push(`${f}@${m.index}`);
     if (f !== "test-infra-core.mjs" && /\/\^\(\?:vitest\\\.config/.test(src)) hits.push(`${f}: a second copy of the regex`);
-    // 6.30.0: the package-manager config names live in ONE constant, too
+    // 6.31.0: the package-manager config names live in ONE constant, too
     if (/["']\.npmrc["']|["']\.yarnrc(?:\.yml)?["']/.test(src)) pmHits.push(f);
   }
   assert.equal(hits.length, 1, JSON.stringify(hits));
@@ -951,7 +951,7 @@ test("pinShapeError under /3 (6.20.0–6.29.x, still read): its own closed shape
   );
 });
 
-test("6.30.0 MIGRATION — a /3 pin is judged by what it pinned; what only /4 pins is UNPINNED, never CHANGED (L6: two fields)", () => {
+test("6.31.0 MIGRATION — a /3 pin is judged by what it pinned; what only /4 pins is UNPINNED, never CHANGED (L6: two fields)", () => {
   // a tree with nothing only /4 pins: a /3 pin holds exactly as before
   withWorld({}, (root) => {
     const { levels, gates, configs } = pinOf(root);

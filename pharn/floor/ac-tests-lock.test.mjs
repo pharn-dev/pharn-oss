@@ -626,7 +626,7 @@ test("/2 is still read: GREEN with --require-red-run, saying it has no pin; a re
   }
 });
 
-// ── 6.30.0: schema /4 — what a level gate RUNS is pinned; a /3 lock is still read, judged by what it pinned ────────
+// ── 6.31.0: schema /4 — what a level gate RUNS is pinned; a /3 lock is still read, judged by what it pinned ────────
 
 /** infraWorld, plus what only /4 pins: a chained script, a file a script names, a jest key, and .npmrc. */
 function richWorld() {
@@ -654,7 +654,7 @@ const toV3 = (lock) => ({
   },
 });
 
-test("6.30.0 /4 --write pins each /4 member; --check REDs each change through the CLI, naming it (L52)", () => {
+test("6.31.0 /4 --write pins each /4 member; --check REDs each change through the CLI, naming it (L52)", () => {
   const cases = [
     [
       "the chained script",
@@ -712,7 +712,7 @@ test("6.30.0 /4 --write pins each /4 member; --check REDs each change through th
   }
 });
 
-test("6.30.0 /4 --write REFUSES a symlinked file a level gate's script names, and a chain past the hop bound", () => {
+test("6.31.0 /4 --write REFUSES a symlinked file a level gate's script names, and a chain past the hop bound", () => {
   const root = richWorld();
   try {
     rmSync(join(root, "tools/reporter.mjs"));
@@ -734,7 +734,7 @@ test("6.30.0 /4 --write REFUSES a symlinked file a level gate's script names, an
   }
 });
 
-test("6.30.0 MIGRATION — a /3 lock is still read: GREEN over a tree with nothing only /4 pins, RED `unpinned` over one that has", () => {
+test("6.31.0 MIGRATION — a /3 lock is still read: GREEN over a tree with nothing only /4 pins, RED `unpinned` over one that has", () => {
   // a /3 lock over the /3-era world: nothing only /4 pins → GREEN, red run required and present
   let root = infraWorld();
   try {

@@ -1,6 +1,6 @@
 # SHIP — ac-gate-plan-scope
 
-An advisory roll-up of the `/pharn-dev-ship` chain for this increment, which closes two AC-gate holes (6.30.0):
+An advisory roll-up of the `/pharn-dev-ship` chain for this increment, which closes two AC-gate holes (6.31.0):
 
 - **H2:** a PLAN can no longer put in scope the test infrastructure the AC gate judges it by. That covers this
   feature's `AC-TESTS.md` and lock, the root package-manager configs, and every file a level gate's script names.
@@ -34,6 +34,11 @@ them ran on Opus.
    re-checked (the COMMAND BUDGET tests pass).
 10. `/pharn-dev-regress` and `/pharn-dev-verify` re-run on the merged tree → the current `REGRESSION.md`,
     `regression-report.json`, `VERIFY.md` and `verify-report.json`.
+11. After the PR opened: the CI fix to `check-ac-tests.test.mjs` (`BUILD.md`, "After the PR opened").
+12. By the orchestrator's order change, #292 (`shell-sink-validation`) merged first as 6.30.0 (`109a4af`). I merged
+    `origin/main` and renumbered this increment to **6.31.0**. Then I re-ran `docs:generate` and the gates the
+    orchestrator named. Regress and verify were not re-run for this merge; the orchestrator's list did not include
+    them. The records above are the `c1bf663` runs.
 
 ## Decisions, and whose
 
@@ -95,7 +100,7 @@ below.
 changelog-entry: exit 0
 
 - `CHANGELOG-ENTRY: GREEN — 2 new entr(ies)` against `origin/main` (`c1bf663`); this pull request opens
-  `## [6.30.0] - 2026-09-27`.
+  `## [6.30.0] - 2026-09-27` (renumbered since: see the last bullet of `## Commit`).
 
 lesson: promoted L65
 
@@ -115,6 +120,14 @@ deferred:
 - The increment is `e3d0ca2` and the merge of `origin/main` (`c1bf663`) is `ab80f37`. The renumber to 6.30.0 is
   `8e81f85`.
 - One more commit carries the post-merge regress and verify records and this file.
+- The CI test fix is `919dad2`.
+- The merge of `origin/main` at `109a4af` (#292, 6.30.0) is `0c6f0aa`. The next commit renumbers this increment to
+  6.31.0:
+  - The renumber touches only lines this branch adds against `origin/main`, plus `SKILLS_VERSION` and the README
+    badge.
+  - main's `## [6.30.0]` section is byte-for-byte, directly below `## [6.31.0]`.
+  - The first renumber's history lines above are kept as written.
+- L65 still does not collide: `109a4af`'s last lesson id is L64.
 
 _Chain ran; the named floor verdicts are as shown. This is NOT a judgment that the increment is good or wise; that is
 the human's call at the post-review gate._
