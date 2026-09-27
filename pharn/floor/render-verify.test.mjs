@@ -175,7 +175,7 @@ test("renderDone: criteria not delivered and evidence reds are listed fenced; th
   assert.doesNotMatch(md, /\|/, "no markdown table anywhere");
 });
 
-test("6.29.0 (M6): per-test anomalies outside the AC-mapped files are listed fenced, as DATA that decides no criterion", () => {
+test("6.30.0 (M6): per-test anomalies outside the AC-mapped files are listed fenced, as DATA that decides no criterion", () => {
   const block = (unmapped) => ({
     mode: "test-first",
     verdict: "PASS",
@@ -200,7 +200,7 @@ test("6.29.0 (M6): per-test anomalies outside the AC-mapped files are listed fen
   );
   // control: none listed, no section
   assert.doesNotMatch(renderDone(report({ ac_gate: block([]) })), /per-test anomalies/);
-  assert.doesNotMatch(renderDone(report()), /per-test anomalies/, "a pre-6.29.0 block without the key renders as before");
+  assert.doesNotMatch(renderDone(report()), /per-test anomalies/, "a pre-6.30.0 block without the key renders as before");
 });
 
 // ── HOSTILE TEXT / L62 ──────────────────────────────────────────────────────────────────────────────

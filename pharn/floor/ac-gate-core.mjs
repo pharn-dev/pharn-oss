@@ -21,11 +21,11 @@
 //                present and bound to its files and mapped ACs, else `ac-never-red`; its test-infrastructure pin holds,
 //                else `test-infra-changed`, and a lock without one (/2, /1) is `test-infra-unpinned` — so is a /3 lock
 //                whose level gates now reach something the /4 pin covers and it does not (a chained script, a file a
-//                script names, a `jest` key, a package-manager config; 6.29.0); every level gate
+//                script names, a `jest` key, a package-manager config; 6.30.0); every level gate
 //                read ran as the pinned command (`source: discover`, `npm run <id>`, no shell), else
 //                `test-infra-changed`. Per AC, over every gate its level maps to that is in the head stamp: a record
 //                refused is item 01's own reason (unmeasured), and so is a per-test anomaly in a file mapped to that AC
-//                (6.29.0 — one elsewhere is `unmapped_anomalies`, reported and never read by the verdict); the matched
+//                (6.30.0 — one elsewhere is `unmapped_anomalies`, reported and never read by the verdict); the matched
 //                tests (observeAc) — none → `ac-untested`;
 //                a matched test id the red run never recorded red for that AC → `ac-never-red`; any `failed` →
 //                `ac-not-passed`; else any `skipped` → `ac-skipped`. An AC with no mapping row → `ac-never-red`.
@@ -46,9 +46,9 @@
 // config and pharn.config.json are agent-editable, which the lock and the pin NARROW and never close; AGREEMENT, never
 // provenance (L43) — a self-consistent fabricated lock + stamp + results set over the live tree passes; code the
 // build writes runs INSIDE the test process and can switch off the assertion library or the reporter there, which
-// no pin reaches (test-infra-core.mjs's header states it, 6.29.0); a flaky test or expected failure the report MARKS,
+// no pin reaches (test-infra-core.mjs's header states it, 6.30.0); a flaky test or expected failure the report MARKS,
 // or a duplicate id, in a file an AC maps makes that AC unmeasured, and one in any other file is only reported
-// (6.29.0 — before, one anywhere refused the whole record) — an unmarked one (vitest `test.fails` or pass on retry,
+// (6.30.0 — before, one anywhere refused the whole record) — an unmarked one (vitest `test.fails` or pass on retry,
 // Jest 29's `test.failing`) reads as its raw status (test-results-record.md); the pin's own gaps are
 // test-infra-core.mjs's header. The gate does NOT re-check that the SPEC is
 // still Approved — it reads the SPEC's pin, never its `state`. Since 6.20.5 a test-first SPEC whose pin cannot be
@@ -171,7 +171,7 @@ function verdictOf(evidence, acs) {
 
 const byKey = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
-/** `unmapped` is the per-test anomalies no verdict read (red-run-core.mjs unmappedAnomalies, 6.29.0): REPORTED in the
+/** `unmapped` is the per-test anomalies no verdict read (red-run-core.mjs unmappedAnomalies, 6.30.0): REPORTED in the
  *  block, never an input to verdictOf. Required at every call (L41) — `[]` where no record was read. */
 function block(mode, evidence, acs, unmapped) {
   if (!Array.isArray(unmapped)) throw new TypeError("block: `unmapped` must be an array");
@@ -233,7 +233,7 @@ function testFirst({ feature, spec, stamp, root, recordOf, records }) {
       add("test-infra-unpinned", `the lock (${lock.schema}) carries no test-infrastructure pin — written before 6.20.0`);
     else {
       // Two fields, never one list split by prefix (L6): what CHANGED from the pin, and what this floor pins that the
-      // lock's schema did not (a /3 lock whose level gates chain to a script, name a file or read a `jest` key, 6.29.0).
+      // lock's schema did not (a /3 lock whose level gates chain to a script, name a file or read a `jest` key, 6.30.0).
       const infra = pinReds(lock, root);
       const first = (xs) => `${xs[0]}${xs.length > 1 ? ` (+${xs.length - 1} more)` : ""}`;
       if (infra.changed.length) add("test-infra-changed", first(infra.changed));

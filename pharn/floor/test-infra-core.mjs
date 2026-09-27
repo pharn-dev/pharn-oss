@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // pharn/floor/test-infra-core.mjs — the TEST-INFRASTRUCTURE PIN: the parts of a project, other than the AC tests
 // themselves, that decide how those tests run and what they report. `/pharn-test`'s `ac-tests-lock.mjs --write` records
-// it in the lock's `test_infra` section (schema `ac-tests-lock/4` since 6.29.0; `/3` is still read); `--check` and
+// it in the lock's `test_infra` section (schema `ac-tests-lock/4` since 6.30.0; `/3` is still read); `--check` and
 // `/pharn-verify`'s AC gate (ac-gate-core.mjs) recompute it from the live tree and compare. Contract:
 // pharn/pharn-contracts/ac-tests.md, "The test-infrastructure pin".
 //
@@ -9,7 +9,7 @@
 // before the build. The lock pins the test FILES; without this pin a build could change what runs them — the `test`
 // script, the runner's config, the per-test results format — and a pinned test would pass without its body ever
 // changing. P3: this file changes when "what counts as test infrastructure" changes, and for no other reason.
-// 6.29.0 (the recorded failure, P7 — a read-only review's H2, reproduced in install-like worlds): with the lock
+// 6.30.0 (the recorded failure, P7 — a read-only review's H2, reproduced in install-like worlds): with the lock
 // writable a build could re-pin anything, and even with it unwritable the pin did not read a file the gate's script
 // NAMES (the `pharn-json` reporter), a script the gate CHAINS to (`"test": "npm run test:unit"`), package.json's `jest`
 // key, or the root `.npmrc` — each a route to a forged `passed` with every floor check green.
@@ -45,7 +45,7 @@
 //                 lock is committed). Jest reads its config from that key when no jest.config.* exists, and a
 //                 `testResultsProcessor` there rewrites the results before `--json` writes them.
 //
-// THE TOKEN PASS (6.29.0) — ONE closed, literal rule, never a shell parse (the reconcile precedent: parsing a shell
+// THE TOKEN PASS (6.30.0) — ONE closed, literal rule, never a shell parse (the reconcile precedent: parsing a shell
 // command is undecidable, and a verb list would be a heuristic P0 forbids calling a guarantee). scriptTokens() splits
 // a script value on whitespace and the shell control characters `; & | ( )` and strips one pair of matching quotes.
 // Over the tokens of every pinned value — each level gate's script, pre and post, then each chained script's own:
@@ -107,7 +107,7 @@
 // ACCIDENTAL change, set the build aside and re-run /pharn-test; for an INTENDED one, re-running /pharn-test cannot
 // help (the rebuild makes the change again) — split it into a `spec_kind: test-infra` increment first. And it is
 // AGREEMENT, never provenance (L43): a lock rewritten to match a changed tree passes — which is why the build's scope
-// may not name the lock (check-ac-tests.mjs `ac-artifact-in-plan`, 6.29.0), leaving a Bash rewrite of it to reconcile.
+// may not name the lock (check-ac-tests.mjs `ac-artifact-in-plan`, 6.30.0), leaving a Bash rewrite of it to reconcile.
 // The `.npmrc` digest is committed with the lock: a digest of a file that holds a LOW-ENTROPY credential lets anyone who
 // reads the lock test guesses offline — keep registry credentials in an environment variable or the user-level npmrc,
 // as npm recommends.
@@ -130,7 +130,7 @@ import { shown } from "./quote-core.mjs";
  *  isRunnerConfigName, which folds the name first. */
 export const CONFIG_NAME_RE =
   /^(?:vitest\.config|vitest\.workspace|vite\.config|playwright\.config|jest\.config)\.(?:js|mjs|cjs|ts|mts|cts|json)$/;
-/** The root PACKAGE-MANAGER configs the pin covers (6.29.0), folded form: npm's (the gate is `npm run <id>`) and yarn's
+/** The root PACKAGE-MANAGER configs the pin covers (6.30.0), folded form: npm's (the gate is `npm run <id>`) and yarn's
  *  two (yarn runs its `yarnPath` / `yarn-path` on every invocation, and the token pass reads yarn chains). */
 export const PACKAGE_MANAGER_CONFIGS = Object.freeze([".npmrc", ".yarnrc", ".yarnrc.yml"]);
 /** The npm manifest the level gates' scripts are read from. */
@@ -138,10 +138,10 @@ export const MANIFEST_FILE = "package.json";
 /** The root files the pin reads VALUES from (the level gates' scripts; the `testResults` formats) — as opposed to the
  *  configs it hashes whole. */
 export const PIN_MANIFESTS = Object.freeze([MANIFEST_FILE, CONFIG_FILE]);
-/** The extensions of a file a gate EXECUTES (6.29.0), sorted: a script-named file with another extension is not
+/** The extensions of a file a gate EXECUTES (6.30.0), sorted: a script-named file with another extension is not
  *  pinned — a gate's JSON or XML OUTPUT named literally must not be (the red run would rewrite it). */
 export const EXECUTED_EXTENSIONS = Object.freeze([".bash", ".cjs", ".cts", ".js", ".jsx", ".mjs", ".mts", ".sh", ".ts", ".tsx", ".zsh"]);
-/** The package managers whose script-running commands the token pass reads (6.29.0). */
+/** The package managers whose script-running commands the token pass reads (6.30.0). */
 export const PACKAGE_MANAGERS = Object.freeze(["npm", "pnpm", "yarn"]);
 /** npm's `run-script` and its aliases, which pnpm and yarn share in part — the next non-flag token is the id. */
 export const RUN_WORDS = Object.freeze(["rum", "run", "run-script", "urn"]);
@@ -151,7 +151,7 @@ export const TEST_WORDS = Object.freeze(["t", "test", "tst"]);
 export const LIFECYCLE_WORDS = Object.freeze(["restart", "start", "stop"]);
 /** The managers whose bare `<pm> <script>` runs a script (a word that is not a script pins nothing). */
 export const SHORTHAND_MANAGERS = Object.freeze(["pnpm", "yarn"]);
-/** How many chaining hops the pin follows from a level gate before REFUSING (6.29.0). Real chains are one or two hops
+/** How many chaining hops the pin follows from a level gate before REFUSING (6.30.0). Real chains are one or two hops
  *  (`test` → `test:unit`); a deeper one is refused, never walked partially, so a small bound fails CLOSED and costs
  *  nothing a real project uses. Not measured beyond that; raise it with the chain that needs it. */
 export const MAX_CHAIN_HOPS = 8;
@@ -163,7 +163,7 @@ export function isRunnerConfigName(name) {
   return typeof name === "string" && CONFIG_NAME_RE.test(foldName(name));
 }
 
-/** Is `name` a root package-manager config the pin covers (6.29.0)? Folded, as a runner config is. */
+/** Is `name` a root package-manager config the pin covers (6.30.0)? Folded, as a runner config is. */
 export function isPackageManagerConfigName(name) {
   return typeof name === "string" && PACKAGE_MANAGER_CONFIGS.includes(foldName(name));
 }
@@ -179,7 +179,7 @@ const configKind = (path) => (isPackageManagerConfigName(path) ? "package-manage
 
 /**
  * Classify a PLAN.md `## Files` entry, read as the writes-scope setter scopes it (ac-tests-core scopedPath: annotation
- * stripped, placeholders/globs dropped): `"config"` — a ROOT config the pin hashes (a runner's or, since 6.29.0, the
+ * stripped, placeholders/globs dropped): `"config"` — a ROOT config the pin hashes (a runner's or, since 6.30.0, the
  * package manager's); `"manifest"` — a root file the pin reads values from (PIN_MANIFESTS, folded); `null` — anything
  * else, including a dropped entry and any path with a `/` (not at the root: the write guard matches a scope entry
  * literally, so `./vite.config.ts` does not let the build write the root file).
@@ -194,7 +194,7 @@ export function testInfraPathKind(entry) {
 }
 /** A pinned gate's `results` value: a format, or the refusal that stood in for one when the pin was taken. */
 export const RESULTS_VALUES = Object.freeze([...RESULTS_FORMATS, "config-invalid", "not-configured"].sort());
-/** `test_infra`'s closed key sets (L36): the /4 pin, and the /3 pin (6.20.0–6.28.x) still read. */
+/** `test_infra`'s closed key sets (L36): the /4 pin, and the /3 pin (6.20.0–6.29.x) still read. */
 export const PIN_KEYS = Object.freeze(["chained", "configs", "gates", "jest", "levels", "script_files"]);
 export const PIN_KEYS_V3 = Object.freeze(["configs", "gates", "levels"]);
 export const GATE_KEYS = Object.freeze(["id", "post", "pre", "results", "script"]);
@@ -251,7 +251,7 @@ export function candidateGates(levels) {
   return [...new Set(levels.flatMap((l) => LEVEL_GATES[l] ?? []))].sort();
 }
 
-// ─── THE TOKEN PASS (6.29.0) ─────────────────────────────────────────────────────────────────────────────────────
+// ─── THE TOKEN PASS (6.30.0) ─────────────────────────────────────────────────────────────────────────────────────
 
 const SEPARATOR_RE = /[\s;&|()]+/;
 /** An OUTPUT redirect, as the tokenizer leaves it (`&>` and `>|` split at `&` / `|` into `>`): `>`, `>>`, `2>`, `2>>`.
@@ -361,7 +361,7 @@ function valuesOf(scripts, id) {
 }
 
 /**
- * The token pass over the pinned gates' values, transitively through the scripts they chain to (6.29.0): `{ok, chained,
+ * The token pass over the pinned gates' values, transitively through the scripts they chain to (6.30.0): `{ok, chained,
  * candidates}` — the chained scripts `{id, script, pre, post}` sorted by id (the gates' own ids and pre/post names not
  * repeated), and every candidate path any pinned value names, sorted — or a refusal (a chained value that is not a
  * string, a chain past MAX_CHAIN_HOPS).
@@ -572,7 +572,7 @@ export function computeTestInfra({ root, levels }) {
 }
 
 /**
- * The PLAN-TIME reading (6.29.0): every file the token pass finds named in the level gates' values and the scripts they
+ * The PLAN-TIME reading (6.30.0): every file the token pass finds named in the level gates' values and the scripts they
  * chain to that is NOT an existing directory at `root` — absent ones included (a file the build creates there is one
  * the pin reads at verify: `was added`), a symlink or unreadable one too (fail-closed) — minus the root configs and
  * manifests read elsewhere. check-ac-tests.mjs REDs a PLAN.md `## Files` entry naming one. `{ok, paths}` or a refusal
@@ -726,7 +726,7 @@ function beyondV3(pin) {
  *  (L6 — two fields, never one list split by prefix). `changed` holds the differences, or `[reason]` when the live pin
  *  cannot be computed (an unreadable manifest, a symlinked config or named file — itself a change from what was
  *  pinned). `unpinned` is empty for a /4 pin; for a /3 pin it names what the live tree has that /4 pins and /3 did not
- *  (6.29.0 — the AC gate reads it as `test-infra-unpinned`, `--check` as a RED). A /3 pin over a tree the /4 pin cannot
+ *  (6.30.0 — the AC gate reads it as `test-infra-unpinned`, `--check` as a RED). A /3 pin over a tree the /4 pin cannot
  *  be computed on (a symlinked `.npmrc` or script-named file, a chain past MAX_CHAIN_HOPS) reads `changed`, not
  *  `unpinned`, deliberately: the refusal cannot tell a /3-covered change (an unparseable manifest, a symlinked runner
  *  config) from a /4-only one, so it keeps the stricter reading — stated in the contract and the README. */

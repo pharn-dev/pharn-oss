@@ -44,9 +44,9 @@
 // retry). A `test.failing` whose body PASSED is reported `failed`, and is a failed test — as Playwright's
 // `unexpected` is.
 //
-// AN UNMAPPED STATUS IS A PER-TEST ANOMALY, NOT A REFUSAL OF THE DOCUMENT (6.29.0). The entry is kept with
+// AN UNMAPPED STATUS IS A PER-TEST ANOMALY, NOT A REFUSAL OF THE DOCUMENT (6.30.0). The entry is kept with
 // `status: null` and `anomaly: {reason_code: "unknown-status", reason}` (ENTRY_ANOMALIES), and the record lists it
-// apart from the tests whose status it can read (test-results-core.mjs). Before 6.29.0 one such test ANYWHERE in the
+// apart from the tests whose status it can read (test-results-core.mjs). Before 6.30.0 one such test ANYWHERE in the
 // suite refused the whole document, so an unrelated flaky test made every AC in the project unmeasurable; now the
 // consumer decides, and the red run and the AC gate refuse only over an anomaly in a file an AC maps
 // (red-run-core.mjs observeAc). A document whose SHAPE is wrong is still refused whole (FORMAT_REFUSALS).

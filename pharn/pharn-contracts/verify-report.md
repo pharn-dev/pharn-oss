@@ -281,10 +281,10 @@ restated, P4):
 - **The per-AC table:** one `acs[]` row per SPEC criterion — id, level, the matched test ids, `status` (what the head
   run reported: `passed` \| `failed` \| `skipped` \| `none` \| `unavailable`) and `reason` (`null` = delivered).
   `evidence[]` holds the feature-wide evidence reds. Every `reason` is a member of the gate's closed set.
-- **`unmapped_anomalies` (6.29.0):** the per-test anomalies (`test-results-record.md`) of the level gates' records the
+- **`unmapped_anomalies` (6.30.0):** the per-test anomalies (`test-results-record.md`) of the level gates' records the
   gate read that no AC's reading decides — in no file an AC maps through that gate's level — grouped by gate and
   reason: `{ gate, reason, count, examples }`, `examples` the first three ids in sorted order. REPORTED, never read by
-  the verdict — every other anomaly is that AC's own `reason` instead (`ac-tests.md`, "The AC gate"). `[]` for a bootstrap or legacy block too; a report written before 6.29.0 has no such
+  the verdict — every other anomaly is that AC's own `reason` instead (`ac-tests.md`, "The AC gate"). `[]` for a bootstrap or legacy block too; a report written before 6.30.0 has no such
   key, and a renderer reads its absence as none.
 - **How it reaches the verdict:** an evidence red adds `ac-evidence` to `failing_gates`, a delivery red adds
   `ac-delivery`; either makes the verdict `FAIL`. An unmeasurable gate over otherwise-green gates is `INCONCLUSIVE`

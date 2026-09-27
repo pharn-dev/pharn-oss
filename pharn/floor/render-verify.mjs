@@ -196,7 +196,7 @@ function acSection(report) {
     : [];
   if (notDelivered.length) out.push(quoteData("criteria not delivered — id, then reason, quoted as DATA:", notDelivered.join("\n")), "");
   if (evidence.length) out.push(quoteData("AC evidence reds — reason, then detail, quoted as DATA:", evidence.join("\n")), "");
-  // 6.29.0: per-test anomalies in files no AC maps — reported, never read by the verdict.
+  // 6.30.0: per-test anomalies in files no AC maps — reported, never read by the verdict.
   const unmapped = Array.isArray(ac.unmapped_anomalies)
     ? ac.unmapped_anomalies
         .filter(isObject)

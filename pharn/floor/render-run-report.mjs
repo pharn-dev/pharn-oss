@@ -763,7 +763,7 @@ function acGateLines(ac) {
   for (const e of Array.isArray(ac.evidence) ? ac.evidence : []) {
     rows.push(isRecord(e) ? `evidence  ${dataText(e.reason)}  ${dataText(e.detail)}` : `evidence  (not an evidence entry)  ${dataText(e)}`);
   }
-  // 6.29.0: per-test anomalies in files no AC maps — reported, never read by the verdict.
+  // 6.30.0: per-test anomalies in files no AC maps — reported, never read by the verdict.
   for (const u of Array.isArray(ac.unmapped_anomalies) ? ac.unmapped_anomalies : []) {
     rows.push(
       isRecord(u)

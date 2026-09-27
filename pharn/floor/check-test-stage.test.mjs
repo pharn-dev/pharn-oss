@@ -702,8 +702,8 @@ describe("6.21.0 — the test-infrastructure pin reaches the gate from both ends
   });
 });
 
-// ── 6.29.0 (H2): the gate the build reads first refuses a PLAN scoped to the lock, and a /3 lock the tree outgrew ─────
-describe("6.29.0 — the build can be scoped to neither the lock nor what the gates run; a /3 lock is judged honestly", () => {
+// ── 6.30.0 (H2): the gate the build reads first refuses a PLAN scoped to the lock, and a /3 lock the tree outgrew ─────
+describe("6.30.0 — the build can be scoped to neither the lock nor what the gates run; a /3 lock is judged honestly", () => {
   test("a PLAN naming this feature's lock (or AC-TESTS.md) is RED mapping-red BEFORE any build could rewrite it (ac-artifact-in-plan)", () => {
     for (const entry of [`pharn/features/${NAME}/AC-TESTS.lock.json`, `pharn/features/${NAME}/AC-TESTS.md`]) {
       withWorld(testFirst, (root) => {

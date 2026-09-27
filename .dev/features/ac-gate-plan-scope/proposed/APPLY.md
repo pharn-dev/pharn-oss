@@ -2,13 +2,13 @@
 
 This build could not, and did not, touch `LIMITS.md`: it is one of the four human-only trusted docs. One sentence
 of its §9 ("The Acceptance-Criteria evidence is agreement, not provenance") describes what the test-infrastructure
-pin does not see, and 6.29.0 changes that list. This folder carries the sentence to a human. **Nothing in the build
+pin does not see, and 6.30.0 changes that list. This folder carries the sentence to a human. **Nothing in the build
 depends on it being applied** — the product floor, the contracts and the tests are complete without it, and
 `pharn/floor/test-infra-core.mjs`'s header (the one copy of the list, which §9 already cites) is current.
 
 ## Why the sentence changes
 
-§9 says the pin does not see "script chaining" or "npm's own configuration". Since 6.29.0 the pin DOES see a literal
+§9 says the pin does not see "script chaining" or "npm's own configuration". Since 6.30.0 the pin DOES see a literal
 chain through the package manager's own run commands (`npm run test:unit`, `yarn build`, `node --run gen`) and the
 root `.npmrc` / `.yarnrc` / `.yarnrc.yml`. So the sentence now understates the pin — not an overclaim, but a
 doc-vs-repo mismatch. The replacement narrows those two items to what is still unseen (a chain through any other

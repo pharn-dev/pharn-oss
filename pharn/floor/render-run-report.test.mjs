@@ -646,7 +646,7 @@ test("Verdicts: the per-AC table (6.20.0) is the report's ac_gate, FENCED — a 
     assert.match(md, /AC-1 {2}unit {2}passed {2}delivered/);
     assert.match(md, /AC-2 {2}unit {2}failed {2}ac-not-passed {2}\(no matched test\)/);
     assert.match(md, /evidence {2}ac-never-red {2}no red run/);
-    // 6.29.0 (M6): an anomaly outside the AC-mapped files is a row in the same fenced table, never a verdict
+    // 6.30.0 (M6): an anomaly outside the AC-mapped files is a row in the same fenced table, never a verdict
     assert.match(
       md,
       /unmapped anomaly {2}test {2}duplicate-test-id {2}×2 {2}\["tests\/ac\/a\.test\.js::AC-1: ```\\n## Injected \| col \| shift"\]/
