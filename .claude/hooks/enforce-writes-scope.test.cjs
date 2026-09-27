@@ -2879,3 +2879,34 @@ test("✧ PIN: resolvePhysicalTarget(), fsRootOf() and the three walk constants 
   assert.match(fn(protectSrc, "realpathOr"), /fs\.realpathSync\(p\)/);
   assert.doesNotMatch(fn(protectSrc, "realpathOr"), /\.native/);
 });
+
+// --- LOW batch 1 (L5/L7/L9) ---------------------------------------------------
+test("★ L7: null JSON payload denies (exit 2), never fail-open exit 0", () => {
+  const r = spawnSync(process.execPath, [HOOK], { input: "null", cwd: tmp(), encoding: "utf8" });
+  assert.equal(r.status, 2, "null payload must deny");
+});
+
+test("★ L7: invalid JSON payload denies (exit 2)", () => {
+  const r = spawnSync(process.execPath, [HOOK], { input: "{not json", cwd: tmp(), encoding: "utf8" });
+  assert.equal(r.status, 2);
+});
+
+test("★ L5: a symlinked .pharn makes install posture deny-all (malformed scope)", () => {
+  const cwd = seedInstalledProject(tmp());
+  fs.symlinkSync(join(cwd, "other-pharn"), join(cwd, ".pharn"));
+  fs.mkdirSync(join(cwd, "other-pharn"), { recursive: true });
+  const r = hook(cwd, "src/x.js");
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /malformed|denies every write/i);
+});
+
+test("★ L9: scoped write matches declared path under case fold only when the volume aliases that spelling", () => {
+  const cwd = seedDevRepo(tmp());
+  fs.mkdirSync(join(cwd, "src"), { recursive: true });
+  fs.writeFileSync(join(cwd, "src", "Foo.md"), "");
+  const aliases = fs.existsSync(join(cwd, "src", "foo.md"));
+  setScope(cwd, ["src/Foo.md"]);
+  assert.equal(hook(cwd, "src/Foo.md").status, 0, "the exact scoped spelling stays allowed");
+  const r = hook(cwd, "src/foo.md");
+  assert.equal(r.status, aliases ? 0 : 2, "case-only mismatch allows only when it reaches the scoped file");
+});

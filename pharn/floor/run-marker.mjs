@@ -71,8 +71,46 @@
 // the raw message), and main() turns any other throw into exit 2 as well. What a refusal leaves behind: a
 // failed `--open` writes no marker, though `mkdirSync` may already have created a directory on the way.
 
-import { lstatSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { lstatSync, mkdirSync, writeFileSync, rmSync, realpathSync } from "node:fs";
+import { join, dirname, parse as pathParse } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// workTreeRoot() is a DELIBERATE COPY of the function of the same name in the three pre-write hooks — a
+// shared module would be a new control-surface file (L31). run-marker must anchor on the project tree,
+// not the hook subprocess cwd when Bash is invoked from a subdirectory (LOW L6).
+function workTreeRoot(dir) {
+  let stop = null;
+  try {
+    const env = process.env.CLAUDE_PROJECT_DIR;
+    if (typeof env === "string" && env !== "") stop = realpathSync(env);
+  } catch {
+    /* an unresolvable project dir is simply not a stop */
+  }
+  let cur = dir;
+  for (;;) {
+    let hasGit = false;
+    try {
+      lstatSync(join(cur, ".git"));
+      hasGit = true;
+    } catch {
+      /* no .git entry here */
+    }
+    if (hasGit || (stop !== null && cur === stop)) return cur;
+    const parent = dirname(cur);
+    if (parent === cur) return null;
+    cur = parent;
+  }
+}
+
+export function projectRoot() {
+  let cwd;
+  try {
+    cwd = process.cwd();
+  } catch {
+    cwd = pathParse(fileURLToPath(import.meta.url)).root;
+  }
+  return workTreeRoot(cwd) ?? cwd;
+}
 
 export const RUN_MARKER_COMMANDS = ["pharn-review", "pharn-ship"];
 
@@ -183,7 +221,7 @@ function main(argv) {
   }
   let result;
   try {
-    const root = process.cwd();
+    const root = projectRoot();
     result =
       mode === "--open"
         ? openRun({ root, command, name, sessionId: process.env.CLAUDE_CODE_SESSION_ID, now: Date.now() })

@@ -438,8 +438,11 @@ const DEV_SAFE_SET_EXTRA = [".dev/features/**", "pharn/pharn-*/**"];
 const INSTALL_SAFE_SET = ["pharn/features/**"];
 
 function isPharnInstalledProject() {
+  const abs = path.resolve(ROOT, "pharn.config.json");
   try {
-    const parsed = JSON.parse(fs.readFileSync(path.resolve(ROOT, "pharn.config.json"), "utf8"));
+    const st = fs.lstatSync(abs);
+    if (!st.isFile() || st.isFIFO()) return false;
+    const parsed = JSON.parse(fs.readFileSync(abs, "utf8"));
     return typeof parsed.skillsVersion === "string" && parsed.skillsVersion.length > 0;
   } catch {
     return false;
@@ -469,17 +472,31 @@ const SCOPE_FILE = ".pharn/writes-scope.json";
 // directory or a dangling link cannot be read anyway. A plain object is carried as `record` even when its
 // `scope` is not an array, so the dev/unsignalled message keeps the origin line and the stale-scope
 // bullet the pre-6.24.0 message showed for that exact shape (GATE-2 review, minor 1).
-function readScopeFileState() {
-  const abs = path.resolve(ROOT, SCOPE_FILE);
+function dotPharnStateBad() {
+  const dot = path.join(ROOT, ".pharn");
   try {
-    fs.lstatSync(abs); // PRESENCE (L54) — never existsSync: a dangling link counts as present.
+    const st = fs.lstatSync(dot);
+    if (st.isSymbolicLink()) return true;
+  } catch (err) {
+    if (err && err.code === "ENOENT") return false;
+    return true;
+  }
+  return false;
+}
+
+function readScopeFileState() {
+  if (dotPharnStateBad()) return { kind: "malformed" };
+  const abs = path.resolve(ROOT, SCOPE_FILE);
+  let lst;
+  try {
+    lst = fs.lstatSync(abs); // PRESENCE (L54) — never existsSync: a dangling link counts as present.
   } catch (e) {
     if (e && e.code === "ENOENT") return { kind: "absent" };
     return { kind: "malformed" };
   }
+  if (lst.isSymbolicLink() || !lst.isFile()) return { kind: "malformed" };
   let raw;
   try {
-    if (!fs.statSync(abs).isFile()) return { kind: "malformed" };
     raw = fs.readFileSync(abs, "utf8");
   } catch {
     return { kind: "malformed" };
@@ -512,6 +529,14 @@ const RUN_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 function scanRuns(root) {
   const runs = [];
   const scanErrorDirs = [];
+  try {
+    const dot = fs.lstatSync(path.join(root, ".pharn"));
+    if (dot.isSymbolicLink()) {
+      return { runs: [], scanErrorDirs: RUN_STATE.map((s) => s.dir) };
+    }
+  } catch (err) {
+    if (!err || err.code !== "ENOENT") return { runs: [], scanErrorDirs: RUN_STATE.map((s) => s.dir) };
+  }
   for (const { dir } of RUN_STATE) {
     const stateDir = path.join(root, ".pharn", dir);
     let st;
@@ -542,8 +567,16 @@ function scanRuns(root) {
         if (!scanErrorDirs.includes(dir)) scanErrorDirs.push(dir);
         continue;
       }
+      const markerFile = path.join(stateDir, name, "active.json");
       const ageMs = Math.abs(Date.now() - mst.mtimeMs);
-      if (ageMs <= RUN_AGE_CEILING_MS) runs.push({ dir, name, ageHours: Math.floor(ageMs / 3_600_000) });
+      if (ageMs <= RUN_AGE_CEILING_MS) {
+        try {
+          fs.utimesSync(markerFile, new Date(), new Date());
+        } catch {
+          /* refresh is best-effort; presence+age still govern */
+        }
+        runs.push({ dir, name, ageHours: Math.floor(ageMs / 3_600_000) });
+      }
     }
   }
   return { runs, scanErrorDirs };
@@ -904,6 +937,25 @@ function extractPaths(toolInput) {
 
 // Tiny stdlib glob -> anchored RegExp. `**` spans segments (incl. `/`); `*` matches within one segment
 // (no `/`); everything else literal. A bare path matches only itself.
+function toScopeFoldKey(rel) {
+  return String(rel)
+    .replace(/\\/g, "/")
+    .normalize("NFC")
+    .split("/")
+    .map((s) => (s === "." || s === ".." ? s : s.replace(/[. ]+$/, "")))
+    .join("/")
+    .toUpperCase()
+    .toLowerCase();
+}
+
+function pathMatchesScope(rel, allowRes, allowFoldRes, foldMode = "none") {
+  if (allowRes.some((re) => re.test(rel))) return true;
+  if (foldMode === "none") return false;
+  if (foldMode === "root-only" && rel.includes("/")) return false;
+  const folded = toScopeFoldKey(rel);
+  return allowFoldRes.some((re) => re.test(folded));
+}
+
 function globToRegExp(glob) {
   let re = "";
   for (let i = 0; i < glob.length; i++) {
@@ -1188,21 +1240,30 @@ function denyGuardError() {
   process.exit(2);
 }
 
-const payload = (() => {
-  try {
-    const parsed = JSON.parse(readStdin() || "{}");
-    // JSON.parse("null") returns null, JSON.parse("42") a number, JSON.parse("[]") an array — NONE of
-    // them throws, so the `catch` above never fires, and every one then dereferences into an uncaught
-    // TypeError. That exit 1 is treated as NON-BLOCKING by Claude Code, so the write PROCEEDS: a crash
-    // in a write-guard is a fail-OPEN bypass, which is the one failure mode this file may not have.
-    // Mirrors the guard `protect-trusted-paths.cjs` already carries — the two hooks run on the same
-    // PreToolUse payload and must not disagree about what a payload IS.
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-    return parsed;
-  } catch {
-    return {};
-  }
-})();
+function denyMalformedHookInput(detail) {
+  const reason =
+    "PHARN floor — write blocked (writes-scope guard, fix #7)\n" +
+    "WHY: hook input is not a usable PreToolUse JSON object" +
+    (detail ? ` (${detail})` : "") +
+    " — fail-closed.\n";
+  process.stdout.write(
+    JSON.stringify({
+      hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason },
+      decision: "block",
+      reason,
+    })
+  );
+  process.stderr.write(reason);
+  process.exit(2);
+}
+
+let payload;
+try {
+  payload = JSON.parse(readStdin() || "{}");
+} catch {
+  denyMalformedHookInput("invalid JSON");
+}
+if (!payload || typeof payload !== "object" || Array.isArray(payload)) denyMalformedHookInput("not a plain object");
 
 const toolName = payload.tool_name || payload.toolName || "";
 const toolInput = payload.tool_input || payload.toolInput || {};
@@ -1240,13 +1301,13 @@ if (isWrite) {
     }
 
     const ctx = { install, runs: runsInfo.runs, scanErrorDirs: runsInfo.scanErrorDirs, openWithout: false, backslash: false };
-    const allowRe = (mode === "scoped" ? [...ALWAYS, ...scope] : mode === "safeset" ? [...ALWAYS, ...defaultSafeSet()] : []).map(
-      globToRegExp
-    );
+    const scopePatterns = mode === "scoped" ? [...ALWAYS, ...scope] : mode === "safeset" ? [...ALWAYS, ...defaultSafeSet()] : [];
+    const allowRe = scopePatterns.map(globToRegExp);
+    const allowFoldRe = scopePatterns.map((g) => globToRegExp(toScopeFoldKey(g)));
 
     // Judge ONE resolved target of payload path `p`; deny() exits, so returning means this target is allowed.
     // `shown` is what the message names: the old rendering for resolution (1), `p -> rel` for (2).
-    const judge = (p, real, physical) => {
+    const judge = (p, real, physical, foldMode = "none") => {
       const fromRootRaw = path.relative(ROOT, real);
       const fromRoot = fromRootRaw.replace(/\\/g, "/");
       const rel = relToRoot(fromRoot);
@@ -1281,7 +1342,7 @@ if (isWrite) {
         return;
       }
 
-      if (!allowRe.some((re) => re.test(rel))) {
+      if (!pathMatchesScope(rel, allowRe, allowFoldRe, foldMode)) {
         deny(shown(rel), scope, record, "in-repo", { ...ctx, openWithout: install && !ambiguous && !isReserved(rel) });
       }
     };
@@ -1289,10 +1350,10 @@ if (isWrite) {
     // PASS 1 — resolution (1) over EVERY path first, so any write the pre-6.24.0 hook denied is denied here
     // with the same message. PASS 2 — resolution (2), only where it reaches a different target.
     const lexical = writePaths.map((p) => resolveWriteTarget(p));
-    writePaths.forEach((p, i) => judge(p, lexical[i], false));
+    const physical = writePaths.map((p) => resolvePhysicalTarget(p));
+    writePaths.forEach((p, i) => judge(p, lexical[i], false, physical[i] !== lexical[i] ? "alias" : "none"));
     writePaths.forEach((p, i) => {
-      const physical = resolvePhysicalTarget(p);
-      if (physical !== lexical[i]) judge(p, physical, true);
+      if (physical[i] !== lexical[i]) judge(p, physical[i], true, "root-only");
     });
   } catch {
     denyGuardError();
