@@ -88,9 +88,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     human at GATE 2 via `proposed/apply.sh`, after any sibling LIMITS patch merges first. `pharn/ARCHITECTURE.md` is
     not touched, so the spec pin does not move (its §6 "Quick mode" paragraph is about `/pharn-ship --quick` and
     stays true; the loop's line is the named catch-up `architecture-loop-quick-line`).
-  - **Named, not built:** `loop-quick-run-report` and `regress-scope-list-grammar` (the Fixed entry below).
-    `quick-scope-inputs-by-code`, named at GATE 1, is built (the Fixed entry). No dev twin: `/pharn-dev-ship --loop`
-    gets no quick mode.
+  - **Stage-model routing for a quick loop — the coupling with 6.27.0, which merged first.** `ROUTE_POLICY` gains the
+    loop's quick column: `/pharn-spec`, `/pharn-plan`, `/pharn-test` and `/pharn-build` run as stage agents, the grill
+    inline (`floor-only`, its two checkers), and `/pharn-regress` never runs. So
+    `route --command pharn-loop --mode quick` now routes, where 6.27.0 refused it. The spec agent is briefed with
+    `/pharn-spec --quick --model-approve`.
+    `LOOP_ROWS` gains **S6c**, so a routed spec agent whose fit checks fail reports `refused S6c`. A quick build's
+    rule 7 names only `verify-report.json`'s three fix-list fields: `fixListFields` derives the list from the policy,
+    and a stage the mode skips has no report. `## Quick mode` pins the quick spec, grill and build route lines, and
+    the spec and build brief lines, each with `--mode quick`. The markers and `read` lines stay in Steps 3–5. Every
+    6.27.0 brief is byte-identical apart from the S6c row, and `STAGE_AGENT_WIRING` covers the new column: the brief
+    rule split by mode, an order rule for `--mode` lines, the lines executed, and mutants for the column.
+  - **Named, not built:** `loop-quick-run-report` and `regress-inside-echo-list` (the Fixed entry below).
+    `quick-scope-inputs-by-code`, named at GATE 1, and `regress-scope-list-grammar`, found at GATE 2, are built (the
+    Fixed entry). No dev twin: `/pharn-dev-ship --loop` gets no quick mode.
 
 ### Fixed
 
@@ -109,10 +120,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   commas, both quote kinds, a newline, a leading `-` and a trailing space: each exits 1 naming exactly that path, and
   no command runs. 6.25.0's line is the control — in the same fixture its canary file appears and `$Q` passes.
   `check-regress.mjs` runs its CLI only under `import.meta.main`; its output is unchanged. **Rolling back below 6.28.0
-  restores the vulnerable line.** **Named, not built:** `regress-scope-list-grammar` — `/pharn-regress`'s own
-  partition still reaches `check-regress.mjs`'s comma-list CLI, which trims a name's surrounding spaces and lets a
-  lone changed path spelled `--declared` shadow the real flag (each a false pass there, reproduced at that CLI; a
-  comma or newline name it already refuses).
+  restores the vulnerable line.** `/pharn-regress`'s own partition used to reach that comma-list CLI too. The CLI trims
+  a name's surrounding spaces and lets a lone changed path spelled `--declared` shadow the real flag, and each was a
+  false pass there, reproduced at that CLI. `stage-regress.mjs` now calls `partitionScope` in-process over the same
+  arrays, which closes `regress-scope-list-grammar` in this release. `stage-regress.test.mjs` runs both names through
+  the real script, with the comma-list CLI as the control, and pins the scope document byte-identical to that CLI's for
+  ordinary names. **Named, not built:** `regress-inside-echo-list`. The verdict call's `inside` echo is ADVISORY and
+  read by no floor op, but it is still a comma list, so a comma or newline changed path is still refused
+  (`unrepresentable-path`), fail-closed.
 
 ## [6.27.0] - 2026-09-26
 

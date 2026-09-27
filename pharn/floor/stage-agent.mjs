@@ -15,7 +15,8 @@
 //                                          --status <done|refused|question> [--row <S4..S10>] [--gate <pass|fail>]
 //   node pharn/floor/stage-agent.mjs read   --command <c> --name '<name>' --stage <stage> [--iteration <N>]
 // `--iteration` is required exactly for an iterated stage (build, regress, verify). `--mode` is spelled only
-// for a column the command's policy holds besides `full` (today: `quick`, for /pharn-ship). Every flag
+// for a column the command's policy holds besides `full` (today: `quick`, for both commands — /pharn-loop's
+// since 6.28.0; the accepted set is read from ROUTE_POLICY, never listed here). Every flag
 // appears at most once; an unknown flag, a missing value, or a value outside its closed set is refused.
 //
 // ── Exit codes ────────────────────────────────────────────────────────────────────────────────────────

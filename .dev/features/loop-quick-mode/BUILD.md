@@ -322,11 +322,121 @@ Sizes after this round: `pharn-loop.md` 98,902 B (+1,154 B; `## Quick mode` 15,3
   - the `stage-model-routing` coupling (Chain sequencing, items 4 and 5) — unbuilt until 2.2 merges.
   - `regress-scope-list-grammar` — above.
 
+## Merge of `stage-model-routing` (2.2) and the coupling — 2026-09-27
+
+- The orchestrator's decision (a model decision under the maintainer's 2026-09-25 delegation, not a human one): 2.2
+  merges first as 6.27.0, and this branch takes it in and builds the coupling on it. Stage model: opus — set by the
+  maintainer's instruction, overriding pharn.config.json; routed via Agent subagent; effort not routed. Regress and
+  verify are not run this round, and the LIMITS patch is not regenerated (the orchestrator's instruction): both follow in
+  one final round, after 2.2's human-applied `LIMITS.md` §8 exists.
+
+### The merge
+
+- `git merge --no-commit --no-ff stage-model-routing` (`5bf6b18`) → 3 conflicts; `pharn-ship.md`,
+  `command-hygiene.test.mjs`, `CLAUDE.md` and `README.md` changed on both sides and auto-merged. Each conflict kept both
+  sides (PLAN Chain sequencing item 5):
+  1. `.claude/commands/pharn-loop.md` — the stuck-point table: 2.2's S9 trigger (a routed stage agent's unusable
+     result) beside this branch's S6c row and S9 rule; `## Running a stage (6.27.0)` placed before `## Quick mode`, so
+     each section ends at the other's heading; Step 3 and Step 7 keep 2.2's routed text with this branch's quick
+     pointers; `version:` 0.11.0 (both sides were at 0.10.0); `reads:` the union.
+  2. `pharn/pharn-contracts/cost-ledger.md` — this branch's "`/pharn-loop --quick` writes no mode marker" paragraph,
+     then 2.2's `## Route` section.
+  3. `CHANGELOG.md` — this branch's section renumbered `[6.28.0]` and placed directly above 2.2's `[6.27.0]`. A scratch
+     check (`.pharn/pharn-dev-build/check-changelog-merge.mjs`, exit 0) proved the file is 2.2's byte for byte plus one
+     insertion (8,942 B).
+- The renumber, 6.27.0 → 6.28.0, found by searching the diff against `stage-model-routing` (scratch
+  `.pharn/pharn-dev-build/added-lines-scan.mjs`, exit 0): whole files where 2.2's copy carries no 6.27.0 (the loop
+  checkers and their tests, `loop-mode-core.mjs`, `check-quick-scope.mjs`, `scope-inputs.mjs`, `pharn-grill.md`,
+  `pharn-spec.md`, three contracts, `make-patch.mjs`, `APPLY.md`, …), line by line in the shared files (`pharn-ship.md`,
+  `CLAUDE.md`, `README.md`, the hygiene suite — two of its pins regex-escaped); `SKILLS_VERSION` 6.28.0; the badge;
+  `pharn-ship.md` 0.11.0. The only added lines still reading 6.27.0 are this directory's records of earlier rounds and
+  the proposed patch (stale until the final round's regeneration).
+- Before the merge commit: `npx prettier --write .claude/commands/pharn-loop.md` (the table's padding);
+  `npm run docs:generate` → exit 0 (README CURRENT-STATE, 5 lines); `npm test` → exit 0, 3,988/3,988; `npm run lint`,
+  `lint:md`, `format:check`, `check:badge`, `check:changelog`, `check:contributing`, `check:markers` → each exit 0.
+  `npm run check:reconcile` was RED, as expected: 2.2's files changed since the gate2 epoch, whose scope never named
+  them. The fresh epoch below answers it.
+- Merge commit `51cf513`.
+
+### Step 0 of the coupling
+
+- `PLAN.md` gains `## Coupling amendments` and five `## Files` paths (38 → 43);
+  `node pharn/floor/check-plan-lessons.mjs .dev/features/loop-quick-mode/PLAN.md .dev/memory-bank/lessons-learned.md`
+  → exit 0.
+- `node .claude/hooks/set-writes-scope.cjs --from-plan .dev/features/loop-quick-mode/PLAN.md` → exit 0, 43 paths;
+  `node pharn/floor/reconcile-baseline.mjs --anchor --by loop-quick-mode-coupling` → exit 0, 2,426 paths, scope 43. No
+  path joined mid-round, so no `--amend-scope` was needed.
+
+### The coupling (Chain sequencing item 4)
+
+- **The loop's quick column** (`pharn/floor/stage-agent-core.mjs`): `ROUTE_POLICY["pharn-loop"].quick` — spec, plan,
+  test and build `agent`, grill `floor-only`, regress skipped, verify `floor-only`; `INVOCATIONS["pharn-loop"].quick`
+  — `/pharn-spec --quick --model-approve`, `/pharn-plan <name>`, `/pharn-test <name> --unattended`,
+  `/pharn-build <name>`. `stage-agent.mjs` reads the accepted `--mode` values from the table, so only its header
+  changed; `route --command pharn-loop --mode quick` now routes (2.2's refusal case moved into a new ROUTES test, and
+  the refusal list gained the loop's skipped quick regress and a `--mode fast`).
+- **`S6c` in `LOOP_ROWS`**, mapped in `## Running a stage` (`refused S6c` → **S6c**) and named in its rows sentence.
+- **Rule 7 per mode.** `FIX_LIST_SOURCES` names each fix-list field's stage; `fixListFields(mode)` drops a field whose
+  stage the mode skips, derived from `ROUTE_POLICY` (a mode the loop does not hold reads nothing). Quick: the three
+  `verify-report.json` fields, "each from `…/verify-report.json` (this mode never runs /pharn-regress, …)". A scratch
+  comparison of every 6.27.0 brief against the new core (`.pharn/pharn-dev-build/brief-parity.mjs`, exit 0): 39
+  (command, mode, stage, iteration) briefs, 0 differing once the S6c row is set aside — full mode's rule 7 is
+  byte-identical.
+- **`## Quick mode`** gains the routing lines: item 2 the spec's route and brief with `--mode quick` (its brief names
+  the quick invocation); item 3 the grill's route with `--mode quick`, which prints `inline:floor-only`, then
+  `/pharn-grill <name> --quick` inline with no brief and no `read`; item 4 — beyond item 4's list in the PLAN (spec
+  and grill), because rule 7 is rendered from the brief's `--mode` — the build's route and brief with
+  `--iteration <N> --mode quick`, and the inline hand-over naming the same three fields. Markers, `read` lines and the
+  returns stay in Steps 3–5, which gain one pointer each; the quick audit gains a bullet (the brief text FLOOR, running
+  the `--mode quick` lines ADVISORY, every miss failing safe).
+- **The hygiene pins** (`.dev/floor/command-hygiene.test.mjs` `STAGE_AGENT_WIRING`): the loop's `modeLines` = quick →
+  spec, grill, build; rule 2's brief comparison split by mode (a `--mode` brief exactly for a `--mode` route line whose
+  cell is agent); rule 4 gains an order rule for `--mode` route lines; ★(6) executes 14 route lines and 12 brief lines;
+  (8) pins `LOOP_ROWS` at 9 and the quick fix-list parity (`## Quick mode` item 4 against `fixListFields("quick")`);
+  (9) adds five mutants of the quick column (a cell flipped inline, a cell newly routed, a brief after the inline grill,
+  a dropped quick brief, a quick brief without `--mode`) and the loop's controls; (10), new, requires every `--mode`
+  line of `pharn-loop.md` to sit inside `## Quick mode`. `LOOP_QUICK_WIRING` gains the three pointers and one G7
+  closure entry — the inline hand-over's anchor phrase, which (8) reads by first occurrence and item 4 precedes.
+- `node --test pharn/floor/stage-agent-core.test.mjs pharn/floor/stage-agent.test.mjs` → exit 0, 54/54;
+  `node --test .dev/floor/command-hygiene.test.mjs` → exit 0, 257/257.
+
+### `regress-scope-list-grammar` — fixed for the decision
+
+- `stage-regress.mjs`'s partition phase now calls `check-regress.mjs`'s `partitionScope` in-process over the arrays
+  `scope-inputs.mjs` builds (the declared patterns through `normPath`, as the CLI's `parseList` gives them), and writes
+  the scope document that CLI printed; no child is spawned for the scope.
+- `pharn/floor/stage-regress.test.mjs`: a changed `src/index.js` spelled with one leading space (a directory named
+  space-`src`) and a lone changed path named `--declared` each end `refused scope-escaped` with the exact name in
+  `escaped`; each test's control feeds the same sets to `check-regress.mjs scope` as comma lists, which passes them
+  (exit 0). A `--declared` file the PLAN declares proceeds to `done`. A ✧ parity test pins scope.json byte-identical to
+  the CLI's stdout for ordinary names.
+  `node --test --test-name-pattern="hostile name|control\)|scope-escaped" pharn/floor/stage-regress.test.mjs` → exit
+  0, 5/5; the parity test → exit 0, 1/1.
+- Named, not built: `regress-inside-echo-list` — the verdict call's `inside` echo (ADVISORY, read by no floor op) is
+  still a comma list, so `assertRepresentable` still refuses a comma or newline changed path (now over the changed paths
+  only), and `unrepresentable-path` stays reachable. Retiring it needs an array-safe verdict input, a stage-exit
+  registry change and a decision on `REGRESSION.md`'s one-path-per-line listing.
+
+### Gates, this round
+
+| command                                                            | exit | result                                                         |
+| ------------------------------------------------------------------ | ---- | -------------------------------------------------------------- |
+| `node pharn/floor/validate.mjs .`                                  | 0    | `FLOOR: GREEN — 36 capabilities`                               |
+| `npm run docs:check`                                               | 0    | GREEN — the coupling changed no generated region               |
+| `npm test`                                                         | 0    | 4,000/4,000                                                    |
+| `npm run check`                                                    | 0    | every gate, `check:reconcile` over the coupling epoch included |
+| `node .dev/floor/check-changelog-entry.mjs --merge-base 5bf6b18 .` | 0    | GREEN — against 2.2, this PR opens only `## [6.28.0]`          |
+
+Sizes: `pharn-loop.md` 112,241 B (the merge commit's 108,429 B + 3,812 B; `## Quick mode` 18,431 B, `## Running a
+stage` 5,716 B); `pharn-ship.md` 123,792 B.
+
 ## Open issues, named
 
 - `architecture-loop-quick-line`, `loop-quick-run-report`, `quick-size-signal` — pending, as the plan records.
-  `quick-scope-inputs-by-code` is built (the GATE 2 round above); `regress-scope-list-grammar` is new and pending.
-- The `stage-model-routing` coupling (Chain sequencing items 4 and 5) is not built here: it belongs to whichever of the
-  two phases merges second.
-- `origin/main` at `008b24b` (6.26.0, `stage-verify-script`, #281) is merged in (`c9d279c`, the section above); no
-  renumber was needed, since 6.27.0 sits directly above 6.26.0.
+  `quick-scope-inputs-by-code` is built (the GATE 2 round above); `regress-scope-list-grammar` is built for the decision
+  (the coupling round above), leaving `regress-inside-echo-list`, new and pending.
+- The `stage-model-routing` coupling (Chain sequencing items 4 and 5) is built (the round above).
+- The final round owes: `make-patch.mjs` re-run against the `LIMITS.md` that carries 2.2's human-applied §8, then
+  `/pharn-dev-regress` and `/pharn-dev-verify` once over the tree `main` will hold.
+- `origin/main` at `008b24b` (6.26.0, `stage-verify-script`, #281) is merged in (`c9d279c`); `stage-model-routing` at
+  `5bf6b18` (6.27.0) is merged in (`51cf513`), and this increment is renumbered 6.28.0.

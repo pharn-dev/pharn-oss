@@ -28,6 +28,8 @@ import {
   INLINE_REMEDIES,
   LOOP_ROWS,
   FIX_LIST_FIELDS,
+  FIX_LIST_SOURCES,
+  FIX_LIST_REPORTS,
   RESULT_SCHEMA,
   RESULT_KEYS,
   RESULT_STATUSES,
@@ -50,6 +52,7 @@ import {
   unusableVerdict,
   buildResult,
   fixListApplies,
+  fixListFields,
 } from "./stage-agent-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -96,7 +99,7 @@ function policyTotalityReds(policy) {
 
 test("POLICY TOTALITY — every command has a full column, and every column holds every stage exactly once, each a policy cell", () => {
   assert.deepEqual(policyTotalityReds(ROUTE_POLICY), []);
-  assert.equal(allCells().length, 21, "three columns x seven stages (ship full, ship quick, loop full) — L34");
+  assert.equal(allCells().length, 28, "four columns x seven stages (ship full, ship quick, loop full, loop quick — 6.28.0) — L34");
 });
 
 test("POLICY TOTALITY DISCRIMINATES — a column missing one cell, or holding an unknown cell, fails (L60)", () => {
@@ -121,9 +124,14 @@ test("the plan's policy, cell by cell — the routed set per column (a flipped c
   assert.deepEqual(routed("pharn-ship", "full"), ["pharn-plan", "pharn-grill", "pharn-test", "pharn-build"]);
   assert.deepEqual(routed("pharn-ship", "quick"), ["pharn-plan", "pharn-test", "pharn-build"]);
   assert.deepEqual(routed("pharn-loop", "full"), ["pharn-spec", "pharn-plan", "pharn-grill", "pharn-test", "pharn-build"]);
+  // 6.28.0 (loop-quick-mode, the coupling): the loop's quick column routes the full column's stages but the grill.
+  assert.deepEqual(routed("pharn-loop", "quick"), ["pharn-spec", "pharn-plan", "pharn-test", "pharn-build"]);
   assert.equal(policyCell("pharn-ship", "full", "pharn-spec"), "interactive", "ship's spec IS GATE 1");
   assert.equal(policyCell("pharn-ship", "quick", "pharn-regress"), SKIPPED);
   assert.equal(policyCell("pharn-ship", "quick", "pharn-grill"), "floor-only");
+  assert.equal(policyCell("pharn-loop", "quick", "pharn-regress"), SKIPPED, "a quick loop never runs /pharn-regress");
+  assert.equal(policyCell("pharn-loop", "quick", "pharn-grill"), "floor-only", "the quick grill runs its two checkers");
+  assert.equal(policyCell("pharn-loop", "quick", "pharn-spec"), AGENT, "unlike ship's, the loop's spec never asks a person");
   for (const command of STAGE_AGENT_COMMANDS) {
     for (const mode of modesOf(command)) {
       for (const stage of ["pharn-regress", "pharn-verify"]) {
@@ -140,8 +148,9 @@ test("policyCell / modesOf are own-property lookups — an inherited name is nev
     assert.equal(policyCell("pharn-ship", FULL_MODE, bad), null);
     assert.deepEqual(modesOf(bad), []);
   }
-  assert.equal(policyCell("pharn-loop", "quick", "pharn-plan"), null, "/pharn-loop has no quick column in this base (amendment C)");
-  assert.deepEqual(modesOf("pharn-loop"), ["full"]);
+  // FLIPPED in 6.28.0: 6.27.0 pinned `null` here (no loop quick column until the second of the two increments merged).
+  assert.equal(policyCell("pharn-loop", "quick", "pharn-plan"), AGENT, "/pharn-loop's quick column exists (the coupling)");
+  assert.deepEqual(modesOf("pharn-loop").sort(), ["full", "quick"]);
   assert.deepEqual(modesOf("pharn-ship").sort(), ["full", "quick"]);
 });
 
@@ -158,6 +167,9 @@ test("INVOCATIONS holds exactly the agent cells — mutant: an invocation for an
   assert.deepEqual(invKeys.sort(), agentKeys);
   assert.equal(INVOCATIONS["pharn-loop"].full["pharn-test"], "/pharn-test <name> --unattended", "the loop's test stage never asks");
   assert.equal(INVOCATIONS["pharn-loop"].full["pharn-spec"], "/pharn-spec --model-approve");
+  // 6.28.0: the quick spec agent runs the quick form under the model's approval; the quick test stage still never asks.
+  assert.equal(INVOCATIONS["pharn-loop"].quick["pharn-spec"], "/pharn-spec --quick --model-approve");
+  assert.equal(INVOCATIONS["pharn-loop"].quick["pharn-test"], "/pharn-test <name> --unattended");
 });
 
 test("INLINE_REMEDIES names a remedy for EVERY inline reason, and for nothing else (L27)", () => {
@@ -265,7 +277,7 @@ test("renderBrief — every ROUTED cell renders; every other cell is refused", (
       rendered++;
     } else assert.equal(b.ok, false, `${c.command}/${c.mode}/${c.stage} is ${c.cell} and must have no brief`);
   }
-  assert.equal(rendered, 12, "4 ship-full + 3 ship-quick + 5 loop cells (L34)");
+  assert.equal(rendered, 16, "4 ship-full + 3 ship-quick + 5 loop-full + 4 loop-quick cells (L34)");
 });
 
 test("renderBrief — the invocation, the exact report lines, rule 5's trust wording; no placeholder, no ask tool", () => {
@@ -308,6 +320,58 @@ test("renderBrief — rule 7 (the fix list) appears ONLY for /pharn-loop's build
   assert.equal(fixListApplies({ command: "pharn-loop", stage: "pharn-build", iteration: 3 }), true);
   assert.equal(fixListApplies({ command: "pharn-loop", stage: "pharn-build", iteration: "2" }), false, "an integer, never a string");
   assert.equal(FIX_LIST_FIELDS.length, 4);
+  // Full mode's rule 7 is byte-identical to 6.27.0's: the first three fields from verify-report.json, the last from
+  // regression-report.json.
+  assert.ok(
+    withIt.includes(
+      "— the first three from `pharn/features/demo/verify-report.json`, the last from `pharn/features/demo/regression-report.json` —"
+    )
+  );
+});
+
+test("fixListFields — derived from the policy: a mode that skips /pharn-regress drops its field (6.28.0, the loop's quick column)", () => {
+  assert.deepEqual(fixListFields("full"), [...FIX_LIST_FIELDS], "full mode reads all four");
+  assert.deepEqual(fixListFields("quick"), [".failing_gates[]", ".completeness.missing[]", ".ac_gate.acs[]"], "quick reads verify's three");
+  for (const bad of ["bogus", "toString", "__proto__", undefined, null])
+    assert.deepEqual(fixListFields(bad), [], `${String(bad)} reads nothing`);
+  // Each field names a real stage and that stage's report — iterated, so a new field without a source fails here (L29).
+  assert.deepEqual(Object.keys(FIX_LIST_SOURCES), [...FIX_LIST_FIELDS]);
+  for (const [f, s] of Object.entries(FIX_LIST_SOURCES)) {
+    assert.ok(STAGES.includes(s), `${f}: a stage`);
+    assert.ok(Object.hasOwn(FIX_LIST_REPORTS, s), `${f}: its stage writes a named report`);
+  }
+  // THE DERIVATION DISCRIMINATES (L60): the verify-sourced fields survive only because verify is not skipped in quick.
+  assert.equal(policyCell("pharn-loop", "quick", "pharn-verify"), "floor-only");
+  assert.equal(policyCell("pharn-loop", "quick", "pharn-regress"), SKIPPED);
+});
+
+test("renderBrief — the QUICK build's rule 7 names verify-report.json's three fields and no regression report (6.28.0)", () => {
+  const quick = renderBrief({ command: "pharn-loop", mode: "quick", stage: "pharn-build", name: "demo", iteration: 2 }).text;
+  assert.match(quick, /^7\. Iteration 2:/m);
+  for (const f of fixListFields("quick")) assert.ok(quick.includes(`\`${f}\``), `quick rule 7 names ${f}`);
+  assert.ok(!quick.includes("`.regressions[]`"), "no regress field");
+  assert.ok(!quick.includes("regression-report.json"), "no regression report named");
+  assert.match(quick, /each from `pharn\/features\/demo\/verify-report\.json` \(this mode never runs \/pharn-regress/);
+  assert.match(quick, /mode: quick/, "the brief's header names the mode");
+  assert.doesNotMatch(
+    renderBrief({ command: "pharn-loop", mode: "quick", stage: "pharn-build", name: "demo", iteration: 1 }).text,
+    /^7\./m,
+    "iteration 1 has no fix list in quick mode either"
+  );
+});
+
+test("renderBrief — the loop's QUICK spec agent is told the quick invocation and where the description is (6.28.0)", () => {
+  const spec = renderBrief({ command: "pharn-loop", mode: "quick", stage: "pharn-spec", name: "demo" }).text;
+  assert.match(spec, /as if it had been invoked as `\/pharn-spec --quick --model-approve`/);
+  assert.match(spec, /The user's increment description is the fenced block below the first line of your prompt\./);
+  assert.match(spec, /--row S6c/, "a misfit is reportable as S6c");
+  assert.match(spec, /one of S4, S5, S6, S6b, S6c, S7, S8, S9, S10\./, "rule 3 names S6c among the rows");
+  assert.doesNotMatch(spec, /--status question/, "the loop's agent never reports question");
+  // CONTROL: the full-mode spec agent is told the full invocation.
+  const full = renderBrief({ command: "pharn-loop", stage: "pharn-spec", name: "demo" }).text;
+  assert.match(full, /as if it had been invoked as `\/pharn-spec --model-approve`/);
+  // The quick grill is inline by policy, so it has no brief at all.
+  assert.equal(renderBrief({ command: "pharn-loop", mode: "quick", stage: "pharn-grill", name: "demo" }).ok, false);
 });
 
 test("renderBrief — the loop's spec agent is told where the description is; everyone else is told nothing is added", () => {
@@ -520,9 +584,11 @@ test("✧ PARITY: every STAGE_CONFIG_KEYS value resolves to ITS OWN model throug
 
 test("LOOP_ROWS is a subset of pharn-loop.md Step 2's stuck-point ids (S9 and S10 included)", () => {
   const body = readFileSync(join(REPO, ".claude", "commands", "pharn-loop.md"), "utf8");
-  const ids = new Set([...body.matchAll(/^\|\s*(S\d+b?)\s*\|/gm)].map((m) => m[1]));
-  assert.ok(ids.size >= 13, `the table scan found ${ids.size} rows — the scan broke (L34)`);
+  // A row id is S<n> with an optional lower-case suffix (S6b, and S6c since 6.28.0) — the 6.27.0 scan read `b?` only.
+  const ids = new Set([...body.matchAll(/^\|\s*(S\d+[a-z]?)\s*\|/gm)].map((m) => m[1]));
+  assert.ok(ids.size >= 15, `the table scan found ${ids.size} rows — the scan broke (L34)`);
   for (const r of LOOP_ROWS) assert.ok(ids.has(r), `${r} is not a stuck-point row in pharn-loop.md`);
   assert.ok(LOOP_ROWS.includes("S9") && LOOP_ROWS.includes("S10"), "the two fallback rows");
+  assert.ok(LOOP_ROWS.includes("S6c"), "a quick spec agent's misfit (6.28.0)");
   for (const r of ["S11", "S12", "S13"]) assert.ok(!LOOP_ROWS.includes(r), `${r} is decided by a checker, never reported by an agent`);
 });

@@ -40,6 +40,7 @@ import {
   STAGE_CONFIG_KEYS,
   modesOf,
   renderBrief,
+  fixListFields,
 } from "../../pharn/floor/stage-agent-core.mjs";
 
 const COMMANDS_DIR = new URL("../../.claude/commands/", import.meta.url).pathname;
@@ -2587,6 +2588,20 @@ const LOOP_QUICK_POINTERS = [
   },
   { site: "Step 6b's render line", re: /\(SKIPPED in\s+Quick mode — `## Quick mode` item 8; `cost\.json` is still emitted above\)/ },
   { site: "Step 7's report bullet", re: /a quick run renders none — `## Quick mode` item 8/ },
+  // 6.28.0 coupling — each full-mode route site whose quick run uses ## Quick mode's --mode lines instead (appended, so the
+  // mutation test's index into this list is unchanged).
+  {
+    site: "Step 3's route lines",
+    re: /_\(A `--quick` run uses `## Quick mode` item 2's route and brief lines, each with\s+`--mode quick`, in place of Step 3's two\.\)_/,
+  },
+  {
+    site: "Step 4's grill route line",
+    re: /Then `\/pharn-grill`, the same way _\(a `--quick` run: `## Quick mode` item 3's route line, which runs it inline\)_:/,
+  },
+  {
+    site: "Step 5.1's build route lines",
+    re: /at iteration `<N>` _\(a `--quick` run:\s+`## Quick mode` item 4's route and brief lines, each with `--mode quick`\)_:/,
+  },
 ];
 
 /** STOP_GREEN_QUICK at the three decisive sites: the stop's exit-0 bullet, and the headings of Step 6a and Step 6c. */
@@ -2638,6 +2653,9 @@ const LOOP_QUICK_FORBIDDEN = [
   { what: "a check-loop.mjs line", re: /node pharn\/floor\/check-loop\.mjs/ },
   { what: "a mark-phase.mjs line", re: /node pharn\/floor\/mark-phase\.mjs/ },
   { what: "the check-test-stage line", re: /node pharn\/floor\/check-test-stage\.mjs/ },
+  // 6.28.0 coupling: STAGE_AGENT_WIRING (8)'s handOverReasons reads Step 5.1's inline hand-over paragraph by the FIRST
+  // occurrence of this phrase, and ## Quick mode item 4 (the quick build's own hand-over) precedes it.
+  { what: "the inline hand-over paragraph's anchor", re: /hand the inline build the standing/ },
 ];
 
 test("✧ LOOP QUICK: pharn-loop.md's ## Quick mode exists, and its two pinned lines appear exactly once — inside it", () => {
@@ -3490,7 +3508,9 @@ const STAGE_AGENT_WIRING = [
     file: "pharn-loop.md",
     command: "pharn-loop",
     routed: { "pharn-spec": [null], "pharn-plan": [null], "pharn-grill": [null], "pharn-test": [null], "pharn-build": ["<N>"] },
-    modeLines: {},
+    // 6.28.0 (loop-quick-mode): ## Quick mode's lines — the spec (its brief names the quick invocation), the grill
+    // (inline by policy) and the build (its brief's rule 7 reads verify-report.json alone).
+    modeLines: { quick: ["pharn-spec", "pharn-grill", "pharn-build"] },
     section: "Running a stage (6.27.0) — a routed stage runs as a stage agent, requested on its configured model",
     waitRule: /a call that\s+returns a background-launch notice instead is \*\*S9\*\*/,
   },
@@ -3536,9 +3556,17 @@ function saLines(body) {
 
 const saKey = (f) => `${f.stage}@${f.iteration ?? "-"}`;
 const sortedKeys = (lines) => lines.map((l) => saKey(l.flags)).sort();
+const saModeKey = (f) => `${f.mode}:${saKey(f)}`;
+
+/** A cell of `policy` by own-property lookups only (L15) — null when the command, mode or stage is not in it. Takes the
+ *  table as an argument so a mutated copy runs through the same rule (L60). */
+function saCell(policy, command, mode, stage) {
+  if (!Object.hasOwn(policy, command) || !Object.hasOwn(policy[command], mode)) return null;
+  return Object.hasOwn(policy[command][mode], stage) ? policy[command][mode][stage] : null;
+}
 
 /** Rule 2 — the routed set, the read/brief lines, and --route only where a route line is. [] when clean. */
-function saWiringReasons(cmd, body) {
+function saWiringReasons(cmd, body, policy = ROUTE_POLICY) {
   const reasons = [];
   const L = saLines(body);
   for (const l of L.filter((x) => ["route", "read", "brief"].includes(x.kind))) {
@@ -3553,8 +3581,21 @@ function saWiringReasons(cmd, body) {
   if (JSON.stringify(have) !== JSON.stringify(want)) reasons.push(`full-mode route lines [${have}] != [${want}]`);
   const reads = sortedKeys(L.filter((l) => l.kind === "read"));
   if (JSON.stringify(reads) !== JSON.stringify(have)) reasons.push(`read lines [${reads}] != route lines [${have}]`);
-  const briefs = sortedKeys(L.filter((l) => l.kind === "brief"));
+  // A brief line carries its route line's --mode (6.28.0 split): the full-mode briefs pair with the full-mode route lines;
+  // a --mode brief exists exactly for a --mode route line whose cell is agent (an inline cell has no brief). A --mode
+  // stage reuses its full-mode read line — `read` takes no --mode — so the read rule above is unchanged.
+  const briefs = sortedKeys(L.filter((l) => l.kind === "brief" && l.flags.mode === undefined));
   if (JSON.stringify(briefs) !== JSON.stringify(have)) reasons.push(`brief prompt lines [${briefs}] != route lines [${have}]`);
+  const haveModeBriefs = L.filter((l) => l.kind === "brief" && l.flags.mode !== undefined)
+    .map((l) => saModeKey(l.flags))
+    .sort();
+  const wantModeBriefs = L.filter(
+    (l) => l.kind === "route" && l.flags.mode !== undefined && saCell(policy, cmd.command, l.flags.mode, l.flags.stage) === AGENT
+  )
+    .map((l) => saModeKey(l.flags))
+    .sort();
+  if (JSON.stringify(haveModeBriefs) !== JSON.stringify(wantModeBriefs))
+    reasons.push(`--mode brief prompt lines [${haveModeBriefs}] != --mode route lines of agent cells [${wantModeBriefs}]`);
   const withRoute = L.filter((l) => l.kind === "stage-start" && l.flags.route !== undefined);
   for (const l of withRoute)
     if (l.flags.route !== "<route>") reasons.push(`line ${l.idx}: --route must be the literal '<route>' placeholder`);
@@ -3610,11 +3651,32 @@ function saPolicyReasons(policy, cmd, body) {
 }
 
 /** Rule 4 — ORDER, per full-mode route line: stage-start < brief < read < the orchestrator return, all before the
- *  next route line, and the brief's argv equal to the route line's. [] when clean. */
-function saOrderReasons(body) {
+ *  next route line, and the brief's argv equal to the route line's. Per --mode route line (6.28.0) — a DELTA whose
+ *  markers and read line are the full-mode ones: an agent cell's brief line follows it, before the next route line,
+ *  with the same argv; an inline cell has none there. [] when clean. */
+function saOrderReasons(body, policy = ROUTE_POLICY) {
   const reasons = [];
   const L = saLines(body);
-  const full = L.filter((l) => l.kind === "route" && l.flags.mode === undefined);
+  const routes = L.filter((l) => l.kind === "route");
+  for (const r of routes.filter((l) => l.flags.mode !== undefined)) {
+    const next = routes.find((l) => l.idx > r.idx);
+    const briefs = L.filter((l) => l.kind === "brief" && l.idx > r.idx && (!next || l.idx < next.idx));
+    const where = `${saModeKey(r.flags)} (line ${r.idx})`;
+    const cell = saCell(policy, r.flags.command, r.flags.mode, r.flags.stage);
+    if (cell !== AGENT) {
+      if (briefs.length) reasons.push(`${where}: an inline (${cell}) --mode cell is followed by a brief prompt line`);
+      continue;
+    }
+    if (briefs.length !== 1) {
+      reasons.push(`${where}: an agent --mode cell needs exactly one brief prompt line before the next route line, found ${briefs.length}`);
+      continue;
+    }
+    for (const k of ["command", "stage", "name", "iteration", "mode"]) {
+      if (briefs[0].flags[k] !== r.flags[k])
+        reasons.push(`${where}: the brief line's --${k} ${briefs[0].flags[k]} differs from the route line's ${r.flags[k]}`);
+    }
+  }
+  const full = routes.filter((l) => l.flags.mode === undefined);
   for (let i = 0; i < full.length; i++) {
     const r = full[i];
     const end = i + 1 < full.length ? full[i + 1].idx : Infinity;
@@ -3781,8 +3843,16 @@ test("★ STAGE_AGENT_WIRING (6) — every committed route line runs to its expe
       routes++;
     }
   }
-  assert.equal(routes, 11, "L34: 6 ship route lines (plan, grill, test, build@1, build@2, the quick grill) + 5 loop lines");
-  assert.equal(briefs, 10, "one brief prompt line per full-mode route line (the quick grill runs inline, so has none)");
+  assert.equal(
+    routes,
+    14,
+    "L34: 6 ship route lines (plan, grill, test, build@1, build@2, the quick grill) + 8 loop lines (5 full; the quick spec, grill and build — 6.28.0)"
+  );
+  assert.equal(
+    briefs,
+    12,
+    "one brief prompt line per full-mode route line (10), plus the loop's quick spec and build (the quick grills run inline, so have none)"
+  );
 });
 
 // ★ (7) PROBED (L37, L40): the two write guards give IDENTICAL verdicts for a subagent-shaped payload (with
@@ -3843,13 +3913,35 @@ function handOverReasons(body) {
   return FIX_LIST_FIELDS.filter((f) => !para.includes(`\`${f}\``)).map((f) => `the hand-over paragraph does not name ${f}`);
 }
 
+/** 6.28.0 — ## Quick mode item 4 (the quick build) names exactly the quick fix list, and never the regress field. */
+function quickHandOverReasons(body) {
+  const section = loopQuickSection(body);
+  const start = section.indexOf("\n4. **Step 5, sub-step 1 — the build.**");
+  const end = section.indexOf("\n5. **Step 5, sub-step 2");
+  if (start === -1 || end <= start) return ["## Quick mode has no item 4 (the build) followed by item 5"];
+  const item = section.slice(start, end);
+  const reasons = fixListFields("quick")
+    .filter((f) => !item.includes(`\`${f}\``))
+    .map((f) => `## Quick mode item 4 does not name ${f}`);
+  for (const f of FIX_LIST_FIELDS.filter((x) => !fixListFields("quick").includes(x))) {
+    if (item.includes(`\`${f}\``)) reasons.push(`## Quick mode item 4 names ${f}, which a quick run has no report for`);
+  }
+  return reasons;
+}
+
 test("✧ STAGE_AGENT_WIRING (8) — LOOP_ROWS are stuck points named in the loop's mapping; the hand-over paragraph and rule 7 name the same fields", () => {
-  assert.equal(LOOP_ROWS.length, 8, "L34");
+  assert.equal(LOOP_ROWS.length, 9, "L34 — S6c joined in 6.28.0");
   const body = commandBody("pharn-loop.md");
   assert.deepEqual(loopRowsReasons(body), []);
   assert.deepEqual(handOverReasons(body), []);
   const rule7 = renderBrief({ command: "pharn-loop", stage: "pharn-build", name: "demo", iteration: 2 }).text;
   for (const f of FIX_LIST_FIELDS) assert.ok(rule7.includes(`\`${f}\``), `the brief's rule 7 names ${f}`);
+  // 6.28.0 — the quick build: its brief's rule 7 and ## Quick mode item 4 name the same, smaller list.
+  assert.deepEqual(fixListFields("quick"), FIX_LIST_FIELDS.slice(0, 3), "L34: the three verify-report.json fields");
+  assert.deepEqual(quickHandOverReasons(body), []);
+  const quick7 = renderBrief({ command: "pharn-loop", mode: "quick", stage: "pharn-build", name: "demo", iteration: 2 }).text;
+  for (const f of fixListFields("quick")) assert.ok(quick7.includes(`\`${f}\``), `the quick brief's rule 7 names ${f}`);
+  assert.ok(!quick7.includes("`.regressions[]`") && !quick7.includes("regression-report.json"), "no regression report in quick mode");
 });
 
 // (9) MUTATION CONTROLS (L60) — each property above fails on a mutant of the REAL command, run through the SAME rule.
@@ -3894,9 +3986,61 @@ test("✧ STAGE_AGENT_WIRING (9) — each rule fails on its mutant: route, read,
   const flipped2 = JSON.parse(JSON.stringify(ROUTE_POLICY));
   flipped2["pharn-loop"].full["pharn-verify"] = AGENT;
   assert.ok(saPolicyReasons(flipped2, loop, loopBody).length > 0, "a newly routed cell with no route line");
+  // 6.28.0 — the loop's QUICK column (the coupling), through the same rules: a quick cell flipped inline with no
+  // --mode line, a quick cell newly routed, a brief after the inline quick grill, a dropped quick brief, and a quick
+  // brief that lost its --mode.
+  const flippedQ = JSON.parse(JSON.stringify(ROUTE_POLICY));
+  flippedQ["pharn-loop"].quick["pharn-plan"] = "floor-only";
+  assert.match(
+    saPolicyReasons(flippedQ, loop, loopBody).join("\n"),
+    /pharn-loop\/quick: pharn-plan is floor-only here/,
+    "a quick cell flipped inline without its --mode route line"
+  );
+  const routedQ = JSON.parse(JSON.stringify(ROUTE_POLICY));
+  routedQ["pharn-loop"].quick["pharn-verify"] = AGENT;
+  assert.match(
+    saPolicyReasons(routedQ, loop, loopBody).join("\n"),
+    /pharn-loop\/quick: stages with a route line/,
+    "a quick cell newly routed with no route line"
+  );
+  const qGrillRoute = "node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-grill --name '<name>' --mode quick";
+  const qGrillBrief = `${BRIEF_PROMPT_PREFIX}node pharn/floor/stage-agent.mjs brief --command pharn-loop --stage pharn-grill --name '<name>' --mode quick`;
+  const briefAfterInline = loopBody.replace(`${qGrillRoute}\n`, `${qGrillRoute}\n${qGrillBrief}\n`);
+  assert.notEqual(briefAfterInline, loopBody, "fixture sanity: the brief landed after the quick grill's route line");
+  assert.match(saOrderReasons(briefAfterInline).join("\n"), /an inline \(floor-only\) --mode cell is followed by a brief/);
+  assert.match(saWiringReasons(loop, briefAfterInline).join("\n"), /--mode brief prompt lines/, "…and the wiring rule sees it");
+  const qSpecBrief = `${BRIEF_PROMPT_PREFIX}node pharn/floor/stage-agent.mjs brief --command pharn-loop --stage pharn-spec --name '<name>' --mode quick`;
+  const noQuickBrief = dropLine(loopBody, qSpecBrief);
+  assert.match(saWiringReasons(loop, noQuickBrief).join("\n"), /--mode brief prompt lines/, "a dropped quick brief");
+  assert.match(saOrderReasons(noQuickBrief).join("\n"), /needs exactly one brief prompt line/, "…and the order rule sees it");
+  const qBuildBrief = `${BRIEF_PROMPT_PREFIX}node pharn/floor/stage-agent.mjs brief --command pharn-loop --stage pharn-build --name '<name>' --iteration <N> --mode quick`;
+  const noMode = loopBody.replace(qBuildBrief, qBuildBrief.replace(" --mode quick", ""));
+  assert.notEqual(noMode, loopBody, "fixture sanity: the quick build brief lost its --mode");
+  assert.match(saWiringReasons(loop, noMode).join("\n"), /brief prompt lines/, "a quick brief without --mode");
+  assert.match(saOrderReasons(noMode).join("\n"), /the brief line's --mode undefined differs/, "…and its argv differs");
   // CONTROLS: every rule ACCEPTS the real commands.
   assert.deepEqual(saWiringReasons(ship, real), []);
   assert.deepEqual(saOrderReasons(real), []);
   assert.deepEqual(saPolicyReasons(ROUTE_POLICY, ship, real), []);
+  assert.deepEqual(saWiringReasons(loop, loopBody), []);
+  assert.deepEqual(saOrderReasons(loopBody), []);
+  assert.deepEqual(saPolicyReasons(ROUTE_POLICY, loop, loopBody), []);
   assert.deepEqual(loopRowsReasons(loopBody), []);
+});
+
+// (10) 6.28.0 — the loop's --mode lines live in ## Quick mode and nowhere else: they replace Steps 3-5's full-mode lines
+// for a --quick run, and the section is where a reader of that run looks (L29: derived from the lines, never re-listed).
+test("✧ STAGE_AGENT_WIRING (10) — every --mode stage-agent line of pharn-loop.md sits inside ## Quick mode", () => {
+  const body = commandBody("pharn-loop.md");
+  const modeText = (b) =>
+    saLines(b)
+      .filter((l) => (l.kind === "route" || l.kind === "brief") && l.flags.mode !== undefined)
+      .map((l) => l.text)
+      .sort();
+  const inFile = modeText(body);
+  assert.equal(inFile.length, 5, "L34: the quick spec's route and brief, the quick grill's route, the quick build's route and brief");
+  assert.deepEqual(modeText(loopQuickSection(body)), inFile);
+  // CONTROL (L60): a --mode line pasted after the section is seen outside it.
+  const pasted = `${body}\n\`\`\`bash\n${inFile.find((t) => t.includes(" route "))}\n\`\`\`\n`;
+  assert.notDeepEqual(modeText(loopQuickSection(pasted)), modeText(pasted));
 });

@@ -97,6 +97,7 @@ import { renderDone, renderRefused } from "./render-regression.mjs";
 import { shelledVerdict } from "./shelled-verdict-core.mjs";
 import { spawnGate } from "./run-gates.mjs";
 import { declaredWrites, changedPaths } from "./scope-inputs.mjs";
+import { partitionScope, scopeFindings, normPath } from "./check-regress.mjs";
 import { FEATURE_SLUG_RE, actualForExpected } from "./gate-run-core.mjs";
 import { isExcluded } from "./worktree-fingerprint.mjs";
 
@@ -196,7 +197,10 @@ function clearBaseWorktree() {
 /** ------------------------------------------------------------------------------------------------
  *  The comma/newline list grammar `check-regress.mjs` parses (GRILL "unrepresentable-path"): a path
  *  containing a comma or a newline cannot be represented in that grammar and must be REFUSED, never
- *  mangled or silently split.
+ *  mangled or silently split. Since 6.28.0 no DECISION reads that grammar — the partition runs in-process
+ *  (phase 4) — and the one list left is the verdict call's `--inside` echo, the report's ADVISORY `inside`
+ *  field (`regression-report.md`). So this now guards only the changed paths that echo carries: the named
+ *  residual `regress-inside-echo-list`, which a comma or newline name still meets as this refusal.
  *  ---------------------------------------------------------------------------------------------- */
 function assertRepresentable(paths, feature) {
   for (const p of paths) {
@@ -404,7 +408,7 @@ function phaseBase(cfg) {
 }
 
 /** ------------------------------------------------------------------------------------------------
- *  PHASE 4 — partition: build the four inputs, call `check-regress.mjs scope`.
+ *  PHASE 4 — partition: build the four inputs, apply `check-regress.mjs`'s scope rule to them.
  *  ---------------------------------------------------------------------------------------------- */
 // The declared and changed sets come from `scope-inputs.mjs` (6.28.0, loop-quick-mode GATE 2): the ONE owner this phase
 // and `check-quick-scope.mjs` — the quick modes' scope check — both call (L35). This phase keeps its own refusals and
@@ -458,6 +462,14 @@ function computeEvalPairs(cfg) {
   return pairs;
 }
 
+// THE PARTITION RUNS IN-PROCESS (6.28.0, the follow-up `regress-scope-list-grammar`). Before, this phase joined the four
+// sets into comma lists for `check-regress.mjs scope`, whose list grammar trims each name and scans argv for its flags:
+// an undeclared ` src/x.js` read as the declared `src/x.js`, and a lone changed path named `--declared` was taken for the
+// flag, so either passed the scope check falsely. Now `partitionScope` — the rule that CLI applies, and the call
+// `check-quick-scope.mjs` makes — reads the sets as ARRAYS, each path exactly as git printed it; the declared patterns get
+// `normPath`, as that CLI's `parseList` gives them. The document written to scope.json has the keys, the order and (for an
+// ordinary name) the bytes that CLI printed, so run-gates.mjs, the verdict phase and render-regression.mjs read it
+// unchanged. Only the changed paths still meet `assertRepresentable`: the verdict call echoes them as a comma list.
 function phasePartition(cfg, planPath, specPath, base) {
   const declared = readPlanDeclared(cfg, planPath, specPath);
   const inside = computeInside(cfg, base);
@@ -465,44 +477,40 @@ function phasePartition(cfg, planPath, specPath, base) {
   const evalPairs = computeEvalPairs(cfg);
 
   assertRepresentable(inside, cfg.feature);
-  assertRepresentable(declared, cfg.feature);
-  assertRepresentable(tests, cfg.feature);
-  for (const p of evalPairs) assertRepresentable([p.expected, p.actual], cfg.feature);
 
-  const args = [
-    "scope",
-    "--changed",
-    inside.join(","),
-    "--declared",
-    declared.join(","),
-    "--tests",
-    tests.join(","),
-    "--eval-pairs",
-    evalPairs.map((p) => `${p.expected}::${p.actual}`).join(","),
-    "--feature",
-    cfg.feature,
-  ];
-  const r = spawnSync(process.execPath, [CHECK_REGRESS, ...args], { encoding: "utf8" });
-  if (r.stdout === undefined || r.stdout === null) {
-    emitUnusable(cfg.feature, "child-crashed", `check-regress.mjs scope produced no stdout (status ${r.status ?? "null"})`);
-  }
-  writeFileSync(REGRESS_PATHS.scopeJson, r.stdout);
-  let scope;
-  try {
-    scope = JSON.parse(r.stdout);
-  } catch (e) {
-    emitUnusable(cfg.feature, "child-crashed", `check-regress.mjs scope did not print JSON: ${e.message}`);
-  }
-  if (r.status === 1) {
+  const declaredPatterns = [...new Set(declared.map(normPath).filter(Boolean))];
+  const { escaped, escapeExempt, outsideTests, outsideEvalPairs } = partitionScope({
+    inside,
+    declared: declaredPatterns,
+    tests,
+    evalPairs,
+    feature: cfg.feature,
+  });
+  const scope = escaped.length
+    ? {
+        inside,
+        declared: declaredPatterns,
+        escaped,
+        escape_exempt: escapeExempt,
+        findings: scopeFindings(escaped),
+        outside_tests: outsideTests,
+        outside_eval_pairs: outsideEvalPairs,
+      }
+    : {
+        inside,
+        declared: declaredPatterns,
+        escaped: [],
+        escape_exempt: escapeExempt,
+        outside_tests: outsideTests,
+        outside_eval_pairs: outsideEvalPairs,
+      };
+  writeFileSync(REGRESS_PATHS.scopeJson, `${JSON.stringify(scope, null, 2)}\n`);
+  if (escaped.length) {
     writeRefusedAndEmit(
       cfg.feature,
       "scope-escaped",
-      `${(scope.escaped ?? []).length} path(s) escaped the declared writes-scope: ${JSON.stringify(scope.escaped)}\n` +
-        JSON.stringify(scope.findings ?? [], null, 2)
+      `${escaped.length} path(s) escaped the declared writes-scope: ${JSON.stringify(escaped)}\n` + JSON.stringify(scope.findings, null, 2)
     );
-  }
-  if (r.status !== 0) {
-    emitUnusable(cfg.feature, "child-refused", `check-regress.mjs scope refused: ${scope.reason ?? JSON.stringify(scope)}`);
   }
   return { scope, tests };
 }

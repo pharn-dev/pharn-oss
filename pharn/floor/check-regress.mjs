@@ -78,9 +78,11 @@
 // list grammar. That grammar is lossy for an attacker-nameable path, and stated rather than hidden: a comma or newline
 // splits one path into two, surrounding spaces are trimmed, and a lone changed path spelled `--declared` is found by
 // the flag scan before the real flag — each can turn an undeclared path into a declared or exempt one (a false pass).
-// `stage-regress.mjs` still reaches this CLI through that grammar and refuses a comma or newline path first; the trim
-// and the flag-name cases are its named follow-up, `regress-scope-list-grammar`. The CLI runs only under
-// `import.meta.main`, so importing this file runs nothing.
+// `stage-regress.mjs`'s partition phase now calls `partitionScope` the same way (6.28.0, closing the follow-up
+// `regress-scope-list-grammar`), so no stage decision reads that grammar; the CLI keeps it for a caller that types its
+// lists. What still travels as a list is the verdict's `--inside`: the report's `inside` echo, ADVISORY, read by no
+// floor op. stage-regress.mjs refuses a comma or newline path before building it — the named residual
+// `regress-inside-echo-list`. The CLI runs only under `import.meta.main`, so importing this file runs nothing.
 
 import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";

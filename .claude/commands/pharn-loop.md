@@ -311,7 +311,9 @@ agent** — requested on the model `models.stages` resolves for it. **The model 
 takes no effort, so a routed stage runs at the effort it inherits. The protocol is
 `pharn/floor/stage-agent-core.mjs`'s header, cited here, not restated (P4). Here `/pharn-spec`, `/pharn-plan`,
 `/pharn-grill`, `/pharn-test` and `/pharn-build` (every iteration) are routed. `/pharn-regress` and
-`/pharn-verify` run inline by policy, exactly as before 6.27.0, so their stage-exit mappings above are unchanged.
+`/pharn-verify` run inline by policy, exactly as before 6.27.0, so their stage-exit mappings above are unchanged. A
+`--quick` run (6.28.0) routes the same stages except the grill, which runs inline by policy (`floor-only`: its two
+checkers), and runs no `/pharn-regress` at all; its own route lines carry `--mode quick` (`## Quick mode` items 2–4).
 
 Each routed stage carries its pinned lines in this order, and you run them in this order:
 
@@ -340,7 +342,8 @@ Each routed stage carries its pinned lines in this order, and you run them in th
 **`read`'s closed line, mapped onto Step 2's table.** A row the stage agent reports is used ONLY where this
 command already maps a stage's OWN report to a row:
 
-- `/pharn-spec`: `refused S6` → **S6**; `refused S6b` → **S6b**.
+- `/pharn-spec`: `refused S6` → **S6**; `refused S6b` → **S6b**; `refused S6c` → **S6c** (a `--quick` run's fit checks,
+  6.28.0).
 - `/pharn-build`: `refused S4` → **S4**; `refused S5` → **S5**; `refused S7` → **S7**; `refused S8` → **S8**.
   `done gate:pass` and `done gate:fail` both go on to regress and verify — a red build gate is not a stop here.
 - any other routed stage outcome: `refused S9` → **S9**; `refused S10` → **S10**. A `refused` with no row, or
@@ -353,7 +356,7 @@ command already maps a stage's OWN report to a row:
 test stage, whose row always comes from `check-test-stage.mjs --require-test-first` and then the pinned
 preflight — exit 1 is S12, any other exit S9, never by relayed text (Step 4) — and freshness (S11) and AC
 evidence (S13). The rows a stage agent may report at all are `LOOP_ROWS` in `pharn/floor/stage-agent-core.mjs`:
-S4, S5, S6, S6b, S7, S8, S9 and S10.
+S4, S5, S6, S6b, S6c, S7, S8, S9 and S10.
 
 **Bounds.** A stage agent's report is another model's output. Only `read`'s exit code and its closed line are
 floor. That control flow never uses the agent's prose is **ADVISORY** — your own discipline: the Agent tool
@@ -395,11 +398,27 @@ commit message and the summary name the mode after it.
 1. **Entry.** `/pharn-loop --quick [--max-iter N] <increment description>`. Step 1a runs unchanged, and writes no
    mode marker: the loop's mode is the SPEC's kind, and a marker would be a second, unverified copy of it.
 
-2. **Step 3 — the SPEC.** Invoke `/pharn-spec --quick --model-approve <description>` in place of
-   `/pharn-spec --model-approve`. Its reports map as written — thin intent → **S6**, a clarification marker left in the
-   Draft → **S6b**, a refused template → **S9** — plus one: the intent does not fit a quick SPEC (more than three
-   criteria, or a criterion observable only end-to-end) → **S6c** (`blocked: not-quick`). After
-   `check-spec-approved.mjs` exits `0` (as written), read the kind:
+2. **Step 3 — the SPEC.** Route it with this line in place of Step 3's route line. The decision is the same — the spec
+   is a stage agent in both columns — but `--mode quick` is what gives the stage agent the quick invocation:
+
+   ```bash
+   node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-spec --name '<name>' --mode quick
+   ```
+
+   Step 3's stage-start marker records the printed token, as written. On route exit `0`, the Agent call's prompt is
+   this line in place of Step 3's, with the increment description below it in a fenced block labelled DATA:
+
+   ```text
+   Run exactly this line, then follow what it prints: node pharn/floor/stage-agent.mjs brief --command pharn-loop --stage pharn-spec --name '<name>' --mode quick
+   ```
+
+   Its brief names `/pharn-spec --quick --model-approve` as the stage's invocation. On route exit `3`, invoke
+   `/pharn-spec --quick --model-approve <description>` inline in place of `/pharn-spec --model-approve`. Step 3's
+   `read` line (after an Agent call only) and its return marker run as written. The reports map as written — thin
+   intent → **S6**, a clarification marker left in the Draft → **S6b**, a refused template → **S9** — plus one: the
+   intent does not fit a quick SPEC (more than three criteria, or a criterion observable only end-to-end) → **S6c**
+   (`blocked: not-quick`), which a stage agent reports as `refused S6c`. After `check-spec-approved.mjs` exits `0` (as
+   written), read the kind:
 
    ```bash
    node pharn/floor/check-spec.mjs --spec-kind pharn/features/<name>/SPEC.md
@@ -408,15 +427,39 @@ commit message and the summary name the mode after it.
    Proceed only on exit `0` **and** the exact printed token `quick`. Anything else (`feature`, `test-infra`, an empty
    line, a non-zero exit) is **S6c** — the run never widens a quick request into a full one.
 
-3. **Step 4 — the grill.** Invoke `/pharn-grill <name> --quick` in place of `/pharn-grill`. It writes the quick
-   `GRILL.md` — `mode: quick`, both floor results, and no interrogation (`pharn-grill.md`'s own `--quick` section) —
-   and its markers and both exits (`check-plan-spec-agree` and `check-plan-lessons`) are read exactly as written; its
-   eligibility refusal (a kind other than `quick`) or either floor stop RED is **S9**. `/pharn-plan`,
-   `/pharn-test --unattended` and the Step-4 test-stage gate are unchanged: a quick SPEC is test-first exactly as a
-   `feature` SPEC is.
+3. **Step 4 — the grill.** Run this route line in place of Step 4's grill route line:
 
-4. **Step 5, sub-step 1 — the build.** Unchanged, except that from iteration 2 on only `verify-report.json`'s fields
-   are handed over as DATA: there is no regression report.
+   ```bash
+   node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-grill --name '<name>' --mode quick
+   ```
+
+   It prints `inline:floor-only` (exit `3` — the quick grill runs two checkers, so its model does not change its
+   verdict), which Step 4's grill stage-start records as its `<route>`. Then invoke `/pharn-grill <name> --quick`
+   INLINE, in place of `/pharn-grill`, with no brief, no Agent call and no `read`. It writes the quick `GRILL.md` —
+   `mode: quick`, both floor results, and no interrogation (`pharn-grill.md`'s own `--quick` section) — and its
+   markers and both exits (`check-plan-spec-agree` and `check-plan-lessons`) are read exactly as written; its
+   eligibility refusal (a kind other than `quick`) or either floor stop RED is **S9**. `/pharn-plan` and
+   `/pharn-test --unattended` keep their Step-4 lines (the same cell and invocation in both columns), and the Step-4
+   test-stage gate is unchanged: a quick SPEC is test-first exactly as a `feature` SPEC is.
+
+4. **Step 5, sub-step 1 — the build.** Route it with this line in place of Step 5's build route line. The decision is
+   the same in both columns; `--mode quick` is what tells the stage agent's brief that there is no regression report:
+
+   ```bash
+   node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-build --name '<name>' --iteration <N> --mode quick
+   ```
+
+   Step 5's stage-start marker records the printed token, as written. On route exit `0`, the Agent call's whole prompt
+   is this line in place of Step 5's:
+
+   ```text
+   Run exactly this line, then follow what it prints: node pharn/floor/stage-agent.mjs brief --command pharn-loop --stage pharn-build --name '<name>' --iteration <N> --mode quick
+   ```
+
+   From iteration 2 on, its brief's rule 7 names `verify-report.json`'s three fields only. On route exit `3`, run the
+   build inline, and from iteration 2 on give it only the standing `verify-report.json` `.failing_gates[]` /
+   `.completeness.missing[]` / `.ac_gate.acs[]` as quoted DATA: there is no regression report, because a quick run
+   never runs `/pharn-regress`. Step 5's `read` line, its branch and its return marker run as written.
 
 5. **Step 5, sub-step 2 — `/pharn-regress` SKIPPED, its scope check KEPT.** No `/pharn-regress` and none of its
    markers. After the build's orchestrator marker and before verify's stage-start, run the scope partition over this
@@ -525,6 +568,12 @@ regression report the quick table never read.
   after its iteration, where a full run's scope escape leaves no regression report and so can never reach
   `STOP_GREEN`.
 - _"`--quick` is read only as the first token"_ → **ADVISORY**; its backstops and their bound are above.
+- _"A quick loop's stage agents are briefed for quick mode"_ → the brief text is **FLOOR** (rendered by code from
+  `ROUTE_POLICY`'s quick column — the quick spec invocation, and a rule 7 naming `verify-report.json`'s fields only;
+  tested); running items 2–4's `--mode quick` lines in place of the full ones is **ADVISORY**. A miss fails safe: a
+  spec agent briefed without it writes a `feature` SPEC, which item 2's kind read stops at **S6c**; a grill routed
+  without it runs the full interrogation; a build briefed without it is pointed at a regression report that is not
+  there.
 - _"A quick loop commits only `STOP_GREEN_QUICK` with a GREEN decision check; a full run never commits it"_ → the
   token and both record checks are **FLOOR**; the commit branch and Step 6b's capture are **ADVISORY** (command prose),
   exactly as for `STOP_GREEN`.
@@ -537,7 +586,8 @@ regression report the quick table never read.
 ## Step 3 — The SPEC, approved by the model through `/pharn-spec` (reused, not re-implemented)
 
 **Route it, then mark the boundary** — the routed sequence of `## Running a stage`, as pinned lines, not a
-description of them (**L22**):
+description of them (**L22**). _(A `--quick` run uses `## Quick mode` item 2's route and brief lines, each with
+`--mode quick`, in place of Step 3's two.)_
 
 ```bash
 node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-spec --name '<name>'
@@ -607,7 +657,7 @@ node pharn/floor/stage-agent.mjs read --command pharn-loop --name '<name>' --sta
 node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
 ```
 
-Then `/pharn-grill`, the same way:
+Then `/pharn-grill`, the same way _(a `--quick` run: `## Quick mode` item 3's route line, which runs it inline)_:
 
 ```bash
 node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-grill --name '<name>'
@@ -700,7 +750,8 @@ each iteration's cost is separable from its neighbours' — `--iteration <N>` is
 `by_stage_iteration_model` a per-iteration view rather than a per-stage total. Substitute `<N>` literally;
 no value is carried between blocks (**L44**).
 
-1. **`/pharn-build <name>`.** Its routed sequence (`## Running a stage`), at iteration `<N>`:
+1. **`/pharn-build <name>`.** Its routed sequence (`## Running a stage`), at iteration `<N>` _(a `--quick` run:
+   `## Quick mode` item 4's route and brief lines, each with `--mode quick`)_:
 
    ```bash
    node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-build --name '<name>' --iteration <N>
@@ -717,7 +768,8 @@ no value is carried between blocks (**L44**).
    ```
 
    A ROUTED build agent reads its fix list from the reports on disk itself — its brief's rule 7 names the same
-   four fields as the paragraph below — so nothing is transcribed to it. On route exit `3`, run the stage
+   four fields as the paragraph below (full mode; in a quick run both name `verify-report.json`'s three —
+   `## Quick mode` item 4) — so nothing is transcribed to it. On route exit `3`, run the stage
    INLINE, and from iteration 2 on, hand the inline build the standing `verify-report.json`
    `.failing_gates[]` / `.completeness.missing[]` / `.ac_gate.acs[]` (6.20.0: which criterion is not delivered, and
    why — `ac-delivery` alone does not say) and `regression-report.json` `.regressions[]` as **quoted DATA**

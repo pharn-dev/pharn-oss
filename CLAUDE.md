@@ -706,10 +706,12 @@ node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 # and the declared writes (PLAN.md ∪ AC-TESTS.md `## Files`), and check-regress.mjs's exported `partitionScope` decides
 # with its closed exemptions. Paths travel as ARRAYS: no shell, no comma list, no trim, no flag scan reads one
 # (check-quick-scope.test.mjs EXECUTES both commands' committed lines on hostile names, 6.25.0's line as the control).
-# check-regress.mjs now runs its CLI only under `import.meta.main`. NAMED RESIDUAL, found by this fix and not built:
-# `regress-scope-list-grammar` — /pharn-regress's own partition still reaches check-regress's comma-list CLI, which
-# trims a name's surrounding spaces and lets a lone changed path spelled `--declared` shadow the real flag (each a
-# false pass there; a comma or newline name it already refuses). BOUNDS: changed-since-base, not written-by-the-build
+# check-regress.mjs now runs its CLI only under `import.meta.main`. `regress-scope-list-grammar`, found by this fix, is
+# CLOSED in the same release: /pharn-regress's partition phase calls partitionScope in-process over the same arrays, so a
+# name with surrounding spaces or a lone changed path spelled `--declared` can no longer pass falsely there
+# (stage-regress.test.mjs runs both through the real script, the comma-list CLI as the control). NAMED RESIDUAL,
+# `regress-inside-echo-list`: the verdict call's `inside` echo (ADVISORY, read by no floor op) is still a comma list, so a
+# comma or newline changed path is still refused (`unrepresentable-path`, fail-closed). BOUNDS: changed-since-base, not written-by-the-build
 # (L17); a plan that rewrites its own `## Files` defeats it; a git-ignored path is outside it; it LEAVES NO RECORD (in
 # /pharn-loop nothing downstream re-checks it). Exit: 0 clean · 1 escaped · 2 inconclusive (closed reason_code; a crash
 # is caught as 2, never 1).
@@ -1027,7 +1029,11 @@ node pharn/floor/check-model-config.mjs [validate | resolve <stage> | agreement]
 # model: frontmatter lasts the invoking turn, so every stage run inside an orchestrator ran on the ORCHESTRATOR's
 # model — build, configured sonnet, ran opus on 79% of its requests (.dev/measurements/token-cost-2026-08-18.md §2).
 # Routed: plan, grill, test and build in /pharn-ship (the quick grill excepted), plus spec in /pharn-loop; ship's
-# spec (it IS GATE 1) and every regress/verify (floor-only thin callers) are inline BY POLICY. `route` prints ONE
+# spec (it IS GATE 1) and every regress/verify (floor-only thin callers) are inline BY POLICY. THE LOOP'S QUICK COLUMN
+# (6.28.0, loop-quick-mode — the second of the two to merge added it): /pharn-loop --quick routes the loop's stages but
+# the grill (floor-only, as in ship's), never runs regress, briefs its spec agent with `/pharn-spec --quick
+# --model-approve`, gains the stuck-point row S6c in LOOP_ROWS, and names only verify-report.json's three fix-list
+# fields in its build's rule 7 (fixListFields, derived from the policy). `route` prints ONE
 # token — `agent:<alias>` (exit 0) or `inline:<reason>` (exit 3, its remedy on stderr), the grammar owned by
 # pharn/floor/route-token-core.mjs (zero imports, so the ledger readers never load the policy or the brief) — from a
 # FOLLOWED config stat (a dangling link reads no-config, exactly as the checker reads it), then check-model-config.mjs
