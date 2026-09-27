@@ -386,41 +386,49 @@ read off the wiring:
 
 ## 8. The declared per-stage model configuration is not the executed one
 
-`pharn.config.json`'s `models.stages` block declares a `model` and an `effort` for each product stage,
-and `pharn/floor/check-model-config.mjs` holds that block in EQUALITY with the product `/pharn-*`
-commands' static `model:` / `effort:` frontmatter, in both directions (the set is that checker's
-`PRODUCT_STAGES` map — read it there). That check is real and
-it is floor (enum/regex, `ARCHITECTURE.md §2` primitive #3). What it certifies is narrower than the
-config's presence suggests.
+`pharn.config.json`'s `models.stages` block declares a `model` and an `effort` for each product stage.
+Each thing that reads it answers a different question:
+
+- **The agreement check.** `pharn/floor/check-model-config.mjs` holds the block in EQUALITY with the product
+  `/pharn-*` commands' static `model:` / `effort:` frontmatter, in both directions (the set is that checker's
+  `PRODUCT_STAGES` map — read it there). The frontmatter is what a stage runs under when a person invokes it
+  directly. That check is real and it is floor (enum/regex, `ARCHITECTURE.md §2` primitive #3).
+- **Stage routing (6.27.0).** `/pharn-ship` and `/pharn-loop` run each stage their routing policy routes as a
+  Claude Code subagent, and `pharn/floor/stage-agent.mjs` reads the block at run time, through that checker's
+  `resolve`, to choose the model that subagent is requested on. The DECISION is floor (a closed policy table
+  and the checker's own exit codes, tested); APPLYING it is the platform's, and the orchestrating model passes
+  the model to the Agent call — advisory.
+
+What either certifies is narrower than the config's presence suggests.
 
 - **Struck claim:** "PHARN runs each stage on its configured model" — or any reading of a green
-  `check-model-config` as evidence that `/pharn-plan` ran on Opus. The checker's own stdout carries the
-  disclaimer: `NOTE (P0): this is config↔frontmatter EQUALITY — never proof a stage RAN under that model.`
-- **True statement:** two files in this repository agree with each other. Model and effort are applied by
-  the Claude Code platform, invisible to any hook, hash or enum, so **no floor primitive in PHARN observes
-  what a stage actually ran under**. An agreement check is also structurally blind to both copies being
-  wrong together.
-- **The block is not a runtime control, and the scope of that statement is exact.** Nothing reads
-  `models.stages` at run time to select a model. The files that mention it are the two checkers that
-  validate it (`pharn/floor/check-model-config.mjs`, `.dev/floor/check-config.mjs`) and their tests'
-  fixtures — a live sweep of the repository, which is weaker than a probe and is stated as such: a
-  negative existential is not something executing a check can settle. This is **not** the broader claim
-  that `pharn.config.json` is unread — that file **is** read at run time, by
-  `.claude/hooks/enforce-writes-scope.cjs` (`skillsVersion`, to choose its posture), by
-  `pharn/floor/check-bash-reconcile.mjs` (which copies it into a probe sandbox), and by others since
-  (`testResults`, read by `pharn/floor/test-results-core.mjs`, 6.15.0). The block is a source of
-  truth the frontmatter is held to, nothing more. PHARN does not attempt to apply a model and fall short;
-  it does not attempt it at all.
-- **Deleting the block loses the check rather than failing it.** Probed, not reasoned about: a config with
-  no `models.stages`, and an absent config file, each exit **0 GREEN by design** — the
+  `check-model-config`, or of an `agent:<alias>` route on a marker, as evidence that `/pharn-plan` ran on
+  Opus. The checker's own stdout carries the disclaimer: `NOTE (P0): this is config↔frontmatter EQUALITY —
+  never proof a stage RAN under that model.`
+- **True statement:** for a routed stage PHARN REQUESTS the configured model, and the stage's marker records
+  that request; `cost.json` records the model each request was SERVED — evidence from a transcript format the
+  platform does not document, not a floor primitive. Model and effort are applied by the Claude Code
+  platform, invisible to any hook, hash or enum, so **no floor primitive in PHARN observes what a stage
+  actually ran under**. An agreement check is also structurally blind to both copies being wrong together.
+- **Effort is not routed.** The Agent tool takes no effort, so a routed stage runs at the effort it inherits;
+  the declared `effort` reaches a stage only when a person invokes the stage command directly.
+- **What is not routed runs on the session's model, and the run records why.** A stage the routing policy
+  keeps inline, a stage that falls back (the inline reasons `pharn/floor/stage-agent-core.mjs`'s header
+  lists), and the orchestrators themselves all run on the model of the session running the orchestrator, not
+  on one chosen for the stage. A stage that could have been routed records its reason on its marker; the
+  policy's own inline stages are named as such in the run's summary.
+- **Deleting the block loses routing as well as the check.** Probed, not reasoned about: a config with no
+  `models.stages`, and an absent config file, each exit **0 GREEN by design** in the checker — the
   `check-lessons-index` NO_CANON / COLD precedent, the honest normal state of an install that does not use
-  the block.
+  the block — and every stage that could have been routed then runs inline, recording `no-stages` or
+  `no-config`.
 - **Two further bounds are the CHECKER's claims, cited rather than adopted.** They describe Claude Code's
   behaviour and no file in this repository can settle them, so they are not asserted here.
-  `pharn/floor/check-model-config.mjs:32-38` states that the override "applies for the rest of the current
-  turn" — so a stage invoked as a step inside `/pharn-ship` or `/pharn-loop` runs inside the
-  orchestrator's turn and gets no per-stage routing — and that an organization `availableModels` allowlist,
-  or auto mode, can decline a value silently. Read them there.
+  `pharn/floor/check-model-config.mjs`'s header states, under "TURN SCOPE", that a command's model override
+  "applies for the rest of the current turn" — so a stage run inline as a step inside `/pharn-ship` or
+  `/pharn-loop` runs inside the orchestrator's turn and does not get its frontmatter model — and, under
+  "PLATFORM VETO", that an organization `availableModels` allowlist, or auto mode, can decline a value
+  silently. What a declined model does to an Agent call is not documented either. Read them there.
 
 This is a limit, not a gap awaiting a fix. Observing the executed model is platform-level and invisible to
 the three floor primitives by the checker's own account; a PHARN-side "fix" would be a fabricated
@@ -428,6 +436,7 @@ guarantee, which is the disease P0 exists to prevent. It reopens if the platform
 model to a hook.
 
 <!-- §8 was drafted in .dev/features/model-routing-limit and applied by a human (SKILLS_VERSION 6.4.1). -->
+<!-- §8 was revised in .dev/features/stage-model-routing and applied by a human (SKILLS_VERSION 6.27.0). -->
 
 ---
 
