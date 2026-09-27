@@ -23,6 +23,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.28.4] - 2026-09-27
+
+### Changed
+
+- **Document the floor's Node 24.2 requirement, the 6.28.2 product-command budget for contributors, and the 6.24.0 write-guard posture in user-facing docs.** README states that `@pharn-dev/pharn` still requires Node 20+ while `pharn/floor/*.mjs` needs Node 24.2+ (`import.meta.main`). CONTRIBUTING adds the `command-hygiene.test.mjs` ceilings and the rule for raising them. SECURITY names `run-marker.mjs` and clarifies that an installed project's permissive default outside an open run is intentional, not a write-guard bypass.
+- **Release housekeeping:** remove one-shot patch/apply helpers after merge; align CHANGELOG with `main` (this section). `SKILLS_VERSION` 6.28.3 → 6.28.4 (PATCH: root documentation only — README, CONTRIBUTING, SECURITY — not the installable `pharn/` product surface). `MIN_CLI` stays 0.5.0.
+- **CHANGELOG section order:** put `[Unreleased]` above released version sections (Keep a Changelog) so `check-skills-version-recorded` and CI pass.
+
 ## [6.28.3] - 2026-09-27
 
 ### Fixed

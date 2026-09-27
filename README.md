@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.28.3-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.28.4-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -109,8 +109,11 @@ them. The goal is not to make AI development look clean. The goal is to make it 
 
 ## Quick start
 
-PHARN runs on [Claude Code](https://claude.com/claude-code). The installer requires Node 20 or newer. In
-your project root:
+PHARN runs on [Claude Code](https://claude.com/claude-code). The `@pharn-dev/pharn` installer requires
+Node 20 or newer. The deterministic floor checkers this repo ships (`pharn/floor/*.mjs`, invoked by the
+`/pharn-*` stages) require **Node 24.2 or newer**: their CLI entry points gate on `import.meta.main`, which
+Node added in 22.18 / 24.2. On an older Node a guarded tool can exit `0` without running its checks — a
+silent false green for several gates. CI and local contributor gates use Node 24. In your project root:
 
 ```bash
 npx @pharn-dev/pharn@latest init
