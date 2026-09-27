@@ -8,6 +8,8 @@
 - stage model: plan — opus — set by the maintainer's instruction; routed via Agent subagent; effort not routed
 - base: branch `slim-commands` at `db3a81f`, whose tree is byte-identical to `origin/main` `b627409` (6.28.0, #284 merged; `git diff --quiet` exit 0, checked this run). `SKILLS_VERSION` 6.28.0, `MIN_CLI` 0.5.0. Bumps to **6.28.1** (patch, D7). #282 (another session's 6.26.1) is open; whichever merges second renumbers by diff.
 - roadmap: Phase 4.1 of the token-reduction roadmap (maintainer-approved 2026-09-25): "slim the commands (rationale to contracts, keep a 'What you may claim' block, size budget test, short descriptions)". M3 is the maintainer's measurement.
+- gate1: APPROVED 2026-09-27 by the orchestrator under the maintainer's 2026-09-25 delegation — a MODEL decision, NOT a human approval. D1–D10 accepted as written; Q1 → (a): the quick-mode sections stay in their commands, slimmed, and reading them on demand is the named follow-up `quick-mode-on-demand`, revisited after M3. No trusted doc, contract or new file is touched. Re-based on the pointer `83b1f89` (this plan's `d82b87b` merged with `main` `b627409`, tree unchanged).
+- grill: amended after `/pharn-dev-grill` (`GRILL.md`); `## Amended after grill` lists what changed. Stage model: opus — set by the maintainer's instruction; routed via Agent subagent; effort not routed.
 
 ## Applied lessons
 
@@ -84,8 +86,9 @@
 
 ### 1. Descriptions — at most 250 bytes, what and when, no claims
 
-- **The budget:** the parsed `description:` value is at most **250 UTF-8 bytes**, for every product command. Drafts measured this run: 153–212 bytes each, 2,010 bytes in total (−91% from 22,786); the largest leaves 38 bytes of headroom.
+- **The budget:** the parsed `description:` value is at most **250 UTF-8 bytes**, for every product command. Drafts measured at grill: 153–237 bytes each, 2,063 bytes in total (−91% from 22,786); the largest leaves 13 bytes of headroom.
 - **What a description says:** what the command does, when to use it (its place in the pipeline, or its trigger), and its mode flag if it has one. Example (the `/pharn-verify` draft, 170 bytes): _"Verify a built feature: run the project's gates once at HEAD plus the acceptance-criteria gate (verify-report.json, VERIFY.md). Run after /pharn-build and /pharn-regress."_
+- **The "when" for a command that commits, approves on its own or writes canon is the user's request (grill G1).** A description is also the text a model uses to decide whether to invoke a command itself, and after this increment all eleven are listed in full (two were name-only). So `/pharn-loop` (the model approves its own SPEC and commits a branch), `/pharn-ship` and `/pharn-memory-promote` (writes canon once the user accepts) each name the user's request as the trigger — never a situation the model may infer. Whether the platform lets a model invoke a command at all, and how it chooses, is undocumented; this wording is ADVISORY and bounds nothing.
 - **What it never says:** a claim. No `FLOOR`, `ADVISORY`, `NEVER means` or `(P<n>)`, and no version tag. A claim squeezed into 250 bytes loses its bound, which is the P0 disease in miniature; the claim's home is the body's claims block (§2).
 - **Where every current claim goes:** into that command's `## What you may claim` block, as a bullet the build writes or finds already there. `BUILD.md` carries one mapping table per command — old description clause → block bullet (or "already stated: <section>"). None may be dropped.
 - **Format:** one line, a double-quoted YAML scalar, as today.
@@ -99,10 +102,10 @@
   pharn-build (172): Build the user's code from an approved PLAN.md, writing only the files its ## Files names, once the spec chain and the test-stage evidence check out. Run after /pharn-test.
   pharn-regress (179): Check for regressions outside the feature: run the project's gates at the base commit and at HEAD and compare them (regression-report.json, REGRESSION.md). Run after /pharn-build.
   pharn-verify (170): Verify a built feature: run the project's gates once at HEAD plus the acceptance-criteria gate (verify-report.json, VERIFY.md). Run after /pharn-build and /pharn-regress.
-  pharn-ship (196): Run the whole pipeline for one feature (spec, plan, grill, test, build, regress, verify) with two human gates: SPEC approval and the final merge/fix/abandon decision. `--quick` for a small change.
-  pharn-loop (212): Run the pipeline unattended: the model approves its own SPEC, iterates build, regress and verify to a checker-decided stop, commits a green result to a new local branch, and reports. `--quick` for a small change.
+  pharn-ship (228): Run the whole pipeline for one feature when the user asks to ship it (spec, plan, grill, test, build, regress, verify), stopping at two human gates: SPEC approval and the merge/fix/abandon decision. `--quick` for a small change.
+  pharn-loop (237): Run the pipeline unattended, only when the user asks: the model approves its own SPEC, iterates build, regress and verify to a checker-decided stop, commits a green result to a new local branch, and reports. `--quick` for a small change.
   pharn-review (153): Review code with PHARN's review lenses run in parallel, then merge their findings into one findings.json and REVIEW.md. Standalone, not a pipeline stage.
-  pharn-memory-promote (169): Promote one lesson or pattern into your memory-bank/ with checked provenance, written only after you accept it. Use when a review or run surfaced a lesson worth keeping.
+  pharn-memory-promote (165): Promote one lesson or pattern into memory-bank/ when the user asks to keep it, with checked provenance; nothing is written until the user accepts the rendered entry.
   ```
 
 ### 2. The claims block — one `## What you may claim` section per command
@@ -114,8 +117,8 @@
   ```markdown
   ## What you may claim (P0)
 
-  Everything this command does is advisory orchestration except the verdicts below, which reduce to the floor
-  (`pharn/ARCHITECTURE.md §2`).
+  Everything this command does is advisory orchestration except what the Floor bullets below name, each of
+  which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`).
 
   - **Floor:** <claim> — `<checker>` (<primitive>)<; one-clause bound>.
   - **Advisory:** <what is orchestration or model work>.
@@ -126,12 +129,13 @@
   The **Untrusted input** bullet appears only where the steps and the trusted-prefix instruction do not already say it.
 
 - **Size:** about 1.5–2 KB for a stage command, 3–3.5 KB for an orchestrator. It is a condensation of text reviewed before, not new analysis, and it never copies a sentence a test pins (so no exactly-once, count or first-occurrence pin can move).
+- **A condensed claim keeps its bound (grill G5).** Many audit bullets carry a qualifier a review added to stop an overclaim ("NARROWED", "relative to the recorded markers", "agreement, never provenance", "a self-consistent fabricated stamp passes"). Every removed audit or two-layers bullet is mapped in `BUILD.md` to exactly one of: a claims-block bullet that carries its bound clause **verbatim**; an owner that states the same bound (file and section named, the sentence quoted); or "duplicate of <bullet>". A mapping row with no bound where the source had one is a defect the build fixes before it continues.
 
 ### 3. Rationale out of the bodies — where it goes, and why that is P3
 
 - **A command keeps:** its steps; every pinned line and every fenced block; every exit-code, verdict and stuck-point mapping; the prompts; the human gates; the trusted-prefix instruction and its P2 fence; every sentence a test pins, in the section the test reads; and the claims block.
 - **A command loses:** why a rule exists, version and review history (`(6.27.0)` in running text, "GATE-2 review F4", "THE RECORDED FAILURE"), measurement narratives, restated bounds of a contract or a floor module, the "This is a PRODUCT command … never `.dev/`" blockquotes, dev-lesson ids, and the dead cites above.
-- **Where the removed rationale lives — nowhere new.** Every piece already has an owner that ships, and the command was restating it (P4: cite, never restate; L35: retire the second copy):
+- **Where the removed rationale lives — nowhere new.** Every piece already has an owner, and the command was restating it (P4: cite, never restate; L35: retire the second copy). Every owner but the CHANGELOG is installed with the commands (contracts, the floor and the hooks are copied, and so are the trusted docs); the CHANGELOG stays in the repository, where `pharn update` points users (grill G6):
   - the **semantics and bounds of an artifact or protocol** → its contract (every contract already carries its "why"; for example `stage-exit.md` "Why it exists", `cost-ledger.md` "The start boundary, and why `/pharn-ship` needs a pending one");
   - the **behaviour and bounds of a floor module or hook with no contract** → its header, which is that module's spec (`stage-agent-core.mjs`, `run-marker.mjs`, `quick-scope-core.mjs`, `ship-outcome-core.mjs`, `require-loop-record.cjs`);
   - **limits** → their `LIMITS.md` section (§3a quick mode's trade, §6 Bash, §7 the guards, §8 routing, §9 the AC evidence) or `THREAT-MODEL.md`;
@@ -142,22 +146,29 @@
 - **Why no contract or module is edited, and no new file is added.** `pharn/ARCHITECTURE.md §4` defines `pharn-contracts` as "schemas only, ZERO behavior" and enumerates its files; the rationale of a schema belongs to the schema and is already there, while command procedure does not belong there at all. A new contract would need that enumeration amended by a human, and nothing here needs one. Keeping contracts and `.mjs` headers byte-identical also keeps this increment clear of #282, which edits `cost-ledger.md` and `ship-record.md`.
 - **The P3 gain.** Today a command changes for two reasons: its procedure, and any change to a bound it restates (L25 — the stale Stop-guard sentence is what that looks like). After this, a command changes when its procedure changes, and a bound changes in its owner.
 - **Editing rule (L22).** Delete, never paraphrase. A sentence that mixes an instruction with its rationale keeps the instruction clause byte for byte and loses the rationale clause; a definition the steps rely on (what a stage agent is, what a route token means) is kept as an instruction. No heading is renamed or moved (headings are anchors, inside and outside the tests), no fenced block is touched, and no pinned literal is newly quoted anywhere a first-occurrence pin would read it first.
+  - **Numbering is frozen (grill G4).** A numbered item that is cited or pinned keeps its number: the Step 2 stages, the `## Quick mode` items (1–12 in `pharn-ship.md`, 1–9 in `pharn-loop.md`), the Step 1a entry steps and every stuck-point row. Removing an item's rationale never removes the item; an item emptied of everything but rationale keeps its number and one line.
+  - **No reflow (grill G10).** A paragraph that holds a pinned sentence is not re-wrapped after a deletion; uneven lines stay. Several pins match a literal line break inside a sentence. (`prettier` keeps prose wrapping as written, since the repo sets no `proseWrap`.)
 - **Cross-references (L50).** Every in-command cite of a removed section (Discovery lists them) points at the claims block afterwards, or is deleted with the sentence it sits in; the release pointer keeps its pinned first sentence, and its second sentence says where the Final step now sits.
+- **Inbound cites into the commands (grill G4).** 41 lines in shipped files (measured at grill with the search below) cite a command step or item by number — for example `quick-scope-core.mjs` and `check-quick-scope.mjs` ("`/pharn-ship --quick`'s item 7"), `loop-mode-core.mjs` (`## Quick mode`, Step 6a), `check-loop.mjs` (Steps 6a and 6c, `/pharn-build` Step 0), `require-loop-record.cjs` (Steps 1a and 6b), `spec-template.md` (`/pharn-spec` Step 4a, `/pharn-ship`'s `## Quick mode`), `render-cost-ledger.mjs` (Step 7), `merge-findings.mjs` and `render-review-assignments.mjs` (`/pharn-review` Steps 1–5), and `THREAT-MODEL.md` (`/pharn-review` Step 3b). None of these files may be edited here (D3), so a cite that would dangle cannot be repaired in this increment: the text it relies on stays. The build lists every such cite — the pinned search below, its output quoted into `BUILD.md` — and marks each "resolves: <the text it relies on is still at the cited step or item>".
 
-### 4. Mode-specific sections — they stay, slimmed (Q1 asks about moving them)
+  ```bash
+  git grep -n -E "(/pharn-(ship|loop|spec|plan|grill|test|build|review|memory-promote)|pharn-(ship|loop|spec|plan|grill|test|build|review|memory-promote)\.md)[^|]{0,30}(Step [0-9][a-z]*|item [0-9]+|## )" -- pharn/pharn-contracts 'pharn/floor/*.mjs' '.claude/hooks/*.cjs' THREAT-MODEL.md LIMITS.md pharn/ARCHITECTURE.md ':!*.test.*'
+  ```
+
+### 4. Mode-specific sections — they stay, slimmed (Q1, resolved (a) at GATE 1)
 
 - **Decision for this increment:** `## Quick mode` stays in `pharn-ship.md` and `pharn-loop.md`, as do `pharn-spec.md`'s `## --quick` and `pharn-grill.md`'s `## --quick mode`. Each is slimmed like the rest: its rationale paragraphs go, its quick guarantee audit folds into the claims block except the text a test pins inside the section (`pharn-ship.md`'s first-token bullet and its two first-token sentences, `FIRST_TOKEN_ADVISORY`; `pharn-loop.md`'s `LOOP_QUICK_SECTION_PINS`), and `pharn-loop.md`'s question table keeps only its quick-only rows (the S6c pair, the scope check's S9, the `regress` RERUN's S11) under a one-line pointer to Step 2 for the rest. Expected: about 8–9 KB each, from 17.1 and 18.7 KB.
 - **Why not an on-demand file now.** A file read with the Read tool only under `--quick` would save a further 8–9 KB per full-run orchestrator request, but no location satisfies all three constraints without a human decision:
   1. **Not under `.claude/commands/`:** a markdown file there, or in a subdirectory, registers as a slash command, and `pharn-cli` copies top-level `pharn-*.md` files only.
   2. **Installed by the CLI:** outside the commands, only `pharn/pharn-contracts/**`, `pharn/pharn-core/**` and `pharn/floor/**` qualify (read in `0.7.0`'s source; the CLIs between `0.5.0` and `0.7.0` were not checked).
   3. **Consistent with `pharn/ARCHITECTURE.md §4`:** "Stages live in commands, not in a module … the modules under `pharn/` hold only the capabilities those stages invoke", and `pharn-contracts` is "schemas only, ZERO behavior". A quick-mode procedure is stage behaviour.
-- The only way through is a human amendment of §4 (Q1).
+- The only way through is a human amendment of §4 — Q1's option (b), deferred at GATE 1 as `quick-mode-on-demand` and revisited after M3.
 
 ### 5. Per-command map and targets
 
-Targets are upper bounds the build aims at; the ceilings are set from what it measures (§7). Every command: the description (§1), the claims block replacing the tail audits (§2), and the "PRODUCT command" blockquote removed.
+**Targets are estimates, never constraints (grill G2).** The editing rule (§3) wins over every number here: a target the build cannot reach by deleting rationale is missed, recorded in `BUILD.md` with the reason, and never met by cutting an instruction, pinned or not. A section-by-section estimate made at grill puts `pharn-ship.md` nearer 73 KB than 70 KB. The ceilings come from what the build measures (§7). Every command: the description (§1), the claims block replacing the tail audits (§2), and the "PRODUCT command" blockquote removed.
 
-| Command                 |  Before | Target ≤ | What else goes                                                                                                                                                                                                                                                                                                                                     |
+| Command                 |  Before | Estimate | What else goes                                                                                                                                                                                                                                                                                                                                     |
 | ----------------------- | ------: | -------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | pharn-ship.md           | 124,078 |   70,000 | the "Two clocks" paragraph; `## Running a stage`'s opening "why" and its unpinned Bounds sentences (A9); `## Quick mode` per §4; Step 2's backstop reasoning, run-marker "why", grill-divergence note and regress-residual narrative (the membership rule stays); unpinned rationale in Steps 2b–3b; the `--loop` section → one Not-a-claim bullet |
 | pharn-loop.md           | 112,538 |   72,000 | the "Two clocks" paragraph; Step 1a's Stop-guard paragraph (the stale wiring sentence and its dead cite) and its ledger paragraph; `## Running a stage`'s opening "why" (A9); `## Quick mode` per §4 (D8 paragraph, mode-binding paragraph except its pinned sentence, the quick audit); unpinned rationale in Steps 5–7                           |
@@ -178,13 +189,19 @@ Targets are upper bounds the build aims at; the ceilings are set from what it me
 2. **Headings and order stay.** No heading's text changes, version tag included, and sections keep their relative order. "Exactly once" pins stay exactly once, and no pinned literal is newly quoted before the occurrence a first-occurrence pin reads (G7's rule, applied to every command).
 3. **A pinned sentence that is only rationale is kept anyway**, unless it is false or dead. Then, and only then, the build re-points its test **inside `.dev/floor/command-hygiene.test.mjs`** (the one test file in `## Files`) to the equivalent claims-block text, keeps its mutation control red (L60), and lists the re-point in `BUILD.md` with before and after. A pin in any other test file is never re-pointed: its text stays.
 4. **The build runs the whole suite after each wave** (Build procedure). A red test means text was removed that should have stayed: the build restores it.
-5. **Survival check (scratch, advisory evidence).** Before the budget test is written, a scratch script compares each command with its base (`git show db3a81f:<file>`) and prints: every fenced-block line of the base present in the new file with the same multiplicity; every base heading present, except the tail-audit and two-layers headings this plan removes (listed); every `blocked: <id>` and stuck-point id of `pharn-loop.md` present. Any exception is either restored or listed in `BUILD.md` with a reason (expected: none). The script and its output stay under `.pharn/pharn-dev-build/`; `BUILD.md` quotes the output.
+5. **Survival check (scratch, advisory evidence).** After each wave, a scratch script compares each command with its base (`git show db3a81f:<file>`) and prints:
+   - every fenced-block line of the base present in the new file with the same multiplicity;
+   - every base heading present, except the tail-audit and two-layers headings this plan removes (listed);
+   - every `blocked: <id>` and stuck-point id of `pharn-loop.md` present;
+   - **(grill G3) every base line outside a fence that carries a decision token — `STOP`, `HALT`, `**Non-zero`, `→`, an exit-code phrase (`` exit `<n>` `` or `` `<n>` — ``), `S<n>` (a row id), `ask the human`, `hand to the human`, `never`, `only` — present verbatim in the new file**, or listed with its disposition: moved to the claims block (quoted there), rationale (the owner named), or restored. The token list is a heuristic, not a proof: an instruction with none of the tokens is covered by the editing rule and the review alone.
+
+   Any other exception is restored or listed in `BUILD.md` with a reason (expected: none). The script and its output stay under `.pharn/pharn-dev-build/`; `BUILD.md` quotes the output, and records per command the lines kept and removed in each wave, so the review can read the deletions wave by wave (grill G12).
 
 ### 7. The budget test (`.dev/floor/command-hygiene.test.mjs`, a new section)
 
 - **What is budgeted: both** — each command's file bytes (what the platform inserts as the prompt), and each description's bytes (what every session carries).
 - **The data, one closed table:** `COMMAND_BYTE_CEILINGS = { "pharn-build.md": …, … }`, eleven entries, and `DESCRIPTION_MAX_BYTES = 250`.
-- **Ceilings are measured, with stated headroom:** after the slim, ceiling = the file's measured bytes + 10%, rounded up to the next multiple of 512. The header states the rule and that raising a ceiling is a deliberate, visible diff in the PR that needs it.
+- **Ceilings are measured, with stated headroom:** after the slim, ceiling = the file's measured bytes + 10%, rounded up to the next multiple of 512. The header states the rule and that raising a ceiling is a deliberate, visible diff in the PR that needs it. `BUILD.md` lists each command's absolute headroom in bytes (grill G9: about 7 KB for an orchestrator, close to the +12% growth A9 flagged, so a reviewer sees what can pass without a ceiling change).
 - **Rules, each over the whole set (L29, L52):**
   - **R1, closure (L34, L36):** the product commands on disk — `.claude/commands/pharn-*.md` minus `pharn-dev-*` — equal the table's keys: non-empty and counted, no command without an entry, no entry without a file;
   - **R2, body:** each file's `Buffer.byteLength`, measured after folding `\r\n` to `\n` (so a CRLF checkout measures what the repository holds — the `hash-doc.mjs` precedent), is at most its ceiling;
@@ -214,14 +231,16 @@ Targets are upper bounds the build aims at; the ceilings are set from what it me
 
 - **6.28.1, a patch.** Every change corrects or clarifies bytes that already ship; no capability, command, checker, contract or frontmatter key is added, and nothing an install holds becomes invalid. The budget test is apparatus and bumps nothing by itself.
 - **`MIN_CLI` stays `0.5.0`:** the same eleven files at the same paths; no new location (Discovery, "The installer").
-- **An install that edited a command** keeps its edit on `pharn update` (the CLI keeps user-edited files unless `--force`), so the saving reaches such a project only for the commands it did not edit.
+- **An install that edited a command** keeps its edit on `pharn update` (the CLI skips a file it cannot prove pristine unless `--force` — read in `pharn-cli`'s `src/lib/update-decision.ts` at grill), so the saving reaches such a project only for the commands it did not edit.
+- **Each edited command's `version:` field bumps its patch** (for example `pharn-ship.md` 0.11.0 → 0.11.1), the convention every command edit follows (grill G7).
+- **`reads:` stays byte-identical in every command (grill G8).** `stage-model-routing` REVIEW A9 noted a `reads:` entry the orchestrator never opens, and `reads:` is part of the bytes a command costs, but trimming it is a separate question (a test pins one entry, `"pharn/floor/check-loop-fresh.mjs"`), named as the follow-up `reads-trim`.
 
 ## Decisions for GATE 1 (each overridable)
 
 - **D1** — Description budget 250 bytes each, what and when only, no claim vocabulary; claims go to the claims block with a per-command mapping in `BUILD.md` (§1).
 - **D2** — One `## What you may claim` block per command, in `## Guarantee audit`'s place; regress's and verify's stay as they are (§2).
 - **D3** — Rationale is retired to the owners that already hold it; no contract, module, hook or trusted doc is edited, and no file is added; a bound no owner states stays as one claims-block clause (§3).
-- **D4** — The mode-specific sections stay in their commands, slimmed; the on-demand move is Q1 (§4).
+- **D4** — The mode-specific sections stay in their commands, slimmed; the on-demand move is Q1 (§4), resolved (a) at GATE 1.
 - **D5** — Pins: every pinned literal survives in place; re-pointing only for a false or dead pinned sentence, only inside `command-hygiene.test.mjs`, each listed (§6).
 - **D6** — The budget test as §7: both bodies and descriptions, measured ceilings with 10% headroom rounded up to 512 B, closure, a vocabulary rule, a block-presence rule, a control per property.
 - **D7** — 6.28.1 (patch); `MIN_CLI` unchanged (§9).
@@ -229,10 +248,27 @@ Targets are upper bounds the build aims at; the ceilings are set from what it me
 - **D9** — The thin callers (`pharn-regress.md`, `pharn-verify.md`) get the new description and lose the "PRODUCT command" blockquote, nothing more: their bodies were slimmed in 6.23.0 and 6.26.0 and are pinned densely (`NAMED_LIMITS`, `STAGE_SCRIPT_WIRING`).
 - **D10** — No stage's deterministic work moves into code here. None of the candidates is small and clear; the nearest is `/pharn-ship` Step 3a's close-out sequence (named follow-up `ship-closeout-script`).
 
+## Amended after grill
+
+`/pharn-dev-grill` (`GRILL.md`): Step 1b GREEN, exit 0; 12 advisory concerns, 0 blocking-severity, 5 important, 7 minor. Each is folded in place, marked "grill G<n>" at the site; no decision moved and no question was opened.
+
+- **G1 (important)** — a description is also a model's invocation trigger, and all eleven will now be listed in full. §1 adds the rule that `/pharn-loop`, `/pharn-ship` and `/pharn-memory-promote` name the user's request as their trigger, and their drafts say so (237, 228 and 165 bytes; total 2,063).
+- **G2 (important)** — §5's targets read as upper bounds, an incentive to cut instructions to hit a number. They are now estimates: the editing rule wins, and a missed target is recorded, never met by cutting.
+- **G3 (important)** — the survival check covered fenced lines, headings and row ids but not prose instructions. §6 item 5 adds every line carrying a decision token, run after each wave, and the per-wave line counts.
+- **G4 (important)** — the inbound sweep covered section names only; 41 shipped lines cite a command step or numbered item. §3 freezes cited and pinned numbering and pins the cite search, whose every line `BUILD.md` marks "resolves".
+- **G5 (important)** — condensing a review-narrowed audit bullet can re-broaden it. §2 maps every removed audit or two-layers bullet to a claims bullet carrying its bound verbatim, an owner stating the same bound, or a duplicate.
+- **G6 (minor)** — the CHANGELOG is not installed; §3 says so.
+- **G7 (minor)** — each edited command's `version:` bumps its patch (§9, Build procedure).
+- **G8 (minor)** — `reads:` stays byte-identical; follow-up `reads-trim` (§9, Deferred).
+- **G9 (minor)** — `BUILD.md` lists each ceiling's absolute headroom; D6's 10% rule is unchanged.
+- **G10 (minor)** — no reflow of a paragraph holding a pinned sentence (§3).
+- **G11 (minor)** — the claims block's opening sentence names the Floor bullets, hooks included, not only "verdicts" (§2).
+- **G12 (minor)** — `BUILD.md` records kept and removed lines per command per wave, for the review (§6 item 5).
+
 ## Files
 
 - `.dev/features/slim-commands/PLAN.md` — this plan — layer dev artifact
-- `.dev/features/slim-commands/BUILD.md` — NEW. The build record: measured before/after per command and per description, the ceilings, the description-claim mapping, the per-section rationale ledger (what left, which owner holds it), any re-point, the survival-check output, every command run with its exit code — layer dev artifact
+- `.dev/features/slim-commands/BUILD.md` — NEW. The build record: measured before/after per command and per description, the ceilings and each one's absolute headroom, the description-claim mapping, the audit-bullet mapping with bounds (§2), the per-section rationale ledger (what left, which owner holds it), the inbound-cite list marked "resolves" (§3), any re-point, any missed target and why (§5), the survival-check output and the kept/removed line counts per wave, every command run with its exit code — layer dev artifact
 - `.claude/commands/pharn-ship.md` — EDIT. Description, claims block, slim (§5) — layer product command
 - `.claude/commands/pharn-loop.md` — EDIT. Description, claims block, slim (§5) — layer product command
 - `.claude/commands/pharn-memory-promote.md` — EDIT. Description, claims block, slim (§5) — layer product command
@@ -260,10 +296,10 @@ Targets are upper bounds the build aims at; the ceilings are set from what it me
 ## Build procedure (pinned — L13, L19, L22, L44, L57)
 
 1. `/pharn-dev-build` Step 0 as written: the setter from this PLAN, then `--anchor`.
-2. **Wave 1 — descriptions and claims blocks, all eleven commands.** Write the claims blocks (nine), shorten every description, delete the tail audits and `## The two layers`. Then `npm test`; a red test means restore the text it reads (§6 item 4).
-3. **Wave 2 — `pharn-ship.md` and `pharn-loop.md` bodies**, per §3's editing rule and §4. Then `npm test`.
-4. **Wave 3 — the other seven bodies** (§5). Then `npm test`.
-5. The survival check (§6 item 5), its output quoted into `BUILD.md`.
+2. **Wave 1 — descriptions and claims blocks, all eleven commands.** Write the claims blocks (nine), shorten every description, bump each edited command's `version:` patch, delete the tail audits and `## The two layers`. Then `npm test` and the survival check (§6 item 5); a red test means restore the text it reads (§6 item 4).
+3. **Wave 2 — `pharn-ship.md` and `pharn-loop.md` bodies**, per §3's editing rule and §4. Then `npm test` and the survival check.
+4. **Wave 3 — the other seven bodies** (§5). Then `npm test` and the survival check.
+5. Run the inbound-cite search (§3) and mark each line in `BUILD.md`; quote the three survival-check outputs.
 6. Measure each file and description; write `COMMAND_BYTE_CEILINGS` from the measurements (§7); write the budget section and run each control once, confirming it red.
 7. `CLAUDE.md`, `README.md`, `CHANGELOG.md`, `SKILLS_VERSION`.
 8. Format only this build's files: `npx prettier --ignore-unknown --write <the written paths>` and `npx markdownlint-cli2 --no-globs --fix <the written .md paths>` — never over the tree (L57).
@@ -286,7 +322,9 @@ Targets are upper bounds the build aims at; the ceilings are set from what it me
 - "No description carries claim vocabulary" → **floor: regex** (R4), bounded to its four forms; a paraphrase passes (advisory).
 - "Every product command has a claims block" → **floor: regex** (R5), presence only; that the block is complete and true is advisory.
 - "Every pinned line and sentence survived" → **floor** where a pin exists: the existing suites, several of which EXECUTE the pinned lines; the full suite stays green.
-- "No executed line was lost" → **advisory**: the survival check is scratch evidence over fenced lines and headings; an unpinned instruction in prose is protected by the editing rule and review, not by a checker.
+- "No executed line was lost" → **advisory**: the survival check is scratch evidence over fenced lines, headings, row ids and lines carrying a decision token (a heuristic list); an unpinned instruction outside those is protected by the editing rule and review, not by a checker.
+- "No inbound cite dangles" → **advisory**: the cite search is pinned, the "resolves" marking is the build's reading; a cite spelled without a step or item number is outside the search.
+- "A condensed claim keeps its bound" → **advisory**: `BUILD.md`'s audit-bullet mapping, read at review.
 - "No claim was lost when the descriptions shrank" → **advisory**: `BUILD.md`'s mapping, read at review.
 - "The commands behave as before" → **advisory**: nothing measures a model's behaviour; the pins and the suite bound the text.
 - "The savings" → **estimate** (`LIMITS.md §1c`); M3 is the measurement.
@@ -304,14 +342,17 @@ Targets are upper bounds the build aims at; the ceilings are set from what it me
 
 ## Deferred — named, not dropped
 
-- `quick-mode-on-demand` — Q1; needs a human amendment of `pharn/ARCHITECTURE.md §4` first.
+- `quick-mode-on-demand` — Q1's option (b), revisited after M3; needs a human amendment of `pharn/ARCHITECTURE.md §4` first.
 - `dev-command-slim` — the same slim for the `pharn-dev-*` commands (D8).
 - `ship-closeout-script` — `/pharn-ship` Step 3a's close-out sequence as one tested script (D10).
 - `description-claim-paraphrase` — R4 sees vocabulary, not meaning (P0 bound; no fix proposed).
+- `reads-trim` — `reads:` entries a command never opens (A9's observation), including their share of each command's bytes (grill G8).
 
 ## Open questions (HALT)
 
-- **Q1 — On-demand mode files.**
+None open. Q1 was resolved at GATE 1 (2026-09-27, the orchestrator under the maintainer's delegation): **(a)**. The record of the question and its options stays below.
+
+- **Q1 — On-demand mode files. RESOLVED at GATE 1 → (a).**
   - **(a) Keep each `## Quick mode` in its command, slimmed (§4)** — no trusted-doc edit, no new shipped location, no pin re-homing.
   - **(b) Move each to a file under `pharn/pharn-contracts/`** — say `pharn/pharn-contracts/modes/pharn-ship-quick.md` and `…/pharn-loop-quick.md` — that the command reads only under `--quick`. The command keeps one pinned line in Step 1: when `--quick` is the first token, Read that file in full before Step 2, and run its deltas in place of the steps they name. The current CLI installs it (the whole-directory contracts copy, read in `0.7.0`'s source; older CLIs not checked). A missed read fails safe, as F7 argued: every delta removes or narrows a step, so a run that skips the file takes the full flow over a quick SPEC (more checks), or meets `MODE_MISMATCH` in the loop (an uncommitted green), never a weaker path. The cost: the maintainer amends `pharn/ARCHITECTURE.md §4` by hand (a patch drafted under `proposed/`, then this plan re-pinned to the new hash), and the pins follow the text — the section-scoped `QUICK_*` and `LOOP_QUICK_*` sets in `command-hygiene.test.mjs` (`QUICK_SKIP_SET`, `QUICK_SCOPE_LINE`, `FIRST_TOKEN_ADVISORY`'s three `pharn-ship.md` sites, `LOOP_QUICK_HEADING`, `LOOP_QUICK_SECTION_PINS`, `LOOP_QUICK_FORBIDDEN`, the `--mode` closure) and `check-quick-scope.test.mjs`'s executed lines move from "exactly once in the command" to "exactly once in the file and zero in the command", plus a new pin that each command carries its read line exactly once. It saves a further 8–9 KB per full-run orchestrator request, in each orchestrator.
   - **(c) A new directory outside the copied surfaces** — rejected: every current CLI would install a tree missing the file, so it needs a `pharn-cli` release and a `MIN_CLI` bump first.
