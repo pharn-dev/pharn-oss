@@ -1,4 +1,4 @@
-// pharn/floor/check-quick-scope.test.mjs — the quick scope check (6.27.0, loop-quick-mode GATE 2, review F1).
+// pharn/floor/check-quick-scope.test.mjs — the quick scope check (6.28.0, loop-quick-mode GATE 2, review F1).
 //
 // What this file holds, and the control each part names (L60):
 //   • ★ HOSTILE NAMES — both COMMITTED lines (pharn-loop.md `## Quick mode` item 5, pharn-ship.md `## Quick mode` item

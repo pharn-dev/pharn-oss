@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.27.0] - 2026-09-27
+## [6.28.0] - 2026-09-27
 
 ### Added
 
@@ -36,10 +36,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `/pharn-verify` — **no** `/pharn-regress` base comparison on any iteration, and **no** `RUN-REPORT.md` (`cost.json`
   is kept). Its green stop is **`STOP_GREEN_QUICK`, which is not `STOP_GREEN`**: every consumer compares `decision` by
   equality, and the token carries its own claim — verify `PASS`, no regression verdict read. `SKILLS_VERSION`
-  6.26.0 → 6.27.0 (minor: a newly shipped mode, a new checker and two new floor modules, a new decision token and an
+  6.27.0 → 6.28.0 (minor: a newly shipped mode, a new checker and two new floor modules, a new decision token and an
   optional record field — plus the security correction under Fixed, below). `MIN_CLI` stays 0.5.0: no installed path
   moves. **The directions that do not read back:**
-  an install rolled back below 6.27.0 REDs a `LOOP.md` carrying `STOP_GREEN_QUICK` in both loop-record checkers, and
+  an install rolled back below 6.28.0 REDs a `LOOP.md` carrying `STOP_GREEN_QUICK` in both loop-record checkers, and
   its `check-loop.mjs` reads a quick run as full (INCONCLUSIVE: no regression report); an older `check-cost-ledger.mjs`
   still reads such a ledger GREEN (rule 7 is a bounded token, not a vocabulary).
   ([`.dev/features/loop-quick-mode/`](./.dev/features/loop-quick-mode/))
@@ -108,11 +108,67 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `pharn/floor/check-quick-scope.test.mjs` executes both commands' committed lines against `$(…)`, backticks, `$Q`,
   commas, both quote kinds, a newline, a leading `-` and a trailing space: each exits 1 naming exactly that path, and
   no command runs. 6.25.0's line is the control — in the same fixture its canary file appears and `$Q` passes.
-  `check-regress.mjs` runs its CLI only under `import.meta.main`; its output is unchanged. **Rolling back below 6.27.0
+  `check-regress.mjs` runs its CLI only under `import.meta.main`; its output is unchanged. **Rolling back below 6.28.0
   restores the vulnerable line.** **Named, not built:** `regress-scope-list-grammar` — `/pharn-regress`'s own
   partition still reaches `check-regress.mjs`'s comma-list CLI, which trims a name's surrounding spaces and lets a
   lone changed path spelled `--declared` shadow the real flag (each a false pass there, reproduced at that CLI; a
   comma or newline name it already refuses).
+
+## [6.27.0] - 2026-09-26
+
+### Added
+
+- 2026-09-26: **`/pharn-ship` and `/pharn-loop` run each routed pipeline stage as a subagent, requested on the
+  model `pharn.config.json`'s `models.stages` resolves for it — stage-model routing, from a measured failure.** A
+  command's `model:` frontmatter applies for the rest of the turn it is invoked in, so every stage an
+  orchestrator ran as a step inside its own turn ran on the ORCHESTRATOR's model: measured on 2026-08-18,
+  `build`, configured `sonnet`, ran `opus` on 79% of its requests. The Agent tool takes a `model` parameter, and
+  in the roadmap's 2.1 spike 15 of 15 stage agents were served 100% by the model they were routed to
+  (`.dev/features/stage-model-routing/route-a-evidence.txt`). `/pharn-plan`, `/pharn-grill`, `/pharn-test` and
+  `/pharn-build` are now routed in `/pharn-ship` (the quick grill excepted), and `/pharn-spec` too in
+  `/pharn-loop`. `/pharn-ship`'s `/pharn-spec` (it IS GATE 1) and every `/pharn-regress` and `/pharn-verify`
+  (floor-only thin callers) run inline by policy, and a stage that could route and does not records why.
+  **The model is routed; effort is not** — the Agent tool takes no effort. `SKILLS_VERSION` 6.26.0 → 6.27.0
+  (minor: a new floor script and a routing capability). **`MIN_CLI` stays 0.5.0**: an older CLI's install is
+  degraded, not broken. **Routing needs a 0.7.0-shaped `models.stages` block** — `pharn update` with
+  `@pharn-dev/pharn` ≥ 0.7.0 migrates it. A pre-0.7.0 CLI writes a block `check-model-config.mjs` REDs, and never
+  migrates it, so until then every routed stage runs inline, saying `config-red` and naming that remedy.
+  ([`.dev/features/stage-model-routing/`](./.dev/features/stage-model-routing/))
+  - **`pharn/floor/stage-agent.mjs`** — `route` prints ONE token, `agent:<alias>` (exit 0) or `inline:<reason>`
+    (exit 3, its remedy on stderr), decided from the closed `ROUTE_POLICY` table and `check-model-config.mjs`'s
+    own `resolve`/`validate` verdicts, shelled under a measured `CHECKER_TIMEOUT_MS` (10 s) and read through
+    `shelled-verdict-core.mjs`, so a crashed or missing checker is `resolve-failed`, never `config-red`. `brief`
+    prints the stage agent's rules, rendered by code: the orchestrator's Agent prompt is one pinned line, so the
+    rules are never transcribed by a model. `report` writes the closed result `pharn-stage-agent-result/1` to
+    `.pharn/<command>/<name>/stage-result.json` — a Bash write outside fix #7, contained by a per-component
+    lstat walk. `read` validates it in both directions, consumes it, and exits with the stage-exit numbers
+    (0 done · 3 refused · 4 question · 2 unusable); its stderr names a refused result by one fixed code, never
+    by anything the file carries. The protocol's spec is `stage-agent-core.mjs`'s header: no new contract (P7).
+  - **`pharn/floor/route-token-core.mjs`** — the route-token grammar and nothing else, with zero imports, so the
+    marker writer and the ledger readers never load the routing policy or the brief.
+  - **`mark-phase.mjs --route <token>`** (stage-start only) records the REQUESTED route on the marker, and
+    `normalizeMarkers` keeps it, so `cost.json`'s `markers[]` carries it beside each request's SERVED `model`.
+    With no flag there is no key, byte-identical to every earlier marker, and an older floor drops the key and
+    checks the ledger GREEN. `pharn/pharn-contracts/cost-ledger.md` gains a "Route" section.
+  - **The two orchestrators** gain `## Running a stage`, and each routed stage gains a pinned route line, a
+    stage-start with `--route '<route>'`, the one-line brief prompt and `read`. `/pharn-ship`'s routed build
+    proceeds on its agent's `done gate:pass` (advisory, re-confirmed by `/pharn-verify`'s floor verdict); a
+    question round-trips through SendMessage, or a fresh agent whose prompt carries the question and the answer,
+    each fenced as DATA (a re-run route line that exits anything but 0 is a STOP). A stage-start line refused
+    for a mis-copied token is run once more without `--route`. `/pharn-loop` uses a reported row only where it
+    already mapped a stage's own report, and a checker-decided row (S11, S12, S13) stays the checker's.
+    `.dev/floor/command-hygiene.test.mjs`'s `STAGE_AGENT_WIRING` pins the lines and their order to the policy,
+    and executes every committed route and brief line.
+  - **Bounds, stated where they live.** A route is a request, and the served model is evidence from a transcript
+    format the platform does not document — never proof. The Agent tool returns a stage agent's final text into
+    the orchestrator's context: `THREAT-MODEL.md §5`'s free-text residual in a new place, and that no proceed/stop
+    reads it is advisory — only `read`'s closed line is floor. A hung stage agent hangs the run
+    (`stage-agent-hang`); a harness that backgrounds one anyway can leave it running (`stage-agent-background`);
+    the Agent tool's alias set is a platform fact read in one harness (`agent-model-set-drift`); routing effort
+    needs agent definitions `pharn update` would have to install (`stage-agent-effort`). The live success
+    measure (the plan's M2) needs a real run and is pending. `LIMITS.md §8` is revised through a human-applied
+    patch (`.dev/features/stage-model-routing/proposed/`); until a person applies it, that section's "nothing
+    reads `models.stages` at run time" is stale.
 
 ## [6.26.0] - 2026-09-26
 

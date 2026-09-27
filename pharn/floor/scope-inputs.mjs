@@ -1,5 +1,5 @@
 // pharn/floor/scope-inputs.mjs — the regress partition's TWO INPUT SETS, computed by code: the declared writes and the
-// changed paths (6.27.0, loop-quick-mode GATE 2, review F1). ONE owner (L35): `stage-regress.mjs`'s partition phase and
+// changed paths (6.28.0, loop-quick-mode GATE 2, review F1). ONE owner (L35): `stage-regress.mjs`'s partition phase and
 // `check-quick-scope.mjs` (the scope check `/pharn-ship --quick` and `/pharn-loop --quick` keep) both call these two
 // functions, so the quick modes compare exactly the sets `/pharn-regress`'s script compares, and nobody re-types either.
 //

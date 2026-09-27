@@ -37,7 +37,7 @@
 // Exit: 0 FRESH · 1 RERUN the named stage · 2 INCONCLUSIVE (unusable input, or — since 6.21.1 — the checker could not
 //       load, threw, or returned no verdict; FAIL-CLOSED) · 4 STOP (not re-runnable: a non-lapse cause, the budget is
 //       spent, or --commit-gate). stdout is ONE JSON document: {verdict, stage_to_rerun, reason_code, reason, checks,
-//       reruns_used, mode}; `checks` is null when the checker did not run to a verdict. `mode` (6.27.0) is the run's mode
+//       reruns_used, mode}; `checks` is null when the checker did not run to a verdict. `mode` (6.28.0) is the run's mode
 //       the checker read from the feature's SPEC — "full" | "quick" (`/pharn-loop --quick`) — and null when it stopped
 //       before reading it: a usage error, or `checker-crashed` (the crash document below).
 
@@ -46,7 +46,7 @@
 const VERDICT_OF = Object.freeze({ 0: "FRESH", 1: "RERUN", 2: "INCONCLUSIVE", 4: "STOP" });
 const EXIT_CODES = Object.freeze(Object.keys(VERDICT_OF).map(Number));
 const INCONCLUSIVE = 2;
-/** loop-fresh-core.mjs `result()`'s document keys, in order — `mode` last (6.27.0). */
+/** loop-fresh-core.mjs `result()`'s document keys, in order — `mode` last (6.28.0). */
 const DOC_KEYS = Object.freeze(["verdict", "stage_to_rerun", "reason_code", "reason", "checks", "reruns_used", "mode"]);
 
 /** Shorten machine paths in text copied into a committed record: the working directory → `.`, the home directory →

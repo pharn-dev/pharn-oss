@@ -10,7 +10,7 @@
 // A DETERMINISTIC VIEW over artifacts that already exist. Every line is derived by this code; no line is
 // authored by a model. It ANNOTATES a run and GATES NOTHING — no proceed/stop in any command reads it,
 // and `/pharn-loop`'s Step 6c commit stays gated on a green stop (`STOP_GREEN`, or `STOP_GREEN_QUICK` under
-// `--quick`, whose run renders no report at all — 6.27.0) and the decision re-derivation alone (fix #3). "The run
+// `--quick`, whose run renders no report at all — 6.28.0) and the decision re-derivation alone (fix #3). "The run
 // report says the change is fine" is not a sentence this file can support.
 //
 // ── THREE BOUNDS, each one a thing a reader would otherwise assume ───────────────────────────────────

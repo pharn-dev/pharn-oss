@@ -1,0 +1,22 @@
+ROUTE-A EVIDENCE (roadmap 2.1), measured 2026-09-26 from this orchestrator session's subagent transcripts
+(~/.claude/projects/-Users-pgalarowicz-Projects-pharn-oss/9a44eb3f-ab36-4c8a-aebd-45c26e85ebf6/subagents/*.jsonl),
+deduped by message id; per-agent rows in route-a-evidence.jsonl (script: route-a-evidence.mjs).
+
+G1 model binding: 15 stage agents (Agent tool, `model` param), every one 100% served by ONE model; 0 mixed.
+   alias opus -> claude-opus-5-5 (10 agents, 2294 requests); alias sonnet -> claude-sonnet-5 (3 agents, 1524 requests).
+   Baseline for contrast: .dev/measurements/token-cost-2026-08-18.md — build configured sonnet ran opus on 79% of
+   requests when stages ran INLINE in /pharn-dev-ship (frontmatter model is turn-scoped).
+   Two haiku agents are NOT stages (a one-command probe; a claude-code-guide docs lookup whose own definition is haiku).
+G2 hooks fire in subagents: yes — write-scope/protect hooks judged subagent Write/Edit calls (deny messages observed).
+G5 no permission bypass: yes — the auto-mode classifier judged subagent Bash calls (it DENIED the /pharn-dev-ship Step 3
+   setter/--amend-scope and a PLAN.md re-scope until the user added Bash allow rules).
+G3 stage completes: yes, with two named failure modes — (a) one agent hung silently ~7 h ("running", no transcript
+   writes) and needed TaskStop + SendMessage resume; (b) session restarts stop agents; SendMessage resumes them in the
+   same worktree with uncommitted work intact.
+G4 question round-trip: yes — GATE 1 / GATE 2 relayed by the orchestrator via SendMessage resume, every phase.
+Effort: NOT routable through the Agent tool (no effort parameter). Config says high everywhere; not applied.
+Route B (node orchestrator running `claude -p --model --effort` per stage): NOT MEASURABLE here — the auto-mode
+   classifier refused to launch headless claude -p sessions ("Create Unsafe Agents"). Decision rule (approved roadmap):
+   one passes -> that one => A. The maintainer's spike answer: "Run it; A only if tied".
+Cost shape: long-lived agents accumulate context; cache_read dominates (e.g. one build agent: 624 requests,
+   376M cache_read tokens). Fresh short-lived per-stage agents cost less per request than a long-lived one.

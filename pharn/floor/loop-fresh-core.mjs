@@ -21,12 +21,12 @@
 // stamp on disk, and nothing noticed. This file is that later increment.
 //
 // WHY A SEPARATE CHECKER, NOT A CHANGE TO check-loop.mjs: that file's inputs are a load-bearing, structural claim in
-// /pharn-loop's own description (no advisory stage can gate the stop). Restated exactly since 6.27.0, they are the two
+// /pharn-loop's own description (no advisory stage can gate the stop). Restated exactly since 6.28.0, they are the two
 // verdict reports, `--iter` / `--cap`, and ONE token of the feature's own SPEC — its `spec_kind`, which chooses the
 // table — and still no review, finding, severity, record or fingerprint input. A filesystem fingerprint input would
 // break that claim. So the command reads THIS checker first, and check-loop.mjs reads no fingerprint.
 //
-// THE MODE (6.27.0, `/pharn-loop --quick`): read once per evaluation with loop-mode-core.mjs's `loopModeOf` over the
+// THE MODE (6.28.0, `/pharn-loop --quick`): read once per evaluation with loop-mode-core.mjs's `loopModeOf` over the
 // feature directory — `quick` iff the SPEC reads `spec_kind: quick`, `full` for everything else — never from an
 // argument. It picks which evidence the checks read (the table below): a quick run never runs /pharn-regress, so its
 // checks read the verify evidence alone and never open a regression report or a regress stamp, stale or fresh. The
@@ -88,7 +88,7 @@
 //   • a failure to load this checker, a throw while it runs, or a result outside its contract is INCONCLUSIVE
 //     `checker-crashed` (exit 2), never a RERUN (6.21.1, through the CLI's dynamic import — check-loop-fresh.mjs,
 //     whose header names what that cannot catch). The AC ids still come from gate-run-core.mjs, not ac-gate-core.mjs,
-//     so the graph that can fail to load stays small (grill R2). loop-mode-core.mjs (6.27.0) joins that graph; a
+//     so the graph that can fail to load stays small (grill R2). loop-mode-core.mjs (6.28.0) joins that graph; a
 //     failure to load it is the same INCONCLUSIVE, in both modes, before any stop is read;
 //   • in QUICK mode, every bullet above over the verify evidence alone: C + D + E for the verify report, F, J for the
 //     verify stamp's logs and results, B for its reason_code. G and H have nothing to read and say "skipped".
@@ -196,7 +196,7 @@ export const LESSONS_CANON = "memory-bank/lessons-learned.md";
 /** The check ids, in evaluation order. Materialized once; the tests iterate it (L29/L52). */
 export const CHECKS = Object.freeze(["A", "B", "C", "D", "J", "E", "H", "F", "G", "I"]);
 
-/** QUICK mode (6.27.0): the checks with no evidence to read — H (the regress BASE stamp) and G (the regress HEAD
+/** QUICK mode (6.28.0): the checks with no evidence to read — H (the regress BASE stamp) and G (the regress HEAD
  *  stamp), because a quick run never runs /pharn-regress. Reported as `"skipped"`. Materialized once (L29). */
 export const QUICK_SKIPPED = Object.freeze(["G", "H"]);
 
@@ -818,7 +818,7 @@ function readLedger(file) {
  *  it (a subprocess is invisible to `--experimental-test-coverage`). The CLI (check-loop-fresh.mjs) only prints it and sets the exit code.
  *  ---------------------------------------------------------------------------------------------- */
 
-/** The document, its keys in a fixed order with `mode` LAST (6.27.0) — check-loop-fresh.mjs restates this key list as
+/** The document, its keys in a fixed order with `mode` LAST (6.28.0) — check-loop-fresh.mjs restates this key list as
  *  DOC_KEYS and a test pins the two equal. `mode` is null until the checker has read it (a usage error). */
 function result(verdict, code, fields, checks, mode = null) {
   return {

@@ -39,7 +39,7 @@ not open with a `spec_kind:` line, 6.20.7) applies to every SPEC. A valid accept
 criteria are **phrased** testably, never that any test exists, runs, or passes. `--spec-kind <SPEC.md>` (6.25.0) prints
 the SPEC's kind (`feature` | `test-infra` | `quick`, an empty line if unusable, `feature` for a legacy SPEC) — the
 one reading its callers shell (among them `/pharn-ship`'s GATE-1 backstop, `/pharn-grill --quick`'s eligibility check
-and `/pharn-loop --quick`'s Step-3 kind read), never re-derived from frontmatter; `loop-mode-core.mjs` (6.27.0) calls
+and `/pharn-loop --quick`'s Step-3 kind read), never re-derived from frontmatter; `loop-mode-core.mjs` (6.28.0) calls
 the same function to pick `/pharn-loop`'s stop table and freshness column.
 
 ## Run the validator

@@ -85,7 +85,7 @@ function writeFront(proj, kind = null) {
     .replace("<the line check-spec.mjs --resolve-template-ref prints>", TEMPLATE_REF)
     .replace("<unit | integration | e2e>", "unit")
     .replace(/<[^>\n]+>/g, "filled");
-  // 6.27.0: a `/pharn-loop --quick` front — the kind line in the frontmatter, BEFORE the pin is taken (the pin covers it).
+  // 6.28.0: a `/pharn-loop --quick` front — the kind line in the frontmatter, BEFORE the pin is taken (the pin covers it).
   if (kind) draft = withKind(draft, kind);
   writeFileSync(join(fd, "SPEC.md"), draft);
   const h = spawnSync(process.execPath, [CHECK_SPEC, "--hash", join(fd, "SPEC.md")], { encoding: "utf8" }).stdout.trim();
@@ -120,7 +120,7 @@ function writeFront(proj, kind = null) {
   writeFileSync(lockPath, JSON.stringify(lock, null, 2));
 }
 
-/** Insert `spec_kind: <kind>` as the frontmatter line after `spec_template:` (6.27.0). */
+/** Insert `spec_kind: <kind>` as the frontmatter line after `spec_template:` (6.28.0). */
 function withKind(specText, kind) {
   const out = specText.replace(/^(spec_template: .*\n)/m, `$1spec_kind: ${kind}\n`);
   assert.notEqual(out, specText, "fixture: the spec_template anchor must exist");
@@ -128,7 +128,7 @@ function withKind(specText, kind) {
 }
 
 /** A committed project. `sub` puts the PROJECT in a subdirectory of the git repo (the install-at-a-subpath
- *  case); `kind` (6.27.0) writes its SPEC with that `spec_kind`. Returns {root, proj, base}. */
+ *  case); `kind` (6.28.0) writes its SPEC with that `spec_kind`. Returns {root, proj, base}. */
 function makeRepo({ sub = null, extra = null, kind = null } = {}) {
   const root = mkdtempSync(join(tmpdir(), "clf-"));
   git(root, "init", "-q", ".");
@@ -1455,7 +1455,7 @@ function expectCrashDoc(r, label, copy) {
       reruns_used: doc.reruns_used,
       mode: doc.mode,
     },
-    // `mode: null` (6.27.0): the crash document carries the key, and null — the checker never read the SPEC.
+    // `mode: null` (6.28.0): the crash document carries the key, and null — the checker never read the SPEC.
     { verdict: "INCONCLUSIVE", reason_code: "checker-crashed", stage_to_rerun: null, checks: null, reruns_used: null, mode: null },
     label
   );
@@ -1505,7 +1505,7 @@ test("6.21.1 — a checker that cannot LOAD is INCONCLUSIVE `checker-crashed`, e
 });
 
 test("6.21.1 — a result OUTSIDE the checker's contract is `checker-crashed` too: never exit 0, never a RERUN without its document", () => {
-  // `mode` (6.27.0) is part of the contract's key set, so a conforming stub carries it.
+  // `mode` (6.28.0) is part of the contract's key set, so a conforming stub carries it.
   const DOC = (verdict) =>
     `{ verdict: "${verdict}", stage_to_rerun: null, reason_code: null, reason: "x", checks: {}, reruns_used: null, mode: null }`;
   const STUBS = [
@@ -1605,7 +1605,7 @@ test("✧ L35 — the entry's restated facts agree with the core (exit codes, ve
   );
   assert.deepEqual(verdictOf, { ...EXIT });
   const keys = JSON.parse(src.match(/DOC_KEYS = Object\.freeze\((\[[^\]]*\])\)/)[1]);
-  // 6.27.0: `mode` is the last key, in BOTH files.
+  // 6.28.0: `mode` is the last key, in BOTH files.
   assert.deepEqual(keys, ["verdict", "stage_to_rerun", "reason_code", "reason", "checks", "reruns_used", "mode"]);
   // Hermetic (REVIEW finding 3): an INCONCLUSIVE, and a STOP from --commit-gate over an empty temp repo — the commit gate
   // never writes the budget ledger, so nothing lands in the source tree.
@@ -1767,7 +1767,7 @@ test("★ UPGRADE STRADDLE (6.21.1) — an honest pre-upgrade report that FAILED
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
-// 6.27.0 — THE QUICK COLUMN (`/pharn-loop --quick`, .dev/features/loop-quick-mode/). Appended as one block. The mode is
+// 6.28.0 — THE QUICK COLUMN (`/pharn-loop --quick`, .dev/features/loop-quick-mode/). Appended as one block. The mode is
 // the feature SPEC's `spec_kind`, read by loop-mode-core.mjs; a quick run never runs /pharn-regress, so A, B, C, D, J
 // and E read the verify evidence ALONE, G and H are skipped, and F and I run as in full mode. Every fixture below is a
 // quick FRONT (the SPEC carries `spec_kind: quick`, pinned) with only verify evidence — `iterate(r, { only: "verify" })`
@@ -1812,7 +1812,7 @@ test("QUICK FRESH — a quick front with ONLY verify evidence passes A–F, J an
   });
 });
 
-test("the full document carries mode full for every pre-6.27.0 fixture shape (L41 — no kind line reads full)", () => {
+test("the full document carries mode full for every pre-6.28.0 fixture shape (L41 — no kind line reads full)", () => {
   withRepo((r) => {
     iterate(r);
     const res = evaluate(args(r, ["--front"]));

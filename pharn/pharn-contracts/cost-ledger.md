@@ -130,6 +130,7 @@ satisfied by a variant spelling of any member; closure is what makes a variant f
 | `markers[].seq`                                                     | integers, **strictly increasing**                                         | FLOOR (integer compare)                                               |
 | `markers[].kind`                                                    | `run-start` \| `stage-start` \| `orchestrator` \| `run-stop`              | FLOOR (enum)                                                          |
 | `markers[].mode`                                                    | (6.25.0) absent, or a `MARKER_MODES` member (today: `quick`)              | **ADVISORY** (a marker field — see "Mode" below)                      |
+| `markers[].route`                                                   | (6.27.0) absent, or a route token (`agent:<alias>` \| `inline:<reason>`)  | **ADVISORY** (a marker field — see "Route" below)                     |
 | `requests[].request_id`                                             | non-empty, **unique across the array**                                    | FLOOR (set membership)                                                |
 | `requests[].usage`                                                  | every leaf: number \| bool \| null \| a short token                       | FLOOR (enum-regex)                                                    |
 | `requests[].model`                                                  | a bounded identity token (<=128 chars, no control char, no path)          | FLOOR (enum-regex)                                                    |
@@ -279,11 +280,49 @@ does not mean the run was invoked with `--quick`, and the reverse.** `ship-outco
 reads only the CURRENT run's run-start (`currentRunMarkers(...)[0]`), by exact equality — an EARLIER run's
 quick run-start never makes the current run quick, and vice versa.
 
-**`/pharn-loop --quick` (6.27.0) writes no mode marker.** The loop's mode is its feature SPEC's pinned `spec_kind`,
+**`/pharn-loop --quick` (6.28.0) writes no mode marker.** The loop's mode is its feature SPEC's pinned `spec_kind`,
 which its stop core reads and its `LOOP.md` records (and `check-loop-decision.mjs` re-derives); a marker would be a
 second, unverified copy of it. The one reader such a marker would feed — the no-`LOOP.md` fallback derivation — reads
 a loop ledger as full, and with no `pharn-regress` stage-start after the build that is `stop:pharn-verify`: the
 under-claiming direction.
+
+## Route (added 6.27.0, stage-model routing)
+
+Since 6.27.0 `/pharn-ship` and `/pharn-loop` run each stage their routing policy routes as a Claude Code
+subagent — a stage agent — requested on the model `models.stages` resolves for it (`pharn/floor/stage-agent-core.mjs`'s
+header is the protocol's spec). A stage-start marker may carry `route`, recorded at the MOMENT THE STAGE STARTS
+(`mark-phase.mjs --route`, stage-start only): `agent:<alias>` when the stage was REQUESTED as a stage agent on
+that alias, `inline:<reason>` when it ran in the orchestrator's own turn, and why. The grammar has one owner,
+`pharn/floor/route-token-core.mjs`, a zero-import module; `normalizeMarkers` keeps the field only as a valid
+token, so a garbage value is dropped, and `mark-phase.mjs` writes no key at all without the flag. A stage the
+policy runs inline in every mode of its command has no route line and no `route` key.
+
+**A routed stage's rows.** A stage agent's requests are read by the same `sessionRequests()` as every other
+row: its transcript sits under the parent session's `subagents/` directory, and its records carry the parent's
+session id. So its rows are ordinary run members, `sidechain: true`, with the stage agent's id in `agent_id` and
+the model the platform SERVED in `model`, and the unchanged attribution method bills them to the routed stage's
+bucket — as long as the stages run in the foreground one at a time and the `orchestrator` marker follows the
+stage's final `read`, both command rules. The same bucket holds the orchestrator's own requests inside the
+bracket, `sidechain: false`: the one that issues the Agent call, the one that issues `read`, and the one that
+issues the closing `orchestrator` marker (whose first line precedes the marker it writes), plus a relayed
+question's requests.
+
+**Reading it (the plan's success measure).** For each stage-start marker whose `route` is `agent:<alias>`, the
+`requests[]` rows with that marker's `stage` and `iteration` and `sidechain: true` should be non-empty and carry
+one served model in `<alias>`'s family — a person reads the family, because the alias → model id map is the
+platform's, and an alias is a mutable pointer. For an `inline:<reason>` marker the bucket holds no sidechain row.
+
+**Bound, and it is the point.** `route` is a REQUEST; `requests[].model` is an OBSERVATION read from a transcript
+format the platform does not document (the reader's own stated assumption). The two agreeing is agreement
+between two records, never proof that a stage ran on a model, and `check-cost-ledger.mjs` still certifies
+internal consistency only. The effort a routed stage ran at is not routed at all.
+
+**No schema bump, and the old-reader direction stated.** `check-cost-ledger.mjs`'s per-marker rule is the closed
+`kind` enum and the `seq` order; it asserts no closed key set over a marker OBJECT, and a token cannot carry a
+path. So a pre-6.27.0 floor reading a 6.27.0 ledger or marker file stays correct: its `normalizeMarkers`
+rebuilds each marker from fixed keys and drops `route`, and its checker reads the ledger GREEN, unchanged. No
+other re-derivation of `markers[]` reads the field — run membership, attribution, the ship outcome and the run
+report's staleness identity are each unchanged by it, and a test pins that. Reverting leaves only an inert key.
 
 ## Compatibility with `pharn-cost-ledger/1`
 
@@ -385,7 +424,7 @@ by the checker rather than re-spelled:
 | `LOOP.md`          | `/pharn-loop`, via its record                          | `check-loop.mjs`'s own tokens                                                           | **DECLARED** — re-derivable (see below) |
 | `verdicts+markers` | `/pharn-ship` always; any other command with no record | `gate2` \| `gate2-quick` (6.25.0) \| `stop:<stage>` \| `stop:unknown` \| `undetermined` | **DERIVED** — split, see below          |
 
-The `LOOP.md` source's vocabulary includes `STOP_GREEN_QUICK` (6.27.0, `/pharn-loop --quick`), which is **not**
+The `LOOP.md` source's vocabulary includes `STOP_GREEN_QUICK` (6.28.0, `/pharn-loop --quick`), which is **not**
 `STOP_GREEN` and claims no regression verdict: the emitter copies it verbatim, so a quick loop's ledger carries its
 own claim with no marker involved, and rule 7 — a bounded token, not a vocabulary — reads it GREEN in an older
 checker too.

@@ -15,14 +15,14 @@
 //
 // IT IS NOT AN INPUT TO THE STOP DECISION (structural, not discipline): check-loop.mjs's inputs are the two
 // verdict reports, `--iter` / `--cap`, and ONE token of the feature's own SPEC — its `spec_kind`, which chooses the
-// table (6.27.0). It has no record parameter, so this checker CANNOT feed it. The record is validated AFTER the stop
+// table (6.28.0). It has no record parameter, so this checker CANNOT feed it. The record is validated AFTER the stop
 // decision already exists. Reading a record's `decision` back into the loop would be the fix#3 disease; here it is
 // impossible because the input does not exist.
 //
-// ── `mode` and STOP_GREEN_QUICK (6.27.0, `/pharn-loop --quick`) ─────────────────────────────────────────────────
+// ── `mode` and STOP_GREEN_QUICK (6.28.0, `/pharn-loop --quick`) ─────────────────────────────────────────────────
 // `decision` gains `STOP_GREEN_QUICK` — check-loop.mjs's green in its quick table (verify PASS, no regression verdict
 // read), which is NOT `STOP_GREEN`. The envelope gains a sixth, OPTIONAL field `mode` ∈ LOOP_MODES {full, quick}
-// (loop-mode-core.mjs owns the vocabulary, L35): absent means `full`, so every pre-6.27.0 record keeps its meaning. It
+// (loop-mode-core.mjs owns the vocabulary, L35): absent means `full`, so every pre-6.28.0 record keeps its meaning. It
 // records the run's INVOCATION (`quick` iff `--quick` was the first argument token) — never a copy of check-loop.mjs's
 // JSON `mode` (pharn-contracts/loop-record.md). When present it passes cleanScalar, then exact membership (L14, L15).
 // ONE cross-field rule, both halves enum tests (primitive #3): `STOP_GREEN_QUICK` requires `mode: quick`, and
@@ -43,7 +43,7 @@
 // ── Honest scope (P0) — the split this file must never blur ───────────────────────────────────────────
 // FLOOR (what the exit code guarantees, GIVEN a record handed to it): the envelope's four MANDATORY
 //   fields, plus the optional fifth (`cap`, ADDITIVE since the loop-decision-integrity increment — see
-//   below) and the optional sixth (`mode`, 6.27.0 — above), are shape-valid (enum membership + anchored regexes over
+//   below) and the optional sixth (`mode`, 6.28.0 — above), are shape-valid (enum membership + anchored regexes over
 //   control-char-guarded values + an integer compare), `decision` and `mode` are a consistent pair (the one
 //   cross-field rule, above), and the Handoff's STRUCTURE is exactly `## Handoff` containing `### investigated`,
 //   `### learned`, `### next_steps` — in that order, as the ONLY `###` headings there, each with a
@@ -98,7 +98,7 @@ import { HANDOFF_SECTIONS, handoffSections } from "./loop-record-core.mjs";
 import { LOOP_MODES } from "./loop-mode-core.mjs";
 
 // The `decision` enum — exactly the values check-loop.mjs EMITS as `.decision` at a stop, STOP_GREEN_QUICK included
-// (6.27.0). `CONTINUE` (which check-loop.mjs also emits) is deliberately absent: a record is written only at a STOP, so
+// (6.28.0). `CONTINUE` (which check-loop.mjs also emits) is deliberately absent: a record is written only at a STOP, so
 // a record claiming CONTINUE is malformed by construction. A Set, so membership is `.has()` and no arbitrary key is
 // ever indexed into a plain object (lessons-learned.md L15 — an inherited prototype member such as `toString` would be
 // both truthy and non-nullish and would leak past `||` / `??`). check-loop-record.test.mjs holds it equal to
@@ -231,7 +231,7 @@ function gate(recordPath) {
     return red(`loop-record's \`date\` is ${JSON.stringify(date)} (${recordPath}) — expected an ISO calendar date, YYYY-MM-DD.`);
   }
 
-  // (A5) mode — OPTIONAL (6.27.0); absent means `full`. Guard first (L14), then exact membership (L15). The value
+  // (A5) mode — OPTIONAL (6.28.0); absent means `full`. Guard first (L14), then exact membership (L15). The value
   // quoted in a refusal is JSON.stringify of a string already proved to be one (L62).
   let mode = "full";
   if (fields.has("mode")) {

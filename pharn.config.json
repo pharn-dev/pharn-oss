@@ -1,5 +1,5 @@
 {
-  "_models_stages_note": "models.stages is the SOURCE OF TRUTH the eleven /pharn-* commands' static model:/effort: frontmatter is held to by pharn/floor/check-model-config.mjs. It is NOT a runtime control: nothing reads this block to select a model, and nothing observes what a stage actually ran under. Bounds: LIMITS.md section 8.",
+  "_models_stages_note": "models.stages is the SOURCE OF TRUTH for two things. (1) The eleven /pharn-* commands' static model:/effort: frontmatter, held to it by pharn/floor/check-model-config.mjs: the model and effort a stage gets when a person invokes it directly. (2) Since 6.27.0, the MODEL a /pharn-ship or /pharn-loop stage agent is requested on, read at run time by pharn/floor/stage-agent.mjs route through that checker's resolve; a stage the routing policy keeps inline, or that falls back, runs on the session's model (the model of the session running the orchestrator) and records why. Effort is not routed to a stage agent. A route records what was REQUESTED: what a stage was served is cost.json's requests[].model, evidence and never proof. Bounds: LIMITS.md section 8.",
   "models": {
     "stages": {
       "default": { "model": "sonnet", "effort": "high" },

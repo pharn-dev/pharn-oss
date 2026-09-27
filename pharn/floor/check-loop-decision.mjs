@@ -14,7 +14,7 @@
 // with what `check-loop.mjs` actually emitted (membership is checked, agreement is not)". Nothing in the
 // pipeline ever re-derived a recorded decision from the reports it claims to summarize, so a
 // hand-authored or corrupted `LOOP.md` was indistinguishable on disk from a genuinely floor-computed one
-// — and on a green stop specifically (`STOP_GREEN`, or `STOP_GREEN_QUICK` under `/pharn-loop --quick`, 6.27.0), that
+// — and on a green stop specifically (`STOP_GREEN`, or `STOP_GREEN_QUICK` under `/pharn-loop --quick`, 6.28.0), that
 // record is committed to a new branch UNATTENDED, with no human between the record and the commit. This file closes
 // exactly that gap.
 //
@@ -27,12 +27,12 @@
 //
 // STRUCTURAL, NOT A NEW GATE ON THE STOP ITSELF (the invariant this file must never blur): `check-loop.mjs`'s
 // inputs are the two verdict reports, `--iter` / `--cap`, and ONE token of the feature's own SPEC — its `spec_kind`,
-// read from the `SPEC.md` beside the verify report, which chooses the table (6.27.0) — and this file is not one of
+// read from the `SPEC.md` beside the verify report, which chooses the table (6.28.0) — and this file is not one of
 // them and cannot become one. This checker runs strictly AFTER a stop already exists (it consumes `check-loop.mjs`'s
 // OUTPUT, from a fresh invocation, never feeds its input) and gates only the downstream `/pharn-loop` Step 6c commit —
 // never the stop decision itself. "No advisory stage can gate the loop's stop" remains true by construction.
 //
-// THE MODE (6.27.0, `/pharn-loop --quick`). The re-run reads the SPEC beside the record — the record's own directory
+// THE MODE (6.28.0, `/pharn-loop --quick`). The re-run reads the SPEC beside the record — the record's own directory
 // is the verify report's — so the table it re-derives with is the SPEC's kind, read in ANY state: /pharn-loop's Step
 // 6a reverts a non-green stop's SPEC to Draft before this check runs, and the revert never touches the kind line (L42,
 // L58). The record's OPTIONAL `mode` (absent → `full`) records the run's INVOCATION; after the live re-run it must
@@ -71,7 +71,7 @@
 //
 // ── NO CROSS-TREE IMPORT, NO SIBLING-INTERNALS IMPORT (P3) ──────────────────────────────────────────────
 // `FM_RE` / `stripBom` come from the shared `frontmatter-core.mjs` (this file is added to its materialized
-// `CONSUMERS` list), and `LOOP_MODES` from `loop-mode-core.mjs` — both cores, never a CLI's internals (6.27.0: the mode
+// `CONSUMERS` list), and `LOOP_MODES` from `loop-mode-core.mjs` — both cores, never a CLI's internals (6.28.0: the mode
 // vocabulary has one owner, L35). The small envelope-scalar helpers below are RE-IMPLEMENTED IN-FILE rather than
 // imported from `check-loop-record.mjs` — the same discipline `check-plan-spec-agree.mjs` already applies
 // to `check-spec.mjs`'s `readValue`: two files agreeing on a tiny parse is a CONVENTION tests can detect,
@@ -99,7 +99,7 @@ import { LOOP_MODES } from "./loop-mode-core.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 const CHECK_LOOP = join(here, "check-loop.mjs");
 
-// check-loop-record.mjs carries the same enum; a behavioural test runs each token through both (6.27.0).
+// check-loop-record.mjs carries the same enum; a behavioural test runs each token through both (6.28.0).
 const DECISION_ENUM = new Set(["STOP_GREEN", "STOP_GREEN_QUICK", "STOP_CAP", "STOP_TERMINAL", "INCONCLUSIVE"]);
 // The optional `mode`'s vocabulary — loop-mode-core.mjs's LOOP_MODES, never restated (L35).
 const MODE_ENUM = new Set(LOOP_MODES);
@@ -184,7 +184,7 @@ function gate(recordPath) {
     );
   }
 
-  // `mode` — OPTIONAL (6.27.0); absent means `full` (every pre-6.27.0 record). Guard first (L14), then exact
+  // `mode` — OPTIONAL (6.28.0); absent means `full` (every pre-6.28.0 record). Guard first (L14), then exact
   // membership (L15). It records the run's invocation, and is compared with the re-derived mode below.
   let mode = "full";
   if (fields.has("mode")) {
@@ -226,7 +226,7 @@ function gate(recordPath) {
   if (redecision === null || typeof redecision !== "object" || typeof redecision.decision !== "string") {
     return red(`check-loop.mjs's re-derivation output for ${recordPath} has no \`.decision\` string.`);
   }
-  // The re-derived mode: check-loop.mjs's JSON `mode`, absent → `full` (a pre-6.27.0 check-loop.mjs has no such key).
+  // The re-derived mode: check-loop.mjs's JSON `mode`, absent → `full` (a pre-6.28.0 check-loop.mjs has no such key).
   // Anything else outside the vocabulary — null included, which only an argv refusal emits — is unusable: fail-closed.
   const rederivedMode = redecision.mode === undefined ? "full" : redecision.mode;
   if (typeof rederivedMode !== "string" || !MODE_ENUM.has(rederivedMode)) {

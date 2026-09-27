@@ -347,7 +347,7 @@ test("★ G3 — the regress fixture regex reaches stage-runtime.mjs and every m
 });
 
 test("★ G3 discriminates — a COMPUTED import path drops the runtime from the closure", () => {
-  // The mutation lands in EVERY module of the closure that imports the runtime literally. Since 6.27.0 there are two:
+  // The mutation lands in EVERY module of the closure that imports the runtime literally. Since 6.28.0 there are two:
   // stage-regress.mjs and scope-inputs.mjs (loop-quick-mode GATE 2) — mutating one alone would leave the runtime
   // reachable through the other, and the test would no longer show the regex's blind spot.
   const LITERAL = 'from "./stage-runtime.mjs";';

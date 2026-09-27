@@ -1,5 +1,5 @@
 ---
-description: "Turn a user's prose intent into a structured, human-approved pharn/features/<name>/SPEC.md — the head of the product pipeline (spec → plan → grill → test → build → regress → verify → ship) and the versioned record of INTENT every downstream stage reads. INTERROGATES the intent for gaps (advisory — never gates), EMITS a Draft SPEC.md by filling the RESOLVED template — the project's own pharn.spec-template.md at the project root when it exists and validates, else the shipped default pharn/pharn-contracts/templates/spec-template.md (both defined by pharn/pharn-contracts/spec-template.md; an existing but invalid project template is a stop, never a fallback) — then HALTS for explicit human approval; only on approval does it flip Draft → Approved, assign a spec_id, and pin the approved intent with a content-hash (fix #4). FLOOR (deterministic, pharn/floor/check-spec.mjs): required-section PRESENCE, the Draft|Approved state enum, spec_id presence, and — when Approved — spec_content_hash == sha256(body), with a `spec_kind:` line hashed in front when present; and, for a SPEC that declares `spec_template` (every SPEC this command writes from the template — opt-in by that key, so a SPEC without it gets none of these rules), the template's shape: Assumptions required, each template section at most once, ID'd acceptance criteria phrased Given/When/Then with exactly one verify level each, at most three clarification markers and none once Approved, a non-empty out-of-scope list, no leftover guidance comment, a well-formed template reference, and at most one valid `spec_kind` (`feature` | `test-infra` | `quick` — `test-infra` never written under --model-approve, and `quick` under it only together with --quick). `/pharn-spec --quick` (6.25.0) writes a `spec_kind: quick` mini-SPEC (1–3 criteria, each unit/integration) for /pharn-ship --quick, naming the trade at the approval gate; with --model-approve (6.27.0, for /pharn-loop --quick) the model writes AND approves it, and an intent that does not fit a quick SPEC is refused, never widened. A valid AC grammar means the criteria are PHRASED testably — never that any test exists, runs, or passes. ADVISORY/HUMAN: whether the intent is clear/complete/wise — the human owns that, and owns the Draft → Approved gate. The model NEVER self-approves. '/pharn-spec produced it' NEVER means 'the intent is sound' (P0). ONE EXCEPTION to self-approval: under --model-approve, meant for /pharn-loop's unattended run (nothing prevents a user from passing it), the model pins the spec itself and records approved_by: model — never presented as a human's approval."
+description: "Turn a user's prose intent into a structured, human-approved pharn/features/<name>/SPEC.md — the head of the product pipeline (spec → plan → grill → test → build → regress → verify → ship) and the versioned record of INTENT every downstream stage reads. INTERROGATES the intent for gaps (advisory — never gates), EMITS a Draft SPEC.md by filling the RESOLVED template — the project's own pharn.spec-template.md at the project root when it exists and validates, else the shipped default pharn/pharn-contracts/templates/spec-template.md (both defined by pharn/pharn-contracts/spec-template.md; an existing but invalid project template is a stop, never a fallback) — then HALTS for explicit human approval; only on approval does it flip Draft → Approved, assign a spec_id, and pin the approved intent with a content-hash (fix #4). FLOOR (deterministic, pharn/floor/check-spec.mjs): required-section PRESENCE, the Draft|Approved state enum, spec_id presence, and — when Approved — spec_content_hash == sha256(body), with a `spec_kind:` line hashed in front when present; and, for a SPEC that declares `spec_template` (every SPEC this command writes from the template — opt-in by that key, so a SPEC without it gets none of these rules), the template's shape: Assumptions required, each template section at most once, ID'd acceptance criteria phrased Given/When/Then with exactly one verify level each, at most three clarification markers and none once Approved, a non-empty out-of-scope list, no leftover guidance comment, a well-formed template reference, and at most one valid `spec_kind` (`feature` | `test-infra` | `quick` — `test-infra` never written under --model-approve, and `quick` under it only together with --quick). `/pharn-spec --quick` (6.25.0) writes a `spec_kind: quick` mini-SPEC (1–3 criteria, each unit/integration) for /pharn-ship --quick, naming the trade at the approval gate; with --model-approve (6.28.0, for /pharn-loop --quick) the model writes AND approves it, and an intent that does not fit a quick SPEC is refused, never widened. A valid AC grammar means the criteria are PHRASED testably — never that any test exists, runs, or passes. ADVISORY/HUMAN: whether the intent is clear/complete/wise — the human owns that, and owns the Draft → Approved gate. The model NEVER self-approves. '/pharn-spec produced it' NEVER means 'the intent is sound' (P0). ONE EXCEPTION to self-approval: under --model-approve, meant for /pharn-loop's unattended run (nothing prevents a user from passing it), the model pins the spec itself and records approved_by: model — never presented as a human's approval."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -76,7 +76,7 @@ Load the trusted prefix and obey it for the whole run:
 ## `--quick` (6.25.0) — a mini-SPEC for `/pharn-ship --quick` and `/pharn-loop --quick`
 
 `/pharn-spec --quick <description>` writes a `spec_kind: quick` SPEC: 1–3 acceptance criteria, each
-verified at `unit` or `integration` — the intent a `/pharn-ship --quick` run (or, since 6.27.0, an unattended
+verified at `unit` or `integration` — the intent a `/pharn-ship --quick` run (or, since 6.28.0, an unattended
 `/pharn-loop --quick` run, through `--quick --model-approve`) trades checks for cost over.
 **`--quick` is recognized only as the FIRST TOKEN of the arguments** — never scanned out of the
 description, which is untrusted prose (P2): treat a `--quick` anywhere else as description text. **This
@@ -109,7 +109,7 @@ exactly as written for a `--quick` invocation too.
   outside the plan's declared files."_ (`/pharn-ship`'s `## Quick mode` names the full list, and the scope
   check it keeps; this sentence is the one the human reads **before** approving, not after, at GATE 2, once
   those checks have already been skipped.)
-- **`--quick` with `--model-approve` (6.27.0, `/pharn-loop --quick`) → the model writes AND approves the quick
+- **`--quick` with `--model-approve` (6.28.0, `/pharn-loop --quick`) → the model writes AND approves the quick
   SPEC.** Fit checks (1) and (2) have no one to ask: when the intent cannot be written as at most three `unit` /
   `integration` criteria without dropping or inventing intent, report back **blocked: the intent does not fit a
   quick SPEC**, and write nothing quick — the caller stops (`/pharn-loop`'s S6c), and never widens a quick request
@@ -182,7 +182,7 @@ findings (there is no `rule_id` for "intent quality"):
 **Under `--model-approve` nobody can answer** (Step 4a). Each of the warnings and questions above becomes
 an `## Assumptions` line instead of a question. The setup-increment offer is NOT taken: under `--model-approve`
 never write `spec_kind: test-infra` (Step 4a). Write a marker only where guessing would invent intent;
-a marker left in the Draft blocks the model's approval (Step 4a). With `--quick` as well (6.27.0), a miss of fit
+a marker left in the Draft blocks the model's approval (Step 4a). With `--quick` as well (6.28.0), a miss of fit
 check (1) or (2) is not a warning but a stop (`## --quick` above); fit check (3) becomes an `## Assumptions` line like
 the rest.
 
@@ -279,7 +279,7 @@ answer.**
 When the invocation carries `--model-approve`, `/pharn-loop` is running this stage **unattended**. Do not
 render the form and do not wait:
 
-- **If the invocation ALSO carries `--quick`** (`/pharn-loop --quick`, 6.27.0) → the quick branch (`## --quick`
+- **If the invocation ALSO carries `--quick`** (`/pharn-loop --quick`, 6.28.0) → the quick branch (`## --quick`
   above): when fit check (1) or (2) misses, do **not** write a quick SPEC — report back **blocked: the intent does
   not fit a quick SPEC** (the caller's S6c); otherwise write the quick Draft and continue with the bullets below.
 - **A Draft carrying `spec_kind: quick` is never approved under `--model-approve` without `--quick`** — report back
@@ -428,7 +428,7 @@ thing — it lands **one** human-approved, pinned spec. It does **not** chain to
   defensible guess is written down in `## Assumptions`, where the human can challenge it.
 - The terminal fallback of the Draft → Approved decision is **ask the human** (the Step-4 halt), never a model
   guess. Under `--model-approve` there is no one to ask mid-run, so the fallback is a **stop**: thin intent,
-  a clarification marker left in the Draft, or — with `--quick` (6.27.0) — an intent that does not fit a quick
+  a clarification marker left in the Draft, or — with `--quick` (6.28.0) — an intent that does not fit a quick
   SPEC, is reported back to `/pharn-loop`, which halts and says what it needs. The fit judgment itself is
   advisory; rule 9 is its floor backstop. Interrogation is advisory and never
   branches a guaranteed gate.

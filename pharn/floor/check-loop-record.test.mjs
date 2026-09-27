@@ -661,7 +661,7 @@ test("extra argv → RED (a malformed invocation is bad input, fail-closed)", ()
   assert.match(r.out, /usage:/);
 });
 
-// ── `mode` and STOP_GREEN_QUICK (6.27.0, /pharn-loop --quick) — one case per member (L52) ─────────────────────────────
+// ── `mode` and STOP_GREEN_QUICK (6.28.0, /pharn-loop --quick) — one case per member (L52) ─────────────────────────────
 //
 // `mode` is OPTIONAL (absent = full, so every record above keeps its meaning), shape-checked when present (cleanScalar,
 // then exact membership — L14, L15), and bound to `decision` by ONE cross-field rule: STOP_GREEN_QUICK requires

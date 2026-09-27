@@ -129,7 +129,7 @@ Load the trusted prefix and obey it for the whole run:
 
 ## `--quick` mode (6.25.0) — `/pharn-grill <name> --quick`
 
-`/pharn-ship --quick` and `/pharn-loop --quick` (6.27.0) invoke this form. **The grill stage keeps owning its
+`/pharn-ship --quick` and `/pharn-loop --quick` (6.28.0) invoke this form. **The grill stage keeps owning its
 artifact** (P3, unchanged): it is `/pharn-grill --quick` that writes the quick `GRILL.md`, never its caller. `--quick` is recognized
 only as the **second** argument (after `<name>`), the same first-token discipline `/pharn-ship` and
 `/pharn-spec` apply to their own `--quick` — never scanned out of surrounding text. That rule is

@@ -52,7 +52,7 @@ export const S3A_TAIL_FIND =
 export const S3A_TAIL_REPLACE =
   S3A_TAIL_FIND +
   ">\n" +
-  "> **The unattended one is `/pharn-loop --quick` (6.27.0), and nobody is told the trade before it runs.** The model\n" +
+  "> **The unattended one is `/pharn-loop --quick` (6.28.0), and nobody is told the trade before it runs.** The model\n" +
   "> writes and approves the `spec_kind: quick` SPEC itself (`approved_by: model`), and `check-loop.mjs` decides every\n" +
   "> stop over `/pharn-verify`'s verdict alone. The decision's mode is that SPEC's pinned kind, never a flag, so a full\n" +
   "> SPEC still needs a regression verdict. It keeps the grill's floor stops, the test-first evidence, the scope check\n" +
@@ -71,7 +71,7 @@ export const S6_FIND =
   "  `/pharn-regress` runs — or, since 6.25.0, `/pharn-ship --quick`'s item 7, which runs the same partition\n" +
   "  without the rest of that stage; it compares _changed since base_, not _written by the build_; it carries\n";
 export const S6_REPLACE =
-  "  `/pharn-regress` runs, or when `check-quick-scope.mjs` (6.27.0) applies that rule — for `/pharn-ship --quick`'s\n" +
+  "  `/pharn-regress` runs, or when `check-quick-scope.mjs` (6.28.0) applies that rule — for `/pharn-ship --quick`'s\n" +
   "  item 7 and for every `/pharn-loop --quick` iteration — to inputs it builds by code exactly as that stage's script\n" +
   "  does, without the rest of that stage; it compares _changed since base_, not _written by the build_; it carries\n";
 

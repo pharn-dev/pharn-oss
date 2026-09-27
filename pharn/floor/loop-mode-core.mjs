@@ -1,4 +1,4 @@
-// pharn/floor/loop-mode-core.mjs — the ONE reading of a `/pharn-loop` run's MODE (6.27.0, loop-quick-mode).
+// pharn/floor/loop-mode-core.mjs — the ONE reading of a `/pharn-loop` run's MODE (6.28.0, loop-quick-mode).
 //
 // A module, not a CLI: it prints nothing and exits nothing. Floor infrastructure, NOT a Capability (no `role:`).
 //

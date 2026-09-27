@@ -16,7 +16,7 @@ purpose: "Single source of truth for the loop-record — the pharn/features/<nam
 The loop-record is `pharn/features/<name>/LOOP.md`. `/pharn-loop` writes it, and exactly one other file
 with the Write tool — `pharn/features/<name>/SPEC.md`, only to revert its own model approval to `Draft` on
 a stop that did not end in a committed green stop — `STOP_GREEN`, or `STOP_GREEN_QUICK` under
-`/pharn-loop --quick` (6.27.0) (fix #7 scopes each of the two writes separately). It carries two cleanly separated
+`/pharn-loop --quick` (6.28.0) (fix #7 scopes each of the two writes separately). It carries two cleanly separated
 halves:
 
 1. a **deterministic envelope** — YAML frontmatter holding four mandatory enum/regex-gated scalars, plus the
@@ -85,7 +85,7 @@ The next concrete step, stated as one — free text, untrusted DATA. Informs; ne
 | `commit`     | `^([0-9a-f]{7,40}\|unknown)$`                                                               | **value** shape-gated; that it names the real `HEAD` is advisory                  |
 | `date`       | `^\d{4}-\d{2}-\d{2}$`                                                                       | **value** shape-gated; that it is the real date is advisory                       |
 | `cap`        | `^\d+$` **and** `>= 1` — **OPTIONAL**, not one of the four mandatory                        | **value** shape-gated when present; see "The fifth, optional field" below         |
-| `mode`       | exact membership in `{full, quick}` — **OPTIONAL**, absent means `full` (6.27.0)            | **value** shape-gated when present; see "The sixth, optional field" below         |
+| `mode`       | exact membership in `{full, quick}` — **OPTIONAL**, absent means `full` (6.28.0)            | **value** shape-gated when present; see "The sixth, optional field" below         |
 
 Every anchored regex above is applied **only after** a control-char + length guard on the raw value —
 composed, never replaced (PHARN's own build-loop lesson **L14**, cited not restated — P4). The
@@ -94,7 +94,7 @@ human.
 
 **`decision` — cite the emitted value, never a paraphrase.** The members are exactly the
 `decision` values `pharn/floor/check-loop.mjs` **emits** in its JSON at a stop, plus `INCONCLUSIVE`.
-`STOP_GREEN_QUICK` (6.27.0) is its green in the quick table — verify `PASS` in a `/pharn-loop --quick` run, no
+`STOP_GREEN_QUICK` (6.28.0) is its green in the quick table — verify `PASS` in a `/pharn-loop --quick` run, no
 regression verdict read — and is **not** `STOP_GREEN`: every consumer compares `decision` by equality.
 `/pharn-loop` sets this field by **copying that emitted value verbatim**, never by re-typing it. `CONTINUE` —
 which `check-loop.mjs` also emits — is deliberately **outside** this enum: a record is written only at a
@@ -130,8 +130,8 @@ checker's distinct, RED verdict) — the honest consequence of `cap` being addit
 a record from before this field existed can be well-shaped without being re-derivable, and nothing
 conflates the two.
 
-**The sixth, optional field: `mode` (6.27.0, `/pharn-loop --quick`).** `mode ∈ {full, quick}` (the vocabulary is
-`pharn/floor/loop-mode-core.mjs`'s `LOOP_MODES`); **absent means `full`**, so every record written before 6.27.0
+**The sixth, optional field: `mode` (6.28.0, `/pharn-loop --quick`).** `mode ∈ {full, quick}` (the vocabulary is
+`pharn/floor/loop-mode-core.mjs`'s `LOOP_MODES`); **absent means `full`**, so every record written before 6.28.0
 keeps its meaning, and a full run may omit it. **What it records, one meaning for every record class: the run's
 INVOCATION** — `quick` iff `/pharn-loop` read `--quick` as the first argument token, an advisory value like every
 envelope field the model writes — **never a copy of `check-loop.mjs`'s JSON `mode`**. That source is what gives the
@@ -150,7 +150,7 @@ on every record, blocked ones included. The checkers' rules:
   line in any state, so Step 6a's revert of the SPEC to `Draft` (which never touches that line) does not move it.
 - A blocked record's `mode` is shape-checked by `check-loop-record.mjs` and otherwise advisory.
 
-**The directions that do not read back, stated:** an install rolled back below 6.27.0 REDs a `LOOP.md` carrying
+**The directions that do not read back, stated:** an install rolled back below 6.28.0 REDs a `LOOP.md` carrying
 `STOP_GREEN_QUICK` in both checkers (the token is outside their older enum), and its older `check-loop.mjs` reads a
 quick run as full.
 
@@ -250,7 +250,7 @@ guarantee (`check-loop-record.mjs`'s shape verdict) is unchanged by either field
 - **ALSO FLOOR, over a SEPARATE checker (`pharn/floor/check-loop-decision.mjs`, loop-decision-integrity):**
   for a non-blocked record, its `decision` **is re-derivable** — a live re-run of `check-loop.mjs` against
   the record's `verify-report.json` / `regression-report.json` siblings (the verify report alone in the quick
-  table), using the record's own `iterations` and `cap`, reproduces the recorded token verbatim — and, since 6.27.0,
+  table), using the record's own `iterations` and `cap`, reproduces the recorded token verbatim — and, since 6.28.0,
   the record's `mode` equals the mode that re-run reports. This is the ONE place "decision agrees
   with what `check-loop.mjs` actually emitted" stops being purely advisory — narrowed, not general: it
   proves re-derivability from the CITED reports, never that those reports are themselves honest (a

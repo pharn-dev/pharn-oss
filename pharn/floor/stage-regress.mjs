@@ -406,7 +406,7 @@ function phaseBase(cfg) {
 /** ------------------------------------------------------------------------------------------------
  *  PHASE 4 — partition: build the four inputs, call `check-regress.mjs scope`.
  *  ---------------------------------------------------------------------------------------------- */
-// The declared and changed sets come from `scope-inputs.mjs` (6.27.0, loop-quick-mode GATE 2): the ONE owner this phase
+// The declared and changed sets come from `scope-inputs.mjs` (6.28.0, loop-quick-mode GATE 2): the ONE owner this phase
 // and `check-quick-scope.mjs` — the quick modes' scope check — both call (L35). This phase keeps its own refusals and
 // every detail string, byte for byte.
 function readPlanDeclared(cfg, planPath, specPath) {

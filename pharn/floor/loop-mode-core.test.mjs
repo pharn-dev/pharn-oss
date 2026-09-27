@@ -1,4 +1,4 @@
-// pharn/floor/loop-mode-core.test.mjs — the ONE reading of a /pharn-loop run's mode (6.27.0, loop-quick-mode).
+// pharn/floor/loop-mode-core.test.mjs — the ONE reading of a /pharn-loop run's mode (6.28.0, loop-quick-mode).
 //
 // Every fixture is a SPEC filled from PHARN's own shipped template (never a hand-typed shape), so a quick reading here
 // is the same reading a real /pharn-spec --quick Draft gets. The ✧ PARITY test runs `check-spec.mjs --spec-kind` — the

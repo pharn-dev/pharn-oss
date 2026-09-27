@@ -568,8 +568,9 @@ function shipLine(re, label) {
   return hits[0];
 }
 
-/** Run the given committed lines, `<name>` substituted, in a scratch cwd whose `pharn/` links to this repo's;
- *  return the markers the emitter would read. No session id, so no pending start is adopted. */
+/** Run the given committed lines, `<name>` substituted — and `<route>` (6.27.0) by the token `route` would
+ *  print for a routed build — in a scratch cwd whose `pharn/` links to this repo's; return the markers the
+ *  emitter would read. No session id, so no pending start is adopted. */
 function runCommitted(lines) {
   const cwd = mkdtempSync(join(tmpdir(), "pharn-ship-wiring-"));
   try {
@@ -577,7 +578,11 @@ function runCommitted(lines) {
     const env = { ...process.env };
     delete env.CLAUDE_CODE_SESSION_ID;
     for (const line of lines) {
-      const r = spawnSync("sh", ["-c", line.replaceAll("'<name>'", "'wiring-feat'")], { cwd, env, encoding: "utf8" });
+      const r = spawnSync("sh", ["-c", line.replaceAll("'<name>'", "'wiring-feat'").replaceAll("'<route>'", "'agent:sonnet'")], {
+        cwd,
+        env,
+        encoding: "utf8",
+      });
       assert.equal(r.status, 0, `${line}\n${r.stdout}${r.stderr}`);
     }
     return readMarkers(join(cwd, ".pharn", "cost", "wiring-feat", "markers.jsonl"));
@@ -592,8 +597,9 @@ test("★ WIRING — the committed QUICK run-start, build and verify lines deriv
     "quick run-start"
   );
   const fullStart = shipLine(/^node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind run-start --adopt-pending$/, "full run-start");
+  // 6.27.0: the routed build's stage-start records the route `stage-agent.mjs route` printed (--route).
   const build1 = shipLine(
-    /^node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind stage-start --stage pharn-build --iteration 1$/,
+    /^node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind stage-start --stage pharn-build --iteration 1 --route '<route>'$/,
     "build@1"
   );
   const verify1 = shipLine(
@@ -604,6 +610,8 @@ test("★ WIRING — the committed QUICK run-start, build and verify lines deriv
   try {
     const quick = runCommitted([quickStart, build1, verify1]);
     assert.equal(quick[0].mode, "quick", "the committed quick line must write mode: quick, and the reader must keep it");
+    assert.equal(quick[1].route, "agent:sonnet", "the committed build line records its route, and the reader keeps it");
+    assert.equal("route" in quick[2], false, "verify runs inline by policy in every mode: its line carries no route");
     assert.equal(readShipOutcome(dir, quick).decision, GATE2_QUICK);
     // CONTROL: the committed FULL run-start over the same stage lines — no regress stage-start, so never gate2.
     const full = runCommitted([fullStart, build1, verify1]);

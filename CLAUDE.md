@@ -70,7 +70,12 @@ tree** — a relocation of an installed path, a frontmatter/contract change that
 installs — never merely because `SKILLS_VERSION` moved; most releases leave it untouched. It went in at
 `0.5.0` with the 5.0.0 `features/` → `pharn/features/` relocation, because a pre-0.5.0 CLI looks for the
 boundary contract at the old root, finds nothing, and — both of its readers being existence-guarded —
-installs it **silently, with no error and no warning**.
+installs it **silently, with no error and no warning**. It did **not** move for 6.27.0's stage-model routing,
+although `models.stages` became a run-time input then: a pre-0.7.0 CLI writes a block (`opus-4-8`/`sonnet-5`,
+a top-level `default`) that `check-model-config.mjs` REDs, so every routed stage of such an install runs inline
+as `inline:config-red` — loudly, with `pharn update` from a CLI ≥ 0.7.0 (which migrates the block) named as the
+remedy — and no product command gates on that checker. That is a degraded install, not a BROKEN one, so the bar
+above is not met (GATE-2 review A2, which reversed a 0.7.0 bump made at GATE 1).
 **FAIL-OPEN IN ONE DIRECTION ONLY, and that is the thing to know (P0):** absent, unreadable, malformed
 and incomparable all mean _"no constraint"_, so a typo cannot brick the fleet — it **silently disables
 the gate** instead. Nothing in this repo checks the file: no floor primitive reads it, so its correctness
@@ -486,7 +491,7 @@ node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-
 # ac-tests.md "The AC gate" + verify-report.md "The additive ac_gate block".
 node pharn/floor/check-verify.mjs --stamp <stamp.json> --feature <name> --ac-gate
 
-# THE /pharn-loop STOP CORE — Design C over the FLOOR verdicts, in a table chosen by the SPEC's kind (6.27.0).
+# THE /pharn-loop STOP CORE — Design C over the FLOOR verdicts, in a table chosen by the SPEC's kind (6.28.0).
 # Decides every stop: INCONCLUSIVE (exit 2, bad input) · STOP_TERMINAL (4: unmeasured, an ac-evidence red, a reconcile
 # red — `terminal_cause` names which) · the green (0) · CONTINUE (3, a measurable red under the cap) · STOP_CAP (1).
 # THE STRUCTURAL CLAIM, restated exactly: its inputs are the two verdict reports, --iter / --cap, and ONE token of the
@@ -506,8 +511,8 @@ node pharn/floor/check-loop.mjs <verify-report.json> <regression-report.json> --
 # it cites; #230 made the gate map tested code and wrote `fingerprint.final` "for a later increment". So an
 # iteration that skipped a stage still found the PREVIOUS iteration's report and stamp, and nothing noticed.
 # This is that later increment — a SEPARATE checker read BEFORE check-loop.mjs, because check-loop.mjs's inputs
-# (the two verdict reports, iter/cap and ONE token of the SPEC — its spec_kind — since 6.27.0) are a load-bearing
-# structural claim a filesystem input would break. QUICK COLUMN (6.27.0): the checker reads the same kind; for a
+# (the two verdict reports, iter/cap and ONE token of the SPEC — its spec_kind — since 6.28.0) are a load-bearing
+# structural claim a filesystem input would break. QUICK COLUMN (6.28.0): the checker reads the same kind; for a
 # `quick` SPEC checks A, B, C, D, J and E read the verify evidence ALONE, G and H read `skipped` (QUICK_SKIPPED), F and
 # I run as in full mode, and stale regress evidence on disk is never opened; the document gains `mode` (last key; null
 # on a usage error or checker-crashed). THE CHECKS, first failure decides, fabrication (J/E/H) before staleness (F/G):
@@ -690,7 +695,7 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 node pharn/floor/stage-verify.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--gates "<cmd>[::<id>],…"]
 node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 
-# THE QUICK SCOPE CHECK (6.27.0, loop-quick-mode GATE 2, review F1) — the partition check `/pharn-ship --quick`'s item 7
+# THE QUICK SCOPE CHECK (6.28.0, loop-quick-mode GATE 2, review F1) — the partition check `/pharn-ship --quick`'s item 7
 # and every `/pharn-loop --quick` iteration keep when they skip /pharn-regress. THE RECORDED FAILURE (P7): 6.25.0's
 # pinned line had the MODEL paste the changed and declared lists into DOUBLE-QUOTED shell arguments of
 # `check-regress.mjs scope`, so a file named `src/$(touch X).js` ran in the orchestrator's shell and a `$Q` or comma
@@ -713,7 +718,7 @@ node pharn/floor/check-quick-scope.mjs --feature <name> --base <40-hex>
 # Check the SHAPE of a loop-record — the pharn/features/<name>/LOOP.md that /pharn-loop writes at every stop.
 # Floor: the frontmatter envelope (`decision` in {STOP_GREEN, STOP_GREEN_QUICK, STOP_CAP, STOP_TERMINAL, INCONCLUSIVE};
 # `iterations` a positive integer; `commit` a git SHA or the literal `unknown`; `date` ISO YYYY-MM-DD; and,
-# when present, `cap` — the loop's --max-iter — a positive integer, and (6.27.0) `mode` in {full, quick} — absent
+# when present, `cap` — the loop's --max-iter — a positive integer, and (6.28.0) `mode` in {full, quick} — absent
 # means full; it records the run's INVOCATION, never a copy of check-loop.mjs's JSON — with ONE cross-field rule:
 # STOP_GREEN_QUICK requires mode: quick, STOP_GREEN forbids it) plus an unambiguous `## Handoff` —
 # exactly `### investigated`, `### learned`, `### next_steps`, in that order, no extras/duplicates, each with
@@ -728,7 +733,7 @@ node pharn/floor/check-loop-record.mjs <LOOP.md>
 # never a sibling import) with the record's own `iterations` and `cap` and compares tokens. A mismatch, a missing or
 # malformed report, or a NON-BLOCKED record with no `cap` (optional to check-loop-record.mjs, required here) is RED,
 # fail-closed. A blocked stop (INCONCLUSIVE + a `blocked` key) never consulted check-loop.mjs and is SKIPPED, GREEN.
-# Since 6.27.0 the record's optional `mode` (absent = full) must ALSO equal the mode the live re-run reports — the table
+# Since 6.28.0 the record's optional `mode` (absent = full) must ALSO equal the mode the live re-run reports — the table
 # the SPEC's kind selects, read in any state (Step 6a's Draft revert never touches the kind line) — else RED
 # MODE_MISMATCH: a run invoked without --quick over a quick SPEC ends there, uncommitted. Agreement between files,
 # never provenance (L43); a quick line cites verify-report.json alone.
@@ -796,11 +801,15 @@ node pharn/floor/check-loop-decision.mjs <LOOP.md>
 # never rewritten. Membership is exact relative to the RECORDED markers only (marker execution is advisory).
 # Exit: mark-phase 0 ok · 2 bad usage (nothing written) | render 0 (incl. an honest `unavailable`) · 2 bad
 # usage | check 0 GREEN (WARNs possible) · 1 RED · 2 unusable input.
-node pharn/floor/mark-phase.mjs --name <slug> --kind <run-start|stage-start|orchestrator|run-stop> [--stage <s>] [--iteration <n>] [--base <dir>] [--mode <m>]
+node pharn/floor/mark-phase.mjs --name <slug> --kind <run-start|stage-start|orchestrator|run-stop> [--stage <s>] [--iteration <n>] [--base <dir>] [--mode <m>] [--route <token>]
 node pharn/floor/mark-phase.mjs --pending-start [--base <dir>]   # ship only; its run-start adds --adopt-pending
 # `--mode` (6.25.0): run-start only, m in MARKER_MODES ({"quick"}) — /pharn-ship --quick's one caller. Absent
 # writes no `mode` key at all (byte-identical to pre-6.25.0). Read by ship-outcome-core.mjs's runMode(), never
 # re-derived from the SPEC's spec_kind (a quick SPEC may still run the full pipeline).
+# `--route` (6.27.0): stage-start only, a route-token-core.mjs token (`agent:<alias>` | `inline:<reason>`) — the
+# route /pharn-ship or /pharn-loop REQUESTED for that stage (stage-agent.mjs, above). Absent writes no `route` key
+# (byte-identical to pre-6.27.0); normalizeMarkers keeps it only as a valid token, so cost.json carries it beside
+# each request's SERVED model, and no other re-derivation of markers[] reads it (a test pins that, L63).
 node pharn/floor/render-cost-ledger.mjs <name> [--base <dir>] [--repo <dir>] [--session <id>] [--stdout]
 node pharn/floor/check-cost-ledger.mjs <cost.json> [--verify-transcript]
 
@@ -861,7 +870,7 @@ node pharn/floor/check-cost-ledger.mjs <cost.json> [--verify-transcript]
 # files, each marked if already dirty before the run and each carrying its PLAN `## Files` line VERBATIM;
 # the standing verify/regress verdicts; and LOOP.md's `## Handoff`. EVERY LINE IS DERIVED BY CODE.
 # ANNOTATES, gates NOTHING (fix #3) — no proceed/stop reads it, and Step 6c stays gated on a green stop and
-# the decision re-derivation (a /pharn-loop --quick run renders no report at all, 6.27.0). There is deliberately NO contract and NO checker (P7: nothing machine-reads
+# the decision re-derivation (a /pharn-loop --quick run renders no report at all, 6.28.0). There is deliberately NO contract and NO checker (P7: nothing machine-reads
 # it, so both would be additions with no trigger); the module header is the spec and the suite enforces it.
 # THREE BOUNDS, carried INSIDE the artifact, not only here: (1) the file list is CHANGED-SINCE-base_sha
 # plus untracked — NOT "what the build wrote"; a `not named in PLAN ## Files` marker is an observation,
@@ -978,18 +987,22 @@ node .dev/floor/check-provenance.mjs <candidate.json> <canon-file.md>
 # pass tests the map's FILE names), a DIFFERENT filename prefix, and a DIFFERENT fresh-install posture. The DISTINCT
 # BASENAME is deliberate: unlike check-provenance / lessons-index-core, the two files share almost no
 # substance, so no ✧ shared-constant obligation set is implied.
-# MECHANISM, read live (P6): Claude Code selects a command's model from STATIC FRONTMATTER and nothing
-# else — `model:`/`effort:` are real platform-honored command-frontmatter fields, and there is NO runtime
-# routing hook. So the config cannot BE the control; it can only be the SOURCE OF TRUTH the frontmatter is
-# held to. Simulating routing in prose would be the P0 disease.
+# MECHANISM, read live (P6): Claude Code selects a COMMAND's model from STATIC FRONTMATTER and nothing
+# else — `model:`/`effort:` are real platform-honored command-frontmatter fields, and no command can switch
+# its OWN model at run time. So, for a stage a person runs directly, the config is the SOURCE OF TRUTH the
+# frontmatter is held to. Since 6.27.0 the block has a SECOND reader, at run time: `stage-agent.mjs route`
+# (below) shells this checker's `resolve` to pick the model a /pharn-ship or /pharn-loop STAGE AGENT is
+# REQUESTED on. Simulating routing in prose would still be the P0 disease — the route decision is tested code.
 # FLOOR: config shape/enums; a `default` entry; every stage key a PRODUCT stage (a `bulid` typo is RED —
 # on this surface it governs nothing); the own-property resolve with a `default` fallback (L15); and
 # BIDIRECTIONAL agreement over the closed map — no mapped command missing, no UNMAPPED product command
 # carrying model:/effort:, and an empty walk is RED, never a vacuous GREEN (L34).
 # NARROWED, and stated three ways: (1) it NEVER proves a stage RAN under that model — the platform applies
-# model/effort, invisible to any hook/hash/enum; (2) TURN SCOPE — the override lasts the invoking turn, so
-# a stage run as a STEP INSIDE /pharn-ship or /pharn-loop gets no per-stage routing; (3) an org
-# availableModels allowlist or auto mode can decline a value SILENTLY. `model_tier:` is a DIFFERENT,
+# model/effort, invisible to any hook/hash/enum; (2) TURN SCOPE — the frontmatter override lasts the invoking
+# turn, so a stage run INLINE as a step inside /pharn-ship or /pharn-loop (a policy-inline stage, a routing
+# fallback, the orchestrators themselves) does not get its frontmatter model; since 6.27.0 a ROUTED stage gets
+# its model from the Agent call instead, and its EFFORT keeps this bound; (3) an org availableModels allowlist
+# or auto mode can decline a value SILENTLY. `model_tier:` is a DIFFERENT,
 # platform-inert field (ARCHITECTURE §3.1) and is untouched — the parser matches keys exactly (L6).
 # GREEN BY DESIGN on no pharn.config.json and on a config with no `models.stages` (the check-lessons-index
 # NO_CANON/COLD precedent — the honest normal state of an install that does not use the block); the cost
@@ -1006,6 +1019,42 @@ node .dev/floor/check-provenance.mjs <candidate.json> <canon-file.md>
 # surface's three wired stages (plan, build, review) are all product stages too, so nothing is blocked.
 # Ships: bumps SKILLS_VERSION. Exits non-zero on RED.
 node pharn/floor/check-model-config.mjs [validate | resolve <stage> | agreement]
+
+# STAGE-MODEL ROUTING (added 6.27.0, stage-model-routing) — /pharn-ship and /pharn-loop run each stage the closed
+# ROUTE_POLICY table routes (pharn/floor/stage-agent-core.mjs — its header IS the protocol's spec; no new contract,
+# P7) as a Claude Code SUBAGENT, REQUESTED on the model models.stages resolves for it (only cost.json's served-model
+# rows are evidence of what it ran on). THE RECORDED FAILURE (P7): a command's
+# model: frontmatter lasts the invoking turn, so every stage run inside an orchestrator ran on the ORCHESTRATOR's
+# model — build, configured sonnet, ran opus on 79% of its requests (.dev/measurements/token-cost-2026-08-18.md §2).
+# Routed: plan, grill, test and build in /pharn-ship (the quick grill excepted), plus spec in /pharn-loop; ship's
+# spec (it IS GATE 1) and every regress/verify (floor-only thin callers) are inline BY POLICY. `route` prints ONE
+# token — `agent:<alias>` (exit 0) or `inline:<reason>` (exit 3, its remedy on stderr), the grammar owned by
+# pharn/floor/route-token-core.mjs (zero imports, so the ledger readers never load the policy or the brief) — from a
+# FOLLOWED config stat (a dangling link reads no-config, exactly as the checker reads it), then check-model-config.mjs
+# resolve (shelled by absolute path, argv arrays, CHECKER_TIMEOUT_MS = 10 s from a measured spawn), then validate
+# only after a resolve RED. Both spawns are read through shelled-verdict-core.mjs's shelledVerdict: a RED is exit 1
+# WITH its `RED — ` line, so a crashed or missing checker (node's own exit 1) is `resolve-failed`, never
+# `config-red` (GATE-2 review A4); `inherit` and a claude-* id route INLINE, each with its own reason (L32/L39). `brief`
+# prints the stage agent's rules, rendered by code: the orchestrator's Agent prompt is ONE pinned line, so no model
+# transcribes them (L5). `report` writes the closed pharn-stage-agent-result/1 to .pharn/<command>/<name>/
+# stage-result.json — a Bash write outside fix #7 (L19), contained by a per-component lstat walk that refuses a
+# symlink or a non-directory (L54/L59); `read` validates it BOTH ways, REMOVES it and exits with the stage-exit
+# numbers, and names a refused result on stderr by ONE fixed code (READ_DEFECTS), never by a byte the file carries
+# (GATE-2 review A7). The Agent tool still returns the stage agent's final text into the orchestrator's context:
+# THREAT-MODEL §5's free-text residual in a new place — that no proceed/stop reads it is ADVISORY (review A6).
+# The orchestrators record the token on the stage-start marker (mark-phase --route), so cost.json carries
+# the REQUESTED route beside the SERVED requests[].model. MODEL ROUTED, EFFORT NOT — the Agent tool takes none.
+# BOUNDS: a route is a request, the served model is evidence from an undocumented transcript format, NEVER proof;
+# ship's routed build proceeds on its agent's advisory `done gate:pass`, re-confirmed by /pharn-verify's floor
+# verdict; named residuals stage-agent-hang, stage-agent-background, agent-model-set-drift, stage-agent-effort;
+# the live success measure (M2) is pending. Wiring: .dev/floor/command-hygiene.test.mjs STAGE_AGENT_WIRING (the
+# lines, their order, policy parity, EXECUTED). Ships: bumps SKILLS_VERSION. Exit: route 0 agent · 3 inline ·
+# 2 refused | brief 0 · 2 | report 0 · 2 | read 0 done · 3 refused · 4 question · 2 unusable — anything else, 1
+# included, is a crash and no verdict.
+node pharn/floor/stage-agent.mjs route --command <pharn-ship|pharn-loop> --stage <stage> --name '<name>' [--iteration <N>] [--mode quick] [--config <path>]
+node pharn/floor/stage-agent.mjs brief --command <c> --stage <stage> --name '<name>' [--iteration <N>] [--mode quick]
+node pharn/floor/stage-agent.mjs report --command <c> --name '<name>' --stage <stage> [--iteration <N>] --status <done|refused|question> [--row S<n>] [--gate pass|fail]
+node pharn/floor/stage-agent.mjs read --command <c> --name '<name>' --stage <stage> [--iteration <N>]
 
 # Validate pharn.config.json (per-stage model/effort) and check that the wired /pharn-dev-* command
 # frontmatter AGREES with it. Config-validity + config↔frontmatter consistency only — NOT proof a stage
@@ -1353,7 +1402,7 @@ the floor plus the review agent.
 a typed artifact carrying `spec_id` (+ the plan additionally pins `spec_content_hash`) — for a **full**
 run; `/pharn-ship --quick` (6.25.0) runs a shorter spine over a `spec_kind: quick` mini-SPEC, skips
 `regress`'s base-and-head comparison and keeps only its scope check (`.claude/commands/pharn-ship.md`,
-`## Quick mode`), and `/pharn-loop --quick` (6.27.0) runs the same shorter spine unattended — the model writes and
+`## Quick mode`), and `/pharn-loop --quick` (6.28.0) runs the same shorter spine unattended — the model writes and
 approves the quick SPEC, every iteration skips the base comparison and keeps the scope check, and `check-loop.mjs`
 decides every stop over verify alone in the table the SPEC's kind selects, ending green on `STOP_GREEN_QUICK`
 (`.claude/commands/pharn-loop.md`, `## Quick mode`).

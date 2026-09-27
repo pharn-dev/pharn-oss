@@ -71,7 +71,7 @@
 // Exit (both subcommands): 0 clean · 1 blocking (scope: escaped path | verdict: >=1 regression) ·
 //   2 inconclusive / bad input — FAIL-CLOSED (P5), never a silent pass.
 //
-// THE SCOPE RULE IS ALSO AN EXPORT (6.27.0, loop-quick-mode GATE 2, review F1). `partitionScope` is the rule `scope`
+// THE SCOPE RULE IS ALSO AN EXPORT (6.28.0, loop-quick-mode GATE 2, review F1). `partitionScope` is the rule `scope`
 // applies, as a pure function over ARRAYS; `runScope` parses its two comma lists and calls it, so the CLI's output is
 // unchanged. pharn/floor/check-quick-scope.mjs — the scope check `/pharn-ship --quick` and `/pharn-loop --quick` keep —
 // calls it with arrays built by code from NUL-separated git listings, so a path there never passes through this CLI's
@@ -633,7 +633,7 @@ function main() {
 }
 
 // Swallow ONLY the emit sentinel; anything else is a real crash and must still end the process non-zero. The CLI runs
-// only when this file is the entry point (6.27.0): check-quick-scope.mjs imports `partitionScope` and runs nothing here.
+// only when this file is the entry point (6.28.0): check-quick-scope.mjs imports `partitionScope` and runs nothing here.
 if (import.meta.main) {
   try {
     main();

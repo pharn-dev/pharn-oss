@@ -40,7 +40,7 @@ function loopRecord(fm) {
 }
 
 // Write a fixture feature directory: LOOP.md + optionally verify-report.json / regression-report.json
-// (a `null` report object means "do not write that file", to test a missing report). `spec` (6.27.0), when given, is
+// (a `null` report object means "do not write that file", to test a missing report). `spec` (6.28.0), when given, is
 // written as SPEC.md beside the record — the file the re-run's check-loop.mjs reads its mode from.
 function withFixture(fm, verifyObj, regressObj, fn, spec = null) {
   const dir = mkdtempSync(join(tmpdir(), "pharn-loop-decision-"));
@@ -185,7 +185,7 @@ test("usage: extra positional argument → RED", () => {
   assert.match(r.stdout, /usage:/);
 });
 
-// ── THE MODE (6.27.0, /pharn-loop --quick): the re-run reads the SPEC's kind; the record's `mode` must agree ─────────
+// ── THE MODE (6.28.0, /pharn-loop --quick): the re-run reads the SPEC's kind; the record's `mode` must agree ─────────
 
 const REC = { iterations: "1", cap: "3", commit: "abc1234", date: "2026-09-26" };
 

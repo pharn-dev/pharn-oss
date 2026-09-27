@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// pharn/floor/check-quick-scope.mjs — the SCOPE CHECK the two quick modes keep (6.27.0, loop-quick-mode GATE 2, review
+// pharn/floor/check-quick-scope.mjs — the SCOPE CHECK the two quick modes keep (6.28.0, loop-quick-mode GATE 2, review
 // F1): `/pharn-ship --quick`'s item 7 and every `/pharn-loop --quick` iteration. It asks `/pharn-regress`'s partition
 // question without the rest of that stage: does every path changed since <base> fall inside the plan's declared writes,
 // or inside one of the closed exemptions? Exit 0 clean · 1 escaped · 2 inconclusive.

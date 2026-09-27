@@ -14,7 +14,7 @@
 //   • malformed input → INCONCLUSIVE (2), fail-closed, NEVER a silent decision;
 //   • the decision object carries NO review/finding/severity channel — no advisory stage can gate the
 //     loop, structurally (the input does not exist), not by agent discipline;
-//   • (6.27.0, `/pharn-loop --quick`) the table is chosen by the SPEC beside the verify report — its `spec_kind` —
+//   • (6.28.0, `/pharn-loop --quick`) the table is chosen by the SPEC beside the verify report — its `spec_kind` —
 //     never by a flag: a quick SPEC gets the verify-only table and STOP_GREEN_QUICK, never STOP_GREEN; any other SPEC
 //     (none at all included) gets the full table, byte-identical to before, and never STOP_GREEN_QUICK; a reader that
 //     cannot load reads full.
@@ -47,7 +47,7 @@ function json(r) {
   return JSON.parse(r.stdout);
 }
 // write verify-report.json + regression-report.json in a scratch dir; pass their paths to fn. A null obj
-// means "do not write that file" (to test a missing report); a string is written verbatim. `spec` (6.27.0), when
+// means "do not write that file" (to test a missing report); a string is written verbatim. `spec` (6.28.0), when
 // given, is written as SPEC.md beside the reports — the file check-loop.mjs reads its mode from.
 function withReports(verifyObj, regressObj, fn, spec = null) {
   const root = mkdtempSync(join(tmpdir(), "pharn-loop-"));
@@ -265,7 +265,7 @@ test("fail-closed: a known flag missing its value → INCONCLUSIVE, exit 2", () 
 test("★ /review-independence: the decision object carries NO review/finding/severity channel", () => {
   for (const verifyObj of [VFAIL, VRECONCILE, VINCOMPLETE]) {
     const o = json(decide(verifyObj, CLEAN, 1, 3));
-    // `mode` (6.27.0) is the one key added: the table the SPEC's kind chose — a closed token, not a review channel.
+    // `mode` (6.28.0) is the one key added: the table the SPEC's kind chose — a closed token, not a review channel.
     assert.deepEqual(Object.keys(o).sort(), [
       "cap",
       "decision",
@@ -375,7 +375,7 @@ test("★ STOP_GREEN is unreachable with any AC id in failing_gates — the verd
   }
 });
 
-// ── THE QUICK TABLE (6.27.0, /pharn-loop --quick) — one case per form (L52) ─────────────────────────────────────────
+// ── THE QUICK TABLE (6.28.0, /pharn-loop --quick) — one case per form (L52) ─────────────────────────────────────────
 //
 // The SPEC beside the verify report reads `spec_kind: quick`, so the table is verify-only: the regression report is
 // never opened — present or absent, stale or fresh, parseable or not — and the green token is STOP_GREEN_QUICK.
@@ -451,7 +451,7 @@ test("★ quick: an unusable VERIFY report is INCONCLUSIVE (exit 2) — missing,
   }
 });
 
-test("full mode is BYTE-IDENTICAL with a feature SPEC beside the reports, or none (L41 — every pre-6.27.0 fixture has none)", () => {
+test("full mode is BYTE-IDENTICAL with a feature SPEC beside the reports, or none (L41 — every pre-6.28.0 fixture has none)", () => {
   const cases = [
     [PASS, CLEAN, 1, 3],
     [PASS, REGR, 1, 3],

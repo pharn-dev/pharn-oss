@@ -32,13 +32,13 @@ reconciliation epoch is open for it to disturb.
 ## What the patch changes
 
 - **`LIMITS.md §3a`** — 6.25.0's "The manual flag is `/pharn-ship --quick`" becomes "The **gated** manual flag", and a
-  second paragraph follows on the **unattended** one, `/pharn-loop --quick` (6.27.0): the model writes and approves
+  second paragraph follows on the **unattended** one, `/pharn-loop --quick` (6.28.0): the model writes and approves
   the quick SPEC, `check-loop.mjs` decides every stop over `/pharn-verify`'s verdict alone in a table the SPEC's
   pinned kind chooses, what it keeps (the grill's floor stops, test-first evidence, the scope check — within the
   bounds §6 states, and leaving no record — and the freshness check) and leaves out (the regression check, the plan
   interrogation, `RUN-REPORT.md`), and that `STOP_GREEN_QUICK` is not `STOP_GREEN`.
 - **`LIMITS.md §6`** (GATE 1, Q1 → (a); reworded at GATE 2) — the scope check's first bound, "it fires only if
-  `/pharn-regress` runs — or … `/pharn-ship --quick`'s item 7", becomes "or when `check-quick-scope.mjs` (6.27.0)
+  `/pharn-regress` runs — or … `/pharn-ship --quick`'s item 7", becomes "or when `check-quick-scope.mjs` (6.28.0)
   applies that rule — for `/pharn-ship --quick`'s item 7 and for every `/pharn-loop --quick` iteration — to inputs it
   builds by code". GATE 2's security fix (review F1) replaced the quick modes' model-assembled lists with that checker,
   so the old "which runs the same partition" no longer describes the mechanism.

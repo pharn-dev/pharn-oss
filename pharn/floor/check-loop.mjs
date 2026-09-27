@@ -14,10 +14,10 @@
 //   FLOOR verdicts the existing stages already emit — /pharn-verify's `.verdict` and /pharn-regress's
 //   `.verdict`; (2) on a verify FAIL only, exact array membership of the gate key `reconcile` — and, since 6.20.0,
 //   of the AC gate's reserved id `ac-evidence` — in /pharn-verify's `.failing_gates`; (3) an integer `iter >= cap`
-//   compare; and (4, since 6.27.0) membership of ONE token of the feature's own SPEC, its `spec_kind`, which picks the
+//   compare; and (4, since 6.28.0) membership of ONE token of the feature's own SPEC, its `spec_kind`, which picks the
 //   table (below). The agent OBEYS the exit code (advisory COMPLIANCE, exactly as it obeys check-verify).
 //
-// THE MODE (6.27.0, `/pharn-loop --quick`) — the SPEC's pinned kind, never a flag. The table is chosen by
+// THE MODE (6.28.0, `/pharn-loop --quick`) — the SPEC's pinned kind, never a flag. The table is chosen by
 //   pharn/floor/loop-mode-core.mjs's `loopModeOf`, read from the SPEC.md beside the verify report (the first positional's
 //   directory; in /pharn-loop that is the feature's own SPEC): `quick` iff that SPEC reads `spec_kind: quick` through the
 //   one kind reading `check-spec.mjs --spec-kind` prints, `full` for everything else. No argv names a SPEC or a mode —
@@ -41,7 +41,7 @@
 //   so folding them into one file would change the dev loop's Design A for a product-loop reason: two
 //   reasons to change one file. Hence a separate file, leaving check-ship.mjs and the dev loop unchanged.
 //
-// "/review NEVER GATES THE LOOP" IS STRUCTURAL, NOT DISCIPLINE (the core invariant), restated exactly (6.27.0):
+// "/review NEVER GATES THE LOOP" IS STRUCTURAL, NOT DISCIPLINE (the core invariant), restated exactly (6.28.0):
 //   this helper's inputs are the two verdict reports, `--iter` / `--cap`, and ONE token of the feature's own SPEC —
 //   its `spec_kind`, read by the one kind reading from the `SPEC.md` beside the verify report — which chooses the table
 //   (verify-only for `quick`, in which the regression report is not read at all). There is still no review, finding,
@@ -65,7 +65,7 @@
 //   a measurable red                                  ∧ iter >= cap
 //                                                     → STOP_CAP      exit 1  (bounded: cap hit)
 //
-// The QUICK table (6.27.0 — the SPEC reads `spec_kind: quick`): the regression report is NEVER opened, present or
+// The QUICK table (6.28.0 — the SPEC reads `spec_kind: quick`): the regression report is NEVER opened, present or
 // not, stale or fresh; `r` is null and `regress_verdict` is null in the output. Precedence top-down:
 //   bad verify input, or bad iter/cap/argv            → INCONCLUSIVE     exit 2
 //   v === "INCONCLUSIVE"                              → STOP_TERMINAL    exit 4  (unmeasured)
@@ -223,7 +223,7 @@ function posInt(raw, name) {
   return { ok: true, value: n };
 }
 
-// --- THE MODE (6.27.0): loop-mode-core.mjs's `loopModeOf` over the verify report's own directory. Loaded with
+// --- THE MODE (6.28.0): loop-mode-core.mjs's `loopModeOf` over the verify report's own directory. Loaded with
 //     import() inside a `try`, so a module that cannot load, exports nothing, or throws reads "full" — the stricter
 //     table (D3). Only the exact token "quick" selects the quick table; anything else a mismatched module returns reads
 //     "full" too. No argument names a SPEC or a mode. ---
