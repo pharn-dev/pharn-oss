@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.31.0] - 2026-09-27
+## [6.30.0] - 2026-09-27
 
 ### Fixed
 
@@ -39,8 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   a branch named `fix';touch${IFS}PWNED_BRANCH;'x` — which `git check-ref-format --branch` accepts — ran its command on a
   green stop whose commit failed. (3) `/pharn-ship --quick` item 7 read "`--base <ref>` if the invoker gave one", although
   `/pharn-ship` has no such flag, so the ref could only come from the description, and typed it into
-  `git rev-parse --verify <ref>^{commit}`. `SKILLS_VERSION` → 6.31.0 (MINOR: a newly shipped floor CLI; 6.29.0 and 6.30.0 went to two other pull requests
-  that merge first).
+  `git rev-parse --verify <ref>^{commit}`. `SKILLS_VERSION` 6.29.0 → 6.30.0 (MINOR: a newly shipped floor CLI).
   `MIN_CLI` stays 0.5.0: nothing is relocated, and no contract or frontmatter shape changes.
   ([`.dev/features/shell-sink-validation/`](./.dev/features/shell-sink-validation/))
   - **The new CLI, `pharn/floor/feature-name.mjs`** (its header is its spec). The model writes the slug alone to

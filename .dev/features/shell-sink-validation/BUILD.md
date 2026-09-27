@@ -27,7 +27,7 @@
 - The ten commands — see the next two sections. `reads:` gains `pharn/floor/feature-name.mjs` in spec, loop and ship.
 - `.dev/floor/command-hygiene.test.mjs` — the SHELL-SINK section, 9 tests (D6 1–8, the Step-6d control split into its
   own test), all green; the file's other 262 tests unchanged and green.
-- `SKILLS_VERSION` 6.31.0, `CHANGELOG.md` `[6.31.0]` (built as 6.29.0, renumbered at GATE 2), `README.md` badge + regenerated `CURRENT-STATE` (floor checkers
+- `SKILLS_VERSION` 6.30.0, `CHANGELOG.md` `[6.30.0]` (built as 6.29.0, renumbered after GATE 2), `README.md` badge + regenerated `CURRENT-STATE` (floor checkers
   100 → 101), `CLAUDE.md` Commands entry.
 
 ## Which of ask / resolve each of the seven commands got, and why (GATE 1)
@@ -76,7 +76,8 @@ The STOP stands as recorded; the remedy is a re-run. Two preliminary fixes, insi
 Review findings 1 and 2 fixed, 3 and 4 recorded only: `pharn-spec.md`'s directory rule gains its `--model-approve`
 route ("or under `--model-approve` report back blocked, naming the path" — a `/pharn-loop` spec agent cannot ask), and
 the CHANGELOG entry now names the directory rule and the narrowed claims. Then `origin/main` was merged and the version
-renumbered to 6.31.0 (#290 took 6.29.0; #291 is open as 6.30.0).
+renumbered to 6.31.0 (#290 took 6.29.0; #291 was open as 6.30.0), then to 6.30.0 when the orchestrator ordered this PR to
+merge before #291 (#291 was still fixing a CI failure).
 
 ## Measured during the build (deviations recorded, not hidden)
 

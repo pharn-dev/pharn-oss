@@ -285,7 +285,7 @@ node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
 node pharn/floor/run-marker.mjs --open <pharn-review|pharn-ship> <name>
 node pharn/floor/run-marker.mjs --close <pharn-review|pharn-ship> <name>
 
-# CHECK A FEATURE NAME BEFORE ANY SHELL LINE CARRIES IT (added 6.31.0, shell-sink-validation). THE RECORDED FAILURE (P7,
+# CHECK A FEATURE NAME BEFORE ANY SHELL LINE CARRIES IT (added 6.30.0, shell-sink-validation). THE RECORDED FAILURE (P7,
 # reproduced): where a command derived the feature slug from the user's description (/pharn-spec Step 0, so /pharn-ship,
 # and /pharn-loop S1), the only check ran INSIDE a node process, after the shell had parsed the line carrying it — the
 # loop's own `node -e … '<slug>'` validator ran `x'$(touch PWNED)'` and exited 0, and /pharn-spec's unquoted setter ran

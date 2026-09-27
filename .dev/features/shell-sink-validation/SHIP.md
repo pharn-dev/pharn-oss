@@ -19,7 +19,8 @@ validated it"`, gated mode (no `--loop`), inline in one isolated worktree.
 - **GATE 2 (merge / fix / abandon): MERGE, decided 2026-09-27 by the orchestrating model under the maintainer's
   delegation**, after review findings 1 (the directory rule's `--model-approve` route in `pharn-spec.md`) and 2 (the
   CHANGELOG line) were fixed; findings 3 and 4 recorded only; `lesson: none` accepted. Version renumbered to 6.31.0
-  (#290 took 6.29.0; #291 is open as 6.30.0 and merges first).
+  (#290 took 6.29.0; #291 was open as 6.30.0), then to **6.30.0** when the orchestrator ordered this PR to merge
+  before #291.
 
 ## Stages that ran, and each structural verdict read, verbatim
 
@@ -48,7 +49,7 @@ validated it"`, gated mode (no `--loop`), inline in one isolated worktree.
 - deferred: none
 
 `changelog-entry: exit 0` was first read against the merge-base `f255f0c`; after `origin/main` (`c1bf663`, which opens
-its own `## [6.29.0]`, #290) was merged in and this branch renumbered to 6.31.0, it was re-run against the new
+its own `## [6.29.0]`, #290) was merged in and this branch renumbered (6.31.0, then 6.30.0), it was re-run against the new
 merge-base (the PR description carries that exit).
 
 chain ran; the named floor verdicts are as shown — this is NOT a judgment that the increment is good or wise; that is

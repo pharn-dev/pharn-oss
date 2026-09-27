@@ -41,7 +41,7 @@ None.
 - type: FINDING
   rule_id: "P0"
   severity: minor
-  file: "CHANGELOG.md:[6.31.0]"
+  file: "CHANGELOG.md:[6.30.0]"
   problem: "The entry describes the Write-refusal rule in the four commands that write a candidate but not the directory rule added after the regress STOP, nor that the claims bullets were narrowed to name only the CLI's output as floor; the release note under-describes the shipped bytes."
   evidence: "the ask or resolve sentence in each of the seven commands, and the Write-refusal rule in the four that write a candidate (presence only)"
 - type: FINDING
