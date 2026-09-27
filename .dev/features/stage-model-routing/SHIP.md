@@ -166,9 +166,12 @@ deferred:
   - the L14 canon observation, which goes to a human through `/pharn-dev-memory-promote`.
 - **Reported for a human, never agent-edited:** `THREAT-MODEL.md §5` lists its free-text residuals in an open form,
   and `REVIEW.md` A6 suggests adding this instance, the Agent tool's return into the orchestrator's context.
-- **Reported for the orchestrator:** the `[6.27.0]` CHANGELOG entry's Bounds bullet still says that until a person
-  applies the `LIMITS.md §8` patch, that section is stale. Since `0344ff1` that condition is met; the clause could be
-  tightened before the PR opens. It was left as is, because this ship-wrap writes `SHIP.md` alone.
+- **Reported, then corrected at the orchestrator's instruction:** the `[6.27.0]` CHANGELOG entry's Bounds bullet
+  said `LIMITS.md §8` was stale until a person applied the patch. `0344ff1` ships in this same release, so on `main`
+  that sentence would have been false. It now says §8 is revised in this release through the human-applied patch,
+  applied by the maintainer in `0344ff1`; the M2 sentence before it is unchanged. That one-sentence edit came after
+  the regress and verify runs above. `npm run check`, `npm run check:changelog` and `npm run check:changelog-entry`
+  were re-run after it, and each exited 0.
 - `route-marker-by-code` is **not** needed: A5 was fixed in prose.
 
 chain ran; the named floor verdicts are as shown — this is NOT a judgment that the increment is good or wise; that is
