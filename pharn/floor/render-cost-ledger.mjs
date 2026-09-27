@@ -24,7 +24,7 @@
 // a **Bash** write, outside the fix #7 `PreToolUse` gate (L19). It is declared in the plan's `## Files`
 // and exempted by name in `pharn/floor/reconcile-ignore.json`, never described as gate-covered.
 //
-// ── RUN MEMBERSHIP (`pharn-cost-ledger/2`, method `run-window/1`) ────────────────────────────────────
+// ── RUN MEMBERSHIP (`pharn-cost-ledger/2`, method `run-window/2` since 6.29.0) ───────────────────────
 // Through `/1` the markers decided only the stage VIEW, never the request POPULATION, so every request of
 // the selected session was emitted and summed — 100 unrelated input tokens before a run plus 10 inside it
 // reported 110, GREEN. `/2` emits ONLY run members, decided by `run-window-core.mjs` (imported, never
@@ -34,13 +34,25 @@
 // and the ledger is `unavailable` with no rows — never whole-session usage presented as run usage, and
 // never a zero that reads as observed. `/1` files are left alone: `check-cost-ledger.mjs` still validates
 // them under their own rules and labels their totals SESSION-scoped.
+// THE CONTEXT HALF (`run-window/2`, 6.29.0 — a real failure, P7): the window alone admitted every concurrent
+// context's request inside it, because a subagent's markers carry its PARENT's session id, so three `/pharn-loop`
+// runs in three agents of one session counted each other's requests and the main thread's. Now a window member counts
+// only when its context is in the run's context set: the ONE context whose tool results carry the lines mark-phase
+// printed for this run (rebuilt by `markerLine`, the one encoding), plus the agents that context tree spawned during
+// the run. Binding and set come from `run-window-core.mjs`, the evidence from `transcript-core.mjs`'s `sessionScan`
+// in the same pass as the rows. A run that cannot be bound, or a window member whose context cannot be placed,
+// makes the whole ledger `unknown` — never a count that silently includes or drops it. `membership` records the
+// bound `context` and the sorted `contexts` (over the contexts a line names by the window's end, so a closed run's
+// set stops moving — L58). `excluded_requests` counts every session request outside the run, and
+// the note gives how many of those were inside the window from other contexts. A `run-window/1` ledger (6.9.0 to
+// 6.28.x) is read by the checker under its own seven keys, and WARNed as not context-scoped.
 //
 // ── Honest scope (P0) ────────────────────────────────────────────────────────────────────────────────
 // FLOOR (primitive #3 + arithmetic):
 //   * One row per request, never per transcript line. LOAD-BEARING, not a nicety: the platform writes one
 //     API request as several lines (this repo's `loop-decision-integrity` transcript: 552 usage-bearing
-//     lines, 275 requests). The rows come from `transcript-core.mjs`'s `sessionRequests()`, imported and
-//     never re-stated ([[L35]]). What a row's values are is defined in `pharn/pharn-contracts/cost-ledger.md`,
+//     lines, 275 requests). The rows come from `transcript-core.mjs`'s one reader — `sessionScan` since 6.29.0,
+//     which reads through the same collector as `sessionRequests()` — imported and never re-stated ([[L35]]). What a row's values are is defined in `pharn/pharn-contracts/cost-ledger.md`,
 //     "One row per request". The core's header gives the measured transcript shapes and the one assumption
 //     the rule rests on. Until 6.24.1 this module read the transcript with its own copy of the loop, which
 //     kept each request's first line and under-counted `output` and `output_thinking`.
@@ -122,12 +134,24 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { findTranscriptDirs, sessionRequests } from "./transcript-core.mjs";
-import { DEFAULT_BASE as MARKERS_DEFAULT_BASE, MARKER_KINDS, MARKER_MODES, cleanScalar } from "./mark-phase.mjs";
+import { findTranscriptDirs, sessionScan } from "./transcript-core.mjs";
+import { DEFAULT_BASE as MARKERS_DEFAULT_BASE, MARKER_KINDS, MARKER_MODES, cleanScalar, markerLine } from "./mark-phase.mjs";
 import { isRouteToken } from "./route-token-core.mjs";
 import { FM_RE, stripBom } from "./frontmatter-core.mjs";
 import { readShipOutcome, OUTCOME_SOURCE as SHIP_OUTCOME_SOURCE } from "./ship-outcome-core.mjs";
-import { runWindow, isMember, isAfterWindow, tsMs, MEMBERSHIP_METHOD } from "./run-window-core.mjs";
+import {
+  runWindow,
+  isMember,
+  isAfterWindow,
+  tsMs,
+  bindingMarkers,
+  bindRun,
+  runContexts,
+  agentContext,
+  MAIN_CONTEXT,
+  MEMBERSHIP_METHOD,
+  UNKNOWN_REASONS,
+} from "./run-window-core.mjs";
 import { ABS_PATH_RE, isIdentityToken, isTokenCount } from "./cost-value-core.mjs";
 
 /** What this emitter writes. `/2` adds the `membership` block and scopes every row to the run window. */
@@ -217,11 +241,27 @@ export const TOP_LEVEL_KEYS = Object.freeze([
 /** The `/1` key set — `TOP_LEVEL_KEYS` minus `membership`, DERIVED rather than re-listed (L35). */
 export const TOP_LEVEL_KEYS_V1 = Object.freeze(TOP_LEVEL_KEYS.filter((k) => k !== "membership"));
 
-/** `membership`'s CLOSED key set (L36). `session` is the SELECTED session the window was computed for, so
- *  the checker can recompute the same window from `markers[]` alone. `excluded_requests` counts deduped
- *  session requests OUTSIDE a known window — it is `null` when the window is unknown, because then
- *  nothing was measured, not excluded (GRILL finding 4). */
-export const MEMBERSHIP_KEYS = Object.freeze(["method", "status", "reason", "session", "start", "end", "excluded_requests"]);
+/** `membership`'s CLOSED key set under `run-window/2` (L36). `session` is the SELECTED session the window was
+ *  computed for, so the checker can recompute the same window from `markers[]` alone. `excluded_requests` counts
+ *  deduped session requests OUTSIDE the run — outside a known window, or inside it from another context — and is
+ *  `null` when membership is unknown, because then nothing was measured, not excluded (GRILL finding 4). `context`
+ *  is the context bound to the run and `contexts` its sorted context set (6.29.0); both are `null` when membership
+ *  is unknown or no transcript was measured. */
+export const MEMBERSHIP_KEYS = Object.freeze([
+  "method",
+  "status",
+  "reason",
+  "session",
+  "start",
+  "end",
+  "excluded_requests",
+  "context",
+  "contexts",
+]);
+
+/** The `run-window/1` key set — `MEMBERSHIP_KEYS` minus the two context keys, DERIVED rather than re-listed (L35). A
+ *  ledger written before 6.29.0 carries exactly these, and the checker still reads it under them. */
+export const MEMBERSHIP_KEYS_V1 = Object.freeze(MEMBERSHIP_KEYS.filter((k) => k !== "context" && k !== "contexts"));
 
 export const SKILLS_VERSION_SOURCES = Object.freeze(["pharn.config.json", "SKILLS_VERSION", "unknown"]);
 
@@ -526,16 +566,33 @@ export function readSkillsVersion(repo) {
   return { version: null, source: "unknown" };
 }
 
-/** The `membership` block for a window (see `MEMBERSHIP_KEYS`). */
-function membershipOf(win, session, excluded) {
+/**
+ * The context a ledger ROW belongs to, read from the row alone (6.29.0): `main` for `sidechain: false`,
+ * `agent:<agent_id>` for `sidechain: true` with a string `agent_id`, else null. The emitter emits a row only when
+ * this reading EQUALS the context the transcript reader decided for the request (`contextOf`), so
+ * `check-cost-ledger.mjs` can re-test every row against the recorded `contexts` from the file alone. Imported by the
+ * checker, never re-spelled ([[L35]]).
+ */
+export function rowContext(row) {
+  if (row === null || typeof row !== "object") return null;
+  if (row.sidechain === false) return MAIN_CONTEXT;
+  if (row.sidechain === true && typeof row.agent_id === "string" && row.agent_id) return agentContext(row.agent_id);
+  return null;
+}
+
+/** The `membership` block (see `MEMBERSHIP_KEYS`). `status`/`reason` default to the window's; a CONTEXT-unknown
+ *  ledger passes its own, keeping the window's `start`/`end`, which the checker re-derives from `markers[]`. */
+function membershipOf(win, session, excluded, { status = win.status, reason = win.reason, context = null, contexts = null } = {}) {
   return {
     method: MEMBERSHIP_METHOD,
-    status: win.status,
-    reason: win.reason,
+    status,
+    reason,
     session: session ?? null,
     start: win.start,
     end: win.end,
-    excluded_requests: win.status === "unknown" ? null : excluded,
+    excluded_requests: status === "unknown" ? null : excluded,
+    context,
+    contexts,
   };
 }
 
@@ -648,25 +705,54 @@ function buildLedger(
   }
 
   const projectDir = hits[0];
-  // One entry per request, from the ONE owner of the counting rule (see the header). Nothing below reads
-  // a transcript line: identity and `ts` come from `record` (the request's first line), `usage` from the
-  // request's line with the most output tokens.
-  const { files, requests: read } = sessionRequests(projectDir, sessionId);
+  // THE BINDING EVIDENCE (`run-window/2`, rule 6): the lines mark-phase printed for this session's current-run
+  // markers, rebuilt by its ONE encoding (`markerLine`). An unknown window binds nothing, so none is looked for.
+  const lines = win.status === "unknown" ? [] : bindingMarkers(markers, sessionId).map(markerLine);
+  // One entry per request, from the ONE owner of the counting rule (see the header), in the same pass as the
+  // context evidence. Nothing below reads a transcript line: identity, `ts` and `context` come from the request's
+  // first line, `usage` from its line with the most output tokens.
+  const { files, requests: read, holders, links, named } = sessionScan(projectDir, sessionId, lines);
   // A hit means `<dir>/<sessionId>.jsonl` STATTED, not that a transcript is readable out of `<dir>`:
   // the two matchers disagree on some inputs, and the file can be unlinked between them. Without this,
   // such a run renders `partial` with zero rows — a measurement that never happened, reported as a
   // cheap one. This is L51's exact defect and it is kept deliberately.
   if (files.length === 0) return shell(`a transcript directory matched session ${sessionId}, but no transcript file under it was selected`);
 
+  // Rule 6: the run's context, bound by the ONE context whose tool results carry a binding line; rule 7: its set.
+  let bound = null;
+  let run = null;
+  if (win.status !== "unknown") {
+    const held = [];
+    for (const l of lines) for (const c of holders.get(l) ?? []) held.push(c);
+    bound = bindRun(held);
+    if (bound.context !== null) {
+      run = runContexts({ run: bound.context, links, openMs: win.openings(sessionId), endMs: win.endMs, named });
+    }
+  }
+  // CONTEXT-unknown (rules 6 and 8): no rows, `excluded_requests: null`, the window's own start/end kept.
+  const contextShell = (reason) =>
+    unavailableLedger({
+      name,
+      command,
+      baseSha,
+      outcome,
+      skills,
+      markers,
+      note: `run membership unknown — ${reason}; ${read.length} usage-bearing request(s) of session ${sessionId} were seen and NONE is reported as run usage`,
+      membership: membershipOf(win, sessionId, null, { status: "unknown", reason }),
+    });
+
   const requests = [];
   let excluded = 0;
+  let excludedByContext = 0;
+  let unlinked = false;
   const dropped = [];
   const versions = new Set();
   const sessions = new Set();
   let start = null;
   let end = null;
 
-  for (const { id, record: r, usage: u } of read) {
+  for (const { id, record: r, usage: u, context } of read) {
     const model = r.message.model ?? "unknown";
     const ts = typeof r.timestamp === "string" ? r.timestamp : null;
     // THE SESSION MEMBERSHIP AND ATTRIBUTION READ, exactly as before 6.28.1: a string as itself, anything else as
@@ -681,6 +767,20 @@ function buildLedger(
       // The part of the exclusion that keeps GROWING after emission (see `deriveLedger`). Counted, never
       // emitted: the file's `excluded_requests` stays the one sum it always was.
       if (isAfterWindow(win, ts)) stats.excludedAfterWindow++;
+      continue;
+    }
+    // The CONTEXT half (rules 7 and 8). An unbound run reports nothing inside its window (the shell below). A
+    // context outside the run's set is COUNTED as excluded — inside the window, so never part of the growing tail.
+    // An undecidable one makes the whole ledger unknown: no guessed row, and no silent drop.
+    if (run === null) continue;
+    const inRun = run.member(context);
+    if (inRun === null) {
+      unlinked = true;
+      continue;
+    }
+    if (inRun === false) {
+      excluded++;
+      excludedByContext++;
       continue;
     }
     // Both observed agent-id spellings, in a fixed precedence (L36 — a parameterized value acquires
@@ -706,6 +806,13 @@ function buildLedger(
       stage: where.stage,
       iteration: where.iteration,
     };
+    // The checker reads a row's context from the row alone (`rowContext`). By construction it equals the reader's
+    // (`contextOf` admits exactly the `isSidechain`/`agentId` values these fields copy), and this line keeps that a
+    // fact rather than an argument: a row the checker would read differently makes the ledger unknown, never GREEN.
+    if (rowContext(row) !== context) {
+      unlinked = true;
+      continue;
+    }
     requests.push(row);
     // The version is listed under its source field's name, since the ledger has no per-row version field.
     const version = sanitizeIdentity(r.version, `requests[${n}].version`, dropped);
@@ -729,6 +836,11 @@ function buildLedger(
       null
     );
   }
+  // CONTEXT-unknown (6.29.0): the window is known, but the run could not be bound to one context (rule 6), or a
+  // request inside the window comes from a context the transcript does not link to the run's tree (rule 8).
+  if (bound.context === null) return contextShell(bound.reason);
+  if (unlinked) return contextShell(UNKNOWN_REASONS.UNLINKED_CONTEXT);
+  const measured = { context: bound.context, contexts: run.contexts };
 
   if (requests.length === 0) {
     if (excluded === 0) {
@@ -740,12 +852,13 @@ function buildLedger(
     // measurement happened. The checker admits an empty `partial` only under a known window (L34).
     return {
       ...shell(
-        `the run window contained no usage-bearing request of session ${sessionId}; ${excluded} session request(s) fell outside it — an OBSERVED zero for the measured window, not an unknown`,
+        `the run window contained no usage-bearing request of the run's own contexts in session ${sessionId}; ${excluded} session request(s) fell outside the run — an OBSERVED zero for the measured window, not an unknown`,
         excluded
       ),
       coverage: "partial",
       sessions: [sessionId],
       dropped,
+      membership: membershipOf(win, sessionId, excluded, measured),
     };
   }
 
@@ -762,7 +875,7 @@ function buildLedger(
     window_start: start,
     window_end: end,
     coverage: "partial",
-    coverage_note: `measured from the selected session's transcript, restricted to the run window (membership ${MEMBERSHIP_METHOD}, ${win.status}); ${excluded} session request(s) outside the window were excluded. NEVER complete — the request that opened the window, the emission's own turns and any other session's requests are not in it. A floor on this run's spend, not the total, and not a feature's lifetime cost.`,
+    coverage_note: `measured from the selected session's transcript, restricted to the run window and to the run's own contexts (membership ${MEMBERSHIP_METHOD}, ${win.status}; the run's context is ${bound.context}, ${run.contexts.length} context(s) in its set); ${excluded} session request(s) outside the run were excluded, ${excludedByContext} of them inside the window from other contexts. NEVER complete — the request that opened the window, the emission's own turns and any other session's requests are not in it. A floor on this run's spend, not the total, and not a feature's lifetime cost.`,
     dedup_key: "requestId",
     attribution: { method: ATTRIBUTION_METHOD, markers: markers.length },
     pricing_note: PRICING_NOTE,
@@ -770,7 +883,7 @@ function buildLedger(
     requests,
     ...buildViews(requests),
     dropped,
-    membership: membershipOf(win, sessionId, excluded),
+    membership: membershipOf(win, sessionId, excluded, measured),
   };
 }
 

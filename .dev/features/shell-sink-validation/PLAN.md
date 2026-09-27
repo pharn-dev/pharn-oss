@@ -6,7 +6,7 @@
 - layer(s): product floor (`pharn/floor/feature-name.mjs`, NEW; `pharn/floor/stage-runtime.mjs`, a header line); product commands (`.claude/commands/pharn-*.md`, ten of them); tests (`pharn/floor/feature-name.test.mjs`, NEW; `.dev/floor/command-hygiene.test.mjs`); repo-meta (`SKILLS_VERSION`, `CHANGELOG.md`, `README.md`, `CLAUDE.md`). No contract, hook, settings file or trusted doc changes.
 - constitution_refs: [P0, P2, P3, P5, P6, P7]
 - stage model: plan — opus — set by the maintainer's instruction for this batch (recorded here, never as a `pharn.config.json` route); run inline in the orchestrated `/pharn-dev-ship`, effort not routed
-- base: worktree branch `worktree-agent-ae292c29714fe25d0`, cut from `main` at `70cb51c` (6.28.2, #285), then fast-forwarded (`git merge --ff-only origin/main`) to `f255f0c` (6.28.3, #286 stage-git-maxbuffer) after GATE 1. `SKILLS_VERSION` 6.28.3, `MIN_CLI` 0.5.0; `pharn/ARCHITECTURE.md` unchanged, so the pin above holds (re-hashed this run). Bumps to **6.29.0** (minor: a newly shipped floor CLI); two other minors are in flight, so it is renumbered at GATE 2 if one merges first.
+- base: worktree branch `worktree-agent-ae292c29714fe25d0`, cut from `main` at `70cb51c` (6.28.2, #285), then fast-forwarded (`git merge --ff-only origin/main`) to `f255f0c` (6.28.3, #286 stage-git-maxbuffer) after GATE 1. `SKILLS_VERSION` 6.28.3, `MIN_CLI` 0.5.0; `pharn/ARCHITECTURE.md` unchanged, so the pin above holds (re-hashed this run). Bumps to **6.29.0** (minor: a newly shipped floor CLI); two other minors are in flight, so it is renumbered at GATE 2 if one merges first — it was: **6.31.0** (#290 took 6.29.0, #291 6.30.0).
 - gate1: APPROVED 2026-09-27 by the orchestrating model under the maintainer's delegation — a MODEL decision, NOT a human approval. The four decisions below stand; Q1 → (A), tightened; the `git checkout -` bound is to be stated in the command and pinned by an executed control. Every change is listed under `## Amended at GATE 1`.
 - grill: amended after `/pharn-dev-grill` (`GRILL.md`, 7 advisory concerns, all taken); `## Amended after grill` lists what changed. The one `## Files` addition since GATE 1 is `BUILD.md`, the build note GATE 1 asked for; no product file was added or removed.
 
@@ -253,7 +253,7 @@ source, L36), `PATH_KINDS` at the leaf and at each parent, the unquoted refusal 
 
 ### D7 — meta
 
-`SKILLS_VERSION` 6.29.0; a `CHANGELOG.md` `[6.29.0]` section (the `[Unreleased]` section holds no entry to move);
+`SKILLS_VERSION` 6.31.0; a `CHANGELOG.md` `[6.31.0]` section (the `[Unreleased]` section holds no entry to move);
 `README.md`'s badge and its generated `CURRENT-STATE` region (the floor-checker count moves by one — regenerated with
 `npm run docs:generate`, never hand-edited); one `CLAUDE.md` Commands entry; `pharn/floor/stage-runtime.mjs`'s header
 names its new caller. **`MIN_CLI` stays 0.5.0:** nothing is relocated and no contract or frontmatter shape changes,
@@ -279,8 +279,8 @@ pre-check and not re-verified here.
 - `.claude/commands/pharn-review.md` — Step 0: the ask sentence — product command
 - `.dev/floor/command-hygiene.test.mjs` — the SHELL-SINK section (D6 1–8) — dev apparatus
 - `.dev/features/shell-sink-validation/BUILD.md` — the build note: what landed, which of ask/resolve each of the seven commands got and why, the measured command bytes — dev apparatus
-- `SKILLS_VERSION` — 6.29.0 — repo-meta
-- `CHANGELOG.md` — the `[6.29.0]` section — repo-meta
+- `SKILLS_VERSION` — 6.31.0 — repo-meta
+- `CHANGELOG.md` — the `[6.31.0]` section — repo-meta
 - `README.md` — the badge, and the regenerated `CURRENT-STATE` region — repo-meta
 - `CLAUDE.md` — one Commands entry for the new CLI — repo-meta
 

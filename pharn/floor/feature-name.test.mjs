@@ -1,4 +1,4 @@
-// pharn/floor/feature-name.test.mjs — the feature-name gate (6.29.0, shell-sink-validation).
+// pharn/floor/feature-name.test.mjs — the feature-name gate (6.31.0, shell-sink-validation).
 //
 // What this file holds, and the control each part names (L60):
 //   • ✧ CLOSURE (L36) — every refusal code the source emits is a member of REFUSALS, and every member is emitted.

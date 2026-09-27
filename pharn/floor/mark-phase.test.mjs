@@ -13,12 +13,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   markPhase,
+  markerLine,
   countMarkers,
   MARKER_KINDS,
   DEFAULT_BASE,
@@ -28,6 +29,8 @@ import {
   writePendingStart,
 } from "./mark-phase.mjs";
 import { AGENT_MODELS, INLINE_REASONS } from "./route-token-core.mjs";
+import { readMarkers, renderLedger } from "./render-cost-ledger.mjs";
+import { UNKNOWN_REASONS } from "./run-window-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, "mark-phase.mjs");
@@ -454,4 +457,162 @@ test("--route absent: the marker carries NO route key at all — byte-identical 
 test("--pending-start refuses --route", () => {
   const base = mkdtempSync(join(tmpdir(), "mark-phase-route-pending-"));
   assert.equal(run(["--pending-start", "--route", "agent:opus", "--base", base]).status, 2);
+});
+
+// ─── ★ THE PRINTED LINE (6.29.0, run membership `run-window/2`) ──────────────────────────────────────
+// The line this CLI prints is how the cost ledger binds a run to the context that ran it (see the header). These
+// tests pin, through the REAL CLI (L55 — never a re-implementation beside it), that the printer and the emitter's
+// matcher are ONE encoding: the printed line equals `markerLine()` of the marker read back the way the emitter reads
+// it, for each marker kind and each field that changes the line, and a line one character off binds nothing.
+
+const DIFF_SESSION = "00000000-0000-4000-8000-00000000d1ff";
+const diffEnv = { ...process.env, CLAUDE_CODE_SESSION_ID: DIFF_SESSION };
+const cli = (args) => execFileSync("node", [CLI, ...args], { env: diffEnv, encoding: "utf8" });
+
+/** Every marker SHAPE the CLI writes: each kind, and each optional field that changes the printed line. */
+const PRINT_SHAPES = [
+  { label: "run-start", args: ["--kind", "run-start"] },
+  { label: "run-start --mode quick", args: ["--kind", "run-start", "--mode", "quick"] },
+  { label: "run-start --adopt-pending", args: ["--kind", "run-start", "--adopt-pending"], pending: true },
+  { label: "run-start --adopt-pending --mode quick", args: ["--kind", "run-start", "--adopt-pending", "--mode", "quick"], pending: true },
+  { label: "stage-start", args: ["--kind", "stage-start", "--stage", "pharn-spec"] },
+  {
+    label: "stage-start + iteration + agent route",
+    args: ["--kind", "stage-start", "--stage", "pharn-build", "--iteration", "3", "--route", "agent:sonnet"],
+  },
+  { label: "stage-start + inline route", args: ["--kind", "stage-start", "--stage", "pharn-plan", "--route", "inline:no-config"] },
+  { label: "orchestrator", args: ["--kind", "orchestrator"] },
+  { label: "orchestrator + stage + iteration", args: ["--kind", "orchestrator", "--stage", "pharn-build", "--iteration", "3"] },
+  { label: "run-stop", args: ["--kind", "run-stop"] },
+];
+
+test("★ DIFFERENTIAL (R2): for each marker kind and each field that changes the line, the REAL CLI prints exactly markerLine() of the marker it wrote, read back as the emitter reads it", () => {
+  const base = mkdtempSync(join(tmpdir(), "mark-phase-print-"));
+  const file = join(base, "feat", "markers.jsonl");
+  const read = [];
+  for (const s of PRINT_SHAPES) {
+    if (s.pending) cli(["--pending-start", "--base", base]);
+    const stdout = cli(["--name", "feat", ...s.args, "--base", base]);
+    const markers = readMarkers(file);
+    const m = markers[markers.length - 1];
+    read.push(m);
+    assert.equal(stdout, `${markerLine(m)}\n`, `${s.label}: the printed line IS the encoding the emitter rebuilds`);
+    assert.equal(stdout.split("\n").length, 2, `${s.label}: exactly one line`);
+  }
+  // CLOSURE (L29, L36): the shapes cover every kind, and every field that adds to the line appears at least once —
+  // so a field a printer rendered and the matcher did not (or the reverse) is reached.
+  assert.deepEqual(new Set(read.map((m) => m.kind)), MARKER_KINDS);
+  for (const field of ["stage", "iteration", "origin", "mode", "route"]) {
+    assert.ok(
+      read.some((m) => m[field] !== null && m[field] !== undefined),
+      `the differential reaches a marker carrying ${field}`
+    );
+  }
+  assert.equal(read.filter((m) => m.origin === "pending").length, 2, "NON-VACUITY: both adopt shapes really adopted");
+});
+
+test("★ END TO END (R2): the emitter binds a run on the lines the real CLI printed into the session's own tool results — and one character off binds nothing", () => {
+  const root = mkdtempSync(join(tmpdir(), "mark-phase-bind-"));
+  const base = join(root, "cost");
+  const printed = [
+    ["--kind", "run-start"],
+    ["--kind", "stage-start", "--stage", "pharn-build", "--iteration", "1", "--route", "agent:sonnet"],
+    ["--kind", "orchestrator", "--stage", "pharn-build", "--iteration", "1"],
+    ["--kind", "run-stop"],
+  ].map((args) => cli(["--name", "feat", ...args, "--base", base]));
+  const markers = readMarkers(join(base, "feat", "markers.jsonl"));
+  assert.equal(markers.length, 4, "NON-VACUITY (L34)");
+  const projectsDir = join(root, "projects");
+  mkdirSync(join(projectsDir, "p"), { recursive: true });
+  const transcript = join(projectsDir, "p", `${DIFF_SESSION}.jsonl`);
+  // The Bash tool records a command's stdout as its tool result's content, in the context that ran it.
+  const writeTranscript = (outputs) =>
+    writeFileSync(
+      transcript,
+      [
+        ...outputs.map((content, i) =>
+          JSON.stringify({
+            type: "user",
+            sessionId: DIFF_SESSION,
+            timestamp: markers[i].ts,
+            isSidechain: false,
+            message: { role: "user", content: [{ type: "tool_result", tool_use_id: `toolu_print_${i}`, content }] },
+          })
+        ),
+        JSON.stringify({
+          type: "assistant",
+          requestId: "req_in_run",
+          sessionId: DIFF_SESSION,
+          timestamp: markers[1].ts,
+          isSidechain: false,
+          message: { model: "claude-opus-5-5", usage: { input_tokens: 1, output_tokens: 1 } },
+        }),
+      ].join("\n") + "\n"
+    );
+  const ledger = () => renderLedger({ name: "feat", sessionId: DIFF_SESSION, projectsDir, markersBase: base, repo: root });
+
+  writeTranscript(printed);
+  const bound = ledger();
+  assert.equal(bound.membership.status, "bounded");
+  assert.equal(bound.membership.context, "main", "the context whose tool results carry the printed lines");
+  assert.deepEqual(
+    bound.requests.map((r) => r.request_id),
+    ["req_in_run"]
+  );
+
+  // NEGATIVE CONTROL (L60): the same outputs with one trailing space on each line — the equality is load-bearing.
+  writeTranscript(printed.map((out) => out.replace(/\n$/, " \n")));
+  const off = ledger();
+  assert.equal(off.membership.status, "unknown");
+  assert.equal(off.membership.reason, UNKNOWN_REASONS.NO_CONTEXT);
+  assert.deepEqual(off.requests, []);
+});
+
+test("✧ GOLDEN (R2): the printed line's exact bytes — a change here changes run membership for every ledger emitted or re-derived afterwards", () => {
+  // Independent literals (L43). If this fails because the format was changed on purpose, the contract's "Run
+  // membership" says what that costs: a run whose markers were printed in the old form no longer binds, so it reads
+  // `unknown` — update these only together with that consequence, in the same PR, stated in its CHANGELOG entry.
+  const ts = "2026-09-27T10:00:00.000Z";
+  const CASES = [
+    [{ seq: 1, kind: "run-start", stage: null, iteration: null, ts }, "marker 1: run-start 2026-09-27T10:00:00.000Z"],
+    [
+      { seq: 2, kind: "run-start", stage: null, iteration: null, ts, origin: "pending", mode: "quick" },
+      "marker 2: run-start 2026-09-27T10:00:00.000Z (adopted pending start) (mode quick)",
+    ],
+    [
+      { seq: 3, kind: "stage-start", stage: "pharn-build", iteration: 2, ts, route: "agent:sonnet" },
+      "marker 3: stage-start pharn-build iter=2 2026-09-27T10:00:00.000Z (route agent:sonnet)",
+    ],
+    [
+      { seq: 4, kind: "orchestrator", stage: "pharn-build", iteration: 2, ts },
+      "marker 4: orchestrator pharn-build iter=2 2026-09-27T10:00:00.000Z",
+    ],
+    [{ seq: 5, kind: "run-stop", stage: null, iteration: null, ts }, "marker 5: run-stop 2026-09-27T10:00:00.000Z"],
+  ];
+  for (const [m, want] of CASES) assert.equal(markerLine(m), want);
+});
+
+test("✧ ONE ENCODING (L35): the printed line's template is spelled once, in markerLine(), and the CLI prints through it", () => {
+  const modules = readdirSync(HERE)
+    .filter((f) => f.endsWith(".mjs") && !f.endsWith(".test.mjs"))
+    .sort();
+  assert.ok(modules.includes("mark-phase.mjs") && modules.includes("render-cost-ledger.mjs"), "NON-VACUITY: the walk found the floor");
+  const TEMPLATE = "`marker ${";
+  const spellings = modules.flatMap((f) =>
+    readFileSync(join(HERE, f), "utf8")
+      .split("\n")
+      .filter((l) => l.includes(TEMPLATE))
+      .map(() => f)
+  );
+  assert.deepEqual(spellings, ["mark-phase.mjs"], "one template, in one module");
+  const source = readFileSync(CLI, "utf8");
+  assert.equal(
+    source.split("process.stdout.write(`${markerLine(m)}\\n`);").length,
+    2,
+    "the CLI prints the marker line through markerLine()"
+  );
+  assert.match(
+    readFileSync(join(HERE, "render-cost-ledger.mjs"), "utf8"),
+    /import \{[^}]*\bmarkerLine\b[^}]*\} from "\.\/mark-phase\.mjs";/
+  );
 });

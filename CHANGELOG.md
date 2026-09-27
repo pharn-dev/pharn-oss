@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.29.0] - 2026-09-27
+## [6.31.0] - 2026-09-27
 
 ### Fixed
 
@@ -39,7 +39,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   a branch named `fix';touch${IFS}PWNED_BRANCH;'x` — which `git check-ref-format --branch` accepts — ran its command on a
   green stop whose commit failed. (3) `/pharn-ship --quick` item 7 read "`--base <ref>` if the invoker gave one", although
   `/pharn-ship` has no such flag, so the ref could only come from the description, and typed it into
-  `git rev-parse --verify <ref>^{commit}`. `SKILLS_VERSION` 6.28.3 → 6.29.0 (MINOR: a newly shipped floor CLI).
+  `git rev-parse --verify <ref>^{commit}`. `SKILLS_VERSION` → 6.31.0 (MINOR: a newly shipped floor CLI; 6.29.0 and 6.30.0 went to two other pull requests
+  that merge first).
   `MIN_CLI` stays 0.5.0: nothing is relocated, and no contract or frontmatter shape changes.
   ([`.dev/features/shell-sink-validation/`](./.dev/features/shell-sink-validation/))
   - **The new CLI, `pharn/floor/feature-name.mjs`** (its header is its spec). The model writes the slug alone to
@@ -81,6 +82,74 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     `<base sha>` stays on shell lines as git's own hex output, and `<M>`, `<path>` and a question's answer as text the
     person typed. Out of scope: markdown rendered from a branch name, `/pharn-ship` Step 2c's `/tmp/briefing-draft.md`
     and `npx`, and the stage agents' free-text residual.
+
+## [6.29.0] - 2026-09-27
+
+### Fixed
+
+- 2026-09-27: **A run's `cost.json` counts only the run's own requests — those of the context that ran it and of the
+  agents that context spawned during it — never a concurrent run's in the same session.** Finding H3 of a read-only
+  review, verified here: a subagent's Bash sees its parent's session id and no id of its own, so every marker a run
+  writes from inside an agent is bound to the parent session, and the time window alone (`run-window/1`, 6.9.0)
+  admitted every concurrent context's request inside it. Three `/pharn-loop` runs in three background agents of one
+  session committed ledgers sharing 357, 381 and 411 of their 370, 407 and 411 rows, main-thread rows included.
+  `SKILLS_VERSION` 6.28.2 → 6.29.0 (MINOR, the 6.9.0 precedent: a new membership method and two new `membership`
+  keys; a `run-window/1` ledger stays valid, so no install is invalidated). `MIN_CLI` stays 0.5.0: no installed path
+  moves. ([`.dev/features/cost-ledger-run-scope/`](./.dev/features/cost-ledger-run-scope/),
+  [`.dev/measurements/cost-ledger-run-scope-2026-09-27.md`](./.dev/measurements/cost-ledger-run-scope-2026-09-27.md))
+  - **The rule, `run-window/2`**, with one implementation in `pharn/floor/run-window-core.mjs` (contract:
+    `cost-ledger.md`, "Run membership"). A request is a member iff it is inside the run window, unchanged, AND its
+    context is in the run's context set. A context is `main` or `agent:<id>`, read from `isSidechain` and `agentId`
+    and kept only when the file the record sits in names the same context. The set is:
+    - the ONE context whose tool results carry, as a whole line, a line `mark-phase.mjs` printed for a current-run
+      marker — none is `unknown`, and two or more is `unknown` too, so a copy of a line in a second context refuses
+      rather than re-binds;
+    - every agent a member of the set spawned inside the window, linked through its meta file's `toolUseId` to the
+      one other context holding that `tool_use` block.
+
+    A window member whose context cannot be decided or linked makes the whole ledger `unknown`, with
+    `coverage: unavailable` and no rows, never a count that includes or drops it silently. Three reasons join the
+    closed set.
+
+  - **The printed marker line is load-bearing now.** `markerLine()` in `mark-phase.mjs` is its one encoding: the CLI
+    prints through it and the ledger rebuilds lines from it. A differential test runs the real CLI for each marker
+    kind and each field that changes the line, a golden test pins the bytes, and the module header says that changing the line changes membership for
+    every ledger emitted or re-derived afterwards: the run reads `unknown`, never a wrong count.
+  - **Where the binding looks.** Tool-result blocks only. A foreground agent's final report is a tool result of its
+    caller, so a marker line quoted there makes the run `unknown`; a background agent's hand-back and a human's paste
+    are user messages and change nothing. Both are pinned by tests.
+  - **Recorded.** `membership.method` is `run-window/2`, beside `context` and a sorted `contexts`. The set is reported
+    over the contexts a line names by the window's end, so a closed run's set stops moving when an agent's first line
+    lands after the emission — measured up to 96 s after its spawn (L58). `excluded_requests` also counts
+    in-window requests of other contexts, and `coverage_note` gives that part.
+  - **Checker.** Plain mode holds each method to its own closed `membership` key set. Under `run-window/2` every
+    row's context, read from its `sidechain` and `agent_id`, must be in `contexts`, and a context-unknown membership is
+    admitted only over a known window. `--verify-transcript` re-derives under the same rule and compares `context` and
+    `contexts` exactly. A marker line copied into another context after emission is a WARN there, never a RED.
+  - **Compatibility.** A `run-window/1` ledger is read under its own seven keys, never rewritten, and WARNed as not
+    context-scoped. `--verify-transcript` REDs one whose rows include other contexts' requests and counts them; where
+    it is RED, the RED is correct (6.28.1's reasoning). A 6.28.x checker REDs a `run-window/2` ledger (probed).
+    `RUN-REPORT.md` names each method's population.
+  - **Measured on real ledgers with the built code.** In session `3c47cb74`, six ledgers that shared 1,538 of their
+    2,070 rows share 0 of 1,063. In session `f34b7a70` the figure re-derived at 6.28.2 is 400 of 2,724 shared, and 0 of
+    2,486 now. Every measured ledger binds to exactly one context, and for every loop run in an agent it is the agent whose
+    description names that loop. **Session `bb54cf03…` no longer exists on this machine.** It held the three ledgers
+    H3 cites and, by H3's attribution, the token-reduction roadmap's measured trigger (~81% of relative cost on small
+    fixes, `/pharn-regress` ~63%), so neither can be re-derived. The emitter took 1–3% longer over a ~79 MB session.
+  - **Bounds (P0).** The transcript layout is undocumented and machine-local; each departure the tests pin reads as
+    `unknown`, and one no test has met is not covered. That `context` is the context that ran the run is ADVISORY: it
+    rests on the marker output reaching the caller's own tool result. The checker still certifies consistency, never
+    provenance, and a fabricated context-unknown membership passes both modes — the safe direction, since it claims
+    no usage. Named, not built: `cost-ledger-workflow-agents`, `cost-ledger-mention-only`,
+    `cost-ledger-shared-markers-file`, `cost-ledger-spawn-batched`.
+
+## [6.28.4] - 2026-09-27
+
+### Changed
+
+- **Document the floor's Node 24.2 requirement, the 6.28.2 product-command budget for contributors, and the 6.24.0 write-guard posture in user-facing docs.** README states that `@pharn-dev/pharn` still requires Node 20+ while `pharn/floor/*.mjs` needs Node 24.2+ (`import.meta.main`). CONTRIBUTING adds the `command-hygiene.test.mjs` ceilings and the rule for raising them. SECURITY names `run-marker.mjs` and clarifies that an installed project's permissive default outside an open run is intentional, not a write-guard bypass.
+- **Release housekeeping:** remove one-shot patch/apply helpers after merge; align CHANGELOG with `main` (this section). `SKILLS_VERSION` 6.28.3 → 6.28.4 (PATCH: root documentation only — README, CONTRIBUTING, SECURITY — not the installable `pharn/` product surface). `MIN_CLI` stays 0.5.0.
+- **CHANGELOG section order:** put `[Unreleased]` above released version sections (Keep a Changelog) so `check-skills-version-recorded` and CI pass.
 
 ## [6.28.3] - 2026-09-27
 

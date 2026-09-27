@@ -60,8 +60,8 @@
 //     `FLOOR (shape)` while nothing checked it; see the rule body for the trigger and for why the new
 //     `/pharn-ship` producer made deferring it worse than building it.
 //
-//  8. (`/2` only) `membership` is SHAPED and RE-DERIVABLE: a closed key set; `method` the imported
-//     `run-window/1`; `status` in the imported enum; and `status`/`reason`/`start`/`end` EQUAL a recompute
+//  8. (`/2` only) `membership` is SHAPED and RE-DERIVABLE: a closed key set; `method` one of the imported
+//     `MEMBERSHIP_METHODS`; `status` in the imported enum; and `status`/`reason`/`start`/`end` EQUAL a recompute
 //     of `run-window-core.mjs`'s `runWindow()` over the file's OWN `markers[]` for the recorded `session`.
 //     Then EVERY row in `requests[]` must be a member of that window, so a row outside the run cannot be
 //     summed into `totals` — the `/1` defect (100 unrelated tokens + 10 in-run reported as 110, GREEN).
@@ -74,6 +74,22 @@
 //     either to the transcript, and only while it exists. Even then `excluded_requests` is bound as a
 //     RANGE, not a value: exact for the requests before the window, an upper bound for those after its
 //     end, because that tail keeps growing after emission (`checkExcludedAgainstTranscript`, 6.14.1).
+//     THE CONTEXT HALF (6.29.0, method `run-window/2`). The METHOD selects the closed key set:
+//     `run-window/1` keeps its seven keys, and every other value is held to the current nine. A `/2` ledger:
+//       * a MEASURED one (a known window, `partial`) records the bound `context` and a sorted, duplicate-free,
+//         non-empty `contexts` holding it, and EVERY row's context — read from the row alone by the emitter's
+//         `rowContext` — must be in `contexts`. Every other ledger records `null` in both;
+//       * may be `unknown` for a CONTEXT reason only over a KNOWN window, keeping that window's start and end,
+//         which are still re-derived here. Its status and reason are not re-derivable from the file.
+//     A `run-window/1` ledger is never REDed for lacking the context half; it gets one WARN naming how many
+//     contexts its rows come from.
+//     `--verify-transcript` re-derives through the emitter's own `deriveLedger`, so under the SAME rule, with the
+//     recorded markers:
+//       * a `/2` ledger's `context`/`contexts` must match;
+//       * a transcript that no longer binds the run (a later copy of a marker line in another context) is a WARN,
+//         never a RED ([[L42]], [[L58]]);
+//       * a `/1` ledger holding other contexts' rows is RED, and the message counts them.
+//     BOUND (L43), unchanged in kind: rows agree with the RECORDED set, never proof the set is the run's.
 //  LEGACY: a `pharn-cost-ledger/1` file is validated under its OWN closed key set and rules, never
 //     retroactively REDed for lacking `membership`, and gets one WARN: its totals are SESSION-scoped and
 //     may include activity outside the run. Reinterpreting them as run-scoped would silently rewrite
@@ -139,6 +155,8 @@ import {
   LEGACY_SCHEMA,
   TOP_LEVEL_KEYS_V1,
   MEMBERSHIP_KEYS,
+  MEMBERSHIP_KEYS_V1,
+  rowContext,
   normalizeMarkers,
   COVERAGE,
   TOKEN_CLASSES,
@@ -154,7 +172,18 @@ import {
   deriveLedger,
 } from "./render-cost-ledger.mjs";
 import { MARKER_KINDS, cleanScalar } from "./mark-phase.mjs";
-import { runWindow, isMember, MEMBERSHIP_METHOD, MEMBERSHIP_STATUSES, UNKNOWN_REASONS } from "./run-window-core.mjs";
+import {
+  runWindow,
+  isMember,
+  MEMBERSHIP_METHOD,
+  MEMBERSHIP_METHOD_V1,
+  MEMBERSHIP_METHODS,
+  MEMBERSHIP_STATUSES,
+  UNKNOWN_REASONS,
+  CONTEXT_REASONS,
+  MAIN_CONTEXT,
+  AGENT_CONTEXT_PREFIX,
+} from "./run-window-core.mjs";
 import { ABS_PATH_RE, IDENTITY_MAX, isIdentityToken, isTokenCount } from "./cost-value-core.mjs";
 import { shown } from "./quote-core.mjs";
 import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
@@ -607,21 +636,48 @@ export function checkLedger(led, opts = {}) {
       projectsDir: opts.projectsDir,
       markers: Array.isArray(led.markers) ? led.markers : [],
     });
-    if (live.coverage === "unavailable" && live.membership?.status !== "unknown") {
+    const liveM = live.membership;
+    if (live.coverage === "unavailable" && liveM?.status !== "unknown") {
       warn(
         `--verify-transcript: the transcript is no longer available (${live.coverage_note}) — the rows could NOT be re-derived, so this run certifies internal consistency only`
+      );
+    } else if (liveM?.status === "unknown" && CONTEXT_REASONS.includes(liveM.reason)) {
+      // The transcript now fails to bind the run (6.29.0): a copy of a marker line reached a SECOND context's tool
+      // results after emission, say, or a spawn record went missing. A re-derivation answers what the transcript
+      // says NOW (L42/L58), so this is not evidence the ledger was wrong when written — a WARN, never a RED.
+      warn(
+        `--verify-transcript: the transcript no longer binds this run to one context (${liveM.reason}) — the rows could NOT be re-derived, so this run certifies internal consistency only`
       );
     } else {
       const a = led.requests.map((r) => r.request_id).sort();
       const b = live.requests.map((r) => r.request_id).sort();
       if (a.length !== b.length || a.some((id, i) => id !== b[i])) {
-        red(`--verify-transcript: requests[] does not match the transcript (${a.length} recorded, ${b.length} re-derived)`);
+        // A ledger written under run-window/1 whose rows are a SUPERSET of the re-derivation holds requests of
+        // other contexts: say so, with the count, because that is exactly what the context half exists to remove.
+        const liveIds = new Set(b);
+        const recordedIds = new Set(a);
+        const notRun = a.filter((id) => !liveIds.has(id)).length;
+        const legacy =
+          led.membership?.method === MEMBERSHIP_METHOD_V1 && notRun > 0 && b.every((id) => recordedIds.has(id))
+            ? ` — ${notRun} recorded row(s) are not the run's own under ${MEMBERSHIP_METHOD}: this ledger was written under ${MEMBERSHIP_METHOD_V1}, which did not scope rows to the context that ran the run`
+            : "";
+        red(`--verify-transcript: requests[] does not match the transcript (${a.length} recorded, ${b.length} re-derived)${legacy}`);
       } else if (checkRowsAgainstTranscript(led.requests, live.requests)) {
-        checkExcludedAgainstTranscript(
-          led.membership?.excluded_requests ?? null,
-          live.membership?.excluded_requests ?? null,
-          excludedAfterWindow
-        );
+        // The recorded context set must be the re-derived one (`/2` only; a `/1` ledger has none). Fixed once a
+        // bounded window closes: an agent spawned after the end is outside it by rule 7.
+        if (led.membership?.method === MEMBERSHIP_METHOD) {
+          // Compared element by element, never through JSON.stringify: a file value nested past the stack would make
+          // that throw, and this checker is total over its input (the 6.28.1 closures walk every node).
+          const sameList = (x, y) =>
+            Array.isArray(x) && Array.isArray(y) && x.length === y.length && x.every((v, i) => typeof v === "string" && v === y[i]);
+          const sameContexts = (x, y) => (x === null && y === null) || sameList(x, y);
+          if (led.membership.context !== (liveM?.context ?? null) || !sameContexts(led.membership.contexts, liveM?.contexts ?? null)) {
+            red(
+              `--verify-transcript: membership.context/contexts do not match the transcript (recorded ${valText(led.membership.context)} with ${valText(led.membership.contexts)}; re-derived ${valText(liveM?.context)} with ${valText(liveM?.contexts)})`
+            );
+          }
+        }
+        checkExcludedAgainstTranscript(led.membership?.excluded_requests ?? null, liveM?.excluded_requests ?? null, excludedAfterWindow);
       }
     }
   }
@@ -737,27 +793,49 @@ function checkExcludedAgainstTranscript(recorded, live, after) {
   }
 }
 
-/** RULE 8 — see the header. Uses the SHARED `run-window-core.mjs`; restates none of it. */
+/** A context key the ledger may record (6.29.0): `main`, or `agent:` + a rule-3 identity token. Total. */
+const isContextKey = (v) =>
+  v === MAIN_CONTEXT ||
+  (typeof v === "string" && v.startsWith(AGENT_CONTEXT_PREFIX) && isIdentityToken(v.slice(AGENT_CONTEXT_PREFIX.length)));
+
+/** RULE 8 — see the header. Uses the SHARED `run-window-core.mjs` and the emitter's `rowContext`; restates neither. */
 function checkMembership(led) {
   const m = led.membership;
   if (!m || typeof m !== "object" || Array.isArray(m)) {
     red("membership must be an object");
     return;
   }
+  // The METHOD selects the closed key set (6.29.0): `run-window/1` keeps its own seven keys, and anything else is
+  // held to the CURRENT nine — an unknown method never downgrades to the lenient legacy set.
+  const v1 = m.method === MEMBERSHIP_METHOD_V1;
+  const wanted = v1 ? MEMBERSHIP_KEYS_V1 : MEMBERSHIP_KEYS;
   const keys = Object.keys(m);
-  const extra = keys.filter((k) => !MEMBERSHIP_KEYS.includes(k));
-  const missing = MEMBERSHIP_KEYS.filter((k) => !keys.includes(k));
+  const extra = keys.filter((k) => !wanted.includes(k));
+  const missing = wanted.filter((k) => !keys.includes(k));
   if (extra.length) red(`membership key set is not closed — unexpected key(s): ${listText(extra.sort(), keyText)}`);
   if (missing.length) red(`membership key set is not closed — missing key(s): ${listText(missing, keyText)}`);
-  if (m.method !== MEMBERSHIP_METHOD) red(`membership.method must be "${MEMBERSHIP_METHOD}" (got ${valText(m.method)})`);
+  if (!MEMBERSHIP_METHODS.includes(m.method)) {
+    red(`membership.method must be one of ${MEMBERSHIP_METHODS.join(" | ")} (got ${valText(m.method)})`);
+  }
   if (!MEMBERSHIP_STATUSES.includes(m.status)) {
     red(`membership.status must be one of ${MEMBERSHIP_STATUSES.join(" | ")} (got ${valText(m.status)})`);
     return;
   }
   if (m.session !== null && badIdentity(m.session)) red("membership.session is not a bounded identity token");
+
+  // Re-derive the window from the file's OWN markers — never trusted from the stored block.
+  const win = runWindow(normalizeMarkers(led.markers), m.session ?? null);
+  // A CONTEXT-unknown `run-window/2` ledger: the window is known, the run could not be bound or placed (rules 6–8 in
+  // run-window-core.mjs). Only the context half can make a known window unknown, and it exists only under `/2`.
+  const contextUnknown = !v1 && m.status === "unknown" && win.status !== "unknown" && CONTEXT_REASONS.includes(m.reason);
+
   if (m.status === "unknown") {
     if (!Object.values(UNKNOWN_REASONS).includes(m.reason))
       red(`membership.reason is not a member of the closed reason set (got ${valText(m.reason)})`);
+    else if (v1 && CONTEXT_REASONS.includes(m.reason))
+      red(
+        `membership.reason is a context reason, but ${MEMBERSHIP_METHOD_V1} has no context half — only ${MEMBERSHIP_METHOD} can be unknown for it`
+      );
     if (m.excluded_requests !== null)
       red("membership.excluded_requests must be null when membership is unknown — nothing was measured, so nothing was excluded");
     if (led.coverage !== "unavailable")
@@ -775,13 +853,15 @@ function checkMembership(led) {
       );
   }
 
-  // Re-derive the window from the file's OWN markers — never trusted from the stored block.
-  const win = runWindow(normalizeMarkers(led.markers), m.session ?? null);
-  for (const k of ["status", "reason", "start", "end"]) {
+  // The stored window must equal the recompute. A context-unknown ledger keeps the window's start and end, and its
+  // status/reason come from the context half, which the file alone cannot re-derive (only --verify-transcript can).
+  for (const k of contextUnknown ? ["start", "end"] : ["status", "reason", "start", "end"]) {
     if ((m[k] ?? null) !== (win[k] ?? null)) {
       red(`membership.${k} disagrees with a recompute from markers[] (stored ${valText(m[k])}, recomputed ${valText(win[k])})`);
     }
   }
+
+  const set = v1 ? null : checkContexts(led, m);
   if (!Array.isArray(led.requests)) return;
   const outside = led.requests.filter((r) => r && typeof r === "object" && !isMember(win, r.ts, r.session_id));
   if (outside.length) {
@@ -792,6 +872,55 @@ function checkMembership(led) {
         .join(", ")}${outside.length > 3 ? ", …" : ""}`
     );
   }
+  // RULE 8, the context half (`/2`): every row's context — read from the row alone, `rowContext` — must be a
+  // member of the RECORDED context set. BOUND (L43): agreement with the recorded set, never that the set is the
+  // run's; only --verify-transcript binds the set to the transcript.
+  if (set !== null) {
+    const foreign = led.requests.filter((r) => r && typeof r === "object" && !set.has(rowContext(r)));
+    if (foreign.length) {
+      red(
+        `${foreign.length} request(s) come from a context outside membership.contexts and are summed into the run's totals: ${listText(
+          foreign.map((r) => r.request_id),
+          valText
+        )}`
+      );
+    }
+  }
+  // A ledger written before 6.29.0: validated under its own rules above, never retroactively REDed for lacking the
+  // context half — and told, with a count, what that half would have separated.
+  if (v1 && Array.isArray(led.requests) && led.requests.length > 0) {
+    const contexts = new Set(led.requests.map((r) => rowContext(r) ?? "(undecidable)"));
+    warn(
+      `membership ${MEMBERSHIP_METHOD_V1} is not context-scoped (written before 6.29.0): its rows are every request of the session inside the window, so a concurrent run, its agents or the main thread working in that window are counted too — these rows come from ${contexts.size} context(s). Re-derive with --verify-transcript while the transcript exists`
+    );
+  }
+}
+
+/**
+ * RULE 8's context fields under `run-window/2`. A MEASURED ledger (a known window, `coverage: partial`) must carry
+ * the bound `context` and a non-empty, sorted, duplicate-free `contexts` of context keys that includes it; every other
+ * ledger (unknown by either half, or a known window whose transcript was not measured) must carry `null` in both,
+ * because nothing was bound. Returns the recorded set, or null when there is none to test rows against.
+ */
+function checkContexts(led, m) {
+  const measured = m.status !== "unknown" && led.coverage === "partial";
+  if (!measured) {
+    if (m.context !== null) red(`membership.context must be null when nothing was measured (got ${valText(m.context)})`);
+    if (m.contexts !== null) red(`membership.contexts must be null when nothing was measured (got ${valText(m.contexts)})`);
+    return null;
+  }
+  if (!isContextKey(m.context)) red(`membership.context must be a context key — \`main\` or \`agent:<id>\` (got ${valText(m.context)})`);
+  if (!Array.isArray(m.contexts) || m.contexts.length === 0) {
+    red("membership.contexts must be a non-empty array of context keys when the run was measured");
+    return new Set();
+  }
+  const bad = m.contexts.filter((c) => !isContextKey(c));
+  if (bad.length) red(`membership.contexts holds ${bad.length} value(s) that are not context keys: ${listText(bad, valText)}`);
+  const keys = m.contexts.filter((c) => isContextKey(c));
+  if (new Set(keys).size !== keys.length) red("membership.contexts carries a duplicate context key");
+  if (keys.some((c, i) => i > 0 && keys[i - 1] > c)) red("membership.contexts must be sorted");
+  if (isContextKey(m.context) && !keys.includes(m.context)) red("membership.contexts does not include membership.context");
+  return new Set(keys);
 }
 
 function main(argv) {

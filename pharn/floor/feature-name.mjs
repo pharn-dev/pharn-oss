@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// pharn/floor/feature-name.mjs — the gate a feature name passes BEFORE any shell line carries it (6.29.0,
+// pharn/floor/feature-name.mjs — the gate a feature name passes BEFORE any shell line carries it (6.31.0,
 // shell-sink-validation). This header is the module's spec (no separate contract, P7 — the run-marker.mjs precedent).
 //
 // ================================ THE RECORDED FAILURE (P7 — reproduced, not a hypothetical) ================================

@@ -4231,7 +4231,7 @@ test("✧ BUDGET R5: every product command has exactly one `## What you may clai
   assert.equal(claimsHeadingCount(body.replace(`${heading}\n`, `\`\`\`text\n${heading}\n\`\`\`\n`)), 0);
 });
 
-// ── SHELL-SINK (shell-sink-validation, 6.29.0) — no model-typed value derived from untrusted input reaches a shell line
+// ── SHELL-SINK (shell-sink-validation, 6.31.0) — no model-typed value derived from untrusted input reaches a shell line
 //    before tested code has validated it ─────────────────────────────────────────────────────────────────────────────
 //
 // THE RECORDED FAILURE (P7, reproduced — `.dev/features/shell-sink-validation/PLAN.md`, "Trigger"): at 6.28.2,

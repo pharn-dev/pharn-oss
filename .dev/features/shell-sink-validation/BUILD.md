@@ -27,7 +27,7 @@
 - The ten commands — see the next two sections. `reads:` gains `pharn/floor/feature-name.mjs` in spec, loop and ship.
 - `.dev/floor/command-hygiene.test.mjs` — the SHELL-SINK section, 9 tests (D6 1–8, the Step-6d control split into its
   own test), all green; the file's other 262 tests unchanged and green.
-- `SKILLS_VERSION` 6.29.0, `CHANGELOG.md` `[6.29.0]`, `README.md` badge + regenerated `CURRENT-STATE` (floor checkers
+- `SKILLS_VERSION` 6.31.0, `CHANGELOG.md` `[6.31.0]` (built as 6.29.0, renumbered at GATE 2), `README.md` badge + regenerated `CURRENT-STATE` (floor checkers
   100 → 101), `CLAUDE.md` Commands entry.
 
 ## Which of ask / resolve each of the seven commands got, and why (GATE 1)

@@ -3,7 +3,7 @@
 // own emit wrappers, its own reason codes and its own detail wording. The one piece of detail text supplied here is
 // git's failure cause (`gitFailureDetail`, 6.28.3), which each caller quotes after its own words. Callers today:
 // `stage-regress.mjs` (6.23.0) and `stage-verify.mjs` (6.26.0); `scope-inputs.mjs` and `quick-scope-core.mjs` use
-// `gitSync` too (6.28.0); `feature-name.mjs` uses `containmentWalk` and `lstatSafe` (6.29.0).
+// `gitSync` too (6.28.0); `feature-name.mjs` uses `containmentWalk` and `lstatSafe` (6.31.0).
 //
 // ================================ WHY ONE OWNER (L31, L35 — the recorded failure) ================================
 // 6.23.0's review repaired these rules one by one inside `stage-regress.mjs`: the `--timeout-ms` digit rule (M7a),

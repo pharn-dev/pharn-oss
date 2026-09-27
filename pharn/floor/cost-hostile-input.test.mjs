@@ -14,6 +14,9 @@
 //   10 ★ LEDGER DOMAIN CLOSURE — EVERY node of a GREEN cost.json × the hostile alphabet × both checker modes, plus the
 //     measured crash sites as named cases and the right-typed extremes (GRILL R2-G3).
 //   11 ✎ FORGERY CLOSURE — every node and every key × a forged verdict line (GRILL R2-G4).
+//   18 ★ CONTEXT DOMAIN CLOSURE (6.29.0) — EVERY node of each record that decides a request's CONTEXT (the printed
+//     marker line, a spawn, an agent's own line, its meta file) × the walk alphabet: every consumer completes, the
+//     ledger is GREEN, and it is either measured over no row the clean run lacks or `unknown` for a context reason.
 //   and 5 DEPTH · 6 TRANSCRIPT CLI · 7 A GROWN TRANSCRIPT · 9 ARGUMENT CHECK · 12 EXIT-2 BACKSTOP · 13 NEW CHECKER
 //   RULES · 14 THE EXIT FORM · 15 session membership (GRILL R2-G7) · ✧ ONE ADDRESS.
 //
@@ -24,14 +27,27 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, copyFileSync, appendFileSync, existsSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  readdirSync,
+  copyFileSync,
+  appendFileSync,
+  existsSync,
+  symlinkSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { render } from "./render-cost-record.mjs";
-import { renderLedger, buildViews, normalizeTokens, TOKEN_CLASSES, USAGE_MAX_DEPTH } from "./render-cost-ledger.mjs";
+import { renderLedger, buildViews, normalizeMarkers, normalizeTokens, TOKEN_CLASSES, USAGE_MAX_DEPTH } from "./render-cost-ledger.mjs";
 import { checkLedger, WALK_MAX_DEPTH } from "./check-cost-ledger.mjs";
 import { isTokenCount } from "./cost-value-core.mjs";
+import { markerLine } from "./mark-phase.mjs";
+import { CONTEXT_REASONS, UNKNOWN_REASONS } from "./run-window-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SESSION = "00000000-0000-4000-8000-00000000cafe";
@@ -90,14 +106,18 @@ function lineA(id, ts) {
   };
 }
 
-/** Shape B: `message.id` and no `requestId`, and no `agentId`, so `attributionAgent` is read. */
+/**
+ * Shape B: `message.id` and no `requestId`, and no `agentId`, so `attributionAgent` is read. It sits in the session's
+ * own file, so it says `isSidechain: false` (6.29.0): a line claiming a sidechain with no `agentId` names no context,
+ * and the ledger would be `unknown` for it (18, below, walks that case).
+ */
 function lineB(id, ts) {
   return {
     type: "assistant",
     sessionId: SESSION,
     timestamp: ts,
     version: "2.1.0",
-    isSidechain: true,
+    isSidechain: false,
     attributionAgent: "agent-x",
     attributionSkill: "pharn-build",
     message: { id, model: "claude-opus-5-5", usage: usageOf() },
@@ -156,24 +176,49 @@ function renamedKey(value, objPath, key, newKey, raw) {
   return serialized.replace(needle, () => `${JSON.stringify(newKey)}:${raw}`);
 }
 
+/** The run's markers: a window [T0, T9]. The stage-start carries a `route` (6.27.0), so the ledger walks (10, 11)
+ *  reach every marker field the emitter keeps. */
+const runMarkers = (markerSession) => [
+  { seq: 1, kind: "run-start", stage: null, iteration: null, ts: T0, session_id: markerSession },
+  { seq: 2, kind: "stage-start", stage: "pharn-build", iteration: 1, ts: T0, session_id: markerSession, route: "agent:opus" },
+  { seq: 3, kind: "run-stop", stage: null, iteration: null, ts: T9, session_id: markerSession },
+];
+
+/**
+ * The record a context writes when a command's output reaches it: a `user` record whose `tool_result` carries `text`
+ * (6.29.0 — `transcript-core.mjs` reads a marker line there, and only there). No usage, so it is no request.
+ */
+function printedLine(text, { ts = T0, n = 0 } = {}) {
+  return {
+    type: "user",
+    sessionId: SESSION,
+    timestamp: ts,
+    isSidechain: false,
+    message: { role: "user", content: [{ type: "tool_result", tool_use_id: `toolu_fx_print_${n}`, content: `${text}\nexit=0` }] },
+  };
+}
+
+/** The lines mark-phase printed for `markers` in this session's own thread: one record per marker the run binds. */
+const printedMarkers = (markers) =>
+  normalizeMarkers(markers)
+    .filter((m) => m.session_id === null || m.session_id === SESSION)
+    .map((m) => JSON.stringify(printedLine(markerLine(m), { ts: m.ts, n: m.seq })));
+
 /**
  * A scratch projects tree holding `lines` (raw JSONL text lines) as the session's transcript, and a markers file
- * that bounds the run window [T0, T9]. `markerSession` binds every marker to one session (null binds all). The
- * stage-start carries a `route` (6.27.0), so the ledger walks (10, 11) reach every marker field the emitter keeps.
+ * that bounds the run window [T0, T9]. `markerSession` binds every marker to one session (null binds all). The lines
+ * mark-phase printed are appended to the session's own thread (6.29.0), so that thread is the run's context — the
+ * ledger's `run-window/2` binding — and a line of `lines` is a member only if it is that thread's too.
  */
 function scratch(lines, { markerSession = null } = {}) {
   const root = mkdtempSync(join(tmpdir(), "cost-hostile-"));
   const projectsDir = join(root, "projects");
   mkdirSync(join(projectsDir, "p"), { recursive: true });
   const transcript = join(projectsDir, "p", `${SESSION}.jsonl`);
-  writeFileSync(transcript, lines.join("\n") + "\n");
+  const markers = runMarkers(markerSession);
+  writeFileSync(transcript, [...lines, ...printedMarkers(markers)].join("\n") + "\n");
   const markersBase = join(root, "cost");
   mkdirSync(join(markersBase, NAME), { recursive: true });
-  const markers = [
-    { seq: 1, kind: "run-start", stage: null, iteration: null, ts: T0, session_id: markerSession },
-    { seq: 2, kind: "stage-start", stage: "pharn-build", iteration: 1, ts: T0, session_id: markerSession, route: "agent:opus" },
-    { seq: 3, kind: "run-stop", stage: null, iteration: null, ts: T9, session_id: markerSession },
-  ];
   writeFileSync(join(markersBase, NAME, "markers.jsonl"), markers.map((m) => JSON.stringify(m)).join("\n") + "\n");
   return { root, projectsDir, markersBase, transcript };
 }
@@ -189,11 +234,23 @@ function consumers(s) {
   return { record, ledger, plain, verified };
 }
 
-/** The ledger/record shape every scenario must satisfy before its own assertions (L34, first grill G5). */
-function assertCommon(out, label) {
+/**
+ * The ledger/record shape every scenario must satisfy before its own assertions (L34, first grill G5). `unlinked`
+ * (6.29.0) names the one other honest outcome: a request inside the window whose CONTEXT the transcript cannot decide
+ * makes the whole ledger `unknown`, with no row — never a guessed row, never a silent drop.
+ */
+function assertCommon(out, label, { unlinked = false } = {}) {
   assert.deepEqual(JSON.parse(JSON.stringify(out.record)), out.record, `${label}: the record round-trips`);
   for (const [cls, v] of Object.entries(out.record.tokens)) assert.ok(isTokenCount(v), `${label}: record total ${cls} = ${v}`);
-  assert.equal(out.ledger.membership.status, "bounded", `${label}: the window is bounded, so the code under test ran`);
+  if (unlinked) {
+    assert.equal(out.ledger.membership.status, "unknown", `${label}: an undecidable context is unknown membership`);
+    assert.equal(out.ledger.membership.reason, UNKNOWN_REASONS.UNLINKED_CONTEXT, label);
+    assert.equal(out.ledger.coverage, "unavailable", label);
+    assert.deepEqual(out.ledger.requests, [], `${label}: and no row is reported`);
+  } else {
+    assert.equal(out.ledger.membership.status, "bounded", `${label}: the window is bounded, so the code under test ran`);
+    assert.equal(out.ledger.membership.context, "main", `${label}: the run is bound to the session's own thread`);
+  }
   assert.deepEqual(out.plain.reds, [], `${label}: the emitted ledger is GREEN`);
   assert.deepEqual(out.verified.reds, [], `${label}: and GREEN under --verify-transcript`);
 }
@@ -472,6 +529,13 @@ test("7 A GROWN TRANSCRIPT: THROWING lines appended after emission still get a v
 
 // ─── 8 ★ TRANSCRIPT DOMAIN CLOSURE ───────────────────────────────────────────────────────────────────
 
+/**
+ * The nodes of the two base shapes that decide a line's CONTEXT (6.29.0, `transcript-core.mjs` `recordContext`). Both
+ * shapes sit in the session's own file, where `isSidechain: false` alone names it, so `agentId` decides nothing here;
+ * no value of the walk alphabet is `true` or `false`, so every mutant of this node reads as undecidable.
+ */
+const CONTEXT_NODES = new Set(["A:isSidechain", "B:isSidechain"]);
+
 test("8 ★ TRANSCRIPT DOMAIN CLOSURE (L36): every node of both line shapes × the walk alphabet — every consumer completes, and the ledger is GREEN", () => {
   let renders = 0;
   let expected = 0;
@@ -481,17 +545,19 @@ test("8 ★ TRANSCRIPT DOMAIN CLOSURE (L36): every node of both line shapes × t
     const paths = nodePaths(base);
     expected += paths.length * WALK_ALPHABET.length;
     for (const path of paths) {
-      walked.add(`${shape}:${path.join(".")}`);
+      const node = `${shape}:${path.join(".")}`;
+      walked.add(node);
       for (const raw of WALK_ALPHABET) {
         const label = `${shape} ${JSON.stringify(path)} = ${raw}`;
         const out = consumers(scratch([CLEAN(), spliced(base, path, raw)]));
-        assertCommon(out, label);
+        assertCommon(out, label, { unlinked: CONTEXT_NODES.has(node) });
         renders++;
       }
     }
   }
   assert.equal(renders, expected, "every node × every value rendered");
   for (const m of MEMBERS) assert.ok(walked.has(`${m.shape}:${m.path.join(".")}`), `the walk reaches the member ${m.name}`);
+  for (const node of CONTEXT_NODES) assert.ok(walked.has(node), `the walk reaches the context node ${node}`);
 });
 
 // ─── 9 ARGUMENT CHECK ────────────────────────────────────────────────────────────────────────────────
@@ -905,6 +971,168 @@ test("17 TYPED VALUES (REVIEW R9): a RED's '(got …)' keeps the value's type �
     redFor((d) => (d.by_model[0].model = 5), "by_model[0] disagrees"),
     /\(5 vs "/
   );
+});
+
+// ─── 18 ★ CONTEXT DOMAIN CLOSURE (6.29.0) ────────────────────────────────────────────────────────────
+
+const AGENT = "a1d0000000000000009";
+const SPAWN_ID = "toolu_fx_hostile_spawn";
+
+/**
+ * The four records that decide which CONTEXTS a run owns (`run-window/2`), as a clean run writes them: ONE printed
+ * marker line in the session's own thread (so breaking it breaks the binding — the full set of three would survive
+ * one broken copy), the spawn of one agent inside the window, that agent's own request, and its meta file.
+ */
+const CONTEXT_RECORDS = {
+  binding: () => printedLine(markerLine(normalizeMarkers(runMarkers(null))[0])),
+  spawn: () => ({
+    type: "assistant",
+    sessionId: SESSION,
+    timestamp: T1,
+    isSidechain: false,
+    message: { model: "claude-opus-5-5", content: [{ type: "tool_use", id: SPAWN_ID, name: "Agent", input: {} }] },
+  }),
+  agent: () => ({ ...lineA("req_agent", T2), isSidechain: true, agentId: AGENT }),
+  meta: () => ({ agentType: "general-purpose", description: "fixture agent", toolUseId: SPAWN_ID, spawnDepth: 1 }),
+};
+
+/** A scratch tree from the four records' raw JSON texts (`raw.<name>`, else the clean record), plus the clean line. */
+function contextScratch(raw = {}) {
+  const textOf = (name) => raw[name] ?? JSON.stringify(CONTEXT_RECORDS[name]());
+  const root = mkdtempSync(join(tmpdir(), "cost-hostile-ctx-"));
+  const projectsDir = join(root, "projects");
+  const dir = join(projectsDir, "p");
+  const sub = join(dir, SESSION, "subagents");
+  mkdirSync(sub, { recursive: true });
+  const transcript = join(dir, `${SESSION}.jsonl`);
+  writeFileSync(transcript, [CLEAN(), textOf("binding"), textOf("spawn")].join("\n") + "\n");
+  writeFileSync(join(sub, `agent-${AGENT}.jsonl`), textOf("agent") + "\n");
+  if (raw.meta !== null) writeFileSync(join(sub, `agent-${AGENT}.meta.json`), textOf("meta") + "\n");
+  const markersBase = join(root, "cost");
+  mkdirSync(join(markersBase, NAME), { recursive: true });
+  writeFileSync(
+    join(markersBase, NAME, "markers.jsonl"),
+    runMarkers(null)
+      .map((m) => JSON.stringify(m))
+      .join("\n") + "\n"
+  );
+  return { root, projectsDir, markersBase, transcript, sub };
+}
+
+const CLEAN_CONTEXTS = [`agent:${AGENT}`, "main"];
+
+/**
+ * The one invariant every context mutant keeps: every consumer completes and the ledger is GREEN in both modes, and
+ * it is EITHER measured — bound to the session's own thread, over no row and no context the clean run lacks — OR
+ * `unknown` for a context reason, with no row. Never a row from a context the transcript cannot place (the finding
+ * this release answers: another run's requests counted as this one's).
+ */
+function assertContextOutcome(out, label, cleanIds) {
+  assert.deepEqual(out.plain.reds, [], `${label}: GREEN`);
+  assert.deepEqual(out.verified.reds, [], `${label}: GREEN under --verify-transcript`);
+  const m = out.ledger.membership;
+  if (m.status === "unknown") {
+    assert.ok(CONTEXT_REASONS.includes(m.reason), `${label}: unknown for a context reason (got ${m.reason})`);
+    assert.deepEqual(out.ledger.requests, [], `${label}: no row`);
+    return "unknown";
+  }
+  assert.equal(m.status, "bounded", label);
+  assert.equal(m.context, "main", `${label}: bound to the session's own thread`);
+  for (const c of m.contexts) assert.ok(CLEAN_CONTEXTS.includes(c), `${label}: context ${c} is one the clean run owns`);
+  for (const r of out.ledger.requests)
+    assert.ok(cleanIds.includes(r.request_id), `${label}: row ${r.request_id} is one the clean run counts`);
+  return "measured";
+}
+
+test("18 ★ CONTEXT CONTROL: the clean run owns its thread and the agent it spawned, and counts both requests", () => {
+  const out = consumers(contextScratch());
+  assert.equal(out.ledger.membership.status, "bounded");
+  assert.equal(out.ledger.membership.context, "main");
+  assert.deepEqual(out.ledger.membership.contexts, CLEAN_CONTEXTS);
+  assert.deepEqual(out.ledger.requests.map((r) => r.request_id).sort(), ["req_agent", "req_clean"]);
+  assert.deepEqual([out.plain.reds, out.verified.reds], [[], []]);
+});
+
+test("18 ★ CONTEXT DOMAIN CLOSURE (L36): every node of the four context records × the walk alphabet — measured over the clean run's rows, or unknown", () => {
+  const cleanIds = consumers(contextScratch()).ledger.requests.map((r) => r.request_id);
+  let renders = 0;
+  let expected = 0;
+  for (const [name, make] of Object.entries(CONTEXT_RECORDS)) {
+    const base = make();
+    const paths = nodePaths(base);
+    expected += paths.length * WALK_ALPHABET.length;
+    const outcomes = new Set();
+    for (const path of paths) {
+      for (const raw of WALK_ALPHABET) {
+        const label = `${name} ${JSON.stringify(path)} = ${raw}`;
+        const out = consumers(contextScratch({ [name]: spliced(base, path, raw) }));
+        outcomes.add(assertContextOutcome(out, label, cleanIds));
+        renders++;
+      }
+    }
+    // NON-VACUITY: the walk reaches a node of this record that decides a context, and one that does not.
+    assert.deepEqual([...outcomes].sort(), ["measured", "unknown"], `${name}: the walk reaches both outcomes`);
+  }
+  assert.equal(renders, expected, "every node × every value rendered");
+});
+
+/** The nodes that DECIDE a context, each with the reason every walk value must produce there (L60: each can fail). */
+const DECIDING_NODES = [
+  { name: "binding", path: ["isSidechain"], reason: UNKNOWN_REASONS.NO_CONTEXT },
+  { name: "binding", path: ["type"], reason: UNKNOWN_REASONS.NO_CONTEXT },
+  { name: "binding", path: ["message", "content", 0, "type"], reason: UNKNOWN_REASONS.NO_CONTEXT },
+  { name: "binding", path: ["message", "content", 0, "content"], reason: UNKNOWN_REASONS.NO_CONTEXT },
+  { name: "spawn", path: ["isSidechain"], reason: UNKNOWN_REASONS.UNLINKED_CONTEXT },
+  { name: "spawn", path: ["timestamp"], reason: UNKNOWN_REASONS.UNLINKED_CONTEXT },
+  { name: "spawn", path: ["message", "content", 0, "id"], reason: UNKNOWN_REASONS.UNLINKED_CONTEXT },
+  { name: "agent", path: ["isSidechain"], reason: UNKNOWN_REASONS.UNLINKED_CONTEXT },
+  { name: "agent", path: ["agentId"], reason: UNKNOWN_REASONS.UNLINKED_CONTEXT },
+  { name: "meta", path: ["toolUseId"], reason: UNKNOWN_REASONS.UNLINKED_CONTEXT },
+  { name: "meta", path: [], reason: UNKNOWN_REASONS.UNLINKED_CONTEXT },
+];
+
+test("18 ★ each DECIDING node yields its named reason for every walk value", () => {
+  for (const d of DECIDING_NODES) {
+    for (const raw of WALK_ALPHABET) {
+      const label = `${d.name} ${JSON.stringify(d.path)} = ${raw}`;
+      const out = consumers(contextScratch({ [d.name]: spliced(CONTEXT_RECORDS[d.name](), d.path, raw) }));
+      assert.equal(out.ledger.membership.status, "unknown", label);
+      assert.equal(out.ledger.membership.reason, d.reason, label);
+      assert.deepEqual([out.plain.reds, out.verified.reds], [[], []], label);
+    }
+  }
+});
+
+test("18 ★ named departures: a record naming ANOTHER valid agent, a meta that is a symlink or a directory, and no meta at all — each unknown, none measured", () => {
+  // The record in agent-…9's file claims agent …8, which IS a linked member of the run (its own meta and spawn), so
+  // only the file-agreement rule (GRILL G2) keeps the claim from being counted as …8's.
+  const OTHER = "a1d0000000000000008";
+  const s = contextScratch({ agent: JSON.stringify({ ...CONTEXT_RECORDS.agent(), agentId: OTHER }) });
+  writeFileSync(join(s.sub, `agent-${OTHER}.meta.json`), JSON.stringify({ ...CONTEXT_RECORDS.meta(), toolUseId: "toolu_fx_other" }) + "\n");
+  const otherSpawn = CONTEXT_RECORDS.spawn();
+  otherSpawn.message.content[0].id = "toolu_fx_other";
+  appendFileSync(s.transcript, JSON.stringify(otherSpawn) + "\n");
+  const other = consumers(s);
+  assert.equal(other.ledger.membership.reason, UNKNOWN_REASONS.UNLINKED_CONTEXT, "a record disagreeing with its file (GRILL G2)");
+
+  const none = consumers(contextScratch({ meta: null }));
+  assert.equal(none.ledger.membership.reason, UNKNOWN_REASONS.UNLINKED_CONTEXT, "no meta: the agent cannot be linked");
+
+  const linked = contextScratch({ meta: null });
+  const elsewhere = join(linked.root, "meta-elsewhere.json");
+  writeFileSync(elsewhere, JSON.stringify(CONTEXT_RECORDS.meta()) + "\n");
+  symlinkSync(elsewhere, join(linked.sub, `agent-${AGENT}.meta.json`));
+  assert.equal(consumers(linked).ledger.membership.reason, UNKNOWN_REASONS.UNLINKED_CONTEXT, "a symlinked meta is not followed");
+
+  const dirMeta = contextScratch({ meta: null });
+  mkdirSync(join(dirMeta.sub, `agent-${AGENT}.meta.json`));
+  assert.equal(consumers(dirMeta).ledger.membership.reason, UNKNOWN_REASONS.UNLINKED_CONTEXT, "a directory named like a meta is not one");
+
+  // CONTROL: the same trees with a regular meta file are measured, so each case above is the departure it names.
+  const control = contextScratch({ meta: null });
+  writeFileSync(join(control.sub, `agent-${AGENT}.meta.json`), JSON.stringify(CONTEXT_RECORDS.meta()) + "\n");
+  assert.equal(consumers(control).ledger.membership.status, "bounded");
+  rmSync(control.root, { recursive: true, force: true });
 });
 
 // ─── ✧ ONE ADDRESS ───────────────────────────────────────────────────────────────────────────────────
