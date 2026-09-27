@@ -83,6 +83,63 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     no usage. Named, not built: `cost-ledger-workflow-agents`, `cost-ledger-mention-only`,
     `cost-ledger-shared-markers-file`, `cost-ledger-spawn-batched`.
 
+## [6.28.4] - 2026-09-27
+
+### Changed
+
+- **Document the floor's Node 24.2 requirement, the 6.28.2 product-command budget for contributors, and the 6.24.0 write-guard posture in user-facing docs.** README states that `@pharn-dev/pharn` still requires Node 20+ while `pharn/floor/*.mjs` needs Node 24.2+ (`import.meta.main`). CONTRIBUTING adds the `command-hygiene.test.mjs` ceilings and the rule for raising them. SECURITY names `run-marker.mjs` and clarifies that an installed project's permissive default outside an open run is intentional, not a write-guard bypass.
+- **Release housekeeping:** remove one-shot patch/apply helpers after merge; align CHANGELOG with `main` (this section). `SKILLS_VERSION` 6.28.3 → 6.28.4 (PATCH: root documentation only — README, CONTRIBUTING, SECURITY — not the installable `pharn/` product surface). `MIN_CLI` stays 0.5.0.
+- **CHANGELOG section order:** put `[Unreleased]` above released version sections (Keep a Changelog) so `check-skills-version-recorded` and CI pass.
+
+## [6.28.3] - 2026-09-27
+
+### Fixed
+
+- 2026-09-27: **`/pharn-verify`, `/pharn-regress` and the quick scope check no longer stop `git-failed` on a repo whose
+  git listing passes 1 MiB, and a `git-failed` stop now says why git failed.** Finding H1 of a read-only review of the
+  preceding three days' merges: the stage scripts' shared git helper, `gitSync` in `stage-runtime.mjs`, ran git at
+  `execFileSync`'s default `maxBuffer`, 1 MiB. A whole-repo `git ls-files -z` passes that on a mid-size repo (the
+  review measured 17,506 tracked files at 1.42 MB). Node then fails the call with ENOBUFS while git has printed nothing
+  on stderr, so each stage exited 2 `git-failed` with a detail ending at its colon — `git ls-files failed:` — before
+  running a gate. Reproduced before the fix over a 1,310,803-byte listing (1,709 paths of 766 bytes) for
+  `stage-verify.mjs`, `stage-regress.mjs` and `check-quick-scope.mjs`, so `/pharn-ship`, `/pharn-loop` and both
+  `--quick` modes could not finish on such a repo. This repo lists 122,788 bytes, which is why its own runs never met
+  the limit. `SKILLS_VERSION` 6.28.2 → 6.28.3 (PATCH: a correction to shipped bytes; no new command, checker, contract
+  or path). `MIN_CLI` stays 0.5.0. ([`.dev/features/stage-git-maxbuffer/`](./.dev/features/stage-git-maxbuffer/))
+  - **The ceiling.** `gitSync` passes an explicit 256 MiB `maxBuffer` on every call — the ceiling
+    `reconcile-baseline.mjs`'s `enumerate()` already used — so one change covers every git call `stage-regress.mjs`,
+    `stage-verify.mjs`, `scope-inputs.mjs` and `quick-scope-core.mjs` make. Twenty calls at the ceiling did not raise
+    a process's resident size (measured). Past it a call still fails, now with its cause named.
+  - **The sweep.** The nine git spawns in shipped `pharn/floor/*.mjs` modules (found by the spelling `<fn>("git"`)
+    were read one by one. One more ran a listing at the default: `render-review-assignments.mjs`'s merge-base diff,
+    whose catch turned the failure into an empty target, so `/pharn-review`'s emitter refused with "the git merge-base
+    diff yielded nothing" over a diff that yielded plenty (reproduced: 0 of 1,710 changed paths). It gains the same
+    256 MiB ceiling, as its own literal. The other listing calls already carried an explicit ceiling (256 or 64 MiB);
+    the rest print one SHA.
+  - **The detail.** A new export, `gitFailureDetail`, builds the text from the error's structured fields: git's stderr,
+    trimmed, then `node error ENOBUFS: git's output exceeded the read buffer`, `node error <code>`,
+    `git exited <n>` or `git was killed by <signal>`. All ten `git-failed` emissions (8 in `stage-regress.mjs`, 1 in
+    `stage-verify.mjs`, 1 in `quick-scope-core.mjs`) quote it instead of raw stderr, and `scope-inputs.mjs`'s
+    `changedPaths` carries it as `detail`. A visible change: a detail that read `fatal: …` now ends
+    `(git exited 128)`. It is total (typeof-gated reads inside a `try`, with a fixed fallback), and its stderr part is
+    not capped, as before.
+  - **Tests** (floor tests; they do not ship). Each crosses the real limit with the real code, with no injected
+    buffer: `gitSync` itself, `stage-verify.mjs`, `stage-regress.mjs`, both committed quick-scope lines, and
+    `render-review-assignments.mjs`'s `resolveTarget`, each over a listing past 1.25 MiB. Each carries an attribution
+    control — the pre-fix call at node's default buffer is ENOBUFS over the same tree — and each of the three stage
+    entries a mutant with only the ceiling removed, which must stop `git-failed` naming ENOBUFS. Two static closures in
+    `stage-runtime.test.mjs`: ★ GIT CEILING pins the nine spawns and requires a `maxBuffer` on each one that is not a
+    `rev-parse` or `merge-base` call — bounded to the PRESENCE of a `maxBuffer` (not its size) and to spawns spelled
+    `<fn>("git"`; ★ GIT-FAILED DETAIL requires each of the ten emissions, found by a lexical scan of those three
+    modules, to quote `.detail`, never `.stderr`.
+  - **Scope, stated: a big repo with a modest change.** `regress-inside-echo-list`, the existing follow-up for the
+    regress verdict call's `--inside` echo, gains a second limit, probed and not built. The echo is ONE argv element,
+    so a changed set whose names pass the platform's argv limit stops regress at "verdict" as `unusable child-crashed`,
+    with no cause in its detail. Measured on darwin: a single 1,100,000-byte argument fails E2BIG (`ARG_MAX` 1,048,576
+    for argv and the environment together). Linux caps one argument at 131,072 bytes, its documented
+    `MAX_ARG_STRLEN` — not measured here. The remedy that follow-up already names, an array-safe verdict input, removes
+    both limits.
+
 ## [6.28.2] - 2026-09-27
 
 ### Changed

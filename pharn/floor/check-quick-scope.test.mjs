@@ -15,6 +15,9 @@
 //   • R2 (the round-2 re-review) — a crash is exit 2 `crashed`, never 1: a module that cannot load, a throw while
 //     checking and a result outside the checker's contract, each in a COPIED floor broken on purpose, with the
 //     unbroken copy as the control; the entry's pinned second copies; and the residual, a run from outside the root.
+//   • ★ LISTING (stage-git-maxbuffer, 6.28.3) — an untracked tree whose listing passes node's 1 MiB default, declared,
+//     is clean through both committed lines. Controls: the untracked listing's own call at node's default buffer is
+//     ENOBUFS over it, and a copied floor with ONLY gitSync's ceiling removed is `git-failed` naming ENOBUFS.
 // The fixture is a throwaway git repo whose `pharn/floor` is a symlink to this directory (or, for R2, a copy of its
 // non-test files), excluded through `.git/info/exclude`, so a committed line runs byte for byte and git never lists it.
 import { test } from "node:test";
@@ -126,10 +129,11 @@ function committedLine(file) {
   return pick(rest.slice(0, end))[0];
 }
 
-/** Run a committed line in `dir` under `sh -c`, substituting only its two placeholders. */
-function runCommitted(line, dir, base) {
+/** Run a committed line in `dir` under `sh -c`, substituting only its two placeholders. `opts` joins spawnSync's options
+ *  (a document echoing more than 1 MiB of paths needs this spawn's own `maxBuffer` raised). */
+function runCommitted(line, dir, base, opts = {}) {
   const cmd = line.replace("<name>", "demo").replace("<base sha>", base);
-  const r = spawnSync("sh", ["-c", cmd], { cwd: dir, encoding: "utf8", env: envWithoutQ() });
+  const r = spawnSync("sh", ["-c", cmd], { cwd: dir, encoding: "utf8", env: envWithoutQ(), ...opts });
   return { status: r.status, doc: parseDoc(r.stdout), stdout: r.stdout, stderr: r.stderr };
 }
 
@@ -590,6 +594,59 @@ test("R2, the residual stated — the ENTRY file itself unloadable (a run from o
     assert.equal(r.status, 1, "node's own exit for an entry path that names no file — NOT CAUGHT, and stated as such");
     assert.equal(r.stdout, "", "no document; every caller stops on 1");
     assert.match(r.stderr, /Cannot find module/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── ★ A LISTING PAST 1 MiB (stage-git-maxbuffer, 6.28.3) ─────────────────────────────────────────────────────────────
+// Before 6.28.3 gitSync ran at node's 1 MiB default, so a changed or untracked set listing more stopped this check
+// `inconclusive git-failed` with nothing after the colon (L41: no fixture here was that big). The tree below is
+// untracked, which is what the check lists; the plan declares it, so the verdict is clean — and the document echoes
+// every path, so THIS test's own spawn raises its buffer (the check itself ends through process.exitCode, so a piped
+// document is not cut).
+const LISTING_MIN_BYTES = (1 << 20) + (1 << 18); // 1.25 MiB
+
+/** Empty files three 250-byte directory levels deep — 766-byte paths, ~1,700 of them — whose `-z` listing passes
+ *  LISTING_MIN_BYTES while an absolute path stays under darwin's 1,024-byte PATH_MAX. */
+function bigTree(root) {
+  const dir = ["big", "a".repeat(250), "b".repeat(250), "c".repeat(250)].join("/");
+  mkdirSync(join(root, dir), { recursive: true });
+  const paths = [];
+  let bytes = 0;
+  for (let i = 0; bytes <= LISTING_MIN_BYTES; i++) {
+    const p = `${dir}/${String(i).padStart(5, "0")}.txt`;
+    writeFileSync(join(root, p), "");
+    paths.push(p);
+    bytes += Buffer.byteLength(p) + 1;
+  }
+  return { paths, bytes };
+}
+
+test("★ LISTING — an untracked tree listing past 1 MiB, declared, is clean through both committed lines; the mutant floor without gitSync's ceiling is git-failed naming ENOBUFS", () => {
+  const { dir, base } = makeRepo({ declared: ["src/x.js", "big/**"], copy: true });
+  try {
+    const { paths, bytes } = bigTree(dir);
+    assert.ok(bytes > 1 << 20, `anchor (L60): the tree lists ${bytes} bytes, past node's 1 MiB default`);
+    // THE ATTRIBUTION CONTROL (L40): changedPaths' untracked listing before 6.28.3 — no ceiling — over this tree.
+    const old = spawnSync("git", ["ls-files", "-z", "--others", "--exclude-standard"], { cwd: dir, encoding: "utf8" });
+    assert.equal(old.error?.code, "ENOBUFS", "at node's default buffer this listing fails ENOBUFS");
+    const big = { maxBuffer: 1 << 26 };
+    for (const file of COMMANDS) {
+      const r = runCommitted(committedLine(file), dir, base, big);
+      assert.equal(r.status, 0, `${file}: ${r.stderr}`);
+      assert.deepEqual(r.doc.escaped, [], file);
+      assert.equal(r.doc.inside.length, paths.length + 1, `${file}: every untracked path, plus the declared src/x.js`);
+    }
+    // THE MUTANT: the fixture's copied floor with ONLY gitSync's ceiling removed.
+    breakFloor(dir, "stage-runtime.mjs", (s) => {
+      assert.ok(s.includes(", maxBuffer: GIT_MAX_BUFFER"), "mutation anchor not found in stage-runtime.mjs (L60)");
+      return s.replace(", maxBuffer: GIT_MAX_BUFFER", "");
+    });
+    const m = runCommitted(committedLine("pharn-loop.md"), dir, base, big);
+    assert.equal(m.status, 2, m.stdout + m.stderr);
+    assert.equal(m.doc.reason_code, "git-failed");
+    assert.match(m.doc.reason, /^git ls-files -z --others --exclude-standard failed: node error ENOBUFS: /);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
