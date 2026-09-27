@@ -247,7 +247,7 @@ function phasePairs(cfg, planPath) {
   const declared = parsed.value.map(clean);
   const ls = gitSync(["ls-files", "-z", "--cached", "--others", "--exclude-standard"]);
   if (!ls.ok) {
-    emitUnusable(cfg.feature, "git-failed", `git ls-files -z --cached --others --exclude-standard failed: ${dataText(ls.stderr)}`);
+    emitUnusable(cfg.feature, "git-failed", `git ls-files -z --cached --others --exclude-standard failed: ${dataText(ls.detail)}`);
   }
   return featureEvalPairs({ declared, listing: nulList(ls.stdout) });
 }

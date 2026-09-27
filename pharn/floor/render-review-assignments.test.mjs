@@ -8,6 +8,9 @@
 // The `--base` default is exercised with the flag ABSENT (L41 again, and this time the measured one:
 // the 5.0.0 relocation left render-ship-briefing.mjs's CLI default stale while a 1979-green suite saw
 // nothing, because every test passed --base explicitly for hermeticity).
+//
+// ★ LISTING (stage-git-maxbuffer, 6.28.3): the merge-base diff that resolves a target when no --target is given, over a
+// diff naming more than 1 MiB of paths — which, at node's default buffer, read as "yielded nothing" (L41 once more).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -317,6 +320,56 @@ test("the emitter creates no stray files beside the record", () => {
       stdio: ["ignore", "pipe", "pipe"],
     });
     assert.deepEqual(readdirSync(join(dir, "pharn/features/feat")), ["assignments.json"]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// --- ★ A DIFF NAMING MORE THAN 1 MiB OF PATHS (stage-git-maxbuffer, 6.28.3) ----------------------------------------
+// Before 6.28.3 gitDiffTarget ran its diff at node's 1 MiB default; past it the call failed ENOBUFS, the catch returned
+// [], and the emitter refused with "the git merge-base diff yielded nothing" over a diff that yielded plenty.
+
+/** Empty files three 250-byte directory levels deep — 766-byte paths, ~1,700 of them — whose name listing passes
+ *  1.25 MiB while an absolute path stays under darwin's 1,024-byte PATH_MAX. */
+function bigTree(root) {
+  const dir = ["big", "a".repeat(250), "b".repeat(250), "c".repeat(250)].join("/");
+  mkdirSync(join(root, dir), { recursive: true });
+  const paths = [];
+  let bytes = 0;
+  for (let i = 0; bytes <= (1 << 20) + (1 << 18); i++) {
+    const p = `${dir}/${String(i).padStart(5, "0")}.txt`;
+    writeFileSync(join(root, p), "");
+    paths.push(p);
+    bytes += Buffer.byteLength(p) + 1;
+  }
+  return { paths, bytes };
+}
+
+test("★ LISTING — resolveTarget returns a merge-base diff naming more than 1 MiB of paths whole; the pre-fix call is ENOBUFS", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pharn-emit-big-"));
+  const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe", encoding: "utf8" });
+  try {
+    git("init", "-q", ".");
+    git("config", "user.email", "t@t");
+    git("config", "user.name", "t");
+    writeFileSync(join(dir, "seed.txt"), "seed\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "seed");
+    const { paths, bytes } = bigTree(dir);
+    git("add", "-A"); // staged adds: `git diff <HEAD>` names them; there is no origin, so the base is HEAD
+    assert.ok(bytes > 1 << 20, `anchor (L60): the diff names ${bytes} bytes of paths, past node's 1 MiB default`);
+    // THE ATTRIBUTION CONTROL (L40): gitDiffTarget's diff before 6.28.3 — its exact options, no ceiling.
+    assert.throws(
+      () =>
+        execFileSync("git", ["diff", "--name-only", "--diff-filter=ACMR", "HEAD"], {
+          cwd: dir,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        }),
+      (e) => e.code === "ENOBUFS",
+      "at node's default buffer this diff fails ENOBUFS"
+    );
+    assert.deepEqual(resolveTarget(dir, []), [...paths].sort(), "every path the diff names, never an empty target");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
