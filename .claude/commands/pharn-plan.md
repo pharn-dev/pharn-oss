@@ -1,5 +1,5 @@
 ---
-description: "Turn an Approved, unchanged SPEC.md into PLAN.md with its declared files and applied lessons (plus AC-TESTS.md for a templated SPEC). Run after the SPEC is approved, before /pharn-grill."
+description: "Turn an Approved, unchanged SPEC.md into PLAN.md with its declared files and applied_lessons declaration (plus AC-TESTS.md for a templated SPEC). Run after the SPEC is approved, before /pharn-grill."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -328,7 +328,8 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`).
   `/pharn-grill` re-verifies the declaration (the same four checks), never the application. `spec_content_hash`
   is carried forward as a deterministic copy, **not re-verified at THIS stage**; `check-plan-spec-agree.mjs`
   re-verifies it downstream (`/pharn-grill`, `/pharn-build`, `/pharn-regress`, `/pharn-verify`).
-- **Untrusted input:** the index reproduces canon titles verbatim and no decision reads them. The `PLAN.md` body
+- **Untrusted input:** the index reproduces canon titles verbatim and no guaranteed decision reads them; taint
+  reaches your selection (advisory) and the human-facing plan body. The `PLAN.md` body
   is never injected into a downstream stage as steering instructions and never gates a guaranteed decision; a
   downstream LLM stage reading it is the residual `THREAT-MODEL.md §5` names — bounded, not zeroed (P2).
 - **Not a claim:** "`/pharn-plan` produced it" means "the plan is sound"; "the plan cited L1" means "the plan

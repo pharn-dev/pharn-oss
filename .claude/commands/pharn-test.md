@@ -275,8 +275,9 @@ not (P0)" (`pharn/pharn-contracts/ac-tests.md`) owns the bounds cited here.
 - **Floor:** tests are written only from a current Approved SPEC, a plan made against it, and a complete mapping —
   `check-spec-approved.mjs` (enum + content-hash, the pin covering `spec_kind`), `check-plan-spec-agree.mjs`
   (content-hash) and `check-ac-tests.mjs` (enum/regex/set membership).
-- **Floor:** this stage writes only the mapped test files and the lock — the fix #7 hook. Bounded: a Bash write
-  bypasses the hook (`LIMITS.md §6`).
+- **Floor:** this stage's Write-tool writes land only in the mapped test files — the fix #7 hook. The lock is
+  written by `ac-tests-lock.mjs` through `fs` in a Bash-run script, outside the hook. Bounded: a Bash write bypasses
+  the hook (`LIMITS.md §6`).
 - **Floor:** the build cannot write an AC test file — the hook, for the PLAN.md `check-ac-tests.mjs` read. An edit
   to PLAN.md after this stage reopens it until `/pharn-build` re-checks it first thing (`check-test-stage.mjs`); the
   comparison is folded, and a filesystem equivalence wider than that fold is not modelled (the contract's bound).
@@ -291,7 +292,8 @@ not (P0)" (`pharn/pharn-contracts/ac-tests.md`) owns the bounds cited here.
 - **Weaker, stated:** a `spec_kind: test-infra` SPEC gets a bootstrap lock — no tests, no run, nothing shown
   failing before the build.
 - **Bound:** this stage runs BEFORE the build's reconcile anchor, so a Bash write by this stage outside its scope
-  is **not** reconciled; after the anchor, a change to AC-TESTS.md, the lock or an AC test file is not exempt. The
+  is **not** reconciled; after the anchor, a change to the lock or an AC test file is not exempt (AC-TESTS.md is,
+  like PLAN.md). The
   red run does not run `build`: an e2e runner that needs a built or served app must build or serve it itself.
 - **Advisory:** the tests themselves — whether they assert the AC's Then on the declared public target — are model
   work; no checker reads a test's body. That this stage read only SPEC, PLAN and AC-TESTS.md is advisory (`reads:`

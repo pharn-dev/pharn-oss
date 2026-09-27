@@ -351,8 +351,9 @@ Abbreviations: TL = `## The two layers`, GA = Guarantee audit bullet n, TA/TR = 
 - GA7, GA8 (tests assert the AC — ADVISORY; reads only SPEC/PLAN/AC-TESTS.md — ADVISORY) → claims Advisory,
   verbatim.
 - GA9 reconciliation bound → claims Bound bullet; "No anchor is added here: an anchor RESETS the baseline" → owner
-  `ac-tests.md` "What it proves" ("/pharn-test runs before the reconcile anchor, so its own Bash writes are not
-  reconciled").
+  `pharn/floor/check-bash-reconcile.mjs:81` (header: "a later anchor RESETS, which is why anchoring is at build
+  ONLY") — corrected at GATE 2 (REVIEW M12; this line first pointed at `ac-tests.md`, which holds only the
+  not-reconciled half).
 - GA10 e2e bound → claims Bound bullet, verbatim; Playwright `webServer` example → owner `ac-tests.md` "The red run".
 - Trust: untrusted DATA → the trusted prefix (kept); gates over enums/ids/paths/digests, target column never
   interpreted → claims Untrusted input, verbatim; test ids copied into the lock as data → the trusted prefix; "tests
@@ -372,7 +373,8 @@ Abbreviations: TL = `## The two layers`, GA = Guarantee audit bullet n, TA/TR = 
   `pharn/floor/check-lessons-index.mjs`'s header.
 - GA5 "index consulted ⇒ lessons read" FALSE; "typed floor" ≠ about the floor → claims Not-a-claim; the Step 1
   blockquote "What the index does and does not buy" (condensed in wave 3; its two struck claims are the block's
-  Not-a-claim bullet, the model-drafted/ratified reason is the block's "Floor, narrowed" bullet).
+  Not-a-claim bullet; the model-drafted/ratified reason → owners `pharn/floor/check-lessons-index.mjs:33` and
+  `pharn/floor/lessons-index-core.mjs:35`, headers — corrected at GATE 2, REVIEW M12).
 - GA6 a stale/poisoned index cannot corrupt the gate → claims "Floor, narrowed", last sentence.
 - GA7 → claims Advisory, verbatim ("the same four checks"). GA8 → Floor 2, bound verbatim.
 - GA9 → Floor 4. GA10, GA11 → Floor 5, verbatim. GA12 → Advisory, verbatim. GA13 → Advisory + Not-a-claim.
@@ -429,8 +431,9 @@ Abbreviations: TL = `## The two layers`, GA = Guarantee audit bullet n, TA/TR = 
   VERIFIED (self-declared `generated_by`; consistent fabrication passes; the measured hand-authored record exits 0
   GREEN) → Floor 4, verbatim — the measurement `pharn/floor/merge-findings.mjs:81` cites is kept word for word;
   `generated_by` detail → owner `pharn/floor/check-review-assignments.mjs`'s header.
-- GA7 lens READ/reviewed struck → Not-a-claim; Step 1b's "never that a lens read, reviewed, covered or examined it";
-  owner `render-review-assignments.mjs`'s header. GA8 → Advisory, verbatim. GA9 → Floor 4, verbatim; Step 6b.
+- GA7 lens READ/reviewed struck → Not-a-claim ("a lens READ / reviewed / covered / examined the slice it was
+  assigned"); owner `render-review-assignments.mjs:14`'s header — corrected at GATE 2 (REVIEW M12; Step 1b keeps
+  only "this slice was ASSIGNED to this lens", not the struck verbs). GA8 → Advisory, verbatim. GA9 → Floor 4, verbatim; Step 6b.
   GA10 → enumeration + Advisory.
 - GA11 backstop label deterministic → Floor 5; "no lens declares its class" → owner `merge-findings.mjs`'s header
   ("DERIVED, NEVER DECLARED"). GA12 → Floor 3, verbatim. GA13 scanner-assigned ≠ regex matched → Not-a-claim;
@@ -670,9 +673,13 @@ trusted prefixes and P2 fences. What left, by section (bytes: base → now):
   anchor rationale → `reconciliation-record.md` and `LIMITS.md §6`; Step 2b's honest split → the claims enumeration
   bullet; Step 2c's extraction and "DOUBLY advisory" paragraphs → the claims Floor 5 bullet and
   `seam-resolver.md`.
-- **pharn-grill** (−14,326): the opening two-natures, honest-claim and divergence blockquotes → the claims block;
-  Step 2b's "Why this stage" (P7) → CHANGELOG [2.8.0]; Step 3b's griller runner deferral → the claims Advisory bullet
-  and `count-grillers.mjs`.
+- **pharn-grill** (−14,326): the opening two-natures and honest-claim blockquotes → the claims block; the divergence
+  blockquote (a comparison with the dev twin) is rationale: its product half — this stage owns the hash-chain block —
+  is the claims block's Floor 1, and its dev half is `.claude/commands/pharn-dev-grill.md`'s own; Step 2b's "Why this
+  stage" (P7) → CHANGELOG [2.8.0]; Step 3b's griller-runner deferral → owner
+  `pharn/pharn-pipeline/grillers/testability/testability.md:111` ("the live griller runner … deferred P7"), with
+  Step 3b keeping "apply its procedure inline". The divergence and deferral pointers were corrected at GATE 2
+  (REVIEW M12).
 - **pharn-plan** (−13,132): the two layers → the claims block; Step 1's index blockquote → condensed to its
   instructions (read canon in full on `?`); Step 4b's two-clocks blockquote → the claims Floor 2 bullet.
 - **pharn-test** (−6,413): the opening "why tests before the build" and honest-claim blockquote → the claims block and

@@ -189,7 +189,8 @@ and gitignored):
 
 - You **may draft** the `title` / `body` / `type` / `concepts`. Those are the model-authored parts, and they
   are **DATA the human judges** — never a guarantee, never an instruction. `type` and `concepts` are
-  **shape-gated**; the human ratifies at Step 5 that the tag actually describes the lesson. **`title` is
+  **shape-gated** (an exact enum member; control-char-free lowercase tags), so a needle cannot survive as a value
+  — but shape is not aptness: the human ratifies at Step 5 that the tag actually describes the lesson. **`title` is
   shape-gated too** — Step 3 validates it before any Markdown is rendered.
 
 ## Step 3 — Validate on the floor (the deterministic gate)

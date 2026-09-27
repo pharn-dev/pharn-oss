@@ -51,9 +51,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **The claims block.** In nine commands the tail audits (`## Guarantee audit`, `## Trust (audit)`,
     `## Determinism audit`, `## What … does NOT do`, the doc-reconciliation sections, `/pharn-ship`'s
     `--loop — deferred`) and `## The two layers` are replaced by one `## What you may claim (P0)` block in the
-    Guarantee audit's place. Every removed bullet maps, in `BUILD.md`, to a block bullet carrying its bound
-    verbatim, an owner stating the same bound, or a duplicate. `/pharn-regress` and `/pharn-verify` keep their
-    blocks as they were and changed only in their description and their "PRODUCT command" blockquote.
+    Guarantee audit's place. `BUILD.md` maps every removed bullet to a block bullet, an owner or a duplicate, and
+    dispositions the removed decision lines by section, not line by line. That mapping is advisory and was not
+    complete: the GATE-2 review sampled 130 removed decision lines and found 0 lost instructions but 14 dropped or
+    re-broadened bounds, plus one more outside its sample. The five important ones (F1–F5) and the minor ones it named
+    were restored before merge, one clause each (below). `/pharn-regress` and `/pharn-verify` keep their blocks as
+    they were and changed only in their description, their "PRODUCT command" blockquote and one cite.
   - **Rationale out.** Why a rule exists, version and review history, restated contract and floor-module bounds,
     the "PRODUCT command" blockquotes and PHARN's own dev-lesson ids leave the bodies; each already has an owner
     that ships (the contract, the module's header, `LIMITS.md` / `THREAT-MODEL.md`) or this CHANGELOG. Every step,
@@ -76,6 +79,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     proves a block exists, not that it is complete or true. One existing pin was re-pointed: the `NAMED_LIMITS` E1
     replay read `deferred` from `pharn-verify.md`'s old description, now frozen in the test as
     `VERIFY_DESCRIPTION_AT_E1`, its control kept.
+  - **Restored at GATE 2** (`.dev/features/slim-commands/REVIEW.md`), one clause each:
+    - `/pharn-ship`'s claims intro names its two exceptions: a `stage-agent.mjs read` STOP and a routed build's
+      advisory `done gate:pass` (F1);
+    - `/pharn-test`'s lock is written through `fs`, outside the hook (F2), and AC-TESTS.md IS reconcile-exempt, like
+      PLAN.md (M9);
+    - `/pharn-review`'s width claim covers its Write-tool writes only, a Bash write being outside the hook (F3), and
+      its label asymmetry "must not be flattened into a score" (M4);
+    - `/pharn-build`'s scope claim covers the Write/Edit surface only, a Bash write being detected at reconcile and
+      never prevented (F4), and no stage GATES intent fidelity (M6);
+    - `/pharn-plan`: no **guaranteed** decision reads the index titles, and taint reaches the selection, advisory
+      (F5); its description says `applied_lessons` declaration (M8);
+    - `/pharn-spec`: its description names `--model-approve` (M7), Step 2's "never blocks" names its subject (M3),
+      and its two mislabelled "Floor" items are re-labelled (M10);
+    - `/pharn-loop`: the D8 residual and the advisory ≤1 repair bound (M5);
+    - `/pharn-memory-promote`: "a needle cannot survive as a value — but shape is not aptness" (M11);
+    - three `CLAUDE.md, "Writes-scope"` cites — a file an install does not receive — now cite
+      `.claude/hooks/enforce-writes-scope.cjs`'s header (M1).
+
+    Not fixed here, named: three shipped module headers still say "guarantee audit" (`merge-findings.mjs`,
+    `render-review-assignments.mjs`), follow-up `module-header-claims-cite`; and whether `/pharn-loop` and
+    `/pharn-ship` should carry `disable-model-invocation`, follow-up `disable-model-invocation-probe`.
+
   - **An install that edited a command** keeps its edit on `pharn update`, so the saving reaches it only for the
     commands it left pristine. Every saving above is an estimate from bytes (`LIMITS.md §1c`); the maintainer's
     measurement after `pharn update` is the real number.

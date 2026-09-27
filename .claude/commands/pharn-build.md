@@ -251,16 +251,20 @@ stage adds no new floor primitive.
 - **Floor:** it writes only within the plan's declared scope — the fix #7 hook (`set-writes-scope.cjs --from-plan`
   and `enforce-writes-scope.cjs`), load-bearing on the user's code; the build record is pinned by the Phase-2
   `--target`, and its content is advisory. The setter's exit code is floor; the **refuse** on no parseable scope is
-  command discipline, which is why Step 0 hard-stops on it.
+  command discipline, which is why Step 0 hard-stops on it. **NARROWED:** the Write/Edit/MultiEdit/NotebookEdit
+  surface only; a Bash write is detected at `/pharn-verify`'s reconcile gate, never prevented (`LIMITS.md §6`).
 - **Floor:** the project's deterministic gate is GREEN before the record is written (Step 4, its exit code) — the
   structural invariants hold, never that the code is correct.
 - **Floor:** the seam-config is validated before a seam walk — `check-seam-config.mjs`. Recognizing the seam and
   running the check are ADVISORY — DOUBLY so, since neither is hook-forced — and the extraction one-liner is
-  advisory, untested bash.
+  advisory, untested bash: the floor verifies only that the extracted file is valid, never that the extraction
+  faithfully reflects the project's intent.
 - **Floor-grade enumeration that gates nothing:** the installed skills (`scan-installed-skills.mjs`).
 - **Advisory:** invoking each gate and obeying it (the verdict is floor; the act is orchestration); the
   implementation — HOW the code is written, whether it is correct, complete or faithful to the plan — checked
-  downstream by `/pharn-regress`, `/pharn-verify` and human review. Not reading `SPEC.md` is advisory: `reads:` is
+  downstream by `/pharn-regress`, `/pharn-verify` and human review. Intent fidelity is `/pharn-grill`'s
+  interrogation before the build and `/pharn-verify`'s verifier slot after it — both advisory, and the slot has zero
+  verifiers today — so no stage GATES intent fidelity. Not reading `SPEC.md` is advisory: `reads:` is
   not enforced, and nothing on the floor stops the model opening it.
 - **Untrusted input:** the chain gate ranges only over the `state` enum and two 64-hex digests, and the scope is
   path membership parsed from `## Files` — never the prose's meaning. A hostile instruction in the PLAN prose, an

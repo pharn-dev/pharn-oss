@@ -804,8 +804,8 @@ node pharn/floor/reconcile-baseline.mjs --amend-scope   # IMMEDIATELY after the 
 ```
 
 If a write is blocked with the `writes-scope guard` message, the fix is to **declare the path in `writes:`
-and re-run this setter with the right `--target`** — never bypass the hook (see CLAUDE.md,
-"Writes-scope").
+and re-run this setter with the right `--target`** — never bypass the hook (`.claude/hooks/enforce-writes-scope.cjs`,
+header).
 
 Write **`pharn/features/<name>/SHIP.md`** — a thin, **advisory** roll-up:
 
@@ -1006,7 +1006,9 @@ Then **end your turn** at the human gate. `/pharn-ship` does not merge, push, or
 
 Everything this command does is advisory orchestration except what the Floor bullets below name, each of
 which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`). Every proceed/stop verdict belongs to a
-sub-stage's checker; `/pharn-ship` adds exactly one non-gating floor primitive of its own, `check-ship-briefing.mjs`.
+sub-stage's checker, except two named below: a `stage-agent.mjs read` exit, a STOP input of this command's own, and a
+routed build's advisory `done gate:pass`. `/pharn-ship` adds exactly one non-gating floor primitive of its own,
+`check-ship-briefing.mjs`.
 
 - **Floor:** every proceed/stop reads a sub-stage's own verdict — the `check-spec-approved`, `check-plan-spec-agree`,
   `check-plan-lessons` and `check-test-stage` exits, the build project-gate exit, and `regression-report.json` /

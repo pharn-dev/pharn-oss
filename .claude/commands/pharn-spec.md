@@ -1,5 +1,5 @@
 ---
-description: "Turn a feature idea into pharn/features/<name>/SPEC.md: surface gaps, fill the SPEC template, stop for human approval, then pin it. The pipeline's first stage; `--quick` writes a 1–3 criterion mini-SPEC."
+description: "Turn a feature idea into SPEC.md: surface gaps, fill the SPEC template, stop for human approval (or, with --model-approve for /pharn-loop, the model approves), then pin it. The first pipeline stage; `--quick` writes a 1–3 criterion mini-SPEC."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -146,7 +146,7 @@ a marker left in the Draft blocks the model's approval (Step 4a). With `--quick`
 check (1) or (2) is not a warning but a stop (`## --quick` above); fit check (3) becomes an `## Assumptions` line like
 the rest.
 
-It **never blocks** and it **never judges the intent as good or bad** — the human owns that.
+The interrogation otherwise **never blocks** and it **never judges the intent as good or bad** — the human owns that.
 
 ## Step 3 — Emit / refresh the Draft SPEC.md
 
@@ -309,9 +309,12 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`). The contract's
   the acceptance-criteria grammar proves each criterion is **phrased** testably, never that a test exists, runs, or
   passes; and the grammar is read line by line, not by a markdown parser.
 - **Floor, for what the checker PRINTS:** the template that was pinned passed validation first — a **minimum
-  shape**: a validated template can still yield a SPEC that REDs. An existing project template is never skipped for
-  the default: every failure is a refusal (exit 1), never a fallback. `spec_template` is provenance — nothing
-  compares it with the template later, and a hand-typed value passes too.
+  shape**: a validated template can still yield a SPEC that REDs.
+- **Floor, in the checker:** an existing project template is never skipped for the default — once a directory entry
+  case-folds to `pharn.spec-template.md`, every failure is a refusal (exit 1), never a fallback. Not falling back by
+  hand is command prose (advisory).
+- **Provenance, not a check:** `spec_template` is computed by the checker, never typed, but nothing compares it with
+  the template later; rule 7 checks only its shape and known id, so a hand-typed value passes too.
 - **Floor on the Write/Edit/MultiEdit/NotebookEdit surface only:** the project template's path
   (`protect-trusted-paths.cjs`). A Bash write reaches it (`LIMITS.md §6`); the shipped default is not hook-protected;
   a changed template of either kind leaves no floor trace beyond a digest nothing compares.

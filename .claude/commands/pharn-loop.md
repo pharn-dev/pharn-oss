@@ -458,7 +458,8 @@ Steps 3–5 say):
 **A full run that meets `STOP_GREEN_QUICK`** — its SPEC reads quick although the run was invoked without `--quick`
 — **does not commit**: a full run's Step 6c commits only `STOP_GREEN`, and `check-loop-record.mjs` and
 `check-loop-decision.mjs` (`MODE_MISMATCH`) both RED its record, because Step 6b records the invocation's mode and
-never "repairs" it.
+never "repairs" it. The residual rests on that: a record rewritten to `mode: quick` would turn both GREEN, and only
+Step 6c's advisory reading of "a green stop" would stand between the run and a commit.
 
 ## Step 3 — The SPEC, approved by the model through `/pharn-spec` (reused, not re-implemented)
 
@@ -816,7 +817,8 @@ Exit 0 → proceed. Exit 1 → fix the record and re-run **at most once**; if it
 checker's output into the summary verbatim and continue to the next check below. Never delete the content
 the check is about to make it pass. **A decision↔mode RED is never repaired by editing `mode`** (6.28.0): it means
 the invocation and the SPEC's kind disagree, so the record keeps the invocation, the RED goes into the summary
-verbatim, and the decision check below REDs too, so nothing is committed.
+verbatim, and the decision check below REDs too, so nothing is committed. The ≤1 repair bound is advisory
+(`LIMITS.md §1d`) — command prose, not a counter.
 
 **Then, on every NON-BLOCKED stop only, re-derive the decision:**
 

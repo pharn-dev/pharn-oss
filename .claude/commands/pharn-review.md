@@ -57,8 +57,8 @@ case `pharn/features/<name>/` is created for it.
 >
 > A leftover scope would deny this command's own writes; `--clear` is idempotent, so it is unconditional. This
 > command sets no scope of its own: Step 4 fans out to N parallel subagent writers, and a scope set to any single
-> artifact would deny every other write it makes. Its writes are bounded by the guard's DEFAULT instead — while
-> Step 2's run marker is open, only inside `pharn/features/**` or `.pharn/**` (the claims block).
+> artifact would deny every other write it makes. Its Write-tool writes are bounded by the guard's DEFAULT instead —
+> while Step 2's run marker is open, only inside `pharn/features/**` or `.pharn/**` (the claims block).
 
 ## Step 1 — Resolve the review TARGET deterministically (its provenance is explicit)
 
@@ -242,6 +242,9 @@ beyond the neutral clause below**:
 | `slice-miss`       | `a recorded verdict did not place this file in this lens's slice` |
 | `unknown`          | `nothing is claimed about what backs this lens`                   |
 
+**The asymmetry is deliberate and must not be flattened into a score (P0).** A `scanner-assigned` label adds
+**no** credibility to the finding; a `scanner-less` label subtracts a guarantee a reader may otherwise assume. Making
+the asymmetry visible narrows the reader's exposure, and closes none of the suppression risk itself.
 **Word it so a reader who ignores the label entirely is still correct.** The label describes the
 **CONTRIBUTOR**, never the finding, so **"verified", "confirmed", "corroborated" and "confidence" are banned**
 from this rendering, and it must **not** be presented as mitigating the degenerate dedup key above. Keep
@@ -303,10 +306,11 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`). Every guarante
   is a property of the **contributor**, never of the finding.
 - **Floor-grade enumeration that gates nothing:** the installed skills (`scan-installed-skills.mjs`).
 - **Floor: hook, through the fail-closed DEFAULT, not a declared scope:** with no scope file and the run marker open,
-  this command writes only inside `pharn/features/**` or `.pharn/**` — WIDER than its own `writes:` declaration
-  (measured), with `.pharn/writes-scope.json` denied by name. **It holds ONLY WHILE THE RUN MARKER IS OPEN**: in an
-  installed project with no run open the default is the permissive one, wider still. Opening the marker is a Bash
-  call — advisory.
+  this command's Write-tool writes land only inside `pharn/features/**` or `.pharn/**` — WIDER than its own
+  `writes:` declaration (measured), with `.pharn/writes-scope.json` denied by name. A Bash write — the emitter, the
+  merge, any lens subagent's shell — is outside the hook (`LIMITS.md §6`). **It holds ONLY WHILE THE RUN MARKER IS
+  OPEN**: in an installed project with no run open the default is the permissive one, wider still. Opening the
+  marker is a Bash call — advisory.
 - **Advisory:** parallel spawn (nothing on the floor forces parallelism or every lens to run), slice derivation,
   each lens reading only its slice, and each lens's judgment about the code (a lens
   never gates — §7); feeding skills to the lenses; the resolved target being the complete or correct set (a
