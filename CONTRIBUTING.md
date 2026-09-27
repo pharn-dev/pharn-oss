@@ -44,6 +44,18 @@ Three doc regions are **generated, never hand-edited**: `docs/capabilities/**`, 
 
 What that buys is **byte-equality** — the committed output equals a fresh regeneration — never that the generated content is _right_: a wrong enumerator regenerates cleanly and stays GREEN. See [`CLAUDE.md`](./CLAUDE.md) ("Three doc regions are GENERATED") for the full rule, including the one case (`ENUM_ERROR` — a duplicate lesson id, an unsafe title) where regenerating cannot help and the canon file has to be fixed instead.
 
+### Editing product commands (`.claude/commands/pharn-*.md`)
+
+Since 6.28.2, [`.dev/floor/command-hygiene.test.mjs`](./.dev/floor/command-hygiene.test.mjs) enforces a **command budget** on every shipped `pharn-*` command (not `pharn-dev-*`):
+
+- **Size** — each command's bytes must stay at or below its row in the test's `COMMAND_BYTE_CEILINGS` table (closed over the product commands on disk, both ways).
+- **Frontmatter `description:`** — at most 250 bytes and must not match the test's claim-vocabulary regex.
+- **Claims block** — exactly one `## What you may claim` heading per command.
+
+The test checks presence and limits, not whether a claim is true. If an increment genuinely needs a larger command, **raise the ceiling in the same PR** by editing `COMMAND_BYTE_CEILINGS`: take the command's measured byte size, add 10%, round up to the next multiple of 512 — never a quiet edit to turn a red test green. Rationale and bounds live in [`CLAUDE.md`](./CLAUDE.md) ("A product command keeps what a run executes…").
+
+`AGENTS.md` at the repo root is **gitignored** (a local Codex copy). It does not ship; if you use Codex here, regenerate it from `CLAUDE.md` when the latter moves.
+
 ### CHANGELOG entries
 
 `pharn-cli` installs the tip of `main`, and `pharn update` points users at [`CHANGELOG.md`](./CHANGELOG.md). So every merge to `main` is a release, and the CHANGELOG is the only record a user reads of what reached them. Four rules:
