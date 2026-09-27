@@ -70,16 +70,33 @@
 // decide `gate2` vs `gate2-quick`; `render-cost-ledger.mjs`'s `normalizeMarkers` keeps it only as a
 // `MARKER_MODES` member, the same pattern `origin: "pending"` already uses.
 //
+// ── THE ROUTE (`--route`, added 6.27.0, stage-model-routing) ─────────────────────────────────────────
+// A stage-start marker may carry `route: "<token>"` — the route `/pharn-ship` or `/pharn-loop` REQUESTED
+// for that stage at the moment it started (L42): `agent:<alias>` when the stage was spawned as a subagent
+// on that model, `inline:<reason>` when it ran in the orchestrator's own turn and why. The grammar is
+// `isRouteToken`, imported from `route-token-core.mjs` — the one owner of the token, a zero-import module,
+// so this writer and every ledger reader load the grammar and never the routing policy or the stage
+// agent's brief (GRILL G-P3). `--route` is refused (exit 2, nothing written) for any `--kind` but
+// `stage-start` and for any value outside the grammar. WITH NO `--route` FLAG the marker carries no `route`
+// key at all — byte-identical to every marker written before 6.27.0 (the `--mode` precedent; a closure test
+// pins this). `render-cost-ledger.mjs`'s `normalizeMarkers` keeps the field only as a valid token, so
+// `cost.json` carries the REQUESTED route beside each request's SERVED `model`.
+// ADVISORY, exactly like every other marker field: a `route` on disk records a request, never what the
+// stage ran on — the platform applies the model, and the served id in `requests[].model` is read from a
+// transcript format the platform does not document (L43: the two agreeing is agreement, never proof).
+//
 // Usage:
 //   node pharn/floor/mark-phase.mjs --name <slug> --kind <kind> [--stage <s>] [--iteration <n>] [--base <dir>]
 //                                   [--adopt-pending]   (run-start only)
 //                                   [--mode <m>]        (run-start only; m in MARKER_MODES)
+//                                   [--route <token>]   (stage-start only; a route-token-core.mjs token)
 //   node pharn/floor/mark-phase.mjs --pending-start [--base <dir>]
 // Exit codes: 0 = a marker (or the pending start) was written; 2 = bad usage (nothing written).
 
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { tsMs } from "./run-window-core.mjs";
+import { isRouteToken } from "./route-token-core.mjs";
 
 /** The marker vocabulary. A Set, so membership is `.has()` and no arbitrary key indexes a plain
  *  object (L15 — an inherited `toString` would be both truthy and non-nullish). */
@@ -216,6 +233,7 @@ export function markPhase({
   now,
   adoptPending = false,
   mode = null,
+  route = null,
 }) {
   const dir = join(base, name);
   const file = join(dir, "markers.jsonl");
@@ -233,6 +251,8 @@ export function markPhase({
   if (pending) marker.origin = "pending";
   // With NO `--mode` the marker carries no `mode` key at all (L41) — byte-identical to a pre-6.25.0 marker.
   if (mode !== null) marker.mode = mode;
+  // The same for `--route` (6.27.0): absent → no key, byte-identical to a pre-6.27.0 marker.
+  if (route !== null) marker.route = route;
   appendFileSync(file, JSON.stringify(marker) + "\n");
   if (pending) {
     try {
@@ -252,13 +272,14 @@ function usage(msg) {
       "                                      [--mode <m>]   (run-start only; m in {" +
       [...MARKER_MODES].join(", ") +
       "})\n" +
+      "                                      [--route <token>]   (stage-start only; agent:<alias> | inline:<reason>)\n" +
       "       node pharn/floor/mark-phase.mjs --pending-start [--base <dir>]\n"
   );
   return 2;
 }
 
 function main(argv) {
-  const opts = { name: null, kind: null, stage: null, iteration: null, base: null, pending: false, adopt: false, mode: null };
+  const opts = { name: null, kind: null, stage: null, iteration: null, base: null, pending: false, adopt: false, mode: null, route: null };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     if (k === "--pending-start") opts.pending = true;
@@ -269,14 +290,23 @@ function main(argv) {
     else if (k === "--iteration") opts.iteration = argv[++i];
     else if (k === "--base") opts.base = argv[++i];
     else if (k === "--mode") opts.mode = argv[++i];
+    else if (k === "--route") opts.route = argv[++i] ?? "";
     else return usage(`unknown argument ${k}`);
   }
 
   const sessionId = process.env.CLAUDE_CODE_SESSION_ID ?? null;
   if (opts.pending) {
     // The pending start carries no name, stage or iteration: it is ONLY a moment, keyed by session.
-    if (opts.name !== null || opts.kind !== null || opts.stage !== null || opts.iteration !== null || opts.adopt || opts.mode !== null) {
-      return usage("--pending-start takes no --name, --kind, --stage, --iteration, --adopt-pending or --mode");
+    if (
+      opts.name !== null ||
+      opts.kind !== null ||
+      opts.stage !== null ||
+      opts.iteration !== null ||
+      opts.adopt ||
+      opts.mode !== null ||
+      opts.route !== null
+    ) {
+      return usage("--pending-start takes no --name, --kind, --stage, --iteration, --adopt-pending, --mode or --route");
     }
     const p = writePendingStart({ ...(opts.base === null ? {} : { base: opts.base }), sessionId });
     if (p === null) return usage("CLAUDE_CODE_SESSION_ID cannot name a pending-start file");
@@ -288,6 +318,12 @@ function main(argv) {
   // Fail-closed on the ARGV VALUE (P5, L62): the refusal names the vocabulary, never the untrusted argv string —
   // an operator who mistypes `--mode fast` sees what IS allowed, never their own typo echoed back.
   if (opts.mode !== null && opts.kind !== "run-start") return usage(`--mode applies to --kind run-start only`);
+  // The route is a fact about ONE stage's start (6.27.0): refused on every other kind, and on any value
+  // outside the token grammar — the refusal names the grammar's owner, never the argv value (L62).
+  if (opts.route !== null && opts.kind !== "stage-start") return usage("--route applies to --kind stage-start only");
+  if (opts.route !== null && !isRouteToken(opts.route)) {
+    return usage("--route must be one route token, agent:<alias> or inline:<reason> (pharn/floor/route-token-core.mjs)");
+  }
 
   // Every branch below is a membership or grammar test (P5). The terminal fallback is refuse.
   if (!cleanScalar(opts.name, 64) || !NAME_RE.test(opts.name)) return usage(`--name must match ${NAME_RE}`);
@@ -316,9 +352,10 @@ function main(argv) {
     sessionId,
     adoptPending: opts.adopt,
     mode: opts.mode,
+    route: opts.route,
   });
   process.stdout.write(
-    `marker ${m.seq}: ${m.kind}${m.stage ? ` ${m.stage}` : ""}${m.iteration ? ` iter=${m.iteration}` : ""} ${m.ts}${m.origin ? ` (adopted ${m.origin} start)` : ""}${m.mode ? ` (mode ${m.mode})` : ""}\n`
+    `marker ${m.seq}: ${m.kind}${m.stage ? ` ${m.stage}` : ""}${m.iteration ? ` iter=${m.iteration}` : ""} ${m.ts}${m.origin ? ` (adopted ${m.origin} start)` : ""}${m.mode ? ` (mode ${m.mode})` : ""}${m.route ? ` (route ${m.route})` : ""}\n`
   );
   return 0;
 }

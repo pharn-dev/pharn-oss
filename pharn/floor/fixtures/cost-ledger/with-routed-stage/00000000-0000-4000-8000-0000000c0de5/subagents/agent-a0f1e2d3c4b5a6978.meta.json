@@ -1,0 +1,5 @@
+{
+  "agentType": "general-purpose",
+  "description": "pharn stage pharn-build",
+  "model": "sonnet"
+}
