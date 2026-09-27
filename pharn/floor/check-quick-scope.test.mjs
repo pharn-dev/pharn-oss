@@ -133,8 +133,13 @@ function committedLine(file) {
 
 /** Run a committed line in `dir` under `sh -c`, substituting only its two placeholders. `opts` joins spawnSync's options
  *  (a document echoing more than 1 MiB of paths needs this spawn's own `maxBuffer` raised). */
+function normalizeCommittedLine(line) {
+  return line.replace(/\s*\[--from-ref '<ref>'\]/, "");
+}
+
 function runCommitted(line, dir, base, opts = {}) {
-  const cmd = line.replace("<name>", "demo").replace("<base sha>", base);
+  let cmd = normalizeCommittedLine(line).replace("<name>", "demo");
+  if (!cmd.includes("--base auto")) cmd = cmd.replace("<base sha>", base);
   const r = spawnSync("sh", ["-c", cmd], { cwd: dir, encoding: "utf8", env: envWithoutQ(), ...opts });
   return { status: r.status, doc: parseDoc(r.stdout), stdout: r.stdout, stderr: r.stderr };
 }
@@ -153,15 +158,15 @@ function runOldLine(dir, base, declared) {
 
 // ── The line itself ────────────────────────────────────────────────────────────────────────────────────────────
 
-test("✧ both committed lines take ONLY the slug and the base, each single-quoted, with no other shell-active character", () => {
-  for (const file of COMMANDS) {
-    const line = committedLine(file);
-    assert.deepEqual([...line.matchAll(/<[^>]*>/g)].map((m) => m[0]).sort(), ["<base sha>", "<name>"], file);
-    assert.ok(line.includes("--feature '<name>'") && line.includes("--base '<base sha>'"), `${file}: both values single-quoted`);
-    const bare = line.replace("'<name>'", "").replace("'<base sha>'", "");
-    assert.doesNotMatch(bare, /["'$`\\;|&(){}<>*?!]/, `${file}: no other shell-active character`);
-  }
-  assert.equal(committedLine("pharn-loop.md"), committedLine("pharn-ship.md"), "the two quick modes pin the same line");
+test("✧ committed quick scope lines: loop passes slug+sha; ship resolves base in Node (LOW L1)", () => {
+  const loopLine = committedLine("pharn-loop.md");
+  assert.deepEqual([...loopLine.matchAll(/<[^>]*>/g)].map((m) => m[0]).sort(), ["<base sha>", "<name>"]);
+  assert.ok(loopLine.includes("--feature '<name>'") && loopLine.includes("--base '<base sha>'"));
+  const shipLine = committedLine("pharn-ship.md");
+  assert.ok(shipLine.includes("--feature '<name>'") && shipLine.includes("--base auto"));
+  assert.ok(!shipLine.includes("git rev-parse"), "ship must not type a ref into shell git");
+  const bareLoop = loopLine.replace("'<name>'", "").replace("'<base sha>'", "");
+  assert.doesNotMatch(bareLoop, /["'$`\\;|&(){}<>*?!]/, "pharn-loop.md");
 });
 
 test("✧ neither quick section still carries 6.25.0's check-regress.mjs scope line", () => {
@@ -402,7 +407,7 @@ test("refusals: every bad input exits 2 with its closed reason_code, never 0 or 
 
 test("✧ CLOSURE (L36) — every reason_code the checker emits is a member, and every member but `crashed` has an inconclusive() call", async () => {
   const { REASON_CODES } = await import("./quick-scope-core.mjs");
-  assert.equal(REASON_CODES.length, 7, "NON-VACUITY (L34)");
+  assert.equal(REASON_CODES.length, 8, "NON-VACUITY (L34)");
   const src = readFileSync(join(HERE, "quick-scope-core.mjs"), "utf8");
   const emitted = new Set([...src.matchAll(/inconclusive\("([a-z-]+)"/g)].map((m) => m[1]));
   for (const code of emitted) assert.ok(REASON_CODES.includes(code), `an emitted code outside the set: ${code}`);

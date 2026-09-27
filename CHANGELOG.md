@@ -47,6 +47,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     moves, they silently match nothing. `npm test`'s glob was already narrowed for the same reason (`package.json`,
     `_test_glob_comment`).
 
+## [6.32.2] - 2026-09-28
+
+### Fixed
+
+- 2026-09-28: **Quick scope resolves regress base inside Node (LOW L1).** `/pharn-ship --quick` item 7 pins `--base auto` (optional `--from-ref`) so untrusted refs never reach shell `git rev-parse`; `regress-base-core.mjs` owns BASE_RULE git argv.
+- 2026-09-28: **GATE-2 briefing draft under `.pharn/` (LOW L8).** Step 2c renders to `.pharn/pharn-ship/<name>/briefing-draft.md` instead of a fixed `/tmp` path.
+
+
 ## [6.32.1] - 2026-09-28
 
 ### Fixed
@@ -85,7 +93,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   trusted text of the command and no path an artifact names is read in its place, a re-read after a compaction (a
   Read result is not kept by one), and a not-loaded rule that stops the run and never runs a part from memory. **No
   stage, order, route, check, stop decision, retry bound, ledger rule, commit rule or human gate moved**; what a run
-  does in addition is the part Reads and, if a part cannot be read, one of four new stops. **Bytes (measured):** sent at invocation, `pharn-loop.md` 77,971 → about 41,100,
+  does in addition is the part Reads and, if a part cannot be read, one of four stops. **Bytes (measured):** sent at invocation, `pharn-loop.md` 77,971 → about 41,100,
   `pharn-ship.md` 67,543 → about 34,100. **Requests and tokens (estimates, from a request profile counted over the
   pinned steps):** a full run carries 29–38% fewer of this text's bytes across its requests, a quick run 17–22%. The
   close part costs the loop one added request, and ship one only at a STOP before verify. Net of that request, the

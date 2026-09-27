@@ -13,9 +13,11 @@
 // and a name holding a comma split into pieces that were each declared or exempt (exit 0 again). The same literal had
 // shipped in `/pharn-ship --quick` since 6.25.0; `/pharn-loop --quick` would have run it unattended.
 //
-// THE FIX, by construction: the pinned line carries exactly two values — the feature slug and a resolved 40-hex base —
-// and this module validates both: the slug against gate-run-core.mjs's FEATURE_SLUG_RE (the loop's own S1 slug rule),
-// the base against SHA_RE AND `git rev-parse --verify --quiet <base>^{commit}`. Everything else is computed here, by code:
+// THE FIX, by construction: the pinned line carries the feature slug and a base token: either a resolved 40-hex base or
+// the literal `auto`, optionally with one git ref carried as `--from-ref`. This module validates the slug against
+// gate-run-core.mjs's FEATURE_SLUG_RE (the loop's own S1 slug rule), resolves `auto` through `regress-base-core.mjs`'s
+// BASE_RULE git argv, then validates the resulting base against SHA_RE AND `git rev-parse --verify --quiet
+// <base>^{commit}`. Everything else is computed here, by code:
 //   • the declared writes and the changed paths by pharn/floor/scope-inputs.mjs — the ONE owner stage-regress.mjs's
 //     partition phase also calls (PLAN.md ∪ AC-TESTS.md `## Files`; `git diff --name-only --no-renames -z <base>` ∪
 //     `git ls-files -z --others --exclude-standard`, minus `.pharn/`);
@@ -51,16 +53,19 @@ import { FEATURE_SLUG_RE, SHA_RE } from "./gate-run-core.mjs";
 import { containmentWalk, gitSync } from "./stage-runtime.mjs";
 import { declaredWrites, changedPaths } from "./scope-inputs.mjs";
 import { partitionScope, scopeFindings, normPath } from "./check-regress.mjs";
+import { resolveRegressBase } from "./regress-base-core.mjs";
 
 const FEATURES_DIR = "pharn/features";
-const FLAGS = new Set(["--feature", "--base"]);
-const USAGE = "usage: check-quick-scope.mjs --feature <name> --base <40-hex>";
+const FLAGS = new Set(["--feature", "--base", "--from-ref"]);
+const REQUIRED_FLAGS = new Set(["--feature", "--base"]);
+const USAGE = "usage: check-quick-scope.mjs --feature <name> --base <40-hex|auto> [--from-ref <git-ref>]";
 
 /** The closed refusal vocabulary (exported so the tests iterate it — L29). `crashed` is the entry's alone: it reports a
  *  module that cannot load, a throw while checking, or a result outside this module's contract. */
 export const REASON_CODES = Object.freeze([
   "usage-error",
   "base-not-commit",
+  "base-unresolved",
   "path-containment",
   "plan-unreadable",
   "plan-files-unparseable",
@@ -91,16 +96,31 @@ function parseArgs(args) {
     if (i + 1 >= args.length) inconclusive("usage-error", `${a} requires a value — ${USAGE}`);
     values.set(a, args[i + 1]);
   }
-  for (const f of FLAGS) if (!values.has(f)) inconclusive("usage-error", `${f} is required — ${USAGE}`);
-  return { feature: values.get("--feature"), base: values.get("--base") };
+  for (const f of REQUIRED_FLAGS) if (!values.has(f)) inconclusive("usage-error", `${f} is required — ${USAGE}`);
+  return {
+    feature: values.get("--feature"),
+    base: values.get("--base"),
+    fromRef: values.has("--from-ref") ? values.get("--from-ref") : null,
+  };
 }
 
 function check(args) {
-  const { feature, base } = parseArgs(args);
+  let { feature, base, fromRef } = parseArgs(args);
   if (!FEATURE_SLUG_RE.test(feature)) {
     inconclusive("usage-error", `--feature must be a plain slug matching ${FEATURE_SLUG_RE}, got ${JSON.stringify(feature)}`);
   }
-  if (!SHA_RE.test(base)) inconclusive("usage-error", `--base must be a resolved 40-hex commit SHA, got ${JSON.stringify(base)}`);
+  if (base === "auto") {
+    const resolved = resolveRegressBase({ explicitRef: fromRef });
+    if (!resolved.ok) {
+      if (resolved.reason_code === "base-not-commit") inconclusive("base-not-commit", resolved.reason);
+      if (resolved.reason_code === "base-unresolved") inconclusive("base-unresolved", resolved.reason);
+      if (resolved.reason_code === "git-failed") inconclusive("git-failed", resolved.reason);
+      inconclusive("git-failed", `base resolution failed with unknown reason ${JSON.stringify(resolved.reason_code)}`);
+    }
+    base = resolved.sha;
+  } else if (!SHA_RE.test(base)) {
+    inconclusive("usage-error", `--base must be a resolved 40-hex commit SHA or the literal auto, got ${JSON.stringify(base)}`);
+  }
   const rev = gitSync(["rev-parse", "--verify", "--quiet", `${base}^{commit}`]);
   if (!rev.ok || rev.stdout.trim() !== base) inconclusive("base-not-commit", `--base ${base} does not name a commit in this repository`);
 

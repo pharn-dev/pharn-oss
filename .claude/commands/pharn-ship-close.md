@@ -33,7 +33,8 @@ _"no baseline"_ is expected and harmless when no epoch is open.
 1. **Render deterministically** (`pharn/pharn-contracts/ship-briefing.md`).
 
    ```bash
-   node pharn/floor/render-ship-briefing.mjs <name> > /tmp/briefing-draft.md
+   mkdir -p .pharn/pharn-ship/<name>
+   node pharn/floor/render-ship-briefing.mjs <name> > .pharn/pharn-ship/<name>/briefing-draft.md
    ```
 
 2. **The one narrow ADVISORY step — only when the render found nothing to quote.** Check whether the

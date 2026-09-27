@@ -89,16 +89,13 @@ spec_kind: quick`. The remedy is to re-run `/pharn-ship <description>` **without
    `regression-report.json` read. (Step 2's regress item, above, is the full-mode procedure this one item
    omits — every other Step-2 item runs as written.) Its first check is **kept**: item 7.
 
-7. **The scope check: KEPT — run it before `/pharn-verify`.** First resolve the base by the branches of
-   `/pharn-regress`'s `BASE_RULE` (`stage-regress-core.mjs` — cited, not restated, P4) that apply here — `/pharn-ship`
-   has no `--base` flag, so a base is never read out of the description: `HEAD` when the working tree is dirty (an
-   uncommitted build), else `git merge-base HEAD origin/main`, else ask the human for the base commit's 40-hex SHA.
-   `git rev-parse HEAD` and `git merge-base HEAD origin/main` each print one. Then run it, substituting `<name>` and
-   that SHA as `<base sha>` — the only two values the line takes (Step 3a captures its own `<base sha>` later,
-   separately):
+7. **The scope check: KEPT — run it before `/pharn-verify`.** Run ONE pinned line — the checker resolves the base
+   by the same `BASE_RULE` as `/pharn-regress`'s `base` phase (`regress-base-core.mjs` / `stage-regress-core.mjs`
+   — cited, not restated, P4) inside Node. **Never run `git rev-parse` or `git merge-base` in the shell** for this
+   step: when the invoker passed `--base <ref>`, add `--from-ref '<ref>'` (single-quoted); otherwise omit it.
 
    ```bash
-   node pharn/floor/check-quick-scope.mjs --feature '<name>' --base '<base sha>'
+   node pharn/floor/check-quick-scope.mjs --feature '<name>' --base auto [--from-ref '<ref>']
    ```
 
    **Never type a path into it**: the checker builds both path sets itself (`pharn/floor/quick-scope-core.mjs`,
