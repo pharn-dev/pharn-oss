@@ -20,9 +20,12 @@ stop — green or not. It exists so a reader can compute what a feature cost **i
 It is written by `pharn/floor/render-cost-ledger.mjs` and validated by `pharn/floor/check-cost-ledger.mjs`.
 
 **It measures ONE RUN, not a session and not a feature.** Since `pharn-cost-ledger/2` every row and every
-aggregate is restricted to the run's own window (`run-window/1`, below), so unrelated work done earlier
-or later in the same Claude Code session is excluded rather than summed. It is not a feature's lifetime
-cost either: a new invocation for the same feature opens a new window.
+aggregate is restricted to the run's own window, so unrelated work done earlier or later in the same Claude
+Code session is excluded rather than summed. Since 6.29.0 (membership `run-window/2`, below) it is also
+restricted to the run's own CONTEXTS — the thread that ran the run and the agents that thread spawned during it —
+so another run working inside the same window in the same session is excluded too, and when the transcript
+cannot say which context a request belongs to, the ledger says membership is unknown. It is not a feature's
+lifetime cost either: a new invocation for the same feature opens a new window.
 
 **TWO commands emit one, and the set is named here so a third is a deliberate addition rather than a
 discovery.** `/pharn-loop` emits at every stop that has a feature directory; `/pharn-ship` emits at
@@ -92,13 +95,15 @@ tagged `pharn-loop`**, with no sub-stage named anywhere. The field is therefore 
   "unattributed": { "requests": 62, "tokens": {} },
   "dropped": [],
   "membership": {
-    "method": "run-window/1",
+    "method": "run-window/2",
     "status": "bounded",
     "reason": null,
     "session": "<the selected session uuid>",
     "start": "2026-09-21T08:35:00.000Z",
     "end": "2026-09-21T09:40:52.000Z",
     "excluded_requests": 14,
+    "context": "agent:<the agent id that printed the run's markers>",
+    "contexts": ["agent:<that id>", "agent:<an agent it spawned during the run>"],
   },
 }
 ```
@@ -111,40 +116,42 @@ tagged `pharn-loop`**, with no sub-stage named anywhere. The field is therefore 
 the keys above, no more and no fewer, asserted in **both** directions. A per-member presence set would be
 satisfied by a variant spelling of any member; closure is what makes a variant fail.
 
-| field                                                               | shape                                                                                                                                      | class                                                                     |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| `schema`                                                            | `pharn-cost-ledger/2` (or the legacy `/1`, see Compatibility)                                                                              | FLOOR (enum)                                                              |
-| `name`                                                              | the feature slug                                                                                                                           | FLOOR (present)                                                           |
-| `command`                                                           | the emitting command — `/pharn-loop` or `/pharn-ship`                                                                                      | FLOOR (present)                                                           |
-| `base_sha`                                                          | the run's base SHA, or the literal `unknown`                                                                                               | FLOOR (present)                                                           |
-| `outcome`                                                           | `{decision, iterations, source, blocked?}`, or `null` — see below                                                                          | FLOOR (shape, rule 5)                                                     |
-| `skills_version`                                                    | the version string, or `null`                                                                                                              | **ADVISORY** (shape unchecked; a value beside an `unknown` source is RED) |
-| `skills_version_source`                                             | `pharn.config.json` \| `SKILLS_VERSION` \| `unknown`                                                                                       | FLOOR (enum)                                                              |
-| `claude_code_versions`                                              | sorted distinct `version` values seen on the records, each a rule-3 token                                                                  | FLOOR (array + enum-regex, rule 3)                                        |
-| `sessions`                                                          | sorted distinct session ids, each a rule-3 token                                                                                           | FLOOR (array + enum-regex, rule 3)                                        |
-| `window_start` / `_end`                                             | ISO timestamps from the **records' own** values, or `null`                                                                                 | **ADVISORY** (written from data; no checker op)                           |
-| `coverage`                                                          | `partial` \| `unavailable` — **there is no `complete`**                                                                                    | FLOOR (enum)                                                              |
-| `dedup_key`                                                         | the literal `requestId`                                                                                                                    | FLOOR (enum)                                                              |
-| `attribution.method`                                                | the versioned method name                                                                                                                  | FLOOR (enum)                                                              |
-| `pricing_note`                                                      | must state the file carries tokens, never prices                                                                                           | FLOOR (regex)                                                             |
-| `markers[].seq`                                                     | integers, **strictly increasing**                                                                                                          | FLOOR (integer compare)                                                   |
-| `markers[].kind`                                                    | `run-start` \| `stage-start` \| `orchestrator` \| `run-stop`                                                                               | FLOOR (enum)                                                              |
-| `markers[].mode`                                                    | (6.25.0) absent, or a `MARKER_MODES` member (today: `quick`)                                                                               | **ADVISORY** (a marker field — see "Mode" below)                          |
-| `markers[].route`                                                   | (6.27.0) absent, or a route token (`agent:<alias>` \| `inline:<reason>`)                                                                   | **ADVISORY** (a marker field — see "Route" below)                         |
-| `requests[].request_id`                                             | a rule-3 token, **unique across the array**                                                                                                | FLOOR (set membership + enum-regex)                                       |
-| `requests[].usage`                                                  | every leaf: number \| bool \| null \| a short token; every key a short token other than `__proto__`; no node deeper than `USAGE_MAX_DEPTH` | FLOOR (enum-regex + integer compare, rule 2)                              |
-| `requests[].model`                                                  | a bounded identity token (<=128 chars, no C0 control char or DEL, no path)                                                                 | FLOOR (enum-regex)                                                        |
-| `requests[].attribution_skill` / `agent_id` / `session_id`          | the same bound, or `null`                                                                                                                  | FLOOR (enum-regex)                                                        |
-| `requests[].tokens.*`                                               | the six classes, each a non-negative safe integer                                                                                          | FLOOR (shape, rule 7)                                                     |
-| `requests[].sidechain`                                              | a boolean                                                                                                                                  | FLOOR (shape)                                                             |
-| `requests[].stage/iteration`                                        | a string or `null` / a number or `null`; the VALUE is the derived VIEW                                                                     | FLOOR (type, rule 7); the value **ADVISORY** (see below)                  |
-| `totals` / `by_model` / `by_stage_iteration_model` / `unattributed` | equal to a recompute from `requests[]`                                                                                                     | FLOOR (recompute + equality)                                              |
-| `dropped[]`                                                         | key paths of values the emitter refused (vocabulary below)                                                                                 | FLOOR (array); the vocabulary is the emitter's output, not a rule         |
-| the whole document                                                  | no node deeper than `WALK_MAX_DEPTH`                                                                                                       | FLOOR (integer compare, rule 8)                                           |
-| `membership`                                                        | closed `{method, status, reason, session, start, end, excluded_requests}`                                                                  | FLOOR (shape + recompute)                                                 |
-| `membership.status/reason/start/end`                                | equal to `runWindow()` recomputed over the file's own `markers[]`                                                                          | FLOOR (recompute + equality)                                              |
-| every `requests[]` row                                              | a MEMBER of that recomputed window                                                                                                         | FLOOR (ordering test)                                                     |
-| `membership.excluded_requests`                                      | an integer (known window) or `null` (unknown) — its VALUE                                                                                  | **ADVISORY** without `--verify-transcript`; with it, a RANGE (rule 6)     |
+| field                                                               | shape                                                                                                                                                                                           | class                                                                                |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `schema`                                                            | `pharn-cost-ledger/2` (or the legacy `/1`, see Compatibility)                                                                                                                                   | FLOOR (enum)                                                                         |
+| `name`                                                              | the feature slug                                                                                                                                                                                | FLOOR (present)                                                                      |
+| `command`                                                           | the emitting command — `/pharn-loop` or `/pharn-ship`                                                                                                                                           | FLOOR (present)                                                                      |
+| `base_sha`                                                          | the run's base SHA, or the literal `unknown`                                                                                                                                                    | FLOOR (present)                                                                      |
+| `outcome`                                                           | `{decision, iterations, source, blocked?}`, or `null` — see below                                                                                                                               | FLOOR (shape, rule 5)                                                                |
+| `skills_version`                                                    | the version string, or `null`                                                                                                                                                                   | **ADVISORY** (shape unchecked; a value beside an `unknown` source is RED)            |
+| `skills_version_source`                                             | `pharn.config.json` \| `SKILLS_VERSION` \| `unknown`                                                                                                                                            | FLOOR (enum)                                                                         |
+| `claude_code_versions`                                              | sorted distinct `version` values seen on the records, each a rule-3 token                                                                                                                       | FLOOR (array + enum-regex, rule 3)                                                   |
+| `sessions`                                                          | sorted distinct session ids, each a rule-3 token                                                                                                                                                | FLOOR (array + enum-regex, rule 3)                                                   |
+| `window_start` / `_end`                                             | ISO timestamps from the **records' own** values, or `null`                                                                                                                                      | **ADVISORY** (written from data; no checker op)                                      |
+| `coverage`                                                          | `partial` \| `unavailable` — **there is no `complete`**                                                                                                                                         | FLOOR (enum)                                                                         |
+| `dedup_key`                                                         | the literal `requestId`                                                                                                                                                                         | FLOOR (enum)                                                                         |
+| `attribution.method`                                                | the versioned method name                                                                                                                                                                       | FLOOR (enum)                                                                         |
+| `pricing_note`                                                      | must state the file carries tokens, never prices                                                                                                                                                | FLOOR (regex)                                                                        |
+| `markers[].seq`                                                     | integers, **strictly increasing**                                                                                                                                                               | FLOOR (integer compare)                                                              |
+| `markers[].kind`                                                    | `run-start` \| `stage-start` \| `orchestrator` \| `run-stop`                                                                                                                                    | FLOOR (enum)                                                                         |
+| `markers[].mode`                                                    | (6.25.0) absent, or a `MARKER_MODES` member (today: `quick`)                                                                                                                                    | **ADVISORY** (a marker field — see "Mode" below)                                     |
+| `markers[].route`                                                   | (6.27.0) absent, or a route token (`agent:<alias>` \| `inline:<reason>`)                                                                                                                        | **ADVISORY** (a marker field — see "Route" below)                                    |
+| `requests[].request_id`                                             | a rule-3 token, **unique across the array**                                                                                                                                                     | FLOOR (set membership + enum-regex)                                                  |
+| `requests[].usage`                                                  | every leaf: number \| bool \| null \| a short token; every key a short token other than `__proto__`; no node deeper than `USAGE_MAX_DEPTH`                                                      | FLOOR (enum-regex + integer compare, rule 2)                                         |
+| `requests[].model`                                                  | a bounded identity token (<=128 chars, no C0 control char or DEL, no path)                                                                                                                      | FLOOR (enum-regex)                                                                   |
+| `requests[].attribution_skill` / `agent_id` / `session_id`          | the same bound, or `null`                                                                                                                                                                       | FLOOR (enum-regex)                                                                   |
+| `requests[].tokens.*`                                               | the six classes, each a non-negative safe integer                                                                                                                                               | FLOOR (shape, rule 7)                                                                |
+| `requests[].sidechain`                                              | a boolean; with `agent_id` it names the row's CONTEXT (`main` for `false`, `agent:<agent_id>` for `true`)                                                                                       | FLOOR (shape)                                                                        |
+| `requests[].stage/iteration`                                        | a string or `null` / a number or `null`; the VALUE is the derived VIEW                                                                                                                          | FLOOR (type, rule 7); the value **ADVISORY** (see below)                             |
+| `totals` / `by_model` / `by_stage_iteration_model` / `unattributed` | equal to a recompute from `requests[]`                                                                                                                                                          | FLOOR (recompute + equality)                                                         |
+| `dropped[]`                                                         | key paths of values the emitter refused (vocabulary below)                                                                                                                                      | FLOOR (array); the vocabulary is the emitter's output, not a rule                    |
+| the whole document                                                  | no node deeper than `WALK_MAX_DEPTH`                                                                                                                                                            | FLOOR (integer compare, rule 8)                                                      |
+| `membership`                                                        | `method` `run-window/2`: closed `{method, status, reason, session, start, end, excluded_requests, context, contexts}`; `run-window/1`: the first seven                                          | FLOOR (shape + recompute)                                                            |
+| `membership.method`                                                 | `run-window/2`, or the legacy `run-window/1` (never written since 6.29.0, see Compatibility)                                                                                                    | FLOOR (enum)                                                                         |
+| `membership.status/reason/start/end`                                | equal to `runWindow()` recomputed over the file's own `markers[]`; under `run-window/2` a known window may instead be `unknown` for a context reason, and then only `start`/`end` must equal it | FLOOR (recompute + equality)                                                         |
+| `membership.context` / `contexts`                                   | a measured ledger: a context key and a sorted, duplicate-free, non-empty list of context keys that includes it; otherwise both `null`                                                           | FLOOR (shape + set membership); the VALUE **ADVISORY** without `--verify-transcript` |
+| every `requests[]` row                                              | a MEMBER of that recomputed window, and (`run-window/2`) its context one of `contexts`                                                                                                          | FLOOR (ordering test + set membership)                                               |
+| `membership.excluded_requests`                                      | an integer (known window) or `null` (unknown) — its VALUE                                                                                                                                       | **ADVISORY** without `--verify-transcript`; with it, a RANGE (rule 6)                |
 
 **One row per request, and which of its transcript lines each value comes from (6.24.1).** `dedup_key` names
 the grouping. The platform writes one API request to the transcript as several lines, sometimes in more than one
@@ -224,9 +231,13 @@ lands _inside_ the loop's own commit, so a field naming that commit could not be
 
 ---
 
-## Run membership — `run-window/1` (added in `pharn-cost-ledger/2`)
+## Run membership — `run-window/2` (the window since `pharn-cost-ledger/2`, the context half since 6.29.0)
 
-**Why it exists — a real failure (P7).** Through `/1`, markers decided only the stage VIEW, never the
+A request is a run member iff it is inside the run's WINDOW (rules 1–4, the `run-window/1` rule, unchanged) AND its
+CONTEXT is in the run's context set (rules 5–8, "The context half" below). Both halves are decided in
+`pharn/floor/run-window-core.mjs`, which the emitter and the checker import.
+
+**Why the window exists — a real failure (P7).** Through `/1`, markers decided only the stage VIEW, never the
 request POPULATION: every usage-bearing request of the selected session was a row. A session that spent
 100 input tokens on unrelated work and then 10 inside a run reported **110**, the 100 sat in
 `unattributed`, and the checker was GREEN. The file agreed with itself and misdescribed the run
@@ -260,7 +271,9 @@ an out-of-run bucket.
 - the stop precedes the start;
 - a stage or orchestrator marker follows a `run-stop` without a new `run-start` — the markers may span
   two invocations;
-- no current-run marker is bound to the selected session.
+- no current-run marker is bound to the selected session;
+- (6.29.0) the window is known but the run cannot be bound to one context, or a request inside it cannot be placed
+  (the three context reasons, below).
 
 The reason is recorded from a closed set. An `unknown` ledger is `coverage: unavailable` with **no
 rows** and `excluded_requests: null`. Whole-session usage is never presented as run usage, and nothing
@@ -268,8 +281,9 @@ is shown as zero. A **known** window that contains no request is different: it i
 `coverage: partial` with an empty `requests[]`, and the checker admits that shape ONLY under a known
 window ([[L34]]).
 
-**`excluded_requests`** counts the deduped session requests that fell outside a known window. It is
-the minimum needed to explain an exclusion. No excluded-token aggregate and no session ledger is kept.
+**`excluded_requests`** counts the deduped session requests that fell outside the run: outside a known window,
+or (6.29.0) inside it from a context outside the run's set. `coverage_note` gives the second number. It is the
+minimum needed to explain an exclusion. No excluded-token aggregate and no session ledger is kept.
 
 **It is a count taken AT EMISSION, and one of its two parts keeps growing after that.** The transcript is
 append-only, so the requests before the window are fixed once the window is. The requests after the
@@ -303,6 +317,90 @@ loop's window.
   collected, and they are **not** in `excluded_requests` either.
 - **Transcript timestamps are untrusted.** A crafted record can move itself into or out of the window.
   This is bounded: it affects a view that gates nothing.
+
+### The context half (6.29.0)
+
+**Why it exists — a real failure (P7).** A subagent's Bash sees its PARENT's session id and no id of its own
+(measured), so every marker a run writes from inside an agent is bound to the parent session, and the window alone
+admitted every concurrent context's request inside it. Three `/pharn-loop` runs in three background agents of one
+session produced three ledgers sharing 357, 381 and 411 of their 370, 407 and 411 rows, main-thread rows included.
+The measurements behind this section are in `.dev/measurements/cost-ledger-run-scope-2026-09-27.md` (in the PHARN
+repository, not an install).
+
+**The rule.**
+
+1. **A context** is `main`, the session's own thread, or `agent:<agentId>`, one agent. A transcript record claims
+   one by `isSidechain` — exactly `false` is `main`; exactly `true` with an `agentId` rule 3 admits is that agent;
+   anything else is undecidable — and the claim counts only when the FILE it was read from names the same context
+   (`<session>.jsonl` is `main`; `<session>/subagents/agent-<id>.jsonl` and
+   `<session>/subagents/workflows/<run>/agent-<id>.jsonl` are that agent). A request's context is its first
+   line's (the row rule above). A row's context is read back from `sidechain` and `agent_id` alone, and the emitter
+   writes a row only when that reading equals the request's context.
+2. **The binding.** The run's context `C` is the ONE context whose tool results carry, as a whole `\n`-delimited
+   line, a line `mark-phase.mjs` printed for a current-run marker bound to the selected session. The line is
+   rebuilt from the marker's own fields by `markerLine()` in `mark-phase.mjs`, the one encoding its CLI prints. No
+   such context: `unknown`, "no … carries … a line mark-phase printed for this run". More than one: `unknown`,
+   "… appear in the tool results of more than one context". A copy of a line in a second context therefore
+   refuses; it never re-binds.
+3. **The set `S`.** `C` is in `S`. `main` is in `S` only when it is `C`. An agent is in `S` iff it was spawned by a
+   member of `S` at a time inside the window (the session's opening ≤ spawn ≤ end, both inclusive): its
+   `agent-<id>.meta.json`, found by listing the `subagents/` directory and read only as a regular file, names a
+   `toolUseId`, and exactly one context other than the agent itself holds a `tool_use` block with that id (a fork's
+   file opens with a copy of its own spawning line). The spawn time is that holder's earliest record of the block.
+   So an agent `C` spawned before the run is not the run's, and neither is a sibling run's agent.
+4. **Fail closed.** A window member whose context is undecidable, or whose agent cannot be linked (no meta, no
+   `toolUseId`, no single holder, an unreadable spawn time, a cycle), makes membership `unknown`, "a request inside
+   the run window comes from a context whose place in the session's agent tree cannot be read". It is never counted
+   and never dropped silently.
+
+**Recorded.** `membership.method` is `run-window/2`. `membership.context` is `C` and `membership.contexts` is `S`,
+sorted, over `C` and the contexts a transcript line names at or before the window's end (every named context
+while the window is open). A context first named after the end has no request inside the window; leaving it out
+keeps a closed run's recorded set fixed while the session goes on writing ([[L58]]). Both are `null` when nothing
+was measured: an unknown membership, no transcript read, or a transcript holding no usage-bearing record
+(`coverage: unavailable` under a known window). A context-unknown ledger is shaped like any other unknown one — `coverage: unavailable`, no
+rows, `excluded_requests: null` — and keeps its window's `start` and `end`, which the checker still re-derives
+from `markers[]`.
+
+**What the binding reads, and what that costs ([[L6]]).** No structured location records which context ran a
+run: the environment carries no agent id, and the platform writes the orchestrating context nowhere. So the
+binding reads tool-result text, as narrowly as that can be done:
+
+- **Tool results only.** A `tool_result` block's `content` — a string, or its `text` blocks — is read, and nothing
+  else: not a user or assistant message, not a `queue-operation` record, not a field outside `message.content`. In
+  an agent's transcript that block is the only copy of a command's output (measured).
+- **A whole line, equal to a line rebuilt from the marker's own fields.** A substring never counts.
+- **A second copy in a TOOL RESULT refuses.** A marker line can legitimately reach a second context. When the copy is
+  in that context's tool results, the run becomes `unknown`, never re-bound; a copy anywhere else is not read at all.
+  The two measured delivery shapes, each pinned by a test:
+  - a FOREGROUND agent's final report is a tool result of the context that spawned it, so an orchestrator whose
+    agent quotes a marker line in its report holds that line too: the run is ambiguous, `unknown`;
+  - a BACKGROUND agent's hand-back reaches its parent as a `user` record with string content (and a
+    `queue-operation` record), and a human's chat paste is a user message: neither is a tool result, so neither
+    changes the binding.
+- **The printed line is load-bearing.** Changing `markerLine()` changes run membership for every ledger emitted or
+  re-derived afterwards: a run whose markers were printed in the old form no longer binds and reads `unknown`,
+  never a wrong count. `mark-phase.test.mjs` runs the real CLI for each marker kind and each field that changes the line, and pins that its output
+  equals `markerLine()` of the marker read back.
+
+**Bounds, each stated where the rule is:**
+
+- **The transcript layout is undocumented and machine-local.** The file names, the `isSidechain`/`agentId` fields,
+  the meta file and its `toolUseId`, and where a command's output lands are the platform's, measured on one machine
+  on 2026-09-27 (94,225 usage-bearing records agreed with their file; 382 of 383 agents linked to exactly one other
+  context). None is a floor fact. Every departure the tests pin — a missing or non-boolean `isSidechain`, a record
+  disagreeing with its file, a missing meta or `toolUseId`, an ambiguous spawn record, output missing from the tool
+  result — reads as undecidable, unlinked or unbound, and so as `unknown`. A departure no test has met is not
+  covered by that sentence.
+- **"`C` is the context that ran the run" is ADVISORY.** It rests on the platform recording a Bash result in the
+  calling context's transcript, and on the marker output reaching that result — the pinned lines print to stdout.
+  A failure of either reads as `unknown`, except in the named case `cost-ledger-mention-only` (Residual): the
+  output never reached the calling context and another context's tool result carries a copy, and then that
+  context is measured.
+- **"A concurrent run's requests are never counted" is NOT claimed.** What holds is narrower: a request is counted
+  only when the transcript links its context to the context whose tool results carry the run's marker lines.
+- **Transcript content is untrusted.** A crafted record can claim a marker's line or move a request between
+  contexts — the timestamp bound above, one field wider. It gates nothing (fix #3).
 
 ## Mode (added 6.25.0, `/pharn-ship --quick`)
 
@@ -340,10 +438,13 @@ policy runs inline in every mode of its command has no route line and no `route`
 
 **A routed stage's rows.** A stage agent's requests are read by the same `sessionRequests()` as every other
 row: its transcript sits under the parent session's `subagents/` directory, and its records carry the parent's
-session id. So its rows are ordinary run members, `sidechain: true`, with the stage agent's id in `agent_id` and
-the model the platform SERVED in `model`, and the unchanged attribution method bills them to the routed stage's
-bucket — as long as the stages run in the foreground one at a time and the `orchestrator` marker follows the
-stage's final `read`, both command rules. The same bucket holds the orchestrator's own requests inside the
+session id. The orchestrator that printed the run's markers spawned it during the run, so it is in the run's
+context set (Run membership, rule 7), and its rows are ordinary run members, `sidechain: true`, with the stage
+agent's id in `agent_id` and the model the platform SERVED in `model`. Since 6.29.0 that holds whether the
+orchestrator is the session's own thread or itself an agent, and a concurrent run's stage agents in the same
+session are excluded: they were spawned by another context. The unchanged attribution method bills the rows to the
+routed stage's bucket — as long as the stages run in the foreground one at a time and the `orchestrator` marker
+follows the stage's final `read`, both command rules. The same bucket holds the orchestrator's own requests inside the
 bracket, `sidechain: false`: the one that issues the Agent call, the one that issues `read`, and the one that
 issues the closing `orchestrator` marker (whose first line precedes the marker it writes), plus a relayed
 question's requests.
@@ -374,6 +475,21 @@ activity outside the run. `render-run-report.mjs` prints the same label. `--veri
 a `/1` file with a WARN, because its rows are not re-derivable under the run-window rule. Reading a `/1`
 total as run-scoped would silently reinterpret historical data. The value rules 6.28.1 added apply to a `/1` file
 too (next note).
+
+**A `run-window/1` ledger (a `/2` file written from 6.9.0 through 6.28.x) is never rewritten either, and its rows
+may include other contexts' requests.** 6.29.0 reads both methods:
+
+- **Plain mode** validates it under its own seven `membership` keys and the window rules, never REDs it for lacking
+  the context half, and WARNs once that it is not context-scoped, naming how many contexts its rows come from.
+- **`--verify-transcript` re-derives under `run-window/2`,** the rule in force, over the file's own markers. Where
+  the recorded rows are a superset of the re-derived ones, it is RED, and the RED says how many recorded rows are not
+  the run's own. As for 6.28.1, where it is RED, that RED is correct: those rows were another context's requests.
+  Where the rows agree, it is GREEN.
+- **`render-run-report.mjs`** labels its totals "not context-scoped".
+- **The old-reader direction.** A checker from 6.28.x or earlier REDs a `run-window/2` ledger twice: its `membership`
+  key set is closed at seven keys, and `context` and `contexts` are two more, and it requires the method
+  `run-window/1` (probed on a real ledger: both REDs). A 6.29.0 or later checker reads both methods. The files are
+  checked by the floor they ship with, so the mismatch needs an older floor reading a newer file.
 
 **A ledger emitted before 6.28.1 from a transcript carrying a value 6.28.1 refuses can now be RED, and where it is,
 that RED is correct.** Those values were never valid; the old emitter copied or summed them. Two ways it shows:
@@ -453,10 +569,26 @@ cache-write classes were equal under both rules on every measured request. For s
 
 6. **(`/2`) Every row is a member of the recorded run window.** The checker recomputes the window from the
    file's own `markers[]` for `membership.session`, requires `membership` to equal it, and REDs any row
-   outside it. **Bound ([[L43]]):** this binds the rows to the RECORDED markers, never to the transcript.
-   `--verify-transcript` re-derives the rows and `excluded_requests` under the same recorded markers,
-   never the live markers file, so a later invocation cannot re-bound an old ledger. It works only while
-   the transcript exists. The request ids must match exactly, and each row is compared class by class:
+   outside it. **Under `run-window/2` (6.29.0) every row's context is also one of the recorded `contexts`:** the
+   checker reads each row's context from its `sidechain` and `agent_id` alone, holds `context` and `contexts` to
+   their shape (a measured ledger: a context key, and a sorted, duplicate-free, non-empty list that includes it;
+   anything else: both `null`), and admits a context-unknown membership only over a KNOWN window, with its
+   `start`/`end` still equal to the recompute. **Bound ([[L43]]):** this binds the rows to the RECORDED markers and
+   the RECORDED context set, never to the transcript — a ledger whose `contexts` name the wrong agents is GREEN
+   in plain mode. **And a fabricated context-unknown membership passes BOTH modes:** its status is not
+   re-derivable from the file, and `--verify-transcript` declines every unknown ledger with a WARN, since it has no
+   rows to re-derive. That is the safe direction — such a ledger claims no usage at all — and it is the 6.9.0
+   posture for an unknown window, now stated for the context half too.
+   `--verify-transcript` re-derives the rows, `excluded_requests` and (`run-window/2`) `context` and `contexts`
+   under the same recorded markers, never the live markers file, so a later invocation cannot re-bound an old
+   ledger. The two context fields must be EQUAL. Once a bounded window closes they are fixed: an agent spawned
+   later is outside the set by rule 7, and one spawned inside it whose first line lands after the end is not
+   reported. That rests on two observed platform behaviours, not floor facts: a record is timestamped when it is
+   written, and an agent's meta file is written moments after the agent's first record (the median last write
+   followed it by 33 ms; `.dev/measurements/cost-ledger-run-scope-2026-09-27.md` §5 gives the bound). A transcript
+   that no longer binds the run to one context — a copy of a marker line that reached a second context after
+   emission, say — is a WARN, never a RED: a re-derivation answers what the transcript says NOW ([[L42]]). It works
+   only while the transcript exists. The request ids must match exactly, and each row is compared class by class:
    - **input, cache read and both cache writes must be EQUAL.** They did not differ across a request's first and
      selected line on any request measured.
    - **`output` and `output_thinking` must satisfy recorded ≤ re-derived (6.24.1).** A row's usage is its
@@ -478,8 +610,11 @@ cache-write classes were equal under both rules on every measured request. For s
      facts: the transcript is append-only, every record is timestamped when it is written, and a request's
      timestamp is its first occurrence's in file order. Its `usage` may come from a later line (6.24.1), and
      that moves no membership decision.
-   - An OPEN window has no end. A continued session therefore adds MEMBERS, and `requests[]` REDs. Both
-     emitters write `run-stop` before emitting, and the checker WARNs an open window.
+   - An OPEN window has no end. A continued session therefore adds MEMBERS, and `requests[]` REDs. Other
+     contexts' requests inside it keep growing too, and `excluded_requests` REDs. Both emitters write `run-stop`
+     before emitting, and the checker WARNs an open window.
+   - (6.29.0) Under a BOUNDED window the part excluded for its context lies inside the window, so it is fixed with
+     the before-window part; only the after-window tail grows.
 
 7. **(6.28.1) Every count is a non-negative safe integer, and the view keys have a type.** Each
    `requests[].tokens.<class>` must satisfy `isTokenCount`: the emitter writes 0 for a refused count and lists it,
@@ -800,6 +935,21 @@ fix #3), but it is a channel into a durable artifact and it is not closed. State
 emitter sorts its rows by `ts`, so in a transcript spread over several files it can name the wrong row. Probed while
 planning 6.28.1 and not selected at its plan gate; the paths 6.28.1 added (`session_id`, `version`, `tokens.<class>`)
 inherit the same index.
+
+**Named, not built (6.29.0, run membership's context half — P7: none has been met):**
+
+- **`cost-ledger-workflow-agents`.** A Workflow-tool agent's meta carries no `toolUseId`, so it is unlinked by
+  construction, and a Workflow agent working inside a run's window makes membership `unknown`. Its link is readable
+  through the parent's Workflow tool result, which names the run id. No ledger has met one.
+- **`cost-ledger-mention-only`.** If the orchestrator's marker output never reaches its own tool result (redirected
+  to a file, say) and a DIFFERENT context later reads that output back through a tool, that context is the only
+  holder, and the run is bound to it. The pinned marker lines print to stdout, and it has not been observed.
+- **`cost-ledger-shared-markers-file`.** Two runs of the SAME feature at once in one checkout append to one markers
+  file. The current run starts at the later `run-start`, and the binding refuses it as ambiguous only when both
+  contexts printed lines of that current run; the stage view would mix them either way.
+- **`cost-ledger-spawn-batched`.** An agent spawned in the same assistant message as the call that writes the run's
+  first marker is stamped with that message's time, before the window opens, so it is excluded — an under-count,
+  never an over-count. The pinned flows write the marker in a call of its own first.
 
 **Named, not changed: a window ordered as strings.** The ledger's `window_start`/`window_end` and its row order
 compare timestamps as strings, and since 6.28.1 the `pharn-cost-record/1` block's window does the same, after the same

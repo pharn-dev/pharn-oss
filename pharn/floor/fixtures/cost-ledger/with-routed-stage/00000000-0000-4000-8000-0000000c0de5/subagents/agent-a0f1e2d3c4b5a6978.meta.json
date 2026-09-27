@@ -1,5 +1,7 @@
 {
   "agentType": "general-purpose",
   "description": "pharn stage pharn-build",
-  "model": "sonnet"
+  "model": "sonnet",
+  "toolUseId": "toolu_fx_rs_build",
+  "spawnDepth": 1
 }
