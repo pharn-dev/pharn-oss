@@ -6,12 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 **There is one version number here that means anything.** The entries below are keyed to [`SKILLS_VERSION`](./SKILLS_VERSION) — the version of PHARN's **product surface**: the bytes an install receives (the `pharn/` tree, the product-floor checkers, the four trusted docs, and the `pharn-*` commands). It moves whenever those bytes change, including for prose-only corrections, and it is what the `pharn` badge at the top of the README shows. `package.json`'s `version` is **deliberately inert** (`0.0.0`) and is not a second version to read: this package is `private: true` and never published, so npm's field addresses nothing. It previously read `1.0.0` as a "foundation tag", which made a third identity to keep in sync with `SKILLS_VERSION` and the README badge while nothing stopped a well-meaning bump of it — so a `0.0.0` beside a `2.x` entry is not a contradiction, it is the point.
 
-## [Unreleased]
+## [6.28.4] - 2026-09-27
 
 ### Changed
 
-- 2026-09-27: **Document the floor's Node 24.2 requirement, the 6.28.2 product-command budget for contributors, and the 6.24.0 write-guard posture in user-facing docs.** README now states that `@pharn-dev/pharn` still requires Node 20+ while `pharn/floor/*.mjs` needs Node 24.2+ (`import.meta.main`). CONTRIBUTING adds the `command-hygiene.test.mjs` ceilings and the rule for raising them. SECURITY names `run-marker.mjs` and clarifies that an installed project's permissive default outside an open run is intentional, not a write-guard bypass. Repo meta only — no `SKILLS_VERSION` bump.
-- 2026-09-27: **Remove one-shot `docs-audit-gaps-1-3.patch` and `apply_docs_audit_patch.py`** after the doc edits landed — repo meta only.
+- **Document the floor's Node 24.2 requirement, the 6.28.2 product-command budget for contributors, and the 6.24.0 write-guard posture in user-facing docs.** README states that `@pharn-dev/pharn` still requires Node 20+ while `pharn/floor/*.mjs` needs Node 24.2+ (`import.meta.main`). CONTRIBUTING adds the `command-hygiene.test.mjs` ceilings and the rule for raising them. SECURITY names `run-marker.mjs` and clarifies that an installed project's permissive default outside an open run is intentional, not a write-guard bypass.
+- **Release housekeeping:** remove one-shot patch/apply helpers after merge; align CHANGELOG with `main` (this section). `SKILLS_VERSION` 6.28.3 → 6.28.4 (PATCH: root documentation only — README, CONTRIBUTING, SECURITY — not the installable `pharn/` product surface). `MIN_CLI` stays 0.5.0.
+
+## [Unreleased]
 
 <!-- Keep a Changelog groups by TYPE within a release, and markdownlint MD024 is `siblings_only`, so
      this section carries exactly ONE heading per type. A new entry joins its existing group at that
