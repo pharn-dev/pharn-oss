@@ -746,7 +746,9 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   so such a path is denied as the project's own. This allowance is **new in 6.24.0**: before it, every
   out-of-project path was denied, as it still is in every other posture. Every other out-of-project path
   stays denied, including another project's memory folder, your dotfiles, `~/.ssh`,
-  `~/.claude/settings.json`, `~/.claude.json` and `~/.claude/hooks/`. The main-checkout key mirrors how
+  `~/.claude/settings.json`, `~/.claude.json` and `~/.claude/hooks/`. ("Another project" means another key:
+  two paths that differ only in characters outside `[A-Za-z0-9]` share one key and, in Claude Code too, one
+  memory folder.) The main-checkout key mirrors how
   Claude Code names its memory folders, which it does not document; if that changes, the key stops matching
   and those writes are denied rather than widened. `protect-trusted-paths.cjs` still denies its own set (the
   trusted docs, `CODEOWNERS`, the guards' own control surface, your SPEC template) in every posture,

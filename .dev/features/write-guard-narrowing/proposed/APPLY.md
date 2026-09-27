@@ -31,8 +31,10 @@ the plan names was written by the agent. This folder carries the three files' ch
        directory when either sits in a temp root.
 
      The main-checkout key mirrors an undocumented Claude Code derivation, and it fails closed if that
-     derivation drifts. A payload field that is absent or malformed grants nothing. A denied write to Claude
-     Code's own state gets a new message variant that offers no Bash route.
+     derivation drifts. A project is its key: two paths that differ only in characters outside `[A-Za-z0-9]`
+     share one memory folder, as they do in Claude Code. A payload field that is absent or malformed grants
+     nothing. A denied write to Claude Code's own state gets a new message variant that offers no Bash route,
+     and offers this session's scratchpad only when the call's payload identifies it.
 
    - **`LIMITS.md §7`.** Four edits:
      - the out-of-project bullet is rewritten, with its bounds;

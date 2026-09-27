@@ -9,8 +9,12 @@
 - scope: `set-writes-scope.cjs --from-plan` → 17 paths (`set_at` 2026-09-27T15:58:43.071Z);
   `reconcile-baseline.mjs --anchor --by pharn-dev-build` → 2452 entries, anchored after the setter
   (2026-09-27T15:58:43.863Z), its `scope_snapshot` the same 17 paths
-- floor: `node pharn/floor/validate.mjs .` → **GREEN** (`FLOOR: GREEN — 72 capabilities checked in "."`, exit 0;
-  this increment adds no capability)
+- floor: `node pharn/floor/validate.mjs .` → **GREEN** (`FLOOR: GREEN — 36 capabilities checked in "."`, exit 0;
+  this increment adds no capability). Corrected at GATE 2 (review F4): this line first recorded 72. That run
+  coincided with the first chain re-run, whose throwaway worktree sat under `.pharn/pharn-dev-build/`, and validate's
+  walk counted that worktree's copy of the capability tree as well — 36 twice. The clean runs (review Step 1,
+  verify's `validate` gate, and the runs after the GATE-2 fix pass) read 36. Every throwaway worktree now lives
+  under the OS temp directory.
 
 ## What landed (the agent-writable surface)
 
@@ -312,4 +316,120 @@ Each sentence below quantifies over a set, so each was held to a measurement rat
 
 - **`main` moved during this run.** `f255f0c` (#286) released `6.28.3`, the number this build uses. Per the
   batch's rule the renumber happens when the orchestrator says so: `SKILLS_VERSION`, the README badge and the
-  CHANGELOG heading move; the human-only patch and its checksums do not (no version string in them).
+  CHANGELOG heading move; the human-only patch and its checksums do not (no version string in them). Done at
+  GATE 2 — see below.
+
+## After the GATE-2 fix pass (2026-09-27)
+
+- stage model: opus (`claude-opus-5-5`), by the maintainer's instruction for this batch; effort not routed
+- input: the orchestrator's GATE-2 decision, FIX (`PLAN.md`, "GATE 2 record, and the fix pass") — a model decision
+  under the maintainer's delegation, not a human approval — plus its follow-up asking for a case-sensitivity audit
+  of the new tests.
+- commits: the GATE-2 snapshot `0a27990`; then `git branch -m write-guard-narrowing`; then the merge of
+  `origin/main` (`c1bf663`, 6.29.0) as `b8b8e1b`; the fix pass on top of it.
+
+### The merge and the renumber
+
+Three conflicts, each resolved by a scratch script that started from `origin/main`'s bytes and required every
+re-applied edit to match exactly once:
+
+- **`CHANGELOG.md`** — main's sections kept byte for byte (`git diff origin/main -- CHANGELOG.md` removes nothing);
+  this branch's entry moved into a new `## [6.29.1] - 2026-09-27` above main's `## [6.29.0]`, its bump sentence now
+  `6.29.0 → 6.29.1`. Main's `[Unreleased]` held no entry, so nothing moved.
+- **`README.md`** — main's bytes with this branch's three edits re-applied (badge, guarantee-row cell, posture
+  paragraph); prettier re-padded the table.
+- **`SKILLS_VERSION`** — `6.29.1`.
+
+`CLAUDE.md` and `pharn/floor/README.md` merged cleanly and were renumbered: every `6.28.3` this branch had added is
+`6.29.1` (none remain on added lines; main's own files carry no `6.28.3` in these two files). `docs:check`,
+`check:changelog` (122 sections in order) and `check:badge` read GREEN before the merge was committed. The three
+human-only files and both hook suites are byte-identical on `origin/main`, so the patch needed no renumber.
+
+### Disposition of every review finding
+
+- **F1 (important) — fixed.** The clause "a non-git project's session started in a subdirectory carries a
+  transcript key Claude Code does not use for memory" is dropped from `LIMITS.md §7` and from PLAN §4. It was not
+  re-verified by another route: the permission classifier's denial of the bundle read stands.
+- **F2 (minor) — fixed.** The Claude-state body's scratch bullet now depends on `ctx.scratchpadKnown` — true only
+  when the call's payload names a scratchpad `ownScratchpadDir()` accepts (the same function `isInOwnScratchpad()`
+  now calls, so the message and the verdict cannot disagree). With it: "the Write tool reaches both". Without it:
+  the temp-directory route only, and "the Write tool cannot reach the scratchpad on this call". `denyMessage()`
+  stays pure composition; nothing from the payload is rendered. Two existing M7 tests gained the assertions (both
+  variants, and all nine fail-closed field shapes), so the expected-fail list keeps its titles.
+- **F3 (minor) — fixed.** "Another project's memory stays denied" is bounded to keys — two paths differing only in
+  characters outside `[A-Za-z0-9]` share one key and, in Claude Code too, one folder — in `LIMITS.md §7`, the
+  enforce header, `CLAUDE.md`, `README.md`, `pharn/floor/README.md`, the CHANGELOG entry and `APPLY.md`.
+- **F4 (minor) — fixed** in this file's header (36, and why 72 was read). Every throwaway worktree now lives under
+  the OS temp directory; the runner also keeps the chain's log now.
+- **F5 (accepted)** — no change.
+
+### The case-sensitivity audit (the orchestrator's follow-up; CI runs on case-sensitive ext4)
+
+Every test this increment added or changed, in both hook suites, was read for an expectation that depends on the
+temp volume's case sensitivity (a stat of a case or Unicode variant, a case-variant alias):
+
+- **One test touches letter case**: `★ M7: the claude-<uid> exclusion is folded and closed`. Its verdicts come from
+  a DENY rule that folds by name (`hasClaudeUidSegment()` through `toKey()`), never from the filesystem, so its
+  expectations stay unconditional. It now also creates both `claude-4242` and `Claude-4242` on disk and asserts,
+  from a run-time probe of the temp volume, that they are two directories on a case-sensitive volume and one on a
+  case-insensitive one — and that both are denied with the Claude-state body either way.
+- **No other added or changed test depends on case or Unicode form**: the memory-key tests build keys from
+  realpaths and compare exactly; the (1b) repositories assert git's pointer premise before use; the M4 cases
+  depend on a backslash being a name character, which holds on every `/` system (ext4 included) and skip
+  elsewhere. The case-variant alias cases in `everyDenyMessage()` are 6.24.0's, already green on CI, and not
+  changed here.
+- **Both branches run.** The two hook suites against the patched hooks (the fixed `handoff/` sources), once with
+  `TMPDIR` on the default APFS volume (case-insensitive) and once on a case-sensitive APFS scratch volume
+  (`hdiutil`, mounted outside every `claude-<uid>` folder; a probe file confirmed `PROBE` did not resolve to
+  `probe`; 323 test temp directories landed on it): **305 of 305** each time. The volume was detached and deleted
+  afterwards.
+
+### The regenerated patch — once
+
+`handoff/` was recreated from HEAD plus the reviewed patch (`mk-patched.mjs`, sha256-checked, then a declared Bash
+`cp`), the two hooks edited with the Edit tool, and `handoff/limits-edits.json` written as two INCREMENTAL edits on
+the patched `LIMITS.md` (each `find` matched once). The runner applied the reviewed patch first, overlaid the new
+hooks, applied the edits, committed in a throwaway worktree under the OS temp directory, and regenerated the patch.
+A first start of this run was stopped by hand before it wrote anything, to take in the audit above; its worktree was
+removed. The one completed run:
+
+| gate                 | exit | note                                                                                   |
+| -------------------- | ---- | -------------------------------------------------------------------------------------- |
+| `format:check`       | 0    |                                                                                        |
+| `lint`               | 0    |                                                                                        |
+| `lint:md`            | 0    |                                                                                        |
+| `docs:check`         | 0    |                                                                                        |
+| `check:markers`      | 0    |                                                                                        |
+| `check:badge`        | 0    | badge `6.29.1` = `SKILLS_VERSION`                                                      |
+| `check:changelog`    | 0    |                                                                                        |
+| `check:contributing` | 0    |                                                                                        |
+| `check:reconcile`    | 0    | not counted: a never-anchored worktree reads `NO_BASELINE`                             |
+| `test`               | 0    | the full suite against the PATCHED hooks: **4157 tests, 4157 pass, 0 fail, 0 skipped** |
+| `npm run check`      | 0    | the aggregate, as one chain (its log kept)                                             |
+
+- the 30 expected-fail titles, TAP in that worktree: **30 of 30 `ok`**, no SKIP directive;
+- the patch: 730 lines (was 703); no added line matches `/\b6\.\d+\.\d+\b/`; `git apply --check` against this
+  worktree exits 0. Against the reviewed patch it changes exactly F1, F2 and F3 plus the `index` lines and hunk
+  headers; `protect-trusted-paths.cjs` is byte-identical to the reviewed version.
+
+```text
+a5e22d3d2aaa69d1944ab75903ca44aed73f87e0ee0b6d1576ee192c23d9f608  .claude/hooks/protect-trusted-paths.cjs
+b65a4bebb37fea96ec06a53a66b4450aaee2a8c21bfde414421dfbb9f105f2d4  .claude/hooks/enforce-writes-scope.cjs
+bb98547e3d7bc5367146900fe2e9871ab75e24c0e2341f3ad29fc6b01870bab2  LIMITS.md
+```
+
+`handoff/` was deleted afterwards (a declared Bash write).
+
+### The message sweeps and the probe, over the final bytes
+
+The three files rebuilt from HEAD plus the new patch (all three sha256 OK), against the in-tree hooks, which
+`git diff --quiet HEAD` confirmed are HEAD's: **D1 enforce 560 combinations, 0 differences; D1 protect 520, 0
+differences; the behavioural probe 51 of 51.** Hook cost, median of 100 interleaved spawns on a quieter machine:
+protect in-repo 31.2 / 31.4 ms, enforce out-of-project 31.9 / 32.2 ms, enforce in-repo 32.9 / 32.4 ms (HEAD /
+patched).
+
+### The expected-fail list, re-derived after the merge
+
+The full suite, TAP reporter, in this worktree against its still-unpatched hooks, after the merge and the fix pass:
+**4157 tests, 4127 pass, 30 fail**. The 30 failing top-level titles are byte-identical to the list above (`cmp` of
+the two lists) — unchanged, all in the two hook test files, and none from the tests `main` brought in.

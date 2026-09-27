@@ -2486,6 +2486,8 @@ test("★ M7: the scratchpad — only this session's own, recognised from the pa
   const r = hookSession(cwd, join(t.other, "gates.sh"), fields);
   assert.match(r.stderr, CLAUDE_STATE_CUE);
   assert.doesNotMatch(r.stderr, BASH_SCRATCH_CUE);
+  // GATE-2 F2 (L27): the payload names this session's scratchpad, so the body may offer it — and does.
+  assert.match(r.stderr, /the Write tool reaches both/);
 });
 
 test("★ M7 fail-closed: a scratchpad the payload does not name as THIS session's grants nothing — and the body never calls it 'not scratch'", () => {
@@ -2509,6 +2511,12 @@ test("★ M7 fail-closed: a scratchpad the payload does not name as THIS session
   assert.match(r.stderr, CLAUDE_STATE_CUE);
   assert.match(r.stderr, /recognised only from the scratchpad_dir and session_id Claude Code passes to hooks/);
   assert.doesNotMatch(r.stderr, /not scratch/i);
+  // GATE-2 F2 (L27): the scratchpad is NOT reachable on this call, so the body must not promise it is.
+  for (const fields of bad) {
+    const b = hookSession(cwd, target, fields);
+    assert.doesNotMatch(b.stderr, /the Write tool reaches both/, `no scratchpad promise: ${JSON.stringify(fields)}`);
+    assert.match(b.stderr, /the Write tool cannot reach the scratchpad on this call/, `says so: ${JSON.stringify(fields)}`);
+  }
 });
 
 test("★ M7 fail-closed: a transcript_path that is absent or malformed grants nothing from the transcript's key", () => {
@@ -2545,6 +2553,20 @@ test("★ M7: the claude-<uid> exclusion is folded and closed — its case varia
   }
   for (const dir of ["claudette-4242", "claude-4242x", "claude-", "my-claude-4242", "claude-42-42"]) {
     assert.equal(hook(cwd, join(base, dir, "x.txt")).status, 0, `an ordinary temp folder: ${dir}`);
+  }
+  // The exclusion is a DENY rule that folds by NAME, so its verdict does not depend on the volume. Probed, not
+  // assumed (CI's ext4 is case-sensitive, APFS usually is not): with both spellings created on disk — ONE directory
+  // on a case-insensitive volume, TWO on a case-sensitive one — each is still denied, with the same body.
+  const probe = join(base, "case-probe");
+  fs.writeFileSync(probe, "x");
+  const caseSensitive = !fs.existsSync(join(base, "CASE-PROBE"));
+  fs.mkdirSync(join(base, "claude-4242", "k"), { recursive: true });
+  fs.mkdirSync(join(base, "Claude-4242", "k"), { recursive: true });
+  assert.equal(fs.readdirSync(base).filter((n) => /^claude-4242$/i.test(n)).length, caseSensitive ? 2 : 1, "the probe's premise");
+  for (const dir of ["claude-4242", "Claude-4242"]) {
+    const r = hook(cwd, join(base, dir, "k", "x.txt"));
+    assert.equal(r.status, 2, `excluded on a case-${caseSensitive ? "sensitive" : "insensitive"} volume: ${dir}`);
+    assert.match(r.stderr, CLAUDE_STATE_CUE);
   }
 });
 

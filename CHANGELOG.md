@@ -49,8 +49,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   undocumented Claude Code derivation and fails closed if it drifts), this session's own scratchpad (the payload's
   `scratchpad_dir`, when it ends in `<session_id>/scratchpad`), and an ordinary temp path: never one with a
   `claude-<uid>` folder in it, and never one inside the Claude config directory or the home directory when either
-  sits in a temp root. A payload field that is absent or malformed grants nothing from the place that needs it. A
-  denied write to Claude Code's own state gets its own message, which offers no Bash route. Both hook files and
+  sits in a temp root. A project here is its key, so two paths that differ only in characters outside
+  `[A-Za-z0-9]` share one memory folder, as they do in Claude Code. A payload field that is absent or malformed
+  grants nothing from the place that needs it. A denied write to Claude Code's own state gets its own message,
+  which offers no Bash route and names this session's scratchpad as a route only when the payload identifies it.
+  Both hook files and
   `LIMITS.md §7` are human-only: they change through a patch the build verified and a human applied.
   `SKILLS_VERSION` 6.29.0 → 6.29.1 (PATCH: a correction to shipped hook bytes — no command, checker, contract,
   frontmatter key or path is added, moved or removed). `MIN_CLI` stays 0.5.0: the same files at the same paths.

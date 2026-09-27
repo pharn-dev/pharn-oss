@@ -226,28 +226,31 @@ count 0 differences).
 
 - `LIMITS.md §7` (in the patch): the D2 bullet rewritten for the three places, the two exclusions and the payload
   fields, with the bounds decision B leaves (grill G2): 1b mirrors an undocumented Claude Code derivation and a
-  drift fails closed; a PHARN install at a subpath (a root with no `.git`) gets nothing from 1b; a non-git
-  project's session started in a subdirectory carries a transcript key Claude Code does not use for memory; a
-  custom `autoMemoryDirectory` or remote memory directory is not recognised; a Claude Code that sends no
+  drift fails closed; a PHARN install at a subpath (a root with no `.git`) gets nothing from 1b; a
+  custom `autoMemoryDirectory` or remote memory directory is not recognised; a project is its KEY, so two paths
+  differing only in non-alphanumerics share one folder (GATE-2 F3); a Claude Code that sends no
   `scratchpad_dir` gets no scratchpad allowance. The "every target" bullet gains protect's second reading; the
   install bullet's "`protect-trusted-paths.cjs` is unchanged" loses "unchanged"; a provenance comment closes §7.
 - `CLAUDE.md` "Writes-scope" (the D2 sentence, the "every target" bullet, the out-of-root remedy bullet) and hard
   constraint 1 (protect's second reading); `README.md` (guarantee row, the posture paragraph);
   `pharn/floor/README.md` (both guard sections); `pharn/floor/run-marker.mjs` header (cite the hook, restate
   nothing).
-- `CHANGELOG.md` `## [6.28.3]`, `### Fixed`, one entry led "Security —".
+- `CHANGELOG.md` `## [6.29.1]` (planned as 6.28.3; renumbered after the merge of 6.29.0), `### Fixed`, one entry
+  led "Security —".
 
 ### 5. Version
 
-`SKILLS_VERSION` 6.28.2 → **6.28.3** (PATCH: a correction to shipped hook bytes — no command, checker, contract,
-frontmatter key or path added, moved or removed). `MIN_CLI` stays 0.5.0: same files at the same paths. Renumbered
-by diff if another PR releases 6.28.3 first.
+`SKILLS_VERSION` 6.29.0 → **6.29.1** (PATCH: a correction to shipped hook bytes — no command, checker, contract,
+frontmatter key or path added, moved or removed). `MIN_CLI` stays 0.5.0: same files at the same paths. Planned as
+6.28.2 → 6.28.3; #286 (6.28.3), #287 (6.28.4) and #290 (6.29.0) merged first, so it was renumbered at GATE 2, and is
+renumbered again by diff if another PR releases 6.29.1 first.
 
 **No PHARN version string in the human-only bytes** (GATE-1 requirement). The two hooks and `LIMITS.md` name this
 change by its slug, `write-guard-narrowing`, wherever a header would carry "(6.x.y)", so a renumber after another
 PR merges never regenerates the patch or its sha256. Version strings stay in `CHANGELOG.md`, `CLAUDE.md`,
 `README.md`, `SKILLS_VERSION` and `pharn/floor/README.md`, which renumber normally. The runner checks it: no ADDED
-line of `proposed/human-only.patch` may match `/\b6\.28\.\d+\b/`.
+line of `proposed/human-only.patch` may match `/\b6\.28\.\d+\b/` — widened at GATE 2 to `/\b6\.\d+\.\d+\b/`, so a
+6.29 or later number is caught too.
 
 ## Decisions for GATE 1 (all five decided at GATE 1 — see "GATE 1 record")
 
@@ -504,6 +507,31 @@ Three amendments, each made in place by `/pharn-dev-build` and recorded in `BUIL
   compares as Claude Code does. Either way the back-pointer check still has to hold.
 - Chain sequencing, step 5 — the pinned `apply.sh` runs twelve suites: every suite that executes either guard or
   reads its source, found by grepping the test tree for the two hook names. `proposed/apply.sh` is byte-identical.
+
+## GATE 2 record, and the fix pass (2026-09-27)
+
+**FIX**, decided by the orchestrator under the maintainer's delegation — a model decision, **not a human
+approval** — with one fix pass, then a stop before anyone applies anything:
+
+- **F1** — drop the unverified clause about a non-git session started in a subdirectory from `LIMITS.md §7` (and
+  from §4 above). It is not to be verified by another route: the permission classifier's denial of the bundle read
+  stands, and an unverified sentence does not go into a trusted doc.
+- **F2** — the Claude-state message offers this session's scratchpad as a route only when the call's payload
+  identifies it (`ctx.scratchpadKnown`, from `ownScratchpadDir()`), and otherwise says the scratchpad cannot be
+  reached on this call (L27). Pinned by assertions added to two existing M7 tests, so the expected-fail list keeps
+  its 30 titles.
+- **F3** — "another project's memory stays denied" is bounded to keys (the encoding collision) in `LIMITS.md §7`,
+  the enforce header, `CLAUDE.md`, `README.md`, `pharn/floor/README.md` and the CHANGELOG entry.
+- **F4** — `BUILD.md`'s capability count corrected to 36, with why 72 was read.
+- Step 2b: `lesson: skipped` (first occurrence; the instance is fixed by this review), the deny-message idea
+  `deferred:`.
+- Then: the branch renamed `write-guard-narrowing`; `origin/main` (`c1bf663`, 6.29.0) merged; renumbered to
+  6.29.1; the patch regenerated once and re-verified in a throwaway worktree; the reconciliation baseline
+  re-anchored so `apply.sh`'s step 2 reads CLEAN; the non-test gates re-run. No push, no PR, until the independent
+  review of the patch.
+
+In `## Files`, `handoff/limits-edits.json` now carries INCREMENTAL edits applied on top of the previous proposed
+patch (the runner applies that patch first), and `handoff/` is again transient, deleted after the regeneration.
 
 ## Open questions (HALT)
 

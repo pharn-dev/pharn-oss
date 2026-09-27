@@ -153,7 +153,9 @@ path (under the OS temp directory or `/tmp`, never inside a `claude-<uid>` folde
 config directory or the home directory when either sits in a temp root) — never a path inside another git
 tree, and never another spelling of the project's own path (a different letter case or Unicode form reaches
 the project's own files on a case-insensitive volume, so it is denied as the project's own); every other
-out-of-project path, another project's memory folder included, stays denied. A malformed
+out-of-project path, another project's memory folder included, stays denied — where a project is its key, so
+two paths that differ only in characters outside `[A-Za-z0-9]` share one folder, as they do in Claude Code
+(`LIMITS.md §7`). A malformed
 `.pharn/writes-scope.json` denies EVERY write in an installed project rather than falling back to either
 default. Confirm it works:
 

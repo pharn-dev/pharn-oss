@@ -1,3 +1,3 @@
 a5e22d3d2aaa69d1944ab75903ca44aed73f87e0ee0b6d1576ee192c23d9f608  .claude/hooks/protect-trusted-paths.cjs
-5127029edd72e8193e1db33063844f82c82c578e4263a464f3dd9e1061f1a0ba  .claude/hooks/enforce-writes-scope.cjs
-eb4bb45374958dc90276cfd46ad6e0b6edee28189a607991516d6628bd7cb2af  LIMITS.md
+b65a4bebb37fea96ec06a53a66b4450aaee2a8c21bfde414421dfbb9f105f2d4  .claude/hooks/enforce-writes-scope.cjs
+bb98547e3d7bc5367146900fe2e9871ab75e24c0e2341f3ad29fc6b01870bab2  LIMITS.md

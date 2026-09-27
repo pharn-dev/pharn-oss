@@ -7,8 +7,8 @@ seal.
 
 - stage: `/pharn-dev-ship` — every stage of this run on opus (`claude-opus-5-5`), by the maintainer's instruction
   for this batch; not a `pharn.config.json` route; effort not routed
-- where the run ended: **GATE 2**, before the human apply, which waits for the orchestrator's independent review of
-  `proposed/human-only.patch`
+- where the run ended: **GATE 2 → FIX**, then the fix pass, which stops again before anyone applies anything: the
+  human apply waits for the orchestrator's independent review of the regenerated `proposed/human-only.patch`
 
 ## Stages run, in order
 
@@ -22,6 +22,10 @@ seal.
 6. `/pharn-dev-verify` → `verify-report.json`, `VERIFY.md` — FAIL by design, then GATE-1 decision 1 applied (below).
 7. `/pharn-dev-review` → `REVIEW.md`.
 8. This roll-up: Step 2b, Step 2c, Step 3.
+9. **GATE 2 → FIX** (the orchestrator), then the fix pass (`BUILD.md`, "After the GATE-2 fix pass"): the GATE-2
+   snapshot committed (`0a27990`), the branch renamed `write-guard-narrowing`, `origin/main` (`c1bf663`, 6.29.0)
+   merged (`b8b8e1b`) and renumbered to 6.29.1, F1–F4 fixed, the new tests audited for case sensitivity, the patch
+   regenerated once and re-verified, the reconciliation baseline re-anchored, the non-test gates re-run.
 
 ## Decisions, and whose
 
@@ -34,7 +38,10 @@ decisions, **not human approvals**:
   exactly equal `BUILD.md`'s expected-fail list, each shown passing in the patched throwaway worktree. It held:
   `failing_gates` was `["test"]`, the 30 titles matched line for line, and all 30 passed against the patch
   (`VERIFY.md`, which carries the exact list);
-- GATE 2 is the orchestrator's next decision, and it has not been made.
+- GATE 2 = **FIX**, one pass, then stop again before any apply: F1 drop the unverified clause (no other route to the
+  binary), F2 a reachable remedy, F3 the key bound wherever stated, F4 the count; the Step 2b answer below; the
+  merge, the renumber, one regeneration, the re-anchor; and, added during the pass, the case-sensitivity audit of
+  the new tests (`PLAN.md`, "GATE 2 record, and the fix pass").
 
 ## The standing verdicts, verbatim
 
@@ -46,15 +53,23 @@ decisions, **not human approvals**:
 - `/pharn-dev-verify` → `verify-report.json` `.verdict`: **`FAIL`**, `failing_gates: ["test"]` — the designed STOP
   before the human apply. Every other gate exited 0, and `reconcile` read CLEAN (12 paths, 0 escapes).
 - `/pharn-dev-review` → `REVIEW.md`: GREEN, 0 floor-gate findings; F1 important, F2–F5 minor — cited, not restated.
+  F1–F4 fixed and F5 accepted in the fix pass (`BUILD.md`).
+- After the fix pass, over the merged tree: `validate` exit 0 (36 capabilities); the regenerated patch's runner —
+  every gate 0, the chain 0, the full suite 4157 of 4157 against the patched hooks, the 30 expected-fail titles all
+  `ok` there; unpatched here, the same 30 titles fail and nothing else. The verify verdict above predates the merge
+  and is re-read at `/pharn-dev-verify` after the apply.
 
 changelog-entry: exit 0
 
+The check was re-run after the merge, against `c1bf663`: GREEN, and this PR opens `## [6.29.1]`.
+
 ## Lesson (Step 2b)
 
-lesson: pending — the 2b.3 question is in the GATE-2 report, and this line becomes `promoted L<n>` or `skipped` when
-the orchestrator answers
+lesson: skipped
 
-The candidate, from `REVIEW.md` F1 (with `GRILL.md` G2):
+The orchestrator answered the 2b.3 question **Skip**, under the maintainer's delegation — a model's answer, not a
+human's answer to the form. The reason it gave: a first occurrence, and the concrete instance is fixed by this
+review (F1). The candidate, kept here so it is not lost, from `REVIEW.md` F1 (with `GRILL.md` G2):
 
 - title: "A grill finding's premise is advisory — the in-place amendment it asks for can carry an unmeasured claim
   into a trusted doc"
@@ -79,13 +94,18 @@ deferred:
 - **Named, not built (P7):** `windows-claude-temp-layout` (GATE-1 ruling 5) and `custom-auto-memory-dir`
   (`PLAN.md`, "Named follow-ups").
 
-## For the orchestrator at GATE 2
+## For the orchestrator, before the apply
 
-- the patch: `.dev/features/write-guard-narrowing/proposed/human-only.patch` (703 lines), its checksums
-  `proposed/human-only.sha256`, and `proposed/apply.sh` (what it runs: `APPLY.md`);
-- `main` moved during the run, to `c1bf663` (6.29.0). The three human-only files and both hook suites are
-  byte-identical there, so the patch applies unchanged. `CHANGELOG.md`, `CLAUDE.md`, `README.md` and
-  `SKILLS_VERSION` will conflict and renumber (6.29.1 if this merges next).
+- the patch: `.dev/features/write-guard-narrowing/proposed/human-only.patch` (730 lines, regenerated once in the fix
+  pass), its checksums `proposed/human-only.sha256`, and `proposed/apply.sh` (what it runs: `APPLY.md`);
+- `main` was merged at `c1bf663` (6.29.0) and this increment is now 6.29.1. If another PR releases 6.29.1 first
+  (the AC-gate PR, as 6.30.0, say), the renumber touches `CHANGELOG.md`, `CLAUDE.md`, `README.md`,
+  `pharn/floor/README.md` and `SKILLS_VERSION` only: the patch carries no version string. A merge after the apply
+  re-opens the reconcile epoch the way `.dev/features/writes-scope-run-only/BUILD.md` records.
+- **`main` moved again during the fix pass**, to `109a4af` (#292, 6.30.0). It touches none of the three human-only
+  files nor either hook test file, so the patch still applies; it does touch `CHANGELOG.md`, `CLAUDE.md`,
+  `README.md` and `SKILLS_VERSION`, so the next merge renumbers this to 6.30.1. Not merged here: the GATE-2
+  instruction named `c1bf663`.
 
 chain ran; the named floor verdicts are as shown — this is NOT a judgment that the increment is good or wise; that is
 the human's call at the post-review gate.

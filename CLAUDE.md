@@ -1260,7 +1260,9 @@ the rule has to be the thing that holds.
   SPELLING of the project's own path (a different letter case, Unicode form or trailing dot/space, which on a
   case-insensitive volume reaches the project's own files: it is denied as the project's own — re-review R1);
   every other out-of-project path (another project's memory, dotfiles, `~/.ssh`, `~/.claude/settings*.json`,
-  `~/.claude.json`, `~/.claude/hooks/`) stays denied, as every one was before 6.24.0. A **malformed** `.pharn/writes-scope.json` (present, or not confirmable as absent, but not a readable
+  `~/.claude.json`, `~/.claude/hooks/`) stays denied, as every one was before 6.24.0 — "another project" meaning
+  another KEY: two paths that differ only in characters outside `[A-Za-z0-9]` share one key and, in Claude Code
+  too, one memory folder (`LIMITS.md §7`). A **malformed** `.pharn/writes-scope.json` (present, or not confirmable as absent, but not a readable
   regular file whose JSON is a plain object with an array `scope`) denies **every** write in an installed
   project, `.pharn/**` included, rather than falling back to either default. A **set** scope is authoritative
   in **every** posture — it replaces whichever default is live for non-`.pharn` zones — so
@@ -1323,7 +1325,9 @@ the rule has to be the thing that holds.
     holding it (the scope, an open run, or an unreadable run-state directory) instead of claiming nothing can
     help. Its **Claude-state** variant (6.29.1 — an installed project, a path that is Claude Code's own state
     outside the project: another project's memory folder, a file in the config directory, or anything below a
-    `claude-<uid>` temp folder) names the two memory keys and the scratchpad rule, and offers NO Bash route:
+    `claude-<uid>` temp folder) names the two memory keys and the scratchpad rule, offers this session's
+    scratchpad as a route only when the call's payload identifies it (and says it cannot be reached otherwise —
+    GATE-2 review F2, L27), and offers NO Bash route:
     another project loads its memory into its later sessions, and another session reads back its temp folder;
   - **inside a git tree that is not the one being judged** — another checkout or worktree, or the same
     repository outside this project's root. That is code, not scratch, so **the Bash route is not
