@@ -27,8 +27,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- 2026-09-26: **`/pharn-ship` and `/pharn-loop` run each routed pipeline stage as a subagent on the model
-  `pharn.config.json`'s `models.stages` resolves for it — stage-model routing, from a measured failure.** A
+- 2026-09-26: **`/pharn-ship` and `/pharn-loop` run each routed pipeline stage as a subagent, requested on the
+  model `pharn.config.json`'s `models.stages` resolves for it — stage-model routing, from a measured failure.** A
   command's `model:` frontmatter applies for the rest of the turn it is invoked in, so every stage an
   orchestrator ran as a step inside its own turn ran on the ORCHESTRATOR's model: measured on 2026-08-18,
   `build`, configured `sonnet`, ran `opus` on 79% of its requests. The Agent tool takes a `model` parameter, and
@@ -38,20 +38,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `/pharn-loop`. `/pharn-ship`'s `/pharn-spec` (it IS GATE 1) and every `/pharn-regress` and `/pharn-verify`
   (floor-only thin callers) run inline by policy, and a stage that could route and does not records why.
   **The model is routed; effort is not** — the Agent tool takes no effort. `SKILLS_VERSION` 6.26.0 → 6.27.0
-  (minor: a new floor script and a routing capability). `MIN_CLI` 0.5.0 →
-  0.7.0: `models.stages` is now a run-time input, a pre-0.7.0 CLI writes a block `check-model-config.mjs` REDs
-  (so every routed stage would run inline, saying `config-red`) and never migrates it, and
-  `@pharn-dev/pharn` 0.7.0 is published, its `update` migrating the block.
+  (minor: a new floor script and a routing capability). **`MIN_CLI` stays 0.5.0**: an older CLI's install is
+  degraded, not broken. **Routing needs a 0.7.0-shaped `models.stages` block** — `pharn update` with
+  `@pharn-dev/pharn` ≥ 0.7.0 migrates it. A pre-0.7.0 CLI writes a block `check-model-config.mjs` REDs, and never
+  migrates it, so until then every routed stage runs inline, saying `config-red` and naming that remedy.
   ([`.dev/features/stage-model-routing/`](./.dev/features/stage-model-routing/))
   - **`pharn/floor/stage-agent.mjs`** — `route` prints ONE token, `agent:<alias>` (exit 0) or `inline:<reason>`
     (exit 3, its remedy on stderr), decided from the closed `ROUTE_POLICY` table and `check-model-config.mjs`'s
-    own `resolve`/`validate` exits, shelled under a measured `CHECKER_TIMEOUT_MS` (10 s). `brief` prints the
-    stage agent's rules, rendered by code: the orchestrator's Agent prompt is one pinned line, so the rules are
-    never transcribed by a model. `report` writes the closed result `pharn-stage-agent-result/1` to
+    own `resolve`/`validate` verdicts, shelled under a measured `CHECKER_TIMEOUT_MS` (10 s) and read through
+    `shelled-verdict-core.mjs`, so a crashed or missing checker is `resolve-failed`, never `config-red`. `brief`
+    prints the stage agent's rules, rendered by code: the orchestrator's Agent prompt is one pinned line, so the
+    rules are never transcribed by a model. `report` writes the closed result `pharn-stage-agent-result/1` to
     `.pharn/<command>/<name>/stage-result.json` — a Bash write outside fix #7, contained by a per-component
     lstat walk. `read` validates it in both directions, consumes it, and exits with the stage-exit numbers
-    (0 done · 3 refused · 4 question · 2 unusable). The protocol's spec is `stage-agent-core.mjs`'s header: no
-    new contract (P7).
+    (0 done · 3 refused · 4 question · 2 unusable); its stderr names a refused result by one fixed code, never
+    by anything the file carries. The protocol's spec is `stage-agent-core.mjs`'s header: no new contract (P7).
   - **`pharn/floor/route-token-core.mjs`** — the route-token grammar and nothing else, with zero imports, so the
     marker writer and the ledger readers never load the routing policy or the brief.
   - **`mark-phase.mjs --route <token>`** (stage-start only) records the REQUESTED route on the marker, and
@@ -61,12 +62,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **The two orchestrators** gain `## Running a stage`, and each routed stage gains a pinned route line, a
     stage-start with `--route '<route>'`, the one-line brief prompt and `read`. `/pharn-ship`'s routed build
     proceeds on its agent's `done gate:pass` (advisory, re-confirmed by `/pharn-verify`'s floor verdict); a
-    question round-trips through SendMessage, or a fresh agent. `/pharn-loop` uses a reported row only where it
+    question round-trips through SendMessage, or a fresh agent whose prompt carries the question and the answer,
+    each fenced as DATA (a re-run route line that exits anything but 0 is a STOP). A stage-start line refused
+    for a mis-copied token is run once more without `--route`. `/pharn-loop` uses a reported row only where it
     already mapped a stage's own report, and a checker-decided row (S11, S12, S13) stays the checker's.
     `.dev/floor/command-hygiene.test.mjs`'s `STAGE_AGENT_WIRING` pins the lines and their order to the policy,
     and executes every committed route and brief line.
   - **Bounds, stated where they live.** A route is a request, and the served model is evidence from a transcript
-    format the platform does not document — never proof. A hung stage agent hangs the run
+    format the platform does not document — never proof. The Agent tool returns a stage agent's final text into
+    the orchestrator's context: `THREAT-MODEL.md §5`'s free-text residual in a new place, and that no proceed/stop
+    reads it is advisory — only `read`'s closed line is floor. A hung stage agent hangs the run
     (`stage-agent-hang`); a harness that backgrounds one anyway can leave it running (`stage-agent-background`);
     the Agent tool's alias set is a platform fact read in one harness (`agent-model-set-drift`); routing effort
     needs agent definitions `pharn update` would have to install (`stage-agent-effort`). The live success

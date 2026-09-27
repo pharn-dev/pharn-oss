@@ -283,7 +283,7 @@ quick run-start never makes the current run quick, and vice versa.
 ## Route (added 6.27.0, stage-model routing)
 
 Since 6.27.0 `/pharn-ship` and `/pharn-loop` run each stage their routing policy routes as a Claude Code
-subagent — a stage agent — on the model `models.stages` resolves for it (`pharn/floor/stage-agent-core.mjs`'s
+subagent — a stage agent — requested on the model `models.stages` resolves for it (`pharn/floor/stage-agent-core.mjs`'s
 header is the protocol's spec). A stage-start marker may carry `route`, recorded at the MOMENT THE STAGE STARTS
 (`mark-phase.mjs --route`, stage-start only): `agent:<alias>` when the stage was REQUESTED as a stage agent on
 that alias, `inline:<reason>` when it ran in the orchestrator's own turn, and why. The grammar has one owner,

@@ -773,11 +773,12 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   commands' `model:` / `effort:` frontmatter, and `pharn/floor/check-model-config.mjs` RED-fails when the
   two disagree — so editing the config is only half the change: update the command frontmatter too, or the
   checker will tell you. Since 6.27.0 `/pharn-ship` and `/pharn-loop` also read the block at run time: each
-  stage their routing policy routes runs as a subagent on the model the block resolves for it. `/pharn-ship`'s
-  spec stage, every `/pharn-regress` and `/pharn-verify`, and any stage that falls back (no config, a
-  pre-0.7.0 block, `inherit`, a full model id) run on the orchestrator's model, and the run says why. Effort
-  is not routed. A green checker means two files agree, and a route records what was REQUESTED: `cost.json`
-  shows the model each request was served, which is evidence, never proof. The full bounds — turn scope, the
+  stage their routing policy routes runs as a subagent, requested on the model the block resolves for it.
+  `/pharn-ship`'s spec stage, every `/pharn-regress` and `/pharn-verify`, and any stage that falls back (no
+  config; a pre-0.7.0 block, which `pharn update` with `@pharn-dev/pharn` ≥ 0.7.0 migrates; `inherit`; a full
+  model id) run on the session's model, the model of the session running the orchestrator, and the run says
+  why. Effort is not routed. A green checker means two files agree, and a route records what was REQUESTED:
+  `cost.json` shows the model each request was served, which is evidence, never proof. The full bounds — turn scope, the
   platform veto, and what deleting the block costs — are stated once, in [`LIMITS.md`](./LIMITS.md) § 8.
 - **It is token-hungry by construction.** `/pharn-grill` runs the grillers over your plan and
   `/pharn-review` fans every applicable lens out as its own parallel subagent; `/pharn-loop` repeats

@@ -3155,7 +3155,7 @@ const STAGE_AGENT_WIRING = [
     routed: { "pharn-plan": [null], "pharn-grill": [null], "pharn-test": [null], "pharn-build": ["1", "2"] },
     // mode -> the stages with a `--mode <mode>` route line (a DELTA replacing that stage's full-mode line).
     modeLines: { quick: ["pharn-grill"] },
-    section: "Running a stage (6.27.0) — a routed stage runs as a stage agent, on its configured model",
+    section: "Running a stage (6.27.0) — a routed stage runs as a stage agent, requested on its configured model",
     waitRule: /A call that returns\s+a background-launch notice has not: wait for the agent's completion notice first/,
   },
   {
@@ -3163,7 +3163,7 @@ const STAGE_AGENT_WIRING = [
     command: "pharn-loop",
     routed: { "pharn-spec": [null], "pharn-plan": [null], "pharn-grill": [null], "pharn-test": [null], "pharn-build": ["<N>"] },
     modeLines: {},
-    section: "Running a stage (6.27.0) — a routed stage runs as a stage agent, on its configured model",
+    section: "Running a stage (6.27.0) — a routed stage runs as a stage agent, requested on its configured model",
     waitRule: /a call that\s+returns a background-launch notice instead is \*\*S9\*\*/,
   },
 ];
@@ -3368,9 +3368,24 @@ for (const cmd of STAGE_AGENT_WIRING) {
     assert.match(s, /\*\*Never run `read` for a stage that ran inline\.\*\*/);
     assert.match(s, /\*\*The model is routed; effort is not\*\*/);
     assert.match(s, /pharn\/floor\/stage-agent-core\.mjs`'s header/, "the protocol is cited, not restated (P4)");
+    // GATE-2 review: A1 (the heading says requested), A5 (a refused stage-start line), A6 (the prose claim is ADVISORY,
+    // the free-text residual named).
+    assert.match(s, /^## Running a stage \(6\.27\.0\) — a routed stage runs as a stage agent, requested on its configured model$/m);
+    assert.match(s, /If it exits\s+`2`\s+it\s+wrote\s+no\s+marker[^.]*\):\s+run\s+it\s+once\s+more\s+without\s+`--route '<route>'`/);
+    assert.match(s, /control\s+flow\s+never\s+uses\s+the\s+agent's\s+prose\s+is\s+\*\*ADVISORY\*\*/);
+    assert.match(s, /`THREAT-MODEL\.md §5`'s\s+free-text\s+residual/);
     if (cmd.command === "pharn-ship") {
       assert.match(s, /with\s+SendMessage — load its schema first if the harness lists it as a deferred tool/);
       assert.match(s, /If SendMessage is absent\s+altogether, re-run the stage's route line/);
+      // A8: a fresh agent never saw the question, so its prompt carries it too; a re-run route line off 0 is a STOP.
+      assert.match(s, /the stage's question and its options verbatim, then the\s+human's answer verbatim/);
+      assert.match(s, /labelled DATA \(the\s+first as the stage's question, the second as the human's answer to it\)/);
+      assert.match(s, /On\s+any\s+other\s+exit\s+of\s+that\s+route\s+line,\s+\*\*STOP\*\*/);
+      const readAgain = s.search(/Either way, then run `read` again\./);
+      assert.ok(
+        readAgain > 0 && readAgain < s.search(/On\s+any\s+other\s+exit\s+of\s+that\s+route\s+line/),
+        "read again, THEN the STOP branch"
+      );
     } else {
       assert.doesNotMatch(commandBody(cmd.file), ASK_TOKEN_RE, "the loop still names no interactive-ask tool");
     }

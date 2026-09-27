@@ -3,7 +3,7 @@
 //
 // ── What a route token is ────────────────────────────────────────────────────────────────────────────
 // `/pharn-ship` and `/pharn-loop` decide, per pipeline stage, whether that stage runs as a Claude Code
-// subagent on the model `pharn.config.json`'s `models.stages` resolves for it, or inline in the
+// subagent, REQUESTED on the model `pharn.config.json`'s `models.stages` resolves for it, or inline in the
 // orchestrator's own turn. The decision is printed by `pharn/floor/stage-agent.mjs route` as ONE token, and
 // the orchestrator records the same token on the stage's `stage-start` marker (`mark-phase.mjs --route`):
 //   agent:<alias>     — the stage was REQUESTED as a subagent on <alias>, a member of AGENT_MODELS;

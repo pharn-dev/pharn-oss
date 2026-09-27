@@ -27,7 +27,8 @@ revision:
 - restates the true statement: for a routed stage PHARN REQUESTS the configured model, and `cost.json` records
   what was SERVED — evidence from an undocumented transcript format, not a floor primitive;
 - says effort is not routed;
-- says what is not routed runs on the orchestrator's model, and that the run records why;
+- says what is not routed runs on the session's model (the model of the session running the orchestrator), and
+  that the run records why;
 - says deleting the block now loses routing as well as the check;
 - cites the checker's TURN SCOPE and PLATFORM VETO bounds by SECTION NAME, not by line — this increment's
   header edit moved the lines `check-model-config.mjs:32-38` named (L50).
@@ -40,12 +41,14 @@ comment records the revision.
 `sh .dev/features/stage-model-routing/proposed/apply.sh`, run from the repo root:
 
 1. Refuses on `main` (a trusted-doc commit belongs on the phase branch, merged normally).
-2. `git apply --check`, then `git apply`, the patch.
-3. Re-runs, on the **applied bytes**: `shasum -a 256 -c human-only.sha256`, `pharn/floor/validate.mjs .`, and
-   `.dev/floor/check-specified-markers.mjs .` at the real path (L26). Any failure restores `LIMITS.md` from the
-   **index** (`git checkout -- LIMITS.md` — `HEAD`'s content unless you had staged edits to it) and commits
-   nothing.
-4. On success, commits **only** `LIMITS.md`.
+2. Refuses to start while `LIMITS.md` has any **unstaged or staged** change (`git diff --quiet` and
+   `git diff --cached --quiet`, both on `LIMITS.md`), touching nothing — so the restore in step 4 can only ever
+   undo this patch, never your own edits (GATE-2 review A10).
+3. `git apply --check`, then `git apply`, the patch.
+4. Re-runs, on the **applied bytes**: `shasum -a 256 -c human-only.sha256`, `pharn/floor/validate.mjs .`, and
+   `.dev/floor/check-specified-markers.mjs .` at the real path (L26). Any failure restores `LIMITS.md` to
+   `HEAD` (`git checkout -- LIMITS.md`; step 2 guarantees the index held `HEAD`'s content) and commits nothing.
+5. On success, commits **only** `LIMITS.md`.
 
 ## When to apply
 

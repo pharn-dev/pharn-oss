@@ -140,18 +140,18 @@ What the orchestrator does with it (amended after grill, G-P5 ×2):
 
 Every case below runs the stage inline, exactly as today, and SAYS SO (narrowed after grill, G-P5). A stage with a route line — one `ROUTE_POLICY` routes in at least one mode of its command — records its token on its stage-start marker, `agent:<alias>` or `inline:<reason>`, the quick grill's `inline:floor-only` included. A stage inline by policy in EVERY mode of its command (ship's spec, regress and verify; the loop's regress and verify) has no route line and its marker carries no `route` key: spending a model turn to print a constant is the cost this roadmap cuts, and ship's spec has no marker at all. `/pharn-ship`'s `SHIP.md` and `/pharn-loop`'s Step 7 summary list every stage's route — the token for a routed-capable stage, `inline (policy)` citing `ROUTE_POLICY` for the others — and both presentations show them.
 
-| reason              | decided by                                                                                                                          | remedy the run names                                                                                            |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `interactive`       | policy (ship spec)                                                                                                                  | none needed: run `/pharn-spec` directly for its frontmatter model                                               |
-| `floor-only`        | policy                                                                                                                              | none needed; the stage's model does not change its verdict                                                      |
-| `no-config`         | `route`: `pharn.config.json` absent (a followed stat — a dangling link reads absent, as the checker reads it)                       | install with `@pharn-dev/pharn` ≥ 0.7.0, or add a `models.stages` block                                         |
-| `no-stages`         | `route`: `resolve` exit 1 and `validate` exit 0                                                                                     | add `models.stages`                                                                                             |
-| `config-red`        | `route`: `validate` exit 1 — includes a pre-0.7.0 block                                                                             | `pharn update` with a CLI ≥ 0.7.0 (it migrates the block), or fix what `check-model-config.mjs validate` prints |
-| `inherit`           | `route`: resolved `inherit`                                                                                                         | an alias in `models.stages`                                                                                     |
-| `model-id`          | `route`: resolved `claude-*` id                                                                                                     | an alias in `models.stages`                                                                                     |
-| `resolve-failed`    | `route`: the checker exited outside 0/1, ran past `CHECKER_TIMEOUT_MS`, or printed no `{model, effort}`                             | run `check-model-config.mjs resolve <stage>` by hand                                                            |
-| `no-agent-tool`     | the orchestrating model: no Agent tool in its tool list NOR its deferred-tool list (a deferred tool is present: load it) — ADVISORY | allow the Agent tool                                                                                            |
-| `route-unavailable` | the orchestrating model: `route` itself exited outside 0/3                                                                          | run the route line by hand                                                                                      |
+| reason              | decided by                                                                                                                           | remedy the run names                                                                                            |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `interactive`       | policy (ship spec)                                                                                                                   | none needed: run `/pharn-spec` directly for its frontmatter model                                               |
+| `floor-only`        | policy                                                                                                                               | none needed; the stage's model does not change its verdict                                                      |
+| `no-config`         | `route`: `pharn.config.json` absent (a followed stat — a dangling link reads absent, as the checker reads it)                        | install with `@pharn-dev/pharn` ≥ 0.7.0, or add a `models.stages` block                                         |
+| `no-stages`         | `route`: `resolve` RED and `validate` GREEN (a RED is exit 1 WITH its `RED —` line — `shelledVerdict`, GATE 2)                       | add `models.stages`                                                                                             |
+| `config-red`        | `route`: `validate` RED — includes a pre-0.7.0 block                                                                                 | `pharn update` with a CLI ≥ 0.7.0 (it migrates the block), or fix what `check-model-config.mjs validate` prints |
+| `inherit`           | `route`: resolved `inherit`                                                                                                          | an alias in `models.stages`                                                                                     |
+| `model-id`          | `route`: resolved `claude-*` id                                                                                                      | an alias in `models.stages`                                                                                     |
+| `resolve-failed`    | `route`: the checker CRASHED (exit 1 without its `RED —` line, any other exit, a signal), timed out, or printed no `{model, effort}` | run `check-model-config.mjs resolve <stage>` by hand                                                            |
+| `no-agent-tool`     | the orchestrating model: no Agent tool in its tool list NOR its deferred-tool list (a deferred tool is present: load it) — ADVISORY  | allow the Agent tool                                                                                            |
+| `route-unavailable` | the orchestrating model: `route` itself exited outside 0/3                                                                           | run the route line by hand                                                                                      |
 
 Never claim routing that did not happen (P0): a marker's `agent:<alias>` records a REQUEST; §6 is how a reader sees what was served.
 
@@ -176,7 +176,10 @@ The premise that routed stages would drop out of `cost.json` does not hold on th
 - **Stop guard.** `require-loop-record.cjs` is wired on `Stop` only; a stage agent ends with `SubagentStop` (documented, advisory), and the loop orchestrator never ends its turn while a foreground stage agent runs. A stage agent's Bash sees the parent's `CLAUDE_CODE_SESSION_ID` (measured), and the prompt forbids it the `--open`/`--close` lines anyway. Unaffected.
 - **What stays outside the guards, as before:** a stage agent's Bash writes (L19), detected — never prevented — by `/pharn-verify`'s `reconcile` gate over the build's anchor window.
 
-### 8. `MIN_CLI` 0.5.0 → 0.7.0
+### 8. `MIN_CLI` 0.5.0 → 0.7.0 — reversed at GATE 2: it stays 0.5.0
+
+**Reversed at GATE 2** ("Amended at GATE 2", below). The paragraph that follows is the GATE-1 reasoning, kept as the
+record of what was decided then.
 
 `@pharn-dev/pharn` 0.7.0 is published (checked live). CLAUDE.md's bar is "an older CLI would install a BROKEN tree — … a contract change that invalidates existing installs". From this increment `models.stages` is a run-time input: a pre-0.7.0 CLI writes a block (`opus-4-8`/`sonnet-5`, a top-level `default`) that `check-model-config.mjs` REDs. That install still runs, inline, saying `config-red`, but routing can never work on it, and a pre-0.7.0 `pharn update` never migrates the block. 0.7.0 turns that into a clean refusal telling the user to upgrade; 0.7.0's own `update` migrates the block. The file stays one bare SemVer line plus a newline, the gate is fail-open only on absent/unreadable/malformed input, and nothing in this repo checks it (care, not a guarantee). Open question 4 confirms.
 
@@ -260,7 +263,7 @@ node pharn/floor/stage-agent.mjs read --command pharn-ship --name '<name>' --sta
 - `.claude/commands/pharn-loop.md` — `## Running a stage`, the per-stage lines in Steps 3, 4 and 5 item 1, the S9 trigger cell, one Step 7 bullet, `reads:` — product command
 - `.dev/floor/command-hygiene.test.mjs` — `STAGE_AGENT_WIRING` and its rules (Design §11)
 - `pharn.config.json` — `_models_stages_note` restated; the `models` block unchanged
-- `MIN_CLI` — 0.5.0 → 0.7.0
+- `MIN_CLI` — stays 0.5.0: GATE 2 reversed the 0.7.0 bump (see "Amended at GATE 2"), so the build writes it back to 0.5.0
 - `SKILLS_VERSION` — 6.25.0 → 6.27.0 (6.26.0 is `stage-verify-script`'s; see Chain sequencing)
 - `CHANGELOG.md` — a new `## [6.27.0]` section (`[Unreleased]` is empty at base)
 - `CLAUDE.md` — the Commands entry, the check-model-config entry, the `mark-phase.mjs` line, the `MIN_CLI` paragraph
@@ -394,6 +397,46 @@ two (`route-token-core.mjs` and its test).
   stage agent itself. Accepted because the orchestrator stops copying the rules and stops spending output tokens on
   them, while neither the routing nor `ROUTE_POLICY` changes. Recorded by the build stage agent before `/pharn-dev-build`.
 
+## Amended at GATE 2 (2026-09-27 — the review's FIX round)
+
+`REVIEW.md` (`1b4158e`) is GREEN with 0 floor-gate findings and 10 advisory ones. The orchestrator decided the round
+under the maintainer's 2026-09-25 delegation: **a MODEL decision, not a human one.** Fix A1–A8 and A10; defer A9 and
+the lesson candidate. Folded as follows:
+
+- **A2 — `MIN_CLI` stays 0.5.0. This REVERSES GATE-1 Q4.** The review executed the case: an older CLI's block
+  (`opus-4-8`/`sonnet-5`, a top-level `default`) makes `route` print `inline:config-red` at exit 3, with "run
+  `pharn update` with @pharn-dev/pharn >= 0.7.0 (it migrates the block)" on stderr, and no product command gates on
+  `check-model-config.mjs`. That install runs every stage inline, loudly — degraded, not the BROKEN tree CLAUDE.md's
+  bar names (its own example is a silent half-install). A new floor file is no reason either: 6.24.1 and 6.26.0 each
+  added one and left `MIN_CLI` at 0.5.0. So `MIN_CLI` goes back to 0.5.0; CLAUDE.md's paragraph is restored and says
+  why it did not move; the CHANGELOG says `MIN_CLI` stays 0.5.0 and that routing needs a 0.7.0-shaped
+  `models.stages` block, which `pharn update` with a CLI ≥ 0.7.0 migrates. Design §8 and Open question 4 keep the
+  GATE-1 reasoning, marked reversed.
+- **A4 — a crashed checker is `resolve-failed`, never `config-red`.** `decideRoute` reads both checker spawns through
+  `shelledVerdict` (`pharn/floor/shelled-verdict-core.mjs`): exit 1 is a RED only WITH its `RED —` line, and anything
+  else — exit 1 without it, another exit, a signal, a spawn error, the timeout — is a crash, which is no verdict. This
+  plan's own Evals line already said "a checker path that cannot run → `resolve-failed`"; the build's test pinned the
+  opposite, and it is flipped. No new inline reason: `resolve-failed` is the closed set's no-verdict member, so
+  `INLINE_REASONS` and the token grammar do not move. The fallback table above is updated.
+- **A1** — every heading and lead sentence that said a routed stage runs "on its configured model" now says the model
+  is REQUESTED (both `## Running a stage` headings and their pins, the CHANGELOG lead, README, CLAUDE.md, the contract,
+  and the module headers and brief). Only the ledger's served-model rows are evidence.
+- **A3** — the `LIMITS.md §8` revision (`handoff/make-patch.mjs`), README and the config note say that what is not
+  routed runs on the session's model (the model of the session running the orchestrator), not "the orchestrator's
+  model"; the patch and its sum are regenerated from the live `LIMITS.md`.
+- **A5** — one fallback sentence per command: a stage-start line that exits 2 (a mis-copied token) is run once more
+  without `--route`, and the route is named in `SHIP.md` / the Step 7 summary. No pinned line changes.
+- **A6** — "the stage agent's prose never reaches control flow" is labelled ADVISORY in both commands, and the
+  residual is named: the Agent tool returns the agent's final text into the orchestrator's context
+  (`THREAT-MODEL.md §5`, the free-text residual). Only `read`'s closed line is floor.
+- **A7** — `read`'s stderr names a fixed defect code and never a byte the result file carries.
+- **A8** — without SendMessage, the fresh stage agent's prompt carries the stage's question and its options as well
+  as the answer, each fenced and labelled DATA; a re-run route line that exits anything but 0 is a STOP.
+- **A10** — `proposed/apply.sh` refuses to start unless `LIMITS.md` has no unstaged and no staged change.
+- **Deferred:** A9 (the orchestrators' size) to the roadmap's Phase 4.1, with `REVIEW.md`'s list of about 6 KB of
+  rationale carried into `SHIP.md`'s follow-ups; the lesson candidate (A4's class) as `lesson: skipped`, the candidate
+  under `deferred:`, as the earlier phases did.
+
 ## Open questions (HALT) — all resolved at GATE 1
 
 Each was answered as recommended by the orchestrator under the maintainer's 2026-09-25 delegation (a model decision, not a human one):
@@ -401,6 +444,7 @@ Each was answered as recommended by the orchestrator under the maintainer's 2026
 1. **Regress and verify inline (`floor-only`)?** RESOLVED: yes, as argued in Design §1 (no measured cost win for a thin caller, the model does not change a floor-decided output, and the loop keeps a deterministic stage-exit mapping); M2 revisits.
 2. **Ship's build verdict read — the build agent's `done gate:pass|fail`, or the orchestrator re-runs the project gate?** RESOLVED: the routed build proceeds on the agent's `done gate:pass`, labelled advisory and re-confirmed by `/pharn-verify`'s floor `.verdict`.
 3. **Record the requested route on the stage-start marker (`mark-phase.mjs --route`)?** RESOLVED: yes.
-4. **`MIN_CLI` 0.7.0 under CLAUDE.md's bar?** RESOLVED: yes, for §8's reason; 0.7.0 is published.
+4. **`MIN_CLI` 0.7.0 under CLAUDE.md's bar?** RESOLVED: yes, for §8's reason; 0.7.0 is published. **REVERSED at
+   GATE 2 (2026-09-27): it stays 0.5.0** — "Amended at GATE 2".
 5. **If this merges before `stage-verify-script`, route `/pharn-verify`?** RESOLVED: no — verify stays `floor-only` (moot as sequenced: 1.2 merges first).
 6. **Question relay without SendMessage — re-invoke a fresh stage agent with the answer, or STOP?** RESOLVED: re-invoke a fresh stage agent with the answer.

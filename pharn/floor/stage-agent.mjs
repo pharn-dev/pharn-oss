@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // pharn/floor/stage-agent.mjs — the CLI half of stage-model routing (added 6.27.0, stage-model-routing):
-// `route` decides whether a pipeline stage runs as a Claude Code subagent on its configured model,
+// `route` decides whether a pipeline stage runs as a Claude Code subagent, REQUESTED on its configured model,
 // `brief` prints that subagent's rules, `report` records its closed result, and `read` consumes it.
 // The protocol — the policy table, the fallback reasons and their remedies, the brief's rules, the result
 // schema, and the floor/advisory split — is `pharn/floor/stage-agent-core.mjs`'s header (NO NEW CONTRACT,
@@ -34,11 +34,14 @@
 //    because `check-model-config.mjs` reads through one, so a DANGLING config link reads `no-config` for
 //    both (L59, pinned by a test). Any other stat error is left to the checker to judge.
 // 2. `check-model-config.mjs resolve <key> --config <abs>` — shelled by ABSOLUTE path (resolved from this
-//    file's own directory), with an argv array, never a shell string, under `CHECKER_TIMEOUT_MS`. Exit 0
-//    with a `{model, effort}` object decides; exit 1 goes to step 3; anything else is `resolve-failed`.
-//    `<key>` comes from `STAGE_CONFIG_KEYS`, never from argv, because the checker resolves an unknown stage
-//    label to `default` silently.
-// 3. `check-model-config.mjs validate --config <abs>`: exit 1 is `config-red`, 0 is `no-stages`, anything
+//    file's own directory), with an argv array, never a shell string, under `CHECKER_TIMEOUT_MS`. Both
+//    spawns are read through `shelledVerdict` (`pharn/floor/shelled-verdict-core.mjs`, applied in
+//    `decideRoute`): exit 0 with a `{model, effort}` object decides; a RED — exit 1 WITH its `RED — ` line —
+//    goes to step 3; anything else is `resolve-failed`, including exit 1 without that line, which is node's
+//    own code for an uncaught throw or a module that cannot load (a crashed or missing checker — GATE-2
+//    review A4). `<key>` comes from `STAGE_CONFIG_KEYS`, never from argv, because the checker resolves an
+//    unknown stage label to `default` silently.
+// 3. `check-model-config.mjs validate --config <abs>`: a RED is `config-red`, exit 0 is `no-stages`, anything
 //    else is `resolve-failed`. So a routed stage costs one spawn, and a failure costs two.
 // The rules live in the checker, shelled rather than re-implemented (L35); its NOTE (P0) stdout line stays
 // true: a resolved alias is what the config DECLARES, never what the stage ran on.
@@ -61,6 +64,8 @@
 //   * `read` opens the result with O_NOFOLLOW and reads at most 64 KiB, validates it CLOSED both ways
 //     against the expected command/name/stage/iteration (`validateResult`), REMOVES it, then prints. A
 //     result it cannot remove is `unusable unreadable`: a result that could answer twice is not consumed.
+//     Its stderr names a refused result by ONE fixed code (`READ_DEFECTS`) and nothing else — never a key,
+//     a value or a byte the file carries, because a stage agent wrote it (GATE-2 review A7).
 //   * `route` removes a leftover result before an Agent spawn (exit 0 only), so a stale file cannot answer
 //     for a new agent; a leftover it cannot clear makes it refuse (exit 2), and the orchestrator then runs
 //     the stage inline (`route-unavailable`).
@@ -73,8 +78,9 @@
 // ── Trust (P2) ────────────────────────────────────────────────────────────────────────────────────────
 // Argv values are shape-checked (a clean-scalar guard, then a closed set or an anchored grammar — L14)
 // before use, and a refusal never echoes one raw: it names the flag and the vocabulary, and anything quoted
-// goes through the total `quote()` (L62). The result file is DATA from another model: it reaches control
-// flow only through `read`'s exit code and closed line.
+// goes through the total `quote()` (L62) — argv is the orchestrator's, never the stage agent's. The result
+// file is DATA from another model: it reaches control flow only through `read`'s exit code and closed line,
+// and `read`'s stderr only as a fixed `READ_DEFECTS` code.
 
 import {
   lstatSync,
@@ -103,6 +109,7 @@ import {
   LOOP_ROWS,
   RESULT_FILE,
   RESULT_STATUSES,
+  RESULT_DEFECTS,
   GATES,
   AGENT,
   policyCell,
@@ -125,6 +132,23 @@ export const DEFAULT_CONFIG = "pharn.config.json";
 
 /** The largest result file `read` accepts. A real one is ~200 bytes. */
 export const RESULT_MAX_BYTES = 64 * 1024;
+
+/** The file-level codes `read` names on stderr for a result it cannot use. */
+export const READ_FILE_DEFECTS = Object.freeze([
+  "no-state-dir",
+  "state-dir-refused",
+  "no-result-file",
+  "not-a-regular-file",
+  "read-failed",
+  "too-large",
+  "not-json",
+  "not-removed",
+]);
+
+/** Every code `read` may print on stderr (`stage-agent: read: <code>`): the file-level ones above, then the
+ *  content-level `RESULT_DEFECTS`. Fixed text only (GATE-2 review A7). A usage refusal is not in this set: it
+ *  names the orchestrator's own argv, as every subcommand's usage refusal does. */
+export const READ_DEFECTS = Object.freeze([...READ_FILE_DEFECTS, ...RESULT_DEFECTS]);
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHECKER = join(HERE, "check-model-config.mjs");
@@ -239,7 +263,7 @@ export function parseArgs(sub, argv) {
     // The cross-field rules have ONE owner, validateResult; a result that would not read back is refused
     // here rather than written.
     const v = validateResult(buildResult(o), o);
-    if (!v.ok) return { ok: false, reason: `this result would not read back: ${v.detail}` };
+    if (!v.ok) return { ok: false, reason: `this result would not read back: ${v.defect}` };
   }
   return { ok: true, opts: o };
 }
@@ -344,28 +368,26 @@ export function writeResult(root, result) {
 }
 
 /**
- * Consume a result (read). Returns `{verdict: {line, exit}, detail}` — never throws. A regular result file
- * is removed whether it validates or not, so it can never answer twice; one that cannot be removed is
- * `unusable unreadable`.
+ * Consume a result (read). Returns `{verdict: {line, exit}, defect}` — never throws; `defect` is a READ_DEFECTS
+ * member, or null for a usable result. A regular result file is removed whether it validates or not, so it can
+ * never answer twice; one that cannot be removed is `unusable unreadable` (`not-removed`).
  */
 export function consumeResult(root, expect) {
   const { command, name } = expect;
   const walk = walkStateDirs(root, command, name);
-  if (!walk.ok) return { verdict: unusableVerdict("unreadable"), detail: walk.reason };
-  if (walk.firstMissing !== -1)
-    return { verdict: unusableVerdict("no-result"), detail: `${stateParts(command, name)[walk.firstMissing]} does not exist` };
+  if (!walk.ok) return { verdict: unusableVerdict("unreadable"), defect: "state-dir-refused" };
+  if (walk.firstMissing !== -1) return { verdict: unusableVerdict("no-result"), defect: "no-state-dir" };
   const path = join(root, ".pharn", command, name, RESULT_FILE);
   const kind = resultKind(path);
-  if (kind === "absent") return { verdict: unusableVerdict("no-result"), detail: `${resultRel(command, name)} does not exist` };
-  if (kind !== "file")
-    return { verdict: unusableVerdict("unreadable"), detail: `${resultRel(command, name)} is not a regular file (${kind})` };
+  if (kind === "absent") return { verdict: unusableVerdict("no-result"), defect: "no-result-file" };
+  if (kind !== "file") return { verdict: unusableVerdict("unreadable"), defect: "not-a-regular-file" };
 
   let text;
   let fd = null;
   try {
     fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
     const st = fstatSync(fd);
-    if (!st.isFile()) return { verdict: unusableVerdict("unreadable"), detail: `${resultRel(command, name)} is not a regular file` };
+    if (!st.isFile()) return { verdict: unusableVerdict("unreadable"), defect: "not-a-regular-file" };
     if (st.size > RESULT_MAX_BYTES) text = null;
     else {
       const buf = Buffer.alloc(st.size);
@@ -377,8 +399,8 @@ export function consumeResult(root, expect) {
       }
       text = buf.subarray(0, off).toString("utf8");
     }
-  } catch (e) {
-    return { verdict: unusableVerdict("unreadable"), detail: `cannot read ${resultRel(command, name)} (${errCode(e)})` };
+  } catch {
+    return { verdict: unusableVerdict("unreadable"), defect: "read-failed" };
   } finally {
     if (fd !== null) {
       try {
@@ -390,7 +412,7 @@ export function consumeResult(root, expect) {
   }
 
   let outcome;
-  if (text === null) outcome = { verdict: unusableVerdict("malformed"), detail: `the result is larger than ${RESULT_MAX_BYTES} bytes` };
+  if (text === null) outcome = { verdict: unusableVerdict("malformed"), defect: "too-large" };
   else {
     let parsed;
     let parsedOk = true;
@@ -399,19 +421,16 @@ export function consumeResult(root, expect) {
     } catch {
       parsedOk = false;
     }
-    if (!parsedOk) outcome = { verdict: unusableVerdict("malformed"), detail: "the result is not JSON" };
+    if (!parsedOk) outcome = { verdict: unusableVerdict("malformed"), defect: "not-json" };
     else {
       const v = validateResult(parsed, expect);
-      outcome = v.ok ? { verdict: readVerdict(v.result), detail: null } : { verdict: unusableVerdict(v.reason), detail: v.detail };
+      outcome = v.ok ? { verdict: readVerdict(v.result), defect: null } : { verdict: unusableVerdict(v.reason), defect: v.defect };
     }
   }
   try {
     unlinkSync(path);
-  } catch (e) {
-    return {
-      verdict: unusableVerdict("unreadable"),
-      detail: `cannot remove ${resultRel(command, name)} after reading it (${errCode(e)}) — it could answer twice`,
-    };
+  } catch {
+    return { verdict: unusableVerdict("unreadable"), defect: "not-removed" };
   }
   return outcome;
 }
@@ -528,10 +547,10 @@ function main(argv) {
     return 0;
   }
 
-  // read
-  const { verdict, detail } = consumeResult(root, { command: o.command, name: o.name, stage: o.stage, iteration: o.iteration });
+  // read — stderr carries one fixed READ_DEFECTS code, never a byte of the result (GATE-2 review A7).
+  const { verdict, defect } = consumeResult(root, { command: o.command, name: o.name, stage: o.stage, iteration: o.iteration });
   out(verdict.line);
-  if (detail) err(detail);
+  if (defect) err(`read: ${defect}`);
   return verdict.exit;
 }
 

@@ -10,7 +10,7 @@
 // its OWN model. So, for a stage a person invokes directly, `models.stages` is the SOURCE OF TRUTH the static
 // frontmatter is held to, which is what this checker's `agreement` mode enforces.
 // SINCE 6.27.0 THE BLOCK HAS A SECOND READER, at run time: `pharn/floor/stage-agent.mjs route` shells THIS
-// checker's `resolve <stage>` to pick the model a `/pharn-ship` or `/pharn-loop` STAGE AGENT is spawned on —
+// checker's `resolve <stage>` to pick the model a `/pharn-ship` or `/pharn-loop` STAGE AGENT is REQUESTED on —
 // the Agent tool takes a `model` parameter (it takes no effort). The two readers ask different questions
 // (L39): the frontmatter agreement accepts `inherit` and `claude-*` ids and the Agent tool does not, so
 // `route` sends those stages inline, each with its own reason. Simulating routing in prose — a command

@@ -295,12 +295,12 @@ by the contract (`pharn/pharn-contracts/loop-record.md`, "The one exception: a b
 restated (P4). **A stop before `pharn/features/<name>/` exists** (S1, a failed S3, or S6 before a Draft is
 written) writes no record and no SPEC revert; it goes straight to the Step 7 summary.
 
-## Running a stage (6.27.0) — a routed stage runs as a stage agent, on its configured model
+## Running a stage (6.27.0) — a routed stage runs as a stage agent, requested on its configured model
 
 A command's `model:` frontmatter applies for the rest of the turn it is invoked in, so every stage this command
 ran as a step inside its own turn used to run on THIS command's model, whatever `pharn.config.json`'s
 `models.stages` said. Since 6.27.0 a stage `ROUTE_POLICY` routes runs as a Claude Code subagent — a **stage
-agent** — on the model `models.stages` resolves for it. **The model is routed; effort is not**: the Agent tool
+agent** — requested on the model `models.stages` resolves for it. **The model is routed; effort is not**: the Agent tool
 takes no effort, so a routed stage runs at the effort it inherits. The protocol is
 `pharn/floor/stage-agent-core.mjs`'s header, cited here, not restated (P4). Here `/pharn-spec`, `/pharn-plan`,
 `/pharn-grill`, `/pharn-test` and `/pharn-build` (every iteration) are routed. `/pharn-regress` and
@@ -314,7 +314,9 @@ Each routed stage carries its pinned lines in this order, and you run them in th
    route `inline:route-unavailable`. With no Agent tool in your tool list, and none in the deferred-tool list
    either (a deferred one IS present: load it first), run it inline with the route `inline:no-agent-tool` —
    ADVISORY, your own reading of your tools, failing in the safe direction.
-2. **The stage-start marker**, its `<route>` replaced by that token, substituted literally (**L44**).
+2. **The stage-start marker**, its `<route>` replaced by that token, substituted literally (**L44**). If it exits
+   `2` it wrote no marker (a mis-copied token is refused): run it once more without `--route '<route>'`, and
+   name the token in the Step 7 summary's route line for this stage.
 3. **On route exit `0` only, the Agent call:** `subagent_type: "general-purpose"`, `model: "<alias>"` (the part
    after `agent:`), `description: "pharn stage <stage>"`, `run_in_background: false`, and **no `isolation`** —
    the stages write into this one tree, one after another, never a worktree each. Its `prompt` is the stage's
@@ -346,8 +348,11 @@ preflight — exit 1 is S12, any other exit S9, never by relayed text (Step 4) �
 evidence (S13). The rows a stage agent may report at all are `LOOP_ROWS` in `pharn/floor/stage-agent-core.mjs`:
 S4, S5, S6, S6b, S7, S8, S9 and S10.
 
-**Bounds.** A stage agent's report is another model's output: only `read`'s exit code and its closed line
-reach control flow (P2). A compromised stage agent can lie in its report, which moves only this advisory
+**Bounds.** A stage agent's report is another model's output. Only `read`'s exit code and its closed line are
+floor. That control flow never uses the agent's prose is **ADVISORY** — your own discipline: the Agent tool
+returns the agent's final text into your context, which is `THREAT-MODEL.md §5`'s free-text residual (a model
+consuming another model's free text) in a new place, bounded — no stop reads it — and not zeroed (P2). A
+compromised stage agent can lie in its report, which moves only this advisory
 mapping — the floor verdicts on disk still decide the stop, and Step 5's freshness check still re-derives them.
 A hung stage agent hangs the run, and only a person's interrupt recovers it (the named residual
 `stage-agent-hang`). A route records what was REQUESTED: what a stage ran on is `cost.json`'s served

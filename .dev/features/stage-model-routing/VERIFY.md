@@ -1,5 +1,46 @@
 # VERIFY — stage-model-routing
 
+## GATE-2 FIX round (2026-09-27)
+
+- **Run:** on the working tree the round left — HEAD `1b4158e` (`REVIEW.md`) plus the uncommitted A1–A8 and A10
+  fixes — after `/pharn-dev-regress` (`no-regressions`, base `008b24b`), with the plan's scope re-set and the
+  baseline re-anchored (`--by stage-model-routing-gate2`) before any fix was written. Stage model: opus — set by the
+  maintainer's instruction, overriding pharn.config.json; routed via Agent subagent; effort not routed.
+
+**VERIFIED: floor gates PASS.** Verdict `PASS` (`check-verify.mjs`, exit 0; the `feature` / `gates` / `verdict` /
+`failing_gates` fields of `verify-report.json` are its stdout verbatim — this run's fields equal the committed
+report's, so the file is unchanged).
+
+### Gates (exit codes)
+
+| gate                                                                 | exit |
+| -------------------------------------------------------------------- | ---- |
+| `test` (`npm test` — 3864 tests, 3864 pass, 0 fail)                  | 0    |
+| `validate` (`node pharn/floor/validate.mjs .`)                       | 0    |
+| `lint` (`npm run lint`)                                              | 0    |
+| `format:check` (`npm run format:check`, whole repo)                  | 0    |
+| `lint:md` (`npm run lint:md`, whole repo)                            | 0    |
+| `structural:…/expected-injection-comment.json` (`check-structural`)  | 0    |
+| `reconcile` (`check-bash-reconcile.mjs --base . --require-baseline`) | 0    |
+
+`failing_gates: []`.
+
+**`reconcile`:** `CLEAN` over this round's epoch (anchored by `stage-model-routing-gate2`, before the fixes, so every
+edit of the round is inside the window). 20 paths reconciled, 0 escapes; exempted by name as pipeline artifacts:
+this run's `REGRESSION.md` and `regression-report.json`.
+
+**How the gates were run (orchestration — advisory):** one Bash call per gate, exit codes only (`npm test`'s output
+to a scratch log under `.pharn/pharn-dev-verify/`), the regress scratch removed first so no scratch `.mjs` sat under
+`.pharn/` when `eslint .` ran; the map assembled into `.pharn/pharn-dev-verify/results.json`.
+
+### Verifiers (advisory)
+
+No verifiers registered — floor gates only (`node pharn/floor/count-verifiers.mjs .` →
+`{"registered":0,"verifiers":[]}`).
+
+Verified = the named gates passed; this is NOT a guarantee of correctness beyond what those gates check — verifier
+concerns are advisory help, not assurance.
+
 ## After merging main (6.26.0, #281) (2026-09-27)
 
 - **Run:** on the committed merge `28bbc1a` (`origin/main` `008b24b` merged in), after `/pharn-dev-regress`

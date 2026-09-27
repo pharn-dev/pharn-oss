@@ -70,11 +70,12 @@ tree** — a relocation of an installed path, a frontmatter/contract change that
 installs — never merely because `SKILLS_VERSION` moved; most releases leave it untouched. It went in at
 `0.5.0` with the 5.0.0 `features/` → `pharn/features/` relocation, because a pre-0.5.0 CLI looks for the
 boundary contract at the old root, finds nothing, and — both of its readers being existence-guarded —
-installs it **silently, with no error and no warning**. It moved to **`0.7.0`** in 6.27.0 (stage-model
-routing): `models.stages` became a run-time input, and a pre-0.7.0 CLI writes a block (`opus-4-8`/`sonnet-5`,
-a top-level `default`) that `check-model-config.mjs` REDs — so every routed stage of such an install would run
-inline as `config-red`, and its `pharn update` never migrates the block; 0.7.0's own `update` does, and 0.7.0
-was published before the bump.
+installs it **silently, with no error and no warning**. It did **not** move for 6.27.0's stage-model routing,
+although `models.stages` became a run-time input then: a pre-0.7.0 CLI writes a block (`opus-4-8`/`sonnet-5`,
+a top-level `default`) that `check-model-config.mjs` REDs, so every routed stage of such an install runs inline
+as `inline:config-red` — loudly, with `pharn update` from a CLI ≥ 0.7.0 (which migrates the block) named as the
+remedy — and no product command gates on that checker. That is a degraded install, not a BROKEN one, so the bar
+above is not met (GATE-2 review A2, which reversed a 0.7.0 bump made at GATE 1).
 **FAIL-OPEN IN ONE DIRECTION ONLY, and that is the thing to know (P0):** absent, unreadable, malformed
 and incomparable all mean _"no constraint"_, so a typo cannot brick the fleet — it **silently disables
 the gate** instead. Nothing in this repo checks the file: no floor primitive reads it, so its correctness
@@ -947,7 +948,7 @@ node .dev/floor/check-provenance.mjs <candidate.json> <canon-file.md>
 # its OWN model at run time. So, for a stage a person runs directly, the config is the SOURCE OF TRUTH the
 # frontmatter is held to. Since 6.27.0 the block has a SECOND reader, at run time: `stage-agent.mjs route`
 # (below) shells this checker's `resolve` to pick the model a /pharn-ship or /pharn-loop STAGE AGENT is
-# spawned on. Simulating routing in prose would still be the P0 disease — the route decision is tested code.
+# REQUESTED on. Simulating routing in prose would still be the P0 disease — the route decision is tested code.
 # FLOOR: config shape/enums; a `default` entry; every stage key a PRODUCT stage (a `bulid` typo is RED —
 # on this surface it governs nothing); the own-property resolve with a `default` fallback (L15); and
 # BIDIRECTIONAL agreement over the closed map — no mapped command missing, no UNMAPPED product command
@@ -977,7 +978,8 @@ node pharn/floor/check-model-config.mjs [validate | resolve <stage> | agreement]
 
 # STAGE-MODEL ROUTING (added 6.27.0, stage-model-routing) — /pharn-ship and /pharn-loop run each stage the closed
 # ROUTE_POLICY table routes (pharn/floor/stage-agent-core.mjs — its header IS the protocol's spec; no new contract,
-# P7) as a Claude Code SUBAGENT on the model models.stages resolves for it. THE RECORDED FAILURE (P7): a command's
+# P7) as a Claude Code SUBAGENT, REQUESTED on the model models.stages resolves for it (only cost.json's served-model
+# rows are evidence of what it ran on). THE RECORDED FAILURE (P7): a command's
 # model: frontmatter lasts the invoking turn, so every stage run inside an orchestrator ran on the ORCHESTRATOR's
 # model — build, configured sonnet, ran opus on 79% of its requests (.dev/measurements/token-cost-2026-08-18.md §2).
 # Routed: plan, grill, test and build in /pharn-ship (the quick grill excepted), plus spec in /pharn-loop; ship's
@@ -986,12 +988,17 @@ node pharn/floor/check-model-config.mjs [validate | resolve <stage> | agreement]
 # pharn/floor/route-token-core.mjs (zero imports, so the ledger readers never load the policy or the brief) — from a
 # FOLLOWED config stat (a dangling link reads no-config, exactly as the checker reads it), then check-model-config.mjs
 # resolve (shelled by absolute path, argv arrays, CHECKER_TIMEOUT_MS = 10 s from a measured spawn), then validate
-# only after a resolve exit 1; `inherit` and a claude-* id route INLINE, each with its own reason (L32/L39). `brief`
+# only after a resolve RED. Both spawns are read through shelled-verdict-core.mjs's shelledVerdict: a RED is exit 1
+# WITH its `RED — ` line, so a crashed or missing checker (node's own exit 1) is `resolve-failed`, never
+# `config-red` (GATE-2 review A4); `inherit` and a claude-* id route INLINE, each with its own reason (L32/L39). `brief`
 # prints the stage agent's rules, rendered by code: the orchestrator's Agent prompt is ONE pinned line, so no model
 # transcribes them (L5). `report` writes the closed pharn-stage-agent-result/1 to .pharn/<command>/<name>/
 # stage-result.json — a Bash write outside fix #7 (L19), contained by a per-component lstat walk that refuses a
 # symlink or a non-directory (L54/L59); `read` validates it BOTH ways, REMOVES it and exits with the stage-exit
-# numbers. The orchestrators record the token on the stage-start marker (mark-phase --route), so cost.json carries
+# numbers, and names a refused result on stderr by ONE fixed code (READ_DEFECTS), never by a byte the file carries
+# (GATE-2 review A7). The Agent tool still returns the stage agent's final text into the orchestrator's context:
+# THREAT-MODEL §5's free-text residual in a new place — that no proceed/stop reads it is ADVISORY (review A6).
+# The orchestrators record the token on the stage-start marker (mark-phase --route), so cost.json carries
 # the REQUESTED route beside the SERVED requests[].model. MODEL ROUTED, EFFORT NOT — the Agent tool takes none.
 # BOUNDS: a route is a request, the served model is evidence from an undocumented transcript format, NEVER proof;
 # ship's routed build proceeds on its agent's advisory `done gate:pass`, re-confirmed by /pharn-verify's floor
