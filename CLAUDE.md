@@ -172,7 +172,11 @@ new layout; it converts a silent half-install into a clean refusal, which is the
    **Since 6.1.0 the same hook also denies GIT METADATA** — any `.git` path segment under a guarded root
    (never `.github/**` or `.gitignore`). A `.git` entry decides which working tree each guard judges, and
    `.git/hooks` / `.git/config` run code on the next git command, so the write tools may not touch them;
-   the remedy the deny message names is the git command that owns the change. **And the wiring itself is
+   the remedy the deny message names is the git command that owns the change. **Since 6.28.3 it judges each
+   write twice** — its old check first, unchanged, then the target the filesystem reaches, where a backslash
+   is part of a file NAME on a `/` system — so a symlink named `s\x` pointing at the root no longer carries a
+   write to a trusted doc, or to canon under a plan-origin scope, past it; its canon escape never authorizes a
+   target whose path holds a backslash (`LIMITS.md §7`). **And the wiring itself is
    load-bearing:** both commands are anchored on `${CLAUDE_PROJECT_DIR}`, because the relative form did not
    **start** from a subdirectory at all — node exited 1, which Claude Code treats as non-blocking, so both
    guards were silently off (measured; `LIMITS.md §7`).
@@ -1229,14 +1233,22 @@ the rule has to be the thing that holds.
   containing a backslash (there a backslash is part of a file NAME, while the reserved-path fold reads it as
   a separator — a deny list must not guess), and allows every other in-project path, including your ordinary
   source and the files Claude Code loads at session start (`CLAUDE.md`, `AGENTS.md`, `.mcp.json`).
-  **Outside the project** it then allows exactly two places, the maintainer's GATE-2 decision (D2,
-  2026-09-26): Claude Code's memory folders, `<claude-config-dir>/projects/*/memory/**` (`$CLAUDE_CONFIG_DIR`
-  when set, else `~/.claude`), and the temp roots, `os.tmpdir()` and `/tmp` — never a path inside another git
-  tree, never the project root itself, and never another SPELLING of the project's own path (a different
-  letter case, Unicode form or trailing dot/space, which on a case-insensitive volume reaches the project's
-  own files: it is denied as the project's own — re-review R1); every other out-of-project path (dotfiles, `~/.ssh`,
-  `~/.claude/settings*.json`, `~/.claude.json`, `~/.claude/hooks/`) stays denied, as every one was before
-  6.24.0. A **malformed** `.pharn/writes-scope.json` (present, or not confirmable as absent, but not a readable
+  **Outside the project** it then allows three places, each narrowed to THIS project and THIS session in 6.28.3
+  (the maintainer's 2026-09-26 GATE-2 decision D2 had allowed every project's memory folder and both whole temp
+  roots, which a security review showed reached another project's auto-memory and another live session's
+  scratch): **this project's auto-memory folder**, `<claude-config-dir>/projects/<key>/memory/**`
+  (`$CLAUDE_CONFIG_DIR` when set, else `~/.claude`), for the key of the folder holding this session's
+  `transcript_path` and the key Claude Code derives from the repository's main checkout (a mirror of an
+  undocumented Claude Code derivation that fails closed if it drifts, so a linked-worktree or subdirectory
+  session still reaches its memory); **this session's own scratchpad**, the payload's `scratchpad_dir` when it
+  ends in `<session_id>/scratchpad`; and **an ordinary temp path** under `os.tmpdir()` or `/tmp` — never with a
+  `claude-<uid>` folder in its path, and never inside the Claude config directory or the home directory when
+  either lies inside the temp root. A payload field that is absent or malformed grants nothing from the place
+  that needs it. Never a path inside another git tree, never the project root itself, and never another
+  SPELLING of the project's own path (a different letter case, Unicode form or trailing dot/space, which on a
+  case-insensitive volume reaches the project's own files: it is denied as the project's own — re-review R1);
+  every other out-of-project path (another project's memory, dotfiles, `~/.ssh`, `~/.claude/settings*.json`,
+  `~/.claude.json`, `~/.claude/hooks/`) stays denied, as every one was before 6.24.0. A **malformed** `.pharn/writes-scope.json` (present, or not confirmable as absent, but not a readable
   regular file whose JSON is a plain object with an array `scope`) denies **every** write in an installed
   project, `.pharn/**` included, rather than falling back to either default. A **set** scope is authoritative
   in **every** posture — it replaces whichever default is live for non-`.pharn` zones — so
@@ -1249,7 +1261,10 @@ the rule has to be the thing that holds.
   either target is denied (GATE-2 review, B1). The second resolution splits on `/` only on a `/`
   system: the first handoff of this fix copied protect-trusted-paths.cjs's `\`-as-separator reading, and
   that made `pharn/features/a\b/../../floor/x.mjs` resolve inside `pharn/features/` while the kernel wrote
-  `pharn/floor/x.mjs` — measured in the dev posture too, before it shipped.
+  `pharn/floor/x.mjs` — measured in the dev posture too, before it shipped. **Since 6.28.3
+  `protect-trusted-paths.cjs` carries a byte-equal copy of that second resolution** (pinned by a ✧ test beside
+  the `workTreeRoot()` / `toKey()` pins) and judges it after its own check, alone, so every verdict it changes
+  moves toward deny and every old denial keeps its message.
 - **A PHARN run, in an installed project, is what keeps the fail-closed default standing (6.24.0).** A
   run is open while `.pharn/<pharn-loop|pharn-review|pharn-ship>/<name>/active.json` exists (`lstat`,
   never followed — a torn file, a directory or a dangling link still counts) with a modification time
@@ -1291,9 +1306,13 @@ the rule has to be the thing that holds.
     express it and neither can the fail-closed default, so the only routes are putting the file inside the
     repo, or, **for genuinely temporary/scratch files and only those**, writing it through **Bash**, which
     `PreToolUse` never sees. **In an installed project outside an open run this is no longer categorical**:
-    a path under Claude Code's memory folders or a temp root, in no other git tree, IS writable there under
-    the permissive default (D2), so for such a path the message says so and names what is holding it (the
-    scope, an open run, or an unreadable run-state directory) instead of claiming nothing can help;
+    this project's memory folder, this session's scratchpad or an ordinary temp path, in no other git tree,
+    IS writable there under the permissive default, so for such a path the message says so and names what is
+    holding it (the scope, an open run, or an unreadable run-state directory) instead of claiming nothing can
+    help. Its **Claude-state** variant (6.28.3 — an installed project, a path that is Claude Code's own state
+    outside the project: another project's memory folder, a file in the config directory, or anything below a
+    `claude-<uid>` temp folder) names the two memory keys and the scratchpad rule, and offers NO Bash route:
+    another project loads its memory into its later sessions, and another session reads back its temp folder;
   - **inside a git tree that is not the one being judged** — another checkout or worktree, or the same
     repository outside this project's root. That is code, not scratch, so **the Bash route is not
     offered**: work from a session whose current directory is inside the project that owns the file

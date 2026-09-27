@@ -72,6 +72,15 @@ function declaredProtected() {
   return (m[1].match(/"([^"]*)"/g) || []).map((s) => s.slice(1, -1));
 }
 
+// The hook's SECOND pass (write-guard-narrowing): after the old check it judges the target the filesystem reaches.
+// Every mutant below but the last disables ONE mechanism of the OLD check, and that second reading would still
+// catch most of those cases — defense in depth, which would leave the mutant proving nothing about the mechanism it
+// names. So mutantSandbox() also switches the second pass off when the hook has one (a hook from before it has
+// none, so there is nothing to switch off), and the second pass's own mutant, at the end of this file, switches it
+// off alone — strictly, so it fails if the anchor is ever renamed.
+const PASS2_ANCHOR = "  if (!offender) {\n    for (const rawPath of extractPaths(toolInput)) {";
+const PASS2_OFF = "  if (false) {\n    for (const rawPath of extractPaths(toolInput)) {";
+
 // A copy of the hook with one source substitution applied, installed in its own sandbox (L4 mutants).
 function mutantSandbox(files, anchor, replacement) {
   const dir = sandbox(files, { link: false });
@@ -79,7 +88,7 @@ function mutantSandbox(files, anchor, replacement) {
   assert.ok(!fs.lstatSync(target).isSymbolicLink(), "a mutant must never be written through a symlink to the real hook");
   const src = fs.readFileSync(target, "utf8");
   assert.ok(src.includes(anchor), `mutant anchor not found in source: ${anchor}`);
-  fs.writeFileSync(target, src.replace(anchor, replacement));
+  fs.writeFileSync(target, src.replace(anchor, replacement).replace(PASS2_ANCHOR, PASS2_OFF));
   return dir;
 }
 
@@ -932,4 +941,114 @@ test("✧ MUTANT: dropping the trailing dot/space strip lets the Windows spellin
   );
   assert.equal(runIn(sb, { tool_name: "Write", tool_input: { file_path: "pharn/CONSTITUTION.md." } }).status, 0, "mutant MUST allow it");
   assert.equal(run({ tool_name: "Write", tool_input: { file_path: "pharn/CONSTITUTION.md." } }).status, 2);
+});
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════════════
+// write-guard-narrowing (M4) — the target the filesystem reaches is judged too. On a `/` system a backslash is
+// part of a file NAME, while both older readings read it as a separator, so a symlink named `s\x` → `.` carried a
+// write to a trusted doc — or to canon under a plan-origin scope — past this hook (a security review, reproduced).
+// Every case runs the SHIPPED hook, so each case asserting the new reading is EXPECTED TO FAIL until the human
+// applies `.dev/features/write-guard-narrowing/proposed/human-only.patch`, and to PASS once they do.
+// ═════════════════════════════════════════════════════════════════════════════════════════════════════
+
+const ONLY_POSIX = { skip: require("node:path").sep !== "/" && "a backslash is a separator on this system" };
+const PROMOTE_ORIGIN = ".claude/commands/pharn-memory-promote.md";
+
+function setScopeRecord(dir, scope, setBy) {
+  fs.mkdirSync(join(dir, ".pharn"), { recursive: true });
+  fs.writeFileSync(join(dir, ".pharn", "writes-scope.json"), JSON.stringify({ scope, set_by: setBy, set_at: "t" }));
+}
+
+function writeIn(dir, file_path) {
+  return runIn(dir, { tool_name: "Write", tool_input: { file_path } });
+}
+
+test("★ M4: a symlink named `s\\x` → `.` no longer carries a write to a trusted doc past this hook", ONLY_POSIX, () => {
+  const sb = sandbox(["LIMITS.md", "pharn/CONSTITUTION.md"]);
+  fs.symlinkSync(".", join(sb, "s\\x"));
+  assert.equal(fs.statSync(join(sb, "s\\x", "LIMITS.md")).ino, fs.statSync(join(sb, "LIMITS.md")).ino, "premise: the same file");
+  for (const p of [join(sb, "s\\x", "LIMITS.md"), "s\\x/pharn/CONSTITUTION.md"]) {
+    const r = writeIn(sb, p);
+    assert.equal(r.status, 2, `denied: ${p}`);
+    assert.match(r.stderr, /is \(or resolves to\) a trusted file/);
+    assert.match(r.stderr, / -> /, "the message names where the write lands");
+  }
+});
+
+test(
+  "★ M4: the same link cannot carry a canon write under a PLAN-origin scope — the `## Files` → canon vector (L7, L20)",
+  ONLY_POSIX,
+  () => {
+    const sb = sandbox(["memory-bank/lessons-learned.md"]);
+    fs.symlinkSync(".", join(sb, "s\\x"));
+    setScopeRecord(sb, ["memory-bank/lessons-learned.md"], ".dev/features/evil/PLAN.md");
+    const r = writeIn(sb, "s\\x/memory-bank/lessons-learned.md");
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /memory-bank CANON/);
+  }
+);
+
+test("★ M4: under a PROMOTE-origin scope that link reaches exactly the authorized file — judged there, so allowed", ONLY_POSIX, () => {
+  const sb = sandbox(["memory-bank/lessons-learned.md"]);
+  fs.symlinkSync(".", join(sb, "s\\x"));
+  setScopeRecord(sb, ["memory-bank/lessons-learned.md"], PROMOTE_ORIGIN);
+  assert.equal(writeIn(sb, "s\\x/memory-bank/lessons-learned.md").status, 0);
+});
+
+test("★ M4: a DANGLING link whose TEXT holds a backslash is followed the way the kernel follows it", ONLY_POSIX, () => {
+  const sb = sandbox([]);
+  fs.mkdirSync(join(sb, "docs"));
+  fs.symlinkSync(".", join(sb, "s\\x"));
+  fs.symlinkSync("s\\x/docs/CODEOWNERS", join(sb, "evil")); // docs/CODEOWNERS is absent: a write through `evil` creates it
+  const r = writeIn(sb, "evil");
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /evil -> .*docs\/CODEOWNERS/);
+});
+
+test("★ M4: git metadata through a backslash-named link — found only by the filesystem's reading", ONLY_POSIX, () => {
+  const sb = sandbox([]);
+  fs.mkdirSync(join(sb, ".git"));
+  fs.symlinkSync(".git", join(sb, "g\\it"));
+  const r = writeIn(sb, "g\\it/config");
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /git metadata/);
+});
+
+test("★ M4: the canon escape never authorizes a target whose name holds a backslash", ONLY_POSIX, () => {
+  const sb = sandbox(["memory-bank/lessons-learned.md"]);
+  setScopeRecord(sb, ["memory-bank/lessons-learned.md"], PROMOTE_ORIGIN);
+  assert.equal(writeIn(sb, "memory-bank/lessons-learned.md").status, 0, "control: the authorized file itself");
+  const r = writeIn(sb, "memory-bank/x\\..\\lessons-learned.md");
+  assert.equal(r.status, 2, "a NEW file beside canon, whose folded key names the authorized one");
+  assert.match(r.stderr, /memory-bank CANON/);
+});
+
+test("★ M4: a link inside canon to a DIFFERENT canon file is judged at its target, not by its authorized name", () => {
+  const sb = sandbox(["memory-bank/pattern-library.md"]);
+  fs.symlinkSync("pattern-library.md", join(sb, "memory-bank", "lessons-learned.md"));
+  setScopeRecord(sb, ["memory-bank/lessons-learned.md"], PROMOTE_ORIGIN);
+  const r = writeIn(sb, "memory-bank/lessons-learned.md");
+  assert.equal(r.status, 2, "the write lands in pattern-library.md, which the scope does not authorize");
+  assert.match(r.stderr, /memory-bank CANON/);
+});
+
+test(
+  "★ M4 controls: a user's own backslash-named file stays writable; a backslash SPELLING of a trusted doc keeps its old message",
+  ONLY_POSIX,
+  () => {
+    const sb = sandbox(["pharn/CONSTITUTION.md"]);
+    assert.equal(writeIn(sb, "src/a\\b.md").status, 0);
+    const r = writeIn(sb, "pharn\\CONSTITUTION.md");
+    assert.equal(r.status, 2, "denied by the OLD reading, exactly as before");
+    assert.doesNotMatch(r.stderr, / -> /, "a first-pass denial keeps the old message, which names the raw path alone");
+  }
+);
+
+test("✧ MUTANT: switching the second pass off re-opens the backslash-named link — the pass is what closes it (L4)", ONLY_POSIX, () => {
+  const sb = mutantSandbox(["LIMITS.md"], PASS2_ANCHOR, PASS2_OFF); // strict: fails if the second pass is renamed
+  fs.symlinkSync(".", join(sb, "s\\x"));
+  assert.equal(writeIn(sb, "s\\x/LIMITS.md").status, 0, "without the second pass the link carries the write — the review's bypass");
+  const good = sandbox(["LIMITS.md"]);
+  fs.symlinkSync(".", join(good, "s\\x"));
+  assert.equal(writeIn(good, "s\\x/LIMITS.md").status, 2);
 });

@@ -4,8 +4,8 @@
 // WHY THIS EXISTS. Since 6.24.0, `enforce-writes-scope.cjs` relaxes its no-scope default in an
 // INSTALLED project (`pharn.config.json` carries a non-empty `skillsVersion`): with no scope set and no
 // PHARN run open, it denies PHARN's own installed surface and its own scope file and allows the rest of
-// the project, plus — outside the project — only Claude's memory folders and the temp roots (the hook's
-// own header states the whole rule). That relaxation must not stand open while a command is actually
+// the project, plus — outside the project — only a few named places (the hook's own header states the
+// whole rule, and LIMITS.md §7 its bounds). That relaxation must not stand open while a command is actually
 // working with no declared scope of its own (`/pharn-ship` between its own scoped writes, `/pharn-review`,
 // which sets no scope at all — see its command file). This is the writer of the marker the guard reads to
 // tell "a run is working" from "nothing is happening" in that install posture.

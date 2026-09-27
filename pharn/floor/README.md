@@ -110,7 +110,10 @@ blocks any write to a protected path. Paths are matched **repo-relative and exac
 the guard's own location (plus the work tree Claude is in, when it belongs to the same repository) — never
 by bare basename, so a user's own `docs/ARCHITECTURE.md` stays writable. **Git metadata is denied too**: any
 `.git` path segment under a guarded root, because those entries decide which tree each guard judges and
-`.git/hooks` / `.git/config` run code on the next git command.
+`.git/hooks` / `.git/config` run code on the next git command. Since 6.28.3 each write is judged twice: first
+exactly as before, then at the file the write actually reaches — on macOS and Linux a backslash is part of a
+file name there — so a symlink named `s\x` pointing at the project root no longer carries a write to a
+protected file past the guard; every verdict that second check changes is a denial.
 The default set is the four trusted spec docs (`pharn/CONSTITUTION.md`, `pharn/ARCHITECTURE.md`,
 `THREAT-MODEL.md`, `LIMITS.md`), `CODEOWNERS` at each of the three locations GitHub honors (root,
 `.github/`, `docs/`) — the GitHub-layer write-guard itself — and **the two pre-write guards' own control
@@ -142,11 +145,15 @@ run is open** (a marker under `.pharn/<command>/<name>/active.json`, written by 
 or, for the loop, `require-loop-record.cjs`); outside an open run it instead denies PHARN's own installed
 surface — `pharn/**` except `pharn/features/**`, `.claude/**` and `pharn.config.json`, matched case-folded
 — plus `.pharn/writes-scope.json` and any path containing a backslash, and allows every other path inside
-the project, including your ordinary source. Outside the project it then allows only Claude Code's memory
-folders (`<claude-config-dir>/projects/*/memory/**`) and the temp roots (the OS temp directory and `/tmp`),
-never a path inside another git tree, and never another spelling of the project's own path (a different
-letter case or Unicode form reaches the project's own files on a case-insensitive volume, so it is denied as
-the project's own); every other out-of-project path stays denied. A malformed
+the project, including your ordinary source. Outside the project it then allows only this project's
+auto-memory folder (`<claude-config-dir>/projects/<key>/memory/**`, for the key of the folder holding the
+session's transcript and the key Claude Code derives from the repository's main checkout — a mirror of an
+undocumented derivation that fails closed if it drifts), this session's own scratchpad, and an ordinary temp
+path (under the OS temp directory or `/tmp`, never inside a `claude-<uid>` folder, nor inside the Claude
+config directory or the home directory when either sits in a temp root) — never a path inside another git
+tree, and never another spelling of the project's own path (a different letter case or Unicode form reaches
+the project's own files on a case-insensitive volume, so it is denied as the project's own); every other
+out-of-project path, another project's memory folder included, stays denied. A malformed
 `.pharn/writes-scope.json` denies EVERY write in an installed project rather than falling back to either
 default. Confirm it works:
 

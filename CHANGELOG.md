@@ -23,6 +23,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.28.3] - 2026-09-27
+
+### Fixed
+
+- 2026-09-27: **Security — the write guards judge the file a write actually reaches, and an installed project's
+  out-of-project allowance reaches only this project's memory and this session's scratch.** Two findings of a
+  read-only security review of 6.28.2, each reproduced before the fix.
+  (1) `protect-trusted-paths.cjs` read `\` as a path separator on every platform, while on macOS and Linux it is
+  part of a file name. A symlink named `s\x` pointing at the project root therefore carried a Write-tool write to
+  `LIMITS.md` or `pharn/CONSTITUTION.md` past it, and, under a scope a PLAN had set, to memory-bank canon — the
+  route the canon denylist exists to close. The writes-scope guard stopped it unless the active scope named the
+  file itself, as a PLAN's `## Files` can. The hook now judges each write a second time, at the target the
+  filesystem reaches (a byte-equal copy of `enforce-writes-scope.cjs`'s resolution, pinned by a test), after its
+  old check, which is unchanged: every write it denied before is denied with the same message, and every verdict
+  the second check changes is a denial — for a write whose path, or a link on it, holds a backslash, and for a
+  write through a link inside canon to another canon file than the one a promotion scope authorizes. Its canon
+  exception never authorizes a target whose path holds a backslash.
+  (2) Since 6.24.0 an installed project with no scope set and no PHARN run open allowed a write outside the project
+  anywhere under `<claude-config-dir>/projects/*/memory/**` and anywhere under the OS temp directory or `/tmp`.
+  That reached another project's auto-memory, which Claude Code loads into that project's later sessions, and
+  another live session's scratch scripts and task output. It now allows only this project's auto-memory folder
+  (for the key of the folder holding the session's `transcript_path`, and the key Claude Code derives from the
+  repository's main checkout, so linked-worktree and subdirectory sessions keep working — the second mirrors an
+  undocumented Claude Code derivation and fails closed if it drifts), this session's own scratchpad (the payload's
+  `scratchpad_dir`, when it ends in `<session_id>/scratchpad`), and an ordinary temp path: never one with a
+  `claude-<uid>` folder in it, and never one inside the Claude config directory or the home directory when either
+  sits in a temp root. A payload field that is absent or malformed grants nothing from the place that needs it. A
+  denied write to Claude Code's own state gets its own message, which offers no Bash route. Both hook files and
+  `LIMITS.md §7` are human-only: they change through a patch the build verified and a human applied.
+  `SKILLS_VERSION` 6.28.2 → 6.28.3 (PATCH: a correction to shipped hook bytes — no command, checker, contract,
+  frontmatter key or path is added, moved or removed). `MIN_CLI` stays 0.5.0: the same files at the same paths.
+  ([`.dev/features/write-guard-narrowing/`](./.dev/features/write-guard-narrowing/))
+
 ## [6.28.2] - 2026-09-27
 
 ### Changed
