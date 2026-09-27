@@ -7,7 +7,7 @@
 //
 // It holds the ONE-LINE form too: `shown` and `SHOWN_CHARS`, which quote an untrusted value inside a single line
 // of a refusal reason or a verdict. They were born in test-results-formats.mjs (6.22.0) and MOVED here
-// byte-for-byte in 6.26.1 (GRILL R2-G6), when check-cost-ledger.mjs needed the same quoting for its RED and WARN
+// byte-for-byte in 6.27.1 (GRILL R2-G6), when check-cost-ledger.mjs needed the same quoting for its RED and WARN
 // lines. A second quoter would be the pair [[L31]] warns about, and importing it from the results parser would
 // tie the cost checker to a module that changes when a reporter format does.
 //
@@ -21,11 +21,11 @@
 // The ONLY import is `fenceFor` from `loop-record-core.mjs`, which itself has ZERO imports. So importing
 // this module adds exactly one small, dependency-free module to a caller's load graph — in particular
 // `pharn/floor/stage-regress.mjs`'s, which must not drag in the cost-ledger graph just to quote a path.
-// Since 6.26.1 `shown` lives here, so this module and `loop-record-core.mjs` join two more kinds of load graph:
+// Since 6.27.1 `shown` lives here, so this module and `loop-record-core.mjs` join two more kinds of load graph:
 // `check-cost-ledger.mjs`'s, which imports `shown` directly, and that of every module which loads
 // `test-results-formats.mjs`, directly or through another module — the verify and AC-test paths among them, for
 // example `check-verify.mjs`, `check-red-run.mjs`, `loop-fresh-core.mjs` and `check-ac-tests.mjs` (REVIEW R7 and
-// re-review F4 of 6.26.1). The rule, not a list, is the statement, because the set grows with every new importer. The
+// re-review F4 of 6.27.1). The rule, not a list, is the statement, because the set grows with every new importer. The
 // cost is those two small modules, and `quote-core.test.mjs`'s ★ LOAD GRAPH pins that it stays so.
 //
 // ── Honest scope (P0) ────────────────────────────────────────────────────────────────────────────────

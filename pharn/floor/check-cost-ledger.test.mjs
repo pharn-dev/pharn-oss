@@ -1059,7 +1059,7 @@ test("--verify-transcript: a CORRECT ledger emitted while a request was still be
 test("--verify-transcript quotes a request id, so a newline in it cannot forge a line of the checker's output (REVIEW S4)", () => {
   // The id comes from the untrusted transcript, and the CLI prints each finding as ONE stdout line. Raw, an id
   // carrying a newline printed a verdict-shaped line of its own ahead of the real verdict. The exit code
-  // never moved, but a reader of stdout could be misled. Since 6.26.1 the reader refuses a control character in
+  // never moved, but a reader of stdout could be misled. Since 6.27.1 the reader refuses a control character in
   // an id (`sessionRequests()`), so a newline can no longer reach this compare at all; cost-hostile-input.test.mjs
   // pins that. The id below carries a quote and a backslash instead, so the WARN's quoting is still visible.
   const id = 'R "quoted" \\ GREEN — forged.json: closed key set';
@@ -1123,7 +1123,7 @@ test("--verify-transcript REDs a class that must match exactly — input, cache 
     const { led, projectsDir } = snapshotLedger();
     const row = led.requests.find((r) => r.request_id === "req_fx_plain");
     // BELOW the transcript where the class has room: allowed for output, never for these. A class at 0 steps UP
-    // instead, because since 6.26.1 a negative count is RED on its own (the token rule), and a must-match class REDs
+    // instead, because since 6.27.1 a negative count is RED on its own (the token rule), and a must-match class REDs
     // a difference either way.
     row.tokens[c] += row.tokens[c] > 0 ? -1 : 1;
     Object.assign(led, buildViews(led.requests));

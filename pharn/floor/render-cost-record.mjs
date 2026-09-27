@@ -25,7 +25,7 @@
 // FLOOR (primitive #3, an integer compare — the `check-ship.mjs` `iter >= cap` precedent): a session id
 //   resolving to 2+ transcript directories is REFUSED, never resolved first-match-wins. Bounded, and
 //   stated: that is a property of THIS LOOKUP, not a proof the platform never reuses a session id.
-// FLOOR (primitive #3), the values this block reads (6.26.1). Which lines are requests at all is the reader's rule
+// FLOOR (primitive #3), the values this block reads (6.27.1). Which lines are requests at all is the reader's rule
 //   (`sessionRequests()`, cited, not restated). Of each request's first line and selected usage:
 //   * the model is a `by_model` key only when `isIdentityToken` (cost-value-core.mjs) admits it, else the
 //     request counts under `unknown`; `attributionSkill` likewise, else `(untagged)`;

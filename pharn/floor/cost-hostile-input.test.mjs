@@ -1,4 +1,4 @@
-// pharn/floor/cost-hostile-input.test.mjs — the cost tooling over CRAFTED input (6.26.1). Two inputs:
+// pharn/floor/cost-hostile-input.test.mjs — the cost tooling over CRAFTED input (6.27.1). Two inputs:
 //   * a Claude Code TRANSCRIPT, read by transcript-core.mjs for render-cost-record.mjs, render-cost-ledger.mjs and
 //     check-cost-ledger.mjs --verify-transcript;
 //   * a `cost.json`, read by check-cost-ledger.mjs.
@@ -158,7 +158,8 @@ function renamedKey(value, objPath, key, newKey, raw) {
 
 /**
  * A scratch projects tree holding `lines` (raw JSONL text lines) as the session's transcript, and a markers file
- * that bounds the run window [T0, T9]. `markerSession` binds every marker to one session (null binds all).
+ * that bounds the run window [T0, T9]. `markerSession` binds every marker to one session (null binds all). The
+ * stage-start carries a `route` (6.27.0), so the ledger walks (10, 11) reach every marker field the emitter keeps.
  */
 function scratch(lines, { markerSession = null } = {}) {
   const root = mkdtempSync(join(tmpdir(), "cost-hostile-"));
@@ -170,7 +171,7 @@ function scratch(lines, { markerSession = null } = {}) {
   mkdirSync(join(markersBase, NAME), { recursive: true });
   const markers = [
     { seq: 1, kind: "run-start", stage: null, iteration: null, ts: T0, session_id: markerSession },
-    { seq: 2, kind: "stage-start", stage: "pharn-build", iteration: 1, ts: T0, session_id: markerSession },
+    { seq: 2, kind: "stage-start", stage: "pharn-build", iteration: 1, ts: T0, session_id: markerSession, route: "agent:opus" },
     { seq: 3, kind: "run-stop", stage: null, iteration: null, ts: T9, session_id: markerSession },
   ];
   writeFileSync(join(markersBase, NAME, "markers.jsonl"), markers.map((m) => JSON.stringify(m)).join("\n") + "\n");
@@ -534,6 +535,10 @@ test("10 ★ LEDGER DOMAIN CLOSURE: every node of a GREEN cost.json × the hosti
   for (const [mode, o] of modesOf(opts)) assert.deepEqual(checkLedger(ledger, o).reds, [], `the base is GREEN (${mode})`);
   const paths = nodePaths(ledger);
   assert.ok(paths.length > 100, `NON-VACUITY: the base ledger has ${paths.length} nodes`);
+  assert.ok(
+    paths.some((p) => p.length === 3 && p[0] === "markers" && p[2] === "route"),
+    "NON-VACUITY: the walk reaches markers[].route (6.27.0)"
+  );
   let checks = 0;
   for (const path of paths) {
     for (const raw of LEDGER_ALPHABET) {
@@ -551,7 +556,7 @@ test("10 ★ LEDGER DOMAIN CLOSURE: every node of a GREEN cost.json × the hosti
   assert.equal(checks, paths.length * LEDGER_ALPHABET.length * 2);
 });
 
-/** The crash sites measured before 6.26.1 (the plan's "Measured" item 6, and GRILL R2-G3), each named. */
+/** The crash sites measured before 6.27.1 (the plan's "Measured" item 6, and GRILL R2-G3), each named. */
 const PINNED_SITES = [
   { site: "S9: a null row, re-derived", path: ["requests", 0], raw: "null", mode: "verify" },
   { site: "requests is not an array, re-derived", path: ["requests"], raw: THROWING_TEXT[0], mode: "verify" },
@@ -843,7 +848,7 @@ test("15 a refused session STRING is still compared as itself: session-bound mar
   const hostile = spliced(lineA("req_hostile", T2), ["sessionId"], text("/Users/someone/x"));
   const bound = consumers(scratch([CLEAN(), hostile], { markerSession: SESSION }));
   assertCommon(bound, "session-bound markers");
-  assert.equal(bound.ledger.requests.length, 1, "excluded, as before 6.26.1");
+  assert.equal(bound.ledger.requests.length, 1, "excluded, as before 6.27.1");
   assert.equal(bound.ledger.membership.excluded_requests, 1);
   const unbound = consumers(scratch([CLEAN(), hostile]));
   assertCommon(unbound, "unbound markers");
@@ -852,7 +857,7 @@ test("15 a refused session STRING is still compared as itself: session-bound mar
   assert.ok(unbound.ledger.dropped.includes("requests[1].session_id"));
 });
 
-// ─── 16 WINDOW ORDER · 17 TYPED VALUES (the 6.26.1 review's R4 and R9) ────────────────────────────────
+// ─── 16 WINDOW ORDER · 17 TYPED VALUES (the 6.27.1 review's R4 and R9) ────────────────────────────────
 
 test("16 WINDOW ORDER (REVIEW R4): the record and the ledger order a mixed-precision window the same way", () => {
   // As strings `…:05.500Z` sorts BEFORE `…:05Z` ('.' < 'Z'); as numbers it is later. Both renderers order the window by

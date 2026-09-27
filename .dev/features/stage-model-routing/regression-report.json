@@ -1,0 +1,61 @@
+{
+  "base": "008b24b593ddb6b58fdacc1b60039ffb8f1fe70b",
+  "inside": [
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-ship.md",
+    ".dev/features/stage-model-routing/BUILD.md",
+    ".dev/features/stage-model-routing/GRILL.md",
+    ".dev/features/stage-model-routing/PLAN.md",
+    ".dev/features/stage-model-routing/REGRESSION.md",
+    ".dev/features/stage-model-routing/REVIEW.md",
+    ".dev/features/stage-model-routing/VERIFY.md",
+    ".dev/features/stage-model-routing/handoff/make-patch.mjs",
+    ".dev/features/stage-model-routing/proposed/APPLY.md",
+    ".dev/features/stage-model-routing/proposed/apply.sh",
+    ".dev/features/stage-model-routing/proposed/human-only.patch",
+    ".dev/features/stage-model-routing/proposed/human-only.sha256",
+    ".dev/features/stage-model-routing/regression-report.json",
+    ".dev/features/stage-model-routing/route-a-evidence.txt",
+    ".dev/features/stage-model-routing/verify-report.json",
+    ".dev/floor/command-hygiene.test.mjs",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "LIMITS.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn.config.json",
+    "pharn/floor/check-model-config.mjs",
+    "pharn/floor/fixtures/cost-ledger/with-routed-stage/00000000-0000-4000-8000-0000000c0de5.jsonl",
+    "pharn/floor/fixtures/cost-ledger/with-routed-stage/00000000-0000-4000-8000-0000000c0de5/subagents/agent-a0f1e2d3c4b5a6978.jsonl",
+    "pharn/floor/fixtures/cost-ledger/with-routed-stage/00000000-0000-4000-8000-0000000c0de5/subagents/agent-a0f1e2d3c4b5a6978.meta.json",
+    "pharn/floor/mark-phase.mjs",
+    "pharn/floor/mark-phase.test.mjs",
+    "pharn/floor/render-cost-ledger.mjs",
+    "pharn/floor/render-cost-ledger.test.mjs",
+    "pharn/floor/route-token-core.mjs",
+    "pharn/floor/route-token-core.test.mjs",
+    "pharn/floor/ship-outcome-core.test.mjs",
+    "pharn/floor/stage-agent-core.mjs",
+    "pharn/floor/stage-agent-core.test.mjs",
+    "pharn/floor/stage-agent.mjs",
+    "pharn/floor/stage-agent.test.mjs",
+    "pharn/pharn-contracts/cost-ledger.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

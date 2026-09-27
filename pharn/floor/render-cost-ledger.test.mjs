@@ -1778,3 +1778,169 @@ test("LAYOUT (L41): the file write AND --stdout both emit exactly serializeLedge
   assert.equal(chk.status, 0, chk.stdout + chk.stderr);
   assert.deepStrictEqual(readJson(p), JSON.parse(want));
 });
+
+// ── ROUTED STAGES (6.27.0, stage-model-routing) — `markers[].route` and a stage agent's rows ─────────────
+//
+// `fixtures/cost-ledger/with-routed-stage/` — HAND-AUTHORED in the 2.1.281 record shape the plan's Discovery
+// read (identity fields only): a parent session on `claude-opus-5-5`, and ONE stage agent's file on
+// `claude-sonnet-5` whose records carry BOTH `agentId` (the id) and `attributionAgent: "general-purpose"`
+// (the agent TYPE, which 2.1.281 writes there), plus the `agent-<id>.meta.json` sibling the platform writes.
+// It covers the member no earlier fixture does (L52): a ROUTED stage's sidechain rows bracketed by a routed
+// stage-start. Walk inclusion, a subagent row's identity and fork dedup are `with-subagents` and
+// `usage-snapshots`, and are not duplicated here. Authored, so it proves the READER's shape — never that a
+// live run routes (L4); that is the plan's M2 measurement.
+
+import { runWindow } from "./run-window-core.mjs";
+import { ledgerCurrency } from "./render-run-report.mjs";
+
+const ROUTED_SESSION = "00000000-0000-4000-8000-0000000c0de5";
+const ROUTED_AGENT_ID = "a0f1e2d3c4b5a6978";
+
+function stageRouted() {
+  const root = mkdtempSync(join(tmpdir(), "cost-ledger-routed-"));
+  const proj = join(root, "projects");
+  mkdirSync(proj, { recursive: true });
+  cpSync(join(FIXTURES, "with-routed-stage"), join(proj, "wt"), { recursive: true });
+  return { root, projectsDir: proj, projectDir: join(proj, "wt") };
+}
+
+/** The ship bracket around a routed build: run-start → stage-start (route) → orchestrator → run-stop. */
+function routedMarkers(stageStartTs = "2026-09-26T10:01:00.000Z", route = "agent:sonnet") {
+  const start = { ...marker(2, "stage-start", "pharn-build", 1, stageStartTs, ROUTED_SESSION), ...(route === null ? {} : { route }) };
+  return [
+    marker(1, "run-start", null, null, "2026-09-26T10:00:00.000Z", ROUTED_SESSION),
+    start,
+    marker(3, "orchestrator", null, null, "2026-09-26T10:05:00.000Z", ROUTED_SESSION),
+    marker(4, "run-stop", null, null, "2026-09-26T10:06:00.000Z", ROUTED_SESSION),
+  ];
+}
+
+test("normalizeMarkers: route is KEPT as a valid token, and DROPPED as anything else", () => {
+  const base = { seq: 1, kind: "stage-start", stage: "pharn-plan", iteration: null, ts: "2026-01-01T00:00:00.000Z", session_id: null };
+  for (const good of ["agent:opus", "agent:sonnet", "inline:no-config", "inline:floor-only", "inline:route-unavailable"]) {
+    assert.equal(normalizeMarkers([{ ...base, route: good }])[0].route, good, good);
+  }
+  for (const bad of [
+    "agent:gpt",
+    "Agent:opus",
+    "agent:opus ",
+    "agent:opus\n",
+    "inline:other",
+    "",
+    1,
+    true,
+    null,
+    {},
+    ["agent:opus"],
+    JSON.parse('{"toString":1}'),
+  ]) {
+    const [m] = normalizeMarkers([{ ...base, route: bad }]);
+    assert.equal("route" in m, false, `route=${JSON.stringify(bad)} must be dropped`);
+  }
+  assert.equal("route" in normalizeMarkers([base])[0], false, "absent stays absent — byte-identical to a pre-6.27.0 marker");
+});
+
+test("✧ ROUTED STAGE: the stage agent's rows are billed to the routed build on the SERVED model, beside the three orchestrator rows", () => {
+  const { root, projectsDir } = stageRouted();
+  const markersBase = writeMarkers(root, "feat", routedMarkers());
+  const led = renderLedger({ name: "feat", command: "/pharn-ship", sessionId: ROUTED_SESSION, projectsDir, markersBase });
+  assert.equal(led.coverage, "partial");
+  assert.equal(led.requests.length, 8, "5 parent + 3 stage-agent rows — the .meta.json adds none");
+
+  const bucket = led.requests.filter((r) => r.stage === "pharn-build" && r.iteration === 1);
+  const agentRows = bucket.filter((r) => r.sidechain);
+  const orchRows = bucket.filter((r) => !r.sidechain);
+  assert.equal(agentRows.length, 3, "NON-VACUITY (L34): the routed stage's sidechain rows exist");
+  assert.deepEqual([...new Set(agentRows.map((r) => r.model))], ["claude-sonnet-5"], "one SERVED model, the routed one");
+  assert.deepEqual([...new Set(agentRows.map((r) => r.agent_id))], [ROUTED_AGENT_ID], "agent_id is the id, never the TYPE");
+  assert.ok(!led.requests.some((r) => r.agent_id === "general-purpose"), "attributionAgent's type never becomes an id");
+  assert.deepEqual(
+    orchRows.map((r) => r.request_id),
+    ["req_rs_p2", "req_rs_p3", "req_rs_p4"],
+    "the bracket's orchestrator rows: the Agent call, the read, and the closing marker's issuer (G-P6)"
+  );
+  assert.ok(orchRows.every((r) => r.model === "claude-opus-5-5"));
+  // The view a reader of §12 uses.
+  const view = (model) => led.by_stage_iteration_model.find((v) => v.stage === "pharn-build" && v.iteration === 1 && v.model === model);
+  assert.equal(view("claude-sonnet-5").requests, 3);
+  assert.equal(view("claude-opus-5-5").requests, 3);
+  assert.equal(view("claude-sonnet-5").tokens.output, 500, "120 + 300 + 80");
+  // The REQUESTED route survives into cost.json beside the SERVED model.
+  const start = led.markers.find((m) => m.kind === "stage-start");
+  assert.equal(start.route, "agent:sonnet");
+  // And the file checks GREEN — internally, and re-derived from the transcript under the recorded markers.
+  const { reds } = checkLedger(led, { verifyTranscript: true, projectsDir });
+  assert.deepEqual(reds, []);
+});
+
+test("✧ ROUTED STAGE non-vacuity: a stage-start written AFTER the agent's rows bills them elsewhere (L60)", () => {
+  const { root, projectsDir } = stageRouted();
+  const markersBase = writeMarkers(root, "feat", routedMarkers("2026-09-26T10:04:45.000Z"));
+  const led = renderLedger({ name: "feat", command: "/pharn-ship", sessionId: ROUTED_SESSION, projectsDir, markersBase });
+  const billed = led.requests.filter((r) => r.stage === "pharn-build" && r.sidechain);
+  assert.notEqual(billed.length, 3, "the mutant must move the agent's rows out of the build bucket");
+  assert.ok(
+    led.requests.some((r) => r.sidechain && r.stage === null),
+    "they land in the unattributed bucket — which is why the bracket discipline is a command rule"
+  );
+});
+
+test("✧ ROUTED STAGE: the .meta.json sibling is in the fixture, and the walk never reads it", () => {
+  const { projectDir } = stageRouted();
+  const sub = join(projectDir, ROUTED_SESSION, "subagents");
+  assert.deepEqual(
+    readdirSync(sub).sort(),
+    [`agent-${ROUTED_AGENT_ID}.jsonl`, `agent-${ROUTED_AGENT_ID}.meta.json`],
+    "CONTROL: the sibling exists"
+  );
+  const files = transcriptFiles(projectDir).map((f) => f.slice(projectDir.length + 1));
+  assert.deepEqual(
+    files,
+    [`${ROUTED_SESSION}.jsonl`, `${ROUTED_SESSION}/subagents/agent-${ROUTED_AGENT_ID}.jsonl`],
+    "only .jsonl files are walked"
+  );
+});
+
+test("L63 INERTNESS: `route` changes no re-derivation of markers[] — membership, attribution, rows, outcome, currency, --verify-transcript", () => {
+  const { root, projectsDir } = stageRouted();
+  const withRoute = routedMarkers();
+  const without = routedMarkers(undefined, null);
+  assert.equal(withRoute[1].route, "agent:sonnet", "precondition: the two marker sets differ by the route key");
+  assert.equal("route" in without[1], false);
+  const baseA = writeMarkers(join(root, "a"), "feat", withRoute);
+  const baseB = writeMarkers(join(root, "b"), "feat", without);
+  // A feature dir with verify PASS + no-regressions, so the ship outcome derivation has verdicts to read.
+  const repo = join(root, "repo");
+  const fdir = join(repo, "pharn", "features", "feat");
+  mkdirSync(fdir, { recursive: true });
+  writeFileSync(join(fdir, "verify-report.json"), JSON.stringify({ verdict: "PASS" }));
+  writeFileSync(join(fdir, "regression-report.json"), JSON.stringify({ verdict: "no-regressions" }));
+  const a = renderLedger({ name: "feat", command: "/pharn-ship", repo, sessionId: ROUTED_SESSION, projectsDir, markersBase: baseA });
+  const b = renderLedger({ name: "feat", command: "/pharn-ship", repo, sessionId: ROUTED_SESSION, projectsDir, markersBase: baseB });
+  // run-window-core (membership, and check-cost-ledger rule 8's recompute) — identical.
+  assert.deepEqual(a.membership, b.membership);
+  // runWindow's result carries a closure (`openings`), so compare its data and what the closure answers.
+  const winA = runWindow(normalizeMarkers(withRoute), ROUTED_SESSION);
+  const winB = runWindow(normalizeMarkers(without), ROUTED_SESSION);
+  const data = ({ openings, ...rest }) => (void openings, rest);
+  assert.deepEqual(data(winA), data(winB));
+  assert.deepEqual(winA.openings(ROUTED_SESSION), winB.openings(ROUTED_SESSION));
+  // attribute() — identical stage attribution per request.
+  assert.deepEqual(a.requests, b.requests);
+  for (const r of a.requests)
+    assert.deepEqual(attribute(normalizeMarkers(withRoute), r.ts, r.session_id), attribute(normalizeMarkers(without), r.ts, r.session_id));
+  // Every view, and the ship outcome (ship-outcome-core) — identical.
+  for (const k of ["totals", "by_model", "by_stage_iteration_model", "unattributed", "outcome"]) assert.deepEqual(a[k], b[k], k);
+  // render-run-report's staleness identity (the latest run-start's seq and ts) — each ledger is CURRENT
+  // against the OTHER's live markers.
+  assert.equal(ledgerCurrency(a, without).state, "current");
+  assert.equal(ledgerCurrency(b, withRoute).state, "current");
+  // The only difference is the route key itself.
+  assert.deepEqual(
+    a.markers.map(({ route, ...rest }) => (void route, rest)),
+    b.markers
+  );
+  // check-cost-ledger --verify-transcript passes the RECORDED markers into deriveLedger: GREEN for both.
+  assert.deepEqual(checkLedger(a, { verifyTranscript: true, projectsDir, repo }).reds, []);
+  assert.deepEqual(checkLedger(b, { verifyTranscript: true, projectsDir, repo }).reds, []);
+});
