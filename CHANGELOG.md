@@ -189,9 +189,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     (`stage-agent-hang`); a harness that backgrounds one anyway can leave it running (`stage-agent-background`);
     the Agent tool's alias set is a platform fact read in one harness (`agent-model-set-drift`); routing effort
     needs agent definitions `pharn update` would have to install (`stage-agent-effort`). The live success
-    measure (the plan's M2) needs a real run and is pending. `LIMITS.md §8` is revised through a human-applied
-    patch (`.dev/features/stage-model-routing/proposed/`); until a person applies it, that section's "nothing
-    reads `models.stages` at run time" is stale.
+    measure (the plan's M2) needs a real run and is pending. `LIMITS.md §8` is revised in this release through
+    the human-applied patch (`.dev/features/stage-model-routing/proposed/`), applied by the maintainer in
+    `0344ff1`, and no longer says nothing reads `models.stages` at run time.
 
 ## [6.26.0] - 2026-09-26
 
