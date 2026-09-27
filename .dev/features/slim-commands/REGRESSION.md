@@ -1,20 +1,22 @@
 # REGRESSION — slim-commands
 
-- stage: `/pharn-dev-regress`, after `/pharn-dev-build` (BUILD.md).
+- stage: `/pharn-dev-regress`, re-run at GATE 2 after the FIX round and the merge of `origin/main` at 6.28.1 (#282,
+  `b9c5a46`), on the merge commit `9d5e2f9`. The build-time run (base `b6274095`) is replaced by this one.
 - stage model: regress — opus — set by the maintainer's instruction, overriding pharn.config.json; routed via Agent
   subagent; effort not routed.
-- base: `b6274095d4c9c6bf58926b375eb710a1809d5f82` (`git merge-base HEAD origin/main`, the invoker's `--base`; the
-  working tree was dirty, so the auto rule would have picked `HEAD` — the invoker's base wins).
+- base: `b9c5a4669e3f19b14c86f791e4df63413d8667dd` (`git merge-base HEAD origin/main`; the tree was clean, so this
+  is also the command's own auto rule).
 - machine report: `regression-report.json` (the `check-regress.mjs verdict` stdout, byte-identical — `cmp` exit 0).
 
 ## Scope partition (`check-regress.mjs scope --feature slim-commands` → exit 0)
 
-- **inside** (19): `git diff --name-only <base>` (18) plus one untracked file (`BUILD.md`) — the eleven product
-  commands, `command-hygiene.test.mjs`, `CHANGELOG.md`, `CLAUDE.md`, `README.md`, `SKILLS_VERSION`, and this feature's
-  `PLAN.md`, `GRILL.md`, `BUILD.md`.
+- **inside** (24): `git diff --name-only <base>`, no untracked file — the eleven product commands,
+  `command-hygiene.test.mjs`, `CHANGELOG.md`, `CLAUDE.md`, `README.md`, `SKILLS_VERSION`, and this feature's
+  `PLAN.md`, `BUILD.md`, `GRILL.md`, `REVIEW.md` and earlier stage reports.
 - **declared** (18): PLAN.md `## Files`.
-- **escaped:** none. **escape_exempt:** `.dev/features/slim-commands/GRILL.md` (this feature's own stage artifact).
-- **outside gates:** 119 test files (every committed `*.test.mjs` / `*.test.cjs` but the one inside), `validate`, and
+- **escaped:** none. **escape_exempt:** this feature's own stage artifacts — `GRILL.md`, `REGRESSION.md`,
+  `REVIEW.md`, `VERIFY.md`, `regression-report.json`, `verify-report.json`.
+- **outside gates:** 121 test files (every committed `*.test.mjs` / `*.test.cjs` but the one inside), `validate`, and
   the one committed eval pair (`expected-injection-comment.json` ↔ `.dev/features/trust-fence/findings.json`, both
   confirmed readable before its exit was recorded).
 - **style gates skipped:** `inside` touches none of `eslint.config.mjs`, `.prettierrc.json`, `.prettierignore`,
@@ -24,7 +26,7 @@
 
 | Gate                                                                                       | base → head |
 | ------------------------------------------------------------------------------------------ | ----------- |
-| `tests` (119 outside files, `node --test` with the paths on argv)                          | 0 → 0       |
+| `tests` (121 outside files, `node --test` with the paths on argv)                          | 0 → 0       |
 | `validate` (`node pharn/floor/validate.mjs .`)                                             | 0 → 0       |
 | `structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json` | 0 → 0       |
 

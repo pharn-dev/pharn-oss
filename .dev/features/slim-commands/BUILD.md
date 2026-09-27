@@ -795,3 +795,97 @@ SKILLS_VERSION "6.28.1"`.
   THREAT-MODEL cites it) — left as it was.
 - The named follow-ups of the plan stand: `quick-mode-on-demand`, `dev-command-slim`, `ship-closeout-script`,
   `description-claim-paraphrase`, `reads-trim`.
+
+(At GATE 2 the `CLAUDE.md` cites were fixed and the module-header drift was named `module-header-claims-cite`; see
+below.)
+
+## GATE 2 — the FIX round and the merge
+
+- decision: GATE 2 = **FIX**, and the final merge in the same round — the orchestrator's, under the maintainer's
+  2026-09-25 delegation; a model decision, not a human one. `REVIEW.md` (`7f6c6c7`): GREEN at the floor, 0
+  blocking, 0 lost instructions, F1–F7 important, M1–M12 minor.
+- stage model: build — opus — set by the maintainer's instruction, overriding pharn.config.json; routed via Agent
+  subagent; effort not routed.
+
+### What was fixed (one clause each, as `REVIEW.md` proposes)
+
+| Finding | File                      | Fix                                                                                                                        |
+| ------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| F1      | `pharn-ship.md`           | the claims intro names its two exceptions: a `stage-agent.mjs read` STOP and a routed build's `done gate:pass`             |
+| F2      | `pharn-test.md`           | the hook bullet covers the Write-tool writes; the lock is written by `ac-tests-lock.mjs` through `fs`, outside it          |
+| F3      | `pharn-review.md`         | the width claim (claims block and Step 0) covers Write-tool writes only; a Bash write is outside the hook (`LIMITS.md §6`) |
+| F4      | `pharn-build.md`          | Floor 3: the Write/Edit surface only; a Bash write is detected at reconcile, never prevented                               |
+| F5      | `pharn-plan.md`           | "no **guaranteed** decision reads them; taint reaches your selection (advisory)"                                           |
+| F6      | `CHANGELOG.md`            | the mapping sentence narrowed to what `BUILD.md` and the review show                                                       |
+| F7      | the version files         | renumbered to 6.28.2 at the merge (below)                                                                                  |
+| M1      | ship, regress, verify     | the three `CLAUDE.md, "Writes-scope"` cites → `.claude/hooks/enforce-writes-scope.cjs`, header                             |
+| M3      | `pharn-spec.md`           | Step 2's "It never blocks" → "The interrogation otherwise never blocks"                                                    |
+| M4      | `pharn-review.md`         | Step 6 restores "must not be flattened into a score" and "closes none of the suppression risk itself"                      |
+| M5      | `pharn-loop.md`           | the D8 residual restored; Step 6b's ≤1 repair bound labelled advisory (`LIMITS.md §1d`)                                    |
+| M6      | `pharn-build.md`          | "no stage GATES intent fidelity" and the seam extraction's bound restored                                                  |
+| M7      | `pharn-spec.md`           | the description names `--model-approve` (244 bytes)                                                                        |
+| M8      | `pharn-plan.md`           | the description says "`applied_lessons` declaration" (198 bytes)                                                           |
+| M9      | `pharn-test.md`           | the reconcile bound: AC-TESTS.md IS exempt, like PLAN.md                                                                   |
+| M10     | `pharn-spec.md`           | the two items re-labelled: "Floor, in the checker" (with the case-fold condition) and "Provenance, not a check"            |
+| M11     | `pharn-memory-promote.md` | Step 2: "so a needle cannot survive as a value — but shape is not aptness"                                                 |
+| M12     | `BUILD.md`                | the five map pointers corrected in place, each marked "corrected at GATE 2"                                                |
+
+Not fixed, per D3: M2, the three shipped module headers still saying "guarantee audit" (`merge-findings.mjs:63`,
+`:81`, `render-review-assignments.mjs:16`) — follow-up `module-header-claims-cite`. Named from the review's answer on
+descriptions: follow-up `disable-model-invocation-probe` (whether `/pharn-loop` and `/pharn-ship` should carry
+`disable-model-invocation`; not probed, P6/P7).
+
+### Commands run, with exit codes
+
+- `git merge --ff-only slim-commands` → exit 0 (to `7f6c6c7`, the review).
+- `node .claude/hooks/set-writes-scope.cjs --from-plan .dev/features/slim-commands/PLAN.md` → exit 0, `18 path(s)`.
+- After the fixes: `node --test .dev/floor/command-hygiene.test.mjs` → exit 0, 262 / 262; `npm test` → exit 0,
+  4,012 / 4,012; `npx prettier --ignore-unknown --check` and `npx markdownlint-cli2 --no-globs` over the edited files
+  → one prettier finding (a blank line in `CHANGELOG.md`), fixed with `--write` on that one path, then clean.
+- `git commit` of the fixes → `862bd76` (committed before the merge, since `git merge` refuses local changes to files
+  it touches).
+- `git fetch origin` → exit 0; `origin/main` = `b9c5a46` (#282, 6.28.1). `git merge --no-edit origin/main` → exit 1,
+  one conflict, `CHANGELOG.md`; `README.md` auto-merged (both sides had set the badge to 6.28.1), `SKILLS_VERSION`
+  identical on both sides.
+- **The resolution:** main's sections byte for byte, `[6.28.1]` included, with this increment's section directly
+  above it, its heading renumbered. A scratch check (`.pharn/pharn-dev-build/changelog-check.mjs`) printed
+  `main byte-identical: true`, `my section identical but for heading: true`, `conflict markers: false`; after the
+  renumber edits inside this section below, the first line still prints `true`.
+- **The renumber (F7), every "6.28.1" this diff added:** `SKILLS_VERSION` and the README badge → `6.28.2`; the
+  CHANGELOG heading `## [6.28.2] - 2026-09-27` and its bump line (`6.28.1 → 6.28.2`, "planned as 6.28.1 and renumbered
+  at merge"); the `CLAUDE.md` bullet's `(6.28.2)`; the eight `6.28.1` mentions in `command-hygiene.test.mjs`'s
+  comments; this file's title; and `PLAN.md`'s base line, §9, D7 and `## Files`, each marked "renumbered at GATE 2, F7",
+  with a new `## Amended at GATE 2`. `REVIEW.md` keeps its own text: it is the review's record, and its `6.28.1`s name
+  main's release or the pre-renumber branch.
+- `npm run docs:generate` → exit 0: "README.md current-state block already current", "docs/lessons-index.md already
+  current" (64 lessons, main's L64 included) — nothing changed.
+- `npm run check:changelog` → GREEN, newest section `## [6.28.2] - 2026-09-27`, 118 sections in order;
+  `npm run check:badge` → GREEN; `npm run docs:check` → GREEN.
+- `git commit` of the merge → `9d5e2f9`, parents `862bd76` and `b9c5a46`.
+- `node .claude/hooks/set-writes-scope.cjs --from-plan …` → exit 0, `18 path(s)`; `node
+pharn/floor/reconcile-baseline.mjs --anchor --by slim-commands-final` → exit 0, `2449 path(s), scope 18 entr(ies)`.
+
+### The budget on the merged tree — the ceilings still hold
+
+The ceilings were NOT raised: every command is still under the one it was measured with at the build. The fixes used
+some headroom.
+
+| Command                 |    Base |     Now | Change | Ceiling | Headroom | Description |
+| ----------------------- | ------: | ------: | -----: | ------: | -------: | ----------: |
+| pharn-ship.md           | 124,078 |  69,550 | −43.9% |  76,800 |    7,250 |         228 |
+| pharn-loop.md           | 112,538 |  78,347 | −30.4% |  86,016 |    7,669 |         237 |
+| pharn-memory-promote.md |  39,685 |  24,819 | −37.5% |  27,648 |    2,829 |         165 |
+| pharn-spec.md           |  37,149 |  24,789 | −33.3% |  27,136 |    2,347 |         244 |
+| pharn-review.md         |  36,909 |  22,009 | −40.4% |  24,064 |    2,055 |         153 |
+| pharn-build.md          |  36,583 |  20,506 | −43.9% |  22,016 |    1,510 |         172 |
+| pharn-grill.md          |  35,075 |  20,749 | −40.8% |  23,040 |    2,291 |         191 |
+| pharn-plan.md           |  34,722 |  21,687 | −37.5% |  24,064 |    2,377 |         198 |
+| pharn-test.md           |  24,904 |  18,617 | −25.2% |  20,480 |    1,863 |         177 |
+| pharn-regress.md        |  19,683 |  18,561 |  −5.7% |  20,480 |    1,919 |         179 |
+| pharn-verify.md         |  18,418 |  16,750 |  −9.1% |  18,432 |    1,682 |         170 |
+| **total**               | 519,744 | 336,384 | −35.3% |         |          |       2,114 |
+
+The descriptions: 22,764 → 2,114 bytes (−91%). The three missed estimates stand: loop 78,347, spec 24,789 and plan
+21,687, against ~72,000, ~23,000 and ~21,000. `#282` touched no command, so the merge moved no command byte.
+
+Regress and verify then ran on the merged tree (`REGRESSION.md`, `VERIFY.md`).
