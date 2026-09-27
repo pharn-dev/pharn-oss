@@ -433,3 +433,18 @@ patched).
 The full suite, TAP reporter, in this worktree against its still-unpatched hooks, after the merge and the fix pass:
 **4157 tests, 4127 pass, 30 fail**. The 30 failing top-level titles are byte-identical to the list above (`cmp` of
 the two lists) — unchanged, all in the two hook test files, and none from the tests `main` brought in.
+
+### The reconcile epoch was re-opened, and the non-test gates re-run
+
+The fix pass was committed as `fe2c80b`. On that tree the build's epoch (`pharn-dev-build`, 2026-09-27T15:58:43Z)
+read `ESCAPE` with 52 escapes, and every one of them is a file `git diff 70cb51c c1bf663` lists — the merge, not a
+write this increment made. So the PLAN setter was re-run and `reconcile-baseline.mjs --anchor --by
+write-guard-narrowing-post-merge` re-anchored at 2026-09-27T21:11:33.769Z (2485 paths, the 17-path PLAN scope). No
+baseline was edited or deleted. `check-bash-reconcile.mjs --base . --require-baseline` then read **CLEAN** (0
+escapes, exit 0) — the check `apply.sh` runs as its step 2. This record and `SHIP.md` are pipeline artifacts, exempt
+from reconcile, so writing them afterwards does not move that reading.
+
+The non-test gates, in this worktree after the anchor, every scratch script moved out of `.pharn/` first:
+`format:check` 0, `lint` 0, `lint:md` 0, `docs:check` 0, `check:markers` 0, `check:badge` 0 (`6.29.1`),
+`check:changelog` 0 (122 sections), `check:contributing` 0, `check:reconcile` 0, `validate` 0 (36 capabilities),
+and `check:changelog-entry` 0 against `c1bf663`. `git apply --check` of the patch exits 0.
