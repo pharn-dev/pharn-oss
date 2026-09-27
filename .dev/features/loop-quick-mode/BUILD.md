@@ -208,10 +208,124 @@ growth. Measured, not assumed; whether to trim is a review question.
 - The `[6.27.0]` entry's and `CLAUDE.md`'s "full mode byte-identical to 6.25.0" still holds against 6.26.0: main did
   not change `check-loop.mjs` or anything it imports.
 
+## GATE 2 FIX round — 2026-09-27
+
+- The orchestrator's GATE-2 decision — a model decision under the maintainer's 2026-09-25 delegation, not a human one:
+  FIX, on `REVIEW.md` at `5ea5e67` (GREEN, 0 floor-gate findings; F1 important, security). Stage model: opus — set by
+  the maintainer's instruction; routed via Agent subagent; effort not routed.
+  `git merge --ff-only loop-quick-mode` → `29fe0fc..5ea5e67`, exit 0.
+- Step 0: `PLAN.md` amended (`## GATE 2 amendments`); `node pharn/floor/check-plan-lessons.mjs …` → exit 0;
+  `set-writes-scope.cjs --from-plan` → exit 0, 37 paths; `reconcile-baseline.mjs --anchor --by loop-quick-mode-gate2` →
+  exit 0, 2400 paths, scope 37. Mid-round `stage-runtime.test.mjs` joined `## Files` (below): the setter → 38 paths,
+  then `reconcile-baseline.mjs --amend-scope` → exit 0, amendment 1 — the contract's order, the setter first.
+
+### F1 — the design
+
+- **The pinned line, at both call sites:** `node pharn/floor/check-quick-scope.mjs --feature '<name>' --base '<base sha>'`
+  — `pharn-loop.md` `## Quick mode` item 5 (the git listing fence and 6.25.0's scope line removed) and `pharn-ship.md`
+  `## Quick mode` item 7 (6.25.0's line replaced; the base still resolved by `BASE_RULE`, now to its 40-hex SHA). No
+  path list reaches any shell argument.
+- **The code, and which set each part computes:**
+  - `pharn/floor/check-quick-scope.mjs` (new CLI) — pairwise argv (`--feature` and `--base`, each once, nothing else);
+    the slug against `gate-run-core.mjs`'s `FEATURE_SLUG_RE`; the base against `SHA_RE` and
+    `git rev-parse --verify --quiet <base>^{commit}`; an lstat containment walk of `pharn/features/<name>`
+    (`stage-runtime.mjs`'s `containmentWalk`); exit 0 / 1 / 2 with a closed `reason_code` set, a crash caught as 2.
+  - The declared set — `pharn/floor/scope-inputs.mjs`'s `declaredWrites`: `PLAN.md` ∪ `AC-TESTS.md` `## Files`
+    through `plan-files-core.mjs` (`pathsFromPlanFiles`, `clean`); then `check-regress.mjs`'s `normPath`, exactly as its
+    `parseList` applies it.
+  - The changed set — `scope-inputs.mjs`'s `changedPaths`: `git diff --name-only --no-renames -z <base>` ∪
+    `git ls-files -z --others --exclude-standard`, NUL-split (`stage-runtime.mjs`'s `gitSync`, `nulList`), minus
+    `.pharn/` (`worktree-fingerprint.mjs`'s `isExcluded`) — never trimmed.
+  - The verdict — `check-regress.mjs`'s newly exported `partitionScope` and `scopeFindings`, the rule and finding
+    shape its `scope` CLI applies; the CLI now calls them (output unchanged, `check-regress.test.mjs` 45/45) and runs
+    only under `import.meta.main`.
+  - One owner (L35): `stage-regress.mjs`'s `readPlanDeclared` / `computeInside` now call `declaredWrites` /
+    `changedPaths`, every detail string byte-identical; `stage-regress.test.mjs` is unchanged and passes (at head in the
+    regress run below too).
+- **The hostile-name test** — `pharn/floor/check-quick-scope.test.mjs`, 28/28, exit 0. Both committed lines, read out of
+  the two command files and run under `sh -c` with only `<name>` and `<base sha>` substituted, in a git fixture whose
+  `pharn/floor` is a symlink excluded through `.git/info/exclude`. Eleven hostile untracked names —
+  `src/$(touch INJECTED).js`, a backtick pair, `src/x$Q.js` (Q unset), `src/x.js,src/x.js`,
+  `pharn/features/demo/SPEC.md,src/x.js`, a single quote, a double quote, a newline, `--declared`, `-n`, and
+  `src/x.js` with a trailing space — each exits 1 on both lines, with `escaped` equal to that one path byte for byte,
+  one finding, and no `INJECTED` file. A **declared** `src/$(touch INJECTED).js` exits 0, and still no `INJECTED`.
+  **The control:** 6.25.0's line, run as it instructed in the same fixture — the `$(touch INJECTED)` name created
+  `INJECTED`, and `src/x$Q.js` exited 0 (the false pass); the committed line exited 1 on that same tree. The line's own
+  shape is pinned too: exactly the two placeholders, each single-quoted, no other shell-active character, and the same
+  line in both commands.
+- **A second literal importer of the runtime.** `scope-inputs.mjs` imports `stage-runtime.mjs`, so
+  `stage-runtime.test.mjs`'s "G3 discriminates" mutation (a computed import path in `stage-regress.mjs` alone) no
+  longer dropped the runtime from the regress fixture closure:
+  `node --test pharn/floor/stage-regress.test.mjs pharn/floor/stage-runtime.test.mjs pharn/floor/stage-regress-core.test.mjs pharn/floor/cli-stdout-flush.test.mjs`
+  → 85/86. The test now mutates every literal importer in the closure, asserting both are found → 19/19. That file
+  joined `## Files` through the amendment above.
+- **Found by this fix, named, not built — `regress-scope-list-grammar`.** `/pharn-regress`'s own partition still
+  reaches `check-regress.mjs scope` through its comma-list argv.
+  `node pharn/floor/check-regress.mjs scope --changed "--declared" --declared "src/a.js" --feature demo` → exit 0,
+  `escaped: []` (a lone path spelled like the flag shadows it); `--changed "src/a.js " --declared "src/a.js"` → exit 0
+  (the trim). Reproduced at that CLI, not through a `stage-regress.mjs` fixture, which already refuses a comma or
+  newline path (`unrepresentable-path`). The quick check is immune by construction (arrays); the full mode's remedy is
+  the same move, outside this increment. Also stated in `check-regress.mjs`'s header, `CLAUDE.md` and
+  `CHANGELOG [6.27.0]`.
+
+### F2–F6 and the patch
+
+- **F2** — `pharn-loop.md`'s quick audit bullet: "Nothing downstream re-checks it: it leaves no record (stdout only),
+  `check-loop-fresh.mjs` skips G and H … and the commit gate does not re-run it"; item 5's bound says the same. No new
+  artifact.
+- **F3** — `check-loop.mjs`'s header: the import fallback holds in this file; the two record checkers import
+  `LOOP_MODES` statically and fail to load (exit 1, never GREEN).
+- **F4** — `spec-template.md`: "failing that," → "then".
+- **F5** — `pharn-loop.md`: a quick qualifier at Step 5.3's FRESH bullet, the retry paragraph and the guarantee audit's
+  freshness bullet; `README.md`: "stops (S6c, under `/pharn-loop --quick`) or takes the full pipeline".
+- **F6** — Step 5.4's exit-0 bullet: the green of the table the SPEC's kind chose, `decision` read from the JSON; a run
+  without `--quick` over a quick SPEC gets `STOP_GREEN_QUICK` and Step 6 never commits it. Its hygiene pin moved with
+  it.
+- **The LIMITS patch** — `make-patch.mjs`: §3a's scope check gains "(within the bounds §6 states for that check; it
+  leaves no record, so nothing after its iteration re-checks it)"; §6's clause names `check-quick-scope.mjs` in place of
+  "which run the same partition". `node .dev/features/loop-quick-mode/handoff/make-patch.mjs` → exit 0, printed
+  `9accea6586b3901df97fba9a0c81673c62b0510196c7e8d0f3085b08d772b474  LIMITS.md`; `git apply --check` → exit 0;
+  `git apply --stat` → 15 insertions, 3 deletions; applied to a scratch copy under `.pharn/` only, the result hashes to
+  the recorded sums, and the live `LIMITS.md` is untouched. `APPLY.md`'s two bullets follow. It is regenerated once
+  more after `stage-model-routing`'s §8 lands on main.
+- **Also touched:** both commands' `reads:` name `check-quick-scope.mjs` in place of `check-regress.mjs`;
+  `pharn-ship.md`'s closing paragraph counts two new gating reads; `CLAUDE.md` gains the checker's Commands entry;
+  `CHANGELOG [6.27.0]` gains a Fixed entry (the security correction to 6.25.0's bytes) and its Added bullets follow;
+  the hygiene suite's quick pins follow the new line (240/240, a mutation control added for a restored listing).
+
+### Gates, this round
+
+| command                                                | exit | result                                                                         |
+| ------------------------------------------------------ | ---- | ------------------------------------------------------------------------------ |
+| `node pharn/floor/validate.mjs .`                      | 0    | `FLOOR: GREEN — 36 capabilities`                                               |
+| `npm run docs:generate`                                | 0    | README CURRENT-STATE: floor checkers 93 → 95; the other regions byte-identical |
+| `/pharn-dev-regress` (base `008b24b`)                  | 0    | `no-regressions`; 3,372 outside tests on each side                             |
+| `/pharn-dev-verify`                                    | 0    | `PASS`, seven gates `0`; `npm test` 3,906/3,906; `reconcile` `CLEAN`, 18 paths |
+| `npm run check`                                        | 0    | 3,906 tests                                                                    |
+| `npm run check:changelog-entry` (merge base `008b24b`) | 0    | GREEN — 2 new entries, opens `## [6.27.0]`                                     |
+
+Sizes after this round: `pharn-loop.md` 98,902 B (+1,154 B; `## Quick mode` 15,327 B, +543 B); `pharn-ship.md`
+109,295 B.
+
+### Deferred, carried
+
+- **F7 (size) → roadmap Phase 4.1**, with the review's numbers: about 4.9 KB of `## Quick mode` is rationale or audit,
+  not instruction (the mode-binding paragraph 522 B, the D8 paragraph 852 B, the quick guarantee audit 2,266 B, item
+  5's divergence note 456 B — replaced this round by its bound, the first-token rule's bound about 400 B, item 1's
+  mode-marker note about 150 B); about 2 KB of the 2,912 B question table restates Step 2 rows (only four are
+  quick-only); and moving `## Quick mode` to a file read only under `--quick` would save about 13–14 KB per full-run
+  read, on the review's four conditions (a file outside `.claude/commands/`; `LOOP_QUICK_WIRING` and the two ★ tests
+  re-pointed; the S6c row, Step 6b's `mode` sentences and the skip-site pointers stay; the G7 closure goes moot).
+- deferred:
+  - `lesson: skipped` — the review's candidate (double quotes are not a boundary for untrusted text; L5 recurring) is
+    not promoted here; a separate, human-gated `/pharn-dev-memory-promote` decides it.
+  - the `stage-model-routing` coupling (Chain sequencing, items 4 and 5) — unbuilt until 2.2 merges.
+  - `regress-scope-list-grammar` — above.
+
 ## Open issues, named
 
-- `quick-scope-inputs-by-code`, `architecture-loop-quick-line`, `loop-quick-run-report`, `quick-size-signal` — pending,
-  as the plan records.
+- `architecture-loop-quick-line`, `loop-quick-run-report`, `quick-size-signal` — pending, as the plan records.
+  `quick-scope-inputs-by-code` is built (the GATE 2 round above); `regress-scope-list-grammar` is new and pending.
 - The `stage-model-routing` coupling (Chain sequencing items 4 and 5) is not built here: it belongs to whichever of the
   two phases merges second.
 - `origin/main` at `008b24b` (6.26.0, `stage-verify-script`, #281) is merged in (`c9d279c`, the section above); no

@@ -664,7 +664,7 @@ byte-for-byte by `npm run docs:check`, so it cannot quietly drift from what is a
 - **Product commands — 11** (`.claude/commands/`): `/pharn-build`, `/pharn-grill`, `/pharn-loop`, `/pharn-memory-promote`, `/pharn-plan`, `/pharn-regress`, `/pharn-review`, `/pharn-ship`, `/pharn-spec`, `/pharn-test`, `/pharn-verify`.
 - **Dev-apparatus commands — 9** (`.claude/commands/`): `/pharn-dev-build`, `/pharn-dev-eval`, `/pharn-dev-grill`, `/pharn-dev-memory-promote`, `/pharn-dev-plan`, `/pharn-dev-regress`, `/pharn-dev-review`, `/pharn-dev-ship`, `/pharn-dev-verify`.
 - **Hook scripts — 4** (`.claude/hooks/`): `enforce-writes-scope.cjs`, `protect-trusted-paths.cjs`, `require-loop-record.cjs`, `set-writes-scope.cjs`.
-- **Floor checkers — 93** `.mjs` files under `pharn/floor/` (tests excluded).
+- **Floor checkers — 95** `.mjs` files under `pharn/floor/` (tests excluded).
 
 <!-- CURRENT-STATE:END -->
 
@@ -803,8 +803,8 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   renders. `/pharn-loop --quick` (6.27.0) is the unattended one: it drops the same base-and-head run on every
   iteration, where the loop multiplied it, plus the interrogation and the run report. There is no
   automatic proportionality — nothing measures whether a change is "small" — the flag is a person's choice (under
-  `/pharn-loop --quick` the model then writes and approves the quick SPEC), and a change too large for it takes the
-  full pipeline.
+  `/pharn-loop --quick` the model then writes and approves the quick SPEC), and a change too large for it stops (S6c,
+  under `/pharn-loop --quick`) or takes the full pipeline.
 - **Packaging is still pre-release shaped.** There are no GitHub releases or git tags yet; the installer
   currently fetches the repository's `main` and records the exact installed commit.
 

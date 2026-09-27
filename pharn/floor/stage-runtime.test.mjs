@@ -347,9 +347,19 @@ test("★ G3 — the regress fixture regex reaches stage-runtime.mjs and every m
 });
 
 test("★ G3 discriminates — a COMPUTED import path drops the runtime from the closure", () => {
-  const mutated = readReal("stage-regress.mjs").replace('from "./stage-runtime.mjs";', 'from `./stage-${"runtime"}.mjs`;');
-  assert.notEqual(mutated, readReal("stage-regress.mjs"), "the mutation must land");
-  const closure = fixtureClosure("stage-regress.mjs", (m) => (m === "stage-regress.mjs" ? mutated : readReal(m)));
+  // The mutation lands in EVERY module of the closure that imports the runtime literally. Since 6.27.0 there are two:
+  // stage-regress.mjs and scope-inputs.mjs (loop-quick-mode GATE 2) — mutating one alone would leave the runtime
+  // reachable through the other, and the test would no longer show the regex's blind spot.
+  const LITERAL = 'from "./stage-runtime.mjs";';
+  const COMPUTED = 'from `./stage-${"runtime"}.mjs`;';
+  const importers = [...fixtureClosure("stage-regress.mjs", readReal)].filter((m) => readReal(m).includes(LITERAL));
+  assert.ok(
+    importers.includes("stage-regress.mjs") && importers.includes("scope-inputs.mjs"),
+    `the runtime's literal importers in the regress closure: ${importers}`
+  );
+  const read = (m) => (importers.includes(m) ? readReal(m).replace(LITERAL, COMPUTED) : readReal(m));
+  for (const m of importers) assert.notEqual(read(m), readReal(m), `the mutation must land in ${m}`);
+  const closure = fixtureClosure("stage-regress.mjs", read);
   assert.equal(
     closure.has("stage-runtime.mjs"),
     false,

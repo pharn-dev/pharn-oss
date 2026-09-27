@@ -221,7 +221,7 @@ as quick. What stands between that and an approved quick or bootstrap SPEC is `/
 the key only when the human chose that path (Step 4's trade sentence, for quick), and the human approval itself —
 both advisory. **Under the unattended `/pharn-loop` (6.27.0) there is no human approval**, so the bound there is:
 without `--quick`, `/pharn-spec`'s Step 4a refuses to approve a Draft carrying `spec_kind: quick` (advisory);
-failing that, `check-spec-approved.mjs` exits non-zero on the unapproved Draft and the run stops (S9 — floor); and a
+then `check-spec-approved.mjs` exits non-zero on the unapproved Draft and the run stops (S9 — floor); and a
 model that approves it anyway ends on an uncommitted `STOP_GREEN_QUICK`, because a full run commits only
 `STOP_GREEN`. With `--quick`, the kind is the one the invoker asked for, and rule 9 still bounds the SPEC. Review a
 template change that adds the key like any change to the template.

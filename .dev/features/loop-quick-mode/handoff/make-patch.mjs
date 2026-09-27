@@ -56,20 +56,24 @@ export const S3A_TAIL_REPLACE =
   "> writes and approves the `spec_kind: quick` SPEC itself (`approved_by: model`), and `check-loop.mjs` decides every\n" +
   "> stop over `/pharn-verify`'s verdict alone. The decision's mode is that SPEC's pinned kind, never a flag, so a full\n" +
   "> SPEC still needs a regression verdict. It keeps the grill's floor stops, the test-first evidence, the scope check\n" +
-  "> and the freshness check (a quick run's verify evidence must still describe the live tree and reproduce from its\n" +
+  "> (within the bounds §6 states for that check; it leaves no record, so nothing after its iteration re-checks it) and\n" +
+  "> the freshness check (a quick run's verify evidence must still describe the live tree and reproduce from its\n" +
   "> stamp). It leaves out the regression check, the plan interrogation and `RUN-REPORT.md` (`cost.json` is still\n" +
   "> written). Its green stop is `STOP_GREEN_QUICK`, which is not `STOP_GREEN` and claims no regression check; the\n" +
   "> record, the commit message and the summary name the mode after the run. The person who typed `--quick` chose it,\n" +
   "> and the model's reading of that flag is advisory, as for `/pharn-ship`.\n";
 
 // ── §6 (GATE 1, Q1 → (a)): the scope check's first bound gains every /pharn-loop --quick iteration ─────────────────
+// GATE 2 (review F1): the quick modes no longer paste model-assembled lists into `check-regress.mjs scope`; the new
+// `check-quick-scope.mjs` applies the same rule to inputs it builds by code, so the clause names that mechanism rather
+// than "which run the same partition".
 export const S6_FIND =
   "  `/pharn-regress` runs — or, since 6.25.0, `/pharn-ship --quick`'s item 7, which runs the same partition\n" +
   "  without the rest of that stage; it compares _changed since base_, not _written by the build_; it carries\n";
 export const S6_REPLACE =
-  "  `/pharn-regress` runs — or, since 6.25.0, `/pharn-ship --quick`'s item 7 and, since 6.27.0, every\n" +
-  "  `/pharn-loop --quick` iteration, which run the same partition without the rest of that stage; it compares\n" +
-  "  _changed since base_, not _written by the build_; it carries\n";
+  "  `/pharn-regress` runs, or when `check-quick-scope.mjs` (6.27.0) applies that rule — for `/pharn-ship --quick`'s\n" +
+  "  item 7 and for every `/pharn-loop --quick` iteration — to inputs it builds by code exactly as that stage's script\n" +
+  "  does, without the rest of that stage; it compares _changed since base_, not _written by the build_; it carries\n";
 
 /** The whole in-memory edit: every find must match exactly once (applyOnce throws FailedGeneration otherwise). Pure. */
 export function editLimits(original) {

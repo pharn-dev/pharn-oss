@@ -23,7 +23,7 @@ reads:
     "pharn/floor/check-plan-spec-agree.mjs",
     "pharn/floor/check-plan-lessons.mjs",
     "pharn/floor/check-test-stage.mjs",
-    "pharn/floor/check-regress.mjs",
+    "pharn/floor/check-quick-scope.mjs",
     "pharn/floor/validate.mjs",
     "pharn/floor/check-attestation.mjs",
     "pharn/floor/render-cost-record.mjs",
@@ -231,29 +231,37 @@ spec_kind: quick`. The remedy is to re-run `/pharn-ship <description>` **without
    omits — every other Step-2 item runs as written.) Its first check is **kept**: item 7.
 
 7. **The scope check: KEPT — run it before `/pharn-verify`.** Skipping `/pharn-regress` must not skip its
-   fix #7 scope partition. `check-regress.mjs scope` is what sees a changed path outside the plan's
-   `## Files` made **before** the build's reconcile anchor — a `/pharn-test`-stage Bash write, say —
-   because `check-bash-reconcile.mjs` at `/pharn-verify` covers anchor → verify only. Resolve its inputs
-   exactly as `/pharn-regress`'s script does in its `base` and `partition` phases
-   (`pharn/floor/stage-regress.mjs`; the base decision is `stage-regress-core.mjs`'s `BASE_RULE` — cited,
-   not restated, P4): the base (`--base <ref>` if the invoker gave one, else `HEAD` when the working tree is
-   dirty (an uncommitted build), else `git merge-base HEAD origin/main`, else ask the human); `inside` =
-   `git diff --name-only --no-renames <base>` plus `git ls-files --others --exclude-standard`, minus any path
-   under `.pharn/` (the state root is never an escape); and the declared writes = `PLAN.md`'s `## Files`
-   paths plus `AC-TESTS.md`'s `## Files` paths when that file exists. Then:
+   fix #7 scope partition. It is what sees a changed path outside the plan's `## Files` made **before** the
+   build's reconcile anchor — a `/pharn-test`-stage Bash write, say — because `check-bash-reconcile.mjs` at
+   `/pharn-verify` covers anchor → verify only. First resolve the base exactly as `/pharn-regress`'s script
+   does in its `base` phase (`stage-regress-core.mjs`'s `BASE_RULE` — cited, not restated, P4): `--base <ref>`
+   if the invoker gave one, else `HEAD` when the working tree is dirty (an uncommitted build), else
+   `git merge-base HEAD origin/main`, else ask the human — and take its 40-hex commit SHA (`git rev-parse HEAD`
+   and `git merge-base HEAD origin/main` each print one; for a ref, `git rev-parse --verify <ref>^{commit}`).
+   Then run it, substituting `<name>` and that SHA as `<base sha>` — the only two values the line takes (Step
+   3a captures its own `<base sha>` later, separately):
 
    ```bash
-   node pharn/floor/check-regress.mjs scope --changed "<inside, comma-separated>" --declared "<PLAN.md ## Files paths, plus AC-TESTS.md ## Files paths when that file exists>" --feature "<name>"
+   node pharn/floor/check-quick-scope.mjs --feature '<name>' --base '<base sha>'
    ```
+
+   **Never type a path into it** — a security correction (6.27.0) to this item as 6.25.0 shipped it, which had
+   you paste the changed and declared lists into double-quoted shell arguments, where a file name carrying
+   `$(…)` ran in your shell and a name carrying a `$` or a comma could pass falsely (`CHANGELOG [6.27.0]`).
+   The checker validates the slug and that the base names a commit, builds both sets itself through the one
+   owner `/pharn-regress`'s script also calls (`pharn/floor/scope-inputs.mjs`: `git diff` since the base plus
+   untracked files, NUL-separated, minus `.pharn/`; `PLAN.md`'s `## Files` plus `AC-TESTS.md`'s when that file
+   exists), and decides with `check-regress.mjs`'s scope rule — the path-set membership `/pharn-regress`'s
+   script reads in its `partition` phase, with its exemptions.
 
    Branch **only** on the exit code (P5): `0` (`escaped: []`) → proceed to `/pharn-verify`. `1` → **STOP**:
    a changed path is outside the declared writes (`escaped` names each one, with a blocking P0 fix #7
-   finding) — a scope breach, not a regression; present it and hand to the human. `2` (a malformed input)
-   → **STOP**, fail-closed. This is the partition only: no base worktree, no dependency install, no gate
-   run, no `--tests`, no `--eval-pairs`, and nothing but this branch reads its output. Running it is
-   **ADVISORY** orchestration (a Bash call outside the `PreToolUse` gate, **L19**); its **exit code is
-   FLOOR** — primitive #3, the same path-set membership `/pharn-regress`'s script reads in its `partition`
-   phase. Record the result for `SHIP.md` (item 11).
+   finding) — a scope breach, not a regression; present it and hand to the human. `2` (inconclusive — its
+   `reason_code` names why) or any other exit → **STOP**, fail-closed. This is the partition only: no base
+   worktree, no dependency install, no gate run, and nothing but this branch reads its output. Running it and
+   substituting its two values are **ADVISORY** orchestration (a Bash call outside the `PreToolUse` gate,
+   **L19**); its inputs are built by **tested code** and its **exit code is FLOOR** — primitive #3. Record the
+   result for `SHIP.md` (item 11).
 
 8. **The verify step: unchanged.** `PASS` → GATE 2 below; `INCOMPLETE` → Step 2b, with the regress re-run
    skipped (item 9); `FAIL` / `INCONCLUSIVE` → STOP.
@@ -324,9 +332,11 @@ looked for before deciding.
   the mapping check, the lock, the red run, the test-stage gate and the AC gate, reached by `quick` through
   `TEST_FIRST_KINDS` exactly as `feature` is.
 - _"A changed file outside the plan's `## Files` still stops a quick run"_ → the verdict is **FLOOR**
-  (`check-regress.mjs scope`'s exit, path-set membership); running it is **ADVISORY** orchestration (item
-  7). Bounded exactly as `/pharn-regress`'s Step 1 states for a `scope-escaped` refusal: a build that
-  rewrites its own `PLAN.md` `## Files` to authorize a path it already wrote is not caught.
+  (`check-quick-scope.mjs`'s exit — `check-regress.mjs`'s scope rule, path-set membership — over inputs it
+  builds itself, tested, so no path reaches a shell); running it and substituting its two values are
+  **ADVISORY** orchestration (item 7). Bounded exactly as `/pharn-regress`'s Step 1 states for a
+  `scope-escaped` refusal: a build that rewrites its own `PLAN.md` `## Files` to authorize a path it already
+  wrote is not caught.
 - _"Quick mode skips `/pharn-regress`'s base comparison, the interrogation, `BRIEFING.md` and
   `RUN-REPORT.md`"_ → **ADVISORY** (command prose). No floor primitive enforces the omission — it is what
   this section instructs, and the hygiene pins prove the prose says so, never that a run obeyed it.
@@ -345,12 +355,13 @@ looked for before deciding.
   resumed, so its mode decides (`stop:pharn-verify` or `gate2-quick` — never `gate2`).
 - _"The change is small"_ → **not a claim**. Nothing measures it; a human chose the flag and the kind.
 
-Quick mode adds **one** new gating read, and it is named here rather than folded into "reused":
+Quick mode adds **two** new gating reads, and each is named here rather than folded into "reused":
 `check-spec.mjs --spec-kind` (6.25.0) — a new print mode of an existing, tested checker, which full mode
-never reads and which quick mode STOPs on (item 3). Every other verdict it reads (`check-spec-approved`,
-`check-plan-spec-agree`, `check-plan-lessons`, `check-test-stage`, the build project-gate,
-`check-regress.mjs scope` — `/pharn-regress`'s own partition — and `verify-report.json .verdict`) is a
-pre-existing checker, reused exactly as full mode reuses it.
+never reads and which quick mode STOPs on (item 3) — and `check-quick-scope.mjs` (6.27.0), which applies
+`check-regress.mjs`'s scope rule, `/pharn-regress`'s own partition, to the inputs that stage's script
+builds, built the same way (item 7). Every other verdict it reads (`check-spec-approved`,
+`check-plan-spec-agree`, `check-plan-lessons`, `check-test-stage`, the build project-gate and
+`verify-report.json .verdict`) is a pre-existing checker, reused exactly as full mode reuses it.
 
 ## Step 2 — Run the chain, branching ONLY on each stage's STRUCTURAL verdict (P5)
 

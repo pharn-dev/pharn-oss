@@ -690,6 +690,26 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 node pharn/floor/stage-verify.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--gates "<cmd>[::<id>],…"]
 node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 
+# THE QUICK SCOPE CHECK (6.27.0, loop-quick-mode GATE 2, review F1) — the partition check `/pharn-ship --quick`'s item 7
+# and every `/pharn-loop --quick` iteration keep when they skip /pharn-regress. THE RECORDED FAILURE (P7): 6.25.0's
+# pinned line had the MODEL paste the changed and declared lists into DOUBLE-QUOTED shell arguments of
+# `check-regress.mjs scope`, so a file named `src/$(touch X).js` ran in the orchestrator's shell and a `$Q` or comma
+# name passed falsely (REVIEW.md F1, reproduced). Now the pinned line carries ONLY the slug and a resolved 40-hex base,
+# both validated (FEATURE_SLUG_RE; SHA_RE + `git rev-parse --verify <base>^{commit}`), and the code builds both sets:
+# pharn/floor/scope-inputs.mjs — the ONE owner stage-regress.mjs's partition phase also calls (L35) — lists the changed
+# paths (`git diff --name-only --no-renames -z <base>` ∪ `git ls-files -z --others --exclude-standard`, minus `.pharn/`)
+# and the declared writes (PLAN.md ∪ AC-TESTS.md `## Files`), and check-regress.mjs's exported `partitionScope` decides
+# with its closed exemptions. Paths travel as ARRAYS: no shell, no comma list, no trim, no flag scan reads one
+# (check-quick-scope.test.mjs EXECUTES both commands' committed lines on hostile names, 6.25.0's line as the control).
+# check-regress.mjs now runs its CLI only under `import.meta.main`. NAMED RESIDUAL, found by this fix and not built:
+# `regress-scope-list-grammar` — /pharn-regress's own partition still reaches check-regress's comma-list CLI, which
+# trims a name's surrounding spaces and lets a lone changed path spelled `--declared` shadow the real flag (each a
+# false pass there; a comma or newline name it already refuses). BOUNDS: changed-since-base, not written-by-the-build
+# (L17); a plan that rewrites its own `## Files` defeats it; a git-ignored path is outside it; it LEAVES NO RECORD (in
+# /pharn-loop nothing downstream re-checks it). Exit: 0 clean · 1 escaped · 2 inconclusive (closed reason_code; a crash
+# is caught as 2, never 1).
+node pharn/floor/check-quick-scope.mjs --feature <name> --base <40-hex>
+
 # Check the SHAPE of a loop-record — the pharn/features/<name>/LOOP.md that /pharn-loop writes at every stop.
 # Floor: the frontmatter envelope (`decision` in {STOP_GREEN, STOP_GREEN_QUICK, STOP_CAP, STOP_TERMINAL, INCONCLUSIVE};
 # `iterations` a positive integer; `commit` a git SHA or the literal `unknown`; `date` ISO YYYY-MM-DD; and,

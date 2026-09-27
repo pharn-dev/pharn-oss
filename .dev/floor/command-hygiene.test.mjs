@@ -2325,9 +2325,11 @@ test("✧ QUICK MODE (GATE-2 F2): the first-token rule is labelled ADVISORY, and
   assert.doesNotMatch(commandBody("pharn-ship.md"), /can never switch a run into this mode/);
 });
 
-/** F3: the scope check quick mode KEEPS — the pinned line, its STOP, its re-run and its SHIP.md record. */
-const QUICK_SCOPE_LINE =
-  'node pharn/floor/check-regress.mjs scope --changed "<inside, comma-separated>" --declared "<PLAN.md ## Files paths, plus AC-TESTS.md ## Files paths when that file exists>" --feature "<name>"';
+/** F3: the scope check quick mode KEEPS — the pinned line, its STOP, its re-run and its SHIP.md record. Since 6.27.0
+ *  (loop-quick-mode GATE 2, review F1) the line carries ONLY the slug and a resolved base: 6.25.0's line pasted the
+ *  changed and declared lists into double-quoted shell arguments. pharn/floor/check-quick-scope.test.mjs EXECUTES both
+ *  commands' committed lines against hostile names; this suite pins the line's presence and place. */
+const QUICK_SCOPE_LINE = "node pharn/floor/check-quick-scope.mjs --feature '<name>' --base '<base sha>'";
 
 test("✧ QUICK MODE (GATE-2 F3): ## Quick mode keeps the scope check — the pinned line once, its STOP, its re-run, and SHIP.md's record", () => {
   const section = quickModeSection();
@@ -2398,37 +2400,37 @@ test("★ QUICK MODE (GATE-2 F3): a stray planted before the anchor passes recon
     });
     assert.equal(reconcile.status, 0, `reconcile is blind to a pre-anchor stray: ${reconcile.stdout}${reconcile.stderr}`);
 
-    // Quick mode item 7, the COMMITTED line: inside = git diff --name-only <base> + untracked (base = HEAD, an
-    // uncommitted working-tree build), declared = the plan's ## Files.
-    const inside = [...git("diff", "--name-only", "HEAD").split("\n"), ...git("ls-files", "--others", "--exclude-standard").split("\n")]
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .sort();
-    assert.deepEqual(inside, ["src/a.js", "src/stray.js"], "fixture sanity: the build's own change and the pre-anchor stray");
+    // Quick mode item 7, the COMMITTED line (6.27.0): it takes only the slug and the base (HEAD here — an uncommitted
+    // working-tree build) and builds the changed and declared sets itself, the declared ones from the plan's ## Files.
+    const plan = (paths) => `# PLAN\n\n## Files\n\n${paths.map((p) => `- \`${p}\` — declared`).join("\n")}\n`;
+    mkdirSync(join(dir, "pharn", "features", "feat"), { recursive: true });
+    writeFileSync(join(dir, "pharn", "features", "feat", "PLAN.md"), plan(["src/a.js"]));
+    const head = git("rev-parse", "HEAD").trim();
     // The line is read out of ## Quick mode as COMMITTED (L45), never re-typed here; the pin test above binds it.
     const committed = quickModeSection()
       .split(/\r?\n/)
       .map((l) => l.trim())
-      .filter((l) => l.startsWith("node pharn/floor/check-regress.mjs scope"));
+      .filter((l) => l === QUICK_SCOPE_LINE);
     assert.equal(committed.length, 1, "## Quick mode must carry exactly one scope line to execute");
-    const run = (declared) =>
+    const run = () =>
       spawnSync(
         "sh",
         [
           "-c",
           committed[0]
-            .replace("pharn/floor/check-regress.mjs", join(FLOOR, "check-regress.mjs"))
-            .replace("<inside, comma-separated>", inside.join(","))
-            .replace("<PLAN.md ## Files paths, plus AC-TESTS.md ## Files paths when that file exists>", declared)
-            .replace("<name>", "feat"),
+            .replace("pharn/floor/check-quick-scope.mjs", join(FLOOR, "check-quick-scope.mjs"))
+            .replace("<name>", "feat")
+            .replace("<base sha>", head),
         ],
         { cwd: dir, encoding: "utf8" }
       );
-    const stop = run("src/a.js");
+    const stop = run();
     assert.equal(stop.status, 1, `the quick scope line must STOP on the stray: ${stop.stdout}${stop.stderr}`);
     assert.deepEqual(JSON.parse(stop.stdout).escaped, ["src/stray.js"]);
+    assert.deepEqual(JSON.parse(stop.stdout).inside.sort(), ["pharn/features/feat/PLAN.md", "src/a.js", "src/stray.js"]);
     // CONTROL: the same run with the stray declared too is clean — the STOP above is the stray, not the line.
-    const clean = run("src/a.js,src/stray.js");
+    writeFileSync(join(dir, "pharn", "features", "feat", "PLAN.md"), plan(["src/a.js", "src/stray.js"]));
+    const clean = run();
     assert.equal(clean.status, 0, `${clean.stdout}${clean.stderr}`);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -2446,11 +2448,11 @@ test("✧ QUICK MODE (GATE-2) mutation controls: each new pin fails when its tex
       "This rule is binding: it is an instruction to you, the",
       FIRST_TOKEN_ADVISORY[0].re,
     ],
-    // F3: drop the pinned scope line's --feature flag.
+    // F3: drop the pinned scope line's --base flag.
     [
       ship,
-      ' --feature "<name>"\n   ```\n\n   Branch **only**',
-      "\n   ```\n\n   Branch **only**",
+      " --base '<base sha>'\n   ```\n\n   **Never type a path into it**",
+      "\n   ```\n\n   **Never type a path into it**",
       new RegExp(QUICK_SCOPE_LINE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
     ],
     // F3: drop the KEPT clause from the trade sentence.
@@ -2514,11 +2516,13 @@ test("✧ QUICK MODE wiring is non-vacuous — pharn-ship.md, pharn-grill.md and
 //
 // `/pharn-ship --quick` (above) and `/pharn-loop --quick` are a deliberate pair; .dev/features/loop-quick-mode/PLAN.md
 // Design §5 enumerates the pair's obligations with each side's answer. This set pins the LOOP's side in its command
-// prose: the section and its closing anchor; its three pinned lines — exactly once in the file, inside the section; the
+// prose: the section and its closing anchor; its two pinned lines — exactly once in the file, inside the section; the
 // quick invocations; the skip set and a pointer at each skip site; the green token at its three decisive sites; the
 // ADVISORY first-token label; the not-checked list; the record's `mode` capture and its no-repair rule (grill G1); the
 // /pharn-spec and /pharn-grill sides; and a CLOSURE — the section quotes none of the whole-file pinned literals other
-// suites read by first occurrence or by count (grill G7). The three pinned lines are EXECUTED further down (L45).
+// suites read by first occurrence or by count (grill G7). The two pinned lines are EXECUTED further down (L45). Until
+// GATE 2 there were three: a git listing fed the scope line's pasted lists, and both were replaced by one line that
+// takes only the slug and the base (review F1; pharn/floor/check-quick-scope.test.mjs runs it on hostile names).
 //
 // Honest scope, as for every set in this file: prose PRESENCE and closure. It cannot prove a run read `--quick` as the
 // first token, skipped `/pharn-regress`, ran the scope line, or wrote `mode: quick` — "the wiring is pinned" NEVER means
@@ -2527,7 +2531,6 @@ test("✧ QUICK MODE wiring is non-vacuous — pharn-ship.md, pharn-grill.md and
 const LOOP_QUICK_HEADING = "Quick mode — `/pharn-loop --quick` (6.27.0)";
 const LOOP_QUICK_NEXT = "Step 3 — The SPEC, approved by the model through `/pharn-spec` (reused, not re-implemented)";
 const LOOP_SPEC_KIND_LINE = "node pharn/floor/check-spec.mjs --spec-kind pharn/features/<name>/SPEC.md";
-const LOOP_GIT_LISTING = ["git diff --name-only --no-renames '<base sha>'", "git ls-files --others --exclude-standard"];
 
 /** pharn-loop.md's `## Quick mode` section, by HEADING OFFSET, both anchors asserted FOUND first (L60). */
 function loopQuickSection(body = commandBody(LOOP_FILE)) {
@@ -2538,19 +2541,18 @@ function loopQuickSection(body = commandBody(LOOP_FILE)) {
   return body.slice(start, end);
 }
 
-/** null when every pinned line appears exactly once in the file and inside the section, and the two listing lines are
- *  adjacent in one fenced block; else why. */
+/** null when every pinned line appears exactly once in the file and inside the section, and no model-assembled git
+ *  listing survives there (GATE 2, F1); else why. */
 function loopQuickPinnedReason(body = commandBody(LOOP_FILE)) {
   const section = loopQuickSection(body);
   const lines = body.split(/\r?\n/).map((l) => l.trim());
-  for (const pinned of [LOOP_SPEC_KIND_LINE, ...LOOP_GIT_LISTING, QUICK_SCOPE_LINE]) {
+  for (const pinned of [LOOP_SPEC_KIND_LINE, QUICK_SCOPE_LINE]) {
     const n = lines.filter((l) => l === pinned).length;
     if (n !== 1) return `expected ${JSON.stringify(pinned)} exactly once in ${LOOP_FILE}, found ${n}`;
     if (!section.split(/\r?\n/).some((l) => l.trim() === pinned)) return `${JSON.stringify(pinned)} is not inside ## Quick mode`;
   }
-  const block = fencedBlocks(section).find((b) => b.lines.some((l) => l.text.trim() === LOOP_GIT_LISTING[0]));
-  const texts = block ? block.lines.map((l) => l.text.trim()) : [];
-  if (texts.join("\n") !== LOOP_GIT_LISTING.join("\n")) return "the two git listing lines must be one fenced block, in order, alone";
+  const listing = fencedBlocks(section).find((b) => b.lines.some((l) => /^git (diff|ls-files)\b/.test(l.text.trim())));
+  if (listing) return "## Quick mode must not ask the model to list paths for the scope check — the checker lists them itself";
   return null;
 }
 
@@ -2577,7 +2579,7 @@ const LOOP_QUICK_POINTERS = [
 
 /** STOP_GREEN_QUICK at the three decisive sites: the stop's exit-0 bullet, and the headings of Step 6a and Step 6c. */
 const LOOP_QUICK_GREEN_SITES = [
-  { site: "Step 5.4's exit-0 bullet", re: /\*\*In a quick run exit `0` is\s+`STOP_GREEN_QUICK`\*\*/ },
+  { site: "Step 5.4's exit-0 bullet", re: /\*\*For a quick SPEC exit `0` is\s+`STOP_GREEN_QUICK`\*\*/ },
   { site: "Step 6a's heading", re: /^### Step 6a — [^\n]*`STOP_GREEN_QUICK`/m },
   { site: "Step 6c's heading", re: /^### Step 6c — [^\n]*`STOP_GREEN_QUICK`/m },
 ];
@@ -2626,7 +2628,7 @@ const LOOP_QUICK_FORBIDDEN = [
   { what: "the check-test-stage line", re: /node pharn\/floor\/check-test-stage\.mjs/ },
 ];
 
-test("✧ LOOP QUICK: pharn-loop.md's ## Quick mode exists, and its three pinned lines appear exactly once — inside it", () => {
+test("✧ LOOP QUICK: pharn-loop.md's ## Quick mode exists, and its two pinned lines appear exactly once — inside it", () => {
   assert.equal(loopQuickPinnedReason(), null);
 });
 
@@ -2712,6 +2714,13 @@ test("✧ LOOP QUICK mutation controls: each pin fails when its text is broken (
   assert.match(loopQuickPinnedReason(moved), /not inside ## Quick mode/);
   // a second quick scope line
   assert.match(loopQuickPinnedReason(`${body}\n\`\`\`bash\n${QUICK_SCOPE_LINE}\n\`\`\`\n`), /exactly once/);
+  // 6.25.0's model-assembled listing restored inside the section (GATE 2, F1)
+  const relisted = body.replace(
+    "**The deltas below, in step order",
+    "```bash\ngit diff --name-only --no-renames '<base sha>'\ngit ls-files --others --exclude-standard\n```\n\n**The deltas below, in step order"
+  );
+  assert.notEqual(relisted, body, "fixture sanity: the listing landed");
+  assert.match(loopQuickPinnedReason(relisted), /must not ask the model to list paths/);
   // a skip pointer dropped (Step 6b's render line)
   const pointer = "_(SKIPPED in\nQuick mode — `## Quick mode` item 8; `cost.json` is still emitted above)_";
   assert.ok(body.includes(pointer), "fixture sanity: the Step-6b pointer exists");
@@ -2775,7 +2784,7 @@ test("★ LOOP QUICK: the committed --spec-kind line prints quick over a quick S
   }
 });
 
-test("★ LOOP QUICK: the committed git listing + scope line STOP on a changed file outside the declared ones, and pass once it is declared", () => {
+test("★ LOOP QUICK: the committed scope line STOPs on a changed file outside the declared ones, and passes once it is declared", () => {
   const dir = mkdtempSync(join(tmpdir(), "hyg-loop-scope-"));
   try {
     const git = (...a) => {
@@ -2783,53 +2792,46 @@ test("★ LOOP QUICK: the committed git listing + scope line STOP on a changed f
       assert.equal(r.status, 0, `git ${a.join(" ")}: ${r.stderr}`);
       return r.stdout;
     };
+    const plan = (paths) => `# PLAN\n\n## Files\n\n${paths.map((p) => `- \`${p}\` — declared`).join("\n")}\n`;
     git("init", "-q");
     git("config", "user.email", "t@example.invalid");
     git("config", "user.name", "t");
     writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
     mkdirSync(join(dir, "src"), { recursive: true });
+    mkdirSync(join(dir, "pharn", "features", "demo"), { recursive: true });
     writeFileSync(join(dir, "src", "a.js"), "export const a = 1;\n");
+    writeFileSync(join(dir, "pharn", "features", "demo", "PLAN.md"), plan(["src/a.js"]));
     git("add", "-A");
     git("commit", "-q", "-m", "seed");
     const base = git("rev-parse", "HEAD").trim(); // Step 1a's <base sha>
     // the iteration's tree: the build's declared change, and one file the plan never named
     writeFileSync(join(dir, "src", "a.js"), "export const a = 2;\n");
     writeFileSync(join(dir, "src", "stray.js"), "outside the plan\n");
-    const section = loopQuickSection()
+    const scope = loopQuickSection()
       .split(/\r?\n/)
-      .map((l) => l.trim());
-    const listing = LOOP_GIT_LISTING.map((pinned) => section.find((l) => l === pinned));
-    assert.ok(listing.every(Boolean), "the committed listing lines");
-    const inside = listing
-      .flatMap((l) => {
-        const r = spawnSync("sh", ["-c", l.replace("<base sha>", base)], { cwd: dir, encoding: "utf8" });
-        assert.equal(r.status, 0, `${l}: ${r.stderr}`);
-        return r.stdout.split("\n");
-      })
-      .map((s) => s.trim())
-      .filter((s) => s && !s.startsWith(".pharn/"))
-      .sort();
-    assert.deepEqual(inside, ["src/a.js", "src/stray.js"], "fixture sanity: the listing finds both");
-    const scope = section.find((l) => l === QUICK_SCOPE_LINE);
+      .map((l) => l.trim())
+      .find((l) => l === QUICK_SCOPE_LINE);
     assert.ok(scope, "the committed scope line");
-    const run = (declared) =>
+    const run = () =>
       spawnSync(
         "sh",
         [
           "-c",
           scope
-            .replace("pharn/floor/check-regress.mjs", join(REPO_ROOT, "pharn", "floor", "check-regress.mjs"))
-            .replace("<inside, comma-separated>", inside.join(","))
-            .replace("<PLAN.md ## Files paths, plus AC-TESTS.md ## Files paths when that file exists>", declared)
-            .replace("<name>", "demo"),
+            .replace("pharn/floor/check-quick-scope.mjs", join(REPO_ROOT, "pharn", "floor", "check-quick-scope.mjs"))
+            .replace("<name>", "demo")
+            .replace("<base sha>", base),
         ],
         { cwd: dir, encoding: "utf8" }
       );
-    const stop = run("src/a.js");
+    const stop = run();
     assert.equal(stop.status, 1, `the scope line must STOP (S9) on the stray: ${stop.stdout}${stop.stderr}`);
     assert.deepEqual(JSON.parse(stop.stdout).escaped, ["src/stray.js"]);
-    const clean = run("src/a.js,src/stray.js");
+    // CONTROL — declared through a re-plan (the S9 remedy), it passes; the PLAN edit itself is an exempt artifact.
+    writeFileSync(join(dir, "pharn", "features", "demo", "PLAN.md"), plan(["src/a.js", "src/stray.js"]));
+    const clean = run();
     assert.equal(clean.status, 0, `CONTROL — declared, it passes: ${clean.stdout}${clean.stderr}`);
+    assert.deepEqual(JSON.parse(clean.stdout).escape_exempt, ["pharn/features/demo/PLAN.md"]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

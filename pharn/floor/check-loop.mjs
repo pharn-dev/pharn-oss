@@ -23,10 +23,12 @@
 //   one kind reading `check-spec.mjs --spec-kind` prints, `full` for everything else. No argv names a SPEC or a mode —
 //   the parser below still refuses every flag but `--iter` and `--cap` — so a model cannot select the table by passing
 //   something (P5). The module is loaded with import() inside a `try`: a load failure or a throw reads `full`, the
-//   stricter table, so the quick machinery can only fail toward more evidence (D3) — here and in
-//   check-loop-decision.mjs's re-run of this file. (A /pharn-loop run meets check-loop-fresh.mjs first, which imports
-//   the same module statically and turns a failed load into INCONCLUSIVE `checker-crashed`, so a run stops at S11 in
-//   either mode before any stop is read — fail-closed, grill G8.) The mode is read in ANY state: /pharn-loop's Step 6a
+//   stricter table, so the quick machinery can only fail toward more evidence (D3) — in this file. The two record
+//   checkers take no such fallback: check-loop-decision.mjs and check-loop-record.mjs import its vocabulary
+//   (`LOOP_MODES`) statically, so an unloadable module stops each at load (exit 1, never GREEN) before any re-run of
+//   this file. (A /pharn-loop run meets check-loop-fresh.mjs first, which imports the same module statically and turns
+//   a failed load into INCONCLUSIVE `checker-crashed`, so a run stops at S11 in either mode before any stop is read —
+//   fail-closed, grill G8.) The mode is read in ANY state: /pharn-loop's Step 6a
 //   reverts a non-green stop's SPEC to Draft before Step 6b re-derives the stop, and the revert never touches the kind
 //   line (L42, L58). That the kind is the APPROVED, un-drifted one is check-loop-fresh.mjs check I's (the pin covers the
 //   line), which runs before this file at the decision and again at the commit gate.

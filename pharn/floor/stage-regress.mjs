@@ -96,7 +96,7 @@ import {
 import { renderDone, renderRefused } from "./render-regression.mjs";
 import { shelledVerdict } from "./shelled-verdict-core.mjs";
 import { spawnGate } from "./run-gates.mjs";
-import { pathsFromPlanFiles, clean } from "./plan-files-core.mjs";
+import { declaredWrites, changedPaths } from "./scope-inputs.mjs";
 import { FEATURE_SLUG_RE, actualForExpected } from "./gate-run-core.mjs";
 import { isExcluded } from "./worktree-fingerprint.mjs";
 
@@ -406,29 +406,26 @@ function phaseBase(cfg) {
 /** ------------------------------------------------------------------------------------------------
  *  PHASE 4 — partition: build the four inputs, call `check-regress.mjs scope`.
  *  ---------------------------------------------------------------------------------------------- */
+// The declared and changed sets come from `scope-inputs.mjs` (6.27.0, loop-quick-mode GATE 2): the ONE owner this phase
+// and `check-quick-scope.mjs` — the quick modes' scope check — both call (L35). This phase keeps its own refusals and
+// every detail string, byte for byte.
 function readPlanDeclared(cfg, planPath, specPath) {
   void specPath;
   const planText = readFileSync(planPath, "utf8");
-  const parsedPlan = pathsFromPlanFiles(planText);
-  if (!parsedPlan.ok) {
-    writeRefusedAndEmit(cfg.feature, "plan-files-unparseable", `${planPath}: ${parsedPlan.reason}`);
+  const declared = declaredWrites(planText, `${FEATURES_DIR}/${cfg.feature}/AC-TESTS.md`);
+  if (!declared.ok) {
+    writeRefusedAndEmit(cfg.feature, "plan-files-unparseable", `${planPath}: ${declared.reason}`);
   }
-  let declared = parsedPlan.value.map(clean);
-  const acPath = `${FEATURES_DIR}/${cfg.feature}/AC-TESTS.md`;
-  if (existsSync(acPath)) {
-    const acParsed = pathsFromPlanFiles(readFileSync(acPath, "utf8"));
-    if (acParsed.ok) declared = declared.concat(acParsed.value.map(clean));
-  }
-  return [...new Set(declared)];
+  return declared.value;
 }
 
 function computeInside(cfg, base) {
-  const diff = gitSync(["diff", "--name-only", "--no-renames", "-z", base]);
-  if (!diff.ok) emitUnusable(cfg.feature, "git-failed", `git diff --name-only --no-renames -z ${base} failed: ${diff.stderr}`);
-  const untracked = gitSync(["ls-files", "-z", "--others", "--exclude-standard"]);
-  if (!untracked.ok) emitUnusable(cfg.feature, "git-failed", `git ls-files --others failed: ${untracked.stderr}`);
-  const all = [...new Set([...nulList(diff.stdout), ...nulList(untracked.stdout)])];
-  return all.filter((p) => !isExcluded(p, null)); // GRILL G2 — the state root is never counted as an escape
+  const inside = changedPaths(base);
+  if (!inside.ok && inside.which === "diff") {
+    emitUnusable(cfg.feature, "git-failed", `git diff --name-only --no-renames -z ${base} failed: ${inside.stderr}`);
+  }
+  if (!inside.ok) emitUnusable(cfg.feature, "git-failed", `git ls-files --others failed: ${inside.stderr}`);
+  return inside.value; // GRILL G2 — the state root is never counted as an escape (scope-inputs.mjs applies it)
 }
 
 function computeTests(cfg) {

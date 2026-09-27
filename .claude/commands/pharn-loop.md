@@ -36,7 +36,7 @@ reads:
     "pharn/floor/loop-fresh-core.mjs",
     "pharn/floor/check-test-stage.mjs",
     "pharn/floor/check-red-run.mjs",
-    "pharn/floor/check-regress.mjs",
+    "pharn/floor/check-quick-scope.mjs",
     "pharn/pharn-contracts/gate-run-record.md",
     "pharn/floor/validate.mjs",
   ]
@@ -355,32 +355,31 @@ commit message and the summary name the mode after it.
 
 5. **Step 5, sub-step 2 — `/pharn-regress` SKIPPED, its scope check KEPT.** No `/pharn-regress` and none of its
    markers. After the build's orchestrator marker and before verify's stage-start, run the scope partition over this
-   iteration's tree. List the changed and untracked files against the loop's own base:
+   iteration's tree, substituting `<name>` and the loop's own `<base sha>` literally — the only two values the line
+   takes:
 
    ```bash
-   git diff --name-only --no-renames '<base sha>'
-   git ls-files --others --exclude-standard
+   node pharn/floor/check-quick-scope.mjs --feature '<name>' --base '<base sha>'
    ```
 
-   `inside` = both lists, minus any path under `.pharn/` (the state root is never an escape); the declared set =
-   `PLAN.md`'s `## Files` paths plus `AC-TESTS.md`'s `## Files` paths — exactly the inputs `/pharn-regress`'s script
-   builds in its `partition` phase (`pharn/floor/stage-regress.mjs`; cited, not restated — P4). Then:
-
-   ```bash
-   node pharn/floor/check-regress.mjs scope --changed "<inside, comma-separated>" --declared "<PLAN.md ## Files paths, plus AC-TESTS.md ## Files paths when that file exists>" --feature "<name>"
-   ```
+   **Never type a path into it** (6.27.0, GATE 2 security fix). The checker (`pharn/floor/check-quick-scope.mjs`,
+   header) validates the slug and that the base names a commit, then builds both sets itself through the one owner
+   `/pharn-regress`'s script also calls (`pharn/floor/scope-inputs.mjs`): the changed paths (`git diff` since
+   `<base sha>` plus untracked files, NUL-separated, minus `.pharn/`) and the declared writes (`PLAN.md`'s `## Files`
+   plus `AC-TESTS.md`'s). It decides with `check-regress.mjs`'s scope rule and its exemptions, so no path is parsed as
+   shell text or split by a list grammar: a name carrying `$(…)`, a backtick, a `$`, a comma, a quote, a newline or a
+   leading `-` is compared as the name git printed.
 
    Branch **only** on the exit code (P5): `0` → verify — `/pharn-verify` exactly as a full iteration runs it, with
    its stage-start and orchestrator markers as written: the thin caller of `pharn/floor/stage-verify.mjs` (6.26.0),
    whose exit maps by Step 2's `/pharn-verify` stage-exit mapping. `1` → **S9** (`blocked: stage-refused`): a changed path is
    outside the declared writes — the row a full run's `/pharn-regress` `scope-escaped` refusal maps to, with the same
-   remedy (declare the path through a re-plan, or revert the change). Any other exit → **S9**, fail-closed. Running the
-   listing and the line, and assembling their inputs, is **ADVISORY** (a named follow-up, `quick-scope-inputs-by-code`,
-   would build them by code); the exit is **FLOOR**. **The one divergence from the script's partition:** the listing
-   above prints without `-z`, so a path git C-quotes (a non-ASCII byte, a quote, a backslash or a control character)
-   reaches `--changed` quoted and reads as escaped — a false S9, never a false pass. A path containing a comma is split
-   by the line's list parse and reads as escaped too; the script's partition refuses such a path instead (`unusable`,
-   S9), so both modes stop there.
+   remedy (declare the path through a re-plan, or revert the change). Any other exit (`2`, inconclusive — an unusable
+   slug or base, an unreadable or unparseable `PLAN.md`, a failed git call — or a crash) → **S9**, fail-closed.
+   Assembling the inputs is **tested code** and the exit is **FLOOR**; running the line, substituting its two values
+   and obeying the exit are **ADVISORY**. **The bound, restated at GATE 2:** it compares changed since `<base sha>`,
+   never written by the build; it carries `/pharn-regress`'s closed exemptions; a plan that rewrites its own
+   `## Files` defeats it; and it leaves no record (the audit bullet below).
 
 6. **Step 5, sub-step 3 — freshness.** The same pinned line. The checker reads the SPEC's kind itself and applies its
    quick column (`pharn/floor/loop-fresh-core.mjs`, header): the verify evidence alone for checks A–E and J, F and I as
@@ -453,9 +452,13 @@ regression report the quick table never read.
 - _"`STOP_GREEN_QUICK` ⇔ a quick SPEC"_ → **FLOOR** (tested both ways).
 - _"A quick run is tree-bound and checked for fabrication"_ → **FLOOR** (`check-loop-fresh.mjs` C, D, J, E and F over
   the verify evidence, tested). Bounds unchanged: tree identity, not recency; agreement, never provenance.
-- _"A changed file outside the declared files stops a quick loop"_ → the exit is **FLOOR** (`check-regress.mjs
-scope`); running it and assembling its inputs are **ADVISORY** (item 5), bounded as `/pharn-regress`'s
-  `scope-escaped` remedy states — a plan that rewrites its own `## Files` defeats it.
+- _"A changed file outside the declared files stops a quick loop"_ → the exit is **FLOOR** (`check-quick-scope.mjs`,
+  over inputs it builds itself — tested code); running it and obeying the exit are **ADVISORY** (item 5), bounded as
+  `/pharn-regress`'s `scope-escaped` remedy states — a plan that rewrites its own `## Files` defeats it. **Nothing
+  downstream re-checks it:** it leaves no record (stdout only), `check-loop-fresh.mjs` skips G and H in quick mode with
+  nothing in their place, and the commit gate does not re-run it — so a skipped or ignored scope check is invisible
+  after its iteration, where a full run's scope escape leaves no regression report and so can never reach
+  `STOP_GREEN`.
 - _"`--quick` is read only as the first token"_ → **ADVISORY**; its backstops and their bound are above.
 - _"A quick loop commits only `STOP_GREEN_QUICK` with a GREEN decision check; a full run never commits it"_ → the
   token and both record checks are **FLOOR**; the commit branch and Step 6b's capture are **ADVISORY** (command prose),
@@ -627,10 +630,11 @@ no value is carried between blocks (**L44**).
 
    Branch **only** on the exit code, and on `reason_code` where named (P5):
 
-   - **`0` FRESH** — both reports are their checkers' output from stamps that validate, each report is
-     bound to its stamp by hash, the verify stamp describes the live tree, the regress head stamp ended on
-     the tree verify started from, the base stamp is `<base sha>`, the logs are the logged bytes, and the
-     front (SPEC, chain, lessons, `GRILL.md`, and the test stage — `check-test-stage.mjs`) still holds. Go to 4.
+   - **`0` FRESH** _(full mode — a quick run: `## Quick mode` item 6)_ — both reports are their checkers' output
+     from stamps that validate, each report is bound to its stamp by hash, the verify stamp describes the live tree,
+     the regress head stamp ended on the tree verify started from, the base stamp is `<base sha>`, the logs are the
+     logged bytes, and the front (SPEC, chain, lessons, `GRILL.md`, and the test stage — `check-test-stage.mjs`)
+     still holds. Go to 4.
    - **`1` RERUN** — the JSON's `stage_to_rerun` (`verify` or `regress`) is stale or missing. Re-invoke that
      stage **inside this same iteration `<N>`**, with its own `mark-phase.mjs --iteration <N>` lines as in 2,
      then run this step again. _(A quick run: a RERUN naming `regress` is **S11**, never a regress run —
@@ -670,8 +674,11 @@ no value is carried between blocks (**L44**).
 
    Keep its JSON output — Step 6 copies `decision` from it. Branch **only** on the exit code (P5):
 
-   - **`0` `STOP_GREEN`** — verify `PASS` ∧ regress `no-regressions`. Go to Step 6. **In a quick run exit `0` is
-     `STOP_GREEN_QUICK`** — verify `PASS` alone, no regression verdict read (`## Quick mode` item 7). Go to Step 6.
+   - **`0` — the green of the table the SPEC's kind chose; read `decision` from the JSON.** For every SPEC not
+     positively quick it is **`STOP_GREEN`** — verify `PASS` ∧ regress `no-regressions`. **For a quick SPEC exit `0` is
+     `STOP_GREEN_QUICK`** — verify `PASS` alone, no regression verdict read (`## Quick mode` item 7) — whatever the
+     invocation: a run invoked without `--quick` over a quick SPEC gets it too, and Step 6 never commits that one (the
+     D8 paragraph in `## Quick mode`). Go to Step 6.
    - **`3` `CONTINUE`** — a measurable red (verify `FAIL` — an AC not delivered yet included — or `INCOMPLETE`, or a
      regression) and `N < M`.
      `N++`, back to 1.
@@ -688,7 +695,8 @@ cause lies **outside** the plan's `## Files` cannot be fixed by a rebuild (fix #
 runs to `STOP_CAP`. A plan that cannot be built reproduces its gap every iteration and also runs to the cap.
 The loop guarantees a **bounded stop**, never convergence. An unsound fix cannot fake a green stop:
 `/pharn-regress` and `/pharn-verify` recompute their verdicts every iteration, and `check-loop.mjs` reads only
-those, with no review / finding / severity input.
+those, with no review / finding / severity input _(full mode — a quick run recomputes `/pharn-verify`'s alone, and
+its stop reads that one verdict: `## Quick mode` items 5–7)_.
 
 ## Step 6 — Stop handling, in this order
 
@@ -1059,7 +1067,8 @@ Then **end your turn**. Do not ask a question, do not push, do not merge, do not
   `failing_gates` is a `report-verdict-mismatch` stop. The residual is forgery of the stamp itself (below).
 - **"The stop is read only from evidence about THIS tree, and a stale or skipped stage is re-run"** →
   **FLOOR** (`check-loop-fresh.mjs`, tested — content-hash + enum membership + a live re-derivation via
-  `spawnSync`). At the decision and again at the commit gate, it checks each of these:
+  `spawnSync`). At the decision and again at the commit gate, it checks each of these _(full mode — a quick run
+  checks the verify evidence alone and skips the two regress bullets: `## Quick mode` item 6)_:
   - both reports are the output their checkers produce from stamps that validate;
   - each report is bound to its stamp by `sha256`;
   - the gate logs are the recorded bytes;

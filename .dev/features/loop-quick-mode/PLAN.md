@@ -407,6 +407,20 @@ GATE 1 was APPROVED by the orchestrator under the maintainer's delegation (a mod
 - **G7 (minor)** — `## Quick mode` sits before Steps 3–7, where whole-file pins outside the hygiene suite read the first occurrence of their literal. Folded: Discovery lists them, the named-edits preamble forbids quoting another step's pinned literal, and a closure rule with its control joins `LOOP_QUICK_WIRING`.
 - **G8 (minor)** — D3's "a full run still decides exactly as today" holds for `check-loop.mjs` and its re-derivation, not for a `/pharn-loop` run, whose freshness check loads the same module statically first. Folded: Design §2, restated; the fail-closed S11 is named.
 
+## GATE 2 amendments — 2026-09-27
+
+GATE 2 returned a FIX round — a model decision by the orchestrator under the maintainer's 2026-09-25 delegation, not a human one. The review (`REVIEW.md`, committed at `5ea5e67`) is GREEN with 0 floor-gate findings; F1 is an important security finding. Stage model: opus — set by the maintainer's instruction; routed via Agent subagent; effort not routed. The sections above stay as they were written: where a line there describes the model-assembled scope inputs, this section supersedes it and names it.
+
+- **F1 (important, security) — the quick scope check's inputs are built by code, at both call sites.** The pinned line in `pharn-loop.md`'s `## Quick mode` item 5 and in `pharn-ship.md`'s item 7 (shipped since 6.25.0) becomes `node pharn/floor/check-quick-scope.mjs --feature '<name>' --base '<base sha>'` — the slug and a resolved 40-hex base, both validated by the checker, and no path list in any shell argument. The checker computes the declared set (`PLAN.md` ∪ `AC-TESTS.md` `## Files`) and the changed set (`git diff --name-only --no-renames -z <base>` ∪ `git ls-files -z --others --exclude-standard`, minus `.pharn/`) through the new `pharn/floor/scope-inputs.mjs` — the one owner `stage-regress.mjs`'s partition phase now calls too — and decides with `check-regress.mjs`'s exported `partitionScope`, the rule its `scope` CLI applies (L35). Paths travel as arrays, so no shell, list grammar, trim or flag scan reads one. `quick-scope-inputs-by-code` (`## Deferred`) is BUILT by this. Superseded above: the L5, L17, L22, L30, L44 and L46 lines, Design §5 item 5's listing, and the guarantee audit's "running it and assembling its inputs are ADVISORY" (assembling is now tested code; running it stays advisory). The grill-G2 divergence ("a false S9, never a false pass") is struck: the review measured false passes (`$Q`, commas) and command execution (`$(…)`, backticks). A test executes both committed lines against hostile names, with 6.25.0's line as the control. `CHANGELOG [6.27.0]` records the `pharn-ship.md` half as a security correction to bytes that shipped in 6.25.0.
+- **F2 (minor)** — `## Quick mode`'s audit bullet states that the quick scope check leaves no record and nothing downstream re-checks it. No new artifact (P7).
+- **F3 (minor)** — `check-loop.mjs`'s header no longer names a load-failure fallback inside `check-loop-decision.mjs`: both record checkers import `LOOP_MODES` statically and fail to load (exit 1, never GREEN).
+- **F4 (minor)** — `spec-template.md`'s unattended bound reads "then" for the S9 stop, not "failing that".
+- **F5 (minor)** — the three full-mode descriptions in `pharn-loop.md` the review lists (Step 5.3's FRESH bullet, the retry paragraph, the guarantee audit's freshness bullet) carry a quick qualifier, and `README.md`'s token-cost bullet says a change too large for the flag stops (S6c) or takes the full pipeline.
+- **F6 (minor)** — Step 5.4's exit-0 bullet ties the green to the table the SPEC's kind chose, not to the invocation.
+- **The LIMITS patch** — `make-patch.mjs`'s §6 replacement names the new mechanism instead of "which run the same partition", and §3a's scope check carries "within the bounds §6 states"; regenerated and `git apply --check`-ed. It is regenerated once more after `stage-model-routing`'s §8 lands on main (Chain sequencing, item 2).
+- **Deferred:** F7 (size) to roadmap Phase 4.1, with the review's numbers carried into `BUILD.md`'s follow-ups; the lesson candidate (L5 recurring) — `lesson: skipped`, carried under `deferred:` in `BUILD.md`; the `stage-model-routing` coupling stays unbuilt until 2.2 merges (Chain sequencing, items 4 and 5).
+- **`## Files` gains six paths (32 → 38):** `pharn/floor/scope-inputs.mjs`, `pharn/floor/check-quick-scope.mjs` and `pharn/floor/check-quick-scope.test.mjs` (NEW), and `pharn/floor/check-regress.mjs` and `pharn/floor/stage-regress.mjs` (EDIT), which leave the not-touched list below; and `pharn/floor/stage-runtime.test.mjs` (EDIT), added after the anchor with `reconcile-baseline.mjs --amend-scope`: `scope-inputs.mjs` is a second literal importer of `stage-runtime.mjs` inside the regress fixture closure, so the G3 discrimination test's computed-path mutation must land in every importer, not in `stage-regress.mjs` alone.
+
 ## Files
 
 - `.dev/features/loop-quick-mode/PLAN.md` — this plan — layer dev artifact
@@ -441,6 +455,12 @@ GATE 1 was APPROVED by the orchestrator under the maintainer's delegation (a mod
 - `.dev/features/loop-quick-mode/proposed/human-only.sha256` — NEW. Written by `make-patch.mjs` (a declared Bash write) — layer dev artifact
 - `.dev/features/loop-quick-mode/proposed/apply.sh` — NEW. The human-run apply script, byte-for-byte from Design §10 — layer dev artifact
 - `.dev/features/loop-quick-mode/proposed/APPLY.md` — NEW. What to read, when to apply, what it does — layer dev artifact
+- `pharn/floor/scope-inputs.mjs` — NEW (GATE 2, F1). The regress partition's two input sets computed by code, `declaredWrites` and `changedPaths`: the one owner `stage-regress.mjs` and `check-quick-scope.mjs` both call — layer product floor
+- `pharn/floor/check-quick-scope.mjs` — NEW (GATE 2, F1). The quick scope check, `--feature <name> --base <40-hex>`, both validated; exit 0 clean, 1 escaped, 2 inconclusive — layer product floor
+- `pharn/floor/check-quick-scope.test.mjs` — NEW (GATE 2, F1). Argv and input refusals, the partition, and both commands' committed lines executed against hostile names, 6.25.0's line as the control — layer product floor tests
+- `pharn/floor/check-regress.mjs` — EDIT (GATE 2, F1). `partitionScope`, `scopeFindings` and `normPath` exported and called by `runScope`; the CLI runs under `import.meta.main` — layer product floor
+- `pharn/floor/stage-regress.mjs` — EDIT (GATE 2, F1). The partition phase takes its declared and changed sets from `scope-inputs.mjs`, every detail string unchanged — layer product floor
+- `pharn/floor/stage-runtime.test.mjs` — EDIT (GATE 2, F1). The G3 computed-path mutation lands in every literal importer of the runtime in the regress closure — layer product floor tests
 
 ### Explicitly not touched by the agent
 
@@ -448,7 +468,7 @@ GATE 1 was APPROVED by the orchestrator under the maintainer's delegation (a mod
 - `pharn/ARCHITECTURE.md`, `pharn/CONSTITUTION.md`, `THREAT-MODEL.md`, `CODEOWNERS`, `.claude/settings.json`, `.claude/settings.local.json`, the four hook scripts, `pharn.spec-template.md` — human-only and byte-identical.
 - `MIN_CLI` — stays `0.5.0`.
 - `pharn/floor/mark-phase.mjs`, `ship-outcome-core.mjs`, `render-cost-ledger.mjs`, `check-cost-ledger.mjs`, `run-window-core.mjs` — no loop mode marker (D7), no ledger change (Design §8); nor #279's `pharn/floor/transcript-core.mjs`, `pharn/floor/render-cost-record.mjs` and `pharn/pharn-contracts/ship-record.md`.
-- `pharn/floor/spec-template-core.mjs`, `check-spec.mjs`, `check-regress.mjs`, `stage-regress.mjs`, `check-verify.mjs`, `gate-run-core.mjs`, `reconcile-ignore.json`, `worktree-fingerprint.mjs` — reused as they are.
+- `pharn/floor/spec-template-core.mjs`, `check-spec.mjs`, `check-verify.mjs`, `gate-run-core.mjs`, `reconcile-ignore.json`, `worktree-fingerprint.mjs` — reused as they are. (`check-regress.mjs` and `stage-regress.mjs` moved to `## Files` at GATE 2.)
 - `.claude/commands/pharn-verify.md`, `pharn-regress.md`, `pharn-test.md`, `pharn-plan.md`, `pharn-build.md`, `pharn-review.md` — no quick behaviour there; `pharn-verify.md`'s one `/pharn-ship --quick` sentence stays true and `stage-verify-script` rewrites that file.
 - `.claude/commands/pharn-dev-*.md` — no dev quick mode (D15).
 
