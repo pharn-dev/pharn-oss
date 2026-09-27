@@ -1469,6 +1469,22 @@ framework-specific`), via the first-match-wins procedure in `pharn/ARCHITECTURE.
   any resolution chain is **ask the human**, never a guess.
 - `seal: "PHARN ✓ reviewed"` only on `kind: pharn-owned`. Community capabilities are markdown-only and
   cannot declare trusted-write or off-allowlist egress.
+- **A product command keeps what a run executes; its rationale lives with the owner it would restate
+  (6.28.2).** A `/pharn-*` command's body holds its steps, every pinned line and fenced block, its exit-code,
+  verdict and stuck-point mappings, its prompts and human gates, its trusted-prefix instruction and its P2
+  fences, plus ONE `## What you may claim` block — the command's floor/advisory split and its struck claims.
+  Why a rule exists, version and review history, and a contract's or floor module's bounds are NOT restated
+  there: they live in that contract, that module's header, the `LIMITS.md` / `THREAT-MODEL.md` section, or
+  the CHANGELOG version section, and the command cites the owner (P4 — a restated bound goes stale when its
+  owner changes, L25). Its `description:` is one double-quoted line saying what the command does and when
+  to use it, with no claim vocabulary. The COMMAND BUDGET section of `.dev/floor/command-hygiene.test.mjs`
+  holds this at the floor, bounded to BYTES and VOCABULARY: each product command's bytes against its
+  measured ceiling in `COMMAND_BYTE_CEILINGS` (a table closed over the product commands on disk, both
+  ways), each description against 250 bytes and a claim-vocabulary regex, and exactly one claims heading
+  per command. It never judges meaning — a paraphrased claim passes, and a block's presence is not its
+  truth. **Raising a ceiling is a deliberate, visible diff to that table in the PR that needs it** (the
+  rule: measured bytes + 10%, rounded up to the next multiple of 512), never a quiet edit to turn a red test
+  green. The `pharn-dev-*` commands are outside the budget (follow-up `dev-command-slim`).
 - **Three doc regions are GENERATED — never hand-edit them.** (1) `docs/capabilities/**`, (2) the root
   `README.md` `## Current state` inventory between its `<!-- CURRENT-STATE:BEGIN -->` /
   `<!-- CURRENT-STATE:END -->` markers (the marker lines are themselves inside the guarded region, so
