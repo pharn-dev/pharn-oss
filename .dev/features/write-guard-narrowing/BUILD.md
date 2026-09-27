@@ -546,4 +546,21 @@ new tests:
 
 No other title moved (the diff of the two lists adds exactly these lines).
 
-⟨pending-applysh⟩
+### `apply.sh` itself, exercised (the committed script, `83f4b45`)
+
+A scratch harness (`.pharn/pharn-dev-build/applysh-test.mjs`) ran the committed `apply.sh` three times in a
+throwaway detached worktree under the OS temp directory, each result checked, all 13 checks OK:
+
+1. **The reviewer's I1 tamper repro** — the patch with a hunk appended that creates `.claude/settings.local.json`:
+   refused at the file-list check ("not exactly … nothing applied"), exit non-zero; the file was never created; the
+   three files stayed at HEAD; no commit.
+2. **m4, a commit that fails** — a `pre-commit` hook, reached through `GIT_CONFIG_*` and refusing only a commit in
+   that worktree: exit non-zero, `FAILED (git commit)`, the three files back at HEAD, no new commit, and the baseline
+   still reads CLEAN (not re-anchored). The harness's first run made the hook refuse every commit, which also failed
+   the test suites' own fixture commits, so the script stopped at the tests instead (correctly restoring); the hook
+   was narrowed to that one worktree and the run repeated.
+3. **The honest run** — exit 0; the patch sha256 printed first; `shasum -c` OK ×3; the 12 suites **1099 of 1099**;
+   one new commit touching exactly the three files; the re-anchored baseline (`write-guard-narrowing-apply`) reads
+   CLEAN.
+
+The worktree and its temp directory were removed.
