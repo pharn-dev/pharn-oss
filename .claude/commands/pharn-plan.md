@@ -21,7 +21,7 @@ reads:
   ]
 writes: ["pharn/features/<name>/PLAN.md", "pharn/features/<name>/AC-TESTS.md"]
 constitution_refs: ["P0", "P2", "P4", "P5", "P6", "P7"]
-version: "0.5.1"
+version: "0.5.2"
 ---
 
 # /pharn-plan — plan from Approved, un-drifted intent
@@ -270,15 +270,17 @@ for such a SPEC is a `spec-kind` RED. Exit **0** → continue. Exit **2** → th
    - Paths are plain repo-relative, never under `.pharn/` or `pharn/features/`, and never a placeholder or glob.
    - Another feature's AC test file is theirs. Name a new file.
    - **The test infrastructure stays out of PLAN.md's `## Files` too** (6.21.0). `/pharn-test` pins it before the
-     build — the root runner configs, and the level gates' `package.json` scripts and `testResults` formats
-     (`pharn/pharn-contracts/ac-tests.md`, "The test-infrastructure pin") — so a build that changes it reads
+     build (`pharn/pharn-contracts/ac-tests.md`, "The test-infrastructure pin"), so a build that changes it reads
      `test-infra-changed` at `/pharn-verify`, and `/pharn-loop` stops (S13) with no rebuild that clears it. A root
-     runner config (`vite.config.ts`, `vitest.config.mjs`, …) in PLAN.md is a **`test-infra-in-plan`** RED. When
-     the feature genuinely needs a runner, config or test-script change, **split it**: spec that change as a
+     runner or package-manager config (`vite.config.ts`, `.npmrc`, …) or a file a level gate's script names (a
+     `pharn-json` reporter, a runner script — 6.31.0) in PLAN.md is a **`test-infra-in-plan`** RED. When the
+     feature genuinely needs a runner, config or test-script change, **split it**: spec that change as a
      `spec_kind: test-infra` increment first (through `/pharn-ship` — `/pharn-loop` never approves one), then plan
      this feature without it. `package.json` / `pharn.config.json` may stay (a dependency is an ordinary build
      change); the checker prints an **advisory** `NOTE —` line for them and never changes its exit code, because it
      cannot see which part of the file the build will change.
+   - **Never name this feature's `AC-TESTS.md` or `AC-TESTS.lock.json` in PLAN.md** (6.31.0): the build is judged
+     against the lock, so a build scoped to it could re-pin its own change — an **`ac-artifact-in-plan`** RED.
 
 3. **Check it (FLOOR)** and branch only on the exit code:
 
@@ -287,7 +289,7 @@ for such a SPEC is a `spec-kind` RED. Exit **0** → continue. Exit **2** → th
    ```
 
    - **0** → GREEN. **1** → the `RED — <kind>` lines name each problem. Fix AC-TESTS.md and re-run. If the fix is in
-     PLAN.md's `## Files` (an `in-plan-files` or `test-infra-in-plan` RED, for instance), first re-scope to PLAN.md with the Step 0 setter
+     PLAN.md's `## Files` (an `in-plan-files`, `test-infra-in-plan` or `ac-artifact-in-plan` RED, for instance), first re-scope to PLAN.md with the Step 0 setter
      line. Then edit it, re-run Step 4b, re-scope to AC-TESTS.md (step 1 above), and re-run this check. **2** → a
      file is missing or unreadable, or (6.21.1) the chain check it shells crashed (`UNUSABLE child-crashed — …`):
      no verdict — HALT and report it.
@@ -319,11 +321,12 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`).
 - **Floor:** it writes only `pharn/features/<name>/PLAN.md` and `pharn/features/<name>/AC-TESTS.md` — the fix #7
   hook, one declared path per `--target`.
 - **Floor:** every Acceptance Criterion is mapped once, at its level, to a test file the build is not scoped to,
-  and no root runner config the lock pins is in the build's scope — `check-ac-tests.mjs` (enum/regex/set
-  membership; `test-infra-in-plan` over the folded name). NOT that each target is a good public interface (follow-up
+  and no root config the lock pins, no file a level gate's script names (when the tree can be read — else a `NOTE —`),
+  and neither this feature's AC-TESTS.md nor its lock is in the build's scope — `check-ac-tests.mjs` (enum/regex/set membership over the folded name;
+  `test-infra-in-plan`, `ac-artifact-in-plan`). NOT that each target is a good public interface (follow-up
   `grill-ac-targets`), nor that a mapped file is new (a stated bound, not a check), nor
-  whether the build changes the pinned `package.json` scripts or `testResults` formats — the `NOTE —` line is
-  **advisory**, and the pin itself compares them at `/pharn-verify` (late).
+  whether the build changes the pinned `package.json` scripts, the scripts they chain to, the `jest` key or the
+  `testResults` formats — the `NOTE —` line is **advisory**, and the pin itself compares them at `/pharn-verify` (late).
 - **Advisory:** invoking each checker and obeying its exit code (the verdict is floor; the act is orchestration);
   the plan's content; and whether the cited lessons were genuinely applied or a `none` is justified —
   `/pharn-grill` re-verifies the declaration (the same four checks), never the application. `spec_content_hash`

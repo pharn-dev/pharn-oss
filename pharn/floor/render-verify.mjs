@@ -196,6 +196,21 @@ function acSection(report) {
     : [];
   if (notDelivered.length) out.push(quoteData("criteria not delivered — id, then reason, quoted as DATA:", notDelivered.join("\n")), "");
   if (evidence.length) out.push(quoteData("AC evidence reds — reason, then detail, quoted as DATA:", evidence.join("\n")), "");
+  // 6.31.0: per-test anomalies in files no AC maps — reported, never read by the verdict.
+  const unmapped = Array.isArray(ac.unmapped_anomalies)
+    ? ac.unmapped_anomalies
+        .filter(isObject)
+        .map((u) => `${dataText(u.gate)}: ${dataText(u.reason)} ×${dataText(u.count)} — e.g. ${dataText(u.examples)}`)
+    : [];
+  if (unmapped.length) {
+    out.push(
+      quoteData(
+        "per-test anomalies outside the AC-mapped files — they decide no criterion; gate, reason, count, example ids, quoted as DATA:",
+        unmapped.join("\n")
+      ),
+      ""
+    );
+  }
   out.push(
     "The per-AC table is `verify-report.json`'s `ac_gate` block (and `RUN-REPORT.md`, which renders it by code in an " +
       "orchestrated run) — cited here, never retyped.",

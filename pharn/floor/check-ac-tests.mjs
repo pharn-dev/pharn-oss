@@ -32,9 +32,20 @@
 // runner configs and the level gates' scripts BEFORE the build (test-infra-core.mjs), so a PLAN.md `## Files` entry the
 // setter would scope to a root runner config certifies a build whose own in-scope edit reads `test-infra-changed` at
 // `/pharn-verify` — no rebuild clears it. The entry is classified by test-infra-core's testInfraPathKind (the pin's own
-// predicate, imported — never a second regex). `package.json` / `pharn.config.json` get an ADVISORY `NOTE —` line and
-// no RED, never changing the exit code: the build may legitimately change a dependency, and this checker cannot see
-// WHICH part of the file the build will change (the pinned script values are still compared at verify).
+// predicate, imported — never a second regex). Since 6.31.0 the kind also covers the root package-manager configs the
+// pin hashes (`.npmrc`, `.yarnrc`, `.yarnrc.yml`) and every file the level gates' scripts NAME (test-infra-core's
+// scriptNamedFiles over the tree at the invoking directory — the reporter a `pharn-json` gate loads, say; the review's
+// H2 wB: a build scoped to it wrote a reporter that said `passed`). `package.json` / `pharn.config.json` get an ADVISORY
+// `NOTE —` line and no RED, never changing the exit code: the build may legitimately change a dependency, and this
+// checker cannot see WHICH part of the file the build will change — every part the pin reads (the level gates'
+// scripts, the scripts they chain to, the `jest` key, the `testResults` formats) is still compared at verify.
+//
+// THE FEATURE'S OWN AC ARTIFACTS STAY OUT OF THE BUILD'S SCOPE (6.31.0, `ac-artifact-in-plan`): a PLAN.md `## Files`
+// entry the setter would scope to THIS feature's AC-TESTS.md or AC-TESTS.lock.json is RED. The lock is what the AC gate
+// compares the tree with — a build scoped to it re-pinned whatever it changed, with every floor check green (the
+// review's H2) — and it pins AC-TESTS.md's bytes, so the two go together. Both are named as the invoking directory
+// spells them: the mapping path on argv and the lock beside it, relative to the project root the setter resolves
+// scope entries against. Compared FOLDED (scopeKey), which over-reports a case variant the guard would deny anyway.
 //
 // NOT GUARANTEED (P0), each stated:
 //   • that the tests are good, assert the AC's Then, or target the right public interface — model work
@@ -42,7 +53,9 @@
 //   • that the build cannot write an AC test LATER: `in-plan-files` holds for the PLAN.md it read. An edit to
 //     PLAN.md after `/pharn-test` reopens it until something re-checks (the queue's item 05 makes `/pharn-build`
 //     refuse without a GREEN lock). A Bash write bypasses the write hooks entirely (LIMITS.md §6);
-//   • that `/pharn-test` read only SPEC, PLAN and AC-TESTS.md — `reads:` is not enforced (ARCHITECTURE §3.1).
+//   • that `/pharn-test` read only SPEC, PLAN and AC-TESTS.md — `reads:` is not enforced (ARCHITECTURE §3.1);
+//   • that the files the level gates' scripts name are ALL of what those gates run — the token pass is a closed,
+//     literal rule, and what it does not read is listed once, in test-infra-core.mjs's header.
 //
 // TRUST (P2): all three files are untrusted DATA. Verdicts range over ids, a closed level enum, paths and the chain
 // check's exit code. The target text is never interpreted; a RED quotes at most a bounded id or path.
@@ -64,22 +77,27 @@
 //       which check-test-stage.mjs reads as UNUSABLE. With a RED kind the exit stays 1 and the crash is named on a
 //       line before the closing `RED — N … failed`.
 
-import { readFileSync, readdirSync, lstatSync } from "node:fs";
+import { readFileSync, readdirSync, lstatSync, realpathSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { specAcceptanceCriteria, specVerdict, SPEC_KINDS, TEST_FIRST_KINDS } from "./spec-template-core.mjs";
 import { clean, pathsFromPlanFiles } from "./plan-files-core.mjs";
-import { badPath, mappingOf, scopeKey } from "./ac-tests-core.mjs";
-import { testInfraPathKind } from "./test-infra-core.mjs";
+import { LEVELS, badPath, mappingOf, scopeKey, scopedPath } from "./ac-tests-core.mjs";
+import { isPackageManagerConfigName, scriptNamedFiles, testInfraPathKind } from "./test-infra-core.mjs";
 import { childCrashedLine, crashedDetail, shelledVerdict } from "./shelled-verdict-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHECK_PLAN_SPEC_AGREE = join(HERE, "check-plan-spec-agree.mjs");
+/** The lock's file name, beside AC-TESTS.md. A literal, NOT imported from ac-tests-lock.mjs — that module's load graph
+ *  (red-run-core, gate-run-core, a spawn of check-spec-approved) has no business in a mapping checker; a ✧ parity test
+ *  pins the two spellings equal. */
+export const LOCK_NAME = "AC-TESTS.lock.json";
 
 /** The closed set of RED kinds. In full mode every one exits 1, `legacy-spec` included; exit 3 is `--spec` mode's
  *  legacy verdict (specVerdict), never this set's. */
 export const KINDS = Object.freeze([
+  "ac-artifact-in-plan",
   "bad-path",
   "claimed-elsewhere",
   "duplicate-ac",
@@ -107,11 +125,18 @@ function shown(v) {
 }
 
 /**
- * The pure check (no chain check, no filesystem beyond what the caller passes).
- * @param {{acTestsText: string, specText: string, planText: string, others: {feature: string, files: string[]}[]}} input
+ * The pure check (no chain check, no filesystem beyond what the caller passes). `acArtifacts` — THIS feature's
+ * AC-TESTS.md and AC-TESTS.lock.json, spelled relative to the project root — and `scriptFiles` — the files the level
+ * gates' scripts name (test-infra-core scriptNamedFiles) — are REQUIRED arrays (L41): an omitted one would silently
+ * switch its RED off.
+ * @param {{acTestsText: string, specText: string, planText: string, others: {feature: string, files: string[]}[], acArtifacts: string[], scriptFiles: string[]}} input
  * @returns {{legacy: boolean, findings: {kind: string, detail: string}[], notes: string[]}}
  */
-export function checkMapping({ acTestsText, specText, planText, others }) {
+export function checkMapping({ acTestsText, specText, planText, others, acArtifacts, scriptFiles }) {
+  if (!Array.isArray(acArtifacts) || !acArtifacts.every((p) => typeof p === "string"))
+    throw new TypeError("checkMapping: `acArtifacts` must be an array of paths (this feature's AC-TESTS.md and lock)");
+  if (!Array.isArray(scriptFiles) || !scriptFiles.every((p) => typeof p === "string"))
+    throw new TypeError("checkMapping: `scriptFiles` must be an array of paths (the files the level gates' scripts name)");
   const findings = [];
   const red = (kind, detail) => {
     if (!KINDS.includes(kind)) throw new Error(`internal: ${kind} is not a member of KINDS`);
@@ -216,19 +241,47 @@ export function checkMapping({ acTestsText, specText, planText, others }) {
     if (k !== null && planKeys.has(k)) red("in-plan-files", `${shown(f)} is in PLAN.md \`## Files\`, so the build would be scoped to it`);
   }
 
-  // The test infrastructure the lock pins stays out of the build's scope too (6.21.0): a root runner config in PLAN.md
-  // is RED — every write the build could make there changes the pin; a manifest is an advisory NOTE only.
+  // The feature's own AC artifacts stay out of the build's scope (6.31.0): the lock is what the AC gate compares the tree
+  // with, and it pins AC-TESTS.md — a build scoped to either could re-pin what it changed.
+  const artifactKeys = new Map();
+  for (const p of acArtifacts) {
+    const k = scopeKey(p);
+    if (k !== null) artifactKeys.set(k, p);
+  }
+  // The files the level gates' scripts name (6.31.0), compared the same way.
+  const namedKeys = new Map();
+  for (const p of scriptFiles) {
+    const k = scopeKey(p);
+    if (k !== null) namedKeys.set(k, p);
+  }
+
+  // The test infrastructure the lock pins stays out of the build's scope too (6.21.0): a root runner or (6.31.0)
+  // package-manager config in PLAN.md is RED — every write the build could make there changes the pin — and so is a
+  // file a level gate's script names; a manifest is an advisory NOTE only.
   const notes = [];
   for (const entry of plan.ok ? plan.value : []) {
+    const k = scopeKey(entry);
+    if (k !== null && artifactKeys.has(k)) {
+      red(
+        "ac-artifact-in-plan",
+        `PLAN.md \`## Files\` names ${shown(entry)}, this feature's ${shown(basename(artifactKeys.get(k)))} — /pharn-test writes it before the build and the AC gate judges the build against it, so the build may never be scoped to it; drop the entry`
+      );
+    }
     const kind = testInfraPathKind(entry);
     if (kind === "config") {
+      const what = isPackageManagerConfigName(scopedPath(entry)) ? "a root package-manager config" : "a root runner config";
       red(
         "test-infra-in-plan",
-        `PLAN.md \`## Files\` names ${shown(entry)}, a root runner config /pharn-test pins before the build — the build's edit would read test-infra-changed at /pharn-verify; put the runner change in a \`spec_kind: test-infra\` increment first (via /pharn-ship), then plan this feature without it`
+        `PLAN.md \`## Files\` names ${shown(entry)}, ${what} /pharn-test pins before the build — the build's edit would read test-infra-changed at /pharn-verify; put the runner change in a \`spec_kind: test-infra\` increment first (via /pharn-ship), then plan this feature without it`
       );
     } else if (kind === "manifest") {
       notes.push(
-        `PLAN.md \`## Files\` names ${shown(entry)}: the build may change it (a dependency, say), but not the level gates' scripts, their pre/post scripts or the \`testResults\` formats /pharn-test pinned — that reads test-infra-changed at /pharn-verify. ADVISORY: this checker cannot see which part the build will change.`
+        `PLAN.md \`## Files\` names ${shown(entry)}: the build may change it (a dependency, say), but not the level gates' scripts, their pre/post scripts, the scripts they chain to, package.json's \`jest\` key or the \`testResults\` formats /pharn-test pinned — that reads test-infra-changed at /pharn-verify. ADVISORY: this checker cannot see which part the build will change.`
+      );
+    } else if (k !== null && namedKeys.has(k)) {
+      red(
+        "test-infra-in-plan",
+        `PLAN.md \`## Files\` names ${shown(entry)}, a file a level gate's script names (${shown(namedKeys.get(k))}) — /pharn-test pins it before the build, so the build's edit would read test-infra-changed at /pharn-verify; put the change in a \`spec_kind: test-infra\` increment first (via /pharn-ship), then plan this feature without it`
       );
     }
   }
@@ -282,6 +335,35 @@ function readOrExit(path, label) {
   }
 }
 
+/** A path's real location when it exists (so `/var/…` and `/private/var/…` agree on macOS), else its resolved form. */
+function canon(p) {
+  try {
+    return realpathSync(p);
+  } catch {
+    return resolve(p);
+  }
+}
+
+/** THIS feature's AC artifacts — the mapping path on argv and the lock beside it — spelled relative to the invoking
+ *  directory, the project root the writes-scope setter resolves `## Files` entries against (POSIX separators). A
+ *  mapping outside that directory yields `..`-led spellings no setter scope entry opens (the guard's own containment). */
+export function ownArtifacts(acPath, cwd) {
+  const rel = relative(canon(cwd), canon(dirname(resolve(cwd, acPath))))
+    .split(sep)
+    .join("/");
+  const at = (n) => (rel === "" ? n : `${rel}/${n}`);
+  return [at(basename(acPath)), at(LOCK_NAME)];
+}
+
+/** The mapped levels the lock's pin will range over: the SPEC's criteria levels and the mapping rows', each a member of
+ *  LEVELS (a mismatch between the two is already `level-mismatch`). */
+function pinLevels(specText, acTestsText) {
+  const levels = new Set();
+  for (const it of specAcceptanceCriteria(specText).items) if (LEVELS.includes(it.level)) levels.add(it.level);
+  for (const r of mappingOf(acTestsText).rows) if (LEVELS.includes(r.level)) levels.add(r.level);
+  return [...levels].sort();
+}
+
 function main(argv) {
   const args = argv.slice(2);
   if (args[0] === "--spec") {
@@ -320,8 +402,19 @@ function main(argv) {
   const planText = readOrExit(planPath, "PLAN.md");
   const self = basename(dirname(resolve(acPath)));
   const others = otherFeatures(featuresDir ?? dirname(dirname(resolve(acPath))), self);
+  const acArtifacts = ownArtifacts(acPath, process.cwd());
+  // The files the level gates' scripts name, over the tree at the invoking directory (the root the lock's pin reads).
+  // A tree the pin cannot read yields a NOTE, not a RED: /pharn-test's lock refuses that same tree, so no build starts.
+  const levels = pinLevels(specText, acTestsText);
+  const named = levels.length ? scriptNamedFiles({ root: process.cwd(), levels }) : { ok: true, paths: [] };
+  const scriptFiles = named.ok ? named.paths : [];
 
-  const { findings, notes } = checkMapping({ acTestsText, specText, planText, others });
+  const { findings, notes } = checkMapping({ acTestsText, specText, planText, others, acArtifacts, scriptFiles });
+  if (!named.ok) {
+    notes.push(
+      `the files the level gates' scripts name could not be read (${named.reason}) — none was checked against PLAN.md \`## Files\`; /pharn-test's lock refuses the same tree`
+    );
+  }
   // The SPEC pin, SHELLED (P3): AC-TESTS.md carries spec_id + spec_content_hash exactly as PLAN.md does. Since 6.21.1
   // its result is read as a VERDICT (shelled-verdict-core.mjs): `pin` only when the chain check REDs. A crash is no
   // verdict on the pin, never a `pin` RED — check-test-stage.mjs reads this checker's RED as `mapping-red`, which
@@ -356,9 +449,14 @@ function main(argv) {
     return 2;
   }
   const rows = mappingOf(acTestsText).rows.length;
+  // The GREEN line claims only what was checked: when the named files could not be read, it says so (the NOTE says why).
+  const namedClaim = named.ok
+    ? "no file a level gate's script names, "
+    : "(the files a level gate's script names NOT checked — see the NOTE), ";
   console.log(
     `GREEN — ${rows} AC(s) mapped once each at the SPEC's level; every test file listed, none in PLAN.md \`## Files\` (as the setter scopes ` +
-      `it), none claimed by another feature, no root runner config in PLAN.md; the SPEC pin holds. NOTE (P0): this checks the MAPPING, never that the tests are good.`
+      `it), none claimed by another feature; no root runner or package-manager config, ${namedClaim}and neither ` +
+      `this feature's AC-TESTS.md nor its lock in PLAN.md; the SPEC pin holds. NOTE (P0): this checks the MAPPING, never that the tests are good.`
   );
   printNotes();
   return 0;

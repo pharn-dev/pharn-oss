@@ -175,6 +175,34 @@ test("renderDone: criteria not delivered and evidence reds are listed fenced; th
   assert.doesNotMatch(md, /\|/, "no markdown table anywhere");
 });
 
+test("6.31.0 (M6): per-test anomalies outside the AC-mapped files are listed fenced, as DATA that decides no criterion", () => {
+  const block = (unmapped) => ({
+    mode: "test-first",
+    verdict: "PASS",
+    reason: null,
+    evidence: [],
+    acs: [],
+    unmapped_anomalies: unmapped,
+    note: "n",
+  });
+  const md = renderDone(
+    report({
+      ac_gate: block([
+        { gate: "test", reason: "duplicate-test-id", count: 2, examples: ["tests/other/x.test.js::handles 1"] },
+        { gate: "test:e2e", reason: "unknown-status", count: 1, examples: ["e2e/a.spec.js::chromium › flaky"] },
+      ]),
+    })
+  );
+  assert.match(md, /per-test anomalies outside the AC-mapped files — they decide no criterion/);
+  assert.match(
+    md,
+    /```text\ntest: duplicate-test-id ×2 — e\.g\. \["tests\/other\/x\.test\.js::handles 1"\]\ntest:e2e: unknown-status ×1 — e\.g\. \["e2e\/a\.spec\.js::chromium › flaky"\]\n```/
+  );
+  // control: none listed, no section
+  assert.doesNotMatch(renderDone(report({ ac_gate: block([]) })), /per-test anomalies/);
+  assert.doesNotMatch(renderDone(report()), /per-test anomalies/, "a pre-6.31.0 block without the key renders as before");
+});
+
 // ── HOSTILE TEXT / L62 ──────────────────────────────────────────────────────────────────────────────
 test("hostile gate ids, missing paths and reasons stay INSIDE fences — no fake heading, no live link", () => {
   const hostile = "x\n# fake heading\n```\n[click](https://evil.example)";
@@ -190,6 +218,7 @@ test("hostile gate ids, missing paths and reasons stay INSIDE fences — no fake
         reason: hostile,
         evidence: [{ reason: hostile, detail: hostile }],
         acs: [],
+        unmapped_anomalies: [{ gate: hostile, reason: hostile, count: 1, examples: [hostile] }],
         note: "n",
       },
     })
@@ -238,6 +267,7 @@ test('L62 — {"toString":1} in every quoted field renders via dataText and neve
         reason: needle,
         evidence: [{ reason: needle, detail: needle }],
         acs: [{ id: needle, reason: needle }],
+        unmapped_anomalies: [{ gate: needle, reason: needle, count: needle, examples: needle }, needle],
       },
     }),
     report({ verifiers: { registered: 1, findings: [needle] } }),

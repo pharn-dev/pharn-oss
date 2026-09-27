@@ -272,6 +272,7 @@ restated, P4):
         "detail": ""
       }
     ],
+    "unmapped_anomalies": [{ "gate": "test", "reason": "duplicate-test-id", "count": 2, "examples": ["tests/other.test.js::handles 1"] }],
     "note": "an AC is delivered = a locked, once-red test titled AC-<n>:, in a file mapped to AC-<n>, passed on this head run. …"
   }
 }
@@ -280,6 +281,11 @@ restated, P4):
 - **The per-AC table:** one `acs[]` row per SPEC criterion — id, level, the matched test ids, `status` (what the head
   run reported: `passed` \| `failed` \| `skipped` \| `none` \| `unavailable`) and `reason` (`null` = delivered).
   `evidence[]` holds the feature-wide evidence reds. Every `reason` is a member of the gate's closed set.
+- **`unmapped_anomalies` (6.31.0):** the per-test anomalies (`test-results-record.md`) of the level gates' records the
+  gate read that no AC's reading decides — in no file an AC maps through that gate's level — grouped by gate and
+  reason: `{ gate, reason, count, examples }`, `examples` the first three ids in sorted order. REPORTED, never read by
+  the verdict — every other anomaly is that AC's own `reason` instead (`ac-tests.md`, "The AC gate"). `[]` for a bootstrap or legacy block too; a report written before 6.31.0 has no such
+  key, and a renderer reads its absence as none.
 - **How it reaches the verdict:** an evidence red adds `ac-evidence` to `failing_gates`, a delivery red adds
   `ac-delivery`; either makes the verdict `FAIL`. An unmeasurable gate over otherwise-green gates is `INCONCLUSIVE`
   with no `reason_code`. `NOT-APPLICABLE` (a legacy SPEC) changes nothing, and is in the report so a reader sees it.
@@ -295,6 +301,6 @@ restated, P4):
   tree and requires `ac_gate` to equal the re-derivation (over a moved tree it re-derives from the stamp alone and the
   AC part is re-run instead, 6.20.6), so the table a report shows is the one the checker
   computes — agreement, never provenance (L43).
-- **Trust (P2):** test ids and titles come from the project's reporter; `detail` strings name paths from the
-  agent-editable lock. Both are untrusted DATA — renderers fence them (`RUN-REPORT.md`, `VERIFY.md`), and no stage
-  follows them.
+- **Trust (P2):** test ids and titles come from the project's reporter, and so do `unmapped_anomalies`' example ids;
+  `detail` strings name paths from the agent-editable lock. All are untrusted DATA — renderers fence them
+  (`RUN-REPORT.md`, `VERIFY.md`), and no stage follows them.

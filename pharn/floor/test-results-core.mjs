@@ -29,17 +29,27 @@
 //     reporter config and the `test` script are project code a build can edit, so a forged file is possible;
 //     `results-exit-contradiction` (a failed test or a suite error under exit 0) narrows that, it does not
 //     close it. "passed" means the project's reporter said so — PHARN does not re-run or re-judge a test.
-//   • FAIL-CLOSED PER RECORD: any refusal voids the whole record. One flaky test or expected failure the report
-//     MARKS (test-results-formats.mjs names which formats mark which), one duplicate title, or a `testResults` key
-//     outside RESULTS_GATES makes the answer a reason, not a partial list. One the report does NOT mark — vitest's
-//     `test.fails` or pass on retry, Jest 29's `test.failing` (measured) — reads as its raw status.
+//   • FAIL-CLOSED PER RECORD for its INTEGRITY: every RECORD_REASONS member outside ANOMALY_REASONS is a refusal that
+//     voids the whole record — a stamp that does not validate, a gate not in it, no or a malformed config (a
+//     `testResults` key outside RESULTS_GATES), a file that is absent, changed after the runner hashed it, malformed
+//     or over a cap, and a report that contradicts the gate's exit.
+//   • PER TEST for its ANOMALIES (6.31.0): a test whose status the report does not give plainly — one flaky test or
+//     expected failure the report MARKS (test-results-formats.mjs names which formats mark which), or any other status
+//     outside the closed map (`unknown-status`) — and every test whose id another test shares (`duplicate-test-id`)
+//     is listed in `anomalies` (ANOMALY_REASONS), never in `tests`, and the record stays `ok`. The CONSUMER decides
+//     what an anomaly means for it: the red run and the AC gate refuse an AC only when an anomaly sits in a file that
+//     AC maps (red-run-core.mjs observeAc) and report the rest. Before 6.31.0 one such test ANYWHERE voided the whole
+//     record, so an unrelated parametrized duplicate made every AC of a project unmeasurable. One the report does NOT
+//     mark — vitest's `test.fails` or pass on retry, Jest 29's `test.failing` (measured) — still reads as its raw
+//     status.
 //   • An `ok` record may hold ZERO tests (a run that ran none). A consumer that needs tests must assert
 //     non-emptiness itself (L34).
 //
 // TRUST (P2): the results file is UNTRUSTED project output, read under a byte cap from a descriptor opened
 // O_NOFOLLOW|O_NONBLOCK and fstat-checked as a regular file. Test ids and titles are opaque strings — never
 // interpreted, never compiled into a RegExp, never an instruction — and the RECORD CARRIES THEM AS UNTRUSTED
-// DATA: `tests[].id`, `.file`, `.title` and every refusal `reason` inherit the file's taint, so a consumer
+// DATA: `tests[].id`, `.file`, `.title`, the same three on `anomalies[]` with each anomaly's `reason`, and every
+// refusal `reason` inherit the file's taint, so a consumer
 // must fence them before any model reads them. A raw value quoted in a reason is bounded by `shown()`. `pharn.config.json` is NOT guarded by any
 // hook, so the opt-in and the format are agent-reachable: a build can switch the record off or change what
 // is parsed. That is advisory, and stated rather than discovered.
@@ -48,7 +58,7 @@ import { createHash } from "node:crypto";
 import { closeSync, fstatSync, openSync, readFileSync, readSync, realpathSync, constants as fsConstants } from "node:fs";
 import { join, resolve } from "node:path";
 import { E2E_SET, resultsFileName, validateStamp } from "./gate-run-core.mjs";
-import { RECORD_STATUSES, RESULTS_FORMATS, parseResults } from "./test-results-formats.mjs";
+import { ENTRY_ANOMALIES, RECORD_STATUSES, RESULTS_FORMATS, parseResults } from "./test-results-formats.mjs";
 import { shown } from "./quote-core.mjs";
 
 /** The config file and key a project opts in with: `{"testResults": {"<gate-id>": "<format>"}}`. */
@@ -75,6 +85,10 @@ export const RECORD_REASONS = Object.freeze([
   "stamp-invalid",
   "unknown-status",
 ]);
+
+/** The PER-TEST anomaly codes (6.31.0) — a subset of RECORD_REASONS, carried on `anomalies[].reason_code`, never a
+ *  refusal of the record: `duplicate-test-id` (decided here) and the adapters' ENTRY_ANOMALIES. Sorted, closed. */
+export const ANOMALY_REASONS = Object.freeze(["duplicate-test-id", ...ENTRY_ANOMALIES].sort());
 
 /** Caps on the untrusted file. Over any of them is `over-cap`, never a truncated record. The id cap counts
  *  UTF-16 code units (JavaScript string length), not user-perceived characters. */
@@ -187,27 +201,63 @@ function rootsOf(root) {
   return out;
 }
 
-/** Turn parsed entries into the record: ids, caps, duplicates, the exit-code cross-check. Pure. */
+const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+
+/** Turn parsed entries into the record: ids, caps, the per-test anomalies, the exit-code cross-check. Pure.
+ *  `tests` holds every entry whose status the report gives plainly and whose id no other entry shares; `anomalies`
+ *  holds the rest — ONE `duplicate-test-id` entry per shared id (whatever those entries' statuses), else the adapter's
+ *  own anomaly — each `{id, file, title, reason_code, reason}`. `counts` range over `tests`. The contradiction check
+ *  counts EVERY entry whose status is `failed`, a duplicated one included, so an anomaly never hides a failure the
+ *  report records under exit 0. */
 export function buildRecord({ gate, format, exit, sha, parsed }) {
   if (parsed.entries.length > MAX_TESTS) return refuse("over-cap", `${parsed.entries.length} tests, over the ${MAX_TESTS}-test cap`);
-  const tests = [];
-  const seen = new Set();
+  const withIds = [];
+  const shared = new Map();
   for (const e of parsed.entries) {
     const id = `${e.file}${FILE_SEP}${e.path.join(TITLE_SEP)}`;
     if (id.length > MAX_ID_CHARS) return refuse("over-cap", `a test id is ${id.length} characters, over the ${MAX_ID_CHARS}-character cap`);
-    if (seen.has(id)) return refuse("duplicate-test-id", `two tests share the id ${shown(id)} — identity is ambiguous`);
-    seen.add(id);
+    withIds.push({ id, e });
+    shared.set(id, (shared.get(id) ?? 0) + 1);
+  }
+  const tests = [];
+  const anomalies = [];
+  const reported = new Set();
+  for (const { id, e } of withIds) {
+    const n = shared.get(id);
+    if (n > 1) {
+      // ONE anomaly per shared id, never last-wins: which entry's status belongs to the id is ambiguous.
+      if (!reported.has(id)) {
+        reported.add(id);
+        anomalies.push({
+          id,
+          file: e.file,
+          title: e.title,
+          reason_code: "duplicate-test-id",
+          reason: `${n} tests share the id ${shown(id)} — identity is ambiguous`,
+        });
+      }
+      continue;
+    }
+    if (e.anomaly) {
+      anomalies.push({ id, file: e.file, title: e.title, reason_code: e.anomaly.reason_code, reason: e.anomaly.reason });
+      continue;
+    }
     tests.push({ id, file: e.file, title: e.title, status: e.status });
   }
-  tests.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  for (const a of anomalies) {
+    if (!ANOMALY_REASONS.includes(a.reason_code)) throw new Error(`internal: '${a.reason_code}' is not a member of ANOMALY_REASONS`);
+  }
+  tests.sort(byId);
+  anomalies.sort(byId);
   const counts = Object.fromEntries(RECORD_STATUSES.map((s) => [s, tests.filter((t) => t.status === s).length]));
-  if (exit === 0 && (counts.failed > 0 || parsed.suiteErrors > 0)) {
+  const failedEntries = parsed.entries.filter((e) => e.status === "failed").length;
+  if (exit === 0 && (failedEntries > 0 || parsed.suiteErrors > 0)) {
     return refuse(
       "results-exit-contradiction",
-      `the gate exited 0 but its results report ${counts.failed} failed test(s) and ${parsed.suiteErrors} suite error(s)`
+      `the gate exited 0 but its results report ${failedEntries} failed test(s) and ${parsed.suiteErrors} suite error(s)`
     );
   }
-  return { ok: true, gate, format, results_sha256: sha, exit, counts, suite_errors: parsed.suiteErrors, tests };
+  return { ok: true, gate, format, results_sha256: sha, exit, counts, suite_errors: parsed.suiteErrors, tests, anomalies };
 }
 
 /** THE EXPORT later stages call: the per-test record of gate `gateId` in a finalized stamp, or a closed
