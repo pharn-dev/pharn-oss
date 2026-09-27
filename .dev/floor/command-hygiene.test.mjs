@@ -24,11 +24,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { REGISTRY } from "../../pharn/floor/stage-exit-core.mjs";
+import { CANDIDATE_REL } from "../../pharn/floor/feature-name.mjs";
 import {
   ROUTE_POLICY,
   AGENT,
@@ -4228,4 +4229,508 @@ test("✧ BUDGET R5: every product command has exactly one `## What you may clai
   assert.equal(claimsHeadingCount(body.replace(`${heading}\n`, `${heading}\n\n${heading}\n`)), 2);
   // A heading inside a fence is not a block.
   assert.equal(claimsHeadingCount(body.replace(`${heading}\n`, `\`\`\`text\n${heading}\n\`\`\`\n`)), 0);
+});
+
+// ── SHELL-SINK (shell-sink-validation, 6.29.0) — no model-typed value derived from untrusted input reaches a shell line
+//    before tested code has validated it ─────────────────────────────────────────────────────────────────────────────
+//
+// THE RECORDED FAILURE (P7, reproduced — `.dev/features/shell-sink-validation/PLAN.md`, "Trigger"): at 6.28.2,
+// /pharn-loop S1's own slug validator, /pharn-spec's first setter line and a single-quoted `--name '<name>'` line each
+// ran a command carried inside a model-derived feature name; /pharn-loop Step 6d typed git's own branch name into
+// `git switch '…'`; and /pharn-ship --quick item 7 typed a description-borne ref into `git rev-parse --verify`. The fix:
+// a name reaches a shell line only as `pharn/floor/feature-name.mjs` printed it — read from a file the Write tool wrote —
+// Step 6d returns with a constant line, and item 7 takes no ref from the description.
+//
+// WHAT THIS SECTION HOLDS (L29 — each enumeration materialized once, and every rule iterates it):
+//   1. SHELL_VALUES — every placeholder a product command's SHELL LINE takes, CLOSED both ways over the corpus (L36). A
+//      shell line is a non-comment line of a bash/sh fence, the Agent brief-prompt line of a text fence (the part after
+//      BRIEF_PROMPT_PREFIX), or an inline code span outside any fence that starts with a command word (SHELL_SPAN_RE).
+//   2. NAME_ORIGINS — where each product command's `<name>` comes from, CLOSED both ways over the commands with a
+//      `<name>` shell line: `validates` (where a name is born), `via` (takes it from a validating stage), `asks` /
+//      `resolves` (a name the command did not receive as its argument is asked for / resolved only through the CLI).
+//   3. ORDER — a validating or resolving command's pinned CLI line precedes its first `<name>` shell line, and names the
+//      candidate path before it.
+//   4. SENTENCES — each asks / resolves command carries its fixed sentence inside its Step 0, and not the other's.
+//   5. ★ EXECUTED — every validating and resolving command's COMMITTED CLI line, under `sh -c`, over HOSTILE_CANDIDATES.
+//   6. ★ EXECUTED — /pharn-loop Step 6c's committed branch block, then Step 6d's committed undo block, in throwaway git
+//      repositories — with the CONTROL that makes the undo line's stated dependency visible: a checkout in between.
+//   7. ★ CONTROLS — the 6.28.2 lines, carried as literals and each run once: each must run its payload, or the rule it
+//      backs guards nothing (L60).
+//
+// HONEST SCOPE (P0): the closure sees the three line kinds above — an inline command span starting with a word outside
+// SHELL_SPAN_RE, or a shell line outside any fence, is not seen (L49). Each member's CLASS is reviewed judgment, never
+// checked. The sentence pins prove a sentence is PRESENT, never that a run follows it; the order pin proves TEXT order,
+// never run order. The executed tests prove the committed lines and the CLI refuse hostile names without running them —
+// never that a model writes the candidate with the Write tool, or re-types only the printed value.
+
+const SHELL_SPAN_RE = /^(?:[A-Z_][A-Z0-9_]*=\S*\s+)?(?:node|git|npx|npm|cat|mkdir|test|gh)\b/;
+const SINK_PLACEHOLDER_RE = /<([A-Za-z][^<>]*)>/g;
+
+/** Every shell line of a command body, in order: [{ line, kind: "fence" | "brief" | "inline", text }]. */
+function shellLines(body) {
+  const out = [];
+  let lang = null;
+  body.split(/\r?\n/).forEach((raw, i) => {
+    const fence = raw.match(/^[ \t]*```(\S*)/);
+    if (fence) {
+      lang = lang === null ? fence[1] : null;
+      return;
+    }
+    const t = raw.trim();
+    if (lang !== null) {
+      if ((lang === "bash" || lang === "sh") && t !== "" && !t.startsWith("#")) out.push({ line: i + 1, kind: "fence", text: t });
+      else if (lang === "text" && t.startsWith(BRIEF_PROMPT_PREFIX)) {
+        out.push({ line: i + 1, kind: "brief", text: t.slice(BRIEF_PROMPT_PREFIX.length) });
+      }
+      return;
+    }
+    for (const m of raw.matchAll(/`([^`\n]+)`/g)) {
+      const span = m[1].trim();
+      if (SHELL_SPAN_RE.test(span)) out.push({ line: i + 1, kind: "inline", text: span });
+    }
+  });
+  return out;
+}
+
+/** Every value a product command's shell line takes, and why it is out of the class or validated first. */
+const SHELL_VALUES = Object.freeze({
+  "<name>": "the feature slug — validated where it is born (NAME_ORIGINS), a FEATURE_SLUG_RE member from then on",
+  "<route>": "a closed code token (route-token-core.mjs ROUTE_TOKEN_RE), printed by stage-agent.mjs route",
+  "<N>": "the loop's own iteration counter",
+  "<M>": "human argv: the --max-iter value the person typed",
+  "<base sha>": "git's own rev-parse / merge-base output (hex), or the literal unknown — a producer grammar",
+  "<branch>": "the name /pharn-loop Step 6c's branch block printed from the validated <name>",
+  "<decision>": "a closed code token (check-loop.mjs's green token)",
+  "<canon-file>": "a closed choice: one of the two memory-bank files /pharn-memory-promote Step 0 names",
+  "<id>": "a closed code token (project | pharn-default), cut from check-spec.mjs's printed line",
+  "<path>": "human argv: /pharn-review's explicit targets (directories are expanded in code, render-review-assignments.mjs)",
+  "<target>": "the project directory /pharn-build runs validate.mjs over",
+  "<resume.argv…>": "code-produced: the stage script's own printed resume.argv",
+  "<chosen option's argv…>": "a registry-held flag plus the human's answer, single-quoted",
+});
+
+/** placeholder -> ["file:line", …] over [file, body] pairs. */
+function placeholdersOf(pairs) {
+  const found = new Map();
+  for (const [file, body] of pairs) {
+    for (const l of shellLines(body)) {
+      for (const m of l.text.matchAll(SINK_PLACEHOLDER_RE)) {
+        const k = `<${m[1]}>`;
+        if (!found.has(k)) found.set(k, []);
+        found.get(k).push(`${file}:${l.line}`);
+      }
+    }
+  }
+  return found;
+}
+
+function shellValueOffenders(found) {
+  const out = [];
+  for (const [k, sites] of found) {
+    if (!Object.hasOwn(SHELL_VALUES, k)) out.push(`${k} — not a SHELL_VALUES member (${sites.slice(0, 3).join(", ")})`);
+  }
+  for (const k of Object.keys(SHELL_VALUES)) if (!found.has(k)) out.push(`${k} — a member no shell line takes`);
+  return out;
+}
+
+const productPairs = () => productCommandFiles().map((f) => [f, commandBody(f)]);
+
+test("✧ SHELL-SINK 1 — every placeholder a product command's shell line takes is a SHELL_VALUES member, and every member is taken (L36)", () => {
+  const found = placeholdersOf(productPairs());
+  assert.ok((found.get("<name>") ?? []).length >= 150, "L34: the scan must find the <name> sites, or it is broken");
+  assert.deepEqual(shellValueOffenders(found), []);
+  // CONTROLS (L60): each value this increment removed, spliced back as a shell line of each kind, is red.
+  for (const [ph, splice] of [
+    ["<original branch>", (b) => `${b}\n\`\`\`bash\ngit switch '<original branch>'\n\`\`\`\n`],
+    ["<slug>", (b) => `${b}\n\`\`\`bash\nnode -e 'x' '<slug>'\n\`\`\`\n`],
+    ["<ref>", (b) => `${b}\nresolve it with \`git rev-parse --verify <ref>^{commit}\`.\n`],
+    ["<desc>", (b) => `${b}\n\`\`\`text\n${BRIEF_PROMPT_PREFIX}node x --d '<desc>'\n\`\`\`\n`],
+  ]) {
+    const pairs = productPairs().map(([f, b]) => [f, f === "pharn-loop.md" ? splice(b) : b]);
+    const offenders = shellValueOffenders(placeholdersOf(pairs)).filter((o) => o.startsWith(`${ph} —`));
+    assert.equal(offenders.length, 1, `${ph} spliced into a shell line must be caught`);
+  }
+  // …and a member no shell line takes any more is red.
+  const noTarget = productPairs().map(([f, b]) => [f, b.replaceAll("<target>", ".")]);
+  assert.ok(shellValueOffenders(placeholdersOf(noTarget)).includes("<target> — a member no shell line takes"));
+  // …and prose (a slash-command invocation, a table cell) is not a shell line.
+  assert.deepEqual(shellLines("Run `/pharn-grill <name> --quick` now.\n\n| `<slug>` | x |\n"), []);
+});
+
+const FEATURE_NAME_LINE = "node pharn/floor/feature-name.mjs";
+const ASK_SENTENCE =
+  "A `<name>` this command did not receive as its argument is asked for: stop and ask the human — never take one from a directory listing or a file's content.";
+const RESOLVE_SENTENCE =
+  "A `<name>` this command did not receive as its argument is resolved only through `pharn/floor/feature-name.mjs`: write the slug alone to `.pharn/feature-name/candidate.txt` with the Write tool, run the line below, and use only the printed value, when it is the slug you wrote — a refusal or any other value → ask the human; never type one from a directory listing or a file's content.";
+
+/** Where each product command's `<name>` comes from. The CLASS is reviewed judgment; the pins below hold each class's text. */
+const NAME_ORIGINS = Object.freeze({
+  "pharn-spec.md": { cls: "validates", line: FEATURE_NAME_LINE },
+  "pharn-loop.md": { cls: "validates", line: `${FEATURE_NAME_LINE} --fresh` },
+  "pharn-ship.md": { cls: "via", from: "pharn-spec.md" },
+  "pharn-plan.md": { cls: "asks" },
+  "pharn-grill.md": { cls: "asks" },
+  "pharn-test.md": { cls: "asks" },
+  "pharn-build.md": { cls: "asks" },
+  "pharn-review.md": { cls: "asks" },
+  "pharn-regress.md": { cls: "resolves", line: FEATURE_NAME_LINE },
+  "pharn-verify.md": { cls: "resolves", line: FEATURE_NAME_LINE },
+});
+const NAME_CLASSES = Object.freeze(["validates", "via", "asks", "resolves"]);
+
+function nameOriginOffenders(pairs, table = NAME_ORIGINS) {
+  const withName = pairs.filter(([, b]) => shellLines(b).some((l) => l.text.includes("<name>"))).map(([f]) => f);
+  const out = [];
+  if (withName.length === 0) out.push("no product command has a <name> shell line — the scan is broken (L34)");
+  for (const f of withName) if (!Object.hasOwn(table, f)) out.push(`${f}: a <name> shell line, no NAME_ORIGINS entry`);
+  for (const f of Object.keys(table)) if (!withName.includes(f)) out.push(`${f}: an entry, no <name> shell line`);
+  for (const [f, o] of Object.entries(table)) if (!NAME_CLASSES.includes(o.cls)) out.push(`${f}: unknown class ${o.cls}`);
+  return out;
+}
+
+test("✧ SHELL-SINK 2 — NAME_ORIGINS is closed over the product commands with a `<name>` shell line, both ways", () => {
+  assert.deepEqual(nameOriginOffenders(productPairs()), []);
+  assert.equal(Object.keys(NAME_ORIGINS).length, 10, "L34: the classified set is counted, not merely iterated");
+  // CONTROLS (L60): a command that gains a <name> shell line with no entry, and an entry dropped, are both red.
+  const gained = productPairs().map(([f, b]) => [f, f === "pharn-memory-promote.md" ? `${b}\n\`\`\`bash\nx '<name>'\n\`\`\`\n` : b]);
+  assert.deepEqual(nameOriginOffenders(gained), ["pharn-memory-promote.md: a <name> shell line, no NAME_ORIGINS entry"]);
+  const rest = Object.fromEntries(Object.entries(NAME_ORIGINS).filter(([f]) => f !== "pharn-plan.md"));
+  assert.deepEqual(nameOriginOffenders(productPairs(), rest), ["pharn-plan.md: a <name> shell line, no NAME_ORIGINS entry"]);
+});
+
+/** null when `line` is pinned once in a bash fence, carries no placeholder, follows the candidate path and precedes the
+ *  first `<name>` shell line; else why. */
+function cliOrderReason(body, line) {
+  const shell = shellLines(body);
+  const at = shell.filter((l) => l.kind === "fence" && l.text === line);
+  if (at.length !== 1) return `the pinned line must appear exactly once in a bash fence (found ${at.length})`;
+  if (/<[A-Za-z]/.test(line)) return "the pinned line must carry no placeholder";
+  const firstName = shell.find((l) => l.text.includes("<name>"));
+  if (!firstName) return "no <name> shell line";
+  if (!(at[0].line < firstName.line)) return `the pinned line (${at[0].line}) must precede the first <name> shell line (${firstName.line})`;
+  const cand = body.split(/\r?\n/).findIndex((t) => t.includes(CANDIDATE_REL)) + 1;
+  if (cand === 0 || !(cand < at[0].line)) return "the candidate path must be named before the pinned line";
+  return null;
+}
+
+const CLI_LINE_COMMANDS = Object.entries(NAME_ORIGINS).filter(([, o]) => o.cls === "validates" || o.cls === "resolves");
+
+// The Write tool REFUSES a link at the path (measured 2026-09-27) and names the link's target as the path to write
+// instead; a model that followed that would write wherever a planted link points. Each command that writes a
+// candidate carries this rule — PRESENCE ONLY, never that a run obeys it.
+const WRITE_REFUSAL_RULE = "never Read it and never write to any other path it names";
+// The CLI leaves a DIRECTORY at the candidate path in place, so "run once, write again" cannot clear it: each command
+// says to stop there (ask the human; the unattended loop stops `blocked: no-slug`). PRESENCE ONLY.
+const DIRECTORY_RULE = "A directory at that path is never removed: stop";
+
+test("✧ SHELL-SINK 3 — each validating and resolving command runs the CLI before its first `<name>` shell line", () => {
+  assert.equal(CLI_LINE_COMMANDS.length, 4, "L34: spec, loop, regress, verify");
+  for (const [file, o] of CLI_LINE_COMMANDS) assert.equal(cliOrderReason(commandBody(file), o.line), null, file);
+  for (const [file] of CLI_LINE_COMMANDS) {
+    const body = commandBody(file);
+    assert.ok(body.replace(/\s+/g, " ").includes(WRITE_REFUSAL_RULE), `${file}: the Write-refusal rule`);
+    // CONTROL: the rule removed is seen.
+    const without = body.replace(looseSentenceRe(WRITE_REFUSAL_RULE), "");
+    assert.notEqual(without, body, `${file}: precondition — the rule is found where it is removed`);
+    assert.equal(without.replace(/\s+/g, " ").includes(WRITE_REFUSAL_RULE), false);
+    assert.ok(body.replace(/\s+/g, " ").includes(DIRECTORY_RULE), `${file}: the directory rule`);
+    const noDir = body.replace(looseSentenceRe(DIRECTORY_RULE), "");
+    assert.notEqual(noDir, body, `${file}: precondition — the directory rule is found where it is removed`);
+    assert.equal(noDir.replace(/\s+/g, " ").includes(DIRECTORY_RULE), false);
+  }
+  // CONTROLS (L60): the line dropped, and moved below the first <name> shell line, are each red — for every member.
+  for (const [file, o] of CLI_LINE_COMMANDS) {
+    const body = commandBody(file);
+    const lines = body.split("\n");
+    const idx = lines.findIndex((t) => t.trim() === o.line);
+    const dropped = [...lines.slice(0, idx), ...lines.slice(idx + 1)].join("\n");
+    assert.match(cliOrderReason(dropped, o.line), /exactly once/, `${file}: a dropped line is red`);
+    const moved = `${dropped}\n\n\`\`\`bash\n${o.line}\n\`\`\`\n`;
+    assert.match(cliOrderReason(moved, o.line), /must precede/, `${file}: a line below the first <name> line is red`);
+  }
+});
+
+test("✧ SHELL-SINK 4 — a `via` command takes its name from a validating stage and names the CLI before its first `<name>` shell line", () => {
+  const via = Object.entries(NAME_ORIGINS).filter(([, o]) => o.cls === "via");
+  assert.equal(via.length, 1, "L34");
+  const reason = (body) => {
+    const firstName = shellLines(body).find((l) => l.text.includes("<name>"));
+    const mention = body.split(/\r?\n/).findIndex((t) => t.includes("pharn/floor/feature-name.mjs")) + 1;
+    return mention > 0 && firstName && mention < firstName.line ? null : "the CLI is not named before the first <name> shell line";
+  };
+  for (const [file, o] of via) {
+    assert.equal(NAME_ORIGINS[o.from].cls, "validates", `${file}: its source must validate`);
+    assert.equal(reason(commandBody(file)), null, file);
+    // CONTROL: the mention removed is red.
+    assert.notEqual(reason(commandBody(file).replaceAll("pharn/floor/feature-name.mjs", "x")), null);
+  }
+});
+
+/** A sentence may wrap across indented lines, so it is matched with any run of whitespace between its words. */
+const looseSentenceRe = (s) => new RegExp(escapeRe(s).replace(/ /g, "\\s+"));
+
+/** The text of a command's `## Step 0` section, whitespace-collapsed, or null. */
+function stepZeroText(body) {
+  const lines = body.split(/\r?\n/);
+  const start = lines.findIndex((l) => /^## Step 0\b/.test(l));
+  if (start === -1) return null;
+  const end = lines.findIndex((l, i) => i > start && /^## /.test(l));
+  return lines
+    .slice(start, end === -1 ? undefined : end)
+    .join("\n")
+    .replace(/\s+/g, " ");
+}
+
+function sentenceReason(file, body) {
+  const cls = NAME_ORIGINS[file].cls;
+  const z = stepZeroText(body);
+  if (z === null) return "no ## Step 0";
+  const has = (s) => z.includes(s.replace(/\s+/g, " "));
+  const [own, other] = cls === "asks" ? [ASK_SENTENCE, RESOLVE_SENTENCE] : [RESOLVE_SENTENCE, ASK_SENTENCE];
+  if (!has(own)) return `Step 0 lacks its ${cls} sentence`;
+  if (has(other)) return "Step 0 carries the other class's sentence";
+  return null;
+}
+
+test("✧ SHELL-SINK 5 — each asks / resolves command carries its fixed sentence in Step 0 (PRESENCE ONLY — never that a run follows it)", () => {
+  const set = Object.entries(NAME_ORIGINS).filter(([, o]) => o.cls === "asks" || o.cls === "resolves");
+  assert.equal(set.length, 7, "L34: the seven commands that take a name");
+  for (const [file] of set) assert.equal(sentenceReason(file, commandBody(file)), null, file);
+  // CONTROLS (L60), per member: the sentence deleted is red, and swapped for the other class's is red.
+  const loose = looseSentenceRe;
+  for (const [file, o] of set) {
+    const body = commandBody(file);
+    const [own, other] = o.cls === "asks" ? [ASK_SENTENCE, RESOLVE_SENTENCE] : [RESOLVE_SENTENCE, ASK_SENTENCE];
+    assert.match(body, loose(own), `${file}: precondition — the sentence is found where it is removed (L34)`);
+    assert.match(sentenceReason(file, body.replace(loose(own), "")) ?? "", /lacks/, `${file}: deleted is red`);
+    assert.match(sentenceReason(file, body.replace(loose(own), other)) ?? "", /lacks/, `${file}: swapped for the other is red`);
+    assert.match(sentenceReason(file, `${body.replace(/^## Step 1\b/m, `${other}\n\n## Step 1`)}`) ?? "", /other/, `${file}: both is red`);
+  }
+});
+
+/** Every shape a committed CLI line must refuse without running it (grill G-H) — written byte for byte to the candidate. */
+const HOSTILE_CANDIDATES = Object.freeze([
+  "x$(touch PWNED)",
+  "x`touch PWNED`",
+  "fix;touch${IFS}PWNED;x",
+  "fix'$(touch PWNED)'",
+  'fix"$(touch PWNED)"',
+  "fix\ntouch PWNED",
+  "fix-login\r\n",
+  "fix login",
+  "-rf",
+  "..",
+  "a/b",
+  "Fix-login",
+  "fix\u0000login",
+  "﻿fix-login",
+  "a".repeat(65),
+  "",
+]);
+
+/** A throwaway project whose pharn/floor is this tree's, reached through a symlink. */
+function nameFixture() {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "shell-sink-")));
+  mkdirSync(join(dir, "pharn", "features"), { recursive: true });
+  symlinkSync(join(REPO_ROOT, "pharn", "floor"), join(dir, "pharn", "floor"), "dir");
+  const cand = join(dir, ...CANDIDATE_REL.split("/"));
+  return {
+    dir,
+    put(bytes) {
+      mkdirSync(dirname(cand), { recursive: true });
+      writeFileSync(cand, bytes);
+    },
+    candidatePresent: () => existsSync(cand),
+    sh: (line) => spawnSync("sh", ["-c", line], { cwd: dir, encoding: "utf8", timeout: 30000 }),
+    done: () => rmSync(dir, { recursive: true, force: true }),
+  };
+}
+
+test("★ SHELL-SINK 6 — every validating and resolving command's COMMITTED line refuses each hostile candidate and runs none of it", () => {
+  const fx = nameFixture();
+  try {
+    for (const [file, o] of CLI_LINE_COMMANDS) {
+      const committed = shellLines(commandBody(file)).filter((l) => l.kind === "fence" && l.text === o.line);
+      assert.equal(committed.length, 1, `${file}: its committed line, read from the command file`);
+      const line = committed[0].text;
+      for (const bytes of HOSTILE_CANDIDATES) {
+        fx.put(bytes);
+        const r = fx.sh(line);
+        assert.equal(r.status, 2, `${file} over ${JSON.stringify(bytes)}: ${r.stdout}${r.stderr}`);
+        assert.equal(r.stdout, "", `${file}: no name is printed`);
+        assert.equal(existsSync(join(fx.dir, "PWNED")), false, `${file}: a command in the candidate ran`);
+        assert.equal(fx.candidatePresent(), false, `${file}: the candidate is consumed`);
+      }
+      fx.put("demo\n");
+      const ok = fx.sh(line);
+      assert.equal(ok.status, 0, `${file}: ${ok.stderr}`);
+      assert.equal(ok.stdout, "demo\n", `${file}: a valid candidate prints itself`);
+    }
+    // The loop's committed --fresh line picks the first absent feature directory; the plain line never does.
+    mkdirSync(join(fx.dir, "pharn", "features", "demo"));
+    fx.put("demo");
+    assert.equal(fx.sh(NAME_ORIGINS["pharn-loop.md"].line).stdout, "demo-2\n");
+    fx.put("demo");
+    assert.equal(fx.sh(NAME_ORIGINS["pharn-spec.md"].line).stdout, "demo\n");
+  } finally {
+    fx.done();
+  }
+});
+
+/** A throwaway git repository with a tracked `a` and a tracked file literally named `-`. */
+function gitFixture({ reflog = true } = {}) {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "shell-sink-git-")));
+  const git = (...a) => spawnSync("git", a, { cwd: dir, encoding: "utf8" });
+  git("init", "-q");
+  if (!reflog) git("config", "core.logAllRefUpdates", "false");
+  git("config", "user.email", "t@example.invalid");
+  git("config", "user.name", "t");
+  git("config", "commit.gpgsign", "false");
+  if (!reflog) rmSync(join(dir, ".git", "logs"), { recursive: true, force: true });
+  writeFileSync(join(dir, "a"), "a\n");
+  writeFileSync(join(dir, "-"), "committed\n");
+  git("add", "-A");
+  assert.equal(git("commit", "-q", "-m", "seed").status, 0, "fixture: the seed commit");
+  const base = git("rev-parse", "HEAD").stdout.trim();
+  const head = () => git("symbolic-ref", "--short", "-q", "HEAD").stdout.trim() || `detached@${git("rev-parse", "HEAD").stdout.trim()}`;
+  const hasBranch = (b) => git("show-ref", "--verify", "--quiet", `refs/heads/${b}`).status === 0;
+  const sh = (cmd) => spawnSync("sh", ["-c", cmd], { cwd: dir, encoding: "utf8" });
+  /** What a failed Step 6c leaves before Step 6d: a staged change and its NUL-separated stage list. */
+  const stageFailed = () => {
+    writeFileSync(join(dir, "a"), "changed by the run\n");
+    git("add", "a");
+    mkdirSync(join(dir, ".pharn", "pharn-loop", "demo"), { recursive: true });
+    writeFileSync(join(dir, ".pharn", "pharn-loop", "demo", "stage.list"), "a\0");
+  };
+  return { dir, git, base, head, hasBranch, sh, stageFailed, done: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
+/** Step 6c's committed branch block and Step 6d's committed undo block, read out of pharn-loop.md. */
+function loopBlocks() {
+  const body = commandBody("pharn-loop.md");
+  const branch = fencedLines(body)
+    .map((l) => l.text.trim())
+    .filter((t) => t.startsWith("b='pharn-loop/<name>'"));
+  const undo = fencedBlocks(body).filter((b) => b.lines.some((l) => l.text.trim() === "git checkout - --"));
+  assert.equal(branch.length, 1, "pharn-loop.md carries one Step 6c branch block");
+  assert.equal(undo.length, 1, "pharn-loop.md carries one Step 6d undo block");
+  const undoText = undo[0].lines.map((l) => l.text.trim()).join("\n");
+  assert.deepEqual([...new Set([...undoText.matchAll(SINK_PLACEHOLDER_RE)].map((m) => m[1]))].sort(), ["branch", "name"]);
+  return {
+    branch: () => branch[0].replaceAll("<name>", "demo"),
+    undo: (printed) => undoText.replaceAll("<name>", "demo").replaceAll("<branch>", printed),
+  };
+}
+
+const HOSTILE_BRANCH = "fix';touch${IFS}PWNED_BRANCH;'x";
+const STEP_6D_BOUND = "It is correct only because nothing checks out between Step 6c's branch block and this line";
+
+test("★ SHELL-SINK 7 — Step 6c's branch block then Step 6d's undo block return to the original checkout and type no git output", () => {
+  const blocks = loopBlocks();
+  // A hostile original branch name: git accepts it, the old line ran it, the committed block never types it.
+  let g = gitFixture();
+  try {
+    assert.equal(g.git("check-ref-format", "--branch", HOSTILE_BRANCH).status, 0, "precondition: git accepts the name");
+    assert.equal(g.git("switch", "-q", "-c", HOSTILE_BRANCH).status, 0);
+    const made = g.sh(blocks.branch());
+    assert.equal(made.status, 0, made.stderr);
+    const printed = made.stdout.trim();
+    assert.equal(printed, "pharn-loop/demo");
+    g.stageFailed();
+    g.sh(blocks.undo(printed));
+    assert.equal(existsSync(join(g.dir, "PWNED_BRANCH")), false, "the undo block ran a command from a branch name");
+    assert.equal(g.head(), HOSTILE_BRANCH, "back on the original branch");
+    assert.equal(g.hasBranch("pharn-loop/demo"), false, "the new branch is deleted");
+    assert.equal(g.git("diff", "--cached", "--name-only").stdout, "", "the run's list is unstaged");
+    assert.equal(readFileSync(join(g.dir, "a"), "utf8"), "changed by the run\n", "and its change stays in the working tree");
+  } finally {
+    g.done();
+  }
+  // A detached original checkout returns to its commit, still detached.
+  g = gitFixture();
+  try {
+    g.git("switch", "-q", "--detach", "HEAD");
+    const printed = g.sh(blocks.branch()).stdout.trim();
+    g.stageFailed();
+    g.sh(blocks.undo(printed));
+    assert.equal(g.head(), `detached@${g.base}`);
+    assert.equal(g.hasBranch("pharn-loop/demo"), false);
+  } finally {
+    g.done();
+  }
+  // No HEAD reflog: the line refuses and restores nothing — a locally edited tracked file named `-` survives.
+  g = gitFixture({ reflog: false });
+  try {
+    g.git("switch", "-q", "-c", "orig");
+    const printed = g.sh(blocks.branch()).stdout.trim();
+    writeFileSync(join(g.dir, "-"), "LOCAL EDIT\n");
+    g.stageFailed();
+    g.sh(blocks.undo(printed));
+    assert.equal(readFileSync(join(g.dir, "-"), "utf8"), "LOCAL EDIT\n", "the `--` keeps git from reading `-` as a file");
+    assert.equal(g.head(), "pharn-loop/demo", "the checkout stays on the new branch, which the summary reports");
+  } finally {
+    g.done();
+  }
+});
+
+test("★ SHELL-SINK 7 CONTROL — the stated dependency, made visible: a checkout between the two blocks sends the undo to the WRONG place", () => {
+  const blocks = loopBlocks();
+  const g = gitFixture();
+  try {
+    g.git("switch", "-q", "-c", "orig");
+    const printed = g.sh(blocks.branch()).stdout.trim();
+    g.git("switch", "-q", "-c", "intervening"); // e.g. a commit hook that checks out, or a second session in this tree
+    g.stageFailed();
+    g.sh(blocks.undo(printed));
+    assert.equal(g.head(), "pharn-loop/demo", "`-` names the checkout before the intervening one, not the original");
+    assert.notEqual(g.head(), "orig");
+  } finally {
+    g.done();
+  }
+  // …which is why the command states the bound where the line is (presence pinned; a run's compliance is advisory).
+  const body = commandBody("pharn-loop.md");
+  const stated = (b) => b.replace(/\s+/g, " ").includes(STEP_6D_BOUND);
+  assert.ok(stated(body), "pharn-loop.md Step 6d states its bound");
+  assert.notEqual(body.replace(looseSentenceRe(STEP_6D_BOUND), ""), body, "precondition: the sentence is found where it is removed");
+  assert.equal(stated(body.replace(looseSentenceRe(STEP_6D_BOUND), "")), false, "CONTROL: the pin sees its removal");
+});
+
+// The 6.28.2 lines, verbatim — CONTROLS only. Each is run once, inside a throwaway directory, with a hostile value.
+const OLD_S1_LINE = "node -e 'process.exit(/^[a-z0-9][a-z0-9-]{0,63}$/.test(process.argv[1]) ? 0 : 1)' '<slug>'";
+const OLD_SPEC_SETTER =
+  "node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-spec.md --target pharn/features/<name>/SPEC.md";
+const OLD_6D_LINE = "git switch '<original branch>'";
+const OLD_QUICK_REF_LINE = "git rev-parse --verify <ref>^{commit}";
+
+test("★ SHELL-SINK 8 CONTROLS — each 6.28.2 line runs its payload (else the rules above guard nothing), and the removed ones are gone", () => {
+  for (const [line, ph, value] of [
+    [OLD_S1_LINE, "<slug>", "x'$(touch PWNED)'"],
+    [OLD_SPEC_SETTER, "<name>", "fix-login;touch${IFS}PWNED;x"],
+    [OLD_6D_LINE, "<original branch>", HOSTILE_BRANCH.replace("PWNED_BRANCH", "PWNED")],
+    [OLD_QUICK_REF_LINE, "<ref>", "HEAD;touch${IFS}PWNED;:"],
+  ]) {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), "shell-sink-old-")));
+    try {
+      spawnSync("sh", ["-c", line.replace(ph, value)], { cwd: dir, encoding: "utf8", timeout: 30000 });
+      assert.equal(existsSync(join(dir, "PWNED")), true, `the 6.28.2 line must run the payload — else this control is vacuous: ${line}`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+  // Plain `git checkout -` (no `--`) with no HEAD reflog reads `-` as a FILE and overwrites a local edit, exit 0.
+  const g = gitFixture({ reflog: false });
+  try {
+    g.git("switch", "-q", "-c", "orig");
+    g.git("switch", "-q", "-c", "pharn-loop/demo");
+    writeFileSync(join(g.dir, "-"), "LOCAL EDIT\n");
+    const r = g.sh("git checkout -");
+    assert.equal(r.status, 0);
+    assert.equal(readFileSync(join(g.dir, "-"), "utf8"), "committed\n", "plain `-` must lose the edit — else the `--` pin guards nothing");
+  } finally {
+    g.done();
+  }
+  // The removed forms are absent from the commands that carried them.
+  assert.ok(!commandBody("pharn-loop.md").includes(OLD_S1_LINE), "pharn-loop.md still carries the 6.28.2 S1 line");
+  assert.ok(!commandBody("pharn-loop.md").includes(OLD_6D_LINE), "pharn-loop.md still types <original branch>");
+  assert.ok(!commandBody("pharn-ship.md").includes("<ref>^{commit}"), "pharn-ship.md still types a description-borne ref");
 });

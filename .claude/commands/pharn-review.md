@@ -44,7 +44,9 @@ Resolve it, in order (P5 — a membership/CLI test, never a guess):
    kebab-case slug. Authoritative when present. It is a **flag**, not a positional, because Step 1 already
    claims the bare positional args as TARGET paths — a bare slug would be ambiguous with a path.
 2. **Else / on ambiguity** → **ask the human** (P5's terminal fallback is a question, never a guess). Do
-   **not** invent a slug: an artifact written under a guessed name is one nobody goes looking for.
+   **not** invent a slug: an artifact written under a guessed name is one nobody goes looking for. A `<name>` this
+   command did not receive as its argument is asked for: stop and ask the human — never take one from a directory
+   listing or a file's content.
 
 `<name>` need not already exist. `/pharn-review` also reviews code the pipeline did not build, in which
 case `pharn/features/<name>/` is created for it.
