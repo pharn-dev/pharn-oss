@@ -16,7 +16,7 @@ const REPO = join(HERE, "..", "..");
 
 // Absolute-path detection is imported by the TEST ONLY (GRILL G10/G6 — the renderer's own load graph must
 // never grow to carry it).
-import { ABS_PATH_RE } from "./render-cost-ledger.mjs";
+import { ABS_PATH_RE } from "./cost-value-core.mjs";
 
 function baseReport(overrides = {}) {
   return {

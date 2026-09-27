@@ -1,0 +1,54 @@
+{
+  "base": "b6274095d4c9c6bf58926b375eb710a1809d5f82",
+  "inside": [
+    ".dev/features/cost-transcript-hostile-values/BUILD.md",
+    ".dev/features/cost-transcript-hostile-values/GRILL.md",
+    ".dev/features/cost-transcript-hostile-values/PLAN.md",
+    ".dev/features/cost-transcript-hostile-values/REGRESSION.md",
+    ".dev/features/cost-transcript-hostile-values/REVIEW.md",
+    ".dev/features/cost-transcript-hostile-values/SHIP.md",
+    ".dev/features/cost-transcript-hostile-values/VERIFY.md",
+    ".dev/features/cost-transcript-hostile-values/regression-report.json",
+    ".dev/features/cost-transcript-hostile-values/verify-report.json",
+    ".dev/memory-bank/lessons-learned.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "docs/lessons-index.md",
+    "pharn/floor/check-cost-ledger.mjs",
+    "pharn/floor/check-cost-ledger.test.mjs",
+    "pharn/floor/cost-hostile-input.test.mjs",
+    "pharn/floor/cost-value-core.mjs",
+    "pharn/floor/cost-value-core.test.mjs",
+    "pharn/floor/quote-core.mjs",
+    "pharn/floor/render-cost-ledger.mjs",
+    "pharn/floor/render-cost-ledger.test.mjs",
+    "pharn/floor/render-cost-record.mjs",
+    "pharn/floor/render-regression.test.mjs",
+    "pharn/floor/render-verify.test.mjs",
+    "pharn/floor/test-results-core.mjs",
+    "pharn/floor/test-results-core.test.mjs",
+    "pharn/floor/test-results-formats.mjs",
+    "pharn/floor/transcript-core.mjs",
+    "pharn/floor/transcript-core.test.mjs",
+    "pharn/pharn-contracts/cost-ledger.md",
+    "pharn/pharn-contracts/ship-record.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

@@ -48,7 +48,8 @@ import { createHash } from "node:crypto";
 import { closeSync, fstatSync, openSync, readFileSync, readSync, realpathSync, constants as fsConstants } from "node:fs";
 import { join, resolve } from "node:path";
 import { E2E_SET, resultsFileName, validateStamp } from "./gate-run-core.mjs";
-import { RECORD_STATUSES, RESULTS_FORMATS, parseResults, shown } from "./test-results-formats.mjs";
+import { RECORD_STATUSES, RESULTS_FORMATS, parseResults } from "./test-results-formats.mjs";
+import { shown } from "./quote-core.mjs";
 
 /** The config file and key a project opts in with: `{"testResults": {"<gate-id>": "<format>"}}`. */
 export const CONFIG_FILE = "pharn.config.json";

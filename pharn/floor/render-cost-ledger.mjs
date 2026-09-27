@@ -46,7 +46,26 @@
 //     kept each request's first line and under-counted `output` and `output_thinking`.
 //   * Every `usage` leaf is number | bool | null | a short token; anything else is DROPPED and its key
 //     path listed in `dropped[]`. Arrays are WALKED, not dropped (decision D1), so `usage` stays
-//     genuinely verbatim.
+//     genuinely verbatim. Since 6.28.1 the copy is also bounded in depth and key shape: a node deeper than
+//     `USAGE_MAX_DEPTH`, and a key `isUsageKey` refuses (`__proto__` among them, which assigned on a plain
+//     object would set its prototype and vanish — [[L15]]), are dropped and listed too, a refused key under
+//     the fixed marker `<refused-key>` so the raw key never reaches the file. Both bounds keep the walk
+//     itself from exhausting the stack.
+//   * Every value copied or counted from the transcript passes a TYPE and DOMAIN test before anything
+//     coerces it (6.28.1, [[L62]]). A line whose request id fails `isIdentityToken`, or whose usage is not
+//     a plain object, is not a request at all — the reader's rule (`sessionRequests()`) — so it leaves no
+//     row and no `dropped[]` entry, and it is not counted in `excluded_requests`. On a ROW (a request
+//     inside the run window), `model`, `session_id`, `agent_id`, `attribution_skill` and each
+//     `claude_code_versions` entry must satisfy `isIdentityToken`, and each count `isTokenCount` (both
+//     cost-value-core.mjs). A refused one becomes its field's fallback (`unknown` for `model`, null or
+//     omission otherwise, 0 for a count) and its path is listed in `dropped[]`; an ABSENT value keeps its old
+//     fallback and is not listed. A request outside the window is only counted, never emitted, so nothing
+//     about it is listed. A timestamp that does not parse makes the request a non-member: under a known
+//     window it is counted in `excluded_requests` and listed nowhere, and under an unknown one that field is
+//     null.
+//     RUN MEMBERSHIP IS NOT CHANGED BY THIS: it reads the session exactly as before (a string as itself,
+//     anything else as absent), and only the emitted `session_id` field is bounded, so a refused session
+//     string is still excluded by markers bound to another session.
 //   * No string anywhere in the emitted file matches `ABS_PATH_RE`.
 //   * Given the same transcript bytes AND the same markers bytes the output is byte-identical: no clock
 //     read, no randomness. `window_*` come from the records' own timestamps, never `Date.now()`.
@@ -77,7 +96,8 @@
 //
 // ── RELATIONSHIP TO `render-cost-record.mjs` (L35, answered rather than assumed) ─────────────────────
 // Both renderers read transcripts through `transcript-core.mjs` — location, the session's file selection and
-// the per-request reader, one implementation and not a copy. Until 6.24.1 the ledger imported only the
+// the per-request reader, one implementation and not a copy — and both test a transcript value through
+// `cost-value-core.mjs` before they coerce it (6.28.1). Until 6.24.1 the ledger imported only the
 // location and the walk, from the record renderer: its reading loop was a second copy, and both copies kept
 // each request's first line. The ledger (`pharn-cost-ledger/2`) is nonetheless a distinct schema from the
 // shipped `pharn-cost-record/1`, and the overlap is real: the record is an aggregate block embedded in
@@ -108,6 +128,7 @@ import { isRouteToken } from "./route-token-core.mjs";
 import { FM_RE, stripBom } from "./frontmatter-core.mjs";
 import { readShipOutcome, OUTCOME_SOURCE as SHIP_OUTCOME_SOURCE } from "./ship-outcome-core.mjs";
 import { runWindow, isMember, isAfterWindow, tsMs, MEMBERSHIP_METHOD } from "./run-window-core.mjs";
+import { ABS_PATH_RE, isIdentityToken, isTokenCount } from "./cost-value-core.mjs";
 
 /** What this emitter writes. `/2` adds the `membership` block and scopes every row to the run window. */
 export const SCHEMA = "pharn-cost-ledger/2";
@@ -208,15 +229,7 @@ export const SKILLS_VERSION_SOURCES = Object.freeze(["pharn.config.json", "SKILL
  *  shape regex after the control-char guard, never instead of it). */
 export const TOKEN_RE = /^[A-Za-z0-9._:+-]{1,64}$/;
 
-/**
- * An absolute path: POSIX (`/Users/...`), home-relative (`~/...`), or a Windows drive (`C:\...`),
- * anchored at a string start or a delimiter.
- *
- * The anchor is load-bearing and is why this is not simply `/\//`: the schema token
- * `pharn-cost-ledger/1` contains a slash and must NOT match, while `/Users/someone/...` must. Probed
- * against both in the test rather than reasoned about (L37).
- */
-export const ABS_PATH_RE = /(^|[\s"'`([{=,;])(~[/\\]|[A-Za-z]:[\\/]|\/[A-Za-z0-9._-]+\/)/;
+// `ABS_PATH_RE` and `IDENTITY_MAX` moved to cost-value-core.mjs in 6.28.1, byte-for-byte; import them from there.
 
 export const PRICING_NOTE =
   "TOKENS ONLY — this file contains no prices and never will. Cost = Σ over classes of " +
@@ -224,10 +237,6 @@ export const PRICING_NOTE =
   "price list. `output_thinking` is a SUBSET of `output`, not an additional class — do not sum all six. " +
   "Any figure so derived is LIST-PRICE EQUIVALENT: a subscription is not billed per token, so it is what " +
   "this usage would have cost at list, not what was charged.";
-
-/** The bound on the IDENTITY fields (`model`, `attribution_skill`, `agent_id`). Wider than a `usage`
- *  leaf because a model id is legitimately longer than a `service_tier` token, and still bounded. */
-export const IDENTITY_MAX = 128;
 
 /**
  * THE ONE ENCODING of the `usage` leaf domain: a short, printable, path-free token.
@@ -242,6 +251,27 @@ export function isTokenLeaf(value) {
 }
 
 /**
+ * The deepest node the ledger's verbatim `usage` copy keeps, counted from the `usage` object itself (depth 0). A
+ * deeper node is DROPPED and its path listed. The platform's own usage objects are a few levels deep on every line
+ * measured when this bound was set (CHANGELOG [6.28.1]), so it admits every observed shape with room to spare. It
+ * also bounds the walk that makes the copy: a crafted line nested 20,000 deep used to drive that walk past the
+ * stack. check-cost-ledger.mjs imports this constant and REDs a stored node deeper than it.
+ */
+export const USAGE_MAX_DEPTH = 32;
+
+/**
+ * A `usage` object KEY the verbatim copy may carry: a short token `isTokenLeaf` admits, and never `__proto__`.
+ *
+ * `__proto__` is refused because the copy WRITES transcript keys into a plain object, and assigning that key on a
+ * plain object sets its prototype instead of adding an own key: the value used to vanish with nothing listed
+ * ([[L15]], the same class on the write side). check-cost-ledger.mjs imports this predicate, so a stored refused
+ * key is a RED there.
+ */
+export function isUsageKey(k) {
+  return k !== "__proto__" && isTokenLeaf(k);
+}
+
+/**
  * An IDENTITY field copied from an untrusted transcript.
  *
  * `model`, `attribution_skill` and `agent_id` are attacker-influencable strings that land in a COMMITTED
@@ -250,13 +280,16 @@ export function isTokenLeaf(value) {
  * bounds what can land in them". It did not: that rule reaches `usage` only. `/pharn-dev-review` probed
  * it and a 200,000-char value, embedded NUL/BEL bytes, and a newline carrying a forged `RED — …` line
  * were all accepted GREEN. This closes the gap so the sentence is TRUE rather than corrected downward.
+ * Since 6.28.1 the test is `isIdentityToken` (cost-value-core.mjs), unchanged in behaviour, and it also bounds
+ * the row's `session_id` and each `claude_code_versions` entry. The value is tested BEFORE anything coerces it:
+ * callers no longer pass `String(value)`, which threw on a crafted object ([[L62]]).
  *
  * A refusal is recorded in `dropped[]` and the field becomes `fallback` — never a truncation, which would
  * silently invent a value that was never in the transcript.
  */
 export function sanitizeIdentity(value, path, dropped, fallback = null) {
   if (value === null || value === undefined) return fallback;
-  if (typeof value !== "string" || !cleanScalar(value, IDENTITY_MAX) || ABS_PATH_RE.test(value)) {
+  if (!isIdentityToken(value)) {
     dropped.push(path);
     return fallback;
   }
@@ -272,8 +305,17 @@ const zeroTokens = () => Object.fromEntries(TOKEN_CLASSES.map((c) => [c, 0]));
  * "verbatim" stays true. A leaf that is neither number, bool, null, nor a short token is DROPPED and its
  * key path pushed to `dropped` — an out-of-domain value is never coerced, never stringified, never
  * silently kept.
+ *
+ * Two more refusals since 6.28.1, listed the same way: a node deeper than `USAGE_MAX_DEPTH` (`depth` counts from
+ * the `usage` object itself), and an object key `isUsageKey` refuses. A refused key is listed as
+ * `<path>.<refused-key>`, a fixed marker, so the raw key never reaches the file. `depth` defaults to 0 in this ONE
+ * place, and every call from outside this function omits it ([[L41]]).
  */
-export function sanitizeUsage(value, path, dropped) {
+export function sanitizeUsage(value, path, dropped, depth = 0) {
+  if (depth > USAGE_MAX_DEPTH) {
+    dropped.push(path);
+    return undefined;
+  }
   if (value === null) return null;
   const t = typeof value;
   if (t === "number") return Number.isFinite(value) ? value : (dropped.push(path), undefined);
@@ -286,7 +328,7 @@ export function sanitizeUsage(value, path, dropped) {
   if (Array.isArray(value)) {
     const out = [];
     for (let i = 0; i < value.length; i++) {
-      const v = sanitizeUsage(value[i], `${path}[${i}]`, dropped);
+      const v = sanitizeUsage(value[i], `${path}[${i}]`, dropped, depth + 1);
       if (v !== undefined) out.push(v);
     }
     return out;
@@ -294,7 +336,11 @@ export function sanitizeUsage(value, path, dropped) {
   if (t === "object") {
     const out = {};
     for (const k of Object.keys(value).sort()) {
-      const v = sanitizeUsage(value[k], path ? `${path}.${k}` : k, dropped);
+      if (!isUsageKey(k)) {
+        dropped.push(path ? `${path}.<refused-key>` : "<refused-key>");
+        continue;
+      }
+      const v = sanitizeUsage(value[k], path ? `${path}.${k}` : k, dropped, depth + 1);
       if (v !== undefined) out[k] = v;
     }
     return out;
@@ -303,15 +349,35 @@ export function sanitizeUsage(value, path, dropped) {
   return undefined;
 }
 
-/** The six price-dimension classes, read from one raw `usage` object. */
-export function normalizeTokens(u) {
+/**
+ * The six price-dimension classes, read from one raw `usage` object, for the row at index `n`.
+ *
+ * Each count must satisfy `isTokenCount` (cost-value-core.mjs). An ABSENT count (undefined or null) is 0, as it
+ * always was, and is not listed. A PRESENT count the rule refuses is 0 as well, and `requests[<n>].tokens.<class>`
+ * is listed in `dropped`, so a crafted count can neither crash the sum nor enter it (6.28.1, [[L62]]).
+ *
+ * NO DEFAULTS ([[L41]]): `n` and `dropped` are checked on EVERY call, clean input included, so a caller that
+ * omits them fails at once rather than on the first transcript that carries a refused count.
+ */
+export function normalizeTokens(u, n, dropped) {
+  if (!Number.isSafeInteger(n) || n < 0 || !Array.isArray(dropped)) {
+    throw new TypeError(
+      "normalizeTokens(u, n, dropped): n must be the row's index (a non-negative safe integer) and dropped the ledger's dropped[] array"
+    );
+  }
+  const count = (v, cls) => {
+    if (v === undefined || v === null) return 0;
+    if (isTokenCount(v)) return v;
+    dropped.push(`requests[${n}].tokens.${cls}`);
+    return 0;
+  };
   return {
-    input: u.input_tokens ?? 0,
-    cache_write_5m: u.cache_creation?.ephemeral_5m_input_tokens ?? 0,
-    cache_write_1h: u.cache_creation?.ephemeral_1h_input_tokens ?? 0,
-    cache_read: u.cache_read_input_tokens ?? 0,
-    output: u.output_tokens ?? 0,
-    output_thinking: u.output_tokens_details?.thinking_tokens ?? 0,
+    input: count(u.input_tokens, "input"),
+    cache_write_5m: count(u.cache_creation?.ephemeral_5m_input_tokens, "cache_write_5m"),
+    cache_write_1h: count(u.cache_creation?.ephemeral_1h_input_tokens, "cache_write_1h"),
+    cache_read: count(u.cache_read_input_tokens, "cache_read"),
+    output: count(u.output_tokens, "output"),
+    output_thinking: count(u.output_tokens_details?.thinking_tokens, "output_thinking"),
   };
 }
 
@@ -603,6 +669,9 @@ function buildLedger(
   for (const { id, record: r, usage: u } of read) {
     const model = r.message.model ?? "unknown";
     const ts = typeof r.timestamp === "string" ? r.timestamp : null;
+    // THE SESSION MEMBERSHIP AND ATTRIBUTION READ, exactly as before 6.28.1: a string as itself, anything else as
+    // absent. Only the EMITTED `session_id` below is bounded, so a refused session string is still compared as
+    // itself, and markers bound to another session still exclude it (GRILL R2-G7).
     const sid = typeof r.sessionId === "string" ? r.sessionId : null;
     // MEMBERSHIP first, attribution second — two decisions, two functions. A non-member is COUNTED and
     // never emitted: not its usage, not its identity fields, not its version. The owner groups lines per
@@ -620,24 +689,28 @@ function buildLedger(
     const where = ts === null ? { stage: null, iteration: null } : attribute(markers, ts, sid);
     const n = requests.length;
     const row = {
-      request_id: String(id),
+      // `id` is already a bounded identity token: the reader admits no other (`sessionRequests()`). No `String()`.
+      request_id: id,
       ts,
-      session_id: sid,
+      session_id: sanitizeIdentity(r.sessionId, `requests[${n}].session_id`, dropped),
       // The three identity fields are BOUNDED, not merely copied — see `sanitizeIdentity`. `model`
       // falls back to the literal `unknown` (the `render-cost-record.mjs` spelling) because the field
       // is required non-empty; the other two fall back to null, which is already their absent value.
-      model: sanitizeIdentity(String(model), `requests[${n}].model`, dropped, "unknown"),
+      // Each value reaches `sanitizeIdentity` uncoerced, which tests it before anything reads it as a string.
+      model: sanitizeIdentity(model, `requests[${n}].model`, dropped, "unknown"),
       sidechain: r.isSidechain === true,
       agent_id: sanitizeIdentity(rawAgent, `requests[${n}].agent_id`, dropped),
       attribution_skill: sanitizeIdentity(r.attributionSkill, `requests[${n}].attribution_skill`, dropped),
       usage: sanitizeUsage(u, "usage", dropped),
-      tokens: normalizeTokens(u),
+      tokens: normalizeTokens(u, n, dropped),
       stage: where.stage,
       iteration: where.iteration,
     };
     requests.push(row);
-    if (typeof r.version === "string") versions.add(r.version);
-    if (sid) sessions.add(sid);
+    // The version is listed under its source field's name, since the ledger has no per-row version field.
+    const version = sanitizeIdentity(r.version, `requests[${n}].version`, dropped);
+    if (version !== null) versions.add(version);
+    if (row.session_id !== null) sessions.add(row.session_id);
     if (ts !== null) {
       if (start === null || ts < start) start = ts;
       if (end === null || ts > end) end = ts;
