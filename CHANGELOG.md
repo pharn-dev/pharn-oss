@@ -23,6 +23,63 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.28.1] - 2026-09-27
+
+### Changed
+
+- 2026-09-27: **The product commands are slimmed: each keeps what a run executes, its `description:` says what it
+  does and when to use it, and its claims sit in one `## What you may claim` block.** Phase 4.1 of the
+  token-reduction roadmap, at the maintainer's 2026-09-25 direction; the cost trigger is the roadmap's (a user's
+  `cost.json` ledgers put PHARN's own stages at ~48% of relative cost on large features and ~81% on three small
+  fixes). An orchestrator's command body is re-read from cache on every request of its run, an inline stage's body
+  joins that context once invoked, and every description sits in the command listing of every session in a user's
+  project. `SKILLS_VERSION` 6.28.0 → 6.28.1 (PATCH: a correction and clarification of bytes that already ship — no
+  command, checker, contract, frontmatter key or path is added, moved or removed). `MIN_CLI` stays 0.5.0: the same
+  files at the same paths. Each edited command's `version:` bumps its patch.
+  ([`.dev/features/slim-commands/`](./.dev/features/slim-commands/))
+  - **Measured on the final tree** (bytes, `\r\n` folded): the command bodies 519,744 → 334,275 (−35.7%) —
+    `pharn-ship.md` 124,078 → 69,392, `pharn-loop.md` 112,538 → 78,077, the other nine 283,128 → 186,806; the
+    descriptions' text 22,764 → 2,063 (−91%), the largest 237 bytes. Per command, with each ceiling and its
+    headroom: `BUILD.md`.
+  - **Descriptions.** Each is at most 250 bytes and says what the command does and when to use it — its place in
+    the pipeline, or, for `/pharn-ship`, `/pharn-loop` and `/pharn-memory-promote`, the user's request. Every
+    FLOOR/ADVISORY claim a description carried is in that command's claims block, moved or already stated there
+    (the mapping per command is in `BUILD.md`). ESTIMATE, not a measurement: in one observed session's listing
+    seven of the old descriptions were cut at 1,535 characters and two (`/pharn-test`, `/pharn-memory-promote`)
+    were shown by name only; all now fit whole — roughly 2,600 fewer tokens on every request of every session, at
+    ~4 characters a token. How the platform budgets that listing is undocumented.
+  - **The claims block.** In nine commands the tail audits (`## Guarantee audit`, `## Trust (audit)`,
+    `## Determinism audit`, `## What … does NOT do`, the doc-reconciliation sections, `/pharn-ship`'s
+    `--loop — deferred`) and `## The two layers` are replaced by one `## What you may claim (P0)` block in the
+    Guarantee audit's place. Every removed bullet maps, in `BUILD.md`, to a block bullet carrying its bound
+    verbatim, an owner stating the same bound, or a duplicate. `/pharn-regress` and `/pharn-verify` keep their
+    blocks as they were and changed only in their description and their "PRODUCT command" blockquote.
+  - **Rationale out.** Why a rule exists, version and review history, restated contract and floor-module bounds,
+    the "PRODUCT command" blockquotes and PHARN's own dev-lesson ids leave the bodies; each already has an owner
+    that ships (the contract, the module's header, `LIMITS.md` / `THREAT-MODEL.md`) or this CHANGELOG. Every step,
+    pinned line, fenced block, exit-code/verdict/stuck-point mapping, prompt, human gate and P2 fence stays; no
+    heading moved; cited and pinned numbering is frozen. Three dead or expired pieces left with it:
+    `/pharn-loop` Step 1a's "acts only once a human has wired it" (the shipped settings have wired the Stop guard
+    since 6.12.0) with its `.dev/` cite, a `.dev/` cite in its old Guarantee audit, and one in `/pharn-ship`
+    Step 2c — each names a file an install does not receive. `/pharn-grill`'s opening no longer calls
+    `/pharn-build` a future stage.
+  - **Missed estimates, recorded rather than met by cutting:** `pharn-loop.md` 78,077 against ~72,000,
+    `pharn-spec.md` 24,474 against ~23,000, `pharn-plan.md` 21,590 against ~21,000 — the rest is pinned or
+    executed text.
+  - **The command budget (apparatus; bumps nothing by itself).** `.dev/floor/command-hygiene.test.mjs` gains a
+    COMMAND BUDGET section: R1 the product commands on disk equal `COMMAND_BYTE_CEILINGS`' keys; R2 each body is
+    within its ceiling (measured bytes + 10%, rounded up to the next multiple of 512 — raising one is a
+    deliberate, visible diff); R3 each description parses as one double-quoted scalar of at most 250 bytes; R4 no
+    description matches `FLOOR`, `ADVISORY`, `NEVER means` or `(P<n>)`; R5 exactly one `## What you may claim`
+    heading outside fences. One control per rule, and each rule was also run once against a mutated copy of the
+    commands and went red. **Bounded:** bytes and vocabulary, never meaning — a paraphrased claim passes R4, and R5
+    proves a block exists, not that it is complete or true. One existing pin was re-pointed: the `NAMED_LIMITS` E1
+    replay read `deferred` from `pharn-verify.md`'s old description, now frozen in the test as
+    `VERIFY_DESCRIPTION_AT_E1`, its control kept.
+  - **An install that edited a command** keeps its edit on `pharn update`, so the saving reaches it only for the
+    commands it left pristine. Every saving above is an estimate from bytes (`LIMITS.md §1c`); the maintainer's
+    measurement after `pharn update` is the real number.
+
 ## [6.28.0] - 2026-09-27
 
 ### Added

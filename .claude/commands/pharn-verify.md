@@ -1,5 +1,5 @@
 ---
-description: "Verify a built feature in the USER's codebase — the seventh product-pipeline stage (spec → plan → grill → test → build → regress → verify → ship). Since 6.26.0 (stage-verify-script) this is a THIN CALLER: every deterministic step — argv, containment, the spec→plan chain re-check (pharn/floor/check-plan-spec-agree.mjs), the eval-pair discovery, the verifier count, the project's gates run ONCE at HEAD through pharn/floor/run-gates.mjs, the verdict, and the atomic artifact writes — lives in pharn/floor/stage-verify.mjs, and this command pins ONE line and branches on its EXIT CODE (pharn/pharn-contracts/stage-exit.md). FLOOR: the verdict is pharn/floor/check-verify.mjs's absolute exit-code threshold (PASS iff every gate exit 0) plus the AC GATE (check-verify.mjs --ac-gate): for a test-first SPEC every Acceptance Criterion must be DELIVERED on this head run — a locked, once-red test titled AC-<n>:, in a file mapped to AC-<n>, passed — or verify FAILS; a spec_kind: test-infra SPEC gets the weaker bootstrap evidence; a legacy SPEC is reported not-applicable, never silently green. ADVISORY: role: verifier capabilities are counted and none is run (the runner is deferred, P7); a verifier finding never flips the verdict (fix #3). Emits pharn/features/<name>/verify-report.json (machine) + pharn/features/<name>/VERIFY.md (human, rendered by pharn/floor/render-verify.mjs). '/pharn-verify verified it' means EXACTLY 'the named gates passed' and, for a test-first SPEC, 'every AC's locked, once-red test passed on this run' — NEVER 'the feature is correct'; PHARN does not judge whether a test captures its AC's intent (P0)."
+description: "Verify a built feature: run the project's gates once at HEAD plus the acceptance-criteria gate (verify-report.json, VERIFY.md). Run after /pharn-build and /pharn-regress."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -16,7 +16,7 @@ reads:
   ]
 writes: [".pharn/pharn-verify/stage.json"]
 constitution_refs: ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7"]
-version: "0.5.0"
+version: "0.5.1"
 ---
 
 # /pharn-verify — did the feature get built CORRECTLY, in the user's codebase?
@@ -31,9 +31,6 @@ feature in it, and was every Acceptance Criterion delivered?**
 script. **You do not re-implement any of it**: you run the one pinned line below, read the script's **exit code**,
 and — on a `question` — relay its text verbatim and re-run. `pharn/pharn-contracts/stage-exit.md` is the protocol
 this command summarizes.
-
-> **This is a PRODUCT command (`pharn-`, not `pharn-dev-`).** Its artifacts live on the product side:
-> `pharn/features/<name>/verify-report.json` + `pharn/features/<name>/VERIFY.md`, never `.dev/`.
 
 ## The two layers (P0, fix #3)
 

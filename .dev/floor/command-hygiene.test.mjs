@@ -3211,6 +3211,11 @@ test("✧ NAMED_LIMITS discriminates — deleting any ONE anchor (its sentence) 
   assert.notEqual(namedLimitsReason(`${body}\n${NAMED_LIMITS[0][1]}\n`), null, "a second occurrence must fail the predicate");
 });
 
+/** The pharn-verify.md `description:` clause E1 (GATE 2 review) was measured with — frozen here by 6.28.1, which
+ *  shortened the live description (slim-commands, PLAN D1). Only the E1 evidence replay below reads it. */
+const VERIFY_DESCRIPTION_AT_E1 =
+  "ADVISORY: role: verifier capabilities are counted and none is run (the runner is deferred, P7); a verifier finding never flips the verdict (fix #3).";
+
 test("✧ NAMED_LIMITS controls — the GATE 2 reviewer's three repros, each run through the same predicate, turn it red", () => {
   const body = commandBody("pharn-verify.md");
   /** Apply one edit to the real body; L60 — the edit's anchor must be found, or the control proves nothing. */
@@ -3239,13 +3244,20 @@ test("✧ NAMED_LIMITS controls — the GATE 2 reviewer's three repros, each run
   assert.equal(repros.length, 3, "non-vacuity: the three repros are counted");
   for (const [label, mutant] of repros) assert.notEqual(namedLimitsReason(mutant), null, `${label} must turn the predicate red`);
   // And the OLD predicate — bare phrases, present anywhere — is what these repros slipped past (the E1 evidence).
+  // RE-POINTED in 6.28.1 (slim-commands): E1 was measured on a body whose frontmatter `description:` repeated
+  // "deferred"; 6.28.1 shortened every product description to what/when (PLAN D1), so the live body no longer carries
+  // that second copy. The evidence is therefore replayed on each mutant PLUS the description E1 was measured with,
+  // carried as a literal (VERIFY_DESCRIPTION_AT_E1) — the gap is history, and the NAMED_LIMITS predicate above is what
+  // catches every repro on the live body.
   const oldAnchors = ["as quoted DATA", "deferred", "`/pharn-plan`"];
   for (const [label, mutant] of repros) {
     assert.ok(
-      oldAnchors.every((a) => mutant.includes(a)),
+      oldAnchors.every((a) => `${VERIFY_DESCRIPTION_AT_E1}\n${mutant}`.includes(a)),
       `${label}: the pre-fix bare anchors all still match — why E1 was a gap`
     );
   }
+  // CONTROL (L60): without the E1-era description, repro 2's bare anchor is gone — the replay is what carries it.
+  assert.ok(!oldAnchors.every((a) => repros[1][1].includes(a)), "the E1-era description is what kept `deferred` present");
 });
 
 function sectionOf(file, startAnchor, endAnchor) {
@@ -4043,4 +4055,177 @@ test("✧ STAGE_AGENT_WIRING (10) — every --mode stage-agent line of pharn-loo
   // CONTROL (L60): a --mode line pasted after the section is seen outside it.
   const pasted = `${body}\n\`\`\`bash\n${inFile.find((t) => t.includes(" route "))}\n\`\`\`\n`;
   assert.notDeepEqual(modeText(loopQuickSection(pasted)), modeText(pasted));
+});
+
+// ── THE COMMAND BUDGET (slim-commands, 6.28.1) ───────────────────────────────────────────────────────
+// WHAT IT BOUNDS. A product command's file is what the platform inserts as the prompt each time the command
+// runs, and its `description:` is what every session of a user's project carries in its command listing.
+// 6.28.1 cut both (the measured before/after is in `.dev/features/slim-commands/BUILD.md` and CHANGELOG
+// [6.28.1]); this section keeps them cut. BOTH are budgeted, over the whole set, one rule per property:
+//   R1 closure — the product commands on disk (`pharn-*.md` minus `pharn-dev-*`) EQUAL the table's keys:
+//      non-empty, no command without a ceiling, no ceiling without a file;
+//   R2 body — each file's UTF-8 bytes, measured after folding `\r\n` to `\n` (a CRLF checkout measures what the
+//      repository holds), is at most its ceiling;
+//   R3 description — each description, read from the frontmatter as ONE double-quoted scalar (a description
+//      this reader cannot parse fails the rule), is at most DESCRIPTION_MAX_BYTES UTF-8 bytes;
+//   R4 no claim vocabulary — no description matches CLAIM_VOCABULARY_RE (claims live in the claims block);
+//   R5 the claims block — each command has exactly one heading line starting `## What you may claim`,
+//      counted outside fenced blocks.
+// THE CEILINGS ARE MEASURED, never chosen: after the slim, ceiling = the file's measured bytes + 10%, rounded
+// up to the next multiple of 512. RAISING ONE IS A DELIBERATE, VISIBLE DIFF in the PR that needs it — the
+// table below is the only place a ceiling lives, so a command that grows past its headroom fails here until
+// someone edits this table and says why.
+//
+// ── Honest scope (P0) ─────────────────────────────────────────────────────────────────────────────────
+// FLOOR (what a green run means): the five rules above hold for the eleven files on disk.
+// NOT guaranteed: it bounds BYTES and VOCABULARY, never meaning. A paraphrased claim ("ensures",
+//   "guarantees") passes R4 — named follow-up `description-claim-paraphrase`. R5 proves the block EXISTS,
+//   never that it is complete or true. A body within its ceiling can still have lost an instruction: the
+//   other pins in this file and the review hold that, not this section. The `pharn-dev-*` commands are
+//   outside it (slim-commands D8, follow-up `dev-command-slim`).
+
+const COMMAND_BYTE_CEILINGS = Object.freeze({
+  "pharn-build.md": 22016,
+  "pharn-grill.md": 23040,
+  "pharn-loop.md": 86016,
+  "pharn-memory-promote.md": 27648,
+  "pharn-plan.md": 24064,
+  "pharn-regress.md": 20480,
+  "pharn-review.md": 24064,
+  "pharn-ship.md": 76800,
+  "pharn-spec.md": 27136,
+  "pharn-test.md": 20480,
+  "pharn-verify.md": 18432,
+});
+const DESCRIPTION_MAX_BYTES = 250;
+const CLAIM_VOCABULARY_RE = /\b(FLOOR|ADVISORY)\b|NEVER means|\(P[0-7]\)/;
+const CLAIMS_HEADING_RE = /^## What you may claim/;
+
+/** `pharn-review.md`'s description before 6.28.1 — R4's control fixture, carried as a literal. */
+const REVIEW_DESCRIPTION_BEFORE_SLIM =
+  "Review a codebase with PHARN's code-review lenses run IN PARALLEL as subagents, then DETERMINISTICALLY merge+dedup their findings into one findings.json. Membership (which lenses run) is FLOOR (count-lenses.mjs, frontmatter not prose); the merge+dedup is FLOOR (merge-findings.mjs, keyed on enum-gated fields only). Parallel spawn + per-lens code-slicing + each lens's judgment are ADVISORY orchestration. '/pharn-review produced findings' NEVER means 'the code is correct/safe' (P0) — a lens can't decide approve (§7); the merge only assembles.";
+
+/** The product commands on disk: `pharn-*.md` minus `pharn-dev-*`, sorted. */
+function productCommandFiles() {
+  return commandFiles().filter((f) => f.startsWith("pharn-") && !f.startsWith("pharn-dev-"));
+}
+
+function productCommandText(file) {
+  return readFileSync(join(COMMANDS_DIR, file), "utf8");
+}
+
+/** R1 — offenders when the files on disk and the table's keys differ, or when there is nothing to budget. */
+function budgetClosureOffenders(onDisk, table) {
+  const keys = Object.keys(table);
+  const out = [];
+  if (onDisk.length === 0) out.push("no product command on disk — an empty set is never a vacuous pass");
+  for (const f of onDisk) if (!Object.hasOwn(table, f)) out.push(`${f}: on disk, no ceiling`);
+  for (const k of keys) if (!onDisk.includes(k)) out.push(`${k}: a ceiling, no file`);
+  return out;
+}
+
+/** The bytes the repository holds: `\r\n` folded to `\n`, then UTF-8. */
+function commandBytes(text) {
+  return Buffer.byteLength(text.replace(/\r\n/g, "\n"), "utf8");
+}
+
+/** R2 — an offender when the body is over its ceiling. */
+function bodyBudgetOffender(file, text, table = COMMAND_BYTE_CEILINGS) {
+  const bytes = commandBytes(text);
+  return bytes > table[file] ? `${file}: ${bytes} bytes > ceiling ${table[file]}` : null;
+}
+
+/** The frontmatter `description:` as one double-quoted scalar, or null when this reader cannot parse it. */
+function frontmatterDescription(text) {
+  const fm = text.replace(/\r\n/g, "\n").match(/^---\n([\s\S]*?)\n---\n/);
+  if (!fm) return null;
+  const lines = fm[1].split("\n").filter((l) => l.startsWith("description:"));
+  if (lines.length !== 1) return null;
+  const raw = lines[0].slice("description:".length).trim();
+  if (!raw.startsWith('"')) return null;
+  try {
+    const value = JSON.parse(raw);
+    return typeof value === "string" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/** R3 — an offender when the description cannot be read, or is over DESCRIPTION_MAX_BYTES. */
+function descriptionBudgetOffender(file, text) {
+  const d = frontmatterDescription(text);
+  if (d === null) return `${file}: description is not one double-quoted scalar this reader can parse`;
+  const bytes = Buffer.byteLength(d, "utf8");
+  return bytes > DESCRIPTION_MAX_BYTES ? `${file}: description ${bytes} bytes > ${DESCRIPTION_MAX_BYTES}` : null;
+}
+
+/** R5 — how many heading lines start `## What you may claim`, outside fenced blocks. */
+function claimsHeadingCount(text) {
+  const fenced = new Set(fencedLines(text).map((l) => l.line));
+  return text.split(/\r?\n/).filter((t, i) => !fenced.has(i + 1) && CLAIMS_HEADING_RE.test(t)).length;
+}
+
+test("✧ BUDGET R1: the product commands on disk equal COMMAND_BYTE_CEILINGS' keys", () => {
+  const onDisk = productCommandFiles();
+  assert.deepEqual(budgetClosureOffenders(onDisk, COMMAND_BYTE_CEILINGS), []);
+  assert.equal(onDisk.length, Object.keys(COMMAND_BYTE_CEILINGS).length);
+  // CONTROLS (L60): a table missing one key, and a table with an extra key, are both red.
+  const [first, ...rest] = Object.keys(COMMAND_BYTE_CEILINGS);
+  const missing = Object.fromEntries(rest.map((k) => [k, COMMAND_BYTE_CEILINGS[k]]));
+  assert.deepEqual(budgetClosureOffenders(onDisk, missing), [`${first}: on disk, no ceiling`]);
+  const extra = { ...COMMAND_BYTE_CEILINGS, "pharn-extra.md": 512 };
+  assert.deepEqual(budgetClosureOffenders(onDisk, extra), ["pharn-extra.md: a ceiling, no file"]);
+  assert.notDeepEqual(budgetClosureOffenders([], COMMAND_BYTE_CEILINGS), []);
+});
+
+test("✧ BUDGET R2: every product command's body is within its measured ceiling", () => {
+  const offenders = productCommandFiles()
+    .map((f) => bodyBudgetOffender(f, productCommandText(f)))
+    .filter(Boolean);
+  assert.deepEqual(offenders, [], "raise a ceiling only as a deliberate, visible diff to COMMAND_BYTE_CEILINGS");
+  // CONTROL (L60): the real body plus the bytes that put it one over its ceiling is red.
+  const file = "pharn-ship.md";
+  const body = productCommandText(file);
+  const pad = "x".repeat(COMMAND_BYTE_CEILINGS[file] - commandBytes(body) + 1);
+  assert.equal(
+    bodyBudgetOffender(file, `${body}${pad}`),
+    `${file}: ${COMMAND_BYTE_CEILINGS[file] + 1} bytes > ceiling ${COMMAND_BYTE_CEILINGS[file]}`
+  );
+  // A CRLF checkout measures what the repository holds.
+  assert.equal(commandBytes(body.replace(/\n/g, "\r\n")), commandBytes(body));
+});
+
+test("✧ BUDGET R3: every product command's description is one parsable scalar of at most 250 bytes", () => {
+  const offenders = productCommandFiles()
+    .map((f) => descriptionBudgetOffender(f, productCommandText(f)))
+    .filter(Boolean);
+  assert.deepEqual(offenders, []);
+  // CONTROLS (L60): bytes, not characters — a 2-byte character counts twice.
+  const fm = (value) => `---\ndescription: ${value}\n---\n\nbody\n`;
+  assert.equal(descriptionBudgetOffender("x.md", fm(JSON.stringify("é".repeat(125)))), null, "250 bytes passes");
+  assert.equal(descriptionBudgetOffender("x.md", fm(JSON.stringify(`${"é".repeat(125)}a`))), "x.md: description 251 bytes > 250");
+  assert.match(descriptionBudgetOffender("x.md", fm("plain scalar")), /not one double-quoted scalar/);
+  assert.match(descriptionBudgetOffender("x.md", fm('"unterminated')), /not one double-quoted scalar/);
+});
+
+test("✧ BUDGET R4: no product command's description carries claim vocabulary", () => {
+  const offenders = productCommandFiles().filter((f) => CLAIM_VOCABULARY_RE.test(frontmatterDescription(productCommandText(f)) ?? ""));
+  assert.deepEqual(offenders, [], "claims belong in the command's `## What you may claim` block, not its description");
+  // CONTROL (L60): the description pharn-review.md carried before 6.28.1 is red.
+  assert.match(REVIEW_DESCRIPTION_BEFORE_SLIM, CLAIM_VOCABULARY_RE);
+});
+
+test("✧ BUDGET R5: every product command has exactly one `## What you may claim` block", () => {
+  const offenders = productCommandFiles()
+    .map((f) => [f, claimsHeadingCount(productCommandText(f))])
+    .filter(([, n]) => n !== 1)
+    .map(([f, n]) => `${f}: ${n} claims headings`);
+  assert.deepEqual(offenders, []);
+  // CONTROLS (L60): the real body with its heading removed, and with it doubled, are both red.
+  const body = productCommandText("pharn-build.md");
+  const heading = body.split(/\r?\n/).find((l) => CLAIMS_HEADING_RE.test(l));
+  assert.equal(claimsHeadingCount(body.replace(`${heading}\n`, "")), 0);
+  assert.equal(claimsHeadingCount(body.replace(`${heading}\n`, `${heading}\n\n${heading}\n`)), 2);
+  // A heading inside a fence is not a block.
+  assert.equal(claimsHeadingCount(body.replace(`${heading}\n`, `\`\`\`text\n${heading}\n\`\`\`\n`)), 0);
 });

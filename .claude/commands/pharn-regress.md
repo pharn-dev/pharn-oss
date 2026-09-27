@@ -1,5 +1,5 @@
 ---
-description: "Detect regressions OUTSIDE the just-built feature in the USER's codebase — the sixth product-pipeline stage (spec → plan → grill → test → build → regress → verify → ship). Since 6.23.0 (stage-regress-script) this is a THIN CALLER: every deterministic step — argv, containment, git, the shelled checkers, the budget-and-resume protocol, the atomic artifact writes — lives in pharn/floor/stage-regress.mjs, and this command pins ONE line and branches on its EXIT CODE (pharn/pharn-contracts/stage-exit.md). The verdict is still a deterministic exit-code comparison (pharn/floor/check-regress.mjs, shelled by the script) — ZERO LLM-judge in the core. Emits pharn/features/<name>/regression-report.json (machine, the checker's own bytes) + pharn/features/<name>/REGRESSION.md (human, rendered by pharn/floor/render-regression.mjs). FLOOR verdict; ADVISORY orchestration (invoking the script and relaying a question). '/pharn-regress produced a report' NEVER means 'nothing broke' — it catches exactly what the project's deterministic suite catches, nothing more, but deterministically (P0)."
+description: "Check for regressions outside the feature: run the project's gates at the base commit and at HEAD and compare them (regression-report.json, REGRESSION.md). Run after /pharn-build."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -16,7 +16,7 @@ reads:
   ]
 writes: [".pharn/pharn-regress/stage.json"]
 constitution_refs: ["P0", "P2", "P3", "P4", "P5", "P6", "P7"]
-version: "0.5.0"
+version: "0.5.1"
 ---
 
 # /pharn-regress — detect regressions OUTSIDE the feature, in the user's codebase
@@ -31,9 +31,6 @@ project's gates at base and HEAD, the verdict, the atomic artifact writes — li
 `pharn/floor/stage-regress.mjs`, a tested script. **You do not re-implement any of it.** You run the one
 pinned line below, read the script's **exit code**, and — on a `question` — relay its text verbatim and
 re-run. See `pharn/pharn-contracts/stage-exit.md` for the full protocol this section summarizes.
-
-> **This is a PRODUCT command (`pharn-`, not `pharn-dev-`).** Its artifacts live on the **product** side:
-> `pharn/features/<name>/regression-report.json` + `pharn/features/<name>/REGRESSION.md`, never `.dev/`.
 
 ## The two natures (P0)
 
