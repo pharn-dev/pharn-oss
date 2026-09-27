@@ -240,10 +240,11 @@ count 0 differences).
 
 ### 5. Version
 
-`SKILLS_VERSION` 6.29.0 → **6.29.1** (PATCH: a correction to shipped hook bytes — no command, checker, contract,
+`SKILLS_VERSION` 6.31.0 → **6.31.1** (PATCH: a correction to shipped hook bytes — no command, checker, contract,
 frontmatter key or path added, moved or removed). `MIN_CLI` stays 0.5.0: same files at the same paths. Planned as
-6.28.2 → 6.28.3; #286 (6.28.3), #287 (6.28.4) and #290 (6.29.0) merged first, so it was renumbered at GATE 2, and is
-renumbered again by diff if another PR releases 6.29.1 first.
+6.28.2 → 6.28.3; #286 (6.28.3), #287 (6.28.4) and #290 (6.29.0) merged first, so it was renumbered to 6.29.1 at GATE
+2; then #292 (6.30.0) and #291 (6.31.0), so it was renumbered to 6.31.1 before the apply. Renumbered again by diff
+if another PR releases 6.31.1 first.
 
 **No PHARN version string in the human-only bytes** (GATE-1 requirement). The two hooks and `LIMITS.md` name this
 change by its slug, `write-guard-narrowing`, wherever a header would carry "(6.x.y)", so a renumber after another

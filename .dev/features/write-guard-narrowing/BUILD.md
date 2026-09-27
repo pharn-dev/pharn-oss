@@ -448,3 +448,23 @@ The non-test gates, in this worktree after the anchor, every scratch script move
 `format:check` 0, `lint` 0, `lint:md` 0, `docs:check` 0, `check:markers` 0, `check:badge` 0 (`6.29.1`),
 `check:changelog` 0 (122 sections), `check:contributing` 0, `check:reconcile` 0, `validate` 0 (36 capabilities),
 and `check:changelog-entry` 0 against `c1bf663`. `git apply --check` of the patch exits 0.
+
+## After merge #2 (2026-09-27), before the apply
+
+- input: the orchestrator's instruction while the independent patch review runs — a model decision under the
+  maintainer's delegation, not a human approval.
+- merge: `origin/main` (`17dda60`, 6.31.0: #292 then #291) merged as `db3543b`. Neither hook, `LIMITS.md` nor either
+  hook test file changed on `main` since `70cb51c` (empty diff), so the patch is unaffected.
+- conflicts: `CHANGELOG.md` (main's sections kept byte for byte — `git diff origin/main -- CHANGELOG.md` removes
+  nothing; this branch's entry moved into a new `## [6.31.1] - 2026-09-27` above main's `## [6.31.0]`, bump
+  sentence `6.31.0 → 6.31.1`; main's `[Unreleased]` held no entry), `README.md` (the badge only), `SKILLS_VERSION`
+  (`6.31.1`). Renumber: every `6.29.1` on this branch's added lines in `CLAUDE.md`, `README.md` and
+  `pharn/floor/README.md` is `6.31.1` (`main` carries no `6.29.1` in those files). `npm run docs:generate` changed no
+  byte.
+- the patch: `git apply --check` exits 0; applied to HEAD's three files in a throwaway directory, `shasum -a 256 -c
+human-only.sha256` prints OK for all three. The patch and its checksums are unchanged by this merge.
+- the expected-fail list: the full suite, TAP reporter, against the unpatched hooks on the merged tree — **4248
+  tests, 4218 pass, 30 fail**; the 30 failing titles are byte-identical to the list above (`cmp`).
+- the reconcile epoch was re-opened as after merge #1: PLAN setter, then `reconcile-baseline.mjs --anchor --by
+write-guard-narrowing-post-merge-2`, after the merge commit. `check-bash-reconcile.mjs --base . --require-baseline`
+  (`apply.sh` step 2) then reads CLEAN; the non-test gates were re-run after the anchor (recorded in `SHIP.md`).

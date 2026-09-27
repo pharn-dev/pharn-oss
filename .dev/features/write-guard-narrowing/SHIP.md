@@ -106,6 +106,11 @@ deferred:
   files nor either hook test file, so the patch still applies; it does touch `CHANGELOG.md`, `CLAUDE.md`,
   `README.md` and `SKILLS_VERSION`, so the next merge renumbers this to 6.30.1. Not merged here: the GATE-2
   instruction named `c1bf663`.
+- **Merge #2, before the apply** (the orchestrator's instruction): `origin/main` at `17dda60` (6.31.0) merged as
+  `db3543b`, renumbered to **6.31.1**; `docs:generate` changed nothing; the patch still passes `git apply --check`
+  and, applied in a throwaway directory, `shasum -a 256 -c`; the expected-fail list on the merged tree is the same 30
+  (4248 tests, 4218 pass); the reconcile epoch re-anchored as `write-guard-narrowing-post-merge-2`, after which
+  `apply.sh`'s step 2 reads CLEAN (`BUILD.md`, "After merge #2").
 
 chain ran; the named floor verdicts are as shown — this is NOT a judgment that the increment is good or wise; that is
 the human's call at the post-review gate.
