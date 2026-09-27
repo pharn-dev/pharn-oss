@@ -285,6 +285,29 @@ node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
 node pharn/floor/run-marker.mjs --open <pharn-review|pharn-ship> <name>
 node pharn/floor/run-marker.mjs --close <pharn-review|pharn-ship> <name>
 
+# CHECK A FEATURE NAME BEFORE ANY SHELL LINE CARRIES IT (added 6.30.0, shell-sink-validation). THE RECORDED FAILURE (P7,
+# reproduced): where a command derived the feature slug from the user's description (/pharn-spec Step 0, so /pharn-ship,
+# and /pharn-loop S1), the only check ran INSIDE a node process, after the shell had parsed the line carrying it — the
+# loop's own `node -e … '<slug>'` validator ran `x'$(touch PWNED)'` and exited 0, and /pharn-spec's unquoted setter ran
+# `;touch${IFS}PWNED;` before GATE 1. Now the model writes the slug alone to `.pharn/feature-name/candidate.txt` with the
+# WRITE tool (no shell parses it); this CLI refuses a symlinked or non-directory `.pharn` / `.pharn/feature-name`, reads
+# the file without following it, removes whatever stands at the path but a directory once those checks pass, and prints
+# the slug only as a FEATURE_SLUG_RE member (imported, L35). `--fresh` also picks the first `<slug>`, `<slug>-2`, … that
+# pharn/features/ lacks (the loop's old S2 shell loop) and refuses on any lstat error but ENOENT. The seven commands that
+# take a name as their argument ask for a missing one (plan grill test build review) or resolve it only through this CLI
+# (regress verify). The Write tool refuses a link at the path and names the link's target as the path to write instead
+# (measured), so every caller says: never Read it, never write elsewhere — run the CLI once, it removes the entry. Same
+# release: /pharn-loop Step 6d returns with the constant `git checkout - --` (its bound is stated there: `-` is this
+# worktree's previous checkout, so a checkout in between sends it elsewhere), and /pharn-ship --quick item 7 takes no
+# ref from the description. FLOOR: the printed value is a FEATURE_SLUG_RE member (tested); `.dev/floor/command-hygiene.
+# test.mjs`'s SHELL-SINK section closes SHELL_VALUES (every placeholder a product command's shell line takes) and
+# NAME_ORIGINS both ways, pins order and the per-command sentences (presence only), and EXECUTES the committed lines.
+# ADVISORY: that the model uses the Write tool, obeys the refusal rule and re-types only the printed value. BOUND: one
+# candidate file per tree (L38). Exit: 0 the name on stdout · 2 refusal (closed REFUSALS, `crashed` included), nothing on
+# stdout · node's own 1 = the entry file did not load (a run from outside the project root). No contract (P7): the
+# module's header is its spec. Ships: bumps SKILLS_VERSION.
+node pharn/floor/feature-name.mjs [--fresh]
+
 # PRODUCE the verify/regress floor input map with TESTED CODE instead of model-typed prose (added 6.8.0).
 # THE RECORDED FAILURE (P7, not a hypothetical): both stages compute a FLOOR verdict from a
 # `{gate-id: exit-int}` map, and the MODEL typed it — verify's Step 3c captured five exit codes in Bash

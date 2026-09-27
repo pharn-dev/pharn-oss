@@ -40,6 +40,7 @@ reads:
     "pharn/floor/check-red-run.mjs",
     "pharn/floor/check-quick-scope.mjs",
     "pharn/floor/quick-scope-core.mjs",
+    "pharn/floor/feature-name.mjs",
     "pharn/pharn-contracts/gate-run-record.md",
     "pharn/floor/validate.mjs",
   ]
@@ -94,23 +95,23 @@ below before Step 3; every step not named there runs as written.
 
 ### Step 1a — the fixed-rule entry steps (S1, S2, S3) and the pre-run snapshot
 
-1. **S1 — the slug.** Choose one short kebab-case slug for the intent. **The description itself is never
-   typed into any shell command.** Before the candidate is used anywhere, it must pass:
+1. **S1 — the slug.** Choose one short kebab-case slug for the intent. **Neither the description nor the slug is
+   typed into a shell command before code has checked it.** Write the slug alone to
+   `.pharn/feature-name/candidate.txt` with the **Write tool** — never through the shell — then run:
 
    ```bash
-   node -e 'process.exit(/^[a-z0-9][a-z0-9-]{0,63}$/.test(process.argv[1]) ? 0 : 1)' '<slug>'
+   node pharn/floor/feature-name.mjs --fresh
    ```
 
-   Type a candidate into that line only if every character in it is `a`–`z`, `0`–`9` or `-`. Non-zero, or a
-   candidate you would not type → stop `blocked: no-slug`.
+   Exit `0` prints `<name>`: the slug, or the slug plus `-<n>` (S2). Any other exit, or a printed value that is
+   neither → stop `blocked: no-slug`. If the Write tool refuses that path (the file already exists, or it is a link),
+   never Read it and never write to any other path it names: run the line once, ignore what it prints (that run
+   removes what is there), then write again. A directory at that path is never removed: stop `blocked: no-slug` and
+   name the path, so a person clears it.
 
-2. **S2 — a fresh feature directory.** Never reuse or overwrite one:
-
-   ```bash
-   name='<slug>'; n=2; while [ -e "pharn/features/$name" ]; do name='<slug>'"-$n"; n=$((n+1)); done; echo "$name"
-   ```
-
-   The printed value is `<name>` for the rest of the run. Thread that exact value into every stage.
+2. **S2 — a fresh feature directory.** Never reuse or overwrite one: the line above prints the first of `<slug>`,
+   `<slug>-2`, `<slug>-3`, … that `pharn/features/` does not hold. The printed value is `<name>` for the rest of the
+   run. Thread that exact value into every stage.
 
 3. **S3 — the base and the original checkout.**
 
@@ -120,8 +121,9 @@ below before Step 3; every step not named there runs as written.
    ```
 
    The SHA is `<base sha>` (passed to `/pharn-regress --base`); the branch name is `<original branch>`, or
-   `detached` meaning the checkout to return to is `<base sha>`. A failed `git rev-parse HEAD` (no
-   repository, an unborn `HEAD`) → stop `blocked: no-git-base`.
+   `detached` meaning the checkout to return to is `<base sha>`. `<original branch>` is for the Step 7 summary only:
+   no shell line takes it (Step 6d returns without it). A failed `git rev-parse HEAD` (no repository, an unborn
+   `HEAD`) → stop `blocked: no-git-base`.
 
 4. **Snapshot the dirty tree** (`-uall` lists an untracked directory as its files):
 
@@ -989,12 +991,16 @@ For `not committed: decision unverifiable`, `not committed: evidence stale`, `no
 
    ```bash
    GIT_LITERAL_PATHSPECS=1 git reset -q --pathspec-from-file=.pharn/pharn-loop/<name>/stage.list --pathspec-file-nul
-   git switch '<original branch>'
+   git checkout - --
    git branch -d '<branch>'
    ```
 
-   For a detached original checkout, use `git switch --detach '<base sha>'` in place of the second line.
-   `<branch>` is the name Step 6c's branch block printed.
+   `-` is this worktree's previous checkout (`@{-1}`) — the original branch or detached `HEAD` alike — so no line
+   types git's own output. **It is correct only because nothing checks out between Step 6c's branch block and this
+   line**: a commit hook that checks out, or another session in this worktree, makes `-` name that checkout instead,
+   and the line succeeds on the wrong target. With no `HEAD` reflog it exits non-zero and changes nothing (the `--`
+   keeps git from reading `-` as a file), leaving the checkout on `<branch>`: say so in the summary. `<branch>` is the
+   name Step 6c's branch block printed.
 
 2. Apply Step 6a's revert — no commit happened, so there is no review point to hold the model's approval.
 3. Re-scope to `LOOP.md` (the Step 6b setter lines), rewrite only the `## Outcome` lines, and re-run
@@ -1090,6 +1096,10 @@ last three feeds `check-loop.mjs`'s inputs.
   the stages' own writes are outside it**, and the commit runs after `/pharn-verify`'s reconcile gate, so neither
   guard nor reconciler covers it. A Bash write by a fix is detected — never prevented — by `check-bash-reconcile.mjs`
   (non-adversarial, `pharn/pharn-contracts/reconciliation-record.md`), and a retry cannot erase it.
+- **Floor:** `pharn/floor/feature-name.mjs --fresh` prints only a member of `FEATURE_SLUG_RE`, or nothing — the first
+  `<slug>`, `<slug>-2`, … that an `lstat` of `pharn/features/` reports absent, at choice time only (enum-regex).
+  **Advisory:** that the candidate is written with the Write tool, and that every later line carries only the printed
+  value — the model re-types it.
 - **Floor, quick mode:** a quick loop's stop is decided over `/pharn-verify`'s verdict alone, and
   `STOP_GREEN_QUICK` ⇔ a quick SPEC (both tested). The mode is the SPEC's pinned kind, never a flag: any SPEC not
   positively quick reads full, and so does a mode reader that cannot load; that the kind is the APPROVED, un-drifted
@@ -1106,7 +1116,8 @@ last three feeds `check-loop.mjs`'s inputs.
   outside the body hash, so it is neither gated nor tamper-evident, and its absence proves nothing about a person; the
   Draft revert on a non-green stop (agent-performed; the reverted file's `Draft` shape is floor, `check-spec.mjs`);
   every git step — what the commit holds, that only a green stop commits, that nothing is pushed or merged, that a
-  failed commit returns the checkout (the green token it branches on is floor; the pins over this file are vocabulary
+  failed commit returns the checkout (Step 6d's one constant line, right only while nothing checks out after Step
+  6c's branch block) (the green token it branches on is floor; the pins over this file are vocabulary
   checks, which a novel spelling still passes); and the `Stop` guard (`require-loop-record.cjs`), deterministic
   infrastructure but not a floor primitive — it makes an early, record-less ending **visible and costly**, never
   impossible, **cannot judge a record or tell a real one from a fabricated one** (`touch LOOP.md` satisfies it), runs
@@ -1117,7 +1128,8 @@ last three feeds `check-loop.mjs`'s inputs.
   from it is EXECUTED — project gates, the suite, commit hooks — before any person sees it, bounded by nothing beyond
   fix #7's write scope (pre-egress is not built); a plan that lists a tracked file the user had edited commits that
   edit (the summary names such paths); a prior run's Handoff informs this run with no person reading it first; the
-  slug's validation line itself carries the candidate, so refusing an untypeable one first is advisory; the Stop
+  slug's check prints only a `FEATURE_SLUG_RE` member (`pharn/floor/feature-name.mjs`, floor), while writing the
+  candidate with the Write tool and re-typing only the printed value into later lines are advisory; the Stop
   guard's marker and counter, the freshness ledger and every stamp, log and report live in the writable tree Bash
   reaches (`LIMITS.md §6`); and `.pharn/writes-scope.json` can be overwritten by a second session, which Step 6c's
   re-derivation narrows to one line, not to zero (P2).

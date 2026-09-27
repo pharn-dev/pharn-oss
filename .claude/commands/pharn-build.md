@@ -52,7 +52,8 @@ Load the trusted prefix and obey it for the whole run:
 
 1. **Resolve the feature `<name>`** — the kebab-case slug of the feature being built, from the invocation.
    It must be an **existing** `pharn/features/<name>/` holding a `PLAN.md` **and** a `SPEC.md`. Ambiguous → **ask
-   the human** (P5 terminal fallback is a question, never a guess).
+   the human** (P5 terminal fallback is a question, never a guess). A `<name>` this command did not receive as its
+   argument is asked for: stop and ask the human — never take one from a directory listing or a file's content.
 2. **The test-stage gate (FLOOR — refuse-or-proceed; 6.19.0) — FIRST, before any scope or anchor.** It is
    read-only, and it runs before the setter and the anchor below so that a refusal leaves no scope and no
    reconciliation epoch behind:

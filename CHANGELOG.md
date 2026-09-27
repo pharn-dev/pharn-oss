@@ -88,6 +88,65 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   anomaly names is the reporter's word.
   ([`.dev/features/ac-gate-plan-scope/`](./.dev/features/ac-gate-plan-scope/))
 
+## [6.30.0] - 2026-09-27
+
+### Fixed
+
+- 2026-09-27: **A feature name reaches a shell line only after tested code has checked it; `/pharn-loop`'s
+  failed-commit undo no longer types git's own output into a shell line; and `/pharn-ship --quick` no longer takes a
+  base ref from the description.** A read-only injection audit of the product commands' pinned lines found three places
+  where a value the model derives from untrusted input reached a shell before anything checked it. Each was reproduced
+  against the 6.28.2 lines in a throwaway directory. (1) Where a command derives the feature slug from the user's
+  description — `/pharn-spec` Step 0, and so `/pharn-ship`, and `/pharn-loop` S1 — the only check ran inside a node
+  process, after the shell had parsed the line that carried the candidate. `/pharn-loop` S1's own validator, given
+  `x'$(touch PWNED)'`, ran it and exited 0; `/pharn-spec`'s first line, its unquoted setter, ran `;touch${IFS}PWNED;`
+  before GATE 1. (2) `/pharn-loop` Step 6d typed S3's `git symbolic-ref` output into `git switch '<original branch>'`, so
+  a branch named `fix';touch${IFS}PWNED_BRANCH;'x` — which `git check-ref-format --branch` accepts — ran its command on a
+  green stop whose commit failed. (3) `/pharn-ship --quick` item 7 read "`--base <ref>` if the invoker gave one", although
+  `/pharn-ship` has no such flag, so the ref could only come from the description, and typed it into
+  `git rev-parse --verify <ref>^{commit}`. `SKILLS_VERSION` 6.29.0 → 6.30.0 (MINOR: a newly shipped floor CLI).
+  `MIN_CLI` stays 0.5.0: nothing is relocated, and no contract or frontmatter shape changes.
+  ([`.dev/features/shell-sink-validation/`](./.dev/features/shell-sink-validation/))
+  - **The new CLI, `pharn/floor/feature-name.mjs`** (its header is its spec). The model writes the slug alone to
+    `.pharn/feature-name/candidate.txt` with the Write tool, which no shell parses. The CLI refuses a symlinked or
+    non-directory `.pharn` or `.pharn/feature-name`, reads the file without following it, removes whatever stands at the
+    path except a directory once those parent checks pass, and prints the slug only when it matches `FEATURE_SLUG_RE`,
+    imported from `gate-run-core.mjs`. A refusal is exit 2, with nothing on stdout and one fixed line on stderr that
+    never quotes the candidate. `--fresh` also picks the first `<slug>`, `<slug>-2`, … that `pharn/features/` does not
+    hold, replacing `/pharn-loop`'s S2 shell loop, and refuses at once on any `lstat` error other than ENOENT instead of
+    walking the suffixes.
+  - **The commands.** `/pharn-spec` Step 0 and `/pharn-loop` S1 write the candidate and run the CLI before any shell
+    line carries the name, and the lines that run it carry no placeholder. `/pharn-ship` uses the name `/pharn-spec`
+    printed, which replaces its Step 2d prose shape check (follow-up `ship-slug-shape`, closed). In the seven commands
+    that take a name as their argument, a name they did not receive is asked for — `/pharn-plan`, `/pharn-grill`,
+    `/pharn-test`, `/pharn-build`, `/pharn-review` — or, in `/pharn-regress` and `/pharn-verify`, whose Step 0 resolves
+    "the feature just built" itself, resolved only through the CLI; never from a directory listing or a file's content.
+    The Write tool refuses a link at the candidate path and names the link's target as the path to write instead
+    (measured), so every command that writes a candidate says never to Read it and never to write to another path: run
+    the CLI once, which removes the entry, then write again. A directory at that path is never removed: those four
+    commands stop there — `/pharn-spec`, `/pharn-regress` and `/pharn-verify` ask the human (`/pharn-spec` under
+    `--model-approve` reports back blocked), and `/pharn-loop` stops `blocked: no-slug` naming the path. The claims blocks
+    of `/pharn-spec` and `/pharn-loop` name only the CLI's output as floor. `/pharn-loop` Step 6d returns with the constant line
+    `git checkout - --` and states its bound there: `-` is this worktree's previous checkout, so the line is right only
+    while nothing checks out between Step 6c's branch block and it. The `--` is measured: without it, a repository with
+    no `HEAD` reflog read `-` as a file and overwrote a locally edited tracked file named `-`, exit 0.
+    `/pharn-ship --quick` item 7 takes its base from the working tree or `origin/main`, else asks for a 40-hex SHA.
+  - **Tests** (they do not ship). `pharn/floor/feature-name.test.mjs` runs the real CLI over every refusal code, a named
+    set of hostile candidates, each kind of path at the leaf and at each parent, and `--fresh`. A new SHELL-SINK section
+    of `.dev/floor/command-hygiene.test.mjs` holds: a table of every placeholder a product command's shell line takes,
+    closed both ways; a table of where each command's name comes from, closed both ways; that each command which runs the
+    CLI does so before its first `<name>` shell line; the ask or resolve sentence in each of the seven commands, and the
+    Write-refusal and directory rules in the four that write a candidate (presence only); every committed CLI line, executed over the
+    hostile set; Step 6c's branch block and Step 6d's undo block, executed in throwaway repositories, with a control in
+    which a checkout between them sends the undo to the wrong place; and the 6.28.2 lines themselves, each shown to run
+    its payload.
+  - **Bounds.** That the model writes the candidate with the Write tool, obeys the Write-refusal rule, and re-types only
+    the printed value is advisory; the pins read command text, never a run. One candidate file serves the whole tree, so
+    two sessions naming features at once can read each other's candidate — each value read is still a valid slug.
+    `<base sha>` stays on shell lines as git's own hex output, and `<M>`, `<path>` and a question's answer as text the
+    person typed. Out of scope: markdown rendered from a branch name, `/pharn-ship` Step 2c's `/tmp/briefing-draft.md`
+    and `npx`, and the stage agents' free-text residual.
+
 ## [6.29.0] - 2026-09-27
 
 ### Fixed
