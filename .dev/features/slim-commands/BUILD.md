@@ -1,4 +1,8 @@
-# BUILD — slim-commands (the product commands slimmed, a claims block each, a byte budget; 6.28.1)
+# BUILD — slim-commands (the product commands slimmed, a claims block each, a byte budget; 6.28.2)
+
+Built as 6.28.1; renumbered to 6.28.2 at GATE 2 (REVIEW F7), after `origin/main` released 6.28.1 first. The build
+record below keeps the version its commands printed at the time; `## GATE 2 — the FIX round and the merge` (at the
+end) records the renumber, the fixes and the merged tree.
 
 - plan: `.dev/features/slim-commands/PLAN.md` (GATE 1 recorded in the plan as the orchestrator's decision under the
   maintainer's delegation; the grill's G1–G12 folded in `## Amended after grill`), built in an isolated worktree from
@@ -44,7 +48,7 @@ hit **now**, not what was assigned **then**" distinction, which `pharn/floor/mer
   section. The replay is evidence about E1's measurement, so it now reads the description E1 was measured with.
 - **Before:** `oldAnchors.every((a) => mutant.includes(a))`, each mutant being the live file.
 - **After:** ``oldAnchors.every((a) => `${VERIFY_DESCRIPTION_AT_E1}\n${mutant}`.includes(a))``, where
-  `VERIFY_DESCRIPTION_AT_E1` is a frozen literal of the pre-6.28.1 description clause, used by that replay only, with
+  `VERIFY_DESCRIPTION_AT_E1` is a frozen literal of the pre-slim description clause, used by that replay only, with
   a comment saying why; plus a new control, `assert.ok(!oldAnchors.every((a) => repros[1][1].includes(a)), …)` — the
   mutant without the frozen clause does not carry every anchor, so the replay is what carries it (L60). The
   `NAMED_LIMITS` predicate itself, and its own controls, are unchanged.

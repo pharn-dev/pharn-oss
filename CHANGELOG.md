@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.28.1] - 2026-09-27
+## [6.28.2] - 2026-09-27
 
 ### Changed
 
@@ -33,14 +33,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `cost.json` ledgers put PHARN's own stages at ~48% of relative cost on large features and ~81% on three small
   fixes). An orchestrator's command body is re-read from cache on every request of its run, an inline stage's body
   joins that context once invoked, and every description sits in the command listing of every session in a user's
-  project. `SKILLS_VERSION` 6.28.0 → 6.28.1 (PATCH: a correction and clarification of bytes that already ship — no
-  command, checker, contract, frontmatter key or path is added, moved or removed). `MIN_CLI` stays 0.5.0: the same
+  project. `SKILLS_VERSION` 6.28.1 → 6.28.2 (PATCH: a correction and clarification of bytes that already ship — no
+  command, checker, contract, frontmatter key or path is added, moved or removed; planned as 6.28.1 and renumbered
+  at merge, since #282 released 6.28.1 first, touching no command). `MIN_CLI` stays 0.5.0: the same
   files at the same paths. Each edited command's `version:` bumps its patch.
   ([`.dev/features/slim-commands/`](./.dev/features/slim-commands/))
-  - **Measured on the final tree** (bytes, `\r\n` folded): the command bodies 519,744 → 334,275 (−35.7%) —
-    `pharn-ship.md` 124,078 → 69,392, `pharn-loop.md` 112,538 → 78,077, the other nine 283,128 → 186,806; the
-    descriptions' text 22,764 → 2,063 (−91%), the largest 237 bytes. Per command, with each ceiling and its
-    headroom: `BUILD.md`.
+  - **Measured on the final tree** (bytes, `\r\n` folded, the GATE-2 fixes included): the command bodies 519,744 →
+    336,384 (−35.3%) — `pharn-ship.md` 124,078 → 69,550, `pharn-loop.md` 112,538 → 78,347, the other nine
+    283,128 → 188,487; the descriptions' text 22,764 → 2,114 (−91%), the largest 244 bytes. Per command, with each
+    ceiling and its headroom: `BUILD.md`.
   - **Descriptions.** Each is at most 250 bytes and says what the command does and when to use it — its place in
     the pipeline, or, for `/pharn-ship`, `/pharn-loop` and `/pharn-memory-promote`, the user's request. Every
     FLOOR/ADVISORY claim a description carried is in that command's claims block, moved or already stated there
@@ -66,8 +67,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     since 6.12.0) with its `.dev/` cite, a `.dev/` cite in its old Guarantee audit, and one in `/pharn-ship`
     Step 2c — each names a file an install does not receive. `/pharn-grill`'s opening no longer calls
     `/pharn-build` a future stage.
-  - **Missed estimates, recorded rather than met by cutting:** `pharn-loop.md` 78,077 against ~72,000,
-    `pharn-spec.md` 24,474 against ~23,000, `pharn-plan.md` 21,590 against ~21,000 — the rest is pinned or
+  - **Missed estimates, recorded rather than met by cutting:** `pharn-loop.md` 78,347 against ~72,000,
+    `pharn-spec.md` 24,789 against ~23,000, `pharn-plan.md` 21,687 against ~21,000 — the rest is pinned or
     executed text.
   - **The command budget (apparatus; bumps nothing by itself).** `.dev/floor/command-hygiene.test.mjs` gains a
     COMMAND BUDGET section: R1 the product commands on disk equal `COMMAND_BYTE_CEILINGS`' keys; R2 each body is
@@ -104,6 +105,102 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **An install that edited a command** keeps its edit on `pharn update`, so the saving reaches it only for the
     commands it left pristine. Every saving above is an estimate from bytes (`LIMITS.md §1c`); the maintainer's
     measurement after `pharn update` is the real number.
+
+## [6.28.1] - 2026-09-27
+
+### Fixed
+
+- 2026-09-26: **The cost tooling no longer crashes on the crafted transcript and `cost.json` values this release
+  enumerates, and for those transcript values it no longer writes a ledger its own checker REDs.** Parsed JSON can put any value where a string or a count is expected, and `String()` is not
+  total over it: `{"toString":1}` and `[{"toString":1}]` make it throw, and so do `+`, a template literal, a relational
+  compare and `Object.fromEntries` (L62). REVIEW finding R11 of 6.24.1 found one crafted `requestId` or `message.model`
+  crashing both renderers. The whole class was measured before the fix, on constructed inputs only. No real
+  transcript or ledger has been seen to carry one.
+  - both renderers threw at the model and at each of the six usage counts, the ledger at the request id, and the
+    record at `attributionSkill`;
+  - a string count concatenated into a string total, a fraction or a negative entered the sum, and two `1e308`
+    overflowed the record's total to `null`;
+  - a `usage` nested 20,000 deep overflowed the emitter's stack. At 3,000 the emitter finished, and the checker then
+    overflowed on the ledger it wrote;
+  - an absolute-path id, session or version made the emitted ledger RED under its own rule 3;
+  - over its own input, `check-cost-ledger.mjs` had 20 distinct crash sites (every node of a GREEN ledger × four
+    hostile values × both modes). Each exited 1, its RED code, with no verdict line. S9, a `null` row under
+    `--verify-transcript`, was one of them.
+
+  `SKILLS_VERSION` 6.28.0 → 6.28.1 (PATCH: a correction to shipped bytes; one new internal module, no new command,
+  checker or contract shape). `MIN_CLI` stays 0.5.0: no installed path moves.
+  ([`.dev/features/cost-transcript-hostile-values/`](./.dev/features/cost-transcript-hostile-values/))
+  - **Every transcript value the tooling reads is tested before anything coerces it**, through one new module,
+    `pharn/floor/cost-value-core.mjs`. It holds `isIdentityToken`, rule 3's bound: 1 to 128 characters, no C0 control
+    character or DEL, no absolute path. A C1 control (U+0080 to U+009F) is admitted. It also holds `isTokenCount`: a
+    non-negative safe integer. `IDENTITY_MAX` and
+    `ABS_PATH_RE` move there from `render-cost-ledger.mjs` byte-for-byte, with no re-export.
+  - **Which lines are requests** (`transcript-core.mjs`, `sessionRequests()`): a line needs a plain-object usage and a
+    resolved id that satisfies rule 3's bound. A `requestId` that is present and not `null` but fails never falls
+    back to `message.id`. The
+    per-request selection ranks only by an admitted count. The module's named residual for R11 is removed. Still
+    open, and now stated in its header: a crafted line that reuses a genuine request's id with a larger output count
+    replaces that request's usage, silently (6.24.1's rule, unchanged).
+  - **The record block** counts a refused model under `unknown`, a refused `attributionSkill` under `(untagged)` and a
+    refused count as 0. Only a timestamp that parses joins its window. All of it is silent, since the block has no
+    `dropped` list.
+  - **The ledger** bounds `request_id`, `session_id` and each `claude_code_versions` entry by rule 3. It writes 0 for
+    a refused count, and it bounds its verbatim `usage` copy: no node deeper than `USAGE_MAX_DEPTH` (32), and no key
+    that is not a short token. `__proto__` is refused too: assigned on a plain object, that key set the prototype, and
+    the value vanished with nothing listed. On a row, that is a request inside the run window, a refused identity
+    field (`model`, `session_id`, `agent_id`, `attribution_skill`), a refused version or count, and a refused `usage`
+    leaf or key are listed in `dropped[]`. A request outside the window is only counted, never emitted, so nothing
+    about it is listed. A line refused as a whole (an id rule 3 refuses, or a usage that is not a plain object) is not a
+    request: it leaves no row and no entry, and it is not counted. An unparseable timestamp makes a request a
+    non-member, counted in `excluded_requests` under a known window (the field is `null` under an unknown one) and
+    listed nowhere. Run membership still reads the session as before; only the emitted field is bounded. `normalizeTokens` now takes `(u, n, dropped)` and checks
+    both on every call.
+  - **The checker enforces every FLOOR rule this release adds to the contract:**
+    - the usage depth and key rules;
+    - rule 3 on `request_id`, `session_id`, `sessions[]` and `claude_code_versions[]`;
+    - counts as non-negative safe integers;
+    - a typed `stage` and `iteration`;
+    - a document depth bound, `WALK_MAX_DEPTH` (64).
+
+    Two older field-table labels that no checker op ever backed are corrected to ADVISORY: the shape of
+    `skills_version`, and the `window_start`/`window_end` values. The field table's `outcome` row, 6.28.0's
+    `STOP_GREEN_QUICK` sentence, and a comment and an assertion message in `check-cost-ledger.test.mjs`, now cite rule 5,
+    the `outcome` rule. Each cited a rule 7 the contract did not have, and this release adds a rule 7, about counts.
+    Released entries that say rule 7 for it keep their wording.
+
+    It is also total over its own input, within stated bounds:
+    - Each value it quotes from the file is quoted by rule: a string or object through `shown()`, which moves
+      byte-for-byte from `test-results-formats.mjs` to `quote-core.mjs`; a number, boolean or `null` as itself, so its
+      type stays visible; a key as itself only when it is a short token. The re-derivation's WARN quotes a session
+      only after rule 3 admits it. So a value from the file can no longer print a `\n`-delimited line of its own.
+      U+2028, U+2029 and U+0085 still pass raw, and some readers split on them; the checker's header says so. A list
+      names at most five members.
+    - The view recompute and `--verify-transcript` run only over input that passes their preconditions, and a RED
+      says so when they do not run.
+    - The marker-completeness WARN counts missing iterations instead of enumerating them. An `outcome.iterations` of
+      `2^53` had allocated about 2 GB before the process died.
+    - An unforeseen error while checking is exit 2, never GREEN or RED; a module that fails to load is outside it. The process ends through `process.exitCode`, so a verdict
+      past a pipe's 64 KiB buffer is no longer dropped. The second grill measured a 689,620-byte WARN with no verdict
+      line after it.
+    - **Not claimed: time and memory.** Rule 6 is O(rows × markers), and a document that exhausts the heap ends with
+      no verdict.
+
+  - **Compatibility.** A ledger emitted before 6.28.1 from a transcript carrying a value 6.28.1 refuses can now be
+    RED, `/1` included, and where it is, the RED is correct: the values were never valid. It is not always RED. The
+    old emitter turned a number, boolean or plain object model or request id into a well-formed token (`"7"`,
+    `"[object Object]"`) through `String()`, and both checker modes pass such a model; `--verify-transcript` REDs such
+    an id. No genuine transcript measured carries one. On
+    2026-09-26 one maintainer's local transcripts held 0 over 115,666 usage-bearing lines, and no `usage` deeper than 4.
+  - **Tests.** `cost-hostile-input.test.mjs` walks every node of both transcript line shapes, and every node of a GREEN
+    ledger, through hostile alphabets and both checker modes. It adds a forgery closure over every node and every
+    key, and pins the two renderers to one window order. The measured crash sites are named cases.
+    `cost-value-core.test.mjs` pins both predicates. The negative controls, one mutant per property the plan names
+    and each killed, ran once in a scratch copy and are recorded in the feature's `BUILD.md`.
+  - **Named, not built:**
+    - `cost-ledger-dropped-row-index`: a `dropped[]` path's row index is taken before the rows are sorted;
+    - the window's string order on mixed-precision timestamps, which both renderers now share.
+
+    Two grills raised 21 advisory concerns between them. Their dispositions are in the feature's `PLAN.md`.
 
 ## [6.28.0] - 2026-09-27
 

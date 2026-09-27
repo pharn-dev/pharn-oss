@@ -3211,7 +3211,7 @@ test("✧ NAMED_LIMITS discriminates — deleting any ONE anchor (its sentence) 
   assert.notEqual(namedLimitsReason(`${body}\n${NAMED_LIMITS[0][1]}\n`), null, "a second occurrence must fail the predicate");
 });
 
-/** The pharn-verify.md `description:` clause E1 (GATE 2 review) was measured with — frozen here by 6.28.1, which
+/** The pharn-verify.md `description:` clause E1 (GATE 2 review) was measured with — frozen here by 6.28.2, which
  *  shortened the live description (slim-commands, PLAN D1). Only the E1 evidence replay below reads it. */
 const VERIFY_DESCRIPTION_AT_E1 =
   "ADVISORY: role: verifier capabilities are counted and none is run (the runner is deferred, P7); a verifier finding never flips the verdict (fix #3).";
@@ -3244,8 +3244,8 @@ test("✧ NAMED_LIMITS controls — the GATE 2 reviewer's three repros, each run
   assert.equal(repros.length, 3, "non-vacuity: the three repros are counted");
   for (const [label, mutant] of repros) assert.notEqual(namedLimitsReason(mutant), null, `${label} must turn the predicate red`);
   // And the OLD predicate — bare phrases, present anywhere — is what these repros slipped past (the E1 evidence).
-  // RE-POINTED in 6.28.1 (slim-commands): E1 was measured on a body whose frontmatter `description:` repeated
-  // "deferred"; 6.28.1 shortened every product description to what/when (PLAN D1), so the live body no longer carries
+  // RE-POINTED in 6.28.2 (slim-commands): E1 was measured on a body whose frontmatter `description:` repeated
+  // "deferred"; 6.28.2 shortened every product description to what/when (PLAN D1), so the live body no longer carries
   // that second copy. The evidence is therefore replayed on each mutant PLUS the description E1 was measured with,
   // carried as a literal (VERIFY_DESCRIPTION_AT_E1) — the gap is history, and the NAMED_LIMITS predicate above is what
   // catches every repro on the live body.
@@ -4057,11 +4057,11 @@ test("✧ STAGE_AGENT_WIRING (10) — every --mode stage-agent line of pharn-loo
   assert.notDeepEqual(modeText(loopQuickSection(pasted)), modeText(pasted));
 });
 
-// ── THE COMMAND BUDGET (slim-commands, 6.28.1) ───────────────────────────────────────────────────────
+// ── THE COMMAND BUDGET (slim-commands, 6.28.2) ───────────────────────────────────────────────────────
 // WHAT IT BOUNDS. A product command's file is what the platform inserts as the prompt each time the command
 // runs, and its `description:` is what every session of a user's project carries in its command listing.
-// 6.28.1 cut both (the measured before/after is in `.dev/features/slim-commands/BUILD.md` and CHANGELOG
-// [6.28.1]); this section keeps them cut. BOTH are budgeted, over the whole set, one rule per property:
+// 6.28.2 cut both (the measured before/after is in `.dev/features/slim-commands/BUILD.md` and CHANGELOG
+// [6.28.2]); this section keeps them cut. BOTH are budgeted, over the whole set, one rule per property:
 //   R1 closure — the product commands on disk (`pharn-*.md` minus `pharn-dev-*`) EQUAL the table's keys:
 //      non-empty, no command without a ceiling, no ceiling without a file;
 //   R2 body — each file's UTF-8 bytes, measured after folding `\r\n` to `\n` (a CRLF checkout measures what the
@@ -4101,7 +4101,7 @@ const DESCRIPTION_MAX_BYTES = 250;
 const CLAIM_VOCABULARY_RE = /\b(FLOOR|ADVISORY)\b|NEVER means|\(P[0-7]\)/;
 const CLAIMS_HEADING_RE = /^## What you may claim/;
 
-/** `pharn-review.md`'s description before 6.28.1 — R4's control fixture, carried as a literal. */
+/** `pharn-review.md`'s description before 6.28.2 — R4's control fixture, carried as a literal. */
 const REVIEW_DESCRIPTION_BEFORE_SLIM =
   "Review a codebase with PHARN's code-review lenses run IN PARALLEL as subagents, then DETERMINISTICALLY merge+dedup their findings into one findings.json. Membership (which lenses run) is FLOOR (count-lenses.mjs, frontmatter not prose); the merge+dedup is FLOOR (merge-findings.mjs, keyed on enum-gated fields only). Parallel spawn + per-lens code-slicing + each lens's judgment are ADVISORY orchestration. '/pharn-review produced findings' NEVER means 'the code is correct/safe' (P0) — a lens can't decide approve (§7); the merge only assembles.";
 
@@ -4211,7 +4211,7 @@ test("✧ BUDGET R3: every product command's description is one parsable scalar 
 test("✧ BUDGET R4: no product command's description carries claim vocabulary", () => {
   const offenders = productCommandFiles().filter((f) => CLAIM_VOCABULARY_RE.test(frontmatterDescription(productCommandText(f)) ?? ""));
   assert.deepEqual(offenders, [], "claims belong in the command's `## What you may claim` block, not its description");
-  // CONTROL (L60): the description pharn-review.md carried before 6.28.1 is red.
+  // CONTROL (L60): the description pharn-review.md carried before 6.28.2 is red.
   assert.match(REVIEW_DESCRIPTION_BEFORE_SLIM, CLAIM_VOCABULARY_RE);
 });
 

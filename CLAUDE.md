@@ -1470,7 +1470,7 @@ framework-specific`), via the first-match-wins procedure in `pharn/ARCHITECTURE.
 - `seal: "PHARN ✓ reviewed"` only on `kind: pharn-owned`. Community capabilities are markdown-only and
   cannot declare trusted-write or off-allowlist egress.
 - **A product command keeps what a run executes; its rationale lives with the owner it would restate
-  (6.28.1).** A `/pharn-*` command's body holds its steps, every pinned line and fenced block, its exit-code,
+  (6.28.2).** A `/pharn-*` command's body holds its steps, every pinned line and fenced block, its exit-code,
   verdict and stuck-point mappings, its prompts and human gates, its trusted-prefix instruction and its P2
   fences, plus ONE `## What you may claim` block — the command's floor/advisory split and its struck claims.
   Why a rule exists, version and review history, and a contract's or floor module's bounds are NOT restated

@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import { renderDone, renderRefused, PREAMBLE, RESIDUAL, NO_VERIFIERS } from "./render-verify.mjs";
 import { REGISTRY } from "./stage-exit-core.mjs";
 // Absolute-path detection is imported by the TEST ONLY (the renderer's own load graph must never grow for it).
-import { ABS_PATH_RE } from "./render-cost-ledger.mjs";
+import { ABS_PATH_RE } from "./cost-value-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..");

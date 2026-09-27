@@ -80,7 +80,7 @@ test("a freshly emitted ledger is GREEN — the control that makes every RED bel
 });
 
 // ── quick (6.25.0): a `--quick` ship ledger (a `mode` marker key, a `gate2-quick` decision) is GREEN ─────
-// under the UNCHANGED checker — no schema bump, exactly as the design states: rule 7 checks
+// under the UNCHANGED checker — no schema bump, exactly as the design states: rule 5 checks
 // `outcome.decision` as a bounded token, never a closed vocabulary, and markers carry no closed key set.
 
 function quickShipLedger() {
@@ -142,7 +142,7 @@ test("a quick ship ledger (mode: quick run-start, decision: gate2-quick) is GREE
   assert.equal(led.markers[0].mode, "quick");
   assert.equal(led.schema, SCHEMA, "still pharn-cost-ledger/2 — additive, no new schema version");
   assert.ok(led.requests.length > 0, "NON-VACUITY");
-  assert.deepEqual(redsOf(led), [], "an OLD checker (rule 7 is a bounded-token check, never a closed vocabulary) reads this GREEN");
+  assert.deepEqual(redsOf(led), [], "an OLD checker (rule 5 is a bounded-token check, never a closed vocabulary) reads this GREEN");
 });
 
 // ---------------------------------------------------------------- the mutation table
@@ -1059,8 +1059,10 @@ test("--verify-transcript: a CORRECT ledger emitted while a request was still be
 test("--verify-transcript quotes a request id, so a newline in it cannot forge a line of the checker's output (REVIEW S4)", () => {
   // The id comes from the untrusted transcript, and the CLI prints each finding as ONE stdout line. Raw, an id
   // carrying a newline printed a verdict-shaped line of its own ahead of the real verdict. The exit code
-  // never moved, but a reader of stdout could be misled.
-  const id = "R\nGREEN — forged.json: closed key set, 0 request(s)";
+  // never moved, but a reader of stdout could be misled. Since 6.28.1 the reader refuses a control character in
+  // an id (`sessionRequests()`), so a newline can no longer reach this compare at all; cost-hostile-input.test.mjs
+  // pins that. The id below carries a quote and a backslash instead, so the WARN's quoting is still visible.
+  const id = 'R "quoted" \\ GREEN — forged.json: closed key set';
   const { led, projectsDir } = inFlightLedger("00000000-0000-4000-8000-0000000000ab", id);
   const { reds, warns } = checkLedger(led, { verifyTranscript: true, projectsDir });
   assert.deepEqual(reds, []);
@@ -1081,7 +1083,7 @@ test("--verify-transcript: a ledger the pre-6.24.1 FIRST-line rule wrote is inte
   assert.equal(first.message.usage.output_tokens, 8, "precondition: and it is the early line");
   const row = led.requests.find((r) => r.request_id === "req_fx_snapshots");
   row.usage = sanitizeUsage(first.message.usage, "usage", []);
-  row.tokens = normalizeTokens(first.message.usage);
+  row.tokens = normalizeTokens(first.message.usage, 0, []);
   Object.assign(led, buildViews(led.requests));
   assert.equal(led.totals.tokens.output, 163 + 522 + 100 + 16886 + 50 - 163 + 8, "the old rule's total");
   assert.deepEqual(checkLedger(led).reds, [], "internally consistent — only the transcript can tell");
@@ -1120,7 +1122,10 @@ test("--verify-transcript REDs a class that must match exactly — input, cache 
   for (const c of ["input", "cache_read", "cache_write_5m", "cache_write_1h"]) {
     const { led, projectsDir } = snapshotLedger();
     const row = led.requests.find((r) => r.request_id === "req_fx_plain");
-    row.tokens[c] -= 1; // BELOW the transcript: allowed for output, never for these
+    // BELOW the transcript where the class has room: allowed for output, never for these. A class at 0 steps UP
+    // instead, because since 6.28.1 a negative count is RED on its own (the token rule), and a must-match class REDs
+    // a difference either way.
+    row.tokens[c] += row.tokens[c] > 0 ? -1 : 1;
     Object.assign(led, buildViews(led.requests));
     assert.deepEqual(checkLedger(led).reds, [], `${c}: internally consistent — only the transcript can tell`);
     const reds = checkLedger(led, { verifyTranscript: true, projectsDir }).reds;

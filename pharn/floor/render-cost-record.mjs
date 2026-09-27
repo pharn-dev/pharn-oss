@@ -25,6 +25,19 @@
 // FLOOR (primitive #3, an integer compare — the `check-ship.mjs` `iter >= cap` precedent): a session id
 //   resolving to 2+ transcript directories is REFUSED, never resolved first-match-wins. Bounded, and
 //   stated: that is a property of THIS LOOKUP, not a proof the platform never reuses a session id.
+// FLOOR (primitive #3), the values this block reads (6.28.1). Which lines are requests at all is the reader's rule
+//   (`sessionRequests()`, cited, not restated). Of each request's first line and selected usage:
+//   * the model is a `by_model` key only when `isIdentityToken` (cost-value-core.mjs) admits it, else the
+//     request counts under `unknown`; `attributionSkill` likewise, else `(untagged)`;
+//   * a usage count is added only when `isTokenCount` admits it, else that class adds 0 for that request, so every
+//     total is a sum of non-negative safe integers;
+//   * a timestamp joins the window only when `tsMs` (run-window-core.mjs) parses it. The window is still ordered by
+//     the timestamp string, which is how the ledger orders its own window.
+//   No value is coerced before its test. SILENT, and stated: this block has no `dropped` list, so a refused value
+//   leaves no trace here. `cost.json` records only some, because it covers only the requests inside its run window
+//   while this block reads the whole session: a refused model, `attributionSkill` or count on a request inside a
+//   known window lands in its `dropped[]`, while a refusal outside that window (or under an unknown one), a line that
+//   is not a request, and a timestamp that does not parse are listed nowhere (`pharn/pharn-contracts/cost-ledger.md`).
 // ADVISORY / NARROWED, and stated:
 //   * THE REPORTED RUN IS THE ONE `CLAUDE_CODE_SESSION_ID` NAMES, and nothing here verifies that is this
 //     run. This is WEAKER than the cwd refusal it replaced (`transcript-core.mjs` says why that went),
@@ -58,6 +71,8 @@
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { findTranscriptDirs, sessionRequests } from "./transcript-core.mjs";
+import { isIdentityToken, isTokenCount } from "./cost-value-core.mjs";
+import { tsMs } from "./run-window-core.mjs";
 
 export const SCHEMA = "pharn-cost-record/1";
 export const COVERAGE = Object.freeze(["partial", "unavailable"]);
@@ -73,14 +88,17 @@ const zero = () => ({
   thinking: 0,
 });
 
+/** A count as `fold()` adds it: the value when `isTokenCount` admits it, else 0 — never coerced (see the header). */
+const count = (v) => (isTokenCount(v) ? v : 0);
+
 function fold(acc, u) {
   acc.requests += 1;
-  acc.input_uncached += u.input_tokens ?? 0;
-  acc.cache_write_1h += u.cache_creation?.ephemeral_1h_input_tokens ?? 0;
-  acc.cache_write_5m += u.cache_creation?.ephemeral_5m_input_tokens ?? 0;
-  acc.cache_read += u.cache_read_input_tokens ?? 0;
-  acc.output += u.output_tokens ?? 0;
-  acc.thinking += u.output_tokens_details?.thinking_tokens ?? 0;
+  acc.input_uncached += count(u.input_tokens);
+  acc.cache_write_1h += count(u.cache_creation?.ephemeral_1h_input_tokens);
+  acc.cache_write_5m += count(u.cache_creation?.ephemeral_5m_input_tokens);
+  acc.cache_read += count(u.cache_read_input_tokens);
+  acc.output += count(u.output_tokens);
+  acc.thinking += count(u.output_tokens_details?.thinking_tokens);
   return acc;
 }
 
@@ -98,16 +116,18 @@ export function aggregate(projectDir, sessionId) {
   let end = null;
 
   for (const { record: r, usage: u } of requests) {
-    const model = r.message.model ?? "unknown";
+    // Each key is tested before it is used as one: a refused model or skill takes the fixed fallback bucket.
+    const model = isIdentityToken(r.message.model) ? r.message.model : "unknown";
     fold(total, u);
-    const stage = r.attributionSkill ?? UNTAGGED;
+    const stage = isIdentityToken(r.attributionSkill) ? r.attributionSkill : UNTAGGED;
     if (!byStage.has(stage)) byStage.set(stage, zero());
     fold(byStage.get(stage), u);
     if (!byModel.has(model)) byModel.set(model, zero());
     fold(byModel.get(model), u);
 
+    // Only a timestamp that parses joins the window; it is compared as the string, as the ledger's window is.
     const ts = r.timestamp;
-    if (typeof ts === "string") {
+    if (tsMs(ts) !== null) {
       if (start === null || ts < start) start = ts;
       if (end === null || ts > end) end = ts;
     }

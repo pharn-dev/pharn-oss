@@ -2212,3 +2212,20 @@ type: floor · concepts: [temporal-state, referent-binding, append-only, derivat
 - commit: `767bf61f493f73c859a9820a01bddcb8f4f40a8d` (working-tree build on this commit; uncommitted at promotion time)
 - source: `.dev/features/cost-dedup-completed-usage/REVIEW.md` R1 + § Proposed lesson candidate
 - promoted: 2026-09-26 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L64 — A bound's RESTATEMENT re-derives its quantifier — L37 recurred in the release note and a sibling contract, while the primary sentences it was applied to held
+
+type: contract · concepts: [universal-quantifier, doc-drift, guarantee-audit, restatement]
+
+**Lesson.** [[L37]] says a bound sentence is written from the probe that pins it, never before. An increment can apply that to every PRIMARY sentence — each contract rule and module header bound to a named test — and still ship false bounds, because the same claim is RESTATED elsewhere: in the CHANGELOG entry, in a sibling contract that summarizes it, and in another module's header. A restatement is a new sentence, written later from memory of the primary, and its quantifier drifts upward: "the bounds this increment adds" became "every bound the contract gives the file"; "the refused fields are listed" became "each refusal is listed"; "no C0 control character or DEL" became "no control character"; "no `\n`-delimited line" became "no line". Remedy: L37's probe follows every restatement, not only the primary. Before a stage hands off, grep the increment's diff for each bound's key phrase and probe every hit as a sentence of its own. A CHANGELOG bullet or a sibling contract that summarizes a bound is probed like the primary it summarizes.
+
+**Measured, in `cost-transcript-hostile-values`.** An independent review found four restatements false, each on a probe that took seconds, while the primary sentences they summarized held (REVIEW R1, R2, R3, R5): "every bound the contract gives the file" (two pre-existing FLOOR rows had no checker op); "`cost.json` lists each refusal" (a line refused as a whole is listed nowhere, which the increment's own test asserted); "no control character" (the predicate admits every C1 control); "can no longer print a line of its own" (U+2028 passes raw). Two grill rounds had already caught three sentences of the same shape at plan time (GRILL G2, G3, R2-G3), so the pattern recurred inside one feature after it had been named there.
+
+**Why it matters.** The CHANGELOG is append-only once merged, so a false restatement there can only be corrected by a new entry, and it is the sentence a user reads first (`pharn update` points at it). Restatements multiply with every increment, and each is a place where [[L2]]'s rule — a contract may cite only live floor ops — is checked by nobody. **Bound (P0):** the remedy is discipline, a grep and a probe per hit, not a floor check: no membership test can tell a restatement's quantifier from its primary's. **Honest trigger (P7):** an independent review found the four before merge, and the maintainer chose at the ship gate to fix all four in the same increment; three more of the same shape were caught at grill time in the same feature. It was promoted at the human's choice at the ship-stage lesson gate, as [[L36]], [[L47]], [[L60]] and [[L63]] were.
+
+**Provenance.**
+
+- feature: `cost-transcript-hostile-values`
+- commit: `df2e880ca23d8d0f83388236ef893a1f6c8610c0`
+- source: `.dev/features/cost-transcript-hostile-values/REVIEW.md` R1,R2,R3,R5 + § Proposed lesson candidate
+- promoted: 2026-09-27 via gated `/pharn-dev-memory-promote` (human-approved).

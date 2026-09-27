@@ -68,7 +68,8 @@
 // TRUST (P2): the document is written by PROJECT code — untrusted DATA. Only the fields named above are read,
 // each type-checked; failure messages, stacks, durations and attachments are ignored. Nothing here is eval'd,
 // compiled into a RegExp, spawned or sent anywhere. A raw value that appears in a refusal `reason` is quoted
-// through `shown()`, which bounds it to SHOWN_CHARS, so an attacker-sized string cannot ride out in a reason.
+// through `shown()` (quote-core.mjs), which bounds it to SHOWN_CHARS, so an attacker-sized string cannot ride out
+// in a reason.
 //
 // BOUNDED WORK: Playwright's describe nesting is capped at MAX_DEPTH (`over-cap`). Each nested suite carries its
 // own title path, so without the cap a deeply nested report walks in quadratic time — measured at review, 1.9 s
@@ -76,6 +77,7 @@
 // flat and walk in linear time.
 
 import { isAbsolute, resolve, sep } from "node:path";
+import { shown } from "./quote-core.mjs";
 
 /** The closed format set. `pharn.config.json`'s `testResults` values must be members. */
 export const RESULTS_FORMATS = Object.freeze(["jest-json", "pharn-json", "playwright-json", "vitest-json"]);
@@ -97,22 +99,8 @@ export const PHARN_TEST_KEYS = Object.freeze(["file", "path", "status"]);
 /** The deepest Playwright `describe` nesting accepted; deeper is `over-cap`. */
 export const MAX_DEPTH = 256;
 
-/** How many characters of an untrusted raw value a refusal reason may quote. */
-export const SHOWN_CHARS = 64;
-
-/** An untrusted value, JSON-quoted and cut to SHOWN_CHARS, for a refusal reason. TOTAL: it never throws. `String(v)`
- *  throws on parsed JSON such as `{"toString":1}` (and on an array holding one), and a refusal that throws is no
- *  refusal — the caller's checker dies with node's exit 1, which reads as a RED verdict (6.22.0 review). Such a value
- *  is shown by its built-in tag (`[object Object]`), which cannot be overridden from JSON. */
-export function shown(v) {
-  let t;
-  try {
-    t = String(v);
-  } catch {
-    t = Object.prototype.toString.call(v);
-  }
-  return JSON.stringify(t.length > SHOWN_CHARS ? `${t.slice(0, SHOWN_CHARS)}…` : t);
-}
+// `shown` and `SHOWN_CHARS` moved to quote-core.mjs in 6.28.1, byte-for-byte, so the cost checker quotes through the
+// same helper (GRILL R2-G6). Import them from there; this module does not re-export them ([[L35]]).
 
 /** Raw vitest / Jest status → record status. ONE map for both (their mapped vocabularies are identical). A `Map`,
  *  so a raw status such as `constructor` can never resolve to an inherited member (lessons-learned L15). */

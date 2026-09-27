@@ -6,7 +6,7 @@
 - layer(s): product commands (`.claude/commands/pharn-*.md`); dev tests (`.dev/floor/command-hygiene.test.mjs`); repo-meta (`CLAUDE.md`, `README.md`, `CHANGELOG.md`, `SKILLS_VERSION`). No contract, floor module, hook, settings file or trusted doc changes. No `role:` capability.
 - constitution_refs: [P0, P2, P3, P4, P5, P6, P7]
 - stage model: plan — opus — set by the maintainer's instruction; routed via Agent subagent; effort not routed
-- base: branch `slim-commands` at `db3a81f`, whose tree is byte-identical to `origin/main` `b627409` (6.28.0, #284 merged; `git diff --quiet` exit 0, checked this run). `SKILLS_VERSION` 6.28.0, `MIN_CLI` 0.5.0. Bumps to **6.28.1** (patch, D7). #282 (another session's 6.26.1) is open; whichever merges second renumbers by diff.
+- base: branch `slim-commands` at `db3a81f`, whose tree is byte-identical to `origin/main` `b627409` (6.28.0, #284 merged; `git diff --quiet` exit 0, checked this run). `SKILLS_VERSION` 6.28.0, `MIN_CLI` 0.5.0. Bumps to **6.28.1** (patch, D7). #282 (another session's 6.26.1) is open; whichever merges second renumbers by diff. **Renumbered to 6.28.2 at GATE 2 (REVIEW F7):** #282 merged first as 6.28.1 (`b9c5a46`); see `## Amended at GATE 2`.
 - roadmap: Phase 4.1 of the token-reduction roadmap (maintainer-approved 2026-09-25): "slim the commands (rationale to contracts, keep a 'What you may claim' block, size budget test, short descriptions)". M3 is the maintainer's measurement.
 - gate1: APPROVED 2026-09-27 by the orchestrator under the maintainer's 2026-09-25 delegation — a MODEL decision, NOT a human approval. D1–D10 accepted as written; Q1 → (a): the quick-mode sections stay in their commands, slimmed, and reading them on demand is the named follow-up `quick-mode-on-demand`, revisited after M3. No trusted doc, contract or new file is touched. Re-based on the pointer `83b1f89` (this plan's `d82b87b` merged with `main` `b627409`, tree unchanged).
 - grill: amended after `/pharn-dev-grill` (`GRILL.md`); `## Amended after grill` lists what changed. Stage model: opus — set by the maintainer's instruction; routed via Agent subagent; effort not routed.
@@ -229,7 +229,7 @@
 
 ### 9. Version, installer, `MIN_CLI`
 
-- **6.28.1, a patch.** Every change corrects or clarifies bytes that already ship; no capability, command, checker, contract or frontmatter key is added, and nothing an install holds becomes invalid. The budget test is apparatus and bumps nothing by itself.
+- **6.28.1, a patch** (renumbered to 6.28.2 at GATE 2, F7). Every change corrects or clarifies bytes that already ship; no capability, command, checker, contract or frontmatter key is added, and nothing an install holds becomes invalid. The budget test is apparatus and bumps nothing by itself.
 - **`MIN_CLI` stays `0.5.0`:** the same eleven files at the same paths; no new location (Discovery, "The installer").
 - **An install that edited a command** keeps its edit on `pharn update` (the CLI skips a file it cannot prove pristine unless `--force` — read in `pharn-cli`'s `src/lib/update-decision.ts` at grill), so the saving reaches such a project only for the commands it did not edit.
 - **Each edited command's `version:` field bumps its patch** (for example `pharn-ship.md` 0.11.0 → 0.11.1), the convention every command edit follows (grill G7).
@@ -243,7 +243,7 @@
 - **D4** — The mode-specific sections stay in their commands, slimmed; the on-demand move is Q1 (§4), resolved (a) at GATE 1.
 - **D5** — Pins: every pinned literal survives in place; re-pointing only for a false or dead pinned sentence, only inside `command-hygiene.test.mjs`, each listed (§6).
 - **D6** — The budget test as §7: both bodies and descriptions, measured ceilings with 10% headroom rounded up to 512 B, closure, a vocabulary rule, a block-presence rule, a control per property.
-- **D7** — 6.28.1 (patch); `MIN_CLI` unchanged (§9).
+- **D7** — 6.28.1 (patch; renumbered to 6.28.2 at GATE 2, F7); `MIN_CLI` unchanged (§9).
 - **D8** — The `pharn-dev-*` commands are out of scope: apparatus, whose descriptions cost this repository's sessions, not a user's. Named follow-up `dev-command-slim`.
 - **D9** — The thin callers (`pharn-regress.md`, `pharn-verify.md`) get the new description and lose the "PRODUCT command" blockquote, nothing more: their bodies were slimmed in 6.23.0 and 6.26.0 and are pinned densely (`NAMED_LIMITS`, `STAGE_SCRIPT_WIRING`).
 - **D10** — No stage's deterministic work moves into code here. None of the candidates is small and clear; the nearest is `/pharn-ship` Step 3a's close-out sequence (named follow-up `ship-closeout-script`).
@@ -265,6 +265,19 @@
 - **G11 (minor)** — the claims block's opening sentence names the Floor bullets, hooks included, not only "verdicts" (§2).
 - **G12 (minor)** — `BUILD.md` records kept and removed lines per command per wave, for the review (§6 item 5).
 
+## Amended at GATE 2
+
+GATE 2 = **FIX**, decided by the orchestrator under the maintainer's 2026-09-25 delegation — a model decision, not a
+human one. `REVIEW.md` (`7f6c6c7`) was GREEN at the floor, 0 blocking, 0 lost instructions.
+
+- **F1–F5** — the five dropped narrowings are restored in their claims blocks, one clause each, as `REVIEW.md`
+  proposes; **M1, M3–M12** — the minors, all fixed (M2, the three shipped module headers, stays unedited per D3).
+- **F6** — the CHANGELOG sentence on the audit-bullet mapping is narrowed to what `BUILD.md` and the review show.
+- **F7** — `origin/main` released 6.28.1 first (#282, `b9c5a46`, no command touched); this increment merges
+  `origin/main` and renumbers to **6.28.2**. The budget ceilings are re-checked on the merged tree.
+- New named follow-ups: `module-header-claims-cite` (M2) and `disable-model-invocation-probe` (the review's note on
+  `/pharn-loop` and `/pharn-ship` auto-invocation).
+
 ## Files
 
 - `.dev/features/slim-commands/PLAN.md` — this plan — layer dev artifact
@@ -282,9 +295,9 @@
 - `.claude/commands/pharn-verify.md` — EDIT. Description and the blockquote only (D9) — layer product command
 - `.dev/floor/command-hygiene.test.mjs` — EDIT. The budget section (§7) with its controls; any re-point allowed by §6 item 3 — layer dev tests
 - `CLAUDE.md` — EDIT. One convention bullet: what a product command keeps, where its rationale lives, the budget test and how a ceiling is raised — layer repo-meta
-- `README.md` — EDIT. The badge, `6.28.1` — layer repo-meta
-- `CHANGELOG.md` — EDIT. `## [6.28.1]` above `## [6.28.0]` with the measured before/after — layer repo-meta
-- `SKILLS_VERSION` — EDIT. `6.28.1` — layer repo-meta
+- `README.md` — EDIT. The badge, `6.28.2` (renumbered from `6.28.1` at GATE 2, F7) — layer repo-meta
+- `CHANGELOG.md` — EDIT. `## [6.28.2]` above `## [6.28.1]` (was: above `## [6.28.0]`, renumbered at GATE 2, F7) with the measured before/after — layer repo-meta
+- `SKILLS_VERSION` — EDIT. `6.28.2` (renumbered from `6.28.1` at GATE 2, F7) — layer repo-meta
 
 ### Explicitly not touched by the agent
 

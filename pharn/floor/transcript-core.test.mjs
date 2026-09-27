@@ -23,7 +23,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { mkdtempSync, writeFileSync, mkdirSync, cpSync, readFileSync, readdirSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, cpSync, readFileSync, readdirSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { findTranscriptDirs, transcriptFiles, sessionRequests } from "./transcript-core.mjs";
@@ -213,12 +213,18 @@ const CORE_SOURCE = readFileSync(join(here, "transcript-core.mjs"), "utf8");
 const RULE_ANCHOR = "else if (outputRank(u) > outputRank(seen.usage)) seen.usage = u;";
 
 /** Import a copy of this module with the selection rule replaced. The anchor must be found exactly once and
- *  the mutant must differ from the source, or the control proves nothing (L60). */
+ *  the mutant must differ from the source, or the control proves nothing (L60). Every non-test module of the floor
+ *  is copied beside the mutant, as the renderers' FOLLOWS controls do, because the module has imports of its own
+ *  (since 6.28.1, `./cost-value-core.mjs`), and a lone copy cannot resolve them. */
 async function mutantCore(replacement) {
   assert.equal(CORE_SOURCE.split(RULE_ANCHOR).length, 2, "the rule's anchor must occur exactly once");
   const source = CORE_SOURCE.replace(RULE_ANCHOR, replacement);
   assert.notEqual(source, CORE_SOURCE, "the mutant must differ from the source");
-  const file = join(mkdtempSync(join(tmpdir(), "transcript-core-mutant-")), "transcript-core.mjs");
+  const dir = mkdtempSync(join(tmpdir(), "transcript-core-mutant-"));
+  for (const f of readdirSync(here)) {
+    if (f.endsWith(".mjs") && !f.endsWith(".test.mjs")) copyFileSync(join(here, f), join(dir, f));
+  }
+  const file = join(dir, "transcript-core.mjs");
   writeFileSync(file, source);
   return import(pathToFileURL(file).href);
 }
