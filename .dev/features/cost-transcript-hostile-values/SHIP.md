@@ -70,14 +70,16 @@ deferred:
 - The re-review's candidate: L64 recurred in its own fix pass, because each replacement sentence was probed only over
   the inputs its author pictured (`REVIEW.md`, "Re-review").
 
-## Commits (local only, as the maintainer chose)
+## Commits
 
 - `df2e880`: the reviewed increment (as 6.24.2);
 - `18c12a4`: L64 promoted;
 - `2c38d9a`: the merge of `origin/main` (6.25.0 #280, 6.26.0 #281), renumbered to 6.26.1;
-- the fix-pass commit that carries this file.
+- `e76f419`: the fix pass, R1–R9 and then F1–F5;
+- the commit that carries this section's current text.
 
-Nothing is pushed, and no pull request is open.
+At GATE 2 the maintainer chose to keep the branch local. On 2026-09-27 they chose to open a pull request, so the
+branch was pushed. `main` was still `008b24b` at the push, so no further merge or renumber was needed.
 
 _Chain ran; the named floor verdicts are as shown. This is NOT a judgment that the increment is good or wise; that is
 the human's call at the post-review gate._
