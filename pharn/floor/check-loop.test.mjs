@@ -13,14 +13,28 @@
 //   • a FAIL whose failing_gates is unreadable → INCONCLUSIVE (2), never "assume no reconcile";
 //   • malformed input → INCONCLUSIVE (2), fail-closed, NEVER a silent decision;
 //   • the decision object carries NO review/finding/severity channel — no advisory stage can gate the
-//     loop, structurally (the input does not exist), not by agent discipline.
+//     loop, structurally (the input does not exist), not by agent discipline;
+//   • (6.28.0, `/pharn-loop --quick`) the table is chosen by the SPEC beside the verify report — its `spec_kind` —
+//     never by a flag: a quick SPEC gets the verify-only table and STOP_GREEN_QUICK, never STOP_GREEN; any other SPEC
+//     (none at all included) gets the full table, byte-identical to before, and never STOP_GREEN_QUICK; a reader that
+//     cannot load reads full.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  rmSync,
+  copyFileSync,
+  symlinkSync,
+  appendFileSync,
+  unlinkSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -33,22 +47,33 @@ function json(r) {
   return JSON.parse(r.stdout);
 }
 // write verify-report.json + regression-report.json in a scratch dir; pass their paths to fn. A null obj
-// means "do not write that file" (to test a missing report).
-function withReports(verifyObj, regressObj, fn) {
+// means "do not write that file" (to test a missing report); a string is written verbatim. `spec` (6.28.0), when
+// given, is written as SPEC.md beside the reports — the file check-loop.mjs reads its mode from.
+function withReports(verifyObj, regressObj, fn, spec = null) {
   const root = mkdtempSync(join(tmpdir(), "pharn-loop-"));
   try {
     const vp = join(root, "verify-report.json");
     const rp = join(root, "regression-report.json");
-    if (verifyObj !== null) writeFileSync(vp, JSON.stringify(verifyObj));
-    if (regressObj !== null) writeFileSync(rp, JSON.stringify(regressObj));
+    const raw = (o) => (typeof o === "string" ? o : JSON.stringify(o));
+    if (verifyObj !== null) writeFileSync(vp, raw(verifyObj));
+    if (regressObj !== null) writeFileSync(rp, raw(regressObj));
+    if (spec !== null) writeFileSync(join(root, "SPEC.md"), spec);
     return fn(vp, rp, root);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 }
-function decide(verifyObj, regressObj, iter, cap) {
-  return withReports(verifyObj, regressObj, (vp, rp) => run([vp, rp, "--iter", String(iter), "--cap", String(cap)]));
+function decide(verifyObj, regressObj, iter, cap, spec = null) {
+  return withReports(verifyObj, regressObj, (vp, rp) => run([vp, rp, "--iter", String(iter), "--cap", String(cap)]), spec);
 }
+
+// The minimal SPEC the one kind reading (spec-template-core.mjs, through loop-mode-core.mjs) reads as `quick` or as
+// `feature`: templated by its `spec_template:` line, the kind a frontmatter line. loop-mode-core.test.mjs pins that
+// reading over PHARN's real template; this file tests the TABLE the mode selects.
+const specText = (kind) =>
+  `---\nspec_id: x\nstate: Approved\nspec_content_hash: ""\nspec_template: pharn-default@x\n${kind ? `spec_kind: ${kind}\n` : ""}---\n\n## Intent\n\nx\n`;
+const QUICK_SPEC = specText("quick");
+const FEATURE_SPEC = specText(null);
 
 // the shapes the real stages emit (extra fields are realistic noise).
 const PASS = { feature: "x", gates: {}, verdict: "PASS", failing_gates: [] };
@@ -240,11 +265,13 @@ test("fail-closed: a known flag missing its value → INCONCLUSIVE, exit 2", () 
 test("★ /review-independence: the decision object carries NO review/finding/severity channel", () => {
   for (const verifyObj of [VFAIL, VRECONCILE, VINCOMPLETE]) {
     const o = json(decide(verifyObj, CLEAN, 1, 3));
+    // `mode` (6.28.0) is the one key added: the table the SPEC's kind chose — a closed token, not a review channel.
     assert.deepEqual(Object.keys(o).sort(), [
       "cap",
       "decision",
       "floor_green",
       "iter",
+      "mode",
       "reason",
       "regress_verdict",
       "terminal_cause",
@@ -346,4 +373,243 @@ test("★ STOP_GREEN is unreachable with any AC id in failing_gates — the verd
       assert.notEqual(json(decide(v, CLEAN, i, c)).decision, "STOP_GREEN");
     }
   }
+});
+
+// ── THE QUICK TABLE (6.28.0, /pharn-loop --quick) — one case per form (L52) ─────────────────────────────────────────
+//
+// The SPEC beside the verify report reads `spec_kind: quick`, so the table is verify-only: the regression report is
+// never opened — present or absent, stale or fresh, parseable or not — and the green token is STOP_GREEN_QUICK.
+
+/** The regression-report states a quick run may find on disk; none may change a quick decision. */
+const STALE_REGRESS = [
+  ["absent", null],
+  ["a stale no-regressions report", CLEAN],
+  ["a regressions report", REGR],
+  ["an inconclusive report", RINCONCLUSIVE],
+  ["an unparseable file", "{ not json"],
+];
+
+test("★ quick: verify PASS → STOP_GREEN_QUICK, exit 0 — whatever regression report is on disk, it is never read", () => {
+  for (const [label, regress] of STALE_REGRESS) {
+    const r = decide(PASS, regress, 1, 3, QUICK_SPEC);
+    assert.equal(r.status, 0, `${label}: ${r.stdout}`);
+    const o = json(r);
+    assert.equal(o.decision, "STOP_GREEN_QUICK", label);
+    assert.equal(o.mode, "quick", label);
+    assert.equal(o.regress_verdict, null, `${label}: the quick table reads no regression verdict`);
+    assert.equal(o.floor_green, true, label);
+    assert.equal(o.terminal_cause, null, label);
+    assert.match(o.reason, /quick table/, label);
+  }
+});
+
+test("★ quick: verify FAIL → CONTINUE under the cap (3), STOP_CAP at it (1) — whatever regression report is on disk", () => {
+  for (const [label, regress] of STALE_REGRESS) {
+    let o = json(decide(VFAIL, regress, 1, 3, QUICK_SPEC));
+    assert.equal(o.decision, "CONTINUE", label);
+    assert.equal(o.regress_verdict, null, label);
+    o = json(decide(VFAIL, regress, 3, 3, QUICK_SPEC));
+    assert.equal(o.decision, "STOP_CAP", label);
+    assert.equal(o.floor_green, false, label);
+  }
+});
+
+test("★ quick: verify INCOMPLETE → CONTINUE under the cap, STOP_CAP at it", () => {
+  assert.equal(decide(VINCOMPLETE, null, 1, 3, QUICK_SPEC).status, 3);
+  assert.equal(json(decide(VINCOMPLETE, null, 3, 3, QUICK_SPEC)).decision, "STOP_CAP");
+});
+
+test("★ quick: verify INCONCLUSIVE → STOP_TERMINAL (unmeasured), exit 4", () => {
+  const r = decide(VINCONCLUSIVE, CLEAN, 1, 3, QUICK_SPEC);
+  assert.equal(r.status, 4);
+  assert.equal(json(r).decision, "STOP_TERMINAL");
+  assert.equal(json(r).terminal_cause, "unmeasured");
+});
+
+test("★ quick: an ac-evidence red → STOP_TERMINAL (ac-evidence); a reconcile red → STOP_TERMINAL (reconcile) — never retried", () => {
+  let o = json(decide(VAC_EVIDENCE, null, 1, 3, QUICK_SPEC));
+  assert.equal(o.decision, "STOP_TERMINAL");
+  assert.equal(o.terminal_cause, "ac-evidence");
+  o = json(decide(VRECONCILE, null, 1, 3, QUICK_SPEC));
+  assert.equal(o.decision, "STOP_TERMINAL");
+  assert.equal(o.terminal_cause, "reconcile");
+});
+
+test("★ quick: an unusable VERIFY report is INCONCLUSIVE (exit 2) — missing, malformed, outside its enum, or a FAIL with unreadable gates", () => {
+  for (const [label, verify] of [
+    ["missing", null],
+    ["unparseable", "{ torn"],
+    ["outside its enum", { verdict: "GREEN" }],
+    ["FAIL with failing_gates not an array", { ...VFAIL, failing_gates: "reconcile" }],
+  ]) {
+    const r = decide(verify, CLEAN, 1, 3, QUICK_SPEC);
+    assert.equal(r.status, 2, label);
+    const o = json(r);
+    assert.equal(o.decision, "INCONCLUSIVE", label);
+    assert.equal(o.mode, "quick", `${label}: the mode is known once argv parsed`);
+    assert.equal(o.regress_verdict, null, label);
+  }
+});
+
+test("full mode is BYTE-IDENTICAL with a feature SPEC beside the reports, or none (L41 — every pre-6.28.0 fixture has none)", () => {
+  const cases = [
+    [PASS, CLEAN, 1, 3],
+    [PASS, REGR, 1, 3],
+    [PASS, REGR, 3, 3],
+    [VFAIL, CLEAN, 1, 3],
+    [VINCOMPLETE, CLEAN, 3, 3],
+    [VINCONCLUSIVE, CLEAN, 1, 3],
+    [PASS, RINCONCLUSIVE, 1, 3],
+    [VRECONCILE, CLEAN, 1, 3],
+    [VAC_EVIDENCE, REGR, 1, 3],
+    [PASS, null, 1, 3],
+    [PASS, "{ not json", 1, 3],
+  ];
+  for (const [v, rg, i, c] of cases) {
+    // ONE directory, run twice — without a SPEC, then with a feature SPEC — so a path in a `reason` is the same path.
+    withReports(v, rg, (vp, rp, root) => {
+      const args = [vp, rp, "--iter", String(i), "--cap", String(c)];
+      const none = run(args);
+      writeFileSync(join(root, "SPEC.md"), FEATURE_SPEC);
+      const feature = run(args);
+      assert.equal(feature.status, none.status, JSON.stringify([v.verdict, rg]));
+      assert.equal(feature.stdout, none.stdout, "the whole document, byte for byte");
+      assert.equal(json(none).mode, "full");
+    });
+  }
+  // A full run with no regression report is INCONCLUSIVE — the stricter table demands the verdict a quick run never makes.
+  assert.equal(json(decide(PASS, null, 1, 3, FEATURE_SPEC)).decision, "INCONCLUSIVE");
+});
+
+test("★ THE TOKEN IS BOUND TO THE KIND, both ways (L37): a feature SPEC never yields STOP_GREEN_QUICK, a quick SPEC never STOP_GREEN", () => {
+  const verifies = [PASS, VFAIL, VINCOMPLETE, VINCONCLUSIVE, VRECONCILE, VAC_EVIDENCE, VAC_DELIVERY];
+  const regresses = [CLEAN, REGR, RINCONCLUSIVE, null];
+  const seen = { feature: new Set(), quick: new Set(), none: new Set() };
+  for (const v of verifies)
+    for (const rg of regresses)
+      for (const [i, c] of [
+        [1, 3],
+        [3, 3],
+      ]) {
+        seen.feature.add(json(decide(v, rg, i, c, FEATURE_SPEC)).decision);
+        seen.quick.add(json(decide(v, rg, i, c, QUICK_SPEC)).decision);
+        seen.none.add(json(decide(v, rg, i, c)).decision);
+      }
+  assert.ok(!seen.feature.has("STOP_GREEN_QUICK") && !seen.none.has("STOP_GREEN_QUICK"), `full: ${[...seen.feature]}`);
+  assert.ok(!seen.quick.has("STOP_GREEN"), `quick: ${[...seen.quick]}`);
+  // non-vacuous: each table reached its own green
+  assert.ok(seen.feature.has("STOP_GREEN") && seen.quick.has("STOP_GREEN_QUICK"));
+});
+
+test("★ THE KIND, NOT A FLAG, SELECTS THE TABLE (L40): the same reports under a flipped kind decide differently; a flag is refused", () => {
+  // PASS + a regressions report: the full table iterates on the regression, the quick one never reads it.
+  assert.equal(json(decide(PASS, REGR, 1, 3, FEATURE_SPEC)).decision, "CONTINUE");
+  assert.equal(json(decide(PASS, REGR, 1, 3, QUICK_SPEC)).decision, "STOP_GREEN_QUICK");
+  // No argument can select the table: --quick and --mode are unrecognized flags, beside either SPEC.
+  for (const spec of [FEATURE_SPEC, QUICK_SPEC]) {
+    for (const extra of [["--quick"], ["--mode", "quick"], ["--mode", "full"]]) {
+      withReports(
+        PASS,
+        CLEAN,
+        (vp, rp) => {
+          const r = run([vp, rp, "--iter", "1", "--cap", "3", ...extra]);
+          assert.equal(r.status, 2, extra.join(" "));
+          assert.equal(json(r).decision, "INCONCLUSIVE");
+          assert.equal(json(r).mode, null, "an argv refusal carries no mode — no path was read");
+        },
+        spec
+      );
+    }
+  }
+});
+
+/** A copy of check-loop.mjs beside a loop-mode-core.mjs broken one way, so the dynamic import fails. */
+const BREAKS = [
+  ["throws at load", (f) => appendFileSync(f, '\nthrow new Error("simulated load failure");\n')],
+  ["exports nothing (an older copy)", (f) => writeFileSync(f, "export {};\n")],
+  ["is missing", (f) => unlinkSync(f)],
+  ["returns a non-member token", (f) => writeFileSync(f, 'export const loopModeOf = () => "QUICK";\n')],
+];
+
+test("★ D3 — a mode reader that cannot load reads FULL: a full case decides exactly as before, a quick case stops INCONCLUSIVE", () => {
+  for (const [label, breakIt] of BREAKS) {
+    const dir = mkdtempSync(join(tmpdir(), "pharn-loop-d3-"));
+    try {
+      for (const m of ["check-loop.mjs", "loop-mode-core.mjs", "spec-template-core.mjs", "frontmatter-core.mjs"]) {
+        copyFileSync(join(here, m), join(dir, m));
+      }
+      breakIt(join(dir, "loop-mode-core.mjs"));
+      const copied = join(dir, "check-loop.mjs");
+      const runCopy = (args) => spawnSync(process.execPath, [copied, ...args], { encoding: "utf8" });
+      // A full case: byte-identical to the real checker's output.
+      withReports(
+        PASS,
+        CLEAN,
+        (vp, rp) => {
+          const a = run([vp, rp, "--iter", "1", "--cap", "3"]);
+          const b = runCopy([vp, rp, "--iter", "1", "--cap", "3"]);
+          assert.equal(b.status, a.status, label);
+          assert.equal(b.stdout, a.stdout, `${label}: the full decision is unchanged`);
+        },
+        FEATURE_SPEC
+      );
+      // A quick case (a quick SPEC, no regression report): read as FULL, so the missing report is bad input.
+      withReports(
+        PASS,
+        null,
+        (vp, rp) => {
+          const b = runCopy([vp, rp, "--iter", "1", "--cap", "3"]);
+          assert.equal(b.status, 2, `${label}: ${b.stdout}${b.stderr}`);
+          assert.equal(json(b).decision, "INCONCLUSIVE", label);
+          assert.equal(json(b).mode, "full", label);
+          // control: the intact checker reads the same directory as quick
+          assert.equal(json(run([vp, rp, "--iter", "1", "--cap", "3"])).decision, "STOP_GREEN_QUICK");
+        },
+        QUICK_SPEC
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test("★ WIRING (L45) — the COMMITTED /pharn-loop stop line, executed in a quick feature directory → STOP_GREEN_QUICK; a feature SPEC there → INCONCLUSIVE", () => {
+  const cmd = readFileSync(join(here, "..", "..", ".claude", "commands", "pharn-loop.md"), "utf8");
+  const lines = cmd
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("node pharn/floor/check-loop.mjs "));
+  assert.equal(lines.length, 1, `pharn-loop.md must pin exactly ONE stop line, found ${lines.length}`);
+  const line = lines[0].replaceAll("<name>", "demo").replace("<N>", "1").replace("<M>", "3");
+  assert.doesNotMatch(line, /<[a-z][^>]*>/, `an unsubstituted placeholder remains: ${line}`);
+  const proj = mkdtempSync(join(tmpdir(), "pharn-loop-wiring-"));
+  try {
+    mkdirSync(join(proj, "pharn"), { recursive: true });
+    symlinkSync(here, join(proj, "pharn", "floor"));
+    const fd = join(proj, "pharn", "features", "demo");
+    mkdirSync(fd, { recursive: true });
+    writeFileSync(join(fd, "verify-report.json"), JSON.stringify(PASS));
+    const sh = () => spawnSync("sh", ["-c", line], { cwd: proj, encoding: "utf8" });
+    writeFileSync(join(fd, "SPEC.md"), QUICK_SPEC);
+    let r = sh();
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.equal(json(r).decision, "STOP_GREEN_QUICK");
+    // CONTROL: the same directory and line over a FEATURE SPEC — the full table needs the regression report.
+    writeFileSync(join(fd, "SPEC.md"), FEATURE_SPEC);
+    r = sh();
+    assert.equal(r.status, 2, r.stdout);
+    assert.equal(json(r).decision, "INCONCLUSIVE");
+  } finally {
+    rmSync(proj, { recursive: true, force: true });
+  }
+});
+
+test("✧ CLOSURE (L36) — the source assigns exactly five decisions, and INCONCLUSIVE only in its refusal objects", () => {
+  const src = readFileSync(CL, "utf8");
+  const assigned = [...new Set([...src.matchAll(/decision = "([^"]+)"/g)].map((m) => m[1]))].sort();
+  assert.deepEqual(assigned, ["CONTINUE", "STOP_CAP", "STOP_GREEN", "STOP_GREEN_QUICK", "STOP_TERMINAL"]);
+  const literal = [...new Set([...src.matchAll(/decision: "([^"]+)"/g)].map((m) => m[1]))];
+  assert.deepEqual(literal, ["INCONCLUSIVE"], "INCONCLUSIVE is emitted only by the two refusal objects");
+  // Every assigned token is reachable (non-vacuous): CONTINUE, STOP_CAP, STOP_GREEN, STOP_TERMINAL above, and:
+  assert.equal(json(decide(PASS, null, 1, 3, QUICK_SPEC)).decision, "STOP_GREEN_QUICK");
 });

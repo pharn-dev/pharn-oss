@@ -13,11 +13,22 @@
 // because of it. Same standing as lessons-learned.md L8 and PRs #114/#115, which say so rather than
 // dressing a design-time addition as a failure-triggered one.
 //
-// IT IS NOT AN INPUT TO THE STOP DECISION (structural, not discipline): check-loop.mjs's input signature
-// is exactly { verify-report.json, regression-report.json, iter, cap }. It has no record parameter, so
-// this checker CANNOT feed it. The record is validated AFTER the stop decision already exists. Reading a
-// record's `decision` back into the loop would be the fix#3 disease; here it is impossible because the
-// input does not exist.
+// IT IS NOT AN INPUT TO THE STOP DECISION (structural, not discipline): check-loop.mjs's inputs are the two
+// verdict reports, `--iter` / `--cap`, and ONE token of the feature's own SPEC — its `spec_kind`, which chooses the
+// table (6.28.0). It has no record parameter, so this checker CANNOT feed it. The record is validated AFTER the stop
+// decision already exists. Reading a record's `decision` back into the loop would be the fix#3 disease; here it is
+// impossible because the input does not exist.
+//
+// ── `mode` and STOP_GREEN_QUICK (6.28.0, `/pharn-loop --quick`) ─────────────────────────────────────────────────
+// `decision` gains `STOP_GREEN_QUICK` — check-loop.mjs's green in its quick table (verify PASS, no regression verdict
+// read), which is NOT `STOP_GREEN`. The envelope gains a sixth, OPTIONAL field `mode` ∈ LOOP_MODES {full, quick}
+// (loop-mode-core.mjs owns the vocabulary, L35): absent means `full`, so every pre-6.28.0 record keeps its meaning. It
+// records the run's INVOCATION (`quick` iff `--quick` was the first argument token) — never a copy of check-loop.mjs's
+// JSON `mode` (pharn-contracts/loop-record.md). When present it passes cleanScalar, then exact membership (L14, L15).
+// ONE cross-field rule, both halves enum tests (primitive #3): `STOP_GREEN_QUICK` requires `mode: quick`, and
+// `STOP_GREEN` forbids it. Every other decision takes either mode — a quick run records `mode: quick` on every record,
+// blocked ones included. That the mode is the TRUE invocation is advisory; that it AGREES with the table the SPEC's
+// kind selects is check-loop-decision.mjs's question (MODE_MISMATCH), never this file's.
 //
 // NON-LLM. Node stdlib only (fs). No network, no eval, no deps, no child processes.
 //
@@ -32,8 +43,9 @@
 // ── Honest scope (P0) — the split this file must never blur ───────────────────────────────────────────
 // FLOOR (what the exit code guarantees, GIVEN a record handed to it): the envelope's four MANDATORY
 //   fields, plus the optional fifth (`cap`, ADDITIVE since the loop-decision-integrity increment — see
-//   below), are shape-valid (enum membership + anchored regexes over control-char-guarded values + an
-//   integer compare), and the Handoff's STRUCTURE is exactly `## Handoff` containing `### investigated`,
+//   below) and the optional sixth (`mode`, 6.28.0 — above), are shape-valid (enum membership + anchored regexes over
+//   control-char-guarded values + an integer compare), `decision` and `mode` are a consistent pair (the one
+//   cross-field rule, above), and the Handoff's STRUCTURE is exactly `## Handoff` containing `### investigated`,
 //   `### learned`, `### next_steps` — in that order, as the ONLY `###` headings there, each with a
 //   non-blank body. All of it is ARCHITECTURE §2 primitive #3.
 // ADVISORY (what it can NEVER check): that the Handoff is ACCURATE, complete, or useful; that `decision`
@@ -57,7 +69,7 @@
 // for every other scalar. A record with no `cap` stays GREEN here, same as before this field existed.
 //
 // ── Trust (P2) — why the heading test is EXACT-EQUALITY, and what that does NOT buy ───────────────────
-// The record is untrusted DATA. The verdict ranges ONLY over four enum/regex-gated scalars and over
+// The record is untrusted DATA. The verdict ranges ONLY over enum/regex-gated scalars and over
 // heading-list equality; the Handoff BODIES are never read for meaning.
 //
 // The bodies are untrusted free text scanned by the SAME heading regex that establishes the structure —
@@ -83,13 +95,18 @@
 import { readFileSync } from "node:fs";
 import { FM_RE, stripBom } from "./frontmatter-core.mjs";
 import { HANDOFF_SECTIONS, handoffSections } from "./loop-record-core.mjs";
+import { LOOP_MODES } from "./loop-mode-core.mjs";
 
-// The `decision` enum — exactly the values check-loop.mjs EMITS as `.decision` at a stop. `CONTINUE`
-// (which check-loop.mjs also emits) is deliberately absent: a record is written only at a STOP, so a
-// record claiming CONTINUE is malformed by construction. A Set, so membership is `.has()` and no
-// arbitrary key is ever indexed into a plain object (lessons-learned.md L15 — an inherited prototype
-// member such as `toString` would be both truthy and non-nullish and would leak past `||` / `??`).
-const DECISION_ENUM = new Set(["STOP_GREEN", "STOP_CAP", "STOP_TERMINAL", "INCONCLUSIVE"]);
+// The `decision` enum — exactly the values check-loop.mjs EMITS as `.decision` at a stop, STOP_GREEN_QUICK included
+// (6.28.0). `CONTINUE` (which check-loop.mjs also emits) is deliberately absent: a record is written only at a STOP, so
+// a record claiming CONTINUE is malformed by construction. A Set, so membership is `.has()` and no arbitrary key is
+// ever indexed into a plain object (lessons-learned.md L15 — an inherited prototype member such as `toString` would be
+// both truthy and non-nullish and would leak past `||` / `??`). check-loop-record.test.mjs holds it equal to
+// check-loop.mjs's stop tokens and to check-loop-decision.mjs's own copy.
+const DECISION_ENUM = new Set(["STOP_GREEN", "STOP_GREEN_QUICK", "STOP_CAP", "STOP_TERMINAL", "INCONCLUSIVE"]);
+
+// The optional `mode` field's vocabulary, as a Set over loop-mode-core.mjs's frozen LOOP_MODES (L15, L35).
+const MODE_ENUM = new Set(LOOP_MODES);
 
 // HANDOFF_SECTIONS + the four structure regexes + the fence-pairing scan now live in
 // ./loop-record-core.mjs, so render-run-report.mjs reads the SAME grammar instead of re-deriving it
@@ -214,6 +231,38 @@ function gate(recordPath) {
     return red(`loop-record's \`date\` is ${JSON.stringify(date)} (${recordPath}) — expected an ISO calendar date, YYYY-MM-DD.`);
   }
 
+  // (A5) mode — OPTIONAL (6.28.0); absent means `full`. Guard first (L14), then exact membership (L15). The value
+  // quoted in a refusal is JSON.stringify of a string already proved to be one (L62).
+  let mode = "full";
+  if (fields.has("mode")) {
+    const m = fields.get("mode");
+    if (!cleanScalar(m, 16) || !MODE_ENUM.has(m)) {
+      return red(
+        `loop-record's \`mode\` is ${JSON.stringify(m)} (${recordPath}) — when present, expected one of ` +
+          `{${[...MODE_ENUM].join(", ")}} (absent means full). It records the run's invocation: quick iff /pharn-loop was ` +
+          `invoked with --quick.`
+      );
+    }
+    mode = m;
+  }
+
+  // (A6) decision ↔ mode — the one cross-field rule (enum membership over the pair). STOP_GREEN_QUICK is the quick
+  // table's green and requires `mode: quick`; STOP_GREEN is the full table's and forbids it. Every other decision
+  // takes either mode.
+  if (decision === "STOP_GREEN_QUICK" && mode !== "quick") {
+    return red(
+      `loop-record's \`decision\` is STOP_GREEN_QUICK but its \`mode\` is ${mode} (${recordPath}) — STOP_GREEN_QUICK is the ` +
+        `quick table's green and requires \`mode: quick\`. The record's mode is the run's invocation: a run without ` +
+        `--quick that reached STOP_GREEN_QUICK ran over a quick SPEC, and is never committed.`
+    );
+  }
+  if (decision === "STOP_GREEN" && mode === "quick") {
+    return red(
+      `loop-record's \`decision\` is STOP_GREEN but its \`mode\` is quick (${recordPath}) — a quick run's green is ` +
+        `STOP_GREEN_QUICK, never STOP_GREEN, which claims a regression verdict a quick run never reads.`
+    );
+  }
+
   // ── (B) The Handoff — structure only; the bodies are never read for meaning (P2) ────────────────────
   const body = text.slice(text.match(FM_RE)[0].length);
   const { count, subs, nonEmpty } = handoff(body);
@@ -255,7 +304,7 @@ function gate(recordPath) {
   }
 
   console.log(
-    `GREEN — loop-record is well-shaped (${recordPath}): decision ${decision}, iterations ${iterations}, ` +
+    `GREEN — loop-record is well-shaped (${recordPath}): decision ${decision}, mode ${mode}, iterations ${iterations}, ` +
       `commit ${commit}, date ${date}; Handoff carries ${HANDOFF_SECTIONS.join(", ")}. NOTE (P0): this is ` +
       `the verdict GIVEN this record — that a record was written at all, that its narrative is ACCURATE, ` +
       `that \`decision\` AGREES with check-loop.mjs's emitted value, and that \`commit\`/\`date\` are ` +

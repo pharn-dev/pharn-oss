@@ -660,3 +660,98 @@ test("extra argv → RED (a malformed invocation is bad input, fail-closed)", ()
   assert.equal(r.status, 1);
   assert.match(r.out, /usage:/);
 });
+
+// ── `mode` and STOP_GREEN_QUICK (6.28.0, /pharn-loop --quick) — one case per member (L52) ─────────────────────────────
+//
+// `mode` is OPTIONAL (absent = full, so every record above keeps its meaning), shape-checked when present (cleanScalar,
+// then exact membership — L14, L15), and bound to `decision` by ONE cross-field rule: STOP_GREEN_QUICK requires
+// `mode: quick`, STOP_GREEN forbids it. It records the run's INVOCATION; that it agrees with the SPEC's kind is
+// check-loop-decision.mjs's question, never this checker's.
+
+test("STOP_GREEN_QUICK + mode: quick → GREEN, and the GREEN line names the mode", () => {
+  const r = run(record({ fm: { decision: "STOP_GREEN_QUICK", mode: "quick" } }));
+  assert.equal(r.status, 0, r.out);
+  assert.match(r.out, /decision STOP_GREEN_QUICK, mode quick/);
+});
+
+for (const [label, fm] of [
+  ["mode: full", { mode: "full" }],
+  ["no mode at all (absent reads full) — D8's own record, as a run without --quick writes it (grill G1)", { mode: undefined }],
+]) {
+  test(`STOP_GREEN_QUICK with ${label} → RED (the quick green requires mode: quick)`, () => {
+    const r = run(record({ fm: { decision: "STOP_GREEN_QUICK", ...fm } }));
+    assert.equal(r.status, 1, r.out);
+    assert.match(r.out, /STOP_GREEN_QUICK but its `mode` is full/);
+  });
+}
+
+test("STOP_GREEN + mode: quick → RED (a quick run's green is never STOP_GREEN)", () => {
+  const r = run(record({ fm: { decision: "STOP_GREEN", mode: "quick" } }));
+  assert.equal(r.status, 1, r.out);
+  assert.match(r.out, /STOP_GREEN but its `mode` is quick/);
+});
+
+test("STOP_GREEN + mode: full, and STOP_GREEN with no mode → GREEN (a full run may omit it)", () => {
+  assert.equal(run(record({ fm: { decision: "STOP_GREEN", mode: "full" } })).status, 0);
+  const r = run(record({ fm: { decision: "STOP_GREEN" } }));
+  assert.equal(r.status, 0, r.out);
+  assert.match(r.out, /mode full/, "an absent mode is reported as full");
+});
+
+for (const decision of ["STOP_CAP", "STOP_TERMINAL", "INCONCLUSIVE"]) {
+  test(`${decision} takes either mode → GREEN with quick, with full, and with none`, () => {
+    for (const mode of ["quick", "full", undefined])
+      assert.equal(run(record({ fm: { decision, mode } })).status, 0, `${decision} / ${mode}`);
+  });
+}
+
+for (const [label, value] of [
+  ["full", "full"],
+  ["quick", "quick"],
+  ["quick, double-quoted (the envelope strips matching quotes)", '"quick"'],
+  ["quick, surrounded by spaces (the envelope trims)", "  quick  "],
+]) {
+  test(`mode ${label} → GREEN (shape)`, () => {
+    assert.equal(run(record({ fm: { decision: "STOP_CAP", mode: value } })).status, 0);
+  });
+}
+
+for (const [label, value] of [
+  ["QUICK (case-sensitive membership)", "QUICK"],
+  ["fast (a non-member)", "fast"],
+  ["full,quick (not a list)", "full,quick"],
+  ["a value carrying a tab", "full\tquick"],
+  ["toString (a prototype name — L15)", "toString"],
+  ["empty", ""],
+]) {
+  test(`mode ${label} → RED, naming the vocabulary`, () => {
+    const r = run(record({ fm: { decision: "STOP_CAP", mode: value } }));
+    assert.equal(r.status, 1, r.out);
+    assert.match(r.out, /expected one of \{full, quick\}/);
+  });
+}
+
+test("a BLOCKED quick record (INCONCLUSIVE, blocked: not-quick, mode: quick) → GREEN — the S6c record's shape", () => {
+  const r = run(record({ fm: { decision: "INCONCLUSIVE", blocked: "not-quick", mode: "quick" } }));
+  assert.equal(r.status, 0, r.out);
+});
+
+test("✧ CLOSURE (L36) — the accepted decisions EQUAL check-loop.mjs's stop tokens plus INCONCLUSIVE, CONTINUE excluded", () => {
+  const loopSrc = readFileSync(join(here, "check-loop.mjs"), "utf8");
+  const stops = [...new Set([...loopSrc.matchAll(/decision = "([^"]+)"/g)].map((m) => m[1]))].filter((d) => d !== "CONTINUE");
+  const expected = [...stops, "INCONCLUSIVE"].sort();
+  assert.deepEqual(
+    expected,
+    ["INCONCLUSIVE", "STOP_CAP", "STOP_GREEN", "STOP_GREEN_QUICK", "STOP_TERMINAL"],
+    "non-vacuous: the scan found every token"
+  );
+  const ownSrc = readFileSync(CHECKER, "utf8");
+  const declared = JSON.parse(`[${ownSrc.match(/const DECISION_ENUM = new Set\(\[([^\]]*)\]\)/)[1]}]`).sort();
+  assert.deepEqual(declared, expected, "check-loop-record.mjs's DECISION_ENUM");
+  // Behavioural, each token through the checker (STOP_GREEN_QUICK with its required mode), and CONTINUE refused.
+  for (const decision of expected) {
+    const fm = decision === "STOP_GREEN_QUICK" ? { decision, mode: "quick" } : { decision };
+    assert.equal(run(record({ fm })).status, 0, decision);
+  }
+  assert.equal(run(record({ fm: { decision: "CONTINUE" } })).status, 1);
+});

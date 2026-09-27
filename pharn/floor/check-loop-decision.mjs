@@ -14,8 +14,9 @@
 // with what `check-loop.mjs` actually emitted (membership is checked, agreement is not)". Nothing in the
 // pipeline ever re-derived a recorded decision from the reports it claims to summarize, so a
 // hand-authored or corrupted `LOOP.md` was indistinguishable on disk from a genuinely floor-computed one
-// — and on `STOP_GREEN` specifically, that record is committed to a new branch UNATTENDED, with no human
-// between the record and the commit. This file closes exactly that gap.
+// — and on a green stop specifically (`STOP_GREEN`, or `STOP_GREEN_QUICK` under `/pharn-loop --quick`, 6.28.0), that
+// record is committed to a new branch UNATTENDED, with no human between the record and the commit. This file closes
+// exactly that gap.
 //
 // WHY REUSE, NOT REIMPLEMENT (P3/P4 — the check-plan-spec-agree.mjs idiom, byte-for-byte). This file
 // shells `check-loop.mjs` as a CLI via `spawnSync` — NOT a sibling import of its internals — the SAME
@@ -25,15 +26,25 @@
 // no new decision logic of its own — it only COMPARES the recorded token to the token a live run emits.
 //
 // STRUCTURAL, NOT A NEW GATE ON THE STOP ITSELF (the invariant this file must never blur): `check-loop.mjs`'s
-// input signature stays EXACTLY `{verify-report.json, regression-report.json, iter, cap}` — this file is
-// not one of its inputs and cannot become one. This checker runs strictly AFTER a stop already exists (it
-// consumes `check-loop.mjs`'s OUTPUT, from a fresh invocation, never feeds its input) and gates only the
-// downstream `/pharn-loop` Step 6c commit — never the stop decision itself. "No advisory stage can gate
-// the loop's stop" remains true by construction.
+// inputs are the two verdict reports, `--iter` / `--cap`, and ONE token of the feature's own SPEC — its `spec_kind`,
+// read from the `SPEC.md` beside the verify report, which chooses the table (6.28.0) — and this file is not one of
+// them and cannot become one. This checker runs strictly AFTER a stop already exists (it consumes `check-loop.mjs`'s
+// OUTPUT, from a fresh invocation, never feeds its input) and gates only the downstream `/pharn-loop` Step 6c commit —
+// never the stop decision itself. "No advisory stage can gate the loop's stop" remains true by construction.
+//
+// THE MODE (6.28.0, `/pharn-loop --quick`). The re-run reads the SPEC beside the record — the record's own directory
+// is the verify report's — so the table it re-derives with is the SPEC's kind, read in ANY state: /pharn-loop's Step
+// 6a reverts a non-green stop's SPEC to Draft before this check runs, and the revert never touches the kind line (L42,
+// L58). The record's OPTIONAL `mode` (absent → `full`) records the run's INVOCATION; after the live re-run it must
+// equal the re-derived mode (check-loop.mjs's JSON `mode`, absent → `full`), else RED `MODE_MISMATCH`, reported beside
+// any decision mismatch. That is what makes a run invoked without `--quick` over a quick SPEC (D8) fail here: its
+// record says full, the SPEC's kind says quick. It certifies AGREEMENT between the record and the SPEC, never who
+// chose either (L43). The output lines name the re-derived mode and, in quick mode, cite `verify-report.json` alone —
+// the quick table never opens the regression report, so this file never says it did (grill G3).
 //
 // DELIBERATE ASYMMETRY WITH check-ship-briefing.mjs (stated, not accidental). That checker's cross-file
 // re-verification is ANNOTATION ONLY — it never gates GATE 2 — because a human GATE-2 decision already
-// follows it, and a wrong briefing is still caught there. `/pharn-loop`'s `STOP_GREEN` → commit has NO
+// follows it, and a wrong briefing is still caught there. `/pharn-loop`'s green stop → commit has NO
 // human between the record and the branch, so this checker GATES that one step. The precedent does not
 // transfer because the surrounding human-gate context differs, not because the pattern itself changed.
 //
@@ -60,7 +71,8 @@
 //
 // ── NO CROSS-TREE IMPORT, NO SIBLING-INTERNALS IMPORT (P3) ──────────────────────────────────────────────
 // `FM_RE` / `stripBom` come from the shared `frontmatter-core.mjs` (this file is added to its materialized
-// `CONSUMERS` list). The small envelope-scalar helpers below are RE-IMPLEMENTED IN-FILE rather than
+// `CONSUMERS` list), and `LOOP_MODES` from `loop-mode-core.mjs` — both cores, never a CLI's internals (6.28.0: the mode
+// vocabulary has one owner, L35). The small envelope-scalar helpers below are RE-IMPLEMENTED IN-FILE rather than
 // imported from `check-loop-record.mjs` — the same discipline `check-plan-spec-agree.mjs` already applies
 // to `check-spec.mjs`'s `readValue`: two files agreeing on a tiny parse is a CONVENTION tests can detect,
 // not a coupling that would make one file's shape depend on another's internals.
@@ -68,24 +80,29 @@
 // Usage:
 //   node pharn/floor/check-loop-decision.mjs <LOOP.md>
 //
-// Exit: 0 (GREEN) — the record is a blocked stop (skipped), or its recorded decision was re-derived
+// Exit: 0 (GREEN) — the record is a blocked stop (skipped), or its recorded decision AND mode were re-derived
 //                    verbatim from a live run of check-loop.mjs against its cited reports.
 //       1 (RED)   — every refusal: a malformed record/envelope, a missing/invalid `iterations` or `cap`
-//                    on a non-blocked record, or a live re-derivation that does NOT match the recorded
-//                    decision (reports missing/malformed, or a genuine mismatch). Fail-closed throughout.
+//                    on a non-blocked record, a malformed `mode`, or a live re-derivation that does NOT match the
+//                    recorded decision (reports missing/malformed, or a genuine mismatch — DECISION_MISMATCH) or the
+//                    recorded mode (MODE_MISMATCH). Fail-closed throughout.
 
 import { readFileSync, existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { FM_RE, stripBom } from "./frontmatter-core.mjs";
+import { LOOP_MODES } from "./loop-mode-core.mjs";
 
 // Resolve the sibling CLI RELATIVE TO THIS FILE (import.meta.url), never the cwd — so this check behaves
 // identically no matter where /pharn-loop is invoked from (mirrors check-plan-spec-agree.mjs).
 const here = dirname(fileURLToPath(import.meta.url));
 const CHECK_LOOP = join(here, "check-loop.mjs");
 
-const DECISION_ENUM = new Set(["STOP_GREEN", "STOP_CAP", "STOP_TERMINAL", "INCONCLUSIVE"]);
+// check-loop-record.mjs carries the same enum; a behavioural test runs each token through both (6.28.0).
+const DECISION_ENUM = new Set(["STOP_GREEN", "STOP_GREEN_QUICK", "STOP_CAP", "STOP_TERMINAL", "INCONCLUSIVE"]);
+// The optional `mode`'s vocabulary — loop-mode-core.mjs's LOOP_MODES, never restated (L35).
+const MODE_ENUM = new Set(LOOP_MODES);
 const ITER_RE = /^\d+$/;
 const CAP_RE = /^\d+$/;
 
@@ -167,6 +184,20 @@ function gate(recordPath) {
     );
   }
 
+  // `mode` — OPTIONAL (6.28.0); absent means `full` (every pre-6.28.0 record). Guard first (L14), then exact
+  // membership (L15). It records the run's invocation, and is compared with the re-derived mode below.
+  let mode = "full";
+  if (fields.has("mode")) {
+    const m = fields.get("mode");
+    if (!cleanScalar(m, 16) || !MODE_ENUM.has(m)) {
+      return red(
+        `loop-record's \`mode\` is ${JSON.stringify(m)} (${recordPath}) — when present, expected one of {${[...MODE_ENUM].join(", ")}} ` +
+          `(absent means full).`
+      );
+    }
+    mode = m;
+  }
+
   const featureDir = dirname(recordPath);
   const verifyPath = join(featureDir, "verify-report.json");
   const regressPath = join(featureDir, "regression-report.json");
@@ -177,9 +208,10 @@ function gate(recordPath) {
 
   // Re-run the SAME decision core the original stop used. Its stdout is JSON regardless of its own exit
   // code (including its own exit-2 bad-input path) — the exit code is deliberately NOT branched on here;
-  // only the printed `.decision` token is compared. This uniformly covers "the reports genuinely reduce
-  // to the recorded decision" AND "the reports were bad/missing then, and still are, so both computed
-  // INCONCLUSIVE" with no special-casing.
+  // only the printed `.decision` and `.mode` tokens are compared. This uniformly covers "the reports genuinely
+  // reduce to the recorded decision" AND "the reports were bad/missing then, and still are, so both computed
+  // INCONCLUSIVE" with no special-casing. The regression report's path is passed because check-loop.mjs's argv
+  // requires two positionals; its quick table never opens it.
   const r = spawnSync(process.execPath, [CHECK_LOOP, verifyPath, regressPath, "--iter", iterations, "--cap", cap], { encoding: "utf8" });
   if (r.error) {
     return red(`could not run check-loop.mjs (${CHECK_LOOP}): ${r.error.message}`);
@@ -194,22 +226,51 @@ function gate(recordPath) {
   if (redecision === null || typeof redecision !== "object" || typeof redecision.decision !== "string") {
     return red(`check-loop.mjs's re-derivation output for ${recordPath} has no \`.decision\` string.`);
   }
-
-  if (redecision.decision !== decision) {
+  // The re-derived mode: check-loop.mjs's JSON `mode`, absent → `full` (a pre-6.28.0 check-loop.mjs has no such key).
+  // Anything else outside the vocabulary — null included, which only an argv refusal emits — is unusable: fail-closed.
+  const rederivedMode = redecision.mode === undefined ? "full" : redecision.mode;
+  if (typeof rederivedMode !== "string" || !MODE_ENUM.has(rederivedMode)) {
     return red(
+      `check-loop.mjs's re-derivation output for ${recordPath} carries a \`mode\` outside {${[...MODE_ENUM].join(", ")}} — ` +
+        `cannot compare the record's mode with it.`
+    );
+  }
+
+  // What the re-run read, named by the mode it re-derived: the quick table never opens the regression report, so a
+  // quick line cites verify-report.json alone (grill G3).
+  const quick = rederivedMode === "quick";
+  const cited = quick ? `${verifyPath} (quick table — the regression report is not read)` : `${verifyPath} + ${regressPath}`;
+
+  const mismatches = [];
+  if (redecision.decision !== decision) {
+    mismatches.push(
       `loop-record's \`decision\` is ${JSON.stringify(decision)} (${recordPath}), but a LIVE re-run of ` +
-        `check-loop.mjs against its cited reports (${verifyPath}, ${regressPath}) with --iter ${iterations} ` +
-        `--cap ${cap} computes ${JSON.stringify(redecision.decision)} instead — DECISION_MISMATCH. ` +
+        `check-loop.mjs against its cited reports (${cited}) with --iter ${iterations} ` +
+        `--cap ${cap} computes ${JSON.stringify(redecision.decision)} in mode ${rederivedMode} instead — DECISION_MISMATCH. ` +
         `check-loop.mjs's own reason: ${JSON.stringify(redecision.reason ?? null)}. This record's decision ` +
         `was NOT genuinely derived from the reports it cites; do not commit it.`
     );
   }
+  if (rederivedMode !== mode) {
+    mismatches.push(
+      `loop-record's \`mode\` is ${mode}${fields.has("mode") ? "" : " (absent — read as full)"} (${recordPath}), but the ` +
+        `table check-loop.mjs re-derives with is ${rederivedMode} — the feature SPEC's spec_kind ` +
+        `${quick ? "reads quick" : "does not read quick"} — MODE_MISMATCH. The record's mode is the run's invocation, so ` +
+        `the invocation and the SPEC's kind disagree (a run without --quick over a quick SPEC, or the reverse); do not ` +
+        `commit it, and never repair this by editing \`mode\`.`
+    );
+  }
+  if (mismatches.length > 0) {
+    for (const m of mismatches) console.log(`RED — ${m}`);
+    return 1;
+  }
 
   console.log(
-    `GREEN — loop-record's decision ${decision} (${recordPath}) is re-derivable: a live re-run of check-loop.mjs ` +
-      `against ${verifyPath} + ${regressPath} with --iter ${iterations} --cap ${cap} reproduces it verbatim. ` +
-      `NOTE (P0): this proves the decision is RE-DERIVABLE from the cited reports — it does NOT prove those ` +
-      `reports are themselves honest. A self-consistent fabricated report pair still passes this check.`
+    `GREEN — loop-record's decision ${decision} (${recordPath}) is re-derivable in mode ${rederivedMode}: a live re-run of ` +
+      `check-loop.mjs against ${cited} with --iter ${iterations} --cap ${cap} reproduces it verbatim, and the ` +
+      `record's mode agrees. NOTE (P0): this proves the decision is RE-DERIVABLE from the cited ` +
+      `report${quick ? "" : "s"} — it does NOT prove ${quick ? "that report is" : "those reports are"} honest. A ` +
+      `self-consistent fabricated ${quick ? "report" : "report pair"} still passes this check.`
   );
   return 0;
 }
