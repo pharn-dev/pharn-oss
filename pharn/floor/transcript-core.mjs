@@ -1,12 +1,13 @@
-// pharn/floor/transcript-core.mjs — the ONE reader of a Claude Code session transcript's token usage on the
-// PRODUCT floor: where a session's transcript lives, which files belong to it, and how its lines become
-// requests. Node stdlib only, no network, no model call, no clock. No CLI: it is imported.
+// pharn/floor/transcript-core.mjs — the ONE reader of a Claude Code session transcript on the PRODUCT floor: where a
+// session's transcript lives, which files belong to it, how its lines become requests, and (6.29.0) which CONTEXT —
+// the session's own thread or one of its agents — each line belongs to. Node stdlib only, no network, no model call,
+// no clock. No CLI: it is imported.
 //
 // ── One axis, and who imports it ─────────────────────────────────────────────────────────────────────
 // This module changes for ONE reason: how the platform writes transcripts (P3). Its consumers are named
 // here so a third one is a deliberate addition:
-//   * render-cost-record.mjs — the `pharn-cost-record/1` block embedded in `ship-record.json`;
-//   * render-cost-ledger.mjs — `cost.json`, and through the ledger's `deriveLedger`,
+//   * render-cost-record.mjs — the `pharn-cost-record/1` block embedded in `ship-record.json` (`sessionRequests`);
+//   * render-cost-ledger.mjs — `cost.json` (`sessionScan`), and through the ledger's `deriveLedger`,
 //     check-cost-ledger.mjs --verify-transcript.
 // It was split out of render-cost-record.mjs in 6.24.1, when the per-request rule below gained its second
 // consumer. A renderer that also served as the transcript library had two reasons to change, and this is
@@ -82,10 +83,46 @@
 //   replaces the real one in both renderers, with nothing listed, and both checker modes stay GREEN
 //   (--verify-transcript re-reads the same bytes). That follows from the selection rule above (6.24.1) and predates
 //   6.28.1, which does not widen it; the transcript is agent-writable (`LIMITS.md §6`). Stated, not closed.
+//
+// ── Which CONTEXT a line belongs to, and who spawned whom (6.29.0, the ledger's `run-window/2`) ──────
+// Measured on 2026-09-27 over every transcript on one machine (`.dev/measurements/cost-ledger-run-scope-2026-09-27.md`):
+//   * FILES. The session's own thread writes `<sessionId>.jsonl`. An Agent-tool agent writes
+//     `<sessionId>/subagents/agent-<agentId>.jsonl` beside `agent-<agentId>.meta.json`, and a NESTED agent is filed
+//     flat in that same directory. A Workflow-tool agent writes under `<sessionId>/subagents/workflows/<run>/`.
+//   * RECORDS. All 94,225 usage-bearing records agreed with their file: agent files carry `isSidechain: true` and an
+//     `agentId` equal to the file's id, and main files carry `isSidechain: false` and no `agentId`.
+//   * LINKS. A child's meta `toolUseId` names the `tool_use` block that spawned it. That block sits in exactly one
+//     OTHER context's transcript (382 of 383 agents, all 5 nested ones included, agreeing with the meta's own parent
+//     field every time). A fork's own file opens with a copy of its spawning line, which is why the child's own
+//     context is excluded. The parent's `toolUseResult.agentId` is NOT a link: nested agents have none.
+//   * OUTPUT. A command's output reaches a transcript as a `tool_result` block's `content`: a string, or `text`
+//     blocks. In an agent's transcript that is the ONLY copy. A background agent's hand-back reaches its parent as a
+//     `user` record with string content (and a `queue-operation` record), never as a tool result.
+// THE RULES, each a membership or equality test (P5):
+//   * `recordContext(r)`: `isSidechain === true` with an admitted `agentId` → `agent:<agentId>`;
+//     `isSidechain === false` → `main`; anything else → null. Exactly `true` or `false`, so a format that drops
+//     the field reads as undecidable, never as main (GRILL G2).
+//   * `fileContext(rel)` reads the same from the path. `contextOf` keeps a record's context only when the two
+//     AGREE, else null.
+//   * `sessionScan` reads the session ONCE: the requests (the rule above, one copy, each with its first line's
+//     context), the contexts holding each wanted line as a WHOLE line of a tool result, each agent's spawn link, and
+//     the earliest time each context is named. A meta file is found by listing the directory, never by building a
+//     path from a transcript value.
+// FLOOR: given the same bytes, contexts, holders and links are deterministic. ADVISORY, and stated in the contract:
+//   that the layout above is the platform's. It is undocumented and machine-local. The departures the suite pins
+//   each read as null, unlinked or no holder, which the ledger turns into `unknown`:
+//     - a missing or non-boolean `isSidechain`;
+//     - a record disagreeing with its file;
+//     - a missing meta or `toolUseId`;
+//     - an ambiguous spawn record;
+//     - output missing from the tool result.
+//   The named exception is `cost-ledger-mention-only`: the output never reached its own context, and another
+//   context's tool result carries a copy. Then that context is measured.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { isIdentityToken, isTokenCount } from "./cost-value-core.mjs";
+import { MAIN_CONTEXT, agentContext, tsMs } from "./run-window-core.mjs";
 
 const SYNTHETIC = "<synthetic>";
 
@@ -147,27 +184,16 @@ const outputRank = (u) => (isTokenCount(u?.output_tokens) ? u.output_tokens : -1
 const isPlainObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
 /**
- * THE per-request read of one session's transcript, and the ONE owner of the counting rule (see the
- * header). Do not re-implement any part of it in a caller: a second copy of this loop is how the ledger
- * kept the first line after the platform stopped writing one usage object per request ([[L35]]).
- *
- * Selects the session's files — `<sessionId>.jsonl` and everything under `<sessionId>/` — and groups every
- * usage-bearing, non-synthetic assistant record by request id ACROSS all of them, in walk order. A record is
- * usage-bearing only with a plain-object usage and an id `isIdentityToken` admits (see the header):
- *   - `record` is the request's FIRST line: its identity (model, session, agent, sidechain, skill, version)
- *     and the timestamp that run membership and stage attribution read. Its `message` is reduced to
- *     `{ model }`, so no message body is kept or handed to a caller.
- *   - `usage` is the `message.usage` of the request's line with the greatest `output_tokens`, the earliest
- *     such line on a tie — one line's object, never assembled from several.
- * Returns `{ files, requests }`, `requests` being `[{ id, record, usage }]` in first-occurrence order.
- * An unreadable file and a torn line are skipped, never thrown on: a partial read is an honest partial.
+ * One pass over a session's lines, in walk order: the session's files — `<sessionId>.jsonl` and everything under
+ * `<sessionId>/` — sorted, and each file's lines in order. `visit(record, rel)` sees every line that parses, `rel`
+ * being its file's path relative to `projectDir`. Returns the files. An unreadable file and a torn line are skipped,
+ * never thrown on: a partial read is an honest partial.
  */
-export function sessionRequests(projectDir, sessionId) {
+function walkSession(projectDir, sessionId, visit) {
   const files = transcriptFiles(projectDir).filter((f) => {
     const rel = f.slice(projectDir.length + 1);
     return rel === `${sessionId}.jsonl` || rel.startsWith(`${sessionId}/`);
   });
-  const byId = new Map();
   for (const f of files) {
     let text;
     try {
@@ -175,6 +201,7 @@ export function sessionRequests(projectDir, sessionId) {
     } catch {
       continue;
     }
+    const rel = f.slice(projectDir.length + 1);
     for (const line of text.split("\n")) {
       if (!line) continue;
       let r;
@@ -183,16 +210,200 @@ export function sessionRequests(projectDir, sessionId) {
       } catch {
         continue; // a torn final line while the session is live is expected, not an error
       }
-      if (r?.type !== "assistant") continue;
-      const u = r.message?.usage;
-      if (!isPlainObject(u)) continue; // no usage, or one of the wrong type: not a request
-      if ((r.message.model ?? "unknown") === SYNTHETIC) continue; // not a real API call
-      const id = r.requestId ?? r.message.id;
-      if (!isIdentityToken(id)) continue; // tested before any caller coerces it; no fallback past a present id
-      const seen = byId.get(id);
-      if (seen === undefined) byId.set(id, { id, record: { ...r, message: { model: r.message.model } }, usage: u });
-      else if (outputRank(u) > outputRank(seen.usage)) seen.usage = u; // THE rule — see the header
+      visit(r, rel);
     }
   }
-  return { files, requests: [...byId.values()] };
+  return files;
+}
+
+/**
+ * THE per-request counting rule, as a collector: `add(record, extra)` folds one line in, `requests()` returns the
+ * requests in first-occurrence order. Both `sessionRequests` and `sessionScan` read through it, so the rule has ONE
+ * copy (see the header). A line is usage-bearing only with a plain-object usage and an id `isIdentityToken` admits:
+ *   - the request's `record` is its FIRST line: its identity (model, session, agent, sidechain, skill, version)
+ *     and the timestamp that run membership and stage attribution read. Its `message` is reduced to `{ model }`,
+ *     so no message body is kept or handed to a caller. `extra` (the first line's fields a caller adds) is copied
+ *     from the first line too;
+ *   - its `usage` is the `message.usage` of its line with the greatest `output_tokens`, the earliest such line on a
+ *     tie — one line's object, never assembled from several.
+ */
+function requestCollector() {
+  const byId = new Map();
+  return {
+    add(r, extra) {
+      if (r?.type !== "assistant") return;
+      const u = r.message?.usage;
+      if (!isPlainObject(u)) return; // no usage, or one of the wrong type: not a request
+      if ((r.message.model ?? "unknown") === SYNTHETIC) return; // not a real API call
+      const id = r.requestId ?? r.message.id;
+      if (!isIdentityToken(id)) return; // tested before any caller coerces it; no fallback past a present id
+      const seen = byId.get(id);
+      if (seen === undefined) byId.set(id, { id, record: { ...r, message: { model: r.message.model } }, usage: u, ...extra });
+      else if (outputRank(u) > outputRank(seen.usage)) seen.usage = u; // THE rule — see the header
+    },
+    requests: () => [...byId.values()],
+  };
+}
+
+/**
+ * THE per-request read of one session's transcript, and the ONE owner of the counting rule (see the
+ * header and `requestCollector`). Do not re-implement any part of it in a caller: a second copy of this loop is
+ * how the ledger kept the first line after the platform stopped writing one usage object per request ([[L35]]).
+ * Returns `{ files, requests }`, `requests` being `[{ id, record, usage }]` in first-occurrence order.
+ */
+export function sessionRequests(projectDir, sessionId) {
+  const collector = requestCollector();
+  const files = walkSession(projectDir, sessionId, (r) => collector.add(r));
+  return { files, requests: collector.requests() };
+}
+
+/** The context a record CLAIMS (see the header): exactly `true`/`false` `isSidechain`, else null. */
+export function recordContext(r) {
+  if (r?.isSidechain === true) return isIdentityToken(r.agentId) ? agentContext(r.agentId) : null;
+  if (r?.isSidechain === false) return MAIN_CONTEXT;
+  return null;
+}
+
+/**
+ * The context a transcript FILE holds, from its path relative to the project directory (`/`-separated, as
+ * `transcriptFiles` builds it on a POSIX system): `<sessionId>.jsonl` is `main`;
+ * `<sessionId>/subagents/agent-<id>.jsonl` and `<sessionId>/subagents/workflows/<run>/agent-<id>.jsonl` are
+ * `agent:<id>` when `<id>` is an identity token. Any other file under the session names no context: null.
+ */
+export function fileContext(rel, sessionId) {
+  if (typeof rel !== "string") return null;
+  if (rel === `${sessionId}.jsonl`) return MAIN_CONTEXT;
+  const parts = rel.split("/");
+  const name = /^agent-(.+)\.jsonl$/.exec(parts[parts.length - 1] ?? "");
+  if (!name || parts[0] !== sessionId || parts[1] !== "subagents") return null;
+  const inPlace = parts.length === 3;
+  const inWorkflow = parts.length === 5 && parts[2] === "workflows";
+  return (inPlace || inWorkflow) && isIdentityToken(name[1]) ? agentContext(name[1]) : null;
+}
+
+/** A line's context: what the record claims, kept only when its file agrees (GRILL G2), else null. */
+export function contextOf(r, rel, sessionId) {
+  const claimed = recordContext(r);
+  return claimed !== null && claimed === fileContext(rel, sessionId) ? claimed : null;
+}
+
+/** The texts of a `tool_result` block's `content`: the string itself, or each `text` block's text. */
+function resultTexts(content) {
+  if (typeof content === "string") return [content];
+  if (!Array.isArray(content)) return [];
+  return content.filter((b) => b?.type === "text" && typeof b.text === "string").map((b) => b.text);
+}
+
+/** The longest prefix every string in `set` shares — "" when the set is empty. A cheap pre-test before a split. */
+function commonPrefix(set) {
+  let prefix = null;
+  for (const s of set) {
+    if (typeof s !== "string") return "";
+    if (prefix === null) prefix = s;
+    else {
+      let i = 0;
+      while (i < prefix.length && i < s.length && prefix[i] === s[i]) i++;
+      prefix = prefix.slice(0, i);
+    }
+  }
+  return prefix ?? "";
+}
+
+/**
+ * Each agent's spawn link: `agent:<id>` → `{ parent, ts }`, from `agent-<id>.meta.json` in the session's
+ * `subagents/` directory — found by LISTING that directory, and only a regular file (a symlink is not followed).
+ * The meta's `toolUseId` must name a `tool_use` block held by exactly ONE context other than the agent's own (a
+ * fork's file holds a copy of its own spawning line); `ts` is that context's earliest record of the block. Anything
+ * else — an unreadable or malformed meta, no `toolUseId`, no holder, two holders, an undecidable one — leaves the
+ * agent out of the map: UNLINKED. A Workflow agent's meta lives elsewhere and carries no `toolUseId`, so it is
+ * unlinked by construction.
+ */
+function spawnLinks(projectDir, sessionId, uses) {
+  const links = new Map();
+  const dir = join(projectDir, sessionId, "subagents");
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return links; // no subagents directory: no agent can be linked
+  }
+  for (const e of entries) {
+    const m = /^agent-(.+)\.meta\.json$/.exec(e.name);
+    if (!m || !e.isFile() || !isIdentityToken(m[1])) continue;
+    let meta;
+    try {
+      meta = JSON.parse(readFileSync(join(dir, e.name), "utf8"));
+    } catch {
+      continue;
+    }
+    const toolUseId = meta !== null && typeof meta === "object" ? meta.toolUseId : undefined;
+    if (!isIdentityToken(toolUseId)) continue;
+    const self = agentContext(m[1]);
+    const held = (uses.get(toolUseId) ?? []).filter((h) => h.ctx !== self);
+    const parents = new Set(held.map((h) => h.ctx));
+    if (parents.size !== 1) continue;
+    const [parent] = parents;
+    if (parent === null) continue;
+    let ts = null;
+    for (const h of held) {
+      const t = tsMs(h.ts);
+      if (t !== null && (ts === null || t < tsMs(ts))) ts = h.ts;
+    }
+    links.set(self, { parent, ts });
+  }
+  return links;
+}
+
+/**
+ * The ONE pass the cost ledger makes over a session (6.29.0): the requests, each with its first line's `context`
+ * (`contextOf`), plus the evidence run membership reads (see the header):
+ *   - `holders`: for each line in `lines`, the Set of contexts (a key, or null when the record's context is
+ *     undecidable) whose TOOL RESULTS carry it as a whole `\n`-delimited line. Only `tool_result` blocks are read.
+ *     A user or assistant message quoting the line is not a tool result and is not evidence either way;
+ *   - `links`: `spawnLinks`, above;
+ *   - `named`: every context a line of the session names → the earliest timestamp (the string) among those lines
+ *     that parses, or null when none does. Run membership reports its context set only over the contexts named by
+ *     the run's end (`run-window-core.mjs` `runContexts`), so a context first written after it cannot change a
+ *     ledger's recorded set on a later re-derivation (L58).
+ * Returns `{ files, requests, holders, links, named }`. `lines` may be any iterable of strings; an empty one skips
+ * the holder search (the caller has no run to bind).
+ */
+export function sessionScan(projectDir, sessionId, lines) {
+  const want = new Set([...(lines ?? [])].filter((l) => typeof l === "string" && l.length > 0));
+  const prefix = commonPrefix(want);
+  const collector = requestCollector();
+  const holders = new Map();
+  const uses = new Map();
+  const named = new Map();
+  const files = walkSession(projectDir, sessionId, (r, rel) => {
+    const ctx = contextOf(r, rel, sessionId);
+    collector.add(r, { context: ctx });
+    if (ctx !== null) {
+      const t = tsMs(r.timestamp);
+      if (!named.has(ctx)) named.set(ctx, t === null ? null : r.timestamp);
+      else if (t !== null && (named.get(ctx) === null || t < tsMs(named.get(ctx)))) named.set(ctx, r.timestamp);
+    }
+    const content = r?.message?.content;
+    if (!Array.isArray(content)) return;
+    if (r.type === "assistant") {
+      for (const b of content) {
+        if (b?.type !== "tool_use" || !isIdentityToken(b.id)) continue;
+        if (!uses.has(b.id)) uses.set(b.id, []);
+        uses.get(b.id).push({ ctx, ts: typeof r.timestamp === "string" ? r.timestamp : null });
+      }
+    } else if (r.type === "user" && want.size > 0) {
+      for (const b of content) {
+        if (b?.type !== "tool_result") continue;
+        for (const text of resultTexts(b.content)) {
+          if (prefix && !text.includes(prefix)) continue; // the cheap test first (GRILL G8)
+          for (const l of text.split("\n")) {
+            if (!want.has(l)) continue;
+            if (!holders.has(l)) holders.set(l, new Set());
+            holders.get(l).add(ctx);
+          }
+        }
+      }
+    }
+  });
+  return { files, requests: collector.requests(), holders, links: spawnLinks(projectDir, sessionId, uses), named };
 }

@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.28.3-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.29.1-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -109,8 +109,11 @@ them. The goal is not to make AI development look clean. The goal is to make it 
 
 ## Quick start
 
-PHARN runs on [Claude Code](https://claude.com/claude-code). The installer requires Node 20 or newer. In
-your project root:
+PHARN runs on [Claude Code](https://claude.com/claude-code). The `@pharn-dev/pharn` installer requires
+Node 20 or newer. The deterministic floor checkers this repo ships (`pharn/floor/*.mjs`, invoked by the
+`/pharn-*` stages) require **Node 24.2 or newer**: their CLI entry points gate on `import.meta.main`, which
+Node added in 22.18 / 24.2. On an older Node a guarded tool can exit `0` without running its checks — a
+silent false green for several gates. CI and local contributor gates use Node 24. In your project root:
 
 ```bash
 npx @pharn-dev/pharn@latest init
@@ -393,7 +396,7 @@ judgment is **advisory**.
 | `/pharn-verify` fails unless each acceptance criterion of a templated SPEC has a locked, once-red test titled `AC-<n>:`, in a file mapped to it, that **passed** on the head run — and fails too when those tests, the lock or the pinned test infrastructure changed after `/pharn-test`. That the reporter said **passed** — **not** that the test captures the criterion's intent, and the infrastructure pin covers a closed set of files                                                                                                                                                                                                                                        | `check-verify.mjs --ac-gate` (`ac-gate-core.mjs`)                                                                                                                                                                                                    |
 | Which lenses run, and how structured findings merge                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `count-lenses.mjs` + `merge-findings.mjs`                                                                                                                                                                                                            |
 | The eleven product commands' `model:` / `effort:` frontmatter equals what `pharn.config.json`'s `models.stages` resolves for that stage — not that the stage ran under it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `check-model-config.mjs`                                                                                                                                                                                                                             |
-| A run's `cost.json` is **internally consistent**: a closed top-level key set, every aggregate equal to a recompute from the recorded requests, unique request ids, a strictly increasing marker sequence, no absolute path anywhere, and every row inside the run window recomputed from its own recorded markers (so unrelated session activity cannot be summed in). Consistency only — **not** that the numbers describe the run                                                                                                                                                                                                                                                  | `check-cost-ledger.mjs`                                                                                                                                                                                                                              |
+| A run's `cost.json` is **internally consistent**: a closed top-level key set, every aggregate equal to a recompute from the recorded requests, unique request ids, a strictly increasing marker sequence, no absolute path anywhere, and every row inside the run window recomputed from its own recorded markers and, since 6.29.0, from a context in its own recorded context set. Consistency only — **not** that the numbers describe the run, nor that the recorded markers and contexts are the run's                                                                                                                                                                          | `check-cost-ledger.mjs`                                                                                                                                                                                                                              |
 
 **Advisory** — everything a model judges: whether a plan is wise, whether a review finding is real,
 whether a severity is right, whether the code satisfies the product intent, and whether the resulting
@@ -731,7 +734,7 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   runtime-state directory the guard bootstraps from, composed into the allow-list unconditionally, so it
   stays writable **even under a set scope**; one path inside it is still denied by name:
   `.pharn/writes-scope.json`. **Outside the project** the permissive default allows only three places, each
-  narrowed to this project and this session in 6.28.3: **this project's auto-memory folder**
+  narrowed to this project and this session in 6.29.1: **this project's auto-memory folder**
   (`<claude-config-dir>/projects/<key>/memory/**`, where the config dir is `$CLAUDE_CONFIG_DIR` or
   `~/.claude`, for the key of the folder that holds this session's transcript and the key Claude Code derives
   from your repository's main checkout, so a linked-worktree or subdirectory session still reaches its
@@ -747,7 +750,7 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   Claude Code names its memory folders, which it does not document; if that changes, the key stops matching
   and those writes are denied rather than widened. `protect-trusted-paths.cjs` still denies its own set (the
   trusted docs, `CODEOWNERS`, the guards' own control surface, your SPEC template) in every posture,
-  regardless of any scope — and since 6.28.3 it also judges the file a write actually reaches, so a symlink
+  regardless of any scope — and since 6.29.1 it also judges the file a write actually reaches, so a symlink
   whose name holds a backslash no longer carries a write to one of them past it. A
   **malformed** `.pharn/writes-scope.json` now denies **every** write in an installed project, rather than
   falling back to a default. The markers are written and removed through **Bash**: `/pharn-ship`,

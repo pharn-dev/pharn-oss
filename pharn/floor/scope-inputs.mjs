@@ -20,7 +20,10 @@
 //       git printed, decoded as UTF-8: never trimmed, never C-quoted, never split on anything but NUL.
 //
 // NO EMISSION, NO REASON CODES: each function RETURNS `{ok: true, value}` or `{ok: false, …}`, and its caller words the
-// refusal — `stage-regress.mjs` keeps every detail string it printed before (its unchanged test file is the evidence).
+// refusal — when this module was cut out of `stage-regress.mjs` (6.28.0), that script kept every detail string it
+// printed before. A failed git listing carries `detail`, stage-runtime.mjs's `gitFailureDetail` text (6.28.3): git's
+// stderr and node's error code, so the caller's refusal says why git failed. It replaced a raw `stderr` field, which an
+// ENOBUFS left empty.
 //
 // BOUNDS, stated: a git-ignored path is never listed, so it is outside every caller's partition; a name that is not
 // valid UTF-8 is compared in its U+FFFD-replaced form, so only a declared pattern containing U+FFFD could match it;
@@ -60,13 +63,13 @@ export function declaredWrites(planText, acTestsPath) {
  * The changed paths since `base`: tracked changes (renames split into a deletion and an addition) plus untracked files,
  * NUL-separated, minus the state root.
  * @param {string} base  a commit the caller already validated
- * @returns {{ok: true, value: string[]} | {ok: false, which: "diff" | "untracked", stderr: string}}
+ * @returns {{ok: true, value: string[]} | {ok: false, which: "diff" | "untracked", detail: string}}
  */
 export function changedPaths(base) {
   const diff = gitSync(["diff", "--name-only", "--no-renames", "-z", base]);
-  if (!diff.ok) return { ok: false, which: "diff", stderr: diff.stderr };
+  if (!diff.ok) return { ok: false, which: "diff", detail: diff.detail };
   const untracked = gitSync(["ls-files", "-z", "--others", "--exclude-standard"]);
-  if (!untracked.ok) return { ok: false, which: "untracked", stderr: untracked.stderr };
+  if (!untracked.ok) return { ok: false, which: "untracked", detail: untracked.detail };
   const all = [...new Set([...nulList(diff.stdout), ...nulList(untracked.stdout)])];
   return { ok: true, value: all.filter((p) => !isExcluded(p, null)) }; // the state root is never an escape
 }

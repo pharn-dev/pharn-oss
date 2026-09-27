@@ -172,7 +172,7 @@ new layout; it converts a silent half-install into a clean refusal, which is the
    **Since 6.1.0 the same hook also denies GIT METADATA** — any `.git` path segment under a guarded root
    (never `.github/**` or `.gitignore`). A `.git` entry decides which working tree each guard judges, and
    `.git/hooks` / `.git/config` run code on the next git command, so the write tools may not touch them;
-   the remedy the deny message names is the git command that owns the change. **Since 6.28.3 it judges each
+   the remedy the deny message names is the git command that owns the change. **Since 6.29.1 it judges each
    write twice** — its old check first, unchanged, then the target the filesystem reaches, where a backslash
    is part of a file NAME on a `/` system — so a symlink named `s\x` pointing at the root no longer carries a
    write to a trusted doc, or to canon under a plan-origin scope, past it; its canon escape never authorizes a
@@ -812,6 +812,18 @@ node pharn/floor/check-loop-decision.mjs <LOOP.md>
 # `mark-phase.mjs --pending-start` BEFORE /pharn-spec (which is what names <name>), and ONLY its named run-start
 # adopts it (`--adopt-pending`, opt-in; `origin: "pending"`), so an abandoned ship cannot widen a loop. /1 ledgers are validated under their own rules and WARNed SESSION-scoped,
 # never rewritten. Membership is exact relative to the RECORDED markers only (marker execution is advisory).
+# CONTEXT-SCOPED since 6.29.0 (membership `run-window/2`, same module). THE RECORDED FAILURE (P7): a subagent's
+# Bash sees its PARENT's session id, so three concurrent /pharn-loop agents of one session counted each other's
+# rows and the main thread's (.dev/measurements/cost-ledger-run-scope-2026-09-27.md). Now a window member counts
+# only when its CONTEXT — the session's own thread or one agent, read from `isSidechain`/`agentId` and required to
+# agree with the file it sits in — is in the run's set: the ONE context whose TOOL RESULTS carry, as a whole line,
+# a line mark-phase printed for this run, plus the agents that context tree spawned inside the window (meta
+# `toolUseId` → the one other holder of that tool_use). No holder, two holders, or a window member that cannot be
+# placed → `unknown` (no rows), never a guessed row. `markerLine()` in mark-phase.mjs is the ONE encoding the CLI
+# prints and the emitter rebuilds; changing it changes membership for every later ledger (a golden pins the bytes).
+# `run-window/1` ledgers keep their seven keys and a not-context-scoped WARN; --verify-transcript REDs one holding
+# other contexts' rows. ADVISORY: the transcript layout (undocumented, machine-local) and that the marker output
+# reached the calling context's own tool result — the contract's "Run membership" carries the bounds.
 # Exit: mark-phase 0 ok · 2 bad usage (nothing written) | render 0 (incl. an honest `unavailable`) · 2 bad
 # usage | check 0 GREEN (WARNs possible) · 1 RED · 2 unusable input.
 node pharn/floor/mark-phase.mjs --name <slug> --kind <run-start|stage-start|orchestrator|run-stop> [--stage <s>] [--iteration <n>] [--base <dir>] [--mode <m>] [--route <token>]
@@ -1233,7 +1245,7 @@ the rule has to be the thing that holds.
   containing a backslash (there a backslash is part of a file NAME, while the reserved-path fold reads it as
   a separator — a deny list must not guess), and allows every other in-project path, including your ordinary
   source and the files Claude Code loads at session start (`CLAUDE.md`, `AGENTS.md`, `.mcp.json`).
-  **Outside the project** it then allows three places, each narrowed to THIS project and THIS session in 6.28.3
+  **Outside the project** it then allows three places, each narrowed to THIS project and THIS session in 6.29.1
   (the maintainer's 2026-09-26 GATE-2 decision D2 had allowed every project's memory folder and both whole temp
   roots, which a security review showed reached another project's auto-memory and another live session's
   scratch): **this project's auto-memory folder**, `<claude-config-dir>/projects/<key>/memory/**`
@@ -1261,7 +1273,7 @@ the rule has to be the thing that holds.
   either target is denied (GATE-2 review, B1). The second resolution splits on `/` only on a `/`
   system: the first handoff of this fix copied protect-trusted-paths.cjs's `\`-as-separator reading, and
   that made `pharn/features/a\b/../../floor/x.mjs` resolve inside `pharn/features/` while the kernel wrote
-  `pharn/floor/x.mjs` — measured in the dev posture too, before it shipped. **Since 6.28.3
+  `pharn/floor/x.mjs` — measured in the dev posture too, before it shipped. **Since 6.29.1
   `protect-trusted-paths.cjs` carries a byte-equal copy of that second resolution** (pinned by a ✧ test beside
   the `workTreeRoot()` / `toKey()` pins) and judges it after its own check, alone, so every verdict it changes
   moves toward deny and every old denial keeps its message.
@@ -1309,7 +1321,7 @@ the rule has to be the thing that holds.
     this project's memory folder, this session's scratchpad or an ordinary temp path, in no other git tree,
     IS writable there under the permissive default, so for such a path the message says so and names what is
     holding it (the scope, an open run, or an unreadable run-state directory) instead of claiming nothing can
-    help. Its **Claude-state** variant (6.28.3 — an installed project, a path that is Claude Code's own state
+    help. Its **Claude-state** variant (6.29.1 — an installed project, a path that is Claude Code's own state
     outside the project: another project's memory folder, a file in the config directory, or anything below a
     `claude-<uid>` temp folder) names the two memory keys and the scratchpad rule, and offers NO Bash route:
     another project loads its memory into its later sessions, and another session reads back its temp folder;

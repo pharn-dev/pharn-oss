@@ -40,6 +40,8 @@ import {
 } from "./render-run-report.mjs";
 import { FEATURE_BASE, TOKEN_CLASSES } from "./render-cost-ledger.mjs";
 import { fenceFor } from "./loop-record-core.mjs";
+import { markerLine } from "./mark-phase.mjs";
+import { UNKNOWN_REASONS } from "./run-window-core.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CLI = join(here, "render-run-report.mjs");
@@ -739,16 +741,21 @@ test("dataText: byte-identical to String() for every JSON primitive (±Infinity 
 });
 
 /** A `/2` ledger with a BOUNDED membership, so measurementLabel's window values are on the rendered path (GRILL G4:
- *  the default costJson() is `/1` and never reaches them). `base_sha` stays `unknown`, so no render spawns git. */
+ *  the default costJson() is `/1` and never reaches them). `base_sha` stays `unknown`, so no render spawns git. Its
+ *  method is the current `run-window/2`, so the closure also walks the context fields the label renders (6.29.0). */
 const domainInputs = () => ({
   "cost.json": costJson({
     schema: "pharn-cost-ledger/2",
     membership: {
+      method: "run-window/2",
       status: "bounded",
+      reason: null,
       start: "2026-09-25T10:00:00.000Z",
       end: "2026-09-25T11:00:00.000Z",
       session: "sess-1",
       excluded_requests: 4,
+      context: "main",
+      contexts: ["agent:a1d0000000000000001", "main"],
     },
     coverage_note: "measured inside the window",
   }),
@@ -835,6 +842,8 @@ test('★ DOMAIN CLOSURE: every node of the three JSON inputs, replaced by `null
     // the control reaches every block the mutants target (L34: a closure over paths never rendered proves nothing)
     for (const re of [
       /window start {7}2026-09-25T10:00:00\.000Z/,
+      /run context {8}main/,
+      /run contexts {7}agent:a1d0000000000000001, main/,
       /pharn-build/,
       /TOTAL/,
       /AC-2 {2}e2e {2}failed/,
@@ -849,10 +858,13 @@ test('★ DOMAIN CLOSURE: every node of the three JSON inputs, replaced by `null
     const walked = new Set(Object.entries(inputs).flatMap(([file, v]) => nodePaths(v).map((p) => `${file}:${p.join(".")}`)));
     for (const site of [
       "cost.json:outcome.iterations",
+      "cost.json:membership.method",
       "cost.json:membership.start",
       "cost.json:membership.end",
       "cost.json:membership.session",
       "cost.json:membership.excluded_requests",
+      "cost.json:membership.context",
+      "cost.json:membership.contexts.0",
       "cost.json:by_stage_iteration_model.0",
       "cost.json:by_stage_iteration_model.0.stage",
       "cost.json:totals.requests",
@@ -1621,6 +1633,77 @@ test("LABEL: an OPEN window says so; a legacy /1 ledger is labelled SESSION-scop
   }
 });
 
+const CTX = { method: "run-window/2", context: "main", contexts: ["agent:a1d0000000000000001", "main"] };
+
+test("LABEL (6.29.0): a run-window/2 ledger names the RUN'S OWN CONTEXTS and its set; a run-window/1 one says it is NOT context-scoped", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", { "cost.json": costJson({ schema: "pharn-cost-ledger/2", membership: MEMB(CTX) }) });
+    const t = tokensOf(renderRunReport("feat", { repo: root }));
+    assert.match(t, /Measured population: the RUN'S OWN CONTEXTS inside its window\*\* \(`run-window\/2`\)/);
+    assert.match(t, /method {13}run-window\/2/);
+    assert.match(t, /run context {8}main/);
+    assert.match(t, /run contexts {7}agent:a1d0000000000000001, main/);
+    assert.match(t, /TOTAL/, "the numbers render under a measured membership");
+    assert.doesNotMatch(t, /Not context-scoped/);
+
+    feature(root, "old", { "cost.json": costJson({ schema: "pharn-cost-ledger/2", membership: MEMB() }) });
+    const o = tokensOf(renderRunReport("old", { repo: root }));
+    assert.match(o, /Measured population: the RUN WINDOW\*\* \(`run-window\/1`\)/);
+    assert.match(o, /Not context-scoped\*\* \(`run-window\/1`, written before 6\.29\.0\)/);
+    assert.match(o, /method {13}run-window\/1/);
+    assert.doesNotMatch(o, /run context/, "a /1 membership has no context half to show");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("LABEL (6.29.0): membership UNKNOWN for a CONTEXT reason renders 'UNKNOWN — NOT a zero', says nothing was bound, and shows no table", () => {
+  const root = scratch();
+  try {
+    const zero = Object.fromEntries(TOKEN_CLASSES.map((c) => [c, 0]));
+    feature(root, "feat", {
+      "cost.json": costJson({
+        schema: "pharn-cost-ledger/2",
+        coverage: "unavailable",
+        membership: MEMB({
+          ...CTX,
+          status: "unknown",
+          reason: UNKNOWN_REASONS.AMBIGUOUS_CONTEXT,
+          excluded_requests: null,
+          context: null,
+          contexts: null,
+        }),
+        totals: { requests: 0, tokens: zero },
+        by_model: [],
+        by_stage_iteration_model: [],
+      }),
+    });
+    const t = tokensOf(renderRunReport("feat", { repo: root }));
+    assert.match(t, /Run usage: UNKNOWN — this is NOT a zero/);
+    assert.match(t, /or bound to its\nown context in the transcript/);
+    assert.match(t, /run context {8}none — nothing was bound/);
+    assert.match(t, /run contexts {7}none — nothing was bound/);
+    assert.doesNotMatch(t, /TOTAL/, "no table of zeros may stand in for an unknown");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("LABEL (6.29.0): a membership naming no KNOWN method is 'unrecognized' — never labelled with a scope it may not have", () => {
+  const root = scratch();
+  try {
+    for (const method of [undefined, "run-window/3", 7, { toString: 1 }]) {
+      feature(root, "feat", { "cost.json": costJson({ schema: "pharn-cost-ledger/2", membership: MEMB({ ...CTX, method }) }) });
+      const t = tokensOf(renderRunReport("feat", { repo: root }));
+      assert.match(t, /Measured population: unrecognized/, JSON.stringify(method));
+      assert.doesNotMatch(t, /RUN WINDOW|OWN CONTEXTS/, JSON.stringify(method));
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("INTEGRATION: CLI emit → CLI check GREEN → report shows the SAME run-scoped totals (100 before / 10 during)", () => {
   const root = scratch();
   try {
@@ -1633,26 +1716,33 @@ test("INTEGRATION: CLI emit → CLI check GREEN → report shows the SAME run-sc
         requestId: id,
         timestamp: ts,
         sessionId: S,
+        isSidechain: false,
         message: {
           model: "claude-opus-5",
           usage: { input_tokens: input, output_tokens: 0, cache_creation: {}, output_tokens_details: {} },
         },
       });
+    const markers = [
+      { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-09-21T10:00:00.000Z", session_id: S },
+      { seq: 2, kind: "run-stop", stage: null, iteration: null, ts: "2026-09-21T10:30:00.000Z", session_id: S },
+    ];
+    // The lines mark-phase printed, as the session's own thread recorded them (6.29.0 — the run's binding).
+    const printed = markers.map((m) =>
+      JSON.stringify({
+        type: "user",
+        sessionId: S,
+        timestamp: m.ts,
+        isSidechain: false,
+        message: { role: "user", content: [{ type: "tool_result", tool_use_id: `toolu_print_${m.seq}`, content: markerLine(m) }] },
+      })
+    );
     writeFileSync(
       join(proj, `${S}.jsonl`),
-      [line("before", "2026-09-21T09:00:00.000Z", 100), line("during", "2026-09-21T10:05:00.000Z", 10)].join("\n") + "\n"
+      [line("before", "2026-09-21T09:00:00.000Z", 100), ...printed, line("during", "2026-09-21T10:05:00.000Z", 10)].join("\n") + "\n"
     );
     const mdir = join(root, "cost", "feat");
     mkdirSync(mdir, { recursive: true });
-    writeFileSync(
-      join(mdir, "markers.jsonl"),
-      [
-        { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-09-21T10:00:00.000Z", session_id: S },
-        { seq: 2, kind: "run-stop", stage: null, iteration: null, ts: "2026-09-21T10:30:00.000Z", session_id: S },
-      ]
-        .map((m) => JSON.stringify(m))
-        .join("\n") + "\n"
-    );
+    writeFileSync(join(mdir, "markers.jsonl"), markers.map((m) => JSON.stringify(m)).join("\n") + "\n");
     const emit = spawnSync(
       "node",
       [
@@ -1676,7 +1766,8 @@ test("INTEGRATION: CLI emit → CLI check GREEN → report shows the SAME run-sc
     const led = JSON.parse(readFileSync(costPath, "utf8"));
     assert.equal(led.totals.tokens.input, 10, "independent literal: 10, never 110");
     const t = tokensOf(renderRunReport("feat", { repo: root }));
-    assert.match(t, /Measured population: the RUN WINDOW/);
+    assert.match(t, /Measured population: the RUN'S OWN CONTEXTS inside its window/);
+    assert.match(t, /run context {8}main/);
     const total = t.split("\n").find((l) => l.startsWith("TOTAL"));
     assert.ok(total, "the TOTAL row must render");
     assert.equal(total.trim().split(/\s+/)[4], "10", "the report's TOTAL input equals the ledger's run-scoped 10");

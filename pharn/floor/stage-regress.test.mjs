@@ -94,8 +94,9 @@ function specBody() {
 }
 
 /** A throwaway repo with an approved SPEC, a PLAN declaring src/index.js (+ src/index.test.js unless
- *  `withTest: false`), one commit, and a package.json carrying `scripts`. Returns {dir, git, base}. */
-function repo({ scripts = { test: "node --test" }, gitignorePharn = true, withTest = true, extraPlanLines = [] } = {}) {
+ *  `withTest: false`), one commit, and a package.json carrying `scripts`. `committed` ({path: content}) adds files to
+ *  that base commit. Returns {dir, git, base}. */
+function repo({ scripts = { test: "node --test" }, gitignorePharn = true, withTest = true, extraPlanLines = [], committed = {} } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "sr-"));
   const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe", encoding: "utf8" });
   git("init", "-q", ".");
@@ -123,6 +124,10 @@ function repo({ scripts = { test: "node --test" }, gitignorePharn = true, withTe
     join(dir, FEATURES, FEATURE, "PLAN.md"),
     `---\nspec_id: ${FEATURE}\nspec_content_hash: ${hash}\n---\n\n## Files\n\n${files}\n`
   );
+  for (const [p, content] of Object.entries(committed)) {
+    mkdirSync(dirname(join(dir, p)), { recursive: true });
+    writeFileSync(join(dir, p), content);
+  }
   git("add", "-A");
   git("commit", "-q", "-m", "base");
   const base = git("rev-parse", "HEAD").trim();
@@ -221,6 +226,88 @@ test("done/regressions: a change to a DECLARED file that breaks an UNDECLARED ou
     const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
     assert.deepEqual(report.regressions, ["test"]);
   } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── ★ A LISTING PAST 1 MiB (stage-git-maxbuffer, 6.28.3) ─────────────────────────────────────────────────────────────
+// Before 6.28.3 gitSync ran at node's 1 MiB default, so the partition phase's whole-repo listings (the test universe
+// and the eval pairs) stopped this script with `git ls-files failed: ` on any repo listing more — the review's exact
+// string (L41: no fixture here was that big). A BIG repo with a MODEST change: the tree is committed at the base, so
+// only src/index.js changes. (A changed set past the argv limit still stops at "verdict" — the extended follow-up
+// `regress-inside-echo-list`, not tested here.) Controls (L40, L60): computeTests' own call at node's default buffer is
+// ENOBUFS over this tree, and a mutant with ONLY gitSync's ceiling removed, run from the fixture-regex closure copied
+// outside the fixture, stops `git-failed` — now naming ENOBUFS.
+const CEILING_OPT = ", maxBuffer: GIT_MAX_BUFFER";
+
+/** Paths three 250-byte directory levels deep — 766 bytes each — until their `-z` listing passes 1.25 MiB. Nothing is
+ *  written: `repo()`'s `committed` map writes them before its base commit. */
+function bigPaths() {
+  const dir = ["big", "a".repeat(250), "b".repeat(250), "c".repeat(250)].join("/");
+  const paths = [];
+  let bytes = 0;
+  for (let i = 0; bytes <= (1 << 20) + (1 << 18); i++) {
+    const p = `${dir}/${String(i).padStart(5, "0")}.txt`;
+    paths.push(p);
+    bytes += Buffer.byteLength(p) + 1;
+  }
+  return { paths, bytes };
+}
+
+/** The floor modules stage-regress.mjs needs: every sibling named in a string literal, transitively (★ WIRING's regex). */
+function regressClosure() {
+  const seen = new Set();
+  const queue = ["stage-regress.mjs"];
+  while (queue.length) {
+    const m = queue.shift();
+    if (seen.has(m)) continue;
+    seen.add(m);
+    for (const [, dep] of readFileSync(join(HERE, m), "utf8").matchAll(/["'](?:\.\/)?([a-z0-9-]+\.mjs)["']/g)) {
+      if (!dep.endsWith(".test.mjs") && existsSync(join(HERE, dep))) queue.push(dep);
+    }
+  }
+  return [...seen];
+}
+
+test("★ LISTING — a committed tree listing past 1 MiB reaches done; the mutant without gitSync's ceiling stops git-failed naming ENOBUFS", () => {
+  const { paths, bytes } = bigPaths();
+  assert.ok(bytes > 1 << 20, `anchor (L60): the tree alone lists ${bytes} bytes, past node's 1 MiB default`);
+  const { dir, base } = repo({ committed: Object.fromEntries(paths.map((p) => [p, ""])) });
+  const mut = mkdtempSync(join(tmpdir(), "sr-mut-"));
+  try {
+    writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport function id(x) { return x; }\n");
+    // THE ATTRIBUTION CONTROL (L40): computeTests' call before 6.28.3 — the same options, no ceiling — over this repo.
+    assert.throws(
+      () =>
+        execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], {
+          cwd: dir,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+        }),
+      (e) => e.code === "ENOBUFS",
+      "at node's default buffer this listing fails ENOBUFS"
+    );
+    // THE MUTANT: the closure with only gitSync's ceiling removed, outside the fixture.
+    for (const m of regressClosure()) copyFileSync(join(HERE, m), join(mut, m));
+    const runtime = readFileSync(join(HERE, "stage-runtime.mjs"), "utf8");
+    assert.ok(runtime.includes(CEILING_OPT), "mutation anchor not found in stage-runtime.mjs (L60)");
+    writeFileSync(join(mut, "stage-runtime.mjs"), runtime.replace(CEILING_OPT, ""));
+    const m = spawnSync(process.execPath, [join(mut, "stage-regress.mjs"), ...freshArgs(base)], {
+      cwd: dir,
+      encoding: "utf8",
+      env: CLEAN_ENV,
+    });
+    assert.equal(m.status, 2, (m.stdout || "") + (m.stderr || ""));
+    const doc = JSON.parse(m.stdout);
+    assert.equal(doc.reason_code, "git-failed");
+    assert.match(doc.detail, /^git ls-files failed: node error ENOBUFS: /, "the review's string, now with its cause");
+
+    const r = cli(dir, freshArgs(base));
+    assert.equal(r.code, 0, r.raw);
+    assert.equal(r.json.status, "done");
+    assert.equal(r.json.verdict, "no-regressions");
+  } finally {
+    rmSync(mut, { recursive: true, force: true });
     rmSync(dir, { recursive: true, force: true });
   }
 });

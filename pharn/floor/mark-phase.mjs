@@ -85,6 +85,20 @@
 // stage ran on — the platform applies the model, and the served id in `requests[].model` is read from a
 // transcript format the platform does not document (L43: the two agreeing is agreement, never proof).
 //
+// ── THE PRINTED LINE IS LOAD-BEARING (6.29.0, run membership `run-window/2`) ────────────────────────────
+// The line this CLI prints for a marker — `marker <seq>: <kind>[ <stage>][ iter=<n>] <ts>` plus a suffix only when
+// its field is present — is how the cost ledger learns WHICH context ran a run. A subagent's Bash sees its parent's
+// session id and no agent id (measured), so a marker cannot record its own context. The emitter therefore finds
+// this exact line in the one context whose tool results carry it (`run-window-core.mjs`, `bindRun`).
+// `markerLine()` below is its ONE encoding: this CLI prints it and the emitter rebuilds it, and
+// mark-phase.test.mjs's differential runs the real CLI to pin that the printed line equals `markerLine()` of the
+// marker read back from disk.
+// CHANGING THE LINE CHANGES RUN MEMBERSHIP for every ledger emitted, or re-derived by `check-cost-ledger.mjs
+// --verify-transcript`, afterwards. A run whose markers were printed in the old form no longer binds, so it reads
+// `unknown`, never a wrong count. Printing the line elsewhere changes membership too: a copy in a SECOND context's
+// tool results makes the run ambiguous, and so `unknown`. A redirect that keeps the line out of the calling
+// context's tool result leaves the run unbound, and so `unknown` as well. See the contract's "Run membership".
+//
 // Usage:
 //   node pharn/floor/mark-phase.mjs --name <slug> --kind <kind> [--stage <s>] [--iteration <n>] [--base <dir>]
 //                                   [--adopt-pending]   (run-start only)
@@ -264,6 +278,22 @@ export function markPhase({
   return marker;
 }
 
+/**
+ * THE ONE ENCODING of the line this CLI prints for a marker, without its trailing newline (see the header: the cost
+ * ledger's run membership reads it back from the transcript, so a change here changes membership).
+ *
+ * `m` is a marker as written, or as `render-cost-ledger.mjs`'s `normalizeMarkers` rebuilds it: every field a
+ * primitive (`seq` a number, `kind` a `MARKER_KINDS` member, `stage` a string or null, `iteration` a number or
+ * null, `ts` a string, and `origin` / `mode` / `route` present only as the values those writers keep). A suffix
+ * prints only when its field is present, which is what keeps every marker written since 6.5.2 rebuildable.
+ */
+export function markerLine(m) {
+  return (
+    `marker ${m.seq}: ${m.kind}${m.stage ? ` ${m.stage}` : ""}${m.iteration ? ` iter=${m.iteration}` : ""} ${m.ts}` +
+    `${m.origin ? ` (adopted ${m.origin} start)` : ""}${m.mode ? ` (mode ${m.mode})` : ""}${m.route ? ` (route ${m.route})` : ""}`
+  );
+}
+
 function usage(msg) {
   process.stderr.write(`mark-phase: ${msg}\n`);
   process.stderr.write(
@@ -354,9 +384,8 @@ function main(argv) {
     mode: opts.mode,
     route: opts.route,
   });
-  process.stdout.write(
-    `marker ${m.seq}: ${m.kind}${m.stage ? ` ${m.stage}` : ""}${m.iteration ? ` iter=${m.iteration}` : ""} ${m.ts}${m.origin ? ` (adopted ${m.origin} start)` : ""}${m.mode ? ` (mode ${m.mode})` : ""}${m.route ? ` (route ${m.route})` : ""}\n`
-  );
+  // The one encoding (see `markerLine` and the header): the emitter finds this exact line in the transcript.
+  process.stdout.write(`${markerLine(m)}\n`);
   return 0;
 }
 

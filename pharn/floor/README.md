@@ -110,7 +110,7 @@ blocks any write to a protected path. Paths are matched **repo-relative and exac
 the guard's own location (plus the work tree Claude is in, when it belongs to the same repository) — never
 by bare basename, so a user's own `docs/ARCHITECTURE.md` stays writable. **Git metadata is denied too**: any
 `.git` path segment under a guarded root, because those entries decide which tree each guard judges and
-`.git/hooks` / `.git/config` run code on the next git command. Since 6.28.3 each write is judged twice: first
+`.git/hooks` / `.git/config` run code on the next git command. Since 6.29.1 each write is judged twice: first
 exactly as before, then at the file the write actually reaches — on macOS and Linux a backslash is part of a
 file name there — so a symlink named `s\x` pointing at the project root no longer carries a write to a
 protected file past the guard; every verdict that second check changes is a denial.
