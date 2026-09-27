@@ -65,7 +65,20 @@ Load the trusted prefix and obey it:
 ## Step 0 — Resolve `<name>`, then set the writes-scope (fix #7, fail-closed; amendment A1)
 
 1. **Resolve the feature `<name>`** — the kebab-case slug of the feature just built. Ambiguous → **ask the
-   human** (P5 — the terminal fallback is a question, never a guess).
+   human** (P5 — the terminal fallback is a question, never a guess). A `<name>` this command did not receive as
+   its argument is resolved only through `pharn/floor/feature-name.mjs`: write the slug alone to
+   `.pharn/feature-name/candidate.txt` with the Write tool, run the line below, and use only the printed value, when
+   it is the slug you wrote — a refusal or any other value → ask the human; never type one from a directory listing
+   or a file's content.
+
+   ```bash
+   node pharn/floor/feature-name.mjs
+   ```
+
+   If the Write tool refuses that path (the file already exists, or it is a link), never Read it and never write to
+   any other path it names: run the line once, ignore what it prints (that run removes what is there), then write
+   again. A directory at that path is never removed: stop and ask the human.
+
 2. **Set the scope to the strictest one the setter can express.** `writes: []` is refused by the setter
    (it will not emit an empty scope), so the concrete entry above — `.pharn/pharn-regress/stage.json`, the
    script's own scratch record — is the minimum: it lies inside the hook's always-writable `.pharn/**`, so

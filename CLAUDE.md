@@ -172,7 +172,7 @@ new layout; it converts a silent half-install into a clean refusal, which is the
    **Since 6.1.0 the same hook also denies GIT METADATA** — any `.git` path segment under a guarded root
    (never `.github/**` or `.gitignore`). A `.git` entry decides which working tree each guard judges, and
    `.git/hooks` / `.git/config` run code on the next git command, so the write tools may not touch them;
-   the remedy the deny message names is the git command that owns the change. **Since 6.29.1 it judges each
+   the remedy the deny message names is the git command that owns the change. **Since 6.31.1 it judges each
    write twice** — its old check first, unchanged, then the target the filesystem reaches, where a backslash
    is part of a file NAME on a `/` system — so a symlink named `s\x` pointing at the root no longer carries a
    write to a trusted doc, or to canon under a plan-origin scope, past it; its canon escape never authorizes a
@@ -289,6 +289,29 @@ node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
 node pharn/floor/run-marker.mjs --open <pharn-review|pharn-ship> <name>
 node pharn/floor/run-marker.mjs --close <pharn-review|pharn-ship> <name>
 
+# CHECK A FEATURE NAME BEFORE ANY SHELL LINE CARRIES IT (added 6.30.0, shell-sink-validation). THE RECORDED FAILURE (P7,
+# reproduced): where a command derived the feature slug from the user's description (/pharn-spec Step 0, so /pharn-ship,
+# and /pharn-loop S1), the only check ran INSIDE a node process, after the shell had parsed the line carrying it — the
+# loop's own `node -e … '<slug>'` validator ran `x'$(touch PWNED)'` and exited 0, and /pharn-spec's unquoted setter ran
+# `;touch${IFS}PWNED;` before GATE 1. Now the model writes the slug alone to `.pharn/feature-name/candidate.txt` with the
+# WRITE tool (no shell parses it); this CLI refuses a symlinked or non-directory `.pharn` / `.pharn/feature-name`, reads
+# the file without following it, removes whatever stands at the path but a directory once those checks pass, and prints
+# the slug only as a FEATURE_SLUG_RE member (imported, L35). `--fresh` also picks the first `<slug>`, `<slug>-2`, … that
+# pharn/features/ lacks (the loop's old S2 shell loop) and refuses on any lstat error but ENOENT. The seven commands that
+# take a name as their argument ask for a missing one (plan grill test build review) or resolve it only through this CLI
+# (regress verify). The Write tool refuses a link at the path and names the link's target as the path to write instead
+# (measured), so every caller says: never Read it, never write elsewhere — run the CLI once, it removes the entry. Same
+# release: /pharn-loop Step 6d returns with the constant `git checkout - --` (its bound is stated there: `-` is this
+# worktree's previous checkout, so a checkout in between sends it elsewhere), and /pharn-ship --quick item 7 takes no
+# ref from the description. FLOOR: the printed value is a FEATURE_SLUG_RE member (tested); `.dev/floor/command-hygiene.
+# test.mjs`'s SHELL-SINK section closes SHELL_VALUES (every placeholder a product command's shell line takes) and
+# NAME_ORIGINS both ways, pins order and the per-command sentences (presence only), and EXECUTES the committed lines.
+# ADVISORY: that the model uses the Write tool, obeys the refusal rule and re-types only the printed value. BOUND: one
+# candidate file per tree (L38). Exit: 0 the name on stdout · 2 refusal (closed REFUSALS, `crashed` included), nothing on
+# stdout · node's own 1 = the entry file did not load (a run from outside the project root). No contract (P7): the
+# module's header is its spec. Ships: bumps SKILLS_VERSION.
+node pharn/floor/feature-name.mjs [--fresh]
+
 # PRODUCE the verify/regress floor input map with TESTED CODE instead of model-typed prose (added 6.8.0).
 # THE RECORDED FAILURE (P7, not a hypothetical): both stages compute a FLOOR verdict from a
 # `{gate-id: exit-int}` map, and the MODEL typed it — verify's Step 3c captured five exit codes in Bash
@@ -370,8 +393,11 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # drops them from a DISCOVERED regress source (an explicit --gates string is not filtered), so an e2e-only manifest
 # is empty-source-set there); the adapters live in
 # test-results-formats.mjs (a reporter's format is its own axis, P3). Closed reasons (RECORD_REASONS), fail-closed
-# PER RECORD: one flaky test or expected failure the report MARKS voids it (Playwright flaky/test.fail(), Jest's
-# invocations > 1 and Jest 30's failing: true); an UNMARKED one reads as its raw status — vitest test.fails and pass on
+# PER RECORD for its integrity (a refusal voids it); since 6.31.0 PER TEST for its anomalies (ANOMALY_REASONS): one
+# flaky test or expected failure the report MARKS (Playwright flaky/test.fail(), Jest's invocations > 1 and Jest 30's
+# failing: true) is an `unknown-status` entry in the record's `anomalies[]`, and every id two tests share is ONE
+# `duplicate-test-id` entry — never a test, never counted, the record still ok; the CONSUMER decides (below). Before
+# 6.31.0 one such test ANYWHERE voided the record. An UNMARKED one reads as its raw status — vitest test.fails and pass on
 # retry, Jest 29's test.failing, each measured and pinned. FLOOR: derived from the exact bytes the runner hashed
 # (a later write is results-hash-mismatch — L58). NOT provenance (L43): "passed" means the reporter said so,
 # and the test script, reporter config and pharn.config.json are all agent-editable; results-exit-contradiction
@@ -387,10 +413,17 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # --from-plan scope), `## Mapping` = one `- AC-<n> | <level> | `<file>` | <public target>` line per AC. check-ac-tests.mjs
 # REDs on a closed kind set (missing/duplicate/unknown AC, level-mismatch, unlisted/unmapped file, in-plan-files — the
 # build's scope would cover it —, claimed-elsewhere, bad-path, no-files, malformed-line, pin via the SHELLED
-# check-plan-spec-agree.mjs, since 6.18.0 spec-kind, and since 6.21.0 test-infra-in-plan — a ROOT runner config the lock's
-# test-infra pin covers named in PLAN.md `## Files`, matched through test-infra-core.mjs's own isRunnerConfigName;
-# package.json / pharn.config.json there print an ADVISORY `NOTE —` line and never change the exit code); exit 0/1/2. ac-tests-lock.mjs --write/--check pins the tests
-# in AC-TESTS.lock.json (schema ac-tests-lock/3 since 6.20.0 — /2 and /1 still read; closed keys per mode; test_infra
+# check-plan-spec-agree.mjs, since 6.18.0 spec-kind, since 6.21.0 test-infra-in-plan — a ROOT runner config the lock's
+# test-infra pin covers named in PLAN.md `## Files`, matched through test-infra-core.mjs's own isRunnerConfigName, and
+# since 6.31.0 also a root package-manager config (.npmrc/.yarnrc/.yarnrc.yml) or a file a level gate's script NAMES
+# (test-infra-core scriptNamedFiles over the tree — the review's H2 wB: a PLAN-scoped build wrote the pharn-json
+# reporter) —, and since 6.31.0 ac-artifact-in-plan — THIS feature's AC-TESTS.md or AC-TESTS.lock.json in PLAN.md (the
+# review's H2: a build scoped to the lock re-pinned its own change with every check green; LOCK_NAME is a literal,
+# parity-tested against ac-tests-lock.mjs, never imported); package.json / pharn.config.json there print an ADVISORY
+# `NOTE —` line and never change the exit code — every part of package.json the pin READS is still compared at verify
+# and cannot be re-pinned through the build's scope, a composition a ★ HOOK test executes; the parts it does not read
+# stay changeable, as the NOT-caught list states); exit 0/1/2. ac-tests-lock.mjs --write/--check pins the tests
+# in AC-TESTS.lock.json (schema ac-tests-lock/4 since 6.31.0 — /3, /2 and /1 still read; closed keys per mode; test_infra
 # is the test-infrastructure pin, see THE AC GATE below); --check names a PATH, never content. The mapping grammar lives in ac-tests-core.mjs. AC-TESTS.md and the lock are PIPELINE_ARTIFACTS (regress-exempt); for reconcile
 # AC-TESTS.md is exempt like PLAN.md (a re-plan rewrites it) but the LOCK is `pre_anchor_artifacts` (NOT exempt).
 # Paths are compared as the setter SCOPES them (clean + isConcrete, case-folded). `--spec <SPEC.md>` decides
@@ -413,7 +446,9 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # reconcile, no build). check-red-run.mjs --verdict (red-run-core.mjs): per AC, over the record of every gate its level
 # maps to, entries whose `file` EQUALS the mapped file (not case-folded) and whose LEAF title starts `AC-<n>:` —
 # ≥1 (else ac-test-not-collected), none passed (ac-test-passes-before-build — NO escape hatch), none skipped
-# (ac-test-skipped); item 01's record refusals are REDs by name. BOUND to the run: validateStamp as ac-test for the
+# (ac-test-skipped); item 01's record refusals are REDs by name, and (6.31.0) so is a per-test anomaly in a file mapped
+# to that AC — one in any other file is `unmapped_anomalies`, printed as `NOTE —` lines, never the exit (the review's M6:
+# a parametrized duplicate elsewhere had refused every AC). BOUND to the run: validateStamp as ac-test for the
 # feature, each run's files == the mapping's, LIVE fingerprint == stamp.fingerprint.final (the lock and the tests are
 # in it). The convention it rests on: unit/integration AC tests import their target INSIDE the test body —
 # a top-level import of a not-yet-built module is a file load failure, i.e. not collected (measured on real vitest
@@ -476,22 +511,36 @@ node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-
 # through an explicit --gates is test-infra-changed (test-first) / ac-untested (bootstrap) BY DESIGN; its detail names
 # the explicit source and /pharn-verify's reference section says not to pass --gates for such a feature. Both ids are
 # RESERVED_IDS and never enter `gates`. Legacy SPEC → NOT-APPLICABLE, stated (with AC evidence beside it → ac-tests-modified); spec_kind:
-# test-infra → BOOTSTRAP, weaker, labelled. THE TEST-INFRA PIN (lock schema ac-tests-lock/3, test-infra-core.mjs,
-# written by --write BEFORE the red run): the level gates' package.json script VALUES + pre/post scripts + testResults
-# formats, and root vitest/vite/playwright/jest config files in a CLOSED name set (matched FOLDED since 6.21.0 — on
-# APFS a `Vitest.config.mjs` is the runner's config); the gate also requires each level
-# gate to have run as the pinned `npm run <id>`. NOT caught, stated ONCE in test-infra-core.mjs's header (restated in
-# the contract): a setup file a config imports, env-driven config, script chaining, .npmrc, tsconfig, and more. /2 and /1 locks are still read (mode, never schema, decides bootstrap) and read
-# test-infra-unpinned at verify — the remedy sets the build aside and re-runs /pharn-test (its red run cannot pass over
-# a built tree). IN THE LOOP: check-loop-fresh E re-derives WITH --ac-gate and compares ac_gate (when the tree moved,
+# test-infra → BOOTSTRAP, weaker, labelled. THE TEST-INFRA PIN (lock schema ac-tests-lock/4 since 6.31.0,
+# test-infra-core.mjs, written by --write BEFORE the red run): the level gates' package.json script VALUES + pre/post
+# scripts + testResults formats, root vitest/vite/playwright/jest config files in a CLOSED name set (matched FOLDED since
+# 6.21.0 — on APFS a `Vitest.config.mjs` is the runner's config), and since 6.31.0 (the review's H2 + the GATE-1
+# amendment) every script a pinned value CHAINS to (transitively, own-property only, REFUSED past MAX_CHAIN_HOPS = 8),
+# every regular file a pinned value NAMES (script_files — a pharn-json reporter), package.json's `jest` key (a canonical
+# JSON digest, null when absent) and the root .npmrc/.yarnrc/.yarnrc.yml (hash only) — all through ONE closed literal
+# token pass (scriptTokens/scriptPathCandidates/chainedIds; never a shell parse; outputs after `>`, -o or an
+# --out… flag skipped); the gate also requires each level gate to have run as the pinned `npm run <id>`. NOT caught,
+# stated ONCE in test-infra-core.mjs's header (restated in the contract), FIRST the in-process bound: code the build
+# writes runs INSIDE the test process and can switch off the assertions or the reporter there (`assert.equal = () =>
+# {}` → verify PASS, measured) — so a green pin NEVER means the build could not forge the AC gate; then imports of a
+# pinned file, env-driven config and user/global npmrc, other package.json keys (mocha, ava, dependencies), chains the
+# rule does not read (npm-run-all, --prefix, bun), tsconfig, and more. STATED COSTS: a source file a test-reachable
+# script names literally (a bundler entry) is pinned too, and a committed .npmrc digest lets a low-entropy credential
+# in it be guessed offline. /2 and /1 locks are still read (mode, never schema, decides bootstrap) and read
+# test-infra-unpinned at verify, and (6.31.0) a /3 lock is judged by what it pinned, while what only /4 pins in the live
+# tree reads `unpinned` (--check RED, AC gate test-infra-unpinned) — the remedy sets the build aside and re-runs
+# /pharn-test (its red run cannot pass over a built tree). A /4 lock is lock-unusable to a pre-6.31.0 floor, never
+# GREEN (rolling back means re-running /pharn-test there). IN THE LOOP: check-loop-fresh E re-derives WITH --ac-gate and compares ac_gate (when the tree moved,
 # 6.20.6: it re-derives WITHOUT the flag and compares what the stamp alone decides — gates, the non-AC failing ids and
 # the verdict rule — so only the AC part defers to F; the AC ids come from gate-run-core AC_RESERVED_IDS, not from
 # ac-gate-core, so the checker's own load graph does not grow); J re-hashes per-test results files;
 # check I's test-stage RED (exit 1, a RED token) is its own code, ac-evidence-invalid → S13 (the other front checks,
 # and a test-stage exit 2 or crash, keep front-stage-red).
-# BOUNDS: "passed" is the reporter's word; agreement, never provenance (L43); one flaky test or expected failure the
-# report MARKS, or a duplicate id, anywhere voids the record (INCONCLUSIVE) — an unmarked one reads as its raw status
-# (test-results-record.md). check-verify.mjs still spawns nothing. Contract: pharn/pharn-contracts/
+# BOUNDS: "passed" is the reporter's word; agreement, never provenance (L43); since 6.31.0 a flaky test or expected
+# failure the report MARKS, or a duplicate id, makes UNMEASURED only an AC whose mapped file holds it (the anomaly's own
+# reason, INCONCLUSIVE) and is otherwise reported in ac_gate.unmapped_anomalies, read by no verdict — before, one
+# ANYWHERE voided the record; an unmarked one reads as its raw status (test-results-record.md); the file an anomaly
+# names is the reporter's word. check-verify.mjs still spawns nothing. Contract: pharn/pharn-contracts/
 # ac-tests.md "The AC gate" + verify-report.md "The additive ac_gate block".
 node pharn/floor/check-verify.mjs --stamp <stamp.json> --feature <name> --ac-gate
 
@@ -1245,7 +1294,7 @@ the rule has to be the thing that holds.
   containing a backslash (there a backslash is part of a file NAME, while the reserved-path fold reads it as
   a separator — a deny list must not guess), and allows every other in-project path, including your ordinary
   source and the files Claude Code loads at session start (`CLAUDE.md`, `AGENTS.md`, `.mcp.json`).
-  **Outside the project** it then allows three places, each narrowed to THIS project and THIS session in 6.29.1
+  **Outside the project** it then allows three places, each narrowed to THIS project and THIS session in 6.31.1
   (the maintainer's 2026-09-26 GATE-2 decision D2 had allowed every project's memory folder and both whole temp
   roots, which a security review showed reached another project's auto-memory and another live session's
   scratch): **this project's auto-memory folder**, `<claude-config-dir>/projects/<key>/memory/**`
@@ -1275,7 +1324,7 @@ the rule has to be the thing that holds.
   either target is denied (GATE-2 review, B1). The second resolution splits on `/` only on a `/`
   system: the first handoff of this fix copied protect-trusted-paths.cjs's `\`-as-separator reading, and
   that made `pharn/features/a\b/../../floor/x.mjs` resolve inside `pharn/features/` while the kernel wrote
-  `pharn/floor/x.mjs` — measured in the dev posture too, before it shipped. **Since 6.29.1
+  `pharn/floor/x.mjs` — measured in the dev posture too, before it shipped. **Since 6.31.1
   `protect-trusted-paths.cjs` carries a byte-equal copy of that second resolution** (pinned by a ✧ test beside
   the `workTreeRoot()` / `toKey()` pins) and judges it after its own check, alone, so every verdict it changes
   moves toward deny and every old denial keeps its message.
@@ -1323,7 +1372,7 @@ the rule has to be the thing that holds.
     this project's memory folder, this session's scratchpad or an ordinary temp path, in no other git tree,
     IS writable there under the permissive default, so for such a path the message says so and names what is
     holding it (the scope, an open run, or an unreadable run-state directory) instead of claiming nothing can
-    help. Its **Claude-state** variant (6.29.1 — an installed project, a path that is Claude Code's own state
+    help. Its **Claude-state** variant (6.31.1 — an installed project, a path that is Claude Code's own state
     outside the project: another project's memory folder, a file in the config directory, or anything below a
     `claude-<uid>` temp folder) names the two memory keys and the scratchpad rule, offers this session's
     scratchpad as a route only when the call's payload identifies it (and says it cannot be reached otherwise —

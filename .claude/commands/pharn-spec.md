@@ -14,6 +14,7 @@ reads:
     "pharn.spec-template.md",
     "pharn/features/<name>/SPEC.md",
     "pharn/floor/check-spec.mjs",
+    "pharn/floor/feature-name.mjs",
     "package.json",
   ]
 writes: ["pharn/features/<name>/SPEC.md"]
@@ -80,12 +81,28 @@ exactly as written for a `--quick` invocation too.
   not-checked list instead. **The floor backstop:** rule 9 REDs a quick Draft with more than three criteria or an
   `e2e` level, so such a SPEC can never be approved (Step 5's re-validation fails first).
 
-## Step 0 — Resolve `<name>`, then set the writes-scope (fix #7, fail-closed)
+## Step 0 — Resolve `<name>`, check it, then set the writes-scope (fix #7, fail-closed)
 
 1. **Resolve the feature `<name>`** — a short kebab-case slug for this intent, from the invocation. If the
    invocation does not make a clear `<name>` available (ambiguous) → **ask the human** (P5 terminal fallback is
    a question, never a guess).
-2. **Set the scope to the single SPEC.md** before any write:
+2. **Check it before any shell line carries it.** Write the slug alone to `.pharn/feature-name/candidate.txt` with
+   the **Write tool** — never through the shell — then run:
+
+   ```bash
+   node pharn/floor/feature-name.mjs
+   ```
+
+   Exit `0` prints the name: use that printed value, and only when it is the slug you wrote (another value means a
+   file you did not write was read — stop and ask). Any other exit prints no name. A slug you derived yourself may be
+   replaced once by another of `a`–`z`, `0`–`9` and `-`, then ask the human. A name you were given — typed by the
+   human, or threaded by an orchestrator — is never changed: ask, or under `--model-approve` report back blocked. If
+   the Write tool refuses that path (the file already exists, or it is a link), never Read it and never write to any
+   other path it names: run the line once, ignore what it prints (that run removes what is there), then write again.
+   A directory at that path is never removed: stop and ask the human, or under `--model-approve` report back
+   blocked, naming the path. Why a file and not an argument: `pharn/floor/feature-name.mjs`, header.
+
+3. **Set the scope to the single SPEC.md** before any write:
 
    ```bash
    node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-spec.md --target pharn/features/<name>/SPEC.md
@@ -300,6 +317,9 @@ Everything this command does is advisory orchestration except what the Floor bul
 which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`). The contract's "What the rules ARE and are NOT
 (P0)" (`pharn/pharn-contracts/spec-template.md`) owns the template rules' bounds.
 
+- **Floor:** `pharn/floor/feature-name.mjs` prints only a member of `FEATURE_SLUG_RE`, or nothing (enum-regex).
+  **Advisory:** that the candidate is written with the Write tool, and that every later shell line carries only the
+  printed value — the model re-types it.
 - **Floor:** the `SPEC.md` has the required sections, `state ∈ {Draft, Approved}` and a `spec_id`, and — when
   `Approved` — `spec_content_hash` equals the pin (`sha256(body)`, with a `spec_kind:` line hashed in front when
   present), so later body drift is detectable — `check-spec.mjs` (presence, enum, content-hash; fix #4). A body whose

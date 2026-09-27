@@ -66,7 +66,7 @@ test("--write then --check is GREEN; the lock's shape is the closed key set, dig
     for (const f of lock.files) assert.equal(f.sha256, sha256RegularFile(join(root, f.path)));
     assert.equal(lock.red_run, null);
     // no package.json and no runner config in this world: the pin records the level and nothing else
-    assert.deepEqual(lock.test_infra, { levels: ["unit"], gates: [], configs: [] });
+    assert.deepEqual(lock.test_infra, { levels: ["unit"], gates: [], chained: [], configs: [], script_files: [], jest: null });
     assert.equal(lockShapeError(lock, NAME), null);
     const r = cli(root, ["--check", NAME]); // the DEFAULT --base, exercised (L41)
     assert.equal(r.code, 0, r.out);
@@ -229,12 +229,12 @@ const redRunFor = (lock) => ({
   acs: [{ id: "AC-1", tests: ["tests/ac/one.test.js::AC-1: t"] }],
 });
 
-test("/3: --write writes mode test-first with bootstrap null; a well-formed red_run bound to the files checks GREEN", () => {
+test("/4: --write writes mode test-first with bootstrap null; a well-formed red_run bound to the files checks GREEN", () => {
   const root = world();
   try {
     cli(root, ["--write", NAME]);
     const lock = lockOf(root);
-    assert.equal(lock.schema, "ac-tests-lock/3");
+    assert.equal(lock.schema, "ac-tests-lock/4");
     assert.equal(lock.mode, "test-first");
     assert.equal(lock.bootstrap, null);
     writeLockJson(root, { ...lock, red_run: redRunFor(lock) });
@@ -277,7 +277,7 @@ test("/1 locks are still read and checked GREEN, and never pass --require-red-ru
     const r = cli(root, ["--check", NAME, "--require-red-run"]);
     assert.equal(r.code, 1, r.out);
     assert.match(r.out, /ac-tests-lock\/1, which has no red run/);
-    assert.equal(cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]).code, 2, "a red run is recorded on a /3 lock only");
+    assert.equal(cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]).code, 2, "a red run is recorded on a /4 lock only");
     writeLockJson(root, { ...rest, schema: "ac-tests-lock/1", mode: "test-first" });
     assert.equal(cli(root, ["--check", NAME]).code, 2, "a /1 lock with /2's keys is not the /1 shape");
   } finally {
@@ -408,7 +408,7 @@ test("bootstrap: --write-bootstrap records mode bootstrap, no mapping, no files,
     assert.match(w.out, /BOOTSTRAP .* WEAKER than test-first/);
     const lock = lockOf(root);
     assert.deepEqual(lock, {
-      schema: "ac-tests-lock/3",
+      schema: "ac-tests-lock/4",
       feature: NAME,
       mode: "bootstrap",
       spec: { spec_id: NAME, spec_content_hash: pinOf(spec) },
@@ -535,7 +535,7 @@ function infraWorld() {
   return root;
 }
 
-test("/3 --write pins the test infrastructure; --check REDs a changed script, config or results format, naming it", () => {
+test("/4 --write pins the test infrastructure; --check REDs a changed script, config or results format, naming it", () => {
   const cases = [
     [
       "the test script",
@@ -558,7 +558,10 @@ test("/3 --write pins the test infrastructure; --check REDs a changed script, co
     try {
       const w = cli(root, ["--write", NAME]);
       assert.equal(w.code, 0, w.out);
-      assert.match(w.out, /the test infrastructure: 1 gate\(s\), 1 runner config\(s\)/);
+      assert.match(
+        w.out,
+        /the test infrastructure: 1 gate\(s\), 0 chained script\(s\), 1 root config\(s\), 0 script-named file\(s\), package\.json jest key absent/
+      );
       const lock = lockOf(root);
       assert.deepEqual(lock.test_infra.gates, [{ id: "test", script: "vitest run", pre: null, post: null, results: "vitest-json" }]);
       const g = cli(root, ["--check", NAME]);
@@ -575,7 +578,7 @@ test("/3 --write pins the test infrastructure; --check REDs a changed script, co
   }
 });
 
-test("/3 --write REFUSES a test infrastructure it cannot pin: a symlinked runner config, an unparseable package.json, no mapping", () => {
+test("/4 --write REFUSES a test infrastructure it cannot pin: a symlinked runner config, an unparseable package.json, no mapping", () => {
   const root = infraWorld();
   try {
     rmSync(join(root, "vitest.config.ts"));
@@ -599,7 +602,7 @@ test("/3 --write REFUSES a test infrastructure it cannot pin: a symlinked runner
   }
 });
 
-test("/2 is still read: GREEN with --require-red-run, saying it has no pin; a red run is never recorded on it; /3 test-first requires the pin", () => {
+test("/2 is still read: GREEN with --require-red-run, saying it has no pin; a red run is never recorded on it; /4 test-first requires the pin", () => {
   const root = infraWorld();
   try {
     cli(root, ["--write", NAME]);
@@ -611,13 +614,168 @@ test("/2 is still read: GREEN with --require-red-run, saying it has no pin; a re
     writeLockJson(root, { ...lock, schema: "ac-tests-lock/2", test_infra: null });
     const rec = cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]);
     assert.equal(rec.code, 2, rec.out);
-    assert.match(rec.out, /ac-tests-lock\/2 test-first; a red run is recorded on an ac-tests-lock\/3 test-first lock/);
+    assert.match(rec.out, /ac-tests-lock\/2 test-first; a red run is recorded on an ac-tests-lock\/4 test-first lock/);
     writeLockJson(root, { ...lock, test_infra: null });
     const u = cli(root, ["--check", NAME]);
     assert.equal(u.code, 2, u.out);
     assert.match(u.out, /test_infra is not exactly/);
     writeLockJson(root, { ...lock, schema: "ac-tests-lock/2" });
     assert.match(cli(root, ["--check", NAME]).out, /test_infra must be null under ac-tests-lock\/2 test-first/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── 6.31.0: schema /4 — what a level gate RUNS is pinned; a /3 lock is still read, judged by what it pinned ────────
+
+/** infraWorld, plus what only /4 pins: a chained script, a file a script names, a jest key, and .npmrc. */
+function richWorld() {
+  const root = world();
+  writeFileSync(
+    join(root, "package.json"),
+    JSON.stringify({
+      scripts: { test: "npm run test:unit -- --reporter=./tools/reporter.mjs", "test:unit": "vitest run", lint: "eslint ." },
+      jest: { testEnvironment: "node" },
+    })
+  );
+  writeFileSync(join(root, "pharn.config.json"), JSON.stringify({ testResults: { test: "pharn-json" } }));
+  mkdirSync(join(root, "tools"), { recursive: true });
+  writeFileSync(join(root, "tools/reporter.mjs"), "export default class R {}\n");
+  writeFileSync(join(root, ".npmrc"), "fund=false\n");
+  return root;
+}
+const toV3 = (lock) => ({
+  ...lock,
+  schema: "ac-tests-lock/3",
+  test_infra: {
+    levels: lock.test_infra.levels,
+    gates: lock.test_infra.gates,
+    configs: lock.test_infra.configs.filter((c) => c.path !== ".npmrc"),
+  },
+});
+
+test("6.31.0 /4 --write pins each /4 member; --check REDs each change through the CLI, naming it (L52)", () => {
+  const cases = [
+    [
+      "the chained script",
+      (root) =>
+        writeFileSync(
+          join(root, "package.json"),
+          JSON.stringify({
+            scripts: { test: "npm run test:unit -- --reporter=./tools/reporter.mjs", "test:unit": "vitest run --passWithNoTests" },
+            jest: { testEnvironment: "node" },
+          })
+        ),
+      /test infrastructure changed — chained script "test:unit": its value changed/,
+    ],
+    [
+      "the reporter the gate's script names",
+      (root) => writeFileSync(join(root, "tools/reporter.mjs"), "export default class R { passAll() {} }\n"),
+      /test infrastructure changed — tools\/reporter\.mjs: a file a level gate's script names changed/,
+    ],
+    [
+      "the jest key",
+      (root) =>
+        writeFileSync(
+          join(root, "package.json"),
+          JSON.stringify({
+            scripts: { test: "npm run test:unit -- --reporter=./tools/reporter.mjs", "test:unit": "vitest run", lint: "eslint ." },
+            jest: { testEnvironment: "node", testResultsProcessor: "./forge.cjs" },
+          })
+        ),
+      /test infrastructure changed — package\.json's jest key changed/,
+    ],
+    [
+      ".npmrc",
+      (root) => writeFileSync(join(root, ".npmrc"), "script-shell=./forge.sh\n"),
+      /test infrastructure changed — \.npmrc: the package-manager config changed/,
+    ],
+  ];
+  for (const [why, mutate, re] of cases) {
+    const root = richWorld();
+    try {
+      const w = cli(root, ["--write", NAME]);
+      assert.equal(w.code, 0, w.out);
+      assert.match(
+        w.out,
+        /1 gate\(s\), 1 chained script\(s\), 1 root config\(s\), 1 script-named file\(s\), package\.json jest key pinned/
+      );
+      assert.equal(cli(root, ["--check", NAME]).code, 0);
+      mutate(root);
+      const r = cli(root, ["--check", NAME]);
+      assert.equal(r.code, 1, `${why}: ${r.out}`);
+      assert.match(r.out, re, why);
+      assert.ok(!/passWithNoTests|passAll|forge/.test(r.out), `${why}: content leaked`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("6.31.0 /4 --write REFUSES a symlinked file a level gate's script names, and a chain past the hop bound", () => {
+  const root = richWorld();
+  try {
+    rmSync(join(root, "tools/reporter.mjs"));
+    writeFileSync(join(root, "real.mjs"), "x\n");
+    symlinkSync(join(root, "real.mjs"), join(root, "tools/reporter.mjs"));
+    let w = cli(root, ["--write", NAME]);
+    assert.equal(w.code, 2, w.out);
+    assert.match(w.out, /cannot be pinned: tools\/reporter\.mjs \(a file a level gate's script names\) is a symlink/);
+    rmSync(join(root, "tools/reporter.mjs"));
+    const scripts = { test: "npm run c1" };
+    for (let i = 1; i <= 9; i++) scripts[`c${i}`] = i < 9 ? `npm run c${i + 1}` : "vitest run";
+    writeFileSync(join(root, "package.json"), JSON.stringify({ scripts }));
+    w = cli(root, ["--write", NAME]);
+    assert.equal(w.code, 2, w.out);
+    assert.match(w.out, /chain deeper than 8 hops/);
+    assert.throws(() => lockOf(root), /ENOENT/, "a refused --write writes no lock");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("6.31.0 MIGRATION — a /3 lock is still read: GREEN over a tree with nothing only /4 pins, RED `unpinned` over one that has", () => {
+  // a /3 lock over the /3-era world: nothing only /4 pins → GREEN, red run required and present
+  let root = infraWorld();
+  try {
+    cli(root, ["--write", NAME]);
+    const lock = lockOf(root);
+    const v3 = { ...toV3(lock), red_run: redRunFor(lock) };
+    writeLockJson(root, v3);
+    const g = cli(root, ["--check", NAME, "--require-red-run"]);
+    assert.equal(g.code, 0, g.out);
+    assert.match(g.out, /the test-infrastructure pin holds/);
+    // a red run is recorded on a /4 lock only (re-running --write is cheap there)
+    const rec = cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]);
+    assert.equal(rec.code, 2, rec.out);
+    assert.match(rec.out, /ac-tests-lock\/3 test-first; a red run is recorded on an ac-tests-lock\/4 test-first lock — re-run --write/);
+    // closed per schema: a /4-shaped pin under /3, and a /3-shaped one under /4, are unusable, never a verdict
+    writeLockJson(root, { ...v3, test_infra: lock.test_infra });
+    const u3 = cli(root, ["--check", NAME]);
+    assert.equal(u3.code, 2, u3.out);
+    assert.match(u3.out, /test_infra is not exactly \{configs, gates, levels\}/);
+    writeLockJson(root, { ...v3, schema: "ac-tests-lock/4" });
+    const u4 = cli(root, ["--check", NAME]);
+    assert.equal(u4.code, 2, u4.out);
+    assert.match(u4.out, /test_infra is not exactly \{chained, configs, gates, jest, levels, script_files\}/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+  // a /3 lock over a tree whose level gates reach what only /4 pins → RED, each named `unpinned`, never `changed`
+  root = richWorld();
+  try {
+    cli(root, ["--write", NAME]);
+    const lock = lockOf(root);
+    writeLockJson(root, { ...toV3(lock), red_run: redRunFor(lock) });
+    const r = cli(root, ["--check", NAME, "--require-red-run"]);
+    assert.equal(r.code, 1, r.out);
+    const reds = r.out.split("\n").filter((l) => l.startsWith("RED — test infrastructure"));
+    assert.deepEqual(reds, [
+      'RED — test infrastructure unpinned — chained script "test:unit": a level gate runs it, and an ac-tests-lock/3 pin does not cover it',
+      "RED — test infrastructure unpinned — tools/reporter.mjs: a level gate's script names it, and an ac-tests-lock/3 pin does not cover it",
+      "RED — test infrastructure unpinned — .npmrc: a package-manager config, which an ac-tests-lock/3 pin does not cover",
+      "RED — test infrastructure unpinned — package.json's jest key: an ac-tests-lock/3 pin does not cover it",
+    ]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

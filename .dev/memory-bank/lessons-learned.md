@@ -2229,3 +2229,18 @@ type: contract · concepts: [universal-quantifier, doc-drift, guarantee-audit, r
 - commit: `df2e880ca23d8d0f83388236ef893a1f6c8610c0`
 - source: `.dev/features/cost-transcript-hostile-values/REVIEW.md` R1,R2,R3,R5 + § Proposed lesson candidate
 - promoted: 2026-09-27 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L65 — A pin is only as strong as the scope around its record — a stage allowed to write the record a later gate compares it against certifies itself
+
+type: floor · concepts: [pinned-record, writes-scope, agreement, self-certification]
+
+**Lesson.** A content-hash pin proves only that the tree still matches the RECORD, so the record itself must sit outside the scope of every stage the pin judges. AC-TESTS.lock.json pinned the AC tests (6.17.0) and the test infrastructure (6.20.0), and for twelve releases a PLAN could still name the lock in its `## Files`: the build was then scoped to the lock, re-pinned whatever it changed (a forging test script, a rewritten pharn-json reporter), and every floor check agreed with the forgery — verify PASS, `ac_gate` PASS, the real AC test failing (the review's H2, reproduced in install-like worlds). [[L43]] names the agreement bound; this names where it bites: the judged stage's write scope. Remedy: when a record is introduced that a later gate compares the tree against, the checker that bounds the judged stage's scope names that record in the SAME increment (here `check-ac-tests.mjs` `ac-artifact-in-plan`), proved through the REAL setter and write guard with a ★ HOOK test — and the record's pin must also cover what the judged stage can reach that decides the comparison (here the files a gate's script names, the scripts it chains to, the `jest` key and the package-manager config).
+
+**Why it matters.** Each record added to strengthen a gate (a lock, a baseline, a stamp) is also a new thing the judged stage can rewrite, and the checks built on it stay GREEN when it is rewritten consistently — the failure is silent by construction. **Bound (P0):** the remedy named here is floor-grade only where a checker enforces the exclusion and a hook test probes it; a Bash rewrite of a record stays detected-not-prevented ([[L19]]). **Trigger (P7):** a read-only review reproduced the forgery end to end; it was promoted at the ship-stage lesson gate, whose accept/deny was delegated by the maintainer to the orchestrating model — recorded as a delegated decision, not a human approval.
+
+**Provenance.**
+
+- feature: `ac-gate-plan-scope`
+- commit: `70cb51c8f3f7c1a3405b651106bc35f244948da9` (working-tree build on this commit; uncommitted at promotion time)
+- source: `.dev/features/ac-gate-plan-scope/REVIEW.md` LC1
+- promoted: 2026-09-27 via gated `/pharn-dev-memory-promote` (accept delegated by the maintainer to the orchestrating model).

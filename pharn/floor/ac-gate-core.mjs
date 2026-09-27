@@ -19,10 +19,14 @@
 //   feature    → TEST-FIRST. Feature-wide EVIDENCE: the lock is a shape-valid test-first lock whose files, mapping and
 //                spec pin still hold, and whose spec pin is the SPEC's, else `ac-tests-modified`; its `red_run` is
 //                present and bound to its files and mapped ACs, else `ac-never-red`; its test-infrastructure pin holds,
-//                else `test-infra-changed`, and a lock without one (/2, /1) is `test-infra-unpinned`; every level gate
+//                else `test-infra-changed`, and a lock without one (/2, /1) is `test-infra-unpinned` — so is a /3 lock
+//                whose level gates now reach something the /4 pin covers and it does not (a chained script, a file a
+//                script names, a `jest` key, a package-manager config; 6.31.0); every level gate
 //                read ran as the pinned command (`source: discover`, `npm run <id>`, no shell), else
 //                `test-infra-changed`. Per AC, over every gate its level maps to that is in the head stamp: a record
-//                refused is item 01's own reason (unmeasured); the matched tests (observeAc) — none → `ac-untested`;
+//                refused is item 01's own reason (unmeasured), and so is a per-test anomaly in a file mapped to that AC
+//                (6.31.0 — one elsewhere is `unmapped_anomalies`, reported and never read by the verdict); the matched
+//                tests (observeAc) — none → `ac-untested`;
 //                a matched test id the red run never recorded red for that AC → `ac-never-red`; any `failed` →
 //                `ac-not-passed`; else any `skipped` → `ac-skipped`. An AC with no mapping row → `ac-never-red`.
 //                A test the red run recorded red for AC-n that the head run does not report at all is `ac-untested`.
@@ -40,10 +44,13 @@
 //
 // BOUNDS (P0), each stated where a reader meets the claim: "passed" is the reporter's word — the tests, the reporter
 // config and pharn.config.json are agent-editable, which the lock and the pin NARROW and never close; AGREEMENT, never
-// provenance (L43) — a self-consistent fabricated lock + stamp + results set over the live tree passes; a record is
-// refused whole on one flaky test or expected failure the report MARKS, or one duplicate id, anywhere in the suite
-// (item 01), which makes the gate unmeasured — an unmarked one (vitest `test.fails` or pass on retry, Jest 29's
-// `test.failing`) reads as its raw status (test-results-record.md); the pin's own gaps are test-infra-core.mjs's header. The gate does NOT re-check that the SPEC is
+// provenance (L43) — a self-consistent fabricated lock + stamp + results set over the live tree passes; code the
+// build writes runs INSIDE the test process and can switch off the assertion library or the reporter there, which
+// no pin reaches (test-infra-core.mjs's header states it, 6.31.0); a flaky test or expected failure the report MARKS,
+// or a duplicate id, in a file an AC maps makes that AC unmeasured, and one in any other file is only reported
+// (6.31.0 — before, one anywhere refused the whole record) — an unmarked one (vitest `test.fails` or pass on retry,
+// Jest 29's `test.failing`) reads as its raw status (test-results-record.md); the pin's own gaps are
+// test-infra-core.mjs's header. The gate does NOT re-check that the SPEC is
 // still Approved — it reads the SPEC's pin, never its `state`. Since 6.20.5 a test-first SPEC whose pin cannot be
 // read (no `spec_id` or `spec_content_hash` line, an empty one, a value that is not 64 hex — a Draft usually has one
 // of these) is `ac-tests-modified`, an EVIDENCE reason: verify FAIL and /pharn-loop S13; before, the comparison was
@@ -73,7 +80,7 @@ import {
   testFirstReds,
 } from "./ac-tests-lock.mjs";
 import { LEVEL_GATES } from "./gate-run-core.mjs";
-import { observeAc } from "./red-run-core.mjs";
+import { observeAc, unmappedAnomalies } from "./red-run-core.mjs";
 import { specVerdict } from "./spec-template-core.mjs";
 import { RECORD_REASONS, testRecord } from "./test-results-core.mjs";
 
@@ -164,7 +171,10 @@ function verdictOf(evidence, acs) {
 
 const byKey = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
-function block(mode, evidence, acs) {
+/** `unmapped` is the per-test anomalies no verdict read (red-run-core.mjs unmappedAnomalies, 6.31.0): REPORTED in the
+ *  block, never an input to verdictOf. Required at every call (L41) — `[]` where no record was read. */
+function block(mode, evidence, acs, unmapped) {
+  if (!Array.isArray(unmapped)) throw new TypeError("block: `unmapped` must be an array");
   const ev = [...evidence].sort((a, b) => byKey(a.reason, b.reason) || byKey(a.detail, b.detail));
   const rows = [...acs].sort((a, b) => acNum(a.id) - acNum(b.id));
   let verdict = verdictOf(ev, rows);
@@ -179,7 +189,7 @@ function block(mode, evidence, acs) {
       : verdict === "INCONCLUSIVE" && unmeasured
         ? `${unmeasured.id}: ${unmeasured.reason} — ${unmeasured.detail}`
         : null;
-  return { mode, verdict, reason, evidence: ev, acs: rows, note: NOTES[mode] };
+  return { mode, verdict, reason, evidence: ev, acs: rows, unmapped_anomalies: unmapped, note: NOTES[mode] };
 }
 
 /** The status the matched observations add up to (failed > skipped > passed; none when there are none). */
@@ -190,7 +200,7 @@ function statusOf(observations) {
   return "passed";
 }
 
-function testFirst({ feature, spec, stamp, root, recordOf }) {
+function testFirst({ feature, spec, stamp, root, recordOf, records }) {
   const evidence = [];
   const add = (reason, detail) => evidence.push({ reason, detail: bounded(detail) });
   const loaded = loadLock(root, feature);
@@ -222,8 +232,12 @@ function testFirst({ feature, spec, stamp, root, recordOf }) {
     if (lock.test_infra === null)
       add("test-infra-unpinned", `the lock (${lock.schema}) carries no test-infrastructure pin — written before 6.20.0`);
     else {
+      // Two fields, never one list split by prefix (L6): what CHANGED from the pin, and what this floor pins that the
+      // lock's schema did not (a /3 lock whose level gates chain to a script, name a file or read a `jest` key, 6.31.0).
       const infra = pinReds(lock, root);
-      if (infra.length) add("test-infra-changed", `${infra[0]}${infra.length > 1 ? ` (+${infra.length - 1} more)` : ""}`);
+      const first = (xs) => `${xs[0]}${xs.length > 1 ? ` (+${xs.length - 1} more)` : ""}`;
+      if (infra.changed.length) add("test-infra-changed", first(infra.changed));
+      if (infra.unpinned.length) add("test-infra-unpinned", first(infra.unpinned));
     }
   }
 
@@ -290,10 +304,13 @@ function testFirst({ feature, spec, stamp, root, recordOf }) {
   });
   for (const id of [...unpinnedRuns].sort())
     add("test-infra-changed", `gate ${id} did not run as the pinned \`npm run ${id}\` — ${notPinnedWhy(stamp)}`);
-  return block("test-first", evidence, acs);
+  // Only the rows an AC of the SPEC reads decide an anomaly (a row for an id outside the SPEC is `unknown-ac` at plan
+  // time and is observed by no AC here), so every anomaly no observeAc call saw is reported.
+  const observedRows = rows.filter((r) => spec.items.some((item) => item.id === r.id));
+  return block("test-first", evidence, acs, unmappedAnomalies({ records, rows: observedRows }));
 }
 
-function bootstrap({ feature, spec, stamp, root, recordOf }) {
+function bootstrap({ feature, spec, stamp, root, recordOf, records }) {
   const evidence = [];
   const loaded = loadLock(root, feature);
   if (!loaded.ok) evidence.push({ reason: "ac-tests-modified", detail: bounded(loaded.why) });
@@ -349,13 +366,14 @@ function bootstrap({ feature, spec, stamp, root, recordOf }) {
     return out;
   };
   const acs = spec.items.map((item) => ({ id: item.id, level: item.level, tests: [], ...levelResult(item.level) }));
-  return block("bootstrap", evidence, acs);
+  // No file is mapped under a bootstrap SPEC, so every anomaly a read record carries is reported, and none decides.
+  return block("bootstrap", evidence, acs, unmappedAnomalies({ records, rows: [] }));
 }
 
 /**
  * THE AC GATE. Every input is required (L41): `feature` (the slug), `stamp` (a VALIDATED verify stamp), `outDir` (the
  * runner's `<out>` for it — the per-test results files sit there), `root` (the project root the gates ran in).
- * @returns {{mode: string|null, verdict: string, reason: string|null, evidence: {reason: string, detail: string}[], acs: {id: string, level: string|null, tests: string[], status: string, reason: string|null, detail: string}[], note: string|null}}
+ * @returns {{mode: string|null, verdict: string, reason: string|null, evidence: {reason: string, detail: string}[], acs: {id: string, level: string|null, tests: string[], status: string, reason: string|null, detail: string}[], unmapped_anomalies: {gate: string, reason: string, count: number, examples: string[]}[], note: string|null}}
  */
 export function evaluateAcGate({ feature, stamp, outDir, root }) {
   for (const [name, v] of [
@@ -375,6 +393,7 @@ export function evaluateAcGate({ feature, stamp, outDir, root }) {
       reason: `${join(DEFAULT_BASE, feature, SPEC_NAME)} is not readable`,
       evidence: [],
       acs: [],
+      unmapped_anomalies: [],
       note: null,
     };
   const spec = specVerdict(specText);
@@ -385,7 +404,7 @@ export function evaluateAcGate({ feature, stamp, outDir, root }) {
   };
   if (spec.token === "LEGACY") {
     const present = [MAPPING_NAME, LOCK_NAME].filter((f) => readText(resolve(root, DEFAULT_BASE, feature, f)) !== null);
-    if (present.length === 0) return block("not-applicable", [], []);
+    if (present.length === 0) return block("not-applicable", [], [], []);
     // grill G5: `spec_template` is outside the approval pin and SPEC.md is reconcile-exempt, so a legacy reading beside
     // AC evidence means the key was removed after the tests were pinned — never a silent NOT-APPLICABLE.
     return block(
@@ -396,10 +415,12 @@ export function evaluateAcGate({ feature, stamp, outDir, root }) {
           detail: `the SPEC reads legacy, but ${present.join(" and ")} exist — the SPEC stopped being templated after the AC tests were pinned`,
         },
       ],
+      [],
       []
     );
   }
-  if (spec.token === "UNUSABLE") return { mode: null, verdict: "INCONCLUSIVE", reason: spec.line, evidence: [], acs: [], note: null };
-  if (spec.token === "BOOTSTRAP") return bootstrap({ feature, spec, stamp, root, recordOf });
-  return testFirst({ feature, spec, stamp, root, recordOf });
+  if (spec.token === "UNUSABLE")
+    return { mode: null, verdict: "INCONCLUSIVE", reason: spec.line, evidence: [], acs: [], unmapped_anomalies: [], note: null };
+  if (spec.token === "BOOTSTRAP") return bootstrap({ feature, spec, stamp, root, recordOf, records });
+  return testFirst({ feature, spec, stamp, root, recordOf, records });
 }

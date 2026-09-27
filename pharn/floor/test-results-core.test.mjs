@@ -8,7 +8,8 @@
 // owns that format, so its contract is the reference, and one test parses the contract's own example. Every refusal test is ONE mutation
 // of a passing case, with the passing case as its non-vacuity control (L34), and every rule over a set is
 // tested per member (L52). The last test asserts that every RECORD_REASONS member was actually reached by a
-// test in this file (L36, the reverse closure).
+// test in this file (L36, the reverse closure) — as a refusal of the record or, for ANOMALY_REASONS (6.31.0), as a
+// per-test anomaly an ok record carries (`expectAnomaly`; `expectReason` refuses to count an anomaly code).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -20,6 +21,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SCHEMA, resultsFileName } from "./gate-run-core.mjs";
 import {
+  ANOMALY_REASONS,
   CONFIG_FILE,
   CONFIG_KEY,
   FILE_SEP,
@@ -36,6 +38,7 @@ import {
   testRecord,
 } from "./test-results-core.mjs";
 import {
+  ENTRY_ANOMALIES,
   FORMAT_REFUSALS,
   MAX_DEPTH,
   PHARN_RESULTS_SCHEMA,
@@ -62,7 +65,24 @@ const REACHED = new Set();
 function expectReason(r, code) {
   assert.equal(r.ok, false, `expected refusal ${code}, got an ok record`);
   assert.equal(r.reason_code, code, `expected ${code}, got ${r.reason_code}: ${r.reason}`);
+  assert.ok(!ANOMALY_REASONS.includes(code), `${code} is a per-test anomaly since 6.31.0 — expectAnomaly, never a refusal`);
   REACHED.add(code);
+}
+/** 6.31.0: an ANOMALY is carried by an ok record — never a refusal of it — and each one names its reason_code. */
+function expectAnomaly(r, code) {
+  assert.equal(r.ok, true, `expected an ok record carrying ${code}, got the refusal ${r.reason_code}: ${r.reason}`);
+  assert.ok(
+    r.anomalies.some((a) => a.reason_code === code),
+    `no ${code} anomaly: ${JSON.stringify(r.anomalies)}`
+  );
+  REACHED.add(code);
+}
+/** The one entry a one-test document parses to is an anomaly with `code`: kept, `status: null`, the document ok. */
+function expectEntryAnomaly(p, code, label) {
+  assert.equal(p.ok, true, `${label}: the document was refused (${p.reason_code}), not the entry`);
+  assert.equal(p.entries.length, 1, label);
+  assert.equal(p.entries[0].status, null, label);
+  assert.equal(p.entries[0].anomaly?.reason_code, code, label);
 }
 
 /** A minimal VALID verify stamp whose `test` run carries the given fields (mirrors gate-run-core.test.mjs). */
@@ -196,6 +216,21 @@ test("RECORD_REASONS is sorted and unique; FORMAT_REFUSALS ⊂ RECORD_REASONS", 
   for (const c of FORMAT_REFUSALS) assert.ok(RECORD_REASONS.includes(c), `${c} is an adapter refusal but not a RECORD_REASONS member`);
 });
 
+test("6.31.0 ANOMALY_REASONS: the per-test codes — sorted, ⊂ RECORD_REASONS, the adapters' ENTRY_ANOMALIES + duplicate-test-id, never a document refusal", () => {
+  assert.deepEqual([...ANOMALY_REASONS], ["duplicate-test-id", "unknown-status"]);
+  assert.deepEqual([...ENTRY_ANOMALIES], ["unknown-status"]);
+  for (const c of ANOMALY_REASONS) assert.ok(RECORD_REASONS.includes(c), c);
+  for (const c of ENTRY_ANOMALIES) assert.ok(ANOMALY_REASONS.includes(c), c);
+  assert.deepEqual(
+    FORMAT_REFUSALS.filter((c) => ANOMALY_REASONS.includes(c)),
+    [],
+    "a code is a refusal of the document OR an anomaly of one test, never both"
+  );
+  // A consumer reads an anomaly's code as a RECORD reason (unmeasured), so it must stay a member of that set.
+  const src = readFileSync(join(HERE, "test-results-core.mjs"), "utf8");
+  assert.match(src, /throw new Error\(`internal: '\$\{a\.reason_code\}' is not a member of ANOMALY_REASONS`\)/);
+});
+
 test("✧ L36 CLOSURE — every reason literal the two modules emit is a RECORD_REASONS member", () => {
   const found = new Set();
   for (const rel of ["test-results-core.mjs", "test-results-formats.mjs"]) {
@@ -268,24 +303,37 @@ test("playwright capture (two projects) → ids carry the project, files resolve
   assert.deepEqual(rec.counts, { passed: 4, failed: 2, skipped: 2 });
 });
 
-test("playwright-edge capture (real retries run: an expected failure + a flaky test, exit 0) → unknown-status, EACH case", () => {
+test("playwright-edge capture (real retries run: an expected failure + a flaky test, exit 0) → an unknown-status ANOMALY each, never a pass", () => {
   const cfg = { [CONFIG_KEY]: { test: "playwright-json" } };
-  // The capture refuses at its FIRST unknown status, which is the expected failure (spec 1, `test.fail()`).
-  const first = scenario({ config: cfg, bytes: fixture("playwright-edge"), run: { exit: 0 } });
-  expectReason(first, "unknown-status");
-  assert.match(first.reason, /specs\[1\].*"expected" \(expectedStatus "failed"\)/, "the expected failure must be the refusal's cause");
-  // Remove it, and the SAME real capture's flaky test is what refuses — so both rows rest on reporter evidence.
   const doc = JSON.parse(fixture("playwright-edge"));
   const specs = doc.suites[0].specs;
-  assert.equal(specs[1].title, "AC-6: expected failure", "the capture's layout changed — this test pins the wrong spec");
-  specs.splice(1, 1);
-  const second = scenario({ config: cfg, bytes: JSON.stringify(doc), run: { exit: 0 } });
-  expectReason(second, "unknown-status");
-  assert.match(second.reason, /"flaky"/);
-  // Remove the flaky one too, and the plain pass left in the capture is an ok record (the control).
-  specs.splice(1, 1);
+  assert.deepEqual(
+    specs.map((s) => s.title),
+    ["AC-1: plain pass", "AC-6: expected failure", "AC-7: flaky"],
+    "the capture's layout changed — this test pins the wrong specs"
+  );
+  // 6.31.0: the record stays ok; BOTH marked tests are anomalies, each with its own cause, and neither is a test.
+  const r = scenario({ config: cfg, bytes: fixture("playwright-edge"), run: { exit: 0 } });
+  expectAnomaly(r, "unknown-status");
+  assert.deepEqual(
+    r.anomalies.map((a) => [a.title, a.reason_code]),
+    [
+      ["AC-6: expected failure", "unknown-status"],
+      ["AC-7: flaky", "unknown-status"],
+    ]
+  );
+  assert.match(r.anomalies[0].reason, /specs\[1\].*"expected" \(expectedStatus "failed"\)/, "the expected failure's own cause");
+  assert.match(r.anomalies[1].reason, /"flaky"/, "the flaky test's own cause");
+  assert.deepEqual(r.counts, { passed: 1, failed: 0, skipped: 0 }, "the plain pass is the only test");
+  assert.deepEqual(
+    r.tests.map((t) => t.title),
+    ["AC-1: plain pass"]
+  );
+  // Control: remove both, and the SAME capture carries no anomaly.
+  specs.splice(1, 2);
   const third = scenario({ config: cfg, bytes: JSON.stringify(doc), run: { exit: 0 } });
   assert.equal(third.ok, true, third.reason);
+  assert.deepEqual(third.anomalies, []);
   assert.deepEqual(third.counts, { passed: 1, failed: 0, skipped: 0 });
 });
 
@@ -309,7 +357,7 @@ test("every status an adapter emits over the captures is a RECORD_STATUSES membe
 // Status maps — every member (L52).
 // ---------------------------------------------------------------------------------------------------
 
-test("vitest status map: each mapped member, and each unmapped member refuses", () => {
+test("vitest status map: each mapped member, and each unmapped member is an entry anomaly (6.31.0: never a refusal)", () => {
   for (const [raw, want] of [
     ["passed", "passed"],
     ["failed", "failed"],
@@ -320,14 +368,14 @@ test("vitest status map: each mapped member, and each unmapped member refuses", 
     const p = parseResults("vitest-json", vitestDoc([va("t", raw)]), ROOTS);
     assert.ok(p.ok, raw);
     assert.equal(p.entries[0].status, want, raw);
+    assert.equal(p.entries[0].anomaly, null, raw);
   }
   for (const raw of ["disabled", "focused", "constructor", "PASSED", ""]) {
-    const p = parseResults("vitest-json", vitestDoc([va("t", raw)]), ROOTS);
-    assert.equal(p.reason_code, "unknown-status", raw);
+    expectEntryAnomaly(parseResults("vitest-json", vitestDoc([va("t", raw)]), ROOTS), "unknown-status", raw);
   }
 });
 
-test("playwright status map: expected/passed, unexpected, skipped map; flaky and an expected failure refuse", () => {
+test("playwright status map: expected/passed, unexpected, skipped map; flaky and an expected failure are entry anomalies", () => {
   for (const [status, expectedStatus, want] of [
     ["expected", "passed", "passed"],
     ["unexpected", "passed", "failed"],
@@ -336,6 +384,7 @@ test("playwright status map: expected/passed, unexpected, skipped map; flaky and
     const p = parseResults("playwright-json", pwDoc([["p", status, expectedStatus]]), ROOTS);
     assert.ok(p.ok, status);
     assert.equal(p.entries[0].status, want);
+    assert.equal(p.entries[0].anomaly, null);
   }
   for (const [status, expectedStatus] of [
     ["flaky", "passed"],
@@ -343,8 +392,11 @@ test("playwright status map: expected/passed, unexpected, skipped map; flaky and
     ["expected", "skipped"],
     ["interrupted", "passed"],
   ]) {
-    const p = parseResults("playwright-json", pwDoc([["p", status, expectedStatus]]), ROOTS);
-    assert.equal(p.reason_code, "unknown-status", `${status}/${expectedStatus}`);
+    expectEntryAnomaly(
+      parseResults("playwright-json", pwDoc([["p", status, expectedStatus]]), ROOTS),
+      "unknown-status",
+      `${status}/${expectedStatus}`
+    );
   }
 });
 
@@ -385,7 +437,7 @@ test("jest capture (30.5.2) → the exact record: nested describe, leaf title, p
   assert.deepEqual([...new Set(raw)].sort(), ["failed", "passed", "pending", "todo"]);
 });
 
-test("jest-edge capture (30.5.2, exit 0) → test.failing and a pass on retry each refuse; each has a control (L60)", () => {
+test("jest-edge capture (30.5.2, exit 0) → test.failing and a pass on retry are each an anomaly; each has a control (L60)", () => {
   const doc = JSON.parse(fixture("jest-edge"));
   const as = doc.testResults[0].assertionResults;
   assert.deepEqual(
@@ -397,31 +449,32 @@ test("jest-edge capture (30.5.2, exit 0) → test.failing and a pass on retry ea
     ],
     "the capture's layout changed — the cases below pin the wrong entries"
   );
-  const first = scenario({ config: JEST_CFG, bytes: fixture("jest-edge"), run: { exit: 0 } });
-  expectReason(first, "unknown-status");
-  assert.match(first.reason, /assertionResults\[0\].*test\.failing/);
-  // Control for the `failing` property: the SAME entry with failing:false is not refused on that ground.
+  const r = scenario({ config: JEST_CFG, bytes: fixture("jest-edge"), run: { exit: 0 } });
+  expectAnomaly(r, "unknown-status");
+  assert.deepEqual(
+    r.anomalies.map((a) => a.title),
+    ["AC-6: known bug still fails", "AC-8: passes on the second attempt"]
+  );
+  assert.match(r.anomalies[0].reason, /assertionResults\[0\].*test\.failing/);
+  assert.match(r.anomalies[1].reason, /retry \(2 invocations\)/);
+  assert.deepEqual(r.counts, { passed: 1, failed: 0, skipped: 0 }, "only the plain pass is a test");
+  // Control for the `failing` property: the SAME entry with failing:false is an ordinary pass.
   const noFailing = structuredClone(doc);
   noFailing.testResults[0].assertionResults[0].failing = false;
-  noFailing.testResults[0].assertionResults.splice(1, 1); // drop the retry, so nothing else refuses
-  assert.equal(parseResults("jest-json", noFailing, ROOTS).ok, true);
-  // Remove the expected failure: the retry pass is what refuses now.
-  as.splice(0, 1);
-  const second = scenario({ config: JEST_CFG, bytes: JSON.stringify(doc), run: { exit: 0 } });
-  expectReason(second, "unknown-status");
-  assert.match(second.reason, /retry \(2 invocations\)/);
+  assert.equal(parseResults("jest-json", noFailing, ROOTS).entries[0].status, "passed");
   // Control for the retry property: the same entry with invocations:1 is an ordinary pass.
   const once = structuredClone(doc);
-  once.testResults[0].assertionResults[0].invocations = 1;
-  assert.equal(parseResults("jest-json", once, ROOTS).ok, true);
-  // Remove it too: the plain pass left in the capture is an ok record.
-  as.splice(0, 1);
+  once.testResults[0].assertionResults[1].invocations = 1;
+  assert.equal(parseResults("jest-json", once, ROOTS).entries[1].status, "passed");
+  // Remove both: the plain pass left in the capture is an ok record with no anomaly.
+  as.splice(0, 2);
   const third = scenario({ config: JEST_CFG, bytes: JSON.stringify(doc), run: { exit: 0 } });
   assert.equal(third.ok, true, third.reason);
+  assert.deepEqual(third.anomalies, []);
   assert.deepEqual(third.counts, { passed: 1, failed: 0, skipped: 0 });
 });
 
-test("jest29-edge capture (29.7.0) — STATED BOUND: no `failing` field, so a test.failing reads `passed`; its retry still refuses", () => {
+test("jest29-edge capture (29.7.0) — STATED BOUND: no `failing` field, so a test.failing reads `passed`; its retry is still an anomaly", () => {
   const doc = JSON.parse(fixture("jest29-edge"));
   const as = doc.testResults[0].assertionResults;
   assert.ok(
@@ -429,12 +482,14 @@ test("jest29-edge capture (29.7.0) — STATED BOUND: no `failing` field, so a te
     "Jest 29.7.0 emits no `failing` key — the bound's evidence"
   );
   assert.equal(as[1].title, "AC-8: passes on the second attempt");
-  const first = scenario({ config: JEST_CFG, bytes: fixture("jest29-edge"), run: { exit: 0 } });
-  expectReason(first, "unknown-status");
-  assert.match(first.reason, /assertionResults\[1\].*retry/, "the retry is refused on Jest 29 too; the expected failure is NOT");
-  as.splice(1, 1);
-  const r = scenario({ config: JEST_CFG, bytes: JSON.stringify(doc), run: { exit: 0 } });
-  assert.equal(r.ok, true, r.reason);
+  const r = scenario({ config: JEST_CFG, bytes: fixture("jest29-edge"), run: { exit: 0 } });
+  expectAnomaly(r, "unknown-status");
+  assert.deepEqual(
+    r.anomalies.map((a) => a.title),
+    ["AC-8: passes on the second attempt"],
+    "the retry is an anomaly on Jest 29 too; the expected failure is NOT"
+  );
+  assert.match(r.anomalies[0].reason, /assertionResults\[1\].*retry/);
   assert.equal(r.tests.find((t) => t.title === "AC-6: known bug still fails").status, "passed", "the unmarked expected failure");
 });
 
@@ -453,7 +508,7 @@ test("jest-after capture — the plain-Jest trap: an in-body `await import` stay
   assert.equal(after.suiteErrors, 0);
 });
 
-test("jest status map: each mapped member, and each unmapped member refuses (L52)", () => {
+test("jest status map: each mapped member, and each unmapped member is an entry anomaly (L52)", () => {
   for (const [raw, want] of [
     ["passed", "passed"],
     ["failed", "failed"],
@@ -466,8 +521,10 @@ test("jest status map: each mapped member, and each unmapped member refuses (L52
     assert.equal(p.entries[0].status, want, raw);
   }
   for (const raw of ["disabled", "focused", "constructor", "PASSED", ""]) {
-    assert.equal(parseResults("jest-json", vitestDoc([ja("t", raw)]), ROOTS).reason_code, "unknown-status", raw);
+    expectEntryAnomaly(parseResults("jest-json", vitestDoc([ja("t", raw)]), ROOTS), "unknown-status", raw);
   }
+  // A malformed Jest field on an entry with an unmapped status is still a refusal of the DOCUMENT (shape first).
+  assert.equal(parseResults("jest-json", vitestDoc([ja("t", "disabled", { invocations: 0 })]), ROOTS).reason_code, "results-malformed");
 });
 
 test("jest per-assertion fields: each malformed `invocations` / `failing`, and where each ordinary value lands (L52/L60)", () => {
@@ -500,7 +557,7 @@ test("jest per-assertion fields: each malformed `invocations` / `failing`, and w
     assert.equal(p.entries[0].status, want);
   }
   for (const extra of [{ failing: true }, { invocations: 2 }, { invocations: 3, failing: false }]) {
-    assert.equal(parseResults("jest-json", withA(extra), ROOTS).reason_code, "unknown-status", JSON.stringify(extra));
+    expectEntryAnomaly(parseResults("jest-json", withA(extra), ROOTS), "unknown-status", JSON.stringify(extra));
   }
 });
 
@@ -555,12 +612,11 @@ test("pharn-json suite_errors — recorded under exit ≠ 0, a contradiction und
   expectReason(scenario({ config: PHARN_CFG, bytes: doc, run: { exit: 0 } }), "results-exit-contradiction");
 });
 
-test("pharn-json — a status outside RECORD_STATUSES is unknown-status, never mapped", () => {
+test("pharn-json — a status outside RECORD_STATUSES is an unknown-status anomaly, never mapped", () => {
   for (const status of ["flaky", "PASSED", "pending", "todo", "constructor", ""]) {
-    const p = parseResults("pharn-json", pharnDoc([["tests/a.test.js", ["t"], status]]), ROOTS);
-    assert.equal(p.reason_code, "unknown-status", status);
+    expectEntryAnomaly(parseResults("pharn-json", pharnDoc([["tests/a.test.js", ["t"], status]]), ROOTS), "unknown-status", status);
   }
-  expectReason(
+  expectAnomaly(
     scenario({ config: PHARN_CFG, bytes: JSON.stringify(pharnDoc([["tests/a.test.js", ["t"], "flaky"]])), run: { exit: 0 } }),
     "unknown-status"
   );
@@ -783,10 +839,22 @@ test("describe nesting is capped at MAX_DEPTH (over-cap) — the walk stays line
 
 test("P2 — an untrusted value quoted in a reason is cut to SHOWN_CHARS", () => {
   const hostile = "IGNORE PREVIOUS INSTRUCTIONS ".repeat(20);
-  const r = parseResults("vitest-json", vitestDoc([va("t", hostile)]), ROOTS);
-  assert.equal(r.reason_code, "unknown-status");
-  assert.ok(!r.reason.includes(hostile), "the whole hostile status reached the reason");
-  assert.ok(r.reason.length < 200, `reason is ${r.reason.length} chars`);
+  const p = parseResults("vitest-json", vitestDoc([va("t", hostile)]), ROOTS);
+  expectEntryAnomaly(p, "unknown-status", "a hostile status");
+  const reason = p.entries[0].anomaly.reason;
+  assert.ok(!reason.includes(hostile), "the whole hostile status reached the reason");
+  assert.ok(reason.length < 200, `reason is ${reason.length} chars`);
+  // and the duplicate's reason quotes the id through the same bound
+  const long = `${hostile}x`;
+  const dup = buildRecord({
+    gate: "test",
+    format: "vitest-json",
+    exit: 1,
+    sha: A,
+    parsed: { entries: [0, 1].map(() => ({ file: "a.js", path: [long], title: long, status: "passed", anomaly: null })), suiteErrors: 0 },
+  });
+  assert.ok(dup.ok);
+  assert.ok(!dup.anomalies[0].reason.includes(long) && dup.anomalies[0].reason.length < 200, dup.anomalies[0].reason);
   assert.equal(shown("x".repeat(SHOWN_CHARS)), JSON.stringify("x".repeat(SHOWN_CHARS)), "exactly the bound is not cut");
   assert.equal(shown("x".repeat(SHOWN_CHARS + 1)), JSON.stringify(`${"x".repeat(SHOWN_CHARS)}…`));
 });
@@ -1067,15 +1135,92 @@ test("results-exit-contradiction — Playwright suite errors under exit 0, end t
   assert.equal(ok.suite_errors, 1);
 });
 
-test("duplicate-test-id — two tests with one id; never last-wins", () => {
-  expectReason(
-    scenario({ bytes: JSON.stringify(vitestDoc([va("same", "passed"), va("same", "failed")])), run: { exit: 1 } }),
-    "duplicate-test-id"
+test("duplicate-test-id — two tests with one id: ONE anomaly for the id, never last-wins, the others still tests (6.31.0)", () => {
+  const r = scenario({
+    bytes: JSON.stringify(vitestDoc([va("same", "passed"), va("same", "failed"), va("other", "passed")])),
+    run: { exit: 1 },
+  });
+  expectAnomaly(r, "duplicate-test-id");
+  const id = "/work/proj/tests/a.test.js::same";
+  assert.deepEqual(r.anomalies, [
+    {
+      id,
+      file: "/work/proj/tests/a.test.js",
+      title: "same",
+      reason_code: "duplicate-test-id",
+      reason: `2 tests share the id ${JSON.stringify(id)} — identity is ambiguous`,
+    },
+  ]);
+  assert.deepEqual(
+    r.tests.map((t) => t.title),
+    ["other"],
+    "neither duplicate is a test — which status belongs to the id is ambiguous"
+  );
+  assert.deepEqual(r.counts, { passed: 1, failed: 0, skipped: 0 }, "an anomaly is never counted");
+  // three entries on one id: still ONE anomaly, and the reason counts them
+  const three = scenario({
+    bytes: JSON.stringify(vitestDoc([va("s", "passed"), va("s", "passed"), va("s", "skipped")])),
+    run: { exit: 0 },
+  });
+  expectAnomaly(three, "duplicate-test-id");
+  assert.equal(three.anomalies.length, 1);
+  assert.match(three.anomalies[0].reason, /^3 tests share the id/);
+  // a duplicated id beats an entry anomaly on the same id: one anomaly, the duplicate one
+  const mixed = scenario({ bytes: JSON.stringify(vitestDoc([va("s", "disabled"), va("s", "passed")])), run: { exit: 0 } });
+  assert.deepEqual(
+    mixed.anomalies.map((a) => a.reason_code),
+    ["duplicate-test-id"]
   );
   // The separator bound, stated in the contract: a title containing TITLE_SEP can collide with a nested one.
   const collide = vitestDoc([va(`a${TITLE_SEP}b`, "passed"), va("b", "passed", ["a"])]);
-  expectReason(scenario({ bytes: JSON.stringify(collide), run: { exit: 0 } }), "duplicate-test-id");
+  expectAnomaly(scenario({ bytes: JSON.stringify(collide), run: { exit: 0 } }), "duplicate-test-id");
   assert.equal(FILE_SEP, "::");
+});
+
+test("6.31.0: a FAILED test hidden behind an anomaly is still a contradiction under exit 0 — an anomaly never hides a failure", () => {
+  // a duplicated id whose one copy failed, under exit 0: every failed ENTRY counts, a duplicated one included
+  expectReason(
+    scenario({ bytes: JSON.stringify(vitestDoc([va("same", "passed"), va("same", "failed")])), run: { exit: 0 } }),
+    "results-exit-contradiction"
+  );
+  // control: the same report under exit 1 is a record carrying the anomaly
+  expectAnomaly(
+    scenario({ bytes: JSON.stringify(vitestDoc([va("same", "passed"), va("same", "failed")])), run: { exit: 1 } }),
+    "duplicate-test-id"
+  );
+  // an unknown status is not `failed`, so it is no contradiction under exit 0 (the playwright-edge capture exits 0)
+  expectAnomaly(scenario({ bytes: JSON.stringify(vitestDoc([va("t", "disabled")])), run: { exit: 0 } }), "unknown-status");
+});
+
+test("6.31.0: anomalies are sorted by id and carry exactly {id, file, title, reason_code, reason}; an ordinary record has none", () => {
+  const r = scenario({
+    bytes: JSON.stringify(vitestDoc([va("z", "disabled"), va("a", "focused"), va("m", "passed")])),
+    run: { exit: 0 },
+  });
+  assert.equal(r.ok, true, r.reason);
+  assert.deepEqual(
+    r.anomalies.map((a) => a.title),
+    ["a", "z"]
+  );
+  for (const a of r.anomalies) assert.deepEqual(Object.keys(a).sort(), ["file", "id", "reason", "reason_code", "title"]);
+  const plain = scenario({ bytes: PASSING, run: { exit: 0 } });
+  assert.equal(plain.ok, true);
+  assert.deepEqual(plain.anomalies, []);
+  // a code outside ANOMALY_REASONS is a programming error, never a silent entry
+  assert.throws(
+    () =>
+      buildRecord({
+        gate: "test",
+        format: "vitest-json",
+        exit: 1,
+        sha: A,
+        parsed: {
+          entries: [{ file: "a.js", path: ["t"], title: "t", status: null, anomaly: { reason_code: "flaky", reason: "x" } }],
+          suiteErrors: 0,
+        },
+      }),
+    /'flaky' is not a member of ANOMALY_REASONS/
+  );
 });
 
 test("results-exit-contradiction — exit 0 with a failed test, and exit 0 with a suite error", () => {
@@ -1084,9 +1229,9 @@ test("results-exit-contradiction — exit 0 with a failed test, and exit 0 with 
   expectReason(scenario({ bytes: JSON.stringify(doc), run: { exit: 0 } }), "results-exit-contradiction");
 });
 
-test("unknown-status — through testRecord, for each format", () => {
-  expectReason(scenario({ bytes: JSON.stringify(vitestDoc([va("t", "disabled")])), run: { exit: 0 } }), "unknown-status");
-  expectReason(
+test("unknown-status — through testRecord, for each format: an ok record carrying the anomaly (6.31.0)", () => {
+  expectAnomaly(scenario({ bytes: JSON.stringify(vitestDoc([va("t", "disabled")])), run: { exit: 0 } }), "unknown-status");
+  expectAnomaly(
     scenario({
       config: { [CONFIG_KEY]: { test: "playwright-json" } },
       bytes: JSON.stringify(pwDoc([["p", "flaky", "passed"]])),
@@ -1094,8 +1239,8 @@ test("unknown-status — through testRecord, for each format", () => {
     }),
     "unknown-status"
   );
-  expectReason(scenario({ config: JEST_CFG, bytes: JSON.stringify(vitestDoc([ja("t", "focused")])), run: { exit: 0 } }), "unknown-status");
-  expectReason(
+  expectAnomaly(scenario({ config: JEST_CFG, bytes: JSON.stringify(vitestDoc([ja("t", "focused")])), run: { exit: 0 } }), "unknown-status");
+  expectAnomaly(
     scenario({ config: PHARN_CFG, bytes: JSON.stringify(pharnDoc([["tests/a.test.js", ["t"], "skip"]])), run: { exit: 0 } }),
     "unknown-status"
   );

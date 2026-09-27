@@ -1,0 +1,19 @@
+diff --git a/LIMITS.md b/LIMITS.md
+index 3ec25be..274eff0 100644
+--- a/LIMITS.md
++++ b/LIMITS.md
+@@ -471,9 +471,11 @@ discipline, as everywhere (§1d). What the verdicts certify is narrower than "th
+ - **Agreement, never provenance.** The tests, the reporter config, the `package.json` scripts and
+   `pharn.config.json` are agent-editable. `results-exit-contradiction`, the lock and the
+   test-infrastructure pin NARROW a forged report and never close it: a self-consistent fabricated lock,
+-  stamp and results set over the live tree passes. The pin also does not see, among others, a setup file
+-  a config imports, configuration read from the environment, script chaining, npm's own configuration or
+-  the runner's version (`pharn/floor/test-infra-core.mjs` states the full list).
++  stamp and results set over the live tree passes. The pin also does not see, among others, code the
++  build writes switching off the assertions or the reporter from inside the test process, a setup file a
++  config imports, configuration read from the environment, a chain through anything but the package
++  manager's own run commands, npm configuration outside the project root, or the runner's version
++  (`pharn/floor/test-infra-core.mjs` states the full list).
+ - **Weaker and absent evidence are reported, never hidden.** A `spec_kind: test-infra` SPEC gets
+   BOOTSTRAP evidence: no test was locked or shown red, and `spec_kind` sits inside the approval pin §1d
+   already calls forgeable. A legacy SPEC gets no AC evidence, and verify reports it `not-applicable`.

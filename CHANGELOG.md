@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.29.1] - 2026-09-27
+## [6.31.1] - 2026-09-27
 
 ### Fixed
 
@@ -55,9 +55,133 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   which offers no Bash route and names this session's scratchpad as a route only when the payload identifies it.
   Both hook files and
   `LIMITS.md §7` are human-only: they change through a patch the build verified and a human applied.
-  `SKILLS_VERSION` 6.29.0 → 6.29.1 (PATCH: a correction to shipped hook bytes — no command, checker, contract,
+  `SKILLS_VERSION` 6.31.0 → 6.31.1 (PATCH: a correction to shipped hook bytes — no command, checker, contract,
   frontmatter key or path is added, moved or removed). `MIN_CLI` stays 0.5.0: the same files at the same paths.
   ([`.dev/features/write-guard-narrowing/`](./.dev/features/write-guard-narrowing/))
+
+## [6.31.0] - 2026-09-27
+
+### Security
+
+- 2026-09-27: **The AC gate: a PLAN can no longer scope the build to the test evidence it is judged by, and the pin
+  covers what a level gate actually runs.** A read-only review (its H2, High) reproduced two routes to a forged `PASS`
+  with every floor check green, both re-measured here in install-like worlds: a PLAN naming the feature's own
+  `AC-TESTS.lock.json` let the build rewrite the test script to a forger AND re-pin the lock (verify `PASS`, `ac_gate`
+  `PASS`, the real AC test failing), and a PLAN naming the `pharn-json` reporter the `test` script loads let the build
+  rewrite the reporter, which the pin never read (same result). The GATE-1 review, under the maintainer's delegation,
+  added three routes of the same kind — a chained script (`"test": "npm run test:unit"`), a root `.npmrc`'s
+  `script-shell`, and `package.json`'s `jest` key — each measured before the fix (verify `PASS` for the first two; the
+  pin blind to the third). `SKILLS_VERSION` 6.30.0 → 6.31.0 (MINOR: a new checker kind, new pin members, lock schema
+  `/4` with `/3` still read, a new record field — no install is invalidated, though an in-flight feature locked by
+  6.20–6.29 whose level gates chain to a script, name a file, or read a `jest` key or a package-manager config reads RED
+  until `/pharn-test` re-runs: Migration, below; planned as 6.29.0 and renumbered twice at merge,
+  since #290 released 6.29.0 and #292 released 6.30.0 first). `MIN_CLI` stays 0.5.0: no installed path moves.
+  ([`.dev/features/ac-gate-plan-scope/`](./.dev/features/ac-gate-plan-scope/))
+  - **`check-ac-tests.mjs` gains `ac-artifact-in-plan`:** a PLAN.md `## Files` entry the setter would scope to THIS
+    feature's `AC-TESTS.md` or lock is RED (folded; the lock's name is a literal parity-tested against
+    `ac-tests-lock.mjs`). **`test-infra-in-plan` widens** to the root package-manager configs and to every file a
+    level gate's script names (`scriptNamedFiles`, absent ones included). `checkMapping` takes both as REQUIRED inputs.
+    `package.json` in PLAN.md stays an advisory `NOTE —`: with the lock out of the build's scope, the pin reads the
+    build's script edit at verify — a ★ HOOK test executes that composition through the real setter and write guard,
+    and another probes every measured PLAN spelling (only the exact and annotated ones open a file; each is RED).
+  - **The pin (`test-infra-core.mjs`, lock `ac-tests-lock/4`) gains `chained`, `script_files`, `jest`, and the root
+    `.npmrc` / `.yarnrc` / `.yarnrc.yml` in `configs`**, all through ONE closed literal token pass — never a shell
+    parse: files a pinned value names (clean relative paths with an executed extension; outputs after `>`, `-o`
+    or an `--out…` flag skipped), scripts it chains to through `npm`/`pnpm`/`yarn` run commands, `test`/`start`/`stop`/
+    `restart`, the pnpm/yarn shorthand and `node --run` (own-property only, refused past 8 hops), and a canonical-JSON
+    digest of the `jest` key. After the fix, measured: the lock route and the reporter route are RED at `/pharn-plan`
+    and at the test-stage gate `/pharn-build` reads first; the chained script, `.npmrc` and `jest` routes are verify
+    `FAIL` (`test-infra-changed`).
+  - **Migration and rollback:** a `/3` lock is judged by what it pinned, and what only `/4` pins in the live tree reads
+    `unpinned` (`--check` RED, AC gate `test-infra-unpinned`); a `/3` lock over a tree with none of it stays GREEN, and
+    one over a tree the `/4` pin cannot be taken on at all (a symlinked `.npmrc` or named file) reads `changed`.
+    `/pharn-verify` does not re-run the mapping check — a run that ignores both earlier REDs reaches verify PASS (a
+    stated bound; follow-up `verify-rechecks-test-stage`).
+    `--record-red-run` writes only on `/4`. **Rolling back** below 6.31.0 reads a `/4` lock as unusable, never GREEN;
+    re-run `/pharn-test` under the older floor.
+  - **Stated, not fixed (P0):** code the build writes runs INSIDE the test process and can switch off the assertions
+    or the reporter there — `assert.equal = () => {}` in the only in-scope file still reads verify `PASS` with the
+    function wrong (re-measured after the fix). It heads the pin's NOT-caught list (the one copy, `test-infra-core.mjs`,
+    restated in `ac-tests.md`); "the build can no longer forge the AC gate" is struck. **Costs, stated:** a source file a
+    test-reachable script names literally (a bundler entry behind `pretest`) is pinned, so a feature that edits it is
+    RED at plan time — measured; and the committed `.npmrc` digest lets a low-entropy credential in it be guessed
+    offline. The `LIMITS.md §9` sentence on what the pin does not see is staged as a human-only patch
+    (`.dev/features/ac-gate-plan-scope/proposed/`), not edited by the agent.
+
+### Fixed
+
+- 2026-09-27: **An unrelated test anomaly no longer voids the AC record.** The review's M6 (Medium), reproduced: one
+  parametrized duplicate test id in an unrelated file refused the whole per-test record, so the red run was RED for
+  every AC, or (with a script running only the handed files) `/pharn-verify` was INCONCLUSIVE and `/pharn-loop` would
+  stop on every iteration. A flaky test or expected failure the report marks, and every id two tests share, are now
+  per-test **anomalies** (`anomalies[]`, `ANOMALY_REASONS`) on an `ok` record — never tests, never counted — and a
+  consumer decides: the red run and the AC gate (the one `observeAc`) refuse an AC by the anomaly's own reason only when
+  it sits in a file that AC maps, and report every other one (`unmapped_anomalies`: the red run's `NOTE —` lines, the
+  verify report's `ac_gate` block, `VERIFY.md` and `RUN-REPORT.md` as fenced data). `results-exit-contradiction` still
+  counts every failed entry, a duplicated one included. After the fix, measured: the world whose `test` script runs the
+  whole suite reads a GREEN red run with one `NOTE —` line (it was RED for every AC), and both worlds read a verify
+  `PASS` whose `ac_gate.unmapped_anomalies` lists the duplicate (one was INCONCLUSIVE). **Bounded:** the file an
+  anomaly names is the reporter's word.
+  ([`.dev/features/ac-gate-plan-scope/`](./.dev/features/ac-gate-plan-scope/))
+
+## [6.30.0] - 2026-09-27
+
+### Fixed
+
+- 2026-09-27: **A feature name reaches a shell line only after tested code has checked it; `/pharn-loop`'s
+  failed-commit undo no longer types git's own output into a shell line; and `/pharn-ship --quick` no longer takes a
+  base ref from the description.** A read-only injection audit of the product commands' pinned lines found three places
+  where a value the model derives from untrusted input reached a shell before anything checked it. Each was reproduced
+  against the 6.28.2 lines in a throwaway directory. (1) Where a command derives the feature slug from the user's
+  description — `/pharn-spec` Step 0, and so `/pharn-ship`, and `/pharn-loop` S1 — the only check ran inside a node
+  process, after the shell had parsed the line that carried the candidate. `/pharn-loop` S1's own validator, given
+  `x'$(touch PWNED)'`, ran it and exited 0; `/pharn-spec`'s first line, its unquoted setter, ran `;touch${IFS}PWNED;`
+  before GATE 1. (2) `/pharn-loop` Step 6d typed S3's `git symbolic-ref` output into `git switch '<original branch>'`, so
+  a branch named `fix';touch${IFS}PWNED_BRANCH;'x` — which `git check-ref-format --branch` accepts — ran its command on a
+  green stop whose commit failed. (3) `/pharn-ship --quick` item 7 read "`--base <ref>` if the invoker gave one", although
+  `/pharn-ship` has no such flag, so the ref could only come from the description, and typed it into
+  `git rev-parse --verify <ref>^{commit}`. `SKILLS_VERSION` 6.29.0 → 6.30.0 (MINOR: a newly shipped floor CLI).
+  `MIN_CLI` stays 0.5.0: nothing is relocated, and no contract or frontmatter shape changes.
+  ([`.dev/features/shell-sink-validation/`](./.dev/features/shell-sink-validation/))
+  - **The new CLI, `pharn/floor/feature-name.mjs`** (its header is its spec). The model writes the slug alone to
+    `.pharn/feature-name/candidate.txt` with the Write tool, which no shell parses. The CLI refuses a symlinked or
+    non-directory `.pharn` or `.pharn/feature-name`, reads the file without following it, removes whatever stands at the
+    path except a directory once those parent checks pass, and prints the slug only when it matches `FEATURE_SLUG_RE`,
+    imported from `gate-run-core.mjs`. A refusal is exit 2, with nothing on stdout and one fixed line on stderr that
+    never quotes the candidate. `--fresh` also picks the first `<slug>`, `<slug>-2`, … that `pharn/features/` does not
+    hold, replacing `/pharn-loop`'s S2 shell loop, and refuses at once on any `lstat` error other than ENOENT instead of
+    walking the suffixes.
+  - **The commands.** `/pharn-spec` Step 0 and `/pharn-loop` S1 write the candidate and run the CLI before any shell
+    line carries the name, and the lines that run it carry no placeholder. `/pharn-ship` uses the name `/pharn-spec`
+    printed, which replaces its Step 2d prose shape check (follow-up `ship-slug-shape`, closed). In the seven commands
+    that take a name as their argument, a name they did not receive is asked for — `/pharn-plan`, `/pharn-grill`,
+    `/pharn-test`, `/pharn-build`, `/pharn-review` — or, in `/pharn-regress` and `/pharn-verify`, whose Step 0 resolves
+    "the feature just built" itself, resolved only through the CLI; never from a directory listing or a file's content.
+    The Write tool refuses a link at the candidate path and names the link's target as the path to write instead
+    (measured), so every command that writes a candidate says never to Read it and never to write to another path: run
+    the CLI once, which removes the entry, then write again. A directory at that path is never removed: those four
+    commands stop there — `/pharn-spec`, `/pharn-regress` and `/pharn-verify` ask the human (`/pharn-spec` under
+    `--model-approve` reports back blocked), and `/pharn-loop` stops `blocked: no-slug` naming the path. The claims blocks
+    of `/pharn-spec` and `/pharn-loop` name only the CLI's output as floor. `/pharn-loop` Step 6d returns with the constant line
+    `git checkout - --` and states its bound there: `-` is this worktree's previous checkout, so the line is right only
+    while nothing checks out between Step 6c's branch block and it. The `--` is measured: without it, a repository with
+    no `HEAD` reflog read `-` as a file and overwrote a locally edited tracked file named `-`, exit 0.
+    `/pharn-ship --quick` item 7 takes its base from the working tree or `origin/main`, else asks for a 40-hex SHA.
+  - **Tests** (they do not ship). `pharn/floor/feature-name.test.mjs` runs the real CLI over every refusal code, a named
+    set of hostile candidates, each kind of path at the leaf and at each parent, and `--fresh`. A new SHELL-SINK section
+    of `.dev/floor/command-hygiene.test.mjs` holds: a table of every placeholder a product command's shell line takes,
+    closed both ways; a table of where each command's name comes from, closed both ways; that each command which runs the
+    CLI does so before its first `<name>` shell line; the ask or resolve sentence in each of the seven commands, and the
+    Write-refusal and directory rules in the four that write a candidate (presence only); every committed CLI line, executed over the
+    hostile set; Step 6c's branch block and Step 6d's undo block, executed in throwaway repositories, with a control in
+    which a checkout between them sends the undo to the wrong place; and the 6.28.2 lines themselves, each shown to run
+    its payload.
+  - **Bounds.** That the model writes the candidate with the Write tool, obeys the Write-refusal rule, and re-types only
+    the printed value is advisory; the pins read command text, never a run. One candidate file serves the whole tree, so
+    two sessions naming features at once can read each other's candidate — each value read is still a valid slug.
+    `<base sha>` stays on shell lines as git's own hex output, and `<M>`, `<path>` and a question's answer as text the
+    person typed. Out of scope: markdown rendered from a branch name, `/pharn-ship` Step 2c's `/tmp/briefing-draft.md`
+    and `npx`, and the stage agents' free-text residual.
 
 ## [6.29.0] - 2026-09-27
 
