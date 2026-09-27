@@ -12,7 +12,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -884,38 +884,96 @@ function buildScopeAllows(root, targets) {
   );
 }
 
+/** Probe the volume `dir` is on: does a case variant of an existing name reach that same file? APFS and HFS+ by
+ *  default: yes. ext4 (CI's Linux) and a case-sensitive APFS volume: no. */
+function caseInsensitiveVolume(dir = tmpdir()) {
+  const probe = mkdtempSync(join(dir, "act-case-probe-"));
+  try {
+    writeFileSync(join(probe, "case-probe"), "");
+    return existsSync(join(probe, "CASE-PROBE"));
+  } finally {
+    rmSync(probe, { recursive: true, force: true });
+  }
+}
+
 // The PLAN spellings the plan-time probe measured (PLAN.md A1/A2), through the REAL setter and write guard, with the
-// files ON DISK as they are at build time (the lock and the reporter exist). `opens` is the MEASURED result: only the
-// exact and the annotated spellings open the file — the guard judges an existing file at its on-disk spelling, so a
-// case variant opens nothing on APFS either. The folded RED therefore over-reports those (fail-closed); what the test
-// holds is "every spelling that opens is RED", plus the table itself (L37 — the probed set, never every spelling).
+// files ON DISK as they are at build time (the lock and the reporter exist). Two facts per row, kept apart because only
+// one of them depends on the filesystem:
+//   `opens` — the build may write a file it is JUDGED BY (the lock, AC-TESTS.md, the reporter), decided by file
+//     identity (same dev + inode), never by spelling. It is the same on every filesystem: only the exact and the
+//     annotated spellings open one. On a case-insensitive volume the guard judges an existing file at its on-disk
+//     spelling, so a case variant is denied; on a case-sensitive one the variant is a different, new file, which the
+//     guard allows and which opens nothing.
+//   `probed` — the row's RAW measurement (does the guard allow any listed spelling at all?) depends on the volume.
+//     THESE ROWS DEPEND ON THE PROBE: the four case variants — allowed on a case-sensitive volume (their own new file),
+//     denied on a case-insensitive one. Every other row reads the same on both (measured on APFS and on a case-
+//     sensitive APFS image; CI's ext4 is the case-sensitive branch).
+// `isRed` does not depend on the probe: the fold is deliberately fail-closed, so a case variant is RED on both — an
+// over-report on a case-sensitive volume, where it opens nothing. What the test holds is "every spelling that opens
+// is RED", plus the table itself (L37 — the probed set, never every spelling).
 const ARTIFACT_HOOK_ROWS = [
-  [LOCK, true, true],
-  [`${LOCK} (pinned)`, true, true],
-  ["pharn/features/demo/ac-tests.lock.json", false, true],
-  ["pharn/features/Demo/AC-TESTS.lock.json", false, true],
-  [`./${LOCK}`, false, false],
-  ["pharn/features/*/AC-TESTS.lock.json", false, false],
-  [MAPPING, true, true],
-  [REPORTER, true, true],
-  [`${REPORTER} (x)`, true, true],
-  ["Tools/pharn-reporter.mjs", false, true],
-  ["tools/Pharn-Reporter.mjs", false, true],
-  [`./${REPORTER}`, false, false],
+  // [entry, opens, isRed, probed]
+  [LOCK, true, true, false],
+  [`${LOCK} (pinned)`, true, true, false],
+  ["pharn/features/demo/ac-tests.lock.json", false, true, true],
+  ["pharn/features/Demo/AC-TESTS.lock.json", false, true, true],
+  [`./${LOCK}`, false, false, false],
+  ["pharn/features/*/AC-TESTS.lock.json", false, false, false],
+  [MAPPING, true, true, false],
+  [REPORTER, true, true, false],
+  [`${REPORTER} (x)`, true, true, false],
+  ["Tools/pharn-reporter.mjs", false, true, true],
+  ["tools/Pharn-Reporter.mjs", false, true, true],
+  [`./${REPORTER}`, false, false, false],
 ];
+/** The files the build is judged by, and every spelling the rows' guard is asked about. */
+const JUDGED = [LOCK, MAPPING, REPORTER];
+const ARTIFACT_TARGETS = [...JUDGED, ...ARTIFACT_HOOK_ROWS.filter((row) => row[3]).map((row) => row[0])];
+
+/** The raw measurement a row must read on a volume: a spelling the guard allows exists iff the row opens a judged
+ *  file, or it is a case variant on a case-sensitive volume (a new file of its own). Pure, so both branches are
+ *  exercised whatever volume the suite runs on. */
+const expectWritable = ([, opens, , probed], caseInsensitive) => opens || (probed && !caseInsensitive);
+
+/** Which of `targets` are, on disk, the same file as one of `JUDGED` (identity, never spelling). It discriminates only
+ *  on a case-sensitive volume, where the guard allows a variant that is not the judged file; on a case-insensitive one
+ *  the guard already denies every variant, so a spelling fold would read the same (mutation-checked on both). */
+function judgedAmong(root, targets) {
+  const ids = JUDGED.map((p) => statSync(join(root, p))).map((s) => `${s.dev}:${s.ino}`);
+  return targets.filter((t) => {
+    const s = statSync(join(root, t), { throwIfNoEntry: false });
+    return s !== undefined && ids.includes(`${s.dev}:${s.ino}`);
+  });
+}
+
+test("the probe-dependent rows: only the case variants' raw reading moves with the volume, and on neither does one open a judged file", () => {
+  // Both probe results, injected, so the case-sensitive branch is exercised on APFS and the case-insensitive one on ext4.
+  for (const row of ARTIFACT_HOOK_ROWS) {
+    const [entry, opens, isRed, probed] = row;
+    const folds = JUDGED.some((j) => j !== entry && j.toLowerCase() === entry.toLowerCase());
+    assert.equal(probed, folds, `${entry}: a row depends on the probe exactly when it is a case variant of a judged file`);
+    assert.equal(expectWritable(row, true), opens, `${entry}: on a case-insensitive volume the raw reading IS \`opens\``);
+    assert.equal(expectWritable(row, false), opens || probed, `${entry}: on a case-sensitive volume a variant is its own file`);
+    if (probed) assert.ok(isRed && !opens, `${entry}: a case variant opens nothing on either volume and stays RED (fail-closed)`);
+  }
+});
 
 test("★ HOOK — every PLAN spelling that opens the lock, AC-TESTS.md or a script-named reporter to the build is RED (measured table)", () => {
-  for (const [entry, opens, isRed] of ARTIFACT_HOOK_ROWS) {
+  const caseInsensitive = caseInsensitiveVolume();
+  for (const row of ARTIFACT_HOOK_ROWS) {
+    const [entry, opens, isRed] = row;
     const root = world({ plan: planText(["src/demo.js", entry]), files: { ...REPORTER_FILES, [LOCK]: "{}\n" } });
     try {
-      const writable = buildScopeAllows(root, [
-        LOCK,
-        MAPPING,
-        REPORTER,
-        "pharn/features/demo/ac-tests.lock.json",
-        "Tools/pharn-reporter.mjs",
-      ]);
-      assert.equal(writable.length > 0, opens, `${entry}: measured — the build may write ${JSON.stringify(writable)}`);
+      assert.equal(caseInsensitiveVolume(root), caseInsensitive, "the probe and the world are on one volume");
+      const writable = buildScopeAllows(root, ARTIFACT_TARGETS);
+      const on = caseInsensitive ? "case-insensitive" : "case-sensitive";
+      assert.equal(
+        writable.length > 0,
+        expectWritable(row, caseInsensitive),
+        `${entry} (${on} volume): measured — the build may write ${JSON.stringify(writable)}`
+      );
+      const judged = judgedAmong(root, writable);
+      assert.equal(judged.length > 0, opens, `${entry} (${on} volume): the judged files the build may write: ${JSON.stringify(judged)}`);
       const r = run(root);
       const red = r.kinds.includes("ac-artifact-in-plan") || r.kinds.includes("test-infra-in-plan");
       assert.equal(red, isRed, `${entry}: ${r.out}`);

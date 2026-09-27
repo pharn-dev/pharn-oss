@@ -150,6 +150,35 @@ GATE 2 = FIX (the orchestrator, delegated). Fixed, each at every site it appeare
 - **The human-only `LIMITS.md §9` patch** stays in `proposed/` as an OPTIONAL staged edit, applied (if at all) after the
   merge on its own branch; `APPLY.md` says so. No gate waits on it.
 
+## After the PR opened — the measured table assumed a case-insensitive volume (CI fix)
+
+CI on PR #291 went red on Linux in one test: `check-ac-tests.test.mjs`, "★ HOOK — every PLAN spelling that opens the
+lock, AC-TESTS.md or a script-named reporter to the build is RED (measured table)". Its "opens" column had been
+measured on APFS, where a case variant of the lock IS the lock, so the guard denies it. On a case-sensitive volume
+(ext4) the variant is a different, new file, which the guard allows. The row read `true`, but that file opens nothing.
+
+The checker was not changed, only the test:
+
+- **The table now keeps two facts apart.**
+  - `opens` — the build may write a file it is judged by. This is decided by file identity (dev + inode), is the same
+    on every volume, and is what "every spelling that opens is RED" rests on.
+  - `probed` — the raw guard reading, which depends on a run-time case-sensitivity probe of the test's temp volume.
+- **The rows that depend on the probe** are the four case variants, and a comment names them. `isRed` stays
+  unconditional, because the fold is deliberately fail-closed.
+- **A pure test injects both probe results**, so each branch is exercised on either kind of volume.
+
+Measured, not only simulated:
+
+- The file was run on the default APFS temp volume and on a case-sensitive APFS disk image mounted in the scratchpad
+  (`TMPDIR` pointed at it). The old test reproduced CI's exact failure there (58/59); the new one reads 60/60 on both.
+- The other eight test files this increment changed passed on the case-sensitive image (339/339). Their case-variant
+  tests create the variant file themselves and never rely on aliasing.
+- Two mutations:
+  - Marking a variant row as not probe-dependent is caught on both volumes.
+  - Replacing the identity check with a case-folded spelling match is caught only on the case-sensitive volume. This
+    is expected, because on APFS the guard already denies every variant, and the code comment says so.
+- The image was detached and deleted afterwards.
+
 ## Scratch
 
 `.pharn/pharn-dev-plan/` (the plan's measurement runners) and `.pharn/pharn-dev-build/` (`limits-patch.mjs`, `cost.mjs`,
