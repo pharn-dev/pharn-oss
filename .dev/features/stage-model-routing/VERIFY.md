@@ -1,5 +1,46 @@
 # VERIFY — stage-model-routing
 
+## After the human apply at GATE 2 (2026-09-27)
+
+- **Run:** on the committed tree at `0344ff1` — the maintainer's human apply of `proposed/human-only.patch`
+  (`LIMITS.md` only) over the GATE-2 fixes `5bf6b18` — after `/pharn-dev-regress` (`no-regressions`, base `008b24b`),
+  with the plan's scope re-set and the baseline re-anchored (`--by stage-model-routing-after-apply`) right after the
+  apply commit, per `proposed/APPLY.md`. Stage model: opus — set by the maintainer's instruction, overriding
+  pharn.config.json; routed via Agent subagent; effort not routed.
+
+**VERIFIED: floor gates PASS.** Verdict `PASS` (`check-verify.mjs`, exit 0; the `feature` / `gates` / `verdict` /
+`failing_gates` fields of `verify-report.json` are its stdout verbatim — this run's fields equal the committed
+report's, so the file is unchanged).
+
+### Gates (exit codes)
+
+| gate                                                                 | exit |
+| -------------------------------------------------------------------- | ---- |
+| `test` (`npm test` — 3864 tests, 3864 pass, 0 fail)                  | 0    |
+| `validate` (`node pharn/floor/validate.mjs .`)                       | 0    |
+| `lint` (`npm run lint`)                                              | 0    |
+| `format:check` (`npm run format:check`, whole repo)                  | 0    |
+| `lint:md` (`npm run lint:md`, whole repo)                            | 0    |
+| `structural:…/expected-injection-comment.json` (`check-structural`)  | 0    |
+| `reconcile` (`check-bash-reconcile.mjs --base . --require-baseline`) | 0    |
+
+`failing_gates: []`.
+
+**`reconcile`:** `CLEAN` over the epoch anchored after the apply commit (`stage-model-routing-after-apply`). 0 paths
+needed reconciling; exempted by name as pipeline artifacts: this run's `REGRESSION.md` and `regression-report.json`.
+The apply is a git commit made by the maintainer, so it sits in the baseline, not in the window.
+
+**How the gates were run (orchestration — advisory):** as in the run below — one Bash call per gate, exit codes only,
+the regress scratch removed first so no scratch `.mjs` sat under `.pharn/` when `eslint .` ran.
+
+### Verifiers (advisory)
+
+No verifiers registered — floor gates only (`node pharn/floor/count-verifiers.mjs .` →
+`{"registered":0,"verifiers":[]}`).
+
+Verified = the named gates passed; this is NOT a guarantee of correctness beyond what those gates check — verifier
+concerns are advisory help, not assurance.
+
 ## GATE-2 FIX round (2026-09-27)
 
 - **Run:** on the working tree the round left — HEAD `1b4158e` (`REVIEW.md`) plus the uncommitted A1–A8 and A10

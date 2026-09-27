@@ -1,5 +1,47 @@
 # REGRESSION — stage-model-routing
 
+## After the human apply at GATE 2 (2026-09-27)
+
+- **Run:** on the committed tree at `0344ff1` — the maintainer's human apply of `proposed/human-only.patch`
+  (`LIMITS.md` only, sha256 `b7e0754b…`, equal to `human-only.sha256`) over the GATE-2 fixes `5bf6b18` — with a clean
+  tree, after the plan's scope was re-set and the baseline re-anchored (`--by stage-model-routing-after-apply`), per
+  `proposed/APPLY.md`. Stage model: opus — set by the maintainer's instruction, overriding pharn.config.json; routed
+  via Agent subagent; effort not routed.
+- **Base:** `008b24b593ddb6b58fdacc1b60039ffb8f1fe70b`, passed explicitly by the orchestrator, and equal to
+  `git merge-base HEAD origin/main` (re-checked by the runner).
+
+**REGRESSIONS: none — no deterministically-detectable breakage outside the feature.** Verdict `no-regressions`
+(`check-regress.mjs verdict`, exit 0; `regression-report.json` is its stdout, byte-identical — `cmp` clean).
+
+### Partition
+
+- **Declared** (`PLAN.md` `## Files`): 32 paths.
+- **Inside** (`git diff --name-only <base>` + untracked): 39 paths — the 38 of the GATE-2 run below, plus
+  `LIMITS.md`, which the human apply changed. `check-regress.mjs scope` lists it in `escape_exempt` beside the
+  feature's seven pipeline artifacts: it is one of the four hook-protected trusted docs, which the agent cannot
+  write at all.
+- **Escaped:** none (`check-regress.mjs scope` exit 0, `escaped: []`).
+- **Outside tests:** 111 files — the 118 tracked `*.test.mjs` / `*.test.cjs` minus the 7 inside.
+- **Outside eval pairs:** 1 — the trust-fence pair, both paths confirmed readable before its exit code was recorded.
+
+### Gate table (base → head)
+
+| gate                                                                | base | head | verdict |
+| ------------------------------------------------------------------- | ---- | ---- | ------- |
+| `tests` (the 111 outside files, one `node --test` over the list)    | 0    | 0    | clean   |
+| `validate` (`node pharn/floor/validate.mjs .`, whole-repo)          | 0    | 0    | clean   |
+| `structural:…/expected-injection-comment.json` (`check-structural`) | 0    | 0    | clean   |
+
+**`regressions: []` · `pre_existing: []`.** The style gates were skipped by the config-touch rule: `inside` touches
+none of `eslint.config.mjs`, `.prettierrc.json`, `.prettierignore`, `.markdownlint-cli2.jsonc`.
+
+### How the baseline was obtained (orchestration — advisory)
+
+The same method as the runs below: a scratch Node runner under `.pharn/pharn-dev-regress/` (argv arrays only,
+deleted after the stage), `git archive <base>` extracted under `.pharn/pharn-dev-regress/base/` with
+`GIT_CEILING_DIRECTORIES` set, and the snapshot removed before the HEAD run. The outside tests took 158 s at base and
+192 s at head.
+
 ## GATE-2 FIX round (2026-09-27)
 
 - **Run:** on the working tree the round left — HEAD `1b4158e` (`REVIEW.md`) plus the uncommitted A1–A8 and A10
