@@ -20,12 +20,25 @@
 // So an iteration that skips /pharn-regress or /pharn-verify still found the PREVIOUS iteration's report and
 // stamp on disk, and nothing noticed. This file is that later increment.
 //
-// WHY A SEPARATE CHECKER, NOT A CHANGE TO check-loop.mjs: that file's input signature being "ONLY the two
-// verdict reports + iter/cap" is a load-bearing, structural claim in /pharn-loop's own description (no
-// advisory stage can gate the stop). A filesystem fingerprint input would break it. So the command reads
-// THIS checker first, and check-loop.mjs stays byte-identical.
+// WHY A SEPARATE CHECKER, NOT A CHANGE TO check-loop.mjs: that file's inputs are a load-bearing, structural claim in
+// /pharn-loop's own description (no advisory stage can gate the stop). Restated exactly since 6.28.0, they are the two
+// verdict reports, `--iter` / `--cap`, and ONE token of the feature's own SPEC — its `spec_kind`, which chooses the
+// table — and still no review, finding, severity, record or fingerprint input. A filesystem fingerprint input would
+// break that claim. So the command reads THIS checker first, and check-loop.mjs reads no fingerprint.
+//
+// THE MODE (6.28.0, `/pharn-loop --quick`): read once per evaluation with loop-mode-core.mjs's `loopModeOf` over the
+// feature directory — `quick` iff the SPEC reads `spec_kind: quick`, `full` for everything else — never from an
+// argument. It picks which evidence the checks read (the table below): a quick run never runs /pharn-regress, so its
+// checks read the verify evidence alone and never open a regression report or a regress stamp, stale or fresh. The
+// quick column keeps the run tree-bound (F) and checked for fabrication (C, D, J, E), in the same order. The document
+// gains `mode` as its last key (null when the checker stops before reading it: a usage error, or — in the CLI —
+// `checker-crashed`).
 //
 // ====================================== THE CHECKS (first failure decides) ======================================
+//
+// Full mode reads every row as written. QUICK mode (QUICK_EVIDENCE_STAGES = [verify]) reads A, B, C, D, J and E over the
+// verify evidence ALONE, SKIPS H and G (QUICK_SKIPPED — there is no regress stamp to read), and runs F and I exactly as
+// full mode does:
 //
 //   A  both reports exist and parse, with a verdict in their stage's enum     → RERUN · report-missing / report-malformed
 //   B  a report's `reason_code`, when present, is a member and a LAPSE        → lapse RERUN · empty-source-set STOP (S4)
@@ -75,9 +88,17 @@
 //   • a failure to load this checker, a throw while it runs, or a result outside its contract is INCONCLUSIVE
 //     `checker-crashed` (exit 2), never a RERUN (6.21.1, through the CLI's dynamic import — check-loop-fresh.mjs,
 //     whose header names what that cannot catch). The AC ids still come from gate-run-core.mjs, not ac-gate-core.mjs,
-//     so the graph that can fail to load stays small (grill R2).
+//     so the graph that can fail to load stays small (grill R2). loop-mode-core.mjs (6.28.0) joins that graph; a
+//     failure to load it is the same INCONCLUSIVE, in both modes, before any stop is read;
+//   • in QUICK mode, every bullet above over the verify evidence alone: C + D + E for the verify report, F, J for the
+//     verify stamp's logs and results, B for its reason_code. G and H have nothing to read and say "skipped".
 //
 // NOT COVERED, each stated rather than discovered:
+//   • THE MODE'S PROVENANCE. The mode is read from the SPEC, whose approval — the kind line under the pin — is this
+//     checker's own check I; without `--front` a SPEC whose kind was flipped after approval is read as it now stands.
+//     A kind flipped TO quick over a full run's evidence passes the quick column and is stopped at I (front-stage-red);
+//     one flipped AWAY from quick in a quick run meets check A's missing regression report first (a `regress` re-run,
+//     which /pharn-loop's quick section maps to S11). Nothing here sees who chose the kind.
 //   • FORGERY. Stamps, reports, logs and the budget ledger all live in the writable tree, which `Bash`
 //     reaches unhooked (LIMITS.md §6). This certifies AGREEMENT between those artifacts and the live tree,
 //     never PROVENANCE (lessons-learned L43) — a self-consistent fabricated set passes, and a test builds
@@ -136,6 +157,7 @@ import { fingerprint } from "./worktree-fingerprint.mjs";
 import { sha256RegularFile } from "./test-infra-core.mjs";
 import { REGRESS_PATHS } from "./stage-regress-core.mjs";
 import { VERIFY_PATHS } from "./stage-verify-core.mjs";
+import { loopModeOf } from "./loop-mode-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -173,6 +195,14 @@ export const LESSONS_CANON = "memory-bank/lessons-learned.md";
 
 /** The check ids, in evaluation order. Materialized once; the tests iterate it (L29/L52). */
 export const CHECKS = Object.freeze(["A", "B", "C", "D", "J", "E", "H", "F", "G", "I"]);
+
+/** QUICK mode (6.28.0): the checks with no evidence to read — H (the regress BASE stamp) and G (the regress HEAD
+ *  stamp), because a quick run never runs /pharn-regress. Reported as `"skipped"`. Materialized once (L29). */
+export const QUICK_SKIPPED = Object.freeze(["G", "H"]);
+
+/** QUICK mode: the stages whose evidence A, B, C, D, J and E read — verify's alone. A regression report or a regress
+ *  stamp on disk (another feature's, or a full run's) is never opened in quick mode. */
+export const QUICK_EVIDENCE_STAGES = Object.freeze(["verify"]);
 
 export const EXIT = Object.freeze({ FRESH: 0, RERUN: 1, INCONCLUSIVE: 2, STOP: 4 });
 
@@ -338,8 +368,19 @@ const REPORTS = Object.freeze([
   { stage: "regress", file: "regression-report.json", verdicts: REGRESS_VERDICTS },
 ]);
 
+/** Does this run's mode read `stage`'s evidence? Every stage in full mode; QUICK_EVIDENCE_STAGES' alone in quick. */
+function reads(ctx, stage) {
+  return ctx.mode !== "quick" || QUICK_EVIDENCE_STAGES.includes(stage);
+}
+
+/** The members of `list` (each carrying a `stage`) whose evidence this run's mode reads — the one filter A, B, C and J
+ *  apply, so the quick column cannot drift between them. */
+function inMode(ctx, list) {
+  return list.filter((x) => reads(ctx, x.stage));
+}
+
 function checkA(ctx) {
-  for (const r of REPORTS) {
+  for (const r of inMode(ctx, REPORTS)) {
     const path = join(ctx.featureDir, r.file);
     const j = readJsonFile(path);
     if (j.state === "missing")
@@ -374,7 +415,7 @@ function checkA(ctx) {
 }
 
 function checkB(ctx) {
-  for (const r of REPORTS) {
+  for (const r of inMode(ctx, REPORTS)) {
     const code = ctx.reports[r.stage].reason_code;
     if (code === undefined || code === null) continue;
     if (typeof code !== "string" || !isReasonCode(code)) {
@@ -422,7 +463,7 @@ const STAMPS = Object.freeze([
 ]);
 
 function checkC(ctx) {
-  for (const s of STAMPS) {
+  for (const s of inMode(ctx, STAMPS)) {
     const path = ctx.stampPaths[s.key];
     const j = readJsonFile(path);
     if (j.state === "missing")
@@ -468,6 +509,7 @@ function checkD(ctx) {
       reason: "verify-report.json's gate_run.stamp_sha256 does not name the verify stamp on disk",
     });
   }
+  if (!reads(ctx, "regress")) return { ok: true }; // quick mode: there is no regression report to bind
   const rg = ctx.reports.regress.gate_run;
   for (const [side, key] of [
     ["base", "regressBase"],
@@ -487,7 +529,7 @@ function checkD(ctx) {
 }
 
 function checkJ(ctx) {
-  for (const s of STAMPS) {
+  for (const s of inMode(ctx, STAMPS)) {
     const st = ctx.stamps[s.key];
     const dir = dirname(st.path);
     for (const run of st.value.runs) {
@@ -574,6 +616,7 @@ function checkE(ctx) {
         : `verify-report.json's ${bad} is not what check-verify.mjs computes from the verify stamp now — the report was not produced from that stamp`,
     });
   }
+  if (!reads(ctx, "regress")) return { ok: true }; // quick mode: check-verify alone — no check-regress re-derivation
   const baseHead = ctx.stamps.regressBase.value.head;
   const g = rerunChecker(ctx, CHECKERS.regress, [
     "verdict",
@@ -775,17 +818,19 @@ function readLedger(file) {
  *  it (a subprocess is invisible to `--experimental-test-coverage`). The CLI (check-loop-fresh.mjs) only prints it and sets the exit code.
  *  ---------------------------------------------------------------------------------------------- */
 
-function result(verdict, code, fields, checks) {
+/** The document, its keys in a fixed order with `mode` LAST (6.28.0) — check-loop-fresh.mjs restates this key list as
+ *  DOC_KEYS and a test pins the two equal. `mode` is null until the checker has read it (a usage error). */
+function result(verdict, code, fields, checks, mode = null) {
   return {
     code,
-    doc: { verdict, stage_to_rerun: null, reason_code: null, reason: null, checks, reruns_used: null, ...fields },
+    doc: { verdict, stage_to_rerun: null, reason_code: null, reason: null, checks, reruns_used: null, ...fields, mode },
   };
 }
 
 /** Unusable input — fail-closed. Called as `inconclusive({ reason_code: "<member>", reason }, checks)` so the
  *  closure scans see the literal (L36). */
-function inconclusive({ reason_code, reason }, checks) {
-  return result("INCONCLUSIVE", EXIT.INCONCLUSIVE, { reason_code, reason }, checks);
+function inconclusive({ reason_code, reason }, checks, mode = null) {
+  return result("INCONCLUSIVE", EXIT.INCONCLUSIVE, { reason_code, reason }, checks, mode);
 }
 
 export function evaluate(argv) {
@@ -813,11 +858,18 @@ export function evaluate(argv) {
     stamps: {},
     rel: (p) => (p.startsWith(`${repo}/`) ? p.slice(repo.length + 1) : p),
   };
+  // The mode, ONCE per evaluation, from the feature's own SPEC (loop-mode-core.mjs) — never from an argument.
+  ctx.mode = loopModeOf(ctx.featureDir);
+  const mode = ctx.mode;
 
   let fail = null;
   for (const id of CHECKS) {
     if (id === "I" && !a.front) {
       checks.I = "skipped";
+      continue;
+    }
+    if (mode === "quick" && QUICK_SKIPPED.includes(id)) {
+      checks[id] = "skipped";
       continue;
     }
     const r = RUNNERS[id](ctx);
@@ -826,16 +878,16 @@ export function evaluate(argv) {
       continue;
     }
     checks[id] = "fail";
-    if (r.unusable) return inconclusive({ reason_code: "usage-error", reason: r.reason }, checks);
+    if (r.unusable) return inconclusive({ reason_code: "usage-error", reason: r.reason }, checks, mode);
     fail = r;
     break;
   }
 
   if (fail === null) {
-    return result("FRESH", EXIT.FRESH, { reason: "every check passed — the evidence belongs to this tree" }, checks);
+    return result("FRESH", EXIT.FRESH, { reason: "every check passed — the evidence belongs to this tree" }, checks, mode);
   }
   if (fail.action === "stop") {
-    return result("STOP", EXIT.STOP, { reason_code: fail.reason_code, reason: fail.reason }, checks);
+    return result("STOP", EXIT.STOP, { reason_code: fail.reason_code, reason: fail.reason }, checks, mode);
   }
   // A RERUN. At the commit gate there is no stage left to re-run, so it is a stop carrying its own code.
   if (a.commitGate) {
@@ -846,17 +898,19 @@ export function evaluate(argv) {
         reason_code: fail.reason_code,
         reason: `${fail.reason} (at the commit gate a re-run is not offered: the evidence is stale, so the commit does not happen)`,
       },
-      checks
+      checks,
+      mode
     );
   }
 
   const lp = ledgerPath(ctx);
-  if (!lp.ok) return inconclusive({ reason_code: "path-containment", reason: lp.reason }, checks);
+  if (!lp.ok) return inconclusive({ reason_code: "path-containment", reason: lp.reason }, checks, mode);
   const led = readLedger(lp.file);
   if (!led.ok) {
     return inconclusive(
       { reason_code: "ledger-malformed", reason: `the budget ledger ${ctx.rel(lp.file)} has a line that is not a {iter, stage} JSON row` },
-      checks
+      checks,
+      mode
     );
   }
   const used = led.rows.filter((row) => row.iter === a.iter && row.stage === fail.stage).length;
@@ -869,7 +923,8 @@ export function evaluate(argv) {
         reason: `/pharn-${fail.stage} was already re-run ${used} time(s) in iteration ${a.iter} (--max-reruns ${a.maxReruns}) and its evidence is still stale: ${fail.reason_code} — ${fail.reason}`,
         reruns_used: used,
       },
-      checks
+      checks,
+      mode
     );
   }
   mkdirSync(lp.dir, { recursive: true });
@@ -881,7 +936,8 @@ export function evaluate(argv) {
     "RERUN",
     EXIT.RERUN,
     { stage_to_rerun: fail.stage, reason_code: fail.reason_code, reason: fail.reason, reruns_used: used + 1 },
-    checks
+    checks,
+    mode
   );
 }
 

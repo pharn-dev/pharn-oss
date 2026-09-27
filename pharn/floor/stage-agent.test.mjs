@@ -186,15 +186,18 @@ test("route — POLICY PRECEDENCE at the CLI: a policy-inline cell ignores even 
   }
 });
 
-test("route — refusals (exit 2, empty stdout): an inherited stage name, a loop quick column, a skipped stage", () => {
+test("route — refusals (exit 2, empty stdout): an inherited stage name, a spelled-out full mode, a skipped stage", () => {
   const dir = scratch();
   try {
     copyFileSync(REPO_CONFIG, join(dir, "pharn.config.json"));
+    // 6.27.0 also refused `--command pharn-loop --mode quick` here (no column yet); 6.28.0's coupling added the column,
+    // so that case moved to the ROUTES test below. The loop's quick REGRESS is still refused: that cell is skipped.
     const cases = [
       ["route", "--command", "pharn-ship", "--stage", "toString", "--name", "demo"],
       ["route", "--command", "pharn-ship", "--stage", "__proto__", "--name", "demo"],
-      ["route", "--command", "pharn-loop", "--stage", "pharn-plan", "--name", "demo", "--mode", "quick"],
+      ["route", "--command", "pharn-loop", "--stage", "pharn-regress", "--name", "demo", "--iteration", "1", "--mode", "quick"],
       ["route", "--command", "pharn-ship", "--stage", "pharn-plan", "--name", "demo", "--mode", "full"],
+      ["route", "--command", "pharn-loop", "--stage", "pharn-plan", "--name", "demo", "--mode", "fast"],
       ["route", "--command", "pharn-ship", "--stage", "pharn-regress", "--name", "demo", "--iteration", "1", "--mode", "quick"],
       ["route", "--command", "pharn-dev-ship", "--stage", "pharn-plan", "--name", "demo"],
       ["route", "--command", "pharn-ship", "--stage", "pharn-plan", "--name", "Bad_Name"],
@@ -207,6 +210,46 @@ test("route — refusals (exit 2, empty stdout): an inherited stage name, a loop
       const r = run(dir, args);
       assert.equal(r.status, 2, `${JSON.stringify(args)}: ${r.stdout}${r.stderr}`);
       assert.equal(r.stdout, "", "a refusal prints no token");
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("route --command pharn-loop --mode quick ROUTES (6.28.0 — flipped from 6.27.0's refusal): agents for the routed cells, floor-only for the grill and verify", () => {
+  const dir = scratch();
+  try {
+    copyFileSync(REPO_CONFIG, join(dir, "pharn.config.json"));
+    const cfg = JSON.parse(readFileSync(REPO_CONFIG, "utf8")).models.stages;
+    const resolved = (key) => (Object.hasOwn(cfg, key) ? cfg[key] : cfg.default).model;
+    const quick = (stage, it = null) => [
+      "route",
+      "--command",
+      "pharn-loop",
+      "--stage",
+      stage,
+      "--name",
+      "demo",
+      ...(it === null ? [] : ["--iteration", String(it)]),
+      "--mode",
+      "quick",
+    ];
+    for (const [stage, key, it] of [
+      ["pharn-spec", "spec", null],
+      ["pharn-plan", "plan", null],
+      ["pharn-test", "ac-test", null],
+      ["pharn-build", "build", 2],
+    ]) {
+      const r = run(dir, quick(stage, it));
+      assert.equal(r.status, 0, `${stage}: ${r.stderr}`);
+      assert.equal(r.stdout, `agent:${resolved(key)}\n`, `${stage}: the alias the checker resolves for ${key}`);
+    }
+    for (const [stage, it] of [
+      ["pharn-grill", null],
+      ["pharn-verify", 1],
+    ]) {
+      const r = run(dir, quick(stage, it));
+      assert.deepEqual([r.status, r.stdout], [3, "inline:floor-only\n"], `${stage}: inline by policy`);
     }
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -261,7 +304,7 @@ test("brief — exit 0 for EVERY routed cell with renderBrief's exact text; exit
         }
       }
     }
-    assert.equal(routed, 12, "L34");
+    assert.equal(routed, 16, "L34 — 12 in 6.27.0, plus the loop's four quick agent cells (6.28.0)");
     assert.deepEqual(readdirSync(dir), [], "brief writes nothing");
   } finally {
     rmSync(dir, { recursive: true, force: true });

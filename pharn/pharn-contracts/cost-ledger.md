@@ -173,9 +173,9 @@ both cost renderers import.
 A request found in several files is one row, under the identity of the copy walked first: the parent's, for every
 fork observed.
 
-**Which transcript lines are requests, and what a refused value becomes (6.27.1).** The transcript is untrusted
+**Which transcript lines are requests, and what a refused value becomes (6.28.1).** The transcript is untrusted
 input, and parsed JSON can put any value where a string or a count is expected: `{"toString":1}` makes `String()`
-throw. Until 6.27.1 the emitter coerced first and bounded second, so one crafted line crashed both cost renderers.
+throw. Until 6.28.1 the emitter coerced first and bounded second, so one crafted line crashed both cost renderers.
 Now every transcript value the cost tooling reads is tested for type and domain BEFORE anything coerces it, by the
 predicates in
 `pharn/floor/cost-value-core.mjs` (`isIdentityToken`, rule 3's bound; `isTokenCount`, rule 7's).
@@ -321,6 +321,12 @@ does not mean the run was invoked with `--quick`, and the reverse.** `ship-outco
 reads only the CURRENT run's run-start (`currentRunMarkers(...)[0]`), by exact equality — an EARLIER run's
 quick run-start never makes the current run quick, and vice versa.
 
+**`/pharn-loop --quick` (6.28.0) writes no mode marker.** The loop's mode is its feature SPEC's pinned `spec_kind`,
+which its stop core reads and its `LOOP.md` records (and `check-loop-decision.mjs` re-derives); a marker would be a
+second, unverified copy of it. The one reader such a marker would feed — the no-`LOOP.md` fallback derivation — reads
+a loop ledger as full, and with no `pharn-regress` stage-start after the build that is `stop:pharn-verify`: the
+under-claiming direction.
+
 ## Route (added 6.27.0, stage-model routing)
 
 Since 6.27.0 `/pharn-ship` and `/pharn-loop` run each stage their routing policy routes as a Claude Code
@@ -366,10 +372,10 @@ scope. `check-cost-ledger.mjs` validates it
 under its own closed key set and rules, and adds one WARN: its totals are SESSION-scoped and may include
 activity outside the run. `render-run-report.mjs` prints the same label. `--verify-transcript` declines
 a `/1` file with a WARN, because its rows are not re-derivable under the run-window rule. Reading a `/1`
-total as run-scoped would silently reinterpret historical data. The value rules 6.27.1 added apply to a `/1` file
+total as run-scoped would silently reinterpret historical data. The value rules 6.28.1 added apply to a `/1` file
 too (next note).
 
-**A ledger emitted before 6.27.1 from a transcript carrying a value 6.27.1 refuses can now be RED, and where it is,
+**A ledger emitted before 6.28.1 from a transcript carrying a value 6.28.1 refuses can now be RED, and where it is,
 that RED is correct.** Those values were never valid; the old emitter copied or summed them. Two ways it shows:
 
 - **The new rules RED a value that reached the file as it was, without `--verify-transcript`:** a `usage` deeper than `USAGE_MAX_DEPTH` or with a key
@@ -419,7 +425,7 @@ cache-write classes were equal under both rules on every measured request. For s
 2. **Every `usage` leaf is `number | bool | null | a short token`.** Anything else is **dropped and its
    key path listed** in `dropped[]` — never coerced, never stringified, never silently kept. **Arrays are
    WALKED, not exempted**: `usage.iterations[]` survives with its scalars, so `usage` is genuinely
-   verbatim. **Since 6.27.1 the copy is also bounded in depth and key shape:** no node deeper than
+   verbatim. **Since 6.28.1 the copy is also bounded in depth and key shape:** no node deeper than
    `USAGE_MAX_DEPTH` (32, counted from `usage` itself), and every key a short token other than `__proto__`, which
    assigned on a plain object sets its prototype and vanished with nothing listed ([[L15]]). The emitter drops and
    lists both, and the checker REDs both, importing the emitter's constant and predicate (`isUsageKey`).
@@ -428,12 +434,12 @@ cache-write classes were equal under both rules on every measured request. For s
    C0 control characters and DEL, and free of an absolute path. A C1 control (U+0080 to U+009F) is admitted. A
    refusal is **dropped and its key path listed** —
    `model` falls back to the literal `unknown`, the other two to `null`. **Never truncated**, which would
-   invent a value that was never in the transcript. **Since 6.27.1 the same bound covers `request_id`, a row's
+   invent a value that was never in the transcript. **Since 6.28.1 the same bound covers `request_id`, a row's
    `session_id` (nullable), and every element of `sessions[]` and `claude_code_versions[]`,** in the emitter and in
    the checker alike ([[L2]]: each bound this rule names is one the checker checks). A refused `session_id` or
    version is dropped and listed like the three above. A refused `request_id` is different: the line is not a
    request at all, so there is no row and nothing is listed ("Which transcript lines are requests", above). The raw
-   value is tested BEFORE any coercion. Until 6.27.1 the emitter ran `String()` first, so a number was coerced into an admitted token and an
+   value is tested BEFORE any coercion. Until 6.28.1 the emitter ran `String()` first, so a number was coerced into an admitted token and an
    object threw.
 4. **No string anywhere in the file matches the absolute-path regex.** Every value, at every depth.
 5. **`outcome` is `null`, or matches its shape.** `decision` a bounded, control-char-free token;
@@ -475,18 +481,18 @@ cache-write classes were equal under both rules on every measured request. For s
    - An OPEN window has no end. A continued session therefore adds MEMBERS, and `requests[]` REDs. Both
      emitters write `run-stop` before emitting, and the checker WARNs an open window.
 
-7. **(6.27.1) Every count is a non-negative safe integer, and the view keys have a type.** Each
+7. **(6.28.1) Every count is a non-negative safe integer, and the view keys have a type.** Each
    `requests[].tokens.<class>` must satisfy `isTokenCount`: the emitter writes 0 for a refused count and lists it,
    so every row and every total is a sum of admitted counts, which never reaches `Infinity` and is exact below
    2^53. A row's `stage` is a string or `null` and its `iteration` a number or `null`. Those two are crash guards
    for the view recompute, not value rules: a fractional `iteration` from a crafted marker stays GREEN, as it was.
    The recompute runs only when every row passes them, and a RED says so when it does not.
-8. **(6.27.1) No node of the document is deeper than `WALK_MAX_DEPTH` (64).** The emitter's deepest node is a
+8. **(6.28.1) No node of the document is deeper than `WALK_MAX_DEPTH` (64).** The emitter's deepest node is a
    `usage` leaf at most `USAGE_MAX_DEPTH` below its row, so a well-formed ledger never comes near it. The checker
    finds a deeper node without recursion and names its path, and its recursive walks stop at the bound.
 
-**The checker is TOTAL over its own input (6.27.1), within stated bounds.** `cost.json` is agent-written,
-committed, untrusted input. Before 6.27.1, twenty measured crash sites made the checker exit 1, its RED code, with
+**The checker is TOTAL over its own input (6.28.1), within stated bounds.** `cost.json` is agent-written,
+committed, untrusted input. Before 6.28.1, twenty measured crash sites made the checker exit 1, its RED code, with
 no verdict line, and raw file strings reached its verdict lines.
 
 - **FLOOR, over the closures in `pharn/floor/cost-hostile-input.test.mjs`:** for every document they walk, the
@@ -524,6 +530,11 @@ by the checker rather than re-spelled:
 | ------------------ | ------------------------------------------------------ | --------------------------------------------------------------------------------------- | --------------------------------------- |
 | `LOOP.md`          | `/pharn-loop`, via its record                          | `check-loop.mjs`'s own tokens                                                           | **DECLARED** — re-derivable (see below) |
 | `verdicts+markers` | `/pharn-ship` always; any other command with no record | `gate2` \| `gate2-quick` (6.25.0) \| `stop:<stage>` \| `stop:unknown` \| `undetermined` | **DERIVED** — split, see below          |
+
+The `LOOP.md` source's vocabulary includes `STOP_GREEN_QUICK` (6.28.0, `/pharn-loop --quick`), which is **not**
+`STOP_GREEN` and claims no regression verdict: the emitter copies it verbatim, so a quick loop's ledger carries its
+own claim with no marker involved, and rule 5 — a bounded token, not a vocabulary — reads it GREEN in an older
+checker too.
 
 **The declared form is re-derivable and the derived form is not, and that asymmetry is the point.** A
 `LOOP.md` decision is checked by `pharn/floor/check-loop-decision.mjs`, which re-runs `check-loop.mjs`
@@ -775,7 +786,7 @@ window it records, which each already states.
 
 The transcript is **untrusted input**. `attribution_skill`, `model` and `agent_id` are copied from it into
 a committed artifact and are attacker-influencable in principle. So are `request_id`, `session_id` and each
-`claude_code_versions` entry, which since 6.27.1 carry the same bound. They key a **view**, never a gate, and
+`claude_code_versions` entry, which since 6.28.1 carry the same bound. They key a **view**, never a gate, and
 **rule 3 above** — not the `usage` leaf rule — is what bounds them: ≤128 characters, no C0 control character or
 DEL, no path. A C1 control (U+0080 to U+009F) is admitted, and U+0085 among them passes `JSON.stringify` raw.
 
@@ -787,11 +798,11 @@ fix #3), but it is a channel into a durable artifact and it is not closed. State
 
 **Named follow-up, not built: `cost-ledger-dropped-row-index`.** A `dropped[]` path's row index is taken before the
 emitter sorts its rows by `ts`, so in a transcript spread over several files it can name the wrong row. Probed while
-planning 6.27.1 and not selected at its plan gate; the paths 6.27.1 added (`session_id`, `version`, `tokens.<class>`)
+planning 6.28.1 and not selected at its plan gate; the paths 6.28.1 added (`session_id`, `version`, `tokens.<class>`)
 inherit the same index.
 
 **Named, not changed: a window ordered as strings.** The ledger's `window_start`/`window_end` and its row order
-compare timestamps as strings, and since 6.27.1 the `pharn-cost-record/1` block's window does the same, after the same
+compare timestamps as strings, and since 6.28.1 the `pharn-cost-record/1` block's window does the same, after the same
 parse test. `…:00Z` sorts after `…:00.500Z`, so on mixed-precision timestamps both would order them wrongly.
 Membership and attribution compare numbers and are not affected. The platform writes one precision, so it has not
 been observed (P7).

@@ -215,7 +215,7 @@ const RULE_ANCHOR = "else if (outputRank(u) > outputRank(seen.usage)) seen.usage
 /** Import a copy of this module with the selection rule replaced. The anchor must be found exactly once and
  *  the mutant must differ from the source, or the control proves nothing (L60). Every non-test module of the floor
  *  is copied beside the mutant, as the renderers' FOLLOWS controls do, because the module has imports of its own
- *  (since 6.27.1, `./cost-value-core.mjs`), and a lone copy cannot resolve them. */
+ *  (since 6.28.1, `./cost-value-core.mjs`), and a lone copy cannot resolve them. */
 async function mutantCore(replacement) {
   assert.equal(CORE_SOURCE.split(RULE_ANCHOR).length, 2, "the rule's anchor must occur exactly once");
   const source = CORE_SOURCE.replace(RULE_ANCHOR, replacement);

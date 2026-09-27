@@ -29,21 +29,21 @@
 //  2. EVERY `usage` LEAF is number | bool | null | a short token (`isTokenLeaf`, composed AFTER a
 //     control-char guard — L14). Arrays are walked (D1), not exempted. The predicate is IMPORTED from
 //     the emitter, not re-stated here: the two encodings used to be written separately and had ALREADY
-//     diverged (this copy omitted the path term), which is [[L31]] exactly. Since 6.27.1 the same rule
+//     diverged (this copy omitted the path term), which is [[L31]] exactly. Since 6.28.1 the same rule
 //     also REDs a `usage` node deeper than `USAGE_MAX_DEPTH` and an object key `isUsageKey` refuses
 //     (`__proto__` among them), both imported from the emitter, which refuses the same two on write.
 //  2b. EVERY IDENTITY FIELD — `model`, `attribution_skill`, `agent_id` — is a bounded token (<=128
 //     chars, no C0 control char or DEL, no path). The contract calls this rule 3; the numbering here is kept
 //     stable so this file's own older references still resolve. Added after `/pharn-dev-review` found
-//     the contract asserting this bound while NOTHING checked it (see `badIdentity`). Since 6.27.1 it
+//     the contract asserting this bound while NOTHING checked it (see `badIdentity`). Since 6.28.1 it
 //     also covers `request_id`, a row's `session_id` (nullable), and every element of `sessions[]` and
-//     `claude_code_versions[]`: the contract gained those bounds in 6.27.1, and every bound 6.27.1 added
+//     `claude_code_versions[]`: the contract gained those bounds in 6.28.1, and every bound 6.28.1 added
 //     to the contract is one this file checks ([[L2]], GRILL R2-G2). That is scoped on purpose: the
-//     review of 6.27.1 (R1) found two OLDER field-table labels, `skills_version`'s shape and the
+//     review of 6.28.1 (R1) found two OLDER field-table labels, `skills_version`'s shape and the
 //     `window_start`/`window_end` values, which no op here ever backed, and the contract now labels
 //     them ADVISORY. The predicate is `isIdentityToken` (cost-value-core.mjs), the one the emitter
 //     applies: 1 to 128 characters, no C0 control character or DEL, no path (a C1 control is admitted).
-//  2c. (6.27.1) EVERY `tokens.<class>` is a non-negative safe integer (`isTokenCount`), where the rule
+//  2c. (6.28.1) EVERY `tokens.<class>` is a non-negative safe integer (`isTokenCount`), where the rule
 //     used to be `Number.isFinite`. A row's `stage` is a string or null and its `iteration` a number or
 //     null: crash guards for the view recompute (RULE 6), which is why a fractional `iteration` from a
 //     crafted marker stays GREEN as before (GRILL R2-G8).
@@ -99,8 +99,8 @@
 // and the first few listed; `1..outcome.iterations` is never enumerated, because a crafted `2^53` there
 // allocated until the process died (GRILL R2-G3).
 //
-// ── TOTAL OVER ITS OWN INPUT (6.27.1), and what that does NOT cover ──────────────────────────────────
-// `cost.json` is agent-written, committed, untrusted input (P2). Until 6.27.1 twenty measured crash sites made
+// ── TOTAL OVER ITS OWN INPUT (6.28.1), and what that does NOT cover ──────────────────────────────────
+// `cost.json` is agent-written, committed, untrusted input (P2). Until 6.28.1 twenty measured crash sites made
 // this file exit 1 — its RED code — with no verdict line, and raw file strings reached its verdict lines.
 // FLOOR, over the closures in cost-hostile-input.test.mjs: for every document they walk (every node of a GREEN
 // ledger × a hostile alphabet, and the right-typed extremes they add), in both modes, `checkLedger` returns and
@@ -180,7 +180,7 @@ const keyText = (k) => (isTokenLeaf(k) ? k : shown(k));
 /** A VALUE quoted into a verdict line with its type kept visible (REVIEW R9): a number, boolean, `null` or `undefined`
  *  prints as itself, and a string, object or function goes through `shown()` — quoted, escaped, bounded. So `1.5` and
  *  `"1.5"` read differently. Total (L62): `String()` only ever meets a primitive that is not a string, where it cannot
- *  throw. It replaced `tokenText` in 6.27.1, which printed every non-number through `shown()`. */
+ *  throw. It replaced `tokenText` in 6.28.1, which printed every non-number through `shown()`. */
 const valText = (v) => (v === null || (typeof v !== "string" && typeof v !== "object" && typeof v !== "function") ? String(v) : shown(v));
 
 /** `items`, at most `LIST_MAX` of them each through `fmt`, then a count of the rest (GRILL R2-G3). */
@@ -197,7 +197,7 @@ const isPlainObject = (v) => v !== null && typeof v === "object" && !Array.isArr
  * NUL/BEL bytes and a newline carrying a forged `RED — …` line were each accepted GREEN, while the
  * contract asserted "the leaf-shape rule bounds what can land in them". It did not — that rule reaches
  * `usage` only. The rule is applied here so the sentence is TRUE rather than corrected downward.
- * Since 6.27.1 the test is `isIdentityToken`, the emitter's own predicate, with identical behaviour.
+ * Since 6.28.1 the test is `isIdentityToken`, the emitter's own predicate, with identical behaviour.
  */
 function badIdentity(v, allowNull = true) {
   if (v === null || v === undefined) return !allowNull;
@@ -228,7 +228,7 @@ function tooDeep(root) {
 
 /** RULE 3, applied to the WHOLE document at every depth. Exported so the test can range over committed
  *  FIXTURE bytes too — the guard the post-grill gate added, so a fixture is covered by the same rule as
- *  a ledger rather than by a description of how it was built. Since 6.27.1 each path segment is a
+ *  a ledger rather than by a description of how it was built. Since 6.28.1 each path segment is a
  *  `keyText`, the value is quoted through `shown()`, and the walk stops at `WALK_MAX_DEPTH` — `tooDeep()`
  *  reports anything deeper. `depth` defaults to 0 in this one place. */
 export function findAbsolutePaths(value, path, hits, depth = 0) {
@@ -248,7 +248,7 @@ export function findAbsolutePaths(value, path, hits, depth = 0) {
 }
 
 /** RULE 2, over one `usage` subtree. `depth` counts from the `usage` object itself and defaults to 0 in this one
- *  place: a node deeper than `USAGE_MAX_DEPTH`, and a key `isUsageKey` refuses, are out of domain (6.27.1). */
+ *  place: a node deeper than `USAGE_MAX_DEPTH`, and a key `isUsageKey` refuses, are out of domain (6.28.1). */
 function checkUsageLeaves(value, path, bad, depth = 0) {
   if (depth > USAGE_MAX_DEPTH) {
     bad.push(path);
@@ -328,7 +328,7 @@ export function checkLedger(led, opts = {}) {
   if (!Array.isArray(led.sessions)) red("sessions must be an array");
   if (!Array.isArray(led.claude_code_versions)) red("claude_code_versions must be an array");
 
-  // RULE 2b over the two list fields (6.27.1): each element a bounded identity token, as the emitter writes them.
+  // RULE 2b over the two list fields (6.28.1): each element a bounded identity token, as the emitter writes them.
   for (const field of ["sessions", "claude_code_versions"]) {
     if (!Array.isArray(led[field])) continue;
     const bad = [];
@@ -347,7 +347,7 @@ export function checkLedger(led, opts = {}) {
     if (/price|cost_usd|usd|dollar/i.test(k)) red(`key ${shown(k)} looks like a price field — this record carries tokens only`);
   }
 
-  // ---- DEPTH: no node deeper than WALK_MAX_DEPTH (6.27.1) ----------------------------------------
+  // ---- DEPTH: no node deeper than WALK_MAX_DEPTH (6.28.1) ----------------------------------------
   // Found without recursion, so a document nested past the stack's limit is REPORTED, never walked into.
   const deep = tooDeep(led);
   if (deep !== null) red(`the document nests deeper than ${WALK_MAX_DEPTH} levels, at ${deep} — the walks below stop there`);
@@ -397,7 +397,7 @@ export function checkLedger(led, opts = {}) {
     const ids = new Set();
     // RULE 6 recomputes the views from these rows, and `buildViews` reads each row's model, stage, iteration and
     // tokens. A row is VIEWABLE only when those four pass the type rules below, so the recompute never meets a value
-    // it would coerce (6.27.1). Counted here, where the rules run: one definition, not a second predicate.
+    // it would coerce (6.28.1). Counted here, where the rules run: one definition, not a second predicate.
     let unviewable = 0;
     for (const [i, r] of led.requests.entries()) {
       if (!isPlainObject(r)) {
@@ -582,7 +582,7 @@ export function checkLedger(led, opts = {}) {
   } else if (opts.verifyTranscript) {
     // Re-derive under the RECORDED boundary: the file's own `markers[]` and `membership.session`, never
     // the live markers file, so a later invocation's appended run-start cannot re-bound this ledger.
-    // PRECONDITIONS (6.27.1): the re-derivation reads `name` into a path, sorts the rows' ids, and quotes the
+    // PRECONDITIONS (6.28.1): the re-derivation reads `name` into a path, sorts the rows' ids, and quotes the
     // session into a note this file prints. So it runs only over rows that are objects with string ids (S9: a
     // `null` row crashed it), a `name` that is a feature slug, and a session — the one ACTUALLY passed, which is
     // `membership.session`, else `sessions[0]` (GRILL R2-G4) — that is null or a bounded identity token.
@@ -829,7 +829,7 @@ function main(argv) {
     return 2; // unusable input is never GREEN by default (fail-closed, P5)
   }
 
-  // THE BACKSTOP (6.27.1): an unforeseen throw while checking is exit 2 — unusable, no verdict — never node's exit
+  // THE BACKSTOP (6.28.1): an unforeseen throw while checking is exit 2 — unusable, no verdict — never node's exit
   // 1, which is this file's RED code. The closures found no throw left to catch; this covers the member they did not
   // reach (L62: a crash is never read as a verdict). The message is fixed text, so nothing from the file rides it.
   let r;
@@ -859,5 +859,5 @@ function main(argv) {
 }
 
 // `import.meta.main` — NOT a `file://` + argv[1] compare (L25). The exit code is SET, never forced: an immediate
-// exit drops stdout still queued for a pipe, which cut a large verdict off before its last line (6.27.1, GRILL R2-G3).
+// exit drops stdout still queued for a pipe, which cut a large verdict off before its last line (6.28.1, GRILL R2-G3).
 if (import.meta.main) process.exitCode = main(process.argv.slice(2));

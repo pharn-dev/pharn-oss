@@ -46,13 +46,13 @@
 //     kept each request's first line and under-counted `output` and `output_thinking`.
 //   * Every `usage` leaf is number | bool | null | a short token; anything else is DROPPED and its key
 //     path listed in `dropped[]`. Arrays are WALKED, not dropped (decision D1), so `usage` stays
-//     genuinely verbatim. Since 6.27.1 the copy is also bounded in depth and key shape: a node deeper than
+//     genuinely verbatim. Since 6.28.1 the copy is also bounded in depth and key shape: a node deeper than
 //     `USAGE_MAX_DEPTH`, and a key `isUsageKey` refuses (`__proto__` among them, which assigned on a plain
 //     object would set its prototype and vanish — [[L15]]), are dropped and listed too, a refused key under
 //     the fixed marker `<refused-key>` so the raw key never reaches the file. Both bounds keep the walk
 //     itself from exhausting the stack.
 //   * Every value copied or counted from the transcript passes a TYPE and DOMAIN test before anything
-//     coerces it (6.27.1, [[L62]]). A line whose request id fails `isIdentityToken`, or whose usage is not
+//     coerces it (6.28.1, [[L62]]). A line whose request id fails `isIdentityToken`, or whose usage is not
 //     a plain object, is not a request at all — the reader's rule (`sessionRequests()`) — so it leaves no
 //     row and no `dropped[]` entry, and it is not counted in `excluded_requests`. On a ROW (a request
 //     inside the run window), `model`, `session_id`, `agent_id`, `attribution_skill` and each
@@ -97,7 +97,7 @@
 // ── RELATIONSHIP TO `render-cost-record.mjs` (L35, answered rather than assumed) ─────────────────────
 // Both renderers read transcripts through `transcript-core.mjs` — location, the session's file selection and
 // the per-request reader, one implementation and not a copy — and both test a transcript value through
-// `cost-value-core.mjs` before they coerce it (6.27.1). Until 6.24.1 the ledger imported only the
+// `cost-value-core.mjs` before they coerce it (6.28.1). Until 6.24.1 the ledger imported only the
 // location and the walk, from the record renderer: its reading loop was a second copy, and both copies kept
 // each request's first line. The ledger (`pharn-cost-ledger/2`) is nonetheless a distinct schema from the
 // shipped `pharn-cost-record/1`, and the overlap is real: the record is an aggregate block embedded in
@@ -229,7 +229,7 @@ export const SKILLS_VERSION_SOURCES = Object.freeze(["pharn.config.json", "SKILL
  *  shape regex after the control-char guard, never instead of it). */
 export const TOKEN_RE = /^[A-Za-z0-9._:+-]{1,64}$/;
 
-// `ABS_PATH_RE` and `IDENTITY_MAX` moved to cost-value-core.mjs in 6.27.1, byte-for-byte; import them from there.
+// `ABS_PATH_RE` and `IDENTITY_MAX` moved to cost-value-core.mjs in 6.28.1, byte-for-byte; import them from there.
 
 export const PRICING_NOTE =
   "TOKENS ONLY — this file contains no prices and never will. Cost = Σ over classes of " +
@@ -253,7 +253,7 @@ export function isTokenLeaf(value) {
 /**
  * The deepest node the ledger's verbatim `usage` copy keeps, counted from the `usage` object itself (depth 0). A
  * deeper node is DROPPED and its path listed. The platform's own usage objects are a few levels deep on every line
- * measured when this bound was set (CHANGELOG [6.27.1]), so it admits every observed shape with room to spare. It
+ * measured when this bound was set (CHANGELOG [6.28.1]), so it admits every observed shape with room to spare. It
  * also bounds the walk that makes the copy: a crafted line nested 20,000 deep used to drive that walk past the
  * stack. check-cost-ledger.mjs imports this constant and REDs a stored node deeper than it.
  */
@@ -280,7 +280,7 @@ export function isUsageKey(k) {
  * bounds what can land in them". It did not: that rule reaches `usage` only. `/pharn-dev-review` probed
  * it and a 200,000-char value, embedded NUL/BEL bytes, and a newline carrying a forged `RED — …` line
  * were all accepted GREEN. This closes the gap so the sentence is TRUE rather than corrected downward.
- * Since 6.27.1 the test is `isIdentityToken` (cost-value-core.mjs), unchanged in behaviour, and it also bounds
+ * Since 6.28.1 the test is `isIdentityToken` (cost-value-core.mjs), unchanged in behaviour, and it also bounds
  * the row's `session_id` and each `claude_code_versions` entry. The value is tested BEFORE anything coerces it:
  * callers no longer pass `String(value)`, which threw on a crafted object ([[L62]]).
  *
@@ -306,7 +306,7 @@ const zeroTokens = () => Object.fromEntries(TOKEN_CLASSES.map((c) => [c, 0]));
  * key path pushed to `dropped` — an out-of-domain value is never coerced, never stringified, never
  * silently kept.
  *
- * Two more refusals since 6.27.1, listed the same way: a node deeper than `USAGE_MAX_DEPTH` (`depth` counts from
+ * Two more refusals since 6.28.1, listed the same way: a node deeper than `USAGE_MAX_DEPTH` (`depth` counts from
  * the `usage` object itself), and an object key `isUsageKey` refuses. A refused key is listed as
  * `<path>.<refused-key>`, a fixed marker, so the raw key never reaches the file. `depth` defaults to 0 in this ONE
  * place, and every call from outside this function omits it ([[L41]]).
@@ -354,7 +354,7 @@ export function sanitizeUsage(value, path, dropped, depth = 0) {
  *
  * Each count must satisfy `isTokenCount` (cost-value-core.mjs). An ABSENT count (undefined or null) is 0, as it
  * always was, and is not listed. A PRESENT count the rule refuses is 0 as well, and `requests[<n>].tokens.<class>`
- * is listed in `dropped`, so a crafted count can neither crash the sum nor enter it (6.27.1, [[L62]]).
+ * is listed in `dropped`, so a crafted count can neither crash the sum nor enter it (6.28.1, [[L62]]).
  *
  * NO DEFAULTS ([[L41]]): `n` and `dropped` are checked on EVERY call, clean input included, so a caller that
  * omits them fails at once rather than on the first transcript that carries a refused count.
@@ -669,7 +669,7 @@ function buildLedger(
   for (const { id, record: r, usage: u } of read) {
     const model = r.message.model ?? "unknown";
     const ts = typeof r.timestamp === "string" ? r.timestamp : null;
-    // THE SESSION MEMBERSHIP AND ATTRIBUTION READ, exactly as before 6.27.1: a string as itself, anything else as
+    // THE SESSION MEMBERSHIP AND ATTRIBUTION READ, exactly as before 6.28.1: a string as itself, anything else as
     // absent. Only the EMITTED `session_id` below is bounded, so a refused session string is still compared as
     // itself, and markers bound to another session still exclude it (GRILL R2-G7).
     const sid = typeof r.sessionId === "string" ? r.sessionId : null;

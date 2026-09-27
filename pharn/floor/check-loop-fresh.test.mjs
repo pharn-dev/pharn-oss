@@ -50,6 +50,8 @@ import {
   EXIT,
   COMPARED_FIELDS,
   stampDerivedMismatch,
+  QUICK_SKIPPED,
+  QUICK_EVIDENCE_STAGES,
 } from "./loop-fresh-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -75,14 +77,16 @@ const AC_TEST = "tests/ac/demo.unit.test.js";
  *  stage — AC-TESTS.md mapping AC-1 to one test file, and a lock `ac-tests-lock.mjs --write` wrote, carrying a red run
  *  bound to its files. So check I's `check-test-stage --require-test-first` reads READY test-first (REVIEW finding 3:
  *  before this the fixture was a legacy SPEC, and the loop's real path through check I was never exercised). */
-function writeFront(proj) {
+function writeFront(proj, kind = null) {
   const fd = join(proj, FEATURE_BASE, FEATURE);
   mkdirSync(fd, { recursive: true });
-  const draft = TEMPLATE.replace(/<!--\s*pharn:guidance[\s\S]*?-->\n?/g, "")
+  let draft = TEMPLATE.replace(/<!--\s*pharn:guidance[\s\S]*?-->\n?/g, "")
     .replace("spec_id: <name>", `spec_id: ${FEATURE}`)
     .replace("<the line check-spec.mjs --resolve-template-ref prints>", TEMPLATE_REF)
     .replace("<unit | integration | e2e>", "unit")
     .replace(/<[^>\n]+>/g, "filled");
+  // 6.28.0: a `/pharn-loop --quick` front — the kind line in the frontmatter, BEFORE the pin is taken (the pin covers it).
+  if (kind) draft = withKind(draft, kind);
   writeFileSync(join(fd, "SPEC.md"), draft);
   const h = spawnSync(process.execPath, [CHECK_SPEC, "--hash", join(fd, "SPEC.md")], { encoding: "utf8" }).stdout.trim();
   writeFileSync(
@@ -116,9 +120,16 @@ function writeFront(proj) {
   writeFileSync(lockPath, JSON.stringify(lock, null, 2));
 }
 
+/** Insert `spec_kind: <kind>` as the frontmatter line after `spec_template:` (6.28.0). */
+function withKind(specText, kind) {
+  const out = specText.replace(/^(spec_template: .*\n)/m, `$1spec_kind: ${kind}\n`);
+  assert.notEqual(out, specText, "fixture: the spec_template anchor must exist");
+  return out;
+}
+
 /** A committed project. `sub` puts the PROJECT in a subdirectory of the git repo (the install-at-a-subpath
- *  case). Returns {root, proj, base}. */
-function makeRepo({ sub = null, extra = null } = {}) {
+ *  case); `kind` (6.28.0) writes its SPEC with that `spec_kind`. Returns {root, proj, base}. */
+function makeRepo({ sub = null, extra = null, kind = null } = {}) {
   const root = mkdtempSync(join(tmpdir(), "clf-"));
   git(root, "init", "-q", ".");
   git(root, "config", "user.email", "t@t");
@@ -127,7 +138,7 @@ function makeRepo({ sub = null, extra = null } = {}) {
   mkdirSync(proj, { recursive: true });
   writeFileSync(join(proj, ".gitignore"), ".pharn/\n");
   writeFileSync(join(proj, "a.txt"), "a\n");
-  writeFront(proj);
+  writeFront(proj, kind);
   if (extra) extra(proj);
   git(root, "add", "-A");
   git(root, "commit", "-qm", "init");
@@ -1442,8 +1453,10 @@ function expectCrashDoc(r, label, copy) {
       stage_to_rerun: doc.stage_to_rerun,
       checks: doc.checks,
       reruns_used: doc.reruns_used,
+      mode: doc.mode,
     },
-    { verdict: "INCONCLUSIVE", reason_code: "checker-crashed", stage_to_rerun: null, checks: null, reruns_used: null },
+    // `mode: null` (6.28.0): the crash document carries the key, and null — the checker never read the SPEC.
+    { verdict: "INCONCLUSIVE", reason_code: "checker-crashed", stage_to_rerun: null, checks: null, reruns_used: null, mode: null },
     label
   );
   assert.doesNotMatch(r.stderr, /NOTE \(P0\)/, `${label}: the bound's NOTE is for a verdict only`);
@@ -1492,7 +1505,9 @@ test("6.21.1 — a checker that cannot LOAD is INCONCLUSIVE `checker-crashed`, e
 });
 
 test("6.21.1 — a result OUTSIDE the checker's contract is `checker-crashed` too: never exit 0, never a RERUN without its document", () => {
-  const DOC = (verdict) => `{ verdict: "${verdict}", stage_to_rerun: null, reason_code: null, reason: "x", checks: {}, reruns_used: null }`;
+  // `mode` (6.28.0) is part of the contract's key set, so a conforming stub carries it.
+  const DOC = (verdict) =>
+    `{ verdict: "${verdict}", stage_to_rerun: null, reason_code: null, reason: "x", checks: {}, reruns_used: null, mode: null }`;
   const STUBS = [
     ["returns {}", "export const evaluate = () => ({});"],
     ["returns an undefined code", "export const evaluate = () => ({ code: undefined, doc: {} });"],
@@ -1590,6 +1605,8 @@ test("✧ L35 — the entry's restated facts agree with the core (exit codes, ve
   );
   assert.deepEqual(verdictOf, { ...EXIT });
   const keys = JSON.parse(src.match(/DOC_KEYS = Object\.freeze\((\[[^\]]*\])\)/)[1]);
+  // 6.28.0: `mode` is the last key, in BOTH files.
+  assert.deepEqual(keys, ["verdict", "stage_to_rerun", "reason_code", "reason", "checks", "reruns_used", "mode"]);
   // Hermetic (REVIEW finding 3): an INCONCLUSIVE, and a STOP from --commit-gate over an empty temp repo — the commit gate
   // never writes the budget ledger, so nothing lands in the source tree.
   const empty = mkdtempSync(join(tmpdir(), "clf-keys-"));
@@ -1747,4 +1764,244 @@ test("★ UPGRADE STRADDLE (6.21.1) — an honest pre-upgrade report that FAILED
       });
     });
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// 6.28.0 — THE QUICK COLUMN (`/pharn-loop --quick`, .dev/features/loop-quick-mode/). Appended as one block. The mode is
+// the feature SPEC's `spec_kind`, read by loop-mode-core.mjs; a quick run never runs /pharn-regress, so A, B, C, D, J
+// and E read the verify evidence ALONE, G and H are skipped, and F and I run as in full mode. Every fixture below is a
+// quick FRONT (the SPEC carries `spec_kind: quick`, pinned) with only verify evidence — `iterate(r, { only: "verify" })`
+// — so a positive control passes because every applicable check genuinely held (L34).
+
+/** A quick project: its SPEC reads `spec_kind: quick`, pinned, with the full front /pharn-loop leaves. */
+function withQuickRepo(fn, opts = {}) {
+  return withRepo(fn, { ...opts, kind: "quick" });
+}
+
+/** Rewrite the SPEC's text with `edit`, leaving the pin as it is (a flip AFTER approval). */
+function editSpec(r, edit) {
+  const p = join(r.proj, FEATURE_BASE, FEATURE, "SPEC.md");
+  const before = readFileSync(p, "utf8");
+  const after = edit(before);
+  assert.notEqual(after, before, "fixture: the edit must change the SPEC");
+  writeFileSync(p, after);
+}
+
+test("✧ L29/L34 — QUICK_SKIPPED is exactly [G, H] and QUICK_EVIDENCE_STAGES exactly [verify], both frozen", () => {
+  assert.deepEqual([...QUICK_SKIPPED], ["G", "H"]);
+  assert.ok(Object.isFrozen(QUICK_SKIPPED));
+  assert.ok(
+    QUICK_SKIPPED.every((c) => CHECKS.includes(c)),
+    "every skipped id is a real check"
+  );
+  assert.deepEqual([...QUICK_EVIDENCE_STAGES], ["verify"]);
+  assert.ok(Object.isFrozen(QUICK_EVIDENCE_STAGES));
+});
+
+test("QUICK FRESH — a quick front with ONLY verify evidence passes A–F, J and I; G and H read `skipped`; the document says mode quick", () => {
+  withQuickRepo((r) => {
+    iterate(r, { only: "verify" });
+    assert.equal(existsSync(reportPath(r, "regression-report.json")), false, "precondition: no regression report exists");
+    const res = evaluate(args(r, ["--front"]));
+    expect(res, { code: EXIT.FRESH, verdict: "FRESH", reason_code: null });
+    assert.equal(res.doc.mode, "quick");
+    for (const c of CHECKS) assert.equal(res.doc.checks[c], QUICK_SKIPPED.includes(c) ? "skipped" : "pass", `check ${c}`);
+    // CONTROL: the same evidence under a FULL SPEC is not fresh — check A asks for the regress report it lacks.
+    editSpec(r, (t) => t.replace(/^spec_kind: quick\n/m, ""));
+    expect(evaluate(args(r)), { code: EXIT.RERUN, verdict: "RERUN", reason_code: "report-missing", stage: "regress" });
+  });
+});
+
+test("the full document carries mode full for every pre-6.28.0 fixture shape (L41 — no kind line reads full)", () => {
+  withRepo((r) => {
+    iterate(r);
+    const res = evaluate(args(r, ["--front"]));
+    expect(res, { code: EXIT.FRESH, verdict: "FRESH" });
+    assert.equal(res.doc.mode, "full");
+    for (const c of CHECKS) assert.equal(res.doc.checks[c], "pass", `check ${c} still runs in full mode`);
+    assert.equal(evaluate(["--bogus"]).doc.mode, null, "a usage error stops before the mode is read");
+  });
+});
+
+// Each quick-mode check broken ALONE, and repaired (L52: one case per check id the quick column runs).
+const QUICK_BREAKS = [
+  {
+    check: "A",
+    why: "no verify report",
+    brk: (r) => unlinkSync(reportPath(r, "verify-report.json")),
+    want: { code: EXIT.RERUN, verdict: "RERUN", reason_code: "report-missing", stage: "verify" },
+  },
+  {
+    check: "B",
+    why: "a lapse reason_code in the verify report",
+    brk: (r) => writeJ(reportPath(r, "verify-report.json"), { ...readJ(reportPath(r, "verify-report.json")), reason_code: LAPSE_CODES[0] }),
+    want: { code: EXIT.RERUN, verdict: "RERUN", reason_code: LAPSE_CODES[0], stage: "verify" },
+  },
+  {
+    check: "C",
+    why: "no verify stamp",
+    brk: (r) => unlinkSync(join(r.proj, DEFAULT_STAMPS.verify)),
+    want: { code: EXIT.RERUN, verdict: "RERUN", reason_code: "stamp-missing", stage: "verify" },
+  },
+  {
+    check: "D",
+    why: "a verify report no longer bound to its stamp's bytes",
+    brk: (r) => {
+      const p = join(r.proj, DEFAULT_STAMPS.verify);
+      writeFileSync(p, JSON.stringify(JSON.parse(readFileSync(p, "utf8"))));
+    },
+    want: { code: EXIT.RERUN, verdict: "RERUN", reason_code: "report-stamp-unbound", stage: "verify" },
+  },
+  {
+    check: "J",
+    why: "an edited verify gate log",
+    brk: (r) => appendFileSync(join(r.proj, dirname(DEFAULT_STAMPS.verify), `${logBasename(0, "test")}.out`), "late\n"),
+    want: { code: EXIT.STOP, verdict: "STOP", reason_code: "output-hash-mismatch" },
+  },
+  {
+    check: "E",
+    why: "a forged verify verdict",
+    brk: (r) => writeJ(reportPath(r, "verify-report.json"), { ...readJ(reportPath(r, "verify-report.json")), verdict: "FAIL" }),
+    want: { code: EXIT.STOP, verdict: "STOP", reason_code: "report-verdict-mismatch" },
+  },
+  {
+    check: "F",
+    why: "a tree moved after verify",
+    brk: (r) => writeFileSync(join(r.proj, "a.txt"), "moved\n"),
+    want: { code: EXIT.RERUN, verdict: "RERUN", reason_code: "tree-moved-since-verify", stage: "verify" },
+  },
+  {
+    check: "I",
+    why: "a red front (the SPEC set back to Draft — its kind line untouched, so the run still reads quick)",
+    brk: (r) => {
+      editSpec(r, (t) => t.replace("state: Approved", "state: Draft"));
+      iterate(r, { only: "verify" }); // the edit moved the tree: re-take the evidence so I is the ONLY failing check
+    },
+    want: { code: EXIT.STOP, verdict: "STOP", reason_code: "front-stage-red" },
+  },
+];
+
+test("✧ L52 — the quick break set names every check the quick column runs, exactly once", () => {
+  const ran = CHECKS.filter((c) => !QUICK_SKIPPED.includes(c)).sort();
+  assert.deepEqual(QUICK_BREAKS.map((b) => b.check).sort(), ran);
+});
+
+for (const b of QUICK_BREAKS) {
+  test(`QUICK ${b.check} — ${b.why} → ${b.want.verdict}${b.want.reason_code ? ` ${b.want.reason_code}` : ""}, with the mode still quick`, () => {
+    withQuickRepo((r) => {
+      iterate(r, { only: "verify" });
+      expect(evaluate(args(r, ["--front"])), { code: EXIT.FRESH, verdict: "FRESH" }); // control first
+      b.brk(r);
+      const res = evaluate(args(r, ["--front", "--max-reruns", "9"]));
+      expect(res, b.want);
+      assert.equal(res.doc.checks[b.check], "fail", `check ${b.check} named the cause`);
+      assert.equal(res.doc.mode, "quick");
+      // A skipped check BEFORE the failing one reads `skipped`; one after it was never reached (`not-run`).
+      for (const c of QUICK_SKIPPED) {
+        const want = CHECKS.indexOf(c) < CHECKS.indexOf(b.check) ? "skipped" : "not-run";
+        assert.equal(res.doc.checks[c], want, `check ${c}`);
+      }
+    });
+  });
+}
+
+test("★ STALE REGRESS EVIDENCE is never read in quick mode (another feature's regress stamps and report) — CONTROL: the same files in full mode STOP", () => {
+  withQuickRepo((r) => {
+    iterate(r); // both stages, then make the regress half ANOTHER feature's
+    for (const rel of [DEFAULT_STAMPS.regressHead, DEFAULT_STAMPS.regressBase]) {
+      const p = join(r.proj, rel);
+      writeJ(p, { ...readJ(p), feature: "other" });
+    }
+    writeJ(reportPath(r, "regression-report.json"), { ...readJ(reportPath(r, "regression-report.json")), verdict: "regressions" });
+    const res = evaluate(args(r, ["--front"]));
+    expect(res, { code: EXIT.FRESH, verdict: "FRESH" });
+    assert.equal(res.doc.mode, "quick");
+    // CONTROL — the SAME files, the SPEC read as full (its kind line removed): check C reads the regress stamps and STOPs.
+    editSpec(r, (t) => t.replace(/^spec_kind: quick\n/m, ""));
+    const full = evaluate(args(r));
+    expect(full, { code: EXIT.STOP, verdict: "STOP", reason_code: "feature-mismatch" });
+    assert.equal(full.doc.mode, "full");
+  });
+});
+
+test("★ the kind flipped to feature AND re-pinned, over only verify evidence → RERUN regress (report-missing) at A", () => {
+  withQuickRepo((r) => {
+    iterate(r, { only: "verify" });
+    const p = join(r.proj, FEATURE_BASE, FEATURE, "SPEC.md");
+    const unpinned = readFileSync(p, "utf8")
+      .replace(/^spec_kind: quick\n/m, "")
+      .replace("state: Approved", "state: Draft")
+      .replace(/spec_content_hash: [0-9a-f]+/, 'spec_content_hash: ""');
+    writeFileSync(p, unpinned);
+    const h = spawnSync(process.execPath, [CHECK_SPEC, "--hash", p], { encoding: "utf8" }).stdout.trim();
+    writeFileSync(p, unpinned.replace("state: Draft", "state: Approved").replace('spec_content_hash: ""', `spec_content_hash: ${h}`));
+    assert.equal(
+      spawnSync(process.execPath, [join(HERE, "check-spec-approved.mjs"), p], { encoding: "utf8" }).status,
+      0,
+      "precondition: re-pinned"
+    );
+    const res = evaluate(args(r));
+    expect(res, { code: EXIT.RERUN, verdict: "RERUN", reason_code: "report-missing", stage: "regress" });
+    assert.equal(res.doc.checks.A, "fail");
+    assert.equal(res.doc.mode, "full");
+  });
+});
+
+test("★ a kind flipped AFTER approval (pin unchanged) is caught either way: TO quick over a full run's evidence at I, AWAY from quick at A", () => {
+  // TO quick: a feature front whose SPEC gains `spec_kind: quick` — the quick column passes over the full run's verify
+  // evidence, and check I stops it, because the pin covers the kind line.
+  withRepo((r) => {
+    editSpec(r, (t) => withKind(t, "quick"));
+    iterate(r); // a full run's evidence, re-taken over the edited tree so I is the ONLY check that can fail
+    const res = evaluate(args(r, ["--front"]));
+    expect(res, { code: EXIT.STOP, verdict: "STOP", reason_code: "front-stage-red" });
+    assert.equal(res.doc.mode, "quick");
+    assert.equal(res.doc.checks.I, "fail");
+    for (const c of ["A", "B", "C", "D", "J", "E", "F"]) assert.equal(res.doc.checks[c], "pass", `the quick column passed ${c}`);
+    for (const c of QUICK_SKIPPED) assert.equal(res.doc.checks[c], "skipped");
+    assert.match(res.doc.reason, /check-spec-approved exits/);
+  });
+  // AWAY from quick: a quick front whose SPEC loses its kind line — check A asks for the regress report first.
+  withQuickRepo((r) => {
+    iterate(r, { only: "verify" });
+    editSpec(r, (t) => t.replace(/^spec_kind: quick\n/m, ""));
+    const res = evaluate(args(r, ["--front"]));
+    expect(res, { code: EXIT.RERUN, verdict: "RERUN", reason_code: "report-missing", stage: "regress" });
+    assert.equal(res.doc.mode, "full");
+  });
+});
+
+test("★ WIRING (L45) — both COMMITTED /pharn-loop freshness lines over a QUICK fixture: FRESH; then a changed tree is a RERUN verify at the decision and a STOP at the commit gate", () => {
+  const pin = pinnedLoopLines();
+  withQuickRepo(
+    (r) => {
+      const sh = (line) =>
+        spawnSync(
+          "sh",
+          ["-c", line.replaceAll("'<name>'", `'${FEATURE}'`).replaceAll("'<base sha>'", `'${r.base}'`).replaceAll("<N>", "1")],
+          {
+            cwd: r.proj,
+            encoding: "utf8",
+          }
+        );
+      iterate(r, { only: "verify" });
+      for (const line of [pin.decision, pin.commit]) {
+        const p = sh(line);
+        assert.equal(p.status, EXIT.FRESH, `${line}: ${p.stdout}${p.stderr}`);
+        const doc = JSON.parse(p.stdout);
+        assert.equal(doc.mode, "quick");
+        assert.equal(doc.checks.G, "skipped");
+        assert.equal(doc.checks.H, "skipped");
+      }
+      writeFileSync(join(r.proj, "a.txt"), "moved after verify\n");
+      let p = sh(pin.decision);
+      assert.equal(p.status, EXIT.RERUN, p.stdout);
+      assert.equal(JSON.parse(p.stdout).stage_to_rerun, "verify");
+      assert.equal(JSON.parse(p.stdout).reason_code, "tree-moved-since-verify");
+      p = sh(pin.commit);
+      assert.equal(p.status, EXIT.STOP, "the commit gate STOPs, never offers a re-run");
+      assert.equal(JSON.parse(p.stdout).reason_code, "tree-moved-since-verify");
+    },
+    { extra: copyFloorModules }
+  );
 });

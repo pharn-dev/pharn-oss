@@ -127,7 +127,7 @@ optimizes _within_ one assembly (don't load all rules at once); it does **nothin
 _breadth_. You pay the most for what there is the most of (small changes). This is
 the largest practical token problem and it is not yet solved.
 
-> **The manual flag is `/pharn-ship --quick` (6.25.0), and it trades checks for cost.** A human chooses it for
+> **The gated manual flag is `/pharn-ship --quick` (6.25.0), and it trades checks for cost.** A human chooses it for
 > a `spec_kind: quick` SPEC: one to three acceptance criteria, each verified at `unit` or `integration`. It
 > keeps both human gates, the grill's two floor stops, the test-first evidence for those criteria,
 > `/pharn-regress`'s scope check (a changed file outside the plan's `## Files` still stops the run, within
@@ -141,6 +141,17 @@ the largest practical token problem and it is not yet solved.
 > `spec_kind: quick`. Nothing measures whether a change is small: the kind and the flag are what a person
 > chose, and a quick SPEC run without the flag takes the full pipeline. There is still no AUTOMATIC
 > proportionality, and `/pharn-review`'s lens fan-out is unchanged.
+>
+> **The unattended one is `/pharn-loop --quick` (6.28.0), and nobody is told the trade before it runs.** The model
+> writes and approves the `spec_kind: quick` SPEC itself (`approved_by: model`), and `check-loop.mjs` decides every
+> stop over `/pharn-verify`'s verdict alone. The decision's mode is that SPEC's pinned kind, never a flag, so a full
+> SPEC still needs a regression verdict. It keeps the grill's floor stops, the test-first evidence, the scope check
+> (within the bounds §6 states for that check; it leaves no record, so nothing after its iteration re-checks it) and
+> the freshness check (a quick run's verify evidence must still describe the live tree and reproduce from its
+> stamp). It leaves out the regression check, the plan interrogation and `RUN-REPORT.md` (`cost.json` is still
+> written). Its green stop is `STOP_GREEN_QUICK`, which is not `STOP_GREEN` and claims no regression check; the
+> record, the commit message and the summary name the mode after the run. The person who typed `--quick` chose it,
+> and the model's reading of that flag is advisory, as for `/pharn-ship`.
 
 ### 3b. Rule overlap × stages
 
@@ -270,8 +281,9 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
   path the plan's `## Files` did not declare (since 6.17.0 `/pharn-regress` also declares
   `AC-TESTS.md`'s), and before 4.0.0 was the only thing in the tree that could surface such a
   write after the fact. Four bounds, every one stated in that checker's own header: it fires only if
-  `/pharn-regress` runs — or, since 6.25.0, `/pharn-ship --quick`'s item 7, which runs the same partition
-  without the rest of that stage; it compares _changed since base_, not _written by the build_; it carries
+  `/pharn-regress` runs, or when `check-quick-scope.mjs` (6.28.0) applies that rule — for `/pharn-ship --quick`'s
+  item 7 and for every `/pharn-loop --quick` iteration — to inputs it builds by code exactly as that stage's script
+  does, without the rest of that stage; it compares _changed since base_, not _written by the build_; it carries
   closed-enum exemptions for the pipeline's own artifacts; and a plan that edits its own `## Files`
   (or its `AC-TESTS.md`) defeats it. A smoke alarm, never the guard.
 - **The only true prevention is OS-level sandboxing of the `Bash` process** — a filesystem jail, a

@@ -64,7 +64,7 @@
 // ONE OWNER ([[L35]]): nothing else in the product floor reads a transcript's usage. Until 6.24.1 the ledger
 //   carried its own copy of the reading loop. A closure test pins the two spellings both copies used, and
 //   it cannot see a third spelling (L36).
-// WHICH LINES ARE REQUESTS (6.27.1), FLOOR (primitive #3). A line is a usage-bearing record only when its
+// WHICH LINES ARE REQUESTS (6.28.1), FLOOR (primitive #3). A line is a usage-bearing record only when its
 //   `message.usage` is a plain object (not null, not an array, a string or a number), and its resolved id
 //   (`requestId`, else `message.id`, precedence unchanged) is a bounded identity token (`isIdentityToken`,
 //   cost-value-core.mjs). A `requestId` that is present and not null but fails the test does NOT fall back to
@@ -73,7 +73,7 @@
 //   for every consumer. The selection ranks only by a count `isTokenCount` admits, so a line whose `output_tokens` is
 //   refused never outranks one whose count is admitted: the selected line carries an admitted `output_tokens`
 //   whenever any line of the request does. When none does, the earliest line is selected, and both renderers count
-//   that class as 0 for it. Each value is tested BEFORE anything coerces it: until 6.27.1 a crafted non-string
+//   that class as 0 for it. Each value is tested BEFORE anything coerces it: until 6.28.1 a crafted non-string
 //   id or model made a caller's `String()` throw ([[L62]]). BOUND: this decides which lines are requests and which
 //   line a request is counted at, nothing more. Each consumer bounds the fields it copies (see its header). A crafted
 //   line with a fresh, bounded id and right-typed usage is still a request, because nothing here can tell it from a
@@ -81,7 +81,7 @@
 //   request's id with a larger admitted `output_tokens` becomes that request's selected line, so its whole usage
 //   replaces the real one in both renderers, with nothing listed, and both checker modes stay GREEN
 //   (--verify-transcript re-reads the same bytes). That follows from the selection rule above (6.24.1) and predates
-//   6.27.1, which does not widen it; the transcript is agent-writable (`LIMITS.md §6`). Stated, not closed.
+//   6.28.1, which does not widen it; the transcript is agent-writable (`LIMITS.md §6`). Stated, not closed.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -138,7 +138,7 @@ export function transcriptFiles(dir) {
 /**
  * A line's rank in the per-request selection: its `output_tokens` when `isTokenCount` admits it, else -1,
  * so a line carrying a real count outranks one that does not. Total over any input — a string, an object,
- * a fraction or a missing field never takes part in a numeric comparison (6.27.1: a count both renderers
+ * a fraction or a missing field never takes part in a numeric comparison (6.28.1: a count both renderers
  * would refuse can no longer be what selects a line).
  */
 const outputRank = (u) => (isTokenCount(u?.output_tokens) ? u.output_tokens : -1);

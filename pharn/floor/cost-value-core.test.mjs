@@ -1,4 +1,4 @@
-// pharn/floor/cost-value-core.test.mjs — the cost tooling's value domain (6.27.1): `isIdentityToken` and
+// pharn/floor/cost-value-core.test.mjs — the cost tooling's value domain (6.28.1): `isIdentityToken` and
 // `isTokenCount` over their boundaries, and over parsed JSON that makes `String()` throw, plus `ABS_PATH_RE`'s own
 // controls beside its new home. Hermetic: no filesystem, no child process. The consumers' behaviour over crafted
 // transcripts and ledgers is pinned in cost-hostile-input.test.mjs.

@@ -20,7 +20,7 @@ reads:
   ]
 writes: ["pharn/features/<name>/GRILL.md"]
 constitution_refs: ["P0", "P1", "P2", "P4", "P5", "P6", "P7"]
-version: "0.2.0"
+version: "0.3.0"
 ---
 
 # /pharn-grill — re-verify the spec→plan chain, then interrogate the plan
@@ -129,8 +129,8 @@ Load the trusted prefix and obey it for the whole run:
 
 ## `--quick` mode (6.25.0) — `/pharn-grill <name> --quick`
 
-`/pharn-ship --quick` invokes this form. **The grill stage keeps owning its artifact** (P3, unchanged): it
-is `/pharn-grill --quick` that writes the quick `GRILL.md`, never `/pharn-ship`. `--quick` is recognized
+`/pharn-ship --quick` and `/pharn-loop --quick` (6.28.0) invoke this form. **The grill stage keeps owning its
+artifact** (P3, unchanged): it is `/pharn-grill --quick` that writes the quick `GRILL.md`, never its caller. `--quick` is recognized
 only as the **second** argument (after `<name>`), the same first-token discipline `/pharn-ship` and
 `/pharn-spec` apply to their own `--quick` — never scanned out of surrounding text. That rule is
 **ADVISORY** (an instruction to you; nothing parses the invocation); the floor backstop is Step 1b below,

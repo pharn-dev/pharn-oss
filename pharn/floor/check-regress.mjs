@@ -70,6 +70,20 @@
 //
 // Exit (both subcommands): 0 clean · 1 blocking (scope: escaped path | verdict: >=1 regression) ·
 //   2 inconclusive / bad input — FAIL-CLOSED (P5), never a silent pass.
+//
+// THE SCOPE RULE IS ALSO AN EXPORT (6.28.0, loop-quick-mode GATE 2, review F1). `partitionScope` is the rule `scope`
+// applies, as a pure function over ARRAYS; `runScope` parses its two comma lists and calls it, so the CLI's output is
+// unchanged. pharn/floor/check-quick-scope.mjs — the scope check `/pharn-ship --quick` and `/pharn-loop --quick` keep —
+// calls it, through its checker quick-scope-core.mjs, with arrays built by code from NUL-separated git listings, so a
+// path there never passes through this CLI's
+// list grammar. That grammar is lossy for an attacker-nameable path, and stated rather than hidden: a comma or newline
+// splits one path into two, surrounding spaces are trimmed, and a lone changed path spelled `--declared` is found by
+// the flag scan before the real flag — each can turn an undeclared path into a declared or exempt one (a false pass).
+// `stage-regress.mjs`'s partition phase now calls `partitionScope` the same way (6.28.0, closing the follow-up
+// `regress-scope-list-grammar`), so no stage decision reads that grammar; the CLI keeps it for a caller that types its
+// lists. What still travels as a list is the verdict's `--inside`: the report's `inside` echo, ADVISORY, read by no
+// floor op. stage-regress.mjs refuses a comma or newline path before building it — the named residual
+// `regress-inside-echo-list`. The CLI runs only under `import.meta.main`, so importing this file runs nothing.
 
 import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -214,7 +228,10 @@ function parseList(s) {
 }
 
 // --- strip a leading "./" and trailing slashes; trim. Repo-relative, forward-slash. ---
-function normPath(p) {
+// Exported for quick-scope-core.mjs (check-quick-scope.mjs's checker) and stage-regress.mjs, which apply it to the
+// DECLARED patterns exactly as `parseList` does here —
+// never to a git path, which may legitimately begin or end with a space.
+export function normPath(p) {
   return String(p).trim().replace(/^\.\//, "").replace(/\/+$/, "");
 }
 
@@ -277,6 +294,46 @@ function flag(args, name) {
 }
 
 // ---------------------------------------------------------------------------------------------------
+// THE SCOPE RULE — pure, over arrays (exported; `runScope` below, quick-scope-core.mjs and stage-regress.mjs call it).
+// `inside` is compared EXACTLY as given and `declared` entries are glob patterns (see globMatch); each caller parses its
+// own input into those two arrays. Returns the undeclared paths split into the REPORTED exempt set and the escaped set,
+// plus the OUTSIDE gate inputs.
+// ---------------------------------------------------------------------------------------------------
+export function partitionScope({ inside, declared, tests = [], evalPairs = [], feature }) {
+  // fix #7 cross-check: every changed file must be covered by a declared `writes:` pattern. A changed
+  // path matching none means the build wrote OUTSIDE its declared `## Files` — a blocking escape.
+  //
+  // ...EXCEPT the two closed exempt sets above (the L17 floor check): this feature's own pipeline
+  // artifacts, and the hook-protected trusted docs. Neither can be a build escape, and reporting them as
+  // one is a false BLOCKING finding on the correct workflow. The exemption is SUBTRACTIVE and REPORTED —
+  // `escape_exempt` is always emitted, so a suppressed path is visible, never silently dropped.
+  const undeclared = inside.filter((f) => !matchesAny(f, declared));
+  const escapeExempt = undeclared.filter((f) => TRUSTED_DOCS.includes(f) || isPipelineArtifact(f, feature));
+  const exemptSet = new Set(escapeExempt);
+  const escaped = undeclared.filter((f) => !exemptSet.has(f));
+
+  // Derive the OUTSIDE gate inputs by path membership (NOT classification, P5): a test/eval is "inside"
+  // iff its file is in the changed set; everything else is outside and must not regress.
+  const insideSet = new Set(inside);
+  const outsideTests = tests.filter((t) => !insideSet.has(t));
+  const outsideEvalPairs = evalPairs.filter((p) => !insideSet.has(p.expected) && !insideSet.has(p.actual));
+  return { escaped, escapeExempt, outsideTests, outsideEvalPairs };
+}
+
+// Dogfood the finding object (fix #1): type/rule_id/severity/file are enum-gated (this helper's own
+// deterministic assertions → trusted); `problem` is free-text DATA. rule_id cites P0 — the
+// writes-scope is a floor guarantee (fix #7; the enforce-writes-scope hook cites P0 the same way).
+export function scopeFindings(escaped) {
+  return escaped.map((f) => ({
+    type: "FINDING",
+    rule_id: "P0",
+    severity: "blocking",
+    file: f,
+    problem: `changed file '${f}' is outside the declared writes-scope (fix #7) — the build escaped its plan's \`## Files\``,
+  }));
+}
+
+// ---------------------------------------------------------------------------------------------------
 // scope — partition the changed files into inside/outside; assert inside ⊆ declared (fix #7).
 // ---------------------------------------------------------------------------------------------------
 function runScope(args) {
@@ -334,13 +391,6 @@ function runScope(args) {
     })
     .filter((p) => p.expected && p.actual);
 
-  // fix #7 cross-check: every changed file must be covered by a declared `writes:` pattern. A changed
-  // path matching none means the build wrote OUTSIDE its declared `## Files` — a blocking escape.
-  //
-  // ...EXCEPT the two closed exempt sets above (the L17 floor check): this feature's own pipeline
-  // artifacts, and the hook-protected trusted docs. Neither can be a build escape, and reporting them as
-  // one is a false BLOCKING finding on the correct workflow. The exemption is SUBTRACTIVE and REPORTED —
-  // `escape_exempt` is always emitted, so a suppressed path is visible, never silently dropped.
   const feature = flag(args, "--feature");
   if (feature !== undefined && !FEATURE_SLUG_RE.test(feature)) {
     emit(
@@ -351,28 +401,10 @@ function runScope(args) {
       2
     );
   }
-  const undeclared = inside.filter((f) => !matchesAny(f, declared));
-  const escapeExempt = undeclared.filter((f) => TRUSTED_DOCS.includes(f) || isPipelineArtifact(f, feature));
-  const exemptSet = new Set(escapeExempt);
-  const escaped = undeclared.filter((f) => !exemptSet.has(f));
-
-  // Derive the OUTSIDE gate inputs by path membership (NOT classification, P5): a test/eval is "inside"
-  // iff its file is in the changed set; everything else is outside and must not regress.
-  const insideSet = new Set(inside);
-  const outsideTests = tests.filter((t) => !insideSet.has(t));
-  const outsideEvalPairs = evalPairs.filter((p) => !insideSet.has(p.expected) && !insideSet.has(p.actual));
+  const { escaped, escapeExempt, outsideTests, outsideEvalPairs } = partitionScope({ inside, declared, tests, evalPairs, feature });
 
   if (escaped.length) {
-    // Dogfood the finding object (fix #1): type/rule_id/severity/file are enum-gated (this helper's own
-    // deterministic assertions → trusted); `problem` is free-text DATA. rule_id cites P0 — the
-    // writes-scope is a floor guarantee (fix #7; the enforce-writes-scope hook cites P0 the same way).
-    const findings = escaped.map((f) => ({
-      type: "FINDING",
-      rule_id: "P0",
-      severity: "blocking",
-      file: f,
-      problem: `changed file '${f}' is outside the declared writes-scope (fix #7) — the build escaped its plan's \`## Files\``,
-    }));
+    const findings = scopeFindings(escaped);
     emit(
       {
         inside,
@@ -604,9 +636,13 @@ function main() {
   );
 }
 
-// Swallow ONLY the emit sentinel; anything else is a real crash and must still end the process non-zero.
-try {
-  main();
-} catch (e) {
-  if (e !== EMITTED) throw e;
+// Swallow ONLY the emit sentinel; anything else is a real crash and must still end the process non-zero. The CLI runs
+// only when this file is the entry point (6.28.0): quick-scope-core.mjs and stage-regress.mjs import `partitionScope`
+// and run nothing here.
+if (import.meta.main) {
+  try {
+    main();
+  } catch (e) {
+    if (e !== EMITTED) throw e;
+  }
 }
