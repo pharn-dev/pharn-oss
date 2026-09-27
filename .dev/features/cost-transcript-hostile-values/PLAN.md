@@ -77,13 +77,20 @@ plan does not claim one.
      #280's quick-mode ledger tests included. So the new checker rules RED no ledger #280 writes (R2-G5).
 10. **Lesson L64 promoted.** The review's candidate went through `/pharn-dev-memory-promote` (check-provenance GREEN,
     maintainer accept) and was committed with its index (`18c12a4`).
-11. **After the pull request opened, `main` moved again; the version is 6.27.1.** #283 (6.27.0, stage-model routing)
-    merged, and #282 conflicted. This is not a new decision: the maintainer turned on Auto-fix for #282, which
+11. **After the pull request opened, `main` moved again; the version is 6.27.1** (since superseded by 12). #283
+    (6.27.0, stage-model routing) merged, and #282 conflicted. This is not a new decision: the maintainer turned on Auto-fix for #282, which
     authorizes fixing a reported conflict, committing and pushing.
     - `origin/main` (`c85be1b`) was merged as `05ad264`, by the same route as in 9.
     - Four textual conflicts, and #283's `markers[].route` row joins the contract's field table. The resolutions, the
       renumber (66 lines in 16 files) and the gates are in `BUILD.md`, "Merge of `main` 6.27.0 (#283)".
     - `pharn/ARCHITECTURE.md` did not change in #283, so the spec pin stays `d831d30d…`.
+12. **`main` moved once more; the version is 6.28.1.** #284 (6.28.0, `/pharn-loop --quick`) merged soon after, and
+    #282 conflicted again, under the same Auto-fix authorization.
+    - `origin/main` (`b627409`) was merged as `5c6a012`, by the same route as in 9 and 11.
+    - Three textual conflicts. #284's `STOP_GREEN_QUICK` sentence cited rule 7 for the `outcome` bound, which is rule
+      5; with this increment's new rule 7 it named the wrong rule, so it now cites rule 5. The details are in
+      `BUILD.md`, "Merge of `main` 6.28.0 (#284)".
+    - `pharn/ARCHITECTURE.md` did not change in #284, so the spec pin stays `d831d30d…`.
 
 A live check this session (`git fetch`, `gh pr view 280`) found `origin/main` still at `b9b6a03`. Open PR #280
 (6.25.0) is `CONFLICTING`. If #280 merges first, this branch is rebased, re-pinned and renumbered at ship. The merge

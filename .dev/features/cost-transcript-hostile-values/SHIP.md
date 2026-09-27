@@ -10,9 +10,12 @@ A thin, advisory roll-up of the chain and its floor verdicts. The decision to me
   chose "Fix + integrate, local only": fix every review finding, merge `main`, renumber, re-verify, and commit on this
   branch with no push and no PR.
 - **Second time (on `main` `008b24b` plus this branch).** The fix pass was done and re-verified.
-- **Then, on 2026-09-27.** The maintainer chose to open a pull request, #282, and turned on Auto-fix for it. #283 then
-  merged to `main` as 6.27.0, and the pull request conflicted. The Auto-fix pass merged `main` (`c85be1b`), renumbered
-  6.26.1 → 6.27.1, and re-ran regress and verify.
+- **Then, on 2026-09-27.** The maintainer chose to open a pull request, #282, and turned on Auto-fix for it. `main`
+  moved twice more, and each time the pull request conflicted:
+  - #283 merged as 6.27.0. The first Auto-fix pass merged `c85be1b`, renumbered 6.26.1 → 6.27.1, and re-ran regress
+    and verify;
+  - #284 merged as 6.28.0. The second Auto-fix pass merged `b627409`, renumbered 6.27.1 → 6.28.1, corrected one rule
+    citation, and re-ran regress and verify.
 
 ## Stages, in order
 
@@ -32,18 +35,19 @@ A thin, advisory roll-up of the chain and its floor verdicts. The decision to me
 13. `/pharn-dev-verify` again.
 14. The pull request, #282.
 15. Merge `origin/main` (#283) and renumber 6.26.1 → 6.27.1 (`05ad264`, `PLAN.md` decision 11).
-16. `/pharn-dev-regress` and `/pharn-dev-verify` against the new base.
+16. `/pharn-dev-regress` and `/pharn-dev-verify` against `c85be1b`.
+17. Merge `origin/main` (#284) and renumber 6.27.1 → 6.28.1 (`5c6a012`, `PLAN.md` decision 12).
+18. `/pharn-dev-regress` and `/pharn-dev-verify` against `b627409`.
 
 ## Structural verdicts, as read
 
 - **`/pharn-dev-build` → `node pharn/floor/validate.mjs .`: exit 0** (`FLOOR: GREEN — 36 capabilities`), on every pass.
 - **`/pharn-dev-regress` → `regression-report.json` `.verdict`: `no-regressions`.** The base is `origin/main`
-  `c85be1b` (6.27.0), and the report is the helper's output, byte for byte. It measured the final tree, after the
-  F1–F5 iteration and the merge. The 112 test files outside the changed scope, `validate` and the structural pair exit
-  0 on both sides.
+  `b627409` (6.28.0), and the report is the helper's output, byte for byte. It measured the final tree. The 114 test
+  files outside the changed scope, `validate` and the structural pair exit 0 on both sides.
 - **`/pharn-dev-verify` → `verify-report.json` `.verdict`: `PASS`**, on the final tree:
-  - test (3,913 of 3,913), validate, lint, format:check, lint:md, the structural pair and reconcile all exit 0;
-  - reconcile is `CLEAN` (0 escapes), over the epoch anchored after the merge commit.
+  - test (4,056 of 4,056), validate, lint, format:check, lint:md, the structural pair and reconcile all exit 0;
+  - reconcile is `CLEAN` (0 escapes), over the epoch anchored after the merge commit `5c6a012`.
 
 ## Review
 
@@ -53,15 +57,17 @@ A thin, advisory roll-up of the chain and its floor verdicts. The decision to me
   subsection on the re-review).
 - **The second fix iteration has not been reviewed independently a third time.** Its F1–F5 fixes are recorded, with
   their own L64 sweep, in `BUILD.md`.
-- **The merge pass (`05ad264`) has had no independent review.** It resolves four textual conflicts, renumbers, and adds
-  `route` to one test fixture; `BUILD.md`, "Merge of `main` 6.27.0 (#283)", records each change.
+- **The two Auto-fix merge passes (`05ad264`, `5c6a012`) have had no independent review.** They resolve textual
+  conflicts and renumber. `05ad264` also adds `route` to one test fixture, and `5c6a012` corrects a rule citation in
+  #284's contract sentence. `BUILD.md` records each change.
 - **`GRILL.md`** holds the two grill rounds, advisory.
 
 ## Ship-stage records
 
 changelog-entry: exit 0
 
-- Re-run after the merge, against `c85be1b`: GREEN, and this pull request opens `## [6.27.1] - 2026-09-27`.
+- Re-run after each merge: GREEN against `c85be1b`, then against `b627409`, where this pull request opens
+  `## [6.28.1] - 2026-09-27`.
 
 lesson: promoted L64
 
@@ -86,10 +92,13 @@ deferred:
 - `e76f419`: the fix pass, R1–R9 and then F1–F5;
 - `64203a1`: the record of the decision to open a pull request;
 - `05ad264`: the merge of `origin/main` (6.27.0 #283), renumbered to 6.27.1;
+- `6fe6eb3`: the regress and verify records for that merge;
+- `5c6a012`: the merge of `origin/main` (6.28.0 #284), renumbered to 6.28.1;
 - the commit that carries this section's current text, with the re-run regress and verify records.
 
 At GATE 2 the maintainer chose to keep the branch local. On 2026-09-27 they chose to open a pull request, #282, and the
-branch was pushed with `main` still at `008b24b`. #283 merged next, and the pull request conflicted until `05ad264`.
+branch was pushed with `main` still at `008b24b`. #283 merged next, and the pull request conflicted until `05ad264`;
+then #284 merged, and it conflicted again until `5c6a012`.
 
 _Chain ran; the named floor verdicts are as shown. This is NOT a judgment that the increment is good or wise; that is
 the human's call at the post-review gate._

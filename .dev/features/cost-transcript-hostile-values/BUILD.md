@@ -306,3 +306,30 @@ reported it. This pass merges and renumbers, and changes nothing else in the inc
 
 - **Epoch.** It was re-anchored after the merge commit (2,421 paths, under the plan's 22-path scope), as after
   `2c38d9a`, so the merge and its resolution are outside this pass's reconciliation window.
+
+## Merge of `main` 6.28.0 (#284) — 2026-09-27 (Auto-fix, again)
+
+Soon after the previous merge was pushed, #284 merged to `main` as 6.28.0, and #282 conflicted again. Auto-fix reported
+it. This pass merges, renumbers, and corrects one rule citation.
+
+- **Merge.** `origin/main` `b627409` was merged as `5c6a012`. The app's host-side sync refused for the same reason as
+  before (the repository's origin is not confirmed with the app), so git ran with the sandbox off for that one command.
+  The plan's scope was set first.
+- **Three conflicts, all textual:**
+  - `SKILLS_VERSION` and the README badge: 6.28.1;
+  - the README's generated floor count: 100 (#284 added four modules, this increment one), which `docs:check` confirms;
+  - the CHANGELOG: this increment's section, renamed `[6.28.1]`, sits above #284's `[6.28.0]`, byte-for-byte `main`'s.
+- **One citation, corrected.** The contract merged cleanly, but #284's `STOP_GREEN_QUICK` sentence cites "rule 7" for
+  the `outcome.decision` bound. On `main` the contract has rules 1–6, and that bound is rule 5; this increment adds a
+  rule 7, about counts, so after the merge the sentence named the wrong rule. It now cites rule 5, as do a comment and
+  an assertion message #280 left in `check-cost-ledger.test.mjs`, which the first merge carried in unnoticed. The
+  CHANGELOG entry records the correction. The released `[6.28.0]` and earlier entries keep their wording.
+- **Renumber.** 66 lines in 16 files named 6.27.1 before the merge, and the same 66 name 6.28.1 after it: three in the
+  conflict hunks and 63 in 14 files by replacement. `main` never had a 6.27.1.
+- **Importer sweep ([[L52]]).** `main`'s tree imports none of the moved names from an old home outside files this
+  increment already changed. The only files #284 and this increment both changed are the three conflicted ones and
+  the contract.
+- **Gates on the merged tree, before the commit:** `format:check`, `lint`, `lint:md`, `docs:check`, `check:markers`,
+  `check:badge`, `check:changelog` and `check:contributing` exit 0, `validate` is GREEN, and `npm test` passes
+  4,056 / 4,056. After the commit, `check:changelog-entry` is GREEN against `b627409`.
+- **Epoch.** It was re-anchored after the merge commit (2,441 paths, under the plan's 22-path scope), as before.

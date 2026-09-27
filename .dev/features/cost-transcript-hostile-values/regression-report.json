@@ -1,5 +1,5 @@
 {
-  "base": "c85be1bdeee10e333e52f9d38b4e0eb218e4c2d1",
+  "base": "b6274095d4c9c6bf58926b375eb710a1809d5f82",
   "inside": [
     ".dev/features/cost-transcript-hostile-values/BUILD.md",
     ".dev/features/cost-transcript-hostile-values/GRILL.md",
