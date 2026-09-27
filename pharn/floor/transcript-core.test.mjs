@@ -19,14 +19,25 @@
 //     the two spellings both pre-6.24.1 copies used.
 //   ⚑ LOOKUP — the directory is found by a filename test and never derived (render-cost-record.test.mjs
 //     keeps the render-level ⚑ tests, which exercise this lookup through `render()`).
+//   ◆ CONTEXTS (6.29.0) — which context each record belongs to (`recordContext`, `fileContext`, `contextOf`), which
+//     contexts' TOOL RESULTS hold a wanted line (`sessionScan` holders), and each agent's spawn link — every rule a
+//     literal table, every departure the header names read as null, unlinked or no holder.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { mkdtempSync, writeFileSync, mkdirSync, cpSync, readFileSync, readdirSync, copyFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, cpSync, readFileSync, readdirSync, copyFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { findTranscriptDirs, transcriptFiles, sessionRequests } from "./transcript-core.mjs";
+import {
+  findTranscriptDirs,
+  transcriptFiles,
+  sessionRequests,
+  sessionScan,
+  recordContext,
+  fileContext,
+  contextOf,
+} from "./transcript-core.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -243,6 +254,261 @@ test("★ MUTANT CONTROL: a LAST-line rule reads the re-appended request as 0 an
   assert.equal(q.req_fx_reappended.usage.output_tokens, 0);
   assert.equal(q.req_fx_forked.usage.output_tokens, 9);
   assert.equal(q.req_fx_snapshots.usage.output_tokens, 163, "the one shape a last-line rule does get right");
+});
+
+test("★ MUTANT CONTROL: sessionScan reads through the SAME collector — the first-line mutant reads 8 there too (L52)", async () => {
+  const m = await mutantCore("// MUTANT: the first line's usage is kept");
+  const { proj } = stageSnapshots();
+  const q = byRequest(m.sessionScan(proj, SNAP_SESSION, []).requests);
+  assert.equal(q.req_fx_snapshots.usage.output_tokens, 8, "the ledger's reader FOLLOWS the one rule, it has no copy of its own");
+});
+
+// ─── ◆ CONTEXTS (6.29.0) ─────────────────────────────────────────────────────────────────────────────
+
+const TS = "2026-09-27T10:00:00.000Z";
+const TS_EARLY = "2026-09-27T09:00:00.000Z";
+/** The fields a context writes on its records, as measured: main `isSidechain: false` and no `agentId`. */
+const fieldsOf = (ctx) => (ctx === "main" ? { isSidechain: false } : { isSidechain: true, agentId: ctx });
+const reqLine = (id, ctx, extra = {}) =>
+  JSON.stringify({
+    type: "assistant",
+    requestId: id,
+    timestamp: TS,
+    ...fieldsOf(ctx),
+    message: { model: "claude-opus-5", usage: usage({ out: 1 }) },
+    ...extra,
+  });
+const resultLine = (ctx, content, extra = {}) =>
+  JSON.stringify({
+    type: "user",
+    timestamp: TS,
+    ...fieldsOf(ctx),
+    message: { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_x", content }] },
+    ...extra,
+  });
+const spawnLine = (ctx, toolUseId, ts = TS) =>
+  JSON.stringify({
+    type: "assistant",
+    timestamp: ts,
+    ...fieldsOf(ctx),
+    message: { model: "claude-opus-5", content: [{ type: "tool_use", id: toolUseId, name: "Agent", input: {} }] },
+  });
+const agentFile = (id) => `s1/subagents/agent-${id}.jsonl`;
+const metaFile = (id) => `s1/subagents/agent-${id}.meta.json`;
+const metaOf = (toolUseId, extra = {}) => JSON.stringify({ agentType: "general-purpose", toolUseId, spawnDepth: 1, ...extra }) + "\n";
+const jsonl = (...lines) => lines.join("\n") + "\n";
+
+test("◆ recordContext: exactly `true` with an admitted agentId is that agent, exactly `false` is main, anything else is null (GRILL G2)", () => {
+  // ONE table (L29); each row an independent literal (L43).
+  const CASES = [
+    [{ isSidechain: false }, "main"],
+    [{ isSidechain: false, agentId: "a1" }, "main", "the session's own thread: `agentId` decides nothing"],
+    [{ isSidechain: true, agentId: "a1" }, "agent:a1"],
+    [{ isSidechain: true }, null, "a sidechain that names no agent"],
+    [{ isSidechain: true, agentId: "" }, null],
+    [{ isSidechain: true, agentId: "/Users/someone/x" }, null, "a path is not an identity"],
+    [{ isSidechain: true, agentId: "a\nb" }, null],
+    [{ isSidechain: true, agentId: "v".repeat(129) }, null, "longer than IDENTITY_MAX"],
+    [{ isSidechain: true, agentId: 7 }, null],
+    [{ isSidechain: true, agentId: { toString: 1 } }, null, "tested before anything coerces it (L62)"],
+    [{ isSidechain: "true", agentId: "a1" }, null, "the string is not the boolean"],
+    [{ isSidechain: 1 }, null],
+    [{ isSidechain: 0 }, null],
+    [{ isSidechain: null }, null],
+    [{ isSidechain: { toString: 1 } }, null],
+    [{}, null, "a format that drops the field reads as undecidable, never as main"],
+    [null, null],
+    [undefined, null],
+    ["main", null],
+  ];
+  for (const [r, want, why] of CASES) assert.equal(recordContext(r), want, why ?? JSON.stringify(r));
+});
+
+test("◆ fileContext: the session's file is main; `subagents/agent-<id>.jsonl` and a Workflow run's are that agent; nothing else names one", () => {
+  const CASES = [
+    ["s1.jsonl", "main"],
+    ["s1/subagents/agent-a1.jsonl", "agent:a1"],
+    ["s1/subagents/workflows/wf_1/agent-a2.jsonl", "agent:a2"],
+    ["s2.jsonl", null, "another session's file"],
+    ["s2/subagents/agent-a1.jsonl", null, "another session's agent"],
+    ["s1/agent-a1.jsonl", null, "not under subagents/"],
+    ["s1/subagents/nested/agent-a1.jsonl", null, "a directory other than workflows/<run>"],
+    ["s1/subagents/workflows/agent-a1.jsonl", null, "workflows/ without a run directory"],
+    ["s1/subagents/workflows/wf_1/x/agent-a1.jsonl", null, "deeper than a run directory"],
+    ["s1/subagents/agent-.jsonl", null, "an empty id"],
+    ["s1/subagents/agent-a1.meta.json", null, "a meta file is not a transcript"],
+    [`s1/subagents/agent-${"v".repeat(129)}.jsonl`, null, "an id longer than IDENTITY_MAX"],
+    [7, null],
+    [null, null],
+  ];
+  for (const [rel, want, why] of CASES) assert.equal(fileContext(rel, "s1"), want, why ?? String(rel));
+});
+
+test("◆ contextOf keeps a record's context only when its FILE agrees — a record naming another context is null (GRILL G2)", () => {
+  const CASES = [
+    [{ isSidechain: false }, "s1.jsonl", "main"],
+    [{ isSidechain: true, agentId: "a1" }, agentFile("a1"), "agent:a1"],
+    [{ isSidechain: true, agentId: "a1" }, agentFile("a2"), null, "an agent's record in ANOTHER agent's file"],
+    [{ isSidechain: true, agentId: "a1" }, "s1.jsonl", null, "an agent's record in the session's own file"],
+    [{ isSidechain: false }, agentFile("a1"), null, "a main record in an agent's file"],
+    [{}, "s1.jsonl", null, "undecidable, wherever it sits"],
+    [{ isSidechain: false }, "s1/tool-results/x.jsonl", null, "a file that names no context"],
+  ];
+  for (const [r, rel, want, why] of CASES) assert.equal(contextOf(r, rel, "s1"), want, why ?? `${JSON.stringify(r)} in ${rel}`);
+});
+
+test("◆ sessionScan's requests ARE sessionRequests' — same ids, records and usage — each carrying its first line's context", () => {
+  const { proj } = stageSnapshots();
+  const plain = sessionRequests(proj, SNAP_SESSION);
+  const scan = sessionScan(proj, SNAP_SESSION, []);
+  assert.deepEqual(scan.files, plain.files);
+  assert.deepEqual(
+    scan.requests.map(({ id, record, usage: u }) => ({ id, record, usage: u })),
+    plain.requests,
+    "the one collector, read twice"
+  );
+  const ctx = Object.fromEntries(scan.requests.map((q) => [q.id, q.context]));
+  assert.deepEqual(ctx, {
+    req_fx_snapshots: "main",
+    req_fx_reappended: "main",
+    req_fx_plain: "main",
+    req_fx_forked: "main", // its first line is the parent's; the fork's copy is walked after it
+    req_fx_subagent_own: "agent:fff3333333333333",
+  });
+  assert.deepEqual([...scan.named.keys()].sort(), ["agent:fff3333333333333", "main"]);
+});
+
+test("◆ named: each context the transcript names, with the EARLIEST parseable time of a line naming it — or null when none parses", () => {
+  const { proj } = scratch({
+    lines: [
+      reqLine("r1", "main", { timestamp: TS }),
+      reqLine("r2", "main", { timestamp: TS_EARLY }),
+      resultLine("main", "x", { timestamp: "later" }),
+    ],
+    extra: {
+      [agentFile("a1")]: jsonl(reqLine("r3", "a1", { timestamp: "not-a-time" }), resultLine("a1", "y", { timestamp: TS })),
+      [agentFile("a2")]: jsonl(resultLine("a2", "z", { timestamp: 7 })),
+      [agentFile("a3")]: jsonl(resultLine("a3", "w", { isSidechain: undefined })), // undecidable: names nothing
+    },
+  });
+  const { named } = sessionScan(proj, "s1", []);
+  assert.deepEqual(Object.fromEntries(named), { main: TS_EARLY, "agent:a1": TS, "agent:a2": null });
+});
+
+test("◆ holders: a wanted line counts only as a WHOLE line of a TOOL RESULT — string or text blocks — in the context that holds it", () => {
+  const W = "marker 1: run-start 2026-09-27T10:00:00.000Z";
+  const { proj } = scratch({
+    lines: [
+      resultLine("main", `${W}\nexit=0`), // held by main, as a string
+      JSON.stringify({ type: "user", timestamp: TS, isSidechain: false, message: { role: "user", content: `${W}` } }), // a message, not a tool result
+      JSON.stringify({
+        type: "assistant",
+        timestamp: TS,
+        isSidechain: false,
+        message: { model: "m", content: [{ type: "text", text: W }] },
+      }),
+    ],
+    extra: {
+      [agentFile("a1")]: jsonl(
+        resultLine("a1", [
+          { type: "text", text: `before\n${W}` },
+          { type: "image", text: W }, // not a text block
+          { type: "text", text: 7 },
+        ])
+      ),
+      [agentFile("a2")]: jsonl(resultLine("a2", `prefix ${W}`), resultLine("a2", `${W} suffix`)), // never a whole line
+      [agentFile("a3")]: jsonl(resultLine("a3", W, { isSidechain: undefined })), // an undecidable record
+    },
+  });
+  const { holders } = sessionScan(proj, "s1", [W, "never printed", 7, ""]);
+  assert.deepEqual([...(holders.get(W) ?? [])].sort(), ["agent:a1", "main", null].sort());
+  assert.equal(holders.has("never printed"), false);
+  assert.equal(holders.size, 1, "a non-string or empty wanted line is not looked for");
+  // No wanted line: the holder search is skipped entirely.
+  assert.equal(sessionScan(proj, "s1", []).holders.size, 0);
+  assert.equal(sessionScan(proj, "s1", undefined).holders.size, 0);
+});
+
+test("◆ links: an agent's parent is the ONE other context holding its meta's `toolUseId` — nested agents included, at the earliest record", () => {
+  const { proj } = scratch({
+    lines: [spawnLine("main", "toolu_a1", TS), spawnLine("main", "toolu_a1", TS_EARLY), reqLine("r0", "main")],
+    extra: {
+      [agentFile("a1")]: jsonl(spawnLine("a1", "toolu_a2"), reqLine("r1", "a1")),
+      [metaFile("a1")]: metaOf("toolu_a1"),
+      [agentFile("a2")]: jsonl(reqLine("r2", "a2")),
+      [metaFile("a2")]: metaOf("toolu_a2", { spawnDepth: 2, parentAgentId: "a1" }),
+    },
+  });
+  const { links } = sessionScan(proj, "s1", []);
+  assert.deepEqual(links.get("agent:a1"), { parent: "main", ts: TS_EARLY }, "the earliest copy of the spawn record");
+  assert.deepEqual(links.get("agent:a2"), { parent: "agent:a1", ts: TS }, "a nested agent links to the agent that spawned it");
+  assert.equal(links.size, 2);
+});
+
+test("◆ links: a FORK's own file copies its spawning line, and the fork itself is excluded from the holders", () => {
+  const { proj } = scratch({
+    lines: [spawnLine("main", "toolu_f1")],
+    extra: {
+      [agentFile("f1")]: jsonl(spawnLine("f1", "toolu_f1"), reqLine("rf", "f1")),
+      [metaFile("f1")]: metaOf("toolu_f1", { agentType: "fork", isFork: true }),
+    },
+  });
+  assert.deepEqual(sessionScan(proj, "s1", []).links.get("agent:f1"), { parent: "main", ts: TS });
+});
+
+test("◆ links: every departure the header names leaves the agent UNLINKED — never a guessed parent", () => {
+  const elsewhere = mkdtempSync(join(tmpdir(), "transcript-core-meta-"));
+  writeFileSync(join(elsewhere, "meta.json"), metaOf("toolu_sym"));
+  const { proj } = scratch({
+    lines: [spawnLine("main", "toolu_two"), spawnLine("main", "toolu_sym"), spawnLine("main", "toolu_dir")],
+    extra: {
+      [agentFile("nometa")]: jsonl(reqLine("r1", "nometa")),
+      [agentFile("noid")]: jsonl(reqLine("r2", "noid")),
+      [metaFile("noid")]: JSON.stringify({ agentType: "general-purpose", spawnDepth: 1 }) + "\n",
+      [agentFile("badid")]: jsonl(reqLine("r3", "badid")),
+      [metaFile("badid")]: metaOf("/Users/someone/x"),
+      [agentFile("orphan")]: jsonl(reqLine("r4", "orphan")),
+      [metaFile("orphan")]: metaOf("toolu_nowhere"),
+      [agentFile("two")]: jsonl(reqLine("r5", "two")),
+      [metaFile("two")]: metaOf("toolu_two"),
+      [agentFile("other")]: jsonl(spawnLine("other", "toolu_two")), // a SECOND context holding the same block
+      [agentFile("undecided")]: jsonl(reqLine("r6", "undecided")),
+      [metaFile("undecided")]: metaOf("toolu_undecided"),
+      [agentFile("holder")]: jsonl(JSON.stringify({ ...JSON.parse(spawnLine("holder", "toolu_undecided")), isSidechain: undefined })),
+      [agentFile("torn")]: jsonl(reqLine("r7", "torn")),
+      [metaFile("torn")]: '{"toolUseId": "toolu_',
+      [agentFile("array")]: jsonl(reqLine("r8", "array")),
+      [metaFile("array")]: "[1]\n",
+      [agentFile("sym")]: jsonl(reqLine("r9", "sym")),
+      [agentFile("dir")]: jsonl(reqLine("r10", "dir")),
+      "s1/subagents/workflows/wf_1/agent-w1.jsonl": jsonl(reqLine("r11", "w1")),
+      "s1/subagents/workflows/wf_1/agent-w1.meta.json": metaOf("toolu_two"),
+    },
+  });
+  symlinkSync(join(elsewhere, "meta.json"), join(proj, metaFile("sym")));
+  mkdirSync(join(proj, metaFile("dir")));
+  const { links, requests } = sessionScan(proj, "s1", []);
+  assert.deepEqual([...links.keys()], [], "no agent above is linked");
+  // NON-VACUITY: every agent above is a request context the reader DID place, so only its link is missing.
+  assert.deepEqual(
+    requests.map((q) => q.context).sort(),
+    ["nometa", "noid", "badid", "orphan", "two", "undecided", "torn", "array", "sym", "dir", "w1"].map((a) => `agent:${a}`).sort()
+  );
+});
+
+test("◆ ★ MUTANT CONTROL: without the fork's self-exclusion the fork reads TWO holders and is unlinked — the exclusion is what links it", async () => {
+  const anchor = ".filter((h) => h.ctx !== self)";
+  assert.equal(CORE_SOURCE.split(anchor).length, 2, "the self-exclusion's anchor must occur exactly once");
+  const source = CORE_SOURCE.replace(anchor, ".filter(() => true)");
+  const dir = mkdtempSync(join(tmpdir(), "transcript-core-mutant-"));
+  for (const f of readdirSync(here)) if (f.endsWith(".mjs") && !f.endsWith(".test.mjs")) copyFileSync(join(here, f), join(dir, f));
+  writeFileSync(join(dir, "transcript-core.mjs"), source);
+  const m = await import(pathToFileURL(join(dir, "transcript-core.mjs")).href);
+  const { proj } = scratch({
+    lines: [spawnLine("main", "toolu_f1")],
+    extra: { [agentFile("f1")]: jsonl(spawnLine("f1", "toolu_f1")), [metaFile("f1")]: metaOf("toolu_f1") },
+  });
+  assert.equal(m.sessionScan(proj, "s1", []).links.has("agent:f1"), false);
 });
 
 // ─── ✧ ONE OWNER ─────────────────────────────────────────────────────────────────────────────────────

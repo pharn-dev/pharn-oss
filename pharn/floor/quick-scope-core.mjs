@@ -122,7 +122,7 @@ function check(args) {
   const changed = changedPaths(base);
   if (!changed.ok) {
     const cmd = changed.which === "diff" ? "git diff --name-only --no-renames -z <base>" : "git ls-files -z --others --exclude-standard";
-    inconclusive("git-failed", `${cmd} failed: ${changed.stderr.trim()}`);
+    inconclusive("git-failed", `${cmd} failed: ${changed.detail}`);
   }
   const inside = changed.value;
 

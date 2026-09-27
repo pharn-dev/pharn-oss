@@ -31,11 +31,13 @@
 // walk, the atomic write, the git helpers, the budget tracker and the drain loop moved into
 // `pharn/floor/stage-runtime.mjs` (stage-verify-script, GATE 1 Q1), their ONE owner, so `stage-verify.mjs` does
 // not copy the rules 6.23.0's review repaired one by one. They were extracted to RETURN results; this script keeps
-// its own emit wrappers, reason codes and detail wording, and its CLI behaviour — every detail text, the phase
-// order, the drain's exit-3 idempotent repeat — is unchanged (the unchanged `stage-regress.test.mjs` is that
-// evidence). ONE deliberate change, from the GATE 2 fix: the stale-output removal goes through the shared
+// its own emit wrappers, reason codes and detail wording, and that extraction left its CLI behaviour — every detail
+// text, the phase order, the drain's exit-3 idempotent repeat — unchanged (6.26.0's unchanged `stage-regress.test.mjs`
+// was that evidence). ONE deliberate change, from the GATE 2 fix: the stale-output removal goes through the shared
 // `removeIfPresent`, so an unlink that fails for any reason other than absence is now a crash instead of a
-// swallowed error (the follow-up `regress-stale-unlink-swallow`, closed; `stage-runtime.test.mjs` holds it).
+// swallowed error (the follow-up `regress-stale-unlink-swallow`, closed; `stage-runtime.test.mjs` holds it). Since
+// 6.28.3 (stage-git-maxbuffer) each `git-failed` detail ends with `gitSync`'s failure cause, and git output up to
+// 256 MiB is read (stage-runtime.mjs's git helpers).
 //
 // ==================================== PHASES, IN ORDER (GRILL G1) ====================================
 // fresh -> chain -> base -> partition -> head-init -> drain-head -> worktree -> install -> base-init ->
@@ -201,6 +203,12 @@ function clearBaseWorktree() {
  *  (phase 4) — and the one list left is the verdict call's `--inside` echo, the report's ADVISORY `inside`
  *  field (`regression-report.md`). So this now guards only the changed paths that echo carries: the named
  *  residual `regress-inside-echo-list`, which a comma or newline name still meets as this refusal.
+ *  The same residual has a SIZE limit too (stage-git-maxbuffer, 6.28.3 — probed, not built): the echo is ONE argv
+ *  element, and a single 1,100,000-byte argument fails E2BIG on darwin (measured; ARG_MAX 1,048,576 for argv and the
+ *  environment together). Linux caps one argument at 131,072 bytes, its documented MAX_ARG_STRLEN — not measured
+ *  here. With the git ceiling raised, a run whose changed paths total past that limit passed its partition and head
+ *  gates in the probe, then stopped at "verdict" as `unusable child-crashed`, with no cause in its detail. The remedy
+ *  the follow-up already names, an array-safe verdict input in place of this list, removes both limits.
  *  ---------------------------------------------------------------------------------------------- */
 function assertRepresentable(paths, feature) {
   for (const p of paths) {
@@ -387,7 +395,7 @@ function phaseBase(cfg) {
     return r.stdout.trim();
   }
   const porcelain = gitSync(["status", "--porcelain"]);
-  if (!porcelain.ok) emitUnusable(cfg.feature, "git-failed", `git status failed: ${porcelain.stderr}`);
+  if (!porcelain.ok) emitUnusable(cfg.feature, "git-failed", `git status failed: ${porcelain.detail}`);
   const workingTreeDirty = porcelain.stdout
     .split(/\r?\n/)
     .filter(Boolean)
@@ -399,7 +407,9 @@ function phaseBase(cfg) {
   const source = resolveBaseSource({ workingTreeDirty, hasMergeBase });
   if (source.kind === "head") {
     const head = gitSync(["rev-parse", "HEAD"]);
-    if (!head.ok || !SHA_RE.test(head.stdout.trim())) emitUnusable(cfg.feature, "git-failed", "git rev-parse HEAD failed");
+    if (!head.ok || !SHA_RE.test(head.stdout.trim())) {
+      emitUnusable(cfg.feature, "git-failed", "git rev-parse HEAD failed" + (head.ok ? "" : `: ${head.detail}`));
+    }
     return head.stdout.trim();
   }
   if (source.kind === "merge-base") return mb.stdout.trim();
@@ -411,8 +421,9 @@ function phaseBase(cfg) {
  *  PHASE 4 — partition: build the four inputs, apply `check-regress.mjs`'s scope rule to them.
  *  ---------------------------------------------------------------------------------------------- */
 // The declared and changed sets come from `scope-inputs.mjs` (6.28.0, loop-quick-mode GATE 2): the ONE owner this phase
-// and `quick-scope-core.mjs` — the checker behind the quick modes' scope check — both call (L35). This phase keeps its
-// own refusals and every detail string, byte for byte.
+// and `quick-scope-core.mjs` — the checker behind the quick modes' scope check — both call (L35). That move kept this
+// phase's own refusals and every detail string byte for byte; since 6.28.3 (stage-git-maxbuffer) each `git-failed`
+// detail ends with git's failure cause (`.detail`, stage-runtime.mjs's `gitFailureDetail`) instead of raw stderr.
 function readPlanDeclared(cfg, planPath, specPath) {
   void specPath;
   const planText = readFileSync(planPath, "utf8");
@@ -426,9 +437,9 @@ function readPlanDeclared(cfg, planPath, specPath) {
 function computeInside(cfg, base) {
   const inside = changedPaths(base);
   if (!inside.ok && inside.which === "diff") {
-    emitUnusable(cfg.feature, "git-failed", `git diff --name-only --no-renames -z ${base} failed: ${inside.stderr}`);
+    emitUnusable(cfg.feature, "git-failed", `git diff --name-only --no-renames -z ${base} failed: ${inside.detail}`);
   }
-  if (!inside.ok) emitUnusable(cfg.feature, "git-failed", `git ls-files --others failed: ${inside.stderr}`);
+  if (!inside.ok) emitUnusable(cfg.feature, "git-failed", `git ls-files --others failed: ${inside.detail}`);
   return inside.value; // GRILL G2 — the state root is never counted as an escape (scope-inputs.mjs applies it)
 }
 
@@ -440,17 +451,17 @@ function computeTests(cfg) {
       .map((s) => s.trim())
       .filter(Boolean);
     const r = gitSync(["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", ...pathspecs]);
-    if (!r.ok) emitUnusable(cfg.feature, "git-failed", `git ls-files for --tests failed: ${r.stderr}`);
+    if (!r.ok) emitUnusable(cfg.feature, "git-failed", `git ls-files for --tests failed: ${r.detail}`);
     return nulList(r.stdout);
   }
   const r = gitSync(["ls-files", "-z", "--cached", "--others", "--exclude-standard"]);
-  if (!r.ok) emitUnusable(cfg.feature, "git-failed", `git ls-files failed: ${r.stderr}`);
+  if (!r.ok) emitUnusable(cfg.feature, "git-failed", `git ls-files failed: ${r.detail}`);
   return nulList(r.stdout).filter(isTestFile);
 }
 
 function computeEvalPairs(cfg) {
   const r = gitSync(["ls-files", "-z"]);
-  if (!r.ok) emitUnusable(cfg.feature, "git-failed", `git ls-files failed: ${r.stderr}`);
+  if (!r.ok) emitUnusable(cfg.feature, "git-failed", `git ls-files failed: ${r.detail}`);
   const tracked = nulList(r.stdout);
   const trackedSet = new Set(tracked);
   const pairs = [];
@@ -669,7 +680,7 @@ function runPhases(state, budget) {
     clearBaseWorktree(); // a no-op on a fresh run; on a resumed one, clears a half-added, locked leftover (A3)
     const r = gitSync(["worktree", "add", "--detach", REGRESS_PATHS.base, state.base]);
     if (!r.ok)
-      emitUnusable(state.feature, "git-failed", `git worktree add --detach ${REGRESS_PATHS.base} ${state.base} failed: ${r.stderr}`);
+      emitUnusable(state.feature, "git-failed", `git worktree add --detach ${REGRESS_PATHS.base} ${state.base} failed: ${r.detail}`);
     state.phase = "install";
   }
 

@@ -112,6 +112,7 @@ import { verdictApplicability, APPLICABILITY, runMode } from "./ship-outcome-cor
 import { handoffSections, HANDOFF_SECTIONS } from "./loop-record-core.mjs";
 import { pathsFromPlanFiles } from "./plan-files-core.mjs";
 import { quoteData, dataText } from "./quote-core.mjs";
+import { MEMBERSHIP_METHOD, MEMBERSHIP_METHOD_V1 } from "./run-window-core.mjs";
 
 // `quoteData` and `dataText` are IMPORTED, not defined here (GRILL G6, stage-regress-script): they moved
 // byte-for-byte into `quote-core.mjs`, whose only import is `fenceFor` from `loop-record-core.mjs` (a
@@ -403,9 +404,11 @@ function membershipStatus(cost) {
 
 /**
  * WHAT THE NUMBERS BELOW MEASURE — carried in the artifact, beside the numbers (P0). A `/2` ledger counts
- * only requests inside the run window (`run-window/1`); a `/1` ledger counts the whole selected session;
- * an UNKNOWN window counts nothing and must never read as zero. The window's own values (timestamps, a
- * session id, a count) are copied from `cost.json` and so are fenced as DATA, never inlined in prose.
+ * only requests inside the run window — and, under `run-window/2` (6.29.0), only those of the run's own
+ * contexts; a `run-window/1` one is labelled as not context-scoped. A `/1` ledger counts the whole selected
+ * session; an UNKNOWN membership counts nothing and must never read as zero. The method is READ from the
+ * ledger (L6), never assumed. The membership's own values (timestamps, a session id, contexts, a count) are
+ * copied from `cost.json` and so are fenced as DATA, never inlined in prose.
  */
 function measurementLabel(cost) {
   const status = membershipStatus(cost);
@@ -416,23 +419,34 @@ function measurementLabel(cost) {
       "are not a run measurement.",
     ];
   }
-  if (status === "unrecognized") {
+  const method = cost?.membership?.method;
+  if (status === "unrecognized" || (method !== MEMBERSHIP_METHOD && method !== MEMBERSHIP_METHOD_V1)) {
     return ["**Measured population: unrecognized** — `cost.json` names no membership this report knows. Read the numbers as unscoped."];
   }
   const m = cost.membership;
+  const contextual = method === MEMBERSHIP_METHOD;
   const facts = [
     `status             ${status}`,
+    `method             ${dataText(method)}`,
     `window start       ${dataText(m.start ?? "none")}`,
     `window end         ${dataText(m.end ?? (status === "open" ? "OPEN (no run-stop)" : "none"))}`,
     `selected session   ${dataText(m.session ?? "none")}`,
+    ...(contextual
+      ? [
+          `run context        ${dataText(typeof m.context === "string" ? m.context : "none — nothing was bound")}`,
+          // Joined only when every element is a string: `join` calls String() on each, which throws on parsed JSON
+          // such as {"toString":1} (L62).
+          `run contexts       ${dataText(Array.isArray(m.contexts) && m.contexts.every((c) => typeof c === "string") ? m.contexts.join(", ") : "none — nothing was bound")}`,
+        ]
+      : []),
     `excluded requests  ${m.excluded_requests === null || m.excluded_requests === undefined ? "n/a — nothing was measured" : dataText(m.excluded_requests)}`,
   ].join("\n");
   const note = typeof cost.coverage_note === "string" && cost.coverage_note ? cost.coverage_note : "(none recorded)";
   if (status === "unknown") {
     return [
-      "**Run usage: UNKNOWN — this is NOT a zero.** The run's boundary could not be established from its",
-      "markers, so NO session request is reported as run usage. The reason is recorded in `cost.json`'s",
-      "`membership.reason`.",
+      "**Run usage: UNKNOWN — this is NOT a zero.** The run could not be bounded from its markers, or bound to its",
+      "own context in the transcript, so NO session request is reported as run usage. The reason is recorded in",
+      "`cost.json`'s `membership.reason`.",
       "",
       quoteData("", facts).trimStart(),
       "",
@@ -452,12 +466,28 @@ function measurementLabel(cost) {
       quoteData("", facts).trimStart(),
     ];
   }
+  const population = contextual
+    ? [
+        "**Measured population: the RUN'S OWN CONTEXTS inside its window** (`run-window/2`) — only requests of the",
+        "selected session that fall inside the window below AND come from the context that printed the run's",
+        "markers or an agent that context tree spawned during the run. Earlier and later activity in that session,",
+        "and other contexts working inside the window (a concurrent run, its agents, the main thread), are excluded",
+        "and counted, never summed. This is NOT a feature's lifetime cost, other sessions' requests are not",
+        "collected, and the request that opened the window falls just before it. A floor on this run's spend,",
+        "never the total.",
+      ]
+    : [
+        "**Measured population: the RUN WINDOW** (`run-window/1`) — only requests of the selected session",
+        "that fall inside the window below. Earlier and later activity in that session is excluded and",
+        "counted, never summed. This is NOT a feature's lifetime cost, other sessions' requests are not",
+        "collected, and the request that opened the window falls just before it. A floor on this run's",
+        "spend, never the total.",
+        "",
+        "**Not context-scoped** (`run-window/1`, written before 6.29.0): requests of other contexts working inside",
+        "the window — a concurrent run, its agents, the main thread — are counted in these totals too.",
+      ];
   return [
-    "**Measured population: the RUN WINDOW** (`run-window/1`) — only requests of the selected session",
-    "that fall inside the window below. Earlier and later activity in that session is excluded and",
-    "counted, never summed. This is NOT a feature's lifetime cost, other sessions' requests are not",
-    "collected, and the request that opened the window falls just before it. A floor on this run's",
-    "spend, never the total.",
+    ...population,
     ...(status === "open" ? ["", "**The window is OPEN** — no `run-stop` was recorded, so its end is unbounded."] : []),
     "",
     quoteData("", facts).trimStart(),

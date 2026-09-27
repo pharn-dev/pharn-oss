@@ -134,11 +134,18 @@ function gitDiffTarget(repoDir) {
       return [];
     }
   }
+  // An explicit output ceiling (stage-git-maxbuffer, 6.28.3). At node's 1 MiB default a diff naming more than 1 MiB of
+  // paths failed with ENOBUFS, and the catch below turned that into an empty target, so the emitter refused with "the
+  // git merge-base diff yielded nothing" over a diff that yielded plenty (measured: 0 of 1,710 changed paths). 256 MiB
+  // is the ceiling stage-runtime.mjs's gitSync and reconcile-baseline.mjs's enumerate() use — each module's own value,
+  // bound to neither. Past it, or on another git failure, the catch still reads as an empty diff (the documented
+  // "not a git repo" branch), so the refusal can still name the wrong cause.
   try {
     const out = execFileSync("git", ["diff", "--name-only", "--diff-filter=ACMR", base], {
       cwd: repoDir,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
+      maxBuffer: 1 << 28,
     });
     return out
       .split("\n")

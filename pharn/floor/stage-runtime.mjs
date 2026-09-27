@@ -1,7 +1,9 @@
 // pharn/floor/stage-runtime.mjs — the MECHANICS every stage script shares (stage-verify-script, 6.26.0; GATE 1
 // Q1). No CLI, no emission, no reason codes: each helper RETURNS a result, and the calling stage script keeps its
-// own emit wrappers, its own reason codes and its own detail wording. Callers today: `stage-regress.mjs` (6.23.0)
-// and `stage-verify.mjs` (6.26.0).
+// own emit wrappers, its own reason codes and its own detail wording. The one piece of detail text supplied here is
+// git's failure cause (`gitFailureDetail`, 6.28.3), which each caller quotes after its own words. Callers today:
+// `stage-regress.mjs` (6.23.0) and `stage-verify.mjs` (6.26.0); `scope-inputs.mjs` and `quick-scope-core.mjs` use
+// `gitSync` too (6.28.0).
 //
 // ================================ WHY ONE OWNER (L31, L35 — the recorded failure) ================================
 // 6.23.0's review repaired these rules one by one inside `stage-regress.mjs`: the `--timeout-ms` digit rule (M7a),
@@ -170,12 +172,57 @@ export function atomicWrite(tmpDir, relPath, bytes) {
 
 /** ------------------------------------------------------------------------------------------------
  *  git helpers. Every call is an ARGUMENT VECTOR (never a shell string); paths are never resolved absolute.
+ *
+ *  THE OUTPUT CEILING (stage-git-maxbuffer, 6.28.3). `execFileSync`'s default `maxBuffer` is 1 MiB, for stdout and for
+ *  stderr each. Past it node fails the call with ENOBUFS, and a whole-repo `git ls-files -z` outgrows 1 MiB on a
+ *  mid-size repo: measured, 1,709 paths of 766 bytes list 1,310,803 bytes, and the review that found this measured
+ *  17,506 tracked files at 1.42 MB. git printed nothing on stderr for such a listing, so each stage script then
+ *  stopped `git-failed` with a detail ending at its colon, before running a gate. GIT_MAX_BUFFER is the ceiling `reconcile-baseline.mjs`'s
+ *  `enumerate()` already uses for the reconcile and fingerprint walks. It is a ceiling, not an allocation: 20 calls at
+ *  it did not raise a process's resident size (45 MiB before them, 43 after, measured). Past it a call still fails,
+ *  and `gitFailureDetail` names ENOBUFS. Every other git spawn in a shipped (non-test) `pharn/floor/*.mjs` module that
+ *  can print a listing carries its own explicit ceiling; stage-runtime.test.mjs's ★ GIT CEILING closure holds that,
+ *  within the bounds its section states.
  *  ---------------------------------------------------------------------------------------------- */
+const GIT_MAX_BUFFER = 1 << 28; // 256 MiB
+
 export function gitSync(args) {
   try {
-    return { ok: true, stdout: execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }) };
+    return {
+      ok: true,
+      stdout: execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: GIT_MAX_BUFFER }),
+    };
   } catch (e) {
-    return { ok: false, error: e, stderr: e && e.stderr ? String(e.stderr) : "" };
+    return { ok: false, error: e, stderr: e && e.stderr ? String(e.stderr) : "", detail: gitFailureDetail(e) };
+  }
+}
+
+/** Why a gitSync call failed, as the text every stage's `git-failed` detail carries: git's own stderr, trimmed, when
+ *  it printed any, then how the call ended — node's error `code` when node set one (ENOBUFS: the output outgrew the
+ *  buffer; ENOENT: git could not be started), else git's exit status, else the signal that ended it. Before this, a
+ *  failure git never described left `git ls-files failed: ` with nothing after the colon.
+ *  Read from the error's STRUCTURED fields only, never parsed out of its message (L6). TOTAL (L62): each field is
+ *  typeof-tested before it is used and the whole body sits in a `try`, so an accessor that throws, a Proxy or a
+ *  parsed-JSON shape yields the fixed fallback, never a throw. The stderr part is NOT capped — unchanged from before
+ *  this function, and an `unusable` exit writes no artifact, so it reaches only the caller, as quoted DATA. */
+export function gitFailureDetail(e) {
+  try {
+    const o = e !== null && typeof e === "object" ? e : {};
+    const raw = typeof o.stderr === "string" ? o.stderr : Buffer.isBuffer(o.stderr) ? o.stderr.toString("utf8") : "";
+    const said = raw.trim();
+    let how;
+    if (typeof o.code === "string" && o.code !== "") {
+      how = o.code === "ENOBUFS" ? "node error ENOBUFS: git's output exceeded the read buffer" : `node error ${o.code}`;
+    } else if (Number.isInteger(o.status)) {
+      how = `git exited ${o.status}`;
+    } else if (typeof o.signal === "string" && o.signal !== "") {
+      how = `git was killed by ${o.signal}`;
+    } else {
+      how = "git failed with no exit status, signal or error code";
+    }
+    return said === "" ? how : `${said} (${how})`;
+  } catch {
+    return "git failed (its error could not be read)";
   }
 }
 

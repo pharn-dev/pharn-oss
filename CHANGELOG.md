@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.29.0] - 2026-09-27
+## [6.30.0] - 2026-09-27
 
 ### Security
 
@@ -85,6 +85,122 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `PASS` whose `ac_gate.unmapped_anomalies` lists the duplicate (one was INCONCLUSIVE). **Bounded:** the file an
   anomaly names is the reporter's word.
   ([`.dev/features/ac-gate-plan-scope/`](./.dev/features/ac-gate-plan-scope/))
+## [6.29.0] - 2026-09-27
+
+### Fixed
+
+- 2026-09-27: **A run's `cost.json` counts only the run's own requests — those of the context that ran it and of the
+  agents that context spawned during it — never a concurrent run's in the same session.** Finding H3 of a read-only
+  review, verified here: a subagent's Bash sees its parent's session id and no id of its own, so every marker a run
+  writes from inside an agent is bound to the parent session, and the time window alone (`run-window/1`, 6.9.0)
+  admitted every concurrent context's request inside it. Three `/pharn-loop` runs in three background agents of one
+  session committed ledgers sharing 357, 381 and 411 of their 370, 407 and 411 rows, main-thread rows included.
+  `SKILLS_VERSION` 6.28.2 → 6.29.0 (MINOR, the 6.9.0 precedent: a new membership method and two new `membership`
+  keys; a `run-window/1` ledger stays valid, so no install is invalidated). `MIN_CLI` stays 0.5.0: no installed path
+  moves. ([`.dev/features/cost-ledger-run-scope/`](./.dev/features/cost-ledger-run-scope/),
+  [`.dev/measurements/cost-ledger-run-scope-2026-09-27.md`](./.dev/measurements/cost-ledger-run-scope-2026-09-27.md))
+  - **The rule, `run-window/2`**, with one implementation in `pharn/floor/run-window-core.mjs` (contract:
+    `cost-ledger.md`, "Run membership"). A request is a member iff it is inside the run window, unchanged, AND its
+    context is in the run's context set. A context is `main` or `agent:<id>`, read from `isSidechain` and `agentId`
+    and kept only when the file the record sits in names the same context. The set is:
+    - the ONE context whose tool results carry, as a whole line, a line `mark-phase.mjs` printed for a current-run
+      marker — none is `unknown`, and two or more is `unknown` too, so a copy of a line in a second context refuses
+      rather than re-binds;
+    - every agent a member of the set spawned inside the window, linked through its meta file's `toolUseId` to the
+      one other context holding that `tool_use` block.
+
+    A window member whose context cannot be decided or linked makes the whole ledger `unknown`, with
+    `coverage: unavailable` and no rows, never a count that includes or drops it silently. Three reasons join the
+    closed set.
+
+  - **The printed marker line is load-bearing now.** `markerLine()` in `mark-phase.mjs` is its one encoding: the CLI
+    prints through it and the ledger rebuilds lines from it. A differential test runs the real CLI for each marker
+    kind and each field that changes the line, a golden test pins the bytes, and the module header says that changing the line changes membership for
+    every ledger emitted or re-derived afterwards: the run reads `unknown`, never a wrong count.
+  - **Where the binding looks.** Tool-result blocks only. A foreground agent's final report is a tool result of its
+    caller, so a marker line quoted there makes the run `unknown`; a background agent's hand-back and a human's paste
+    are user messages and change nothing. Both are pinned by tests.
+  - **Recorded.** `membership.method` is `run-window/2`, beside `context` and a sorted `contexts`. The set is reported
+    over the contexts a line names by the window's end, so a closed run's set stops moving when an agent's first line
+    lands after the emission — measured up to 96 s after its spawn (L58). `excluded_requests` also counts
+    in-window requests of other contexts, and `coverage_note` gives that part.
+  - **Checker.** Plain mode holds each method to its own closed `membership` key set. Under `run-window/2` every
+    row's context, read from its `sidechain` and `agent_id`, must be in `contexts`, and a context-unknown membership is
+    admitted only over a known window. `--verify-transcript` re-derives under the same rule and compares `context` and
+    `contexts` exactly. A marker line copied into another context after emission is a WARN there, never a RED.
+  - **Compatibility.** A `run-window/1` ledger is read under its own seven keys, never rewritten, and WARNed as not
+    context-scoped. `--verify-transcript` REDs one whose rows include other contexts' requests and counts them; where
+    it is RED, the RED is correct (6.28.1's reasoning). A 6.28.x checker REDs a `run-window/2` ledger (probed).
+    `RUN-REPORT.md` names each method's population.
+  - **Measured on real ledgers with the built code.** In session `3c47cb74`, six ledgers that shared 1,538 of their
+    2,070 rows share 0 of 1,063. In session `f34b7a70` the figure re-derived at 6.28.2 is 400 of 2,724 shared, and 0 of
+    2,486 now. Every measured ledger binds to exactly one context, and for every loop run in an agent it is the agent whose
+    description names that loop. **Session `bb54cf03…` no longer exists on this machine.** It held the three ledgers
+    H3 cites and, by H3's attribution, the token-reduction roadmap's measured trigger (~81% of relative cost on small
+    fixes, `/pharn-regress` ~63%), so neither can be re-derived. The emitter took 1–3% longer over a ~79 MB session.
+  - **Bounds (P0).** The transcript layout is undocumented and machine-local; each departure the tests pin reads as
+    `unknown`, and one no test has met is not covered. That `context` is the context that ran the run is ADVISORY: it
+    rests on the marker output reaching the caller's own tool result. The checker still certifies consistency, never
+    provenance, and a fabricated context-unknown membership passes both modes — the safe direction, since it claims
+    no usage. Named, not built: `cost-ledger-workflow-agents`, `cost-ledger-mention-only`,
+    `cost-ledger-shared-markers-file`, `cost-ledger-spawn-batched`.
+
+## [6.28.4] - 2026-09-27
+
+### Changed
+
+- **Document the floor's Node 24.2 requirement, the 6.28.2 product-command budget for contributors, and the 6.24.0 write-guard posture in user-facing docs.** README states that `@pharn-dev/pharn` still requires Node 20+ while `pharn/floor/*.mjs` needs Node 24.2+ (`import.meta.main`). CONTRIBUTING adds the `command-hygiene.test.mjs` ceilings and the rule for raising them. SECURITY names `run-marker.mjs` and clarifies that an installed project's permissive default outside an open run is intentional, not a write-guard bypass.
+- **Release housekeeping:** remove one-shot patch/apply helpers after merge; align CHANGELOG with `main` (this section). `SKILLS_VERSION` 6.28.3 → 6.28.4 (PATCH: root documentation only — README, CONTRIBUTING, SECURITY — not the installable `pharn/` product surface). `MIN_CLI` stays 0.5.0.
+- **CHANGELOG section order:** put `[Unreleased]` above released version sections (Keep a Changelog) so `check-skills-version-recorded` and CI pass.
+
+## [6.28.3] - 2026-09-27
+
+### Fixed
+
+- 2026-09-27: **`/pharn-verify`, `/pharn-regress` and the quick scope check no longer stop `git-failed` on a repo whose
+  git listing passes 1 MiB, and a `git-failed` stop now says why git failed.** Finding H1 of a read-only review of the
+  preceding three days' merges: the stage scripts' shared git helper, `gitSync` in `stage-runtime.mjs`, ran git at
+  `execFileSync`'s default `maxBuffer`, 1 MiB. A whole-repo `git ls-files -z` passes that on a mid-size repo (the
+  review measured 17,506 tracked files at 1.42 MB). Node then fails the call with ENOBUFS while git has printed nothing
+  on stderr, so each stage exited 2 `git-failed` with a detail ending at its colon — `git ls-files failed:` — before
+  running a gate. Reproduced before the fix over a 1,310,803-byte listing (1,709 paths of 766 bytes) for
+  `stage-verify.mjs`, `stage-regress.mjs` and `check-quick-scope.mjs`, so `/pharn-ship`, `/pharn-loop` and both
+  `--quick` modes could not finish on such a repo. This repo lists 122,788 bytes, which is why its own runs never met
+  the limit. `SKILLS_VERSION` 6.28.2 → 6.28.3 (PATCH: a correction to shipped bytes; no new command, checker, contract
+  or path). `MIN_CLI` stays 0.5.0. ([`.dev/features/stage-git-maxbuffer/`](./.dev/features/stage-git-maxbuffer/))
+  - **The ceiling.** `gitSync` passes an explicit 256 MiB `maxBuffer` on every call — the ceiling
+    `reconcile-baseline.mjs`'s `enumerate()` already used — so one change covers every git call `stage-regress.mjs`,
+    `stage-verify.mjs`, `scope-inputs.mjs` and `quick-scope-core.mjs` make. Twenty calls at the ceiling did not raise
+    a process's resident size (measured). Past it a call still fails, now with its cause named.
+  - **The sweep.** The nine git spawns in shipped `pharn/floor/*.mjs` modules (found by the spelling `<fn>("git"`)
+    were read one by one. One more ran a listing at the default: `render-review-assignments.mjs`'s merge-base diff,
+    whose catch turned the failure into an empty target, so `/pharn-review`'s emitter refused with "the git merge-base
+    diff yielded nothing" over a diff that yielded plenty (reproduced: 0 of 1,710 changed paths). It gains the same
+    256 MiB ceiling, as its own literal. The other listing calls already carried an explicit ceiling (256 or 64 MiB);
+    the rest print one SHA.
+  - **The detail.** A new export, `gitFailureDetail`, builds the text from the error's structured fields: git's stderr,
+    trimmed, then `node error ENOBUFS: git's output exceeded the read buffer`, `node error <code>`,
+    `git exited <n>` or `git was killed by <signal>`. All ten `git-failed` emissions (8 in `stage-regress.mjs`, 1 in
+    `stage-verify.mjs`, 1 in `quick-scope-core.mjs`) quote it instead of raw stderr, and `scope-inputs.mjs`'s
+    `changedPaths` carries it as `detail`. A visible change: a detail that read `fatal: …` now ends
+    `(git exited 128)`. It is total (typeof-gated reads inside a `try`, with a fixed fallback), and its stderr part is
+    not capped, as before.
+  - **Tests** (floor tests; they do not ship). Each crosses the real limit with the real code, with no injected
+    buffer: `gitSync` itself, `stage-verify.mjs`, `stage-regress.mjs`, both committed quick-scope lines, and
+    `render-review-assignments.mjs`'s `resolveTarget`, each over a listing past 1.25 MiB. Each carries an attribution
+    control — the pre-fix call at node's default buffer is ENOBUFS over the same tree — and each of the three stage
+    entries a mutant with only the ceiling removed, which must stop `git-failed` naming ENOBUFS. Two static closures in
+    `stage-runtime.test.mjs`: ★ GIT CEILING pins the nine spawns and requires a `maxBuffer` on each one that is not a
+    `rev-parse` or `merge-base` call — bounded to the PRESENCE of a `maxBuffer` (not its size) and to spawns spelled
+    `<fn>("git"`; ★ GIT-FAILED DETAIL requires each of the ten emissions, found by a lexical scan of those three
+    modules, to quote `.detail`, never `.stderr`.
+  - **Scope, stated: a big repo with a modest change.** `regress-inside-echo-list`, the existing follow-up for the
+    regress verdict call's `--inside` echo, gains a second limit, probed and not built. The echo is ONE argv element,
+    so a changed set whose names pass the platform's argv limit stops regress at "verdict" as `unusable child-crashed`,
+    with no cause in its detail. Measured on darwin: a single 1,100,000-byte argument fails E2BIG (`ARG_MAX` 1,048,576
+    for argv and the environment together). Linux caps one argument at 131,072 bytes, its documented
+    `MAX_ARG_STRLEN` — not measured here. The remedy that follow-up already names, an array-safe verdict input, removes
+    both limits.
 
 ## [6.28.2] - 2026-09-27
 
