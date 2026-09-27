@@ -60,7 +60,8 @@ plan does not claim one.
    advisories. The maintainer chose "Fix + integrate, local only": fix R1 and R2 and every advisory (R3–R9), merge
    `origin/main`, renumber, re-verify, and commit on this branch with no push and no PR. The fixes are the section
    "Fix pass" below.
-9. **`main` moved twice; the version is 6.26.1.** #280 (6.25.0) and #281 (6.26.0) merged during the run.
+9. **`main` moved twice; the version is 6.26.1** (since superseded by 11). #280 (6.25.0) and #281 (6.26.0) merged
+   during the run.
    - The reviewed state was committed first (`df2e880`), and `origin/main` (`008b24b`) was merged into it (`2c38d9a`).
      The app's sync tool refused, because the merge touches sandbox-protected `.claude/commands/*`, so the merge ran
      through git with the sandbox off for that one command. That is the route the maintainer chose for the same
@@ -76,6 +77,13 @@ plan does not claim one.
      #280's quick-mode ledger tests included. So the new checker rules RED no ledger #280 writes (R2-G5).
 10. **Lesson L64 promoted.** The review's candidate went through `/pharn-dev-memory-promote` (check-provenance GREEN,
     maintainer accept) and was committed with its index (`18c12a4`).
+11. **After the pull request opened, `main` moved again; the version is 6.27.1.** #283 (6.27.0, stage-model routing)
+    merged, and #282 conflicted. This is not a new decision: the maintainer turned on Auto-fix for #282, which
+    authorizes fixing a reported conflict, committing and pushing.
+    - `origin/main` (`c85be1b`) was merged as `05ad264`, by the same route as in 9.
+    - Four textual conflicts, and #283's `markers[].route` row joins the contract's field table. The resolutions, the
+      renumber (66 lines in 16 files) and the gates are in `BUILD.md`, "Merge of `main` 6.27.0 (#283)".
+    - `pharn/ARCHITECTURE.md` did not change in #283, so the spec pin stays `d831d30d…`.
 
 A live check this session (`git fetch`, `gh pr view 280`) found `origin/main` still at `b9b6a03`. Open PR #280
 (6.25.0) is `CONFLICTING`. If #280 merges first, this branch is rebased, re-pinned and renumbered at ship. The merge

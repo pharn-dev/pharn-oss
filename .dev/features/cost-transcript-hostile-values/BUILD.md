@@ -268,3 +268,41 @@ Gates after the iteration:
 - The affected suites pass 245 / 245, and M29 and M30 are still killed.
 - Formatting and lint are clean, `validate` is GREEN, and `docs:check`, `check:changelog` and `check:badge` exit 0.
 - The full suite is `/pharn-dev-verify`'s `test` gate.
+
+## Merge of `main` 6.27.0 (#283) — 2026-09-27 (Auto-fix)
+
+The pull request (#282) was opened, and then conflicted when #283 merged to `main` as 6.27.0. The app's Auto-fix
+reported it. This pass merges and renumbers, and changes nothing else in the increment.
+
+- **Merge.** `origin/main` `c85be1b` was merged as `05ad264` with `git merge`: no rebase, no force-push. The plan's
+  scope (22 paths) was set first, so each resolution below is a Write-tool edit under it.
+- **Four conflicts, all textual:**
+  - `SKILLS_VERSION` and the README badge: 6.27.1;
+  - the README's generated floor count: 96 (#283 added three modules, this increment one), which `docs:check` confirms;
+  - the CHANGELOG: this increment's section, renamed `[6.27.1]`, sits above #283's `[6.27.0]`, byte-for-byte `main`'s;
+  - the contract's field table: this increment's table, plus #283's `markers[].route` row.
+- **Every code file merged cleanly,** including #283's `route` in `render-cost-ledger.mjs` and its tests. Read against
+  this increment:
+  - `isRouteToken` tests the type before its regex, so `normalizeMarkers` stays total over a crafted `route`, in the
+    emitter and in the checker's membership recompute;
+  - #283's contract sentence on the checker's "per-marker rule" still holds: the marker-object RED it leaves out was
+    already on `main`.
+- **Renumber.** 66 lines in 16 files named 6.26.1 before the merge, and the same 66 name 6.27.1 after it: three in the
+  conflict hunks (the `SKILLS_VERSION` line, the badge and the CHANGELOG heading), and 63 in 14 files by replacement.
+  `main` never had a 6.26.1, so every occurrence was this increment's. The merge commit's message says 65 lines in 14
+  files; the count here is the exact one. The feature records keep their history.
+- **Importer sweep ([[L52]]).** Outside files this increment already changed, whose merged versions are this branch's,
+  `main`'s tree has no import of `ABS_PATH_RE`, `IDENTITY_MAX`, `shown` or `SHOWN_CHARS` from an old home, and no
+  `normalizeTokens` call at the old arity.
+- **One test change.** The scratch stage-start marker in `cost-hostile-input.test.mjs` carries `route: "agent:opus"`, so
+  the ledger walks (tests 10 and 11) reach #283's field, and test 10 asserts that the walk reaches `markers[].route`.
+- **Gates on the merged tree, before the commit:**
+  - the cost and routing suites pass 349 / 349;
+  - `format:check`, `lint`, `lint:md`, `docs:check`, `check:markers`, `check:badge`, `check:changelog` and
+    `check:contributing` exit 0, and `validate` is GREEN;
+  - `npm test` passes 3,913 / 3,913.
+
+  After the commit, `check:changelog-entry` is GREEN against `c85be1b`.
+
+- **Epoch.** It was re-anchored after the merge commit (2,421 paths, under the plan's 22-path scope), as after
+  `2c38d9a`, so the merge and its resolution are outside this pass's reconciliation window.
