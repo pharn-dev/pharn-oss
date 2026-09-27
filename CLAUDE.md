@@ -808,6 +808,18 @@ node pharn/floor/check-loop-decision.mjs <LOOP.md>
 # `mark-phase.mjs --pending-start` BEFORE /pharn-spec (which is what names <name>), and ONLY its named run-start
 # adopts it (`--adopt-pending`, opt-in; `origin: "pending"`), so an abandoned ship cannot widen a loop. /1 ledgers are validated under their own rules and WARNed SESSION-scoped,
 # never rewritten. Membership is exact relative to the RECORDED markers only (marker execution is advisory).
+# CONTEXT-SCOPED since 6.29.0 (membership `run-window/2`, same module). THE RECORDED FAILURE (P7): a subagent's
+# Bash sees its PARENT's session id, so three concurrent /pharn-loop agents of one session counted each other's
+# rows and the main thread's (.dev/measurements/cost-ledger-run-scope-2026-09-27.md). Now a window member counts
+# only when its CONTEXT — the session's own thread or one agent, read from `isSidechain`/`agentId` and required to
+# agree with the file it sits in — is in the run's set: the ONE context whose TOOL RESULTS carry, as a whole line,
+# a line mark-phase printed for this run, plus the agents that context tree spawned inside the window (meta
+# `toolUseId` → the one other holder of that tool_use). No holder, two holders, or a window member that cannot be
+# placed → `unknown` (no rows), never a guessed row. `markerLine()` in mark-phase.mjs is the ONE encoding the CLI
+# prints and the emitter rebuilds; changing it changes membership for every later ledger (a golden pins the bytes).
+# `run-window/1` ledgers keep their seven keys and a not-context-scoped WARN; --verify-transcript REDs one holding
+# other contexts' rows. ADVISORY: the transcript layout (undocumented, machine-local) and that the marker output
+# reached the calling context's own tool result — the contract's "Run membership" carries the bounds.
 # Exit: mark-phase 0 ok · 2 bad usage (nothing written) | render 0 (incl. an honest `unavailable`) · 2 bad
 # usage | check 0 GREEN (WARNs possible) · 1 RED · 2 unusable input.
 node pharn/floor/mark-phase.mjs --name <slug> --kind <run-start|stage-start|orchestrator|run-stop> [--stage <s>] [--iteration <n>] [--base <dir>] [--mode <m>] [--route <token>]

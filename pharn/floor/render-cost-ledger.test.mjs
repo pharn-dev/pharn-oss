@@ -23,7 +23,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, copyFileSync, cpSync, existsSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  readdirSync,
+  copyFileSync,
+  cpSync,
+  existsSync,
+  appendFileSync,
+} from "node:fs";
+import { markerLine } from "./mark-phase.mjs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -70,11 +81,23 @@ function stageSingle() {
   return { root, projectsDir: join(root, "projects") };
 }
 
+/** `with-subagents/`: the main thread spawns both agents at 10:10:00 (by the request `req-parent-2`), recorded as the
+ *  platform records a spawn (`spawnAgent`); the committed metas name the two `toolUseId`s. */
 function stageSubagents() {
   const root = mkdtempSync(join(tmpdir(), "cost-ledger-sub-"));
   const proj = join(root, "projects");
   mkdirSync(proj, { recursive: true });
   cpSync(join(FIXTURES, "with-subagents"), join(proj, "wt"), { recursive: true });
+  spawnAgent(join(proj, "wt"), SUB_SESSION, "aaa1111111111111", {
+    ts: "2026-09-21T10:10:00.500Z",
+    toolUseId: "toolu_fx_sub_aaa",
+    meta: false,
+  });
+  spawnAgent(join(proj, "wt"), SUB_SESSION, "bbb2222222222222", {
+    ts: "2026-09-21T10:10:00.600Z",
+    toolUseId: "toolu_fx_sub_bbb",
+    meta: false,
+  });
   return { root, projectsDir: proj };
 }
 
@@ -87,14 +110,96 @@ function stageSnapshots() {
   const proj = join(root, "projects");
   mkdirSync(proj, { recursive: true });
   cpSync(join(FIXTURES, "usage-snapshots"), join(proj, "wt"), { recursive: true });
+  // The fork is spawned by the main thread's `req_fx_forked` request (10:00:20.000), whose line the fork's own file
+  // opens with a copy of — the measured fork shape. The committed meta names the `toolUseId`.
+  spawnAgent(join(proj, "wt"), SNAP_SESSION, "fff3333333333333", {
+    ts: "2026-09-26T10:00:20.000Z",
+    toolUseId: "toolu_fx_fork_fff",
+    meta: false,
+  });
   return { root, projectsDir: proj };
 }
 
-function writeMarkers(root, name, markers) {
+/**
+ * Write the markers file AND record each marker's printed line in the tool results of the context that ran it —
+ * what the platform writes when an orchestrator's Bash call runs mark-phase (6.29.0, `run-window/2`: that line is how
+ * the ledger learns which context ran the run). By default the printer is the MAIN thread of every session staged
+ * under `root/projects` that the marker is bound to. `{ printedBy: null }` records nothing (an unbound run);
+ * `{ printedBy: "<agentId>" }` records into that agent's file. The line is `markerLine` of the NORMALIZED marker —
+ * the emitter's own reading, so a test never rebuilds the format by hand (L35).
+ */
+function writeMarkers(root, name, markers, { printedBy = "main" } = {}) {
   const dir = join(root, "cost", name);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "markers.jsonl"), markers.map((m) => JSON.stringify(m)).join("\n") + "\n");
+  if (printedBy !== null) printMarkers(join(root, "projects"), markers, printedBy);
   return join(root, "cost");
+}
+
+/** Every staged session's main transcript under a projects dir: `[{ dir, sid }]`, one level of project dirs deep. */
+function stagedSessions(projectsDir) {
+  const out = [];
+  if (!existsSync(projectsDir)) return out;
+  for (const p of readdirSync(projectsDir, { withFileTypes: true })) {
+    if (!p.isDirectory()) continue;
+    for (const e of readdirSync(join(projectsDir, p.name), { withFileTypes: true })) {
+      const m = e.isFile() ? /^(.+)\.jsonl$/.exec(e.name) : null;
+      if (m) out.push({ dir: join(projectsDir, p.name), sid: m[1] });
+    }
+  }
+  return out;
+}
+
+/** The transcript file of a context: the session's main file, or `subagents/agent-<id>.jsonl`. */
+const contextFile = (dir, sid, agentId) =>
+  agentId === "main" ? join(dir, `${sid}.jsonl`) : join(dir, sid, "subagents", `agent-${agentId}.jsonl`);
+
+/** One tool-result record carrying `text`, written as the context `agentId` (`"main"` or an agent id) records it. */
+const toolResultLine = (sid, agentId, ts, text, n) =>
+  JSON.stringify({
+    type: "user",
+    sessionId: sid,
+    timestamp: ts,
+    isSidechain: agentId !== "main",
+    ...(agentId === "main" ? {} : { agentId }),
+    message: { role: "user", content: [{ type: "tool_result", tool_use_id: `toolu_fx_print_${n}`, content: `${text}\nexit=0` }] },
+  });
+
+function printMarkers(projectsDir, markers, printedBy) {
+  for (const { dir, sid } of stagedSessions(projectsDir)) {
+    const lines = [];
+    for (const m of normalizeMarkers(markers)) {
+      if (m.session_id !== null && m.session_id !== sid) continue;
+      lines.push(toolResultLine(sid, printedBy, m.ts ?? OPEN_TS, markerLine(m), m.seq));
+    }
+    if (lines.length) appendFileSync(contextFile(dir, sid, printedBy), lines.join("\n") + "\n");
+  }
+}
+
+/**
+ * Stage an agent's SPAWN the way the platform records it: its meta file naming a `toolUseId`, and the PARENT
+ * context's assistant record holding that `tool_use` block, at `ts` (6.29.0 links: `transcript-core.mjs`
+ * `spawnLinks`). The record carries no usage, so it counts as no request. It is message content, which is why it is
+ * staged in the scratch copy and never committed (the fixture guard below). `meta: false` keeps an existing
+ * committed meta file.
+ */
+function spawnAgent(dir, sid, agentId, { ts, toolUseId = `toolu_fx_spawn_${agentId}`, parent = "main", meta = true }) {
+  const sub = join(dir, sid, "subagents");
+  mkdirSync(sub, { recursive: true });
+  if (meta)
+    writeFileSync(
+      join(sub, `agent-${agentId}.meta.json`),
+      JSON.stringify({ agentType: "general-purpose", toolUseId, spawnDepth: 1 }) + "\n"
+    );
+  const line = JSON.stringify({
+    type: "assistant",
+    sessionId: sid,
+    timestamp: ts,
+    isSidechain: parent !== "main",
+    ...(parent === "main" ? {} : { agentId: parent }),
+    message: { model: "claude-opus-5-5", content: [{ type: "tool_use", id: toolUseId, name: "Agent", input: {} }] },
+  });
+  appendFileSync(contextFile(dir, sid, parent), line + "\n");
 }
 
 const marker = (seq, kind, stage, iteration, ts, session_id = null) => ({ seq, kind, stage, iteration, ts, session_id });
@@ -205,18 +310,40 @@ test("D1 NON-VACUITY: dropped[] fires on a synthetic out-of-domain leaf", () => 
 
 // ---------------------------------------------------------------- D2: the subagent path
 
-test("D2: sidechain rows from nested subagent files are included, with BOTH agent key spellings", () => {
+test("D2: sidechain rows from nested subagent files are included, each under the agentId its file is named for", () => {
+  // 6.29.0 (GRILL G6): the fixture now carries the MEASURED shape — every agent line's `agentId` equals its file's
+  // id, and `attributionAgent` carries the agent TYPE. Before, one line carried only `attributionAgent` as its id.
+  // That spelling can no longer reach a row of a KNOWN ledger: a sidechain line without an `agentId` has no
+  // context, so membership is `unknown` (pinned by the next test). The row field keeps its fallback for a
+  // main-thread line.
   const { root, projectsDir } = stageSubagents();
   const led = renderLedger({ name: "feat", sessionId: SUB_SESSION, projectsDir, markersBase: openRun(root, "feat") });
   assert.equal(led.requests.length, 4, "2 parent + 2 subagent rows");
   const subs = led.requests.filter((r) => r.sidechain);
   assert.equal(subs.length, 2, "NON-VACUITY: the subagent rows must exist for the next assertions to mean anything");
   const agents = subs.map((r) => r.agent_id).sort();
-  assert.deepEqual(agents, ["agent-aaa1111111111111", "agent-bbb2222222222222"], "`agentId` AND `attributionAgent` both resolve (L36)");
+  assert.deepEqual(agents, ["aaa1111111111111", "bbb2222222222222"], "the agentId, never the attributionAgent TYPE");
+  assert.deepEqual(led.membership.contexts, ["agent:aaa1111111111111", "agent:bbb2222222222222", "main"]);
+  assert.equal(led.membership.context, "main", "the main thread printed the run's markers");
   assert.ok(
     led.requests.every((r) => typeof r.sidechain === "boolean"),
     "sidechain is always a boolean, never undefined"
   );
+});
+
+test("D2 (6.29.0): a sidechain line with NO agentId has no context, so a window holding one is UNKNOWN — never counted, never dropped", () => {
+  const { root, projectsDir } = stageSubagents();
+  const file = join(projectsDir, "wt", SUB_SESSION, "subagents", "agent-bbb2222222222222.jsonl");
+  const line = JSON.parse(readFileSync(file, "utf8").trim());
+  delete line.agentId; // only the attributionAgent TYPE is left: the pre-6.29.0 fixture's shape
+  writeFileSync(file, JSON.stringify(line) + "\n");
+  const led = renderLedger({ name: "feat", sessionId: SUB_SESSION, projectsDir, markersBase: openRun(root, "feat") });
+  assert.equal(led.membership.status, "unknown");
+  assert.equal(led.membership.reason, UNKNOWN_REASONS.UNLINKED_CONTEXT);
+  assert.equal(led.coverage, "unavailable");
+  assert.deepEqual(led.requests, []);
+  assert.equal(led.membership.excluded_requests, null);
+  assert.deepEqual(checkLedger(led).reds, [], "an honest unknown is a well-formed ledger");
 });
 
 // ---------------------------------------------------------------- attribution (the VIEW)
@@ -469,12 +596,14 @@ test("a synthetic model is skipped — it is not a real API call", () => {
   const root = mkdtempSync(join(tmpdir(), "cost-ledger-syn-"));
   const proj = join(root, "projects", "p");
   mkdirSync(proj, { recursive: true });
+  // `isSidechain: false` is the measured main-thread shape; without it the line's context is undecidable (6.29.0).
   const line = (model, id) =>
     JSON.stringify({
       type: "assistant",
       requestId: id,
       timestamp: "2026-01-01T00:00:00.000Z",
       sessionId: "s1",
+      isSidechain: false,
       message: { model, usage: { output_tokens: 7 } },
     });
   writeFileSync(join(proj, "s1.jsonl"), [line("<synthetic>", "a"), line("claude-opus-5", "b")].join("\n") + "\n");
@@ -1349,6 +1478,9 @@ test("RUN 3 — spec boundary: a PENDING start recorded before the feature is na
   assert.equal(rsm.ts, "2026-09-21T10:00:00.000Z");
   markPhase({ name: "feat", kind: "stage-start", stage: "pharn-plan", base, sessionId: RS, now: new Date("2026-09-21T10:06:00.000Z") });
   markPhase({ name: "feat", kind: "run-stop", base, sessionId: RS, now: new Date("2026-09-21T10:30:00.000Z") });
+  // The CLI prints each marker's line into the calling context's tool result (6.29.0); markPhase() is the library
+  // call, so the test records what the platform would have.
+  printMarkers(projectsDir, readMarkers(join(base, "feat", "markers.jsonl")), "main");
   const led = renderLedger({ name: "feat", sessionId: RS, projectsDir, markersBase: base });
   assert.equal(led.totals.tokens.input, 27, "20 + 5 spec + 2 plan; the 50 that issued the pending call is before the window");
   assert.equal(led.unattributed.tokens.input, 25, "spec work has no stage marker in /pharn-ship — in the run, unattributed");
@@ -1358,6 +1490,7 @@ test("RUN 3 — spec boundary: a PENDING start recorded before the feature is na
   const base2 = join(root, "cost-no-pending");
   markPhase({ name: "feat", kind: "run-start", base: base2, sessionId: RS, now: new Date("2026-09-21T10:05:00.000Z") });
   markPhase({ name: "feat", kind: "run-stop", base: base2, sessionId: RS, now: new Date("2026-09-21T10:30:00.000Z") });
+  printMarkers(projectsDir, readMarkers(join(base2, "feat", "markers.jsonl")), "main");
   const late = renderLedger({ name: "feat", sessionId: RS, projectsDir, markersBase: base2 });
   assert.equal(late.totals.tokens.input, 2);
 });
@@ -1372,11 +1505,9 @@ test("RUN 4 — a CLOSED run is not contaminated by later session activity, and 
   const first = renderLedger({ name: "feat", sessionId: RS, projectsDir, markersBase });
   const again = renderLedger({ name: "feat", sessionId: RS, projectsDir, markersBase });
   assert.equal(JSON.stringify(first), JSON.stringify(again), "re-rendering never double-counts");
-  // Unrelated work later in the SAME session is appended to the transcript; the run is closed.
-  writeFileSync(
-    join(projectsDir, "p", `${RS}.jsonl`),
-    [...lines, rec({ id: "later", ts: "2026-09-21T10:30:00.001Z", input: 5000 })].join("\n") + "\n"
-  );
+  // Unrelated work later in the SAME session is appended to the transcript; the run is closed. (Appended, as the
+  // platform appends: a rewrite would also erase the tool results that bind the run to its context.)
+  appendFileSync(join(projectsDir, "p", `${RS}.jsonl`), rec({ id: "later", ts: "2026-09-21T10:30:00.001Z", input: 5000 }) + "\n");
   const rerender = renderLedger({ name: "feat", sessionId: RS, projectsDir, markersBase });
   assert.equal(rerender.totals.tokens.input, 10);
   assert.equal(rerender.membership.excluded_requests, 1);
@@ -1474,12 +1605,17 @@ test("RUN 8 — a KNOWN window that contains nothing is an OBSERVED zero (partia
 
 test("RUN 9 — dedup, subagents and the three views all operate on the SAME in-window population", () => {
   const dup = rec({ id: "dup", ts: "2026-09-21T10:05:00.000Z", input: 8, out: 2 });
+  // Two agents, each file named for its agentId (the measured shape): `ax1` is spawned INSIDE the run and works
+  // there; `ax0` was spawned before it and worked before it. (Until 6.29.0 one agent did both, which a real
+  // transcript cannot hold: an agent's requests follow its spawn.)
   const { root, projectsDir } = synth(RS, [rec({ id: "old", ts: "2026-09-21T09:00:00.000Z", input: 100 }), dup, dup, dup], {
-    "agent-x": [
-      rec({ id: "sub-in", ts: "2026-09-21T10:10:00.000Z", input: 4, out: 1, model: "claude-sonnet-5", side: true, agent: "agent-x" }),
-      rec({ id: "sub-old", ts: "2026-09-21T09:30:00.000Z", input: 60, model: "claude-sonnet-5", side: true, agent: "agent-x" }),
+    "agent-ax1": [
+      rec({ id: "sub-in", ts: "2026-09-21T10:10:00.000Z", input: 4, out: 1, model: "claude-sonnet-5", side: true, agent: "ax1" }),
     ],
+    "agent-ax0": [rec({ id: "sub-old", ts: "2026-09-21T09:30:00.000Z", input: 60, model: "claude-sonnet-5", side: true, agent: "ax0" })],
   });
+  spawnAgent(join(projectsDir, "p"), RS, "ax1", { ts: "2026-09-21T10:02:00.000Z" });
+  spawnAgent(join(projectsDir, "p"), RS, "ax0", { ts: "2026-09-21T09:25:00.000Z" });
   const markersBase = writeMarkers(root, "feat", [
     marker(1, "run-start", null, null, "2026-09-21T10:00:00.000Z", RS),
     marker(2, "stage-start", "pharn-build", 1, "2026-09-21T10:01:00.000Z", RS),
@@ -1801,6 +1937,12 @@ function stageRouted() {
   const proj = join(root, "projects");
   mkdirSync(proj, { recursive: true });
   cpSync(join(FIXTURES, "with-routed-stage"), join(proj, "wt"), { recursive: true });
+  // `req_rs_p2` (10:01:05) issues the Agent call that spawns the routed build's stage agent (6.29.0 links).
+  spawnAgent(join(proj, "wt"), ROUTED_SESSION, ROUTED_AGENT_ID, {
+    ts: "2026-09-26T10:01:05.500Z",
+    toolUseId: "toolu_fx_rs_build",
+    meta: false,
+  });
   return { root, projectsDir: proj, projectDir: join(proj, "wt") };
 }
 
@@ -1943,4 +2085,390 @@ test("L63 INERTNESS: `route` changes no re-derivation of markers[] — membershi
   // check-cost-ledger --verify-transcript passes the RECORDED markers into deriveLedger: GREEN for both.
   assert.deepEqual(checkLedger(a, { verifyTranscript: true, projectsDir, repo }).reds, []);
   assert.deepEqual(checkLedger(b, { verifyTranscript: true, projectsDir, repo }).reds, []);
+});
+
+// ===================================================================================================
+// RUN CONTEXT (`run-window/2`, 6.29.0) — the regression set for finding H3: "a cost ledger counts only its
+// own run's requests, never a concurrent run's in the same session". A subagent's Bash sees its PARENT's
+// session id, so the window alone admitted every concurrent context's request inside it: three /pharn-loop
+// runs in three background agents of one session shared most of their rows, main-thread rows included
+// (.dev/measurements/cost-ledger-run-scope-2026-09-27.md). Synthetic transcripts in the MEASURED shape
+// (agent files named for their agentId, spawns recorded as the parent's tool_use + the child's meta, marker
+// lines recorded as tool results), explicit timestamps, and every expected number a literal (L43).
+// ===================================================================================================
+
+import { sessionRequests, sessionScan } from "./transcript-core.mjs";
+import { isMember, runWindow as runWindowFor, CONTEXT_REASONS } from "./run-window-core.mjs";
+import { rowContext, MEMBERSHIP_KEYS } from "./render-cost-ledger.mjs";
+
+const CS = "00000000-0000-4000-8000-0000000000c1"; // one session, three contexts
+const AGENT_A = "a1c0ffee0000000001"; // runs `fa`
+const AGENT_B = "a2c0ffee0000000002"; // runs `fb`, concurrently
+
+/** Two concurrent runs, each orchestrated by its own background agent of ONE session, plus main-thread requests
+ *  inside both windows — the H3 shape. `fa` = [10:01, 10:30], `fb` = [10:02, 10:35]. */
+function concurrentRuns() {
+  const { root, projectsDir } = synth(
+    CS,
+    [
+      rec({ id: "main-before", ts: "2026-09-25T09:59:00.000Z", sid: CS, input: 1000 }),
+      rec({ id: "main-in-both", ts: "2026-09-25T10:08:00.000Z", sid: CS, input: 100 }),
+      rec({ id: "main-in-both-2", ts: "2026-09-25T10:20:00.000Z", sid: CS, input: 200 }),
+    ],
+    {
+      [`agent-${AGENT_A}`]: [
+        rec({ id: "a-1", ts: "2026-09-25T10:05:00.000Z", sid: CS, input: 1, side: true, agent: AGENT_A }),
+        rec({ id: "a-2", ts: "2026-09-25T10:10:00.000Z", sid: CS, input: 2, side: true, agent: AGENT_A }),
+      ],
+      [`agent-${AGENT_B}`]: [
+        rec({ id: "b-1", ts: "2026-09-25T10:06:00.000Z", sid: CS, input: 10, side: true, agent: AGENT_B }),
+        rec({ id: "b-2", ts: "2026-09-25T10:12:00.000Z", sid: CS, input: 20, side: true, agent: AGENT_B }),
+      ],
+    }
+  );
+  const dir = join(projectsDir, "p");
+  spawnAgent(dir, CS, AGENT_A, { ts: "2026-09-25T10:00:00.000Z" });
+  spawnAgent(dir, CS, AGENT_B, { ts: "2026-09-25T10:00:30.000Z" });
+  const fa = writeMarkers(
+    root,
+    "fa",
+    [marker(1, "run-start", null, null, "2026-09-25T10:01:00.000Z", CS), marker(2, "run-stop", null, null, "2026-09-25T10:30:00.000Z", CS)],
+    { printedBy: AGENT_A }
+  );
+  const fb = writeMarkers(
+    root,
+    "fb",
+    [marker(1, "run-start", null, null, "2026-09-25T10:02:00.000Z", CS), marker(2, "run-stop", null, null, "2026-09-25T10:35:00.000Z", CS)],
+    { printedBy: AGENT_B }
+  );
+  return { root, projectsDir, dir, fa, fb };
+}
+
+test("★ H3: two concurrent runs in agents of ONE session each count only their own agent — disjoint rows, the main thread in neither", () => {
+  const { projectsDir, fa, fb } = concurrentRuns();
+  const a = renderLedger({ name: "fa", sessionId: CS, projectsDir, markersBase: fa });
+  const b = renderLedger({ name: "fb", sessionId: CS, projectsDir, markersBase: fb });
+  assert.deepEqual(
+    a.requests.map((r) => r.request_id),
+    ["a-1", "a-2"]
+  );
+  assert.deepEqual(
+    b.requests.map((r) => r.request_id),
+    ["b-1", "b-2"]
+  );
+  assert.equal(a.totals.tokens.input, 3, "1 + 2: none of B's 30 and none of the main thread's 300");
+  assert.equal(b.totals.tokens.input, 30);
+  assert.equal(a.membership.method, "run-window/2");
+  assert.equal(a.membership.context, `agent:${AGENT_A}`, "bound to the agent that printed fa's markers");
+  assert.deepEqual(a.membership.contexts, [`agent:${AGENT_A}`]);
+  assert.equal(b.membership.context, `agent:${AGENT_B}`);
+  // excluded_requests counts every session request outside the run: main-before (time) + B's two and the main
+  // thread's two inside fa's window (context).
+  assert.equal(a.membership.excluded_requests, 5);
+  assert.match(a.coverage_note, /5 session request\(s\) outside the run were excluded, 4 of them inside the window from other contexts/);
+  for (const led of [a, b]) {
+    assert.deepEqual(checkLedger(led).reds, [], "each ledger is GREEN");
+    assert.deepEqual(checkLedger(led, { verifyTranscript: true, projectsDir }).reds, [], "and re-derives from the transcript");
+  }
+});
+
+test("★ H3 CONTROL (L60): on the SAME bytes the window alone — run-window/1 — would have shared rows and counted the main thread", () => {
+  const { projectsDir, fa, fb } = concurrentRuns();
+  const { requests } = sessionRequests(join(projectsDir, "p"), CS);
+  const windowOnly = (base, name) => {
+    const win = runWindowFor(readMarkers(join(base, name, "markers.jsonl")), CS);
+    return requests.filter((q) => isMember(win, q.record.timestamp, q.record.sessionId)).map((q) => q.id);
+  };
+  const oldA = windowOnly(fa, "fa");
+  const oldB = windowOnly(fb, "fb");
+  const shared = oldA.filter((id) => oldB.includes(id));
+  assert.ok(shared.length >= 4, `the window alone shares rows between the two runs (shared ${shared.join(", ")})`);
+  assert.ok(oldA.includes("main-in-both") && oldA.includes("b-1"), "and puts the main thread's and B's requests into A's run");
+});
+
+test("★ R1: a FOREGROUND agent's report quoting its run's marker line lands in the orchestrator's TOOL RESULT — the run becomes unknown, never re-bound", () => {
+  const { projectsDir, dir, fa } = concurrentRuns();
+  // The shape measured on 2026-09-27: a foreground Agent call's return is a `tool_result` whose content is text blocks.
+  const line = markerLine(normalizeMarkers([marker(1, "run-start", null, null, "2026-09-25T10:01:00.000Z", CS)])[0]);
+  appendFileSync(
+    join(dir, `${CS}.jsonl`),
+    JSON.stringify({
+      type: "user",
+      sessionId: CS,
+      timestamp: "2026-09-25T10:40:00.000Z",
+      isSidechain: false,
+      message: {
+        role: "user",
+        content: [{ type: "tool_result", tool_use_id: "toolu_fx_report", content: [{ type: "text", text: `Done.\n${line}\nall green` }] }],
+      },
+    }) + "\n"
+  );
+  const a = renderLedger({ name: "fa", sessionId: CS, projectsDir, markersBase: fa });
+  assert.equal(a.membership.status, "unknown");
+  assert.equal(a.membership.reason, UNKNOWN_REASONS.AMBIGUOUS_CONTEXT);
+  assert.equal(a.coverage, "unavailable");
+  assert.deepEqual(a.requests, []);
+  assert.deepEqual(checkLedger(a).reds, [], "an honest unknown is well-formed");
+});
+
+test("★ R1 CONTROL: a BACKGROUND agent's hand-back, or a human's paste, is a user message — not a tool result — and leaves the binding alone", () => {
+  const { projectsDir, dir, fa } = concurrentRuns();
+  const line = markerLine(normalizeMarkers([marker(1, "run-start", null, null, "2026-09-25T10:01:00.000Z", CS)])[0]);
+  // The shapes measured on 2026-09-27: a background hand-back arrives as a `queue-operation` record and a `user`
+  // record whose content is a STRING; a human's paste is a `user` record too.
+  appendFileSync(
+    join(dir, `${CS}.jsonl`),
+    [
+      JSON.stringify({
+        type: "queue-operation",
+        sessionId: CS,
+        timestamp: "2026-09-25T10:40:00.000Z",
+        content: `<agent-message>\n${line}\n`,
+      }),
+      JSON.stringify({
+        type: "user",
+        sessionId: CS,
+        timestamp: "2026-09-25T10:40:00.100Z",
+        isSidechain: false,
+        message: { role: "user", content: `Another Claude session sent a message:\n${line}` },
+      }),
+      JSON.stringify({
+        type: "user",
+        sessionId: CS,
+        timestamp: "2026-09-25T10:41:00.000Z",
+        isSidechain: false,
+        message: { role: "user", content: [{ type: "text", text: line }] },
+      }),
+    ].join("\n") + "\n"
+  );
+  const a = renderLedger({ name: "fa", sessionId: CS, projectsDir, markersBase: fa });
+  assert.equal(a.membership.status, "bounded");
+  assert.equal(a.membership.context, `agent:${AGENT_A}`);
+  assert.deepEqual(
+    a.requests.map((r) => r.request_id),
+    ["a-1", "a-2"]
+  );
+});
+
+test("★ the orchestrator's own Bash reading a sub-run's output back is a second holder: unknown (the mention case refuses)", () => {
+  const { projectsDir, dir, fb } = concurrentRuns();
+  const line = markerLine(normalizeMarkers([marker(2, "run-stop", null, null, "2026-09-25T10:35:00.000Z", CS)])[0]);
+  appendFileSync(join(dir, `${CS}.jsonl`), toolResultLine(CS, "main", "2026-09-25T10:50:00.000Z", line, 99) + "\n");
+  const b = renderLedger({ name: "fb", sessionId: CS, projectsDir, markersBase: fb });
+  assert.equal(b.membership.reason, UNKNOWN_REASONS.AMBIGUOUS_CONTEXT);
+});
+
+test("NO_CONTEXT: a run whose marker lines reached no tool result is unknown — never bound by guess", () => {
+  const { root, projectsDir } = synth(CS, [rec({ id: "m-1", ts: "2026-09-25T10:05:00.000Z", sid: CS, input: 5 })]);
+  const base = writeMarkers(
+    root,
+    "fx",
+    [marker(1, "run-start", null, null, "2026-09-25T10:00:00.000Z", CS), marker(2, "run-stop", null, null, "2026-09-25T10:30:00.000Z", CS)],
+    { printedBy: null }
+  );
+  const led = renderLedger({ name: "fx", sessionId: CS, projectsDir, markersBase: base });
+  assert.equal(led.membership.status, "unknown");
+  assert.equal(led.membership.reason, UNKNOWN_REASONS.NO_CONTEXT);
+  assert.equal(led.membership.start, "2026-09-25T10:00:00.000Z", "the window's own bounds are kept — they are re-derivable");
+  assert.equal(led.membership.excluded_requests, null);
+  assert.equal(led.membership.context, null);
+  assert.equal(led.membership.contexts, null);
+  assert.deepEqual(checkLedger(led).reds, []);
+});
+
+test("UNLINKED_CONTEXT: an agent with no spawn record working inside the window makes the run unknown, whoever ran it", () => {
+  const { root, projectsDir } = synth(CS, [rec({ id: "m-1", ts: "2026-09-25T10:05:00.000Z", sid: CS, input: 5 })], {
+    "agent-a9nometa00000000": [
+      rec({ id: "x-1", ts: "2026-09-25T10:06:00.000Z", sid: CS, input: 7, side: true, agent: "a9nometa00000000" }),
+    ],
+  });
+  const base = writeMarkers(root, "fx", [
+    marker(1, "run-start", null, null, "2026-09-25T10:00:00.000Z", CS),
+    marker(2, "run-stop", null, null, "2026-09-25T10:30:00.000Z", CS),
+  ]);
+  const led = renderLedger({ name: "fx", sessionId: CS, projectsDir, markersBase: base });
+  assert.equal(led.membership.reason, UNKNOWN_REASONS.UNLINKED_CONTEXT, "no meta: the agent may or may not be the run's");
+  assert.deepEqual(led.requests, []);
+  assert.ok(CONTEXT_REASONS.includes(led.membership.reason));
+});
+
+test("a NESTED agent (spawned by the run's agent inside the window) is the run's; the rest of the tree is not", () => {
+  const { projectsDir, dir, fa } = concurrentRuns();
+  const nested = "a3nested000000000003";
+  mkdirSync(join(dir, CS, "subagents"), { recursive: true });
+  writeFileSync(
+    join(dir, CS, "subagents", `agent-${nested}.jsonl`),
+    rec({ id: "n-1", ts: "2026-09-25T10:15:00.000Z", sid: CS, input: 40, side: true, agent: nested }) + "\n"
+  );
+  spawnAgent(dir, CS, nested, { ts: "2026-09-25T10:14:00.000Z", parent: AGENT_A });
+  const a = renderLedger({ name: "fa", sessionId: CS, projectsDir, markersBase: fa });
+  assert.deepEqual(
+    a.requests.map((r) => r.request_id),
+    ["a-1", "a-2", "n-1"]
+  );
+  assert.deepEqual(a.membership.contexts, [`agent:${AGENT_A}`, `agent:${nested}`]);
+});
+
+test("the run's agents are the ones spawned DURING it: a background agent the main thread spawned before its run-start is excluded (and admitted when spawned inside)", () => {
+  const build = (spawnTs) => {
+    const { root, projectsDir } = synth(CS, [rec({ id: "m-1", ts: "2026-09-25T10:05:00.000Z", sid: CS, input: 5 })], {
+      "agent-a4bg00000000000004": [
+        rec({ id: "bg-1", ts: "2026-09-25T10:07:00.000Z", sid: CS, input: 70, side: true, agent: "a4bg00000000000004" }),
+      ],
+    });
+    spawnAgent(join(projectsDir, "p"), CS, "a4bg00000000000004", { ts: spawnTs });
+    const base = writeMarkers(root, "fx", [
+      marker(1, "run-start", null, null, "2026-09-25T10:00:00.000Z", CS),
+      marker(2, "run-stop", null, null, "2026-09-25T10:30:00.000Z", CS),
+    ]);
+    return renderLedger({ name: "fx", sessionId: CS, projectsDir, markersBase: base });
+  };
+  const before = build("2026-09-25T09:50:00.000Z");
+  assert.deepEqual(
+    before.requests.map((r) => r.request_id),
+    ["m-1"],
+    "spawned before the run: its in-window work is not the run's"
+  );
+  assert.deepEqual(before.membership.contexts, ["main"]);
+  const inside = build("2026-09-25T10:01:00.000Z");
+  assert.deepEqual(
+    inside.requests.map((r) => r.request_id),
+    ["m-1", "bg-1"],
+    "CONTROL: spawned inside the run, it is the run's"
+  );
+});
+
+test("a record whose context disagrees with its FILE is undecidable (GRILL G2): isSidechain false inside an agent file makes the run unknown", () => {
+  const { root, projectsDir } = synth(CS, [rec({ id: "m-1", ts: "2026-09-25T10:05:00.000Z", sid: CS, input: 5 })], {
+    "agent-a5drift0000000005": [rec({ id: "d-1", ts: "2026-09-25T10:06:00.000Z", sid: CS, input: 9, side: false })],
+  });
+  spawnAgent(join(projectsDir, "p"), CS, "a5drift0000000005", { ts: "2026-09-25T10:01:00.000Z" });
+  const base = writeMarkers(root, "fx", [
+    marker(1, "run-start", null, null, "2026-09-25T10:00:00.000Z", CS),
+    marker(2, "run-stop", null, null, "2026-09-25T10:30:00.000Z", CS),
+  ]);
+  const led = renderLedger({ name: "fx", sessionId: CS, projectsDir, markersBase: base });
+  assert.equal(led.membership.reason, UNKNOWN_REASONS.UNLINKED_CONTEXT, "it would have read as main, the fail-open direction");
+});
+
+test("EMITTER == CHECKER: every emitted row's rowContext equals the context the reader decided for its request", () => {
+  const cases = [
+    () => {
+      const s = stageSubagents();
+      return { projectsDir: s.projectsDir, sid: SUB_SESSION, base: openRun(s.root, "feat"), dir: join(s.projectsDir, "wt") };
+    },
+    () => {
+      const s = stageRouted();
+      return { projectsDir: s.projectsDir, sid: ROUTED_SESSION, base: writeMarkers(s.root, "feat", routedMarkers()), dir: s.projectDir };
+    },
+    () => {
+      const s = concurrentRuns();
+      return { projectsDir: s.projectsDir, sid: CS, base: s.fa, name: "fa", dir: s.dir };
+    },
+  ];
+  let rows = 0;
+  for (const make of cases) {
+    const { projectsDir, sid, base, name = "feat", dir } = make();
+    const led = renderLedger({ name, sessionId: sid, projectsDir, markersBase: base });
+    const ctxOf = new Map(sessionScan(dir, sid, []).requests.map((q) => [q.id, q.context]));
+    for (const r of led.requests) {
+      rows++;
+      assert.equal(rowContext(r), ctxOf.get(r.request_id), `${r.request_id}: the checker reads the emitter's context`);
+    }
+  }
+  assert.ok(rows >= 10, `NON-VACUITY (L34): ${rows} rows compared`);
+});
+
+test("membership carries the two context keys, in the closed order, on a measured ledger", () => {
+  const { projectsDir, fa } = concurrentRuns();
+  const led = renderLedger({ name: "fa", sessionId: CS, projectsDir, markersBase: fa });
+  assert.deepEqual(Object.keys(led.membership), [...MEMBERSHIP_KEYS]);
+  assert.ok(MEMBERSHIP_KEYS.includes("context") && MEMBERSHIP_KEYS.includes("contexts"));
+});
+
+// ─── the contract's named residuals, each PINNED as it behaves today (L37: a stated bound is probed) ──
+
+const window1030 = () => [
+  marker(1, "run-start", null, null, "2026-09-25T10:00:00.000Z", CS),
+  marker(2, "run-stop", null, null, "2026-09-25T10:30:00.000Z", CS),
+];
+
+test("RESIDUAL cost-ledger-workflow-agents: a Workflow-tool agent working inside the window is unlinked by construction — the run is unknown", () => {
+  const WF = "a6wf000000000006";
+  const build = (ts) => {
+    const { root, projectsDir } = synth(CS, [rec({ id: "m-1", ts: "2026-09-25T10:05:00.000Z", sid: CS, input: 5 })]);
+    const wf = join(projectsDir, "p", CS, "subagents", "workflows", "wf_fx1");
+    mkdirSync(wf, { recursive: true });
+    writeFileSync(join(wf, `agent-${WF}.jsonl`), rec({ id: "w-1", ts, sid: CS, input: 3, side: true, agent: WF }) + "\n");
+    // The measured Workflow meta: a phase, and no toolUseId.
+    writeFileSync(join(wf, `agent-${WF}.meta.json`), JSON.stringify({ agentType: "workflow", workflowPhase: "build" }) + "\n");
+    return renderLedger({ name: "fx", sessionId: CS, projectsDir, markersBase: writeMarkers(root, "fx", window1030()) });
+  };
+  const inside = build("2026-09-25T10:06:00.000Z");
+  assert.equal(inside.membership.reason, UNKNOWN_REASONS.UNLINKED_CONTEXT);
+  // CONTROL: the same agent working only AFTER the window is excluded by time, never placed — the run is measured.
+  const after = build("2026-09-25T10:40:00.000Z");
+  assert.equal(after.membership.status, "bounded");
+  assert.deepEqual(
+    after.requests.map((r) => r.request_id),
+    ["m-1"]
+  );
+});
+
+test("RESIDUAL cost-ledger-mention-only: lines held ONLY by a context that read them back bind the run to THAT context — the rule cannot tell a reader from a printer", () => {
+  // The run printed with its output redirected, so nothing reached the main thread's tool results; agent R, which
+  // the main thread spawned during the run, later read the output back.
+  const R = "a7reader0000000007";
+  const { root, projectsDir } = synth(CS, [rec({ id: "m-1", ts: "2026-09-25T10:05:00.000Z", sid: CS, input: 5 })], {
+    [`agent-${R}`]: [rec({ id: "r-1", ts: "2026-09-25T10:06:00.000Z", sid: CS, input: 6, side: true, agent: R })],
+  });
+  spawnAgent(join(projectsDir, "p"), CS, R, { ts: "2026-09-25T10:01:00.000Z" });
+  const led = renderLedger({
+    name: "fx",
+    sessionId: CS,
+    projectsDir,
+    markersBase: writeMarkers(root, "fx", window1030(), { printedBy: R }),
+  });
+  assert.equal(led.membership.context, `agent:${R}`, "measured, as the reader's run");
+  assert.deepEqual(
+    led.requests.map((r) => r.request_id),
+    ["r-1"]
+  );
+});
+
+test("RESIDUAL cost-ledger-shared-markers-file: two runs appending to ONE markers file are refused as ambiguous only when both printed lines of the current run", () => {
+  const A = "a8runa0000000008";
+  const B = "a9runb0000000009";
+  const build = (printedByA) => {
+    const { root, projectsDir } = synth(CS, [], {
+      [`agent-${A}`]: [rec({ id: "a-1", ts: "2026-09-25T10:05:00.000Z", sid: CS, input: 1, side: true, agent: A })],
+      [`agent-${B}`]: [rec({ id: "b-1", ts: "2026-09-25T10:06:00.000Z", sid: CS, input: 2, side: true, agent: B })],
+    });
+    const dir = join(projectsDir, "p");
+    spawnAgent(dir, CS, A, { ts: "2026-09-25T09:58:00.000Z" });
+    spawnAgent(dir, CS, B, { ts: "2026-09-25T09:59:00.000Z" });
+    // A's run-start, then B's run-start in the SAME file, then A's stage-start, then B's run-stop.
+    const markers = [
+      marker(1, "run-start", null, null, "2026-09-25T10:00:00.000Z", CS),
+      marker(2, "run-start", null, null, "2026-09-25T10:01:00.000Z", CS),
+      marker(3, "stage-start", "pharn-build", 1, "2026-09-25T10:02:00.000Z", CS),
+      marker(4, "run-stop", null, null, "2026-09-25T10:30:00.000Z", CS),
+    ];
+    const base = writeMarkers(root, "fs", markers, { printedBy: null });
+    const lines = normalizeMarkers(markers).map((m) => markerLine(m));
+    const byA = printedByA.map((i) => toolResultLine(CS, A, markers[i].ts, lines[i], 10 + i));
+    const byB = [1, 3].filter((i) => !printedByA.includes(i)).map((i) => toolResultLine(CS, B, markers[i].ts, lines[i], 20 + i));
+    appendFileSync(contextFile(dir, CS, A), byA.join("\n") + "\n");
+    appendFileSync(contextFile(dir, CS, B), byB.join("\n") + "\n");
+    return renderLedger({ name: "fs", sessionId: CS, projectsDir, markersBase: base });
+  };
+  // A printed its run-start AND the stage-start that follows B's run-start: both hold a line of the current run.
+  assert.equal(build([0, 2]).membership.reason, UNKNOWN_REASONS.AMBIGUOUS_CONTEXT);
+  // A printed only its own run-start, which B's supersedes: the current run's lines are B's alone, and B is measured.
+  const onlyB = build([0]);
+  assert.equal(onlyB.membership.context, `agent:${B}`);
+  assert.deepEqual(
+    onlyB.requests.map((r) => r.request_id),
+    ["b-1"]
+  );
 });

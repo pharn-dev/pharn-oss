@@ -15,17 +15,81 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, mkdirSync, copyFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, copyFileSync, existsSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkLedger, findAbsolutePaths, GROWING_CLASSES } from "./check-cost-ledger.mjs";
-import { renderLedger, buildViews, TOP_LEVEL_KEYS, ATTRIBUTION_METHOD, SCHEMA } from "./render-cost-ledger.mjs";
+import {
+  renderLedger as renderLedgerRaw,
+  deriveLedger as deriveLedgerRaw,
+  readMarkers,
+  normalizeMarkers,
+  buildViews,
+  TOP_LEVEL_KEYS,
+  ATTRIBUTION_METHOD,
+  SCHEMA,
+} from "./render-cost-ledger.mjs";
+import { markerLine } from "./mark-phase.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, "check-cost-ledger.mjs");
 const FIXTURES = join(HERE, "fixtures", "cost-ledger");
 const REAL_SESSION = "51a7441d-0e03-4066-8d1c-be5a2d419121";
+
+/**
+ * THIS FILE'S STAGING CONVENTION (6.29.0, `run-window/2`): the MAIN thread of each staged session ran the run's
+ * markers. The ledger binds a run to its context by the lines mark-phase printed into that context's tool results,
+ * so before emitting, every marker is recorded as a main-thread tool result — exactly what the platform writes when
+ * the main thread's Bash call runs mark-phase. The line is `markerLine` of the normalized marker, the emitter's own
+ * reading (L35). `printedBy: null` opts out: the unbound case. Appending twice is harmless: a context holding a line
+ * twice is still one holder.
+ */
+function recordPrinted(opts) {
+  if (opts.printedBy === null || !opts.projectsDir || !existsSync(opts.projectsDir)) return;
+  const markers =
+    opts.markers !== undefined
+      ? normalizeMarkers(opts.markers)
+      : readMarkers(join(opts.markersBase ?? "", opts.name ?? "", "markers.jsonl"));
+  for (const p of readdirSync(opts.projectsDir, { withFileTypes: true })) {
+    if (!p.isDirectory()) continue;
+    for (const e of readdirSync(join(opts.projectsDir, p.name), { withFileTypes: true })) {
+      const m = e.isFile() ? /^(.+)\.jsonl$/.exec(e.name) : null;
+      if (!m) continue;
+      const sid = m[1];
+      const lines = markers
+        .filter((mk) => mk.session_id === null || mk.session_id === sid)
+        .map((mk) =>
+          JSON.stringify({
+            type: "user",
+            sessionId: sid,
+            timestamp: mk.ts ?? "2020-01-01T00:00:00.000Z",
+            isSidechain: false,
+            message: { role: "user", content: [{ type: "tool_result", tool_use_id: `toolu_fx_print_${mk.seq}`, content: markerLine(mk) }] },
+          })
+        );
+      if (lines.length) appendFileSync(join(opts.projectsDir, p.name, e.name), lines.join("\n") + "\n");
+    }
+  }
+}
+const withoutPrintedBy = ({ printedBy, ...rest }) => (void printedBy, rest);
+const renderLedger = (opts) => (recordPrinted(opts), renderLedgerRaw(withoutPrintedBy(opts)));
+const deriveLedger = (opts) => (recordPrinted(opts), deriveLedgerRaw(withoutPrintedBy(opts)));
+
+/** A fixture agent's SPAWN, as the platform records it: the parent's (main thread's) tool_use naming the
+ *  `toolUseId` the agent's committed meta carries. Message content, so staged, never committed. */
+function spawnFromMain(dir, sid, toolUseId, ts) {
+  appendFileSync(
+    join(dir, `${sid}.jsonl`),
+    JSON.stringify({
+      type: "assistant",
+      sessionId: sid,
+      timestamp: ts,
+      isSidechain: false,
+      message: { model: "claude-opus-5-5", content: [{ type: "tool_use", id: toolUseId, name: "Agent", input: {} }] },
+    }) + "\n"
+  );
+}
 
 /** A clean, real ledger built from the committed fixture. Deep-cloned per test so a mutation in one
  *  cannot leak into another. */
@@ -906,7 +970,7 @@ test("--verify-transcript on a continued session through the CLI: exit 0, the WA
 // ---------------------------------------------------------------- the emitter is untouched by the split
 
 import { cpSync } from "node:fs";
-import { deriveLedger } from "./render-cost-ledger.mjs";
+// `deriveLedger` is this file's wrapper (top of file): it records the printed marker lines first (6.29.0).
 
 const SUB_SESSION = "00000000-0000-4000-8000-00000000cafe";
 
@@ -997,6 +1061,8 @@ function snapshotLedger() {
   const projectsDir = join(root, "projects");
   mkdirSync(projectsDir, { recursive: true });
   cpSync(join(FIXTURES, "usage-snapshots"), join(projectsDir, "p"), { recursive: true });
+  // The fork's spawn (6.29.0): its committed meta names `toolu_fx_fork_fff`, issued by the main thread's `req_fx_forked`.
+  spawnFromMain(join(projectsDir, "p"), SNAP_SESSION, "toolu_fx_fork_fff", "2026-09-26T10:00:20.000Z");
   const led = renderLedger({ name: "feat", sessionId: SNAP_SESSION, projectsDir, markersBase: openRun(root) });
   return { led, projectsDir };
 }
@@ -1017,12 +1083,14 @@ function inFlightLedger(sessionId, requestId) {
   const projectsDir = join(root, "projects");
   const transcript = join(projectsDir, "p", `${sessionId}.jsonl`);
   mkdirSync(join(projectsDir, "p"), { recursive: true });
+  // `isSidechain: false` is the measured main-thread shape; without it the line's context is undecidable (6.29.0).
   const line = (ts, out, stop) =>
     JSON.stringify({
       type: "assistant",
       requestId,
       timestamp: ts,
       sessionId,
+      isSidechain: false,
       message: { model: "claude-opus-5-5", stop_reason: stop, usage: { input_tokens: 1, output_tokens: out, cache_creation: {} } },
     }) + "\n";
   writeFileSync(transcript, line("2026-09-26T10:00:01.000Z", 8, null));
@@ -1133,5 +1201,384 @@ test("--verify-transcript REDs a class that must match exactly — input, cache 
       reds.some((r) => /in a class that must match exactly/.test(r) && r.includes(`"req_fx_plain" ${c}:`)),
       `${c}: ${reds.join(" | ")}`
     );
+  }
+});
+
+// ===================================================================================================
+// RUN CONTEXT (`run-window/2`, 6.29.0) — rule 8's context half in plain mode, the per-method key sets, and
+// --verify-transcript over the context set. One session, the main thread and two agents; every mutation
+// control names the ONE property it violates (L60).
+// ===================================================================================================
+
+import { MEMBERSHIP_KEYS, MEMBERSHIP_KEYS_V1 } from "./render-cost-ledger.mjs";
+import { UNKNOWN_REASONS } from "./run-window-core.mjs";
+
+const XS = "00000000-0000-4000-8000-0000000000d1";
+const XA = "a1d0000000000000001";
+const XB = "a2d0000000000000002";
+
+const ctxLine = ({ id, ts, input = 1, agent = null }) =>
+  JSON.stringify({
+    type: "assistant",
+    requestId: id,
+    timestamp: ts,
+    sessionId: XS,
+    isSidechain: agent !== null,
+    ...(agent ? { agentId: agent } : {}),
+    message: { model: "claude-opus-5", usage: { input_tokens: input, output_tokens: 0, cache_creation: {}, output_tokens_details: {} } },
+  });
+
+/** The run [10:00, 10:30] of session XS. Agent XA is spawned by the main thread at 10:00:10 (inside the run); XB at
+ *  `xbSpawn`. `printer` names the context whose tool results carry the run's marker lines: `main` through this file's
+ *  wrapper, or an agent id. */
+function contextFixture({ xbSpawn = "2026-09-25T10:00:20.000Z", printer = "main" } = {}) {
+  const root = mkdtempSync(join(tmpdir(), "check-cl-ctx-"));
+  const projectsDir = join(root, "projects");
+  const dir = join(projectsDir, "p");
+  const sub = join(dir, XS, "subagents");
+  mkdirSync(sub, { recursive: true });
+  writeFileSync(
+    join(dir, `${XS}.jsonl`),
+    [
+      ctxLine({ id: "main-before", ts: "2026-09-25T09:59:00.000Z", input: 1000 }),
+      ctxLine({ id: "main-in", ts: "2026-09-25T10:08:00.000Z", input: 100 }),
+    ].join("\n") + "\n"
+  );
+  writeFileSync(
+    join(sub, `agent-${XA}.jsonl`),
+    [
+      ctxLine({ id: "a-1", ts: "2026-09-25T10:05:00.000Z", input: 1, agent: XA }),
+      ctxLine({ id: "a-2", ts: "2026-09-25T10:10:00.000Z", input: 2, agent: XA }),
+    ].join("\n") + "\n"
+  );
+  writeFileSync(join(sub, `agent-${XB}.jsonl`), ctxLine({ id: "b-1", ts: "2026-09-25T10:06:00.000Z", input: 10, agent: XB }) + "\n");
+  for (const [id, ts] of [
+    [XA, "2026-09-25T10:00:10.000Z"],
+    [XB, xbSpawn],
+  ]) {
+    writeFileSync(
+      join(sub, `agent-${id}.meta.json`),
+      JSON.stringify({ agentType: "general-purpose", toolUseId: `toolu_ctx_${id}`, spawnDepth: 1 }) + "\n"
+    );
+    spawnFromMain(dir, XS, `toolu_ctx_${id}`, ts);
+  }
+  const markers = [
+    { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-09-25T10:00:00.000Z", session_id: XS },
+    { seq: 2, kind: "run-stop", stage: null, iteration: null, ts: "2026-09-25T10:30:00.000Z", session_id: XS },
+  ];
+  const mdir = join(root, "cost", "feat");
+  mkdirSync(mdir, { recursive: true });
+  writeFileSync(join(mdir, "markers.jsonl"), markers.map((m) => JSON.stringify(m)).join("\n") + "\n");
+  if (printer !== "main") {
+    // The run's markers were printed inside agent `printer`: its tool results carry the lines.
+    appendFileSync(
+      join(sub, `agent-${printer}.jsonl`),
+      markers
+        .map((m) =>
+          JSON.stringify({
+            type: "user",
+            sessionId: XS,
+            timestamp: m.ts,
+            isSidechain: true,
+            agentId: printer,
+            message: { role: "user", content: [{ type: "tool_result", tool_use_id: `toolu_ctx_print_${m.seq}`, content: markerLine(m) }] },
+          })
+        )
+        .join("\n") + "\n"
+    );
+  }
+  const led = renderLedger({
+    name: "feat",
+    sessionId: XS,
+    projectsDir,
+    markersBase: join(root, "cost"),
+    ...(printer === "main" ? {} : { printedBy: null }),
+  });
+  return { root, projectsDir, dir, sub, led, markers };
+}
+
+/** The same ledger, as a pre-6.29.0 emitter would have shaped it: method run-window/1, the seven keys. */
+function asV1(led) {
+  const v1 = clone(led);
+  v1.membership.method = "run-window/1";
+  delete v1.membership.context;
+  delete v1.membership.contexts;
+  return v1;
+}
+
+test("RULE 8 ctx — a measured /2 ledger records the bound context and its sorted set, and is GREEN", () => {
+  const { led } = contextFixture();
+  assert.deepEqual(
+    led.requests.map((r) => r.request_id),
+    ["a-1", "b-1", "main-in", "a-2"]
+  );
+  assert.equal(led.membership.context, "main");
+  assert.deepEqual(led.membership.contexts, [`agent:${XA}`, `agent:${XB}`, "main"]);
+  assert.deepEqual(Object.keys(led.membership), [...MEMBERSHIP_KEYS]);
+  assert.deepEqual(redsOf(led), []);
+});
+
+test("RULE 8 ctx — MUTATION CONTROLS: each context property REDs when, and only when, it is violated (L60)", () => {
+  const { led } = contextFixture();
+  const cases = [
+    [
+      "a row from a context outside contexts",
+      (l) => (l.membership.contexts = ["main", `agent:${XA}`].sort()),
+      /come from a context outside membership\.contexts/,
+    ],
+    ["contexts unsorted", (l) => (l.membership.contexts = ["main", `agent:${XB}`, `agent:${XA}`]), /must be sorted/],
+    [
+      "a duplicate context",
+      (l) => (l.membership.contexts = [`agent:${XA}`, `agent:${XA}`, `agent:${XB}`, "main"]),
+      /duplicate context key/,
+    ],
+    ["context outside contexts", (l) => (l.membership.context = `agent:${XA}zz`), /does not include membership\.context/],
+    ["a key that is not a context key", (l) => (l.membership.contexts = [...l.membership.contexts, "worker:1"].sort()), /not context keys/],
+    ["an empty set", (l) => (l.membership.contexts = []), /non-empty array/],
+    ["contexts not an array", (l) => (l.membership.contexts = "main"), /non-empty array/],
+    ["the context key missing", (l) => delete l.membership.context, /missing key\(s\): context/],
+  ];
+  for (const [label, mutate, want] of cases) {
+    const l = clone(led);
+    mutate(l);
+    const reds = redsOf(l);
+    assert.ok(
+      reds.some((r) => want.test(r)),
+      `${label}: expected ${want} in ${reds.join(" | ")}`
+    );
+  }
+});
+
+test("RULE 8 ctx — a CONTEXT-unknown ledger (known window) is well-formed, and carrying a context or a row under it is RED", () => {
+  // XA printed the run's lines; this file's wrapper now records them in the main thread too: two holders.
+  const bare = contextFixture({ printer: XA });
+  const amb = renderLedger({ name: "feat", sessionId: XS, projectsDir: bare.projectsDir, markersBase: join(bare.root, "cost") });
+  assert.equal(amb.membership.reason, UNKNOWN_REASONS.AMBIGUOUS_CONTEXT);
+  assert.equal(amb.membership.start, "2026-09-25T10:00:00.000Z", "the window's bounds are kept");
+  assert.deepEqual(redsOf(amb), []);
+  const carrying = clone(amb);
+  carrying.membership.context = "main";
+  assert.ok(redsOf(carrying).some((r) => /membership\.context must be null when nothing was measured/.test(r)));
+  const moved = clone(amb);
+  moved.membership.start = "2026-09-25T10:00:01.000Z";
+  assert.ok(
+    redsOf(moved).some((r) => /membership\.start disagrees with a recompute/.test(r)),
+    "the window's bounds are still re-derived under a context-unknown status"
+  );
+  const rowed = clone(amb);
+  rowed.requests = clone(bare.led.requests);
+  Object.assign(rowed, buildViews(rowed.requests));
+  assert.ok(redsOf(rowed).some((r) => /membership is unknown but requests\[\] carries rows/.test(r)));
+});
+
+test("RULE 8 ctx — the METHOD selects the closed key set, and an unknown method never downgrades to the lenient one", () => {
+  const { led } = contextFixture();
+  const v1 = asV1(led);
+  assert.deepEqual(Object.keys(v1.membership), [...MEMBERSHIP_KEYS_V1]);
+  const v1Reds = redsOf(v1);
+  assert.deepEqual(v1Reds, [], "a run-window/1 ledger is validated under its own seven keys");
+  const v1Warns = checkLedger(v1).warns;
+  assert.ok(
+    v1Warns.some((w) => /run-window\/1 is not context-scoped/.test(w) && /3 context\(s\)/.test(w)),
+    `the legacy WARN names the contexts its rows come from: ${v1Warns.join(" | ")}`
+  );
+  const v1With9 = clone(led);
+  v1With9.membership.method = "run-window/1";
+  assert.ok(redsOf(v1With9).some((r) => /unexpected key\(s\): context, contexts/.test(r)));
+  const future = clone(led);
+  future.membership.method = "run-window/9";
+  assert.ok(redsOf(future).some((r) => /membership\.method must be one of run-window\/1 \| run-window\/2/.test(r)));
+  const v1Ctx = asV1(led);
+  v1Ctx.membership.status = "unknown";
+  v1Ctx.membership.reason = UNKNOWN_REASONS.NO_CONTEXT;
+  v1Ctx.membership.excluded_requests = null;
+  v1Ctx.coverage = "unavailable";
+  v1Ctx.requests = [];
+  Object.assign(v1Ctx, buildViews([]));
+  assert.ok(redsOf(v1Ctx).some((r) => /run-window\/1 has no context half/.test(r)));
+});
+
+test("--verify-transcript ctx — a measured /2 ledger re-derives its context set exactly: GREEN", () => {
+  const { led, projectsDir } = contextFixture();
+  const { reds } = checkLedger(led, { verifyTranscript: true, projectsDir });
+  assert.deepEqual(reds, []);
+});
+
+test("--verify-transcript ctx — a TAMPERED context set the internal check cannot see is RED", () => {
+  const { led, projectsDir } = contextFixture();
+  const t = clone(led);
+  t.membership.contexts = [...t.membership.contexts, "agent:zz9"].sort();
+  assert.deepEqual(redsOf(t), [], "internally consistent: every row's context is still in the set");
+  const reds = checkLedger(t, { verifyTranscript: true, projectsDir }).reds;
+  assert.ok(
+    reds.some((r) => /membership\.context\/contexts do not match the transcript/.test(r)),
+    reds.join(" | ")
+  );
+});
+
+test("--verify-transcript ctx — a marker line copied into a SECOND context after emission is a WARN, never a RED (L42/L58)", () => {
+  const { led, projectsDir, sub, markers } = contextFixture();
+  appendFileSync(
+    join(sub, `agent-${XB}.jsonl`),
+    JSON.stringify({
+      type: "user",
+      sessionId: XS,
+      timestamp: "2026-09-25T10:45:00.000Z",
+      isSidechain: true,
+      agentId: XB,
+      message: {
+        role: "user",
+        content: [{ type: "tool_result", tool_use_id: "toolu_ctx_copy", content: `cat log\n${markerLine(markers[0])}\n` }],
+      },
+    }) + "\n"
+  );
+  const { reds, warns } = checkLedger(led, { verifyTranscript: true, projectsDir });
+  assert.deepEqual(reds, [], "the ledger was right when written");
+  assert.ok(warns.some((w) => /no longer binds this run to one context/.test(w)));
+});
+
+test("--verify-transcript ctx — a LEGACY run-window/1 ledger holding other contexts' rows is RED, and the message counts them (H3)", () => {
+  // Written as a pre-6.29.0 emitter would have: every window row of the session, the main thread's and XB's included.
+  const recorded = asV1(contextFixture().led);
+  assert.equal(recorded.requests.length, 4);
+  // The transcript it is checked against: the run was actually orchestrated INSIDE agent XA.
+  const truth = contextFixture({ printer: XA });
+  assert.deepEqual(
+    truth.led.requests.map((r) => r.request_id),
+    ["a-1", "a-2"],
+    "under run-window/2 the run is XA's own two requests"
+  );
+  const reds = checkLedger(recorded, { verifyTranscript: true, projectsDir: truth.projectsDir }).reds;
+  assert.ok(
+    reds.some((r) => /4 recorded, 2 re-derived\) — 2 recorded row\(s\) are not the run's own under run-window\/2/.test(r)),
+    reds.join(" | ")
+  );
+});
+
+test("--verify-transcript ctx — a LEGACY run-window/1 ledger holding only its own context stays GREEN (with its WARN)", () => {
+  const truth = contextFixture({ printer: XA });
+  const { reds, warns } = checkLedger(asV1(truth.led), { verifyTranscript: true, projectsDir: truth.projectsDir });
+  assert.deepEqual(reds, []);
+  assert.ok(warns.some((w) => /run-window\/1 is not context-scoped/.test(w)));
+});
+
+test("--verify-transcript ctx (GRILL G4, L63) — another context's requests INSIDE the window are part of the FIXED count, and later ones join the growing tail", () => {
+  // XB is spawned BEFORE the run, so it is not the run's: its in-window request b-1 is excluded by CONTEXT.
+  const { led, projectsDir, dir, sub } = contextFixture({ xbSpawn: "2026-09-25T09:58:00.000Z" });
+  assert.deepEqual(
+    led.requests.map((r) => r.request_id),
+    ["a-1", "main-in", "a-2"]
+  );
+  assert.equal(led.membership.excluded_requests, 2, "main-before (time) + b-1 (context, inside the window)");
+  // The session continues after the run, in BOTH contexts.
+  appendFileSync(join(dir, `${XS}.jsonl`), ctxLine({ id: "main-after", ts: "2026-09-25T10:40:00.000Z" }) + "\n");
+  appendFileSync(join(sub, `agent-${XB}.jsonl`), ctxLine({ id: "b-after", ts: "2026-09-25T10:41:00.000Z", agent: XB }) + "\n");
+  const ok = checkLedger(led, { verifyTranscript: true, projectsDir });
+  assert.deepEqual(ok.reds, [], "2 lies in [2, 4]: exact before, bounded after");
+  assert.ok(ok.warns.some((w) => /the session continued after the run/.test(w)));
+  for (const [bad, why] of [
+    [1, "below the fixed part — the in-window context exclusion is part of it"],
+    [5, "above the live total"],
+  ]) {
+    const t = clone(led);
+    t.membership.excluded_requests = bad;
+    assert.deepEqual(redsOf(t), [], `${bad}: internally consistent`);
+    assert.ok(
+      checkLedger(t, { verifyTranscript: true, projectsDir }).reds.some((r) => /excluded_requests does not match the transcript/.test(r)),
+      `${bad}: ${why}`
+    );
+  }
+});
+
+test("--verify-transcript ctx (L58) — an agent the run spawned before its run-stop, whose FIRST line lands after the emission, changes neither the recorded set nor the verdict", () => {
+  const { led, projectsDir, dir, sub } = contextFixture();
+  // After emission: the run's spawn of XC at 10:29 (inside the window) and XC's first line at 10:31 (after its end).
+  const XC = "a3d0000000000000003";
+  writeFileSync(
+    join(sub, `agent-${XC}.meta.json`),
+    JSON.stringify({ agentType: "general-purpose", toolUseId: "toolu_ctx_late", spawnDepth: 1 }) + "\n"
+  );
+  spawnFromMain(dir, XS, "toolu_ctx_late", "2026-09-25T10:29:00.000Z");
+  writeFileSync(join(sub, `agent-${XC}.jsonl`), ctxLine({ id: "c-1", ts: "2026-09-25T10:31:00.000Z", agent: XC }) + "\n");
+  const later = checkLedger(led, { verifyTranscript: true, projectsDir });
+  assert.deepEqual(later.reds, [], "XC is the run's, but nothing of it lies inside the window, so it is not in the set");
+  // NEGATIVE CONTROL (L60): a line of XC timestamped INSIDE the window puts XC in the set, and the recorded one no longer matches.
+  appendFileSync(
+    join(sub, `agent-${XC}.jsonl`),
+    JSON.stringify({
+      type: "user",
+      sessionId: XS,
+      timestamp: "2026-09-25T10:29:30.000Z",
+      isSidechain: true,
+      agentId: XC,
+      message: { role: "user", content: "go" },
+    }) + "\n"
+  );
+  const control = checkLedger(led, { verifyTranscript: true, projectsDir }).reds;
+  assert.ok(
+    control.some((r) => /membership\.context\/contexts do not match the transcript/.test(r)),
+    control.join(" | ")
+  );
+});
+
+test("--verify-transcript ctx — GROWTH CLOSURE (L58, L63): every kind of line a session writes after a closed run's emission leaves its genuine ledger free of RED", () => {
+  // A session goes on working after the run's stop is emitted. Each case below appends one KIND of later line, as a
+  // real session does, and the re-derivation must still agree with the ledger written before it — or say, with a
+  // WARN, that it can no longer bind. Enumerated once (L29); each case is its own fresh fixture.
+  const LATE = "2026-09-25T10:40:00.000Z";
+  const agentLate = (sub, id, ts) => writeFileSync(join(sub, `agent-${id}.jsonl`), ctxLine({ id: `${id}-late`, ts, agent: id }) + "\n");
+  const metaFor = (sub, id, toolUseId) =>
+    writeFileSync(join(sub, `agent-${id}.meta.json`), JSON.stringify({ agentType: "general-purpose", toolUseId, spawnDepth: 1 }) + "\n");
+  const CASES = [
+    [
+      "a request of the run's own thread",
+      ({ dir }) => appendFileSync(join(dir, `${XS}.jsonl`), ctxLine({ id: "late-main", ts: LATE }) + "\n"),
+    ],
+    [
+      "a request of an agent the run spawned",
+      ({ sub }) => appendFileSync(join(sub, `agent-${XA}.jsonl`), ctxLine({ id: "late-a", ts: LATE, agent: XA }) + "\n"),
+    ],
+    [
+      "an agent spawned after the end, working",
+      ({ dir, sub }) => {
+        metaFor(sub, "a5d0000000000000005", "toolu_ctx_after");
+        spawnFromMain(dir, XS, "toolu_ctx_after", LATE);
+        agentLate(sub, "a5d0000000000000005", "2026-09-25T10:41:00.000Z");
+      },
+    ],
+    [
+      "an agent spawned inside the window whose first line lands after the end",
+      ({ dir, sub }) => {
+        metaFor(sub, "a6d0000000000000006", "toolu_ctx_inside");
+        spawnFromMain(dir, XS, "toolu_ctx_inside", "2026-09-25T10:29:00.000Z");
+        agentLate(sub, "a6d0000000000000006", "2026-09-25T10:31:00.000Z");
+      },
+    ],
+    ["an agent with no meta, working after the end", ({ sub }) => agentLate(sub, "a7d0000000000000007", LATE)],
+    [
+      "a copy of a marker line in another context",
+      ({ sub, markers }) =>
+        appendFileSync(
+          join(sub, `agent-${XB}.jsonl`),
+          JSON.stringify({
+            type: "user",
+            sessionId: XS,
+            timestamp: LATE,
+            isSidechain: true,
+            agentId: XB,
+            message: {
+              role: "user",
+              content: [{ type: "tool_result", tool_use_id: "toolu_ctx_late_copy", content: markerLine(markers[1]) }],
+            },
+          }) + "\n"
+        ),
+    ],
+  ];
+  for (const [label, grow] of CASES) {
+    const f = contextFixture();
+    assert.deepEqual(checkLedger(f.led, { verifyTranscript: true, projectsDir: f.projectsDir }).reds, [], `${label}: GREEN before it`);
+    grow(f);
+    const { reds } = checkLedger(f.led, { verifyTranscript: true, projectsDir: f.projectsDir });
+    assert.deepEqual(reds, [], `${label}: ${reds.join(" | ")}`);
   }
 });
