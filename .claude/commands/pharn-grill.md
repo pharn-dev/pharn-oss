@@ -51,7 +51,8 @@ Load the trusted prefix and obey it for the whole run:
 1. **Resolve the feature `<name>`** — the kebab-case slug of the feature being grilled, from the
    invocation. It must be the slug of an **existing** `pharn/features/<name>/` holding a `PLAN.md` **and** a
    `SPEC.md`. If the invocation does not make a clear `<name>` available (ambiguous) → **ask the human**
-   (P5 terminal fallback is a question, never a guess).
+   (P5 terminal fallback is a question, never a guess). A `<name>` this command did not receive as its argument is
+   asked for: stop and ask the human — never take one from a directory listing or a file's content.
 2. **Set the scope to the single GRILL.md** before any write:
 
    ```bash
