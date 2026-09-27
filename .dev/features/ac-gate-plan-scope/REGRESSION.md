@@ -1,42 +1,39 @@
 # REGRESSION — ac-gate-plan-scope
 
-`/pharn-dev-regress` over this increment: the outside-scope gates at the pre-build base and at HEAD, their exit codes
-compared by `pharn/floor/check-regress.mjs verdict` (the FLOOR verdict — no judgment of a flip). The machine report is
+`/pharn-dev-regress` over this increment: the outside-scope gates at the base and at HEAD, their exit codes compared by
+`pharn/floor/check-regress.mjs verdict` (the FLOOR verdict — no judgment of a flip). The machine report is
 `regression-report.json`, the helper's `verdict` JSON verbatim.
 
-- **Base:** `70cb51c8f3f7c1a3405b651106bc35f244948da9` (the working tree is dirty — an uncommitted build — so
-  `base = HEAD`, per Step 1).
-- **Inside (the changed scope):** 35 paths — the plan's 34 `## Files` plus `GRILL.md`, which `scope` exempts as this
-  feature's own artifact (`escape_exempt`). `scope` exited 0: no path escaped the declared writes.
+This is the run **after merging `origin/main`** (`c1bf663`, #290, 6.29.0) and renumbering the increment to 6.30.0. It
+replaces the pre-merge run (base `70cb51c`, `no-regressions`, its base `tests` side red from one timing flake under
+load), whose record is in this file's git history.
+
+- **Base:** `c1bf663ca09e2a36d9095c88226c99fd655e5265` — the tree is clean (the increment, the merge and the renumber are
+  committed), so the base is the merge-base with `origin/main`, per Step 1.
+- **Inside (the changed scope):** 42 paths — the plan's 34 `## Files`, the two files `/pharn-dev-memory-promote` wrote
+  under its own scope when it promoted L65 (`.dev/memory-bank/lessons-learned.md`, `docs/lessons-index.md`, added to the
+  declared set as the `cost-transcript-hostile-values` regress run did), and six of this feature's own artifacts, which
+  `scope` exempts (`escape_exempt`). `scope` exited 0: no path escaped.
 - **Outside:** 113 test files (of 122 tracked `*.test.mjs` / `*.test.cjs`; the other 9 are this increment's own), the
   whole-repo `validate`, and the one committed eval pair
   (`pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json` ↔ `.dev/features/trust-fence/findings.json`).
 - **Style gates:** skipped at both sides — no shared style config (`eslint.config.mjs`, `.prettierrc.json`,
-  `.prettierignore`, `.markdownlint-cli2.jsonc`) is inside, so a style flip over the byte-identical outside files is
-  impossible (the command's deterministic skip rule).
+  `.prettierignore`, `.markdownlint-cli2.jsonc`) is inside (the command's deterministic skip rule).
 
 ## Gates, base → head (exit codes)
 
 | gate                                                                                       | base | head |
 | ------------------------------------------------------------------------------------------ | ---- | ---- |
-| `tests` (the 113 outside files)                                                            | 1    | 0    |
+| `tests` (the 113 outside files)                                                            | 0    | 0    |
 | `validate`                                                                                 | 0    | 0    |
 | `structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json` | 0    | 0    |
 
-`regressions[]`: none. `pre_existing[]`: `tests`.
+`regressions[]`: none. `pre_existing[]`: none.
 
 **REGRESSIONS: none — no deterministically-detectable breakage outside the feature.**
 
-## The red base, investigated rather than trusted
-
-The base `tests` exit 1 is one failing test out of 3706 (3701 pass, 1 fail; the four others are the style probes that
-skip in a worktree with no `node_modules`). It is a load artifact, not the base's state: the SAME base commit ran the
-same 113 files at 20:26–20:48 with **0 failures** (3702 pass) in this stage's first attempt, whose runner then crashed on
-the eval-pair record's shape before writing its map, so that result is quoted here and was not recorded. Both attempts
-ran while other sessions' suites held the machine's load average between 55 and 97, and this build's own
-`npm run check` hit a timing-sensitive test the same way (`BUILD.md`, "The aggregate gate"). The runner kept exit codes
-only, so which test failed at base is not known. **What it cannot hide:** HEAD ran the 113 outside files with **0
-failures** (3706 / 3706), so no outside test is red at HEAD for the base's red to mask.
+At the base, 3772 tests ran, 3768 passed and none failed; the other four are the style probes that skip in a worktree
+with no `node_modules`. At HEAD, 3772 of 3772 passed.
 
 ## How this stage ran (advisory orchestration)
 

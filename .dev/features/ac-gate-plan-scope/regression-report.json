@@ -1,19 +1,26 @@
 {
-  "base": "70cb51c8f3f7c1a3405b651106bc35f244948da9",
+  "base": "c1bf663ca09e2a36d9095c88226c99fd655e5265",
   "inside": [
     ".claude/commands/pharn-plan.md",
     ".claude/commands/pharn-test.md",
     ".dev/features/ac-gate-plan-scope/BUILD.md",
     ".dev/features/ac-gate-plan-scope/GRILL.md",
     ".dev/features/ac-gate-plan-scope/PLAN.md",
+    ".dev/features/ac-gate-plan-scope/REGRESSION.md",
+    ".dev/features/ac-gate-plan-scope/REVIEW.md",
+    ".dev/features/ac-gate-plan-scope/VERIFY.md",
     ".dev/features/ac-gate-plan-scope/proposed/APPLY.md",
     ".dev/features/ac-gate-plan-scope/proposed/apply.sh",
     ".dev/features/ac-gate-plan-scope/proposed/human-only.patch",
     ".dev/features/ac-gate-plan-scope/proposed/human-only.sha256",
+    ".dev/features/ac-gate-plan-scope/regression-report.json",
+    ".dev/features/ac-gate-plan-scope/verify-report.json",
+    ".dev/memory-bank/lessons-learned.md",
     "CHANGELOG.md",
     "CLAUDE.md",
     "README.md",
     "SKILLS_VERSION",
+    "docs/lessons-index.md",
     "pharn/floor/ac-gate-core.mjs",
     "pharn/floor/ac-gate-core.test.mjs",
     "pharn/floor/ac-tests-lock.mjs",
@@ -43,7 +50,7 @@
       "head": 0
     },
     "tests": {
-      "base": 1,
+      "base": 0,
       "head": 0
     },
     "validate": {
@@ -52,8 +59,6 @@
     }
   },
   "regressions": [],
-  "pre_existing": [
-    "tests"
-  ],
+  "pre_existing": [],
   "verdict": "no-regressions"
 }
