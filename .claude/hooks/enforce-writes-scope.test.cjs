@@ -2441,7 +2441,9 @@ const OTHER_SID = "99999999-8888-7777-6666-555555555555";
 
 // A stand-in for Claude Code's per-user temp layout, <base>/claude-<n>/<key>/<session>/{scratchpad,tasks}, under
 // the OS temp directory — so only the rule under test can allow a path in it (a path below a claude-<n> folder is
-// never an ordinary temp path).
+// never an ordinary temp path). Since GATE-2 review m3 the scratchpad must sit DIRECTLY under a temp root, so a test
+// that expects its own scratchpad to be recognised passes `TMPDIR: t.base` (TEMP_ROOT_ENV below).
+const TEMP_ROOT_ENV = (t) => ({ TMPDIR: t.base });
 function claudeTempLayout() {
   const base = fs.realpathSync(tmp());
   const perUser = join(base, "claude-4242", "-proj-key");
@@ -2482,8 +2484,8 @@ test("★ M7: the scratchpad — only this session's own, recognised from the pa
     [join(t.ownTasks, "a.output"), 2], // even this session's task output: only its scratchpad is admitted
     [join(t.base, "claude-4242", "x.txt"), 2],
   ];
-  for (const [p, want] of cases) assert.equal(hookSession(cwd, p, fields).status, want, `scratchpad case: ${p}`);
-  const r = hookSession(cwd, join(t.other, "gates.sh"), fields);
+  for (const [p, want] of cases) assert.equal(hookSession(cwd, p, fields, TEMP_ROOT_ENV(t)).status, want, `scratchpad case: ${p}`);
+  const r = hookSession(cwd, join(t.other, "gates.sh"), fields, TEMP_ROOT_ENV(t));
   assert.match(r.stderr, CLAUDE_STATE_CUE);
   assert.doesNotMatch(r.stderr, BASH_SCRATCH_CUE);
   // GATE-2 F2 (L27): the payload names this session's scratchpad, so the body may offer it — and does.
@@ -2505,7 +2507,9 @@ test("★ M7 fail-closed: a scratchpad the payload does not name as THIS session
     { session_id: SID, scratchpad_dir: 42 }, // not a string
     { session_id: SID, scratchpad_dir: join(t.base, "claude-4242\0", "-proj-key", SID, "scratchpad") }, // a NUL
   ];
-  for (const fields of bad) assert.equal(hookSession(cwd, target, fields).status, 2, `fields: ${JSON.stringify(fields)}`);
+  // The base stands in for the temp root, so each case fails on its FIELDS alone — the control proves it.
+  assert.equal(hookSession(cwd, target, { session_id: SID, scratchpad_dir: t.own }, TEMP_ROOT_ENV(t)).status, 0, "control");
+  for (const fields of bad) assert.equal(hookSession(cwd, target, fields, TEMP_ROOT_ENV(t)).status, 2, `fields: ${JSON.stringify(fields)}`);
   // With no usable fields the target may be the agent's OWN scratchpad (grill G1).
   const r = hookSession(cwd, target, {});
   assert.match(r.stderr, CLAUDE_STATE_CUE);
@@ -2540,6 +2544,56 @@ test("★ M7 fail-closed: a transcript_path that is absent or malformed grants n
   for (const tp of bad) {
     const fields = tp === undefined ? {} : { transcript_path: tp };
     assert.equal(hookSession(cwd, target, fields, env).status, 2, `transcript_path: ${String(JSON.stringify(tp)).slice(0, 80)}`);
+  }
+});
+
+test("★ M7 m3: a session path field not in normal form grants nothing, and a scratchpad must have Claude Code's own shape under a temp root", () => {
+  const cwd = seedInstalledProject(tmp());
+  const ccd = fs.realpathSync(tmp());
+  const env = { CLAUDE_CONFIG_DIR: ccd };
+  const memory = join(ccd, "projects", "p", "memory", "n.md");
+  assert.equal(hookSession(cwd, memory, { transcript_path: transcriptIn(ccd, "p") }, env).status, 0, "control: transcript");
+  // String concatenation, never join(): join() would normalize the very segments under test.
+  for (const tp of [
+    `${ccd}/projects/other/../p/s.jsonl`,
+    `${ccd}/projects/p/./s.jsonl`,
+    `${ccd}/projects//p/s.jsonl`,
+    `${ccd}/projects/p/sub/../s.jsonl`,
+  ]) {
+    assert.equal(hookSession(cwd, memory, { transcript_path: tp }, env).status, 2, `transcript_path: ${tp}`);
+  }
+  const t = claudeTempLayout();
+  const target = join(t.own, "gates.sh");
+  assert.equal(hookSession(cwd, target, { session_id: SID, scratchpad_dir: t.own }, TEMP_ROOT_ENV(t)).status, 0, "control: scratchpad");
+  const shapes = [
+    [t.own, {}], // the right shape, but its base is not a temp root here
+    [`${t.base}/claude-4242/x/../-proj-key/${SID}/scratchpad`, TEMP_ROOT_ENV(t)], // a `..` segment
+    [`${t.base}/claude-4242/./-proj-key/${SID}/scratchpad`, TEMP_ROOT_ENV(t)], // a `.` segment
+    [join(t.base, "claude-4242", SID, "scratchpad"), TEMP_ROOT_ENV(t)], // no key folder
+    [join(t.base, "nested", "claude-4242", "-proj-key", SID, "scratchpad"), TEMP_ROOT_ENV(t)], // not directly under the temp root
+    [join(t.base, "Claude-4242", "-proj-key", SID, "scratchpad"), TEMP_ROOT_ENV(t)], // the folder compared exactly
+  ];
+  for (const [dir, over] of shapes) {
+    const p = join(dir, "gates.sh"); // join() normalizes: the target lies inside the directory the field NAMES
+    assert.equal(hookSession(cwd, p, { session_id: SID, scratchpad_dir: dir }, over).status, 2, `scratchpad_dir: ${dir}`);
+  }
+});
+
+test("★ M7 m1: nothing inside the Claude config directory is a temp path, whichever of it and the temp root contains the other", () => {
+  const cwd = seedInstalledProject(tmp());
+  const ccd = fs.realpathSync(tmp());
+  const fields = { transcript_path: transcriptIn(ccd, "this-proj") };
+  for (const tmpRoot of [join(ccd, "projects"), ccd]) {
+    const env = { CLAUDE_CONFIG_DIR: ccd, TMPDIR: tmpRoot };
+    const other = hookSession(cwd, join(ccd, "projects", "OTHER", "memory", "x.md"), fields, env);
+    assert.equal(other.status, 2, `another project's memory, TMPDIR=${tmpRoot}`);
+    assert.match(other.stderr, CLAUDE_STATE_CUE);
+    assert.equal(hookSession(cwd, join(ccd, "projects", "loose.txt"), fields, env).status, 2, `a loose file, TMPDIR=${tmpRoot}`);
+    assert.equal(
+      hookSession(cwd, join(ccd, "projects", "this-proj", "memory", "n.md"), fields, env).status,
+      0,
+      `control: this project's own memory, TMPDIR=${tmpRoot}`
+    );
   }
 });
 

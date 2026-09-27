@@ -468,3 +468,82 @@ human-only.sha256` prints OK for all three. The patch and its checksums are unch
 - the reconcile epoch was re-opened as after merge #1: PLAN setter, then `reconcile-baseline.mjs --anchor --by
 write-guard-narrowing-post-merge-2`, after the merge commit. `check-bash-reconcile.mjs --base . --require-baseline`
   (`apply.sh` step 2) then reads CLEAN; the non-test gates were re-run after the anchor (recorded in `SHIP.md`).
+
+## After the patch review (2026-09-27)
+
+- input: the orchestrator's independent review of the regenerated patch — nothing blocking in the hooks; I1, m1,
+  m3, m4 to fix, m2 to name, three pre-existing items to record (`PLAN.md`, "The independent patch review, and its
+  fix pass"). A decision of the orchestrating model under the maintainer's delegation, not a human approval.
+
+### What changed
+
+- **I1 + m4, `proposed/apply.sh`** (and its pinned copy in PLAN, byte-identical, 33 lines):
+  - prints `shasum -a 256` of `human-only.patch` first, as a record the maintainer compares with the value given
+    out of band before running it;
+  - refuses unless `git apply --numstat` lists exactly the three paths;
+  - requires the reconcile baseline CLEAN and the three files equal to HEAD;
+  - applies with one `--include=` per path;
+  - snapshots `git status --porcelain --ignored --untracked-files=all` before and after and requires the
+    difference to be exactly the three paths, each a regular file and not a symlink;
+  - on any failure from the apply on — the working-tree check, the checksums, the tests or the commit itself —
+    restores the three files with `git checkout HEAD --` and exits 1, so no patched byte is ever left uncommitted
+    and un-anchored. `APPLY.md` now says what is enforced instead of "nothing more".
+- **m1** (deny-only): `isOrdinaryTempPath()` refuses any target inside the Claude config directory, whichever of it
+  and the temp root contains the other (the reviewer's `TMPDIR=<config>/projects` repro); the home-directory
+  exclusion keeps its condition, so `TMPDIR=$HOME/tmp` stays ordinary.
+- **m3** (deny-only): `payloadPath()` refuses a path not in normal form (`path.normalize(v) !== v`, or a `.`/`..`
+  segment); `ownScratchpadDir()` accepts only `<temp root>/claude-<digits>/<key>/<session_id>/scratchpad` with the
+  temp root one of `tempRoots()`, every part compared exactly.
+- **m2**: `LIMITS.md §7` names `cc-socks`, `claude-mcp-browser-bridge-*` and the desktop app's `ShipIt` folders
+  — all three present on this machine — as ordinary temp paths to rule 3.
+- Doc restatements of rules 2 and 3 updated to match (L64): the enforce header and `OUT_OF_PROJECT_PLACES`,
+  `LIMITS.md §7`, `CLAUDE.md`, `README.md`, `pharn/floor/README.md`, the CHANGELOG entry, `APPLY.md`.
+- Tests: two new (`★ M7 m1: …`, `★ M7 m3: …`, each with a control); the two scratchpad tests pass `TMPDIR` so
+  their layout sits under a temp root (m3), and the fail-closed one gained a control. The probe gained five rows
+  (m1 ×2, m3 ×3).
+
+### Named follow-ups (pre-existing, recorded by the review, not fixed here)
+
+- `protect-fifo-git-hang` — `protect-trusted-paths.cjs` can block on a FIFO planted at a `.git` path it reads.
+- `protect-firmlink-spelling` — a macOS firmlink spelling of a protected path passes `protect-trusted-paths.cjs`
+  while `enforce-writes-scope.cjs` denies it.
+- `deep-path-segment-slowness` — a path of ~200k segments makes both walks slow (bounded, not a hang).
+
+### The regenerated patch and its verification
+
+Regenerated once: `handoff/` recreated from HEAD plus the reviewed patch (sha256-checked), the enforce hook edited
+with the Edit tool, `handoff/limits-edits.json` written as three incremental edits on the reviewed `LIMITS.md`
+(each `find` matched once), the runner as before (a throwaway worktree under the OS temp directory), then
+`handoff/` deleted. `protect-trusted-paths.cjs` is byte-identical to the reviewed version.
+
+- every gate of `scripts.check` alone: 0; the chain `npm run check`: 0; the full suite against the PATCHED hooks:
+  **4250 tests, 4250 pass**;
+- the 32 expected-fail titles, TAP in that worktree: **32 of 32 `ok`**, no SKIP directive;
+- the patch: 753 lines (was 730); no added line matches `/\b6\.\d+\.\d+\b/`; `git apply --check` 0; `git apply
+--numstat` lists exactly the three files;
+- D1 over the final bytes (HEAD's in-tree hooks vs the patch rebuilt from HEAD, sha256-checked): **enforce 560, 0
+  differences; protect 520, 0 differences**; the behavioural probe **56 of 56** (the 51 rows before, the own-scratchpad
+  row now under a temp root, and five m1/m3 rows); hook cost HEAD / patched 29.7 / 30.0 ms (protect),
+  29.6 / 30.3 ms (enforce out-of-project), 29.0 / 29.3 ms (enforce in-repo).
+
+```text
+a5e22d3d2aaa69d1944ab75903ca44aed73f87e0ee0b6d1576ee192c23d9f608  .claude/hooks/protect-trusted-paths.cjs
+75439d92cf328b7abb617e90531fe385527b90fcce78ed65c87f7f08e0e864cd  .claude/hooks/enforce-writes-scope.cjs
+9f6d5811434ce13714aa719864931db889b87e97611643c5857753b48eaa80d6  LIMITS.md
+```
+
+`human-only.patch` itself: `6cceeebc8f7632c391896351adbe1c0bf5ace44136cd69be103480e6d82b5aff`.
+
+### The expected-fail list grows to 32
+
+Against the unpatched hooks on this tree: **4250 tests, 4218 pass, 32 fail**. The 32 are the 30 above plus the two
+new tests:
+
+```text
+.claude/hooks/enforce-writes-scope.test.cjs :: ★ M7 m1: nothing inside the Claude config directory is a temp path, whichever of it and the temp root contains the other
+.claude/hooks/enforce-writes-scope.test.cjs :: ★ M7 m3: a session path field not in normal form grants nothing, and a scratchpad must have Claude Code's own shape under a temp root
+```
+
+No other title moved (the diff of the two lists adds exactly these lines).
+
+⟨pending-applysh⟩

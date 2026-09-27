@@ -27,8 +27,8 @@ the plan names was written by the agent. This folder carries the three files' ch
      - this project's auto-memory folder, for the key of the folder holding the session's `transcript_path`
        and the key Claude Code derives from the repository's main checkout;
      - this session's own scratchpad;
-     - an ordinary temp path, never with a `claude-<uid>` folder in it and never inside the config or home
-       directory when either sits in a temp root.
+     - an ordinary temp path, never with a `claude-<uid>` folder in it, never inside the config directory, and
+       not inside the home directory when that sits in a temp root.
 
      The main-checkout key mirrors an undocumented Claude Code derivation, and it fails closed if that
      derivation drifts. A project is its key: two paths that differ only in characters outside `[A-Za-z0-9]`
@@ -57,11 +57,23 @@ That worktree holds the reconciliation baseline the checkpoint in step 2 reads. 
 script refuses there by itself as a backstop.
 
 1. **Refuses on `main`.**
-2. **Requires a clean reconciliation baseline** (`check-bash-reconcile.mjs --base . --require-baseline`). An
-   absent or dirty baseline stops the script (`INCONCLUSIVE` or `ESCAPE`) instead of applying onto an unverified
-   tree. Never delete or hand-edit a baseline to get past it.
-3. **`git apply --check`, then `git apply`** the patch onto the three real paths — nothing more.
-4. **Verifies the applied bytes**:
+2. **Prints the patch's own sha256** (`shasum -a 256 human-only.patch`) as a record. Compare the value with the
+   one the orchestrator gives you separately **before you run the script** — run that same `shasum` line
+   yourself first — and do not run it if they differ. The script cannot make this comparison for you: a value it
+   read from this folder could be changed together with the patch, and it does not pause.
+3. **Refuses a patch that touches anything but the three files.** `git apply --numstat` must list exactly
+   `.claude/hooks/enforce-writes-scope.cjs`, `.claude/hooks/protect-trusted-paths.cjs` and `LIMITS.md`, once
+   each; a hunk for any other path (a new `.claude/settings.local.json`, say — gitignored, so a later `git status`
+   would not show it) stops the script with nothing applied.
+4. **Requires a clean reconciliation baseline** (`check-bash-reconcile.mjs --base . --require-baseline`), and the
+   three files to equal HEAD. An absent or dirty baseline stops the script (`INCONCLUSIVE` or `ESCAPE`) instead
+   of applying onto an unverified tree. Never delete or hand-edit a baseline to get past it.
+5. **Applies the patch to the three paths only**: `git apply --check`, then `git apply` with one `--include=` per
+   path. It snapshots `git status --porcelain --ignored --untracked-files=all` before and after, and requires the
+   two to differ in exactly those three paths, each a regular file and not a symlink. What is enforced is that
+   set: the patch may change the three files' contents however it says, and nothing else in the working tree may
+   move.
+6. **Verifies the applied bytes**:
    - `shasum -a 256 -c` against `human-only.sha256`;
    - a live `node --test` run of every suite that executes either guard or pins the files they read:
      - the five hook suites (`protect-trusted-paths`, `enforce-writes-scope`, `set-writes-scope`,
@@ -70,11 +82,15 @@ script refuses there by itself as a backstop.
      - `check-spec.test.mjs`, `check-ac-tests.test.mjs` and `stage-verify.test.mjs`;
      - `.dev/floor/command-hygiene.test.mjs`.
 
-   **If either check fails, the script restores the three files from HEAD and exits 1, and nothing is
-   committed.** It is safe to re-run after investigating.
+**If anything from step 5 on fails — the apply, the working-tree check, a checksum, a test, or the commit itself —
+the script restores the three files from HEAD (`git checkout HEAD -- <the three>`) and exits 1.** Nothing is
+committed and nothing is re-anchored, so patched bytes are never left behind uncommitted. Steps 1–4 stop before
+anything is applied. It is safe to re-run after investigating. A restore touches only the three files: if the
+working-tree check names another path, look at that path yourself — the script does not delete what it did not
+write.
 
-5. **Commits** exactly the three paths, authored as you (the human running the shell), with a fixed message.
-6. **Re-sets the writes-scope from the PLAN, then re-anchors the reconciliation baseline**
+1. **Commits** exactly the three paths, authored as you (the human running the shell), with a fixed message.
+2. **Re-sets the writes-scope from the PLAN, then re-anchors the reconciliation baseline**
    (`--by write-guard-narrowing-apply`). The setter runs before the anchor, so the anchor records the scope that
    is live after your commit.
 
@@ -89,8 +105,10 @@ guards. Afterwards the same verify is expected to PASS.
 
 - **The reconcile checkpoint refuses (`ESCAPE` or `INCONCLUSIVE`).** Investigate what changed since the anchor.
   Never delete or hand-edit the baseline to silence it: that is the failure mode the checkpoint exists to catch.
-- **The verification step fails and the three files are restored.** Nothing was committed. Re-run `apply.sh`
-  once you understand why (a stale `node_modules`, a `shasum` that differs, …). A failed attempt changes neither
-  the patch nor its checksums.
+- **The patch's sha256 differs from the value you were given, or the script refuses the patch's file list.** Do
+  not apply it; tell the orchestrator. The patch in this folder is not the one that was reviewed.
+- **A later step fails and the three files are restored.** Nothing was committed or re-anchored. Re-run
+  `apply.sh` once you understand why (a stale `node_modules`, a `shasum` that differs, a commit hook, …). A failed
+  attempt changes neither the patch nor its checksums.
 - **You disagree with the patch itself.** Do not apply it. Nothing downstream depends on the patch having been
   applied in order to review the rest of the increment.

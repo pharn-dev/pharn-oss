@@ -759,8 +759,8 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   from your repository's main checkout, so a linked-worktree or subdirectory session still reaches its
   memory), **this session's own scratchpad**, and **an ordinary temp path** (under the OS temp directory or
   `/tmp`, but never inside a `claude-<uid>` folder, where every Claude Code session keeps its scratchpad and
-  task output, nor inside the Claude config directory or your home directory when either lies inside that
-  temp directory). It never allows a path inside another git tree, nor another spelling of the project's own
+  task output, never inside the Claude config directory, and not inside your home directory when that lies
+  inside the temp directory). It never allows a path inside another git tree, nor another spelling of the project's own
   path: a different letter case or Unicode form reaches the project's own files on a case-insensitive volume,
   so such a path is denied as the project's own. This allowance is **new in 6.24.0**: before it, every
   out-of-project path was denied, as it still is in every other posture. Every other out-of-project path

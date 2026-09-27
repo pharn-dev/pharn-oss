@@ -47,11 +47,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (for the key of the folder holding the session's `transcript_path`, and the key Claude Code derives from the
   repository's main checkout, so linked-worktree and subdirectory sessions keep working — the second mirrors an
   undocumented Claude Code derivation and fails closed if it drifts), this session's own scratchpad (the payload's
-  `scratchpad_dir`, when it ends in `<session_id>/scratchpad`), and an ordinary temp path: never one with a
-  `claude-<uid>` folder in it, and never one inside the Claude config directory or the home directory when either
+  `scratchpad_dir`, only in the shape Claude Code writes, `<temp root>/claude-<uid>/<key>/<session_id>/scratchpad`),
+  and an ordinary temp path: never one with a `claude-<uid>` folder in it, never one inside the Claude config
+  directory, whichever of it and the temp root contains the other, and not one inside the home directory when that
   sits in a temp root. A project here is its key, so two paths that differ only in characters outside
-  `[A-Za-z0-9]` share one memory folder, as they do in Claude Code. A payload field that is absent or malformed
-  grants nothing from the place that needs it. A denied write to Claude Code's own state gets its own message,
+  `[A-Za-z0-9]` share one memory folder, as they do in Claude Code. A payload field that is absent, malformed or
+  not in normal form (a `.` or `..` segment) grants nothing from the place that needs it. A denied write to Claude Code's own state gets its own message,
   which offers no Bash route and names this session's scratchpad as a route only when the payload identifies it.
   Both hook files and
   `LIMITS.md §7` are human-only: they change through a patch the build verified and a human applied.

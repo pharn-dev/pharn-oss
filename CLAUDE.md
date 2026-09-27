@@ -1301,11 +1301,12 @@ the rule has to be the thing that holds.
   (`$CLAUDE_CONFIG_DIR` when set, else `~/.claude`), for the key of the folder holding this session's
   `transcript_path` and the key Claude Code derives from the repository's main checkout (a mirror of an
   undocumented Claude Code derivation that fails closed if it drifts, so a linked-worktree or subdirectory
-  session still reaches its memory); **this session's own scratchpad**, the payload's `scratchpad_dir` when it
-  ends in `<session_id>/scratchpad`; and **an ordinary temp path** under `os.tmpdir()` or `/tmp` — never with a
-  `claude-<uid>` folder in its path, and never inside the Claude config directory or the home directory when
-  either lies inside the temp root. A payload field that is absent or malformed grants nothing from the place
-  that needs it. Never a path inside another git tree, never the project root itself, and never another
+  session still reaches its memory); **this session's own scratchpad**, the payload's `scratchpad_dir` only in the
+  shape Claude Code writes, `<temp root>/claude-<uid>/<key>/<session_id>/scratchpad`; and **an ordinary temp
+  path** under `os.tmpdir()` or `/tmp` — never with a `claude-<uid>` folder in its path, never inside the Claude
+  config directory (whichever of it and the temp root contains the other), and not inside the home directory
+  when that lies inside the temp root. A payload field that is absent, malformed or not in normal form (a `.` or
+  `..` segment) grants nothing from the place that needs it. Never a path inside another git tree, never the project root itself, and never another
   SPELLING of the project's own path (a different letter case, Unicode form or trailing dot/space, which on a
   case-insensitive volume reaches the project's own files: it is denied as the project's own — re-review R1);
   every other out-of-project path (another project's memory, dotfiles, `~/.ssh`, `~/.claude/settings*.json`,

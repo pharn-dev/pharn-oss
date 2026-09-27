@@ -93,6 +93,8 @@ deferred:
   (`.dev/features/writes-scope-run-only/SHIP.md`).
 - **Named, not built (P7):** `windows-claude-temp-layout` (GATE-1 ruling 5) and `custom-auto-memory-dir`
   (`PLAN.md`, "Named follow-ups").
+- **Named by the independent patch review, pre-existing, not fixed here:** `protect-fifo-git-hang`,
+  `protect-firmlink-spelling`, `deep-path-segment-slowness` (`BUILD.md`, "After the patch review").
 
 ## For the orchestrator, before the apply
 
@@ -111,6 +113,13 @@ deferred:
   and, applied in a throwaway directory, `shasum -a 256 -c`; the expected-fail list on the merged tree is the same 30
   (4248 tests, 4218 pass); the reconcile epoch re-anchored as `write-guard-narrowing-post-merge-2`, after which
   `apply.sh`'s step 2 reads CLEAN (`BUILD.md`, "After merge #2").
+- **The independent patch review, and its fix pass** (`PLAN.md` and `BUILD.md`, "After the patch review"): I1 and
+  m4 fixed in `apply.sh` (a file-list bound, per-path `--include`, a before/after working-tree check, the patch's own
+  sha256 printed first, and a restore from HEAD on every failure, the commit included); m1 and m3 fixed in the
+  patch, both deny-only; m2 named in `LIMITS.md §7`. The patch was regenerated once (753 lines, sha256
+  `6cceeebc…6d82b5aff`). The expected-fail list is now **32** — the 30 plus the two new m1/m3 tests. The reviewer's
+  I1 tamper repro is refused by the committed `apply.sh`, a failing commit is restored, and the honest run commits
+  and re-anchors (`BUILD.md`). The reconcile epoch was re-anchored as `write-guard-narrowing-post-review`.
 
 chain ran; the named floor verdicts are as shown — this is NOT a judgment that the increment is good or wise; that is
 the human's call at the post-review gate.

@@ -367,16 +367,33 @@ LIMITS.md` → `proposed/human-only.patch`; each file's sha256 (node `crypto`) �
    #!/bin/sh
    set -eu
    F=.dev/features/write-guard-narrowing/proposed
-   [ "$(git branch --show-current)" != "main" ] || { echo "apply.sh: refusing to commit the guard change on main" >&2; exit 1; }
-   node pharn/floor/check-bash-reconcile.mjs --base . --require-baseline
-   git apply --check "$F/human-only.patch"
-   git apply "$F/human-only.patch"
-   if ! { shasum -a 256 -c "$F/human-only.sha256" && node --test .claude/hooks/protect-trusted-paths.test.cjs .claude/hooks/enforce-writes-scope.test.cjs .claude/hooks/set-writes-scope.test.cjs .claude/hooks/hook-wiring.test.cjs .claude/hooks/writes-scope-release.test.cjs pharn/floor/run-marker.test.mjs pharn/floor/check-bash-reconcile.test.mjs pharn/floor/reconcile-baseline.test.mjs pharn/floor/check-spec.test.mjs pharn/floor/check-ac-tests.test.mjs pharn/floor/stage-verify.test.mjs .dev/floor/command-hygiene.test.mjs; }; then
-     git checkout -- .claude/hooks/protect-trusted-paths.cjs .claude/hooks/enforce-writes-scope.cjs LIMITS.md
-     echo "apply.sh: FAILED - the three files were restored from HEAD; nothing was committed" >&2
+   P="$F/human-only.patch"
+   FILES=".claude/hooks/enforce-writes-scope.cjs .claude/hooks/protect-trusted-paths.cjs LIMITS.md"
+   restore() {
+     git checkout HEAD -- $FILES
+     echo "apply.sh: FAILED ($1) - the three files were restored from HEAD; nothing was committed" >&2
      exit 1
-   fi
-   git commit -q -m "fix(hooks): the write guards judge the path the kernel writes; the out-of-project allowance is this project's and this session's (human-applied)" -- .claude/hooks/protect-trusted-paths.cjs .claude/hooks/enforce-writes-scope.cjs LIMITS.md
+   }
+   [ "$(git branch --show-current)" != "main" ] || { echo "apply.sh: refusing to commit the guard change on main" >&2; exit 1; }
+   echo "apply.sh: sha256 of the patch about to be applied - compare it with the value you were given:"
+   shasum -a 256 "$P"
+   TOUCHED="$(git apply --numstat "$P" | cut -f3 | LC_ALL=C sort | tr '\n' ' ')"
+   WANTED="$(printf '%s\n' $FILES | LC_ALL=C sort | tr '\n' ' ')"
+   [ "$TOUCHED" = "$WANTED" ] || { echo "apply.sh: the patch touches [$TOUCHED], not exactly [$WANTED] - refusing, nothing applied" >&2; exit 1; }
+   node pharn/floor/check-bash-reconcile.mjs --base . --require-baseline
+   git diff --quiet HEAD -- $FILES || { echo "apply.sh: the three files differ from HEAD already - refusing, nothing applied" >&2; exit 1; }
+   T="$(mktemp -d)"
+   trap 'rm -rf "$T"' EXIT
+   git status --porcelain --ignored --untracked-files=all | LC_ALL=C sort > "$T/before"
+   git apply --check --include=.claude/hooks/enforce-writes-scope.cjs --include=.claude/hooks/protect-trusted-paths.cjs --include=LIMITS.md "$P"
+   git apply --include=.claude/hooks/enforce-writes-scope.cjs --include=.claude/hooks/protect-trusted-paths.cjs --include=LIMITS.md "$P" || restore "git apply"
+   git status --porcelain --ignored --untracked-files=all | LC_ALL=C sort > "$T/after"
+   CHANGED="$({ LC_ALL=C comm -23 "$T/before" "$T/after"; LC_ALL=C comm -13 "$T/before" "$T/after"; } | cut -c4- | LC_ALL=C sort -u | tr '\n' ' ')"
+   [ "$CHANGED" = "$WANTED" ] || restore "the working tree changed in [$CHANGED], not exactly [$WANTED]"
+   for f in $FILES; do [ -f "$f" ] && [ ! -L "$f" ] || restore "$f is not a regular file"; done
+   shasum -a 256 -c "$F/human-only.sha256" || restore "sha256"
+   node --test .claude/hooks/protect-trusted-paths.test.cjs .claude/hooks/enforce-writes-scope.test.cjs .claude/hooks/set-writes-scope.test.cjs .claude/hooks/hook-wiring.test.cjs .claude/hooks/writes-scope-release.test.cjs pharn/floor/run-marker.test.mjs pharn/floor/check-bash-reconcile.test.mjs pharn/floor/reconcile-baseline.test.mjs pharn/floor/check-spec.test.mjs pharn/floor/check-ac-tests.test.mjs pharn/floor/stage-verify.test.mjs .dev/floor/command-hygiene.test.mjs || restore "tests"
+   git commit -q -m "fix(hooks): the write guards judge the path the kernel writes; the out-of-project allowance is this project's and this session's (human-applied)" -- $FILES || restore "git commit"
    node .claude/hooks/set-writes-scope.cjs --from-plan .dev/features/write-guard-narrowing/PLAN.md
    node pharn/floor/reconcile-baseline.mjs --anchor --by write-guard-narrowing-apply
    echo "apply.sh: applied, tested and committed - resume at /pharn-dev-verify"
@@ -533,6 +550,28 @@ approval** — with one fix pass, then a stop before anyone applies anything:
 
 In `## Files`, `handoff/limits-edits.json` now carries INCREMENTAL edits applied on top of the previous proposed
 patch (the runner applies that patch first), and `handoff/` is again transient, deleted after the regeneration.
+
+## The independent patch review, and its fix pass (2026-09-27)
+
+The orchestrator's independent review of the regenerated patch found nothing blocking in the hooks and asked for one
+more regeneration — a decision of the orchestrating model under the maintainer's delegation, not a human approval:
+
+- **I1** — `apply.sh` did not bound which files the patch touches (a hunk creating a gitignored
+  `.claude/settings.local.json` applied and passed `shasum -c`). It now prints the patch's own sha256 before
+  anything else; refuses unless `git apply --numstat` lists exactly the three paths; requires the three to equal
+  HEAD; applies with one `--include=` per path; and requires `git status --porcelain --ignored
+--untracked-files=all` to differ before and after in exactly those three paths, each a regular file. The pinned
+  copy in "Chain sequencing", step 5, carries the new script byte for byte.
+- **m4** — every failure from the apply on, the commit included, restores the three files from HEAD (`git
+checkout HEAD --`) and exits 1; nothing is left uncommitted and un-anchored.
+- **m1** (deny-only) — §2 rule 3: nothing inside the Claude config directory is an ordinary temp path, whichever
+  of it and the temp root contains the other; the home-directory exclusion keeps its condition.
+- **m3** (deny-only) — §2: `transcript_path` and `scratchpad_dir` must be in normal form (absolute, no `.`/`..`
+  segment); rule 2 accepts only `<temp root>/claude-<uid>/<key>/<session_id>/scratchpad`.
+- **m2** — no code change; `LIMITS.md §7` names `cc-socks`, `claude-mcp-browser-bridge-*` and the desktop app's
+  `ShipIt` folders as ordinary temp paths to rule 3.
+- Named follow-ups, pre-existing and not fixed here: `protect-fifo-git-hang`, `protect-firmlink-spelling`,
+  `deep-path-segment-slowness` (`BUILD.md`, "After the patch review").
 
 ## Open questions (HALT)
 
