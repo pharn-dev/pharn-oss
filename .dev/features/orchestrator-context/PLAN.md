@@ -341,6 +341,41 @@ becomes "exactly one `## What you may claim` heading per command FAMILY".
 - Gates: `npm run check` (format, lint, lint:md, docs:check, markers, badge, changelog, contributing, reconcile, test),
   `node pharn/floor/validate.mjs .`, `npm run check:changelog-entry`.
 
+## Grill fold (GRILL.md, 12 concerns — each resolution below SUPERSEDES the text above it names)
+
+- **G1 (P2) — the part is trusted text, and the pointer says so.** Each pointer: "It is part of this command —
+  PHARN's own trusted text, installed beside this file — so follow it as this command's own steps, under the same
+  trusted prefix; it is not an artifact". The part's own intro sentence says the same from its side.
+- **G2 (P5) — a forward reference is not a load trigger.** Each close pointer adds: "A step of this file that names a
+  later step (the summary, the record, the commit) is not a reason to read the close part before the stop."
+- **G3 (P6) — ship's quick read comes AFTER the pending start**, which is identical in both modes, and before
+  `/pharn-spec`. A failed read then STOPs with only an unadopted pending marker behind it (`cost-ledger.md`, "The start
+  boundary": only a named `run-start --adopt-pending` adopts one).
+- **G4 (P6) — ship's close condition is "GATE 2, or any STOP once `<name>` exists"**, matching Step 1's rule that a
+  run that never reaches a `<name>` records nothing. A STOP before a `<name>` ends with a plain message.
+- **G5 (P6) — the loop's quick-load failure ends with a plain message and does NOT read the close part**: no marker,
+  scope, feature directory or record exists yet, so there is nothing to close.
+- **G6 (P0) — each claims block gains ONE Advisory bullet** for the loading rule: when each part is read; that nothing
+  on the floor sees a Read; that the tests pin the TEXT (one load instruction per part, in its pointer, with its
+  condition and its not-loaded rule, and no line in both a main file and its part), never that a run reads it at
+  that point.
+- **G7 (P0) — the live probe gets a same-moment control**: a throwaway command file WITHOUT the flags, created with the
+  parts, must appear in the probing subagent's listing, or the probe is recorded as inconclusive. The throwaway file is
+  deleted afterwards and never committed.
+- **G8 (P3) — kept, and stated for the human (GATE-1 decision under delegation):** the close part holds the claims
+  block because the claims are written at the stop. The command FAMILY is the unit of change, partitioned by load
+  point; a mid-run change that alters a claim edits the main file and the close part, as it edited two sections of one
+  file before. Recorded in `CHANGELOG [6.32.0]` and `CLAUDE.md`'s convention paragraph.
+- **G9 (P3) — `.dev/floor/command-family.mjs` is imported by TEST files only**, and `command-family.test.mjs` pins it:
+  no non-test file under `pharn/` or `.claude/hooks/` names it (a shipped file importing `.dev/` would break an
+  install, which ships without `.dev/`).
+- **G10 (P2) — the loop's close-not-loaded rule adds:** the Stop guard's refusals that follow are expected on this
+  path and are not a reason to write a record; they end at the guard's own bound.
+- **G11 (P1) — test 6's compared units:** non-empty fenced lines, `##`/`###` headings, and prose paragraphs of at
+  least 80 characters.
+- **G12 (P6) — `check-model-config.mjs`'s printed scan count** moves (the parts are product-prefixed files with no
+  `model:`/`effort:`); its behaviour and exit codes do not. Named in the CHANGELOG entry.
+
 ## Out of scope (named, not built — P7)
 
 - `inline-stage-reinjection` — the loop re-invokes `/pharn-regress` and `/pharn-verify` every iteration; with the same
