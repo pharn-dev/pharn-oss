@@ -23,6 +23,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.33.0] - 2026-09-28
+
+### Changed
+
+- 2026-09-28: **A later `/pharn-regress` of the same `/pharn-loop` or `/pharn-ship` run reuses the BASE-side evidence an
+  earlier one produced — no base worktree, no install, no base gate — when tested code proves it was produced for
+  exactly the BASE requirement this invocation has; otherwise the base side runs as before**
+  ([`pharn/floor/regress-base-reuse-core.mjs`](./pharn/floor/regress-base-reuse-core.mjs),
+  [`pharn/floor/regress-base-reuse.mjs`](./pharn/floor/regress-base-reuse.mjs),
+  [`pharn/floor/stage-regress.mjs`](./pharn/floor/stage-regress.mjs)). `SKILLS_VERSION` 6.32.1 → 6.33.0 (minor: a new
+  shipped capability), with the README badge. `MIN_CLI` stays 0.5.0: no installed path moves.
+  - **The trigger.** The maintainer's explicit direction ("PR 2: Reuse Verified BASE Regression Evidence"). Measured
+    on `main`'s floor over a fixture: two identical regress invocations of one run each made 1 worktree checkout, 1
+    install, 3 base gate runs and 3 head gate runs; the second repeated all of it (`.dev/features/regress-base-reuse/
+MEASUREMENT.md`).
+  - **The requirement, derived from the evidence.** The base SHA; the spec `run-gates.mjs init --side base` copies
+    (now `gate-run-core.mjs` `baseSpecFrom`, one owner for base-init and the predicate — outside tests, eval pairs,
+    style skip, explicit/discovered gates all live there); the install decision; the timeout; the stamp and fingerprint
+    versions; and the content of every root-level HEAD path the change touched, because the base worktree is nested in
+    the HEAD tree and a parent-directory search reaches its root. The base stamp itself carries most of it; the record
+    carries only the install decision, the timeout and those root files. No-install, failed-install and timed-out
+    evidence is never reused.
+  - **Lifetime: one delivery run.** Bound to the run marker the orchestrator already opens (`require-loop-record.cjs`,
+    `run-marker.mjs`), by sha256 of its bytes and the write guard's own 24 h mtime rule — hashed, never parsed. An
+    invocation with no open delivery-run marker never reuses and never records; a marker an interrupted run left
+    (≤ 24 h) makes a standalone invocation behave as part of that run.
+  - **Where it lives.** The evidence stays in `.pharn/pharn-regress/base-gates/` (the fresh start now keeps that one
+    directory; check-loop-fresh reads it unchanged). The binding record is `<git dir>/pharn-regress-base-reuse.json`,
+    which the composed write guards deny to the write tools — protect-trusted-paths in a main checkout, enforce-writes-scope in a linked worktree — while `.pharn/**` is always writable to them (L65). A persisted
+    HIT is re-decided in full at the verdict; a record is published only if the predicate accepts it, for the run and
+    requirement the decision saw (the base side was produced for that requirement).
+  - **Unchanged:** `check-regress.mjs`, `validateStamp`, every verdict, the stage-exit protocol. The progress record
+    becomes `pharn-stage-regress-progress/2` (a `/1` record resumed across the upgrade stops `progress-malformed`; re-run
+    fresh). `regression-report.json` gains the additive, advisory `base_evidence` block
+    (`{reused, miss, requirement_sha256, recorded}`); every key the checker printed keeps its bytes.
+  - **Not claimed.** That a reused base result equals a fresh one is advisory (it assumes a deterministic suite, and
+    does not bind ignored root content such as `node_modules/`, the environment or the machine). A Bash writer can
+    forge the record with the evidence; the base side's in-progress scratch is write-tool reachable while a chain is
+    paused at `continue` (follow-up `regress-paused-chain-integrity`); a stale marker (≤ 24 h) binds a later
+    standalone regress. No token saving is claimed. `/pharn-dev-regress` is unchanged.
+
 ### Fixed
 
 - 2026-09-28: **A bare `npm run format:check` or `npm run lint` no longer reads other Claude Code sessions' worktrees

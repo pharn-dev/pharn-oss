@@ -313,3 +313,47 @@ test("style probe: a REGRESSION.md fixture under pharn/features/ is correctly ig
     rmSync(dirname(abs), { recursive: true, force: true });
   }
 });
+
+// ── BASE-EVIDENCE REUSE (6.33.0) — one line, from the report's own block ──────────────────────────────────
+const REQ = "f".repeat(64);
+
+test("renderDone: a HIT names the reuse and the requirement, says nothing ran at BASE, and replaces the install line", () => {
+  const progress = baseProgress({
+    installResult: null,
+    baseEvidence: { reused: true, miss: null, requirement_sha256: REQ, recorded: true, notRecordedWhy: null },
+  });
+  const md = renderDone({ feature: "demo", base: "a".repeat(40), report: baseReport(), scope: baseScope(), progress });
+  assert.match(md, /BASE evidence: REUSED — .*created no base worktree, ran no install and ran no base gate/);
+  assert.ok(md.includes(REQ));
+  assert.match(md, /install: none run by this invocation \(the BASE evidence was reused\)/);
+  assert.doesNotMatch(md, /npm ci/, "no install command is shown for an install that did not run");
+});
+
+test("renderDone: a miss names its category and whether the evidence was recorded, or why not", () => {
+  const recorded = renderDone({
+    feature: "demo",
+    base: "a".repeat(40),
+    report: baseReport(),
+    scope: baseScope(),
+    progress: baseProgress({
+      baseEvidence: { reused: false, miss: "gates-changed", requirement_sha256: REQ, recorded: true, notRecordedWhy: null },
+    }),
+  });
+  assert.match(recorded, /BASE evidence: produced by this invocation \(not reused: `gates-changed`\); recorded for reuse/);
+  const notRecorded = renderDone({
+    feature: "demo",
+    base: "a".repeat(40),
+    report: baseReport(),
+    scope: baseScope(),
+    progress: baseProgress({
+      baseEvidence: { reused: false, miss: "no-delivery-run", requirement_sha256: REQ, recorded: false, notRecordedWhy: "no-delivery-run" },
+    }),
+  });
+  assert.match(notRecorded, /not reused: `no-delivery-run`\); not recorded for reuse \(`no-delivery-run`\)/);
+  assert.match(notRecorded, /npm ci/, "a miss keeps the ordinary install line");
+});
+
+test("renderDone: with no baseEvidence (an older caller) nothing about reuse is rendered", () => {
+  const md = renderDone({ feature: "demo", base: "a".repeat(40), report: baseReport(), scope: baseScope(), progress: baseProgress() });
+  assert.doesNotMatch(md, /BASE evidence/);
+});

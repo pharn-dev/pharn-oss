@@ -563,6 +563,49 @@ function resolveAcTest({ gates, scripts, extras, skipStyle, feature, acRows }) {
   };
 }
 
+/** ------------------------------------------------------------------------------------------------
+ *  The BASE side's spec, copied from the HEAD record — `run-gates.mjs init --side base --spec-from <head-out>`'s own
+ *  rule, extracted here (6.33.0, regress-base-reuse) so the /pharn-regress BASE-reuse predicate
+ *  (regress-base-reuse-core.mjs) derives "what a fresh base-init would build now" from the ONE function base-init runs
+ *  (L35). `head` is the parsed in-progress `state.json` (its spec in `entries`) or the finalized `stamp.json`, which
+ *  drops `entries` — the spec is then reconstructible from `runs`. Refusals are `spec-mismatch`, as they were inside
+ *  run-gates.mjs; TOTAL over parsed JSON (L62): a value quoted into a reason goes through JSON.stringify, and a
+ *  non-object entry or a non-array `required` is a refusal, where run-gates.mjs used to throw a TypeError.
+ *  ---------------------------------------------------------------------------------------------- */
+export function baseSpecFrom(head, feature) {
+  if (head === null || typeof head !== "object" || Array.isArray(head)) {
+    return err("spec-mismatch", "the --spec-from record is not a JSON object");
+  }
+  if (head.stage !== "regress" || head.side !== "head" || head.feature !== feature) {
+    return err(
+      "spec-mismatch",
+      `the --spec-from record is stage=${JSON.stringify(head.stage)} side=${JSON.stringify(head.side)} feature=${JSON.stringify(head.feature)}; expected regress/head/${JSON.stringify(feature)}`
+    );
+  }
+  // The spec lives in `entries` on an IN-PROGRESS record and is reconstructible from `runs` on a FINALIZED stamp
+  // (which drops `entries`). Reading `runs` unconditionally yielded an EMPTY set whenever the head side had not run
+  // yet — the common case at base-init, since both sides are initialized before either runs.
+  const source = Array.isArray(head.entries) && head.entries.length ? head.entries : head.runs;
+  if (!Array.isArray(source) || source.length === 0) return err("spec-mismatch", "the --spec-from record carries no gate entries to copy");
+  if (!source.every((r) => r !== null && typeof r === "object" && !Array.isArray(r))) {
+    return err("spec-mismatch", "the --spec-from record has a gate entry that is not an object");
+  }
+  if (!Array.isArray(head.required)) return err("spec-mismatch", "the --spec-from record's `required` is not an array");
+  return {
+    ok: true,
+    spec: {
+      stage: "regress",
+      side: "base",
+      feature,
+      source: head.source,
+      source_raw: head.source_raw ?? null,
+      style_skipped: head.style_skipped === true,
+      required: [...head.required],
+      entries: source.map((r, i) => ({ id: r.id, shell: r.shell ?? null, argv: r.argv ?? null, files: r.files ?? [], seq: i })),
+    },
+  };
+}
+
 /** The coverage predicate, re-checked by the CHECKERS from the stamp — never trusted from the writer.
  *  Returns the missing ids, so the caller can name them. */
 export function coverageGap(stamp) {

@@ -37,6 +37,7 @@ import {
   completenessArgv,
   orderEntries,
   resolveSet,
+  baseSpecFrom,
   LEVEL_GATES,
   acFilesFor,
   coverageGap,
@@ -790,4 +791,68 @@ test("validateStamp accepts an ac-test stamp (side null) and refuses one with a 
   assert.equal(validateStamp({ ...s, side: "head" }).reason_code, "stamp-malformed");
   assert.equal(validateStamp(s, { stage: "verify" }).reason_code, "stage-mismatch");
   assert.equal(validateStamp(s, { stage: "regress" }).reason_code, "stage-mismatch");
+});
+
+// ── baseSpecFrom (6.33.0) — run-gates.mjs init --side base's copy rule, extracted so the BASE-reuse predicate applies
+//    the SAME function (L35). run-gates.test.mjs pins that init still copies the head spec verbatim through it. ──
+function headRecordFor(overrides = {}) {
+  return {
+    stage: "regress",
+    side: "head",
+    feature: "demo",
+    source: "explicit",
+    source_raw: "make test::t",
+    style_skipped: true,
+    required: ["t"],
+    entries: [{ id: "t", shell: "make test", argv: null, files: ["a.test.js"], seq: 0 }],
+    runs: [],
+    ...overrides,
+  };
+}
+
+test("baseSpecFrom: an in-progress head record's `entries` are copied verbatim, re-sequenced", () => {
+  const r = baseSpecFrom(headRecordFor(), "demo");
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.spec, {
+    stage: "regress",
+    side: "base",
+    feature: "demo",
+    source: "explicit",
+    source_raw: "make test::t",
+    style_skipped: true,
+    required: ["t"],
+    entries: [{ id: "t", shell: "make test", argv: null, files: ["a.test.js"], seq: 0 }],
+  });
+});
+
+test("baseSpecFrom: a FINALIZED head stamp (no entries) is reconstructed from its runs, extra run fields dropped", () => {
+  const r = baseSpecFrom(
+    headRecordFor({
+      entries: undefined,
+      runs: [{ seq: 0, id: "t", shell: null, argv: ["npm", "run", "t"], files: [], exit: 1, ran: true }],
+    }),
+    "demo"
+  );
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.spec.entries, [{ id: "t", shell: null, argv: ["npm", "run", "t"], files: [], seq: 0 }]);
+});
+
+test("baseSpecFrom: every refusal is spec-mismatch, and it is TOTAL over parsed JSON (L62)", () => {
+  const bad = [
+    null,
+    [],
+    "x",
+    headRecordFor({ side: "base" }),
+    headRecordFor({ stage: "verify" }),
+    headRecordFor({ feature: "other" }),
+    headRecordFor({ entries: [], runs: [] }),
+    headRecordFor({ entries: [null] }),
+    headRecordFor({ required: "t" }),
+    headRecordFor({ stage: { toString: 1 } }),
+  ];
+  for (const h of bad) {
+    const r = baseSpecFrom(h, "demo");
+    assert.equal(r.ok, false, JSON.stringify(h));
+    assert.equal(r.reason_code, "spec-mismatch");
+  }
 });

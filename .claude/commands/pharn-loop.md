@@ -82,9 +82,10 @@ Load the trusted prefix and obey it:
   (a clarification stop, S6b) simply stays a `Draft`.
 - **The human decision still exists; it moves to after the run.** A person reviews the branch (or the
   working tree) and decides what to merge.
-- **It is expensive unattended.** Every iteration re-runs `/pharn-regress` (a base worktree, an install,
-  and the project's suite at base and at HEAD) plus every `/pharn-verify` gate; the worst case is `M` times
-  that with nobody watching (a quick run skips `/pharn-regress` — `## Quick mode`).
+- **It is expensive unattended.** Every iteration re-runs `/pharn-regress` (the project's suite at HEAD, and a
+  base worktree, an install and the suite at base — which a later iteration reuses when its base requirement is
+  unchanged, `regression-report.json` `base_evidence`) plus every `/pharn-verify` gate; the worst case is `M`
+  times that with nobody watching (a quick run skips `/pharn-regress` — `## Quick mode`).
 
 ## Step 1 — Entry
 

@@ -8,13 +8,27 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, symlinkSync, copyFileSync, chmodSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  existsSync,
+  rmSync,
+  symlinkSync,
+  copyFileSync,
+  chmodSync,
+  utimesSync,
+  appendFileSync,
+  realpathSync,
+} from "node:fs";
 import { execFileSync, spawnSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { REGRESS_PATHS, PROGRESS_SCHEMA } from "./stage-regress-core.mjs";
+import { RECORD_BASENAME } from "./regress-base-reuse-core.mjs";
 import { REGISTRY, allReasonCodes } from "./stage-exit-core.mjs";
 // A5 (GATE 2 review) — the check-loop-fresh WIRING test fabricates a verify stamp exactly the way
 // check-loop-fresh.test.mjs's own `iterate()` helper does: a REAL fingerprint of the live tree, and the
@@ -1508,5 +1522,818 @@ test("★ round trip — tests-unresolved: a typo'd --tests corrected on the SEC
     assert.equal(done.json.status, "done");
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// ── BASE-EVIDENCE REUSE (6.33.0, regress-base-reuse) — END TO END, through the real CLI (L45) ─────────
+// Every fixture counts its own work: each gate script and the base install append one line to a counter file OUTSIDE
+// the repo (so the tree never moves), and a post-checkout hook appends one line per `git worktree add` checkout. The
+// HIT is proven by those counters — never by the predicate — and every first run is asserted to count (L34), so a zero
+// on a second run cannot come from a fixture that counts nothing. The run markers are opened by their REAL writers.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+const COUNT_JS =
+  "import { appendFileSync } from 'node:fs';\n" +
+  "const side = /[\\\\/]\\.pharn[\\\\/]pharn-regress[\\\\/]base([\\\\/]|$)/.test(process.cwd()) ? 'base' : 'head';\n" +
+  "if (process.env.RBR_COUNTER) appendFileSync(process.env.RBR_COUNTER, `${process.argv[2]} ${side}\\n`);\n";
+const RUN_MARKER = join(HERE, "run-marker.mjs");
+const LOOP_RECORD = join(HERE, "..", "..", ".claude", "hooks", "require-loop-record.cjs");
+const INSTALL_CMD = "node count.mjs install";
+const COUNTING_SCRIPTS = {
+  test: "node count.mjs test && node --test",
+  typecheck: "node count.mjs typecheck",
+  build: "node count.mjs build",
+};
+
+/** A counting fixture: `repo()` plus count.mjs committed at the base, a post-checkout counter hook, and a counter file
+ *  beside (never inside) the repo. */
+function reuseRepo({ scripts = COUNTING_SCRIPTS, extraPlanLines = [], committed = {} } = {}) {
+  const r = repo({ scripts, extraPlanLines, committed: { "count.mjs": COUNT_JS, ...committed } });
+  const counter = `${r.dir}.counter.log`;
+  writeFileSync(counter, "");
+  const hook = join(r.dir, ".git", "hooks", "post-checkout");
+  mkdirSync(dirname(hook), { recursive: true });
+  writeFileSync(hook, '#!/bin/sh\n[ -n "$RBR_COUNTER" ] && echo "worktree base" >> "$RBR_COUNTER"\nexit 0\n');
+  chmodSync(hook, 0o755);
+  return { ...r, counter };
+}
+
+function dropReuseRepo(fx) {
+  rmSync(fx.dir, { recursive: true, force: true });
+  rmSync(fx.counter, { force: true });
+}
+
+function counterLines(fx) {
+  return readFileSync(fx.counter, "utf8").split("\n").filter(Boolean);
+}
+
+function countsSince(fx, from) {
+  const c = { worktree: 0, install: 0, base: 0, head: 0 };
+  for (const l of counterLines(fx).slice(from)) {
+    const [what, side] = l.split(" ");
+    if (what === "worktree") c.worktree++;
+    else if (what === "install") c.install++;
+    else c[side]++;
+  }
+  return c;
+}
+
+/** Run the stage once; return its exit, its document, the report's base_evidence block and what it counted. */
+function runReuse(fx, args, env = {}) {
+  const from = counterLines(fx).length;
+  const r = cli(fx.dir, args, { env: { ...CLEAN_ENV, RBR_COUNTER: fx.counter, ...env } });
+  let report = null;
+  if (r.json && r.json.report && existsSync(join(fx.dir, r.json.report)))
+    report = JSON.parse(readFileSync(join(fx.dir, r.json.report), "utf8"));
+  return { ...r, report, be: report ? report.base_evidence : null, counts: countsSince(fx, from) };
+}
+
+function reuseArgs(base, extra = []) {
+  return ["--feature", FEATURE, "--timeout-ms", "30000", "--install", INSTALL_CMD, "--base", base, ...extra];
+}
+
+/** Open a delivery run with its REAL marker writer (run-marker.mjs for /pharn-ship, require-loop-record.cjs for
+ *  /pharn-loop), from the fixture, exactly as the orchestrators' pinned lines do. */
+function openRun(dir, command = "pharn-loop", feature = FEATURE) {
+  const argv = command === "pharn-loop" ? [LOOP_RECORD, "--open", feature, "--cap", "3"] : [RUN_MARKER, "--open", command, feature];
+  const r = spawnSync(process.execPath, argv, { cwd: dir, encoding: "utf8", env: CLEAN_ENV });
+  assert.equal(r.status, 0, `the ${command} marker writer refused: ${r.stdout}${r.stderr}`);
+  return join(dir, ".pharn", command, feature, "active.json");
+}
+
+function recordFile(dir) {
+  return join(execFileSync("git", ["rev-parse", "--absolute-git-dir"], { cwd: dir, encoding: "utf8" }).trim(), RECORD_BASENAME);
+}
+
+function editIndex(dir, n) {
+  writeFileSync(join(dir, "src", "index.js"), `export function add(a, b) { return a + b; }\nexport const n${n} = ${n};\n`);
+}
+
+// ── ★ THE HIT (the success criterion) ─────────────────────────────────────────────────────────────────
+test("★ HIT — a second regress of the same run, after a new build, runs HEAD normally and skips the base worktree, install and every base gate", () => {
+  const fx = reuseRepo();
+  try {
+    openRun(fx.dir);
+    editIndex(fx.dir, 1);
+    const first = runReuse(fx, reuseArgs(fx.base));
+    assert.equal(first.code, 0, first.raw);
+    assert.deepEqual(first.be, { reused: false, miss: "no-record", requirement_sha256: first.be.requirement_sha256, recorded: true });
+    // L34: the fixture COUNTS — the first run made a worktree, installed, and ran every gate on both sides.
+    assert.deepEqual(first.counts, { worktree: 1, install: 1, base: 3, head: 3 });
+    assert.ok(existsSync(recordFile(fx.dir)), "the first run published a record in the git dir");
+    const headStampFirst = readFileSync(join(fx.dir, REGRESS_PATHS.head, "stamp.json"), "utf8");
+    const firstMd = readFileSync(join(fx.dir, first.json.render), "utf8");
+
+    editIndex(fx.dir, 2); // a later build: an in-scope implementation edit, the BASE requirement unchanged
+    const second = runReuse(fx, reuseArgs(fx.base));
+    assert.equal(second.code, 0, second.raw);
+    assert.equal(second.json.status, "done");
+    assert.equal(second.be.reused, true, JSON.stringify(second.be));
+    assert.equal(second.be.miss, null);
+    assert.equal(second.be.recorded, true);
+    assert.equal(second.be.requirement_sha256, first.be.requirement_sha256, "the same requirement");
+    assert.deepEqual(second.counts, { worktree: 0, install: 0, base: 0, head: 3 }, "HEAD ran in full; nothing ran at BASE");
+    assert.equal(second.report.gate_run.base.stamp_sha256, first.report.gate_run.base.stamp_sha256, "the reused stamp is the first run's");
+    assert.notEqual(
+      JSON.parse(readFileSync(join(fx.dir, REGRESS_PATHS.head, "stamp.json"), "utf8")).fingerprint.final,
+      JSON.parse(headStampFirst).fingerprint.final,
+      "the HEAD side judged the NEW tree"
+    );
+    assert.equal(second.report.verdict, first.report.verdict);
+    assert.ok(!existsSync(join(fx.dir, REGRESS_PATHS.base)), "no base worktree exists after a HIT");
+    const md = readFileSync(join(fx.dir, second.json.render), "utf8");
+    assert.match(md, /BASE evidence: REUSED/);
+    assert.match(md, /install: none run by this invocation/);
+    assert.match(firstMd, /BASE evidence: produced by this invocation \(not reused: `no-record`\); recorded for reuse/);
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+// ── ★ EQUIVALENCE (mandatory): a FRESH base execution and a REUSED one, same requirement, same semantics ────
+test("★ EQUIVALENCE — fresh BASE evidence and reused BASE evidence for one requirement give the same regression semantics", () => {
+  // A real regression (src/other.test.js breaks), a pre-existing red gate (typecheck), a green gate (build), and an
+  // outside structural eval pair — so the four compared fields are all non-trivial.
+  const committed = {
+    "src/other.js": "import { add } from './index.js';\nexport function addOne(x) { return add(x, 1); }\n",
+    "src/other.test.js":
+      "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport { addOne } from './other.js';\ntest('addOne', () => { assert.equal(addOne(5), 6); });\n",
+    "cap/evals/expected/x.json": "[]\n",
+    "cap/findings.json": "[]\n",
+    "pharn/floor/check-structural.mjs": "process.exit(0);\n",
+  };
+  const scripts = {
+    test: "node count.mjs test && node --test",
+    typecheck: "node count.mjs typecheck && exit 1",
+    build: "node count.mjs build",
+  };
+  const fx = reuseRepo({ scripts, committed });
+  try {
+    writeFileSync(join(fx.dir, "src", "index.js"), "export function add(a, b) { return a - b; }\n"); // breaks addOne
+
+    // Path A — a FRESH base execution: no delivery run, so nothing is reused and nothing is recorded.
+    const a = runReuse(fx, reuseArgs(fx.base));
+    assert.equal(a.code, 0, a.raw);
+    assert.deepEqual([a.be.reused, a.be.miss, a.be.recorded], [false, "no-delivery-run", false]);
+    assert.ok(a.counts.base > 0 && a.counts.worktree === 1, "path A ran the base side");
+    const stampA = JSON.parse(readFileSync(join(fx.dir, REGRESS_PATHS.baseGates, "stamp.json"), "utf8"));
+
+    // Path B — the same requirement under a delivery run: a publishing run, then a run that REUSES.
+    openRun(fx.dir);
+    const publish = runReuse(fx, reuseArgs(fx.base));
+    assert.equal(publish.be.recorded, true, JSON.stringify(publish.be));
+    const b = runReuse(fx, reuseArgs(fx.base));
+    assert.equal(b.code, 0, b.raw);
+    assert.equal(b.be.reused, true, JSON.stringify(b.be));
+    assert.deepEqual(b.counts, { worktree: 0, install: 0, base: 0, head: 3 }, "the structural gate is not a counting script");
+    const stampB = JSON.parse(readFileSync(join(fx.dir, REGRESS_PATHS.baseGates, "stamp.json"), "utf8"));
+
+    // The regression semantics are the same.
+    for (const key of ["verdict", "regressions", "pre_existing", "outside_gates"]) {
+      assert.deepEqual(b.report[key], a.report[key], `${key} differs between fresh and reused BASE evidence`);
+    }
+    assert.equal(a.report.verdict, "regressions", "non-vacuity: a real regression");
+    assert.deepEqual(a.report.regressions, ["test"]);
+    assert.deepEqual(a.report.pre_existing, ["typecheck"]);
+    assert.ok(
+      Object.keys(a.report.outside_gates).some((id) => id.startsWith("structural:")),
+      "the structural pair is compared"
+    );
+    assert.equal(a.be.requirement_sha256, b.be.requirement_sha256, "one requirement");
+
+    // The reused BASE stamp and the fresh one are the same evidence, run for run.
+    const view = (s) => ({
+      head: s.head,
+      source: s.source,
+      source_raw: s.source_raw,
+      style_skipped: s.style_skipped,
+      required: s.required,
+      runs: s.runs.map((r) => ({
+        seq: r.seq,
+        id: r.id,
+        exit: r.exit,
+        ran: r.ran,
+        timed_out: r.timed_out,
+        argv: r.argv,
+        shell: r.shell,
+        files: r.files,
+      })),
+    });
+    assert.deepEqual(view(stampB), view(stampA));
+
+    // …and the unchanged checker, re-run over the stamps B used, reproduces B's report (what check-loop-fresh E asks).
+    const rederived = spawnSync(
+      process.execPath,
+      [
+        join(HERE, "check-regress.mjs"),
+        "verdict",
+        "--base-stamp",
+        join(REGRESS_PATHS.baseGates, "stamp.json"),
+        "--head-stamp",
+        join(REGRESS_PATHS.head, "stamp.json"),
+        "--base",
+        fx.base,
+        "--inside",
+        b.report.inside.join(","),
+      ],
+      { cwd: fx.dir, encoding: "utf8", env: CLEAN_ENV }
+    );
+    const withoutBlock = { ...b.report };
+    delete withoutBlock.base_evidence;
+    assert.equal(
+      `${JSON.stringify(withoutBlock, null, 2)}\n`,
+      rederived.stdout,
+      "report minus base_evidence == the checker's stdout, byte for byte"
+    );
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+test("HIT — a `no-files` test entry (every test inside the feature) is reused like any other entry", () => {
+  const fx = reuseRepo();
+  try {
+    openRun(fx.dir);
+    writeFileSync(join(fx.dir, "src", "index.test.js"), readFileSync(join(fx.dir, "src", "index.test.js"), "utf8") + "// touched\n");
+    editIndex(fx.dir, 1);
+    const first = runReuse(fx, reuseArgs(fx.base));
+    assert.equal(first.code, 0, first.raw);
+    const s = JSON.parse(readFileSync(join(fx.dir, REGRESS_PATHS.baseGates, "stamp.json"), "utf8"));
+    assert.equal(s.runs.find((r) => r.id === "test").reason, "no-files", "precondition: the test entry has no outside files");
+    editIndex(fx.dir, 2);
+    const second = runReuse(fx, reuseArgs(fx.base));
+    assert.equal(second.be.reused, true, JSON.stringify(second.be));
+    assert.equal(second.counts.base, 0);
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+test("HIT — a /pharn-ship run (its run-marker.mjs marker) reuses like a /pharn-loop run", () => {
+  const fx = reuseRepo();
+  try {
+    openRun(fx.dir, "pharn-ship");
+    editIndex(fx.dir, 1);
+    assert.equal(runReuse(fx, reuseArgs(fx.base)).be.recorded, true);
+    editIndex(fx.dir, 2);
+    const second = runReuse(fx, reuseArgs(fx.base));
+    assert.equal(second.be.reused, true, JSON.stringify(second.be));
+    assert.deepEqual(second.counts, { worktree: 0, install: 0, base: 0, head: 3 });
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+test("HIT — a BUDGETED miss chain (continue + --resume, the pinned line's shape) publishes, and the next invocation reuses", () => {
+  const fx = reuseRepo();
+  try {
+    openRun(fx.dir);
+    editIndex(fx.dir, 1);
+    let r = runReuse(fx, reuseArgs(fx.base, ["--budget-ms", "1"]));
+    let continues = 0;
+    while (r.code === 5) {
+      continues++;
+      assert.ok(continues < 50, "the budget loop never converges");
+      r = runReuse(fx, ["--resume", "--budget-ms", "1"]);
+    }
+    assert.equal(r.code, 0, r.raw);
+    assert.ok(continues >= 3, "the chain paused on the base side too");
+    assert.equal(r.be.recorded, true, JSON.stringify(r.be));
+    editIndex(fx.dir, 2);
+    const next = runReuse(fx, reuseArgs(fx.base, ["--budget-ms", "1"]));
+    let n = next;
+    while (n.code === 5) n = runReuse(fx, ["--resume", "--budget-ms", "1"]);
+    assert.equal(n.code, 0, n.raw);
+    assert.equal(n.be.reused, true, JSON.stringify(n.be));
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+test("A2 — a root-level HEAD file edited while a budgeted MISS chain is paused on the base side is never bound: recorded:false (requirement-moved), and the next run recomputes", () => {
+  const fx = reuseRepo({ extraPlanLines: ["- `tsconfig.json` — root config"] });
+  try {
+    openRun(fx.dir);
+    editIndex(fx.dir, 1);
+    writeFileSync(join(fx.dir, "tsconfig.json"), '{ "v": 1 }\n');
+    let r = runReuse(fx, reuseArgs(fx.base, ["--budget-ms", "1"]));
+    let edited = false;
+    let guard = 0;
+    while (r.code === 5) {
+      assert.ok(++guard < 50, "the budget loop never converges");
+      if (!edited && ["worktree", "install", "base-init", "drain-base"].includes(r.json.phase)) {
+        // Paused AFTER the reuse decision (drain-head), BEFORE the verdict: the base side was produced for v1.
+        writeFileSync(join(fx.dir, "tsconfig.json"), '{ "v": 2 }\n');
+        edited = true;
+      }
+      r = runReuse(fx, ["--resume", "--budget-ms", "1"]);
+    }
+    assert.equal(r.code, 0, r.raw);
+    assert.ok(edited, "non-vacuity: the chain paused on the base side, where the edit landed");
+    assert.equal(r.be.reused, false);
+    assert.equal(r.be.recorded, false, JSON.stringify(r.be));
+    assert.match(readFileSync(join(fx.dir, "pharn", "features", FEATURE, "REGRESSION.md"), "utf8"), /requirement-moved/);
+    assert.equal(existsSync(recordFile(fx.dir)), false, "no record binds v1 evidence to the v2 root file");
+    const next = runReuse(fx, reuseArgs(fx.base));
+    assert.equal(next.code, 0, next.raw);
+    assert.equal(next.be.reused, false);
+    assert.equal(next.be.miss, "no-record");
+    assert.equal(next.counts.worktree, 1, "the base side ran again");
+    assert.ok(next.counts.base > 0);
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+test("retention — a refused invocation in between does not destroy the retained evidence; the next run still reuses", () => {
+  const fx = reuseRepo();
+  try {
+    openRun(fx.dir);
+    editIndex(fx.dir, 1);
+    assert.equal(runReuse(fx, reuseArgs(fx.base)).be.recorded, true);
+    writeFileSync(join(fx.dir, "src", "undeclared.js"), "x\n");
+    const refused = runReuse(fx, reuseArgs(fx.base));
+    assert.equal(refused.code, 3, refused.raw);
+    assert.equal(refused.json.reason_code, "scope-escaped");
+    assert.ok(existsSync(join(fx.dir, REGRESS_PATHS.baseGates, "stamp.json")), "the fresh start kept base-gates/");
+    rmSync(join(fx.dir, "src", "undeclared.js"));
+    const again = runReuse(fx, reuseArgs(fx.base));
+    assert.equal(again.be.reused, true, JSON.stringify(again.be));
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+// ── END-TO-END MISS CONTROLS — one input at a time; each shows the base side REALLY ran again ──────────
+const COMMIT_TWICE = (fx) => {
+  editIndex(fx.dir, 0);
+  execFileSync("git", ["add", "-A"], { cwd: fx.dir });
+  execFileSync("git", ["commit", "-q", "-m", "second"], { cwd: fx.dir });
+  fx.base2 = execFileSync("git", ["rev-parse", "HEAD"], { cwd: fx.dir, encoding: "utf8" }).trim();
+};
+
+const E2E_MISSES = [
+  {
+    miss: "base-changed",
+    why: "a different --base commit",
+    setup: COMMIT_TWICE,
+    args2: (fx) => reuseArgs(fx.base2),
+  },
+  {
+    miss: "gates-changed",
+    why: "a gate script added at HEAD",
+    opts: { extraPlanLines: ["- `package.json` — scripts"] },
+    between: (fx) => {
+      const pkg = JSON.parse(readFileSync(join(fx.dir, "package.json"), "utf8"));
+      pkg.scripts["type-check"] = "node count.mjs type-check";
+      writeFileSync(join(fx.dir, "package.json"), JSON.stringify(pkg, null, 2) + "\n");
+    },
+  },
+  {
+    miss: "gates-changed",
+    why: "an explicit --gates command changed",
+    args1: (fx) => reuseArgs(fx.base, ["--gates", "node count.mjs custom::custom"]),
+    args2: (fx) => reuseArgs(fx.base, ["--gates", "node count.mjs custom2::custom"]),
+  },
+  {
+    miss: "gates-changed",
+    why: "an outside test became inside",
+    opts: {
+      extraPlanLines: ["- `src/other.test.js` — a second test"],
+      committed: {
+        "src/other.test.js": "import { test } from 'node:test';\ntest('other', () => {});\n",
+      },
+    },
+    between: (fx) => appendFileSync(join(fx.dir, "src", "other.test.js"), "// now inside\n"),
+  },
+  {
+    miss: "gates-changed",
+    why: "an outside eval pair became inside",
+    opts: {
+      extraPlanLines: ["- `cap/findings.json` — the pair's actual"],
+      committed: {
+        "cap/evals/expected/x.json": "[]\n",
+        "cap/findings.json": "[]\n",
+        "pharn/floor/check-structural.mjs": "process.exit(0);\n",
+      },
+    },
+    between: (fx) => writeFileSync(join(fx.dir, "cap", "findings.json"), "[ ]\n"),
+  },
+  {
+    miss: "gates-changed",
+    why: "a style config was touched, so the style gates are no longer skipped",
+    opts: { scripts: { ...COUNTING_SCRIPTS, lint: "node count.mjs lint" }, extraPlanLines: ["- `.prettierrc` — style"] },
+    between: (fx) => writeFileSync(join(fx.dir, ".prettierrc"), "{}\n"),
+  },
+  {
+    miss: "execution-changed",
+    why: "the --install command changed",
+    args2: (fx) => ["--feature", FEATURE, "--timeout-ms", "30000", "--install", `${INSTALL_CMD} && true`, "--base", fx.base],
+  },
+  {
+    miss: "execution-changed",
+    why: "the --timeout-ms changed",
+    args2: (fx) => ["--feature", FEATURE, "--timeout-ms", "40000", "--install", INSTALL_CMD, "--base", fx.base],
+  },
+  {
+    miss: "execution-changed",
+    why: "a root-level HEAD file was added (reachable from the nested base worktree by a parent-directory search)",
+    opts: { extraPlanLines: ["- `tsconfig.json` — root config"] },
+    between: (fx) => writeFileSync(join(fx.dir, "tsconfig.json"), "{}\n"),
+  },
+  { miss: "other-run", why: "the delivery run was re-opened (a new run)", between: (fx) => openRun(fx.dir) },
+  {
+    miss: "no-delivery-run",
+    why: "a second delivery command's marker is open for the feature",
+    between: (fx) => openRun(fx.dir, "pharn-ship"),
+  },
+  {
+    miss: "no-delivery-run",
+    why: "the run marker is older than 24 h",
+    between: (fx) => {
+      const t = (Date.now() - 25 * 60 * 60 * 1000) / 1000;
+      utimesSync(join(fx.dir, ".pharn", "pharn-loop", FEATURE, "active.json"), t, t);
+    },
+  },
+  { miss: "no-record", why: "the record was removed", between: (fx) => rmSync(recordFile(fx.dir)) },
+  { miss: "record-malformed", why: "the record was overwritten", between: (fx) => writeFileSync(recordFile(fx.dir), "{}\n") },
+  {
+    miss: "evidence-unbound",
+    why: "the retained stamp's bytes changed",
+    between: (fx) => appendFileSync(join(fx.dir, REGRESS_PATHS.baseGates, "stamp.json"), " "),
+  },
+  {
+    miss: "evidence-invalid",
+    why: "a retained log was edited",
+    between: (fx) => appendFileSync(join(fx.dir, REGRESS_PATHS.baseGates, `${logBasename(0, "test")}.out`), "edited\n"),
+  },
+  {
+    miss: "evidence-invalid",
+    why: "a retained log was replaced by a symlink to identical bytes (never followed)",
+    between: (fx) => {
+      const log = join(fx.dir, REGRESS_PATHS.baseGates, `${logBasename(1, "typecheck")}.out`);
+      const copy = `${fx.dir}.log-copy`;
+      copyFileSync(log, copy);
+      rmSync(log);
+      symlinkSync(copy, log);
+    },
+  },
+  {
+    miss: "evidence-missing",
+    why: "the retained base-gates/ became a file",
+    between: (fx) => {
+      rmSync(join(fx.dir, REGRESS_PATHS.baseGates), { recursive: true });
+      writeFileSync(join(fx.dir, REGRESS_PATHS.baseGates), "not a directory\n");
+    },
+  },
+  {
+    miss: "evidence-missing",
+    why: "the retained base-gates/ became a symlink to a copy of itself (removed, never followed)",
+    between: (fx) => {
+      const copy = `${fx.dir}.gates-copy`;
+      execFileSync("cp", ["-R", join(fx.dir, REGRESS_PATHS.baseGates), copy]);
+      rmSync(join(fx.dir, REGRESS_PATHS.baseGates), { recursive: true });
+      symlinkSync(copy, join(fx.dir, REGRESS_PATHS.baseGates));
+    },
+  },
+];
+
+for (const c of E2E_MISSES) {
+  test(`MISS end-to-end ${c.miss} — ${c.why}; the base side runs again`, () => {
+    const fx = reuseRepo(c.opts);
+    try {
+      if (c.setup) c.setup(fx);
+      openRun(fx.dir);
+      editIndex(fx.dir, 1);
+      const first = runReuse(fx, (c.args1 ?? ((f) => reuseArgs(f.base)))(fx));
+      assert.equal(first.code, 0, first.raw);
+      assert.equal(first.be.recorded, true, `precondition — the first run published: ${JSON.stringify(first.be)}`);
+      assert.ok(first.counts.base > 0, "L34: the first run counted base work");
+      if (c.between) c.between(fx);
+      editIndex(fx.dir, 2);
+      const second = runReuse(fx, (c.args2 ?? c.args1 ?? ((f) => reuseArgs(f.base)))(fx));
+      assert.equal(second.code, 0, second.raw);
+      assert.equal(second.be.reused, false, JSON.stringify(second.be));
+      assert.equal(second.be.miss, c.miss);
+      assert.equal(second.counts.worktree, 1, "the base worktree was created again");
+      assert.ok(second.counts.base > 0, "the base gates ran again");
+    } finally {
+      dropReuseRepo(fx);
+      rmSync(`${fx.dir}.log-copy`, { force: true });
+      rmSync(`${fx.dir}.gates-copy`, { recursive: true, force: true });
+    }
+  });
+}
+
+test("MISS end-to-end — a foreign feature's retained evidence and record are not reused (other-run)", () => {
+  const fx = reuseRepo();
+  try {
+    mkdirSync(join(fx.dir, FEATURES, "other"), { recursive: true });
+    for (const f of ["SPEC.md", "PLAN.md"]) {
+      writeFileSync(
+        join(fx.dir, FEATURES, "other", f),
+        readFileSync(join(fx.dir, FEATURES, FEATURE, f), "utf8").replace(`spec_id: ${FEATURE}`, "spec_id: other")
+      );
+    }
+    execFileSync("git", ["add", "-A"], { cwd: fx.dir });
+    execFileSync("git", ["commit", "-q", "-m", "other feature"], { cwd: fx.dir });
+    const base = execFileSync("git", ["rev-parse", "HEAD"], { cwd: fx.dir, encoding: "utf8" }).trim();
+    openRun(fx.dir);
+    editIndex(fx.dir, 1);
+    assert.equal(runReuse(fx, reuseArgs(base)).be.recorded, true);
+    // demo's own run wrote its report and render; to feature "other" those are undeclared changes, so remove them.
+    rmSync(join(fx.dir, FEATURES, FEATURE, "regression-report.json"));
+    rmSync(join(fx.dir, FEATURES, FEATURE, "REGRESSION.md"));
+    openRun(fx.dir, "pharn-loop", "other");
+    const second = runReuse(fx, ["--feature", "other", "--timeout-ms", "30000", "--install", INSTALL_CMD, "--base", base]);
+    assert.equal(second.code, 0, second.raw);
+    assert.equal(second.be.reused, false);
+    assert.equal(second.be.miss, "other-run");
+    assert.ok(second.counts.base > 0);
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+// Evidence a fresh run could not be ASSUMED to reproduce is never published, so the next run finds no record.
+const NEVER_RECORDED = [
+  { why: "--no-install (dependency resolution may walk up into the HEAD tree)", args: (fx) => freshArgs(fx.base) },
+  {
+    why: "a failed base install",
+    args: (fx) => ["--feature", FEATURE, "--timeout-ms", "30000", "--install", `${INSTALL_CMD} && exit 3`, "--base", fx.base],
+  },
+  {
+    why: "a timed-out base gate",
+    scripts: {
+      test: "node count.mjs test && node --test",
+      typecheck: 'node count.mjs typecheck && node -e "if (/pharn-regress[\\\\/]base/.test(process.cwd())) setTimeout(() => {}, 5000)"',
+    },
+    args: (fx) => ["--feature", FEATURE, "--timeout-ms", "1500", "--install", INSTALL_CMD, "--base", fx.base],
+  },
+];
+
+for (const c of NEVER_RECORDED) {
+  test(`never recorded — ${c.why}: the run says recorded:false, and the next one misses no-record and recomputes`, () => {
+    const fx = reuseRepo(c.scripts ? { scripts: c.scripts } : {});
+    try {
+      openRun(fx.dir);
+      editIndex(fx.dir, 1);
+      const first = runReuse(fx, c.args(fx));
+      assert.equal(first.code, 0, first.raw);
+      assert.equal(first.be.recorded, false, JSON.stringify(first.be));
+      assert.ok(!existsSync(recordFile(fx.dir)), "no record was published");
+      assert.match(readFileSync(join(fx.dir, first.json.render), "utf8"), /not recorded for reuse \(`evidence-unreliable`\)/);
+      editIndex(fx.dir, 2);
+      const second = runReuse(fx, c.args(fx));
+      assert.equal(second.be.reused, false);
+      assert.equal(second.be.miss, "no-record");
+      assert.ok(second.counts.base > 0);
+    } finally {
+      dropReuseRepo(fx);
+    }
+  });
+}
+
+// ── A FORGED PROGRESS HIT (grill F1): a persisted HIT is re-decided in full at the verdict ─────────────
+test("a forged stage.json HIT at verdict over a forged stamp is never honored — --resume re-decides and runs the base side", () => {
+  const fx = reuseRepo();
+  try {
+    openRun(fx.dir);
+    editIndex(fx.dir, 1);
+    const first = runReuse(fx, reuseArgs(fx.base));
+    assert.equal(first.be.recorded, true);
+    // The forgery: a base stamp whose `test` exit is flipped (and re-hashed into a progress HIT), then --resume.
+    const stampPath = join(fx.dir, REGRESS_PATHS.baseGates, "stamp.json");
+    const forged = JSON.parse(readFileSync(stampPath, "utf8"));
+    forged.runs[0].exit = 1;
+    const forgedText = JSON.stringify(forged, null, 2);
+    writeFileSync(stampPath, forgedText);
+    const inst = { kind: "cmd", cmd: INSTALL_CMD, unmeasured: false };
+    writeFileSync(
+      join(fx.dir, REGRESS_PATHS.stageJson),
+      JSON.stringify({
+        schema: PROGRESS_SCHEMA,
+        feature: FEATURE,
+        timeoutMs: 30000,
+        budgetMs: null,
+        base: fx.base,
+        phase: "verdict",
+        install: inst,
+        e2eExcluded: [],
+        styleSkipped: true,
+        installResult: { ran: true, exit: 0, timedOut: false },
+        cleanupResult: null,
+        baseReuse: {
+          reused: true,
+          miss: null,
+          requirementSha256: first.be.requirement_sha256,
+          stampSha256: sha256(forgedText),
+          run: { command: "pharn-loop", markerSha256: sha256(readFileSync(join(fx.dir, ".pharn", "pharn-loop", FEATURE, "active.json"))) },
+        },
+      })
+    );
+    const r = runReuse(fx, ["--resume"]);
+    assert.equal(r.code, 0, r.raw);
+    assert.equal(r.be.reused, false, "the forged HIT was not honored");
+    assert.equal(r.be.miss, "evidence-unbound");
+    assert.ok(r.counts.base > 0 && r.counts.worktree === 1, "the base side ran");
+    assert.equal(r.report.outside_gates.test.base, 0, "the verdict reads the REAL base exit, not the forged one");
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+// ── CRASH: a kill while a MISS rebuilds the base side can never leave a false HIT ─────────────────────
+test("crash — a kill during drain-base of a MISS run, then a fresh run: no record survives, so no false HIT", async () => {
+  const scripts = {
+    test: "node count.mjs test && node --test",
+    typecheck:
+      'node count.mjs typecheck && node -e "if (/pharn-regress[\\\\/]base/.test(process.cwd()) && process.env.RBR_SLOW) setTimeout(() => {}, 20000)"',
+  };
+  const fx = reuseRepo({ scripts });
+  try {
+    openRun(fx.dir);
+    editIndex(fx.dir, 1);
+    assert.equal(runReuse(fx, reuseArgs(fx.base)).be.recorded, true);
+    // A second run under ANOTHER timeout misses (execution-changed), discards the record, and is killed mid-base.
+    const child = spawn(process.execPath, [CLI, ...reuseArgs(fx.base).map((a) => (a === "30000" ? "40000" : a))], {
+      cwd: fx.dir,
+      env: { ...CLEAN_ENV, RBR_COUNTER: fx.counter, RBR_SLOW: "1" },
+      stdio: "ignore",
+      detached: true,
+    });
+    const t0 = Date.now();
+    while (counterLines(fx).filter((l) => l === "typecheck base").length < 2 && Date.now() - t0 < 60000) {
+      await new Promise((res) => setTimeout(res, 100));
+    }
+    assert.ok(counterLines(fx).filter((l) => l === "typecheck base").length >= 2, "the kill must land during the second run's base gates");
+    process.kill(-child.pid, "SIGKILL");
+    await new Promise((res) => setTimeout(res, 500));
+    assert.ok(!existsSync(recordFile(fx.dir)), "the miss removed the record before rebuilding the base side");
+    // A FRESH run with the FIRST run's requirement: the partial base-gates/ must not be reused.
+    const r = runReuse(fx, reuseArgs(fx.base));
+    assert.equal(r.code, 0, r.raw);
+    assert.equal(r.be.reused, false);
+    assert.equal(r.be.miss, "no-record");
+    assert.ok(r.counts.base > 0);
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+// ── ★ HOOK — the record is out of the WRITE TOOLS' reach; `.pharn/` is not (the reason the record is not there) ──
+const PROTECT = join(HERE, "..", "..", ".claude", "hooks", "protect-trusted-paths.cjs");
+const ENFORCE = join(HERE, "..", "..", ".claude", "hooks", "enforce-writes-scope.cjs");
+
+/** Each guard anchors its guarded root on where its OWN file lives (an installed project's `.claude/hooks/`), so the
+ *  test installs a copy of both hooks into the project it judges, as `pharn update` would — running this repo's copy
+ *  against a temp repo would judge this repo instead. */
+function installHooks(projectDir) {
+  const dir = join(projectDir, ".claude", "hooks");
+  mkdirSync(dir, { recursive: true });
+  for (const h of [PROTECT, ENFORCE]) copyFileSync(h, join(dir, h.split("/").pop()));
+}
+
+function hookExit(hook, projectDir, filePath) {
+  const r = spawnSync(process.execPath, [join(projectDir, ".claude", "hooks", hook.split("/").pop())], {
+    cwd: projectDir,
+    input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: filePath, content: "{}" }, cwd: projectDir }),
+    encoding: "utf8",
+    env: { ...CLEAN_ENV, CLAUDE_PROJECT_DIR: projectDir },
+  });
+  return r.status;
+}
+
+test("★ HOOK — both real write guards deny the record path, in a main checkout and in a linked worktree; `.pharn/` evidence is writable", () => {
+  const fx = reuseRepo();
+  const wt = `${fx.dir}-wt`;
+  try {
+    // A main checkout: the git dir is `.git/` under the guarded root.
+    installHooks(fx.dir);
+    const mainRecord = recordFile(fx.dir);
+    assert.equal(realpathSync(dirname(mainRecord)), realpathSync(join(fx.dir, ".git")));
+    assert.equal(hookExit(PROTECT, fx.dir, mainRecord), 2, "protect-trusted-paths denies git metadata");
+    assert.equal(hookExit(ENFORCE, fx.dir, mainRecord), 2, "enforce-writes-scope's default denies it too");
+    const evidence = join(fx.dir, REGRESS_PATHS.baseGates, "stamp.json");
+    assert.equal(hookExit(PROTECT, fx.dir, evidence), 0);
+    assert.equal(hookExit(ENFORCE, fx.dir, evidence), 0, "`.pharn/**` is always writable — why the record is not there");
+
+    // A linked worktree: its own git dir lives in the main checkout's `.git/worktrees/<name>/`, another git tree.
+    execFileSync("git", ["worktree", "add", "-q", "--detach", wt], { cwd: fx.dir });
+    installHooks(wt);
+    const wtRecord = recordFile(wt);
+    assert.ok(wtRecord.includes(`${join(".git", "worktrees")}`), `the record lands in the worktree's own git dir: ${wtRecord}`);
+    const denied = [hookExit(PROTECT, wt, wtRecord), hookExit(ENFORCE, wt, wtRecord)];
+    assert.ok(denied.includes(2), `a write must pass both guards; neither denied: ${denied}`);
+    assert.equal(hookExit(ENFORCE, wt, wtRecord), 2, "enforce-writes-scope denies a path inside another git tree");
+    // …in the installed posture too, with no run open (its permissive default never admits another git tree).
+    writeFileSync(join(wt, "pharn.config.json"), JSON.stringify({ skillsVersion: "6.33.0" }) + "\n");
+    assert.equal(hookExit(ENFORCE, wt, wtRecord), 2, "installed, no run open: still denied");
+  } finally {
+    try {
+      execFileSync("git", ["worktree", "remove", "--force", wt], { cwd: fx.dir, stdio: "ignore" });
+    } catch {
+      /* already gone */
+    }
+    rmSync(wt, { recursive: true, force: true });
+    dropReuseRepo(fx);
+  }
+});
+
+// ── ★ LOOP FRESHNESS over a HIT: the retained files satisfy check-loop-fresh's C/D/E/H/J unchanged ─────
+test("★ A5 (reuse) — check-loop-fresh reads FRESH over a HIT run, with D/E/H/J pinned", () => {
+  const fx = reuseRepo();
+  try {
+    openRun(fx.dir);
+    editIndex(fx.dir, 1);
+    assert.equal(runReuse(fx, reuseArgs(fx.base)).be.recorded, true);
+    editIndex(fx.dir, 2);
+    const hit = runReuse(fx, reuseArgs(fx.base));
+    assert.equal(hit.be.reused, true, JSON.stringify(hit.be));
+    const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: fx.dir, encoding: "utf8" }).trim();
+    const fp = fingerprint(fx.dir, { feature: FEATURE });
+    assert.ok(fp.ok);
+    writeVerifyStampAndReport(fx.dir, { head, digest: fp.digest });
+    const fresh = spawnSync(
+      process.execPath,
+      [CHECK_LOOP_FRESH, "--feature", FEATURE, "--base", fx.base, "--iter", "2", "--repo", fx.dir],
+      {
+        encoding: "utf8",
+        env: CLEAN_ENV,
+      }
+    );
+    const doc = JSON.parse(fresh.stdout);
+    assert.equal(doc.verdict, "FRESH", JSON.stringify(doc));
+    for (const id of ["C", "D", "E", "H", "J"]) assert.equal(doc.checks[id], "pass", `check ${id}: ${JSON.stringify(doc.checks)}`);
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+// ── ★ WIRING (reuse, L45) — the COMMITTED pharn-regress.md line, executed twice under one run marker ────
+test("★ WIRING (reuse) — pharn-regress.md's pinned line, run twice in one delivery run with a real npm ci, reuses on the second", () => {
+  const text = readFileSync(COMMAND, "utf8");
+  const pinned = text
+    .split(/\r?\n/)
+    .find((l) => /^node pharn\/floor\/stage-regress\.mjs --feature <name> --timeout-ms \d+ --budget-ms \d+\s*$/.test(l));
+  assert.ok(pinned, "the pinned fresh line is present");
+  const fx = reuseRepo({ scripts: { test: "node count.mjs test && node --test", build: "node count.mjs build" } });
+  try {
+    writeFileSync(
+      join(fx.dir, "package-lock.json"),
+      JSON.stringify(
+        { name: "fx", version: "1.0.0", lockfileVersion: 3, requires: true, packages: { "": { name: "fx", version: "1.0.0" } } },
+        null,
+        2
+      ) + "\n"
+    );
+    // The line names a REPO-RELATIVE script, and the base worktree checks out committed files only: commit the floor.
+    mkdirSync(join(fx.dir, "pharn", "floor"), { recursive: true });
+    const seen = new Set();
+    const queue = ["stage-regress.mjs"];
+    while (queue.length) {
+      const m = queue.shift();
+      if (seen.has(m)) continue;
+      seen.add(m);
+      for (const [, dep] of readFileSync(join(HERE, m), "utf8").matchAll(/["'](?:\.\/)?([a-z0-9-]+\.mjs)["']/g)) {
+        if (!dep.endsWith(".test.mjs") && existsSync(join(HERE, dep))) queue.push(dep);
+      }
+    }
+    assert.ok(
+      seen.has("regress-base-reuse.mjs") && seen.has("regress-base-reuse-core.mjs"),
+      "the fixture closure carries the reuse modules"
+    );
+    for (const m of seen) copyFileSync(join(HERE, m), join(fx.dir, "pharn", "floor", m));
+    execFileSync("git", ["add", "-A"], { cwd: fx.dir });
+    execFileSync("git", ["commit", "-q", "-m", "floor + lockfile"], { cwd: fx.dir });
+    const base = execFileSync("git", ["rev-parse", "HEAD"], { cwd: fx.dir, encoding: "utf8" }).trim();
+    openRun(fx.dir);
+    const env = {
+      ...CLEAN_ENV,
+      RBR_COUNTER: fx.counter,
+      npm_config_offline: "true",
+      npm_config_audit: "false",
+      npm_config_fund: "false",
+      npm_config_update_notifier: "false",
+    };
+    const line = `${pinned.replaceAll("<name>", FEATURE).trim()} --base ${base}`;
+    const run = () => {
+      const from = counterLines(fx).length;
+      const r = spawnSync("sh", ["-c", line], { cwd: fx.dir, encoding: "utf8", env });
+      const doc = JSON.parse(r.stdout);
+      assert.equal(doc.status, "done", r.stdout + r.stderr);
+      const report = JSON.parse(readFileSync(join(fx.dir, doc.report), "utf8"));
+      return { be: report.base_evidence, counts: countsSince(fx, from) };
+    };
+    editIndex(fx.dir, 1);
+    const first = run();
+    assert.equal(first.be.recorded, true, JSON.stringify(first.be));
+    assert.ok(first.counts.base > 0 && first.counts.worktree === 1, "L34: the first run did base work");
+    editIndex(fx.dir, 2);
+    const second = run();
+    assert.equal(second.be.reused, true, JSON.stringify(second.be));
+    assert.deepEqual(second.counts, { worktree: 0, install: 0, base: 0, head: 2 });
+  } finally {
+    dropReuseRepo(fx);
   }
 });

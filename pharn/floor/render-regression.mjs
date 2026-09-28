@@ -95,8 +95,30 @@ export function renderDone({ feature, base, report, scope, progress }) {
 
   out.push(verdictLine(report.verdict, report.regressions), "");
 
+  // BASE-evidence reuse (6.33.0): ONE line, from the report's own `base_evidence` block. Every value in it is this
+  // floor's own — a boolean, a closed-enum member, a hex digest — never untrusted text.
+  const be = progress.baseEvidence;
+  if (be) {
+    if (be.reused) {
+      out.push(
+        `BASE evidence: REUSED — the run marker, the reuse record, the stamp and its logs agree with this invocation's BASE requirement (sha256 \`${inline(be.requirement_sha256)}\`; that an earlier /pharn-regress of this run produced them is advisory), so this invocation created no base worktree, ran no install and ran no base gate; \`gate_run.base.stamp_sha256\` in regression-report.json names the stamp.`,
+        ""
+      );
+    } else {
+      out.push(
+        `BASE evidence: produced by this invocation (not reused: \`${inline(be.miss)}\`); ` +
+          (be.recorded
+            ? "recorded for reuse by a later /pharn-regress of this run."
+            : `not recorded for reuse (\`${inline(be.notRecordedWhy ?? "unknown")}\`).`),
+        ""
+      );
+    }
+  }
+
   if (installFailed) {
     // Already rendered above, before the verdict — no redundant install-info line here.
+  } else if (be && be.reused) {
+    out.push("install: none run by this invocation (the BASE evidence was reused).", "");
   } else if (progress.install.kind === "none") {
     out.push(`install: none${progress.install.reason ? ` (${inline(progress.install.reason)})` : ""}`, "");
   } else {

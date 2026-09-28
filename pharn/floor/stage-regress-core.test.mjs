@@ -17,6 +17,9 @@ import {
   resolveBaseSource,
   PROGRESS_SCHEMA,
   validateProgress,
+  validateReuseDecision,
+  BASE_REUSE_MISSES,
+  DELIVERY_COMMANDS,
 } from "./stage-regress-core.mjs";
 
 // ── ★ LOAD GRAPH (GRILL G8) ──────────────────────────────────────────────────────────────────────────
@@ -216,9 +219,78 @@ function validRecord(overrides = {}) {
     styleSkipped: false,
     installResult: null,
     cleanupResult: null,
+    baseReuse: null,
     ...overrides,
   };
 }
+
+// ── THE REUSE DECISION (schema /2, 6.33.0) ─────────────────────────────────────────────────────────────
+const H = (c) => c.repeat(64);
+const RUN = { command: "pharn-loop", markerSha256: H("a") };
+const HIT = { reused: true, miss: null, requirementSha256: H("b"), stampSha256: H("c"), run: RUN };
+const MISS = { reused: false, miss: "gates-changed", requirementSha256: H("b"), stampSha256: null, run: RUN };
+
+test("progress /2: baseReuse is required — null at drain-head, a decision at every later phase", () => {
+  assert.equal(PROGRESS_SCHEMA, "pharn-stage-regress-progress/2");
+  const noKey = validRecord();
+  delete noKey.baseReuse;
+  assert.equal(validateProgress(noKey).ok, false, "a record without baseReuse (a /1-shaped record) is refused");
+  assert.equal(validateProgress(validRecord({ schema: "pharn-stage-regress-progress/1" })).ok, false, "a /1 record is refused");
+  assert.equal(validateProgress(validRecord({ baseReuse: MISS })).ok, false, "no decision yet at drain-head");
+  for (const phase of ["worktree", "install", "base-init", "drain-base", "verdict"]) {
+    assert.deepEqual(validateProgress(validRecord({ phase, baseReuse: MISS })), { ok: true }, phase);
+    assert.equal(validateProgress(validRecord({ phase, baseReuse: null })).ok, false, `${phase} needs its decision`);
+  }
+});
+
+test("progress /2: a HIT decision can only sit at verdict — it never visits the base phases", () => {
+  assert.deepEqual(validateProgress(validRecord({ phase: "verdict", baseReuse: HIT })), { ok: true });
+  for (const phase of ["worktree", "install", "base-init", "drain-base"]) {
+    assert.equal(validateProgress(validRecord({ phase, baseReuse: HIT })).ok, false, phase);
+  }
+});
+
+test("validateReuseDecision: closed keys and every field's shape (fail-closed)", () => {
+  assert.deepEqual(validateReuseDecision(HIT, "verdict"), { ok: true });
+  assert.deepEqual(validateReuseDecision(MISS, "worktree"), { ok: true });
+  assert.deepEqual(validateReuseDecision({ ...MISS, run: null, miss: "no-delivery-run" }, "worktree"), { ok: true });
+  assert.deepEqual(validateReuseDecision({ ...MISS, run: null, miss: "requirement-unknown", requirementSha256: null }, "worktree"), {
+    ok: true,
+  });
+  const bad = [
+    null,
+    [],
+    { ...HIT, extra: 1 },
+    { ...HIT, reused: "yes" },
+    { ...HIT, miss: "gates-changed" },
+    { ...HIT, stampSha256: null },
+    { ...HIT, run: null },
+    { ...HIT, requirementSha256: "short" },
+    { ...MISS, miss: "not-a-member" },
+    { ...MISS, stampSha256: H("c") },
+    { ...MISS, requirementSha256: null },
+    { ...MISS, miss: "requirement-unknown" }, // a digest for an unknown requirement
+    { ...MISS, run: { command: "pharn-review", markerSha256: H("a") } },
+    { ...MISS, run: { command: "pharn-loop", markerSha256: "x" } },
+    { ...MISS, run: { command: "pharn-loop", markerSha256: H("a"), extra: 1 } },
+  ];
+  for (const d of bad) assert.equal(validateReuseDecision(d, "verdict").ok, false, JSON.stringify(d));
+});
+
+test("the reuse vocabularies are closed, ordered and duplicate-free", () => {
+  assert.deepEqual([...DELIVERY_COMMANDS], ["pharn-loop", "pharn-ship"]);
+  assert.equal(new Set(BASE_REUSE_MISSES).size, BASE_REUSE_MISSES.length);
+  assert.equal(BASE_REUSE_MISSES[0], "requirement-unknown");
+  assert.equal(BASE_REUSE_MISSES[BASE_REUSE_MISSES.length - 1], "evidence-unreliable");
+  for (const m of BASE_REUSE_MISSES) assert.match(m, /^[a-z]+(-[a-z]+)*$/);
+});
+
+test("the BASE_REUSE_MISSES glosses (the one owner of each member's meaning, P4) name every member, in order, and nothing else", () => {
+  const src = readFileSync(fileURLToPath(new URL("./stage-regress-core.mjs", import.meta.url)), "utf8");
+  const block = src.slice(src.indexOf("The one owner of each member's meaning"), src.indexOf("export const DELIVERY_COMMANDS"));
+  const glossed = [...block.matchAll(/^ \* {4}([a-z]+(?:-[a-z]+)*) {2,}\S/gm)].map((m) => m[1]);
+  assert.deepEqual(glossed, [...BASE_REUSE_MISSES], "a member added, renamed or dropped without its gloss fails here");
+});
 
 test("validateProgress: accepts a well-formed record, including a null budgetMs (unbudgeted)", () => {
   assert.deepEqual(validateProgress(validRecord()), { ok: true });
