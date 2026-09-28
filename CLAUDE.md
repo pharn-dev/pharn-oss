@@ -920,6 +920,18 @@ node pharn/floor/check-loop-decision.mjs <LOOP.md>
 # `run-window/1` ledgers keep their seven keys and a not-context-scoped WARN; --verify-transcript REDs one holding
 # other contexts' rows. ADVISORY: the transcript layout (undocumented, machine-local) and that the marker output
 # reached the calling context's own tool result — the contract's "Run membership" carries the bounds.
+# STAGE ELAPSED AND DETERMINISTIC WORK (6.35.0, run-performance-breakdown) — two additive `/2` keys, no schema bump.
+# `executions` is a VIEW over markers[] (pharn/floor/stage-executions-core.mjs, method `stage-start-to-return/1`): each
+# current-run stage-start is one row, ended ONLY by the next marker when it is the orchestrator return; a re-run is
+# `run 2`, never merged; anything else is unmeasured with a closed reason and `elapsed_ms: null` (never 0, never a
+# guessed end). OBSERVED WALL CLOCK between two processes' toISOString() reads — not CPU/model/tool time, not
+# monotonic, never decomposed. mark-phase.mjs and its printed binding line are UNCHANGED. `work[]` is FACTS: at `done`
+# stage-regress.mjs / stage-verify.mjs append one `pharn-stage-work/1` line to `.pharn/cost/<feature>/work.jsonl`
+# (pharn/floor/stage-work.mjs, the one owner), counted from the stamp the verdict used — executed / reused / no_files /
+# required, BASE `fresh|reused`, the install's exit and ms (the ONE new timer). Best-effort and OBSERVATIONAL (no
+# exit, verdict, reuse, route or commit reads it); only a `done` exit writes one. check-cost-ledger rule 9 validates
+# the rows and recomputes `executions`; /2 admits exactly the current key set or the pre-6.35.0 one. Contract:
+# cost-ledger.md "Stage executions and deterministic work".
 # Exit: mark-phase 0 ok · 2 bad usage (nothing written) | render 0 (incl. an honest `unavailable`) · 2 bad
 # usage | check 0 GREEN (WARNs possible) · 1 RED · 2 unusable input.
 node pharn/floor/mark-phase.mjs --name <slug> --kind <run-start|stage-start|orchestrator|run-stop> [--stage <s>] [--iteration <n>] [--base <dir>] [--mode <m>] [--route <token>]

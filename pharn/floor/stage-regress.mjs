@@ -122,6 +122,7 @@ import { FEATURE_SLUG_RE, SCHEMA as GATE_RUN_SCHEMA, actualForExpected } from ".
 import { isExcluded, ALGO as FINGERPRINT_ALGO } from "./worktree-fingerprint.mjs";
 import { decideFromDisk, discardRetained, publishRecord } from "./regress-base-reuse.mjs";
 import { discardOffer, publishOffer } from "./head-reuse-offer.mjs";
+import { regressWork, recordWork } from "./stage-work.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHECK_PLAN_SPEC_AGREE = join(HERE, "check-plan-spec-agree.mjs");
@@ -764,6 +765,9 @@ function runPhases(state, budget) {
       const errFile = join(REGRESS_PATHS.root, "install.err");
       // spawnGate is exported by run-gates.mjs (6.23.0) precisely so a stage script reuses the SAME
       // process-group/timeout/kill discipline rather than re-implementing it (P3/P4).
+      // The ONE timer this stage adds (6.35.0, run-performance-breakdown): the install's own interval, monotonic,
+      // persisted as integer ms for the cost ledger's work record. Observational — nothing decides on it.
+      const installStart = performance.now();
       const resultPromise = spawnGate(
         { shell: state.install.cmd, argv: null, files: [] },
         REGRESS_PATHS.base,
@@ -774,7 +778,8 @@ function runPhases(state, budget) {
       );
       return resultPromise.then((res) => {
         budget.spent();
-        state.installResult = { ran: true, exit: res.exit, timedOut: res.timed_out };
+        const ms = Math.round(performance.now() - installStart);
+        state.installResult = { ran: true, exit: res.exit, timedOut: res.timed_out, ms };
         state.phase = "base-init";
         return runPhases(state, budget); // the SAME tracker — see makeBudget's header
       });
@@ -932,7 +937,31 @@ function runPhases(state, budget) {
   } catch {
     /* never persisted in a single-invocation run — the normal case */
   }
+  // The cost ledger's deterministic-work record (6.35.0, stage-work.mjs): what THIS execution ran and what it took from
+  // reused evidence, counted from the two stamps the verdict just used. Best-effort and observational — a failure is a
+  // stderr note, and the exit below is unchanged either way.
+  recordWork(
+    state.feature,
+    regressWork({
+      headStamp: readStampOrNull(join(REGRESS_PATHS.head, "stamp.json")),
+      baseStamp: readStampOrNull(join(REGRESS_PATHS.baseGates, "stamp.json")),
+      baseReuse: state.baseReuse,
+      installResult: state.installResult,
+      ts: new Date().toISOString(),
+      sessionId: process.env.CLAUDE_CODE_SESSION_ID ?? null,
+    }),
+    (m) => console.error(`stage-regress: ${m}`)
+  );
   emit(doneExit({ stage: "regress", feature: state.feature, verdict: state.report.verdict, report: reportPath, render: renderPath }));
+}
+
+/** A stamp as parsed JSON, or null — for the work record only, which treats null as "cannot count". */
+function readStampOrNull(path) {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
 }
 
 /** ------------------------------------------------------------------------------------------------

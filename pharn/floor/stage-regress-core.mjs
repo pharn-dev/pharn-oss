@@ -316,9 +316,14 @@ export function validateProgress(rec) {
       Array.isArray(rec.installResult) ||
       typeof rec.installResult.ran !== "boolean" ||
       !Number.isInteger(rec.installResult.exit) ||
-      typeof rec.installResult.timedOut !== "boolean")
+      typeof rec.installResult.timedOut !== "boolean" ||
+      // `ms` (6.35.0): the install's measured interval for the cost ledger's work record — optional, so a record
+      // persisted before it still resumes; when present, a non-negative safe integer or null.
+      (Object.hasOwn(rec.installResult, "ms") &&
+        rec.installResult.ms !== null &&
+        !(Number.isSafeInteger(rec.installResult.ms) && rec.installResult.ms >= 0)))
   ) {
-    return { ok: false, reason: "progress.installResult must be null or {ran, exit, timedOut}" };
+    return { ok: false, reason: "progress.installResult must be null or {ran, exit, timedOut, ms?}" };
   }
   if (
     rec.cleanupResult !== null &&

@@ -739,6 +739,9 @@ test("COMPATIBILITY — a legacy /1 ledger is GREEN under its own rules, WARNed 
   const v1 = clone(led);
   v1.schema = LEGACY_SCHEMA;
   delete v1.membership;
+  // A /1 ledger predates the 6.35.0 keys too.
+  delete v1.executions;
+  delete v1.work;
   v1.requests.unshift({
     ...clone(v1.requests[0]),
     request_id: "before",
@@ -1581,4 +1584,124 @@ test("--verify-transcript ctx — GROWTH CLOSURE (L58, L63): every kind of line 
     const { reds } = checkLedger(f.led, { verifyTranscript: true, projectsDir: f.projectsDir });
     assert.deepEqual(reds, [], `${label}: ${reds.join(" | ")}`);
   }
+});
+
+// ── RULE 9 (6.35.0): the work facts and the executions view ──────────────────────────────────────────────────────
+
+import { TOP_LEVEL_KEYS_PRE_WORK, WORK_KEYS } from "./render-cost-ledger.mjs";
+
+/** The run fixture above, with its stages bracketed and two work records (fresh BASE regress, partially reused verify). */
+function perfFixture() {
+  const root = mkdtempSync(join(tmpdir(), "check-cl-perf-"));
+  const proj = join(root, "projects", "p");
+  mkdirSync(proj, { recursive: true });
+  writeFileSync(join(proj, `${RS}.jsonl`), [recLine("during", "2026-09-21T10:05:00.000Z", 10)].join("\n") + "\n");
+  const mdir = join(root, "cost", "feat");
+  mkdirSync(mdir, { recursive: true });
+  const mk = (seq, kind, stage, iteration, ts) => ({ seq, kind, stage, iteration, ts, session_id: RS });
+  writeFileSync(
+    join(mdir, "markers.jsonl"),
+    [
+      mk(1, "run-start", null, null, "2026-09-21T10:00:00.000Z"),
+      mk(2, "stage-start", "pharn-regress", 1, "2026-09-21T10:01:00.000Z"),
+      mk(3, "orchestrator", null, null, "2026-09-21T10:04:00.000Z"),
+      mk(4, "stage-start", "pharn-verify", 1, "2026-09-21T10:04:10.000Z"),
+      mk(5, "orchestrator", null, null, "2026-09-21T10:06:00.000Z"),
+      mk(6, "run-stop", null, null, "2026-09-21T10:30:00.000Z"),
+    ]
+      .map((m) => JSON.stringify(m))
+      .join("\n") + "\n"
+  );
+  writeFileSync(
+    join(mdir, "work.jsonl"),
+    [
+      {
+        schema: "pharn-stage-work/1",
+        stage: "pharn-regress",
+        ts: "2026-09-21T10:03:59.000Z",
+        session_id: RS,
+        head: { required: 2, executed: 2, reused: 0, no_files: 0 },
+        base: { evidence: "fresh", miss: "no-record", required: 2, executed: 2, reused: 0, no_files: 0 },
+        install: { exit: 0, timed_out: false, ms: 5000 },
+      },
+      {
+        schema: "pharn-stage-work/1",
+        stage: "pharn-verify",
+        ts: "2026-09-21T10:05:59.000Z",
+        session_id: RS,
+        gates: { required: 3, executed: 2, reused: 1, no_files: 0 },
+      },
+    ]
+      .map((w) => JSON.stringify(w))
+      .join("\n") + "\n"
+  );
+  const led = renderLedger({ name: "feat", sessionId: RS, projectsDir: join(root, "projects"), markersBase: join(root, "cost") });
+  return { led };
+}
+
+test("RULE 9 — a ledger with executions and work is GREEN, and its view is the recompute", () => {
+  const { led } = perfFixture();
+  assert.equal(led.work.length, 2, "non-vacuity: both records are rows");
+  assert.deepEqual(
+    led.executions.rows.map((r) => [r.stage, r.elapsed_ms, r.work]),
+    [
+      ["pharn-regress", 180000, [0]],
+      ["pharn-verify", 110000, [1]],
+    ]
+  );
+  assert.deepEqual(redsOf(led), []);
+});
+
+test("RULE 9 — an edited view is RED: elapsed, run number, pairing, work index, method, status", () => {
+  const { led } = perfFixture();
+  const mutants = [
+    (l) => (l.executions.rows[0].elapsed_ms = 1),
+    (l) => (l.executions.rows[0].elapsed_ms = null),
+    (l) => (l.executions.rows[1].run = 2),
+    (l) => (l.executions.rows[0].end_seq = 6),
+    (l) => (l.executions.rows[0].work = []),
+    (l) => (l.executions.rows[1].work = [0, 1]),
+    (l) => (l.executions.rows[0].unmeasured = "no-end-marker"),
+    (l) => l.executions.rows.pop(),
+    (l) => (l.executions.method = "guess/1"),
+    (l) => (l.executions.status = "unknown"),
+    (l) => (l.executions.rows[0].extra = 1),
+  ];
+  for (const [i, f] of mutants.entries()) {
+    const bad = clone(led);
+    f(bad);
+    assert.ok(
+      redsOf(bad).some((r) => /executions disagrees with a recompute/.test(r)),
+      `mutant ${i} must be RED`
+    );
+  }
+});
+
+test("RULE 9 — a work row that is not a valid record, or lies outside the window, is RED", () => {
+  const { led } = perfFixture();
+  const broken = clone(led);
+  broken.work[1].gates.executed = 3; // executed + reused + no_files !== required
+  assert.ok(redsOf(broken).some((r) => /work\[\] holds 1 row\(s\) that are not valid work records, at index 1/.test(r)));
+  const outside = clone(led);
+  outside.work[0].ts = "2026-09-21T11:00:00.000Z";
+  assert.ok(redsOf(outside).some((r) => /OUTSIDE the recorded run window, at index 0/.test(r)));
+  const notArray = clone(led);
+  notArray.work = {};
+  assert.ok(redsOf(notArray).some((r) => /work must be an array/.test(r)));
+});
+
+test("RULE 9 / L36 — /2 admits exactly two key sets: both 6.35.0 keys, or neither (a pre-6.35.0 ledger stays GREEN)", () => {
+  const { led } = perfFixture();
+  assert.deepEqual([...WORK_KEYS], ["executions", "work"]);
+  assert.deepEqual([...TOP_LEVEL_KEYS_PRE_WORK].sort(), TOP_LEVEL_KEYS.filter((k) => k !== "executions" && k !== "work").sort());
+  const pre = clone(led);
+  delete pre.executions;
+  delete pre.work;
+  assert.deepEqual(redsOf(pre), [], "a ledger written before 6.35.0 is not retroactively REDed");
+  const half = clone(led);
+  delete half.work;
+  assert.ok(redsOf(half).some((r) => /missing key\(s\): work/.test(r)));
+  const otherHalf = clone(led);
+  delete otherHalf.executions;
+  assert.ok(redsOf(otherHalf).some((r) => /missing key\(s\): executions/.test(r)));
 });

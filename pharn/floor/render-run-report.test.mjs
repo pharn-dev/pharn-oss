@@ -164,7 +164,7 @@ test("L36 CLOSURE: the rendered `##` headings equal SECTIONS exactly, both direc
   try {
     feature(root, "feat", { "cost.json": costJson(), "LOOP.md": LOOP_MD });
     const got = headings(renderRunReport("feat", { repo: root }));
-    assert.equal(SECTIONS.length, 6, "non-vacuity: the vocabulary must be non-empty");
+    assert.equal(SECTIONS.length, 7, "non-vacuity: the vocabulary must be non-empty");
     // Equality, not per-member presence: a variant spelling of ANY member fails here, which is the
     // whole point — a presence set is satisfied by the spelling its author was looking at.
     assert.deepEqual(got, [...SECTIONS]);
@@ -1065,7 +1065,7 @@ test("L52 CLOSURE: this module introduces ZERO new feature-base defaults", () =>
     .join("\n");
   const hits = [...code.matchAll(/"pharn\/features"/g)];
   assert.equal(hits.length, 0, "the feature-base literal must be imported, never re-spelled in code");
-  assert.match(src, /import \{ FEATURE_BASE[^}]*\} from "\.\/render-cost-ledger\.mjs"/);
+  assert.match(src, /import \{\s*FEATURE_BASE[^}]*\} from "\.\/render-cost-ledger\.mjs"/);
 });
 
 // ── the CLI ──────────────────────────────────────────────────────────────────────────────────────────
@@ -2168,6 +2168,67 @@ test("F2: no live markers file → an explicit 'currency not checked' line, neve
     const md = renderRunReport("feat", { repo: root, markersBase: join(root, "nowhere") });
     assert.match(md, /Ledger currency not checked/);
     assert.doesNotMatch(md, /STALE LEDGER/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── 6.35.0: `## Stage elapsed and deterministic work` ─────────────────────────────────────────────────────────────
+const PERF_ROWS = [
+  { stage: "pharn-regress", iteration: 1, run: 1, start_seq: 2, end_seq: 3, elapsed_ms: 90000, unmeasured: null, work: [0] },
+  { stage: "pharn-verify", iteration: 1, run: 1, start_seq: 4, end_seq: null, elapsed_ms: null, unmeasured: "no-return-marker", work: [] },
+];
+const PERF_WORK = [
+  {
+    schema: "pharn-stage-work/1",
+    stage: "pharn-regress",
+    ts: "2026-09-21T08:39:59.000Z",
+    session_id: null,
+    head: { required: 2, executed: 2, reused: 0, no_files: 0 },
+    base: { evidence: "reused", miss: null, required: 2, executed: 0, reused: 2, no_files: 0 },
+    install: null,
+  },
+];
+const perfSection = (md) => md.slice(md.indexOf("## Stage elapsed and deterministic work"), md.indexOf("## Files"));
+
+test("6.35.0 — the section copies the stored views: an unmeasured row shows its reason, never a number; BASE reuse is named", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", {
+      "cost.json": costJson({
+        executions: { method: "stage-start-to-return/1", status: "derived", reason: null, rows: PERF_ROWS },
+        work: PERF_WORK,
+      }),
+    });
+    const sec = perfSection(renderRunReport("feat", { repo: root }));
+    assert.match(sec, /pharn-regress\s+1\s+1\s+90\.0 s/);
+    assert.match(sec, /pharn-verify\s+1\s+1\s+unmeasured — no-return-marker/);
+    assert.match(sec, /BASE REUSED \(no worktree, no install, 0 base gate processes; 2 results from earlier evidence\)/);
+    assert.match(sec, /NOT CPU time, model time or tool time/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("6.35.0 — a pre-6.35.0 ledger renders n/a; a hand-edited view renders n/a and NEVER crashes (GATE-2: a throwing reason)", () => {
+  const root = scratch();
+  try {
+    feature(root, "old", { "cost.json": costJson() });
+    assert.match(perfSection(renderRunReport("old", { repo: root })), /_n\/a — cost\.json predates 6\.35\.0/);
+    const hostile = [
+      { method: "stage-start-to-return/1", status: "unknown", reason: { toString: 1, valueOf: 1 }, rows: [] },
+      { method: "stage-start-to-return/1", status: "derived", reason: null, rows: [{ ...PERF_ROWS[0], elapsed_ms: null }] },
+      { method: "stage-start-to-return/1", status: "derived", reason: null, rows: [{ ...PERF_ROWS[0], work: 5 }] },
+      null,
+    ];
+    for (const [i, executions] of hostile.entries()) {
+      feature(root, `h${i}`, { "cost.json": costJson({ executions, work: PERF_WORK }) });
+      assert.match(
+        perfSection(renderRunReport(`h${i}`, { repo: root })),
+        /_n\/a — cost\.json's `executions`\/`work` do not have the shape/,
+        `case ${i}`
+      );
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -10,7 +10,7 @@ lessons to fetch; canon stays the source of truth and the floor's verification t
 applied, without fetching its full `## L<n>` entry from canon, is the P0 disease. "The index was
 consulted" never means "the relevant lessons were read".
 
-65 lessons · 65 tagged · 0 malformed · 0 untagged · ~47557 tokens total
+66 lessons · 66 tagged · 0 malformed · 0 untagged · ~48047 tokens total
 
 Columns: `id | type | concepts | title | promoted | ~tokens`. `-` is rendered in THREE columns
 and does NOT mean the same thing in each — read it against the column it sits in. In `type`/`concepts`:
@@ -89,4 +89,5 @@ L62 | floor    | refusal-path,untrusted-input,total-function,crash-as-verdict,fa
 L63 | floor    | temporal-state,referent-binding,append-only,derivation-change,lesson-recurrence                | A change to how a recorded value is DERIVED can move it into the still-growing part of its referent — L58 recurred through a checker the change left untouched | 2026-09-26 | ~992
 L64 | contract | universal-quantifier,doc-drift,guarantee-audit,restatement                                     | A bound's RESTATEMENT re-derives its quantifier — L37 recurred in the release note and a sibling contract, while the primary sentences it was applied to held | 2026-09-27 | ~803
 L65 | floor    | pinned-record,writes-scope,agreement,self-certification                                        | A pin is only as strong as the scope around its record — a stage allowed to write the record a later gate compares it against certifies itself | 2026-09-27 | ~623
+L66 | tooling  | input-capture,shared-state,temporal-state,false-green,lesson-recurrence                        | A wait on a result file in shared scratch is satisfied by another session's stale file — capture into a directory the run creates empty, and read only after the writer has exited | 2026-09-28 | ~490
 ```

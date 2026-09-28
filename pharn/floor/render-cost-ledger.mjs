@@ -151,8 +151,11 @@ import {
   MAIN_CONTEXT,
   MEMBERSHIP_METHOD,
   UNKNOWN_REASONS,
+  CONTEXT_REASONS,
 } from "./run-window-core.mjs";
 import { ABS_PATH_RE, isIdentityToken, isTokenCount } from "./cost-value-core.mjs";
+import { readWork, WORK_FILE } from "./stage-work.mjs";
+import { buildExecutions, unattachedWork } from "./stage-executions-core.mjs";
 
 /** What this emitter writes. `/2` adds the `membership` block and scopes every row to the run window. */
 export const SCHEMA = "pharn-cost-ledger/2";
@@ -236,10 +239,22 @@ export const TOP_LEVEL_KEYS = Object.freeze([
   "unattributed",
   "dropped",
   "membership",
+  "executions",
+  "work",
 ]);
 
-/** The `/1` key set — `TOP_LEVEL_KEYS` minus `membership`, DERIVED rather than re-listed (L35). */
-export const TOP_LEVEL_KEYS_V1 = Object.freeze(TOP_LEVEL_KEYS.filter((k) => k !== "membership"));
+/** The two keys added in 6.35.0 (run-performance-breakdown): the `executions` VIEW over `markers[]` + `work[]`, and the
+ *  `work[]` FACTS the regress/verify stage scripts record at `done`. See the contract's "Stage executions and
+ *  deterministic work". Every ledger this emitter writes carries both. */
+export const WORK_KEYS = Object.freeze(["executions", "work"]);
+
+/** A `/2` ledger written BEFORE 6.35.0 — `TOP_LEVEL_KEYS` minus `WORK_KEYS`, DERIVED rather than re-listed (L35). The
+ *  checker accepts exactly this set or exactly `TOP_LEVEL_KEYS` for `/2`: both new keys, or neither (L36). */
+export const TOP_LEVEL_KEYS_PRE_WORK = Object.freeze(TOP_LEVEL_KEYS.filter((k) => !WORK_KEYS.includes(k)));
+
+/** The `/1` key set — `TOP_LEVEL_KEYS` minus `membership` and the 6.35.0 keys (a `/1` ledger predates both), DERIVED
+ *  rather than re-listed (L35). */
+export const TOP_LEVEL_KEYS_V1 = Object.freeze(TOP_LEVEL_KEYS_PRE_WORK.filter((k) => k !== "membership"));
 
 /** `membership`'s CLOSED key set under `run-window/2` (L36). `session` is the SELECTED session the window was
  *  computed for, so the checker can recompute the same window from `markers[]` alone. `excluded_requests` counts
@@ -645,8 +660,36 @@ export function renderLedger(opts) {
  */
 export function deriveLedger(opts) {
   const stats = { excludedAfterWindow: 0 };
-  const ledger = buildLedger(opts, stats);
+  const ledger = withWork(buildLedger(opts, stats), opts);
   return { ledger, excludedAfterWindow: stats.excludedAfterWindow };
+}
+
+/**
+ * Append the 6.35.0 keys to a built ledger — on EVERY path, the unavailable and context-unknown shells included,
+ * because timing needs only markers: a run whose transcript is gone still has its stage intervals.
+ *
+ * `work[]` = the valid records of `<markersBase>/<name>/work.jsonl` (`stage-work.mjs readWork`) that are MEMBERS of the
+ * run window computed over the ledger's OWN `markers[]` for the selected session — `isMember`, the test every request
+ * row passes; an unknown window admits none. A line that fails validation is not a row: its index joins `dropped[]` as
+ * `work[<n>]`. `executions` is `buildExecutions(markers, work)`, which `check-cost-ledger.mjs` recomputes from the file.
+ * Nothing here reads the transcript, and nothing above is changed: every existing key keeps its value.
+ */
+function withWork(ledger, { name, sessionId, markersBase = MARKERS_DEFAULT_BASE, markers: suppliedMarkers, work: suppliedWork }) {
+  // A re-derivation under a RECORDED boundary (`check-cost-ledger.mjs --verify-transcript` passes the ledger's own
+  // `markers[]`) never reads the live work file: that check compares neither 6.35.0 key, and the live file is still
+  // growing (L58). It uses the records it is handed, or none.
+  const { records, dropped } =
+    suppliedMarkers !== undefined
+      ? { records: Array.isArray(suppliedWork) ? suppliedWork : [], dropped: [] }
+      : readWork(join(markersBase, name, WORK_FILE));
+  const win = runWindow(ledger.markers, sessionId ?? null);
+  const work = records.filter((w) => isMember(win, w.ts, w.session_id));
+  return {
+    ...ledger,
+    dropped: dropped.length ? [...ledger.dropped, ...dropped] : ledger.dropped,
+    executions: buildExecutions(ledger.markers, work),
+    work,
+  };
 }
 
 function buildLedger(
@@ -930,7 +973,11 @@ export function buildViews(requests) {
 
 /** The two FACT arrays (the contract's "record facts, derive views"), written one element per line. Every
  *  other value in the file is a derived view or scalar metadata and stays pretty-printed. */
-export const ROW_ARRAYS = Object.freeze(["markers", "requests"]);
+export const ROW_ARRAYS = Object.freeze(["markers", "requests", "work"]);
+
+/** A derived view whose `rows` are written one per line too (6.35.0), so a many-iteration run's elapsed view costs a
+ *  line per execution in a diff, not a dozen. */
+export const NESTED_ROW_ARRAYS = Object.freeze({ executions: "rows" });
 
 /**
  * THE ONE serialization of a ledger, used by BOTH CLI output paths (the file write and `--stdout`).
@@ -959,9 +1006,25 @@ export function serializeLedger(ledger) {
     const value = ledger[key];
     if (value === undefined || typeof value === "function" || typeof value === "symbol") continue;
     let body;
+    const nested = Object.hasOwn(NESTED_ROW_ARRAYS, key) ? NESTED_ROW_ARRAYS[key] : null;
     if (ROW_ARRAYS.includes(key) && Array.isArray(value) && value.length > 0) {
       const rows = value.map((el, i) => `    ${JSON.stringify(el) ?? "null"}${i < value.length - 1 ? "," : ""}`);
       body = `[\n${rows.join("\n")}\n  ]`;
+    } else if (nested !== null && value !== null && typeof value === "object" && !Array.isArray(value)) {
+      const parts = [];
+      for (const k of Object.keys(value)) {
+        const v = value[k];
+        if (v === undefined || typeof v === "function" || typeof v === "symbol") continue;
+        let b;
+        if (k === nested && Array.isArray(v) && v.length > 0) {
+          const rows = v.map((el, i) => `      ${JSON.stringify(el) ?? "null"}${i < v.length - 1 ? "," : ""}`);
+          b = `[\n${rows.join("\n")}\n    ]`;
+        } else {
+          b = JSON.stringify(v, null, 2).replace(/\n/g, "\n    ");
+        }
+        parts.push(`    ${JSON.stringify(k)}: ${b}`);
+      }
+      body = parts.length === 0 ? "{}" : `{\n${parts.join(",\n")}\n  }`;
     } else {
       body = JSON.stringify(value, null, 2).replace(/\n/g, "\n  ");
     }
@@ -971,16 +1034,22 @@ export function serializeLedger(ledger) {
 }
 
 /** The compact per-stage table `/pharn-loop` Step 7 prints. The FILE is the record; this screen copy is
- *  advisory and is regenerated from the same rows, never typed. */
+ *  advisory and is regenerated from the same rows, never typed. Three blocks, kept apart on purpose (6.35.0): model
+ *  usage (tokens, from `requests[]`), observed elapsed (from `executions`), deterministic work (from `work[]`) — no
+ *  number in one is derived from another, and none is subtracted from another. */
 export function table(ledger) {
+  return [...usageLines(ledger), ...elapsedLines(ledger), ...workLines(ledger)].join("\n");
+}
+
+function usageLines(ledger) {
   const rows = ledger.by_stage_iteration_model;
   const m = ledger.membership;
   const scope = m ? `run window ${m.status}${m.status === "unknown" ? "" : `, ${m.excluded_requests} outside excluded`}` : "session-scoped";
   const lines = [
     `cost ledger — ${ledger.name} (${ledger.coverage}, ${scope}, ${ledger.totals.requests} requests, dedup on ${ledger.dedup_key})`,
   ];
-  if (m && m.status === "unknown") return lines.concat(`  run usage UNKNOWN — ${m.reason}. Not a zero.`).join("\n");
-  if (rows.length === 0) return lines.concat("  (no attributed requests)").join("\n");
+  if (m && m.status === "unknown") return lines.concat(`  run usage UNKNOWN — ${m.reason}. Not a zero.`);
+  if (rows.length === 0) return lines.concat("  (no attributed requests)");
   const w = (s, n) => String(s).padEnd(n);
   const r = (s, n) => String(s).padStart(n);
   lines.push(`  ${w("stage", 18)}${r("iter", 5)}  ${w("model", 20)}${r("reqs", 6)}${r("cache_read", 12)}${r("output", 9)}`);
@@ -990,7 +1059,69 @@ export function table(ledger) {
     );
   }
   lines.push(`  TOKENS ONLY — no prices here. Multiply by your own price list; output_thinking ⊂ output.`);
-  return lines.join("\n");
+  return lines;
+}
+
+/** The observed-elapsed block. An unmeasured row prints its reason, never a number. */
+export function elapsedLines(ledger) {
+  const ex = ledger.executions;
+  if (!ex || typeof ex !== "object") return ["observed elapsed — not recorded (a ledger written before 6.35.0)"];
+  const head = "observed elapsed — wall clock between PHARN's stage markers (not CPU, model or tool time; not monotonic)";
+  if (ex.status === "unknown") return [head, `  UNKNOWN — ${ex.reason}. Not a zero.`];
+  if (!Array.isArray(ex.rows) || ex.rows.length === 0) return [head, "  (no stage-start marker in this run)"];
+  const w = (s, n) => String(s).padEnd(n);
+  const r = (s, n) => String(s).padStart(n);
+  const lines = [head, `  ${w("stage", 18)}${r("iter", 5)}${r("run", 5)}  elapsed`];
+  for (const x of ex.rows) {
+    const v = Number.isInteger(x.elapsed_ms) ? formatMs(x.elapsed_ms) : `unmeasured — ${x.unmeasured}`;
+    lines.push(`  ${w(x.stage ?? "(no stage)", 18)}${r(x.iteration ?? "-", 5)}${r(x.run, 5)}  ${v}`);
+  }
+  return lines;
+}
+
+/** The deterministic-work block, one line per record, in the order the stages wrote them. */
+export function workLines(ledger) {
+  const work = ledger.work;
+  if (!Array.isArray(work)) return ["deterministic work — not recorded (a ledger written before 6.35.0)"];
+  const head = "deterministic work — gate processes run vs taken from reused evidence (counted from each stage's gate-run stamp)";
+  // An UNKNOWN run window admits no record, so an empty list there is not "nothing ran" (GATE-2 review: it printed so).
+  const m = ledger.membership;
+  const windowUnknown = m && m.status === "unknown" && !(typeof m.reason === "string" && CONTEXT_REASONS.includes(m.reason));
+  if (windowUnknown) return [head, "  UNKNOWN — the run window is unknown, so no work record was admitted. Not a zero."];
+  if (work.length === 0) return [head, "  (no /pharn-regress or /pharn-verify execution recorded one in this run)"];
+  const where = new Map();
+  for (const x of ledger.executions?.rows ?? [])
+    for (const i of x.work ?? []) where.set(i, `${x.stage} iter ${x.iteration ?? "-"} run ${x.run}`);
+  const lines = [head];
+  work.forEach((rec, i) => {
+    const at = where.get(i) ?? `${rec.stage} (outside any marked execution)`;
+    lines.push(`  ${at}: ${workSummary(rec)}`);
+  });
+  const loose = unattachedWork(ledger.executions, work).length;
+  if (loose > 0) lines.push(`  ${loose} record(s) attach to no marked execution — shown, never merged into one`);
+  return lines;
+}
+
+/** One record in one line. `evidence` decides what the BASE did; worktree and install are read from it, never stored. */
+export function workSummary(rec) {
+  const side = (s) => `${s.executed} run, ${s.reused} reused, ${s.no_files} nothing-to-run, of ${s.required}`;
+  if (rec.stage === "pharn-verify") return `gates ${side(rec.gates)}`;
+  const b = rec.base;
+  const base =
+    b.evidence === "reused"
+      ? `BASE REUSED (no worktree, no install, 0 base gate processes; ${b.reused} results from earlier evidence)`
+      : `BASE fresh${b.miss ? ` (${b.miss})` : ""} — worktree created, install ${
+          rec.install === null
+            ? "none configured"
+            : `ran (exit ${rec.install.exit}${rec.install.timed_out ? ", timed out" : ""}, ${rec.install.ms === null ? "time unmeasured" : formatMs(rec.install.ms)})`
+        }, base gates ${side(b)}`;
+  return `HEAD gates ${side(rec.head)}; ${base}`;
+}
+
+/** Milliseconds for a human: exact ms below 10 s, else seconds with one decimal. Never rounds a measured value to 0 s. */
+export function formatMs(ms) {
+  if (ms < 10000) return `${ms} ms`;
+  return `${(ms / 1000).toFixed(1)} s`;
 }
 
 function main(argv) {

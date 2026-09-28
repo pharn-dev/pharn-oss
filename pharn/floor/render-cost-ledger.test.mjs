@@ -1718,10 +1718,12 @@ function rowLayoutProblems(text, led) {
   const problems = [];
   const lines = text.split("\n");
   if (lines.at(-1) !== "" || lines.at(-2) === "") problems.push("the file must end with exactly one newline");
-  for (const key of ["markers", "requests"]) {
+  for (const key of ROW_ARRAYS) {
     const arr = led[key];
     if (arr.length === 0) {
-      if (!lines.includes(`  "${key}": [],`)) problems.push(`${key}: an empty fact array must be written as []`);
+      // `work` (6.35.0) is the LAST key, so its empty form carries no trailing comma.
+      if (!lines.includes(`  "${key}": [],`) && !lines.includes(`  "${key}": []`))
+        problems.push(`${key}: an empty fact array must be written as []`);
       continue;
     }
     const open = lines.indexOf(`  "${key}": [`);
@@ -1864,7 +1866,7 @@ test("LAYOUT: JSON.parse of the new file equals JSON.parse of the old one — ov
     assert.equal(serializeLedger(structuredClone(led)), text, `${label}: byte-deterministic for an equal object`);
     assert.ok(text.split("\n").length <= old.split("\n").length, `${label}: never MORE lines than the old layout`);
   }
-  assert.deepEqual([...ROW_ARRAYS], ["markers", "requests"], "exactly the two fact arrays — equality, not presence (L36)");
+  assert.deepEqual([...ROW_ARRAYS], ["markers", "requests", "work"], "exactly the three fact arrays — equality, not presence (L36)");
 });
 
 test("LAYOUT: a value carrying \\n or U+2028 stays on its row's line — the \\n-delimited claim, probed (L37)", () => {
@@ -2471,4 +2473,168 @@ test("RESIDUAL cost-ledger-shared-markers-file: two runs appending to ONE marker
     onlyB.requests.map((r) => r.request_id),
     ["b-1"]
   );
+});
+
+// ── 6.35.0 (run-performance-breakdown): the `executions` view and the `work[]` facts ─────────────────────────────
+
+/** A bounded run with every stage bracketed by its orchestrator return, plus a work.jsonl beside the markers. */
+function perfRun({ work = null } = {}) {
+  const { root, projectsDir } = stageSingle();
+  const markersBase = writeMarkers(root, "feat", [
+    marker(1, "run-start", null, null, "2026-09-21T08:00:00.000Z"),
+    marker(2, "stage-start", "pharn-build", 1, "2026-09-21T08:36:00.000Z"),
+    marker(3, "orchestrator", null, null, "2026-09-21T08:38:00.000Z"),
+    marker(4, "stage-start", "pharn-regress", 1, "2026-09-21T08:38:30.000Z"),
+    marker(5, "orchestrator", null, null, "2026-09-21T08:40:00.000Z"),
+    marker(6, "stage-start", "pharn-verify", 1, "2026-09-21T08:41:00.000Z"),
+    marker(7, "orchestrator", null, null, "2026-09-21T08:44:00.000Z"),
+    marker(8, "stage-start", "pharn-verify", 1, "2026-09-21T08:44:10.000Z"),
+    marker(9, "run-stop", null, null, "2026-09-21T09:00:00.000Z"),
+  ]);
+  if (work !== null)
+    writeFileSync(
+      join(markersBase, "feat", "work.jsonl"),
+      work.map((w) => (typeof w === "string" ? w : JSON.stringify(w))).join("\n") + "\n"
+    );
+  return { root, projectsDir, markersBase };
+}
+
+const REGRESS_WORK = {
+  schema: "pharn-stage-work/1",
+  stage: "pharn-regress",
+  ts: "2026-09-21T08:39:59.000Z",
+  session_id: null,
+  head: { required: 3, executed: 2, reused: 0, no_files: 1 },
+  base: { evidence: "fresh", miss: "no-record", required: 3, executed: 2, reused: 0, no_files: 1 },
+  install: { exit: 0, timed_out: false, ms: 1234 },
+};
+const VERIFY_WORK = {
+  schema: "pharn-stage-work/1",
+  stage: "pharn-verify",
+  ts: "2026-09-21T08:43:00.000Z",
+  session_id: null,
+  gates: { required: 4, executed: 2, reused: 2, no_files: 0 },
+};
+
+test("6.35.0 — every ledger carries `executions` (a view over markers) and `work` (facts), after membership", () => {
+  const { projectsDir, markersBase } = perfRun({ work: [REGRESS_WORK, VERIFY_WORK] });
+  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase });
+  assert.deepEqual(Object.keys(led).slice(-3), ["membership", "executions", "work"]);
+  assert.deepEqual(led.work, [REGRESS_WORK, VERIFY_WORK]);
+  assert.equal(led.executions.method, "stage-start-to-return/1");
+  assert.deepEqual(
+    led.executions.rows.map((r) => [r.stage, r.iteration, r.run, r.elapsed_ms, r.unmeasured, r.work]),
+    [
+      ["pharn-build", 1, 1, 120000, null, []],
+      ["pharn-regress", 1, 1, 90000, null, [0]],
+      ["pharn-verify", 1, 1, 180000, null, [1]],
+      ["pharn-verify", 1, 2, null, "no-return-marker", []],
+    ]
+  );
+  assert.deepEqual(checkLedger(led).reds, []);
+});
+
+test("✧ 6.35.0 does not move model accounting: requests, every view and membership are identical with and without work.jsonl", () => {
+  const a = perfRun();
+  const b = perfRun({ work: [REGRESS_WORK, VERIFY_WORK, "not json"] });
+  const without = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir: a.projectsDir, markersBase: a.markersBase });
+  const withWork = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir: b.projectsDir, markersBase: b.markersBase });
+  assert.ok(without.requests.length > 0, "non-vacuity: rows were measured");
+  for (const k of [
+    "requests",
+    "totals",
+    "by_model",
+    "by_stage_iteration_model",
+    "unattributed",
+    "membership",
+    "markers",
+    "coverage",
+    "sessions",
+  ]) {
+    assert.deepStrictEqual(withWork[k], without[k], k);
+  }
+  // Stage attribution of every request is exactly `attribute()` over the markers — untouched by the new view.
+  for (const r of withWork.requests)
+    assert.deepEqual({ stage: r.stage, iteration: r.iteration }, attribute(withWork.markers, r.ts, r.session_id));
+  assert.deepEqual(
+    withWork.dropped.filter((d) => d.startsWith("work.jsonl")),
+    ["work.jsonl[2]"],
+    "an invalid line is listed by index, never copied"
+  );
+  assert.deepEqual(without.work, []);
+  assert.deepEqual(
+    without.executions.rows.map((r) => r.work),
+    [[], [], [], []]
+  );
+});
+
+test("6.35.0 — a work record outside the run window is not a row (the membership test requests use)", () => {
+  const early = { ...VERIFY_WORK, ts: "2026-09-21T07:00:00.000Z" };
+  const { projectsDir, markersBase } = perfRun({ work: [early, VERIFY_WORK] });
+  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase });
+  assert.deepEqual(led.work, [VERIFY_WORK]);
+});
+
+test("6.35.0 — timing needs only markers: a ledger with NO transcript still carries its elapsed rows and work", () => {
+  const { markersBase } = perfRun({ work: [VERIFY_WORK] });
+  const led = renderLedger({ name: "feat", sessionId: null, projectsDir: join(tmpdir(), "absent-projects"), markersBase });
+  assert.equal(led.coverage, "unavailable");
+  assert.equal(led.executions.status, "derived");
+  assert.equal(led.executions.rows.length, 4);
+  assert.deepEqual(led.work, [VERIFY_WORK]);
+  assert.deepEqual(checkLedger(led).reds, []);
+});
+
+test("6.35.0 LAYOUT — work records and executions rows are one per line; the parse is unchanged", () => {
+  const { projectsDir, markersBase } = perfRun({ work: [REGRESS_WORK, VERIFY_WORK] });
+  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase });
+  const text = serializeLedger(led);
+  assert.deepStrictEqual(JSON.parse(text), JSON.parse(JSON.stringify(led)));
+  const lines = text.split("\n");
+  for (const r of led.executions.rows)
+    assert.ok(lines.includes(`      ${JSON.stringify(r)},`) || lines.includes(`      ${JSON.stringify(r)}`));
+  for (const w of led.work) assert.ok(lines.includes(`    ${JSON.stringify(w)},`) || lines.includes(`    ${JSON.stringify(w)}`));
+  assert.ok(text.split("\n").length <= (JSON.stringify(led, null, 2) + "\n").split("\n").length);
+});
+
+test("6.35.0 table() — three separate blocks; an unmeasured row prints its reason, never a number", () => {
+  const { projectsDir, markersBase } = perfRun({ work: [REGRESS_WORK, VERIFY_WORK] });
+  const out = table(renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase }));
+  assert.match(out, /observed elapsed — wall clock between PHARN's stage markers \(not CPU, model or tool time; not monotonic\)/);
+  assert.match(out, /pharn-regress\s+1\s+1\s+90\.0 s/);
+  assert.match(out, /pharn-verify\s+1\s+2\s+unmeasured — no-return-marker/);
+  assert.match(
+    out,
+    /pharn-regress iter 1 run 1: HEAD gates 2 run, 0 reused, 1 nothing-to-run, of 3; BASE fresh \(no-record\) — worktree created, install ran \(exit 0, 1234 ms\)/
+  );
+  assert.match(out, /pharn-verify iter 1 run 1: gates 2 run, 2 reused, 0 nothing-to-run, of 4/);
+  const reused = {
+    ...REGRESS_WORK,
+    base: { evidence: "reused", miss: null, required: 3, executed: 0, reused: 2, no_files: 1 },
+    install: null,
+  };
+  const { projectsDir: p2, markersBase: m2 } = perfRun({ work: [reused] });
+  assert.match(
+    table(renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir: p2, markersBase: m2 })),
+    /BASE REUSED \(no worktree, no install, 0 base gate processes; 2 results from earlier evidence\)/
+  );
+});
+
+test("GATE-2 — an UNKNOWN run window prints UNKNOWN work, never 'no work'; a known one with no record says so", () => {
+  const { projectsDir, markersBase } = perfRun({ work: [VERIFY_WORK] });
+  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase });
+  const unknown = { ...led, membership: { ...led.membership, status: "unknown", reason: "no run-start marker was recorded" }, work: [] };
+  const out = table(unknown);
+  assert.match(out, /UNKNOWN — the run window is unknown, so no work record was admitted\. Not a zero\./);
+  assert.doesNotMatch(out, /no \/pharn-regress or \/pharn-verify execution recorded one/);
+  const none = { ...led, work: [], executions: { ...led.executions, rows: led.executions.rows.map((r) => ({ ...r, work: [] })) } };
+  assert.match(table(none), /no \/pharn-regress or \/pharn-verify execution recorded one/);
+});
+
+test("GATE-2 (L58) — a --verify-transcript re-derivation never reads the live work file", () => {
+  const { projectsDir, markersBase } = perfRun({ work: [VERIFY_WORK] });
+  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase });
+  const again = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase, markers: led.markers });
+  assert.deepEqual(again.work, [], "the recorded-boundary path reads no live work.jsonl");
+  assert.deepEqual(led.work, [VERIFY_WORK]);
 });
