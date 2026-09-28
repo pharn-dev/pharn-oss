@@ -43,6 +43,12 @@
 // record can exist (run-gates.mjs's own stamps, `.pharn/pharn-regress/scope.json`), so it is read from
 // there rather than duplicated here (one owner of each fact, L35).
 //
+// Since `/2` (6.33.0) it also carries `baseReuse`, the BASE-reuse decision made once the HEAD side is done, because a
+// resumed invocation must know whether to run the base phases at all and what to report. It is never TRUSTED as a
+// HIT: `stage-regress.mjs` re-decides a persisted HIT in full at the verdict (the record is ordinary `.pharn/` state
+// the write tools reach, `regress-base-reuse.mjs`, header). A persisted MISS keeps the delivery run it saw, which a
+// later publication must see again.
+//
 // TRUST (P2): every field here is a string/int/bool the CLI derived from deterministic tooling (git, a
 // shelled checker's exit code) or from argv already shape-gated at the CLI layer. Nothing here is
 // untrusted free text; a value that FAILS to validate is refused (`progress-malformed`), never repaired.
@@ -106,6 +112,49 @@ export const PHASES = Object.freeze([
 export const RESUMABLE_PHASES = Object.freeze(
   PHASES.filter((p) => PHASES.indexOf(p) >= PHASES.indexOf("drain-head") && p !== "cleanup" && p !== "render")
 );
+
+/** ------------------------------------------------------------------------------------------------
+ *  BASE-EVIDENCE REUSE (6.33.0, regress-base-reuse) — the stage's two closed vocabularies for it, owned HERE with
+ *  the phase enum because the progress record below carries a reuse decision and its validator checks membership;
+ *  this module's G8 pin keeps its imports at `gate-run-core.mjs`, so the rules that USE them live in
+ *  `regress-base-reuse-core.mjs`, which imports these.
+ *
+ *  DELIVERY_COMMANDS — the delivery runs that invoke /pharn-regress, whose run markers (`.pharn/<command>/<feature>/
+ *  active.json`, written by require-loop-record.cjs and run-marker.mjs) bound a reuse to ONE run.
+ *  BASE_REUSE_MISSES — why a base run was NOT reused, in the predicate's evaluation order (first failure decides).
+ *  The one owner of each member's meaning (the contract cites this list rather than restating it, P4):
+ *    requirement-unknown  the head record gives no spec, so no requirement can be built;
+ *    no-delivery-run      not exactly one open /pharn-loop or /pharn-ship marker for the feature (presence + 24 h age,
+ *                         never parsed — so a marker an interrupted run left makes a standalone invocation part of it);
+ *    no-record            no reuse record in the git dir;
+ *    record-malformed     the record is not a regular file of the closed pharn-regress-base-reuse/1 shape;
+ *    other-run            the record names another feature, command or marker digest;
+ *    evidence-missing     no retained base stamp;
+ *    evidence-unbound     the stamp is not the bytes the record bound;
+ *    evidence-invalid     the stamp fails validateStamp, or a log / results file it hashed changed;
+ *    version-changed      another stamp schema or fingerprint algorithm;
+ *    base-changed         another base SHA;
+ *    gates-changed        another gate spec (set, command, files, style skip, source);
+ *    execution-changed    another install decision, timeout, or root-level HEAD file;
+ *    evidence-unreliable  no install, a failed or timed-out install, or a timed-out base gate.
+ *  ---------------------------------------------------------------------------------------------- */
+export const DELIVERY_COMMANDS = Object.freeze(["pharn-loop", "pharn-ship"]);
+
+export const BASE_REUSE_MISSES = Object.freeze([
+  "requirement-unknown",
+  "no-delivery-run",
+  "no-record",
+  "record-malformed",
+  "other-run",
+  "evidence-missing",
+  "evidence-unbound",
+  "evidence-invalid",
+  "version-changed",
+  "base-changed",
+  "gates-changed",
+  "execution-changed",
+  "evidence-unreliable",
+]);
 
 /** ------------------------------------------------------------------------------------------------
  *  TEST_FILE_RULE (GRILL G15).
@@ -183,9 +232,55 @@ export function resolveBaseSource({ explicitBase = null, workingTreeDirty, hasMe
 /** ------------------------------------------------------------------------------------------------
  *  THE PROGRESS RECORD — schema + validator.
  *  ---------------------------------------------------------------------------------------------- */
-export const PROGRESS_SCHEMA = "pharn-stage-regress-progress/1";
+// `/2` since 6.33.0: the record carries `baseReuse` (below). A `/1` record is refused as `progress-malformed` — a run
+// straddling the upgrade stops and is re-run fresh, never resumed under rules it was not started with.
+export const PROGRESS_SCHEMA = "pharn-stage-regress-progress/2";
 
 const INSTALL_KIND_SET = new Set(["none", "cmd"]);
+const HEX64_RE = /^[0-9a-f]{64}$/;
+const REUSE_DECISION_KEYS = Object.freeze(["reused", "miss", "requirementSha256", "stampSha256", "run"]);
+
+function isHex64(v) {
+  return typeof v === "string" && HEX64_RE.test(v);
+}
+
+/**
+ * The reuse DECISION a progress record carries once the HEAD side is done (`regress-base-reuse-core.mjs`
+ * `decideBaseReuse`'s result): closed keys; `run` is the delivery run seen when it was made, or null. A HIT names the
+ * stamp it decided on and can only sit at `verdict` (a HIT never visits the base phases); a miss names its category,
+ * no stamp, and a requirement digest unless the requirement itself was unknown.
+ */
+export function validateReuseDecision(d, phase) {
+  if (d === null || typeof d !== "object" || Array.isArray(d)) return { ok: false, reason: "progress.baseReuse must be an object" };
+  const keys = Object.keys(d);
+  if (keys.length !== REUSE_DECISION_KEYS.length || !REUSE_DECISION_KEYS.every((k) => Object.hasOwn(d, k))) {
+    return { ok: false, reason: `progress.baseReuse keys must be exactly ${REUSE_DECISION_KEYS.join(", ")}` };
+  }
+  if (typeof d.reused !== "boolean") return { ok: false, reason: "progress.baseReuse.reused must be a boolean" };
+  if (d.run !== null) {
+    const r = d.run;
+    if (r === null || typeof r !== "object" || Array.isArray(r) || Object.keys(r).length !== 2) {
+      return { ok: false, reason: "progress.baseReuse.run must be null or {command, markerSha256}" };
+    }
+    if (!DELIVERY_COMMANDS.includes(r.command) || !isHex64(r.markerSha256)) {
+      return { ok: false, reason: "progress.baseReuse.run must name a delivery command and a sha256" };
+    }
+  }
+  if (d.reused) {
+    if (d.miss !== null || !isHex64(d.stampSha256) || !isHex64(d.requirementSha256) || d.run === null) {
+      return { ok: false, reason: "a reused decision has no miss, and names its stamp, requirement and run" };
+    }
+    if (phase !== "verdict") return { ok: false, reason: "a reused decision can only sit at the verdict phase" };
+    return { ok: true };
+  }
+  if (!BASE_REUSE_MISSES.includes(d.miss))
+    return { ok: false, reason: `progress.baseReuse.miss must be one of ${BASE_REUSE_MISSES.join(" | ")}` };
+  if (d.stampSha256 !== null) return { ok: false, reason: "a miss names no stamp" };
+  if (d.miss === "requirement-unknown" ? d.requirementSha256 !== null : !isHex64(d.requirementSha256)) {
+    return { ok: false, reason: "progress.baseReuse.requirementSha256 must be a sha256 (null only when the requirement was unknown)" };
+  }
+  return { ok: true };
+}
 
 function isValidInstall(v) {
   if (v === null || typeof v !== "object" || Array.isArray(v)) return false;
@@ -230,6 +325,15 @@ export function validateProgress(rec) {
     (typeof rec.cleanupResult !== "object" || Array.isArray(rec.cleanupResult) || typeof rec.cleanupResult.ok !== "boolean")
   ) {
     return { ok: false, reason: "progress.cleanupResult must be null or {ok, error}" };
+  }
+  // `baseReuse` — null while the HEAD side drains (the decision is made after it), the decision from then on.
+  if (!Object.hasOwn(rec, "baseReuse")) return { ok: false, reason: "progress.baseReuse is required (schema /2)" };
+  if (rec.phase === "drain-head") {
+    if (rec.baseReuse !== null)
+      return { ok: false, reason: "progress.baseReuse must be null at drain-head — the decision follows the HEAD side" };
+  } else {
+    const d = validateReuseDecision(rec.baseReuse, rec.phase);
+    if (!d.ok) return d;
   }
   return { ok: true };
 }

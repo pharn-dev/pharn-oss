@@ -61,6 +61,10 @@ Load the trusted prefix and obey it:
 - **The residual, named not hidden:** `/pharn-regress` catches **exactly what the project's suite
   catches — nothing more.** A regression no deterministic check covers is **invisible**. Never read a
   `done` exit as "nothing broke."
+- **A reused BASE side** (the report's `base_evidence.reused`, 6.33.0) is reused because the run marker, the reuse
+  record, the stamp and its logs agree with this invocation's BASE requirement — a floor decision over hashes and
+  enums. That an earlier `/pharn-regress` of this run produced it, and that it equals a fresh base run, are
+  **advisory** (L43; a marker an interrupted run left, ≤ 24 h, also binds — `pharn/pharn-contracts/regression-report.md`).
 
 ## Step 0 — Resolve `<name>`, then set the writes-scope (fix #7, fail-closed; amendment A1)
 
@@ -115,7 +119,8 @@ Read the printed `pharn-stage-exit/1` JSON object and branch on the **exit code 
     an earlier run's `.pharn/pharn-regress/` scratch. That run's progress record and base worktree survive,
     and a `--resume` run now would revive that earlier run. Run `--resume` only after a `5`, or after a
     Bash-tool timeout (below);
-  - every later `unusable` has removed the stale report and cleared that scratch, and from "drain-head"
+  - every later `unusable` has removed the stale report and cleared that scratch (all but a retained
+    `base-gates/`, kept for reuse), and from "drain-head"
     onward may have written new state: this run's own progress record, a base-commit checkout, install
     logs, gate stamps;
   - a stale-report removal that FAILED (anything but absence) is a crash (below), never a `2` (since 6.26.0).

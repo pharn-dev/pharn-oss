@@ -47,6 +47,17 @@
 // refusal (before containment passes) removes nothing, and a removal that FAILS (anything but ENOENT) is a
 // crash — never a later refusal over a report that is still there.
 //
+// ==================================== BASE-EVIDENCE REUSE (6.33.0) ====================================
+// Once the HEAD side is finalized, `regress-base-reuse.mjs` decides whether an earlier invocation of the SAME
+// `/pharn-loop` or `/pharn-ship` run already produced the BASE evidence this one needs (`regress-base-reuse-core.mjs`
+// holds the rule and says what the requirement is). On a HIT the phases worktree -> install -> base-init -> drain-base
+// are skipped, and so is cleanup: the retained `base-gates/` stamp goes straight to the unchanged `check-regress.mjs
+// verdict`. On a MISS they run exactly as before. So the fresh start clears the scratch EXCEPT `base-gates/`; a persisted
+// HIT is re-decided in full at "verdict" (never trusted from the progress record); after a verdict over base evidence
+// this chain produced, the stage publishes a reuse record, but only one the predicate accepts. The report gains the
+// additive `base_evidence` block (pharn/pharn-contracts/regression-report.md). The verdict itself is always the
+// checker's over the stamps on disk.
+//
 // ============================== NO ABSOLUTE PATH TO A CHILD OR A RENDER (GRILL G10) ==============================
 // Every path this script hands to a shelled checker, to git, or to `render-regression.mjs` is
 // REPO-RELATIVE. `/pharn-loop` commits `REGRESSION.md`, and a child's refusal text can quote whatever path
@@ -65,8 +76,8 @@
 //
 // Exit: 0 done · 2 unusable · 3 refused · 4 question · 5 continue · anything else (1 included) = CRASHED.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, unlinkSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync, unlinkSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { doneExit, refusedExit, unusableExit, continueExit, questionExit, EXIT_CODE } from "./stage-exit-core.mjs";
@@ -100,8 +111,9 @@ import { shelledVerdict } from "./shelled-verdict-core.mjs";
 import { spawnGate } from "./run-gates.mjs";
 import { declaredWrites, changedPaths } from "./scope-inputs.mjs";
 import { partitionScope, scopeFindings, normPath } from "./check-regress.mjs";
-import { FEATURE_SLUG_RE, actualForExpected } from "./gate-run-core.mjs";
-import { isExcluded } from "./worktree-fingerprint.mjs";
+import { FEATURE_SLUG_RE, SCHEMA as GATE_RUN_SCHEMA, actualForExpected } from "./gate-run-core.mjs";
+import { isExcluded, ALGO as FINGERPRINT_ALGO } from "./worktree-fingerprint.mjs";
+import { decideFromDisk, discardRetained, publishRecord } from "./regress-base-reuse.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHECK_PLAN_SPEC_AGREE = join(HERE, "check-plan-spec-agree.mjs");
@@ -325,13 +337,34 @@ function phaseFreshEarly(feature) {
  *  checks. Runs AFTER the rest of argv has been validated (parseRestOfArgv) — everything here CAN fail
  *  without having falsified "no earlier verdict survives", which phaseFreshEarly already discharged.
  *  ---------------------------------------------------------------------------------------------- */
+/** Clear the stage's scratch, KEEPING a retained `base-gates/` directory (6.33.0): whether it can be reused is decided
+ *  after the HEAD side runs, and a miss discards it then (regress-base-reuse.mjs `discardRetained`). Anything else at
+ *  that name — a file, a link — is removed like the rest; a link is removed, never followed. */
+function clearScratchKeepingBaseEvidence() {
+  const root = REGRESS_PATHS.root;
+  const st = lstatSafe(root);
+  if (st.ok && st.stat !== null && st.stat.isDirectory()) {
+    const keep = basename(REGRESS_PATHS.baseGates);
+    for (const name of readdirSync(root)) {
+      if (name === keep) {
+        const k = lstatSafe(join(root, name));
+        if (k.ok && k.stat !== null && k.stat.isDirectory()) continue;
+      }
+      rmSync(join(root, name), { recursive: true, force: true });
+    }
+  } else {
+    rmSync(root, { recursive: true, force: true });
+  }
+  mkdirSync(root, { recursive: true });
+}
+
 function phaseFreshLate(cfg) {
   // A leftover base worktree — locked or not — is cleared (clearBaseWorktree); then the scratch directory
-  // is cleared. One run per worktree at a time (GRILL G14) — a second fresh start destroys the first run's
-  // in-progress record, matching run-gates.mjs init's own recreate of <out>.
+  // is cleared, all but a retained `base-gates/` (clearScratchKeepingBaseEvidence). One run per worktree at a
+  // time (GRILL G14) — a second fresh start destroys the first run's in-progress record, matching run-gates.mjs
+  // init's own recreate of <out>.
   clearBaseWorktree();
-  rmSync(REGRESS_PATHS.root, { recursive: true, force: true });
-  mkdirSync(REGRESS_PATHS.root, { recursive: true });
+  clearScratchKeepingBaseEvidence();
 
   if (!existsSync(`${FEATURES_DIR}/${cfg.feature}`)) {
     emitUnusable(cfg.feature, "no-feature", `no such feature directory: ${FEATURES_DIR}/${cfg.feature}`);
@@ -629,6 +662,19 @@ function drain(state, budget, outDir) {
  *  resumed one. `state` carries EXACTLY the progress-record fields (`stage-regress-core.mjs`
  *  `PROGRESS_SCHEMA`); `phase` is the NEXT phase to run.
  *  ---------------------------------------------------------------------------------------------- */
+/** The inputs of the BASE-reuse predicate this stage owns; `regress-base-reuse.mjs` reads the rest off disk. The
+ *  formats are this floor's own: a stamp written now would carry this schema and this fingerprint algorithm. */
+function reuseInputs(state) {
+  return {
+    feature: state.feature,
+    base: state.base,
+    install: state.install,
+    timeoutMs: state.timeoutMs,
+    gateRunSchema: GATE_RUN_SCHEMA,
+    fingerprintAlgo: FINGERPRINT_ALGO,
+  };
+}
+
 function persistProgress(state) {
   mkdirSync(REGRESS_PATHS.root, { recursive: true });
   const rec = { schema: PROGRESS_SCHEMA, ...state };
@@ -672,11 +718,18 @@ function runPhases(state, budget) {
     if (drain(state, budget, REGRESS_PATHS.head) === "budget") {
       emitContinue(state.feature, state.phase, ["--resume"]);
     }
-    state.phase = "worktree";
+    // BASE-evidence reuse (6.33.0): decided once the HEAD side is finalized, because the head stamp is what base-init
+    // would copy its spec from. A kill before the next checkpoint resumes at drain-head, whose drain is then an
+    // idempotent repeat, and decides again. A HIT goes straight to the verdict.
+    state.baseReuse = decideFromDisk(reuseInputs(state));
+    state.phase = state.baseReuse.reused ? "verdict" : "worktree";
   }
 
   if (state.phase === "worktree") {
     persistProgress(state);
+    // A miss (or a HIT the verdict could not confirm): the retained evidence goes before any new base evidence is made
+    // — its record first, then `base-gates/`, so no record outlives the evidence it names. Idempotent on a resume.
+    discardRetained();
     clearBaseWorktree(); // a no-op on a fresh run; on a resumed one, clears a half-added, locked leftover (A3)
     const r = gitSync(["worktree", "add", "--detach", REGRESS_PATHS.base, state.base]);
     if (!r.ok)
@@ -756,6 +809,17 @@ function runPhases(state, budget) {
 
   if (state.phase === "verdict") {
     persistProgress(state);
+    if (state.baseReuse.reused) {
+      // A persisted HIT is never trusted: the progress record is ordinary `.pharn/` state a write tool can reach while a
+      // chain is paused (regress-base-reuse.mjs, header). Re-decide in full over the disk, and go on only on a HIT over
+      // the SAME stamp bytes; otherwise run the base side after all, from "worktree".
+      const again = decideFromDisk(reuseInputs(state));
+      if (!again.reused || again.stampSha256 !== state.baseReuse.stampSha256) {
+        state.baseReuse = again.reused ? { ...again, reused: false, miss: "evidence-unbound", stampSha256: null } : again;
+        state.phase = "worktree";
+        return runPhases(state, budget);
+      }
+    }
     const scopeText = readFileSync(REGRESS_PATHS.scopeJson, "utf8");
     const scope = JSON.parse(scopeText);
     const args = [
@@ -779,30 +843,58 @@ function runPhases(state, budget) {
     } catch (e) {
       emitUnusable(state.feature, "child-crashed", `check-regress.mjs verdict did not print JSON: ${e.message}`);
     }
-    state.reportRaw = r.stdout;
     state.report = report;
     state.scope = scope;
+    // Publication (6.33.0): after a real verdict (exit 0 or 1 — both stamps validated, the specs agree, the base head
+    // matches) over base evidence THIS chain produced, bind it for later invocations of the same delivery run — only
+    // through the predicate, and only for the run and requirement the decision saw. A HIT keeps the record that bound it.
+    state.recordOutcome = state.baseReuse.reused
+      ? { published: true, why: null }
+      : r.status === 0 || r.status === 1
+        ? publishRecord({
+            ...reuseInputs(state),
+            installResult: state.installResult,
+            decisionRun: state.baseReuse.run,
+            decisionRequirementSha256: state.baseReuse.requirementSha256,
+          })
+        : { published: false, why: "verdict-inconclusive" };
+    if (!state.recordOutcome.published && state.recordOutcome.why === "write-failed") {
+      console.error("stage-regress: note — the BASE evidence could not be recorded for reuse (the git dir was not writable)");
+    }
     state.phase = "cleanup";
   }
 
   if (state.phase === "cleanup") {
-    // A SINGLE `--force`, on purpose: a worktree someone LOCKED is left in place and reported (GRILL G4) —
-    // the end of a run never force-unlocks it. The NEXT fresh start clears it (clearBaseWorktree's double
-    // force); before GATE-2 round 2 that next start failed on it instead (N7).
-    // N2 (round 2): a failed removal with NO directory left behind is not a failure. That is a re-run of
-    // this phase after a kill or crash in "render" (the record stays parked at "verdict"), where the earlier
-    // invocation already removed the worktree; `prune` clears any stale registration.
-    const r = gitSync(["worktree", "remove", "--force", REGRESS_PATHS.base]);
-    const left = lstatSafe(REGRESS_PATHS.base);
-    const gone = left.ok && left.stat === null;
-    if (!r.ok && gone) gitSync(["worktree", "prune"]);
-    state.cleanupResult = r.ok || gone ? { ok: true } : { ok: false, error: r.stderr || "git worktree remove failed" };
+    if (state.baseReuse.reused) {
+      // A HIT made no base worktree, so there is nothing to remove.
+      state.cleanupResult = { ok: true };
+    } else {
+      // A SINGLE `--force`, on purpose: a worktree someone LOCKED is left in place and reported (GRILL G4) —
+      // the end of a run never force-unlocks it. The NEXT fresh start clears it (clearBaseWorktree's double
+      // force); before GATE-2 round 2 that next start failed on it instead (N7).
+      // N2 (round 2): a failed removal with NO directory left behind is not a failure. That is a re-run of
+      // this phase after a kill or crash in "render" (the record stays parked at "verdict"), where the earlier
+      // invocation already removed the worktree; `prune` clears any stale registration.
+      const r = gitSync(["worktree", "remove", "--force", REGRESS_PATHS.base]);
+      const left = lstatSafe(REGRESS_PATHS.base);
+      const gone = left.ok && left.stat === null;
+      if (!r.ok && gone) gitSync(["worktree", "prune"]);
+      state.cleanupResult = r.ok || gone ? { ok: true } : { ok: false, error: r.stderr || "git worktree remove failed" };
+    }
     state.phase = "render";
   }
 
-  // "render" — always reached in the same invocation as verdict/cleanup (neither is budgeted).
+  // "render" — always reached in the same invocation as verdict/cleanup (neither is budgeted). The report is the
+  // checker's object with ONE additive block appended last; every key the checker printed keeps its bytes, because
+  // this is the same `JSON.stringify(…, null, 2)` the checker prints with (a test pins report-minus-block == stdout).
   const reportPath = `${FEATURES_DIR}/${state.feature}/regression-report.json`;
-  atomicWriteIntoFeature(reportPath, state.reportRaw);
+  const baseEvidence = {
+    reused: state.baseReuse.reused,
+    miss: state.baseReuse.miss,
+    requirement_sha256: state.baseReuse.requirementSha256,
+    recorded: state.recordOutcome.published,
+  };
+  atomicWriteIntoFeature(reportPath, `${JSON.stringify({ ...state.report, base_evidence: baseEvidence }, null, 2)}\n`);
   const md = renderDone({
     feature: state.feature,
     base: state.base,
@@ -814,6 +906,7 @@ function runPhases(state, budget) {
       cleanupResult: state.cleanupResult,
       e2eExcluded: state.e2eExcluded,
       styleSkipped: state.styleSkipped,
+      baseEvidence: { ...baseEvidence, notRecordedWhy: state.recordOutcome.published ? null : state.recordOutcome.why },
     },
   });
   const renderPath = `${FEATURES_DIR}/${state.feature}/REGRESSION.md`;
@@ -850,6 +943,7 @@ function runFresh(args) {
     styleSkipped,
     installResult: null,
     cleanupResult: null,
+    baseReuse: null, // decided once the HEAD side is finalized (runPhases, drain-head)
     phase: "drain-head",
   };
   return runPhases(state, makeBudget(state, invocationStart));

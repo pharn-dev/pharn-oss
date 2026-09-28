@@ -1,0 +1,49 @@
+{
+  "base": "a2b5f6be027a69c0abd69f373cfb7ba0660b536d",
+  "inside": [
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-regress.md",
+    ".dev/features/regress-base-reuse/GRILL.md",
+    ".dev/features/regress-base-reuse/MEASUREMENT.md",
+    ".dev/features/regress-base-reuse/PLAN.md",
+    ".dev/features/regress-base-reuse/REGRESSION.md",
+    ".dev/features/regress-base-reuse/measure.mjs",
+    ".dev/features/regress-base-reuse/regression-report.json",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/gate-run-core.mjs",
+    "pharn/floor/gate-run-core.test.mjs",
+    "pharn/floor/regress-base-reuse-core.mjs",
+    "pharn/floor/regress-base-reuse-core.test.mjs",
+    "pharn/floor/regress-base-reuse.mjs",
+    "pharn/floor/regress-base-reuse.test.mjs",
+    "pharn/floor/render-regression.mjs",
+    "pharn/floor/render-regression.test.mjs",
+    "pharn/floor/run-gates.mjs",
+    "pharn/floor/stage-regress-core.mjs",
+    "pharn/floor/stage-regress-core.test.mjs",
+    "pharn/floor/stage-regress.mjs",
+    "pharn/floor/stage-regress.test.mjs",
+    "pharn/pharn-contracts/regression-report.md",
+    "pharn/pharn-contracts/stage-exit.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

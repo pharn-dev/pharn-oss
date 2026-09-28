@@ -679,7 +679,7 @@ node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --b
 # scratch layout; `loop-fresh-core.mjs`'s `DEFAULT_STAMPS.regressHead`/`regressBase` derive from it.
 # THE BUDGET (`--budget-ms`) solves the 600 s Bash-tool cap: a slow step (the base-commit install, or one gate)
 # starts only if it is the FIRST slow step of THIS invocation, or `elapsed + timeoutMs <= budgetMs`; otherwise the
-# script persists `.pharn/pharn-regress/stage.json` (schema `pharn-stage-regress-progress/1`) and exits 5
+# script persists `.pharn/pharn-regress/stage.json` (schema `pharn-stage-regress-progress/2` since 6.33.0, which adds the BASE-reuse decision) and exits 5
 # `continue`. `--resume` accepts ONLY `--budget-ms` and reads everything else from that record, so the resume line
 # carries no state (L44). With no `--budget-ms` (a code caller, never a Bash-tool caller), nothing is budgeted.
 # `pharn/floor/render-regression.mjs` (pure, no CLI) renders `REGRESSION.md` from the verdict JSON, the scope
@@ -711,6 +711,24 @@ node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --b
 # (1 included) = crashed.
 node pharn/floor/stage-regress.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--base <ref>] [--gates "<cmd>[::<id>],…"] [--install "<cmd>" | --no-install] [--tests "<pathspec>,…" | --no-tests]
 node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
+
+# BASE-EVIDENCE REUSE (6.33.0, regress-base-reuse) — inside ONE /pharn-loop or /pharn-ship run, a later regress reuses the
+# BASE side an earlier one produced (no base worktree, no install, no base gate) when tested code proves it was produced
+# for exactly the current BASE requirement; the HEAD side always runs. pharn/floor/regress-base-reuse-core.mjs is the
+# rule (the requirement: base SHA, the spec base-init copies — gate-run-core.mjs baseSpecFrom, one owner —, the install
+# decision, the timeout, the stamp/fingerprint versions, and the content of every root-level HEAD path in `inside`,
+# because the base worktree is nested in the HEAD tree; no-install, failed-install and timed-out evidence is never
+# reused); pharn/floor/regress-base-reuse.mjs is the storage. The evidence stays in .pharn/pharn-regress/base-gates/
+# (the fresh start now keeps that one directory); the binding record is <git rev-parse --absolute-git-dir>/
+# pharn-regress-base-reuse.json, out of the write tools' reach (the composed guards deny it: protect-trusted-paths in a main checkout, enforce-writes-scope in a linked worktree), bound to the run marker's bytes and
+# mtime (the write guard's own 24 h rule; markers are hashed, never parsed). A persisted HIT is re-decided in full at
+# "verdict"; a record is published only if the predicate accepts it, for the run and requirement the decision saw. check-regress.mjs and
+# validateStamp are UNCHANGED. regression-report.json gains the additive, advisory `base_evidence` block
+# {reused, miss, requirement_sha256, recorded}. FLOOR: the reuse decision (content hashes + closed enums). ADVISORY:
+# that a reused result equals a fresh base run (determinism; ignored root content, env, machine). BOUNDS, named: a Bash
+# writer can forge record + evidence together; the base side's in-progress scratch is write-tool reachable while a chain
+# is paused at `continue` (follow-up regress-paused-chain-integrity); a stale marker (≤ 24 h) binds a later standalone
+# regress. /pharn-dev-regress (prose) is unchanged. Contract: pharn/pharn-contracts/regression-report.md.
 
 # THE /pharn-verify STAGE SCRIPT (added 6.26.0, stage-verify-script) — the same move for verify: every deterministic
 # step of the stage in ONE tested script, so `.claude/commands/pharn-verify.md` is a THIN CALLER that pins one line

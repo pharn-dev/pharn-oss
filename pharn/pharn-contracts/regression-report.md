@@ -24,13 +24,15 @@ purpose: "Single source of truth for the machine regression-report — the pharn
 The regression-report is `pharn/features/<name>/regression-report.json` (product) /
 `.dev/features/<name>/regression-report.json` (dev) — the machine half of the regress stage, written
 beside the human-facing `REGRESSION.md`. It is `pharn/floor/check-regress.mjs`'s **`verdict` subcommand**
-stdout **verbatim**; unlike the verify-report, the emitting command merges **nothing** into it.
+stdout, plus — in the product report, since 6.33.0 — ONE additive advisory block, `base_evidence` (below).
 
 **Since `stage-regress-script` (6.23.0), the WRITER is `pharn/floor/stage-regress.mjs`, not the model.** The
-product stage script shells `check-regress.mjs verdict` and writes its stdout **bytes**, atomically (a tmp
-file under `.pharn/pharn-regress/`, then `rename`), so no stray tmp file lands in the feature directory.
-The dev twin (`/pharn-dev-regress`) is unchanged and still has the model write the same bytes by hand. The
-report is never re-serialized by either writer: what `check-regress.mjs` printed is what lands on disk.
+product stage script shells `check-regress.mjs verdict` and writes its output atomically (a tmp file under
+`.pharn/pharn-regress/`, then `rename`), so no stray tmp file lands in the feature directory. Since 6.33.0 it
+appends `base_evidence` as the object's last key and re-serializes with the same `JSON.stringify(…, null, 2)`
+the checker prints with, so every key the checker printed keeps its bytes: the report minus that block is the
+checker's stdout, byte for byte (`stage-regress.test.mjs` pins it). The dev twin (`/pharn-dev-regress`) is
+unchanged: the model writes the checker's bytes by hand and adds no block.
 
 ## What this artifact IS and IS NOT (P0 — the honesty bar)
 
@@ -227,3 +229,47 @@ The verdict fields are **unchanged**; the report additionally carries a **per-si
   whenever the build moved the tree regardless.
 
 Full shape: `pharn/pharn-contracts/gate-run-record.md` (cited, not restated — P4).
+
+## The additive `base_evidence` block (6.33.0, advisory shape)
+
+A later `/pharn-regress` of the same `/pharn-loop` or `/pharn-ship` run may REUSE the BASE-side evidence an earlier
+one produced, instead of re-creating the base worktree, re-installing and re-running every base gate. The product
+report says what happened, as its last key:
+
+```json
+{
+  "base_evidence": {
+    "reused": false,
+    "miss": "no-record",
+    "requirement_sha256": "<sha256>",
+    "recorded": true
+  }
+}
+```
+
+- **`reused`** — `true`: this invocation created no base worktree, ran no install and ran no base gate; the base stamp
+  it compared is the one `gate_run.base.stamp_sha256` names, and the run marker, reuse record, stamp and logs agree
+  with this invocation's requirement (floor). That an earlier invocation of the same delivery run produced it is
+  advisory: agreement, never provenance (L43). `false`: the base side ran here, exactly as before 6.33.0.
+- **`miss`** — `null` on a reuse; otherwise why not: one member of the closed, ordered set `BASE_REUSE_MISSES`,
+  the first that applied. The set and each member's meaning are owned by `pharn/floor/stage-regress-core.mjs` and
+  `pharn/floor/regress-base-reuse-core.mjs`'s header (P4). An invocation with no open `/pharn-loop` or `/pharn-ship`
+  run marker for the feature reads `no-delivery-run` and never reuses or records; a marker an interrupted run left
+  (≤ 24 h, the write guard's age rule) makes a standalone invocation behave as part of that run, because the marker is
+  read by presence and age, never parsed.
+- **`requirement_sha256`** — the digest of the BASE requirement this invocation needed (`null` only with
+  `requirement-unknown`). What the requirement contains, and what it deliberately leaves out, is
+  `pharn/floor/regress-base-reuse-core.mjs`'s header.
+- **`recorded`** — whether, when the invocation ended, a reuse record binds the base stamp on disk, so a later
+  invocation of the same run can reuse it. `false` with no open delivery-run marker, for evidence that would never be reused, or
+  when the record could not be written; `REGRESSION.md` names which.
+
+**The rule, and its bounds (P0).** FLOOR: whether a reuse happens is decided by tested code over content hashes and
+closed enums (`regress-base-reuse-core.mjs`); `check-regress.mjs` and `validateStamp` are unchanged, so a reused stamp
+is read and validated exactly as a fresh one, and the verdict is always the checker's over the stamps on disk.
+ADVISORY: that a reused base result equals what a fresh base run would give now — it assumes the suite is
+deterministic for one requirement, and that nothing the requirement does not bind changed (ignored root content such
+as `node_modules/`, the environment, the machine). The reuse record lives in the git dir, out of the write tools'
+reach; a Bash writer can forge it with the evidence, and the base side's in-progress scratch is write-tool reachable
+while a chain is paused (`pharn/floor/regress-base-reuse.mjs`, header). No floor op reads this block, and the four
+verdict consumers above ignore it.

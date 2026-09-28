@@ -121,6 +121,7 @@ import {
   RESULTS_ENV,
   isReasonCode,
   resolveSet,
+  baseSpecFrom,
   completenessArgv,
   actualForExpected,
   logBasename,
@@ -238,7 +239,8 @@ function sha256File(file) {
 
 /** The sha256 of a project-written file IF it is a regular file, else `null` — never following a symlink,
  *  never blocking on a FIFO, and never holding more than one chunk in memory. The type test is `fstat` on
- *  the descriptor that is then read, so no name is checked and then used (CWE-367). */
+ *  the descriptor that is then read, so no name is checked and then used (CWE-367). EXPORTED (6.33.0) so
+ *  regress-base-reuse.mjs re-hashes a retained base run's logs with the function that recorded its digests. */
 const RESULTS_OPEN_FLAGS = fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK;
 const HASH_CHUNK = 1 << 20;
 function sha256RegularFile(file) {
@@ -448,32 +450,11 @@ function runInit(args) {
     const src = existsSync(headFinal) ? headFinal : headStampish;
     const r = readJson(src);
     if (!r.ok) fail("spec-mismatch", `--spec-from has no readable record at ${src}: ${r.reason}`);
-    const head = r.value;
-    if (head.stage !== "regress" || head.side !== "head" || head.feature !== feature) {
-      fail(
-        "spec-mismatch",
-        `--spec-from record is stage=${head.stage} side=${head.side} feature=${head.feature}; expected regress/head/${feature}`
-      );
-    }
-    // The spec lives in `entries` on an IN-PROGRESS record and is reconstructible from `runs` on a
-    // FINALIZED stamp (which drops `entries`). Reading `runs` unconditionally yielded an EMPTY set
-    // whenever the head side had not run yet — the common case, since both sides are initialized before
-    // either runs. Caught by the test that compares the two sides' printed ids.
-    const source = Array.isArray(head.entries) && head.entries.length ? head.entries : head.runs;
-    if (!Array.isArray(source) || source.length === 0) {
-      fail("spec-mismatch", `--spec-from record at ${src} carries no gate entries to copy`);
-    }
-    const spec = {
-      stage: "regress",
-      side: "base",
-      feature,
-      source: head.source,
-      source_raw: head.source_raw ?? null,
-      style_skipped: head.style_skipped === true,
-      required: [...head.required],
-      entries: source.map((r2, i) => ({ id: r2.id, shell: r2.shell ?? null, argv: r2.argv ?? null, files: r2.files ?? [], seq: i })),
-    };
-    return startRecord(spec, outAbs, cwd, args);
+    // The copy rule is gate-run-core.mjs's `baseSpecFrom` (6.33.0) — the ONE owner, which /pharn-regress's BASE-reuse
+    // predicate also applies to decide whether an earlier base run was produced for exactly this spec (L35).
+    const copied = baseSpecFrom(r.value, feature);
+    if (!copied.ok) fail(copied.reason_code, `${copied.reason} (${src})`);
+    return startRecord(copied.spec, outAbs, cwd, args);
   }
 
   let acRows = null;
@@ -907,4 +888,4 @@ if (import.meta.main) {
   });
 }
 
-export { assertContained, isStaleLock, signalExit, readScopeJson, spawnGate };
+export { assertContained, isStaleLock, signalExit, readScopeJson, spawnGate, sha256RegularFile };

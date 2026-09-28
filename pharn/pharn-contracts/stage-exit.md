@@ -58,7 +58,9 @@ requires must be present, and no key outside that status's set may appear.
     command runs `--resume` only after a `continue` exit, so that revival is reachable only outside the
     documented flow.
   - **Every later stop** (`no-feature` onward) has removed the stale report AND cleared `.pharn/pharn-regress/`
-    (GRILL G14: one run per worktree at a time, so another run's in-progress record goes with it). From
+    (GRILL G14: one run per worktree at a time, so another run's in-progress record goes with it) — all but a
+    retained `base-gates/` directory, which a later decision reuses or discards (6.33.0, BASE-evidence reuse:
+    `pharn/pharn-contracts/regression-report.md`, "The additive `base_evidence` block"). From
     "drain-head" onward the stop may have written NEW state: this run's own progress record (a checkpoint is
     persisted at the top of every phase from "drain-head" through "verdict"), a base-commit checkout, install
     logs, gate stamps.
