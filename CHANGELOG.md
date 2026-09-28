@@ -23,6 +23,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Fixed
+
+- 2026-09-28: **A bare `npm run format:check` or `npm run lint` no longer reads other Claude Code sessions' worktrees
+  under `.claude/worktrees/`** ([`.prettierignore`](./.prettierignore), [`eslint.config.mjs`](./eslint.config.mjs)).
+  Repo-meta only, so `SKILLS_VERSION` does not move.
+  - **The failure.** On 2026-09-28, with 9 sibling worktrees present, `npm run check` from the main checkout failed
+    `format:check` with hundreds of `[warn]` lines, each one for a file inside `.claude/worktrees/<name>/`. Those
+    worktrees are excluded through `.git/info/exclude`, which prettier does not read. `prettier --check .` therefore
+    descended into each one and applied only the root `.prettierignore`, whose entries match at the root alone.
+    ESLint 10's flat config does not skip dot-directories either, so `eslint .` linted them too. 6.13.1 measured the
+    prettier half and deferred it; markdownlint has ignored `.claude/worktrees` since then.
+  - **Fix.** `.prettierignore` gains `.claude/worktrees/`, and `eslint.config.mjs`'s global `ignores` gains
+    `.claude/worktrees/**`. Each carries a comment giving the reason and the bound, as the `.markdownlint-cli2.jsonc`
+    entry does. The directory is untracked, so no repo file loses coverage.
+  - **Measured** in a worktree with no nested worktrees, with a probe at `.claude/worktrees/probe/` holding a copy of
+    HEAD plus a mis-formatted `.md` and `.mjs`. Before: `format:check` exited 1 on 64 files (the two probe files, and
+    62 committed files that the root `.prettierignore` excludes only at the root), and `lint` exited 1 with 2 errors
+    in the probe `.mjs`. After: both exit 0. Negative control: the same two files at the repo root still fail both
+    gates (2 prettier warnings, 2 ESLint errors). The probe was removed afterwards.
+  - **Not claimed.** No test pins either entry, unlike the markdownlint one (`command-hygiene.test.mjs`), so nothing
+    stops one being removed. Both entries are tied to where Claude Code places worktrees today. If that location
+    moves, they silently match nothing. `npm test`'s glob was already narrowed for the same reason (`package.json`,
+    `_test_glob_comment`).
+
 ## [6.32.1] - 2026-09-28
 
 ### Fixed
