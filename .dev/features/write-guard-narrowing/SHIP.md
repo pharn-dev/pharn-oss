@@ -7,8 +7,9 @@ seal.
 
 - stage: `/pharn-dev-ship` — every stage of this run on opus (`claude-opus-5-5`), by the maintainer's instruction
   for this batch; not a `pharn.config.json` route; effort not routed
-- where the run ended: **GATE 2 → FIX**, then the fix pass, which stops again before anyone applies anything: the
-  human apply waits for the orchestrator's independent review of the regenerated `proposed/human-only.patch`
+- where the run ended: **GATE 2 → FIX**, the fix pass, an independent patch review and its fix pass, then the
+  maintainer's apply of `proposed/human-only.patch` (commit `2bf04a8`) and `/pharn-dev-verify` over the applied tree:
+  **PASS**. The PR is opened; nobody merged it in this run
 
 ## Stages run, in order
 
@@ -26,6 +27,12 @@ seal.
    snapshot committed (`0a27990`), the branch renamed `write-guard-narrowing`, `origin/main` (`c1bf663`, 6.29.0)
    merged (`b8b8e1b`) and renumbered to 6.29.1, F1–F4 fixed, the new tests audited for case sensitivity, the patch
    regenerated once and re-verified, the reconciliation baseline re-anchored, the non-test gates re-run.
+10. **The human apply** (2026-09-28): the maintainer checked the patch's sha256 (`6cceeebc…6d82b5aff`) and ran
+    `proposed/apply.sh` from the worktree root, which ended "applied, tested and committed". Its commit, `2bf04a8`,
+    touches exactly `.claude/hooks/enforce-writes-scope.cjs`, `.claude/hooks/protect-trusted-paths.cjs` and
+    `LIMITS.md`, and `shasum -a 256 -c proposed/human-only.sha256` reads OK for all three.
+11. `/pharn-dev-verify` again, over the applied tree → `verify-report.json`, `VERIFY.md` ("After the human apply"):
+    **PASS**. `origin/main` was still `17dda60`, so no merge was needed.
 
 ## Decisions, and whose
 
@@ -50,14 +57,16 @@ decisions, **not human approvals**:
 "."` on a clean tree; `BUILD.md` misrecords 72, `REVIEW.md` F4).
 - `/pharn-dev-regress` → `regression-report.json` `.verdict`: **`no-regressions`** (base `70cb51c`, 15 paths inside,
   none escaped; 120 outside test files, `validate` and the trust-fence structural pair exit 0 at base and head).
-- `/pharn-dev-verify` → `verify-report.json` `.verdict`: **`FAIL`**, `failing_gates: ["test"]` — the designed STOP
-  before the human apply. Every other gate exited 0, and `reconcile` read CLEAN (12 paths, 0 escapes).
+- `/pharn-dev-verify`, after the human apply → `verify-report.json` `.verdict`: **`PASS`**, `failing_gates: []` —
+  every gate exited 0 (`test` 4250 of 4250), and `reconcile` read CLEAN under the epoch the apply anchored
+  (`write-guard-narrowing-apply`). Before the apply it read `FAIL` with `failing_gates: ["test"]`, the designed STOP;
+  `VERIFY.md` keeps both.
 - `/pharn-dev-review` → `REVIEW.md`: GREEN, 0 floor-gate findings; F1 important, F2–F5 minor — cited, not restated.
   F1–F4 fixed and F5 accepted in the fix pass (`BUILD.md`).
 - After the fix pass, over the merged tree: `validate` exit 0 (36 capabilities); the regenerated patch's runner —
   every gate 0, the chain 0, the full suite 4157 of 4157 against the patched hooks, the 30 expected-fail titles all
-  `ok` there; unpatched here, the same 30 titles fail and nothing else. The verify verdict above predates the merge
-  and is re-read at `/pharn-dev-verify` after the apply.
+  `ok` there; unpatched here, the same 30 titles fail and nothing else. The verify verdict above is the one re-read after
+  the apply.
 
 changelog-entry: exit 0
 

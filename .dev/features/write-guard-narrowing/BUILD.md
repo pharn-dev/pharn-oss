@@ -564,3 +564,14 @@ throwaway detached worktree under the OS temp directory, each result checked, al
    CLEAN.
 
 The worktree and its temp directory were removed.
+
+## The human apply, and verify after it (2026-09-28)
+
+- the apply: the maintainer compared the patch sha256 (`6cceeebc…6d82b5aff`) with the orchestrator's value and ran
+  `sh .dev/features/write-guard-narrowing/proposed/apply.sh` from this worktree's root. It ended "applied, tested
+  and committed" — its 12 suites 1099/1099 — and committed `2bf04a8` (authored by the maintainer), then set the
+  scope from the PLAN and re-anchored as `write-guard-narrowing-apply`.
+- checked afterwards: HEAD `2bf04a8` touches exactly the three files (500 insertions, 63 deletions); `shasum -a 256
+-c proposed/human-only.sha256` OK ×3; the working tree clean; `origin/main` still `17dda60`, so no merge.
+- `/pharn-dev-verify` then: every gate exit 0, `npm test` **4250 of 4250**, `reconcile` CLEAN under the apply
+  epoch; `check-verify.mjs` → **PASS** (`VERIFY.md`, "After the human apply").

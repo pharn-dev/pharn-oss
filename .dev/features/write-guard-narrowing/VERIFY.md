@@ -98,3 +98,37 @@ no verifiers registered — floor gates only (`node pharn/floor/count-verifiers.
 gates check — verifier concerns are advisory help, not assurance. Here one named gate did not pass, by design, and
 the equality check above is what licensed the chain to go on: it matches titles, and it cannot tell a test that
 fails for the designed reason from one that fails the same way for another.
+
+## After the human apply (2026-09-28) — the current verdict
+
+The sections above record the pre-apply run (the designed STOP, 30 expected failures at the time; the list grew to 32
+with the patch review's m1/m3 tests — `BUILD.md`). The maintainer then compared the patch's sha256
+(`6cceeebc…6d82b5aff`) and ran `proposed/apply.sh` from this worktree's root. It ended "applied, tested and committed"
+(12 suites 1099/1099), set the scope from the PLAN and re-anchored the baseline (`write-guard-narrowing-apply`).
+Checked before this run: HEAD `2bf04a8` is the apply commit, touching exactly the three files; `shasum -a 256 -c
+human-only.sha256` OK ×3; the working tree clean; `origin/main` still `17dda60`.
+
+The same gates, re-run the same way (a node runner with argv arrays that deletes itself before the first gate;
+`reconcile` last):
+
+| gate                                                                                       | exit |
+| ------------------------------------------------------------------------------------------ | ---- |
+| `test` (`npm test`: **4250 tests, 4250 pass**, 0 fail, 0 skipped)                          | 0    |
+| `validate` (`pharn/floor/validate.mjs .`)                                                  | 0    |
+| `lint`                                                                                     | 0    |
+| `format:check`                                                                             | 0    |
+| `lint:md`                                                                                  | 0    |
+| `structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json` | 0    |
+| `reconcile` (`check-bash-reconcile.mjs --base . --require-baseline`)                       | 0    |
+
+`reconcile` read **CLEAN** under the apply epoch (2026-09-28T07:28:50.959Z, `write-guard-narrowing-apply`), 0
+escapes.
+
+## VERIFIED: floor gates PASS
+
+`check-verify.mjs .pharn/pharn-dev-verify/results.json --feature write-guard-narrowing` exited **0** (`"verdict":
+"PASS"`, `"failing_gates": []`); `verify-report.json` now carries that output verbatim, replacing the pre-apply FAIL.
+No verifiers registered — floor gates only (`count-verifiers.mjs` → `{"registered":0,"verifiers":[]}`).
+
+**The honest residual:** verified = the named gates passed; this is NOT a guarantee of correctness beyond what those
+gates check — verifier concerns are advisory help, not assurance.
