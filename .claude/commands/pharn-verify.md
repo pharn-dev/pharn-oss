@@ -66,6 +66,10 @@ test-infra` SPEC gets only the weaker BOOTSTRAP evidence (each level's gate ran 
 - **The absolute-threshold residual:** the verdict asks "are ALL gates green NOW?", not "did anything flip?". A
   pre-existing red gate the feature did not cause also fails verify, by design — `/pharn-regress` is the stage that
   excludes pre-existing failures. The feature-specific signal is the `structural:*` gates over the feature's evals.
+- **The reuse residual (6.34.0):** inside a `/pharn-loop` or `/pharn-ship` run, a gate's result may be REUSED from that
+  run's `/pharn-regress` HEAD execution over the same tree and execution identity, not re-run here; the report's
+  `gate_reuse` block names each. That the result equals a fresh run is advisory, and this verify then gives no second
+  sample of a flaky gate (`pharn/floor/gate-reuse-core.mjs`).
 
 ## Step 0 — Resolve `<name>`, then set the writes-scope (fix #7, fail-closed)
 

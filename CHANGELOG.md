@@ -23,6 +23,67 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.34.0] - 2026-09-28
+
+### Changed
+
+- 2026-09-28: **Inside one `/pharn-loop` or `/pharn-ship` run, `/pharn-verify` records a gate's result from the COMPLETED
+  execution `/pharn-regress`'s HEAD side already made of it — without spawning the gate again — when tested code proves
+  every input it binds is equal (the execution identity — agreement, never proof that the two executions are the
+  same); every other gate runs exactly as before**
+  ([`pharn/floor/gate-reuse-core.mjs`](./pharn/floor/gate-reuse-core.mjs),
+  [`pharn/floor/head-reuse-offer.mjs`](./pharn/floor/head-reuse-offer.mjs),
+  [`pharn/floor/run-gates.mjs`](./pharn/floor/run-gates.mjs), [`pharn/floor/stage-verify.mjs`](./pharn/floor/stage-verify.mjs),
+  [`pharn/floor/stage-regress.mjs`](./pharn/floor/stage-regress.mjs)). `SKILLS_VERSION` 6.33.0 → 6.34.0 (minor: a new
+  shipped capability), with the README badge. `MIN_CLI` stays 0.5.0: no installed path moves, and an older CLI copies the
+  new floor modules like any other.
+  - **The trigger.** The maintainer's explicit direction ("PR 3: Reuse Equivalent HEAD Gate Executions"). Discovery
+    (`.dev/features/verify-head-gate-reuse/PLAN.md`, the matrix) found the genuine overlap is narrow: `typecheck`,
+    `type-check`, `build` and a structural pair that lands in both sets. `test` is never the same execution (regress
+    runs the outside-scope subset, verify the whole suite) and is an AC level gate; style gates are skipped at regress by
+    default; e2e gates never run at regress.
+  - **The execution identity.** A sha256 over what `spawnGate` actually uses: the command (`shell` or `argv`), the
+    ordered files, the realpath of the working directory, `--timeout-ms`, the stamp's git `head`, the name of the one
+    PHARN-added variable, and the tree fingerprint (`algo` + `fp_before`). `run-gates.mjs` records it on every run as
+    the optional, additive `runs[].identity_sha256`. The gate id, `seq`, the stage and `<out>` are not in it, and the
+    tests prove each material component alone flips a HIT to a MISS and the irrelevant ones do not.
+  - **Eligibility.** Only a completed process exit (0..125, not timed out — a completed RED is reused like a green),
+    that did not move the tree and recorded no regular per-test results file. Never an id in `NON_REUSABLE_IDS`
+    (`gate-run-core.mjs`): every AC level gate (the AC gate reads their per-test records from verify's own `<out>`),
+    every style gate (a whole-tree style run reads the fingerprint-excluded `REGRESSION.md` / `VERIFY.md`, which differ
+    between the two stages — grill B1) and `reconcile`.
+  - **The source is offered only through a record in the git dir** (`pharn-regress-head-offer.json`, grill B2), while
+    `.pharn/**` — where the head stamp lives — is always writable, so a stamp a `--quick` build plants there is never
+    offered. The write tools cannot write that record in a main checkout or a linked worktree (a ★ HOOK test runs both
+    guards); a SEPARATE git dir under an allowed temp root, in an installed project with no run open, is writable
+    (measured at GATE-2 review; the 6.33.0 BASE record shares the bound), and with a run open it is denied. `/pharn-regress` discards the offer at its fresh start and publishes
+    one once its HEAD stamp is final, bound to the stamp's bytes and the open run marker; `/pharn-verify` passes
+    `--reuse-stamp`/`--reuse-sha256` only when the offer names this run and those bytes.
+  - **Truthful evidence.** A reused entry is `ran: false`, `reason: "reused"`, with a `reused` block naming the source
+    execution (stage, side, seq, stamp sha256), the source's exit and log digests, and its logs copied — each verified
+    against the recorded digest — under verify's own names; `validateStamp` admits exactly that shape, only in a verify
+    stamp. `verify-report.json` gains the additive, advisory `gate_reuse: {reused: [...]}`; `VERIFY.md` says which
+    results were "reused, not re-executed". The verdict, the AC gate, completeness, `check-verify.mjs`,
+    `check-regress.mjs`, `check-loop-fresh.mjs` and the drain/budget/resume are unchanged.
+  - **Measured** (`.dev/features/verify-head-gate-reuse/MEASUREMENT.md`): on a fixture with `test`, `lint`,
+    `typecheck` and `build`, verify spawned 4 project gate processes before and 2 after (2 reused), 12 → 10 across the
+    delivery. No token saving is claimed: the orchestrator's calls are unchanged, and a reused entry still spends one
+    budgeted `run --next` call.
+  - **Bounds, named.** That a reused result equals a fresh run is ADVISORY (the inherited environment, the git index
+    and ignored files are unbound), and verify gives up its second sample of a flaky gate for the ids it reuses. The
+    decision is floor when it is made; nothing re-derives it later (`verify-reuse-rederive`). A Bash writer can forge
+    offer and stamp together (L19). During a budget-paused verify chain, the in-progress `reuse` binding in
+    `.pharn/pharn-verify/gates/state.json` is write-tool reachable, as its `runs` already are
+    (`verify-paused-chain-integrity`). `LIMITS.md`'s "/pharn-verify re-runs the project's own gates" is human-only and now
+    partly stale — flagged for the maintainer, not edited.
+  - **GATE-2 review fixes (independent Opus review, no false-HIT path found):** runner-level negative controls for git
+    HEAD, cwd and an intermediate-directory symlink (each proven by a mutant that stayed green before); `validateStamp`
+    also requires a reused exit in 0..125; the offer rule moved into `head-reuse-offer.mjs`, so the runner's load graph
+    carries no regress-stage module; a failed offer discard is reported, never a crash; the report's `gate_reuse` block
+    is read from the stamp bytes the verdict read (`gate_run.stamp_sha256`).
+  - **Contracts:** `gate-run-record.md` "Reused entries", `verify-report.md` "The additive `gate_reuse` block".
+    `.claude/commands/pharn-verify.md` gains one claims bullet.
+
 ## [6.33.0] - 2026-09-28
 
 ### Changed

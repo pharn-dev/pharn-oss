@@ -138,7 +138,26 @@ function gatesSection(report) {
   else
     out.push(quoteData("exit code, then gate id — quoted as DATA:", ids.map((id) => `${dataText(gates[id])}  ${dataText(id)}`).join("\n")));
   out.push("");
+  out.push(...reuseLines(report));
   return out;
+}
+
+/** 6.34.0 — which gate results were REUSED rather than executed by this run (the report's `gate_reuse` block, derived
+ *  from the stamp). A reused id is untrusted text, so it is fenced; the source label is a closed pair. */
+function reuseLines(report) {
+  const g = report.gate_reuse;
+  if (!isObject(g) || !Array.isArray(g.reused)) return ["gate result reuse: not recorded — this report carries no `gate_reuse` block.", ""];
+  const reused = g.reused.filter(isObject);
+  if (reused.length === 0) return ["gate result reuse: none — every gate above was executed by this verify run.", ""];
+  return [
+    quoteData(
+      "REUSED, NOT RE-EXECUTED by this verify run — each result is a completed execution of this delivery run's " +
+        "`/pharn-regress` HEAD side with the same execution identity over the same tree fingerprint (that a fresh run " +
+        "would give the same result is advisory). Gate id, then the source's run seq, quoted as DATA:",
+      reused.map((r) => `${dataText(r.id)}  regress/head seq ${dataText(r.seq)}`).join("\n")
+    ),
+    "",
+  ];
 }
 
 function completenessSection(report) {

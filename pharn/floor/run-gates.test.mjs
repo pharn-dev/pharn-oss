@@ -25,6 +25,7 @@ import {
   statSync,
   realpathSync,
   chmodSync,
+  readdirSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
 import { RESULTS_ENV, resultsFileName } from "./gate-run-core.mjs";
@@ -1438,4 +1439,496 @@ test("ac-test: a record whose entry lost its files is refused at run, never run 
     assert.match(r.json.reason, /carries no mapped files/);
     assert.ok(!existsSync(join(dir, ".pharn/argv-test.json")), "the gate never ran");
   });
+});
+
+// ── REUSED EXECUTIONS (6.34.0, verify-head-gate-reuse) — the runner's per-entry decision ────────────────────────────
+// Every gate script appends its id to a counter file OUTSIDE the repo, so "not spawned" is MEASURED, never read off a
+// `reused: true` flag (the plan's requirement 17). The source is a REAL regress/head stamp this runner wrote.
+const HEAD_OUT = ".pharn/pharn-regress/head";
+const HEAD_STAMP_REL = `${HEAD_OUT}/stamp.json`;
+const COUNT = (gate, tail = "") => `node -e "require('fs').appendFileSync(process.env.RG_COUNTER, '${gate}\\n')${tail}"`;
+const REUSE_SCRIPTS = Object.freeze({
+  test: COUNT("test"),
+  lint: COUNT("lint"),
+  typecheck: COUNT("typecheck"),
+  build: COUNT("build"),
+});
+
+function reuseRepo(scripts = REUSE_SCRIPTS) {
+  const dir = realpathSync(repo({ scripts }));
+  const counter = `${dir}.counter`;
+  writeFileSync(counter, "");
+  const env = { ...process.env, RG_COUNTER: counter };
+  delete env.NODE_TEST_CONTEXT;
+  mkdirSync(join(dir, ".pharn"), { recursive: true });
+  writeFileSync(
+    join(dir, ".pharn/scope.json"),
+    JSON.stringify({ inside: [], declared: [], escaped: [], outside_tests: [], outside_eval_pairs: [] })
+  );
+  return { dir, counter, env };
+}
+
+function dropReuseRepo(fx) {
+  rmSync(fx.dir, { recursive: true, force: true });
+  rmSync(fx.counter, { force: true });
+}
+
+const counted = (fx) => readFileSync(fx.counter, "utf8").split("\n").filter(Boolean);
+
+/** The HEAD side, as stage-regress.mjs runs it (no --cwd, the pinned discover, a scope file). */
+function runHead(fx, { ms = 30000, extra = [] } = {}) {
+  const init = cli(
+    fx.dir,
+    [
+      "init",
+      "--stage",
+      "regress",
+      "--side",
+      "head",
+      "--feature",
+      FEATURE,
+      "--out",
+      HEAD_OUT,
+      "--discover",
+      "package.json",
+      "--scope-json",
+      ".pharn/scope.json",
+      ...extra,
+    ],
+    { env: fx.env }
+  );
+  assert.equal(init.code, 0, init.raw);
+  for (let i = 0; i < 20; i++) {
+    const r = cli(fx.dir, ["run", "--next", "--out", HEAD_OUT, "--timeout-ms", String(ms)], { env: fx.env });
+    if (r.code === 3 || r.json.finalized) break;
+    assert.equal(r.code, 0, r.raw);
+  }
+  const bytes = readFileSync(join(fx.dir, HEAD_STAMP_REL));
+  return { sha: createHash("sha256").update(bytes).digest("hex"), stamp: JSON.parse(bytes) };
+}
+
+function verifyWithReuse(fx, sha, { ms = 30000, extra = [] } = {}) {
+  const init = cli(fx.dir, initArgs(["--reuse-stamp", HEAD_STAMP_REL, "--reuse-sha256", sha, ...extra]), { env: fx.env });
+  const calls = [];
+  if (init.code !== 0) return { init, calls };
+  for (let i = 0; i < 20; i++) {
+    const r = cli(fx.dir, runArgs(ms), { env: fx.env });
+    calls.push(r);
+    if (r.code !== 0 || r.json.finalized) break;
+  }
+  return { init, calls };
+}
+
+test("REUSE HIT (A/G) — typecheck and build are recorded from the HEAD run and NOT spawned; test and reconcile run", () => {
+  const fx = reuseRepo();
+  try {
+    // --skip-style (stage-regress's default when no style config changed) drops lint at the HEAD side, so every later
+    // entry sits at a LOWER seq there than at verify — the irrelevant-metadata control below.
+    const head = runHead(fx, { extra: ["--skip-style"] });
+    assert.deepEqual(counted(fx), ["typecheck", "build"], "regress/head: test had no outside files (no-files), lint skipped");
+    assert.ok(
+      head.stamp.runs.every((r) => /^[0-9a-f]{64}$/.test(r.identity_sha256)),
+      "every head run records its identity"
+    );
+    writeFileSync(fx.counter, "");
+
+    const v = verifyWithReuse(fx, head.sha);
+    assert.equal(v.init.code, 0, v.init.raw);
+    assert.equal(v.init.json.reuse_offered, true);
+    assert.deepEqual(
+      counted(fx),
+      ["test", "lint"],
+      "verify spawned test (never reusable) and lint (style, never reusable) — and nothing else"
+    );
+    const byId = Object.fromEntries(v.calls.map((c) => [c.json.ran, c.json]));
+    assert.equal(byId.typecheck.reused, true);
+    assert.equal(byId.build.reused, true);
+    assert.equal(byId.test.reused, false);
+    assert.equal(byId.test.reuse_miss, "not-reusable-id");
+    assert.equal(byId.lint.reuse_miss, "not-reusable-id");
+    assert.equal(byId.reconcile.reuse_miss, "not-reusable-id");
+
+    const s = stamp(fx.dir);
+    assert.ok(!Object.hasOwn(s, "reuse"), "the offer binding is in-progress state only, never in the finalized stamp");
+    for (const gate of ["typecheck", "build"]) {
+      const r = s.runs.find((x) => x.id === gate);
+      const src = head.stamp.runs.find((x) => x.id === gate);
+      assert.equal(r.ran, false, "VERIFY did not run it — the truthful value");
+      assert.equal(r.reason, "reused");
+      assert.deepEqual(r.reused, { stage: "regress", side: "head", seq: src.seq, stamp_sha256: head.sha });
+      assert.equal(r.identity_sha256, src.identity_sha256);
+      assert.equal(r.exit, src.exit);
+      assert.notEqual(r.seq, src.seq, "IRRELEVANT METADATA: the verify seq differs from the source's and it still HITs");
+      // The logs are the source execution's bytes, under VERIFY's own names (check-loop-fresh J re-hashes these).
+      const base = `${r.seq}-${gate}`;
+      for (const [ext, field] of [
+        ["out", "stdout_sha256"],
+        ["err", "stderr_sha256"],
+      ]) {
+        const bytes = readFileSync(join(fx.dir, OUT, `${base}.${ext}`));
+        assert.equal(createHash("sha256").update(bytes).digest("hex"), r[field]);
+      }
+    }
+    const t = s.runs.find((x) => x.id === "test");
+    assert.equal(t.ran, true);
+    assert.ok(!Object.hasOwn(t, "reused"));
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+test("REUSE of a completed RED — a red typecheck is reused as exit 1, not re-spawned", () => {
+  const fx = reuseRepo({ ...REUSE_SCRIPTS, typecheck: COUNT("typecheck", ";process.exit(1)") });
+  try {
+    const head = runHead(fx);
+    writeFileSync(fx.counter, "");
+    const v = verifyWithReuse(fx, head.sha);
+    const r = stamp(fx.dir).runs.find((x) => x.id === "typecheck");
+    assert.equal(r.reason, "reused");
+    assert.equal(r.exit, 1, "the recorded red result");
+    assert.ok(!counted(fx).includes("typecheck"), "not spawned");
+    assert.equal(v.calls.find((c) => c.json.ran === "typecheck").json.exit, 1);
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+test("REUSE MISS (F) — the tree changed after the HEAD run: every entry runs (identity-mismatch)", () => {
+  const fx = reuseRepo();
+  try {
+    const head = runHead(fx);
+    writeFileSync(join(fx.dir, "a.txt"), "changed after regress\n");
+    writeFileSync(fx.counter, "");
+    const v = verifyWithReuse(fx, head.sha);
+    assert.deepEqual(counted(fx), ["test", "lint", "typecheck", "build"]);
+    assert.equal(v.calls.find((c) => c.json.ran === "typecheck").json.reuse_miss, "identity-mismatch");
+    assert.ok(stamp(fx.dir).runs.every((r) => r.reason !== "reused"));
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+test("REUSE MISS (B) — same gate id, different command (an explicit --gates shell token at regress)", () => {
+  const fx = reuseRepo();
+  try {
+    const head = runHead(fx, { extra: [] });
+    // Rebuild the head side with an explicit gate list: `typecheck` is the same ID with a different execution.
+    rmSync(join(fx.dir, HEAD_OUT), { recursive: true, force: true });
+    // A comma-free wrapper (the --gates grammar splits on commas); under the git-ignored state root, so the tree is unchanged.
+    writeFileSync(join(fx.dir, ".pharn/tc.cjs"), "require('fs').appendFileSync(process.env.RG_COUNTER, 'typecheck\\n');\n");
+    const init = cli(
+      fx.dir,
+      [
+        "init",
+        "--stage",
+        "regress",
+        "--side",
+        "head",
+        "--feature",
+        FEATURE,
+        "--out",
+        HEAD_OUT,
+        "--gates",
+        "node .pharn/tc.cjs::typecheck",
+        "--scope-json",
+        ".pharn/scope.json",
+      ],
+      { env: fx.env }
+    );
+    assert.equal(init.code, 0, init.raw);
+    cli(fx.dir, ["run", "--next", "--out", HEAD_OUT, "--timeout-ms", "30000"], { env: fx.env });
+    const sha = createHash("sha256")
+      .update(readFileSync(join(fx.dir, HEAD_STAMP_REL)))
+      .digest("hex");
+    assert.notEqual(sha, head.sha);
+    writeFileSync(fx.counter, "");
+    const v = verifyWithReuse(fx, sha);
+    assert.ok(counted(fx).includes("typecheck"), "a different command is never reused");
+    assert.equal(v.calls.find((c) => c.json.ran === "typecheck").json.reuse_miss, "identity-mismatch");
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+test("REUSE MISS (D) — a gate the HEAD run skipped (--skip-style / absent) runs at verify: no-candidate", () => {
+  const fx = reuseRepo({ test: COUNT("test"), typecheck: COUNT("typecheck"), "type-check": COUNT("type-check") });
+  try {
+    // A head side that ran only typecheck (explicit set), so verify's type-check has no candidate.
+    const init = cli(
+      fx.dir,
+      [
+        "init",
+        "--stage",
+        "regress",
+        "--side",
+        "head",
+        "--feature",
+        FEATURE,
+        "--out",
+        HEAD_OUT,
+        "--discover",
+        "package.json",
+        "--scope-json",
+        ".pharn/scope.json",
+      ],
+      { env: fx.env }
+    );
+    assert.equal(init.code, 0, init.raw);
+    const st = JSON.parse(readFileSync(join(fx.dir, HEAD_OUT, "state.json"), "utf8"));
+    st.entries = st.entries.filter((e) => e.id !== "type-check").map((e, i) => ({ ...e, seq: i }));
+    st.required = st.entries.map((e) => e.id);
+    writeFileSync(join(fx.dir, HEAD_OUT, "state.json"), JSON.stringify(st));
+    for (let i = 0; i < 5; i++) {
+      const r = cli(fx.dir, ["run", "--next", "--out", HEAD_OUT, "--timeout-ms", "30000"], { env: fx.env });
+      if (r.code === 3 || r.json.finalized) break;
+    }
+    const sha = createHash("sha256")
+      .update(readFileSync(join(fx.dir, HEAD_STAMP_REL)))
+      .digest("hex");
+    writeFileSync(fx.counter, "");
+    const v = verifyWithReuse(fx, sha);
+    assert.deepEqual(counted(fx), ["test", "type-check"], "typecheck reused; type-check (absent from HEAD) ran");
+    assert.equal(v.calls.find((c) => c.json.ran === "type-check").json.reuse_miss, "no-candidate");
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+test("REUSE NEGATIVE CONTROL — a different --timeout-ms at verify is a different execution (identity-mismatch)", () => {
+  const fx = reuseRepo();
+  try {
+    const head = runHead(fx, { ms: 30000 });
+    writeFileSync(fx.counter, "");
+    const v = verifyWithReuse(fx, head.sha, { ms: 20000 });
+    assert.ok(counted(fx).includes("typecheck"));
+    assert.equal(v.calls.find((c) => c.json.ran === "typecheck").json.reuse_miss, "identity-mismatch");
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+test("REUSE MISS (H) — a source whose bytes changed after init, or whose log was edited, runs the gate", () => {
+  const fx = reuseRepo();
+  try {
+    const head = runHead(fx);
+    const ok = cli(fx.dir, initArgs(["--reuse-stamp", HEAD_STAMP_REL, "--reuse-sha256", head.sha]), { env: fx.env });
+    assert.equal(ok.code, 0);
+    // Edit the source AFTER init bound it.
+    writeFileSync(join(fx.dir, HEAD_STAMP_REL), JSON.stringify({ ...head.stamp, note: 1 }));
+    writeFileSync(fx.counter, "");
+    for (let i = 0; i < 10; i++) {
+      const r = cli(fx.dir, runArgs(), { env: fx.env });
+      if (r.json.ran === "typecheck") assert.equal(r.json.reuse_miss, "source-changed");
+      if (r.json.finalized) break;
+    }
+    assert.ok(counted(fx).includes("typecheck"));
+
+    // A log edited behind the stamp's back: the copy refuses it and the gate runs.
+    const head2 = runHead(fx);
+    const src = head2.stamp.runs.find((r) => r.id === "build");
+    writeFileSync(join(fx.dir, HEAD_OUT, `${src.seq}-build.out`), "tampered\n");
+    writeFileSync(fx.counter, "");
+    const v = verifyWithReuse(fx, head2.sha);
+    assert.equal(v.calls.find((c) => c.json.ran === "build").json.reuse_miss, "log-unverified");
+    assert.deepEqual(counted(fx), ["test", "lint", "build"], "typecheck still reused; build ran");
+    const b = stamp(fx.dir).runs.find((r) => r.id === "build");
+    assert.equal(b.ran, true, "the MISS path is the normal path");
+    assert.equal(validateStampOk(fx.dir), true);
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+function validateStampOk(dir) {
+  const s = stamp(dir);
+  return s.finalized === true && s.runs.every((r) => r.ran === true || r.reason === "reused");
+}
+
+test("REUSE — an offer init cannot bind is simply no offer: a digest mismatch, a symlinked stamp, an absent one", () => {
+  const fx = reuseRepo();
+  try {
+    const head = runHead(fx);
+    // The wrong digest: no offer, every gate runs, nothing refused.
+    const wrong = cli(fx.dir, initArgs(["--reuse-stamp", HEAD_STAMP_REL, "--reuse-sha256", "0".repeat(64)]), { env: fx.env });
+    assert.equal(wrong.code, 0, wrong.raw);
+    assert.equal(wrong.json.reuse_offered, false);
+    // A link at the stamp's name (L59) — never followed.
+    const real = join(fx.dir, ".pharn/elsewhere.json");
+    writeFileSync(real, readFileSync(join(fx.dir, HEAD_STAMP_REL)));
+    rmSync(join(fx.dir, HEAD_STAMP_REL));
+    symlinkSync(real, join(fx.dir, HEAD_STAMP_REL));
+    const link = cli(fx.dir, initArgs(["--reuse-stamp", HEAD_STAMP_REL, "--reuse-sha256", head.sha]), { env: fx.env });
+    assert.equal(link.code, 0);
+    assert.equal(link.json.reuse_offered, false, "a symlinked source is not read");
+    // Absent.
+    rmSync(join(fx.dir, HEAD_STAMP_REL));
+    const absent = cli(fx.dir, initArgs(["--reuse-stamp", HEAD_STAMP_REL, "--reuse-sha256", head.sha]), { env: fx.env });
+    assert.equal(absent.code, 0);
+    assert.equal(absent.json.reuse_offered, false);
+    // Control: without --reuse-stamp the field reads false too, and the stamp carries no reuse.
+    assert.equal(cli(fx.dir, initArgs(), { env: fx.env }).json.reuse_offered, false);
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+test("REUSE usage — --reuse-stamp is verify-only, needs its digest, and must name a path inside the state root", () => {
+  const fx = reuseRepo();
+  try {
+    const h = "a".repeat(64);
+    const cases = [
+      [
+        "regress stage",
+        [
+          "init",
+          "--stage",
+          "regress",
+          "--side",
+          "head",
+          "--feature",
+          FEATURE,
+          "--out",
+          HEAD_OUT,
+          "--discover",
+          "package.json",
+          "--scope-json",
+          ".pharn/scope.json",
+          "--reuse-stamp",
+          HEAD_STAMP_REL,
+          "--reuse-sha256",
+          h,
+        ],
+      ],
+      ["no digest", initArgs(["--reuse-stamp", HEAD_STAMP_REL])],
+      ["a malformed digest", initArgs(["--reuse-stamp", HEAD_STAMP_REL, "--reuse-sha256", "xyz"])],
+      ["a digest with no stamp", initArgs(["--reuse-sha256", h])],
+      ["outside the state root", initArgs(["--reuse-stamp", "a.txt", "--reuse-sha256", h])],
+    ];
+    for (const [name, args] of cases) {
+      const r = cli(fx.dir, args, { env: fx.env });
+      assert.equal(r.code, 2, `${name}: ${r.raw}`);
+      assert.equal(r.json.reason_code, "usage-error", name);
+    }
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+test("REUSE resume — a crash after the logs were copied but before the state write re-decides the entry once", () => {
+  const fx = reuseRepo();
+  const floorCopy = mkdtempSync(join(tmpdir(), "rg-floor-"));
+  try {
+    for (const f of readdirSync(HERE)) {
+      if (f.endsWith(".mjs") && !f.endsWith(".test.mjs")) writeFileSync(join(floorCopy, f), readFileSync(join(HERE, f)));
+    }
+    const src = readFileSync(join(HERE, "run-gates.mjs"), "utf8");
+    const anchor = "      if (r.hit) reused = r.run;";
+    assert.ok(src.includes(anchor), "the mutation anchor exists (L60)");
+    writeFileSync(
+      join(floorCopy, "run-gates.mjs"),
+      src.replace(anchor, `${anchor}\n      if (r.hit) throw new Error("crash after the log copy");`)
+    );
+
+    const head = runHead(fx);
+    assert.equal(cli(fx.dir, initArgs(["--reuse-stamp", HEAD_STAMP_REL, "--reuse-sha256", head.sha]), { env: fx.env }).code, 0);
+    // Drain with the REAL runner up to typecheck, then crash on it with the mutant.
+    for (;;) {
+      const st = JSON.parse(readFileSync(join(fx.dir, OUT, "state.json"), "utf8"));
+      if (st.entries[st.runs.length].id === "typecheck") break;
+      assert.equal(cli(fx.dir, runArgs(), { env: fx.env }).code, 0);
+    }
+    const crashed = spawnSync(process.execPath, [join(floorCopy, "run-gates.mjs"), ...runArgs()], {
+      cwd: fx.dir,
+      encoding: "utf8",
+      env: fx.env,
+    });
+    assert.notEqual(crashed.status, 0, "the mutant crashed");
+    const mid = JSON.parse(readFileSync(join(fx.dir, OUT, "state.json"), "utf8"));
+    assert.ok(!mid.runs.some((r) => r.id === "typecheck"), "nothing was recorded for the crashed entry");
+    assert.ok(!existsSync(join(fx.dir, OUT, "stamp.json")), "no stamp was finalized");
+    // The real runner resumes: the stale lock is recovered, the entry is re-decided ONCE, the stamp finalizes.
+    for (let i = 0; i < 10; i++) {
+      const r = cli(fx.dir, runArgs(), { env: fx.env });
+      if (r.code !== 0 || r.json.finalized) break;
+    }
+    const s = stamp(fx.dir);
+    assert.equal(s.runs.filter((r) => r.id === "typecheck").length, 1, "no double-counted entry");
+    assert.equal(s.runs.find((r) => r.id === "typecheck").reason, "reused");
+    assert.deepEqual(
+      s.runs.map((r) => r.seq),
+      s.runs.map((_, i) => i)
+    );
+  } finally {
+    rmSync(floorCopy, { recursive: true, force: true });
+    dropReuseRepo(fx);
+  }
+});
+
+// ── GATE-2 review: RUNNER-LEVEL negative controls for the identity inputs the pure tests alone covered (L60) ─────────
+test("REUSE NEGATIVE CONTROL — git HEAD: a commit that leaves the tree unchanged between regress and verify is a MISS", () => {
+  const fx = reuseRepo();
+  try {
+    const head = runHead(fx);
+    execFileSync("git", ["commit", "-q", "--allow-empty", "-m", "moves HEAD, not the tree"], { cwd: fx.dir });
+    writeFileSync(fx.counter, "");
+    const v = verifyWithReuse(fx, head.sha);
+    const tc = stamp(fx.dir).runs.find((r) => r.id === "typecheck");
+    const src = head.stamp.runs.find((r) => r.id === "typecheck");
+    assert.equal(tc.fp_before, src.fp_before, "the control isolates HEAD: the tree fingerprint is unchanged");
+    assert.equal(v.calls.find((c) => c.json.ran === "typecheck").json.reuse_miss, "identity-mismatch");
+    assert.ok(counted(fx).includes("typecheck"));
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+test("REUSE NEGATIVE CONTROL — cwd: the same content judged from another directory (a linked worktree) is a MISS", () => {
+  const fx = reuseRepo();
+  const wt = `${fx.dir}-wt`;
+  try {
+    const head = runHead(fx);
+    execFileSync("git", ["worktree", "add", "-q", "--detach", wt], { cwd: fx.dir });
+    writeFileSync(fx.counter, "");
+    const init = cli(fx.dir, initArgs(["--cwd", wt, "--reuse-stamp", HEAD_STAMP_REL, "--reuse-sha256", head.sha]), { env: fx.env });
+    assert.equal(init.code, 0, init.raw);
+    assert.equal(init.json.reuse_offered, true);
+    const calls = [];
+    for (let i = 0; i < 20; i++) {
+      const r = cli(fx.dir, runArgs(), { env: fx.env });
+      calls.push(r);
+      if (r.code !== 0 || r.json.finalized) break;
+    }
+    const tc = stamp(fx.dir).runs.find((r) => r.id === "typecheck");
+    const src = head.stamp.runs.find((r) => r.id === "typecheck");
+    assert.equal(tc.fp_before, src.fp_before, "the control isolates cwd: the worktree's content fingerprints equal");
+    assert.equal(calls.find((c) => c.json.ran === "typecheck").json.reuse_miss, "identity-mismatch");
+    assert.ok(counted(fx).includes("typecheck"));
+  } finally {
+    try {
+      execFileSync("git", ["worktree", "remove", "--force", wt], { cwd: fx.dir, stdio: "ignore" });
+    } catch {
+      /* already gone */
+    }
+    rmSync(wt, { recursive: true, force: true });
+    dropReuseRepo(fx);
+  }
+});
+
+test("REUSE — a symlink at an INTERMEDIATE directory of the source path is never followed (L54/L59): no offer", () => {
+  const fx = reuseRepo();
+  try {
+    const head = runHead(fx);
+    execFileSync("mv", [join(fx.dir, ".pharn/pharn-regress"), join(fx.dir, ".pharn/real-regress")]);
+    symlinkSync(join(fx.dir, ".pharn/real-regress"), join(fx.dir, ".pharn/pharn-regress"));
+    const init = cli(fx.dir, initArgs(["--reuse-stamp", HEAD_STAMP_REL, "--reuse-sha256", head.sha]), { env: fx.env });
+    assert.equal(init.code, 0, init.raw);
+    assert.equal(init.json.reuse_offered, false, "the stamp behind a linked directory is not read");
+    // Control: the same bytes at the real path ARE offered, so the refusal above is the link rule's.
+    rmSync(join(fx.dir, ".pharn/pharn-regress"));
+    execFileSync("mv", [join(fx.dir, ".pharn/real-regress"), join(fx.dir, ".pharn/pharn-regress")]);
+    const ok = cli(fx.dir, initArgs(["--reuse-stamp", HEAD_STAMP_REL, "--reuse-sha256", head.sha]), { env: fx.env });
+    assert.equal(ok.json.reuse_offered, true);
+  } finally {
+    dropReuseRepo(fx);
+  }
 });

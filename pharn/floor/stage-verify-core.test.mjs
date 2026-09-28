@@ -26,6 +26,7 @@ import {
   MERGED_KEYS,
   VERIFIER_DEFERRED_NOTE,
   composeReport,
+  gateReuseBlock,
 } from "./stage-verify-core.mjs";
 import { DEFAULT_STAMPS } from "./loop-fresh-core.mjs";
 
@@ -45,7 +46,7 @@ test("★ LOAD GRAPH — stage-verify-core.mjs imports exactly gate-run-core.mjs
 test("★ LOAD GRAPH discriminates — an injected second import fails the same scan", () => {
   const src = readFileSync(join(HERE, "stage-verify-core.mjs"), "utf8");
   const mutant = src.replace(
-    'import { FEATURE_SLUG_RE, actualForExpected } from "./gate-run-core.mjs";',
+    'import { FEATURE_SLUG_RE, actualForExpected, REUSED_REASON } from "./gate-run-core.mjs";',
     (m) => `${m}\nimport { dataText } from "./quote-core.mjs";`
   );
   assert.notEqual(mutant, src, "the mutation must land — the import line is the anchor");
@@ -297,31 +298,87 @@ const CHECKER = {
 };
 const COMPLETE = { plan: "pharn/features/demo/PLAN.md", declared: ["a"], skipped: [], missing: [], complete: true, verdict: "complete" };
 
-test("composeReport: the checker's keys in order, values deep-equal, then completeness and verifiers", () => {
-  const r = composeReport({ checker: CHECKER, completeness: COMPLETE, verifiers: { registered: 0, verifiers: [] } });
+const NO_REUSE = { reused: [] };
+
+test("composeReport: the checker's keys in order, values deep-equal, then completeness, verifiers and gate_reuse", () => {
+  const r = composeReport({ checker: CHECKER, completeness: COMPLETE, verifiers: { registered: 0, verifiers: [] }, gateReuse: NO_REUSE });
   assert.equal(r.ok, true);
   assert.deepEqual(Object.keys(r.report), [...Object.keys(CHECKER), ...MERGED_KEYS]);
   for (const k of Object.keys(CHECKER)) assert.deepEqual(r.report[k], CHECKER[k]);
   assert.deepEqual(r.report.completeness, COMPLETE, "the capture is carried verbatim");
   assert.deepEqual(r.report.verifiers, { registered: 0, findings: [] }, "no note with zero verifiers");
+  assert.deepEqual(r.report.gate_reuse, NO_REUSE);
 });
 
 test("composeReport: the deferral note appears only when registered > 0", () => {
-  const r = composeReport({ checker: CHECKER, completeness: COMPLETE, verifiers: { registered: 2, verifiers: ["a.md", "b.md"] } });
+  const r = composeReport({
+    checker: CHECKER,
+    completeness: COMPLETE,
+    verifiers: { registered: 2, verifiers: ["a.md", "b.md"] },
+    gateReuse: NO_REUSE,
+  });
   assert.deepEqual(r.report.verifiers, { registered: 2, findings: [], note: VERIFIER_DEFERRED_NOTE });
 });
 
-test("composeReport (Q2): a checker key named completeness or verifiers is REFUSED, never overwritten", () => {
-  assert.deepEqual(MERGED_KEYS, ["completeness", "verifiers"]);
+test("composeReport (Q2): a checker key named like a merged block is REFUSED, never overwritten", () => {
+  assert.deepEqual(MERGED_KEYS, ["completeness", "verifiers", "gate_reuse"]);
+  const V0 = { registered: 0, verifiers: [] };
   for (const k of MERGED_KEYS) {
-    const r = composeReport({
-      checker: { ...CHECKER, [k]: "theirs" },
-      completeness: COMPLETE,
-      verifiers: { registered: 0, verifiers: [] },
-    });
+    const r = composeReport({ checker: { ...CHECKER, [k]: "theirs" }, completeness: COMPLETE, verifiers: V0, gateReuse: NO_REUSE });
     assert.equal(r.ok, false, `a checker key '${k}' must be refused`);
   }
-  assert.equal(composeReport({ checker: [], completeness: COMPLETE, verifiers: { registered: 0, verifiers: [] } }).ok, false);
-  assert.equal(composeReport({ checker: CHECKER, completeness: null, verifiers: { registered: 0, verifiers: [] } }).ok, false);
-  assert.equal(composeReport({ checker: CHECKER, completeness: COMPLETE, verifiers: { registered: 1, verifiers: [] } }).ok, false);
+  assert.equal(composeReport({ checker: [], completeness: COMPLETE, verifiers: V0, gateReuse: NO_REUSE }).ok, false);
+  assert.equal(composeReport({ checker: CHECKER, completeness: null, verifiers: V0, gateReuse: NO_REUSE }).ok, false);
+  assert.equal(
+    composeReport({ checker: CHECKER, completeness: COMPLETE, verifiers: { registered: 1, verifiers: [] }, gateReuse: NO_REUSE }).ok,
+    false
+  );
+  // 6.34.0 — the reuse block is required and shape-checked; its absence is a refusal, never an omitted key.
+  for (const bad of [undefined, null, {}, { reused: "x" }, []]) {
+    assert.equal(composeReport({ checker: CHECKER, completeness: COMPLETE, verifiers: V0, gateReuse: bad }).ok, false, JSON.stringify(bad));
+  }
+});
+
+// ── gateReuseBlock (6.34.0) — derived from the stamp's OWN bytes, nothing else ─────────────────────────
+test("gateReuseBlock: lists exactly the reused runs, in run order, with their source labels; none -> empty", () => {
+  const runs = [
+    { seq: 0, id: "test", reason: null, ran: true },
+    {
+      seq: 1,
+      id: "typecheck",
+      reason: "reused",
+      ran: false,
+      reused: { stage: "regress", side: "head", seq: 3, stamp_sha256: "a".repeat(64) },
+    },
+    { seq: 2, id: "build", reason: "reused", ran: false, reused: { stage: "regress", side: "head", seq: 4, stamp_sha256: "a".repeat(64) } },
+    { seq: 3, id: "reconcile", reason: null, ran: true },
+  ];
+  const b = gateReuseBlock(JSON.stringify({ runs }));
+  assert.deepEqual(b, {
+    ok: true,
+    value: {
+      reused: [
+        { id: "typecheck", stage: "regress", side: "head", seq: 3 },
+        { id: "build", stage: "regress", side: "head", seq: 4 },
+      ],
+    },
+  });
+  assert.deepEqual(gateReuseBlock(JSON.stringify({ runs: [runs[0], runs[3]] })), { ok: true, value: { reused: [] } });
+});
+
+test("gateReuseBlock: unparseable or run-less text, or a reused run with no block, is a refusal (L62: total)", () => {
+  for (const bad of [
+    null,
+    "",
+    "not json",
+    "[]",
+    "{}",
+    JSON.stringify({ runs: "x" }),
+    JSON.stringify({ runs: [{ id: "x", reason: "reused" }] }),
+    // GATE-2 review: a block whose fields are not {string, string, integer} is refused, never copied into the report.
+    JSON.stringify({ runs: [{ id: "x", reason: "reused", reused: { stage: { toString: 1 }, side: "head", seq: "1" } }] }),
+  ]) {
+    assert.equal(gateReuseBlock(bad).ok, false, String(bad));
+  }
+  assert.doesNotThrow(() => gateReuseBlock(JSON.stringify({ runs: [{ toString: 1 }, null, 3] })));
 });

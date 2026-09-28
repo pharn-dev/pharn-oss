@@ -2337,3 +2337,44 @@ test("★ WIRING (reuse) — pharn-regress.md's pinned line, run twice in one de
     dropReuseRepo(fx);
   }
 });
+
+// ── THE HEAD OFFER (6.34.0, verify-head-gate-reuse) — its lifecycle through the REAL script ──────────────────────────
+function offerFile(dir) {
+  return join(
+    execFileSync("git", ["rev-parse", "--absolute-git-dir"], { cwd: dir, encoding: "utf8" }).trim(),
+    "pharn-regress-head-offer.json"
+  );
+}
+
+test("HEAD OFFER — published once the HEAD stamp is final, bound to its bytes and this run; discarded by the next fresh start", () => {
+  const fx = reuseRepo();
+  try {
+    // No delivery run: a standalone regress offers nothing (and a stale offer planted earlier is discarded).
+    writeFileSync(offerFile(fx.dir), '{"planted":true}\n');
+    editIndex(fx.dir, 1);
+    const alone = runReuse(fx, reuseArgs(fx.base));
+    assert.equal(alone.code, 0, alone.raw);
+    assert.equal(existsSync(offerFile(fx.dir)), false, "the fresh start discarded the planted offer; no run, no new one");
+
+    // Inside a run: the offer names this feature, this run's marker digest and the head stamp's exact bytes.
+    const marker = openRun(fx.dir);
+    const inRun = runReuse(fx, reuseArgs(fx.base));
+    assert.equal(inRun.code, 0, inRun.raw);
+    const offer = JSON.parse(readFileSync(offerFile(fx.dir), "utf8"));
+    const sha = (b) => createHash("sha256").update(b).digest("hex");
+    assert.equal(offer.schema, "pharn-regress-head-offer/1");
+    assert.equal(offer.feature, FEATURE);
+    assert.deepEqual(offer.run, { command: "pharn-loop", marker_sha256: sha(readFileSync(marker)) });
+    assert.equal(offer.stamp_sha256, sha(readFileSync(join(fx.dir, REGRESS_PATHS.head, "stamp.json"))));
+    // Every HEAD run records its execution identity (what verify compares against).
+    const head = JSON.parse(readFileSync(join(fx.dir, REGRESS_PATHS.head, "stamp.json"), "utf8"));
+    assert.ok(
+      head.runs.every((r) => /^[0-9a-f]{64}$/.test(r.identity_sha256)),
+      JSON.stringify(head.runs.map((r) => r.id))
+    );
+    // The BASE-reuse record is a different file, untouched by the offer.
+    assert.notEqual(offerFile(fx.dir), recordFile(fx.dir));
+  } finally {
+    dropReuseRepo(fx);
+  }
+});

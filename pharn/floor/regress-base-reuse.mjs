@@ -111,13 +111,19 @@ export function readMarkers(feature) {
   return out;
 }
 
-/** `<absolute git dir>/<RECORD_BASENAME>` — a linked worktree's own git dir, so one record per worktree — or null when
- *  git cannot name the directory. */
-export function recordPath() {
+/** `<absolute git dir>/<name>` — a linked worktree's own git dir, so one file per worktree — or null when git cannot name
+ *  the directory. The ONE resolver of a record kept out of the write tools' reach; since 6.34.0 head-reuse-offer.mjs keeps
+ *  the HEAD offer through it too (L35). */
+export function gitDirFile(name) {
   const r = gitSync(["rev-parse", "--absolute-git-dir"]);
   if (!r.ok) return null;
   const dir = r.stdout.trim();
-  return dir === "" ? null : join(dir, RECORD_BASENAME);
+  return dir === "" ? null : join(dir, name);
+}
+
+/** `<absolute git dir>/<RECORD_BASENAME>`, or null when git cannot name the directory. */
+export function recordPath() {
+  return gitDirFile(RECORD_BASENAME);
 }
 
 function parsedOrNull(read) {

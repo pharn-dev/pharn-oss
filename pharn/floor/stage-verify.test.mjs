@@ -249,8 +249,8 @@ test("★ WIRING — pharn-verify.md's pinned fresh line, executed verbatim, rea
     const live = JSON.parse(cv.stdout);
     assert.deepEqual(
       Object.keys(report),
-      [...Object.keys(live), "completeness", "verifiers"],
-      "the checker's keys, in order, then the two blocks"
+      [...Object.keys(live), "completeness", "verifiers", "gate_reuse"],
+      "the checker's keys, in order, then the three blocks"
     );
     for (const k of Object.keys(live)) assert.deepEqual(report[k], live[k], `field ${k} is not the checker's own output`);
     // F — the stamp's final fingerprint is the live tree's, after the render wrote both artifacts.
@@ -988,4 +988,265 @@ test("★ CLOSURE discriminates — an injected variant spelling fails the scan"
   const lits = [...'emitUnusable(cfg.feature, "child-crashd", "x");'.matchAll(REASON_CODE_CALL_RE)].map((m) => m[1]);
   assert.deepEqual(lits, ["child-crashd"]);
   assert.equal(new Set(allReasonCodes("verify")).has("child-crashd"), false);
+});
+
+// ── HEAD→VERIFY GATE REUSE (6.34.0, verify-head-gate-reuse) — through the REAL stage scripts ─────────────────────────
+// Every gate script appends its id and the stage it ran under (read from PHARN_TEST_RESULTS, whose value is that gate's
+// own path under the stage's `<out>`) to a counter OUTSIDE the fixture, so "not spawned" is MEASURED (requirement 17).
+const REGRESS_COMMAND = join(REPO, ".claude", "commands", "pharn-regress.md");
+const COUNTED = (gate, tail = "") =>
+  `node -e "const p=process.env.PHARN_TEST_RESULTS||'';require('fs').appendFileSync(process.env.SV_COUNTER, '${gate} '+(/pharn-verify/.test(p)?'verify':/base-gates/.test(p)?'base':'head')+'\\n')${tail}"`;
+const REUSE_FIXTURE_SCRIPTS = Object.freeze({
+  test: `${COUNTED("test")} && node --test src/`,
+  lint: COUNTED("lint"),
+  typecheck: COUNTED("typecheck"),
+  build: COUNTED("build"),
+});
+
+function withReuseFixture(opts, fn) {
+  return withFixture({ scripts: REUSE_FIXTURE_SCRIPTS, ...opts }, (fx) => {
+    const counter = `${fx.dir}.counter`;
+    writeFileSync(counter, "");
+    const env = { ...CLEAN_ENV, SV_COUNTER: counter };
+    try {
+      return fn({ ...fx, counter, env });
+    } finally {
+      rmSync(counter, { force: true });
+    }
+  });
+}
+
+/** /pharn-loop Step 1a's marker — the delivery run the reuse is bound to. */
+function openDeliveryRun(dir, body = '{"schema":"pharn-loop-active/1"}\n') {
+  mkdirSync(join(dir, ".pharn", "pharn-loop", FEATURE), { recursive: true });
+  writeFileSync(join(dir, ".pharn", "pharn-loop", FEATURE, "active.json"), body);
+}
+
+function runRegress(fx, extra = []) {
+  const r = spawnSync(
+    process.execPath,
+    ["pharn/floor/stage-regress.mjs", "--feature", FEATURE, "--timeout-ms", "30000", "--no-install", "--base", fx.base, ...extra],
+    { cwd: fx.dir, encoding: "utf8", env: fx.env }
+  );
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  return r;
+}
+
+/** Counter lines of one stage since `from`. */
+function spawned(fx, stage, from = 0) {
+  return readFileSync(fx.counter, "utf8")
+    .split("\n")
+    .filter(Boolean)
+    .slice(from)
+    .filter((l) => l.endsWith(` ${stage}`))
+    .map((l) => l.split(" ")[0]);
+}
+const counterLen = (fx) => readFileSync(fx.counter, "utf8").split("\n").filter(Boolean).length;
+
+function loopFresh(fx) {
+  const r = spawnSync(process.execPath, [CHECK_LOOP_FRESH, "--feature", FEATURE, "--base", fx.base, "--iter", "1", "--repo", fx.dir], {
+    encoding: "utf8",
+    env: CLEAN_ENV,
+  });
+  return JSON.parse(r.stdout);
+}
+
+/** One delivery: regress then verify; returns what VERIFY spawned, its report, stamp and the freshness reading. */
+function deliver(fx, { run = true, editBetween = null, verifyExtra = [] } = {}) {
+  if (run) openDeliveryRun(fx.dir);
+  runRegress(fx);
+  if (editBetween) editBetween(fx);
+  const from = counterLen(fx);
+  const v = runCli(fx.dir, fresh(verifyExtra), { env: fx.env });
+  assert.equal(v.code, 0, v.raw);
+  return {
+    verifySpawned: spawned(fx, "verify", from),
+    report: readReport(fx.dir),
+    stamp: JSON.parse(readFileSync(join(fx.dir, STAMP), "utf8")),
+    fresh: loopFresh(fx),
+    render: readFileSync(join(fx.dir, RENDER), "utf8"),
+  };
+}
+
+test("★ REUSE A — inside one delivery run, VERIFY records typecheck and build from REGRESS/HEAD and spawns neither", () => {
+  withReuseFixture({}, (fx) => {
+    const d = deliver(fx);
+    assert.deepEqual(d.verifySpawned.sort(), ["lint", "test"], "only the never-reused gates were spawned by verify");
+    assert.deepEqual(
+      d.report.gate_reuse.reused.map((r) => r.id),
+      ["typecheck", "build"]
+    );
+    for (const r of d.report.gate_reuse.reused) assert.deepEqual([r.stage, r.side], ["regress", "head"]);
+    assert.deepEqual(validateStamp(d.stamp, { stage: "verify", feature: FEATURE, side: null }), { ok: true });
+    for (const id of ["typecheck", "build"]) {
+      const r = d.stamp.runs.find((x) => x.id === id);
+      assert.equal(r.ran, false, "truthful: verify did not execute it");
+      assert.equal(r.reason, "reused");
+    }
+    assert.equal(d.report.verdict, "PASS");
+    assert.match(d.render, /REUSED, NOT RE-EXECUTED by this verify run/);
+    assert.equal(d.fresh.verdict, "FRESH", JSON.stringify(d.fresh));
+  });
+});
+
+test("★ REUSE — FRESH-vs-REUSE EQUIVALENCE (mandatory): same coverage, exits, verdict, completeness, AC and freshness", () => {
+  const runOne = (withRun) => withReuseFixture({}, (fx) => deliver(fx, { run: withRun }));
+  const freshPath = runOne(false); // no delivery run: nothing is offered, every gate is executed by verify
+  const reusePath = runOne(true);
+  assert.deepEqual(freshPath.report.gate_reuse.reused, [], "the control really executed everything");
+  assert.deepEqual(freshPath.verifySpawned.sort(), ["build", "lint", "test", "typecheck"]);
+  assert.ok(reusePath.report.gate_reuse.reused.length > 0, "the reuse path really reused something (L34: never vacuous)");
+  assert.ok(reusePath.verifySpawned.length < freshPath.verifySpawned.length);
+  // Coverage: the same required set and the same run ids, in the same order.
+  assert.deepEqual(reusePath.stamp.required, freshPath.stamp.required);
+  assert.deepEqual(
+    reusePath.stamp.runs.map((r) => r.id),
+    freshPath.stamp.runs.map((r) => r.id)
+  );
+  // Results and the verdict.
+  for (const k of ["gates", "verdict", "failing_gates", "completeness", "ac_gate", "verifiers"]) {
+    assert.deepEqual(reusePath.report[k], freshPath.report[k], `report.${k}`);
+  }
+  // Freshness: both read FRESH with the same per-check outcome.
+  assert.equal(freshPath.fresh.verdict, "FRESH");
+  assert.equal(reusePath.fresh.verdict, "FRESH");
+  assert.deepEqual(reusePath.fresh.checks, freshPath.fresh.checks);
+  // Provenance MAY differ, and only there: the reused entries say so.
+  assert.ok(reusePath.stamp.runs.some((r) => r.reason === "reused"));
+  assert.ok(freshPath.stamp.runs.every((r) => r.ran === true));
+});
+
+test("REUSE of a completed RED — the same FAIL verdict as a fresh run, and the red gate is not re-spawned", () => {
+  const scripts = { ...REUSE_FIXTURE_SCRIPTS, typecheck: COUNTED("typecheck", ";process.exit(1)") };
+  const freshPath = withReuseFixture({ scripts }, (fx) => deliver(fx, { run: false }));
+  const reusePath = withReuseFixture({ scripts }, (fx) => deliver(fx, { run: true }));
+  assert.equal(freshPath.report.verdict, "FAIL");
+  assert.deepEqual(reusePath.report.verdict, "FAIL");
+  assert.deepEqual(reusePath.report.failing_gates, freshPath.report.failing_gates);
+  assert.deepEqual(reusePath.report.failing_gates, ["typecheck"]);
+  assert.ok(!reusePath.verifySpawned.includes("typecheck"));
+});
+
+test("REUSE D/E — a gate REGRESS skipped (style) and a VERIFY-only gate (e2e) are executed by verify", () => {
+  const scripts = { ...REUSE_FIXTURE_SCRIPTS, "test:e2e": COUNTED("test:e2e") };
+  withReuseFixture({ scripts }, (fx) => {
+    const d = deliver(fx);
+    // regress/head skipped lint (no style config touched) and never discovers test:e2e.
+    assert.ok(!spawned(fx, "head").includes("lint"));
+    assert.ok(!spawned(fx, "head").includes("test:e2e"));
+    assert.ok(d.verifySpawned.includes("lint"), "D: the skipped style gate runs at verify");
+    assert.ok(d.verifySpawned.includes("test:e2e"), "E: the verify-only gate runs");
+    assert.deepEqual(
+      d.report.gate_reuse.reused.map((r) => r.id),
+      ["typecheck", "build"]
+    );
+    assert.equal(d.report.verdict, "PASS");
+  });
+});
+
+test("REUSE F — the tree changed between regress and verify: nothing is reused, every gate runs", () => {
+  withReuseFixture({}, (fx) => {
+    const d = deliver(fx, {
+      editBetween: () => writeFileSync(join(fx.dir, "src", "index.js"), "export function add(a, b) { return b + a; }\n"),
+    });
+    assert.deepEqual(d.report.gate_reuse.reused, []);
+    assert.deepEqual(d.verifySpawned.sort(), ["build", "lint", "test", "typecheck"]);
+    assert.equal(d.report.verdict, "PASS");
+  });
+});
+
+test("REUSE H — no marker, a planted stamp (quick mode: no regress in the run), a rewritten stamp, a removed offer: all run, all done", () => {
+  // (1) A regress run OUTSIDE any delivery run publishes no offer; a run opened afterwards (as `--quick` does, where no
+  //     regress runs at all) finds a stamp under .pharn/ that nothing offered — the grill's B2 plant. Nothing is reused.
+  withReuseFixture({}, (fx) => {
+    runRegress(fx);
+    openDeliveryRun(fx.dir);
+    const from = counterLen(fx);
+    const v = runCli(fx.dir, fresh(), { env: fx.env });
+    assert.equal(v.code, 0, v.raw);
+    assert.deepEqual(readReport(fx.dir).gate_reuse.reused, []);
+    assert.deepEqual(spawned(fx, "verify", from).sort(), ["build", "lint", "test", "typecheck"]);
+  });
+  // (2) The stamp rewritten after the offer bound it (a write-tool edit of `.pharn/`): source-unbound, nothing reused.
+  withReuseFixture({}, (fx) => {
+    const d = deliver(fx, {
+      editBetween: () => {
+        const p = join(fx.dir, ".pharn/pharn-regress/head/stamp.json");
+        const s = JSON.parse(readFileSync(p, "utf8"));
+        writeFileSync(p, JSON.stringify(s)); // same content, other bytes
+      },
+    });
+    assert.deepEqual(d.report.gate_reuse.reused, []);
+    assert.equal(d.report.verdict, "PASS");
+  });
+  // (3) The offer removed: nothing is offered.
+  withReuseFixture({}, (fx) => {
+    const d = deliver(fx, {
+      editBetween: () => {
+        const gitDir = execFileSync("git", ["rev-parse", "--absolute-git-dir"], { cwd: fx.dir, encoding: "utf8" }).trim();
+        rmSync(join(gitDir, "pharn-regress-head-offer.json"));
+      },
+    });
+    assert.deepEqual(d.report.gate_reuse.reused, []);
+    assert.equal(d.report.verdict, "PASS");
+  });
+  // (4) A NEW run (the marker rewritten) never inherits the previous run's offer.
+  withReuseFixture({}, (fx) => {
+    const d = deliver(fx, { editBetween: () => openDeliveryRun(fx.dir, '{"schema":"pharn-loop-active/1","n":2}\n') });
+    assert.deepEqual(d.report.gate_reuse.reused, []);
+  });
+});
+
+test("REUSE resume — a budgeted verify that pauses and resumes records each reused entry exactly once", () => {
+  withReuseFixture({}, (fx) => {
+    openDeliveryRun(fx.dir);
+    runRegress(fx);
+    let r = runCli(fx.dir, fresh(["--budget-ms", "0"]), { env: fx.env });
+    let rounds = 0;
+    while (r.code === EXIT_CODE.continue && rounds < 20) {
+      r = runCli(fx.dir, ["--resume", "--budget-ms", "0"], { env: fx.env });
+      rounds++;
+    }
+    assert.equal(r.code, 0, r.raw);
+    assert.ok(rounds >= 2, `the run really paused (${rounds} resumes)`);
+    const stamp = JSON.parse(readFileSync(join(fx.dir, STAMP), "utf8"));
+    const ids = stamp.runs.map((x) => x.id);
+    assert.equal(new Set(ids).size, ids.length, "no double-counted entry");
+    assert.deepEqual(
+      stamp.runs.filter((x) => x.reason === "reused").map((x) => x.id),
+      ["typecheck", "build"]
+    );
+    assert.deepEqual(validateStamp(stamp, { stage: "verify", feature: FEATURE, side: null }), { ok: true });
+    assert.equal(readReport(fx.dir).verdict, "PASS");
+  });
+});
+
+test("★ WIRING (reuse, L45) — the COMMITTED pharn-regress.md and pharn-verify.md lines, run in one delivery run, reuse", () => {
+  const pinnedLine = (file, re) => {
+    const lines = readFileSync(file, "utf8")
+      .split(/\r?\n/)
+      .filter((l) => re.test(l));
+    assert.equal(lines.length, 1, `exactly one pinned fresh line in ${file}`);
+    return lines[0].replaceAll("<name>", FEATURE).trim();
+  };
+  const regressLine = pinnedLine(
+    REGRESS_COMMAND,
+    /^node pharn\/floor\/stage-regress\.mjs --feature <name> --timeout-ms \d+ --budget-ms \d+\s*$/
+  );
+  const verifyLine = pinnedLine(COMMAND, /^node pharn\/floor\/stage-verify\.mjs --feature <name> --timeout-ms \d+ --budget-ms \d+\s*$/);
+  withReuseFixture({}, (fx) => {
+    openDeliveryRun(fx.dir);
+    // The fixture has no lockfile and no origin; the committed line resolves its own base (a dirty tree -> HEAD) and
+    // its install question is answered with --no-install exactly as the command's question round-trip would.
+    const reg = spawnSync("sh", ["-c", `${regressLine} --no-install`], { cwd: fx.dir, encoding: "utf8", env: fx.env });
+    assert.equal(reg.status, 0, reg.stdout + reg.stderr);
+    const from = counterLen(fx);
+    const ver = checked(spawnSync("sh", ["-c", verifyLine], { cwd: fx.dir, encoding: "utf8", env: fx.env }));
+    assert.equal(ver.code, 0, ver.raw);
+    assert.deepEqual(
+      readReport(fx.dir).gate_reuse.reused.map((r) => r.id),
+      ["typecheck", "build"]
+    );
+    assert.ok(!spawned(fx, "verify", from).includes("typecheck"), "the committed lines reach the reuse path");
+  });
 });

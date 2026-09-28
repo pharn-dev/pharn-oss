@@ -58,6 +58,13 @@
 // additive `base_evidence` block (pharn/pharn-contracts/regression-report.md). The verdict itself is always the
 // checker's over the stamps on disk.
 //
+// ==================================== THE HEAD OFFER (6.34.0) ====================================
+// /pharn-verify may record a gate result from a completed HEAD execution of THIS delivery run instead of spawning the
+// gate again (gate-reuse-core.mjs). It does so only through the OFFER this stage keeps in the git dir
+// (head-reuse-offer.mjs): the fresh start DISCARDS it (with the scratch, before the HEAD side runs), and the drain-head
+// phase PUBLISHES one once the HEAD stamp is finalized, bound to the stamp's bytes and the open run marker. Nothing this
+// stage decides reads the offer, so a failure to publish is only a lost reuse — reported on stderr, never a refusal.
+//
 // ============================== NO ABSOLUTE PATH TO A CHILD OR A RENDER (GRILL G10) ==============================
 // Every path this script hands to a shelled checker, to git, or to `render-regression.mjs` is
 // REPO-RELATIVE. `/pharn-loop` commits `REGRESSION.md`, and a child's refusal text can quote whatever path
@@ -114,6 +121,7 @@ import { partitionScope, scopeFindings, normPath } from "./check-regress.mjs";
 import { FEATURE_SLUG_RE, SCHEMA as GATE_RUN_SCHEMA, actualForExpected } from "./gate-run-core.mjs";
 import { isExcluded, ALGO as FINGERPRINT_ALGO } from "./worktree-fingerprint.mjs";
 import { decideFromDisk, discardRetained, publishRecord } from "./regress-base-reuse.mjs";
+import { discardOffer, publishOffer } from "./head-reuse-offer.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHECK_PLAN_SPEC_AGREE = join(HERE, "check-plan-spec-agree.mjs");
@@ -365,6 +373,9 @@ function phaseFreshLate(cfg) {
   // init's own recreate of <out>.
   clearBaseWorktree();
   clearScratchKeepingBaseEvidence();
+  // 6.34.0 — no offer may name a HEAD stamp this run is about to replace. A failure is reported, never a crash: reuse
+  // is an optimisation, and a stale offer binds only a byte-identical stamp (head-reuse-offer.mjs).
+  if (!discardOffer().ok) console.error("stage-regress: note — the previous HEAD offer could not be removed from the git dir");
 
   if (!existsSync(`${FEATURES_DIR}/${cfg.feature}`)) {
     emitUnusable(cfg.feature, "no-feature", `no such feature directory: ${FEATURES_DIR}/${cfg.feature}`);
@@ -717,6 +728,11 @@ function runPhases(state, budget) {
     persistProgress(state);
     if (drain(state, budget, REGRESS_PATHS.head) === "budget") {
       emitContinue(state.feature, state.phase, ["--resume"]);
+    }
+    // THE HEAD OFFER (6.34.0): the HEAD stamp is final — offer it to this run's /pharn-verify (head-reuse-offer.mjs).
+    const offered = publishOffer(state.feature);
+    if (!offered.published && offered.why === "write-failed") {
+      console.error("stage-regress: note — the HEAD evidence could not be offered for reuse (the git dir was not writable)");
     }
     // BASE-evidence reuse (6.33.0): decided once the HEAD side is finalized, because the head stamp is what base-init
     // would copy its spec from. A kill before the next checkpoint resumes at drain-head, whose drain is then an
