@@ -1575,15 +1575,19 @@ framework-specific`), via the first-match-wins procedure in `pharn/ARCHITECTURE.
   only when the model reads it — frontmatter `reads:` loads nothing. So `/pharn-loop` and `/pharn-ship` each keep
   their entry-to-stop steps in their own file and two parts beside it: `pharn-<cmd>-quick.md` (the `--quick` deltas,
   read only for a `--quick` run, at entry) and `pharn-<cmd>-close.md` (the stop steps, the claims block and the Final
-  step, read once at the run's first stop). A part is a `.claude/commands/pharn-*.md` file — `pharn/ARCHITECTURE.md
-§4` keeps stages in commands, and `pharn-cli` copies every top-level `pharn-*.md` there — recognized ONLY by its
-  frontmatter (`part_of:` + `part:`), hidden from both invocation paths (`disable-model-invocation: true`,
-  `user-invocable: false`), framed by a title line and an `<!-- end of … -->` line, and loaded by ONE pointer in its
-  command that names its path, its loading condition, its trusted status and its not-loaded rule (stop; never run it
-  from memory). The command FAMILY (file + parts) is the unit of change; its claims block may sit in the close part,
-  and the budget's claims rule counts one block per family. `.dev/floor/command-family.mjs` splices a family back
-  into one text for the tests (never imported by shipped code), and `.dev/floor/command-family.test.mjs` pins where
-  each line lives. FLOOR: the text and the file names; ADVISORY: that a run reads a part at its point, or at all.
+  step, read once — the loop's at its first stop, ship's with step 7's return marker after the first verify or at an
+  earlier STOP). A part is a `.claude/commands/pharn-*.md` file — `pharn/ARCHITECTURE.md §4` keeps stages in commands,
+  and `pharn-cli` copies every top-level `pharn-*.md` there that is not `pharn-dev-*` — recognized ONLY by its
+  frontmatter (`part_of:` + `part:`), marked to be hidden from both invocation paths (`disable-model-invocation:
+true`, `user-invocable: false` — documented keys; the one live probe was inconclusive), framed by a title line and an
+  `<!-- end of … -->` line, and loaded by ONE pointer in its command that names its path, its loading condition, its
+  trusted status, the compaction re-read and its not-loaded rule (stop; never run it from memory). The command FAMILY
+  (file + parts) is the unit of change; its claims block may sit in the close part, and the budget's claims rule
+  counts one block per family. `.dev/floor/command-family.mjs` splices a family back into one text for the tests (no
+  shipped file imports it), and `.dev/floor/command-family.test.mjs` pins which step headings each file holds, that no
+  fenced line, heading or long paragraph sits in two files of a command, each pointer's load-condition and not-loaded
+  sentences, and that no other command text names a part — NOT the file of a body line under an unchanged heading.
+  FLOOR: the text and the file names; ADVISORY: that a run reads a part at its point, or at all.
 - **Three doc regions are GENERATED — never hand-edit them.** (1) `docs/capabilities/**`, (2) the root
   `README.md` `## Current state` inventory between its `<!-- CURRENT-STATE:BEGIN -->` /
   `<!-- CURRENT-STATE:END -->` markers (the marker lines are themselves inside the guarded region, so

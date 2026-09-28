@@ -4104,20 +4104,20 @@ test("✧ STAGE_AGENT_WIRING (10) — every --mode stage-agent line of pharn-loo
 
 // 6.32.0 (orchestrator-context): the budget is per FILE on disk, a command's PARTS included — a part is inserted into
 // the run when its command reads it, so its bytes are budgeted like a command's. pharn-loop.md and pharn-ship.md were
-// re-measured after their quick and stop text moved into parts (79,903 → 42,536 and 69,421 → 35,301 bytes); their
+// re-measured after their quick and stop text moved into parts (79,903 → 43,036 and 69,421 → 35,982 bytes, after the GATE-2 review fixes); their
 // rows went DOWN, and each part's row is its own measure + 10%, rounded up to 512.
 const COMMAND_BYTE_CEILINGS = Object.freeze({
   "pharn-build.md": 22016,
   "pharn-grill.md": 23040,
-  "pharn-loop.md": 47104,
-  "pharn-loop-close.md": 33792,
-  "pharn-loop-quick.md": 12800,
+  "pharn-loop.md": 47616,
+  "pharn-loop-close.md": 34816,
+  "pharn-loop-quick.md": 12288,
   "pharn-memory-promote.md": 27648,
   "pharn-plan.md": 24064,
   "pharn-regress.md": 20480,
   "pharn-review.md": 24064,
-  "pharn-ship.md": 38912,
-  "pharn-ship-close.md": 30720,
+  "pharn-ship.md": 39936,
+  "pharn-ship-close.md": 31232,
   "pharn-ship-quick.md": 12800,
   "pharn-spec.md": 27136,
   "pharn-test.md": 20480,

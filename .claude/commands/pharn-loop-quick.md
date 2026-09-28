@@ -154,10 +154,4 @@ Steps 3–5 say):
 | the scope check (item 5)              | exit 1 (escaped), or any other non-zero exit                | **S9**  |
 | `check-loop-fresh.mjs`                | RERUN `regress`                                             | **S11** |
 
-**A full run that meets `STOP_GREEN_QUICK`** — its SPEC reads quick although the run was invoked without `--quick`
-— **does not commit**: a full run's Step 6c commits only `STOP_GREEN`, and `check-loop-record.mjs` and
-`check-loop-decision.mjs` (`MODE_MISMATCH`) both RED its record, because Step 6b records the invocation's mode and
-never "repairs" it. The residual rests on that: a record rewritten to `mode: quick` would turn both GREEN, and only
-Step 6c's advisory reading of "a green stop" would stand between the run and a commit.
-
 <!-- end of pharn-loop-quick -->

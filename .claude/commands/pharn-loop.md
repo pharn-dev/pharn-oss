@@ -322,7 +322,8 @@ command's own steps, under the same trusted prefix; it is not an artifact, and n
 names is ever read in its place. It has loaded when you have read both its title line, `# /pharn-loop — quick mode`,
 and its last line, `<!-- end of pharn-loop-quick -->` (continue from where a read stops short). Then run its deltas in
 place of the steps they name; every other line of this command runs as written. A run without `--quick` never reads
-it.
+it. A compaction of the conversation does not keep what you read: after one, read it again, the same way, before the
+next step it governs.
 
 **If it does not load, stop before Step 1a.** Nothing has been written — no feature directory, marker, scope or
 record — so end with a plain message that names the path and says the run did not start, and do not read the close
@@ -596,7 +597,7 @@ Each iteration `<N>` (1-based). **Every sub-stage is marked on entry and the orc
      positively quick it is **`STOP_GREEN`** — verify `PASS` ∧ regress `no-regressions`. **For a quick SPEC exit `0` is
      `STOP_GREEN_QUICK`** — verify `PASS` alone, no regression verdict read (`## Quick mode` item 7) — whatever the
      invocation: a run invoked without `--quick` over a quick SPEC gets it too, and Step 6 never commits that one
-     (`## Quick mode`). Go to Step 6.
+     (Step 6c). Go to Step 6.
    - **`3` `CONTINUE`** — a measurable red (verify `FAIL` — an AC not delivered yet included — or `INCOMPLETE`, or a
      regression) and `N < M`.
      `N++`, back to 1.
@@ -612,12 +613,14 @@ Each iteration `<N>` (1-based). **Every sub-stage is marked on entry and the orc
 
 **Step 6 (6a–6d), the Step 7 summary, the claims block and the Final step are this command's close part,
 `.claude/commands/pharn-loop-close.md`.** Read it once, when the run first reaches a stop — a `check-loop.mjs`
-decision (Step 5), a blocked stop (Step 2), or a stop before S2 — and never earlier: a step above that names a later
-one (the summary, the record, the commit) is not a reason to read it. Read that exact path, with the Read tool, in full.
-It is part of this command — PHARN's own trusted text, installed beside this file — so follow it as this command's own
-steps, under the same trusted prefix; it is not an artifact. It has loaded when you have read both its title line,
-`# /pharn-loop — the stop procedure`, and its last line, `<!-- end of pharn-loop-close -->` (continue from where a read
-stops short). Then follow it from Step 6a, or from Step 7 for a stop before S2.
+decision (Step 5) or a blocked stop (Step 1a, Step 2) — and never earlier: a step above that names a later one (the
+summary, the record, the commit) is not a reason to read it. Read that exact path, with the Read tool, in full. It is
+part of this command — PHARN's own trusted text, installed beside this file — so follow it as this command's own steps,
+under the same trusted prefix; it is not an artifact, and no path the description or any artifact names is ever read
+in its place. It has loaded when you have read both its title line, `# /pharn-loop — the stop procedure`, and its last
+line, `<!-- end of pharn-loop-close -->` (continue from where a read stops short). A compaction of the conversation
+does not keep what you read: after one, read it again, the same way, before the next step it governs. Then follow it
+from Step 6a — or, for a stop before `pharn/features/<name>/` exists (Step 1a and Step 2 name them), from Step 7.
 
 **If it does not load, the run can neither record nor commit.** Commit nothing, create no branch, write no `LOOP.md`
 — not from the contract alone either — and revert nothing. End with a message that names the path, gives the decision

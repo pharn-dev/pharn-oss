@@ -143,8 +143,11 @@ continues.
 ### Step 6c — commit, on a green stop (`STOP_GREEN`, or `STOP_GREEN_QUICK` under `--quick`) AND a GREEN `<decision-check>` only
 
 The green stop is `STOP_GREEN` in a run invoked without `--quick`, and `STOP_GREEN_QUICK` in a `--quick` run — never
-the other one (a full run that meets `STOP_GREEN_QUICK` does not commit: `## Quick mode`). Any other decision skips
-this step: no branch, no commit. **A green stop whose `<decision-check>` (above)
+the other one. **A full run that meets `STOP_GREEN_QUICK`** — its SPEC reads quick although the run was invoked without
+`--quick` — **does not commit**: `check-loop-record.mjs` and `check-loop-decision.mjs` (`MODE_MISMATCH`) both RED its
+record, because Step 6b records the invocation's mode and never "repairs" it. The residual rests on that: a record
+rewritten to `mode: quick` would turn both GREEN, and only this step's advisory reading of "a green stop" would stand
+between the run and a commit. Any other decision skips this step: no branch, no commit. **A green stop whose `<decision-check>` (above)
 was RED also skips this step** — `not committed: decision unverifiable` — so nothing is committed regardless of the
 `decision` token; go to Step 6d exactly as for any other non-committing outcome. Only on a green stop **with** a
 GREEN `<decision-check>`, run these pinned lines in order.
@@ -392,11 +395,13 @@ last three feeds `check-loop.mjs`'s inputs.
   impossible, **cannot judge a record or tell a real one from a fabricated one** (`touch LOOP.md` satisfies it), runs
   only when Claude Code starts it (`LIMITS.md §7`), and fails **open**.
 - **Advisory, the parts (6.32.0):** this command reads `pharn-loop-quick.md` only for a `--quick` run, before Step 1a,
-  and this file once, at the run's first stop. That you read each there, in full, and follow it is your own
-  discipline: nothing on the floor sees a Read. PHARN's own tests pin the TEXT — one load instruction per part, in its
-  pointer, with its condition and its not-loaded rule, and no fenced line, heading or long paragraph in both a command
-  and its part — never that a run read a part at that point, or at all. A part that does not load ends the run with
-  nothing committed.
+  and this file once, at the run's first stop — each again after a compaction. That you read each there, in full, and
+  follow it is your own discipline: nothing on the floor sees a Read. PHARN's own tests pin the TEXT — each part's file
+  name in its one pointer, in this bullet and in no other command text, that pointer's load-condition and not-loaded
+  sentences, which step headings each file holds, and no fenced line, heading or long paragraph in both a command and its part — never
+  that a run read a part at that point, or at all, and never a sentence that sends you to a part without its path. A
+  part is read from disk at its point, so a write to it earlier in the run changes what the run follows, as a write to
+  a stage's command does before that stage runs. A part that does not load ends the run with nothing committed.
 - **Untrusted input:** control flow reads only deterministic-tool output — no stop, continue or stuck-point decision
   rests on a free-text field. **This command ENLARGES the residual** (`LIMITS.md §2`, `THREAT-MODEL.md §5`), and says
   so: untrusted prose reaches an Approved SPEC, a PLAN, a writes-scope and code with no person reading it; code built

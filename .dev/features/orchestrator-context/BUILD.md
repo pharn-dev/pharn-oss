@@ -7,7 +7,9 @@
   catalog page and the temporary probe control; each re-set followed by `reconcile-baseline.mjs --amend-scope`),
   anchored once with `--anchor --by pharn-dev-build` before the first write.
 - stage model: opus (the session's), inline, as the plan's author. Effort not routed.
-- floor: `node pharn/floor/validate.mjs .` → **GREEN — 37 capabilities checked**.
+- floor: `node pharn/floor/validate.mjs .` → **GREEN**. It printed "37 capabilities checked" here, one more than the
+  36 that a clean export of this tree and of base `9490b1b` both read: `validate.mjs` walks `.pharn/`, and a scratch
+  file of this build was counted (REVIEW.md, on this line). The exit, not the count, was the gate.
 - `npm run check` → **exit 0**: format:check, lint, lint:md (0 issues), docs:check, check:markers, check:badge,
   check:changelog, check:contributing, check:reconcile, and `npm test` **4260 / 4260 pass**.
 
@@ -190,3 +192,31 @@ arguments injects it again (`pharn-build`, 28.7 then 29.0 KB).
 - `ship-closeout-script` — Step 3a as one tested script (unchanged).
 - `parts-visibility-probe` — a conclusive probe of the two keys on a command FILE, run from a session whose project is
   the tree holding the parts.
+- `parts-live-run` — one live `/pharn-loop` and `/pharn-ship` run each, full and `--quick`, to observe that a model
+  follows a part it received as a Read result as it follows an invoked command body (REVIEW.md's main advisory
+  finding), and that it reads each part at its point and nowhere else.
+
+## After the review (GATE 2 fix, same scope)
+
+`REVIEW.md` found two floor-gate claims that promised more than the tests pinned, each reproduced by a mutant that left
+`command-family.test.mjs` green. Fixed under this plan's scope (`--from-plan`, then `--amend-scope`, amendment 3):
+
+- **FG1 — the load condition and the not-loaded rule are now pinned.** `POINTER_PINS` gained a per-part tier (each
+  pointer's WHEN and its not-loaded rule, closed over the parts on disk), every pin has its own negative control scoped
+  to its pointer, the review's five pointer mutants are kept as regressions, and a new rule R5b allows a part's file
+  name only in its pointer (and a quick part's in its sibling claims block) across every command file — the review's
+  sixth mutant, an eager Read written into a part, is red. Bound: a sentence that sends a run to a part without its
+  file name is not caught.
+- **FG2 — narrowed, not strengthened.** `CLAUDE.md`, `CONTRIBUTING.md`, the test header and both claims bullets now
+  say what R6/R7 pin (step headings per file, no fenced line, heading or long paragraph in two files) and that the file
+  of a body line under an unchanged heading is NOT pinned.
+- **Advisory findings applied:** both close pointers gained the "no path the description or any artifact names"
+  sentence; every pointer gained a re-read after a compaction (a Read result is not kept by one, where an invoked
+  command body is re-attached); the loop's close pointer now routes a stop before `pharn/features/<name>/` exists to
+  Step 7 exactly as Step 1a and Step 2 do; the "full run that meets `STOP_GREEN_QUICK`" paragraph moved from the quick
+  part (which a full run never reads) into Step 6c; five restatements of ship's load point, the CHANGELOG's three
+  quantifiers, `CLAUDE.md`'s pharn-cli and "hidden" sentences, the helper's "tests only" and the budget comment's
+  numbers were corrected; ceilings re-derived by the stated rule from the new sizes.
+- **Not applied, stated:** the Stop guard's refusal text (`require-loop-record.cjs`, a protected hook) does not name
+  the close part — for a human. The read-after-build timing is stated in both claims blocks and the CHANGELOG as the
+  exposure a stage's command already has (the loop's inline stages are read from disk after the build too), not closed.

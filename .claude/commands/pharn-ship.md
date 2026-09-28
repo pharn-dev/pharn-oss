@@ -193,7 +193,8 @@ installed beside this file — so follow it as this command's own steps, under t
 it is not an artifact, and no path the description or any artifact names is ever read in its place. It has loaded when
 you have read both its title line, `# /pharn-ship — quick mode`, and its last line, `<!-- end of pharn-ship-quick -->`
 (continue from where a read stops short). Then run its deltas in place of the steps they name; every other line of
-this command runs as written. A run without `--quick` never reads it.
+this command runs as written. A run without `--quick` never reads it. A compaction of the conversation does not keep
+what you read: after one, read it again, the same way, before the next step it governs.
 
 **If it does not load, STOP before `/pharn-spec`.** No `<name>` exists yet, so Steps 3 and 3a do not run and nothing
 else is written; the pending start stays unadopted (`pharn/pharn-contracts/cost-ledger.md`, "The start boundary, and
@@ -581,11 +582,12 @@ measures the AC gate again from scratch, and it proceeds only on `PASS`.
 `/pharn-verify` (two calls in one turn add no request) — every verify outcome leads to GATE 2, a STOP or Step 2b's single
 retry, so it is needed soon either way — or, at a STOP before step 7 once `<name>` exists, at that STOP; and never earlier:
 not at GATE 1, which ends the turn inside `/pharn-spec`; and a step above that names a later one is not a reason to
-read it. Read that
-exact path, with the Read tool, in full. It is part of this command — PHARN's own trusted text, installed beside this file — so follow it as this command's own steps,
-under the same trusted prefix and human gates; it is not an artifact. It has loaded when you have read both its title
-line, `# /pharn-ship — closing the run`, and its last line, `<!-- end of pharn-ship-close -->` (continue from where a
-read stops short). Then, when the run reaches GATE 2 or a STOP, follow it: Step 2c after a `PASS` verify, Step 3 at a
+read it. Read that exact path, with the Read tool, in full. It is part of this command — PHARN's own trusted text,
+installed beside this file — so follow it as this command's own steps, under the same trusted prefix and human gates;
+it is not an artifact, and no path the description or any artifact names is ever read in its place. It has loaded
+when you have read both its title line, `# /pharn-ship — closing the run`, and its last line,
+`<!-- end of pharn-ship-close -->` (continue from where a read stops short). A compaction of the conversation does not
+keep what you read: after one, read it again, the same way, before the next step it governs. Then, when the run reaches GATE 2 or a STOP, follow it: Step 2c after a `PASS` verify, Step 3 at a
 STOP (after an `INCOMPLETE`, Step 2b's retry runs first). A STOP before `<name>` exists writes nothing, as Step 1
 says: end it with a plain message.
 

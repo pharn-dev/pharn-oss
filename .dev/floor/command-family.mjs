@@ -2,12 +2,15 @@
 //
 // WHAT A PART IS. `/pharn-loop` and `/pharn-ship` keep the text a run needs only at one point in its own file under
 // `.claude/commands/`: `pharn-<cmd>-quick.md` (read only for a `--quick` run, at entry) and `pharn-<cmd>-close.md`
-// (read once, at the run's first stop). A part is recognized ONLY by its frontmatter — `part_of: <parent file stem>`
+// (read once: the loop's at its first stop, ship's with step 7's return marker after the first verify or at an earlier
+// STOP). A part is recognized ONLY by its frontmatter — `part_of: <parent file stem>`
 // and `part: quick | close` — never by its name (L6: a structural fact is read from its structured location), and that
 // frontmatter is the ONE record of which parts a command has (L35): this module, the tests and the capability catalog
 // all discover parts here, and no second list exists.
 //
-// WHAT THIS MODULE IS FOR. Tests only. Every pin that asked "does /pharn-loop carry this line, in this order?" read one
+// WHAT THIS MODULE IS FOR. Dev apparatus only: the tests, and `capability-catalog-core.mjs` (docs:generate /
+// docs:check), which reads `frontmatterFields()` to leave parts out of the command catalog — both under `.dev/`, which
+// no install receives. Every pin that asked "does /pharn-loop carry this line, in this order?" read one
 // file; after the move the answer spans three. `commandFamilyText()` splices each part back where its text sat before
 // the move — a quick part at the end of the parent's `## Quick mode` section, a close part at the end of the parent —
 // so those pins keep their meaning, and `.dev/floor/command-family.test.mjs` adds the rules that say WHERE each line
