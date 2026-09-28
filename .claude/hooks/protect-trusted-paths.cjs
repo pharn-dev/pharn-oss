@@ -781,16 +781,32 @@ const DENY_REASONS = {
     `BLOCKED by PHARN floor: ${shown} is (or resolves to) memory-bank CANON (CONSTITUTION P2 / fix #2; THREAT-MODEL.md §2 #3 — memory poisoning is silent, cumulative, and has no rollback signal). Canon is written only through the gated promotion path. FIX (pick one): • run /pharn-memory-promote (or /pharn-dev-memory-promote), which after its human accept/deny gate sets a writes-scope whose ORIGIN authorizes exactly this one canon file; • or have a human edit canon by hand, outside the agent loop. Re-scoping a build from a PLAN's \`## Files\` CANNOT authorize this write — that is the specific thing this guard refuses, deliberately.`,
 };
 
+function denyMalformedHookInput(detail) {
+  const reason =
+    "BLOCKED by PHARN floor: hook input is not a usable PreToolUse JSON object" +
+    (detail ? ` (${detail})` : "") +
+    " — fail-closed; the write is denied.";
+  process.stdout.write(
+    JSON.stringify({
+      hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason },
+      decision: "block",
+      reason,
+    })
+  );
+  process.stderr.write(reason + "\n");
+  process.exit(2);
+}
+
 const raw = readStdin();
 let payload;
 try {
   payload = JSON.parse(raw || "{}");
 } catch {
-  payload = {};
+  denyMalformedHookInput("invalid JSON");
 }
-// JSON.parse("null") returns null and JSON.parse("42") a number — neither throws, and both then
-// dereference into an uncaught TypeError (exit 1, non-blocking, write proceeds).
-if (!payload || typeof payload !== "object" || Array.isArray(payload)) payload = {};
+// JSON.parse("null") returns null and JSON.parse("42") a number — neither throws; both must deny, not
+// normalize to {} (exit 0 on a write would fail OPEN).
+if (!payload || typeof payload !== "object" || Array.isArray(payload)) denyMalformedHookInput("not a plain object");
 
 const toolName = payload.tool_name || payload.toolName || "";
 const toolInput = payload.tool_input || payload.toolInput || {};

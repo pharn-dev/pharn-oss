@@ -560,3 +560,26 @@ test("✧ pinnedLine() executes the WHOLE line — an appended `|| true` would b
     "a suffix on the same line changes the exit — which is why the whole line is executed"
   );
 });
+
+test("★ L6: projectRoot() follows CLAUDE_PROJECT_DIR when cwd is a subdirectory", async () => {
+  const root = tmp();
+  mkdirSync(join(root, ".git"), { recursive: true });
+  writeFileSync(join(root, ".git", "HEAD"), "ref: refs/heads/main\n");
+  const sub = join(root, "pkg");
+  mkdirSync(sub, { recursive: true });
+  const prior = process.cwd();
+  const envDir = process.env.CLAUDE_PROJECT_DIR;
+  try {
+    process.chdir(sub);
+    process.env.CLAUDE_PROJECT_DIR = root;
+    const { projectRoot } = await import(`./run-marker.mjs?subroot=${Date.now()}`);
+    assert.equal(projectRoot(), root);
+    const opened = openRun({ root: projectRoot(), command: "pharn-ship", name: "sub-run" });
+    assert.equal(opened.ok, true);
+    assert.ok(existsSync(markerPath(root, "pharn-ship", "sub-run")));
+  } finally {
+    process.chdir(prior);
+    if (envDir === undefined) delete process.env.CLAUDE_PROJECT_DIR;
+    else process.env.CLAUDE_PROJECT_DIR = envDir;
+  }
+});
