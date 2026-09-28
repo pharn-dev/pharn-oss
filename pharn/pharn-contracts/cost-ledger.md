@@ -105,6 +105,34 @@ tagged `pharn-loop`**, with no sub-stage named anywhere. The field is therefore 
     "context": "agent:<the agent id that printed the run's markers>",
     "contexts": ["agent:<that id>", "agent:<an agent it spawned during the run>"],
   },
+  "executions": {
+    "method": "stage-start-to-return/1",
+    "status": "derived",
+    "reason": null,
+    "rows": [
+      {
+        "stage": "pharn-regress",
+        "iteration": 1,
+        "run": 1,
+        "start_seq": 7,
+        "end_seq": 8,
+        "elapsed_ms": 412345,
+        "unmeasured": null,
+        "work": [0],
+      },
+    ],
+  },
+  "work": [
+    {
+      "schema": "pharn-stage-work/1",
+      "stage": "pharn-regress",
+      "ts": "…",
+      "session_id": "…",
+      "head": { "required": 4, "executed": 3, "reused": 0, "no_files": 1 },
+      "base": { "evidence": "fresh", "miss": "no-record", "required": 4, "executed": 3, "reused": 0, "no_files": 1 },
+      "install": { "exit": 0, "timed_out": false, "ms": 41234 },
+    },
+  ],
 }
 ```
 
@@ -152,6 +180,8 @@ satisfied by a variant spelling of any member; closure is what makes a variant f
 | `membership.context` / `contexts`                                   | a measured ledger: a context key and a sorted, duplicate-free, non-empty list of context keys that includes it; otherwise both `null`                                                           | FLOOR (shape + set membership); the VALUE **ADVISORY** without `--verify-transcript` |
 | every `requests[]` row                                              | a MEMBER of that recomputed window, and (`run-window/2`) its context one of `contexts`                                                                                                          | FLOOR (ordering test + set membership)                                               |
 | `membership.excluded_requests`                                      | an integer (known window) or `null` (unknown) — its VALUE                                                                                                                                       | **ADVISORY** without `--verify-transcript`; with it, a RANGE (rule 6)                |
+| `executions`                                                        | (6.35.0) `{method, status, reason, rows}`, equal to `buildExecutions` recomputed from `markers[]` and `work[]`                                                                                  | FLOOR (recompute + equality, rule 9); what an interval MEANS **ADVISORY**            |
+| `work[]`                                                            | (6.35.0) `pharn-stage-work/1` records: closed keys, enums, `executed + reused + no_files = required`; each a MEMBER of the recomputed window                                                    | FLOOR (enum + integer compare, rule 9); that the record is true **ADVISORY**         |
 
 **One row per request, and which of its transcript lines each value comes from (6.24.1).** `dedup_key` names
 the grouping. The platform writes one API request to the transcript as several lines, sometimes in more than one
@@ -844,10 +874,92 @@ every aggregate is recomputable from its own rows.
   of that conjunction is load-bearing, because `markers[]` is copied from a file a different process
   wrote at wall-clock time.
 
+## Stage executions and deterministic work (6.35.0)
+
+Two keys answer, for one run, **where the observed wall-clock time went** and **which deterministic gate work ran
+or was avoided by reuse** — beside the model usage above, never folded into it. They are appended after
+`membership` on every `/2` ledger the emitter writes since 6.35.0, the `unavailable` and context-unknown shells
+included: timing needs only markers, so a run whose transcript is gone still has its intervals. **No schema bump:**
+the change is additive and no existing field changes meaning. The checker admits, for `/2`, EXACTLY the current key
+set or the pre-6.35.0 set with neither key (`TOP_LEVEL_KEYS_PRE_WORK`); one key without the other is RED. A `/1`
+ledger has neither.
+
+### `executions` — a VIEW over `markers[]` (method `stage-start-to-return/1`)
+
+No new marker, no new marker field, and no change to the line `mark-phase.mjs` prints (that line binds the run to
+its context; this view reads no transcript). The one implementation is `pharn/floor/stage-executions-core.mjs`,
+whose header holds the rule; in short, over the CURRENT run's markers (`currentRunMarkers`):
+
+- every `stage-start` is ONE row `{stage, iteration, run, start_seq, end_seq, elapsed_ms, unmeasured, work}`;
+  `run` numbers rows sharing `(stage, iteration)` in `seq` order, so a freshness re-run or a re-plan is `run 2`,
+  never merged into run 1;
+- its end is the NEXT marker, and only when that marker is an `orchestrator` return. Otherwise the row is
+  UNMEASURED with a closed reason — `no-end-marker`, `no-return-marker`, `session-changed` (two different non-null
+  sessions; a null binds any, as in attribution), `bad-timestamp`, `clock-went-back`, `foreign-work-inside` — and
+  `elapsed_ms: null`. **The next stage-start or a `run-stop` is never used as an end.** So a stage that STOPs a
+  `/pharn-ship` run (its next marker is `run-stop`) is `no-return-marker`; its work record, written before the stop,
+  still shows what it ran;
+- **one bound the markers cannot close, stated:** when a stage's return AND the next stage's start are both skipped,
+  the next marker is the LATER stage's return, and the markers alone cannot tell. A work record of another stage
+  inside the interval is the one evidence that can, and makes the row `foreign-work-inside`; a double skip around
+  stages that write no work record reads as one long execution;
+- **`elapsed_ms: null` means not measured; `0` means measured equal.** Unknown is never zero, in the file or in any
+  rendering;
+- when the markers do not describe one run (`runWindow(markers, null)` is unknown) the view is
+  `status: "unknown"` with that reason and no rows. A CONTEXT-unknown ledger keeps its rows.
+- A stage a run skipped (`pharn-regress` under `--quick`, `pharn-spec` in `/pharn-ship`, which marks no spec
+  stage-start because the spec IS GATE 1) has no row: nothing is represented as executed.
+
+**What an interval MEANS is ADVISORY, and the label travels with it.** It is OBSERVED WALL-CLOCK time between two
+`toISOString()` reads by two short-lived processes — not CPU time, not model time, not tool time, not monotonic (a
+clock step moves it) — and it includes orchestration, subprocesses, waiting and any human answer given inside the
+stage. **Nothing decomposes it**: stage elapsed minus anything is not model time, and no such number is written.
+
+### `work[]` — FACTS a stage script records at `done` (`pharn-stage-work/1`)
+
+Whether a regress execution reused its BASE evidence and how many VERIFY results were reused is recorded in the two
+reports — which every iteration OVERWRITES — and the gate-run stamps are cleared at every fresh start. So
+`/pharn-regress` and `/pharn-verify` (`stage-regress.mjs`, `stage-verify.mjs`) each append ONE line at their `done`
+exit to `<.pharn/cost>/<feature>/work.jsonl`, beside `markers.jsonl`, counted by `pharn/floor/stage-work.mjs` (the
+record's one owner, whose header is its spec) from the stamp the verdict just used:
+
+- `required` = the stamp's entries; `executed` = `ran: true` (a process ran); `reused` = `reason: "reused"` (a
+  VERIFY result from the REGRESS/HEAD execution, 6.34.0); `no_files` = nothing to run. Invariant, checked:
+  `executed + reused + no_files = required`.
+- regress: `head`; `base` with `evidence` `fresh` | `reused` (6.33.0) and the decision's closed `miss` code. A BASE
+  HIT has `executed: 0` and `reused = required − no_files`, even though the reused stamp's own entries record `ran`
+  as true: they ran in an EARLIER execution. Those two counts follow from `evidence` and are stored anyway, so every
+  side carries the same four counts and one invariant. `install` is `null` (none ran) or `{exit, timed_out, ms}`.
+  **Worktree creation and install skipping are not stored at all**: both happen iff `evidence` is `fresh`, and are
+  read from it.
+- verify: `gates` (`reconcile` included).
+- `install.ms` is the ONE new timer: `performance.now()` around the install process, integer milliseconds, carried
+  through a budget `continue` by the progress record. No gate process is timed.
+
+The emitter copies a record into `work[]` only when it passes `validateWork` and is a MEMBER of the run window
+(`isMember`, the test every request row passes). A line that fails is not a row: `work.jsonl[<n>]` joins `dropped[]`
+— `n` is its line index in the whole file, across every run the file has seen, not an index into `work[]` — and no
+value of it is copied. A path that is not a regular file (a link, a FIFO) is never read through and is listed as
+`work.jsonl`. A `--verify-transcript` re-derivation reads no live work file. `executions.rows[].work` lists the
+`work[]` indices attached to each execution: the record's
+own stage, found by the latest-marker-at-or-before rule `attribute()` applies to requests (a ✧ parity test pins the
+two). A record attached to no execution is shown, never merged.
+
+**Bounds, each stated.** Only a `done` exit writes a record: gates a stage ran before refusing, crashing or being
+killed are NOT recorded (`work-on-non-done-exit`). The file is never pruned: one line per execution, standalone runs
+included, in disposable `.pharn/` scratch. The append is best-effort and OBSERVATIONAL — it refuses a symlinked or
+non-directory component, opens with `O_NOFOLLOW | O_NONBLOCK` (a planted FIFO is refused, never blocked on), never
+throws, and a failure is one stderr note;
+nothing reads a record to decide a verdict, an exit, a reuse, a route or a commit. `work.jsonl` is `.pharn/` state a
+Bash write reaches (LIMITS.md §6): the checker certifies agreement between the file's facts and its view, never that
+the records or markers are true (L43). `--verify-transcript` does not compare either key: neither is
+transcript-derived. No per-gate duration is measured (`gate-process-duration`).
+
 ## Size, disclosed rather than discovered
 
-**The layout (since 6.14.1).** The file is pretty-printed at a 2-space indent, except the two FACT arrays,
-`markers[]` and `requests[]`. Each of their elements is written as one JSON value on one `\n`-delimited line.
+**The layout (since 6.14.1).** The file is pretty-printed at a 2-space indent, except the FACT arrays,
+`markers[]`, `requests[]` and (6.35.0) `work[]`, and the `executions.rows` view. Each of their elements is written as
+one JSON value on one `\n`-delimited line.
 An empty fact array is `[]`. The derived views stay pretty-printed, because they are what a person reads to
 learn the cost. `JSON.parse` of the file is exactly what it was under the old layout, key order included.
 `render-cost-ledger.mjs`'s `serializeLedger` is the one implementation, and both CLI output paths use it.

@@ -87,6 +87,7 @@ import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { recordWork, verifyWork } from "./stage-work.mjs";
 import { doneExit, refusedExit, unusableExit, continueExit, questionExit, EXIT_CODE } from "./stage-exit-core.mjs";
 import {
   VERIFY_PATHS,
@@ -415,6 +416,20 @@ function runPhases(state, budget) {
   writeIntoFeature(state.feature, reportPath, JSON.stringify(composed.report, null, 2) + "\n");
   writeIntoFeature(state.feature, renderPath, renderDone(composed.report));
   removeIfPresent(VERIFY_PATHS.stageJson);
+  // The cost ledger's deterministic-work record (6.35.0, stage-work.mjs): how many gate results this execution needed,
+  // ran, and took from the REGRESS/HEAD execution — counted from the stamp bytes the verdict just read (the reuse
+  // block's own binding). Best-effort and observational: a failure is a stderr note, and the exit below is unchanged.
+  let stampForWork;
+  try {
+    stampForWork = stampText === null ? null : JSON.parse(stampText);
+  } catch {
+    stampForWork = null;
+  }
+  recordWork(
+    state.feature,
+    verifyWork({ stamp: stampForWork, ts: new Date().toISOString(), sessionId: process.env.CLAUDE_CODE_SESSION_ID ?? null }),
+    (m) => console.error(`stage-verify: ${m}`)
+  );
   emit(doneExit({ stage: "verify", feature: state.feature, verdict: composed.report.verdict, report: reportPath, render: renderPath }));
 }
 

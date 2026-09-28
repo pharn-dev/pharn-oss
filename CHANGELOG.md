@@ -23,6 +23,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.35.0] - 2026-09-28
+
+### Added
+
+- 2026-09-28: **One `/pharn-loop` or `/pharn-ship` run's `cost.json` now shows, beside its unchanged model usage, the
+  observed wall-clock interval of every stage execution and the deterministic gate work each `/pharn-regress` and
+  `/pharn-verify` execution ran or took from reused evidence** — two additive keys, `executions` and `work`
+  ([`pharn/floor/stage-executions-core.mjs`](./pharn/floor/stage-executions-core.mjs),
+  [`pharn/floor/stage-work.mjs`](./pharn/floor/stage-work.mjs),
+  [`pharn/floor/render-cost-ledger.mjs`](./pharn/floor/render-cost-ledger.mjs),
+  [`pharn/floor/check-cost-ledger.mjs`](./pharn/floor/check-cost-ledger.mjs),
+  [`pharn/floor/render-run-report.mjs`](./pharn/floor/render-run-report.mjs); contract
+  [`cost-ledger.md`](./pharn/pharn-contracts/cost-ledger.md), "Stage executions and deterministic work").
+  `SKILLS_VERSION` 6.34.0 → 6.35.0 (minor: a newly shipped floor capability), with the README badge. `MIN_CLI` stays
+  0.5.0: no installed path moves. **No schema bump:** `pharn-cost-ledger/2` gains two keys and no existing field
+  changes meaning; the checker admits exactly the current key set or the pre-6.35.0 one, so older ledgers stay GREEN.
+  - **The trigger.** The maintainer's explicit direction ("PR 4: Run Performance Breakdown"), after 6.33.0 (BASE
+    evidence reuse) and 6.34.0 (HEAD → VERIFY gate reuse): both reports that say what was reused are overwritten every
+    iteration, so for every iteration but the last the savings were invisible after the run.
+  - **`executions` is a VIEW, derived with no new instrumentation** (method `stage-start-to-return/1`): every
+    `stage-start` marker of the current run is one row, ended only by the NEXT marker when that is the orchestrator's
+    return. A re-run is `run 2`, never merged; any other pairing is unmeasured with a closed reason and
+    `elapsed_ms: null` — never 0, and never the next stage-start or run-stop used as an end (a return AND a start both
+    skipped around a stage that writes no work record is the one case the markers cannot tell, and the contract says
+    so). Labelled wherever it appears as observed wall clock between two
+    processes' timestamps: not CPU, model or tool time, not monotonic. `mark-phase.mjs` and its printed binding line
+    are unchanged, and so is every request's stage attribution (a ✧ test pins both).
+  - **`work[]` is FACTS captured at the moment** (`pharn-stage-work/1`): at its `done` exit each regress/verify
+    execution appends one line to `.pharn/cost/<feature>/work.jsonl`, counted from the gate-run stamp its verdict just
+    used — processes executed, results reused, nothing-to-run, required; regress adds whether BASE evidence was
+    `fresh` or `reused` (the worktree and install follow from it and are not stored twice) and the install's exit and
+    `ms`, the ONE new timer (`performance.now()` around the install process). The append is observational and
+    best-effort: it refuses a symlinked component, never blocks on a planted FIFO (`O_NONBLOCK` — the GATE-2 review
+    reproduced the hang), never throws, and a failure changes no exit, verdict, reuse, route or commit (a test runs a
+    verify with a planted link and compares its parsed exit document with the control's).
+  - **The checker (rule 9)** validates every `work[]` row and its window membership and recomputes `executions` from
+    the file's own `markers[]` and `work[]`; an edited interval, run number, pairing or work index is RED.
+    `--verify-transcript` is unchanged. The run report gains `## Stage elapsed and deterministic work`, copied from the
+    stored views; the stop's `table()` prints the same three blocks, kept apart.
+  - **Measured** (`.dev/features/run-performance-breakdown/DEMO.md`, a controlled fixture): the emitter and checker
+    gain under 1 ms on a 126-request run, one small file read, no transcript pass, no process, no model call.
+  - **Named residuals:** `gate-process-duration` (no per-gate timer), `ship-spec-elapsed` (`/pharn-ship` marks no spec
+    stage-start, and adding one would change stage attribution), `work-on-non-done-exit` (a stage that ran gates then
+    refused records none), `work-record-provenance` (a Bash writer can forge `work.jsonl`, as `markers.jsonl` today).
+
 ## [6.34.0] - 2026-09-28
 
 ### Changed

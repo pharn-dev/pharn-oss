@@ -2244,3 +2244,18 @@ type: floor · concepts: [pinned-record, writes-scope, agreement, self-certifica
 - commit: `70cb51c8f3f7c1a3405b651106bc35f244948da9` (working-tree build on this commit; uncommitted at promotion time)
 - source: `.dev/features/ac-gate-plan-scope/REVIEW.md` LC1
 - promoted: 2026-09-27 via gated `/pharn-dev-memory-promote` (accept delegated by the maintainer to the orchestrating model).
+
+## L66 — A wait on a result file in shared scratch is satisfied by another session's stale file — capture into a directory the run creates empty, and read only after the writer has exited
+
+type: tooling · concepts: [input-capture, shared-state, temporal-state, false-green, lesson-recurrence]
+
+**Lesson.** A wait such as `until [ -f .pharn/<cmd>/x.json ]` is a presence test on a path several sessions share. In run-performance-breakdown it passed at once on base/head maps an earlier session had left in `.pharn/pharn-dev-regress/`, the regress verdict was computed over them (void: it measured nothing of this build), and the base worktree was removed while this run's own base side was still executing. The same stale `results.json` appeared at verify and was caught before use. [[L5]] and [[L21]] bound WHAT is captured; this is WHOSE capture is read. Remedy: capture into a directory the run creates empty (a run-private path under `.pharn/<command>/`), and read results only after the background process that writes them has exited (its completion notice or an exit marker it prints last), never on a file's existence.
+
+**Why it matters.** The stale verdict read `no-regressions` — a false green indistinguishable from a real one, reached by a correctly pinned checker over the wrong inputs. **Bound (P0):** discipline, not a floor check — nothing can tell an old file from a new one by its path. **Trigger (P7):** observed once in this run and caught by the orchestrator before the verdict was used; promoted at the maintainer's choice at the ship-stage lesson gate.
+
+**Provenance.**
+
+- feature: `run-performance-breakdown`
+- commit: `1f6e2d610b1141ca59b02b84b2a1c798946f1d29` (working-tree build on this commit; uncommitted at promotion time)
+- source: `.dev/features/run-performance-breakdown/REVIEW.md` § Proposed lesson candidate + `REGRESSION.md` § A void first run
+- promoted: 2026-09-28 via gated `/pharn-dev-memory-promote` (human-approved).

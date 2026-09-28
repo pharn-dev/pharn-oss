@@ -106,7 +106,17 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
-import { FEATURE_BASE, TOKEN_CLASSES, LEGACY_SCHEMA, SHIP_COMMAND, readMarkers, normalizeMarkers } from "./render-cost-ledger.mjs";
+import {
+  FEATURE_BASE,
+  TOKEN_CLASSES,
+  LEGACY_SCHEMA,
+  SHIP_COMMAND,
+  readMarkers,
+  normalizeMarkers,
+  elapsedLines,
+  workLines,
+} from "./render-cost-ledger.mjs";
+import { validateWork } from "./stage-work.mjs";
 import { DEFAULT_BASE as MARKERS_DEFAULT_BASE } from "./mark-phase.mjs";
 import { verdictApplicability, APPLICABILITY, runMode } from "./ship-outcome-core.mjs";
 import { handoffSections, HANDOFF_SECTIONS } from "./loop-record-core.mjs";
@@ -134,6 +144,7 @@ const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 export const SECTIONS = Object.freeze([
   "## Outcome",
   "## Tokens — stage x iteration x model",
+  "## Stage elapsed and deterministic work",
   "## Files",
   "## Verdicts",
   "## Briefing",
@@ -557,6 +568,58 @@ function tokensSection(cost, absentReason = null) {
     "folded into a neighbouring stage.",
     "",
     quoteData("", table).trimStart(),
+  ].join("\n");
+}
+
+/** A stored `executions` view with the shape the emitter writes — checked here only so a hand-edited `cost.json` can
+ *  never crash this renderer; whether the view AGREES with the facts is `check-cost-ledger.mjs`'s rule 9. */
+function executionsShapeOk(ex) {
+  const intOrNull = (v) => v === null || Number.isSafeInteger(v);
+  const strOrNull = (v) => v === null || typeof v === "string";
+  // Every value the screen functions interpolate is type-tested first: `reason` too (GATE-2 review: an object there
+  // with a throwing toString crashed this renderer).
+  if (!isRecord(ex) || !Array.isArray(ex.rows) || (ex.status !== "derived" && ex.status !== "unknown")) return false;
+  if (typeof ex.method !== "string" || !strOrNull(ex.reason)) return false;
+  return ex.rows.every(
+    (r) =>
+      isRecord(r) &&
+      strOrNull(r.stage) &&
+      intOrNull(r.iteration) &&
+      Number.isSafeInteger(r.run) &&
+      intOrNull(r.elapsed_ms) &&
+      strOrNull(r.unmeasured) &&
+      (r.elapsed_ms === null) === (r.unmeasured !== null) &&
+      Array.isArray(r.work) &&
+      r.work.every((i) => Number.isSafeInteger(i))
+  );
+}
+
+/**
+ * STAGE ELAPSED AND DETERMINISTIC WORK (6.35.0) — COPIED from `cost.json`'s stored `executions` view and `work[]`
+ * facts (bound (2): never recomputed here), rendered by the ledger's own screen functions so the report and the stop's
+ * printout cannot word the same fact two ways. Three measurements, deliberately not combined: tokens (above), the
+ * observed wall-clock interval between a stage's markers, and the gate processes a regress/verify execution ran or
+ * took from reused evidence. Fenced as DATA: stage labels and reasons are file values.
+ */
+function performanceSection(cost, absentReason = null) {
+  if (absentReason) return na(absentReason);
+  if (!cost) return na("no cost.json — no ledger was emitted for this run");
+  if (!Object.hasOwn(cost, "executions") && !Object.hasOwn(cost, "work")) {
+    return na("cost.json predates 6.35.0 — it records no stage elapsed view and no deterministic-work facts");
+  }
+  if (!executionsShapeOk(cost.executions) || !Array.isArray(cost.work) || !cost.work.every((w) => validateWork(w).ok)) {
+    return na("cost.json's `executions`/`work` do not have the shape the emitter writes — run check-cost-ledger.mjs on it");
+  }
+  const text = [...elapsedLines(cost), "", ...workLines(cost)].join("\n");
+  return [
+    "**Observed elapsed** is wall-clock time between two PHARN markers — the stage's start and the orchestrator's",
+    "return — read by two different processes. It is NOT CPU time, model time or tool time, it is not monotonic, and",
+    "it includes orchestration, subprocesses, waiting and any answer a human gave inside the stage. An `unmeasured`",
+    "row names why no interval could be paired, and is never a zero. **Deterministic work** is counted from each",
+    "`/pharn-regress` and `/pharn-verify` execution's own gate-run stamp at its `done` exit; an execution that ended any",
+    "other way recorded none. Nothing here is subtracted from anything else.",
+    "",
+    quoteData("", text).trimStart(),
   ].join("\n");
 }
 
@@ -1001,6 +1064,7 @@ export function renderRunReport(name, opts = {}) {
   const bodyBySection = {
     "## Outcome": outcomeSection(cost, staleReason),
     "## Tokens — stage x iteration x model": tokensSection(cost, staleReason),
+    "## Stage elapsed and deterministic work": performanceSection(cost, staleReason),
     "## Files": filesSection({ cost, repo, planEntries, dirtyBefore, dirtyNote, absentReason: staleReason }),
     "## Verdicts": verdictsSection({ verify, regress, cost: staleReason ? null : cost, stale: Boolean(staleReason) }),
     "## Briefing": briefingSection({ dir, cost: staleReason ? null : cost }),

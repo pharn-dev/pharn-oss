@@ -37,6 +37,8 @@ import { VERIFY_PATHS, PROGRESS_SCHEMA, PHASES, RESUMABLE_PHASES, validateProgre
 import { validateStamp, logBasename } from "./gate-run-core.mjs";
 import { fingerprint } from "./worktree-fingerprint.mjs";
 import { DEFAULT_STAMPS } from "./loop-fresh-core.mjs";
+import { readWork, WORK_FILE } from "./stage-work.mjs";
+import { DEFAULT_BASE as COST_BASE } from "./mark-phase.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..");
@@ -318,6 +320,35 @@ test("verdict FAIL — a red project gate is named; done is still exit 0 (the ve
     assert.deepEqual(report.failing_gates, ["lint"]);
     assert.equal(r.doc.verdict, "FAIL");
     assert.match(readFileSync(join(dir, RENDER), "utf8"), /VERIFY FAILS/);
+  });
+});
+
+test("6.35.0 OBSERVATIONAL — the work record is written at done; a planted `.pharn/cost` link refuses it and changes NOTHING else", () => {
+  let control;
+  withFixture({}, ({ dir }) => {
+    const r = runCli(dir, fresh());
+    assert.equal(r.code, 0, r.raw);
+    const { records } = readWork(join(dir, COST_BASE, FEATURE, WORK_FILE));
+    assert.equal(records.length, 1);
+    assert.equal(records[0].stage, "pharn-verify");
+    assert.equal(records[0].gates.executed, records[0].gates.required, "no delivery run: every gate executed");
+    control = { code: r.code, doc: r.doc, verdict: readReport(dir).verdict, gates: readReport(dir).gates };
+  });
+  withFixture({}, ({ dir }) => {
+    const elsewhere = realpathSync(mkdtempSync(join(tmpdir(), "sv-elsewhere-")));
+    try {
+      mkdirSync(join(dir, ".pharn"), { recursive: true });
+      symlinkSync(elsewhere, join(dir, COST_BASE));
+      const r = runCli(dir, fresh());
+      assert.equal(r.code, control.code, r.raw);
+      assert.deepEqual(r.doc, control.doc, "the exit document is byte-for-byte the control's");
+      assert.equal(readReport(dir).verdict, control.verdict);
+      assert.deepEqual(readReport(dir).gates, control.gates);
+      assert.match(r.raw, /stage-verify: note — the deterministic-work record for the cost ledger was not written/);
+      assert.deepEqual(readdirSync(elsewhere), [], "nothing was written through the link");
+    } finally {
+      rmSync(elsewhere, { recursive: true, force: true });
+    }
   });
 });
 
@@ -1065,6 +1096,8 @@ function deliver(fx, { run = true, editBetween = null, verifyExtra = [] } = {}) 
     stamp: JSON.parse(readFileSync(join(fx.dir, STAMP), "utf8")),
     fresh: loopFresh(fx),
     render: readFileSync(join(fx.dir, RENDER), "utf8"),
+    // 6.35.0: the cost ledger's deterministic-work records this delivery left (regress's, then verify's).
+    work: readWork(join(fx.dir, COST_BASE, FEATURE, WORK_FILE)),
   };
 }
 
@@ -1114,6 +1147,20 @@ test("★ REUSE — FRESH-vs-REUSE EQUIVALENCE (mandatory): same coverage, exits
   // Provenance MAY differ, and only there: the reused entries say so.
   assert.ok(reusePath.stamp.runs.some((r) => r.reason === "reused"));
   assert.ok(freshPath.stamp.runs.every((r) => r.ran === true));
+  // 6.35.0 — the work record tells the two apart, and its counts are the stamp's: FRESH executed every required gate,
+  // REUSE executed the rest and reused the two verify did not spawn. Nothing dropped, one record per stage.
+  for (const p of [freshPath, reusePath]) {
+    assert.deepEqual(p.work.dropped, []);
+    assert.deepEqual(
+      p.work.records.map((w) => w.stage),
+      ["pharn-regress", "pharn-verify"]
+    );
+  }
+  const fv = freshPath.work.records[1].gates;
+  const rv = reusePath.work.records[1].gates;
+  assert.deepEqual(fv, { required: freshPath.stamp.runs.length, executed: freshPath.stamp.runs.length, reused: 0, no_files: 0 });
+  assert.deepEqual(rv, { required: reusePath.stamp.runs.length, executed: reusePath.stamp.runs.length - 2, reused: 2, no_files: 0 });
+  assert.equal(fv.executed - rv.executed, freshPath.verifySpawned.length - reusePath.verifySpawned.length, "avoided = not spawned");
 });
 
 test("REUSE of a completed RED — the same FAIL verdict as a fresh run, and the red gate is not re-spawned", () => {

@@ -27,8 +27,10 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { REGRESS_PATHS, PROGRESS_SCHEMA } from "./stage-regress-core.mjs";
+import { REGRESS_PATHS, PROGRESS_SCHEMA, validateProgress } from "./stage-regress-core.mjs";
 import { RECORD_BASENAME } from "./regress-base-reuse-core.mjs";
+import { readWork, WORK_FILE } from "./stage-work.mjs";
+import { DEFAULT_BASE as COST_BASE } from "./mark-phase.mjs";
 import { REGISTRY, allReasonCodes } from "./stage-exit-core.mjs";
 // A5 (GATE 2 review) — the check-loop-fresh WIRING test fabricates a verify stamp exactly the way
 // check-loop-fresh.test.mjs's own `iterate()` helper does: a REAL fingerprint of the live tree, and the
@@ -1645,6 +1647,22 @@ test("★ HIT — a second regress of the same run, after a new build, runs HEAD
     assert.match(md, /BASE evidence: REUSED/);
     assert.match(md, /install: none run by this invocation/);
     assert.match(firstMd, /BASE evidence: produced by this invocation \(not reused: `no-record`\); recorded for reuse/);
+    // 6.35.0 — one deterministic-work record per execution, whose counts agree with what the fixture COUNTED spawning.
+    const { records, dropped } = readWork(join(fx.dir, COST_BASE, FEATURE, WORK_FILE));
+    assert.deepEqual(dropped, []);
+    assert.equal(records.length, 2);
+    const [w1, w2] = records;
+    assert.equal(w1.base.evidence, "fresh");
+    assert.equal(w1.base.miss, "no-record");
+    assert.equal(w1.base.executed, first.counts.base);
+    assert.equal(w1.head.executed, first.counts.head);
+    assert.equal(w1.install.exit, 0);
+    assert.ok(Number.isSafeInteger(w1.install.ms) && w1.install.ms >= 0, "the install's interval was measured");
+    assert.equal(w2.base.evidence, "reused");
+    assert.equal(w2.base.executed, second.counts.base, "0 base gate processes");
+    assert.equal(w2.base.reused, w2.base.required - w2.base.no_files);
+    assert.equal(w2.install, null, "no install");
+    assert.equal(w2.head.executed, second.counts.head, "HEAD ran in full");
   } finally {
     dropReuseRepo(fx);
   }
@@ -1805,6 +1823,14 @@ test("HIT — a BUDGETED miss chain (continue + --resume, the pinned line's shap
     while (n.code === 5) n = runReuse(fx, ["--resume", "--budget-ms", "1"]);
     assert.equal(n.code, 0, n.raw);
     assert.equal(n.be.reused, true, JSON.stringify(n.be));
+    // 6.35.0 — ONE work record per EXECUTION, not per invocation: every `continue` wrote none. The install interval
+    // measured in the invocation that ran it survived the resumes through the progress record.
+    const { records } = readWork(join(fx.dir, COST_BASE, FEATURE, WORK_FILE));
+    assert.deepEqual(
+      records.map((w) => w.base.evidence),
+      ["fresh", "reused"]
+    );
+    assert.ok(Number.isSafeInteger(records[0].install.ms), JSON.stringify(records[0].install));
   } finally {
     dropReuseRepo(fx);
   }
@@ -2376,5 +2402,29 @@ test("HEAD OFFER — published once the HEAD stamp is final, bound to its bytes 
     assert.notEqual(offerFile(fx.dir), recordFile(fx.dir));
   } finally {
     dropReuseRepo(fx);
+  }
+});
+
+// ── 6.35.0: the install interval in the progress record ──────────────────────────────────────────────────────────
+test("6.35.0 — validateProgress: installResult.ms is optional; when present a non-negative safe integer or null", () => {
+  const rec = (installResult) => ({
+    schema: PROGRESS_SCHEMA,
+    feature: "demo",
+    timeoutMs: 540000,
+    budgetMs: 570000,
+    base: "a".repeat(40),
+    phase: "drain-head",
+    install: { kind: "cmd", cmd: "npm ci", unmeasured: false },
+    e2eExcluded: [],
+    styleSkipped: false,
+    installResult,
+    cleanupResult: null,
+    baseReuse: null,
+  });
+  assert.deepEqual(validateProgress(rec({ ran: true, exit: 0, timedOut: false })), { ok: true }, "a pre-6.35.0 record still resumes");
+  assert.deepEqual(validateProgress(rec({ ran: true, exit: 0, timedOut: false, ms: 0 })), { ok: true });
+  assert.deepEqual(validateProgress(rec({ ran: true, exit: 0, timedOut: false, ms: null })), { ok: true });
+  for (const ms of [-1, 1.5, "10", 2 ** 60, {}]) {
+    assert.equal(validateProgress(rec({ ran: true, exit: 0, timedOut: false, ms })).ok, false, JSON.stringify(ms));
   }
 });

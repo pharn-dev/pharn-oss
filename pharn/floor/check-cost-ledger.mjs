@@ -161,6 +161,8 @@ import {
   COVERAGE,
   TOKEN_CLASSES,
   TOP_LEVEL_KEYS,
+  TOP_LEVEL_KEYS_PRE_WORK,
+  WORK_KEYS,
   SKILLS_VERSION_SOURCES,
   ATTRIBUTION_METHOD,
   OUTCOME_SOURCES,
@@ -187,6 +189,8 @@ import {
 import { ABS_PATH_RE, IDENTITY_MAX, isIdentityToken, isTokenCount } from "./cost-value-core.mjs";
 import { shown } from "./quote-core.mjs";
 import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
+import { validateWork } from "./stage-work.mjs";
+import { buildExecutions } from "./stage-executions-core.mjs";
 
 const reds = [];
 const warns = [];
@@ -327,7 +331,10 @@ export function checkLedger(led, opts = {}) {
 
   // ---- RULE 1: the closed top-level key set, BOTH directions -----------------------------------
   const present = new Set(Object.keys(led));
-  const expected = new Set(legacy ? TOP_LEVEL_KEYS_V1 : TOP_LEVEL_KEYS);
+  // `/2` admits EXACTLY two key sets (6.35.0): the current one, or the pre-6.35.0 one with neither `WORK_KEYS` member.
+  // One of the two new keys without the other is held to the current set, so the absent one reads as missing (L36).
+  const hasWork = WORK_KEYS.some((k) => present.has(k));
+  const expected = new Set(legacy ? TOP_LEVEL_KEYS_V1 : hasWork ? TOP_LEVEL_KEYS : TOP_LEVEL_KEYS_PRE_WORK);
   const extra = [...present].filter((k) => !expected.has(k)).sort();
   const missing = [...expected].filter((k) => !present.has(k)).sort();
   if (extra.length) red(`top-level key set is not closed — unexpected key(s): ${listText(extra, keyText)}`);
@@ -569,6 +576,9 @@ export function checkLedger(led, opts = {}) {
 
   // ---- RULE 8 (`/2`): membership shape, re-derivation, and every row inside the window ----------
   if (!legacy) checkMembership(led);
+
+  // ---- RULE 9 (6.35.0): the work facts and the executions view ----------------------------------
+  if (!legacy && hasWork) checkWorkAndExecutions(led);
 
   // ---- WARN (never RED): marker completeness ----------------------------------------------------
   if (Array.isArray(led.markers) && led.outcome && Number.isInteger(led.outcome.iterations)) {
@@ -894,6 +904,51 @@ function checkMembership(led) {
       `membership ${MEMBERSHIP_METHOD_V1} is not context-scoped (written before 6.29.0): its rows are every request of the session inside the window, so a concurrent run, its agents or the main thread working in that window are counted too — these rows come from ${contexts.size} context(s). Re-derive with --verify-transcript while the transcript exists`
     );
   }
+}
+
+/**
+ * RULE 9 (6.35.0, `cost-ledger.md` "Stage executions and deterministic work"). `work[]` rows are FACTS: each must pass
+ * `stage-work.mjs validateWork` (closed keys, enums, the count invariant) and be a MEMBER of the run window recomputed
+ * from the file's own `markers[]` for `membership.session` — the test every request row passes; an unknown window
+ * admits none. `executions` is a VIEW: it must equal `buildExecutions` recomputed from the file's own `markers[]` and
+ * `work[]`, so an edited elapsed value, run number, pairing or work index is RED. BOUND ([[L43]]): agreement between
+ * the file's facts and its view, never that the markers or the records describe what really ran.
+ */
+function checkWorkAndExecutions(led) {
+  if (!Array.isArray(led.work)) {
+    red("work must be an array");
+    return;
+  }
+  const markers = normalizeMarkers(Array.isArray(led.markers) ? led.markers : []);
+  const session = isPlainObject(led.membership) ? (led.membership.session ?? null) : null;
+  const win = runWindow(markers, typeof session === "string" ? session : null);
+  const invalid = [];
+  const outside = [];
+  led.work.forEach((w, i) => {
+    if (!validateWork(w).ok) invalid.push(i);
+    else if (!isMember(win, w.ts, w.session_id)) outside.push(i);
+  });
+  if (invalid.length) red(`work[] holds ${invalid.length} row(s) that are not valid work records, at index ${listText(invalid, String)}`);
+  if (outside.length) red(`work[] holds ${outside.length} row(s) OUTSIDE the recorded run window, at index ${listText(outside, String)}`);
+  if (invalid.length) return; // the view cannot be recomputed over rows the rule refused
+  const expected = buildExecutions(markers, led.work);
+  if (!sameValue(led.executions, expected, 0)) {
+    red(
+      `executions disagrees with a recompute from markers[] and work[] (method ${valText(expected.method)}, ${expected.rows.length} row(s) recomputed) — the elapsed view is a function of the file's own facts`
+    );
+  }
+}
+
+/** Structural equality over parsed JSON, total and bounded in depth (never JSON.stringify — see RULE 6's note). */
+function sameValue(a, b, depth) {
+  if (depth > 8) return false;
+  if (a === b) return true;
+  if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) return a.length === b.length && a.every((v, i) => sameValue(v, b[i], depth + 1));
+  const ka = Object.keys(a);
+  const kb = Object.keys(b);
+  return ka.length === kb.length && ka.every((k) => Object.hasOwn(b, k) && sameValue(a[k], b[k], depth + 1));
 }
 
 /**
