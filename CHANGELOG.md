@@ -23,6 +23,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.32.0] - 2026-09-28
+
+### Changed
+
+- 2026-09-28: **`/pharn-loop` and `/pharn-ship` stop sending their quick-mode steps on every request of a full run, and
+  their stop procedure on every request before the stop — each now lives in a part file the command reads at one named
+  point.** A command's body is sent with every later request of the conversation it was invoked in; measured in 37
+  orchestrator transcripts on the maintainer's machine, where a run makes about a hundred to four hundred requests,
+  and frontmatter `reads:` loaded nothing. Four new files in `.claude/commands/`, moved verbatim (every pinned shell
+  line survives exactly once, checked against 6.31.1): `pharn-loop-quick.md` and `pharn-ship-quick.md` (the `## Quick
+mode` deltas, read only for a `--quick` run, at entry, in the same turn as a call the run already makes) and
+  `pharn-loop-close.md` and `pharn-ship-close.md` (the stop steps, the `## What you may claim` block and the Final step:
+  the loop reads its close part at its first stop, ship reads its close part with step 7's return marker or at an
+  earlier STOP). Each command keeps ONE pointer per part: the exact path, the loading condition, that the part is
+  trusted text of the command, and a not-loaded rule that stops the run and never runs a part from memory.
+  **Nothing a run executes changed**: no stage, order, route, check, stop decision, retry bound, ledger rule, commit
+  rule or human gate moved. **Bytes (measured):** sent at invocation, `pharn-loop.md` 77,971 → about 40,700,
+  `pharn-ship.md` 67,543 → about 33,800. **Requests and tokens (estimates, from a request profile counted over the
+  pinned steps):** a full run carries 29–39% fewer of this text's bytes across its requests, a quick run 17–22%. The
+  close part costs the loop one added request, and ship one only at a STOP before verify. Net of that request, the
+  estimate is about 2–3.5% of a full run's whole prompt volume at a ~120k-token prefix and 6–8% at ~30k. For a quick
+  run it is about 0.5–2% and 2.8–4.4%; a quick Read NOT batched with an existing call would add a request of about
+  130k tokens at the larger prefix, more than a one-iteration quick loop gains. No live
+  before/after run was made. The live probe of the parts' visibility was inconclusive (its control was not listed
+  either); the hiding keys are documented behaviour, not measured here.
+  **Parts** are `.claude/commands/pharn-*.md` files — where `pharn/ARCHITECTURE.md §4` keeps stages, and what
+  `pharn-cli` already copies (verified by running pharn-cli 0.7.0's own manifest and install code on this tree: all
+  four listed and written byte-identical) — so `MIN_CLI` stays 0.5.0 and no installer change is needed. A part is
+  recognized only by its frontmatter (`part_of:`, `part:`) and carries `disable-model-invocation: true` and
+  `user-invocable: false`. `check-model-config.mjs agreement` now prints `15 product command(s) scanned` (was 11); its
+  verdict and exit codes are unchanged. The COMMAND BUDGET covers each file on disk, parts included (the two commands'
+  ceilings went down), and its claims rule counts one block per command read with its parts. Test-only helper
+  `.dev/floor/command-family.mjs` reads a command with its parts; `.dev/floor/command-family.test.mjs` pins the part set
+  (closed), each part's frontmatter, file name and framing, one load pointer per part with its pinned sentences, no line
+  in two files of one command, and where each step lives — with a negative control per rule. The capability catalog
+  does not list a part as a command. **Bound:** the tests pin the TEXT; that a run reads a part at its point, or at all,
+  is the model's discipline (advisory). Follow-ups: `inline-stage-reinjection`, `stage-agent-final-text`,
+  `ship-closeout-script`.
+
 ## [6.31.1] - 2026-09-27
 
 ### Fixed

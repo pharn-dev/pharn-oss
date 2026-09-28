@@ -12,6 +12,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { READY_TOKENS, TEST_STAGE_REASONS, evaluateTestStage } from "./check-test-stage.mjs";
 import { filesDigest } from "./ac-tests-lock.mjs";
+import { commandFamilyText } from "../../.dev/floor/command-family.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, "check-test-stage.mjs");
@@ -439,8 +440,9 @@ test("an invalid name is unusable (exit 2), never a verdict", () => {
 // ── ★ WIRING (L45): the three commands' pinned lines, EXECUTED ─────────────────────────────────────────
 
 const COMMANDS = join(HERE, "..", "..", ".claude", "commands");
+// A command's text is its file plus its parts (6.32.0, `.dev/floor/command-family.mjs`); a command with none reads as its file.
 const fenced = (file) =>
-  [...readFileSync(join(COMMANDS, file), "utf8").matchAll(/```bash\n([\s\S]*?)```/g)].flatMap((m) =>
+  [...commandFamilyText(COMMANDS, file).matchAll(/```bash\n([\s\S]*?)```/g)].flatMap((m) =>
     m[1]
       .split("\n")
       .map((l) => l.trim())
@@ -496,7 +498,7 @@ test("★ WIRING — /pharn-loop's pinned S12 preflight line is the checker's, a
 });
 
 test("★ WIRING — /pharn-loop's Step 6c staging builder, EXECUTED: stages the lock and its pinned tests, exits 4 on a missing or ignored one", () => {
-  const body = readFileSync(join(COMMANDS, "pharn-loop.md"), "utf8");
+  const body = commandFamilyText(COMMANDS, "pharn-loop.md");
   const m = body.match(/node -e '\n([\s\S]*?)\n' '<name>'/);
   assert.ok(m, "the builder block is pinned in pharn-loop.md");
   const builder = m[1];

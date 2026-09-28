@@ -40,6 +40,7 @@ import {
   isShippedTemplate,
   kindLineOpensBody,
 } from "./spec-template-core.mjs";
+import { commandFamilyText } from "../../.dev/floor/command-family.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CHECK = join(here, "check-spec.mjs");
@@ -1149,12 +1150,10 @@ test("★ WIRING — /pharn-spec's Draft and re-validate steps name exactly the 
 // ── ★ WIRING (6.25.0): the --spec-kind line pinned in pharn-ship.md's GATE-1 backstop and pharn-grill.md's
 // eligibility check, each exactly once, EXECUTED (never merely read) on a quick and a feature SPEC ──────
 
-for (const [label, cmdPath] of [
-  ["pharn-ship.md", join(REPO, ".claude", "commands", "pharn-ship.md")],
-  ["pharn-grill.md", join(REPO, ".claude", "commands", "pharn-grill.md")],
-]) {
+// A command's text is its file plus its parts (6.32.0): pharn-ship.md's kind read sits in its quick part.
+for (const label of ["pharn-ship.md", "pharn-grill.md"]) {
   test(`★ WIRING — ${label} pins exactly one --spec-kind line, executed on a quick and a feature SPEC`, () => {
-    const hits = readFileSync(cmdPath, "utf8")
+    const hits = commandFamilyText(join(REPO, ".claude", "commands"), label)
       .split(/\r?\n/)
       .filter((l) => /node pharn\/floor\/check-spec\.mjs --spec-kind pharn\/features\/<name>\/SPEC\.md/.test(l));
     assert.equal(hits.length, 1, `expected ONE pinned --spec-kind line in ${label}, found ${hits.length}`);

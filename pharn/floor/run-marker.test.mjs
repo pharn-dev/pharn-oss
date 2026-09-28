@@ -11,6 +11,8 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 import { RUN_MARKER_COMMANDS, markerPath, openRun, closeRun } from "./run-marker.mjs";
+// A command's text is its file plus its parts (6.32.0): pharn-ship.md's --close line sits in its close part.
+import { commandFamilyText } from "../../.dev/floor/command-family.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..", "..");
@@ -241,7 +243,7 @@ const COMMANDS_DIR = join(REPO, ".claude", "commands");
 // review, the P1 minor on pinnedLine). Leading indentation (a list item's code block) is trimmed; nothing
 // else is. L45: pin what is EXECUTED, never a line re-typed by hand.
 function pinnedLine(file, re) {
-  const body = readFileSync(join(COMMANDS_DIR, file), "utf8");
+  const body = commandFamilyText(COMMANDS_DIR, file);
   const lines = body.split("\n").filter((l) => re.test(l));
   assert.equal(lines.length, 1, `${file} must contain exactly one line matching ${re}`);
   return lines[0].trim();
@@ -286,7 +288,7 @@ test("✧ WIRING: pharn-ship.md's pinned CLOSE line, executed verbatim, removes 
 });
 
 test("✧ WIRING: pharn-ship's OPEN line sits AFTER the GATE-1 backstop and BEFORE /pharn-plan's stage-start marker", () => {
-  const body = readFileSync(join(COMMANDS_DIR, "pharn-ship.md"), "utf8");
+  const body = commandFamilyText(COMMANDS_DIR, "pharn-ship.md");
   const backstop = body.indexOf("node pharn/floor/check-spec-approved.mjs pharn/features/<name>/SPEC.md");
   const open = body.indexOf("node pharn/floor/run-marker.mjs --open pharn-ship '<name>'");
   const planStart = body.indexOf("node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-plan");
@@ -296,7 +298,7 @@ test("✧ WIRING: pharn-ship's OPEN line sits AFTER the GATE-1 backstop and BEFO
 });
 
 test("✧ WIRING: pharn-ship's CLOSE line sits directly after Step 3a's run-stop marker", () => {
-  const body = readFileSync(join(COMMANDS_DIR, "pharn-ship.md"), "utf8");
+  const body = commandFamilyText(COMMANDS_DIR, "pharn-ship.md");
   const runStop = body.indexOf("node pharn/floor/mark-phase.mjs --name '<name>' --kind run-stop");
   const close = body.indexOf("node pharn/floor/run-marker.mjs --close pharn-ship '<name>'");
   assert.ok(runStop >= 0 && close >= 0, "both anchors must exist");
@@ -332,7 +334,7 @@ test("✧ WIRING: pharn-review.md's pinned CLOSE line (Step 7), executed verbati
 });
 
 test("✧ WIRING: pharn-review's OPEN line sits after Step 1b and before Step 3; a new '## Step 7 — Close the run' exists", () => {
-  const body = readFileSync(join(COMMANDS_DIR, "pharn-review.md"), "utf8");
+  const body = commandFamilyText(COMMANDS_DIR, "pharn-review.md");
   const step1b = body.indexOf("## Step 1b");
   const open = body.indexOf("node pharn/floor/run-marker.mjs --open pharn-review '<name>'");
   const step3 = body.indexOf("## Step 3 —");
@@ -343,7 +345,7 @@ test("✧ WIRING: pharn-review's OPEN line sits after Step 1b and before Step 3;
 });
 
 test("✧ WIRING: no command OTHER than pharn-ship.md / pharn-review.md invokes run-marker.mjs (closed over the corpus)", () => {
-  const files = readFileSync(join(COMMANDS_DIR, "pharn-loop.md"), "utf8"); // control: the loop keeps its OWN marker
+  const files = commandFamilyText(COMMANDS_DIR, "pharn-loop.md"); // control: the loop keeps its OWN marker
   assert.doesNotMatch(files, /run-marker\.mjs/, "pharn-loop.md must not invoke run-marker.mjs — it keeps require-loop-record.cjs");
   const all = [
     "pharn-spec.md",
@@ -356,7 +358,7 @@ test("✧ WIRING: no command OTHER than pharn-ship.md / pharn-review.md invokes 
     "pharn-memory-promote.md",
   ];
   for (const f of all) {
-    assert.doesNotMatch(readFileSync(join(COMMANDS_DIR, f), "utf8"), /run-marker\.mjs/, `${f} must not invoke run-marker.mjs`);
+    assert.doesNotMatch(commandFamilyText(COMMANDS_DIR, f), /run-marker\.mjs/, `${f} must not invoke run-marker.mjs`);
   }
 });
 
@@ -477,7 +479,7 @@ for (const { file, command, next } of [
   });
 
   test(`✧ WIRING: ${file} STOPS on a non-zero --open, and says so between the open line and the next step`, () => {
-    const body = readFileSync(join(COMMANDS_DIR, file), "utf8");
+    const body = commandFamilyText(COMMANDS_DIR, file);
     const open = body.indexOf(`node pharn/floor/run-marker.mjs --open ${command} '<name>'`);
     const stop = body.indexOf("**Non-zero → STOP**", open);
     const nextAt = body.indexOf(next, open);
@@ -533,7 +535,7 @@ for (const at of LOOP_PLANTS) {
 }
 
 test("✧ WIRING (R2): pharn-loop.md STOPs as S9 after EACH of the two lines, before the next step, and says why S9", () => {
-  const body = readFileSync(join(COMMANDS_DIR, "pharn-loop.md"), "utf8");
+  const body = commandFamilyText(COMMANDS_DIR, "pharn-loop.md");
   const snapAt = body.search(LOOP_SNAPSHOT_RE);
   const openAt = body.search(LOOP_OPEN_RE);
   const ledgerAt = body.indexOf("node pharn/floor/mark-phase.mjs --name '<name>' --kind run-start");

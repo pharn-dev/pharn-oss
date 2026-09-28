@@ -1499,11 +1499,11 @@ the floor plus the review agent.
 `pharn/ARCHITECTURE.md §6`), each stage emitting
 a typed artifact carrying `spec_id` (+ the plan additionally pins `spec_content_hash`) — for a **full**
 run; `/pharn-ship --quick` (6.25.0) runs a shorter spine over a `spec_kind: quick` mini-SPEC, skips
-`regress`'s base-and-head comparison and keeps only its scope check (`.claude/commands/pharn-ship.md`,
-`## Quick mode`), and `/pharn-loop --quick` (6.28.0) runs the same shorter spine unattended — the model writes and
-approves the quick SPEC, every iteration skips the base comparison and keeps the scope check, and `check-loop.mjs`
-decides every stop over verify alone in the table the SPEC's kind selects, ending green on `STOP_GREEN_QUICK`
-(`.claude/commands/pharn-loop.md`, `## Quick mode`).
+`regress`'s base-and-head comparison and keeps only its scope check (`.claude/commands/pharn-ship-quick.md`, the
+quick part `/pharn-ship`'s `## Quick mode` reads since 6.32.0), and `/pharn-loop --quick` (6.28.0) runs the same
+shorter spine unattended — the model writes and approves the quick SPEC, every iteration skips the base comparison
+and keeps the scope check, and `check-loop.mjs` decides every stop over verify alone in the table the SPEC's kind
+selects, ending green on `STOP_GREEN_QUICK` (`.claude/commands/pharn-loop-quick.md`, likewise).
 
 ## Conventions when building PHARN capabilities
 
@@ -1570,6 +1570,20 @@ framework-specific`), via the first-match-wins procedure in `pharn/ARCHITECTURE.
   truth. **Raising a ceiling is a deliberate, visible diff to that table in the PR that needs it** (the
   rule: measured bytes + 10%, rounded up to the next multiple of 512), never a quiet edit to turn a red test
   green. The `pharn-dev-*` commands are outside the budget (follow-up `dev-command-slim`).
+- **A command's text a run needs at only ONE point may live in a PART file, read at that point (6.32.0).** A
+  command body is sent with every later request of the conversation it was invoked in, and a file enters context
+  only when the model reads it — frontmatter `reads:` loads nothing. So `/pharn-loop` and `/pharn-ship` each keep
+  their entry-to-stop steps in their own file and two parts beside it: `pharn-<cmd>-quick.md` (the `--quick` deltas,
+  read only for a `--quick` run, at entry) and `pharn-<cmd>-close.md` (the stop steps, the claims block and the Final
+  step, read once at the run's first stop). A part is a `.claude/commands/pharn-*.md` file — `pharn/ARCHITECTURE.md
+§4` keeps stages in commands, and `pharn-cli` copies every top-level `pharn-*.md` there — recognized ONLY by its
+  frontmatter (`part_of:` + `part:`), hidden from both invocation paths (`disable-model-invocation: true`,
+  `user-invocable: false`), framed by a title line and an `<!-- end of … -->` line, and loaded by ONE pointer in its
+  command that names its path, its loading condition, its trusted status and its not-loaded rule (stop; never run it
+  from memory). The command FAMILY (file + parts) is the unit of change; its claims block may sit in the close part,
+  and the budget's claims rule counts one block per family. `.dev/floor/command-family.mjs` splices a family back
+  into one text for the tests (never imported by shipped code), and `.dev/floor/command-family.test.mjs` pins where
+  each line lives. FLOOR: the text and the file names; ADVISORY: that a run reads a part at its point, or at all.
 - **Three doc regions are GENERATED — never hand-edit them.** (1) `docs/capabilities/**`, (2) the root
   `README.md` `## Current state` inventory between its `<!-- CURRENT-STATE:BEGIN -->` /
   `<!-- CURRENT-STATE:END -->` markers (the marker lines are themselves inside the guarded region, so

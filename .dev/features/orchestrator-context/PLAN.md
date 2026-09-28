@@ -225,7 +225,11 @@ proves the concatenated text still carries it exactly once.
 - `CHANGELOG.md` — `## [6.32.0]` — layer: repo-meta
 - `SKILLS_VERSION` — 6.32.0 — layer: repo-meta
 - `README.md` — the version badge — layer: repo-meta
-- `.dev/features/orchestrator-context/PLAN.md`, `GRILL.md`, `BUILD.md`, `REGRESSION.md`, `VERIFY.md`, `REVIEW.md`, `SHIP.md`, `regression-report.json`, `verify-report.json` — this increment's own record — layer: dev apparatus
+- `.dev/features/orchestrator-context/PLAN.md` — this plan — layer: dev apparatus
+- `.dev/features/orchestrator-context/BUILD.md` — the build note, the parity diff, the cite sweep and the measurements — layer: dev apparatus
+- `.claude/commands/pharn-zz-probe.md` — TEMPORARY: the G7 live-probe control (a command WITHOUT the two keys), deleted before the build commits — layer: stages (never committed)
+- `docs/capabilities/README.md` — regenerated only if the catalog output moves — layer: generated
+  (GRILL, REGRESSION, VERIFY, REVIEW and SHIP are written by their own stages under their own scopes.)
 
 A test file above that turns out not to read a moved line needs no edit and is left untouched; the build lists which
 were edited. **Not touched:** every `pharn/floor/*.mjs` module (no shipped code changes), every contract, the four

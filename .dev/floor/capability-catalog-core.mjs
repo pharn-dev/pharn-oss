@@ -29,6 +29,7 @@
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative, sep, basename, dirname } from "node:path";
 import { posix } from "node:path";
+import { frontmatterFields } from "./command-family.mjs";
 
 // The catalog output directory (repo-relative, POSIX). One page per capability + a README index.
 export const OUT_DIR = "docs/capabilities";
@@ -385,9 +386,14 @@ export function enumerateContracts(targetDir) {
   return listDir(targetDir, CONTRACTS_DIR, (n) => n.endsWith(".md")).map(stripExt);
 }
 
-/** `pharn-*` command names, split by the `pharn-dev-` prefix into { product, dev } (P5: prefix membership). */
+/**
+ * `pharn-*` command names, split by the `pharn-dev-` prefix into { product, dev } (P5: prefix membership). A PART of a
+ * command (6.32.0 — its frontmatter declares `part_of:`, read by `command-family.mjs`, the one owner of that rule) is
+ * not a command: it is read by its command at one point of a run and cannot be invoked, so it is not listed.
+ */
 export function enumerateCommands(targetDir) {
-  const all = listDir(targetDir, COMMANDS_DIR, (n) => n.startsWith("pharn-") && n.endsWith(".md")).map(stripExt);
+  const isPart = (n) => frontmatterFields(readFileSync(join(targetDir, COMMANDS_DIR, n), "utf8"))?.part_of !== undefined;
+  const all = listDir(targetDir, COMMANDS_DIR, (n) => n.startsWith("pharn-") && n.endsWith(".md") && !isPart(n)).map(stripExt);
   return {
     product: all.filter((n) => !n.startsWith("pharn-dev-")),
     dev: all.filter((n) => n.startsWith("pharn-dev-")),

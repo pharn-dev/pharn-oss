@@ -17,7 +17,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync, symlinkSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -308,6 +308,7 @@ test("A SKIPPED OR WRONG MODE MARKER NEVER YIELDS gate2 — the value altered (t
 
 import { BUILD_STAGE, REPEATED_STAGE_REASON } from "./ship-outcome-core.mjs";
 import { normalizeMarkers, readMarkers } from "./render-cost-ledger.mjs";
+import { commandFamilyText } from "../../.dev/floor/command-family.mjs";
 
 /** The markers a `--quick` ship run's prose prescribes AFTER its run-start, starting at `seq` — the run-start
  *  itself is omitted on purpose: these are the trails of a run whose run-start line was skipped. */
@@ -556,11 +557,12 @@ test("quick Step 2b: iteration 2's build supersedes iteration 1's verify; the re
 // ── ★ WIRING (L45): the COMMITTED /pharn-ship lines, executed, read back through the emitter's own reader ──
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const SHIP_CMD = join(REPO, ".claude", "commands", "pharn-ship.md");
+// pharn-ship.md's text is its file plus its parts (6.32.0): the quick run-start line sits in its quick part.
+const COMMANDS_DIR = join(REPO, ".claude", "commands");
 
 /** The ONE line of pharn-ship.md matching `re` — asserted unique, so a second copy or a rewording fails. */
 function shipLine(re, label) {
-  const hits = readFileSync(SHIP_CMD, "utf8")
+  const hits = commandFamilyText(COMMANDS_DIR, "pharn-ship.md")
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => re.test(l));

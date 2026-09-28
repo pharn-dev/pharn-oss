@@ -43,8 +43,18 @@ import {
   renderBrief,
   fixListFields,
 } from "../../pharn/floor/stage-agent-core.mjs";
+import { allParts, commandFamilyText } from "./command-family.mjs";
 
 const COMMANDS_DIR = new URL("../../.claude/commands/", import.meta.url).pathname;
+
+// 6.32.0 (orchestrator-context): a product command may keep text in PART files — `pharn-<cmd>-quick.md` and
+// `pharn-<cmd>-close.md`, recognized by their `part_of:` frontmatter (`.dev/floor/command-family.mjs`). A rule about
+// what a COMMAND carries reads the command's FAMILY text (its file plus its parts, spliced where the text sat before
+// the move); a rule that reports `file:line`, or budgets bytes per file, reads each file on disk, parts included.
+// `.dev/floor/command-family.test.mjs` holds the rules about WHERE a line must live.
+const PART_FILES = new Set(allParts(COMMANDS_DIR).map((p) => p.file));
+/** A command's text: its file plus its parts. A file with no parts reads as itself. */
+const commandText = (file) => commandFamilyText(COMMANDS_DIR, file);
 
 // A region a command may mark to quote a rejected form for the historical record without tripping this
 // guard. Same mechanism as the `TYPE-ENUM:BEGIN/END` block in pharn-dev-memory-promote.md — the house
@@ -79,7 +89,13 @@ const FORBIDDEN = [
   },
 ];
 
+/** The commands — every `.md` file in `.claude/commands/` that is not a PART of another command. */
 function commandFiles() {
+  return commandAndPartFiles().filter((f) => !PART_FILES.has(f));
+}
+
+/** Every `.md` file in `.claude/commands/`, parts included — for rules that report `file:line` or budget bytes. */
+function commandAndPartFiles() {
   return readdirSync(COMMANDS_DIR)
     .filter((f) => f.endsWith(".md"))
     .sort();
@@ -87,7 +103,7 @@ function commandFiles() {
 
 test("✧ L19: no stage command prescribes a repo-wide formatter/linter WRITE", () => {
   const offenders = [];
-  for (const file of commandFiles()) {
+  for (const file of commandAndPartFiles()) {
     const text = readFileSync(join(COMMANDS_DIR, file), "utf8").replace(SKIP_RE, "");
     text.split(/\r?\n/).forEach((line, i) => {
       if (/\bxargs\b/.test(line)) return; // the scoped form: paths arrive on argv
@@ -147,7 +163,7 @@ const STEP_2B_GATES = [
 ];
 
 function step2bBlock() {
-  const body = readFileSync(join(COMMANDS_DIR, "pharn-dev-build.md"), "utf8").replace(SKIP_RE, "");
+  const body = commandText("pharn-dev-build.md").replace(SKIP_RE, "");
   const start = body.indexOf("SCOPE=.pharn/writes-scope.json");
   assert.notEqual(start, -1, "Step 2b's scope-reading block must still exist in pharn-dev-build.md");
   const end = body.indexOf("```", start);
@@ -229,7 +245,7 @@ const MARKDOWNLINT_SITES = [
   "pharn-dev-ship.md",
   "pharn-dev-verify.md",
   "pharn-memory-promote.md", // PRODUCT: read-only check over a USER's canon, through vendor/bin
-  "pharn-ship.md", // PRODUCT: the BRIEFING.md format step
+  "pharn-ship-close.md", // PRODUCT: the BRIEFING.md format step (in /pharn-ship's close part since 6.32.0)
 ];
 
 // The tool name followed by an argument-shaped token: a flag, a `<placeholder>`, a quoted, `$`- or
@@ -271,7 +287,7 @@ function unflaggedInvocations(corpus) {
   return out;
 }
 
-const commandCorpus = () => new Map(commandFiles().map((f) => [f, linePreservingBody(f)]));
+const commandCorpus = () => new Map(commandAndPartFiles().map((f) => [f, linePreservingBody(f)]));
 
 test("✧ every markdownlint-cli2 invocation in a command carries --no-globs (closure over the corpus)", () => {
   const offenders = unflaggedInvocations(commandCorpus()).map(({ file, line, text }) => `${file}:${line}\n      ${text.trim()}`);
@@ -475,7 +491,7 @@ const LESSONS_SWEEP_WIRING = [
 ];
 
 function commandBody(file) {
-  return readFileSync(join(COMMANDS_DIR, file), "utf8").replace(SKIP_RE, "");
+  return commandText(file).replace(SKIP_RE, "");
 }
 
 for (const site of LESSONS_SWEEP_WIRING) {
@@ -1295,7 +1311,7 @@ test("✧ the /pharn-review carve-out NAMES every scanner-less lens (derived fro
   // every lens gained a scanner, the loop below would certify the carve-out by examining zero lenses.
   assert.ok(nullLenses.length > 0, "no scanner-less lens in the map — the rule below would pass vacuously");
 
-  const region = carveOutRegion(readFileSync(join(COMMANDS_DIR, REVIEW_CMD), "utf8"));
+  const region = carveOutRegion(commandText(REVIEW_CMD));
   assert.ok(region, `${REVIEW_CMD}: carve-out anchor not found — the suppression carve-out is missing or reworded`);
 
   const named = backtickedLensNames(region, new Set(Object.keys(scanners)));
@@ -1313,7 +1329,7 @@ test("✧ the carve-out is CLOSED — it names no SCANNER-BOUND lens (presence i
   // L34 again, for the other direction of the domain.
   assert.ok(mapped.length > 0, "no scanner-bound lens in the map — the closure rule below would pass vacuously");
 
-  const region = carveOutRegion(readFileSync(join(COMMANDS_DIR, REVIEW_CMD), "utf8"));
+  const region = carveOutRegion(commandText(REVIEW_CMD));
   assert.ok(region, `${REVIEW_CMD}: carve-out anchor not found`);
 
   // The stale-list direction: a lens gains a scanner, the map is updated, and the carve-out keeps naming
@@ -1334,7 +1350,7 @@ test("✧ the carve-out rules DISCRIMINATE — both halves fail on a mutated com
   const names = new Set(Object.keys(scanners));
   const nullLenses = Object.keys(scanners).filter((k) => scanners[k] === null);
   const mapped = Object.keys(scanners).filter((k) => scanners[k] !== null);
-  const body = readFileSync(join(COMMANDS_DIR, REVIEW_CMD), "utf8");
+  const body = commandText(REVIEW_CMD);
 
   // (a) DROP a scanner-less lens from the carve-out -> the presence rule must catch it.
   const dropped = body.replace(new RegExp("\\*\\*`" + nullLenses[0] + "`\\*\\*"), "**`totally-made-up-lens`**");
@@ -1400,7 +1416,7 @@ const TURN_END_RE = /end (your|the) turn/i;
  * together — the domain was wrong, not the command.
  */
 function setterCommands() {
-  return commandFiles().filter((f) => /--from-(frontmatter|plan)\s+\S*[./]/.test(readFileSync(join(COMMANDS_DIR, f), "utf8")));
+  return commandFiles().filter((f) => /--from-(frontmatter|plan)\s+\S*[./]/.test(commandText(f)));
 }
 
 test("✧ L34 — the setter-invoking corpus is non-empty (the per-file rules below cannot pass vacuously)", () => {
@@ -1434,7 +1450,7 @@ function releaseUnreachableReason(body) {
 test("✧ every setter-invoking command names the release step BEFORE its last turn-end instruction", () => {
   const offenders = [];
   for (const file of setterCommands()) {
-    const reason = releaseUnreachableReason(readFileSync(join(COMMANDS_DIR, file), "utf8"));
+    const reason = releaseUnreachableReason(commandText(file));
     if (reason) offenders.push(`${file} — ${reason}`);
   }
   assert.deepEqual(offenders, [], `release step unreachable in:\n    ${offenders.join("\n    ")}`);
@@ -1444,7 +1460,7 @@ test("✧ the reachability rule DISCRIMINATES — it fails on the real pre-fix s
   // Mutated from a REAL command body, not a synthetic string: strip the pointer from live bytes and the
   // rule must fail. Without this, the rule above passes by construction on a corpus already fixed.
   const file = setterCommands()[0];
-  const real = readFileSync(join(COMMANDS_DIR, file), "utf8");
+  const real = commandText(file);
   assert.ok(real.includes(RELEASE_POINTER), `precondition: ${file} must carry the pointer, or this control mutates nothing`);
 
   // The mutant: the real body with its pointer stripped — the exact pre-fix shape.
@@ -1520,7 +1536,7 @@ test("✧ NO --from-frontmatter call site names a Capability — the reason lens
   // says a Capability's writes: is parsed by nothing — must be revisited.
   const targets = [];
   for (const file of commandFiles()) {
-    const text = readFileSync(join(COMMANDS_DIR, file), "utf8");
+    const text = commandText(file);
     // Only REAL invocations: the argument must look like a path. Guarantee-audit prose writes
     // `--from-frontmatter … --target`, and an ellipsis is a citation of the flag, not a call site.
     for (const m of text.matchAll(/--from-frontmatter\s+(\S+)/g)) {
@@ -2023,7 +2039,7 @@ test("✧ PHASE-MARKER ENUMERATION is non-vacuous and CLOSED over the corpus", (
   // Closure over the CORPUS, not over this list — this is the assertion that makes a third caller fail
   // here instead of shipping uncovered (L31's exact gap).
   const live = readdirSync(COMMANDS_DIR)
-    .filter((f) => f.endsWith(".md") && /node pharn\/floor\/mark-phase\.mjs/.test(readFileSync(join(COMMANDS_DIR, f), "utf8")))
+    .filter((f) => f.endsWith(".md") && !PART_FILES.has(f) && /node pharn\/floor\/mark-phase\.mjs/.test(commandText(f)))
     .sort();
   assert.deepEqual(live, enumerated, "every command invoking mark-phase.mjs must be enumerated above");
 });
@@ -3413,7 +3429,7 @@ test("✧ RUN-MARKER ENUMERATION is non-vacuous and CLOSED over the corpus — n
   const enumerated = RUN_MARKER_WIRING.map((c) => c.file).sort();
   assert.deepEqual([...new Set(enumerated)], enumerated, "no duplicate member");
   const live = readdirSync(COMMANDS_DIR)
-    .filter((f) => f.endsWith(".md") && /node pharn\/floor\/run-marker\.mjs/.test(readFileSync(join(COMMANDS_DIR, f), "utf8")))
+    .filter((f) => f.endsWith(".md") && !PART_FILES.has(f) && /node pharn\/floor\/run-marker\.mjs/.test(commandText(f)))
     .sort();
   assert.deepEqual(
     live,
@@ -4063,37 +4079,46 @@ test("✧ STAGE_AGENT_WIRING (10) — every --mode stage-agent line of pharn-loo
 // runs, and its `description:` is what every session of a user's project carries in its command listing.
 // 6.28.2 cut both (the measured before/after is in `.dev/features/slim-commands/BUILD.md` and CHANGELOG
 // [6.28.2]); this section keeps them cut. BOTH are budgeted, over the whole set, one rule per property:
-//   R1 closure — the product commands on disk (`pharn-*.md` minus `pharn-dev-*`) EQUAL the table's keys:
-//      non-empty, no command without a ceiling, no ceiling without a file;
+//   R1 closure — the product command FILES on disk (`pharn-*.md` minus `pharn-dev-*`, a command's parts included,
+//      6.32.0) EQUAL the table's keys: non-empty, no file without a ceiling, no ceiling without a file;
 //   R2 body — each file's UTF-8 bytes, measured after folding `\r\n` to `\n` (a CRLF checkout measures what the
 //      repository holds), is at most its ceiling;
 //   R3 description — each description, read from the frontmatter as ONE double-quoted scalar (a description
 //      this reader cannot parse fails the rule), is at most DESCRIPTION_MAX_BYTES UTF-8 bytes;
 //   R4 no claim vocabulary — no description matches CLAIM_VOCABULARY_RE (claims live in the claims block);
-//   R5 the claims block — each command has exactly one heading line starting `## What you may claim`,
-//      counted outside fenced blocks.
+//   R5 the claims block — each command, read with its parts, has exactly one heading line starting
+//      `## What you may claim`, counted outside fenced blocks.
 // THE CEILINGS ARE MEASURED, never chosen: after the slim, ceiling = the file's measured bytes + 10%, rounded
 // up to the next multiple of 512. RAISING ONE IS A DELIBERATE, VISIBLE DIFF in the PR that needs it — the
 // table below is the only place a ceiling lives, so a command that grows past its headroom fails here until
 // someone edits this table and says why.
 //
 // ── Honest scope (P0) ─────────────────────────────────────────────────────────────────────────────────
-// FLOOR (what a green run means): the five rules above hold for the eleven files on disk.
+// FLOOR (what a green run means): the five rules above hold for the product files on disk (fifteen at 6.32.0:
+//   eleven commands and four parts).
 // NOT guaranteed: it bounds BYTES and VOCABULARY, never meaning. A paraphrased claim ("ensures",
 //   "guarantees") passes R4 — named follow-up `description-claim-paraphrase`. R5 proves the block EXISTS,
 //   never that it is complete or true. A body within its ceiling can still have lost an instruction: the
 //   other pins in this file and the review hold that, not this section. The `pharn-dev-*` commands are
 //   outside it (slim-commands D8, follow-up `dev-command-slim`).
 
+// 6.32.0 (orchestrator-context): the budget is per FILE on disk, a command's PARTS included — a part is inserted into
+// the run when its command reads it, so its bytes are budgeted like a command's. pharn-loop.md and pharn-ship.md were
+// re-measured after their quick and stop text moved into parts (79,903 → 42,536 and 69,421 → 35,301 bytes); their
+// rows went DOWN, and each part's row is its own measure + 10%, rounded up to 512.
 const COMMAND_BYTE_CEILINGS = Object.freeze({
   "pharn-build.md": 22016,
   "pharn-grill.md": 23040,
-  "pharn-loop.md": 86016,
+  "pharn-loop.md": 47104,
+  "pharn-loop-close.md": 33792,
+  "pharn-loop-quick.md": 12800,
   "pharn-memory-promote.md": 27648,
   "pharn-plan.md": 24064,
   "pharn-regress.md": 20480,
   "pharn-review.md": 24064,
-  "pharn-ship.md": 76800,
+  "pharn-ship.md": 38912,
+  "pharn-ship-close.md": 30720,
+  "pharn-ship-quick.md": 12800,
   "pharn-spec.md": 27136,
   "pharn-test.md": 20480,
   "pharn-verify.md": 18432,
@@ -4108,9 +4133,10 @@ const REVIEW_DESCRIPTION_BEFORE_SLIM =
 
 /** The product commands on disk: `pharn-*.md` minus `pharn-dev-*`, sorted. */
 function productCommandFiles() {
-  return commandFiles().filter((f) => f.startsWith("pharn-") && !f.startsWith("pharn-dev-"));
+  return commandAndPartFiles().filter((f) => f.startsWith("pharn-") && !f.startsWith("pharn-dev-"));
 }
 
+/** One product FILE's bytes as the repository holds them — a part is budgeted on its own (R1–R4). */
 function productCommandText(file) {
   return readFileSync(join(COMMANDS_DIR, file), "utf8");
 }
@@ -4216,9 +4242,11 @@ test("✧ BUDGET R4: no product command's description carries claim vocabulary",
   assert.match(REVIEW_DESCRIPTION_BEFORE_SLIM, CLAIM_VOCABULARY_RE);
 });
 
-test("✧ BUDGET R5: every product command has exactly one `## What you may claim` block", () => {
+test("✧ BUDGET R5: every product command has exactly one `## What you may claim` block — counted over the command with its parts", () => {
+  // 6.32.0: a command's claims block may sit in its close part; the rule is one block per COMMAND, never per file.
   const offenders = productCommandFiles()
-    .map((f) => [f, claimsHeadingCount(productCommandText(f))])
+    .filter((f) => !PART_FILES.has(f))
+    .map((f) => [f, claimsHeadingCount(commandText(f))])
     .filter(([, n]) => n !== 1)
     .map(([f, n]) => `${f}: ${n} claims headings`);
   assert.deepEqual(offenders, []);
@@ -4333,7 +4361,11 @@ function shellValueOffenders(found) {
   return out;
 }
 
-const productPairs = () => productCommandFiles().map((f) => [f, commandBody(f)]);
+// Per COMMAND (6.32.0): a part's shell lines are read inside its command's family text, never as a command of its own.
+const productPairs = () =>
+  productCommandFiles()
+    .filter((f) => !PART_FILES.has(f))
+    .map((f) => [f, commandBody(f)]);
 
 test("✧ SHELL-SINK 1 — every placeholder a product command's shell line takes is a SHELL_VALUES member, and every member is taken (L36)", () => {
   const found = placeholdersOf(productPairs());
