@@ -18,6 +18,15 @@ docs/lessons-index.md
 .claude/settings.json
 .claude/settings.local.json
 
+# Other Claude Code sessions' worktrees. They are git-excluded through `.git/info/exclude`, which prettier does not
+# read (it reads `.gitignore`), and they are not tracked, so this entry removes no repo file from format coverage.
+# Without it, a bare `format:check` in a main checkout reads every nested worktree and ignores that worktree's own
+# `.prettierignore`. Measured with one nested copy of HEAD: 62 committed files inside it were flagged, because this
+# file excludes them at the root only. The markdownlint twin is `.markdownlint-cli2.jsonc`'s `.claude/worktrees`
+# entry. Bound: it is tied to where Claude Code places worktrees today. If that location moves, the entry silently
+# matches nothing.
+.claude/worktrees/
+
 # Machine stage-reports that /pharn-dev-regress and /pharn-dev-verify must write VERBATIM — each is its
 # floor helper's stdout JSON, deliberately NOT formatted so the recorded verdict is the helper's own
 # bytes. Without these entries those two requirements conflict with whole-repo `format:check`, which the
