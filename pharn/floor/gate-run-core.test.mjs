@@ -45,6 +45,12 @@ import {
   stampToMap,
   completenessFromStamp,
   gateRunBlock,
+  REUSED_REASON,
+  REUSE_SOURCE,
+  REUSE_TARGET_STAGE,
+  REUSED_BLOCK_KEYS,
+  NON_REUSABLE_IDS,
+  MAX_REUSABLE_EXIT,
 } from "./gate-run-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -854,5 +860,123 @@ test("baseSpecFrom: every refusal is spec-mismatch, and it is TOTAL over parsed 
     const r = baseSpecFrom(h, "demo");
     assert.equal(r.ok, false, JSON.stringify(h));
     assert.equal(r.reason_code, "spec-mismatch");
+  }
+});
+
+// ── REUSED ENTRIES (6.34.0, verify-head-gate-reuse) — the SHAPE validateStamp admits, and every way to miss it ──
+function reusedStamp(mutate = () => {}) {
+  const s = goodStamp({ required: ["test", "typecheck"] });
+  const A = s.runs[0].fp_after;
+  const typecheck = {
+    seq: 1,
+    id: "typecheck",
+    exit: 0,
+    ran: false,
+    timed_out: false,
+    mutated: false,
+    reason: REUSED_REASON,
+    argv: ["npm", "run", "typecheck"],
+    shell: null,
+    files: [],
+    fp_before: A,
+    fp_after: A,
+    stdout_sha256: A,
+    stderr_sha256: A,
+    results_sha256: null,
+    identity_sha256: "c".repeat(64),
+    reused: { stage: "regress", side: "head", seq: 3, stamp_sha256: "d".repeat(64) },
+  };
+  s.runs = [s.runs[0], typecheck, { ...s.runs[1], seq: 2, fp_before: A }];
+  mutate(s, typecheck);
+  return s;
+}
+
+test("reused entry: the constants are the one sanctioned source and target", () => {
+  assert.equal(REUSED_REASON, "reused");
+  assert.deepEqual({ ...REUSE_SOURCE }, { stage: "regress", side: "head" });
+  assert.equal(REUSE_TARGET_STAGE, "verify");
+  assert.deepEqual([...REUSED_BLOCK_KEYS], ["stage", "side", "seq", "stamp_sha256"]);
+  assert.deepEqual([...NON_REUSABLE_IDS], [...new Set([...Object.values(LEVEL_GATES).flat(), ...STYLE_SET, "reconcile"])].sort());
+});
+
+test("reused entry: a well-formed one validates (the non-vacuity control), and its exit reaches the map", () => {
+  const s = reusedStamp();
+  assert.deepEqual(validateStamp(s), { ok: true });
+  assert.deepEqual(stampToMap(s), { test: 0, typecheck: 0, reconcile: 0 });
+});
+
+test("reused entry: EACH shape defect is refused as stamp-malformed (L52: one mutation per rule)", () => {
+  const defects = [
+    ["ran: true", (s, r) => (r.ran = true)],
+    ["no reused block", (s, r) => delete r.reused],
+    ["a reused block without the reason", (s, r) => (r.reason = null)],
+    ["the block is not an object", (s, r) => (r.reused = "regress/head")],
+    ["an extra key", (s, r) => (r.reused.extra = 1)],
+    ["a missing key", (s, r) => delete r.reused.seq],
+    ["another stage", (s, r) => (r.reused.stage = "verify")],
+    ["the base side", (s, r) => (r.reused.side = "base")],
+    ["a negative seq", (s, r) => (r.reused.seq = -1)],
+    ["a non-integer seq", (s, r) => (r.reused.seq = "3")],
+    ["a malformed stamp digest", (s, r) => (r.reused.stamp_sha256 = "x")],
+    ["no identity", (s, r) => delete r.identity_sha256],
+    ["timed out", (s, r) => (r.timed_out = true)],
+    ["mutated", (s, r) => (r.mutated = true)],
+    ["fp_after differs", (s, r) => (r.fp_after = "e".repeat(64))],
+    ["a results digest", (s, r) => (r.results_sha256 = "f".repeat(64))],
+    ["no results field", (s, r) => delete r.results_sha256],
+    ["in a regress stamp", (s) => Object.assign(s, { stage: "regress", side: "head" })],
+  ];
+  for (const [name, m] of defects) {
+    const s = reusedStamp(m);
+    // Keep the fp chain intact where a mutation moved fp_after, so only the rule under test can refuse.
+    if (s.runs[2]) s.runs[2].fp_before = s.runs[1].fp_after;
+    assert.equal(validateStamp(s).reason_code, "stamp-malformed", name);
+  }
+});
+
+test("reused entry: EVERY never-reused id is refused, whatever its shape (grill I1)", () => {
+  for (const gate of NON_REUSABLE_IDS) {
+    const s = reusedStamp((st, r) => {
+      r.id = gate;
+      st.required = ["test", gate].filter((x, i, a) => a.indexOf(x) === i);
+    });
+    if (gate === "test") s.runs[0].id = "lint-other"; // keep ids unique; `test` itself is the reused one here
+    if (gate === "reconcile") s.runs[2].id = "structural:x/evals/expected/a.json";
+    const v = validateStamp(s);
+    assert.equal(v.ok, false, gate);
+    assert.equal(v.reason_code, "stamp-malformed", `${gate}: ${v.reason}`);
+    assert.match(v.reason, /are never reused/, `${gate} is refused by the never-reused rule, not another (L60): ${v.reason}`);
+  }
+  // Control: the same construction with a reusable id validates, so the refusals above are the rule's.
+  assert.equal(validateStamp(reusedStamp()).ok, true);
+});
+
+test("identity_sha256 (6.34.0) is optional and additive — absent validates, a malformed value is refused", () => {
+  const s = goodStamp();
+  assert.equal(validateStamp(s).ok, true, "a pre-6.34.0 stamp (no identity) still validates");
+  s.runs[0].identity_sha256 = "a".repeat(64);
+  assert.equal(validateStamp(s).ok, true);
+  for (const bad of ["x", null, 3, "A".repeat(64)]) {
+    s.runs[0].identity_sha256 = bad;
+    assert.equal(validateStamp(s).reason_code, "stamp-malformed", String(bad));
+  }
+});
+
+test("entry-not-run is unchanged for every reason but `no-files` and a well-formed reuse", () => {
+  const s = goodStamp();
+  s.runs[0].ran = false;
+  for (const reason of [null, "skipped", "reuse", "REUSED"]) {
+    s.runs[0].reason = reason;
+    assert.equal(validateStamp(s).reason_code, "entry-not-run", String(reason));
+  }
+});
+
+test("reused entry: its exit must be a completed process exit (0..MAX_REUSABLE_EXIT) — GATE-2 review", () => {
+  for (const exit of [0, 1, MAX_REUSABLE_EXIT])
+    assert.equal(validateStamp(reusedStamp((s, r) => (r.exit = exit))).ok, true, `exit ${exit}`);
+  for (const exit of [126, 127, 137, -1, 1.5]) {
+    const v = validateStamp(reusedStamp((s, r) => (r.exit = exit)));
+    assert.equal(v.ok, false, `exit ${exit}`);
+    if (Number.isInteger(exit)) assert.match(v.reason, /completed process exit/, `exit ${exit}: ${v.reason}`);
   }
 });

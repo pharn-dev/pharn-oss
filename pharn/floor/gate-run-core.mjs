@@ -25,7 +25,10 @@
 // ================================ HONEST SCOPE — WHAT A STAMP PROVES ================================
 //
 // GIVEN a stamp that validates here, these hold and nothing more:
-//   • the map's VALUES are the exit codes the runner recorded from the listed argv;
+//   • the map's VALUES are the exit codes the runner recorded from the listed argv — for a REUSED verify entry
+//     (6.34.0), the exit a runner recorded for the SOURCE execution its `reused` block names, which this stamp's
+//     runner found eligible and identity-equal at the live tree when it recorded the entry (gate-reuse-core.mjs);
+//     nothing re-derives that decision later (the named residual `verify-reuse-rederive`);
 //   • the map's KEYS cover the resolved source set (plus `reconcile` for verify);
 //   • no tree edit happened between consecutive gate runs (fp_after[k-1] === fp_before[k]);
 //   • `reconcile`, when present, ran LAST.
@@ -208,6 +211,31 @@ export const SIDES = Object.freeze(["base", "head"]);
 
 /** The stamp schema id. Bumped only on a breaking shape change (pharn-contracts/gate-run-record.md). */
 export const SCHEMA = "gate-run-record/1";
+
+/** ------------------------------------------------------------------------------------------------
+ *  A REUSED run (6.34.0, verify-head-gate-reuse). A verify stamp may record an entry whose result is a COMPLETED
+ *  execution of this delivery run's /pharn-regress HEAD side over the same tree and the same execution identity
+ *  (gate-reuse-core.mjs decides that; this module holds only the SHAPE). Such an entry is `ran: false` — VERIFY did
+ *  not run the process — with `reason: REUSED_REASON` and a `reused` block naming the source execution. The shape is
+ *  ADDITIVE, like `results_sha256` (6.15.0): SCHEMA is unchanged, and a floor older than 6.34.0 reads such an entry as
+ *  `entry-not-run` (a LAPSE code — a re-run), the fail-closed direction.
+ *  REUSE_SOURCE is the ONE sanctioned source; a reused entry is admitted only in a stamp of REUSE_TARGET_STAGE.
+ *  ---------------------------------------------------------------------------------------------- */
+export const REUSED_REASON = "reused";
+export const REUSE_SOURCE = Object.freeze({ stage: "regress", side: "head" });
+export const REUSE_TARGET_STAGE = "verify";
+export const REUSED_BLOCK_KEYS = Object.freeze(["stage", "side", "seq", "stamp_sha256"]);
+/** The largest exit a COMPLETED process reports as itself: 126/127 are the runner's spawn-failure codes, >= 128 a signal
+ *  (run-gates.mjs `signalExit`), and 124-by-timeout is excluded by `timed_out`. Only 0..this is ever reused. */
+export const MAX_REUSABLE_EXIT = 125;
+/** Never reused, whatever a source says — DERIVED from the sets below, never re-listed (L29/L35):
+ *    • every AC level gate (LEVEL_GATES) — the AC gate reads their per-test records from VERIFY's OWN `<out>` and requires
+ *      their pinned run;
+ *    • every style gate (STYLE_SET) — a whole-tree style run reads the feature's fingerprint-EXCLUDED artifacts, which
+ *      differ between the regress HEAD run and verify (REGRESSION.md is written after the head drain; an earlier
+ *      iteration's VERIFY.md is removed by verify's fresh start), so an equal fingerprint is not an equal input (grill B1);
+ *    • `reconcile` — it judges the verify window itself. */
+export const NON_REUSABLE_IDS = Object.freeze([...new Set([...Object.values(LEVEL_GATES).flat(), ...STYLE_SET, "reconcile"])].sort());
 
 /** A feature slug: one path segment, no traversal, no separators.
  *  A THIRD copy of a grammar already in mark-phase.mjs (NAME_RE) and render-run-report.mjs (SLUG_RE) — neither exports
@@ -614,6 +642,32 @@ export function coverageGap(stamp) {
   return required.filter((id) => !have.has(id));
 }
 
+/** Why run `r` of `stamp` is not a well-formed REUSED entry, or null. The runner writes exactly this shape
+ *  (gate-reuse-core.mjs `reusedRunRecord`): VERIFY ran nothing (`ran: false`), nothing timed out or moved the tree in
+ *  this slot (`fp_before === fp_after`), no per-test file exists at this stage's results path, the identity is
+ *  recorded, and the block names the one sanctioned source. TOTAL over parsed JSON (L62): no value is interpolated. */
+function reusedRunDefect(stamp, r) {
+  if (stamp.stage !== REUSE_TARGET_STAGE) return `only a ${REUSE_TARGET_STAGE} stamp may carry a reused entry`;
+  if (r.reason !== REUSED_REASON || r.ran !== false) return `a reused entry is ran:false with reason ${JSON.stringify(REUSED_REASON)}`;
+  if (NON_REUSABLE_IDS.includes(r.id)) return `${NON_REUSABLE_IDS.join(", ")} are never reused`;
+  if (!isInt(r.exit) || r.exit < 0 || r.exit > MAX_REUSABLE_EXIT)
+    return `a reused exit is a completed process exit, 0..${MAX_REUSABLE_EXIT}`;
+  const b = r.reused;
+  if (b === null || typeof b !== "object" || Array.isArray(b)) return "the `reused` block is not an object";
+  const keys = Object.keys(b);
+  if (keys.length !== REUSED_BLOCK_KEYS.length || !REUSED_BLOCK_KEYS.every((k) => Object.hasOwn(b, k))) {
+    return `the \`reused\` block's keys are not exactly ${REUSED_BLOCK_KEYS.join(", ")}`;
+  }
+  if (b.stage !== REUSE_SOURCE.stage || b.side !== REUSE_SOURCE.side) return "the `reused` block does not name the regress/head source";
+  if (!isInt(b.seq) || b.seq < 0) return "reused.seq is not a non-negative integer";
+  if (!isCleanToken(b.stamp_sha256, 64) || !HEX64_RE.test(b.stamp_sha256)) return "reused.stamp_sha256 is not a sha256 hex digest";
+  if (!Object.hasOwn(r, "identity_sha256")) return "a reused entry must record its identity_sha256";
+  if (r.timed_out !== false || r.mutated !== false || r.fp_before !== r.fp_after)
+    return "a reused entry neither times out nor moves the tree";
+  if (!Object.hasOwn(r, "results_sha256") || r.results_sha256 !== null) return "a reused entry records results_sha256: null";
+  return null;
+}
+
 /** ------------------------------------------------------------------------------------------------
  *  Stamp validation — the shape half of the floor claim. Every refusal carries a closed reason_code.
  *  ---------------------------------------------------------------------------------------------- */
@@ -676,9 +730,19 @@ export function validateStamp(stamp, expect = {}) {
     ) {
       return err("stamp-malformed", `stamp.runs[${i}].results_sha256 must be null or a sha256 hex digest`);
     }
+    // OPTIONAL and additive (6.34.0): the execution identity the runner computed for this entry (gate-reuse-core.mjs).
+    if (Object.hasOwn(r, "identity_sha256") && !(isCleanToken(r.identity_sha256, 64) && HEX64_RE.test(r.identity_sha256))) {
+      return err("stamp-malformed", `stamp.runs[${i}].identity_sha256 must be a sha256 hex digest`);
+    }
+    // A REUSED entry (6.34.0) — its whole shape, before the not-run rule below admits it.
+    if (r.reason === REUSED_REASON || Object.hasOwn(r, "reused")) {
+      const bad = reusedRunDefect(stamp, r);
+      if (bad !== null)
+        return err("stamp-malformed", `stamp.runs[${i}] (${JSON.stringify(r.id)}) is not a well-formed reused entry: ${bad}`);
+    }
     // An entry that never ran is a stamp that must not have been finalized. Named separately from the
     // malformed class so check-loop-fresh.mjs routes it to "re-run the stage" (it is in LAPSE_CODES).
-    if (r.ran === false && r.reason !== "no-files") {
+    if (r.ran === false && r.reason !== "no-files" && r.reason !== REUSED_REASON) {
       return err("entry-not-run", `stamp.runs[${i}] (${r.id}) never ran and carries no 'no-files' reason`);
     }
   }

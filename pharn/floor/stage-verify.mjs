@@ -33,7 +33,13 @@
 //   chain    — `check-plan-spec-agree.mjs`, read through `shelledVerdict` (a crash is never read as a RED).
 //   pairs    — EVAL_PAIR_RULE over the PLAN's `## Files` and a `-z` listing (L21).
 //   verifiers— `count-verifiers.mjs .`, before the slow steps so a crash costs no gate run.
-//   init     — `run-gates.mjs init --stage verify`; exit 3 is the `no-gates` question. The completeness capture the
+//   init     — `run-gates.mjs init --stage verify`; exit 3 is the `no-gates` question. Since 6.34.0 it OFFERS this
+//              delivery run's /pharn-regress HEAD stamp (`--reuse-stamp`, `--reuse-sha256`) when `head-reuse-offer.mjs
+//              acceptReuseSource` accepts it — exactly one open /pharn-loop|/pharn-ship marker, and the git-dir offer
+//              /pharn-regress published for that run binding the stamp's exact bytes (head-reuse-offer.mjs); the runner
+//              then decides PER ENTRY whether a completed HEAD execution with the same execution identity can
+//              stand in for spawning the gate (REUSED EXECUTIONS, run-gates.mjs). No offer, or a miss: the gate runs as
+//              before. The completeness capture the
 //              runner took at init must pass `checkCompleteness`, BEFORE any gate runs: a crashed
 //              `check-build-complete.mjs` is `child-crashed` here, never an INCOMPLETE verdict.
 //   drain    — `run --next` per gate under the budget (a checkpoint at its top).
@@ -77,6 +83,7 @@
 // Exit: 0 done · 2 unusable · 3 refused · 4 question · 5 continue · anything else (1 included) = CRASHED.
 
 import { existsSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -90,12 +97,16 @@ import {
   classifyVerdict,
   checkCompleteness,
   composeReport,
+  gateReuseBlock,
 } from "./stage-verify-core.mjs";
 import { renderDone, renderRefused } from "./render-verify.mjs";
 import { shelledVerdict, crashedDetail } from "./shelled-verdict-core.mjs";
 import { pathsFromPlanFiles, clean } from "./plan-files-core.mjs";
 import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 import { dataText } from "./quote-core.mjs";
+import { readMarkers, readInProject, HEAD_STAMP } from "./regress-base-reuse.mjs";
+import { readOffer, acceptReuseSource } from "./head-reuse-offer.mjs";
+import { STAMP_MAX_BYTES } from "./regress-base-reuse-core.mjs";
 import {
   flag,
   has,
@@ -287,11 +298,27 @@ function readCompletenessText() {
   }
 }
 
+/** 6.34.0 — does THIS delivery run offer its /pharn-regress HEAD stamp? Read this invocation (markers never parsed, the
+ *  offer and the stamp never followed — the BASE-reuse readers, L35); decided by the pure rule. Null: no offer, never an
+ *  error — every gate then runs exactly as before. */
+function reuseOffer(feature) {
+  const a = acceptReuseSource({
+    feature,
+    markers: readMarkers(feature),
+    now: Date.now(),
+    offer: readOffer(),
+    stamp: readInProject(HEAD_STAMP, STAMP_MAX_BYTES),
+  });
+  return a.ok ? { stamp: HEAD_STAMP, sha256: a.stampSha256 } : null;
+}
+
 function phaseInit(cfg, pairs) {
   const args = ["init", "--stage", "verify", "--feature", cfg.feature, "--out", VERIFY_PATHS.gates];
   if (cfg.gatesSpec !== null) args.push("--gates", cfg.gatesSpec);
   else if (existsSync("package.json")) args.push("--discover", "package.json");
   if (pairs.length) args.push("--extra", JSON.stringify(pairs));
+  const offer = reuseOffer(cfg.feature);
+  if (offer !== null) args.push("--reuse-stamp", offer.stamp, "--reuse-sha256", offer.sha256);
   const r = spawnSync(process.execPath, [RUN_GATES, ...args], { encoding: "utf8" });
   let parsed;
   try {
@@ -361,7 +388,25 @@ function runPhases(state, budget) {
   if (!completeness.ok) {
     emitUnusable(state.feature, "child-crashed", `the completeness capture is no longer usable (${completeness.reason})`);
   }
-  const composed = composeReport({ checker: verdict.report, completeness: completeness.value, verifiers: state.verifiers });
+  // 6.34.0 — which results the stamp records as reused, read from the stamp the verdict was just derived from.
+  // Bound to the bytes the verdict read (its gate_run.stamp_sha256), so the block cannot describe another stamp.
+  let stampText;
+  try {
+    const bytes = readFileSync(STAMP);
+    const bound = verdict.report.gate_run && verdict.report.gate_run.stamp_sha256;
+    stampText = createHash("sha256").update(bytes).digest("hex") === bound ? bytes.toString("utf8") : null;
+  } catch {
+    stampText = null; // gateReuseBlock refuses it — a stamp the verdict just read and now cannot, never a silent "none"
+  }
+  const gateReuse = gateReuseBlock(stampText);
+  if (!gateReuse.ok)
+    emitUnusable(state.feature, "child-crashed", `the verify stamp could not be re-read for its reuse block (${gateReuse.reason})`);
+  const composed = composeReport({
+    checker: verdict.report,
+    completeness: completeness.value,
+    verifiers: state.verifiers,
+    gateReuse: gateReuse.value,
+  });
   if (!composed.ok) emitUnusable(state.feature, "child-crashed", composed.reason);
 
   // "render" — a containment walk before each write (writeIntoFeature), the report first.

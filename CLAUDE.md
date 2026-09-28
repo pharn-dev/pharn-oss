@@ -325,7 +325,8 @@ node pharn/floor/feature-name.mjs [--fresh]
 # trigger. THREE FILES, three reasons to change (P3): gate-run-core.mjs is PURE (grammar, coverage, the
 # closed reason_code set, stamp validation — no child_process, so both checkers' "no child process"
 # headers stay true); worktree-fingerprint.mjs is git+hashing; run-gates.mjs is execution.
-# FLOOR, given the stamp: the map's values ARE the exit codes the runner recorded from the listed argv;
+# FLOOR, given the stamp: the map's values ARE the exit codes the runner recorded from the listed argv (for a REUSED
+# verify entry, 6.34.0, the exit recorded for the SOURCE execution its `reused` block names — see HEAD→VERIFY REUSE);
 # the keys COVER the resolved source set (+ `reconcile` for verify); NO tree edit happened between
 # consecutive gates (fp_after[k-1] == fp_before[k]); and `reconcile` ran LAST so it judges any write an
 # earlier gate made. NOT COVERED BY THE STAMP ALONE, each stated: FRESHNESS (`fingerprint.final` is WRITTEN
@@ -371,7 +372,7 @@ node pharn/floor/feature-name.mjs [--fresh]
 # Exit: init 0 ok | 2 runner error (closed reason_code) | 3 EMPTY SOURCE SET (nothing written; routes to the
 # existing no-gates HALT, and to /pharn-loop's unattended S4 `blocked: no-gates`) ·
 # run 0 an entry ran (a FAILING GATE IS DATA, not a runner error) | 2 runner error | 3 nothing left.
-node pharn/floor/run-gates.mjs init --stage verify|regress [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--discover <package.json>] [--gates "<cmd>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>]
+node pharn/floor/run-gates.mjs init --stage verify|regress [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--discover <package.json>] [--gates "<cmd>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>] [--reuse-stamp <f> --reuse-sha256 <hex>]
 node pharn/floor/run-gates.mjs init --stage ac-test --feature <name> --out <dir> --discover <package.json> --ac-tests <AC-TESTS.md> [--cwd <dir>]   # 6.18.0, /pharn-test's red run
 node pharn/floor/run-gates.mjs run --next --out <dir> --timeout-ms <N>
 node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
@@ -729,6 +730,34 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 # writer can forge record + evidence together; the base side's in-progress scratch is write-tool reachable while a chain
 # is paused at `continue` (follow-up regress-paused-chain-integrity); a stale marker (≤ 24 h) binds a later standalone
 # regress. /pharn-dev-regress (prose) is unchanged. Contract: pharn/pharn-contracts/regression-report.md.
+
+# HEAD→VERIFY GATE REUSE (6.34.0, verify-head-gate-reuse) — inside ONE /pharn-loop or /pharn-ship run, /pharn-verify records a
+# gate's result from a COMPLETED execution of that run's /pharn-regress HEAD side instead of spawning the gate again, when
+# tested code proves every input it binds is equal (agreement, never that the executions are the same):
+# pharn/floor/gate-reuse-core.mjs (pure) is the rule — the EXECUTION
+# IDENTITY (command, ordered files, cwd realpath, --timeout-ms, git HEAD, the PHARN_TEST_RESULTS variable's name, the
+# tree fingerprint algo + fp_before; `run-gates.mjs` records it on every run as `runs[].identity_sha256`) and the
+# eligibility (a completed process exit 0..125 — a completed RED is reused like a green —, not timed out, not mutated,
+# no regular results file, never an id in gate-run-core.mjs NON_REUSABLE_IDS = every AC level gate, every STYLE_SET gate
+# (a whole-tree style run reads the fingerprint-excluded REGRESSION.md/VERIFY.md, grill B1) and reconcile). The source is
+# offered only through pharn/floor/head-reuse-offer.mjs's record in the GIT DIR (`pharn-regress-head-offer.json`; the
+# module also holds the acceptance rule) — denied to the write tools in a main checkout and a linked worktree (★ HOOK),
+# NOT for a separate git dir under a temp root in an installed project with no run open (GATE-2 review, the BASE record's
+# bound too); a stamp planted under `.pharn/` by a --quick build is never offered (grill B2): stage-regress
+# discards it at its fresh start and publishes it once the HEAD stamp is final, bound to the stamp's bytes and the open
+# run marker; stage-verify passes `--reuse-stamp`/`--reuse-sha256` only when that offer names THIS run and these bytes.
+# A HIT is recorded as `ran: false, reason: "reused"` + `reused: {stage, side, seq, stamp_sha256}` with the source's
+# exit and log digests (its logs copied, verified, under verify's own names) — nothing spawned; every MISS runs the gate
+# exactly as before, never an error. verify-report.json gains the additive, advisory `gate_reuse: {reused: [...]}` and
+# VERIFY.md says "reused, not re-executed". UNCHANGED: resolveSet, the AC gate, completeness, check-verify.mjs,
+# check-regress.mjs, check-loop-fresh.mjs (J/E pass over the copied logs), the drain/budget/resume. FLOOR: the decision
+# (content hashes + equality) at the moment it is made. ADVISORY: that a reused result equals a fresh run (determinism;
+# the inherited env, the git index and ignored files are unbound), and verify loses its second sample of a flaky gate.
+# NAMED residuals: verify-reuse-rederive (nothing re-derives the decision later), verify-paused-chain-integrity (the
+# in-progress `reuse` binding is write-tool reachable while a verify chain is paused), verify-reuse-inherited-env,
+# verify-reuse-excluded-artifacts, a Bash writer can forge offer + stamp together (L19). LIMITS.md's "/pharn-verify re-runs
+# the project's own gates" is human-only and now partly stale — flagged, not edited. Contracts: gate-run-record.md
+# "Reused entries", verify-report.md "The additive gate_reuse block".
 
 # THE /pharn-verify STAGE SCRIPT (added 6.26.0, stage-verify-script) — the same move for verify: every deterministic
 # step of the stage in ONE tested script, so `.claude/commands/pharn-verify.md` is a THIN CALLER that pins one line

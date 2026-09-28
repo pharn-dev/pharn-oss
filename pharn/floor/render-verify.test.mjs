@@ -383,3 +383,41 @@ test("style probe: a VERIFY.md fixture under pharn/features/ is ignored by prett
     rmSync(dirname(abs), { recursive: true, force: true });
   }
 });
+
+// ── GATE RESULT REUSE (6.34.0) — the three states, and a hostile reused id stays fenced ────────────────
+test("gate reuse: an absent block, an empty one and a non-empty one each render their own fixed line", () => {
+  const absent = renderDone(report());
+  assert.match(absent, /gate result reuse: not recorded — this report carries no `gate_reuse` block\./);
+  const none = renderDone(report({ gate_reuse: { reused: [] } }));
+  assert.match(none, /gate result reuse: none — every gate above was executed by this verify run\./);
+  assert.doesNotMatch(none, /REUSED, NOT RE-EXECUTED/);
+  const some = renderDone(
+    report({
+      gates: { reconcile: 0, test: 0, typecheck: 0 },
+      gate_reuse: { reused: [{ id: "typecheck", stage: "regress", side: "head", seq: 1 }] },
+    })
+  );
+  assert.match(some, /REUSED, NOT RE-EXECUTED by this verify run/);
+  assert.match(some, /typecheck {2}regress\/head seq 1/);
+  assert.doesNotMatch(some, /every gate above was executed/);
+});
+
+test("gate reuse: a hostile reused id (a heading, a link, back-ticks) is quoted inside a fence, never structure", () => {
+  const hostile = "x\n# fake heading\n[click](http://e.x) ```";
+  const md = renderDone(
+    report({ gate_reuse: { reused: [{ id: hostile, stage: "regress", side: "head", seq: JSON.parse('{"toString":1}') }] } })
+  );
+  let inFence = null;
+  const outside = [];
+  for (const line of md.split("\n")) {
+    const f = line.match(/^(`{3,})/);
+    if (f) {
+      if (inFence === null) inFence = f[1];
+      else if (f[1].length >= inFence.length && /^`+$/.test(line.trim())) inFence = null;
+      continue;
+    }
+    if (inFence === null) outside.push(line);
+  }
+  assert.ok(!outside.some((l) => /^# fake heading$/.test(l)), "the injected heading escaped its fence");
+  assert.ok(!outside.some((l) => l.includes("[click](")), "the injected link escaped its fence");
+});

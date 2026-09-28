@@ -78,18 +78,20 @@ initialize at all.
 
 ### Field notes
 
-| field                   | meaning                                                                                        |
-| ----------------------- | ---------------------------------------------------------------------------------------------- |
-| `schema`                | Exact match required. Bumped only on a breaking shape change.                                  |
-| `side`                  | `base`/`head` for regress; **`null`** for verify. Enum-gated both ways.                        |
-| `head`                  | `git rev-parse HEAD` at `init`, or `null` when the tree is not a git repo / HEAD is unborn.    |
-| `source`                | How the **source set** was resolved. `explicit` records the raw string in `source_raw`.        |
-| `style_skipped`         | True iff `--skip-style` actually removed a member of `STYLE_SET`. Never silent.                |
-| `required`              | The **source** ids coverage is checked against. Injected entries are not members.              |
-| `runs[].ran`            | `false` only with `reason: "no-files"` — a file-addressable gate with an empty file list.      |
-| `runs[].mutated`        | The gate changed the tree itself. **Recorded, never refused** — `reconcile` judges that write. |
-| `aux.completeness`      | `check-build-complete.mjs`'s exit. **A sibling of `runs[]`, never a member.** See below.       |
-| `runs[].results_sha256` | Optional (6.15.0). The sha256 of the gate's results file, or `null`. See below.                |
+| field                    | meaning                                                                                                                           |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `schema`                 | Exact match required. Bumped only on a breaking shape change.                                                                     |
+| `side`                   | `base`/`head` for regress; **`null`** for verify. Enum-gated both ways.                                                           |
+| `head`                   | `git rev-parse HEAD` at `init`, or `null` when the tree is not a git repo / HEAD is unborn.                                       |
+| `source`                 | How the **source set** was resolved. `explicit` records the raw string in `source_raw`.                                           |
+| `style_skipped`          | True iff `--skip-style` actually removed a member of `STYLE_SET`. Never silent.                                                   |
+| `required`               | The **source** ids coverage is checked against. Injected entries are not members.                                                 |
+| `runs[].ran`             | `false` only with `reason: "no-files"` — a file-addressable gate with an empty file list — or `reason: "reused"` (6.34.0, below). |
+| `runs[].mutated`         | The gate changed the tree itself. **Recorded, never refused** — `reconcile` judges that write.                                    |
+| `aux.completeness`       | `check-build-complete.mjs`'s exit. **A sibling of `runs[]`, never a member.** See below.                                          |
+| `runs[].results_sha256`  | Optional (6.15.0). The sha256 of the gate's results file, or `null`. See below.                                                   |
+| `runs[].identity_sha256` | Optional (6.34.0). The entry's execution identity (`gate-reuse-core.mjs`). See "Reused entries".                                  |
+| `runs[].reused`          | Only on a reused entry (6.34.0): `{stage, side, seq, stamp_sha256}` naming the source execution.                                  |
 
 ## Per-test results (`results_sha256`, 6.15.0)
 
@@ -105,6 +107,33 @@ The field is **optional and additive**. `SCHEMA` is unchanged: `validateStamp` c
 **malformed** value is refused as `stamp-malformed` by all three `validateStamp` callers — a route reachable
 only by a forged or corrupted stamp, never by one the runner wrote. What the file means, and when it can be
 read, is `test-results-record.md`'s contract, not this one.
+
+## Reused entries (`identity_sha256`, `reused`, 6.34.0)
+
+`run-gates.mjs` records on every run it executes `identity_sha256`: a sha256 over the entry's execution inputs — the
+command (`shell` or `argv`), the ordered files, the realpath of its working directory, the `--timeout-ms`, the stamp's
+`head`, the PHARN-added environment variable's NAME, and the tree fingerprint (`algo` + `fp_before`). The rule and its
+bounds are `pharn/floor/gate-reuse-core.mjs`'s header (cited, not restated — P4).
+
+A **verify** stamp may carry a **reused** entry: `/pharn-verify` offered this delivery run's regress/head stamp
+(`--reuse-stamp` + `--reuse-sha256`, only through the git-dir offer `/pharn-regress` published —
+`pharn/floor/head-reuse-offer.mjs`, which holds the offer's record and its acceptance rule), and a completed, eligible source run had the same identity at the live tree, so
+the runner recorded its result and spawned nothing. The entry is:
+
+- `ran: false`, `reason: "reused"` — this stage did not run the process;
+- `exit`, `stdout_sha256`, `stderr_sha256` — the source execution's; its two logs are copied into `<out>` under this
+  stage's own log names, byte for byte, only after each hashes to the digest the source recorded;
+- `timed_out: false`, `mutated: false`, `fp_before === fp_after` (nothing ran in the slot; a concurrent tree change
+  is caught at the next entry's boundary, as for any entry), `results_sha256: null`, `identity_sha256` present;
+- `reused: {stage: "regress", side: "head", seq, stamp_sha256}` — the source execution, by its stamp's sha256.
+
+`validateStamp` admits exactly that shape — with an `exit` in 0..125, a completed process exit — only in a `verify`
+stamp, and never for an id in `NON_REUSABLE_IDS` (every
+AC level gate, every style gate, `reconcile`). Both fields are **optional and additive**: `SCHEMA` is unchanged, a stamp
+without them validates as before, and a floor older than 6.34.0 reads a reused entry as `entry-not-run` (a LAPSE code,
+so a re-run — the fail-closed direction). The in-progress record's `reuse` binding (the offered path and digest) is
+dropped at finalize. While a verify chain is paused at `continue`, that in-progress binding is ordinary `.pharn/` state
+the write tools reach, as the in-progress `runs` already are — the named residual `verify-paused-chain-integrity`.
 
 ## Build-completeness is NOT a gate
 
@@ -171,7 +200,9 @@ release line; `check-loop-fresh.mjs`'s log check is now its emitter.
 
 ## What a validating stamp PROVES
 
-- the map's **values** are the exit codes the runner recorded from the listed argv;
+- the map's **values** are the exit codes the runner recorded from the listed argv — for a reused entry (6.34.0), the
+  exit a runner recorded for the SOURCE execution its `reused` block names, which the runner of THIS stamp found
+  eligible and identity-equal at the live tree when it recorded the entry;
 - the map's **keys** cover the resolved source set, plus `reconcile` for verify;
 - **no tree edit happened between consecutive gate runs** (`fp_after[k-1] === fp_before[k]`);
 - `reconcile`, when present, ran **last**.
@@ -192,6 +223,11 @@ release line; `check-loop-fresh.mjs`'s log check is now its emitter.
   stamp and its logs live in the writable tree, which `Bash` reaches unhooked (`LIMITS.md §6`).
 - **That a gate is the right gate.** The allowlist ∩ manifest is a membership test; that the allowlist is
   the _correct_ set is judgment, unchanged from today.
+- **A reuse decision, after the fact** (6.34.0). The identity comparison and the eligibility rules ran as tested
+  runner code when the entry was recorded; nothing later re-derives them from the verify stamp — the next
+  `/pharn-regress` clears the source, and `check-loop-fresh.mjs` does not consult it (the named residual
+  `verify-reuse-rederive`). Nor does a reused result prove what a fresh run would give NOW: that is advisory — the gate
+  assumed deterministic for one identity, with the inherited environment, the git index and ignored files unbound.
 
 ## Bounds
 

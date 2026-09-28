@@ -83,6 +83,7 @@ them in its command prose.
 | `verifiers`     | `{ registered: <int>, findings: [], note: str }`, OPTIONAL — `findings` and `note` are each optional; zero verifiers ship today, so no committed report exercises a non-empty `findings` | `stage-verify.mjs` (product) / the dev command, from `pharn/floor/count-verifiers.mjs` + each verifier | ADVISORY — no floor op reads it            |
 | `reason`        | a diagnostic sentence, present only on `INCONCLUSIVE`                                                                                                                                    | `check-verify.mjs`                                                                                     | ADVISORY — no floor op reads it            |
 | `ac_gate`       | the AC gate's block, OPTIONAL — present when `check-verify.mjs` ran with `--ac-gate` (below)                                                                                             | `check-verify.mjs` (`ac-gate-core.mjs`)                                                                | compared by `check-loop-fresh.mjs` check E |
+| `gate_reuse`    | `{ reused: [{ id, stage, side, seq }] }`, OPTIONAL — since 6.34.0 `stage-verify.mjs` always writes it (below)                                                                            | `stage-verify.mjs`, from its own verify stamp                                                          | ADVISORY — no floor op reads it            |
 
 **Trust (P2).** Every field except one carries deterministic-tool output — gate-id strings, integer exit
 codes, path strings: the enum-gated / floor-verifiable class. The exceptions are **free text and inherit
@@ -304,3 +305,32 @@ restated, P4):
 - **Trust (P2):** test ids and titles come from the project's reporter, and so do `unmapped_anomalies`' example ids;
   `detail` strings name paths from the agent-editable lock. All are untrusted DATA — renderers fence them
   (`RUN-REPORT.md`, `VERIFY.md`), and no stage follows them.
+
+## The additive `gate_reuse` block (6.34.0)
+
+Inside one `/pharn-loop` or `/pharn-ship` run, `/pharn-verify` may record a gate's result from a COMPLETED execution
+of that run's `/pharn-regress` HEAD side instead of spawning the gate again — only when the execution identity
+(command, files, cwd, timeout, git HEAD, the PHARN-added environment variable and the tree fingerprint) is equal, and
+never for an AC level gate, a style gate or `reconcile` (`pharn/floor/gate-reuse-core.mjs`, whose header is the rule;
+the stamp shape is `gate-run-record.md`, "Reused entries" — cited, not restated, P4). The report names every such
+result:
+
+```json
+{
+  "gate_reuse": {
+    "reused": [{ "id": "typecheck", "stage": "regress", "side": "head", "seq": 1 }]
+  }
+}
+```
+
+- **ADDITIVE and ADVISORY.** It is derived from the verify stamp's own run entries (`reason: "reused"`), in run
+  order, and is `{ "reused": [] }` when every gate ran in this verify run. No verdict, stop or freshness check reads it;
+  the verdict reads a reused entry's exit exactly as it reads any other (`check-verify.mjs` is unchanged). A report
+  written before 6.34.0 has no such key, and a renderer reads its absence as "not recorded".
+- **What it says, and what it does not:** it is read from the stamp bytes the verdict read (their sha256 must equal
+  `gate_run.stamp_sha256`, else the stage stops `child-crashed`); the stamp's reused entry is `ran: false` — this verify run spawned nothing — and its
+  `reused` block names the source execution by its stamp's sha256 and seq; `VERIFY.md` says "reused, not
+  re-executed". That a reused result equals what a fresh run would produce now is ADVISORY (the gate assumed
+  deterministic for one identity; nothing unbound — the inherited environment, the git index, ignored files — moved),
+  and verify gives up its independent second sample of a flaky gate for the ids it reuses.
+- **Trust (P2):** a gate id is attacker-nameable (a `--gates` token, a `structural:` path), so renderers fence it.

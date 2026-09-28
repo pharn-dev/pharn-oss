@@ -3303,14 +3303,14 @@ test("✧ NAMED_LIMITS beside it — /pharn-ship binds the verify verdict to a `
 // ---------------------------------------------------------------------------------------------------------------
 const STAGE_VERIFY_SRC = () => readFileSync(join(REPO_ROOT, "pharn/floor/stage-verify.mjs"), "utf8");
 
-test("✧ verify's report keeps EVERY checker field — composeReport spreads the checker's object, then the two blocks", () => {
+test("✧ verify's report keeps EVERY checker field — composeReport spreads the checker's object, then the three blocks", () => {
   const core = readFileSync(join(REPO_ROOT, "pharn/floor/stage-verify-core.mjs"), "utf8");
   assert.match(
     core,
-    /report: \{ \.\.\.checker, completeness, verifiers: block \}/,
-    "the checker's object is carried whole — gate_run and ac_gate included"
+    /report: \{ \.\.\.checker, completeness, verifiers: block, gate_reuse: \{ reused: gateReuse\.reused \} \}/,
+    "the checker's object is carried whole — gate_run and ac_gate included — then the merged blocks (6.34.0: gate_reuse)"
   );
-  assert.match(STAGE_VERIFY_SRC(), /composeReport\(\{ checker: verdict\.report,/, "the script composes through composeReport");
+  assert.match(STAGE_VERIFY_SRC(), /composeReport\(\{\s*checker: verdict\.report,/, "the script composes through composeReport");
 });
 
 test("✧ verify's verdict call passes --stamp, --feature and --ac-gate — the flag check-loop-fresh.mjs re-derives the report with", () => {

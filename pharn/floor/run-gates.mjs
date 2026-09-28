@@ -76,6 +76,20 @@
 // large file costs no more memory than one chunk. The file is project-written and UNTRUSTED; the runner only
 // hashes it. What it MEANS is test-results-core.mjs's business (pharn-contracts/test-results-record.md).
 //
+// ================================ REUSED EXECUTIONS (6.34.0) ================================
+// `init --stage verify --reuse-stamp <regress-head stamp> --reuse-sha256 <hex>` OFFERS a finalized /pharn-regress HEAD
+// stamp — the caller (`stage-verify.mjs`) names it only when this run's git-dir offer binds those bytes
+// (head-reuse-offer.mjs). Init reads it once (a regular file, never followed, capped), requires the named digest, and
+// binds it in the in-progress record (`reuse`). Each
+// `run --next` then computes the entry's EXECUTION IDENTITY (gate-reuse-core.mjs) at the live tree and records it on
+// EVERY run as `identity_sha256`; for a verify entry with a source, it re-reads the source, requires the same bytes,
+// asks `findReusable`, and copies the candidate's two logs into `<out>` only after each hashes to the digest the source
+// recorded. A HIT records `gate-reuse-core.mjs reusedRunRecord` and SPAWNS NOTHING; any miss runs the gate exactly as
+// before. An offer that cannot be read is `reuse` absent — never a refusal: reuse is an optimisation, never a
+// requirement. The `reuse` field lives in the in-progress record only; a finalized stamp carries the provenance per run.
+// NAMED residual `verify-paused-chain-integrity`: while a budgeted verify chain is paused at `continue`, `state.json` —
+// its `reuse` binding included — is ordinary `.pharn/` state the write tools reach, exactly as its `runs` already are.
+//
 // TRUST (P2): every operand is a path, an integer or a hex digest. Untrusted inputs — a `--gates`
 // string, a `--extra` array, a scope JSON — are shape-gated by gate-run-core.mjs before use and are
 // never eval'd, imported, or compiled into a RegExp.
@@ -84,6 +98,9 @@
 //   node pharn/floor/run-gates.mjs init --stage verify|regress [--side base|head] --feature <name>
 //        --out <dir> [--cwd <dir>] [--base <featureBase>] [--discover <package.json>] [--gates "<c>[::<id>],…"]
 //        [--extra <json-array>] [--scope-json <file>] [--skip-style] [--spec-from <dir>]
+//        [--reuse-stamp <file> --reuse-sha256 <hex>]
+//     `--reuse-stamp` (6.34.0) applies to `--stage verify` only, always with the offered bytes' `--reuse-sha256`: see
+//     REUSED EXECUTIONS above.
 //   node pharn/floor/run-gates.mjs init --stage ac-test --feature <name> --out <dir> --discover <package.json>
 //        --ac-tests <pharn/features/<name>/AC-TESTS.md> [--cwd <dir>]
 //     /pharn-test's RED RUN (6.18.0). The set is selected BY ID from the mapping's levels (gate-run-core.mjs
@@ -110,6 +127,7 @@ import {
   renameSync,
   rmSync,
   unlinkSync,
+  realpathSync,
   constants as fsConstants,
 } from "node:fs";
 import { basename, dirname, resolve, join, sep } from "node:path";
@@ -119,6 +137,8 @@ import {
   SCHEMA,
   STRUCTURAL_PREFIX,
   RESULTS_ENV,
+  REUSED_REASON,
+  REUSE_TARGET_STAGE,
   isReasonCode,
   resolveSet,
   baseSpecFrom,
@@ -129,6 +149,7 @@ import {
 } from "./gate-run-core.mjs";
 import { fingerprint } from "./worktree-fingerprint.mjs";
 import { acRowsOf } from "./ac-tests-core.mjs";
+import { executionIdentity, findReusable, reusedRunRecord } from "./gate-reuse-core.mjs";
 
 const STATE_ROOT = ".pharn";
 /** Grace between SIGTERM and SIGKILL, and the pid-reuse margin on a stale lock. */
@@ -265,6 +286,108 @@ function sha256RegularFile(file) {
   } finally {
     closeSync(fd);
   }
+}
+
+/** ------------------------------------------------------------------------------------------------
+ *  REUSE READS (6.34.0). The offered source and its logs are read WITHOUT following a link at any component under
+ *  the state root (lstat walk — ENOENT the only absence, L54) or at the last component (O_NOFOLLOW + fstat, L59), as
+ *  regular files only, capped — so a planted link, FIFO or huge file is a MISS, never followed, blocked on or loaded.
+ *  Every failure is returned, never thrown: a source that cannot be read runs the gate as before.
+ *  ---------------------------------------------------------------------------------------------- */
+const REUSE_MAX_BYTES = 64 * 1024 * 1024;
+
+function noLinkInside(base, relPath) {
+  const rootAbs = resolve(base, STATE_ROOT);
+  const abs = resolve(base, relPath);
+  if (!(abs + sep).startsWith(rootAbs + sep) || abs === rootAbs) return false;
+  let cur = rootAbs;
+  for (const part of [rootAbs, ...abs.slice(rootAbs.length).split(sep).filter(Boolean)]) {
+    cur = part === rootAbs ? rootAbs : join(cur, part);
+    let st;
+    try {
+      st = lstatSync(cur);
+    } catch (e) {
+      return e && e.code === "ENOENT"; // absent: nothing to follow (the open below then reports it)
+    }
+    if (st.isSymbolicLink()) return false;
+  }
+  return true;
+}
+
+function readRegularCapped(file) {
+  let fd;
+  try {
+    fd = openSync(file, RESULTS_OPEN_FLAGS);
+  } catch {
+    return null;
+  }
+  try {
+    const st = fstatSync(fd);
+    if (!st.isFile() || st.size > REUSE_MAX_BYTES) return null;
+    const buf = Buffer.alloc(st.size);
+    let off = 0;
+    while (off < st.size) {
+      const n = readSync(fd, buf, off, st.size - off, off);
+      if (n === 0) break;
+      off += n;
+    }
+    return off === st.size ? buf : null;
+  } catch {
+    return null;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/** The offered source's bytes, or null — contained under the invoking directory's state root, never followed. */
+function readReuseSource(relPath) {
+  if (!noLinkInside(process.cwd(), relPath)) return null;
+  return readRegularCapped(resolve(relPath));
+}
+
+/** The gate's working directory as the identity binds it: its realpath (the directory the process really runs in),
+ *  or the resolved path when it cannot be resolved — which then matches nothing a realpath produced. */
+function cwdForIdentity(cwd) {
+  try {
+    return realpathSync(resolve(cwd));
+  } catch {
+    return resolve(cwd);
+  }
+}
+
+/** Try to stand a completed source execution in for `next`. Returns `{hit: true, run}` after BOTH logs were copied into
+ *  `<out>` byte-for-byte as the source recorded them, or `{hit: false, miss}`. Writes nothing but the two log files, and
+ *  only on the path to a HIT (a miss after a partial copy leaves logs spawnGate then truncates with "w"). */
+function tryReuse({ rec, next, liveFp, liveIdentity, outFile, errFile }) {
+  const bytes = readReuseSource(rec.reuse.stamp);
+  if (bytes === null || createHash("sha256").update(bytes).digest("hex") !== rec.reuse.stamp_sha256) {
+    return { hit: false, miss: "source-changed" };
+  }
+  let source;
+  try {
+    source = JSON.parse(bytes.toString("utf8"));
+  } catch {
+    return { hit: false, miss: "source-invalid" };
+  }
+  const found = findReusable({ source, feature: rec.feature, entry: next, liveIdentity });
+  if (!found.hit) return found;
+  const srcDir = dirname(rec.reuse.stamp);
+  const srcBase = logBasename(found.run.seq, found.run.id);
+  const copies = [
+    [join(srcDir, `${srcBase}.out`), outFile, found.run.stdout_sha256],
+    [join(srcDir, `${srcBase}.err`), errFile, found.run.stderr_sha256],
+  ];
+  for (const [from, to, expected] of copies) {
+    if (!noLinkInside(process.cwd(), from)) return { hit: false, miss: "log-unverified" };
+    const log = readRegularCapped(resolve(from));
+    if (log === null || createHash("sha256").update(log).digest("hex") !== expected) return { hit: false, miss: "log-unverified" };
+    writeFileSync(to, log);
+    if (sha256File(to) !== expected) return { hit: false, miss: "log-unverified" };
+  }
+  return {
+    hit: true,
+    run: reusedRunRecord({ entry: next, candidate: found.run, sourceSha256: rec.reuse.stamp_sha256, liveFp, liveIdentity }),
+  };
 }
 
 /** Remove a gate's results path before the gate runs, so the hash taken afterwards can only describe a file
@@ -439,6 +562,23 @@ function runInit(args) {
   const featureBase = flag(args, "--base") ?? "pharn/features";
   const specFrom = flag(args, "--spec-from");
 
+  // 6.34.0 — an OFFERED source, verify only, named with the sha256 of the exact bytes the caller's offer bound. A path
+  // outside the state root or a missing digest is the caller's error (usage-error); a source that cannot be read, or
+  // whose bytes are not the named ones, is simply no offer (`reuse` absent), never a refusal.
+  let reuse = null;
+  if (has(args, "--reuse-stamp") || has(args, "--reuse-sha256")) {
+    const src = flag(args, "--reuse-stamp");
+    const want = flag(args, "--reuse-sha256");
+    if (stage !== REUSE_TARGET_STAGE) fail("usage-error", `--reuse-stamp applies to --stage ${REUSE_TARGET_STAGE} only`);
+    if (!src || src.startsWith("-")) fail("usage-error", "--reuse-stamp requires a path");
+    if (!want || !/^[0-9a-f]{64}$/.test(want)) fail("usage-error", "--reuse-stamp requires --reuse-sha256 <the offered bytes' sha256>");
+    const rootAbs = resolve(process.cwd(), STATE_ROOT);
+    const abs = resolve(process.cwd(), src);
+    if (!(abs + sep).startsWith(rootAbs + sep)) fail("usage-error", `--reuse-stamp must resolve strictly inside ${rootAbs}`);
+    const bytes = readReuseSource(src);
+    if (bytes !== null && createHash("sha256").update(bytes).digest("hex") === want) reuse = { stamp: src, stamp_sha256: want };
+  }
+
   // --side base copies the HEAD spec VERBATIM, so the gate set is decided ONCE and both sides are
   // compared over the same keys (check-regress.mjs verdict fails inconclusive on a key-set mismatch).
   if (stage === "regress" && side === "base") {
@@ -540,7 +680,7 @@ function runInit(args) {
     }
   }
 
-  return startRecord(spec, outAbs, cwd, args, { featureBase });
+  return startRecord(spec, outAbs, cwd, args, { featureBase, reuse });
 }
 
 function startRecord(spec, outAbs, cwd, args, opts = {}) {
@@ -586,6 +726,8 @@ function startRecord(spec, outAbs, cwd, args, opts = {}) {
     aux: { completeness },
     cwd,
   };
+  // In-progress only (dropped at finalize, like `entries` and `cwd`): the offered source, bound by its bytes.
+  if (opts.reuse) record.reuse = opts.reuse;
   writeAtomic(join(outAbs, "state.json"), JSON.stringify(record, null, 2));
   // `e2e_excluded` makes the regress e2e rule's drop visible to the caller (it renders it in REGRESSION.md); a
   // base side copies the head spec and reports none of its own.
@@ -598,6 +740,7 @@ function startRecord(spec, outAbs, cwd, args, opts = {}) {
       source: spec.source,
       ids: spec.entries.map((e) => e.id),
       e2e_excluded: spec.e2e_excluded ?? [],
+      reuse_offered: Boolean(opts.reuse),
     },
     0
   );
@@ -790,41 +933,76 @@ async function runNext(args) {
     if (rec.stage === "ac-test" && (next.files ?? []).length === 0) {
       fail("usage-error", `ac-test gate ${next.id} carries no mapped files — re-run init`);
     }
-    if (needsFiles && next.files.length === 0 && rec.stage === "regress") {
-      exit = 0;
-      ran = false;
-      reason = "no-files";
-      writeFileSync(outFile, "");
-      writeFileSync(errFile, "");
-    } else {
-      const res = await spawnGate(next, cwd, outFile, errFile, resultsFile, timeoutMs);
-      if (res.spawnError) fail("usage-error", `gate ${next.id} could not be started: ${res.spawnError}`);
-      exit = res.exit;
-      timed_out = res.timed_out;
+    // 6.34.0 — the entry's execution identity at the live tree (gate-reuse-core.mjs), recorded on every run.
+    const identity = executionIdentity({
+      shell: next.shell ?? null,
+      argv: next.argv ?? null,
+      files: next.files ?? [],
+      cwdAbs: cwdForIdentity(cwd),
+      timeoutMs,
+      head: rec.head ?? null,
+      fingerprintAlgo: fpBefore.algo,
+      fpBefore: fpBefore.digest,
+    });
+    const liveIdentity = identity.ok ? identity.value : null;
+
+    // 6.34.0 — a verify entry with an offered source: stand the completed source execution in for it, or run it.
+    let reused = null;
+    let reuseMiss = null;
+    if (rec.stage === REUSE_TARGET_STAGE && rec.reuse && liveIdentity !== null) {
+      const r = tryReuse({ rec, next, liveFp: fpBefore.digest, liveIdentity, outFile, errFile });
+      if (r.hit) reused = r.run;
+      else reuseMiss = r.miss;
     }
 
-    const fpAfter = fingerprint(cwd, { feature: rec.feature });
-    if (!fpAfter.ok) fail("usage-error", `cannot fingerprint after ${next.id}: ${fpAfter.reason}`);
+    let fpAfter = fpBefore;
+    if (reused !== null) {
+      // Nothing ran in this slot, so the tree was not fingerprinted again: fp_after IS fp_before (reusedRunRecord).
+      exit = reused.exit;
+      rec.runs.push(reused);
+    } else {
+      if (needsFiles && next.files.length === 0 && rec.stage === "regress") {
+        exit = 0;
+        ran = false;
+        reason = "no-files";
+        writeFileSync(outFile, "");
+        writeFileSync(errFile, "");
+      } else {
+        const res = await spawnGate(next, cwd, outFile, errFile, resultsFile, timeoutMs);
+        if (res.spawnError) fail("usage-error", `gate ${next.id} could not be started: ${res.spawnError}`);
+        exit = res.exit;
+        timed_out = res.timed_out;
+      }
 
-    rec.runs.push({
-      seq: next.seq,
-      id: next.id,
-      exit,
-      ran,
-      timed_out,
-      // A gate that mutates the tree ITSELF is RECORDED, never refused — `reconcile` runs last and is
-      // what judges that write. Refusing here would turn a legitimate generator into a runner error.
-      mutated: fpAfter.digest !== fpBefore.digest,
-      reason,
-      argv: next.argv,
-      shell: next.shell,
-      files: next.files ?? [],
-      fp_before: fpBefore.digest,
-      fp_after: fpAfter.digest,
-      stdout_sha256: sha256File(outFile),
-      stderr_sha256: sha256File(errFile),
-      results_sha256: sha256RegularFile(resultsFile),
-    });
+      fpAfter = fingerprint(cwd, { feature: rec.feature });
+      if (!fpAfter.ok) fail("usage-error", `cannot fingerprint after ${next.id}: ${fpAfter.reason}`);
+
+      const run = {
+        seq: next.seq,
+        id: next.id,
+        exit,
+        ran,
+        timed_out,
+        // A gate that mutates the tree ITSELF is RECORDED, never refused — `reconcile` runs last and is
+        // what judges that write. Refusing here would turn a legitimate generator into a runner error.
+        mutated: fpAfter.digest !== fpBefore.digest,
+        reason,
+        argv: next.argv,
+        shell: next.shell,
+        files: next.files ?? [],
+        fp_before: fpBefore.digest,
+        fp_after: fpAfter.digest,
+        stdout_sha256: sha256File(outFile),
+        stderr_sha256: sha256File(errFile),
+        results_sha256: sha256RegularFile(resultsFile),
+      };
+      if (liveIdentity !== null) run.identity_sha256 = liveIdentity;
+      rec.runs.push(run);
+    }
+    // What this call did about reuse — stdout only (the stamp's run entry is the evidence): `reused` true when it
+    // recorded a source execution and spawned nothing; `reuse_miss` the closed REUSE_MISSES code when a source was
+    // offered and this entry ran anyway.
+    const reuseOut = rec.stage === REUSE_TARGET_STAGE && rec.reuse ? { reused: reused !== null, reuse_miss: reuseMiss } : {};
 
     const remaining = rec.entries.length - rec.runs.length;
     if (remaining === 0) {
@@ -838,7 +1016,8 @@ async function runNext(args) {
           );
         }
       }
-      const notRun = rec.runs.find((x) => x.ran === false && x.reason !== "no-files");
+      // A REUSED entry (6.34.0) did not run here and is admitted: its result is the named source execution's.
+      const notRun = rec.runs.find((x) => x.ran === false && x.reason !== "no-files" && x.reason !== REUSED_REASON);
       if (notRun) fail("entry-not-run", `entry ${notRun.id} never ran`);
 
       rec.finalized = true;
@@ -846,6 +1025,7 @@ async function runNext(args) {
       const stamp = { ...rec };
       delete stamp.entries;
       delete stamp.cwd;
+      delete stamp.reuse;
       writeAtomic(join(outAbs, "stamp.json"), JSON.stringify(stamp, null, 2));
       // Exactly ONE store of the map at rest (L35): the in-progress record is removed, and no
       // results.json is ever written.
@@ -854,11 +1034,11 @@ async function runNext(args) {
       } catch {
         /* nothing to remove */
       }
-      emit({ ok: true, ran: next.id, exit, timed_out, remaining: 0, finalized: true, stamp: join(out, "stamp.json") }, 0);
+      emit({ ok: true, ran: next.id, exit, timed_out, remaining: 0, finalized: true, stamp: join(out, "stamp.json"), ...reuseOut }, 0);
     }
 
     writeAtomic(statePath, JSON.stringify(rec, null, 2));
-    emit({ ok: true, ran: next.id, exit, timed_out, remaining, finalized: false }, 0);
+    emit({ ok: true, ran: next.id, exit, timed_out, remaining, finalized: false, ...reuseOut }, 0);
   }
 }
 
@@ -875,7 +1055,7 @@ async function main(argv) {
       ok: false,
       reason_code: "usage-error",
       reason:
-        'usage: run-gates.mjs init --stage verify|regress [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--base <featureBase>] [--discover <package.json>] [--gates "<c>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>] | init --stage ac-test --feature <name> --out <dir> --discover <package.json> --ac-tests <AC-TESTS.md> [--cwd <dir>] | run --next --out <dir> --timeout-ms <N>',
+        'usage: run-gates.mjs init --stage verify|regress [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--base <featureBase>] [--discover <package.json>] [--gates "<c>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>] [--reuse-stamp <f> --reuse-sha256 <hex>] | init --stage ac-test --feature <name> --out <dir> --discover <package.json> --ac-tests <AC-TESTS.md> [--cwd <dir>] | run --next --out <dir> --timeout-ms <N>',
     },
     2
   );

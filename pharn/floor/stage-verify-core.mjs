@@ -30,7 +30,7 @@
 // select a pair the tree holds but never introduce a path. A child's parsed JSON is shape-checked with `typeof`
 // before any value is used as a key or quoted into a reason (L62: `{"toString":1}` is a legal JSON value).
 
-import { FEATURE_SLUG_RE, actualForExpected } from "./gate-run-core.mjs";
+import { FEATURE_SLUG_RE, actualForExpected, REUSED_REASON } from "./gate-run-core.mjs";
 
 /** ------------------------------------------------------------------------------------------------
  *  VERIFY_PATHS — the stage's scratch layout. The stamp is `<gates>/stamp.json` and the completeness capture
@@ -201,18 +201,50 @@ export function checkCompleteness(text) {
 }
 
 /** ------------------------------------------------------------------------------------------------
- *  THE REPORT — `check-verify.mjs`'s object with every key kept, value and order, then two ADVISORY blocks the
- *  command used to merge by hand: `completeness` (the runner's capture, verbatim, after `checkCompleteness`) and
- *  `verifiers` (`{registered, findings: []}`, plus a fixed `note` when `registered > 0`). A checker key named
- *  `completeness` or `verifiers` is REFUSED rather than overwritten (GATE 1 Q2) — `check-verify.mjs` prints
- *  neither today, so the refusal guards a future change to it.
+ *  THE REUSE BLOCK (6.34.0, verify-head-gate-reuse) — which gate results in this run's stamp were REUSED from this
+ *  delivery run's /pharn-regress HEAD execution instead of being executed here (gate-reuse-core.mjs decides; the
+ *  stamp's run entries are the evidence). Derived from the verify stamp's OWN bytes — never from the source, never from
+ *  the progress record — so it can say nothing the stamp does not: `{reused: [{id, stage, side, seq}]}`, in run order,
+ *  empty when every gate ran here. ADVISORY: no verdict reads it (the checker's verdict already reads the reused
+ *  entries' exits, exactly as it reads any other). TOTAL over the text (L62): anything unparseable is a refusal.
  *  ---------------------------------------------------------------------------------------------- */
-export const MERGED_KEYS = Object.freeze(["completeness", "verifiers"]);
+export function gateReuseBlock(stampText) {
+  let stamp;
+  try {
+    stamp = JSON.parse(typeof stampText === "string" ? stampText : "");
+  } catch {
+    return { ok: false, reason: "the verify stamp is not JSON" };
+  }
+  if (stamp === null || typeof stamp !== "object" || !Array.isArray(stamp.runs)) {
+    return { ok: false, reason: "the verify stamp carries no `runs` array" };
+  }
+  const reused = [];
+  for (const r of stamp.runs) {
+    if (r === null || typeof r !== "object" || r.reason !== REUSED_REASON) continue;
+    const b = r.reused;
+    if (b === null || typeof b !== "object" || typeof r.id !== "string")
+      return { ok: false, reason: "a reused run carries no `reused` block" };
+    if (typeof b.stage !== "string" || typeof b.side !== "string" || !Number.isInteger(b.seq)) {
+      return { ok: false, reason: "a reused run's block is not {stage, side, seq}" };
+    }
+    reused.push({ id: r.id, stage: b.stage, side: b.side, seq: b.seq });
+  }
+  return { ok: true, value: { reused } };
+}
+
+/** ------------------------------------------------------------------------------------------------
+ *  THE REPORT — `check-verify.mjs`'s object with every key kept, value and order, then three ADVISORY blocks the
+ *  stage merges: `completeness` (the runner's capture, verbatim, after `checkCompleteness`), `verifiers`
+ *  (`{registered, findings: []}`, plus a fixed `note` when `registered > 0`) and, since 6.34.0, `gate_reuse`
+ *  (`gateReuseBlock`). A checker key named like any of them is REFUSED rather than overwritten (GATE 1 Q2) —
+ *  `check-verify.mjs` prints none today, so the refusal guards a future change to it.
+ *  ---------------------------------------------------------------------------------------------- */
+export const MERGED_KEYS = Object.freeze(["completeness", "verifiers", "gate_reuse"]);
 
 export const VERIFIER_DEFERRED_NOTE =
   "verifiers are registered, but the live verifier runner is deferred (P7): none was run, and a verifier finding never flips the verdict (fix #3)";
 
-export function composeReport({ checker, completeness, verifiers }) {
+export function composeReport({ checker, completeness, verifiers, gateReuse }) {
   if (checker === null || typeof checker !== "object" || Array.isArray(checker)) {
     return { ok: false, reason: "the verdict checker's output is not a JSON object" };
   }
@@ -230,5 +262,8 @@ export function composeReport({ checker, completeness, verifiers }) {
   if (!isVerifierCount(verifiers)) return { ok: false, reason: "the verifier count is not {registered, verifiers}" };
   const block = { registered: verifiers.registered, findings: [] };
   if (verifiers.registered > 0) block.note = VERIFIER_DEFERRED_NOTE;
-  return { ok: true, report: { ...checker, completeness, verifiers: block } };
+  if (gateReuse === null || typeof gateReuse !== "object" || !Array.isArray(gateReuse.reused)) {
+    return { ok: false, reason: "the gate-reuse block is not {reused: [...]}" };
+  }
+  return { ok: true, report: { ...checker, completeness, verifiers: block, gate_reuse: { reused: gateReuse.reused } } };
 }
