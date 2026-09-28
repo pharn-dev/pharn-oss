@@ -69,6 +69,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   follows — the exposure a stage's command already has before that stage is invoked. Follow-ups:
   `inline-stage-reinjection`, `stage-agent-final-text`, `ship-closeout-script`, `parts-visibility-probe`, `parts-live-run`.
 
+## [6.31.2] - 2026-09-28
+
+### Fixed
+
+- 2026-09-27: **Write guards fail closed on unusable PreToolUse stdin (LOW L7).** Both hooks now exit 2 on invalid JSON or a non-object payload instead of normalizing to `{}` (fail-open). `enforce-writes-scope.cjs` also refuses to hang on a FIFO `pharn.config.json` (lstat + regular file only).
+- 2026-09-27: **`.pharn` symlink and scope-file symlink read as malformed / fail-closed (LOW L5).** A symlinked `.pharn` directory no longer redirects the scope record the guard reads; scope paths that are symlinks are malformed.
+- 2026-09-27: **Run markers refresh mtime while a run is open (LOW L6).** `scanRuns()` touches valid markers so a run past 24h without `--close` does not silently revert to permissive; `run-marker.mjs` resolves the project root like the hooks (not raw cwd only).
+- 2026-09-27: **Scoped writes match declared paths under case fold (LOW L9).** A scope entry and payload path that differ only by letter case now allow only when that spelling aliases the declared file on the underlying volume, without widening scoped writes to unrelated case variants.
+
 ## [6.31.1] - 2026-09-27
 
 ### Fixed

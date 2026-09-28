@@ -408,9 +408,9 @@ for (const p of TRUSTED) {
   });
 }
 
-test("malformed stdin JSON is not treated as a write (allow, no crash)", () => {
+test("malformed stdin JSON denies fail-closed (exit 2), never fail-open exit 0 (L7)", () => {
   const r = spawnSync(process.execPath, [HOOK], { input: "{not json", encoding: "utf8" });
-  assert.equal(r.status, 0);
+  assert.equal(r.status, 2);
 });
 
 test("a non-write tool is ignored even when its input names a control file", () => {
@@ -544,7 +544,7 @@ for (const payload of ["null", "42", '"str"', "[1,2]", "true"]) {
     // JSON.parse("null") returns null WITHOUT throwing, so the try/catch never fired and the next
     // property access exited 1.
     const r = spawnSync(process.execPath, [HOOK], { input: payload, encoding: "utf8" });
-    assert.equal(r.status, 0);
+    assert.equal(r.status, 2, `${payload} must deny fail-closed`);
   });
 }
 
@@ -793,10 +793,14 @@ test("✧ MUTANT: dropping the inode test re-opens the hard-link alias", () => {
 });
 
 test("✧ MUTANT: dropping the non-object payload guard makes a `null` payload exit 1 (fail-open)", () => {
-  const sb = mutantSandbox([], 'if (!payload || typeof payload !== "object" || Array.isArray(payload)) payload = {};', "");
+  const sb = mutantSandbox(
+    [],
+    'if (!payload || typeof payload !== "object" || Array.isArray(payload)) denyMalformedHookInput("not a plain object");',
+    ""
+  );
   const r = spawnSync(process.execPath, [join(sb, ".claude", "hooks", "protect-trusted-paths.cjs")], { input: "null", encoding: "utf8" });
   assert.equal(r.status, 1, "the mutant MUST exit 1 — a non-blocking error, i.e. the write proceeds");
-  assert.equal(spawnSync(process.execPath, [HOOK], { input: "null", encoding: "utf8" }).status, 0);
+  assert.equal(spawnSync(process.execPath, [HOOK], { input: "null", encoding: "utf8" }).status, 2, "live hook denies fail-closed");
 });
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -1051,4 +1055,12 @@ test("✧ MUTANT: switching the second pass off re-opens the backslash-named lin
   const good = sandbox(["LIMITS.md"]);
   fs.symlinkSync(".", join(good, "s\\x"));
   assert.equal(writeIn(good, "s\\x/LIMITS.md").status, 2);
+});
+
+test("★ L7: null JSON payload denies (exit 2), never fail-open", () => {
+  const r = spawnSync(process.execPath, [join(__dirname, "protect-trusted-paths.cjs")], {
+    input: "null",
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 2);
 });
