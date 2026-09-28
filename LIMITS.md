@@ -352,20 +352,45 @@ read off the wiring:
   is `/`, any path containing a backslash: there a backslash is part of a file name, while the guards' path
   folding reads it as a separator. It allows every other path inside the project, including the files
   Claude Code loads at session start (`CLAUDE.md`, `AGENTS.md`, `.mcp.json`), so a write made outside a run
-  can shape later runs. `protect-trusted-paths.cjs` is unchanged and still denies its own set in every
-  posture.
-- **Outside the project, that permissive default allows exactly two places (6.24.0, the maintainer's
-  GATE-2 decision).** A path under Claude Code's memory folders — `<claude-config-dir>/projects/*/memory/**`,
-  where the config dir is `$CLAUDE_CONFIG_DIR` when set, else `~/.claude` — or under a temp root, the OS
-  temp directory (`os.tmpdir()`, which honours `$TMPDIR`) or `/tmp`, and never one inside another git
-  tree. Every other out-of-project path stays denied, as every out-of-project path was in every posture
-  before 6.24.0: dotfiles, `~/.ssh`, `~/.claude/settings*.json`, `~/.claude.json`, `~/.claude/hooks/`,
-  LaunchAgents. The two roots are read from the hook's environment, so an environment that points
-  `CLAUDE_CONFIG_DIR`, `HOME` or `TMPDIR` at a broad directory widens them. A different spelling of the
-  project's own path is never an out-of-project path: a path that matches the project's once letter case,
-  Unicode form and trailing dots/spaces are ignored reaches the project's own files on a case-insensitive
-  volume, so it is denied as the project's own (re-review R1) — and so is a sibling directory named like
-  the project plus a trailing dot, although on APFS that is another directory: an over-block.
+  can shape later runs. `protect-trusted-paths.cjs` still denies its own set in every posture.
+- **Outside the project, that permissive default allows only this project's auto-memory folder, this
+  session's own scratchpad, and ordinary temp paths** — never a path inside another git tree:
+  - **This project's auto-memory folder**, `<claude-config-dir>/projects/<key>/memory/**`, where the config
+    dir is `$CLAUDE_CONFIG_DIR` when set, else `~/.claude`, for two keys only: the project folder that holds
+    this session's transcript, read from the `transcript_path` Claude Code passes every hook, and the key
+    Claude Code derives for auto-memory from the repository's main checkout, so a session in a linked
+    worktree or in a subdirectory still reaches its project's memory. **That second key mirrors an
+    undocumented Claude Code derivation** — a worktree's `.git` file, its `commondir`, and a `gitdir`
+    back-pointer that must name this worktree, with the path encoded by turning every character outside
+    `[A-Za-z0-9]` into `-` — **and it fails closed if that derivation drifts**: a check that does not hold, or
+    a path over 200 characters (Claude Code hashes those, and the hash is not copied), grants nothing.
+    Another project's memory folder stays denied: Claude Code loads it into that project's later sessions.
+    A project here is a key: two paths that differ only in characters outside `[A-Za-z0-9]` (`…/a-b` and
+    `…/a/b`) encode to one key, and Claude Code gives them one memory folder, so the guard allows it to both.
+  - **This session's own scratchpad**: the `scratchpad_dir` Claude Code passes, and only in the shape Claude
+    Code writes, `<temp root>/claude-<uid>/<key>/<session_id>/scratchpad`, for the payload's own `session_id`.
+  - **An ordinary temp path**: under the OS temp directory (`os.tmpdir()`, which honours `$TMPDIR`) or
+    `/tmp`, but never with a `claude-<uid>` folder anywhere in its path — Claude Code's per-user state, which
+    holds every session's scratchpad and task output — never inside the Claude config directory, whichever of
+    it and the temp root contains the other, and never inside the home directory when that lies inside the
+    temp root. Claude Code's other temp paths outside a `claude-<uid>` folder (`cc-socks`,
+    `claude-mcp-browser-bridge-*`, the desktop app's `ShipIt` update folders) are ordinary temp paths to this rule.
+  - Every other out-of-project path stays denied: another project's memory, dotfiles, `~/.ssh`,
+    `~/.claude/settings*.json`, `~/.claude.json`, `~/.claude/hooks/`, LaunchAgents.
+  - **Fail-closed, and what that costs.** A payload field that is absent or malformed makes the place that
+    needs it grant nothing, never a wider one; so does a path field not in normal form (not absolute, or with a
+    `.` or `..` segment). So a Claude Code that sends no `scratchpad_dir` gets no
+    scratchpad allowance; a PHARN install at a subpath of a repository, whose root holds no `.git`, gets
+    nothing from the main-checkout key; and a custom `autoMemoryDirectory`, or a memory directory Claude Code
+    keys some other way, is not recognised. The payload fields are set by the harness,
+    not the model — a tool call sets only its own input — and the guard checks their shape; it cannot verify
+    they are Claude Code's own. The roots are read from the hook's environment, so an environment that points
+    `CLAUDE_CONFIG_DIR`, `HOME` or `TMPDIR` at a broad directory widens them.
+  - A different spelling of the project's own path is never an out-of-project path: a path that matches the
+    project's once letter case, Unicode form and trailing dots/spaces are ignored reaches the project's own
+    files on a case-insensitive volume, so it is denied as the project's own (re-review R1) — and so is a
+    sibling directory named like the project plus a trailing dot, although on APFS that is another
+    directory: an over-block.
 - **A run is open while `.pharn/<pharn-loop|pharn-ship|pharn-review>/<name>/active.json` exists with a
   modification time within 24 h**, or while one of those three state directories is present but is not a
   readable directory — a file planted there holds the tree fail-closed until someone removes it. The
@@ -384,6 +409,12 @@ read off the wiring:
   Unicode form than an existing directory, now also judged at that directory's own spelling. A hard link
   is not resolved,
   so the permissive default judges it by its own name; creating one needs `Bash`.
+  `protect-trusted-paths.cjs` now judges that second reading too, after its own: on a system whose separator
+  is `/` a backslash is part of a file name, so a symlink named with one — `s\x` pointing at the project
+  root, say — no longer carries a write to a trusted doc, or to canon, past it. Its canon exception never
+  authorizes a target whose path holds a backslash, and a link inside canon is judged at the canon file it
+  reaches. Every verdict this changes moves toward deny, and every write it denied before is denied with the
+  same message.
 - **Outside a run, an edit the guard allows between a manual `/pharn-build` and `/pharn-verify` is still
   judged by `check-bash-reconcile.mjs` against the build's recorded scope**, and reads as an escape, as an
   editor edit does.
@@ -393,6 +424,8 @@ read off the wiring:
   and is satisfied by any non-empty file. A hook that cannot start, times out, or crashes lets the turn
   end, which is the safe direction for a guard that ends turns. Its wiring is exec form, so the
   quote-character bound above does not apply to it.
+
+<!-- §7's out-of-project and every-target bullets were revised in .dev/features/write-guard-narrowing and applied by a human. -->
 
 ---
 
