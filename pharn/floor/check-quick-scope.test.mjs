@@ -2,7 +2,7 @@
 //
 // What this file holds, and the control each part names (L60):
 //   • ★ HOSTILE NAMES — both COMMITTED lines (pharn-loop.md `## Quick mode` item 5, pharn-ship.md `## Quick mode` item
-//     7), read out of the command files and run under `sh -c` exactly as written with only `<name>` and `<base sha>`
+//     7 — each in its command's quick part since 6.32.0), read out of the commands with their parts and run under `sh -c` exactly as written with only `<name>` and `<base sha>`
 //     substituted, against every hostile name the fix names: `$(…)`, backticks, `$Q`, commas, both quote kinds, a
 //     newline, a leading `-` (a flag's own spelling included) and a surrounding space. Each must exit 1 naming exactly
 //     that path, and no command may run. THE CONTROL runs 6.25.0's line the way it instructed, in the same fixture: the
@@ -41,6 +41,8 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+// A command's text is its file plus its parts (6.32.0): each `## Quick mode` is read in its quick part.
+import { commandFamilyText } from "../../.dev/floor/command-family.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..");
@@ -113,7 +115,7 @@ function runCli(dir, args) {
 
 /** The ONE committed scope line inside a command's `## Quick mode`, asserted once in the section and once in the file. */
 function committedLine(file) {
-  const body = readFileSync(join(REPO, ".claude", "commands", file), "utf8");
+  const body = commandFamilyText(join(REPO, ".claude", "commands"), file);
   const start = body.search(/^## Quick mode — /m);
   assert.ok(start >= 0, `${file} must carry a ## Quick mode section`);
   const rest = body.slice(start + 3);
@@ -164,7 +166,7 @@ test("✧ both committed lines take ONLY the slug and the base, each single-quot
 
 test("✧ neither quick section still carries 6.25.0's check-regress.mjs scope line", () => {
   for (const file of COMMANDS) {
-    const body = readFileSync(join(REPO, ".claude", "commands", file), "utf8");
+    const body = commandFamilyText(join(REPO, ".claude", "commands"), file);
     assert.ok(!body.includes(OLD_LINE), `${file} still carries the 6.25.0 line`);
     assert.doesNotMatch(body, /check-regress\.mjs scope --changed "/, `${file} still pastes a list into a double-quoted argument`);
   }

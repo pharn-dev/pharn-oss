@@ -309,6 +309,23 @@ test("enumerators: extensions stripped, prefix split, tests excluded, sorted (no
   }
 });
 
+test("enumerators: a command PART (frontmatter `part_of:`, 6.32.0) is not listed as a command; its parent is", () => {
+  const root = makeRepo();
+  try {
+    surface(root, { contracts: ["real.md"], commands: ["pharn-loop.md", "pharn-build.md"], hooks: ["real.cjs"], floor: ["real.mjs"] });
+    const part = (parentStem, kind) => `---\ndescription: "a part"\npart_of: ${parentStem}\npart: ${kind}\n---\n\n# t\n`;
+    writeFileSync(join(root, ".claude/commands/pharn-loop-close.md"), part("pharn-loop", "close"));
+    writeFileSync(join(root, ".claude/commands/pharn-loop-quick.md"), part("pharn-loop", "quick"));
+    assert.deepEqual(enumerateCommands(root), { product: ["pharn-build", "pharn-loop"], dev: [] });
+    // CONTROL (L60): the same file WITHOUT `part_of:` is a command, so the rule is the frontmatter, never the name.
+    writeFileSync(join(root, ".claude/commands/pharn-loop-close.md"), `---\ndescription: "a command"\n---\n\n# t\n`);
+    // (listDir sorts by FILE name, so `pharn-loop-close.md` precedes `pharn-loop.md`: `-` sorts before `.`)
+    assert.deepEqual(enumerateCommands(root), { product: ["pharn-build", "pharn-loop-close", "pharn-loop"], dev: [] });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("enumerators: a DIRECTORY or SYMLINK whose NAME matches the predicate is not counted as a file", () => {
   const root = makeRepo();
   try {

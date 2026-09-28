@@ -42,6 +42,7 @@ import { FEATURE_BASE, TOKEN_CLASSES } from "./render-cost-ledger.mjs";
 import { fenceFor } from "./loop-record-core.mjs";
 import { markerLine } from "./mark-phase.mjs";
 import { UNKNOWN_REASONS } from "./run-window-core.mjs";
+import { allParts, commandFamilyText } from "../../.dev/floor/command-family.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CLI = join(here, "render-run-report.mjs");
@@ -1188,7 +1189,7 @@ test("★ ENUMERATION (L29/L31): every site that must know `RUN-REPORT.md` names
   const SITES = [
     ["pharn/floor/check-regress.mjs", /PIPELINE_ARTIFACTS[\s\S]*?"RUN-REPORT\.md"[\s\S]*?\];/],
     ["pharn/floor/reconcile-ignore.json", /"names":[\s\S]*?"RUN-REPORT\.md"/],
-    [".claude/commands/pharn-loop.md", /"RUN-REPORT\.md"\]/],
+    [".claude/commands/pharn-loop-close.md", /"RUN-REPORT\.md"\]/], // Step 6c's staging list, in the loop's close part (6.32.0)
     [".prettierignore", /^pharn\/features\/\*\/RUN-REPORT\.md$/m],
     [".markdownlint-cli2.jsonc", /"pharn\/features\/\*\/RUN-REPORT\.md"/],
   ];
@@ -1241,14 +1242,18 @@ test("★ WIRING ENUMERATION (L29/L31/L45) is non-vacuous and covers every invok
   // member. This is what makes a third invoker fail here instead of silently going uncovered — the
   // exact gap L31 records, where the set of sites was never written down so "done" was assessed
   // per-file.
+  // A command's text is its file plus its parts (6.32.0): a part is read as its command's, never as a command.
   const cmdDir = join(REPO, ".claude", "commands");
-  const invokers = readdirSync(cmdDir).filter((f) => f.endsWith(".md") && RENDER_INVOCATION.test(readFileSync(join(cmdDir, f), "utf8")));
+  const parts = new Set(allParts(cmdDir).map((p) => p.file));
+  const invokers = readdirSync(cmdDir).filter(
+    (f) => f.endsWith(".md") && !parts.has(f) && RENDER_INVOCATION.test(commandFamilyText(cmdDir, f))
+  );
   assert.deepEqual(invokers.sort(), [...files].sort(), "every command invoking the renderer must be enumerated above");
 });
 
 for (const cmd of RENDERER_INVOKERS) {
   test(`★ WIRING (L45): ${cmd.file} ${cmd.role}`, () => {
-    const text = readFileSync(join(REPO, ".claude", "commands", cmd.file), "utf8");
+    const text = commandFamilyText(join(REPO, ".claude", "commands"), cmd.file);
     assert.match(text, RENDER_INVOCATION, "the committed command must carry the pinned invocation line");
 
     const at = (re) => text.search(re);
@@ -1268,7 +1273,7 @@ test("★ NEGATIVE CONTROL: the invocation pin requires the FULL line, not the m
 });
 
 test("★ the staging list and Step 7 both know the report", () => {
-  const cmd = readFileSync(join(REPO, ".claude", "commands", "pharn-loop.md"), "utf8");
+  const cmd = commandFamilyText(join(REPO, ".claude", "commands"), "pharn-loop.md");
   assert.match(cmd, /"LOOP\.md", "cost\.json", "RUN-REPORT\.md"\]/, "Step 6c must stage it");
   assert.match(cmd, /\*\*the run report\*\*/, "Step 7 must print from it");
 });

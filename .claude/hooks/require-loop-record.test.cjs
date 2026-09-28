@@ -420,11 +420,12 @@ test("CLI: --open reads CLAUDE_CODE_SESSION_ID, and a bad invocation exits 2", (
 // ★ WIRING — /pharn-loop's COMMITTED --open / --close lines, executed (L45)
 // ---------------------------------------------------------------------------------------------------
 
-const LOOP_CMD = path.join(__dirname, "..", "commands", "pharn-loop.md");
+// The loop's text is its file plus its parts (6.32.0): the --close line sits in the close part. require(esm), Node 24.
+const { commandFamilyText } = require("../../.dev/floor/command-family.mjs");
+const COMMANDS_DIR = path.join(__dirname, "..", "commands");
 
 function pinned(re) {
-  const lines = fs
-    .readFileSync(LOOP_CMD, "utf8")
+  const lines = commandFamilyText(COMMANDS_DIR, "pharn-loop.md")
     .split(/\r?\n/)
     .filter((l) => re.test(l))
     .map((l) => l.trim());

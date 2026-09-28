@@ -48,9 +48,11 @@ What that buys is **byte-equality** — the committed output equals a fresh rege
 
 Since 6.28.2, [`.dev/floor/command-hygiene.test.mjs`](./.dev/floor/command-hygiene.test.mjs) enforces a **command budget** on every shipped `pharn-*` command (not `pharn-dev-*`):
 
-- **Size** — each command's bytes must stay at or below its row in the test's `COMMAND_BYTE_CEILINGS` table (closed over the product commands on disk, both ways).
+- **Size** — each command's bytes must stay at or below its row in the test's `COMMAND_BYTE_CEILINGS` table (closed over the product command files on disk, both ways — a command's part files included).
 - **Frontmatter `description:`** — at most 250 bytes and must not match the test's claim-vocabulary regex.
-- **Claims block** — exactly one `## What you may claim` heading per command.
+- **Claims block** — exactly one `## What you may claim` heading per command, counted over the command and its parts.
+
+Since 6.32.0, `/pharn-loop` and `/pharn-ship` each keep text a run needs at only one point in **part files** beside them: `pharn-<cmd>-quick.md` (read only for a `--quick` run) and `pharn-<cmd>-close.md` (the stop procedure, read once near the run's end — the pointer in each command says exactly when). A part is recognized by its `part_of:` frontmatter, not its name, and `.dev/floor/command-family.test.mjs` pins which step headings each file holds, that no fenced line, heading or long paragraph sits in two of a command's files, and each pointer's load sentences — it does not pin which file a body line under an unchanged heading sits in, so edit a step in the file that holds it, and keep each part's single load pointer in its command intact. See `CLAUDE.md` ("A command's text a run needs at only ONE point…").
 
 The test checks presence and limits, not whether a claim is true. If an increment genuinely needs a larger command, **raise the ceiling in the same PR** by editing `COMMAND_BYTE_CEILINGS`: take the command's measured byte size, add 10%, round up to the next multiple of 512 — never a quiet edit to turn a red test green. Rationale and bounds live in [`CLAUDE.md`](./CLAUDE.md) ("A product command keeps what a run executes…").
 

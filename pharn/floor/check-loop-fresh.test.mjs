@@ -35,6 +35,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fingerprint, ALGO } from "./worktree-fingerprint.mjs";
+import { commandFamilyText } from "../../.dev/floor/command-family.mjs";
 import { SCHEMA, LAPSE_CODES, REASON_CODES, AC_RESERVED_IDS, RESERVED_IDS, logBasename, resultsFileName } from "./gate-run-core.mjs";
 import { filesDigest } from "./ac-tests-lock.mjs";
 import { FAILING_IDS } from "./ac-gate-core.mjs";
@@ -1210,7 +1211,8 @@ test("a project rooted in a git SUBDIRECTORY is judged on its own subtree", () =
 // ★ WIRING — the COMMITTED /pharn-loop lines, executed (L45)
 // ---------------------------------------------------------------------------------------------------
 
-const LOOP_CMD = join(HERE, "..", "..", ".claude", "commands", "pharn-loop.md");
+// The loop's text is its file plus its parts (6.32.0): the commit-gate call sits in the close part.
+const COMMANDS_DIR = join(HERE, "..", "..", ".claude", "commands");
 /** The floor modules the pinned calls need in the fixture: the CLOSURE, from check-loop-fresh.mjs, of every sibling
  *  `.mjs` a module names in a string literal — an import or a spawned checker alike. Computed, never listed by hand:
  *  a hand list went stale twice (6.19.0, 6.20.0), and a module missing from it crashes a shelled child — which the
@@ -1230,7 +1232,7 @@ const FLOOR_MODULES = (() => {
 })();
 
 function pinnedLoopLines() {
-  const lines = readFileSync(LOOP_CMD, "utf8")
+  const lines = commandFamilyText(COMMANDS_DIR, "pharn-loop.md")
     .split(/\r?\n/)
     .filter((l) => /^\s*node pharn\/floor\/check-loop-fresh\.mjs /.test(l))
     .map((l) => l.trim());

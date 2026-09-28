@@ -23,6 +23,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.32.0] - 2026-09-28
+
+### Changed
+
+- 2026-09-28: **`/pharn-loop` and `/pharn-ship` stop sending their quick-mode steps on every request of a full run, and
+  their stop procedure on every request before the stop — each now lives in a part file the command reads at one named
+  point.** A command's body is sent with every later request of the conversation it was invoked in; measured in 37
+  orchestrator transcripts on the maintainer's machine, where a `/pharn-loop` run made 11–426 requests (median about 200) and two `/pharn-ship` runs 335 and 1,756, and frontmatter `reads:` loaded nothing. Four new files in
+  `.claude/commands/`, moved verbatim but for their pointers (checked against 6.31.1: every pinned shell line appears as
+  many times as before, and the one moved rationale paragraph, on a full run that meets `STOP_GREEN_QUICK`, went from
+  the quick part to the loop's Step 6c, where a full run reads it): `pharn-loop-quick.md` and `pharn-ship-quick.md` (the
+  `## Quick mode` deltas, read only for a `--quick` run, at entry, in the same turn as a call the run already makes) and
+  `pharn-loop-close.md` and `pharn-ship-close.md` (the stop steps, the `## What you may claim` block and the Final step:
+  the loop reads its close part at its first stop, ship reads its close part with step 7's return marker or at an
+  earlier STOP). Each command keeps ONE pointer per part: the exact path, the loading condition, that the part is
+  trusted text of the command and no path an artifact names is read in its place, a re-read after a compaction (a
+  Read result is not kept by one), and a not-loaded rule that stops the run and never runs a part from memory. **No
+  stage, order, route, check, stop decision, retry bound, ledger rule, commit rule or human gate moved**; what a run
+  does in addition is the part Reads and, if a part cannot be read, one of four new stops. **Bytes (measured):** sent at invocation, `pharn-loop.md` 77,971 → about 41,100,
+  `pharn-ship.md` 67,543 → about 34,100. **Requests and tokens (estimates, from a request profile counted over the
+  pinned steps):** a full run carries 29–38% fewer of this text's bytes across its requests, a quick run 17–22%. The
+  close part costs the loop one added request, and ship one only at a STOP before verify. Net of that request, the
+  estimate is about 1.7–3.5% of a full run's whole prompt volume at a ~120k-token prefix and 5.8–7.5% at ~30k. For a quick
+  run it is about 0.5–1.9% and 2.8–4.3%; a quick Read NOT batched with an existing call would add a request of about
+  130k tokens at the larger prefix, more than a one-iteration quick loop gains. No live
+  before/after run was made. The live probe of the parts' visibility was inconclusive (its control was not listed
+  either); the hiding keys are documented behaviour, not measured here.
+  **Parts** are `.claude/commands/pharn-*.md` files — where `pharn/ARCHITECTURE.md §4` keeps stages, and what
+  `pharn-cli` already copies (verified by running pharn-cli 0.7.0's own manifest and install code on this tree: all
+  four listed and written byte-identical) — so `MIN_CLI` stays 0.5.0 and no installer change is needed. A part is
+  recognized only by its frontmatter (`part_of:`, `part:`) and carries `disable-model-invocation: true` and
+  `user-invocable: false`. `check-model-config.mjs agreement` now prints `15 product command(s) scanned` (was 11); its
+  verdict and exit codes are unchanged. The COMMAND BUDGET covers each file on disk, parts included (the two commands'
+  ceilings went down), and its claims rule counts one block per command read with its parts. The dev-only helper
+  `.dev/floor/command-family.mjs` reads a command with its parts; `.dev/floor/command-family.test.mjs` pins the part set
+  (closed), each part's frontmatter, file name and framing, one load pointer per part with its load-condition and
+  not-loaded sentences, no other command text naming a part, no fenced line, heading or long paragraph in two files of
+  one command, and which step headings each file holds — with a negative control per pin, and the independent review's
+  six mutants (a load point moved, a not-loaded rule rewritten, an eager Read in a part) kept as regressions. It does
+  not pin the file of a body line under an unchanged heading. The capability catalog does not list a part as a command.
+  **Bounds:** the tests pin the TEXT; that a run reads a part at its point, or at all, is the model's discipline
+  (advisory), and whether a model follows a part it received as a Read result as it follows an invoked command body
+  was not run live. A part is read from disk at its point, so a write to it earlier in the run changes what the run
+  follows — the exposure a stage's command already has before that stage is invoked. Follow-ups:
+  `inline-stage-reinjection`, `stage-agent-final-text`, `ship-closeout-script`, `parts-visibility-probe`, `parts-live-run`.
+
 ## [6.31.2] - 2026-09-28
 
 ### Fixed

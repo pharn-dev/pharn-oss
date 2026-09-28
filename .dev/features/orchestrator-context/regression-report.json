@@ -1,0 +1,51 @@
+{
+  "base": "9490b1b8de89340aba3b26c1e6ee8dcd2cbf8917",
+  "inside": [
+    ".claude/commands/pharn-loop-close.md",
+    ".claude/commands/pharn-loop-quick.md",
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-ship-close.md",
+    ".claude/commands/pharn-ship-quick.md",
+    ".claude/commands/pharn-ship.md",
+    ".claude/hooks/require-loop-record.test.cjs",
+    ".dev/features/orchestrator-context/BUILD.md",
+    ".dev/features/orchestrator-context/GRILL.md",
+    ".dev/features/orchestrator-context/PLAN.md",
+    ".dev/floor/capability-catalog-core.mjs",
+    ".dev/floor/capability-catalog-core.test.mjs",
+    ".dev/floor/command-family.mjs",
+    ".dev/floor/command-family.test.mjs",
+    ".dev/floor/command-hygiene.test.mjs",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/check-loop-fresh.test.mjs",
+    "pharn/floor/check-quick-scope.test.mjs",
+    "pharn/floor/check-spec.test.mjs",
+    "pharn/floor/check-test-stage.test.mjs",
+    "pharn/floor/render-regression.test.mjs",
+    "pharn/floor/render-run-report.test.mjs",
+    "pharn/floor/render-verify.test.mjs",
+    "pharn/floor/run-marker.test.mjs",
+    "pharn/floor/ship-outcome-core.test.mjs"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
