@@ -1,0 +1,37 @@
+{
+  "base": "70cb51c8f3f7c1a3405b651106bc35f244948da9",
+  "inside": [
+    ".claude/hooks/enforce-writes-scope.test.cjs",
+    ".claude/hooks/protect-trusted-paths.test.cjs",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/README.md",
+    "pharn/floor/run-marker.mjs",
+    ".dev/features/write-guard-narrowing/BUILD.md",
+    ".dev/features/write-guard-narrowing/GRILL.md",
+    ".dev/features/write-guard-narrowing/PLAN.md",
+    ".dev/features/write-guard-narrowing/proposed/APPLY.md",
+    ".dev/features/write-guard-narrowing/proposed/apply.sh",
+    ".dev/features/write-guard-narrowing/proposed/human-only.patch",
+    ".dev/features/write-guard-narrowing/proposed/human-only.sha256"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

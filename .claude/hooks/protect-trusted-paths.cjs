@@ -68,6 +68,12 @@
 //     build write. That is a NARROWING, not a closure.
 //   • It is also NOT evidence a human approved. The floor cannot verify a form answer (LIMITS.md §1d);
 //     the promote commands' accept/deny halt stays exactly as advisory as it is today.
+//   • It never authorizes a target whose physical path holds a backslash on a `/` system
+//     (write-guard-narrowing). The escape compares toKey() keys, and toKey() reads `\` as `/` and collapses
+//     `..`, so `memory-bank/x\..\lessons-learned.md` — a NEW file beside canon, named `x\..\lessons-learned.md`
+//     — folded onto the one file a promote-origin scope authorizes. An exact-match ALLOW must not rest on a
+//     fold that changes which file a path names, so such a target is denied as canon. The whole path is
+//     tested, so a project whose own path holds a backslash (unsupported: LIMITS.md §7) has no escape at all.
 //
 // A CAPABILITY THIS DELIBERATELY REMOVES. .claude/commands/pharn-dev-memory-promote.md documents a
 // second, legitimate canon route: the L1-L17 retro-tagging increment travelled "the ordinary gated build
@@ -123,6 +129,14 @@
 //      path while open() reaches pharn/ARCHITECTURE.md. Demonstrated by performing the write.
 //   5. The fold must be full, not simple. `ſ` (U+017F) lowercases to ITSELF, yet pharn/CONſTITUTION.md
 //      opens the real file on this filesystem. Upper-casing first maps ſ→S, ß→SS, ﬅ→ST.
+//   6. A backslash is a separator only on a system whose separator it is (write-guard-narrowing). Both readings
+//      below read `\` as `/` on every platform — resolveWriteTarget() splits on it and toKey() folds it — while
+//      on a `/` system the kernel reads it as part of a file NAME. So a symlink named `s\x` pointing at `.`
+//      carried a write to `<root>/s\x/LIMITS.md` past this hook: both readings saw `s/x/LIMITS.md`, a path
+//      that does not exist, while the kernel wrote LIMITS.md. Under a scope a PLAN had set, the same route
+//      wrote memory-bank canon — the `## Files` → canon vector the canon denylist exists to close (L7, L20).
+//      Measured by a security review, in the dev posture too. The fix keeps both old readings, unchanged, and
+//      ADDS the filesystem's own, judged second: resolvePhysicalTarget(), below.
 // The lesson is recorded because the shape of the mistake repeats: every one of these was a guard that
 // looked obviously correct in the source and was false against the filesystem (P6 — read live state).
 //
@@ -174,6 +188,17 @@
 //   exactly as it reaches every other guarded path, and re-pointing a worktree's `.git` that way removes
 //   this hook's coverage of that worktree. The rule also over-blocks a vendored repository's own `.git`
 //   under a guarded root, deliberately — no legitimate agent write names one.
+// • TWO PASSES, never merged (write-guard-narrowing). PASS 1 is the check this hook made before — the literal
+//   path and the old walk, byte for byte — run over every path first, so every write it denied is denied with
+//   the same message. PASS 2 runs only when PASS 1 found nothing, and judges the target the filesystem reaches,
+//   ALONE, by the same rules in the same order. So every verdict PASS 2 changes moves toward deny, and it
+//   changes one only for a write that involves a backslash on a `/` system — in the path, in a link's name, or
+//   in a dangling link's text (item 6 above), the canon escape's refusal included — or that goes through a link
+//   inside canon from the authorized name to a DIFFERENT canon file (PASS 1 took the first canon match — the
+//   link's own name — so the escape authorized a write that landed elsewhere; enforce-writes-scope.cjs already
+//   denied that write, so the composed verdict did not move). Without a backslash and without such a link, the
+//   filesystem's target is the old walk's target spelled on-disk, which the fold makes the same key.
+//   A backslash-named link needs Bash to create, like every symlink: this closes a Write-tool write THROUGH one.
 //
 // Composes with set-writes-scope.cjs, which REFUSES to emit a scope naming the .claude/ control paths
 // unless --allow-claude-dir is passed. For every DEFAULT_PROTECTED entry the two remain independent:
@@ -575,6 +600,78 @@ function resolveWriteTarget(p) {
   return missing.length ? path.join(cur, missing.join("/")) : cur;
 }
 
+// RESOLUTION (2) — the filesystem's own reading (write-guard-narrowing; header, item 6). A DELIBERATE COPY of
+// enforce-writes-scope.cjs's resolvePhysicalTarget(), with its two constants, pinned byte-equal by a ✧ test
+// (lessons-learned L31) — a shared module would be a new control-surface file. One segment at a time: each
+// existing prefix realpath'd NATIVELY, `..` applied to the REAL parent, a DANGLING link followed to the target
+// it names, a lexical tail once a segment is missing — and `\` a separator ONLY on a system whose separator it
+// is, so on a `/` system `s\x` is the one directory entry the kernel reads. The copy calls THIS file's
+// realpathOr() for its start directory and an absolute link's filesystem root (the JS realpath; enforce's is the
+// native one): every rule here folds case and Unicode through toKey(), so that difference cannot move a verdict.
+const MAX_LINK_HOPS = 40;
+const SEPARATORS = path.sep === "\\" ? /[\\/]/ : /\//;
+
+function resolvePhysicalTarget(p) {
+  const raw = String(p);
+  let cur;
+  try {
+    cur = realpathOr(path.isAbsolute(raw) ? fsRootOf(raw) : CWD);
+  } catch {
+    cur = CWD;
+  }
+  let pending = raw.split(SEPARATORS).filter((s) => s && s !== ".");
+  const missing = [];
+  let hops = 0;
+  let walked = 0;
+  while (pending.length) {
+    const seg = pending.shift();
+    if (missing.length) {
+      missing.push(seg);
+      continue;
+    }
+    // Bound the syscall walk — a pathologically long path must not make this hook hang.
+    if (++walked > MAX_RESOLVED_SEGMENTS) {
+      missing.push(seg);
+      continue;
+    }
+    const next = seg === ".." ? path.dirname(cur) : path.join(cur, seg);
+    const real = (() => {
+      try {
+        return fs.realpathSync.native(next);
+      } catch {
+        return null;
+      }
+    })();
+    if (real !== null) {
+      cur = real;
+      continue;
+    }
+    let link = null;
+    try {
+      if (hops < MAX_LINK_HOPS && fs.lstatSync(next).isSymbolicLink()) {
+        link = fs.readlinkSync(next);
+        hops++;
+      }
+    } catch {
+      link = null;
+    }
+    if (link !== null) {
+      // An absolute target restarts at the filesystem root; a relative one resolves against the link's
+      // own directory, which is exactly `cur`.
+      if (path.isAbsolute(link)) cur = realpathOr(fsRootOf(link));
+      pending = link
+        .split(SEPARATORS)
+        .filter((x) => x && x !== ".")
+        .concat(pending);
+      continue;
+    }
+    missing.push(seg);
+  }
+  // One join over a pre-joined tail, not path.join(cur, ...missing) (which throws RangeError past the
+  // argument limit) and not a per-segment reduce (quadratic in the total length).
+  return missing.length ? path.join(cur, missing.join("/")) : cur;
+}
+
 // Exact membership over the target's path relative to a guarded root (ARCHITECTURE §2 primitive #3),
 // plus the inode test for hard links and the operator's PHARN_PROTECTED fragments. Takes an ABSOLUTE
 // path — callers pass both the cwd-resolved literal and the symlink-canonicalized target.
@@ -741,10 +838,46 @@ if (isWrite) {
       break;
     }
   }
+  // PASS 2 (write-guard-narrowing; header, "TWO PASSES") — only when PASS 1 found nothing, so every write PASS 1
+  // denies keeps its message. The target the filesystem reaches is judged ALONE, by the same rules in the same
+  // order, and a hit's message names `<raw> -> <that target>`. The canon escape never authorizes a physical
+  // target holding a backslash on a `/` system (header, the canon escape). FAIL-CLOSED like PASS 1: a throw
+  // while deciding a path denies it.
+  if (!offender) {
+    for (const rawPath of extractPaths(toolInput)) {
+      let hit;
+      try {
+        const physical = resolvePhysicalTarget(rawPath);
+        const shown = `${rawPath} -> ${physical}`;
+        if (isProtected(physical)) {
+          hit = { rawPath, shown, kind: "trusted" };
+        } else if (gitMetaRelKey(physical) !== null) {
+          hit = { rawPath, shown, kind: "gitmeta" };
+        } else {
+          const cm = canonMatch(physical);
+          if (cm !== null) {
+            const backslashName = path.sep === "/" && String(physical).includes("\\");
+            hit = !backslashName && canonWriteAuthorized(cm.rel, cm.root) ? null : { rawPath, shown, kind: "canon" };
+          } else if (inodeIn(CANON_INODES, physical)) {
+            hit = { rawPath, shown, kind: "canon" };
+          } else {
+            hit = null;
+          }
+        }
+      } catch {
+        hit = { rawPath, shown: String(rawPath), kind: "trusted" };
+      }
+      if (hit) {
+        offender = hit;
+        break;
+      }
+    }
+  }
   if (offender) {
     let shown = offender.rawPath;
     try {
-      if (!offender.errored && !isProtected(offender.literal) && canonRelKey(offender.literal) === null)
+      if (typeof offender.shown === "string") shown = offender.shown;
+      else if (!offender.errored && !isProtected(offender.literal) && canonRelKey(offender.literal) === null)
         shown = `${offender.rawPath} -> ${offender.real}`;
     } catch {
       /* keep the raw path in the message */
