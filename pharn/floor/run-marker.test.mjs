@@ -4,13 +4,13 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, existsSync, utimesSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, existsSync, utimesSync, realpathSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
-import { RUN_MARKER_COMMANDS, markerPath, openRun, closeRun } from "./run-marker.mjs";
+import { RUN_MARKER_COMMANDS, markerPath, openRun, closeRun, projectRoot } from "./run-marker.mjs";
 // A command's text is its file plus its parts (6.32.0): pharn-ship.md's --close line sits in its close part.
 import { commandFamilyText } from "../../.dev/floor/command-family.mjs";
 
@@ -563,22 +563,33 @@ test("✧ pinnedLine() executes the WHOLE line — an appended `|| true` would b
   );
 });
 
-test("★ L6: projectRoot() follows CLAUDE_PROJECT_DIR when cwd is a subdirectory", async () => {
+test("★ L6: projectRoot() follows CLAUDE_PROJECT_DIR, or a .git entry, when cwd is a subdirectory", () => {
   const root = tmp();
-  mkdirSync(join(root, ".git"), { recursive: true });
-  writeFileSync(join(root, ".git", "HEAD"), "ref: refs/heads/main\n");
   const sub = join(root, "pkg");
   mkdirSync(sub, { recursive: true });
+  // projectRoot() walks up from process.cwd(), which the OS reports resolved, and stops at
+  // realpath($CLAUDE_PROJECT_DIR) — the hooks' workTreeRoot(). On macOS tmpdir() is under /var, a symlink
+  // to /private/var, so the mkdtemp spelling is not what comes back; compare against the resolved root.
+  const realRoot = realpathSync(root);
   const prior = process.cwd();
   const envDir = process.env.CLAUDE_PROJECT_DIR;
   try {
     process.chdir(sub);
+    // Negative control: no .git and no CLAUDE_PROJECT_DIR, so nothing stops the walk at root. With a .git
+    // in the fixture from the start, the CLAUDE_PROJECT_DIR assertion held with the variable unset too.
+    delete process.env.CLAUDE_PROJECT_DIR;
+    assert.notEqual(projectRoot(), realRoot, "control: without either stop the walk does not end at root");
+
     process.env.CLAUDE_PROJECT_DIR = root;
-    const { projectRoot } = await import(`./run-marker.mjs?subroot=${Date.now()}`);
-    assert.equal(projectRoot(), root);
+    assert.equal(projectRoot(), realRoot);
     const opened = openRun({ root: projectRoot(), command: "pharn-ship", name: "sub-run" });
     assert.equal(opened.ok, true);
-    assert.ok(existsSync(markerPath(root, "pharn-ship", "sub-run")));
+    assert.ok(existsSync(markerPath(realRoot, "pharn-ship", "sub-run")));
+
+    delete process.env.CLAUDE_PROJECT_DIR;
+    mkdirSync(join(root, ".git"), { recursive: true });
+    writeFileSync(join(root, ".git", "HEAD"), "ref: refs/heads/main\n");
+    assert.equal(projectRoot(), realRoot, "a .git entry is a stop on its own");
   } finally {
     process.chdir(prior);
     if (envDir === undefined) delete process.env.CLAUDE_PROJECT_DIR;

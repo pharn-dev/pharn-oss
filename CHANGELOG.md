@@ -23,6 +23,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.32.1] - 2026-09-28
+
+### Fixed
+
+- 2026-09-28: **The 6.31.2 L6 `projectRoot()` test passes on macOS, and now tests what its title says**
+  ([`pharn/floor/run-marker.test.mjs`](./pharn/floor/run-marker.test.mjs)). The change is test-only, but every
+  merge to `main` is a release, so it ships as its own patch version: `SKILLS_VERSION` 6.32.0 → 6.32.1, with the
+  README badge. No product-surface byte changes; `MIN_CLI` is unchanged.
+  - **The failure.** On macOS `os.tmpdir()` is under `/var`, a symlink to `/private/var`. `projectRoot()` walks up
+    from `process.cwd()`, which the OS reports resolved, so it returned `/private/var/…` while the test expected the
+    `mkdtemp` spelling `/var/…`. Linux CI has no such symlink, so the test only ever failed locally. The resolved
+    root is correct: the hooks' `workTreeRoot()` resolves the same way, and `run-marker.mjs` is unchanged.
+  - **A second defect, found while fixing it.** The fixture also held a `.git`, which stops the walk on its own. So
+    the test passed with the `CLAUDE_PROJECT_DIR` branch deleted from a copy of `run-marker.mjs` (measured, with
+    only the `realpathSync` fix applied).
+  - **Fix.** The test compares against `realpathSync(root)`, and the marker check uses the same resolved root. It
+    now runs three phases on one fixture: no stop (a negative control, not root), `CLAUDE_PROJECT_DIR` alone
+    (root), then a `.git` alone (root). Measured on copies of `run-marker.mjs`: deleting the
+    `CLAUDE_PROJECT_DIR` stop fails the second phase, and deleting the `.git` stop fails the third.
+
 ## [6.32.0] - 2026-09-28
 
 ### Changed
