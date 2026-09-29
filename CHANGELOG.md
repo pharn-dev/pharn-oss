@@ -23,6 +23,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-09-29: **A post-optimization performance audit of the delivery pipeline, analysis only
+  (`.dev/measurements/pipeline-performance-audit-2026-09-29.md`).** Its headline is that no real run exists on a
+  post-optimization version: all 69 real cost ledgers were written by pharn 6.12.1 or 6.7.0, so the question of what
+  dominates measured model usage and wall-clock time stays open. From static and controlled evidence it finds three
+  structural costs:
+  - at least 70 pinned or mandated orchestrator tool calls in a green one-iteration `/pharn-loop`, 57 of them
+    deterministic. That is an estimate from the command text; how many requests a real run makes is not measured;
+  - a fresh `general-purpose` agent's first request cache-writing 68,223–129,646 tokens (median 91,759), over 29
+    such subagents in this repo;
+  - the project's `test` gate running at least twice per iteration, and three or four times when any test file lies
+    outside the feature.
+
+  It recommends one prerequisite and two contingent increments. The prerequisite is to update pharn-starter with a CLI
+  at 0.7.0 or later and collect real runs. The two increments fold the routed-stage pinned lines, and move the
+  green-path closeout into a script. Both wait for real ledgers to show that the run's own context (the orchestrator)
+  makes at least 20% of a run's requests. The build-output, agent-resume and model/effort candidates are experiments,
+  gated on a defined counterfactual. The audit also lists what not to optimize yet.
+  `.dev/features/pipeline-performance-audit/audit.mjs` is the read-only helper behind the report's figures; its
+  `--ledgers` mode applies the selection rule frozen at GATE 1. The review's ten advisory findings and the re-review's
+  three were fixed before merge. No product-surface byte changed, so there is no `SKILLS_VERSION` bump.
+
 ## [6.35.0] - 2026-09-28
 
 ### Added

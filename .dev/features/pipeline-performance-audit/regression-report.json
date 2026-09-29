@@ -1,0 +1,33 @@
+{
+  "base": "c9737b4486bc47759bd36f43f3430cf86bc068b4",
+  "inside": [
+    ".dev/features/pipeline-performance-audit/GRILL.md",
+    ".dev/features/pipeline-performance-audit/PLAN.md",
+    ".dev/features/pipeline-performance-audit/REGRESSION.md",
+    ".dev/features/pipeline-performance-audit/REVIEW.md",
+    ".dev/features/pipeline-performance-audit/SHIP.md",
+    ".dev/features/pipeline-performance-audit/VERIFY.md",
+    ".dev/features/pipeline-performance-audit/audit.mjs",
+    ".dev/features/pipeline-performance-audit/regression-report.json",
+    ".dev/features/pipeline-performance-audit/verify-report.json",
+    ".dev/measurements/pipeline-performance-audit-2026-09-29.md",
+    "CHANGELOG.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
