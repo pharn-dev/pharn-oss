@@ -1056,7 +1056,7 @@ test("verify: a declared id that is discovered is REMOVED and named; one that is
   assert.deepEqual(r.spec.required, ["test", "build"]);
   assert.deepEqual(
     r.spec.entries.map((e) => e.id),
-    ["test", "build", "reconcile"]
+    ["test", "build", "instruction-growth", "reconcile"]
   );
   assert.deepEqual(r.spec.excluded, { declared_in: EXCLUSION_DECLARED_IN, ids: ["typecheck", "e2e"] });
   const none = resolveSet({ stage: "verify", feature: "demo", scripts, exclude: ["lint"] });

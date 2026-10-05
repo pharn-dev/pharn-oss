@@ -303,7 +303,7 @@ test("★ WIRING 6.36.0 — the pinned line over a project that EXCLUDES a red g
     assert.equal(r.code, 0, r.raw);
     const report = readReport(dir);
     assert.equal(report.verdict, "PASS", JSON.stringify(report));
-    assert.deepEqual(Object.keys(report.gates).sort(), ["reconcile", "test"]);
+    assert.deepEqual(Object.keys(report.gates).sort(), ["instruction-growth", "reconcile", "test"]);
     assert.deepEqual(report.gate_run.excluded, { declared_in: "pharn.config.json#gates.exclude", ids: ["typecheck"] });
     const stamp = JSON.parse(readFileSync(join(dir, STAMP), "utf8"));
     assert.deepEqual(validateStamp(stamp, { stage: "verify", feature: FEATURE, side: null }), { ok: true });

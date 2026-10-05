@@ -153,7 +153,7 @@ test("6.36.0 — a declared, discovered gate is NOT run; init prints it and the 
       declare(dir, { exclude: ["typecheck"] });
       const r = cli(dir, initArgs());
       assert.equal(r.code, 0, r.raw);
-      assert.deepEqual(r.json.ids, ["test", "reconcile"]);
+      assert.deepEqual(r.json.ids, ["test", "instruction-growth", "reconcile"]);
       assert.deepEqual(r.json.excluded, ["typecheck"]);
       drain(dir);
       const s = stamp(dir);
@@ -161,7 +161,7 @@ test("6.36.0 — a declared, discovered gate is NOT run; init prints it and the 
       assert.deepEqual(s.required, ["test"]);
       assert.deepEqual(
         s.runs.map((x) => x.id),
-        ["test", "reconcile"]
+        ["test", "instruction-growth", "reconcile"]
       );
     },
     { scripts: { test: "true", typecheck: "exit 1" } }
@@ -254,7 +254,7 @@ test("6.36.0 — the declaration is read BESIDE the --discover manifest, never f
       const r = cli(dir, ["init", "--stage", "verify", "--feature", FEATURE, "--out", OUT, "--discover", "sub/package.json"]);
       assert.equal(r.code, 0, r.raw);
       assert.deepEqual(r.json.excluded, ["typecheck"]);
-      assert.deepEqual(r.json.ids, ["test", "reconcile"]);
+      assert.deepEqual(r.json.ids, ["test", "instruction-growth", "reconcile"]);
     },
     { scripts: { test: "true" } }
   );
