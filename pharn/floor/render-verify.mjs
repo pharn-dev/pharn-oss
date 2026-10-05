@@ -32,11 +32,13 @@
 // rendered as given, fenced — `check-verify.mjs` evaluates the AC gate with an absolute root, and nothing here
 // establishes that no reason quotes a path built from it.
 //
-// LOAD GRAPH: `quote-core.mjs` (→ `loop-record-core.mjs`) for the fences, and `stage-exit-core.mjs` (which imports
-// nothing) for the refusal code's membership test.
+// LOAD GRAPH: `quote-core.mjs` (→ `loop-record-core.mjs`) for the fences, `stage-exit-core.mjs` (which imports
+// nothing) for the refusal code's membership test, and `gate-run-core.mjs` (which imports nothing) for the ALLOWLIST
+// membership test the gate-exclusion line (6.36.0) renders an id after.
 
 import { quoteData, dataText } from "./quote-core.mjs";
 import { isReasonCode } from "./stage-exit-core.mjs";
+import { ALLOWLIST, EXCLUSION_DECLARED_IN } from "./gate-run-core.mjs";
 
 /** The fixed reading guide. It names BOTH markers validate.mjs CHECK 5 looks for (L10). */
 export const PREAMBLE =
@@ -107,11 +109,35 @@ const AC_MODE_LINES = Object.freeze({
 
 const AC_VERDICTS = Object.freeze(["PASS", "FAIL", "INCONCLUSIVE", "NOT-APPLICABLE"]);
 
+/** 6.36.0 — the discovered gates the project's declaration EXCLUDED (the report's `gate_run.excluded`, copied from the
+ *  stamp), rendered DIRECTLY under the verdict line so a verdict over fewer gates is never read as one over all of
+ *  them (P0). An id renders inline only after an ALLOWLIST membership test; the source only as the one sanctioned
+ *  value; anything else is a fixed phrase. No block → no line, so a report without one renders as before 6.36.0. */
+function exclusionLines(run) {
+  const x = isObject(run) && isObject(run.excluded) ? run.excluded : null;
+  if (x === null) return [];
+  const ids = Array.isArray(x.ids) ? x.ids : [];
+  const known = ids.filter((id) => typeof id === "string" && ALLOWLIST.includes(id));
+  const where =
+    x.declared_in === EXCLUSION_DECLARED_IN
+      ? "the project's `pharn.config.json` `gates.exclude`"
+      : "a declaration whose source is not one this renderer recognizes";
+  const unknown = ids.length - known.length;
+  return [
+    `**${ids.length} discovered gate(s) EXCLUDED and NOT RUN** by ${where}: ` +
+      (known.length ? known.map((id) => `\`${id}\``).join(", ") : "(no allowlisted id to show)") +
+      (unknown > 0 ? ` (+${unknown} id(s) outside the allowlist, not rendered)` : "") +
+      " — this verdict covers only the gates that ran; an excluded gate is evidence neither way.",
+    "",
+  ];
+}
+
 function verdictSection(report) {
   const out = [];
   const v = report.verdict;
   if (typeof v === "string" && Object.hasOwn(VERDICT_LINES, v)) out.push(VERDICT_LINES[v], "");
   else out.push("**verdict: not a member of {PASS, FAIL, INCOMPLETE, INCONCLUSIVE} — nothing is claimed.**", "");
+  out.push(...exclusionLines(report.gate_run));
   if (v === "FAIL") {
     const failing = Array.isArray(report.failing_gates) ? report.failing_gates : [];
     out.push(quoteData("failing gate ids, quoted as DATA:", failing.length ? failing.map(dataText).join("\n") : "(none recorded)"), "");

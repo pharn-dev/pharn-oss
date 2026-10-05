@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.35.2-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.36.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -592,6 +592,28 @@ in the suite voided the whole record. One the report does not mark reads as a pa
 `test.fails` and pass on a retry, and Jest 29's `test.failing`. `pharn.config.json` is not write-protected, so review
 changes to it like changes to your test script.
 
+### Excluding a gate (6.36.0)
+
+If one of your gates cannot run on your machine — an `e2e` suite that needs more memory than it has, say — leave it
+out of discovery in `pharn.config.json`:
+
+```json
+{ "gates": { "exclude": ["e2e"] } }
+```
+
+Each id must be one of the gates PHARN discovers (`test`, `lint`, `format:check`, `lint:md`, `typecheck`,
+`type-check`, `build`, `test:e2e`, `e2e`). Anything else stops the run with an error, and so does a
+`pharn.config.json` that is not valid JSON. The rules:
+
+- `/pharn-regress`, `/pharn-verify` and `/pharn-test`'s red run then skip that gate. A list you pass yourself with
+  `--gates` is never filtered.
+- Every verify and regression report says which gates were excluded, directly under its verdict. A PASS over fewer
+  gates means less than a full PASS: an excluded gate is not evidence either way.
+- **Declare it and commit it before the run.** `/pharn-test` pins the list, so a change made during the build fails
+  verify. An uncommitted change also reads as the build writing outside its plan.
+- A criterion whose level only an excluded gate runs (an `e2e` criterion with `e2e` excluded) is refused at
+  `/pharn-plan`. Re-specify it at another level, or keep the gate.
+
 ### Acceptance-criteria tests, before the build
 
 For a SPEC filled from the template, `/pharn-plan` maps each acceptance criterion to a test file and the public
@@ -640,7 +662,8 @@ verify report carries a per-AC table (id, level, matched tests, status, reason),
   that. `/pharn-test` now also pins what runs the tests: the level gates' `package.json` scripts (with their
   `pre`/`post` scripts), their `testResults` format, and root `vitest`/`vite`/`playwright`/`jest` config files — and,
   since 6.31.0, the scripts those chain to (`npm run test:unit`), the files they name (your reporter, a runner
-  script), a `jest` key in `package.json`, and a root `.npmrc`/`.yarnrc`/`.yarnrc.yml`. A plan may not put the
+  script), a `jest` key in `package.json`, and a root `.npmrc`/`.yarnrc`/`.yarnrc.yml` — and, since 6.36.0, the
+  `gates.exclude` list in `pharn.config.json` ("Excluding a gate", above). A plan may not put the
   named files, those configs or the feature's own lock in the build's scope; it may still name `package.json` (a
   dependency is ordinary build work), and a change there to anything the lock pins fails verify. What the pin does not see — code the build writes can still
   switch off assertions or the reporter from inside the test process, and a setup file a config imports,
@@ -687,7 +710,7 @@ byte-for-byte by `npm run docs:check`, so it cannot quietly drift from what is a
 - **Product commands — 11** (`.claude/commands/`): `/pharn-build`, `/pharn-grill`, `/pharn-loop`, `/pharn-memory-promote`, `/pharn-plan`, `/pharn-regress`, `/pharn-review`, `/pharn-ship`, `/pharn-spec`, `/pharn-test`, `/pharn-verify`.
 - **Dev-apparatus commands — 9** (`.claude/commands/`): `/pharn-dev-build`, `/pharn-dev-eval`, `/pharn-dev-grill`, `/pharn-dev-memory-promote`, `/pharn-dev-plan`, `/pharn-dev-regress`, `/pharn-dev-review`, `/pharn-dev-ship`, `/pharn-dev-verify`.
 - **Hook scripts — 4** (`.claude/hooks/`): `enforce-writes-scope.cjs`, `protect-trusted-paths.cjs`, `require-loop-record.cjs`, `set-writes-scope.cjs`.
-- **Floor checkers — 107** `.mjs` files under `pharn/floor/` (tests excluded).
+- **Floor checkers — 108** `.mjs` files under `pharn/floor/` (tests excluded).
 
 <!-- CURRENT-STATE:END -->
 

@@ -37,6 +37,7 @@
 // executed, evaluated, or treated as an instruction.
 
 import { quoteData, dataText } from "./quote-core.mjs";
+import { ALLOWLIST, EXCLUSION_DECLARED_IN } from "./gate-run-core.mjs";
 
 /** A gate id, git path, or command string rendered INLINE — always with fixed text before it on the same
  *  line, so a leading `#`/`>`/`-` in the value cannot become document structure. `String()` first: a gate
@@ -47,6 +48,30 @@ function inline(v) {
 
 function section(title, lines) {
   return [`## ${title}`, "", ...lines, ""];
+}
+
+/** 6.36.0 — the discovered gates the project's declaration EXCLUDED, from the report's `gate_run.head.excluded` (copied
+ *  from the HEAD stamp; the base side runs the head's set), DIRECTLY under the verdict line: both sides compared only
+ *  the gates that ran (P0). An id renders inline only after an ALLOWLIST membership test, the source only as the one
+ *  sanctioned value. No block → no line, so a report without one renders exactly as before 6.36.0. */
+function exclusionLines(report) {
+  const run = report.gate_run && typeof report.gate_run === "object" ? report.gate_run.head : null;
+  const x = run && typeof run === "object" && run.excluded && typeof run.excluded === "object" ? run.excluded : null;
+  if (x === null || Array.isArray(x)) return [];
+  const ids = Array.isArray(x.ids) ? x.ids : [];
+  const known = ids.filter((id) => typeof id === "string" && ALLOWLIST.includes(id));
+  const where =
+    x.declared_in === EXCLUSION_DECLARED_IN
+      ? "the project's `pharn.config.json` `gates.exclude`"
+      : "a declaration whose source is not one this renderer recognizes";
+  const unknown = ids.length - known.length;
+  return [
+    `**${ids.length} discovered gate(s) EXCLUDED and NOT RUN on either side** by ${where}: ` +
+      (known.length ? known.map((id) => `\`${id}\``).join(", ") : "(no allowlisted id to show)") +
+      (unknown > 0 ? ` (+${unknown} id(s) outside the allowlist, not rendered)` : "") +
+      " — a regression in an excluded gate cannot be seen here.",
+    "",
+  ];
 }
 
 function verdictLine(verdict, regressions) {
@@ -94,6 +119,7 @@ export function renderDone({ feature, base, report, scope, progress }) {
   }
 
   out.push(verdictLine(report.verdict, report.regressions), "");
+  out.push(...exclusionLines(report));
 
   // BASE-evidence reuse (6.33.0): ONE line, from the report's own `base_evidence` block. Every value in it is this
   // floor's own — a boolean, a closed-enum member, a hex digest — never untrusted text.

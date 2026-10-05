@@ -142,6 +142,124 @@ test("init RECREATES <out>, so no stale log or stamp survives an earlier run", (
   );
 });
 
+// ── 6.36.0 — the project's gate exclusion, read with NO flag (the production path — L41) beside --discover ──────
+
+const declare = (dir, gates, at = ".") =>
+  writeFileSync(join(dir, at, "pharn.config.json"), typeof gates === "string" ? gates : JSON.stringify({ gates }));
+
+test("6.36.0 — a declared, discovered gate is NOT run; init prints it and the finalized stamp carries `excluded`", () => {
+  withRepo(
+    (dir) => {
+      declare(dir, { exclude: ["typecheck"] });
+      const r = cli(dir, initArgs());
+      assert.equal(r.code, 0, r.raw);
+      assert.deepEqual(r.json.ids, ["test", "reconcile"]);
+      assert.deepEqual(r.json.excluded, ["typecheck"]);
+      drain(dir);
+      const s = stamp(dir);
+      assert.deepEqual(s.excluded, { declared_in: "pharn.config.json#gates.exclude", ids: ["typecheck"] });
+      assert.deepEqual(s.required, ["test"]);
+      assert.deepEqual(
+        s.runs.map((x) => x.id),
+        ["test", "reconcile"]
+      );
+    },
+    { scripts: { test: "true", typecheck: "exit 1" } }
+  );
+});
+
+test("6.36.0 — ABSENT: no pharn.config.json, no `gates` key, or an exclusion naming no discovered script → no `excluded` anywhere", () => {
+  withRepo(
+    (dir) => {
+      const cases = [
+        ["no file", () => {}],
+        ["no gates key", () => declare(dir, JSON.stringify({ testResults: { test: "vitest-json" } }))],
+        ["an undiscovered id", () => declare(dir, { exclude: ["build"] })],
+      ];
+      for (const [why, set] of cases) {
+        set();
+        const r = cli(dir, initArgs());
+        assert.equal(r.code, 0, `${why}: ${r.raw}`);
+        assert.equal(Object.hasOwn(r.json, "excluded"), false, why);
+        drain(dir);
+        const s = stamp(dir);
+        assert.equal(Object.hasOwn(s, "excluded"), false, why);
+        assert.deepEqual(s.required, ["test", "typecheck"], why);
+      }
+    },
+    { scripts: { test: "true", typecheck: "true" } }
+  );
+});
+
+test("6.36.0 — a malformed declaration REFUSES (exit 2, bad-gate-exclusion, nothing written); an explicit --gates never reads it", () => {
+  withRepo(
+    (dir) => {
+      for (const bad of ["{", JSON.stringify({ gates: { exclude: ["nope"] } }), JSON.stringify({ gates: { excludes: [] } })]) {
+        declare(dir, bad);
+        const r = cli(dir, initArgs());
+        assert.equal(r.code, 2, `${bad}: ${r.raw}`);
+        assert.equal(r.json.reason_code, "bad-gate-exclusion", bad);
+        assert.match(r.json.reason, /^pharn\.config\.json /);
+        assert.ok(!existsSync(join(dir, OUT, "state.json")), "a refused init writes no state");
+      }
+      const g = cli(dir, ["init", "--stage", "verify", "--feature", FEATURE, "--out", OUT, "--gates", "true::t"]);
+      assert.equal(g.code, 0, `an explicit --gates run never reads the declaration: ${g.raw}`);
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+test("6.36.0 (review R4) — a valueless trailing --gates is refused; before, it skipped the declaration and ran the excluded gate", () => {
+  withRepo(
+    (dir) => {
+      declare(dir, { exclude: ["typecheck"] });
+      const r = cli(dir, [...initArgs(), "--gates"]);
+      assert.equal(r.code, 2, r.raw);
+      assert.equal(r.json.reason_code, "usage-error");
+      assert.match(r.json.reason, /--gates requires a value/);
+      assert.ok(!existsSync(join(dir, OUT, "state.json")), "nothing written");
+      // the control: the same line without the stray flag discovers and excludes
+      const ok = cli(dir, initArgs());
+      assert.equal(ok.code, 0, ok.raw);
+      assert.deepEqual(ok.json.excluded, ["typecheck"]);
+      // and a malformed declaration is still refused when the stray flag is absent
+      declare(dir, { exclude: ["nope"] });
+      assert.equal(cli(dir, initArgs()).json.reason_code, "bad-gate-exclusion");
+    },
+    { scripts: { test: "true", typecheck: "exit 1" } }
+  );
+});
+
+test("6.36.0 L34 — an exclusion that removes every discovered gate exits 3 (the no-gates stop) and writes no state", () => {
+  withRepo(
+    (dir) => {
+      declare(dir, { exclude: ["test"] });
+      const r = cli(dir, initArgs());
+      assert.equal(r.code, 3, r.raw);
+      assert.equal(r.json.reason_code, "empty-source-set");
+      assert.match(r.json.reason, /gates\.exclude removed test/);
+      assert.ok(!existsSync(join(dir, OUT, "state.json")));
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+test("6.36.0 — the declaration is read BESIDE the --discover manifest, never from the invoking directory alone", () => {
+  withRepo(
+    (dir) => {
+      mkdirSync(join(dir, "sub"));
+      writeFileSync(join(dir, "sub", "package.json"), JSON.stringify({ scripts: { test: "true", typecheck: "true" } }));
+      declare(dir, { exclude: ["test"] }); // at the invoking directory: NOT beside sub/package.json
+      declare(dir, { exclude: ["typecheck"] }, "sub");
+      const r = cli(dir, ["init", "--stage", "verify", "--feature", FEATURE, "--out", OUT, "--discover", "sub/package.json"]);
+      assert.equal(r.code, 0, r.raw);
+      assert.deepEqual(r.json.excluded, ["typecheck"]);
+      assert.deepEqual(r.json.ids, ["test", "reconcile"]);
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
 test("CONTAINMENT: --out outside, equal to, or symlinked through the state root is REFUSED (L52: each case)", () => {
   withRepo(
     (dir) => {

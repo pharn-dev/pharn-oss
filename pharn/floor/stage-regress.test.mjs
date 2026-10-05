@@ -204,6 +204,45 @@ test("done/no-regressions: a build that changes only its declared scope, with th
   }
 });
 
+// ── ★ 6.36.0 — a project's gate exclusion, end to end through the real script (grill G4) ─────────────────────
+test("★ 6.36.0 — an excluded gate runs on NEITHER side; gate_run.head.excluded and the REGRESSION.md line disclose it; the control runs it", () => {
+  const scripts = { test: "node --test", typecheck: 'node -e "process.exit(1)"' };
+  const edit = (dir) =>
+    writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport function id(x) { return x; }\n");
+  // the control: no declaration → typecheck runs on both sides, red at base, so it is pre-existing
+  withRepo(
+    (dir) => {
+      const base = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
+      edit(dir);
+      const r = cli(dir, freshArgs(base));
+      assert.equal(r.code, 0, r.raw);
+      const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
+      assert.deepEqual(report.pre_existing, ["typecheck"]);
+      assert.equal(Object.hasOwn(report.gate_run.head, "excluded"), false);
+      assert.doesNotMatch(readFileSync(join(dir, r.json.render), "utf8"), /EXCLUDED and NOT RUN/);
+    },
+    { scripts }
+  );
+  withRepo(
+    (dir) => {
+      const base = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
+      edit(dir);
+      const r = cli(dir, freshArgs(base));
+      assert.equal(r.code, 0, r.raw);
+      assert.equal(r.json.verdict, "no-regressions");
+      const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
+      assert.deepEqual(Object.keys(report.outside_gates), ["test"], "typecheck ran on neither side");
+      assert.deepEqual(report.pre_existing, []);
+      assert.deepEqual(report.gate_run.head.excluded, { declared_in: "pharn.config.json#gates.exclude", ids: ["typecheck"] });
+      assert.equal(Object.hasOwn(report.gate_run.base, "excluded"), false, "the base side runs the head's set and names nothing itself");
+      const md = readFileSync(join(dir, r.json.render), "utf8").split("\n");
+      const at = md.findIndex((l) => l.startsWith("**verdict: NO REGRESSIONS**"));
+      assert.match(md[at + 2], /^\*\*1 discovered gate\(s\) EXCLUDED and NOT RUN on either side\*\* .*`typecheck`/);
+    },
+    { scripts, committed: { "pharn.config.json": JSON.stringify({ gates: { exclude: ["typecheck"] } }) + "\n" } }
+  );
+});
+
 // ── A GENUINE REGRESSION OUTSIDE THE FEATURE ────────────────────────────────────────────────────────
 test("done/regressions: a change to a DECLARED file that breaks an UNDECLARED outside test", () => {
   const dir = mkdtempSync(join(tmpdir(), "sr-regr-"));
