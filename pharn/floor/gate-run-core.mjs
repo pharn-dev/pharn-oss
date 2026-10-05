@@ -40,6 +40,8 @@
 //   • that the stage ran at all, or that the report on disk is the checker's own output — check-loop-fresh
 //     narrows both (report↔stamp hash binding, a live verdict re-derivation), never proves provenance.
 //   • WHO wrote an explicit `--gates` string. Only `source` ("explicit" | "discover") is recorded.
+//   • anything about a gate the project EXCLUDED from discovery (6.36.0): it did not run, so the map holds no exit for
+//     it; the stamp's `excluded` block names it and where it was declared — a disclosure, not evidence either way.
 //   • FORGERY. **This certifies INTERNAL CONSISTENCY, never provenance — a self-consistent fabricated
 //     stamp passes, and a test builds one to prove it rather than leaving the bound as prose**
 //     (lessons-learned L43; the phrasing is check-cost-ledger.mjs's, cited not restated — P4). The stamp
@@ -93,6 +95,49 @@ export const LEVEL_GATES = Object.freeze({
   e2e: E2E_SET,
 });
 
+/** ------------------------------------------------------------------------------------------------
+ *  A PROJECT'S GATE EXCLUSION (6.36.0, gate-exclusion-config). THE RECORDED FAILURE (P7): in a user's project the
+ *  discovered `e2e` gate could not run on the user's machine (not enough RAM), discovery offered no way to leave it
+ *  out, and an explicit `--gates` list makes the AC gate read `test-infra-changed` by design — two of three real
+ *  /pharn-loop runs stopped on exactly that. So a project may declare, in `pharn.config.json`, ALLOWLIST ids that
+ *  DISCOVERY removes (gate-exclusion-core.mjs reads the declaration; this module applies it and validates its trace).
+ *  An explicit `--gates` string is never filtered. What is removed is DISCLOSED, never silent: the stamp's optional
+ *  `excluded` block names the ids and where they were declared, and both reports copy it (gateRunBlock).
+ *  EXCLUSION_DECLARED_IN is the one source a stamp may name; it spells gate-exclusion-core.mjs's CONFIG_FILE + key
+ *  path, which a ✧ test pins equal (this module imports nothing, so it cannot import them).
+ *  ---------------------------------------------------------------------------------------------- */
+export const EXCLUSION_DECLARED_IN = "pharn.config.json#gates.exclude";
+/** The stamp's `excluded` block — its closed key set. */
+export const EXCLUDED_KEYS = Object.freeze(["declared_in", "ids"]);
+
+/** Why `ids` is not a usable exclusion list, or null: an array of DISTINCT ALLOWLIST members (any order — the reader
+ *  normalizes it to ALLOWLIST order). The ONE membership rule (L35): gate-exclusion-core.mjs, resolveSet and the
+ *  test-infrastructure pin all call it. TOTAL over parsed JSON (L62): it names a position, never a value. */
+export function exclusionError(ids) {
+  if (!Array.isArray(ids)) return "is not an array of gate ids";
+  const seen = new Set();
+  for (let i = 0; i < ids.length; i++) {
+    const id = ids[i];
+    if (typeof id !== "string" || !ALLOWLIST.includes(id)) {
+      return `entry ${i} is not one of the allowlisted gate ids {${ALLOWLIST.join(", ")}}`;
+    }
+    if (seen.has(id)) return `entry ${i} repeats an id already listed`;
+    seen.add(id);
+  }
+  return null;
+}
+
+/** The level gates of `level` that the project's exclusion leaves nothing of, or [] (6.36.0, review R5): the gates of
+ *  the level the manifest HAS (every one of the level's gates when `scripts` is not an object — the plan-time reading,
+ *  which needs no package.json) when ALL of them are in `exclude`. A level whose manifest has none of its gates returns
+ *  [] — that is "no runner", the red-run preflight's own reason, not the exclusion's. Own-property test (L15). */
+export function levelExcludedGates({ level, scripts, exclude }) {
+  const gates = Object.hasOwn(LEVEL_GATES, level) ? LEVEL_GATES[level] : [];
+  const hasScripts = scripts !== null && typeof scripts === "object" && !Array.isArray(scripts);
+  const present = hasScripts ? gates.filter((id) => Object.hasOwn(scripts, id)) : gates;
+  return present.length > 0 && present.every((id) => exclude.includes(id)) ? [...present] : [];
+}
+
 /** The style/format subset eligible for /pharn-regress's config-touch skip. NOT eligible: every other
  *  allowlist member, because a typecheck/build flip over outside files is possible with no config change
  *  (inside -> outside import edges), so skipping one would hide a real regression. */
@@ -121,6 +166,7 @@ export const STRUCTURAL_PREFIX = "structural:";
 export const REASON_CODES = Object.freeze([
   "ac-evidence-invalid",
   "bad-extra",
+  "bad-gate-exclusion",
   "bad-gates",
   "bad-scope-json",
   "base-head-mismatch",
@@ -205,8 +251,10 @@ export function isReasonCode(code) {
 /** The three stages and the two regress sides — enum-gated, fail-closed on anything else. `ac-test` (6.18.0) is
  *  /pharn-test's RED RUN: the AC tests, run before the build, whose per-test record check-red-run.mjs judges.
  *  Every stamp reader that is not that one asserts its own stage (`validateStamp`'s `expect.stage`), so an
- *  `ac-test` stamp handed to /pharn-verify or /pharn-regress is `stage-mismatch`, never a verdict. */
-export const STAGES = Object.freeze(["verify", "regress", "ac-test"]);
+ *  `ac-test` stamp handed to /pharn-verify or /pharn-regress is `stage-mismatch`, never a verdict. `build` (6.38.0,
+ *  build-gate-bounded) is /pharn-build's own project gate, run by build-gate.mjs: no verdict reads its stamp, and every
+ *  stamp reader that asserts a stage refuses it the same way. */
+export const STAGES = Object.freeze(["verify", "regress", "ac-test", "build"]);
 export const SIDES = Object.freeze(["base", "head"]);
 
 /** The stamp schema id. Bumped only on a breaking shape change (pharn-contracts/gate-run-record.md). */
@@ -427,8 +475,27 @@ export function orderEntries(sourceEntries, extraEntries, withReconcile) {
  *            itself stays ADVISORY and `style_skipped` is recorded so the drop is never silent). A DISCOVERED
  *            regress source never contains an E2E_SET member (a fixed rule, not a flag); an explicit
  *            `--gates` string is the caller's choice and is never filtered.
+ *  `exclude` (6.36.0): the project's declared exclusion (gate-exclusion-core.mjs), applied to a DISCOVERED source
+ *  only, AFTER the regress e2e rule and before the emptiness test — so an exclusion that leaves nothing is
+ *  `empty-source-set` naming it, never a run with nothing in it (L34). Passing it with `--gates` is a usage error.
+ *  build   : (6.38.0, /pharn-build's gate via build-gate.mjs) DISCOVERED only — `--gates`, `--extra` and
+ *            `--skip-style` are refused — minus E2E_SET (the regress rule: e2e runs at /pharn-verify), then the
+ *            exclusion, no `reconcile`. With `targets` (a non-empty array of repo-relative test files), the set is
+ *            the `test` gate alone, handed those files; an id that a targeted run skips anyway is never credited to
+ *            the exclusion (the G9 rule above). `targets` applies to `build` only.
  *  ---------------------------------------------------------------------------------------------- */
-export function resolveSet({ stage, side = null, gates = null, scripts = null, extras = null, skipStyle = false, feature, acRows = null }) {
+export function resolveSet({
+  stage,
+  side = null,
+  gates = null,
+  scripts = null,
+  extras = null,
+  skipStyle = false,
+  feature,
+  acRows = null,
+  exclude = [],
+  targets = null,
+}) {
   if (!STAGES.includes(stage)) return err("usage-error", `--stage must be one of ${STAGES.join(" | ")}`);
   if (stage === "regress") {
     if (!SIDES.includes(side)) return err("usage-error", `--side must be one of ${SIDES.join(" | ")} for --stage regress`);
@@ -438,13 +505,25 @@ export function resolveSet({ stage, side = null, gates = null, scripts = null, e
   if (!isCleanToken(feature, 64) || !FEATURE_SLUG_RE.test(feature)) {
     return err("usage-error", `--feature must be a plain slug matching ${FEATURE_SLUG_RE}`);
   }
-  if (stage === "ac-test") return resolveAcTest({ gates, scripts, extras, skipStyle, feature, acRows });
+  const exErr = exclusionError(exclude);
+  if (exErr) return err("bad-gate-exclusion", `the gate exclusion ${exErr}`);
+  if (exclude.length && gates !== null && gates !== undefined) {
+    return err("usage-error", "a gate exclusion applies to DISCOVERY only — an explicit --gates string is never filtered");
+  }
+  if (stage === "ac-test") return resolveAcTest({ gates, scripts, extras, skipStyle, feature, acRows, exclude });
   if (acRows !== null) return err("usage-error", "--ac-tests applies to --stage ac-test only");
+  if (stage === "build") {
+    const bad = buildArgsError({ gates, extras, skipStyle, targets });
+    if (bad) return err("usage-error", bad);
+  } else if (targets !== null) {
+    return err("usage-error", "--targets applies to --stage build only");
+  }
 
   let source;
   let sourceKind;
   let sourceRaw = null;
   let e2eExcluded = [];
+  let excludedIds = [];
   if (gates !== null && gates !== undefined) {
     const p = parseGatesSpec(gates);
     if (!p.ok) return p;
@@ -456,10 +535,17 @@ export function resolveSet({ stage, side = null, gates = null, scripts = null, e
     sourceKind = "discover";
     // e2e runs at /pharn-verify only. Filtered HERE, before the emptiness test below, so an e2e-only manifest
     // is `empty-source-set` at regress (its no-gates stop) rather than a run with nothing in it (L34).
-    if (stage === "regress") {
+    if (stage === "regress" || stage === "build") {
       e2eExcluded = source.filter((e) => E2E_SET.includes(e.id)).map((e) => e.id);
       source = source.filter((e) => !E2E_SET.includes(e.id));
     }
+    // build, targeted (6.38.0): the `test` gate alone. Narrowed BEFORE the exclusion, so `excluded` never names a
+    // gate a targeted run skips anyway (the G9 rule just below).
+    if (stage === "build" && targets !== null) source = source.filter((e) => e.id === "test");
+    // The project's exclusion AFTER the fixed e2e rule (grill G9): `excluded` names only what the declaration itself
+    // removed from what this stage would otherwise run, never an e2e id regress drops anyway.
+    excludedIds = source.filter((e) => exclude.includes(e.id)).map((e) => e.id);
+    source = source.filter((e) => !exclude.includes(e.id));
   }
 
   // The EMPTY-SOURCE refusal, and it is deliberately computed on `source` BEFORE any injection (L34).
@@ -467,13 +553,19 @@ export function resolveSet({ stage, side = null, gates = null, scripts = null, e
   // for free and this refusal would be unreachable — the vacuous pass aimed at the one condition that
   // must route to the existing no-gates stop.
   if (source.length === 0) {
+    const byExclusion = excludedIds.length ? ` once the project's ${EXCLUSION_DECLARED_IN} removed ${excludedIds.join(", ")}` : "";
+    if (stage === "build" && targets !== null) {
+      return err("empty-source-set", `no gates: a targeted build run needs the discovered \`test\` gate, and there is none${byExclusion}`);
+    }
     return err(
       "empty-source-set",
       e2eExcluded.length
-        ? `no gates: at regress the allowlist ∩ package.json scripts holds only the e2e gates (${e2eExcluded.join(", ")}), which regress never discovers`
-        : "no gates: --gates was not supplied and the allowlist ∩ package.json scripts is empty"
+        ? `no gates: at ${stage} the allowlist ∩ package.json scripts holds only the e2e gates (${e2eExcluded.join(", ")})${byExclusion}, and ${stage} never discovers those`
+        : `no gates: --gates was not supplied and the allowlist ∩ package.json scripts is empty${byExclusion}`
     );
   }
+  // build, targeted: hand `test` exactly the target files (run-gates.mjs appends them after `--`).
+  if (stage === "build" && targets !== null) source = source.map((e) => ({ ...e, files: [...targets] }));
 
   const ex = parseExtras(extras);
   if (!ex.ok) return ex;
@@ -515,10 +607,46 @@ export function resolveSet({ stage, side = null, gates = null, scripts = null, e
       style_skipped: styleSkipped,
       // The e2e ids the regress rule dropped — reported by `init`, never written into the stamp.
       e2e_excluded: e2eExcluded,
+      // The ids the project's declaration removed from discovery (6.36.0) — WRITTEN into the stamp when non-empty.
+      excluded: excludedBlock(excludedIds),
       required: kept.map((e) => e.id),
       entries,
     },
   };
+}
+
+/** The stamp's `excluded` block for the ids discovery removed, or null when it removed none — so a project with no
+ *  declaration (or one naming no discovered script) writes a stamp byte-identical to before 6.36.0. */
+function excludedBlock(ids) {
+  return ids.length ? { declared_in: EXCLUSION_DECLARED_IN, ids: [...ids] } : null;
+}
+
+/** The most target files one targeted build run takes. A cap, never a truncation: over it is a refusal. */
+export const MAX_BUILD_TARGETS = 4096;
+
+/** Why these are not usable `build` arguments, or null. The set is DISCOVERED only (no `--gates`, `--extra`,
+ *  `--skip-style`); `targets` is null (full) or a NON-EMPTY array (L34 — an empty list handed to a runner means "the
+ *  whole suite", L16) of distinct clean tokens, none led by `-` (a runner would read it as a flag) and none
+ *  glob-shaped. The PATH rule proper (normalized, repo-relative, outside `.pharn/`) is ac-tests-core.mjs `badPath`,
+ *  which run-gates.mjs applies when it reads `--targets` — this module imports nothing. TOTAL (L62): names a
+ *  position, never a value. */
+function buildArgsError({ gates, extras, skipStyle, targets }) {
+  if (gates !== null && gates !== undefined) return "--gates does not apply to --stage build (its set is the discovered one)";
+  if (extras !== null && extras !== undefined) return "--extra does not apply to --stage build";
+  if (skipStyle) return "--skip-style does not apply to --stage build";
+  if (targets === null) return null;
+  if (!Array.isArray(targets) || targets.length === 0) return "--targets must be a non-empty array of test files";
+  if (targets.length > MAX_BUILD_TARGETS) return `--targets holds more than ${MAX_BUILD_TARGETS} files`;
+  const seen = new Set();
+  for (let i = 0; i < targets.length; i++) {
+    const t = targets[i];
+    if (!isCleanToken(t, 1024) || t.startsWith("-") || /[*?]/.test(t)) {
+      return `--targets entry ${i} is not a clean, non-flag, non-glob path`;
+    }
+    if (seen.has(t)) return `--targets entry ${i} repeats an earlier entry`;
+    seen.add(t);
+  }
+  return null;
 }
 
 /** ------------------------------------------------------------------------------------------------
@@ -541,7 +669,7 @@ export function acFilesFor(acRows, gateId) {
   return [...new Set(acRows.filter((r) => LEVEL_GATES[r.level].includes(gateId)).map((r) => r.file))].sort();
 }
 
-function resolveAcTest({ gates, scripts, extras, skipStyle, feature, acRows }) {
+function resolveAcTest({ gates, scripts, extras, skipStyle, feature, acRows, exclude }) {
   if (gates !== null && gates !== undefined)
     return err("usage-error", "--gates does not apply to --stage ac-test (the set is the mapping's)");
   if (extras !== null && extras !== undefined) return err("usage-error", "--extra does not apply to --stage ac-test");
@@ -559,7 +687,14 @@ function resolveAcTest({ gates, scripts, extras, skipStyle, feature, acRows }) {
       return err("usage-error", "an --ac-tests mapping row is not {id, level ∈ unit|integration|e2e, file}");
     }
   }
-  const discovered = discoverGates(scripts);
+  // The project's exclusion (6.36.0) removes ids from discovery here exactly as in resolveSet: a level whose gates are
+  // ALL excluded is uncovered, so the red run refuses rather than running a smaller set (L34). `excluded` names only the
+  // level gates the mapping would have run (grill G9's rule: never credit the declaration with what this stage skips
+  // anyway).
+  const all = discoverGates(scripts);
+  const levelIds = new Set(acRows.flatMap((r) => LEVEL_GATES[r.level]));
+  const excludedIds = all.filter((e) => exclude.includes(e.id) && levelIds.has(e.id)).map((e) => e.id);
+  const discovered = all.filter((e) => !exclude.includes(e.id));
   const have = new Set(discovered.map((e) => e.id));
   const needed = new Set();
   const uncovered = [];
@@ -571,7 +706,9 @@ function resolveAcTest({ gates, scripts, extras, skipStyle, feature, acRows }) {
   if (uncovered.length) {
     return err(
       "coverage-violation",
-      `no discovered gate runs ${uncovered.join(", ")} — package.json has none of the level's scripts (run check-red-run.mjs --preflight)`
+      `no discovered gate runs ${uncovered.join(", ")} — package.json has none of the level's scripts` +
+        (excludedIds.length ? `, or the project's ${EXCLUSION_DECLARED_IN} removed them (${excludedIds.join(", ")})` : "") +
+        " (run check-red-run.mjs --preflight)"
     );
   }
   const kept = discovered.filter((e) => needed.has(e.id)).map((e) => ({ ...e, files: acFilesFor(acRows, e.id) }));
@@ -585,6 +722,7 @@ function resolveAcTest({ gates, scripts, extras, skipStyle, feature, acRows }) {
       source_raw: null,
       style_skipped: false,
       e2e_excluded: [],
+      excluded: excludedBlock(excludedIds),
       required: kept.map((e) => e.id),
       entries: orderEntries(kept, [], false),
     },
@@ -665,6 +803,27 @@ function reusedRunDefect(stamp, r) {
   if (r.timed_out !== false || r.mutated !== false || r.fp_before !== r.fp_after)
     return "a reused entry neither times out nor moves the tree";
   if (!Object.hasOwn(r, "results_sha256") || r.results_sha256 !== null) return "a reused entry records results_sha256: null";
+  return null;
+}
+
+/** Why `stamp.excluded` is not the block the runner writes, or null: exactly {declared_in, ids}; `declared_in` the one
+ *  sanctioned source; `ids` a NON-EMPTY list of distinct ALLOWLIST members in ALLOWLIST order; only on a DISCOVERED
+ *  stamp; and none of them in `required` or `runs` — an excluded gate is one that did not run. TOTAL (L62). */
+function excludedDefect(stamp) {
+  const x = stamp.excluded;
+  if (x === null || typeof x !== "object" || Array.isArray(x)) return "is not an object";
+  const keys = Object.keys(x);
+  if (keys.length !== EXCLUDED_KEYS.length || !EXCLUDED_KEYS.every((k) => Object.hasOwn(x, k))) {
+    return `is not exactly {${EXCLUDED_KEYS.join(", ")}}`;
+  }
+  if (x.declared_in !== EXCLUSION_DECLARED_IN) return `.declared_in is not ${JSON.stringify(EXCLUSION_DECLARED_IN)}`;
+  const listErr = exclusionError(x.ids);
+  if (listErr !== null) return `.ids ${listErr}`;
+  if (x.ids.length === 0) return ".ids is empty — a stamp whose discovery removed nothing carries no block";
+  if (x.ids.join("\n") !== ALLOWLIST.filter((id) => x.ids.includes(id)).join("\n")) return ".ids is not in ALLOWLIST order";
+  if (stamp.source !== "discover") return "appears on a stamp whose source is not `discover` — an explicit --gates set is never filtered";
+  const ran = new Set([...stamp.required, ...stamp.runs.map((r) => r.id)]);
+  if (x.ids.some((id) => ran.has(id))) return "names a gate the stamp also requires or ran";
   return null;
 }
 
@@ -763,6 +922,13 @@ export function validateStamp(stamp, expect = {}) {
     return err("reconcile-not-last", `'reconcile' is at seq ${rec} of ${stamp.runs.length} — it must run last`);
   }
 
+  // OPTIONAL and additive (6.36.0): the ids the project's declaration removed from discovery. Absent on every stamp
+  // written before it, and on every stamp whose discovery removed nothing.
+  if (Object.hasOwn(stamp, "excluded")) {
+    const bad = excludedDefect(stamp);
+    if (bad !== null) return err("stamp-malformed", `stamp.excluded ${bad}`);
+  }
+
   const gap = coverageGap(stamp);
   if (gap.length) return err("coverage-violation", `stamp.runs is missing required gate(s): ${gap.join(", ")}`);
 
@@ -799,11 +965,14 @@ export function completenessFromStamp(stamp) {
  *  reports then read named fields only (verified by reading each: check-loop.mjs, check-ship.mjs,
  *  check-loop-decision.mjs, check-ship-briefing.mjs, render-ship-briefing.mjs, render-run-report.mjs,
  *  ship-outcome-core.mjs — none validated a closed key set); check-loop-fresh.mjs (6.10.0) reads
- *  `gate_run.stamp_sha256` by name. A consumer added since is not covered by either reading. */
+ *  `gate_run.stamp_sha256` by name. A consumer added since is not covered by either reading.
+ *  6.36.0: it copies the stamp's `excluded` block when the stamp carries one (and only then, so every report over a
+ *  stamp without it is byte-identical) — the disclosure that this verdict ran over fewer gates than discovery found. */
 export function gateRunBlock(stamp, stampSha256) {
   return {
     stamp_sha256: stampSha256,
     source: stamp.source,
     fingerprint: { algo: stamp.fingerprint.algo, final: stamp.fingerprint.final },
+    ...(Object.hasOwn(stamp, "excluded") ? { excluded: { declared_in: stamp.excluded.declared_in, ids: [...stamp.excluded.ids] } } : {}),
   };
 }

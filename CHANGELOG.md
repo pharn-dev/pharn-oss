@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.36.0] - 2026-10-05
+## [6.39.0] - 2026-10-05
 
 ### Added
 
@@ -87,8 +87,169 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     The close parts are untouched. Their "the route line" wording still reads true, since `start` prints and runs the
     route.
 
-  - `SKILLS_VERSION` 6.35.2 → 6.36.0 (minor: a new floor CLI and two subcommands), with the README badge. `MIN_CLI` is
+  - `SKILLS_VERSION` 6.38.0 → 6.39.0 (minor: a new floor CLI and two subcommands), with the README badge. `MIN_CLI` is
     unchanged.
+
+## [6.38.0] - 2026-10-05
+
+### Added
+
+- **`/pharn-build` runs the project's gates through one tested helper,
+  [`pharn/floor/build-gate.mjs`](./pharn/floor/build-gate.mjs), targeted while fixing and once in full.** Step 4 pins
+  two lines and maps each exit. `--mode targeted` runs the `test` gate over this feature's declared test files (PLAN.md
+  and AC-TESTS.md `## Files`, each through `badPath` and `isTestFile`, existing regular files only, e2e-mapped files left
+  out). `--mode full` runs the set `/pharn-verify` discovers minus the e2e gates, and its exit is the build's gate (the
+  routed agent's `--gate`). Both go through the gate runner's new `build` stage, the stage scripts' drain and budget
+  (unchanged), and the project's gate exclusion ([6.36.0]). The summary is bounded: per gate its exit and the wall time
+  of its runner call; for a red gate the failing tests' ids with a fenced excerpt of each first failure message, or a
+  fenced tail of its logs; at most 16 KiB per call, with the full logs left under `.pharn/pharn-build/<name>/`. The same
+  line starts and continues a run, and continues only while the tree is unchanged.
+  - **The trigger (P7).** In a user's 92-minute `/pharn-loop` run (PHARN 6.35.0) the routed build agent chose its own
+    gate set: a full `vitest run` twice, a `test:db` script `/pharn-verify` never runs twice, `typecheck` piped through
+    `grep -v` to hide pre-existing errors, and never `build`. It spent 7.8 minutes blocked on the suites
+    (`.dev/measurements/loop-wall-clock-2026-10-05.md` §4). Its first full run found 39 failing tests in 14 files, all
+    14 of them files the plan declared.
+  - **A correction to the batch's evidence.** The agent's gate output was about 18 KB of its 484 KB of Bash results.
+    Its context grew from about 302k to 660k tokens through source reads and its own write scripts, not gate output. So
+    the output bound removes a risk (a whole log read into context) rather than a cost measured in that run.
+  - **Expected saving:** about 2.5–3 minutes per build iteration on that project, plus a gate set decided by tested
+    code: targeted runs over the 75 declared test files (≈ 15 s each, scaled from a measured 13.35 s for 22 files)
+    replace the first full suite; `test:db` (≈ 109 s, not a verify gate) is no longer run; `build` (≈ 180 s) now is,
+    and about seven polling requests go. The arithmetic is in `.dev/features/build-gate-bounded/PLAN.md`.
+  - **Behaviour change, accepted at GATE 1:** in a project with gates red at its base commit, the full run reads RED,
+    so a routed build under `/pharn-ship` reports `done gate:fail` and ship stops after the build instead of at verify.
+    `/pharn-loop` is unaffected (it goes on to regress and verify either way). A base-red gate was already a red build
+    gate before this change; the agent had hidden it by hand.
+  - **Shared modules, additive:** `gate-run-core.mjs` gains the `build` stage and `resolveSet`'s `targets`;
+    `run-gates.mjs init --stage build [--targets <file>]`; the results adapters carry `messages` on each parsed entry,
+    and `test-results-core.mjs` gains `gateResults` and `testIdOf`. No record carries a message, and `testRecord`'s
+    output is unchanged. Contracts: [`gate-run-record.md`](./pharn/pharn-contracts/gate-run-record.md) (the `build`
+    stage) and [`test-results-record.md`](./pharn/pharn-contracts/test-results-record.md).
+  - **Bounds:** advisory that the agent runs nothing else, that an excerpt holds the diagnostic it needs, and that a
+    targeted GREEN predicts a full one or a full GREEN a verify PASS (e2e, `reconcile` and the AC gate run only at
+    verify). "Targeted" is the runner's reading of file arguments (vitest filters by substring, Jest by pattern). The
+    times are observed wall clock of each runner call. `pharn-build.md`'s byte ceiling rose to 24,576 by the documented
+    rule. Named follow-ups: `build-gate-execution-reuse` (offer the full run's executions to regress HEAD and verify
+    through the 6.34.0 identity mechanism) and `ship-build-gate-cite` (`pharn-ship.md`'s inline-build bullet still
+    names a `--gates` clause the build never took).
+  - Product-surface change: `SKILLS_VERSION` 6.37.0 → 6.38.0 (minor), stacked on `feat/regress-pre-run-snapshot`.
+
+## [6.37.0] - 2026-10-05
+
+### Added
+
+- 2026-10-05: **A path that was already changed when a `/pharn-loop` or `/pharn-ship` run began is no longer counted
+  as that run's scope escape — it is reported instead, as long as it still holds the bytes it held at entry**
+  ([`pharn/floor/pre-run-snapshot.mjs`](./pharn/floor/pre-run-snapshot.mjs),
+  [`pharn/floor/pre-run-snapshot-core.mjs`](./pharn/floor/pre-run-snapshot-core.mjs),
+  [`pharn/floor/check-regress.mjs`](./pharn/floor/check-regress.mjs) `partitionScope`,
+  [`pharn/floor/stage-regress.mjs`](./pharn/floor/stage-regress.mjs),
+  [`pharn/floor/quick-scope-core.mjs`](./pharn/floor/quick-scope-core.mjs),
+  [`pharn/floor/render-regression.mjs`](./pharn/floor/render-regression.mjs); contract
+  [`regression-report.md`](./pharn/pharn-contracts/regression-report.md), "The additive `pre_run_snapshot` block").
+  `SKILLS_VERSION` 6.36.0 → 6.37.0 (minor: a new floor CLI and a changed stage behaviour), with the README badge.
+  `MIN_CLI` stays 0.5.0: no installed path moves.
+  - **The trigger.** Two of three recorded `/pharn-loop` runs in a user's project stopped at `/pharn-regress`
+    `scope-escaped` on paths the run never wrote: an abandoned earlier run's untracked `pharn/features/<other>/`
+    folder (a 19 min 26 s refusal-and-human-wait in a 92-minute run) and the user's own uncommitted edit (an S9
+    stop). Both were in the loop's own `pre-run-status.txt`, which the partition never read.
+  - **How.** `node pharn/floor/pre-run-snapshot.mjs --capture '<name>'` runs right after the run marker opens —
+    `/pharn-loop` Step 1a, `/pharn-ship` Step 2 item 1 (the quick modes inherit it); a non-zero exit stops the run
+    before any model work. It records every path git reports changed since `HEAD` with a digest (content, a link's own
+    text, `absent`, or `unhashable`) in `<git dir>/pharn-pre-run-snapshot.json`, bound to the marker's bytes, the base
+    and the feature, once per run. `/pharn-regress`'s partition and `check-quick-scope.mjs` then subtract an undeclared,
+    non-exempt path only when that snapshot applies and the path's live digest equals the recorded one, and report it
+    as `pre_run_snapshot: {status, unchanged}` in `scope.json`, `regression-report.json` (a second additive block after
+    `base_evidence`), the quick check's document and `REGRESSION.md`. With no open run or no snapshot the partition is
+    exactly what it was, and the `check-regress.mjs scope` CLI is byte-identical. "Open" is a marker's presence and age
+    (≤ 24 h), so a standalone `/pharn-regress` after an interrupted run of the same feature applies that run's snapshot.
+  - **Bounds, stated in the module headers and the contract.** Agreement, never provenance: the record is out of the
+    write tools' reach (a ★ HOOK test runs both guards on it), and a Bash writer can forge it. Nothing is attributed: a
+    path an earlier run escaped with is pre-run state for a re-run, so re-running reports it rather than refusing. Only
+    the escape set changes: `inside` is unchanged, so a pre-run change that breaks a gate still reads as a regression
+    (follow-up `regress-base-pre-run-overlay`), and a pre-run-changed test file is not compared at regress. A green
+    `/pharn-loop` never commits a subtracted path, so its branch is not the whole tree its gates ran on; the summary
+    names those paths. The porcelain `pre-run-status.txt` stays beside the record (follow-up
+    `pre-run-snapshot-single-source`).
+  - **`LIMITS.md` §3a and §6 now understate this bound.** The proposed human-only edits are in
+    `.dev/features/regress-pre-run-snapshot/PROTECTED-FOLLOWUPS.md`.
+
+## [6.36.0] - 2026-10-05
+
+### Added
+
+- 2026-10-05: **A project can now exclude a discovered gate.** It does so with an optional, closed
+  `pharn.config.json` block, `{"gates": {"exclude": [<allowlisted gate ids>]}}`, read by the new
+  [`pharn/floor/gate-exclusion-core.mjs`](./pharn/floor/gate-exclusion-core.mjs). Discovery leaves those ids out at
+  every stage that discovers: `/pharn-regress`, `/pharn-verify` and `/pharn-test`'s red run. An explicit `--gates` list
+  is never filtered. `/pharn-test` pins the declaration, and every verdict that ran over fewer gates says so. Contracts:
+  [`gate-run-record.md`](./pharn/pharn-contracts/gate-run-record.md) ("Excluding a discovered gate") and
+  [`ac-tests.md`](./pharn/pharn-contracts/ac-tests.md) ("The test-infrastructure pin").
+  - **The trigger (P7).** In a user's project the discovered `e2e` gate (Playwright) cannot run on the user's machine.
+    Discovery offered no way to leave it out, and an explicit `--gates` list makes the AC gate read
+    `test-infra-changed` by design. Two of three real `/pharn-loop` runs on 6.35.0 stopped on exactly this, after 28
+    and 92 minutes. The direct saving is the excluded gate's run time per verify iteration (the Playwright suite took
+    2.1 minutes in one of those runs) and the stop itself.
+  - **Closed and loud.** Each id must be a distinct `ALLOWLIST` member. Anything else refuses: `run-gates.mjs init` exits
+    2 with the new reason code `bad-gate-exclusion`, and the red-run preflight is unusable. With no file, or no `gates`
+    key, nothing changes byte-for-byte. **Behaviour change:** a `pharn.config.json` that exists but is not valid JSON
+    now refuses discovery and the test-infrastructure pin. Before, discovery never read the file. A valueless trailing
+    `--gates` is now refused (`usage-error`): it had skipped the declaration while discovery still ran.
+  - **Declare it and commit it before the run.** An uncommitted declaration is a change since base, so regress's scope
+    partition (`--quick`: `check-quick-scope.mjs`) reads it `scope-escaped` unless the PLAN declares
+    `pharn.config.json`.
+  - **Pinned where the build cannot move it unnoticed.** `ac-tests-lock.mjs --write` now writes schema
+    `ac-tests-lock/5`, whose test-infrastructure pin adds `exclude`: the whole declared list, not only level gates.
+    Adding or removing an id after `/pharn-test` reads `test-infra-changed` at `/pharn-verify`, which `/pharn-loop`
+    stops on (S13). This is agreement, never provenance (L43).
+  - **Costs of the schema bump, stated.**
+    - A `/4` or `/3` lock is still read and judged by what it pinned. It reads `unpinned` (a `--check` RED, and
+      `test-infra-unpinned` at the AC gate) only when the live tree declares a non-empty exclusion. Such a feature
+      re-runs `/pharn-test`.
+    - `--write` writes `/5` for every project, so a floor older than 6.36.0 reads a new lock as unusable. That is
+      fail-closed, never GREEN.
+    - A `/4` or `/3` lock over an unparseable `pharn.config.json` now reads `changed`.
+  - **Fail-closed at plan time and at the red run.** An acceptance criterion whose level maps only to excluded gates
+    is RED at `/pharn-plan` (`check-ac-tests.mjs`'s new kind `level-excluded`), and `ac-level-unavailable` at the red-run
+    preflight. Both apply one rule, `gate-run-core.mjs` `levelExcludedGates`. It is never a vacuous pass. The closed
+    `blocked: no-test-runner` line then suggests removing the id or re-specifying the criterion. The runner refuses the
+    same set (`coverage-violation`).
+  - **Disclosed everywhere a verdict is shown.**
+    - The gate-run stamp gains an optional, additive `excluded` block, `{declared_in, ids}`, which `validateStamp`
+      shape-checks.
+    - The block is copied to `verify-report.json` `gate_run.excluded` and `regression-report.json`
+      `gate_run.head.excluded`.
+    - `VERIFY.md` and `REGRESSION.md` render one line directly under the verdict line.
+    - The AC gate's detail names an excluded level gate.
+    - The `no-gates` questions name the new cause.
+
+    At regress the exclusion applies after the fixed e2e rule, so it is never credited with an `e2e` that regress
+    skips anyway.
+
+  - **Not pinned, stated:**
+    - a legacy SPEC (no lock);
+    - a bootstrap lock (`test_infra: null`);
+    - an exclusion written during `/pharn-test`, which runs before the reconcile anchor. The backstop is conditional:
+      regress's scope partition (`--quick`: `check-quick-scope.mjs`) reads a `pharn.config.json` change since base
+      `scope-escaped`. It does not hold in three cases: when PLAN `## Files` names the file (`check-ac-tests.mjs` only
+      prints a NOTE), when git ignores the file, or in a standalone `/pharn-verify`.
+    - In a bootstrap or legacy SPEC, a build whose PLAN declares `pharn.config.json` can exclude a gate and regress
+      still reads no-regressions. Only the disclosure line shows it, and `BRIEFING.md` does not carry that line. **Not
+      closed here:** regress has the base commit and could compare the declaration at base and HEAD. That is the
+      follow-up `gate-exclusion-base-compare`.
+
+    Named residuals: `gate-exclusion-summary-disclosure` (`RUN-REPORT.md` and `BRIEFING.md` do not repeat the line),
+    `gate-exclusion-bootstrap-pin`, `gate-exclusion-base-compare`, and `gate-exclusion-build-gate` (`/pharn-build`'s
+    own prose gate does not read the list).
+
+  - An independent review's six findings were taken before merge (`.dev/features/gate-exclusion-config/REVIEW.md`).
+
+  - Product commands `pharn-verify`, `pharn-regress`, `pharn-test`, `pharn-loop`, `pharn-build`, `pharn-ship` and
+    `pharn-spec` name the exclusion where they restate discovery. The README gains "Excluding a gate".
+  - `SKILLS_VERSION` 6.35.2 → 6.36.0 (minor: a new capability), with the README badge. `MIN_CLI` stays 0.5.0: no
+    installed path moves, and `pharn-cli` carries `gates` over as a user-owned key. One trusted-doc sentence becomes
+    incomplete (`LIMITS.md §5`, "re-runs the project's own gates"). It is proposed for a human edit in
+    `.dev/features/gate-exclusion-config/PROTECTED-FOLLOWUPS.md` and not edited here.
 
 ## [6.35.2] - 2026-10-05
 

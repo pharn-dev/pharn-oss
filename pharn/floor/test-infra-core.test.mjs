@@ -20,6 +20,7 @@ import {
   PACKAGE_MANAGER_CONFIGS,
   PIN_KEYS,
   PIN_KEYS_V3,
+  PIN_KEYS_V4,
   PIN_MANIFESTS,
   RUN_WORDS,
   SCRIPT_FILE_KEYS,
@@ -93,8 +94,9 @@ test("the pin: the level gates' script values and results formats, the root runn
       configs: [{ path: "vitest.config.ts", sha256: sha256RegularFile(join(root, "vitest.config.ts")) }],
       script_files: [],
       jest: null,
+      exclude: [],
     });
-    assert.equal(pinShapeError(pin, { version: 4 }), null);
+    assert.equal(pinShapeError(pin, { version: 5 }), null);
     assert.deepEqual(testInfraReds({ recorded: pin, root }), HOLDS, "a pin holds over the tree it was taken from");
   });
 });
@@ -137,9 +139,11 @@ test("each change is named by gate id or path, never by script text (P2), and ea
       /^gate test: its testResults format changed \(vitest-json → not-configured\)$/,
     ],
     [
+      // 6.36.0: an unparseable pharn.config.json can no longer be pinned at all (its gates.exclude cannot be read), so
+      // it is a refusal-as-change — before, it read `testResults format changed (vitest-json → config-invalid)`.
       "results config broken",
       (root) => writeFileSync(join(root, "pharn.config.json"), "{"),
-      /^gate test: its testResults format changed \(vitest-json → config-invalid\)$/,
+      /^the test infrastructure cannot be pinned now: pharn\.config\.json is not valid JSON/,
     ],
     [
       "config edited",
@@ -175,7 +179,7 @@ test("each change is named by gate id or path, never by script text (P2), and ea
       const d = testInfraReds({ recorded: pin, root });
       assert.equal(d.changed.length, 1, `${why}: ${JSON.stringify(d)}`);
       assert.match(d.changed[0], re, why);
-      assert.deepEqual(d.unpinned, [], `${why}: a /4 pin has nothing unpinned`);
+      assert.deepEqual(d.unpinned, [], `${why}: a /5 pin has nothing unpinned`);
       assert.ok(!d.changed[0].includes("secret-7f3a"), `${why}: the script text leaked`);
     });
   }
@@ -241,7 +245,7 @@ test("6.31.0: the /4 pin — a chained script, the files the scripts name, the j
     ]);
     assert.match(pin.jest, /^[0-9a-f]{64}$/);
     assert.equal(JSON.stringify(pin).includes("testEnvironment"), false, "the jest key is a digest, never its value");
-    assert.equal(pinShapeError(pin, { version: 4 }), null);
+    assert.equal(pinShapeError(pin, { version: 5 }), null);
     assert.deepEqual(testInfraReds({ recorded: pin, root }), HOLDS);
   });
 });
@@ -716,7 +720,7 @@ test("6.21.0: a case-variant runner config added after the pin is `a runner conf
       ["Vitest.config.mjs"],
       "a case-variant config present at pin time is pinned under its on-disk spelling"
     );
-    assert.equal(pinShapeError(pin, { version: 4 }), null, "and a pin recording that spelling is shape-valid");
+    assert.equal(pinShapeError(pin, { version: 5 }), null, "and a pin recording that spelling is shape-valid");
     writeFileSync(join(root, "Vitest.config.mjs"), "export default { test: { include: ['nomatch/**'] } }\n");
     assert.deepEqual(testInfraReds({ recorded: pin, root }).changed, ["Vitest.config.mjs: the runner config changed"]);
   });
@@ -838,13 +842,13 @@ test("REFUSED, never hashed through: a symlinked or non-regular config (L59); an
 
 test("no package.json pins no gates (a scratch project); inputs are required (L41)", () => {
   withWorld({ scripts: null, results: null, files: {} }, (root) => {
-    assert.deepEqual(pinOf(root), { levels: ["unit"], gates: [], chained: [], configs: [], script_files: [], jest: null });
+    assert.deepEqual(pinOf(root), { levels: ["unit"], gates: [], chained: [], configs: [], script_files: [], jest: null, exclude: [] });
   });
   assert.throws(() => computeTestInfra({ levels: ["unit"] }), TypeError);
   assert.throws(() => computeTestInfra({ root: "/x", levels: [] }), TypeError);
   assert.throws(() => computeTestInfra({ root: "/x", levels: ["smoke"] }), TypeError);
   assert.throws(() => pinShapeError({}), TypeError, "the schema version is required");
-  assert.throws(() => pinShapeError({}, { version: 5 }), TypeError);
+  assert.throws(() => pinShapeError({}, { version: 6 }), TypeError);
 });
 
 const GOOD_V3 = {
@@ -866,7 +870,8 @@ const GOOD_V4 = {
 test("pinShapeError closes every level (L36), per schema: /4 keys, levels, gates, chained, configs, script files, jest, order", () => {
   assert.equal(pinShapeError(GOOD_V4, { version: 4 }), null);
   assert.equal(pinShapeError({ ...GOOD_V4, jest: null, chained: [], script_files: [] }, { version: 4 }), null);
-  assert.deepEqual([...PIN_KEYS].sort(), ["chained", "configs", "gates", "jest", "levels", "script_files"]);
+  assert.deepEqual([...PIN_KEYS_V4].sort(), ["chained", "configs", "gates", "jest", "levels", "script_files"]);
+  assert.notEqual(pinShapeError({ ...GOOD_V4, exclude: [] }, { version: 4 }), null, "a /5-shaped pin under /4");
   assert.deepEqual([...CHAINED_KEYS].sort(), ["id", "post", "pre", "script"]);
   assert.deepEqual([...SCRIPT_FILE_KEYS].sort(), ["path", "sha256"]);
   const good = GOOD_V4;
@@ -938,6 +943,72 @@ test("pinShapeError closes every level (L36), per schema: /4 keys, levels, gates
   for (const [why, pin] of bad) assert.notEqual(pinShapeError(pin, { version: 4 }), null, why);
   assert.deepEqual(RESULTS_VALUES, [...RESULTS_VALUES].sort());
   assert.ok(RESULTS_VALUES.includes("not-configured") && RESULTS_VALUES.includes("config-invalid"));
+});
+
+test("6.36.0 — pinShapeError under /5: /4's shape plus `exclude`, a list of distinct ALLOWLIST ids in ALLOWLIST order", () => {
+  const good = { ...GOOD_V4, exclude: ["typecheck", "e2e"] };
+  assert.equal(pinShapeError(good, { version: 5 }), null);
+  assert.equal(pinShapeError({ ...GOOD_V4, exclude: [] }, { version: 5 }), null, "nothing excluded is an empty list");
+  assert.deepEqual([...PIN_KEYS].sort(), ["chained", "configs", "exclude", "gates", "jest", "levels", "script_files"]);
+  const bad = [
+    ["a /4-shaped pin under /5", GOOD_V4],
+    ["exclude not an array", { ...good, exclude: "e2e" }],
+    ["exclude null", { ...good, exclude: null }],
+    ["an id outside the allowlist", { ...good, exclude: ["smoke"] }],
+    ["a reserved id", { ...good, exclude: ["reconcile"] }],
+    ["a non-string id", { ...good, exclude: [1] }],
+    ["a duplicate id", { ...good, exclude: ["e2e", "e2e"] }],
+    ["ids out of ALLOWLIST order", { ...good, exclude: ["e2e", "typecheck"] }],
+  ];
+  for (const [why, pin] of bad) assert.notEqual(pinShapeError(pin, { version: 5 }), null, why);
+});
+
+test("6.36.0 — the pin records the DECLARED gate exclusion; a change is CHANGED, named by id only; a bad one refuses the pin", () => {
+  const config = (exclude) => JSON.stringify({ testResults: { test: "vitest-json" }, gates: { exclude } });
+  withWorld({}, (root) => {
+    writeFileSync(join(root, "pharn.config.json"), config(["e2e", "typecheck"]));
+    const pin = pinOf(root);
+    assert.deepEqual(pin.exclude, ["typecheck", "e2e"], "ALLOWLIST order, the whole list (not only level gates)");
+    assert.deepEqual(testInfraReds({ recorded: pin, root }), HOLDS);
+    writeFileSync(join(root, "pharn.config.json"), config(["e2e", "typecheck", "build"]));
+    assert.deepEqual(testInfraReds({ recorded: pin, root }), {
+      changed: ["pharn.config.json gates.exclude: build was added — discovery no longer runs it"],
+      unpinned: [],
+    });
+    writeFileSync(join(root, "pharn.config.json"), config(["typecheck"]));
+    assert.deepEqual(testInfraReds({ recorded: pin, root }).changed, [
+      "pharn.config.json gates.exclude: e2e is no longer excluded — discovery runs it again",
+    ]);
+    // a declaration that cannot be read refuses the pin, and reads as a change against a recorded one
+    writeFileSync(join(root, "pharn.config.json"), config(["smoke"]));
+    const r = computeTestInfra({ root, levels: ["unit"] });
+    assert.equal(r.ok, false);
+    assert.match(r.reason, /gates\.exclude` entry 0 is not one of the allowlisted gate ids/);
+    const d = testInfraReds({ recorded: pin, root });
+    assert.equal(d.changed.length, 1);
+    assert.match(d.changed[0], /^the test infrastructure cannot be pinned now: pharn\.config\.json `gates\.exclude`/);
+  });
+});
+
+test("6.36.0 MIGRATION — a /4 or /3 pin reads as before with no declaration, and `unpinned` (never `changed`) with one", () => {
+  withWorld({}, (root) => {
+    const full = pinOf(root);
+    const v4 = { ...full };
+    delete v4.exclude;
+    const v3 = { levels: full.levels, gates: full.gates, configs: full.configs };
+    assert.equal(pinShapeError(v4, { version: 4 }), null);
+    assert.deepEqual(testInfraReds({ recorded: v4, root }), HOLDS, "a /4 pin, no declaration: exactly as before");
+    assert.deepEqual(testInfraReds({ recorded: v3, root }), HOLDS, "a /3 pin, no declaration: exactly as before");
+    // an EMPTY declaration adds nothing either
+    writeFileSync(join(root, "pharn.config.json"), JSON.stringify({ testResults: { test: "vitest-json" }, gates: { exclude: [] } }));
+    assert.deepEqual(testInfraReds({ recorded: v4, root }), HOLDS);
+    writeFileSync(join(root, "pharn.config.json"), JSON.stringify({ testResults: { test: "vitest-json" }, gates: { exclude: ["e2e"] } }));
+    const want = [
+      "pharn.config.json gates.exclude: e2e — the project excludes discovered gate(s), and a pin written before ac-tests-lock/5 does not cover the declaration",
+    ];
+    assert.deepEqual(testInfraReds({ recorded: v4, root }), { changed: [], unpinned: want });
+    assert.deepEqual(testInfraReds({ recorded: v3, root }), { changed: [], unpinned: want });
+  });
 });
 
 test("pinShapeError under /3 (6.20.0–6.29.x, still read): its own closed shape, runner configs only", () => {

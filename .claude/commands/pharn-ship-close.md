@@ -126,7 +126,9 @@ Write **`pharn/features/<name>/SHIP.md`** — a thin, **advisory** roll-up:
   `/pharn-grill` → **both** its exits: `check-plan-spec-agree.mjs` (chain GREEN) **and**
   `check-plan-lessons.mjs` (declaration GREEN); `/pharn-test` → `check-test-stage.mjs`'s token (`ac-tests: test-first`,
   `ac-tests: bootstrap`, or `ac-tests: not-applicable (legacy spec)` — never silent); `/pharn-build` → the project-gate exit;
-  `/pharn-regress` → `regression-report.json` `.verdict`; `/pharn-verify` → `verify-report.json` `.verdict`
+  `/pharn-regress` → `regression-report.json` `.verdict`, then `pre-run unchanged: <n>` from its `pre_run_snapshot`,
+  with the paths fenced as quoted DATA when `<n>` is not 0 (changed before the run: reported, not counted);
+  `/pharn-verify` → `verify-report.json` `.verdict`
   (incl. `INCOMPLETE`, with `.completeness.missing[]` quoted as DATA) and its AC gate, `.ac_gate.verdict` +
   `.ac_gate.mode` (6.20.0 — `PASS` / `FAIL` / `INCONCLUSIVE` / `NOT-APPLICABLE`, and `bootstrap` said as weaker);
   **the per-AC table is cited, never retyped** — point at `RUN-REPORT.md`'s `## Verdicts` (rendered by code from the
@@ -358,8 +360,9 @@ routed build's advisory `done gate:pass`. `/pharn-ship` adds exactly one non-gat
   over inputs it builds itself. **Bounded:** the kind read sees the SPEC and never the invocation, so over an Approved
   quick SPEC a typed and a misread `--quick` both run the short spine; a legacy SPEC is never quick only **while it
   stays legacy** (`spec_template` sits outside the pin — `pharn/pharn-contracts/spec-template.md`, "`spec_kind`");
-  and a build that rewrites its own `PLAN.md` `## Files` to authorize a path it already wrote is not caught by the
-  scope check. The omissions (the base comparison, the interrogation, `BRIEFING.md`, `RUN-REPORT.md`) are command
+  a build that rewrites its own `PLAN.md` `## Files` to authorize a path it already wrote is not caught by the
+  scope check; and a path already changed at Step 2's snapshot that still holds those bytes is reported, not counted —
+  an earlier run's escape included (`pharn/floor/pre-run-snapshot-core.mjs`, header). The omissions (the base comparison, the interrogation, `BRIEFING.md`, `RUN-REPORT.md`) are command
   prose — advisory. A quick ledger never claims a regress check: `gate2-quick` is FLOOR relative to the recorded
   markers, and a skipped or wrong mode marker never yields `gate2` (`ship-outcome-core.mjs`, header).
 - **Advisory:** running the stages in order; preserving the two human gates (by construction, backstopped by

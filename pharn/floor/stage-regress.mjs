@@ -118,6 +118,7 @@ import { shelledVerdict } from "./shelled-verdict-core.mjs";
 import { spawnGate } from "./run-gates.mjs";
 import { declaredWrites, changedPaths } from "./scope-inputs.mjs";
 import { partitionScope, scopeFindings, normPath } from "./check-regress.mjs";
+import { preRunUnchanged } from "./pre-run-snapshot.mjs";
 import { FEATURE_SLUG_RE, SCHEMA as GATE_RUN_SCHEMA, actualForExpected } from "./gate-run-core.mjs";
 import { isExcluded, ALGO as FINGERPRINT_ALGO } from "./worktree-fingerprint.mjs";
 import { decideFromDisk, discardRetained, publishRecord } from "./regress-base-reuse.mjs";
@@ -390,8 +391,8 @@ function phaseFreshLate(cfg) {
   return { planPath, specPath };
 }
 
-function writeRefusedAndEmit(feature, reasonCode, detail) {
-  const md = renderRefused({ feature, reasonCode, detail });
+function writeRefusedAndEmit(feature, reasonCode, detail, preRun = null) {
+  const md = renderRefused({ feature, reasonCode, detail, preRun });
   const renderPath = `${FEATURES_DIR}/${feature}/REGRESSION.md`;
   atomicWriteIntoFeature(renderPath, md);
   emit(refusedExit({ stage: "regress", feature, reasonCode, render: renderPath }));
@@ -524,12 +525,23 @@ function computeEvalPairs(cfg) {
 // flag, so either passed the scope check falsely. Now `partitionScope` — the rule that CLI applies, and the call
 // `quick-scope-core.mjs` makes — reads the sets as ARRAYS, each path exactly as git printed it; the declared patterns get
 // `normPath`, as that CLI's `parseList` gives them. The document written to scope.json has the keys and the order that
-// CLI printed, so run-gates.mjs, the verdict phase and render-regression.mjs read it unchanged, and its bytes are that
-// CLI's for every name but one kind. NAMED, the round-2 re-review's R3: git lists an untracked nested repository (a
+// CLI printed, plus ONE key that CLI never prints — `pre_run_snapshot` (6.37.0, below) — so run-gates.mjs, the verdict
+// phase and render-regression.mjs read it unchanged, and its bytes minus that key are that CLI's for every name but one
+// kind. NAMED, the round-2 re-review's R3: git lists an untracked nested repository (a
 // directory holding its own `.git`) as `vendor/lib/`, with a trailing slash, which the CLI's `normPath` stripped. So
 // scope.json and REGRESSION.md now carry the slash, and a PLAN declaring the bare `vendor/lib` no longer covers it — it is
 // `scope-escaped`, stricter than before and what check-quick-scope.mjs already did; `vendor/**` or `vendor/lib/**`
 // covers it. Only the changed paths still meet `assertRepresentable`: the verdict call echoes them as a comma list.
+//
+// THE PRE-RUN SNAPSHOT (6.37.0, regress-pre-run-snapshot). Inside an open `/pharn-loop` or `/pharn-ship` run, the
+// partition also asks `pre-run-snapshot.mjs` which changed paths still hold the bytes the run's entry snapshot recorded;
+// an undeclared, non-exempt one is reported, not counted as an escape (`check-regress.mjs` `partitionScope`; the rule
+// and its bounds are pre-run-snapshot-core.mjs's header). `pre_run_snapshot: {status, unchanged}` is ALWAYS written to
+// scope.json — `unchanged` the subtracted paths only — and the render phase copies it into the report; a refusal renders
+// it beside the escapes. This phase decides it once, before anything can pause; a resumed chain re-reads scope.json, a
+// `.pharn/` file, so the block it renders is advisory. A standalone regress reads `no-delivery-run` and behaves exactly
+// as before — unless an interrupted /pharn-loop or /pharn-ship of the same feature left its marker (≤ 24 h), whose
+// snapshot it then applies (a marker is read by presence and age only; pre-run-snapshot-core.mjs, `no-delivery-run`).
 function phasePartition(cfg, planPath, specPath, base) {
   const declared = readPlanDeclared(cfg, planPath, specPath);
   const inside = computeInside(cfg, base);
@@ -539,19 +551,23 @@ function phasePartition(cfg, planPath, specPath, base) {
   assertRepresentable(inside, cfg.feature);
 
   const declaredPatterns = [...new Set(declared.map(normPath).filter(Boolean))];
-  const { escaped, escapeExempt, outsideTests, outsideEvalPairs } = partitionScope({
+  const preRunDecision = preRunUnchanged({ feature: cfg.feature, base, inside });
+  const { escaped, escapeExempt, preRun, outsideTests, outsideEvalPairs } = partitionScope({
     inside,
     declared: declaredPatterns,
     tests,
     evalPairs,
     feature: cfg.feature,
+    preRunUnchanged: preRunDecision.unchanged,
   });
+  const preRunBlock = { status: preRunDecision.status, unchanged: preRun };
   const scope = escaped.length
     ? {
         inside,
         declared: declaredPatterns,
         escaped,
         escape_exempt: escapeExempt,
+        pre_run_snapshot: preRunBlock,
         findings: scopeFindings(escaped),
         outside_tests: outsideTests,
         outside_eval_pairs: outsideEvalPairs,
@@ -561,6 +577,7 @@ function phasePartition(cfg, planPath, specPath, base) {
         declared: declaredPatterns,
         escaped: [],
         escape_exempt: escapeExempt,
+        pre_run_snapshot: preRunBlock,
         outside_tests: outsideTests,
         outside_eval_pairs: outsideEvalPairs,
       };
@@ -569,7 +586,8 @@ function phasePartition(cfg, planPath, specPath, base) {
     writeRefusedAndEmit(
       cfg.feature,
       "scope-escaped",
-      `${escaped.length} path(s) escaped the declared writes-scope: ${JSON.stringify(escaped)}\n` + JSON.stringify(scope.findings, null, 2)
+      `${escaped.length} path(s) escaped the declared writes-scope: ${JSON.stringify(escaped)}\n` + JSON.stringify(scope.findings, null, 2),
+      preRunBlock
     );
   }
   return { scope, tests };
@@ -906,8 +924,9 @@ function runPhases(state, budget) {
   }
 
   // "render" — always reached in the same invocation as verdict/cleanup (neither is budgeted). The report is the
-  // checker's object with ONE additive block appended last; every key the checker printed keeps its bytes, because
-  // this is the same `JSON.stringify(…, null, 2)` the checker prints with (a test pins report-minus-block == stdout).
+  // checker's object with TWO additive blocks appended last — `base_evidence` (6.33.0), then `pre_run_snapshot`
+  // (6.37.0, copied from scope.json); every key the checker printed keeps its bytes, because this is the same
+  // `JSON.stringify(…, null, 2)` the checker prints with (a test pins report-minus-blocks == stdout).
   const reportPath = `${FEATURES_DIR}/${state.feature}/regression-report.json`;
   const baseEvidence = {
     reused: state.baseReuse.reused,
@@ -915,7 +934,11 @@ function runPhases(state, budget) {
     requirement_sha256: state.baseReuse.requirementSha256,
     recorded: state.recordOutcome.published,
   };
-  atomicWriteIntoFeature(reportPath, `${JSON.stringify({ ...state.report, base_evidence: baseEvidence }, null, 2)}\n`);
+  const preRunBlock = state.scope.pre_run_snapshot ?? null;
+  atomicWriteIntoFeature(
+    reportPath,
+    `${JSON.stringify({ ...state.report, base_evidence: baseEvidence, pre_run_snapshot: preRunBlock }, null, 2)}\n`
+  );
   const md = renderDone({
     feature: state.feature,
     base: state.base,

@@ -377,6 +377,18 @@ node pharn/floor/run-gates.mjs init --stage ac-test --feature <name> --out <dir>
 node pharn/floor/run-gates.mjs run --next --out <dir> --timeout-ms <N>
 node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 
+# GATE EXCLUSION (added 6.36.0, gate-exclusion-config) — a project may declare in pharn.config.json
+# `{"gates": {"exclude": [<ALLOWLIST ids>]}}` (pharn/floor/gate-exclusion-core.mjs, closed both ways; a bad one is
+# `bad-gate-exclusion`, and an unparseable pharn.config.json now refuses discovery). `init --discover <m>` (no --gates)
+# reads it beside <m> and resolveSet drops those ids from DISCOVERY at verify, at regress (after the e2e rule) and at the
+# ac-test red run; an explicit --gates is never filtered. The stamp carries an optional `excluded` {declared_in, ids}
+# only when discovery removed one (validateStamp shape-checks it), gateRunBlock copies it into both reports, and
+# VERIFY.md / REGRESSION.md show a line under the verdict. /pharn-test pins the whole list (lock /5, below), and the red
+# run's preflight REDs an AC whose level gates are all excluded. THE RECORDED FAILURE (P7): a user's e2e gate could not
+# run on their machine and --gates makes the AC gate read test-infra-changed — two of three real loops stopped on it.
+# BOUND: FLOOR when init resolves the set, never re-derived later (only the red run's bindStamp re-resolves); legacy and
+# bootstrap SPECs pin nothing; /pharn-test runs before the reconcile anchor. Contract: gate-run-record.md.
+
 # PER-TEST RESULTS (added 6.15.0) — the runner hands EVERY gate one env var, PHARN_TEST_RESULTS, valued with
 # that gate's OWN absolute path under <out> (gate-run-core's resultsFileName, one copy); a project's reporter
 # config writes a machine-readable report there. The runner unlinks the path before the gate (a stale-lock
@@ -424,7 +436,7 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # `NOTE —` line and never change the exit code — every part of package.json the pin READS is still compared at verify
 # and cannot be re-pinned through the build's scope, a composition a ★ HOOK test executes; the parts it does not read
 # stay changeable, as the NOT-caught list states); exit 0/1/2. ac-tests-lock.mjs --write/--check pins the tests
-# in AC-TESTS.lock.json (schema ac-tests-lock/4 since 6.31.0 — /3, /2 and /1 still read; closed keys per mode; test_infra
+# in AC-TESTS.lock.json (schema ac-tests-lock/5 since 6.36.0 — /4, /3, /2 and /1 still read; closed keys per mode; test_infra
 # is the test-infrastructure pin, see THE AC GATE below); --check names a PATH, never content. The mapping grammar lives in ac-tests-core.mjs. AC-TESTS.md and the lock are PIPELINE_ARTIFACTS (regress-exempt); for reconcile
 # AC-TESTS.md is exempt like PLAN.md (a re-plan rewrites it) but the LOCK is `pre_anchor_artifacts` (NOT exempt).
 # Paths are compared as the setter SCOPES them (clean + isConcrete, case-folded). `--spec <SPEC.md>` decides
@@ -440,8 +452,10 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # THE RED RUN (added 6.18.0) — /pharn-test RUNS the AC tests before the build and requires each to FAIL, so a test
 # that cannot fail, is never collected or is skipped cannot pass unnoticed. check-red-run.mjs --preflight: every AC's
 # level has a DISCOVERED gate (gate-run-core LEVEL_GATES: unit/integration → test, e2e → E2E_SET) with per-test
-# results configured for EVERY such gate, else `ac-level-unavailable: AC-<n> (<level>)` and a closed last line
-# `blocked: no-test-runner — …; suggested: /pharn-ship "…(spec_kind: test-infra)"` (/pharn-test --unattended prints it;
+# results configured for EVERY such gate (6.36.0: a gate the project's gates.exclude lists is not discovered), else
+# `ac-level-unavailable: AC-<n> (<level>)` and a closed last line `blocked: no-test-runner — …; suggested: <remedy>` —
+# the `/pharn-ship "…(spec_kind: test-infra)"` command, or for an exclusion-caused AC the ids to remove from
+# gates.exclude (since 6.36.0 check-ac-tests.mjs REDs that mapping row earlier, `level-excluded`) (/pharn-test --unattended prints it;
 # interactive asks; never a nested run). run-gates --stage ac-test selects the gates BY ID from the levels and hands
 # each its mapped files after `--` (--gates/--extra/--skip-style/--scope-json/--spec-from/--side refused; no
 # reconcile, no build). check-red-run.mjs --verdict (red-run-core.mjs): per AC, over the record of every gate its level
@@ -512,7 +526,7 @@ node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-
 # through an explicit --gates is test-infra-changed (test-first) / ac-untested (bootstrap) BY DESIGN; its detail names
 # the explicit source and /pharn-verify's reference section says not to pass --gates for such a feature. Both ids are
 # RESERVED_IDS and never enter `gates`. Legacy SPEC → NOT-APPLICABLE, stated (with AC evidence beside it → ac-tests-modified); spec_kind:
-# test-infra → BOOTSTRAP, weaker, labelled. THE TEST-INFRA PIN (lock schema ac-tests-lock/4 since 6.31.0,
+# test-infra → BOOTSTRAP, weaker, labelled. THE TEST-INFRA PIN (lock schema ac-tests-lock/5 since 6.36.0, /4 since 6.31.0,
 # test-infra-core.mjs, written by --write BEFORE the red run): the level gates' package.json script VALUES + pre/post
 # scripts + testResults formats, root vitest/vite/playwright/jest config files in a CLOSED name set (matched FOLDED since
 # 6.21.0 — on APFS a `Vitest.config.mjs` is the runner's config), and since 6.31.0 (the review's H2 + the GATE-1
@@ -531,7 +545,9 @@ node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-
 # test-infra-unpinned at verify, and (6.31.0) a /3 lock is judged by what it pinned, while what only /4 pins in the live
 # tree reads `unpinned` (--check RED, AC gate test-infra-unpinned) — the remedy sets the build aside and re-runs
 # /pharn-test (its red run cannot pass over a built tree). A /4 lock is lock-unusable to a pre-6.31.0 floor, never
-# GREEN (rolling back means re-running /pharn-test there). IN THE LOOP: check-loop-fresh E re-derives WITH --ac-gate and compares ac_gate (when the tree moved,
+# GREEN (rolling back means re-running /pharn-test there). 6.36.0 (/5): the pin adds `exclude`, the project's whole
+# declared `pharn.config.json` `gates.exclude` list (GATE EXCLUSION, further up); a /4 lock reads `unpinned` only when a
+# non-empty declaration exists, and every --write now writes /5, so a pre-6.36.0 floor reads it lock-unusable. IN THE LOOP: check-loop-fresh E re-derives WITH --ac-gate and compares ac_gate (when the tree moved,
 # 6.20.6: it re-derives WITHOUT the flag and compares what the stamp alone decides — gates, the non-AC failing ids and
 # the verdict rule — so only the AC part defers to F; the AC ids come from gate-run-core AC_RESERVED_IDS, not from
 # ac-gate-core, so the checker's own load graph does not grow); J re-hashes per-test results files;
@@ -795,6 +811,23 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 node pharn/floor/stage-verify.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--gates "<cmd>[::<id>],…"]
 node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 
+# /pharn-build's PROJECT GATE (6.38.0, build-gate-bounded) — Step 4 runs the project's gates ONLY through this helper.
+# THE RECORDED FAILURE (P7): in a user's 92-minute /pharn-loop run the routed build agent chose its own set (a full
+# `vitest run` twice, a `test:db` script /pharn-verify never runs twice, `typecheck | grep -v` hiding pre-existing errors,
+# never `build`) — 7.8 min blocked on suites (.dev/measurements/loop-wall-clock-2026-10-05.md §4). Correction recorded in
+# the PLAN: its gate output was ~18 KB of 484 KB of Bash results, so the context growth was NOT gate output.
+# `targeted`: the `test` gate over this feature's declared test files (PLAN ∪ AC-TESTS `## Files`, through badPath +
+# isTestFile + a regular-file lstat, e2e-mapped files left out); `full`: the set /pharn-verify discovers minus E2E_SET (the
+# project's gate exclusion applies), whose exit is the build's gate. Both through run-gates.mjs's new `build` stage,
+# stage-runtime.mjs's drain and budget (unchanged), logs under .pharn/pharn-build/<name>/<mode>/. The summary is bounded
+# (per gate exit + runner-call wall time; failing tests' ids with a fenced excerpt of their first message — the adapters
+# now carry `messages` on parsed entries, NO record does — or a fenced log tail; 16 KiB per call). The same line starts
+# and continues a run (continues only while the tree fingerprint is unchanged). FLOOR: the set (resolveSet), the exit
+# codes (the stamp). ADVISORY: that the agent runs nothing else, that an excerpt holds the diagnostic, that a targeted
+# GREEN predicts a full one. Follow-up `build-gate-execution-reuse`. Exit: 0 GREEN · 3 RED · 4 NO-GATES · 5 CONTINUE ·
+# 2 UNUSABLE · anything else (1 included) = crashed. Ships: bumps SKILLS_VERSION.
+node pharn/floor/build-gate.mjs --feature <name> --mode targeted|full --timeout-ms <N> [--budget-ms <B>]
+
 # THE QUICK SCOPE CHECK (6.28.0, loop-quick-mode GATE 2, review F1) — the partition check `/pharn-ship --quick`'s item 7
 # and every `/pharn-loop --quick` iteration keep when they skip /pharn-regress. THE RECORDED FAILURE (P7): 6.25.0's
 # pinned line had the MODEL paste the changed and declared lists into DOUBLE-QUOTED shell arguments of
@@ -823,6 +856,29 @@ node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 # the pinned relative path names no file) is node's own exit 1 with no document; both callers stop on 1.
 # Exit: 0 clean · 1 escaped · 2 inconclusive (closed reason_code, `crashed` included).
 node pharn/floor/check-quick-scope.mjs --feature <name> --base <40-hex>
+
+# THE PRE-RUN SNAPSHOT (6.37.0, regress-pre-run-snapshot) — a path already changed when a /pharn-loop or /pharn-ship run
+# began is not that run's scope escape. THE RECORDED FAILURE (P7): two of three post-6.35.0 /pharn-loop runs in a user's
+# project stopped at /pharn-regress `scope-escaped` on paths the run never wrote — an abandoned run's untracked
+# `pharn/features/<other>/` folder (a 19-minute human wait) and the user's own uncommitted edit — both listed in the
+# loop's own pre-run-status.txt, which the partition never read. `--capture` runs right after the run marker opens
+# (/pharn-loop Step 1a; /pharn-ship Step 2 item 1; both STOP on non-zero) and writes `<git dir>/pharn-pre-run-snapshot.json`:
+# every `changedPaths(HEAD)` path (scope-inputs.mjs, the partition's own listing) with ONE digest rule (`pathDigest`:
+# content, a link's own text, `absent`, or `unhashable` — never subtracted), bound to the marker's bytes (6.33.0's
+# deliveryRunIdentity, reused), the base and the feature; write-once per run (`already-captured`). The partition
+# (stage-regress.mjs, quick-scope-core.mjs → check-regress.mjs partitionScope's optional `preRunUnchanged`) subtracts an
+# undeclared, non-exempt path only when the snapshot applies (closed PRE_RUN_STATUSES, first miss decides) and its live
+# digest is EQUAL, and REPORTS it: `pre_run_snapshot: {status, unchanged}` in scope.json, regression-report.json (after
+# base_evidence), the quick check's document and REGRESSION.md. No run / no snapshot → exactly today's partition, where
+# "a run" is a marker's presence and age (≤ 24 h), so an interrupted run's leftover marker makes a later standalone regress
+# apply that run's snapshot; the `check-regress.mjs scope` CLI is byte-identical. FLOOR: the subtraction (content hashes + closed enums). BOUNDS, in
+# pre-run-snapshot-core.mjs's header: agreement, never provenance (a Bash writer can forge the git-dir record; the write
+# tools cannot — ★ HOOK); never attributed (an earlier run's escape is pre-run state for a re-run); escape set ONLY —
+# `inside` is unchanged, so a pre-run change that breaks a gate still reads as a regression (follow-up
+# `regress-base-pre-run-overlay`) and a pre-run-changed test file is not compared at regress; a green loop never commits
+# a subtracted path. LIMITS.md §3a/§6 understate it: .dev/features/regress-pre-run-snapshot/PROTECTED-FOLLOWUPS.md.
+# Exit: 0 recorded · 2 refused (closed REASON_CODES, `crashed` a caught throw); a module that cannot load is node's 1.
+node pharn/floor/pre-run-snapshot.mjs --capture <name>
 
 # Check the SHAPE of a loop-record — the pharn/features/<name>/LOOP.md that /pharn-loop writes at every stop.
 # Floor: the frontmatter envelope (`decision` in {STOP_GREEN, STOP_GREEN_QUICK, STOP_CAP, STOP_TERMINAL, INCONCLUSIVE};
@@ -1181,7 +1237,7 @@ node pharn/floor/check-model-config.mjs [validate | resolve <stage> | agreement]
 # numbers, and names a refused result on stderr by ONE fixed code (READ_DEFECTS), never by a byte the file carries
 # (GATE-2 review A7). The Agent tool still returns the stage agent's final text into the orchestrator's context:
 # THREAT-MODEL §5's free-text residual in a new place — that no proceed/stop reads it is ADVISORY (review A6).
-# The orchestrators record the token on the stage-start marker (since 6.36.0 via `start`, below), so cost.json carries
+# The orchestrators record the token on the stage-start marker (since 6.39.0 via `start`, below), so cost.json carries
 # the REQUESTED route beside the SERVED requests[].model. MODEL ROUTED, EFFORT NOT — the Agent tool takes none.
 # BOUNDS: a route is a request, the served model is evidence from an undocumented transcript format, NEVER proof;
 # ship's routed build proceeds on its agent's advisory `done gate:pass`, re-confirmed by /pharn-verify's floor
@@ -1194,7 +1250,7 @@ node pharn/floor/stage-agent.mjs route --command <pharn-ship|pharn-loop> --stage
 node pharn/floor/stage-agent.mjs brief --command <c> --stage <stage> --name '<name>' [--iteration <N>] [--mode quick]
 node pharn/floor/stage-agent.mjs report --command <c> --name '<name>' --stage <stage> [--iteration <N>] --status <done|refused|question> [--row S<n>] [--gate pass|fail]
 node pharn/floor/stage-agent.mjs read --command <c> --name '<name>' --stage <stage> [--iteration <N>]
-# START / FINISH (6.36.0, orchestrator-direct-stage-calls — audit C1): the orchestrators pin these two instead of the
+# START / FINISH (6.39.0, orchestrator-direct-stage-calls — audit C1): the orchestrators pin these two instead of the
 # four lines above. `start` = `route`'s decision + the stage-start marker carrying its token (written by code through
 # mark-phase.mjs's tryMarkPhase — the model types no token; `<route>` left every shell line); `--no-agent-tool` records
 # inline:no-agent-tool (ADVISORY: the model's reading of its tools); an uncleared leftover result is
@@ -1207,7 +1263,7 @@ node pharn/floor/stage-agent.mjs read --command <c> --name '<name>' --stage <sta
 node pharn/floor/stage-agent.mjs start --command <c> --stage <stage> --name '<name>' [--iteration <N>] [--mode quick] [--no-agent-tool]
 node pharn/floor/stage-agent.mjs finish --command <c> --name '<name>' --stage <stage> [--iteration <N>]
 
-# THE DIRECT STAGE CALL (6.36.0, orchestrator-direct-stage-calls — audit C3) — /pharn-loop and /pharn-ship run
+# THE DIRECT STAGE CALL (6.39.0, orchestrator-direct-stage-calls — audit C3) — /pharn-loop and /pharn-ship run
 # /pharn-regress and /pharn-verify as ONE call each instead of invoking the thin callers (which a model invoked through
 # the Skill tool, injecting 19,301 + 17,339 B of command text per iteration in the measured 92-minute run). The call
 # sets the thin caller's own writes-scope (its pinned setter line), writes the stage-start marker (fresh), runs the stage

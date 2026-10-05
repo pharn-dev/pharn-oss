@@ -421,3 +421,50 @@ test("gate reuse: a hostile reused id (a heading, a link, back-ticks) is quoted 
   assert.ok(!outside.some((l) => /^# fake heading$/.test(l)), "the injected heading escaped its fence");
   assert.ok(!outside.some((l) => l.includes("[click](")), "the injected link escaped its fence");
 });
+
+// ── 6.36.0: the gate-exclusion disclosure, DIRECTLY under the verdict line ──────────────────────────────────
+
+const EXCLUDED_RUN = {
+  stamp_sha256: "a".repeat(64),
+  source: "discover",
+  fingerprint: { algo: "x", final: "b".repeat(64) },
+  excluded: { declared_in: "pharn.config.json#gates.exclude", ids: ["typecheck", "e2e"] },
+};
+const VERDICTS = ["PASS", "FAIL", "INCOMPLETE", "INCONCLUSIVE"];
+
+test("6.36.0 — the exclusion line sits DIRECTLY under the verdict line for EVERY verdict (L52), and is absent without the block", () => {
+  for (const verdict of VERDICTS) {
+    const lines = renderDone(report({ verdict, gate_run: EXCLUDED_RUN, failing_gates: verdict === "FAIL" ? ["test"] : [] })).split("\n");
+    const at = lines.findIndex((l) => l.startsWith("**") && /VERIFIED|VERIFY FAILS|INCOMPLETE|INCONCLUSIVE/.test(l));
+    assert.ok(at !== -1, verdict);
+    assert.equal(lines[at + 1], "", verdict);
+    assert.equal(
+      lines[at + 2],
+      "**2 discovered gate(s) EXCLUDED and NOT RUN** by the project's `pharn.config.json` `gates.exclude`: `typecheck`, `e2e` — this verdict covers only the gates that ran; an excluded gate is evidence neither way.",
+      verdict
+    );
+    const plain = renderDone(report({ verdict, failing_gates: verdict === "FAIL" ? ["test"] : [] }));
+    assert.doesNotMatch(plain, /EXCLUDED and NOT RUN/, `${verdict}: the control renders no exclusion line`);
+  }
+});
+
+test("6.36.0 — an exclusion id outside the ALLOWLIST and an unknown source are never rendered inline (P2)", () => {
+  const md = renderDone(
+    report({
+      gate_run: {
+        ...EXCLUDED_RUN,
+        excluded: { declared_in: "[x](hostile-link-target)", ids: ["e2e", "# heading", "[l](hostile-link-target)"] },
+      },
+    })
+  );
+  assert.match(
+    md,
+    /\*\*3 discovered gate\(s\) EXCLUDED and NOT RUN\*\* by a declaration whose source is not one this renderer recognizes: `e2e` \(\+2 id\(s\) outside the allowlist, not rendered\)/
+  );
+  assert.ok(!md.includes("# heading") && !md.includes("hostile-link-target"), "hostile text reached the render");
+  const none = renderDone(report({ gate_run: { ...EXCLUDED_RUN, excluded: { declared_in: "x", ids: "nope" } } }));
+  assert.match(
+    none,
+    /\*\*0 discovered gate\(s\) EXCLUDED and NOT RUN\*\* by a declaration whose source is not one this renderer recognizes: \(no allowlisted id to show\)/
+  );
+});

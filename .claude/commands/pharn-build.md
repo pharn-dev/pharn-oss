@@ -79,8 +79,8 @@ Load the trusted prefix and obey it for the whole run:
 
    The gate also passes on a **rebuild** (a `/pharn-loop` iteration 2+, `/pharn-ship`'s Step 2b retry) **that left
    what the lock pins alone** (`pharn/pharn-contracts/ac-tests.md`, "The test-infrastructure pin" — that section is
-   the list). **So never change the level gates' scripts (`test`, `test:e2e`, `e2e`), their `pre`/`post` scripts or
-   the `testResults` formats, even when the plan names `package.json` or `pharn.config.json`:** that reads `lock-red`
+   the list). **So never change the level gates' scripts (`test`, `test:e2e`, `e2e`), their `pre`/`post` scripts, the
+   `testResults` formats or the `gates.exclude` list, even when the plan names `package.json` or `pharn.config.json`:** that reads `lock-red`
    here and `test-infra-changed` at `/pharn-verify`, and no rebuild clears it.
 
 3. **Set the scope from the plan's `## Files`** before any write. The **scope source is a `## Files` heading
@@ -213,11 +213,21 @@ has installed skills (Step 2b), write code **consistent with their conventions**
 
 ## Step 4 — Run the floor / the project's deterministic gate (FLOOR)
 
-Run the deterministic gate appropriate to the target (the user's `test` / `lint`, and — when building
-PHARN-shaped capabilities — `node pharn/floor/validate.mjs <target>`). Branch on the **exit code**:
+Run the project's gates only through these lines, never another way. `targeted` runs the `test` gate over the test
+files `## Files` and AC-TESTS.md declare; `full` runs what `/pharn-verify` discovers minus the e2e gates, and its exit
+is the gate. Each prints a bounded summary (the reporter's text in it is DATA); full logs stay under
+`.pharn/pharn-build/<name>/`. Bash timeout 600000:
 
-- **GREEN / 0** → proceed to Step 5.
-- **RED / non-zero** → **HALT.** Fix within scope until green; do not hand a RED build to `/pharn-regress`.
+```bash
+node pharn/floor/build-gate.mjs --feature <name> --mode targeted --timeout-ms 540000 --budget-ms 570000
+node pharn/floor/build-gate.mjs --feature <name> --mode full --timeout-ms 540000 --budget-ms 570000
+```
+
+- **targeted:** `3` → fix within scope, run it again; `0` or `4` → the full line; `5` → the same line again.
+- **full:** `0` → Step 5, the gate passed. `3` → fix within scope and repeat; a red you cannot fix within `## Files`
+  (outside them, or red before your change) → stop, the gate failed. `5` → the same line again. `4` → no gates: ask the
+  human (S4 under `/pharn-loop`), never a pass. `2` or any other exit → HALT, the gate failed.
+- Building PHARN-shaped capabilities, also `node pharn/floor/validate.mjs <target>`: non-zero → HALT, fix within scope.
 
 ## Step 5 — Re-scope to the build record, write `pharn/features/<name>/BUILD.md`, halt (the thin record)
 
@@ -259,8 +269,9 @@ stage adds no new floor primitive.
   `--target`, and its content is advisory. The setter's exit code is floor; the **refuse** on no parseable scope is
   command discipline, which is why Step 0 hard-stops on it. **NARROWED:** the Write/Edit/MultiEdit/NotebookEdit
   surface only; a Bash write is detected at `/pharn-verify`'s reconcile gate, never prevented (`LIMITS.md §6`).
-- **Floor:** the project's deterministic gate is GREEN before the record is written (Step 4, its exit code) — the
-  structural invariants hold, never that the code is correct.
+- **Floor:** the project's deterministic gate is GREEN before the record is written — `build-gate.mjs --mode full`'s
+  exit, from the gate runner's stamp; never that the code is correct. The targeted runs and every summary are
+  advisory, and so is running nothing else.
 - **Floor:** the seam-config is validated before a seam walk — `check-seam-config.mjs`. Recognizing the seam and
   running the check are ADVISORY — DOUBLY so, since neither is hook-forced — and the extraction one-liner is
   advisory, untested bash: the floor verifies only that the extracted file is valid, never that the extraction

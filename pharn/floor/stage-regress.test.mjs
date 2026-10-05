@@ -204,6 +204,45 @@ test("done/no-regressions: a build that changes only its declared scope, with th
   }
 });
 
+// ── ★ 6.36.0 — a project's gate exclusion, end to end through the real script (grill G4) ─────────────────────
+test("★ 6.36.0 — an excluded gate runs on NEITHER side; gate_run.head.excluded and the REGRESSION.md line disclose it; the control runs it", () => {
+  const scripts = { test: "node --test", typecheck: 'node -e "process.exit(1)"' };
+  const edit = (dir) =>
+    writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport function id(x) { return x; }\n");
+  // the control: no declaration → typecheck runs on both sides, red at base, so it is pre-existing
+  withRepo(
+    (dir) => {
+      const base = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
+      edit(dir);
+      const r = cli(dir, freshArgs(base));
+      assert.equal(r.code, 0, r.raw);
+      const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
+      assert.deepEqual(report.pre_existing, ["typecheck"]);
+      assert.equal(Object.hasOwn(report.gate_run.head, "excluded"), false);
+      assert.doesNotMatch(readFileSync(join(dir, r.json.render), "utf8"), /EXCLUDED and NOT RUN/);
+    },
+    { scripts }
+  );
+  withRepo(
+    (dir) => {
+      const base = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
+      edit(dir);
+      const r = cli(dir, freshArgs(base));
+      assert.equal(r.code, 0, r.raw);
+      assert.equal(r.json.verdict, "no-regressions");
+      const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
+      assert.deepEqual(Object.keys(report.outside_gates), ["test"], "typecheck ran on neither side");
+      assert.deepEqual(report.pre_existing, []);
+      assert.deepEqual(report.gate_run.head.excluded, { declared_in: "pharn.config.json#gates.exclude", ids: ["typecheck"] });
+      assert.equal(Object.hasOwn(report.gate_run.base, "excluded"), false, "the base side runs the head's set and names nothing itself");
+      const md = readFileSync(join(dir, r.json.render), "utf8").split("\n");
+      const at = md.findIndex((l) => l.startsWith("**verdict: NO REGRESSIONS**"));
+      assert.match(md[at + 2], /^\*\*1 discovered gate\(s\) EXCLUDED and NOT RUN on either side\*\* .*`typecheck`/);
+    },
+    { scripts, committed: { "pharn.config.json": JSON.stringify({ gates: { exclude: ["typecheck"] } }) + "\n" } }
+  );
+});
+
 // ── A GENUINE REGRESSION OUTSIDE THE FEATURE ────────────────────────────────────────────────────────
 test("done/regressions: a change to a DECLARED file that breaks an UNDECLARED outside test", () => {
   const dir = mkdtempSync(join(tmpdir(), "sr-regr-"));
@@ -469,7 +508,7 @@ test("refused/scope-escaped: a lone changed path NAMED `--declared` is a path, n
   }
 });
 
-test("✧ PARITY: for ordinary names the in-process scope.json is byte-identical to `check-regress.mjs scope`'s own output", () => {
+test("✧ PARITY: for ordinary names the in-process scope.json minus `pre_run_snapshot` is byte-identical to `check-regress.mjs scope`'s own output", () => {
   const { dir, base } = repo();
   try {
     writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport const two = 2;\n");
@@ -479,11 +518,19 @@ test("✧ PARITY: for ordinary names the in-process scope.json is byte-identical
     const scope = JSON.parse(text);
     assert.deepEqual(scope.inside, ["src/index.js"]);
     assert.deepEqual(scope.outside_tests, ["src/index.test.js"], "non-vacuous: an outside test is carried");
+    // 6.37.0: the ONE key the CLI never prints, always present — a standalone run reads `no-delivery-run`.
+    assert.deepEqual(scope.pre_run_snapshot, { status: "no-delivery-run", unchanged: [] });
+    const withoutBlock = { ...scope };
+    delete withoutBlock.pre_run_snapshot;
     const args = ["scope", "--changed", scope.inside.join(","), "--declared", scope.declared.join(",")];
     args.push("--tests", scope.outside_tests.join(","), "--eval-pairs", "", "--feature", FEATURE);
     const cliOut = spawnSync(process.execPath, [CHECK_REGRESS, ...args], { cwd: dir, encoding: "utf8" });
     assert.equal(cliOut.status, 0, cliOut.stdout);
-    assert.equal(text, cliOut.stdout, "the same keys, order and bytes run-gates.mjs and render-regression.mjs read");
+    assert.equal(
+      `${JSON.stringify(withoutBlock, null, 2)}\n`,
+      cliOut.stdout,
+      "the same keys, order and bytes run-gates.mjs and render-regression.mjs read"
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -1758,10 +1805,11 @@ test("★ EQUIVALENCE — fresh BASE evidence and reused BASE evidence for one r
     );
     const withoutBlock = { ...b.report };
     delete withoutBlock.base_evidence;
+    delete withoutBlock.pre_run_snapshot; // 6.37.0's additive block
     assert.equal(
       `${JSON.stringify(withoutBlock, null, 2)}\n`,
       rederived.stdout,
-      "report minus base_evidence == the checker's stdout, byte for byte"
+      "report minus base_evidence and pre_run_snapshot == the checker's stdout, byte for byte"
     );
   } finally {
     dropReuseRepo(fx);
@@ -2426,5 +2474,155 @@ test("6.35.0 — validateProgress: installResult.ms is optional; when present a 
   assert.deepEqual(validateProgress(rec({ ran: true, exit: 0, timedOut: false, ms: null })), { ok: true });
   for (const ms of [-1, 1.5, "10", 2 ** 60, {}]) {
     assert.equal(validateProgress(rec({ ran: true, exit: 0, timedOut: false, ms })).ok, false, JSON.stringify(ms));
+  }
+});
+
+// ── 6.37.0: the PRE-RUN SNAPSHOT (regress-pre-run-snapshot) — the partition, end to end ────────────────────────────
+// The two recorded failures (an abandoned run's untracked feature folder; the user's own uncommitted edit) pass under an
+// open run with a snapshot; everything that is not provably unchanged since the snapshot still escapes.
+const PRE_RUN_CLI = join(HERE, "pre-run-snapshot.mjs");
+
+function captureSnapshotCli(dir) {
+  const r = spawnSync(process.execPath, [PRE_RUN_CLI, "--capture", FEATURE], { cwd: dir, encoding: "utf8", env: CLEAN_ENV });
+  assert.equal(r.status, 0, `the capture refused: ${r.stderr}`);
+}
+
+/** A repo with an undeclared committed file `src/other.js`, made dirty before the run, plus an abandoned run's folder. */
+function dirtyBeforeRun() {
+  const r = repo({ committed: { "src/other.js": "export const o = 1;\n" } });
+  writeFileSync(join(r.dir, "src", "other.js"), "export const o = 2; // the user's uncommitted edit\n");
+  mkdirSync(join(r.dir, FEATURES, "abandoned"), { recursive: true });
+  writeFileSync(join(r.dir, FEATURES, "abandoned", "SPEC.md"), "an abandoned run's record\n");
+  writeFileSync(join(r.dir, FEATURES, "abandoned", "cost.json"), "{}\n");
+  return r;
+}
+
+const buildDeclared = (dir) =>
+  writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport const built = 1;\n");
+
+test("PRE-RUN — the two recorded cases pass under an open run with a snapshot, and are REPORTED (report, scope.json, REGRESSION.md)", () => {
+  const { dir, base } = dirtyBeforeRun();
+  try {
+    openRun(dir, "pharn-loop");
+    captureSnapshotCli(dir);
+    buildDeclared(dir);
+    const r = cli(dir, freshArgs(base));
+    assert.equal(r.code, 0, r.raw);
+    assert.equal(r.json.verdict, "no-regressions");
+    const expected = {
+      status: "applied",
+      unchanged: ["src/other.js", "pharn/features/abandoned/SPEC.md", "pharn/features/abandoned/cost.json"],
+    };
+    const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
+    assert.deepEqual(report.pre_run_snapshot, expected);
+    assert.deepEqual(Object.keys(report).slice(-2), ["base_evidence", "pre_run_snapshot"], "the two additive blocks, last");
+    const scope = JSON.parse(readFileSync(join(dir, REGRESS_PATHS.scopeJson), "utf8"));
+    assert.deepEqual(scope.pre_run_snapshot, expected);
+    assert.deepEqual(scope.escaped, []);
+    assert.ok(scope.inside.includes("src/other.js"), "inside is unchanged: the subtraction touches the escape set only");
+    const md = readFileSync(join(dir, r.json.render), "utf8");
+    assert.match(md, /already changed when this run began \(3\)/);
+    assert.match(md, /pharn\/features\/abandoned\/cost\.json/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("PRE-RUN — a MIXED case: the build edits a pre-run path and writes a new stray; both escape, the untouched one is reported beside them", () => {
+  const { dir, base } = dirtyBeforeRun();
+  try {
+    openRun(dir, "pharn-ship");
+    captureSnapshotCli(dir);
+    buildDeclared(dir);
+    writeFileSync(join(dir, "src", "other.js"), "export const o = 3; // the build edited the user's file\n");
+    writeFileSync(join(dir, "src", "stray.js"), "export const s = 1;\n");
+    const r = cli(dir, freshArgs(base));
+    assert.equal(r.code, 3, r.raw);
+    assert.equal(r.json.reason_code, "scope-escaped");
+    const scope = JSON.parse(readFileSync(join(dir, REGRESS_PATHS.scopeJson), "utf8"));
+    assert.deepEqual(scope.escaped, ["src/other.js", "src/stray.js"]);
+    assert.deepEqual(scope.pre_run_snapshot, {
+      status: "applied",
+      unchanged: ["pharn/features/abandoned/SPEC.md", "pharn/features/abandoned/cost.json"],
+    });
+    const md = readFileSync(join(dir, r.json.render), "utf8");
+    assert.match(md, /## Pre-run snapshot/);
+    assert.match(md, /src\/stray\.js/);
+    assert.match(md, /pharn\/features\/abandoned\/SPEC\.md/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("PRE-RUN — no open run, no snapshot, or another run: every undeclared change escapes exactly as before, and a standalone render is unchanged", () => {
+  const { dir, base } = dirtyBeforeRun();
+  try {
+    buildDeclared(dir);
+    let r = cli(dir, freshArgs(base));
+    assert.equal(r.code, 3, r.raw);
+    let scope = JSON.parse(readFileSync(join(dir, REGRESS_PATHS.scopeJson), "utf8"));
+    assert.deepEqual(scope.pre_run_snapshot, { status: "no-delivery-run", unchanged: [] });
+    assert.equal(scope.escaped.length, 3);
+    assert.doesNotMatch(readFileSync(join(dir, r.json.render), "utf8"), /Pre-run snapshot/, "a standalone regress renders as before");
+
+    openRun(dir, "pharn-loop");
+    r = cli(dir, freshArgs(base));
+    assert.equal(r.code, 3, r.raw);
+    scope = JSON.parse(readFileSync(join(dir, REGRESS_PATHS.scopeJson), "utf8"));
+    assert.equal(scope.pre_run_snapshot.status, "no-snapshot");
+    assert.match(readFileSync(join(dir, r.json.render), "utf8"), /not applied \(no-snapshot\)/);
+
+    captureSnapshotCli(dir); // records the build's own write too — then the run is re-opened, which is another run
+    openRun(dir, "pharn-loop");
+    r = cli(dir, freshArgs(base));
+    assert.equal(r.code, 3, r.raw);
+    assert.equal(JSON.parse(readFileSync(join(dir, REGRESS_PATHS.scopeJson), "utf8")).pre_run_snapshot.status, "other-run");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("PRE-RUN — base-changed end to end under BASE_RULE: no --base, HEAD moved after the capture → the snapshot does not apply", () => {
+  const { dir, git } = dirtyBeforeRun();
+  const noBase = ["--feature", FEATURE, "--timeout-ms", "30000", "--no-install"];
+  try {
+    openRun(dir, "pharn-ship");
+    captureSnapshotCli(dir);
+    buildDeclared(dir);
+    let r = cli(dir, noBase); // control: a dirty tree resolves the base to HEAD, the snapshot's own base
+    assert.equal(r.code, 0, r.raw);
+    assert.equal(JSON.parse(readFileSync(join(dir, r.json.report), "utf8")).pre_run_snapshot.status, "applied");
+    writeFileSync(join(dir, "README.txt"), "committed mid-run\n");
+    git("add", "README.txt");
+    git("commit", "-q", "-m", "mid-run");
+    r = cli(dir, noBase);
+    assert.equal(r.code, 3, r.raw);
+    const scope = JSON.parse(readFileSync(join(dir, REGRESS_PATHS.scopeJson), "utf8"));
+    assert.equal(scope.pre_run_snapshot.status, "base-changed");
+    assert.ok(scope.escaped.includes("src/other.js"));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("PRE-RUN — the RE-RUN bound, pinned: an escape refused in one run is pre-run state for the next and is reported, not refused", () => {
+  const { dir, base } = repo();
+  try {
+    openRun(dir, "pharn-ship");
+    captureSnapshotCli(dir);
+    buildDeclared(dir);
+    writeFileSync(join(dir, "src", "stray.js"), "export const s = 1;\n"); // the first run's build escapes
+    let r = cli(dir, freshArgs(base));
+    assert.equal(r.code, 3, r.raw);
+    assert.equal(r.json.reason_code, "scope-escaped");
+
+    openRun(dir, "pharn-ship"); // a re-run: a new marker, a new snapshot
+    captureSnapshotCli(dir);
+    r = cli(dir, freshArgs(base));
+    assert.equal(r.code, 0, r.raw);
+    const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
+    assert.deepEqual(report.pre_run_snapshot, { status: "applied", unchanged: ["src/stray.js"] }, "reported — never silent");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });

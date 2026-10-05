@@ -342,7 +342,7 @@ test("renderBrief — EVERY routed brief carries the write-tool rule inside rule
   assert.equal(hasWriteToolRule(WRITE_TOOL_RULE), true);
 });
 
-/** The orchestrator's own lines rule 4 forbids a stage agent (6.36.0 added `start`, `finish` and stage-direct.mjs: each
+/** The orchestrator's own lines rule 4 forbids a stage agent (6.39.0 added `start`, `finish` and stage-direct.mjs: each
  *  writes a stage's markers, and stage-direct runs /pharn-regress or /pharn-verify). Spelled out here (L60). */
 const ORCHESTRATOR_ONLY = [
   "`pharn/floor/mark-phase.mjs`",
@@ -352,7 +352,7 @@ const ORCHESTRATOR_ONLY = [
   "`pharn/floor/stage-direct.mjs`",
 ];
 
-test("renderBrief — rule 4 forbids EVERY routed agent the orchestrator's own lines, start/finish/stage-direct included (6.36.0)", () => {
+test("renderBrief — rule 4 forbids EVERY routed agent the orchestrator's own lines, start/finish/stage-direct included (6.39.0)", () => {
   let routed = 0;
   for (const c of allCells().filter((x) => x.cell === AGENT)) {
     const text = renderBrief({

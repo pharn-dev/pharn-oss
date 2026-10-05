@@ -176,7 +176,8 @@ either way.
 
 - **Gate discovery:** explicit `--gates "<cmd>[::<id>],…"` wins; else the closed allowlist
   **`{ test, lint, format:check, lint:md, typecheck, type-check, build, test:e2e, e2e }`** intersected with the
-  project's `package.json` `scripts`; else the script's `no-gates` question. PHARN-internal tools are never
+  project's `package.json` `scripts`, minus any id its `pharn.config.json` `gates.exclude` lists (6.36.0, named in the
+  report and `VERIFY.md`); else the script's `no-gates` question. PHARN-internal tools are never
   hard-coded: `validate.mjs` runs only if the project exposes it as an allowlisted script or names it in `--gates`.
 - **The e2e gates** (`test:e2e`, `e2e`) are discovered here and at no other stage, and run after `build`. A red e2e
   gate fails verify like a red `test` gate. They are bounded by the same per-gate `--timeout-ms`; starting servers
@@ -184,7 +185,8 @@ either way.
 - **`--gates` and the AC gate:** the AC gate counts a level gate only when it ran as the **discovered** `npm run
 <id>`, so an explicit `--gates` run of a feature with AC evidence reads `test-infra-changed` (test-first — verify
   `FAIL` with `ac-evidence`, `/pharn-loop`'s S13) or `ac-untested` (`spec_kind: test-infra`). Do not pass `--gates`
-  for such a feature; if a report already carries that reading, re-run without it.
+  for such a feature; if a report already carries that reading, re-run without it. To leave a gate out, declare it
+  in `gates.exclude` and commit it before the run (`/pharn-test` pins it).
 - **Eval pairs:** one `structural:<expected>` gate per `<capDir>/evals/expected/<x>.json` whose colocated
   `<capDir>/findings.json` exists, for each capability directory the PLAN's `## Files` declares; the pair may be
   committed, or untracked and not git-ignored (a capability the build just wrote is untracked at verify time).

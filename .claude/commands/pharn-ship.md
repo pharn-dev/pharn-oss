@@ -25,6 +25,7 @@ reads:
     "pharn/floor/check-test-stage.mjs",
     "pharn/floor/check-quick-scope.mjs",
     "pharn/floor/quick-scope-core.mjs",
+    "pharn/floor/pre-run-snapshot.mjs",
     "pharn/floor/feature-name.mjs",
     "pharn/floor/validate.mjs",
     "pharn/floor/check-attestation.mjs",
@@ -137,7 +138,7 @@ Step 2b re-build too) are routed. `/pharn-spec` runs inline by policy (it IS GAT
 `/pharn-regress` and `/pharn-verify` (floor code produces their verdicts, so their model does not change them) — one
 `stage-direct.mjs` call each (the last paragraph below).
 
-Each routed stage in Step 2 carries a start line, a brief prompt and a finish line (6.36.0: `start` and `finish` each
+Each routed stage in Step 2 carries a start line, a brief prompt and a finish line (6.39.0: `start` and `finish` each
 do what two lines did), and you run them in this order:
 
 1. **The start line** (`stage-agent.mjs start`). It decides the route exactly as `route` does, writes the
@@ -196,7 +197,7 @@ bounded — no proceed/stop reads it — and not zeroed (P2). The other bounds (
 records) are the header's named residuals.
 
 **The two floor-only stages, `/pharn-regress` and `/pharn-verify`, are one call each** to
-`pharn/floor/stage-direct.mjs` (6.36.0, its header): it sets the stage's writes-scope, runs its stage script, releases
+`pharn/floor/stage-direct.mjs` (6.39.0, its header): it sets the stage's writes-scope, runs its stage script, releases
 the scope and writes the stage's stage-start and return markers, printing the script's `pharn-stage-exit/1` object
 (`pharn/pharn-contracts/stage-exit.md`) and exiting with its code. Run each line with the Bash tool's timeout at 600000. Branch **only** on its exit code:
 
@@ -296,6 +297,17 @@ checker's verdict alongside the RED. See Step 3a's own presentation rule, in the
 
    The marker holds the write guard's fail-closed default standing in an **installed** project until Step 3a's
    close (`pharn/floor/run-marker.mjs`, header).
+
+   **Then record the pre-run snapshot**, bound to that marker: every changed path with a digest, kept in the git dir,
+   so `/pharn-regress` and the quick scope check report a path that still holds those bytes instead of counting it as
+   this run's escape. It is the tree as it stands at this approval (`pharn/floor/pre-run-snapshot.mjs`, header):
+
+   ```bash
+   node pharn/floor/pre-run-snapshot.mjs --capture '<name>'
+   ```
+
+   **Non-zero → STOP** before `/pharn-plan`, as for the marker line: present its `pre-run-snapshot:` refusal and hand to
+   the human. Like every STOP, it goes through Steps 3 and 3a.
 
 2. **`/pharn-plan`** → writes `pharn/features/<name>/PLAN.md`. Routed (`## Running a stage`):
 
@@ -430,7 +442,8 @@ project gate `/pharn-build` ran at its Step 4** —
   `--gates`, else the closed allowlist (`ALLOWLIST` in
   `pharn/floor/gate-run-core.mjs`, cited rather than copied) ∩ the project's `package.json` scripts, else
   **ask the human** (reused, NOT hard-coded `validate.mjs`, P3). The e2e gates in the allowlist are
-  discovered by `/pharn-verify`'s runner, not by this build gate.
+  discovered by `/pharn-verify`'s runner, not by this build gate, and the runner also drops the ids the project's
+  `pharn.config.json` `gates.exclude` lists (6.36.0) — this prose build gate does not read that list.
 
 `0` → **proceed**; non-zero → **STOP**, present the RED floor, hand to the human. **Fail-closed:** if
 `/pharn-build` **refused before** its floor gate (missing `PLAN.md`/`SPEC.md`, a plan with no parseable
@@ -478,7 +491,8 @@ flips the verdict (fix #3, `pharn/ARCHITECTURE.md §7`).
 
 1. **GATE 2 — post-verify decision.** On a `PASS` verify, this is the chain's end. `/pharn-ship` **presents**
    the standing verdicts (steps 1–7) + the `GRILL.md` / `REGRESSION.md` / `VERIFY.md` (and `BUILD.md`)
-   free-text quoted as DATA (P2), **plus the per-stage token table and `check-cost-ledger.mjs`'s verdict
+   free-text quoted as DATA (P2), + `regression-report.json`'s `pre_run_snapshot.unchanged` paths as quoted DATA
+   (changed before this run; reported, not counted as escapes), **plus the per-stage token table and `check-cost-ledger.mjs`'s verdict
    from Step 3a** (see its presentation rule), then — after writing `SHIP.md` (Step 3) and emitting the
    ledger + report (Step 3a) — **ends its turn**, handing to the
    human to decide **merge / fix / abandon**. There is **no product `/review` stage**: the product spine ends at

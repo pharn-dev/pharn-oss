@@ -621,7 +621,7 @@ test("✧ ONE ENCODING (L35): the printed line's template is spelled once, in ma
   );
 });
 
-// ── 6.36.0 (orchestrator-direct-stage-calls): the two in-process helpers ─────────────────────────────────
+// ── 6.39.0 (orchestrator-direct-stage-calls): the two in-process helpers ─────────────────────────────────
 
 test("tryMarkPhase writes the marker markPhase writes and returns markerLine() of it; markersPath is markPhase's own file", () => {
   const base = mkdtempSync(join(tmpdir(), "mark-phase-"));

@@ -291,7 +291,7 @@ test("✧ WIRING: pharn-ship's OPEN line sits AFTER the GATE-1 backstop and BEFO
   const body = commandFamilyText(COMMANDS_DIR, "pharn-ship.md");
   const backstop = body.indexOf("node pharn/floor/check-spec-approved.mjs pharn/features/<name>/SPEC.md");
   const open = body.indexOf("node pharn/floor/run-marker.mjs --open pharn-ship '<name>'");
-  // 6.36.0: /pharn-plan's stage-start marker is written by its start line.
+  // 6.39.0: /pharn-plan's stage-start marker is written by its start line.
   const planStart = body.indexOf("node pharn/floor/stage-agent.mjs start --command pharn-ship --stage pharn-plan");
   assert.ok(backstop >= 0 && open >= 0 && planStart >= 0, "all three anchors must exist in pharn-ship.md");
   assert.ok(backstop < open, "the open must come after the GATE-1 backstop");
