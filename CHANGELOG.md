@@ -23,6 +23,69 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.38.0] - 2026-10-05
+
+### Added
+
+- 2026-10-05: **A floor backstop against feature growth of the always-loaded instruction files: the checker
+  `pharn/floor/check-instruction-files.mjs` and the `/pharn-verify` gate `instruction-growth`.** `SKILLS_VERSION`
+  6.37.0 → 6.38.0 (minor: a new floor checker and a new verify gate). `MIN_CLI` stays 0.5.0: no installed path moves,
+  the installer copies `pharn/floor/` whole minus tests (CHANGELOG [6.21.1]), and a `pharn.config.json` without the new
+  key defaults cleanly. ([`.dev/features/instruction-growth-gate/`](./.dev/features/instruction-growth-gate/))
+  - **Why (P7, measured).** In a user's `/pharn-ship` run, the harness attached 634,379 B of instruction files to every
+    stage agent: a 418,456 B `CLAUDE.md`, 14 `.claude/rules/*.md` totalling 213,290 B, and a 2,633 B auto-memory index.
+    That is about half of a ~302k-token first-request prefix (bytes/4, an estimate;
+    `.dev/measurements/loop-wall-clock-2026-10-05.md` §3, §10). Eight of the rules carried Cursor-style `globs:` and
+    none carried `paths:`, so all of them loaded every time. The user reports that the growth came from features whose
+    plans routed narrative into `CLAUDE.md`; that report is not verifiable from this repository. The planning rule
+    against that routing is advisory, and this is its deterministic backstop.
+  - **The set** is modelled from Claude Code's memory documentation (read 2026-10-05) and comprises:
+    - the root `CLAUDE.md` and `.claude/CLAUDE.md` (else `AGENTS.md`);
+    - their `@path` imports, up to four hops, skipping code spans and fences;
+    - every `.claude/rules/**/*.md` without `paths:`, or whose `paths:` is a catch-all (`**`, `**/*`, `*`).
+
+    `globs:` is not read by Claude Code ("`paths` is the only field Claude Code reads from a rule"), so it is noted
+    `globs-not-read`. Every assumption beyond the docs is labelled in `instruction-files-core.mjs`'s header.
+
+  - **`--report`** is ADVISORY. It prints per-file bytes, the total, a bytes/4 estimate, notes and the path-scoped
+    rules, and lists `CLAUDE.local.md` as personal.
+  - **`--growth`** is FLOOR. It sums the bytes ADDED to the set since a base: a file new to the set counts whole, and a
+    file in both counts its line-multiset difference, so removals never offset. It compares the sum with
+    `budget.instructionGrowthBytes` read from `pharn.config.json` AT THE BASE COMMIT (default 2048, the maintainer's
+    choice at GATE 1, not a measurement), so a change cannot raise its own gate. Base objects are read with
+    `--no-replace-objects`. An unusable input is exit 2 with a closed `reason_code`, never a pass. The entry has no
+    static import, so a crash is `crashed` (exit 2), never a verdict.
+  - **The gate.** `gate-run-core.mjs` injects `instruction-growth` for verify, immediately before `reconcile`, with the
+    fixed argv `--growth --base-rule`. It takes /pharn-regress's BASE_RULE branches (dirty tree → HEAD, else
+    `merge-base HEAD origin/main`, else INCONCLUSIVE). The id is reserved and never reused. `run-gates.mjs`,
+    `stage-verify.mjs`, `check-verify.mjs` and `check-loop.mjs` are unchanged. A red gate is an ordinary, retried
+    `CONTINUE` in `/pharn-loop`. `/pharn-dev-verify` and the dev loop are unchanged.
+  - **Bounds, named:**
+    - It measures changed-since-base, not written-by-the-build.
+    - With a dirty tree only uncommitted growth is measured (`instruction-growth-base-binding`).
+    - A clean tree with no `origin/main` is INCONCLUSIVE at verify.
+    - An INCONCLUSIVE gate is retried by `/pharn-loop` to the cap.
+    - `--growth` is a FLOOR verdict over this checker's MODEL of the loader, never over the loader itself. Under-count
+      routes known so far (never a complete list, L67): a catch-all spelled another way, an unrecognised YAML error
+      beside `paths:`, a git-ignored always-loaded file, and an uncommitted edit inside an initialised submodule.
+    - A per-change budget does not bound growth accumulated across changes.
+    - Whether `pharn update` preserves an unknown `pharn.config.json` key is not verifiable here.
+    - The `LIMITS.md §3` text is proposed in the plan for a human to apply; the write guard keeps it human-only.
+  - **GATE 2 review fixes, before merge.** An independent review reproduced six defects, all fixed in this release,
+    each with a test and a mutation control:
+    - a project root below the git top level (a monorepo package) is measured; it was refused, failing every verify;
+    - a `paths` value that is not a string list (YAML null, a number, a boolean, a mapping, a block scalar) loads
+      always (`paths-unrecognised`); it had scoped the rule out;
+    - the fixed names match case-insensitively (`case-variant`), so a `claude.md` on APFS counts;
+    - a submodule on the way to a member is noted unread, and a moved one is INCONCLUSIVE `submodule-changed`;
+    - an absolute link spelled through an alias of the root (`/tmp` vs `/private/tmp`) is followed;
+    - a staged rename into `.pharn/` reads as a dirty tree, as `/pharn-regress` reads it.
+  - **Lesson L67** (promoted at the ship-stage gate): a checker that models an external tool states its bounds from
+    the inputs its author pictured, so enumerate the tool's documented input grammar as fixture kinds.
+  - **Dogfood.** This increment's own Commands entry in this repo's `CLAUDE.md` adds 1,031 B (`--growth --base-rule`
+    against `d40667d`), within the 2048-B default it ships.
+  - **PENDING:** a `--report` of pharn-starter before and after its cleanup, both recorded.
+
 ## [6.37.0] - 2026-10-05
 
 ### Added
