@@ -256,8 +256,11 @@ export function isReasonCode(code) {
  *  Every stamp reader that is not that one asserts its own stage (`validateStamp`'s `expect.stage`), so an
  *  `ac-test` stamp handed to /pharn-verify or /pharn-regress is `stage-mismatch`, never a verdict. `build` (6.39.0,
  *  build-gate-bounded) is /pharn-build's own project gate, run by build-gate.mjs: no verdict reads its stamp, and every
- *  stamp reader that asserts a stage refuses it the same way. */
-export const STAGES = Object.freeze(["verify", "regress", "ac-test", "build"]);
+ *  stamp reader that asserts a stage refuses it the same way. `entry` (6.42.0) is a delivery run's ENTRY check
+ *  (entry-gates.mjs): verify's discovered set, STYLE_SET first, run once in the background on the tree the run starts
+ *  from — read by entry-gates.mjs alone, never reuse evidence (its fingerprint algo is its own; worktree-fingerprint.mjs
+ *  ENTRY_ALGO). */
+export const STAGES = Object.freeze(["verify", "regress", "ac-test", "build", "entry"]);
 export const SIDES = Object.freeze(["base", "head"]);
 
 /** The stamp schema id. Bumped only on a breaking shape change (pharn-contracts/gate-run-record.md). */
@@ -621,6 +624,9 @@ export function resolveSet({
     }
   }
 
+  // entry (6.42.0): STYLE_SET first, each part in its own order — the style gates run before a front stage has
+  // written any markdown they could read (entry-gates-core.mjs, "attributable").
+  if (stage === "entry") kept = [...kept.filter((e) => STYLE_SET.includes(e.id)), ...kept.filter((e) => !STYLE_SET.includes(e.id))];
   const entries = orderEntries(kept, ex.entries, stage === "verify");
   return {
     ok: true,

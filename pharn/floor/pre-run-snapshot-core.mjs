@@ -67,6 +67,11 @@ import { deliveryRunIdentity } from "./regress-base-reuse-core.mjs";
 export const SNAPSHOT_SCHEMA = "pharn-pre-run-snapshot/1";
 /** The record's file name inside `git rev-parse --absolute-git-dir` (pre-run-snapshot.mjs resolves the directory). */
 export const SNAPSHOT_BASENAME = "pharn-pre-run-snapshot.json";
+/** 6.42.0 (loop-entry-preflight, review R1): the paths a delivery run's ENTRY GATES changed (entry-gates.mjs `--wait`),
+ *  in a SECOND record of exactly this shape, schema, validator and decision — beside the snapshot, bound to the same run
+ *  marker. Its paths changed after the snapshot, by the run's own entry gates, so they are not build escapes either while
+ *  they hold the recorded bytes. Reported apart (regression-report.json `entry_gate_changes`). */
+export const ENTRY_CHANGES_BASENAME = "pharn-entry-gate-changes.json";
 /** Read cap in bytes, so a planted huge file is `snapshot-malformed`, never a memory spike. */
 export const SNAPSHOT_MAX_BYTES = 64 * 1024 * 1024;
 /** A file larger than this digests as UNHASHABLE: `hashFile` reads a whole file into memory (GRILL #15). */
@@ -212,4 +217,18 @@ export function decidePreRun(i) {
     if (i.liveDigest(p) === d) unchanged.push(p);
   }
   return { status: "applied", unchanged };
+}
+
+/** 6.42.0 (loop-entry-preflight, review R1) — the ONE split both partition callers (stage-regress.mjs,
+ *  quick-scope-core.mjs) make of the paths `partitionScope` subtracted: the snapshot's block, exactly as before, and the
+ *  entry gates' block — `null` (so no key is written) unless an entry record is there (any status but `no-delivery-run`
+ *  / `no-snapshot`), so a run without one writes the bytes it wrote before. A path both records hold is reported once,
+ *  in the snapshot's block. */
+export function entryBlocks(preRunDecision, entryDecision, subtracted) {
+  const pre = new Set(preRunDecision.unchanged);
+  const ent = new Set(entryDecision.unchanged);
+  const preRunBlock = { status: preRunDecision.status, unchanged: subtracted.filter((p) => pre.has(p)) };
+  const present = entryDecision.status !== "no-delivery-run" && entryDecision.status !== "no-snapshot";
+  const entryBlock = present ? { status: entryDecision.status, unchanged: subtracted.filter((p) => ent.has(p) && !pre.has(p)) } : null;
+  return { preRunBlock, entryBlock };
 }

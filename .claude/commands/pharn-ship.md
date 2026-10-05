@@ -26,6 +26,7 @@ reads:
     "pharn/floor/check-quick-scope.mjs",
     "pharn/floor/quick-scope-core.mjs",
     "pharn/floor/pre-run-snapshot.mjs",
+    "pharn/floor/entry-gates.mjs",
     "pharn/floor/feature-name.mjs",
     "pharn/floor/validate.mjs",
     "pharn/floor/check-attestation.mjs",
@@ -273,6 +274,17 @@ checker's verdict alongside the RED. See Step 3a's own presentation rule, in the
    **Non-zero → STOP** before `/pharn-plan`, as for the marker line: present its `pre-run-snapshot:` refusal and hand to
    the human. Like every STOP, it goes through Steps 3 and 3a.
 
+   **Then start the entry gates** (6.42.0) — the gates `/pharn-verify` will discover, run once on this tree in the
+   background while `/pharn-plan` and `/pharn-grill` work; the read before `/pharn-test` decides
+   (`pharn/floor/entry-gates.mjs`, header):
+
+   ```bash
+   node pharn/floor/entry-gates.mjs --start --feature '<name>' --timeout-ms 540000
+   ```
+
+   Whatever the exit → `/pharn-plan`: with no gates, `/pharn-verify` asks about that, as before, and a start that
+   failed is reported by the read before `/pharn-test`, which asks.
+
 2. **`/pharn-plan`** → writes `pharn/features/<name>/PLAN.md`. Routed (`## Running a stage`):
 
    ```bash
@@ -363,6 +375,19 @@ grill `read` exit `3` (`refused`) is a **STOP** here, because no verdict read fo
 interrogation itself is **advisory** and gates nothing — **present** its findings' free-text as quoted DATA
 (P2), then proceed regardless of what it raised. Never write that the grill verified the plan's lesson
 application.
+
+**Then read the entry gates** (6.42.0), before `/pharn-test` writes anything a gate reads. The line blocks until the
+verdict is in, or for at most its budget (Bash-tool timeout 600000):
+
+```bash
+node pharn/floor/entry-gates.mjs --wait --feature '<name>' --budget-ms 570000
+```
+
+Branch **only** on the exit code (P5): `5` → run it again; `0` or `3` → proceed (keep any `unattributed` ids, and the
+`mutated` gates with their `changed_paths`, for `SHIP.md` — regress reports those paths, it does not count them). `4` (a gate red on the tree the run started from), `2` or anything else → present the document's `red` ids
+or its `reason_code` as DATA and ask, through the interactive form: **Stop** (a STOP, through Steps 3 and 3a) or
+**Continue** (fixing that gate is the feature, or the human accepts a red verify at GATE 2; keep the ids for
+`SHIP.md`). Never continue without the answer.
 
 1. **`/pharn-test <name>`** (6.19.0) → writes each Acceptance Criterion's test into the files `AC-TESTS.md` maps, runs
    them before any implementation exists, and records the red run in `pharn/features/<name>/AC-TESTS.lock.json` — or a
@@ -596,6 +621,13 @@ measures the AC gate again from scratch, and it proceeds only on `PASS`.
      human. **There is NO second retry.**
 
 ## Closing the run — GATE 2 and every STOP (Steps 2c–3b)
+
+**First, at every STOP once `<name>` exists, stop the entry gates** (6.42.0) — a no-op once the read before
+`/pharn-test` has its verdict, or when none started. Its exit never changes the STOP:
+
+```bash
+node pharn/floor/entry-gates.mjs --abort --feature '<name>'
+```
 
 **Steps 2c, 2d, 3, 3a and 3b, the claims block and the Final step are this command's close part,
 `.claude/commands/pharn-ship-close.md`.** Read it once: in the same turn as step 7's return marker after the first

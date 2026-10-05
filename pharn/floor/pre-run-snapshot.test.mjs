@@ -37,8 +37,18 @@ import {
   buildSnapshot,
   validateSnapshot,
   decidePreRun,
+  ENTRY_CHANGES_BASENAME,
+  entryBlocks,
 } from "./pre-run-snapshot-core.mjs";
-import { pathDigest, preRunUnchanged, snapshotPath, captureSnapshot } from "./pre-run-snapshot.mjs";
+import {
+  pathDigest,
+  preRunUnchanged,
+  snapshotPath,
+  captureSnapshot,
+  recordEntryChanges,
+  entryChangesUnchanged,
+  clearEntryChanges,
+} from "./pre-run-snapshot.mjs";
 import { MARKER_AGE_CEILING_MS } from "./regress-base-reuse-core.mjs";
 import { RECORD_BASENAME } from "./regress-base-reuse-core.mjs";
 import { OFFER_BASENAME } from "./head-reuse-offer.mjs";
@@ -730,3 +740,76 @@ for (const { file, open, next, stopRow } of WIRING) {
     assert.match(body.slice(stop, stop + 200), stopRow);
   });
 }
+
+// ── 6.42.0 (loop-entry-preflight, review R1): the ENTRY GATES' changes — a second record, the same rule ─────────────
+test("ENTRY CHANGES — written bound to the open run, decided by the snapshot's own rule: subtracted while unchanged, not once edited, never over another base", () => {
+  const { dir, base } = repo();
+  try {
+    writeFileSync(join(dir, "src", "a.js"), "rewritten by an entry gate\n");
+    const digest = inDir(dir, () => pathDigest("src/a.js"));
+    assert.deepEqual(
+      inDir(dir, () => recordEntryChanges(FEATURE, [["src/a.js", digest]])).code,
+      "no-delivery-run",
+      "no run open → nothing written"
+    );
+    assert.equal(existsSync(join(dir, ".git", ENTRY_CHANGES_BASENAME)), false);
+    openShip(dir);
+    assert.deepEqual(
+      inDir(dir, () => recordEntryChanges(FEATURE, [["src/a.js", digest]])),
+      { ok: true }
+    );
+    const rec = JSON.parse(readFileSync(join(dir, ".git", ENTRY_CHANGES_BASENAME), "utf8"));
+    assert.equal(validateSnapshot(rec).ok, true, "the snapshot's own shape and validator");
+    const inside = ["src/a.js", "src/b.js"];
+    assert.deepEqual(
+      inDir(dir, () => entryChangesUnchanged({ feature: FEATURE, base, inside })),
+      {
+        status: "applied",
+        unchanged: ["src/a.js"],
+      }
+    );
+    assert.equal(inDir(dir, () => entryChangesUnchanged({ feature: FEATURE, base: "f".repeat(40), inside })).status, "base-changed");
+    writeFileSync(join(dir, "src", "a.js"), "then the build edited it\n");
+    assert.deepEqual(inDir(dir, () => entryChangesUnchanged({ feature: FEATURE, base, inside })).unchanged, []);
+    assert.equal(inDir(dir, () => preRunUnchanged({ feature: FEATURE, base, inside })).status, "no-snapshot", "a separate record");
+    assert.equal(
+      inDir(dir, () => clearEntryChanges()),
+      true
+    );
+    assert.equal(inDir(dir, () => entryChangesUnchanged({ feature: FEATURE, base, inside })).status, "no-snapshot");
+    assert.equal(
+      inDir(dir, () => clearEntryChanges()),
+      true,
+      "ENOENT is success"
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("entryBlocks — the snapshot's block is unchanged; the entry block exists only with an entry record and never repeats a snapshot path", () => {
+  const pre = { status: "applied", unchanged: ["a", "c"] };
+  const none = { status: "no-snapshot", unchanged: [] };
+  assert.deepEqual(entryBlocks(pre, none, ["a"]), { preRunBlock: { status: "applied", unchanged: ["a"] }, entryBlock: null });
+  assert.equal(entryBlocks(pre, { status: "no-delivery-run", unchanged: [] }, ["a"]).entryBlock, null);
+  assert.deepEqual(entryBlocks(pre, { status: "applied", unchanged: ["a", "b"] }, ["a", "b"]), {
+    preRunBlock: { status: "applied", unchanged: ["a"] },
+    entryBlock: { status: "applied", unchanged: ["b"] },
+  });
+  assert.deepEqual(entryBlocks(pre, { status: "other-run", unchanged: [] }, ["a"]).entryBlock, { status: "other-run", unchanged: [] });
+  assert.notEqual(ENTRY_CHANGES_BASENAME, SNAPSHOT_BASENAME);
+});
+
+test("★ HOOK — the entry-changes record is out of the write tools' reach in a main checkout, like the snapshot", () => {
+  const { dir } = repo();
+  try {
+    installHooks(dir);
+    const gitDir = execFileSync("git", ["rev-parse", "--absolute-git-dir"], { cwd: dir, encoding: "utf8" }).trim();
+    const target = join(gitDir, ENTRY_CHANGES_BASENAME);
+    const cells = hookMatrix(dir, target);
+    assert.equal(cells.length, 18);
+    for (const [label, p] of cells) assert.equal(p, 2, `${label}: protect-trusted-paths denies the .git segment`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
