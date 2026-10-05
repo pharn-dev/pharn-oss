@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  finishedLines,
   BUILD_GATE_ROOT,
   CAPS,
   EXIT,
@@ -230,23 +231,73 @@ test("renderSummary — suite errors (a file that would not load) add the log ta
     stamp: stampOf([run(0, "test", 0)]),
     outDir: "O",
     times: {},
-    perGate: { test: { results: { ok: false, reason_code: "results-exit-contradiction" }, outText: "", errText: "" } },
+    perGate: { test: { results: { ok: false, reason_code: "results-exit-contradiction" }, outText: "1 failed, exit 0 anyway", errText: "" } },
   });
   assert.match(refused, /result: GREEN/, "the exit decides; a refused record is a disclosure, never a verdict");
-  assert.match(refused, /per-test results not read: results-exit-contradiction/);
+  assert.match(refused, /per-test results not read: results-exit-contradiction — the log tail follows/);
+  // Review R4: the tail it announces is printed, for a GREEN gate too.
+  assert.match(refused, /stdout, last lines \(DATA[^\n]*\n\n```text\n1 failed, exit 0 anyway\n```/);
 });
 
-test("renderSummary — past the total cap a section becomes its pointer line, never silently gone", () => {
+test("review R7 — an anomaly whose raw status is failed is listed by id beside the plain failures, never only counted", () => {
+  const text = renderSummary({
+    mode: "full",
+    feature: "demo",
+    stamp: stampOf([run(0, "test", 1)]),
+    outDir: "O",
+    times: {},
+    perGate: {
+      test: {
+        results: record([{ id: "t/a.test.js::param case", messages: ["Error: dup boom"], note: "duplicate-test-id" }], {
+          counts: { failed: 0, passed: 3, skipped: 0 },
+          anomalies: [{ id: "t/a.test.js::param case", reason_code: "duplicate-test-id" }],
+        }),
+        outText: "",
+        errText: "",
+      },
+    },
+  });
+  assert.match(text, /0 failed · 3 passed · 0 skipped · 1 anomaly/);
+  assert.match(text, /✗ t\/a\.test\.js::param case \(duplicate-test-id\)\n {4}Error: dup boom/);
+});
+
+test("review R6 — finishedLines names each finished gate's id and exit, red ones marked; bounded", () => {
+  const lines = finishedLines([run(0, "test", 1), run(1, "lint", 0)], { 0: 130000, 1: 2000 });
+  assert.equal(lines[0], "finished so far (exit · wall time of the runner call):");
+  assert.match(lines[1], /^ {2}test\s+exit\s+1\s+130\.0 s\s+\(red\)$/);
+  assert.match(lines[2], /^ {2}lint\s+exit\s+0\s+2\.0 s$/);
+  assert.deepEqual(finishedLines([], {}), ["finished so far: none"]);
+  const many = finishedLines(
+    Array.from({ length: CAPS.tableRows + 5 }, (_, i) => run(i, `g${i}`, 0)),
+    {}
+  );
+  assert.equal(many.at(-1), "  … 5 more");
+});
+
+test("review R3 — the 16,384-byte cap HOLDS: every section past it is named by one closing line counted inside it", () => {
   const big = Array.from({ length: 400 }, (_, i) => `noise ${i} ${"q".repeat(150)}`).join("\n");
   const runs = ["test", "lint", "format:check", "lint:md", "typecheck", "type-check", "build"].map((id, i) => run(i, id, 1));
   const perGate = Object.fromEntries(runs.map((r) => [r.id, { results: null, outText: big, errText: big }]));
-  // With every allowlisted non-e2e gate red at the real caps, the whole text still fits (each tail is bounded).
-  const full = renderSummary({ mode: "full", feature: "demo", stamp: stampOf(runs), outDir: "O", times: {}, perGate });
-  assert.ok(bytes(full) <= CAPS.totalBytes + 1024, `bounded at the real caps: ${bytes(full)}`);
-  // A smaller total cap forces the pointer form: every gate is still NAMED, the late ones by their log paths.
+  const text = renderSummary({ mode: "full", feature: "demo", stamp: stampOf(runs), outDir: ".pharn/pharn-build/demo/full", times: {}, perGate });
+  assert.ok(bytes(text) <= CAPS.totalBytes, `at most ${CAPS.totalBytes}: ${bytes(text)}`);
+  const shown = (text.match(/^## (?:test|lint|format:check|lint:md|typecheck|type-check|build) — exit 1$/gm) ?? []).length;
+  assert.ok(shown >= 1 && shown < runs.length, `some sections shown, some left out (${shown})`);
+  assert.match(text, new RegExp(`^## ${runs.length - shown} red gate section\\(s\\) over the 16384-byte summary cap — the table above names them`, "m"));
+  for (const r of runs) assert.match(text, new RegExp(`^ {2}${r.id}\\s+exit\\s+1\\b.*\\(red\\)$`, "m"), `${r.id} is in the table`);
+  // A smaller cap, the same rule.
   const caps = { ...CAPS, totalBytes: 6000 };
-  const text = renderSummary({ mode: "full", feature: "demo", stamp: stampOf(runs), outDir: "O", times: {}, perGate }, caps);
-  for (const r of runs) assert.match(text, new RegExp(`## ${r.id} — exit 1`), `${r.id} is named`);
-  assert.match(text, /## build — exit 1: section over the 6000-byte summary cap — open O\/6-build\.out and O\/6-build\.err/);
-  assert.ok(bytes(text) <= caps.totalBytes + 1024, `bounded: ${bytes(text)}`);
+  const small = renderSummary({ mode: "full", feature: "demo", stamp: stampOf(runs), outDir: "O", times: {}, perGate }, caps);
+  assert.ok(bytes(small) <= caps.totalBytes, `${bytes(small)}`);
+});
+
+test("review R3 — adversarial: 200 explicit gates with 256-char ids and huge logs, failing tests with 4,096-char ids — still at most the cap", () => {
+  const longId = (i) => `${String(i).padStart(3, "0")}${"x".repeat(253)}`;
+  const runs = Array.from({ length: 200 }, (_, i) => run(i, longId(i), i % 2));
+  const big = Array.from({ length: 50 }, () => "`".repeat(300) + "y".repeat(500)).join("\n");
+  const failing = Array.from({ length: 80 }, (_, i) => ({ id: `${"f".repeat(4096)}${i}`, messages: ["`".repeat(1000)], note: null }));
+  const perGate = Object.fromEntries(runs.map((r) => [r.id, { results: r.seq === 1 ? record(failing) : null, outText: big, errText: big }]));
+  const text = renderSummary({ mode: "full", feature: "demo", stamp: { ...stampOf(runs), source: "explicit" }, outDir: ".pharn/pharn-build/demo/full", times: {}, perGate });
+  assert.ok(bytes(text) <= CAPS.totalBytes, `${bytes(text)}`);
+  assert.match(text, /set: the human's --gates spec, run as given/);
+  assert.match(text, new RegExp(`… ${200 - CAPS.tableRows} more gate\\(s\\), \\d+ of them red`));
 });

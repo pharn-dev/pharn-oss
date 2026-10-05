@@ -1188,7 +1188,7 @@ test("build, targeted — the `test` gate alone, handed exactly the target files
 test("build — empty sets are `empty-source-set` (L34), naming why", () => {
   const noTest = resolveSet({ stage: "build", feature: "demo", scripts: { lint: "x" }, targets: ["a.test.js"] });
   assert.equal(noTest.reason_code, "empty-source-set");
-  assert.match(noTest.reason, /targeted build run needs the discovered `test` gate/);
+  assert.match(noTest.reason, /targeted build run needs a `test` gate/);
   const excluded = resolveSet({ stage: "build", feature: "demo", scripts: ALL_SCRIPTS, targets: ["a.test.js"], exclude: ["test"] });
   assert.equal(excluded.reason_code, "empty-source-set");
   assert.match(excluded.reason, /removed test/);
@@ -1206,10 +1206,30 @@ test("build — empty sets are `empty-source-set` (L34), naming why", () => {
   );
 });
 
-test("build — refusals: --gates, --extra, --skip-style, a bad targets array; --targets off the build stage", () => {
+test("build — a human's explicit --gates is run as given (never filtered, e2e included); targeted keeps only its `test` id (review R1)", () => {
+  const r = resolveSet({ stage: "build", feature: "demo", gates: "npm test::test,make check::check,npm run e2e::e2e" });
+  assert.equal(r.ok, true, r.reason);
+  assert.equal(r.spec.source, "explicit");
+  assert.deepEqual(
+    r.spec.entries.map((e) => e.id),
+    ["test", "check", "e2e"],
+    "an explicit spec is the human's choice — never filtered"
+  );
+  const t = resolveSet({ stage: "build", feature: "demo", gates: "npm test::test,make check::check", targets: ["a.test.js"] });
+  assert.deepEqual(
+    t.spec.entries.map((e) => [e.id, e.files]),
+    [["test", ["a.test.js"]]]
+  );
+  const none = resolveSet({ stage: "build", feature: "demo", gates: "make check::check", targets: ["a.test.js"] });
+  assert.equal(none.reason_code, "empty-source-set");
+  assert.match(none.reason, /targeted build run needs a `test` gate/);
+  const both = resolveSet({ stage: "build", feature: "demo", gates: "npm test::test", exclude: ["lint"] });
+  assert.equal(both.reason_code, "usage-error", "an exclusion never applies to an explicit spec");
+});
+
+test("build — refusals: --extra, --skip-style, a bad targets array; --targets off the build stage", () => {
   const base = { stage: "build", feature: "demo", scripts: ALL_SCRIPTS };
   for (const [why, over] of [
-    ["--gates", { gates: "npm test" }],
     ["--extra", { extras: "[]" }],
     ["--skip-style", { skipStyle: true }],
     ["an empty targets list (it would run everything)", { targets: [] }],

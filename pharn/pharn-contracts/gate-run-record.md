@@ -225,12 +225,13 @@ gate — it already is one today.
   its levels (`acFilesFor`), appended after `--`, and an entry with none is refused rather than run. No
   `reconcile`, no `aux.completeness`. Every other stamp reader asserts its own stage, so an `ac-test` stamp is
   `stage-mismatch` there. What the stamp's per-test records decide is `ac-tests.md`'s contract.
-- **`build` (6.38.0), `/pharn-build`'s own gate, run by `pharn/floor/build-gate.mjs`:** `--discover` is required, and
-  `--gates`, `--extra`, `--skip-style`, `--scope-json`, `--spec-from`, `--side` and `--base` are refused. The set is the
-  DISCOVERED ids minus `E2E_SET` (the regress rule — e2e runs at `/pharn-verify`), then the project's exclusion, in
-  ALLOWLIST order; an empty set is `empty-source-set`. With `--targets <file>` — a JSON array of repo-relative test
-  files, each accepted by `ac-tests-core.mjs` `badPath`, non-empty, unique — the set is the `test` gate alone, handed
-  those files after `--`; an id a targeted run skips anyway is never named in `excluded`. No `reconcile`, no
+- **`build` (6.39.0), `/pharn-build`'s own gate, run by `pharn/floor/build-gate.mjs`:** `--discover` or a human's
+  `--gates` is required, and `--extra`, `--skip-style`, `--scope-json`, `--spec-from`, `--side` and `--base` are
+  refused. The set is the DISCOVERED ids minus `E2E_SET` (the regress rule — e2e runs at `/pharn-verify`), then the
+  project's exclusion, in ALLOWLIST order — or the explicit `--gates` spec, never filtered; an empty set is
+  `empty-source-set`. With `--targets <file>` — a JSON array of repo-relative test files, each accepted by
+  `ac-tests-core.mjs` `badPath`, non-empty, unique — the set is the `test` gate alone, handed those files after `--`;
+  an id a targeted run skips anyway is never named in `excluded`. No `reconcile`, no
   `aux.completeness`. No verdict reads a `build` stamp: the helper prints a summary from it, and every other stamp
   reader asserts its own stage, so a `build` stamp is `stage-mismatch` there.
 - **Reserved ids:** `reconcile` and `completeness` (the runner's), and `ac-delivery` and `ac-evidence` (6.20.0 — the ids

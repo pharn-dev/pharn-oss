@@ -29,7 +29,9 @@
 // included — never the gate's own time). For a red gate with per-test results, the failing tests' ids and a bounded
 // excerpt of each failure message; otherwise a bounded tail of the gate's logs. Bounded by LINES and BYTES, never by
 // dropping a message's first line: what is cut is counted and the full log's path is printed beside it. A whole
-// call's text is capped at MAX_OUTPUT_BYTES; a section past the cap becomes its pointer line, never silently gone.
+// summary is at most CAPS.totalBytes (16,384) bytes — ENFORCED, not approximate (review R3): the gate table is bounded
+// (ids cut to CAPS.idChars, at most CAPS.tableRows rows plus a count line), the room for ONE closing pointer line is
+// reserved first, and every red gate whose section does not fit is named by that line, never silently gone.
 //
 // TRUST (P2): gate logs and the reporter's results are UNTRUSTED project output. Every byte of them reaches the text
 // only inside a quoteData fence (quote-core.mjs — inert to a CommonMark parser, NOT forgery-proofing), labelled as
@@ -72,8 +74,10 @@ export const CAPS = Object.freeze({
   tailBytes: 1600,
   errTailLines: 10,
   errTailBytes: 600,
-  gateBytes: 8192, // one gate's section
-  totalBytes: 16384, // the whole call
+  gateBytes: 8192, // one gate's failing-tests block
+  totalBytes: 16384, // the whole summary, enforced
+  idChars: 80, // a gate id in the table and in a heading
+  tableRows: 40, // gate rows shown; the rest are counted
 });
 
 const bytes = (s) => Buffer.byteLength(s, "utf8");
@@ -172,8 +176,32 @@ export function logPaths(outDir, run) {
 
 const seconds = (ms) => (Number.isInteger(ms) && ms >= 0 ? `${(ms / 1000).toFixed(1)} s` : "time n/a");
 
+/** A gate id as the summary prints it: cut to `max` characters (a `--gates` id may be 256). */
+const cutId = (id, max) => (String(id).length > max ? `${String(id).slice(0, max)}…` : String(id));
+
+/** One table row per run: id, exit, runner-call time, flags. Shared by the summary and the CONTINUE lines. */
+function rowsOf(runs, times, caps) {
+  const ids = runs.map((r) => cutId(r.id, caps.idChars));
+  const width = Math.max(0, ...ids.map((s) => s.length));
+  return runs.map((r, i) => {
+    const flags = [r.exit !== 0 ? "red" : null, r.timed_out ? "timed out" : null, r.mutated ? "changed the tree" : null].filter(Boolean);
+    return `  ${ids[i].padEnd(width)}  exit ${String(r.exit).padStart(3)}  ${seconds(times?.[r.seq]).padStart(9)}${flags.length ? `  (${flags.join(", ")})` : ""}`;
+  });
+}
+
+/** CONTINUE (review R6): the gates a paused run already finished, with their exits, so a red one is visible before
+ *  the rest run. Bounded like the summary's table. */
+export function finishedLines(runs, times, caps = CAPS) {
+  if (!Array.isArray(runs) || runs.length === 0) return ["finished so far: none"];
+  const shown = runs.slice(0, caps.tableRows);
+  const lines = ["finished so far (exit · wall time of the runner call):", ...rowsOf(shown, times, caps)];
+  if (runs.length > shown.length) lines.push(`  … ${runs.length - shown.length} more`);
+  return lines;
+}
+
 /** One red gate's failing-tests block: the ids (and the first `excerpts` messages) inside ONE DATA fence, within
- *  `budget` bytes; the rest counted. `failing` = [{id, messages}] in record order. */
+ *  `budget` bytes; the rest counted. `failing` = [{id, messages, note}] in record order; `note` names an anomaly
+ *  (a duplicated id whose raw status is failed — review R7). */
 function failingBlock(failing, budget, caps) {
   const body = [];
   let used = 0;
@@ -181,8 +209,8 @@ function failingBlock(failing, budget, caps) {
   for (const f of failing) {
     if (shown >= caps.listed) break;
     const withMsg = shown < caps.excerpts ? (f.messages.map((m) => excerpt(m, caps)).filter(Boolean)[0] ?? "") : "";
-    const piece = withMsg ? `✗ ${f.id}\n${withMsg.replace(/^/gm, "    ")}` : `✗ ${f.id}`;
-    const idOnly = `✗ ${f.id}`;
+    const idOnly = `✗ ${cutLine(f.id, caps.lineChars + 100)}${f.note ? ` (${f.note})` : ""}`;
+    const piece = withMsg ? `${idOnly}\n${withMsg.replace(/^/gm, "    ")}` : idOnly;
     const pick = used + bytes(piece) + 1 <= budget ? piece : used + bytes(idOnly) + 1 <= budget ? idOnly : null;
     if (pick === null) break;
     body.push(pick);
@@ -197,7 +225,9 @@ function failingBlock(failing, budget, caps) {
  *   mode, feature, stamp (validated), outDir, times ({seq: ms}),
  *   perGate: {[id]: {results: {ok:true, record, failing:[{id, messages}]} | {ok:false, reason_code, reason} | null,
  *                    outText, errText}}  (results null = the gate has no per-test results key; logs read by the CLI)
- * Returns the text; its length is bounded by `caps.totalBytes` plus the fixed header and pointer lines.
+ * Returns the text: at most `caps.totalBytes` bytes, ENFORCED (review R3) — the head and the bounded table first, the
+ * room for one closing pointer line reserved, then each section only while it fits; every section left out is named
+ * by that closing line.
  */
 export function renderSummary(ctx, caps = CAPS) {
   const { mode, feature, stamp, outDir, times, perGate } = ctx;
@@ -208,30 +238,27 @@ export function renderSummary(ctx, caps = CAPS) {
   if (mode === "targeted") {
     const n = stamp.runs[0]?.files?.length ?? 0;
     head.push(`targets: ${n} test file(s) the plan declares (PLAN.md and AC-TESTS.md \`## Files\`, e2e-mapped files left out).`);
+  } else if (stamp.source === "explicit") {
+    head.push("set: the human's --gates spec, run as given (never filtered).");
   } else {
     head.push("set: the gates /pharn-verify discovers, minus the e2e gates (they run at /pharn-verify).");
   }
   if (stamp.excluded) head.push(`excluded by the project (${stamp.excluded.declared_in}): ${stamp.excluded.ids.join(", ")}.`);
   head.push("");
   head.push("gates (exit · wall time of the runner call, node start-up and two tree fingerprints included):");
-  const width = Math.max(...stamp.runs.map((r) => r.id.length));
-  for (const r of stamp.runs) {
-    const flags = [r.timed_out ? "timed out" : null, r.mutated ? "changed the tree" : null].filter(Boolean);
-    head.push(
-      `  ${r.id.padEnd(width)}  exit ${String(r.exit).padStart(3)}  ${seconds(times?.[r.seq]).padStart(9)}${flags.length ? `  (${flags.join(", ")})` : ""}`
-    );
+  const rows = stamp.runs.slice(0, caps.tableRows);
+  head.push(...rowsOf(rows, times, caps));
+  if (stamp.runs.length > rows.length) {
+    const hidden = stamp.runs.slice(rows.length);
+    head.push(`  … ${hidden.length} more gate(s), ${hidden.filter((r) => r.exit !== 0).length} of them red — logs under ${outDir}/`);
   }
   const out = [head.join("\n")];
-  let total = bytes(out[0]);
-  const sectionOrPointer = (section, pointer) => {
-    if (total + bytes(section) + 2 <= caps.totalBytes) {
-      out.push(section);
-      total += bytes(section) + 2;
-    } else {
-      out.push(pointer);
-      total += bytes(pointer) + 2;
-    }
-  };
+  // The closing line, its room reserved up front so the cap holds whatever the sections weigh.
+  const closing = (n) =>
+    `## ${n} red gate section(s) over the ${caps.totalBytes}-byte summary cap — the table above names them; their logs are ${outDir}/<seq>-<id>.out and .err`;
+  const reserve = bytes(closing(999999)) + 2;
+  let total = bytes(out[0]) + 1; // + the final newline
+  let left = 0;
 
   for (const r of stamp.runs) {
     const g = perGate[r.id] ?? { results: null, outText: "", errText: "" };
@@ -240,8 +267,9 @@ export function renderSummary(ctx, caps = CAPS) {
     const res = g.results;
     // A green gate gets a section only when its per-test record was refused (a disclosure, never a verdict).
     if (!red && (res === null || res.ok)) continue;
-    const lines = [`## ${r.id} — exit ${r.exit}${r.timed_out ? " (timed out)" : ""}`];
-    let needTail = red;
+    const lines = [`## ${cutId(r.id, caps.idChars)} — exit ${r.exit}${r.timed_out ? " (timed out)" : ""}`];
+    // A red gate, or one whose record was refused (review R4), shows its tail unless its failing tests say enough.
+    let needTail = true;
     if (res !== null && res.ok) {
       const c = res.record.counts;
       lines.push(
@@ -272,10 +300,14 @@ export function renderSummary(ctx, caps = CAPS) {
       if (!t && !e) lines.push("(the gate printed nothing)");
     }
     lines.push(`full logs: ${p.out} · ${p.err}${res !== null ? ` · ${p.results}` : ""}`);
-    sectionOrPointer(
-      lines.join("\n\n"),
-      `## ${r.id} — exit ${r.exit}: section over the ${caps.totalBytes}-byte summary cap — open ${p.out} and ${p.err}`
-    );
+    const section = lines.join("\n\n");
+    if (total + bytes(section) + 2 + reserve <= caps.totalBytes) {
+      out.push(section);
+      total += bytes(section) + 2;
+    } else {
+      left++;
+    }
   }
+  if (left > 0) out.push(closing(left));
   return `${out.join("\n\n")}\n`;
 }

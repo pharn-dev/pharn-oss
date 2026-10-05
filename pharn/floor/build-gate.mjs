@@ -4,22 +4,28 @@
 // is that module's header (P4 — cited, not restated).
 //
 //   node pharn/floor/build-gate.mjs --feature <name> --mode targeted|full --timeout-ms <N> [--budget-ms <B>]
+//        [--gates "<cmd>[::<id>],…"]
 //
 // WHAT IT DOES, in order:
 //   1. argv (stage-runtime.mjs's rules): `<name>` a FEATURE_SLUG_RE member, `--mode` in MODES, `--timeout-ms`
-//      REQUIRED (no default — L41), `--budget-ms` optional (absent = unbudgeted, for a code caller).
+//      REQUIRED (no default — L41), `--budget-ms` optional (absent = unbudgeted, for a code caller). `--gates` is a
+//      HUMAN's spec (review R1), exactly as `/pharn-verify` takes one: the invoker appends it verbatim, it reaches the
+//      runner as ONE argv string (no shell parses it here), and the project's gate exclusion never filters it.
 //   2. containment: every path under `.pharn/pharn-build/<name>/` is walked with containmentWalk first (lstat; a
 //      symlink or a dangling link at any component refuses — L54).
 //   3. CONTINUE OR START (L44, L66). The same line both starts and continues a run, so nothing rides between Bash
-//      calls. It continues only an UNFINALIZED `<out>/state.json` of this feature and stage whose last fingerprint
-//      (the last run's fp_after, else fingerprint.init) equals the live tree's; anything else starts over, and the
-//      runner's `init` recreates `<out>` empty, so no earlier run's log or results file is read as this one's.
-//   4. START: `targeted` writes `targets.json` (build-gate-core `targetFiles`) and exits 4 when it is empty — an empty
-//      list handed to a runner means "the whole suite" (L16/L34); then `run-gates.mjs init --stage build`
-//      (`--targets` for targeted). The runner reads the project's gate exclusion itself (6.36.0), so it applies here.
+//      calls. It continues only an UNFINALIZED `<out>/state.json` of this feature and stage, made from the same
+//      `--gates` spec (or none), whose last fingerprint (the last run's fp_after, else fingerprint.init) equals the
+//      live tree's; anything else starts over, and the runner's `init` recreates `<out>` empty, so no earlier run's
+//      log or results file is read as this one's.
+//   4. START: no `--gates` and no `package.json` → exit 4 (NO-GATES), as stage-verify.mjs reads that case. `targeted`
+//      writes `targets.json` (build-gate-core `targetFiles`) and exits 4 when it is empty — an empty list handed to a
+//      runner means "the whole suite" (L16/L34); then `run-gates.mjs init --stage build` (`--targets` for targeted;
+//      `--gates` or `--discover package.json`). The runner reads the project's gate exclusion itself (6.36.0).
 //   5. DRAIN: stage-runtime.mjs `drainGates` under `makeBudget`, unchanged. The budget object handed to it is wrapped:
 //      `may()` true marks a runner call's start and `spent()` its end, each interval stored in `<mode>.times.json`
-//      under the run's seq — observed wall time, never the gate's own.
+//      under the run's seq — observed wall time, never the gate's own. On CONTINUE the gates already finished are
+//      listed with their exits (review R6), so a red one is visible before the rest run.
 //   6. SUMMARY from the finalized stamp (validateStamp, expecting stage `build` and this feature): per gate, and for
 //      a red gate the failing tests (test-results-core.mjs `gateResults` + `buildRecord`, one parse) or a log tail.
 //
@@ -31,7 +37,8 @@
 //
 // TRUST (P2): the PLAN's and AC-TESTS' `## Files` paths are untrusted: they reach the runner only through
 // targetFiles (badPath, isTestFile, a regular-file lstat) and the runner's own badPath re-check, as positional
-// arguments after `--`. Gate output is quoted as DATA by the core; the exit decides.
+// arguments after `--`. Gate output is quoted as DATA by the core; the exit decides. A `--gates` spec is the human's
+// own text, run exactly as `/pharn-verify` runs it (through `/bin/sh -c`, the runner's documented form).
 
 import { closeSync, fstatSync, lstatSync, openSync, readFileSync, readSync, constants as fsConstants } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -54,13 +61,16 @@ import { fingerprint } from "./worktree-fingerprint.mjs";
 import { declaredWrites } from "./scope-inputs.mjs";
 import { RESULTS_GATES, buildRecord, gateResults, testIdOf } from "./test-results-core.mjs";
 import { FEATURE_BASE } from "./check-test-stage.mjs";
-import { EXIT, MODES, STAGE, buildGatePaths, decide, logPaths, renderSummary, targetFiles } from "./build-gate-core.mjs";
+import { EXIT, MODES, STAGE, buildGatePaths, decide, finishedLines, logPaths, renderSummary, targetFiles } from "./build-gate-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RUN_GATES = join(HERE, "run-gates.mjs");
 const STATE_ROOT = ".pharn";
-const KNOWN = new Set(["--feature", "--mode", "--timeout-ms", "--budget-ms"]);
+const KNOWN = new Set(["--feature", "--mode", "--timeout-ms", "--budget-ms", "--gates"]);
 const LOG_READ_CAP = 4 * 1024 * 1024; // a log is read for its TAIL; past this, only the last bytes are read
+const ASK_GATES =
+  "There is no project gate to run: ask the human which gates to run (pharn-build.md Step 4). A human's answer is " +
+  "appended to both lines as --gates followed by it, single-quoted, exactly as given; under /pharn-loop this is S4.";
 
 /** End the run: print, set the exit code, unwind (the 6.20.4 flush rule — never process.exit, which drops stdout). */
 const DONE = Symbol("build-gate-done");
@@ -70,7 +80,7 @@ function finish(code, text) {
   throw DONE;
 }
 function unusable(detail) {
-  finish(EXIT.unusable, `UNUSABLE — ${detail}\nThe build gate did not run; treat the gate as \`fail\` (pharn-build.md Step 4).`);
+  finish(EXIT.unusable, `UNUSABLE — ${detail}\nThe build gate did not run: HALT, the gate failed (pharn-build.md Step 4).`);
 }
 
 function readJsonFile(path) {
@@ -109,11 +119,13 @@ function isRegularFile(p) {
   return r.ok && r.stat !== null && r.stat.isFile();
 }
 
-/** Continue only an unfinalized record of this feature and stage whose last fingerprint is the live tree's. */
-function canContinue(statePath, feature) {
+/** Continue only an unfinalized record of this feature and stage, from the same `--gates` spec (or none), whose last
+ *  fingerprint is the live tree's. */
+function canContinue(statePath, feature, gatesSpec) {
   const rec = readJsonFile(statePath);
   if (rec === null || typeof rec !== "object" || Array.isArray(rec)) return null;
   if (rec.stage !== STAGE || rec.feature !== feature || rec.finalized !== false) return null;
+  if ((rec.source_raw ?? null) !== gatesSpec) return null;
   if (!Array.isArray(rec.entries) || !Array.isArray(rec.runs) || rec.runs.length >= rec.entries.length) return null;
   const last = rec.runs.length ? rec.runs[rec.runs.length - 1].fp_after : rec.fingerprint?.init;
   const live = fingerprint(".", { feature });
@@ -121,9 +133,19 @@ function canContinue(statePath, feature) {
   return rec;
 }
 
-function startRun({ feature, mode, paths, out }) {
+function startRun({ feature, mode, paths, out, gatesSpec }) {
   const featureDir = `${FEATURE_BASE}/${feature}`;
-  const initArgs = ["init", "--stage", STAGE, "--feature", feature, "--out", out, "--discover", "package.json"];
+  const initArgs = ["init", "--stage", STAGE, "--feature", feature, "--out", out];
+  if (gatesSpec !== null) initArgs.push("--gates", gatesSpec);
+  else if (isRegularFile("package.json")) initArgs.push("--discover", "package.json");
+  else {
+    finish(
+      EXIT["no-gates"],
+      mode === "targeted"
+        ? "NO-GATES — no --gates was given and there is no package.json.\nRun the full line instead (pharn-build.md Step 4)."
+        : `NO-GATES — no --gates was given and there is no package.json.\n${ASK_GATES}`
+    );
+  }
   if (mode === "targeted") {
     let planText;
     try {
@@ -144,7 +166,7 @@ function startRun({ feature, mode, paths, out }) {
     if (targets.length === 0) {
       finish(
         EXIT["no-gates"],
-        `NO-GATES — nothing to target: PLAN.md and AC-TESTS.md \`## Files\` name no existing test file the \`test\` gate runs.\nRun the full line instead (pharn-build.md Step 4).`
+        "NO-GATES — nothing to target: PLAN.md and AC-TESTS.md `## Files` name no existing test file the `test` gate runs.\nRun the full line instead (pharn-build.md Step 4)."
       );
     }
     atomicWrite(paths.root, paths.targets, `${JSON.stringify(targets, null, 2)}\n`);
@@ -161,9 +183,7 @@ function startRun({ feature, mode, paths, out }) {
     const why = parsed && typeof parsed.reason === "string" ? parsed.reason : "the runner found no gate to run";
     finish(
       EXIT["no-gates"],
-      mode === "targeted"
-        ? `NO-GATES — ${why}.\nRun the full line instead (pharn-build.md Step 4).`
-        : `NO-GATES — ${why}.\nThere is no project gate to run: ask the human (pharn-build.md Step 4).`
+      mode === "targeted" ? `NO-GATES — ${why}.\nRun the full line instead (pharn-build.md Step 4).` : `NO-GATES — ${why}.\n${ASK_GATES}`
     );
   }
   if (r.status !== 0 || parsed === null || parsed.ok !== true) {
@@ -172,6 +192,26 @@ function startRun({ feature, mode, paths, out }) {
     unusable(`the gate runner refused init (${code})${why}`);
   }
   return 0;
+}
+
+/** The record's failing tests with their messages, plus each anomaly whose raw status is `failed` (a duplicated id —
+ *  review R7), so a red `test` gate never reads "0 failed" with nothing named. */
+function failingOf(g, record) {
+  const byId = new Map();
+  for (const e of g.parsed.entries) {
+    const id = testIdOf(e);
+    if (!byId.has(id)) byId.set(id, { messages: e.messages ?? [], failed: false });
+    if (e.status === "failed") {
+      const v = byId.get(id);
+      v.failed = true;
+      if (v.messages.length === 0) v.messages = e.messages ?? [];
+    }
+  }
+  const failing = record.tests.filter((t) => t.status === "failed").map((t) => ({ id: t.id, messages: byId.get(t.id)?.messages ?? [], note: null }));
+  for (const a of record.anomalies) {
+    if (byId.get(a.id)?.failed) failing.push({ id: a.id, messages: byId.get(a.id).messages, note: a.reason_code });
+  }
+  return failing;
 }
 
 function run(argv) {
@@ -190,6 +230,11 @@ function run(argv) {
   if (has(args, "--budget-ms") && budgetMs.value !== null && budgetMs.value <= timeout.value) {
     unusable("usage-error: --budget-ms must exceed --timeout-ms");
   }
+  let gatesSpec = null;
+  if (has(args, "--gates")) {
+    gatesSpec = flag(args, "--gates");
+    if (gatesSpec === undefined || gatesSpec.trim() === "") unusable("usage-error: --gates requires a non-empty spec");
+  }
 
   const paths = buildGatePaths(feature);
   const out = paths.out(mode);
@@ -201,12 +246,12 @@ function run(argv) {
 
   let times = {};
   const statePath = join(out, "state.json");
-  const continued = canContinue(statePath, feature);
+  const continued = canContinue(statePath, feature, gatesSpec);
   if (continued !== null) {
     const t = readJsonFile(paths.times(mode));
     times = t !== null && typeof t === "object" && !Array.isArray(t) ? t : {};
   } else {
-    startRun({ feature, mode, paths, out });
+    startRun({ feature, mode, paths, out, gatesSpec });
   }
   const rec = readJsonFile(statePath);
   let seq = rec && Array.isArray(rec.runs) ? rec.runs.length : 0;
@@ -230,9 +275,15 @@ function run(argv) {
   };
   const res = drainGates({ outDir: out, timeoutMs: timeout.value, budget: observed });
   if (res.kind === "budget") {
+    const now = readJsonFile(statePath);
+    const done = now && Array.isArray(now.runs) ? now.runs : [];
     finish(
       EXIT.continue,
-      `CONTINUE — ${seq} of ${total} gate(s) done; the budget leaves no room for the next one.\nRun the same line again: it continues this run while the tree is unchanged.`
+      [
+        `CONTINUE — ${done.length} of ${total} gate(s) done; the budget leaves no room for the next one.`,
+        ...finishedLines(done, times),
+        "Run the same line again: it continues this run while the tree is unchanged.",
+      ].join("\n")
     );
   }
   if (res.kind !== "done") {
@@ -255,20 +306,12 @@ function run(argv) {
         results = g.reason_code === "not-configured" ? null : { ok: false, reason_code: g.reason_code };
       } else {
         const record = buildRecord({ gate: g.gate, format: g.format, exit: g.exit, sha: g.sha, parsed: g.parsed });
-        if (!record.ok) results = { ok: false, reason_code: record.reason_code };
-        else {
-          const byId = new Map();
-          for (const e of g.parsed.entries) {
-            const id = testIdOf(e);
-            if (!byId.has(id)) byId.set(id, e.messages ?? []);
-          }
-          const failing = record.tests.filter((t) => t.status === "failed").map((t) => ({ id: t.id, messages: byId.get(t.id) ?? [] }));
-          results = { ok: true, record, failing };
-        }
+        results = record.ok ? { ok: true, record, failing: failingOf(g, record) } : { ok: false, reason_code: record.reason_code };
       }
     }
-    const red = r.exit !== 0;
-    perGate[r.id] = { results, outText: red ? readLogTail(lp.out) : "", errText: red ? readLogTail(lp.err) : "" };
+    // A log is read when its tail may be printed: a red gate, or one whose per-test record was refused (review R4).
+    const wantTail = r.exit !== 0 || (results !== null && !results.ok);
+    perGate[r.id] = { results, outText: wantTail ? readLogTail(lp.out) : "", errText: wantTail ? readLogTail(lp.err) : "" };
   }
   const text = renderSummary({ mode, feature, stamp, outDir: out, times, perGate });
   finish(decide(stamp) === "green" ? EXIT.green : EXIT.red, text);

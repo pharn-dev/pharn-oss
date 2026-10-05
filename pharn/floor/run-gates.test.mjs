@@ -2108,7 +2108,6 @@ test("build: refusals by presence, and every --targets entry through badPath (no
     (dir) => {
       mkdirSync(join(dir, ".pharn"), { recursive: true });
       for (const f of [
-        ["--gates", "npm test"],
         ["--extra", "[]"],
         ["--skip-style"],
         ["--scope-json", "x.json"],
@@ -2122,6 +2121,11 @@ test("build: refusals by presence, and every --targets entry through badPath (no
       }
       const noDiscover = cli(dir, ["init", "--stage", "build", "--feature", FEATURE, "--out", OUT]);
       assert.equal(noDiscover.json.reason_code, "usage-error");
+      assert.match(noDiscover.json.reason, /requires --discover <package\.json> or --gates <spec>/);
+      // Review R1: a human's --gates needs no manifest.
+      const explicit = cli(dir, ["init", "--stage", "build", "--feature", FEATURE, "--out", OUT, "--gates", "node -e 0::check"]);
+      assert.equal(explicit.code, 0, explicit.raw);
+      assert.deepEqual(explicit.json.ids, ["check"]);
       for (const bad of [["-x.test.js"], ["/abs/a.test.js"], ["a/../b.test.js"], [".pharn/x.test.js"], ["t/*.test.js"], [3], {}]) {
         writeFileSync(join(dir, ".pharn/targets.json"), JSON.stringify(bad));
         const r = cli(dir, buildInit(["--targets", ".pharn/targets.json"]));
