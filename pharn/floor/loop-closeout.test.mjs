@@ -48,7 +48,6 @@ import {
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..");
-const CLI = join(HERE, "loop-closeout.mjs");
 const FEATURE = "demo";
 
 // ── fixtures ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -532,7 +531,7 @@ test("no push, merge or no-verify argument in the closeout or its core (a source
 
 test("recordFacts reads the envelope as the checkers do: quotes stripped, BOM and CRLF tolerated, bad values null", () => {
   assert.deepEqual(recordFacts(loopRecord()), { decision: "STOP_GREEN", mode: "full", blocked: null, hasBlocked: false, iterations: "1" });
-  assert.equal(recordFacts(`﻿${loopRecord().replaceAll("\n", "\r\n")}`).decision, "STOP_GREEN");
+  assert.equal(recordFacts(String.fromCharCode(0xfeff) + loopRecord().replaceAll("\n", "\r\n")).decision, "STOP_GREEN");
   assert.equal(recordFacts(loopRecord({ decision: '"STOP_CAP"' })).decision, "STOP_CAP");
   assert.equal(recordFacts(loopRecord({ decision: "toString" })).decision, null, "L15: no prototype member");
   assert.equal(recordFacts(loopRecord({ mode: "fast" })).mode, null);

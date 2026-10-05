@@ -340,7 +340,7 @@ const SITES = [
   ["pharn/floor/check-regress.mjs", /PIPELINE_ARTIFACTS[\s\S]*?"VERIFY\.md"[\s\S]*?\];/],
   ["pharn/floor/reconcile-ignore.json", /"names":[\s\S]*?"VERIFY\.md"/],
   ["pharn/floor/worktree-fingerprint.mjs", /EXCLUDED_ARTIFACTS[\s\S]*?"VERIFY\.md"[\s\S]*?\]\);/],
-  [".claude/commands/pharn-loop-close.md", /"VERIFY\.md"/], // Step 6c's staging list, in the loop's close part (6.32.0)
+  ["pharn/floor/loop-closeout.mjs", /STAGE_ARTIFACTS[\s\S]*?"VERIFY\.md"[\s\S]*?\]\);/], // Step 6c's staging list, in the loop's closeout (6.42.0)
   [".prettierignore", /^pharn\/features\/\*\/VERIFY\.md$/m],
   [".markdownlint-cli2.jsonc", /"pharn\/features\/\*\/VERIFY\.md"/],
 ];

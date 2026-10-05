@@ -36,6 +36,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fingerprint, ALGO } from "./worktree-fingerprint.mjs";
 import { commandFamilyText } from "../../.dev/floor/command-family.mjs";
+import { commitGateArgs } from "./loop-closeout.mjs";
 import { SCHEMA, LAPSE_CODES, REASON_CODES, AC_RESERVED_IDS, RESERVED_IDS, logBasename, resultsFileName } from "./gate-run-core.mjs";
 import { filesDigest } from "./ac-tests-lock.mjs";
 import { FAILING_IDS } from "./ac-gate-core.mjs";
@@ -1237,10 +1238,12 @@ function pinnedLoopLines() {
     .filter((l) => /^\s*node pharn\/floor\/check-loop-fresh\.mjs /.test(l))
     .map((l) => l.trim());
   const decision = lines.filter((l) => /--iter <N>/.test(l));
-  const commit = lines.filter((l) => /--commit-gate/.test(l));
   assert.equal(decision.length, 1, `expected ONE pinned decision-time call in pharn-loop.md, found ${decision.length}`);
-  assert.equal(commit.length, 1, `expected ONE pinned commit-gate call in pharn-loop.md, found ${commit.length}`);
-  return { decision: decision[0], commit: commit[0] };
+  // Since 6.42.0 the commit-gate call is made by the loop's closeout (pharn/floor/loop-closeout.mjs), so the line
+  // EXECUTED below is built from the argv that module passes (L45: what runs, never a re-typed copy).
+  assert.equal(lines.filter((l) => /--commit-gate/.test(l)).length, 0, "the commit-gate call is the closeout's, never a typed line");
+  const commit = ["node pharn/floor/check-loop-fresh.mjs", ...commitGateArgs("'<name>'", "'<base sha>'")].join(" ");
+  return { decision: decision[0], commit };
 }
 
 test("★ WIRING — both pinned /pharn-loop calls, executed in a fixture: FRESH, then a changed tree is caught at each", () => {
