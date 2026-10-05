@@ -325,7 +325,8 @@ Report, plainly and without asking anything:
   not a person. This is not a judgment that the change is good; review the branch before merging."_ When
   the SPEC state is **not approved**, its second sentence reads instead: _"The SPEC was never approved;
   it is a Draft waiting for a person."_ A quick run adds: _"It ran in quick mode: no regression outside the
-  feature was looked for, and the plan was not interrogated."_
+  feature was looked for, and the plan was not interrogated."_ A full run adds (6.45.0): _"The grill ran its two
+  floor stops only; the plan was not interrogated."_
 
 **Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the claims block for document layout only, and a reader who stops at the turn-end never reaches it.
 
@@ -420,7 +421,8 @@ last three feeds `check-loop.mjs`'s inputs.
 - **Reported for a human, never agent-edited:** `LIMITS.md §1d`'s backstop list should name the Draft revert and the
   merge review; and `/pharn-verify`'s premise of human-approved intent does not hold under this command (a follow-up).
 - **Not a claim:** "`/pharn-loop` finished" means **a stop was reached and recorded** — STRUCK: "the feature is good",
-  "a human approved the intent", "the fix converged", "context was carried forward", "the change is small". It never
+  "a human approved the intent", "the fix converged", "context was carried forward", "the change is small", "the plan
+  was interrogated" (6.45.0: the grill runs its two floor stops only). It never
   pushes, merges, seals, attests or uses `--no-verify`, and the merge decision stays a person's.
 
 ## Final step — release the writes-scope (ADVISORY lifecycle hygiene)

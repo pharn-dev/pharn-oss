@@ -16,7 +16,8 @@ An unattended run for a **small** change: a `spec_kind: quick` mini-SPEC (1–3 
 `integration`) that the model writes **and** approves, the grill's two floor stops **without** the interrogation,
 test-first AC evidence, the build, the scope check `/pharn-regress` runs before its gates (**kept**, on every
 iteration), `/pharn-verify` with its AC gate, and the freshness check — and it **skips** `/pharn-regress`'s
-base-and-head comparison on every iteration, the plan interrogation, and `RUN-REPORT.md` (`cost.json` is kept). Its
+base-and-head comparison on every iteration and `RUN-REPORT.md` (`cost.json` is kept); the plan interrogation is
+skipped in both modes (6.45.0). Its
 green stop is **`STOP_GREEN_QUICK`, which is not `STOP_GREEN`**: it claims verify `PASS` and no regression check.
 Its gated sibling is `/pharn-ship --quick`, where a person approves the quick SPEC and is told the trade first.
 
@@ -60,18 +61,11 @@ reads.
    Proceed only on exit `0` **and** the exact printed token `quick`. Anything else (`feature`, `test-infra`, an empty
    line, a non-zero exit) is **S6c** — the run never widens a quick request into a full one.
 
-3. **Step 4 — the grill.** Run this route line in place of Step 4's grill route line:
-
-   ```bash
-   node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-grill --name '<name>' --mode quick
-   ```
-
-   It prints `inline:floor-only` (exit `3` — the quick grill runs two checkers, so its model does not change its
-   verdict), which Step 4's grill stage-start records as its `<route>`. Then invoke `/pharn-grill <name> --quick`
-   INLINE, in place of `/pharn-grill`, with no brief, no Agent call and no `read`. It writes the quick `GRILL.md` —
-   `mode: quick`, both floor results, and no interrogation (`pharn-grill.md`'s own `--quick` section) — and its
-   markers and both exits (`check-plan-spec-agree` and `check-plan-lessons`) are read exactly as written; its
-   eligibility refusal (a kind other than `quick`) or either floor stop RED is **S9**. `/pharn-plan` and
+3. **Step 4 — the grill.** Invoke `/pharn-grill <name> --quick` INLINE in place of Step 4's
+   `/pharn-grill <name> --floor-only` — the same two floor stops, plus the quick form's eligibility check. It writes
+   the quick `GRILL.md` — `mode: quick`, both floor results, and no interrogation (`pharn-grill.md`'s own `--quick`
+   section) — and its markers and both exits (`check-plan-spec-agree` and `check-plan-lessons`) are read exactly as
+   written; its eligibility refusal (a kind other than `quick`) or either floor stop RED is **S9**. `/pharn-plan` and
    `/pharn-test --unattended` keep their Step-4 lines (the same cell and invocation in both columns), and the Step-4
    test-stage gate is unchanged: a quick SPEC is test-first exactly as a `feature` SPEC is.
 

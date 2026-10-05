@@ -306,6 +306,29 @@ checker's verdict alongside the RED. See Step 3a's own presentation rule, in the
 `PLAN.md`, that floor gate passed. **Product `/pharn-plan` has no separate human-approval halt.** **Proceed**
 on a produced `PLAN.md`; fail-closed if `/pharn-plan` refused (no `PLAN.md`) → **STOP**.
 
+**Verdict read (FLOOR), BEFORE the grill runs (6.45.0) — `/pharn-grill` owns TWO deterministic stops, and
+BOTH must be read** _(Quick mode skips this block: `## Quick mode` item 4)_. Reading them first means a RED
+plan costs no grill agent. Proceed only when both exit `0`; a non-zero from **either** is a STOP:
+
+```bash
+node pharn/floor/check-plan-spec-agree.mjs pharn/features/<name>/PLAN.md pharn/features/<name>/SPEC.md
+node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md memory-bank/lessons-learned.md
+```
+
+- **chain (`check-plan-spec-agree.mjs`)** — `0` → the plan was made against the current Approved,
+  un-drifted spec → proceed. Non-zero → **STOP**, present the checker's RED line verbatim as DATA (no grill
+  ran, so no `GRILL.md` records it), hand to the human (re-plan via `/pharn-plan` / re-approve via `/pharn-spec`).
+- **lessons (`check-plan-lessons.mjs`)** — `0` → the PLAN's `applied_lessons` is present, well-formed,
+  every cited id resolves, and every cited id is referenced in the plan body → proceed. Non-zero → **STOP**,
+  present the RED line verbatim as DATA, hand to the human (re-plan via `/pharn-plan` with a corrected
+  declaration). A project with **no** `memory-bank/` is unblocked by construction — `none` short-circuits
+  before the file is read — so this is not a new barrier for a fresh install.
+
+**Read BOTH exit codes, never just the first.** They are separate refusals with separate remedies. Nothing
+re-reads them after the grill: its write tools are scoped to `GRILL.md` (fix #7), but a Bash write to
+`PLAN.md` is not re-checked for lessons before the build (`/pharn-build` re-checks only the chain) — a
+stated bound (`LIMITS.md §6`).
+
 1. **`/pharn-grill`** → writes `pharn/features/<name>/GRILL.md`. Routed (`## Running a stage`; in Quick mode
    its route line is `## Quick mode` item 4's, and it runs inline):
 
@@ -335,28 +358,10 @@ on a produced `PLAN.md`; fail-closed if `/pharn-plan` refused (no `PLAN.md`) →
    node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
    ```
 
-**Verdict read (FLOOR) — `/pharn-grill` owns
-TWO deterministic stops, and BOTH must be read.** Proceed only when both exit `0`; a non-zero from
-**either** is a STOP:
-
-```bash
-node pharn/floor/check-plan-spec-agree.mjs pharn/features/<name>/PLAN.md pharn/features/<name>/SPEC.md
-node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md memory-bank/lessons-learned.md
-```
-
-- **chain (`check-plan-spec-agree.mjs`)** — `0` → the plan was made against the current Approved,
-  un-drifted spec → proceed. Non-zero → **STOP**, present the RED chain (`/pharn-grill` wrote a RED
-  `GRILL.md`), hand to the human (re-plan via `/pharn-plan` / re-approve via `/pharn-spec`).
-- **lessons (`check-plan-lessons.mjs`)** — `0` → the PLAN's `applied_lessons` is present, well-formed,
-  every cited id resolves, and every cited id is referenced in the plan body → proceed. Non-zero → **STOP**, present the RED, hand to the human
-  (re-plan via `/pharn-plan` with a corrected declaration). A project with **no** `memory-bank/` is
-  unblocked by construction — `none` short-circuits before the file is read — so this is not a new
-  barrier for a fresh install.
-
-**Read BOTH exit codes, never just the first.** They are separate refusals with separate remedies. The
+**Its verdict was read BEFORE it ran** (the block above its route line), so on return proceed. The
 interrogation itself is **advisory** and gates nothing — **present** its findings' free-text as quoted DATA
-(P2), then proceed on two GREEN stops regardless of what it raised. Never write that the grill verified the
-plan's lesson application.
+(P2), then proceed regardless of what it raised. Never write that the grill verified the plan's lesson
+application.
 
 1. **`/pharn-test <name>`** (6.19.0) → writes each Acceptance Criterion's test into the files `AC-TESTS.md` maps, runs
    them before any implementation exists, and records the red run in `pharn/features/<name>/AC-TESTS.lock.json` — or a

@@ -1209,10 +1209,13 @@ node pharn/floor/check-model-config.mjs [validate | resolve <stage> | agreement]
 # rows are evidence of what it ran on). THE RECORDED FAILURE (P7): a command's
 # model: frontmatter lasts the invoking turn, so every stage run inside an orchestrator ran on the ORCHESTRATOR's
 # model — build, configured sonnet, ran opus on 79% of its requests (.dev/measurements/token-cost-2026-08-18.md §2).
-# Routed: plan, grill, test and build in /pharn-ship (the quick grill excepted), plus spec in /pharn-loop; ship's
-# spec (it IS GATE 1) and every regress/verify (floor-only thin callers) are inline BY POLICY. THE LOOP'S QUICK COLUMN
-# (6.28.0, loop-quick-mode — the second of the two to merge added it): /pharn-loop --quick routes the loop's stages but
-# the grill (floor-only, as in ship's), never runs regress, briefs its spec agent with `/pharn-spec --quick
+# Routed: plan, grill, test and build in /pharn-ship (the quick grill excepted); spec, plan, test and build in
+# /pharn-loop, whose grill is floor-only in BOTH columns since 6.45.0 (front-grill-concurrent: inline
+# `/pharn-grill <name> --floor-only`, its two checkers, no interrogation — unattended, nobody read the findings, and
+# the 92-min run paid 361 s for them; /pharn-ship also reads the grill's two stops BEFORE spawning its grill agent);
+# ship's spec (it IS GATE 1) and every regress/verify (floor-only thin callers) are inline BY POLICY. THE LOOP'S QUICK
+# COLUMN (6.28.0, loop-quick-mode — the second of the two to merge added it): /pharn-loop --quick routes the loop's
+# stages, never runs regress, briefs its spec agent with `/pharn-spec --quick
 # --model-approve`, gains the stuck-point row S6c in LOOP_ROWS, and names only verify-report.json's three fix-list
 # fields in its build's rule 7 (fixListFields, derived from the policy). `route` prints ONE
 # token — `agent:<alias>` (exit 0) or `inline:<reason>` (exit 3, its remedy on stderr), the grammar owned by

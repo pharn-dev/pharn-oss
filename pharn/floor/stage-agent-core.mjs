@@ -24,12 +24,18 @@
 //                  relaying that approval through a second model would weaken the gate;
 //   floor-only   — inline: /pharn-regress and /pharn-verify are thin callers of stage scripts whose
 //                  verdicts floor code produces, so the model barely matters, and the loop keeps its
-//                  deterministic stage-exit mapping; each quick mode's grill runs two checkers only;
+//                  deterministic stage-exit mapping; each quick mode's grill, and /pharn-loop's grill in
+//                  BOTH columns (6.45.0), runs two checkers only;
 //   skipped      — the stage does not run in that mode at all (each quick mode's regress).
 // A policy-inline cell NEVER consults the config (policy precedence). THE LOOP'S QUICK COLUMN (6.28.0,
 // loop-quick-mode — added by the second of the two increments to merge): `/pharn-loop --quick` routes what
-// its full column routes except the grill (`floor-only`, as in /pharn-ship --quick) and never runs
-// /pharn-regress; its spec agent is briefed with the quick invocation, `/pharn-spec --quick --model-approve`.
+// its full column routes and never runs /pharn-regress; its spec agent is briefed with the quick invocation,
+// `/pharn-spec --quick --model-approve`. THE LOOP'S GRILL IS FLOOR-ONLY IN BOTH COLUMNS (6.45.0,
+// front-grill-concurrent — a decision made by the orchestrating model under the maintainer's delegation): the full
+// loop runs `/pharn-grill <name> --floor-only` inline — its two floor stops, no interrogation, no grill agent.
+// Why: unattended, the grill's findings gate nothing and nobody reads them before the build, and the 92-minute run
+// in .dev/measurements/loop-wall-clock-2026-10-05.md §2 paid 361.0 s and a ~302k-token cache write for them.
+// /pharn-ship keeps its routed full grill: a person reads GRILL.md at GATE 2.
 //
 // ============================ THE FALLBACK — every inline reason, with its remedy ============================
 // Every case runs the stage inline, exactly as before 6.27.0, and SAYS SO: a stage with a route line
@@ -193,10 +199,11 @@ export const ROUTE_POLICY = Object.freeze({
     }),
   }),
   "pharn-loop": Object.freeze({
+    // 6.45.0 (front-grill-concurrent): the full loop's grill is floor-only too — the header says why.
     full: Object.freeze({
       "pharn-spec": AGENT,
       "pharn-plan": AGENT,
-      "pharn-grill": AGENT,
+      "pharn-grill": "floor-only",
       "pharn-test": AGENT,
       "pharn-build": AGENT,
       "pharn-regress": "floor-only",
@@ -238,7 +245,6 @@ export const INVOCATIONS = Object.freeze({
     full: Object.freeze({
       "pharn-spec": "/pharn-spec --model-approve",
       "pharn-plan": "/pharn-plan <name>",
-      "pharn-grill": "/pharn-grill <name>",
       "pharn-test": "/pharn-test <name> --unattended",
       "pharn-build": "/pharn-build <name>",
     }),

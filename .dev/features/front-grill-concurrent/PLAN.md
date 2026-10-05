@@ -134,8 +134,28 @@ the follow-up matters only to `/pharn-ship`.
 - `CHANGELOG.md` — `## [6.45.0]`, moving any `[Unreleased]` entry into it — repo meta
 - `.dev/features/front-grill-concurrent/PROTECTED-FOLLOWUPS.md` — `LIMITS.md §3a` (and `ARCHITECTURE.md §6`'s grill
   row) wording the change leaves incomplete — layer `.dev/features`
-- `.dev/features/front-grill-concurrent/PLAN.md`, `GRILL.md`, `BUILD.md`, `REGRESSION.md`, `regression-report.json`,
-  `VERIFY.md`, `verify-report.json`, `REVIEW.md`, `SHIP.md` — pipeline artifacts — layer `.dev/features`
+- `.dev/features/front-grill-concurrent/PLAN.md` — this plan — layer `.dev/features`
+- `.dev/features/front-grill-concurrent/GRILL.md` — grill log — layer `.dev/features`
+- `.dev/features/front-grill-concurrent/BUILD.md` — build log — layer `.dev/features`
+- `.dev/features/front-grill-concurrent/REGRESSION.md` — regress artifact — layer `.dev/features`
+- `.dev/features/front-grill-concurrent/regression-report.json` — regress artifact — layer `.dev/features`
+- `.dev/features/front-grill-concurrent/VERIFY.md` — verify artifact — layer `.dev/features`
+- `.dev/features/front-grill-concurrent/verify-report.json` — verify artifact — layer `.dev/features`
+- `.dev/features/front-grill-concurrent/REVIEW.md` — review — layer `.dev/features`
+- `.dev/features/front-grill-concurrent/SHIP.md` — ship record — layer `.dev/features`
+
+## Grill amendments (all five `GRILL.md` findings taken)
+
+- P0 (important): the CHANGELOG entry and `pharn-ship.md`'s verdict block name the dropped post-grill lessons re-read
+  as a stated bound (a Bash write by the grill agent to `PLAN.md` is not re-checked for lessons before the build).
+- P0 (minor): ship's pre-grill STOP presents the checker's RED line verbatim as DATA, since no RED `GRILL.md` is
+  written on that path.
+- P5 (important): the build runs the whole hygiene suite over the edited loop body (PHASE_MARKER_WIRING and every
+  STAGE_AGENT_WIRING rule), not the parity rule alone.
+- P5 (minor): ✧ pins both ways — `pharn-loop.md` names `/pharn-grill <name> --floor-only`; `pharn-grill.md` names
+  `/pharn-loop` as its invoker.
+- P7 (minor): the saving names the inline grill's context cost (pharn-grill.md, ~21 KB, read from cache by later
+  orchestrator requests) as a token offset.
 
 ## Contracts satisfied
 

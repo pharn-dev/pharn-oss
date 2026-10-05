@@ -2312,6 +2312,62 @@ test("✧ QUICK MODE: pharn-grill.md pins its --spec-kind line and the skip lite
   assert.match(body, /interrogation NOT performed — skipped by mode \(quick\)/);
 });
 
+// ── FLOOR-ONLY GRILL (6.45.0, front-grill-concurrent) ───────────────────────────────────────────────
+// /pharn-loop's grill is `floor-only` in both columns (stage-agent-core.mjs ROUTE_POLICY; policy parity above holds that
+// it has no route line). These pins bind the two sides of its one invocation, `/pharn-grill <name> --floor-only`, and
+// hold /pharn-ship's grill verdict read BEFORE its grill agent. Presence and order only — never that a run executed them.
+const SHIP_GRILL_ROUTE = "node pharn/floor/stage-agent.mjs route --command pharn-ship --stage pharn-grill --name '<name>'";
+const GRILL_STOP_LINES = [
+  "node pharn/floor/check-plan-spec-agree.mjs pharn/features/<name>/PLAN.md pharn/features/<name>/SPEC.md",
+  "node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md memory-bank/lessons-learned.md",
+];
+
+/** Reasons pharn-ship.md's grill stop lines are not each pinned ONCE, before the full grill route line. [] when clean. */
+function shipGrillReadReasons(body) {
+  const lines = fencedLines(body).map((f) => ({ idx: f.line, text: f.text.trim() }));
+  const route = lines.find((l) => l.text === SHIP_GRILL_ROUTE);
+  if (!route) return ["no full-mode grill route line"];
+  const reasons = [];
+  for (const want of GRILL_STOP_LINES) {
+    const at = lines.filter((l) => l.text === want);
+    if (at.length !== 1) reasons.push(`${want.split(" ")[1]} is pinned ${at.length} times, not once`);
+    else if (at[0].idx > route.idx) reasons.push(`${want.split(" ")[1]} is read after the grill's route line`);
+  }
+  return reasons;
+}
+
+test("✧ FLOOR-ONLY GRILL: pharn-grill.md defines --floor-only (its mode line, its skip literal, its invoker)", () => {
+  const body = commandBody("pharn-grill.md");
+  assert.match(body, /^## `--floor-only` mode \(6\.45\.0\) — `\/pharn-grill <name> --floor-only`$/m);
+  assert.match(body, /`mode: floor-only \(\/pharn-grill --floor-only\)`/);
+  assert.match(body, /`interrogation NOT performed — skipped by mode \(floor-only\)`/);
+  assert.match(body, /`\/pharn-loop` invokes this form \(inline\) in its full mode/);
+});
+
+test("✧ FLOOR-ONLY GRILL: pharn-loop.md invokes --floor-only inline and runs neither grill checker itself (one read)", () => {
+  const body = commandBody(LOOP_FILE);
+  assert.match(body, /invoke `\/pharn-grill <name> --floor-only` yourself/);
+  assert.match(body, /\*\*The grill's two floor stops ARE the verdict read\*\*/);
+  const pinned = fencedLines(body).map((f) => f.text.trim());
+  for (const want of GRILL_STOP_LINES) assert.ok(!pinned.includes(want), `pharn-loop.md must not pin ${want} a second time`);
+  assert.ok(!pinned.some((t) => /stage-agent\.mjs (route|read|brief) .*--stage pharn-grill/.test(t)), "no grill stage-agent line");
+  // CONTROL (L60): the same predicate sees a pasted checker line.
+  const pasted = `${body}\n\`\`\`bash\n${GRILL_STOP_LINES[1]}\n\`\`\`\n`;
+  assert.ok(fencedLines(pasted).some((f) => f.text.trim() === GRILL_STOP_LINES[1]));
+});
+
+test("✧ FLOOR-ONLY GRILL: pharn-ship.md reads both grill stops ONCE, before its grill agent's route line", () => {
+  const body = commandBody("pharn-ship.md");
+  assert.deepEqual(shipGrillReadReasons(body), []);
+  // CONTROLS (L60): the block moved after the route line, and a duplicate read, each fail.
+  const block = GRILL_STOP_LINES.join("\n");
+  assert.ok(body.includes(block), "fixture sanity: the two lines are one block");
+  const moved = body.replace(block, "").replace(SHIP_GRILL_ROUTE, `${SHIP_GRILL_ROUTE}\n${block}`);
+  assert.match(shipGrillReadReasons(moved).join("\n"), /read after the grill's route line/);
+  const doubled = `${body}\n\`\`\`bash\n${block}\n\`\`\`\n`;
+  assert.match(shipGrillReadReasons(doubled).join("\n"), /pinned 2 times/);
+});
+
 test("✧ QUICK MODE: pharn-spec.md pins the literal spec_kind: quick and its Step-4 trade sentence", () => {
   const body = commandBody("pharn-spec.md");
   assert.match(body, /spec_kind: quick/);
@@ -2615,8 +2671,9 @@ const LOOP_QUICK_POINTERS = [
     re: /_\(A `--quick` run uses `## Quick mode` item 2's route and brief lines, each with\s+`--mode quick`, in place of Step 3's two\.\)_/,
   },
   {
-    site: "Step 4's grill route line",
-    re: /Then `\/pharn-grill`, the same way _\(a `--quick` run: `## Quick mode` item 3's route line, which runs it inline\)_:/,
+    // 6.45.0: the grill has no route line in either column; the pointer sits on its inline invocation.
+    site: "Step 4's inline grill invocation",
+    re: /invoke `\/pharn-grill <name> --floor-only` yourself _\(a `--quick` run: `\/pharn-grill <name> --quick` instead —\s+`## Quick mode` item 3\)_/,
   },
   {
     site: "Step 5.1's build route lines",
@@ -3542,10 +3599,11 @@ const STAGE_AGENT_WIRING = [
   {
     file: "pharn-loop.md",
     command: "pharn-loop",
-    routed: { "pharn-spec": [null], "pharn-plan": [null], "pharn-grill": [null], "pharn-test": [null], "pharn-build": ["<N>"] },
-    // 6.28.0 (loop-quick-mode): ## Quick mode's lines — the spec (its brief names the quick invocation), the grill
-    // (inline by policy) and the build (its brief's rule 7 reads verify-report.json alone).
-    modeLines: { quick: ["pharn-spec", "pharn-grill", "pharn-build"] },
+    // 6.45.0 (front-grill-concurrent): the loop's grill is floor-only in both columns, so it has no route line at all.
+    routed: { "pharn-spec": [null], "pharn-plan": [null], "pharn-test": [null], "pharn-build": ["<N>"] },
+    // 6.28.0 (loop-quick-mode): ## Quick mode's lines — the spec (its brief names the quick invocation) and the build
+    // (its brief's rule 7 reads verify-report.json alone). Its grill --mode line went with the full one (6.45.0).
+    modeLines: { quick: ["pharn-spec", "pharn-build"] },
     section: "Running a stage (6.27.0) — a routed stage runs as a stage agent, requested on its configured model",
     waitRule: /a call that\s+returns a background-launch notice instead is \*\*S9\*\*/,
   },
@@ -3880,13 +3938,13 @@ test("★ STAGE_AGENT_WIRING (6) — every committed route line runs to its expe
   }
   assert.equal(
     routes,
-    14,
-    "L34: 6 ship route lines (plan, grill, test, build@1, build@2, the quick grill) + 8 loop lines (5 full; the quick spec, grill and build — 6.28.0)"
+    12,
+    "L34: 6 ship route lines (plan, grill, test, build@1, build@2, the quick grill) + 6 loop lines (4 full; the quick spec and build — 6.28.0; the loop's grill lost both lines, 6.45.0)"
   );
   assert.equal(
     briefs,
-    12,
-    "one brief prompt line per full-mode route line (10), plus the loop's quick spec and build (the quick grills run inline, so have none)"
+    11,
+    "one brief prompt line per full-mode route line (9), plus the loop's quick spec and build (the quick grills run inline, so have none)"
   );
 });
 
@@ -4038,12 +4096,18 @@ test("✧ STAGE_AGENT_WIRING (9) — each rule fails on its mutant: route, read,
     /pharn-loop\/quick: stages with a route line/,
     "a quick cell newly routed with no route line"
   );
-  const qGrillRoute = "node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-grill --name '<name>' --mode quick";
-  const qGrillBrief = `${BRIEF_PROMPT_PREFIX}node pharn/floor/stage-agent.mjs brief --command pharn-loop --stage pharn-grill --name '<name>' --mode quick`;
-  const briefAfterInline = loopBody.replace(`${qGrillRoute}\n`, `${qGrillRoute}\n${qGrillBrief}\n`);
-  assert.notEqual(briefAfterInline, loopBody, "fixture sanity: the brief landed after the quick grill's route line");
+  // 6.45.0: the loop's grill has no route line in either column, so the inline --mode cell's mutant uses ship's quick
+  // grill (the one --mode inline route line left in the corpus).
+  const qGrillRoute = "node pharn/floor/stage-agent.mjs route --command pharn-ship --stage pharn-grill --name '<name>' --mode quick";
+  const qGrillBrief = `${BRIEF_PROMPT_PREFIX}node pharn/floor/stage-agent.mjs brief --command pharn-ship --stage pharn-grill --name '<name>' --mode quick`;
+  const briefAfterInline = real.replace(`${qGrillRoute}\n`, `${qGrillRoute}\n${qGrillBrief}\n`);
+  assert.notEqual(briefAfterInline, real, "fixture sanity: the brief landed after the quick grill's route line");
   assert.match(saOrderReasons(briefAfterInline).join("\n"), /an inline \(floor-only\) --mode cell is followed by a brief/);
-  assert.match(saWiringReasons(loop, briefAfterInline).join("\n"), /--mode brief prompt lines/, "…and the wiring rule sees it");
+  assert.match(saWiringReasons(ship, briefAfterInline).join("\n"), /--mode brief prompt lines/, "…and the wiring rule sees it");
+  // …and a grill route line pasted back into the loop is refused by policy parity (its cell is floor-only everywhere).
+  const loopGrillRoute = "node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-grill --name '<name>'";
+  const withGrillRoute = `${loopBody}\n\`\`\`bash\n${loopGrillRoute}\n\`\`\`\n`;
+  assert.match(saPolicyReasons(ROUTE_POLICY, loop, withGrillRoute).join("\n"), /pharn-loop\/full: stages with a route line/);
   const qSpecBrief = `${BRIEF_PROMPT_PREFIX}node pharn/floor/stage-agent.mjs brief --command pharn-loop --stage pharn-spec --name '<name>' --mode quick`;
   const noQuickBrief = dropLine(loopBody, qSpecBrief);
   assert.match(saWiringReasons(loop, noQuickBrief).join("\n"), /--mode brief prompt lines/, "a dropped quick brief");
@@ -4073,7 +4137,7 @@ test("✧ STAGE_AGENT_WIRING (10) — every --mode stage-agent line of pharn-loo
       .map((l) => l.text)
       .sort();
   const inFile = modeText(body);
-  assert.equal(inFile.length, 5, "L34: the quick spec's route and brief, the quick grill's route, the quick build's route and brief");
+  assert.equal(inFile.length, 4, "L34: the quick spec's route and brief, the quick build's route and brief (no grill line, 6.45.0)");
   assert.deepEqual(modeText(loopQuickSection(body)), inFile);
   // CONTROL (L60): a --mode line pasted after the section is seen outside it.
   const pasted = `${body}\n\`\`\`bash\n${inFile.find((t) => t.includes(" route "))}\n\`\`\`\n`;

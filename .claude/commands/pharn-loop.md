@@ -263,10 +263,10 @@ A stage `ROUTE_POLICY` routes runs as a Claude Code subagent — a **stage
 agent** — requested on the model `models.stages` resolves for it. **The model is routed; effort is not**: the Agent tool
 takes no effort, so a routed stage runs at the effort it inherits. The protocol is
 `pharn/floor/stage-agent-core.mjs`'s header, cited here, not restated (P4). Here `/pharn-spec`, `/pharn-plan`,
-`/pharn-grill`, `/pharn-test` and `/pharn-build` (every iteration) are routed. `/pharn-regress` and
-`/pharn-verify` run inline by policy, exactly as before 6.27.0, so their stage-exit mappings above are unchanged. A
-`--quick` run (6.28.0) routes the same stages except the grill, which runs inline by policy (`floor-only`: its two
-checkers), and runs no `/pharn-regress` at all; its own route lines carry `--mode quick` (`## Quick mode` items 2–4).
+`/pharn-test` and `/pharn-build` (every iteration) are routed. `/pharn-regress` and `/pharn-verify` run inline by
+policy, exactly as before 6.27.0, so their stage-exit mappings above are unchanged, and so does `/pharn-grill`
+(`floor-only`, 6.45.0: its two checkers, no interrogation — Step 4). A `--quick` run (6.28.0) routes the same stages
+and runs no `/pharn-regress` at all; its own route lines carry `--mode quick` (`## Quick mode` items 2 and 4).
 
 Each routed stage carries its pinned lines in this order, and you run them in this order:
 
@@ -303,7 +303,7 @@ command already maps a stage's OWN report to a row:
   with a row this list does not give that stage, is **S9**. A `question` is **S10**. Exit `2` (`unusable …`,
   `no-result` included) or a crash is **S9** — never an inline re-run, since the stage may have written half
   its files.
-- `done` from spec, plan or grill → the stage's own verdict read, unchanged.
+- `done` from spec or plan → the stage's own verdict read, unchanged.
 
 **Where a checker decides the row, the checker still decides, and whatever `read` printed is ignored:** the
 test stage, whose row always comes from `check-test-stage.mjs --require-test-first` and then the pinned
@@ -392,9 +392,9 @@ node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
 
 ## Step 4 — The front, once: `/pharn-plan` → `/pharn-grill` → `/pharn-test` → iteration 1
 
-**Run each sub-stage through its routed sequence (`## Running a stage`)** — the route line, the stage-start
-marker, the Agent call (or the stage inline, on route exit `3`), `read` after an Agent call only, and the
-return marker. `/pharn-plan` first:
+**Run `/pharn-plan` and `/pharn-test` through their routed sequence (`## Running a stage`)** — the route line, the
+stage-start marker, the Agent call (or the stage inline, on route exit `3`), `read` after an Agent call only, and the
+return marker; `/pharn-grill` runs inline between them. `/pharn-plan` first:
 
 ```bash
 node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-plan --name '<name>'
@@ -416,22 +416,12 @@ node pharn/floor/stage-agent.mjs read --command pharn-loop --name '<name>' --sta
 node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
 ```
 
-Then `/pharn-grill`, the same way _(a `--quick` run: `## Quick mode` item 3's route line, which runs it inline)_:
+Then `/pharn-grill`, **inline by policy (`floor-only`, 6.45.0)**: no route line, no Agent call and no `read`. Mark
+it, invoke `/pharn-grill <name> --floor-only` yourself _(a `--quick` run: `/pharn-grill <name> --quick` instead —
+`## Quick mode` item 3)_, then mark the return:
 
 ```bash
-node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-grill --name '<name>'
-```
-
-```bash
-node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-grill --route '<route>'
-```
-
-```text
-Run exactly this line, then follow what it prints: node pharn/floor/stage-agent.mjs brief --command pharn-loop --stage pharn-grill --name '<name>'
-```
-
-```bash
-node pharn/floor/stage-agent.mjs read --command pharn-loop --name '<name>' --stage pharn-grill
+node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-grill
 ```
 
 ```bash
@@ -441,16 +431,18 @@ node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
 **Each fenced block runs as its own shell and carries no state into the next** — every value a
 line needs is literal, so there is nothing to carry.
 
-Run `/pharn-plan` and `/pharn-grill` with the **same** structural verdict reads as `/pharn-ship` Step 2
-stages 2–3 — `check-spec-approved` at plan, **both** of grill's exits (`check-plan-spec-agree` and
-`check-plan-lessons`) — cited, not restated (P4); a `--quick` run invokes the grill's quick form (`## Quick mode`
-item 3). Two differences, stated:
+**The grill's two floor stops ARE the verdict read** — `check-plan-spec-agree` and `check-plan-lessons`, which the
+inline grill runs in its Steps 2 and 2b; never run either a second time. Both exit `0` → the test stage. Either
+non-zero → **S9**: the grill wrote a RED `GRILL.md`; quote the checker's RED line as DATA. Plan's own read
+(`check-spec-approved`) is `/pharn-ship` Step 2's, cited, not restated (P4). Two differences from `/pharn-ship`, stated:
 
 - **Every question a stage would ask maps to Step 2**, never to a person.
 - **A RED build project gate is NOT a stop here.** The loop proceeds to regress + verify, so the decision
   comes from `check-loop.mjs`, which retries a measurable red.
 
-Grill's interrogation findings gate nothing, exactly as in `/pharn-ship`.
+**The plan is not interrogated in an unattended run.** `--floor-only` skips the interrogation and the grillers, and
+its `GRILL.md` says so; the reason is in `pharn/floor/stage-agent-core.mjs`'s header (cited, P4). A person who wants
+the critique runs `/pharn-grill <name>`.
 
 **Then the test stage (6.19.0), once per front — the AC tests are pinned, so they are never rewritten per iteration.**
 Route it and mark it like the two above:

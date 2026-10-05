@@ -1,5 +1,5 @@
 ---
-description: "Re-check a PLAN against its approved SPEC and its applied_lessons, then question it for gaps and write GRILL.md. Run after /pharn-plan, before /pharn-test; `--quick` runs the two checks only."
+description: "Re-check a PLAN against its approved SPEC and its applied_lessons, then question it for gaps and write GRILL.md. Run after /pharn-plan, before /pharn-test; `--quick` or `--floor-only` runs the two checks only."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -101,6 +101,15 @@ RED at either one still writes the RED grill-log (Step 4), with one addition: th
 **Steps 3 and 3b are SKIPPED entirely.** No interrogation, no installed-skills scan, no griller — `PLAN.md`,
 `SPEC.md` and `finding-shape.md` are never read for their CONTENT in `--quick` mode (only hashed, by the
 two floor checkers). Proceed directly from a GREEN Step 2b to Step 4's **quick** `GRILL.md` shape, below.
+
+## `--floor-only` mode (6.45.0) — `/pharn-grill <name> --floor-only`
+
+`/pharn-loop` invokes this form (inline) in its full mode, where nobody reads the interrogation before the build.
+It is **`--quick` without Step 1b**: any SPEC kind; recognized only as the second argument, under the same ADVISORY
+rule as `--quick`; Steps 2 and 2b run exactly as written (a RED still writes the RED grill-log); Steps 3 and 3b are
+skipped. On GREEN at both stops, `GRILL.md` takes Step 4's quick shape with two substitutions: the mode line is
+`mode: floor-only (/pharn-grill --floor-only)` and the pinned line is
+`interrogation NOT performed — skipped by mode (floor-only)`. Step 0's scope and the Final step are unchanged.
 
 ## Step 2 — The hash-chain re-verification (FLOOR — refuse-or-proceed; the FIRST of two deterministic stops)
 

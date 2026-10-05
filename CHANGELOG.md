@@ -23,6 +23,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.45.0] - 2026-10-05
+
+### Changed
+
+- 2026-10-05: **`/pharn-loop`'s grill runs its two floor stops only, and `/pharn-ship` reads them before its grill
+  agent.** (`front-grill-concurrent`, batch item 8.)
+  - **Measured** (pharn-starter's 92-minute `/pharn-loop` run, `.dev/measurements/loop-wall-clock-2026-10-05.md` §2):
+    the grill stage agent (`agent:opus`, 41 requests) took 361.0 s and wrote a ~302k-token cache prefix, then the test
+    stage took 538.3 s, one after the other. In the loop, the grill's findings gate nothing and no person reads them
+    before the build.
+  - **Decision** (made by the orchestrating model, under the maintainer's delegation for this batch): the full
+    `/pharn-loop` grill is `floor-only`, as its quick grill already was. `ROUTE_POLICY` in
+    `pharn/floor/stage-agent-core.mjs` changes one cell, and its header records the reason. The loop invokes the new
+    `/pharn-grill <name> --floor-only` inline. That mode is `--quick` without the quick eligibility check, so it
+    accepts any SPEC kind. It runs both floor stops, skips the interrogation and the grillers, writes a `GRILL.md` that
+    says so, and keeps its writes-scope. Those two stops are the loop's grill verdict read, and either RED is S9;
+    neither checker runs a second time. The loop's grill has no route line, Agent call or `read` any more, and its
+    stage-start marker carries no `--route`. `/pharn-ship` keeps its routed full grill, because a person reads
+    `GRILL.md` at GATE 2.
+  - **Estimated saving per full loop run:** 361.0 s for the agent minus about 6 inline orchestrator requests × ~10.7 s
+    (the run's 85.7 s over 8 orchestrator gaps) ≈ 64 s, so **≈ 5 min**. The opus agent's ~302k cache-write and ~425k
+    cache-read tokens are also saved. The offset is that `pharn-grill.md` (~22 KB) now sits in the orchestrator's
+    context and is read from cache on each later request.
+  - **`/pharn-ship` Step 2** now reads the grill's two stops (`check-plan-spec-agree`, `check-plan-lessons`) before the
+    grill's route line, instead of after the grill returns. A red plan stops without spawning a grill agent (about
+    1–1.5 min, an estimate). The STOP quotes the checker's RED line, because no `GRILL.md` is written on that path.
+    The same reads run on the green path, so its time is unchanged. **Stated bound:** nothing re-reads them after the
+    grill. The grill agent's write tools are scoped to `GRILL.md`, but a Bash write to `PLAN.md` is not re-checked
+    for lessons before the build. `/pharn-ship --quick` skips the block, because its inline quick grill's stops are
+    that read.
+  - **Not built, and why: running the grill and test agents at the same time.** Follow-up
+    `front-grill-concurrent-agents`; with the loop's grill now floor-only, it matters to `/pharn-ship` alone.
+    1. The tree has one writes-scope (lesson L38). The grill's setter and its `--clear` would replace or release the
+       test stage's scope.
+    2. A grill mode with no scope would be judged under the test stage's scope, which permits the test files. Its
+       "writes only `GRILL.md`" claim would then be false.
+    3. `stage-agent.mjs` writes one `stage-result.json` per run, so two agents overwrite each other's result.
+    4. Copying a draft into `GRILL.md` would be a Bash write.
+    5. The `executions` view would leave the grill row unmeasured and bill grill requests to the test stage.
+  - **Trusted docs:** `LIMITS.md §3a` lists the plan interrogation among what `/pharn-loop --quick` leaves out. That is
+    still true, but the full loop now leaves it out as well. The proposed wording, for a human to apply, is in
+    `.dev/features/front-grill-concurrent/PROTECTED-FOLLOWUPS.md`.
+  - `SKILLS_VERSION` 6.38.1 → 6.45.0 (minor: a new `/pharn-grill` mode and a routing-policy change).
+
 ## [6.38.1] - 2026-10-05
 
 ### Changed
