@@ -150,59 +150,42 @@ conditional on attestation, on `ship.requireAttestation`, or on which verdict st
 
 **The POSITION is load-bearing — after Step 3, before Step 3b**, which can STOP or halt-and-ask.
 
-1. **Close the marker file** — the `run-stop` boundary:
+**Run ONE line, the closeout; it performs items 1–4 below, in that order, each exactly as described**
+(`pharn/floor/ship-closeout.mjs`, header), and prints each item's output under its own header — quoted DATA — then
+one JSON document as its last line. Substitute `<name>` literally:
 
-   ```bash
-   node pharn/floor/mark-phase.mjs --name '<name>' --kind run-stop
-   ```
+```bash
+node pharn/floor/ship-closeout.mjs --feature '<name>'
+```
 
-   **Then close the write-guard run marker (6.24.0, D3) — directly after the line above, on EVERY exit
-   that reaches this step (GATE 2 and every STOP):**
+Exit `0`: every item ran, and none gates — each item's result is in the document (`run_stop`, `run_marker_close`,
+`base_sha`, `ledger`, `ledger_check`, `report`). Exit `2`: refused before any item ran (its stderr names why) — run it
+once more with the run's own `<name>`. Any other exit, `1` included, is a crash: say so with its stderr verbatim, run
+none of its items by hand, and say the ledger, the report and the marker close may not have happened (a run marker
+left open expires within 24 h). Either way the run goes on to its gate or its STOP.
 
-   ```bash
-   node pharn/floor/run-marker.mjs --close pharn-ship '<name>'
-   ```
-
-   A STOP before the GATE-1 backstop closes a marker that was never opened — `--close` is idempotent. Never
-   close a run you are still executing.
-
-2. **Capture the base SHA, in ONE block that prints it.** Substitute the printed value literally as
-   `<base sha>` into step 3 — never carry it in a shell variable, because each fenced block runs as its
-   own shell and a variable set here is empty there:
-
-   ```bash
-   git rev-parse HEAD 2>/dev/null || echo unknown
-   ```
-
-3. **Emit the ledger, then check it:**
-
-   ```bash
-   node pharn/floor/render-cost-ledger.mjs '<name>' --command /pharn-ship --base-sha '<base sha>'
-   ```
-
-   ```bash
-   node pharn/floor/check-cost-ledger.mjs pharn/features/<name>/cost.json
-   ```
-
-   Keep the emitter's printed table for the GATE-2 / STOP presentation, and the checker's output for the
-   same. Contract: [`pharn/pharn-contracts/cost-ledger.md`](../../pharn/pharn-contracts/cost-ledger.md),
+1. **Close the marker file** — the `run-stop` boundary, `mark-phase.mjs --kind run-stop` — **then close the
+   write-guard run marker (6.24.0, D3) directly after it**, `run-marker.mjs --close pharn-ship`, on EVERY exit that
+   reaches this step (GATE 2 and every STOP). A STOP before the GATE-1 backstop closes a marker that was never opened
+   — `--close` is idempotent. Never close a run you are still executing.
+2. **Capture the base SHA** — `git rev-parse HEAD`, or the literal `unknown` (the document's `base_sha`). The value
+   stays inside the closeout: nothing carries it between shell blocks.
+3. **Emit the ledger, then check it** — `render-cost-ledger.mjs` with `--command /pharn-ship` and that SHA, then
+   `check-cost-ledger.mjs` on `cost.json`. Keep the emitter's printed table for the GATE-2 / STOP presentation, and the
+   checker's output for the same. Contract: [`pharn/pharn-contracts/cost-ledger.md`](../../pharn/pharn-contracts/cost-ledger.md),
    cited not restated (P4).
 
-   **If the emitter exits non-zero, no ledger was emitted THIS run.** Any `cost.json` still in the
-   directory belongs to an EARLIER run. `check-cost-ledger.mjs` can be GREEN on it, because it certifies
-   internal consistency, never which run a file describes. So do not present that check's output as this
-   run's ledger: say "no ledger was emitted this run" instead. Still run step 4.
+   **If the emitter exits non-zero, no ledger was emitted THIS run** (`ledger: not-emitted`). Any `cost.json`
+   still in the directory belongs to an EARLIER run, and `check-cost-ledger.mjs` could be GREEN on it, because it
+   certifies internal consistency, never which run a file describes — so the closeout does not run the check then
+   (`ledger_check: not-run`): say "no ledger was emitted this run" instead. Item 4 still runs.
 
    The ledger's `outcome` is derived by `pharn/floor/ship-outcome-core.mjs` (its header states how, and its bounds).
 
-4. **Render the human-readable run report** _(SKIPPED in Quick mode — see `## Quick mode` item 12 above;
-   items 1–3 above still run, so `cost.json` is kept)_:
-
-   ```bash
-   node pharn/floor/render-run-report.mjs '<name>' --base pharn/features
-   ```
-
-   **Every line is derived by that code; none is authored by you.** Do not retype, summarize or "improve" it.
+4. **Render the human-readable run report** — `render-run-report.mjs` with `--base pharn/features`
+   _(SKIPPED in Quick mode — see `## Quick mode` item 12 above; items 1–3 above still run, so `cost.json` is kept)_. The closeout reads
+   the mode from the run's own run-start marker, the record the ledger's `outcome` reads. **Every line is derived by
+   that code; none is authored by you.** Do not retype, summarize or "improve" it.
 
 5. **Show it, at GATE 2 and at every STOP alike.** The presentation carries:
    - the per-stage table `render-cost-ledger.mjs` printed at step 3, **verbatim**;
@@ -367,13 +350,15 @@ routed build's advisory `done gate:pass`. `/pharn-ship` adds exactly one non-gat
   markers, and a skipped or wrong mode marker never yields `gate2` (`ship-outcome-core.mjs`, header).
 - **Advisory:** running the stages in order; preserving the two human gates (by construction, backstopped by
   `/pharn-plan`'s deterministic approved-input gate); emitting `cost.json` and `RUN-REPORT.md` at every exit (Step
-  3a's Bash lines — their position before Step 3b is a property of these bytes, not a floor op); reading a verify
+  3a's closeout line — its position before Step 3b is a property of these bytes, not a floor op; the order of its
+  items is tested code, `pharn/floor/ship-closeout.mjs`, 6.42.0); reading a verify
   verdict THIS run produced (the regress half is the follow-up `ship-regress-exit-binding`); that every `<name>`
   typed here, Step 2d's displayed block included, is the value `pharn/floor/feature-name.mjs` printed at `/pharn-spec`
   Step 0 (the check itself is floor; follow-up `ship-slug-shape` is closed by it), that the human runs the displayed
   command or that `gh` works; and performing no git WRITE, which is a property of these bytes, not floor by absence —
   a Bash-run `git` call bypasses fix #7, and no checker would catch one added later. Every git call here is a
-  **read**: Step 3a's `git rev-parse HEAD`, and quick mode item 7's base resolution.
+  **read**: Step 3a's `git rev-parse HEAD` (inside the closeout, whose source a test scans for the known git-write
+  spellings), and quick mode item 7's base resolution.
 - **Advisory, the parts (6.32.0):** this command reads `pharn-ship-quick.md` only for a `--quick` run, with the
   pending start, and this file once, with step 7's return marker after the first `/pharn-verify` or at an earlier STOP
   once `<name>` exists — each again after a compaction. That you read each there, in full, and follow it is your own
