@@ -1249,8 +1249,9 @@ node pharn/floor/check-model-config.mjs [validate | resolve <stage> | agreement]
 # model — build, configured sonnet, ran opus on 79% of its requests (.dev/measurements/token-cost-2026-08-18.md §2).
 # Routed: plan, grill, test and build in /pharn-ship (the quick grill excepted); spec, plan, test and build in
 # /pharn-loop, whose grill is floor-only in BOTH columns since 6.45.0 (front-grill-concurrent: inline
-# `/pharn-grill <name> --floor-only`, its two checkers, no interrogation — unattended, nobody read the findings, and
-# the 92-min run paid 361 s for them; /pharn-ship also reads the grill's two stops BEFORE spawning its grill agent);
+# `/pharn-grill <name> --floor-only`: its two checkers plus the five scan-plan-* scanners via pharn/floor/grill-scan.mjs,
+# no interrogation and no model-driven griller — unattended, no stage reads the findings before the build since
+# routing split the contexts, and the 92-min run's grill cost 361 s and 43 opus requests; /pharn-ship also reads the grill's two stops BEFORE spawning its grill agent);
 # ship's spec (it IS GATE 1) and every regress/verify (floor-only thin callers) are inline BY POLICY. THE LOOP'S QUICK
 # COLUMN (6.28.0, loop-quick-mode — the second of the two to merge added it): /pharn-loop --quick routes the loop's
 # stages, never runs regress, briefs its spec agent with `/pharn-spec --quick

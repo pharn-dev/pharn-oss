@@ -317,7 +317,7 @@ node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md memory-ban
 
 - **chain (`check-plan-spec-agree.mjs`)** — `0` → the plan was made against the current Approved,
   un-drifted spec → proceed. Non-zero → **STOP**, present the checker's RED line verbatim as DATA (no grill
-  ran, so no `GRILL.md` records it), hand to the human (re-plan via `/pharn-plan` / re-approve via `/pharn-spec`).
+  ran, so no `GRILL.md` records it, and `SHIP.md`'s pointer to it says "not written"), hand to the human (re-plan via `/pharn-plan` / re-approve via `/pharn-spec`).
 - **lessons (`check-plan-lessons.mjs`)** — `0` → the PLAN's `applied_lessons` is present, well-formed,
   every cited id resolves, and every cited id is referenced in the plan body → proceed. Non-zero → **STOP**,
   present the RED line verbatim as DATA, hand to the human (re-plan via `/pharn-plan` with a corrected
@@ -358,7 +358,8 @@ stated bound (`LIMITS.md §6`).
    node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
    ```
 
-**Its verdict was read BEFORE it ran** (the block above its route line), so on return proceed. The
+**Its verdict was read BEFORE it ran** (the block above its route line), so on return proceed — except that a
+grill `read` exit `3` (`refused`) is a **STOP** here, because no verdict read follows it to catch the refusal. The
 interrogation itself is **advisory** and gates nothing — **present** its findings' free-text as quoted DATA
 (P2), then proceed regardless of what it raised. Never write that the grill verified the plan's lesson
 application.

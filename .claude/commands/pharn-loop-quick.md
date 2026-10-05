@@ -62,7 +62,8 @@ reads.
    line, a non-zero exit) is **S6c** — the run never widens a quick request into a full one.
 
 3. **Step 4 — the grill.** Invoke `/pharn-grill <name> --quick` INLINE in place of Step 4's
-   `/pharn-grill <name> --floor-only` — the same two floor stops, plus the quick form's eligibility check. It writes
+   `/pharn-grill <name> --floor-only` — the same two floor stops, plus the quick form's eligibility check and minus
+   the plan scans. It writes
    the quick `GRILL.md` — `mode: quick`, both floor results, and no interrogation (`pharn-grill.md`'s own `--quick`
    section) — and its markers and both exits (`check-plan-spec-agree` and `check-plan-lessons`) are read exactly as
    written; its eligibility refusal (a kind other than `quick`) or either floor stop RED is **S9**. `/pharn-plan` and

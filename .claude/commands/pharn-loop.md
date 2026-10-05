@@ -264,8 +264,9 @@ agent** — requested on the model `models.stages` resolves for it. **The model 
 takes no effort, so a routed stage runs at the effort it inherits. The protocol is
 `pharn/floor/stage-agent-core.mjs`'s header, cited here, not restated (P4). Here `/pharn-spec`, `/pharn-plan`,
 `/pharn-test` and `/pharn-build` (every iteration) are routed. `/pharn-regress` and `/pharn-verify` run inline by
-policy, exactly as before 6.27.0, so their stage-exit mappings above are unchanged, and so does `/pharn-grill`
-(`floor-only`, 6.45.0: its two checkers, no interrogation — Step 4). A `--quick` run (6.28.0) routes the same stages
+policy, exactly as before 6.27.0, so their stage-exit mappings above are unchanged. `/pharn-grill` runs inline by
+policy too (`floor-only`, 6.45.0: its two floor stops and the deterministic plan scans, no interrogation — Step 4).
+A `--quick` run (6.28.0) routes the same stages
 and runs no `/pharn-regress` at all; its own route lines carry `--mode quick` (`## Quick mode` items 2 and 4).
 
 Each routed stage carries its pinned lines in this order, and you run them in this order:
@@ -440,12 +441,13 @@ non-zero → **S9**: the grill wrote a RED `GRILL.md`; quote the checker's RED l
 - **A RED build project gate is NOT a stop here.** The loop proceeds to regress + verify, so the decision
   comes from `check-loop.mjs`, which retries a measurable red.
 
-**The plan is not interrogated in an unattended run.** `--floor-only` skips the interrogation and the grillers, and
-its `GRILL.md` says so; the reason is in `pharn/floor/stage-agent-core.mjs`'s header (cited, P4). A person who wants
-the critique runs `/pharn-grill <name>`.
+**The plan is not interrogated in an unattended run.** `--floor-only` runs the five deterministic `scan-plan-*`
+scanners (their findings advisory, in `GRILL.md`) but skips the interrogation and the model-driven grillers, and its
+`GRILL.md` says so; the reason is in `pharn/floor/stage-agent-core.mjs`'s header (cited, P4). A person who wants the
+critique runs `/pharn-grill <name>`.
 
 **Then the test stage (6.19.0), once per front — the AC tests are pinned, so they are never rewritten per iteration.**
-Route it and mark it like the two above:
+Route it and mark it like `/pharn-plan` above:
 
 ```bash
 node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-test --name '<name>'

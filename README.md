@@ -66,8 +66,8 @@ increment a committed paper trail:
   unattended `/pharn-loop`, approves for you and records as the model's approval).
 - `PLAN.md` — the agent's implementation plan and declared write scope.
 - `GRILL.md` — pre-build interrogation of the plan (a quick run's `GRILL.md` — `/pharn-ship --quick` or
-  `/pharn-loop --quick` — and every `/pharn-loop` run's, since 6.45.0, records only its two floor stops and explicitly
-  did not interrogate — see `--quick` under [Quick start](#quick-start)).
+  `/pharn-loop --quick` — and every `/pharn-loop` run's, since 6.45.0, records its two floor stops, plus in a full loop
+  the deterministic plan scans, and explicitly did not interrogate — see `--quick` under [Quick start](#quick-start)).
 - `AC-TESTS.md`, `AC-TESTS.lock.json` — which test covers each acceptance criterion, and the pinned evidence
   that each of those tests failed before the build.
 - `BUILD.md`, `REGRESSION.md`, `VERIFY.md`, `SHIP.md` — what changed, what ran, what passed, what did
@@ -126,8 +126,8 @@ Then open Claude Code in the same project and run the full loop:
 ```
 
 `/pharn-loop` runs spec → plan → grill → test → build → regress → verify **unattended**. The model approves its
-own spec, checks the plan with the grill's two floor stops only (no interrogation, since 6.45.0 — nobody would read it
-before the build), writes each acceptance criterion's test and shows it fails before any code exists, repeats build →
+own spec, checks the plan with the grill's two floor stops and its deterministic plan scans (no interrogation and no
+model-driven griller, since 6.45.0 — no stage would read them before the build), writes each acceptance criterion's test and shows it fails before any code exists, repeats build →
 regress → verify until a deterministic stop — green, the `--max-iter` cap, or a
 result it must not retry — commits a green result to a new local branch (never pushed or merged), and
 ends with a summary of what was done. When it reaches a point that needs a human decision, it stops and
@@ -711,7 +711,7 @@ byte-for-byte by `npm run docs:check`, so it cannot quietly drift from what is a
 - **Product commands — 11** (`.claude/commands/`): `/pharn-build`, `/pharn-grill`, `/pharn-loop`, `/pharn-memory-promote`, `/pharn-plan`, `/pharn-regress`, `/pharn-review`, `/pharn-ship`, `/pharn-spec`, `/pharn-test`, `/pharn-verify`.
 - **Dev-apparatus commands — 9** (`.claude/commands/`): `/pharn-dev-build`, `/pharn-dev-eval`, `/pharn-dev-grill`, `/pharn-dev-memory-promote`, `/pharn-dev-plan`, `/pharn-dev-regress`, `/pharn-dev-review`, `/pharn-dev-ship`, `/pharn-dev-verify`.
 - **Hook scripts — 4** (`.claude/hooks/`): `enforce-writes-scope.cjs`, `protect-trusted-paths.cjs`, `require-loop-record.cjs`, `set-writes-scope.cjs`.
-- **Floor checkers — 117** `.mjs` files under `pharn/floor/` (tests excluded).
+- **Floor checkers — 118** `.mjs` files under `pharn/floor/` (tests excluded).
 
 <!-- CURRENT-STATE:END -->
 

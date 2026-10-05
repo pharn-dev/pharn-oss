@@ -2342,6 +2342,11 @@ test("✧ FLOOR-ONLY GRILL: pharn-grill.md defines --floor-only (its mode line, 
   assert.match(body, /`mode: floor-only \(\/pharn-grill --floor-only\)`/);
   assert.match(body, /`interrogation NOT performed — skipped by mode \(floor-only\)`/);
   assert.match(body, /`\/pharn-loop` invokes this form \(inline\) in its full mode/);
+  // review R2: the deterministic scans run under --floor-only, as one pinned line whose stdout is copied verbatim.
+  const pinned = fencedLines(body).map((f) => f.text.trim());
+  assert.ok(pinned.includes("node pharn/floor/grill-scan.mjs pharn/features/<name>/PLAN.md"), "the grill-scan line is pinned");
+  assert.match(body, /Exit `0` → copy its stdout \*\*verbatim\*\* into `GRILL\.md`/);
+  assert.match(body, /`scans: NOT run \(grill-scan\.mjs exit <n>\)`/);
 });
 
 test("✧ FLOOR-ONLY GRILL: pharn-loop.md invokes --floor-only inline and runs neither grill checker itself (one read)", () => {
@@ -2366,6 +2371,26 @@ test("✧ FLOOR-ONLY GRILL: pharn-ship.md reads both grill stops ONCE, before it
   assert.match(shipGrillReadReasons(moved).join("\n"), /read after the grill's route line/);
   const doubled = `${body}\n\`\`\`bash\n${block}\n\`\`\`\n`;
   assert.match(shipGrillReadReasons(doubled).join("\n"), /pinned 2 times/);
+});
+
+/** The stages a Step-7 summary sentence lists as `inline (policy)`, sorted. null when the sentence is absent. */
+function inlinePolicyListed(body) {
+  const m = body.match(/`inline \(policy\)` for\s+([\s\S]*?), citing `ROUTE_POLICY`/);
+  return m ? [...m[1].matchAll(/`\/(pharn-[a-z-]+)`/g)].map((x) => x[1]).sort() : null;
+}
+
+test("✧ FLOOR-ONLY GRILL (review R1): the loop's Step 7 `inline (policy)` list equals ROUTE_POLICY's policy-inline loop cells", () => {
+  // Derived from the policy (L29): every stage policy-inline in BOTH loop columns (or skipped in quick) — it has no
+  // route line, so its summary line is `inline (policy)`.
+  const loop = ROUTE_POLICY["pharn-loop"];
+  const want = Object.keys(loop.full)
+    .filter((s) => POLICY_INLINE.includes(loop.full[s]))
+    .sort();
+  assert.deepEqual(want, ["pharn-grill", "pharn-regress", "pharn-verify"], "fixture sanity: the 6.45.0 policy");
+  assert.deepEqual(inlinePolicyListed(commandBody(LOOP_FILE)), want);
+  // CONTROL (L60): the list with /pharn-grill dropped fails.
+  const dropped = commandBody(LOOP_FILE).replace("`/pharn-grill`, `/pharn-regress`", "`/pharn-regress`");
+  assert.notDeepEqual(inlinePolicyListed(dropped), want);
 });
 
 test("✧ QUICK MODE: pharn-spec.md pins the literal spec_kind: quick and its Step-4 trade sentence", () => {

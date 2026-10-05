@@ -143,6 +143,23 @@ the follow-up matters only to `/pharn-ship`.
 - `.dev/features/front-grill-concurrent/verify-report.json` — verify artifact — layer `.dev/features`
 - `.dev/features/front-grill-concurrent/REVIEW.md` — review — layer `.dev/features`
 - `.dev/features/front-grill-concurrent/SHIP.md` — ship record — layer `.dev/features`
+- `pharn/floor/grill-scan.mjs` — (review R2) runs the five `scan-plan-*` scanners over a PLAN and prints the
+  `--floor-only` GRILL.md scan section — layer product floor
+- `pharn/floor/grill-scan.test.mjs` — its tests — apparatus
+
+## Review amendments (independent review of `cfb7158`; owner decisions, all fixed)
+
+- R2: `--floor-only` also runs the five deterministic `scan-plan-*` scanners through the new tested
+  `pharn/floor/grill-scan.mjs` and puts their output in `GRILL.md` as advisory, finding-shape DATA; only the
+  model-driven grillers and the interrogation are dropped. Quick mode is unchanged. The rationale is corrected (no
+  stage reads the findings before the build since routing split the contexts), and `PROTECTED-FOLLOWUPS.md` gains
+  `LIMITS.md §5` and `THREAT-MODEL.md §1`.
+- R1: the loop's Step 7 `inline (policy)` list names `/pharn-grill`, pinned against `ROUTE_POLICY`'s policy-inline
+  cells.
+- R3: the saving quotes the ledger figures (43 requests, cache_write 391,438, cache_read 16,097,324; ≈352 s).
+- R4: a ship grill `read` exit 3 is a STOP; the CHANGELOG notes `stop:pharn-plan` and SHIP.md's "not written"
+  pointer on a pre-grill STOP.
+- R5: wording in `pharn-loop.md` and `--floor-only` threaded through `pharn-grill.md`.
 
 ## Grill amendments (all five `GRILL.md` findings taken)
 

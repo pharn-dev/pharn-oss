@@ -32,10 +32,14 @@
 // its full column routes and never runs /pharn-regress; its spec agent is briefed with the quick invocation,
 // `/pharn-spec --quick --model-approve`. THE LOOP'S GRILL IS FLOOR-ONLY IN BOTH COLUMNS (6.45.0,
 // front-grill-concurrent — a decision made by the orchestrating model under the maintainer's delegation): the full
-// loop runs `/pharn-grill <name> --floor-only` inline — its two floor stops, no interrogation, no grill agent.
-// Why: unattended, the grill's findings gate nothing and nobody reads them before the build, and the 92-minute run
-// in .dev/measurements/loop-wall-clock-2026-10-05.md §2 paid 361.0 s and a ~302k-token cache write for them.
-// /pharn-ship keeps its routed full grill: a person reads GRILL.md at GATE 2.
+// loop runs `/pharn-grill <name> --floor-only` inline — its two floor stops plus the five deterministic `scan-plan-*`
+// scanners (pharn/floor/grill-scan.mjs, findings advisory), and no grill agent. THE TRADE: the plan interrogation and
+// the model-driven grillers (the security griller's judgment half included) no longer run in an unattended loop.
+// Why: unattended, the grill's findings gate nothing, and since 6.27.0 routing split the stages into separate
+// contexts no stage reads them before the build (GRILL.md is still read afterwards — the loop's summary points at
+// it). The 92-minute run's ledger (pharn-starter billing-plan-catalog cost.json) shows the grill stage at 361.0 s,
+// 43 opus requests, cache_write 391,438 and cache_read 16,097,324 tokens; an inline floor-only grill measured 8.5 s
+// in that project's quick run. /pharn-ship keeps its routed full grill: a person reads GRILL.md at GATE 2.
 //
 // ============================ THE FALLBACK — every inline reason, with its remedy ============================
 // Every case runs the stage inline, exactly as before 6.27.0, and SAYS SO: a stage with a route line

@@ -286,7 +286,7 @@ Report, plainly and without asking anything:
   run needs from a person to continue (the row's trigger, in one sentence);
 - **each stage's route** (6.27.0), one line per stage and iteration: the token its stage-start marker recorded
   (`agent:<alias>`, or `inline:<reason>` with the remedy the route line printed), and `inline (policy)` for
-  `/pharn-regress` and `/pharn-verify`, citing `ROUTE_POLICY` in `pharn/floor/stage-agent-core.mjs`. A route
+  `/pharn-grill`, `/pharn-regress` and `/pharn-verify`, citing `ROUTE_POLICY` in `pharn/floor/stage-agent-core.mjs`. A route
   records what was REQUESTED; never write that a stage ran on a model — what it was served is `cost.json`'s
   `requests[].model`. A stage agent that may still be running (a backgrounded call, S9) is named here;
 - the files changed, and the per-iteration verify / regress verdicts (a quick run: its mode, the not-checked list,
@@ -326,7 +326,7 @@ Report, plainly and without asking anything:
   the SPEC state is **not approved**, its second sentence reads instead: _"The SPEC was never approved;
   it is a Draft waiting for a person."_ A quick run adds: _"It ran in quick mode: no regression outside the
   feature was looked for, and the plan was not interrogated."_ A full run adds (6.45.0): _"The grill ran its two
-  floor stops only; the plan was not interrogated."_
+  floor stops and the deterministic plan scans only; the plan was not interrogated."_
 
 **Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the claims block for document layout only, and a reader who stops at the turn-end never reaches it.
 
@@ -422,7 +422,7 @@ last three feeds `check-loop.mjs`'s inputs.
   merge review; and `/pharn-verify`'s premise of human-approved intent does not hold under this command (a follow-up).
 - **Not a claim:** "`/pharn-loop` finished" means **a stop was reached and recorded** — STRUCK: "the feature is good",
   "a human approved the intent", "the fix converged", "context was carried forward", "the change is small", "the plan
-  was interrogated" (6.45.0: the grill runs its two floor stops only). It never
+  was interrogated" (6.45.0: the grill runs its floor stops and the deterministic plan scans only). It never
   pushes, merges, seals, attests or uses `--no-verify`, and the merge decision stays a person's.
 
 ## Final step — release the writes-scope (ADVISORY lifecycle hygiene)
