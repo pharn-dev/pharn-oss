@@ -1,4 +1,4 @@
-// pharn/floor/stage-direct.test.mjs — the orchestrators' direct stage call (6.39.0, orchestrator-direct-stage-calls).
+// pharn/floor/stage-direct.test.mjs — the orchestrators' direct stage call (6.41.0, orchestrator-direct-stage-calls).
 //
 // Two halves, named so neither stands in for the other (GRILL G4):
 //   (a) HERE, with an INJECTED stage script: every exit code (0/2/3/4/5, a crash, a signal) passes through; the scope

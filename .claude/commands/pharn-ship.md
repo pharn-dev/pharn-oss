@@ -138,7 +138,7 @@ Step 2b re-build too) are routed. `/pharn-spec` runs inline by policy (it IS GAT
 `/pharn-regress` and `/pharn-verify` (floor code produces their verdicts, so their model does not change them) — one
 `stage-direct.mjs` call each (the last paragraph below).
 
-Each routed stage in Step 2 carries a start line, a brief prompt and a finish line (6.39.0: `start` and `finish` each
+Each routed stage in Step 2 carries a start line, a brief prompt and a finish line (6.41.0: `start` and `finish` each
 do what two lines did), and you run them in this order:
 
 1. **The start line** (`stage-agent.mjs start`). It decides the route exactly as `route` does, writes the
@@ -197,7 +197,7 @@ bounded — no proceed/stop reads it — and not zeroed (P2). The other bounds (
 records) are the header's named residuals.
 
 **The two floor-only stages, `/pharn-regress` and `/pharn-verify`, are one call each** to
-`pharn/floor/stage-direct.mjs` (6.39.0, its header): it sets the stage's writes-scope, runs its stage script, releases
+`pharn/floor/stage-direct.mjs` (6.41.0, its header): it sets the stage's writes-scope, runs its stage script, releases
 the scope and writes the stage's stage-start and return markers, printing the script's `pharn-stage-exit/1` object
 (`pharn/pharn-contracts/stage-exit.md`) and exiting with its code. Run each line with the Bash tool's timeout at 600000. Branch **only** on its exit code:
 

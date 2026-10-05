@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // pharn/floor/stage-direct.mjs — run `/pharn-regress` or `/pharn-verify` from an orchestrator as ONE tested call
-// (added 6.39.0, orchestrator-direct-stage-calls — audit candidate C3). The rules (which stages, which flags, which
+// (added 6.41.0, orchestrator-direct-stage-calls — audit candidate C3). The rules (which stages, which flags, which
 // exits close a stage) are `pharn/floor/stage-direct-core.mjs`; this file is execution (P3). Its header is the spec:
 // no new contract (P7). The stage scripts' protocol — one `pharn-stage-exit/1` object, its exit code — is
 // `pharn/pharn-contracts/stage-exit.md`, which this call passes through UNCHANGED.

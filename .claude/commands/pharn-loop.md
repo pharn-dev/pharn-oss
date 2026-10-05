@@ -222,7 +222,7 @@ trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 | S13 | the AC evidence changed or is missing after `/pharn-test` — decided by `check-loop-fresh.mjs` `reason_code` `ac-evidence-invalid` or `check-loop.mjs` `terminal_cause` `ac-evidence` (Step 5), never by relayed text                     | stop `blocked: ac-evidence-invalid` — a rebuild cannot restore it; a person sets the build aside and re-runs `/pharn-test`, or re-plans |
 
 **`/pharn-regress`'s stage-exit mapping (since `stage-regress-script`, 6.23.0).** Step 5 runs
-`pharn/floor/stage-regress.mjs` through one `stage-direct.mjs` call (6.39.0), which prints the script's one
+`pharn/floor/stage-regress.mjs` through one `stage-direct.mjs` call (6.41.0), which prints the script's one
 `pharn-stage-exit/1` object (`pharn/pharn-contracts/stage-exit.md`) and exits with its code. It maps onto the table
 above by a fixed rule:
 
@@ -277,7 +277,7 @@ hold. A `--quick` run (6.28.0) routes the same stages except the grill, which ru
 two checkers), and runs no `/pharn-regress` at all; its own start lines carry `--mode quick` (`## Quick mode` items
 2–4).
 
-Each routed stage carries a start line, a brief prompt and a finish line (6.39.0: `start` and `finish` each do what
+Each routed stage carries a start line, a brief prompt and a finish line (6.41.0: `start` and `finish` each do what
 two lines did), and you run them in this order:
 
 1. **The start line** (`stage-agent.mjs start`). It decides the route exactly as `route` does, writes the
@@ -519,7 +519,7 @@ Each iteration `<N>` (1-based). **Every sub-stage is marked on entry and the orc
    `done gate:pass` or `done gate:fail` → go on to 2; any other line maps onto Step 2's table as
    `## Running a stage` says.
 
-2. **`/pharn-regress`, then `/pharn-verify` — one call each** (`pharn/floor/stage-direct.mjs`, 6.39.0, its header):
+2. **`/pharn-regress`, then `/pharn-verify` — one call each** (`pharn/floor/stage-direct.mjs`, 6.41.0, its header):
    it sets that stage's writes-scope, runs its stage script, releases the scope and writes the stage's stage-start and
    return markers, printing the script's object and exiting with its code. Run each with the Bash tool's timeout at
    600000, and branch by Step 2's two stage-exit mappings. _(`/pharn-regress` and its two markers are

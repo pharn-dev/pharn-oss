@@ -58,7 +58,7 @@ const CLOSURE = [
   "route-token-core.mjs",
   "shelled-verdict-core.mjs",
   "gate-run-core.mjs",
-  // 6.39.0: `start` / `finish` write markers through mark-phase.mjs, which imports run-window-core.mjs.
+  // 6.41.0: `start` / `finish` write markers through mark-phase.mjs, which imports run-window-core.mjs.
   "mark-phase.mjs",
   "run-window-core.mjs",
 ];
@@ -655,7 +655,7 @@ test(`resolve-failed — a checker that outlives CHECKER_TIMEOUT_MS (${CHECKER_T
   }
 });
 
-// ── start / finish (6.39.0, orchestrator-direct-stage-calls) ──────────────────────────────────────────
+// ── start / finish (6.41.0, orchestrator-direct-stage-calls) ──────────────────────────────────────────
 
 const startArgs = (command, stage, extra = []) => {
   const it = ITERATED_STAGES.includes(stage) ? ["--iteration", "1"] : [];
@@ -911,7 +911,7 @@ test("never a crash — odd argv exits 2 (never 1, node's crash code), for every
       ["read", "--command", "pharn-ship", "--stage", "pharn-plan", "--name", "demo", "--iteration", "1"],
       ["toString"],
       ["__proto__", "--command", "pharn-ship"],
-      // 6.39.0: start and finish refuse the same way.
+      // 6.41.0: start and finish refuse the same way.
       ["start"],
       ["start", "--command", "pharn-ship", "--stage", "pharn-plan", "--name", "demo", "--status", "done"],
       ["start", "--no-agent-tool", "--no-agent-tool"],

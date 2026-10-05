@@ -1250,7 +1250,7 @@ node pharn/floor/check-model-config.mjs [validate | resolve <stage> | agreement]
 # numbers, and names a refused result on stderr by ONE fixed code (READ_DEFECTS), never by a byte the file carries
 # (GATE-2 review A7). The Agent tool still returns the stage agent's final text into the orchestrator's context:
 # THREAT-MODEL §5's free-text residual in a new place — that no proceed/stop reads it is ADVISORY (review A6).
-# The orchestrators record the token on the stage-start marker (since 6.39.0 via `start`, below), so cost.json carries
+# The orchestrators record the token on the stage-start marker (since 6.41.0 via `start`, below), so cost.json carries
 # the REQUESTED route beside the SERVED requests[].model. MODEL ROUTED, EFFORT NOT — the Agent tool takes none.
 # BOUNDS: a route is a request, the served model is evidence from an undocumented transcript format, NEVER proof;
 # ship's routed build proceeds on its agent's advisory `done gate:pass`, re-confirmed by /pharn-verify's floor
@@ -1263,7 +1263,7 @@ node pharn/floor/stage-agent.mjs route --command <pharn-ship|pharn-loop> --stage
 node pharn/floor/stage-agent.mjs brief --command <c> --stage <stage> --name '<name>' [--iteration <N>] [--mode quick]
 node pharn/floor/stage-agent.mjs report --command <c> --name '<name>' --stage <stage> [--iteration <N>] --status <done|refused|question> [--row S<n>] [--gate pass|fail]
 node pharn/floor/stage-agent.mjs read --command <c> --name '<name>' --stage <stage> [--iteration <N>]
-# START / FINISH (6.39.0, orchestrator-direct-stage-calls — audit C1): the orchestrators pin these two instead of the
+# START / FINISH (6.41.0, orchestrator-direct-stage-calls — audit C1): the orchestrators pin these two instead of the
 # four lines above. `start` = `route`'s decision + the stage-start marker carrying its token (written by code through
 # mark-phase.mjs's tryMarkPhase — the model types no token; `<route>` left every shell line); `--no-agent-tool` records
 # inline:no-agent-tool (ADVISORY: the model's reading of its tools); an uncleared leftover result is
@@ -1276,7 +1276,7 @@ node pharn/floor/stage-agent.mjs read --command <c> --name '<name>' --stage <sta
 node pharn/floor/stage-agent.mjs start --command <c> --stage <stage> --name '<name>' [--iteration <N>] [--mode quick] [--no-agent-tool]
 node pharn/floor/stage-agent.mjs finish --command <c> --name '<name>' --stage <stage> [--iteration <N>]
 
-# THE DIRECT STAGE CALL (6.39.0, orchestrator-direct-stage-calls — audit C3) — /pharn-loop and /pharn-ship run
+# THE DIRECT STAGE CALL (6.41.0, orchestrator-direct-stage-calls — audit C3) — /pharn-loop and /pharn-ship run
 # /pharn-regress and /pharn-verify as ONE call each instead of invoking the thin callers (which a model invoked through
 # the Skill tool, injecting 19,301 + 17,339 B of command text per iteration in the measured 92-minute run). The call
 # sets the thin caller's own writes-scope (its pinned setter line), writes the stage-start marker (fresh), runs the stage
