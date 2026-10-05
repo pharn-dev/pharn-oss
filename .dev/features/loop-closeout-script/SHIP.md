@@ -36,6 +36,9 @@ The batch ran unattended under the user's delegation:
 9. **Fix pass** `be3526d`: `/pharn-dev-verify` `.verdict` **`PASS`** (4,778 tests). Then `origin/main` merged at
    `c62999a` (6.42.0, #313; one conflict in `pharn-ship-quick.md` item 3, both edits kept) and renumbered 6.44.0:
    `npm run check` exit 0 over 4,823 tests.
+   - Then `origin/main` merged at `fbb84e8` (6.43.0, #314; one conflict in a hygiene mutation control, resolved to
+     main's new pairing check with the mistyped kind planted on the run-start line): `npm run check` exit 0 over 4,863
+     tests; `check-changelog-entry --merge-base origin/main` GREEN.
    - **Not re-run for the fix pass:** `/pharn-dev-regress`. The fixes touch only this feature's own files and
      `pharn-ship-quick.md`'s two items; the whole suite is GREEN on the fixed, merged tree.
 
