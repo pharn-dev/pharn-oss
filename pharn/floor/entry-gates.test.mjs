@@ -685,7 +685,8 @@ const WIRING = [
     startAfter: "node pharn/floor/mark-phase.mjs --name '<name>' --kind run-start",
     // 6.43.0 (orchestrator-direct-stage-calls): the routed stages' `route`/`read` lines are `start`/`finish` lines.
     startBefore: "node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-spec --name '<name>'",
-    waitAfter: "node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-grill",
+    // 6.45.0: the loop's grill runs inline (floor-only) and has no `finish` line; its stage-start marker anchors it.
+    waitAfter: "node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-grill",
     waitBefore: "node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-test --name '<name>'",
     abortIn: "\n## At the stop — ",
     rows: [
