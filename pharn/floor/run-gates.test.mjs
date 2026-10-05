@@ -2054,3 +2054,95 @@ test("REUSE — a symlink at an INTERMEDIATE directory of the source path is nev
     dropReuseRepo(fx);
   }
 });
+
+// ---------------------------------------------------------------------------------------------------
+// --stage build (6.39.0, build-gate-bounded) — /pharn-build's own gate, driven by build-gate.mjs
+// ---------------------------------------------------------------------------------------------------
+
+const buildInit = (extra = []) => ["init", "--stage", "build", "--feature", FEATURE, "--out", OUT, "--discover", "package.json", ...extra];
+const BUILD_SCRIPTS = { test: RECORDER("test"), lint: RECORDER("lint"), e2e: RECORDER("e2e") };
+
+test("build: init runs the discovered set minus the e2e gates, no reconcile, no completeness; the stamp is stage build", () => {
+  withRepo(
+    (dir) => {
+      mkdirSync(join(dir, ".pharn"), { recursive: true });
+      const init = cli(dir, buildInit());
+      assert.equal(init.code, 0, init.raw);
+      assert.deepEqual(init.json.ids, ["test", "lint"]);
+      assert.deepEqual(init.json.e2e_excluded, ["e2e"]);
+      const calls = drain(dir);
+      assert.equal(calls.at(-1).code, 3);
+      const st = stamp(dir);
+      assert.equal(st.stage, "build");
+      assert.deepEqual(
+        st.runs.map((r) => [r.id, r.files, r.exit]),
+        [
+          ["test", [], 1],
+          ["lint", [], 1],
+        ]
+      );
+      assert.equal(st.aux.completeness, null, "no completeness capture at build");
+      assert.equal(existsSync(join(dir, ".pharn/argv-e2e.json")), false, "e2e never ran");
+    },
+    { scripts: BUILD_SCRIPTS }
+  );
+});
+
+test("build: --targets hands the `test` gate exactly the listed files after `--`, and only it runs", () => {
+  withRepo(
+    (dir) => {
+      mkdirSync(join(dir, ".pharn"), { recursive: true });
+      writeFileSync(join(dir, ".pharn/targets.json"), JSON.stringify(["tests/b.test.js", "tests/a.test.js"]));
+      const init = cli(dir, buildInit(["--targets", ".pharn/targets.json"]));
+      assert.equal(init.code, 0, init.raw);
+      assert.deepEqual(init.json.ids, ["test"]);
+      drain(dir);
+      assert.deepEqual(JSON.parse(readFileSync(join(dir, ".pharn/argv-test.json"), "utf8")).slice(-2), [
+        "tests/b.test.js",
+        "tests/a.test.js",
+      ]);
+      assert.equal(existsSync(join(dir, ".pharn/argv-lint.json")), false);
+    },
+    { scripts: BUILD_SCRIPTS }
+  );
+});
+
+test("build: refusals by presence, and every --targets entry through badPath (no flag, glob, absolute or state-root path)", () => {
+  withRepo(
+    (dir) => {
+      mkdirSync(join(dir, ".pharn"), { recursive: true });
+      for (const f of [
+        ["--extra", "[]"],
+        ["--skip-style"],
+        ["--scope-json", "x.json"],
+        ["--spec-from", "x"],
+        ["--side", "head"],
+        ["--base", "x"],
+      ]) {
+        const r = cli(dir, buildInit(f));
+        assert.equal(r.code, 2, f.join(" "));
+        assert.equal(r.json.reason_code, "usage-error", f.join(" "));
+      }
+      const noDiscover = cli(dir, ["init", "--stage", "build", "--feature", FEATURE, "--out", OUT]);
+      assert.equal(noDiscover.json.reason_code, "usage-error");
+      assert.match(noDiscover.json.reason, /requires --discover <package\.json> or --gates <spec>/);
+      // Review R1: a human's --gates needs no manifest.
+      const explicit = cli(dir, ["init", "--stage", "build", "--feature", FEATURE, "--out", OUT, "--gates", "node -e 0::check"]);
+      assert.equal(explicit.code, 0, explicit.raw);
+      assert.deepEqual(explicit.json.ids, ["check"]);
+      for (const bad of [["-x.test.js"], ["/abs/a.test.js"], ["a/../b.test.js"], [".pharn/x.test.js"], ["t/*.test.js"], [3], {}]) {
+        writeFileSync(join(dir, ".pharn/targets.json"), JSON.stringify(bad));
+        const r = cli(dir, buildInit(["--targets", ".pharn/targets.json"]));
+        assert.equal(r.code, 2, JSON.stringify(bad));
+        assert.equal(r.json.reason_code, "usage-error", JSON.stringify(bad));
+        assert.doesNotMatch(r.json.reason, /abs|\.pharn\/x|\*/, "the reason names a position, never the value (L62)");
+      }
+      const missing = cli(dir, buildInit(["--targets"]));
+      assert.equal(missing.json.reason_code, "usage-error");
+      const off = cli(dir, initArgs(["--targets", ".pharn/targets.json"]));
+      assert.equal(off.json.reason_code, "usage-error");
+      assert.match(off.json.reason, /--targets applies to --stage build only/);
+    },
+    { scripts: BUILD_SCRIPTS }
+  );
+});
