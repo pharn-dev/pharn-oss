@@ -23,7 +23,7 @@
 //   exit alone is never read as a verdict (6.21.1's "a crash is not read as a verdict").
 // • checkCompleteness — the SHAPE of the runner's `completeness.json` capture. A crashed `check-build-complete.mjs`
 //   leaves it empty (probed at plan time), which is a refusal here, never an INCOMPLETE.
-// • composeReport — the report is the checker's object, every key kept in order, then two advisory blocks.
+// • composeReport — the report is the checker's object, every key kept in order, then the advisory blocks it merges.
 //
 // TRUST (P2): nothing here reads a file or runs anything. `featureEvalPairs`' `declared` strings come from the
 // untrusted PLAN and are used ONLY as prefix operands of a membership test over git's own listing, so a PLAN can
@@ -40,6 +40,8 @@ export const VERIFY_PATHS = Object.freeze({
   root: ".pharn/pharn-verify",
   gates: ".pharn/pharn-verify/gates",
   stageJson: ".pharn/pharn-verify/stage.json",
+  // 6.40.0 — the HEAD install check's block, written at init and re-read at verdict (install-drift.mjs).
+  headInstall: ".pharn/pharn-verify/head-install.json",
 });
 
 /** THE PHASE ENUM, in EXECUTION ORDER. Every refusal and the one question are raised before "drain", the first
@@ -236,15 +238,17 @@ export function gateReuseBlock(stampText) {
  *  THE REPORT — `check-verify.mjs`'s object with every key kept, value and order, then three ADVISORY blocks the
  *  stage merges: `completeness` (the runner's capture, verbatim, after `checkCompleteness`), `verifiers`
  *  (`{registered, findings: []}`, plus a fixed `note` when `registered > 0`) and, since 6.34.0, `gate_reuse`
- *  (`gateReuseBlock`). A checker key named like any of them is REFUSED rather than overwritten (GATE 1 Q2) —
+ *  (`gateReuseBlock`), and since 6.40.0 `head_install` (the HEAD install check's block, `install-drift-core.mjs`;
+ *  the CALLER validates it — this module keeps its one import — so here it is only "a plain object, or null").
+ *  A checker key named like any of them is REFUSED rather than overwritten (GATE 1 Q2) —
  *  `check-verify.mjs` prints none today, so the refusal guards a future change to it.
  *  ---------------------------------------------------------------------------------------------- */
-export const MERGED_KEYS = Object.freeze(["completeness", "verifiers", "gate_reuse"]);
+export const MERGED_KEYS = Object.freeze(["completeness", "verifiers", "gate_reuse", "head_install"]);
 
 export const VERIFIER_DEFERRED_NOTE =
   "verifiers are registered, but the live verifier runner is deferred (P7): none was run, and a verifier finding never flips the verdict (fix #3)";
 
-export function composeReport({ checker, completeness, verifiers, gateReuse }) {
+export function composeReport({ checker, completeness, verifiers, gateReuse, headInstall }) {
   if (checker === null || typeof checker !== "object" || Array.isArray(checker)) {
     return { ok: false, reason: "the verdict checker's output is not a JSON object" };
   }
@@ -265,5 +269,11 @@ export function composeReport({ checker, completeness, verifiers, gateReuse }) {
   if (gateReuse === null || typeof gateReuse !== "object" || !Array.isArray(gateReuse.reused)) {
     return { ok: false, reason: "the gate-reuse block is not {reused: [...]}" };
   }
-  return { ok: true, report: { ...checker, completeness, verifiers: block, gate_reuse: { reused: gateReuse.reused } } };
+  if (headInstall !== null && (typeof headInstall !== "object" || Array.isArray(headInstall))) {
+    return { ok: false, reason: "the head-install block is not an object or null" };
+  }
+  return {
+    ok: true,
+    report: { ...checker, completeness, verifiers: block, gate_reuse: { reused: gateReuse.reused }, head_install: headInstall },
+  };
 }

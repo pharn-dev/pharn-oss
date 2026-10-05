@@ -3579,12 +3579,12 @@ test("✧ NAMED_LIMITS beside it — /pharn-ship binds the verify verdict to a `
 // ---------------------------------------------------------------------------------------------------------------
 const STAGE_VERIFY_SRC = () => readFileSync(join(REPO_ROOT, "pharn/floor/stage-verify.mjs"), "utf8");
 
-test("✧ verify's report keeps EVERY checker field — composeReport spreads the checker's object, then the three blocks", () => {
+test("✧ verify's report keeps EVERY checker field — composeReport spreads the checker's object, then the merged blocks", () => {
   const core = readFileSync(join(REPO_ROOT, "pharn/floor/stage-verify-core.mjs"), "utf8");
   assert.match(
     core,
-    /report: \{ \.\.\.checker, completeness, verifiers: block, gate_reuse: \{ reused: gateReuse\.reused \} \}/,
-    "the checker's object is carried whole — gate_run and ac_gate included — then the merged blocks (6.34.0: gate_reuse)"
+    /report: \{ \.\.\.checker, completeness, verifiers: block, gate_reuse: \{ reused: gateReuse\.reused \}, head_install: headInstall \}/,
+    "the checker's object is carried whole — gate_run and ac_gate included — then the merged blocks (6.34.0: gate_reuse; 6.40.0: head_install)"
   );
   assert.match(STAGE_VERIFY_SRC(), /composeReport\(\{\s*checker: verdict\.report,/, "the script composes through composeReport");
 });
@@ -4450,7 +4450,7 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   "pharn-ship-quick.md": 12800,
   "pharn-spec.md": 27136,
   "pharn-test.md": 20480,
-  "pharn-verify.md": 18432,
+  "pharn-verify.md": 20480, // 6.40.0 regress-head-install-drift: 18519 B measured + 10% → next 512 (was 18432)
 });
 const DESCRIPTION_MAX_BYTES = 250;
 const CLAIM_VOCABULARY_RE = /\b(FLOOR|ADVISORY)\b|NEVER means|\(P[0-7]\)/;

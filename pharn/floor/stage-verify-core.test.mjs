@@ -73,11 +73,12 @@ test("G12 discriminates — a local declaration in a module's source is caught b
 });
 
 // ── VERIFY_PATHS / PHASES ───────────────────────────────────────────────────────────────────────────
-test("VERIFY_PATHS: three entries under the stage root; loop-fresh-core.mjs's DEFAULT_STAMPS.verify derives from it", () => {
+test("VERIFY_PATHS: four entries under the stage root; loop-fresh-core.mjs's DEFAULT_STAMPS.verify derives from it", () => {
   assert.deepEqual(VERIFY_PATHS, {
     root: ".pharn/pharn-verify",
     gates: ".pharn/pharn-verify/gates",
     stageJson: ".pharn/pharn-verify/stage.json",
+    headInstall: ".pharn/pharn-verify/head-install.json", // 6.40.0
   });
   assert.equal(DEFAULT_STAMPS.verify, `${VERIFY_PATHS.gates}/stamp.json`);
   const lf = readFileSync(join(HERE, "loop-fresh-core.mjs"), "utf8");
@@ -300,14 +301,40 @@ const COMPLETE = { plan: "pharn/features/demo/PLAN.md", declared: ["a"], skipped
 
 const NO_REUSE = { reused: [] };
 
-test("composeReport: the checker's keys in order, values deep-equal, then completeness, verifiers and gate_reuse", () => {
-  const r = composeReport({ checker: CHECKER, completeness: COMPLETE, verifiers: { registered: 0, verifiers: [] }, gateReuse: NO_REUSE });
+const HEAD_INSTALL = {
+  state: "clean",
+  why: null,
+  family: "npm",
+  lockfile: "package-lock.json",
+  counts: { changed: 0, missing: 0, extraneous: 0, missing_unchecked: 0 },
+};
+
+test("composeReport: the checker's keys in order, values deep-equal, then completeness, verifiers, gate_reuse and head_install", () => {
+  const r = composeReport({
+    checker: CHECKER,
+    completeness: COMPLETE,
+    verifiers: { registered: 0, verifiers: [] },
+    gateReuse: NO_REUSE,
+    headInstall: HEAD_INSTALL,
+  });
   assert.equal(r.ok, true);
   assert.deepEqual(Object.keys(r.report), [...Object.keys(CHECKER), ...MERGED_KEYS]);
   for (const k of Object.keys(CHECKER)) assert.deepEqual(r.report[k], CHECKER[k]);
   assert.deepEqual(r.report.completeness, COMPLETE, "the capture is carried verbatim");
   assert.deepEqual(r.report.verifiers, { registered: 0, findings: [] }, "no note with zero verifiers");
   assert.deepEqual(r.report.gate_reuse, NO_REUSE);
+  assert.deepEqual(r.report.head_install, HEAD_INSTALL, "6.40.0 — carried as given (the caller validated it)");
+  assert.equal(
+    composeReport({
+      checker: CHECKER,
+      completeness: COMPLETE,
+      verifiers: { registered: 0, verifiers: [] },
+      gateReuse: NO_REUSE,
+      headInstall: null,
+    }).report.head_install,
+    null,
+    "an unrecorded check is null, never an omitted key"
+  );
 });
 
 test("composeReport: the deferral note appears only when registered > 0", () => {
@@ -316,26 +343,51 @@ test("composeReport: the deferral note appears only when registered > 0", () => 
     completeness: COMPLETE,
     verifiers: { registered: 2, verifiers: ["a.md", "b.md"] },
     gateReuse: NO_REUSE,
+    headInstall: null,
   });
   assert.deepEqual(r.report.verifiers, { registered: 2, findings: [], note: VERIFIER_DEFERRED_NOTE });
 });
 
 test("composeReport (Q2): a checker key named like a merged block is REFUSED, never overwritten", () => {
-  assert.deepEqual(MERGED_KEYS, ["completeness", "verifiers", "gate_reuse"]);
+  assert.deepEqual(MERGED_KEYS, ["completeness", "verifiers", "gate_reuse", "head_install"]);
   const V0 = { registered: 0, verifiers: [] };
   for (const k of MERGED_KEYS) {
-    const r = composeReport({ checker: { ...CHECKER, [k]: "theirs" }, completeness: COMPLETE, verifiers: V0, gateReuse: NO_REUSE });
+    const r = composeReport({
+      checker: { ...CHECKER, [k]: "theirs" },
+      completeness: COMPLETE,
+      verifiers: V0,
+      gateReuse: NO_REUSE,
+      headInstall: null,
+    });
     assert.equal(r.ok, false, `a checker key '${k}' must be refused`);
   }
-  assert.equal(composeReport({ checker: [], completeness: COMPLETE, verifiers: V0, gateReuse: NO_REUSE }).ok, false);
-  assert.equal(composeReport({ checker: CHECKER, completeness: null, verifiers: V0, gateReuse: NO_REUSE }).ok, false);
+  assert.equal(composeReport({ checker: [], completeness: COMPLETE, verifiers: V0, gateReuse: NO_REUSE, headInstall: null }).ok, false);
+  assert.equal(composeReport({ checker: CHECKER, completeness: null, verifiers: V0, gateReuse: NO_REUSE, headInstall: null }).ok, false);
   assert.equal(
-    composeReport({ checker: CHECKER, completeness: COMPLETE, verifiers: { registered: 1, verifiers: [] }, gateReuse: NO_REUSE }).ok,
+    composeReport({
+      checker: CHECKER,
+      completeness: COMPLETE,
+      verifiers: { registered: 1, verifiers: [] },
+      gateReuse: NO_REUSE,
+      headInstall: null,
+    }).ok,
     false
   );
   // 6.34.0 — the reuse block is required and shape-checked; its absence is a refusal, never an omitted key.
   for (const bad of [undefined, null, {}, { reused: "x" }, []]) {
-    assert.equal(composeReport({ checker: CHECKER, completeness: COMPLETE, verifiers: V0, gateReuse: bad }).ok, false, JSON.stringify(bad));
+    assert.equal(
+      composeReport({ checker: CHECKER, completeness: COMPLETE, verifiers: V0, gateReuse: bad, headInstall: null }).ok,
+      false,
+      JSON.stringify(bad)
+    );
+  }
+  // 6.40.0 — the head-install block is required too: an object (the caller validated it) or null, never omitted.
+  for (const bad of [undefined, [], "clean", 0]) {
+    assert.equal(
+      composeReport({ checker: CHECKER, completeness: COMPLETE, verifiers: V0, gateReuse: NO_REUSE, headInstall: bad }).ok,
+      false,
+      JSON.stringify(bad)
+    );
   }
 });
 
