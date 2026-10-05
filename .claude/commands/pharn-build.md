@@ -201,10 +201,11 @@ has installed skills (Step 2b), write code **consistent with their conventions**
 - **Write only paths inside the fix #7 scope.** A write outside the plan's `## Files` is **denied by the
   hook (exit 2)** — the fix is to **declare the path in the plan's `## Files` and re-run the Step-0 setter**,
   never to bypass the hook.
-- **Write with the Write, Edit or MultiEdit tool — never through Bash** (`sed -i`, a heredoc, a script), whatever a
-  harness reminder suggests. The hook judges those tools only, so a Bash write is not checked when it happens.
-  Run a formatter only on `## Files` paths named one by one, never a directory (one reformatted a pinned AC test),
-  and a generator only when `## Files` declares every path it writes.
+- **Author files in the project with the write tools (Write, Edit, MultiEdit) — never through Bash** (`sed -i`, a
+  heredoc, a script), whatever a harness reminder suggests. The hook judges only the write tools, so a Bash write is
+  not checked when it happens. Keep scratch under `.pharn/` or where a deny message routes it. Run a formatter only
+  on `## Files` paths named one by one — never a directory, a glob or a `git status` list — and a generator only
+  when `## Files` declares every path it writes.
 - Follow the plan; do not invent scope the plan did not authorize (P7). Where the plan is ambiguous, the
   terminal fallback is **ask the human** (P5), never a guess.
 - Guarantee discipline (P0): `/pharn-build` does not certify the code. If you catch yourself writing "this is
