@@ -1,164 +1,188 @@
-# PLAN — front-grill-concurrent: the grill's two floor checks run before the grill agent
+# PLAN — front-grill-concurrent: the loop's grill runs floor-only, and ship reads the grill's floor stops first
 
 - spec_content_hash: d831d30d399a37dc403080072763d13383de6f6f31875e7e8cb4eadeb642f4f4 # fix #4 — sha256(pharn/ARCHITECTURE.md), pinned 2026-10-05
 - applied_lessons: [L19, L29, L38]
-- increment: In `/pharn-loop` Step 4, run `/pharn-grill`'s two floor checkers (`check-plan-spec-agree`, `check-plan-lessons`) as pinned lines BEFORE the grill stage is routed, so a RED plan stops at S9 without paying a grill agent; record grill ‖ test concurrency as infeasible in this batch, with its blockers.
-- layer(s): product `.claude/` surface (`pharn-loop.md`, a `pharn-*` command) + `.dev/floor` (command-hygiene test — apparatus) # pharn/ARCHITECTURE.md §4
-- constitution_refs: [P0, P3, P5, P6, P7]
+- increment: `/pharn-loop`'s FULL-mode grill becomes `floor-only` (its two checkers, inline, through a new `/pharn-grill <name> --floor-only`; no grill agent, no interrogation), and `/pharn-ship` reads the grill's two floor stops BEFORE spawning its grill agent; grill ‖ test concurrency is recorded as infeasible (follow-up `front-grill-concurrent-agents`).
+- layer(s): product `.claude/` surface (`pharn-loop.md`, `pharn-loop-quick.md`, `pharn-ship.md`, `pharn-ship-quick.md`, `pharn-grill.md`) + product floor (`pharn/floor/stage-agent-core.mjs`) + `.dev/floor` tests (apparatus) # pharn/ARCHITECTURE.md §4
+- constitution_refs: [P0, P3, P4, P5, P6, P7]
+
+## Decisions (GATE 1, 2026-10-05)
+
+Recorded as decisions of the **orchestrating model, to whom the user delegated this batch's decisions** — not a human
+approval:
+
+1. Checkers first: build it, and apply the same reorder to `/pharn-ship` Step 2 (kept local).
+2. Grill ‖ test concurrency: accepted as infeasible in this batch; follow-up `front-grill-concurrent-agents` carries
+   the blockers below.
+3. **Adopt option 3:** `/pharn-loop` FULL mode routes the grill `floor-only`, exactly as its quick mode already does.
+   Rationale (recorded in the CHANGELOG and the policy's owner, `stage-agent-core.mjs`): unattended, the grill's
+   findings gate nothing and nobody reads them before the build; the 92-minute run paid 361.0 s and a ~302k-token
+   cache write for them. `/pharn-ship` keeps its full grill — a human reads `GRILL.md` at GATE 2.
+   With (3), the loop's checkers-first read and its floor-only grill are ONE read: the inline `/pharn-grill
+--floor-only`'s own two floor stops, with no second run of either checker.
+4. Version: minor, **6.45.0** (pre-assigned); the PR targets `main` directly.
 
 ## Applied lessons
 
-- L38 — the single `.pharn/writes-scope.json` per tree is the first named reason grill ‖ test is NOT built: two concurrent stage agents in one tree contend for it (grill's Step 0 setter and its `--clear` would replace or release the test stage's scope mid-run), so the design that would need it is recorded as infeasible rather than patched by discipline.
-- L19 — the only way to promote a grill draft from `.pharn/` to `pharn/features/<name>/GRILL.md` after the test stage would be a Bash write outside fix #7; this plan builds no such write, and says so in the infeasibility record.
-- L29 — the loop becomes a seventh read site of `check-plan-lessons.mjs`, so it is added to the ONE enumeration that ranges over those sites (`PLAN_LESSONS_WIRING`), not given a one-off assertion; the set's length pin moves 6 → 7 in the same edit.
+- L38 — the single `.pharn/writes-scope.json` per tree is the first named reason grill ‖ test is NOT built: two
+  concurrent stage agents in one tree contend for it (grill's Step 0 setter and its `--clear` would replace or release
+  the test stage's scope mid-run), so that design is recorded as infeasible rather than patched by discipline.
+- L19 — the only way to promote a grill draft from `.pharn/` to `GRILL.md` after the test stage would be a Bash write
+  outside fix #7; nothing here builds one. The new `--floor-only` grill still writes `GRILL.md` through the Write tool
+  under its own Step 0 scope, so its "writes only GRILL.md — the fix #7 hook" claim stays true.
+- L29 — every set this change moves is changed at its ONE enumeration: `ROUTE_POLICY` / `INVOCATIONS` (the totality
+  test pins them together), `STAGE_AGENT_WIRING.routed` / `.modeLines` for the loop (derived parity, so the loop's
+  grill route line, brief and read must disappear together), and ship's checkers-first ORDER pin iterates the two
+  checker lines rather than asserting one.
 
 ## The P7 trigger (cited evidence)
 
-`.dev/measurements/loop-wall-clock-2026-10-05.md` §2 "By stage": in the 92-minute `billing-plan-catalog` run the grill
-stage took **361.0 s** (`agent:opus`, 41 requests, a ~302k-token first-request cache write) and the test stage
-**538.3 s**, strictly one after the other. Today `pharn-loop.md` Step 4 reads grill's two floor verdicts only AFTER the
-grill agent returns (it cites `/pharn-ship` Step 2's reads), so a plan whose chain or lessons declaration is RED still
-spawns a full grill agent first — the agent's own Step 2/2b then refuses and writes a RED `GRILL.md`, and only then
-does the loop stop at S9.
+`.dev/measurements/loop-wall-clock-2026-10-05.md` §2 "By stage", the 92-minute `billing-plan-catalog` run: grill
+**361.0 s** (`agent:opus`, 41 requests, a ~302k-token first-request cache write, ~425k cache-read), then test
+**538.3 s**, strictly in sequence. In the loop nothing reads `GRILL.md`'s findings before the build (they gate nothing,
+Step 4), so the agent bought no decision. Both orchestrators read the grill's two floor stops only AFTER the grill
+agent returns, so a RED plan still pays a grill agent before stopping.
 
 ## Design
 
-### Built: checkers first (item direction 1)
+### A. `/pharn-grill <name> --floor-only` (new mode, `pharn-grill.md`)
 
-In `pharn-loop.md` Step 4, between `/pharn-plan`'s return marker and `/pharn-grill`'s route line, one pinned fenced
-block with the two checkers (the same argv `/pharn-ship` pins and `/pharn-grill` Steps 2/2b run):
+`--quick` cannot serve the full loop: its Step 1b refuses any SPEC kind but `quick` (the backstop for the quick
+pipelines). So a sibling mode: **`--floor-only` is `--quick` without Step 1b** — any SPEC kind; Steps 2 and 2b run as
+written (both floor stops; a RED writes the RED grill-log); Steps 3/3b are skipped; on GREEN the `GRILL.md` takes the
+quick shape with the mode line `mode: floor-only (/pharn-grill --floor-only)` and the pinned line
+`interrogation NOT performed — skipped by mode (floor-only)`. Recognized only as the second argument (ADVISORY, as for
+`--quick`). Step 0's scope setter and the Final step's `--clear` are unchanged, so the hook claim holds. `/pharn-loop`
+(full mode) is its one invoker. The description line gains the mode.
 
-```bash
-node pharn/floor/check-plan-spec-agree.mjs pharn/features/<name>/PLAN.md pharn/features/<name>/SPEC.md
-node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md memory-bank/lessons-learned.md
-```
+### B. Policy (`stage-agent-core.mjs`)
 
-- Branch only on the two exit codes (P5): both `0` → route the grill. Either non-zero → **S9** (`blocked:
-stage-refused`, already the row for "a RED spec→plan chain, a RED lessons declaration"), quoting the RED line; no
-  grill agent is spawned and no `GRILL.md` is written (the record's `### next_steps` names the remedy: re-plan).
-- The post-grill read of the same two exits is replaced by this earlier read: the grill's writes-scope is
-  `GRILL.md` alone (fix #7 hook), so a Write-tool edit by the grill cannot change PLAN.md or SPEC.md, and
-  `check-loop-fresh.mjs` check I (`--front`) re-runs both checkers after every build and at the commit gate. A
-  Bash write by the grill agent to PLAN.md is the L19 residual it always was; check I is what catches it, as today.
-  Net request count on the green path: unchanged (the same two reads, earlier).
-- A `--quick` run skips the block: its grill IS these two checks, inline (`## Quick mode` item 3). One
-  parenthetical, the existing `_(a --quick run: …)_` pattern; the quick part file is not touched.
+`ROUTE_POLICY["pharn-loop"].full["pharn-grill"]`: `AGENT` → `"floor-only"`; `INVOCATIONS["pharn-loop"].full` loses
+`pharn-grill`. The header's routed-set sentences change, and the header carries the rationale (P4 owner). Since the
+loop's grill is now inline in BOTH columns, policy parity (`command-hygiene.test.mjs` rule 3) requires the loop to have
+**no** grill route line at all — exactly the shape of the inline-by-policy regress/verify stages.
 
-### Not built: grill ‖ test concurrency (item direction 2) — infeasible in this batch, with reasons
+### C. `/pharn-loop` Step 4 (`pharn-loop.md`) and its quick part
 
-The proposed shape (a grill agent that writes only a draft under `.pharn/`, promoted to `GRILL.md` by a pinned line
-after the test stage returns, markers naming their stage) meets six blockers, three of them beyond the three the item
-named:
+- The grill item loses its route, brief and read lines; it keeps a stage-start marker **without** `--route` and the
+  orchestrator return, as `/pharn-verify` does. Between them: invoke `/pharn-grill <name> --floor-only` INLINE.
+- Its two floor stops ARE the verdict read (the old "same reads as `/pharn-ship`" sentence goes): both exit `0` →
+  `/pharn-test`; either non-zero → **S9** (already the row for a RED chain / RED lessons declaration). No second run of
+  either checker — the collapse decision 3 asks for.
+- `## Running a stage` and the routed-stage lists: the grill moves to the inline-by-policy set in both columns;
+  "`done` from spec, plan or grill" → "spec or plan".
+- One sentence in Step 4 states the trade and cites the owner: no plan interrogation in an unattended run; `GRILL.md`
+  says so; `/pharn-grill <name>` run by a person interrogates.
+- `pharn-loop-quick.md` item 3: no `--mode quick` route line any more (nothing to route); the delta is only "invoke
+  `/pharn-grill <name> --quick` in place of Step 4's `--floor-only`", whose eligibility refusal is S9. Its intro list
+  stops naming the interrogation as a quick-only skip.
 
-1. **One writes-scope per tree (L38).** `/pharn-grill` Step 0 sets the scope and its Final step `--clear`s it. Run
-   beside `/pharn-test`, either call replaces or releases the test stage's scope while it writes its tests (a release
-   drops the loop to the fail-closed default, so the test files are denied — loud, but the run is lost). Avoiding it
-   needs a new `/pharn-grill` mode that sets no scope — and then the grill's writes are judged under the TEST stage's
-   scope, which permits the test files: the shipped claim "Floor: it writes only `pharn/features/<name>/GRILL.md` —
-   the fix #7 hook" (`pharn-grill.md` `## What you may claim`) would no longer hold for that mode.
-2. **One stage-result file per run (newly found).** `stage-agent.mjs report` writes `.pharn/<command>/<name>/
-stage-result.json` (`RESULT_FILE`, one per command+name); two concurrent agents overwrite each other's result, and
-   `read --stage pharn-grill` would refuse the test's result (S9). Fixing it is a floor change to `stage-agent.mjs`,
-   which `orchestrator-direct-stage-calls` is rewriting in this batch.
-3. **Promotion is a Bash write (L19).** Copying the draft to `GRILL.md` after the test stage is a write outside
-   fix #7; `GRILL.md` is reconcile-exempt (`pipeline_artifacts`), so nothing would detect a wrong promotion either. It
-   would need a tested promotion script, not a `cp`.
-4. **Markers and the ledger.** `stage-executions-core.mjs` ends a stage-start row only at the NEXT marker when that is
-   the orchestrator return; a grill start followed by a test start leaves grill's row unmeasured, and the marker-window
-   stage view bills every grill request after the test marker to `pharn-test`. Correct attribution needs per-context
-   stage membership (the 6.29.0 context machinery could carry it) — a ledger-semantics change.
-5. **Inline fallback serializes anyway.** On route exit `3` either stage runs inline in the orchestrator, so the
-   concurrent path exists only when both route to agents; the command would carry two orderings.
-6. **Fingerprint (the item's blocker b) is NOT a blocker** for a `.pharn/` draft — `.pharn/` is fingerprint-excluded,
-   and `ac-tests-lock.mjs` binds no fingerprint — but any tracked write the grill agent made during the red run would
-   refuse the run (fail-closed, a whole front lost).
+### D. `/pharn-ship` Step 2 (`pharn-ship.md`) and its quick part
 
-Saving if built: `min(361.0, 538.3) = 361.0 s` of overlap, minus one orchestrator request for the promotion (~8 s,
-the measured mean gap) ≈ **5.9 min** of the 92 [R·e]. Recorded as follow-up `front-grill-concurrent-agents` in the
-CHANGELOG entry and SHIP.md, with the four changes it needs (per-stage result files, a scope-less grill draft mode with
-its weaker claim stated, a tested promotion script, per-context stage attribution).
+- The pinned two-checker block (unchanged argv) moves from after the grill's return marker to **before** its route
+  line: both `0` → route the grill; either non-zero → **STOP** (no grill agent, no `GRILL.md`), same remedies as
+  today. Net reads on the green path: unchanged.
+- Dropping the post-grill read is safe within its stated bound: the grill's Write-tool scope is `GRILL.md` alone
+  (fix #7 hook, floor), so it cannot edit `PLAN.md`/`SPEC.md` through the write tools; a Bash write could (L19, the
+  residual it always was), and `/pharn-build`'s own Step 0 chain re-check still runs.
+- `pharn-ship-quick.md` item 4: a quick run skips the pre-grill block; `/pharn-grill --quick`'s own two floor stops are
+  that read, either RED a STOP.
 
-### Not built, offered as a policy option (item direction 3)
+### E. Not built — grill ‖ test concurrency (follow-up `front-grill-concurrent-agents`)
 
-Routing the loop's full-mode grill `floor-only` (as `--quick` and `/pharn-ship --quick` already do) would drop the
-interrogation agent: 361.0 s − ~3 inline orchestrator requests × ~8 s ≈ **5.6 min** [R·e], and ~302k cache-write +
-~425k cache-read tokens. It is the maintainer's decision (the interrogation is advisory and gates nothing in the loop,
-but it is the loop's only plan critique); nothing here changes it.
+Blockers, recorded in the CHANGELOG and SHIP.md: (1) one writes-scope per tree (L38) — a scope-less grill mode would be
+judged under the test stage's scope, voiding "writes only GRILL.md"; (2) one `stage-result.json` per (command, name) in
+`stage-agent.mjs` — concurrent agents overwrite each other's result, `read` then refuses (S9); (3) promoting a draft is
+a Bash write (L19) and `GRILL.md` is reconcile-exempt; (4) `executions` leaves the grill row unmeasured and the
+marker-window stage view bills grill requests to `pharn-test`; (5) an inline route serializes anyway; (6) the
+fingerprint is NOT a blocker (`.pharn/` is excluded). With (3) adopted the loop has no grill agent left to overlap, so
+the follow-up matters only to `/pharn-ship`.
 
-### Saving of what is built
+### Saving (92-minute run, [R·e])
 
-- **Green plan (the 92-minute run): 0 s.** The two reads move; none is added or removed.
-- **RED plan:** the whole grill agent is skipped. Its refusal path is a fresh agent (one ~302k-token cache write) plus
-  its Step 0–2b requests; at the run's measured 5.2 s median / 8.7 s mean gap (grill agent, §3) and ~6–10 requests,
-  ≈ **1–1.5 min** and ~0.3M cache-write tokens per RED front [R·e]. No RED-plan run is in the evidence, so this is an
-  estimate of a path, not a measured saving.
+- Loop, full mode, every run: the grill agent's **361.0 s** is replaced by an inline floor-only grill — the Skill load,
+  the setter, two checkers, one `GRILL.md` Write and the clear, ≈ 6 orchestrator requests × ~10.7 s (the run's measured
+  85.7 s / 8 orchestrator gaps) ≈ 64 s. **Saving ≈ 297 s ≈ 5.0 min**, plus the agent's ~302k cache-write and ~425k
+  cache-read tokens (opus).
+- Ship, RED plan only: the grill agent is skipped (one fresh agent ≈ 1–1.5 min). Green path: 0.
 
 ## Files
 
-- `.claude/commands/pharn-loop.md` — Step 4: the pinned two-checker block before the grill's route line, its S9
-  branch, the `--quick` skip, and the post-grill read sentence replaced — layer product `.claude/` (`pharn-*` command)
-- `.dev/floor/command-hygiene.test.mjs` — `pharn-loop.md` joins `PLAN_LESSONS_WIRING` (length 6 → 7); a ✧ ORDER test:
-  in `pharn-loop.md` both checker lines sit after `/pharn-plan`'s return marker and before `/pharn-grill`'s route
-  line, with a discrimination control — layer `.dev/floor` (apparatus)
-- `CLAUDE.md` — the "All six call sites … `PLAN_LESSONS_WIRING`" sentence becomes seven, naming the loop — layer repo
-  meta (not a trusted doc)
-- `SKILLS_VERSION` — provisional 6.45.0 (orchestrator assigns the final number at stacking) — layer repo meta
-- `README.md` — the shields badge only — layer repo meta
-- `CHANGELOG.md` — a new `## [6.45.0]` section, moving any `[Unreleased]` entry into it — layer repo meta
-- `.dev/features/front-grill-concurrent/PLAN.md` — this plan — layer `.dev/features`
-- `.dev/features/front-grill-concurrent/GRILL.md` — grill log — layer `.dev/features`
-- `.dev/features/front-grill-concurrent/BUILD.md` — build log — layer `.dev/features`
-- `.dev/features/front-grill-concurrent/REGRESSION.md` — `.dev/features/front-grill-concurrent/regression-report.json`
-  — regress artifacts — layer `.dev/features`
-- `.dev/features/front-grill-concurrent/VERIFY.md` — `.dev/features/front-grill-concurrent/verify-report.json` — verify
-  artifacts — layer `.dev/features`
-- `.dev/features/front-grill-concurrent/REVIEW.md` — review — layer `.dev/features`
-- `.dev/features/front-grill-concurrent/SHIP.md` — ship record — layer `.dev/features`
+- `pharn/floor/stage-agent-core.mjs` — loop full grill → `floor-only`; `INVOCATIONS` entry removed; header sentences +
+  rationale — layer product floor
+- `pharn/floor/stage-agent-core.test.mjs` — the loop full grill cell's expectation, if any test pins it — apparatus
+- `pharn/floor/stage-agent.test.mjs` — likewise, if a route test pins the loop's full grill as agent — apparatus
+- `.claude/commands/pharn-grill.md` — the `--floor-only` mode + description — layer product `.claude/`
+- `.claude/commands/pharn-loop.md` — Step 4 grill item, `## Running a stage` lists, pointer line — layer product
+  `.claude/`
+- `.claude/commands/pharn-loop-quick.md` — item 3 and the intro list — layer product `.claude/`
+- `.claude/commands/pharn-loop-close.md` — only if a claim there says the full loop interrogates (none found at
+  planning; listed so a needed edit is in scope) — layer product `.claude/`
+- `.claude/commands/pharn-ship.md` — the pre-grill verdict block moved before the grill route line — layer product
+  `.claude/`
+- `.claude/commands/pharn-ship-quick.md` — item 4's verdict-read sentence — layer product `.claude/`
+- `.dev/floor/command-hygiene.test.mjs` — loop `STAGE_AGENT_WIRING` (routed/modeLines), the loop-quick pointer and
+  mutation fixtures that used the loop's quick grill route line, a ✧ ship ORDER test (both checker lines before the
+  grill route line, with a mutation control), ✧ pins for `--floor-only` in `pharn-grill.md` and in `pharn-loop.md`,
+  and any byte ceiling the diff needs (visible) — apparatus
+- `.dev/floor/command-family.test.mjs` — only if a family pin names a moved line — apparatus
+- `CLAUDE.md` — the STAGE-MODEL ROUTING paragraph's routed sets — repo meta
+- `README.md` — badge; the `GRILL.md` bullet, the `/pharn-loop` paragraph and the cost paragraph that call the
+  interrogation quick-only — repo meta
+- `docs/capabilities/**` — regenerated by `npm run docs:generate` if a command change moves it — generated
+- `SKILLS_VERSION` — 6.45.0 — repo meta
+- `CHANGELOG.md` — `## [6.45.0]`, moving any `[Unreleased]` entry into it — repo meta
+- `.dev/features/front-grill-concurrent/PROTECTED-FOLLOWUPS.md` — `LIMITS.md §3a` (and `ARCHITECTURE.md §6`'s grill
+  row) wording the change leaves incomplete — layer `.dev/features`
+- `.dev/features/front-grill-concurrent/PLAN.md`, `GRILL.md`, `BUILD.md`, `REGRESSION.md`, `regression-report.json`,
+  `VERIFY.md`, `verify-report.json`, `REVIEW.md`, `SHIP.md` — pipeline artifacts — layer `.dev/features`
 
 ## Contracts satisfied
 
-- `pharn/pharn-contracts/loop-record.md` — unchanged; the S9 stop it already defines carries the RED (cited, P4).
-- `/pharn-grill`'s two floor stops and their argv — reused verbatim, not re-implemented (P3/P4).
+- `pharn/pharn-contracts/loop-record.md` — unchanged; its S9 stop carries a RED grill stop (cited, P4).
+- `pharn/floor/stage-agent-core.mjs`'s header is the routing protocol's spec (no separate contract); the policy edit is
+  made there.
 
 ## Evals to write (P1)
 
-- No capability is added or changed (no `role:` file), so no eval fixture. The command change is pinned by the
-  command-hygiene tests above (presence, canon path, cross-surface, order, discrimination).
+- No `role:` capability is added or changed, so no eval fixture. Command and policy changes are pinned by the tests in
+  `## Files` (policy parity, order, presence, mutation controls).
 
 ## Guarantee audit (P0)
 
-- "A RED chain or lessons declaration stops the loop before a grill agent is spawned" → **advisory** (command prose;
-  the orchestrating model runs the lines). The two VERDICTS are floor (enum/regex + content-hash checkers, unchanged).
-- "`pharn-loop.md` invokes both checkers against the product canon, before the grill route line" → floor
-  (enum/regex over the command text, `command-hygiene.test.mjs`) — presence and order only, never that a run executed
-  them.
-- "Dropping the post-grill re-read loses nothing" → **advisory** reasoning, bounded: the grill's Write-tool writes are
-  hook-scoped to `GRILL.md` (floor), its Bash writes are not (L19), and `check-loop-fresh.mjs` check I re-reads both
-  checkers after every build (floor verdict; its execution is a pinned line).
-- No new "guarantee" word is introduced in shipped text.
+- "The loop's grill is not routed to an agent" → floor (`ROUTE_POLICY` enum cell + the parity test over the command's
+  lines); that a run obeys `route`'s output and invokes `--floor-only` inline is advisory.
+- "`/pharn-grill --floor-only` writes only `GRILL.md`" → floor (fix #7 hook; Step 0 unchanged).
+- "Both floor stops still gate the loop and ship" → the verdicts are floor (enum/regex + content-hash checkers); acting
+  on them is advisory orchestration, as before.
+- "Ship reads both stops before its grill agent" → floor for presence/order of the pinned lines (enum/regex over the
+  command text); advisory that a run executes them.
+- STRUCK, never written: "the loop's plan was interrogated"; "the floor-only grill checks the plan's quality".
 
 ## Trust audit (P2)
 
-- The checkers' RED lines quote PLAN.md content (untrusted, model-authored) into the record's `### next_steps`
-  exactly as an S9 quote does today — as DATA, never as an instruction. No new input is ingested.
+- No new input. The checkers' RED lines quote `PLAN.md` content into a STOP/S9 report as DATA, as today. The loop no
+  longer ingests a grill agent's free text at all (one fewer `THREAT-MODEL.md §5` residual site per run).
 
 ## Determinism audit (P5)
 
-- The new branch is two exit codes, `0` vs non-zero → a fixed row (S9). No classification.
+- Branches stay exit-code membership tests (`0` vs non-zero → a fixed row / STOP). The policy cell is a closed enum.
 
 ## Trusted-doc / hook / MIN_CLI impact
 
-- None. The spine order in `pharn/ARCHITECTURE.md §6` (`spec → plan → grill → test → build …`) is unchanged — the
-  grill still runs before the test stage. No hook, settings or `MIN_CLI` change.
+- No hook, settings or `MIN_CLI` change. A pre-0.7.0/older CLI is irrelevant: the policy is read at run time from the
+  installed `stage-agent-core.mjs`, and the command and module ship together.
+- `LIMITS.md §3a` lists "the plan interrogation" among what the QUICK loop leaves out — still true, but now the full
+  loop leaves it out too, so the contrast is incomplete (stale, not an overclaim). `pharn/ARCHITECTURE.md §6`'s grill
+  row ("findings vs plan") reads as if every grill-log carries findings; the quick runs already did not. Both go to
+  `PROTECTED-FOLLOWUPS.md` with exact current text and proposed replacement.
 
 ## Stay-in-lane note
 
-`orchestrator-direct-stage-calls` and `loop-entry-preflight` edit `pharn-loop.md` now. This diff adds one fenced block
-and rewrites two sentences inside Step 4, between the plan's return marker and the grill's route line, and touches no
-route/marker/read line, so a merge with theirs is a local text merge.
+`orchestrator-direct-stage-calls` and `loop-entry-preflight` edit `pharn-loop.md` / `pharn-ship.md`. This diff removes
+the loop's grill route/brief/read lines (theirs may rewrite those same lines — a textual conflict the orchestrator
+resolves by dropping them) and moves ship's verdict block within Step 2; nothing else.
 
 ## Open questions (HALT)
 
-- None blocking. For the orchestrator: (a) the version (minor 6.45.0 as provisioned, though "move an existing read
-  earlier" is arguably a patch); (b) whether to mirror the same reorder in `/pharn-ship` Step 2 (out of this item's
-  lane; same saving per RED plan).
+- None.
