@@ -68,18 +68,23 @@ hands the parsed values to the pure `installCheck(inputs)`, which returns ONE cl
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
 | `clean`         | npm; every compared entry agrees (or the lock lists no installable package and there is no `node_modules`)                                                                                                                                                                     | no       |
 | `drifted`       | npm; ≥ 1 entry `changed`, `missing` or `extraneous`                                                                                                                                                                                                                            | **yes**  |
-| `not-installed` | npm; the lock lists ≥ 1 non-optional package and there is no `node_modules`                                                                                                                                                                                                    | **yes**  |
+| `not-installed` | npm; the lock lists ≥ 1 package that would count as `missing` (below) and there is no `node_modules`                                                                                                                                                                           | **yes**  |
 | `not-checked`   | with a closed `why`: `no-manifest`, `no-lockfile`, `several-lockfile-families`, `unmeasured-family` (pnpm/yarn/bun), `lockfile-unreadable`, `lockfile-unsupported` (no `packages` map, npm ≤ 6), `node-modules-unreadable`, `no-hidden-lockfile`, `hidden-lockfile-unreadable` | no       |
 
 The comparison, over keys with a `node_modules/` segment only (a workspace's own folder entries are source, not an
 install): `changed` = present in both and `version`, `link`, and (`integrity` when both carry one, else `resolved`)
 differ — integrity first, so a registry-host difference in `resolved` cannot read as drift; `missing` = in the lock,
-absent from the hidden lockfile, and neither `optional` nor `devOptional` (npm skips an optional package that does not
-fit the platform — the 271 measured above); `extraneous` = in the hidden lockfile, absent from the lock. Lockfile =
-`npm-shrinkwrap.json` when present, else `package-lock.json` (npm's own precedence). Non-string field values are
-compared by `JSON.stringify` (total over parsed JSON) and shown as `null` (L62).
+absent from the hidden lockfile, and the lock entry carries **none** of `dev`, `peer`, `optional`, `devOptional`
+(GATE 1 change); an absent entry that carries one of them is `missing-unchecked` — counted and reported, never drift,
+because npm skips an optional package that does not fit the platform (the 271 measured above) and an install
+configured with `omit=dev`, `NODE_ENV=production` or `legacy-peer-deps` leaves dev/peer entries absent on every
+`npm ci`, which would otherwise be a permanent false stop with no remedy (L27); `extraneous` = in the hidden lockfile,
+absent from the lock. Lockfile = `npm-shrinkwrap.json` when present, else `package-lock.json` (npm's own precedence).
+Non-string field values are compared by `JSON.stringify` (total over parsed JSON) and shown as `null` (L62).
+**Residual, stated:** a dev/peer/optional package that is really needed and really absent reads `clean` (its gate fails
+as today); `changed` always counts, so the measured `@sentry/core` case (a changed version) is still caught.
 
-The result also carries `family`, `lockfile`, `counts` `{changed, missing, extraneous}`, at most 20 `mismatches`
+The result also carries `family`, `lockfile`, `counts` `{changed, missing, extraneous, missing_unchecked}`, at most 20 `mismatches`
 `{path, kind, lockfile, installed}` sorted by path (DATA), and `remedy` = `resolveInstall(...)`'s command over the
 HEAD tree's lockfile families — `INSTALL_RULE`, the one owner of the install command (L35), so `npm ci` for npm, the
 command the BASE side runs. `detailText(result)` renders the refusal detail (fixed sentences + the capped list);
@@ -181,8 +186,9 @@ No capability is added (no `role:` file), so no eval fixture; the floor modules 
 --package-lock-only` (measured), reads `clean`. Every false `clean` is today's behaviour, never a false refusal.
 - "pnpm / yarn / bun installs are checked" → **NOT claimed**: `not-checked` `unmeasured-family`, reported.
 - The `head_install` block in a report → advisory (re-read from `.pharn/`, which the write tools reach while paused).
-- The remedy `npm ci` is reachable → measured once (scratch probe); bound: an npm config that omits dev or peer
-  dependencies (`omit`, `NODE_ENV=production`, `legacy-peer-deps`) reads as `missing` and `npm ci` keeps it so.
+- The remedy `npm ci` is reachable → measured once (scratch probe). An npm config that omits dev or peer
+  dependencies (`omit`, `NODE_ENV=production`, `legacy-peer-deps`) leaves only `missing-unchecked` entries, which never
+  refuse (GATE 1 change), so no refusing state is one `npm ci` cannot clear.
 
 ## Trust audit (P2)
 
@@ -199,7 +205,8 @@ proceeds exactly as today (the status quo), never a guess. No question is added.
 ## Applied lessons
 
 - L27 — the one remedy (`npm ci`) is printed only for the two refusing states and was measured to reach `clean`; the
-  thin callers name it only under `head-install-drift`; `not-checked` prints no remedy.
+  thin callers name it only under `head-install-drift`; `not-checked` prints no remedy; and (GATE 1) an absent
+  dev/peer/optional entry never refuses, because for an install that omits them `npm ci` cannot clear it.
 - L35 — one owner each: the install command (`resolveInstall`), the lockfile names (`LOCKFILE_FAMILIES`, which
   `lockfilesAtBase` now reads), the check (one function both stage scripts call).
 - L41 — `readInstallCheck(root)` has no default root; every test passes it.
@@ -226,7 +233,20 @@ proceeds exactly as today (the status quo), never a guess. No question is added.
 - npm's own freshness walk (`assertNoNewer`) is not mirrored: a hidden lockfile older than a package folder is trusted.
 - `/pharn-dev-regress` / `/pharn-dev-verify` (prose) are unchanged.
 
+## GATE 1 (orchestrator, under the user's delegation — a model decision, not a human approval)
+
+Approved with one change, 2026-10-05:
+
+- Response (a) refuse — accepted; (b) declined with the follow-up `head-install-opt-in` named; (c) advisory labelling
+  in the `head_install` block — accepted.
+- Every `not-checked` state fails open (proceeds as today) and is reported in the `head_install` block.
+- **CHANGE:** a `missing` entry counts as drift only when its lockfile entry carries none of `dev`, `peer`,
+  `optional`, `devOptional`; the others are `missing-unchecked` (advisory, counted). `changed` and `extraneous` always
+  count. No opt-out flag. The residual (a needed dev package that is really absent reads `clean`) is stated above.
+- The L43 bound and "a lockfile edited without an install now stops at S9 with `npm ci` as the remedy" are accepted as
+  stated bounds; the latter is said in the CHANGELOG.
+- Keep the `stage-regress.mjs` diff local.
+
 ## Open questions (HALT)
 
-None for the planner; the response choice (a), verify's inclusion and the fail-open `not-checked` states are put to the
-orchestrator at GATE 1.
+None.
