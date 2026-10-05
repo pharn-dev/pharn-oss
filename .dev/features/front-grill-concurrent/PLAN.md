@@ -146,6 +146,8 @@ the follow-up matters only to `/pharn-ship`.
 - `pharn/floor/grill-scan.mjs` — (review R2) runs the five `scan-plan-*` scanners over a PLAN and prints the
   `--floor-only` GRILL.md scan section — layer product floor
 - `pharn/floor/grill-scan.test.mjs` — its tests — apparatus
+- `pharn/floor/entry-gates.test.mjs` — (merge with 6.42.0) the loop's wait-line anchor moves from the grill's removed
+  `read` line to its stage-start marker — apparatus
 
 ## Review amendments (independent review of `cfb7158`; owner decisions, all fixed)
 

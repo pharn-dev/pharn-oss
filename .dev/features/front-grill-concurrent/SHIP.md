@@ -33,6 +33,10 @@ The batch ran unattended under the user's delegation.
 7. **Merges and PR**
    - Merged `origin/main` ab0b11c (6.39.0) and opened PR #317.
    - Merged `origin/main` 7696477 (6.40.0); its `[Unreleased]` entry was already in 6.40.0.
+   - Merged `origin/main` c62999a (6.42.0, entry gates).
+     - Its `entry-gates.test.mjs` wiring test anchored the loop's wait line on the grill's `read` line, which this
+       change removes. CI `check` and `floor` failed on exactly that one test, and local `npm test` showed 4,778/4,779.
+     - The anchor moved to the grill's stage-start marker. The test now passes; the `docs:generate` README count is 120.
    - CI `check` and `floor` pass. CodeQL `Analyze` was cancelled at 15 min before any step ran; the same happened on
      `main`'s own run. A rerun was queued; no step of this PR failed.
 8. **Independent review** of `cfb7158` — 0 floor-gate findings and 5 advisory findings (R1–R5), all fixed

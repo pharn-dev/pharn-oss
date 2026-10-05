@@ -684,7 +684,8 @@ const WIRING = [
     file: "pharn-loop.md",
     startAfter: "node pharn/floor/mark-phase.mjs --name '<name>' --kind run-start",
     startBefore: "node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-spec --name '<name>'",
-    waitAfter: "node pharn/floor/stage-agent.mjs read --command pharn-loop --name '<name>' --stage pharn-grill",
+    // 6.45.0: the loop's grill runs inline (floor-only) and has no `read` line; its stage-start marker anchors it.
+    waitAfter: "node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-grill",
     waitBefore: "node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-test --name '<name>'",
     abortIn: "\n## At the stop — ",
     rows: [
