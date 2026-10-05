@@ -279,6 +279,44 @@ test("★ WIRING — pharn-verify.md's pinned fresh line, executed verbatim, rea
   });
 });
 
+// ── ★ WIRING 6.36.0 — a project's gate exclusion, through the COMMITTED line, disclosed in the report and VERIFY.md ──
+test("★ WIRING 6.36.0 — the pinned line over a project that EXCLUDES a red gate: done/PASS, gate_run.excluded and the VERIFY.md line; the control without it FAILs", () => {
+  const pinned = readFileSync(COMMAND, "utf8")
+    .split(/\r?\n/)
+    .filter((l) => /^node pharn\/floor\/stage-verify\.mjs --feature <name> --timeout-ms \d+ --budget-ms \d+\s*$/.test(l));
+  assert.equal(pinned.length, 1);
+  const line = pinned[0].replaceAll("<name>", FEATURE).trim();
+  const scripts = { test: "node --test src/", typecheck: 'node -e "process.exit(1)"' };
+  // the control: no declaration → the red typecheck gate runs and verify FAILs on it
+  withFixture({ scripts }, ({ dir }) => {
+    const r = checked(spawnSync("sh", ["-c", line], { cwd: dir, encoding: "utf8", env: CLEAN_ENV }));
+    assert.equal(r.code, 0, r.raw);
+    const report = readReport(dir);
+    assert.equal(report.verdict, "FAIL");
+    assert.deepEqual(report.failing_gates, ["typecheck"]);
+    assert.equal(Object.hasOwn(report.gate_run, "excluded"), false);
+    assert.doesNotMatch(readFileSync(join(dir, RENDER), "utf8"), /EXCLUDED and NOT RUN/);
+  });
+  const committed = { "pharn.config.json": JSON.stringify({ gates: { exclude: ["typecheck", "e2e"] } }) + "\n" };
+  withFixture({ scripts, committed }, ({ dir }) => {
+    const r = checked(spawnSync("sh", ["-c", line], { cwd: dir, encoding: "utf8", env: CLEAN_ENV }));
+    assert.equal(r.code, 0, r.raw);
+    const report = readReport(dir);
+    assert.equal(report.verdict, "PASS", JSON.stringify(report));
+    assert.deepEqual(Object.keys(report.gates).sort(), ["reconcile", "test"]);
+    assert.deepEqual(report.gate_run.excluded, { declared_in: "pharn.config.json#gates.exclude", ids: ["typecheck"] });
+    const stamp = JSON.parse(readFileSync(join(dir, STAMP), "utf8"));
+    assert.deepEqual(validateStamp(stamp, { stage: "verify", feature: FEATURE, side: null }), { ok: true });
+    assert.deepEqual(stamp.excluded, report.gate_run.excluded, "the report's block is the stamp's");
+    const md = readFileSync(join(dir, RENDER), "utf8").split("\n");
+    const at = md.findIndex((l) => l.startsWith("**VERIFIED: floor gates PASS**"));
+    assert.match(
+      md[at + 2],
+      /^\*\*1 discovered gate\(s\) EXCLUDED and NOT RUN\*\* by the project's `pharn\.config\.json` `gates\.exclude`: `typecheck`/
+    );
+  });
+});
+
 // ── ★ LOOP-FRESH over the REAL stage outputs ────────────────────────────────────────────────────────
 test("★ LOOP-FRESH — stage-regress.mjs then stage-verify.mjs over one fixture read FRESH, A B C D J E H F G each pass", () => {
   withFixture({}, ({ dir, base }) => {
@@ -330,7 +368,7 @@ test("verdict FAIL — a red project gate is named; done is still exit 0 (the ve
   });
 });
 
-// ── 6.36.0 — the injected instruction-growth gate, through the real script (the plan's acceptance) ──────────────────
+// ── 6.38.0 — the injected instruction-growth gate, through the real script (the plan's acceptance) ──────────────────
 const GROWTH_FILES = [
   "- `src/index.js` — the feature",
   "- `src/index.test.js` — its test",
@@ -339,7 +377,7 @@ const GROWTH_FILES = [
 ];
 const CLAUDE_BASE = "# Project\n\n- use node --test\n";
 
-test("6.36.0 ACCEPTANCE — a 5 KB section appended to CLAUDE.md fails verify, naming `instruction-growth` alone", () => {
+test("6.38.0 ACCEPTANCE — a 5 KB section appended to CLAUDE.md fails verify, naming `instruction-growth` alone", () => {
   withFixture({ files: GROWTH_FILES, committed: { "CLAUDE.md": CLAUDE_BASE } }, ({ dir }) => {
     writeFileSync(join(dir, "CLAUDE.md"), `${CLAUDE_BASE}\n## Feature X narrative\n\n${"n".repeat(5 * 1024)}\n`);
     const r = runCli(dir, fresh());
@@ -356,7 +394,7 @@ test("6.36.0 ACCEPTANCE — a 5 KB section appended to CLAUDE.md fails verify, n
   });
 });
 
-test("6.36.0 ACCEPTANCE — a one-line convention edit to CLAUDE.md passes verify (the control)", () => {
+test("6.38.0 ACCEPTANCE — a one-line convention edit to CLAUDE.md passes verify (the control)", () => {
   withFixture({ files: GROWTH_FILES.slice(0, 3), committed: { "CLAUDE.md": CLAUDE_BASE } }, ({ dir }) => {
     writeFileSync(join(dir, "CLAUDE.md"), `${CLAUDE_BASE}- prefer pnpm over npm\n`);
     const r = runCli(dir, fresh());
@@ -365,7 +403,7 @@ test("6.36.0 ACCEPTANCE — a one-line convention edit to CLAUDE.md passes verif
   });
 });
 
-test("6.36.0 ACCEPTANCE ★ ANTI-GAMING — the 5 KB feature that also raises the threshold in its own tree still fails verify", () => {
+test("6.38.0 ACCEPTANCE ★ ANTI-GAMING — the 5 KB feature that also raises the threshold in its own tree still fails verify", () => {
   withFixture({ files: GROWTH_FILES, committed: { "CLAUDE.md": CLAUDE_BASE } }, ({ dir }) => {
     writeFileSync(join(dir, "CLAUDE.md"), `${CLAUDE_BASE}\n## Feature X narrative\n\n${"n".repeat(5 * 1024)}\n`);
     writeFileSync(join(dir, "pharn.config.json"), JSON.stringify({ budget: { instructionGrowthBytes: 1000000 } }) + "\n");

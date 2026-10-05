@@ -46,8 +46,9 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { acRowsOf } from "./ac-tests-core.mjs";
-import { LEVEL_GATES, acFilesFor, discoverGates, resolveSet, validateStamp } from "./gate-run-core.mjs";
+import { LEVEL_GATES, acFilesFor, discoverGates, levelExcludedGates, resolveSet, validateStamp } from "./gate-run-core.mjs";
 import { RECORD_REASONS, formatFor, loadResultsConfig, testRecord } from "./test-results-core.mjs";
+import { loadGateExclusion } from "./gate-exclusion-core.mjs";
 import { fingerprint } from "./worktree-fingerprint.mjs";
 
 /** The red run's OWN reasons. An AC whose gate record is refused carries item 01's RECORD_REASONS member instead. */
@@ -65,14 +66,23 @@ export const RED_RUN_REASONS = Object.freeze([...OWN_REASONS, ...RECORD_REASONS]
 export const STAMP_FILE = "stamp.json";
 
 /** The ONE line an unattended caller prints when a level has no runner (grill G11: the brief's `blocked:
- *  no-test-runner`). Built from closed-set values only — AC ids and levels — so it carries no project text. */
+ *  no-test-runner`). Built from closed-set values only — AC ids, levels and ALLOWLIST gate ids — so it carries no
+ *  project text. 6.36.0: an unavailable AC whose level has discovered gates that the project's `pharn.config.json`
+ *  `gates.exclude` removed (`excluded`, non-empty) needs a different remedy than a test-infra increment, so the
+ *  suggestion names it — alone when every unavailable AC is exclusion-caused, after the setup command when only some
+ *  are. The closed `blocked: no-test-runner — ` prefix is unchanged (S12 is decided by the preflight's exit code). */
 export function blockedLine(unavailable) {
   const acs = unavailable.map((u) => `${u.id} (${u.level})`).join(", ");
-  const levels = [...new Set(unavailable.map((u) => u.level))].sort().join(" and ");
-  return (
-    `blocked: no-test-runner — ${acs}; suggested: /pharn-ship "set up a test runner for ${levels} with per-test results ` +
-    `(spec_kind: test-infra)"`
-  );
+  const byExclusion = unavailable.filter((u) => Array.isArray(u.excluded) && u.excluded.length);
+  const others = unavailable.filter((u) => !byExclusion.includes(u));
+  const levels = [...new Set(others.map((u) => u.level))].sort().join(" and ");
+  const setup = `/pharn-ship "set up a test runner for ${levels} with per-test results (spec_kind: test-infra)"`;
+  const unexclude = byExclusion.length
+    ? `remove ${[...new Set(byExclusion.flatMap((u) => u.excluded))].join(", ")} from pharn.config.json gates.exclude, or ` +
+      `re-specify ${byExclusion.map((u) => u.id).join(", ")} at a level whose gate is not excluded`
+    : null;
+  const suggested = others.length === 0 && unexclude ? unexclude : unexclude ? `${setup}; and ${unexclude}` : setup;
+  return `blocked: no-test-runner — ${acs}; suggested: ${suggested}`;
 }
 
 /** The feature a mapping belongs to: the name of the directory AC-TESTS.md sits in. */
@@ -97,20 +107,34 @@ export function readRows(acTestsPath) {
  * each of those a configured per-test results format. An AC is unavailable when its level has no discovered gate,
  * or when ANY of its discovered gates has no results format — the verdict needs every gate's record, so a partly
  * configured level would fail later for a reason a human cannot act on before the run (grill G6).
- * @returns {{unavailable: {id: string, level: string, why: string}[], gates: string[]}}
+ * `exclude` (6.36.0, required — L41): the project's declared gate exclusion (gate-exclusion-core.mjs), removed from
+ * discovery exactly as the run removes it; a level whose discovered gates are ALL excluded is unavailable, and its
+ * entry carries those ids in `excluded` — never a vacuous pass over a level nothing will run (L34).
+ * @returns {{unavailable: {id: string, level: string, why: string, excluded: string[]}[], gates: string[]}}
  */
-export function preflight({ rows, scripts, root }) {
-  const have = new Set(discoverGates(scripts).map((e) => e.id));
+export function preflight({ rows, scripts, root, exclude }) {
+  if (!Array.isArray(exclude)) throw new TypeError("preflight: `exclude` must be the loaded gate exclusion (an array)");
+  const discovered = new Set(discoverGates(scripts).map((e) => e.id));
+  const have = new Set([...discovered].filter((id) => !exclude.includes(id)));
   const config = loadResultsConfig(root);
   const unavailable = [];
   const gates = new Set();
   for (const r of rows) {
     const ids = LEVEL_GATES[r.level].filter((id) => have.has(id));
     if (ids.length === 0) {
+      // The one rule (gate-run-core levelExcludedGates, which check-ac-tests also applies at plan time — L35), read
+      // against the manifest; with no manifest the reason is "no script", never the exclusion.
+      const excluded =
+        scripts !== null && typeof scripts === "object" && !Array.isArray(scripts)
+          ? levelExcludedGates({ level: r.level, scripts, exclude })
+          : [];
       unavailable.push({
         id: r.id,
         level: r.level,
-        why: `package.json has no ${LEVEL_GATES[r.level].map((g) => `\`${g}\``).join(" or ")} script`,
+        why: excluded.length
+          ? `every ${r.level} gate package.json has (${excluded.map((g) => `\`${g}\``).join(", ")}) is excluded by the project's pharn.config.json gates.exclude`
+          : `package.json has no ${LEVEL_GATES[r.level].map((g) => `\`${g}\``).join(" or ")} script`,
+        excluded,
       });
       continue;
     }
@@ -121,6 +145,7 @@ export function preflight({ rows, scripts, root }) {
         id: r.id,
         level: r.level,
         why: `no per-test results for ${unconfigured.map((g) => `\`${g}\``).join(", ")} (${f.reason_code})`,
+        excluded: [],
       });
       continue;
     }
@@ -155,7 +180,12 @@ export function bindStamp({ stamp, rows, feature, root }) {
   } catch (e) {
     return { ok: false, reason: `cannot read ${join(root, "package.json")} to re-resolve the red run's gates: ${e.code ?? e.message}` };
   }
-  const res = resolveSet({ stage: "ac-test", feature, scripts, acRows: rows });
+  // The exclusion `init` applied (6.36.0), read from the same root. A declaration changed since the run re-resolves to a
+  // different set (or refuses) when it touches a level gate the mapping needs; any edit to pharn.config.json also moves
+  // the fingerprint compared below, so the stamp does not bind either way.
+  const ex = loadGateExclusion(root);
+  if (!ex.ok) return { ok: false, reason: `cannot re-resolve the red run's gates: ${ex.reason}` };
+  const res = resolveSet({ stage: "ac-test", feature, scripts, acRows: rows, exclude: ex.exclude });
   if (!res.ok) return { ok: false, reason: `the live package.json no longer resolves this mapping's red run: ${res.reason_code}` };
   const shape = (xs) => JSON.stringify(xs.map((e) => [e.id, e.shell ?? null, e.argv ?? null, e.files ?? []]));
   if (shape(res.spec.entries) !== shape(stamp.runs)) {

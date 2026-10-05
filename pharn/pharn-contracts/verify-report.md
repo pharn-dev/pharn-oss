@@ -122,7 +122,7 @@ costs a reader.
   membership** of the gate id `reconcile` — a reconcile red is never retried, because a retry re-anchors
   the reconciliation baseline and would erase the detected escape — and, since 6.20.0, of `ac-evidence` (the AC
   evidence changed or is missing; a rebuild cannot restore it), reporting which fired in its closed
-  `terminal_cause`; `ac-delivery` is an ordinary, retried red, and so is `instruction-growth` (6.36.0 — the gate the
+  `terminal_cause`; `ac-delivery` is an ordinary, retried red, and so is `instruction-growth` (6.38.0 — the gate the
   runner injects for verify before `reconcile`: the project's always-loaded instruction files gained more bytes since
   the base than the base commit's threshold allows; `pharn/floor/instruction-files-core.mjs`'s header is its spec). It
   refuses a `FAIL` report whose
@@ -240,6 +240,12 @@ additionally carries:
   `/pharn-verify`" rather than to a stop.
 - **Build-completeness is NOT in the gate map.** It reaches the verdict from the stamp's
   `aux.completeness`, which is what keeps the `INCOMPLETE` verdict reachable. See `gate-run-record.md`.
+- **`gate_run.excluded` (6.36.0, optional).** `{ "declared_in": "pharn.config.json#gates.exclude", "ids": [...] }`,
+  copied from the stamp when the project's `gates.exclude` removed a discovered gate, and absent otherwise, so every
+  other report is byte-identical. The verdict covers only the gates that ran, and an excluded gate is evidence neither
+  way. `VERIFY.md` renders one line directly under the verdict line naming the ids. An id is shown inline only after
+  an ALLOWLIST membership test. ADVISORY like the rest of the block: `check-loop-fresh.mjs` E does not compare it.
+  Shape and bounds: `gate-run-record.md`, "Excluding a discovered gate".
 - **The bound (L43):** a stamp certifies **internal consistency, never provenance** — a self-consistent
   fabricated stamp passes. **`gate_run` has one machine consumer:** `check-loop-fresh.mjs` requires
   `gate_run.stamp_sha256` to equal the sha256 of the verify stamp on disk and re-derives

@@ -14,8 +14,8 @@ the plan-scope setter (24 paths), and the reconcile epoch was anchored after it.
 - Contracts: `verify-report.md` gets the gate id in its two built-in-gate lists. `gate-run-record.md` gets the reserved
   ids, the order and the "proves" line.
 - `/pharn-verify` gets one reference bullet (version 0.6.0; 18,286 B against its 18,432 B ceiling).
-- `CLAUDE.md` gets a Commands entry. `SKILLS_VERSION` is 6.36.0, with the README badge and the regenerated
-  CURRENT-STATE count (110). `CHANGELOG [6.36.0]` is added.
+- `CLAUDE.md` gets a Commands entry. `SKILLS_VERSION` is 6.38.0 (6.36.0 at build time; renumbered after #307 and #308 merged), with the README badge and the regenerated
+  CURRENT-STATE count (110). `CHANGELOG [6.38.0]` is added.
 
 ## Decisions made during the build (recorded, each within the approved plan)
 

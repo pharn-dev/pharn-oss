@@ -627,6 +627,34 @@ test("★ the stamp flags are MUTUALLY EXCLUSIVE with the positional maps, and m
   });
 });
 
+// ── 6.37.0: partitionScope's pre-run input (regress-pre-run-snapshot) ─────────────────────────────────────────────
+test("partitionScope — a pre-run path is subtracted AFTER the closed exemptions, only when undeclared, and REPORTED", async () => {
+  const { partitionScope } = await import("./check-regress.mjs");
+  const inside = ["src/a.js", "src/user.js", "pharn/features/demo/GRILL.md", "LIMITS.md", "src/stray.js", "src/user.test.js"];
+  const args = { inside, declared: ["src/a.js"], tests: ["src/user.test.js", "src/other.test.js"], evalPairs: [], feature: "demo" };
+  const before = partitionScope(args);
+  assert.deepEqual(before.escaped, ["src/user.js", "src/stray.js", "src/user.test.js"]);
+  assert.deepEqual(before.preRun, [], "no pre-run input: nothing subtracted (the CLI's case)");
+  const after = partitionScope({
+    ...args,
+    preRunUnchanged: ["src/a.js", "src/user.js", "pharn/features/demo/GRILL.md", "src/user.test.js", "not/inside.js"],
+  });
+  assert.deepEqual(after.escaped, ["src/stray.js"], "only the path the snapshot does not hold escapes");
+  assert.deepEqual(after.preRun, ["src/user.js", "src/user.test.js"], "undeclared and not exempt — and nothing outside `inside`");
+  assert.deepEqual(after.escapeExempt, before.escapeExempt, "the closed exemptions are applied first and unchanged");
+  assert.deepEqual(after.outsideTests, before.outsideTests, "inside is unchanged, so the outside gate inputs are too");
+  assert.deepEqual(after.outsideTests, ["src/other.test.js"], "a pre-run test file stays inside — not compared at regress (stated bound)");
+});
+
+test("partitionScope — the `scope` CLI passes no pre-run list, so its output is unchanged (no pre_run key)", () => {
+  const r = run(["scope", "--changed", "src/a.js,src/b.js", "--declared", "src/a.js", "--feature", "demo"]);
+  assert.equal(r.status, 1);
+  const out = JSON.parse(r.stdout);
+  assert.deepEqual(out.escaped, ["src/b.js"]);
+  assert.equal(Object.hasOwn(out, "pre_run_snapshot"), false);
+  assert.equal(Object.hasOwn(out, "preRun"), false);
+});
+
 test("★ L43 BOUND, PROVEN NOT ASSERTED — a self-consistent FABRICATED pair passes", () => {
   // Hand-built, never produced by run-gates.mjs. Internally consistent, therefore accepted — which is
   // precisely the claim's limit. "The checker accepted these stamps" never means "these gates ran".

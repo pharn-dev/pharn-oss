@@ -34,6 +34,13 @@
 // • It LEAVES NO RECORD: the entry prints its JSON to stdout, and nothing writes it anywhere. In /pharn-loop nothing
 //   downstream re-checks it (check-loop-fresh.mjs skips G and H in quick mode; the commit gate does not re-run it);
 //   /pharn-ship copies its result into SHIP.md, a model-written line.
+// • Inside an open /pharn-loop or /pharn-ship run (6.37.0), a changed path the run's PRE-RUN SNAPSHOT recorded with the
+//   bytes it still holds is reported in `pre_run_snapshot.unchanged`, not counted as an escape — so a build that writes
+//   such a path back to its recorded bytes is not seen, a path an earlier run escaped with is pre-run state for a
+//   re-run, and the record can be forged through Bash (pre-run-snapshot-core.mjs states each bound). With no open run
+//   or no snapshot the check is exactly what it was — and "open" is a marker's presence and age (≤ 24 h), so an
+//   interrupted run's leftover marker makes a later standalone check apply that run's snapshot. The snapshot reader brings regress-base-reuse.mjs and run-gates.mjs
+//   into this module's load graph; the entry's import() maps a load failure to `crashed`.
 // • The only shell text left is the pinned line itself; the slug and the base reach it inside single quotes, and a
 //   caller that types anything else there is outside this module's reach (the loop's S1 slug rule; a SHA git printed).
 // • That a caller RUNS it, and obeys its exit code, is advisory orchestration (L19); the verdict is floor.
@@ -51,6 +58,7 @@ import { FEATURE_SLUG_RE, SHA_RE } from "./gate-run-core.mjs";
 import { containmentWalk, gitSync } from "./stage-runtime.mjs";
 import { declaredWrites, changedPaths } from "./scope-inputs.mjs";
 import { partitionScope, scopeFindings, normPath } from "./check-regress.mjs";
+import { preRunUnchanged } from "./pre-run-snapshot.mjs";
 
 const FEATURES_DIR = "pharn/features";
 const FLAGS = new Set(["--feature", "--base"]);
@@ -126,8 +134,17 @@ function check(args) {
   }
   const inside = changed.value;
 
-  const { escaped, escapeExempt } = partitionScope({ inside, declared, feature });
-  const doc = { feature, base, inside, declared, escaped, escape_exempt: escapeExempt };
+  const preRunDecision = preRunUnchanged({ feature, base, inside });
+  const { escaped, escapeExempt, preRun } = partitionScope({ inside, declared, feature, preRunUnchanged: preRunDecision.unchanged });
+  const doc = {
+    feature,
+    base,
+    inside,
+    declared,
+    escaped,
+    escape_exempt: escapeExempt,
+    pre_run_snapshot: { status: preRunDecision.status, unchanged: preRun },
+  };
   if (escaped.length) finish({ ...doc, findings: scopeFindings(escaped) }, EXIT.escaped);
   finish(doc, EXIT.clean);
 }

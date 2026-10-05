@@ -491,8 +491,45 @@ test("item 01's reason, fatal — no `test` gate in the head run is `gate-absent
     assert.equal(g.verdict, "INCONCLUSIVE");
     assert.deepEqual([...new Set(reasonsOf(g))], ["gate-absent"]);
     assert.deepEqual(g.unmapped_anomalies, []);
+    assert.doesNotMatch(g.acs[0].detail, /gates\.exclude/, "no exclusion block, no exclusion named");
     REACHED.add("gate-absent");
   });
+});
+
+test('6.36.0 (independent review R6, reproduced) — `gates.exclude: ["typecheck"]` added after the lock → FAIL test-infra-changed; control PASS', () => {
+  withWorld({}, (w) => {
+    const control = gateOf(w);
+    assert.equal(control.verdict, "PASS", JSON.stringify(control, null, 1));
+    writeFileSync(
+      join(w.root, "pharn.config.json"),
+      JSON.stringify({ testResults: { test: "vitest-json" }, gates: { exclude: ["typecheck"] } })
+    );
+    const g = gateOf(w);
+    only(g, "test-infra-changed", "FAIL");
+    assert.match(g.evidence[0].detail, /pharn\.config\.json gates\.exclude: typecheck was added — discovery no longer runs it/);
+  });
+});
+
+test("6.36.0 (grill G11) — a level gate the stamp says was EXCLUDED is named in the detail; the reason and verdict do not move", () => {
+  withWorld({}, (w) => {
+    const stamp = stampOf(w, [{ id: "lint" }, { id: "reconcile" }]);
+    stamp.excluded = { declared_in: "pharn.config.json#gates.exclude", ids: ["test"] };
+    const g = evaluateAcGate({ feature: NAME, stamp, outDir: w.outDir, root: w.root });
+    assert.equal(g.verdict, "INCONCLUSIVE");
+    assert.deepEqual([...new Set(reasonsOf(g))], ["gate-absent"]);
+    assert.match(g.acs[0].detail, /^the head run has none of test — test excluded by the project's pharn\.config\.json gates\.exclude$/);
+  });
+  const b = bootWorld(["unit"]);
+  try {
+    const stamp = stampOf(b, [{ id: "lint" }, { id: "reconcile" }]);
+    stamp.excluded = { declared_in: "pharn.config.json#gates.exclude", ids: ["test"] };
+    const g = evaluateAcGate({ feature: NAME, stamp, outDir: b.outDir, root: b.root });
+    only(g, "ac-untested", "FAIL");
+    assert.match(g.acs[0].detail, /test excluded by the project's pharn\.config\.json gates\.exclude, so no rebuild delivers it/);
+    assert.doesNotMatch(g.acs[0].detail, /not delivered yet/);
+  } finally {
+    b.done();
+  }
 });
 
 test("6.31.0 (M6) — an anomaly decides an AC only in a file that AC maps; elsewhere it is REPORTED, never verdict-bearing", () => {

@@ -290,7 +290,9 @@ for such a SPEC is a `spec-kind` RED. Exit **0** → continue. Exit **2** → th
 
    - **0** → GREEN. **1** → the `RED — <kind>` lines name each problem. Fix AC-TESTS.md and re-run. If the fix is in
      PLAN.md's `## Files` (an `in-plan-files`, `test-infra-in-plan` or `ac-artifact-in-plan` RED, for instance), first re-scope to PLAN.md with the Step 0 setter
-     line. Then edit it, re-run Step 4b, re-scope to AC-TESTS.md (step 1 above), and re-run this check. **2** → a
+     line. Then edit it, re-run Step 4b, re-scope to AC-TESTS.md (step 1 above), and re-run this check. A
+     **`level-excluded`** RED (6.36.0) is not yours to fix: the SPEC sets the level and `pharn.config.json`'s
+     `gates.exclude` removes its gates — HALT and report it (re-specify the criterion, or keep the gate). **2** → a
      file is missing or unreadable, or (6.21.1) the chain check it shells crashed (`UNUSABLE child-crashed — …`):
      no verdict — HALT and report it.
    - **Map only NEW test files.** Nothing here checks that a mapped file does not already exist. An existing

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// pharn/floor/check-instruction-files.mjs — the CLI of the instruction-files checker (6.36.0). What it computes, the
+// pharn/floor/check-instruction-files.mjs — the CLI of the instruction-files checker (6.38.0). What it computes, the
 // recorded failure it answers and its bounds are pharn/floor/instruction-files-core.mjs's header; the base and the
 // threshold are pharn/floor/instruction-files.mjs's. This file loads that module, runs it and prints the document.
 //
