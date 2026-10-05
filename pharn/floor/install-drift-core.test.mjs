@@ -20,7 +20,7 @@ import {
   validateHeadInstallBlock,
   headInstallLine,
 } from "./install-drift-core.mjs";
-import { quoteData } from "./quote-core.mjs";
+import { quoteData, SHOWN_CHARS } from "./quote-core.mjs";
 
 const NPM_ONLY = { npm: true, pnpm: false, yarn: false, bun: false };
 const lockOf = (packages) => ({ kind: "ok", value: { name: "fx", lockfileVersion: 3, packages: { "": { name: "fx" }, ...packages } } });
@@ -158,6 +158,53 @@ test("missing vs missing-unchecked (GATE 1): only an entry with none of dev/peer
   assert.equal(comparePackages({ "node_modules/a": pkg("1.0.0") }, {}).counts.missing, 1);
   // but a PRESENT dev package whose version moved is still `changed` — the flag exempts absence only
   assert.equal(comparePackages({ "node_modules/a": pkg("2.0.0", { dev: true }) }, { "node_modules/a": pkg("1.0.0") }).counts.changed, 1);
+});
+
+test("review R1 — an absent dev/peer/devOptional entry IS drift when npm's record shows that class was installed", () => {
+  const present = (flag) => ({ "node_modules/other": pkg("1.0.0", { [flag]: true }) });
+  for (const flag of ["dev", "peer", "devOptional"]) {
+    const lock = { "node_modules/other": pkg("1.0.0", { [flag]: true }), "node_modules/new": pkg("1.0.0", { [flag]: true }) };
+    // the reproduced case: a pulled devDependencies addition, while the rest of the class is installed → drift
+    const added = comparePackages(lock, present(flag));
+    assert.deepEqual(added.counts, { changed: 0, missing: 1, extraneous: 0, missing_unchecked: 0 }, `${flag}: class installed`);
+    assert.deepEqual(added.mismatches, [{ path: "node_modules/new", kind: "missing", lockfile: "1.0.0", installed: null }]);
+    // the control: an omit=dev / legacy-peer-deps install — no present entry of the class at all → never drift
+    const omitted = comparePackages(lock, { "node_modules/prod": pkg("1.0.0") });
+    assert.deepEqual(omitted.counts, { changed: 0, missing: 0, extraneous: 1, missing_unchecked: 2 }, `${flag}: class omitted`);
+    // a present entry of ANOTHER class is not evidence for this one
+    const other = flag === "dev" ? "peer" : "dev";
+    assert.equal(comparePackages({ "node_modules/new": pkg("1.0.0", { [flag]: true }) }, present(other)).counts.missing_unchecked, 1);
+  }
+  // `optional` is always unchecked (platform binaries), even with every class installed
+  const all = { ...present("dev"), "node_modules/p": pkg("1.0.0", { peer: true }), "node_modules/o": pkg("1.0.0", { optional: true }) };
+  const opt = comparePackages({ "node_modules/bin": pkg("1.0.0", { optional: true, dev: true, os: ["linux"] }) }, all);
+  assert.equal(opt.counts.missing_unchecked, 1);
+  // and so is a devOptional entry with a platform constraint; without one it follows its class
+  const devOptRecord = { "node_modules/x": pkg("1.0.0", { devOptional: true }) };
+  assert.equal(
+    comparePackages({ "node_modules/fsevents": pkg("2.3.3", { devOptional: true, os: ["darwin"] }) }, devOptRecord).counts
+      .missing_unchecked,
+    1
+  );
+  assert.equal(comparePackages({ "node_modules/y": pkg("1.0.0", { devOptional: true }) }, devOptRecord).counts.missing, 1);
+  // end to end: the same added devDependency over a dev-installed tree refuses; over an omit=dev tree it is clean
+  const lockAll = { "node_modules/vitest": pkg("3.0.0", { dev: true }), "node_modules/is-even": pkg("1.0.0", { dev: true }) };
+  assert.equal(
+    installCheck(npm({ lock: lockOf(lockAll), hidden: hiddenOf({ "node_modules/vitest": pkg("3.0.0", { dev: true }) }) })).state,
+    "drifted"
+  );
+  assert.equal(installCheck(npm({ lock: lockOf(lockAll), hidden: hiddenOf({}) })).state, "clean");
+});
+
+test("review R4 — a multi-kilobyte hostile key and version are cut to SHOWN_CHARS in the detail", () => {
+  const key = `node_modules/${"x".repeat(100_000)}`;
+  const r = installCheck(npm({ lock: lockOf({ [key]: pkg("9".repeat(5000)) }), hidden: hiddenOf({}) }));
+  const line = detailText(r)
+    .split("\n")
+    .find((l) => l.startsWith("- missing "));
+  assert.ok(line.length < 3 * SHOWN_CHARS, `the line is bounded (${line.length} chars)`);
+  assert.match(line, /…"/, "the cut is marked");
+  assert.match(line, /installed null$/, "an absent version is shown as null, not a quoted string");
 });
 
 test("measured shape — pharn-starter: 271 absent entries, every one optional, read clean", () => {

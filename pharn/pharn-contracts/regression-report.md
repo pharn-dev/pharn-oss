@@ -346,9 +346,10 @@ HEAD gates run in. Every other state proceeds exactly as before, and the report 
   `not-installed`, never reach one). **`why`** — for `not-checked` only, one member of the closed, ordered
   `NOT_CHECKED_WHYS` (no `package.json`, no lockfile, two lockfile families, a pnpm / yarn / bun project — UNMEASURED,
   never guessed —, an unreadable or npm ≤ 6 lockfile, an unreadable `node_modules`, no npm record in it, an unreadable
-  record). **`counts.missing_unchecked`** — absent packages the lockfile marks `dev`, `peer`, `optional` or
-  `devOptional`: counted, never drift, because a platform-specific optional package, or an install configured to omit
-  dev or peer packages, leaves them absent after every `npm ci`.
+  record). **`counts.missing_unchecked`** — absent packages npm may legitimately skip: `optional` ones (a platform's
+  binaries), `devOptional` ones with a platform constraint, and `dev` / `peer` / `devOptional` ones of a class npm's
+  record shows NO present member of (an install configured to omit that class leaves it absent after every `npm ci`).
+  Counted, never drift. An absent member of a class that WAS installed is `missing`, i.e. drift.
 - `null` — the stored block was absent or malformed when the report was written (it is re-read from
   `.pharn/pharn-regress/head-install.json`, a file the write tools reach while a chain is paused). A report written
   before 6.40.0 has no such key.
@@ -358,8 +359,10 @@ HEAD gates run in. Every other state proceeds exactly as before, and the report 
 **The rule, and its bounds (P0).** FLOOR: the refusal is decided by tested code over the two files' parsed content and
 closed enums, in the invocation that runs head-init. **NOT claimed:** that `node_modules` holds what the lockfile says
 — the check certifies that two records npm writes agree (L43), so a `node_modules` changed outside npm, or by `npm
-install --package-lock-only` (measured), reads `clean`; nor that a needed dev package is present (it is
-`missing_unchecked`). Every such false `clean` is the behaviour before 6.40.0, never a false refusal. A resumed chain
+install --package-lock-only` (measured), reads `clean`; nor that a needed package of a class the install omitted is
+present (it is `missing_unchecked`). A false `clean` leaves the pre-6.40.0 behaviour; it never causes a refusal. A known
+refusal, named: a workspace-filtered install (`npm ci -w <ws>`, measured) reads `drifted`, and its remedy is a full
+install. No bypass is offered — the only way past the refusal is an install that matches the lockfile. A resumed chain
 does not re-check (its HEAD gates already ran). A build that edits the lockfile without installing is now refused here
 — in `/pharn-loop`, an S9 stop with `npm ci` as the remedy instead of iterations over the old install. No verdict
 consumer reads this block.

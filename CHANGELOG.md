@@ -49,12 +49,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     path: a changed version or integrity, a missing package, or an extraneous one is `drifted`; a lockfile listing
     packages with no `node_modules` is `not-installed`. Both refuse; `REGRESSION.md` / `VERIFY.md` quote the counts,
     the first 20 package paths and the remedy as DATA, and no report JSON is written. `--no-install` and `--gates` do
-    not change it. In `/pharn-loop` it is an S9 stop by the existing "refused → S9" rule, in seconds instead of after
-    the gates (the 92-minute run spent 660 s of regress and 4.5 min of verify on that tree); `/pharn-ship` STOPs.
-  - **What does not refuse.** An absent package the lockfile marks `dev`, `peer`, `optional` or `devOptional` is
-    counted as `missing_unchecked`, never drift: a platform's optional binaries (271 such entries in the user's tree)
-    and an install configured with `omit=dev`, `NODE_ENV=production` or `legacy-peer-deps` stay absent after every
-    `npm ci`, so refusing them would be a stop no remedy clears. A pnpm, yarn or bun project, no lockfile, two lockfile
+    not change it. In `/pharn-loop` it is an S9 stop by the existing "refused → S9" rule; `/pharn-ship` STOPs.
+  - **What it saves.** The refusal comes within seconds of reaching regress — after the front stages and the build,
+    about 55 minutes into the measured run, not at entry. What it saves is the gate runs over a drifted tree (that run
+    spent 660 s of regress and 4.5 min of verify on it) and the CONTINUE iterations a loop would add at verify (25–45
+    min each, none able to fix `node_modules`). The entry pre-flight (#313) now runs verify's gates at entry, which
+    surfaces a drift-caused red earlier; calling this check there is the named follow-up `entry-preflight-install-drift`.
+  - **What does not refuse.** An absent package the lockfile marks `optional` (a platform's optional binaries: 271
+    such entries in the user's tree), or `devOptional` with a platform constraint, is counted as `missing_unchecked`,
+    never drift. So is an absent `dev`, `peer` or `devOptional` package when npm's record holds NO present entry of that
+    class: an install configured with `omit=dev`, `NODE_ENV=production` or `legacy-peer-deps` leaves the whole class
+    absent after every `npm ci`, so refusing it would be a stop no remedy clears. When the class WAS installed, an
+    absent member is drift — a pulled `devDependencies` addition refuses (independent review R1, reproduced with npm
+    11.12.1 both ways). A pnpm, yarn or bun project, no lockfile, two lockfile
     families, an npm ≤ 6 lockfile or no npm record in `node_modules` is `not-checked` with a closed reason, and proceeds
     exactly as before. Every non-refusing state is reported as the additive, advisory `head_install` block, last in
     `regression-report.json` and `verify-report.json`, and as one line in each render.
@@ -64,8 +71,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **Bounds, in the module header and the contracts.** The check certifies that two records npm writes agree, never
     that `node_modules` holds what the lockfile says: a `node_modules` changed outside npm, or by `npm install
 --package-lock-only` (measured — it rewrites npm's record without installing), reads clean, as does a needed dev
-    package that is absent. Every false clean is the behaviour before this release, never a false refusal. A resumed
-    chain does not re-check. Named follow-ups: `entry-preflight-install-drift` (call the exported `readInstallCheck` at
+    package in a class the install omitted. A false clean leaves the pre-6.40.0 behaviour; it never causes a refusal. A
+    known refusal: a workspace-filtered install (`npm ci -w <ws>`) reads drifted, and its remedy is a full install. No
+    bypass is offered — the only way past the refusal is an install that matches the lockfile. A resumed chain does not
+    re-check. Lockfile paths and versions in the refusal detail are cut to 64 characters. Named follow-ups: `entry-preflight-install-drift` (call the exported `readInstallCheck` at
     `/pharn-loop` / `/pharn-ship` entry) and `head-install-opt-in` (an opt-in install at HEAD — declined here: `npm ci`
     deletes the user's `node_modules`).
 

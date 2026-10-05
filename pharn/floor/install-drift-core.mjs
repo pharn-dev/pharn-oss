@@ -22,13 +22,18 @@
 //               integrity differs, else `resolved` differs. Integrity first, so a registry-host difference in
 //               `resolved` cannot read as drift. A field that is not a string is never equal to anything (a lockfile
 //               npm wrote holds strings there), which keeps the comparison total over any parsed JSON (L62).
-//   missing     in the lockfile only, and the entry carries NONE of `dev`, `peer`, `optional`, `devOptional` (true).
-//   missing-unchecked   in the lockfile only, and the entry carries one of them — COUNTED, never drift (GATE 1). npm
-//               skips an optional package that does not fit the platform (271 such entries in pharn-starter, every one
-//               flagged optional), and an install configured with `omit=dev`, `NODE_ENV=production` or
-//               `legacy-peer-deps` leaves dev or peer entries absent on EVERY `npm ci` — refusing them would be a
-//               permanent stop no remedy clears (L27). Residual, stated: such a package that is really needed and
-//               really absent reads `clean`, and its gate fails exactly as it did before this check.
+//   missing     in the lockfile only, and EITHER the entry carries none of `dev`, `peer`, `optional`, `devOptional`,
+//               OR it carries `dev`, `peer` or `devOptional` and npm's record holds at least one PRESENT entry carrying
+//               that same flag — the class WAS installed, so this member of it is missing (independent review R1:
+//               a pulled `devDependencies` addition read `clean` under the first rule; measured: after `npm ci
+//               --omit=dev` the record holds no `dev: true` entry at all).
+//   missing-unchecked   in the lockfile only, and the entry is `optional`, or `devOptional` with a platform constraint
+//               (`os` / `cpu` / `libc`), or carries `dev` / `peer` / `devOptional` while the record holds NO present
+//               entry with that flag — COUNTED, never drift (GATE 1). npm skips an optional package that does not fit
+//               the platform (271 such entries in pharn-starter, every one flagged optional), and an install configured
+//               with `omit=dev`, `NODE_ENV=production` or `legacy-peer-deps` leaves that whole class absent on EVERY
+//               `npm ci` — refusing it would be a permanent stop no remedy clears (L27). Residual, stated: a needed
+//               package in such a class that is really absent reads `clean`, and its gate fails as it did before.
 //   extraneous  in the hidden lockfile only.
 //
 // THE STATES (closed). `drifted` and `not-installed` REFUSE (`refuses`); every other state proceeds exactly as before
@@ -46,16 +51,20 @@
 //   • `npm install --package-lock-only` rewrites the hidden lockfile to the new lockfile WITHOUT installing (measured,
 //     npm 11.12.1, 2026-10-05), so that tree reads `clean`;
 //   • pnpm, yarn and bun are `not-checked` `unmeasured-family` — no rule is guessed for them.
-// Every false `clean` is the behaviour before this check (the gates run), never a false refusal. The remedy for both
+// A false `clean` leaves the pre-6.40.0 behaviour (the gates run); it never causes a refusal. The remedy for both
 // refusing states is the command INSTALL_RULE resolves for npm (`npm ci`, what the BASE side runs), measured to bring a
-// drifted tree back to `clean`.
+// drifted tree back to `clean`. A KNOWN REFUSAL, named (independent review R3, measured): a workspace-filtered install
+// (`npm ci -w <ws>`) leaves the other workspaces' packages absent and reads `drifted`; its remedy is a full install. No
+// bypass is offered: the only way past a refusal is an install that matches the lockfile.
 //
 // TRUST (P2): the lockfile and the hidden lockfile are project content a build can write. Only enums, integers and
-// booleans branch here. Package paths and versions leave this module only in `mismatches` and in `detailText`, each
-// JSON-quoted, and the stage scripts render that detail inside a DATA fence (`quote-core.mjs` `quoteData`); the report
+// booleans branch here. Package paths and versions leave this module only in `mismatches` and in `detailText`, where
+// each is JSON-quoted and cut to SHOWN_CHARS (`quote-core.mjs` `shown` — review R4: a multi-megabyte hostile key is
+// size, not injection), and the stage scripts render that detail inside a DATA fence (`quoteData`); the report
 // block (`headInstallBlock`) carries enums and integers only. No lockfile key ever becomes a path that is read.
 
 import { LOCKFILE_FAMILIES, resolveInstall } from "./stage-regress-core.mjs";
+import { shown } from "./quote-core.mjs";
 
 export const STATES = Object.freeze(["clean", "drifted", "not-installed", "not-checked"]);
 export const REFUSING_STATES = Object.freeze(["drifted", "not-installed"]);
@@ -80,7 +89,9 @@ export const NPM_HIDDEN_LOCKFILE = "node_modules/.package-lock.json";
 /** How many mismatches a result lists (the counts are always complete). */
 export const MISMATCH_CAP = 20;
 
-const UNCHECKED_WHEN_ABSENT = Object.freeze(["dev", "peer", "optional", "devOptional"]);
+/** The flags whose absent entries count as drift only when npm's record shows the class was installed (review R1). */
+const CLASS_FLAGS = Object.freeze(["dev", "peer", "devOptional"]);
+const PLATFORM_FIELDS = Object.freeze(["os", "cpu", "libc"]);
 const FAMILIES = Object.freeze(Object.keys(LOCKFILE_FAMILIES));
 const BLOCK_KEYS = Object.freeze(["state", "why", "family", "lockfile", "counts"]);
 const INSTALL_KEY_RE = /(^|\/)node_modules\//;
@@ -116,13 +127,29 @@ function isChanged(lockEntry, hiddenEntry) {
   return !sameString(field(lockEntry, "resolved"), field(hiddenEntry, "resolved"));
 }
 
-/** Absent from the install, this entry is not drift: npm skips it on a platform or under an install config. */
-function uncheckedWhenAbsent(entry) {
-  return UNCHECKED_WHEN_ABSENT.some((flag) => field(entry, flag) === true);
-}
-
 function installKeys(packages) {
   return Object.keys(packages).filter((k) => INSTALL_KEY_RE.test(k));
+}
+
+/** The CLASS_FLAGS some present install entry of npm's record carries (`true`) — the classes that were installed. */
+export function installedClasses(hiddenPackages) {
+  const seen = new Set();
+  for (const key of installKeys(hiddenPackages)) {
+    for (const flag of CLASS_FLAGS) if (field(hiddenPackages[key], flag) === true) seen.add(flag);
+  }
+  return seen;
+}
+
+/**
+ * Is an entry ABSENT from the install drift? `false` → missing-unchecked: npm skips it on this platform (`optional`, or
+ * `devOptional` with a platform constraint), or it belongs only to classes this install did not install (an omit=dev /
+ * legacy-peer-deps install). An entry with no class flag is always drift.
+ */
+export function absentIsDrift(entry, installed) {
+  if (field(entry, "optional") === true) return false;
+  if (field(entry, "devOptional") === true && PLATFORM_FIELDS.some((f) => field(entry, f) !== undefined)) return false;
+  const flags = CLASS_FLAGS.filter((f) => field(entry, f) === true);
+  return flags.length === 0 || flags.some((f) => installed.has(f));
 }
 
 function asVersion(v) {
@@ -136,6 +163,7 @@ function asVersion(v) {
 export function comparePackages(lockPackages, hiddenPackages) {
   const counts = zeroCounts();
   const all = [];
+  const installed = installedClasses(hiddenPackages);
   for (const key of installKeys(lockPackages)) {
     const lockEntry = lockPackages[key];
     if (Object.hasOwn(hiddenPackages, key)) {
@@ -149,7 +177,7 @@ export function comparePackages(lockPackages, hiddenPackages) {
           installed: asVersion(field(hiddenEntry, "version")),
         });
       }
-    } else if (uncheckedWhenAbsent(lockEntry)) {
+    } else if (!absentIsDrift(lockEntry, installed)) {
       counts.missing_unchecked++;
     } else {
       counts.missing++;
@@ -193,9 +221,10 @@ export function installCheck(inputs) {
   if (nodeModules === "absent") {
     const counts = zeroCounts();
     const mismatches = [];
+    const none = new Set(); // no node_modules: no class was installed
     for (const key of installKeys(lockPackages)) {
       const entry = lockPackages[key];
-      if (uncheckedWhenAbsent(entry)) {
+      if (!absentIsDrift(entry, none)) {
         counts.missing_unchecked++;
       } else {
         counts.missing++;
@@ -232,6 +261,11 @@ export function installCheck(inputs) {
   };
 }
 
+/** A path or version for the detail: JSON-quoted, cut to SHOWN_CHARS (`shown`); an absent version is `null`. */
+function quoted(v) {
+  return v === null ? "null" : shown(v);
+}
+
 /** Does this result stop the stage before any gate? Membership in REFUSING_STATES. */
 export function refuses(result) {
   return isPlainObject(result) && REFUSING_STATES.includes(result.state);
@@ -262,7 +296,7 @@ export function detailText(result) {
   const total = c.changed + c.missing + c.extraneous;
   lines.push(shown === total ? `All ${total} mismatch(es), by path:` : `The first ${shown} of ${total} mismatches, by path:`);
   for (const m of result.mismatches) {
-    lines.push(`- ${m.kind} ${JSON.stringify(m.path)}: lockfile ${JSON.stringify(m.lockfile)}, installed ${JSON.stringify(m.installed)}`);
+    lines.push(`- ${m.kind} ${quoted(m.path)}: lockfile ${quoted(m.lockfile)}, installed ${quoted(m.installed)}`);
   }
   return lines.join("\n");
 }

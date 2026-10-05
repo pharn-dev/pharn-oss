@@ -818,13 +818,15 @@ node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 # reported a false `typecheck` regression — HEAD gates over a stale node_modules, BASE over a fresh `npm ci`. A changed,
 # missing or extraneous package (`drifted`) or a lockfile with packages and no node_modules (`not-installed`) is
 # `refused head-install-drift` (remedy `npm ci`, the command INSTALL_RULE resolves — measured to clear all three kinds);
-# in /pharn-loop an S9 stop by the existing status rule. GATE 1 (orchestrator, delegated): an absent package marked
-# dev/peer/optional/devOptional is `missing_unchecked`, never drift (an omit=dev install would otherwise be refused
-# forever); pnpm/yarn/bun and every unreadable state are `not-checked` with a closed `why` and proceed as before. Every
+# in /pharn-loop an S9 stop by the existing status rule. GATE 1 + review R1 (orchestrator, delegated): an absent
+# `optional` package (or `devOptional` with os/cpu/libc) is `missing_unchecked`, never drift; an absent dev/peer/
+# devOptional package is drift only when npm's record holds a present entry of that class (an omit=dev install would
+# otherwise be refused forever); pnpm/yarn/bun and every unreadable state are `not-checked` with a closed `why` and
+# proceed as before. A workspace-filtered install (`npm ci -w`) refuses (remedy: a full install); no bypass. Every
 # non-refusing state is the additive, advisory `head_install` block in both reports. LOCKFILE_FAMILIES
 # (stage-regress-core.mjs) is the one owner of the lockfile names, BASE and HEAD alike. BOUND (L43): agreement of two npm
 # records, never "node_modules is right" — a tree changed outside npm, or by `npm install --package-lock-only`
-# (measured), reads clean; every false clean is the pre-6.40.0 behaviour. `readInstallCheck(root)` + `refuses` are
+# (measured), reads clean; a false clean leaves the pre-6.40.0 behaviour and never causes a refusal. `readInstallCheck(root)` + `refuses` are
 # exported for the follow-up `entry-preflight-install-drift`. Contracts: regression-report.md / verify-report.md "The
 # additive `head_install` block", stage-exit.md.
 

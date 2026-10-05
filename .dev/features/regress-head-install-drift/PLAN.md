@@ -153,6 +153,7 @@ and `stage-regress.mjs`'s `lockfilesAtBase` derives from it, so BASE and HEAD re
 - `pharn/pharn-contracts/stage-exit.md` — `head-install-drift` in both vocabularies — layer pharn-contracts
 - `.claude/commands/pharn-regress.md` — one remedy line under `3` refused — product command
 - `.claude/commands/pharn-verify.md` — one remedy line under `3` refused — product command
+- `.claude/commands/pharn-loop.md` — REVIEW AMENDMENT (R2): the verify refused list names `head-install-drift`; the S9 trigger cell names an install mismatch — product command
 - `.dev/floor/command-hygiene.test.mjs` — BUILD AMENDMENT: the `composeReport` source pin gains `head_install` (one regex) — apparatus (test)
 - `CLAUDE.md` — a short block for the check under the stage-script entries — repo-meta
 - `CHANGELOG.md` — the release section — repo-meta
