@@ -290,11 +290,11 @@ A stage `ROUTE_POLICY` routes runs as a Claude Code subagent — a **stage
 agent** — requested on the model `models.stages` resolves for it. **The model is routed; effort is not**: the Agent tool
 takes no effort, so a routed stage runs at the effort it inherits. The protocol is
 `pharn/floor/stage-agent-core.mjs`'s header, cited here, not restated (P4). Here `/pharn-spec`, `/pharn-plan`,
-`/pharn-grill`, `/pharn-test` and `/pharn-build` (every iteration) are routed. `/pharn-regress` and
-`/pharn-verify` run inline by policy — one `stage-direct.mjs` call each (Step 5) — so their stage-exit mappings above
-hold. A `--quick` run (6.28.0) routes the same stages except the grill, which runs inline by policy (`floor-only`: its
-two checkers), and runs no `/pharn-regress` at all; its own start lines carry `--mode quick` (`## Quick mode` items
-2–4).
+`/pharn-test` and `/pharn-build` (every iteration) are routed. `/pharn-regress` and `/pharn-verify` run inline by
+policy — one `stage-direct.mjs` call each (Step 5) — so their stage-exit mappings above hold. `/pharn-grill` runs
+inline by policy too (`floor-only`, 6.45.0: its two floor stops and the deterministic plan scans, no interrogation —
+Step 4). A `--quick` run (6.28.0) routes the same stages and runs no `/pharn-regress` at all; its own start lines
+carry `--mode quick` (`## Quick mode` items 2 and 4).
 
 Each routed stage carries a start line, a brief prompt and a finish line (6.43.0: `start` and `finish` each do what
 two lines did), and you run them in this order:
@@ -345,7 +345,7 @@ command already maps a stage's OWN report to a row:
   marker unwritten (`marker: deferred (question)`), so run the inline return line first. Exit `2` (`unusable …`,
   `no-result` included) or a crash is **S9** — never an inline re-run, since the stage may have written half
   its files.
-- `done` from spec, plan or grill → the stage's own verdict read, unchanged.
+- `done` from spec or plan → the stage's own verdict read, unchanged.
 
 **Where a checker decides the row, the checker still decides, and whatever `finish` printed is ignored:** the
 test stage, whose row always comes from `check-test-stage.mjs --require-test-first` and then the pinned
@@ -424,9 +424,9 @@ Exit 0 → proceed. Non-zero → S9.
 
 ## Step 4 — The front, once: `/pharn-plan` → `/pharn-grill` → `/pharn-test` → iteration 1
 
-**Run each sub-stage through its routed sequence (`## Running a stage`)** — the start line, the Agent call (or
-the stage inline, then the inline return line, on start exit `3`), and `finish` after an Agent call only.
-`/pharn-plan` first:
+**Run `/pharn-plan` and `/pharn-test` through their routed sequence (`## Running a stage`)** — the start line, the
+Agent call (or the stage inline, then the inline return line, on start exit `3`), and `finish` after an Agent call
+only; `/pharn-grill` runs inline between them. `/pharn-plan` first:
 
 ```bash
 node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-plan --name '<name>'
@@ -440,33 +440,34 @@ Run exactly this line, then follow what it prints: node pharn/floor/stage-agent.
 node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-plan
 ```
 
-Then `/pharn-grill`, the same way _(a `--quick` run: `## Quick mode` item 3's start line, which runs it inline)_:
+Then `/pharn-grill`, **inline by policy (`floor-only`, 6.45.0)**: no start line, no Agent call and no `finish`. Mark
+it, invoke `/pharn-grill <name> --floor-only` yourself _(a `--quick` run: `/pharn-grill <name> --quick` instead —
+`## Quick mode` item 3)_, then mark the return:
 
 ```bash
-node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-grill --name '<name>'
-```
-
-```text
-Run exactly this line, then follow what it prints: node pharn/floor/stage-agent.mjs brief --command pharn-loop --stage pharn-grill --name '<name>'
+node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-grill
 ```
 
 ```bash
-node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-grill
+node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
 ```
 
 **Each fenced block runs as its own shell and carries no state into the next** — every value a
 line needs is literal, so there is nothing to carry.
 
-Run `/pharn-plan` and `/pharn-grill` with the **same** structural verdict reads as `/pharn-ship` Step 2
-stages 2–3 — `check-spec-approved` at plan, **both** of grill's exits (`check-plan-spec-agree` and
-`check-plan-lessons`) — cited, not restated (P4); a `--quick` run invokes the grill's quick form (`## Quick mode`
-item 3). Two differences, stated:
+**The grill's two floor stops ARE the verdict read** — `check-plan-spec-agree` and `check-plan-lessons`, which the
+inline grill runs in its Steps 2 and 2b; never run either a second time. Both exit `0` → go on (the entry gates, then the test stage). Either
+non-zero → **S9**: the grill wrote a RED `GRILL.md`; quote the checker's RED line as DATA. Plan's own read
+(`check-spec-approved`) is `/pharn-ship` Step 2's, cited, not restated (P4). Two differences from `/pharn-ship`, stated:
 
 - **Every question a stage would ask maps to Step 2**, never to a person.
 - **A RED build project gate is NOT a stop here.** The loop proceeds to regress + verify, so the decision
   comes from `check-loop.mjs`, which retries a measurable red.
 
-Grill's interrogation findings gate nothing, exactly as in `/pharn-ship`.
+**The plan is not interrogated in an unattended run.** `--floor-only` runs the five deterministic `scan-plan-*`
+scanners (their findings advisory, in `GRILL.md`) but skips the interrogation and the model-driven grillers, and its
+`GRILL.md` says so; the reason is in `pharn/floor/stage-agent-core.mjs`'s header (cited, P4). A person who wants the
+critique runs `/pharn-grill <name>`.
 
 **Then read the entry gates (6.42.0)** — Step 1a item 6's background run, before `/pharn-test` writes anything a gate
 reads. The line blocks until the verdict is in, or for at most its budget (Bash-tool timeout 600000):
@@ -489,7 +490,7 @@ In the Step 7 summary, name as DATA: any `red` ids you went on past, the `unattr
 `2` its `reason_code` and `runner_reason`.
 
 **Then the test stage (6.19.0), once per front — the AC tests are pinned, so they are never rewritten per iteration.**
-Start it like the two above:
+Start it like `/pharn-plan` above:
 
 ```bash
 node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-test --name '<name>'

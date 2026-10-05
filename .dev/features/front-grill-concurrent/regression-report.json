@@ -1,0 +1,40 @@
+{
+  "base": "d8fd005487420e2bb367ac12bbe07b7642a48dec",
+  "inside": [
+    ".claude/commands/pharn-grill.md",
+    ".claude/commands/pharn-loop-close.md",
+    ".claude/commands/pharn-loop-quick.md",
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-ship-quick.md",
+    ".claude/commands/pharn-ship.md",
+    ".dev/features/front-grill-concurrent/BUILD.md",
+    ".dev/features/front-grill-concurrent/GRILL.md",
+    ".dev/features/front-grill-concurrent/PLAN.md",
+    ".dev/features/front-grill-concurrent/PROTECTED-FOLLOWUPS.md",
+    ".dev/floor/command-hygiene.test.mjs",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/stage-agent-core.mjs",
+    "pharn/floor/stage-agent-core.test.mjs",
+    "pharn/floor/stage-agent.test.mjs"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

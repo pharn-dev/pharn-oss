@@ -23,6 +23,76 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.45.0] - 2026-10-05
+
+### Changed
+
+- 2026-10-05: **`/pharn-loop`'s grill runs its two floor stops and the deterministic plan scans, with no grill agent
+  and no interrogation; `/pharn-ship` reads the grill's floor stops before its grill agent.**
+  (`front-grill-concurrent`, batch item 8.)
+  - **Measured** (pharn-starter's 92-minute `billing-plan-catalog` `/pharn-loop` run, ledger `cost.json`): the grill
+    stage took 361.0 s, with 43 opus requests, cache_write 391,438 tokens and cache_read 16,097,324 tokens. The test
+    stage then took 538.3 s, one after the other. The same project's quick run, `locales-en-pl-only`, ran an inline
+    floor-only grill in 8.5 s.
+  - **Why:** unattended, the grill's findings gate nothing. Since 6.27.0's routing split the stages into separate
+    contexts, no stage reads them before the build. `GRILL.md` is still read afterwards, because the loop's summary
+    points at it.
+  - **Decision** (made by the orchestrating model, under the maintainer's delegation for this batch; revised at the
+    independent review): the full `/pharn-loop` grill is `floor-only`, as its quick grill already was.
+    - `ROUTE_POLICY` in `pharn/floor/stage-agent-core.mjs` changes one cell, and its header records the reason and
+      the trade.
+    - The loop invokes the new `/pharn-grill <name> --floor-only` inline. That mode is `--quick` without the quick
+      eligibility check, so it accepts any SPEC kind.
+    - It runs both floor stops. On GREEN it also runs the five deterministic `scan-plan-*` scanners (secrets, PII,
+      i18n, migrations, observability) through the new tested `pharn/floor/grill-scan.mjs`. That script spawns each
+      scanner as its griller does, checks each output's shape, and prints a section the grill copies into `GRILL.md`.
+      A secrets, PII or i18n hit becomes an advisory finding-shape object with the griller's own `rule_id` and the
+      scanner's line. A migrations or observability mention is a plain line: deciding whether a migration or
+      telemetry is needed is the griller's judgment, which does not run. No plan text is copied into the section.
+    - The two floor stops are the loop's grill verdict read: either RED is S9, and neither checker runs a second
+      time.
+    - The loop's grill has no route line, Agent call or `read` any more, its stage-start marker carries no
+      `--route`, and Step 7 lists it as `inline (policy)`.
+    - `/pharn-ship` keeps its routed full grill, because a person reads `GRILL.md` at GATE 2. `--quick` is
+      unchanged and runs no scans.
+  - **THE TRADE, named:** an unattended loop no longer runs the plan interrogation or any model-driven griller. That
+    includes the security griller's judgment half (authorization, injection surfaces) and the observability and
+    migrations grillers' judgment of need and adequacy. Only their deterministic scanners remain.
+  - **Estimated saving per full loop run:** about 361.0 s − 8.5 s ≈ **352 s (≈ 5.9 min)**. The grill-scan call adds
+    one more orchestrator request, so take it as ≈ 5.7–5.9 min. Also saved: 43 opus requests and about 0.39 M
+    cache-write and 16.1 M cache-read tokens. The offset is that `pharn-grill.md` (~23 KB) now sits in the
+    orchestrator's context and is read from cache on each later request.
+  - **`/pharn-ship` Step 2** now reads the grill's two stops (`check-plan-spec-agree`, `check-plan-lessons`) before the
+    grill's route line, instead of after the grill returns. A red plan stops without spawning a grill agent (about
+    1–1.5 min, an estimate). The STOP quotes the checker's RED line, because no `GRILL.md` is written on that path.
+    The same reads run on the green path, so its time is unchanged. **Stated bound:** nothing re-reads them after the
+    grill. The grill agent's write tools are scoped to `GRILL.md`, but a Bash write to `PLAN.md` is not re-checked
+    for lessons before the build. `/pharn-ship --quick` skips the block, because its inline quick grill's stops are
+    that read.
+    - A grill `read` exit `3` (`refused`) is now a STOP. Before, the later verdict read caught a refusal, and now
+      nothing follows it.
+    - A pre-grill STOP leaves the run's last stage-start marker at `pharn-plan`, so the ledger outcome reads
+      `stop:pharn-plan`, not `stop:pharn-grill`. `SHIP.md`'s pointer to `GRILL.md` must say "not written" on that
+      path.
+  - **Not built, and why: running the grill and test agents at the same time.** Follow-up
+    `front-grill-concurrent-agents`; with the loop's grill now floor-only, it matters to `/pharn-ship` alone.
+    1. The tree has one writes-scope (lesson L38). The grill's setter and its `--clear` would replace or release the
+       test stage's scope.
+    2. A grill mode with no scope would be judged under the test stage's scope, which permits the test files. Its
+       "writes only `GRILL.md`" claim would then be false.
+    3. `stage-agent.mjs` writes one `stage-result.json` per run, so two agents overwrite each other's result.
+    4. Copying a draft into `GRILL.md` would be a Bash write.
+    5. The `executions` view would leave the grill row unmeasured and bill grill requests to the test stage.
+  - **Trusted docs:** three passages are now incomplete; none is an overclaim. Proposed wording, for a human to apply,
+    is in `.dev/features/front-grill-concurrent/PROTECTED-FOLLOWUPS.md`.
+    - `LIMITS.md §3a` lists the plan interrogation among what `/pharn-loop --quick` leaves out. That is still true,
+      but the full loop now leaves it out as well.
+    - `LIMITS.md §5` ("pass the grill") does not say that an unattended loop's grill runs only the observability
+      scanner, not the griller's judgment.
+    - `THREAT-MODEL.md §1` names the security griller as threat-model-A methodology. In `/pharn-loop` only its secret
+      scanner runs.
+  - `SKILLS_VERSION` 6.44.0 → 6.45.0 (minor: a new `/pharn-grill` mode and a routing-policy change).
+
 ## [6.44.0] - 2026-10-05
 
 ### Added

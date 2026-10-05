@@ -75,8 +75,9 @@ spec_kind: quick`. The remedy is to re-run `/pharn-ship <description>` **without
    It prints `inline:floor-only` (exit `3` — the quick grill runs two checkers, so its model does not change
    its verdict) and records it on the grill's stage-start marker. Then invoke
    `/pharn-grill <name> --quick` INLINE, in place of `/pharn-grill`, and run no `finish` and no Agent call — the
-   inline return line closes it. The two-exit verdict read (`check-plan-spec-agree.mjs` +
-   `check-plan-lessons.mjs`) runs exactly as written; `/pharn-grill --quick` writes a `GRILL.md` recording
+   inline return line closes it. Step 2's pre-grill verdict block is SKIPPED, because `/pharn-grill --quick`'s own
+   two floor stops (`check-plan-spec-agree.mjs` + `check-plan-lessons.mjs`) are that read — either RED is a STOP, its
+   RED line presented as DATA; `/pharn-grill --quick` writes a `GRILL.md` recording
    `mode: quick`, both floor results, and the pinned line `interrogation NOT performed — skipped by mode
 (quick)` — see `pharn-grill.md`'s own `--quick` section. No `ADVISORY VERDICT` line and no finding
    object are written (nothing was interrogated, so none is fabricated).
