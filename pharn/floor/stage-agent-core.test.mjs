@@ -342,6 +342,38 @@ test("renderBrief — EVERY routed brief carries the write-tool rule inside rule
   assert.equal(hasWriteToolRule(WRITE_TOOL_RULE), true);
 });
 
+/** The orchestrator's own lines rule 4 forbids a stage agent (6.36.0 added `start`, `finish` and stage-direct.mjs: each
+ *  writes a stage's markers, and stage-direct runs /pharn-regress or /pharn-verify). Spelled out here (L60). */
+const ORCHESTRATOR_ONLY = [
+  "`pharn/floor/mark-phase.mjs`",
+  "`pharn/floor/run-marker.mjs`",
+  "`.claude/hooks/require-loop-record.cjs`",
+  "the `route`, `read`, `start` or `finish` subcommand of `pharn/floor/stage-agent.mjs`",
+  "`pharn/floor/stage-direct.mjs`",
+];
+
+test("renderBrief — rule 4 forbids EVERY routed agent the orchestrator's own lines, start/finish/stage-direct included (6.36.0)", () => {
+  let routed = 0;
+  for (const c of allCells().filter((x) => x.cell === AGENT)) {
+    const text = renderBrief({
+      command: c.command,
+      mode: c.mode,
+      stage: c.stage,
+      name: "demo",
+      iteration: ITERATED_STAGES.includes(c.stage) ? 1 : null,
+    }).text;
+    const rule4 = text.split("\n").find((l) => l.startsWith("4. "));
+    for (const p of ORCHESTRATOR_ONLY) assert.ok(rule4.includes(p), `${c.command}/${c.mode}/${c.stage}: rule 4 names ${p}`);
+    // CONTROL (L60): the same check fails on rule 4 with the new names cut.
+    assert.equal(
+      ORCHESTRATOR_ONLY.every((p) => rule4.replace("`pharn/floor/stage-direct.mjs`, ", "").includes(p)),
+      false
+    );
+    routed++;
+  }
+  assert.equal(routed, 16, "every routed cell was checked (L34)");
+});
+
 test("renderBrief — rule 7 (the fix list) appears ONLY for /pharn-loop's build at iteration >= 2, naming the four fields", () => {
   const withIt = renderBrief({ command: "pharn-loop", stage: "pharn-build", name: "demo", iteration: 2 }).text;
   assert.match(withIt, /^7\. Iteration 2:/m);

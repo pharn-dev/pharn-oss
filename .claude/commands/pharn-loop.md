@@ -25,6 +25,7 @@ reads:
     "pharn/floor/mark-phase.mjs",
     "pharn/floor/stage-agent.mjs",
     "pharn/floor/stage-agent-core.mjs",
+    "pharn/floor/stage-direct.mjs",
     "pharn/floor/render-cost-ledger.mjs",
     "pharn/floor/check-cost-ledger.mjs",
     "pharn/floor/render-run-report.mjs",
@@ -55,8 +56,11 @@ You are the **orchestrator** of an **unattended** run. You take a user's `<incre
 way through the product pipeline — spec, plan, grill, test, build, regress, verify — iterate the
 `build → regress → verify` middle until a **deterministic** stop, commit a green result to a new local
 branch, and finish with a **summary**. Nobody answers questions during the run. You **reuse** the existing
-product stage commands and **reimplement none of them**. **If the user wants to approve the intent themselves,
-`/pharn-ship` is the right command, not this one.**
+product stage commands and **reimplement none of them** — `/pharn-regress` and `/pharn-verify` through one call each
+to their stage scripts (Step 5). **If the user wants to approve the intent themselves, `/pharn-ship` is the right
+command, not this one.** Its frontmatter `model:` applies only when a person invokes it with the slash command; a
+model invoking it through the Skill tool runs it on the session's model (observed — ADVISORY;
+`pharn/floor/check-model-config.mjs`, TURN SCOPE).
 
 Load the trusted prefix and obey it:
 
@@ -205,25 +209,29 @@ trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 | S12 | `/pharn-test` could not run the AC tests because a criterion's level has no test runner with per-test results — decided by the pinned `check-red-run.mjs --preflight` exit 1 (Step 4), never by relayed text                             | stop `blocked: no-test-runner` — its last line (the setup suggestion) goes into `### next_steps` as DATA; never a nested run            |
 | S13 | the AC evidence changed or is missing after `/pharn-test` — decided by `check-loop-fresh.mjs` `reason_code` `ac-evidence-invalid` or `check-loop.mjs` `terminal_cause` `ac-evidence` (Step 5), never by relayed text                     | stop `blocked: ac-evidence-invalid` — a rebuild cannot restore it; a person sets the build aside and re-runs `/pharn-test`, or re-plans |
 
-**`/pharn-regress`'s stage-exit mapping (since `stage-regress-script`, 6.23.0).** `/pharn-regress` is a
-thin caller of `pharn/floor/stage-regress.mjs`, which reports one `pharn-stage-exit/1` object per exit
-(`pharn/pharn-contracts/stage-exit.md`). Its object maps onto the table above by a fixed rule:
+**`/pharn-regress`'s stage-exit mapping (since `stage-regress-script`, 6.23.0).** Step 5 runs
+`pharn/floor/stage-regress.mjs` through one `stage-direct.mjs` call (6.36.0), which prints the script's one
+`pharn-stage-exit/1` object (`pharn/pharn-contracts/stage-exit.md`) and exits with its code. It maps onto the table
+above by a fixed rule:
 
+- `done` (`0`) → on to `/pharn-verify`; its verdict is read by `check-loop.mjs` (Step 5);
 - `question no-gates` → **S4**;
 - every other `question` (`base-unresolved`, `install-unresolved`, `tests-unresolved`) → **S10**;
-- `refused` and `unusable` → **S9**;
+- `refused` and `unusable` → **S9** — the call's own refusal too (exit `2`, a `stage-direct:` line, no object: the
+  stage's writes-scope could not be set);
 - a crash (an exit outside `{0, 2, 3, 4, 5}`) → **S9**;
-- `continue` is handled **inside** `/pharn-regress` (it re-runs the pinned resume line itself) and never
-  reaches the loop as a stuck point.
+- `continue` (`5`) is no stuck point: run the stage's resume line (Step 5) until another exit — and once when the
+  Bash tool itself timed out (no exit code).
 
-**`/pharn-verify`'s stage-exit mapping (since `stage-verify-script`, 6.26.0).** `/pharn-verify` is a thin
-caller of `pharn/floor/stage-verify.mjs`, which reports through the same protocol and maps by the same rule:
+**`/pharn-verify`'s stage-exit mapping (since `stage-verify-script`, 6.26.0).** Step 5 runs
+`pharn/floor/stage-verify.mjs` the same way, and its object maps by the same rule:
 
 - `question no-gates` → **S4** (no `--gates`, and no allowlisted script or no `package.json` — S4's own trigger);
-- `refused` (`missing-artifact`, `chain-red`, `plan-files-unparseable`) and `unusable` → **S9**;
+- `refused` (`missing-artifact`, `chain-red`, `plan-files-unparseable`) and `unusable` → **S9**, the call's own
+  refusal too;
 - a crash (an exit outside `{0, 2, 3, 4, 5}`) → **S9**;
-- `continue` is handled **inside** `/pharn-verify` (it re-runs the pinned resume line itself) and never reaches the
-  loop as a stuck point; a `done` exit's verdict is read from `verify-report.json` by `check-loop.mjs`, as before.
+- `continue` → the stage's resume line, as for `/pharn-regress`; a `done` exit's verdict is read from
+  `verify-report.json` by `check-loop.mjs`, as before.
 - **S9, named:** a crashed `check-build-complete.mjs` is `unusable child-crashed`; a runner refusal, a lapse
   included, is `unusable child-refused`; and an unparseable `## Files` is `refused plan-files-unparseable`.
 
@@ -251,35 +259,42 @@ agent** — requested on the model `models.stages` resolves for it. **The model 
 takes no effort, so a routed stage runs at the effort it inherits. The protocol is
 `pharn/floor/stage-agent-core.mjs`'s header, cited here, not restated (P4). Here `/pharn-spec`, `/pharn-plan`,
 `/pharn-grill`, `/pharn-test` and `/pharn-build` (every iteration) are routed. `/pharn-regress` and
-`/pharn-verify` run inline by policy, exactly as before 6.27.0, so their stage-exit mappings above are unchanged. A
-`--quick` run (6.28.0) routes the same stages except the grill, which runs inline by policy (`floor-only`: its two
-checkers), and runs no `/pharn-regress` at all; its own route lines carry `--mode quick` (`## Quick mode` items 2–4).
+`/pharn-verify` run inline by policy — one `stage-direct.mjs` call each (Step 5) — so their stage-exit mappings above
+hold. A `--quick` run (6.28.0) routes the same stages except the grill, which runs inline by policy (`floor-only`: its
+two checkers), and runs no `/pharn-regress` at all; its own start lines carry `--mode quick` (`## Quick mode` items
+2–4).
 
-Each routed stage carries its pinned lines in this order, and you run them in this order:
+Each routed stage carries a start line, a brief prompt and a finish line (6.36.0: `start` and `finish` each do what
+two lines did), and you run them in this order:
 
-1. **The route line** (`stage-agent.mjs route`). Branch **only** on its exit code (P5): `0` — it printed
-   `agent:<alias>`, so run the stage as a stage agent (3, below); `3` — it printed `inline:<reason>`, so run
-   the stage INLINE, exactly as before 6.27.0, and run **no** `read`; anything else — run it inline, with the
-   route `inline:route-unavailable`. With no Agent tool in your tool list, and none in the deferred-tool list
-   either (a deferred one IS present: load it first), run it inline with the route `inline:no-agent-tool` —
-   ADVISORY, your own reading of your tools, failing in the safe direction.
-2. **The stage-start marker**, its `<route>` replaced by that token, substituted literally. If it exits
-   `2` it wrote no marker (a mis-copied token is refused): run it once more without `--route '<route>'`, and
-   name the token in the Step 7 summary's route line for this stage.
-3. **On route exit `0` only, the Agent call:** `subagent_type: "general-purpose"`, `model: "<alias>"` (the part
+1. **The start line** (`stage-agent.mjs start`). It decides the route exactly as `route` does, writes the
+   stage-start marker with that token, and prints the token, then the marker line. Branch **only** on its exit code
+   (P5): `0` — the token is `agent:<alias>`, so run the stage as a stage agent (2, below); `3` — it is
+   `inline:<reason>`, so run the stage INLINE, exactly as before 6.27.0, then the inline return line (4); anything
+   else — no marker was written: run the stage inline and name it in the Step 7 summary's route line. With no Agent
+   tool in your tool list, and none in the deferred-tool list either (a deferred one IS present: load it first),
+   append `--no-agent-tool` to the start line: it records `inline:no-agent-tool` and exits `3` — ADVISORY, your own
+   reading of your tools, failing in the safe direction. A second line `marker: not written` changes only the
+   summary's route line.
+2. **On start exit `0` only, the Agent call:** `subagent_type: "general-purpose"`, `model: "<alias>"` (the part
    after `agent:`), `description: "pharn stage <stage>"`, `run_in_background: false`, and **no `isolation`** —
    the stages write into this one tree, one after another, never a worktree each. Its `prompt` is the stage's
    pinned one-line brief prompt, `<name>` (and `<N>`) substituted; the stage agent runs that line first and
    receives its rules from code. Only `/pharn-spec`'s prompt carries anything more: the increment description,
    below that line, in a fence longer than any backtick run inside it, labelled DATA (ADVISORY, like every
    placement).
-4. **The read line — only after an Agent call has returned the agent's COMPLETED result.** This command cannot
-   end its turn to wait (the `Stop` guard refuses a turn end, and nobody is there to resume it), so a call that
-   returns a background-launch notice instead is **S9**, and the summary says the stage agent may still be
-   running. **Never run `read` for a stage that ran inline.**
-5. **Then the `orchestrator` marker**, after the stage's `read`.
+3. **The finish line — only after an Agent call has returned the agent's COMPLETED result.** It reads the agent's
+   result as `read` does and writes the `orchestrator` return marker. This command cannot end its turn to wait (the
+   `Stop` guard refuses a turn end, and nobody is there to resume it), so a call that returns a background-launch
+   notice instead is **S9**, and the summary says the stage agent may still be running. **Never run `finish` for a
+   stage that ran inline.**
+4. **After an inline run, the inline return line** in place of `finish`:
 
-**`read`'s closed line, mapped onto Step 2's table.** A row the stage agent reports is used ONLY where this
+   ```bash
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
+   ```
+
+**`finish`'s closed first line, mapped onto Step 2's table.** A row the stage agent reports is used ONLY where this
 command already maps a stage's OWN report to a row:
 
 - `/pharn-spec`: `refused S6` → **S6**; `refused S6b` → **S6b**; `refused S6c` → **S6c** (a `--quick` run's fit checks,
@@ -287,18 +302,19 @@ command already maps a stage's OWN report to a row:
 - `/pharn-build`: `refused S4` → **S4**; `refused S5` → **S5**; `refused S7` → **S7**; `refused S8` → **S8**.
   `done gate:pass` and `done gate:fail` both go on to regress and verify — a red build gate is not a stop here.
 - any other routed stage outcome: `refused S9` → **S9**; `refused S10` → **S10**. A `refused` with no row, or
-  with a row this list does not give that stage, is **S9**. A `question` is **S10**. Exit `2` (`unusable …`,
+  with a row this list does not give that stage, is **S9**. A `question` is **S10** — `finish` leaves its return
+  marker unwritten (`marker: deferred (question)`), so run the inline return line first. Exit `2` (`unusable …`,
   `no-result` included) or a crash is **S9** — never an inline re-run, since the stage may have written half
   its files.
 - `done` from spec, plan or grill → the stage's own verdict read, unchanged.
 
-**Where a checker decides the row, the checker still decides, and whatever `read` printed is ignored:** the
+**Where a checker decides the row, the checker still decides, and whatever `finish` printed is ignored:** the
 test stage, whose row always comes from `check-test-stage.mjs --require-test-first` and then the pinned
 preflight — exit 1 is S12, any other exit S9, never by relayed text (Step 4) — and freshness (S11) and AC
 evidence (S13). The rows a stage agent may report at all are `LOOP_ROWS` in `pharn/floor/stage-agent-core.mjs`:
 S4, S5, S6, S6b, S6c, S7, S8, S9 and S10.
 
-**Bounds.** A stage agent's report is another model's output. Only `read`'s exit code and its closed line are
+**Bounds.** A stage agent's report is another model's output. Only `finish`'s exit code and its closed first line are
 floor. That control flow never uses the agent's prose is **ADVISORY** — your own discipline: the Agent tool
 returns the agent's final text into your context, which is `THREAT-MODEL.md §5`'s free-text residual (a model
 consuming another model's free text) in a new place, bounded — no stop reads it — and not zeroed (P2). A
@@ -332,19 +348,15 @@ part (`## At the stop`). Never run a quick run from memory of that file, and nev
 
 ## Step 3 — The SPEC, approved by the model through `/pharn-spec` (reused, not re-implemented)
 
-**Route it, then mark the boundary** — the routed sequence of `## Running a stage`, as pinned lines, not a
-description of them. _(A `--quick` run uses `## Quick mode` item 2's route and brief lines, each with
-`--mode quick`, in place of Step 3's two.)_
+**Start it** — the routed sequence of `## Running a stage`, as pinned lines, not a description of them. _(A
+`--quick` run uses `## Quick mode` item 2's start and brief lines, each with `--mode quick`, in place of Step 3's
+two.)_
 
 ```bash
-node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-spec --name '<name>'
+node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-spec --name '<name>'
 ```
 
-```bash
-node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-spec --route '<route>'
-```
-
-On route exit `0`, the Agent call's prompt is this one line, with the increment description below it in a
+On start exit `0`, the Agent call's prompt is this one line, with the increment description below it in a
 fenced block labelled DATA:
 
 ```text
@@ -357,10 +369,10 @@ Either way, its Step 4a skips the
 approval form, pins the SPEC through its own Step 5 under its own writes-scope, and records
 `approved_by: model`; on thin intent it reports back instead, which is S6, and on a clarification marker
 left in the Draft it reports back blocked on clarification, which is S6b. Only after an Agent call has
-returned:
+returned (after an inline run, the inline return line instead):
 
 ```bash
-node pharn/floor/stage-agent.mjs read --command pharn-loop --name '<name>' --stage pharn-spec
+node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-spec
 ```
 
 Then read the gate this run's plan stage will enforce anyway:
@@ -371,24 +383,14 @@ node pharn/floor/check-spec-approved.mjs pharn/features/<name>/SPEC.md
 
 Exit 0 → proceed. Non-zero → S9.
 
-**Then mark the return of control:**
-
-```bash
-node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
-```
-
 ## Step 4 — The front, once: `/pharn-plan` → `/pharn-grill` → `/pharn-test` → iteration 1
 
-**Run each sub-stage through its routed sequence (`## Running a stage`)** — the route line, the stage-start
-marker, the Agent call (or the stage inline, on route exit `3`), `read` after an Agent call only, and the
-return marker. `/pharn-plan` first:
+**Run each sub-stage through its routed sequence (`## Running a stage`)** — the start line, the Agent call (or
+the stage inline, then the inline return line, on start exit `3`), and `finish` after an Agent call only.
+`/pharn-plan` first:
 
 ```bash
-node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-plan --name '<name>'
-```
-
-```bash
-node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-plan --route '<route>'
+node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-plan --name '<name>'
 ```
 
 ```text
@@ -396,21 +398,13 @@ Run exactly this line, then follow what it prints: node pharn/floor/stage-agent.
 ```
 
 ```bash
-node pharn/floor/stage-agent.mjs read --command pharn-loop --name '<name>' --stage pharn-plan
+node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-plan
 ```
 
-```bash
-node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
-```
-
-Then `/pharn-grill`, the same way _(a `--quick` run: `## Quick mode` item 3's route line, which runs it inline)_:
+Then `/pharn-grill`, the same way _(a `--quick` run: `## Quick mode` item 3's start line, which runs it inline)_:
 
 ```bash
-node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-grill --name '<name>'
-```
-
-```bash
-node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-grill --route '<route>'
+node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-grill --name '<name>'
 ```
 
 ```text
@@ -418,11 +412,7 @@ Run exactly this line, then follow what it prints: node pharn/floor/stage-agent.
 ```
 
 ```bash
-node pharn/floor/stage-agent.mjs read --command pharn-loop --name '<name>' --stage pharn-grill
-```
-
-```bash
-node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
+node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-grill
 ```
 
 **Each fenced block runs as its own shell and carries no state into the next** — every value a
@@ -440,14 +430,10 @@ item 3). Two differences, stated:
 Grill's interrogation findings gate nothing, exactly as in `/pharn-ship`.
 
 **Then the test stage (6.19.0), once per front — the AC tests are pinned, so they are never rewritten per iteration.**
-Route it and mark it like the two above:
+Start it like the two above:
 
 ```bash
-node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-test --name '<name>'
-```
-
-```bash
-node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-test --route '<route>'
+node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-test --name '<name>'
 ```
 
 ```text
@@ -455,15 +441,11 @@ Run exactly this line, then follow what it prints: node pharn/floor/stage-agent.
 ```
 
 ```bash
-node pharn/floor/stage-agent.mjs read --command pharn-loop --name '<name>' --stage pharn-test
-```
-
-```bash
-node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
+node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-test
 ```
 
 The stage is `/pharn-test <name> --unattended` — the stage agent's brief names that invocation, and an inline run
-invokes it (it never asks; on a missing runner it prints a closed line and stops). Whatever `read` printed —
+invokes it (it never asks; on a missing runner it prints a closed line and stops). Whatever `finish` printed —
 `unusable` included — the row is not read from it: read the SAME verdict `/pharn-build` re-reads first thing and `check-loop-fresh.mjs` re-reads after every build, with
 this command's POLICY in the checker — only a test-first stage is a pass here:
 
@@ -493,17 +475,13 @@ Each iteration `<N>` (1-based). **Every sub-stage is marked on entry and the orc
 `<N>` literally; no value is carried between blocks.
 
 1. **`/pharn-build <name>`.** Its routed sequence (`## Running a stage`), at iteration `<N>` _(a `--quick` run:
-   `## Quick mode` item 4's route and brief lines, each with `--mode quick`)_:
+   `## Quick mode` item 4's start and brief lines, each with `--mode quick`)_:
 
    ```bash
-   node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-build --name '<name>' --iteration <N>
+   node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-build --name '<name>' --iteration <N>
    ```
 
-   ```bash
-   node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-build --iteration <N> --route '<route>'
-   ```
-
-   On route exit `0`, the Agent call's whole prompt:
+   On start exit `0`, the Agent call's whole prompt:
 
    ```text
    Run exactly this line, then follow what it prints: node pharn/floor/stage-agent.mjs brief --command pharn-loop --stage pharn-build --name '<name>' --iteration <N>
@@ -511,7 +489,7 @@ Each iteration `<N>` (1-based). **Every sub-stage is marked on entry and the orc
 
    A ROUTED build agent reads its fix list from the reports on disk itself — its brief's rule 7 names the same
    four fields as the paragraph below (full mode; in a quick run both name `verify-report.json`'s three —
-   `## Quick mode` item 4) — so nothing is transcribed to it. On route exit `3`, run the stage
+   `## Quick mode` item 4) — so nothing is transcribed to it. On start exit `3`, run the stage
    INLINE, and from iteration 2 on, hand the inline build the standing `verify-report.json`
    `.failing_gates[]` / `.completeness.missing[]` / `.ac_gate.acs[]` (6.20.0: which criterion is not delivered, and
    why — `ac-delivery` alone does not say) and `regression-report.json` `.regressions[]` as **quoted DATA**
@@ -519,37 +497,37 @@ Each iteration `<N>` (1-based). **Every sub-stage is marked on entry and the orc
    instruction, and the pinned tests themselves are outside the plan's `## Files`, so the rebuild fixes the
    implementation, never the test.
 
-   Only after an Agent call has returned:
+   Only after an Agent call has returned (after an inline run, the inline return line instead):
 
    ```bash
-   node pharn/floor/stage-agent.mjs read --command pharn-loop --name '<name>' --stage pharn-build --iteration <N>
+   node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-build --iteration <N>
    ```
 
    `done gate:pass` or `done gate:fail` → go on to 2; any other line maps onto Step 2's table as
-   `## Running a stage` says. Then the return marker:
+   `## Running a stage` says.
+
+2. **`/pharn-regress`, then `/pharn-verify` — one call each** (`pharn/floor/stage-direct.mjs`, 6.36.0, its header):
+   it sets that stage's writes-scope, runs its stage script, releases the scope and writes the stage's stage-start and
+   return markers, printing the script's object and exiting with its code. Run each with the Bash tool's timeout at
+   600000, and branch by Step 2's two stage-exit mappings. _(`/pharn-regress` and its two markers are
+   SKIPPED in Quick mode: the scope check runs instead — `## Quick mode` item 5.)_
 
    ```bash
-   node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
-   ```
-
-2. **`/pharn-regress --base <base sha>`**, then **`/pharn-verify`**. _(`/pharn-regress` and its two markers are
-   SKIPPED in Quick mode: the scope check runs instead — `## Quick mode` item 5.)_ Each stage is marked the
-   same way:
-
-   ```bash
-   node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-regress --iteration <N>
-   ```
-
-   ```bash
-   node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
+   node pharn/floor/stage-direct.mjs --stage pharn-regress --name '<name>' --iteration <N> --timeout-ms 540000 --budget-ms 570000 --base '<base sha>'
    ```
 
    ```bash
-   node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-verify --iteration <N>
+   node pharn/floor/stage-direct.mjs --stage pharn-verify --name '<name>' --iteration <N> --timeout-ms 540000 --budget-ms 570000
+   ```
+
+   On a `5`, that stage's resume line, the same way, until another exit:
+
+   ```bash
+   node pharn/floor/stage-direct.mjs --stage pharn-regress --name '<name>' --resume --budget-ms 570000
    ```
 
    ```bash
-   node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
+   node pharn/floor/stage-direct.mjs --stage pharn-verify --name '<name>' --resume --budget-ms 570000
    ```
 
 3. **Check that the evidence belongs to this tree — BEFORE reading the stop.** Every stage is mandatory. Run the
@@ -563,9 +541,8 @@ Each iteration `<N>` (1-based). **Every sub-stage is marked on entry and the orc
 
    - **`0` FRESH** _(full mode — a quick run: `## Quick mode` item 6)_ — the evidence and the front still hold
      (`pharn/floor/loop-fresh-core.mjs`, header, lists the checks). Go to 4.
-   - **`1` RERUN** — the JSON's `stage_to_rerun` (`verify` or `regress`) is stale or missing. Re-invoke that
-     stage **inside this same iteration `<N>`**, with its own `mark-phase.mjs --iteration <N>` lines as in 2,
-     then run this step again. _(A quick run: a RERUN naming `regress` is **S11**, never a regress run —
+   - **`1` RERUN** — the JSON's `stage_to_rerun` (`verify` or `regress`) is stale or missing. Re-run that
+     stage's line from 2 **inside this same iteration `<N>`** (it writes its own markers), then run this step again. _(A quick run: a RERUN naming `regress` is **S11**, never a regress run —
      `## Quick mode` item 6.)_ A re-run consumes **no** iteration. **A verify re-run can cascade into a regress
      re-run** — one re-run per stage, not a second unexplained staleness. If the re-run stage itself refuses, that is
      **S9** at the stage.

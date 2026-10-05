@@ -27,6 +27,10 @@ import {
   NO_SESSION_KEY,
   pendingFile,
   writePendingStart,
+  markersPath,
+  tryMarkPhase,
+  latestMarker,
+  MARKER_NOT_WRITTEN,
 } from "./mark-phase.mjs";
 import { AGENT_MODELS, INLINE_REASONS } from "./route-token-core.mjs";
 import { readMarkers, renderLedger } from "./render-cost-ledger.mjs";
@@ -615,4 +619,61 @@ test("✧ ONE ENCODING (L35): the printed line's template is spelled once, in ma
     readFileSync(join(HERE, "render-cost-ledger.mjs"), "utf8"),
     /import \{[^}]*\bmarkerLine\b[^}]*\} from "\.\/mark-phase\.mjs";/
   );
+});
+
+// ── 6.36.0 (orchestrator-direct-stage-calls): the two in-process helpers ─────────────────────────────────
+
+test("tryMarkPhase writes the marker markPhase writes and returns markerLine() of it; markersPath is markPhase's own file", () => {
+  const base = mkdtempSync(join(tmpdir(), "mark-phase-"));
+  try {
+    const r = tryMarkPhase({ name: "demo", kind: "stage-start", stage: "pharn-plan", base, route: "agent:opus" });
+    assert.equal(r.ok, true);
+    assert.equal(r.code, null);
+    const onDisk = readFileSync(markersPath("demo", base), "utf8")
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l));
+    assert.equal(onDisk.length, 1, "NON-VACUITY: one marker");
+    assert.deepEqual(r.marker, onDisk[0]);
+    assert.equal(r.line, markerLine(onDisk[0]), "the one encoding");
+    assert.equal(markersPath("demo", base), join(base, "demo", "markers.jsonl"));
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("tryMarkPhase never throws: an unwritable base is {ok: false, line: MARKER_NOT_WRITTEN, code}", () => {
+  const dir = mkdtempSync(join(tmpdir(), "mark-phase-"));
+  try {
+    const base = join(dir, "cost");
+    writeFileSync(base, "a file where the marker directory belongs\n");
+    // CONTROL: markPhase itself throws on this base, so the helper is what makes it safe.
+    assert.throws(() => markPhase({ name: "demo", kind: "orchestrator", base }));
+    const r = tryMarkPhase({ name: "demo", kind: "orchestrator", base });
+    assert.deepEqual([r.ok, r.line, r.marker], [false, MARKER_NOT_WRITTEN, null]);
+    assert.match(r.code, /^[A-Z0-9_]+$/, "a node error code, never a message");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("latestMarker: the last MARKER of the file — a torn line, a non-object and a non-marker are skipped; none is null", () => {
+  const dir = mkdtempSync(join(tmpdir(), "mark-phase-"));
+  try {
+    const file = join(dir, "markers.jsonl");
+    assert.equal(latestMarker(file), null, "no file");
+    const m1 = { seq: 1, kind: "stage-start", stage: "pharn-plan", iteration: null, ts: "t", session_id: null };
+    const m2 = { seq: 2, kind: "orchestrator", stage: null, iteration: null, ts: "t", session_id: null };
+    writeFileSync(file, `${JSON.stringify(m1)}\n${JSON.stringify(m2)}\n`);
+    assert.deepEqual(latestMarker(file), m2);
+    // Each skipped shape, appended after m2, leaves m2 the latest (a CONTROL per shape: m1 would read otherwise).
+    for (const junk of ['{"seq":', "[1,2]", '"str"', "null", '{"seq":"3","kind":"orchestrator"}', '{"seq":3,"kind":"stage-begin"}']) {
+      writeFileSync(file, `${JSON.stringify(m1)}\n${JSON.stringify(m2)}\n${junk}\n`);
+      assert.deepEqual(latestMarker(file), m2, `skips ${junk}`);
+    }
+    writeFileSync(file, "[1]\n\n");
+    assert.equal(latestMarker(file), null, "no marker at all");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

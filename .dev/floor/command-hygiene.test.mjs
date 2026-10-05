@@ -43,6 +43,7 @@ import {
   renderBrief,
   fixListFields,
 } from "../../pharn/floor/stage-agent-core.mjs";
+import { DIRECT_STAGES, setterArgv } from "../../pharn/floor/stage-direct-core.mjs";
 import { allParts, commandFamilyText } from "./command-family.mjs";
 
 const COMMANDS_DIR = new URL("../../.claude/commands/", import.meta.url).pathname;
@@ -2000,6 +2001,49 @@ test("✧ the /pharn-loop rules DISCRIMINATE — each fails on a mutant of the r
 // written" (P0), which is `mark-phase.mjs`'s own stated bound and is not re-claimed stronger here.
 
 const MARK_PHASE = /node pharn\/floor\/mark-phase\.mjs[^\n]*/g;
+// 6.36.0 (orchestrator-direct-stage-calls): three more lines write markers. `stage-agent.mjs start` is a routed stage's
+// stage-start and `finish` its return; a FRESH `stage-direct.mjs` line is a floor-only stage's start AND its return (its
+// `--resume` line only continues it). A `--mode` start line is a quick DELTA, excluded as a `--mode` run-start is.
+const START_LINE = /node pharn\/floor\/stage-agent\.mjs start [^\n]*/g;
+const FINISH_LINE = /node pharn\/floor\/stage-agent\.mjs finish [^\n]*/g;
+const DIRECT_LINE = /node pharn\/floor\/stage-direct\.mjs [^\n]*/g;
+
+/** Every marker-writing site of a body, in order: {at, type: "start" | "return" | "both", stage, iteration, text}. */
+function markerSites(body) {
+  const flag = (c, f) => (c.match(new RegExp(`--${f}\\s+'?([^\\s']+)'?`)) ?? [])[1];
+  const sites = [];
+  for (const m of body.matchAll(MARK_PHASE)) {
+    const c = m[0];
+    if (/--pending-start/.test(c) || /--mode\b/.test(c)) continue;
+    const kind = flag(c, "kind");
+    if (kind === "stage-start")
+      sites.push({ at: m.index, type: "start", stage: flag(c, "stage"), iteration: flag(c, "iteration"), text: c });
+    else if (kind === "orchestrator") sites.push({ at: m.index, type: "return", text: c });
+  }
+  for (const m of body.matchAll(START_LINE)) {
+    if (/--mode\b/.test(m[0])) continue;
+    sites.push({ at: m.index, type: "start", stage: flag(m[0], "stage"), iteration: flag(m[0], "iteration"), text: m[0] });
+  }
+  for (const m of body.matchAll(FINISH_LINE)) sites.push({ at: m.index, type: "return", text: m[0] });
+  for (const m of body.matchAll(DIRECT_LINE)) {
+    if (/--resume\b/.test(m[0])) continue;
+    sites.push({ at: m.index, type: "both", stage: flag(m[0], "stage"), iteration: flag(m[0], "iteration"), text: m[0] });
+  }
+  return sites.sort((a, b) => a.at - b.at);
+}
+
+/** Every stage-start site is followed by a return before the next start (a fresh direct line closes itself). */
+function markerPairingReasons(body) {
+  const sites = markerSites(body);
+  const out = [];
+  sites.forEach((s, i) => {
+    if (s.type !== "start") return;
+    const next = sites[i + 1];
+    if (!next || next.type !== "return")
+      out.push(`${s.stage}${s.iteration ? `@${s.iteration}` : ""}: no return before the next stage starts`);
+  });
+  return out;
+}
 
 const PHASE_MARKER_WIRING = [
   {
@@ -2075,18 +2119,19 @@ for (const cmd of PHASE_MARKER_WIRING) {
       assert.equal(n, 1, `${cmd.file} must carry exactly one --kind ${kind} invocation; found ${n}`);
     }
 
-    // Every stage this command runs must be marked.
-    const staged = new Set(calls.map((c) => (c.match(/--stage\s+(\S+)/) ?? [])[1]).filter(Boolean));
+    // Every stage this command runs must be marked — by a mark-phase line, or (6.36.0) by a start or direct line.
+    const sites = markerSites(body);
+    const staged = new Set(sites.filter((s) => s.type !== "return").map((s) => s.stage));
     assert.deepEqual([...staged].sort(), [...cmd.stages].sort(), `${cmd.file}'s marked stages must equal its declared stage set`);
 
-    // An `orchestrator` marker per stage-start, so a stage's tail is not attributed to the stage.
-    const starts = kindsSeen.filter((k) => k === "stage-start").length;
-    const orchs = kindsSeen.filter((k) => k === "orchestrator").length;
-    assert.equal(orchs, starts, `${cmd.file} must return to the orchestrator after every stage-start (${starts} starts, ${orchs} returns)`);
+    // An `orchestrator` return after every stage-start, before the next stage starts, so a stage's tail is not
+    // attributed to the stage (6.36.0: an order rule over the sites — a routed stage's return is its finish line, an
+    // inline one's the inline return line in ## Running a stage, and a fresh direct line closes itself).
+    assert.deepEqual(markerPairingReasons(body), [], `${cmd.file} must return to the orchestrator after every stage-start`);
 
     // The iterated stages carry an explicit --iteration; the once-only stages must NOT, or their
     // requests would land in a bucket the run never iterated.
-    for (const c of calls) {
+    for (const c of sites.filter((s) => s.type !== "return").map((s) => s.text)) {
       const stage = (c.match(/--stage\s+(\S+)/) ?? [])[1];
       if (!stage) continue;
       const iter = (c.match(/--iteration\s+(\S+)/) ?? [])[1];
@@ -2161,15 +2206,19 @@ test("✧ PHASE-MARKER rules DISCRIMINATE — a dropped orchestrator and a misty
   // L4/L34: an assertion that only ever sees the correct corpus certifies nothing. Mutate the REAL body
   // so the guard's own extraction runs on both sides.
   const body = commandBody("pharn-ship.md");
-  const dropped = body.replace(/node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind orchestrator\n/, "");
+  // 6.36.0: a routed stage's return is its FINISH line — drop the plan's, and the pairing rule must see it.
+  const dropped = body.replace(/node pharn\/floor\/stage-agent\.mjs finish --command pharn-ship --name '<name>' --stage pharn-plan\n/, "");
   assert.notEqual(dropped, body, "the mutation must change the body, or this test is vacuous");
-  const kindsOf = (s) => (s.match(MARK_PHASE) ?? []).map((c) => (c.match(/--kind\s+(\S+)/) ?? [])[1]);
-  const k = kindsOf(dropped);
-  assert.notEqual(
-    k.filter((x) => x === "orchestrator").length,
-    k.filter((x) => x === "stage-start").length,
-    "a dropped orchestrator must break the pairing rule"
+  assert.deepEqual(markerPairingReasons(body), [], "control: the real body pairs");
+  assert.match(markerPairingReasons(dropped).join("\n"), /pharn-plan: no return/, "a dropped finish must break the pairing rule");
+  // …and a FRESH direct line closes itself, while a mark-phase stage-start spliced before it has no return.
+  const spliced = body.replace(
+    "node pharn/floor/stage-direct.mjs --stage pharn-verify --name '<name>' --iteration 1",
+    "node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-verify --iteration 1\nnode pharn/floor/stage-direct.mjs --stage pharn-verify --name '<name>' --iteration 1"
   );
+  assert.notEqual(spliced, body);
+  assert.match(markerPairingReasons(spliced).join("\n"), /pharn-verify@1: no return/);
+  const kindsOf = (s) => (s.match(MARK_PHASE) ?? []).map((c) => (c.match(/--kind\s+(\S+)/) ?? [])[1]);
   const mistyped = body.replace("--kind run-stop", "--kind run-stopped");
   assert.ok(kindsOf(mistyped).includes("run-stopped"), "the guard must SEE a mistyped kind — else it proves nothing");
   assert.ok(!["run-start", "stage-start", "orchestrator", "run-stop"].includes("run-stopped"), "and the closure must reject it");
@@ -2606,18 +2655,18 @@ const LOOP_QUICK_POINTERS = [
   { site: "Step 6b's render line", re: /\(SKIPPED in\s+Quick mode — `## Quick mode` item 8; `cost\.json` is still emitted above\)/ },
   { site: "Step 7's report bullet", re: /a quick run renders none — `## Quick mode` item 8/ },
   // 6.28.0 coupling — each full-mode route site whose quick run uses ## Quick mode's --mode lines instead (appended, so the
-  // mutation test's index into this list is unchanged).
+  // mutation test's index into this list is unchanged). 6.36.0: the route line is the `start` line.
   {
-    site: "Step 3's route lines",
-    re: /_\(A `--quick` run uses `## Quick mode` item 2's route and brief lines, each with\s+`--mode quick`, in place of Step 3's two\.\)_/,
+    site: "Step 3's start lines",
+    re: /_\(A\s+`--quick` run uses `## Quick mode` item 2's start and brief lines, each with\s+`--mode quick`, in place of Step 3's\s+two\.\)_/,
   },
   {
-    site: "Step 4's grill route line",
-    re: /Then `\/pharn-grill`, the same way _\(a `--quick` run: `## Quick mode` item 3's route line, which runs it inline\)_:/,
+    site: "Step 4's grill start line",
+    re: /Then `\/pharn-grill`, the same way _\(a `--quick` run: `## Quick mode` item 3's start line, which runs it inline\)_:/,
   },
   {
-    site: "Step 5.1's build route lines",
-    re: /at iteration `<N>` _\(a `--quick` run:\s+`## Quick mode` item 4's route and brief lines, each with `--mode quick`\)_:/,
+    site: "Step 5.1's build start lines",
+    re: /at iteration `<N>` _\(a `--quick` run:\s+`## Quick mode` item 4's start and brief lines, each with `--mode quick`\)_:/,
   },
 ];
 
@@ -3130,8 +3179,7 @@ function mappingNamesCode(mapping, code) {
   return mapping.includes(`\`${code}\``) || mapping.includes(code);
 }
 
-function loopMapping(anchor) {
-  const body = commandBody("pharn-loop.md");
+function loopMapping(anchor, body = commandBody("pharn-loop.md")) {
   const start = body.indexOf(anchor);
   assert.ok(start !== -1, `pharn-loop.md must carry the paragraph anchored ${anchor}`);
   const end = body.indexOf("\n\n**", start + anchor.length);
@@ -3160,6 +3208,231 @@ test("✧ CLOSURE discriminates — the SAME predicate, run over a mapping parag
   const regress = loopMapping(STAGE_SCRIPT_WIRING[0].mappingAnchor);
   const verify = loopMapping(STAGE_SCRIPT_WIRING[1].mappingAnchor);
   assert.ok(!regress.includes(STAGE_SCRIPT_WIRING[1].mappingAnchor) && !verify.includes(STAGE_SCRIPT_WIRING[0].mappingAnchor));
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// ✧ DIRECT_STAGE_WIRING (6.36.0, orchestrator-direct-stage-calls — audit C3) — `/pharn-loop` and `/pharn-ship` run
+// `/pharn-regress` and `/pharn-verify` as ONE `pharn/floor/stage-direct.mjs` call each, instead of invoking the thin
+// callers above. The thin caller and the orchestrator's direct call are a deliberate COPY-PAIR of one invocation (L31),
+// so the pair's OBLIGATION SET is enumerated here, each member with the rule that checks it (GRILL G3):
+//   1. the setter argv the call runs equals the thin caller's pinned setter line (the module's table vs command text);
+//   2. every fresh direct line's --timeout-ms / --budget-ms equal the thin caller's pinned numbers (N < B < 600000);
+//   3. every resume line's --budget-ms equals the thin caller's;
+//   4. each orchestrator names the 600000 Bash-tool timeout for these lines;
+//   5. each orchestrator's mapping names every stage-exit code — done, question, refused, unusable, continue — plus a
+//      crash and a Bash-tool timeout;
+//   6. (stage-direct.test.mjs) the call's per-stage flag set holds every flag a registry question option appends.
+// Plus the CLOSURE (L36): the commands calling stage-direct.mjs are exactly these two, each holds exactly its expected
+// (stage, iteration) fresh lines and one resume line per stage, in the closed shape below; and ★ EXECUTED (L45): every
+// committed line, run in a scratch tree where the REAL script refuses, passes that exit through, writes its markers and
+// releases the scope. HONEST SCOPE: presence, shape and parity over committed prose, plus one executed exit per line —
+// never that a run executed a line or branched as the prose says (P0).
+// ---------------------------------------------------------------------------------------------------------------
+
+const DIRECT_STAGE_WIRING = [
+  {
+    file: "pharn-loop.md",
+    fresh: ["pharn-regress@<N>", "pharn-verify@<N>"],
+    // the loop's regress line carries its own captured base; nothing else is appended to a committed line.
+    extra: { "pharn-regress": " --base '<base sha>'", "pharn-verify": "" },
+    exitText: (body) => STAGE_SCRIPT_WIRING.map((w) => loopMapping(w.mappingAnchor, body)).join("\n"),
+    exitNeedles: [
+      "`done`",
+      "`question",
+      "`refused`",
+      "`unusable`",
+      "a crash",
+      "`continue`",
+      "Bash\ntool itself timed out|Bash tool itself timed out",
+    ],
+  },
+  {
+    file: "pharn-ship.md",
+    fresh: ["pharn-regress@1", "pharn-regress@2", "pharn-verify@1", "pharn-verify@2"],
+    extra: { "pharn-regress": "", "pharn-verify": "" },
+    exitText: (body) => {
+      const at = body.indexOf("**The two floor-only stages, `/pharn-regress` and `/pharn-verify`, are one call each**");
+      assert.ok(at >= 0, "pharn-ship.md must carry the floor-only stages paragraph (L60: the anchor is found first)");
+      return body.slice(at, body.indexOf("\n## ", at));
+    },
+    exitNeedles: [
+      "`0` (`done`)",
+      "`2` (`unusable`",
+      "`3` (`refused`)",
+      "`4` (`question`)",
+      "`5` (`continue`)",
+      "anything else",
+      "Bash tool itself",
+    ],
+  },
+];
+const DIRECT_FRESH =
+  /^node pharn\/floor\/stage-direct\.mjs --stage (pharn-regress|pharn-verify) --name '<name>' --iteration (\S+) --timeout-ms (\d+) --budget-ms (\d+)(.*)$/;
+const DIRECT_RESUME =
+  /^node pharn\/floor\/stage-direct\.mjs --stage (pharn-regress|pharn-verify) --name '<name>' --resume --budget-ms (\d+)$/;
+
+/** The thin caller's pinned numbers and setter line, read from its own committed text. */
+function thinCallerPins(stage) {
+  const w = STAGE_SCRIPT_WIRING.find((x) => x.file === `${stage}.md`);
+  const lines = fencedLines(commandBody(w.file)).map((l) => l.text.trim());
+  const fresh = lines.find((t) =>
+    new RegExp(`^node pharn/floor/${escapeRe(w.script)} --feature <name> --timeout-ms \\d+ --budget-ms \\d+$`).test(t)
+  );
+  const resume = lines.find((t) => new RegExp(`^node pharn/floor/${escapeRe(w.script)} --resume --budget-ms \\d+$`).test(t));
+  const setter = lines.find((t) => t.startsWith("node .claude/hooks/set-writes-scope.cjs --from-frontmatter"));
+  const [, n, b] = fresh.match(/--timeout-ms (\d+) --budget-ms (\d+)/);
+  return { n, b, resumeB: resume.match(/--budget-ms (\d+)/)[1], setter };
+}
+
+/** Rules 2–5 and the closure for one orchestrator. [] when clean. */
+function directWiringReasons(w, body = commandBody(w.file)) {
+  const reasons = [];
+  const lines = fencedLines(body).map((l) => l.text.trim());
+  const direct = lines.filter((t) => t.startsWith("node pharn/floor/stage-direct.mjs"));
+  const fresh = [];
+  const resumes = [];
+  for (const t of direct) {
+    let m;
+    if ((m = t.match(DIRECT_FRESH))) {
+      const [, stage, it, n, b, rest] = m;
+      fresh.push(`${stage}@${it}`);
+      if (rest !== w.extra[stage]) reasons.push(`${t}: carries ${JSON.stringify(rest)}, not ${JSON.stringify(w.extra[stage])}`);
+      const pin = thinCallerPins(stage);
+      if (n !== pin.n || b !== pin.b) reasons.push(`${t}: --timeout-ms ${n} --budget-ms ${b} != the thin caller's ${pin.n} / ${pin.b}`);
+      if (!(Number(n) < Number(b) && Number(b) < 600000)) reasons.push(`${t}: N < B < 600000 does not hold`);
+    } else if ((m = t.match(DIRECT_RESUME))) {
+      resumes.push(m[1]);
+      if (m[2] !== thinCallerPins(m[1]).resumeB) reasons.push(`${t}: --budget-ms != the thin caller's resume line`);
+    } else reasons.push(`${t}: not a closed stage-direct.mjs line shape`);
+  }
+  if (JSON.stringify(fresh.sort()) !== JSON.stringify([...w.fresh].sort())) reasons.push(`fresh lines [${fresh}] != [${w.fresh}]`);
+  if (JSON.stringify(resumes.sort()) !== JSON.stringify(["pharn-regress", "pharn-verify"]))
+    reasons.push(`resume lines [${resumes}] != one per stage`);
+  if (!/Bash tool's timeout at\s+600000/.test(body)) reasons.push("the 600000 Bash-tool timeout for these lines is not named");
+  const exitText = w.exitText(body);
+  for (const needle of w.exitNeedles) {
+    if (!needle.split("|").some((n) => exitText.includes(n))) reasons.push(`the exit mapping does not name ${needle}`);
+  }
+  // The thin callers' own pinned script and setter lines must not be re-typed in an orchestrator (that is the call's).
+  for (const t of lines) {
+    if (/^node pharn\/floor\/stage-(regress|verify)\.mjs\b/.test(t))
+      reasons.push(`${t}: a stage script run directly — use stage-direct.mjs`);
+    if (/--from-frontmatter \.claude\/commands\/pharn-(regress|verify)\.md/.test(t))
+      reasons.push(`${t}: the thin caller's setter, re-typed`);
+  }
+  return reasons;
+}
+
+test("✧ DIRECT_STAGE_WIRING — CLOSURE: the commands calling stage-direct.mjs are exactly the two orchestrators", () => {
+  assert.equal(DIRECT_STAGE_WIRING.length, 2, "L34");
+  const live = commandFiles()
+    .filter((f) => /node pharn\/floor\/stage-direct\.mjs/.test(commandBody(f)))
+    .sort();
+  assert.deepEqual(live, DIRECT_STAGE_WIRING.map((w) => w.file).sort());
+});
+
+test("✧ DIRECT_STAGE_WIRING (1) — the setter argv the call runs IS the thin caller's pinned setter line, per stage", () => {
+  for (const stage of Object.keys(DIRECT_STAGES)) {
+    assert.equal(`node .claude/hooks/set-writes-scope.cjs ${setterArgv(stage).join(" ")}`, thinCallerPins(stage).setter, stage);
+  }
+  assert.deepEqual(
+    Object.keys(DIRECT_STAGES).sort(),
+    STAGE_SCRIPT_WIRING.map((w) => w.file.replace(/\.md$/, "")).sort(),
+    "L34: the same two stages"
+  );
+});
+
+for (const w of DIRECT_STAGE_WIRING) {
+  test(`✧ DIRECT_STAGE_WIRING (2–5) — ${w.file}: the closed fresh and resume lines, the thin caller's numbers, the 600000 timeout, every exit named`, () => {
+    assert.deepEqual(directWiringReasons(w), []);
+  });
+}
+
+test("✧ DIRECT_STAGE_WIRING — each rule fails on its mutant (L60)", () => {
+  const [loop, ship] = DIRECT_STAGE_WIRING;
+  const loopBody = commandBody(loop.file);
+  const shipBody = commandBody(ship.file);
+  const mutate = (body, from, to) => {
+    assert.ok(body.includes(from), `fixture sanity: ${from}`);
+    return body.replace(from, to);
+  };
+  const vfresh =
+    "node pharn/floor/stage-direct.mjs --stage pharn-verify --name '<name>' --iteration <N> --timeout-ms 540000 --budget-ms 570000";
+  const rres = "node pharn/floor/stage-direct.mjs --stage pharn-regress --name '<name>' --resume --budget-ms 570000";
+  const cases = [
+    [loop, mutate(loopBody, vfresh, vfresh.replace("540000", "550000")), /!= the thin caller's/],
+    [loop, mutate(loopBody, vfresh, `${vfresh} --gates 'x'`), /carries/],
+    [loop, mutate(loopBody, `${rres}\n`, ""), /resume lines/],
+    [loop, mutate(loopBody, rres, rres.replace("570000", "560000")), /resume line/],
+    [
+      loop,
+      mutate(loopBody, vfresh, vfresh.replace("--iteration <N>", "--iteration <N> --name-x y")),
+      /not a closed stage-direct\.mjs line shape/,
+    ],
+    [loop, mutate(loopBody, "Bash tool's timeout at\n   600000", "Bash tool's default timeout"), /600000 Bash-tool timeout/],
+    [loop, mutate(loopBody, "`continue`", "`continue`").replaceAll("`continue`", "`cont`"), /does not name `continue`/],
+    [ship, mutate(shipBody, "- `5` (`continue`)", "- `5` (cont)"), /does not name `5` \(`continue`\)/],
+    [
+      ship,
+      mutate(shipBody, "--stage pharn-verify --name '<name>' --iteration 2", "--stage pharn-verify --name '<name>' --iteration 3"),
+      /fresh lines/,
+    ],
+    [
+      ship,
+      `${shipBody}\n\`\`\`bash\nnode pharn/floor/stage-verify.mjs --feature <name> --timeout-ms 540000 --budget-ms 570000\n\`\`\`\n`,
+      /a stage script run directly/,
+    ],
+  ];
+  for (const [w, body, re] of cases) assert.match(directWiringReasons(w, body).join("\n"), re);
+  // CONTROLS: the real bodies are clean.
+  assert.deepEqual(directWiringReasons(loop, loopBody), []);
+  assert.deepEqual(directWiringReasons(ship, shipBody), []);
+});
+
+test("★ DIRECT_STAGE_WIRING — every COMMITTED line, run where the real script refuses: its exit passes through, its markers, its release", () => {
+  const env = { ...process.env };
+  delete env.CLAUDE_PROJECT_DIR;
+  delete env.CLAUDE_CODE_SESSION_ID;
+  let ran = 0;
+  for (const w of DIRECT_STAGE_WIRING) {
+    for (const t of fencedLines(commandBody(w.file)).map((l) => l.text.trim())) {
+      if (!t.startsWith("node pharn/floor/stage-direct.mjs")) continue;
+      const dir = mkdtempSync(join(tmpdir(), "hyg-direct-"));
+      try {
+        symlinkSync(join(REPO_ROOT, "pharn"), join(dir, "pharn"));
+        mkdirSync(join(dir, ".claude"));
+        symlinkSync(join(REPO_ROOT, ".claude", "hooks"), join(dir, ".claude", "hooks"));
+        symlinkSync(join(REPO_ROOT, ".claude", "commands"), join(dir, ".claude", "commands"));
+        const line = t
+          .replaceAll("'<name>'", "'demo'")
+          .replaceAll("<N>", "1")
+          .replaceAll("'<base sha>'", `'${"a".repeat(40)}'`);
+        const r = spawnSync("sh", ["-c", line], { cwd: dir, env, encoding: "utf8" });
+        assert.equal(r.status, 2, `${w.file}: ${t}\n${r.stdout}${r.stderr}`);
+        assert.match(r.stdout, /"schema": "pharn-stage-exit\/1"/, "the script's own object, passed through");
+        const markers = readFileSync(join(dir, ".pharn", "cost", "demo", "markers.jsonl"), "utf8")
+          .trim()
+          .split("\n")
+          .map((l) => JSON.parse(l));
+        const isResume = / --resume /.test(t);
+        assert.deepEqual(
+          markers.map((m) => m.kind),
+          isResume ? ["orchestrator"] : ["stage-start", "orchestrator"],
+          `${w.file}: ${t}`
+        );
+        if (!isResume)
+          assert.deepEqual(
+            [markers[0].stage, markers[0].iteration],
+            [t.match(/--stage (\S+)/)[1], Number(line.match(/--iteration (\d+)/)[1])]
+          );
+        assert.equal(existsSync(join(dir, ".pharn", "writes-scope.json")), false, "the scope is released");
+        ran++;
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  }
+  assert.equal(ran, 10, "L34: loop 2 fresh + 2 resume, ship 4 fresh + 2 resume");
 });
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -3412,7 +3685,8 @@ const RUN_MARKER_WIRING = [
     file: "pharn-ship.md",
     command: "pharn-ship",
     openAfter: "node pharn/floor/check-spec-approved.mjs pharn/features/<name>/SPEC.md",
-    openBefore: "node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-plan",
+    // 6.36.0: /pharn-plan's stage-start is written by its start line.
+    openBefore: "node pharn/floor/stage-agent.mjs start --command pharn-ship --stage pharn-plan",
     closeAfter: "node pharn/floor/mark-phase.mjs --name '<name>' --kind run-stop",
   },
   {
@@ -3510,9 +3784,11 @@ test("✧ neither run-marker command is scoped to `pharn-loop` — the CLI refus
 
 // ── ✧ STAGE_AGENT_WIRING (6.27.0, stage-model-routing) — a routed stage's pinned lines, in the two orchestrators ──
 //
-// `/pharn-ship` and `/pharn-loop` run each routed stage through four pinned lines — `stage-agent.mjs route`, the
-// stage-start marker carrying `--route '<route>'`, the one-line brief prompt the Agent call carries, and
-// `stage-agent.mjs read` — then the orchestrator marker. The routed set is ONE table, `ROUTE_POLICY` in
+// `/pharn-ship` and `/pharn-loop` run each routed stage through its pinned lines — since 6.36.0 (orchestrator-direct-
+// stage-calls) `stage-agent.mjs start` (`route`'s decision + the stage-start marker carrying its token), the one-line
+// brief prompt the Agent call carries, and `stage-agent.mjs finish` (`read` + the return marker). The rules below keep
+// their 6.27.0 vocabulary: a "route" line is the START line and a "read" line the FINISH line, and the old four-line
+// form (`route`, `read`, a stage-start typed with `--route`) is CLOSED OUT of both commands. The routed set is ONE table, `ROUTE_POLICY` in
 // `pharn/floor/stage-agent-core.mjs`, and these rules iterate it (L29): a policy cell flipped without its route
 // lines, or route lines added without their cell, fail here. The committed route and brief lines are EXECUTED
 // (L45), and the guards are probed with and without a subagent's `agent_id`/`agent_type` (L37).
@@ -3531,7 +3807,7 @@ const STAGE_AGENT_WIRING = [
     // mode -> the stages with a `--mode <mode>` route line (a DELTA replacing that stage's full-mode line).
     modeLines: { quick: ["pharn-grill"] },
     section: "Running a stage (6.27.0) — a routed stage runs as a stage agent, requested on its configured model",
-    waitRule: /A call that returns\s+a background-launch notice has not: wait for the agent's completion notice first/,
+    waitRule: /A call that returns\s+a background-launch\s+notice has not: wait for the agent's completion notice first/,
   },
   {
     file: "pharn-loop.md",
@@ -3541,12 +3817,15 @@ const STAGE_AGENT_WIRING = [
     // (inline by policy) and the build (its brief's rule 7 reads verify-report.json alone).
     modeLines: { quick: ["pharn-spec", "pharn-grill", "pharn-build"] },
     section: "Running a stage (6.27.0) — a routed stage runs as a stage agent, requested on its configured model",
-    waitRule: /a call that\s+returns a background-launch notice instead is \*\*S9\*\*/,
+    waitRule: /a call that\s+returns a background-launch\s+notice instead is \*\*S9\*\*/,
   },
 ];
 
-const SA_ROUTE = /^node pharn\/floor\/stage-agent\.mjs route (.*)$/;
-const SA_READ = /^node pharn\/floor\/stage-agent\.mjs read (.*)$/;
+// 6.36.0: the "route" kind is the START line, the "read" kind the FINISH line (see the header above).
+const SA_ROUTE = /^node pharn\/floor\/stage-agent\.mjs start (.*)$/;
+const SA_READ = /^node pharn\/floor\/stage-agent\.mjs finish (.*)$/;
+/** The 6.27.0 four-line form, closed out of both orchestrators (L36): a `route`/`read` line, or a typed `--route`. */
+const SA_OLD = /node pharn\/floor\/stage-agent\.mjs (?:route|read) |mark-phase\.mjs [^\n]*--route\b/;
 const SA_BRIEF = new RegExp(`^${BRIEF_PROMPT_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}node pharn/floor/stage-agent\\.mjs brief (.*)$`);
 const SA_MARK = /^node pharn\/floor\/mark-phase\.mjs (.*)$/;
 
@@ -3625,12 +3904,18 @@ function saWiringReasons(cmd, body, policy = ROUTE_POLICY) {
     .sort();
   if (JSON.stringify(haveModeBriefs) !== JSON.stringify(wantModeBriefs))
     reasons.push(`--mode brief prompt lines [${haveModeBriefs}] != --mode route lines of agent cells [${wantModeBriefs}]`);
-  const withRoute = L.filter((l) => l.kind === "stage-start" && l.flags.route !== undefined);
-  for (const l of withRoute)
-    if (l.flags.route !== "<route>") reasons.push(`line ${l.idx}: --route must be the literal '<route>' placeholder`);
-  const withRouteKeys = sortedKeys(withRoute);
-  if (JSON.stringify(withRouteKeys) !== JSON.stringify(have))
-    reasons.push(`stage-starts carrying --route [${withRouteKeys}] != routed [${have}]`);
+  // 6.36.0: the start line writes the routed stage's stage-start itself, so no mark-phase line carries `--route` (the model
+  // types no token) and no routed stage has a mark-phase stage-start of its own; the 6.27.0 lines are closed out (L36).
+  const fullKeys = new Set(have);
+  for (const l of L.filter((x) => x.kind === "stage-start")) {
+    if (l.flags.route !== undefined)
+      reasons.push(`line ${l.idx}: a mark-phase stage-start carries --route — the start line records the route`);
+    if (fullKeys.has(saKey(l.flags)))
+      reasons.push(`line ${l.idx}: a mark-phase stage-start for routed ${saKey(l.flags)} — its start line is its stage-start`);
+  }
+  for (const [i, t] of body.split("\n").entries()) {
+    if (SA_OLD.test(t)) reasons.push(`line ${i + 1}: the 6.27.0 form (a route/read line, or a typed --route) is closed out`);
+  }
   const modeLines = L.filter((l) => l.kind === "route" && l.flags.mode !== undefined);
   const wantModes = Object.entries(cmd.modeLines)
     .flatMap(([m, stages]) => stages.map((s) => `${m}:${s}`))
@@ -3679,8 +3964,9 @@ function saPolicyReasons(policy, cmd, body) {
   return reasons;
 }
 
-/** Rule 4 — ORDER, per full-mode route line: stage-start < brief < read < the orchestrator return, all before the
- *  next route line, and the brief's argv equal to the route line's. Per --mode route line (6.28.0) — a DELTA whose
+/** Rule 4 — ORDER, per full-mode route (START) line: start < brief < read (FINISH), no marker line between start and
+ *  finish (6.36.0: each writes its own), all before the next route line, and the brief's argv equal to the route
+ *  line's. Per --mode route line (6.28.0) — a DELTA whose
  *  markers and read line are the full-mode ones: an agent cell's brief line follows it, before the next route line,
  *  with the same argv; an inline cell has none there. [] when clean. */
 function saOrderReasons(body, policy = ROUTE_POLICY) {
@@ -3711,14 +3997,11 @@ function saOrderReasons(body, policy = ROUTE_POLICY) {
     const end = i + 1 < full.length ? full[i + 1].idx : Infinity;
     const after = L.filter((l) => l.idx > r.idx && l.idx < end);
     const where = `${saKey(r.flags)} (line ${r.idx})`;
-    const ss = after.find((l) => l.kind === "stage-start");
-    if (!ss || ss.flags.stage !== r.flags.stage || ss.flags.iteration !== r.flags.iteration || ss.flags.route !== "<route>") {
-      reasons.push(`${where}: the next stage-start is not this stage's, carrying --route '<route>'`);
-      continue;
-    }
+    // 6.36.0: the start line IS the stage-start (it writes the marker), so the brief follows it directly.
+    const ss = r;
     const brief = after.find((l) => l.kind === "brief" && l.idx > ss.idx);
     if (!brief) {
-      reasons.push(`${where}: no brief prompt line after the stage-start`);
+      reasons.push(`${where}: no brief prompt line after the start line`);
       continue;
     }
     for (const k of ["command", "stage", "name", "iteration", "mode"]) {
@@ -3730,12 +4013,10 @@ function saOrderReasons(body, policy = ROUTE_POLICY) {
       reasons.push(`${where}: no read line for this stage after the brief line`);
       continue;
     }
+    // The finish line writes the return marker itself (6.36.0), so no marker line may sit between start and finish.
     if (L.some((l) => ["stage-start", "orchestrator", "marker"].includes(l.kind) && l.idx > ss.idx && l.idx < read.idx)) {
-      reasons.push(`${where}: a marker sits between the stage-start and the read`);
+      reasons.push(`${where}: a marker sits between the start line and the finish line`);
     }
-    const next = L.find((l) => ["stage-start", "orchestrator", "marker"].includes(l.kind) && l.idx > read.idx);
-    if (!next || next.kind !== "orchestrator" || next.idx > end)
-      reasons.push(`${where}: the next marker after read is not the orchestrator return`);
   }
   return reasons;
 }
@@ -3760,7 +4041,7 @@ test("✧ STAGE_AGENT_WIRING (1) — CLOSURE: every command invoking stage-agent
 });
 
 for (const cmd of STAGE_AGENT_WIRING) {
-  test(`✧ STAGE_AGENT_WIRING (2) — ${cmd.file}: the routed set, one read and one brief line per route line, --route only on those stage-starts`, () => {
+  test(`✧ STAGE_AGENT_WIRING (2) — ${cmd.file}: the routed set, one finish and one brief line per start line, no typed --route, no 6.27.0 line`, () => {
     assert.ok(
       saLines(commandBody(cmd.file)).some((l) => l.kind === "route"),
       "L34: the scan found route lines"
@@ -3773,7 +4054,7 @@ for (const cmd of STAGE_AGENT_WIRING) {
     assert.deepEqual(saPolicyReasons(ROUTE_POLICY, cmd, commandBody(cmd.file)), []);
   });
 
-  test(`✧ STAGE_AGENT_WIRING (4) — ${cmd.file}: ORDER — route < stage-start < brief < read < the orchestrator return`, () => {
+  test(`✧ STAGE_AGENT_WIRING (4) — ${cmd.file}: ORDER — start < brief < finish, no marker line between them`, () => {
     assert.deepEqual(saOrderReasons(commandBody(cmd.file)), []);
   });
 
@@ -3782,39 +4063,47 @@ for (const cmd of STAGE_AGENT_WIRING) {
     assert.match(s, /`subagent_type: "general-purpose"`/);
     assert.match(s, /`run_in_background: false`/);
     assert.match(s, /\*\*no\s+`isolation`\*\*/);
-    assert.match(s, cmd.waitRule, "the wait-before-read rule");
-    assert.match(s, /\*\*The read line — only after an Agent call has returned the agent's COMPLETED result\.\*\*/);
-    assert.match(s, /\*\*Never run `read` for a stage that ran inline\.\*\*/);
+    assert.match(s, cmd.waitRule, "the wait-before-finish rule");
+    assert.match(s, /\*\*The finish line — only after an Agent call has returned the agent's COMPLETED result\.\*\*/);
+    assert.match(s, /\*\*Never run `finish` for a\s+stage that ran inline\.\*\*/);
     assert.match(s, /\*\*The model is routed; effort is not\*\*/);
     assert.match(s, /pharn\/floor\/stage-agent-core\.mjs`'s header/, "the protocol is cited, not restated (P4)");
-    // GATE-2 review: A1 (the heading says requested), A5 (a refused stage-start line), A6 (the prose claim is ADVISORY,
-    // the free-text residual named).
+    // GATE-2 review: A1 (the heading says requested), A6 (the prose claim is ADVISORY, the free-text residual named).
+    // 6.36.0: A5's "re-run the marker without --route" sentence is gone with the typed token; in its place, the
+    // no-agent-tool flag, and the inline return line pinned in this section (the start line's exit-3 branch runs it).
     assert.match(s, /^## Running a stage \(6\.27\.0\) — a routed stage runs as a stage agent, requested on its configured model$/m);
-    assert.match(s, /If it exits\s+`2`\s+it\s+wrote\s+no\s+marker[^.]*\):\s+run\s+it\s+once\s+more\s+without\s+`--route '<route>'`/);
+    assert.match(s, /append\s+`--no-agent-tool`\s+to\s+the\s+start\s+line:\s+it\s+records\s+`inline:no-agent-tool`\s+and\s+exits\s+`3`/);
+    assert.equal(
+      fencedLines(s).filter((l) => l.text.trim() === "node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator").length,
+      1,
+      "the inline return line, once, in this section"
+    );
     assert.match(s, /control\s+flow\s+never\s+uses\s+the\s+agent's\s+prose\s+is\s+\*\*ADVISORY\*\*/);
     assert.match(s, /`THREAT-MODEL\.md §5`'s\s+free-text\s+residual/);
     if (cmd.command === "pharn-ship") {
       assert.match(s, /with\s+SendMessage — load its schema first if the harness lists it as a deferred tool/);
-      assert.match(s, /If SendMessage is absent\s+altogether, re-run the stage's route line/);
-      // A8: a fresh agent never saw the question, so its prompt carries it too; a re-run route line off 0 is a STOP.
+      assert.match(s, /If SendMessage is absent\s+altogether, re-run the stage's start line \(it writes no second stage-start/);
+      // A8: a fresh agent never saw the question, so its prompt carries it too; a re-run start line off 0 is a STOP.
       assert.match(s, /the stage's question and its options verbatim, then the\s+human's answer verbatim/);
       assert.match(s, /labelled DATA \(the\s+first as the stage's question, the second as the human's answer to it\)/);
-      assert.match(s, /On\s+any\s+other\s+exit\s+of\s+that\s+route\s+line,\s+\*\*STOP\*\*/);
-      const readAgain = s.search(/Either way, then run `read` again\./);
+      assert.match(s, /On\s+any\s+other\s+exit\s+of\s+that\s+start\s+line,\s+\*\*STOP\*\*/);
+      const readAgain = s.search(/Either way, then run `finish` again\./);
       assert.ok(
-        readAgain > 0 && readAgain < s.search(/On\s+any\s+other\s+exit\s+of\s+that\s+route\s+line/),
-        "read again, THEN the STOP branch"
+        readAgain > 0 && readAgain < s.search(/On\s+any\s+other\s+exit\s+of\s+that\s+start\s+line/),
+        "finish again, THEN the STOP branch"
       );
+      assert.match(s, /Before any STOP on a question, run the inline return line\./, "finish deferred its return marker");
     } else {
       assert.doesNotMatch(commandBody(cmd.file), ASK_TOKEN_RE, "the loop still names no interactive-ask tool");
     }
   });
 }
 
-// ★ (6) EXECUTED (L45): every committed route line, run in a scratch dir against this repo's config, no config, and a
-// pre-0.7.0-shaped block; every committed brief line runs at exit 0. The expected alias is what the REAL checker
-// resolves — never re-typed here.
-test("★ STAGE_AGENT_WIRING (6) — every committed route line runs to its expected route over three configs, and every brief line runs", () => {
+// ★ (6) EXECUTED (L45): every committed route (START) line, run in a scratch dir against this repo's config, no config,
+// and a pre-0.7.0-shaped block; every committed brief line runs at exit 0; every committed FINISH line, with no result
+// on disk, reads `unusable no-result` and writes the return marker (6.36.0). The expected alias is what the REAL checker
+// resolves — never re-typed here; the start line's second line is the marker line the run binds on.
+test("★ STAGE_AGENT_WIRING (6) — every committed start line routes AND marks over three configs; every brief and finish line runs", () => {
   const CLI = join(REPO_ROOT, "pharn", "floor", "stage-agent.mjs");
   const CHECKER = join(REPO_ROOT, "pharn", "floor", "check-model-config.mjs");
   const repoConfig = readFileSync(join(REPO_ROOT, "pharn.config.json"), "utf8");
@@ -3825,8 +4114,26 @@ test("★ STAGE_AGENT_WIRING (6) — every committed route line runs to its expe
     line.replaceAll("'<name>'", "'demo'").replaceAll("<N>", "1").replace("pharn/floor/stage-agent.mjs", JSON.stringify(CLI));
   let routes = 0;
   let briefs = 0;
+  let finishes = 0;
+  const MARKER_LINE = /^marker \d+: (stage-start|orchestrator)\b/;
   for (const cmd of STAGE_AGENT_WIRING) {
     for (const l of saLines(commandBody(cmd.file))) {
+      if (l.kind === "read") {
+        const dir = mkdtempSync(join(tmpdir(), "hyg-sa-finish-"));
+        try {
+          const r = spawnSync("sh", ["-c", sub(l.text)], { cwd: dir, encoding: "utf8" });
+          const [first, second, ...rest] = r.stdout.trimEnd().split("\n");
+          assert.equal(r.status, 2, `${cmd.file}:${l.idx}: ${r.stderr}`);
+          assert.match(first, /^unusable no-result — /);
+          assert.match(second, MARKER_LINE, `${cmd.file}:${l.idx}: the return marker's line`);
+          assert.equal(second.match(MARKER_LINE)[1], "orchestrator");
+          assert.deepEqual(rest, []);
+          finishes++;
+        } finally {
+          rmSync(dir, { recursive: true, force: true });
+        }
+        continue;
+      }
       if (l.kind === "brief") {
         const dir = mkdtempSync(join(tmpdir(), "hyg-sa-brief-"));
         try {
@@ -3864,7 +4171,12 @@ test("★ STAGE_AGENT_WIRING (6) — every committed route line runs to its expe
             want = [0, `agent:${JSON.parse(res.stdout).model}\n`];
           }
           const r = spawnSync("sh", ["-c", sub(l.text)], { cwd: dir, encoding: "utf8" });
-          assert.deepEqual([r.status, r.stdout], want, `${cmd.file}:${l.idx} over ${label}: ${r.stderr}`);
+          const [token, second, ...rest] = r.stdout.trimEnd().split("\n");
+          assert.deepEqual([r.status, `${token}\n`], want, `${cmd.file}:${l.idx} over ${label}: ${r.stderr}`);
+          // 6.36.0: the start line's second line is the stage-start marker it wrote, carrying the token it printed.
+          assert.equal(second?.match(MARKER_LINE)?.[1], "stage-start", `${cmd.file}:${l.idx} over ${label}: the marker line`);
+          assert.ok(second.endsWith(`(route ${token})`), `${cmd.file}:${l.idx}: the marker records the printed token`);
+          assert.deepEqual(rest, []);
         } finally {
           rmSync(dir, { recursive: true, force: true });
         }
@@ -3875,13 +4187,14 @@ test("★ STAGE_AGENT_WIRING (6) — every committed route line runs to its expe
   assert.equal(
     routes,
     14,
-    "L34: 6 ship route lines (plan, grill, test, build@1, build@2, the quick grill) + 8 loop lines (5 full; the quick spec, grill and build — 6.28.0)"
+    "L34: 6 ship start lines (plan, grill, test, build@1, build@2, the quick grill) + 8 loop lines (5 full; the quick spec, grill and build — 6.28.0)"
   );
   assert.equal(
     briefs,
     12,
-    "one brief prompt line per full-mode route line (10), plus the loop's quick spec and build (the quick grills run inline, so have none)"
+    "one brief prompt line per full-mode start line (10), plus the loop's quick spec and build (the quick grills run inline, so have none)"
   );
+  assert.equal(finishes, 10, "L34: one finish line per full-mode start line (ship 5, loop 5)");
 });
 
 // ★ (7) PROBED (L37, L40): the two write guards give IDENTICAL verdicts for a subagent-shaped payload (with
@@ -3974,7 +4287,7 @@ test("✧ STAGE_AGENT_WIRING (8) — LOOP_ROWS are stuck points named in the loo
 });
 
 // (9) MUTATION CONTROLS (L60) — each property above fails on a mutant of the REAL command, run through the SAME rule.
-test("✧ STAGE_AGENT_WIRING (9) — each rule fails on its mutant: route, read, --route, order, brief argv, a loop row, a policy cell", () => {
+test("✧ STAGE_AGENT_WIRING (9) — each rule fails on its mutant: start, finish, a typed --route, the 6.27.0 lines, order, brief argv, a loop row, a policy cell", () => {
   const ship = STAGE_AGENT_WIRING.find((c) => c.command === "pharn-ship");
   const loop = STAGE_AGENT_WIRING.find((c) => c.command === "pharn-loop");
   const real = commandBody(ship.file);
@@ -3985,18 +4298,27 @@ test("✧ STAGE_AGENT_WIRING (9) — each rule fails on its mutant: route, read,
     lines.splice(i, 1);
     return lines.join("\n");
   };
-  const planRoute = "node pharn/floor/stage-agent.mjs route --command pharn-ship --stage pharn-plan --name '<name>'";
-  const planRead = "node pharn/floor/stage-agent.mjs read --command pharn-ship --name '<name>' --stage pharn-plan";
+  // 6.36.0: the route (START) and read (FINISH) lines; the planStart mutant re-types the 6.27.0 marker line.
+  const planRoute = "node pharn/floor/stage-agent.mjs start --command pharn-ship --stage pharn-plan --name '<name>'";
+  const planRead = "node pharn/floor/stage-agent.mjs finish --command pharn-ship --name '<name>' --stage pharn-plan";
   const planStart = "node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-plan --route '<route>'";
   const planBrief = `${BRIEF_PROMPT_PREFIX}node pharn/floor/stage-agent.mjs brief --command pharn-ship --stage pharn-plan --name '<name>'`;
 
-  assert.match(saWiringReasons(ship, dropLine(real, planRoute)).join("\n"), /full-mode route lines/, "a dropped route line");
-  assert.match(saWiringReasons(ship, dropLine(real, planRead)).join("\n"), /read lines/, "a dropped read line");
-  const noRoute = real.replace(planStart, planStart.replace(" --route '<route>'", ""));
-  assert.notEqual(noRoute, real);
-  assert.match(saWiringReasons(ship, noRoute).join("\n"), /stage-starts carrying --route/, "a dropped --route");
-  // A swapped order: the read line moved ABOVE its stage-start.
-  const swapped = real.replace(planRead, "__READ__").replace(planStart, `${planRead}\n${planStart}`).replace("__READ__", "");
+  assert.match(saWiringReasons(ship, dropLine(real, planRoute)).join("\n"), /full-mode route lines/, "a dropped start line");
+  assert.match(saWiringReasons(ship, dropLine(real, planRead)).join("\n"), /read lines/, "a dropped finish line");
+  // A typed --route on a stage-start, spliced after the start line: the token is the start line's to record.
+  const typed = real.replace(planRoute, `${planRoute}\n${planStart}`);
+  assert.notEqual(typed, real);
+  assert.match(saWiringReasons(ship, typed).join("\n"), /carries --route/, "a typed --route");
+  assert.match(saWiringReasons(ship, typed).join("\n"), /a mark-phase stage-start for routed pharn-plan@-/, "a second stage-start");
+  assert.match(saOrderReasons(typed).join("\n"), /a marker sits between the start line and the finish line/, "…between start and finish");
+  // The 6.27.0 route/read lines, spliced back (as prose-free fenced lines), are closed out.
+  for (const old of [planRoute.replace(" start ", " route "), planRead.replace(" finish ", " read ")]) {
+    const back = `${real}\n\`\`\`bash\n${old}\n\`\`\`\n`;
+    assert.match(saWiringReasons(ship, back).join("\n"), /the 6\.27\.0 form/, `closed out: ${old}`);
+  }
+  // A swapped order: the finish line moved ABOVE its start line.
+  const swapped = real.replace(planRead, "__READ__").replace(planRoute, `${planRead}\n${planRoute}`).replace("__READ__", "");
   assert.notEqual(swapped, real);
   assert.ok(saOrderReasons(swapped).length > 0, "a swapped order");
   // A brief line whose --stage differs from its route line's.
@@ -4032,7 +4354,7 @@ test("✧ STAGE_AGENT_WIRING (9) — each rule fails on its mutant: route, read,
     /pharn-loop\/quick: stages with a route line/,
     "a quick cell newly routed with no route line"
   );
-  const qGrillRoute = "node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-grill --name '<name>' --mode quick";
+  const qGrillRoute = "node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-grill --name '<name>' --mode quick";
   const qGrillBrief = `${BRIEF_PROMPT_PREFIX}node pharn/floor/stage-agent.mjs brief --command pharn-loop --stage pharn-grill --name '<name>' --mode quick`;
   const briefAfterInline = loopBody.replace(`${qGrillRoute}\n`, `${qGrillRoute}\n${qGrillBrief}\n`);
   assert.notEqual(briefAfterInline, loopBody, "fixture sanity: the brief landed after the quick grill's route line");
@@ -4070,7 +4392,7 @@ test("✧ STAGE_AGENT_WIRING (10) — every --mode stage-agent line of pharn-loo
   assert.equal(inFile.length, 5, "L34: the quick spec's route and brief, the quick grill's route, the quick build's route and brief");
   assert.deepEqual(modeText(loopQuickSection(body)), inFile);
   // CONTROL (L60): a --mode line pasted after the section is seen outside it.
-  const pasted = `${body}\n\`\`\`bash\n${inFile.find((t) => t.includes(" route "))}\n\`\`\`\n`;
+  const pasted = `${body}\n\`\`\`bash\n${inFile.find((t) => t.includes(" start "))}\n\`\`\`\n`;
   assert.notDeepEqual(modeText(loopQuickSection(pasted)), modeText(pasted));
 });
 
@@ -4323,7 +4645,6 @@ function shellLines(body) {
 /** Every value a product command's shell line takes, and why it is out of the class or validated first. */
 const SHELL_VALUES = Object.freeze({
   "<name>": "the feature slug — validated where it is born (NAME_ORIGINS), a FEATURE_SLUG_RE member from then on",
-  "<route>": "a closed code token (route-token-core.mjs ROUTE_TOKEN_RE), printed by stage-agent.mjs route",
   "<N>": "the loop's own iteration counter",
   "<M>": "human argv: the --max-iter value the person typed",
   "<base sha>": "git's own rev-parse / merge-base output (hex), or the literal unknown — a producer grammar",
@@ -4377,6 +4698,8 @@ test("✧ SHELL-SINK 1 — every placeholder a product command's shell line take
     ["<slug>", (b) => `${b}\n\`\`\`bash\nnode -e 'x' '<slug>'\n\`\`\`\n`],
     ["<ref>", (b) => `${b}\nresolve it with \`git rev-parse --verify <ref>^{commit}\`.\n`],
     ["<desc>", (b) => `${b}\n\`\`\`text\n${BRIEF_PROMPT_PREFIX}node x --d '<desc>'\n\`\`\`\n`],
+    // 6.36.0: the route token is recorded by `stage-agent.mjs start`, so no shell line takes `<route>` any more.
+    ["<route>", (b) => `${b}\n\`\`\`bash\nnode pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --route '<route>'\n\`\`\`\n`],
   ]) {
     const pairs = productPairs().map(([f, b]) => [f, f === "pharn-loop.md" ? splice(b) : b]);
     const offenders = shellValueOffenders(placeholdersOf(pairs)).filter((o) => o.startsWith(`${ph} —`));

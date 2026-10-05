@@ -23,6 +23,73 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.36.0] - 2026-10-05
+
+### Added
+
+- 2026-10-05: **`/pharn-loop` and `/pharn-ship` run `/pharn-regress` and `/pharn-verify` as one tested call each, and
+  each routed stage's four pinned lines become two** (`.dev/features/orchestrator-direct-stage-calls/`, batch item 7,
+  audit candidates C3 and C1).
+  - **C3 — `pharn/floor/stage-direct.mjs`** (+ `stage-direct-core.mjs`). One call:
+    - sets the thin caller's own writes-scope (its pinned setter line, so "while the script runs, no Write-tool write
+      lands outside `.pharn/**`" still holds);
+    - writes the stage-start marker, runs `stage-regress.mjs` / `stage-verify.mjs` and releases the scope;
+    - writes the return marker (not after a `continue`);
+    - passes the script's `pharn-stage-exit/1` object and exit code through unchanged.
+
+    The orchestrators pin it, with its resume line, instead of invoking the thin callers. `/pharn-regress` and
+    `/pharn-verify` are unchanged, for a person.
+
+  - **C1 — `stage-agent.mjs start` and `finish`.**
+    - `start` is `route`'s decision plus the stage-start marker carrying its token, written by code. The model no
+      longer types the token into a shell line, and `<route>` left every shell line.
+    - `finish` is `read` plus the return marker. The marker waits after a `question`, whose round trip stays inside
+      the stage.
+    - `--no-agent-tool` keeps today's `inline:no-agent-tool` route. An uncleared leftover result is
+      `inline:route-unavailable`.
+    - A stage that is still open gets no second stage-start. That is what lets ship's question relay re-route without
+      tripping `ship-outcome-core.mjs` (b).
+    - Stage agents are told never to run `start`, `finish` or `stage-direct.mjs` (brief rule 4).
+  - **The evidence (P7), re-derived from pharn-starter's 92-minute run.**
+    - The model-invoked orchestrator called `Skill pharn-regress` and `Skill pharn-verify`. That injected 19,301 B and
+      17,339 B of command text, carried by 29 and 16 later requests (the brief's 19,449 / 17,500 do not reproduce).
+    - Each routed stage cost one extra request, because the stage-start marker needed the token `route` printed.
+  - **C1's own pre-registered bar was NOT met.** The audit's bar for C1 was orchestrator-role requests ≥ 20% of a
+    run's requests. It held in 1 of the 3 real runs: 15.2% / 14.9% / 21.2%. C1 is adopted because the user asked for
+    item 7 to be addressed, and because it takes a model-typed route token out of every shell line — not because the
+    bar was met. The decision was made at GATE 1 by the batch's orchestrating model, under the user's delegation.
+  - **The saving, stated as derived.**
+    - On the 92-minute run: about 10 orchestrator requests (C1 −5, C3 about −5) × 4.4 s mean orchestrator model time
+      (median 3.1 s) ≈ **44 s**.
+    - 36,640 B per iteration is no longer injected. That is ≈ 837 KB·requests carried, about 209k cache-read tokens,
+      an estimate at 4 B per token.
+    - It does not move the hour.
+    - The brief's "~4 s / ~6.6 s" per request does not reproduce from the measurement record. The record says model
+      time 3.1 / 4.4 s, and a request-gap median of 4.9 s.
+    - By the audit's per-line accounting, a green one-iteration loop goes from ~70 to ~46 pinned calls, and each
+      further iteration from 23 to 7. That is an upper bound, since the model already chains independent lines.
+  - **Two ledger changes, visible to anyone comparing `cost.json` across versions** (`cost-ledger.md`, "Route"):
+    - regress/verify `executions` rows now span the stage script's run plus the scope set and release. They no longer
+      include the orchestrator's requests between pinned lines, so the rows are smaller;
+    - an answered `question` in `/pharn-ship` regress or verify is a second call, so a second execution row (`run 2`).
+  - **Finding 7, recorded.** `pharn/floor/check-model-config.mjs`'s header, under TURN SCOPE, now records that a command
+    a model invokes through the Skill tool was served the session's model, not its frontmatter `sonnet`. Only a
+    person's slash invocation got the override. That was one session, an observation; `LIMITS.md §8` cites the header
+    and stays true. The two orchestrators carry one advisory line saying so. pharn-cli's vendored copy of that
+    checker, pinned by sha256, lags this header-only edit until refreshed there; no rule or output changed.
+  - **Wiring.** `.dev/floor/command-hygiene.test.mjs`:
+    - `STAGE_AGENT_WIRING` and `PHASE_MARKER_WIRING` read the new lines and close the 6.27.0 form out;
+    - `SHELL_VALUES` drops `<route>`;
+    - the new `DIRECT_STAGE_WIRING` holds the thin-caller copy-pair's obligation set (setter argv, numbers, the
+      600000 timeout, every exit named) and executes every committed line;
+    - each rewritten rule has a mutation control.
+
+    The close parts are untouched. Their "the route line" wording still reads true, since `start` prints and runs the
+    route.
+
+  - `SKILLS_VERSION` 6.35.2 → 6.36.0 (minor: a new floor CLI and two subcommands), with the README badge. `MIN_CLI` is
+    unchanged.
+
 ## [6.35.2] - 2026-10-05
 
 ### Fixed

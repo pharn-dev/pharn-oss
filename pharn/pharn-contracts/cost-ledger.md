@@ -460,7 +460,8 @@ under-claiming direction.
 Since 6.27.0 `/pharn-ship` and `/pharn-loop` run each stage their routing policy routes as a Claude Code
 subagent — a stage agent — requested on the model `models.stages` resolves for it (`pharn/floor/stage-agent-core.mjs`'s
 header is the protocol's spec). A stage-start marker may carry `route`, recorded at the MOMENT THE STAGE STARTS
-(`mark-phase.mjs --route`, stage-start only): `agent:<alias>` when the stage was REQUESTED as a stage agent on
+(stage-start only — since 6.36.0 written by `stage-agent.mjs start` in the same call that decides the route, through
+`mark-phase.mjs`'s own writer, so no model types the token; before, by `mark-phase.mjs --route`): `agent:<alias>` when the stage was REQUESTED as a stage agent on
 that alias, `inline:<reason>` when it ran in the orchestrator's own turn, and why. The grammar has one owner,
 `pharn/floor/route-token-core.mjs`, a zero-import module; `normalizeMarkers` keeps the field only as a valid
 token, so a garbage value is dropped, and `mark-phase.mjs` writes no key at all without the flag. A stage the
@@ -474,10 +475,19 @@ agent's id in `agent_id` and the model the platform SERVED in `model`. Since 6.2
 orchestrator is the session's own thread or itself an agent, and a concurrent run's stage agents in the same
 session are excluded: they were spawned by another context. The unchanged attribution method bills the rows to the
 routed stage's bucket — as long as the stages run in the foreground one at a time and the `orchestrator` marker
-follows the stage's final `read`, both command rules. The same bucket holds the orchestrator's own requests inside the
-bracket, `sidechain: false`: the one that issues the Agent call, the one that issues `read`, and the one that
-issues the closing `orchestrator` marker (whose first line precedes the marker it writes), plus a relayed
-question's requests.
+follows the stage's final read, both command rules (since 6.36.0 `stage-agent.mjs finish` reads the result and writes
+that marker in one call, and leaves it unwritten after a `question`, whose round trip stays inside the stage). The same
+bucket holds the orchestrator's own requests inside the bracket, `sidechain: false`: the one that issues the Agent
+call and the one that issues `finish` (whose first line precedes the marker it writes), plus a relayed question's
+requests.
+
+**The floor-only stages' bracket (6.36.0).** `/pharn-loop` and `/pharn-ship` run `/pharn-regress` and `/pharn-verify` as
+one `stage-direct.mjs` call each, which writes the stage-start marker right before the stage script runs and the
+`orchestrator` marker right after it ends (not after a `continue`, which a resume call closes). So such a stage's
+`executions` row spans the script's run plus the scope set and release, no longer the orchestrator's requests between
+its pinned lines, and its bucket holds only the requests that issue a resume. An answered `question` is a second call,
+so a second row (`run 2`) of the same stage and iteration — regress and verify are verdict stages, which
+`ship-outcome-core.mjs` lets repeat.
 
 **Reading it (the plan's success measure).** For each stage-start marker whose `route` is `agent:<alias>`, the
 `requests[]` rows with that marker's `stage` and `iteration` and `sidechain: true` should be non-empty and carry

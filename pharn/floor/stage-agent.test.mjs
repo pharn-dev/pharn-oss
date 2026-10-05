@@ -24,7 +24,16 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CHECKER_TIMEOUT_MS, DEFAULT_CONFIG, READ_DEFECTS, RESULT_MAX_BYTES } from "./stage-agent.mjs";
+import {
+  CHECKER_TIMEOUT_MS,
+  DEFAULT_CONFIG,
+  READ_DEFECTS,
+  RESULT_MAX_BYTES,
+  NO_AGENT_TOOL,
+  MARKER_KEPT,
+  MARKER_DEFERRED,
+} from "./stage-agent.mjs";
+import { MARKER_NOT_WRITTEN, markerLine } from "./mark-phase.mjs";
 import { AGENT_MODELS } from "./route-token-core.mjs";
 import {
   ROUTE_POLICY,
@@ -43,7 +52,16 @@ const REPO = join(HERE, "..", "..");
 const CLI = join(HERE, "stage-agent.mjs");
 const REPO_CONFIG = join(REPO, "pharn.config.json");
 /** The CLI's import closure — copied beside a stub checker for the resolve-failed cases. */
-const CLOSURE = ["stage-agent.mjs", "stage-agent-core.mjs", "route-token-core.mjs", "shelled-verdict-core.mjs", "gate-run-core.mjs"];
+const CLOSURE = [
+  "stage-agent.mjs",
+  "stage-agent-core.mjs",
+  "route-token-core.mjs",
+  "shelled-verdict-core.mjs",
+  "gate-run-core.mjs",
+  // 6.36.0: `start` / `finish` write markers through mark-phase.mjs, which imports run-window-core.mjs.
+  "mark-phase.mjs",
+  "run-window-core.mjs",
+];
 
 function scratch(prefix = "stage-agent-") {
   return mkdtempSync(join(tmpdir(), prefix));
@@ -637,6 +655,243 @@ test(`resolve-failed — a checker that outlives CHECKER_TIMEOUT_MS (${CHECKER_T
   }
 });
 
+// ── start / finish (6.36.0, orchestrator-direct-stage-calls) ──────────────────────────────────────────
+
+const startArgs = (command, stage, extra = []) => {
+  const it = ITERATED_STAGES.includes(stage) ? ["--iteration", "1"] : [];
+  return ["start", "--command", command, "--stage", stage, "--name", "demo", ...it, ...extra];
+};
+const finishArgs = (command, stage, iteration = ITERATED_STAGES.includes(stage) ? "1" : null) => [
+  "finish",
+  "--command",
+  command,
+  "--name",
+  "demo",
+  "--stage",
+  stage,
+  ...(iteration === null ? [] : ["--iteration", iteration]),
+];
+const markersFile = (dir) => join(dir, ".pharn", "cost", "demo", "markers.jsonl");
+function markersIn(dir) {
+  if (!existsSync(markersFile(dir))) return [];
+  return readFileSync(markersFile(dir), "utf8")
+    .split("\n")
+    .filter(Boolean)
+    .map((l) => JSON.parse(l));
+}
+const lines = (s) => s.split("\n").filter((l, i, a) => !(l === "" && i === a.length - 1));
+/** The token `route` prints for ship's plan over THIS repo's config — read from the real CLI, never re-typed. */
+function planToken() {
+  const d = scratch();
+  try {
+    copyFileSync(REPO_CONFIG, join(d, "pharn.config.json"));
+    const t = run(d, routeArgs("pharn-plan")).stdout.trim();
+    assert.match(t, /^agent:/, "fixture sanity: this repo's config routes ship's plan");
+    return t;
+  } finally {
+    rmSync(d, { recursive: true, force: true });
+  }
+}
+
+test("start — ONE call routes AND marks: line 1 is exactly what `route` prints, line 2 is markerLine() of the marker on disk", () => {
+  const cases = [
+    // [label, config?, command, stage, extra]
+    ["an agent cell over this repo's config", true, "pharn-ship", "pharn-plan", []],
+    ["an agent cell with no config", false, "pharn-loop", "pharn-build", []],
+    ["a policy-inline cell (the loop's quick grill)", true, "pharn-loop", "pharn-grill", ["--mode", "quick"]],
+  ];
+  for (const [label, withConfig, command, stage, extra] of cases) {
+    const a = scratch();
+    const b = scratch();
+    try {
+      for (const d of [a, b]) if (withConfig) copyFileSync(REPO_CONFIG, join(d, "pharn.config.json"));
+      const routed = run(a, ["route", ...startArgs(command, stage, extra).slice(1)]);
+      const started = run(b, startArgs(command, stage, extra));
+      assert.equal(started.status, routed.status, `${label}: the exit is route's`);
+      const [token, second, ...rest] = lines(started.stdout);
+      assert.equal(`${token}\n`, routed.stdout, `${label}: the token is route's own line`);
+      assert.deepEqual(rest, [], `${label}: exactly two lines`);
+      const m = markersIn(b);
+      assert.equal(m.length, 1, `${label}: one marker`);
+      assert.equal(m[0].kind, "stage-start");
+      assert.equal(m[0].stage, stage);
+      assert.equal(m[0].iteration, ITERATED_STAGES.includes(stage) ? 1 : null);
+      assert.equal(m[0].route, token, `${label}: the marker records the token start printed`);
+      assert.equal(second, markerLine(m[0]), `${label}: the printed line is the one encoding (the run binds on it)`);
+      if (started.status === 3) assert.match(started.stderr, /runs inline \(/, `${label}: the remedy on stderr, as route prints it`);
+      assert.deepEqual(markersIn(a), [], "control: route alone writes no marker");
+    } finally {
+      rmSync(a, { recursive: true, force: true });
+      rmSync(b, { recursive: true, force: true });
+    }
+  }
+});
+
+test(`start ${NO_AGENT_TOOL} — an agent cell is inline:no-agent-tool WITHOUT consulting the config; a policy cell keeps its reason`, () => {
+  const dir = scratch();
+  try {
+    // No config: the decision without the flag would be no-config, so a no-agent-tool token proves the probe was skipped.
+    const plain = run(dir, ["route", ...startArgs("pharn-ship", "pharn-plan").slice(1)]);
+    assert.equal(plain.stdout, "inline:no-config\n", "control: without the flag the config decides");
+    const r = run(dir, startArgs("pharn-ship", "pharn-plan", [NO_AGENT_TOOL]));
+    assert.equal(r.status, 3, r.stderr);
+    assert.equal(lines(r.stdout)[0], "inline:no-agent-tool");
+    assert.equal(markersIn(dir)[0].route, "inline:no-agent-tool");
+    // A policy-inline cell: the flag changes nothing.
+    const q = run(dir, startArgs("pharn-ship", "pharn-grill", ["--mode", "quick", NO_AGENT_TOOL]));
+    assert.equal(lines(q.stdout)[0], "inline:floor-only");
+    // The flag at most once; anywhere else in argv it is still the bare flag, never a value.
+    const twice = run(dir, startArgs("pharn-ship", "pharn-plan", [NO_AGENT_TOOL, NO_AGENT_TOOL]));
+    assert.deepEqual([twice.status, twice.stdout], [2, ""]);
+    const asValue = run(dir, ["start", "--command", "pharn-ship", "--stage", "pharn-plan", "--name", NO_AGENT_TOOL]);
+    assert.deepEqual([asValue.status, asValue.stdout], [2, ""], "a --name with no value is refused, never a slug");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("start — the OPEN-STAGE rule: a second start for the same stage and iteration keeps its marker; anything else writes one", () => {
+  const dir = scratch();
+  try {
+    copyFileSync(REPO_CONFIG, join(dir, "pharn.config.json"));
+    run(dir, startArgs("pharn-ship", "pharn-plan"));
+    const again = run(dir, startArgs("pharn-ship", "pharn-plan"));
+    assert.equal(again.status, 0, again.stderr);
+    assert.deepEqual(lines(again.stdout), [planToken(), MARKER_KEPT]);
+    assert.equal(markersIn(dir).length, 1, "no second stage-start for an open stage (ship-outcome-core (b))");
+    // The stage returns: the next start of the same stage is a NEW execution.
+    run(dir, finishArgs("pharn-ship", "pharn-plan"));
+    run(dir, startArgs("pharn-ship", "pharn-plan"));
+    assert.deepEqual(
+      markersIn(dir).map((m) => m.kind),
+      ["stage-start", "orchestrator", "stage-start"]
+    );
+    // Same stage, another iteration: written.
+    run(dir, startArgs("pharn-ship", "pharn-build"));
+    run(dir, ["start", "--command", "pharn-ship", "--stage", "pharn-build", "--name", "demo", "--iteration", "2"]);
+    assert.deepEqual(
+      markersIn(dir)
+        .slice(-2)
+        .map((m) => `${m.stage}@${m.iteration}`),
+      ["pharn-build@1", "pharn-build@2"]
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("start — a hostile markers file can only make it KEEP a marker: never another token, exit or line 1 (GRILL G5)", () => {
+  const dir = scratch();
+  try {
+    copyFileSync(REPO_CONFIG, join(dir, "pharn.config.json"));
+    mkdirSync(dirname(markersFile(dir)), { recursive: true });
+    const forged = JSON.stringify({ seq: 9, kind: "stage-start", stage: "pharn-plan", iteration: null, ts: "x", session_id: null });
+    // A torn line and a non-object after the forged stage-start are skipped, so the forged line reads as the latest.
+    writeFileSync(markersFile(dir), `${forged}\n[1,2]\n"str"\n{"seq":`);
+    const r = run(dir, startArgs("pharn-ship", "pharn-plan"));
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(lines(r.stdout), [planToken(), MARKER_KEPT], "kept — the bound stated in mark-phase.mjs");
+    // CONTROL: a forged line for ANOTHER stage, or a non-marker kind, does not keep.
+    writeFileSync(markersFile(dir), `${forged.replace("pharn-plan", "pharn-grill")}\n`);
+    assert.notEqual(lines(run(dir, startArgs("pharn-ship", "pharn-plan")).stdout)[1], MARKER_KEPT);
+    writeFileSync(markersFile(dir), `${forged.replace('"stage-start"', '"stage-begin"')}\n`);
+    assert.notEqual(lines(run(dir, startArgs("pharn-ship", "pharn-plan")).stdout)[1], MARKER_KEPT);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("start — an uncleared leftover result is inline:route-unavailable (exit 3) with its reason; an unwritable marker keeps the route", () => {
+  const dir = scratch();
+  try {
+    copyFileSync(REPO_CONFIG, join(dir, "pharn.config.json"));
+    mkdirSync(join(dir, ".pharn", "pharn-ship", "demo", RESULT_FILE), { recursive: true });
+    const r = run(dir, startArgs("pharn-ship", "pharn-plan"));
+    assert.equal(r.status, 3);
+    assert.equal(lines(r.stdout)[0], "inline:route-unavailable");
+    assert.match(r.stderr, /route-unavailable[\s\S]*not a regular file/, "the remedy, then the reason");
+    assert.equal(markersIn(dir)[0].route, "inline:route-unavailable");
+
+    const d2 = scratch();
+    try {
+      copyFileSync(REPO_CONFIG, join(d2, "pharn.config.json"));
+      mkdirSync(join(d2, ".pharn"));
+      writeFileSync(join(d2, ".pharn", "cost"), "a file where the marker directory belongs\n");
+      const m = run(d2, startArgs("pharn-ship", "pharn-plan"));
+      assert.equal(m.status, 0, "the route stands — a marker never fails a run");
+      assert.deepEqual(lines(m.stdout), [planToken(), MARKER_NOT_WRITTEN]);
+      assert.match(m.stderr, /stage-start marker was not written \([A-Z]+\)/);
+    } finally {
+      rmSync(d2, { recursive: true, force: true });
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("start — a skipped stage or bad argv is exit 2 and writes NOTHING", () => {
+  const dir = scratch();
+  try {
+    for (const args of [
+      ["start", "--command", "pharn-ship", "--stage", "pharn-regress", "--name", "demo", "--iteration", "1", "--mode", "quick"],
+      ["start", "--command", "pharn-ship", "--stage", "pharn-plan", "--name", "BAD NAME"],
+      ["start", "--command", "pharn-ship", "--stage", "pharn-build", "--name", "demo"],
+    ]) {
+      const r = run(dir, args);
+      assert.deepEqual([r.status, r.stdout], [2, ""], `${JSON.stringify(args)}: ${r.stderr}`);
+    }
+    assert.deepEqual(readdirSync(dir), [], "nothing written");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("finish — read's verdict and exit, then the return marker; a QUESTION defers it; usage writes nothing", () => {
+  const dir = scratch();
+  try {
+    const report = (stage, extra) => run(dir, ["report", "--command", "pharn-ship", "--name", "demo", "--stage", stage, ...extra]);
+    const cases = [
+      ["pharn-plan", ["--status", "done"], "done", 0, true],
+      ["pharn-build", ["--iteration", "1", "--status", "done", "--gate", "pass"], "done gate:pass", 0, true],
+      ["pharn-plan", ["--status", "refused"], "refused", 3, true],
+      ["pharn-plan", ["--status", "question"], "question", 4, false],
+      ["pharn-plan", null, `unusable no-result — ${NO_RESULT_TEXT}`, 2, true],
+    ];
+    for (const [stage, rep, line1, exit, marked] of cases) {
+      if (rep) assert.equal(report(stage, rep).status, 0);
+      const before = markersIn(dir).length;
+      const r = run(dir, finishArgs("pharn-ship", stage));
+      assert.equal(r.status, exit, `${line1}: ${r.stderr}`);
+      const [first, second, ...rest] = lines(r.stdout);
+      assert.equal(first, line1);
+      assert.deepEqual(rest, []);
+      const after = markersIn(dir);
+      if (marked) {
+        assert.equal(after.length, before + 1, `${line1}: one return marker`);
+        assert.equal(after.at(-1).kind, "orchestrator");
+        assert.equal(second, markerLine(after.at(-1)), "the one encoding");
+      } else {
+        assert.equal(second, MARKER_DEFERRED, "the stage is not over");
+        assert.equal(after.length, before, "no marker after a question");
+      }
+    }
+    const bad = run(dir, ["finish", "--command", "pharn-ship", "--name", "BAD NAME", "--stage", "pharn-plan"]);
+    assert.deepEqual([bad.status, bad.stdout], [2, "unusable usage\n"], "read's own usage line, and no marker");
+    const d2 = scratch();
+    try {
+      mkdirSync(join(d2, ".pharn"));
+      writeFileSync(join(d2, ".pharn", "cost"), "x\n");
+      const m = run(d2, finishArgs("pharn-ship", "pharn-plan"));
+      assert.equal(m.status, 2, "the verdict's exit, unchanged");
+      assert.equal(lines(m.stdout)[1], MARKER_NOT_WRITTEN);
+    } finally {
+      rmSync(d2, { recursive: true, force: true });
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // ── never a crash; the measured spawn ─────────────────────────────────────────────────────────────────
 
 test("never a crash — odd argv exits 2 (never 1, node's crash code), for every subcommand", () => {
@@ -656,6 +911,12 @@ test("never a crash — odd argv exits 2 (never 1, node's crash code), for every
       ["read", "--command", "pharn-ship", "--stage", "pharn-plan", "--name", "demo", "--iteration", "1"],
       ["toString"],
       ["__proto__", "--command", "pharn-ship"],
+      // 6.36.0: start and finish refuse the same way.
+      ["start"],
+      ["start", "--command", "pharn-ship", "--stage", "pharn-plan", "--name", "demo", "--status", "done"],
+      ["start", "--no-agent-tool", "--no-agent-tool"],
+      ["finish", "--command", "pharn-ship", "--stage", "pharn-plan", "--name", "demo", "--mode", "quick"],
+      ["finish", "--command", "pharn-ship", "--stage", "pharn-build", "--name", "demo"],
     ];
     for (const args of cases) {
       const r = run(dir, args);
