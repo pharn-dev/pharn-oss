@@ -1254,6 +1254,75 @@ test("L41 — testRecord takes NO defaults: each missing argument is a TypeError
   }
 });
 
+// ── 6.39.0 (build-gate-bounded): parsed entries carry the reporter's failure messages; NO record does ──────────
+
+import { gateResults, testIdOf } from "./test-results-core.mjs";
+
+test("messages — each format's failure messages ride on the parsed entry, on the REAL captured reports (L55); pharn-json has none", () => {
+  for (const [fmt, name] of [
+    ["vitest-json", "vitest"],
+    ["vitest-json", "vitest-red"],
+    ["jest-json", "jest-red"],
+    ["playwright-json", "playwright"],
+  ]) {
+    const p = parseResults(fmt, JSON.parse(fixture(name)), ROOTS);
+    assert.equal(p.ok, true, name);
+    const failed = p.entries.filter((e) => e.status === "failed");
+    assert.ok(failed.length > 0, `${name} has a failed test`);
+    for (const e of failed) assert.ok(e.messages.length > 0 && e.messages.every((m) => typeof m === "string" && m.length > 0), name);
+    for (const e of p.entries) assert.ok(Array.isArray(e.messages), `${name}: every entry carries the array`);
+  }
+  const ph = parseResults(
+    "pharn-json",
+    { schema: PHARN_RESULTS_SCHEMA, suite_errors: 0, tests: [{ file: "a.test.js", path: ["t"], status: "failed" }] },
+    ROOTS
+  );
+  assert.deepEqual(ph.entries[0].messages, []);
+  // A message of the wrong type is dropped, never a refusal and never a status input (TOTAL, L62).
+  const odd = parseResults("vitest-json", vitestDoc([{ ...va("t", "failed"), failureMessages: [{ toString: 1 }, "real"] }]), ROOTS);
+  assert.equal(odd.ok, true);
+  assert.deepEqual(odd.entries[0].messages, ["real"]);
+  const notArray = parseResults("vitest-json", vitestDoc([{ ...va("t", "failed"), failureMessages: "x" }]), ROOTS);
+  assert.deepEqual(notArray.entries[0].messages, []);
+});
+
+test("✧ no record carries a message — every test and anomaly in a record has exactly its documented keys", () => {
+  for (const [fmt, name, cfg] of [
+    ["vitest-json", "vitest-red", { test: "vitest-json" }],
+    ["jest-json", "jest-red", { test: "jest-json" }],
+  ]) {
+    const parsed = parseResults(fmt, JSON.parse(fixture(name)), ROOTS);
+    const r = buildRecord({ gate: "test", format: fmt, exit: 1, sha: A, parsed });
+    assert.equal(r.ok, true, `${name} ${JSON.stringify(cfg)}`);
+    for (const t of r.tests) assert.deepEqual(Object.keys(t).sort(), ["file", "id", "status", "title"], name);
+    for (const a of r.anomalies) assert.deepEqual(Object.keys(a).sort(), ["file", "id", "reason", "reason_code", "title"], name);
+    assert.doesNotMatch(JSON.stringify(r), /Cannot find module|failureMessages|messages/, `${name}: no message text in the record`);
+  }
+});
+
+test("gateResults + buildRecord over ONE parse equals testRecord; testIdOf is the record's id rule", () => {
+  const root = mkdtempSync(join(tmpdir(), "trc-gr-"));
+  try {
+    writeFileSync(join(root, CONFIG_FILE), JSON.stringify({ [CONFIG_KEY]: { test: "vitest-json" } }));
+    const outDir = join(root, ".pharn", "gates");
+    mkdirSync(outDir, { recursive: true });
+    const bytes = fixture("vitest-red").replaceAll("/work/proj", root);
+    writeFileSync(join(outDir, resultsFileName(0, "test")), bytes);
+    const stamp = stampWith({ results_sha256: sha256(Buffer.from(bytes)), exit: 1 });
+    const g = gateResults({ stamp, outDir, gateId: "test", root });
+    assert.equal(g.ok, true, g.reason);
+    const viaParts = buildRecord({ gate: g.gate, format: g.format, exit: g.exit, sha: g.sha, parsed: g.parsed });
+    assert.deepEqual(viaParts, testRecord({ stamp, outDir, gateId: "test", root }));
+    const failed = g.parsed.entries.find((e) => e.status === "failed");
+    assert.ok(viaParts.tests.some((t) => t.id === testIdOf(failed) && t.status === "failed"));
+    // The same refusals, with gateResults named in the TypeError (L41).
+    assert.throws(() => gateResults({ stamp, outDir: "", gateId: "test", root }), /gateResults: `outDir`/);
+    expectReason(gateResults({ stamp, outDir, gateId: "nope", root }), "gate-absent");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("✧ L36 REVERSE CLOSURE — every RECORD_REASONS member was reached by a test in this file", () => {
   const unreached = RECORD_REASONS.filter((c) => !REACHED.has(c));
   assert.deepEqual(unreached, [], `no test reached: ${unreached.join(", ")}`);

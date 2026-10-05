@@ -23,6 +23,54 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.39.0] - 2026-10-05
+
+### Added
+
+- **`/pharn-build` runs the project's gates through one tested helper,
+  [`pharn/floor/build-gate.mjs`](./pharn/floor/build-gate.mjs), targeted while fixing and once in full.** Step 4 pins
+  two lines and maps each exit. `--mode targeted` runs the `test` gate over this feature's declared test files (PLAN.md
+  and AC-TESTS.md `## Files`, each through `badPath` and `isTestFile`, existing regular files only, e2e-mapped files left
+  out). `--mode full` runs the set `/pharn-verify` discovers minus the e2e gates, and its exit is the build's gate (the
+  routed agent's `--gate`). Both go through the gate runner's new `build` stage, the stage scripts' drain and budget
+  (unchanged), and the project's gate exclusion ([6.36.0]). With no gate to run (no `package.json`, or none of the
+  allowlisted scripts) both exit NO-GATES (4): the human may name the gates with `--gates`, exactly as at
+  `/pharn-verify` (appended verbatim, never model-typed, never filtered); under `/pharn-loop` it stays S4. The summary
+  is bounded: per gate its exit and the wall time of its runner call; for a red gate the failing tests' ids (a
+  duplicated id whose test failed included) with a fenced excerpt of each first failure message, or a fenced tail of
+  its logs; at most 16,384 bytes per summary, enforced (a red gate past the cap is named by one closing line counted
+  inside it). Full logs stay under `.pharn/pharn-build/<name>/`. The same line starts and continues a run, continues
+  only while the tree is unchanged, and on CONTINUE lists the gates already finished with their exits.
+  - **The trigger (P7).** In a user's 92-minute `/pharn-loop` run (PHARN 6.35.0) the routed build agent chose its own
+    gate set: a full `vitest run` twice, a `test:db` script `/pharn-verify` never runs twice, `typecheck` piped through
+    `grep -v` to hide pre-existing errors, and never `build`. It spent 7.8 minutes blocked on the suites
+    (`.dev/measurements/loop-wall-clock-2026-10-05.md` §4). Its first full run found 39 failing tests in 14 files, all
+    14 of them files the plan declared.
+  - **A correction to the batch's evidence.** The agent's gate output was about 18 KB of its 484 KB of Bash results.
+    Its context grew from about 302k to 660k tokens through source reads and its own write scripts, not gate output. So
+    the output bound removes a risk (a whole log read into context) rather than a cost measured in that run.
+  - **Expected saving:** about 2.5–3 minutes per build iteration on that project, plus a gate set decided by tested
+    code: targeted runs over the 75 declared test files (≈ 15 s each, scaled from a measured 13.35 s for 22 files)
+    replace the first full suite; `test:db` (≈ 109 s, not a verify gate) is no longer run; `build` (≈ 180 s) now is,
+    and about seven polling requests go. The arithmetic is in `.dev/features/build-gate-bounded/PLAN.md`.
+  - **Behaviour change, accepted at GATE 1:** in a project with gates red at its base commit, the full run reads RED,
+    so a routed build under `/pharn-ship` reports `done gate:fail` and ship stops after the build instead of at verify.
+    `/pharn-loop` is unaffected (it goes on to regress and verify either way). A base-red gate was already a red build
+    gate before this change; the agent had hidden it by hand. Step 5 records a red gate as failed, never passed.
+  - **Shared modules, additive:** `gate-run-core.mjs` gains the `build` stage and `resolveSet`'s `targets`;
+    `run-gates.mjs init --stage build (--discover <m> | --gates <spec>) [--targets <file>]`; the results adapters carry
+    `messages` on each parsed entry, and `test-results-core.mjs` gains `gateResults` and `testIdOf`. No record carries a
+    message, and `testRecord`'s output is unchanged. Contracts: [`gate-run-record.md`](./pharn/pharn-contracts/gate-run-record.md)
+    (the `build` stage) and [`test-results-record.md`](./pharn/pharn-contracts/test-results-record.md).
+    `pharn-ship.md`'s inline-build bullet no longer says the build gate ignores `gates.exclude`.
+  - **Bounds:** advisory that the agent runs nothing else, that an excerpt holds the diagnostic it needs, and that a
+    targeted GREEN predicts a full one or a full GREEN a verify PASS (e2e, `reconcile` and the AC gate run only at
+    verify). "Targeted" is the runner's reading of file arguments (vitest filters by substring, Jest by pattern). The
+    times are observed wall clock of each runner call. `pharn-build.md`'s byte ceiling rose to 24,576 by the documented
+    rule. Named follow-up: `build-gate-execution-reuse` (offer the full run's executions to regress HEAD and verify
+    through the 6.34.0 identity mechanism).
+  - Product-surface change: `SKILLS_VERSION` 6.38.1 → 6.39.0 (minor).
+
 ## [6.38.1] - 2026-10-05
 
 ### Changed

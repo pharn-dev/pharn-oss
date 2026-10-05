@@ -183,6 +183,11 @@ plain pass.
 - **`suite_errors`** counts failures no test owns: a vitest or Jest file that failed with no failed test
   (typically a file that could not be imported), each entry of Playwright's top-level `errors[]`, and
   `pharn-json`'s own `suite_errors`. Their messages are not read.
+- **Failure messages are never in a record (6.39.0).** The format adapters carry each test's messages on the parsed
+  entry (`messages`: vitest/Jest `failureMessages`, Playwright's per-result error messages, none for `pharn-json`),
+  for one reader: `pharn/floor/build-gate.mjs`, which quotes a bounded excerpt of each failing test's first message as
+  fenced DATA in `/pharn-build`'s gate summary. `buildRecord` copies `id`, `file`, `title` and `status` only, so no
+  record — the red run's, the AC gate's, a report's — carries message text, and no verdict reads one.
 - **`tests`** is sorted by `id`. It may be **empty**: an `ok` record with zero tests is a run that ran none, and
   a consumer that needs tests must check for them itself. `counts` range over `tests` alone.
 - **`anomalies`** (6.31.0) is sorted by `id`: every test whose status the report does not give plainly
