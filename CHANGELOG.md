@@ -23,6 +23,62 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.42.0] - 2026-10-05
+
+### Added
+
+- 2026-10-05: **`/pharn-loop` and `/pharn-ship` now run the project's gates once on the tree a run starts from, in the
+  background, while the spec, plan and grill stages work. A gate already red there stops an unattended run before the
+  build** ([`pharn/floor/entry-gates.mjs`](./pharn/floor/entry-gates.mjs),
+  [`pharn/floor/entry-gates-core.mjs`](./pharn/floor/entry-gates-core.mjs); `gate-run-core.mjs` stage `entry`,
+  `worktree-fingerprint.mjs` `ENTRY_ALGO`; contract [`gate-run-record.md`](./pharn/pharn-contracts/gate-run-record.md),
+  the `entry` bullet). `SKILLS_VERSION` 6.40.0 → 6.42.0 (minor; the version was assigned by the orchestrator, so 6.41.0 belongs to
+  another PR of the same batch: a new floor CLI, a new stuck point, changed command
+  behaviour), with the README badge. `MIN_CLI` stays 0.5.0: no installed path moves.
+  - **The trigger.** All three recorded 6.35.0 `/pharn-loop` runs in a user's project had gates red before any change
+    (a `typecheck`, unit tests, `build`), and nothing looked until `/pharn-verify`, 28–92 minutes in.
+    `/pharn-verify`'s threshold is absolute, so such a run cannot pass. With 6.36.0 and 6.37.0 removing the other two
+    entry causes, a loop would iterate to `STOP_CAP` on gates no build in its plan can fix
+    (`.dev/measurements/loop-wall-clock-2026-10-05.md` §9).
+  - **How.**
+    - `--start` runs after the entry steps: `/pharn-loop` Step 1a item 6, `/pharn-ship` right after its pre-run
+      snapshot. It resolves the set `/pharn-verify` will discover (e2e kept, `gates.exclude` applied, the style gates
+      first) and starts a detached runner.
+    - `--wait --budget-ms 570000` reads the verdict between the grill and `/pharn-test`. It blocks inside node, and
+      exit 5 means "run the same line again". If the runner is gone, `--wait` runs the remaining gates itself, through
+      the same drain and within its budget.
+    - `--abort` runs first at every stop and stops any gate still running.
+    - `/pharn-loop` maps exit 4 to the new **S14** `blocked: gates-red-at-entry`, unless the person passed a leading
+      `--allow-red-entry`, which says fixing that gate is the feature. A run with no gates is S4. When the check could
+      not judge (exit 2), the run goes on and its summary names the reason. `/pharn-ship` asks the person **Stop** or
+      **Continue**.
+    - A gate that rewrites a file itself (`next build` regenerating `next-env.d.ts`) does so after the pre-run snapshot.
+      `--wait` records the paths a `mutated` gate changed in a second git-dir record beside the snapshot, bound to the
+      same run marker (`pre-run-snapshot.mjs` `recordEntryChanges`; the snapshot's shape, digest and decision). The
+      `/pharn-regress` partition and the quick scope check then report such a path in a conditional
+      `entry_gate_changes` block, and do not count it as the build's escape while it keeps those bytes
+      ([`regression-report.md`](./pharn/pharn-contracts/regression-report.md)).
+  - **Two invariants, each tested.**
+    - The `entry` stage's fingerprint also excludes the run's whole `pharn/features/<name>/`, where the front stages
+      write. Any other change between gates still refuses. This is sound for `entry` only: its stamp is never reuse
+      evidence, and every other reader refuses it as `stage-mismatch`.
+    - A red style gate counts only when the feature directory held its start digest before and after that gate.
+      Otherwise it is reported as `unattributed`, never a stop.
+  - **Bounds, in the module headers.**
+    - It never claims verify would fail.
+    - That non-style gates do not read the feature directory is assumed, not checked (advisory).
+    - A front-stage write outside that directory between two gates makes the check unusable. If it lands during a
+      `mutated` gate, it is recorded with that gate's changes.
+    - `.pharn/` state is forgeable through Bash.
+    - Only a process reparented before `--abort` lists the processes (a double-forked daemon) escapes it. `--abort`
+      freezes and lists the gate groups, and it kills a survivor only when the survivor still matches that list.
+    - A healthy quick run may wait for whatever part of the gates' time its short front does not cover.
+  - **Follow-ups:**
+    - `entry-run-as-base-evidence`: offer the entry stamp as regress's BASE evidence;
+    - `entry-gates-ledger-row`;
+    - `entry-gates-nonstyle-overlap`.
+  - **Dropped from this item:** the instruction-file prefix note. 6.38.0's instruction-growth gate owns it.
+
 ## [6.40.0] - 2026-10-05
 
 ### Added

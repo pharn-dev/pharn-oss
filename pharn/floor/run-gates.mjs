@@ -100,7 +100,7 @@
 // never eval'd, imported, or compiled into a RegExp.
 //
 // Usage:
-//   node pharn/floor/run-gates.mjs init --stage verify|regress [--side base|head] --feature <name>
+//   node pharn/floor/run-gates.mjs init --stage verify|regress|entry [--side base|head] --feature <name>
 //        --out <dir> [--cwd <dir>] [--base <featureBase>] [--discover <package.json>] [--gates "<c>[::<id>],…"]
 //        [--extra <json-array>] [--scope-json <file>] [--skip-style] [--spec-from <dir>]
 //        [--reuse-stamp <file> --reuse-sha256 <hex>]
@@ -751,7 +751,7 @@ function startRecord(spec, outAbs, cwd, args, opts = {}) {
   rmSync(outAbs, { recursive: true, force: true });
   mkdirSync(outAbs, { recursive: true });
 
-  const fp = fingerprint(cwd, { feature: spec.feature });
+  const fp = fingerprint(cwd, { feature: spec.feature, stage: spec.stage });
   if (!fp.ok) fail("usage-error", `cannot fingerprint the worktree: ${fp.reason}`);
 
   let head = null;
@@ -971,7 +971,7 @@ async function runNext(args) {
     const next = rec.entries[rec.runs.length];
     if (next === undefined) emit({ ok: true, remaining: 0, finalized: rec.finalized === true }, 3);
 
-    const fpBefore = fingerprint(cwd, { feature: rec.feature });
+    const fpBefore = fingerprint(cwd, { feature: rec.feature, stage: rec.stage });
     if (!fpBefore.ok) fail("usage-error", `cannot fingerprint before ${next.id}: ${fpBefore.reason}`);
 
     // The log names come from gate-run-core's ONE copy of the rule, which check-loop-fresh.mjs re-hashes.
@@ -1039,7 +1039,7 @@ async function runNext(args) {
         timed_out = res.timed_out;
       }
 
-      fpAfter = fingerprint(cwd, { feature: rec.feature });
+      fpAfter = fingerprint(cwd, { feature: rec.feature, stage: rec.stage });
       if (!fpAfter.ok) fail("usage-error", `cannot fingerprint after ${next.id}: ${fpAfter.reason}`);
 
       const run = {

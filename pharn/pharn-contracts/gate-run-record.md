@@ -43,7 +43,7 @@ initialize at all.
 ```json
 {
   "schema": "gate-run-record/1",
-  "stage": "verify | regress | ac-test | build",
+  "stage": "verify | regress | ac-test | build | entry",
   "side": "base | head | null",
   "feature": "<slug>",
   "head": "<40-hex> | null",
@@ -226,6 +226,15 @@ gate — it already is one today.
   its levels (`acFilesFor`), appended after `--`, and an entry with none is refused rather than run. No
   `reconcile`, no `aux.completeness`. Every other stamp reader asserts its own stage, so an `ac-test` stamp is
   `stage-mismatch` there. What the stamp's per-test records decide is `ac-tests.md`'s contract.
+- **`entry` (6.42.0), a delivery run's entry check (`pharn/floor/entry-gates.mjs`):** the set `/pharn-verify` would
+  discover — e2e kept, `gates.exclude` applied — with every `STYLE_SET` member first (each part in its own order), no
+  `reconcile` and no `aux.completeness`. Its fingerprint also excludes the run's whole `pharn/features/<name>/`, because
+  its gates run in the background while `/pharn-spec`, `/pharn-plan` and `/pharn-grill` write there, and it records its
+  own algo (`worktree-fingerprint.mjs` `ENTRY_ALGO`). That is sound for this stage only: an `entry` stamp is read by
+  `entry-gates.mjs` alone, it is never reuse evidence (`gate-reuse-core.mjs` `findReusable` accepts only a regress/head
+  stamp, and the execution identity carries the algo), and every other stamp reader asserts its own stage, so it is
+  `stage-mismatch` there. Any other tree change between two gates still refuses (`tree-changed-between-gates`). What
+  counts as red at entry, and why a style gate's red is weighed differently, is `entry-gates-core.mjs`'s header.
 - **`build` (6.39.0), `/pharn-build`'s own gate, run by `pharn/floor/build-gate.mjs`:** `--discover` or a human's
   `--gates` is required, and `--extra`, `--skip-style`, `--scope-json`, `--spec-from`, `--side` and `--base` are
   refused. The set is the DISCOVERED ids minus `E2E_SET` (the regress rule — e2e runs at `/pharn-verify`), then the

@@ -62,6 +62,7 @@ import { changedPaths } from "./scope-inputs.mjs";
 import { FEATURE_SLUG_RE, SHA_RE } from "./gate-run-core.mjs";
 import {
   SNAPSHOT_BASENAME,
+  ENTRY_CHANGES_BASENAME,
   SNAPSHOT_MAX_BYTES,
   DIGEST_MAX_BYTES,
   DIGEST_ABSENT,
@@ -181,6 +182,75 @@ export function captureSnapshot(feature) {
     else if (d === DIGEST_UNHASHABLE) counts.unhashable++;
   }
   return { ok: true, command: id.command, counts };
+}
+
+/** ------------------------------------------------------------------------------------------------------------------
+ *  THE ENTRY GATES' CHANGES (6.42.0, loop-entry-preflight, review R1). A delivery run's entry gates (entry-gates.mjs)
+ *  run AFTER this snapshot, so a path one of them rewrites (a `next build` regenerating `next-env.d.ts`) changed since
+ *  the snapshot without being the build's escape. `entry-gates.mjs --wait` records those paths — the ones a gate the
+ *  stamp marks `mutated` changed, with their digest after it — in a SECOND record of this module's shape, beside the
+ *  snapshot, bound to the same run marker; the partition asks `entryChangesUnchanged` exactly as it asks
+ *  `preRunUnchanged` (the same `decidePreRun`, the same `pathDigest` — L35). Overwritten by each `--wait` decision of the
+ *  run; `entry-gates.mjs --start` removes an earlier run's. Bounds: the snapshot's (agreement, never provenance; a Bash
+ *  writer can forge it), plus one of its own — a non-gate write outside the feature directory DURING a mutated gate is
+ *  recorded with that gate's (entry-gates.mjs, header).
+ *  ---------------------------------------------------------------------------------------------------------------- */
+
+/** `<absolute git dir>/pharn-entry-gate-changes.json`, or null when git cannot name the directory. */
+export function entryChangesPath() {
+  return gitDirFile(ENTRY_CHANGES_BASENAME);
+}
+
+/** The partition's second input: which of `inside` still hold the bytes the run's entry gates left. Same contract as
+ *  `preRunUnchanged`; `no-snapshot` when no entry record exists. */
+export function entryChangesUnchanged({ feature, base, inside }) {
+  const rp = entryChangesPath();
+  return decidePreRun({
+    feature,
+    base,
+    markers: readMarkers(feature),
+    now: Date.now(),
+    record: rp === null ? { state: "absent" } : readRegularFile(rp, SNAPSHOT_MAX_BYTES),
+    inside,
+    liveDigest: (p) => pathDigest(p),
+  });
+}
+
+/** Record `paths` (`[[path, digest], …]`) as this run's entry-gate changes. `{ok: true}` or `{ok: false, code}` with
+ *  `code` ∈ {no-delivery-run, git-failed, git-dir-unresolved, write-failed}. Never throws for an expected failure. */
+export function recordEntryChanges(feature, paths) {
+  const id = deliveryRunIdentity({ markers: readMarkers(feature), now: Date.now() });
+  if (!id.ok) return refusal("no-delivery-run", "no single open /pharn-loop or /pharn-ship run marker for this feature");
+  const head = gitSync(["rev-parse", "--verify", "--quiet", "HEAD"]);
+  const base = head.ok ? head.stdout.trim() : "";
+  if (!SHA_RE.test(base)) return refusal("git-failed", "git rev-parse HEAD did not name a commit");
+  const rp = entryChangesPath();
+  if (rp === null) return refusal("git-dir-unresolved", "git rev-parse --absolute-git-dir named no directory");
+  const tmp = `${rp}.tmp-${process.pid}`;
+  try {
+    writeFileSync(tmp, `${JSON.stringify(buildSnapshot({ feature, run: id, base, paths }), null, 2)}\n`);
+    renameSync(tmp, rp);
+  } catch (e) {
+    try {
+      unlinkSync(tmp);
+    } catch {
+      /* nothing was created */
+    }
+    return refusal("write-failed", `the entry-gate changes could not be written in the git dir (${e && e.code ? e.code : "error"})`);
+  }
+  return { ok: true };
+}
+
+/** Remove an earlier run's entry-gate changes record (`--start`); ENOENT is success. Returns false on any other error. */
+export function clearEntryChanges() {
+  const rp = entryChangesPath();
+  if (rp === null) return true;
+  try {
+    unlinkSync(rp);
+    return true;
+  } catch (e) {
+    return Boolean(e && e.code === "ENOENT");
+  }
 }
 
 /** A thrown value's first line, bounded — total (L62): a value with no string form must not throw on this path. */
