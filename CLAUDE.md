@@ -951,6 +951,23 @@ node pharn/floor/check-loop-record.mjs <LOOP.md>
 # SKIPPED · 1 RED.
 node pharn/floor/check-loop-decision.mjs <LOOP.md>
 
+# THE CLOSEOUTS (6.44.0, loop-closeout-script) — /pharn-loop's close after the model writes LOOP.md, and /pharn-ship's
+# Step 3a, each as ONE tested line instead of 16 / 6 pinned blocks (each block was a model request at the run's largest
+# context). loop-closeout runs, in the close part's former order: check-loop-record (RED → exit 5, nothing else ran;
+# repair, re-run with --after-repair), check-loop-decision (blocked → N/A), run-stop, ledger + check + report (report
+# skipped for a quick record), then on a green token agreeing with the record's mode: check-loop-fresh --commit-gate
+# --front, the --from-plan setter + --amend-scope, the staging list (the former inline builder, lstat-based — L54),
+# branch, add, commit (or the former undo), the freshness ledger, and on exit 0/3 the Final step's two releases. Exit:
+# 0 committed · 3 not committed, final · 4 not committed with a model write owed (Step 6d; also a non-green record over a
+# still-Approved SPEC) · 5 record RED · 2 refused, nothing ran · else a crash, never a commit decision. ship-closeout
+# runs run-stop, run-marker --close, rev-parse HEAD (or `unknown`), ledger + check + report (quick read from the
+# run-start marker); exit 0 always (nothing gates) · 2 refused; it holds NO git write (a source scan). The shared steps
+# live once in closeout-core.mjs. Last stdout line: one JSON document, closed keys. FLOOR: tested code over floor
+# verdicts (the green-token enum, the two checkers' exits); ADVISORY: that a run invokes the line and runs no git of its
+# own. C2's audit bar was met by 1 of 3 real runs; adopted at the user's request (CHANGELOG [6.44.0]).
+node pharn/floor/loop-closeout.mjs --feature <name> --base <40-hex> [--after-repair]
+node pharn/floor/ship-closeout.mjs --feature <name>
+
 # The COST LEDGER trio (added 6.5.0) — `pharn/features/<name>/cost.json`. TWO commands emit one, and the
 # set is named here so a third is a deliberate addition: /pharn-loop at EVERY stop that has a feature dir,
 # green or not; /pharn-ship (6.7.0) at EVERY exit that ends the run — GATE 2 and every STOP — from its

@@ -64,7 +64,7 @@ spec_kind: quick`. The remedy is to re-run `/pharn-ship <description>` **without
    and its snapshot line run next, exactly as written there, each with its own rule: a non-zero exit is a STOP before
    `/pharn-plan`. The order in a quick run is therefore: the backstop exits `0`, this kind read prints `quick`, the
    marker opens, the snapshot is recorded, the entry gates start (Step 2's line and rule), then `/pharn-plan` starts. A refused `--quick` never opens a marker. Every quick exit still reaches
-   Step 3a, whose `--close` runs right after the run-stop marker and is idempotent (item 12).
+   Step 3a, whose closeout closes the marker right after the run-stop marker, idempotently (item 12).
 
 4. **The grill step.** Run this pinned QUICK start line in place of Step 2's grill start line (6.27.0):
 
@@ -144,10 +144,11 @@ spec_kind: quick`. The remedy is to re-run `/pharn-ship <description>` **without
     `RUN-REPORT.md` in this directory predates this run and is not part of it."_ They are **labelled, not
     removed**.
 
-12. **Step 3a.** Items 1–3 (the run-stop marker and, directly after it, the run-marker `--close` line; the
-    base-SHA capture; `render-cost-ledger.mjs` + `check-cost-ledger.mjs`) run **unchanged**, on every quick
+12. **Step 3a.** Its closeout line runs items 1–3 (the run-stop marker and, directly after it, the run marker's
+    close; the base-SHA capture; `render-cost-ledger.mjs` + `check-cost-ledger.mjs`) **unchanged**, on every quick
     exit as on every full one — `cost.json` is kept in quick mode. **Item 4
-    (`render-run-report.mjs`) is SKIPPED** — no `RUN-REPORT.md` in quick mode. Item 5's presentation shows
+    (`render-run-report.mjs`) is SKIPPED** — the closeout reads quick from the run-start marker this mode's `--mode
+quick` line wrote, so no `RUN-REPORT.md` in quick mode. Item 5's presentation shows
     the emitter's printed table and the checker's verdict only; there is no report table to reproduce.
 
 **GATE 2 in quick mode** presents the same standing verdicts as full mode, minus the regress verdict (never

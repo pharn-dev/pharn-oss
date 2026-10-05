@@ -43,6 +43,7 @@ import { fenceFor } from "./loop-record-core.mjs";
 import { markerLine } from "./mark-phase.mjs";
 import { UNKNOWN_REASONS } from "./run-window-core.mjs";
 import { allParts, commandFamilyText } from "../../.dev/floor/command-family.mjs";
+import { ledgerSteps } from "./closeout-core.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CLI = join(here, "render-run-report.mjs");
@@ -1189,7 +1190,7 @@ test("★ ENUMERATION (L29/L31): every site that must know `RUN-REPORT.md` names
   const SITES = [
     ["pharn/floor/check-regress.mjs", /PIPELINE_ARTIFACTS[\s\S]*?"RUN-REPORT\.md"[\s\S]*?\];/],
     ["pharn/floor/reconcile-ignore.json", /"names":[\s\S]*?"RUN-REPORT\.md"/],
-    [".claude/commands/pharn-loop-close.md", /"RUN-REPORT\.md"\]/], // Step 6c's staging list, in the loop's close part (6.32.0)
+    ["pharn/floor/loop-closeout.mjs", /STAGE_ARTIFACTS[\s\S]*?"RUN-REPORT\.md",?\s*\]\);/], // Step 6c's staging list, in the loop's closeout (6.44.0)
     [".prettierignore", /^pharn\/features\/\*\/RUN-REPORT\.md$/m],
     [".markdownlint-cli2.jsonc", /"pharn\/features\/\*\/RUN-REPORT\.md"/],
   ];
@@ -1216,23 +1217,31 @@ test("★ ENUMERATION (L29/L31): every site that must know `RUN-REPORT.md` names
 // Each member names the boundary its render must precede. The boundaries DIFFER by command and that is
 // the point — the loop must render before it COMMITS, ship before it can HALT on attestation — so a
 // single shared regex would be wrong for one of them.
+//
+// Since 6.44.0 (loop-closeout-script) neither command types the render line: each runs ONE closeout line, and the
+// closeout runs the renderer after the ledger check (closeout-core.mjs `runLedgerTail`). So the pins split: the
+// command's committed closeout line precedes its boundary (here), the renderer's argv is the shared step's
+// (`ledgerSteps`, here), and the order inside each closeout is EXECUTED by its own suite — the loop's report before its
+// commit gate (loop-closeout.test.mjs, GREEN_PATH), ship's report after its ledger check (ship-closeout.test.mjs).
 const RENDERER_INVOKERS = [
   {
     file: "pharn-loop.md",
     role: "renders at every stop that has a feature directory, before Step 6c's commit",
+    closeout: /node pharn\/floor\/loop-closeout\.mjs --feature '<name>' --base '<base sha>'/,
     boundary: /^### Step 6c —/m,
     boundaryLabel: "Step 6c (the commit)",
   },
   {
     file: "pharn-ship.md",
     role: "renders at every exit that ends the run, before Step 3b can STOP or halt on attestation",
+    closeout: /node pharn\/floor\/ship-closeout\.mjs --feature '<name>'/,
     boundary: /^## Step 3b —/m,
     boundaryLabel: "Step 3b (attestation)",
   },
 ];
 
 const RENDER_INVOCATION = /node pharn\/floor\/render-run-report\.mjs '<name>' --base pharn\/features/;
-const LEDGER_CHECK = /node pharn\/floor\/check-cost-ledger\.mjs/;
+const ANY_CLOSEOUT = /node pharn\/floor\/(?:loop|ship)-closeout\.mjs/;
 
 test("★ WIRING ENUMERATION (L29/L31/L45) is non-vacuous and covers every invoking command", () => {
   assert.ok(RENDERER_INVOKERS.length >= 2, `expected >=2 invoking commands, got ${RENDERER_INVOKERS.length}`);
@@ -1245,26 +1254,44 @@ test("★ WIRING ENUMERATION (L29/L31/L45) is non-vacuous and covers every invok
   // A command's text is its file plus its parts (6.32.0): a part is read as its command's, never as a command.
   const cmdDir = join(REPO, ".claude", "commands");
   const parts = new Set(allParts(cmdDir).map((p) => p.file));
-  const invokers = readdirSync(cmdDir).filter(
-    (f) => f.endsWith(".md") && !parts.has(f) && RENDER_INVOCATION.test(commandFamilyText(cmdDir, f))
+  const commands = readdirSync(cmdDir).filter((f) => f.endsWith(".md") && !parts.has(f));
+  const invokers = commands.filter((f) => {
+    const text = commandFamilyText(cmdDir, f);
+    return RENDER_INVOCATION.test(text) || ANY_CLOSEOUT.test(text);
+  });
+  assert.deepEqual(
+    invokers.sort(),
+    [...files].sort(),
+    "every command invoking the renderer (directly or by a closeout) must be enumerated above"
   );
-  assert.deepEqual(invokers.sort(), [...files].sort(), "every command invoking the renderer must be enumerated above");
+  for (const f of commands) {
+    assert.doesNotMatch(
+      commandFamilyText(cmdDir, f),
+      RENDER_INVOCATION,
+      `${f}: the render runs inside the closeout, never as a typed line`
+    );
+  }
 });
 
 for (const cmd of RENDERER_INVOKERS) {
   test(`★ WIRING (L45): ${cmd.file} ${cmd.role}`, () => {
     const text = commandFamilyText(join(REPO, ".claude", "commands"), cmd.file);
-    assert.match(text, RENDER_INVOCATION, "the committed command must carry the pinned invocation line");
-
-    const at = (re) => text.search(re);
-    const ledgerCheck = at(LEDGER_CHECK);
-    const render = at(RENDER_INVOCATION);
-    const boundary = at(cmd.boundary);
-    assert.ok(ledgerCheck > 0 && render > 0 && boundary > 0, `non-vacuity: all three anchors must be found in ${cmd.file}`);
-    assert.ok(ledgerCheck < render, "the render must come AFTER the ledger checks");
-    assert.ok(render < boundary, `the render must come BEFORE ${cmd.boundaryLabel}`);
+    const lines = text.split("\n").filter((l) => cmd.closeout.test(l));
+    assert.equal(lines.length, 1, "the committed command must carry its closeout line exactly once");
+    const closeout = text.search(cmd.closeout);
+    const boundary = text.search(cmd.boundary);
+    assert.ok(closeout > 0 && boundary > 0, `non-vacuity: both anchors must be found in ${cmd.file}`);
+    assert.ok(closeout < boundary, `the closeout (and so the render) must come BEFORE ${cmd.boundaryLabel}`);
   });
 }
+
+test("★ the closeouts' render step is the pinned invocation, after the ledger check (closeout-core.mjs)", () => {
+  const steps = ledgerSteps({ feature: "<name>", command: "/pharn-loop", baseSha: "x" });
+  const line = `node pharn/floor/${steps.report.script.split("/").at(-1)} ${steps.report.args.map((a) => (a === "<name>" ? "'<name>'" : a)).join(" ")}`;
+  assert.match(line, RENDER_INVOCATION);
+  const order = Object.keys(steps);
+  assert.ok(order.indexOf("ledgerCheck") < order.indexOf("report"), "the report follows the ledger check");
+});
 
 test("★ NEGATIVE CONTROL: the invocation pin requires the FULL line, not the module name", () => {
   assert.ok(!RENDER_INVOCATION.test("node pharn/floor/render-run-report.mjs"), "a bare module path must not satisfy the pin");
@@ -1274,7 +1301,8 @@ test("★ NEGATIVE CONTROL: the invocation pin requires the FULL line, not the m
 
 test("★ the staging list and Step 7 both know the report", () => {
   const cmd = commandFamilyText(join(REPO, ".claude", "commands"), "pharn-loop.md");
-  assert.match(cmd, /"LOOP\.md", "cost\.json", "RUN-REPORT\.md"\]/, "Step 6c must stage it");
+  const closeout = readFileSync(join(REPO, "pharn", "floor", "loop-closeout.mjs"), "utf8");
+  assert.match(closeout, /"LOOP\.md",\s*"cost\.json",\s*"RUN-REPORT\.md",?\s*\]/, "Step 6c's closeout must stage it");
   assert.match(cmd, /\*\*the run report\*\*/, "Step 7 must print from it");
 });
 

@@ -270,20 +270,23 @@ test("✧ WIRING: pharn-ship.md's pinned OPEN line, executed verbatim (with <nam
   assert.ok(existsSync(markerPath(dir, "pharn-ship", "demo-run")), "the pinned open line must create the marker");
 });
 
-test("✧ WIRING: pharn-ship.md's pinned CLOSE line, executed verbatim, removes it", () => {
+// Since 6.44.0 ship's close runs inside its Step 3a closeout line (pharn/floor/ship-closeout.mjs), so the line
+// EXECUTED here is that committed closeout line; the order inside it (run-stop, then this close) is executed by
+// ship-closeout.test.mjs against the close part's former lines.
+test("✧ WIRING: pharn-ship.md's pinned Step 3a closeout line, executed verbatim, removes it", () => {
   const openLine = pinnedLine("pharn-ship.md", /node pharn\/floor\/run-marker\.mjs --open pharn-ship '<name>'/).replace(
     "<name>",
     "demo-run"
   );
-  const closeLine = pinnedLine("pharn-ship.md", /node pharn\/floor\/run-marker\.mjs --close pharn-ship '<name>'/).replace(
-    "<name>",
-    "demo-run"
-  );
+  const closeLine = pinnedLine("pharn-ship.md", /node pharn\/floor\/ship-closeout\.mjs --feature '<name>'/)
+    .replace("<name>", "demo-run")
+    .replace("node pharn/floor/ship-closeout.mjs", `node ${JSON.stringify(join(HERE, "ship-closeout.mjs"))}`);
   const dir = tmp();
   runShellLine(dir, openLine);
   assert.ok(existsSync(markerPath(dir, "pharn-ship", "demo-run")));
   const r = runShellLine(dir, closeLine);
   assert.equal(r.status, 0, r.stderr);
+  assert.equal(JSON.parse(r.stdout.trimEnd().split("\n").at(-1)).run_marker_close, "ok");
   assert.equal(existsSync(markerPath(dir, "pharn-ship", "demo-run")), false);
 });
 
@@ -298,13 +301,27 @@ test("✧ WIRING: pharn-ship's OPEN line sits AFTER the GATE-1 backstop and BEFO
   assert.ok(open < planStart, "the open must come before /pharn-plan's stage-start marker");
 });
 
-test("✧ WIRING: pharn-ship's CLOSE line sits directly after Step 3a's run-stop marker", () => {
+test("✧ WIRING: pharn-ship's close runs directly after Step 3a's run-stop marker, inside its closeout", () => {
+  const src = readFileSync(join(HERE, "ship-closeout.mjs"), "utf8");
+  const runStop = src.indexOf("runStop({ steps: pre");
+  const close = src.indexOf("run(pre.markerClose)");
+  assert.ok(runStop >= 0 && close >= 0, "both anchors must exist in ship-closeout.mjs");
+  assert.ok(runStop < close && close - runStop < 200, "the close must sit DIRECTLY after run-stop");
+  // The one typed close left is the closeout's crash fallback (independent review R4): after the closeout line.
   const body = commandFamilyText(COMMANDS_DIR, "pharn-ship.md");
-  const runStop = body.indexOf("node pharn/floor/mark-phase.mjs --name '<name>' --kind run-stop");
-  const close = body.indexOf("node pharn/floor/run-marker.mjs --close pharn-ship '<name>'");
-  assert.ok(runStop >= 0 && close >= 0, "both anchors must exist");
-  assert.ok(runStop < close, "the close must come after Step 3a's run-stop marker");
-  assert.ok(close - runStop < 400, "the close must sit DIRECTLY after run-stop, not merely somewhere later");
+  const typed = [...body.matchAll(/node pharn\/floor\/run-marker\.mjs --close pharn-ship '<name>'/g)];
+  assert.equal(typed.length, 1, "exactly one typed close: the crash fallback");
+  assert.ok(body.indexOf("node pharn/floor/ship-closeout.mjs --feature '<name>'") < typed[0].index, "it follows the closeout line");
+});
+
+test("✧ WIRING: pharn-ship.md's crash-fallback CLOSE line, executed verbatim, is idempotent", () => {
+  const closeLine = pinnedLine("pharn-ship.md", /node pharn\/floor\/run-marker\.mjs --close pharn-ship '<name>'/).replace(
+    "<name>",
+    "demo-run"
+  );
+  const dir = tmp();
+  assert.equal(runShellLine(dir, closeLine).status, 0, "closing a marker never opened is ok");
+  assert.equal(runShellLine(dir, closeLine).status, 0, "and again");
 });
 
 test("✧ WIRING: pharn-review.md's pinned OPEN line, executed verbatim, opens a pharn-review marker", () => {

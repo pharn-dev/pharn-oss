@@ -1,0 +1,46 @@
+{
+  "base": "43c09ba39c83a0fa228009446012cc11728a97c9",
+  "inside": [
+    ".claude/commands/pharn-loop-close.md",
+    ".claude/commands/pharn-ship-close.md",
+    ".dev/features/loop-closeout-script/BUILD.md",
+    ".dev/features/loop-closeout-script/GRILL.md",
+    ".dev/features/loop-closeout-script/PLAN.md",
+    ".dev/floor/command-hygiene.test.mjs",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/check-loop-fresh.test.mjs",
+    "pharn/floor/check-test-stage.test.mjs",
+    "pharn/floor/closeout-core.mjs",
+    "pharn/floor/closeout-core.test.mjs",
+    "pharn/floor/frontmatter-core.test.mjs",
+    "pharn/floor/loop-closeout.mjs",
+    "pharn/floor/loop-closeout.test.mjs",
+    "pharn/floor/render-regression.test.mjs",
+    "pharn/floor/render-run-report.test.mjs",
+    "pharn/floor/render-verify.test.mjs",
+    "pharn/floor/run-marker.test.mjs",
+    "pharn/floor/ship-closeout.mjs",
+    "pharn/floor/ship-closeout.test.mjs",
+    "pharn/floor/stage-runtime.test.mjs"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
