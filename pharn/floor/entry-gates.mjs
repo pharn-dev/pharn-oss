@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// pharn/floor/entry-gates.mjs — a delivery run's ENTRY check (loop-entry-preflight, 6.38.0): the gate set /pharn-verify
+// pharn/floor/entry-gates.mjs — a delivery run's ENTRY check (loop-entry-preflight, 6.41.0): the gate set /pharn-verify
 // will discover, run ONCE on the tree the run starts from, in a detached background runner, while /pharn-spec,
 // /pharn-plan and /pharn-grill work; its verdict is read just before /pharn-test. The rule — what counts as red, and why
 // — is entry-gates-core.mjs's header; this file reads and writes the disk and runs the processes (P3).

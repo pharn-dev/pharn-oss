@@ -16,7 +16,7 @@ reads:
   ]
 writes: [".pharn/pharn-verify/stage.json"]
 constitution_refs: ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7"]
-version: "0.5.1"
+version: "0.6.0"
 ---
 
 # /pharn-verify — did the feature get built CORRECTLY, in the user's codebase?
@@ -202,6 +202,9 @@ either way.
   contract's (`pharn/pharn-contracts/reconciliation-record.md`): git-ignored paths are outside the reconciled set,
   the window is anchor → reconcile, one worktree per session, no attribution. `CLEAN` means no escape was detected,
   never that none occurred.
+- **Before it, `instruction-growth`** (`check-instruction-files.mjs --growth --base-rule`): FAIL when the always-loaded
+  instruction files grew past `budget.instructionGrowthBytes` (the base commit's `pharn.config.json`; default 2048).
+  Spec: `instruction-files-core.mjs`.
 
 ## The verifier plug-in slot (ZERO verifiers authored — P7)
 

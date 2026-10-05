@@ -27,10 +27,15 @@
 // In the git dir, one per worktree (a linked worktree has its own), beside 6.33.0's base-reuse record and 6.34.0's head
 // offer (regress-base-reuse.mjs `gitDirFile`, the one resolver). `.pharn/**` is writable by the write tools in every
 // posture, so a record there could be rewritten by the very build the partition judges (L65); the git dir is denied to
-// them — `protect-trusted-paths.cjs` denies any `.git` segment under a guarded root, and `enforce-writes-scope.cjs` a path
-// inside another git tree or outside the project (pre-run-snapshot.test.mjs's ★ HOOK test runs both on both layouts).
-// The 6.34.0 GATE-2 bound carries over: a separate git dir under a temp root, in an installed project with no run open,
-// is not covered. A Bash writer reaches the git dir (L19) and can forge a record bound to the right marker; nothing
+// them, by a different guard per layout (the independent review's R3, probed in every posture, with and without a run
+// open, with no scope, `src/**` and `**`): in a MAIN checkout the git dir is `.git/` under the project and
+// `protect-trusted-paths.cjs` denies it (a `.git` segment under a guarded root), whatever the scope; for a LINKED
+// worktree — beside the main checkout or nested under it — the git dir is `<main>/.git/worktrees/<id>/`, which
+// protect-trusted-paths does not see as this project's, and `enforce-writes-scope.cjs` denies it (a path inside another
+// git tree), whatever the scope. pre-run-snapshot.test.mjs's ★ HOOK test pins each cell. NOT COVERED, and pinned there
+// too: a SEPARATE git dir kept inside the project under a name that is not `.git` (`git init --separate-git-dir`) — no
+// `.git` segment and no other tree, so a `**` scope, or an installed project with no scope and no run open, lets the
+// write tools reach it; and the 6.34.0 GATE-2 bound (a separate git dir under a temp root, installed, no run open). A Bash writer reaches the git dir (L19) and can forge a record bound to the right marker; nothing
 // detects it. The capture itself is a Bash `fs` write outside fix #7, declared; it runs before the build's reconcile
 // anchor, so no reconciliation window sees it.
 //
@@ -78,10 +83,18 @@ export function snapshotPath() {
  * The digest of `rel` (a path as git printed it, relative to `root`), by the one rule the capture and the check share:
  * `absent` (lstat ENOENT), a sha256 (a regular file of at most DIGEST_MAX_BYTES, or a symlink's own text — hashFile), or
  * `unhashable` (a directory, a FIFO or other non-file, a trailing-slash entry, a parent component that is a symlink, an
- * oversize or unreadable file, any lstat error but ENOENT).
+ * oversize or unreadable file, any lstat error but ENOENT, and any path holding U+FFFD).
+ *
+ * U+FFFD (the independent review's R4, reproduced on a byte-name filesystem): git prints a name that is not valid UTF-8
+ * and `nulList` decodes it with U+FFFD in place of the bad bytes, so `lstat` of the DECODED name is ENOENT — `absent`
+ * at capture AND at check — and a later content change to the real file would be subtracted as unchanged. The decoded
+ * name cannot reach the real file, so such a path is never digested: `unhashable`, never subtracted. A name that
+ * genuinely holds U+FFFD is caught by the same rule — fail-closed, counted as before.
  */
 export function pathDigest(rel, root = process.cwd()) {
-  if (typeof rel !== "string" || rel === "" || rel.endsWith("/") || rel.includes("\0")) return DIGEST_UNHASHABLE;
+  if (typeof rel !== "string" || rel === "" || rel.endsWith("/") || rel.includes("\0") || rel.includes("�")) {
+    return DIGEST_UNHASHABLE;
+  }
   const abs = join(root, rel);
   if (abs === root || !abs.startsWith(root + sep)) return DIGEST_UNHASHABLE;
   const parent = dirname(abs);

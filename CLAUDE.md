@@ -840,6 +840,17 @@ node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 # Exit: 0 clean · 1 escaped · 2 inconclusive (closed reason_code, `crashed` included).
 node pharn/floor/check-quick-scope.mjs --feature <name> --base <40-hex>
 
+# THE INSTRUCTION-GROWTH GATE (6.38.0). A user's CLAUDE.md + 14 rules (634,379 B) rode in every stage agent's prefix.
+# `--report` (ADVISORY): the always-loaded set — root CLAUDE.md files, their `@` imports, rules without `paths:` —
+# per-file bytes, a bytes/4 estimate, notes (`globs-not-read`, …). `--growth` (FLOOR over this MODEL of the loader, never
+# the loader itself): bytes ADDED since the base (removals never offset) vs `budget.instructionGrowthBytes` in
+# pharn.config.json AT THE BASE (default 2048). Under-count routes are listed as known-so-far (L67).
+# /pharn-verify injects it before `reconcile` as `instruction-growth` (`--base-rule`: dirty → HEAD, else merge-base
+# origin/main, else INCONCLUSIVE); never reused. Spec/bounds: instruction-files-core.mjs. This repo's dev loop never runs it.
+# Exit: 0 within/reported · 1 over · 2 inconclusive (closed reason_code).
+node pharn/floor/check-instruction-files.mjs --report
+node pharn/floor/check-instruction-files.mjs --growth (--base <ref> | --base-rule)
+
 # THE PRE-RUN SNAPSHOT (6.37.0, regress-pre-run-snapshot) — a path already changed when a /pharn-loop or /pharn-ship run
 # began is not that run's scope escape. THE RECORDED FAILURE (P7): two of three post-6.35.0 /pharn-loop runs in a user's
 # project stopped at /pharn-regress `scope-escaped` on paths the run never wrote — an abandoned run's untracked
@@ -852,8 +863,9 @@ node pharn/floor/check-quick-scope.mjs --feature <name> --base <40-hex>
 # (stage-regress.mjs, quick-scope-core.mjs → check-regress.mjs partitionScope's optional `preRunUnchanged`) subtracts an
 # undeclared, non-exempt path only when the snapshot applies (closed PRE_RUN_STATUSES, first miss decides) and its live
 # digest is EQUAL, and REPORTS it: `pre_run_snapshot: {status, unchanged}` in scope.json, regression-report.json (after
-# base_evidence), the quick check's document and REGRESSION.md. No run / no snapshot → exactly today's partition; the
-# `check-regress.mjs scope` CLI is byte-identical. FLOOR: the subtraction (content hashes + closed enums). BOUNDS, in
+# base_evidence), the quick check's document and REGRESSION.md. No run / no snapshot → exactly today's partition, where
+# "a run" is a marker's presence and age (≤ 24 h), so an interrupted run's leftover marker makes a later standalone regress
+# apply that run's snapshot; the `check-regress.mjs scope` CLI is byte-identical. FLOOR: the subtraction (content hashes + closed enums). BOUNDS, in
 # pre-run-snapshot-core.mjs's header: agreement, never provenance (a Bash writer can forge the git-dir record; the write
 # tools cannot — ★ HOOK); never attributed (an earlier run's escape is pre-run state for a re-run); escape set ONLY —
 # `inside` is unchanged, so a pre-run change that breaks a gate still reads as a regression (follow-up
@@ -862,28 +874,11 @@ node pharn/floor/check-quick-scope.mjs --feature <name> --base <40-hex>
 # Exit: 0 recorded · 2 refused (closed REASON_CODES, `crashed` a caught throw); a module that cannot load is node's 1.
 node pharn/floor/pre-run-snapshot.mjs --capture <name>
 
-# THE ENTRY GATES (6.38.0, loop-entry-preflight) — a delivery run runs /pharn-verify's discovered gate set ONCE on the tree
-# it starts from, in the BACKGROUND, while /pharn-spec, /pharn-plan and /pharn-grill work, and reads the verdict before
-# /pharn-test. THE RECORDED FAILURE (P7): all three post-6.35.0 /pharn-loop runs in a user's project had gates red
-# before any change (Sentry `typecheck`, unit tests, `build`) and nothing looked until verify, 28–92 min in; verify's
-# threshold is absolute, so such a run can never PASS (.dev/measurements/loop-wall-clock-2026-10-05.md §9). `--start`
-# (/pharn-loop Step 1a item 6; /pharn-ship after its pre-run snapshot) runs `run-gates.mjs init --stage entry` (gate-run-core
-# resolveSet: verify's discovered set, e2e kept, `gates.exclude` applied, STYLE_SET FIRST, no reconcile) and spawns a
-# detached runner (setsid; one per tree, a new start supersedes); `--wait --budget-ms 570000` blocks inside node (exit 5 =
-# run it again — never a model poll); `--abort` runs first at every stop (SIGSTOP the runner's group, snapshot `ps`, kill
-# every descendant gate group; a pid is signalled only when `ps -ww -p <pid> -o args=` shows the runner's nonce). The
-# entry stage's fingerprint ALSO excludes the run's whole `pharn/features/<name>/` (worktree-fingerprint.mjs ENTRY_ALGO —
-# the front stages write only there); sound for `entry` only, since its stamp is never reuse evidence (findReusable
-# accepts only regress/head) and every other reader asserts its stage. VERDICT (entry-gates-core.mjs entryVerdict): a red
-# non-style gate counts; a red STYLE_SET gate counts only when the feature directory held its start digest before AND
-# after that gate (otherwise `unattributed`: reported, never a stop). /pharn-loop: exit 4 → S14 `blocked:
-# gates-red-at-entry` unless the leading `--allow-red-entry` (advisory); 3 → S4; else S9. /pharn-ship asks Stop/Continue.
-# BOUNDS (the module headers): it never claims verify would fail; non-style gates are ASSUMED not to read the feature
-# directory (advisory); a front-stage write elsewhere between gates is `tree-changed-between-gates` (S9); `.pharn/` state
-# is forgeable by Bash (L43); a gate's own `setsid` child survives `--abort`. Follow-ups: `entry-run-as-base-evidence`,
-# `entry-gates-ledger-row`, `entry-gates-nonstyle-overlap`. No contract of its own (P7): gate-run-record.md's `entry`
-# bullet + the module headers. Exit (--wait): 0 green · 4 red · 3 no-gates · 5 continue · 2 unusable (closed REASON_CODES);
-# --start: 0 started · 3 no gates · 2 refused; --abort: always 0.
+# THE ENTRY GATES (6.41.0, loop-entry-preflight) — /pharn-loop and /pharn-ship run /pharn-verify's discovered gates once
+# on the starting tree, in a detached background runner, during spec/plan/grill; the verdict is read before /pharn-test.
+# A red gate is /pharn-loop S14 (`--allow-red-entry` opts out); /pharn-ship asks. Rules, bounds and the P7 trigger:
+# pharn/floor/entry-gates.mjs and entry-gates-core.mjs headers; gate-run-record.md's `entry` bullet.
+# Exit (--wait): 0 green · 4 red · 3 no-gates · 5 continue (run again) · 2 unusable; --start 0 · 3 · 2; --abort 0.
 node pharn/floor/entry-gates.mjs --start --feature <name> --timeout-ms <N>
 node pharn/floor/entry-gates.mjs --wait --feature <name> --budget-ms <B>
 node pharn/floor/entry-gates.mjs --abort --feature <name>

@@ -540,7 +540,8 @@ function computeEvalPairs(cfg) {
 // scope.json — `unchanged` the subtracted paths only — and the render phase copies it into the report; a refusal renders
 // it beside the escapes. This phase decides it once, before anything can pause; a resumed chain re-reads scope.json, a
 // `.pharn/` file, so the block it renders is advisory. A standalone regress reads `no-delivery-run` and behaves exactly
-// as before.
+// as before — unless an interrupted /pharn-loop or /pharn-ship of the same feature left its marker (≤ 24 h), whose
+// snapshot it then applies (a marker is read by presence and age only; pre-run-snapshot-core.mjs, `no-delivery-run`).
 function phasePartition(cfg, planPath, specPath, base) {
   const declared = readPlanDeclared(cfg, planPath, specPath);
   const inside = computeInside(cfg, base);

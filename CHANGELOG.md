@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.38.0] - 2026-10-05
+## [6.41.0] - 2026-10-05
 
 ### Added
 
@@ -32,7 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   build** ([`pharn/floor/entry-gates.mjs`](./pharn/floor/entry-gates.mjs),
   [`pharn/floor/entry-gates-core.mjs`](./pharn/floor/entry-gates-core.mjs); `gate-run-core.mjs` stage `entry`,
   `worktree-fingerprint.mjs` `ENTRY_ALGO`; contract [`gate-run-record.md`](./pharn/pharn-contracts/gate-run-record.md),
-  the `entry` bullet). `SKILLS_VERSION` 6.37.0 → 6.38.0 (minor: a new floor CLI, a new stuck point, changed command
+  the `entry` bullet). `SKILLS_VERSION` 6.40.0 → 6.41.0 (minor: a new floor CLI, a new stuck point, changed command
   behaviour), with the README badge. `MIN_CLI` stays 0.5.0: no installed path moves.
   - **The trigger.** All three recorded 6.35.0 `/pharn-loop` runs in a user's project had gates red before any change
     (a `typecheck`, unit tests, `build`), and nothing looked until `/pharn-verify`, 28–92 minutes in.
@@ -44,7 +44,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
       snapshot. It resolves the set `/pharn-verify` will discover (e2e kept, `gates.exclude` applied, the style gates
       first) and starts a detached runner.
     - `--wait --budget-ms 570000` reads the verdict between the grill and `/pharn-test`. It blocks inside node, and
-      exit 5 means "run the same line again".
+      exit 5 means "run the same line again". If the runner is gone, `--wait` runs the remaining gates itself, through
+      the same drain and within its budget.
     - `--abort` runs first at every stop and stops any gate still running.
     - `/pharn-loop` maps exit 4 to the new **S14** `blocked: gates-red-at-entry`, unless the person passed a leading
       `--allow-red-entry`, which says fixing that gate is the feature. A run with no gates is S4, and anything else is
@@ -66,7 +67,103 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     - `entry-run-as-base-evidence`: offer the entry stamp as regress's BASE evidence;
     - `entry-gates-ledger-row`;
     - `entry-gates-nonstyle-overlap`.
-  - **Dropped from this item:** the instruction-file prefix note. The `instruction-growth-gate` increment owns it.
+  - **Dropped from this item:** the instruction-file prefix note. 6.38.0's instruction-growth gate owns it.
+
+## [6.38.1] - 2026-10-05
+
+### Changed
+
+- 2026-10-05: **`/pharn-plan` tells the model not to put a feature's narrative into project instruction files.**
+  Claude Code loads `CLAUDE.md`, the files it imports and every `.claude/rules/` file without `paths:` frontmatter into
+  every stage agent, so their bytes are paid on every run, whatever the change.
+  - **Measured** (pharn-starter's 92-minute `/pharn-loop` run, `.dev/measurements/loop-wall-clock-2026-10-05.md` §3,
+    §10): every stage agent's first request carried 302,207–304,974 tokens, and the harness attached the same 634,379 B
+    of instruction files to each: `CLAUDE.md` 418,456 B, 14 `.claude/rules/*.md` 213,290 B (none with `paths:`) and
+    `MEMORY.md` 2,633 B. At 4 bytes per token that is about 159k tokens, roughly half the prefix (an estimate).
+  - **Reported by the user, not verifiable from this repo:** nearly every PLAN in that project (~98) named `CLAUDE.md` in
+    `## Files` and added a per-feature section, which is how the file reached 418 KB. Nothing in `/pharn-plan` told the
+    model to do that, and nothing told it not to.
+  - **The rule** sits in `/pharn-plan` Step 3, under the anchor "Instruction files load into every agent". A feature's
+    narrative, rationale, history and limits stay in its record (`pharn/features/<name>/`) or a docs page. An
+    instruction file is named in `## Files` only for a standing convention every future session must obey, as
+    ``- `CLAUDE.md` — convention: <one line>``. A path-specific convention goes in a `.claude/rules/` file with `paths:`.
+    `/pharn-plan` is the only product command that writes a PLAN, so `/pharn-ship` and `/pharn-loop` get the rule by
+    running it. The PLAN template's `## Files` block and the scope setter's parse rules are unchanged.
+  - **ADVISORY.** Nothing deterministic stops a plan from naming `CLAUDE.md`, and no behavioural eval covers
+    `/pharn-plan`. `LIMITS.md §3f` states that bound, as a human edit, since the agent's write tools cannot reach the
+    trusted docs. The deterministic backstop is 6.38.0's `instruction-growth` gate at `/pharn-verify`. It bounds the
+    bytes one change adds to the always-loaded set (`LIMITS.md §3e`), never whether a plan names `CLAUDE.md`.
+  - `.dev/floor/command-hygiene.test.mjs` `INSTRUCTION_FILE_RULE` derives the PLAN authors from each product
+    command's `writes:` frontmatter and requires the anchor in each author's Step 3 and in no other product command file.
+    Each property has its own control, and a live run with the anchor removed fails. It pins presence, never obedience.
+  - `SKILLS_VERSION` 6.38.0 → 6.38.1: a patch, since no capability, command or checker is added. The rule clarifies what
+    an existing command's `## Files` should hold, as 6.35.1's write-tool sentence did. The README badge moves with it,
+    and `/pharn-plan`'s `version:` goes 0.5.2 → 0.5.3. `MIN_CLI` is unchanged: an older CLI installs this tree intact.
+    Built on 6.35.2 as 6.35.3 and renumbered after merging 6.36.0 (#307), 6.37.0 (#308) and 6.38.0 (#311). Its lesson
+    is L68; L67 is 6.38.0's.
+
+## [6.38.0] - 2026-10-05
+
+### Added
+
+- 2026-10-05: **A floor backstop against feature growth of the always-loaded instruction files: the checker
+  `pharn/floor/check-instruction-files.mjs` and the `/pharn-verify` gate `instruction-growth`.** `SKILLS_VERSION`
+  6.37.0 → 6.38.0 (minor: a new floor checker and a new verify gate). `MIN_CLI` stays 0.5.0: no installed path moves,
+  the installer copies `pharn/floor/` whole minus tests (CHANGELOG [6.21.1]), and a `pharn.config.json` without the new
+  key defaults cleanly. ([`.dev/features/instruction-growth-gate/`](./.dev/features/instruction-growth-gate/))
+  - **Why (P7, measured).** In a user's `/pharn-ship` run, the harness attached 634,379 B of instruction files to every
+    stage agent: a 418,456 B `CLAUDE.md`, 14 `.claude/rules/*.md` totalling 213,290 B, and a 2,633 B auto-memory index.
+    That is about half of a ~302k-token first-request prefix (bytes/4, an estimate;
+    `.dev/measurements/loop-wall-clock-2026-10-05.md` §3, §10). Eight of the rules carried Cursor-style `globs:` and
+    none carried `paths:`, so all of them loaded every time. The user reports that the growth came from features whose
+    plans routed narrative into `CLAUDE.md`; that report is not verifiable from this repository. The planning rule
+    against that routing is advisory, and this is its deterministic backstop.
+  - **The set** is modelled from Claude Code's memory documentation (read 2026-10-05) and comprises:
+    - the root `CLAUDE.md` and `.claude/CLAUDE.md` (else `AGENTS.md`);
+    - their `@path` imports, up to four hops, skipping code spans and fences;
+    - every `.claude/rules/**/*.md` without `paths:`, or whose `paths:` is a catch-all (`**`, `**/*`, `*`).
+
+    `globs:` is not read by Claude Code ("`paths` is the only field Claude Code reads from a rule"), so it is noted
+    `globs-not-read`. Every assumption beyond the docs is labelled in `instruction-files-core.mjs`'s header.
+
+  - **`--report`** is ADVISORY. It prints per-file bytes, the total, a bytes/4 estimate, notes and the path-scoped
+    rules, and lists `CLAUDE.local.md` as personal.
+  - **`--growth`** is FLOOR. It sums the bytes ADDED to the set since a base: a file new to the set counts whole, and a
+    file in both counts its line-multiset difference, so removals never offset. It compares the sum with
+    `budget.instructionGrowthBytes` read from `pharn.config.json` AT THE BASE COMMIT (default 2048, the maintainer's
+    choice at GATE 1, not a measurement), so a change cannot raise its own gate. Base objects are read with
+    `--no-replace-objects`. An unusable input is exit 2 with a closed `reason_code`, never a pass. The entry has no
+    static import, so a crash is `crashed` (exit 2), never a verdict.
+  - **The gate.** `gate-run-core.mjs` injects `instruction-growth` for verify, immediately before `reconcile`, with the
+    fixed argv `--growth --base-rule`. It takes /pharn-regress's BASE_RULE branches (dirty tree → HEAD, else
+    `merge-base HEAD origin/main`, else INCONCLUSIVE). The id is reserved and never reused. `run-gates.mjs`,
+    `stage-verify.mjs`, `check-verify.mjs` and `check-loop.mjs` are unchanged. A red gate is an ordinary, retried
+    `CONTINUE` in `/pharn-loop`. `/pharn-dev-verify` and the dev loop are unchanged.
+  - **Bounds, named:**
+    - It measures changed-since-base, not written-by-the-build.
+    - With a dirty tree only uncommitted growth is measured (`instruction-growth-base-binding`).
+    - A clean tree with no `origin/main` is INCONCLUSIVE at verify.
+    - An INCONCLUSIVE gate is retried by `/pharn-loop` to the cap.
+    - `--growth` is a FLOOR verdict over this checker's MODEL of the loader, never over the loader itself. Under-count
+      routes known so far (never a complete list, L67): a catch-all spelled another way, an unrecognised YAML error
+      beside `paths:`, a git-ignored always-loaded file, and an uncommitted edit inside an initialised submodule.
+    - A per-change budget does not bound growth accumulated across changes.
+    - Whether `pharn update` preserves an unknown `pharn.config.json` key is not verifiable here.
+    - The `LIMITS.md §3` text is proposed in the plan for a human to apply; the write guard keeps it human-only.
+  - **GATE 2 review fixes, before merge.** An independent review reproduced six defects, all fixed in this release,
+    each with a test and a mutation control:
+    - a project root below the git top level (a monorepo package) is measured; it was refused, failing every verify;
+    - a `paths` value that is not a string list (YAML null, a number, a boolean, a mapping, a block scalar) loads
+      always (`paths-unrecognised`); it had scoped the rule out;
+    - the fixed names match case-insensitively (`case-variant`), so a `claude.md` on APFS counts;
+    - a submodule on the way to a member is noted unread, and a moved one is INCONCLUSIVE `submodule-changed`;
+    - an absolute link spelled through an alias of the root (`/tmp` vs `/private/tmp`) is followed;
+    - a staged rename into `.pharn/` reads as a dirty tree, as `/pharn-regress` reads it.
+  - **Lesson L67** (promoted at the ship-stage gate): a checker that models an external tool states its bounds from
+    the inputs its author pictured, so enumerate the tool's documented input grammar as fixture kinds.
+  - **Dogfood.** This increment's own Commands entry in this repo's `CLAUDE.md` adds 1,031 B (`--growth --base-rule`
+    against `d40667d`), within the 2048-B default it ships.
+  - **PENDING:** a `--report` of pharn-starter before and after its cleanup, both recorded.
 
 ## [6.37.0] - 2026-10-05
 
@@ -95,7 +192,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     non-exempt path only when that snapshot applies and the path's live digest equals the recorded one, and report it
     as `pre_run_snapshot: {status, unchanged}` in `scope.json`, `regression-report.json` (a second additive block after
     `base_evidence`), the quick check's document and `REGRESSION.md`. With no open run or no snapshot the partition is
-    exactly what it was, and the `check-regress.mjs scope` CLI is byte-identical.
+    exactly what it was, and the `check-regress.mjs scope` CLI is byte-identical. "Open" is a marker's presence and age
+    (≤ 24 h), so a standalone `/pharn-regress` after an interrupted run of the same feature applies that run's snapshot.
   - **Bounds, stated in the module headers and the contract.** Agreement, never provenance: the record is out of the
     write tools' reach (a ★ HOOK test runs both guards on it), and a Bash writer can forge it. Nothing is attributed: a
     path an earlier run escaped with is pre-run state for a re-run, so re-running reports it rather than refusing. Only

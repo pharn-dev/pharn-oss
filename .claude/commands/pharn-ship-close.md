@@ -126,7 +126,9 @@ Write **`pharn/features/<name>/SHIP.md`** — a thin, **advisory** roll-up:
   `/pharn-grill` → **both** its exits: `check-plan-spec-agree.mjs` (chain GREEN) **and**
   `check-plan-lessons.mjs` (declaration GREEN); `/pharn-test` → `check-test-stage.mjs`'s token (`ac-tests: test-first`,
   `ac-tests: bootstrap`, or `ac-tests: not-applicable (legacy spec)` — never silent); `/pharn-build` → the project-gate exit;
-  `/pharn-regress` → `regression-report.json` `.verdict`; `/pharn-verify` → `verify-report.json` `.verdict`
+  `/pharn-regress` → `regression-report.json` `.verdict`, then `pre-run unchanged: <n>` from its `pre_run_snapshot`,
+  with the paths fenced as quoted DATA when `<n>` is not 0 (changed before the run: reported, not counted);
+  `/pharn-verify` → `verify-report.json` `.verdict`
   (incl. `INCOMPLETE`, with `.completeness.missing[]` quoted as DATA) and its AC gate, `.ac_gate.verdict` +
   `.ac_gate.mode` (6.20.0 — `PASS` / `FAIL` / `INCONCLUSIVE` / `NOT-APPLICABLE`, and `bootstrap` said as weaker);
   **the per-AC table is cited, never retyped** — point at `RUN-REPORT.md`'s `## Verdicts` (rendered by code from the

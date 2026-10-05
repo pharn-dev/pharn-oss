@@ -1,4 +1,4 @@
-// pharn/floor/entry-gates.test.mjs — the entry check's suite (loop-entry-preflight, 6.38.0): the pure rules
+// pharn/floor/entry-gates.test.mjs — the entry check's suite (loop-entry-preflight, 6.41.0): the pure rules
 // (entry-gates-core.mjs), the CLI end to end in throwaway git repositories (real `npm run` gates, a real detached
 // runner), and the ★ WIRING of the pinned lines in /pharn-loop and /pharn-ship, EXECUTED (L45).
 //

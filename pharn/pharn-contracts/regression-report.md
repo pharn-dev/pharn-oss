@@ -299,7 +299,9 @@ The product report says what happened, as its last key:
 - **`status`** — `applied` (the snapshot bound to this run and this base was used), or why not: one member of the
   closed, ordered `PRE_RUN_MISSES`, the first that applied. The set and each member's meaning are owned by
   `pharn/floor/pre-run-snapshot-core.mjs`'s header (P4). A standalone `/pharn-regress` reads `no-delivery-run` and
-  behaves exactly as before 6.37.0.
+  behaves exactly as before 6.37.0 — unless an interrupted `/pharn-loop` or `/pharn-ship` of the same feature left its
+  run marker (≤ 24 h, the write guard's age rule): the marker is read by presence and age, never parsed, so that
+  standalone invocation applies the interrupted run's snapshot, as `base_evidence` above already does.
 - **`unchanged`** — the undeclared, non-exempt changed paths NOT counted as escapes, in `inside`'s order; empty on
   every miss. It is never the whole of what the snapshot holds: a declared or exempt path is not listed here.
 

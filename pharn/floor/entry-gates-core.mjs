@@ -1,4 +1,4 @@
-// pharn/floor/entry-gates-core.mjs — the PURE rules of a delivery run's ENTRY check (loop-entry-preflight, 6.38.0).
+// pharn/floor/entry-gates-core.mjs — the PURE rules of a delivery run's ENTRY check (loop-entry-preflight, 6.41.0).
 // No I/O, no spawning: entry-gates.mjs reads and writes the disk and runs the processes (P3 — this file changes when
 // the RULE changes, that one when the storage or the process handling does).
 //

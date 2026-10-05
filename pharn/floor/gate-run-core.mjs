@@ -29,7 +29,7 @@
 //     (6.34.0), the exit a runner recorded for the SOURCE execution its `reused` block names, which this stamp's
 //     runner found eligible and identity-equal at the live tree when it recorded the entry (gate-reuse-core.mjs);
 //     nothing re-derives that decision later (the named residual `verify-reuse-rederive`);
-//   • the map's KEYS cover the resolved source set (plus `reconcile` for verify);
+//   • the map's KEYS cover the resolved source set (plus `instruction-growth` and `reconcile` for verify);
 //   • no tree edit happened between consecutive gate runs (fp_after[k-1] === fp_before[k]);
 //   • `reconcile`, when present, ran LAST.
 //
@@ -152,7 +152,10 @@ export const STYLE_SET = Object.freeze(["lint", "format:check", "lint:md"]);
  *  without loading the AC gate's module graph: a load failure there would stop the freshness check (grill R2) — since
  *  6.21.1 as INCONCLUSIVE `checker-crashed` rather than node's exit 1, and a smaller graph still fails less often. */
 export const AC_RESERVED_IDS = Object.freeze(["ac-delivery", "ac-evidence"]);
-export const RESERVED_IDS = Object.freeze(["reconcile", "completeness", ...AC_RESERVED_IDS]);
+/** The instruction-growth gate's id (6.38.0): the runner injects it for verify, before `reconcile`
+ *  (`instructionGrowthEntry`, below). Reserved so no project gate can claim the name. */
+export const INSTRUCTION_GROWTH_ID = "instruction-growth";
+export const RESERVED_IDS = Object.freeze(["reconcile", "completeness", ...AC_RESERVED_IDS, INSTRUCTION_GROWTH_ID]);
 
 /** The `structural:` prefix belongs to `--extra` entries alone. */
 export const STRUCTURAL_PREFIX = "structural:";
@@ -251,7 +254,7 @@ export function isReasonCode(code) {
 /** The three stages and the two regress sides — enum-gated, fail-closed on anything else. `ac-test` (6.18.0) is
  *  /pharn-test's RED RUN: the AC tests, run before the build, whose per-test record check-red-run.mjs judges.
  *  Every stamp reader that is not that one asserts its own stage (`validateStamp`'s `expect.stage`), so an
- *  `ac-test` stamp handed to /pharn-verify or /pharn-regress is `stage-mismatch`, never a verdict. `entry` (6.38.0) is
+ *  `ac-test` stamp handed to /pharn-verify or /pharn-regress is `stage-mismatch`, never a verdict. `entry` (6.41.0) is
  *  a delivery run's ENTRY check (entry-gates.mjs): verify's discovered set, STYLE_SET first, run once in the background
  *  on the tree the run starts from — read by entry-gates.mjs alone, never reuse evidence (its fingerprint algo is its
  *  own; worktree-fingerprint.mjs ENTRY_ALGO). */
@@ -283,8 +286,12 @@ export const MAX_REUSABLE_EXIT = 125;
  *    • every style gate (STYLE_SET) — a whole-tree style run reads the feature's fingerprint-EXCLUDED artifacts, which
  *      differ between the regress HEAD run and verify (REGRESSION.md is written after the head drain; an earlier
  *      iteration's VERIFY.md is removed by verify's fresh start), so an equal fingerprint is not an equal input (grill B1);
- *    • `reconcile` — it judges the verify window itself. */
-export const NON_REUSABLE_IDS = Object.freeze([...new Set([...Object.values(LEVEL_GATES).flat(), ...STYLE_SET, "reconcile"])].sort());
+ *    • `reconcile` — it judges the verify window itself;
+ *    • `instruction-growth` (6.38.0) — regress never runs it, and its input includes `origin/main`, which the execution
+ *      identity does not bind. */
+export const NON_REUSABLE_IDS = Object.freeze(
+  [...new Set([...Object.values(LEVEL_GATES).flat(), ...STYLE_SET, "reconcile", INSTRUCTION_GROWTH_ID])].sort()
+);
 
 /** A feature slug: one path segment, no traversal, no separators.
  *  A THIRD copy of a grammar already in mark-phase.mjs (NAME_RE) and render-run-report.mjs (SLUG_RE) — neither exports
@@ -450,19 +457,36 @@ export function reconcileEntry() {
   };
 }
 
+/** ------------------------------------------------------------------------------------------------
+ *  The instruction-growth entry (6.38.0) — injected by the runner for verify, with a fixed argv, immediately BEFORE
+ *  `reconcile` (which stays last). It fails when the project's always-loaded instruction files (CLAUDE.md, its
+ *  imports, the rules without `paths`) gained more bytes since the base than the base commit's threshold allows;
+ *  pharn/floor/instruction-files-core.mjs's header is the spec and states the bounds. The checker writes nothing, so it
+ *  cannot move the tree between gates. As for `reconcile`, nothing re-checks that a stamp carries it: the runner
+ *  composes it.
+ *  ---------------------------------------------------------------------------------------------- */
+export function instructionGrowthEntry() {
+  return {
+    id: INSTRUCTION_GROWTH_ID,
+    shell: null,
+    argv: ["node", "pharn/floor/check-instruction-files.mjs", "--growth", "--base-rule"],
+    files: [],
+  };
+}
+
 /** The completeness AUX entry — captured by the runner, recorded OUTSIDE `runs[]`. See the header. */
 export function completenessArgv(feature, base) {
   return ["node", "pharn/floor/check-build-complete.mjs", `${base}/${feature}/PLAN.md`, "."];
 }
 
 /** ------------------------------------------------------------------------------------------------
- *  Ordering. ALLOWLIST order (or the explicit token order), then `structural:*` sorted, then
- *  `reconcile` last. Deterministic and filesystem-independent.
+ *  Ordering. ALLOWLIST order (or the explicit token order), then `structural:*` sorted, then — verify only —
+ *  `instruction-growth`, then `reconcile` last. Deterministic and filesystem-independent.
  *  ---------------------------------------------------------------------------------------------- */
 export function orderEntries(sourceEntries, extraEntries, withReconcile) {
   const structural = [...extraEntries].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const out = [...sourceEntries, ...structural];
-  if (withReconcile) out.push(reconcileEntry());
+  if (withReconcile) out.push(instructionGrowthEntry(), reconcileEntry());
   return out.map((e, i) => ({ ...e, seq: i }));
 }
 
@@ -576,7 +600,7 @@ export function resolveSet({
     }
   }
 
-  // entry (6.38.0): STYLE_SET first, each part in its own order — the style gates run before a front stage has
+  // entry (6.41.0): STYLE_SET first, each part in its own order — the style gates run before a front stage has
   // written any markdown they could read (entry-gates-core.mjs, "attributable").
   if (stage === "entry") kept = [...kept.filter((e) => STYLE_SET.includes(e.id)), ...kept.filter((e) => !STYLE_SET.includes(e.id))];
   const entries = orderEntries(kept, ex.entries, stage === "verify");

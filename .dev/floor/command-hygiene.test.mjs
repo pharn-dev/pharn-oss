@@ -1666,7 +1666,7 @@ const STUCK_POINTS = [
   { id: "S11", blocked: "stale-evidence" },
   { id: "S12", blocked: "no-test-runner" }, // 6.19.0: /pharn-test's preflight found a level with no runner
   { id: "S13", blocked: "ac-evidence-invalid" }, // 6.20.0: the AC evidence changed or is missing — a rebuild cannot fix it
-  { id: "S14", blocked: "gates-red-at-entry" }, // 6.38.0: a gate was red on the tree the run started from (entry-gates.mjs)
+  { id: "S14", blocked: "gates-red-at-entry" }, // 6.41.0: a gate was red on the tree the run started from (entry-gates.mjs)
 ];
 // The one non-member spelling the closure admits: the command's own placeholder in generic prose.
 const BLOCKED_PLACEHOLDER = "<id>";
@@ -4811,4 +4811,61 @@ test("WRITE_TOOL_RULE — each command that writes the user's files says, in its
     for (const p of phrases) assert.equal(writeToolRuleHeld(step.replace(p, ""), phrases), false, `${file}: control without "${p}"`);
   }
   assert.equal(Object.keys(WRITE_TOOL_RULE_SITES).length, 2, "the two commands that write the user's files (L34)");
+});
+
+// ── INSTRUCTION_FILE_RULE (6.38.1, plan-instruction-file-rule) ──────────────────────────────────────────────
+// THE RECORDED FAILURE (P7): in pharn-starter the harness attached 634,379 B of instruction files (CLAUDE.md 418,456 B,
+// 14 `.claude/rules/*.md` 213,290 B, MEMORY.md 2,633 B) to every stage agent, about half of each agent's ~302k-token
+// first request (.dev/measurements/loop-wall-clock-2026-10-05.md §3, §10). The user reports, unverified here, that
+// nearly every PLAN there named CLAUDE.md in `## Files` and added a per-feature section. So each product command that
+// AUTHORS a PLAN carries one advisory rule in its Step 3, under the anchor below. The AUTHOR set is derived from each
+// command's `writes:` frontmatter (L6), never listed, and the rule is closed both ways (L36): in every author's Step 3,
+// in no other product command file. PRESENCE only: it never proves a plan obeys the rule. Self-contained so a stacking
+// merge appends.
+const INSTRUCTION_FILE_ANCHOR = "Instruction files load into every agent";
+
+/** A command's `writes:` frontmatter entries; [] without the key. Throws on a value that is not a one-line JSON array. */
+function frontmatterWrites(text) {
+  const fm = text.match(/^---\n([\s\S]*?)\n---\n/);
+  const line = fm && fm[1].match(/^writes:(.*)$/m);
+  if (!line) return [];
+  const value = JSON.parse(line[1].trim());
+  if (!Array.isArray(value)) throw new Error(`writes: is not an array: ${line[1]}`);
+  return value;
+}
+
+const authorsPlan = (text) => frontmatterWrites(text).some((w) => typeof w === "string" && w.endsWith("/PLAN.md"));
+
+/** Every rule break over `{file: text}`: an author whose ## Step 3 lacks the anchor, or a non-author carrying it. */
+function instructionFileRuleOffenders(texts) {
+  const offenders = [];
+  for (const [file, text] of Object.entries(texts)) {
+    const step = writeToolStep3(text);
+    if (authorsPlan(text)) {
+      if (step === null || !step.includes(INSTRUCTION_FILE_ANCHOR)) offenders.push(`${file}: authors a PLAN; its ## Step 3 lacks the rule`);
+    } else if (text.includes(INSTRUCTION_FILE_ANCHOR)) offenders.push(`${file}: carries the rule but authors no PLAN`);
+  }
+  return offenders;
+}
+
+test("INSTRUCTION_FILE_RULE — every product command that authors a PLAN carries the instruction-file rule in its Step 3, and no other", () => {
+  const files = readdirSync(COMMANDS_DIR).filter((f) => /^pharn-.+\.md$/.test(f) && !f.startsWith("pharn-dev-"));
+  const texts = Object.fromEntries(files.map((f) => [f, readFileSync(join(COMMANDS_DIR, f), "utf8")]));
+  const authors = files.filter((f) => authorsPlan(texts[f]));
+  // L34: the derived set is not empty, and it holds the one command known to write PLAN.md.
+  assert.ok(authors.includes("pharn-plan.md"), `derived AUTHOR set ${JSON.stringify(authors)} lacks pharn-plan.md`);
+  assert.deepEqual(instructionFileRuleOffenders(texts), []);
+
+  // Non-vacuity (L60): one control per asserted property, each run through the same predicate.
+  const author = "pharn-plan.md";
+  const consumer = files.find((f) => !authors.includes(f) && PART_FILES.has(f));
+  assert.ok(consumer, "no part file to run the closure control on");
+  const without = texts[author].replaceAll(INSTRUCTION_FILE_ANCHOR, "");
+  const one = (t) => instructionFileRuleOffenders(t).length;
+  assert.equal(one({ [author]: without }), 1, "presence: the author without the rule");
+  assert.equal(one({ [author]: `${without}\n${INSTRUCTION_FILE_ANCHOR}\n` }), 1, "placement: the rule outside Step 3");
+  assert.equal(one({ [author]: texts[author].replace(/^## Step 3\b/m, "## Stage 3") }), 1, "an unfound Step 3 never passes");
+  assert.equal(one({ [consumer]: `${texts[consumer]}\n${INSTRUCTION_FILE_ANCHOR}\n` }), 1, "closure: a non-author with the rule");
+  assert.equal(one({ "x.md": '---\nwrites: ["pharn/features/<name>/PLAN.md"]\n---\n\n## Step 3 — x\n' }), 1, "derivation");
+  assert.throws(() => frontmatterWrites('---\nwrites:\n  ["a"]\n---\n'), SyntaxError, "a multi-line writes: is refused");
 });
