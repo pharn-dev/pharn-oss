@@ -593,6 +593,7 @@ const GIT_SPAWNS = {
   "render-review-assignments.mjs": ["merge-base", "rev-parse", "diff"],
   "render-run-report.mjs": [null],
   "render-ship-briefing.mjs": ["rev-parse"],
+  "loop-closeout.mjs": [null], // 6.44.0: one argv-vector helper (gitRun), with a maxBuffer
   "run-gates.mjs": ["rev-parse"],
   "stage-runtime.mjs": [null],
 };
@@ -660,7 +661,7 @@ test("★ GIT CEILING — every git spawn in a shipped floor module is listed, a
   const map = {};
   for (const s of spawns) (map[s.file] ??= []).push(s.sub);
   assert.deepEqual(map, GIT_SPAWNS, "the enumeration (L29): list a new or removed git spawn here in the same diff");
-  assert.equal(spawns.length, 11, "non-vacuity (L34): the eleven spawns the sweep found");
+  assert.equal(spawns.length, 12, "non-vacuity (L34): the twelve spawns the sweep found (loop-closeout.mjs's gitRun, 6.44.0)");
   assert.deepEqual(
     ceilingViolations(spawns).map((s) => `${s.file}: ${s.text}`),
     [],

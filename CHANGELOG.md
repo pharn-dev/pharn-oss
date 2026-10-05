@@ -57,8 +57,59 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     own in-flight guard when called directly. It is not built here because it needs a parent pass-through
     (`stage-direct.mjs` holds its lock while it spawns the script) and a new code in both stages' closed `unusable`
     sets.
-  - SKILLS_VERSION 6.43.0 → 6.46.0: a correction to shipped command and contract text. It takes the next number
-    after the two open PRs holding 6.44.0 and 6.45.0. No `MIN_CLI` change.
+  - SKILLS_VERSION 6.44.0 → 6.46.0: a correction to shipped command and contract text. 6.45.0 is held by an open
+    PR. No `MIN_CLI` change.
+
+## [6.44.0] - 2026-10-05
+
+### Added
+
+- **`/pharn-loop` and `/pharn-ship` run their deterministic close as ONE tested line each.** After the model writes
+  `LOOP.md`, `/pharn-loop` runs [`pharn/floor/loop-closeout.mjs`](./pharn/floor/loop-closeout.mjs) with
+  `--feature '<name>' --base '<base sha>'`: the record check, the decision re-derivation, the run-stop marker, the cost
+  ledger and its check, the run report (skipped in quick mode), the commit-gate freshness check, the plan-scope
+  re-derivation, the staging list, the branch, the add and the commit (or the undo of a failed one), the freshness
+  ledger and the two releases — in the order the close part's pinned lines ran them. It returns one closed outcome by
+  exit code: `0` committed · `3` not committed, final · `4` not committed with a model write still owed (Step 6d's
+  revert and Outcome rewrite) · `5` record RED, repair and re-run with `--after-repair` · `2` refused before anything
+  ran · anything else a crash, never read as a commit decision. `/pharn-ship`'s Step 3a's six lines become
+  [`pharn/floor/ship-closeout.mjs`](./pharn/floor/ship-closeout.mjs) `--feature '<name>'`, which holds no git write.
+  The steps the two share live once in [`pharn/floor/closeout-core.mjs`](./pharn/floor/closeout-core.mjs). Only the two
+  close parts change; every outcome spelling, the ledger-before-commit and ledger-before-attestation order, the
+  blocked-stop path and the quick-mode differences are kept, each pinned by an executed test against the former line.
+  - **The trigger (P7), with its honest size.** The 2026-09-29 audit's candidate C2 (named follow-up
+    `ship-closeout-script`): a green loop close was 16 pinned blocks plus a mandated `git rev-parse HEAD`, each a model
+    request at the orchestrator's largest context (498k–503k tokens per request, 2.1–5.8 s, in the 92-minute
+    pharn-starter run). Now 3: −14 requests per green stop (about 46 s at the measured 3.3 s mean, about 7.0M cache-read
+    tokens), −8 on a non-green stop, −7 on a blocked one, −5 at every `/pharn-ship` exit. **The audit's pre-registered
+    bar for C2 (orchestrator requests ≥ 20% of a run's) was met by 1 of 3 real runs (15.2 / 14.9 / 21.2%)**, and the
+    measured run's own blocked close saves about one request, because its model had already chained the tail. C2 is
+    adopted because the user asked for this batch item and because the commit path — branch, staging list, undo,
+    previously command prose only an unattended run executed — becomes tested code the suite runs.
+  - **Changes in behaviour, each stated.** A non-green record over a still-Approved SPEC exits `4` so Step 6d's revert
+    still runs (today's backstop was 6c's decision check); `check-cost-ledger.mjs` is not run when no ledger was
+    emitted; the staging list treats a dangling symlink as present (lstat, L54), so it is skipped instead of staged as a
+    deletion; the `stage.list` write walks containment; the releases run before the Step 7 summary on exit `0`/`3` (no
+    write follows them); a crash leaves the commit state for a person to check, with `git status --short --branch`
+    quoted.
+  - **Tests re-pointed** (the pins that read the close parts): `command-hygiene.test.mjs` (the loop commit and
+    freshness wiring, the phase-marker and ledger obligations, ship's run-marker close, `SHELL_VALUES` loses `<branch>`
+    and `<decision>`, SHELL-SINK 7's executed branch/undo cases moved to `loop-closeout.test.mjs`),
+    `render-run-report`/`render-regression`/`render-verify.test.mjs` (the staging-list site), `run-marker.test.mjs`,
+    `check-loop-fresh.test.mjs` (executes the closeout's commit-gate argv), `check-test-stage.test.mjs` (executes
+    `buildStageList`), `stage-runtime.test.mjs` (GIT CEILING), `frontmatter-core.test.mjs` (CONSUMERS).
+  - **After the independent review (R1–R8):** a crash is no longer sent through Step 6d's "already undone" item — the
+    closeout writes the git step it has reached to `.pharn/pharn-loop/<name>/closeout-phase`, and while the checkout is
+    on `pharn-loop/<name>` a crash leaves the SPEC, the Outcome and the tree for a person; the close parts say a Bash
+    call reported "moved to the background" is still running and is never re-run. The closeout refuses (exit 2,
+    `on-loop-branch`) on this run's own branch, which stops the reproduced double commit. A crash on a non-green stop
+    records `not committed: <decision>`, and the crash path names the artifacts it may have lost. Ship's crash path may
+    run the idempotent run-marker close by hand. `git commit -q`, and each step's echoed output is capped at its last
+    8,192 characters, so the closing JSON line stays in the tool result. The end-to-end test executes the committed
+    closeout line. `pharn-ship-quick.md` items 3 and 12 now say the marker close and the report skip run inside the
+    closeout.
+  - SKILLS_VERSION 6.43.0 → 6.44.0 (minor: new floor scripts and command behaviour). No trusted doc, hook, settings or
+    `MIN_CLI` change.
 
 ## [6.43.0] - 2026-10-05
 
