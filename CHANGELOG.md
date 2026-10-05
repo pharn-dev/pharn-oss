@@ -23,6 +23,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.35.3] - 2026-10-05
+
+### Changed
+
+- 2026-10-05: **`/pharn-plan` tells the model not to put a feature's narrative into project instruction files.**
+  Claude Code loads `CLAUDE.md`, the files it imports and every `.claude/rules/` file without `paths:` frontmatter into
+  every stage agent, so their bytes are paid on every run, whatever the change.
+  - **Measured** (pharn-starter's 92-minute `/pharn-loop` run, `.dev/measurements/loop-wall-clock-2026-10-05.md` §3,
+    §10): every stage agent's first request carried 302,207–304,974 tokens, and the harness attached the same 634,379 B
+    of instruction files to each: `CLAUDE.md` 418,456 B, 14 `.claude/rules/*.md` 213,290 B (none with `paths:`) and
+    `MEMORY.md` 2,633 B. At 4 bytes per token that is about 159k tokens, roughly half the prefix (an estimate).
+  - **Reported by the user, not verifiable from this repo:** nearly every PLAN in that project (~98) named `CLAUDE.md` in
+    `## Files` and added a per-feature section, which is how the file reached 418 KB. Nothing in `/pharn-plan` told the
+    model to do that, and nothing told it not to.
+  - **The rule** sits in `/pharn-plan` Step 3, under the anchor "Instruction files load into every agent". A feature's
+    narrative, rationale, history and limits stay in its record (`pharn/features/<name>/`) or a docs page. An
+    instruction file is named in `## Files` only for a standing convention every future session must obey, as
+    ``- `CLAUDE.md` — convention: <one line>``. A path-specific convention goes in a `.claude/rules/` file with `paths:`.
+    `/pharn-plan` is the only product command that writes a PLAN, so `/pharn-ship` and `/pharn-loop` get the rule by
+    running it. The PLAN template's `## Files` block and the scope setter's parse rules are unchanged.
+  - **ADVISORY.** Nothing deterministic stops a plan from naming `CLAUDE.md`, and no behavioural eval covers
+    `/pharn-plan`. `LIMITS.md §3e` states that bound; it was applied by a human, since the agent's write tools cannot
+    reach the trusted docs. A context-budget floor check is a separate, unbuilt increment.
+  - `.dev/floor/command-hygiene.test.mjs` `INSTRUCTION_FILE_RULE` derives the PLAN authors from each product
+    command's `writes:` frontmatter and requires the anchor in each author's Step 3 and in no other product command file.
+    Each property has its own control, and a live run with the anchor removed fails. It pins presence, never obedience.
+  - `SKILLS_VERSION` 6.35.2 → 6.35.3: a patch, since no capability, command or checker is added. The rule clarifies what
+    an existing command's `## Files` should hold, as 6.35.1's write-tool sentence did. The README badge moves with it,
+    and `/pharn-plan`'s `version:` goes 0.5.2 → 0.5.3. `MIN_CLI` is unchanged: an older CLI installs this tree intact.
+
 ## [6.35.2] - 2026-10-05
 
 ### Fixed
