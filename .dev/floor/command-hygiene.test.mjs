@@ -4114,7 +4114,9 @@ test("✧ STAGE_AGENT_WIRING (10) — every --mode stage-agent line of pharn-loo
 // re-measured after their quick and stop text moved into parts (79,903 → 43,036 and 69,421 → 35,982 bytes, after the GATE-2 review fixes); their
 // rows went DOWN, and each part's row is its own measure + 10%, rounded up to 512.
 const COMMAND_BYTE_CEILINGS = Object.freeze({
-  "pharn-build.md": 22016,
+  // build-gate-bounded: Step 4 pins build-gate.mjs's two lines and their exit mapping — 22,148 bytes measured at the
+  // build, 132 over the old 22,016; raised by the rule (+10%, up to a multiple of 512). 22,722 after the review fixes.
+  "pharn-build.md": 24576,
   "pharn-grill.md": 23040,
   "pharn-loop.md": 47616,
   "pharn-loop-close.md": 34816,
