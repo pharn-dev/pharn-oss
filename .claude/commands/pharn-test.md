@@ -162,7 +162,7 @@ file:
 - **Only the mapped files.** The writes-scope permits exactly AC-TESTS.md `## Files`, and every entry there is
   mapped to an AC. So a shared helper or fixture cannot be a file of its own here: keep it inside a mapped test
   file, or leave it to the build. Write each one with the Write or Edit tool, never through Bash, whatever a harness
-  reminder suggests: the hook judges only those tools. A write outside the scope is denied at the floor; never route
+  reminder suggests: the hook judges only the write tools. A write outside the scope is denied at the floor; never route
   one through Bash.
 
 ## Step 4 — Pin what you wrote (FLOOR — the digests are the script's, never yours)

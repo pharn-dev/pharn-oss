@@ -54,6 +54,7 @@ import {
   EXCLUSION_DECLARED_IN,
   EXCLUDED_KEYS,
   exclusionError,
+  levelExcludedGates,
 } from "./gate-run-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1081,6 +1082,25 @@ test("ac-test: a level whose discovered gates are ALL excluded is coverage-viola
   assert.equal(two.ok, true);
   assert.deepEqual(two.spec.required, ["test", "test:e2e"]);
   assert.deepEqual(two.spec.excluded, { declared_in: EXCLUSION_DECLARED_IN, ids: ["e2e"] }, "never the non-level typecheck");
+});
+
+test("levelExcludedGates (review R5) — the gates a level has, ALL excluded → them; else []; no manifest reads every gate", () => {
+  assert.deepEqual(levelExcludedGates({ level: "e2e", scripts: { e2e: "x" }, exclude: ["e2e"] }), ["e2e"]);
+  assert.deepEqual(levelExcludedGates({ level: "e2e", scripts: { e2e: "x", "test:e2e": "x" }, exclude: ["e2e"] }), []);
+  assert.deepEqual(levelExcludedGates({ level: "unit", scripts: { test: "x" }, exclude: ["test"] }), ["test"]);
+  assert.deepEqual(
+    levelExcludedGates({ level: "unit", scripts: { lint: "x" }, exclude: ["test"] }),
+    [],
+    "no runner is not the exclusion's"
+  );
+  assert.deepEqual(levelExcludedGates({ level: "e2e", scripts: null, exclude: ["e2e"] }), [], "no manifest: every gate must be excluded");
+  assert.deepEqual(levelExcludedGates({ level: "e2e", scripts: null, exclude: ["test:e2e", "e2e"] }), ["test:e2e", "e2e"]);
+  assert.deepEqual(levelExcludedGates({ level: "toString", scripts: null, exclude: [...ALLOWLIST] }), [], "L15: not a level");
+  assert.deepEqual(
+    levelExcludedGates({ level: "unit", scripts: Object.create({ test: "x" }), exclude: ["test"] }),
+    [],
+    "L15: own scripts only"
+  );
 });
 
 /** goodStamp() plus an `excluded` block (the runner's shape) over a discovered stamp whose required set lacks it. */

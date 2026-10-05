@@ -452,8 +452,10 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # THE RED RUN (added 6.18.0) — /pharn-test RUNS the AC tests before the build and requires each to FAIL, so a test
 # that cannot fail, is never collected or is skipped cannot pass unnoticed. check-red-run.mjs --preflight: every AC's
 # level has a DISCOVERED gate (gate-run-core LEVEL_GATES: unit/integration → test, e2e → E2E_SET) with per-test
-# results configured for EVERY such gate, else `ac-level-unavailable: AC-<n> (<level>)` and a closed last line
-# `blocked: no-test-runner — …; suggested: /pharn-ship "…(spec_kind: test-infra)"` (/pharn-test --unattended prints it;
+# results configured for EVERY such gate (6.36.0: a gate the project's gates.exclude lists is not discovered), else
+# `ac-level-unavailable: AC-<n> (<level>)` and a closed last line `blocked: no-test-runner — …; suggested: <remedy>` —
+# the `/pharn-ship "…(spec_kind: test-infra)"` command, or for an exclusion-caused AC the ids to remove from
+# gates.exclude (since 6.36.0 check-ac-tests.mjs REDs that mapping row earlier, `level-excluded`) (/pharn-test --unattended prints it;
 # interactive asks; never a nested run). run-gates --stage ac-test selects the gates BY ID from the levels and hands
 # each its mapped files after `--` (--gates/--extra/--skip-style/--scope-json/--spec-from/--side refused; no
 # reconcile, no build). check-red-run.mjs --verdict (red-run-core.mjs): per AC, over the record of every gate its level

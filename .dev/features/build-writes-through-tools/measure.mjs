@@ -204,10 +204,18 @@ function shellWrite(cmd, root) {
   const cd = cmd.match(/^\s*cd ([^&;\s]+)\s*&&/);
   const cwd = cd ? cd[1] : root;
   const t = new Set();
+  const tmp = new Set();
   const add = (p) => {
-    if (!p || /^\/(private\/)?tmp\//.test(p)) return;
+    if (!p) return;
+    if (/^\/(private\/)?tmp\//.test(p)) {
+      tmp.add(p);
+      return;
+    }
     for (const v of p.includes("{loc}") ? ["en", "pl"].map((l) => p.replace("{loc}", l)) : [p]) t.add(relative(root, resolve(cwd, v)));
   };
+  // `open('<literal path>', 'w')` (REVIEW R2b: the 09:11:23Z call created a test file this way) and the
+  // `p = '<path>'` / `rep('<path>', …)` / `edit('<path>', …)` forms the other scripts use.
+  for (const m of cmd.matchAll(/open\(\s*f?['"]([^'"]+)['"]\s*,\s*['"]w['"]/g)) add(m[1]);
   for (const m of cmd.matchAll(new RegExp(String.raw`\bp\s*=\s*f?['"](${PATH})['"]`, "g"))) add(m[1]);
   for (const m of cmd.matchAll(new RegExp(String.raw`\b(?:rep|edit)\(\s*f?['"](${PATH})['"]`, "g"))) add(m[1]);
   for (const m of cmd.matchAll(new RegExp(String.raw`cat > (${PATH})`, "g"))) add(m[1]);
@@ -218,7 +226,11 @@ function shellWrite(cmd, root) {
   for (const m of cmd.matchAll(/files\s*=\s*\[([^\]]*)\]/g))
     for (const q of m[1].matchAll(new RegExp(String.raw`['"](${PATH})['"]`, "g"))) add(q[1]);
   for (const m of cmd.matchAll(/files\s*=\s*"""([\s\S]*?)"""/g)) for (const p of m[1].split(/\s+/).filter(Boolean)) add(p);
-  return { kinds, targets: [...t] };
+  // TEMP-ONLY (REVIEW R2c): a call whose only literal targets are under the temp dir, with no formatter run, wrote no
+  // project file. A `prettier --write` with no literal target (it reads its list from a file) is NOT temp-only: it
+  // rewrites whatever project files that list names.
+  const tempOnly = t.size === 0 && tmp.size > 0 && !kinds.includes("prettier-write");
+  return { kinds, targets: [...t], temp_targets: [...tmp], tempOnly };
 }
 
 function writesOf(parsed, root, lockPinned) {
@@ -244,18 +256,23 @@ function writesOf(parsed, root, lockPinned) {
   const scope = planScope ? planScope.scope : null;
   const isDirOrGlob = (p) => /[*?[]/.test(p) || (existsSync(join(root, p)) && statSync(join(root, p)).isDirectory());
   const calls = [];
+  const tempOnlyCalls = [];
   const byKind = {};
   const byTarget = new Map();
   for (const u of parsed.uses) {
     let w = null;
     if (u.name === "Bash") w = shellWrite(String(u.input.command || ""), root);
-    else if (["Write", "Edit", "MultiEdit"].includes(u.name))
-      w = { kinds: [u.name], targets: [relative(root, String(u.input.file_path || ""))] };
+    else if (["Write", "Edit", "MultiEdit", "NotebookEdit"].includes(u.name))
+      w = { kinds: [u.name], targets: [relative(root, String(u.input.file_path || u.input.notebook_path || ""))] };
     if (!w) continue;
+    const command = redact(String(u.input.command || "").slice(0, 100));
+    if (w.tempOnly) {
+      tempOnlyCalls.push({ ts: u.ts, kinds: w.kinds, temp_targets: w.temp_targets.map(redact), command });
+      continue;
+    }
     const key = w.kinds.join("+");
     byKind[key] = (byKind[key] || 0) + 1;
-    if (u.name === "Bash")
-      calls.push({ ts: u.ts, kinds: w.kinds, targets: w.targets, command: redact(String(u.input.command).slice(0, 100)) });
+    if (u.name === "Bash") calls.push({ ts: u.ts, kinds: w.kinds, targets: w.targets.map(redact), command });
     for (const p of w.targets) {
       if (!byTarget.has(p)) byTarget.set(p, { via: new Set(), classes: new Set() });
       const t = byTarget.get(p);
@@ -279,15 +296,17 @@ function writesOf(parsed, root, lockPinned) {
   const targets = [...byTarget.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([p, v]) => ({ path: redact(p), via: [...v.via], class: [...v.classes].sort().join("+") }));
-  const shellTargets = targets.filter((t) => t.via.some((v) => !["Write", "Edit", "MultiEdit"].includes(v)));
+  const WRITE_TOOLS = ["Write", "Edit", "MultiEdit", "NotebookEdit"];
+  const shellTargets = targets.filter((t) => t.via.some((v) => !WRITE_TOOLS.includes(v)));
   const count = (cls) => shellTargets.filter((t) => t.class === cls).length;
   const auto = parsed.allAttachments.find((a) => a.type === "auto_mode");
-  const firstWriteTool = parsed.uses.find((u) => ["Write", "Edit", "MultiEdit"].includes(u.name));
+  const firstWriteTool = parsed.uses.find((u) => WRITE_TOOLS.includes(u.name));
   const firstShell = calls.find((c) => c.targets.some((p) => !(p.startsWith("..") || p.startsWith("/"))));
   return {
     tools,
     write_calls_by_mechanism: byKind,
-    shell_write_calls: calls.length,
+    project_shell_write_calls: calls.length,
+    temp_only_shell_write_calls: tempOnlyCalls.length,
     scope_entries: scope === null ? "absent" : scope.length,
     scope_setters: setters.map((s) => ({ ts: s.ts, via: s.via, entries: s.scope === null ? null : s.scope.length })),
     shell_targets: Object.fromEntries([
@@ -297,8 +316,11 @@ function writesOf(parsed, root, lockPinned) {
     first_write_tool: firstWriteTool ? firstWriteTool.ts : null,
     first_project_shell_write: firstShell ? firstShell.ts : null,
     auto_mode: auto ? { ts: auto.ts, bashFirst: auto.bashFirst, bashFirstSteer: auto.bashFirstSteer, steerOnly: auto.steerOnly } : "absent",
-    targets: targets.filter((t) => t.class !== "in-scope" || t.via.some((v) => ["Write", "Edit", "MultiEdit"].includes(v))),
+    // EVERY target and EVERY call, so the counts above can be audited line by line (REVIEW R2a).
+    targets,
+    calls,
     calls_without_literal_target: calls.filter((c) => c.targets.length === 0),
+    temp_only_calls: tempOnlyCalls,
   };
 }
 

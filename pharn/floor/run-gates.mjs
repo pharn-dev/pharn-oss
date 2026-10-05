@@ -630,8 +630,12 @@ function runInit(args) {
   }
   // 6.36.0 — the project's declared exclusion, read beside the manifest discovery reads (the project root for every
   // pinned caller) and only when the set is discovered: an explicit --gates string is never filtered (gate-exclusion-core).
+  // Keyed on the PARSED --gates value, the one resolveSet receives (review R4): a valueless trailing `--gates` used to
+  // skip the declaration while resolveSet still discovered, so an excluded gate ran. It is refused instead.
+  const gatesRaw = flag(args, "--gates");
+  if (has(args, "--gates") && gatesRaw === undefined) fail("usage-error", "--gates requires a value");
   let exclude = [];
-  if (discover && !has(args, "--gates")) {
+  if (discover && gatesRaw === undefined) {
     const x = loadGateExclusion(dirname(resolve(discover)));
     if (!x.ok) fail("bad-gate-exclusion", x.reason);
     exclude = x.exclude;
@@ -640,7 +644,7 @@ function runInit(args) {
   const res = resolveSet({
     stage,
     side: stage === "regress" ? side : null,
-    gates: flag(args, "--gates") ?? null,
+    gates: gatesRaw ?? null,
     scripts,
     extras: flag(args, "--extra") ?? null,
     skipStyle: has(args, "--skip-style"),

@@ -72,7 +72,7 @@ Inside the stage agents:
 
 The build agent spent 7.8 minutes blocked on the project's own test suites [R·m].
 
-It also wrote the user's code through 49 shell commands and no Edit call [R·m]. So the writes-scope guard checked
+It also wrote the user's code through 48 shell commands and no Edit call [R·m]. So the writes-scope guard checked
 none of those writes (section 7).
 
 All three runs stopped on conditions present before the run began (section 9). Two corrections to the batch's own
@@ -235,34 +235,40 @@ Helper `hooks`: the harness's own `durationMs` per hook run, inside the run wind
 
 Helper `writes`, over the transcript's tool calls. The shell-write test is a heuristic over the command TEXT:
 
-- `open(…, 'w')` in a `python3` heredoc;
+- `open(…, 'w')` in a `python3` heredoc, with its target from `p = '…'`, `rep('…', …)`, `edit('…', …)` or a literal
+  `open('…', 'w')`;
 - `sed -i`;
 - `cat > <path>`;
 - `prettier --write`.
 
-Each call's targets are listed in the helper's output for audit. All `[R·m]`.
+The helper's output lists every such call with its targets (`writes.*.calls`) and every target with its class
+(`writes.*.targets`), so each count below can be audited line by line. A call whose only targets are under the temp
+directory wrote no project file. It is listed apart (`temp_only_calls`) and is not counted. All `[R·m]`.
 
 **Tool use and write mechanism, per agent:**
 
 | agent | tool calls                            | Bash calls that wrote project files                                    |
 | ----- | ------------------------------------- | ---------------------------------------------------------------------- |
-| build | Bash 126 · Read 4 · Write 2 · Edit 0  | **49**: see the mechanism list below                                   |
+| build | Bash 126 · Read 4 · Write 2 · Edit 0  | **48**: see the mechanism list below                                   |
 | spec  | Bash 20 · Write 2 · Edit 1            | 0                                                                      |
 | plan  | Bash 54 · Write 2 · Edit 1            | 0 (its one shell write is a scratch file under the session scratchpad) |
 | grill | Bash 38 · Read 3 · Write 1            | 0                                                                      |
 | test  | Bash 35 · Read 3 · Write 18 · Edit 18 | 0                                                                      |
 
-The build agent's 49 shell writes, by mechanism:
+The build agent's 48 project-writing Bash calls, by mechanism:
 
-- 44 `python3` scripts, ten of them also running `prettier --write`;
+- 43 `python3` scripts, ten of them also running `prettier --write`;
 - 2 `cat >` heredocs, one with a `sed -i`;
 - 1 `sed -i` alone;
 - 2 `prettier --write` alone.
 
+One more `python3` call (09:28:16Z) wrote only `/tmp/changed.txt`. It is not counted.
+
 **Where those writes went, against the scope in force at each write.** The scope comes from the agent's own setter
 calls: `--from-plan` printed 93 entries at 09:09:07Z; `--target` gave `BUILD.md` at 09:33:58Z.
 
-- **78 targets were inside the scope.**
+- **79 targets were inside the scope.** They include `shared/lib/db/__tests__/billing-plan-catalog-migration.test.ts`,
+  created through a literal `open('…', 'w')` at 09:11:23Z.
 - **1 was a pinned AC test,** `features/files/services/__tests__/billing-plan-catalog-upload-no-limit.test.ts`:
   - the agent ran `npx prettier --write features/files app/api/files` at 09:18:10Z, a formatter over two
     directories, and it reformatted the file;
@@ -271,8 +277,10 @@ calls: `--from-plan` printed 93 entries at 09:09:07Z; `--target` gave `BUILD.md`
   - `check-test-stage.mjs` read `READY` at 09:19:41Z.
 - **5 targets were directory or glob arguments to `prettier --write`.** These are the reach the rule in this
   increment removes.
-- **2 calls named no literal target.** One writes `/tmp/changed.txt`; the other formats that list through
-  `xargs -0`.
+- **1 call named no literal target.** At 09:28:19Z, `xargs -0 npx prettier --write` ran over the 70 `.ts`/`.tsx`
+  paths the 09:28:16Z script had taken from `git status --porcelain -uall`, minus the lock's files and `pharn/`. It
+  rewrote one in-scope file. A list built from `git status` holds every dirty path, including a user's own edits,
+  which is why the rule now names it.
 
 **What preceded the first shell write (09:09:59Z).**
 
@@ -280,6 +288,9 @@ calls: `--from-plan` printed 93 entries at 09:09:07Z; `--target` gave `BUILD.md`
 - **The harness's `auto_mode` attachment** (`bashFirst: true`, `bashFirstSteer: "relaxed"`) arrived at
   09:09:00.830Z, rendered as a system reminder. It offers `sed`, heredocs and short scripts for mechanical edits
   instead of Read/Edit/Write, and leaves the choice to the model.
+- **The reminder itself does not ask for what the build did.** It also tells the model to prefer Edit or Write
+  where a shell edit would be fragile, naming exact and multi-line replacements. The build's `python3` scripts were
+  mostly exactly that: multi-line string replacements.
 - **Varying the condition:** all five stage agents received the identical attachment, and only the `sonnet` build
   wrote through the shell. So the attachment is not established as the cause. It is the only instruction in the
   agent's context that offered the shell.
@@ -305,9 +316,15 @@ Recorded exactly as found, because later PRs cite this file.
 3. **`CLAUDE.md` was 418,456 B at run time**, not 426 KB: the instructions attachment [R·m]. It is 418,301 B now
    [S·m]. The 14 rules files were 213,290 B at run time [R·m] and are 220,310 B now [S·m].
 4. **"41 `python3` one-liners and 27 `sed` calls" does not reproduce.**
-   - 45 build Bash calls mention `python3`, and 44 of them write.
+   - 45 build Bash calls mention `python3`. 44 of them open a file for writing, and 43 of those write a project
+     file; the 44th writes only `/tmp/changed.txt`.
    - 54 mention `sed`, but only 2 are `sed -i`; the other 52 are `sed -n` reads [R·m].
-   - The total that matters is 49 shell writes and 0 Edits.
+   - The total that matters is 48 project-writing Bash calls and 0 Edits.
+   - The first version of this record (#305, released as 6.35.1) said 49 / 44 / 78. The independent review (R2)
+     found the temp-only call and a missed literal `open('…', 'w')`; this version was corrected in 6.35.2.
+5. **The auto-mode reminder is not the established cause of the shell writes** (section 7). It was present for all
+   five agents, only one wrote through the shell, and the reminder's own text prefers Edit or Write for multi-line
+   replacements. Any later citation should say "offered the shell", never "caused".
 
 ## 9. Why each run stopped (the three runs' blocked causes)
 
@@ -348,5 +365,6 @@ These describe the user's project. This batch changes pharn-oss alone.
   92-minute run only.
 - **Model time is latency, not generation.** It includes harness queueing and prefix processing.
 - **Shell writes are classified from command text.** No command was re-executed, and an unusual write form could be
-  missed. Every extracted target is listed in the helper's output for audit.
+  missed. The first version missed a literal `open('…', 'w')`, which the #305 review found. Every extracted
+  target and call is now listed in the helper's output for audit.
 - **Per-gate regress durations for the 92-minute run are inferred** (section 5), because its logs were overwritten.

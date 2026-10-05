@@ -209,6 +209,27 @@ test("6.36.0 — a malformed declaration REFUSES (exit 2, bad-gate-exclusion, no
   );
 });
 
+test("6.36.0 (review R4) — a valueless trailing --gates is refused; before, it skipped the declaration and ran the excluded gate", () => {
+  withRepo(
+    (dir) => {
+      declare(dir, { exclude: ["typecheck"] });
+      const r = cli(dir, [...initArgs(), "--gates"]);
+      assert.equal(r.code, 2, r.raw);
+      assert.equal(r.json.reason_code, "usage-error");
+      assert.match(r.json.reason, /--gates requires a value/);
+      assert.ok(!existsSync(join(dir, OUT, "state.json")), "nothing written");
+      // the control: the same line without the stray flag discovers and excludes
+      const ok = cli(dir, initArgs());
+      assert.equal(ok.code, 0, ok.raw);
+      assert.deepEqual(ok.json.excluded, ["typecheck"]);
+      // and a malformed declaration is still refused when the stray flag is absent
+      declare(dir, { exclude: ["nope"] });
+      assert.equal(cli(dir, initArgs()).json.reason_code, "bad-gate-exclusion");
+    },
+    { scripts: { test: "true", typecheck: "exit 1" } }
+  );
+});
+
 test("6.36.0 L34 — an exclusion that removes every discovered gate exits 3 (the no-gates stop) and writes no state", () => {
   withRepo(
     (dir) => {
