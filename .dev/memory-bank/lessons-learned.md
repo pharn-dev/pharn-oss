@@ -2274,3 +2274,18 @@ type: floor · concepts: [input-domain, external-model, test-blindspot, stated-b
 - commit: `d40667d1e998ecfc3039a658648065cba0243e9c` (working-tree build on this commit; uncommitted at promotion time)
 - source: `.dev/features/instruction-growth-gate/REVIEW.md § Advisory findings (instruction-files-core.mjs:169, :79, :40; instruction-files.mjs:150) + § Lessons to feed`
 - promoted: 2026-10-05 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L68 — A human-only edit an increment needs must land outside the build's anchor→verify window — reconcile has no attribution, so the human's own correct write reads as an escape
+
+type: scoping · concepts: [reconciliation, trusted-docs, human-only-patch, attribution, false-red]
+
+**Lesson.** In plan-instruction-file-rule the plan named a LIMITS.md §3e bound that only a human may write (fix #2). The human applied the agreed text mid-run, after /pharn-dev-build had anchored the reconciliation epoch, and a reconcile preview at once reported `escapes: [{file: "LIMITS.md", denied_by: "protect-trusted-paths.cjs"}]` — which would have turned /pharn-dev-verify FAIL and stopped the ship chain. check-bash-reconcile.mjs asks only whether the live guards would deny a changed path; it reports WHAT changed, never WHO (pharn/pharn-contracts/reconciliation-record.md), so a correct human edit and a stray Bash write are the same escape. The clean routes were revert-then-reapply after verify, or land the edit before the anchor; re-anchoring to absorb it is the forbidden 'silence a RED' move. Remedy: when a PLAN needs a human-only write (a trusted doc, CODEOWNERS, a guard file), its plan says WHEN — before /pharn-dev-build's Step 0, or after /pharn-dev-verify — and the human is told that ordering at GATE 1, not after the escape.
+
+**Why it matters.** The escape is a real floor verdict over a correct change, so the only ways past it are a revert, a FAIL a human must override, or the forbidden re-anchor. Agents were already told never to hand-edit the baseline; nothing told the PLAN to sequence the human's write. **Bound (P0):** discipline, not a floor check. Reconcile cannot attribute a write, and no checker reads a PLAN for human-write ordering. **Trigger (P7):** observed once in this run and caught by a preview before verify; promoted at the maintainer's choice at the ship-stage lesson gate.
+
+**Provenance.**
+
+- feature: `plan-instruction-file-rule`
+- commit: `d40667d1e998ecfc3039a658648065cba0243e9c` (working-tree build on this commit; uncommitted at promotion time)
+- source: `.dev/features/plan-instruction-file-rule/REVIEW.md` § Proposed lesson candidate + `VERIFY.md` § Orchestration notes
+- promoted: 2026-10-05 via gated `/pharn-dev-memory-promote` (human-approved). Promoted first as L67; renumbered to L68 when 6.38.0 (#311) merged its own L67.

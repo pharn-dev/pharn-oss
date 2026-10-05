@@ -10,7 +10,7 @@ lessons to fetch; canon stays the source of truth and the floor's verification t
 applied, without fetching its full `## L<n>` entry from canon, is the P0 disease. "The index was
 consulted" never means "the relevant lessons were read".
 
-67 lessons · 67 tagged · 0 malformed · 0 untagged · ~48680 tokens total
+68 lessons · 68 tagged · 0 malformed · 0 untagged · ~49273 tokens total
 
 Columns: `id | type | concepts | title | promoted | ~tokens`. `-` is rendered in THREE columns
 and does NOT mean the same thing in each — read it against the column it sits in. In `type`/`concepts`:
@@ -91,4 +91,5 @@ L64 | contract | universal-quantifier,doc-drift,guarantee-audit,restatement     
 L65 | floor    | pinned-record,writes-scope,agreement,self-certification                                        | A pin is only as strong as the scope around its record — a stage allowed to write the record a later gate compares it against certifies itself | 2026-09-27 | ~623
 L66 | tooling  | input-capture,shared-state,temporal-state,false-green,lesson-recurrence                        | A wait on a result file in shared scratch is satisfied by another session's stale file — capture into a directory the run creates empty, and read only after the writer has exited | 2026-09-28 | ~490
 L67 | floor    | input-domain,external-model,test-blindspot,stated-bound,lesson-recurrence                      | A checker that models an external tool's behaviour states its bounds from the inputs its author pictured — enumerate the tool's documented input grammar as fixture kinds | 2026-10-05 | ~633
+L68 | scoping  | reconciliation,trusted-docs,human-only-patch,attribution,false-red                             | A human-only edit an increment needs must land outside the build's anchor→verify window — reconcile has no attribution, so the human's own correct write reads as an escape | 2026-10-05 | ~593
 ```
