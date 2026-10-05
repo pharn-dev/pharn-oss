@@ -111,17 +111,20 @@ a test on a refusal:
 node pharn/floor/check-red-run.mjs --preflight --ac-tests pharn/features/<name>/AC-TESTS.md --discover package.json --root .
 ```
 
-Exit **0** → continue. Exit **2** → **`mapping-unusable`**, stop. Exit **1** → **`ac-level-unavailable`**: an AC's
-level has no discovered gate (`unit`/`integration` need a `test` script, `e2e` a `test:e2e` or `e2e` script), or a
+Exit **0** → continue. Exit **2** → **`mapping-unusable`** (or `pharn.config.json`'s `gates.exclude` cannot be read —
+its `UNUSABLE` line says which), stop. Exit **1** → **`ac-level-unavailable`**: an AC's
+level has no discovered gate (`unit`/`integration` need a `test` script, `e2e` a `test:e2e` or `e2e` script; since
+6.36.0 a gate the project lists in `gates.exclude` is not discovered), or a
 gate the level needs has no per-test results configured (`pharn.config.json` `testResults`,
 `pharn/pharn-contracts/test-results-record.md`). Quote its `RED — ac-level-unavailable: …` lines, then:
 
 - **interactive** (no `--unattended`): ASK — _"This project has no `<level>` test runner, or no per-test results for
   it. Run a test-setup increment (`spec_kind: test-infra`) first via `/pharn-ship`?"_ — and **stop this feature's
   run either way**. Never continue to the build, and never start that setup run yourself. Offer `/pharn-ship` only
-  (`/pharn-loop` cannot carry a test-infra increment).
+  (`/pharn-loop` cannot carry a test-infra increment). When a RED line names `gates.exclude`, say so instead: the
+  remedy is the human's — remove the id from it, or re-specify the criterion's level.
 - **`--unattended`**: print the checker's LAST line **verbatim** — it is the closed
-  `blocked: no-test-runner — <AC-n (level), …>; suggested: <command>` line an orchestrator maps — and stop. **Never
+  `blocked: no-test-runner — <AC-n (level), …>; suggested: <remedy>` line an orchestrator maps — and stop. **Never
   start a nested run.**
 
 Run the Final step either way.
@@ -158,7 +161,9 @@ file:
   stubs of the target, `.skip`/`.todo`, or test doubles that make an assertion pass by construction.
 - **Only the mapped files.** The writes-scope permits exactly AC-TESTS.md `## Files`, and every entry there is
   mapped to an AC. So a shared helper or fixture cannot be a file of its own here: keep it inside a mapped test
-  file, or leave it to the build. A write outside the scope is denied at the floor. Never route one through Bash.
+  file, or leave it to the build. Write each one with the Write or Edit tool, never through Bash, whatever a harness
+  reminder suggests: the hook judges only those tools. A write outside the scope is denied at the floor; never route
+  one through Bash.
 
 ## Step 4 — Pin what you wrote (FLOOR — the digests are the script's, never yours)
 
@@ -180,12 +185,13 @@ node pharn/floor/ac-tests-lock.mjs --check <name>
 
 `--write` records every test file's sha256, AC-TESTS.md's digest and the SPEC pin (`pharn/pharn-contracts/ac-tests.md`,
 "The lock"), with `red_run: null` — and, since 6.20.0, the **test-infrastructure pin** (`test_infra`, lock schema
-`ac-tests-lock/4` since 6.31.0): the `package.json` scripts of the gates your levels map to (with their `pre`/`post`
+`ac-tests-lock/5` since 6.36.0): the `package.json` scripts of the gates your levels map to (with their `pre`/`post`
 scripts) and the scripts they chain to, their `testResults` formats, the files those scripts name (a `pharn-json`
-reporter, a runner script), `package.json`'s `jest` key, and the root runner and package-manager configs in a closed
-name set ("The test-infrastructure pin"). Set up the runner and its per-test results BEFORE this step, never after it.
-`--write` refuses an infrastructure it cannot pin (an unparseable `package.json`, a symlinked config or script-named
-file, a chain past the hop bound) — HALT on it. `--check` must print GREEN.
+reporter, a runner script), `package.json`'s `jest` key, the root runner and package-manager configs in a closed
+name set, and `pharn.config.json`'s `gates.exclude` list ("The test-infrastructure pin"). Set up the runner, its
+per-test results and any gate exclusion BEFORE this step, never after it.
+`--write` refuses an infrastructure it cannot pin (an unparseable `package.json` or `pharn.config.json`, a symlinked
+config or script-named file, a chain past the hop bound) — HALT on it. `--check` must print GREEN.
 
 ## Step 5 — The red run (FLOOR — the runner picks the gates and the files, the checker decides)
 

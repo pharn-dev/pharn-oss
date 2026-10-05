@@ -525,7 +525,7 @@ function computeEvalPairs(cfg) {
 // flag, so either passed the scope check falsely. Now `partitionScope` — the rule that CLI applies, and the call
 // `quick-scope-core.mjs` makes — reads the sets as ARRAYS, each path exactly as git printed it; the declared patterns get
 // `normPath`, as that CLI's `parseList` gives them. The document written to scope.json has the keys and the order that
-// CLI printed, plus ONE key that CLI never prints — `pre_run_snapshot` (6.36.0, below) — so run-gates.mjs, the verdict
+// CLI printed, plus ONE key that CLI never prints — `pre_run_snapshot` (6.37.0, below) — so run-gates.mjs, the verdict
 // phase and render-regression.mjs read it unchanged, and its bytes minus that key are that CLI's for every name but one
 // kind. NAMED, the round-2 re-review's R3: git lists an untracked nested repository (a
 // directory holding its own `.git`) as `vendor/lib/`, with a trailing slash, which the CLI's `normPath` stripped. So
@@ -533,7 +533,7 @@ function computeEvalPairs(cfg) {
 // `scope-escaped`, stricter than before and what check-quick-scope.mjs already did; `vendor/**` or `vendor/lib/**`
 // covers it. Only the changed paths still meet `assertRepresentable`: the verdict call echoes them as a comma list.
 //
-// THE PRE-RUN SNAPSHOT (6.36.0, regress-pre-run-snapshot). Inside an open `/pharn-loop` or `/pharn-ship` run, the
+// THE PRE-RUN SNAPSHOT (6.37.0, regress-pre-run-snapshot). Inside an open `/pharn-loop` or `/pharn-ship` run, the
 // partition also asks `pre-run-snapshot.mjs` which changed paths still hold the bytes the run's entry snapshot recorded;
 // an undeclared, non-exempt one is reported, not counted as an escape (`check-regress.mjs` `partitionScope`; the rule
 // and its bounds are pre-run-snapshot-core.mjs's header). `pre_run_snapshot: {status, unchanged}` is ALWAYS written to
@@ -924,7 +924,7 @@ function runPhases(state, budget) {
 
   // "render" — always reached in the same invocation as verdict/cleanup (neither is budgeted). The report is the
   // checker's object with TWO additive blocks appended last — `base_evidence` (6.33.0), then `pre_run_snapshot`
-  // (6.36.0, copied from scope.json); every key the checker printed keeps its bytes, because this is the same
+  // (6.37.0, copied from scope.json); every key the checker printed keeps its bytes, because this is the same
   // `JSON.stringify(…, null, 2)` the checker prints with (a test pins report-minus-blocks == stdout).
   const reportPath = `${FEATURES_DIR}/${state.feature}/regression-report.json`;
   const baseEvidence = {

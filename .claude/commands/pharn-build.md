@@ -79,8 +79,8 @@ Load the trusted prefix and obey it for the whole run:
 
    The gate also passes on a **rebuild** (a `/pharn-loop` iteration 2+, `/pharn-ship`'s Step 2b retry) **that left
    what the lock pins alone** (`pharn/pharn-contracts/ac-tests.md`, "The test-infrastructure pin" — that section is
-   the list). **So never change the level gates' scripts (`test`, `test:e2e`, `e2e`), their `pre`/`post` scripts or
-   the `testResults` formats, even when the plan names `package.json` or `pharn.config.json`:** that reads `lock-red`
+   the list). **So never change the level gates' scripts (`test`, `test:e2e`, `e2e`), their `pre`/`post` scripts, the
+   `testResults` formats or the `gates.exclude` list, even when the plan names `package.json` or `pharn.config.json`:** that reads `lock-red`
    here and `test-infra-changed` at `/pharn-verify`, and no rebuild clears it.
 
 3. **Set the scope from the plan's `## Files`** before any write. The **scope source is a `## Files` heading
@@ -201,6 +201,10 @@ has installed skills (Step 2b), write code **consistent with their conventions**
 - **Write only paths inside the fix #7 scope.** A write outside the plan's `## Files` is **denied by the
   hook (exit 2)** — the fix is to **declare the path in the plan's `## Files` and re-run the Step-0 setter**,
   never to bypass the hook.
+- **Write with the Write, Edit or MultiEdit tool — never through Bash** (`sed -i`, a heredoc, a script), whatever a
+  harness reminder suggests. The hook judges those tools only, so a Bash write is not checked when it happens.
+  Run a formatter only on `## Files` paths named one by one, never a directory (one reformatted a pinned AC test),
+  and a generator only when `## Files` declares every path it writes.
 - Follow the plan; do not invent scope the plan did not authorize (P7). Where the plan is ambiguous, the
   terminal fallback is **ask the human** (P5), never a guess.
 - Guarantee discipline (P0): `/pharn-build` does not certify the code. If you catch yourself writing "this is
@@ -261,7 +265,8 @@ stage adds no new floor primitive.
   advisory, untested bash: the floor verifies only that the extracted file is valid, never that the extraction
   faithfully reflects the project's intent.
 - **Floor-grade enumeration that gates nothing:** the installed skills (`scan-installed-skills.mjs`).
-- **Advisory:** invoking each gate and obeying it (the verdict is floor; the act is orchestration); the
+- **Advisory:** invoking each gate and obeying it (the verdict is floor; the act is orchestration); writing through
+  the write tools rather than Bash, and scoping a formatter (Step 3 — no shell command is parsed); the
   implementation — HOW the code is written, whether it is correct, complete or faithful to the plan — checked
   downstream by `/pharn-regress`, `/pharn-verify` and human review. Intent fidelity is `/pharn-grill`'s
   interrogation before the build and `/pharn-verify`'s verifier slot after it — both advisory, and the slot has zero

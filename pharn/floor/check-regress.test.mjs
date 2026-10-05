@@ -627,7 +627,7 @@ test("★ the stamp flags are MUTUALLY EXCLUSIVE with the positional maps, and m
   });
 });
 
-// ── 6.36.0: partitionScope's pre-run input (regress-pre-run-snapshot) ─────────────────────────────────────────────
+// ── 6.37.0: partitionScope's pre-run input (regress-pre-run-snapshot) ─────────────────────────────────────────────
 test("partitionScope — a pre-run path is subtracted AFTER the closed exemptions, only when undeclared, and REPORTED", async () => {
   const { partitionScope } = await import("./check-regress.mjs");
   const inside = ["src/a.js", "src/user.js", "pharn/features/demo/GRILL.md", "LIMITS.md", "src/stray.js", "src/user.test.js"];

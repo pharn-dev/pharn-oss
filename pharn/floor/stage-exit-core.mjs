@@ -236,14 +236,15 @@ export const REGISTRY = Object.freeze({
           }),
         ]),
       }),
-      // GRILL G12: the fixed text names all three causes a discovered set can empty into, so the human
-      // is not left guessing which of them applies.
+      // GRILL G12: the fixed text names every cause a discovered set can empty into (four since 6.36.0's gate
+      // exclusion), so the human is not left guessing which of them applies.
       "no-gates": Object.freeze({
         question:
           "No deterministic gate was found to run. This can be because: (1) no --gates was given and package.json " +
           "declares none of the allowlisted scripts; (2) the discovered scripts are e2e-only, which /pharn-regress " +
-          "never runs (e2e is verify-only); or (3) every discovered gate was style-only and the config-touch rule " +
-          "skipped it because no shared style config changed. Which gates should run, if any?",
+          "never runs (e2e is verify-only); (3) every discovered gate was style-only and the config-touch rule " +
+          "skipped it because no shared style config changed; or (4) pharn.config.json's gates.exclude removed the " +
+          "rest. Which gates should run, if any?",
         options: Object.freeze([
           Object.freeze({
             id: "gates",
@@ -309,12 +310,14 @@ export const REGISTRY = Object.freeze({
   // exit 3), which an explicit `--gates` never reaches, so the answer's `--gates` is the only one on the re-run.
   verify: Object.freeze({
     question: Object.freeze({
-      // Verify's one cause (no --gates, and no allowlisted script or no package.json), plus the caveat the AC gate
+      // Verify's one cause (no --gates, and no allowlisted script or no package.json, or — 6.36.0 — every discovered one
+      // excluded by the project's gates.exclude), plus the caveat the AC gate
       // makes true: a level gate named through --gates is not the discovered `npm run <id>` the AC-test lock pinned.
       "no-gates": Object.freeze({
         question:
           "No deterministic gate was found to run: no --gates was given, and package.json is absent or declares none " +
-          "of the allowlisted gate scripts. For a SPEC written from the template, gates named with --gates are read by " +
+          "of the allowlisted gate scripts, or pharn.config.json's gates.exclude removed every one it declares. For a " +
+          "SPEC written from the template, gates named with --gates are read by " +
           "the AC gate as not the discovered `npm run <id>` (test-infra-changed for a test-first SPEC, ac-untested for a " +
           "spec_kind: test-infra one), so adding the missing script to package.json is the better answer there. Which " +
           "gates should run, if any?",

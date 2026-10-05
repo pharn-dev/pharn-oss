@@ -3415,7 +3415,7 @@ const RUN_MARKER_WIRING = [
     file: "pharn-ship.md",
     command: "pharn-ship",
     openAfter: "node pharn/floor/check-spec-approved.mjs pharn/features/<name>/SPEC.md",
-    // 6.36.0: the pre-run snapshot line follows the open line, before /pharn-plan, with its OWN STOP — so the next
+    // 6.37.0: the pre-run snapshot line follows the open line, before /pharn-plan, with its OWN STOP — so the next
     // pinned line, not the plan marker, is what the open line's STOP must precede (pre-run-snapshot.test.mjs pins the
     // capture line's order and STOP).
     openBefore: "node pharn/floor/pre-run-snapshot.mjs --capture '<name>'",
@@ -4771,4 +4771,38 @@ test("★ SHELL-SINK 8 CONTROLS — each 6.28.2 line runs its payload (else the 
   assert.ok(!commandBody("pharn-loop.md").includes(OLD_S1_LINE), "pharn-loop.md still carries the 6.28.2 S1 line");
   assert.ok(!commandBody("pharn-loop.md").includes(OLD_6D_LINE), "pharn-loop.md still types <original branch>");
   assert.ok(!commandBody("pharn-ship.md").includes("<ref>^{commit}"), "pharn-ship.md still types a description-borne ref");
+});
+
+// ── WRITE_TOOL_RULE (6.35.1, build-writes-through-tools) ─────────────────────────────────────────────────
+// THE RECORDED FAILURE (P7): a routed /pharn-build agent wrote the user's code through 49 Bash calls and no Edit, so
+// the writes-scope guard judged none of those writes, and a `prettier --write` over two directories reformatted a
+// pinned AC test (.dev/measurements/loop-wall-clock-2026-10-05.md). The brief's rule 4 carries the routed-agent copy
+// (stage-agent-core.test.mjs pins it); a person or an inline orchestrator runs the COMMAND and never sees the brief,
+// so each command that writes the user's files says it in its own Step 3. PRESENCE only, inside that step: it never
+// proves the rule is obeyed (no shell command is parsed — LIMITS.md §6). Self-contained so a stacking merge appends.
+const WRITE_TOOL_RULE_SITES = Object.freeze({
+  "pharn-build.md": ["with the Write, Edit or MultiEdit tool", "never through Bash", "named one by one, never a directory"],
+  "pharn-test.md": ["with the Write or Edit tool, never through Bash", "never route\n  one through Bash"],
+});
+
+/** The text of `## Step 3 …` up to the next `## ` heading, or null when the file has no such step. */
+function writeToolStep3(text) {
+  const start = text.search(/^## Step 3\b/m);
+  if (start < 0) return null;
+  const rest = text.slice(start + 1);
+  const next = rest.search(/^## /m);
+  return next < 0 ? text.slice(start) : text.slice(start, start + 1 + next);
+}
+
+const writeToolRuleHeld = (step, phrases) => typeof step === "string" && phrases.every((p) => step.includes(p));
+
+test("WRITE_TOOL_RULE — each command that writes the user's files says, in its Step 3, to write with the write tools", () => {
+  for (const [file, phrases] of Object.entries(WRITE_TOOL_RULE_SITES)) {
+    const step = writeToolStep3(readFileSync(join(COMMANDS_DIR, file), "utf8"));
+    assert.ok(step !== null, `${file}: no ## Step 3`);
+    assert.ok(writeToolRuleHeld(step, phrases), `${file}: its ## Step 3 lacks the write-tool rule`);
+    // Non-vacuity (L60): the same step with each phrase removed fails the SAME predicate.
+    for (const p of phrases) assert.equal(writeToolRuleHeld(step.replace(p, ""), phrases), false, `${file}: control without "${p}"`);
+  }
+  assert.equal(Object.keys(WRITE_TOOL_RULE_SITES).length, 2, "the two commands that write the user's files (L34)");
 });

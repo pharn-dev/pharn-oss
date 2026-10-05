@@ -654,7 +654,7 @@ test("★ LISTING — an untracked tree listing past 1 MiB, declared, is clean t
   }
 });
 
-// ── 6.36.0: the PRE-RUN SNAPSHOT (regress-pre-run-snapshot) ──────────────────────────────────────────────────────
+// ── 6.37.0: the PRE-RUN SNAPSHOT (regress-pre-run-snapshot) ──────────────────────────────────────────────────────
 const LOOP_HOOK = join(REPO, ".claude", "hooks", "require-loop-record.cjs");
 const PRE_RUN_CLI = join(HERE, "pre-run-snapshot.mjs");
 

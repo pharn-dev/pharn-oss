@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // pharn/floor/test-infra-core.mjs — the TEST-INFRASTRUCTURE PIN: the parts of a project, other than the AC tests
 // themselves, that decide how those tests run and what they report. `/pharn-test`'s `ac-tests-lock.mjs --write` records
-// it in the lock's `test_infra` section (schema `ac-tests-lock/4` since 6.31.0; `/3` is still read); `--check` and
+// it in the lock's `test_infra` section (schema `ac-tests-lock/5` since 6.36.0; `/4` and `/3` are still read); `--check` and
 // `/pharn-verify`'s AC gate (ac-gate-core.mjs) recompute it from the live tree and compare. Contract:
 // pharn/pharn-contracts/ac-tests.md, "The test-infrastructure pin".
 //
@@ -44,6 +44,11 @@
 //                 when the key is absent — a digest, never the value (a Jest config can hold paths and tokens, and the
 //                 lock is committed). Jest reads its config from that key when no jest.config.* exists, and a
 //                 `testResultsProcessor` there rewrites the results before `--json` writes them.
+//   exclude       (/5, 6.36.0) the project's DECLARED gate exclusion — `pharn.config.json` `gates.exclude`, read by
+//                 gate-exclusion-core.mjs, in ALLOWLIST order, `[]` when none — the WHOLE list, not only level gates:
+//                 an excluded `typecheck` or `build` changes what /pharn-verify runs as surely as an excluded `test`. A
+//                 declaration that cannot be read refuses the pin. A /4 or /3 pin never recorded it, so a NON-EMPTY live
+//                 declaration reads `unpinned` against one (and an empty one reads exactly as before 6.36.0).
 //
 // THE TOKEN PASS (6.31.0) — ONE closed, literal rule, never a shell parse (the reconcile precedent: parsing a shell
 // command is undecidable, and a verb list would be a heuristic P0 forbids calling a guarantee). scriptTokens() splits
@@ -120,7 +125,8 @@ import { createHash } from "node:crypto";
 import { closeSync, fstatSync, lstatSync, openSync, readdirSync, readFileSync, readSync, constants as fsConstants } from "node:fs";
 import { join, posix } from "node:path";
 import { LEVELS, scopedPath } from "./ac-tests-core.mjs";
-import { LEVEL_GATES, discoverGates } from "./gate-run-core.mjs";
+import { ALLOWLIST, LEVEL_GATES, discoverGates, exclusionError } from "./gate-run-core.mjs";
+import { loadGateExclusion } from "./gate-exclusion-core.mjs";
 import { foldName } from "./spec-template-core.mjs";
 import { CONFIG_FILE, formatFor, loadResultsConfig } from "./test-results-core.mjs";
 import { RESULTS_FORMATS } from "./test-results-formats.mjs";
@@ -194,8 +200,10 @@ export function testInfraPathKind(entry) {
 }
 /** A pinned gate's `results` value: a format, or the refusal that stood in for one when the pin was taken. */
 export const RESULTS_VALUES = Object.freeze([...RESULTS_FORMATS, "config-invalid", "not-configured"].sort());
-/** `test_infra`'s closed key sets (L36): the /4 pin, and the /3 pin (6.20.0–6.29.x) still read. */
-export const PIN_KEYS = Object.freeze(["chained", "configs", "gates", "jest", "levels", "script_files"]);
+/** `test_infra`'s closed key sets (L36): the /5 pin (6.36.0), and the /4 (6.31.0–6.35.x) and /3 (6.20.0–6.30.x) pins
+ *  still read. */
+export const PIN_KEYS = Object.freeze(["chained", "configs", "exclude", "gates", "jest", "levels", "script_files"]);
+export const PIN_KEYS_V4 = Object.freeze(["chained", "configs", "gates", "jest", "levels", "script_files"]);
 export const PIN_KEYS_V3 = Object.freeze(["configs", "gates", "levels"]);
 export const GATE_KEYS = Object.freeze(["id", "post", "pre", "results", "script"]);
 export const CHAINED_KEYS = Object.freeze(["id", "post", "pre", "script"]);
@@ -536,8 +544,8 @@ function requireInputs(fn, root, levels) {
 }
 
 /**
- * Compute the /4 pin over the live tree at `root` for the mapped `levels`. Both inputs are required (L41).
- * @returns {{ok: true, pin: {levels: string[], gates: object[], chained: object[], configs: {path: string, sha256: string}[], script_files: {path: string, sha256: string}[], jest: string|null}} | {ok: false, reason: string}}
+ * Compute the /5 pin over the live tree at `root` for the mapped `levels`. Both inputs are required (L41).
+ * @returns {{ok: true, pin: {levels: string[], gates: object[], chained: object[], configs: {path: string, sha256: string}[], script_files: {path: string, sha256: string}[], jest: string|null, exclude: string[]}} | {ok: false, reason: string}}
  */
 export function computeTestInfra({ root, levels }) {
   requireInputs("computeTestInfra", root, levels);
@@ -558,6 +566,8 @@ export function computeTestInfra({ root, levels }) {
   if (!named.ok) return named;
   const jest = jestPin(m.pkg);
   if (!jest.ok) return jest;
+  const ex = loadGateExclusion(root);
+  if (!ex.ok) return ex;
   return {
     ok: true,
     pin: {
@@ -567,6 +577,7 @@ export function computeTestInfra({ root, levels }) {
       configs: cfg.configs,
       script_files: named.files,
       jest: jest.jest,
+      exclude: ex.exclude,
     },
   };
 }
@@ -595,11 +606,12 @@ const exactKeys = (o, keys) =>
 const sortedUnique = (xs) => new Set(xs).size === xs.length && xs.join("\n") === [...xs].sort(cmp).join("\n");
 const isScriptValue = (v) => typeof v === "string" && v.length <= MAX_SCRIPT;
 
-/** Shape-check a recorded pin — closed at every level (L36), per schema: `{version: 4}` for `ac-tests-lock/4`,
- *  `{version: 3}` for `/3`. The version is required (L41). A reason string, or null when well-formed. */
+/** Shape-check a recorded pin — closed at every level (L36), per schema: `{version: 5}` for `ac-tests-lock/5`,
+ *  `{version: 4}` for `/4`, `{version: 3}` for `/3`. The version is required (L41). A reason string, or null when
+ *  well-formed. */
 export function pinShapeError(pin, { version } = {}) {
-  if (version !== 3 && version !== 4) throw new TypeError("pinShapeError: `version` must be 3 or 4");
-  const keys = version === 4 ? PIN_KEYS : PIN_KEYS_V3;
+  if (version !== 3 && version !== 4 && version !== 5) throw new TypeError("pinShapeError: `version` must be 3, 4 or 5");
+  const keys = version === 5 ? PIN_KEYS : version === 4 ? PIN_KEYS_V4 : PIN_KEYS_V3;
   if (!exactKeys(pin, keys)) return `test_infra is not exactly {${keys.join(", ")}}`;
   if (!Array.isArray(pin.levels) || pin.levels.length === 0 || !pin.levels.every((l) => LEVELS.includes(l)) || !sortedUnique(pin.levels))
     return `test_infra.levels is not a non-empty, sorted, unique subset of {${LEVELS.join(", ")}}`;
@@ -615,7 +627,7 @@ export function pinShapeError(pin, { version } = {}) {
   }
   if (!sortedUnique(pin.gates.map((g) => g.id))) return "test_infra.gates is not unique and sorted by id";
   if (!Array.isArray(pin.configs)) return "test_infra.configs is not an array";
-  const configName = version === 4 ? isPinnedConfigName : isRunnerConfigName;
+  const configName = version >= 4 ? isPinnedConfigName : isRunnerConfigName;
   for (const c of pin.configs) {
     if (!exactKeys(c, CONFIG_KEYS) || !configName(c.path) || !HEX64_RE.test(c.sha256 ?? ""))
       return "a test_infra.configs entry is not exactly {path in the closed config set, sha256}";
@@ -640,6 +652,11 @@ export function pinShapeError(pin, { version } = {}) {
   }
   if (!sortedUnique(pin.script_files.map((f) => f.path))) return "test_infra.script_files is not unique and sorted by path";
   if (pin.jest !== null && !HEX64_RE.test(pin.jest)) return "test_infra.jest is not a sha256 or null";
+  if (version === 4) return null;
+  const exErr = exclusionError(pin.exclude);
+  if (exErr !== null) return `test_infra.exclude ${exErr}`;
+  if (pin.exclude.join("\n") !== ALLOWLIST.filter((id) => pin.exclude.includes(id)).join("\n"))
+    return "test_infra.exclude is not in ALLOWLIST order";
   return null;
 }
 
@@ -706,7 +723,25 @@ export function diffTestInfra(recorded, now) {
           : "package.json's jest key changed"
     );
   }
+  // /5 (6.36.0): the declared exclusion. Every id is an ALLOWLIST member on both sides (shape-checked / loaded), so
+  // naming it inline quotes no project text.
+  if (Object.hasOwn(recorded, "exclude")) {
+    for (const id of recorded.exclude)
+      if (!now.exclude.includes(id)) out.push(`pharn.config.json gates.exclude: ${id} is no longer excluded — discovery runs it again`);
+    for (const id of now.exclude)
+      if (!recorded.exclude.includes(id)) out.push(`pharn.config.json gates.exclude: ${id} was added — discovery no longer runs it`);
+  }
   return out;
+}
+
+/** What the /5 pin covers that a /4 or /3 pin could not (6.36.0): a NON-EMPTY declared gate exclusion — UNPINNED, never
+ *  "changed". An empty one adds nothing, so a pre-6.36 lock over a project that declares none reads as before. */
+function beyondV4(pin) {
+  return pin.exclude.length
+    ? [
+        `pharn.config.json gates.exclude: ${pin.exclude.join(", ")} — the project excludes discovered gate(s), and a pin written before ac-tests-lock/5 does not cover the declaration`,
+      ]
+    : [];
 }
 
 /** What the /4 pin covers that a /3 pin could not: each chained script, script-named file, package-manager config and
@@ -725,15 +760,17 @@ function beyondV3(pin) {
 /** Recompute over `root` for the RECORDED levels and compare with `recorded` (a shape-valid pin): `{changed, unpinned}`
  *  (L6 — two fields, never one list split by prefix). `changed` holds the differences, or `[reason]` when the live pin
  *  cannot be computed (an unreadable manifest, a symlinked config or named file — itself a change from what was
- *  pinned). `unpinned` is empty for a /4 pin; for a /3 pin it names what the live tree has that /4 pins and /3 did not
- *  (6.31.0 — the AC gate reads it as `test-infra-unpinned`, `--check` as a RED). A /3 pin over a tree the /4 pin cannot
- *  be computed on (a symlinked `.npmrc` or script-named file, a chain past MAX_CHAIN_HOPS) reads `changed`, not
- *  `unpinned`, deliberately: the refusal cannot tell a /3-covered change (an unparseable manifest, a symlinked runner
- *  config) from a /4-only one, so it keeps the stricter reading — stated in the contract and the README. */
+ *  pinned). `unpinned` is empty for a /5 pin; for a /4 pin it names a non-empty declared gate exclusion (6.36.0); for a
+ *  /3 pin it names that and what the live tree has that /4 pins and /3 did not (6.31.0 — the AC gate reads it as
+ *  `test-infra-unpinned`, `--check` as a RED). A /3 or /4 pin over a tree the current pin cannot be computed on (a
+ *  symlinked `.npmrc` or script-named file, a chain past MAX_CHAIN_HOPS, a gate exclusion that cannot be read) reads
+ *  `changed`, not `unpinned`, deliberately: the refusal cannot tell a change the old pin covered from one only the new
+ *  pin covers, so it keeps the stricter reading — stated in the contract and the README. */
 export function testInfraReds({ recorded, root }) {
   const now = computeTestInfra({ root, levels: recorded.levels });
   if (!now.ok) return { changed: [`the test infrastructure cannot be pinned now: ${now.reason}`], unpinned: [] };
-  if (Object.hasOwn(recorded, "script_files")) return { changed: diffTestInfra(recorded, now.pin), unpinned: [] };
+  if (Object.hasOwn(recorded, "exclude")) return { changed: diffTestInfra(recorded, now.pin), unpinned: [] };
+  if (Object.hasOwn(recorded, "script_files")) return { changed: diffTestInfra(recorded, now.pin), unpinned: beyondV4(now.pin) };
   const v3 = { ...now.pin, configs: now.pin.configs.filter((c) => isRunnerConfigName(c.path)) };
-  return { changed: diffTestInfra(recorded, v3), unpinned: beyondV3(now.pin) };
+  return { changed: diffTestInfra(recorded, v3), unpinned: [...beyondV3(now.pin), ...beyondV4(now.pin)] };
 }

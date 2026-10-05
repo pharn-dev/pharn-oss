@@ -1,5 +1,5 @@
 // pharn/floor/pre-run-snapshot-core.mjs — the PURE rules of a delivery run's PRE-RUN SNAPSHOT (regress-pre-run-snapshot,
-// 6.36.0): the record's closed shape, and the decision that lets `/pharn-regress`'s partition and the quick scope check
+// 6.37.0): the record's closed shape, and the decision that lets `/pharn-regress`'s partition and the quick scope check
 // stop counting a path the run did not change. No filesystem, no child process, no clock of its own: the execution half,
 // `pre-run-snapshot.mjs`, reads every input off disk and hands plain values in (P3 — this file changes when a RULE
 // changes, that one when the storage or the CLI does; the regress-base-reuse precedent).
@@ -27,7 +27,7 @@
 // THE DECISION, first failure decides (`PRE_RUN_MISSES`, in order); only `applied` yields paths:
 //   no-delivery-run     not exactly one open /pharn-loop or /pharn-ship marker for the feature — regress-base-reuse-core
 //                       `deliveryRunIdentity`, reused: presence + the write guard's 24 h age, the bytes hashed, never
-//                       parsed. A standalone /pharn-regress is here, and so behaves exactly as before 6.36.0;
+//                       parsed. A standalone /pharn-regress is here, and so behaves exactly as before 6.37.0;
 //   no-snapshot         no record in the git dir, or a git dir git cannot name;
 //   snapshot-malformed  the record is not a regular file (a link, a FIFO, a directory, unreadable, over
 //                       `SNAPSHOT_MAX_BYTES`) of the closed `pharn-pre-run-snapshot/1` shape;

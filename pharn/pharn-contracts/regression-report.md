@@ -25,12 +25,12 @@ The regression-report is `pharn/features/<name>/regression-report.json` (product
 `.dev/features/<name>/regression-report.json` (dev) — the machine half of the regress stage, written
 beside the human-facing `REGRESSION.md`. It is `pharn/floor/check-regress.mjs`'s **`verdict` subcommand**
 stdout, plus — in the product report — two additive advisory blocks, `base_evidence` (6.33.0) and
-`pre_run_snapshot` (6.36.0), both below.
+`pre_run_snapshot` (6.37.0), both below.
 
 **Since `stage-regress-script` (6.23.0), the WRITER is `pharn/floor/stage-regress.mjs`, not the model.** The
 product stage script shells `check-regress.mjs verdict` and writes its output atomically (a tmp file under
 `.pharn/pharn-regress/`, then `rename`), so no stray tmp file lands in the feature directory. Since 6.33.0 it
-appends `base_evidence`, and since 6.36.0 `pre_run_snapshot` after it, as the object's last keys and re-serializes
+appends `base_evidence`, and since 6.37.0 `pre_run_snapshot` after it, as the object's last keys and re-serializes
 with the same `JSON.stringify(…, null, 2)` the checker prints with, so every key the checker printed keeps its bytes:
 the report minus those two blocks is the checker's stdout, byte for byte (`stage-regress.test.mjs` pins it). The dev
 twin (`/pharn-dev-regress`) is unchanged: the model writes the checker's bytes by hand and adds no block.
@@ -215,6 +215,11 @@ The verdict fields are **unchanged**; the report additionally carries a **per-si
   `head` must equal the `--base` SHA (`base-head-mismatch`), and the two sides' specs must agree
   (`spec-mismatch`) — which is what makes "the set is decided once and applied to both" checkable rather
   than merely intended.
+- **`gate_run.head.excluded` (6.36.0, optional).** It is copied from the HEAD stamp when the project's `gates.exclude`
+  removed a discovered gate (`gate-run-record.md`, "Excluding a discovered gate"), and is absent otherwise. The base
+  side runs the head's set through `base-init`'s spec copy and names nothing itself. An excluded gate runs on neither
+  side, so a regression in it cannot be seen. `REGRESSION.md` renders one line directly under the verdict line
+  saying so. ADVISORY: no verdict and no `check-loop-fresh.mjs` comparison reads it.
 - **The bound (L43):** internal consistency, never provenance — a self-consistent fabricated pair passes.
 - **One machine consumer:** `check-loop-fresh.mjs` requires each side's `gate_run.<side>.stamp_sha256` to
   equal the sha256 of that side's stamp on disk, re-derives `verdict` / `regressions` / `pre_existing` /
@@ -275,7 +280,7 @@ reach; a Bash writer can forge it with the evidence, and the base side's in-prog
 while a chain is paused (`pharn/floor/regress-base-reuse.mjs`, header). No floor op reads this block, and the four
 verdict consumers above ignore it.
 
-## The additive `pre_run_snapshot` block (6.36.0, advisory shape)
+## The additive `pre_run_snapshot` block (6.37.0, advisory shape)
 
 `/pharn-loop` and `/pharn-ship` record a PRE-RUN SNAPSHOT at entry — every path changed since `HEAD`, each with a
 content digest, kept in the git dir and bound to the run marker (`pharn/floor/pre-run-snapshot.mjs`). The partition
@@ -294,7 +299,7 @@ The product report says what happened, as its last key:
 - **`status`** — `applied` (the snapshot bound to this run and this base was used), or why not: one member of the
   closed, ordered `PRE_RUN_MISSES`, the first that applied. The set and each member's meaning are owned by
   `pharn/floor/pre-run-snapshot-core.mjs`'s header (P4). A standalone `/pharn-regress` reads `no-delivery-run` and
-  behaves exactly as before 6.36.0.
+  behaves exactly as before 6.37.0.
 - **`unchanged`** — the undeclared, non-exempt changed paths NOT counted as escapes, in `inside`'s order; empty on
   every miss. It is never the whole of what the snapshot holds: a declared or exempt path is not listed here.
 

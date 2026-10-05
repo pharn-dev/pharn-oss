@@ -164,9 +164,9 @@ gains the same lines.
   product command
 - `.claude/commands/pharn-regress.md` — the `scope-escaped` remedy clause and the qualified guaranteed bullet. —
   product command
-- `CHANGELOG.md` — `## [6.36.0]` (provisional; the orchestrator assigns the final number), moving `[Unreleased]`. —
+- `CHANGELOG.md` — `## [6.37.0]` (provisional; the orchestrator assigns the final number), moving `[Unreleased]`. —
   repo meta
-- `SKILLS_VERSION` — `6.36.0` (minor: a new floor CLI and a changed stage behavior). — repo meta
+- `SKILLS_VERSION` — `6.37.0` (minor: a new floor CLI and a changed stage behavior). — repo meta
 - `README.md` — the version badge, the quick-mode sentence (grill #5) and the generated CURRENT-STATE floor count
   (`npm run docs:generate`). — repo meta
 - `CLAUDE.md` — one command block for the new CLI. — repo meta
@@ -264,7 +264,7 @@ is today's behavior.
 - GATE 1, 2026-10-05 (orchestrator): approved. (1) escape-set only, the BASE overlay deferred as
   `regress-base-pre-run-overlay` — the entry pre-flight item owns pre-existing red gates; (2) STOP on a failed capture
   (loop S9, ship STOP before plan); (3) the porcelain line and `render-run-report.mjs` kept, follow-up
-  `pre-run-snapshot-single-source`. Version 6.36.0 stays provisional (stacking).
+  `pre-run-snapshot-single-source`. Version 6.37.0 stays provisional (stacking).
 - Grill (`GRILL.md`): #1, #2, #3, #4, #5, #7, #8, #9, #11, #12, #14, #15, #16 taken into this plan; #6 declined (GATE-1
   answer 2); #10 accepted as stated.
 

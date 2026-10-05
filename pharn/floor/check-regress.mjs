@@ -85,7 +85,7 @@
 // floor op. stage-regress.mjs refuses a comma or newline path before building it — the named residual
 // `regress-inside-echo-list`. The CLI runs only under `import.meta.main`, so importing this file runs nothing.
 //
-// A FIFTH BOUND ON THE SCOPE RULE, for its two callers (6.36.0, regress-pre-run-snapshot). Inside an open `/pharn-loop`
+// A FIFTH BOUND ON THE SCOPE RULE, for its two callers (6.37.0, regress-pre-run-snapshot). Inside an open `/pharn-loop`
 // or `/pharn-ship` run, `stage-regress.mjs` and `quick-scope-core.mjs` pass `partitionScope` the changed paths the run's
 // PRE-RUN SNAPSHOT recorded with the bytes they still hold (pre-run-snapshot-core.mjs). An undeclared one is REPORTED
 // (`pre_run_snapshot.unchanged`), not counted as an escape — so a build that writes such a path back to its pre-run
@@ -306,7 +306,7 @@ function flag(args, name) {
 // own input into those two arrays. Returns the undeclared paths split into the REPORTED exempt set, the REPORTED
 // pre-run set and the escaped set, plus the OUTSIDE gate inputs.
 //
-// `preRunUnchanged` (6.36.0, regress-pre-run-snapshot; default empty) — the changed paths the open delivery run's
+// `preRunUnchanged` (6.37.0, regress-pre-run-snapshot; default empty) — the changed paths the open delivery run's
 // pre-run snapshot recorded with the bytes they still hold (pre-run-snapshot-core.mjs `decidePreRun`, whose header
 // owns the rule and its bounds). An UNDECLARED path in it that is not already exempt is not this run's escape: it is
 // returned in `preRun` and REPORTED by every caller, never dropped. Applied AFTER the closed exemptions, so

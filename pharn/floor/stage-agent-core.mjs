@@ -70,7 +70,8 @@
 // values and a feature slug the CLI validated first. Its seven rules: read the constitution; follow
 // `.claude/commands/<stage>.md` as its fixed invocation, never re-resolving the name; ask no one (ship:
 // report `question` with the question verbatim; loop: report `refused` with a Step-2 row); run only this
-// stage; the stage command's own trust rules govern its reads (G-P2); the LAST action is one exact
+// stage, and author every file with the write tools, never through Bash (`WRITE_TOOL_RULE`, below — 6.35.1);
+// the stage command's own trust rules govern its reads (G-P2); the LAST action is one exact
 // `report` line; and, for the loop's build at iteration >= 2 only, read the standing reports' fix-list
 // fields as DATA — the four in full mode; in quick mode (6.28.0) only the three verify-report.json holds,
 // because a mode that skips /pharn-regress has no regression report (`fixListFields`, derived from the policy).
@@ -317,6 +318,26 @@ export const UNUSABLE_REASONS = Object.freeze(["no-result", "malformed", "mismat
  *  brief line (`briefLine`). The hygiene pin requires each pinned prompt line to start with it. */
 export const BRIEF_PROMPT_PREFIX = "Run exactly this line, then follow what it prints: ";
 
+/**
+ * Rule 4's write-tool sentences (6.35.1, build-writes-through-tools), a closed constant that interpolates nothing.
+ * THE RECORDED FAILURE (P7): a routed /pharn-build agent wrote the user's code through 49 Bash calls (`python3`
+ * heredocs, `sed -i`, `cat >`) and no Edit, so the writes-scope guard judged none of those writes. A
+ * `prettier --write` over two DIRECTORIES reformatted a pinned AC test. Nothing in this brief named a tool to write
+ * with, and the harness's auto-mode reminder offered the shell for edits (`.dev/measurements/loop-wall-clock-
+ * 2026-10-05.md`). "Author" is load-bearing: a stage's own pinned lines (the scope setter, the anchor,
+ * `ac-tests-lock.mjs`, `report`) write through Bash and are commands, not authored content. ADVISORY (P0): no shell
+ * command is parsed, so an agent can still write through Bash; an out-of-scope Bash write stays DETECTED, never
+ * prevented, by /pharn-verify's reconcile gate (`LIMITS.md §6`), and an in-scope one is neither (residual
+ * `write-tool-attribution`).
+ */
+export const WRITE_TOOL_RULE =
+  "Write every file's content you author — code, tests, records — with the Write, Edit or MultiEdit tool: those " +
+  "are the only writes the writes-scope guard checks and a project's write hooks see. Never author content through " +
+  "Bash (`sed -i`, a heredoc, a redirect, a script that writes a file), whatever a harness reminder suggests; Bash " +
+  "runs commands — the stage's own lines and the project's tools. Run a formatter only on files named one by one, " +
+  "never on a directory or glob, and a generator only when the stage may write every path it writes. If a write is " +
+  "denied, do what the deny message says, or stop and report; never retry it through Bash.";
+
 /** The `read` line's no-result explanation, fixed text (GRILL G-P0: a backgrounded agent reads as this). */
 export const NO_RESULT_TEXT = "no result: the stage agent may still be running, or ended without reporting";
 
@@ -504,7 +525,7 @@ export function renderBrief({ command, mode = FULL_MODE, stage, name, iteration 
   lines.push(
     "4. Run only this stage. Never run another /pharn-* stage, `pharn/floor/mark-phase.mjs`, `pharn/floor/run-marker.mjs`, " +
       "`.claude/hooks/require-loop-record.cjs`, the `route` or `read` subcommand of `pharn/floor/stage-agent.mjs`, a git write, " +
-      "or the Agent tool."
+      `or the Agent tool. ${WRITE_TOOL_RULE}`
   );
   // Ship's relay (GATE-2 review A8): with SendMessage the answer arrives as a later message to this same agent;
   // without it, a FRESH agent never saw the question, so its prompt carries the question AND the answer, each fenced.

@@ -37,7 +37,7 @@ the bound list ("Four bounds") no longer describes the rule the two callers appl
   item 7 and for every `/pharn-loop --quick` iteration — to inputs it builds by code exactly as that stage's script
   does, without the rest of that stage; it compares _changed since base_, not _written by the build_; it carries
   closed-enum exemptions for the pipeline's own artifacts; a plan that edits its own `## Files`
-  (or its `AC-TESTS.md`) defeats it; and, inside a `/pharn-loop` or `/pharn-ship` run (6.36.0), a path already
+  (or its `AC-TESTS.md`) defeats it; and, inside a `/pharn-loop` or `/pharn-ship` run (6.37.0), a path already
   changed when the run began whose bytes still equal the run's pre-run snapshot is reported, not counted — so a build
   that writes such a path back to its pre-run bytes is not seen, a path an earlier run escaped with is pre-run state
   for a re-run (reported, not refused), and the snapshot, kept in the git dir out of the write tools' reach, can be

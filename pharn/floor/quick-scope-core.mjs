@@ -34,7 +34,7 @@
 // • It LEAVES NO RECORD: the entry prints its JSON to stdout, and nothing writes it anywhere. In /pharn-loop nothing
 //   downstream re-checks it (check-loop-fresh.mjs skips G and H in quick mode; the commit gate does not re-run it);
 //   /pharn-ship copies its result into SHIP.md, a model-written line.
-// • Inside an open /pharn-loop or /pharn-ship run (6.36.0), a changed path the run's PRE-RUN SNAPSHOT recorded with the
+// • Inside an open /pharn-loop or /pharn-ship run (6.37.0), a changed path the run's PRE-RUN SNAPSHOT recorded with the
 //   bytes it still holds is reported in `pre_run_snapshot.unchanged`, not counted as an escape — so a build that writes
 //   such a path back to its recorded bytes is not seen, a path an earlier run escaped with is pre-run state for a
 //   re-run, and the record can be forged through Bash (pre-run-snapshot-core.mjs states each bound). With no open run

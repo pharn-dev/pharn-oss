@@ -6,7 +6,9 @@
 // Usage (every flag required — no defaults, L41):
 //   node pharn/floor/check-red-run.mjs --preflight --ac-tests <AC-TESTS.md> --discover <package.json> --root <dir>
 //     Does every AC's level have a discovered gate with per-test results configured? A missing package.json is
-//     read as "no scripts" (the no-runner case it is), never as unusable. On RED the LAST line is the closed
+//     read as "no scripts" (the no-runner case it is), never as unusable. Since 6.36.0 a gate the project excludes
+//     (`<root>/pharn.config.json` `gates.exclude`, gate-exclusion-core.mjs) is not discovered, so a level whose gates
+//     are all excluded is RED too; a declaration that cannot be read is UNUSABLE. On RED the LAST line is the closed
 //     `blocked: no-test-runner — …; suggested: …` line an unattended caller prints verbatim.
 //   node pharn/floor/check-red-run.mjs --verdict --ac-tests <AC-TESTS.md> --out <dir> --root <dir>
 //     Over the finished ac-test run in <out> (run-gates.mjs `--stage ac-test`): bound to the mapping and the live
@@ -21,6 +23,7 @@
 
 import { readFileSync } from "node:fs";
 import { blockedLine, evaluateRedRun, preflight, readRows } from "./red-run-core.mjs";
+import { loadGateExclusion } from "./gate-exclusion-core.mjs";
 
 function flag(args, name) {
   const i = args.indexOf(name);
@@ -66,7 +69,13 @@ function runPreflight(args) {
     console.log(`UNUSABLE — ${pkg.reason}`);
     return 2;
   }
-  const p = preflight({ rows: rows.rows, scripts: pkg.scripts, root });
+  // 6.36.0 — the project's declared gate exclusion, from the root the run's own init reads it beside.
+  const ex = loadGateExclusion(root);
+  if (!ex.ok) {
+    console.log(`UNUSABLE — ${ex.reason}`);
+    return 2;
+  }
+  const p = preflight({ rows: rows.rows, scripts: pkg.scripts, root, exclude: ex.exclude });
   if (p.unavailable.length) {
     for (const u of p.unavailable) console.log(`RED — ac-level-unavailable: ${u.id} (${u.level}) — ${u.why}`);
     console.log(blockedLine(p.unavailable));

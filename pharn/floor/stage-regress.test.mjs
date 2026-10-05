@@ -204,6 +204,45 @@ test("done/no-regressions: a build that changes only its declared scope, with th
   }
 });
 
+// ── ★ 6.36.0 — a project's gate exclusion, end to end through the real script (grill G4) ─────────────────────
+test("★ 6.36.0 — an excluded gate runs on NEITHER side; gate_run.head.excluded and the REGRESSION.md line disclose it; the control runs it", () => {
+  const scripts = { test: "node --test", typecheck: 'node -e "process.exit(1)"' };
+  const edit = (dir) =>
+    writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport function id(x) { return x; }\n");
+  // the control: no declaration → typecheck runs on both sides, red at base, so it is pre-existing
+  withRepo(
+    (dir) => {
+      const base = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
+      edit(dir);
+      const r = cli(dir, freshArgs(base));
+      assert.equal(r.code, 0, r.raw);
+      const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
+      assert.deepEqual(report.pre_existing, ["typecheck"]);
+      assert.equal(Object.hasOwn(report.gate_run.head, "excluded"), false);
+      assert.doesNotMatch(readFileSync(join(dir, r.json.render), "utf8"), /EXCLUDED and NOT RUN/);
+    },
+    { scripts }
+  );
+  withRepo(
+    (dir) => {
+      const base = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
+      edit(dir);
+      const r = cli(dir, freshArgs(base));
+      assert.equal(r.code, 0, r.raw);
+      assert.equal(r.json.verdict, "no-regressions");
+      const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
+      assert.deepEqual(Object.keys(report.outside_gates), ["test"], "typecheck ran on neither side");
+      assert.deepEqual(report.pre_existing, []);
+      assert.deepEqual(report.gate_run.head.excluded, { declared_in: "pharn.config.json#gates.exclude", ids: ["typecheck"] });
+      assert.equal(Object.hasOwn(report.gate_run.base, "excluded"), false, "the base side runs the head's set and names nothing itself");
+      const md = readFileSync(join(dir, r.json.render), "utf8").split("\n");
+      const at = md.findIndex((l) => l.startsWith("**verdict: NO REGRESSIONS**"));
+      assert.match(md[at + 2], /^\*\*1 discovered gate\(s\) EXCLUDED and NOT RUN on either side\*\* .*`typecheck`/);
+    },
+    { scripts, committed: { "pharn.config.json": JSON.stringify({ gates: { exclude: ["typecheck"] } }) + "\n" } }
+  );
+});
+
 // ── A GENUINE REGRESSION OUTSIDE THE FEATURE ────────────────────────────────────────────────────────
 test("done/regressions: a change to a DECLARED file that breaks an UNDECLARED outside test", () => {
   const dir = mkdtempSync(join(tmpdir(), "sr-regr-"));
@@ -479,7 +518,7 @@ test("✧ PARITY: for ordinary names the in-process scope.json minus `pre_run_sn
     const scope = JSON.parse(text);
     assert.deepEqual(scope.inside, ["src/index.js"]);
     assert.deepEqual(scope.outside_tests, ["src/index.test.js"], "non-vacuous: an outside test is carried");
-    // 6.36.0: the ONE key the CLI never prints, always present — a standalone run reads `no-delivery-run`.
+    // 6.37.0: the ONE key the CLI never prints, always present — a standalone run reads `no-delivery-run`.
     assert.deepEqual(scope.pre_run_snapshot, { status: "no-delivery-run", unchanged: [] });
     const withoutBlock = { ...scope };
     delete withoutBlock.pre_run_snapshot;
@@ -1766,7 +1805,7 @@ test("★ EQUIVALENCE — fresh BASE evidence and reused BASE evidence for one r
     );
     const withoutBlock = { ...b.report };
     delete withoutBlock.base_evidence;
-    delete withoutBlock.pre_run_snapshot; // 6.36.0's second additive block
+    delete withoutBlock.pre_run_snapshot; // 6.37.0's additive block
     assert.equal(
       `${JSON.stringify(withoutBlock, null, 2)}\n`,
       rederived.stdout,
@@ -2438,7 +2477,7 @@ test("6.35.0 — validateProgress: installResult.ms is optional; when present a 
   }
 });
 
-// ── 6.36.0: the PRE-RUN SNAPSHOT (regress-pre-run-snapshot) — the partition, end to end ────────────────────────────
+// ── 6.37.0: the PRE-RUN SNAPSHOT (regress-pre-run-snapshot) — the partition, end to end ────────────────────────────
 // The two recorded failures (an abandoned run's untracked feature folder; the user's own uncommitted edit) pass under an
 // open run with a snapshot; everything that is not provably unchanged since the snapshot still escapes.
 const PRE_RUN_CLI = join(HERE, "pre-run-snapshot.mjs");

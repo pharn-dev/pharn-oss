@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // pharn/floor/pre-run-snapshot.mjs — the EXECUTION half and CLI of a delivery run's PRE-RUN SNAPSHOT
-// (regress-pre-run-snapshot, 6.36.0). The rule — what is recorded, how the partition uses it, every status and every
+// (regress-pre-run-snapshot, 6.37.0). The rule — what is recorded, how the partition uses it, every status and every
 // bound — is `pre-run-snapshot-core.mjs`'s header; this file reads and writes the disk (P3: it changes when the storage
 // or the CLI changes).
 //

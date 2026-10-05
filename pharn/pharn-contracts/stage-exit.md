@@ -145,8 +145,8 @@ answer on re-invocation** — a shape check on an argv flag is not a one-time tr
 
 Keyed by stage; `regress` and `verify` are its members.
 
-- **`question`** — `base-unresolved`, `no-gates` (its fixed text names all three causes a discovered set
-  can empty into), `install-unresolved`, `tests-unresolved`.
+- **`question`** — `base-unresolved`, `no-gates` (its fixed text names every cause a discovered set can empty into —
+  four since 6.36.0, the fourth the project's `gates.exclude`), `install-unresolved`, `tests-unresolved`.
 - **`refused`** — `missing-artifact`, `chain-red`, `plan-files-unparseable`, `scope-escaped`.
   - **The `scope-escaped` remedy has a named blind spot (M3, GATE-2 round 2).** The remedy is to declare
     the escaped path in `PLAN.md`'s `## Files` via `/pharn-plan`, or to revert the change. But `scope`
@@ -171,7 +171,8 @@ Step 2 table, not restated here):
 ## The `verify` vocabulary (6.26.0, `stage-verify-script`)
 
 - **`question`** — `no-gates` only. Its fixed text names verify's one cause (no `--gates`, and `package.json` absent
-  or declaring none of the allowlisted scripts) and the caveat the AC gate makes true: for a SPEC written from the
+  or declaring none of the allowlisted scripts, or — 6.36.0 — the project's `gates.exclude` removing every one it
+  declares) and the caveat the AC gate makes true: for a SPEC written from the
   template, a gate named with `--gates` is not the discovered `npm run <id>` the AC-test lock pinned
   (`test-infra-changed` / `ac-untested`), so adding the missing script is the better answer there. Options:
   `--gates <value>` (`gates-spec`) or stop.

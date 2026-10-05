@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.36.0] - 2026-10-05
+## [6.37.0] - 2026-10-05
 
 ### Added
 
@@ -36,7 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   [`pharn/floor/quick-scope-core.mjs`](./pharn/floor/quick-scope-core.mjs),
   [`pharn/floor/render-regression.mjs`](./pharn/floor/render-regression.mjs); contract
   [`regression-report.md`](./pharn/pharn-contracts/regression-report.md), "The additive `pre_run_snapshot` block").
-  `SKILLS_VERSION` 6.35.0 → 6.36.0 (minor: a new floor CLI and a changed stage behaviour), with the README badge.
+  `SKILLS_VERSION` 6.36.0 → 6.37.0 (minor: a new floor CLI and a changed stage behaviour), with the README badge.
   `MIN_CLI` stays 0.5.0: no installed path moves.
   - **The trigger.** Two of three recorded `/pharn-loop` runs in a user's project stopped at `/pharn-regress`
     `scope-escaped` on paths the run never wrote: an abandoned earlier run's untracked `pharn/features/<other>/`
@@ -62,6 +62,89 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **`LIMITS.md` §3a and §6 now understate this bound.** The proposed human-only edits are in
     `.dev/features/regress-pre-run-snapshot/PROTECTED-FOLLOWUPS.md`.
 
+## [6.36.0] - 2026-10-05
+
+### Added
+
+- 2026-10-05: **A project can now exclude a discovered gate.** It does so with an optional, closed
+  `pharn.config.json` block, `{"gates": {"exclude": [<allowlisted gate ids>]}}`, read by the new
+  [`pharn/floor/gate-exclusion-core.mjs`](./pharn/floor/gate-exclusion-core.mjs). Discovery leaves those ids out at
+  every stage that discovers: `/pharn-regress`, `/pharn-verify` and `/pharn-test`'s red run. An explicit `--gates` list
+  is never filtered. `/pharn-test` pins the declaration, and every verdict that ran over fewer gates says so. Contracts:
+  [`gate-run-record.md`](./pharn/pharn-contracts/gate-run-record.md) ("Excluding a discovered gate") and
+  [`ac-tests.md`](./pharn/pharn-contracts/ac-tests.md) ("The test-infrastructure pin").
+  - **The trigger (P7).** In a user's project the discovered `e2e` gate (Playwright) cannot run on the user's machine.
+    Discovery offered no way to leave it out, and an explicit `--gates` list makes the AC gate read
+    `test-infra-changed` by design. Two of three real `/pharn-loop` runs on 6.35.0 stopped on exactly this, after 28
+    and 92 minutes. The direct saving is the excluded gate's run time per verify iteration (the Playwright suite took
+    2.1 minutes in one of those runs) and the stop itself.
+  - **Closed and loud.** Each id must be a distinct `ALLOWLIST` member. Anything else refuses: `run-gates.mjs init` exits
+    2 with the new reason code `bad-gate-exclusion`, and the red-run preflight is unusable. With no file, or no `gates`
+    key, nothing changes byte-for-byte. **Behaviour change:** a `pharn.config.json` that exists but is not valid JSON
+    now refuses discovery and the test-infrastructure pin. Before, discovery never read the file.
+  - **Pinned where the build cannot move it unnoticed.** `ac-tests-lock.mjs --write` now writes schema
+    `ac-tests-lock/5`, whose test-infrastructure pin adds `exclude`: the whole declared list, not only level gates.
+    Adding or removing an id after `/pharn-test` reads `test-infra-changed` at `/pharn-verify`, which `/pharn-loop`
+    stops on (S13). This is agreement, never provenance (L43).
+  - **Costs of the schema bump, stated.**
+    - A `/4` or `/3` lock is still read and judged by what it pinned. It reads `unpinned` (a `--check` RED, and
+      `test-infra-unpinned` at the AC gate) only when the live tree declares a non-empty exclusion. Such a feature
+      re-runs `/pharn-test`.
+    - `--write` writes `/5` for every project, so a floor older than 6.36.0 reads a new lock as unusable. That is
+      fail-closed, never GREEN.
+    - A `/4` or `/3` lock over an unparseable `pharn.config.json` now reads `changed`.
+  - **Fail-closed at the red run.** An acceptance criterion whose level maps only to excluded gates is
+    `ac-level-unavailable` at the preflight, never a vacuous pass. Its closed `blocked: no-test-runner` line then
+    suggests removing the id or re-specifying the criterion. The runner refuses the same set (`coverage-violation`).
+  - **Disclosed everywhere a verdict is shown.**
+    - The gate-run stamp gains an optional, additive `excluded` block, `{declared_in, ids}`, which `validateStamp`
+      shape-checks.
+    - The block is copied to `verify-report.json` `gate_run.excluded` and `regression-report.json`
+      `gate_run.head.excluded`.
+    - `VERIFY.md` and `REGRESSION.md` render one line directly under the verdict line.
+    - The AC gate's detail names an excluded level gate.
+    - The `no-gates` questions name the new cause.
+
+    At regress the exclusion applies after the fixed e2e rule, so it is never credited with an `e2e` that regress
+    skips anyway.
+
+  - **Not pinned, stated:**
+    - a legacy SPEC (no lock);
+    - a bootstrap lock (`test_infra: null`);
+    - an exclusion written during `/pharn-test`, which runs before the reconcile anchor. Regress's scope partition is
+      the backstop: a `pharn.config.json` change since base reads `scope-escaped`.
+    - In a bootstrap or legacy SPEC, a build whose PLAN declares `pharn.config.json` can exclude a gate and regress
+      still reads no-regressions. Only the disclosure line shows it.
+
+    Named residuals: `gate-exclusion-summary-disclosure` (`RUN-REPORT.md` and `BRIEFING.md` do not repeat the line),
+    `gate-exclusion-bootstrap-pin`, `gate-exclusion-regress-blind`, and `gate-exclusion-build-gate` (`/pharn-build`'s
+    own prose gate does not read the list).
+
+  - Product commands `pharn-verify`, `pharn-regress`, `pharn-test`, `pharn-loop`, `pharn-build`, `pharn-ship` and
+    `pharn-spec` name the exclusion where they restate discovery.
+  - `SKILLS_VERSION` 6.35.1 → 6.36.0 (minor: a new capability), with the README badge. `MIN_CLI` stays 0.5.0: no
+    installed path moves, and `pharn-cli` carries `gates` over as a user-owned key. One trusted-doc sentence becomes
+    incomplete (`LIMITS.md §5`, "re-runs the project's own gates"). It is proposed for a human edit in
+    `.dev/features/gate-exclusion-config/PROTECTED-FOLLOWUPS.md` and not edited here.
+
+## [6.35.1] - 2026-10-05
+
+### Added
+
+- 2026-10-05: **A measurement record of a real 92-minute `/pharn-loop` run in a user project, and two shorter
+  ones, all on 6.35.0 (`.dev/measurements/loop-wall-clock-2026-10-05.md`, apparatus).** It reports, for each run:
+  - wall clock by stage and context;
+  - request counts and per-request latency;
+  - first-request prefix sizes;
+  - the gate durations that still belong to the run;
+  - why the run stopped.
+
+  Every figure comes from the read-only helper `.dev/features/build-writes-through-tools/measure.mjs`, labelled by
+  source and precision. The record also corrects two figures in the batch evidence that later PRs cite. First, the
+  project's PostToolUse hook cost the test agent 3.5 s in total, not about 5 minutes; the 9–29 s per write came from
+  parallel tool calls. Second, the per-gate regress timings in that project's `.pharn/pharn-regress/` belong to a
+  later run of another feature.
+
 - 2026-09-29: **A post-optimization performance audit of the delivery pipeline, analysis only
   (`.dev/measurements/pipeline-performance-audit-2026-09-29.md`).** Its headline is that no real run exists on a
   post-optimization version: all 69 real cost ledgers were written by pharn 6.12.1 or 6.7.0, so the question of what
@@ -82,6 +165,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `.dev/features/pipeline-performance-audit/audit.mjs` is the read-only helper behind the report's figures; its
   `--ledgers` mode applies the selection rule frozen at GATE 1. The review's ten advisory findings and the re-review's
   three were fixed before merge. No product-surface byte changed, so there is no `SKILLS_VERSION` bump.
+
+### Changed
+
+- 2026-10-05: **Every routed stage agent, `/pharn-build` and `/pharn-test` are now told to write files with the
+  Write, Edit or MultiEdit tool, never through the shell.** They are also told to run a formatter only on files named
+  one by one. Where the rule lives:
+  - rule 4 of the brief ([`pharn/floor/stage-agent-core.mjs`](./pharn/floor/stage-agent-core.mjs),
+    `WRITE_TOOL_RULE`);
+  - [`/pharn-build`](./.claude/commands/pharn-build.md) Step 3;
+  - [`/pharn-test`](./.claude/commands/pharn-test.md) Step 3.
+
+  **The trigger (P7).** In that 92-minute run the routed build agent wrote the user's code through 49 Bash calls
+  (`python3` scripts, `sed -i`, `cat >`) and no Edit. So the writes-scope guard judged none of those writes. A
+  `prettier --write` over two directories reformatted a pinned AC test, and the agent restored it by searching for the
+  locked hash. No guard denial came first. The only instruction offering the shell was the harness's auto-mode
+  reminder, and all five stage agents received it, the four that wrote with the write tools included.
+
+  **ADVISORY.** No shell command is parsed, so an agent can still write through Bash:
+  - an out-of-scope Bash write stays DETECTED, never prevented, by `/pharn-verify`'s `reconcile` gate
+    (`LIMITS.md §6`);
+  - an in-scope one is neither. The named residual is `write-tool-attribution`: closing it needs a PostToolUse record,
+    a human-only hook change.
+
+  **Tests.** Every routed brief (16 cells) carries the rule, checked against a control text that fails without it.
+  `.dev/floor/command-hygiene.test.mjs` `WRITE_TOOL_RULE` pins the two Step 3s.
+
+  `SKILLS_VERSION` 6.35.0 → 6.35.1 (patch: a clarification of shipped stage rules), with the README badge. `MIN_CLI`
+  is unchanged.
 
 ## [6.35.0] - 2026-09-28
 

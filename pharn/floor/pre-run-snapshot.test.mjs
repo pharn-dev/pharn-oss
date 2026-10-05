@@ -1,4 +1,4 @@
-// pharn/floor/pre-run-snapshot.test.mjs — the pre-run snapshot (regress-pre-run-snapshot, 6.36.0): the pure rules
+// pharn/floor/pre-run-snapshot.test.mjs — the pre-run snapshot (regress-pre-run-snapshot, 6.37.0): the pure rules
 // (pre-run-snapshot-core.mjs), the digest per path kind (L59's PATH_KINDS), the capture CLI, the ★ HOOK proof that the
 // write tools cannot reach the record (L65), and the ★ WIRING proof that the two pinned command lines run.
 //
@@ -530,7 +530,7 @@ test("★ HOOK — both real write guards deny the record path (main checkout, l
     const wtRecord = recordFile(wt);
     assert.ok(wtRecord.includes(join(".git", "worktrees")), wtRecord);
     assert.equal(hookExit(ENFORCE, wt, wtRecord), 2, "a path inside another git tree is denied");
-    writeFileSync(join(wt, "pharn.config.json"), JSON.stringify({ skillsVersion: "6.36.0" }) + "\n");
+    writeFileSync(join(wt, "pharn.config.json"), JSON.stringify({ skillsVersion: "6.37.0" }) + "\n");
     assert.equal(hookExit(ENFORCE, wt, wtRecord), 2, "installed, no run open: still denied");
   } finally {
     try {
