@@ -41,3 +41,11 @@
 - `stage-verify-core.mjs` keeps its one pinned import: it shape-checks a plain object; the caller validates the block.
 - Step 2b ran through a node runner under `.pharn/build-scratch/` (xargs is refused in this worktree session), scoped
   to the 29 existing scoped paths: prettier, markdownlint, eslint — all exit 0.
+- **Build amendment (one path).** `npm run check` failed two dev pins in `.dev/floor/command-hygiene.test.mjs`:
+  (1) the `composeReport` source regex, which pins the merged-block literal — extended by `head_install: headInstall`,
+  so `.dev/floor/command-hygiene.test.mjs` was added to the plan's `## Files`, the setter re-run (36 → 37 paths) and the
+  open reconcile epoch amended with `reconcile-baseline.mjs --amend-scope` (L48), before the Edit; (2) the NAMED_LIMITS
+  repro anchors `pharn-verify.md`'s last remedy line ending in `.` — fixed in the command instead, by putting the new
+  `head-install-drift` line BEFORE `plan-files-unparseable`, so that line keeps its bytes. `npm run check` before the
+  two fixes: 4628 tests, 4626 pass, those 2 fail; every other gate green (after `npm run docs:generate` moved the
+  README's floor-checker count 110 → 112).
