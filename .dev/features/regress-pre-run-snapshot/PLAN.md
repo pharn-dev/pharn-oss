@@ -21,7 +21,8 @@ The batch brief's evidence (§2, finding 1a), re-read this run from `~/Projects/
   line of `.pharn/pharn-loop/workspace-wording-ui/pre-run-status.txt` (`M shared/…/settings-layout.tsx`).
 
 Both escapes were known at entry. `/pharn-loop` Step 1a already snapshots `git status --porcelain -uall`, but only
-`render-run-report.mjs` reads it (`git grep pre-run-status`), never the partition. `/pharn-ship` has no snapshot at
+`render-run-report.mjs` and the loop's summary line (`pharn-loop-close.md`) read it (`git grep pre-run-status`), never
+the partition. `/pharn-ship` has no snapshot at
 all, and after its build `BASE_RULE` resolves the regress base to `HEAD` (a dirty tree), so the same two cases refuse
 there too.
 
@@ -54,15 +55,17 @@ there too.
 3. each path gets a digest from ONE function, `pathDigest`, used at capture and at check: `lstat` first (L54/L59);
    ENOENT → `"absent"` (a deletion); a regular file or a symlink → `reconcile-baseline.mjs` `hashFile` (content, or
    the link's own text — the fingerprint's function); anything else — a directory (git lists an untracked nested
-   repository as `vendor/lib/`), a FIFO, a parent component that is a symlink, an unreadable file — `"unhashable"`,
-   which is **never** subtracted (fail-closed: today's behavior for that path).
+   repository as `vendor/lib/`), a FIFO, a parent component that is a symlink, an unreadable file, a file over 64 MiB
+   (grill #15: `hashFile` buffers a whole file) — `"unhashable"`, which is **never** subtracted (fail-closed: today's
+   behavior for that path).
 4. **write-once per run:** a valid record already bound to the run that is open now → refuse `already-captured`
    (a second capture would record the build's own writes as pre-run state).
 5. writes `<absolute git dir>/pharn-pre-run-snapshot.json` (tmp + rename): `{schema: "pharn-pre-run-snapshot/1",
 feature, run: {command, marker_sha256}, base, paths: [[path, digest], …]}` (sorted, unique; closed keys both ways).
 
-Exit `0` recorded · `2` refused (closed `REASON_CODES`, `crashed` included — never node's exit 1, the run-marker.mjs
-rule). A clean tree records an empty `paths`.
+Exit `0` recorded · `2` refused (closed `REASON_CODES`; a throw the CLI catches is `crashed`). A module that fails to
+load is node's own exit 1 (grill #9 — no claim otherwise); both callers stop on any non-zero exit. A clean tree records
+an empty `paths`.
 
 ### The check (every partition consumer)
 
@@ -71,7 +74,8 @@ rule). A clean tree records an empty `paths`.
 `no-delivery-run` → `no-snapshot` → `snapshot-malformed` → `other-run` (feature or run identity differs) →
 `base-changed` (record base ≠ this partition's base) → `applied`. Only `applied` yields paths: each `inside` path in the
 record whose recorded digest is a hash or `"absent"` and whose live `pathDigest` is **equal**. Any miss yields none:
-the partition is exactly today's.
+the partition is exactly today's. Mappings (grill #11): an unresolvable git dir reads `no-snapshot`; a record that is a
+link, a FIFO, a directory, unreadable or over 64 MiB reads `snapshot-malformed` — never a crash.
 
 `partitionScope` gains one optional input, `preRunUnchanged` (default `[]`), applied **after** the closed exemptions:
 `undeclared` → `escape_exempt` (unchanged, first) → `pre_run` (in the list) → `escaped`. It returns the subtracted
@@ -80,7 +84,8 @@ so `outside_tests`, the style skip and 6.33.0's `head_root` binding see exactly 
 predicate is untouched (a pre-dirty root-level file is still hashed into `head_root`, which is right: the nested base
 worktree's parent-directory search still reaches it).
 
-Reported, never silent (the `escape_exempt` precedent): `pre_run_snapshot: {status, unchanged: [...]}` in
+Reported, never silent (the `escape_exempt` precedent): `pre_run_snapshot: {status, unchanged: [...]}` — `unchanged`
+is the SUBTRACTED list only (undeclared, not exempt, digest-equal), never record ∩ inside — in
 `scope.json`, in `regression-report.json` (an additive advisory block after `base_evidence`), in `check-quick-scope`'s
 document, and in `REGRESSION.md` — a done render lists the subtracted paths and names a non-`applied` status (except
 `no-delivery-run`, a standalone regress, whose render stays byte-identical); a `scope-escaped` refusal's quoted detail
@@ -93,9 +98,30 @@ gains the same lines.
   later). The porcelain line and `render-run-report.mjs` stay unchanged (see L35 below).
 - `/pharn-ship` Step 2 item 1: the capture line right after `run-marker.mjs --open`, **Non-zero → STOP** before
   `/pharn-plan`. `pharn-ship-quick.md`'s order sentence names it. `/pharn-loop --quick` inherits Step 1a.
-- `pharn-regress.md`: one clause on the `scope-escaped` remedy; `pharn-loop-close.md`: the quick-scope claim gains the
-  bound (it now reads "a changed file outside the declared files stops a quick loop", which this change makes false
-  for a pre-run path).
+- `pharn-regress.md`: one clause on the `scope-escaped` remedy (a re-run does not clear an escape — grill #1) and the
+  "Guaranteed" bullet qualified (a pre-run-changed test file stays `inside` and is not compared here — grill #3).
+- `pharn-loop-close.md`: the quick-scope claim gains the bound (it reads "a changed file outside the declared files
+  stops a quick loop", which this change makes false for a pre-run path); the summary gains one line naming the
+  subtracted paths — present when the gates ran, never in the Step 6c commit — and the claims residual says the branch
+  alone is not the tree the gates verified (grill #2).
+- Stale claims corrected (grill #5): `pharn-ship-quick.md` item 11 and `README.md` ("a changed file outside the plan's
+  … still stops the run" → "a file the run changed …"), `pharn-ship-close.md`'s quick **Bounded:** list, and the bound
+  blocks of `check-regress.mjs` and `quick-scope-core.mjs`. The S9 row is not re-padded: the new line is named
+  "Step 1a's second snapshot line", which the row's "Step 1a's snapshot" covers.
+
+### Bounds introduced by this design (grill #1, #2, #7, #14) — stated in both headers, the contract and the commands
+
+- **A re-run subtracts an earlier attempt's escape.** A path an earlier run escaped with is changed when the next run
+  begins, so that run's snapshot records it: it is reported in `pre_run_snapshot.unchanged`, not refused. This cannot
+  be separated from the recorded case this increment passes (`billing-plan-catalog`'s leftovers were an earlier run's).
+  `/pharn-loop` never commits such a path (Step 6c stages plan scope ∪ this feature's artifacts ∪ pinned tests, and a
+  subtracted path is none of them); the remedy text says a re-run does not clear an escape. A test pins it.
+- **A green loop's branch is not the whole verified tree** when anything was subtracted: the gates ran with those
+  paths present and the commit leaves them out; the summary names them.
+- **Ship's snapshot is the tree at GATE-1 approval**: whatever changed it before then (the human, a Bash write in the
+  GATE-1 turn) is pre-run state.
+- **Names, not contents, reach a committed `REGRESSION.md`**: a green loop publishes the subtracted paths' names on
+  its branch (`inside` already lists them).
 
 ## Files
 
@@ -104,35 +130,45 @@ gains the same lines.
 - `pharn/floor/pre-run-snapshot.mjs` — NEW. The CLI (`--capture <name>`, the import.meta.main guard) and the I/O half:
   `pathDigest`, `captureSnapshot`, `preRunUnchanged`. — layer pharn-floor
 - `pharn/floor/pre-run-snapshot.test.mjs` — NEW. Every status row with a one-input mutation; `PATH_KINDS` (file, link
-  to file, link to dir, dangling link, directory, FIFO, absent, symlinked parent) at capture and check; write-once;
-  CLI exits; ★ HOOK (both real guards deny the record path, main checkout + linked worktree); ★ WIRING (the pinned
-  lines in `pharn-loop.md` and `pharn-ship.md`, EXECUTED in a git sandbox, and their STOP branches). — layer
-  pharn-floor (test)
+  to file, link to dir, dangling link, directory, FIFO, absent, symlinked parent, oversize) at capture and check;
+  `liveDigest` called only for recorded `inside` paths (a record path not in `inside` is never opened); write-once;
+  CLI exits; ★ HOOK (both real guards deny the record path, main checkout + linked worktree, with a `.pharn/` path
+  writable as the non-vacuity control); ★ WIRING (the pinned lines in `pharn-loop.md` and `pharn-ship.md`, EXECUTED
+  in a git sandbox, and their STOP branches). — layer pharn-floor (test)
 - `pharn/floor/check-regress.mjs` — `partitionScope`'s optional `preRunUnchanged` input and its returned list; the
-  CLI unchanged. — layer pharn-floor
+  CLI unchanged; the header's bound list. — layer pharn-floor
 - `pharn/floor/check-regress.test.mjs` — the subtraction cases, order after `escape_exempt`, CLI byte-identity. —
   layer pharn-floor (test)
 - `pharn/floor/stage-regress.mjs` — phase `partition` reads the snapshot, writes `pre_run_snapshot` into `scope.json`
   and the refusal detail; the render phase appends the block to the report. — layer pharn-floor
 - `pharn/floor/stage-regress.test.mjs` — end to end: the two recorded cases (an untracked leftover directory, a
   modified tracked file) pass under an open run with a snapshot; the build editing a pre-dirty path still escapes;
-  no run / no snapshot / other run → `scope-escaped` as today; the report-minus-blocks byte test. — layer pharn-floor
-  (test)
-- `pharn/floor/quick-scope-core.mjs` — the same input and the `pre_run_snapshot` key in its document. — layer
-  pharn-floor
-- `pharn/floor/check-quick-scope.test.mjs` — the quick subtraction cases. — layer pharn-floor (test)
+  a mixed case (one subtracted, one new escape, both in the refusal); no run / no snapshot / other run → `scope-escaped`
+  as today; `base-changed` end to end under `BASE_RULE` (no `--base`, HEAD moved after capture); the re-run bound
+  pinned; the report-minus-blocks byte test and the ✧ PARITY test (scope.json minus the block == the CLI's stdout). —
+  layer pharn-floor (test)
+- `pharn/floor/quick-scope-core.mjs` — the same input, the `pre_run_snapshot` key in its document, the header's
+  bound block. — layer pharn-floor
+- `pharn/floor/check-quick-scope.test.mjs` — the quick subtraction cases; a throwing snapshot reader exits 2
+  `crashed`, never 1. — layer pharn-floor (test)
 - `pharn/floor/render-regression.mjs` — the subtracted list and the not-applied status line. — layer pharn-floor
 - `pharn/floor/render-regression.test.mjs` — render cases. — layer pharn-floor (test)
-- `pharn/pharn-contracts/regression-report.md` — the additive `pre_run_snapshot` block. — layer pharn-contracts
+- `pharn/pharn-contracts/regression-report.md` — the additive `pre_run_snapshot` block; the "ONE additive block"
+  sentences corrected. — layer pharn-contracts
 - `.claude/commands/pharn-loop.md` — Step 1a capture line + STOP, `reads:`. — product command
 - `.claude/commands/pharn-ship.md` — Step 2 capture line + STOP, `reads:`. — product command
-- `.claude/commands/pharn-ship-quick.md` — the quick order sentence names the snapshot. — product command
-- `.claude/commands/pharn-loop-close.md` — the quick scope claim's bound. — product command
-- `.claude/commands/pharn-regress.md` — the `scope-escaped` remedy clause. — product command
+- `.claude/commands/pharn-ship-quick.md` — the quick order sentence names the snapshot; item 11's kept-check line. —
+  product command
+- `.claude/commands/pharn-ship-close.md` — the quick **Bounded:** list. — product command
+- `.claude/commands/pharn-loop-close.md` — the quick scope claim's bound, the summary line, the claims residual. —
+  product command
+- `.claude/commands/pharn-regress.md` — the `scope-escaped` remedy clause and the qualified guaranteed bullet. —
+  product command
 - `CHANGELOG.md` — `## [6.36.0]` (provisional; the orchestrator assigns the final number), moving `[Unreleased]`. —
   repo meta
 - `SKILLS_VERSION` — `6.36.0` (minor: a new floor CLI and a changed stage behavior). — repo meta
-- `README.md` — the version badge and the generated CURRENT-STATE floor count (`npm run docs:generate`). — repo meta
+- `README.md` — the version badge, the quick-mode sentence (grill #5) and the generated CURRENT-STATE floor count
+  (`npm run docs:generate`). — repo meta
 - `CLAUDE.md` — one command block for the new CLI. — repo meta
 - `.dev/features/regress-pre-run-snapshot/PROTECTED-FOLLOWUPS.md` — the `LIMITS.md` §3a and §6 sentences. — apparatus
 
@@ -164,8 +200,11 @@ None: no Capability (`role:`) is added or changed. The floor tests above are the
   bound to the right marker. Write-once narrows only an accidental re-run of the pinned line.
 - "The capture runs at entry" → advisory (a Bash step a run may skip; a skipped capture reads `no-snapshot`, today's
   strict partition).
-- "Subtracted paths are reported" → floor in code (the block is always written, a test pins it); that a reader reads
-  it is advisory.
+- "Subtracted paths are reported" → floor in code for the invocation that decides them (the partition runs before any
+  budget pause; the block is always written, a test pins it). The block a RESUMED chain renders is re-read from
+  `scope.json`, a `.pharn/` file the write tools reach while the chain is paused → advisory there (grill #8). That a
+  reader reads it is advisory.
+- "A re-run clears an earlier escape" → **not claimed**: it is subtracted and reported (see the bounds above).
 - "The pre-run change did not affect the gates" → **not claimed**: the subtraction touches the escape set only. The
   HEAD gates run on the dirty tree and the BASE worktree lacks the pre-run changes, so a pre-run edit that breaks a gate
   still reads as a regression (named follow-up `regress-base-pre-run-overlay`).
@@ -216,7 +255,15 @@ is today's behavior.
 - A marker an interrupted run left (≤ 24 h) makes a standalone regress apply that run's snapshot — the 6.33.0 bound.
 - `LIMITS.md` §3a/§6 — `PROTECTED-FOLLOWUPS.md` (human-only edits).
 
+## GATE 1 and grill amendments (orchestrator / builder, under the user's delegation — model decisions, not a human approval)
+
+- GATE 1, 2026-10-05 (orchestrator): approved. (1) escape-set only, the BASE overlay deferred as
+  `regress-base-pre-run-overlay` — the entry pre-flight item owns pre-existing red gates; (2) STOP on a failed capture
+  (loop S9, ship STOP before plan); (3) the porcelain line and `render-run-report.mjs` kept, follow-up
+  `pre-run-snapshot-single-source`. Version 6.36.0 stays provisional (stacking).
+- Grill (`GRILL.md`): #1, #2, #3, #4, #5, #7, #8, #9, #11, #12, #14, #15, #16 taken into this plan; #6 declined (GATE-1
+  answer 2); #10 accepted as stated.
+
 ## Open questions (HALT)
 
-- GATE 1 (orchestrator, delegated): accept the escape-set-only scope (the overlay deferred), STOP on a failed
-  capture, and the porcelain line kept alongside.
+None — GATE 1 answered every one.
