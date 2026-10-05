@@ -33,23 +33,23 @@ reads.
    (its entry gates included), and writes no mode marker: the loop's mode is the SPEC's kind, and a marker would be a
    second, unverified copy of it.
 
-2. **Step 3 — the SPEC.** Route it with this line in place of Step 3's route line. The decision is the same — the spec
+2. **Step 3 — the SPEC.** Start it with this line in place of Step 3's start line. The decision is the same — the spec
    is a stage agent in both columns — but `--mode quick` is what gives the stage agent the quick invocation:
 
    ```bash
-   node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-spec --name '<name>' --mode quick
+   node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-spec --name '<name>' --mode quick
    ```
 
-   Step 3's stage-start marker records the printed token, as written. On route exit `0`, the Agent call's prompt is
-   this line in place of Step 3's, with the increment description below it in a fenced block labelled DATA:
+   It writes the stage-start marker with the printed token. On start exit `0`, the Agent call's prompt is this line in
+   place of Step 3's, with the increment description below it in a fenced block labelled DATA:
 
    ```text
    Run exactly this line, then follow what it prints: node pharn/floor/stage-agent.mjs brief --command pharn-loop --stage pharn-spec --name '<name>' --mode quick
    ```
 
-   Its brief names `/pharn-spec --quick --model-approve` as the stage's invocation. On route exit `3`, invoke
+   Its brief names `/pharn-spec --quick --model-approve` as the stage's invocation. On start exit `3`, invoke
    `/pharn-spec --quick --model-approve <description>` inline in place of `/pharn-spec --model-approve`. Step 3's
-   `read` line (after an Agent call only) and its return marker run as written. The reports map as written — thin
+   `finish` line (after an Agent call only) or the inline return line runs as written. The reports map as written — thin
    intent → **S6**, a clarification marker left in the Draft → **S6b**, a refused template → **S9** — plus one: the
    intent does not fit a quick SPEC (more than three criteria, or a criterion observable only end-to-end) → **S6c**
    (`blocked: not-quick`), which a stage agent reports as `refused S6c`. After `check-spec-approved.mjs` exits `0` (as
@@ -71,29 +71,29 @@ reads.
    `/pharn-test --unattended` keep their Step-4 lines (the same cell and invocation in both columns), and the Step-4
    test-stage gate is unchanged: a quick SPEC is test-first exactly as a `feature` SPEC is.
 
-4. **Step 5, sub-step 1 — the build.** Route it with this line in place of Step 5's build route line. The decision is
+4. **Step 5, sub-step 1 — the build.** Start it with this line in place of Step 5's build start line. The decision is
    the same in both columns; `--mode quick` is what tells the stage agent's brief that there is no regression report:
 
    ```bash
-   node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-build --name '<name>' --iteration <N> --mode quick
+   node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-build --name '<name>' --iteration <N> --mode quick
    ```
 
-   Step 5's stage-start marker records the printed token, as written. On route exit `0`, the Agent call's whole prompt
-   is this line in place of Step 5's:
+   It writes the stage-start marker with the printed token. On start exit `0`, the Agent call's whole prompt is this
+   line in place of Step 5's:
 
    ```text
    Run exactly this line, then follow what it prints: node pharn/floor/stage-agent.mjs brief --command pharn-loop --stage pharn-build --name '<name>' --iteration <N> --mode quick
    ```
 
-   From iteration 2 on, its brief's rule 7 names `verify-report.json`'s three fields only. On route exit `3`, run the
+   From iteration 2 on, its brief's rule 7 names `verify-report.json`'s three fields only. On start exit `3`, run the
    build inline, and from iteration 2 on give it only the standing `verify-report.json` `.failing_gates[]` /
    `.completeness.missing[]` / `.ac_gate.acs[]` as quoted DATA: there is no regression report, because a quick run
-   never runs `/pharn-regress`. Step 5's `read` line, its branch and its return marker run as written.
+   never runs `/pharn-regress`. Step 5's `finish` line (or the inline return line) and its branch run as written.
 
 5. **Step 5, sub-step 2 — `/pharn-regress` SKIPPED, its scope check KEPT.** No `/pharn-regress` and none of its
-   markers. After the build's orchestrator marker and before verify's stage-start, run the scope partition over this
-   iteration's tree, substituting `<name>` and the loop's own `<base sha>` literally — the only two values the line
-   takes:
+   markers (its Step-5 line writes them). After the build's return marker and before verify's line, run the scope
+   partition over this iteration's tree, substituting `<name>` and the loop's own `<base sha>` literally — the only two
+   values the line takes:
 
    ```bash
    node pharn/floor/check-quick-scope.mjs --feature '<name>' --base '<base sha>'
@@ -102,9 +102,8 @@ reads.
    **Never type a path into it**: the checker builds both path sets itself (`pharn/floor/quick-scope-core.mjs`,
    header).
 
-   Branch **only** on the exit code (P5): `0` → verify — `/pharn-verify` exactly as a full iteration runs it, with
-   its stage-start and orchestrator markers as written: the thin caller of `pharn/floor/stage-verify.mjs` (6.26.0),
-   whose exit maps by Step 2's `/pharn-verify` stage-exit mapping. `1` → **S9** (`blocked: stage-refused`): a changed path is
+   Branch **only** on the exit code (P5): `0` → verify — Step 5's verify line (and its resume line), exactly as a full
+   iteration runs it, whose exit maps by Step 2's `/pharn-verify` stage-exit mapping. `1` → **S9** (`blocked: stage-refused`): a changed path is
    outside the declared writes — the row a full run's `/pharn-regress` `scope-escaped` refusal maps to, with the same
    remedy (declare the path through a re-plan, or revert the change); an exit `1` that prints no JSON document is the
    checker's own file failing to start (a run from outside the project root) — the same S9, with nothing escaped to

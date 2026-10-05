@@ -683,10 +683,11 @@ const WIRING = [
   {
     file: "pharn-loop.md",
     startAfter: "node pharn/floor/mark-phase.mjs --name '<name>' --kind run-start",
-    startBefore: "node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-spec --name '<name>'",
-    // 6.45.0: the loop's grill runs inline (floor-only) and has no `read` line; its stage-start marker anchors it.
+    // 6.43.0 (orchestrator-direct-stage-calls): the routed stages' `route`/`read` lines are `start`/`finish` lines.
+    startBefore: "node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-spec --name '<name>'",
+    // 6.45.0: the loop's grill runs inline (floor-only) and has no `finish` line; its stage-start marker anchors it.
     waitAfter: "node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-grill",
-    waitBefore: "node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-test --name '<name>'",
+    waitBefore: "node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-test --name '<name>'",
     abortIn: "\n## At the stop — ",
     rows: [
       /`3` → \*\*S4\*\*/,
@@ -699,9 +700,9 @@ const WIRING = [
   {
     file: "pharn-ship.md",
     startAfter: "node pharn/floor/pre-run-snapshot.mjs --capture '<name>'",
-    startBefore: "node pharn/floor/stage-agent.mjs route --command pharn-ship --stage pharn-plan --name '<name>'",
+    startBefore: "node pharn/floor/stage-agent.mjs start --command pharn-ship --stage pharn-plan --name '<name>'",
     waitAfter: "node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md memory-bank/lessons-learned.md",
-    waitBefore: "node pharn/floor/stage-agent.mjs route --command pharn-ship --stage pharn-test --name '<name>'",
+    waitBefore: "node pharn/floor/stage-agent.mjs start --command pharn-ship --stage pharn-test --name '<name>'",
     abortIn: "\n## Closing the run — ",
     rows: [/\*\*Stop\*\*/, /\*\*Continue\*\*/, /Never continue without the answer/],
   },

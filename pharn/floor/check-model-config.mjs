@@ -39,7 +39,12 @@
 //     and does not get its frontmatter model: every stage the routing policy keeps inline, every routing
 //     fallback, and the orchestrators themselves. Since 6.27.0 a ROUTED stage gets its model from the Agent
 //     call instead (`stage-agent.mjs`); its EFFORT keeps this bound, because the Agent tool takes none. This
-//     checker cannot see any of it.
+//     checker cannot see any of it. OBSERVED, 2026-10-05, one session (`.dev/features/orchestrator-direct-stage-calls/
+//     PLAN.md`, "Why"): "directly" means a PERSON's slash invocation. A person's `/pharn-loop` (frontmatter `sonnet`)
+//     was served `claude-sonnet-5-5` for that turn; in the next turn, served the session's `claude-opus-5-5`, the
+//     MODEL invoked `/pharn-loop` through the Skill tool, and every request after it — through the `/pharn-regress`
+//     and `/pharn-verify` it invoked the same way, both `sonnet` too — was served `claude-opus-5-5`. So a command a
+//     model invokes does not get its frontmatter model either. One observation of the platform, never a guarantee.
 //   • PLATFORM VETO. A value excluded by an organization's `availableModels` allowlist is not used, and
 //     in auto mode a model auto mode does not support is not used; the session silently keeps its
 //     current model. A GREEN here says nothing about either.

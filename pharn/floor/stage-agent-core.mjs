@@ -42,9 +42,10 @@
 // in that project's quick run. /pharn-ship keeps its routed full grill: a person reads GRILL.md at GATE 2.
 //
 // ============================ THE FALLBACK — every inline reason, with its remedy ============================
-// Every case runs the stage inline, exactly as before 6.27.0, and SAYS SO: a stage with a route line
-// records `--route 'inline:<reason>'` on its stage-start marker. Each reason names a remedy reachable from
-// that reason (L27) — `INLINE_REMEDIES` below is the table, and `route` prints the remedy on stderr:
+// Every case runs the stage inline, exactly as before 6.27.0, and SAYS SO: a routed stage's stage-start marker
+// records `inline:<reason>` (written by `stage-agent.mjs start` since 6.43.0; before, the model passed the token
+// to `mark-phase.mjs --route`). Each reason names a remedy reachable from that reason (L27) — `INLINE_REMEDIES`
+// below is the table, and `route` and `start` print the remedy on stderr:
 //   interactive       policy (ship spec)          none needed: run /pharn-spec directly for its frontmatter model
 //   floor-only        policy                      none needed: the stage's model does not change its verdict
 //   no-config         route: config absent (a FOLLOWED stat — a dangling link reads absent, as the checker
@@ -58,9 +59,10 @@
 //   resolve-failed    route: the checker CRASHED — exit 1 without its `RED — ` line, any other exit, a signal,
 //                     a spawn error, or CHECKER_TIMEOUT_MS — or printed no {model, effort}
 //                                                 run check-model-config.mjs resolve <stage> by hand
-//   no-agent-tool     the orchestrating model (ADVISORY): no Agent tool, not even a deferred one
-//                                                 allow the Agent tool
-//   route-unavailable the orchestrating model: `route` itself exited outside 0/3
+//   no-agent-tool     the orchestrating model (ADVISORY): no Agent tool, not even a deferred one — since 6.43.0
+//                     passed to `start` as `--no-agent-tool`      allow the Agent tool
+//   route-unavailable `start`: a `route` refusal or a leftover result it cannot clear, its reason after the
+//                     remedy (before 6.43.0, the orchestrating model when `route` exited outside 0/3)
 //                                                 run the route line by hand
 // RED and GREEN are `shelledVerdict`'s reading (`pharn/floor/shelled-verdict-core.mjs`, the repo's one rule
 // for a shelled checker since 6.20.6 / 6.21.1): exit 1 is a RED only WITH its `RED — ` line, because node
@@ -80,7 +82,9 @@
 // values and a feature slug the CLI validated first. Its seven rules: read the constitution; follow
 // `.claude/commands/<stage>.md` as its fixed invocation, never re-resolving the name; ask no one (ship:
 // report `question` with the question verbatim; loop: report `refused` with a Step-2 row); run only this
-// stage, and author every file inside the project with the write tools, never through Bash (`WRITE_TOOL_RULE`,
+// stage — never the orchestrator's own lines (since 6.43.0 that list names `stage-agent.mjs start` / `finish`, which
+// write the stage's markers, and `stage-direct.mjs`, which runs /pharn-regress or /pharn-verify) — and author every
+// file inside the project with the write tools, never through Bash (`WRITE_TOOL_RULE`,
 // below — 6.35.1, scoped to the project in 6.35.2);
 // the stage command's own trust rules govern its reads (G-P2); the LAST action is one exact
 // `report` line; and, for the loop's build at iteration >= 2 only, read the standing reports' fix-list
@@ -540,7 +544,8 @@ export function renderBrief({ command, mode = FULL_MODE, stage, name, iteration 
   }
   lines.push(
     "4. Run only this stage. Never run another /pharn-* stage, `pharn/floor/mark-phase.mjs`, `pharn/floor/run-marker.mjs`, " +
-      "`.claude/hooks/require-loop-record.cjs`, the `route` or `read` subcommand of `pharn/floor/stage-agent.mjs`, a git write, " +
+      "`.claude/hooks/require-loop-record.cjs`, the `route`, `read`, `start` or `finish` subcommand of `pharn/floor/stage-agent.mjs`, " +
+      "`pharn/floor/stage-direct.mjs`, a git write, " +
       `or the Agent tool. ${WRITE_TOOL_RULE}`
   );
   // Ship's relay (GATE-2 review A8): with SendMessage the answer arrives as a later message to this same agent;

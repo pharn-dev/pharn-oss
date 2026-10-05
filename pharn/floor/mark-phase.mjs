@@ -99,6 +99,15 @@
 // tool results makes the run ambiguous, and so `unknown`. A redirect that keeps the line out of the calling
 // context's tool result leaves the run unbound, and so `unknown` as well. See the contract's "Run membership".
 //
+// ── THE TWO IN-PROCESS CALLERS (6.43.0, orchestrator-direct-stage-calls) ─────────────────────────────────
+// `stage-agent.mjs start` / `finish` and `stage-direct.mjs` write a stage's markers in the same call that routes,
+// reads or runs it, through `tryMarkPhase()` — `markPhase()` + `markerLine()`, the one encoding above, so the line
+// they print binds the run exactly as this CLI's does. It never throws: a marker that cannot be written prints the
+// fixed `MARKER_NOT_WRITTEN` line instead, because a marker is advisory and never fails a run. `latestMarker()`
+// reads the last marker of a run's file, for `start`'s open-stage rule. TRUST BOUND (stated, and tested):
+// `markers.jsonl` is unauthenticated `.pharn/` state a Bash write reaches (LIMITS.md §6), so a forged last line can
+// make `start` KEEP an open stage's marker instead of writing one — it never changes a route, a token or an exit.
+//
 // Usage:
 //   node pharn/floor/mark-phase.mjs --name <slug> --kind <kind> [--stage <s>] [--iteration <n>] [--base <dir>]
 //                                   [--adopt-pending]   (run-start only)
@@ -250,7 +259,7 @@ export function markPhase({
   route = null,
 }) {
   const dir = join(base, name);
-  const file = join(dir, "markers.jsonl");
+  const file = markersPath(name, base);
   mkdirSync(dir, { recursive: true });
   const at = now ?? new Date();
   const pending = kind === "run-start" && adoptPending === true ? readPendingStart(base, sessionId, at.getTime()) : null;
@@ -292,6 +301,56 @@ export function markerLine(m) {
     `marker ${m.seq}: ${m.kind}${m.stage ? ` ${m.stage}` : ""}${m.iteration ? ` iter=${m.iteration}` : ""} ${m.ts}` +
     `${m.origin ? ` (adopted ${m.origin} start)` : ""}${m.mode ? ` (mode ${m.mode})` : ""}${m.route ? ` (route ${m.route})` : ""}`
   );
+}
+
+/** Where a run's markers live: `<base>/<name>/markers.jsonl`. The one definition (`markPhase` and `latestMarker`). */
+export function markersPath(name, base = DEFAULT_BASE) {
+  return join(base, name, "markers.jsonl");
+}
+
+/** The fixed line a caller prints in place of a marker line when the marker could not be written (6.43.0). */
+export const MARKER_NOT_WRITTEN = "marker: not written";
+
+/**
+ * Write one marker for an in-process caller and return what to print (6.43.0). Never throws: on any failure it returns
+ * `{ok: false, line: MARKER_NOT_WRITTEN, code}` with a node error code (or `error`), never a message — the caller
+ * prints `code` and goes on, because a marker never fails a run. `opts` is `markPhase`'s.
+ */
+export function tryMarkPhase(opts) {
+  try {
+    const marker = markPhase(opts);
+    return { ok: true, marker, line: markerLine(marker), code: null };
+  } catch (e) {
+    const code = e && typeof e.code === "string" && /^[A-Z0-9_]{1,40}$/.test(e.code) ? e.code : "error";
+    return { ok: false, marker: null, line: MARKER_NOT_WRITTEN, code };
+  }
+}
+
+/**
+ * The LAST marker in `file`, or null (6.43.0) — read from the end, skipping a torn line, a line that is not a JSON
+ * object, and an object that is not a marker (`seq` a number, `kind` a `MARKER_KINDS` member), exactly as
+ * `countMarkers` tolerates a torn line. No file, an unreadable file or no marker at all is null. See the header's
+ * TRUST BOUND: the result is unauthenticated state.
+ */
+export function latestMarker(file) {
+  let text;
+  try {
+    text = readFileSync(file, "utf8");
+  } catch {
+    return null;
+  }
+  const lines = text.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (!lines[i]) continue;
+    let r;
+    try {
+      r = JSON.parse(lines[i]);
+    } catch {
+      continue;
+    }
+    if (r && typeof r === "object" && !Array.isArray(r) && typeof r.seq === "number" && MARKER_KINDS.has(r.kind)) return r;
+  }
+  return null;
 }
 
 function usage(msg) {
