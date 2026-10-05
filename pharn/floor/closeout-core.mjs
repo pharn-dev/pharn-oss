@@ -99,13 +99,24 @@ export function indent(text) {
     .join("\n")}\n`;
 }
 
-/** Print one step's result as DATA: the header, then stdout and stderr, both indented (`printRaw` prints stdout
- *  whole — used for mark-phase.mjs's own marker line only). */
+/** The most of each stream echoed per step (independent review R8): a hook or a checker that prints a lot must not push
+ *  the closing JSON line out of the tool result. The TAIL is kept — a verdict line comes last — and the cut is said. */
+export const ECHO_CAP = 8192;
+
+/** `text` cut to its last `ECHO_CAP` characters, with a line saying how much was left out. Total over any value. */
+export function capped(text) {
+  const s = typeof text === "string" ? text : "";
+  if (s.length <= ECHO_CAP) return s;
+  return `[… ${s.length - ECHO_CAP} earlier characters not shown]\n${s.slice(-ECHO_CAP)}`;
+}
+
+/** Print one step's result as DATA: the header, then stdout and stderr, both indented and capped (`printRaw` prints
+ *  stdout whole — used for mark-phase.mjs's own one-line marker output only). */
 export function echo(log, s, r, { printRaw = false } = {}) {
   log(`── ${s.id} (exit ${shownExit(r)})\n`);
   if (printRaw) log(r.stdout.endsWith("\n") || r.stdout === "" ? r.stdout : `${r.stdout}\n`);
-  else log(indent(r.stdout));
-  if (r.stderr !== "") log(`  [stderr]\n${indent(r.stderr)}`);
+  else log(indent(capped(r.stdout)));
+  if (r.stderr !== "") log(`  [stderr]\n${indent(capped(r.stderr))}`);
   if (r.error) log(`  [spawn error] ${r.error}\n`);
 }
 

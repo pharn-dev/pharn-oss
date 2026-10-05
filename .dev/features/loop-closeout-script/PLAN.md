@@ -190,6 +190,9 @@ does).
 - `pharn/floor/frontmatter-core.test.mjs` — CONSUMERS gains `loop-closeout.mjs` — test
 - `pharn/floor/check-test-stage.test.mjs` — its executed Step 6c staging-builder test runs `buildStageList` (added at
   build: the builder moved out of the close part) — test
+- `.claude/commands/pharn-ship-quick.md` — items 3 and 12 re-worded: the run-marker close runs inside the closeout,
+  and the report skip keys on the run-start marker (added after the independent review, R6) — product command part
+- `.dev/features/loop-closeout-script/REVIEW.md` — the independent review, quoted as DATA, and its disposition — apparatus
 - `CLAUDE.md` — one Commands entry for the two closeout lines — repo meta
 - `CHANGELOG.md` — the 6.43.0 section (pre-assigned by the batch; built as provisional 6.42.0) — repo meta
 - `SKILLS_VERSION` — 6.39.0 → 6.43.0 (minor: new floor scripts and command behaviour) — repo meta

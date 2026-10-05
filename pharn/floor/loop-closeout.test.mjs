@@ -39,12 +39,15 @@ import {
   commitArgs,
   commitGateArgs,
   createBranch,
+  isLoopBranchOf,
   parseArgs,
+  phasePath,
   recordFacts,
   stageListPath,
   undoArgs,
   undoBranch,
 } from "./loop-closeout.mjs";
+import { commandFamilyText } from "../../.dev/floor/command-family.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..");
@@ -469,6 +472,49 @@ test("exit 4 — a failed commit hook → commit failed, then the undo: unstaged
   }
 });
 
+test("review R1 — the phase file names the git step under way: a commit hook sees `commit`; the run ends `finished`", () => {
+  const fx = fixture();
+  try {
+    const hook = join(fx.dir, ".git", "hooks", "pre-commit");
+    writeFileSync(hook, `#!/bin/sh\ncp ${phasePath(FEATURE)} hook-saw.txt\nexit 1\n`);
+    chmodSync(hook, 0o755);
+    const { doc } = close(fx, { run: stub().run });
+    assert.equal(doc.outcome, "not committed: commit failed");
+    assert.equal(readFileSync(join(fx.dir, "hook-saw.txt"), "utf8"), "commit\n", "a crash inside the commit step would read `commit`");
+    assert.equal(readFileSync(join(fx.dir, phasePath(FEATURE)), "utf8"), "finished\n");
+  } finally {
+    fx.done();
+  }
+  // A close that never reaches git writes no phase file.
+  const nongreen = fixture({ record: loopRecord({ decision: "STOP_CAP" }) });
+  try {
+    close(nongreen, { run: stub().run });
+    assert.equal(existsSync(join(nongreen.dir, phasePath(FEATURE))), false);
+  } finally {
+    nongreen.done();
+  }
+});
+
+test("review R2 (reproduced double commit) — on this run's own pharn-loop branch the closeout refuses, exit 2, nothing run", () => {
+  const fx = fixture();
+  try {
+    assert.equal(close(fx, { run: stub().run }).doc.exit, EXIT.COMMITTED);
+    const again = stub();
+    const { doc } = close(fx, { run: again.run });
+    assert.equal(doc.exit, EXIT.UNUSABLE);
+    assert.equal(doc.refusal, "on-loop-branch");
+    assert.deepEqual(again.calls, [], "no step ran — no second run-stop marker, no second commit");
+    assert.equal(sh(fx.dir, "rev-list", "--count", "HEAD").stdout.trim(), "2", "exactly one commit made");
+  } finally {
+    fx.done();
+  }
+  assert.equal(isLoopBranchOf("demo", "pharn-loop/demo"), true);
+  assert.equal(isLoopBranchOf("demo", "pharn-loop/demo-12"), true);
+  for (const b of ["pharn-loop/demo-x", "pharn-loop/demox", "pharn-loop/demo-", "main", "pharn-loop/demo-2-3", null]) {
+    assert.equal(isLoopBranchOf("demo", b), false, String(b));
+  }
+});
+
 test("exit 4 — a failed add (a listed path outside the repository) → stage failed, then the undo", () => {
   const fx = fixture();
   const outside = realpathSync(mkdtempSync(join(tmpdir(), "loop-closeout-outside-")));
@@ -563,8 +609,11 @@ test("the add, commit and undo argv equal the close part's former lines", () => 
   const list = stageListPath("<name>");
   assert.equal(list, ".pharn/pharn-loop/<name>/stage.list");
   assert.deepEqual(addArgs(list), ["add", "-A", "--pathspec-from-file=.pharn/pharn-loop/<name>/stage.list", "--pathspec-file-nul"]);
+  // One stated difference from the former line: `-q` (independent review R8), so a commit's summary does not crowd the
+  // closing JSON line out of the tool result; hook output is still echoed (capped).
   assert.deepEqual(commitArgs(list, "<name>", "<decision>", "<N>"), [
     "commit",
+    "-q",
     "--pathspec-from-file=.pharn/pharn-loop/<name>/stage.list",
     "--pathspec-file-nul",
     "-m",
@@ -736,7 +785,16 @@ test("★ END-TO-END — a blocked stop, real children: ledger and report writte
       }).status,
       0
     );
-    const r = runCli(fx, ["--feature", FEATURE, "--base", fx.base]);
+    // L45 (review R7): the COMMITTED line, read out of the loop's close part, placeholders substituted — never this
+    // test's own argv.
+    const pinned = commandFamilyText(join(REPO, ".claude", "commands"), "pharn-loop.md")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => /^node pharn\/floor\/loop-closeout\.mjs /.test(l));
+    assert.equal(pinned.length, 1, "the close part pins the closeout line exactly once");
+    const line = pinned[0].replaceAll("'<name>'", `'${FEATURE}'`).replaceAll("'<base sha>'", `'${fx.base}'`);
+    assert.doesNotMatch(line, /<[a-z][^>]*>/, `an unsubstituted placeholder remains in: ${line}`);
+    const r = spawnSync("sh", ["-c", line], { cwd: fx.dir, encoding: "utf8", env });
     assert.equal(r.status, EXIT.NOT_COMMITTED, `${r.stdout}${r.stderr}`);
     const lines = r.stdout.trimEnd().split("\n");
     const doc = JSON.parse(lines.at(-1));

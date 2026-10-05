@@ -6,7 +6,19 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { echo, floorScript, indent, ledgerSteps, runLedgerTail, runNode, runStop, shownExit, step } from "./closeout-core.mjs";
+import {
+  ECHO_CAP,
+  capped,
+  echo,
+  floorScript,
+  indent,
+  ledgerSteps,
+  runLedgerTail,
+  runNode,
+  runStop,
+  shownExit,
+  step,
+} from "./closeout-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -27,6 +39,17 @@ test("echo: a fixed header, stdout and stderr indented; printRaw prints stdout w
   echo(log, { id: "m" }, { status: 0, stdout: "marker 3: run-stop 2026-10-05T00:00:00.000Z", stderr: "", error: null }, { printRaw: true });
   assert.equal(out.join(""), "── m (exit 0)\nmarker 3: run-stop 2026-10-05T00:00:00.000Z\n");
   assert.equal(shownExit({ status: null }), "none");
+});
+
+test("review R8 — a step's echoed stream is capped to its last ECHO_CAP characters, and the cut is said", () => {
+  const out = [];
+  const big = `${"x".repeat(ECHO_CAP + 100)}\nVERDICT LINE\n`;
+  echo((s) => out.push(s), { id: "loud" }, { status: 0, stdout: big, stderr: big, error: null });
+  const text = out.join("");
+  assert.ok(text.length < 3 * ECHO_CAP, "both streams are bounded");
+  assert.match(text, /earlier characters not shown/);
+  assert.ok(text.includes("  VERDICT LINE\n"), "the tail (where a verdict sits) is kept");
+  assert.equal(capped("short"), "short");
 });
 
 test("runNode never throws: a missing script, a crashing one and a signal are non-zero status objects; stdin is ignored", () => {

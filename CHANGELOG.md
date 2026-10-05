@@ -61,6 +61,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     `render-run-report`/`render-regression`/`render-verify.test.mjs` (the staging-list site), `run-marker.test.mjs`,
     `check-loop-fresh.test.mjs` (executes the closeout's commit-gate argv), `check-test-stage.test.mjs` (executes
     `buildStageList`), `stage-runtime.test.mjs` (GIT CEILING), `frontmatter-core.test.mjs` (CONSUMERS).
+  - **After the independent review (R1–R8):** a crash is no longer sent through Step 6d's "already undone" item — the
+    closeout writes the git step it has reached to `.pharn/pharn-loop/<name>/closeout-phase`, and while the checkout is
+    on `pharn-loop/<name>` a crash leaves the SPEC, the Outcome and the tree for a person; the close parts say a Bash
+    call reported "moved to the background" is still running and is never re-run. The closeout refuses (exit 2,
+    `on-loop-branch`) on this run's own branch, which stops the reproduced double commit. A crash on a non-green stop
+    records `not committed: <decision>`, and the crash path names the artifacts it may have lost. Ship's crash path may
+    run the idempotent run-marker close by hand. `git commit -q`, and each step's echoed output is capped at its last
+    8,192 characters, so the closing JSON line stays in the tool result. The end-to-end test executes the committed
+    closeout line. `pharn-ship-quick.md` items 3 and 12 now say the marker close and the report skip run inside the
+    closeout.
   - SKILLS_VERSION 6.40.0 → 6.43.0 (minor: new floor scripts and command behaviour; the version was pre-assigned by
     the batch). No trusted doc, hook, settings or `MIN_CLI` change.
 

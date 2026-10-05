@@ -80,7 +80,10 @@ capture rules:
 
 **Then run the closeout — ONE line, which performs the rest of Step 6 in the order below and stops at its first
 gate that does not pass** (`pharn/floor/loop-closeout.mjs`, header). Run it once, from the project root, with the Bash
-tool's `timeout` at 600000; substitute `<name>` and `<base sha>` literally:
+tool's `timeout` at 600000; substitute `<name>` and `<base sha>` literally. **Never run it again after a crash or after
+exit `0`, `3` or `4`** (on this run's own `pharn-loop/<name>` branch it refuses anyway). A call the Bash tool reports as
+**moved to the background** is still running, not failed: wait for its completion notice and read its exit then — never
+re-run it meanwhile.
 
 ```bash
 node pharn/floor/loop-closeout.mjs --feature '<name>' --base '<base sha>'
@@ -117,17 +120,25 @@ node pharn/floor/loop-closeout.mjs --feature '<name>' --base '<base sha>'
 - **`3`** — `not committed: <decision>`, a stop that is not green. Go to Step 7.
 - **`4`** — not committed, and a write of yours is still owed: Step 6d.
 - **`5`** — the record is RED: item 1.
-- **`2`** — refused before anything ran (its stderr names why): run the line once more with this run's own
-  `<name>` and `<base sha>`; a second refusal is handled as a crash.
+- **`2`** — refused before anything ran (its stderr names why). Refusal `usage` or `no-feature-dir`: run the line once
+  more with this run's own `<name>` and `<base sha>`; a second refusal is handled as a crash. Refusal `on-loop-branch`:
+  the closeout already ran — handle it as a crash.
 - **Any other exit, `1` included, is a crash.** No outcome is read from it, and it is never a commit decision:
-  commit nothing yourself and run none of its steps by hand. The outcome is `not committed: stage failed`, and the
-  summary says **the commit state must be checked by a person** — a crash after the commit step cannot be told from
-  one before it, so a `pharn-loop/<name>` branch, staged paths or a commit may exist. Quote the exit code, its stderr
-  and this read's output verbatim, then go to Step 6d:
+  commit nothing yourself, run none of its steps by hand, and do not run the line again. Nothing was undone. Quote the
+  exit code, its stderr and the output of these two reads verbatim:
 
   ```bash
   git status --short --branch
+  cat .pharn/pharn-loop/<name>/closeout-phase 2>/dev/null || echo "no git step reached"
   ```
+
+  The phase file names the git step the closeout had reached (`branch`, `add`, `commit`, `undo`, `committed`,
+  `finished`). **While the first read shows `## pharn-loop/<name>…`, leave everything for a person**: no SPEC revert
+  and no `## Outcome` rewrite — a `pharn-loop/<name>` branch, staged paths or a commit may exist, and a crash after the
+  commit step cannot be told from one before it. Otherwise go to Step 6d with the outcome `not committed: stage failed`
+  on a green stop, or `not committed: <decision>` on one that is not. Either way the summary says **the commit state
+  must be checked by a person**, and names what a crash may have left unwritten: the run-stop marker, `cost.json` and
+  `RUN-REPORT.md` (say "no ledger was emitted this run" unless the output shows the emitter exited 0).
 
 ### Step 6c — commit, on a green stop (`STOP_GREEN`, or `STOP_GREEN_QUICK` under `--quick`) AND a GREEN `<decision-check>` only
 
@@ -171,9 +182,10 @@ On success the document carries the SHA (`commit`), and the checkout **stays on 
 For a closeout exit `4` — `not committed: decision unverifiable`, `not committed: evidence stale`,
 `not committed: nothing staged`, `branch failed`, `stage failed` or `commit failed` on a green stop, or
 `not committed: <decision>` on a stop that is not green while the SPEC still reads Approved (Step 6a did not run, or
-its revert failed) — and for a closeout crash:
+its revert failed) — and for a closeout crash whose checkout is not on a `pharn-loop/<name>` branch (Step 6b's crash
+bullet; item 1 does not apply to it — a crash undid nothing):
 
-1. **The closeout has already undone exactly what happened, and nothing else.** `decision unverifiable` and
+1. **On exit `4` the closeout has already undone exactly what happened, and nothing else.** `decision unverifiable` and
    `evidence stale` are caught before any staging or branch step — nothing was staged and no branch exists — as are
    `nothing staged`, `branch failed` and a setter-or-builder `stage failed`. After a failed add or commit it unstaged
    only the run's list, returned with `git checkout - --` and deleted the new branch with the safe form (it holds no
@@ -185,7 +197,7 @@ its revert failed) — and for a closeout crash:
    says where the checkout is: put it in the summary.
 2. Apply Step 6a's revert — no commit happened, so there is no review point to hold the model's approval.
 3. Re-scope to `LOOP.md` (the Step 6b setter lines), rewrite only the `## Outcome` lines (the document's `outcome`;
-   after a crash, `not committed: stage failed`), and re-run the record check:
+   after a crash, the outcome Step 6b's crash bullet names), and re-run the record check:
 
    ```bash
    node pharn/floor/check-loop-record.mjs pharn/features/<name>/LOOP.md

@@ -3469,8 +3469,11 @@ for (const cmd of RUN_MARKER_WIRING) {
     assert.equal(opens.length, 1, `${cmd.file}: expected exactly one --open line`);
     assert.equal(opens[0][1], cmd.command, `${cmd.file}: --open must name ${cmd.command}`);
     if (cmd.closeVia) {
-      assert.equal(closes.length, 0, `${cmd.file}: the close is its closeout's, never a typed line`);
+      // The close is the closeout's; the one typed line left is the crash fallback (independent review R4), after it.
+      assert.equal(closes.length, 1, `${cmd.file}: exactly one typed --close line, the closeout's crash fallback`);
+      assert.equal(closes[0][1], cmd.command, `${cmd.file}: --close must name ${cmd.command}`);
       assert.equal([...body.matchAll(new RegExp(cmd.closeVia, "g"))].length, 1, `${cmd.file}: expected exactly one closeout line`);
+      assert.ok(body.search(cmd.closeVia) < closes[0].index, `${cmd.file}: the fallback follows the closeout line`);
       assert.deepEqual([...shipSteps("<name>", "x").markerClose.args], ["--close", cmd.command, "<name>"]);
     } else {
       assert.equal(closes.length, 1, `${cmd.file}: expected exactly one --close line`);

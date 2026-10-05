@@ -160,9 +160,17 @@ node pharn/floor/ship-closeout.mjs --feature '<name>'
 
 Exit `0`: every item ran, and none gates — each item's result is in the document (`run_stop`, `run_marker_close`,
 `base_sha`, `ledger`, `ledger_check`, `report`). Exit `2`: refused before any item ran (its stderr names why) — run it
-once more with the run's own `<name>`. Any other exit, `1` included, is a crash: say so with its stderr verbatim, run
-none of its items by hand, and say the ledger, the report and the marker close may not have happened (a run marker
-left open expires within 24 h). Either way the run goes on to its gate or its STOP.
+once more with the run's own `<name>`. Any other exit, `1` included, is a crash: say so with its stderr verbatim, do
+not run the closeout again, and say the run-stop marker, `cost.json` and `RUN-REPORT.md` may not have been written. Its
+one item you may run by hand is the write-guard marker's close — idempotent, so it is safe whether or not the closeout
+reached it (a marker left open would hold an installed project's write guard fail-closed for up to 24 h):
+
+```bash
+node pharn/floor/run-marker.mjs --close pharn-ship '<name>'
+```
+
+A call the Bash tool reports as moved to the background is still running: wait for its completion notice. Either way
+the run goes on to its gate or its STOP.
 
 1. **Close the marker file** — the `run-stop` boundary, `mark-phase.mjs --kind run-stop` — **then close the
    write-guard run marker (6.24.0, D3) directly after it**, `run-marker.mjs --close pharn-ship`, on EVERY exit that

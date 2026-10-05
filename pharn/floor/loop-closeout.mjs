@@ -7,7 +7,8 @@
 // ================================ WHY (P7 — the recorded trigger) ================================
 // The green close was 16 pinned blocks plus a mandated `git rev-parse HEAD`, each its own Bash call and so its own
 // model request re-sending the orchestrator's whole context (498k–503k tokens per request in the 2026-10-05
-// 92-minute pharn-starter run; 2.1–5.8 s per non-Write request). This script replaces 14 of those requests with one.
+// 92-minute pharn-starter run; 2.1–5.8 s per non-Write request). This script replaces 15 of those requests with one
+// (net −14).
 // The second reason stands on its own: the commit's branch, staging list and undo were model-executed prose that only
 // an unattended run reached (L44's recorded failure: a variable carried between blocks emptied a branch delete). Here
 // they are tested code the suite executes. The audit's own confirm-first bar for this candidate (orchestrator requests
@@ -17,7 +18,11 @@
 // ================================ THE SEQUENCE (each step exactly as the line it replaced) ================================
 //  0. argv: --feature a FEATURE_SLUG_RE member, --base a SHA_RE member (both gate-run-core.mjs, the one owner),
 //     --after-repair optional, nothing else, no repeat; then pharn/features/<name>/ must be an lstat directory under
-//     the INVOKING directory. Any refusal → exit 2, nothing run. The closeout runs from the project root, as every
+//     the INVOKING directory, and the checkout must NOT already be on pharn-loop/<name> or pharn-loop/<name>-<n> — a
+//     second run after a commit (or after a crash that left the branch) would commit again (independent review R2,
+//     reproduced). Any refusal → exit 2, nothing run. Never re-run the closeout after a crash or after exit 0/3/4.
+//     From the branch step on, the step about to run is written to .pharn/pharn-loop/<name>/closeout-phase
+//     (`branch`, `add`, `commit`, `undo`, `committed`, then `finished`), so a crash can be classified (review R1). The closeout runs from the project root, as every
 //     pinned line did: floor children resolve from this file's directory, the two hooks and every path operand from
 //     the invoking directory.
 //  1. check-loop-record.mjs <LOOP.md>. RED without --after-repair → exit 5, NOTHING else run (the ≤1 repair; still
@@ -167,6 +172,31 @@ const recordPath = (f) => `pharn/features/${f}/LOOP.md`;
 const specPath = (f) => `pharn/features/${f}/SPEC.md`;
 const lockPath = (f) => `pharn/features/${f}/AC-TESTS.lock.json`;
 export const stageListPath = (f) => `.pharn/pharn-loop/${f}/stage.list`;
+export const phasePath = (f) => `.pharn/pharn-loop/${f}/closeout-phase`;
+
+/** The closed set of phases written to `phasePath` (review R1). */
+export const PHASES = Object.freeze(["branch", "add", "commit", "undo", "committed", "finished"]);
+
+/** The branch a run of `feature` creates (pharn-loop/<name> or pharn-loop/<name>-<n>). */
+export function isLoopBranchOf(feature, branch) {
+  if (typeof branch !== "string") return false;
+  const stem = `pharn-loop/${feature}`;
+  return branch === stem || (branch.startsWith(`${stem}-`) && /^\d+$/.test(branch.slice(stem.length + 1)));
+}
+
+/** Record the step about to run, best effort (a write that fails is reported, never fatal): containment first. */
+function writePhase(feature, phase, log) {
+  const root = process.cwd();
+  const rel = phasePath(feature);
+  const walk = containmentWalk(root, join(root, rel));
+  try {
+    if (!walk.ok) throw new Error(walk.reason);
+    mkdirSync(join(root, ".pharn", "pharn-loop", feature), { recursive: true });
+    writeFileSync(rel, `${phase}\n`);
+  } catch (e) {
+    log(`── closeout-phase not written (${phase}): ${e && typeof e.message === "string" ? e.message : "write failed"}\n`);
+  }
+}
 const freshnessPath = (f) => `.pharn/pharn-loop/${f}/freshness.jsonl`;
 
 /** The commit-gate freshness argv — exported so check-loop-fresh.test.mjs EXECUTES exactly what this script passes. */
@@ -218,6 +248,7 @@ export function addArgs(list) {
 export function commitArgs(list, feature, decision, iterations) {
   return [
     "commit",
+    "-q",
     `--pathspec-from-file=${list}`,
     "--pathspec-file-nul",
     "-m",
@@ -440,6 +471,13 @@ export function closeLoop({ feature, base, afterRepair = false, run = runStep, g
     doc.refusal = "no-feature-dir";
     return doc;
   }
+  const current = git(["symbolic-ref", "--short", "-q", "HEAD"]);
+  if (current.status === 0 && isLoopBranchOf(feature, current.stdout.trim())) {
+    log("── refused: the checkout is already on this run's pharn-loop branch — the closeout ran before; never re-run it\n");
+    doc.exit = EXIT.UNUSABLE;
+    doc.refusal = "on-loop-branch";
+    return doc;
+  }
 
   trace.phase = "record-check";
   const rc = run(steps.recordCheck);
@@ -473,6 +511,7 @@ export function closeLoop({ feature, base, afterRepair = false, run = runStep, g
   Object.assign(doc, runLedgerTail({ steps, quick: facts.mode === "quick", run, log }));
   doc.freshness = "not-run";
 
+  let gitReached = false;
   const owed = (reason) => {
     doc.outcome = `not committed: ${reason}`;
     doc.exit = EXIT.OWED;
@@ -480,6 +519,7 @@ export function closeLoop({ feature, base, afterRepair = false, run = runStep, g
   };
   const finish = () => {
     trace.phase = "finish";
+    if (gitReached) writePhase(feature, "finished", log);
     printFreshness(feature, log);
     doc.checkout = checkoutNow(git);
     if (doc.exit === EXIT.COMMITTED || doc.exit === EXIT.NOT_COMMITTED) {
@@ -540,26 +580,33 @@ export function closeLoop({ feature, base, afterRepair = false, run = runStep, g
   log(`── staging list: ${list.paths.length} path(s) -> ${stageListPath(feature)}\n`);
 
   trace.phase = "branch";
+  gitReached = true;
+  writePhase(feature, "branch", log);
   const br = createBranch(feature, { git });
   echo(log, { id: "git switch -c" }, br.result);
   if (!br.ok) return owed("branch failed");
   doc.branch = br.branch;
 
   trace.phase = "add";
+  writePhase(feature, "add", log);
   const add = git(addArgs(stageListPath(feature)), { literal: true });
   echo(log, { id: "git add" }, add);
   if (add.status !== 0) {
+    writePhase(feature, "undo", log);
     undoBranch(feature, br.branch, { git, log });
     return owed("stage failed");
   }
   trace.phase = "commit";
+  writePhase(feature, "commit", log);
   const cm = git(commitArgs(stageListPath(feature), feature, facts.decision, facts.iterations), { literal: true });
   echo(log, { id: "git commit" }, cm);
   if (cm.status !== 0) {
+    writePhase(feature, "undo", log);
     undoBranch(feature, br.branch, { git, log });
     return owed("commit failed");
   }
   trace.phase = "committed";
+  writePhase(feature, "committed", log);
   const h = git(["rev-parse", "HEAD"]);
   const sha = h.stdout.trim();
   doc.commit = h.status === 0 && SHA_RE.test(sha) ? sha : null;
