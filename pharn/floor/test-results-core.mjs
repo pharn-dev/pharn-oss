@@ -203,6 +203,12 @@ function rootsOf(root) {
 
 const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
+/** A parsed entry's test id: `<file>::<title path joined by " › ">`. The ONE id rule (L35) — buildRecord's, and
+ *  build-gate-core.mjs's when it joins an entry's failure messages to the record's failing tests (6.39.0). */
+export function testIdOf(entry) {
+  return `${entry.file}${FILE_SEP}${entry.path.join(TITLE_SEP)}`;
+}
+
 /** Turn parsed entries into the record: ids, caps, the per-test anomalies, the exit-code cross-check. Pure.
  *  `tests` holds every entry whose status the report gives plainly and whose id no other entry shares; `anomalies`
  *  holds the rest — ONE `duplicate-test-id` entry per shared id (whatever those entries' statuses), else the adapter's
@@ -214,7 +220,7 @@ export function buildRecord({ gate, format, exit, sha, parsed }) {
   const withIds = [];
   const shared = new Map();
   for (const e of parsed.entries) {
-    const id = `${e.file}${FILE_SEP}${e.path.join(TITLE_SEP)}`;
+    const id = testIdOf(e);
     if (id.length > MAX_ID_CHARS) return refuse("over-cap", `a test id is ${id.length} characters, over the ${MAX_ID_CHARS}-character cap`);
     withIds.push({ id, e });
     shared.set(id, (shared.get(id) ?? 0) + 1);
@@ -264,12 +270,26 @@ export function buildRecord({ gate, format, exit, sha, parsed }) {
  *  reason. `outDir` is the runner's `<out>` for that stamp; `root` is the directory the gate ran in (the
  *  stamp does not record it) and holds `pharn.config.json`. All four are required — no defaults (L41). */
 export function testRecord({ stamp, outDir, gateId, root }) {
+  const g = readGateResults("testRecord", { stamp, outDir, gateId, root });
+  if (!g.ok) return g;
+  return buildRecord({ gate: g.gate, format: g.format, exit: g.exit, sha: g.sha, parsed: g.parsed });
+}
+
+/** testRecord's first half (6.39.0), for a caller that needs the parsed ENTRIES beside the record — build-gate.mjs,
+ *  whose summary quotes each failing test's `messages`: `{ok, gate, format, exit, sha, parsed}`, bound to the stamp
+ *  exactly as testRecord is (validated stamp, configured format, the bytes the runner hashed), or the same closed
+ *  refusal. The caller builds the record with `buildRecord` from the SAME parse, so the two can never disagree. */
+export function gateResults({ stamp, outDir, gateId, root }) {
+  return readGateResults("gateResults", { stamp, outDir, gateId, root });
+}
+
+function readGateResults(caller, { stamp, outDir, gateId, root }) {
   for (const [name, v] of [
     ["outDir", outDir],
     ["gateId", gateId],
     ["root", root],
   ]) {
-    if (typeof v !== "string" || v === "") throw new TypeError(`testRecord: \`${name}\` must be a non-empty string`);
+    if (typeof v !== "string" || v === "") throw new TypeError(`${caller}: \`${name}\` must be a non-empty string`);
   }
   const valid = validateStamp(stamp);
   if (!valid.ok) return refuse("stamp-invalid", `${valid.reason_code}: ${valid.reason}`);
@@ -304,5 +324,5 @@ export function testRecord({ stamp, outDir, gateId, root }) {
   }
   const parsed = parseResults(fmt.format, doc, rootsOf(root));
   if (!parsed.ok) return refuse(parsed.reason_code, parsed.reason);
-  return buildRecord({ gate: gateId, format: fmt.format, exit: run.exit, sha, parsed });
+  return { ok: true, gate: gateId, format: fmt.format, exit: run.exit, sha, parsed };
 }
