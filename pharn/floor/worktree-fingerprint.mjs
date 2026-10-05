@@ -49,6 +49,10 @@
 //     BOUND, and it is L43's exactly: that test certifies the three stores AGREE, never that the set is
 //     CORRECT. All three can be stale together the day a new artifact lands and nobody classifies it.
 //
+// (3) ENTRY ONLY (6.42.0) — `stage: "entry"` also excludes the WHOLE `pharn/features/<feature>/` and records ENTRY_ALGO.
+//     The entry check's gates overlap the front stages, which write only there; see FEATURE_DIR_EXCLUDED_STAGE below.
+//     No other stage passes `stage`, so every other digest is byte-identical to before (the golden test pins it).
+//
 // ================================== BOUNDS, NAMED NOT DISCOVERED ==================================
 //   • CONTENT ONLY — a chmod-only change is invisible (inherited from hashFile, which hashes bytes).
 //   • A submodule gitlink is not descended (git reports the gitlink path; hashFile returns null for a
@@ -99,6 +103,23 @@ import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
  *  golden digest in worktree-fingerprint.test.mjs is keyed by this value (/2 since 6.20.8 — every symlink
  *  hashed by its link text; see the header's UPGRADES bound). */
 export const ALGO = "worktree-fingerprint/2+sha256";
+
+/** The ENTRY stage's algo (6.42.0, loop-entry-preflight) — ALGO plus the one extra exclusion below. Its own token so
+ *  an entry digest can never be compared equal to any other stage's: every consumer compares `algo` first, and
+ *  gate-reuse-core.mjs's execution identity includes it. */
+export const ENTRY_ALGO = `${ALGO}+entry-feature-dir`;
+
+/** The one stage whose fingerprint excludes the run's WHOLE product feature directory (6.42.0). Its gates run in the
+ *  background while /pharn-spec, /pharn-plan and /pharn-grill write `pharn/features/<name>/**` and nothing else a gate
+ *  reads, so those writes must not read as a tree change between gates. Sound for this stage only: an entry stamp is
+ *  read by entry-gates.mjs alone and is never reuse evidence (gate-reuse-core.mjs `findReusable` accepts only a
+ *  regress/head stamp, and ENTRY_ALGO differs). Every other stage keeps the digest and ALGO it had. */
+export const FEATURE_DIR_EXCLUDED_STAGE = "entry";
+
+/** The product feature directory the entry stage excludes — a literal prefix for a slug FEATURE_SLUG_RE accepted. */
+export function productFeatureDir(feature) {
+  return `pharn/features/${feature}/`;
+}
 
 /** The scratch namespace the runner itself writes. See exclusion (1) in the header. */
 export const STATE_ROOT_SEGMENT = ".pharn/";
@@ -165,10 +186,17 @@ export function isExcluded(file, feature) {
  * Returns `{ok: true, digest, algo, paths}` or `{ok: false, reason}`; the caller maps the failure onto a
  * closed reason_code. Fail-closed: an enumeration this module cannot trust is never hashed partially.
  */
-export function fingerprint(baseDir, { feature = null } = {}) {
+export function fingerprint(baseDir, { feature = null, stage = null } = {}) {
+  // The entry exclusion needs a slug the shape gate accepts; without one there is no directory to exclude, and an
+  // entry fingerprint is refused rather than computed over a set it could not narrow (fail-closed).
+  const entry = stage === FEATURE_DIR_EXCLUDED_STAGE;
+  if (entry && !(typeof feature === "string" && FEATURE_SLUG_RE.test(feature))) {
+    return { ok: false, reason: "an entry fingerprint requires a feature slug" };
+  }
   const e = enumerate(baseDir);
   if (!e.ok) return { ok: false, reason: e.reason };
-  const kept = e.paths.filter((p) => !isExcluded(p, feature)).sort();
+  const dir = entry ? productFeatureDir(feature) : null;
+  const kept = e.paths.filter((p) => !isExcluded(p, feature) && !(dir !== null && p.startsWith(dir))).sort();
   const h = createHash("sha256");
   for (const rel of kept) {
     // The length-prefixed field separator is load-bearing: without it the pairs
@@ -181,7 +209,7 @@ export function fingerprint(baseDir, { feature = null } = {}) {
     h.update(hashFile(resolve(baseDir, rel)) ?? "DELETED");
     h.update("\0");
   }
-  return { ok: true, digest: h.digest("hex"), algo: ALGO, paths: kept.length };
+  return { ok: true, digest: h.digest("hex"), algo: entry ? ENTRY_ALGO : ALGO, paths: kept.length };
 }
 
 function main(argv) {

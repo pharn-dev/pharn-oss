@@ -9,7 +9,7 @@ import { readFileSync, mkdirSync, writeFileSync, existsSync, rmSync } from "node
 import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { renderDone, renderRefused, preRunLines } from "./render-regression.mjs";
+import { renderDone, renderRefused, preRunLines, entryGateLines } from "./render-regression.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..");
@@ -257,7 +257,7 @@ test("★ ENUMERATION (G9) — every site that must know REGRESSION.md names it"
     ["pharn/floor/check-regress.mjs", /PIPELINE_ARTIFACTS[\s\S]*?"REGRESSION\.md"[\s\S]*?\];/],
     ["pharn/floor/reconcile-ignore.json", /"names":[\s\S]*?"REGRESSION\.md"/],
     ["pharn/floor/worktree-fingerprint.mjs", /EXCLUDED_ARTIFACTS[\s\S]*?"REGRESSION\.md"[\s\S]*?\]\);/],
-    ["pharn/floor/loop-closeout.mjs", /STAGE_ARTIFACTS[\s\S]*?"REGRESSION\.md"[\s\S]*?\]\);/], // Step 6c's staging list, in the loop's closeout (6.43.0)
+    ["pharn/floor/loop-closeout.mjs", /STAGE_ARTIFACTS[\s\S]*?"REGRESSION\.md"[\s\S]*?\]\);/], // Step 6c's staging list, in the loop's closeout (6.44.0)
     [".prettierignore", /^pharn\/features\/\*\/REGRESSION\.md$/m],
     [".markdownlint-cli2.jsonc", /"pharn\/features\/\*\/REGRESSION\.md"/],
   ];
@@ -400,6 +400,27 @@ test("renderRefused: a scope-escaped refusal names the pre-run paths in their ow
   assert.equal(md.split("\n").filter((l) => l === "# fake heading").length, 1, "and nowhere outside it");
   const without = renderRefused({ feature: "demo", reasonCode: "scope-escaped", detail: "1 path(s) escaped" });
   assert.doesNotMatch(without, /Pre-run snapshot/, "no block, no section — the pre-6.37.0 render");
+});
+
+test("6.42.0 (review R1) — the entry gates' changes render in their own lines, quoted as DATA, and nothing without the block", () => {
+  const scope = (block) => ({ ...baseScope(), ...(block ? { entry_gate_changes: block } : {}) });
+  const render = (block) =>
+    renderDone({ feature: "demo", base: "a".repeat(40), report: baseReport(), scope: scope(block), progress: baseProgress() });
+  assert.equal(render(null), render(undefined), "no block → the earlier render");
+  assert.deepEqual(entryGateLines(null), []);
+  const md = render({ status: "applied", unchanged: ["# fake heading", "next-env.d.ts"] });
+  assert.match(md, /changed by this run's entry gates \(2\)/);
+  assert.match(md, /```text\n# fake heading\nnext-env\.d\.ts\n```/);
+  assert.equal(md.split("\n").filter((l) => l === "# fake heading").length, 1, "only inside the fence");
+  assert.match(render({ status: "applied", unchanged: [] }), /entry gates' changes: applied — no undeclared path/);
+  assert.match(render({ status: "other-run", unchanged: [] }), /entry gates' changes: not applied \(other-run\)/);
+  const refused = renderRefused({
+    feature: "demo",
+    reasonCode: "scope-escaped",
+    detail: "1 path(s) escaped",
+    entryGates: { status: "applied", unchanged: ["next-env.d.ts"] },
+  });
+  assert.match(refused, /## Entry gates' changes/);
 });
 
 // ── 6.36.0: the gate-exclusion disclosure, from gate_run.head.excluded, DIRECTLY under the verdict line ─────────

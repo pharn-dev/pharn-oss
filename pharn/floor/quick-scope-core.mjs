@@ -58,7 +58,8 @@ import { FEATURE_SLUG_RE, SHA_RE } from "./gate-run-core.mjs";
 import { containmentWalk, gitSync } from "./stage-runtime.mjs";
 import { declaredWrites, changedPaths } from "./scope-inputs.mjs";
 import { partitionScope, scopeFindings, normPath } from "./check-regress.mjs";
-import { preRunUnchanged } from "./pre-run-snapshot.mjs";
+import { preRunUnchanged, entryChangesUnchanged } from "./pre-run-snapshot.mjs";
+import { entryBlocks } from "./pre-run-snapshot-core.mjs";
 
 const FEATURES_DIR = "pharn/features";
 const FLAGS = new Set(["--feature", "--base"]);
@@ -135,7 +136,14 @@ function check(args) {
   const inside = changed.value;
 
   const preRunDecision = preRunUnchanged({ feature, base, inside });
-  const { escaped, escapeExempt, preRun } = partitionScope({ inside, declared, feature, preRunUnchanged: preRunDecision.unchanged });
+  const entryDecision = entryChangesUnchanged({ feature, base, inside }); // 6.42.0: the entry gates' own writes (R1)
+  const { escaped, escapeExempt, preRun } = partitionScope({
+    inside,
+    declared,
+    feature,
+    preRunUnchanged: [...new Set([...preRunDecision.unchanged, ...entryDecision.unchanged])],
+  });
+  const { preRunBlock, entryBlock } = entryBlocks(preRunDecision, entryDecision, preRun);
   const doc = {
     feature,
     base,
@@ -143,7 +151,8 @@ function check(args) {
     declared,
     escaped,
     escape_exempt: escapeExempt,
-    pre_run_snapshot: { status: preRunDecision.status, unchanged: preRun },
+    pre_run_snapshot: preRunBlock,
+    ...(entryBlock ? { entry_gate_changes: entryBlock } : {}),
   };
   if (escaped.length) finish({ ...doc, findings: scopeFindings(escaped) }, EXIT.escaped);
   finish(doc, EXIT.clean);

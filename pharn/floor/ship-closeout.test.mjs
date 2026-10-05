@@ -1,4 +1,4 @@
-// pharn/floor/ship-closeout.test.mjs — /pharn-ship's Step 3a as one line (6.43.0, loop-closeout-script).
+// pharn/floor/ship-closeout.test.mjs — /pharn-ship's Step 3a as one line (6.44.0, loop-closeout-script).
 // Stubbed children pin the order and each step's argv against the close part's former lines (TODAY); the ★ tests run
 // the CLI with its real children in a fixture project.
 

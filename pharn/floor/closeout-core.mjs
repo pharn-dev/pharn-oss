@@ -1,4 +1,4 @@
-// pharn/floor/closeout-core.mjs — the half of a run's close that /pharn-loop and /pharn-ship SHARE (6.43.0,
+// pharn/floor/closeout-core.mjs — the half of a run's close that /pharn-loop and /pharn-ship SHARE (6.44.0,
 // loop-closeout-script). No CLI. Its two callers are `loop-closeout.mjs` (the loop's Steps 6b–6c, after the model
 // writes LOOP.md) and `ship-closeout.mjs` (ship's Step 3a); each keeps its own steps, outcome and exit codes.
 //

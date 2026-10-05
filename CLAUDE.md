@@ -372,7 +372,7 @@ node pharn/floor/feature-name.mjs [--fresh]
 # Exit: init 0 ok | 2 runner error (closed reason_code) | 3 EMPTY SOURCE SET (nothing written; routes to the
 # existing no-gates HALT, and to /pharn-loop's unattended S4 `blocked: no-gates`) ·
 # run 0 an entry ran (a FAILING GATE IS DATA, not a runner error) | 2 runner error | 3 nothing left.
-node pharn/floor/run-gates.mjs init --stage verify|regress [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--discover <package.json>] [--gates "<cmd>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>] [--reuse-stamp <f> --reuse-sha256 <hex>]
+node pharn/floor/run-gates.mjs init --stage verify|regress|entry [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--discover <package.json>] [--gates "<cmd>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>] [--reuse-stamp <f> --reuse-sha256 <hex>]
 node pharn/floor/run-gates.mjs init --stage ac-test --feature <name> --out <dir> --discover <package.json> --ac-tests <AC-TESTS.md> [--cwd <dir>]   # 6.18.0, /pharn-test's red run
 node pharn/floor/run-gates.mjs run --next --out <dir> --timeout-ms <N>
 node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
@@ -912,6 +912,16 @@ node pharn/floor/check-instruction-files.mjs --growth (--base <ref> | --base-rul
 # Exit: 0 recorded · 2 refused (closed REASON_CODES, `crashed` a caught throw); a module that cannot load is node's 1.
 node pharn/floor/pre-run-snapshot.mjs --capture <name>
 
+# THE ENTRY GATES (6.42.0, loop-entry-preflight) — /pharn-loop and /pharn-ship run /pharn-verify's discovered gates once
+# on the starting tree, in a detached background runner, during spec/plan/grill; the verdict is read before /pharn-test.
+# A red gate is /pharn-loop S14 (`--allow-red-entry` opts out); /pharn-ship asks. A gate's own writes are recorded beside
+# the pre-run snapshot (regression-report.md `entry_gate_changes`). Rules, bounds and the P7 trigger:
+# pharn/floor/entry-gates.mjs and entry-gates-core.mjs headers; gate-run-record.md's `entry` bullet.
+# Exit (--wait): 0 green · 4 red · 3 no-gates · 5 continue (run again) · 2 unusable; --start 0 · 3 · 2; --abort 0.
+node pharn/floor/entry-gates.mjs --start --feature <name> --timeout-ms <N>
+node pharn/floor/entry-gates.mjs --wait --feature <name> --budget-ms <B>
+node pharn/floor/entry-gates.mjs --abort --feature <name>
+
 # Check the SHAPE of a loop-record — the pharn/features/<name>/LOOP.md that /pharn-loop writes at every stop.
 # Floor: the frontmatter envelope (`decision` in {STOP_GREEN, STOP_GREEN_QUICK, STOP_CAP, STOP_TERMINAL, INCONCLUSIVE};
 # `iterations` a positive integer; `commit` a git SHA or the literal `unknown`; `date` ISO YYYY-MM-DD; and,
@@ -941,7 +951,7 @@ node pharn/floor/check-loop-record.mjs <LOOP.md>
 # SKIPPED · 1 RED.
 node pharn/floor/check-loop-decision.mjs <LOOP.md>
 
-# THE CLOSEOUTS (6.43.0, loop-closeout-script) — /pharn-loop's close after the model writes LOOP.md, and /pharn-ship's
+# THE CLOSEOUTS (6.44.0, loop-closeout-script) — /pharn-loop's close after the model writes LOOP.md, and /pharn-ship's
 # Step 3a, each as ONE tested line instead of 16 / 6 pinned blocks (each block was a model request at the run's largest
 # context). loop-closeout runs, in the close part's former order: check-loop-record (RED → exit 5, nothing else ran;
 # repair, re-run with --after-repair), check-loop-decision (blocked → N/A), run-stop, ledger + check + report (report
@@ -954,7 +964,7 @@ node pharn/floor/check-loop-decision.mjs <LOOP.md>
 # run-start marker); exit 0 always (nothing gates) · 2 refused; it holds NO git write (a source scan). The shared steps
 # live once in closeout-core.mjs. Last stdout line: one JSON document, closed keys. FLOOR: tested code over floor
 # verdicts (the green-token enum, the two checkers' exits); ADVISORY: that a run invokes the line and runs no git of its
-# own. C2's audit bar was met by 1 of 3 real runs; adopted at the user's request (CHANGELOG [6.43.0]).
+# own. C2's audit bar was met by 1 of 3 real runs; adopted at the user's request (CHANGELOG [6.44.0]).
 node pharn/floor/loop-closeout.mjs --feature <name> --base <40-hex> [--after-repair]
 node pharn/floor/ship-closeout.mjs --feature <name>
 

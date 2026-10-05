@@ -270,7 +270,7 @@ test("✧ WIRING: pharn-ship.md's pinned OPEN line, executed verbatim (with <nam
   assert.ok(existsSync(markerPath(dir, "pharn-ship", "demo-run")), "the pinned open line must create the marker");
 });
 
-// Since 6.43.0 ship's close runs inside its Step 3a closeout line (pharn/floor/ship-closeout.mjs), so the line
+// Since 6.44.0 ship's close runs inside its Step 3a closeout line (pharn/floor/ship-closeout.mjs), so the line
 // EXECUTED here is that committed closeout line; the order inside it (run-stop, then this close) is executed by
 // ship-closeout.test.mjs against the close part's former lines.
 test("✧ WIRING: pharn-ship.md's pinned Step 3a closeout line, executed verbatim, removes it", () => {

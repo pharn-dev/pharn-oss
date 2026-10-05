@@ -1668,6 +1668,7 @@ const STUCK_POINTS = [
   { id: "S11", blocked: "stale-evidence" },
   { id: "S12", blocked: "no-test-runner" }, // 6.19.0: /pharn-test's preflight found a level with no runner
   { id: "S13", blocked: "ac-evidence-invalid" }, // 6.20.0: the AC evidence changed or is missing — a rebuild cannot fix it
+  { id: "S14", blocked: "gates-red-at-entry" }, // 6.42.0: a gate was red on the tree the run started from (entry-gates.mjs)
 ];
 // The one non-member spelling the closure admits: the command's own placeholder in generic prose.
 const BLOCKED_PLACEHOLDER = "<id>";
@@ -1685,7 +1686,7 @@ const COMMIT_OUTCOMES = [
 
 const ASK_TOKEN_RE = /\bAsk(?:User)?Question\b/;
 const LOOP_COMMIT_HEADING = "### Step 6c";
-// 6.43.0 (loop-closeout-script): the scope re-derivation, the staging list, the branch, add and commit moved into ONE
+// 6.44.0 (loop-closeout-script): the scope re-derivation, the staging list, the branch, add and commit moved into ONE
 // pinned line, `pharn/floor/loop-closeout.mjs`. What these pins hold now: the close part carries that line exactly
 // once, under Step 6b, before the Step 6c heading. The ORDER inside it (re-derive, then stage, then commit by a literal
 // pathspec file) and its argv are EXECUTED by pharn/floor/loop-closeout.test.mjs against the former lines.
@@ -1764,7 +1765,7 @@ function forbiddenGitOffenders(body) {
 }
 
 test("✧ L34 — the /pharn-loop sets are non-empty and well-formed (the rules below cannot pass vacuously)", () => {
-  assert.equal(STUCK_POINTS.length, 15, "the stuck-point table is S1–S13 plus S6b and S6c");
+  assert.equal(STUCK_POINTS.length, 16, "the stuck-point table is S1–S14 plus S6b and S6c");
   assert.equal(new Set(STUCK_POINTS.map((s) => s.id)).size, STUCK_POINTS.length, "duplicate stuck-point id");
   assert.ok(COMMIT_OUTCOMES.length > 0, "the commit-outcome set is empty");
   assert.ok(fencedLines(commandBody(LOOP_FILE)).length > 0, `found no fenced lines in ${LOOP_FILE} — the fence scan broke`);
@@ -1825,7 +1826,7 @@ const LOOP_FRESH_COMMIT =
 const LOOP_STOP_LINE = /^[ \t]*node pharn\/floor\/check-loop\.mjs pharn\/features\/<name>\/verify-report\.json /;
 
 /** null when the decision-time freshness call is pinned exactly once and precedes check-loop.mjs, and no typed
- *  commit-gate call remains (since 6.43.0 the closeout makes it — its argv is pinned below and EXECUTED by
+ *  commit-gate call remains (since 6.44.0 the closeout makes it — its argv is pinned below and EXECUTED by
  *  check-loop-fresh.test.mjs, its position FIRST in the commit gate by loop-closeout.test.mjs); else why. */
 function freshnessWiringReason(body) {
   const lines = body.split(/\r?\n/);
@@ -2062,7 +2063,7 @@ for (const cmd of PHASE_MARKER_WIRING) {
       );
     }
 
-    // The RUN boundaries: exactly one of each. Two `run-start`s would mean two epochs in one ledger. Since 6.43.0 the
+    // The RUN boundaries: exactly one of each. Two `run-start`s would mean two epochs in one ledger. Since 6.44.0 the
     // run-stop is written by the command's closeout line (its argv pinned here, its run EXECUTED by the closeout's own
     // suite), so a run-stop counts as a typed mark-phase line OR the one closeout line — never both.
     const runStarts = kindsSeen.filter((k) => k === "run-start").length;
@@ -2181,7 +2182,7 @@ test("✧ every emitting command emits the LEDGER and the REPORT, and checks the
     ["render-run-report", /node pharn\/floor\/render-run-report\.mjs '<name>' --base pharn\/features/],
   ];
   assert.equal(OBLIGATIONS.length, 3, "non-vacuity: the obligation set must be non-empty and counted");
-  // Since 6.43.0 each emitting command reaches the three through its ONE closeout line: the invocations are the
+  // Since 6.44.0 each emitting command reaches the three through its ONE closeout line: the invocations are the
   // closeout's steps, rendered here as the lines they replaced and matched against the same pins (their run and order
   // are EXECUTED by each closeout's own suite).
   const asLine = (s) => `node pharn/floor/${s.script.split("/").at(-1)} ${s.args.map((a) => (a === "<name>" ? "'<name>'" : a)).join(" ")}`;
@@ -2723,7 +2724,7 @@ test("✧ LOOP QUICK (grill G7): ## Quick mode quotes NONE of the whole-file pin
   );
   const section = loopQuickSection();
   for (const f of LOOP_QUICK_FORBIDDEN) assert.doesNotMatch(section, f.re, `## Quick mode must not quote ${f.what}`);
-  // The render invocation (6.43.0): the closeout runs it, so it is typed NOWHERE in the command — the section included.
+  // The render invocation (6.44.0): the closeout runs it, so it is typed NOWHERE in the command — the section included.
   assert.doesNotMatch(commandBody(LOOP_FILE), RENDER_INVOCATION_COPY, "the render invocation is the closeout's, never typed");
   // …and each forbidden literal genuinely exists elsewhere in the file (non-vacuous: the closure guards a real pin).
   const body = commandBody(LOOP_FILE);
@@ -2778,7 +2779,7 @@ test("✧ LOOP QUICK mutation controls: each pin fails when its text is broken (
   assert.notEqual(relisted, body, "fixture sanity: the listing landed");
   assert.match(loopQuickPinnedReason(relisted), /must not ask the model to list paths/);
   // a skip pointer dropped (Step 6b's render line)
-  const pointer = "_(SKIPPED in\n   Quick mode — `## Quick mode` item 8; `cost.json` is still emitted above)_"; // inside the closeout's item 4 (6.43.0)
+  const pointer = "_(SKIPPED in\n   Quick mode — `## Quick mode` item 8; `cost.json` is still emitted above)_"; // inside the closeout's item 4 (6.44.0)
   assert.ok(body.includes(pointer), "fixture sanity: the Step-6b pointer exists");
   assert.doesNotMatch(body.replace(pointer, ""), LOOP_QUICK_POINTERS[2].re);
   // STOP_GREEN_QUICK respelled STOP_GREEN_Q — the closure fires
@@ -3425,7 +3426,7 @@ const RUN_MARKER_WIRING = [
     // pinned line, not the plan marker, is what the open line's STOP must precede (pre-run-snapshot.test.mjs pins the
     // capture line's order and STOP).
     openBefore: "node pharn/floor/pre-run-snapshot.mjs --capture '<name>'",
-    // 6.43.0: ship's close runs inside its Step 3a closeout line, directly after the run-stop step (the order is
+    // 6.44.0: ship's close runs inside its Step 3a closeout line, directly after the run-stop step (the order is
     // EXECUTED by pharn/floor/ship-closeout.test.mjs; run-marker.test.mjs executes the committed line).
     closeAfter: "## Step 3a —",
     closeVia: /node pharn\/floor\/ship-closeout\.mjs --feature '<name>'/,
@@ -4306,7 +4307,7 @@ test("✧ BUDGET R5: every product command has exactly one `## What you may clai
 //      candidate path before it.
 //   4. SENTENCES — each asks / resolves command carries its fixed sentence inside its Step 0, and not the other's.
 //   5. ★ EXECUTED — every validating and resolving command's COMMITTED CLI line, under `sh -c`, over HOSTILE_CANDIDATES.
-//   6. Since 6.43.0 the branch and undo run inside pharn/floor/loop-closeout.mjs, and their EXECUTED cases (with the
+//   6. Since 6.44.0 the branch and undo run inside pharn/floor/loop-closeout.mjs, and their EXECUTED cases (with the
 //      intervening-checkout CONTROL) live in loop-closeout.test.mjs; here, no typed branch/undo block remains and Step
 //      6d states the bound.
 //   7. ★ CONTROLS — the 6.28.2 lines, carried as literals and each run once: each must run its payload, or the rule it
@@ -4663,7 +4664,7 @@ function gitFixture({ reflog = true } = {}) {
 }
 
 const HOSTILE_BRANCH = "fix';touch${IFS}PWNED_BRANCH;'x";
-// 6.43.0 (loop-closeout-script): the branch and undo blocks moved into pharn/floor/loop-closeout.mjs, and their
+// 6.44.0 (loop-closeout-script): the branch and undo blocks moved into pharn/floor/loop-closeout.mjs, and their
 // EXECUTED cases (a hostile original branch, a detached checkout, no reflog, and the intervening-checkout CONTROL)
 // moved with them into pharn/floor/loop-closeout.test.mjs. What stays here: no typed branch or undo block remains in
 // the command, and Step 6d still states the bound where a reader meets it.

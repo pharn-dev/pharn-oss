@@ -25,15 +25,16 @@ The regression-report is `pharn/features/<name>/regression-report.json` (product
 `.dev/features/<name>/regression-report.json` (dev) — the machine half of the regress stage, written
 beside the human-facing `REGRESSION.md`. It is `pharn/floor/check-regress.mjs`'s **`verdict` subcommand**
 stdout, plus — in the product report — three additive advisory blocks, `base_evidence` (6.33.0),
-`pre_run_snapshot` (6.37.0) and `head_install` (6.40.0), all below.
+`pre_run_snapshot` (6.37.0) and `head_install` (6.40.0), and, only when the run's entry gates recorded changes, a
+fourth, `entry_gate_changes` (6.42.0), all below.
 
 **Since `stage-regress-script` (6.23.0), the WRITER is `pharn/floor/stage-regress.mjs`, not the model.** The
 product stage script shells `check-regress.mjs verdict` and writes its output atomically (a tmp file under
 `.pharn/pharn-regress/`, then `rename`), so no stray tmp file lands in the feature directory. Since 6.33.0 it
-appends `base_evidence`, since 6.37.0 `pre_run_snapshot` after it, and since 6.40.0 `head_install` last, as the
-object's last keys and re-serializes with the same `JSON.stringify(…, null, 2)` the checker prints with, so every key
-the checker printed keeps its bytes: the report minus those three blocks is the checker's stdout, byte for byte
-(`stage-regress.test.mjs` pins it). The dev
+appends `base_evidence`, since 6.37.0 `pre_run_snapshot` after it, since 6.40.0 `head_install`, and since 6.42.0, when
+present, `entry_gate_changes` last, as the object's last keys and re-serializes with the same `JSON.stringify(…, null, 2)`
+the checker prints with, so every key the checker printed keeps its bytes: the report minus those blocks is the
+checker's stdout, byte for byte (`stage-regress.test.mjs` pins it). The dev
 twin (`/pharn-dev-regress`) is unchanged: the model writes the checker's bytes by hand and adds no block.
 
 ## What this artifact IS and IS NOT (P0 — the honesty bar)
@@ -366,3 +367,25 @@ install. No bypass is offered — the only way past the refusal is an install th
 does not re-check (its HEAD gates already ran). A build that edits the lockfile without installing is now refused here
 — in `/pharn-loop`, an S9 stop with `npm ci` as the remedy instead of iterations over the old install. No verdict
 consumer reads this block.
+
+## The conditional `entry_gate_changes` block (6.42.0, advisory shape)
+
+A delivery run's entry gates (`pharn/floor/entry-gates.mjs`) run AFTER the pre-run snapshot. A gate the entry stamp
+marks `mutated` can rewrite a path itself, as `next build` does with `next-env.d.ts`. `entry-gates.mjs --wait`
+records those paths, each with the digest the gate left, in a second git-dir record. That record has the snapshot's
+shape, validator and decision (`pre-run-snapshot.mjs` `recordEntryChanges` / `entryChangesUnchanged`), and is bound to
+the same run marker. The partition subtracts such a path by the same rule: only while it still holds the recorded
+bytes. It reports the path in this block, in `scope.json` (after `pre_run_snapshot`), in the report (last, after
+`head_install`) and in the quick check's document:
+
+```json
+{ "entry_gate_changes": { "status": "applied", "unchanged": ["next-env.d.ts"] } }
+```
+
+- **The block is present only when an entry record exists**, that is, any status but `no-delivery-run` or
+  `no-snapshot` (`pre-run-snapshot-core.mjs` `entryBlocks`). A run without one writes exactly the bytes it wrote
+  before. `status` and `unchanged` read as in `pre_run_snapshot` above. A path that both records hold is reported once,
+  under `pre_run_snapshot`.
+- **Bounds:** the snapshot's, plus one of its own. A non-gate write outside the feature directory that lands while a
+  `mutated` gate runs is recorded with that gate's writes (`entry-gates.mjs`, header). The block is advisory: no floor
+  op reads it.

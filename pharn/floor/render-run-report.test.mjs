@@ -1190,7 +1190,7 @@ test("★ ENUMERATION (L29/L31): every site that must know `RUN-REPORT.md` names
   const SITES = [
     ["pharn/floor/check-regress.mjs", /PIPELINE_ARTIFACTS[\s\S]*?"RUN-REPORT\.md"[\s\S]*?\];/],
     ["pharn/floor/reconcile-ignore.json", /"names":[\s\S]*?"RUN-REPORT\.md"/],
-    ["pharn/floor/loop-closeout.mjs", /STAGE_ARTIFACTS[\s\S]*?"RUN-REPORT\.md",?\s*\]\);/], // Step 6c's staging list, in the loop's closeout (6.43.0)
+    ["pharn/floor/loop-closeout.mjs", /STAGE_ARTIFACTS[\s\S]*?"RUN-REPORT\.md",?\s*\]\);/], // Step 6c's staging list, in the loop's closeout (6.44.0)
     [".prettierignore", /^pharn\/features\/\*\/RUN-REPORT\.md$/m],
     [".markdownlint-cli2.jsonc", /"pharn\/features\/\*\/RUN-REPORT\.md"/],
   ];
@@ -1218,7 +1218,7 @@ test("★ ENUMERATION (L29/L31): every site that must know `RUN-REPORT.md` names
 // the point — the loop must render before it COMMITS, ship before it can HALT on attestation — so a
 // single shared regex would be wrong for one of them.
 //
-// Since 6.43.0 (loop-closeout-script) neither command types the render line: each runs ONE closeout line, and the
+// Since 6.44.0 (loop-closeout-script) neither command types the render line: each runs ONE closeout line, and the
 // closeout runs the renderer after the ledger check (closeout-core.mjs `runLedgerTail`). So the pins split: the
 // command's committed closeout line precedes its boundary (here), the renderer's argv is the shared step's
 // (`ledgerSteps`, here), and the order inside each closeout is EXECUTED by its own suite — the loop's report before its

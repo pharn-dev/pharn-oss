@@ -498,7 +498,7 @@ test("★ WIRING — /pharn-loop's pinned S12 preflight line is the checker's, a
   });
 });
 
-// Since 6.43.0 the builder runs inside /pharn-loop's closeout (pharn/floor/loop-closeout.mjs `buildStageList`), so the
+// Since 6.44.0 the builder runs inside /pharn-loop's closeout (pharn/floor/loop-closeout.mjs `buildStageList`), so the
 // function the closeout calls is what is EXECUTED here; the close part carries no builder block any more.
 test("★ WIRING — /pharn-loop's Step 6c staging builder, EXECUTED: stages the lock and its pinned tests, exits 4 on a missing or ignored one", () => {
   assert.doesNotMatch(commandFamilyText(COMMANDS, "pharn-loop.md"), /node -e '\n/, "no inline builder block remains in the command");
