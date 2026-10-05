@@ -237,6 +237,8 @@ header; every §8 sentence stays true ("when a person invokes it directly"), so 
 - `.claude/commands/pharn-ship-quick.md` — D3 — product command part
 - `pharn/floor/ship-outcome-core.test.mjs` — ★ WIRING reads the new committed lines — test, not shipped
 - `pharn/floor/run-marker.test.mjs` — ✧ WIRING anchors move to the plan's `start` line — test, not shipped
+- `pharn/floor/pre-run-snapshot.test.mjs` — (added at stacking, after 6.37.0 merged) its ✧ WIRING `next` anchor moves
+  to ship's plan `start` line — test, not shipped
 - `.dev/floor/command-hygiene.test.mjs` — `STAGE_AGENT_WIRING`, `PHASE_MARKER_WIRING`, `SHELL_VALUES`,
   `RUN_MARKER_WIRING`, the quick pointer pins, and the new `DIRECT_STAGE_WIRING` — apparatus
 - `.dev/floor/command-family.test.mjs` — only if a pinned heading or paragraph moves — apparatus
