@@ -226,7 +226,7 @@ gate — it already is one today.
   its levels (`acFilesFor`), appended after `--`, and an entry with none is refused rather than run. No
   `reconcile`, no `aux.completeness`. Every other stamp reader asserts its own stage, so an `ac-test` stamp is
   `stage-mismatch` there. What the stamp's per-test records decide is `ac-tests.md`'s contract.
-- **`entry` (6.41.0), a delivery run's entry check (`pharn/floor/entry-gates.mjs`):** the set `/pharn-verify` would
+- **`entry` (6.42.0), a delivery run's entry check (`pharn/floor/entry-gates.mjs`):** the set `/pharn-verify` would
   discover — e2e kept, `gates.exclude` applied — with every `STYLE_SET` member first (each part in its own order), no
   `reconcile` and no `aux.completeness`. Its fingerprint also excludes the run's whole `pharn/features/<name>/`, because
   its gates run in the background while `/pharn-spec`, `/pharn-plan` and `/pharn-grill` write there, and it records its

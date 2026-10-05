@@ -1184,7 +1184,7 @@ test("gateRunBlock copies `excluded` ONLY when the stamp carries it — every re
   assert.deepEqual(s.excluded.ids, ["typecheck", "e2e"], "a copy, never the stamp's own array");
 });
 
-// ── ENTRY (6.41.0, loop-entry-preflight) ─────────────────────────────────────────────────────────────────────────
+// ── ENTRY (6.42.0, loop-entry-preflight) ─────────────────────────────────────────────────────────────────────────
 test("✧ STAGES is exactly verify, regress, ac-test, entry", () => {
   assert.deepEqual([...STAGES], ["verify", "regress", "ac-test", "entry"]);
 });

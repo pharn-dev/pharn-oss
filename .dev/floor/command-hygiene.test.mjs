@@ -1666,7 +1666,7 @@ const STUCK_POINTS = [
   { id: "S11", blocked: "stale-evidence" },
   { id: "S12", blocked: "no-test-runner" }, // 6.19.0: /pharn-test's preflight found a level with no runner
   { id: "S13", blocked: "ac-evidence-invalid" }, // 6.20.0: the AC evidence changed or is missing — a rebuild cannot fix it
-  { id: "S14", blocked: "gates-red-at-entry" }, // 6.41.0: a gate was red on the tree the run started from (entry-gates.mjs)
+  { id: "S14", blocked: "gates-red-at-entry" }, // 6.42.0: a gate was red on the tree the run started from (entry-gates.mjs)
 ];
 // The one non-member spelling the closure admits: the command's own placeholder in generic prose.
 const BLOCKED_PLACEHOLDER = "<id>";

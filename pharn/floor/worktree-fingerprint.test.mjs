@@ -441,7 +441,7 @@ test("✧ GOLDEN: the digest of a fixed tree holding every link kind is the one 
   }
 });
 
-// ── ENTRY (6.41.0, loop-entry-preflight) — the whole product feature directory, for the entry stage only ──────────
+// ── ENTRY (6.42.0, loop-entry-preflight) — the whole product feature directory, for the entry stage only ──────────
 test("ENTRY: the entry digest ignores ANY write under pharn/features/<name>/ — and moves on every other edit (control)", () => {
   const { dir } = repo();
   try {

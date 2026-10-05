@@ -92,7 +92,7 @@ Load the trusted prefix and obey it:
 ## Step 1 — Entry
 
 `/pharn-loop [--allow-red-entry] [--max-iter N] <increment description>`. `--max-iter N` sets the cap `M` (a positive
-integer; absent ⇒ `M = 3`). `--allow-red-entry` (6.41.0) says the feature's purpose is to fix a gate already red:
+integer; absent ⇒ `M = 3`). `--allow-red-entry` (6.42.0) says the feature's purpose is to fix a gate already red:
 Step 4's entry read then goes on past a red gate instead of stopping at S14. It counts only among the leading flags
 (after `--quick`), never inside the description — ADVISORY, an instruction to you, like `--quick`'s rule.
 `/pharn-loop --quick [--max-iter N] <increment description>` (6.28.0) is the quick form — load its quick part
@@ -181,7 +181,7 @@ before Step 1a, as `## Quick mode` below says; every step not named there runs a
    membership", which states its bounds). **A stop BEFORE S2 records nothing** and goes straight to the Step 7
    summary.
 
-6. **Start the entry gates** (6.41.0) — the gates `/pharn-verify` will discover, run once on the tree this run starts
+6. **Start the entry gates** (6.42.0) — the gates `/pharn-verify` will discover, run once on the tree this run starts
    from, in the background, while the spec, plan and grill stages work; Step 4 reads the verdict before `/pharn-test`
    (`pharn/floor/entry-gates.mjs`, header):
 
@@ -467,7 +467,7 @@ item 3). Two differences, stated:
 
 Grill's interrogation findings gate nothing, exactly as in `/pharn-ship`.
 
-**Then read the entry gates (6.41.0)** — Step 1a item 6's background run, before `/pharn-test` writes anything a gate
+**Then read the entry gates (6.42.0)** — Step 1a item 6's background run, before `/pharn-test` writes anything a gate
 reads. The line blocks until the verdict is in, or for at most its budget (Bash-tool timeout 600000):
 
 ```bash
@@ -656,7 +656,7 @@ Each iteration `<N>` (1-based). **Every sub-stage is marked on entry and the orc
 
 ## At the stop — Steps 6 and 7 are in the close part
 
-**First, at every stop once `<name>` exists, stop the entry gates** (6.41.0) — a no-op once Step 4's read has its
+**First, at every stop once `<name>` exists, stop the entry gates** (6.42.0) — a no-op once Step 4's read has its
 verdict, or when none started. Its exit never changes the stop:
 
 ```bash

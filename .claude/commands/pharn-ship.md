@@ -274,7 +274,7 @@ checker's verdict alongside the RED. See Step 3a's own presentation rule, in the
    **Non-zero → STOP** before `/pharn-plan`, as for the marker line: present its `pre-run-snapshot:` refusal and hand to
    the human. Like every STOP, it goes through Steps 3 and 3a.
 
-   **Then start the entry gates** (6.41.0) — the gates `/pharn-verify` will discover, run once on this tree in the
+   **Then start the entry gates** (6.42.0) — the gates `/pharn-verify` will discover, run once on this tree in the
    background while `/pharn-plan` and `/pharn-grill` work; the read before `/pharn-test` decides
    (`pharn/floor/entry-gates.mjs`, header):
 
@@ -370,7 +370,7 @@ interrogation itself is **advisory** and gates nothing — **present** its findi
 (P2), then proceed on two GREEN stops regardless of what it raised. Never write that the grill verified the
 plan's lesson application.
 
-**Then read the entry gates** (6.41.0), before `/pharn-test` writes anything a gate reads. The line blocks until the
+**Then read the entry gates** (6.42.0), before `/pharn-test` writes anything a gate reads. The line blocks until the
 verdict is in, or for at most its budget (Bash-tool timeout 600000):
 
 ```bash
@@ -616,7 +616,7 @@ measures the AC gate again from scratch, and it proceeds only on `PASS`.
 
 ## Closing the run — GATE 2 and every STOP (Steps 2c–3b)
 
-**First, at every STOP once `<name>` exists, stop the entry gates** (6.41.0) — a no-op once the read before
+**First, at every STOP once `<name>` exists, stop the entry gates** (6.42.0) — a no-op once the read before
 `/pharn-test` has its verdict, or when none started. Its exit never changes the STOP:
 
 ```bash

@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.41.0] - 2026-10-05
+## [6.42.0] - 2026-10-05
 
 ### Added
 
@@ -32,7 +32,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   build** ([`pharn/floor/entry-gates.mjs`](./pharn/floor/entry-gates.mjs),
   [`pharn/floor/entry-gates-core.mjs`](./pharn/floor/entry-gates-core.mjs); `gate-run-core.mjs` stage `entry`,
   `worktree-fingerprint.mjs` `ENTRY_ALGO`; contract [`gate-run-record.md`](./pharn/pharn-contracts/gate-run-record.md),
-  the `entry` bullet). `SKILLS_VERSION` 6.40.0 → 6.41.0 (minor: a new floor CLI, a new stuck point, changed command
+  the `entry` bullet). `SKILLS_VERSION` 6.38.1 → 6.42.0 (minor; the version was assigned by the orchestrator, so 6.39.0–6.41.0 belong to
+  other PRs of the same batch: a new floor CLI, a new stuck point, changed command
   behaviour), with the README badge. `MIN_CLI` stays 0.5.0: no installed path moves.
   - **The trigger.** All three recorded 6.35.0 `/pharn-loop` runs in a user's project had gates red before any change
     (a `typecheck`, unit tests, `build`), and nothing looked until `/pharn-verify`, 28–92 minutes in.

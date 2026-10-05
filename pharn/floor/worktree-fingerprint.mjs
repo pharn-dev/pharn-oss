@@ -49,7 +49,7 @@
 //     BOUND, and it is L43's exactly: that test certifies the three stores AGREE, never that the set is
 //     CORRECT. All three can be stale together the day a new artifact lands and nobody classifies it.
 //
-// (3) ENTRY ONLY (6.41.0) — `stage: "entry"` also excludes the WHOLE `pharn/features/<feature>/` and records ENTRY_ALGO.
+// (3) ENTRY ONLY (6.42.0) — `stage: "entry"` also excludes the WHOLE `pharn/features/<feature>/` and records ENTRY_ALGO.
 //     The entry check's gates overlap the front stages, which write only there; see FEATURE_DIR_EXCLUDED_STAGE below.
 //     No other stage passes `stage`, so every other digest is byte-identical to before (the golden test pins it).
 //
@@ -104,12 +104,12 @@ import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
  *  hashed by its link text; see the header's UPGRADES bound). */
 export const ALGO = "worktree-fingerprint/2+sha256";
 
-/** The ENTRY stage's algo (6.41.0, loop-entry-preflight) — ALGO plus the one extra exclusion below. Its own token so
+/** The ENTRY stage's algo (6.42.0, loop-entry-preflight) — ALGO plus the one extra exclusion below. Its own token so
  *  an entry digest can never be compared equal to any other stage's: every consumer compares `algo` first, and
  *  gate-reuse-core.mjs's execution identity includes it. */
 export const ENTRY_ALGO = `${ALGO}+entry-feature-dir`;
 
-/** The one stage whose fingerprint excludes the run's WHOLE product feature directory (6.41.0). Its gates run in the
+/** The one stage whose fingerprint excludes the run's WHOLE product feature directory (6.42.0). Its gates run in the
  *  background while /pharn-spec, /pharn-plan and /pharn-grill write `pharn/features/<name>/**` and nothing else a gate
  *  reads, so those writes must not read as a tree change between gates. Sound for this stage only: an entry stamp is
  *  read by entry-gates.mjs alone and is never reuse evidence (gate-reuse-core.mjs `findReusable` accepts only a

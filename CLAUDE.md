@@ -874,7 +874,7 @@ node pharn/floor/check-instruction-files.mjs --growth (--base <ref> | --base-rul
 # Exit: 0 recorded · 2 refused (closed REASON_CODES, `crashed` a caught throw); a module that cannot load is node's 1.
 node pharn/floor/pre-run-snapshot.mjs --capture <name>
 
-# THE ENTRY GATES (6.41.0, loop-entry-preflight) — /pharn-loop and /pharn-ship run /pharn-verify's discovered gates once
+# THE ENTRY GATES (6.42.0, loop-entry-preflight) — /pharn-loop and /pharn-ship run /pharn-verify's discovered gates once
 # on the starting tree, in a detached background runner, during spec/plan/grill; the verdict is read before /pharn-test.
 # A red gate is /pharn-loop S14 (`--allow-red-entry` opts out); /pharn-ship asks. Rules, bounds and the P7 trigger:
 # pharn/floor/entry-gates.mjs and entry-gates-core.mjs headers; gate-run-record.md's `entry` bullet.
