@@ -1258,7 +1258,7 @@ test("★ CLOSURE discriminates — an injected variant spelling FAILS the scan"
 });
 
 test("every REGISTERED regress reason_code is reachable — the registry and the script agree on the vocabulary size", () => {
-  assert.equal(REGISTRY.regress.refused.length, 4);
+  assert.equal(REGISTRY.regress.refused.length, 5); // head-install-drift since 6.40.0
   assert.equal(Object.keys(REGISTRY.regress.question).length, 4);
   assert.equal(REGISTRY.regress.unusable.length, 9);
 });
@@ -1806,10 +1806,11 @@ test("★ EQUIVALENCE — fresh BASE evidence and reused BASE evidence for one r
     const withoutBlock = { ...b.report };
     delete withoutBlock.base_evidence;
     delete withoutBlock.pre_run_snapshot; // 6.37.0's additive block
+    delete withoutBlock.head_install; // 6.40.0's additive block
     assert.equal(
       `${JSON.stringify(withoutBlock, null, 2)}\n`,
       rederived.stdout,
-      "report minus base_evidence and pre_run_snapshot == the checker's stdout, byte for byte"
+      "report minus base_evidence, pre_run_snapshot and head_install == the checker's stdout, byte for byte"
     );
   } finally {
     dropReuseRepo(fx);
@@ -2515,7 +2516,11 @@ test("PRE-RUN — the two recorded cases pass under an open run with a snapshot,
     };
     const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
     assert.deepEqual(report.pre_run_snapshot, expected);
-    assert.deepEqual(Object.keys(report).slice(-2), ["base_evidence", "pre_run_snapshot"], "the two additive blocks, last");
+    assert.deepEqual(
+      Object.keys(report).slice(-3),
+      ["base_evidence", "pre_run_snapshot", "head_install"],
+      "the three additive blocks, last (head_install since 6.40.0)"
+    );
     const scope = JSON.parse(readFileSync(join(dir, REGRESS_PATHS.scopeJson), "utf8"));
     assert.deepEqual(scope.pre_run_snapshot, expected);
     assert.deepEqual(scope.escaped, []);
@@ -2628,7 +2633,7 @@ test("ENTRY GATES (6.42.0, review R1) — a path an entry gate rewrote after the
     const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
     assert.deepEqual(report.entry_gate_changes, expected);
     assert.deepEqual(report.pre_run_snapshot, { status: "applied", unchanged: [] });
-    assert.deepEqual(Object.keys(report).slice(-3), ["base_evidence", "pre_run_snapshot", "entry_gate_changes"]);
+    assert.deepEqual(Object.keys(report).slice(-4), ["base_evidence", "pre_run_snapshot", "head_install", "entry_gate_changes"]);
     const scope = JSON.parse(readFileSync(join(dir, REGRESS_PATHS.scopeJson), "utf8"));
     assert.deepEqual(scope.entry_gate_changes, expected);
     assert.deepEqual(scope.escaped, []);
@@ -2655,6 +2660,110 @@ test("PRE-RUN — the RE-RUN bound, pinned: an escape refused in one run is pre-
     assert.equal(r.code, 0, r.raw);
     const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
     assert.deepEqual(report.pre_run_snapshot, { status: "applied", unchanged: ["src/stray.js"] }, "reported — never silent");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── 6.40.0: THE HEAD INSTALL CHECK (regress-head-install-drift) ─────────────────────────────────────────────────────
+// The fixtures git-ignore node_modules/ (G5: an un-ignored node_modules would be refused `scope-escaped` first, and a
+// "refuses before any gate" test would pass for the wrong reason), commit an npm lockfile, and plant npm's record.
+const npmLock = (version, flags = {}) =>
+  JSON.stringify({
+    name: "fx",
+    lockfileVersion: 3,
+    requires: true,
+    packages: {
+      "": { name: "fx" },
+      "node_modules/dep": { version, resolved: `file:dep-${version}.tgz`, integrity: `sha512-${version}`, ...flags },
+    },
+  });
+const npmRecord = (version) =>
+  JSON.stringify({ name: "fx", lockfileVersion: 3, requires: true, packages: JSON.parse(npmLock(version)).packages });
+
+/** A repo whose COMMITTED lockfile names dep@2.0.0 (with `flags`); `installed` plants npm's record at that version, or
+ *  no node_modules (null). */
+function installRepo(installed, flags = {}) {
+  const fx = repo({ committed: { ".gitignore": ".pharn/\nnode_modules/\n", "package-lock.json": npmLock("2.0.0", flags) } });
+  if (installed !== null) {
+    mkdirSync(join(fx.dir, "node_modules"), { recursive: true });
+    writeFileSync(join(fx.dir, "node_modules", ".package-lock.json"), npmRecord(installed));
+  }
+  writeFileSync(join(fx.dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport function id(x) { return x; }\n");
+  return fx;
+}
+
+test("6.40.0 — a drifted HEAD install is refused head-install-drift BEFORE any gate, with --gates too (G6); the control reaches done", () => {
+  const { dir, base } = installRepo("1.0.0");
+  try {
+    for (const extra of [[], ["--gates", "node --test::test"]]) {
+      const r = cli(dir, freshArgs(base, extra));
+      assert.equal(r.code, 3, r.raw);
+      assert.equal(r.json.status, "refused");
+      assert.equal(r.json.reason_code, "head-install-drift", "this refusal, not an earlier one (G5)");
+      assert.equal(existsSync(join(dir, REGRESS_PATHS.head, "stamp.json")), false, "no HEAD gate ran");
+      assert.equal(existsSync(join(dir, FEATURES, FEATURE, "regression-report.json")), false, "no verdict on disk");
+      const md = readFileSync(join(dir, r.json.render), "utf8");
+      assert.match(md, /^refused: `head-install-drift`/m);
+      assert.match(md, /differs in 1 changed, 0 missing and 0 extraneous package\(s\)/);
+      assert.match(md, /Remedy: run `npm ci` in the project root, then re-run\./);
+      assert.match(md, /- changed "node_modules\/dep": lockfile "2\.0\.0", installed "1\.0\.0"/);
+    }
+    // the control: npm's record now matches the lockfile — the same tree reaches done, and the report says it was checked
+    writeFileSync(join(dir, "node_modules", ".package-lock.json"), npmRecord("2.0.0"));
+    const r = cli(dir, freshArgs(base));
+    assert.equal(r.code, 0, r.raw);
+    const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
+    assert.deepEqual(report.head_install, {
+      state: "clean",
+      why: null,
+      family: "npm",
+      lockfile: "package-lock.json",
+      counts: { changed: 0, missing: 0, extraneous: 0, missing_unchecked: 0 },
+    });
+    assert.deepEqual(Object.keys(report).slice(-1), ["head_install"], "the additive block, last");
+    assert.match(readFileSync(join(dir, r.json.render), "utf8"), /^HEAD install: checked — npm's record of the installed tree agrees/m);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("6.40.0 — a lockfile listing packages with no node_modules is refused; an absent dev-only package is not (GATE 1)", () => {
+  const { dir, base } = installRepo(null);
+  try {
+    const r = cli(dir, freshArgs(base));
+    assert.equal(r.code, 3, r.raw);
+    assert.equal(r.json.reason_code, "head-install-drift");
+    assert.match(
+      readFileSync(join(dir, r.json.render), "utf8"),
+      /lists 1 package\(s\) that every install includes, and there is no node_modules directory/
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  // the same tree, the package marked dev: an omit=dev install leaves it absent on every `npm ci`, so it is not drift
+  const dev = installRepo(null, { dev: true });
+  try {
+    const r = cli(dev.dir, freshArgs(dev.base));
+    assert.equal(r.code, 0, r.raw);
+    const report = JSON.parse(readFileSync(join(dev.dir, r.json.report), "utf8"));
+    assert.equal(report.head_install.state, "clean");
+    assert.equal(report.head_install.counts.missing_unchecked, 1, "counted and reported, never drift");
+  } finally {
+    rmSync(dev.dir, { recursive: true, force: true });
+  }
+});
+
+test("6.40.0 — a project with no lockfile is not checked, proceeds exactly as before, and the report says so", () => {
+  const { dir, base } = repo();
+  try {
+    writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport function id(x) { return x; }\n");
+    const r = cli(dir, freshArgs(base));
+    assert.equal(r.code, 0, r.raw);
+    const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
+    assert.equal(report.head_install.state, "not-checked");
+    assert.equal(report.head_install.why, "no-lockfile");
+    assert.match(readFileSync(join(dir, r.json.render), "utf8"), /^HEAD install: NOT CHECKED \(`no-lockfile`\)/m);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

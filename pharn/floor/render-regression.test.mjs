@@ -483,3 +483,52 @@ test("6.36.0 — an exclusion id outside the ALLOWLIST and an unknown source are
   );
   assert.ok(!md.includes("hostile-link-target") && !md.includes("# x"));
 });
+
+// ── 6.40.0: the HEAD install check (regress-head-install-drift) ────────────────────────────────────────────────────
+const HI_CLEAN = {
+  state: "clean",
+  why: null,
+  family: "npm",
+  lockfile: "package-lock.json",
+  counts: { changed: 0, missing: 0, extraneous: 0, missing_unchecked: 2 },
+};
+
+test("6.40.0 — the HEAD install line: clean says what was compared, not-checked warns, null reads 'not recorded'; no key, no line", () => {
+  const render = (progress) => renderDone({ feature: "demo", base: "a".repeat(40), report: baseReport(), scope: baseScope(), progress });
+  const clean = render(baseProgress({ headInstall: HI_CLEAN }));
+  assert.match(clean, /^HEAD install: checked — npm's record of the installed tree agrees with `package-lock.json` \(2 absent/m);
+  const nc = render(
+    baseProgress({
+      headInstall: {
+        ...HI_CLEAN,
+        state: "not-checked",
+        why: "unmeasured-family",
+        family: "yarn",
+        lockfile: null,
+        counts: { changed: 0, missing: 0, extraneous: 0, missing_unchecked: 0 },
+      },
+    })
+  );
+  assert.match(nc, /^HEAD install: NOT CHECKED \(`unmeasured-family`, yarn\)/m);
+  assert.match(render(baseProgress({ headInstall: null })), /^HEAD install: not recorded/m);
+  assert.match(
+    render(baseProgress({ headInstall: { state: "clean", hostile: "# x" } })),
+    /^HEAD install: not recorded/m,
+    "an invalid block is never rendered"
+  );
+  assert.doesNotMatch(render(baseProgress()), /HEAD install/, "an older caller (no key) renders exactly as before");
+  // placement: after the base install lines, before the Scope section
+  const lines = clean.split("\n");
+  assert.ok(lines.findIndex((l) => l.startsWith("HEAD install:")) < lines.indexOf("## Scope"));
+});
+
+test("6.40.0 — a head-install-drift refusal renders NOT measured with its detail fenced", () => {
+  const md = renderRefused({
+    feature: "demo",
+    reasonCode: "head-install-drift",
+    detail: "Remedy: run `npm ci` in the project root, then re-run.",
+  });
+  assert.match(md, /^refused: `head-install-drift`/m);
+  assert.match(md, /regression NOT measured/);
+  assert.match(md, /```text\nRemedy: run `npm ci`/);
+});

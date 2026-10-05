@@ -138,6 +138,7 @@ Read the printed `pharn-stage-exit/1` JSON object and branch on the **exit code 
   - `chain-red` — the SPEC drifted after the PLAN pinned it: re-approve via `/pharn-spec`, or re-plan via
     `/pharn-plan` if the PLAN itself is stale against the current SPEC;
   - `plan-files-unparseable` — fix `PLAN.md`'s `## Files` heading (or its list syntax) so it parses;
+  - `head-install-drift` — `node_modules` does not match the lockfile: run `npm ci`, then re-run;
   - `scope-escaped` — an undeclared path changed: either declare it in `PLAN.md`'s `## Files` via
     `/pharn-plan` (a legitimate widening) or revert the undeclared change. Re-running does not fix it; it only replaces
     the refusal with a report, and the escaped change stays in the tree. **The blind spot this remedy
