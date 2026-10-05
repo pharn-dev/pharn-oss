@@ -96,9 +96,15 @@ test comments). Those five say what a kill does WHEN one happens (orphaned proce
 - `SKILLS_VERSION` — 6.46.0 — release meta
 - `README.md` — the version badge — release meta
 - `CHANGELOG.md` — a `[6.46.0]` section — release meta
-- `.dev/features/thin-caller-background-timeout/PLAN.md`, `GRILL.md`, `BUILD.md`, `REGRESSION.md`,
-  `regression-report.json`, `VERIFY.md`, `verify-report.json`, `REVIEW.md`, `SHIP.md` — this increment's audit trail
-  — apparatus
+- `.dev/features/thin-caller-background-timeout/PLAN.md` — this plan — apparatus
+- `.dev/features/thin-caller-background-timeout/GRILL.md` — the grill log — apparatus
+- `.dev/features/thin-caller-background-timeout/BUILD.md` — the build record — apparatus
+- `.dev/features/thin-caller-background-timeout/REGRESSION.md` — the regress render — apparatus
+- `.dev/features/thin-caller-background-timeout/regression-report.json` — the regress verdict — apparatus
+- `.dev/features/thin-caller-background-timeout/VERIFY.md` — the verify render — apparatus
+- `.dev/features/thin-caller-background-timeout/verify-report.json` — the verify verdict — apparatus
+- `.dev/features/thin-caller-background-timeout/REVIEW.md` — the review — apparatus
+- `.dev/features/thin-caller-background-timeout/SHIP.md` — the ship record — apparatus
 
 ## Contracts satisfied
 
@@ -130,9 +136,25 @@ test comments). Those five say what a kill does WHEN one happens (orphaned proce
   correctness fix for a person running `/pharn-regress` / `/pharn-verify`: it removes a prescribed concurrent second
   run (up to ~570 s of duplicated gate work per occurrence, plus a possibly corrupt progress record).
 
+## Grill amendments
+
+- GRILL P5 (taken): the bullet gains a terminal fallback — when the model cannot tell whether the call is still
+  running (no notice arrived, a later session), it does not resume: it stops and says so, naming the background task
+  and the progress record, for the human to decide.
+- GRILL P0 (taken): the pin's negative half catches one spelling (`TIMEOUT_RESUME`); the test comment states that
+  bound — a reworded resume-on-timeout clause passes it.
+
+## Decisions (GATE 1)
+
+Recorded as decisions of the orchestrating model under the user's delegation, not a human approval:
+
+- The in-flight guard for direct script calls is the named follow-up `stage-script-in-flight-guard` (design item 4's
+  three reasons).
+- `pharn-regress.md`'s bullet is fitted inside its ceiling; the ceiling is raised by the rule only if a stated bound
+  would otherwise be lost.
+- The 600 s background behaviour is assumed from the 3 s probe and labelled advisory.
+- Version 6.46.0, renumbered to the next free number above `main` at PR time if 6.44.0/6.45.0 merge first.
+
 ## Open questions (HALT)
 
-- Accept the guard as a named follow-up (`stage-script-in-flight-guard`) rather than building it here? (Design item 4
-  gives the reason: not local — a stage-exit registry change plus a parent pass-through, in files three other builders
-  are changing.)
-- Version: 6.46.0 as assigned (patch-sized correction).
+- none

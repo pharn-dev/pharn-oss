@@ -3423,6 +3423,47 @@ test("✧ DIRECT_STAGE_WIRING — each rule fails on its mutant (L60)", () => {
   assert.deepEqual(directWiringReasons(ship, shipBody), []);
 });
 
+// ── THIN_CALLER_BACKGROUND (6.46.0, thin-caller-background-timeout) — rule 7's OTHER half (L31) ────────────────
+// The thin callers and the orchestrators' direct call are a copy-pair of one invocation; #314 pinned rule 7 on the
+// orchestrators only, and the thin callers kept "the Bash tool itself timed out — run the resume line once", which,
+// since the tool MOVES a timed-out call to the background rather than killing it, starts a second stage script on the
+// same `.pharn/pharn-<stage>/` record. Each thin caller (iterated over STAGE_SCRIPT_WIRING, never named here) must
+// carry the STILL-RUNNING bullet with its never-resume-meanwhile sentence, and must not match TIMEOUT_RESUME.
+// HONEST SCOPE (P0): presence over committed prose. TIMEOUT_RESUME is ONE spelling — a reworded resume-on-timeout
+// clause passes it (GRILL P0 finding); and nothing here proves a run waited for a backgrounded call.
+const THIN_BACKGROUND_RULE =
+  /\*\*A call the Bash tool reports as moved to the background is STILL RUNNING\*\*[\s\S]{0,700}?Never\s+run\s+`--resume`,\s+or\s+another\s+fresh\s+line,\s+while\s+it\s+runs/;
+
+function thinBackgroundReasons(body) {
+  const reasons = [];
+  if (!THIN_BACKGROUND_RULE.test(body)) reasons.push("no 'a backgrounded call is STILL RUNNING — never resume it meanwhile' bullet");
+  if (TIMEOUT_RESUME.test(body)) reasons.push("still prescribes a resume after 'the Bash tool itself timed out'");
+  return reasons;
+}
+
+for (const w of STAGE_SCRIPT_WIRING) {
+  test(`✧ THIN_CALLER_BACKGROUND — ${w.file}: a backgrounded call is still running and is never resumed meanwhile`, () => {
+    assert.deepEqual(thinBackgroundReasons(commandBody(w.file)), []);
+  });
+}
+
+test("✧ THIN_CALLER_BACKGROUND — each assertion fails on its own mutant (L60)", () => {
+  assert.equal(STAGE_SCRIPT_WIRING.length, 2, "L34: both thin callers");
+  const anchor = "**A call the Bash tool reports as moved to the background is STILL RUNNING**";
+  for (const w of STAGE_SCRIPT_WIRING) {
+    const body = commandBody(w.file);
+    assert.ok(body.includes(anchor), `fixture sanity (L60): ${w.file} holds the anchor`);
+    assert.match(thinBackgroundReasons(body.replace(anchor, "A call")).join("\n"), /no 'a backgrounded call/);
+    assert.match(
+      thinBackgroundReasons(`${body}\n- **The Bash tool itself timed out** — run the resume line once.\n`).join("\n"),
+      /still prescribes a resume/
+    );
+    const never = body.match(/Never\s+run\s+`--resume`,\s+or\s+another\s+fresh\s+line,\s+while\s+it\s+runs/);
+    assert.ok(never, `fixture sanity (L60): ${w.file} holds the never-resume sentence`);
+    assert.match(thinBackgroundReasons(body.replace(never[0], "Run `--resume` at once")).join("\n"), /no 'a backgrounded call/);
+  }
+});
+
 test("★ DIRECT_STAGE_WIRING — every COMMITTED line, run where the real script refuses: its exit passes through, its markers, its release", () => {
   const env = { ...process.env };
   delete env.CLAUDE_PROJECT_DIR;
