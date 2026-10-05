@@ -53,7 +53,7 @@ record.
 ### Why the shell — what preceded the first shell write
 
 - **No denial was routed around.** The agent made no Write, Edit or MultiEdit call before its first shell write (a
-  `python3` rewrite of `shared/lib/billing/plans.ts` at 09:09:59Z). Its first Write came 26 minutes later and was
+  `python3` rewrite of `shared/lib/billing/plans.ts` at 09:09:59Z). Its first Write came 16 minutes later and was
   allowed. So the fix #7 guard never refused it anything. The project's `PostToolUse` hook (`npm run tsc`) could
   not have deterred it either: that hook fires on Write/Edit only, and the agent had made none.
 - **The agent's reasoning is not recorded.** Its thinking blocks are empty in the transcript.
@@ -89,9 +89,9 @@ record.
   so `reconcile` never ran. A write that restores the anchored bytes (the AC-test restore above) is invisible to
   `reconcile` by design. Here the AC lock caught it, inside the build.
 - **The project's own `PostToolUse` hook was also bypassed, and in this project that bypass costs nothing.** The hook
-  is `npm run tsc`, and the project has no `tsc` script. Every run exits 1 ("Missing script"), non-blocking. Across
-  the run's 63 Write/Edit calls (all contexts) the harness records 89–593 ms per run. That is an observation about
-  that project only.
+  is `npm run tsc`, and the project has no `tsc` script. Every run exits 1 ("Missing script"), non-blocking. Inside
+  the run window the harness recorded 47 runs of it (all contexts), 88–183 ms each, 5.0 s in total. That is an
+  observation about that project only.
 
 ### Correction to the batch evidence (finding 5)
 
@@ -259,7 +259,7 @@ None claimed. This is a prevention correction (finding 4), not a speed-up.
 - Possible cost: the build's 44 shell scripts bundled about 179 replacement call sites. As Edit calls those could
   become more tool calls. Edits can be issued in parallel within one request (the test agent issued 8 Writes in one
   request), so the request count need not grow. Not estimated.
-- The project's `PostToolUse` hook would then run per Write/Edit: measured 89–593 ms per run in that project.
+- The project's `PostToolUse` hook would then run per Write/Edit: measured 88–183 ms per run in that project.
 
 ## Open questions (HALT)
 
