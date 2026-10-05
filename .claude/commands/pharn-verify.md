@@ -186,7 +186,7 @@ either way.
 <id>`, so an explicit `--gates` run of a feature with AC evidence reads `test-infra-changed` (test-first — verify
   `FAIL` with `ac-evidence`, `/pharn-loop`'s S13) or `ac-untested` (`spec_kind: test-infra`). Do not pass `--gates`
   for such a feature; if a report already carries that reading, re-run without it. To leave a gate out, declare it
-  in `gates.exclude` before `/pharn-test`, which pins it.
+  in `gates.exclude` and commit it before the run (`/pharn-test` pins it).
 - **Eval pairs:** one `structural:<expected>` gate per `<capDir>/evals/expected/<x>.json` whose colocated
   `<capDir>/findings.json` exists, for each capability directory the PLAN's `## Files` declares; the pair may be
   committed, or untracked and not git-ignored (a capability the build just wrote is untracked at verify time).

@@ -87,6 +87,13 @@ without joining the build's scope, and a second extractor would mean editing a p
 | `no-files`          | there is no `## Files`, or it names nothing                                                                                                                                             |
 | `bad-path`          | a `## Files` entry is a placeholder or glob, absolute, led by `-`, not normalized, or under `.pharn/` or `pharn/features/`                                                              |
 
+**One more kind, since 6.36.0 — `level-excluded`:** a mapping row whose level's gates the project's
+`pharn.config.json` `gates.exclude` leaves nothing of. The rule is `gate-run-core.mjs` `levelExcludedGates`, which the
+red-run preflight also applies, read against the invoking directory's `package.json`, or every gate of the level when
+there is none. The row is RED here, at `/pharn-plan`, instead of at `/pharn-test`'s preflight after the tests are
+written (an independent review's R5). A declaration that cannot be read prints an advisory `NOTE —`, because the
+preflight and the lock refuse it.
+
 **One more kind, since 6.21.0 — `test-infra-in-plan`:** a PLAN.md `## Files` entry that, as the setter scopes it, is a
 ROOT runner config the test-infrastructure pin covers (below) — since 6.31.0 also a root package-manager config it
 covers (`.npmrc`, `.yarnrc`, `.yarnrc.yml`), or a file a level gate's script NAMES (the token pass, below: the
@@ -164,15 +171,23 @@ cannot fail, is never collected, or is skipped would otherwise pass unnoticed.
 <package.json> --root <dir>`. Each AC's level must map to a discovered gate (`unit`/`integration` → `test`,
   `e2e` → `test:e2e` / `e2e` — `LEVEL_GATES` in `gate-run-core.mjs`), and **every** discovered gate of that level
   must have per-test results configured (`test-results-record.md`). Otherwise `ac-level-unavailable: AC-<n>
-(<level>)`, and the output's last line is the closed
-  `blocked: no-test-runner — <AC-n (level), …>; suggested: <a /pharn-ship command for a test-infra increment>` that
-  an unattended caller prints verbatim. A missing `package.json` reads as "no runner". **Since 6.36.0** a gate the
-  project EXCLUDES (`pharn.config.json` `gates.exclude`, `gate-run-record.md`) is not discovered here either. So an AC
-  whose level's discovered gates are all excluded is `ac-level-unavailable`, and its line names the exclusion. When
-  every unavailable AC is exclusion-caused, the closed line's `suggested:` is not a command: it names the ids to remove
-  from `gates.exclude`, or the ACs to re-specify at a level a gate that is not excluded runs. In a mixed case that text
-  follows the `/pharn-ship` command, joined by "and". A declaration that cannot be read makes the preflight unusable
-  (exit 2), and the run's `init` refuses it (`bad-gate-exclusion`).
+(<level>)`, and the output's last line is the closed `blocked: no-test-runner — <AC-n (level), …>; suggested: <remedy>`
+  that an unattended caller prints verbatim. The `<remedy>` is a `/pharn-ship` command for a test-infra increment, except
+  as below. A missing `package.json` reads as "no runner".
+
+  **Since 6.36.0**, a gate the project EXCLUDES (`pharn.config.json` `gates.exclude`, `gate-run-record.md`) is not
+  discovered here either. So an AC whose level's discovered gates are all excluded is `ac-level-unavailable`, and its
+  line names the exclusion.
+
+  - When every unavailable AC is exclusion-caused, the `<remedy>` is not a command. It names the ids to remove from
+    `gates.exclude`, or the ACs to re-specify at a level whose gate is not excluded.
+  - In a mixed case, that text follows the `/pharn-ship` command, joined by "and".
+  - `check-ac-tests.mjs` REDs the same mapping row earlier, at `/pharn-plan`, as `level-excluded`. It uses the same
+    rule: `gate-run-core.mjs` `levelExcludedGates`, read against the root's `package.json`, or every gate of the level
+    when there is none.
+  - A declaration that cannot be read makes the preflight unusable (exit 2), and the run's `init` refuses it
+    (`bad-gate-exclusion`).
+
 - **The run:** `run-gates.mjs init --stage ac-test --ac-tests <AC-TESTS.md> --discover <package.json> …`. The gate
   set is selected **by id** from the mapping's levels, never named by a caller (`--gates`, `--extra`,
   `--skip-style`, `--scope-json`, `--spec-from` and `--side` are refused), and each gate is handed exactly the mapped
@@ -336,14 +351,23 @@ script, pre, post }`, sorted by id, the level gates' own ids not repeated. `"tes
   cannot be read refuses the pin, so `--write` exits 2. The exclusion does NOT filter the other sections: an excluded
   level gate's script stays pinned in `gates`, and `scriptNamedFiles` (the plan-time `test-infra-in-plan` check) still
   reads it.
+  **Declare it and commit it before the run.** An uncommitted declaration is a change since base: regress's scope
+  partition, and `--quick`'s `check-quick-scope.mjs`, read it `scope-escaped` unless the PLAN declares
+  `pharn.config.json`.
   **Two windows, stated:**
   - `/pharn-test` runs before the reconcile anchor (`LIMITS.md §9`), so an exclusion written DURING it is pinned as if
-    it were legitimate. The backstop is regress's scope partition, which has no exemption for `pharn.config.json`: a
-    change since base reads `scope-escaped`. A standalone `/pharn-verify` has neither.
+    it were legitimate. The backstop holds only CONDITIONALLY. It is regress's scope partition (under `--quick`,
+    `check-quick-scope.mjs`), which has no exemption for `pharn.config.json`, so a change since base reads
+    `scope-escaped`. It does NOT hold in three cases:
+    - when PLAN.md `## Files` names `pharn.config.json`, for which `check-ac-tests.mjs` prints only a NOTE;
+    - when git ignores the file;
+    - in a standalone `/pharn-verify`, which has no scope check.
   - A bootstrap or legacy SPEC pins nothing (no lock, or `test_infra: null`). There, a build whose PLAN declares
     `pharn.config.json` can add an exclusion, and regress still reads no-regressions, because the base side runs the
     head's set. Deleting the script has the same effect today. Only the disclosure line in `REGRESSION.md` and
-    `VERIFY.md` shows it.
+    `VERIFY.md` shows it. `BRIEFING.md` does not carry the line (`gate-exclusion-summary-disclosure`).
+    **Not closed here:** regress has the base commit, so it could compare the declaration at base and HEAD. That is
+    the named follow-up `gate-exclusion-base-compare`: report a widened exclusion as a closed finding.
 
 **The token pass — ONE closed, literal rule, never a shell parse** (`test-infra-core.mjs`'s header is its spec):
 `scriptTokens()` splits a value on whitespace and `; & | ( )` and strips one pair of matching quotes. A FILE is a
