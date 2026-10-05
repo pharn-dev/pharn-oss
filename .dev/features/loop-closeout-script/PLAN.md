@@ -43,6 +43,14 @@ items, and states the saving at its real, small size (below). A second, non-late
 green commit's branch, staging and undo are today **model-executed prose** that only an unattended run reaches, which
 is L44's recorded failure class; as tested code they are executed by the suite every run.
 
+**GATE 1 (2026-10-05), decided by the batch orchestrator under the user's delegation — not a human approval.**
+Approved. Q1: proceed, and record that C2's pre-registered bar was met in 1 of 3 runs (15.2 / 14.9 / 21.2%), that the
+measured run's blocked close saves about one request, and that C2 is adopted because the user asked for item 7 and
+because the commit path becomes tested code (this section, the CHANGELOG entry and SHIP.md say so). Q2: the test
+re-points are accepted, each kept minimal. Q3: a crash keeps `not committed: stage failed`, and the close part presents
+that case explicitly (below). Q4, Q5: accepted as stated bounds. The grill's findings (`GRILL.md` G1–G7) were folded in
+after GATE 1: G1, G3–G7 taken; G2 declined (P7).
+
 ## Design
 
 ### Where the line runs, and what stays model work
@@ -64,9 +72,11 @@ is L44's recorded failure class; as tested code they are executed by the suite e
 
 Argv validated before any side effect: `--feature` a `gate-run-core.mjs` `FEATURE_SLUG_RE` member, `--base` a
 `SHA_RE` member (both imported — the one owner, L35), no other flag; `pharn/features/<name>/` an lstat directory.
-Any refusal → **exit 2, nothing run**. Then, in today's order (each child spawned as an argv vector, node by
-`process.execPath`, floor children resolved from the script's own directory, hooks from the invoking directory as the
-pinned lines did — no shell, no new input reaches a shell):
+Any refusal → **exit 2, nothing run**. The closeout runs from the project root, as every pinned line does (G7): floor
+children resolve from the script's own directory, while the two hooks and every path operand resolve from the invoking
+directory exactly as the pinned lines did, so a wrong directory finds no `pharn/features/<name>/` and refuses (exit 2)
+before anything runs. Then, in today's order — each child an argv vector (node by `process.execPath`), **stdin
+ignored** so a commit hook cannot block on it (G3), no shell, no new input reaching a shell:
 
 1. `check-loop-record.mjs pharn/features/<name>/LOOP.md`. RED and no `--after-repair` → **exit 5, nothing else run**
    (the ≤1 repair moves from prose to an argv round trip; still advisory — the model may pass the flag at once).
@@ -83,7 +93,10 @@ pinned lines did — no shell, no new input reaches a shell):
 7. `render-run-report.mjs <name> --base pharn/features` unless the record's `mode` is `quick` (quick-part item 8 —
    the record's mode IS the invocation, Step 6b's capture rule).
 8. **The green gate**, enum membership over the record: `decision ∈ {STOP_GREEN, STOP_GREEN_QUICK}`, no `blocked`.
-   - not green → `not committed: <decision>` → releases → **exit 3**;
+   - not green → `not committed: <decision>` → releases → **exit 3** — but only when `SPEC.md`'s `state` (read with
+     `frontmatter-core.mjs` `readField`, the one value reader) is not `Approved`. A still-Approved SPEC means 6a did
+     not run (the model read the stop as green and the record disagrees, or the revert failed): the same outcome,
+     **exit 4**, no release, so 6d.2 applies the revert — today's backstop for that case was 6c's decision check (G1);
    - green and decision check RED, or the token disagrees with the record's mode, or the decision unreadable →
      `not committed: decision unverifiable` → **exit 4**.
 9. `check-loop-fresh.mjs --feature <name> --base <base> --commit-gate --front`; non-zero → `evidence stale`, exit 4.
@@ -93,13 +106,14 @@ pinned lines did — no shell, no new input reaches a shell):
 11. The staging list — today's inline builder **moved verbatim into a function** (same `set_by` check → `stage failed`,
     same lock/pinned-test refusal → `stage failed`, same artifact array, same regular-file / tracked-deletion /
     not-ignored rule, same order and de-dup). Written NUL-separated to `.pharn/pharn-loop/<name>/stage.list` after a
-    `stage-runtime.mjs` `containmentWalk` (lstat; L54) — stricter than today's shell redirect. Empty → `nothing
-staged`, exit 4.
+    `stage-runtime.mjs` `containmentWalk` (lstat; L54) — stricter than today's shell redirect. Empty →
+    `nothing staged`, exit 4.
 12. Branch: the first of `pharn-loop/<name>`, `-2`, … that `git show-ref --verify --quiet refs/heads/<b>` reports
     absent, then `git switch -c <b>`; non-zero → `branch failed`, exit 4.
-13. `GIT_LITERAL_PATHSPECS=1 git add -A --pathspec-from-file=<list> --pathspec-file-nul`, then `… git commit
---pathspec-from-file=<list> --pathspec-file-nul -m 'pharn-loop(<name>): <decision> after <N> iteration(s)' -m
-'<today's second line>'` — `<decision>` and `<N>` are the record's enum token and `^\d+$` value, never model-typed.
+13. `GIT_LITERAL_PATHSPECS=1 git add -A --pathspec-from-file=<list> --pathspec-file-nul`, then the matching
+    `git commit --pathspec-from-file=<list> --pathspec-file-nul` with today's two `-m` messages (the first
+    `pharn-loop(<name>): <decision> after <N> iteration(s)`) — `<decision>` and `<N>` are the record's enum token and
+    `^\d+$` value, never model-typed.
     Hooks run; never `--no-verify`, never push or merge. Non-zero add → `stage failed`; commit → `commit failed`; both
     followed by today's undo (`reset -q --pathspec-from-file …`, `checkout - --`, `branch -d <b>`), exit 4. Success →
     `git rev-parse HEAD` → `committed <b>`, exit 0.
@@ -107,8 +121,8 @@ staged`, exit 4.
 15. Exit 0 or 3 only: `set-writes-scope.cjs --clear`, then `require-loop-record.cjs --close <name>` (today's Final
     order); their exits reported as `released`.
 
-Every child's output is echoed indented under a `── <step> (exit N)` header (untrusted DATA; a child line can never
-start at column 0). The **last line** is one JSON document, closed keys both ways (validated in tests):
+Every child's stdout **and stderr** is echoed indented under a `── <step> (exit N)` header (untrusted DATA; a child
+line can never start at column 0); the one exception is mark-phase's own stdout marker line (G4). The **last line** is one JSON document, closed keys both ways (validated in tests):
 `{schema: "pharn-loop-closeout/1", feature, exit, outcome, decision, mode, blocked, record_check, decision_check,
 ledger, ledger_check, report, freshness, branch, commit, checkout, released}`. `outcome` is a member of the existing
 closed set (Step 7), never a new spelling. **Control flow reads the exit code only** (P5).
@@ -117,8 +131,12 @@ closed set (Step 7), never a new spelling. **Control flow reads the exit code on
 (undo done; the model runs Step 6d.2–3 then the Final step) · 5 record RED, repair first · 2 refused, nothing ran ·
 anything else, 1 included, a crash — never read as a commit decision. Every spawn and git call returns a status object;
 the one top-level `catch` sets exit 1 (crash) and prints the phase reached to stderr. A crash's handling in the close
-part: report it and `git status --short --branch` verbatim, commit nothing and run none of its steps by hand, then
-Step 6d.2–3 with `not committed: stage failed` and the Final step.
+part (GATE 1 Q3, explicit): the outcome is `not committed: stage failed`, presented with the exit code, stderr and
+`git status --short --branch` verbatim, and the summary says the commit state must be checked by a person, because a
+crash after the commit step (a kill) cannot be told from one before it; commit nothing and run none of its steps by
+hand, then Step 6d.2–3 and the Final step. **Residual (named):** a child that hangs regardless of stdin (a hook waiting
+on a network) is killed with the closeout at the Bash tool's timeout — the same crash path; the close part advises the
+600000 ms ceiling.
 
 ### `pharn/floor/ship-closeout.mjs --feature '<name>'`
 
@@ -223,7 +241,9 @@ does).
 
 - loop-closeout: every exit class from a fixture (green commit; STOP_CAP; blocked; record RED → 5 then `--after-repair`;
   decision RED; stale; setter fail; builder `set_by` mismatch; lock not a file; empty list; branch fail; commit-hook
-  fail → undo; bad argv → 2 with nothing run); the child ORDER recorded by a stub runner equals today's; a quick record
+  fail → undo; bad argv → 2 with nothing run); the child ORDER and each child's FULL ARGV, recorded by a stub runner,
+  equal today's lines, with a mutation control per property (G5, L60); a non-green record over a still-Approved SPEC
+  exits 4 (G1); a quick record
   skips the report; releases only on 0/3; hostile scope JSON → `stage failed`; no `push`/`merge`/`--no-verify` in the
   module; the executed branch+undo cases moved from SHELL-SINK 7 (hostile original branch, detached, no reflog, the
   intervening-checkout CONTROL); one un-stubbed end-to-end blocked run with the real children.
@@ -275,7 +295,5 @@ does).
 
 ## Open questions (HALT)
 
-- (GATE 1) The confirm-first bar is met by 1 of 3 runs (above). Proceed as the batch directs?
-- (GATE 1) The test churn is wider than the brief's file list: seven `pharn/floor/*.test.mjs` suites pin close-part
-  lines (staging-list sites, the ship close line, the commit-gate line, the git-spawn map, the frontmatter consumers).
-  Each edit is a re-point, listed above.
+None open. Both questions raised for GATE 1 (proceed despite the 1-of-3 bar; the wider test re-points) were answered
+by the orchestrator under the user's delegation — see "GATE 1" above.
