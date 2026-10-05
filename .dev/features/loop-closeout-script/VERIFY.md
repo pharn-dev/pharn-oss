@@ -16,6 +16,9 @@ build write), so the `reconcile` gate judges the window from the merge to this r
 | `structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json` |    0 |
 | `reconcile` (`check-bash-reconcile.mjs --require-baseline`)                                |    0 |
 
+**Re-checked after merging `origin/main` at `7696477` (6.40.0):** the baseline re-anchored, then `npm run check` (the
+same gate set plus docs, markers, badge, CHANGELOG, contributing and reconcile) exited 0 over 4,774 tests.
+
 **Verifiers:** none registered (`count-verifiers.mjs` → 0) — floor gates only.
 
 **What this verdict does not say (P0):** the gates are whole-repo, and the feature-specific signal is its own tests —
