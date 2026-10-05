@@ -335,9 +335,57 @@ ends in a stop or a question to the human (ship), never a guess.
 5. Ship's question now yields two regress/verify executions in `cost.json` (D5): a reader comparing ledgers across
    versions sees it; the CHANGELOG says so.
 
+## Grill amendments (G1–G8, `GRILL.md`; all taken)
+
+- **G1 — a question that ends a loop run.** `finish` defers the return marker on `question` in both commands. In
+  `/pharn-loop` a question is **S10**, so the loop's mapping says: run the inline return line, then stop (ship's
+  STOP-on-question paths say the same).
+- **G2 — the direct call's failure modes**, each in its header and here: the setter fails (no thin-caller command file
+  in the install, an unusable `.pharn/`, the setter missing) → exit 2, nothing run, no marker (S9 / STOP); the
+  start marker cannot be written → `marker: not written`, the run goes on; the script cannot be spawned, or dies on a
+  signal → exit 1, a crash (the return marker is still written); `--clear` fails → a note on stderr, the script's
+  exit unchanged, and a `.pharn/**`-only scope left for the next scoped step to overwrite.
+- **G3 — the copy-pair obligation set (L31), closed, each with its rule in `DIRECT_STAGE_WIRING`:**
+  1. the setter argv the call runs equals the thin caller's pinned setter line (module table vs command text);
+  2. every direct fresh line's `--timeout-ms` / `--budget-ms` equal the thin caller's pinned numbers, `N < B < 600000`;
+  3. every resume line's `--budget-ms` equals the thin caller's;
+  4. each orchestrator names the 600000 Bash-tool timeout for these lines;
+  5. each orchestrator's mapping names every stage-exit code — `0`, `2`, `3`, `4`, `5` — plus a crash and a Bash-tool
+     timeout;
+  6. the call's per-stage flag set holds every flag a registry question option appends (`stage-exit-core.mjs`
+     `REGISTRY`), so every answer can be appended.
+- **G4 — the two halves of the direct call's tests.** (a) `stage-direct.test.mjs`, with an injected script: every code
+  0/2/3/4/5, a crash (1, 7) and a signal pass through; the scope file holds the thin caller's scope WHILE the script
+  runs and the live guard denies a write outside `.pharn/**` then; markers per mode. (b) The hygiene ★ test runs each
+  COMMITTED line with the real script in a scratch tree, where it refuses: it proves that line's pass-through, its
+  markers and its release, never the other codes.
+- **G5 — `latestMarker`'s trust bound**, in `mark-phase.mjs`'s header and tested with a torn last line, a non-object
+  and a forged matching stage-start: a forged last line can only make `start` keep a marker instead of writing one;
+  it never changes the route, the token printed or the exit.
+- **G6 — the budget clock.** The call's own work (node's start-up, two setter spawns, two marker writes) is outside the
+  stage script's clock; the header adds it to the thin callers' "not counted" list (the pinned numbers hold the 600 s
+  cap only while uncounted work fits in the remaining 30 s).
+- **G7 — `reads:`.** Both orchestrators' frontmatter lists gain `pharn/floor/stage-direct.mjs`.
+- **G8 — not additions.** `--no-agent-tool` preserves today's `inline:no-agent-tool` route, which the fold would
+  otherwise lose (the token is no longer typed by the model); the open-stage rule preserves ship's question relay,
+  whose re-route today writes no second stage-start.
+
 ## Open questions (HALT)
 
-1. Keep C1 although its own pre-registered bar (≥ 20% orchestrator-role requests) is met by only 1 of the 3 real
-   runs? Recommendation: keep — it removes a data-dependent request per routed stage and the model-typed `<route>`
-   token from five shell lines per loop, at low risk and one revert; if declined, D1 and its pins drop and C3 ships
-   alone.
+None. The one question raised at GATE 1 (keep C1?) is answered below.
+
+## GATE 1 — decisions (2026-10-05)
+
+Approved by the batch's orchestrating model under the user's delegation. This was not a human approval. It decided:
+
+- **Ship BOTH C3 and C1.** C1's own pre-registered bar (orchestrator-role requests ≥ 20% of a run's requests) was met
+  in **1 of the 3 real runs** (15.2% / 14.9% / 21.2%). C1 is adopted because the user asked for item 7 to be
+  addressed, and because it removes a model-typed route token from every shell line — **not** because the bar was
+  met. The PLAN, the CHANGELOG and SHIP.md say so.
+- **Keep the saving statement exactly as derived above:** ≈ 10 orchestrator requests ≈ 44 s on the 92-minute run;
+  36,640 B per iteration no longer injected, ≈ 209k cache-read tokens estimated; it does not move the hour. The
+  corrections to the brief's figures (3.1 / 4.4 s, not ~4 / ~6.6 s; 19,301 / 17,339 B, not 19,449 / 17,500 B) stay.
+- **Keep each hygiene rewrite minimal**, and give every rewritten rule its mutation control (Risk 2).
+- **State both ledger changes (Risk 5) in the CHANGELOG**: regress/verify `executions` rows shrink to the script's
+  own time, and a ship question yields two regress/verify executions.
+- **Stacking:** on the tip the orchestrator names when green (expected `feat/build-gate-bounded`, 6.39.0).
