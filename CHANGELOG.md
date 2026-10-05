@@ -50,7 +50,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     non-exempt path only when that snapshot applies and the path's live digest equals the recorded one, and report it
     as `pre_run_snapshot: {status, unchanged}` in `scope.json`, `regression-report.json` (a second additive block after
     `base_evidence`), the quick check's document and `REGRESSION.md`. With no open run or no snapshot the partition is
-    exactly what it was, and the `check-regress.mjs scope` CLI is byte-identical.
+    exactly what it was, and the `check-regress.mjs scope` CLI is byte-identical. "Open" is a marker's presence and age
+    (≤ 24 h), so a standalone `/pharn-regress` after an interrupted run of the same feature applies that run's snapshot.
   - **Bounds, stated in the module headers and the contract.** Agreement, never provenance: the record is out of the
     write tools' reach (a ★ HOOK test runs both guards on it), and a Bash writer can forge it. Nothing is attributed: a
     path an earlier run escaped with is pre-run state for a re-run, so re-running reports it rather than refusing. Only

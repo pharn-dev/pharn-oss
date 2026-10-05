@@ -507,7 +507,8 @@ flips the verdict (fix #3, `pharn/ARCHITECTURE.md §7`).
 
 1. **GATE 2 — post-verify decision.** On a `PASS` verify, this is the chain's end. `/pharn-ship` **presents**
    the standing verdicts (steps 1–7) + the `GRILL.md` / `REGRESSION.md` / `VERIFY.md` (and `BUILD.md`)
-   free-text quoted as DATA (P2), **plus the per-stage token table and `check-cost-ledger.mjs`'s verdict
+   free-text quoted as DATA (P2), + `regression-report.json`'s `pre_run_snapshot.unchanged` paths as quoted DATA
+   (changed before this run; reported, not counted as escapes), **plus the per-stage token table and `check-cost-ledger.mjs`'s verdict
    from Step 3a** (see its presentation rule), then — after writing `SHIP.md` (Step 3) and emitting the
    ledger + report (Step 3a) — **ends its turn**, handing to the
    human to decide **merge / fix / abandon**. There is **no product `/review` stage**: the product spine ends at

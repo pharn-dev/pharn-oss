@@ -139,8 +139,8 @@ Read the printed `pharn-stage-exit/1` JSON object and branch on the **exit code 
     `/pharn-plan` if the PLAN itself is stale against the current SPEC;
   - `plan-files-unparseable` — fix `PLAN.md`'s `## Files` heading (or its list syntax) so it parses;
   - `scope-escaped` — an undeclared path changed: either declare it in `PLAN.md`'s `## Files` via
-    `/pharn-plan` (a legitimate widening) or revert the undeclared change. A re-run does not clear it: the next run's
-    pre-run snapshot reports the path instead of refusing. **The blind spot this remedy
+    `/pharn-plan` (a legitimate widening) or revert the undeclared change. Re-running does not fix it; it only replaces
+    the refusal with a report, and the escaped change stays in the tree. **The blind spot this remedy
     walks into (M3, GATE-2 round 2):** `scope` exempts this feature's own `PLAN.md` from the escape check,
     so once a `## Files` line authorizes a path, nothing here can tell a legitimate widening from a
     `## Files` rewritten to authorize a path the build had already written. `check-plan-spec-agree.mjs`

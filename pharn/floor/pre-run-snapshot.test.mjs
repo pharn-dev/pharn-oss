@@ -338,6 +338,29 @@ test("★ PATH_KINDS — pathDigest classifies the path itself before any read",
   }
 });
 
+// The independent review's R4: git prints a name that is not valid UTF-8 and `nulList` decodes it with U+FFFD, so lstat
+// of the DECODED name is ENOENT — `absent` at capture AND at check — and a later content change to the real file read as
+// unchanged. APFS refuses such names, so this suite pins the rule (any U+FFFD path is unhashable) and, end to end, a
+// valid-UTF-8 name that genuinely holds U+FFFD: recorded unhashable, never subtracted, whatever its content does.
+test("R4 — a path holding U+FFFD (what a non-UTF-8 name decodes to) is unhashable: never `absent`, never subtracted", () => {
+  const { dir, base } = repo();
+  try {
+    inDir(dir, () => {
+      assert.equal(pathDigest("src/�.txt"), DIGEST_UNHASHABLE, "absent on disk, still never `absent`");
+    });
+    const name = join("src", "x�.txt");
+    writeFileSync(join(dir, name), "pre-run content\n");
+    openLoop(dir);
+    assert.equal(capture(dir).status, 0);
+    assert.deepEqual(readRecord(dir).paths, [[name, DIGEST_UNHASHABLE]]);
+    writeFileSync(join(dir, name), "the build changed it\n");
+    const d = inDir(dir, () => preRunUnchanged({ feature: FEATURE, base, inside: [name] }));
+    assert.deepEqual(d, { status: "applied", unchanged: [] }, "counted as before");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("CLI refusals: usage, a bad slug, and no open run — exit 2, a closed reason code, nothing written", () => {
   const { dir } = repo();
   try {
@@ -513,34 +536,132 @@ function recordFile(projectDir) {
   return join(gitDir, SNAPSHOT_BASENAME);
 }
 
-test("★ HOOK — both real write guards deny the record path (main checkout, linked worktree, installed posture); a .pharn/ path is writable", () => {
+// The independent review's R3: the old title said BOTH guards deny on BOTH layouts, but in a linked worktree only
+// enforce-writes-scope denies. Each layout is now pinned to the guard that denies it, over every posture, with and
+// without a run open, and under no scope, the build's narrow `src/**` and a whole-tree `**` scope (a set scope REPLACES
+// the default, so it is the posture a build actually writes in).
+function setPosture(dir, kind) {
+  rmSync(join(dir, "pharn.config.json"), { force: true });
+  rmSync(join(dir, ".dev"), { recursive: true, force: true });
+  if (kind === "installed") writeFileSync(join(dir, "pharn.config.json"), JSON.stringify({ skillsVersion: "6.37.0" }) + "\n");
+  if (kind === "dev") mkdirSync(join(dir, ".dev", "floor"), { recursive: true });
+}
+
+function setRun(dir, open) {
+  rmSync(join(dir, ".pharn", "pharn-loop"), { recursive: true, force: true });
+  if (open) {
+    mkdirSync(join(dir, ".pharn", "pharn-loop", FEATURE), { recursive: true });
+    writeFileSync(join(dir, ".pharn", "pharn-loop", FEATURE, "active.json"), "{}\n");
+  }
+}
+
+function setScope(dir, scope) {
+  rmSync(join(dir, ".pharn", "writes-scope.json"), { force: true });
+  if (scope) {
+    mkdirSync(join(dir, ".pharn"), { recursive: true });
+    writeFileSync(join(dir, ".pharn", "writes-scope.json"), JSON.stringify({ scope, set_by: "test", set_at: "now" }) + "\n");
+  }
+}
+
+const HOOK_POSTURES = ["unsignalled", "dev", "installed"];
+const HOOK_SCOPES = [null, ["src/**"], ["**"]];
+
+/** Every (posture, run, scope) cell for `projectDir`: [label, protect exit, enforce exit]. */
+function hookMatrix(projectDir, target) {
+  const rows = [];
+  for (const posture of HOOK_POSTURES) {
+    for (const open of [false, true]) {
+      for (const scope of HOOK_SCOPES) {
+        setPosture(projectDir, posture);
+        setRun(projectDir, open);
+        setScope(projectDir, scope);
+        const label = `${posture}/${open ? "run" : "no-run"}/${scope ? JSON.stringify(scope) : "no-scope"}`;
+        rows.push([label, hookExit(PROTECT, projectDir, target), hookExit(ENFORCE, projectDir, target)]);
+      }
+    }
+  }
+  setPosture(projectDir, "unsignalled");
+  setRun(projectDir, false);
+  setScope(projectDir, null);
+  return rows;
+}
+
+test("★ HOOK — the write tools never reach the record: protect-trusted-paths denies it in a MAIN checkout, enforce-writes-scope in a LINKED worktree (beside or nested), in every posture, run state and scope", () => {
   const { dir } = repo();
-  const wt = `${dir}-wt`;
+  const beside = `${dir}-wt`;
+  const nested = join(dir, ".claude", "worktrees", "agent-x");
   try {
     installHooks(dir);
-    const mainRecord = recordFile(dir);
-    assert.equal(hookExit(PROTECT, dir, mainRecord), 2, "protect-trusted-paths denies git metadata");
-    assert.equal(hookExit(ENFORCE, dir, mainRecord), 2, "enforce-writes-scope's default denies it too");
+    const main = hookMatrix(dir, recordFile(dir));
+    assert.equal(main.length, 18, "L34: the cell set is counted, not merely iterated");
+    for (const [label, p] of main) assert.equal(p, 2, `main checkout, ${label}: protect-trusted-paths denies the .git segment`);
+    // Control (non-vacuity): the guards do not deny everything — a .pharn/ path is writable, the reason the record is not kept there.
     const marker = join(dir, ".pharn", "pharn-loop", FEATURE, "active.json");
-    assert.equal(hookExit(PROTECT, dir, marker), 0, "control: the guards are not denying everything");
-    assert.equal(hookExit(ENFORCE, dir, marker), 0, "`.pharn/**` is always writable — why the record is not kept there");
+    assert.equal(hookExit(PROTECT, dir, marker), 0);
+    assert.equal(hookExit(ENFORCE, dir, marker), 0, "`.pharn/**` is always writable");
 
-    execFileSync("git", ["worktree", "add", "-q", "--detach", wt], { cwd: dir });
-    installHooks(wt);
-    const wtRecord = recordFile(wt);
-    assert.ok(wtRecord.includes(join(".git", "worktrees")), wtRecord);
-    assert.equal(hookExit(ENFORCE, wt, wtRecord), 2, "a path inside another git tree is denied");
-    writeFileSync(join(wt, "pharn.config.json"), JSON.stringify({ skillsVersion: "6.37.0" }) + "\n");
-    assert.equal(hookExit(ENFORCE, wt, wtRecord), 2, "installed, no run open: still denied");
-  } finally {
-    try {
-      execFileSync("git", ["worktree", "remove", "--force", wt], { cwd: dir, stdio: "ignore" });
-    } catch {
-      /* already gone */
+    for (const [layout, wt] of [
+      ["beside", beside],
+      ["nested", nested],
+    ]) {
+      mkdirSync(dirname(wt), { recursive: true });
+      execFileSync("git", ["worktree", "add", "-q", "--detach", wt], { cwd: dir });
+      installHooks(wt);
+      const target = recordFile(wt);
+      assert.ok(target.includes(join(".git", "worktrees")), target);
+      for (const [label, p, e] of hookMatrix(wt, target)) {
+        assert.equal(e, 2, `linked worktree (${layout}), ${label}: enforce-writes-scope denies a path inside another git tree`);
+        assert.equal(p, 0, `linked worktree (${layout}), ${label}: protect-trusted-paths does NOT deny it — stated, not hidden`);
+      }
     }
-    rmSync(wt, { recursive: true, force: true });
+  } finally {
+    for (const wt of [nested, beside]) {
+      try {
+        execFileSync("git", ["worktree", "remove", "--force", wt], { cwd: dir, stdio: "ignore" });
+      } catch {
+        /* already gone */
+      }
+    }
+    rmSync(beside, { recursive: true, force: true });
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("★ HOOK, the stated bound PINNED — a SEPARATE git dir kept inside the project under a non-.git name is reachable under a `**` scope", () => {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "prs-sep-")));
+  try {
+    const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe", encoding: "utf8" });
+    git("init", "-q", "--separate-git-dir", join(dir, "gitdata"), ".");
+    writeFileSync(join(dir, ".gitignore"), ".pharn/\n.claude/\ngitdata/\n");
+    installHooks(dir);
+    const target = recordFile(dir);
+    assert.ok(target.startsWith(join(dir, "gitdata")), target);
+    const cells = hookMatrix(dir, target);
+    const reachable = cells.filter(([, p, e]) => p !== 2 && e !== 2).map(([label]) => label);
+    assert.ok(reachable.includes('dev/no-run/["**"]'), "a `**` scope admits it — the bound pre-run-snapshot.mjs's header names");
+    assert.ok(reachable.includes("installed/no-run/no-scope"), "installed, no scope, no run open admits it too");
+    assert.ok(!reachable.includes("dev/no-run/no-scope"), "control: the dev default still denies it");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── ✧ REPORTED — every human-facing surface of a run names the subtracted paths (the independent review's R1) ────────
+// "Reported, never silent" was true of the machine artifacts and false of /pharn-ship --quick, whose item 7 read only the
+// exit code and whose SHIP.md recorded `scope: clean` verbatim. Presence only: it never proves a run did what it reads.
+test("✧ REPORTED (R1) — ship --quick keeps and records the pre-run paths, ship's roll-up and GATE 2 name them, the loop's summary lists them", () => {
+  const quick = readFileSync(join(COMMANDS_DIR, "pharn-ship-quick.md"), "utf8");
+  const item7 = quick.slice(quick.indexOf("7. **The scope check: KEPT"), quick.indexOf("8. **The verify step"));
+  assert.match(item7, /keep the document's `pre_run_snapshot\.unchanged`/);
+  const item11 = quick.slice(quick.indexOf("11. **Step 3 — `SHIP.md` records"), quick.indexOf("12. **Step 3a.**"));
+  assert.match(item11, /`pre-run unchanged: <n>` with those paths fenced as quoted\s+DATA/);
+  const gate2 = quick.slice(quick.indexOf("**GATE 2 in quick mode**"));
+  assert.match(gate2, /`pre-run unchanged` paths as quoted DATA/);
+  assert.match(readFileSync(join(COMMANDS_DIR, "pharn-ship-close.md"), "utf8"), /`pre-run unchanged: <n>` from its `pre_run_snapshot`/);
+  const ship = readFileSync(join(COMMANDS_DIR, "pharn-ship.md"), "utf8");
+  const shipGate2 = ship.slice(ship.indexOf("1. **GATE 2 — post-verify decision.**"));
+  assert.match(shipGate2.slice(0, 900), /`pre_run_snapshot\.unchanged` paths as quoted DATA/);
+  assert.match(readFileSync(join(COMMANDS_DIR, "pharn-loop-close.md"), "utf8"), /every path `pre_run_snapshot\.unchanged` lists/);
 });
 
 // ── ★ WIRING — the pinned lines, EXECUTED, and their STOP branches ───────────────────────────────────────────────

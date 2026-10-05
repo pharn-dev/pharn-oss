@@ -38,7 +38,8 @@
 //   bytes it still holds is reported in `pre_run_snapshot.unchanged`, not counted as an escape — so a build that writes
 //   such a path back to its recorded bytes is not seen, a path an earlier run escaped with is pre-run state for a
 //   re-run, and the record can be forged through Bash (pre-run-snapshot-core.mjs states each bound). With no open run
-//   or no snapshot the check is exactly what it was. The snapshot reader brings regress-base-reuse.mjs and run-gates.mjs
+//   or no snapshot the check is exactly what it was — and "open" is a marker's presence and age (≤ 24 h), so an
+//   interrupted run's leftover marker makes a later standalone check apply that run's snapshot. The snapshot reader brings regress-base-reuse.mjs and run-gates.mjs
 //   into this module's load graph; the entry's import() maps a load failure to `crashed`.
 // • The only shell text left is the pinned line itself; the slug and the base reach it inside single quotes, and a
 //   caller that types anything else there is outside this module's reach (the loop's S1 slug rule; a SHA git printed).

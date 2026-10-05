@@ -110,7 +110,8 @@ spec_kind: quick`. The remedy is to re-run `/pharn-ship <description>` **without
    document is the checker's own file failing to start (run from outside the project root, say): the same STOP,
    with no breach to present. `2` (inconclusive — its `reason_code` names why; `crashed` since 6.28.0 for a
    checker module that cannot load or throws) or any other exit → **STOP**, fail-closed. Record the
-   result for `SHIP.md` (item 11).
+   result for `SHIP.md` (item 11), and keep the document's `pre_run_snapshot.unchanged`: paths changed before this run,
+   reported and not counted (`pharn/floor/pre-run-snapshot-core.mjs`), which item 11 and GATE 2 name.
 
 8. **The verify step: unchanged.** `PASS` → GATE 2 below; `INCOMPLETE` → Step 2b, with the regress re-run
    skipped (item 9); `FAIL` / `INCONCLUSIVE` → STOP.
@@ -125,8 +126,8 @@ spec_kind: quick`. The remedy is to re-run `/pharn-ship <description>` **without
     (Step 2d's only input is `BRIEFING.md`, which quick mode never writes).
 
 11. **Step 3 — `SHIP.md` records `mode: quick`** (a full run records `mode: full` — Step 3), the scope
-    check's result verbatim (`scope: clean`, item 7), and a `## Not checked in quick mode` list, plainly,
-    in this order:
+    check's result verbatim (`scope: clean`, item 7), then `pre-run unchanged: <n>` with those paths fenced as quoted
+    DATA when `<n>` is not 0, and a `## Not checked in quick mode` list, plainly, in this order:
     - **regressions outside the feature** — no base comparison ran (`/pharn-regress` was skipped), so a
       break the feature's own tests and the head gates do not exercise is not looked for. **Kept:** the
       scope check (item 7) — a file the run changed outside the plan's `## Files` still stops the run;
@@ -151,8 +152,8 @@ spec_kind: quick`. The remedy is to re-run `/pharn-ship <description>` **without
 
 **GATE 2 in quick mode** presents the same standing verdicts as full mode, minus the regress verdict (never
 read) and every pointer to `RUN-REPORT.md` or `BRIEFING.md` (a quick run writes neither, and a file of either
-name already in the directory belongs to an earlier run — item 11), plus the scope check's result (item 7)
-and the `## Not checked in quick mode` list from `SHIP.md`, so the human sees exactly what was and was not
+name already in the directory belongs to an earlier run — item 11), plus the scope check's result (item 7), its
+`pre-run unchanged` paths as quoted DATA, and the `## Not checked in quick mode` list from `SHIP.md`, so the human sees exactly what was and was not
 looked for before deciding.
 
 **What quick mode claims** — the rest is in `## What you may claim`:

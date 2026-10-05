@@ -51,8 +51,8 @@ function section(title, lines) {
 }
 
 /** The pre-run snapshot's lines (6.37.0, regress-pre-run-snapshot) — `block` is scope.json's `pre_run_snapshot`
- *  (`{status, unchanged}`), or absent. Nothing for an absent block or for `no-delivery-run` (a standalone regress, whose
- *  render stays byte-identical); otherwise the status, and the subtracted paths quoted as DATA. The status is a closed
+ *  (`{status, unchanged}`), or absent. Nothing for an absent block or for `no-delivery-run` (no open run — a standalone
+ *  regress, whose render stays byte-identical); otherwise the status, and the subtracted paths quoted as DATA. The status is a closed
  *  enum (pre-run-snapshot-core.mjs PRE_RUN_STATUSES); it is still rendered through `dataText`, inline after fixed text. */
 export function preRunLines(block) {
   if (block === null || typeof block !== "object" || block.status === "no-delivery-run") return [];

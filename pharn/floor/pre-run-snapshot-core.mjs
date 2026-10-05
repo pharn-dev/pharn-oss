@@ -21,13 +21,16 @@
 // A DIGEST is one of: a sha256 hex string (a regular file's content, or a symlink's own text — `reconcile-baseline.mjs`
 // `hashFile`, the fingerprint's function), `DIGEST_ABSENT` (lstat ENOENT: a deletion), or `DIGEST_UNHASHABLE` (anything
 // else: a directory — git lists an untracked nested repository as `vendor/lib/` —, a FIFO, a parent component that is
-// a symlink, an unreadable file, a file over `DIGEST_MAX_BYTES`). An UNHASHABLE entry is never subtracted: that path is
-// counted exactly as before.
+// a symlink, an unreadable file, a file over `DIGEST_MAX_BYTES`, a name holding U+FFFD — what git's non-UTF-8 names decode
+// to, which could never reach the real file). An UNHASHABLE entry is never subtracted: that path is counted as before.
 //
 // THE DECISION, first failure decides (`PRE_RUN_MISSES`, in order); only `applied` yields paths:
 //   no-delivery-run     not exactly one open /pharn-loop or /pharn-ship marker for the feature — regress-base-reuse-core
 //                       `deliveryRunIdentity`, reused: presence + the write guard's 24 h age, the bytes hashed, never
-//                       parsed. A standalone /pharn-regress is here, and so behaves exactly as before 6.37.0;
+//                       parsed. A standalone /pharn-regress is here, and so behaves exactly as before 6.37.0 — UNLESS an
+//                       interrupted /pharn-loop or /pharn-ship of the same feature left its marker (≤ 24 h old): a
+//                       marker is read by presence and age only, so that standalone run applies the interrupted run's
+//                       snapshot (the independent review's R2; 6.33.0's base reuse carries the same bound);
 //   no-snapshot         no record in the git dir, or a git dir git cannot name;
 //   snapshot-malformed  the record is not a regular file (a link, a FIFO, a directory, unreadable, over
 //                       `SNAPSHOT_MAX_BYTES`) of the closed `pharn-pre-run-snapshot/1` shape;

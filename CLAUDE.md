@@ -852,8 +852,9 @@ node pharn/floor/check-quick-scope.mjs --feature <name> --base <40-hex>
 # (stage-regress.mjs, quick-scope-core.mjs → check-regress.mjs partitionScope's optional `preRunUnchanged`) subtracts an
 # undeclared, non-exempt path only when the snapshot applies (closed PRE_RUN_STATUSES, first miss decides) and its live
 # digest is EQUAL, and REPORTS it: `pre_run_snapshot: {status, unchanged}` in scope.json, regression-report.json (after
-# base_evidence), the quick check's document and REGRESSION.md. No run / no snapshot → exactly today's partition; the
-# `check-regress.mjs scope` CLI is byte-identical. FLOOR: the subtraction (content hashes + closed enums). BOUNDS, in
+# base_evidence), the quick check's document and REGRESSION.md. No run / no snapshot → exactly today's partition, where
+# "a run" is a marker's presence and age (≤ 24 h), so an interrupted run's leftover marker makes a later standalone regress
+# apply that run's snapshot; the `check-regress.mjs scope` CLI is byte-identical. FLOOR: the subtraction (content hashes + closed enums). BOUNDS, in
 # pre-run-snapshot-core.mjs's header: agreement, never provenance (a Bash writer can forge the git-dir record; the write
 # tools cannot — ★ HOOK); never attributed (an earlier run's escape is pre-run state for a re-run); escape set ONLY —
 # `inside` is unchanged, so a pre-run change that breaks a gate still reads as a regression (follow-up
