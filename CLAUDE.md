@@ -824,6 +824,17 @@ node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 # Exit: 0 clean · 1 escaped · 2 inconclusive (closed reason_code, `crashed` included).
 node pharn/floor/check-quick-scope.mjs --feature <name> --base <40-hex>
 
+# THE INSTRUCTION-GROWTH GATE (6.36.0). A user's CLAUDE.md + 14 rules (634,379 B) rode in every stage agent's prefix.
+# `--report` (ADVISORY): the always-loaded set — root CLAUDE.md files, their `@` imports, rules without `paths:` —
+# per-file bytes, a bytes/4 estimate, notes (`globs-not-read`, …). `--growth` (FLOOR over this MODEL of the loader, never
+# the loader itself): bytes ADDED since the base (removals never offset) vs `budget.instructionGrowthBytes` in
+# pharn.config.json AT THE BASE (default 2048). Under-count routes are listed as known-so-far (L67).
+# /pharn-verify injects it before `reconcile` as `instruction-growth` (`--base-rule`: dirty → HEAD, else merge-base
+# origin/main, else INCONCLUSIVE); never reused. Spec/bounds: instruction-files-core.mjs. This repo's dev loop never runs it.
+# Exit: 0 within/reported · 1 over · 2 inconclusive (closed reason_code).
+node pharn/floor/check-instruction-files.mjs --report
+node pharn/floor/check-instruction-files.mjs --growth (--base <ref> | --base-rule)
+
 # Check the SHAPE of a loop-record — the pharn/features/<name>/LOOP.md that /pharn-loop writes at every stop.
 # Floor: the frontmatter envelope (`decision` in {STOP_GREEN, STOP_GREEN_QUICK, STOP_CAP, STOP_TERMINAL, INCONCLUSIVE};
 # `iterations` a positive integer; `commit` a git SHA or the literal `unknown`; `date` ISO YYYY-MM-DD; and,

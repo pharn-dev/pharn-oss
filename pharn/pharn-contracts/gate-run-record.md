@@ -149,7 +149,8 @@ gate — it already is one today.
 ## Ordering and coverage
 
 - **Order:** the source ids (ALLOWLIST order, or the explicit token order), then `structural:*` sorted,
-  then `reconcile` **last** so it judges any tree write an earlier gate made. The e2e ids (`E2E_SET`:
+  then — verify only — `instruction-growth` (6.36.0), then `reconcile` **last** so it judges any tree write an earlier
+  gate made. The e2e ids (`E2E_SET`:
   `test:e2e`, `e2e`, 6.16.0) are the last ALLOWLIST members, so a discovered e2e gate runs after `build`.
 - **Coverage:** `runs` ⊇ `required`. For regress, `required` is the source set minus `STYLE_SET` when
   `--skip-style` was passed, and a **discovered** regress source never contains an `E2E_SET` member (a fixed
@@ -164,7 +165,8 @@ gate — it already is one today.
   `stage-mismatch` there. What the stamp's per-test records decide is `ac-tests.md`'s contract.
 - **Reserved ids:** `reconcile` and `completeness` (the runner's), and `ac-delivery` and `ac-evidence` (6.20.0 — the ids
   `check-verify.mjs --ac-gate` adds to a verify report's `failing_gates`, which `check-loop.mjs` reads by exact
-  membership; a real gate carrying one would be read as the AC gate). The `structural:` prefix belongs to `--extra` only.
+  membership; a real gate carrying one would be read as the AC gate), and `instruction-growth` (6.36.0, the runner's).
+  The `structural:` prefix belongs to `--extra` only.
 - **`<actual>` is derived, never supplied:** a `structural:<expected>` entry's argv resolves `<actual>` as
   the `findings.json` colocated with the capability directory that owns `<expected>`, per
   `finding-shape.md`'s emission contract. A supplied or mismatched `<actual>` is refused, so the one
@@ -203,7 +205,8 @@ release line; `check-loop-fresh.mjs`'s log check is now its emitter.
 - the map's **values** are the exit codes the runner recorded from the listed argv — for a reused entry (6.34.0), the
   exit a runner recorded for the SOURCE execution its `reused` block names, which the runner of THIS stamp found
   eligible and identity-equal at the live tree when it recorded the entry;
-- the map's **keys** cover the resolved source set, plus `reconcile` for verify;
+- the map's **keys** cover the resolved source set, plus `instruction-growth` and `reconcile` for verify (the runner
+  composes both; nothing re-checks that a stamp carries them);
 - **no tree edit happened between consecutive gate runs** (`fp_after[k-1] === fp_before[k]`);
 - `reconcile`, when present, ran **last**.
 
