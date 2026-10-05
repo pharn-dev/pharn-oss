@@ -72,7 +72,7 @@ test("REGISTRY: the regress vocabulary matches the plan's closed table exactly",
 });
 
 test("REGISTRY: the verify vocabulary matches the stage-verify-script plan's closed table exactly (6.26.0)", () => {
-  // 6.42.0 — `head-install-drift` is in BOTH stages: the same check runs before either stage's first gate.
+  // 6.40.0 — `head-install-drift` is in BOTH stages: the same check runs before either stage's first gate.
   assert.deepEqual(REGISTRY.verify.refused, ["missing-artifact", "chain-red", "plan-files-unparseable", "head-install-drift"]);
   assert.deepEqual(Object.keys(REGISTRY.verify.question), ["no-gates"]);
   assert.deepEqual(REGISTRY.verify.unusable, [

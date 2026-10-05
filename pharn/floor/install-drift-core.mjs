@@ -1,4 +1,4 @@
-// pharn/floor/install-drift-core.mjs — THE HEAD INSTALL CHECK, the pure half (6.42.0, regress-head-install-drift). No
+// pharn/floor/install-drift-core.mjs — THE HEAD INSTALL CHECK, the pure half (6.40.0, regress-head-install-drift). No
 // filesystem, no child process, no clock. `install-drift.mjs` reads the tree and hands this module what it found; both
 // stage scripts (`stage-regress.mjs` at head-init, `stage-verify.mjs` at init) call it before any gate runs (P3: this
 // module changes when the RULE changes, the reader when the way the tree is read changes).

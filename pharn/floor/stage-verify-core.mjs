@@ -40,7 +40,7 @@ export const VERIFY_PATHS = Object.freeze({
   root: ".pharn/pharn-verify",
   gates: ".pharn/pharn-verify/gates",
   stageJson: ".pharn/pharn-verify/stage.json",
-  // 6.42.0 — the HEAD install check's block, written at init and re-read at verdict (install-drift.mjs).
+  // 6.40.0 — the HEAD install check's block, written at init and re-read at verdict (install-drift.mjs).
   headInstall: ".pharn/pharn-verify/head-install.json",
 });
 
@@ -238,7 +238,7 @@ export function gateReuseBlock(stampText) {
  *  THE REPORT — `check-verify.mjs`'s object with every key kept, value and order, then three ADVISORY blocks the
  *  stage merges: `completeness` (the runner's capture, verbatim, after `checkCompleteness`), `verifiers`
  *  (`{registered, findings: []}`, plus a fixed `note` when `registered > 0`) and, since 6.34.0, `gate_reuse`
- *  (`gateReuseBlock`), and since 6.42.0 `head_install` (the HEAD install check's block, `install-drift-core.mjs`;
+ *  (`gateReuseBlock`), and since 6.40.0 `head_install` (the HEAD install check's block, `install-drift-core.mjs`;
  *  the CALLER validates it — this module keeps its one import — so here it is only "a plain object, or null").
  *  A checker key named like any of them is REFUSED rather than overwritten (GATE 1 Q2) —
  *  `check-verify.mjs` prints none today, so the refusal guards a future change to it.

@@ -1,4 +1,4 @@
-// pharn/floor/install-drift.mjs — THE HEAD INSTALL CHECK, the disk half (6.42.0, regress-head-install-drift). It reads
+// pharn/floor/install-drift.mjs — THE HEAD INSTALL CHECK, the disk half (6.40.0, regress-head-install-drift). It reads
 // what `install-drift-core.mjs` decides over — the project root's package.json and lockfile entries, the npm lockfile,
 // `node_modules` and npm's record in it — and stores and re-reads the stage's report block. No CLI (nothing runs it
 // alone; P7): `stage-regress.mjs` (head-init) and `stage-verify.mjs` (init) import it, and `readInstallCheck` +

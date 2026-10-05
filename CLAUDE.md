@@ -811,7 +811,7 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 node pharn/floor/stage-verify.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--gates "<cmd>[::<id>],…"]
 node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 
-# THE HEAD INSTALL CHECK (6.42.0, regress-head-install-drift) — no CLI: pharn/floor/install-drift.mjs (reads the tree)
+# THE HEAD INSTALL CHECK (6.40.0, regress-head-install-drift) — no CLI: pharn/floor/install-drift.mjs (reads the tree)
 # + install-drift-core.mjs (the pure rule; its header IS the spec). First thing in stage-regress.mjs's head-init and
 # stage-verify.mjs's init, before any gate, it compares npm's record of the installed tree (node_modules/.package-lock.json)
 # with the lockfile (npm-shrinkwrap.json first, npm's own order). THE RECORDED FAILURE (P7): a user's 92-min /pharn-loop
@@ -824,7 +824,7 @@ node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 # non-refusing state is the additive, advisory `head_install` block in both reports. LOCKFILE_FAMILIES
 # (stage-regress-core.mjs) is the one owner of the lockfile names, BASE and HEAD alike. BOUND (L43): agreement of two npm
 # records, never "node_modules is right" — a tree changed outside npm, or by `npm install --package-lock-only`
-# (measured), reads clean; every false clean is the pre-6.42.0 behaviour. `readInstallCheck(root)` + `refuses` are
+# (measured), reads clean; every false clean is the pre-6.40.0 behaviour. `readInstallCheck(root)` + `refuses` are
 # exported for the follow-up `entry-preflight-install-drift`. Contracts: regression-report.md / verify-report.md "The
 # additive `head_install` block", stage-exit.md.
 

@@ -1,6 +1,7 @@
 # VERIFY — regress-head-install-drift
 
-Run at HEAD after merging `origin/main` (d8fd005, 6.38.1) into the branch; provisional version 6.42.0.
+Run at HEAD after merging `origin/main` (d8fd005, 6.38.1) into the branch; version 6.40.0 (assigned by the orchestrator; it was provisional 6.42.0 when these gates ran, and the later renumber
+touched version strings only).
 
 | gate                                                                                       | exit |
 | ------------------------------------------------------------------------------------------ | ---: |

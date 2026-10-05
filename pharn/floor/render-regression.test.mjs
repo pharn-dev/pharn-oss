@@ -463,7 +463,7 @@ test("6.36.0 — an exclusion id outside the ALLOWLIST and an unknown source are
   assert.ok(!md.includes("hostile-link-target") && !md.includes("# x"));
 });
 
-// ── 6.42.0: the HEAD install check (regress-head-install-drift) ────────────────────────────────────────────────────
+// ── 6.40.0: the HEAD install check (regress-head-install-drift) ────────────────────────────────────────────────────
 const HI_CLEAN = {
   state: "clean",
   why: null,
@@ -472,7 +472,7 @@ const HI_CLEAN = {
   counts: { changed: 0, missing: 0, extraneous: 0, missing_unchecked: 2 },
 };
 
-test("6.42.0 — the HEAD install line: clean says what was compared, not-checked warns, null reads 'not recorded'; no key, no line", () => {
+test("6.40.0 — the HEAD install line: clean says what was compared, not-checked warns, null reads 'not recorded'; no key, no line", () => {
   const render = (progress) => renderDone({ feature: "demo", base: "a".repeat(40), report: baseReport(), scope: baseScope(), progress });
   const clean = render(baseProgress({ headInstall: HI_CLEAN }));
   assert.match(clean, /^HEAD install: checked — npm's record of the installed tree agrees with `package-lock.json` \(2 absent/m);
@@ -501,7 +501,7 @@ test("6.42.0 — the HEAD install line: clean says what was compared, not-checke
   assert.ok(lines.findIndex((l) => l.startsWith("HEAD install:")) < lines.indexOf("## Scope"));
 });
 
-test("6.42.0 — a head-install-drift refusal renders NOT measured with its detail fenced", () => {
+test("6.40.0 — a head-install-drift refusal renders NOT measured with its detail fenced", () => {
   const md = renderRefused({
     feature: "demo",
     reasonCode: "head-install-drift",

@@ -259,7 +259,7 @@ test("★ WIRING — pharn-verify.md's pinned fresh line, executed verbatim, rea
     assert.deepEqual(
       Object.keys(report),
       [...Object.keys(live), "completeness", "verifiers", "gate_reuse", "head_install"],
-      "the checker's keys, in order, then the four blocks (head_install since 6.42.0)"
+      "the checker's keys, in order, then the four blocks (head_install since 6.40.0)"
     );
     for (const k of Object.keys(live)) assert.deepEqual(report[k], live[k], `field ${k} is not the checker's own output`);
     // F — the stamp's final fingerprint is the live tree's, after the render wrote both artifacts.
@@ -589,7 +589,7 @@ test("refused missing-artifact / chain-red / plan-files-unparseable — VERIFY.m
   withFixture({ files: null, anchor: false }, ({ dir }) => assertRefused(dir, runCli(dir, fresh()), "plan-files-unparseable"));
 });
 
-// ── 6.42.0: THE HEAD INSTALL CHECK (regress-head-install-drift) — the same function regress runs, before any gate ──
+// ── 6.40.0: THE HEAD INSTALL CHECK (regress-head-install-drift) — the same function regress runs, before any gate ──
 const npmPackages = (version) => ({
   "": { name: "fx" },
   "node_modules/dep": { version, resolved: `file:dep-${version}.tgz`, integrity: `sha512-${version}` },
@@ -606,7 +606,7 @@ function plantRecord(dir, version) {
   );
 }
 
-test("6.42.0 — a drifted install, or none at all, is refused head-install-drift before any gate, with --gates too; the control is done/PASS", () => {
+test("6.40.0 — a drifted install, or none at all, is refused head-install-drift before any gate, with --gates too; the control is done/PASS", () => {
   withFixture({ committed: NPM_COMMITTED }, ({ dir }) => {
     plantRecord(dir, "1.0.0");
     for (const extra of [[], ["--gates", "node --test src/::test"]]) {
@@ -638,7 +638,7 @@ test("6.42.0 — a drifted install, or none at all, is refused head-install-drif
   });
 });
 
-test("6.42.0 — a project with no lockfile is not checked: the gates run as before and the report says so", () => {
+test("6.40.0 — a project with no lockfile is not checked: the gates run as before and the report says so", () => {
   withFixture({}, ({ dir }) => {
     const r = runCli(dir, fresh());
     assert.equal(r.code, 0, r.raw);
@@ -1162,7 +1162,7 @@ test("★ CLOSURE — every reason_code literal stage-verify.mjs emits is a regi
   const registered = new Set(allReasonCodes("verify"));
   for (const l of lits) assert.ok(registered.has(l), `stage-verify.mjs emits '${l}', not in the verify registry`);
   assert.deepEqual([...new Set(lits)].sort(), [...registered].sort());
-  assert.equal(REGISTRY.verify.refused.length, 4); // head-install-drift since 6.42.0
+  assert.equal(REGISTRY.verify.refused.length, 4); // head-install-drift since 6.40.0
   assert.equal(Object.keys(REGISTRY.verify.question).length, 1);
   assert.equal(REGISTRY.verify.unusable.length, 8);
   assert.deepEqual(Object.keys(EXIT_CODE).sort(), ["continue", "done", "question", "refused", "unusable"]);
