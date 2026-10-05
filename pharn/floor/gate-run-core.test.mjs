@@ -1127,3 +1127,95 @@ test("gateRunBlock copies `excluded` ONLY when the stamp carries it — every re
   b.excluded.ids.push("build");
   assert.deepEqual(s.excluded.ids, ["typecheck", "e2e"], "a copy, never the stamp's own array");
 });
+
+// ── build (6.38.0, build-gate-bounded) — /pharn-build's own gate: discovered, minus e2e, no reconcile; targeted = `test` ─
+
+import { MAX_BUILD_TARGETS } from "./gate-run-core.mjs";
+
+test("build, full — the DISCOVERED set minus the e2e gates, in ALLOWLIST order, with no reconcile and no files", () => {
+  assert.ok(STAGES.includes("build"));
+  const r = resolveSet({ stage: "build", feature: "demo", scripts: ALL_SCRIPTS });
+  assert.equal(r.ok, true, r.reason);
+  assert.deepEqual(
+    r.spec.required,
+    ALLOWLIST.filter((id) => !E2E_SET.includes(id))
+  );
+  assert.deepEqual(
+    r.spec.entries.map((e) => e.id),
+    r.spec.required,
+    "no reconcile is injected"
+  );
+  assert.deepEqual(r.spec.e2e_excluded, [...E2E_SET]);
+  for (const e of r.spec.entries) assert.deepEqual(e.files, []);
+  assert.equal(r.spec.side, null);
+});
+
+test("build, targeted — the `test` gate alone, handed exactly the target files; the exclusion is never credited with what it skips anyway", () => {
+  const r = resolveSet({ stage: "build", feature: "demo", scripts: ALL_SCRIPTS, targets: ["b.test.js", "a.test.js"] });
+  assert.equal(r.ok, true, r.reason);
+  assert.deepEqual(
+    r.spec.entries.map((e) => [e.id, e.files]),
+    [["test", ["b.test.js", "a.test.js"]]]
+  );
+  const x = resolveSet({ stage: "build", feature: "demo", scripts: ALL_SCRIPTS, targets: ["a.test.js"], exclude: ["typecheck"] });
+  assert.equal(x.ok, true);
+  assert.equal(x.spec.excluded, null, "typecheck is skipped by a targeted run anyway (the G9 rule)");
+  const full = resolveSet({ stage: "build", feature: "demo", scripts: ALL_SCRIPTS, exclude: ["typecheck"] });
+  assert.deepEqual(full.spec.excluded, { declared_in: EXCLUSION_DECLARED_IN, ids: ["typecheck"] });
+  assert.ok(!full.spec.required.includes("typecheck"));
+});
+
+test("build — empty sets are `empty-source-set` (L34), naming why", () => {
+  const noTest = resolveSet({ stage: "build", feature: "demo", scripts: { lint: "x" }, targets: ["a.test.js"] });
+  assert.equal(noTest.reason_code, "empty-source-set");
+  assert.match(noTest.reason, /targeted build run needs the discovered `test` gate/);
+  const excluded = resolveSet({ stage: "build", feature: "demo", scripts: ALL_SCRIPTS, targets: ["a.test.js"], exclude: ["test"] });
+  assert.equal(excluded.reason_code, "empty-source-set");
+  assert.match(excluded.reason, /removed test/);
+  const e2eOnly = resolveSet({ stage: "build", feature: "demo", scripts: { e2e: "x", "test:e2e": "y" } });
+  assert.equal(e2eOnly.reason_code, "empty-source-set");
+  assert.match(
+    e2eOnly.reason,
+    /at build the allowlist ∩ package\.json scripts holds only the e2e gates \(test:e2e, e2e\), and build never discovers those/
+  );
+  // The regress message is byte-identical to before (the template names the stage).
+  const reg = resolveSet({ stage: "regress", side: "head", feature: "demo", scripts: { e2e: "x" } });
+  assert.equal(
+    reg.reason,
+    "no gates: at regress the allowlist ∩ package.json scripts holds only the e2e gates (e2e), and regress never discovers those"
+  );
+});
+
+test("build — refusals: --gates, --extra, --skip-style, a bad targets array; --targets off the build stage", () => {
+  const base = { stage: "build", feature: "demo", scripts: ALL_SCRIPTS };
+  for (const [why, over] of [
+    ["--gates", { gates: "npm test" }],
+    ["--extra", { extras: "[]" }],
+    ["--skip-style", { skipStyle: true }],
+    ["an empty targets list (it would run everything)", { targets: [] }],
+    ["a non-array", { targets: "a.test.js" }],
+    ["a flag-shaped path", { targets: ["--config=x.js"] }],
+    ["a glob", { targets: ["tests/*.test.js"] }],
+    ["a duplicate", { targets: ["a.test.js", "a.test.js"] }],
+    ["a control character", { targets: ["a\n.test.js"] }],
+    ["a non-string", { targets: [{ toString: 1 }] }],
+    ["over the cap", { targets: Array.from({ length: MAX_BUILD_TARGETS + 1 }, (_, i) => `t${i}.test.js`) }],
+  ]) {
+    const r = resolveSet({ ...base, ...over });
+    assert.equal(r.ok, false, why);
+    assert.equal(r.reason_code, "usage-error", why);
+  }
+  const ver = resolveSet({ stage: "verify", feature: "demo", scripts: ALL_SCRIPTS, targets: ["a.test.js"] });
+  assert.match(ver.reason, /--targets applies to --stage build only/);
+  const reg = resolveSet({ stage: "regress", side: "head", feature: "demo", scripts: ALL_SCRIPTS, targets: ["a.test.js"] });
+  assert.equal(reg.reason_code, "usage-error");
+  assert.match(reg.reason, /--targets applies to --stage build only/);
+});
+
+test("build — a build stamp validates, and every reader that asserts another stage refuses it", () => {
+  const s = goodStamp({ stage: "build" });
+  assert.equal(validateStamp(s).ok, true);
+  assert.equal(validateStamp(s, { stage: "build", feature: "demo" }).ok, true);
+  for (const stage of ["verify", "regress", "ac-test"]) assert.equal(validateStamp(s, { stage }).reason_code, "stage-mismatch", stage);
+  assert.equal(validateStamp(goodStamp({ stage: "build", side: "head" })).reason_code, "stamp-malformed");
+});

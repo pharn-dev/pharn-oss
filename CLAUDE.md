@@ -809,6 +809,23 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 node pharn/floor/stage-verify.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--gates "<cmd>[::<id>],…"]
 node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 
+# /pharn-build's PROJECT GATE (6.38.0, build-gate-bounded) — Step 4 runs the project's gates ONLY through this helper.
+# THE RECORDED FAILURE (P7): in a user's 92-minute /pharn-loop run the routed build agent chose its own set (a full
+# `vitest run` twice, a `test:db` script /pharn-verify never runs twice, `typecheck | grep -v` hiding pre-existing errors,
+# never `build`) — 7.8 min blocked on suites (.dev/measurements/loop-wall-clock-2026-10-05.md §4). Correction recorded in
+# the PLAN: its gate output was ~18 KB of 484 KB of Bash results, so the context growth was NOT gate output.
+# `targeted`: the `test` gate over this feature's declared test files (PLAN ∪ AC-TESTS `## Files`, through badPath +
+# isTestFile + a regular-file lstat, e2e-mapped files left out); `full`: the set /pharn-verify discovers minus E2E_SET (the
+# project's gate exclusion applies), whose exit is the build's gate. Both through run-gates.mjs's new `build` stage,
+# stage-runtime.mjs's drain and budget (unchanged), logs under .pharn/pharn-build/<name>/<mode>/. The summary is bounded
+# (per gate exit + runner-call wall time; failing tests' ids with a fenced excerpt of their first message — the adapters
+# now carry `messages` on parsed entries, NO record does — or a fenced log tail; 16 KiB per call). The same line starts
+# and continues a run (continues only while the tree fingerprint is unchanged). FLOOR: the set (resolveSet), the exit
+# codes (the stamp). ADVISORY: that the agent runs nothing else, that an excerpt holds the diagnostic, that a targeted
+# GREEN predicts a full one. Follow-up `build-gate-execution-reuse`. Exit: 0 GREEN · 3 RED · 4 NO-GATES · 5 CONTINUE ·
+# 2 UNUSABLE · anything else (1 included) = crashed. Ships: bumps SKILLS_VERSION.
+node pharn/floor/build-gate.mjs --feature <name> --mode targeted|full --timeout-ms <N> [--budget-ms <B>]
+
 # THE QUICK SCOPE CHECK (6.28.0, loop-quick-mode GATE 2, review F1) — the partition check `/pharn-ship --quick`'s item 7
 # and every `/pharn-loop --quick` iteration keep when they skip /pharn-regress. THE RECORDED FAILURE (P7): 6.25.0's
 # pinned line had the MODEL paste the changed and declared lists into DOUBLE-QUOTED shell arguments of
