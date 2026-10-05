@@ -126,27 +126,44 @@ So a per-call "tool_use → tool_result" gap measures the model writing the rema
 
 ## Design
 
-1. **The brief (every routed stage, both orchestrators).** Rule 4 gains a few sentences:
-   - create and edit project files only with the Write, Edit or MultiEdit tool, because the writes-scope guard (and
-     any project hook on those tools) judges only them;
-   - Bash runs commands and never writes a project file's content itself (no `sed -i`, heredoc, redirect or script),
-     whatever a harness reminder suggests;
-   - a formatter or generator runs only on files the stage may write, named one by one, never on a directory;
+1. **The brief (every routed stage, both orchestrators).** Rule 4 gains a few sentences. Wording amended after grill
+   G1/G2:
+   - write every file's content you author — code, tests, records — with the Write, Edit or MultiEdit tool, because the
+     writes-scope guard (and any project hook on those tools) judges only them;
+   - never author content through Bash (`sed -i`, a heredoc, a redirect, a script that writes a file), whatever a
+     harness reminder suggests. Bash runs commands: the stage's own lines and the project's tools;
+   - a formatter runs only on files named one by one, never on a directory or glob. A generator runs only when the
+     stage may write every path it writes;
    - a denied write is answered by the deny message's own remedy, or by stopping and reporting, never through Bash.
 
-   One closed sentence, no new rule number.
+   Each part is a constant string, joined into rule 4. There is no new rule number.
 
-2. **`/pharn-build` Step 3** gains one bullet with the same rule, stated for the user's code: the Write/Edit/MultiEdit
-   tools only; formatters on the plan's `## Files` paths named one by one, never a directory (which reached a pinned AC
-   test). Its claims block's **Advisory** bullet names this rule. It covers a person running `/pharn-build` directly
+   **"Author" is the load-bearing word (grill G1).** The stages pin lines that write files through Bash:
+   - `set-writes-scope.cjs` and `reconcile-baseline.mjs --anchor`;
+   - `ac-tests-lock.mjs`;
+   - `stage-agent.mjs report`;
+   - `/pharn-build` Step 2c's `node -e` seam-config extraction.
+
+   Those are commands the stage names, not content the agent authors. The rule must not contradict them.
+
+2. **`/pharn-build` Step 3** gains one bullet with the same rule, stated for the user's code:
+   - the Write/Edit/MultiEdit tools only;
+   - a formatter only on the plan's `## Files` paths named one by one, never a directory (one reached a pinned AC
+     test);
+   - a generator only when the plan's `## Files` declares what it writes (CLAUDE.md "Writes-scope", grill G2).
+
+   Its claims block's **Advisory** bullet names this rule. The bullet covers a person running `/pharn-build` directly
    and an inline (unrouted) build, which never sees the brief.
+
 3. **`/pharn-test` Step 3**'s last sentence widens from out-of-scope writes to every test write: write them with the
    Write or Edit tool; never route a write, in scope or not, through Bash.
 4. **Tests.**
-   - `stage-agent-core.test.mjs`: every routed cell's brief carries the rule's three load-bearing phrases. A mutant
-     brief without them fails.
-   - `.dev/floor/command-hygiene.test.mjs`: a small `WRITE_TOOL_RULE` section pins that `pharn-build.md` and
-     `pharn-test.md` carry it inside their `## Step 3`. It checks presence only.
+   - `stage-agent-core.test.mjs`: a predicate `hasWriteToolRule(text)` requires the rule's load-bearing phrases. It is
+     asserted TRUE on every routed cell's brief (16), and FALSE on a control: the same brief with the new sentences
+     removed. The control is the non-vacuity proof, per asserted property (L60, grill G5).
+   - `.dev/floor/command-hygiene.test.mjs`: a self-contained `WRITE_TOOL_RULE` block, appended at the end of the
+     file so a stacking merge is a clean append (grill G6). It pins that `pharn-build.md` and `pharn-test.md` carry
+     the rule inside their `## Step 3`, with the same kind of control. It checks presence only.
 5. **The measurement record** `.dev/measurements/loop-wall-clock-2026-10-05.md` and its read-only helper
    `.dev/features/build-writes-through-tools/measure.mjs`. The record follows
    `pipeline-performance-audit-2026-09-29.md`'s labels (source × precision per figure). It covers:
@@ -161,6 +178,14 @@ So a per-call "tool_use → tool_result" gap measures the model writing the rema
      - 14 `.claude/rules/*.md` files (213,290 B), 8 of them with Cursor-style `globs:` frontmatter, all loaded into
        every stage agent;
      - the `npm run tsc` hook that fails at once.
+
+   **The helper's failure modes (grill G4).**
+   - It reads only. It prints one JSON document and writes nothing.
+   - An input that is absent — the two 2026-09-30 runs' transcripts, an overwritten log — is reported as `absent`,
+     never as a zero.
+   - It replaces the home directory with `~` in every path it prints.
+   - Its inputs are machine-local and perishable (transcripts, `.pharn/` logs). So the record states each figure's
+     source and the date it was read, and makes no claim that a later re-run reproduces it.
 
 **Deliberately NOT done (stated, not dropped):**
 
@@ -206,9 +231,9 @@ So a per-call "tool_use → tool_result" gap measures the model writing the rema
 - `.dev/features/build-writes-through-tools/measure.mjs` — the read-only analysis helper behind every figure —
   apparatus
 - `.dev/measurements/loop-wall-clock-2026-10-05.md` — the batch's measurement record — apparatus
-- `SKILLS_VERSION` — 6.35.0 → 6.36.0 (provisional; the orchestrator assigns the final number at stacking)
+- `SKILLS_VERSION` — 6.35.0 → 6.35.1, a patch (provisional; the orchestrator assigns the final number at stacking)
 - `README.md` — the version badge
-- `CHANGELOG.md` — a new `[6.36.0]` section, moving the `[Unreleased]` entry into it
+- `CHANGELOG.md` — a new `[6.35.1]` section, moving the `[Unreleased]` entry into it
 
 ## Contracts satisfied
 
@@ -221,16 +246,17 @@ So a per-call "tool_use → tool_result" gap measures the model writing the rema
 
 No capability (`role:`) is added or changed, so no eval. Behavioural tests instead:
 
-- `renderBrief` × every routed cell (16) → the brief contains the write-tool sentence's three pinned phrases; a
-  mutant renderer that drops them fails the test.
-- `command-hygiene` `WRITE_TOOL_RULE` → `pharn-build.md` and `pharn-test.md` `## Step 3` each contain the pinned
-  phrase; a fixture copy with the sentence removed fails.
+- `renderBrief` × every routed cell (16) → `hasWriteToolRule` is true. On a control (the same brief with the new
+  sentences cut out) it is false, so the predicate is not vacuous.
+- `command-hygiene` `WRITE_TOOL_RULE` → `pharn-build.md` and `pharn-test.md` `## Step 3` each satisfy the pinned
+  predicate. The same section with the sentence removed does not.
 - `COMMAND_BYTE_CEILINGS` (existing) → both commands stay under their ceilings. No ceiling is raised.
 
 ## Guarantee audit (P0)
 
-- "Every routed stage agent is TOLD to write with the write tools" → floor: enum/regex (the brief's text is rendered
-  by tested code from closed tables; the new test pins the phrases in every routed cell).
+- "Every routed cell's brief TEXT carries the write-tool rule" → floor: enum/regex (the brief is rendered by tested
+  code from closed tables; the new test pins the phrases in every routed cell). That a stage agent runs the brief
+  line and reads it is **advisory**, as `stage-agent-core.mjs`'s header already states (grill G3).
 - "`/pharn-build` and `/pharn-test` SAY so" → floor: regex presence (hygiene pin). It is never proof the text is
   obeyed.
 - "The stage agent writes through the write tools" → **advisory**. No shell command is parsed. A model can still use
@@ -263,6 +289,18 @@ None claimed. This is a prevention correction (finding 4), not a speed-up.
 
 ## Open questions (HALT)
 
-None. Decisions for GATE 1 are listed in the GATE-1 report: the version size (provisional 6.36.0 per the batch brief;
-a patch would also fit, since the bytes clarify how an existing stage writes), and the residual name
-`write-tool-attribution`.
+None.
+
+## GATE 1 — decisions (2026-10-05)
+
+Approved by the batch's orchestrating model under the user's delegation. This was not a human approval. It decided:
+
+- **Version: a PATCH**, provisionally 6.35.1, because the bytes clarify how an existing stage writes. This PR is
+  expected at the bottom of the stack.
+- **The residual name `write-tool-attribution` is accepted.**
+- **Keep the corrections in the measurement record exactly as found:**
+  - finding 5 is refuted;
+  - the per-gate regress timings now in `.pharn/pharn-regress/` belong to the later `billing-remove-seats` run;
+  - the 92-minute run's own figures are its four regress script calls (134 / 188 / 146 / 192 s), its install
+    (17.1 s) and its verify `test` gate (about 2:36);
+  - at run time, `CLAUDE.md` was 418,456 B and the rules files 213,290 B.
