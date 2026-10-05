@@ -102,12 +102,14 @@ node pharn/floor/entry-gates.mjs --abort --feature '<name>'
   L41); supersedes an earlier runner; wipes `.pharn/pharn-entry/` (containment-walked, lstat-first — L54); runs
   `run-gates.mjs init --stage entry --feature <name> --out .pharn/pharn-entry/gates [--discover package.json]`
   synchronously. Init exit 3 → writes the result `no-gates`, exits `3`. A refusal (a bad `gates.exclude` included) →
-  `2`. Else it records `runner.json` (`{schema, feature, nonce, pid, timeout_ms, d0}`), spawns the runner and exits
-  `0`.
+  `2`. Else it records `runner.json` (`{schema, feature, nonce, pid: null, timeout_ms, d0}`) BEFORE the spawn, spawns
+  the runner, then rewrites the record with the pid (atomic rename) and exits `0` — so the runner, which checks only the
+  nonce, can never read the directory before its record exists (grill: the start/runner race).
 - the runner (`--runner`, internal; refuses unless `runner.json` names its nonce): one `run-gates.mjs run --next` per
   gate, the feature-directory digest before and after each, then writes `result.json` LAST (atomic rename), carrying
   the nonce, the stamp's sha256 and the per-gate digests. A runner error writes an `unusable` result.
-- `--wait`: reads `runner.json` and `result.json` only through `readInProject` (lstat-walked, not followed, capped),
+- `--wait`: reads `runner.json` and `result.json` only through `readInProject` (lstat-walked, not followed, capped —
+  imported from `regress-base-reuse.mjs`, so a change to that reader reaches this check too; reused, not copied, L35),
   and only when `result.json` carries THIS run's nonce and feature (L66). It then re-reads the stamp, checks its sha256,
   `validateStamp(stamp, {stage: "entry", feature})`, and decides with the pure `entryVerdict`. No result and the runner
   alive → keep waiting, or exit `5` when out of budget. No result and the runner gone → `unusable runner-died`.
@@ -115,10 +117,16 @@ node pharn/floor/entry-gates.mjs --abort --feature '<name>'
   an `aborted` result. Its exit never changes the stop it runs at.
 
 **`--wait` prints ONE JSON document `pharn-entry-gates/1`**, with closed keys for every status:
-`{schema, status, feature, gates: [{id, exit, timed_out}], red, unattributed, excluded, reason_code, detail}`.
-Exits are closed: `0` green (nothing attributable red) · `4` red · `3` no-gates · `5` continue · `2` unusable (closed
-`REASON_CODES`: `usage-error`, `path-containment`, `child-refused` — any runner refusal, `tree-changed-between-gates`
-included —, `no-runner`, `runner-died`, `result-unbound`, `stamp-invalid`, `aborted`, `spawn-failed`, `crashed`).
+`{schema, status, feature, gates: [{id, exit, timed_out, mutated}], red, unattributed, mutated, excluded, reason_code,
+runner_reason, detail}`. `mutated` names every gate run-gates recorded as having changed the tree itself (grill: a
+mutating entry gate moves the tree after the pre-run snapshot; this makes it visible). `runner_reason` is run-gates'
+own closed `reason_code` when the runner refused (e.g. `tree-changed-between-gates`, which a front-stage write outside
+the feature directory causes), else null. Exits are closed: `0` green (nothing attributable red) · `4` red · `3`
+no-gates · `5` continue · `2` unusable (closed `REASON_CODES`: `usage-error`, `path-containment`, `child-refused` — any
+runner refusal, named by `runner_reason` —, `no-runner`, `runner-died`, `result-unbound`, `stamp-invalid`, `aborted`,
+`spawn-failed`, `crashed`). **Bound (grill):** a front-stage agent's write outside the feature directory during the
+entry run is `child-refused` / `tree-changed-between-gates`, so the loop stops at S9 although the run might have been
+healthy. That write would itself read `scope-escaped` at regress unless removed again; the bound is stated, not closed.
 `1` is never chosen, so node's own crash exit is never a verdict (the 6.21.1 rule). Every untrusted value quoted into
 `detail` goes through a total function (L62). Gate output is never read (P2).
 
@@ -141,7 +149,9 @@ the drain.
 - **Step 1a item 6, after the `run-start` marker:** the `--start` line. `0` → go on; `3` → **S4**; anything else →
   **S9**. These stops precede the feature directory, so the close part's Step 7 runs unchanged.
 - **Step 4, between the grill's return marker and the test stage:** the `--wait` line. `5` → run it again; `0` → go on;
-  `4` → **S14** `blocked: gates-red-at-entry` with the `red` ids as DATA, or, with `--allow-red-entry`, go on and keep
+  `4` → **S14** `blocked: gates-red-at-entry`, the `red` ids copied into the record's `### next_steps` as DATA (the
+  S12 precedent, so the close part needs no edit), or, with `--allow-red-entry`, go on and name them in the Step 7
+  summary (the wait block says so; the close part is not edited), and keep
   the ids for the summary; `3` → **S4**; anything else → **S9**. S14 is an ordinary blocked stop (the feature directory
   exists): record, SPEC revert, close part, all unchanged. A new table row S14 is added.
 - **`## At the stop`** (main file): the `--abort` line runs first, before the close part is read.
@@ -225,7 +235,9 @@ were a style gate. It is not, so its red counts.
   - a feature-directory write between gates does not refuse, and a write elsewhere refuses;
   - the style-first order, and a style red after `d0` moved reads `unattributed`;
   - result unbound (another nonce, another feature), runner died, a symlinked `.pharn/pharn-entry`;
-  - abort kills a running gate's group, and a reused pid is never signalled; a superseding start;
+  - abort kills a running gate's group, observed as ESRCH on the pid that gate wrote, and a reused pid is never
+    signalled; a superseding start. Every test that starts a runner aborts it in `finally` (grill: no leaked process
+    on CI);
   - a `{"toString":1}` detail;
   - ✧ the entry set == verify's discovered set minus `reconcile`, style first;
   - ★ WIRING: both commands' pinned lines EXECUTED in a git sandbox, their order (start after the entry steps,
