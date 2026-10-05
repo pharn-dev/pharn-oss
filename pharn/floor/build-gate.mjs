@@ -40,7 +40,7 @@
 // arguments after `--`. Gate output is quoted as DATA by the core; the exit decides. A `--gates` spec is the human's
 // own text, run exactly as `/pharn-verify` runs it (through `/bin/sh -c`, the runner's documented form).
 
-import { closeSync, fstatSync, lstatSync, openSync, readFileSync, readSync, constants as fsConstants } from "node:fs";
+import { closeSync, fstatSync, openSync, readFileSync, readSync, constants as fsConstants } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -95,9 +95,11 @@ function readJsonFile(path) {
 function readLogTail(path) {
   let fd;
   try {
-    if (!lstatSync(path).isFile()) return "";
+    // Open first (never following a link, never blocking on a FIFO), then check THAT descriptor: no check-then-use window.
     fd = openSync(path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK);
-    const size = fstatSync(fd).size;
+    const st = fstatSync(fd);
+    if (!st.isFile()) return "";
+    const size = st.size;
     const len = Math.min(size, LOG_READ_CAP);
     const buf = Buffer.alloc(len);
     let off = 0;
