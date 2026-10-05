@@ -857,6 +857,17 @@ node pharn/floor/build-gate.mjs --feature <name> --mode targeted|full --timeout-
 # Exit: 0 clean · 1 escaped · 2 inconclusive (closed reason_code, `crashed` included).
 node pharn/floor/check-quick-scope.mjs --feature <name> --base <40-hex>
 
+# THE INSTRUCTION-GROWTH GATE (6.38.0). A user's CLAUDE.md + 14 rules (634,379 B) rode in every stage agent's prefix.
+# `--report` (ADVISORY): the always-loaded set — root CLAUDE.md files, their `@` imports, rules without `paths:` —
+# per-file bytes, a bytes/4 estimate, notes (`globs-not-read`, …). `--growth` (FLOOR over this MODEL of the loader, never
+# the loader itself): bytes ADDED since the base (removals never offset) vs `budget.instructionGrowthBytes` in
+# pharn.config.json AT THE BASE (default 2048). Under-count routes are listed as known-so-far (L67).
+# /pharn-verify injects it before `reconcile` as `instruction-growth` (`--base-rule`: dirty → HEAD, else merge-base
+# origin/main, else INCONCLUSIVE); never reused. Spec/bounds: instruction-files-core.mjs. This repo's dev loop never runs it.
+# Exit: 0 within/reported · 1 over · 2 inconclusive (closed reason_code).
+node pharn/floor/check-instruction-files.mjs --report
+node pharn/floor/check-instruction-files.mjs --growth (--base <ref> | --base-rule)
+
 # THE PRE-RUN SNAPSHOT (6.37.0, regress-pre-run-snapshot) — a path already changed when a /pharn-loop or /pharn-ship run
 # began is not that run's scope escape. THE RECORDED FAILURE (P7): two of three post-6.35.0 /pharn-loop runs in a user's
 # project stopped at /pharn-regress `scope-escaped` on paths the run never wrote — an abandoned run's untracked

@@ -108,8 +108,8 @@ test("identity: a malformed input has NO identity (fail-closed: it can never mat
 });
 
 // ── THE NEVER-REUSED SET ───────────────────────────────────────────────────────────────────────────
-test("NON_REUSABLE_IDS is DERIVED — every AC level gate, every style gate, reconcile; re-exported, one owner", () => {
-  const expected = [...new Set([...Object.values(LEVEL_GATES).flat(), ...STYLE_SET, "reconcile"])].sort();
+test("NON_REUSABLE_IDS is DERIVED — every AC level gate, every style gate, reconcile, instruction-growth; re-exported, one owner", () => {
+  const expected = [...new Set([...Object.values(LEVEL_GATES).flat(), ...STYLE_SET, "reconcile", "instruction-growth"])].sort();
   assert.deepEqual([...NON_REUSABLE_IDS], expected);
   assert.equal(NON_REUSABLE_IDS, CORE_NON_REUSABLE, "gate-reuse-core re-exports gate-run-core's set, never a copy");
   // Closed over the allowlist both ways (L36): exactly these allowlist members stay reusable.

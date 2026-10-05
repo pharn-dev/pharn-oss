@@ -270,7 +270,7 @@ test("★ drainGates — {kind: done} after every entry ran (each counted once),
       inDir(dir, () => drainGates({ outDir: ".pharn/g", timeoutMs: 30000, budget })),
       { kind: "done" }
     );
-    assert.equal(spent, 3, "a, b and the injected reconcile — each a slow step");
+    assert.equal(spent, 4, "a, b and the two injected entries (instruction-growth, reconcile) — each a slow step");
     assert.ok(existsSync(join(dir, ".pharn/g/stamp.json")));
     assert.deepEqual(
       inDir(dir, () => drainGates({ outDir: ".pharn/g", timeoutMs: 30000, budget })),
@@ -588,6 +588,7 @@ const GIT_SPAWN_RE = /\b(?:execFileSync|spawnSync|execSync|execFile|spawn|exec)\
 const BOUNDED = new Set(["rev-parse", "merge-base"]);
 const GIT_SPAWNS = {
   "check-bash-reconcile.mjs": ["diff"],
+  "instruction-files.mjs": [null, null],
   "reconcile-baseline.mjs": ["ls-files"],
   "render-review-assignments.mjs": ["merge-base", "rev-parse", "diff"],
   "render-run-report.mjs": [null],
@@ -660,7 +661,7 @@ test("★ GIT CEILING — every git spawn in a shipped floor module is listed, a
   const map = {};
   for (const s of spawns) (map[s.file] ??= []).push(s.sub);
   assert.deepEqual(map, GIT_SPAWNS, "the enumeration (L29): list a new or removed git spawn here in the same diff");
-  assert.equal(spawns.length, 10, "non-vacuity (L34): the ten spawns the sweep found (loop-closeout.mjs's gitRun, 6.42.0)");
+  assert.equal(spawns.length, 12, "non-vacuity (L34): the twelve spawns the sweep found (loop-closeout.mjs's gitRun, 6.43.0)");
   assert.deepEqual(
     ceilingViolations(spawns).map((s) => `${s.file}: ${s.text}`),
     [],
