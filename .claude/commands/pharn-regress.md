@@ -57,7 +57,9 @@ Load the trusted prefix and obey it:
 ## What you may claim, and the one honest residual (P0/P7)
 
 - **Guaranteed:** any regression OUTSIDE the feature **that the project's deterministic suite covers** is
-  caught — deterministically — built only from a **current Approved, un-drifted** plan.
+  caught — deterministically — built only from a **current Approved, un-drifted** plan. Bound: a path changed before
+  an open `/pharn-loop` or `/pharn-ship` run began counts as inside, so a test file among them is not compared here
+  (the report's `pre_run_snapshot`; `pharn/floor/pre-run-snapshot-core.mjs`).
 - **The residual, named not hidden:** `/pharn-regress` catches **exactly what the project's suite
   catches — nothing more.** A regression no deterministic check covers is **invisible**. Never read a
   `done` exit as "nothing broke."
@@ -137,7 +139,8 @@ Read the printed `pharn-stage-exit/1` JSON object and branch on the **exit code 
     `/pharn-plan` if the PLAN itself is stale against the current SPEC;
   - `plan-files-unparseable` — fix `PLAN.md`'s `## Files` heading (or its list syntax) so it parses;
   - `scope-escaped` — an undeclared path changed: either declare it in `PLAN.md`'s `## Files` via
-    `/pharn-plan` (a legitimate widening) or revert the undeclared change. **The blind spot this remedy
+    `/pharn-plan` (a legitimate widening) or revert the undeclared change. Re-running does not fix it; it only replaces
+    the refusal with a report, and the escaped change stays in the tree. **The blind spot this remedy
     walks into (M3, GATE-2 round 2):** `scope` exempts this feature's own `PLAN.md` from the escape check,
     so once a `## Files` line authorizes a path, nothing here can tell a legitimate widening from a
     `## Files` rewritten to authorize a path the build had already written. `check-plan-spec-agree.mjs`

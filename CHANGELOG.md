@@ -23,6 +23,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.37.0] - 2026-10-05
+
+### Added
+
+- 2026-10-05: **A path that was already changed when a `/pharn-loop` or `/pharn-ship` run began is no longer counted
+  as that run's scope escape — it is reported instead, as long as it still holds the bytes it held at entry**
+  ([`pharn/floor/pre-run-snapshot.mjs`](./pharn/floor/pre-run-snapshot.mjs),
+  [`pharn/floor/pre-run-snapshot-core.mjs`](./pharn/floor/pre-run-snapshot-core.mjs),
+  [`pharn/floor/check-regress.mjs`](./pharn/floor/check-regress.mjs) `partitionScope`,
+  [`pharn/floor/stage-regress.mjs`](./pharn/floor/stage-regress.mjs),
+  [`pharn/floor/quick-scope-core.mjs`](./pharn/floor/quick-scope-core.mjs),
+  [`pharn/floor/render-regression.mjs`](./pharn/floor/render-regression.mjs); contract
+  [`regression-report.md`](./pharn/pharn-contracts/regression-report.md), "The additive `pre_run_snapshot` block").
+  `SKILLS_VERSION` 6.36.0 → 6.37.0 (minor: a new floor CLI and a changed stage behaviour), with the README badge.
+  `MIN_CLI` stays 0.5.0: no installed path moves.
+  - **The trigger.** Two of three recorded `/pharn-loop` runs in a user's project stopped at `/pharn-regress`
+    `scope-escaped` on paths the run never wrote: an abandoned earlier run's untracked `pharn/features/<other>/`
+    folder (a 19 min 26 s refusal-and-human-wait in a 92-minute run) and the user's own uncommitted edit (an S9
+    stop). Both were in the loop's own `pre-run-status.txt`, which the partition never read.
+  - **How.** `node pharn/floor/pre-run-snapshot.mjs --capture '<name>'` runs right after the run marker opens —
+    `/pharn-loop` Step 1a, `/pharn-ship` Step 2 item 1 (the quick modes inherit it); a non-zero exit stops the run
+    before any model work. It records every path git reports changed since `HEAD` with a digest (content, a link's own
+    text, `absent`, or `unhashable`) in `<git dir>/pharn-pre-run-snapshot.json`, bound to the marker's bytes, the base
+    and the feature, once per run. `/pharn-regress`'s partition and `check-quick-scope.mjs` then subtract an undeclared,
+    non-exempt path only when that snapshot applies and the path's live digest equals the recorded one, and report it
+    as `pre_run_snapshot: {status, unchanged}` in `scope.json`, `regression-report.json` (a second additive block after
+    `base_evidence`), the quick check's document and `REGRESSION.md`. With no open run or no snapshot the partition is
+    exactly what it was, and the `check-regress.mjs scope` CLI is byte-identical. "Open" is a marker's presence and age
+    (≤ 24 h), so a standalone `/pharn-regress` after an interrupted run of the same feature applies that run's snapshot.
+  - **Bounds, stated in the module headers and the contract.** Agreement, never provenance: the record is out of the
+    write tools' reach (a ★ HOOK test runs both guards on it), and a Bash writer can forge it. Nothing is attributed: a
+    path an earlier run escaped with is pre-run state for a re-run, so re-running reports it rather than refusing. Only
+    the escape set changes: `inside` is unchanged, so a pre-run change that breaks a gate still reads as a regression
+    (follow-up `regress-base-pre-run-overlay`), and a pre-run-changed test file is not compared at regress. A green
+    `/pharn-loop` never commits a subtracted path, so its branch is not the whole tree its gates ran on; the summary
+    names those paths. The porcelain `pre-run-status.txt` stays beside the record (follow-up
+    `pre-run-snapshot-single-source`).
+  - **`LIMITS.md` §3a and §6 now understate this bound.** The proposed human-only edits are in
+    `.dev/features/regress-pre-run-snapshot/PROTECTED-FOLLOWUPS.md`.
+
 ## [6.36.0] - 2026-10-05
 
 ### Added

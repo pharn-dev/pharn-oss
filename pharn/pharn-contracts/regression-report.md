@@ -24,15 +24,16 @@ purpose: "Single source of truth for the machine regression-report — the pharn
 The regression-report is `pharn/features/<name>/regression-report.json` (product) /
 `.dev/features/<name>/regression-report.json` (dev) — the machine half of the regress stage, written
 beside the human-facing `REGRESSION.md`. It is `pharn/floor/check-regress.mjs`'s **`verdict` subcommand**
-stdout, plus — in the product report, since 6.33.0 — ONE additive advisory block, `base_evidence` (below).
+stdout, plus — in the product report — two additive advisory blocks, `base_evidence` (6.33.0) and
+`pre_run_snapshot` (6.37.0), both below.
 
 **Since `stage-regress-script` (6.23.0), the WRITER is `pharn/floor/stage-regress.mjs`, not the model.** The
 product stage script shells `check-regress.mjs verdict` and writes its output atomically (a tmp file under
 `.pharn/pharn-regress/`, then `rename`), so no stray tmp file lands in the feature directory. Since 6.33.0 it
-appends `base_evidence` as the object's last key and re-serializes with the same `JSON.stringify(…, null, 2)`
-the checker prints with, so every key the checker printed keeps its bytes: the report minus that block is the
-checker's stdout, byte for byte (`stage-regress.test.mjs` pins it). The dev twin (`/pharn-dev-regress`) is
-unchanged: the model writes the checker's bytes by hand and adds no block.
+appends `base_evidence`, and since 6.37.0 `pre_run_snapshot` after it, as the object's last keys and re-serializes
+with the same `JSON.stringify(…, null, 2)` the checker prints with, so every key the checker printed keeps its bytes:
+the report minus those two blocks is the checker's stdout, byte for byte (`stage-regress.test.mjs` pins it). The dev
+twin (`/pharn-dev-regress`) is unchanged: the model writes the checker's bytes by hand and adds no block.
 
 ## What this artifact IS and IS NOT (P0 — the honesty bar)
 
@@ -278,3 +279,40 @@ as `node_modules/`, the environment, the machine). The reuse record lives in the
 reach; a Bash writer can forge it with the evidence, and the base side's in-progress scratch is write-tool reachable
 while a chain is paused (`pharn/floor/regress-base-reuse.mjs`, header). No floor op reads this block, and the four
 verdict consumers above ignore it.
+
+## The additive `pre_run_snapshot` block (6.37.0, advisory shape)
+
+`/pharn-loop` and `/pharn-ship` record a PRE-RUN SNAPSHOT at entry — every path changed since `HEAD`, each with a
+content digest, kept in the git dir and bound to the run marker (`pharn/floor/pre-run-snapshot.mjs`). The partition
+then reports, instead of counting as an escape, an undeclared path that still holds the bytes the snapshot recorded.
+The product report says what happened, as its last key:
+
+```json
+{
+  "pre_run_snapshot": {
+    "status": "applied",
+    "unchanged": ["shared/components/settings-layout/settings-layout.tsx"]
+  }
+}
+```
+
+- **`status`** — `applied` (the snapshot bound to this run and this base was used), or why not: one member of the
+  closed, ordered `PRE_RUN_MISSES`, the first that applied. The set and each member's meaning are owned by
+  `pharn/floor/pre-run-snapshot-core.mjs`'s header (P4). A standalone `/pharn-regress` reads `no-delivery-run` and
+  behaves exactly as before 6.37.0 — unless an interrupted `/pharn-loop` or `/pharn-ship` of the same feature left its
+  run marker (≤ 24 h, the write guard's age rule): the marker is read by presence and age, never parsed, so that
+  standalone invocation applies the interrupted run's snapshot, as `base_evidence` above already does.
+- **`unchanged`** — the undeclared, non-exempt changed paths NOT counted as escapes, in `inside`'s order; empty on
+  every miss. It is never the whole of what the snapshot holds: a declared or exempt path is not listed here.
+
+The same block is written to the stage's `scope.json` and, for the quick modes, printed in `check-quick-scope.mjs`'s
+document; a `scope-escaped` refusal's `REGRESSION.md` names it beside the escapes.
+
+**The rule, and its bounds (P0).** FLOOR: the subtraction is decided by tested code over content hashes, the marker's
+bytes and closed enums, in the invocation that runs the partition. ADVISORY: the block a resumed chain renders (it is
+re-read from `scope.json`, a `.pharn/` file the write tools reach while a chain is paused). Agreement, never
+provenance (L43): a Bash writer can forge the git-dir record bound to the right marker. The subtraction never
+attributes — a path an earlier run escaped with is pre-run state for the next run, so a re-run reports it rather than
+refusing — and it touches the escape set only: `inside` is unchanged, so a pre-run change that breaks a gate still
+reads as a regression and a pre-run-changed test file is not compared here (`pharn/floor/pre-run-snapshot-core.mjs`,
+header). No floor op reads this block, and the four verdict consumers above ignore it.

@@ -84,6 +84,13 @@
 // lists. What still travels as a list is the verdict's `--inside`: the report's `inside` echo, ADVISORY, read by no
 // floor op. stage-regress.mjs refuses a comma or newline path before building it — the named residual
 // `regress-inside-echo-list`. The CLI runs only under `import.meta.main`, so importing this file runs nothing.
+//
+// A FIFTH BOUND ON THE SCOPE RULE, for its two callers (6.37.0, regress-pre-run-snapshot). Inside an open `/pharn-loop`
+// or `/pharn-ship` run, `stage-regress.mjs` and `quick-scope-core.mjs` pass `partitionScope` the changed paths the run's
+// PRE-RUN SNAPSHOT recorded with the bytes they still hold (pre-run-snapshot-core.mjs). An undeclared one is REPORTED
+// (`pre_run_snapshot.unchanged`), not counted as an escape — so a build that writes such a path back to its pre-run
+// bytes is not seen, a path an earlier run escaped with is pre-run state for a re-run, and the record (in the git dir,
+// out of the write tools' reach) can be forged through Bash. The `scope` CLI below passes no such list.
 
 import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -296,10 +303,18 @@ function flag(args, name) {
 // ---------------------------------------------------------------------------------------------------
 // THE SCOPE RULE — pure, over arrays (exported; `runScope` below, quick-scope-core.mjs and stage-regress.mjs call it).
 // `inside` is compared EXACTLY as given and `declared` entries are glob patterns (see globMatch); each caller parses its
-// own input into those two arrays. Returns the undeclared paths split into the REPORTED exempt set and the escaped set,
-// plus the OUTSIDE gate inputs.
+// own input into those two arrays. Returns the undeclared paths split into the REPORTED exempt set, the REPORTED
+// pre-run set and the escaped set, plus the OUTSIDE gate inputs.
+//
+// `preRunUnchanged` (6.37.0, regress-pre-run-snapshot; default empty) — the changed paths the open delivery run's
+// pre-run snapshot recorded with the bytes they still hold (pre-run-snapshot-core.mjs `decidePreRun`, whose header
+// owns the rule and its bounds). An UNDECLARED path in it that is not already exempt is not this run's escape: it is
+// returned in `preRun` and REPORTED by every caller, never dropped. Applied AFTER the closed exemptions, so
+// `escapeExempt` is unchanged; `inside` is unchanged too, so the outside gate inputs below are what they were. The
+// `scope` CLI passes nothing, so its output is byte-identical. Bound: the subtraction never attributes — a path an
+// earlier run escaped with is pre-run state for the next run (pre-run-snapshot-core.mjs, "HONEST SCOPE").
 // ---------------------------------------------------------------------------------------------------
-export function partitionScope({ inside, declared, tests = [], evalPairs = [], feature }) {
+export function partitionScope({ inside, declared, tests = [], evalPairs = [], feature, preRunUnchanged = [] }) {
   // fix #7 cross-check: every changed file must be covered by a declared `writes:` pattern. A changed
   // path matching none means the build wrote OUTSIDE its declared `## Files` — a blocking escape.
   //
@@ -310,14 +325,16 @@ export function partitionScope({ inside, declared, tests = [], evalPairs = [], f
   const undeclared = inside.filter((f) => !matchesAny(f, declared));
   const escapeExempt = undeclared.filter((f) => TRUSTED_DOCS.includes(f) || isPipelineArtifact(f, feature));
   const exemptSet = new Set(escapeExempt);
-  const escaped = undeclared.filter((f) => !exemptSet.has(f));
+  const preRunSet = new Set(preRunUnchanged);
+  const preRun = undeclared.filter((f) => !exemptSet.has(f) && preRunSet.has(f));
+  const escaped = undeclared.filter((f) => !exemptSet.has(f) && !preRunSet.has(f));
 
   // Derive the OUTSIDE gate inputs by path membership (NOT classification, P5): a test/eval is "inside"
   // iff its file is in the changed set; everything else is outside and must not regress.
   const insideSet = new Set(inside);
   const outsideTests = tests.filter((t) => !insideSet.has(t));
   const outsideEvalPairs = evalPairs.filter((p) => !insideSet.has(p.expected) && !insideSet.has(p.actual));
-  return { escaped, escapeExempt, outsideTests, outsideEvalPairs };
+  return { escaped, escapeExempt, preRun, outsideTests, outsideEvalPairs };
 }
 
 // Dogfood the finding object (fix #1): type/rule_id/severity/file are enum-gated (this helper's own
