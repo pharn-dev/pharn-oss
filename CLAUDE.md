@@ -452,8 +452,10 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # THE RED RUN (added 6.18.0) — /pharn-test RUNS the AC tests before the build and requires each to FAIL, so a test
 # that cannot fail, is never collected or is skipped cannot pass unnoticed. check-red-run.mjs --preflight: every AC's
 # level has a DISCOVERED gate (gate-run-core LEVEL_GATES: unit/integration → test, e2e → E2E_SET) with per-test
-# results configured for EVERY such gate, else `ac-level-unavailable: AC-<n> (<level>)` and a closed last line
-# `blocked: no-test-runner — …; suggested: /pharn-ship "…(spec_kind: test-infra)"` (/pharn-test --unattended prints it;
+# results configured for EVERY such gate (6.36.0: a gate the project's gates.exclude lists is not discovered), else
+# `ac-level-unavailable: AC-<n> (<level>)` and a closed last line `blocked: no-test-runner — …; suggested: <remedy>` —
+# the `/pharn-ship "…(spec_kind: test-infra)"` command, or for an exclusion-caused AC the ids to remove from
+# gates.exclude (since 6.36.0 check-ac-tests.mjs REDs that mapping row earlier, `level-excluded`) (/pharn-test --unattended prints it;
 # interactive asks; never a nested run). run-gates --stage ac-test selects the gates BY ID from the levels and hands
 # each its mapped files after `--` (--gates/--extra/--skip-style/--scope-json/--spec-from/--side refused; no
 # reconcile, no build). check-red-run.mjs --verdict (red-run-core.mjs): per AC, over the record of every gate its level
@@ -854,6 +856,29 @@ node pharn/floor/build-gate.mjs --feature <name> --mode targeted|full --timeout-
 # the pinned relative path names no file) is node's own exit 1 with no document; both callers stop on 1.
 # Exit: 0 clean · 1 escaped · 2 inconclusive (closed reason_code, `crashed` included).
 node pharn/floor/check-quick-scope.mjs --feature <name> --base <40-hex>
+
+# THE PRE-RUN SNAPSHOT (6.37.0, regress-pre-run-snapshot) — a path already changed when a /pharn-loop or /pharn-ship run
+# began is not that run's scope escape. THE RECORDED FAILURE (P7): two of three post-6.35.0 /pharn-loop runs in a user's
+# project stopped at /pharn-regress `scope-escaped` on paths the run never wrote — an abandoned run's untracked
+# `pharn/features/<other>/` folder (a 19-minute human wait) and the user's own uncommitted edit — both listed in the
+# loop's own pre-run-status.txt, which the partition never read. `--capture` runs right after the run marker opens
+# (/pharn-loop Step 1a; /pharn-ship Step 2 item 1; both STOP on non-zero) and writes `<git dir>/pharn-pre-run-snapshot.json`:
+# every `changedPaths(HEAD)` path (scope-inputs.mjs, the partition's own listing) with ONE digest rule (`pathDigest`:
+# content, a link's own text, `absent`, or `unhashable` — never subtracted), bound to the marker's bytes (6.33.0's
+# deliveryRunIdentity, reused), the base and the feature; write-once per run (`already-captured`). The partition
+# (stage-regress.mjs, quick-scope-core.mjs → check-regress.mjs partitionScope's optional `preRunUnchanged`) subtracts an
+# undeclared, non-exempt path only when the snapshot applies (closed PRE_RUN_STATUSES, first miss decides) and its live
+# digest is EQUAL, and REPORTS it: `pre_run_snapshot: {status, unchanged}` in scope.json, regression-report.json (after
+# base_evidence), the quick check's document and REGRESSION.md. No run / no snapshot → exactly today's partition, where
+# "a run" is a marker's presence and age (≤ 24 h), so an interrupted run's leftover marker makes a later standalone regress
+# apply that run's snapshot; the `check-regress.mjs scope` CLI is byte-identical. FLOOR: the subtraction (content hashes + closed enums). BOUNDS, in
+# pre-run-snapshot-core.mjs's header: agreement, never provenance (a Bash writer can forge the git-dir record; the write
+# tools cannot — ★ HOOK); never attributed (an earlier run's escape is pre-run state for a re-run); escape set ONLY —
+# `inside` is unchanged, so a pre-run change that breaks a gate still reads as a regression (follow-up
+# `regress-base-pre-run-overlay`) and a pre-run-changed test file is not compared at regress; a green loop never commits
+# a subtracted path. LIMITS.md §3a/§6 understate it: .dev/features/regress-pre-run-snapshot/PROTECTED-FOLLOWUPS.md.
+# Exit: 0 recorded · 2 refused (closed REASON_CODES, `crashed` a caught throw); a module that cannot load is node's 1.
+node pharn/floor/pre-run-snapshot.mjs --capture <name>
 
 # Check the SHAPE of a loop-record — the pharn/features/<name>/LOOP.md that /pharn-loop writes at every stop.
 # Floor: the frontmatter envelope (`decision` in {STOP_GREEN, STOP_GREEN_QUICK, STOP_CAP, STOP_TERMINAL, INCONCLUSIVE};

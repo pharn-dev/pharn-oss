@@ -2371,7 +2371,10 @@ test("✧ QUICK MODE (GATE-2 F3): ## Quick mode keeps the scope check — the pi
   assert.match(section, /7\. \*\*The scope check: KEPT — run it before `\/pharn-verify`\.\*\*/);
   assert.match(section, /`1` → \*\*STOP\*\*:\s+a changed path is outside the declared writes/);
   assert.match(section, /the scope\s+check \(item 7\) runs again between the re-build and the re-verify/);
-  assert.match(section, /\*\*Kept:\*\* the\s+scope check \(item 7\) — a changed file outside the plan's `## Files` still stops the run/);
+  assert.match(
+    section,
+    /\*\*Kept:\*\* the\s+scope check \(item 7\) — a file the run changed outside the plan's `## Files` still stops the run/
+  );
   assert.match(section, /the scope\s+check's result verbatim \(`scope: clean`, item 7\)/);
 });
 
@@ -3412,7 +3415,10 @@ const RUN_MARKER_WIRING = [
     file: "pharn-ship.md",
     command: "pharn-ship",
     openAfter: "node pharn/floor/check-spec-approved.mjs pharn/features/<name>/SPEC.md",
-    openBefore: "node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-plan",
+    // 6.37.0: the pre-run snapshot line follows the open line, before /pharn-plan, with its OWN STOP — so the next
+    // pinned line, not the plan marker, is what the open line's STOP must precede (pre-run-snapshot.test.mjs pins the
+    // capture line's order and STOP).
+    openBefore: "node pharn/floor/pre-run-snapshot.mjs --capture '<name>'",
     closeAfter: "node pharn/floor/mark-phase.mjs --name '<name>' --kind run-stop",
   },
   {
@@ -4770,14 +4776,19 @@ test("★ SHELL-SINK 8 CONTROLS — each 6.28.2 line runs its payload (else the 
 });
 
 // ── WRITE_TOOL_RULE (6.35.1, build-writes-through-tools) ─────────────────────────────────────────────────
-// THE RECORDED FAILURE (P7): a routed /pharn-build agent wrote the user's code through 49 Bash calls and no Edit, so
+// THE RECORDED FAILURE (P7): a routed /pharn-build agent wrote the user's code through 48 Bash calls and no Edit, so
 // the writes-scope guard judged none of those writes, and a `prettier --write` over two directories reformatted a
 // pinned AC test (.dev/measurements/loop-wall-clock-2026-10-05.md). The brief's rule 4 carries the routed-agent copy
 // (stage-agent-core.test.mjs pins it); a person or an inline orchestrator runs the COMMAND and never sees the brief,
 // so each command that writes the user's files says it in its own Step 3. PRESENCE only, inside that step: it never
 // proves the rule is obeyed (no shell command is parsed — LIMITS.md §6). Self-contained so a stacking merge appends.
 const WRITE_TOOL_RULE_SITES = Object.freeze({
-  "pharn-build.md": ["with the Write, Edit or MultiEdit tool", "never through Bash", "named one by one, never a directory"],
+  "pharn-build.md": [
+    "Author files in the project with the write tools",
+    "never through Bash",
+    "Keep scratch under `.pharn/`",
+    "named one by one — never a directory, a glob or a `git status` list",
+  ],
   "pharn-test.md": ["with the Write or Edit tool, never through Bash", "never route\n  one through Bash"],
 });
 

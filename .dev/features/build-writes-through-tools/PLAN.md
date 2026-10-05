@@ -25,18 +25,28 @@ record.
 
 - **Tool use:** 126 Bash, 4 Read, 2 Write, 0 Edit, 0 MultiEdit. The two Writes are the new DB test file
   (09:26:21Z) and `BUILD.md` (09:34:10Z), both allowed and both fast (0.1–0.2 s).
-- **49 Bash calls wrote project files.** By mechanism:
-  - 44 run a `python3` heredoc that calls `open(p, 'w')`. Ten of these also run `npx prettier --write`. The scripts
-    hold 179 textual replacement call sites (`.replace(`, `rep(`, `edit(`, `re.sub(`, `cut(`).
+
+> **Corrected after the GATE-2 review (R2).** This section first said 49 calls, 44 `python3` and 78 in-scope
+> targets. Two things changed that:
+>
+> - the 09:28:16Z `python3` call wrote only `/tmp/changed.txt`, so it is not a project write;
+> - a literal `open('shared/lib/db/__tests__/billing-plan-catalog-migration.test.ts', 'w')` at 09:11:23Z had been
+>   missed.
+>
+> The figures below are the corrected ones (`measure.mjs`).
+
+- **48 Bash calls wrote project files.** By mechanism:
+  - 43 run a `python3` heredoc that opens a file for writing. Ten of these also run `npx prettier --write`. The
+    scripts hold 179 textual replacement call sites (`.replace(`, `rep(`, `edit(`, `re.sub(`, `cut(`).
   - 2 create a file with `cat > <path> <<'EOF'`. One of them also runs `sed -i`.
   - 1 runs `sed -i` alone.
   - 2 run `npx prettier --write` alone.
   - The brief's "41 `python3` one-liners and 27 `sed` calls" is not reproduced. 45 Bash calls mention `python3`
     (one only reads). 54 mention `sed`, but only 2 of them are `sed -i`; the other 52 are `sed -n` reads.
-- **Targets: 79 distinct project paths, every one checked against the build's own scope.** The build agent printed
-  that scope itself: `cat .pharn/writes-scope.json` ran right after `set-writes-scope.cjs --from-plan`, at 09:09:07Z,
-  and listed 93 entries. Result:
-  - **78 targets are inside the scope.** They include `CLAUDE.md` and four `.claude/rules/*.md`, which the PLAN named.
+- **Targets: 80 distinct project file paths, plus 5 directory or glob arguments to `prettier --write`, every one
+  checked against the build's own scope.** The build agent printed that scope itself: `cat .pharn/writes-scope.json`
+  ran right after `set-writes-scope.cjs --from-plan`, at 09:09:07Z, and listed 93 entries. Result:
+  - **79 targets are inside the scope.** They include `CLAUDE.md` and four `.claude/rules/*.md`, which the PLAN named.
   - **One is outside it: a pinned AC test,**
     `features/files/services/__tests__/billing-plan-catalog-upload-no-limit.test.ts`. It was rewritten by
     `npx prettier --write features/files app/api/files` (09:18:10Z). That is a formatter run over two DIRECTORIES.
@@ -44,11 +54,14 @@ record.
     The agent then restored the file with a `python3` script that tried combinations of formatting reversals until
     the file's sha256 equalled the lock's (09:19:37Z, `FOUND`). `check-test-stage.mjs` read `READY` again at
     09:19:41Z.
-- Target extraction is a heuristic over the command TEXT: `p='…'`, `rep('…'`, `cat > …`, `sed -i … <file>`,
-  `prettier --write <file>`, resolved against a leading `cd`, with `{loc}` expanded. Two calls name no literal target.
-  One writes `/tmp/changed.txt`. The other is `xargs -0 npx prettier --write` over that list, which the agent had
-  built from `git status` minus the lock's files and `pharn/`; it rewrote one in-scope file. Every target is printed
-  with its call, so a human can audit the extraction.
+- **Target extraction is a heuristic over the command TEXT.** It reads:
+  - `p='…'`, `rep('…'` and a literal `open('…', 'w')`;
+  - `cat > …`, `sed -i … <file>` and `prettier --write <file>`.
+
+  Each path is resolved against a leading `cd`, with `{loc}` expanded. One call names no literal target:
+  `xargs -0 npx prettier --write` over a list the agent had built from `git status`, minus the lock's files and
+  `pharn/`. It rewrote one in-scope file. The call that built that list wrote only `/tmp/changed.txt`, so it is not
+  counted as a project write. Every target and every call is printed, so a human can audit the extraction.
 
 ### Why the shell — what preceded the first shell write
 
@@ -80,7 +93,7 @@ record.
 
 ### What the bypass did and did not cost in this run
 
-- **In scope it changed no outcome.** 78 of 79 targets were inside the scope, so the guard would have allowed those
+- **In scope it changed no outcome.** 79 of 80 file targets were inside the scope, so the guard would have allowed those
   writes.
 - **The one out-of-scope touch was a formatter.** A formatter runs through Bash under any write-tool rule ([[L19]]).
   What would have prevented it is naming files, not directories ([[L57]]).
@@ -282,7 +295,7 @@ outputs from another project.
 
 None claimed. This is a prevention correction (finding 4), not a speed-up.
 
-- Possible cost: the build's 44 shell scripts bundled about 179 replacement call sites. As Edit calls those could
+- Possible cost: the build's 43 project-writing `python3` scripts bundled about 179 replacement call sites. As Edit calls those could
   become more tool calls. Edits can be issued in parallel within one request (the test agent issued 8 Writes in one
   request), so the request count need not grow. Not estimated.
 - The project's `PostToolUse` hook would then run per Write/Edit: measured 88–183 ms per run in that project.

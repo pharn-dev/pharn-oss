@@ -409,7 +409,7 @@ test("6.36.0 — blockedLine: an exclusion-caused AC gets the exclusion remedy, 
   const only = blockedLine([{ id: "AC-2", level: "e2e", excluded: ["e2e"] }]);
   assert.equal(
     only,
-    "blocked: no-test-runner — AC-2 (e2e); suggested: remove e2e from pharn.config.json gates.exclude, or re-specify AC-2 at a level a gate that is not excluded runs"
+    "blocked: no-test-runner — AC-2 (e2e); suggested: remove e2e from pharn.config.json gates.exclude, or re-specify AC-2 at a level whose gate is not excluded"
   );
   const mixed = blockedLine([
     { id: "AC-1", level: "unit", excluded: [] },
@@ -417,7 +417,7 @@ test("6.36.0 — blockedLine: an exclusion-caused AC gets the exclusion remedy, 
   ]);
   assert.equal(
     mixed,
-    'blocked: no-test-runner — AC-1 (unit), AC-2 (e2e); suggested: /pharn-ship "set up a test runner for unit with per-test results (spec_kind: test-infra)"; and remove e2e from pharn.config.json gates.exclude, or re-specify AC-2 at a level a gate that is not excluded runs'
+    'blocked: no-test-runner — AC-1 (unit), AC-2 (e2e); suggested: /pharn-ship "set up a test runner for unit with per-test results (spec_kind: test-infra)"; and remove e2e from pharn.config.json gates.exclude, or re-specify AC-2 at a level whose gate is not excluded'
   );
   for (const line of [only, mixed]) assert.match(line, /^blocked: no-test-runner — /);
   assert.ok(!/\/pharn-loop/.test(only + mixed), "never a /pharn-loop suggestion");

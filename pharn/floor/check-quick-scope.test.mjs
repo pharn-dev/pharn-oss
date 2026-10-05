@@ -653,3 +653,58 @@ test("★ LISTING — an untracked tree listing past 1 MiB, declared, is clean t
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ── 6.37.0: the PRE-RUN SNAPSHOT (regress-pre-run-snapshot) ──────────────────────────────────────────────────────
+const LOOP_HOOK = join(REPO, ".claude", "hooks", "require-loop-record.cjs");
+const PRE_RUN_CLI = join(HERE, "pre-run-snapshot.mjs");
+
+function openLoopAndCapture(dir) {
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  const o = spawnSync(process.execPath, [LOOP_HOOK, "--open", "demo", "--cap", "3"], { cwd: dir, encoding: "utf8", env });
+  assert.equal(o.status, 0, o.stderr);
+  const c = spawnSync(process.execPath, [PRE_RUN_CLI, "--capture", "demo"], { cwd: dir, encoding: "utf8", env });
+  assert.equal(c.status, 0, c.stderr);
+}
+
+test("PRE-RUN — inside an open run, an undeclared path unchanged since the snapshot is reported, not counted; edited after it, it escapes", () => {
+  const { dir, base } = makeRepo();
+  try {
+    writeFileSync(join(dir, "src", "y.js"), "export const y = 'the user edit, before the run';\n");
+    let r = runCli(dir, ["--feature", "demo", "--base", base]);
+    assert.equal(r.status, 1, "control: with no run open the user's edit escapes, as before");
+    assert.deepEqual(r.doc.pre_run_snapshot, { status: "no-delivery-run", unchanged: [] });
+    openLoopAndCapture(dir);
+    for (const file of COMMANDS) {
+      const c = runCommitted(committedLine(file), dir, base);
+      assert.equal(c.status, 0, `${file}: ${c.stdout}`);
+      assert.deepEqual(c.doc.escaped, []);
+      assert.deepEqual(c.doc.pre_run_snapshot, { status: "applied", unchanged: ["src/y.js"] });
+    }
+    writeFileSync(join(dir, "src", "y.js"), "export const y = 'then the build edited it';\n");
+    r = runCli(dir, ["--feature", "demo", "--base", base]);
+    assert.equal(r.status, 1, r.stdout);
+    assert.deepEqual(r.doc.escaped, ["src/y.js"]);
+    assert.deepEqual(r.doc.pre_run_snapshot, { status: "applied", unchanged: [] });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("★ R2 — a snapshot reader that throws exits 2 `crashed`, never 1; one that cannot load is `crashed` too", () => {
+  const cases = [
+    ["a throw while reading", (s) => s.replace("return decidePreRun({", 'throw new Error("thrown by the test"); return decidePreRun({')],
+    ["a syntax error", () => "export const = ;\n"],
+  ];
+  for (const [label, edit] of cases) {
+    const { dir, base } = makeRepo({ copy: true });
+    try {
+      breakFloor(dir, "pre-run-snapshot.mjs", edit);
+      const r = runCommitted(committedLine("pharn-loop.md"), dir, base);
+      assert.equal(r.status, 2, `${label}: ${r.stdout}${r.stderr}`);
+      assert.equal(r.doc?.reason_code, "crashed", label);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});

@@ -127,6 +127,17 @@ export function exclusionError(ids) {
   return null;
 }
 
+/** The level gates of `level` that the project's exclusion leaves nothing of, or [] (6.36.0, review R5): the gates of
+ *  the level the manifest HAS (every one of the level's gates when `scripts` is not an object — the plan-time reading,
+ *  which needs no package.json) when ALL of them are in `exclude`. A level whose manifest has none of its gates returns
+ *  [] — that is "no runner", the red-run preflight's own reason, not the exclusion's. Own-property test (L15). */
+export function levelExcludedGates({ level, scripts, exclude }) {
+  const gates = Object.hasOwn(LEVEL_GATES, level) ? LEVEL_GATES[level] : [];
+  const hasScripts = scripts !== null && typeof scripts === "object" && !Array.isArray(scripts);
+  const present = hasScripts ? gates.filter((id) => Object.hasOwn(scripts, id)) : gates;
+  return present.length > 0 && present.every((id) => exclude.includes(id)) ? [...present] : [];
+}
+
 /** The style/format subset eligible for /pharn-regress's config-touch skip. NOT eligible: every other
  *  allowlist member, because a typecheck/build flip over outside files is possible with no config change
  *  (inside -> outside import edges), so skipping one would hide a real regression. */

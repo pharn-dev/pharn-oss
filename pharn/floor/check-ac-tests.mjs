@@ -48,6 +48,12 @@
 // spells them: the mapping path on argv and the lock beside it, relative to the project root the setter resolves
 // scope entries against. Compared FOLDED (scopeKey), which over-reports a case variant the guard would deny anyway.
 //
+// A LEVEL THE PROJECT EXCLUDED (6.36.0, `level-excluded`, an independent review's R5): a mapping row whose level's gates
+// the project's `pharn.config.json` `gates.exclude` leaves nothing of — gate-run-core levelExcludedGates, the red-run
+// preflight's own rule, read against the invoking directory's package.json (every gate of the level when there is none)
+// — is RED here, at /pharn-plan, instead of at /pharn-test's preflight after the tests are written. A declaration that
+// cannot be read is a NOTE (the preflight and the lock refuse it).
+//
 // NOT GUARANTEED (P0), each stated:
 //   • that the tests are good, assert the AC's Then, or target the right public interface — model work
 //     (`/pharn-test`), advisory; the target column is checked for PRESENCE only;
@@ -87,6 +93,8 @@ import { clean, pathsFromPlanFiles } from "./plan-files-core.mjs";
 import { LEVELS, badPath, mappingOf, scopeKey, scopedPath } from "./ac-tests-core.mjs";
 import { isPackageManagerConfigName, scriptNamedFiles, testInfraPathKind } from "./test-infra-core.mjs";
 import { childCrashedLine, crashedDetail, shelledVerdict } from "./shelled-verdict-core.mjs";
+import { levelExcludedGates } from "./gate-run-core.mjs";
+import { loadGateExclusion } from "./gate-exclusion-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHECK_PLAN_SPEC_AGREE = join(HERE, "check-plan-spec-agree.mjs");
@@ -104,6 +112,7 @@ export const KINDS = Object.freeze([
   "duplicate-ac",
   "in-plan-files",
   "legacy-spec",
+  "level-excluded",
   "level-mismatch",
   "malformed-line",
   "missing-ac",
@@ -129,15 +138,19 @@ function shown(v) {
  * The pure check (no chain check, no filesystem beyond what the caller passes). `acArtifacts` — THIS feature's
  * AC-TESTS.md and AC-TESTS.lock.json, spelled relative to the project root — and `scriptFiles` — the files the level
  * gates' scripts name (test-infra-core scriptNamedFiles) — are REQUIRED arrays (L41): an omitted one would silently
- * switch its RED off.
- * @param {{acTestsText: string, specText: string, planText: string, others: {feature: string, files: string[]}[], acArtifacts: string[], scriptFiles: string[]}} input
+ * switch its RED off. `excludedLevels` (6.36.0, review R5, REQUIRED for the same reason) maps a level to the gates the
+ * project's `gates.exclude` leaves it nothing of (gate-run-core levelExcludedGates — the red-run preflight's own rule);
+ * a mapping row at such a level is `level-excluded` HERE, at plan time, rather than ~20 minutes later at /pharn-test.
+ * @param {{acTestsText: string, specText: string, planText: string, others: {feature: string, files: string[]}[], acArtifacts: string[], scriptFiles: string[], excludedLevels: Record<string, string[]>}} input
  * @returns {{legacy: boolean, findings: {kind: string, detail: string}[], notes: string[]}}
  */
-export function checkMapping({ acTestsText, specText, planText, others, acArtifacts, scriptFiles }) {
+export function checkMapping({ acTestsText, specText, planText, others, acArtifacts, scriptFiles, excludedLevels }) {
   if (!Array.isArray(acArtifacts) || !acArtifacts.every((p) => typeof p === "string"))
     throw new TypeError("checkMapping: `acArtifacts` must be an array of paths (this feature's AC-TESTS.md and lock)");
   if (!Array.isArray(scriptFiles) || !scriptFiles.every((p) => typeof p === "string"))
     throw new TypeError("checkMapping: `scriptFiles` must be an array of paths (the files the level gates' scripts name)");
+  if (excludedLevels === null || typeof excludedLevels !== "object" || Array.isArray(excludedLevels))
+    throw new TypeError("checkMapping: `excludedLevels` must be an object mapping a level to its excluded gates");
   const findings = [];
   const red = (kind, detail) => {
     if (!KINDS.includes(kind)) throw new Error(`internal: ${kind} is not a member of KINDS`);
@@ -215,6 +228,13 @@ export function checkMapping({ acTestsText, specText, planText, others, acArtifa
       red(
         "level-mismatch",
         `line ${r.line}: ${r.id} is mapped at \`${r.level}\` but the SPEC says \`${specLevel.get(r.id) ?? "a malformed level"}\``
+      );
+    }
+    const excludedGates = Object.hasOwn(excludedLevels, r.level) ? excludedLevels[r.level] : [];
+    if (Array.isArray(excludedGates) && excludedGates.length) {
+      red(
+        "level-excluded",
+        `line ${r.line}: ${r.id} is mapped at \`${r.level}\`, and pharn.config.json \`gates.exclude\` excludes every ${r.level} gate (${excludedGates.join(", ")}) — the red run would refuse it; re-specify the criterion at another level, or remove the id from \`gates.exclude\``
       );
     }
     mappedCells.add(r.file);
@@ -356,6 +376,18 @@ export function ownArtifacts(acPath, cwd) {
   return [at(basename(acPath)), at(LOCK_NAME)];
 }
 
+/** `<root>/package.json` `scripts`, or null when there is none to read (absent, unreadable, not JSON, no object) —
+ *  levelExcludedGates then reads every gate of a level, the stricter plan-time reading that needs no manifest. */
+function manifestScripts(root) {
+  try {
+    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+    const s = pkg !== null && typeof pkg === "object" ? pkg.scripts : null;
+    return s !== null && typeof s === "object" && !Array.isArray(s) ? s : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The mapped levels the lock's pin will range over: the SPEC's criteria levels and the mapping rows', each a member of
  *  LEVELS (a mismatch between the two is already `level-mismatch`). */
 function pinLevels(specText, acTestsText) {
@@ -409,8 +441,22 @@ function main(argv) {
   const levels = pinLevels(specText, acTestsText);
   const named = levels.length ? scriptNamedFiles({ root: process.cwd(), levels }) : { ok: true, paths: [] };
   const scriptFiles = named.ok ? named.paths : [];
+  // 6.36.0 (review R5): the levels the project's gate exclusion leaves no gate, read at the same root. A declaration
+  // that cannot be read is a NOTE, like an unreadable tree above: /pharn-test's preflight and lock refuse it.
+  const exclusion = loadGateExclusion(process.cwd());
+  const scripts = manifestScripts(process.cwd());
+  const excludedLevels = {};
+  if (exclusion.ok) {
+    for (const level of LEVELS) {
+      const gates = levelExcludedGates({ level, scripts, exclude: exclusion.exclude });
+      if (gates.length) excludedLevels[level] = gates;
+    }
+  }
 
-  const { findings, notes } = checkMapping({ acTestsText, specText, planText, others, acArtifacts, scriptFiles });
+  const { findings, notes } = checkMapping({ acTestsText, specText, planText, others, acArtifacts, scriptFiles, excludedLevels });
+  if (!exclusion.ok) {
+    notes.push(`${exclusion.reason} — no mapping level was checked against it; /pharn-test's preflight and lock refuse the same file`);
+  }
   if (!named.ok) {
     notes.push(
       `the files the level gates' scripts name could not be read (${named.reason}) — none was checked against PLAN.md \`## Files\`; /pharn-test's lock refuses the same tree`

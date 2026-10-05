@@ -65,7 +65,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     rule. Named follow-ups: `build-gate-execution-reuse` (offer the full run's executions to regress HEAD and verify
     through the 6.34.0 identity mechanism) and `ship-build-gate-cite` (`pharn-ship.md`'s inline-build bullet still
     names a `--gates` clause the build never took).
-  - Product-surface change: `SKILLS_VERSION` 6.36.0 → 6.38.0 (minor; 6.37.0 is the stacked PR below this one).
+  - Product-surface change: `SKILLS_VERSION` 6.37.0 → 6.38.0 (minor), stacked on `feat/regress-pre-run-snapshot`.
+
+## [6.37.0] - 2026-10-05
+
+### Added
+
+- 2026-10-05: **A path that was already changed when a `/pharn-loop` or `/pharn-ship` run began is no longer counted
+  as that run's scope escape — it is reported instead, as long as it still holds the bytes it held at entry**
+  ([`pharn/floor/pre-run-snapshot.mjs`](./pharn/floor/pre-run-snapshot.mjs),
+  [`pharn/floor/pre-run-snapshot-core.mjs`](./pharn/floor/pre-run-snapshot-core.mjs),
+  [`pharn/floor/check-regress.mjs`](./pharn/floor/check-regress.mjs) `partitionScope`,
+  [`pharn/floor/stage-regress.mjs`](./pharn/floor/stage-regress.mjs),
+  [`pharn/floor/quick-scope-core.mjs`](./pharn/floor/quick-scope-core.mjs),
+  [`pharn/floor/render-regression.mjs`](./pharn/floor/render-regression.mjs); contract
+  [`regression-report.md`](./pharn/pharn-contracts/regression-report.md), "The additive `pre_run_snapshot` block").
+  `SKILLS_VERSION` 6.36.0 → 6.37.0 (minor: a new floor CLI and a changed stage behaviour), with the README badge.
+  `MIN_CLI` stays 0.5.0: no installed path moves.
+  - **The trigger.** Two of three recorded `/pharn-loop` runs in a user's project stopped at `/pharn-regress`
+    `scope-escaped` on paths the run never wrote: an abandoned earlier run's untracked `pharn/features/<other>/`
+    folder (a 19 min 26 s refusal-and-human-wait in a 92-minute run) and the user's own uncommitted edit (an S9
+    stop). Both were in the loop's own `pre-run-status.txt`, which the partition never read.
+  - **How.** `node pharn/floor/pre-run-snapshot.mjs --capture '<name>'` runs right after the run marker opens —
+    `/pharn-loop` Step 1a, `/pharn-ship` Step 2 item 1 (the quick modes inherit it); a non-zero exit stops the run
+    before any model work. It records every path git reports changed since `HEAD` with a digest (content, a link's own
+    text, `absent`, or `unhashable`) in `<git dir>/pharn-pre-run-snapshot.json`, bound to the marker's bytes, the base
+    and the feature, once per run. `/pharn-regress`'s partition and `check-quick-scope.mjs` then subtract an undeclared,
+    non-exempt path only when that snapshot applies and the path's live digest equals the recorded one, and report it
+    as `pre_run_snapshot: {status, unchanged}` in `scope.json`, `regression-report.json` (a second additive block after
+    `base_evidence`), the quick check's document and `REGRESSION.md`. With no open run or no snapshot the partition is
+    exactly what it was, and the `check-regress.mjs scope` CLI is byte-identical. "Open" is a marker's presence and age
+    (≤ 24 h), so a standalone `/pharn-regress` after an interrupted run of the same feature applies that run's snapshot.
+  - **Bounds, stated in the module headers and the contract.** Agreement, never provenance: the record is out of the
+    write tools' reach (a ★ HOOK test runs both guards on it), and a Bash writer can forge it. Nothing is attributed: a
+    path an earlier run escaped with is pre-run state for a re-run, so re-running reports it rather than refusing. Only
+    the escape set changes: `inside` is unchanged, so a pre-run change that breaks a gate still reads as a regression
+    (follow-up `regress-base-pre-run-overlay`), and a pre-run-changed test file is not compared at regress. A green
+    `/pharn-loop` never commits a subtracted path, so its branch is not the whole tree its gates ran on; the summary
+    names those paths. The porcelain `pre-run-status.txt` stays beside the record (follow-up
+    `pre-run-snapshot-single-source`).
+  - **`LIMITS.md` §3a and §6 now understate this bound.** The proposed human-only edits are in
+    `.dev/features/regress-pre-run-snapshot/PROTECTED-FOLLOWUPS.md`.
 
 ## [6.36.0] - 2026-10-05
 
@@ -86,7 +126,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **Closed and loud.** Each id must be a distinct `ALLOWLIST` member. Anything else refuses: `run-gates.mjs init` exits
     2 with the new reason code `bad-gate-exclusion`, and the red-run preflight is unusable. With no file, or no `gates`
     key, nothing changes byte-for-byte. **Behaviour change:** a `pharn.config.json` that exists but is not valid JSON
-    now refuses discovery and the test-infrastructure pin. Before, discovery never read the file.
+    now refuses discovery and the test-infrastructure pin. Before, discovery never read the file. A valueless trailing
+    `--gates` is now refused (`usage-error`): it had skipped the declaration while discovery still ran.
+  - **Declare it and commit it before the run.** An uncommitted declaration is a change since base, so regress's scope
+    partition (`--quick`: `check-quick-scope.mjs`) reads it `scope-escaped` unless the PLAN declares
+    `pharn.config.json`.
   - **Pinned where the build cannot move it unnoticed.** `ac-tests-lock.mjs --write` now writes schema
     `ac-tests-lock/5`, whose test-infrastructure pin adds `exclude`: the whole declared list, not only level gates.
     Adding or removing an id after `/pharn-test` reads `test-infra-changed` at `/pharn-verify`, which `/pharn-loop`
@@ -98,9 +142,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     - `--write` writes `/5` for every project, so a floor older than 6.36.0 reads a new lock as unusable. That is
       fail-closed, never GREEN.
     - A `/4` or `/3` lock over an unparseable `pharn.config.json` now reads `changed`.
-  - **Fail-closed at the red run.** An acceptance criterion whose level maps only to excluded gates is
-    `ac-level-unavailable` at the preflight, never a vacuous pass. Its closed `blocked: no-test-runner` line then
-    suggests removing the id or re-specifying the criterion. The runner refuses the same set (`coverage-violation`).
+  - **Fail-closed at plan time and at the red run.** An acceptance criterion whose level maps only to excluded gates
+    is RED at `/pharn-plan` (`check-ac-tests.mjs`'s new kind `level-excluded`), and `ac-level-unavailable` at the red-run
+    preflight. Both apply one rule, `gate-run-core.mjs` `levelExcludedGates`. It is never a vacuous pass. The closed
+    `blocked: no-test-runner` line then suggests removing the id or re-specifying the criterion. The runner refuses the
+    same set (`coverage-violation`).
   - **Disclosed everywhere a verdict is shown.**
     - The gate-run stamp gains an optional, additive `excluded` block, `{declared_in, ids}`, which `validateStamp`
       shape-checks.
@@ -116,21 +162,66 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **Not pinned, stated:**
     - a legacy SPEC (no lock);
     - a bootstrap lock (`test_infra: null`);
-    - an exclusion written during `/pharn-test`, which runs before the reconcile anchor. Regress's scope partition is
-      the backstop: a `pharn.config.json` change since base reads `scope-escaped`.
+    - an exclusion written during `/pharn-test`, which runs before the reconcile anchor. The backstop is conditional:
+      regress's scope partition (`--quick`: `check-quick-scope.mjs`) reads a `pharn.config.json` change since base
+      `scope-escaped`. It does not hold in three cases: when PLAN `## Files` names the file (`check-ac-tests.mjs` only
+      prints a NOTE), when git ignores the file, or in a standalone `/pharn-verify`.
     - In a bootstrap or legacy SPEC, a build whose PLAN declares `pharn.config.json` can exclude a gate and regress
-      still reads no-regressions. Only the disclosure line shows it.
+      still reads no-regressions. Only the disclosure line shows it, and `BRIEFING.md` does not carry that line. **Not
+      closed here:** regress has the base commit and could compare the declaration at base and HEAD. That is the
+      follow-up `gate-exclusion-base-compare`.
 
     Named residuals: `gate-exclusion-summary-disclosure` (`RUN-REPORT.md` and `BRIEFING.md` do not repeat the line),
-    `gate-exclusion-bootstrap-pin`, `gate-exclusion-regress-blind`, and `gate-exclusion-build-gate` (`/pharn-build`'s
+    `gate-exclusion-bootstrap-pin`, `gate-exclusion-base-compare`, and `gate-exclusion-build-gate` (`/pharn-build`'s
     own prose gate does not read the list).
 
+  - An independent review's six findings were taken before merge (`.dev/features/gate-exclusion-config/REVIEW.md`).
+
   - Product commands `pharn-verify`, `pharn-regress`, `pharn-test`, `pharn-loop`, `pharn-build`, `pharn-ship` and
-    `pharn-spec` name the exclusion where they restate discovery.
-  - `SKILLS_VERSION` 6.35.1 → 6.36.0 (minor: a new capability), with the README badge. `MIN_CLI` stays 0.5.0: no
+    `pharn-spec` name the exclusion where they restate discovery. The README gains "Excluding a gate".
+  - `SKILLS_VERSION` 6.35.2 → 6.36.0 (minor: a new capability), with the README badge. `MIN_CLI` stays 0.5.0: no
     installed path moves, and `pharn-cli` carries `gates` over as a user-owned key. One trusted-doc sentence becomes
     incomplete (`LIMITS.md §5`, "re-runs the project's own gates"). It is proposed for a human edit in
     `.dev/features/gate-exclusion-config/PROTECTED-FOLLOWUPS.md` and not edited here.
+
+## [6.35.2] - 2026-10-05
+
+### Fixed
+
+- 2026-10-05: **The stage-agent write rule (6.35.1) is scoped to writes inside the project, and names where scratch
+  goes.** These are corrections from the independent review of #305, which the maintainer merged before the fixes
+  landed (`.dev/features/build-writes-through-tools/REVIEW.md`, R1, R3, R5).
+  - **R1.** As shipped in 6.35.1, the brief's rule 4 ("never author content through Bash … never retry it through
+    Bash") contradicted `enforce-writes-scope.cjs`'s own deny message for a path outside every git tree, which routes
+    scratch through Bash. A routed agent following both would stop at S9. Rule 4 now says:
+    - author every file **inside the project** with the Write, Edit, MultiEdit or NotebookEdit tool;
+    - never author a file inside the project through Bash;
+    - keep your own scratch under `.pharn/` with the Write tool, or outside the project where a deny message routes
+      it;
+    - if a write inside the project is denied, follow the deny message or stop.
+
+    `pharn/floor/stage-agent-core.mjs` `WRITE_TOOL_RULE` carries it, and `/pharn-build` Step 3 mirrors it.
+
+  - **R3.** The formatter clause carries its scope limit: "only on files the stage may write, named one by one —
+    never a directory, a glob or a list built from `git status`". The recorded build ran
+    `xargs -0 npx prettier --write` over 70 paths taken from `git status`.
+  - **R5.** NotebookEdit is named. `/pharn-build` and `/pharn-test` say "the write tools". The incident aside moved
+    out of the `/pharn-build` body.
+
+  The brief tests pin the new phrases. Every routed cell still carries the rule, checked against a control text that
+  fails without it. `SKILLS_VERSION` 6.35.1 → 6.35.2 (patch: a correction to shipped bytes), with the README badge.
+  `MIN_CLI` is unchanged.
+
+- 2026-10-05: **The measurement record's shell-write counts are corrected
+  (`.dev/measurements/loop-wall-clock-2026-10-05.md`, apparatus; review R2 and R4).** The [6.35.1] entry says 49
+  Bash calls; the correct count is **48** project-writing Bash calls (43 `python3`), and **79** targets were in
+  scope, not 78. Two errors caused the difference:
+  - one `python3` call wrote only `/tmp/changed.txt`;
+  - the helper `measure.mjs` missed a literal `open('…', 'w')`.
+
+  The helper now prints every call and every target, and lists temp-only calls apart. The record also gains a fifth
+  correction: the harness's auto-mode reminder is "offered the shell", never "caused it". The reminder's own text
+  prefers Edit or Write for multi-line replacements.
 
 ## [6.35.1] - 2026-10-05
 

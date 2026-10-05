@@ -306,9 +306,15 @@ test("renderBrief — the invocation, the exact report lines, rule 5's trust wor
 /** The write-tool rule's load-bearing phrases (6.35.1, build-writes-through-tools). Spelled out HERE, never read from
  *  WRITE_TOOL_RULE, so a reworded constant that drops one fails: the asserted property is the phrases (L60). */
 const WRITE_TOOL_PHRASES = [
-  "with the Write, Edit or MultiEdit tool",
-  "Never author content through Bash",
-  "never on a directory or glob",
+  "with the Write, Edit, MultiEdit or NotebookEdit tool",
+  "Never author a file inside the project through Bash",
+  // 6.35.2 (the #305 review's R1): the guard's own deny message routes an OUT-of-project scratch write through Bash, so the rule
+  // must name where scratch goes instead of forbidding every Bash write.
+  "Keep your own scratch under `.pharn/`",
+  // 6.35.2 (the #305 review's R3): the formatter clause carries the scope limit, and names the list the build actually used.
+  "files the stage may write, named one by one",
+  "a list built from `git status`",
+  "If a write inside the project is denied",
   "never retry it through Bash",
 ];
 const hasWriteToolRule = (text) => typeof text === "string" && WRITE_TOOL_PHRASES.every((p) => text.includes(p));
