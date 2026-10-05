@@ -37,6 +37,16 @@ The batch ran unattended under the user's delegation.
      - Its `entry-gates.test.mjs` wiring test anchored the loop's wait line on the grill's `read` line, which this
        change removes. CI `check` and `floor` failed on exactly that one test, and local `npm test` showed 4,778/4,779.
      - The anchor moved to the grill's stage-start marker. The test now passes; the `docs:generate` README count is 120.
+   - Merged `origin/main` fbb84e8 (6.43.0, direct stage calls), which turned routed stages' route, read and marker
+     lines into `stage-agent.mjs start` / `finish`. The grill change was re-expressed against those lines:
+     - the loop's grill keeps no start, brief or finish line — it is a plain stage-start marker, the inline
+       `/pharn-grill <name> --floor-only`, and the inline return line;
+     - the loop's quick grill drops its `--mode quick` start line (policy parity: floor-only in both columns);
+     - ship's checks-first block now sits before its grill `start` line, and a grill `finish` exit 3 is a STOP.
+
+     Test counts moved to 12 start lines, 11 briefs and 9 finishes. Local `npm run check` minus reconcile is GREEN
+     (4,819/4,819). Reconcile is not run locally after a merge, because merged-in files are expected escapes.
+
    - CI `check` and `floor` pass. CodeQL `Analyze` was cancelled at 15 min before any step ran; the same happened on
      `main`'s own run. A rerun was queued; no step of this PR failed.
 8. **Independent review** of `cfb7158` — 0 floor-gate findings and 5 advisory findings (R1–R5), all fixed
