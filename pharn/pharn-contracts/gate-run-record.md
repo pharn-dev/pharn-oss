@@ -148,6 +148,10 @@ Two of three real `/pharn-loop` runs stopped on exactly that.
 { "gates": { "exclude": ["e2e"] } }
 ```
 
+**Declare it and commit it before the run.** `/pharn-test` pins it. An uncommitted declaration is a change since base,
+so regress's scope partition (and `--quick`'s scope check) reads it `scope-escaped` unless the PLAN declares
+`pharn.config.json` (`ac-tests.md`, "The test-infrastructure pin", states that bound).
+
 `pharn/floor/gate-exclusion-core.mjs` reads it; its header is the grammar (cited, not restated — P4). An absent file
 or an absent `gates` key excludes nothing and changes nothing. `exclude` is a list of distinct `ALLOWLIST` members.
 Anything else refuses: `run-gates.mjs init` exits 2 with `bad-gate-exclusion` and writes nothing. A `pharn.config.json`

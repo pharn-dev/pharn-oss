@@ -46,7 +46,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { acRowsOf } from "./ac-tests-core.mjs";
-import { LEVEL_GATES, acFilesFor, discoverGates, resolveSet, validateStamp } from "./gate-run-core.mjs";
+import { LEVEL_GATES, acFilesFor, discoverGates, levelExcludedGates, resolveSet, validateStamp } from "./gate-run-core.mjs";
 import { RECORD_REASONS, formatFor, loadResultsConfig, testRecord } from "./test-results-core.mjs";
 import { loadGateExclusion } from "./gate-exclusion-core.mjs";
 import { fingerprint } from "./worktree-fingerprint.mjs";
@@ -79,7 +79,7 @@ export function blockedLine(unavailable) {
   const setup = `/pharn-ship "set up a test runner for ${levels} with per-test results (spec_kind: test-infra)"`;
   const unexclude = byExclusion.length
     ? `remove ${[...new Set(byExclusion.flatMap((u) => u.excluded))].join(", ")} from pharn.config.json gates.exclude, or ` +
-      `re-specify ${byExclusion.map((u) => u.id).join(", ")} at a level a gate that is not excluded runs`
+      `re-specify ${byExclusion.map((u) => u.id).join(", ")} at a level whose gate is not excluded`
     : null;
   const suggested = others.length === 0 && unexclude ? unexclude : unexclude ? `${setup}; and ${unexclude}` : setup;
   return `blocked: no-test-runner — ${acs}; suggested: ${suggested}`;
@@ -122,7 +122,12 @@ export function preflight({ rows, scripts, root, exclude }) {
   for (const r of rows) {
     const ids = LEVEL_GATES[r.level].filter((id) => have.has(id));
     if (ids.length === 0) {
-      const excluded = LEVEL_GATES[r.level].filter((id) => discovered.has(id) && exclude.includes(id));
+      // The one rule (gate-run-core levelExcludedGates, which check-ac-tests also applies at plan time — L35), read
+      // against the manifest; with no manifest the reason is "no script", never the exclusion.
+      const excluded =
+        scripts !== null && typeof scripts === "object" && !Array.isArray(scripts)
+          ? levelExcludedGates({ level: r.level, scripts, exclude })
+          : [];
       unavailable.push({
         id: r.id,
         level: r.level,

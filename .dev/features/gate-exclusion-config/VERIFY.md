@@ -1,11 +1,12 @@
 # VERIFY — gate-exclusion-config
 
-- tree: HEAD `9eb4a21` (the build), plus this increment's `REGRESSION.md` and `regression-report.json`.
 - driver: `.pharn/pharn-dev-verify/run.mjs`, a node runner for Step 1. The isolated worktree refuses the pinned `$?`
-  capture form. It records each gate's exit code only. The verdict is `pharn/floor/check-verify.mjs`'s, copied
-  verbatim into `verify-report.json`.
+  capture form. It records each gate's exit code only. The verdict is `pharn/floor/check-verify.mjs`'s, copied verbatim
+  into `verify-report.json`.
 
-## Floor gates (exit codes)
+## Run 2 — after the GATE-2 review fixes (the standing verdict)
+
+- tree: the branch after merging `origin/main` (`4c4c0c5`, 6.35.1), plus the review fixes R1–R6 (`REVIEW.md`).
 
 | gate                                                                                       | exit |
 | ------------------------------------------------------------------------------------------ | ---- |
@@ -19,12 +20,18 @@
 
 **VERIFIED: floor gates PASS.** `failing_gates`: none.
 
-- `reconcile`: `CLEAN`. It reconciled 27 paths since the build's anchor, found 0 escapes, and exempted this
-  increment's two regress artifacts. **Bound, stated:** the baseline was re-anchored after each plan amendment (the
-  plan's "Grill amendments"), so writes made before the last anchor are outside this window. All of them went through
-  the Write/Edit tools under the two guards.
-- The same tree also passed the full `npm run check` chain before the build was committed: all ten gates, 4540 tests,
-  0 failing.
+- `reconcile`: `CLEAN`. It reconciled 12 paths since the review-fix anchor, found 0 escapes, and exempted `PLAN.md` and
+  `REVIEW.md`. **Bound, stated:** the baseline was re-anchored at the start of the review-fix phase, after the two
+  merges, so the merged files are not judged as this build's writes. It was re-anchored again after the one `## Files`
+  amendment (`pharn-plan.md`). Writes before the last anchor are outside this window. All of them went through the
+  Write/Edit tools under the two guards, and none went through Bash.
+- The non-test `npm run check` gates also pass on this tree: `docs:check`, `check:markers`, `check:badge`,
+  `check:changelog` and `check:contributing`. The per-PR `check-changelog-entry.mjs --merge-base origin/main` is GREEN.
+
+## Run 1 — the build (`9eb4a21`), superseded
+
+Every gate above exited 0 there too. `reconcile` was `CLEAN` over 27 paths. The full `npm run check` chain passed: all
+ten gates, 4540 tests, 0 failing.
 
 ## Verifiers (advisory)
 

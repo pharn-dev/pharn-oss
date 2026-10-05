@@ -140,6 +140,7 @@ pre_existing, outside_gates` (regress); `gate_run` is advisory and not compared.
 - `.claude/commands/pharn-build.md` — the never-change list names `gates.exclude` (grill G2) — product command
 - `.claude/commands/pharn-ship.md` — the build-gate discovery sentence names the runner's exclusion (grill G2) — product command
 - `.claude/commands/pharn-spec.md` — the e2e-criterion question names an excluded e2e gate (grill G2) — product command
+- `.claude/commands/pharn-plan.md` — a `level-excluded` RED is a HALT, not an AC-TESTS.md fix (review R5) — product command
 - `pharn/floor/ac-gate-core.mjs` — detail texts name an exclusion (grill G11) — layer pharn-floor
 - `pharn/floor/ac-gate-core.test.mjs` — the AC gate's detail under an exclusion — layer pharn-floor (test)
 - `.dev/floor/command-hygiene.test.mjs` — only if a byte ceiling must move, as a visible diff (grill G3) — apparatus (test)
@@ -268,9 +269,12 @@ pre_existing, outside_gates` (regress); `gate_run` is advisory and not compared.
   verdict tokens; they do not repeat the exclusion line (the linked `VERIFY.md`/`REGRESSION.md` do).
 - `gate-exclusion-bootstrap-pin` — a `spec_kind: test-infra` (bootstrap) lock carries no test-infrastructure pin, so
   the declaration is not pinned there (as nothing else is); verify still discloses it.
-- `gate-exclusion-regress-blind` — in a bootstrap or legacy SPEC, a build whose PLAN declares `pharn.config.json` can
-  add an exclusion and regress reads no-regressions over the smaller set (the base side runs the head's set); only the
-  disclosure line shows it — the same exposure as deleting the script today (grill G5).
+- `gate-exclusion-base-compare` (renamed from `gate-exclusion-regress-blind` at the review, R2) — in a bootstrap or
+  legacy SPEC, a build whose PLAN declares `pharn.config.json` can add an exclusion and regress reads no-regressions
+  over the smaller set (the base side runs the head's set); only the disclosure line shows it, and `BRIEFING.md` does
+  not carry it — the same exposure as deleting the script today (grill G5). NOT CLOSED HERE, though closable: regress
+  has the base commit, so it could compare `readGateExclusion` at base and HEAD and report a widened exclusion as a
+  closed finding; deferred because `stage-regress.mjs` is being changed by another builder in this batch.
 - `gate-exclusion-build-gate` — `/pharn-build` Step 4's own gate is model-run prose, not the runner, so it does not read
   the declaration (the `build-gate-bounded` increment owns that step).
 

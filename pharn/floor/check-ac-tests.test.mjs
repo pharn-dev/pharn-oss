@@ -115,8 +115,8 @@ function world({ spec = SPEC, ac = acTests(), plan = planText(), others = {}, fi
 }
 /** THIS feature's AC artifacts as main() computes them for a run from the project root. */
 const ART = [`pharn/features/${NAME}/AC-TESTS.md`, `pharn/features/${NAME}/${LOCK_NAME}`];
-/** checkMapping with its two required 6.31.0 inputs defaulted to this world's (no script names a file). */
-const cm = (input) => checkMapping({ acArtifacts: ART, scriptFiles: [], ...input });
+/** checkMapping with its required inputs defaulted to this world's (no script names a file; 6.36.0: no level excluded). */
+const cm = (input) => checkMapping({ acArtifacts: ART, scriptFiles: [], excludedLevels: {}, ...input });
 function run(root, extra = []) {
   const f = (n) => `pharn/features/${NAME}/${n}`;
   const r = spawnSync(process.execPath, [CHECK, f("AC-TESTS.md"), f("SPEC.md"), f("PLAN.md"), ...extra], { cwd: root, encoding: "utf8" });
@@ -812,7 +812,55 @@ test("checkMapping's 6.31.0 inputs are REQUIRED (L41): an omitted one would sile
   assert.throws(() => checkMapping({ ...base, acArtifacts: ART }), /scriptFiles/);
   assert.throws(() => checkMapping({ ...base, acArtifacts: "x", scriptFiles: [] }), /acArtifacts/);
   assert.throws(() => checkMapping({ ...base, acArtifacts: ART, scriptFiles: [1] }), /scriptFiles/);
-  assert.deepEqual(checkMapping({ ...base, acArtifacts: ART, scriptFiles: [] }).findings, [], "control");
+  assert.throws(() => checkMapping({ ...base, acArtifacts: ART, scriptFiles: [] }), /excludedLevels/, "6.36.0's input too");
+  assert.throws(() => checkMapping({ ...base, acArtifacts: ART, scriptFiles: [], excludedLevels: [] }), /excludedLevels/);
+  assert.deepEqual(checkMapping({ ...base, acArtifacts: ART, scriptFiles: [], excludedLevels: {} }).findings, [], "control");
+});
+
+// ── 6.36.0 (independent review R5): a criterion at a level the project's gate exclusion empties is RED at plan time ──
+
+test("level-excluded (pure) — a mapping row at a level whose gates are all excluded is RED; another level's row is not", () => {
+  const base = { acTestsText: acTests(), specText: SPEC, planText: planText(), others: [] };
+  const r = cm({ ...base, excludedLevels: { e2e: ["e2e"] } });
+  assert.deepEqual(kindsOf(r), ["level-excluded"]);
+  assert.match(r.findings[0].detail, /AC-2 is mapped at `e2e`, and pharn\.config\.json `gates\.exclude` excludes every e2e gate \(e2e\)/);
+  assert.deepEqual(kindsOf(cm({ ...base, excludedLevels: { integration: ["test"] } })), [], "a level no row uses changes nothing");
+  // L15 — an inherited key is never a level
+  assert.deepEqual(kindsOf(cm({ ...base, excludedLevels: Object.create({ e2e: ["e2e"] }) })), []);
+});
+
+test("level-excluded (CLI) — read from the root's pharn.config.json and package.json; the preflight's own rule (L35)", () => {
+  const config = (exclude) => JSON.stringify({ gates: { exclude } });
+  // package.json has only `e2e`, and it is excluded → RED (the user's project shape)
+  onlyKind(
+    { files: { "package.json": JSON.stringify({ scripts: { test: "x", e2e: "x" } }), "pharn.config.json": config(["e2e"]) } },
+    "level-excluded"
+  );
+  // no package.json → every e2e gate must be excluded for the RED
+  onlyKind({ files: { "pharn.config.json": config(["test:e2e", "e2e"]) } }, "level-excluded");
+  // controls: the other e2e gate still runs; and with no package.json one of two excluded is not enough
+  for (const files of [
+    { "package.json": JSON.stringify({ scripts: { test: "x", e2e: "x", "test:e2e": "x" } }), "pharn.config.json": config(["e2e"]) },
+    { "pharn.config.json": config(["e2e"]) },
+    { "pharn.config.json": config(["typecheck"]) },
+  ]) {
+    const root = world({ files });
+    try {
+      const r = run(root);
+      assert.equal(r.code, 0, `${JSON.stringify(files)}\n${r.out}`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+  // a declaration that cannot be read is a NOTE, never the exit code
+  const root = world({ files: { "pharn.config.json": config(["nope"]) } });
+  try {
+    const r = run(root);
+    assert.equal(r.code, 0, r.out);
+    assert.match(r.out, /^NOTE — pharn\.config\.json `gates\.exclude` entry 0 is not one of the allowlisted gate ids/m);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("test-infra-in-plan — a file a level gate's script NAMES (the review's wB: the build wrote the reporter), absent ones too", () => {

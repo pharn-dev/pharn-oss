@@ -42,7 +42,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **Closed and loud.** Each id must be a distinct `ALLOWLIST` member. Anything else refuses: `run-gates.mjs init` exits
     2 with the new reason code `bad-gate-exclusion`, and the red-run preflight is unusable. With no file, or no `gates`
     key, nothing changes byte-for-byte. **Behaviour change:** a `pharn.config.json` that exists but is not valid JSON
-    now refuses discovery and the test-infrastructure pin. Before, discovery never read the file.
+    now refuses discovery and the test-infrastructure pin. Before, discovery never read the file. A valueless trailing
+    `--gates` is now refused (`usage-error`): it had skipped the declaration while discovery still ran.
+  - **Declare it and commit it before the run.** An uncommitted declaration is a change since base, so regress's scope
+    partition (`--quick`: `check-quick-scope.mjs`) reads it `scope-escaped` unless the PLAN declares
+    `pharn.config.json`.
   - **Pinned where the build cannot move it unnoticed.** `ac-tests-lock.mjs --write` now writes schema
     `ac-tests-lock/5`, whose test-infrastructure pin adds `exclude`: the whole declared list, not only level gates.
     Adding or removing an id after `/pharn-test` reads `test-infra-changed` at `/pharn-verify`, which `/pharn-loop`
@@ -54,9 +58,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     - `--write` writes `/5` for every project, so a floor older than 6.36.0 reads a new lock as unusable. That is
       fail-closed, never GREEN.
     - A `/4` or `/3` lock over an unparseable `pharn.config.json` now reads `changed`.
-  - **Fail-closed at the red run.** An acceptance criterion whose level maps only to excluded gates is
-    `ac-level-unavailable` at the preflight, never a vacuous pass. Its closed `blocked: no-test-runner` line then
-    suggests removing the id or re-specifying the criterion. The runner refuses the same set (`coverage-violation`).
+  - **Fail-closed at plan time and at the red run.** An acceptance criterion whose level maps only to excluded gates
+    is RED at `/pharn-plan` (`check-ac-tests.mjs`'s new kind `level-excluded`), and `ac-level-unavailable` at the red-run
+    preflight. Both apply one rule, `gate-run-core.mjs` `levelExcludedGates`. It is never a vacuous pass. The closed
+    `blocked: no-test-runner` line then suggests removing the id or re-specifying the criterion. The runner refuses the
+    same set (`coverage-violation`).
   - **Disclosed everywhere a verdict is shown.**
     - The gate-run stamp gains an optional, additive `excluded` block, `{declared_in, ids}`, which `validateStamp`
       shape-checks.
@@ -72,17 +78,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **Not pinned, stated:**
     - a legacy SPEC (no lock);
     - a bootstrap lock (`test_infra: null`);
-    - an exclusion written during `/pharn-test`, which runs before the reconcile anchor. Regress's scope partition is
-      the backstop: a `pharn.config.json` change since base reads `scope-escaped`.
+    - an exclusion written during `/pharn-test`, which runs before the reconcile anchor. The backstop is conditional:
+      regress's scope partition (`--quick`: `check-quick-scope.mjs`) reads a `pharn.config.json` change since base
+      `scope-escaped`. It does not hold in three cases: when PLAN `## Files` names the file (`check-ac-tests.mjs` only
+      prints a NOTE), when git ignores the file, or in a standalone `/pharn-verify`.
     - In a bootstrap or legacy SPEC, a build whose PLAN declares `pharn.config.json` can exclude a gate and regress
-      still reads no-regressions. Only the disclosure line shows it.
+      still reads no-regressions. Only the disclosure line shows it, and `BRIEFING.md` does not carry that line. **Not
+      closed here:** regress has the base commit and could compare the declaration at base and HEAD. That is the
+      follow-up `gate-exclusion-base-compare`.
 
     Named residuals: `gate-exclusion-summary-disclosure` (`RUN-REPORT.md` and `BRIEFING.md` do not repeat the line),
-    `gate-exclusion-bootstrap-pin`, `gate-exclusion-regress-blind`, and `gate-exclusion-build-gate` (`/pharn-build`'s
+    `gate-exclusion-bootstrap-pin`, `gate-exclusion-base-compare`, and `gate-exclusion-build-gate` (`/pharn-build`'s
     own prose gate does not read the list).
 
+  - An independent review's six findings were taken before merge (`.dev/features/gate-exclusion-config/REVIEW.md`).
+
   - Product commands `pharn-verify`, `pharn-regress`, `pharn-test`, `pharn-loop`, `pharn-build`, `pharn-ship` and
-    `pharn-spec` name the exclusion where they restate discovery.
+    `pharn-spec` name the exclusion where they restate discovery. The README gains "Excluding a gate".
   - `SKILLS_VERSION` 6.35.1 → 6.36.0 (minor: a new capability), with the README badge. `MIN_CLI` stays 0.5.0: no
     installed path moves, and `pharn-cli` carries `gates` over as a user-owned key. One trusted-doc sentence becomes
     incomplete (`LIMITS.md §5`, "re-runs the project's own gates"). It is proposed for a human edit in
