@@ -196,6 +196,14 @@ either direction (versions, settings, `claudeMdExcludes`, HTML-comment stripping
   `budget` key in `pharn.config.json` is not verifiable from this repository; a dropped key falls back to
   the default, which is the strict direction.
 
+### 3f. What goes into an instruction file is a planning choice, and the rule that steers it is advisory
+
+`/pharn-plan` carries an advisory planning rule (6.38.1): a feature's narrative, rationale, history and limits stay
+in its record, and a plan names an instruction file only for a standing convention every future session must obey.
+Nothing deterministic stops a plan from naming `CLAUDE.md`, and no behavioural eval covers `/pharn-plan`. The
+deterministic backstop is §3e's `instruction-growth` gate at `/pharn-verify`. It bounds the bytes one change adds to
+the modelled set, never what a plan names, and never growth accumulated across changes that each stay under budget.
+
 ---
 
 ## 4. What "good architecture" means here
