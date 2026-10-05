@@ -90,6 +90,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - `SKILLS_VERSION` → 6.41.0 (minor: a new floor CLI and two subcommands), with the README badge; built as 6.36.0 and
     renumbered to the version the maintainer assigned, after #309. `MIN_CLI` is unchanged.
 
+- 2026-10-05: **Running `/pharn-regress`'s HEAD and BASE sides at the same time: measured, and deferred with its
+  preconditions (build apparatus only; no `SKILLS_VERSION` bump).** `.dev/features/gates-parallel-drain/PLAN.md`
+  records why the two sides keep running one after the other. The trigger was a user project's 92-minute `/pharn-loop`
+  run, whose `/pharn-regress` took 660.6 s over 4 script calls. The record's findings:
+  - the BASE checkout is nested in the HEAD tree at `.pharn/pharn-regress/base`. Leaving it out of the fingerprint
+    does not stop a HEAD gate from reading it, and the user project's `tsconfig.json` does not exclude `.pharn`, so a
+    concurrent HEAD `typecheck` would report a false regression;
+  - gates that share ports, a database or temp paths are not written to run twice at once;
+  - two concurrent `node --test` runs took 5.60 s of wall clock against 8.93 s in sequence (one sample, on a loaded
+    8 GB machine);
+  - the estimated saving is about 1.5–4 minutes per regress (about 1.5–4.5 % of that run), and only for projects that
+    opt in.
+
+  At GATE 1, the orchestrating model, deciding under the user's delegation, chose not to build the opt-in mode. The
+  record names two follow-ups, each with its preconditions:
+  - `regress-base-outside-tree`, which side concurrency would first need;
+  - `gates-within-side-parallel`, the only lever for `/pharn-verify`, which would break the stamp's per-gate
+    tree-state chain.
+
 ## [6.39.0] - 2026-10-05
 
 ### Added
