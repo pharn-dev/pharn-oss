@@ -127,8 +127,8 @@ timestamps in one context. All `[R·m]`.
 
 - **289 stage-agent requests** (22 + 55 + 41 + 45 + 126) [R·m].
 - **The first request of every stage agent carries about 302k tokens** (302,207–304,974). Most of that is a cache
-  write, because a fresh agent shares no cache with its parent beyond a ~36k-token reusable part, seen in three of
-  the five [R·m].
+  write: 265,982–304,972 tokens written. Three of the five also read 36,223 tokens from the cache; the spec and build
+  agents read none [R·m]. Why the cache read differs between agents is not established here.
 - **The project's instruction files are a large part of that prefix.** The harness attached the same 16 files to
   every stage agent, 634,379 B in total (helper `instructions`) [R·m]:
   - `CLAUDE.md`, 418,456 B;
