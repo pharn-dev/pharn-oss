@@ -1,5 +1,5 @@
 // pharn/floor/test-results-formats.mjs — the per-FORMAT adapters for a project's test-results file. Each
-// adapter turns ONE format's JSON document into a flat list of `{file, path[], title, status, anomaly}` entries
+// adapter turns ONE format's JSON document into a flat list of `{file, path[], title, status, anomaly, messages}` entries
 // (`status` null and `anomaly` set for an entry whose status it cannot read — ENTRY_ANOMALIES) plus a count of
 // suite-level errors, or refuses the whole document with a closed reason (FORMAT_REFUSALS). This file changes when a FORMAT's definition
 // changes (a reporter's output, or PHARN's own neutral schema), and for no other reason (P3). The record's
@@ -73,8 +73,14 @@
 // `pharn-json`'s required `suite_errors`. Counted, never described — their messages are untrusted free text and are
 // not read.
 //
+// FAILURE MESSAGES (6.39.0, build-gate-bounded) ride on each entry as `messages`, an array of strings: vitest/Jest
+// `failureMessages`, Playwright's per-result `errors[].message` (else `error.message`), and none for `pharn-json`,
+// whose schema has no message field. A non-string or non-array value yields `[]` — never a refusal, never a status
+// input. They exist for build-gate.mjs's bounded summary ALONE: test-results-core.mjs `buildRecord` copies
+// `id/file/title/status` only, so no record — the red run's, the AC gate's, a report's — carries a message.
+//
 // TRUST (P2): the document is written by PROJECT code — untrusted DATA. Only the fields named above are read,
-// each type-checked; failure messages, stacks, durations and attachments are ignored. Nothing here is eval'd,
+// each type-checked; durations and attachments are ignored, and a message is opaque text. Nothing here is eval'd,
 // compiled into a RegExp, spawned or sent anywhere. A raw value that appears in a refusal `reason` is quoted
 // through `shown()` (quote-core.mjs), which bounds it to SHOWN_CHARS, so an attacker-sized string cannot ride out
 // in a reason.
@@ -149,6 +155,25 @@ function nonEmpty(s) {
   return s !== "";
 }
 
+/** The string members of `v` when it is an array, else none — a message is optional DATA, never a refusal. */
+function stringsOf(v) {
+  return Array.isArray(v) ? v.filter((s) => typeof s === "string") : [];
+}
+
+/** Playwright: each result's `errors[].message`, else its `error.message` (the first of `errors`). */
+function playwrightMessages(results) {
+  const out = [];
+  if (!Array.isArray(results)) return out;
+  for (const r of results) {
+    if (!isPlainObject(r)) continue;
+    const errs = Array.isArray(r.errors) ? r.errors.filter(isPlainObject).map((e) => e.message) : [];
+    const own = errs.filter((m) => typeof m === "string");
+    if (own.length) out.push(...own);
+    else if (isPlainObject(r.error) && typeof r.error.message === "string") out.push(r.error.message);
+  }
+  return out;
+}
+
 /** A reporter's file path, relative to the first root it sits under; unchanged otherwise. */
 export function relativeFile(p, roots) {
   if (!isAbsolute(p)) return p;
@@ -216,6 +241,7 @@ function parseJestShape(doc, roots, extra) {
       const path = [...a.ancestorTitles, a.title].filter(nonEmpty);
       const checked = extra === null ? null : extra(a, status, where);
       if (checked !== null && checked.refusal) return checked.refusal;
+      const messages = stringsOf(a.failureMessages);
       if (status === null) {
         entries.push({
           file,
@@ -223,15 +249,16 @@ function parseJestShape(doc, roots, extra) {
           title: a.title,
           status: null,
           anomaly: unknownStatus(`${where} has status ${shown(a.status)}, outside the closed map`),
+          messages,
         });
         continue;
       }
       if (checked !== null && checked.anomaly) {
-        entries.push({ file, path, title: a.title, status: null, anomaly: checked.anomaly });
+        entries.push({ file, path, title: a.title, status: null, anomaly: checked.anomaly, messages });
         continue;
       }
       if (status === "failed") failedHere++;
-      entries.push({ file, path, title: a.title, status, anomaly: null });
+      entries.push({ file, path, title: a.title, status, anomaly: null, messages });
     }
     if (tr.status === "failed" && failedHere === 0) suiteErrors++;
   }
@@ -292,7 +319,7 @@ function parsePlaywright(doc, roots) {
                 `${where}.specs[${j}].tests[${k}] has status ${shown(t.status)} (expectedStatus ${shown(t.expectedStatus)}), outside the closed map`
               )
             : null;
-        entries.push({ file, path, title: spec.title, status, anomaly });
+        entries.push({ file, path, title: spec.title, status, anomaly, messages: playwrightMessages(t.results) });
       }
     }
     for (let c = children.length - 1; c >= 0; c--) {
@@ -352,6 +379,7 @@ function parsePharn(doc, roots) {
       title: t.path[t.path.length - 1],
       status: known ? t.status : null,
       anomaly: known ? null : unknownStatus(`${where} has status ${shown(t.status)}, outside {${RECORD_STATUSES.join(", ")}}`),
+      messages: [],
     });
   }
   return { ok: true, entries, suiteErrors: doc.suite_errors };
