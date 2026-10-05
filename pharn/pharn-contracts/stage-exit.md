@@ -243,8 +243,8 @@ runner's `init`, and the only slow steps are the gates. The unbudgeted tail afte
 `run --next`'s fingerprints, the verdict call, the report composition, the render and the writes.
 
 **A kill mid-invocation (GATE-2 round 2).** For `regress`, a progress record is persisted at the top of
-every phase from "drain-head" through "verdict". A hard kill (a harness timeout, say) therefore leaves the
-record at the phase it interrupted, and `--resume` re-runs that phase from its start. That includes a kill
+every phase from "drain-head" through "verdict". A hard kill (an interrupt, or the Bash tool stopping a call
+that ran past its background limit, say) therefore leaves the record at the phase it interrupted, and `--resume` re-runs that phase from its start. That includes a kill
 during `git worktree add`: git leaves that worktree locked and half-populated, and the script
 force-removes it before re-adding (measured, and tested by killing a real `add` mid-checkout). What a kill
 still costs:
@@ -259,6 +259,18 @@ re-derives the verdict from the same durable stamp: over an UNCHANGED tree it re
 report, but the AC gate also reads live files (the lock, the SPEC, the mapping), so after the tree moved it may
 not. `/pharn-loop`'s `check-loop-fresh.mjs` F catches a moved tree; `/pharn-ship` has no such check. A kill
 before "drain" leaves no record of that run, and `--resume` answers `no-progress`.
+
+**A Bash-tool timeout is not a kill (6.46.0).** Observed in this harness (probed with a 3 s tool timeout; the
+pinned 600 s is assumed to behave the same — ADVISORY, a harness behaviour, not a floor fact): a call that reaches
+the tool's timeout is MOVED TO THE BACKGROUND and runs on to its own exit, which the tool's completion notice reports
+later (that notice says "failed" for every non-zero code, `continue`'s `5` included). So a caller waits for that
+notice and branches on the exit code it reports; it runs `--resume` only for a call that is gone without one. A
+`--resume` (or a second fresh invocation) started while the first still runs would put two scripts on one progress
+record, and nothing refuses it: when either script is called directly it takes no in-flight lock. That guard exists
+only around `pharn/floor/stage-direct.mjs`, the orchestrators' call, whose own lock is held while it spawns the
+script. Giving the scripts their own is the named follow-up `stage-script-in-flight-guard` (it needs a parent
+pass-through and a new code in both stages' closed `unusable` sets); until then the thin callers' text is the only
+thing that prevents it, and that text is advisory.
 
 ## Guarantee audit (P0)
 

@@ -146,10 +146,14 @@ Read the printed `pharn-stage-exit/1` object and branch on the **exit code only*
 
 - **Anything else (`1` included)** — the script **crashed**; no document is guaranteed. Present what exists and
   stop. A crash is never read as a verdict.
-- **The Bash tool itself timed out** — run the resume line once, then branch as above. The script checkpoints the top
-  of the drain and of the verdict, so a resume re-runs from the phase the record names: a kill in the drain re-runs
-  the interrupted gate, and a kill during the render re-runs the verdict as well, because the record stays parked
-  at `verdict` until the run ends. A kill before the drain left no record, and the resume answers `2 no-progress`.
+- **A call the Bash tool reports as moved to the background is STILL RUNNING** — wait for its completion notice (it
+  may outlast this turn) and branch on the exit code it reports, never on the notice's word ("failed" covers `5`
+  too). Never run `--resume`, or another fresh line, while it runs: nothing refuses the second script on the same
+  record. Only a call that is GONE without an exit code (interrupted, or stopped by the tool) is resumed, once, then
+  branch as above. The script checkpoints the top of the drain and of the verdict, so a resume re-runs from the phase
+  the record names: a kill in the drain re-runs the interrupted gate, and a kill during the render re-runs the verdict
+  as well, because the record stays parked at `verdict` until the run ends. A kill before the drain left no record,
+  and the resume answers `2 no-progress`. Unsure whether the call still runs → do not resume: stop and say so.
 
 **Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a
 **procedure** step, not reference material; it sits beneath the audit sections for document layout only, and a

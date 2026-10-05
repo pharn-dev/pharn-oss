@@ -120,7 +120,7 @@ Read the printed `pharn-stage-exit/1` JSON object and branch on the **exit code 
   - a `usage-error` from any OTHER flag has removed this feature's stale prior report, but has NOT cleared
     an earlier run's `.pharn/pharn-regress/` scratch. That run's progress record and base worktree survive,
     and a `--resume` run now would revive that earlier run. Run `--resume` only after a `5`, or after a
-    Bash-tool timeout (below);
+    call that is gone (below);
   - every later `unusable` has removed the stale report and cleared that scratch (all but a retained
     `base-gates/`, kept for reuse), and from "drain-head"
     onward may have written new state: this run's own progress record, a base-commit checkout, install
@@ -174,15 +174,16 @@ Read the printed `pharn-stage-exit/1` JSON object and branch on the **exit code 
 
 - **Anything else (`1` included)** — the script **crashed**; no JSON document is guaranteed. Present
   whatever stdout/stderr exist and stop. This is never read as a verdict.
-- **The Bash tool itself timed out** (no exit code at all: the harness killed the script mid-run) — run
-  the pinned resume line once (GATE-2 round 2). From "drain-head" onward the script checkpoints the top of
-  every phase, so `--resume` re-runs only the phase the kill interrupted. That includes a kill during the
-  base worktree's `git worktree add`, whose locked, half-created leftover the script force-removes first.
-  Then branch on its exit code as above. A kill before "drain-head" left no checkpoint of THIS run, and by
-  then "fresh" has normally cleared the scratch, so `--resume` answers `2 no-progress`: present it and
-  stop. The exception is a kill inside "fresh" itself, before its scratch clear. An earlier run's record
-  can then survive, and `--resume` would revive that run (the N1 residual in `stage-exit.md`). A Bash-tool
-  timeout lands minutes into a run, long past that point.
+- **A call the Bash tool reports as moved to the background is STILL RUNNING** — wait for its completion
+  notice (it may outlast this turn) and branch on the exit code it reports, never on the notice's
+  word ("failed" covers `5` too). Never run `--resume`, or another
+  fresh line, while it runs: nothing refuses the second script on the same record. Only a call that is
+  GONE without an exit code (interrupted, or stopped by the tool) is resumed, once. From "drain-head" on
+  the script checkpoints every phase, so `--resume` re-runs the one the kill interrupted (a half-created
+  base worktree is force-removed first); a kill before it left no record, so `--resume` answers `2
+no-progress` (present it, stop) — unless the kill hit "fresh" before its scratch clear, which can
+  revive an earlier run (the N1 residual in `stage-exit.md`). Unsure whether it still runs → do not
+  resume: stop and say so.
 
 **Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It
 is a **procedure** step, not reference material; it sits beneath the audit sections for document layout

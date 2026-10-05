@@ -23,6 +23,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.46.0] - 2026-10-06
+
+### Fixed
+
+- 2026-10-06: **`/pharn-regress` and `/pharn-verify` no longer resume a call the Bash tool moved to the background**
+  (`.dev/features/thin-caller-background-timeout/`). Both thin callers said: when the Bash tool itself times out, run
+  the resume line once. In this harness a call that reaches the tool's timeout is not killed. It is moved to the
+  background and runs on to its own exit. #314's review reproduced this (CHANGELOG [6.43.0]), and it was re-probed
+  here with a 3 s tool timeout over an 8 s process. The process finished, its exit code `5` was reported later, and
+  the completion notice called it "failed". So that sentence started a second stage script on the same
+  `.pharn/pharn-<stage>/` progress record while the first still ran. Nothing refuses that: the in-flight lock is
+  `stage-direct.mjs`'s, and it applies only to the orchestrators' call.
+  - Each thin caller now carries the rule 6.43.0 gave the orchestrators:
+    - a call reported as moved to the background is STILL RUNNING;
+    - wait for its completion notice and branch on the exit code it reports, never on the notice's wording;
+    - never run `--resume` or another fresh line while it runs;
+    - resume once only a call that is gone with no exit code (interrupted, or stopped by the tool after its
+      background limit);
+    - when unsure, do not resume: stop and say so.
+
+    The checkpoint and `no-progress` text for a real kill is kept. Both commands stay inside their byte ceilings
+    (unchanged).
+
+  - `pharn/pharn-contracts/stage-exit.md`: the kill example no longer reads "a harness timeout". A new paragraph says
+    a Bash-tool timeout is not a kill, and labels that as ADVISORY: an observed harness behaviour, probed at 3 s and
+    assumed at 600 s.
+  - `.dev/floor/command-hygiene.test.mjs` `THIN_CALLER_BACKGROUND` iterates both thin callers. It checks that the
+    bullet is present and that rule 7's `TIMEOUT_RESUME` does not match, with one mutant per assertion.
+  - **Bounds (P0).** The pin checks presence in committed prose, and `TIMEOUT_RESUME` catches one spelling only. That
+    a run waits for a backgrounded call is advisory.
+  - **Named follow-up: `stage-script-in-flight-guard`.** It would give `stage-regress.mjs` / `stage-verify.mjs` their
+    own in-flight guard when called directly. It is not built here because it needs a parent pass-through
+    (`stage-direct.mjs` holds its lock while it spawns the script) and a new code in both stages' closed `unusable`
+    sets.
+  - SKILLS_VERSION 6.45.0 → 6.46.0: a correction to shipped command and contract text. No `MIN_CLI` change.
+
 ## [6.45.0] - 2026-10-05
 
 ### Changed
