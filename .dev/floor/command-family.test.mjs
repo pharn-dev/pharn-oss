@@ -196,7 +196,7 @@ const POINTER_PINS = Object.freeze({
     "**If it does not load, STOP before `/pharn-spec`.**",
   ],
   "pharn-ship-close.md": [
-    "Read it once: in the same turn as step 7's return marker after the first `/pharn-verify`",
+    "Read it once: with step 7's first `/pharn-verify` call that exits other than `5`",
     "or, at a STOP before step 7 once `<name>` exists, at that STOP; and never earlier: not at GATE 1",
     "**If it does not load, write nothing more.**",
     "say that `SHIP.md`, `cost.json` and `RUN-REPORT.md` were not written",
@@ -566,11 +566,7 @@ test("R4/R5 — every part is framed by its title and end line, and its command 
       "When `--quick` is anywhere in the description, read it before Step 5",
     ],
     ["pharn-loop.md", "Read it once, when the run first reaches a stop", "Read it once, at the start of Step 3"],
-    [
-      "pharn-ship.md",
-      "in the same turn as step 7's return marker after the first `/pharn-verify`",
-      "with `/pharn-plan`'s stage-start marker",
-    ],
+    ["pharn-ship.md", "with step 7's first `/pharn-verify` call that exits other than `5`", "with `/pharn-plan`'s stage-start marker"],
     ["pharn-ship.md", "Read it in the same turn as Step 1's pending-start line", "Read it after GATE 2"],
     ["pharn-loop.md", "Commit nothing, create no branch, write no `LOOP.md`", "Write `LOOP.md` from the contract and commit it"],
   ];
@@ -587,6 +583,32 @@ test("R4/R5 — every part is framed by its title and end line, and its command 
     });
     assert.match(pointerOffenders(m).join("\n"), /pointer lacks: /, `${file}: "${from}" → "${to}" must be red`);
   }
+});
+
+// 6.43.0 GATE-2 review R4: step 7's verify is a `stage-direct.mjs` call that writes its own return marker, so the close
+// part loads with "the first verify call that exits other than 5" — said ALIKE in the pointer (pinned above) and in the
+// close part's own title paragraph and claims bullet, with the old "return marker after the first" wording nowhere.
+function shipCloseLoadOffenders(m) {
+  const NEW = /with\s+step\s+7's\s+first\s+`\/pharn-verify`\s+call\s+that\s+exits\s+other\s+than\s+`5`/g;
+  const out = [];
+  const close = m.get("pharn-ship-close.md");
+  if ((close.match(NEW) ?? []).length !== 2)
+    out.push("pharn-ship-close.md: the load sentence is not in its title paragraph AND its claims bullet");
+  for (const f of ["pharn-ship.md", "pharn-ship-close.md"])
+    if (/return\s+marker\s+after\s+the\s+first/.test(m.get(f))) out.push(`${f}: the pre-6.43.0 load wording`);
+  return out;
+}
+
+test("R4 (6.43.0) — /pharn-ship's close part states its own load condition as its pointer does; each mutant is red (L60)", () => {
+  assert.deepEqual(shipCloseLoadOffenders(LIVE), []);
+  const back = edit(LIVE, "pharn-ship-close.md", (t) =>
+    t.replace(
+      "with step 7's first `/pharn-verify` call that exits other than `5`",
+      "with step 7's return marker after the first `/pharn-verify`"
+    )
+  );
+  assert.match(shipCloseLoadOffenders(back).join("\n"), /title paragraph AND its claims bullet/);
+  assert.match(shipCloseLoadOffenders(back).join("\n"), /pharn-ship-close\.md: the pre-6\.43\.0 load wording/);
 });
 
 test("R5b — a part's file name appears only in its pointer (and a quick part's in its sibling claims block): no second load", () => {

@@ -17,7 +17,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -570,22 +570,30 @@ function shipLine(re, label) {
   return hits[0];
 }
 
-/** Run the given committed lines, `<name>` substituted — and `<route>` (6.27.0) by the token `route` would
- *  print for a routed build — in a scratch cwd whose `pharn/` links to this repo's; return the markers the
- *  emitter would read. No session id, so no pending start is adopted. */
+/** Run the given committed lines, `<name>` substituted, in a scratch cwd whose `pharn/`, `.claude/hooks` and
+ *  `.claude/commands` link to this repo's and which holds this repo's config; return the markers the emitter would
+ *  read. No session id, so no pending start is adopted. 6.43.0: the build's stage-start comes from its `start` line
+ *  (it records the route `route` decides itself), and verify's from its `stage-direct.mjs` line, which exits with the
+ *  stage script's own code — here the script refuses the scratch tree (exit 2) after the marker is written. */
 function runCommitted(lines) {
   const cwd = mkdtempSync(join(tmpdir(), "pharn-ship-wiring-"));
   try {
     symlinkSync(join(REPO, "pharn"), join(cwd, "pharn"));
+    mkdirSync(join(cwd, ".claude"));
+    symlinkSync(join(REPO, ".claude", "hooks"), join(cwd, ".claude", "hooks"));
+    symlinkSync(join(REPO, ".claude", "commands"), join(cwd, ".claude", "commands"));
+    writeFileSync(join(cwd, "pharn.config.json"), readFileSync(join(REPO, "pharn.config.json"), "utf8"));
     const env = { ...process.env };
     delete env.CLAUDE_CODE_SESSION_ID;
+    delete env.CLAUDE_PROJECT_DIR;
     for (const line of lines) {
-      const r = spawnSync("sh", ["-c", line.replaceAll("'<name>'", "'wiring-feat'").replaceAll("'<route>'", "'agent:sonnet'")], {
+      const r = spawnSync("sh", ["-c", line.replaceAll("'<name>'", "'wiring-feat'")], {
         cwd,
         env,
         encoding: "utf8",
       });
-      assert.equal(r.status, 0, `${line}\n${r.stdout}${r.stderr}`);
+      const want = /stage-direct\.mjs/.test(line) ? 2 : 0;
+      assert.equal(r.status, want, `${line}\n${r.stdout}${r.stderr}`);
     }
     return readMarkers(join(cwd, ".pharn", "cost", "wiring-feat", "markers.jsonl"));
   } finally {
@@ -599,13 +607,14 @@ test("★ WIRING — the committed QUICK run-start, build and verify lines deriv
     "quick run-start"
   );
   const fullStart = shipLine(/^node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind run-start --adopt-pending$/, "full run-start");
-  // 6.27.0: the routed build's stage-start records the route `stage-agent.mjs route` printed (--route).
+  // 6.27.0: the routed build's stage-start records its route; since 6.43.0 its `start` line writes it.
   const build1 = shipLine(
-    /^node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind stage-start --stage pharn-build --iteration 1 --route '<route>'$/,
+    /^node pharn\/floor\/stage-agent\.mjs start --command pharn-ship --stage pharn-build --name '<name>' --iteration 1$/,
     "build@1"
   );
+  // 6.43.0: verify's stage-start is written by its one stage-direct.mjs line.
   const verify1 = shipLine(
-    /^node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind stage-start --stage pharn-verify --iteration 1$/,
+    /^node pharn\/floor\/stage-direct\.mjs --stage pharn-verify --name '<name>' --iteration 1 --timeout-ms \d+ --budget-ms \d+$/,
     "verify@1"
   );
   const dir = greenDir(); // verify PASS + a no-regressions report on disk
@@ -632,6 +641,35 @@ test("★ WIRING — the committed QUICK run-start, build and verify lines deriv
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("★ WIRING (6.43.0 GATE-2 review R3) — a build whose START line crashed: the committed fallback line keeps gate2-quick derivable; with no fallback it is not", () => {
+  const quickStart = shipLine(
+    /^node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind run-start --adopt-pending --mode quick$/,
+    "quick run-start"
+  );
+  const fallback = shipLine(
+    /^node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind stage-start --stage <stage> --route 'inline:route-unavailable'$/,
+    "start-crash fallback"
+  );
+  const inlineReturn = shipLine(/^node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind orchestrator$/, "inline return");
+  const verify1 = shipLine(
+    /^node pharn\/floor\/stage-direct\.mjs --stage pharn-verify --name '<name>' --iteration 1 --timeout-ms \d+ --budget-ms \d+$/,
+    "verify@1"
+  );
+  // The command: "for the build, add the start line's own `--iteration`" (ship's build@1 start line carries 1).
+  const build1 = `${fallback.replace("<stage>", "pharn-build")} --iteration 1`;
+  const dir = greenDir();
+  try {
+    const m = runCommitted([quickStart, build1, inlineReturn, verify1]);
+    assert.deepEqual([m[1].stage, m[1].iteration, m[1].route], ["pharn-build", 1, "inline:route-unavailable"]);
+    assert.equal(readShipOutcome(dir, m).decision, GATE2_QUICK);
+    // CONTROL (the pre-fix state): the crashed start wrote nothing and no fallback ran — never gate2-quick.
+    const none = runCommitted([quickStart, verify1]);
+    assert.notEqual(readShipOutcome(dir, none).decision, GATE2_QUICK);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

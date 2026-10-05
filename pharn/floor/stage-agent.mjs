@@ -14,6 +14,8 @@
 //   node pharn/floor/stage-agent.mjs report --command <c> --name '<name>' --stage <stage> [--iteration <N>]
 //                                          --status <done|refused|question> [--row <S4..S10>] [--gate <pass|fail>]
 //   node pharn/floor/stage-agent.mjs read   --command <c> --name '<name>' --stage <stage> [--iteration <N>]
+//   node pharn/floor/stage-agent.mjs start  <route's flags> [--no-agent-tool]          (6.43.0 — see START / FINISH)
+//   node pharn/floor/stage-agent.mjs finish <read's flags>                            (6.43.0)
 // `--iteration` is required exactly for an iterated stage (build, regress, verify). `--mode` is spelled only
 // for a column the command's policy holds besides `full` (today: `quick`, for both commands — /pharn-loop's
 // since 6.28.0; the accepted set is read from ROUTE_POLICY, never listed here). Every flag
@@ -27,7 +29,36 @@
 //   read    0 done · 3 refused · 4 question · 2 unusable (`no-result`, `malformed`, `mismatch`, `unreadable`,
 //           `usage`) — one closed line on stdout; the stage-exit numbers (`stage-exit.md`). Anything else,
 //           1 included, is a crash, and a caller must read a crash as no verdict.
+//   start   `route`'s 0 / 3 with TWO stdout lines (the token, then the marker line) · 2 refused, nothing written.
+//   finish  `read`'s 0 / 2 / 3 / 4 with TWO stdout lines (the closed verdict line, then the marker line).
 // Every path ends by setting `process.exitCode`, never `process.exit()` (the 6.20.4 flush rule).
+//
+// ── START / FINISH (6.43.0, orchestrator-direct-stage-calls — audit candidate C1) ─────────────────────
+// THE RECORDED COST (P7): an orchestrator spent four pinned lines per routed stage — `route`, the stage-start marker,
+// `read`, the return marker — and the marker could never share `route`'s request, because it needed the token
+// `route` printed, which the model then TYPED into a shell line. In pharn-starter's 92-minute /pharn-loop run that was
+// one extra orchestrator request per routed stage, five in all (.dev/features/orchestrator-direct-stage-calls/
+// PLAN.md, "Why"). C1's own pre-registered bar (orchestrator-role requests >= 20%) was met in 1 of 3 real runs; it
+// was adopted because the batch request named it and because no route token is typed into a shell line any more.
+//   * `start` decides exactly as `route` does, then writes the stage-start marker carrying that token through
+//     `mark-phase.mjs`'s `tryMarkPhase` (the one printed encoding, so the line binds the run as the CLI's does), and
+//     prints the token, then the marker line. Three decisions the model used to make around the old lines are code:
+//     `--no-agent-tool` on an `agent` cell is `inline:no-agent-tool` with no config consulted (the model's reading of
+//     its own tool list stays ADVISORY, as before); a `route` refusal other than a skipped stage, or a leftover result
+//     it cannot clear, is `inline:route-unavailable` (exit 3) with the reason on stderr; and a stage that is still
+//     OPEN — the run's latest marker is this stage's own stage-start, same stage and iteration — gets no second one
+//     (`MARKER_KEPT`), which is what lets /pharn-ship's question relay re-route a fresh agent without a second
+//     stage-start (`ship-outcome-core.mjs` reads a non-verdict stage started twice as `undetermined`). Neither the
+//     flag nor the open-stage rule is new behaviour: both keep what the four-line form did.
+//   * `finish` consumes the result exactly as `read` does, then writes the `orchestrator` return marker, and prints
+//     the closed verdict line, then the marker line — except after a `question` (exit 4), when the stage is not over
+//     (ship's round trip continues inside it, and its agent's later rows must bill to the stage): no marker
+//     (`MARKER_DEFERRED`); the round trip's own `finish` writes it, and a run that STOPS on the question runs the
+//     command's inline return line first.
+//   * A marker that cannot be written prints `MARKER_NOT_WRITTEN` and changes no exit: a marker is advisory.
+// BOUNDS: `start` reads the run's markers file, unauthenticated `.pharn/` state (`mark-phase.mjs`, TRUST BOUND): a
+// forged last line can only make it keep instead of write a marker. A crash of either subcommand (node's exit 1)
+// leaves the marker unwritten, and the orchestrator runs the stage inline (`start`) or stops (`finish`), as before.
 //
 // ── THE CONFIG PROBE (`route`, for a routed cell only — a policy-inline cell never consults it) ────────
 // 1. `<config>` (default `pharn.config.json` in the invoking directory, `DEFAULT_CONFIG` below — the one
@@ -111,8 +142,10 @@ import {
   RESULT_FILE,
   RESULT_STATUSES,
   RESULT_DEFECTS,
+  READ_EXIT,
   GATES,
   AGENT,
+  SKIPPED,
   policyCell,
   modesOf,
   decideRoute,
@@ -123,6 +156,8 @@ import {
   unusableVerdict,
   quote,
 } from "./stage-agent-core.mjs";
+import { inlineToken } from "./route-token-core.mjs";
+import { DEFAULT_BASE, markersPath, tryMarkPhase, latestMarker } from "./mark-phase.mjs";
 
 /** The checker spawn's bound — measured, with its margin, in the header. Exported so a test names it. */
 export const CHECKER_TIMEOUT_MS = 10_000;
@@ -154,13 +189,25 @@ export const READ_DEFECTS = Object.freeze([...READ_FILE_DEFECTS, ...RESULT_DEFEC
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHECKER = join(HERE, "check-model-config.mjs");
 
-/** Each subcommand's closed flag set. */
+/** Each subcommand's closed flag set (every one takes a value). `start` takes `route`'s, plus the bare
+ *  `NO_AGENT_TOOL`, which `main` removes before parsing; `finish` takes `read`'s. */
 const FLAGS = Object.freeze({
   route: Object.freeze(["--command", "--stage", "--name", "--iteration", "--mode", "--config"]),
   brief: Object.freeze(["--command", "--stage", "--name", "--iteration", "--mode"]),
   report: Object.freeze(["--command", "--stage", "--name", "--iteration", "--status", "--row", "--gate"]),
   read: Object.freeze(["--command", "--stage", "--name", "--iteration"]),
+  start: Object.freeze(["--command", "--stage", "--name", "--iteration", "--mode", "--config"]),
+  finish: Object.freeze(["--command", "--stage", "--name", "--iteration"]),
 });
+
+/** `start`'s one bare flag: the orchestrator has no Agent tool, not even a deferred one (its own, ADVISORY, reading). */
+export const NO_AGENT_TOOL = "--no-agent-tool";
+
+/** `start`'s second line when the stage is still open (the run's latest marker is its own stage-start). */
+export const MARKER_KEPT = "marker: kept (stage already open)";
+
+/** `finish`'s second line after a `question`: the stage is not over, so its return marker waits. */
+export const MARKER_DEFERRED = "marker: deferred (question)";
 
 const ITER_RE = /^[1-9][0-9]{0,5}$/;
 
@@ -481,6 +528,74 @@ export function route(opts, root = process.cwd()) {
   return { refuse: "the route decision did not converge" };
 }
 
+// ── start / finish (6.43.0 — see START / FINISH in the header) ───────────────────────────────────────
+
+/** The route `start` records: `route`'s decision, with the three decisions the header names made in code. Returns
+ *  `{token, exit, reason?, why?}` or `{refuse}` (a skipped stage only). Never throws. */
+export function decideStart(opts, root = process.cwd(), noAgentTool = false) {
+  const cell = policyCell(opts.command, opts.mode, opts.stage);
+  if (cell === SKIPPED || cell === null)
+    return { refuse: `${opts.stage} does not run in ${opts.command}'s ${opts.mode} mode, so it has no route` };
+  if (noAgentTool && cell === AGENT) return { token: inlineToken("no-agent-tool"), exit: 3, reason: "no-agent-tool" };
+  const unavailable = (why) => ({ token: inlineToken("route-unavailable"), exit: 3, reason: "route-unavailable", why });
+  let d;
+  try {
+    d = route(opts, root);
+  } catch (e) {
+    return unavailable(`the route decision failed (${errCode(e)})`);
+  }
+  if (d.refuse) return unavailable(d.refuse);
+  if (d.exit === 0) {
+    const why = clearResult(root, opts.command, opts.name);
+    if (why !== null) return unavailable(`${why}; no agent is routed while a leftover result could answer for it`);
+  }
+  return d;
+}
+
+/** Is the run's latest marker this stage's own stage-start (same stage and iteration)? */
+function stageIsOpen(opts, base) {
+  const m = latestMarker(markersPath(opts.name, base));
+  return m !== null && m.kind === "stage-start" && m.stage === opts.stage && (m.iteration ?? null) === (opts.iteration ?? null);
+}
+
+/** `start`: route, then the stage-start marker. Returns `{exit, out: [lines], err: [lines]}`. */
+export function startStage(opts, { root = process.cwd(), noAgentTool = false, sessionId = null, base = join(root, DEFAULT_BASE) } = {}) {
+  const d = decideStart(opts, root, noAgentTool);
+  if (d.refuse) return { exit: 2, out: [], err: [d.refuse] };
+  const err = [];
+  if (d.exit !== 0) err.push(`${opts.stage} runs inline (${d.reason}) — ${INLINE_REMEDIES[d.reason]}${d.why ? `; ${d.why}` : ""}`);
+  let second;
+  if (stageIsOpen(opts, base)) second = MARKER_KEPT;
+  else {
+    const m = tryMarkPhase({
+      name: opts.name,
+      kind: "stage-start",
+      stage: opts.stage,
+      iteration: opts.iteration,
+      base,
+      sessionId,
+      route: d.token,
+    });
+    second = m.line;
+    if (!m.ok) err.push(`start: the stage-start marker was not written (${m.code}); the route stands`);
+  }
+  return { exit: d.exit, out: [d.token, second], err };
+}
+
+/** `finish`: read, then the orchestrator return marker (deferred after a question). Returns `{exit, out, err}`. */
+export function finishStage(opts, { root = process.cwd(), sessionId = null, base = join(root, DEFAULT_BASE) } = {}) {
+  const { verdict, defect } = consumeResult(root, { command: opts.command, name: opts.name, stage: opts.stage, iteration: opts.iteration });
+  const err = defect ? [`read: ${defect}`] : [];
+  let second;
+  if (verdict.exit === READ_EXIT.question) second = MARKER_DEFERRED;
+  else {
+    const m = tryMarkPhase({ name: opts.name, kind: "orchestrator", base, sessionId });
+    second = m.line;
+    if (!m.ok) err.push(`finish: the return marker was not written (${m.code})`);
+  }
+  return { exit: verdict.exit, out: [verdict.line, second], err };
+}
+
 // ── The CLI ──────────────────────────────────────────────────────────────────────────────────────────
 
 function out(line) {
@@ -493,17 +608,36 @@ function err(line) {
 function main(argv) {
   const sub = argv[0];
   if (!Object.hasOwn(FLAGS, sub ?? "")) {
-    err(`usage: node pharn/floor/stage-agent.mjs <route|brief|report|read> --command <c> --stage <stage> --name '<name>' …`);
+    err(`usage: node pharn/floor/stage-agent.mjs <route|brief|report|read|start|finish> --command <c> --stage <stage> --name '<name>' …`);
     return 2;
   }
-  const parsed = parseArgs(sub, argv.slice(1));
+  let rest = argv.slice(1);
+  let noAgentTool = false;
+  if (sub === "start") {
+    const n = rest.filter((a) => a === NO_AGENT_TOOL).length;
+    if (n > 1) {
+      err(`${NO_AGENT_TOOL} was given more than once`);
+      return 2;
+    }
+    noAgentTool = n === 1;
+    rest = rest.filter((a) => a !== NO_AGENT_TOOL);
+  }
+  const parsed = parseArgs(sub, rest);
   if (!parsed.ok) {
-    if (sub === "read") out(unusableVerdict("usage").line);
+    if (sub === "read" || sub === "finish") out(unusableVerdict("usage").line);
     err(parsed.reason);
     return 2;
   }
   const o = parsed.opts;
   const root = process.cwd();
+
+  if (sub === "start" || sub === "finish") {
+    const sessionId = process.env.CLAUDE_CODE_SESSION_ID ?? null;
+    const r = sub === "start" ? startStage(o, { root, noAgentTool, sessionId }) : finishStage(o, { root, sessionId });
+    for (const line of r.out) out(line);
+    for (const line of r.err) err(line);
+    return r.exit;
+  }
 
   if (sub === "route") {
     const d = route(o, root);
