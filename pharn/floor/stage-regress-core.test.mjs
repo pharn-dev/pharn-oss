@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   REGRESS_PATHS,
+  LOCKFILE_FAMILIES,
   PHASES,
   RESUMABLE_PHASES,
   isTestFile,
@@ -39,6 +40,27 @@ test("REGRESS_PATHS: every entry sits under the state root, and loop-fresh-core.
   assert.equal(REGRESS_PATHS.baseGates, ".pharn/pharn-regress/base-gates");
   assert.equal(REGRESS_PATHS.stageJson, ".pharn/pharn-regress/stage.json");
   assert.equal(REGRESS_PATHS.scopeJson, ".pharn/pharn-regress/scope.json");
+  assert.equal(REGRESS_PATHS.headInstall, ".pharn/pharn-regress/head-install.json"); // 6.40.0
+});
+
+test("LOCKFILE_FAMILIES (6.40.0): the one owner of the names per family — the four INSTALL_RULE families, in order", () => {
+  assert.deepEqual(LOCKFILE_FAMILIES, {
+    npm: ["package-lock.json", "npm-shrinkwrap.json"],
+    pnpm: ["pnpm-lock.yaml"],
+    yarn: ["yarn.lock"],
+    bun: ["bun.lock", "bun.lockb"],
+  });
+  // every family resolves to a command when it is the only one present — the table and INSTALL_RULE agree
+  for (const f of Object.keys(LOCKFILE_FAMILIES)) {
+    const r = resolveInstall({ hasPackageJson: true, lockfiles: { [f]: true } });
+    assert.equal(r.kind, "cmd", f);
+    assert.equal(r.family, f);
+  }
+  // and stage-regress.mjs's base-side reader derives from it rather than spelling the names again (L35)
+  const src = readFileSync(fileURLToPath(new URL("./stage-regress.mjs", import.meta.url)), "utf8");
+  const body = src.slice(src.indexOf("function lockfilesAtBase("), src.indexOf("function phaseHeadInstall("));
+  assert.match(body, /LOCKFILE_FAMILIES/);
+  assert.doesNotMatch(body, /package-lock\.json|pnpm-lock|yarn\.lock|bun\.lock/, "no second spelling of a lockfile name");
 });
 
 test("PHASES: the 13 phases in execution order; RESUMABLE_PHASES is the drain-head..render suffix", () => {
