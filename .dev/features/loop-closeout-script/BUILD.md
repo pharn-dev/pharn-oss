@@ -9,6 +9,9 @@ the close parts' former lines and run each script end-to-end with its real child
 Final step, both claims blocks); the pins that read the close parts re-pointed in `command-hygiene.test.mjs`,
 `render-run-report`/`render-regression`/`render-verify.test.mjs`, `run-marker.test.mjs`, `check-loop-fresh.test.mjs`,
 `stage-runtime.test.mjs` and `frontmatter-core.test.mjs`; CLAUDE.md, CHANGELOG [6.43.0] (provisional), SKILLS_VERSION,
-README badge. `node pharn/floor/validate.mjs .` → GREEN (36 capabilities). Decisions: `origin/main` (6.38.1) was not
-merged — its 6.38.0 collides with this branch's base (#309, also 6.38.0), which the orchestrator is restacking; the merge
-happens at stacking. One deviation from "verbatim" in the builder is stated (lstat absence, L54).
+README badge. `node pharn/floor/validate.mjs .` → GREEN (36 capabilities). Decisions: stacking was dropped by the orchestrator;
+`origin/main` was merged twice (6.38.1, then 6.39.0 once #309 landed — every build-gate file taken as main's), the
+version is the pre-assigned 6.43.0, and the reconcile baseline was re-anchored after each merge (the merges are git
+operations, not build writes). A late re-point: `check-test-stage.test.mjs` executed the inline builder, so it now runs
+`buildStageList` (added to `## Files`, the scope re-set and `--amend-scope`d). `npm run check` exits 0 (4,739 tests).
+One deviation from "verbatim" in the builder is stated (lstat absence, L54).
