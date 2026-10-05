@@ -28,7 +28,10 @@ human approval.**
 10. Merged `origin/main` 43c09ba (6.39.0, #309), with `[6.39.0]` kept directly below `[6.40.0]`.
 11. `/pharn-dev-verify` (iteration 2, after the fixes and the merge) → `verify-report.json` `.verdict`: **`PASS`**
     (4723 tests).
-12. **GATE 2** — PR #312 is open against `main`. **Merge: left to the maintainer, or to the orchestrator under the
+12. Merged `origin/main` ab0b11c (#315). It touched apparatus only (`.dev/features/gates-parallel-drain/` and one
+    CHANGELOG entry), and its `[Unreleased]` entry was moved into `[6.40.0]`. No product byte changed, so iteration 2's
+    verdict stands. `check-changelog-entry --merge-base origin/main` is GREEN.
+13. **GATE 2** — PR #312 is open against `main`. **Merge: left to the maintainer, or to the orchestrator under the
     user's stated authorisation to merge green PRs.**
 
 ## Records
