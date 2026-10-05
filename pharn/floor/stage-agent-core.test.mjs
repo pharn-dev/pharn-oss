@@ -39,6 +39,7 @@ import {
   UNUSABLE_REASONS,
   NO_RESULT_TEXT,
   BRIEF_PROMPT_PREFIX,
+  WRITE_TOOL_RULE,
   quote,
   policyCell,
   modesOf,
@@ -300,6 +301,39 @@ test("renderBrief — the invocation, the exact report lines, rule 5's trust wor
     if (c.command === "pharn-loop") assert.doesNotMatch(b.text, /--status question/, `${where}: the loop's agent never reports question`);
     else assert.match(b.text, /--status question/, `${where}: ship's agent reports question`);
   }
+});
+
+/** The write-tool rule's load-bearing phrases (6.35.1, build-writes-through-tools). Spelled out HERE, never read from
+ *  WRITE_TOOL_RULE, so a reworded constant that drops one fails: the asserted property is the phrases (L60). */
+const WRITE_TOOL_PHRASES = [
+  "with the Write, Edit or MultiEdit tool",
+  "Never author content through Bash",
+  "never on a directory or glob",
+  "never retry it through Bash",
+];
+const hasWriteToolRule = (text) => typeof text === "string" && WRITE_TOOL_PHRASES.every((p) => text.includes(p));
+
+test("renderBrief — EVERY routed brief carries the write-tool rule inside rule 4, and no rule is renumbered (6.35.1)", () => {
+  let routed = 0;
+  for (const c of allCells().filter((x) => x.cell === AGENT)) {
+    for (const iteration of ITERATED_STAGES.includes(c.stage) ? [1, 2] : [null]) {
+      const where = `${c.command}/${c.mode}/${c.stage}${iteration === null ? "" : `@${iteration}`}`;
+      const text = renderBrief({ command: c.command, mode: c.mode, stage: c.stage, name: "demo", iteration }).text;
+      const rules = text.split("\n").filter((l) => /^\d\. /.test(l));
+      assert.ok(hasWriteToolRule(rules.find((l) => l.startsWith("4. "))), `${where}: rule 4 carries the write-tool rule`);
+      // "rule 6" and "rule 7" are cited by number in pharn-loop.md and the hygiene suite: the sentences join rule 4.
+      const numbers = rules.map((l) => l.slice(0, 1)).join("");
+      assert.ok(numbers === "123456" || numbers === "1234567", `${where}: rule numbers ${numbers}`);
+      // Non-vacuity (L60): the SAME predicate fails on the same brief with the sentences cut out.
+      assert.equal(hasWriteToolRule(text.replace(WRITE_TOOL_RULE, "")), false, `${where}: the control must fail`);
+    }
+    routed++;
+  }
+  assert.equal(routed, 16, "every routed cell was checked (L34)");
+  // A closed constant: no placeholder, no interpolation, one line.
+  assert.doesNotMatch(WRITE_TOOL_RULE, PLACEHOLDER_RE);
+  assert.doesNotMatch(WRITE_TOOL_RULE, /\$\{|\n/);
+  assert.equal(hasWriteToolRule(WRITE_TOOL_RULE), true);
 });
 
 test("renderBrief — rule 7 (the fix list) appears ONLY for /pharn-loop's build at iteration >= 2, naming the four fields", () => {
