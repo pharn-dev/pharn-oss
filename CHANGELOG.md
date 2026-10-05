@@ -23,6 +23,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.41.0] - 2026-10-05
+
+### Added
+
+- 2026-10-05: **`/pharn-regress` and `/pharn-verify` no longer run their HEAD gates over an npm install that does not
+  match its lockfile — they refuse `head-install-drift` before any gate, naming `npm ci` as the remedy**
+  ([`pharn/floor/install-drift-core.mjs`](./pharn/floor/install-drift-core.mjs),
+  [`pharn/floor/install-drift.mjs`](./pharn/floor/install-drift.mjs),
+  [`pharn/floor/stage-regress.mjs`](./pharn/floor/stage-regress.mjs),
+  [`pharn/floor/stage-verify.mjs`](./pharn/floor/stage-verify.mjs),
+  [`pharn/floor/stage-exit-core.mjs`](./pharn/floor/stage-exit-core.mjs); contracts
+  [`stage-exit.md`](./pharn/pharn-contracts/stage-exit.md),
+  [`regression-report.md`](./pharn/pharn-contracts/regression-report.md) and
+  [`verify-report.md`](./pharn/pharn-contracts/verify-report.md), "The additive `head_install` block").
+  `SKILLS_VERSION` 6.37.0 → 6.41.0 (minor: a new refusal and a new floor check), with the README badge. `MIN_CLI`
+  stays 0.5.0: no installed path moves.
+  - **The trigger.** A user's 92-minute `/pharn-loop` reported `typecheck` as a regression (exit 0 at base, 1 at head)
+    in files the build never touched: the HEAD gates ran over a stale `node_modules` (`@sentry/core@10.75.0`, invalid
+    against `^11.0.0` after a pulled dependency bump) while the BASE side ran on a fresh `npm ci`. `/pharn-verify`
+    reads the same tree, so a loop would have CONTINUEd into rebuild iterations no build can fix. This repository's
+    own main checkout showed the same state the same day (12 packages changed after a bump nobody installed).
+  - **How.** First thing in regress's head-init and verify's init, one function compares npm's record of the installed
+    tree (`node_modules/.package-lock.json`) with the lockfile (`npm-shrinkwrap.json` first, as npm does), per package
+    path: a changed version or integrity, a missing package, or an extraneous one is `drifted`; a lockfile listing
+    packages with no `node_modules` is `not-installed`. Both refuse; `REGRESSION.md` / `VERIFY.md` quote the counts,
+    the first 20 package paths and the remedy as DATA, and no report JSON is written. `--no-install` and `--gates` do
+    not change it. In `/pharn-loop` it is an S9 stop by the existing "refused → S9" rule, in seconds instead of after
+    the gates (the 92-minute run spent 660 s of regress and 4.5 min of verify on that tree); `/pharn-ship` STOPs.
+  - **What does not refuse.** An absent package the lockfile marks `dev`, `peer`, `optional` or `devOptional` is
+    counted as `missing_unchecked`, never drift: a platform's optional binaries (271 such entries in the user's tree)
+    and an install configured with `omit=dev`, `NODE_ENV=production` or `legacy-peer-deps` stay absent after every
+    `npm ci`, so refusing them would be a stop no remedy clears. A pnpm, yarn or bun project, no lockfile, two lockfile
+    families, an npm ≤ 6 lockfile or no npm record in `node_modules` is `not-checked` with a closed reason, and proceeds
+    exactly as before. Every non-refusing state is reported as the additive, advisory `head_install` block, last in
+    `regression-report.json` and `verify-report.json`, and as one line in each render.
+  - **A behaviour change, stated.** A build that edits the lockfile without installing is now refused
+    here: in `/pharn-loop` that is an S9 stop with `npm ci` as the remedy, where before its gates ran over the old
+    install and the loop iterated.
+  - **Bounds, in the module header and the contracts.** The check certifies that two records npm writes agree, never
+    that `node_modules` holds what the lockfile says: a `node_modules` changed outside npm, or by `npm install
+--package-lock-only` (measured — it rewrites npm's record without installing), reads clean, as does a needed dev
+    package that is absent. Every false clean is the behaviour before this release, never a false refusal. A resumed
+    chain does not re-check. Named follow-ups: `entry-preflight-install-drift` (call the exported `readInstallCheck` at
+    `/pharn-loop` / `/pharn-ship` entry) and `head-install-opt-in` (an opt-in install at HEAD — declined here: `npm ci`
+    deletes the user's `node_modules`).
+
 ## [6.37.0] - 2026-10-05
 
 ### Added

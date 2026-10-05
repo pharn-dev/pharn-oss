@@ -39,6 +39,7 @@
 import { quoteData, dataText } from "./quote-core.mjs";
 import { isReasonCode } from "./stage-exit-core.mjs";
 import { ALLOWLIST, EXCLUSION_DECLARED_IN } from "./gate-run-core.mjs";
+import { headInstallLine } from "./install-drift-core.mjs";
 
 /** The fixed reading guide. It names BOTH markers validate.mjs CHECK 5 looks for (L10). */
 export const PREAMBLE =
@@ -289,6 +290,8 @@ export function renderDone(report) {
   const out = [title(r.feature), "", PREAMBLE, ""];
   out.push(...verdictSection(r));
   out.push(...gatesSection(r));
+  // 6.41.0 — the install check that ran before the gates (install-drift-core.mjs); a report without the key renders as before.
+  if (Object.hasOwn(r, "head_install")) out.push(headInstallLine(r.head_install), "");
   out.push(...completenessSection(r));
   out.push(...acSection(r));
   out.push(...verifiersSection(r));
@@ -296,7 +299,8 @@ export function renderDone(report) {
   return finish(out);
 }
 
-/** Render the human doc for a REFUSED run (`missing-artifact`, `chain-red`, `plan-files-unparseable`). `detail` is
+/** Render the human doc for a REFUSED run (`missing-artifact`, `chain-red`, `plan-files-unparseable`,
+ *  `head-install-drift`). `detail` is
  *  the script's sentence or a shelled checker's own message — quoted as DATA, never trusted as this module's prose. */
 export function renderRefused({ feature, reasonCode, detail }) {
   const out = [title(feature), "", PREAMBLE, ""];

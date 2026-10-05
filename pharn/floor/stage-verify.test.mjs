@@ -251,8 +251,8 @@ test("★ WIRING — pharn-verify.md's pinned fresh line, executed verbatim, rea
     const live = JSON.parse(cv.stdout);
     assert.deepEqual(
       Object.keys(report),
-      [...Object.keys(live), "completeness", "verifiers", "gate_reuse"],
-      "the checker's keys, in order, then the three blocks"
+      [...Object.keys(live), "completeness", "verifiers", "gate_reuse", "head_install"],
+      "the checker's keys, in order, then the four blocks (head_install since 6.41.0)"
     );
     for (const k of Object.keys(live)) assert.deepEqual(report[k], live[k], `field ${k} is not the checker's own output`);
     // F — the stamp's final fingerprint is the live tree's, after the render wrote both artifacts.
@@ -533,6 +533,67 @@ test("refused missing-artifact / chain-red / plan-files-unparseable — VERIFY.m
     assert.match(readFileSync(join(dir, RENDER), "utf8"), /```text\nRED — /, "the checker's own message is quoted as DATA");
   });
   withFixture({ files: null, anchor: false }, ({ dir }) => assertRefused(dir, runCli(dir, fresh()), "plan-files-unparseable"));
+});
+
+// ── 6.41.0: THE HEAD INSTALL CHECK (regress-head-install-drift) — the same function regress runs, before any gate ──
+const npmPackages = (version) => ({
+  "": { name: "fx" },
+  "node_modules/dep": { version, resolved: `file:dep-${version}.tgz`, integrity: `sha512-${version}` },
+});
+const NPM_COMMITTED = {
+  ".gitignore": ".pharn/\nnode_modules/\n", // G5: an ignored node_modules, as in every real project
+  "package-lock.json": JSON.stringify({ name: "fx", lockfileVersion: 3, requires: true, packages: npmPackages("2.0.0") }),
+};
+function plantRecord(dir, version) {
+  mkdirSync(join(dir, "node_modules"), { recursive: true });
+  writeFileSync(
+    join(dir, "node_modules", ".package-lock.json"),
+    JSON.stringify({ name: "fx", lockfileVersion: 3, requires: true, packages: npmPackages(version) })
+  );
+}
+
+test("6.41.0 — a drifted install, or none at all, is refused head-install-drift before any gate, with --gates too; the control is done/PASS", () => {
+  withFixture({ committed: NPM_COMMITTED }, ({ dir }) => {
+    plantRecord(dir, "1.0.0");
+    for (const extra of [[], ["--gates", "node --test src/::test"]]) {
+      const r = runCli(dir, fresh(extra));
+      assertRefused(dir, r, "head-install-drift");
+      const md = readFileSync(join(dir, RENDER), "utf8");
+      assert.match(md, /Remedy: run `npm ci` in the project root, then re-run\./);
+      assert.match(md, /- changed "node_modules\/dep": lockfile "2\.0\.0", installed "1\.0\.0"/);
+    }
+    rmSync(join(dir, "node_modules"), { recursive: true });
+    const none = runCli(dir, fresh());
+    assertRefused(dir, none, "head-install-drift");
+    assert.match(readFileSync(join(dir, RENDER), "utf8"), /there is no node_modules directory/);
+    // the control: npm's record matches the lockfile
+    plantRecord(dir, "2.0.0");
+    const ok = runCli(dir, fresh());
+    assert.equal(ok.code, 0, ok.raw);
+    const report = readReport(dir);
+    assert.equal(report.verdict, "PASS", JSON.stringify(report));
+    assert.deepEqual(report.head_install, {
+      state: "clean",
+      why: null,
+      family: "npm",
+      lockfile: "package-lock.json",
+      counts: { changed: 0, missing: 0, extraneous: 0, missing_unchecked: 0 },
+    });
+    assert.deepEqual(Object.keys(report).slice(-1), ["head_install"], "the merged block, last");
+    assert.match(readFileSync(join(dir, RENDER), "utf8"), /^HEAD install: checked — /m);
+  });
+});
+
+test("6.41.0 — a project with no lockfile is not checked: the gates run as before and the report says so", () => {
+  withFixture({}, ({ dir }) => {
+    const r = runCli(dir, fresh());
+    assert.equal(r.code, 0, r.raw);
+    const report = readReport(dir);
+    assert.equal(report.verdict, "PASS");
+    assert.equal(report.head_install.state, "not-checked");
+    assert.equal(report.head_install.why, "no-lockfile");
+    assert.match(readFileSync(join(dir, RENDER), "utf8"), /^HEAD install: NOT CHECKED \(`no-lockfile`\)/m);
+  });
 });
 
 // ── STALE OUTPUT, BRANCH BY BRANCH (GRILL G16) ──────────────────────────────────────────────────────
@@ -1047,7 +1108,7 @@ test("★ CLOSURE — every reason_code literal stage-verify.mjs emits is a regi
   const registered = new Set(allReasonCodes("verify"));
   for (const l of lits) assert.ok(registered.has(l), `stage-verify.mjs emits '${l}', not in the verify registry`);
   assert.deepEqual([...new Set(lits)].sort(), [...registered].sort());
-  assert.equal(REGISTRY.verify.refused.length, 3);
+  assert.equal(REGISTRY.verify.refused.length, 4); // head-install-drift since 6.41.0
   assert.equal(Object.keys(REGISTRY.verify.question).length, 1);
   assert.equal(REGISTRY.verify.unusable.length, 8);
   assert.deepEqual(Object.keys(EXIT_CODE).sort(), ["continue", "done", "question", "refused", "unusable"]);

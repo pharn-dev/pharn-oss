@@ -811,6 +811,23 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 node pharn/floor/stage-verify.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--gates "<cmd>[::<id>],…"]
 node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 
+# THE HEAD INSTALL CHECK (6.41.0, regress-head-install-drift) — no CLI: pharn/floor/install-drift.mjs (reads the tree)
+# + install-drift-core.mjs (the pure rule; its header IS the spec). First thing in stage-regress.mjs's head-init and
+# stage-verify.mjs's init, before any gate, it compares npm's record of the installed tree (node_modules/.package-lock.json)
+# with the lockfile (npm-shrinkwrap.json first, npm's own order). THE RECORDED FAILURE (P7): a user's 92-min /pharn-loop
+# reported a false `typecheck` regression — HEAD gates over a stale node_modules, BASE over a fresh `npm ci`. A changed,
+# missing or extraneous package (`drifted`) or a lockfile with packages and no node_modules (`not-installed`) is
+# `refused head-install-drift` (remedy `npm ci`, the command INSTALL_RULE resolves — measured to clear all three kinds);
+# in /pharn-loop an S9 stop by the existing status rule. GATE 1 (orchestrator, delegated): an absent package marked
+# dev/peer/optional/devOptional is `missing_unchecked`, never drift (an omit=dev install would otherwise be refused
+# forever); pnpm/yarn/bun and every unreadable state are `not-checked` with a closed `why` and proceed as before. Every
+# non-refusing state is the additive, advisory `head_install` block in both reports. LOCKFILE_FAMILIES
+# (stage-regress-core.mjs) is the one owner of the lockfile names, BASE and HEAD alike. BOUND (L43): agreement of two npm
+# records, never "node_modules is right" — a tree changed outside npm, or by `npm install --package-lock-only`
+# (measured), reads clean; every false clean is the pre-6.41.0 behaviour. `readInstallCheck(root)` + `refuses` are
+# exported for the follow-up `entry-preflight-install-drift`. Contracts: regression-report.md / verify-report.md "The
+# additive `head_install` block", stage-exit.md.
+
 # THE QUICK SCOPE CHECK (6.28.0, loop-quick-mode GATE 2, review F1) — the partition check `/pharn-ship --quick`'s item 7
 # and every `/pharn-loop --quick` iteration keep when they skip /pharn-regress. THE RECORDED FAILURE (P7): 6.25.0's
 # pinned line had the MODEL paste the changed and declared lists into DOUBLE-QUOTED shell arguments of

@@ -125,6 +125,7 @@ Read the printed `pharn-stage-exit/1` object and branch on the **exit code only*
   - `missing-artifact` — produce the named file: `PLAN.md` via `/pharn-plan`, `SPEC.md` via `/pharn-spec`;
   - `chain-red` — the SPEC changed after the PLAN pinned it: re-plan via `/pharn-plan`, or re-approve via
     `/pharn-spec` when the SPEC change is intended;
+  - `head-install-drift` — `node_modules` does not match the lockfile: run `npm ci`, then re-run;
   - `plan-files-unparseable` — fix the PLAN's `## Files` via `/pharn-plan`.
 - **`4` question** — relay `question` and `options[]` **verbatim**. On an answer, re-run with the object's own
   `resume.argv` **followed by** the chosen option's `argv`, each appended value single-quoted, an embedded `'`

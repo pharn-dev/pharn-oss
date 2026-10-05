@@ -106,6 +106,7 @@ import {
 } from "./stage-runtime.mjs";
 import {
   REGRESS_PATHS,
+  LOCKFILE_FAMILIES,
   isTestFile,
   shouldSkipStyle,
   resolveInstall,
@@ -113,6 +114,8 @@ import {
   PROGRESS_SCHEMA,
   validateProgress,
 } from "./stage-regress-core.mjs";
+import { readInstallCheck, recordInstallCheck, readRecordedInstallCheck, refuses } from "./install-drift.mjs";
+import { detailText } from "./install-drift-core.mjs";
 import { renderDone, renderRefused } from "./render-regression.mjs";
 import { shelledVerdict } from "./shelled-verdict-core.mjs";
 import { spawnGate } from "./run-gates.mjs";
@@ -594,8 +597,8 @@ function phasePartition(cfg, planPath, specPath, base) {
 }
 
 /** ------------------------------------------------------------------------------------------------
- *  PHASE 5 — head-init: resolve --skip-style, run `run-gates.mjs init --side head`, then the TESTS and
- *  INSTALL checks.
+ *  PHASE 5 — head-init: the HEAD install check (6.41.0), resolve --skip-style, run `run-gates.mjs init --side
+ *  head`, then the TESTS and INSTALL checks.
  *  ---------------------------------------------------------------------------------------------- */
 function runGatesInit(args) {
   return spawnSync(process.execPath, [RUN_GATES, "init", ...args], { encoding: "utf8" });
@@ -606,18 +609,25 @@ function lockfilesAtBase(base) {
     const r = gitSync(["cat-file", "-e", `${base}:${path}`]);
     return r.ok;
   };
-  return {
-    hasPackageJson: check("package.json"),
-    lockfiles: {
-      npm: check("package-lock.json") || check("npm-shrinkwrap.json"),
-      pnpm: check("pnpm-lock.yaml"),
-      yarn: check("yarn.lock"),
-      bun: check("bun.lock") || check("bun.lockb"),
-    },
-  };
+  // The names per family are stage-regress-core.mjs's LOCKFILE_FAMILIES (6.41.0), which the HEAD install check reads too.
+  const lockfiles = {};
+  for (const [family, names] of Object.entries(LOCKFILE_FAMILIES)) lockfiles[family] = names.some(check);
+  return { hasPackageJson: check("package.json"), lockfiles };
+}
+
+// THE HEAD INSTALL CHECK (6.41.0, regress-head-install-drift) runs first: the HEAD gates run in the user's working tree,
+// over whatever `node_modules` it holds, while the BASE side gets a fresh install — so an install that does not match
+// its lockfile is refused here, before any gate, never compared as if it were the change. `--no-install` and `--gates`
+// do not change it (it is about the tree the HEAD gates run in). Every non-refusing state proceeds as before and is
+// recorded for the report. The rule and its bounds: install-drift-core.mjs's header.
+function phaseHeadInstall(cfg) {
+  const check = readInstallCheck(".");
+  if (refuses(check)) writeRefusedAndEmit(cfg.feature, "head-install-drift", detailText(check));
+  recordInstallCheck(REGRESS_PATHS.headInstall, check);
 }
 
 function phaseHeadInit(cfg, base, scope, tests) {
+  phaseHeadInstall(cfg);
   const skipStyle = shouldSkipStyle({ source: cfg.gatesSpec !== null ? "explicit" : "discover", insidePaths: scope.inside });
   const args = [
     "--stage",
@@ -924,8 +934,8 @@ function runPhases(state, budget) {
   }
 
   // "render" — always reached in the same invocation as verdict/cleanup (neither is budgeted). The report is the
-  // checker's object with TWO additive blocks appended last — `base_evidence` (6.33.0), then `pre_run_snapshot`
-  // (6.37.0, copied from scope.json); every key the checker printed keeps its bytes, because this is the same
+  // checker's object with THREE additive blocks appended last — `base_evidence` (6.33.0), then `pre_run_snapshot`
+  // (6.37.0, copied from scope.json), then `head_install` (6.41.0); every key the checker printed keeps its bytes, because this is the same
   // `JSON.stringify(…, null, 2)` the checker prints with (a test pins report-minus-blocks == stdout).
   const reportPath = `${FEATURES_DIR}/${state.feature}/regression-report.json`;
   const baseEvidence = {
@@ -935,9 +945,11 @@ function runPhases(state, budget) {
     recorded: state.recordOutcome.published,
   };
   const preRunBlock = state.scope.pre_run_snapshot ?? null;
+  // 6.41.0 — the HEAD install check's block, re-read from the stage's scratch (null when absent or malformed: advisory).
+  const headInstall = readRecordedInstallCheck(REGRESS_PATHS.headInstall);
   atomicWriteIntoFeature(
     reportPath,
-    `${JSON.stringify({ ...state.report, base_evidence: baseEvidence, pre_run_snapshot: preRunBlock }, null, 2)}\n`
+    `${JSON.stringify({ ...state.report, base_evidence: baseEvidence, pre_run_snapshot: preRunBlock, head_install: headInstall }, null, 2)}\n`
   );
   const md = renderDone({
     feature: state.feature,
@@ -951,6 +963,7 @@ function runPhases(state, budget) {
       e2eExcluded: state.e2eExcluded,
       styleSkipped: state.styleSkipped,
       baseEvidence: { ...baseEvidence, notRecordedWhy: state.recordOutcome.published ? null : state.recordOutcome.why },
+      headInstall,
     },
   });
   const renderPath = `${FEATURES_DIR}/${state.feature}/REGRESSION.md`;

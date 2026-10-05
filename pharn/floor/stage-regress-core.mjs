@@ -78,6 +78,9 @@ export const REGRESS_PATHS = Object.freeze({
   base: ".pharn/pharn-regress/base",
   scopeJson: ".pharn/pharn-regress/scope.json",
   stageJson: ".pharn/pharn-regress/stage.json",
+  // 6.41.0 — the HEAD install check's result (install-drift.mjs), written at head-init and re-read at render, so a
+  // resumed chain reports it without a progress-record field (the scope.json precedent).
+  headInstall: ".pharn/pharn-regress/head-install.json",
 });
 
 /** ------------------------------------------------------------------------------------------------
@@ -193,6 +196,16 @@ export function shouldSkipStyle({ source, insidePaths }) {
  *  INSTALL_RULE (GATE 1 Q3 — all four families included; pnpm/yarn/bun are UNMEASURED).
  *  ---------------------------------------------------------------------------------------------- */
 const UNMEASURED_FAMILY = Object.freeze({ npm: false, pnpm: true, yarn: true, bun: true });
+
+/** LOCKFILE_FAMILIES — the file names that mean each family, the ONE owner (L35) of what `stage-regress.mjs`'s
+ *  `lockfilesAtBase` reads at the BASE commit and what `install-drift.mjs` reads in the HEAD working tree (6.41.0).
+ *  Two names in one family are the SAME family (npm's lock and shrinkwrap; bun's text and binary lockfile). */
+export const LOCKFILE_FAMILIES = Object.freeze({
+  npm: Object.freeze(["package-lock.json", "npm-shrinkwrap.json"]),
+  pnpm: Object.freeze(["pnpm-lock.yaml"]),
+  yarn: Object.freeze(["yarn.lock"]),
+  bun: Object.freeze(["bun.lock", "bun.lockb"]),
+});
 
 /** `lockfiles` — `{npm, pnpm, yarn, bun}` booleans, read at the BASE commit (`git ls-tree`). `npm` is true
  *  whenever EITHER `package-lock.json` OR `npm-shrinkwrap.json` is present — both are the SAME family, so

@@ -38,6 +38,7 @@
 
 import { quoteData, dataText } from "./quote-core.mjs";
 import { ALLOWLIST, EXCLUSION_DECLARED_IN } from "./gate-run-core.mjs";
+import { headInstallLine } from "./install-drift-core.mjs";
 
 /** A gate id, git path, or command string rendered INLINE — always with fixed text before it on the same
  *  line, so a leading `#`/`>`/`-` in the value cannot become document structure. `String()` first: a gate
@@ -176,6 +177,10 @@ export function renderDone({ feature, base, report, scope, progress }) {
     );
   }
 
+  // 6.41.0 — the HEAD side's install check (install-drift-core.mjs): one line, every value a validated enum or integer.
+  // Rendered when the caller passes the key (stage-regress.mjs always does; null renders "not recorded").
+  if (Object.hasOwn(progress, "headInstall")) out.push(headInstallLine(progress.headInstall), "");
+
   out.push(
     ...section("Scope", [
       `inside (${scope.inside.length}):`,
@@ -248,7 +253,7 @@ export function renderDone({ feature, base, report, scope, progress }) {
 }
 
 /** Render the human doc for a REFUSED run (`chain-red`, `missing-artifact`, `plan-files-unparseable`,
- *  `scope-escaped`). `detail` is an already-composed sentence (or fenced-ready text) the CLI assembled from
+ *  `scope-escaped`, `head-install-drift`). `detail` is an already-composed sentence (or fenced-ready text) the CLI assembled from
  *  a shelled checker's own message or a git/plan-scan finding; it is quoted as untrusted DATA here rather
  *  than trusted as this renderer's own prose. `preRun` (6.37.0) is the partition's `pre_run_snapshot` block, passed
  *  with a `scope-escaped` refusal so the paths it did NOT count are named beside the ones it did. */

@@ -24,15 +24,16 @@ purpose: "Single source of truth for the machine regression-report — the pharn
 The regression-report is `pharn/features/<name>/regression-report.json` (product) /
 `.dev/features/<name>/regression-report.json` (dev) — the machine half of the regress stage, written
 beside the human-facing `REGRESSION.md`. It is `pharn/floor/check-regress.mjs`'s **`verdict` subcommand**
-stdout, plus — in the product report — two additive advisory blocks, `base_evidence` (6.33.0) and
-`pre_run_snapshot` (6.37.0), both below.
+stdout, plus — in the product report — three additive advisory blocks, `base_evidence` (6.33.0),
+`pre_run_snapshot` (6.37.0) and `head_install` (6.41.0), all below.
 
 **Since `stage-regress-script` (6.23.0), the WRITER is `pharn/floor/stage-regress.mjs`, not the model.** The
 product stage script shells `check-regress.mjs verdict` and writes its output atomically (a tmp file under
 `.pharn/pharn-regress/`, then `rename`), so no stray tmp file lands in the feature directory. Since 6.33.0 it
-appends `base_evidence`, and since 6.37.0 `pre_run_snapshot` after it, as the object's last keys and re-serializes
-with the same `JSON.stringify(…, null, 2)` the checker prints with, so every key the checker printed keeps its bytes:
-the report minus those two blocks is the checker's stdout, byte for byte (`stage-regress.test.mjs` pins it). The dev
+appends `base_evidence`, since 6.37.0 `pre_run_snapshot` after it, and since 6.41.0 `head_install` last, as the
+object's last keys and re-serializes with the same `JSON.stringify(…, null, 2)` the checker prints with, so every key
+the checker printed keeps its bytes: the report minus those three blocks is the checker's stdout, byte for byte
+(`stage-regress.test.mjs` pins it). The dev
 twin (`/pharn-dev-regress`) is unchanged: the model writes the checker's bytes by hand and adds no block.
 
 ## What this artifact IS and IS NOT (P0 — the honesty bar)
@@ -316,3 +317,49 @@ attributes — a path an earlier run escaped with is pre-run state for the next 
 refusing — and it touches the escape set only: `inside` is unchanged, so a pre-run change that breaks a gate still
 reads as a regression and a pre-run-changed test file is not compared here (`pharn/floor/pre-run-snapshot-core.mjs`,
 header). No floor op reads this block, and the four verdict consumers above ignore it.
+
+## The additive `head_install` block (6.41.0, advisory shape)
+
+The BASE side runs its gates over a fresh install (`stage-regress-core.mjs` INSTALL_RULE); the HEAD side runs them in
+the working tree, over whatever `node_modules` it holds. So before any HEAD gate, the stage compares npm's own record
+of the installed tree (`node_modules/.package-lock.json`) with the lockfile the project declares
+(`pharn/floor/install-drift-core.mjs`, whose header owns the rule, its states and its bounds — cited, not restated,
+P4). A tree that does not match — a package changed, missing or extraneous, or a lockfile listing packages with no
+`node_modules` at all — is **refused** `head-install-drift` (`pharn/pharn-contracts/stage-exit.md`): `REGRESSION.md`
+quotes the counts, the first 20 mismatched package paths and the remedy (`npm ci`) as DATA, and **no
+`regression-report.json` is written**. `--no-install` and `--gates` do not change the check — it is about the tree the
+HEAD gates run in. Every other state proceeds exactly as before, and the report says which, as its last key:
+
+```json
+{
+  "head_install": {
+    "state": "clean",
+    "why": null,
+    "family": "npm",
+    "lockfile": "package-lock.json",
+    "counts": { "changed": 0, "missing": 0, "extraneous": 0, "missing_unchecked": 271 }
+  }
+}
+```
+
+- **`state`** — `clean` or `not-checked` in a written report (the two refusing states, `drifted` and
+  `not-installed`, never reach one). **`why`** — for `not-checked` only, one member of the closed, ordered
+  `NOT_CHECKED_WHYS` (no `package.json`, no lockfile, two lockfile families, a pnpm / yarn / bun project — UNMEASURED,
+  never guessed —, an unreadable or npm ≤ 6 lockfile, an unreadable `node_modules`, no npm record in it, an unreadable
+  record). **`counts.missing_unchecked`** — absent packages the lockfile marks `dev`, `peer`, `optional` or
+  `devOptional`: counted, never drift, because a platform-specific optional package, or an install configured to omit
+  dev or peer packages, leaves them absent after every `npm ci`.
+- `null` — the stored block was absent or malformed when the report was written (it is re-read from
+  `.pharn/pharn-regress/head-install.json`, a file the write tools reach while a chain is paused). A report written
+  before 6.41.0 has no such key.
+- `REGRESSION.md` renders it as ONE line beside the install lines: `clean` says what was compared, `not-checked` says
+  a red gate may come from the install rather than from the change.
+
+**The rule, and its bounds (P0).** FLOOR: the refusal is decided by tested code over the two files' parsed content and
+closed enums, in the invocation that runs head-init. **NOT claimed:** that `node_modules` holds what the lockfile says
+— the check certifies that two records npm writes agree (L43), so a `node_modules` changed outside npm, or by `npm
+install --package-lock-only` (measured), reads `clean`; nor that a needed dev package is present (it is
+`missing_unchecked`). Every such false `clean` is the behaviour before 6.41.0, never a false refusal. A resumed chain
+does not re-check (its HEAD gates already ran). A build that edits the lockfile without installing is now refused here
+— in `/pharn-loop`, an S9 stop with `npm ci` as the remedy instead of iterations over the old install. No verdict
+consumer reads this block.

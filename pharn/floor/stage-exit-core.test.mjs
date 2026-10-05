@@ -48,7 +48,7 @@ test("statusForExitCode: round-trips every EXIT_CODE member; anything else is nu
 test("REGISTRY: the regress vocabulary matches the plan's closed table exactly", () => {
   assert.deepEqual(
     new Set(REGISTRY.regress.refused),
-    new Set(["missing-artifact", "chain-red", "plan-files-unparseable", "scope-escaped"])
+    new Set(["missing-artifact", "chain-red", "plan-files-unparseable", "scope-escaped", "head-install-drift"])
   );
   assert.deepEqual(
     new Set(Object.keys(REGISTRY.regress.question)),
@@ -72,7 +72,8 @@ test("REGISTRY: the regress vocabulary matches the plan's closed table exactly",
 });
 
 test("REGISTRY: the verify vocabulary matches the stage-verify-script plan's closed table exactly (6.26.0)", () => {
-  assert.deepEqual(REGISTRY.verify.refused, ["missing-artifact", "chain-red", "plan-files-unparseable"]);
+  // 6.41.0 — `head-install-drift` is in BOTH stages: the same check runs before either stage's first gate.
+  assert.deepEqual(REGISTRY.verify.refused, ["missing-artifact", "chain-red", "plan-files-unparseable", "head-install-drift"]);
   assert.deepEqual(Object.keys(REGISTRY.verify.question), ["no-gates"]);
   assert.deepEqual(REGISTRY.verify.unusable, [
     "usage-error",
@@ -84,7 +85,7 @@ test("REGISTRY: the verify vocabulary matches the stage-verify-script plan's clo
     "no-progress",
     "progress-malformed",
   ]);
-  assert.equal(allReasonCodes("verify").length, 3 + 1 + 8);
+  assert.equal(allReasonCodes("verify").length, 4 + 1 + 8);
   // verify's no-gates names its one cause and the AC-gate caveat, and offers exactly --gates or stop.
   const q = REGISTRY.verify.question["no-gates"];
   assert.match(q.question, /test-infra-changed/);
@@ -145,7 +146,7 @@ test("isReasonCode / allReasonCodes: membership matches the registry, and non-me
   assert.equal(isReasonCode("nonexistent-stage", "refused", "chain-red"), false);
 
   const all = allReasonCodes("regress");
-  assert.equal(all.length, 4 + 4 + 9, "refused + question + unusable counts");
+  assert.equal(all.length, 5 + 4 + 9, "refused + question + unusable counts");
   assert.deepEqual(new Set(all).size, all.length, "no duplicate reason_code across the three sub-vocabularies");
   assert.deepEqual(allReasonCodes("nonexistent-stage"), []);
 });

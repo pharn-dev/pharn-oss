@@ -84,6 +84,7 @@ them in its command prose.
 | `reason`        | a diagnostic sentence, present only on `INCONCLUSIVE`                                                                                                                                    | `check-verify.mjs`                                                                                     | ADVISORY — no floor op reads it            |
 | `ac_gate`       | the AC gate's block, OPTIONAL — present when `check-verify.mjs` ran with `--ac-gate` (below)                                                                                             | `check-verify.mjs` (`ac-gate-core.mjs`)                                                                | compared by `check-loop-fresh.mjs` check E |
 | `gate_reuse`    | `{ reused: [{ id, stage, side, seq }] }`, OPTIONAL — since 6.34.0 `stage-verify.mjs` always writes it (below)                                                                            | `stage-verify.mjs`, from its own verify stamp                                                          | ADVISORY — no floor op reads it            |
+| `head_install`  | `{ state, why, family, lockfile, counts }` or `null`, OPTIONAL — since 6.41.0 `stage-verify.mjs` always writes it (below)                                                                | `stage-verify.mjs`, from `install-drift.mjs`                                                           | ADVISORY — no floor op reads it            |
 
 **Trust (P2).** Every field except one carries deterministic-tool output — gate-id strings, integer exit
 codes, path strings: the enum-gated / floor-verifiable class. The exceptions are **free text and inherit
@@ -340,3 +341,23 @@ result:
   deterministic for one identity; nothing unbound — the inherited environment, the git index, ignored files — moved),
   and verify gives up its independent second sample of a flaky gate for the ids it reuses.
 - **Trust (P2):** a gate id is attacker-nameable (a `--gates` token, a `structural:` path), so renderers fence it.
+
+## The additive `head_install` block (6.41.0)
+
+First thing in its `init` phase, before any gate, `/pharn-verify` runs the same HEAD install check `/pharn-regress`
+runs at head-init (`pharn/floor/install-drift.mjs`, one function; the rule, its states and its bounds are
+`pharn/floor/install-drift-core.mjs`'s header, and the block's fields are `regression-report.md`, "The additive
+`head_install` block" — cited, not restated, P4). This matters most for the quick modes, which run no regress: verify
+is their first gate run.
+
+- **A drifted npm install is refused** `head-install-drift`: `VERIFY.md` quotes the counts, the mismatched package
+  paths and the remedy (`npm ci`) as DATA, and **no `verify-report.json` is written** — the verdict is never computed
+  over that tree. In `/pharn-loop` that is an S9 stop (its existing "refused → S9" rule), where before the gates ran,
+  verify FAILed on reds no rebuild could reach, and `check-loop.mjs` CONTINUEd into further iterations up to the cap.
+  `--gates` does not change the check.
+- **Every other state proceeds exactly as before**, and the report carries `head_install` as its last merged key —
+  `{state, why, family, lockfile, counts}`, enums and integers only, or `null` when the stored block
+  (`.pharn/pharn-verify/head-install.json`) was absent or malformed at the verdict. `VERIFY.md` renders one line for it
+  between the gates and completeness.
+- **ADDITIVE and ADVISORY.** `check-verify.mjs` is unchanged and no verdict, stop or freshness check reads the block; a
+  report written before 6.41.0 has no such key.
