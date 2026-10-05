@@ -404,7 +404,7 @@ test("6.36.0 — the exclusion line sits DIRECTLY under the verdict line for EVE
 });
 
 test("6.36.0 — an exclusion id outside the ALLOWLIST and an unknown source are never rendered inline (P2)", () => {
-  const excluded = { declared_in: "# x", ids: ["[l](http://e.x)", "build"] };
+  const excluded = { declared_in: "# x", ids: ["[l](hostile-link-target)", "build"] };
   const md = renderDone({
     feature: "demo",
     base: "a".repeat(40),
@@ -416,5 +416,5 @@ test("6.36.0 — an exclusion id outside the ALLOWLIST and an unknown source are
     md,
     /by a declaration whose source is not one this renderer recognizes: `build` \(\+1 id\(s\) outside the allowlist, not rendered\)/
   );
-  assert.ok(!md.includes("http://e.x") && !md.includes("# x"));
+  assert.ok(!md.includes("hostile-link-target") && !md.includes("# x"));
 });
