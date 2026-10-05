@@ -33,7 +33,9 @@
 //   chain    — `check-plan-spec-agree.mjs`, read through `shelledVerdict` (a crash is never read as a RED).
 //   pairs    — EVAL_PAIR_RULE over the PLAN's `## Files` and a `-z` listing (L21).
 //   verifiers— `count-verifiers.mjs .`, before the slow steps so a crash costs no gate run.
-//   init     — `run-gates.mjs init --stage verify`; exit 3 is the `no-gates` question. Since 6.34.0 it OFFERS this
+//   init     — first the HEAD install check (6.40.0, install-drift.mjs): a drifted npm install is `refused
+//              head-install-drift`, before any gate. Then `run-gates.mjs init --stage verify`; exit 3 is the `no-gates`
+//              question. Since 6.34.0 it OFFERS this
 //              delivery run's /pharn-regress HEAD stamp (`--reuse-stamp`, `--reuse-sha256`) when `head-reuse-offer.mjs
 //              acceptReuseSource` accepts it — exactly one open /pharn-loop|/pharn-ship marker, and the git-dir offer
 //              /pharn-regress published for that run binding the stamp's exact bytes (head-reuse-offer.mjs); the runner
@@ -108,6 +110,8 @@ import { dataText } from "./quote-core.mjs";
 import { readMarkers, readInProject, HEAD_STAMP } from "./regress-base-reuse.mjs";
 import { readOffer, acceptReuseSource } from "./head-reuse-offer.mjs";
 import { STAMP_MAX_BYTES } from "./regress-base-reuse-core.mjs";
+import { readInstallCheck, recordInstallCheck, readRecordedInstallCheck, refuses } from "./install-drift.mjs";
+import { detailText } from "./install-drift-core.mjs";
 import {
   flag,
   has,
@@ -313,7 +317,19 @@ function reuseOffer(feature) {
   return a.ok ? { stamp: HEAD_STAMP, sha256: a.stampSha256 } : null;
 }
 
+/** 6.40.0 — the HEAD install check, the same function `/pharn-regress` runs at head-init (install-drift.mjs, L35), first
+ *  thing in "init": a working tree whose npm install does not match its lockfile is refused before any gate, so the
+ *  verdict is never computed over it — this matters most for the quick modes, which run no regress. Every other state
+ *  proceeds exactly as before and is recorded for the report's `head_install` block. `--gates` does not change it. */
+function phaseHeadInstall(cfg) {
+  const check = readInstallCheck(".");
+  if (refuses(check)) writeRefusedAndEmit(cfg.feature, "head-install-drift", detailText(check));
+  mkdirSync(VERIFY_PATHS.root, { recursive: true });
+  recordInstallCheck(VERIFY_PATHS.headInstall, check);
+}
+
 function phaseInit(cfg, pairs) {
+  phaseHeadInstall(cfg);
   const args = ["init", "--stage", "verify", "--feature", cfg.feature, "--out", VERIFY_PATHS.gates];
   if (cfg.gatesSpec !== null) args.push("--gates", cfg.gatesSpec);
   else if (existsSync("package.json")) args.push("--discover", "package.json");
@@ -407,6 +423,7 @@ function runPhases(state, budget) {
     completeness: completeness.value,
     verifiers: state.verifiers,
     gateReuse: gateReuse.value,
+    headInstall: readRecordedInstallCheck(VERIFY_PATHS.headInstall), // advisory; null when absent or malformed
   });
   if (!composed.ok) emitUnusable(state.feature, "child-crashed", composed.reason);
 
