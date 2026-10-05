@@ -73,7 +73,7 @@ import { mkdirSync, openSync, closeSync, readdirSync, renameSync, rmSync, writeF
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
-import { containmentWalk, flag, has, lstatSafe, parseBudgetMs, parseTimeoutMs, scanFlags } from "./stage-runtime.mjs";
+import { containmentWalk, flag, gitSync, has, lstatSafe, parseBudgetMs, parseTimeoutMs, scanFlags } from "./stage-runtime.mjs";
 import { readInProject } from "./regress-base-reuse.mjs";
 import { hashFile } from "./reconcile-baseline.mjs";
 import { FEATURE_SLUG_RE, validateStamp, REASON_CODES as RUNNER_REASON_CODES } from "./gate-run-core.mjs";
@@ -438,8 +438,8 @@ function changedListing(feature, head) {
 }
 
 function headSha() {
-  const r = spawnSync("git", ["rev-parse", "--verify", "--quiet", "HEAD"], { encoding: "utf8" });
-  const s = r.status === 0 ? r.stdout.trim() : "";
+  const r = gitSync(["rev-parse", "--verify", "--quiet", "HEAD"]);
+  const s = r.ok ? r.stdout.trim() : "";
   return /^[0-9a-f]{40}$/.test(s) ? s : null;
 }
 
