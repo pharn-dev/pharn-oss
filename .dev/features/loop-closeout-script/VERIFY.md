@@ -19,6 +19,10 @@ build write), so the `reconcile` gate judges the window from the merge to this r
 **Re-checked after merging `origin/main` at `7696477` (6.40.0):** the baseline re-anchored, then `npm run check` (the
 same gate set plus docs, markers, badge, CHANGELOG, contributing and reconcile) exited 0 over 4,774 tests.
 
+**Re-verified after the independent review's fixes (R1–R8, `be3526d`):** the seven gates above re-run → every exit 0,
+`check-verify.mjs` `.verdict` **`PASS`** (4,778 tests). **Then merged `origin/main` at `c62999a` (6.42.0, #313) and
+renumbered to 6.44.0:** baseline re-anchored, `npm run check` exit 0 over 4,823 tests.
+
 **Verifiers:** none registered (`count-verifiers.mjs` → 0) — floor gates only.
 
 **What this verdict does not say (P0):** the gates are whole-repo, and the feature-specific signal is its own tests —
