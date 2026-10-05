@@ -1254,7 +1254,7 @@ test("L41 — testRecord takes NO defaults: each missing argument is a TypeError
   }
 });
 
-// ── 6.38.0 (build-gate-bounded): parsed entries carry the reporter's failure messages; NO record does ──────────
+// ── 6.39.0 (build-gate-bounded): parsed entries carry the reporter's failure messages; NO record does ──────────
 
 import { gateResults, testIdOf } from "./test-results-core.mjs";
 

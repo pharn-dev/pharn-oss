@@ -96,7 +96,8 @@ node pharn/floor/build-gate.mjs --feature <name> --mode targeted|full --timeout-
      `changed the tree` when the stamp says so;
    - for a gate with per-test results configured (`test`, the e2e ids — `RESULTS_GATES`): `test-results-core.mjs`'s
      record via a new `gateResults` (the record unchanged): counts, then each failing test's id + a bounded excerpt of
-     its failure message, fenced; the first 20 with excerpts, ids only up to 50, then a count. When the record is
+     its failure message, fenced; the first 15 with excerpts, ids only up to 40, then a count (review R7: the code's
+     15/40 kept, this line aligned to it). When the record is
      refused, or reports suite errors (a file that would not load — no test owns its message), a bounded tail of the
      gate's `.out` and `.err` logs;
    - for any other red gate: the bounded log tail;
@@ -239,6 +240,8 @@ its Step 4" — still true (Step 4 names the full line as that gate), so the bri
 - `pharn/pharn-contracts/test-results-record.md` — parsed entries carry messages; no record does — layer
   pharn-contracts
 - `.claude/commands/pharn-build.md` — Step 4 pinned lines and exit mapping; the claims line — product command
+- `.claude/commands/pharn-ship.md` — review R5: the inline-build bullet's "this prose build gate does not read that
+  list" sentence, now false — one local edit — product command
 - `.dev/floor/command-hygiene.test.mjs` — `COMMAND_BYTE_CEILINGS` raise for `pharn-build.md`, only if measured over —
   apparatus
 - `CLAUDE.md` — a Commands entry for the helper — repo meta
@@ -339,3 +342,25 @@ full run, 22 files measured at 13.35 s) ≈ 20–40 s; round 2 → one full run:
   `[6.36.0]`; a test proves the exclusion reaches both modes. Taken (Design step 4, grill G6).
 - Q2 — keep `build` in the full run; follow-up `build-gate-execution-reuse` named (D2).
 - Q3 — accepted: a base-red gate was already a red build gate before this change; the CHANGELOG says so (D6).
+
+## Review amendments (the independent review of fb33d07; the orchestrator's decisions under the user's delegation)
+
+Recorded in full in `REVIEW.md`; each changes the design above as stated here.
+
+- R1 — D5 is reversed. An absent `package.json` is NO-GATES (exit 4), as `stage-verify.mjs` treats it, and the helper
+  takes a human-supplied `--gates "<cmd>[::<id>],…"` exactly as `/pharn-verify` does: appended verbatim by the invoker,
+  never model-typed, passed to the runner as one argv string, never filtered by the exclusion. A targeted run over an
+  explicit spec keeps only its `test` id. `/pharn-ship`'s relay can then answer exit 4; under `/pharn-loop` it stays S4.
+  The continue rule also requires the same spec (`source_raw`).
+- R2 — Step 4's mapping covers every exit of both lines (targeted `2`/other → HALT, the gate failed; a targeted red
+  that cannot be fixed within `## Files`, a runner that runs none of the targets included → the full line, never a
+  loop); "repeat" means targeted rounds then one full run; Step 5 runs on the stop path too and records the gate as
+  failed; Step 5's "floor status (GREEN)" and the claims line say so.
+- R3 — the 16 KiB cap is enforced, not approximate: the gate table is bounded (ids cut, at most 40 rows plus a count),
+  and every red gate past the cap is named by ONE reserved pointer line counted inside it.
+- R4 — a gate whose per-test record was refused gets its log tail, green or red.
+- R5 — `pharn-ship.md`'s inline-build bullet: its "this prose build gate does not read that list" sentence is replaced
+  (one local edit). With R1 the bullet's `--gates` clause is true, so the residual `ship-build-gate-cite` is closed.
+- R6 — CONTINUE (exit 5) prints the id and exit of every gate already finished.
+- R7 — a record anomaly with a `failed` raw status (a duplicated id) is listed by id among the failing tests; the
+  PLAN's 20/50 is aligned to the code's 15/40.
