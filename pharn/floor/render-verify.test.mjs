@@ -450,13 +450,18 @@ test("6.36.0 — the exclusion line sits DIRECTLY under the verdict line for EVE
 
 test("6.36.0 — an exclusion id outside the ALLOWLIST and an unknown source are never rendered inline (P2)", () => {
   const md = renderDone(
-    report({ gate_run: { ...EXCLUDED_RUN, excluded: { declared_in: "[x](http://e.x)", ids: ["e2e", "# heading", "[l](http://e.x)"] } } })
+    report({
+      gate_run: {
+        ...EXCLUDED_RUN,
+        excluded: { declared_in: "[x](hostile-link-target)", ids: ["e2e", "# heading", "[l](hostile-link-target)"] },
+      },
+    })
   );
   assert.match(
     md,
     /\*\*3 discovered gate\(s\) EXCLUDED and NOT RUN\*\* by a declaration whose source is not one this renderer recognizes: `e2e` \(\+2 id\(s\) outside the allowlist, not rendered\)/
   );
-  assert.ok(!md.includes("# heading") && !md.includes("http://e.x"), "hostile text reached the render");
+  assert.ok(!md.includes("# heading") && !md.includes("hostile-link-target"), "hostile text reached the render");
   const none = renderDone(report({ gate_run: { ...EXCLUDED_RUN, excluded: { declared_in: "x", ids: "nope" } } }));
   assert.match(
     none,
