@@ -43,7 +43,7 @@ initialize at all.
 ```json
 {
   "schema": "gate-run-record/1",
-  "stage": "verify | regress | ac-test",
+  "stage": "verify | regress | ac-test | entry",
   "side": "base | head | null",
   "feature": "<slug>",
   "head": "<40-hex> | null",
@@ -225,6 +225,15 @@ gate — it already is one today.
   its levels (`acFilesFor`), appended after `--`, and an entry with none is refused rather than run. No
   `reconcile`, no `aux.completeness`. Every other stamp reader asserts its own stage, so an `ac-test` stamp is
   `stage-mismatch` there. What the stamp's per-test records decide is `ac-tests.md`'s contract.
+- **`entry` (6.38.0), a delivery run's entry check (`pharn/floor/entry-gates.mjs`):** the set `/pharn-verify` would
+  discover — e2e kept, `gates.exclude` applied — with every `STYLE_SET` member first (each part in its own order), no
+  `reconcile` and no `aux.completeness`. Its fingerprint also excludes the run's whole `pharn/features/<name>/`, because
+  its gates run in the background while `/pharn-spec`, `/pharn-plan` and `/pharn-grill` write there, and it records its
+  own algo (`worktree-fingerprint.mjs` `ENTRY_ALGO`). That is sound for this stage only: an `entry` stamp is read by
+  `entry-gates.mjs` alone, it is never reuse evidence (`gate-reuse-core.mjs` `findReusable` accepts only a regress/head
+  stamp, and the execution identity carries the algo), and every other stamp reader asserts its own stage, so it is
+  `stage-mismatch` there. Any other tree change between two gates still refuses (`tree-changed-between-gates`). What
+  counts as red at entry, and why a style gate's red is weighed differently, is `entry-gates-core.mjs`'s header.
 - **Reserved ids:** `reconcile` and `completeness` (the runner's), and `ac-delivery` and `ac-evidence` (6.20.0 — the ids
   `check-verify.mjs --ac-gate` adds to a verify report's `failing_gates`, which `check-loop.mjs` reads by exact
   membership; a real gate carrying one would be read as the AC gate). The `structural:` prefix belongs to `--extra` only.

@@ -19,6 +19,9 @@ import {
   EXCLUDED_ARTIFACTS,
   INCLUDED_ARTIFACTS,
   ALGO,
+  ENTRY_ALGO,
+  FEATURE_DIR_EXCLUDED_STAGE,
+  productFeatureDir,
   STATE_ROOT_SEGMENT,
   featureRoots,
 } from "./worktree-fingerprint.mjs";
@@ -433,6 +436,66 @@ test("✧ GOLDEN: the digest of a fixed tree holding every link kind is the one 
       GOLDEN[ALGO],
       "what the fingerprint hashes changed without an ALGO bump — bump ALGO and record the new digest (worktree-fingerprint.mjs, UPGRADES)"
     );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── ENTRY (6.38.0, loop-entry-preflight) — the whole product feature directory, for the entry stage only ──────────
+test("ENTRY: the entry digest ignores ANY write under pharn/features/<name>/ — and moves on every other edit (control)", () => {
+  const { dir } = repo();
+  try {
+    const entryFp = () => fingerprint(dir, { feature: FEATURE, stage: "entry" });
+    const a = entryFp();
+    const defaultBefore = fingerprint(dir, { feature: FEATURE }).digest;
+    assert.ok(a.ok, a.reason);
+    assert.equal(a.algo, ENTRY_ALGO);
+    for (const name of [...INCLUDED_ARTIFACTS, "nested/x.md", "anything.txt"]) {
+      mkdirSync(dirname(join(dir, `pharn/features/${FEATURE}/${name}`)), { recursive: true });
+      writeFileSync(join(dir, `pharn/features/${FEATURE}/${name}`), `${name}\n`);
+      assert.equal(entryFp().digest, a.digest, `a write of pharn/features/${FEATURE}/${name} moved the entry digest`);
+    }
+    // The same writes DO move every other stage's digest (SPEC.md and PLAN.md are INCLUDED there) — the control.
+    assert.notEqual(fingerprint(dir, { feature: FEATURE }).digest, defaultBefore, "control: the default digest saw nothing");
+    for (const other of [
+      `pharn/features/${FEATURE}-2/SPEC.md`,
+      `pharn/features/${FEATURE}x/SPEC.md`,
+      `.dev/features/${FEATURE}/SPEC.md`,
+      "a.txt",
+    ]) {
+      const before = entryFp().digest;
+      mkdirSync(dirname(join(dir, other)), { recursive: true });
+      appendFileSync(join(dir, other), "x\n");
+      assert.notEqual(entryFp().digest, before, `${other} must stay in the entry digest`);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("ENTRY: the default digest and ALGO are unchanged by the option's existence, and no other stage excludes the directory", () => {
+  const { dir } = repo();
+  try {
+    const plain = fingerprint(dir, { feature: FEATURE });
+    for (const stage of [null, "verify", "regress", "ac-test"]) {
+      const r = fingerprint(dir, { feature: FEATURE, stage });
+      assert.equal(r.algo, ALGO, `${stage} kept ALGO`);
+      assert.equal(r.digest, plain.digest, `${stage} kept the default digest`);
+    }
+    assert.notEqual(ENTRY_ALGO, ALGO);
+    assert.equal(productFeatureDir(FEATURE), `pharn/features/${FEATURE}/`);
+    assert.equal(FEATURE_DIR_EXCLUDED_STAGE, "entry");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("ENTRY: an entry fingerprint with no usable slug is REFUSED, never computed over an unnarrowed set", () => {
+  const { dir } = repo();
+  try {
+    for (const feature of [null, "", "../x", "A"]) {
+      assert.equal(fingerprint(dir, { feature, stage: "entry" }).ok, false, JSON.stringify(feature));
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

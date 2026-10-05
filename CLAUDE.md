@@ -372,7 +372,7 @@ node pharn/floor/feature-name.mjs [--fresh]
 # Exit: init 0 ok | 2 runner error (closed reason_code) | 3 EMPTY SOURCE SET (nothing written; routes to the
 # existing no-gates HALT, and to /pharn-loop's unattended S4 `blocked: no-gates`) ·
 # run 0 an entry ran (a FAILING GATE IS DATA, not a runner error) | 2 runner error | 3 nothing left.
-node pharn/floor/run-gates.mjs init --stage verify|regress [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--discover <package.json>] [--gates "<cmd>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>] [--reuse-stamp <f> --reuse-sha256 <hex>]
+node pharn/floor/run-gates.mjs init --stage verify|regress|entry [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--discover <package.json>] [--gates "<cmd>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>] [--reuse-stamp <f> --reuse-sha256 <hex>]
 node pharn/floor/run-gates.mjs init --stage ac-test --feature <name> --out <dir> --discover <package.json> --ac-tests <AC-TESTS.md> [--cwd <dir>]   # 6.18.0, /pharn-test's red run
 node pharn/floor/run-gates.mjs run --next --out <dir> --timeout-ms <N>
 node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
@@ -861,6 +861,32 @@ node pharn/floor/check-quick-scope.mjs --feature <name> --base <40-hex>
 # a subtracted path. LIMITS.md §3a/§6 understate it: .dev/features/regress-pre-run-snapshot/PROTECTED-FOLLOWUPS.md.
 # Exit: 0 recorded · 2 refused (closed REASON_CODES, `crashed` a caught throw); a module that cannot load is node's 1.
 node pharn/floor/pre-run-snapshot.mjs --capture <name>
+
+# THE ENTRY GATES (6.38.0, loop-entry-preflight) — a delivery run runs /pharn-verify's discovered gate set ONCE on the tree
+# it starts from, in the BACKGROUND, while /pharn-spec, /pharn-plan and /pharn-grill work, and reads the verdict before
+# /pharn-test. THE RECORDED FAILURE (P7): all three post-6.35.0 /pharn-loop runs in a user's project had gates red
+# before any change (Sentry `typecheck`, unit tests, `build`) and nothing looked until verify, 28–92 min in; verify's
+# threshold is absolute, so such a run can never PASS (.dev/measurements/loop-wall-clock-2026-10-05.md §9). `--start`
+# (/pharn-loop Step 1a item 6; /pharn-ship after its pre-run snapshot) runs `run-gates.mjs init --stage entry` (gate-run-core
+# resolveSet: verify's discovered set, e2e kept, `gates.exclude` applied, STYLE_SET FIRST, no reconcile) and spawns a
+# detached runner (setsid; one per tree, a new start supersedes); `--wait --budget-ms 570000` blocks inside node (exit 5 =
+# run it again — never a model poll); `--abort` runs first at every stop (SIGSTOP the runner's group, snapshot `ps`, kill
+# every descendant gate group; a pid is signalled only when `ps -ww -p <pid> -o args=` shows the runner's nonce). The
+# entry stage's fingerprint ALSO excludes the run's whole `pharn/features/<name>/` (worktree-fingerprint.mjs ENTRY_ALGO —
+# the front stages write only there); sound for `entry` only, since its stamp is never reuse evidence (findReusable
+# accepts only regress/head) and every other reader asserts its stage. VERDICT (entry-gates-core.mjs entryVerdict): a red
+# non-style gate counts; a red STYLE_SET gate counts only when the feature directory held its start digest before AND
+# after that gate (otherwise `unattributed`: reported, never a stop). /pharn-loop: exit 4 → S14 `blocked:
+# gates-red-at-entry` unless the leading `--allow-red-entry` (advisory); 3 → S4; else S9. /pharn-ship asks Stop/Continue.
+# BOUNDS (the module headers): it never claims verify would fail; non-style gates are ASSUMED not to read the feature
+# directory (advisory); a front-stage write elsewhere between gates is `tree-changed-between-gates` (S9); `.pharn/` state
+# is forgeable by Bash (L43); a gate's own `setsid` child survives `--abort`. Follow-ups: `entry-run-as-base-evidence`,
+# `entry-gates-ledger-row`, `entry-gates-nonstyle-overlap`. No contract of its own (P7): gate-run-record.md's `entry`
+# bullet + the module headers. Exit (--wait): 0 green · 4 red · 3 no-gates · 5 continue · 2 unusable (closed REASON_CODES);
+# --start: 0 started · 3 no gates · 2 refused; --abort: always 0.
+node pharn/floor/entry-gates.mjs --start --feature <name> --timeout-ms <N>
+node pharn/floor/entry-gates.mjs --wait --feature <name> --budget-ms <B>
+node pharn/floor/entry-gates.mjs --abort --feature <name>
 
 # Check the SHAPE of a loop-record — the pharn/features/<name>/LOOP.md that /pharn-loop writes at every stop.
 # Floor: the frontmatter envelope (`decision` in {STOP_GREEN, STOP_GREEN_QUICK, STOP_CAP, STOP_TERMINAL, INCONCLUSIVE};
