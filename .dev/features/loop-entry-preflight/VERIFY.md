@@ -1,6 +1,9 @@
 # VERIFY — loop-entry-preflight
 
-- **Current run (after the independent review):** head `46085a9`. It holds the build, the review fixes R1–R6 and a
+- **Latest run:** head `435855f`, after a merge of `origin/main` at `7696477` (6.40.0, #312 install drift). That merge
+  touched `stage-regress.mjs`; the report now writes `head_install` before this increment's conditional
+  `entry_gate_changes`. All 7 gates exited 0, as did `check:markers` and `check:reconcile`. The verdict is **PASS**.
+- **Previous run (after the independent review):** head `46085a9`. It holds the build, the review fixes R1–R6 and a
   merge of `origin/main` at `ab0b11c` (6.39.0, #309, plus the apparatus #315). All 7 gates below exited 0 again and the
   verdict is **PASS**.
   - The run before it, over the review fixes plus `43c09ba`, read `test` 1. stage-runtime's GIT CEILING enumeration
