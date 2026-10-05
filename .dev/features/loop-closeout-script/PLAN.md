@@ -188,6 +188,8 @@ does).
 - `pharn/floor/check-loop-fresh.test.mjs` — the executed commit-gate pin reads the closeout's exported argv — test
 - `pharn/floor/stage-runtime.test.mjs` — ★ GIT CEILING map gains `loop-closeout.mjs` — test
 - `pharn/floor/frontmatter-core.test.mjs` — CONSUMERS gains `loop-closeout.mjs` — test
+- `pharn/floor/check-test-stage.test.mjs` — its executed Step 6c staging-builder test runs `buildStageList` (added at
+  build: the builder moved out of the close part) — test
 - `CLAUDE.md` — one Commands entry for the two closeout lines — repo meta
 - `CHANGELOG.md` — the 6.42.0 section (provisional) — repo meta
 - `SKILLS_VERSION` — 6.38.0 → 6.42.0 (provisional; minor: new floor scripts and command behaviour) — repo meta

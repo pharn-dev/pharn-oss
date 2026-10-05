@@ -12,6 +12,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { READY_TOKENS, TEST_STAGE_REASONS, evaluateTestStage } from "./check-test-stage.mjs";
 import { filesDigest } from "./ac-tests-lock.mjs";
+import { buildStageList } from "./loop-closeout.mjs";
 import { commandFamilyText } from "../../.dev/floor/command-family.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -497,11 +498,10 @@ test("★ WIRING — /pharn-loop's pinned S12 preflight line is the checker's, a
   });
 });
 
+// Since 6.43.0 the builder runs inside /pharn-loop's closeout (pharn/floor/loop-closeout.mjs `buildStageList`), so the
+// function the closeout calls is what is EXECUTED here; the close part carries no builder block any more.
 test("★ WIRING — /pharn-loop's Step 6c staging builder, EXECUTED: stages the lock and its pinned tests, exits 4 on a missing or ignored one", () => {
-  const body = commandFamilyText(COMMANDS, "pharn-loop.md");
-  const m = body.match(/node -e '\n([\s\S]*?)\n' '<name>'/);
-  assert.ok(m, "the builder block is pinned in pharn-loop.md");
-  const builder = m[1];
+  assert.doesNotMatch(commandFamilyText(COMMANDS, "pharn-loop.md"), /node -e '\n/, "no inline builder block remains in the command");
   const repo = mkdtempSync(join(tmpdir(), "cts-6c-"));
   try {
     const git = (...a) => execFileSync("git", a, { cwd: repo, stdio: "pipe" });
@@ -525,11 +525,20 @@ test("★ WIRING — /pharn-loop's Step 6c staging builder, EXECUTED: stages the
     );
     const lock = (path) =>
       writeFileSync(join(repo, "pharn", "features", NAME, "AC-TESTS.lock.json"), JSON.stringify({ files: [{ path, sha256: "x" }] }));
-    const run = () => spawnSync(process.execPath, ["-e", builder, NAME], { cwd: repo, encoding: "utf8" });
+    const run = () => {
+      const prev = process.cwd();
+      process.chdir(repo);
+      try {
+        const r = buildStageList(NAME);
+        return { status: r.code, paths: r.paths, stderr: r.detail ?? "" };
+      } finally {
+        process.chdir(prev);
+      }
+    };
     lock(UNIT);
     const ok = run();
     assert.equal(ok.status, 0, ok.stderr);
-    const staged = ok.stdout.split("\0").filter(Boolean);
+    const staged = ok.paths;
     for (const p of ["src/a.js", `pharn/features/${NAME}/AC-TESTS.lock.json`, UNIT])
       assert.ok(staged.includes(p), `${p} staged: ${staged}`);
     assert.ok(!staged.includes("src/ignored.js"), "an ignored PLAN path is dropped — the filter works without GIT_LITERAL_PATHSPECS");
