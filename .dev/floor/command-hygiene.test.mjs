@@ -30,6 +30,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { REGISTRY } from "../../pharn/floor/stage-exit-core.mjs";
 import { CANDIDATE_REL } from "../../pharn/floor/feature-name.mjs";
+import { commitGateArgs, loopSteps } from "../../pharn/floor/loop-closeout.mjs";
+import { shipSteps } from "../../pharn/floor/ship-closeout.mjs";
 import {
   ROUTE_POLICY,
   AGENT,
@@ -1685,10 +1687,12 @@ const COMMIT_OUTCOMES = [
 
 const ASK_TOKEN_RE = /\bAsk(?:User)?Question\b/;
 const LOOP_COMMIT_HEADING = "### Step 6c";
-const LOOP_FROM_PLAN_LINE = /^[ \t]*node \.claude\/hooks\/set-writes-scope\.cjs --from-plan pharn\/features\/<name>\/PLAN\.md\s*$/;
-// Both staging lines must disable pathspec globbing — a listed path is a path, never a pattern.
-const LOOP_ADD_LINE = /^[ \t]*GIT_LITERAL_PATHSPECS=1 git add -A --pathspec-from-file=\S+ --pathspec-file-nul\s*$/;
-const LOOP_COMMIT_LINE = /^[ \t]*GIT_LITERAL_PATHSPECS=1 git commit --pathspec-from-file=\S+ --pathspec-file-nul\b/;
+// 6.44.0 (loop-closeout-script): the scope re-derivation, the staging list, the branch, add and commit moved into ONE
+// pinned line, `pharn/floor/loop-closeout.mjs`. What these pins hold now: the close part carries that line exactly
+// once, under Step 6b, before the Step 6c heading. The ORDER inside it (re-derive, then stage, then commit by a literal
+// pathspec file) and its argv are EXECUTED by pharn/floor/loop-closeout.test.mjs against the former lines.
+const LOOP_CLOSEOUT_LINE = /^[ \t]*node pharn\/floor\/loop-closeout\.mjs --feature '<name>' --base '<base sha>'\s*$/;
+const LOOP_RECORD_HEADING = "### Step 6b";
 // Anywhere on a fenced line, not only at its start: a compound line (`b=…; git push`), a global option
 // (`git -C . push`) and an argv array (`execFileSync("git", ["push"])`) are all the same invocation. A word
 // boundary keeps `pushed` / `merged` in the commit message's prose from matching.
@@ -1743,20 +1747,15 @@ function outcomeClosureOffenders(body) {
   return spelled.filter((v) => !allowed.has(v));
 }
 
-/** null when the commit block re-derives scope, stages and commits, in that order, under Step 6c; else why. */
+/** null when the closeout line appears exactly once, under Step 6b and before the Step 6c heading; else why. */
 function commitBlockReason(body) {
   const lines = body.split(/\r?\n/);
+  const record = lines.findIndex((l) => l.startsWith(LOOP_RECORD_HEADING));
   const heading = lines.findIndex((l) => l.startsWith(LOOP_COMMIT_HEADING));
-  const fromPlan = lines.findIndex((l) => LOOP_FROM_PLAN_LINE.test(l));
-  const add = lines.findIndex((l) => LOOP_ADD_LINE.test(l));
-  const commit = lines.findIndex((l) => LOOP_COMMIT_LINE.test(l));
-  if (heading === -1) return `no \`${LOOP_COMMIT_HEADING}\` heading`;
-  if (fromPlan === -1) return "no `--from-plan` re-derivation line";
-  if (add === -1) return "no `git add -A --pathspec-from-file` line";
-  if (commit === -1) return "no `git commit --pathspec-from-file` line";
-  if (!(heading < fromPlan && fromPlan < add && add < commit)) {
-    return `out of order: heading ${heading + 1}, --from-plan ${fromPlan + 1}, add ${add + 1}, commit ${commit + 1}`;
-  }
+  const closeouts = lines.map((l, i) => (LOOP_CLOSEOUT_LINE.test(l) ? i : -1)).filter((i) => i !== -1);
+  if (record === -1 || heading === -1) return `no \`${LOOP_RECORD_HEADING}\` / \`${LOOP_COMMIT_HEADING}\` heading`;
+  if (closeouts.length !== 1) return `expected ONE loop-closeout line, found ${closeouts.length}`;
+  if (!(record < closeouts[0] && closeouts[0] < heading)) return "the closeout line must sit under Step 6b, before the Step 6c heading";
   return null;
 }
 
@@ -1801,12 +1800,18 @@ test("✧ CLOSURE — every `blocked:` and commit-outcome spelling in /pharn-loo
   assert.deepEqual(outcomeClosureOffenders(body), [], "a commit-outcome spelling outside COMMIT_OUTCOMES");
 });
 
-test("✧ /pharn-loop's commit re-derives the plan scope, then stages, then commits by pathspec (L38)", () => {
+test("✧ /pharn-loop's commit runs through ONE closeout line under Step 6b, which re-derives the plan scope (L38)", () => {
   assert.equal(commitBlockReason(commandBody(LOOP_FILE)), null);
+  // The re-derivation the L38 pin protected is the closeout's own step, before its staging list (order EXECUTED by
+  // pharn/floor/loop-closeout.test.mjs); here, its argv.
+  assert.deepEqual([...loopSteps("<name>", "x").setScope.args], ["--from-plan", "pharn/features/<name>/PLAN.md"]);
 });
 
 test("✧ no fenced line in /pharn-loop spells a known `git push`, `git merge` or `--no-verify` form", () => {
   assert.deepEqual(forbiddenGitOffenders(commandBody(LOOP_FILE)), []);
+  // …nor does the closeout that now runs the git steps, read as code text (its own suite scans its string literals).
+  const src = readFileSync(join(REPO_ROOT, "pharn", "floor", "loop-closeout.mjs"), "utf8");
+  assert.doesNotMatch(src, /["'](?:push|merge|--no-verify)["']/);
 });
 
 test("✧ no fenced block in /pharn-loop reads a shell variable it did not assign — each block is its own shell", () => {
@@ -1821,30 +1826,27 @@ const LOOP_FRESH_COMMIT =
   /^[ \t]*node pharn\/floor\/check-loop-fresh\.mjs --feature '<name>' --base '<base sha>' --commit-gate --front\s*$/;
 const LOOP_STOP_LINE = /^[ \t]*node pharn\/floor\/check-loop\.mjs pharn\/features\/<name>\/verify-report\.json /;
 
-/** null when both freshness calls are pinned exactly once, the decision call precedes check-loop.mjs, and
- *  the commit-gate call sits under Step 6c BEFORE the scope re-derivation and the staging lines; else why. */
+/** null when the decision-time freshness call is pinned exactly once and precedes check-loop.mjs, and no typed
+ *  commit-gate call remains (since 6.44.0 the closeout makes it — its argv is pinned below and EXECUTED by
+ *  check-loop-fresh.test.mjs, its position FIRST in the commit gate by loop-closeout.test.mjs); else why. */
 function freshnessWiringReason(body) {
   const lines = body.split(/\r?\n/);
   const idx = (re) => lines.map((l, i) => (re.test(l) ? i : -1)).filter((i) => i !== -1);
   const decision = idx(LOOP_FRESH_DECISION);
   const commit = idx(LOOP_FRESH_COMMIT);
   const stop = idx(LOOP_STOP_LINE);
-  const heading = lines.findIndex((l) => l.startsWith(LOOP_COMMIT_HEADING));
-  const fromPlan = lines.findIndex((l) => LOOP_FROM_PLAN_LINE.test(l));
-  const add = lines.findIndex((l) => LOOP_ADD_LINE.test(l));
   if (decision.length !== 1) return `expected ONE decision-time freshness call, found ${decision.length}`;
-  if (commit.length !== 1) return `expected ONE commit-gate freshness call, found ${commit.length}`;
+  if (commit.length !== 0) return `expected NO typed commit-gate freshness call (the closeout makes it), found ${commit.length}`;
   if (stop.length !== 1) return `expected ONE check-loop.mjs stop line, found ${stop.length}`;
   if (!(decision[0] < stop[0])) return "the decision-time freshness call must precede check-loop.mjs";
-  if (!(heading < commit[0] && commit[0] < fromPlan && commit[0] < add)) {
-    return "the commit-gate freshness call must sit under Step 6c, before the scope re-derivation and the staging lines";
-  }
   return null;
 }
 
-test("✧ /pharn-loop reads check-loop-fresh.mjs BEFORE the stop, and again FIRST in the Step 6c commit gate", () => {
+test("✧ /pharn-loop reads check-loop-fresh.mjs BEFORE the stop, and its closeout again FIRST in the Step 6c commit gate", () => {
   assert.equal(freshnessWiringReason(commandBody(LOOP_FILE)), null);
   assert.ok(commandBody(LOOP_FILE).includes('"pharn/floor/check-loop-fresh.mjs"'), "the checker must be in `reads:`");
+  const typed = `node pharn/floor/check-loop-fresh.mjs ${commitGateArgs("'<name>'", "'<base sha>'").join(" ")}`;
+  assert.match(typed, LOOP_FRESH_COMMIT, "the closeout's commit-gate argv is the former pinned line");
 });
 
 test("✧ the freshness wiring rule DISCRIMINATES — each mutant of the real command fails (L4)", () => {
@@ -1857,9 +1859,9 @@ test("✧ the freshness wiring rule DISCRIMINATES — each mutant of the real co
   const noDecision = drop(LOOP_FRESH_DECISION);
   assert.notEqual(noDecision, real, "precondition: the decision call must exist to be dropped (L34)");
   assert.match(freshnessWiringReason(noDecision), /ONE decision-time/);
-  const noCommit = drop(LOOP_FRESH_COMMIT);
-  assert.notEqual(noCommit, real, "precondition: the commit-gate call must exist to be dropped (L34)");
-  assert.match(freshnessWiringReason(noCommit), /ONE commit-gate/);
+  // A typed commit-gate line restored beside the closeout.
+  const typed = `${real}\n\`\`\`bash\nnode pharn/floor/check-loop-fresh.mjs --feature '<name>' --base '<base sha>' --commit-gate --front\n\`\`\`\n`;
+  assert.match(freshnessWiringReason(typed), /NO typed commit-gate/);
   // Move the decision call AFTER the stop line.
   const lines = real.split("\n");
   const d = lines.findIndex((l) => LOOP_FRESH_DECISION.test(l));
@@ -1867,12 +1869,15 @@ test("✧ the freshness wiring rule DISCRIMINATES — each mutant of the real co
   const [call] = moved.splice(d, 1);
   moved.splice(moved.findIndex((l) => LOOP_STOP_LINE.test(l)) + 1, 0, call);
   assert.match(freshnessWiringReason(moved.join("\n")), /must precede check-loop\.mjs/);
-  // Move the commit-gate call AFTER the staging line.
-  const c = lines.findIndex((l) => LOOP_FRESH_COMMIT.test(l));
+  // The closeout line dropped, or moved under Step 6c.
+  const noCloseout = drop(LOOP_CLOSEOUT_LINE);
+  assert.notEqual(noCloseout, real, "precondition: the closeout line exists (L34)");
+  assert.match(commitBlockReason(noCloseout), /ONE loop-closeout/);
+  const c = lines.findIndex((l) => LOOP_CLOSEOUT_LINE.test(l));
   const late = [...lines];
-  const [gate] = late.splice(c, 1);
-  late.splice(late.findIndex((l) => LOOP_ADD_LINE.test(l)) + 1, 0, gate);
-  assert.match(freshnessWiringReason(late.join("\n")), /under Step 6c, before/);
+  const [co] = late.splice(c, 1);
+  late.splice(late.findIndex((l) => l.startsWith(LOOP_COMMIT_HEADING)) + 1, 0, co);
+  assert.match(commitBlockReason(late.join("\n")), /under Step 6b, before the Step 6c heading/);
 });
 
 // ── STOP-GUARD MARKER (L22/L45): the run is OPENED right after the pre-run snapshot and CLOSED after the
@@ -1951,24 +1956,8 @@ test("✧ the /pharn-loop rules DISCRIMINATE — each fails on a mutant of the r
   assert.notEqual(outcome, real, "precondition: the mutation must change the body (L34)");
   assert.deepEqual(outcomeClosureOffenders(outcome), ["not committed: commit error"], "outcome closure must reject a variant");
 
-  const noRederive = real
-    .split("\n")
-    .filter((l) => !LOOP_FROM_PLAN_LINE.test(l))
-    .join("\n");
-  assert.notEqual(noRederive, real, "precondition: the --from-plan line must exist to be removed (L34)");
-  assert.equal(
-    commitBlockReason(noRederive),
-    "no `--from-plan` re-derivation line",
-    "the ordering rule must reject a commit block that reuses a stale scope"
-  );
-
-  const globbing = real.replace(/GIT_LITERAL_PATHSPECS=1 git add -A/, "git add -A");
-  assert.notEqual(globbing, real, "precondition: the literal-pathspec add line must exist to be mutated (L34)");
-  assert.equal(
-    commitBlockReason(globbing),
-    "no `git add -A --pathspec-from-file` line",
-    "the ordering rule must reject a staging line that lets git glob a listed path"
-  );
+  const twice = `${real}\n\`\`\`bash\nnode pharn/floor/loop-closeout.mjs --feature '<name>' --base '<base sha>'\n\`\`\`\n`;
+  assert.equal(commitBlockReason(twice), "expected ONE loop-closeout line, found 2", "a second closeout line is rejected");
 
   for (const line of ["git push origin HEAD", "b=x; git push origin HEAD", "git -C . push", 'execFileSync("git", ["push"]);']) {
     const pushes = `${real}\n\`\`\`bash\n${line}\n\`\`\`\n`;
@@ -2062,6 +2051,8 @@ const PHASE_MARKER_WIRING = [
     // PLACEHOLDER and the agent substitutes it. Pinning `\d+` here would be wrong for this command.
     iterationForm: /^<N>$/,
     iterationWhy: "a runtime value under --max-iter, substituted by the agent",
+    closeout: /^[ \t]*node pharn\/floor\/loop-closeout\.mjs --feature '<name>' --base '<base sha>'\s*$/,
+    closeoutSteps: () => loopSteps("<name>", "'<base sha>'"),
   },
   {
     file: "pharn-ship.md",
@@ -2079,6 +2070,8 @@ const PHASE_MARKER_WIRING = [
     // The two forms are pinned per command precisely so neither can drift into the other.
     iterationForm: /^[12]$/,
     iterationWhy: "a literal: 1 in the chain, 2 in the single Step-2b retry",
+    closeout: /^[ \t]*node pharn\/floor\/ship-closeout\.mjs --feature '<name>'\s*$/,
+    closeoutSteps: () => shipSteps("<name>", "'<base sha>'"),
   },
 ];
 
@@ -2119,11 +2112,15 @@ for (const cmd of PHASE_MARKER_WIRING) {
       );
     }
 
-    // The RUN boundaries: exactly one of each. Two `run-start`s would mean two epochs in one ledger.
-    for (const kind of ["run-start", "run-stop"]) {
-      const n = kindsSeen.filter((k) => k === kind).length;
-      assert.equal(n, 1, `${cmd.file} must carry exactly one --kind ${kind} invocation; found ${n}`);
-    }
+    // The RUN boundaries: exactly one of each. Two `run-start`s would mean two epochs in one ledger. Since 6.44.0 the
+    // run-stop is written by the command's closeout line (its argv pinned here, its run EXECUTED by the closeout's own
+    // suite), so a run-stop counts as a typed mark-phase line OR the one closeout line — never both.
+    const runStarts = kindsSeen.filter((k) => k === "run-start").length;
+    assert.equal(runStarts, 1, `${cmd.file} must carry exactly one --kind run-start invocation; found ${runStarts}`);
+    const typedStops = kindsSeen.filter((k) => k === "run-stop").length;
+    const closeouts = body.split("\n").filter((l) => cmd.closeout.test(l)).length;
+    assert.equal(typedStops + closeouts, 1, `${cmd.file} must reach run-stop exactly once (typed ${typedStops}, closeout ${closeouts})`);
+    assert.deepEqual([...cmd.closeoutSteps().runStop.args], ["--name", "<name>", "--kind", "run-stop"]);
 
     // Every stage this command runs must be marked — by a mark-phase line, or (6.43.0) by a start or direct line.
     const sites = markerSites(body);
@@ -2226,9 +2223,10 @@ test("✧ PHASE-MARKER rules DISCRIMINATE — a dropped orchestrator and a misty
   assert.notEqual(spliced, body);
   assert.match(markerPairingReasons(spliced).join("\n"), /pharn-verify@1: no return/);
   const kindsOf = (s) => (s.match(MARK_PHASE) ?? []).map((c) => (c.match(/--kind\s+(\S+)/) ?? [])[1]);
-  const mistyped = body.replace("--kind run-stop", "--kind run-stopped");
-  assert.ok(kindsOf(mistyped).includes("run-stopped"), "the guard must SEE a mistyped kind — else it proves nothing");
-  assert.ok(!["run-start", "stage-start", "orchestrator", "run-stop"].includes("run-stopped"), "and the closure must reject it");
+  // 6.44.0: the run-stop is the closeout's, so the mistyped kind is planted on the run-start line instead.
+  const mistyped = body.replace("--kind run-start", "--kind run-started");
+  assert.ok(kindsOf(mistyped).includes("run-started"), "the guard must SEE a mistyped kind — else it proves nothing");
+  assert.ok(!["run-start", "stage-start", "orchestrator", "run-stop"].includes("run-started"), "and the closure must reject it");
 });
 
 test("✧ every emitting command emits the LEDGER and the REPORT, and checks the ledger", () => {
@@ -2240,18 +2238,26 @@ test("✧ every emitting command emits the LEDGER and the REPORT, and checks the
     ["render-run-report", /node pharn\/floor\/render-run-report\.mjs '<name>' --base pharn\/features/],
   ];
   assert.equal(OBLIGATIONS.length, 3, "non-vacuity: the obligation set must be non-empty and counted");
+  // Since 6.44.0 each emitting command reaches the three through its ONE closeout line: the invocations are the
+  // closeout's steps, rendered here as the lines they replaced and matched against the same pins (their run and order
+  // are EXECUTED by each closeout's own suite).
+  const asLine = (s) => `node pharn/floor/${s.script.split("/").at(-1)} ${s.args.map((a) => (a === "<name>" ? "'<name>'" : a)).join(" ")}`;
   for (const cmd of PHASE_MARKER_WIRING) {
     const body = commandBody(cmd.file);
+    assert.equal(body.split("\n").filter((l) => cmd.closeout.test(l)).length, 1, `${cmd.file} must carry its closeout line once`);
+    const steps = cmd.closeoutSteps();
+    const lines = [steps.ledger, steps.ledgerCheck, steps.report].map(asLine).join("\n");
     for (const [label, re] of OBLIGATIONS) {
-      assert.match(body, re, `${cmd.file} must invoke ${label} with its pinned arguments`);
+      assert.match(lines, re, `${cmd.file}'s closeout must invoke ${label} with its pinned arguments`);
+      assert.doesNotMatch(body, re, `${cmd.file} must not ALSO type ${label} (the closeout runs it)`);
     }
     // `--command` must name THIS command, not a sibling — the defect a copied invocation produces, and
     // the reason the ledger's `command` field is worth checking at all.
     const slug = cmd.file.replace(/\.md$/, "");
     assert.match(
-      body,
+      lines,
       new RegExp(`render-cost-ledger\\.mjs '<name>' --command /${slug}\\b`),
-      `${cmd.file} must pass --command /${slug} — a copied sibling value would mislabel every ledger it writes`
+      `${cmd.file}'s closeout must pass --command /${slug} — a copied sibling value would mislabel every ledger it writes`
     );
   }
 });
@@ -2666,8 +2672,8 @@ test("✧ QUICK MODE mutation controls: each asserted property fails when broken
 
   // (4) drop one skip pointer (Step 3a item 4's) -> that pointer's own rule must stop matching.
   const droppedPointer = shipBody.replace(
-    "4. **Render the human-readable run report** _(SKIPPED in Quick mode — see `## Quick mode` item 12 above;\n   items 1–3 above still run, so `cost.json` is kept)_:",
-    "4. **Render the human-readable run report:**"
+    "_(SKIPPED in Quick mode — see `## Quick mode` item 12 above; items 1–3 above still run, so `cost.json` is kept)_",
+    ""
   );
   assert.notEqual(droppedPointer, shipBody, "fixture sanity: the mutation must change the body");
   assert.doesNotMatch(droppedPointer, /SKIPPED in Quick mode — see `## Quick mode` item 12 above/);
@@ -2809,7 +2815,6 @@ const LOOP_MODE_CAPTURE = [
  *  assertion below (a test file cannot be imported without running its tests). */
 const RENDER_INVOCATION_COPY = /node pharn\/floor\/render-run-report\.mjs '<name>' --base pharn\/features/;
 const LOOP_QUICK_FORBIDDEN = [
-  { what: "the render-run-report invocation", re: RENDER_INVOCATION_COPY },
   { what: "a check-loop-fresh.mjs line", re: /node pharn\/floor\/check-loop-fresh\.mjs/ },
   { what: "a check-loop.mjs line", re: /node pharn\/floor\/check-loop\.mjs/ },
   { what: "a mark-phase.mjs line", re: /node pharn\/floor\/mark-phase\.mjs/ },
@@ -2860,6 +2865,8 @@ test("✧ LOOP QUICK (grill G7): ## Quick mode quotes NONE of the whole-file pin
   );
   const section = loopQuickSection();
   for (const f of LOOP_QUICK_FORBIDDEN) assert.doesNotMatch(section, f.re, `## Quick mode must not quote ${f.what}`);
+  // The render invocation (6.44.0): the closeout runs it, so it is typed NOWHERE in the command — the section included.
+  assert.doesNotMatch(commandBody(LOOP_FILE), RENDER_INVOCATION_COPY, "the render invocation is the closeout's, never typed");
   // …and each forbidden literal genuinely exists elsewhere in the file (non-vacuous: the closure guards a real pin).
   const body = commandBody(LOOP_FILE);
   for (const f of LOOP_QUICK_FORBIDDEN) assert.match(body, f.re, `${f.what} must exist in ${LOOP_FILE}`);
@@ -2913,7 +2920,7 @@ test("✧ LOOP QUICK mutation controls: each pin fails when its text is broken (
   assert.notEqual(relisted, body, "fixture sanity: the listing landed");
   assert.match(loopQuickPinnedReason(relisted), /must not ask the model to list paths/);
   // a skip pointer dropped (Step 6b's render line)
-  const pointer = "_(SKIPPED in\nQuick mode — `## Quick mode` item 8; `cost.json` is still emitted above)_";
+  const pointer = "_(SKIPPED in\n   Quick mode — `## Quick mode` item 8; `cost.json` is still emitted above)_"; // inside the closeout's item 4 (6.44.0)
   assert.ok(body.includes(pointer), "fixture sanity: the Step-6b pointer exists");
   assert.doesNotMatch(body.replace(pointer, ""), LOOP_QUICK_POINTERS[2].re);
   // STOP_GREEN_QUICK respelled STOP_GREEN_Q — the closure fires
@@ -3808,7 +3815,10 @@ const RUN_MARKER_WIRING = [
     // pinned line, not the plan marker, is what the open line's STOP must precede (pre-run-snapshot.test.mjs pins the
     // capture line's order and STOP).
     openBefore: "node pharn/floor/pre-run-snapshot.mjs --capture '<name>'",
-    closeAfter: "node pharn/floor/mark-phase.mjs --name '<name>' --kind run-stop",
+    // 6.44.0: ship's close runs inside its Step 3a closeout line, directly after the run-stop step (the order is
+    // EXECUTED by pharn/floor/ship-closeout.test.mjs; run-marker.test.mjs executes the committed line).
+    closeAfter: "## Step 3a —",
+    closeVia: /node pharn\/floor\/ship-closeout\.mjs --feature '<name>'/,
   },
   {
     file: "pharn-review.md",
@@ -3847,9 +3857,18 @@ for (const cmd of RUN_MARKER_WIRING) {
     const opens = [...body.matchAll(RUN_MARKER_OPEN)];
     const closes = [...body.matchAll(RUN_MARKER_CLOSE)];
     assert.equal(opens.length, 1, `${cmd.file}: expected exactly one --open line`);
-    assert.equal(closes.length, 1, `${cmd.file}: expected exactly one --close line`);
     assert.equal(opens[0][1], cmd.command, `${cmd.file}: --open must name ${cmd.command}`);
-    assert.equal(closes[0][1], cmd.command, `${cmd.file}: --close must name ${cmd.command}`);
+    if (cmd.closeVia) {
+      // The close is the closeout's; the one typed line left is the crash fallback (independent review R4), after it.
+      assert.equal(closes.length, 1, `${cmd.file}: exactly one typed --close line, the closeout's crash fallback`);
+      assert.equal(closes[0][1], cmd.command, `${cmd.file}: --close must name ${cmd.command}`);
+      assert.equal([...body.matchAll(new RegExp(cmd.closeVia, "g"))].length, 1, `${cmd.file}: expected exactly one closeout line`);
+      assert.ok(body.search(cmd.closeVia) < closes[0].index, `${cmd.file}: the fallback follows the closeout line`);
+      assert.deepEqual([...shipSteps("<name>", "x").markerClose.args], ["--close", cmd.command, "<name>"]);
+    } else {
+      assert.equal(closes.length, 1, `${cmd.file}: expected exactly one --close line`);
+      assert.equal(closes[0][1], cmd.command, `${cmd.file}: --close must name ${cmd.command}`);
+    }
   });
 
   test(`✧ ${cmd.file}'s --open sits after '${cmd.openAfter.slice(0, 40)}…' and before '${cmd.openBefore.slice(0, 40)}…'`, () => {
@@ -3865,7 +3884,7 @@ for (const cmd of RUN_MARKER_WIRING) {
   test(`✧ ${cmd.file}'s --close sits after '${cmd.closeAfter.slice(0, 40)}…', on the every-exit path`, () => {
     const body = commandBody(cmd.file);
     const after = body.indexOf(cmd.closeAfter);
-    const close = body.search(RUN_MARKER_CLOSE);
+    const close = body.search(cmd.closeVia ?? RUN_MARKER_CLOSE);
     assert.ok(after >= 0 && close >= 0, `${cmd.file}: both anchors must exist`);
     assert.ok(after < close, `${cmd.file}: --close must come after its anchor`);
   });
@@ -4746,8 +4765,9 @@ test("✧ BUDGET R5: every product command has exactly one `## What you may clai
 //      candidate path before it.
 //   4. SENTENCES — each asks / resolves command carries its fixed sentence inside its Step 0, and not the other's.
 //   5. ★ EXECUTED — every validating and resolving command's COMMITTED CLI line, under `sh -c`, over HOSTILE_CANDIDATES.
-//   6. ★ EXECUTED — /pharn-loop Step 6c's committed branch block, then Step 6d's committed undo block, in throwaway git
-//      repositories — with the CONTROL that makes the undo line's stated dependency visible: a checkout in between.
+//   6. Since 6.44.0 the branch and undo run inside pharn/floor/loop-closeout.mjs, and their EXECUTED cases (with the
+//      intervening-checkout CONTROL) live in loop-closeout.test.mjs; here, no typed branch/undo block remains and Step
+//      6d states the bound.
 //   7. ★ CONTROLS — the 6.28.2 lines, carried as literals and each run once: each must run its payload, or the rule it
 //      backs guards nothing (L60).
 //
@@ -4792,8 +4812,6 @@ const SHELL_VALUES = Object.freeze({
   "<N>": "the loop's own iteration counter",
   "<M>": "human argv: the --max-iter value the person typed",
   "<base sha>": "git's own rev-parse / merge-base output (hex), or the literal unknown — a producer grammar",
-  "<branch>": "the name /pharn-loop Step 6c's branch block printed from the validated <name>",
-  "<decision>": "a closed code token (check-loop.mjs's green token)",
   "<canon-file>": "a closed choice: one of the two memory-bank files /pharn-memory-promote Step 0 names",
   "<id>": "a closed code token (project | pharn-default), cut from check-spec.mjs's printed line",
   "<path>": "human argv: /pharn-review's explicit targets (directories are expanded in code, render-review-assignments.mjs)",
@@ -5105,92 +5123,18 @@ function gitFixture({ reflog = true } = {}) {
   return { dir, git, base, head, hasBranch, sh, stageFailed, done: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
-/** Step 6c's committed branch block and Step 6d's committed undo block, read out of pharn-loop.md. */
-function loopBlocks() {
-  const body = commandBody("pharn-loop.md");
-  const branch = fencedLines(body)
-    .map((l) => l.text.trim())
-    .filter((t) => t.startsWith("b='pharn-loop/<name>'"));
-  const undo = fencedBlocks(body).filter((b) => b.lines.some((l) => l.text.trim() === "git checkout - --"));
-  assert.equal(branch.length, 1, "pharn-loop.md carries one Step 6c branch block");
-  assert.equal(undo.length, 1, "pharn-loop.md carries one Step 6d undo block");
-  const undoText = undo[0].lines.map((l) => l.text.trim()).join("\n");
-  assert.deepEqual([...new Set([...undoText.matchAll(SINK_PLACEHOLDER_RE)].map((m) => m[1]))].sort(), ["branch", "name"]);
-  return {
-    branch: () => branch[0].replaceAll("<name>", "demo"),
-    undo: (printed) => undoText.replaceAll("<name>", "demo").replaceAll("<branch>", printed),
-  };
-}
-
 const HOSTILE_BRANCH = "fix';touch${IFS}PWNED_BRANCH;'x";
-const STEP_6D_BOUND = "It is correct only because nothing checks out between Step 6c's branch block and this line";
+// 6.44.0 (loop-closeout-script): the branch and undo blocks moved into pharn/floor/loop-closeout.mjs, and their
+// EXECUTED cases (a hostile original branch, a detached checkout, no reflog, and the intervening-checkout CONTROL)
+// moved with them into pharn/floor/loop-closeout.test.mjs. What stays here: no typed branch or undo block remains in
+// the command, and Step 6d still states the bound where a reader meets it.
+const STEP_6D_BOUND = "It is correct only because nothing checks out between the closeout's branch step and its undo";
 
-test("★ SHELL-SINK 7 — Step 6c's branch block then Step 6d's undo block return to the original checkout and type no git output", () => {
-  const blocks = loopBlocks();
-  // A hostile original branch name: git accepts it, the old line ran it, the committed block never types it.
-  let g = gitFixture();
-  try {
-    assert.equal(g.git("check-ref-format", "--branch", HOSTILE_BRANCH).status, 0, "precondition: git accepts the name");
-    assert.equal(g.git("switch", "-q", "-c", HOSTILE_BRANCH).status, 0);
-    const made = g.sh(blocks.branch());
-    assert.equal(made.status, 0, made.stderr);
-    const printed = made.stdout.trim();
-    assert.equal(printed, "pharn-loop/demo");
-    g.stageFailed();
-    g.sh(blocks.undo(printed));
-    assert.equal(existsSync(join(g.dir, "PWNED_BRANCH")), false, "the undo block ran a command from a branch name");
-    assert.equal(g.head(), HOSTILE_BRANCH, "back on the original branch");
-    assert.equal(g.hasBranch("pharn-loop/demo"), false, "the new branch is deleted");
-    assert.equal(g.git("diff", "--cached", "--name-only").stdout, "", "the run's list is unstaged");
-    assert.equal(readFileSync(join(g.dir, "a"), "utf8"), "changed by the run\n", "and its change stays in the working tree");
-  } finally {
-    g.done();
-  }
-  // A detached original checkout returns to its commit, still detached.
-  g = gitFixture();
-  try {
-    g.git("switch", "-q", "--detach", "HEAD");
-    const printed = g.sh(blocks.branch()).stdout.trim();
-    g.stageFailed();
-    g.sh(blocks.undo(printed));
-    assert.equal(g.head(), `detached@${g.base}`);
-    assert.equal(g.hasBranch("pharn-loop/demo"), false);
-  } finally {
-    g.done();
-  }
-  // No HEAD reflog: the line refuses and restores nothing — a locally edited tracked file named `-` survives.
-  g = gitFixture({ reflog: false });
-  try {
-    g.git("switch", "-q", "-c", "orig");
-    const printed = g.sh(blocks.branch()).stdout.trim();
-    writeFileSync(join(g.dir, "-"), "LOCAL EDIT\n");
-    g.stageFailed();
-    g.sh(blocks.undo(printed));
-    assert.equal(readFileSync(join(g.dir, "-"), "utf8"), "LOCAL EDIT\n", "the `--` keeps git from reading `-` as a file");
-    assert.equal(g.head(), "pharn-loop/demo", "the checkout stays on the new branch, which the summary reports");
-  } finally {
-    g.done();
-  }
-});
-
-test("★ SHELL-SINK 7 CONTROL — the stated dependency, made visible: a checkout between the two blocks sends the undo to the WRONG place", () => {
-  const blocks = loopBlocks();
-  const g = gitFixture();
-  try {
-    g.git("switch", "-q", "-c", "orig");
-    const printed = g.sh(blocks.branch()).stdout.trim();
-    g.git("switch", "-q", "-c", "intervening"); // e.g. a commit hook that checks out, or a second session in this tree
-    g.stageFailed();
-    g.sh(blocks.undo(printed));
-    assert.equal(g.head(), "pharn-loop/demo", "`-` names the checkout before the intervening one, not the original");
-    assert.notEqual(g.head(), "orig");
-  } finally {
-    g.done();
-  }
-  // …which is why the command states the bound where the line is (presence pinned; a run's compliance is advisory).
+test("★ SHELL-SINK 7 — no typed branch or undo block remains in /pharn-loop; Step 6d states the closeout's bound", () => {
   const body = commandBody("pharn-loop.md");
+  assert.equal(fencedLines(body).filter((l) => /^b='pharn-loop\/|^git (checkout|branch|switch|reset)\b/.test(l.text.trim())).length, 0);
   const stated = (b) => b.replace(/\s+/g, " ").includes(STEP_6D_BOUND);
-  assert.ok(stated(body), "pharn-loop.md Step 6d states its bound");
+  assert.ok(stated(body), "Step 6d states its bound");
   assert.notEqual(body.replace(looseSentenceRe(STEP_6D_BOUND), ""), body, "precondition: the sentence is found where it is removed");
   assert.equal(stated(body.replace(looseSentenceRe(STEP_6D_BOUND), "")), false, "CONTROL: the pin sees its removal");
 });

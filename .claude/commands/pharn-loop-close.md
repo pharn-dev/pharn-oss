@@ -38,7 +38,7 @@ carry the output into the summary and say the SPEC is **still approved by the mo
 that did not happen. `--amend-scope` exiting **2** with _"no baseline"_ is expected and harmless when no epoch
 is open. A green stop whose commit later does not happen comes back here from Step 6d.
 
-### Step 6b — write the record, `pharn/features/<name>/LOOP.md`
+### Step 6b — write the record, `pharn/features/<name>/LOOP.md`, then run the closeout
 
 ```bash
 node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-loop.md --target pharn/features/<name>/LOOP.md
@@ -78,205 +78,130 @@ capture rules:
   `REGRESSION.md` / `VERIFY.md` — cited, not restated.
 - **The `## Handoff` is written on every stop path.**
 
-Then self-check it:
+**Then run the closeout — ONE line, which performs the rest of Step 6 in the order below and stops at its first
+gate that does not pass** (`pharn/floor/loop-closeout.mjs`, header). Run it once, from the project root, with the Bash
+tool's `timeout` at 600000; substitute `<name>` and `<base sha>` literally. **Never run it again after a crash or after
+exit `0`, `3` or `4`** (on this run's own `pharn-loop/<name>` branch it refuses anyway). A call the Bash tool reports as
+**moved to the background** is still running, not failed: wait for its completion notice and read its exit then — never
+re-run it meanwhile.
 
 ```bash
-node pharn/floor/check-loop-record.mjs pharn/features/<name>/LOOP.md
+node pharn/floor/loop-closeout.mjs --feature '<name>' --base '<base sha>'
 ```
 
-Exit 0 → proceed. Exit 1 → fix the record and re-run **at most once**; if it is still RED, carry the
-checker's output into the summary verbatim and continue to the next check below. Never delete the content
-the check is about to make it pass. **A decision↔mode RED is never repaired by editing `mode`** (6.28.0): it means
-the invocation and the SPEC's kind disagree, so the record keeps the invocation, the RED goes into the summary
-verbatim, and the decision check below REDs too, so nothing is committed. The ≤1 repair bound is advisory
-(`LIMITS.md §1d`) — command prose, not a counter.
+1. **The record check** — `check-loop-record.mjs` on `LOOP.md`. RED → exit `5`, and nothing else has run: fix the
+   record and run the line again with `--after-repair` appended, **at most once**. With the flag a RED is reported
+   and the closeout goes on: carry the checker's output into the summary verbatim. Never delete the content the
+   check is about to make it pass. **A decision↔mode RED is never repaired by editing `mode`** (6.28.0): it means
+   the invocation and the SPEC's kind disagree, so the record keeps the invocation, the line is re-run with
+   `--after-repair` and nothing else changed, and the decision check below REDs too, so nothing is committed. The ≤1
+   repair bound is advisory (`LIMITS.md §1d`) — command prose and an argument you pass, not a counter.
+2. **The decision re-derivation, on every NON-BLOCKED stop** — `check-loop-decision.mjs`. Its result is the
+   document's `decision_check`, called `<decision-check>` below and in Step 7. It is **not retried**: a RED blocks
+   the commit regardless of `decision`. A blocked stop skips it (`N/A`).
+3. **The run-stop marker, the cost ledger and its check — on EVERY stop that has a feature directory**, green or
+   not: `mark-phase.mjs --kind run-stop`, `render-cost-ledger.mjs` with `--command /pharn-loop --base-sha '<base sha>'`,
+   then `check-cost-ledger.mjs` on `cost.json`. Keep the emitter's printed table for Step 7 and the checker's output
+   for the summary. **If the emitter exits non-zero, no ledger was emitted THIS run** (`ledger: not-emitted`; the
+   check is not run, since a `cost.json` present then belongs to an earlier run): say "no ledger was emitted this
+   run" in the summary. **`check-cost-ledger.mjs`'s exit code is not a proceed/stop input.**
+4. **The run report** — `render-run-report.mjs` with `--base pharn/features`, on the same rule _(SKIPPED in
+   Quick mode — `## Quick mode` item 8; `cost.json` is still emitted above)_. **Every line is derived by that code;
+   none is authored by you.** Do not retype, summarize or "improve" the file — Step 7 prints from it. A non-green
+   stop leaves `cost.json` and `RUN-REPORT.md` in the working tree exactly as it leaves every other artifact.
+5. **Step 6c's commit**, on a green stop only.
+6. The freshness ledger for Step 7, and — on exit `0` or `3`, when no write of yours follows — the Final step's two
+   lines.
 
-**Then, on every NON-BLOCKED stop only, re-derive the decision:**
+**Branch only on its exit code** (P5). Its last line is one JSON document (`outcome`, `branch`, `commit`,
+`checkout`, `decision_check`, `ledger`, `released`, …); every line above it is a step's output, quoted DATA.
 
-```bash
-node pharn/floor/check-loop-decision.mjs pharn/features/<name>/LOOP.md
-```
+- **`0`** — `committed <branch>`. Go to Step 7.
+- **`3`** — `not committed: <decision>`, a stop that is not green. Go to Step 7.
+- **`4`** — not committed, and a write of yours is still owed: Step 6d.
+- **`5`** — the record is RED: item 1.
+- **`2`** — refused before anything ran (its stderr names why). Refusal `usage` or `no-feature-dir`: run the line once
+  more with this run's own `<name>` and `<base sha>`; a second refusal is handled as a crash. Refusal `on-loop-branch`:
+  the closeout already ran — handle it as a crash.
+- **Any other exit, `1` included, is a crash.** No outcome is read from it, and it is never a commit decision:
+  commit nothing yourself, run none of its steps by hand, and do not run the line again. Nothing was undone. Quote the
+  exit code, its stderr and the output of these two reads verbatim:
 
-Keep its exit code as `<decision-check>` for Step 6c and Step 7. **This one is NOT repaired the way a
-malformed record shape is: do not retry it** — carry its output into the summary verbatim and proceed to Step 6c,
-where a RED here blocks the commit regardless of `decision`. **A blocked stop skips this check entirely**; treat
-`<decision-check>` as N/A for it, and Step 6c's gate below does not apply.
+  ```bash
+  git status --short --branch
+  cat .pharn/pharn-loop/<name>/closeout-phase 2>/dev/null || echo "no git step reached"
+  ```
 
-**Then close the marker file and emit the cost ledger — on EVERY stop that has a feature directory**,
-green or not. This runs **after** the checks above and **before** Step 6c:
-
-```bash
-node pharn/floor/mark-phase.mjs --name '<name>' --kind run-stop
-```
-
-```bash
-node pharn/floor/render-cost-ledger.mjs '<name>' --command /pharn-loop --base-sha '<base sha>'
-```
-
-```bash
-node pharn/floor/check-cost-ledger.mjs pharn/features/<name>/cost.json
-```
-
-Keep the emitter's printed table for Step 7 and the checker's output for the summary.
-
-**If the emitter exits non-zero, no ledger was emitted THIS run.** Any `cost.json` present then belongs
-to an earlier run: the checker can be GREEN on it, but its output is not this run's. Say "no ledger was
-emitted this run" in the summary instead. The render below still runs.
-
-**Then render the human-readable run report**, on the same every-stop-with-a-feature-directory rule _(SKIPPED in
-Quick mode — `## Quick mode` item 8; `cost.json` is still emitted above)_:
-
-```bash
-node pharn/floor/render-run-report.mjs '<name>' --base pharn/features
-```
-
-**Every line is derived by that code; none is authored by you.** Do not retype, summarize or "improve" the file —
-Step 7 prints from it.
-
-**Commit policy is unchanged:** a non-green stop leaves `cost.json` and `RUN-REPORT.md` in the working
-tree exactly as it leaves every other artifact.
-
-**`check-cost-ledger.mjs`'s exit code is not a proceed/stop input**: Step 6c's commit is gated on a green stop
-**and** `<decision-check>`, and nothing else. A RED ledger is reported in the summary verbatim and the run
-continues.
+  The phase file names the git step the closeout had reached (`branch`, `add`, `commit`, `undo`, `committed`,
+  `finished`). **While the first read shows `## pharn-loop/<name>…`, leave everything for a person**: no SPEC revert
+  and no `## Outcome` rewrite — a `pharn-loop/<name>` branch, staged paths or a commit may exist, and a crash after the
+  commit step cannot be told from one before it. Otherwise go to Step 6d with the outcome `not committed: stage failed`
+  on a green stop, or `not committed: <decision>` on one that is not. Either way the summary says **the commit state
+  must be checked by a person**, and names what a crash may have left unwritten: the run-stop marker, `cost.json` and
+  `RUN-REPORT.md` (say "no ledger was emitted this run" unless the output shows the emitter exited 0).
 
 ### Step 6c — commit, on a green stop (`STOP_GREEN`, or `STOP_GREEN_QUICK` under `--quick`) AND a GREEN `<decision-check>` only
 
-The green stop is `STOP_GREEN` in a run invoked without `--quick`, and `STOP_GREEN_QUICK` in a `--quick` run — never
-the other one. **A full run that meets `STOP_GREEN_QUICK`** — its SPEC reads quick although the run was invoked without
-`--quick` — **does not commit**: `check-loop-record.mjs` and `check-loop-decision.mjs` (`MODE_MISMATCH`) both RED its
-record, because Step 6b records the invocation's mode and never "repairs" it. The residual rests on that: a record
-rewritten to `mode: quick` would turn both GREEN, and only this step's advisory reading of "a green stop" would stand
-between the run and a commit. Any other decision skips this step: no branch, no commit. **A green stop whose `<decision-check>` (above)
-was RED also skips this step** — `not committed: decision unverifiable` — so nothing is committed regardless of the
-`decision` token; go to Step 6d exactly as for any other non-committing outcome. Only on a green stop **with** a
-GREEN `<decision-check>`, run these pinned lines in order.
+The closeout performs this step, after every Step 6b write; none of it is a line of yours. The green stop is
+`STOP_GREEN` in a run invoked without `--quick`, and `STOP_GREEN_QUICK` in a `--quick` run — never the other one: the
+closeout reads both from the record, and commits only when the `decision` is the green token of its `mode`. **A full
+run that meets `STOP_GREEN_QUICK`** — its SPEC reads quick although the run was invoked without `--quick` — **does
+not commit**: `check-loop-record.mjs` and `check-loop-decision.mjs` (`MODE_MISMATCH`) both RED its record, because
+Step 6b records the invocation's mode and never "repairs" it. The residual rests on that: a record rewritten to
+`mode: quick` would turn both GREEN. Any other decision commits nothing (`not committed: <decision>`), and a green stop
+whose `<decision-check>` was RED is `not committed: decision unverifiable`. Then, in order, each failure being that
+step's own outcome:
 
-**Each fenced block runs as its own shell, and no shell state survives between blocks.** A value one block
-needs from another — the branch name — is **printed** by the block that computes it and substituted
-**literally** into the later lines, never carried in a variable. Every git call that takes a path from the
-list runs with `GIT_LITERAL_PATHSPECS=1`, so a listed `app/[id]/page.tsx` is that file and never also
-`app/i/page.tsx`.
+0. **Freshness at the commit gate, FIRST** — `check-loop-fresh.mjs` with `--commit-gate --front`, so the commit holds
+   the tree that was verified. Any non-zero exit → `not committed: evidence stale`, `reason_code` `checker-crashed`
+   included: the evidence could not be checked, so it is not committed (quote the JSON's `reason` in the record, since
+   the cause is the checker, not the evidence). At the commit gate the checker never offers a re-run and never spends
+   budget.
+1. **The plan's scope, re-derived** — `set-writes-scope.cjs --from-plan` over this plan, then `--amend-scope`; never
+   the scope file an earlier stage left (by now it holds this run's `LOOP.md` scope). A non-zero setter →
+   `not committed: stage failed`.
+2. **The staging list** — regular files and tracked deletions only, git-ignored paths dropped, plus the feature's
+   artifacts by name and every test the AC lock pins, NUL-separated in `.pharn/pharn-loop/<name>/stage.list`. A scope
+   file not set from this plan, or a lock or pinned test that is not a regular, non-ignored file →
+   `not committed: stage failed`; an empty list → `not committed: nothing staged`.
+3. **The branch** — the first absent of `pharn-loop/<name>`, `pharn-loop/<name>-2`, … → else
+   `not committed: branch failed`.
+4. **Stage, then commit exactly the listed paths**, with `GIT_LITERAL_PATHSPECS=1` so a listed `app/[id]/page.tsx` is
+   that file and never also `app/i/page.tsx`. The message names the record's green token — so the mode — and its
+   iteration count, and says the SPEC was approved by the model and nothing was merged or pushed. A failed add →
+   `not committed: stage failed`; a failed commit → `not committed: commit failed`. The pathspec form commits **only**
+   the listed paths, so anything the user had already staged stays staged and uncommitted. The repository's commit
+   hooks run. **Never** retry with `--no-verify`, and never run `git push` or `git merge` — the branch is for a human
+   to review.
 
-**0. Re-check freshness at the commit gate — FIRST, after every Step 6b write.** The commit must hold the
-tree that was verified:
-
-```bash
-node pharn/floor/check-loop-fresh.mjs --feature '<name>' --base '<base sha>' --commit-gate --front
-```
-
-`0` → continue to 1. **Any other exit → `not committed: evidence stale`**, and go to Step 6d — `reason_code`
-`checker-crashed` included: the evidence could not be checked, so it is not committed (quote the JSON's `reason` in
-the record, since the cause is the checker, not the evidence). At the commit
-gate the checker never offers a re-run and never spends budget: a `1`-class cause comes back as `4`,
-carrying its own `reason_code`.
-
-**1. Re-derive the plan's scope — never reuse the scope file an earlier stage left** (by now
-`.pharn/writes-scope.json` holds this run's `LOOP.md` scope, not the plan's):
-
-```bash
-node .claude/hooks/set-writes-scope.cjs --from-plan pharn/features/<name>/PLAN.md
-node pharn/floor/reconcile-baseline.mjs --amend-scope   # IMMEDIATELY after the setter, never before
-```
-
-A non-zero setter → `not committed: stage failed`; go to Step 6d. Never build the list from a scope file this
-step did not just write.
-
-**2. Build the staging list** — regular files and tracked deletions only (a `.` or directory entry is
-dropped), git-ignored paths dropped, plus the feature's artifacts by name, NUL-separated. The builder first
-confirms the scope file was set from **this** plan, and exits 3 otherwise. Git is called with an argument
-vector, never through a shell string, so a path is never parsed as shell:
-
-```bash
-node -e '
-const fs = require("fs");
-const { execFileSync } = require("child_process");
-const name = process.argv[1];
-const env = { ...process.env, GIT_LITERAL_PATHSPECS: "1" };
-const ok = (args) => { try { execFileSync("git", args, { stdio: "ignore", env }); return true; } catch { return false; } };
-const ignored = (p) => { try { execFileSync("git", ["check-ignore", "-q", "--", p], { stdio: "ignore" }); return true; } catch { return false; } };
-const rec = JSON.parse(fs.readFileSync(".pharn/writes-scope.json", "utf8"));
-if (rec.set_by !== "pharn/features/" + name + "/PLAN.md") process.exit(3);
-const scope = rec.scope;
-const artifacts = ["SPEC.md", "PLAN.md", "AC-TESTS.md", "AC-TESTS.lock.json", "GRILL.md", "BUILD.md", "REGRESSION.md", "VERIFY.md", "regression-report.json", "verify-report.json", "LOOP.md", "cost.json", "RUN-REPORT.md"].map((f) => "pharn/features/" + name + "/" + f);
-const lockPath = "pharn/features/" + name + "/AC-TESTS.lock.json";
-if (fs.existsSync(lockPath) && (!fs.lstatSync(lockPath).isFile() || ignored(lockPath))) process.exit(4);
-const pinned = fs.existsSync(lockPath) ? JSON.parse(fs.readFileSync(lockPath, "utf8")).files.map((f) => f.path) : [];
-for (const p of pinned) {
-  if (!fs.existsSync(p) || !fs.lstatSync(p).isFile() || ignored(p)) process.exit(4);
-}
-const keep = [];
-for (const p of scope.concat(artifacts, pinned)) {
-  const exists = fs.existsSync(p);
-  const isFile = exists && fs.lstatSync(p).isFile();
-  const deleted = !exists && ok(["cat-file", "-e", "HEAD:" + p]);
-  if (!isFile && !deleted) continue;
-  if (ignored(p)) continue;
-  if (!keep.includes(p)) keep.push(p);
-}
-process.stdout.write(keep.map((p) => p + "\0").join(""));
-' '<name>' > .pharn/pharn-loop/<name>/stage.list; echo "builder exit=$?"
-test -s .pharn/pharn-loop/<name>/stage.list
-```
-
-`builder exit=3` (the scope file was not set from this plan), `builder exit=4` (the lock, or a test it pins, is not a
-regular, non-ignored file), or any other non-zero builder exit → `not committed: stage failed`. Otherwise `test -s`
-non-zero → `not committed: nothing staged`. Either → Step 6d.
-
-**3. Create the branch** (first absent of `pharn-loop/<name>`, `pharn-loop/<name>-2`, …) — one block, which
-prints the name it created:
-
-```bash
-b='pharn-loop/<name>'; n=2; while git show-ref --verify --quiet "refs/heads/$b"; do b='pharn-loop/<name>'"-$n"; n=$((n+1)); done; git switch -c "$b" && echo "$b"
-```
-
-The printed name is `<branch>`; substitute it literally from here on. Non-zero → `not committed: branch failed`;
-go to Step 6d.
-
-**4. Stage, then commit exactly the listed paths:**
-
-```bash
-GIT_LITERAL_PATHSPECS=1 git add -A --pathspec-from-file=.pharn/pharn-loop/<name>/stage.list --pathspec-file-nul
-GIT_LITERAL_PATHSPECS=1 git commit --pathspec-from-file=.pharn/pharn-loop/<name>/stage.list --pathspec-file-nul -m 'pharn-loop(<name>): <decision> after <N> iteration(s)' -m 'The SPEC was approved by the model (approved_by: model), not by a person. Nothing was merged or pushed; review this branch before merging.'
-```
-
-`<decision>` is substituted literally with the green token `check-loop.mjs` emitted — `STOP_GREEN`, or
-`STOP_GREEN_QUICK` in a `--quick` run — so the commit message names the mode (6.28.0). A non-zero `git add` →
-`not committed: stage failed`; a non-zero `git commit` → `not committed: commit failed`;
-either → Step 6d. The pathspec form commits **only** the listed paths, so anything the user had already staged
-stays staged and uncommitted. The repository's commit hooks run. **Never** retry with `--no-verify`, and never
-run `git push` or `git merge` — the branch is for a human to review.
-
-On success, capture the SHA for the summary (`git rev-parse HEAD`). The checkout **stays on the new branch**;
-the summary names `<original branch>` so the user can switch back.
+On success the document carries the SHA (`commit`), and the checkout **stays on the new branch**; the summary names
+`<original branch>` so the user can switch back.
 
 ### Step 6d — when the commit does not happen
 
-For `not committed: decision unverifiable`, `not committed: evidence stale`, `not committed: nothing staged`,
-`branch failed`, `stage failed` or `commit failed` on a green stop:
+For a closeout exit `4` — `not committed: decision unverifiable`, `not committed: evidence stale`,
+`not committed: nothing staged`, `branch failed`, `stage failed` or `commit failed` on a green stop, or
+`not committed: <decision>` on a stop that is not green while the SPEC still reads Approved (Step 6a did not run, or
+its revert failed) — and for a closeout crash whose checkout is not on a `pharn-loop/<name>` branch (Step 6b's crash
+bullet; item 1 does not apply to it — a crash undid nothing):
 
-1. Undo exactly what happened, and nothing else. **`decision unverifiable` and `evidence stale` are caught
-   before any staging or branch line runs** — nothing was ever staged and no branch exists — skip straight to 2, exactly
-   as for `nothing staged` / `branch failed` / a setter-or-builder `stage failed`. After a
-   `stage failed` from `git add`, or a `commit failed`, unstage only the run's list, return to the original
-   checkout, and delete the new branch with the safe form (it holds no new commit):
+1. **On exit `4` the closeout has already undone exactly what happened, and nothing else.** `decision unverifiable` and
+   `evidence stale` are caught before any staging or branch step — nothing was staged and no branch exists — as are
+   `nothing staged`, `branch failed` and a setter-or-builder `stage failed`. After a failed add or commit it unstaged
+   only the run's list, returned with `git checkout - --` and deleted the new branch with the safe form (it holds no
+   new commit). `-` is this worktree's previous checkout (`@{-1}`) — the original branch or detached `HEAD` alike — so
+   no step types git's own output. **It is correct only because nothing checks out between the closeout's branch step
+   and its undo**: a commit hook that checks out, or another session in this worktree, makes `-` name that checkout
+   instead, and the return succeeds on the wrong target. With no `HEAD` reflog it exits non-zero and changes nothing
+   (the `--` keeps git from reading `-` as a file), leaving the checkout on the new branch. The document's `checkout`
+   says where the checkout is: put it in the summary.
+2. Apply Step 6a's revert — no commit happened, so there is no review point to hold the model's approval.
+3. Re-scope to `LOOP.md` (the Step 6b setter lines), rewrite only the `## Outcome` lines (the document's `outcome`;
+   after a crash, the outcome Step 6b's crash bullet names), and re-run the record check:
 
    ```bash
-   GIT_LITERAL_PATHSPECS=1 git reset -q --pathspec-from-file=.pharn/pharn-loop/<name>/stage.list --pathspec-file-nul
-   git checkout - --
-   git branch -d '<branch>'
+   node pharn/floor/check-loop-record.mjs pharn/features/<name>/LOOP.md
    ```
-
-   `-` is this worktree's previous checkout (`@{-1}`) — the original branch or detached `HEAD` alike — so no line
-   types git's own output. **It is correct only because nothing checks out between Step 6c's branch block and this
-   line**: a commit hook that checks out, or another session in this worktree, makes `-` name that checkout instead,
-   and the line succeeds on the wrong target. With no `HEAD` reflog it exits non-zero and changes nothing (the `--`
-   keeps git from reading `-` as a file), leaving the checkout on `<branch>`: say so in the summary. `<branch>` is the
-   name Step 6c's branch block printed.
-
-2. Apply Step 6a's revert — no commit happened, so there is no review point to hold the model's approval.
-3. Re-scope to `LOOP.md` (the Step 6b setter lines), rewrite only the `## Outcome` lines, and re-run
-   `check-loop-record.mjs`.
 
 ## Step 7 — The summary, then end the turn
 
@@ -291,20 +216,18 @@ Report, plainly and without asking anything:
   `requests[].model`. A stage agent that may still be running (a backgrounded call, S9) is named here;
 - the files changed, and the per-iteration verify / regress verdicts (a quick run: its mode, the not-checked list,
   and verify with the scope result per iteration — `## Quick mode` item 9);
-- **every stage re-run**, by stage and iteration, read from the budget ledger rather than from memory, and
-  the final freshness verdict (`FRESH`, or the `reason_code` that blocked or stopped the commit):
-
-  ```bash
-  cat .pharn/pharn-loop/<name>/freshness.jsonl 2>/dev/null || echo "no re-runs"
-  ```
-
-- **the `<decision-check>` result** (Step 6b) for the final stop — GREEN, RED (quoting
-  `check-loop-decision.mjs`'s message verbatim), or N/A on a blocked stop;
+- **every stage re-run**, by stage and iteration, read from the budget ledger the closeout printed
+  (`.pharn/pharn-loop/<name>/freshness.jsonl`, or `no re-runs`) rather than from memory, and the final freshness
+  verdict (`FRESH`, or the `reason_code` that blocked or stopped the commit);
+- **the `<decision-check>` result** for the final stop — GREEN, RED (quoting `check-loop-decision.mjs`'s message
+  verbatim from the closeout's output), or N/A on a blocked stop;
 - the **commit outcome, from this closed set**: `committed <branch>` (plus the SHA) |
   `not committed: <decision>` | `not committed: decision unverifiable` | `not committed: evidence stale` |
   `not committed: nothing staged` |
   `not committed: branch failed` | `not committed: stage failed` | `not committed: commit failed`;
-- where the checkout is: on the new branch (naming `<original branch>` to return to), or unchanged;
+- where the checkout is (the document's `checkout`): on the new branch (naming `<original branch>` to return to), or
+  unchanged — after a closeout crash, the `git status --short --branch` output and the sentence that a person must
+  check the commit state;
 - any committed path that was already dirty in the pre-run snapshot (`.pharn/pharn-loop/<name>/pre-run-status.txt`);
 - every path `pre_run_snapshot.unchanged` lists (`regression-report.json`, or a quick run's scope-check output):
   changed before the run, present when the gates ran, and never in the commit;
@@ -315,8 +238,8 @@ Report, plainly and without asking anything:
   retyped. Name the path so the reader can open it. If no report was rendered (a stop before S2 has no
   feature directory; a quick run renders none — `## Quick mode` item 8), say that plainly rather than omitting
   the line;
-- **the cost ledger**: the per-stage table `render-cost-ledger.mjs` printed at Step 6b, verbatim, plus
-  `check-cost-ledger.mjs`'s verdict (GREEN, any WARN, or a RED quoted verbatim). **The FILE is the
+- **the cost ledger**: the per-stage table `render-cost-ledger.mjs` printed inside the closeout's output, verbatim,
+  plus `check-cost-ledger.mjs`'s verdict (GREEN, any WARN, or a RED quoted verbatim). **The FILE is the
   record; this screen copy is advisory** — and both carry the same bound: the ledger reports **tokens**,
   never money, and **never** whether the spend was worthwhile. If no ledger was emitted (a stop before
   S2 has no feature directory), say that plainly rather than omitting the line;
@@ -365,6 +288,13 @@ last three feeds `check-loop.mjs`'s inputs.
   `check-loop.mjs` live. **Bounded:** it proves the decision is **re-derivable**, never that the reports are honest —
   with the freshness check, the forgery narrows to a self-consistent fabricated stamp set, and it does not close it. A
   **blocked** stop is exempt by construction.
+- **Tested code over floor verdicts (6.44.0):** the commit — `pharn/floor/loop-closeout.mjs` commits only when the
+  record's `decision` is the green token of its `mode` (enum membership), `check-loop-decision.mjs` re-derives it
+  GREEN and the commit-gate freshness check exits 0; it stages the list its builder computes, runs the steps in Step
+  6's order, undoes a failed add or commit, and carries no push, merge or `--no-verify` argument (a scan of its source
+  for the known spellings). Its suite executes every one of those paths. **Advisory:** that you run the closeout
+  rather than any git line of your own, the ≤1 record repair, and your reading of its exit code; and the return after
+  a failed commit is right only while nothing checks out between its branch step and its undo (Step 6d).
 - **Floor: hook (fix #7):** a rebuild never writes outside the plan's `## Files` (`/pharn-build`'s own setter each
   iteration), and this command's own Write-tool writes land only in `SPEC.md` (the revert) and `LOOP.md` — the
   Write/Edit/MultiEdit/NotebookEdit surface only. **Every git step, the scratch files under `.pharn/pharn-loop/`, and
@@ -391,13 +321,11 @@ last three feeds `check-loop.mjs`'s inputs.
 - **Advisory:** the orchestration and every stuck-point mapping; the SPEC approval — `approved_by: model` sits
   outside the body hash, so it is neither gated nor tamper-evident, and its absence proves nothing about a person; the
   Draft revert on a non-green stop (agent-performed; the reverted file's `Draft` shape is floor, `check-spec.mjs`);
-  every git step — what the commit holds, that only a green stop commits, that nothing is pushed or merged, that a
-  failed commit returns the checkout (Step 6d's one constant line, right only while nothing checks out after Step
-  6c's branch block) (the green token it branches on is floor; the pins over this file are vocabulary
-  checks, which a novel spelling still passes); and the `Stop` guard (`require-loop-record.cjs`), deterministic
-  infrastructure but not a floor primitive — it makes an early, record-less ending **visible and costly**, never
-  impossible, **cannot judge a record or tell a real one from a fabricated one** (`touch LOOP.md` satisfies it), runs
-  only when Claude Code starts it (`LIMITS.md §7`), and fails **open**.
+  that nothing is pushed or merged beyond the closeout's own code (a git line you typed would bypass it; the pins over
+  this file are vocabulary checks, which a novel spelling still passes); and the `Stop` guard (`require-loop-record.cjs`),
+  deterministic infrastructure but not a floor primitive — it makes an early, record-less ending **visible and
+  costly**, never impossible, **cannot judge a record or tell a real one from a fabricated one** (`touch LOOP.md`
+  satisfies it), runs only when Claude Code starts it (`LIMITS.md §7`), and fails **open**.
 - **Advisory, the parts (6.32.0):** this command reads `pharn-loop-quick.md` only for a `--quick` run, before Step 1a,
   and this file once, at the run's first stop — each again after a compaction. That you read each there, in full, and
   follow it is your own discipline: nothing on the floor sees a Read. PHARN's own tests pin the TEXT — each part's file
@@ -416,8 +344,8 @@ last three feeds `check-loop.mjs`'s inputs.
   slug's check prints only a `FEATURE_SLUG_RE` member (`pharn/floor/feature-name.mjs`, floor), while writing the
   candidate with the Write tool and re-typing only the printed value into later lines are advisory; the Stop
   guard's marker and counter, the freshness ledger and every stamp, log and report live in the writable tree Bash
-  reaches (`LIMITS.md §6`); and `.pharn/writes-scope.json` can be overwritten by a second session, which Step 6c's
-  re-derivation narrows to one line, not to zero (P2).
+  reaches (`LIMITS.md §6`); and `.pharn/writes-scope.json` can be overwritten by a second session, which the
+  closeout's scope re-derivation narrows to one step, not to zero (P2).
 - **Reported for a human, never agent-edited:** `LIMITS.md §1d`'s backstop list should name the Draft revert and the
   merge review; and `/pharn-verify`'s premise of human-approved intent does not hold under this command (a follow-up).
 - **Not a claim:** "`/pharn-loop` finished" means **a stop was reached and recorded** — STRUCK: "the feature is good",
@@ -426,6 +354,10 @@ last three feeds `check-loop.mjs`'s inputs.
   pushes, merges, seals, attests or uses `--no-verify`, and the merge decision stays a person's.
 
 ## Final step — release the writes-scope (ADVISORY lifecycle hygiene)
+
+**On a closeout exit `0` or `3` it has already run both lines below** (its document says `released: true`). Run them
+yourself on every other path: a closeout exit `4`, `2` or a crash, a `released: false`, and a stop before
+`pharn/features/<name>/` exists.
 
 After every write this command performs — **including any write that follows a human gate** — release
 the active writes-scope so a finished run cannot leave a narrow scope behind:
@@ -438,7 +370,7 @@ A leftover **set** scope is stricter than none; the release is a Bash call, so a
 (`.claude/hooks/set-writes-scope.cjs`, header). Never write "the command cleaned up"; write that it **declares**
 the release step.
 
-**Then close the run for the Stop guard** — after every write, and after the Step 7 summary is written:
+**Then close the run for the Stop guard** — after every write:
 
 ```bash
 node .claude/hooks/require-loop-record.cjs --close '<name>'
