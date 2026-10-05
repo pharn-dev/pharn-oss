@@ -2184,8 +2184,7 @@ test("✧ every emitting command emits the LEDGER and the REPORT, and checks the
   // Since 6.42.0 each emitting command reaches the three through its ONE closeout line: the invocations are the
   // closeout's steps, rendered here as the lines they replaced and matched against the same pins (their run and order
   // are EXECUTED by each closeout's own suite).
-  const asLine = (s) =>
-    `node pharn/floor/${s.script.split("/").at(-1)} ${s.args.map((a) => (a === "<name>" ? "'<name>'" : a)).join(" ")}`;
+  const asLine = (s) => `node pharn/floor/${s.script.split("/").at(-1)} ${s.args.map((a) => (a === "<name>" ? "'<name>'" : a)).join(" ")}`;
   for (const cmd of PHASE_MARKER_WIRING) {
     const body = commandBody(cmd.file);
     assert.equal(body.split("\n").filter((l) => cmd.closeout.test(l)).length, 1, `${cmd.file} must carry its closeout line once`);
@@ -4675,7 +4674,6 @@ test("★ SHELL-SINK 7 — no typed branch or undo block remains in /pharn-loop;
   assert.notEqual(body.replace(looseSentenceRe(STEP_6D_BOUND), ""), body, "precondition: the sentence is found where it is removed");
   assert.equal(stated(body.replace(looseSentenceRe(STEP_6D_BOUND), "")), false, "CONTROL: the pin sees its removal");
 });
-
 
 // The 6.28.2 lines, verbatim — CONTROLS only. Each is run once, inside a throwaway directory, with a hostile value.
 const OLD_S1_LINE = "node -e 'process.exit(/^[a-z0-9][a-z0-9-]{0,63}$/.test(process.argv[1]) ? 0 : 1)' '<slug>'";

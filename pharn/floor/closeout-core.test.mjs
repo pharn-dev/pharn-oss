@@ -35,7 +35,10 @@ test("runNode never throws: a missing script, a crashing one and a signal are no
     assert.notEqual(runNode(join(dir, "nowhere.mjs"), []).status, 0);
     writeFileSync(join(dir, "throws.mjs"), "throw new Error('x');\n");
     assert.equal(runNode(join(dir, "throws.mjs"), []).status, 1);
-    writeFileSync(join(dir, "reads.mjs"), "process.stdin.on('data', () => {}); process.stdin.on('end', () => process.stdout.write('eof'));\n");
+    writeFileSync(
+      join(dir, "reads.mjs"),
+      "process.stdin.on('data', () => {}); process.stdin.on('end', () => process.stdout.write('eof'));\n"
+    );
     const r = runNode(join(dir, "reads.mjs"), []);
     assert.equal(r.status, 0, "a child reading stdin sees end-of-input at once, never blocks");
     assert.equal(r.stdout, "eof");
@@ -71,13 +74,25 @@ test("runLedgerTail: emitted → checked → rendered; the check is skipped when
   const steps = ledgerSteps({ feature: "demo", command: "/pharn-loop", baseSha: "a".repeat(40) });
   const log = () => {};
   let r = recorder({});
-  assert.deepEqual(runLedgerTail({ steps, quick: false, run: r.run, log }), { ledger: "emitted", ledger_check: "GREEN", report: "rendered" });
+  assert.deepEqual(runLedgerTail({ steps, quick: false, run: r.run, log }), {
+    ledger: "emitted",
+    ledger_check: "GREEN",
+    report: "rendered",
+  });
   assert.deepEqual(r.ids, [steps.ledger.id, steps.ledgerCheck.id, steps.report.id]);
   r = recorder({ [steps.ledger.id]: 1 });
-  assert.deepEqual(runLedgerTail({ steps, quick: false, run: r.run, log }), { ledger: "not-emitted", ledger_check: "not-run", report: "rendered" });
+  assert.deepEqual(runLedgerTail({ steps, quick: false, run: r.run, log }), {
+    ledger: "not-emitted",
+    ledger_check: "not-run",
+    report: "rendered",
+  });
   assert.deepEqual(r.ids, [steps.ledger.id, steps.report.id], "an earlier run's cost.json is never checked as this run's");
   r = recorder({ [steps.ledgerCheck.id]: 2, [steps.report.id]: 2 });
-  assert.deepEqual(runLedgerTail({ steps, quick: false, run: r.run, log }), { ledger: "emitted", ledger_check: "UNUSABLE", report: "failed" });
+  assert.deepEqual(runLedgerTail({ steps, quick: false, run: r.run, log }), {
+    ledger: "emitted",
+    ledger_check: "UNUSABLE",
+    report: "failed",
+  });
   r = recorder({ [steps.ledgerCheck.id]: 1 });
   assert.equal(runLedgerTail({ steps, quick: true, run: r.run, log }).ledger_check, "RED");
   assert.ok(!r.ids.includes(steps.report.id), "quick: no report");

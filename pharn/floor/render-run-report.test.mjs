@@ -1259,9 +1259,17 @@ test("★ WIRING ENUMERATION (L29/L31/L45) is non-vacuous and covers every invok
     const text = commandFamilyText(cmdDir, f);
     return RENDER_INVOCATION.test(text) || ANY_CLOSEOUT.test(text);
   });
-  assert.deepEqual(invokers.sort(), [...files].sort(), "every command invoking the renderer (directly or by a closeout) must be enumerated above");
+  assert.deepEqual(
+    invokers.sort(),
+    [...files].sort(),
+    "every command invoking the renderer (directly or by a closeout) must be enumerated above"
+  );
   for (const f of commands) {
-    assert.doesNotMatch(commandFamilyText(cmdDir, f), RENDER_INVOCATION, `${f}: the render runs inside the closeout, never as a typed line`);
+    assert.doesNotMatch(
+      commandFamilyText(cmdDir, f),
+      RENDER_INVOCATION,
+      `${f}: the render runs inside the closeout, never as a typed line`
+    );
   }
 });
 

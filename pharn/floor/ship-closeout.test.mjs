@@ -70,9 +70,18 @@ test("nothing gates: a failed run-stop, marker close or emitter is reported and 
 });
 
 test("baseShaNow: a 40-hex SHA or `unknown`, never git's other output", () => {
-  assert.equal(baseShaNow(() => ({ ok: true, stdout: `${SHA}\n` })), SHA);
-  assert.equal(baseShaNow(() => ({ ok: true, stdout: "HEAD\n" })), "unknown");
-  assert.equal(baseShaNow(() => ({ ok: false })), "unknown");
+  assert.equal(
+    baseShaNow(() => ({ ok: true, stdout: `${SHA}\n` })),
+    SHA
+  );
+  assert.equal(
+    baseShaNow(() => ({ ok: true, stdout: "HEAD\n" })),
+    "unknown"
+  );
+  assert.equal(
+    baseShaNow(() => ({ ok: false })),
+    "unknown"
+  );
 });
 
 test("argv: exactly --feature <slug>", () => {
@@ -131,7 +140,10 @@ for (const quick of [false, true]) {
       assert.equal(doc.base_sha, p.head);
       assert.equal(doc.run_marker_close, "ok");
       assert.equal(existsSync(join(p.dir, ".pharn", "pharn-ship", "demo", "active.json")), false, "the run marker is closed");
-      assert.ok(lines.some((l) => /^marker \d+: run-stop /.test(l)), "mark-phase's own line printed whole");
+      assert.ok(
+        lines.some((l) => /^marker \d+: run-stop /.test(l)),
+        "mark-phase's own line printed whole"
+      );
       assert.ok(existsSync(join(p.dir, "pharn", "features", "demo", "cost.json")));
       assert.equal(existsSync(join(p.dir, "pharn", "features", "demo", "RUN-REPORT.md")), !quick);
     } finally {

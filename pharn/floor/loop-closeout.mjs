@@ -181,7 +181,10 @@ export function loopSteps(feature, base) {
     decisionCheck: step("check-loop-decision.mjs", floorScript("check-loop-decision.mjs"), [recordPath(feature)]),
     ...ledgerSteps({ feature, command: "/pharn-loop", baseSha: base }),
     fresh: step("check-loop-fresh.mjs --commit-gate --front", floorScript("check-loop-fresh.mjs"), commitGateArgs(feature, base)),
-    setScope: step("set-writes-scope.cjs --from-plan", ".claude/hooks/set-writes-scope.cjs", ["--from-plan", `${featureDir(feature)}/PLAN.md`]),
+    setScope: step("set-writes-scope.cjs --from-plan", ".claude/hooks/set-writes-scope.cjs", [
+      "--from-plan",
+      `${featureDir(feature)}/PLAN.md`,
+    ]),
     amend: step("reconcile-baseline.mjs --amend-scope", floorScript("reconcile-baseline.mjs"), ["--amend-scope"]),
     clear: step("set-writes-scope.cjs --clear", ".claude/hooks/set-writes-scope.cjs", ["--clear"]),
     closeGuard: step("require-loop-record.cjs --close", ".claude/hooks/require-loop-record.cjs", ["--close", feature]),
@@ -313,10 +316,12 @@ export function buildStageList(feature, { git = gitRun } = {}) {
   } catch {
     return { code: 1, paths: [], detail: ".pharn/writes-scope.json is unreadable or not JSON" };
   }
-  if (rec === null || typeof rec !== "object" || Array.isArray(rec)) return { code: 1, paths: [], detail: "the scope record is not an object" };
+  if (rec === null || typeof rec !== "object" || Array.isArray(rec))
+    return { code: 1, paths: [], detail: "the scope record is not an object" };
   if (rec.set_by !== `${featureDir(feature)}/PLAN.md`) return { code: 3, paths: [], detail: "the scope file was not set from this plan" };
   const scope = rec.scope;
-  if (!Array.isArray(scope) || !scope.every((p) => typeof p === "string")) return { code: 1, paths: [], detail: "the scope is not a list of paths" };
+  if (!Array.isArray(scope) || !scope.every((p) => typeof p === "string"))
+    return { code: 1, paths: [], detail: "the scope is not a list of paths" };
   const artifacts = STAGE_ARTIFACTS.map((f) => `${featureDir(feature)}/${f}`);
   const lock = lockPath(feature);
   let pinned = [];
@@ -332,7 +337,8 @@ export function buildStageList(feature, { git = gitRun } = {}) {
     if (!Array.isArray(files)) return { code: 1, paths: [], detail: "the AC-TESTS lock has no files list" };
     pinned = files.map((f) => (f !== null && typeof f === "object" ? f.path : undefined));
     for (const p of pinned) {
-      if (typeof p !== "string" || !isRegular(p) || ignored(p)) return { code: 4, paths: [], detail: "a test the lock pins is not a regular, non-ignored file" };
+      if (typeof p !== "string" || !isRegular(p) || ignored(p))
+        return { code: 4, paths: [], detail: "a test the lock pins is not a regular, non-ignored file" };
     }
   }
   const keep = [];
@@ -593,7 +599,9 @@ function main(argv) {
   const log = (s) => process.stdout.write(s);
   const p = parseArgs(argv);
   if (!p.ok) {
-    process.stderr.write(`loop-closeout: ${p.detail}\nusage: node pharn/floor/loop-closeout.mjs --feature <name> --base <40-hex> [--after-repair]\n`);
+    process.stderr.write(
+      `loop-closeout: ${p.detail}\nusage: node pharn/floor/loop-closeout.mjs --feature <name> --base <40-hex> [--after-repair]\n`
+    );
     const doc = emptyDoc(null);
     doc.exit = EXIT.UNUSABLE;
     doc.refusal = "usage";
@@ -607,7 +615,9 @@ function main(argv) {
     log(closingLine(doc));
     process.exitCode = doc.exit;
   } catch (e) {
-    process.stderr.write(`loop-closeout: crashed in phase ${trace.phase}: ${e && typeof e.message === "string" ? e.message : "unknown error"}\n`);
+    process.stderr.write(
+      `loop-closeout: crashed in phase ${trace.phase}: ${e && typeof e.message === "string" ? e.message : "unknown error"}\n`
+    );
     process.exitCode = 1;
   }
 }

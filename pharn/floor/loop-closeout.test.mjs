@@ -79,7 +79,8 @@ function fixture({ record = loopRecord(), spec = "Draft", reflog = true } = {}) 
   mkdirSync(join(dir, ".pharn", "pharn-loop", FEATURE), { recursive: true });
   mkdirSync(join(dir, "src"), { recursive: true });
   writeFileSync(join(dir, "src", "a.js"), "export const a = 1;\n");
-  const head = () => sh(dir, "symbolic-ref", "--short", "-q", "HEAD").stdout.trim() || `detached@${sh(dir, "rev-parse", "HEAD").stdout.trim()}`;
+  const head = () =>
+    sh(dir, "symbolic-ref", "--short", "-q", "HEAD").stdout.trim() || `detached@${sh(dir, "rev-parse", "HEAD").stdout.trim()}`;
   const hasBranch = (b) => sh(dir, "show-ref", "--verify", "--quiet", `refs/heads/${b}`).status === 0;
   return { dir, base, head, hasBranch, done: () => rmSync(dir, { recursive: true, force: true }) };
 }
@@ -158,7 +159,8 @@ const TODAY = {
   "render-cost-ledger.mjs": "node pharn/floor/render-cost-ledger.mjs '<name>' --command /pharn-loop --base-sha '<base sha>'",
   "check-cost-ledger.mjs": "node pharn/floor/check-cost-ledger.mjs pharn/features/<name>/cost.json",
   "render-run-report.mjs": "node pharn/floor/render-run-report.mjs '<name>' --base pharn/features",
-  "check-loop-fresh.mjs --commit-gate --front": "node pharn/floor/check-loop-fresh.mjs --feature '<name>' --base '<base sha>' --commit-gate --front",
+  "check-loop-fresh.mjs --commit-gate --front":
+    "node pharn/floor/check-loop-fresh.mjs --feature '<name>' --base '<base sha>' --commit-gate --front",
   "set-writes-scope.cjs --from-plan": "node .claude/hooks/set-writes-scope.cjs --from-plan pharn/features/<name>/PLAN.md",
   "reconcile-baseline.mjs --amend-scope": "node pharn/floor/reconcile-baseline.mjs --amend-scope",
   "set-writes-scope.cjs --clear": "node .claude/hooks/set-writes-scope.cjs --clear",
@@ -231,7 +233,13 @@ test("★ exit 0 — a green stop commits exactly the list, in today's order, wi
     for (const c of s.calls) assert.deepEqual(callTokens(c, fx.base), lineTokens(TODAY[c.id]), `${c.id}'s argv`);
     // What the commit holds: the scoped path and the artifacts that exist — never the unrelated file.
     const files = sh(fx.dir, "show", "--name-only", "--format=", "HEAD").stdout.trim().split("\n").sort();
-    assert.deepEqual(files, ["pharn/features/demo/LOOP.md", "pharn/features/demo/PLAN.md", "pharn/features/demo/SPEC.md", "pharn/features/demo/cost.json", "src/a.js"]);
+    assert.deepEqual(files, [
+      "pharn/features/demo/LOOP.md",
+      "pharn/features/demo/PLAN.md",
+      "pharn/features/demo/SPEC.md",
+      "pharn/features/demo/cost.json",
+      "src/a.js",
+    ]);
     assert.equal(sh(fx.dir, "log", "-1", "--format=%s").stdout.trim(), "pharn-loop(demo): STOP_GREEN after 1 iteration(s)");
     assert.equal(sh(fx.dir, "log", "-1", "--format=%b").stdout.trim(), COMMIT_BODY);
     assert.equal(sh(fx.dir, "status", "--porcelain", "--", "unrelated.txt").stdout.trim(), "?? unrelated.txt", "left untouched");
@@ -336,14 +344,49 @@ test("exit 5 — a RED record stops before anything else; --after-repair reports
 // ── green stops that do not commit (exit 4) ──────────────────────────────────────────────────────────────────
 
 for (const [label, opts, reason, lastStep] of [
-  ["a RED decision check", { record: loopRecord(), exits: { "check-loop-decision.mjs": 1 } }, "decision unverifiable", "render-run-report.mjs"],
-  ["a green token that disagrees with the record's mode", { record: loopRecord({ decision: "STOP_GREEN_QUICK" }) }, "decision unverifiable", "render-run-report.mjs"],
-  ["an unreadable decision", { record: loopRecord({ decision: "STOP_GREENISH" }), afterRepair: true }, "decision unverifiable", "render-run-report.mjs"],
-  ["a stale commit gate", { exits: { "check-loop-fresh.mjs --commit-gate --front": 4 } }, "evidence stale", "check-loop-fresh.mjs --commit-gate --front"],
-  ["a crashed commit gate", { exits: { "check-loop-fresh.mjs --commit-gate --front": null } }, "evidence stale", "check-loop-fresh.mjs --commit-gate --front"],
+  [
+    "a RED decision check",
+    { record: loopRecord(), exits: { "check-loop-decision.mjs": 1 } },
+    "decision unverifiable",
+    "render-run-report.mjs",
+  ],
+  [
+    "a green token that disagrees with the record's mode",
+    { record: loopRecord({ decision: "STOP_GREEN_QUICK" }) },
+    "decision unverifiable",
+    "render-run-report.mjs",
+  ],
+  [
+    "an unreadable decision",
+    { record: loopRecord({ decision: "STOP_GREENISH" }), afterRepair: true },
+    "decision unverifiable",
+    "render-run-report.mjs",
+  ],
+  [
+    "a stale commit gate",
+    { exits: { "check-loop-fresh.mjs --commit-gate --front": 4 } },
+    "evidence stale",
+    "check-loop-fresh.mjs --commit-gate --front",
+  ],
+  [
+    "a crashed commit gate",
+    { exits: { "check-loop-fresh.mjs --commit-gate --front": null } },
+    "evidence stale",
+    "check-loop-fresh.mjs --commit-gate --front",
+  ],
   ["a failed setter", { exits: { "set-writes-scope.cjs --from-plan": 1 } }, "stage failed", "set-writes-scope.cjs --from-plan"],
-  ["a scope set by another plan", { scopeRecord: { scope: ["src/a.js"], set_by: "pharn/features/other/PLAN.md" } }, "stage failed", "reconcile-baseline.mjs --amend-scope"],
-  ["hostile scope JSON (L62)", { scopeRecord: { scope: [{ toString: 1 }], set_by: "pharn/features/demo/PLAN.md" } }, "stage failed", "reconcile-baseline.mjs --amend-scope"],
+  [
+    "a scope set by another plan",
+    { scopeRecord: { scope: ["src/a.js"], set_by: "pharn/features/other/PLAN.md" } },
+    "stage failed",
+    "reconcile-baseline.mjs --amend-scope",
+  ],
+  [
+    "hostile scope JSON (L62)",
+    { scopeRecord: { scope: [{ toString: 1 }], set_by: "pharn/features/demo/PLAN.md" } },
+    "stage failed",
+    "reconcile-baseline.mjs --amend-scope",
+  ],
   ["an unparseable scope file", { scopeRecord: "{" }, "stage failed", "reconcile-baseline.mjs --amend-scope"],
 ]) {
   test(`exit 4 — ${label} → not committed: ${reason}; nothing committed, no release`, () => {
@@ -455,11 +498,20 @@ test("buildStageList — regular files and tracked deletions, minus ignored ones
       symlinkSync("nowhere", "dangling");
       writeFileSync(
         join(".pharn", "writes-scope.json"),
-        JSON.stringify({ set_by: "pharn/features/demo/PLAN.md", scope: ["src/a.js", "README", "ignored.log", "dangling", "src", "src/a.js", "absent.js"] })
+        JSON.stringify({
+          set_by: "pharn/features/demo/PLAN.md",
+          scope: ["src/a.js", "README", "ignored.log", "dangling", "src", "src/a.js", "absent.js"],
+        })
       );
       const r = buildStageList(FEATURE);
       assert.equal(r.code, 0);
-      assert.deepEqual(r.paths, ["src/a.js", "README", "pharn/features/demo/SPEC.md", "pharn/features/demo/PLAN.md", "pharn/features/demo/LOOP.md"]);
+      assert.deepEqual(r.paths, [
+        "src/a.js",
+        "README",
+        "pharn/features/demo/SPEC.md",
+        "pharn/features/demo/PLAN.md",
+        "pharn/features/demo/LOOP.md",
+      ]);
     });
   } finally {
     fx.done();
@@ -487,7 +539,21 @@ test("buildStageList — the lock's pinned tests are staged", () => {
 test("STAGE_ARTIFACTS is the close part's former list, in its order", () => {
   assert.deepEqual(
     [...STAGE_ARTIFACTS],
-    ["SPEC.md", "PLAN.md", "AC-TESTS.md", "AC-TESTS.lock.json", "GRILL.md", "BUILD.md", "REGRESSION.md", "VERIFY.md", "regression-report.json", "verify-report.json", "LOOP.md", "cost.json", "RUN-REPORT.md"]
+    [
+      "SPEC.md",
+      "PLAN.md",
+      "AC-TESTS.md",
+      "AC-TESTS.lock.json",
+      "GRILL.md",
+      "BUILD.md",
+      "REGRESSION.md",
+      "VERIFY.md",
+      "regression-report.json",
+      "verify-report.json",
+      "LOOP.md",
+      "cost.json",
+      "RUN-REPORT.md",
+    ]
   );
 });
 
@@ -542,7 +608,8 @@ test("recordFacts reads the envelope as the checkers do: quotes stripped, BOM an
 });
 
 test("the decision vocabulary equals check-loop-record.mjs's and check-loop-decision.mjs's own", () => {
-  const read = (f) => JSON.parse(`[${readFileSync(join(HERE, f), "utf8").match(/const DECISION_ENUM = new Set\(\[([^\]]*)\]\)/)[1]}]`).sort();
+  const read = (f) =>
+    JSON.parse(`[${readFileSync(join(HERE, f), "utf8").match(/const DECISION_ENUM = new Set\(\[([^\]]*)\]\)/)[1]}]`).sort();
   const mine = read("loop-closeout.mjs");
   assert.equal(mine.length, 5);
   assert.deepEqual(read("check-loop-record.mjs"), mine);
@@ -638,7 +705,8 @@ function e2eFixture(opts) {
   const fx = fixture(opts);
   symlinkSync(join(REPO, "pharn", "floor"), join(fx.dir, "pharn", "floor"), "dir");
   mkdirSync(join(fx.dir, ".claude", "hooks"), { recursive: true });
-  for (const h of ["set-writes-scope.cjs", "require-loop-record.cjs"]) copyFileSync(join(REPO, ".claude", "hooks", h), join(fx.dir, ".claude", "hooks", h));
+  for (const h of ["set-writes-scope.cjs", "require-loop-record.cjs"])
+    copyFileSync(join(REPO, ".claude", "hooks", h), join(fx.dir, ".claude", "hooks", h));
   return fx;
 }
 
@@ -654,8 +722,20 @@ test("★ END-TO-END — a blocked stop, real children: ledger and report writte
     const env = { ...process.env, CLAUDE_PROJECT_DIR: fx.dir };
     delete env.CLAUDE_CODE_SESSION_ID;
     // The run as Step 1a opened it: the Stop guard's marker and the run-start marker.
-    assert.equal(spawnSync(process.execPath, [join(".claude", "hooks", "require-loop-record.cjs"), "--open", FEATURE, "--cap", "3"], { cwd: fx.dir, env }).status, 0);
-    assert.equal(spawnSync(process.execPath, [join("pharn", "floor", "mark-phase.mjs"), "--name", FEATURE, "--kind", "run-start"], { cwd: fx.dir, env }).status, 0);
+    assert.equal(
+      spawnSync(process.execPath, [join(".claude", "hooks", "require-loop-record.cjs"), "--open", FEATURE, "--cap", "3"], {
+        cwd: fx.dir,
+        env,
+      }).status,
+      0
+    );
+    assert.equal(
+      spawnSync(process.execPath, [join("pharn", "floor", "mark-phase.mjs"), "--name", FEATURE, "--kind", "run-start"], {
+        cwd: fx.dir,
+        env,
+      }).status,
+      0
+    );
     const r = runCli(fx, ["--feature", FEATURE, "--base", fx.base]);
     assert.equal(r.status, EXIT.NOT_COMMITTED, `${r.stdout}${r.stderr}`);
     const lines = r.stdout.trimEnd().split("\n");
@@ -666,8 +746,14 @@ test("★ END-TO-END — a blocked stop, real children: ledger and report writte
     assert.equal(doc.ledger, "emitted");
     assert.equal(doc.report, "rendered");
     assert.equal(doc.released, true);
-    assert.ok(lines.some((l) => /^marker \d+: run-stop /.test(l)), "mark-phase's own line is printed whole (run membership reads it)");
-    assert.ok(lines.slice(0, -1).every((l) => !l.startsWith("{")), "only the closing line starts at column 0 with a brace");
+    assert.ok(
+      lines.some((l) => /^marker \d+: run-stop /.test(l)),
+      "mark-phase's own line is printed whole (run membership reads it)"
+    );
+    assert.ok(
+      lines.slice(0, -1).every((l) => !l.startsWith("{")),
+      "only the closing line starts at column 0 with a brace"
+    );
     assert.ok(existsSync(join(fx.dir, "pharn", "features", FEATURE, "cost.json")));
     assert.ok(existsSync(join(fx.dir, "pharn", "features", FEATURE, "RUN-REPORT.md")));
     assert.equal(existsSync(join(fx.dir, ".pharn", "pharn-loop", FEATURE, "active.json")), false, "the Stop guard's marker is closed");
