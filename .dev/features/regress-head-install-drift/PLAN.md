@@ -247,6 +247,19 @@ Approved with one change, 2026-10-05:
   stated bounds; the latter is said in the CHANGELOG.
 - Keep the `stage-regress.mjs` diff local.
 
+## Grill amendments (builder, after `/pharn-dev-grill`; GRILL.md has the findings)
+
+- G1 — the `clean` line says what was compared ("npm's record of the installed tree agrees with `<lockfile>`"), never
+  "the install is correct".
+- G2 — an absent or malformed recorded block renders `head_install: null` and "HEAD install: not recorded"; never a
+  refusal, never a made-up state.
+- G3 — a test feeds a lockfile key with a newline and a backtick run through the refusal render: one fenced block.
+- G5 — integration fixtures git-ignore `node_modules/`; refusal tests assert `reason_code` `head-install-drift`, with a
+  matching-hidden-lockfile control that reaches `done`.
+- G6 — `--no-install` and `--gates` do not change the HEAD check; the contract says so.
+- Declined: G4 (move INSTALL_RULE to a neutral module — pinned imports and contract cites; follow-up only if a third
+  stage needs it), G7 (drop the `not-checked` labelling — accepted at GATE 1).
+
 ## Open questions (HALT)
 
 None.
