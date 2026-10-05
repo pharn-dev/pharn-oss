@@ -49,8 +49,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
       the same drain and within its budget.
     - `--abort` runs first at every stop and stops any gate still running.
     - `/pharn-loop` maps exit 4 to the new **S14** `blocked: gates-red-at-entry`, unless the person passed a leading
-      `--allow-red-entry`, which says fixing that gate is the feature. A run with no gates is S4, and anything else is
-      S9. `/pharn-ship` asks the person **Stop** or **Continue**.
+      `--allow-red-entry`, which says fixing that gate is the feature. A run with no gates is S4. When the check could
+      not judge (exit 2), the run goes on and its summary names the reason. `/pharn-ship` asks the person **Stop** or
+      **Continue**.
+    - A gate that rewrites a file itself (`next build` regenerating `next-env.d.ts`) does so after the pre-run snapshot.
+      `--wait` records the paths a `mutated` gate changed in a second git-dir record beside the snapshot, bound to the
+      same run marker (`pre-run-snapshot.mjs` `recordEntryChanges`; the snapshot's shape, digest and decision). The
+      `/pharn-regress` partition and the quick scope check then report such a path in a conditional
+      `entry_gate_changes` block, and do not count it as the build's escape while it keeps those bytes
+      ([`regression-report.md`](./pharn/pharn-contracts/regression-report.md)).
   - **Two invariants, each tested.**
     - The `entry` stage's fingerprint also excludes the run's whole `pharn/features/<name>/`, where the front stages
       write. Any other change between gates still refuses. This is sound for `entry` only: its stamp is never reuse
@@ -60,9 +67,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **Bounds, in the module headers.**
     - It never claims verify would fail.
     - That non-style gates do not read the feature directory is assumed, not checked (advisory).
-    - A front-stage write outside that directory between two gates stops the loop at S9.
+    - A front-stage write outside that directory between two gates makes the check unusable. If it lands during a
+      `mutated` gate, it is recorded with that gate's changes.
     - `.pharn/` state is forgeable through Bash.
-    - A gate's own `setsid` child survives `--abort`.
+    - Only a process reparented before `--abort` lists the processes (a double-forked daemon) escapes it. `--abort`
+      freezes and lists the gate groups, and it kills a survivor only when the survivor still matches that list.
     - A healthy quick run may wait for whatever part of the gates' time its short front does not cover.
   - **Follow-ups:**
     - `entry-run-as-base-evidence`: offer the entry stamp as regress's BASE evidence;

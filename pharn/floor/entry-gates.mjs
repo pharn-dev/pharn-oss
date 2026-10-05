@@ -11,15 +11,19 @@
 // /pharn-loop: `--start` is Step 1a's last line, `--wait` runs between the grill and the test stage, `--abort` runs first
 // at every stop. /pharn-ship: `--start` after its pre-run snapshot, the same `--wait` point, `--abort` at every STOP.
 //
-// --start  supersedes an earlier runner of this tree (one per tree, L38: `--abort` first), wipes `.pharn/pharn-entry/`
-//          (containment-walked; a symlink at any component refuses — L54), records `runner.json` with a fresh nonce
-//          BEFORE anything else (pid null), runs `run-gates.mjs init --stage entry` synchronously, then spawns the
-//          runner (`detached`, so `setsid`: it outlives the Bash call — measured — and has its own process group) and
-//          rewrites the record with its pid. Exit 0 started · 3 no gates (a `no-gates` result is recorded, no runner) ·
-//          2 refused (`entry-gates: refused <reason> — …` on stderr; a runner refusal records an `unusable` result).
+// --start  supersedes an earlier runner of this tree (one per tree, L38: `--abort` first; review R6 — an earlier pid
+//          that is alive but cannot be verified, with no `ps`, refuses `runner-unverifiable` and wipes nothing), wipes
+//          `.pharn/pharn-entry/` (containment-walked; a symlink at any component refuses — L54) and an earlier run's
+//          entry-gate changes record, records `runner.json` with a fresh nonce BEFORE anything else (pid null), runs
+//          `run-gates.mjs init --stage entry` synchronously, then spawns the runner (`detached`, so `setsid`: it outlives
+//          the Bash call — measured — and has its own process group) and rewrites the record with its pid. Exit 0 started
+//          · 3 no gates (a `no-gates` result is recorded, no runner) · 2 refused (`entry-gates: refused <reason> — …` on
+//          stderr; a runner refusal records an `unusable` result).
 // --runner INTERNAL. Refuses unless `runner.json` names its nonce and feature. One `run-gates.mjs run --next` per gate,
-//          the feature-directory digest before and after each, then `result.json` LAST (tmp + rename), carrying the
-//          nonce, the stamp's sha256 and the per-gate digests. Any error writes an `unusable` result instead.
+//          the feature-directory digest AND the changed-path listing (scope-inputs.mjs `changedPaths(HEAD)` minus the
+//          feature directory, each path through pre-run-snapshot.mjs `pathDigest`) before and after each, then
+//          `result.json` LAST (tmp + rename), carrying the nonce, the stamp's sha256, the per-gate digests and the
+//          per-gate changes. Any error writes an `unusable` result instead.
 // --wait   blocks inside node (never a model poll) up to --budget-ms. It reads ONLY a `result.json` carrying the nonce
 //          and feature of the `runner.json` in place (L66 — a directory `--start` created empty, a file the runner
 //          writes last), re-reads the stamp, requires its sha256 to be the result's, `validateStamp(…, {stage:
@@ -27,19 +31,27 @@
 //          or exit 5 when the budget is spent. No result + runner GONE (a harness that kills a Bash call's descendants,
 //          a crash) → TAKEOVER: it runs what is left in the foreground through the SAME drain (`drainEntry`; the digests
 //          so far come from progress.json), within its budget (stage-exit-core.mjs mayStartSlowStep), and exits 5 to be
-//          re-run when out of it; with no gate run in progress at all → `runner-died`. Prints ONE JSON document
-//          (entry-gates-core.mjs DOC_SCHEMA). Exit 0 green · 4 red · 3 no-gates · 5 continue · 2 unusable.
+//          re-run when out of it; with no gate run in progress at all → `runner-died`. On a verdict it RECORDS the paths a
+//          `mutated` gate changed beside the pre-run snapshot (pre-run-snapshot.mjs `recordEntryChanges`, review R1), so
+//          /pharn-regress and the quick scope check report them rather than count them as the build's escape. Prints ONE
+//          JSON document (entry-gates-core.mjs DOC_SCHEMA). Exit 0 green · 4 red · 3 no-gates · 5 continue · 2 unusable.
 // --abort  a no-op (exit 0) when no runner record exists, it names another feature, or its pid is not this runner's.
-//          Otherwise: SIGSTOP the runner's process group (so it starts nothing new), snapshot `ps -A -o
-//          pid=,ppid=,pgid=`, SIGTERM every descendant's process group (each gate is its own group — run-gates.mjs
-//          spawnGate), SIGKILL the runner's group, SIGKILL any survivor after a grace, record an `aborted` result.
-//          No signal is sent until `ps -ww -p <pid> -o args=` shows this runner's nonce, so a reused pid is never
-//          signalled. Its exit never changes the stop it runs at.
+//          Otherwise (review R4): SIGSTOP the runner's process group (so it starts nothing new), then list
+//          `ps -A -o pid=,ppid=,pgid=` and SIGSTOP every descendant's process group, re-listing until the set is stable;
+//          SIGTERM + SIGCONT those groups, wait a grace, SIGKILL a survivor group only when one of its processes still
+//          matches a listed `(pid, ppid, pgid)` (entry-gates-core.mjs `killableGroups`), then SIGKILL the runner's group
+//          and record an `aborted` result. No signal is sent until `ps -ww -p <pid> -o args=` shows this runner's nonce,
+//          so a reused pid is never signalled. Its exit never changes the stop it runs at.
 //
 // ================================ BOUNDS, NAMED ================================
-//   • A process a gate starts with its own `setsid` leaves that gate's group and survives `--abort` (run-gates.mjs's own
-//     bound). With no `ps` on PATH, `--abort` kills only the runner's group and says so; `--wait` then reads a live pid
-//     as alive.
+//   • Descendants are found by parent pid, so a process a gate starts in its own group or session (`detached`, `setsid`)
+//     IS found and killed while its parent is alive at the listing (review R5, reproduced). Only a process that was
+//     reparented before the listing — a double-forked daemon whose parent already exited — escapes `--abort`. With no
+//     `ps` on PATH, `--abort` signals nothing and says so; `--wait` then reads a live pid as alive.
+//   • The recorded gate changes are what the listings saw DURING a `mutated` gate: a front-stage write outside the
+//     feature directory that lands during such a gate is recorded with it (and so not counted at regress while it keeps
+//     its bytes). A gate re-run after a takeover is listed from the takeover's own start, so a write its killed first
+//     attempt left, rewritten byte-identically, is not recorded and reads as an escape — the safe direction.
 //   • An orchestrator that dies without a stop leaves the runner to finish its gates (each bounded by --timeout-ms);
 //     the next `--start` in the tree supersedes it.
 //   • A front-stage write OUTSIDE `pharn/features/<name>/` while the gates run: landing BETWEEN two gates it is a tree
@@ -82,8 +94,13 @@ import {
   entryDocument,
   parsePsTable,
   descendantGroups,
+  killableGroups,
+  listingDiff,
+  CHANGES_RECORD,
   shown,
 } from "./entry-gates-core.mjs";
+import { changedPaths } from "./scope-inputs.mjs";
+import { pathDigest, recordEntryChanges, clearEntryChanges } from "./pre-run-snapshot.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RUN_GATES = join(HERE, "run-gates.mjs");
@@ -207,29 +224,54 @@ function signalGroup(pgid, signal) {
   }
 }
 
-/** Stop a verified runner and every gate it started. Returns `{killed, how}`, `how` a short, fixed-vocabulary text. */
+/** `ps -A -o pid=,ppid=,pgid=` as rows, or null when ps cannot run. */
+function psRows() {
+  const ps = spawnSync("ps", ["-A", "-o", "pid=,ppid=,pgid="], { encoding: "utf8", maxBuffer: 1 << 26 });
+  return ps.error || ps.status !== 0 ? null : parsePsTable(ps.stdout);
+}
+
+const FREEZE_PASSES = 5;
+
+/** Stop a verified runner and every gate it started (review R4). Returns `{killed, unverifiable, how}`, `how` a short,
+ *  fixed-vocabulary text; `unverifiable` when the pid is alive but `ps` cannot say whose it is (review R6). */
 function killRunner(rec) {
-  if (rec.pid === null) return { killed: false, how: "no runner process was recorded" };
+  if (rec.pid === null) return { killed: false, unverifiable: false, how: "no runner process was recorded" };
   const mine = psShowsNonce(rec.pid, rec.nonce);
   if (mine !== true) {
+    const unverifiable = mine === null && pidAlive(rec.pid);
     return {
       killed: false,
+      unverifiable,
       how: mine === null ? "ps is unavailable, so the recorded pid could not be verified; nothing was signalled" : "no runner is running",
     };
   }
+  // Freeze the runner (it starts nothing new), then every descendant group, re-listing until the set is stable.
   signalGroup(rec.pid, "SIGSTOP");
-  const ps = spawnSync("ps", ["-A", "-o", "pid=,ppid=,pgid="], { encoding: "utf8", maxBuffer: 1 << 26 });
-  const groups = ps.error || ps.status !== 0 ? [] : descendantGroups(parsePsTable(ps.stdout), rec.pid);
-  for (const g of groups) signalGroup(g, "SIGTERM");
-  signalGroup(rec.pid, "SIGKILL");
+  let rows = psRows();
+  let groups = [];
+  for (let i = 0; rows !== null && i < FREEZE_PASSES; i++) {
+    const next = descendantGroups(rows, rec.pid);
+    for (const g of next) if (!groups.includes(g)) signalGroup(g, "SIGSTOP");
+    const stable = next.length === groups.length && next.every((g) => groups.includes(g));
+    groups = next;
+    if (stable) break;
+    rows = psRows();
+  }
+  // TERM + CONT so each gate can handle TERM; then KILL only a survivor that still matches the frozen listing.
+  for (const g of groups) {
+    signalGroup(g, "SIGTERM");
+    signalGroup(g, "SIGCONT");
+  }
   const until = Date.now() + KILL_GRACE_MS;
-  while (Date.now() < until && (groups.some(groupAlive) || groupAlive(rec.pid))) sleepMs(50);
-  for (const g of groups) if (groupAlive(g)) signalGroup(g, "SIGKILL");
+  while (Date.now() < until && groups.some(groupAlive)) sleepMs(50);
+  const now = groups.some(groupAlive) ? psRows() : [];
+  if (rows !== null && now !== null) for (const g of killableGroups(rows, now, groups)) signalGroup(g, "SIGKILL");
+  signalGroup(rec.pid, "SIGKILL");
   const how =
-    ps.error || ps.status !== 0
+    rows === null
       ? "the runner's group was killed; ps -A failed, so its gates may survive"
       : `the runner and ${groups.length} gate group(s) were stopped`;
-  return { killed: true, how };
+  return { killed: true, unverifiable: false, how };
 }
 
 function result(status, feature, nonce, extra = {}) {
@@ -310,10 +352,18 @@ function start({ feature, timeoutMs }) {
   let superseded = null;
   if (prior.state === "ok" && runnerRecordDefect(prior.value) === null) {
     const k = killRunner(prior.value);
+    if (k.unverifiable) {
+      return refuse(
+        "runner-unverifiable",
+        `an earlier runner's pid ${prior.value.pid} is alive but ps cannot verify it; nothing was wiped — stop it, or remove ${ENTRY_PATHS.root}, then start again`
+      );
+    }
     if (k.killed) superseded = k.how;
   }
   rmSync(ENTRY_PATHS.root, { recursive: true, force: true });
   mkdirSync(ENTRY_PATHS.root, { recursive: true });
+  if (!clearEntryChanges())
+    return refuse("path-containment", "an earlier run's entry-gate changes record in the git dir could not be removed");
 
   const nonce = randomBytes(16).toString("hex");
   const rec = { schema: RUNNER_SCHEMA, feature, nonce, pid: null, timeout_ms: timeoutMs, d0: featureDirDigest(feature) };
@@ -371,25 +421,53 @@ function start({ feature, timeoutMs }) {
  *  (the direction that never stops a run). */
 function readProgress(feature, nonce) {
   const p = readRecord(ENTRY_PATHS.progress);
-  if (p.state !== "ok" || progressRecordDefect(p.value) !== null) return [];
-  return p.value.nonce === nonce && p.value.feature === feature ? p.value.feature_dir : [];
+  if (p.state !== "ok" || progressRecordDefect(p.value) !== null) return { featureDir: [], gateChanges: [] };
+  return p.value.nonce === nonce && p.value.feature === feature
+    ? { featureDir: p.value.feature_dir, gateChanges: p.value.gate_changes }
+    : { featureDir: [], gateChanges: [] };
 }
 
-/** The ONE drain the runner and a `--wait` takeover share: one `run-gates.mjs run --next` per gate, the feature
- *  directory's digest before and after each, persisted to progress.json after every gate (a takeover keeps them; a
- *  stale-lock re-run of the same gate replaces its entry). `budget.may()` gates every gate. Returns
- *  `{kind: done, featureDir}` · `{kind: budget}` · `{kind: refused, detail, runnerReason}`. */
+/** The changed-since-HEAD paths outside the run's feature directory, each with its `pathDigest` (review R1), or null
+ *  when git cannot list them (the gate's changes are then not recorded — they read as escapes, the safe direction). */
+function changedListing(feature, head) {
+  if (head === null) return null;
+  const c = changedPaths(head);
+  if (!c.ok) return null;
+  const dir = productFeatureDir(feature);
+  return new Map(c.value.filter((p) => !p.startsWith(dir)).map((p) => [p, pathDigest(p)]));
+}
+
+function headSha() {
+  const r = spawnSync("git", ["rev-parse", "--verify", "--quiet", "HEAD"], { encoding: "utf8" });
+  const s = r.status === 0 ? r.stdout.trim() : "";
+  return /^[0-9a-f]{40}$/.test(s) ? s : null;
+}
+
+/** Replace or append the entry for `id` in a list of `{id, …}` (a stale-lock re-run of the same gate replaces it). */
+function upsert(list, entry) {
+  const i = list.findIndex((x) => x.id === entry.id);
+  if (i === -1) list.push(entry);
+  else list[i] = entry;
+}
+
+/** The ONE drain the runner and a `--wait` takeover share: one `run-gates.mjs run --next` per gate; around each, the
+ *  feature directory's digest and the changed-path listing; both persisted to progress.json after every gate (a takeover
+ *  keeps them). `budget.may()` gates every gate. Returns `{kind: done, featureDir, gateChanges}` · `{kind: budget}` ·
+ *  `{kind: refused, detail, runnerReason}`. */
 function drainEntry({ feature, nonce, timeoutMs, budget }) {
-  const featureDir = readProgress(feature, nonce);
+  const { featureDir, gateChanges } = readProgress(feature, nonce);
+  const head = headSha();
   for (;;) {
     if (!budget.may()) return { kind: "budget" };
     const before = featureDirDigest(feature);
+    const listBefore = changedListing(feature, head);
     const r = spawnSync(process.execPath, [RUN_GATES, "run", "--next", "--out", ENTRY_PATHS.gates, "--timeout-ms", String(timeoutMs)], {
       encoding: "utf8",
     });
     const after = featureDirDigest(feature);
+    const listAfter = changedListing(feature, head);
     const parsed = parseJson(r.stdout);
-    if (r.status === 3) return { kind: "done", featureDir };
+    if (r.status === 3) return { kind: "done", featureDir, gateChanges };
     if (r.status !== 0 || parsed === null) {
       return {
         kind: "refused",
@@ -399,18 +477,17 @@ function drainEntry({ feature, nonce, timeoutMs, budget }) {
     }
     budget.spent();
     if (typeof parsed.ran === "string") {
-      const entry = { id: parsed.ran, before, after };
-      const i = featureDir.findIndex((x) => x.id === entry.id);
-      if (i === -1) featureDir.push(entry);
-      else featureDir[i] = entry;
-      writeAtomic(ENTRY_PATHS.progress, { schema: PROGRESS_SCHEMA, feature, nonce, feature_dir: featureDir });
+      upsert(featureDir, { id: parsed.ran, before, after });
+      const paths = listBefore !== null && listAfter !== null ? listingDiff(listBefore, listAfter, (p) => pathDigest(p)) : [];
+      upsert(gateChanges, { id: parsed.ran, paths });
+      writeAtomic(ENTRY_PATHS.progress, { schema: PROGRESS_SCHEMA, feature, nonce, feature_dir: featureDir, gate_changes: gateChanges });
     }
-    if (parsed.finalized || parsed.remaining === 0) return { kind: "done", featureDir };
+    if (parsed.finalized || parsed.remaining === 0) return { kind: "done", featureDir, gateChanges };
   }
 }
 
 /** Write the run's result LAST: `done` bound to the stamp's bytes, or `unusable` when no readable stamp exists. */
-function finalizeResult(feature, nonce, featureDir) {
+function finalizeResult(feature, nonce, featureDir, gateChanges) {
   const stamp = readInProject(ENTRY_PATHS.stamp, STAMP_MAX_BYTES);
   if (stamp.state !== "ok") {
     writeAtomic(
@@ -420,7 +497,10 @@ function finalizeResult(feature, nonce, featureDir) {
     return;
   }
   const sha = createHash("sha256").update(stamp.bytes).digest("hex");
-  writeAtomic(ENTRY_PATHS.result, result("done", feature, nonce, { stamp_sha256: sha, feature_dir: featureDir }));
+  writeAtomic(
+    ENTRY_PATHS.result,
+    result("done", feature, nonce, { stamp_sha256: sha, feature_dir: featureDir, gate_changes: gateChanges })
+  );
 }
 
 function runner({ feature, timeoutMs, nonce }) {
@@ -435,7 +515,7 @@ function runner({ feature, timeoutMs, nonce }) {
       writeAtomic(ENTRY_PATHS.result, unusableResult(feature, nonce, "child-refused", d.detail, d.runnerReason));
       return EXIT.unusable;
     }
-    finalizeResult(feature, nonce, d.featureDir);
+    finalizeResult(feature, nonce, d.featureDir, d.gateChanges);
     return 0;
   } catch (e) {
     writeAtomic(
@@ -469,8 +549,15 @@ function decideDone(feature, runnerRec, res) {
   if (!v.ok) return unusableDoc(feature, "stamp-invalid", `${v.reason_code}: ${v.reason}`);
   if (stamp.value.fingerprint.algo !== ENTRY_ALGO)
     return unusableDoc(feature, "stamp-invalid", "the stamp's fingerprint algo is not the entry algo");
-  const verdict = entryVerdict({ stamp: stamp.value, featureDir: res.feature_dir, d0: runnerRec.d0 });
-  return emitDoc({ status: verdict.status, feature, verdict });
+  const verdict = entryVerdict({ stamp: stamp.value, featureDir: res.feature_dir, d0: runnerRec.d0, gateChanges: res.gate_changes });
+  // Review R1: the paths a `mutated` gate changed go beside the pre-run snapshot, bound to the open run, so the
+  // partition reports them rather than counting them as the build's escape. Rewritten on every decision of the run.
+  let changesRecord = "none";
+  if (verdict.changed.length) {
+    const w = recordEntryChanges(feature, verdict.changed);
+    changesRecord = w.ok ? "recorded" : CHANGES_RECORD.includes(w.code) ? w.code : "write-failed";
+  }
+  return emitDoc({ status: verdict.status, feature, verdict, changesRecord });
 }
 
 function wait({ feature, budgetMs }) {
@@ -525,7 +612,7 @@ function wait({ feature, budgetMs }) {
       if (d.kind === "refused") {
         writeAtomic(ENTRY_PATHS.result, unusableResult(feature, rr.value.nonce, "child-refused", d.detail, d.runnerReason));
       } else {
-        finalizeResult(feature, rr.value.nonce, d.featureDir);
+        finalizeResult(feature, rr.value.nonce, d.featureDir, d.gateChanges);
       }
       continue; // the result now exists: read it like any other
     }

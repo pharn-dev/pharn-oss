@@ -189,8 +189,8 @@ before Step 1a, as `## Quick mode` below says; every step not named there runs a
    node pharn/floor/entry-gates.mjs --start --feature '<name>' --timeout-ms 540000
    ```
 
-   Exit `0` → go on. `3` → **S4** (`blocked: no-gates`). Anything else → **S9**. Either stop precedes
-   `pharn/features/<name>/`: no record, straight to the Step 7 summary.
+   Exit `3` → **S4** (`blocked: no-gates`); it precedes `pharn/features/<name>/`, so there is no record and the run goes
+   straight to the Step 7 summary. Any other exit → go on (Step 4's read reports a start that failed).
 
 ### Step 1b — read the most recent prior record, if one exists (context only; it gates NOTHING)
 
@@ -477,11 +477,15 @@ node pharn/floor/entry-gates.mjs --wait --feature '<name>' --budget-ms 570000
 It prints one JSON document. Branch **only** on the exit code (P5):
 
 - `5` (the gates are still running) → run the same line again.
-- `0` → go on. Name any `unattributed` ids (a style gate red after this run's own artifacts existed) in the Step 7
-  summary, as DATA.
+- `0` → go on.
 - `4` → **S14** (`blocked: gates-red-at-entry`): copy the `red` ids into the record's `### next_steps` as DATA. With
-  `--allow-red-entry`, go on instead, and name them in the Step 7 summary.
-- `3` → **S4**. Anything else → **S9**, quoting `reason_code` and `runner_reason`.
+  `--allow-red-entry`, go on instead.
+- `3` → **S4**.
+- `2` or anything else → go on: the check could not judge, and the run is no worse off than without it.
+
+In the Step 7 summary, name as DATA: any `red` ids you went on past, the `unattributed` ids, the `mutated` gates with the
+`changed_paths` and `changes_record` (regress reports those paths instead of counting them as the build's), and on exit
+`2` its `reason_code` and `runner_reason`.
 
 **Then the test stage (6.19.0), once per front — the AC tests are pinned, so they are never rewritten per iteration.**
 Route it and mark it like the two above:

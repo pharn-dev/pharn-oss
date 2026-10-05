@@ -26,6 +26,8 @@ import {
   resultRecordDefect,
   parsePsTable,
   descendantGroups,
+  killableGroups,
+  listingDiff,
   shown,
   RUNNER_SCHEMA,
   RESULT_SCHEMA,
@@ -36,6 +38,8 @@ import { commandFamilyText } from "../../.dev/floor/command-family.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");
 const CLI = join(HERE, "entry-gates.mjs");
+const RUN_MARKER = join(HERE, "run-marker.mjs");
+const PRE_RUN = join(HERE, "pre-run-snapshot.mjs");
 const COMMANDS_DIR = join(ROOT, ".claude", "commands");
 const FEATURE = "demo";
 const NONCE = "0123456789abcdef0123456789abcdef";
@@ -121,10 +125,30 @@ test("the runner and result records are CLOSED both ways", () => {
   ]) {
     assert.notEqual(runnerRecordDefect(bad), null, why);
   }
-  const done = { schema: RESULT_SCHEMA, status: "done", feature: FEATURE, nonce: NONCE, stamp_sha256: "b".repeat(64), feature_dir: [] };
+  const done = {
+    schema: RESULT_SCHEMA,
+    status: "done",
+    feature: FEATURE,
+    nonce: NONCE,
+    stamp_sha256: "b".repeat(64),
+    feature_dir: [],
+    gate_changes: [{ id: "build", paths: [["next-env.d.ts", "c".repeat(64)]] }],
+  };
   assert.equal(resultRecordDefect(done), null);
   for (const [why, bad] of [
     ["extra key", { ...done, detail: "x" }],
+    ["no gate_changes", Object.fromEntries(Object.entries(done).filter(([k]) => k !== "gate_changes"))],
+    ["a gate change that is not [path, digest]", { ...done, gate_changes: [{ id: "build", paths: [["x", "sha256:zz"]] }] }],
+    [
+      "a repeated gate_changes id",
+      {
+        ...done,
+        gate_changes: [
+          { id: "b", paths: [] },
+          { id: "b", paths: [] },
+        ],
+      },
+    ],
     ["bad sha", { ...done, stamp_sha256: "x" }],
     [
       "repeated id",
@@ -184,6 +208,45 @@ test("parsePsTable / descendantGroups: integer rows only; transitive; the root's
   assert.equal(rows.length, 7);
   assert.deepEqual(descendantGroups(rows, 10), [12, 16]);
   assert.deepEqual(descendantGroups(rows, 99), []);
+});
+
+test("killableGroups (review R4): a survivor group is killed only when one of its processes still matches a frozen (pid, ppid, pgid); a reused group id is never signalled", () => {
+  const frozen = [
+    { pid: 12, ppid: 11, pgid: 12 },
+    { pid: 13, ppid: 12, pgid: 12 },
+    { pid: 16, ppid: 13, pgid: 16 },
+  ];
+  assert.deepEqual(killableGroups(frozen, [{ pid: 13, ppid: 12, pgid: 12 }], [12, 16]), [12], "a member of the frozen group");
+  assert.deepEqual(killableGroups(frozen, [{ pid: 16, ppid: 1, pgid: 16 }], [12, 16]), [], "reparented or reused: not the frozen triple");
+  assert.deepEqual(killableGroups(frozen, [], [12, 16]), []);
+});
+
+test("listingDiff + entryVerdict (review R1): only a MUTATED gate's changes are taken; the last such gate's digest wins; a path back at HEAD is recorded with its digest now", () => {
+  const before = new Map([
+    ["a", "1".repeat(64)],
+    ["b", "2".repeat(64)],
+  ]);
+  const after = new Map([
+    ["a", "3".repeat(64)],
+    ["c", "4".repeat(64)],
+  ]);
+  assert.deepEqual(
+    listingDiff(before, after, () => "5".repeat(64)),
+    [
+      ["a", "3".repeat(64)],
+      ["b", "5".repeat(64)],
+      ["c", "4".repeat(64)],
+    ]
+  );
+  const stamp = { runs: [run("lint", 0), run("build", 0, { mutated: true }), run("e2e", 0, { mutated: true })] };
+  const gateChanges = [
+    { id: "lint", paths: [["x", "6".repeat(64)]] },
+    { id: "build", paths: [["n", "7".repeat(64)]] },
+    { id: "e2e", paths: [["n", "8".repeat(64)]] },
+  ];
+  const v = entryVerdict({ stamp, featureDir: [], d0: DIGEST_ABSENT, gateChanges });
+  assert.deepEqual(v.mutated, ["build", "e2e"]);
+  assert.deepEqual(v.changed, [["n", "8".repeat(64)]], "lint was not mutated: its listing diff is not taken");
 });
 
 // ── the CLI, end to end ──────────────────────────────────────────────────────────────────────────────────────────
@@ -301,15 +364,73 @@ test("CLI: a front-stage write under pharn/features/<name>/ during the gates nei
   }
 });
 
-test("CLI: a write OUTSIDE the feature directory during a gate is reported as `mutated` (control for the exclusion)", () => {
+test("CLI: a write OUTSIDE the feature directory during a gate is reported as `mutated` (control for the exclusion), with its path; with no run open nothing is recorded", () => {
   const dir = sandbox({ gates: { test: { exit: 0, writes: [["b.txt", "b\n"]] } } });
   try {
     assert.equal(start(dir).status, 0);
     const { status, doc } = wait(dir);
     assert.equal(status, 0);
     assert.deepEqual(doc.mutated, ["test"]);
+    assert.deepEqual(doc.changed_paths, ["b.txt"]);
+    assert.equal(doc.changes_record, "no-delivery-run");
   } finally {
     cleanup(dir);
+  }
+});
+
+test("CLI (review R1, reproduced): a `build` gate rewriting a tracked file inside an open run — recorded beside the pre-run snapshot, so the partition reports it while it keeps those bytes", () => {
+  const dir = sandbox({ gates: { lint: {}, build: { exit: 0, writes: [["a.txt", "rewritten by the build\n"]] } } });
+  try {
+    const o = spawnSync(process.execPath, [RUN_MARKER, "--open", "pharn-ship", FEATURE], { cwd: dir, encoding: "utf8" });
+    assert.equal(o.status, 0, o.stderr);
+    assert.equal(start(dir).status, 0);
+    const { status, doc } = wait(dir);
+    assert.equal(status, 0, JSON.stringify(doc));
+    assert.deepEqual(doc.mutated, ["build"]);
+    assert.deepEqual(doc.changed_paths, ["a.txt"], "lint changed nothing; the gates/*.cjs files are not listed");
+    assert.equal(doc.changes_record, "recorded");
+    const ask = (code) =>
+      spawnSync(
+        process.execPath,
+        [
+          "--input-type=module",
+          "-e",
+          `const m = await import(${JSON.stringify(PRE_RUN)}); const head = (await import("node:child_process")).execFileSync("git", ["rev-parse", "HEAD"], {encoding: "utf8"}).trim(); ${code}`,
+        ],
+        { cwd: dir, encoding: "utf8" }
+      );
+    const r = ask(`console.log(JSON.stringify(m.entryChangesUnchanged({ feature: "demo", base: head, inside: ["a.txt"] })));`);
+    assert.deepEqual(JSON.parse(r.stdout), { status: "applied", unchanged: ["a.txt"] });
+    writeFileSync(join(dir, "a.txt"), "then the build edited it\n");
+    const r2 = ask(`console.log(JSON.stringify(m.entryChangesUnchanged({ feature: "demo", base: head, inside: ["a.txt"] })));`);
+    assert.deepEqual(JSON.parse(r2.stdout).unchanged, []);
+    // A new --start removes the earlier run's record.
+    assert.equal(start(dir).status, 0);
+    wait(dir);
+    const gitDir = execFileSync("git", ["rev-parse", "--absolute-git-dir"], { cwd: dir, encoding: "utf8" }).trim();
+    assert.ok(existsSync(join(gitDir, "pharn-entry-gate-changes.json")), "the re-run's build rewrote it again and re-recorded");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("CLI (review R6): --start refuses `runner-unverifiable`, wiping nothing, when an earlier runner's pid is alive and ps cannot verify it", () => {
+  const dir = sandbox({ gates: { test: {} } });
+  try {
+    mkdirSync(join(dir, ENTRY_PATHS.root), { recursive: true });
+    const rec = { schema: RUNNER_SCHEMA, feature: FEATURE, nonce: NONCE, pid: process.pid, timeout_ms: 1000, d0: DIGEST_ABSENT };
+    writeFileSync(join(dir, ENTRY_PATHS.runner), JSON.stringify(rec));
+    const r = spawnSync(process.execPath, [CLI, "--start", "--feature", FEATURE, "--timeout-ms", "60000"], {
+      cwd: dir,
+      encoding: "utf8",
+      env: { ...process.env, PATH: "/nonexistent-for-the-test" },
+    });
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /refused runner-unverifiable/);
+    assert.deepEqual(JSON.parse(readFileSync(join(dir, ENTRY_PATHS.runner), "utf8")), rec, "nothing was wiped");
+    assert.ok(!gone(process.pid), "and nothing was signalled");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 
@@ -545,7 +666,7 @@ test("CLI: usage — no default for --timeout-ms or --budget-ms (L41), one mode,
 test("✧ CLOSURE — every reason_code the CLI emits is a member of REASON_CODES, and every member has an emitter (L36)", () => {
   const src = readFileSync(CLI, "utf8");
   const emitted = new Set(
-    [...src.matchAll(/(?:unusableDoc\([^,]+,\s*|unusableResult\([^,]+,[^,]+,\s*|refuse\(|fail\()"([a-z][a-z-]*)"/g)].map((m) => m[1])
+    [...src.matchAll(/(?:unusableDoc\([^,]+,\s*|unusableResult\([^,]+,[^,]+,\s*|refuse\(\s*|fail\(\s*)"([a-z][a-z-]*)"/g)].map((m) => m[1])
   );
   assert.ok(emitted.size > 0, "the scan found nothing — the scan broke");
   for (const c of emitted) assert.ok(REASON_CODES.includes(c), `${c} is not a member`);
@@ -566,7 +687,13 @@ const WIRING = [
     waitAfter: "node pharn/floor/stage-agent.mjs read --command pharn-loop --name '<name>' --stage pharn-grill",
     waitBefore: "node pharn/floor/stage-agent.mjs route --command pharn-loop --stage pharn-test --name '<name>'",
     abortIn: "\n## At the stop — ",
-    rows: [/`3` → \*\*S4\*\*/, /\*\*S14\*\* \(`blocked: gates-red-at-entry`\)/, /`--allow-red-entry`/, /\*\*S9\*\*/],
+    rows: [
+      /`3` → \*\*S4\*\*/,
+      /\*\*S14\*\* \(`blocked: gates-red-at-entry`\)/,
+      /`--allow-red-entry`/,
+      /`2` or anything else → go on/,
+      /`changed_paths`/,
+    ],
   },
   {
     file: "pharn-ship.md",
@@ -597,7 +724,7 @@ for (const w of WIRING) {
     const section = at(w.abortIn);
     const abortAt = at(LINES.abort);
     assert.ok(section >= 0 && abortAt > section && abortAt - section < 600, `abort first in ${w.abortIn}`);
-    const branch = body.slice(waitAt, waitAt + 1400);
+    const branch = body.slice(waitAt, waitAt + 1900);
     for (const re of w.rows) assert.match(branch, re, `${w.file}: the wait line's branch ${re}`);
   });
 

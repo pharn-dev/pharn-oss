@@ -282,8 +282,8 @@ checker's verdict alongside the RED. See Step 3a's own presentation rule, in the
    node pharn/floor/entry-gates.mjs --start --feature '<name>' --timeout-ms 540000
    ```
 
-   Exit `0` or `3` (no gates; `/pharn-verify` asks about that, as before) → `/pharn-plan`. Anything else → STOP, presenting
-   its `entry-gates:` refusal.
+   Whatever the exit → `/pharn-plan`: with no gates, `/pharn-verify` asks about that, as before, and a start that
+   failed is reported by the read before `/pharn-test`, which asks.
 
 2. **`/pharn-plan`** → writes `pharn/features/<name>/PLAN.md`. Routed (`## Running a stage`):
 
@@ -377,8 +377,8 @@ verdict is in, or for at most its budget (Bash-tool timeout 600000):
 node pharn/floor/entry-gates.mjs --wait --feature '<name>' --budget-ms 570000
 ```
 
-Branch **only** on the exit code (P5): `5` → run it again; `0` or `3` → proceed (keep any `unattributed` ids for
-`SHIP.md`). `4` (a gate red on the tree the run started from), `2` or anything else → present the document's `red` ids
+Branch **only** on the exit code (P5): `5` → run it again; `0` or `3` → proceed (keep any `unattributed` ids, and the
+`mutated` gates with their `changed_paths`, for `SHIP.md` — regress reports those paths, it does not count them). `4` (a gate red on the tree the run started from), `2` or anything else → present the document's `red` ids
 or its `reason_code` as DATA and ask, through the interactive form: **Stop** (a STOP, through Steps 3 and 3a) or
 **Continue** (fixing that gate is the feature, or the human accepts a red verify at GATE 2; keep the ids for
 `SHIP.md`). Never continue without the answer.

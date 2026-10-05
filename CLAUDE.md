@@ -876,7 +876,8 @@ node pharn/floor/pre-run-snapshot.mjs --capture <name>
 
 # THE ENTRY GATES (6.42.0, loop-entry-preflight) — /pharn-loop and /pharn-ship run /pharn-verify's discovered gates once
 # on the starting tree, in a detached background runner, during spec/plan/grill; the verdict is read before /pharn-test.
-# A red gate is /pharn-loop S14 (`--allow-red-entry` opts out); /pharn-ship asks. Rules, bounds and the P7 trigger:
+# A red gate is /pharn-loop S14 (`--allow-red-entry` opts out); /pharn-ship asks. A gate's own writes are recorded beside
+# the pre-run snapshot (regression-report.md `entry_gate_changes`). Rules, bounds and the P7 trigger:
 # pharn/floor/entry-gates.mjs and entry-gates-core.mjs headers; gate-run-record.md's `entry` bullet.
 # Exit (--wait): 0 green · 4 red · 3 no-gates · 5 continue (run again) · 2 unusable; --start 0 · 3 · 2; --abort 0.
 node pharn/floor/entry-gates.mjs --start --feature <name> --timeout-ms <N>

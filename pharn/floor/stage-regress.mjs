@@ -118,7 +118,8 @@ import { shelledVerdict } from "./shelled-verdict-core.mjs";
 import { spawnGate } from "./run-gates.mjs";
 import { declaredWrites, changedPaths } from "./scope-inputs.mjs";
 import { partitionScope, scopeFindings, normPath } from "./check-regress.mjs";
-import { preRunUnchanged } from "./pre-run-snapshot.mjs";
+import { preRunUnchanged, entryChangesUnchanged } from "./pre-run-snapshot.mjs";
+import { entryBlocks } from "./pre-run-snapshot-core.mjs";
 import { FEATURE_SLUG_RE, SCHEMA as GATE_RUN_SCHEMA, actualForExpected } from "./gate-run-core.mjs";
 import { isExcluded, ALGO as FINGERPRINT_ALGO } from "./worktree-fingerprint.mjs";
 import { decideFromDisk, discardRetained, publishRecord } from "./regress-base-reuse.mjs";
@@ -391,8 +392,8 @@ function phaseFreshLate(cfg) {
   return { planPath, specPath };
 }
 
-function writeRefusedAndEmit(feature, reasonCode, detail, preRun = null) {
-  const md = renderRefused({ feature, reasonCode, detail, preRun });
+function writeRefusedAndEmit(feature, reasonCode, detail, preRun = null, entryGates = null) {
+  const md = renderRefused({ feature, reasonCode, detail, preRun, entryGates });
   const renderPath = `${FEATURES_DIR}/${feature}/REGRESSION.md`;
   atomicWriteIntoFeature(renderPath, md);
   emit(refusedExit({ stage: "regress", feature, reasonCode, render: renderPath }));
@@ -552,15 +553,18 @@ function phasePartition(cfg, planPath, specPath, base) {
 
   const declaredPatterns = [...new Set(declared.map(normPath).filter(Boolean))];
   const preRunDecision = preRunUnchanged({ feature: cfg.feature, base, inside });
+  // 6.42.0 (loop-entry-preflight, review R1): the run's ENTRY GATES' own writes, recorded beside the snapshot by the same
+  // rule — subtracted only while they hold the recorded bytes, and reported in their own block (entryBlocks).
+  const entryDecision = entryChangesUnchanged({ feature: cfg.feature, base, inside });
   const { escaped, escapeExempt, preRun, outsideTests, outsideEvalPairs } = partitionScope({
     inside,
     declared: declaredPatterns,
     tests,
     evalPairs,
     feature: cfg.feature,
-    preRunUnchanged: preRunDecision.unchanged,
+    preRunUnchanged: [...new Set([...preRunDecision.unchanged, ...entryDecision.unchanged])],
   });
-  const preRunBlock = { status: preRunDecision.status, unchanged: preRun };
+  const { preRunBlock, entryBlock } = entryBlocks(preRunDecision, entryDecision, preRun);
   const scope = escaped.length
     ? {
         inside,
@@ -568,6 +572,7 @@ function phasePartition(cfg, planPath, specPath, base) {
         escaped,
         escape_exempt: escapeExempt,
         pre_run_snapshot: preRunBlock,
+        ...(entryBlock ? { entry_gate_changes: entryBlock } : {}),
         findings: scopeFindings(escaped),
         outside_tests: outsideTests,
         outside_eval_pairs: outsideEvalPairs,
@@ -578,6 +583,7 @@ function phasePartition(cfg, planPath, specPath, base) {
         escaped: [],
         escape_exempt: escapeExempt,
         pre_run_snapshot: preRunBlock,
+        ...(entryBlock ? { entry_gate_changes: entryBlock } : {}),
         outside_tests: outsideTests,
         outside_eval_pairs: outsideEvalPairs,
       };
@@ -587,7 +593,8 @@ function phasePartition(cfg, planPath, specPath, base) {
       cfg.feature,
       "scope-escaped",
       `${escaped.length} path(s) escaped the declared writes-scope: ${JSON.stringify(escaped)}\n` + JSON.stringify(scope.findings, null, 2),
-      preRunBlock
+      preRunBlock,
+      entryBlock
     );
   }
   return { scope, tests };
@@ -935,9 +942,11 @@ function runPhases(state, budget) {
     recorded: state.recordOutcome.published,
   };
   const preRunBlock = state.scope.pre_run_snapshot ?? null;
+  // 6.42.0: a THIRD additive block, `entry_gate_changes`, only when the partition wrote one (stage-regress entryBlocks).
+  const entryGates = state.scope.entry_gate_changes ? { entry_gate_changes: state.scope.entry_gate_changes } : {};
   atomicWriteIntoFeature(
     reportPath,
-    `${JSON.stringify({ ...state.report, base_evidence: baseEvidence, pre_run_snapshot: preRunBlock }, null, 2)}\n`
+    `${JSON.stringify({ ...state.report, base_evidence: baseEvidence, pre_run_snapshot: preRunBlock, ...entryGates }, null, 2)}\n`
   );
   const md = renderDone({
     feature: state.feature,

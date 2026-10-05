@@ -270,6 +270,36 @@ were a style gate. It is not, so its red counts.
 - `README.md` — the badge, plus the generated CURRENT-STATE region if `npm run docs:generate` changes it. — repo meta
 - `docs/capabilities/**` — only what `npm run docs:generate` regenerates. — generated
 - `.dev/features/loop-entry-preflight/**` — this increment's pipeline artifacts. — dev apparatus
+- `.dev/features/loop-entry-preflight/REVIEW.md` — the independent review, quoted as DATA. — dev apparatus
+- `.dev/features/loop-entry-preflight/SHIP.md` — the ship record. — dev apparatus
+- `pharn/floor/pre-run-snapshot-core.mjs` — (review R1) the entry-gate-changes record's basename. — layer pharn-floor
+- `pharn/floor/pre-run-snapshot.mjs` — (review R1) `recordEntryChanges` / `entryChangesUnchanged`: the same record shape,
+  digest and decision as the snapshot, a second file. — layer pharn-floor
+- `pharn/floor/pre-run-snapshot.test.mjs` — (review R1) the second record's write, binding and decision. — layer
+  pharn-floor (test)
+- `pharn/floor/stage-regress.mjs` — (review R1) the partition also subtracts the entry gates' recorded paths and
+  reports them in a conditional `entry_gate_changes` block. — layer pharn-floor
+- `pharn/floor/stage-regress.test.mjs` — (review R1) the block end to end. — layer pharn-floor (test)
+- `pharn/floor/quick-scope-core.mjs` — (review R1) the same, for the quick scope check. — layer pharn-floor
+- `pharn/floor/check-quick-scope.test.mjs` — (review R1) the quick case. — layer pharn-floor (test)
+- `pharn/floor/render-regression.mjs` — (review R1) the block's lines in REGRESSION.md. — layer pharn-floor
+- `pharn/floor/render-regression.test.mjs` — (review R1) render cases. — layer pharn-floor (test)
+- `pharn/pharn-contracts/regression-report.md` — (review R1) the conditional `entry_gate_changes` block. — layer
+  pharn-contracts
+
+## Review amendments (independent review of `3060476`; decisions by the orchestrating model under the user's delegation)
+
+- R1 — an entry gate's own write lands after the pre-run snapshot, so regress counted it as an escape. The runner lists
+  the changed paths (`changedPaths(HEAD)` minus the feature directory, each with `pathDigest`) before and after every gate;
+  `--wait` records the paths a `mutated` gate changed, with their digest after it, in `<git dir>/pharn-entry-gate-changes.json`,
+  bound to the open run's marker (the snapshot's `buildSnapshot`, `decidePreRun`, `pathDigest` — reused, L35). The
+  partition subtracts such a path only while its live digest equals the recorded one, and reports it.
+- R2 — `/pharn-loop` reads entry exit 2 as "go on, name the reason in the summary"; only 4 stops (S14), 3 is S4.
+- R3 — the header names the `/pharn-ship` case of `d0` (the approved SPEC.md is already there).
+- R4 — `--abort` freezes the descendant gate groups too, re-lists until the set is stable, and sends the final SIGKILL
+  only to a group a process of which still matches a listed `(pid, ppid, pgid)`.
+- R5 — the header's escape bound is narrowed: only a double-forked/reparented process escapes.
+- R6 — `--start` refuses `runner-unverifiable` when an earlier runner's pid is alive but `ps` cannot verify it.
 
 ## Contracts satisfied
 

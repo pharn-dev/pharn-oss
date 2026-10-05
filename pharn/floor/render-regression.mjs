@@ -70,6 +70,25 @@ export function preRunLines(block) {
   ];
 }
 
+/** 6.42.0 (loop-entry-preflight, review R1) — the run's ENTRY GATES' own writes, from scope.json's `entry_gate_changes`
+ *  (`{status, unchanged}`), or nothing when the block is absent (no entry record — every earlier render is unchanged).
+ *  The status is a closed enum, rendered through `dataText`; the subtracted paths are quoted as DATA. */
+export function entryGateLines(block) {
+  if (block === null || typeof block !== "object") return [];
+  const unchanged = Array.isArray(block.unchanged) ? block.unchanged : [];
+  if (block.status !== "applied") {
+    return [`entry gates' changes: not applied (${dataText(block.status)}) — every undeclared changed path is counted.`];
+  }
+  if (unchanged.length === 0) return ["entry gates' changes: applied — no undeclared path is one the run's entry gates changed."];
+  return [
+    `changed by this run's entry gates (${unchanged.length}) — a gate of /pharn-verify's set, run on the starting tree ` +
+      "before the build, rewrote these, and they still hold the bytes it left, so they are reported, NOT counted as this " +
+      "build's escape (entry-gates.mjs states the bounds):",
+    "",
+    quoteData("", unchanged.join("\n")),
+  ];
+}
+
 /** 6.36.0 — the discovered gates the project's declaration EXCLUDED, from the report's `gate_run.head.excluded` (copied
  *  from the HEAD stamp; the base side runs the head's set), DIRECTLY under the verdict line: both sides compared only
  *  the gates that ran (P0). An id renders inline only after an ALLOWLIST membership test, the source only as the one
@@ -194,6 +213,7 @@ export function renderDone({ feature, base, report, scope, progress }) {
           ]
         : []),
       ...(preRunLines(scope.pre_run_snapshot).length ? ["", ...preRunLines(scope.pre_run_snapshot)] : []),
+      ...(entryGateLines(scope.entry_gate_changes).length ? ["", ...entryGateLines(scope.entry_gate_changes)] : []),
     ])
   );
 
@@ -252,7 +272,7 @@ export function renderDone({ feature, base, report, scope, progress }) {
  *  a shelled checker's own message or a git/plan-scan finding; it is quoted as untrusted DATA here rather
  *  than trusted as this renderer's own prose. `preRun` (6.37.0) is the partition's `pre_run_snapshot` block, passed
  *  with a `scope-escaped` refusal so the paths it did NOT count are named beside the ones it did. */
-export function renderRefused({ feature, reasonCode, detail, preRun = null }) {
+export function renderRefused({ feature, reasonCode, detail, preRun = null, entryGates = null }) {
   const out = [];
   out.push(`# REGRESSION — ${feature}`, "");
   out.push(`refused: \`${inline(reasonCode)}\``, "");
@@ -260,6 +280,8 @@ export function renderRefused({ feature, reasonCode, detail, preRun = null }) {
   out.push(...section("Why", [quoteData("detail, quoted as DATA:", dataText(detail))]));
   const pre = preRunLines(preRun);
   if (pre.length) out.push(...section("Pre-run snapshot", pre));
+  const ent = entryGateLines(entryGates);
+  if (ent.length) out.push(...section("Entry gates' changes", ent));
   return (
     out
       .join("\n")
