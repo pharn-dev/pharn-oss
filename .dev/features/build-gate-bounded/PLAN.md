@@ -80,16 +80,20 @@ node pharn/floor/build-gate.mjs --feature <name> --mode targeted|full --timeout-
      hands it those files after `--` (`spawnGate`'s existing file append — how the red run hands a level gate its AC
      files). An empty list is NEVER passed to the runner (it would mean "the whole suite", L16/L34): the helper exits
      `4` before `init`.
-   - **Gate exclusion (sibling item 3, `gate-exclusion-config`):** its `run-gates.mjs init` reads
-     `pharn.config.json#gates.exclude` for any `--discover` run without `--gates` and filters resolveSet's discovered
-     branch. The `build` stage sits in that branch, so once that PR is under this one the exclusion applies to both
-     modes with no line of this increment's code (a stacking-time test asserts it).
-5. **Drain** with `stage-runtime.mjs` `drainGates` and `makeBudget` — the stage scripts' one drain and budget rule. One
-   additive change: an optional `onStep` callback receives each `run --next` result with its wall-clock ms, appended to
-   `<mode>.times.json`. Budget reached → exit `5`; the summary says "run the same line again".
+   - **Gate exclusion (sibling item 3, `gate-exclusion-config`, merged into this branch before the build — GATE 1
+     Q1, grill G6):** its `run-gates.mjs init` reads `pharn.config.json#gates.exclude` for any `--discover` run
+     without `--gates` and filters resolveSet's discovered branch. The `build` stage sits in that branch, so the
+     exclusion applies to both modes; `build-gate.test.mjs` proves it for each mode (an excluded `typecheck` is not
+     run in `full`; an excluded `test` makes `targeted` exit `4`).
+5. **Drain** with `stage-runtime.mjs` `drainGates` and `makeBudget`, unchanged — the stage scripts' one drain and
+   budget rule (grill G1: the shared drain is not touched). The helper hands `drainGates` a wrapped budget object:
+   `may()` returning true marks a runner call's start, `spent()` (called after each successful `run --next`) its end,
+   and each interval is appended to `<mode>.times.json` under the next run's seq. Budget reached → exit `5`; the
+   summary says "run the same line again".
 6. **Summarize** from the finalized `stamp.json` (`validateStamp`, `expect: {stage: "build", feature}`):
-   - one line per gate: id, exit, wall time of its runner call (observed; it includes the runner's two tree
-     fingerprints), `timed out` / `changed the tree` when the stamp says so;
+   - one line per gate: id, exit, the wall time of its RUNNER CALL (grill G7: observed, and it includes node's
+     startup and the runner's two tree fingerprints — never labelled the gate's own time), `timed out` /
+     `changed the tree` when the stamp says so;
    - for a gate with per-test results configured (`test`, the e2e ids — `RESULTS_GATES`): `test-results-core.mjs`'s
      record via a new `gateResults` (the record unchanged): counts, then each failing test's id + a bounded excerpt of
      its failure message, fenced; the first 20 with excerpts, ids only up to 50, then a count. When the record is
@@ -104,17 +108,23 @@ node pharn/floor/build-gate.mjs --feature <name> --mode targeted|full --timeout-
 
 ### The TARGET rule (pure, `build-gate-core.mjs`)
 
-Sorted, unique union of:
+The feature's declared writes — `scope-inputs.mjs` `declaredWrites(PLAN.md, AC-TESTS.md)` (PLAN `## Files` ∪
+AC-TESTS `## Files`, the setter's grammar — L35) — then, over that whole set (grill G3), keep a path only when:
 
-- the feature's declared test files: `scope-inputs.mjs` `declaredWrites(PLAN.md, AC-TESTS.md)` (PLAN `## Files` ∪
-  AC-TESTS `## Files`, the setter's grammar — L35), kept when `ac-tests-core.mjs` `badPath` accepts it (no glob, not
-  absolute, no leading `-` a runner would read as a flag, normalized, not under `.pharn/` or `pharn/features/`) and
-  `stage-regress-core.mjs` `isTestFile` matches;
-- the files of the tests that FAILED in this feature's last `full` run, when its stamp validates and its `test`
-  record is readable (so the fix loop re-runs a full-run failure without a full run);
+- `ac-tests-core.mjs` `badPath` accepts it (no glob, not absolute, no leading `-` a runner would read as a flag,
+  normalized, not under `.pharn/` or `pharn/features/`);
+- `stage-regress-core.mjs` `isTestFile` matches;
+- `AC-TESTS.md`'s mapping does not place it at level `e2e` (an e2e test runs under an e2e gate, never `test`);
+- it `lstat`s as a regular file now.
 
-minus every file `AC-TESTS.md`'s mapping places at level `e2e` (an e2e test runs under an e2e gate, never `test`), and
-keeping only paths that `lstat` as regular files now. The helper prints how many came from each source.
+Sorted and unique. The helper prints the count. **Dropped at grill (G2):** a second source, "the files that failed in
+the last full run", had no recorded trigger — all 14 failing files of the agent's first full run were declared — and
+would have let a pre-existing red outside the plan into every targeted run, which then could never go green. A full-run
+failure outside the declared files is re-checked by the full line.
+
+**Bound (grill G10).** "Targeted" is the runner's reading of the file arguments, as for the red run and regress head:
+vitest treats them as substring filters and Jest as patterns, so more files may run (`a.test.ts` also matches
+`a.test.tsx`), and a `test` script carrying its own glob runs that glob plus the files.
 
 ### The `build` stage in the runner (shared files, kept minimal)
 
@@ -140,16 +150,25 @@ keeping only paths that `lstat` as regular files now. The helper prints how many
 ### The command (`pharn-build.md` Step 4)
 
 Step 4 pins the two lines (with `--timeout-ms 540000 --budget-ms 570000`, the stage scripts' values), keeps
-`validate.mjs <target>` for PHARN-shaped capabilities, and maps exits: targeted `0`/`4` → the full line, `3` → fix and
-repeat; full `0` → Step 5, `3` → fix within scope (the targeted line now includes the full run's failing files) and
-repeat — a red you cannot fix within `## Files` (outside them, or red before your change) → HALT, `5` → the same line
-again, `4` → ask the human (S4 under `/pharn-loop`), `2`/crash → HALT. "Never run the project's gates another way" is
-said once. The claims block's Step-4 Floor line names the helper. Expected growth ≈ 800 B against 818 B of headroom;
-if it exceeds, the ceiling is raised in `COMMAND_BYTE_CEILINGS` by the documented rule, as a visible diff.
+`validate.mjs <target>` for PHARN-shaped capabilities, and maps exits (grill G4 — each exit has one outcome, the routed
+agent's included):
 
-`pharn-ship.md`'s inline-build bullet says the build gate is discovered "explicit `--gates`, else the closed allowlist
-… else ask the human"; `/pharn-build` never took `--gates`. It now cites `pharn/floor/build-gate.mjs --mode full`
-instead of the `--gates` clause (one bullet, P4).
+- targeted `0` or `4` → the full line; `3` → fix within scope and repeat; `5` → the same line again;
+- full `0` → Step 5, the gate is `pass`; `3` → fix within scope and repeat (targeted, then full); a red you cannot fix
+  within `## Files` (a failure outside them, or one red before your change) → stop fixing, the gate is `fail`; `5` →
+  the same line again; `4` → ask the human (a routed agent: `refused` with row S4 under `/pharn-loop`, a question
+  under `/pharn-ship`) — never `pass`; `2` or any other exit → HALT, the gate is `fail`.
+
+"Never run the project's gates another way" is said once. The claims block's Step-4 Floor line names the helper.
+Expected growth ≈ 800 B against 818 B of headroom; if it exceeds, the ceiling is raised in `COMMAND_BYTE_CEILINGS` by
+the documented rule, as a visible diff.
+
+**`pharn-ship.md` is NOT edited (grill G5).** Its inline-build bullet says the build gate is "discovered the same way
+`/pharn-build` Step 4 and `/pharn-verify`'s stage script discover it — explicit `--gates`, else the closed allowlist …
+else ask the human"; `/pharn-build` never took `--gates`, which was already so before this increment, and the next
+sentence ("the e2e gates … are discovered by `/pharn-verify`'s runner, not by this build gate") becomes true by tested
+code. The `--gates` clause is a named residual, `ship-build-gate-cite`, left out because `orchestrator-direct-stage-calls`
+edits the same file in this batch.
 
 The routed build brief (`stage-agent-core.mjs` rule 6) says "`--gate` is the exit of the project gate the stage ran at
 its Step 4" — still true (Step 4 names the full line as that gate), so the brief is NOT changed.
@@ -163,8 +182,13 @@ its Step 4" — still true (Step 4 names the full line as that gate), so the bri
 - **D2 — the full run is verify's discovered set minus the e2e gates.** `build` stays in: a `--gate pass` then
   predicts verify's non-e2e gates, and `pharn-ship.md` already describes the build gate as the allowlist minus e2e.
   E2E stays at `/pharn-verify`: it is the slowest set, needs servers or browsers, and could not run on the user's
-  machine in 2 of 3 runs (measurement record §9). `reconcile` and the AC gate stay at verify. **GATE-1 question Q2**
-  offers dropping `build` too.
+  machine in 2 of 3 runs (measurement record §9). `reconcile` and the AC gate stay at verify. GATE 1 Q2 kept `build`:
+  a build break caught inside the iteration is cheaper than a lost iteration. Named follow-up
+  `build-gate-execution-reuse`: offer the full run's executions to regress HEAD / verify through the 6.34.0 identity
+  mechanism, so `build` and `typecheck` are not run again on the same tree.
+- **D6 — a project with gates red at base (GATE 1 Q3, accepted).** The full run reads RED there, so a routed build
+  under `/pharn-ship` reports `done gate:fail` and ship stops after the build rather than at verify; the loop is
+  unaffected. A base-red gate was already a red build gate before this change; the CHANGELOG says so.
 - **D3 — targeted runs only `test`.** Lint, typecheck and build have no file-addressable form `ALLOWLIST` can rely on;
   they run in the full mode.
 - **D4 — no new contract (P7).** The helper's output is read by the model only; its header is its spec, as for
@@ -208,8 +232,6 @@ its Step 4" — still true (Step 4 names the full line as that gate), so the bri
 - `pharn/floor/gate-run-core.test.mjs` — the build stage's resolution and refusals — test
 - `pharn/floor/run-gates.mjs` — `init --stage build [--targets <file>]` — layer floor
 - `pharn/floor/run-gates.test.mjs` — init/run for the build stage — test
-- `pharn/floor/stage-runtime.mjs` — `drainGates`'s optional `onStep` — layer floor
-- `pharn/floor/stage-runtime.test.mjs` — `onStep` called once per gate with a duration — test
 - `pharn/floor/test-results-formats.mjs` — parsed entries carry `messages` — layer floor
 - `pharn/floor/test-results-core.mjs` — `testIdOf`, `gateResults`; `testRecord` unchanged in output — layer floor
 - `pharn/floor/test-results-core.test.mjs` — messages per format; record byte-identity — test
@@ -217,7 +239,6 @@ its Step 4" — still true (Step 4 names the full line as that gate), so the bri
 - `pharn/pharn-contracts/test-results-record.md` — parsed entries carry messages; no record does — layer
   pharn-contracts
 - `.claude/commands/pharn-build.md` — Step 4 pinned lines and exit mapping; the claims line — product command
-- `.claude/commands/pharn-ship.md` — the inline-build bullet cites the helper — product command
 - `.dev/floor/command-hygiene.test.mjs` — `COMMAND_BYTE_CEILINGS` raise for `pharn-build.md`, only if measured over —
   apparatus
 - `CLAUDE.md` — a Commands entry for the helper — repo meta
@@ -244,21 +265,21 @@ its Step 4" — still true (Step 4 names the full line as that gate), so the bri
 
 ## Evals / tests to write (P1 — no capability is added, so no eval; the helper ships with tests)
 
-- core: TARGET rule (declared ∩ test files ∩ badPath-clean ∩ existing; minus mapped e2e; plus last-full failures;
-  empty → NO-GATES); excerpt bounding (lines, bytes, ANSI stripped, node_modules/node:internal stack frames dropped,
+- core: TARGET rule (declared ∩ test files ∩ badPath-clean ∩ existing, minus mapped e2e; empty → NO-GATES); excerpt bounding (lines, bytes, ANSI stripped, node_modules/node:internal stack frames dropped,
   the message's first line always kept); summary caps (20 excerpts, 50 ids, 16 KiB total, overflow names the log);
   fencing survives a back-tick run and a `{"toString":1}` value.
 - CLI (fixture git repos with `package.json` scripts that write a vitest-shaped report to `$PHARN_TEST_RESULTS`):
   full = discovered minus e2e, in ALLOWLIST order, no reconcile; targeted hands `test` exactly the target files after
   `--`; exits 0/3/4/5/2; continue after `5` reuses the run, a tree edit between calls restarts it; a symlinked or
-  dangling `.pharn/pharn-build` is `2`; a crash is not `0`/`3`; ★ WIRING: the committed `pharn-build.md` lines run
-  verbatim (with `<name>` substituted) and reach GREEN and RED in the fixture; CONTROL: a line with a flag removed
-  exits `2`.
+  dangling `.pharn/pharn-build` is `2`; a crash is not `0`/`3`; the gate exclusion reaches both modes (grill G6);
+  ★ WIRING: the committed `pharn-build.md` lines run verbatim, each as its own shell (L44, grill G8), with `<name>`
+  substituted, reach GREEN and RED in the fixture, and leave the runner's records under `.pharn/pharn-build/<name>/`;
+  CONTROL: a line with a flag removed exits `2`.
 - gate-run-core / run-gates: the build stage resolves and refuses as specified; a build stamp validates and is
   `stage-mismatch` for `expect.stage: "verify"`.
 - test-results: `messages` per format from the committed fixtures; `testRecord`'s output deep-equals its pre-change
   output on every fixture (byte-identity), and no `messages` key appears in any record.
-- stage-runtime: `onStep` fires once per gate with a non-negative integer ms; absent, behaviour unchanged.
+- durations: `<mode>.times.json` holds one non-negative integer ms per run seq, through the wrapped budget (grill G1).
 
 ## Guarantee audit (P0)
 
@@ -292,33 +313,29 @@ round 2 — `npm run test` + `test:db` 256.1 s, `lint` 20 s, `typecheck`/`i18n`/
 `prettier` 8 s ≈ 302 s. Total ≈ 515 s (8.6 min) in ~12 requests.
 
 After [R·e]: round 1 → one or two targeted runs over the 75 declared test files (≈ 15.6 s each by scaling the measured
-full run, 22 files measured at 13.35 s) ≈ 20–40 s; round 2 → one full run: `test` ≈ 152 s [R·m] + `typecheck` ≈ 7 s
-
-- `build` ≈ 180 s [R·m, the later `billing-remove-seats` run of the same suite, measurement record §8.2] + `lint` 20 s
-- `format:check` 10 s ≈ 369 s, in ~3 runner calls. Total ≈ 390–410 s in ~5 requests.
+full run, 22 files measured at 13.35 s) ≈ 20–40 s; round 2 → one full run: `test` ≈ 152 s [R·m], plus `typecheck` ≈
+7 s, plus `build` ≈ 180 s [R·m, the later `billing-remove-seats` run of the same suite, measurement record §8.2], plus
+`lint` 20 s and `format:check` 10 s ≈ 369 s, in ~3 runner calls. Total ≈ 390–410 s in ~5 requests.
 
 - **Wall time saved ≈ 105–125 s, plus ~7 fewer requests ≈ 43 s of model time (7 × the agent's 6.2 s mean) → ≈ 2.5–3
-  min.** `test:db` (≈ 109 s, not a verify gate) is no longer run; `build` (≈ 180 s) now is.
-- **With Q2 (drop `build` too): ≈ 5.5 min.**
+  min per build iteration, plus a gate set decided by tested code.** `test:db` (≈ 109 s, not a verify gate) is no
+  longer run; `build` (≈ 180 s) now is (GATE 1 Q2 kept it).
 - **Context:** no material saving in this run (the correction above). The cap removes the 19k–41k-token risk of a
   whole log.
 - **Not in this item:** the 19 min human wait, regress and verify, and the stage agents' 302k-token prefix.
 
 ## Version, trusted docs, hooks
 
-- **Bump:** minor, provisional `6.36.0` (a new floor helper and a new runner stage). The orchestrator assigns the final
-  number at stacking (likely 6.38.0). `[6.35.1]` (`build-writes-through-tools`, below this branch) is kept byte-for-byte.
+- **Bump:** minor, provisional (a new floor helper and a new runner stage). The stack (orchestrator, 2026-10-05) is
+  main ← `fix/build-writes-review` (6.35.2) ← `feat/gate-exclusion-config` (6.36.0) ← `feat/regress-pre-run-snapshot`
+  (6.37.0) ← this branch, so this increment is built as `6.38.0`; every section below it is kept byte-for-byte.
 - **Trusted docs:** none made stale — no trusted sentence describes `/pharn-build`'s project gate (searched
   `ARCHITECTURE.md` §6, `LIMITS.md`, `THREAT-MODEL.md`). No `PROTECTED-FOLLOWUPS.md`.
 - **Hooks / settings / `MIN_CLI`:** none.
 
-## Open questions (HALT)
+## GATE-1 answers (resolved — the orchestrator, under the user's delegation, 2026-10-05)
 
-- Q1 — `gate-exclusion-config` (de8bc3a) sits below this PR in the planned stack. May I merge
-  `origin/feat/gate-exclusion-config` now, so the build stage is written against its `resolveSet` once and a test
-  proves the exclusion reaches both modes? Default if no: write against today's `resolveSet`, resolve at stacking.
-- Q2 — keep `build` in the full run (D2, ≈ 2.5–3 min saved here) or leave it to verify like e2e (≈ 5.5 min saved; a
-  build-only break then costs a loop iteration)? Default: keep.
-- Q3 — in a project with gates red at base (3 of 3 runs here: `typecheck`, `build`), the full run reads RED, so a
-  routed build under `/pharn-ship` reports `done gate:fail` and ship STOPs after the build instead of at verify; the
-  loop is unaffected. Accept (default), knowing `loop-entry-preflight` (item 1) detects base reds at entry?
+- Q1 — merge `origin/feat/gate-exclusion-config` before building against `resolveSet`, once its CHANGELOG lists
+  `[6.36.0]`; a test proves the exclusion reaches both modes. Taken (Design step 4, grill G6).
+- Q2 — keep `build` in the full run; follow-up `build-gate-execution-reuse` named (D2).
+- Q3 — accepted: a base-red gate was already a red build gate before this change; the CHANGELOG says so (D6).
