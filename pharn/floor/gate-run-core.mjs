@@ -254,7 +254,7 @@ export function isReasonCode(code) {
 /** The three stages and the two regress sides — enum-gated, fail-closed on anything else. `ac-test` (6.18.0) is
  *  /pharn-test's RED RUN: the AC tests, run before the build, whose per-test record check-red-run.mjs judges.
  *  Every stamp reader that is not that one asserts its own stage (`validateStamp`'s `expect.stage`), so an
- *  `ac-test` stamp handed to /pharn-verify or /pharn-regress is `stage-mismatch`, never a verdict. `build` (6.38.0,
+ *  `ac-test` stamp handed to /pharn-verify or /pharn-regress is `stage-mismatch`, never a verdict. `build` (6.39.0,
  *  build-gate-bounded) is /pharn-build's own project gate, run by build-gate.mjs: no verdict reads its stamp, and every
  *  stamp reader that asserts a stage refuses it the same way. */
 export const STAGES = Object.freeze(["verify", "regress", "ac-test", "build"]);
@@ -502,11 +502,11 @@ export function orderEntries(sourceEntries, extraEntries, withReconcile) {
  *  `exclude` (6.36.0): the project's declared exclusion (gate-exclusion-core.mjs), applied to a DISCOVERED source
  *  only, AFTER the regress e2e rule and before the emptiness test — so an exclusion that leaves nothing is
  *  `empty-source-set` naming it, never a run with nothing in it (L34). Passing it with `--gates` is a usage error.
- *  build   : (6.38.0, /pharn-build's gate via build-gate.mjs) DISCOVERED only — `--gates`, `--extra` and
- *            `--skip-style` are refused — minus E2E_SET (the regress rule: e2e runs at /pharn-verify), then the
- *            exclusion, no `reconcile`. With `targets` (a non-empty array of repo-relative test files), the set is
- *            the `test` gate alone, handed those files; an id that a targeted run skips anyway is never credited to
- *            the exclusion (the G9 rule above). `targets` applies to `build` only.
+ *  build   : (6.39.0, /pharn-build's gate via build-gate.mjs) a DISCOVERED source minus E2E_SET (the regress rule:
+ *            e2e runs at /pharn-verify), then the exclusion — or a human's explicit `--gates`, never filtered, as at
+ *            verify; `--extra` and `--skip-style` are refused; no `reconcile`. With `targets` (a non-empty array of
+ *            repo-relative test files), the set is the `test` gate alone, handed those files; an id that a targeted
+ *            run skips anyway is never credited to the exclusion (the G9 rule above). `targets` applies to `build` only.
  *  ---------------------------------------------------------------------------------------------- */
 export function resolveSet({
   stage,
@@ -537,7 +537,7 @@ export function resolveSet({
   if (stage === "ac-test") return resolveAcTest({ gates, scripts, extras, skipStyle, feature, acRows, exclude });
   if (acRows !== null) return err("usage-error", "--ac-tests applies to --stage ac-test only");
   if (stage === "build") {
-    const bad = buildArgsError({ gates, extras, skipStyle, targets });
+    const bad = buildArgsError({ extras, skipStyle, targets });
     if (bad) return err("usage-error", bad);
   } else if (targets !== null) {
     return err("usage-error", "--targets applies to --stage build only");
@@ -554,6 +554,8 @@ export function resolveSet({
     source = p.entries;
     sourceKind = "explicit";
     sourceRaw = gates;
+    // build, targeted, over a human's explicit spec: its `test` id alone (6.39.0, review R1).
+    if (stage === "build" && targets !== null) source = source.filter((e) => e.id === "test");
   } else {
     source = discoverGates(scripts);
     sourceKind = "discover";
@@ -563,7 +565,7 @@ export function resolveSet({
       e2eExcluded = source.filter((e) => E2E_SET.includes(e.id)).map((e) => e.id);
       source = source.filter((e) => !E2E_SET.includes(e.id));
     }
-    // build, targeted (6.38.0): the `test` gate alone. Narrowed BEFORE the exclusion, so `excluded` never names a
+    // build, targeted (6.39.0): the `test` gate alone. Narrowed BEFORE the exclusion, so `excluded` never names a
     // gate a targeted run skips anyway (the G9 rule just below).
     if (stage === "build" && targets !== null) source = source.filter((e) => e.id === "test");
     // The project's exclusion AFTER the fixed e2e rule (grill G9): `excluded` names only what the declaration itself
@@ -579,7 +581,7 @@ export function resolveSet({
   if (source.length === 0) {
     const byExclusion = excludedIds.length ? ` once the project's ${EXCLUSION_DECLARED_IN} removed ${excludedIds.join(", ")}` : "";
     if (stage === "build" && targets !== null) {
-      return err("empty-source-set", `no gates: a targeted build run needs the discovered \`test\` gate, and there is none${byExclusion}`);
+      return err("empty-source-set", `no gates: a targeted build run needs a \`test\` gate, and there is none${byExclusion}`);
     }
     return err(
       "empty-source-set",
@@ -648,14 +650,13 @@ function excludedBlock(ids) {
 /** The most target files one targeted build run takes. A cap, never a truncation: over it is a refusal. */
 export const MAX_BUILD_TARGETS = 4096;
 
-/** Why these are not usable `build` arguments, or null. The set is DISCOVERED only (no `--gates`, `--extra`,
- *  `--skip-style`); `targets` is null (full) or a NON-EMPTY array (L34 — an empty list handed to a runner means "the
- *  whole suite", L16) of distinct clean tokens, none led by `-` (a runner would read it as a flag) and none
- *  glob-shaped. The PATH rule proper (normalized, repo-relative, outside `.pharn/`) is ac-tests-core.mjs `badPath`,
- *  which run-gates.mjs applies when it reads `--targets` — this module imports nothing. TOTAL (L62): names a
- *  position, never a value. */
-function buildArgsError({ gates, extras, skipStyle, targets }) {
-  if (gates !== null && gates !== undefined) return "--gates does not apply to --stage build (its set is the discovered one)";
+/** Why these are not usable `build` arguments, or null. No `--extra` and no `--skip-style` (a human's `--gates` is
+ *  accepted, as at verify — review R1); `targets` is null (full) or a NON-EMPTY array (L34 — an empty list handed to
+ *  a runner means "the whole suite", L16) of distinct clean tokens, none led by `-` (a runner would read it as a flag)
+ *  and none glob-shaped. The PATH rule proper (normalized, repo-relative, outside `.pharn/`) is ac-tests-core.mjs
+ *  `badPath`, which run-gates.mjs applies when it reads `--targets` — this module imports nothing. TOTAL (L62): names
+ *  a position, never a value. */
+function buildArgsError({ extras, skipStyle, targets }) {
   if (extras !== null && extras !== undefined) return "--extra does not apply to --stage build";
   if (skipStyle) return "--skip-style does not apply to --stage build";
   if (targets === null) return null;

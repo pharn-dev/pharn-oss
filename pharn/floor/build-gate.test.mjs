@@ -1,4 +1,4 @@
-// pharn/floor/build-gate.test.mjs — /pharn-build's project gate (6.38.0), end to end in fixture git repos: the full
+// pharn/floor/build-gate.test.mjs — /pharn-build's project gate (6.39.0), end to end in fixture git repos: the full
 // set (discovered minus e2e, no reconcile), the targeted set (the `test` gate over the declared test files only),
 // every exit, the continue-or-start rule, containment, the gate exclusion reaching both modes (GATE 1 Q1, grill G6),
 // and ★ WIRING — /pharn-build Step 4's committed lines, each run as its own shell (L44, L45).
@@ -202,14 +202,75 @@ test("L34 — NO-GATES (exit 4) when there is nothing to run, and the runner is 
   withProject({ scripts: { lint: "node runner.cjs lint" } }, (dir) => {
     const r = targeted(dir);
     assert.equal(r.status, EXIT["no-gates"], r.stdout);
-    assert.match(r.stdout, /needs the discovered `test` gate/);
+    assert.match(r.stdout, /needs a `test` gate/);
   });
   // full, an e2e-only manifest.
   withProject({ scripts: { e2e: "node runner.cjs e2e" } }, (dir) => {
     const r = full(dir);
     assert.equal(r.status, EXIT["no-gates"], r.stdout);
-    assert.match(r.stdout, /ask the human/);
+    assert.match(r.stdout, /ask the human which gates to run/);
     assert.deepEqual(calls(dir), []);
+  });
+});
+
+test("review R1 — no package.json is NO-GATES (4), never UNUSABLE; a human's --gates runs as given in both modes", () => {
+  withProject({}, (dir) => {
+    rmSync(join(dir, "package.json"));
+    for (const run of [full, targeted]) {
+      const r = run(dir);
+      assert.equal(r.status, EXIT["no-gates"], r.stdout + r.stderr);
+      assert.match(r.stdout, /no --gates was given and there is no package\.json/);
+    }
+    assert.match(full(dir).stdout, /--gates followed by it, single-quoted, exactly as given; under \/pharn-loop this is S4/);
+    // The human's spec (no comma inside a token — the runner's documented bound), passed as one argv string.
+    const spec = "node runner.cjs test::test,node runner.cjs check::check";
+    const f = full(dir, ["--gates", spec]);
+    assert.equal(f.status, EXIT.green, f.stdout + f.stderr);
+    assert.match(f.stdout, /set: the human's --gates spec, run as given/);
+    assert.deepEqual(
+      calls(dir).map((c) => c.id),
+      ["test", "check"]
+    );
+    assert.equal(stampOf(dir, OUT_FULL).source, "explicit");
+    // targeted over an explicit spec: its `test` id alone, handed the targets.
+    writeFileSync(join(dir, ".pharn", "calls.jsonl"), "");
+    const t = targeted(dir, ["--gates", spec]);
+    assert.equal(t.status, EXIT.green, t.stdout + t.stderr);
+    assert.deepEqual(calls(dir), [{ id: "test", files: ["tests/a.test.js", "tests/ac/u.test.js"] }]);
+    // An empty spec is a usage error, never "no spec".
+    assert.equal(full(dir, ["--gates", " "]).status, EXIT.unusable);
+  });
+});
+
+test("review R4/R7 — a refused record prints the tail it announces; a failed duplicated-id test is named, not only counted", () => {
+  withProject({}, (dir) => {
+    // exit 0 with a failed test in the report → results-exit-contradiction → a GREEN gate with a refused record.
+    setMode(dir, { fail: ["tests/all.test.js"], forceExit: 0 });
+    writeFileSync(
+      join(dir, "runner.cjs"),
+      RUNNER.replace(
+        "process.exit(id === 'test' && failed ? 1 : 0);",
+        "process.exit(mode.forceExit !== undefined ? mode.forceExit : id === 'test' && failed ? 1 : 0);"
+      )
+    );
+    const r = full(dir);
+    assert.equal(r.status, EXIT.green, r.stdout);
+    assert.match(r.stdout, /per-test results not read: results-exit-contradiction — the log tail follows/);
+    assert.match(r.stdout, /```text\n> test\n> node runner\.cjs test\n\ntest ran over 1 file\(s\)\n```/);
+  });
+  withProject({}, (dir) => {
+    // Two tests sharing one id, one failed → the record's anomaly; the gate is red and the id is named.
+    writeFileSync(
+      join(dir, "runner.cjs"),
+      RUNNER.replace(
+        'if (id === "test" && process.env.PHARN_TEST_RESULTS)',
+        "if (id === 'test') { testResults[0].assertionResults.push({ ...testResults[0].assertionResults[0], status: 'failed', failureMessages: ['Error: dup boom'] }); failed++; }\nif (id === \"test\" && process.env.PHARN_TEST_RESULTS)"
+      )
+    );
+    const r = full(dir);
+    assert.equal(r.status, EXIT.red, r.stdout + r.stderr);
+    assert.match(r.stdout, /0 failed · 0 passed · 0 skipped · 1 anomaly/);
+    assert.match(r.stdout, /✗ tests\/all\.test\.js::suite › case tests\/all\.test\.js \(duplicate-test-id\)\n {4}Error: dup boom/);
   });
 });
 
@@ -243,6 +304,8 @@ test("L44/L66 — CONTINUE (exit 5) under the budget; the same line continues an
     const a = gate(dir, ["--mode", "full", ...line]);
     assert.equal(a.status, EXIT.continue, a.stdout + a.stderr);
     assert.match(a.stdout, /CONTINUE — 1 of 2 gate\(s\) done/);
+    // Review R6: the finished gate and its exit are visible before the rest runs.
+    assert.match(a.stdout, /finished so far \(exit · wall time of the runner call\):\n {2}test\s+exit\s+0\s+\d+\.\d s\n/);
     const b = gate(dir, ["--mode", "full", ...line]);
     assert.equal(b.status, EXIT.green, b.stdout + b.stderr);
     assert.deepEqual(
@@ -270,7 +333,7 @@ test("UNUSABLE (exit 2) — usage, and a symlinked or dangling .pharn/pharn-buil
     for (const args of [
       ["--mode", "full"], // no --timeout-ms (no default, L41)
       ["--mode", "fast", "--timeout-ms", "60000"],
-      ["--mode", "full", "--timeout-ms", "60000", "--gates", "x"],
+      ["--mode", "full", "--timeout-ms", "60000", "--extra", "x"],
       ["--mode", "full", "--timeout-ms", "60000", "--budget-ms", "100"],
     ]) {
       const r = gate(dir, args);

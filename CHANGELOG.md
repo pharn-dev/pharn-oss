@@ -28,14 +28,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - **`/pharn-loop` and `/pharn-ship` run their deterministic close as ONE tested line each.** After the model writes
-  `LOOP.md`, `/pharn-loop` runs [`pharn/floor/loop-closeout.mjs`](./pharn/floor/loop-closeout.mjs) `--feature '<name>'
---base '<base sha>'`: the record check, the decision re-derivation, the run-stop marker, the cost ledger and its
-  check, the run report (skipped in quick mode), the commit-gate freshness check, the plan-scope re-derivation, the
-  staging list, the branch, the add and the commit (or the undo of a failed one), the freshness ledger and the two
-  releases — in the order the close part's pinned lines ran them. It returns one closed outcome by exit code: `0`
-  committed · `3` not committed, final · `4` not committed with a model write still owed (Step 6d's revert and Outcome
-  rewrite) · `5` record RED, repair and re-run with `--after-repair` · `2` refused before anything ran · anything else a
-  crash, never read as a commit decision. `/pharn-ship`'s Step 3a's six lines become
+  `LOOP.md`, `/pharn-loop` runs [`pharn/floor/loop-closeout.mjs`](./pharn/floor/loop-closeout.mjs) with
+  `--feature '<name>' --base '<base sha>'`: the record check, the decision re-derivation, the run-stop marker, the cost
+  ledger and its check, the run report (skipped in quick mode), the commit-gate freshness check, the plan-scope
+  re-derivation, the staging list, the branch, the add and the commit (or the undo of a failed one), the freshness
+  ledger and the two releases — in the order the close part's pinned lines ran them. It returns one closed outcome by
+  exit code: `0` committed · `3` not committed, final · `4` not committed with a model write still owed (Step 6d's
+  revert and Outcome rewrite) · `5` record RED, repair and re-run with `--after-repair` · `2` refused before anything
+  ran · anything else a crash, never read as a commit decision. `/pharn-ship`'s Step 3a's six lines become
   [`pharn/floor/ship-closeout.mjs`](./pharn/floor/ship-closeout.mjs) `--feature '<name>'`, which holds no git write.
   The steps the two share live once in [`pharn/floor/closeout-core.mjs`](./pharn/floor/closeout-core.mjs). Only the two
   close parts change; every outcome spelling, the ledger-before-commit and ledger-before-attestation order, the
@@ -59,10 +59,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     freshness wiring, the phase-marker and ledger obligations, ship's run-marker close, `SHELL_VALUES` loses `<branch>`
     and `<decision>`, SHELL-SINK 7's executed branch/undo cases moved to `loop-closeout.test.mjs`),
     `render-run-report`/`render-regression`/`render-verify.test.mjs` (the staging-list site), `run-marker.test.mjs`,
-    `check-loop-fresh.test.mjs` (executes the closeout's commit-gate argv), `stage-runtime.test.mjs` (GIT CEILING),
-    `frontmatter-core.test.mjs` (CONSUMERS).
-  - SKILLS_VERSION 6.43.0 (minor: new floor scripts and command behaviour). No trusted doc, hook, settings or
-    `MIN_CLI` change.
+    `check-loop-fresh.test.mjs` (executes the closeout's commit-gate argv), `check-test-stage.test.mjs` (executes
+    `buildStageList`), `stage-runtime.test.mjs` (GIT CEILING), `frontmatter-core.test.mjs` (CONSUMERS).
+  - SKILLS_VERSION 6.39.0 → 6.43.0 (minor: new floor scripts and command behaviour; the version was pre-assigned by
+    the batch). No trusted doc, hook, settings or `MIN_CLI` change.
 
 ## [6.39.0] - 2026-10-05
 
@@ -74,10 +74,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   and AC-TESTS.md `## Files`, each through `badPath` and `isTestFile`, existing regular files only, e2e-mapped files left
   out). `--mode full` runs the set `/pharn-verify` discovers minus the e2e gates, and its exit is the build's gate (the
   routed agent's `--gate`). Both go through the gate runner's new `build` stage, the stage scripts' drain and budget
-  (unchanged), and the project's gate exclusion ([6.36.0]). The summary is bounded: per gate its exit and the wall time
-  of its runner call; for a red gate the failing tests' ids with a fenced excerpt of each first failure message, or a
-  fenced tail of its logs; at most 16 KiB per call, with the full logs left under `.pharn/pharn-build/<name>/`. The same
-  line starts and continues a run, and continues only while the tree is unchanged.
+  (unchanged), and the project's gate exclusion ([6.36.0]). With no gate to run (no `package.json`, or none of the
+  allowlisted scripts) both exit NO-GATES (4): the human may name the gates with `--gates`, exactly as at
+  `/pharn-verify` (appended verbatim, never model-typed, never filtered); under `/pharn-loop` it stays S4. The summary
+  is bounded: per gate its exit and the wall time of its runner call; for a red gate the failing tests' ids (a
+  duplicated id whose test failed included) with a fenced excerpt of each first failure message, or a fenced tail of
+  its logs; at most 16,384 bytes per summary, enforced (a red gate past the cap is named by one closing line counted
+  inside it). Full logs stay under `.pharn/pharn-build/<name>/`. The same line starts and continues a run, continues
+  only while the tree is unchanged, and on CONTINUE lists the gates already finished with their exits.
   - **The trigger (P7).** In a user's 92-minute `/pharn-loop` run (PHARN 6.35.0) the routed build agent chose its own
     gate set: a full `vitest run` twice, a `test:db` script `/pharn-verify` never runs twice, `typecheck` piped through
     `grep -v` to hide pre-existing errors, and never `build`. It spent 7.8 minutes blocked on the suites
@@ -93,22 +97,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **Behaviour change, accepted at GATE 1:** in a project with gates red at its base commit, the full run reads RED,
     so a routed build under `/pharn-ship` reports `done gate:fail` and ship stops after the build instead of at verify.
     `/pharn-loop` is unaffected (it goes on to regress and verify either way). A base-red gate was already a red build
-    gate before this change; the agent had hidden it by hand.
+    gate before this change; the agent had hidden it by hand. Step 5 records a red gate as failed, never passed.
   - **Shared modules, additive:** `gate-run-core.mjs` gains the `build` stage and `resolveSet`'s `targets`;
-    `run-gates.mjs init --stage build [--targets <file>]`; the results adapters carry `messages` on each parsed entry,
-    and `test-results-core.mjs` gains `gateResults` and `testIdOf`. No record carries a message, and `testRecord`'s
-    output is unchanged. Contracts: [`gate-run-record.md`](./pharn/pharn-contracts/gate-run-record.md) (the `build`
-    stage) and [`test-results-record.md`](./pharn/pharn-contracts/test-results-record.md).
+    `run-gates.mjs init --stage build (--discover <m> | --gates <spec>) [--targets <file>]`; the results adapters carry
+    `messages` on each parsed entry, and `test-results-core.mjs` gains `gateResults` and `testIdOf`. No record carries a
+    message, and `testRecord`'s output is unchanged. Contracts: [`gate-run-record.md`](./pharn/pharn-contracts/gate-run-record.md)
+    (the `build` stage) and [`test-results-record.md`](./pharn/pharn-contracts/test-results-record.md).
+    `pharn-ship.md`'s inline-build bullet no longer says the build gate ignores `gates.exclude`.
   - **Bounds:** advisory that the agent runs nothing else, that an excerpt holds the diagnostic it needs, and that a
     targeted GREEN predicts a full one or a full GREEN a verify PASS (e2e, `reconcile` and the AC gate run only at
     verify). "Targeted" is the runner's reading of file arguments (vitest filters by substring, Jest by pattern). The
     times are observed wall clock of each runner call. `pharn-build.md`'s byte ceiling rose to 24,576 by the documented
-    rule. Named follow-ups: `build-gate-execution-reuse` (offer the full run's executions to regress HEAD and verify
-    through the 6.34.0 identity mechanism) and `ship-build-gate-cite` (`pharn-ship.md`'s inline-build bullet still
-    names a `--gates` clause the build never took).
-  - Product-surface change: `SKILLS_VERSION` 6.37.0 → 6.38.0 (minor), stacked on `feat/regress-pre-run-snapshot`;
-    renumbered 6.39.0 here, in this branch only, after main took 6.38.0 (#311) and 6.38.1 (#310) — PR #309's own
-    numbering supersedes this copy when it merges.
+    rule. Named follow-up: `build-gate-execution-reuse` (offer the full run's executions to regress HEAD and verify
+    through the 6.34.0 identity mechanism).
+  - Product-surface change: `SKILLS_VERSION` 6.38.1 → 6.39.0 (minor).
 
 ## [6.38.1] - 2026-10-05
 

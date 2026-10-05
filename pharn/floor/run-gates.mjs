@@ -113,11 +113,12 @@
 //     e2e to each e2e gate. The mapping is read by ac-tests-core.mjs `acRowsOf` — the grammar's one home, the one
 //     check-ac-tests.mjs checks with (L35) — so a file the mapping checker would refuse (a leading `-` a runner
 //     would read as a flag, a glob, an absolute path) never reaches a gate's argv.
-//   node pharn/floor/run-gates.mjs init --stage build --feature <name> --out <dir> --discover <package.json>
-//        [--targets <json-array-file>] [--cwd <dir>]
-//     /pharn-build's own gate (6.38.0), run by build-gate.mjs: the DISCOVERED set minus the e2e gates, no reconcile,
-//     no aux.completeness; with `--targets`, the `test` gate alone, handed those files (each through ac-tests-core.mjs
-//     `badPath`). `--gates`, `--extra`, `--skip-style`, `--scope-json`, `--spec-from`, `--side`, `--base` are refused.
+//   node pharn/floor/run-gates.mjs init --stage build --feature <name> --out <dir> (--discover <package.json> |
+//        --gates "<c>[::<id>],…") [--targets <json-array-file>] [--cwd <dir>]
+//     /pharn-build's own gate (6.39.0), run by build-gate.mjs: the DISCOVERED set minus the e2e gates, or a human's
+//     explicit --gates, never filtered; no reconcile, no aux.completeness; with `--targets`, the `test` gate alone,
+//     handed those files (each through ac-tests-core.mjs `badPath`). `--extra`, `--skip-style`, `--scope-json`,
+//     `--spec-from`, `--side`, `--base` are refused.
 //   node pharn/floor/run-gates.mjs run --next --out <dir> --timeout-ms <N>
 //
 // Exit: init  0 ok · 2 runner error (reason_code) · 3 empty SOURCE set (nothing written)
@@ -560,7 +561,7 @@ function readAcRows(file, feature) {
   return rows.ok ? rows : { ok: false, reason: `--ac-tests ${JSON.stringify(file)}: ${rows.reason}` };
 }
 
-/** `--targets` (6.38.0, build): a JSON array of repo-relative test files, read from a FILE (the `--scope-json` pattern —
+/** `--targets` (6.39.0, build): a JSON array of repo-relative test files, read from a FILE (the `--scope-json` pattern —
  *  no list through argv splitting, L5), each one a path ac-tests-core.mjs `badPath` accepts — the path rule the red run
  *  already applies to the files it hands a runner (no glob, not absolute, no leading `-`, normalized, outside `.pharn/`
  *  and `pharn/features/`). The array's shape (non-empty, unique, capped) is resolveSet's. Returns `{ok, targets}` or a
@@ -644,13 +645,15 @@ function runInit(args) {
     fail("usage-error", "--ac-tests applies to --stage ac-test only");
   }
 
-  // 6.38.0 — /pharn-build's own gate (build-gate.mjs). DISCOVERED only; the same by-presence refusals as ac-test.
+  // 6.39.0 — /pharn-build's own gate (build-gate.mjs): discovered, or a human's --gates (review R1); by-presence refusals.
   let targets = null;
   if (stage === "build") {
-    for (const f of ["--scope-json", "--spec-from", "--side", "--base", "--gates", "--extra", "--skip-style"]) {
+    for (const f of ["--scope-json", "--spec-from", "--side", "--base", "--extra", "--skip-style"]) {
       if (has(args, f)) fail("usage-error", `${f} does not apply to --stage build`);
     }
-    if (!flag(args, "--discover")) fail("usage-error", "--stage build requires --discover <package.json>");
+    if (!flag(args, "--discover") && !flag(args, "--gates")) {
+      fail("usage-error", "--stage build requires --discover <package.json> or --gates <spec>");
+    }
     if (has(args, "--targets")) {
       const r = readTargets(flag(args, "--targets"));
       if (!r.ok) fail("usage-error", r.reason);
@@ -1117,7 +1120,7 @@ async function main(argv) {
       ok: false,
       reason_code: "usage-error",
       reason:
-        'usage: run-gates.mjs init --stage verify|regress [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--base <featureBase>] [--discover <package.json>] [--gates "<c>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>] [--reuse-stamp <f> --reuse-sha256 <hex>] | init --stage ac-test --feature <name> --out <dir> --discover <package.json> --ac-tests <AC-TESTS.md> [--cwd <dir>] | init --stage build --feature <name> --out <dir> --discover <package.json> [--targets <json-file>] [--cwd <dir>] | run --next --out <dir> --timeout-ms <N>',
+        'usage: run-gates.mjs init --stage verify|regress [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--base <featureBase>] [--discover <package.json>] [--gates "<c>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>] [--reuse-stamp <f> --reuse-sha256 <hex>] | init --stage ac-test --feature <name> --out <dir> --discover <package.json> --ac-tests <AC-TESTS.md> [--cwd <dir>] | init --stage build --feature <name> --out <dir> (--discover <package.json> | --gates "<c>[::<id>],…") [--targets <json-file>] [--cwd <dir>] | run --next --out <dir> --timeout-ms <N>',
     },
     2
   );

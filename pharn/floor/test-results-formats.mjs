@@ -73,7 +73,7 @@
 // `pharn-json`'s required `suite_errors`. Counted, never described — their messages are untrusted free text and are
 // not read.
 //
-// FAILURE MESSAGES (6.38.0, build-gate-bounded) ride on each entry as `messages`, an array of strings: vitest/Jest
+// FAILURE MESSAGES (6.39.0, build-gate-bounded) ride on each entry as `messages`, an array of strings: vitest/Jest
 // `failureMessages`, Playwright's per-result `errors[].message` (else `error.message`), and none for `pharn-json`,
 // whose schema has no message field. A non-string or non-array value yields `[]` — never a refusal, never a status
 // input. They exist for build-gate.mjs's bounded summary ALONE: test-results-core.mjs `buildRecord` copies

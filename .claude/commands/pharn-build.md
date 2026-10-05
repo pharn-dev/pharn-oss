@@ -223,10 +223,15 @@ node pharn/floor/build-gate.mjs --feature <name> --mode targeted --timeout-ms 54
 node pharn/floor/build-gate.mjs --feature <name> --mode full --timeout-ms 540000 --budget-ms 570000
 ```
 
-- **targeted:** `3` → fix within scope, run it again; `0` or `4` → the full line; `5` → the same line again.
-- **full:** `0` → Step 5, the gate passed. `3` → fix within scope and repeat; a red you cannot fix within `## Files`
-  (outside them, or red before your change) → stop, the gate failed. `5` → the same line again. `4` → no gates: ask the
-  human (S4 under `/pharn-loop`), never a pass. `2` or any other exit → HALT, the gate failed.
+- **targeted:** `3` → fix within scope, run it again; a red you cannot fix within `## Files` (a runner that ran none of
+  the targets included) → the full line, never loop; `0` or `4` → the full line; `5` → the same line again; `2` or any
+  other exit → HALT, the gate failed.
+- **full:** `0` → Step 5, the gate passed. `3` → fix within scope, then targeted rounds and one full run again; a red
+  you cannot fix within `## Files` (outside them, or red before your change) → stop, the gate failed. `5` → the same
+  line again. `4` → no gates: ask the human which gates to run, never a pass (S4 under `/pharn-loop`); append their
+  answer to both lines as `--gates` followed by it, single-quoted, exactly as given. `2` or any other exit → HALT, the
+  gate failed.
+- On every stop Step 5 still runs: `BUILD.md` records the gate as failed, with the exit.
 - Building PHARN-shaped capabilities, also `node pharn/floor/validate.mjs <target>`: non-zero → HALT, fix within scope.
 
 ## Step 5 — Re-scope to the build record, write `pharn/features/<name>/BUILD.md`, halt (the thin record)
@@ -240,7 +245,7 @@ node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/phar
 
 Then write a **thin, advisory** `pharn/features/<name>/BUILD.md` recording: which plan was built; the chain-gate
 result (GREEN, by `check-plan-spec-agree.mjs`); the test-stage gate's token (Step 0, verbatim); the fix #7 scope that was set (the authorized paths); the
-floor status (GREEN); and the files written. It is **never** a self-issued "correct" / "done" / `PHARN ✓
+gate result (passed, or failed with the exit Step 4 stopped on); and the files written. It is **never** a self-issued "correct" / "done" / `PHARN ✓
 reviewed` seal (the §6 ship-stage seal is the **human's** post-review decision downstream, not
 `/pharn-build`'s). End with the honest line: _"built within the named scope from a current approved plan —
 this is NOT a judgment that the code is correct; that is `/pharn-regress` / `/pharn-verify` + the human."_
@@ -269,9 +274,9 @@ stage adds no new floor primitive.
   `--target`, and its content is advisory. The setter's exit code is floor; the **refuse** on no parseable scope is
   command discipline, which is why Step 0 hard-stops on it. **NARROWED:** the Write/Edit/MultiEdit/NotebookEdit
   surface only; a Bash write is detected at `/pharn-verify`'s reconcile gate, never prevented (`LIMITS.md §6`).
-- **Floor:** the project's deterministic gate is GREEN before the record is written — `build-gate.mjs --mode full`'s
-  exit, from the gate runner's stamp; never that the code is correct. The targeted runs and every summary are
-  advisory, and so is running nothing else.
+- **Floor:** the gate result the record and `--gate` carry is `build-gate.mjs --mode full`'s exit, from the gate
+  runner's stamp — a red gate is recorded as failed, never passed; never that the code is correct. The targeted runs,
+  every summary, and running nothing else are advisory.
 - **Floor:** the seam-config is validated before a seam walk — `check-seam-config.mjs`. Recognizing the seam and
   running the check are ADVISORY — DOUBLY so, since neither is hook-forced — and the extraction one-liner is
   advisory, untested bash: the floor verifies only that the extracted file is valid, never that the extraction
