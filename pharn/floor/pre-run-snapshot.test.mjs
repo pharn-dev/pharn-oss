@@ -703,7 +703,8 @@ const WIRING = [
   {
     file: "pharn-ship.md",
     open: /node pharn\/floor\/run-marker\.mjs --open pharn-ship '<name>'/,
-    next: "node pharn/floor/stage-agent.mjs route --command pharn-ship --stage pharn-plan",
+    // 6.43.0 (orchestrator-direct-stage-calls): /pharn-plan's first line is its `start` line.
+    next: "node pharn/floor/stage-agent.mjs start --command pharn-ship --stage pharn-plan",
     stopRow: /before `\/pharn-plan`/,
   },
 ];

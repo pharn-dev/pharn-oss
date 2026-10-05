@@ -1232,7 +1232,9 @@ node .dev/floor/check-provenance.mjs <candidate.json> <canon-file.md>
 # model/effort, invisible to any hook/hash/enum; (2) TURN SCOPE — the frontmatter override lasts the invoking
 # turn, so a stage run INLINE as a step inside /pharn-ship or /pharn-loop (a policy-inline stage, a routing
 # fallback, the orchestrators themselves) does not get its frontmatter model; since 6.27.0 a ROUTED stage gets
-# its model from the Agent call instead, and its EFFORT keeps this bound; (3) an org availableModels allowlist
+# its model from the Agent call instead, and its EFFORT keeps this bound; and (observed once, 2026-10-05) a command
+# a MODEL invokes through the Skill tool does not get its frontmatter model at all — only a person's slash invocation
+# did (the checker's header, TURN SCOPE); (3) an org availableModels allowlist
 # or auto mode can decline a value SILENTLY. `model_tier:` is a DIFFERENT,
 # platform-inert field (ARCHITECTURE §3.1) and is untouched — the parser matches keys exactly (L6).
 # GREEN BY DESIGN on no pharn.config.json and on a config with no `models.stages` (the check-lessons-index
@@ -1277,7 +1279,7 @@ node pharn/floor/check-model-config.mjs [validate | resolve <stage> | agreement]
 # numbers, and names a refused result on stderr by ONE fixed code (READ_DEFECTS), never by a byte the file carries
 # (GATE-2 review A7). The Agent tool still returns the stage agent's final text into the orchestrator's context:
 # THREAT-MODEL §5's free-text residual in a new place — that no proceed/stop reads it is ADVISORY (review A6).
-# The orchestrators record the token on the stage-start marker (mark-phase --route), so cost.json carries
+# The orchestrators record the token on the stage-start marker (since 6.43.0 via `start`, below), so cost.json carries
 # the REQUESTED route beside the SERVED requests[].model. MODEL ROUTED, EFFORT NOT — the Agent tool takes none.
 # BOUNDS: a route is a request, the served model is evidence from an undocumented transcript format, NEVER proof;
 # ship's routed build proceeds on its agent's advisory `done gate:pass`, re-confirmed by /pharn-verify's floor
@@ -1290,6 +1292,38 @@ node pharn/floor/stage-agent.mjs route --command <pharn-ship|pharn-loop> --stage
 node pharn/floor/stage-agent.mjs brief --command <c> --stage <stage> --name '<name>' [--iteration <N>] [--mode quick]
 node pharn/floor/stage-agent.mjs report --command <c> --name '<name>' --stage <stage> [--iteration <N>] --status <done|refused|question> [--row S<n>] [--gate pass|fail]
 node pharn/floor/stage-agent.mjs read --command <c> --name '<name>' --stage <stage> [--iteration <N>]
+# START / FINISH (6.43.0, orchestrator-direct-stage-calls — audit C1): the orchestrators pin these two instead of the
+# four lines above. `start` = `route`'s decision + the stage-start marker carrying its token (written by code through
+# mark-phase.mjs's tryMarkPhase — the model types no token; `<route>` left every shell line); `--no-agent-tool` records
+# inline:no-agent-tool (ADVISORY: the model's reading of its tools); an uncleared leftover result is
+# inline:route-unavailable; a stage still OPEN (the run's latest marker is its own stage-start) gets no second one, which
+# keeps ship's question relay from tripping ship-outcome-core (b). `finish` = `read` + the orchestrator marker, deferred
+# after a `question`. Each prints its closed line, then the marker line (or `marker: not written` — a marker never fails
+# a run). C1's own pre-registered bar (orchestrator-role requests >= 20%) was met in 1 of 3 real runs; adopted at the
+# user's request and to take the route token out of shell lines. Exit: start = route's 0/3 (2 refused, nothing written);
+# finish = read's 0/2/3/4. An inline-run stage closes with `mark-phase.mjs --kind orchestrator` (the inline return line).
+node pharn/floor/stage-agent.mjs start --command <c> --stage <stage> --name '<name>' [--iteration <N>] [--mode quick] [--no-agent-tool]
+node pharn/floor/stage-agent.mjs finish --command <c> --name '<name>' --stage <stage> [--iteration <N>]
+
+# THE DIRECT STAGE CALL (6.43.0, orchestrator-direct-stage-calls — audit C3) — /pharn-loop and /pharn-ship run
+# /pharn-regress and /pharn-verify as ONE call each instead of invoking the thin callers (which a model invoked through
+# the Skill tool, injecting 19,301 + 17,339 B of command text per iteration in the measured 92-minute run). The call
+# sets the thin caller's own writes-scope (its pinned setter line), writes the stage-start marker (fresh), runs the stage
+# script beside it, releases the scope, writes the return marker (not after a `5`), and passes the script's object and
+# exit code through unchanged (a signal or spawn failure → 1). Rules: pharn/floor/stage-direct-core.mjs; execution and
+# failure modes: pharn/floor/stage-direct.mjs's header (no new contract). The thin callers stay, unchanged, for a person.
+# Wiring: .dev/floor/command-hygiene.test.mjs DIRECT_STAGE_WIRING (the copy-pair's obligation set, closure, EXECUTED).
+# A Bash call that reaches the tool's timeout is MOVED TO THE BACKGROUND, not killed (GATE-2 review R1), so the call
+# first takes an IN-FLIGHT LOCK, .pharn/stage-direct/in-flight.json (O_EXCL; pid + start time; stale only when that pid
+# is dead; released only while it holds the call's own record): a second call refuses `in-flight`, and the orchestrators
+# wait for a backgrounded call instead of resuming it. One lock for both stages, beside their roots (each script's fresh
+# start deletes its own root; the two share one scope file). BOUNDS: its own writes (scope file, markers, lock) are
+# Bash writes under .pharn/ (L19); the lock sees only stage-direct calls, and a reused pid reads as alive (refuses); no
+# stage scope between two calls around a `continue`; its node start-up and setter spawns are outside the script's
+# budget clock. Ships: bumps SKILLS_VERSION. Exit: the script's 0/2/3/4/5; 2 also for its own refusal (bad argv, a scope
+# it could not set, `in-flight` / `lock-unusable`); 1 crash.
+node pharn/floor/stage-direct.mjs --stage <pharn-regress|pharn-verify> --name '<name>' --iteration <N> --timeout-ms <T> --budget-ms <B> [stage flags]
+node pharn/floor/stage-direct.mjs --stage <pharn-regress|pharn-verify> --name '<name>' --resume --budget-ms <B>
 
 # Validate pharn.config.json (per-stage model/effort) and check that the wired /pharn-dev-* command
 # frontmatter AGREES with it. Config-validity + config↔frontmatter consistency only — NOT proof a stage

@@ -66,17 +66,17 @@ spec_kind: quick`. The remedy is to re-run `/pharn-ship <description>` **without
    marker opens, the snapshot is recorded, the entry gates start (Step 2's line and rule), then `/pharn-plan` starts. A refused `--quick` never opens a marker. Every quick exit still reaches
    Step 3a, whose `--close` runs right after the run-stop marker and is idempotent (item 12).
 
-4. **The grill step.** Run this pinned QUICK route line in place of Step 2's grill route line (6.27.0):
+4. **The grill step.** Run this pinned QUICK start line in place of Step 2's grill start line (6.27.0):
 
    ```bash
-   node pharn/floor/stage-agent.mjs route --command pharn-ship --stage pharn-grill --name '<name>' --mode quick
+   node pharn/floor/stage-agent.mjs start --command pharn-ship --stage pharn-grill --name '<name>' --mode quick
    ```
 
    It prints `inline:floor-only` (exit `3` — the quick grill runs two checkers, so its model does not change
-   its verdict), which Step 2's grill stage-start records as its `<route>`. Then invoke
-   `/pharn-grill <name> --quick` INLINE, in place of `/pharn-grill`, and run no `read` and no Agent call.
-   Its markers (Step 2's grill item) and the two-exit verdict read (`check-plan-spec-agree.mjs` +
-   `check-plan-lessons.mjs`) run exactly as written; `/pharn-grill --quick` writes a `GRILL.md` recording
+   its verdict) and records it on the grill's stage-start marker. Then invoke
+   `/pharn-grill <name> --quick` INLINE, in place of `/pharn-grill`, and run no `finish` and no Agent call — the
+   inline return line closes it. The two-exit verdict read (`check-plan-spec-agree.mjs` +
+   `check-plan-lessons.mjs`) runs exactly as written; `/pharn-grill --quick` writes a `GRILL.md` recording
    `mode: quick`, both floor results, and the pinned line `interrogation NOT performed — skipped by mode
 (quick)` — see `pharn-grill.md`'s own `--quick` section. No `ADVISORY VERDICT` line and no finding
    object are written (nothing was interrogated, so none is fabricated).
@@ -85,7 +85,7 @@ spec_kind: quick`. The remedy is to re-run `/pharn-ship <description>` **without
    `feature`, so `/pharn-test` and `/pharn-build` need no delta at all — the same mapping check, red run,
    test-stage gate and build project-gate apply.
 
-6. **The regress step: SKIPPED.** No `/pharn-regress`, no `pharn-regress` markers, no base worktree, no
+6. **The regress step: SKIPPED.** No `/pharn-regress` line (so no `pharn-regress` markers), no base worktree, no
    `regression-report.json` read. (Step 2's regress item, above, is the full-mode procedure this one item
    omits — every other Step-2 item runs as written.) Its first check is **kept**: item 7.
 
