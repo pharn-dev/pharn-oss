@@ -484,7 +484,8 @@ requests.
 **The floor-only stages' bracket (6.41.0).** `/pharn-loop` and `/pharn-ship` run `/pharn-regress` and `/pharn-verify` as
 one `stage-direct.mjs` call each, which writes the stage-start marker right before the stage script runs and the
 `orchestrator` marker right after it ends (not after a `continue`, which a resume call closes). So such a stage's
-`executions` row spans the script's run plus the scope set and release, no longer the orchestrator's requests between
+`executions` row spans the script's run plus the scope release (the scope is set before the start marker is written, so
+the set is outside it), no longer the orchestrator's requests between
 its pinned lines, and its bucket holds only the requests that issue a resume. An answered `question` is a second call,
 so a second row (`run 2`) of the same stage and iteration — regress and verify are verdict stages, which
 `ship-outcome-core.mjs` lets repeat.

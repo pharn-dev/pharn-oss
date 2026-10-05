@@ -235,6 +235,8 @@ header; every §8 sentence stays true ("when a person invokes it directly"), so 
 - `.claude/commands/pharn-ship.md` — D3 — product command
 - `.claude/commands/pharn-loop-quick.md` — D3 — product command part
 - `.claude/commands/pharn-ship-quick.md` — D3 — product command part
+- `.claude/commands/pharn-ship-close.md` — (added at GATE 2, review R4, an owner decision) the load-condition wording
+  only: "with step 7's first `/pharn-verify` call that exits other than `5`" — product command part
 - `pharn/floor/ship-outcome-core.test.mjs` — ★ WIRING reads the new committed lines — test, not shipped
 - `pharn/floor/run-marker.test.mjs` — ✧ WIRING anchors move to the plan's `start` line — test, not shipped
 - `pharn/floor/pre-run-snapshot.test.mjs` — (added at stacking, after 6.37.0 merged) its ✧ WIRING `next` anchor moves

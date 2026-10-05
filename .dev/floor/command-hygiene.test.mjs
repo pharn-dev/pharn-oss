@@ -2005,6 +2005,10 @@ const MARK_PHASE = /node pharn\/floor\/mark-phase\.mjs[^\n]*/g;
 // stage-start and `finish` its return; a FRESH `stage-direct.mjs` line is a floor-only stage's start AND its return (its
 // `--resume` line only continues it). A `--mode` start line is a quick DELTA, excluded as a `--mode` run-start is.
 const START_LINE = /node pharn\/floor\/stage-agent\.mjs start [^\n]*/g;
+// GATE-2 review R3: the ONE mark-phase stage-start a routed stage may carry — after its start line CRASHED (no marker
+// written) — with a FIXED literal route, never a model-typed token. Exactly this text; anything else is a typed route.
+const FALLBACK_START =
+  "node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage <stage> --route 'inline:route-unavailable'";
 const FINISH_LINE = /node pharn\/floor\/stage-agent\.mjs finish [^\n]*/g;
 const DIRECT_LINE = /node pharn\/floor\/stage-direct\.mjs [^\n]*/g;
 
@@ -2016,7 +2020,8 @@ function markerSites(body) {
     const c = m[0];
     if (/--pending-start/.test(c) || /--mode\b/.test(c)) continue;
     const kind = flag(c, "kind");
-    if (kind === "stage-start")
+    if (c.trim() === FALLBACK_START) sites.push({ at: m.index, type: "start", fallback: true, stage: "<stage>", text: c });
+    else if (kind === "stage-start")
       sites.push({ at: m.index, type: "start", stage: flag(c, "stage"), iteration: flag(c, "iteration"), text: c });
     else if (kind === "orchestrator") sites.push({ at: m.index, type: "return", text: c });
   }
@@ -2121,7 +2126,8 @@ for (const cmd of PHASE_MARKER_WIRING) {
 
     // Every stage this command runs must be marked — by a mark-phase line, or (6.41.0) by a start or direct line.
     const sites = markerSites(body);
-    const staged = new Set(sites.filter((s) => s.type !== "return").map((s) => s.stage));
+    // The crash fallback (R3) names no stage of its own (`<stage>`), so it is not counted here; it is paired below.
+    const staged = new Set(sites.filter((s) => s.type !== "return" && !s.fallback).map((s) => s.stage));
     assert.deepEqual([...staged].sort(), [...cmd.stages].sort(), `${cmd.file}'s marked stages must equal its declared stage set`);
 
     // An `orchestrator` return after every stage-start, before the next stage starts, so a stage's tail is not
@@ -3223,8 +3229,14 @@ test("✧ CLOSURE discriminates — the SAME predicate, run over a mapping parag
 //   3. every resume line's --budget-ms equals the thin caller's;
 //   4. each orchestrator names the 600000 Bash-tool timeout for these lines;
 //   5. each orchestrator's mapping names every stage-exit code — done, question, refused, unusable, continue — plus a
-//      crash and a Bash-tool timeout;
-//   6. (stage-direct.test.mjs) the call's per-stage flag set holds every flag a registry question option appends.
+//      crash;
+//   6. (stage-direct.test.mjs) the call's per-stage flag set holds every flag a registry question option appends;
+//   7. (GATE-2 review R1) each orchestrator says a call the Bash tool moved to the background is STILL RUNNING and is
+//      never followed by its resume line or another call meanwhile — and no longer prescribes "resume once after the
+//      Bash tool timed out" (the call is not killed; stage-direct.mjs's in-flight lock is the floor behind it);
+//   8. (GATE-2 review R2) /pharn-ship builds a question's answer from the pinned line's own flags + `resume.argv` after
+//      its `--budget-ms` value + the option — never "the same line with the option appended" (stage-direct.test.mjs
+//      runs the rule through the real stage-regress.mjs).
 // Plus the CLOSURE (L36): the commands calling stage-direct.mjs are exactly these two, each holds exactly its expected
 // (stage, iteration) fresh lines and one resume line per stage, in the closed shape below; and ★ EXECUTED (L45): every
 // committed line, run in a scratch tree where the REAL script refuses, passes that exit through, writes its markers and
@@ -3239,15 +3251,8 @@ const DIRECT_STAGE_WIRING = [
     // the loop's regress line carries its own captured base; nothing else is appended to a committed line.
     extra: { "pharn-regress": " --base '<base sha>'", "pharn-verify": "" },
     exitText: (body) => STAGE_SCRIPT_WIRING.map((w) => loopMapping(w.mappingAnchor, body)).join("\n"),
-    exitNeedles: [
-      "`done`",
-      "`question",
-      "`refused`",
-      "`unusable`",
-      "a crash",
-      "`continue`",
-      "Bash\ntool itself timed out|Bash tool itself timed out",
-    ],
+    exitNeedles: ["`done`", "`question", "`refused`", "`unusable`", "a crash", "`continue`"],
+    answerRule: false,
   },
   {
     file: "pharn-ship.md",
@@ -3258,17 +3263,19 @@ const DIRECT_STAGE_WIRING = [
       assert.ok(at >= 0, "pharn-ship.md must carry the floor-only stages paragraph (L60: the anchor is found first)");
       return body.slice(at, body.indexOf("\n## ", at));
     },
-    exitNeedles: [
-      "`0` (`done`)",
-      "`2` (`unusable`",
-      "`3` (`refused`)",
-      "`4` (`question`)",
-      "`5` (`continue`)",
-      "anything else",
-      "Bash tool itself",
-    ],
+    exitNeedles: ["`0` (`done`)", "`2` (`unusable`", "`3` (`refused`)", "`4` (`question`)", "`5` (`continue`)", "anything else"],
+    answerRule: true,
   },
 ];
+/** Rule 7: the backgrounded-call paragraph (words matched across line breaks). */
+const BACKGROUND_RULE =
+  /\*\*A call the Bash tool reports as moved to the background is STILL RUNNING\*\*[\s\S]{0,600}?Never\s+start\s+its\s+resume\s+line,\s+or\s+any\s+other\s+`stage-direct\.mjs`\s+call,\s+while\s+it\s+runs:\s+a\s+second\s+call\s+refuses\s+`in-flight`/;
+/** Rule 7's closed-out claim: "resume once when the Bash tool timed out". */
+const TIMEOUT_RESUME = /Bash\s+tool\s+itself\s+timed\s+out/;
+/** Rule 8: ship's answer line. */
+const ANSWER_RULE =
+  /pinned\s+line's\s+own\s+flags\s+up\s+to\s+and\s+including\s+`--budget-ms\s+570000`,\s+then\s+the\s+object's\s+`resume\.argv`\s+tokens\s+after\s+its\s+own\s+`--budget-ms`\s+value,\s+then\s+the\s+chosen\s+option's\s+`argv`/;
+const SAME_LINE_ANSWER = /re-run\s+the\s+same\s+line\s+with\s+the\s+chosen\s+option's\s+`argv`\s+appended/;
 const DIRECT_FRESH =
   /^node pharn\/floor\/stage-direct\.mjs --stage (pharn-regress|pharn-verify) --name '<name>' --iteration (\S+) --timeout-ms (\d+) --budget-ms (\d+)(.*)$/;
 const DIRECT_RESUME =
@@ -3315,6 +3322,12 @@ function directWiringReasons(w, body = commandBody(w.file)) {
   const exitText = w.exitText(body);
   for (const needle of w.exitNeedles) {
     if (!needle.split("|").some((n) => exitText.includes(n))) reasons.push(`the exit mapping does not name ${needle}`);
+  }
+  if (!BACKGROUND_RULE.test(body)) reasons.push("rule 7: no 'a backgrounded call is STILL RUNNING — never resume it meanwhile' paragraph");
+  if (TIMEOUT_RESUME.test(body)) reasons.push("rule 7: still prescribes a resume after 'the Bash tool itself timed out'");
+  if (w.answerRule) {
+    if (!ANSWER_RULE.test(body)) reasons.push("rule 8: the answer line is not 'own flags + resume.argv after --budget-ms + option'");
+    if (SAME_LINE_ANSWER.test(body)) reasons.push("rule 8: still answers with 'the same line + the option'");
   }
   // The thin callers' own pinned script and setter lines must not be re-typed in an orchestrator (that is the call's).
   for (const t of lines) {
@@ -3384,6 +3397,23 @@ test("✧ DIRECT_STAGE_WIRING — each rule fails on its mutant (L60)", () => {
       ship,
       `${shipBody}\n\`\`\`bash\nnode pharn/floor/stage-verify.mjs --feature <name> --timeout-ms 540000 --budget-ms 570000\n\`\`\`\n`,
       /a stage script run directly/,
+    ],
+    // Rule 7 (R1): the paragraph removed, and the old timeout-resume clause restored.
+    [loop, mutate(loopBody, "**A call the Bash tool reports as moved to the background is STILL RUNNING**", "A call"), /rule 7: no/],
+    [
+      ship,
+      mutate(shipBody, "until another exit:", "until another exit; and once when the Bash tool itself timed out:"),
+      /rule 7: still prescribes/,
+    ],
+    // Rule 8 (R2): the old answer sentence back in ship.
+    [
+      ship,
+      mutate(
+        shipBody,
+        "run `stage-direct.mjs` with the\n  pinned line's own flags",
+        "re-run the same line with the chosen option's `argv` appended, or the\n  pinned line's flags"
+      ),
+      /rule 8: the answer line is not[\s\S]*rule 8: still answers/,
     ],
   ];
   for (const [w, body, re] of cases) assert.match(directWiringReasons(w, body).join("\n"), re);
@@ -3912,13 +3942,17 @@ function saWiringReasons(cmd, body, policy = ROUTE_POLICY) {
   // 6.41.0: the start line writes the routed stage's stage-start itself, so no mark-phase line carries `--route` (the model
   // types no token) and no routed stage has a mark-phase stage-start of its own; the 6.27.0 lines are closed out (L36).
   const fullKeys = new Set(have);
-  for (const l of L.filter((x) => x.kind === "stage-start")) {
+  // R3: exactly one crash fallback per orchestrator, byte-equal to FALLBACK_START (its route a fixed literal).
+  const fallbacks = L.filter((x) => x.kind === "stage-start" && x.text === FALLBACK_START);
+  if (fallbacks.length !== 1) reasons.push(`${fallbacks.length} start-crash fallback lines, not exactly 1 (R3)`);
+  for (const l of L.filter((x) => x.kind === "stage-start" && x.text !== FALLBACK_START)) {
     if (l.flags.route !== undefined)
       reasons.push(`line ${l.idx}: a mark-phase stage-start carries --route — the start line records the route`);
     if (fullKeys.has(saKey(l.flags)))
       reasons.push(`line ${l.idx}: a mark-phase stage-start for routed ${saKey(l.flags)} — its start line is its stage-start`);
   }
   for (const [i, t] of body.split("\n").entries()) {
+    if (t.trim() === FALLBACK_START) continue; // R3's fixed literal, counted above
     if (SA_OLD.test(t)) reasons.push(`line ${i + 1}: the 6.27.0 form (a route/read line, or a typed --route) is closed out`);
   }
   const modeLines = L.filter((l) => l.kind === "route" && l.flags.mode !== undefined);
@@ -4317,6 +4351,12 @@ test("✧ STAGE_AGENT_WIRING (9) — each rule fails on its mutant: start, finis
   assert.match(saWiringReasons(ship, typed).join("\n"), /carries --route/, "a typed --route");
   assert.match(saWiringReasons(ship, typed).join("\n"), /a mark-phase stage-start for routed pharn-plan@-/, "a second stage-start");
   assert.match(saOrderReasons(typed).join("\n"), /a marker sits between the start line and the finish line/, "…between start and finish");
+  // R3: the crash fallback is the one exempt line — exactly once, with the FIXED literal; a typed token is closed out.
+  assert.ok(real.includes(FALLBACK_START), "fixture sanity: the fallback is committed");
+  const typedFallback = real.replace(FALLBACK_START, FALLBACK_START.replace("'inline:route-unavailable'", "'<route>'"));
+  assert.match(saWiringReasons(ship, typedFallback).join("\n"), /0 start-crash fallback lines[\s\S]*the 6\.27\.0 form/, "a typed fallback");
+  const twice = `${real}\n\`\`\`bash\n${FALLBACK_START}\n\`\`\`\n`;
+  assert.match(saWiringReasons(ship, twice).join("\n"), /2 start-crash fallback lines/, "a second fallback");
   // The 6.27.0 route/read lines, spliced back (as prose-free fenced lines), are closed out.
   for (const old of [planRoute.replace(" start ", " route "), planRead.replace(" finish ", " read ")]) {
     const back = `${real}\n\`\`\`bash\n${old}\n\`\`\`\n`;
@@ -4663,6 +4703,7 @@ const SHELL_VALUES = Object.freeze({
   "<target>": "the project directory /pharn-build runs validate.mjs over",
   "<resume.argv…>": "code-produced: the stage script's own printed resume.argv",
   "<chosen option's argv…>": "a registry-held flag plus the human's answer, single-quoted",
+  "<stage>": "a closed choice: the --stage of the orchestrator's own pinned start line that crashed (R3's fallback)",
 });
 
 /** placeholder -> ["file:line", …] over [file, body] pairs. */

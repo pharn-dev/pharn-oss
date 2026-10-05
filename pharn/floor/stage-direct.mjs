@@ -22,6 +22,12 @@
 // lines did, in one process, and the orchestrators pin it instead. The thin callers stay, unchanged, for a person.
 //
 // ── WHAT ONE CALL DOES, IN ORDER ──────────────────────────────────────────────────────────────────────
+//   0. TAKE THE IN-FLIGHT LOCK (GATE-2 review R1): create `.pharn/stage-direct/in-flight.json` with O_EXCL|O_NOFOLLOW,
+//      holding this process's pid, the start time, the stage and the name. A lock already there whose pid is ALIVE —
+//      or whose record cannot be read — refuses: exit 2, `stage-direct: refused (in-flight)`, nothing set, run or
+//      marked. A lock whose pid is dead is stale: removed, then taken. `.pharn` or `.pharn/stage-direct` that is not a
+//      real directory (a link, a file), or any other filesystem failure, refuses `lock-unusable`. The lock is
+//      released in a `finally` — and only while it still holds this call's own record.
 //   1. SET THE SCOPE: spawn `.claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-<stage>.md
 //      --target .pharn/pharn-<stage>/stage.json` — the thin caller's own pinned setter line, so its claim holds here
 //      too: while the script runs, no Write-tool write lands outside `.pharn/**` (fix #7, a hook). A setter that does
@@ -46,8 +52,16 @@
 //   * The script cannot be spawned, or dies on a signal → exit 1 (the return marker is still written).
 //   * `--clear` fails → a `stage-direct:` note on stderr, the exit unchanged; the `.pharn/**`-only scope left behind is
 //     overwritten by the next scoped step (the same degradation the thin callers' own release has, L19).
-//   * The Bash tool kills the call at its 600 s limit → steps 4–6 never run; the orchestrator runs the resume line
-//     once, which sets the scope again, resumes the script and closes the stage.
+//   * The Bash tool's 600 s limit does NOT kill the call: the tool MOVES IT TO THE BACKGROUND, where the stage script
+//     and steps 4–6 run on to the end (GATE-2 review R1, reproduced at a 3 s tool timeout; 600 s is assumed to behave
+//     the same). The orchestrators wait for its completion notice and branch on the exit and object it reports. Were a
+//     second call started meanwhile — the resume line, say — two stage scripts would share `.pharn/pharn-<stage>/`, the
+//     first call's late `--clear` would release a scope the second had set, and its return marker would land in the
+//     middle of a later stage. Step 0's lock refuses that second call instead.
+//   * Another call holds the lock → `refused (in-flight)`, exit 2, nothing touched; the orchestrators map it as the
+//     call's own refusal (S9 / STOP). A process killed hard (SIGKILL) leaves its lock behind with a dead pid: the next
+//     call clears it. A torn record (a kill between the lock's create and its write) is never guessed stale: it
+//     refuses, and the line names the file to remove once no call is running.
 //
 // ── BOUNDS (P0) ───────────────────────────────────────────────────────────────────────────────────────
 //   * DETECTED, NEVER PREVENTED, as before: the call's own writes — the scope file and two markers — are Bash writes
@@ -60,9 +74,13 @@
 //     step). The pinned numbers (540000 < 570000 < 600000) hold the 600 s cap only while that uncounted work fits in
 //     the remaining 30 s; the call's own share is two short node spawns.
 //   * Markers are advisory, as every marker is: a call that is not run marks nothing.
+//   * THE LOCK excludes stage-direct calls from each other, in one tree — nothing else. A person running a thin
+//     caller, or the stage script directly, beside a call is not seen. "Alive" is `kill(pid, 0)`: a dead holder whose
+//     pid the OS has reused for another process reads as alive, so that call refuses (fail-closed) until the file is
+//     removed. The lock is a Bash write outside fix #7 (L19), unauthenticated `.pharn/` state like the markers.
 
 import { spawnSync } from "node:child_process";
-import { writeSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readSync, unlinkSync, writeSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_BASE, tryMarkPhase } from "./mark-phase.mjs";
@@ -71,6 +89,11 @@ import {
   CLEAR_ARGV,
   DIRECT_STAGES,
   MARKER_DEFERRED_CONTINUE,
+  LOCK_DIR,
+  LOCK_FILE,
+  LOCK_READ_MAX,
+  lockRecord,
+  parseLock,
   parseDirectArgs,
   scriptArgv,
   setterArgv,
@@ -100,6 +123,118 @@ function runSetter(root, args, setterPath) {
   return r.error || r.status === null ? null : r.status;
 }
 
+/** Is `pid` a live process? `EPERM` means it exists under another user — alive. */
+function pidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return e?.code === "EPERM";
+  }
+}
+
+/** The text of the regular file at `file`, never following a link, never blocking, at most LOCK_READ_MAX bytes; null
+ *  when it is absent, not a regular file, or unreadable. */
+function readRegular(file) {
+  let fd;
+  try {
+    fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch {
+    return null;
+  }
+  try {
+    if (!fstatSync(fd).isFile()) return null;
+    const buf = Buffer.alloc(LOCK_READ_MAX);
+    const n = readSync(fd, buf, 0, LOCK_READ_MAX, 0);
+    return buf.subarray(0, n).toString("utf8");
+  } catch {
+    return null;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/** Make `rel` (under `root`) exist as a REAL directory — never a link, never a file. */
+function realDir(root, rel) {
+  const p = join(root, rel);
+  try {
+    mkdirSync(p);
+  } catch (e) {
+    if (e?.code !== "EEXIST") return `${rel}: ${errCode(e)}`;
+  }
+  try {
+    const st = lstatSync(p);
+    return st.isDirectory() ? null : `${rel} is not a directory (a link or a file)`;
+  } catch (e) {
+    return `${rel}: ${errCode(e)}`;
+  }
+}
+
+/**
+ * Take the in-flight lock (header, step 0). Returns `{ok: true, file, record}` or `{ok: false, reason, detail}` with
+ * `reason` a LOCK_REFUSALS member. A dead holder's lock is removed once, then taken.
+ */
+export function acquireLock(root, { stage, name, now = Date.now(), pid = process.pid }) {
+  for (const rel of [".pharn", LOCK_DIR]) {
+    const bad = realDir(root, rel);
+    if (bad) return { ok: false, reason: "lock-unusable", detail: bad };
+  }
+  const file = join(root, LOCK_FILE);
+  const record = lockRecord({ pid, startedAt: new Date(now).toISOString(), stage, name });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let fd;
+    try {
+      fd = openSync(file, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o644);
+    } catch (e) {
+      if (e?.code !== "EEXIST") return { ok: false, reason: "lock-unusable", detail: `${LOCK_FILE}: ${errCode(e)}` };
+      const held = parseLock(readRegular(file));
+      if (held === null)
+        return {
+          ok: false,
+          reason: "in-flight",
+          detail: `${LOCK_FILE} holds no readable lock record; if no stage-direct call is running in this tree, remove it`,
+        };
+      if (pidAlive(held.pid))
+        return {
+          ok: false,
+          reason: "in-flight",
+          detail: `another call (pid ${held.pid}, ${held.stage} for ${held.name}, started ${JSON.stringify(held.startedAt)}) is still running in this tree; wait for its completion notice and branch on what it reports — never start a second call`,
+        };
+      try {
+        unlinkSync(file); // a dead holder: stale
+      } catch (e2) {
+        if (e2?.code !== "ENOENT") return { ok: false, reason: "lock-unusable", detail: `${LOCK_FILE}: ${errCode(e2)}` };
+      }
+      continue;
+    }
+    try {
+      writeSync(fd, record);
+    } catch (e) {
+      closeSync(fd);
+      try {
+        unlinkSync(file);
+      } catch {
+        // the refusal below names the file either way
+      }
+      return { ok: false, reason: "lock-unusable", detail: `${LOCK_FILE}: ${errCode(e)}` };
+    }
+    closeSync(fd);
+    return { ok: true, file, record };
+  }
+  return { ok: false, reason: "in-flight", detail: "another call took the lock while this one cleared a stale one" };
+}
+
+/** Release the lock — only while it still holds `record` (this call's own). Returns an error line, or null. */
+export function releaseLock(lock) {
+  if (readRegular(lock.file) !== lock.record) return `the in-flight lock no longer holds this call's record; left in place`;
+  try {
+    unlinkSync(lock.file);
+    return null;
+  } catch (e) {
+    return e?.code === "ENOENT" ? null : `the in-flight lock was not released (${errCode(e)})`;
+  }
+}
+
 /**
  * One direct call. Returns `{exit, out: string, err: string[]}` — `out` is everything for stdout, in order, also
  * handed to `write` piece by piece AS IT HAPPENS (the CLI writes each piece synchronously, so the start marker's line
@@ -114,6 +249,20 @@ export function runDirect(
   const parsed = parseDirectArgs(argv);
   if (!parsed.ok) return { exit: 2, out: "", err: [parsed.reason] };
   const o = parsed.opts;
+  const lock = acquireLock(root, { stage: o.stage, name: o.name });
+  if (!lock.ok) return { exit: 2, out: "", err: [`refused (${lock.reason}) — ${lock.detail}; nothing was run`] };
+  let r = { exit: 1, out: "", err: [] };
+  try {
+    r = runLocked(o, { root, sessionId, base, scriptPathFor, setterPath, write });
+  } finally {
+    const note = releaseLock(lock);
+    if (note) r.err.push(note);
+  }
+  return r;
+}
+
+/** Steps 1–6 of the header, under the lock. */
+function runLocked(o, { root, sessionId, base, scriptPathFor, setterPath, write }) {
   const table = DIRECT_STAGES[o.stage];
   const setter = setterPath ?? join(root, SETTER);
   const err = [];

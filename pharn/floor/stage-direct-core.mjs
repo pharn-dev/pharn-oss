@@ -18,6 +18,8 @@
 //   * `returnMarkerDue(exit)` — every exit closes the stage's execution but `continue` (5): a stage SCRIPT that asks
 //     a question has ENDED (nothing continues inside it, unlike a stage agent — `stage-agent.mjs finish`), so its
 //     return marker is written and an answered re-run is a second execution.
+//   * The in-flight lock's path, schema and closed refusals, and `parseLock` — what a held record must look like
+//     (GATE-2 review R1; the execution, and why the lock exists, are `stage-direct.mjs`'s header).
 // TRUST (P2): argv is the orchestrator's (a validated slug, `<N>`, git's hex, or a ship human's answer the script
 // re-validates). This module checks presence, closed membership and control characters only — it never interprets
 // a stage flag's VALUE; the script does, as it always has. A refusal names the flag and the vocabulary, and quotes an
@@ -182,3 +184,46 @@ export function returnMarkerDue(exit) {
 
 /** The second (last) line printed when the return marker waits for a resume. */
 export const MARKER_DEFERRED_CONTINUE = "marker: deferred (continue)";
+
+// ── THE IN-FLIGHT LOCK (GATE-2 review R1) ─────────────────────────────────────────────────────────────
+// ONE lock for both stages, beside (never inside) their state roots: each stage script's fresh start removes its own
+// root (`.pharn/pharn-verify/` whole; regress clears `.pharn/pharn-regress/`), so a lock there would be deleted while
+// held — and the two stages share the one writes-scope file, which is what a second concurrent call would clobber.
+
+/** The lock's directory and file, relative to the project root. */
+export const LOCK_DIR = ".pharn/stage-direct";
+export const LOCK_FILE = `${LOCK_DIR}/in-flight.json`;
+
+/** The lock record's schema token. */
+export const LOCK_SCHEMA = "pharn-stage-direct-lock/1";
+
+/** The closed reasons a call refuses with because of the lock (exit 2, a `stage-direct: refused (<reason>)` line). */
+export const LOCK_REFUSALS = Object.freeze(["in-flight", "lock-unusable"]);
+
+/** The most bytes a lock record is read to (one record is ~150 B). */
+export const LOCK_READ_MAX = 4096;
+
+/** The lock record a call writes: one JSON line. */
+export function lockRecord({ pid, startedAt, stage, name }) {
+  return `${JSON.stringify({ schema: LOCK_SCHEMA, pid, started_at: startedAt, stage, name })}\n`;
+}
+
+/**
+ * Read a lock record's text. Returns `{pid, startedAt, stage, name}` when it is a well-formed record of this schema —
+ * a positive integer pid, a stage of `DIRECT_STAGES`, a feature slug — else null (a torn or foreign file). Never throws.
+ */
+export function parseLock(text) {
+  if (typeof text !== "string") return null;
+  let o;
+  try {
+    o = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (o === null || typeof o !== "object" || Array.isArray(o) || o.schema !== LOCK_SCHEMA) return null;
+  if (!Number.isSafeInteger(o.pid) || o.pid < 1) return null;
+  if (typeof o.stage !== "string" || !Object.hasOwn(DIRECT_STAGES, o.stage)) return null;
+  if (typeof o.name !== "string" || !FEATURE_SLUG_RE.test(o.name)) return null;
+  if (typeof o.started_at !== "string" || o.started_at.length > 40) return null;
+  return { pid: o.pid, startedAt: o.started_at, stage: o.stage, name: o.name };
+}

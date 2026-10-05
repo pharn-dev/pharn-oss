@@ -10,7 +10,7 @@ part: close
 
 # /pharn-ship — closing the run
 
-Part of `/pharn-ship` (`.claude/commands/pharn-ship.md`), which reads this file once — with step 7's return marker after the first `/pharn-verify`, or at an earlier STOP once `<name>` exists — under the rule in its `## Closing the run` section: this is Steps 2c–3b, the claims block and the Final step. It is not run on its own — if it was invoked as a command, stop and say so — and it changes nothing about `/pharn-ship`'s trusted prefix, trust rules and human gates, which still apply.
+Part of `/pharn-ship` (`.claude/commands/pharn-ship.md`), which reads this file once — with step 7's first `/pharn-verify` call that exits other than `5`, or at an earlier STOP once `<name>` exists — under the rule in its `## Closing the run` section: this is Steps 2c–3b, the claims block and the Final step. It is not run on its own — if it was invoked as a command, stop and say so — and it changes nothing about `/pharn-ship`'s trusted prefix, trust rules and human gates, which still apply.
 
 ## Step 2c — Render the GATE-2 briefing artifact (`BRIEFING.md`)
 
@@ -375,7 +375,7 @@ routed build's advisory `done gate:pass`. `/pharn-ship` adds exactly one non-gat
   a Bash-run `git` call bypasses fix #7, and no checker would catch one added later. Every git call here is a
   **read**: Step 3a's `git rev-parse HEAD`, and quick mode item 7's base resolution.
 - **Advisory, the parts (6.32.0):** this command reads `pharn-ship-quick.md` only for a `--quick` run, with the
-  pending start, and this file once, with step 7's return marker after the first `/pharn-verify` or at an earlier STOP
+  pending start, and this file once, with step 7's first `/pharn-verify` call that exits other than `5` or at an earlier STOP
   once `<name>` exists — each again after a compaction. That you read each there, in full, and follow it is your own
   discipline: nothing on the floor sees a Read. PHARN's own tests pin the TEXT — each part's file name in its one
   pointer, in this bullet and in no other command text, that pointer's load-condition and not-loaded sentences, which

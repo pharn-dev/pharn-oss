@@ -230,10 +230,14 @@ above by a fixed rule:
 - `question no-gates` → **S4**;
 - every other `question` (`base-unresolved`, `install-unresolved`, `tests-unresolved`) → **S10**;
 - `refused` and `unusable` → **S9** — the call's own refusal too (exit `2`, a `stage-direct:` line, no object: the
-  stage's writes-scope could not be set);
+  stage's writes-scope or the in-flight lock could not be taken);
 - a crash (an exit outside `{0, 2, 3, 4, 5}`) → **S9**;
-- `continue` (`5`) is no stuck point: run the stage's resume line (Step 5) until another exit — and once when the
-  Bash tool itself timed out (no exit code).
+- `continue` (`5`) is no stuck point: run the stage's resume line (Step 5) until another exit.
+
+**A call the Bash tool reports as moved to the background is STILL RUNNING** — it finishes the stage itself. Wait for
+it inside this turn (a blocking read of that background task's output until it completes) and branch on the exit code
+and object it reports. Never start its resume line, or any other `stage-direct.mjs` call, while it runs: a second call
+refuses `in-flight` (exit `2`, S9). No way to wait → **S9**, and the summary says the call may still be running.
 
 **`/pharn-verify`'s stage-exit mapping (since `stage-verify-script`, 6.26.0).** Step 5 runs
 `pharn/floor/stage-verify.mjs` the same way, and its object maps by the same rule:
@@ -284,11 +288,18 @@ two lines did), and you run them in this order:
    stage-start marker with that token, and prints the token, then the marker line. Branch **only** on its exit code
    (P5): `0` — the token is `agent:<alias>`, so run the stage as a stage agent (2, below); `3` — it is
    `inline:<reason>`, so run the stage INLINE, exactly as before 6.27.0, then the inline return line (4); anything
-   else — no marker was written: run the stage inline and name it in the Step 7 summary's route line. With no Agent
-   tool in your tool list, and none in the deferred-tool list either (a deferred one IS present: load it first),
-   append `--no-agent-tool` to the start line: it records `inline:no-agent-tool` and exits `3` — ADVISORY, your own
+   else — a crash, no marker written: run the line below (for the build, add the start line's own `--iteration <N>`),
+   then the stage inline, and name it in the Step 7 summary's route line. Its route is a fixed literal:
+
+   ```bash
+   node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage <stage> --route 'inline:route-unavailable'
+   ```
+
+   With no Agent tool in your tool list, and none in the deferred-tool list either (a deferred one IS present: load
+   it first), append `--no-agent-tool` to the start line: it records `inline:no-agent-tool` and exits `3` — ADVISORY, your own
    reading of your tools, failing in the safe direction. A second line `marker: not written` changes only the
    summary's route line.
+
 2. **On start exit `0` only, the Agent call:** `subagent_type: "general-purpose"`, `model: "<alias>"` (the part
    after `agent:`), `description: "pharn stage <stage>"`, `run_in_background: false`, and **no `isolation`** —
    the stages write into this one tree, one after another, never a worktree each. Its `prompt` is the stage's

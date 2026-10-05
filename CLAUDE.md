@@ -1303,9 +1303,15 @@ node pharn/floor/stage-agent.mjs finish --command <c> --name '<name>' --stage <s
 # exit code through unchanged (a signal or spawn failure → 1). Rules: pharn/floor/stage-direct-core.mjs; execution and
 # failure modes: pharn/floor/stage-direct.mjs's header (no new contract). The thin callers stay, unchanged, for a person.
 # Wiring: .dev/floor/command-hygiene.test.mjs DIRECT_STAGE_WIRING (the copy-pair's obligation set, closure, EXECUTED).
-# BOUNDS: its own writes (scope file, markers) are Bash writes under .pharn/ (L19); no stage scope between two calls
-# around a `continue`; its node start-up and setter spawns are outside the script's budget clock. Ships: bumps
-# SKILLS_VERSION. Exit: the script's 0/2/3/4/5; 2 also for its own refusal (bad argv, a scope it could not set); 1 crash.
+# A Bash call that reaches the tool's timeout is MOVED TO THE BACKGROUND, not killed (GATE-2 review R1), so the call
+# first takes an IN-FLIGHT LOCK, .pharn/stage-direct/in-flight.json (O_EXCL; pid + start time; stale only when that pid
+# is dead; released only while it holds the call's own record): a second call refuses `in-flight`, and the orchestrators
+# wait for a backgrounded call instead of resuming it. One lock for both stages, beside their roots (each script's fresh
+# start deletes its own root; the two share one scope file). BOUNDS: its own writes (scope file, markers, lock) are
+# Bash writes under .pharn/ (L19); the lock sees only stage-direct calls, and a reused pid reads as alive (refuses); no
+# stage scope between two calls around a `continue`; its node start-up and setter spawns are outside the script's
+# budget clock. Ships: bumps SKILLS_VERSION. Exit: the script's 0/2/3/4/5; 2 also for its own refusal (bad argv, a scope
+# it could not set, `in-flight` / `lock-unusable`); 1 crash.
 node pharn/floor/stage-direct.mjs --stage <pharn-regress|pharn-verify> --name '<name>' --iteration <N> --timeout-ms <T> --budget-ms <B> [stage flags]
 node pharn/floor/stage-direct.mjs --stage <pharn-regress|pharn-verify> --name '<name>' --resume --budget-ms <B>
 

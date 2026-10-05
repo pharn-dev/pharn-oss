@@ -11,7 +11,8 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -21,6 +22,11 @@ import {
   SETTER,
   CLEAR_ARGV,
   MARKER_DEFERRED_CONTINUE,
+  LOCK_DIR,
+  LOCK_FILE,
+  LOCK_REFUSALS,
+  lockRecord,
+  parseLock,
   parseDirectArgs,
   scriptArgv,
   setterArgv,
@@ -166,6 +172,12 @@ const guard = (p) => spawnSync(process.execPath, [process.env.FAKE_GUARD], {
   input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: p } }), encoding: "utf8" }).status;
 const seen = { argv: process.argv.slice(2), scope, inside: guard(".pharn/pharn-regress/other.json"),
   outside: guard("pharn/features/demo/REGRESSION.md") };
+if (process.env.FAKE_HOLD) {
+  writeFileSync(".holding", "1");
+  const sab = new Int32Array(new SharedArrayBuffer(4));
+  while (!existsSync(".release")) Atomics.wait(sab, 0, 0, 20);
+}
+if (process.env.FAKE_SWAP_LOCK) writeFileSync(".pharn/stage-direct/in-flight.json", process.env.FAKE_SWAP_LOCK);
 process.stdout.write(JSON.stringify(seen) + (process.env.FAKE_NO_NL ? "" : "\\n"));
 if (process.env.FAKE_EXIT === "SIGKILL") process.kill(process.pid, "SIGKILL");
 process.exitCode = Number(process.env.FAKE_EXIT ?? "0");
@@ -360,6 +372,283 @@ test("runDirect — a script stdout without a final newline gets one, so the ret
     assert.ok(r.out.endsWith(`}\n${markerLine(m[1])}\n`), JSON.stringify(r.out.slice(-200)));
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── the in-flight lock (GATE-2 review R1) ─────────────────────────────────────────────────────────────
+
+const lockPath = (root) => join(root, LOCK_FILE);
+/** The pid of a process that has already exited. */
+function deadPid() {
+  const r = spawnSync(process.execPath, ["-e", "process.stdout.write(String(process.pid))"], { encoding: "utf8" });
+  return Number(r.stdout);
+}
+function plantLock(root, text) {
+  mkdirSync(join(root, LOCK_DIR), { recursive: true });
+  writeFileSync(lockPath(root), text);
+}
+
+test("parseLock — a well-formed record of this schema, else null (torn, foreign, a bad pid/stage/name)", () => {
+  const good = lockRecord({ pid: 42, startedAt: "2026-10-05T00:00:00.000Z", stage: "pharn-verify", name: "demo" });
+  assert.deepEqual(parseLock(good), { pid: 42, startedAt: "2026-10-05T00:00:00.000Z", stage: "pharn-verify", name: "demo" });
+  const o = JSON.parse(good);
+  for (const [why, bad] of [
+    ["empty (a torn record)", ""],
+    ["not JSON", "{"],
+    ["an array", "[]"],
+    ["another schema", JSON.stringify({ ...o, schema: "x/1" })],
+    ["pid 0", JSON.stringify({ ...o, pid: 0 })],
+    ["pid as a string", JSON.stringify({ ...o, pid: "42" })],
+    ["a stage outside DIRECT_STAGES", JSON.stringify({ ...o, stage: "pharn-build" })],
+    ["a non-slug name", JSON.stringify({ ...o, name: "../x" })],
+  ])
+    assert.equal(parseLock(bad), null, why);
+  assert.deepEqual(LOCK_REFUSALS, ["in-flight", "lock-unusable"], "the closed refusal set");
+});
+
+test("runDirect — a lock held by a LIVE pid refuses `in-flight` (exit 2): no scope set, nothing run or marked, the lock untouched", () => {
+  const root = scratchRoot();
+  try {
+    const held = lockRecord({ pid: process.pid, startedAt: "2026-10-05T00:00:00.000Z", stage: "pharn-regress", name: "demo" });
+    plantLock(root, held);
+    for (const argv of [fresh("pharn-verify"), resume("pharn-regress")]) {
+      const r = direct(root, argv);
+      assert.deepEqual([r.exit, r.out], [2, ""]);
+      assert.match(r.err.join("\n"), /^refused \(in-flight\) — another call \(pid \d+, pharn-regress for demo, /);
+      assert.equal(existsSync(join(root, ".ran")), false, "the script never ran");
+      assert.equal(existsSync(join(root, ".pharn", "writes-scope.json")), false, "no scope was set");
+      assert.deepEqual(markersIn(root), [], "no marker");
+      assert.equal(readFileSync(lockPath(root), "utf8"), held, "the holder's lock is left alone");
+    }
+    // CONTROL (the mutant "the lock is ignored"): the same root with no lock runs, and releases the lock it took.
+    rmSync(lockPath(root));
+    const ok = direct(root, fresh("pharn-verify"));
+    assert.equal(ok.exit, 0, ok.err.join("\n"));
+    assert.equal(existsSync(lockPath(root)), false, "released");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runDirect — a DEAD holder's lock is stale: cleared, taken and released; a torn record is never guessed stale", () => {
+  const root = scratchRoot();
+  try {
+    plantLock(root, lockRecord({ pid: deadPid(), startedAt: "2026-10-05T00:00:00.000Z", stage: "pharn-verify", name: "demo" }));
+    const r = direct(root, fresh("pharn-verify"));
+    assert.equal(r.exit, 0, r.err.join("\n"));
+    assert.equal(existsSync(lockPath(root)), false);
+    plantLock(root, "");
+    const torn = direct(root, fresh("pharn-verify"));
+    assert.equal(torn.exit, 2);
+    assert.match(
+      torn.err.join("\n"),
+      /^refused \(in-flight\) — \.pharn\/stage-direct\/in-flight\.json holds no readable lock record; if no stage-direct call is running in this tree, remove it/
+    );
+    assert.equal(readFileSync(lockPath(root), "utf8"), "", "a torn record is left for a person");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runDirect — a lock directory that is a link or a file refuses `lock-unusable`, and nothing is written through it", () => {
+  for (const plant of ["link", "file"]) {
+    const root = scratchRoot();
+    const elsewhere = mkdtempSync(join(tmpdir(), "stage-direct-elsewhere-"));
+    try {
+      mkdirSync(join(root, ".pharn"), { recursive: true });
+      if (plant === "link") symlinkSync(elsewhere, join(root, LOCK_DIR));
+      else writeFileSync(join(root, LOCK_DIR), "x");
+      const r = direct(root, fresh("pharn-verify"));
+      assert.deepEqual([r.exit, r.out], [2, ""], plant);
+      assert.match(r.err.join("\n"), /^refused \(lock-unusable\) — \.pharn\/stage-direct is not a directory/, plant);
+      assert.equal(existsSync(join(elsewhere, "in-flight.json")), false, `${plant}: nothing through the link`);
+      assert.equal(existsSync(join(root, ".ran")), false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(elsewhere, { recursive: true, force: true });
+    }
+  }
+});
+
+test("runDirect — the lock is released on every exit and a signal, but never while it holds ANOTHER call's record", () => {
+  for (const exit of ["0", "4", "5", "SIGKILL"]) {
+    const root = scratchRoot();
+    try {
+      direct(root, fresh("pharn-regress"), { FAKE_EXIT: exit });
+      assert.equal(existsSync(lockPath(root)), false, `exit ${exit}: released`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+  const root = scratchRoot();
+  try {
+    const other = lockRecord({ pid: process.pid, startedAt: "2026-10-05T00:00:00.000Z", stage: "pharn-verify", name: "demo" });
+    const r = direct(root, fresh("pharn-regress"), { FAKE_SWAP_LOCK: other });
+    assert.equal(r.exit, 0);
+    assert.equal(readFileSync(lockPath(root), "utf8"), other, "another call's record is not deleted");
+    assert.match(r.err.join("\n"), /the in-flight lock no longer holds this call's record; left in place/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("★ two PROCESSES — a call still running (as a call the Bash tool moved to the background is) refuses a second call, even the resume line; it ends with its own release", async () => {
+  const root = scratchRoot();
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  let child = null;
+  let ended = null;
+  try {
+    const driver = join(root, "driver.mjs");
+    writeFileSync(
+      driver,
+      `import { runDirect } from ${JSON.stringify(new URL("./stage-direct.mjs", import.meta.url).href)};\n` +
+        `const r = runDirect(JSON.parse(process.argv[2]), { root: process.cwd(), scriptPathFor: () => ${JSON.stringify(join(root, "fake.mjs"))}, setterPath: ${JSON.stringify(REAL_SETTER)} });\n` +
+        `process.stdout.write(JSON.stringify(r));\nprocess.exitCode = r.exit;\n`
+    );
+    const env = { ...process.env, FAKE_GUARD: GUARD, FAKE_HOLD: "1" };
+    delete env.CLAUDE_PROJECT_DIR;
+    child = spawn(process.execPath, [driver, JSON.stringify(fresh("pharn-regress"))], {
+      cwd: root,
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let out = "";
+    child.stdout.on("data", (d) => (out += d));
+    ended = new Promise((res) => child.on("close", (code) => res(code)));
+    for (let i = 0; i < 500 && !existsSync(join(root, ".holding")); i++) await sleep(20);
+    assert.ok(existsSync(join(root, ".holding")), "the first call's script is running");
+    const scopeWhileHeld = readFileSync(join(root, ".pharn", "writes-scope.json"), "utf8");
+    rmSync(join(root, ".holding"));
+    for (const argv of [resume("pharn-regress"), fresh("pharn-verify")]) {
+      const r = direct(root, argv);
+      assert.deepEqual([r.exit, r.out], [2, ""], JSON.stringify(argv));
+      assert.match(r.err.join("\n"), new RegExp(`^refused \\(in-flight\\) — another call \\(pid ${child.pid}, pharn-regress for demo, `));
+    }
+    assert.equal(readFileSync(join(root, ".pharn", "writes-scope.json"), "utf8"), scopeWhileHeld, "the first call's scope is untouched");
+    assert.deepEqual(
+      markersIn(root).map((m) => m.kind),
+      ["stage-start"],
+      "no second marker"
+    );
+    writeFileSync(join(root, ".release"), "1");
+    assert.equal(await ended, 0, out);
+    assert.equal(JSON.parse(out).exit, 0);
+    assert.deepEqual(
+      markersIn(root).map((m) => m.kind),
+      ["stage-start", "orchestrator"],
+      "the first call closes its own stage"
+    );
+    assert.equal(existsSync(lockPath(root)), false, "and releases the lock");
+    assert.equal(existsSync(join(root, ".pharn", "writes-scope.json")), false, "and the scope");
+    // CONTROL: the call refused above now runs.
+    rmSync(join(root, ".release"));
+    assert.equal(direct(root, resume("pharn-regress")).exit, 0);
+  } finally {
+    // A failure above must not leave the held script polling forever: release its hold (killing the driver alone would
+    // orphan the script, which keeps the inherited stderr pipe open), then wait for the driver, bounded.
+    if (child && child.exitCode === null && child.signalCode === null) {
+      writeFileSync(join(root, ".release"), "1");
+      await Promise.race([ended, sleep(10_000)]);
+      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+    }
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── a question's answer line (GATE-2 review R2), END TO END with the real stage-regress.mjs ─────────────
+
+/** /pharn-ship's answer rule, as its text states it: the pinned line's own flags (through `--budget-ms <B>`), then the
+ *  object's `resume.argv` tokens after ITS `--budget-ms <B>` pair, then the chosen option's argv. */
+function answerLine(pinned, resumeArgv, optionArgv) {
+  const own = pinned.slice(0, pinned.indexOf("--budget-ms") + 2);
+  return [...own, ...resumeArgv.slice(resumeArgv.indexOf("--budget-ms") + 2), ...optionArgv];
+}
+
+/** A git repo with an approved SPEC, a PLAN declaring src/index.js and NO test file anywhere (so regress asks
+ *  `tests-unresolved`), the thin caller committed for the setter, and src/index.js changed after the base. */
+function regressRepo() {
+  const dir = mkdtempSync(join(tmpdir(), "stage-direct-rt-"));
+  const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe", encoding: "utf8" });
+  git("init", "-q", ".");
+  git("config", "user.email", "t@t");
+  git("config", "user.name", "t");
+  writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+  writeFileSync(join(dir, "package.json"), `${JSON.stringify({ name: "fx", version: "1.0.0", scripts: { test: "node --test" } })}\n`);
+  mkdirSync(join(dir, "src"));
+  writeFileSync(join(dir, "src", "index.js"), "export const add = (a, b) => a + b;\n");
+  mkdirSync(join(dir, ".claude", "commands"), { recursive: true });
+  copyFileSync(join(REPO, ".claude/commands/pharn-regress.md"), join(dir, ".claude/commands/pharn-regress.md"));
+  const feat = join(dir, "pharn", "features", "demo");
+  mkdirSync(feat, { recursive: true });
+  const body = "\n## Intent\n\nwhat and why\n\n## Scope\n\nfiller\n\n## Acceptance Criteria\n\nfiller\n\n## Constraints\n\nfiller\n";
+  const hash = createHash("sha256").update(body).digest("hex");
+  writeFileSync(join(feat, "SPEC.md"), `---\nspec_id: demo\nstate: Approved\nspec_content_hash: ${hash}\n---\n${body}`);
+  writeFileSync(
+    join(feat, "PLAN.md"),
+    `---\nspec_id: demo\nspec_content_hash: ${hash}\n---\n\n## Files\n\n- \`src/index.js\` — the feature\n`
+  );
+  git("add", "-A");
+  git("commit", "-q", "-m", "base");
+  const base = git("rev-parse", "HEAD").trim();
+  writeFileSync(join(dir, "src", "index.js"), "export const add = (a, b) => a + b;\nexport const id = (x) => x;\n");
+  return { dir, base };
+}
+
+/** One direct call with the REAL regress script, outside node:test's own coordination env (see stage-regress.test). */
+function realRegress(dir, argv) {
+  const saved = process.env.NODE_TEST_CONTEXT;
+  delete process.env.NODE_TEST_CONTEXT;
+  try {
+    const r = runDirect(argv, { root: dir, setterPath: REAL_SETTER });
+    const lines = r.out.trimEnd().split("\n");
+    let obj = null;
+    try {
+      obj = JSON.parse(lines.slice(argv.includes("--resume") ? 0 : 1, -1).join("\n"));
+    } catch {
+      // a refusal of the call itself prints no object
+    }
+    return { exit: r.exit, obj, err: r.err.join("\n") };
+  } finally {
+    if (saved !== undefined) process.env.NODE_TEST_CONTEXT = saved;
+  }
+}
+
+test("★ a question's answer line — the pinned line's own flags + resume.argv after its --budget-ms pair + the option: a tests-unresolved RE-ASK reaches done; the old 'same line + option' is refused (GATE-2 review R2)", () => {
+  const { dir, base } = regressRepo();
+  try {
+    const opt = (id) => REGISTRY.regress.question["tests-unresolved"].options.find((o) => o.id === id).argv;
+    const pinned = fresh("pharn-regress", ["--base", base]); // ship's pinned regress line
+    const q1 = realRegress(dir, pinned);
+    assert.equal(q1.exit, EXIT_CODE.question, q1.err);
+    assert.equal(q1.obj.reason_code, "tests-unresolved");
+    // The human first answers with a pathspec that matches nothing: the stage asks AGAIN.
+    const line1 = answerLine(
+      pinned,
+      q1.obj.resume.argv,
+      opt("tests").map((t) => (t === "<value>" ? "nonexistent/**/*.spec.js" : t))
+    );
+    const q2 = realRegress(dir, line1);
+    assert.equal(q2.exit, EXIT_CODE.question, q2.err);
+    assert.equal(q2.obj.reason_code, "tests-unresolved");
+    assert.ok(!q2.obj.resume.argv.includes("--tests"), "the script's resume.argv drops the --tests that did not resolve");
+    // CONTROLS — the old rule, "re-run the same line with the option appended", on the re-ask:
+    const dup = realRegress(dir, [...line1, ...opt("tests").map((t) => (t === "<value>" ? "src/**" : t))]);
+    assert.equal(dup.exit, 2, "a second --tests: the call refuses its own argv");
+    assert.match(dup.err, /--tests was given more than once/);
+    const clash = realRegress(dir, [...line1, ...opt("no-tests")]);
+    assert.equal(clash.exit, 2, "--tests beside --no-tests: the script refuses");
+    assert.equal(clash.obj?.status, "unusable");
+    // The rule: the answer goes on — to the next question (no lockfile), answered by the same rule, then done.
+    const q3 = realRegress(dir, answerLine(pinned, q2.obj.resume.argv, opt("no-tests")));
+    assert.equal(q3.exit, EXIT_CODE.question, q3.err);
+    assert.equal(q3.obj.reason_code, "install-unresolved");
+    assert.ok(q3.obj.resume.argv.includes("--no-tests"), "the earlier answer rides in resume.argv");
+    const noInstall = REGISTRY.regress.question["install-unresolved"].options.find((o) => o.id === "no-install").argv;
+    const done = realRegress(dir, answerLine(pinned, q3.obj.resume.argv, noInstall));
+    assert.equal(done.exit, 0, `${done.err}\n${JSON.stringify(done.obj)}`);
+    assert.equal(done.obj.status, "done");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

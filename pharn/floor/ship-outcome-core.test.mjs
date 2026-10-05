@@ -646,6 +646,35 @@ test("★ WIRING — the committed QUICK run-start, build and verify lines deriv
   }
 });
 
+test("★ WIRING (6.41.0 GATE-2 review R3) — a build whose START line crashed: the committed fallback line keeps gate2-quick derivable; with no fallback it is not", () => {
+  const quickStart = shipLine(
+    /^node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind run-start --adopt-pending --mode quick$/,
+    "quick run-start"
+  );
+  const fallback = shipLine(
+    /^node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind stage-start --stage <stage> --route 'inline:route-unavailable'$/,
+    "start-crash fallback"
+  );
+  const inlineReturn = shipLine(/^node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind orchestrator$/, "inline return");
+  const verify1 = shipLine(
+    /^node pharn\/floor\/stage-direct\.mjs --stage pharn-verify --name '<name>' --iteration 1 --timeout-ms \d+ --budget-ms \d+$/,
+    "verify@1"
+  );
+  // The command: "for the build, add the start line's own `--iteration`" (ship's build@1 start line carries 1).
+  const build1 = `${fallback.replace("<stage>", "pharn-build")} --iteration 1`;
+  const dir = greenDir();
+  try {
+    const m = runCommitted([quickStart, build1, inlineReturn, verify1]);
+    assert.deepEqual([m[1].stage, m[1].iteration, m[1].route], ["pharn-build", 1, "inline:route-unavailable"]);
+    assert.equal(readShipOutcome(dir, m).decision, GATE2_QUICK);
+    // CONTROL (the pre-fix state): the crashed start wrote nothing and no fallback ran — never gate2-quick.
+    const none = runCommitted([quickStart, verify1]);
+    assert.notEqual(readShipOutcome(dir, none).decision, GATE2_QUICK);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("SHIP_DECISION_RE closure rejects near-misses of gate2-quick", () => {
   for (const bad of ["gate2-Quick", "quick-gate2", "gate2_quick", "gate2-quick "]) {
     assert.doesNotMatch(bad, SHIP_DECISION_RE, `${JSON.stringify(bad)} must NOT be in the vocabulary`);

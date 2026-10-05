@@ -69,8 +69,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     - By the audit's per-line accounting, a green one-iteration loop goes from ~70 to ~46 pinned calls, and each
       further iteration from 23 to 7. That is an upper bound, since the model already chains independent lines.
   - **Two ledger changes, visible to anyone comparing `cost.json` across versions** (`cost-ledger.md`, "Route"):
-    - regress/verify `executions` rows now span the stage script's run plus the scope set and release. They no longer
-      include the orchestrator's requests between pinned lines, so the rows are smaller;
+    - regress/verify `executions` rows now span the stage script's run plus the scope release (the scope is set before
+      the start marker, so the set is outside the row). They no longer include the orchestrator's requests between
+      pinned lines, so the rows are smaller;
     - an answered `question` in `/pharn-ship` regress or verify is a second call, so a second execution row (`run 2`).
   - **Finding 7, recorded.** `pharn/floor/check-model-config.mjs`'s header, under TURN SCOPE, now records that a command
     a model invokes through the Skill tool was served the session's model, not its frontmatter `sonnet`. Only a
@@ -79,13 +80,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     checker, pinned by sha256, lags this header-only edit until refreshed there; no rule or output changed.
   - **Wiring.** `.dev/floor/command-hygiene.test.mjs`:
     - `STAGE_AGENT_WIRING` and `PHASE_MARKER_WIRING` read the new lines and close the 6.27.0 form out;
-    - `SHELL_VALUES` drops `<route>`;
+    - `SHELL_VALUES` drops `<route>` and gains `<stage>` (the crash fallback line below);
     - the new `DIRECT_STAGE_WIRING` holds the thin-caller copy-pair's obligation set (setter argv, numbers, the
       600000 timeout, every exit named) and executes every committed line;
     - each rewritten rule has a mutation control.
 
-    The close parts are untouched. Their "the route line" wording still reads true, since `start` prints and runs the
-    route.
+    The close parts' "the route line" wording still reads true, since `start` prints and runs the route.
+
+  - **Fixed at GATE 2, from an independent review of the pull request (owner decisions, all five taken).**
+    - R1: a Bash call that reaches the tool's timeout is MOVED TO THE BACKGROUND, not killed (reproduced at a 3 s
+      timeout). The prescribed "resume once after a timeout" then ran a second stage script on the same
+      `.pharn/pharn-<stage>/` state, and the first call's late `--clear` released the second's scope. Now
+      `stage-direct.mjs` takes an in-flight lock first (`.pharn/stage-direct/in-flight.json`, O_EXCL, pid + start
+      time, stale only when its pid is dead, released in a `finally` and only while it holds the call's own record). A
+      second call refuses `in-flight` (exit 2), and a lock directory that is a link or a file refuses `lock-unusable`.
+      One lock serves both stages, beside their roots: each stage script's fresh start deletes its own root, and the two
+      stages share one writes-scope file. Both orchestrators now say a backgrounded call is still running: wait for it,
+      never start the resume line. A test runs two processes. Bound: a dead holder whose pid was reused reads as alive
+      and refuses until the file is removed.
+    - R2: `/pharn-ship`'s answer to a regress or verify question is the pinned line's own flags, then the object's
+      `resume.argv` after its `--budget-ms` value, then the option. "The same line plus the option" duplicated or
+      clashed with a `--tests` the script had dropped, the 6.23.0 A2 defect again. A test drives the real
+      `stage-regress.mjs` through a `tests-unresolved` re-ask to `done`, with the old rule as its control.
+    - R3: a `start` that crashes wrote no stage-start marker. Both orchestrators pin a fallback marker line whose route is
+      the fixed literal `inline:route-unavailable`.
+    - R4: `/pharn-ship`'s close part loads "with step 7's first `/pharn-verify` call that exits other than `5`", in its
+      pointer and in the part itself (`pharn-ship-close.md`, two sentences; a family test pins all three).
+    - R5: the `executions` wording above, here and in `cost-ledger.md`.
 
   - `SKILLS_VERSION` → 6.41.0 (minor: a new floor CLI and two subcommands), with the README badge; built as 6.36.0 and
     renumbered to the version the maintainer assigned, after #309. `MIN_CLI` is unchanged.
