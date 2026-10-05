@@ -204,7 +204,7 @@ function rootsOf(root) {
 const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
 /** A parsed entry's test id: `<file>::<title path joined by " › ">`. The ONE id rule (L35) — buildRecord's, and
- *  build-gate-core.mjs's when it joins an entry's failure messages to the record's failing tests (6.38.0). */
+ *  build-gate-core.mjs's when it joins an entry's failure messages to the record's failing tests (6.39.0). */
 export function testIdOf(entry) {
   return `${entry.file}${FILE_SEP}${entry.path.join(TITLE_SEP)}`;
 }
@@ -275,7 +275,7 @@ export function testRecord({ stamp, outDir, gateId, root }) {
   return buildRecord({ gate: g.gate, format: g.format, exit: g.exit, sha: g.sha, parsed: g.parsed });
 }
 
-/** testRecord's first half (6.38.0), for a caller that needs the parsed ENTRIES beside the record — build-gate.mjs,
+/** testRecord's first half (6.39.0), for a caller that needs the parsed ENTRIES beside the record — build-gate.mjs,
  *  whose summary quotes each failing test's `messages`: `{ok, gate, format, exit, sha, parsed}`, bound to the stamp
  *  exactly as testRecord is (validated stamp, configured format, the bytes the runner hashed), or the same closed
  *  refusal. The caller builds the record with `buildRecord` from the SAME parse, so the two can never disagree. */

@@ -1,4 +1,4 @@
-// pharn/floor/build-gate-core.mjs — the PURE rules of /pharn-build's project gate (6.38.0, build-gate-bounded): the
+// pharn/floor/build-gate-core.mjs — the PURE rules of /pharn-build's project gate (6.39.0, build-gate-bounded): the
 // paths, the TARGET rule, the excerpt and tail bounds, the summary text and the exit table. No `child_process`, no
 // filesystem, no clock. The execution half is pharn/floor/build-gate.mjs (P3: this file changes when a RULE or the
 // summary's shape changes, that one when how the gate is run changes).

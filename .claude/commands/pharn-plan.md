@@ -21,7 +21,7 @@ reads:
   ]
 writes: ["pharn/features/<name>/PLAN.md", "pharn/features/<name>/AC-TESTS.md"]
 constitution_refs: ["P0", "P2", "P4", "P5", "P6", "P7"]
-version: "0.5.2"
+version: "0.5.3"
 ---
 
 # /pharn-plan — plan from Approved, un-drifted intent
@@ -130,6 +130,15 @@ node pharn/floor/check-spec-approved.mjs pharn/features/<name>/SPEC.md
 From the **approved** intent (the SPEC's sections), produce the plan **body** — _how to implement_ what
 the Acceptance Criteria require, within the Scope and Constraints. Plan only what the SPEC expresses; do not
 invent intent the human did not approve (P7).
+
+> **Instruction files load into every agent (ADVISORY — nothing checks a plan for it).** Claude Code loads
+> `CLAUDE.md`, any file it imports with `@…` (e.g. `AGENTS.md`), and every `.claude/rules/` file without `paths:`
+> frontmatter into every agent of every stage, so each byte there is paid on every run. A feature's narrative,
+> rationale, history and limits already live in its record (`pharn/features/<name>/`); if the project keeps a docs
+> folder, a page there may be planned. Neither becomes a new section in an instruction file. Name an instruction file
+> in `## Files` only when the feature changes a standing convention every future session must obey, as
+> ``- `CLAUDE.md` — convention: <the one convention, one line>``; a convention for some paths only belongs in a
+> `.claude/rules/` file with `paths:` frontmatter.
 
 ## Step 4 — Emit `pharn/features/<name>/PLAN.md`, carrying the hash forward, then halt
 

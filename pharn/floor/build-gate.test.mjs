@@ -1,4 +1,4 @@
-// pharn/floor/build-gate.test.mjs — /pharn-build's project gate (6.38.0), end to end in fixture git repos: the full
+// pharn/floor/build-gate.test.mjs — /pharn-build's project gate (6.39.0), end to end in fixture git repos: the full
 // set (discovered minus e2e, no reconcile), the targeted set (the `test` gate over the declared test files only),
 // every exit, the continue-or-start rule, containment, the gate exclusion reaching both modes (GATE 1 Q1, grill G6),
 // and ★ WIRING — /pharn-build Step 4's committed lines, each run as its own shell (L44, L45).
@@ -246,7 +246,13 @@ test("review R4/R7 — a refused record prints the tail it announces; a failed d
   withProject({}, (dir) => {
     // exit 0 with a failed test in the report → results-exit-contradiction → a GREEN gate with a refused record.
     setMode(dir, { fail: ["tests/all.test.js"], forceExit: 0 });
-    writeFileSync(join(dir, "runner.cjs"), RUNNER.replace("process.exit(id === 'test' && failed ? 1 : 0);", "process.exit(mode.forceExit !== undefined ? mode.forceExit : id === 'test' && failed ? 1 : 0);"));
+    writeFileSync(
+      join(dir, "runner.cjs"),
+      RUNNER.replace(
+        "process.exit(id === 'test' && failed ? 1 : 0);",
+        "process.exit(mode.forceExit !== undefined ? mode.forceExit : id === 'test' && failed ? 1 : 0);"
+      )
+    );
     const r = full(dir);
     assert.equal(r.status, EXIT.green, r.stdout);
     assert.match(r.stdout, /per-test results not read: results-exit-contradiction — the log tail follows/);

@@ -811,7 +811,7 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 node pharn/floor/stage-verify.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--gates "<cmd>[::<id>],…"]
 node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 
-# /pharn-build's PROJECT GATE (6.38.0, build-gate-bounded) — Step 4 runs the project's gates ONLY through this helper.
+# /pharn-build's PROJECT GATE (6.39.0, build-gate-bounded) — Step 4 runs the project's gates ONLY through this helper.
 # THE RECORDED FAILURE (P7): in a user's 92-minute /pharn-loop run the routed build agent chose its own set (a full
 # `vitest run` twice, a `test:db` script /pharn-verify never runs twice, `typecheck | grep -v` hiding pre-existing errors,
 # never `build`) — 7.8 min blocked on suites (.dev/measurements/loop-wall-clock-2026-10-05.md §4). Correction recorded in
@@ -821,12 +821,14 @@ node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 # project's gate exclusion applies), whose exit is the build's gate. Both through run-gates.mjs's new `build` stage,
 # stage-runtime.mjs's drain and budget (unchanged), logs under .pharn/pharn-build/<name>/<mode>/. The summary is bounded
 # (per gate exit + runner-call wall time; failing tests' ids with a fenced excerpt of their first message — the adapters
-# now carry `messages` on parsed entries, NO record does — or a fenced log tail; 16 KiB per call). The same line starts
-# and continues a run (continues only while the tree fingerprint is unchanged). FLOOR: the set (resolveSet), the exit
+# now carry `messages` on parsed entries, NO record does — or a fenced log tail; at most 16,384 bytes, enforced). The same
+# line starts and continues a run (only while the tree fingerprint and --gates spec are unchanged). No gate to run (no
+# package.json, none allowlisted) → exit 4; a HUMAN may then name the gates with --gates, as at /pharn-verify (appended
+# verbatim, never model-typed, never filtered); /pharn-loop maps 4 to S4. FLOOR: the set (resolveSet), the exit
 # codes (the stamp). ADVISORY: that the agent runs nothing else, that an excerpt holds the diagnostic, that a targeted
 # GREEN predicts a full one. Follow-up `build-gate-execution-reuse`. Exit: 0 GREEN · 3 RED · 4 NO-GATES · 5 CONTINUE ·
 # 2 UNUSABLE · anything else (1 included) = crashed. Ships: bumps SKILLS_VERSION.
-node pharn/floor/build-gate.mjs --feature <name> --mode targeted|full --timeout-ms <N> [--budget-ms <B>]
+node pharn/floor/build-gate.mjs --feature <name> --mode targeted|full --timeout-ms <N> [--budget-ms <B>] [--gates "<cmd>[::<id>],…"]
 
 # THE QUICK SCOPE CHECK (6.28.0, loop-quick-mode GATE 2, review F1) — the partition check `/pharn-ship --quick`'s item 7
 # and every `/pharn-loop --quick` iteration keep when they skip /pharn-regress. THE RECORDED FAILURE (P7): 6.25.0's
@@ -856,6 +858,17 @@ node pharn/floor/build-gate.mjs --feature <name> --mode targeted|full --timeout-
 # the pinned relative path names no file) is node's own exit 1 with no document; both callers stop on 1.
 # Exit: 0 clean · 1 escaped · 2 inconclusive (closed reason_code, `crashed` included).
 node pharn/floor/check-quick-scope.mjs --feature <name> --base <40-hex>
+
+# THE INSTRUCTION-GROWTH GATE (6.38.0). A user's CLAUDE.md + 14 rules (634,379 B) rode in every stage agent's prefix.
+# `--report` (ADVISORY): the always-loaded set — root CLAUDE.md files, their `@` imports, rules without `paths:` —
+# per-file bytes, a bytes/4 estimate, notes (`globs-not-read`, …). `--growth` (FLOOR over this MODEL of the loader, never
+# the loader itself): bytes ADDED since the base (removals never offset) vs `budget.instructionGrowthBytes` in
+# pharn.config.json AT THE BASE (default 2048). Under-count routes are listed as known-so-far (L67).
+# /pharn-verify injects it before `reconcile` as `instruction-growth` (`--base-rule`: dirty → HEAD, else merge-base
+# origin/main, else INCONCLUSIVE); never reused. Spec/bounds: instruction-files-core.mjs. This repo's dev loop never runs it.
+# Exit: 0 within/reported · 1 over · 2 inconclusive (closed reason_code).
+node pharn/floor/check-instruction-files.mjs --report
+node pharn/floor/check-instruction-files.mjs --growth (--base <ref> | --base-rule)
 
 # THE PRE-RUN SNAPSHOT (6.37.0, regress-pre-run-snapshot) — a path already changed when a /pharn-loop or /pharn-ship run
 # began is not that run's scope escape. THE RECORDED FAILURE (P7): two of three post-6.35.0 /pharn-loop runs in a user's

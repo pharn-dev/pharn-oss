@@ -29,7 +29,7 @@
 //     (6.34.0), the exit a runner recorded for the SOURCE execution its `reused` block names, which this stamp's
 //     runner found eligible and identity-equal at the live tree when it recorded the entry (gate-reuse-core.mjs);
 //     nothing re-derives that decision later (the named residual `verify-reuse-rederive`);
-//   • the map's KEYS cover the resolved source set (plus `reconcile` for verify);
+//   • the map's KEYS cover the resolved source set (plus `instruction-growth` and `reconcile` for verify);
 //   • no tree edit happened between consecutive gate runs (fp_after[k-1] === fp_before[k]);
 //   • `reconcile`, when present, ran LAST.
 //
@@ -152,7 +152,10 @@ export const STYLE_SET = Object.freeze(["lint", "format:check", "lint:md"]);
  *  without loading the AC gate's module graph: a load failure there would stop the freshness check (grill R2) — since
  *  6.21.1 as INCONCLUSIVE `checker-crashed` rather than node's exit 1, and a smaller graph still fails less often. */
 export const AC_RESERVED_IDS = Object.freeze(["ac-delivery", "ac-evidence"]);
-export const RESERVED_IDS = Object.freeze(["reconcile", "completeness", ...AC_RESERVED_IDS]);
+/** The instruction-growth gate's id (6.38.0): the runner injects it for verify, before `reconcile`
+ *  (`instructionGrowthEntry`, below). Reserved so no project gate can claim the name. */
+export const INSTRUCTION_GROWTH_ID = "instruction-growth";
+export const RESERVED_IDS = Object.freeze(["reconcile", "completeness", ...AC_RESERVED_IDS, INSTRUCTION_GROWTH_ID]);
 
 /** The `structural:` prefix belongs to `--extra` entries alone. */
 export const STRUCTURAL_PREFIX = "structural:";
@@ -251,7 +254,7 @@ export function isReasonCode(code) {
 /** The three stages and the two regress sides — enum-gated, fail-closed on anything else. `ac-test` (6.18.0) is
  *  /pharn-test's RED RUN: the AC tests, run before the build, whose per-test record check-red-run.mjs judges.
  *  Every stamp reader that is not that one asserts its own stage (`validateStamp`'s `expect.stage`), so an
- *  `ac-test` stamp handed to /pharn-verify or /pharn-regress is `stage-mismatch`, never a verdict. `build` (6.38.0,
+ *  `ac-test` stamp handed to /pharn-verify or /pharn-regress is `stage-mismatch`, never a verdict. `build` (6.39.0,
  *  build-gate-bounded) is /pharn-build's own project gate, run by build-gate.mjs: no verdict reads its stamp, and every
  *  stamp reader that asserts a stage refuses it the same way. */
 export const STAGES = Object.freeze(["verify", "regress", "ac-test", "build"]);
@@ -282,8 +285,12 @@ export const MAX_REUSABLE_EXIT = 125;
  *    • every style gate (STYLE_SET) — a whole-tree style run reads the feature's fingerprint-EXCLUDED artifacts, which
  *      differ between the regress HEAD run and verify (REGRESSION.md is written after the head drain; an earlier
  *      iteration's VERIFY.md is removed by verify's fresh start), so an equal fingerprint is not an equal input (grill B1);
- *    • `reconcile` — it judges the verify window itself. */
-export const NON_REUSABLE_IDS = Object.freeze([...new Set([...Object.values(LEVEL_GATES).flat(), ...STYLE_SET, "reconcile"])].sort());
+ *    • `reconcile` — it judges the verify window itself;
+ *    • `instruction-growth` (6.38.0) — regress never runs it, and its input includes `origin/main`, which the execution
+ *      identity does not bind. */
+export const NON_REUSABLE_IDS = Object.freeze(
+  [...new Set([...Object.values(LEVEL_GATES).flat(), ...STYLE_SET, "reconcile", INSTRUCTION_GROWTH_ID])].sort()
+);
 
 /** A feature slug: one path segment, no traversal, no separators.
  *  A THIRD copy of a grammar already in mark-phase.mjs (NAME_RE) and render-run-report.mjs (SLUG_RE) — neither exports
@@ -449,19 +456,36 @@ export function reconcileEntry() {
   };
 }
 
+/** ------------------------------------------------------------------------------------------------
+ *  The instruction-growth entry (6.38.0) — injected by the runner for verify, with a fixed argv, immediately BEFORE
+ *  `reconcile` (which stays last). It fails when the project's always-loaded instruction files (CLAUDE.md, its
+ *  imports, the rules without `paths`) gained more bytes since the base than the base commit's threshold allows;
+ *  pharn/floor/instruction-files-core.mjs's header is the spec and states the bounds. The checker writes nothing, so it
+ *  cannot move the tree between gates. As for `reconcile`, nothing re-checks that a stamp carries it: the runner
+ *  composes it.
+ *  ---------------------------------------------------------------------------------------------- */
+export function instructionGrowthEntry() {
+  return {
+    id: INSTRUCTION_GROWTH_ID,
+    shell: null,
+    argv: ["node", "pharn/floor/check-instruction-files.mjs", "--growth", "--base-rule"],
+    files: [],
+  };
+}
+
 /** The completeness AUX entry — captured by the runner, recorded OUTSIDE `runs[]`. See the header. */
 export function completenessArgv(feature, base) {
   return ["node", "pharn/floor/check-build-complete.mjs", `${base}/${feature}/PLAN.md`, "."];
 }
 
 /** ------------------------------------------------------------------------------------------------
- *  Ordering. ALLOWLIST order (or the explicit token order), then `structural:*` sorted, then
- *  `reconcile` last. Deterministic and filesystem-independent.
+ *  Ordering. ALLOWLIST order (or the explicit token order), then `structural:*` sorted, then — verify only —
+ *  `instruction-growth`, then `reconcile` last. Deterministic and filesystem-independent.
  *  ---------------------------------------------------------------------------------------------- */
 export function orderEntries(sourceEntries, extraEntries, withReconcile) {
   const structural = [...extraEntries].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const out = [...sourceEntries, ...structural];
-  if (withReconcile) out.push(reconcileEntry());
+  if (withReconcile) out.push(instructionGrowthEntry(), reconcileEntry());
   return out.map((e, i) => ({ ...e, seq: i }));
 }
 
@@ -478,7 +502,7 @@ export function orderEntries(sourceEntries, extraEntries, withReconcile) {
  *  `exclude` (6.36.0): the project's declared exclusion (gate-exclusion-core.mjs), applied to a DISCOVERED source
  *  only, AFTER the regress e2e rule and before the emptiness test — so an exclusion that leaves nothing is
  *  `empty-source-set` naming it, never a run with nothing in it (L34). Passing it with `--gates` is a usage error.
- *  build   : (6.38.0, /pharn-build's gate via build-gate.mjs) a DISCOVERED source minus E2E_SET (the regress rule:
+ *  build   : (6.39.0, /pharn-build's gate via build-gate.mjs) a DISCOVERED source minus E2E_SET (the regress rule:
  *            e2e runs at /pharn-verify), then the exclusion — or a human's explicit `--gates`, never filtered, as at
  *            verify; `--extra` and `--skip-style` are refused; no `reconcile`. With `targets` (a non-empty array of
  *            repo-relative test files), the set is the `test` gate alone, handed those files; an id that a targeted
@@ -530,7 +554,7 @@ export function resolveSet({
     source = p.entries;
     sourceKind = "explicit";
     sourceRaw = gates;
-    // build, targeted, over a human's explicit spec: its `test` id alone (6.38.0, review R1).
+    // build, targeted, over a human's explicit spec: its `test` id alone (6.39.0, review R1).
     if (stage === "build" && targets !== null) source = source.filter((e) => e.id === "test");
   } else {
     source = discoverGates(scripts);
@@ -541,7 +565,7 @@ export function resolveSet({
       e2eExcluded = source.filter((e) => E2E_SET.includes(e.id)).map((e) => e.id);
       source = source.filter((e) => !E2E_SET.includes(e.id));
     }
-    // build, targeted (6.38.0): the `test` gate alone. Narrowed BEFORE the exclusion, so `excluded` never names a
+    // build, targeted (6.39.0): the `test` gate alone. Narrowed BEFORE the exclusion, so `excluded` never names a
     // gate a targeted run skips anyway (the G9 rule just below).
     if (stage === "build" && targets !== null) source = source.filter((e) => e.id === "test");
     // The project's exclusion AFTER the fixed e2e rule (grill G9): `excluded` names only what the declaration itself

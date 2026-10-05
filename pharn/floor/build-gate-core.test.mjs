@@ -1,4 +1,4 @@
-// pharn/floor/build-gate-core.test.mjs — the pure rules of /pharn-build's project gate (6.38.0): the TARGET rule over
+// pharn/floor/build-gate-core.test.mjs — the pure rules of /pharn-build's project gate (6.39.0): the TARGET rule over
 // each of its filters, the excerpt and tail bounds, the verdict's one input, and the summary's caps and fences.
 
 import { test } from "node:test";
@@ -231,7 +231,9 @@ test("renderSummary — suite errors (a file that would not load) add the log ta
     stamp: stampOf([run(0, "test", 0)]),
     outDir: "O",
     times: {},
-    perGate: { test: { results: { ok: false, reason_code: "results-exit-contradiction" }, outText: "1 failed, exit 0 anyway", errText: "" } },
+    perGate: {
+      test: { results: { ok: false, reason_code: "results-exit-contradiction" }, outText: "1 failed, exit 0 anyway", errText: "" },
+    },
   });
   assert.match(refused, /result: GREEN/, "the exit decides; a refused record is a disclosure, never a verdict");
   assert.match(refused, /per-test results not read: results-exit-contradiction — the log tail follows/);
@@ -278,11 +280,21 @@ test("review R3 — the 16,384-byte cap HOLDS: every section past it is named by
   const big = Array.from({ length: 400 }, (_, i) => `noise ${i} ${"q".repeat(150)}`).join("\n");
   const runs = ["test", "lint", "format:check", "lint:md", "typecheck", "type-check", "build"].map((id, i) => run(i, id, 1));
   const perGate = Object.fromEntries(runs.map((r) => [r.id, { results: null, outText: big, errText: big }]));
-  const text = renderSummary({ mode: "full", feature: "demo", stamp: stampOf(runs), outDir: ".pharn/pharn-build/demo/full", times: {}, perGate });
+  const text = renderSummary({
+    mode: "full",
+    feature: "demo",
+    stamp: stampOf(runs),
+    outDir: ".pharn/pharn-build/demo/full",
+    times: {},
+    perGate,
+  });
   assert.ok(bytes(text) <= CAPS.totalBytes, `at most ${CAPS.totalBytes}: ${bytes(text)}`);
   const shown = (text.match(/^## (?:test|lint|format:check|lint:md|typecheck|type-check|build) — exit 1$/gm) ?? []).length;
   assert.ok(shown >= 1 && shown < runs.length, `some sections shown, some left out (${shown})`);
-  assert.match(text, new RegExp(`^## ${runs.length - shown} red gate section\\(s\\) over the 16384-byte summary cap — the table above names them`, "m"));
+  assert.match(
+    text,
+    new RegExp(`^## ${runs.length - shown} red gate section\\(s\\) over the 16384-byte summary cap — the table above names them`, "m")
+  );
   for (const r of runs) assert.match(text, new RegExp(`^ {2}${r.id}\\s+exit\\s+1\\b.*\\(red\\)$`, "m"), `${r.id} is in the table`);
   // A smaller cap, the same rule.
   const caps = { ...CAPS, totalBytes: 6000 };
@@ -295,8 +307,17 @@ test("review R3 — adversarial: 200 explicit gates with 256-char ids and huge l
   const runs = Array.from({ length: 200 }, (_, i) => run(i, longId(i), i % 2));
   const big = Array.from({ length: 50 }, () => "`".repeat(300) + "y".repeat(500)).join("\n");
   const failing = Array.from({ length: 80 }, (_, i) => ({ id: `${"f".repeat(4096)}${i}`, messages: ["`".repeat(1000)], note: null }));
-  const perGate = Object.fromEntries(runs.map((r) => [r.id, { results: r.seq === 1 ? record(failing) : null, outText: big, errText: big }]));
-  const text = renderSummary({ mode: "full", feature: "demo", stamp: { ...stampOf(runs), source: "explicit" }, outDir: ".pharn/pharn-build/demo/full", times: {}, perGate });
+  const perGate = Object.fromEntries(
+    runs.map((r) => [r.id, { results: r.seq === 1 ? record(failing) : null, outText: big, errText: big }])
+  );
+  const text = renderSummary({
+    mode: "full",
+    feature: "demo",
+    stamp: { ...stampOf(runs), source: "explicit" },
+    outDir: ".pharn/pharn-build/demo/full",
+    times: {},
+    perGate,
+  });
   assert.ok(bytes(text) <= CAPS.totalBytes, `${bytes(text)}`);
   assert.match(text, /set: the human's --gates spec, run as given/);
   assert.match(text, new RegExp(`… ${200 - CAPS.tableRows} more gate\\(s\\), \\d+ of them red`));

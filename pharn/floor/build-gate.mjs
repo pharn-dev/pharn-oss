@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// pharn/floor/build-gate.mjs — /pharn-build Step 4's project gate (6.38.0, build-gate-bounded): the EXECUTION half.
+// pharn/floor/build-gate.mjs — /pharn-build Step 4's project gate (6.39.0, build-gate-bounded): the EXECUTION half.
 // The rules (paths, the TARGET rule, the bounds, the summary, the exit table) are build-gate-core.mjs; why both exist
 // is that module's header (P4 — cited, not restated).
 //
@@ -207,7 +207,9 @@ function failingOf(g, record) {
       if (v.messages.length === 0) v.messages = e.messages ?? [];
     }
   }
-  const failing = record.tests.filter((t) => t.status === "failed").map((t) => ({ id: t.id, messages: byId.get(t.id)?.messages ?? [], note: null }));
+  const failing = record.tests
+    .filter((t) => t.status === "failed")
+    .map((t) => ({ id: t.id, messages: byId.get(t.id)?.messages ?? [], note: null }));
   for (const a of record.anomalies) {
     if (byId.get(a.id)?.failed) failing.push({ id: a.id, messages: byId.get(a.id).messages, note: a.reason_code });
   }
