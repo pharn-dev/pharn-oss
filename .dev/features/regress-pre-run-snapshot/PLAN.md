@@ -171,6 +171,10 @@ gains the same lines.
   (`npm run docs:generate`). — repo meta
 - `CLAUDE.md` — one command block for the new CLI. — repo meta
 - `.dev/features/regress-pre-run-snapshot/PROTECTED-FOLLOWUPS.md` — the `LIMITS.md` §3a and §6 sentences. — apparatus
+- `.dev/floor/command-hygiene.test.mjs` — BUILD AMENDMENT (found by `npm run check`): the QUICK MODE pin of
+  `pharn-ship-quick.md` item 11's kept-check sentence follows its reword (grill #5), and `RUN_MARKER_WIRING`'s
+  `pharn-ship` `openBefore` anchor becomes the capture line, so the run-marker STOP rule's mutation control still
+  discriminates (the capture line's own STOP sits between the open line and the old anchor). — apparatus (test)
 
 `MIN_CLI` stays `0.5.0`: no installed path moves and no file changes shape for an older CLI. No hook or settings
 change: the record path is already denied by both guards (the ★ HOOK test proves it, it adds nothing to them).

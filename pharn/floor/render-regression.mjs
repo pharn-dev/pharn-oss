@@ -49,6 +49,26 @@ function section(title, lines) {
   return [`## ${title}`, "", ...lines, ""];
 }
 
+/** The pre-run snapshot's lines (6.36.0, regress-pre-run-snapshot) — `block` is scope.json's `pre_run_snapshot`
+ *  (`{status, unchanged}`), or absent. Nothing for an absent block or for `no-delivery-run` (a standalone regress, whose
+ *  render stays byte-identical); otherwise the status, and the subtracted paths quoted as DATA. The status is a closed
+ *  enum (pre-run-snapshot-core.mjs PRE_RUN_STATUSES); it is still rendered through `dataText`, inline after fixed text. */
+export function preRunLines(block) {
+  if (block === null || typeof block !== "object" || block.status === "no-delivery-run") return [];
+  const unchanged = Array.isArray(block.unchanged) ? block.unchanged : [];
+  if (block.status !== "applied") {
+    return [`pre-run snapshot: not applied (${dataText(block.status)}) — every undeclared changed path is counted.`];
+  }
+  if (unchanged.length === 0) return ["pre-run snapshot: applied — no undeclared path was already changed when this run began."];
+  return [
+    `already changed when this run began (${unchanged.length}) — the run's pre-run snapshot recorded these with exactly the ` +
+      "bytes they hold now, so they are reported, NOT counted as this build's escape (a re-run records an earlier run's " +
+      "escape the same way; pre-run-snapshot-core.mjs states the bounds):",
+    "",
+    quoteData("", unchanged.join("\n")),
+  ];
+}
+
 function verdictLine(verdict, regressions) {
   if (verdict === "no-regressions") {
     return "**verdict: NO REGRESSIONS** — no deterministically-detectable breakage outside the feature.";
@@ -147,6 +167,7 @@ export function renderDone({ feature, base, report, scope, progress }) {
             quoteData("", scope.escape_exempt.join("\n")),
           ]
         : []),
+      ...(preRunLines(scope.pre_run_snapshot).length ? ["", ...preRunLines(scope.pre_run_snapshot)] : []),
     ])
   );
 
@@ -203,13 +224,16 @@ export function renderDone({ feature, base, report, scope, progress }) {
 /** Render the human doc for a REFUSED run (`chain-red`, `missing-artifact`, `plan-files-unparseable`,
  *  `scope-escaped`). `detail` is an already-composed sentence (or fenced-ready text) the CLI assembled from
  *  a shelled checker's own message or a git/plan-scan finding; it is quoted as untrusted DATA here rather
- *  than trusted as this renderer's own prose. */
-export function renderRefused({ feature, reasonCode, detail }) {
+ *  than trusted as this renderer's own prose. `preRun` (6.36.0) is the partition's `pre_run_snapshot` block, passed
+ *  with a `scope-escaped` refusal so the paths it did NOT count are named beside the ones it did. */
+export function renderRefused({ feature, reasonCode, detail, preRun = null }) {
   const out = [];
   out.push(`# REGRESSION — ${feature}`, "");
   out.push(`refused: \`${inline(reasonCode)}\``, "");
   out.push("**regression NOT measured — the refusal below must be resolved first.**", "");
   out.push(...section("Why", [quoteData("detail, quoted as DATA:", dataText(detail))]));
+  const pre = preRunLines(preRun);
+  if (pre.length) out.push(...section("Pre-run snapshot", pre));
   return (
     out
       .join("\n")

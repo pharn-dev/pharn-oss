@@ -60,10 +60,10 @@ written for a `--quick` invocation too; only what is listed here changes.**
 spec_kind: quick`. The remedy is to re-run `/pharn-ship <description>` **without** `--quick`: the SPEC
    resumes and the full flow runs. A STOP here still runs Steps 3 and 3a (with the quick deltas below).
 
-   **Then the run marker, unchanged.** On a `quick` token, Step 2's run-marker `--open` line runs next,
-   exactly as written there, with its own rule: a non-zero exit is a STOP before `/pharn-plan`. The
-   order in a quick run is therefore: the backstop exits `0`, this kind read prints `quick`, the marker
-   opens, then `/pharn-plan` starts. A refused `--quick` never opens a marker. Every quick exit still reaches
+   **Then the run marker and the pre-run snapshot, unchanged.** On a `quick` token, Step 2's run-marker `--open` line
+   and its snapshot line run next, exactly as written there, each with its own rule: a non-zero exit is a STOP before
+   `/pharn-plan`. The order in a quick run is therefore: the backstop exits `0`, this kind read prints `quick`, the
+   marker opens, the snapshot is recorded, then `/pharn-plan` starts. A refused `--quick` never opens a marker. Every quick exit still reaches
    Step 3a, whose `--close` runs right after the run-stop marker and is idempotent (item 12).
 
 4. **The grill step.** Run this pinned QUICK route line in place of Step 2's grill route line (6.27.0):
@@ -129,7 +129,7 @@ spec_kind: quick`. The remedy is to re-run `/pharn-ship <description>` **without
     in this order:
     - **regressions outside the feature** — no base comparison ran (`/pharn-regress` was skipped), so a
       break the feature's own tests and the head gates do not exercise is not looked for. **Kept:** the
-      scope check (item 7) — a changed file outside the plan's `## Files` still stops the run;
+      scope check (item 7) — a file the run changed outside the plan's `## Files` still stops the run;
     - **the plan interrogation** — `/pharn-grill --quick` ran its two floor stops only, and no griller ran;
     - **the briefing and the run report** — no `BRIEFING.md` and no `RUN-REPORT.md` (`cost.json` **is**
       still emitted and checked, unchanged — item 12 below).

@@ -39,8 +39,9 @@ the bound list ("Four bounds") no longer describes the rule the two callers appl
   closed-enum exemptions for the pipeline's own artifacts; a plan that edits its own `## Files`
   (or its `AC-TESTS.md`) defeats it; and, inside a `/pharn-loop` or `/pharn-ship` run (6.36.0), a path already
   changed when the run began whose bytes still equal the run's pre-run snapshot is reported, not counted — so a build
-  that writes such a path back to its pre-run bytes is not seen, and the snapshot, kept in the git dir out of the
-  write tools' reach, can be forged through `Bash`. A smoke alarm, never the guard.
+  that writes such a path back to its pre-run bytes is not seen, a path an earlier run escaped with is pre-run state
+  for a re-run (reported, not refused), and the snapshot, kept in the git dir out of the write tools' reach, can be
+  forged through `Bash`. A smoke alarm, never the guard.
 ```
 
 ## 2. `LIMITS.md` §3a, the `/pharn-ship --quick` paragraph — STALE by reference (reads as an overclaim)
@@ -63,6 +64,16 @@ what the check now asks.
 > `/pharn-regress`'s scope check (a file the run changed outside the plan's `## Files` still stops the run, within
 > the bounds §6 states for that check) and `/pharn-verify` with its AC gate. It leaves out: **the regression
 ```
+
+## 3. Grill additions (GRILL.md #1, #3) — folded into item 1, recorded here so the reason survives
+
+- **#1, the re-run bound:** item 1's proposed text names it ("a path an earlier run escaped with is pre-run state for
+  a re-run"). It is inherent: the recorded case this increment passes (an abandoned run's leftover folder) is an
+  earlier run's output too. `/pharn-loop` never commits such a path (Step 6c stages plan scope ∪ the feature's
+  artifacts ∪ pinned tests), and `pharn-regress.md`'s remedy text says a re-run does not clear an escape.
+- **#3, a pre-run-changed test file is not compared at regress:** no trusted-doc sentence claims every outside test is
+  compared, so nothing here is made false. The claim it qualifies lives in `.claude/commands/pharn-regress.md`'s
+  "Guaranteed" bullet, which this increment edits directly (not a protected path).
 
 ## Checked and unaffected
 

@@ -25,6 +25,7 @@ reads:
     "pharn/floor/check-test-stage.mjs",
     "pharn/floor/check-quick-scope.mjs",
     "pharn/floor/quick-scope-core.mjs",
+    "pharn/floor/pre-run-snapshot.mjs",
     "pharn/floor/feature-name.mjs",
     "pharn/floor/validate.mjs",
     "pharn/floor/check-attestation.mjs",
@@ -260,6 +261,17 @@ checker's verdict alongside the RED. See Step 3a's own presentation rule, in the
 
    The marker holds the write guard's fail-closed default standing in an **installed** project until Step 3a's
    close (`pharn/floor/run-marker.mjs`, header).
+
+   **Then record the pre-run snapshot**, bound to that marker: every changed path with a digest, kept in the git dir,
+   so `/pharn-regress` and the quick scope check report a path that still holds those bytes instead of counting it as
+   this run's escape. It is the tree as it stands at this approval (`pharn/floor/pre-run-snapshot.mjs`, header):
+
+   ```bash
+   node pharn/floor/pre-run-snapshot.mjs --capture '<name>'
+   ```
+
+   **Non-zero → STOP** before `/pharn-plan`, as for the marker line: present its `pre-run-snapshot:` refusal and hand to
+   the human. Like every STOP, it goes through Steps 3 and 3a.
 
 2. **`/pharn-plan`** → writes `pharn/features/<name>/PLAN.md`. Routed (`## Running a stage`):
 

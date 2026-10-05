@@ -40,6 +40,7 @@ reads:
     "pharn/floor/check-red-run.mjs",
     "pharn/floor/check-quick-scope.mjs",
     "pharn/floor/quick-scope-core.mjs",
+    "pharn/floor/pre-run-snapshot.mjs",
     "pharn/floor/feature-name.mjs",
     "pharn/pharn-contracts/gate-run-record.md",
     "pharn/floor/validate.mjs",
@@ -154,6 +155,17 @@ before Step 1a, as `## Quick mode` below says; every step not named there runs a
    until `pharn/features/<name>/LOOP.md` exists (`.claude/hooks/require-loop-record.cjs`, header). **A blocked
    stop is a valid record**, so the way to end a run that cannot continue is Step 6b's blocked record, never a
    summary.
+
+   **Then Step 1a's second snapshot line — the pre-run snapshot**, bound to the marker just opened: every changed path
+   with a digest, kept in the git dir. `/pharn-regress` and the quick scope check report a path that still holds those
+   bytes instead of counting it as this run's escape (`pharn/floor/pre-run-snapshot.mjs`, header):
+
+   ```bash
+   node pharn/floor/pre-run-snapshot.mjs --capture '<name>'
+   ```
+
+   **Non-zero → STOP**, **S9** again (`blocked: stage-refused`), the same way: without it, a path changed before this
+   run would read as a build escape at `/pharn-regress`.
 
 5. **Open the cost ledger's marker file** — the `run-start` boundary. This runs **after S2**, because
    `<name>` must exist first:

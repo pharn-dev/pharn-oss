@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.35.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.36.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -151,8 +151,8 @@ both human gates:
 For a small, well-scoped change, `--quick` (6.25.0) runs a shorter spine — both human gates, a
 `spec_kind: quick` mini-SPEC of 1–3 criteria, the grill's two floor stops without its interrogation,
 test-first evidence and `/pharn-verify` — and skips `/pharn-regress`'s base-and-head comparison, the plan
-interrogation, `BRIEFING.md` and `RUN-REPORT.md`. Its ship record lists what it did not check, and a changed
-file outside the plan's declared files still stops the run (`/pharn-regress`'s scope check is kept).
+interrogation, `BRIEFING.md` and `RUN-REPORT.md`. Its ship record lists what it did not check, and a file the
+run changed outside the plan's declared files still stops the run (`/pharn-regress`'s scope check is kept).
 
 ```text
 /pharn-ship --quick fix the off-by-one in the pagination cursor
@@ -687,7 +687,7 @@ byte-for-byte by `npm run docs:check`, so it cannot quietly drift from what is a
 - **Product commands — 11** (`.claude/commands/`): `/pharn-build`, `/pharn-grill`, `/pharn-loop`, `/pharn-memory-promote`, `/pharn-plan`, `/pharn-regress`, `/pharn-review`, `/pharn-ship`, `/pharn-spec`, `/pharn-test`, `/pharn-verify`.
 - **Dev-apparatus commands — 9** (`.claude/commands/`): `/pharn-dev-build`, `/pharn-dev-eval`, `/pharn-dev-grill`, `/pharn-dev-memory-promote`, `/pharn-dev-plan`, `/pharn-dev-regress`, `/pharn-dev-review`, `/pharn-dev-ship`, `/pharn-dev-verify`.
 - **Hook scripts — 4** (`.claude/hooks/`): `enforce-writes-scope.cjs`, `protect-trusted-paths.cjs`, `require-loop-record.cjs`, `set-writes-scope.cjs`.
-- **Floor checkers — 107** `.mjs` files under `pharn/floor/` (tests excluded).
+- **Floor checkers — 109** `.mjs` files under `pharn/floor/` (tests excluded).
 
 <!-- CURRENT-STATE:END -->
 
