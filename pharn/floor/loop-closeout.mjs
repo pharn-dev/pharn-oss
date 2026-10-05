@@ -1,4 +1,4 @@
-// pharn/floor/loop-closeout.mjs — /pharn-loop's close after the model has written LOOP.md (6.42.0,
+// pharn/floor/loop-closeout.mjs — /pharn-loop's close after the model has written LOOP.md (6.43.0,
 // loop-closeout-script): the deterministic tail of Steps 6b–6c, Step 7's freshness-ledger print and the Final step's
 // two releases, in the order the close part's pinned lines ran them, returning ONE closed outcome by exit code.
 //

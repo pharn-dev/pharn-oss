@@ -1239,7 +1239,7 @@ function pinnedLoopLines() {
     .map((l) => l.trim());
   const decision = lines.filter((l) => /--iter <N>/.test(l));
   assert.equal(decision.length, 1, `expected ONE pinned decision-time call in pharn-loop.md, found ${decision.length}`);
-  // Since 6.42.0 the commit-gate call is made by the loop's closeout (pharn/floor/loop-closeout.mjs), so the line
+  // Since 6.43.0 the commit-gate call is made by the loop's closeout (pharn/floor/loop-closeout.mjs), so the line
   // EXECUTED below is built from the argv that module passes (L45: what runs, never a re-typed copy).
   assert.equal(lines.filter((l) => /--commit-gate/.test(l)).length, 0, "the commit-gate call is the closeout's, never a typed line");
   const commit = ["node pharn/floor/check-loop-fresh.mjs", ...commitGateArgs("'<name>'", "'<base sha>'")].join(" ");

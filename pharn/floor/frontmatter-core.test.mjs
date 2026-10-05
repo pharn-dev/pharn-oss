@@ -32,7 +32,7 @@ const CONSUMERS = [
   "check-plan-spec-agree.mjs",
   "check-ship-briefing.mjs",
   "render-ship-briefing.mjs",
-  "loop-closeout.mjs", // 6.42.0: reads LOOP.md's envelope and SPEC.md's state
+  "loop-closeout.mjs", // 6.43.0: reads LOOP.md's envelope and SPEC.md's state
 ];
 
 // ── stripBom ──────────────────────────────────────────────────────────────────────────────────────

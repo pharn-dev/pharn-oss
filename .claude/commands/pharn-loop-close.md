@@ -275,7 +275,7 @@ last three feeds `check-loop.mjs`'s inputs.
   `check-loop.mjs` live. **Bounded:** it proves the decision is **re-derivable**, never that the reports are honest —
   with the freshness check, the forgery narrows to a self-consistent fabricated stamp set, and it does not close it. A
   **blocked** stop is exempt by construction.
-- **Tested code over floor verdicts (6.42.0):** the commit — `pharn/floor/loop-closeout.mjs` commits only when the
+- **Tested code over floor verdicts (6.43.0):** the commit — `pharn/floor/loop-closeout.mjs` commits only when the
   record's `decision` is the green token of its `mode` (enum membership), `check-loop-decision.mjs` re-derives it
   GREEN and the commit-gate freshness check exits 0; it stages the list its builder computes, runs the steps in Step
   6's order, undoes a failed add or commit, and carries no push, merge or `--no-verify` argument (a scan of its source

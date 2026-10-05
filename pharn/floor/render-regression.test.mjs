@@ -257,7 +257,7 @@ test("★ ENUMERATION (G9) — every site that must know REGRESSION.md names it"
     ["pharn/floor/check-regress.mjs", /PIPELINE_ARTIFACTS[\s\S]*?"REGRESSION\.md"[\s\S]*?\];/],
     ["pharn/floor/reconcile-ignore.json", /"names":[\s\S]*?"REGRESSION\.md"/],
     ["pharn/floor/worktree-fingerprint.mjs", /EXCLUDED_ARTIFACTS[\s\S]*?"REGRESSION\.md"[\s\S]*?\]\);/],
-    ["pharn/floor/loop-closeout.mjs", /STAGE_ARTIFACTS[\s\S]*?"REGRESSION\.md"[\s\S]*?\]\);/], // Step 6c's staging list, in the loop's closeout (6.42.0)
+    ["pharn/floor/loop-closeout.mjs", /STAGE_ARTIFACTS[\s\S]*?"REGRESSION\.md"[\s\S]*?\]\);/], // Step 6c's staging list, in the loop's closeout (6.43.0)
     [".prettierignore", /^pharn\/features\/\*\/REGRESSION\.md$/m],
     [".markdownlint-cli2.jsonc", /"pharn\/features\/\*\/REGRESSION\.md"/],
   ];

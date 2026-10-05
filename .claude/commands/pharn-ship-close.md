@@ -351,7 +351,7 @@ routed build's advisory `done gate:pass`. `/pharn-ship` adds exactly one non-gat
 - **Advisory:** running the stages in order; preserving the two human gates (by construction, backstopped by
   `/pharn-plan`'s deterministic approved-input gate); emitting `cost.json` and `RUN-REPORT.md` at every exit (Step
   3a's closeout line — its position before Step 3b is a property of these bytes, not a floor op; the order of its
-  items is tested code, `pharn/floor/ship-closeout.mjs`, 6.42.0); reading a verify
+  items is tested code, `pharn/floor/ship-closeout.mjs`, 6.43.0); reading a verify
   verdict THIS run produced (the regress half is the follow-up `ship-regress-exit-binding`); that every `<name>`
   typed here, Step 2d's displayed block included, is the value `pharn/floor/feature-name.mjs` printed at `/pharn-spec`
   Step 0 (the check itself is floor; follow-up `ship-slug-shape` is closed by it), that the human runs the displayed

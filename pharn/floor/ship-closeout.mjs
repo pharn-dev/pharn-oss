@@ -1,4 +1,4 @@
-// pharn/floor/ship-closeout.mjs — /pharn-ship's Step 3a as ONE line (6.42.0, loop-closeout-script): the run-stop
+// pharn/floor/ship-closeout.mjs — /pharn-ship's Step 3a as ONE line (6.43.0, loop-closeout-script): the run-stop
 // marker, the write-guard run marker's close, the base SHA, the cost ledger, its check and the run report, in the
 // order the six pinned lines ran them.
 //

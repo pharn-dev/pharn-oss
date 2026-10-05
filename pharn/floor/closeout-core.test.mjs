@@ -1,4 +1,4 @@
-// pharn/floor/closeout-core.test.mjs — the shared half of the two closeouts (6.42.0, loop-closeout-script).
+// pharn/floor/closeout-core.test.mjs — the shared half of the two closeouts (6.43.0, loop-closeout-script).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";

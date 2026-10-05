@@ -1,4 +1,4 @@
-// pharn/floor/loop-closeout.test.mjs — behaviour pins for /pharn-loop's closeout (6.42.0, loop-closeout-script).
+// pharn/floor/loop-closeout.test.mjs — behaviour pins for /pharn-loop's closeout (6.43.0, loop-closeout-script).
 //
 // Two kinds of test. (1) STUBBED children, REAL git: `closeLoop` takes the step runner as a parameter, so every
 // outcome class is driven by recorded child exits while the branch, staging, commit and undo run against a real

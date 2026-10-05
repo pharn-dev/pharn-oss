@@ -593,7 +593,7 @@ const GIT_SPAWNS = {
   "render-review-assignments.mjs": ["merge-base", "rev-parse", "diff"],
   "render-run-report.mjs": [null],
   "render-ship-briefing.mjs": ["rev-parse"],
-  "loop-closeout.mjs": [null], // 6.42.0: one argv-vector helper (gitRun), with a maxBuffer
+  "loop-closeout.mjs": [null], // 6.43.0: one argv-vector helper (gitRun), with a maxBuffer
   "run-gates.mjs": ["rev-parse"],
   "stage-runtime.mjs": [null],
 };
