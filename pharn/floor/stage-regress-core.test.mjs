@@ -40,10 +40,10 @@ test("REGRESS_PATHS: every entry sits under the state root, and loop-fresh-core.
   assert.equal(REGRESS_PATHS.baseGates, ".pharn/pharn-regress/base-gates");
   assert.equal(REGRESS_PATHS.stageJson, ".pharn/pharn-regress/stage.json");
   assert.equal(REGRESS_PATHS.scopeJson, ".pharn/pharn-regress/scope.json");
-  assert.equal(REGRESS_PATHS.headInstall, ".pharn/pharn-regress/head-install.json"); // 6.41.0
+  assert.equal(REGRESS_PATHS.headInstall, ".pharn/pharn-regress/head-install.json"); // 6.42.0
 });
 
-test("LOCKFILE_FAMILIES (6.41.0): the one owner of the names per family — the four INSTALL_RULE families, in order", () => {
+test("LOCKFILE_FAMILIES (6.42.0): the one owner of the names per family — the four INSTALL_RULE families, in order", () => {
   assert.deepEqual(LOCKFILE_FAMILIES, {
     npm: ["package-lock.json", "npm-shrinkwrap.json"],
     pnpm: ["pnpm-lock.yaml"],

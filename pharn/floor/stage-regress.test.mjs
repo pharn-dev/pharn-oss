@@ -1258,7 +1258,7 @@ test("★ CLOSURE discriminates — an injected variant spelling FAILS the scan"
 });
 
 test("every REGISTERED regress reason_code is reachable — the registry and the script agree on the vocabulary size", () => {
-  assert.equal(REGISTRY.regress.refused.length, 5); // head-install-drift since 6.41.0
+  assert.equal(REGISTRY.regress.refused.length, 5); // head-install-drift since 6.42.0
   assert.equal(Object.keys(REGISTRY.regress.question).length, 4);
   assert.equal(REGISTRY.regress.unusable.length, 9);
 });
@@ -1806,7 +1806,7 @@ test("★ EQUIVALENCE — fresh BASE evidence and reused BASE evidence for one r
     const withoutBlock = { ...b.report };
     delete withoutBlock.base_evidence;
     delete withoutBlock.pre_run_snapshot; // 6.37.0's additive block
-    delete withoutBlock.head_install; // 6.41.0's additive block
+    delete withoutBlock.head_install; // 6.42.0's additive block
     assert.equal(
       `${JSON.stringify(withoutBlock, null, 2)}\n`,
       rederived.stdout,
@@ -2519,7 +2519,7 @@ test("PRE-RUN — the two recorded cases pass under an open run with a snapshot,
     assert.deepEqual(
       Object.keys(report).slice(-3),
       ["base_evidence", "pre_run_snapshot", "head_install"],
-      "the three additive blocks, last (head_install since 6.41.0)"
+      "the three additive blocks, last (head_install since 6.42.0)"
     );
     const scope = JSON.parse(readFileSync(join(dir, REGRESS_PATHS.scopeJson), "utf8"));
     assert.deepEqual(scope.pre_run_snapshot, expected);
@@ -2632,7 +2632,7 @@ test("PRE-RUN — the RE-RUN bound, pinned: an escape refused in one run is pre-
   }
 });
 
-// ── 6.41.0: THE HEAD INSTALL CHECK (regress-head-install-drift) ─────────────────────────────────────────────────────
+// ── 6.42.0: THE HEAD INSTALL CHECK (regress-head-install-drift) ─────────────────────────────────────────────────────
 // The fixtures git-ignore node_modules/ (G5: an un-ignored node_modules would be refused `scope-escaped` first, and a
 // "refuses before any gate" test would pass for the wrong reason), commit an npm lockfile, and plant npm's record.
 const npmLock = (version, flags = {}) =>
@@ -2660,7 +2660,7 @@ function installRepo(installed, flags = {}) {
   return fx;
 }
 
-test("6.41.0 — a drifted HEAD install is refused head-install-drift BEFORE any gate, with --gates too (G6); the control reaches done", () => {
+test("6.42.0 — a drifted HEAD install is refused head-install-drift BEFORE any gate, with --gates too (G6); the control reaches done", () => {
   const { dir, base } = installRepo("1.0.0");
   try {
     for (const extra of [[], ["--gates", "node --test::test"]]) {
@@ -2695,7 +2695,7 @@ test("6.41.0 — a drifted HEAD install is refused head-install-drift BEFORE any
   }
 });
 
-test("6.41.0 — a lockfile listing packages with no node_modules is refused; an absent dev-only package is not (GATE 1)", () => {
+test("6.42.0 — a lockfile listing packages with no node_modules is refused; an absent dev-only package is not (GATE 1)", () => {
   const { dir, base } = installRepo(null);
   try {
     const r = cli(dir, freshArgs(base));
@@ -2721,7 +2721,7 @@ test("6.41.0 — a lockfile listing packages with no node_modules is refused; an
   }
 });
 
-test("6.41.0 — a project with no lockfile is not checked, proceeds exactly as before, and the report says so", () => {
+test("6.42.0 — a project with no lockfile is not checked, proceeds exactly as before, and the report says so", () => {
   const { dir, base } = repo();
   try {
     writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport function id(x) { return x; }\n");

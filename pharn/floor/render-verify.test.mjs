@@ -103,7 +103,7 @@ test("renderDone: a verdict outside the closed set claims nothing", () => {
 
 test("renderRefused: every registered verify refusal renders its code, 'feature NOT verified', and the detail fenced", () => {
   const codes = REGISTRY.verify.refused;
-  assert.equal(codes.length, 4, "non-vacuity: the refused vocabulary is counted (head-install-drift since 6.41.0)");
+  assert.equal(codes.length, 4, "non-vacuity: the refused vocabulary is counted (head-install-drift since 6.42.0)");
   for (const reasonCode of codes) {
     const md = renderRefused({ feature: "demo", reasonCode, detail: `synthetic detail for ${reasonCode}` });
     assert.ok(md.includes(`refused: \`${reasonCode}\``));
@@ -469,8 +469,8 @@ test("6.36.0 — an exclusion id outside the ALLOWLIST and an unknown source are
   );
 });
 
-// ── 6.41.0: the HEAD install check (regress-head-install-drift) ────────────────────────────────────────────────────
-test("6.41.0 — the HEAD install line renders from the report's head_install, between the gates and completeness; no key, no line", () => {
+// ── 6.42.0: the HEAD install check (regress-head-install-drift) ────────────────────────────────────────────────────
+test("6.42.0 — the HEAD install line renders from the report's head_install, between the gates and completeness; no key, no line", () => {
   const block = {
     state: "not-checked",
     why: "no-hidden-lockfile",
@@ -485,5 +485,5 @@ test("6.41.0 — the HEAD install line renders from the report's head_install, b
   assert.ok(at > lines.findIndex((l) => l.startsWith("## Gates")), "after the gates");
   assert.ok(at < lines.findIndex((l) => l.startsWith("## Completeness")), "before completeness");
   assert.match(renderDone(report({ head_install: null })), /^HEAD install: not recorded/m);
-  assert.doesNotMatch(renderDone(report()), /HEAD install/, "a pre-6.41.0 report renders as before");
+  assert.doesNotMatch(renderDone(report()), /HEAD install/, "a pre-6.42.0 report renders as before");
 });

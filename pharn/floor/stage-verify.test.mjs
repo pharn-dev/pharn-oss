@@ -62,7 +62,14 @@ delete CLEAN_ENV.NODE_TEST_CONTEXT;
  *  `pharn/floor/<name>` paths inside gate-run-core.mjs and so are not reached by the regex. */
 const FLOOR_MODULES = (() => {
   const seen = new Set();
-  const queue = ["stage-verify.mjs", "stage-regress.mjs", "check-bash-reconcile.mjs", "check-build-complete.mjs", "check-structural.mjs"];
+  const queue = [
+    "stage-verify.mjs",
+    "stage-regress.mjs",
+    "check-bash-reconcile.mjs",
+    "check-build-complete.mjs",
+    "check-structural.mjs",
+    "check-instruction-files.mjs",
+  ];
   while (queue.length) {
     const m = queue.shift();
     if (seen.has(m)) continue;
@@ -252,7 +259,7 @@ test("★ WIRING — pharn-verify.md's pinned fresh line, executed verbatim, rea
     assert.deepEqual(
       Object.keys(report),
       [...Object.keys(live), "completeness", "verifiers", "gate_reuse", "head_install"],
-      "the checker's keys, in order, then the four blocks (head_install since 6.41.0)"
+      "the checker's keys, in order, then the four blocks (head_install since 6.42.0)"
     );
     for (const k of Object.keys(live)) assert.deepEqual(report[k], live[k], `field ${k} is not the checker's own output`);
     // F — the stamp's final fingerprint is the live tree's, after the render wrote both artifacts.
@@ -296,7 +303,7 @@ test("★ WIRING 6.36.0 — the pinned line over a project that EXCLUDES a red g
     assert.equal(r.code, 0, r.raw);
     const report = readReport(dir);
     assert.equal(report.verdict, "PASS", JSON.stringify(report));
-    assert.deepEqual(Object.keys(report.gates).sort(), ["reconcile", "test"]);
+    assert.deepEqual(Object.keys(report.gates).sort(), ["instruction-growth", "reconcile", "test"]);
     assert.deepEqual(report.gate_run.excluded, { declared_in: "pharn.config.json#gates.exclude", ids: ["typecheck"] });
     const stamp = JSON.parse(readFileSync(join(dir, STAMP), "utf8"));
     assert.deepEqual(validateStamp(stamp, { stage: "verify", feature: FEATURE, side: null }), { ok: true });
@@ -358,6 +365,53 @@ test("verdict FAIL — a red project gate is named; done is still exit 0 (the ve
     assert.deepEqual(report.failing_gates, ["lint"]);
     assert.equal(r.doc.verdict, "FAIL");
     assert.match(readFileSync(join(dir, RENDER), "utf8"), /VERIFY FAILS/);
+  });
+});
+
+// ── 6.38.0 — the injected instruction-growth gate, through the real script (the plan's acceptance) ──────────────────
+const GROWTH_FILES = [
+  "- `src/index.js` — the feature",
+  "- `src/index.test.js` — its test",
+  "- `CLAUDE.md` — a convention",
+  "- `pharn.config.json` — the config",
+];
+const CLAUDE_BASE = "# Project\n\n- use node --test\n";
+
+test("6.38.0 ACCEPTANCE — a 5 KB section appended to CLAUDE.md fails verify, naming `instruction-growth` alone", () => {
+  withFixture({ files: GROWTH_FILES, committed: { "CLAUDE.md": CLAUDE_BASE } }, ({ dir }) => {
+    writeFileSync(join(dir, "CLAUDE.md"), `${CLAUDE_BASE}\n## Feature X narrative\n\n${"n".repeat(5 * 1024)}\n`);
+    const r = runCli(dir, fresh());
+    assert.equal(r.code, 0, r.raw);
+    const report = readReport(dir);
+    assert.equal(report.verdict, "FAIL");
+    assert.deepEqual(report.failing_gates, ["instruction-growth"], "declared in the plan, so reconcile stays green");
+    const stamp = JSON.parse(readFileSync(join(dir, STAMP), "utf8"));
+    assert.deepEqual(
+      stamp.runs.slice(-2).map((x) => x.id),
+      ["instruction-growth", "reconcile"],
+      "injected immediately before reconcile, which stays last"
+    );
+  });
+});
+
+test("6.38.0 ACCEPTANCE — a one-line convention edit to CLAUDE.md passes verify (the control)", () => {
+  withFixture({ files: GROWTH_FILES.slice(0, 3), committed: { "CLAUDE.md": CLAUDE_BASE } }, ({ dir }) => {
+    writeFileSync(join(dir, "CLAUDE.md"), `${CLAUDE_BASE}- prefer pnpm over npm\n`);
+    const r = runCli(dir, fresh());
+    assert.equal(r.code, 0, r.raw);
+    assert.equal(readReport(dir).verdict, "PASS", JSON.stringify(readReport(dir)));
+  });
+});
+
+test("6.38.0 ACCEPTANCE ★ ANTI-GAMING — the 5 KB feature that also raises the threshold in its own tree still fails verify", () => {
+  withFixture({ files: GROWTH_FILES, committed: { "CLAUDE.md": CLAUDE_BASE } }, ({ dir }) => {
+    writeFileSync(join(dir, "CLAUDE.md"), `${CLAUDE_BASE}\n## Feature X narrative\n\n${"n".repeat(5 * 1024)}\n`);
+    writeFileSync(join(dir, "pharn.config.json"), JSON.stringify({ budget: { instructionGrowthBytes: 1000000 } }) + "\n");
+    const r = runCli(dir, fresh());
+    assert.equal(r.code, 0, r.raw);
+    const report = readReport(dir);
+    assert.equal(report.verdict, "FAIL");
+    assert.deepEqual(report.failing_gates, ["instruction-growth"]);
   });
 });
 
@@ -535,7 +589,7 @@ test("refused missing-artifact / chain-red / plan-files-unparseable — VERIFY.m
   withFixture({ files: null, anchor: false }, ({ dir }) => assertRefused(dir, runCli(dir, fresh()), "plan-files-unparseable"));
 });
 
-// ── 6.41.0: THE HEAD INSTALL CHECK (regress-head-install-drift) — the same function regress runs, before any gate ──
+// ── 6.42.0: THE HEAD INSTALL CHECK (regress-head-install-drift) — the same function regress runs, before any gate ──
 const npmPackages = (version) => ({
   "": { name: "fx" },
   "node_modules/dep": { version, resolved: `file:dep-${version}.tgz`, integrity: `sha512-${version}` },
@@ -552,7 +606,7 @@ function plantRecord(dir, version) {
   );
 }
 
-test("6.41.0 — a drifted install, or none at all, is refused head-install-drift before any gate, with --gates too; the control is done/PASS", () => {
+test("6.42.0 — a drifted install, or none at all, is refused head-install-drift before any gate, with --gates too; the control is done/PASS", () => {
   withFixture({ committed: NPM_COMMITTED }, ({ dir }) => {
     plantRecord(dir, "1.0.0");
     for (const extra of [[], ["--gates", "node --test src/::test"]]) {
@@ -584,7 +638,7 @@ test("6.41.0 — a drifted install, or none at all, is refused head-install-drif
   });
 });
 
-test("6.41.0 — a project with no lockfile is not checked: the gates run as before and the report says so", () => {
+test("6.42.0 — a project with no lockfile is not checked: the gates run as before and the report says so", () => {
   withFixture({}, ({ dir }) => {
     const r = runCli(dir, fresh());
     assert.equal(r.code, 0, r.raw);
@@ -960,7 +1014,7 @@ test("★ budget — --budget-ms 1 advances exactly ONE slow step per invocation
     const unbudgeted = runCli(dir, fresh(gates));
     assert.equal(unbudgeted.code, 0, unbudgeted.raw);
     const want = readReport(dir);
-    assert.deepEqual(Object.keys(want.gates).sort(), ["a", "b", "c", "reconcile"], "none of the gates is skipped");
+    assert.deepEqual(Object.keys(want.gates).sort(), ["a", "b", "c", "instruction-growth", "reconcile"], "none of the gates is skipped");
 
     let r = runCli(dir, fresh([...gates, "--budget-ms", "1"]));
     const ran = [];
@@ -971,7 +1025,7 @@ test("★ budget — --budget-ms 1 advances exactly ONE slow step per invocation
       r = runCli(dir, ["--resume", "--budget-ms", "1"]);
     }
     assert.equal(r.code, 0, r.raw);
-    assert.deepEqual(ran, [1, 2, 3], "each invocation advanced exactly one slow step; the fourth ran reconcile and finished");
+    assert.deepEqual(ran, [1, 2, 3, 4], "each invocation advanced exactly one slow step; the fifth ran reconcile and finished");
     const got = readReport(dir);
     for (const k of ["verdict", "failing_gates", "gates", "ac_gate"]) assert.deepEqual(got[k], want[k], `${k} diverged`);
   });
@@ -1108,7 +1162,7 @@ test("★ CLOSURE — every reason_code literal stage-verify.mjs emits is a regi
   const registered = new Set(allReasonCodes("verify"));
   for (const l of lits) assert.ok(registered.has(l), `stage-verify.mjs emits '${l}', not in the verify registry`);
   assert.deepEqual([...new Set(lits)].sort(), [...registered].sort());
-  assert.equal(REGISTRY.verify.refused.length, 4); // head-install-drift since 6.41.0
+  assert.equal(REGISTRY.verify.refused.length, 4); // head-install-drift since 6.42.0
   assert.equal(Object.keys(REGISTRY.verify.question).length, 1);
   assert.equal(REGISTRY.verify.unusable.length, 8);
   assert.deepEqual(Object.keys(EXIT_CODE).sort(), ["continue", "done", "question", "refused", "unusable"]);

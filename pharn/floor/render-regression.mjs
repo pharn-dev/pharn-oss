@@ -177,7 +177,7 @@ export function renderDone({ feature, base, report, scope, progress }) {
     );
   }
 
-  // 6.41.0 — the HEAD side's install check (install-drift-core.mjs): one line, every value a validated enum or integer.
+  // 6.42.0 — the HEAD side's install check (install-drift-core.mjs): one line, every value a validated enum or integer.
   // Rendered when the caller passes the key (stage-regress.mjs always does; null renders "not recorded").
   if (Object.hasOwn(progress, "headInstall")) out.push(headInstallLine(progress.headInstall), "");
 

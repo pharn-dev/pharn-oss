@@ -78,7 +78,7 @@ test("VERIFY_PATHS: four entries under the stage root; loop-fresh-core.mjs's DEF
     root: ".pharn/pharn-verify",
     gates: ".pharn/pharn-verify/gates",
     stageJson: ".pharn/pharn-verify/stage.json",
-    headInstall: ".pharn/pharn-verify/head-install.json", // 6.41.0
+    headInstall: ".pharn/pharn-verify/head-install.json", // 6.42.0
   });
   assert.equal(DEFAULT_STAMPS.verify, `${VERIFY_PATHS.gates}/stamp.json`);
   const lf = readFileSync(join(HERE, "loop-fresh-core.mjs"), "utf8");
@@ -323,7 +323,7 @@ test("composeReport: the checker's keys in order, values deep-equal, then comple
   assert.deepEqual(r.report.completeness, COMPLETE, "the capture is carried verbatim");
   assert.deepEqual(r.report.verifiers, { registered: 0, findings: [] }, "no note with zero verifiers");
   assert.deepEqual(r.report.gate_reuse, NO_REUSE);
-  assert.deepEqual(r.report.head_install, HEAD_INSTALL, "6.41.0 — carried as given (the caller validated it)");
+  assert.deepEqual(r.report.head_install, HEAD_INSTALL, "6.42.0 — carried as given (the caller validated it)");
   assert.equal(
     composeReport({
       checker: CHECKER,
@@ -381,7 +381,7 @@ test("composeReport (Q2): a checker key named like a merged block is REFUSED, ne
       JSON.stringify(bad)
     );
   }
-  // 6.41.0 — the head-install block is required too: an object (the caller validated it) or null, never omitted.
+  // 6.42.0 — the head-install block is required too: an object (the caller validated it) or null, never omitted.
   for (const bad of [undefined, [], "clean", 0]) {
     assert.equal(
       composeReport({ checker: CHECKER, completeness: COMPLETE, verifiers: V0, gateReuse: NO_REUSE, headInstall: bad }).ok,

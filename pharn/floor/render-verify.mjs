@@ -290,7 +290,7 @@ export function renderDone(report) {
   const out = [title(r.feature), "", PREAMBLE, ""];
   out.push(...verdictSection(r));
   out.push(...gatesSection(r));
-  // 6.41.0 — the install check that ran before the gates (install-drift-core.mjs); a report without the key renders as before.
+  // 6.42.0 — the install check that ran before the gates (install-drift-core.mjs); a report without the key renders as before.
   if (Object.hasOwn(r, "head_install")) out.push(headInstallLine(r.head_install), "");
   out.push(...completenessSection(r));
   out.push(...acSection(r));

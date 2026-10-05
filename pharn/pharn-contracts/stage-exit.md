@@ -148,7 +148,7 @@ Keyed by stage; `regress` and `verify` are its members.
 - **`question`** — `base-unresolved`, `no-gates` (its fixed text names every cause a discovered set can empty into —
   four since 6.36.0, the fourth the project's `gates.exclude`), `install-unresolved`, `tests-unresolved`.
 - **`refused`** — `missing-artifact`, `chain-red`, `plan-files-unparseable`, `scope-escaped`, `head-install-drift`
-  (6.41.0: the HEAD working tree's npm install does not match its lockfile — raised first thing in head-init, before
+  (6.42.0: the HEAD working tree's npm install does not match its lockfile — raised first thing in head-init, before
   any gate; its remedy is `npm ci`; the rule and its bounds are `pharn/floor/install-drift-core.mjs`'s header,
   `regression-report.md` "The additive `head_install` block" says what is reported when it does not refuse).
   - **The `scope-escaped` remedy has a named blind spot (M3, GATE-2 round 2).** The remedy is to declare
@@ -179,7 +179,7 @@ Step 2 table, not restated here):
   template, a gate named with `--gates` is not the discovered `npm run <id>` the AC-test lock pinned
   (`test-infra-changed` / `ac-untested`), so adding the missing script is the better answer there. Options:
   `--gates <value>` (`gates-spec`) or stop.
-- **`refused`** — `missing-artifact`, `chain-red`, `plan-files-unparseable`, `head-install-drift` (6.41.0 — the same
+- **`refused`** — `missing-artifact`, `chain-red`, `plan-files-unparseable`, `head-install-drift` (6.42.0 — the same
   check regress runs, first thing in `init`, before any gate). Each writes `VERIFY.md` naming the refusal and **no**
   `verify-report.json`.
 - **`unusable`** — `usage-error`, `no-feature`, `path-containment`, `git-failed`, `child-crashed`, `child-refused`,
@@ -195,7 +195,7 @@ Step 2 table, not restated here):
 disclosure):** a crashed completeness checker (before, it read `INCOMPLETE`, which `check-loop.mjs` CONTINUEs — a
 rebuild iteration, up to the cap), a runner refusal with a lapse included (before, a fail-closed report
 `check-loop-fresh.mjs` B could route to one re-run), and an unparseable `## Files` (before, the gates ran and the
-verdict read `INCONCLUSIVE`). **New S9 stops as of 6.41.0:** `head-install-drift` from either stage (before, the gates
+verdict read `INCONCLUSIVE`). **New S9 stops as of 6.42.0:** `head-install-drift` from either stage (before, the gates
 ran over the drifted install: regress could report a false regression, verify FAILed, and the loop CONTINUEd into
 iterations no rebuild could fix — including when the build itself edited the lockfile without installing).
 

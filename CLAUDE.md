@@ -811,7 +811,7 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 node pharn/floor/stage-verify.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--gates "<cmd>[::<id>],…"]
 node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 
-# THE HEAD INSTALL CHECK (6.41.0, regress-head-install-drift) — no CLI: pharn/floor/install-drift.mjs (reads the tree)
+# THE HEAD INSTALL CHECK (6.42.0, regress-head-install-drift) — no CLI: pharn/floor/install-drift.mjs (reads the tree)
 # + install-drift-core.mjs (the pure rule; its header IS the spec). First thing in stage-regress.mjs's head-init and
 # stage-verify.mjs's init, before any gate, it compares npm's record of the installed tree (node_modules/.package-lock.json)
 # with the lockfile (npm-shrinkwrap.json first, npm's own order). THE RECORDED FAILURE (P7): a user's 92-min /pharn-loop
@@ -824,7 +824,7 @@ node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 # non-refusing state is the additive, advisory `head_install` block in both reports. LOCKFILE_FAMILIES
 # (stage-regress-core.mjs) is the one owner of the lockfile names, BASE and HEAD alike. BOUND (L43): agreement of two npm
 # records, never "node_modules is right" — a tree changed outside npm, or by `npm install --package-lock-only`
-# (measured), reads clean; every false clean is the pre-6.41.0 behaviour. `readInstallCheck(root)` + `refuses` are
+# (measured), reads clean; every false clean is the pre-6.42.0 behaviour. `readInstallCheck(root)` + `refuses` are
 # exported for the follow-up `entry-preflight-install-drift`. Contracts: regression-report.md / verify-report.md "The
 # additive `head_install` block", stage-exit.md.
 
@@ -856,6 +856,17 @@ node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 # the pinned relative path names no file) is node's own exit 1 with no document; both callers stop on 1.
 # Exit: 0 clean · 1 escaped · 2 inconclusive (closed reason_code, `crashed` included).
 node pharn/floor/check-quick-scope.mjs --feature <name> --base <40-hex>
+
+# THE INSTRUCTION-GROWTH GATE (6.38.0). A user's CLAUDE.md + 14 rules (634,379 B) rode in every stage agent's prefix.
+# `--report` (ADVISORY): the always-loaded set — root CLAUDE.md files, their `@` imports, rules without `paths:` —
+# per-file bytes, a bytes/4 estimate, notes (`globs-not-read`, …). `--growth` (FLOOR over this MODEL of the loader, never
+# the loader itself): bytes ADDED since the base (removals never offset) vs `budget.instructionGrowthBytes` in
+# pharn.config.json AT THE BASE (default 2048). Under-count routes are listed as known-so-far (L67).
+# /pharn-verify injects it before `reconcile` as `instruction-growth` (`--base-rule`: dirty → HEAD, else merge-base
+# origin/main, else INCONCLUSIVE); never reused. Spec/bounds: instruction-files-core.mjs. This repo's dev loop never runs it.
+# Exit: 0 within/reported · 1 over · 2 inconclusive (closed reason_code).
+node pharn/floor/check-instruction-files.mjs --report
+node pharn/floor/check-instruction-files.mjs --growth (--base <ref> | --base-rule)
 
 # THE PRE-RUN SNAPSHOT (6.37.0, regress-pre-run-snapshot) — a path already changed when a /pharn-loop or /pharn-ship run
 # began is not that run's scope escape. THE RECORDED FAILURE (P7): two of three post-6.35.0 /pharn-loop runs in a user's

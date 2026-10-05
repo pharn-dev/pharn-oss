@@ -34,6 +34,8 @@ import {
   parseExtras,
   actualForExpected,
   reconcileEntry,
+  instructionGrowthEntry,
+  INSTRUCTION_GROWTH_ID,
   completenessArgv,
   orderEntries,
   resolveSet,
@@ -279,7 +281,7 @@ test("STYLE_SET ⊂ ALLOWLIST, and RESERVED_IDS is disjoint from ALLOWLIST (ever
 // ---------------------------------------------------------------------------------------------------
 
 test("6.20.0 — the AC gate's failing ids are RESERVED: --gates refuses `ac-delivery` and `ac-evidence` as gate ids", () => {
-  for (const id of ["ac-delivery", "ac-evidence", "reconcile", "completeness"]) {
+  for (const id of ["ac-delivery", "ac-evidence", "reconcile", "completeness", "instruction-growth"]) {
     assert.ok(RESERVED_IDS.includes(id), id);
     const r = parseGatesSpec(`npm test::${id}`);
     assert.equal(r.ok, false, id);
@@ -430,11 +432,18 @@ test("verify ORDER: source ids, then structural sorted, then reconcile LAST", ()
   assert.ok(r.ok);
   assert.deepEqual(
     r.spec.entries.map((e) => e.id),
-    ["test", "lint", `${STRUCTURAL_PREFIX}z/evals/expected/a.json`, `${STRUCTURAL_PREFIX}z/evals/expected/b.json`, "reconcile"]
+    [
+      "test",
+      "lint",
+      `${STRUCTURAL_PREFIX}z/evals/expected/a.json`,
+      `${STRUCTURAL_PREFIX}z/evals/expected/b.json`,
+      "instruction-growth",
+      "reconcile",
+    ]
   );
   assert.deepEqual(
     r.spec.entries.map((e) => e.seq),
-    [0, 1, 2, 3, 4]
+    [0, 1, 2, 3, 4, 5]
   );
 });
 
@@ -493,8 +502,32 @@ test("orderEntries / reconcileEntry / completenessArgv are the fixed argv the co
   const ordered = orderEntries([{ id: "a" }], [{ id: "s:b" }], true);
   assert.deepEqual(
     ordered.map((e) => e.id),
-    ["a", "s:b", "reconcile"]
+    ["a", "s:b", "instruction-growth", "reconcile"]
   );
+  assert.deepEqual(
+    orderEntries([{ id: "a" }], [], false).map((e) => e.id),
+    ["a"],
+    "only verify (withReconcile) gets the injected entries"
+  );
+});
+
+test("6.38.0 — the instruction-growth entry: a fixed argv, reserved, never reused, injected for verify only and before reconcile", () => {
+  assert.equal(INSTRUCTION_GROWTH_ID, "instruction-growth");
+  assert.deepEqual(instructionGrowthEntry(), {
+    id: "instruction-growth",
+    shell: null,
+    argv: ["node", "pharn/floor/check-instruction-files.mjs", "--growth", "--base-rule"],
+    files: [],
+  });
+  assert.ok(RESERVED_IDS.includes(INSTRUCTION_GROWTH_ID));
+  assert.ok(NON_REUSABLE_IDS.includes(INSTRUCTION_GROWTH_ID));
+  for (const stage of ["verify", "regress"]) {
+    const r = resolveSet({ stage, side: stage === "regress" ? "head" : null, feature: "demo", scripts: { test: "x" } });
+    const ids = r.spec.entries.map((e) => e.id);
+    if (stage === "verify") assert.deepEqual(ids.slice(-2), ["instruction-growth", "reconcile"]);
+    else assert.ok(!ids.includes("instruction-growth"), "regress never runs it");
+    assert.ok(!r.spec.required.includes("instruction-growth"), "an injected entry is not a source id");
+  }
 });
 
 // ---------------------------------------------------------------------------------------------------
@@ -658,7 +691,7 @@ test("ABSENT → the resolved gate set is unchanged: every pre-6.16 member resol
   assert.deepEqual(v.spec.required, PRE_E2E_ALLOWLIST);
   assert.deepEqual(
     v.spec.entries.map((e) => e.id),
-    [...PRE_E2E_ALLOWLIST, "reconcile"]
+    [...PRE_E2E_ALLOWLIST, "instruction-growth", "reconcile"]
   );
   const r = resolveSet({ stage: "regress", side: "head", feature: "demo", scripts });
   assert.deepEqual(r.spec.required, PRE_E2E_ALLOWLIST);
@@ -670,7 +703,7 @@ test("PRESENT → each e2e script is discovered at verify, as `npm run <id>`, AF
     assert.ok(v.ok);
     assert.deepEqual(
       v.spec.entries.map((x) => x.id),
-      ["test", "build", e, "reconcile"]
+      ["test", "build", e, "instruction-growth", "reconcile"]
     );
     assert.deepEqual(v.spec.entries.find((x) => x.id === e).argv, ["npm", "run", e]);
   }
@@ -900,7 +933,10 @@ test("reused entry: the constants are the one sanctioned source and target", () 
   assert.deepEqual({ ...REUSE_SOURCE }, { stage: "regress", side: "head" });
   assert.equal(REUSE_TARGET_STAGE, "verify");
   assert.deepEqual([...REUSED_BLOCK_KEYS], ["stage", "side", "seq", "stamp_sha256"]);
-  assert.deepEqual([...NON_REUSABLE_IDS], [...new Set([...Object.values(LEVEL_GATES).flat(), ...STYLE_SET, "reconcile"])].sort());
+  assert.deepEqual(
+    [...NON_REUSABLE_IDS],
+    [...new Set([...Object.values(LEVEL_GATES).flat(), ...STYLE_SET, "reconcile", "instruction-growth"])].sort()
+  );
 });
 
 test("reused entry: a well-formed one validates (the non-vacuity control), and its exit reaches the map", () => {
@@ -1020,7 +1056,7 @@ test("verify: a declared id that is discovered is REMOVED and named; one that is
   assert.deepEqual(r.spec.required, ["test", "build"]);
   assert.deepEqual(
     r.spec.entries.map((e) => e.id),
-    ["test", "build", "reconcile"]
+    ["test", "build", "instruction-growth", "reconcile"]
   );
   assert.deepEqual(r.spec.excluded, { declared_in: EXCLUSION_DECLARED_IN, ids: ["typecheck", "e2e"] });
   const none = resolveSet({ stage: "verify", feature: "demo", scripts, exclude: ["lint"] });

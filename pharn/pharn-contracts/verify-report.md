@@ -84,7 +84,7 @@ them in its command prose.
 | `reason`        | a diagnostic sentence, present only on `INCONCLUSIVE`                                                                                                                                    | `check-verify.mjs`                                                                                     | ADVISORY — no floor op reads it            |
 | `ac_gate`       | the AC gate's block, OPTIONAL — present when `check-verify.mjs` ran with `--ac-gate` (below)                                                                                             | `check-verify.mjs` (`ac-gate-core.mjs`)                                                                | compared by `check-loop-fresh.mjs` check E |
 | `gate_reuse`    | `{ reused: [{ id, stage, side, seq }] }`, OPTIONAL — since 6.34.0 `stage-verify.mjs` always writes it (below)                                                                            | `stage-verify.mjs`, from its own verify stamp                                                          | ADVISORY — no floor op reads it            |
-| `head_install`  | `{ state, why, family, lockfile, counts }` or `null`, OPTIONAL — since 6.41.0 `stage-verify.mjs` always writes it (below)                                                                | `stage-verify.mjs`, from `install-drift.mjs`                                                           | ADVISORY — no floor op reads it            |
+| `head_install`  | `{ state, why, family, lockfile, counts }` or `null`, OPTIONAL — since 6.42.0 `stage-verify.mjs` always writes it (below)                                                                | `stage-verify.mjs`, from `install-drift.mjs`                                                           | ADVISORY — no floor op reads it            |
 
 **Trust (P2).** Every field except one carries deterministic-tool output — gate-id strings, integer exit
 codes, path strings: the enum-gated / floor-verifiable class. The exceptions are **free text and inherit
@@ -123,7 +123,10 @@ costs a reader.
   membership** of the gate id `reconcile` — a reconcile red is never retried, because a retry re-anchors
   the reconciliation baseline and would erase the detected escape — and, since 6.20.0, of `ac-evidence` (the AC
   evidence changed or is missing; a rebuild cannot restore it), reporting which fired in its closed
-  `terminal_cause`; `ac-delivery` is an ordinary, retried red. It refuses a `FAIL` report whose
+  `terminal_cause`; `ac-delivery` is an ordinary, retried red, and so is `instruction-growth` (6.38.0 — the gate the
+  runner injects for verify before `reconcile`: the project's always-loaded instruction files gained more bytes since
+  the base than the base commit's threshold allows; `pharn/floor/instruction-files-core.mjs`'s header is its spec). It
+  refuses a `FAIL` report whose
   `failing_gates` is not an array of strings (`INCONCLUSIVE`, exit 2). Gate ids are deterministic-tool
   output, so no free-text field is read. The three-checker half is a measurement, not a reading of their
   source: see `## How the "only`verdict`" claim was verified`.
@@ -318,7 +321,7 @@ restated, P4):
 Inside one `/pharn-loop` or `/pharn-ship` run, `/pharn-verify` may record a gate's result from a COMPLETED execution
 of that run's `/pharn-regress` HEAD side instead of spawning the gate again — only when the execution identity
 (command, files, cwd, timeout, git HEAD, the PHARN-added environment variable and the tree fingerprint) is equal, and
-never for an AC level gate, a style gate or `reconcile` (`pharn/floor/gate-reuse-core.mjs`, whose header is the rule;
+never for an AC level gate, a style gate, `instruction-growth` or `reconcile` (`pharn/floor/gate-reuse-core.mjs`, whose header is the rule;
 the stamp shape is `gate-run-record.md`, "Reused entries" — cited, not restated, P4). The report names every such
 result:
 
@@ -342,7 +345,7 @@ result:
   and verify gives up its independent second sample of a flaky gate for the ids it reuses.
 - **Trust (P2):** a gate id is attacker-nameable (a `--gates` token, a `structural:` path), so renderers fence it.
 
-## The additive `head_install` block (6.41.0)
+## The additive `head_install` block (6.42.0)
 
 First thing in its `init` phase, before any gate, `/pharn-verify` runs the same HEAD install check `/pharn-regress`
 runs at head-init (`pharn/floor/install-drift.mjs`, one function; the rule, its states and its bounds are
@@ -360,4 +363,4 @@ is their first gate run.
   (`.pharn/pharn-verify/head-install.json`) was absent or malformed at the verdict. `VERIFY.md` renders one line for it
   between the gates and completeness.
 - **ADDITIVE and ADVISORY.** `check-verify.mjs` is unchanged and no verdict, stop or freshness check reads the block; a
-  report written before 6.41.0 has no such key.
+  report written before 6.42.0 has no such key.

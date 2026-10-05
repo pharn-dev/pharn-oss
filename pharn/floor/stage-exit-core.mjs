@@ -292,7 +292,7 @@ export const REGISTRY = Object.freeze({
         ]),
       }),
     }),
-    // `head-install-drift` (6.41.0): the HEAD working tree's npm install does not match its lockfile (install-drift-core.mjs).
+    // `head-install-drift` (6.42.0): the HEAD working tree's npm install does not match its lockfile (install-drift-core.mjs).
     refused: Object.freeze(["missing-artifact", "chain-red", "plan-files-unparseable", "scope-escaped", "head-install-drift"]),
     unusable: Object.freeze([
       "usage-error",

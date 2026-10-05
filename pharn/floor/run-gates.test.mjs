@@ -106,7 +106,7 @@ test("init resolves the set, prints the ordered ids, and writes an in-progress r
     (dir) => {
       const r = cli(dir, initArgs());
       assert.equal(r.code, 0);
-      assert.deepEqual(r.json.ids, ["test", "lint", "reconcile"]);
+      assert.deepEqual(r.json.ids, ["test", "lint", "instruction-growth", "reconcile"]);
       assert.equal(r.json.source, "discover");
       assert.ok(existsSync(join(dir, OUT, "state.json")));
       assert.ok(!existsSync(join(dir, OUT, "stamp.json")), "init must not write a stamp");
@@ -153,7 +153,7 @@ test("6.36.0 — a declared, discovered gate is NOT run; init prints it and the 
       declare(dir, { exclude: ["typecheck"] });
       const r = cli(dir, initArgs());
       assert.equal(r.code, 0, r.raw);
-      assert.deepEqual(r.json.ids, ["test", "reconcile"]);
+      assert.deepEqual(r.json.ids, ["test", "instruction-growth", "reconcile"]);
       assert.deepEqual(r.json.excluded, ["typecheck"]);
       drain(dir);
       const s = stamp(dir);
@@ -161,7 +161,7 @@ test("6.36.0 — a declared, discovered gate is NOT run; init prints it and the 
       assert.deepEqual(s.required, ["test"]);
       assert.deepEqual(
         s.runs.map((x) => x.id),
-        ["test", "reconcile"]
+        ["test", "instruction-growth", "reconcile"]
       );
     },
     { scripts: { test: "true", typecheck: "exit 1" } }
@@ -254,7 +254,7 @@ test("6.36.0 — the declaration is read BESIDE the --discover manifest, never f
       const r = cli(dir, ["init", "--stage", "verify", "--feature", FEATURE, "--out", OUT, "--discover", "sub/package.json"]);
       assert.equal(r.code, 0, r.raw);
       assert.deepEqual(r.json.excluded, ["typecheck"]);
-      assert.deepEqual(r.json.ids, ["test", "reconcile"]);
+      assert.deepEqual(r.json.ids, ["test", "instruction-growth", "reconcile"]);
     },
     { scripts: { test: "true" } }
   );
@@ -450,7 +450,7 @@ test("run --next walks the entries IN SPEC ORDER and finalizes on the last one",
       const calls = drain(dir);
       assert.deepEqual(
         calls.filter((c) => c.json && c.json.ran).map((c) => c.json.ran),
-        ["test", "lint", "reconcile"]
+        ["test", "lint", "instruction-growth", "reconcile"]
       );
       const last = calls[calls.length - 2];
       assert.equal(last.json.finalized, true);
@@ -884,7 +884,7 @@ const PATH_OPERANDS = [
       const r = cli(dir, [...initArgs(), "--cwd", SUB]);
       assert.equal(r.code, 0, r.raw);
       // The invoking directory's manifest carries `test`; the subdirectory's carries only `lint`.
-      assert.deepEqual(r.json.ids, ["test", "reconcile"], "--discover must read the invoking directory's manifest");
+      assert.deepEqual(r.json.ids, ["test", "instruction-growth", "reconcile"], "--discover must read the invoking directory's manifest");
     },
   },
   {
@@ -1329,7 +1329,11 @@ test("E2E END TO END — `test` and `test:e2e` each write their own report; each
         JSON.stringify({ testResults: { test: "vitest-json", "test:e2e": "playwright-json" } })
       );
       const init = cli(dir, initArgs());
-      assert.deepEqual(init.json.ids, ["test", "build", "test:e2e", "reconcile"], "the e2e gate must run AFTER build");
+      assert.deepEqual(
+        init.json.ids,
+        ["test", "build", "test:e2e", "instruction-growth", "reconcile"],
+        "the e2e gate must run AFTER build"
+      );
       drainWith(dir, { GATE_EXIT: "1" }); // both captured runs exited 1
       const s = stamp(dir);
       const byId = Object.fromEntries(s.runs.map((r) => [r.id, r]));
@@ -1367,10 +1371,10 @@ test("E2E VERDICT — a red e2e gate fails verify exactly like a red test gate (
           cwd: dir,
           encoding: "utf8",
         });
-        // The fixture repo has no pharn/floor/, so the injected `reconcile` gate is red in EVERY case, which makes
-        // the overall verdict FAIL regardless. The claim under test is over the PROJECT gates, and the all-green
-        // control below proves the filtered list is not empty for free.
-        const projectRed = JSON.parse(r.stdout).failing_gates.filter((g) => g !== "reconcile");
+        // The fixture repo has no pharn/floor/, so the two injected gates (`instruction-growth`, `reconcile`) are red
+        // in EVERY case, which makes the overall verdict FAIL regardless. The claim under test is over the PROJECT
+        // gates, and the all-green control below proves the filtered list is not empty for free.
+        const projectRed = JSON.parse(r.stdout).failing_gates.filter((g) => g !== "reconcile" && g !== "instruction-growth");
         assert.deepEqual(projectRed, redId === null ? [] : [redId]);
       },
       { scripts }
