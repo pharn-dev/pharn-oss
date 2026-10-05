@@ -1184,6 +1184,55 @@ test("gateRunBlock copies `excluded` ONLY when the stamp carries it — every re
   assert.deepEqual(s.excluded.ids, ["typecheck", "e2e"], "a copy, never the stamp's own array");
 });
 
+// ── ENTRY (6.42.0, loop-entry-preflight) ─────────────────────────────────────────────────────────────────────────
+test("✧ STAGES is exactly verify, regress, ac-test, build, entry", () => {
+  assert.deepEqual([...STAGES], ["verify", "regress", "ac-test", "build", "entry"]);
+});
+
+test("✧ entry: verify's DISCOVERED set (e2e kept, the exclusion applied), STYLE_SET first, no reconcile", () => {
+  const verify = resolveSet({ stage: "verify", feature: "demo", scripts: ALL_SCRIPTS, exclude: ["typecheck"] });
+  const entry = resolveSet({ stage: "entry", feature: "demo", scripts: ALL_SCRIPTS, exclude: ["typecheck"] });
+  assert.equal(entry.ok, true, entry.reason);
+  const verifyIds = verify.spec.required;
+  const style = verifyIds.filter((id) => STYLE_SET.includes(id));
+  const rest = verifyIds.filter((id) => !STYLE_SET.includes(id));
+  assert.deepEqual(entry.spec.required, [...style, ...rest], "the same members, style first, each part in its own order");
+  assert.deepEqual(entry.spec.required.slice(0, STYLE_SET.length), [...STYLE_SET]);
+  assert.ok(entry.spec.required.includes("e2e") && entry.spec.required.includes("test:e2e"), "e2e is kept, as at verify");
+  assert.ok(!entry.spec.entries.some((e) => e.id === "reconcile"), "no reconcile at entry");
+  assert.deepEqual(entry.spec.excluded, { declared_in: EXCLUSION_DECLARED_IN, ids: ["typecheck"] });
+  assert.deepEqual(
+    entry.spec.entries.map((e) => e.seq),
+    entry.spec.entries.map((_, i) => i),
+    "seq follows the reordered list"
+  );
+  const empty = resolveSet({ stage: "entry", feature: "demo", scripts: {} });
+  assert.equal(empty.reason_code, "empty-source-set", "an empty set is refused, never a vacuous run (L34)");
+  const onlyStyleless = resolveSet({ stage: "entry", feature: "demo", scripts: { test: "x", build: "y" } });
+  assert.deepEqual(onlyStyleless.spec.required, ["test", "build"], "no style gate: the order is ALLOWLIST order");
+});
+
+test("✧ entry: an entry stamp is never another stage's evidence — validateStamp refuses it under every other stage, and findReusable refuses it as a source", async () => {
+  const { findReusable } = await import("./gate-reuse-core.mjs");
+  const s = goodStamp({
+    stage: "entry",
+    required: ["test"],
+    fingerprint: { algo: "worktree-fingerprint/2+sha256+entry-feature-dir", init: "a".repeat(64), final: "a".repeat(64) },
+  });
+  s.runs = s.runs.filter((r) => r.id !== "reconcile");
+  assert.equal(validateStamp(s, { stage: "entry", feature: "demo" }).ok, true);
+  for (const stage of ["verify", "regress", "ac-test", "build"]) {
+    assert.equal(validateStamp(s, { stage }).reason_code, "stage-mismatch", stage);
+  }
+  const r = findReusable({
+    source: s,
+    feature: "demo",
+    entry: { id: "test", shell: null, argv: ["npm", "run", "test"], files: [] },
+    liveIdentity: "a".repeat(64),
+  });
+  assert.deepEqual(r, { hit: false, miss: "source-invalid" });
+});
+
 // ── build (6.39.0, build-gate-bounded) — /pharn-build's own gate: discovered, minus e2e, no reconcile; targeted = `test` ─
 
 import { MAX_BUILD_TARGETS } from "./gate-run-core.mjs";

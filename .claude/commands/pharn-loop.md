@@ -42,6 +42,7 @@ reads:
     "pharn/floor/check-quick-scope.mjs",
     "pharn/floor/quick-scope-core.mjs",
     "pharn/floor/pre-run-snapshot.mjs",
+    "pharn/floor/entry-gates.mjs",
     "pharn/floor/feature-name.mjs",
     "pharn/pharn-contracts/gate-run-record.md",
     "pharn/floor/validate.mjs",
@@ -94,8 +95,10 @@ Load the trusted prefix and obey it:
 
 ## Step 1 — Entry
 
-`/pharn-loop [--max-iter N] <increment description>`. `--max-iter N` sets the cap `M` (a positive integer;
-absent ⇒ `M = 3`).
+`/pharn-loop [--allow-red-entry] [--max-iter N] <increment description>`. `--max-iter N` sets the cap `M` (a positive
+integer; absent ⇒ `M = 3`). `--allow-red-entry` (6.42.0) says the feature's purpose is to fix a gate already red:
+Step 4's entry read then goes on past a red gate instead of stopping at S14. It counts only among the leading flags
+(after `--quick`), never inside the description — ADVISORY, an instruction to you, like `--quick`'s rule.
 `/pharn-loop --quick [--max-iter N] <increment description>` (6.28.0) is the quick form — load its quick part
 before Step 1a, as `## Quick mode` below says; every step not named there runs as written.
 
@@ -182,6 +185,17 @@ before Step 1a, as `## Quick mode` below says; every step not named there runs a
    membership", which states its bounds). **A stop BEFORE S2 records nothing** and goes straight to the Step 7
    summary.
 
+6. **Start the entry gates** (6.42.0) — the gates `/pharn-verify` will discover, run once on the tree this run starts
+   from, in the background, while the spec, plan and grill stages work; Step 4 reads the verdict before `/pharn-test`
+   (`pharn/floor/entry-gates.mjs`, header):
+
+   ```bash
+   node pharn/floor/entry-gates.mjs --start --feature '<name>' --timeout-ms 540000
+   ```
+
+   Exit `3` → **S4** (`blocked: no-gates`); it precedes `pharn/features/<name>/`, so there is no record and the run goes
+   straight to the Step 7 summary. Any other exit → go on (Step 4's read reports a start that failed).
+
 ### Step 1b — read the most recent prior record, if one exists (context only; it gates NOTHING)
 
 Look for `pharn/features/<slug>-<N>/LOOP.md` with the highest existing `<N>`, else
@@ -199,7 +213,7 @@ Look for `pharn/features/<slug>-<N>/LOOP.md` with the highest existing `<N>`, el
 ## Step 2 — The stuck-point table (the ONE enumeration of every question a sub-stage could ask)
 
 Every "ask the human" a sub-stage would make during this run maps to **exactly one** row. Rows S1–S3 keep
-the run going on a fixed rule; S4–S13 **stop** it. S6, S6b, S7 and S8 — and S6c's fit-check trigger (6.28.0) — are
+the run going on a fixed rule; S4–S14 **stop** it. S6, S6b, S7 and S8 — and S6c's fit-check trigger (6.28.0) — are
 triggered by your own judgment, and each fails in the safe direction — it stops rather than guesses. S6c's other
 trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 
@@ -220,9 +234,10 @@ trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 | S11 | a stage's evidence is stale or missing after the stage claims to have run, and `check-loop-fresh.mjs` will not offer another re-run (Step 5)                                                                                             | stop `blocked: stale-evidence` — never read a stop from evidence about another tree                                                     |
 | S12 | `/pharn-test` could not run the AC tests because a criterion's level has no test runner with per-test results (or only excluded ones) — decided by the pinned `check-red-run.mjs --preflight` exit 1 (Step 4), never by relayed text     | stop `blocked: no-test-runner` — its last line (the suggested remedy) goes into `### next_steps` as DATA; never a nested run            |
 | S13 | the AC evidence changed or is missing after `/pharn-test` — decided by `check-loop-fresh.mjs` `reason_code` `ac-evidence-invalid` or `check-loop.mjs` `terminal_cause` `ac-evidence` (Step 5), never by relayed text                     | stop `blocked: ac-evidence-invalid` — a rebuild cannot restore it; a person sets the build aside and re-runs `/pharn-test`, or re-plans |
+| S14 | Step 4's entry read exits `4`: a gate was red on the tree the run started from, and `--allow-red-entry` was not given                                                                                                                    | stop `blocked: gates-red-at-entry` — fix the gate first, or re-run with `--allow-red-entry` when fixing it is the feature               |
 
 **`/pharn-regress`'s stage-exit mapping (since `stage-regress-script`, 6.23.0).** Step 5 runs
-`pharn/floor/stage-regress.mjs` through one `stage-direct.mjs` call (6.41.0), which prints the script's one
+`pharn/floor/stage-regress.mjs` through one `stage-direct.mjs` call (6.43.0), which prints the script's one
 `pharn-stage-exit/1` object (`pharn/pharn-contracts/stage-exit.md`) and exits with its code. It maps onto the table
 above by a fixed rule:
 
@@ -266,8 +281,8 @@ while this is an exit code. And it is not S11: no stage has claimed to run yet.
 **A blocked stop does NOT consult `check-loop.mjs`** — its inputs could be a previous iteration's stale
 reports. Go to Step 6 with `decision: INCONCLUSIVE` and the id. The record's shape for that case is defined
 by the contract (`pharn/pharn-contracts/loop-record.md`, "The one exception: a blocked stop") — cited, not
-restated (P4). **A stop before `pharn/features/<name>/` exists** (S1, a failed S3, or S6 or S6c before a Draft is
-written) writes no record and no SPEC revert; it goes straight to the Step 7 summary.
+restated (P4). **A stop before `pharn/features/<name>/` exists** (S1, a failed S3, any Step 1a stop, or S6 or S6c
+before a Draft is written) writes no record and no SPEC revert; it goes straight to the Step 7 summary.
 
 ## Running a stage (6.27.0) — a routed stage runs as a stage agent, requested on its configured model
 
@@ -281,7 +296,7 @@ hold. A `--quick` run (6.28.0) routes the same stages except the grill, which ru
 two checkers), and runs no `/pharn-regress` at all; its own start lines carry `--mode quick` (`## Quick mode` items
 2–4).
 
-Each routed stage carries a start line, a brief prompt and a finish line (6.41.0: `start` and `finish` each do what
+Each routed stage carries a start line, a brief prompt and a finish line (6.43.0: `start` and `finish` each do what
 two lines did), and you run them in this order:
 
 1. **The start line** (`stage-agent.mjs start`). It decides the route exactly as `route` does, writes the
@@ -453,6 +468,26 @@ item 3). Two differences, stated:
 
 Grill's interrogation findings gate nothing, exactly as in `/pharn-ship`.
 
+**Then read the entry gates (6.42.0)** — Step 1a item 6's background run, before `/pharn-test` writes anything a gate
+reads. The line blocks until the verdict is in, or for at most its budget (Bash-tool timeout 600000):
+
+```bash
+node pharn/floor/entry-gates.mjs --wait --feature '<name>' --budget-ms 570000
+```
+
+It prints one JSON document. Branch **only** on the exit code (P5):
+
+- `5` (the gates are still running) → run the same line again.
+- `0` → go on.
+- `4` → **S14** (`blocked: gates-red-at-entry`): copy the `red` ids into the record's `### next_steps` as DATA. With
+  `--allow-red-entry`, go on instead.
+- `3` → **S4**.
+- `2` or anything else → go on: the check could not judge, and the run is no worse off than without it.
+
+In the Step 7 summary, name as DATA: any `red` ids you went on past, the `unattributed` ids, the `mutated` gates with the
+`changed_paths` and `changes_record` (regress reports those paths instead of counting them as the build's), and on exit
+`2` its `reason_code` and `runner_reason`.
+
 **Then the test stage (6.19.0), once per front — the AC tests are pinned, so they are never rewritten per iteration.**
 Start it like the two above:
 
@@ -530,7 +565,7 @@ Each iteration `<N>` (1-based). **Every sub-stage is marked on entry and the orc
    `done gate:pass` or `done gate:fail` → go on to 2; any other line maps onto Step 2's table as
    `## Running a stage` says.
 
-2. **`/pharn-regress`, then `/pharn-verify` — one call each** (`pharn/floor/stage-direct.mjs`, 6.41.0, its header):
+2. **`/pharn-regress`, then `/pharn-verify` — one call each** (`pharn/floor/stage-direct.mjs`, 6.43.0, its header):
    it sets that stage's writes-scope, runs its stage script, releases the scope and writes the stage's stage-start and
    return markers, printing the script's object and exiting with its code. Run each with the Bash tool's timeout at
    600000, and branch by Step 2's two stage-exit mappings. _(`/pharn-regress` and its two markers are
@@ -612,6 +647,13 @@ Each iteration `<N>` (1-based). **Every sub-stage is marked on entry and the orc
    - **`2` `INCONCLUSIVE`** — a report is missing or malformed. Go to Step 6, fail-closed.
 
 ## At the stop — Steps 6 and 7 are in the close part
+
+**First, at every stop once `<name>` exists, stop the entry gates** (6.42.0) — a no-op once Step 4's read has its
+verdict, or when none started. Its exit never changes the stop:
+
+```bash
+node pharn/floor/entry-gates.mjs --abort --feature '<name>'
+```
 
 **Step 6 (6a–6d), the Step 7 summary, the claims block and the Final step are this command's close part,
 `.claude/commands/pharn-loop-close.md`.** Read it once, when the run first reaches a stop — a `check-loop.mjs`

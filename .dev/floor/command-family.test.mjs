@@ -585,7 +585,7 @@ test("R4/R5 — every part is framed by its title and end line, and its command 
   }
 });
 
-// 6.41.0 GATE-2 review R4: step 7's verify is a `stage-direct.mjs` call that writes its own return marker, so the close
+// 6.43.0 GATE-2 review R4: step 7's verify is a `stage-direct.mjs` call that writes its own return marker, so the close
 // part loads with "the first verify call that exits other than 5" — said ALIKE in the pointer (pinned above) and in the
 // close part's own title paragraph and claims bullet, with the old "return marker after the first" wording nowhere.
 function shipCloseLoadOffenders(m) {
@@ -595,11 +595,11 @@ function shipCloseLoadOffenders(m) {
   if ((close.match(NEW) ?? []).length !== 2)
     out.push("pharn-ship-close.md: the load sentence is not in its title paragraph AND its claims bullet");
   for (const f of ["pharn-ship.md", "pharn-ship-close.md"])
-    if (/return\s+marker\s+after\s+the\s+first/.test(m.get(f))) out.push(`${f}: the pre-6.41.0 load wording`);
+    if (/return\s+marker\s+after\s+the\s+first/.test(m.get(f))) out.push(`${f}: the pre-6.43.0 load wording`);
   return out;
 }
 
-test("R4 (6.41.0) — /pharn-ship's close part states its own load condition as its pointer does; each mutant is red (L60)", () => {
+test("R4 (6.43.0) — /pharn-ship's close part states its own load condition as its pointer does; each mutant is red (L60)", () => {
   assert.deepEqual(shipCloseLoadOffenders(LIVE), []);
   const back = edit(LIVE, "pharn-ship-close.md", (t) =>
     t.replace(
@@ -608,7 +608,7 @@ test("R4 (6.41.0) — /pharn-ship's close part states its own load condition as 
     )
   );
   assert.match(shipCloseLoadOffenders(back).join("\n"), /title paragraph AND its claims bullet/);
-  assert.match(shipCloseLoadOffenders(back).join("\n"), /pharn-ship-close\.md: the pre-6\.41\.0 load wording/);
+  assert.match(shipCloseLoadOffenders(back).join("\n"), /pharn-ship-close\.md: the pre-6\.43\.0 load wording/);
 });
 
 test("R5b — a part's file name appears only in its pointer (and a quick part's in its sibling claims block): no second load", () => {

@@ -1,4 +1,4 @@
-// pharn/floor/stage-direct-core.mjs — the PURE half of the orchestrators' direct stage call (added 6.41.0,
+// pharn/floor/stage-direct-core.mjs — the PURE half of the orchestrators' direct stage call (added 6.43.0,
 // orchestrator-direct-stage-calls — audit candidate C3). No filesystem, no child_process, no clock. The execution
 // half — the scope setter, the markers, the stage script — is `pharn/floor/stage-direct.mjs`, whose header is the
 // protocol's spec (P7: no new contract). This file changes when a RULE changes (which stages, which flags, which

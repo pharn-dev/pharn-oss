@@ -1667,6 +1667,7 @@ const STUCK_POINTS = [
   { id: "S11", blocked: "stale-evidence" },
   { id: "S12", blocked: "no-test-runner" }, // 6.19.0: /pharn-test's preflight found a level with no runner
   { id: "S13", blocked: "ac-evidence-invalid" }, // 6.20.0: the AC evidence changed or is missing — a rebuild cannot fix it
+  { id: "S14", blocked: "gates-red-at-entry" }, // 6.42.0: a gate was red on the tree the run started from (entry-gates.mjs)
 ];
 // The one non-member spelling the closure admits: the command's own placeholder in generic prose.
 const BLOCKED_PLACEHOLDER = "<id>";
@@ -1766,7 +1767,7 @@ function forbiddenGitOffenders(body) {
 }
 
 test("✧ L34 — the /pharn-loop sets are non-empty and well-formed (the rules below cannot pass vacuously)", () => {
-  assert.equal(STUCK_POINTS.length, 15, "the stuck-point table is S1–S13 plus S6b and S6c");
+  assert.equal(STUCK_POINTS.length, 16, "the stuck-point table is S1–S14 plus S6b and S6c");
   assert.equal(new Set(STUCK_POINTS.map((s) => s.id)).size, STUCK_POINTS.length, "duplicate stuck-point id");
   assert.ok(COMMIT_OUTCOMES.length > 0, "the commit-outcome set is empty");
   assert.ok(fencedLines(commandBody(LOOP_FILE)).length > 0, `found no fenced lines in ${LOOP_FILE} — the fence scan broke`);
@@ -2001,7 +2002,7 @@ test("✧ the /pharn-loop rules DISCRIMINATE — each fails on a mutant of the r
 // written" (P0), which is `mark-phase.mjs`'s own stated bound and is not re-claimed stronger here.
 
 const MARK_PHASE = /node pharn\/floor\/mark-phase\.mjs[^\n]*/g;
-// 6.41.0 (orchestrator-direct-stage-calls): three more lines write markers. `stage-agent.mjs start` is a routed stage's
+// 6.43.0 (orchestrator-direct-stage-calls): three more lines write markers. `stage-agent.mjs start` is a routed stage's
 // stage-start and `finish` its return; a FRESH `stage-direct.mjs` line is a floor-only stage's start AND its return (its
 // `--resume` line only continues it). A `--mode` start line is a quick DELTA, excluded as a `--mode` run-start is.
 const START_LINE = /node pharn\/floor\/stage-agent\.mjs start [^\n]*/g;
@@ -2124,14 +2125,14 @@ for (const cmd of PHASE_MARKER_WIRING) {
       assert.equal(n, 1, `${cmd.file} must carry exactly one --kind ${kind} invocation; found ${n}`);
     }
 
-    // Every stage this command runs must be marked — by a mark-phase line, or (6.41.0) by a start or direct line.
+    // Every stage this command runs must be marked — by a mark-phase line, or (6.43.0) by a start or direct line.
     const sites = markerSites(body);
     // The crash fallback (R3) names no stage of its own (`<stage>`), so it is not counted here; it is paired below.
     const staged = new Set(sites.filter((s) => s.type !== "return" && !s.fallback).map((s) => s.stage));
     assert.deepEqual([...staged].sort(), [...cmd.stages].sort(), `${cmd.file}'s marked stages must equal its declared stage set`);
 
     // An `orchestrator` return after every stage-start, before the next stage starts, so a stage's tail is not
-    // attributed to the stage (6.41.0: an order rule over the sites — a routed stage's return is its finish line, an
+    // attributed to the stage (6.43.0: an order rule over the sites — a routed stage's return is its finish line, an
     // inline one's the inline return line in ## Running a stage, and a fresh direct line closes itself).
     assert.deepEqual(markerPairingReasons(body), [], `${cmd.file} must return to the orchestrator after every stage-start`);
 
@@ -2212,7 +2213,7 @@ test("✧ PHASE-MARKER rules DISCRIMINATE — a dropped orchestrator and a misty
   // L4/L34: an assertion that only ever sees the correct corpus certifies nothing. Mutate the REAL body
   // so the guard's own extraction runs on both sides.
   const body = commandBody("pharn-ship.md");
-  // 6.41.0: a routed stage's return is its FINISH line — drop the plan's, and the pairing rule must see it.
+  // 6.43.0: a routed stage's return is its FINISH line — drop the plan's, and the pairing rule must see it.
   const dropped = body.replace(/node pharn\/floor\/stage-agent\.mjs finish --command pharn-ship --name '<name>' --stage pharn-plan\n/, "");
   assert.notEqual(dropped, body, "the mutation must change the body, or this test is vacuous");
   assert.deepEqual(markerPairingReasons(body), [], "control: the real body pairs");
@@ -2664,7 +2665,7 @@ const LOOP_QUICK_POINTERS = [
   { site: "Step 6b's render line", re: /\(SKIPPED in\s+Quick mode — `## Quick mode` item 8; `cost\.json` is still emitted above\)/ },
   { site: "Step 7's report bullet", re: /a quick run renders none — `## Quick mode` item 8/ },
   // 6.28.0 coupling — each full-mode route site whose quick run uses ## Quick mode's --mode lines instead (appended, so the
-  // mutation test's index into this list is unchanged). 6.41.0: the route line is the `start` line.
+  // mutation test's index into this list is unchanged). 6.43.0: the route line is the `start` line.
   {
     site: "Step 3's start lines",
     re: /_\(A\s+`--quick` run uses `## Quick mode` item 2's start and brief lines, each with\s+`--mode quick`, in place of Step 3's\s+two\.\)_/,
@@ -3220,7 +3221,7 @@ test("✧ CLOSURE discriminates — the SAME predicate, run over a mapping parag
 });
 
 // ---------------------------------------------------------------------------------------------------------------
-// ✧ DIRECT_STAGE_WIRING (6.41.0, orchestrator-direct-stage-calls — audit C3) — `/pharn-loop` and `/pharn-ship` run
+// ✧ DIRECT_STAGE_WIRING (6.43.0, orchestrator-direct-stage-calls — audit C3) — `/pharn-loop` and `/pharn-ship` run
 // `/pharn-regress` and `/pharn-verify` as ONE `pharn/floor/stage-direct.mjs` call each, instead of invoking the thin
 // callers above. The thin caller and the orchestrator's direct call are a deliberate COPY-PAIR of one invocation (L31),
 // so the pair's OBLIGATION SET is enumerated here, each member with the rule that checks it (GRILL G3):
@@ -3819,7 +3820,7 @@ test("✧ neither run-marker command is scoped to `pharn-loop` — the CLI refus
 
 // ── ✧ STAGE_AGENT_WIRING (6.27.0, stage-model-routing) — a routed stage's pinned lines, in the two orchestrators ──
 //
-// `/pharn-ship` and `/pharn-loop` run each routed stage through its pinned lines — since 6.41.0 (orchestrator-direct-
+// `/pharn-ship` and `/pharn-loop` run each routed stage through its pinned lines — since 6.43.0 (orchestrator-direct-
 // stage-calls) `stage-agent.mjs start` (`route`'s decision + the stage-start marker carrying its token), the one-line
 // brief prompt the Agent call carries, and `stage-agent.mjs finish` (`read` + the return marker). The rules below keep
 // their 6.27.0 vocabulary: a "route" line is the START line and a "read" line the FINISH line, and the old four-line
@@ -3856,7 +3857,7 @@ const STAGE_AGENT_WIRING = [
   },
 ];
 
-// 6.41.0: the "route" kind is the START line, the "read" kind the FINISH line (see the header above).
+// 6.43.0: the "route" kind is the START line, the "read" kind the FINISH line (see the header above).
 const SA_ROUTE = /^node pharn\/floor\/stage-agent\.mjs start (.*)$/;
 const SA_READ = /^node pharn\/floor\/stage-agent\.mjs finish (.*)$/;
 /** The 6.27.0 four-line form, closed out of both orchestrators (L36): a `route`/`read` line, or a typed `--route`. */
@@ -3939,7 +3940,7 @@ function saWiringReasons(cmd, body, policy = ROUTE_POLICY) {
     .sort();
   if (JSON.stringify(haveModeBriefs) !== JSON.stringify(wantModeBriefs))
     reasons.push(`--mode brief prompt lines [${haveModeBriefs}] != --mode route lines of agent cells [${wantModeBriefs}]`);
-  // 6.41.0: the start line writes the routed stage's stage-start itself, so no mark-phase line carries `--route` (the model
+  // 6.43.0: the start line writes the routed stage's stage-start itself, so no mark-phase line carries `--route` (the model
   // types no token) and no routed stage has a mark-phase stage-start of its own; the 6.27.0 lines are closed out (L36).
   const fullKeys = new Set(have);
   // R3: exactly one crash fallback per orchestrator, byte-equal to FALLBACK_START (its route a fixed literal).
@@ -4004,7 +4005,7 @@ function saPolicyReasons(policy, cmd, body) {
 }
 
 /** Rule 4 — ORDER, per full-mode route (START) line: start < brief < read (FINISH), no marker line between start and
- *  finish (6.41.0: each writes its own), all before the next route line, and the brief's argv equal to the route
+ *  finish (6.43.0: each writes its own), all before the next route line, and the brief's argv equal to the route
  *  line's. Per --mode route line (6.28.0) — a DELTA whose
  *  markers and read line are the full-mode ones: an agent cell's brief line follows it, before the next route line,
  *  with the same argv; an inline cell has none there. [] when clean. */
@@ -4036,7 +4037,7 @@ function saOrderReasons(body, policy = ROUTE_POLICY) {
     const end = i + 1 < full.length ? full[i + 1].idx : Infinity;
     const after = L.filter((l) => l.idx > r.idx && l.idx < end);
     const where = `${saKey(r.flags)} (line ${r.idx})`;
-    // 6.41.0: the start line IS the stage-start (it writes the marker), so the brief follows it directly.
+    // 6.43.0: the start line IS the stage-start (it writes the marker), so the brief follows it directly.
     const ss = r;
     const brief = after.find((l) => l.kind === "brief" && l.idx > ss.idx);
     if (!brief) {
@@ -4052,7 +4053,7 @@ function saOrderReasons(body, policy = ROUTE_POLICY) {
       reasons.push(`${where}: no read line for this stage after the brief line`);
       continue;
     }
-    // The finish line writes the return marker itself (6.41.0), so no marker line may sit between start and finish.
+    // The finish line writes the return marker itself (6.43.0), so no marker line may sit between start and finish.
     if (L.some((l) => ["stage-start", "orchestrator", "marker"].includes(l.kind) && l.idx > ss.idx && l.idx < read.idx)) {
       reasons.push(`${where}: a marker sits between the start line and the finish line`);
     }
@@ -4108,7 +4109,7 @@ for (const cmd of STAGE_AGENT_WIRING) {
     assert.match(s, /\*\*The model is routed; effort is not\*\*/);
     assert.match(s, /pharn\/floor\/stage-agent-core\.mjs`'s header/, "the protocol is cited, not restated (P4)");
     // GATE-2 review: A1 (the heading says requested), A6 (the prose claim is ADVISORY, the free-text residual named).
-    // 6.41.0: A5's "re-run the marker without --route" sentence is gone with the typed token; in its place, the
+    // 6.43.0: A5's "re-run the marker without --route" sentence is gone with the typed token; in its place, the
     // no-agent-tool flag, and the inline return line pinned in this section (the start line's exit-3 branch runs it).
     assert.match(s, /^## Running a stage \(6\.27\.0\) — a routed stage runs as a stage agent, requested on its configured model$/m);
     assert.match(s, /append\s+`--no-agent-tool`\s+to\s+the\s+start\s+line:\s+it\s+records\s+`inline:no-agent-tool`\s+and\s+exits\s+`3`/);
@@ -4140,7 +4141,7 @@ for (const cmd of STAGE_AGENT_WIRING) {
 
 // ★ (6) EXECUTED (L45): every committed route (START) line, run in a scratch dir against this repo's config, no config,
 // and a pre-0.7.0-shaped block; every committed brief line runs at exit 0; every committed FINISH line, with no result
-// on disk, reads `unusable no-result` and writes the return marker (6.41.0). The expected alias is what the REAL checker
+// on disk, reads `unusable no-result` and writes the return marker (6.43.0). The expected alias is what the REAL checker
 // resolves — never re-typed here; the start line's second line is the marker line the run binds on.
 test("★ STAGE_AGENT_WIRING (6) — every committed start line routes AND marks over three configs; every brief and finish line runs", () => {
   const CLI = join(REPO_ROOT, "pharn", "floor", "stage-agent.mjs");
@@ -4212,7 +4213,7 @@ test("★ STAGE_AGENT_WIRING (6) — every committed start line routes AND marks
           const r = spawnSync("sh", ["-c", sub(l.text)], { cwd: dir, encoding: "utf8" });
           const [token, second, ...rest] = r.stdout.trimEnd().split("\n");
           assert.deepEqual([r.status, `${token}\n`], want, `${cmd.file}:${l.idx} over ${label}: ${r.stderr}`);
-          // 6.41.0: the start line's second line is the stage-start marker it wrote, carrying the token it printed.
+          // 6.43.0: the start line's second line is the stage-start marker it wrote, carrying the token it printed.
           assert.equal(second?.match(MARKER_LINE)?.[1], "stage-start", `${cmd.file}:${l.idx} over ${label}: the marker line`);
           assert.ok(second.endsWith(`(route ${token})`), `${cmd.file}:${l.idx}: the marker records the printed token`);
           assert.deepEqual(rest, []);
@@ -4337,7 +4338,7 @@ test("✧ STAGE_AGENT_WIRING (9) — each rule fails on its mutant: start, finis
     lines.splice(i, 1);
     return lines.join("\n");
   };
-  // 6.41.0: the route (START) and read (FINISH) lines; the planStart mutant re-types the 6.27.0 marker line.
+  // 6.43.0: the route (START) and read (FINISH) lines; the planStart mutant re-types the 6.27.0 marker line.
   const planRoute = "node pharn/floor/stage-agent.mjs start --command pharn-ship --stage pharn-plan --name '<name>'";
   const planRead = "node pharn/floor/stage-agent.mjs finish --command pharn-ship --name '<name>' --stage pharn-plan";
   const planStart = "node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-plan --route '<route>'";
@@ -4478,14 +4479,18 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   // build, 132 over the old 22,016; raised by the rule (+10%, up to a multiple of 512). 22,722 after the review fixes.
   "pharn-build.md": 24576,
   "pharn-grill.md": 23040,
-  "pharn-loop.md": 47616,
+  // orchestrator-direct-stage-calls (6.43.0), after #313 merged: 47,664 bytes measured, 48 over 47,616 (the GATE-2
+  // review's R1/R3 text plus #313's entry gates); raised by the rule (+10%, up to a multiple of 512).
+  "pharn-loop.md": 52736,
   "pharn-loop-close.md": 34816,
   "pharn-loop-quick.md": 12288,
   "pharn-memory-promote.md": 27648,
   "pharn-plan.md": 24064,
   "pharn-regress.md": 20480,
   "pharn-review.md": 24064,
-  "pharn-ship.md": 39936,
+  // orchestrator-direct-stage-calls (6.43.0), after #313 merged: 40,551 bytes measured, 615 over 39,936 (the GATE-2
+  // review's R1–R3 text plus #313's entry gates); raised by the rule (+10%, up to a multiple of 512).
+  "pharn-ship.md": 45056,
   "pharn-ship-close.md": 31232,
   "pharn-ship-quick.md": 12800,
   "pharn-spec.md": 27136,
@@ -4746,7 +4751,7 @@ test("✧ SHELL-SINK 1 — every placeholder a product command's shell line take
     ["<slug>", (b) => `${b}\n\`\`\`bash\nnode -e 'x' '<slug>'\n\`\`\`\n`],
     ["<ref>", (b) => `${b}\nresolve it with \`git rev-parse --verify <ref>^{commit}\`.\n`],
     ["<desc>", (b) => `${b}\n\`\`\`text\n${BRIEF_PROMPT_PREFIX}node x --d '<desc>'\n\`\`\`\n`],
-    // 6.41.0: the route token is recorded by `stage-agent.mjs start`, so no shell line takes `<route>` any more.
+    // 6.43.0: the route token is recorded by `stage-agent.mjs start`, so no shell line takes `<route>` any more.
     ["<route>", (b) => `${b}\n\`\`\`bash\nnode pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --route '<route>'\n\`\`\`\n`],
   ]) {
     const pairs = productPairs().map(([f, b]) => [f, f === "pharn-loop.md" ? splice(b) : b]);

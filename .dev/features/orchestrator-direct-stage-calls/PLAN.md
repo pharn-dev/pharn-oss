@@ -241,6 +241,8 @@ header; every §8 sentence stays true ("when a person invokes it directly"), so 
 - `pharn/floor/run-marker.test.mjs` — ✧ WIRING anchors move to the plan's `start` line — test, not shipped
 - `pharn/floor/pre-run-snapshot.test.mjs` — (added at stacking, after 6.37.0 merged) its ✧ WIRING `next` anchor moves
   to ship's plan `start` line — test, not shipped
+- `pharn/floor/entry-gates.test.mjs` — (added at the merge with #313, 6.42.0) its ★ WIRING anchors move from the
+  6.27.0 `route`/`read` lines to the `start`/`finish` lines — test, not shipped
 - `.dev/floor/command-hygiene.test.mjs` — `STAGE_AGENT_WIRING`, `PHASE_MARKER_WIRING`, `SHELL_VALUES`,
   `RUN_MARKER_WIRING`, the quick pointer pins, and the new `DIRECT_STAGE_WIRING` — apparatus
 - `.dev/floor/command-family.test.mjs` — only if a pinned heading or paragraph moves — apparatus

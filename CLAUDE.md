@@ -372,7 +372,7 @@ node pharn/floor/feature-name.mjs [--fresh]
 # Exit: init 0 ok | 2 runner error (closed reason_code) | 3 EMPTY SOURCE SET (nothing written; routes to the
 # existing no-gates HALT, and to /pharn-loop's unattended S4 `blocked: no-gates`) ·
 # run 0 an entry ran (a FAILING GATE IS DATA, not a runner error) | 2 runner error | 3 nothing left.
-node pharn/floor/run-gates.mjs init --stage verify|regress [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--discover <package.json>] [--gates "<cmd>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>] [--reuse-stamp <f> --reuse-sha256 <hex>]
+node pharn/floor/run-gates.mjs init --stage verify|regress|entry [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--discover <package.json>] [--gates "<cmd>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>] [--reuse-stamp <f> --reuse-sha256 <hex>]
 node pharn/floor/run-gates.mjs init --stage ac-test --feature <name> --out <dir> --discover <package.json> --ac-tests <AC-TESTS.md> [--cwd <dir>]   # 6.18.0, /pharn-test's red run
 node pharn/floor/run-gates.mjs run --next --out <dir> --timeout-ms <N>
 node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
@@ -912,6 +912,16 @@ node pharn/floor/check-instruction-files.mjs --growth (--base <ref> | --base-rul
 # Exit: 0 recorded · 2 refused (closed REASON_CODES, `crashed` a caught throw); a module that cannot load is node's 1.
 node pharn/floor/pre-run-snapshot.mjs --capture <name>
 
+# THE ENTRY GATES (6.42.0, loop-entry-preflight) — /pharn-loop and /pharn-ship run /pharn-verify's discovered gates once
+# on the starting tree, in a detached background runner, during spec/plan/grill; the verdict is read before /pharn-test.
+# A red gate is /pharn-loop S14 (`--allow-red-entry` opts out); /pharn-ship asks. A gate's own writes are recorded beside
+# the pre-run snapshot (regression-report.md `entry_gate_changes`). Rules, bounds and the P7 trigger:
+# pharn/floor/entry-gates.mjs and entry-gates-core.mjs headers; gate-run-record.md's `entry` bullet.
+# Exit (--wait): 0 green · 4 red · 3 no-gates · 5 continue (run again) · 2 unusable; --start 0 · 3 · 2; --abort 0.
+node pharn/floor/entry-gates.mjs --start --feature <name> --timeout-ms <N>
+node pharn/floor/entry-gates.mjs --wait --feature <name> --budget-ms <B>
+node pharn/floor/entry-gates.mjs --abort --feature <name>
+
 # Check the SHAPE of a loop-record — the pharn/features/<name>/LOOP.md that /pharn-loop writes at every stop.
 # Floor: the frontmatter envelope (`decision` in {STOP_GREEN, STOP_GREEN_QUICK, STOP_CAP, STOP_TERMINAL, INCONCLUSIVE};
 # `iterations` a positive integer; `commit` a git SHA or the literal `unknown`; `date` ISO YYYY-MM-DD; and,
@@ -1269,7 +1279,7 @@ node pharn/floor/check-model-config.mjs [validate | resolve <stage> | agreement]
 # numbers, and names a refused result on stderr by ONE fixed code (READ_DEFECTS), never by a byte the file carries
 # (GATE-2 review A7). The Agent tool still returns the stage agent's final text into the orchestrator's context:
 # THREAT-MODEL §5's free-text residual in a new place — that no proceed/stop reads it is ADVISORY (review A6).
-# The orchestrators record the token on the stage-start marker (since 6.41.0 via `start`, below), so cost.json carries
+# The orchestrators record the token on the stage-start marker (since 6.43.0 via `start`, below), so cost.json carries
 # the REQUESTED route beside the SERVED requests[].model. MODEL ROUTED, EFFORT NOT — the Agent tool takes none.
 # BOUNDS: a route is a request, the served model is evidence from an undocumented transcript format, NEVER proof;
 # ship's routed build proceeds on its agent's advisory `done gate:pass`, re-confirmed by /pharn-verify's floor
@@ -1282,7 +1292,7 @@ node pharn/floor/stage-agent.mjs route --command <pharn-ship|pharn-loop> --stage
 node pharn/floor/stage-agent.mjs brief --command <c> --stage <stage> --name '<name>' [--iteration <N>] [--mode quick]
 node pharn/floor/stage-agent.mjs report --command <c> --name '<name>' --stage <stage> [--iteration <N>] --status <done|refused|question> [--row S<n>] [--gate pass|fail]
 node pharn/floor/stage-agent.mjs read --command <c> --name '<name>' --stage <stage> [--iteration <N>]
-# START / FINISH (6.41.0, orchestrator-direct-stage-calls — audit C1): the orchestrators pin these two instead of the
+# START / FINISH (6.43.0, orchestrator-direct-stage-calls — audit C1): the orchestrators pin these two instead of the
 # four lines above. `start` = `route`'s decision + the stage-start marker carrying its token (written by code through
 # mark-phase.mjs's tryMarkPhase — the model types no token; `<route>` left every shell line); `--no-agent-tool` records
 # inline:no-agent-tool (ADVISORY: the model's reading of its tools); an uncleared leftover result is
@@ -1295,7 +1305,7 @@ node pharn/floor/stage-agent.mjs read --command <c> --name '<name>' --stage <sta
 node pharn/floor/stage-agent.mjs start --command <c> --stage <stage> --name '<name>' [--iteration <N>] [--mode quick] [--no-agent-tool]
 node pharn/floor/stage-agent.mjs finish --command <c> --name '<name>' --stage <stage> [--iteration <N>]
 
-# THE DIRECT STAGE CALL (6.41.0, orchestrator-direct-stage-calls — audit C3) — /pharn-loop and /pharn-ship run
+# THE DIRECT STAGE CALL (6.43.0, orchestrator-direct-stage-calls — audit C3) — /pharn-loop and /pharn-ship run
 # /pharn-regress and /pharn-verify as ONE call each instead of invoking the thin callers (which a model invoked through
 # the Skill tool, injecting 19,301 + 17,339 B of command text per iteration in the measured 92-minute run). The call
 # sets the thin caller's own writes-scope (its pinned setter line), writes the stage-start marker (fresh), runs the stage

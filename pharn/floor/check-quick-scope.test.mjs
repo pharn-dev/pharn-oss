@@ -691,6 +691,37 @@ test("PRE-RUN — inside an open run, an undeclared path unchanged since the sna
   }
 });
 
+test("ENTRY GATES (6.42.0, review R1) — a path an entry gate rewrote after the snapshot is reported in `entry_gate_changes`, not counted; edited after, it escapes", () => {
+  const { dir, base } = makeRepo();
+  try {
+    openLoopAndCapture(dir);
+    let r = runCli(dir, ["--feature", "demo", "--base", base]);
+    assert.equal(Object.hasOwn(r.doc, "entry_gate_changes"), false, "no entry record → the document is as before");
+    writeFileSync(join(dir, "src", "y.js"), "export const y = 'rewritten by an entry gate';\n");
+    const rec = spawnSync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        `const m = await import(${JSON.stringify(PRE_RUN_CLI)}); const w = m.recordEntryChanges("demo", [["src/y.js", m.pathDigest("src/y.js")]]); process.exit(w.ok ? 0 : 1);`,
+      ],
+      { cwd: dir, encoding: "utf8" }
+    );
+    assert.equal(rec.status, 0, rec.stderr);
+    r = runCli(dir, ["--feature", "demo", "--base", base]);
+    assert.equal(r.status, 0, r.stdout);
+    assert.deepEqual(r.doc.escaped, []);
+    assert.deepEqual(r.doc.pre_run_snapshot, { status: "applied", unchanged: [] });
+    assert.deepEqual(r.doc.entry_gate_changes, { status: "applied", unchanged: ["src/y.js"] });
+    writeFileSync(join(dir, "src", "y.js"), "export const y = 'then the build edited it';\n");
+    r = runCli(dir, ["--feature", "demo", "--base", base]);
+    assert.equal(r.status, 1, r.stdout);
+    assert.deepEqual(r.doc.escaped, ["src/y.js"]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("★ R2 — a snapshot reader that throws exits 2 `crashed`, never 1; one that cannot load is `crashed` too", () => {
   const cases = [
     ["a throw while reading", (s) => s.replace("return decidePreRun({", 'throw new Error("thrown by the test"); return decidePreRun({')],

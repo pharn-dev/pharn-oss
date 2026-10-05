@@ -14,8 +14,8 @@
 //   node pharn/floor/stage-agent.mjs report --command <c> --name '<name>' --stage <stage> [--iteration <N>]
 //                                          --status <done|refused|question> [--row <S4..S10>] [--gate <pass|fail>]
 //   node pharn/floor/stage-agent.mjs read   --command <c> --name '<name>' --stage <stage> [--iteration <N>]
-//   node pharn/floor/stage-agent.mjs start  <route's flags> [--no-agent-tool]          (6.41.0 — see START / FINISH)
-//   node pharn/floor/stage-agent.mjs finish <read's flags>                            (6.41.0)
+//   node pharn/floor/stage-agent.mjs start  <route's flags> [--no-agent-tool]          (6.43.0 — see START / FINISH)
+//   node pharn/floor/stage-agent.mjs finish <read's flags>                            (6.43.0)
 // `--iteration` is required exactly for an iterated stage (build, regress, verify). `--mode` is spelled only
 // for a column the command's policy holds besides `full` (today: `quick`, for both commands — /pharn-loop's
 // since 6.28.0; the accepted set is read from ROUTE_POLICY, never listed here). Every flag
@@ -33,7 +33,7 @@
 //   finish  `read`'s 0 / 2 / 3 / 4 with TWO stdout lines (the closed verdict line, then the marker line).
 // Every path ends by setting `process.exitCode`, never `process.exit()` (the 6.20.4 flush rule).
 //
-// ── START / FINISH (6.41.0, orchestrator-direct-stage-calls — audit candidate C1) ─────────────────────
+// ── START / FINISH (6.43.0, orchestrator-direct-stage-calls — audit candidate C1) ─────────────────────
 // THE RECORDED COST (P7): an orchestrator spent four pinned lines per routed stage — `route`, the stage-start marker,
 // `read`, the return marker — and the marker could never share `route`'s request, because it needed the token
 // `route` printed, which the model then TYPED into a shell line. In pharn-starter's 92-minute /pharn-loop run that was
@@ -528,7 +528,7 @@ export function route(opts, root = process.cwd()) {
   return { refuse: "the route decision did not converge" };
 }
 
-// ── start / finish (6.41.0 — see START / FINISH in the header) ───────────────────────────────────────
+// ── start / finish (6.43.0 — see START / FINISH in the header) ───────────────────────────────────────
 
 /** The route `start` records: `route`'s decision, with the three decisions the header names made in code. Returns
  *  `{token, exit, reason?, why?}` or `{refuse}` (a skipped stage only). Never throws. */

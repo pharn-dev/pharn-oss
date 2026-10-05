@@ -572,7 +572,7 @@ function shipLine(re, label) {
 
 /** Run the given committed lines, `<name>` substituted, in a scratch cwd whose `pharn/`, `.claude/hooks` and
  *  `.claude/commands` link to this repo's and which holds this repo's config; return the markers the emitter would
- *  read. No session id, so no pending start is adopted. 6.41.0: the build's stage-start comes from its `start` line
+ *  read. No session id, so no pending start is adopted. 6.43.0: the build's stage-start comes from its `start` line
  *  (it records the route `route` decides itself), and verify's from its `stage-direct.mjs` line, which exits with the
  *  stage script's own code — here the script refuses the scratch tree (exit 2) after the marker is written. */
 function runCommitted(lines) {
@@ -607,12 +607,12 @@ test("★ WIRING — the committed QUICK run-start, build and verify lines deriv
     "quick run-start"
   );
   const fullStart = shipLine(/^node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind run-start --adopt-pending$/, "full run-start");
-  // 6.27.0: the routed build's stage-start records its route; since 6.41.0 its `start` line writes it.
+  // 6.27.0: the routed build's stage-start records its route; since 6.43.0 its `start` line writes it.
   const build1 = shipLine(
     /^node pharn\/floor\/stage-agent\.mjs start --command pharn-ship --stage pharn-build --name '<name>' --iteration 1$/,
     "build@1"
   );
-  // 6.41.0: verify's stage-start is written by its one stage-direct.mjs line.
+  // 6.43.0: verify's stage-start is written by its one stage-direct.mjs line.
   const verify1 = shipLine(
     /^node pharn\/floor\/stage-direct\.mjs --stage pharn-verify --name '<name>' --iteration 1 --timeout-ms \d+ --budget-ms \d+$/,
     "verify@1"
@@ -646,7 +646,7 @@ test("★ WIRING — the committed QUICK run-start, build and verify lines deriv
   }
 });
 
-test("★ WIRING (6.41.0 GATE-2 review R3) — a build whose START line crashed: the committed fallback line keeps gate2-quick derivable; with no fallback it is not", () => {
+test("★ WIRING (6.43.0 GATE-2 review R3) — a build whose START line crashed: the committed fallback line keeps gate2-quick derivable; with no fallback it is not", () => {
   const quickStart = shipLine(
     /^node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind run-start --adopt-pending --mode quick$/,
     "quick run-start"

@@ -99,7 +99,7 @@
 // tool results makes the run ambiguous, and so `unknown`. A redirect that keeps the line out of the calling
 // context's tool result leaves the run unbound, and so `unknown` as well. See the contract's "Run membership".
 //
-// ── THE TWO IN-PROCESS CALLERS (6.41.0, orchestrator-direct-stage-calls) ─────────────────────────────────
+// ── THE TWO IN-PROCESS CALLERS (6.43.0, orchestrator-direct-stage-calls) ─────────────────────────────────
 // `stage-agent.mjs start` / `finish` and `stage-direct.mjs` write a stage's markers in the same call that routes,
 // reads or runs it, through `tryMarkPhase()` — `markPhase()` + `markerLine()`, the one encoding above, so the line
 // they print binds the run exactly as this CLI's does. It never throws: a marker that cannot be written prints the
@@ -308,11 +308,11 @@ export function markersPath(name, base = DEFAULT_BASE) {
   return join(base, name, "markers.jsonl");
 }
 
-/** The fixed line a caller prints in place of a marker line when the marker could not be written (6.41.0). */
+/** The fixed line a caller prints in place of a marker line when the marker could not be written (6.43.0). */
 export const MARKER_NOT_WRITTEN = "marker: not written";
 
 /**
- * Write one marker for an in-process caller and return what to print (6.41.0). Never throws: on any failure it returns
+ * Write one marker for an in-process caller and return what to print (6.43.0). Never throws: on any failure it returns
  * `{ok: false, line: MARKER_NOT_WRITTEN, code}` with a node error code (or `error`), never a message — the caller
  * prints `code` and goes on, because a marker never fails a run. `opts` is `markPhase`'s.
  */
@@ -327,7 +327,7 @@ export function tryMarkPhase(opts) {
 }
 
 /**
- * The LAST marker in `file`, or null (6.41.0) — read from the end, skipping a torn line, a line that is not a JSON
+ * The LAST marker in `file`, or null (6.43.0) — read from the end, skipping a torn line, a line that is not a JSON
  * object, and an object that is not a marker (`seq` a number, `kind` a `MARKER_KINDS` member), exactly as
  * `countMarkers` tolerates a torn line. No file, an unreadable file or no marker at all is null. See the header's
  * TRUST BOUND: the result is unauthenticated state.

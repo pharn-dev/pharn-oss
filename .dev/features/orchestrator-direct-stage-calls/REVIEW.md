@@ -91,7 +91,7 @@ input; every wiring pin executes with its controls; the saving claim is honest; 
 - **R4 — the close part's load condition** reads "with step 7's first `/pharn-verify` call that exits other than `5`"
   in the pointer and in both of the close part's sentences. `pharn-ship-close.md` joined the plan's `## Files` for
   this. A family test holds all three, and the old wording is red in either file.
-- **R5 — the `executions` wording** in `cost-ledger.md` and CHANGELOG [6.41.0]: the stage plus the scope release; the
+- **R5 — the `executions` wording** in `cost-ledger.md` and CHANGELOG [6.43.0] (renumbered from 6.41.0 after #313): the stage plus the scope release; the
   set is outside the row.
 
 **Not fixed here, flagged:** the thin callers `/pharn-regress` and `/pharn-verify` still tell a person to run the
