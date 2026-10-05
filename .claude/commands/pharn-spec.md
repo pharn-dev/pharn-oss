@@ -150,7 +150,7 @@ findings (there is no `rule_id` for "intent quality"):
   end-to-end runner. Say plainly that PHARN's gate discovery allowlist (`ALLOWLIST` in
   `pharn/floor/gate-run-core.mjs`) discovers an e2e suite at verify only from a `test:e2e` or `e2e` script
   (6.16.0), so without one it runs only if the project's `test` script runs it or an explicit `--gates` entry
-  does.
+  does — and never when `pharn.config.json` `gates.exclude` lists it (6.36.0), which `/pharn-test` then refuses.
 - **Ambiguity** — a genuine ambiguity that cannot be settled without inventing intent becomes a
   **clarification marker** in `## Open Questions`, spelled as `pharn/pharn-contracts/spec-template.md`
   defines it (`[NEEDS CLARIFICATION: <question>]`), at most three. Everything else becomes an informed

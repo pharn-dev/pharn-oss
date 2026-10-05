@@ -90,6 +90,11 @@
 // NAMED residual `verify-paused-chain-integrity`: while a budgeted verify chain is paused at `continue`, `state.json` —
 // its `reuse` binding included — is ordinary `.pharn/` state the write tools reach, exactly as its `runs` already are.
 //
+// ================================ GATE EXCLUSION (6.36.0) ================================
+// `init --discover <m>` (no `--gates`) reads the project's `gates.exclude` from the `pharn.config.json` beside `<m>`
+// (gate-exclusion-core.mjs) and hands it to resolveSet; a bad declaration is `bad-gate-exclusion`, nothing written. The
+// record (and so the stamp) carries the `excluded` block only when discovery removed an id; `init` prints its ids.
+//
 // TRUST (P2): every operand is a path, an integer or a hex digest. Untrusted inputs — a `--gates`
 // string, a `--extra` array, a scope JSON — are shape-gated by gate-run-core.mjs before use and are
 // never eval'd, imported, or compiled into a RegExp.
@@ -150,6 +155,7 @@ import {
 import { fingerprint } from "./worktree-fingerprint.mjs";
 import { acRowsOf } from "./ac-tests-core.mjs";
 import { executionIdentity, findReusable, reusedRunRecord } from "./gate-reuse-core.mjs";
+import { loadGateExclusion } from "./gate-exclusion-core.mjs";
 
 const STATE_ROOT = ".pharn";
 /** Grace between SIGTERM and SIGKILL, and the pid-reuse margin on a stale lock. */
@@ -622,6 +628,14 @@ function runInit(args) {
     if (!r.ok) fail("usage-error", `--discover manifest is not readable/parseable: ${r.reason}`);
     scripts = r.value && typeof r.value === "object" ? r.value.scripts : null;
   }
+  // 6.36.0 — the project's declared exclusion, read beside the manifest discovery reads (the project root for every
+  // pinned caller) and only when the set is discovered: an explicit --gates string is never filtered (gate-exclusion-core).
+  let exclude = [];
+  if (discover && !has(args, "--gates")) {
+    const x = loadGateExclusion(dirname(resolve(discover)));
+    if (!x.ok) fail("bad-gate-exclusion", x.reason);
+    exclude = x.exclude;
+  }
 
   const res = resolveSet({
     stage,
@@ -632,6 +646,7 @@ function runInit(args) {
     skipStyle: has(args, "--skip-style"),
     feature,
     acRows,
+    exclude,
   });
   if (!res.ok) {
     // The empty SOURCE set is the ONE refusal that writes no state and exits 3, so the invoking command
@@ -718,6 +733,8 @@ function startRecord(spec, outAbs, cwd, args, opts = {}) {
     source: spec.source,
     source_raw: spec.source_raw,
     style_skipped: spec.style_skipped,
+    // 6.36.0 — present only when discovery removed an id the project excluded, so every other record is unchanged.
+    ...(spec.excluded ? { excluded: spec.excluded } : {}),
     finalized: false,
     fingerprint: { algo: fp.algo, init: fp.digest, final: null },
     required: spec.required,
@@ -740,6 +757,7 @@ function startRecord(spec, outAbs, cwd, args, opts = {}) {
       source: spec.source,
       ids: spec.entries.map((e) => e.id),
       e2e_excluded: spec.e2e_excluded ?? [],
+      ...(spec.excluded ? { excluded: spec.excluded.ids } : {}),
       reuse_offered: Boolean(opts.reuse),
     },
     0

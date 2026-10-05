@@ -434,7 +434,8 @@ project gate `/pharn-build` ran at its Step 4** —
   `--gates`, else the closed allowlist (`ALLOWLIST` in
   `pharn/floor/gate-run-core.mjs`, cited rather than copied) ∩ the project's `package.json` scripts, else
   **ask the human** (reused, NOT hard-coded `validate.mjs`, P3). The e2e gates in the allowlist are
-  discovered by `/pharn-verify`'s runner, not by this build gate.
+  discovered by `/pharn-verify`'s runner, not by this build gate, and the runner also drops the ids the project's
+  `pharn.config.json` `gates.exclude` lists (6.36.0) — this prose build gate does not read that list.
 
 `0` → **proceed**; non-zero → **STOP**, present the RED floor, hand to the human. **Fail-closed:** if
 `/pharn-build` **refused before** its floor gate (missing `PLAN.md`/`SPEC.md`, a plan with no parseable

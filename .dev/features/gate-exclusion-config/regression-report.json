@@ -1,0 +1,64 @@
+{
+  "base": "ea0234b4f57fd9d525b99a2de769a411c542264f",
+  "inside": [
+    ".claude/commands/pharn-build.md",
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-regress.md",
+    ".claude/commands/pharn-ship.md",
+    ".claude/commands/pharn-spec.md",
+    ".claude/commands/pharn-test.md",
+    ".claude/commands/pharn-verify.md",
+    ".dev/features/gate-exclusion-config/GRILL.md",
+    ".dev/features/gate-exclusion-config/PLAN.md",
+    ".dev/features/gate-exclusion-config/PROTECTED-FOLLOWUPS.md",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/ac-gate-core.mjs",
+    "pharn/floor/ac-gate-core.test.mjs",
+    "pharn/floor/ac-tests-lock.mjs",
+    "pharn/floor/ac-tests-lock.test.mjs",
+    "pharn/floor/check-ac-tests.mjs",
+    "pharn/floor/check-red-run.mjs",
+    "pharn/floor/check-red-run.test.mjs",
+    "pharn/floor/gate-exclusion-core.mjs",
+    "pharn/floor/gate-exclusion-core.test.mjs",
+    "pharn/floor/gate-run-core.mjs",
+    "pharn/floor/gate-run-core.test.mjs",
+    "pharn/floor/red-run-core.mjs",
+    "pharn/floor/render-regression.mjs",
+    "pharn/floor/render-regression.test.mjs",
+    "pharn/floor/render-verify.mjs",
+    "pharn/floor/render-verify.test.mjs",
+    "pharn/floor/run-gates.mjs",
+    "pharn/floor/run-gates.test.mjs",
+    "pharn/floor/stage-exit-core.mjs",
+    "pharn/floor/stage-regress.test.mjs",
+    "pharn/floor/stage-verify.test.mjs",
+    "pharn/floor/test-infra-core.mjs",
+    "pharn/floor/test-infra-core.test.mjs",
+    "pharn/pharn-contracts/ac-tests.md",
+    "pharn/pharn-contracts/gate-run-record.md",
+    "pharn/pharn-contracts/regression-report.md",
+    "pharn/pharn-contracts/stage-exit.md",
+    "pharn/pharn-contracts/verify-report.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

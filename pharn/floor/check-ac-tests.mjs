@@ -38,7 +38,8 @@
 // H2 wB: a build scoped to it wrote a reporter that said `passed`). `package.json` / `pharn.config.json` get an ADVISORY
 // `NOTE —` line and no RED, never changing the exit code: the build may legitimately change a dependency, and this
 // checker cannot see WHICH part of the file the build will change — every part the pin reads (the level gates'
-// scripts, the scripts they chain to, the `jest` key, the `testResults` formats) is still compared at verify.
+// scripts, the scripts they chain to, the `jest` key, the `testResults` formats and, since 6.36.0, the `gates.exclude`
+// list) is still compared at verify.
 //
 // THE FEATURE'S OWN AC ARTIFACTS STAY OUT OF THE BUILD'S SCOPE (6.31.0, `ac-artifact-in-plan`): a PLAN.md `## Files`
 // entry the setter would scope to THIS feature's AC-TESTS.md or AC-TESTS.lock.json is RED. The lock is what the AC gate
@@ -276,7 +277,7 @@ export function checkMapping({ acTestsText, specText, planText, others, acArtifa
       );
     } else if (kind === "manifest") {
       notes.push(
-        `PLAN.md \`## Files\` names ${shown(entry)}: the build may change it (a dependency, say), but not the level gates' scripts, their pre/post scripts, the scripts they chain to, package.json's \`jest\` key or the \`testResults\` formats /pharn-test pinned — that reads test-infra-changed at /pharn-verify. ADVISORY: this checker cannot see which part the build will change.`
+        `PLAN.md \`## Files\` names ${shown(entry)}: the build may change it (a dependency, say), but not the level gates' scripts, their pre/post scripts, the scripts they chain to, package.json's \`jest\` key, the \`testResults\` formats or the \`gates.exclude\` list /pharn-test pinned — that reads test-infra-changed at /pharn-verify. ADVISORY: this checker cannot see which part the build will change.`
       );
     } else if (k !== null && namedKeys.has(k)) {
       red(

@@ -377,6 +377,18 @@ node pharn/floor/run-gates.mjs init --stage ac-test --feature <name> --out <dir>
 node pharn/floor/run-gates.mjs run --next --out <dir> --timeout-ms <N>
 node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 
+# GATE EXCLUSION (added 6.36.0, gate-exclusion-config) — a project may declare in pharn.config.json
+# `{"gates": {"exclude": [<ALLOWLIST ids>]}}` (pharn/floor/gate-exclusion-core.mjs, closed both ways; a bad one is
+# `bad-gate-exclusion`, and an unparseable pharn.config.json now refuses discovery). `init --discover <m>` (no --gates)
+# reads it beside <m> and resolveSet drops those ids from DISCOVERY at verify, at regress (after the e2e rule) and at the
+# ac-test red run; an explicit --gates is never filtered. The stamp carries an optional `excluded` {declared_in, ids}
+# only when discovery removed one (validateStamp shape-checks it), gateRunBlock copies it into both reports, and
+# VERIFY.md / REGRESSION.md show a line under the verdict. /pharn-test pins the whole list (lock /5, below), and the red
+# run's preflight REDs an AC whose level gates are all excluded. THE RECORDED FAILURE (P7): a user's e2e gate could not
+# run on their machine and --gates makes the AC gate read test-infra-changed — two of three real loops stopped on it.
+# BOUND: FLOOR when init resolves the set, never re-derived later (only the red run's bindStamp re-resolves); legacy and
+# bootstrap SPECs pin nothing; /pharn-test runs before the reconcile anchor. Contract: gate-run-record.md.
+
 # PER-TEST RESULTS (added 6.15.0) — the runner hands EVERY gate one env var, PHARN_TEST_RESULTS, valued with
 # that gate's OWN absolute path under <out> (gate-run-core's resultsFileName, one copy); a project's reporter
 # config writes a machine-readable report there. The runner unlinks the path before the gate (a stale-lock
@@ -424,7 +436,7 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # `NOTE —` line and never change the exit code — every part of package.json the pin READS is still compared at verify
 # and cannot be re-pinned through the build's scope, a composition a ★ HOOK test executes; the parts it does not read
 # stay changeable, as the NOT-caught list states); exit 0/1/2. ac-tests-lock.mjs --write/--check pins the tests
-# in AC-TESTS.lock.json (schema ac-tests-lock/4 since 6.31.0 — /3, /2 and /1 still read; closed keys per mode; test_infra
+# in AC-TESTS.lock.json (schema ac-tests-lock/5 since 6.36.0 — /4, /3, /2 and /1 still read; closed keys per mode; test_infra
 # is the test-infrastructure pin, see THE AC GATE below); --check names a PATH, never content. The mapping grammar lives in ac-tests-core.mjs. AC-TESTS.md and the lock are PIPELINE_ARTIFACTS (regress-exempt); for reconcile
 # AC-TESTS.md is exempt like PLAN.md (a re-plan rewrites it) but the LOCK is `pre_anchor_artifacts` (NOT exempt).
 # Paths are compared as the setter SCOPES them (clean + isConcrete, case-folded). `--spec <SPEC.md>` decides
@@ -512,7 +524,7 @@ node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-
 # through an explicit --gates is test-infra-changed (test-first) / ac-untested (bootstrap) BY DESIGN; its detail names
 # the explicit source and /pharn-verify's reference section says not to pass --gates for such a feature. Both ids are
 # RESERVED_IDS and never enter `gates`. Legacy SPEC → NOT-APPLICABLE, stated (with AC evidence beside it → ac-tests-modified); spec_kind:
-# test-infra → BOOTSTRAP, weaker, labelled. THE TEST-INFRA PIN (lock schema ac-tests-lock/4 since 6.31.0,
+# test-infra → BOOTSTRAP, weaker, labelled. THE TEST-INFRA PIN (lock schema ac-tests-lock/5 since 6.36.0, /4 since 6.31.0,
 # test-infra-core.mjs, written by --write BEFORE the red run): the level gates' package.json script VALUES + pre/post
 # scripts + testResults formats, root vitest/vite/playwright/jest config files in a CLOSED name set (matched FOLDED since
 # 6.21.0 — on APFS a `Vitest.config.mjs` is the runner's config), and since 6.31.0 (the review's H2 + the GATE-1
@@ -531,7 +543,9 @@ node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-
 # test-infra-unpinned at verify, and (6.31.0) a /3 lock is judged by what it pinned, while what only /4 pins in the live
 # tree reads `unpinned` (--check RED, AC gate test-infra-unpinned) — the remedy sets the build aside and re-runs
 # /pharn-test (its red run cannot pass over a built tree). A /4 lock is lock-unusable to a pre-6.31.0 floor, never
-# GREEN (rolling back means re-running /pharn-test there). IN THE LOOP: check-loop-fresh E re-derives WITH --ac-gate and compares ac_gate (when the tree moved,
+# GREEN (rolling back means re-running /pharn-test there). 6.36.0 (/5): the pin adds `exclude`, the project's whole
+# declared `pharn.config.json` `gates.exclude` list (GATE EXCLUSION, further up); a /4 lock reads `unpinned` only when a
+# non-empty declaration exists, and every --write now writes /5, so a pre-6.36.0 floor reads it lock-unusable. IN THE LOOP: check-loop-fresh E re-derives WITH --ac-gate and compares ac_gate (when the tree moved,
 # 6.20.6: it re-derives WITHOUT the flag and compares what the stamp alone decides — gates, the non-AC failing ids and
 # the verdict rule — so only the AC part defers to F; the AC ids come from gate-run-core AC_RESERVED_IDS, not from
 # ac-gate-core, so the checker's own load graph does not grow); J re-hashes per-test results files;

@@ -214,6 +214,11 @@ The verdict fields are **unchanged**; the report additionally carries a **per-si
   `head` must equal the `--base` SHA (`base-head-mismatch`), and the two sides' specs must agree
   (`spec-mismatch`) — which is what makes "the set is decided once and applied to both" checkable rather
   than merely intended.
+- **`gate_run.head.excluded` (6.36.0, optional).** It is copied from the HEAD stamp when the project's `gates.exclude`
+  removed a discovered gate (`gate-run-record.md`, "Excluding a discovered gate"), and is absent otherwise. The base
+  side runs the head's set through `base-init`'s spec copy and names nothing itself. An excluded gate runs on neither
+  side, so a regression in it cannot be seen. `REGRESSION.md` renders one line directly under the verdict line
+  saying so. ADVISORY: no verdict and no `check-loop-fresh.mjs` comparison reads it.
 - **The bound (L43):** internal consistency, never provenance — a self-consistent fabricated pair passes.
 - **One machine consumer:** `check-loop-fresh.mjs` requires each side's `gate_run.<side>.stamp_sha256` to
   equal the sha256 of that side's stamp on disk, re-derives `verdict` / `regressions` / `pre_existing` /

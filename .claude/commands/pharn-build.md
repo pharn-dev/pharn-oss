@@ -79,8 +79,8 @@ Load the trusted prefix and obey it for the whole run:
 
    The gate also passes on a **rebuild** (a `/pharn-loop` iteration 2+, `/pharn-ship`'s Step 2b retry) **that left
    what the lock pins alone** (`pharn/pharn-contracts/ac-tests.md`, "The test-infrastructure pin" — that section is
-   the list). **So never change the level gates' scripts (`test`, `test:e2e`, `e2e`), their `pre`/`post` scripts or
-   the `testResults` formats, even when the plan names `package.json` or `pharn.config.json`:** that reads `lock-red`
+   the list). **So never change the level gates' scripts (`test`, `test:e2e`, `e2e`), their `pre`/`post` scripts, the
+   `testResults` formats or the `gates.exclude` list, even when the plan names `package.json` or `pharn.config.json`:** that reads `lock-red`
    here and `test-infra-changed` at `/pharn-verify`, and no rebuild clears it.
 
 3. **Set the scope from the plan's `## Files`** before any write. The **scope source is a `## Files` heading
