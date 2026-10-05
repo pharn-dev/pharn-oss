@@ -83,10 +83,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
   - Product commands `pharn-verify`, `pharn-regress`, `pharn-test`, `pharn-loop`, `pharn-build`, `pharn-ship` and
     `pharn-spec` name the exclusion where they restate discovery.
-  - `SKILLS_VERSION` 6.35.0 → 6.36.0 (minor: a new capability), with the README badge. `MIN_CLI` stays 0.5.0: no
+  - `SKILLS_VERSION` 6.35.1 → 6.36.0 (minor: a new capability), with the README badge. `MIN_CLI` stays 0.5.0: no
     installed path moves, and `pharn-cli` carries `gates` over as a user-owned key. One trusted-doc sentence becomes
     incomplete (`LIMITS.md §5`, "re-runs the project's own gates"). It is proposed for a human edit in
     `.dev/features/gate-exclusion-config/PROTECTED-FOLLOWUPS.md` and not edited here.
+
+## [6.35.1] - 2026-10-05
+
+### Added
+
+- 2026-10-05: **A measurement record of a real 92-minute `/pharn-loop` run in a user project, and two shorter
+  ones, all on 6.35.0 (`.dev/measurements/loop-wall-clock-2026-10-05.md`, apparatus).** It reports, for each run:
+  - wall clock by stage and context;
+  - request counts and per-request latency;
+  - first-request prefix sizes;
+  - the gate durations that still belong to the run;
+  - why the run stopped.
+
+  Every figure comes from the read-only helper `.dev/features/build-writes-through-tools/measure.mjs`, labelled by
+  source and precision. The record also corrects two figures in the batch evidence that later PRs cite. First, the
+  project's PostToolUse hook cost the test agent 3.5 s in total, not about 5 minutes; the 9–29 s per write came from
+  parallel tool calls. Second, the per-gate regress timings in that project's `.pharn/pharn-regress/` belong to a
+  later run of another feature.
 
 - 2026-09-29: **A post-optimization performance audit of the delivery pipeline, analysis only
   (`.dev/measurements/pipeline-performance-audit-2026-09-29.md`).** Its headline is that no real run exists on a
@@ -108,6 +126,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `.dev/features/pipeline-performance-audit/audit.mjs` is the read-only helper behind the report's figures; its
   `--ledgers` mode applies the selection rule frozen at GATE 1. The review's ten advisory findings and the re-review's
   three were fixed before merge. No product-surface byte changed, so there is no `SKILLS_VERSION` bump.
+
+### Changed
+
+- 2026-10-05: **Every routed stage agent, `/pharn-build` and `/pharn-test` are now told to write files with the
+  Write, Edit or MultiEdit tool, never through the shell.** They are also told to run a formatter only on files named
+  one by one. Where the rule lives:
+  - rule 4 of the brief ([`pharn/floor/stage-agent-core.mjs`](./pharn/floor/stage-agent-core.mjs),
+    `WRITE_TOOL_RULE`);
+  - [`/pharn-build`](./.claude/commands/pharn-build.md) Step 3;
+  - [`/pharn-test`](./.claude/commands/pharn-test.md) Step 3.
+
+  **The trigger (P7).** In that 92-minute run the routed build agent wrote the user's code through 49 Bash calls
+  (`python3` scripts, `sed -i`, `cat >`) and no Edit. So the writes-scope guard judged none of those writes. A
+  `prettier --write` over two directories reformatted a pinned AC test, and the agent restored it by searching for the
+  locked hash. No guard denial came first. The only instruction offering the shell was the harness's auto-mode
+  reminder, and all five stage agents received it, the four that wrote with the write tools included.
+
+  **ADVISORY.** No shell command is parsed, so an agent can still write through Bash:
+  - an out-of-scope Bash write stays DETECTED, never prevented, by `/pharn-verify`'s `reconcile` gate
+    (`LIMITS.md §6`);
+  - an in-scope one is neither. The named residual is `write-tool-attribution`: closing it needs a PostToolUse record,
+    a human-only hook change.
+
+  **Tests.** Every routed brief (16 cells) carries the rule, checked against a control text that fails without it.
+  `.dev/floor/command-hygiene.test.mjs` `WRITE_TOOL_RULE` pins the two Step 3s.
+
+  `SKILLS_VERSION` 6.35.0 → 6.35.1 (patch: a clarification of shipped stage rules), with the README badge. `MIN_CLI`
+  is unchanged.
 
 ## [6.35.0] - 2026-09-28
 
