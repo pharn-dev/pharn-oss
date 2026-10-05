@@ -173,6 +173,29 @@ Fencing scaffolding on every untrusted block + re-stating the finding schema + r
 constitution is per-call overhead × fan-out. "Free because it's frontmatter" is false at runtime;
 it is a real per-leaf tax.
 
+### 3e. The always-loaded instruction set is a model, and its growth gate measures that model
+
+`pharn/floor/check-instruction-files.mjs` models which project files Claude Code attaches to every
+session: the root `CLAUDE.md` / `.claude/CLAUDE.md` (else `AGENTS.md`), their `@path` imports, and the
+`.claude/rules/**/*.md` files without a `paths:` scope. The model comes from Claude Code's published
+memory documentation plus the assumptions its header labels. The harness's actual set may differ in
+either direction (versions, settings, `claudeMdExcludes`, HTML-comment stripping, the 4 MiB skip).
+
+- **Struck claim:** "`instruction-growth` PASS means the session prefix did not grow."
+- **True statement:** `--growth` (the `/pharn-verify` gate `instruction-growth`, 6.38.0) is a floor
+  verdict over that model: the bytes added to the modelled set since a base commit, against
+  `budget.instructionGrowthBytes` read from `pharn.config.json` at that base (default 2048). It measures
+  changed-since-base, not written-by-the-build; with a dirty working tree only uncommitted growth is
+  seen; and a per-change budget does not bound growth accumulated across changes that each stay under it.
+- **Under-count routes, known so far and never a complete list:** a catch-all `paths:` pattern spelled
+  another way, a YAML error the line reader does not recognise beside `paths:`, an always-loaded file
+  made git-ignored, and an uncommitted edit inside an initialised submodule.
+- **Not counted:** git-ignored files, `CLAUDE.local.md`, subdirectory `CLAUDE.md` files, directories
+  above the project root, `~/.claude/**`, managed policy files, and auto memory.
+- `--report` is advisory, and its token figure is bytes/4 (§1c). Whether `pharn update` preserves the
+  `budget` key in `pharn.config.json` is not verifiable from this repository; a dropped key falls back to
+  the default, which is the strict direction.
+
 ---
 
 ## 4. What "good architecture" means here

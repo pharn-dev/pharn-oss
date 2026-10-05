@@ -2260,7 +2260,22 @@ type: tooling · concepts: [input-capture, shared-state, temporal-state, false-g
 - source: `.dev/features/run-performance-breakdown/REVIEW.md` § Proposed lesson candidate + `REGRESSION.md` § A void first run
 - promoted: 2026-09-28 via gated `/pharn-dev-memory-promote` (human-approved).
 
-## L67 — A human-only edit an increment needs must land outside the build's anchor→verify window — reconcile has no attribution, so the human's own correct write reads as an escape
+## L67 — A checker that models an external tool's behaviour states its bounds from the inputs its author pictured — enumerate the tool's documented input grammar as fixture kinds
+
+type: floor · concepts: [input-domain, external-model, test-blindspot, stated-bound, lesson-recurrence]
+
+**Lesson.** instruction-files-core.mjs models which files Claude Code loads into every session, and its header listed three under-count routes as the stated bound. An independent review found four more by EXECUTING the tool's documented input grammar rather than the author's examples: YAML scalar kinds for a rule's `paths:` (null, `~`, `{}`, `0`, a block scalar holding `**`) were read as real scoping patterns; a case-variant `claude.md` or `.Claude/rules/` on a case-insensitive volume was not counted; content inside a git submodule was invisible, so `--report` said `no-instruction-files`; an in-root absolute link spelled through an alias (`/tmp` vs `/private/tmp`) read as outside the root. Each let a 10 KB always-loaded file pass the gate as 0 bytes. Remedy: when a floor checker models another tool, enumerate that tool's documented input kinds (each grammar production of the format it parses, each filesystem and git object kind it walks) as a fixture list the suite iterates, run every kind through the checker once, and label the bound list as known-so-far, never complete.
+
+**Why it matters.** This is [[L59]]'s remedy (make the input kinds a fixture must cover an enumeration) recurring in a new domain: the model of an external tool. [[L41]] explains why the suite stayed green: hermetic fixtures held only the kinds the author pictured. [[L60]] asks whether each assertion can fail; this asks whether the input domain was ever enumerated. A modelling checker's stated bounds are the author's model too, so a bound list presented as complete is an overclaim (P0). **Bound (P0):** discipline, not a floor check — nothing can enumerate a grammar the author did not read. **Trigger (P7):** one review, four reproduced under-count routes, promoted at the maintainer's choice at the ship-stage lesson gate.
+
+**Provenance.**
+
+- feature: `instruction-growth-gate`
+- commit: `d40667d1e998ecfc3039a658648065cba0243e9c` (working-tree build on this commit; uncommitted at promotion time)
+- source: `.dev/features/instruction-growth-gate/REVIEW.md § Advisory findings (instruction-files-core.mjs:169, :79, :40; instruction-files.mjs:150) + § Lessons to feed`
+- promoted: 2026-10-05 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L68 — A human-only edit an increment needs must land outside the build's anchor→verify window — reconcile has no attribution, so the human's own correct write reads as an escape
 
 type: scoping · concepts: [reconciliation, trusted-docs, human-only-patch, attribution, false-red]
 
@@ -2273,4 +2288,4 @@ type: scoping · concepts: [reconciliation, trusted-docs, human-only-patch, attr
 - feature: `plan-instruction-file-rule`
 - commit: `d40667d1e998ecfc3039a658648065cba0243e9c` (working-tree build on this commit; uncommitted at promotion time)
 - source: `.dev/features/plan-instruction-file-rule/REVIEW.md` § Proposed lesson candidate + `VERIFY.md` § Orchestration notes
-- promoted: 2026-10-05 via gated `/pharn-dev-memory-promote` (human-approved).
+- promoted: 2026-10-05 via gated `/pharn-dev-memory-promote` (human-approved). Promoted first as L67; renumbered to L68 when 6.38.0 (#311) merged its own L67.

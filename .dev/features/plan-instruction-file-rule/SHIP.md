@@ -26,7 +26,7 @@ Grill: [GRILL.md](GRILL.md), advisory.
 
 changelog-entry: exit 0
 
-lesson: promoted L67
+lesson: promoted L68
 
 deferred: none
 
@@ -47,16 +47,22 @@ deferred: none
 
 ## After GATE 2 — the human chose "fix"
 
-The human chose **fix**. The orchestrator then committed (`aa8e0e9`), opened PR #310 and merged `origin/main`. Main
-had moved twice during the run: 6.36.0 (#307), then 6.37.0 (#308). So the renumber target became **6.37.1**, not the
-6.36.1 named above.
+The human chose **fix**. The orchestrator committed (`aa8e0e9`), opened PR #310 and merged `origin/main` twice, because
+main kept moving:
 
-- The conflicts were in `CHANGELOG.md`, `README.md` and `SKILLS_VERSION`.
-- Main's released sections were kept byte-for-byte: the CHANGELOG diff against `origin/main` removes zero lines.
-- The renumbered lines were found by diffing the added lines against `origin/main`.
-- The run records above still say 6.35.3 / 6.36.1, as written at the time.
+- **First merge, `7e0e18a`:** brought in 6.36.0 (#307) and 6.37.0 (#308), and renumbered this increment to 6.37.1.
+- **Second merge:** brought in 6.38.0 (#311, the `instruction-growth` gate) and renumbered to **6.38.1**.
+  - #311 promoted its own **L67**, so this run's lesson was renumbered to **L68**. Canon was first reset to
+    `origin/main`'s exact bytes (`cmp` equal). L68 was then re-checked by `check-provenance.mjs` (GREEN) and appended
+    with Edit under the promote scope, and the index was regenerated (`check-lessons-index` GREEN).
+  - #311 also added `LIMITS.md` **§3e**, about the instruction set and its gate. This increment's bound therefore
+    becomes **§3f**, still the human's edit.
+  - The CHANGELOG no longer calls the deterministic backstop unbuilt: it names the 6.38.0 `instruction-growth` gate,
+    which bounds per-change growth, never whether a plan names `CLAUDE.md`.
+- Both merges kept main's released CHANGELOG sections and canon byte-for-byte. Renumbered lines were found by diffing
+  the added lines against `origin/main`.
+- The run records above keep the numbers they had when written (6.35.3, 6.36.1, L67).
 - The gates were re-run after the merge (see the PR).
-- `LIMITS.md` §3e is still the human's edit, and its version tag reads `6.37.1`.
 
 Chain ran; the named floor verdicts are as shown. This is NOT a judgment that the increment is good or wise; that is
 the human's call at the post-review gate.

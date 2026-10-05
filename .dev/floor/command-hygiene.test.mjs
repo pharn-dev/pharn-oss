@@ -4812,7 +4812,7 @@ test("WRITE_TOOL_RULE — each command that writes the user's files says, in its
   assert.equal(Object.keys(WRITE_TOOL_RULE_SITES).length, 2, "the two commands that write the user's files (L34)");
 });
 
-// ── INSTRUCTION_FILE_RULE (6.37.1, plan-instruction-file-rule) ──────────────────────────────────────────────
+// ── INSTRUCTION_FILE_RULE (6.38.1, plan-instruction-file-rule) ──────────────────────────────────────────────
 // THE RECORDED FAILURE (P7): in pharn-starter the harness attached 634,379 B of instruction files (CLAUDE.md 418,456 B,
 // 14 `.claude/rules/*.md` 213,290 B, MEMORY.md 2,633 B) to every stage agent, about half of each agent's ~302k-token
 // first request (.dev/measurements/loop-wall-clock-2026-10-05.md §3, §10). The user reports, unverified here, that
