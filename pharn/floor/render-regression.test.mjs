@@ -357,3 +357,64 @@ test("renderDone: with no baseEvidence (an older caller) nothing about reuse is 
   const md = renderDone({ feature: "demo", base: "a".repeat(40), report: baseReport(), scope: baseScope(), progress: baseProgress() });
   assert.doesNotMatch(md, /BASE evidence/);
 });
+
+// ── 6.36.0: the gate-exclusion disclosure, from gate_run.head.excluded, DIRECTLY under the verdict line ─────────
+
+const headRun = (excluded) => ({
+  base: { stamp_sha256: "a".repeat(64), source: "discover", fingerprint: { algo: "x", final: "b".repeat(64) } },
+  head: {
+    stamp_sha256: "c".repeat(64),
+    source: "discover",
+    fingerprint: { algo: "x", final: "d".repeat(64) },
+    ...(excluded ? { excluded } : {}),
+  },
+});
+
+test("6.36.0 — the exclusion line sits DIRECTLY under the verdict line for EVERY outcome (L52), and is absent without the block", () => {
+  const outcomes = [
+    baseReport(),
+    baseReport({ verdict: "regressions", regressions: ["test"], outside_gates: { test: { base: 0, head: 1 } } }),
+    baseReport({ verdict: "inconclusive", reason: "r" }),
+  ];
+  for (const r of outcomes) {
+    const excluded = { declared_in: "pharn.config.json#gates.exclude", ids: ["typecheck"] };
+    const md = renderDone({
+      feature: "demo",
+      base: "a".repeat(40),
+      report: { ...r, gate_run: headRun(excluded) },
+      scope: baseScope(),
+      progress: baseProgress(),
+    });
+    const lines = md.split("\n");
+    const at = lines.findIndex((l) => l.startsWith("**verdict:"));
+    assert.equal(
+      lines[at + 2],
+      "**1 discovered gate(s) EXCLUDED and NOT RUN on either side** by the project's `pharn.config.json` `gates.exclude`: `typecheck` — a regression in an excluded gate cannot be seen here.",
+      r.verdict
+    );
+    const plain = renderDone({
+      feature: "demo",
+      base: "a".repeat(40),
+      report: { ...r, gate_run: headRun(null) },
+      scope: baseScope(),
+      progress: baseProgress(),
+    });
+    assert.doesNotMatch(plain, /EXCLUDED and NOT RUN/, `${r.verdict}: the control`);
+  }
+});
+
+test("6.36.0 — an exclusion id outside the ALLOWLIST and an unknown source are never rendered inline (P2)", () => {
+  const excluded = { declared_in: "# x", ids: ["[l](http://e.x)", "build"] };
+  const md = renderDone({
+    feature: "demo",
+    base: "a".repeat(40),
+    report: { ...baseReport(), gate_run: headRun(excluded) },
+    scope: baseScope(),
+    progress: baseProgress(),
+  });
+  assert.match(
+    md,
+    /by a declaration whose source is not one this renderer recognizes: `build` \(\+1 id\(s\) outside the allowlist, not rendered\)/
+  );
+  assert.ok(!md.includes("http://e.x") && !md.includes("# x"));
+});

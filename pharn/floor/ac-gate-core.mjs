@@ -160,6 +160,14 @@ function notPinnedWhy(stamp) {
     : "it ran with a shell or a command other than the discovered one";
 }
 
+/** 6.36.0 — the gates of `ids` the head run's discovery left out because the project's `pharn.config.json`
+ *  `gates.exclude` names them (the stamp's `excluded` block, shape-checked by validateStamp), so a detail can say so
+ *  instead of reading as a runner not delivered yet (grill G11). Only the detail moves — never a reason or a verdict. */
+function excludedAmong(stamp, ids) {
+  const x = stamp.excluded;
+  return x && Array.isArray(x.ids) ? ids.filter((id) => x.ids.includes(id)) : [];
+}
+
 function verdictOf(evidence, acs) {
   const reasons = [...evidence.map((e) => e.reason), ...acs.map((a) => a.reason).filter((r) => r !== null)];
   for (const r of reasons) if (!AC_GATE_REASONS.includes(r)) throw new Error(`internal: ${r} is not an AC_GATE_REASONS member`);
@@ -263,9 +271,13 @@ function testFirst({ feature, spec, stamp, root, recordOf, records }) {
     }
     const gateIds = [...new Set(mine.flatMap((r) => LEVEL_GATES[r.level]))].filter((id) => inStamp.has(id));
     if (gateIds.length === 0) {
+      const levelIds = [...new Set(mine.flatMap((r) => LEVEL_GATES[r.level]))];
+      const excluded = excludedAmong(stamp, levelIds);
       ac.status = "unavailable";
       ac.reason = "gate-absent";
-      ac.detail = `the head run has none of ${[...new Set(mine.flatMap((r) => LEVEL_GATES[r.level]))].join(", ")}`;
+      ac.detail =
+        `the head run has none of ${levelIds.join(", ")}` +
+        (excluded.length ? ` — ${excluded.join(", ")} excluded by the project's pharn.config.json gates.exclude` : "");
       return ac;
     }
     for (const id of gateIds) if (!ranAsPinned(stamp, inStamp.get(id))) unpinnedRuns.add(id);
@@ -331,12 +343,15 @@ function bootstrap({ feature, spec, stamp, root, recordOf, records }) {
     if (gateIds.length === 0) {
       // A level gate that DID run, just not as discovered, is not "the runner is not delivered yet" — say which.
       const unpinned = LEVEL_GATES[level].filter((id) => stamp.runs.some((r) => r.id === id));
+      const excluded = excludedAmong(stamp, LEVEL_GATES[level]);
       out = {
         status: "none",
         reason: "ac-untested",
         detail: unpinned.length
           ? `the ${unpinned.join(", ")} gate ran, but not as the discovered \`npm run <id>\` — ${notPinnedWhy(stamp)}`
-          : `no discovered ${LEVEL_GATES[level].join(" or ")} gate ran — the runner is not delivered yet`,
+          : excluded.length
+            ? `no discovered ${LEVEL_GATES[level].join(" or ")} gate ran — ${excluded.join(", ")} excluded by the project's pharn.config.json gates.exclude, so no rebuild delivers it`
+            : `no discovered ${LEVEL_GATES[level].join(" or ")} gate ran — the runner is not delivered yet`,
       };
     } else {
       let passed = 0;

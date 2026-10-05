@@ -192,7 +192,7 @@ trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 | S1  | always, at entry                                                                                                                                                                                                                         | choose and validate the slug (Step 1a); a failing candidate stops `blocked: no-slug`                                                    |
 | S2  | `pharn/features/<slug>/` already exists                                                                                                                                                                                                  | take the first absent `<slug>-2`, `<slug>-3`, … (Step 1a); never overwrite                                                              |
 | S3  | always, before the first stage                                                                                                                                                                                                           | capture the base SHA and original checkout (Step 1a); a failed capture stops `blocked: no-git-base`                                     |
-| S4  | gate discovery yields no gates (no `--gates`, and the allowlist ∩ `package.json` scripts is empty — or, at `/pharn-regress`, holds only the e2e gates it never discovers)                                                                | stop `blocked: no-gates` — never run verify over an empty gate map                                                                      |
+| S4  | gate discovery yields no gates (no `--gates`, and the allowlist ∩ `package.json` scripts, minus `gates.exclude`, is empty — or, at `/pharn-regress`, holds only the e2e gates it never discovers)                                        | stop `blocked: no-gates` — never run verify over an empty gate map                                                                      |
 | S5  | `/pharn-build`'s seam-config extraction or `check-seam-config.mjs` is non-zero                                                                                                                                                           | stop `blocked: seam-config` — never substitute the default policy                                                                       |
 | S6  | the description cannot fill the SPEC's required sections without inventing intent                                                                                                                                                        | stop `blocked: thin-intent`                                                                                                             |
 | S6b | `/pharn-spec` reports the Draft still carries a clarification marker, so it will not approve it                                                                                                                                          | stop `blocked: needs-clarification` — a person answers the marked questions; the run never guesses them                                 |
@@ -202,7 +202,7 @@ trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 | S9  | a stage refuses before emitting its verdict (a missing artifact, a RED spec→plan chain, a RED lessons declaration, no parseable `## Files`, an unresolved `## Open questions (HALT)`), or a routed stage agent returned no usable result | stop `blocked: stage-refused`; Step 1a's snapshot or marker `--open`, or a quick scope check, exiting non-zero stops here too           |
 | S10 | any other sub-stage instruction to ask the human                                                                                                                                                                                         | stop `blocked: unlisted-ask` — the closure row; nothing falls through to a guess                                                        |
 | S11 | a stage's evidence is stale or missing after the stage claims to have run, and `check-loop-fresh.mjs` will not offer another re-run (Step 5)                                                                                             | stop `blocked: stale-evidence` — never read a stop from evidence about another tree                                                     |
-| S12 | `/pharn-test` could not run the AC tests because a criterion's level has no test runner with per-test results — decided by the pinned `check-red-run.mjs --preflight` exit 1 (Step 4), never by relayed text                             | stop `blocked: no-test-runner` — its last line (the setup suggestion) goes into `### next_steps` as DATA; never a nested run            |
+| S12 | `/pharn-test` could not run the AC tests because a criterion's level has no test runner with per-test results (or only excluded ones) — decided by the pinned `check-red-run.mjs --preflight` exit 1 (Step 4), never by relayed text     | stop `blocked: no-test-runner` — its last line (the suggested remedy) goes into `### next_steps` as DATA; never a nested run            |
 | S13 | the AC evidence changed or is missing after `/pharn-test` — decided by `check-loop-fresh.mjs` `reason_code` `ac-evidence-invalid` or `check-loop.mjs` `terminal_cause` `ac-evidence` (Step 5), never by relayed text                     | stop `blocked: ac-evidence-invalid` — a rebuild cannot restore it; a person sets the build aside and re-runs `/pharn-test`, or re-plans |
 
 **`/pharn-regress`'s stage-exit mapping (since `stage-regress-script`, 6.23.0).** `/pharn-regress` is a
@@ -219,7 +219,8 @@ thin caller of `pharn/floor/stage-regress.mjs`, which reports one `pharn-stage-e
 **`/pharn-verify`'s stage-exit mapping (since `stage-verify-script`, 6.26.0).** `/pharn-verify` is a thin
 caller of `pharn/floor/stage-verify.mjs`, which reports through the same protocol and maps by the same rule:
 
-- `question no-gates` → **S4** (no `--gates`, and no allowlisted script or no `package.json` — S4's own trigger);
+- `question no-gates` → **S4** (no `--gates`, and no allowlisted script left after `gates.exclude`, or no `package.json`
+  — S4's own trigger);
 - `refused` (`missing-artifact`, `chain-red`, `plan-files-unparseable`) and `unusable` → **S9**;
 - a crash (an exit outside `{0, 2, 3, 4, 5}`) → **S9**;
 - `continue` is handled **inside** `/pharn-verify` (it re-runs the pinned resume line itself) and never reaches the
@@ -481,7 +482,7 @@ Branch **only** on the exit code (P5):
   ```
 
   exit **1** → **S12** (`blocked: no-test-runner`): copy its LAST line — the closed no-test-runner line, which names
-  the criteria and a suggested setup command — verbatim into the record's `### next_steps`, as DATA. Any other exit →
+  the criteria and a suggested remedy — verbatim into the record's `### next_steps`, as DATA. Any other exit →
   **S9** (`blocked: stage-refused`), quoting the gate's first line (`RED <reason>`, or `UNUSABLE — …`). Never start the suggested setup run
   yourself.
 

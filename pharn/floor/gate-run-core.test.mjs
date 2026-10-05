@@ -51,6 +51,9 @@ import {
   REUSED_BLOCK_KEYS,
   NON_REUSABLE_IDS,
   MAX_REUSABLE_EXIT,
+  EXCLUSION_DECLARED_IN,
+  EXCLUDED_KEYS,
+  exclusionError,
 } from "./gate-run-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -979,4 +982,148 @@ test("reused entry: its exit must be a completed process exit (0..MAX_REUSABLE_E
     assert.equal(v.ok, false, `exit ${exit}`);
     if (Number.isInteger(exit)) assert.match(v.reason, /completed process exit/, `exit ${exit}: ${v.reason}`);
   }
+});
+
+// ---------------------------------------------------------------------------------------------------
+// 6.36.0 — a project's gate exclusion: applied to DISCOVERY at every discovering stage, disclosed in the stamp.
+// ---------------------------------------------------------------------------------------------------
+
+test("exclusionError: distinct ALLOWLIST members pass (every member — L52); anything else names a position, never a value", () => {
+  assert.equal(exclusionError([]), null);
+  assert.equal(exclusionError([...ALLOWLIST]), null);
+  for (const id of ALLOWLIST) assert.equal(exclusionError([id]), null, id);
+  for (const bad of [null, "e2e", {}, ["nope"], ["reconcile"], [1], ["e2e", "e2e"], [JSON.parse('{"toString":1}')]]) {
+    const e = exclusionError(bad);
+    assert.equal(typeof e, "string", JSON.stringify(bad));
+  }
+});
+
+test("ABSENT → nothing changes: with no exclusion every stage resolves exactly as before, and the spec's `excluded` is null", () => {
+  for (const [stage, side] of [
+    ["verify", null],
+    ["regress", "head"],
+  ]) {
+    const a = resolveSet({ stage, side, feature: "demo", scripts: ALL_SCRIPTS });
+    const b = resolveSet({ stage, side, feature: "demo", scripts: ALL_SCRIPTS, exclude: [] });
+    assert.deepEqual(a, b, stage);
+    assert.equal(a.spec.excluded, null, stage);
+  }
+  const ac = resolveSet({ stage: "ac-test", feature: "demo", scripts: ALL_SCRIPTS, acRows: AC_ROWS });
+  assert.equal(ac.spec.excluded, null);
+});
+
+test("verify: a declared id that is discovered is REMOVED and named; one that is not discovered changes nothing (L34 control)", () => {
+  const scripts = { test: "x", typecheck: "x", build: "x", e2e: "x" };
+  const r = resolveSet({ stage: "verify", feature: "demo", scripts, exclude: ["e2e", "typecheck"] });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.spec.required, ["test", "build"]);
+  assert.deepEqual(
+    r.spec.entries.map((e) => e.id),
+    ["test", "build", "reconcile"]
+  );
+  assert.deepEqual(r.spec.excluded, { declared_in: EXCLUSION_DECLARED_IN, ids: ["typecheck", "e2e"] });
+  const none = resolveSet({ stage: "verify", feature: "demo", scripts, exclude: ["lint"] });
+  assert.equal(none.spec.excluded, null, "an excluded id the manifest does not have removes nothing");
+  assert.deepEqual(none.spec.required, ["test", "typecheck", "build", "e2e"]);
+});
+
+test("regress: the exclusion applies AFTER the e2e rule (grill G9) — `excluded` never credits the declaration with an e2e id", () => {
+  const scripts = { test: "x", typecheck: "x", e2e: "x" };
+  const r = resolveSet({ stage: "regress", side: "head", feature: "demo", scripts, exclude: ["e2e", "typecheck"] });
+  assert.deepEqual(r.spec.required, ["test"]);
+  assert.deepEqual(r.spec.e2e_excluded, ["e2e"], "the fixed rule keeps its own line");
+  assert.deepEqual(r.spec.excluded, { declared_in: EXCLUSION_DECLARED_IN, ids: ["typecheck"] });
+});
+
+test("L34 — an exclusion that leaves NOTHING is empty-source-set naming it, at verify and at regress; --skip-style composes", () => {
+  const v = resolveSet({ stage: "verify", feature: "demo", scripts: { test: "x" }, exclude: ["test"] });
+  assert.equal(v.reason_code, "empty-source-set");
+  assert.match(v.reason, /once the project's pharn\.config\.json#gates\.exclude removed test/);
+  const r = resolveSet({ stage: "regress", side: "head", feature: "demo", scripts: { test: "x", e2e: "x" }, exclude: ["test"] });
+  assert.equal(r.reason_code, "empty-source-set");
+  assert.match(r.reason, /only the e2e gates \(e2e\) once the project's pharn\.config\.json#gates\.exclude removed test/);
+  const s = resolveSet({
+    stage: "regress",
+    side: "head",
+    feature: "demo",
+    scripts: { test: "x", lint: "x" },
+    exclude: ["test"],
+    skipStyle: true,
+  });
+  assert.equal(s.reason_code, "empty-source-set");
+});
+
+test("an explicit --gates string is NEVER filtered: passing an exclusion with it is a usage error; a bad exclusion is refused", () => {
+  const g = resolveSet({ stage: "verify", feature: "demo", gates: "npm test::test", exclude: ["test"] });
+  assert.equal(g.reason_code, "usage-error");
+  assert.match(g.reason, /DISCOVERY only/);
+  const ok = resolveSet({ stage: "verify", feature: "demo", gates: "npm test::test" });
+  assert.equal(ok.ok, true, "the control: the same --gates with no exclusion resolves");
+  for (const bad of [["nope"], "test", ["test", "test"], null]) {
+    const r = resolveSet({ stage: "verify", feature: "demo", scripts: { test: "x" }, exclude: bad });
+    assert.equal(r.reason_code, "bad-gate-exclusion", JSON.stringify(bad));
+  }
+});
+
+test("ac-test: a level whose discovered gates are ALL excluded is coverage-violation naming the exclusion; one of two e2e gates is not", () => {
+  const rows = [AC_ROWS[0], AC_ROWS[2]];
+  const scripts = { test: "x", e2e: "x", typecheck: "x" };
+  const all = resolveSet({ stage: "ac-test", feature: "demo", scripts, acRows: rows, exclude: ["e2e"] });
+  assert.equal(all.reason_code, "coverage-violation");
+  assert.match(all.reason, /AC-3 \(e2e\).*pharn\.config\.json#gates\.exclude removed them \(e2e\)/);
+  const two = resolveSet({
+    stage: "ac-test",
+    feature: "demo",
+    scripts: { ...scripts, "test:e2e": "x" },
+    acRows: rows,
+    exclude: ["e2e", "typecheck"],
+  });
+  assert.equal(two.ok, true);
+  assert.deepEqual(two.spec.required, ["test", "test:e2e"]);
+  assert.deepEqual(two.spec.excluded, { declared_in: EXCLUSION_DECLARED_IN, ids: ["e2e"] }, "never the non-level typecheck");
+});
+
+/** goodStamp() plus an `excluded` block (the runner's shape) over a discovered stamp whose required set lacks it. */
+const excludedStamp = (over = {}) => goodStamp({ excluded: { declared_in: EXCLUSION_DECLARED_IN, ids: ["typecheck", "e2e"] }, ...over });
+
+test("validateStamp: the `excluded` block is OPTIONAL and additive — absent and well-formed both validate", () => {
+  assert.deepEqual(validateStamp(goodStamp()), { ok: true });
+  assert.deepEqual(validateStamp(excludedStamp()), { ok: true });
+  assert.deepEqual([...EXCLUDED_KEYS].sort(), ["declared_in", "ids"]);
+});
+
+test("validateStamp REFUSES each malformed `excluded` block as stamp-malformed (L52: one mutation per rule)", () => {
+  const block = (b) => excludedStamp({ excluded: b });
+  const cases = [
+    ["not an object", block(["e2e"])],
+    ["null", block(null)],
+    ["an extra key", block({ declared_in: EXCLUSION_DECLARED_IN, ids: ["e2e"], by: "x" })],
+    ["a missing key", block({ ids: ["e2e"] })],
+    ["another source", block({ declared_in: "env", ids: ["e2e"] })],
+    ["an empty list", block({ declared_in: EXCLUSION_DECLARED_IN, ids: [] })],
+    ["a non-allowlist id", block({ declared_in: EXCLUSION_DECLARED_IN, ids: ["nope"] })],
+    ["a duplicate", block({ declared_in: EXCLUSION_DECLARED_IN, ids: ["e2e", "e2e"] })],
+    ["out of ALLOWLIST order", block({ declared_in: EXCLUSION_DECLARED_IN, ids: ["e2e", "typecheck"] })],
+    ["an id the stamp ran", block({ declared_in: EXCLUSION_DECLARED_IN, ids: ["test"] })],
+    [
+      "an id the stamp requires",
+      excludedStamp({ required: ["test", "e2e"], excluded: { declared_in: EXCLUSION_DECLARED_IN, ids: ["e2e"] } }),
+    ],
+    ["an explicit source", excludedStamp({ source: "explicit", source_raw: "npm test::test" })],
+  ];
+  for (const [why, s] of cases) {
+    const v = validateStamp(s);
+    assert.equal(v.ok, false, why);
+    assert.equal(v.reason_code, "stamp-malformed", why);
+    assert.match(v.reason, /^stamp\.excluded /, `${why}: ${v.reason}`);
+  }
+});
+
+test("gateRunBlock copies `excluded` ONLY when the stamp carries it — every report over a stamp without one is unchanged", () => {
+  assert.equal(Object.hasOwn(gateRunBlock(goodStamp(), "x"), "excluded"), false);
+  const s = excludedStamp();
+  const b = gateRunBlock(s, "x");
+  assert.deepEqual(b.excluded, { declared_in: EXCLUSION_DECLARED_IN, ids: ["typecheck", "e2e"] });
+  b.excluded.ids.push("build");
+  assert.deepEqual(s.excluded.ids, ["typecheck", "e2e"], "a copy, never the stamp's own array");
 });

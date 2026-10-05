@@ -53,9 +53,9 @@ pre_existing, outside_gates` (regress); `gate_run` is advisory and not compared.
    ALLOWLIST order.
 2. **Discovery applies it — `gate-run-core.mjs`.** `resolveSet` (and `resolveAcTest`) take `exclude` (default `[]`,
    validated by one exported `exclusionError()` the module above also calls — one rule, L35). In the DISCOVER branch
-   only: `excluded = discovered ∩ exclude`, removed BEFORE the regress e2e rule and before the empty-source test, so
-   an exclusion that leaves nothing is `empty-source-set` (the existing no-gates stop, L34) with a reason naming the
-   exclusion. An explicit `--gates` is never filtered. The spec gains `excluded: {ids, declared_in:
+   only: `excluded = discovered ∩ exclude`, removed AFTER the regress e2e rule (grill G9: so regress never credits the
+   declaration with an `e2e` it would not run anyway) and before the empty-source test, so an exclusion that leaves
+   nothing is `empty-source-set` (the existing no-gates stop, L34) with a reason naming the exclusion. An explicit `--gates` is never filtered. The spec gains `excluded: {ids, declared_in:
 "pharn.config.json#gates.exclude"}` only when `ids` is non-empty. New `REASON_CODES` member `bad-gate-exclusion`.
    `validateStamp` admits an OPTIONAL `excluded` (exact keys; `declared_in` the one member; `ids` non-empty, unique
    ALLOWLIST members in ALLOWLIST order; `source: "discover"`; no id in `required` or `runs`), else `stamp-malformed`.
@@ -73,17 +73,29 @@ pre_existing, outside_gates` (regress); `gate_run` is advisory and not compared.
    `--check` RED / `test-infra-changed`. A `/4` or `/3` lock is judged by what it pinned, and a NON-EMPTY live
    declaration is reported `unpinned` (`--check` RED "test infrastructure unpinned", AC gate `test-infra-unpinned`)
    — the 6.31.0 `/3`→`/4` precedent; with no declaration they read exactly as today. `--record-red-run` writes only
-   on `/5`. A pre-6.36 floor reads a `/5` lock as `lock-unusable` (fail-closed, never GREEN).
+   on `/5`. A pre-6.36 floor reads a `/5` lock as `lock-unusable` (fail-closed, never GREEN) — and `--write` writes
+   `/5` for EVERY project, declaring or not, so that rollback cost is universal (grill G12). The pin's `gates`,
+   `chained` and `script_files` sections and `scriptNamedFiles` (the plan-time `test-infra-in-plan` check) do NOT
+   filter an excluded level gate: its script stays pinned (grill G8). Because the pin now reads the declaration, a
+   `/4` or `/3` lock over an unparseable `pharn.config.json` reads `changed` (before: `results: config-invalid`).
    **Not pinned, stated:** a legacy SPEC (no lock), a bootstrap lock (`test_infra: null`), and agreement-not-provenance
    (L43: a self-consistent rewrite of config + lock passes; the lock stays out of the build's scope through
    `ac-artifact-in-plan`, and a PLAN naming `pharn.config.json` keeps its advisory NOTE, whose text gains
-   `gates.exclude`).
+   `gates.exclude`). **Two windows, named (grill G5):** `/pharn-test` runs before the reconcile anchor
+   (`LIMITS.md §9`), so an exclusion written during it is pinned as if legitimate — the backstop is regress's scope
+   partition, which has no exemption for `pharn.config.json` (a change since base reads `scope-escaped`), and a
+   standalone `/pharn-verify` has neither; and in a bootstrap or legacy SPEC a build whose PLAN declares
+   `pharn.config.json` can exclude a gate and regress still reads no-regressions (the base side runs the head's set) —
+   exactly as deleting the script can today; only the disclosure line shows it.
 5. **The red run — `red-run-core.mjs` + `check-red-run.mjs`.** `preflight` takes the exclusion (the CLI loads it
    from `--root`, `UNUSABLE` exit 2 on a bad one): a level whose discovered gates are ALL excluded is
    `ac-level-unavailable` with `why` naming the exclusion — never a vacuous pass (L34). `blockedLine` keeps its
    closed `blocked: no-test-runner — …` prefix (S12 is decided by exit code); when every unavailable AC is
-   exclusion-caused its `suggested:` names the exclusion instead of a test-infra increment. `bindStamp` re-resolves
-   with the same exclusion read from `root`.
+   exclusion-caused its `suggested:` names the exclusion instead of a test-infra increment, and in a mixed case it
+   names both (grill G10). `bindStamp` re-resolves with the same exclusion read from `root`. The run reads the
+   declaration beside `--discover`, the preflight/bindStamp/pin from `--root`/`root`: every pinned caller passes
+   `package.json` and `.`, so they agree — the same split `bindStamp` already has for the scripts (grill G7, stated).
+   The AC gate's detail texts name the exclusion when an AC's level gates are all excluded (grill G11).
 6. **Disclosure everywhere a verdict is shown.** Stamp `excluded`; `verify-report.json` `gate_run.excluded`;
    `regression-report.json` `gate_run.head.excluded`; `VERIFY.md` (`render-verify.mjs`) and `REGRESSION.md`
    (`render-regression.mjs`) render one line DIRECTLY UNDER the verdict line — "N discovered gate(s) EXCLUDED and NOT
@@ -124,8 +136,15 @@ pre_existing, outside_gates` (regress); `gate_run` is advisory and not compared.
 - `.claude/commands/pharn-verify.md` — reference: discovery minus `gates.exclude` (instead of `--gates`) — product command
 - `.claude/commands/pharn-regress.md` — reference: discovery minus `gates.exclude`; the no-gates causes — product command
 - `.claude/commands/pharn-test.md` — Step 2b names the exclusion cause; Step 4 names `/5` and the pinned list — product command
+- `.claude/commands/pharn-loop.md` — S4/S12 triggers and the verify mapping name the exclusion (grill G1) — product command
+- `.claude/commands/pharn-build.md` — the never-change list names `gates.exclude` (grill G2) — product command
+- `.claude/commands/pharn-ship.md` — the build-gate discovery sentence names the runner's exclusion (grill G2) — product command
+- `.claude/commands/pharn-spec.md` — the e2e-criterion question names an excluded e2e gate (grill G2) — product command
+- `pharn/floor/ac-gate-core.mjs` — detail texts name an exclusion (grill G11) — layer pharn-floor
+- `pharn/floor/ac-gate-core.test.mjs` — the AC gate's detail under an exclusion — layer pharn-floor (test)
+- `.dev/floor/command-hygiene.test.mjs` — only if a byte ceiling must move, as a visible diff (grill G3) — apparatus (test)
 - `SKILLS_VERSION` — 6.35.0 → 6.36.0 (provisional; minor: new behaviour) — repo meta
-- `README.md` — badge (and the generated region only through `npm run docs:generate`, if it moves) — repo meta
+- `README.md` — badge, and the generated CURRENT-STATE region through `npm run docs:generate` (the floor count moves) — repo meta
 - `CHANGELOG.md` — `## [6.36.0]`, moving `[Unreleased]` — repo meta
 - `CLAUDE.md` — the lock-schema mentions (`/4` → `/5`) and one line on `gates.exclude` — repo meta
 - `.dev/features/gate-exclusion-config/PLAN.md` — this plan — apparatus
@@ -177,12 +196,18 @@ pre_existing, outside_gates` (regress); `gate_run` is advisory and not compared.
   non-ALLOWLIST id is not rendered inline. A test runs `validate.mjs`-unaffected (the line carries no marker).
 - ★ WIRING (L45): `stage-verify.mjs` over a temp project with `pharn.config.json` excluding a failing gate → `done`,
   `verify-report.json` `gate_run.excluded`, `VERIFY.md` line; and the control without the config → that gate runs.
-  `stage-regress.mjs` likewise for `gate_run.head.excluded` (if the suite's fixtures allow it cheaply).
+  `stage-regress.mjs` likewise for `gate_run.head.excluded` and the `REGRESSION.md` line — UNCONDITIONAL (grill G4).
+- ★ WIRING (L45): `/pharn-test`'s committed lines (preflight, `--write`, `--check`, `init --stage ac-test`, drain,
+  verdict, `--record-red-run`, `--check --require-red-run`) run GREEN over a project that DECLARES an exclusion, the
+  lock records it and the red-run stamp carries `excluded`; and the preflight line exits 1 with the exclusion
+  suggestion for an `e2e` criterion whose gate is excluded (grill G4).
 
 ## Guarantee audit (P0)
 
-- "A declared id is not discovered at regress, verify or the red run" → floor: enum-regex (ALLOWLIST membership over
-  the parsed declaration, set difference in resolveSet; tested per stage).
+- "A declared id is not discovered at regress, verify or the red run" → runner code (an ALLOWLIST membership test over
+  the parsed declaration and a set difference in resolveSet; tested per stage) — FLOOR at the moment the set is
+  resolved; re-derived later only by the red run's `bindStamp`. `validateStamp` checks the `excluded` block's shape
+  when present and never re-derives the set: a stamp missing a gate with no block validates as before (grill G6).
 - "A malformed declaration refuses rather than running a different set" → floor: enum-regex (closed shape).
 - "A change to the declaration after `/pharn-test` reads `test-infra-changed` at verify (test-first SPEC)" → floor:
   content-hash/equality over the `/5` pin — AGREEMENT, never provenance (L43); the act of running `/pharn-test` first
@@ -243,13 +268,41 @@ pre_existing, outside_gates` (regress); `gate_run` is advisory and not compared.
   verdict tokens; they do not repeat the exclusion line (the linked `VERIFY.md`/`REGRESSION.md` do).
 - `gate-exclusion-bootstrap-pin` — a `spec_kind: test-infra` (bootstrap) lock carries no test-infrastructure pin, so
   the declaration is not pinned there (as nothing else is); verify still discloses it.
+- `gate-exclusion-regress-blind` — in a bootstrap or legacy SPEC, a build whose PLAN declares `pharn.config.json` can
+  add an exclusion and regress reads no-regressions over the smaller set (the base side runs the head's set); only the
+  disclosure line shows it — the same exposure as deleting the script today (grill G5).
+- `gate-exclusion-build-gate` — `/pharn-build` Step 4's own gate is model-run prose, not the runner, so it does not read
+  the declaration (the `build-gate-bounded` increment owns that step).
+
+## Grill amendments (taken before the build completed)
+
+The independent grill (an Opus agent, read-only) returned 12 findings, none blocking; G1–G12 above are taken as
+amended in this plan: restatements in `pharn-loop.md`, `pharn-build.md`, `pharn-ship.md` and `pharn-spec.md` (G1, G2);
+`command-hygiene.test.mjs` declared for a visible ceiling change only if needed, and no new "reads
+`test-infra-changed`" occurrence in `pharn-verify.md` (G3); both ★ wiring tests unconditional (G4); the two windows
+named (G5); the guarantee wording (G6); the read-location split stated (G7); the pin not filtering an excluded level
+gate stated (G8); regress applies the exclusion AFTER the e2e rule (G9); the blocked line's mixed case and the
+`mapping-unusable` label (G10); the AC gate's detail texts (G11); the back-compat costs (G12). The grill also recorded
+that the build had started in the worktree while it ran; this plan was amended, the writes-scope re-set and the
+reconcile baseline RE-ANCHORED after each amendment (twice: the grill amendment, then one `## Files` correction —
+`ac-gate-core.test.mjs` is where the AC gate's tests live, not `check-verify.test.mjs`) (L48: an amendment is invisible
+to an open epoch) — so writes made before the last re-anchor, all through the Write/Edit tools under the guards, are not
+judged by this increment's `reconcile` gate.
+
+## GATE 1
+
+APPROVED 2026-10-05 by the orchestrating model under the user's delegation (batch "make /pharn-loop fast") — a
+delegated decision, not a human approval. Answers to the questions this plan raised:
+
+- Q1 (config shape): the closed object `{"gates": {"exclude": [...]}}` — accepted.
+- Q2 (lock schema `/5`; an existing `/4`/`/3` lock reads `unpinned` only when a declaration exists) — accepted; the
+  CHANGELOG entry states that cost.
+- Q3 (disclosure scope): RUN-REPORT/BRIEFING stay the named residual `gate-exclusion-summary-disclosure` — accepted.
+- Q4 (an unparseable `pharn.config.json` now refuses discovery loudly) — accepted; the CHANGELOG says it is a
+  behaviour change.
+- Q5 (shared files): keep the edits in `run-gates.mjs`, `gate-run-record.md` and the stage tests minimal and local.
+- Version: 6.36.0, provisional; the orchestrator assigns the final one at stacking time.
 
 ## Open questions (HALT)
 
-- Q1: the config shape `{"gates": {"exclude": [...]}}` (a closed object leaves room for a later key without a new
-  top-level name) — accept, or prefer a flat `"excludeGates": [...]`?
-- Q2: a lock schema bump to `/5` (vs an optional key under `/4`): chosen because the pin's key set is closed per
-  schema and the 6.31.0 precedent bumped for added pin keys; cost: every in-flight `/4` feature in a project that
-  DECLARES an exclusion must re-run `/pharn-test` (fail-closed `unpinned`). Accept?
-- Q3: scope the disclosure to the four artifacts + stamp named in the brief, leaving RUN-REPORT/BRIEFING as the named
-  residual above — accept?
+- none — every question above was answered at GATE 1.
