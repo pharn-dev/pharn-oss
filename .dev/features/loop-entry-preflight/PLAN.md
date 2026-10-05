@@ -1,10 +1,17 @@
-# PLAN — loop-entry-preflight: a delivery run runs verify's gates once on the tree it starts from, and an unattended run stops before any model work when one is already red
+# PLAN — loop-entry-preflight: a delivery run runs verify's gates once on the tree it starts from, in the background, and stops before the build when one is already red
 
 - spec_content_hash: d831d30d399a37dc403080072763d13383de6f6f31875e7e8cb4eadeb642f4f4
 - applied_lessons: [L22, L30, L34, L35, L38, L41, L44, L45, L54, L62, L66]
-- increment: `/pharn-loop` (Step 1a) and `/pharn-ship` (Step 2 item 1) run one new floor CLI, `entry-gates.mjs`, right after the run's entry steps and before any stage: it resolves the gate set `/pharn-verify` will discover (`resolveSet`, the project's `gates.exclude` applied) and runs it ONCE, through `run-gates.mjs`, in the working tree the run starts from. A red gate stops an unattended run as a new stuck point `S14` (`blocked: gates-red-at-entry`) unless the person opted in with a leading `--allow-red-entry`; `/pharn-ship`, which has a person present, asks.
+- increment: `/pharn-loop` (Step 1a) and `/pharn-ship` (Step 2 item 1) start one new floor CLI, `entry-gates.mjs --start`, right after the run's entry steps. It resolves the gate set `/pharn-verify` will discover (`resolveSet`, `gates.exclude` applied) and runs it ONCE, through `run-gates.mjs`, in the working tree, in a detached background runner, while the spec, plan and grill stages run. A pinned `--wait` line reads its verdict just before `/pharn-test`. A red gate stops an unattended run as a new stuck point `S14` (`blocked: gates-red-at-entry`) unless the person opted in with a leading `--allow-red-entry`; `/pharn-ship`, which has a person present, asks. `--abort` runs at every stop.
 - layer(s): pharn-floor (product), pharn-contracts (one contract), product `.claude/commands` (four files)
 - constitution_refs: [P0, P2, P3, P4, P5, P6, P7]
+
+## GATE 1 record
+
+GATE 1 was decided by the orchestrating model under the user's delegation (2026-10-05), not by a human: approved with
+one design change. The first plan's placement (A), foreground before the spec stage, became (D), background in the
+working tree, overlapping spec + plan + grill, read before `/pharn-test`. The evidence against (B) (an isolated
+worktree) was accepted. The item-9 prefix-weight note was dropped from this increment (below).
 
 ## Why (P7)
 
@@ -15,9 +22,9 @@ The batch brief's evidence (§2, finding 1b), re-read this run from `~/Projects/
   `billing-plan-catalog` (91.75 min): `build` red at base and head (its `REGRESSION.md`, `pre_existing`), plus a
   discovered `e2e` the user does not run locally. `workspace-wording-ui` (33 min): its `LOOP.md` records "standing reds
   outside the plan would also have kept verify red: 2 unit tests and the Sentry `typecheck`". `locales-en-pl-only`
-  (`--quick`, 27.5 min): its `verify-report.json` reads `test: 1, typecheck: 2, build: 1`, and `LOOP.md` says all three
-  are red at base. `/pharn-verify`'s threshold is absolute, so no such run can PASS; `check-loop.mjs` reads a verify
-  `FAIL` as `CONTINUE` until `STOP_CAP`.
+  (`--quick`, 27.5 min): its `verify-report.json` reads `test: 1, typecheck: 2, build: 1`, and its `LOOP.md` says all
+  three are red at base. `/pharn-verify`'s threshold is absolute, so no such run can PASS; `check-loop.mjs` reads a
+  verify `FAIL` as `CONTINUE` until `STOP_CAP`.
 - **Items 2 and 3 of the batch remove the other two entry causes** (pre-run dirt at regress, 6.37.0; an unrunnable
   discovered gate, 6.36.0). With both merged, each of these runs would no longer stop early on them: it would iterate
   build → regress → verify to `STOP_CAP` (M = 3) on gates no build in its plan can fix.
@@ -30,217 +37,272 @@ The batch brief's evidence (§2, finding 1b), re-read this run from `~/Projects/
   agent's own (advisory), then `/pharn-regress` HEAD, then `/pharn-verify`.
 - `gate-run-core.mjs` `resolveSet` is the one discovery rule (ALLOWLIST ∩ `package.json` scripts, `E2E_SET` dropped at
   regress only, `gates.exclude` applied after it, `empty-source-set` before any injection). `STAGES` is
-  `["verify", "regress", "ac-test"]`; for any stage but `verify` no `reconcile` is injected, and `run-gates.mjs` runs
-  `check-build-complete` only for `verify`. So a stage value `entry` would get exactly verify's discovered set, no
-  `reconcile`, no completeness, with no other code change (read: `resolveSet`, `orderEntries`, run-gates `init` lines
-  590–760, `run --next` line 986).
-- `stage-runtime.mjs` already owns the budgeted drain (`drainGates`, `makeBudget`, `mayStartSlowStep`) both stage
-  scripts use; `run-gates.mjs init` wipes `<out>` and asserts its containment under `.pharn/`.
-- `/pharn-loop` Step 1a (6.37.0): S1 slug → S2 dir → S3 base → porcelain snapshot → Stop-guard `--open` → pre-run
-  snapshot `--capture` → `run-start` marker. A stop there writes no record and goes to the close part's Step 7.
-  `/pharn-ship` Step 2 item 1: GATE-1 backstop → `run-marker --open` → pre-run snapshot → `/pharn-plan`.
+  `["verify", "regress", "ac-test"]`. For any stage but `verify`, no `reconcile` is injected, and `run-gates.mjs` runs
+  `check-build-complete` only for `verify`. So a stage `entry` gets exactly verify's discovered set, with no `reconcile`
+  and no completeness.
+- `run-gates.mjs` fingerprints the tree before and after every gate (`worktree-fingerprint.mjs`) and refuses to finalize
+  when one gate's `fp_before` differs from the previous gate's `fp_after` (`tree-changed-between-gates`). The
+  fingerprint excludes `.pharn/` and a closed set of POST-build artifacts; `SPEC.md`, `PLAN.md`, `GRILL.md` and
+  `AC-TESTS.md` are INCLUDED, so the front stages' writes would trip that refusal for an overlapping run.
+- The front stages write only `pharn/features/<name>/**`: `writes:` of `/pharn-spec` (`SPEC.md`), `/pharn-plan`
+  (`PLAN.md`, `AC-TESTS.md`), `/pharn-grill` (`GRILL.md`); none runs a formatter over them. Their other writes are under
+  `.pharn/` (markers, stage results, the writes-scope record). `/pharn-test` (`AC-TESTS.lock.json` + the test files) is
+  the first stage that writes files a gate reads outside the feature directory.
+- `gate-reuse-core.mjs` `findReusable` accepts only a `regress`/`head` stamp (`validateStamp` with `REUSE_SOURCE`), and
+  the execution identity includes the fingerprint algo.
+- **Measured this run: a process spawned `detached: true, stdio: "ignore"` and `unref()`'d from a Bash-tool call
+  survives the call's end** (it wrote its file 20 s later, after the Bash call had returned).
 
 ## The core decision — where and when the gates run
 
-Three placements were weighed against measured facts from this very project. **Chosen: (A), foreground, in the working
-tree, before the spec stage.**
+|                     | (A) foreground before spec (first plan) | (B) background, isolated worktree + install                                                                                                                                                                | (D) background, working tree, overlapping the front (chosen)         |
+| ------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| healthy full run    | + E ≈ 4–9 min                           | ≈ 0                                                                                                                                                                                                        | ≈ 0 while E ≤ the front (spec + plan + grill: 20.7 / 13.5 min [R·m]) |
+| healthy quick run   | + E                                     | ≈ 0                                                                                                                                                                                                        | + max(0, E − front); the quick front was 5.1 min [R·m]               |
+| doomed run stops at | ≈ minute 4–10                           | end of the front                                                                                                                                                                                           | end of the front, or E if longer                                     |
+| fidelity to verify  | exact                                   | **false red measured**: the base worktree lacks the ignored `.env.local`, so `next build` fails env validation (`.pharn/pharn-regress/base-gates/2-build.err`); a fresh install hides stale `node_modules` | exact: same tree, same `node_modules`, same ignored files            |
 
-|                              | (A) foreground, working tree, before spec                 | (B) background, isolated worktree + install, read before the first build                                                                                                                                                                                                                                                                                      | (C) background, working tree, overlapping the spec stage                                                                                                                                                |
-| ---------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| healthy-run cost             | + the gates' wall time, E ≈ 4–9 min here [R·e, below]     | ≈ 0 on the critical path                                                                                                                                                                                                                                                                                                                                      | ≈ max(0, E − spec) ≈ 1–6 min                                                                                                                                                                            |
-| doomed-run stop              | ≈ minute 4–10, no feature dir, nothing to revert          | at the end of the front: min 30.1 / 18.9 / 6.9 in the three runs [R·m markers]                                                                                                                                                                                                                                                                                | ≈ minute 4–10, after a SPEC exists                                                                                                                                                                      |
-| fidelity to what verify runs | exact: same tree, same `node_modules`, same ignored files | **measured false red**: the regress BASE worktree's `next build` fails `Production environment validation failed: NEXT_PUBLIC_SITE_URL is required…` because the git-ignored `.env.local` is absent there (`.pharn/pharn-regress/base-gates/2-build.err`); a fresh install also hides the stale-`node_modules` typecheck red the working tree has (finding 2) | exact for the tree, but the spec stage writes `pharn/features/<name>/SPEC.md` mid-run, which `run-gates.mjs` refuses at finalize (`tree-changed-between-gates`) and a project's `format:check` may read |
-| new mechanism                | none: `run-gates` + `stage-runtime` drain                 | a detached worker (unmeasured survival across Bash-tool calls), a worktree overlay from the snapshot, an install, a wait line, cleanup; concurrency with `/pharn-test`'s red run on shared ports/DBs                                                                                                                                                          | a second executor without the between-gate fingerprint rule                                                                                                                                             |
-
-**Why (A).** (B)'s one advantage, zero critical-path time, is real, but in the evidence project its isolated tree
-**false-reds `build` on every run** (the ignored `.env.local` is never in a fresh worktree), so it would stop healthy runs
-too — the worst outcome for a speed item — and its fresh install hides one class (stale dependencies) that the working
-tree shows. (C) saves at most the spec stage's 1.3–3.6 min [R·m] and needs an executor that tolerates a moving tree,
-which is the property `run-gates.mjs` exists to refuse. (A) answers exactly the question "can verify pass on this
-tree's pre-existing gates?", reuses the one executor, and inherits batch item 5's parallel drain for free, which would
-cut E to about the longest gate.
-
-**The cost is stated, not hidden.** E is the project's full verify gate time (e2e included, since verify runs it), paid
-once per run, in wall clock, with no model tokens beyond the orchestrator's 1–6 continue round trips. Measured inputs
-for pharn-starter: `test` 155 s (the 92-min run's verify, vitest JSON span) [R·m]; `typecheck` ~5 s and a warm, failing `build`
-~63 s (mtimes of a later run's head logs; a passing build is longer) [R·e]; the whole verify set with `e2e`, 8.6 min (the `locales-en-pl-only`
-verify interval, which ran all six gates) [R·m]. Under load the same `test` took 481–511 s [R·m]. Two named follow-ups
-recover it (see "Follow-ups").
-
-### Expected saving, per recorded run (A)
-
-Entry steps before the check take 7 s (run-start 08:38:43 → spec start 08:38:50) [R·m]; E = 4–9 min.
-
-| run                        |    actual | red at entry (source)                      | under (A) |      vs actual |                  vs the post-6.36/6.37 counterfactual |
-| -------------------------- | --------: | ------------------------------------------ | --------: | -------------: | ----------------------------------------------------: |
-| billing-plan-catalog       | 91.75 min | `build` [R·m], `e2e` unless excluded [R·m] |  4–10 min |     −82 to −88 | ≈ 30.1 + 3 × (25.7 + 11.1 + 8.6) ≈ 166 → −156 to −162 |
-| workspace-wording-ui       |    33 min | `test`, `typecheck` [R·m]                  |  4–10 min |     −23 to −29 | ≈ 18.9 + 3 × (13.1 + 11.1 + 8.6) ≈ 117 → −107 to −113 |
-| locales-en-pl-only (quick) |  27.5 min | `test`, `typecheck`, `build` [R·m]         |  4–10 min | −17.5 to −23.5 |            ≈ 6.9 + 3 × (10.9 + 8.6) ≈ 65 → −55 to −61 |
-
-The counterfactual column [R·e] assumes items 2 and 3 merged (so the run reaches verify), three iterations to
-`STOP_CAP` at the measured iteration-1 stage durations (regress = the 92-min run's second regress, 11.1 min; verify =
-locales' full verify, 8.6 min). A healthy run pays +E (4–9 min) here.
+E is the project's verify gate time: `test` 155 s [R·m]; `typecheck` ≈ 5 s and a failing `build` ≈ 63 s [R·e, mtimes];
+the whole verify set with `e2e` 8.6 min [R·m, the locales verify interval].
 
 ## The design
 
-### The CLI — `pharn/floor/entry-gates.mjs` (execution) + `pharn/floor/entry-gates-core.mjs` (pure rules)
+### Three invariants (D) must keep, and how
+
+1. **The front stages' writes must not make the run refuse.** The `entry` stage's fingerprint excludes exactly
+   `pharn/features/<name>/` — the validated slug, a literal prefix, never a glob — and carries its own algo token
+   (`worktree-fingerprint/2+sha256+entry-feature-dir`). Any other tree change between gates still refuses
+   (`tree-changed-between-gates`). **Sound for `entry` only:** an entry stamp is read by `entry-gates.mjs` alone; it is
+   never reuse evidence (`findReusable` accepts only `regress`/`head`, and its identity's algo differs), and every
+   other consumer passes `expect.stage` to `validateStamp` and refuses it. A test pins all three.
+2. **A model-written artifact must not false-red a style gate.** The `entry` set drains `STYLE_SET` first. The runner
+   records the feature directory's digest when the run starts (`d0`) and before and after every gate. A style gate's
+   red counts only when that gate's run began and ended with the directory as it was at `d0`, i.e. before this run
+   wrote any artifact. Otherwise it is `unattributed`: reported, never a stop. **What remains when a style gate is
+   slow:** its red is then `unattributed`, so the run continues exactly as it does today and verify judges it.
+   Non-style gates are not held to this rule. The front writes only markdown under the feature directory, and the
+   assumption that `test` / `typecheck` / `build` / `e2e` do not read it is ADVISORY. It is stated, and
+   `--allow-red-entry` is the remedy.
+3. **No gate is left running, and no wait is a model poll.** `--start` spawns a detached runner (`setsid`) and records
+   `{feature, nonce, pid}`. `--wait` blocks inside node up to `--budget-ms` and exits `5` to be re-run as the same
+   pinned line. `--abort` freezes the runner's process group (SIGSTOP), snapshots `ps -A -o pid=,ppid=,pgid=`, then
+   SIGTERMs every descendant gate's process group and SIGKILLs the runner's, with a SIGKILL after a grace. Every signal
+   is sent only after `ps -p <pid> -o args=` shows the runner's own nonce, so a reused pid is never signalled. One
+   runner per tree (L38): a new `--start` supersedes an earlier one (abort first, then wipe).
+
+### The CLI — `pharn/floor/entry-gates.mjs` (I/O) + `pharn/floor/entry-gates-core.mjs` (pure rules)
 
 ```text
-node pharn/floor/entry-gates.mjs --feature '<name>' --timeout-ms 540000 --budget-ms 570000
-node pharn/floor/entry-gates.mjs --resume --feature '<name>' --timeout-ms 540000 --budget-ms 570000
+node pharn/floor/entry-gates.mjs --start --feature '<name>' --timeout-ms 540000
+node pharn/floor/entry-gates.mjs --wait --feature '<name>' --budget-ms 570000
+node pharn/floor/entry-gates.mjs --abort --feature '<name>'
 ```
 
-1. Validates argv with `stage-runtime.mjs`'s `scanFlags` / `parseTimeoutMs` / `parseBudgetMs` (one owner, L35); `<name>`
-   against `FEATURE_SLUG_RE`. `--timeout-ms` is required, no default (L41).
-2. Fresh: `run-gates.mjs init --stage entry --feature <name> --out .pharn/pharn-entry/gates --discover package.json`
-   (no `--discover` when there is no `package.json`, which `resolveSet` reads as the empty set). Init wipes `<out>`, so the
-   directory this run reads was created empty by this run (L66); its exit 3 is `no-gates`.
-3. `--resume`: no init; the in-progress record or the stamp under `<out>` must name the same feature (read with
-   `regress-base-reuse.mjs` `readInProject`, lstat-walked, never followed, capped — L54/L59), else `unusable`.
-4. Drains with `stage-runtime.mjs` `drainGates` + `makeBudget` (the budget clock starts at the first statement); out of
-   budget → `continue`.
-5. Reads `<out>/stamp.json` the same way, `validateStamp(stamp, {stage: "entry", feature})`, and decides with the pure
-   `entryVerdict`: red = every run with `exit !== 0` or `timed_out` — by membership over the validated stamp (P5).
-6. Prints ONE JSON document, `pharn-entry-gates/1`, a closed key set for every status:
-   `{schema, status, feature, gates: [{id, exit, timed_out}], red: [ids], excluded, out, reason_code, detail}`.
+- `--start`: validates argv (`stage-runtime.mjs` helpers, `FEATURE_SLUG_RE`; `--timeout-ms` required, no default —
+  L41); supersedes an earlier runner; wipes `.pharn/pharn-entry/` (containment-walked, lstat-first — L54); runs
+  `run-gates.mjs init --stage entry --feature <name> --out .pharn/pharn-entry/gates [--discover package.json]`
+  synchronously. Init exit 3 → writes the result `no-gates`, exits `3`. A refusal (a bad `gates.exclude` included) →
+  `2`. Else it records `runner.json` (`{schema, feature, nonce, pid, timeout_ms, d0}`), spawns the runner and exits
+  `0`.
+- the runner (`--runner`, internal; refuses unless `runner.json` names its nonce): one `run-gates.mjs run --next` per
+  gate, the feature-directory digest before and after each, then writes `result.json` LAST (atomic rename), carrying
+  the nonce, the stamp's sha256 and the per-gate digests. A runner error writes an `unusable` result.
+- `--wait`: reads `runner.json` and `result.json` only through `readInProject` (lstat-walked, not followed, capped),
+  and only when `result.json` carries THIS run's nonce and feature (L66). It then re-reads the stamp, checks its sha256,
+  `validateStamp(stamp, {stage: "entry", feature})`, and decides with the pure `entryVerdict`. No result and the runner
+  alive → keep waiting, or exit `5` when out of budget. No result and the runner gone → `unusable runner-died`.
+- `--abort`: a no-op when no runner record exists or it names another feature; otherwise the kill sequence above, then
+  an `aborted` result. Its exit never changes the stop it runs at.
 
-**Exits (closed; `1` deliberately unused, so node's own crash exit is never a verdict — the 6.21.1 rule):** `0` green ·
-`4` red · `3` no-gates · `5` continue · `2` unusable (closed `REASON_CODES`: `usage-error`, `child-refused` — a runner
-refusal, `tree-changed-between-gates` included —, `no-progress`, `feature-mismatch`, `stamp-invalid`, `crashed`). Every
-untrusted value quoted into `detail` goes through a total function (L62).
+**`--wait` prints ONE JSON document `pharn-entry-gates/1`**, with closed keys for every status:
+`{schema, status, feature, gates: [{id, exit, timed_out}], red, unattributed, excluded, reason_code, detail}`.
+Exits are closed: `0` green (nothing attributable red) · `4` red · `3` no-gates · `5` continue · `2` unusable (closed
+`REASON_CODES`: `usage-error`, `path-containment`, `child-refused` — any runner refusal, `tree-changed-between-gates`
+included —, `no-runner`, `runner-died`, `result-unbound`, `stamp-invalid`, `aborted`, `spawn-failed`, `crashed`).
+`1` is never chosen, so node's own crash exit is never a verdict (the 6.21.1 rule). Every untrusted value quoted into
+`detail` goes through a total function (L62). Gate output is never read (P2).
 
-**It writes only through `run-gates.mjs`, under `.pharn/pharn-entry/` (one per tree, L38).** It judges nothing about the
-gates' output (untrusted free text, P2); only exit codes from the stamp.
+### `gate-run-core.mjs` — minimal
 
-### `gate-run-core.mjs` — ONE line
+`STAGES` gains `"entry"`, and `resolveSet` orders an `entry` source `STYLE_SET` first (stable within each part).
+Nothing else changes.
 
-`STAGES` gains `"entry"`. Nothing else: `resolveSet` already gives a non-verify stage verify's discovered set (e2e kept,
-`gates.exclude` applied) without `reconcile`, and `validateStamp` is generic. The `entry` stamp's consumers are this CLI
-alone; every existing reader passes `expect.stage` and refuses it (`stage-mismatch`).
+### `worktree-fingerprint.mjs` + `run-gates.mjs` — the stage-scoped exclusion
 
-### `/pharn-loop` — Step 1a item 6 (local; no stage line touched)
+`fingerprint(baseDir, {feature, stage})`: for `stage === "entry"`, the whole `pharn/features/<feature>/` is excluded
+and the algo is `ENTRY_ALGO`. For every other stage the digest and `ALGO` are unchanged, and the golden test still
+pins them. `run-gates.mjs` passes `stage` at its three fingerprint calls. That is a three-token diff, with no change to
+the drain.
 
-After the `run-start` marker: the pinned line, then the resume line on exit 5, branching only on the exit code (P5):
-`0` → go on; `4` → **S14** `blocked: gates-red-at-entry`, the printed `red` ids quoted as DATA in the summary — unless
-`--allow-red-entry` was given, then go on and name them in the Step 7 summary; `3` → **S4** (`blocked: no-gates`, now
-at entry); anything else → **S9**. A stop here precedes `pharn/features/<name>/`, so no record and no SPEC revert: the
-close part's Step 7, unchanged. New table row S14 (cells kept under the current column widths, so no other row
-re-pads). Step 1's grammar gains the opt-in: read only among the leading flags (after `--quick`, before `--max-iter`),
-never by scanning the description (P2) — ADVISORY, an instruction to the model, like `--quick`'s rule.
+### `/pharn-loop`
 
-### `/pharn-ship` — Step 2 item 1 (after the pre-run snapshot)
+- **Step 1 grammar.** `/pharn-loop [--quick] [--allow-red-entry] [--max-iter N] <description>`. The opt-in is read only
+  among the leading flags, never by scanning the description (P2). This is ADVISORY, like `--quick`'s rule.
+- **Step 1a item 6, after the `run-start` marker:** the `--start` line. `0` → go on; `3` → **S4**; anything else →
+  **S9**. These stops precede the feature directory, so the close part's Step 7 runs unchanged.
+- **Step 4, between the grill's return marker and the test stage:** the `--wait` line. `5` → run it again; `0` → go on;
+  `4` → **S14** `blocked: gates-red-at-entry` with the `red` ids as DATA, or, with `--allow-red-entry`, go on and keep
+  the ids for the summary; `3` → **S4**; anything else → **S9**. S14 is an ordinary blocked stop (the feature directory
+  exists): record, SPEC revert, close part, all unchanged. A new table row S14 is added.
+- **`## At the stop`** (main file): the `--abort` line runs first, before the close part is read.
+- The quick part's item 1 grammar names the opt-in. Nothing else in it moves: the read point is the same place, and the
+  quick grill runs inline.
 
-Same pinned lines. `0` → `/pharn-plan`; `4` → present the red ids (DATA) and ask, through the interactive form the
-stages use: **Stop now** (a STOP via Steps 3/3a) or **Continue** (the feature fixes them, or the person accepts a FAIL at
-GATE 2; keep the ids for `SHIP.md`) — never a silent continue; `3` → proceed (ship's verify still asks `no-gates` and
-can take explicit gates from the person, as today); anything else → STOP. The quick part's order sentence names the step.
+### `/pharn-ship`
+
+- **Step 2 item 1, after the pre-run snapshot:** the `--start` line. `0` or `3` → `/pharn-plan`; anything else → STOP.
+- **Before `/pharn-test`:** the `--wait` line. `5` → again; `0` or `3` → proceed; `4`, `2` or anything else → present
+  the `red` ids or the refusal as DATA and ask **Stop** (STOP via Steps 3/3a) or **Continue** (keep the ids for
+  `SHIP.md`). Never a silent continue. That is the terminal fallback to the human (P5).
+- **`## Closing the run`** (main file): the `--abort` line runs first at every STOP. The quick part's order sentence
+  names the start.
 
 ### What is NOT in this increment
 
-- **The item-9 prefix-weight note is dropped** (orchestrator scope change): the `instruction-growth-gate` increment owns
-  instruction-file measurement (`instruction-files-core.mjs`, `check-instruction-files.mjs`); a second owner would be L35
-  duplication.
-- No close part is edited (the `loop-closeout-script` builder owns them); no stage line is edited
-  (`orchestrator-direct-stage-calls`); no `run-gates.mjs` edit (`gates-parallel-drain`).
+- **The item-9 prefix-weight note is dropped** (orchestrator scope change). The `instruction-growth-gate` increment owns
+  instruction-file measurement (`instruction-files-core.mjs`, `check-instruction-files.mjs`), and a second owner would
+  be L35 duplication.
+- No close part is edited (the `loop-closeout-script` builder owns them). No routed stage line is edited
+  (`orchestrator-direct-stage-calls`). No `run-gates.mjs` drain change (`gates-parallel-drain`); its edit here is the
+  three fingerprint arguments.
+
+## Expected saving (D), per recorded run
+
+Start at t ≈ 0.1 min (after Step 1a). The read point is the grill's return marker: 20.8 / 13.6 / 5.2 min [R·m]. The
+verdict is ready at max(read point, 0.1 + E). A stop then costs the close part, ≈ 1–2 min [R·e].
+
+| run                        |    actual | red at entry                       |                            under (D) |    vs actual | vs the post-6.36/6.37 counterfactual |
+| -------------------------- | --------: | ---------------------------------- | -----------------------------------: | -----------: | -----------------------------------: |
+| billing-plan-catalog       | 91.75 min | `build` [R·m]                      |                          ≈ 22–23 min |   −69 to −70 |                 ≈ 166 → −143 to −144 |
+| workspace-wording-ui       |    33 min | `typecheck`, `test` [R·m]          |                          ≈ 15–16 min |   −17 to −18 |                 ≈ 117 → −101 to −102 |
+| locales-en-pl-only (quick) |  27.5 min | `test`, `typecheck`, `build` [R·m] | ≈ 9.7–11 min (E = 8.6 → read at 8.7) | −16.5 to −18 |                    ≈ 65 → −54 to −55 |
+
+The counterfactual [R·e] assumes items 2 and 3 merged (so the run reaches verify), and three iterations to `STOP_CAP` at
+the measured iteration-1 durations: build 25.7 / 13.1 / 10.9 min; regress 11.1 min; verify 8.6 min. **A healthy run:**
++0 on the two full runs (E 4–9 ≤ front 13.6–20.8), and + max(0, E − 5.1) ≈ 0–3.5 min on the quick one, plus two
+orchestrator round trips (`--start`, `--wait`). `workspace-wording-ui`'s `test` red may read `unattributed` only if it
+were a style gate. It is not, so its red counts.
 
 ## Follow-ups (named, not built — P7)
 
-- `entry-run-as-base-evidence` — offer a green-or-red entry stamp as `/pharn-regress`'s BASE evidence (6.33.0) when the
-  entry tree is the base commit (empty pre-run snapshot). It would remove the regress BASE side (worktree, install, base
-  gates: calls 4–5 of the 92-min run, 146.2 + 192.1 s [R·m]) and compare HEAD against the same environment (finding 2's
-  false regression), turning E into a net saving. Touches regress-base-reuse and item 4's area; not trivial.
-- `entry-gates-background` — (B) with a nested worktree that inherits the project's `node_modules` by resolution and git's
-  ignored root files, if usage data shows healthy runs dominate; needs the detached-worker survival measured first.
-- `entry-gates-ledger-row` — the entry check has no stage marker, so its time shows only as the gap between `run-start`
-  and the first stage-start in `cost.json`.
+- `entry-run-as-base-evidence`: offer the entry stamp as `/pharn-regress`'s BASE evidence (6.33.0) when the entry tree
+  is the base commit (an empty pre-run snapshot). It would remove the regress BASE side (calls 4–5 of the 92-min run,
+  146.2 + 192.1 s [R·m]) and compare HEAD against the same environment (finding 2). Not trivial: it needs a fingerprint
+  algo regress accepts, and it touches item 4's area.
+- `entry-gates-ledger-row`: the entry runner has no stage marker, so `cost.json` does not show its time. It overlaps the
+  front by design.
+- `entry-gates-nonstyle-overlap`: if a project's non-style gate is found reading `pharn/features/**`, extend rule 2 to
+  that gate class.
 
 ## Applied lessons
 
-- L22 — the CLI and its resume line are pinned literal command lines in both commands; no technique is described.
-- L30 — the step runs every gate it names: the set is `resolveSet`'s, the model names none.
-- L34 — an empty set is `no-gates` (exit 3), never a vacuous green; the empty-source refusal is `resolveSet`'s own.
-- L35 — one allowlist (`resolveSet`), one executor (`run-gates.mjs`), one drain (`stage-runtime.mjs`); nothing copied.
-- L38 — `.pharn/pharn-entry/` is one per tree; the stamp's `feature` binds it to this run's fresh S2 name.
-- L41 — `--timeout-ms` has no default; the tests run the CLI with the exact pinned argv.
-- L44 — the resume line carries no run state: only `<name>` and the two pinned constants.
-- L45 — a ★ WIRING test EXECUTES both commands' committed lines in a git sandbox and pins each branch's row.
-- L54 — the stamp and the in-progress record are read lstat-first, never followed (`readInProject`).
+- L22 — `--start`, `--wait` and `--abort` are pinned literal lines in both commands; no technique is described, and
+  no poll is asked of the model.
+- L30 — the runner runs every gate the set names; the model names none.
+- L34 — an empty set is `no-gates` (exit 3), never a vacuous green. The empty-source refusal is `resolveSet`'s own.
+- L35 — one allowlist (`resolveSet`), one executor (`run-gates.mjs`), one argv/containment owner (`stage-runtime.mjs`),
+  one reader (`readInProject`). The prefix note stays with its owner increment.
+- L38 — one runner per tree under `.pharn/pharn-entry/`. A new start supersedes, and the record binds feature + nonce.
+- L41 — `--timeout-ms` / `--budget-ms` have no defaults; the tests run the CLI with the exact pinned argv.
+- L44 — the `--wait` re-run line carries no state: only `<name>` and a pinned constant.
+- L45 — a ★ WIRING test EXECUTES both commands' committed lines in a git sandbox (start → wait → abort) and pins each
+  branch's row.
+- L54 — every read under `.pharn/pharn-entry/` is lstat-walked and never followed.
 - L62 — every untrusted value in a `detail` is quoted through a total function, tested with `{"toString":1}`.
-- L66 — the verdict reads only the stamp this invocation's drain (or a same-feature resume) finalized, in a directory
-  `init` created empty.
+- L66 — `--wait` reads only a `result.json` that the runner wrote LAST, carrying the nonce `--start` recorded, in a
+  directory `--start` created empty.
 
 ## Files
 
-- `pharn/floor/entry-gates-core.mjs` — NEW. Pure: `ENTRY_PATHS`, `ENTRY_SCHEMA`, `ENTRY_STATUSES` + exit map,
-  `REASON_CODES`, `entryVerdict(stamp, feature)`, `entryDocument(...)`, `validateEntryDocument` (closed both ways). —
+- `pharn/floor/entry-gates-core.mjs` — NEW. Pure: `ENTRY_PATHS`, schemas, `ENTRY_STATUSES` + exit map,
+  `REASON_CODES`, `entryVerdict`, the runner/result record validators (closed both ways), `parsePsTable`,
+  `descendantGroups`. — layer pharn-floor
+- `pharn/floor/entry-gates.mjs` — NEW. The CLI (`--start`, `--wait`, `--abort`, internal `--runner`) and
+  `featureDirDigest`; the `import.meta.main` guard. — layer pharn-floor
+- `pharn/floor/entry-gates.test.mjs` — NEW. The test cases:
+  - every status and exit, each with a one-input mutation: green, red, timed out, no `package.json`, empty set,
+    `gates.exclude` honoured and disclosed, e2e kept, `continue` then green;
+  - a feature-directory write between gates does not refuse, and a write elsewhere refuses;
+  - the style-first order, and a style red after `d0` moved reads `unattributed`;
+  - result unbound (another nonce, another feature), runner died, a symlinked `.pharn/pharn-entry`;
+  - abort kills a running gate's group, and a reused pid is never signalled; a superseding start;
+  - a `{"toString":1}` detail;
+  - ✧ the entry set == verify's discovered set minus `reconcile`, style first;
+  - ★ WIRING: both commands' pinned lines EXECUTED in a git sandbox, their order (start after the entry steps,
+    wait after the grill and before the test stage, abort at the stop pointer), and each exit's branch.
+
+  — layer pharn-floor (test)
+
+- `pharn/floor/gate-run-core.mjs` — `STAGES` + `"entry"`; the entry style-first order. — layer pharn-floor
+- `pharn/floor/gate-run-core.test.mjs` — the `STAGES` pin; `resolveSet({stage: "entry"})`; an entry stamp refused as
+  any other stage, and refused by `findReusable`. — layer pharn-floor (test)
+- `pharn/floor/worktree-fingerprint.mjs` — the `stage` option, `ENTRY_ALGO`, and the feature-directory exclusion. —
   layer pharn-floor
-- `pharn/floor/entry-gates.mjs` — NEW. The CLI (fresh and `--resume`), the `import.meta.main` guard. — layer
-  pharn-floor
-- `pharn/floor/entry-gates.test.mjs` — NEW. Every exit with a one-input mutation (green, red, timed out, no
-  `package.json`, empty set, `gates.exclude` honoured and disclosed, e2e kept, `continue` then `--resume`, a resume with
-  no record / another feature's record, a malformed exclusion, a symlinked `.pharn/pharn-entry`, a mutating gate →
-  `tree-changed-between-gates`, a throwing value in a detail); ✧ PARITY (the entry set == `resolveSet` verify's
-  required set minus nothing but `reconcile`); ★ WIRING (both commands' pinned lines EXECUTED in a git sandbox, their
-  order after the entry steps and before the first stage, and each exit's branch). — layer pharn-floor (test)
-- `pharn/floor/gate-run-core.mjs` — `STAGES` gains `"entry"`. — layer pharn-floor
-- `pharn/floor/gate-run-core.test.mjs` — the `STAGES` pin; `resolveSet({stage: "entry"})` keeps e2e, applies the
-  exclusion, injects no `reconcile`; an `entry` stamp validates and is refused under `expect.stage: "verify"`. — layer
-  pharn-floor (test)
+- `pharn/floor/worktree-fingerprint.test.mjs` — the exclusion is exactly the one directory (a sibling feature, a
+  prefix-sharing name and `.dev/features/<name>/` stay in), the default digest is unchanged, and the algo differs. —
+  layer pharn-floor (test)
+- `pharn/floor/run-gates.mjs` — `stage` passed at the three fingerprint calls. — layer pharn-floor
 - `pharn/pharn-contracts/gate-run-record.md` — the stage enum gains `entry`; a short "The entry stage" section. —
   layer pharn-contracts
-- `.claude/commands/pharn-loop.md` — Step 1 grammar (`--allow-red-entry`), Step 1a item 6, the S14 row, the
-  before-the-feature-dir stop list, `reads:`. — product command
-- `.claude/commands/pharn-loop-quick.md` — item 1's entry grammar names the opt-in. — product command
-- `.claude/commands/pharn-ship.md` — Step 2 item 1's entry-gates paragraph and question, `reads:`. — product command
-- `.claude/commands/pharn-ship-quick.md` — the quick order sentence names the step. — product command
-- `.dev/floor/command-hygiene.test.mjs` — `STUCK_POINTS` gains S14 (count 16); `COMMAND_BYTE_CEILINGS` only if a
-  measured body exceeds its ceiling (a visible diff, measured + 10 %). — dev floor (test)
+- `.claude/commands/pharn-loop.md` — the Step 1 grammar, Step 1a item 6, the S14 row, the Step 4 wait block,
+  `## At the stop`'s abort line, and `reads:`. — product command
+- `.claude/commands/pharn-loop-quick.md` — item 1's grammar names the opt-in. — product command
+- `.claude/commands/pharn-ship.md` — Step 2 item 1's start line, the wait block before `/pharn-test`,
+  `## Closing the run`'s abort line, and `reads:`. — product command
+- `.claude/commands/pharn-ship-quick.md` — the quick order sentence names the start. — product command
+- `.dev/floor/command-hygiene.test.mjs` — `STUCK_POINTS` gains S14. `COMMAND_BYTE_CEILINGS` changes only if a
+  measured body exceeds its ceiling (a visible diff). — dev floor (test)
 - `CLAUDE.md` — a Commands entry for `entry-gates.mjs`; the run-gates usage line's `--stage` list. — repo meta
 - `CHANGELOG.md` — the new version section. — repo meta
 - `SKILLS_VERSION` — 6.37.0 → 6.38.0 (provisional; the orchestrator assigns the final one at stacking). — repo meta
-- `README.md` — the badge, and the generated CURRENT-STATE region if `npm run docs:generate` changes it. — repo meta
+- `README.md` — the badge, plus the generated CURRENT-STATE region if `npm run docs:generate` changes it. — repo meta
 - `docs/capabilities/**` — only what `npm run docs:generate` regenerates. — generated
-- `.dev/features/loop-entry-preflight/**` — this increment's pipeline artifacts (PLAN, GRILL, BUILD, REGRESSION,
-  VERIFY, REVIEW, SHIP and their JSON reports). — dev apparatus
+- `.dev/features/loop-entry-preflight/**` — this increment's pipeline artifacts. — dev apparatus
 
 ## Contracts satisfied
 
-- `gate-run-record.md` — an `entry` stamp is an ordinary `gate-run-record/1` (validated by `validateStamp`), consumed by
-  `entry-gates.mjs` only.
-- `stage-exit.md` — deliberately NOT used: the entry check is no stage script (no report, no render, no question); its own
-  closed exit set mirrors the protocol's "1 is never a verdict" rule.
+- `gate-run-record.md`: an `entry` stamp is an ordinary `gate-run-record/1` (`validateStamp`), with its own
+  fingerprint algo, consumed by `entry-gates.mjs` only.
+- `stage-exit.md`: deliberately NOT used. The entry check writes no report, render or question; its own closed exit set
+  mirrors the protocol's "1 is never a verdict" rule.
 
 ## Evals to write (P1)
 
-No capability (`role:`) is added, so no eval fixture. The tests above are the specification of the CLI.
+No capability (`role:`) is added, so there is no eval fixture. The tests above specify the CLI.
 
 ## Guarantee audit (P0)
 
-- The entry set is exactly `resolveSet`'s discovered verify set for the stage `entry` → floor: enum/regex (the one rule,
+- The entry set is exactly `resolveSet`'s discovered verify set, style first → floor: enum/regex (one rule,
   ✧ parity-tested).
-- A gate's recorded exit is the exit `run-gates.mjs` recorded, in a stamp that validates → floor (agreement over the
-  validated stamp; L43: never provenance — a Bash writer can forge `.pharn/` state).
-- The CLI's exit is `4` iff a validated stamp's runs contain a non-zero exit or a timeout → floor (membership, tested).
-- That the run STOPS on exit 4, that the opt-in is read only from the leading flags, and that `/pharn-ship` asks → advisory
-  (command prose the model follows), pinned for presence and order by tests, never proven run.
+- A gate's exit is the exit `run-gates.mjs` recorded, in a stamp that validates and whose sha256 the result names →
+  floor (agreement, L43: never provenance; a Bash writer can forge `.pharn/` state).
+- No tree change outside `pharn/features/<name>/` between gates → floor (content hash, the existing refusal).
+- `--wait` exits `4` iff an attributable gate is red under `entryVerdict` → floor (membership over recorded values,
+  tested).
+- A style red counts only when the feature directory held its `d0` content before and after that gate → floor over the
+  runner's recorded digests. That the gate read nothing between those samples is not claimed (a write and a
+  byte-identical restore inside one gate is invisible).
+- The runner survives the Bash call; `--abort` leaves no gate running → measured / tested on darwin and on CI's Linux.
+  Not claimed for a `setsid` descendant (run-gates' own bound) or when `ps` is unavailable (then only the runner's group
+  is killed, and the line says so).
+- That the run STOPS on exit 4, reads the opt-in from the leading flags only, runs `--abort` at every stop, and that
+  `/pharn-ship` asks → advisory (command prose), pinned for presence and order, never proven run.
 - "The run would have failed verify" → NOT claimed. A gate red at entry predicts a red verify gate only if the run does
-  not fix it; a gate green at entry may still go red (flaky, environment). The stop's message says "red on the tree the
-  run starts from", nothing more.
-- E (the healthy-run cost) → measured inputs [R·m] + an estimate [R·e]; never claimed reproducible.
+  not fix it. The stop's text says "red on the tree the run started from".
+- E and the savings → measured inputs [R·m] plus estimates [R·e]; never claimed reproducible.
 
 ## Trust audit (P2)
 
-- Gate stdout/stderr → untrusted; reduced to a sha256 by `run-gates.mjs`; never read here.
-- Gate ids in `red` → `ALLOWLIST` members from the validated stamp (closed set); still quoted as DATA in summaries.
-- The user's description → never parsed for `--allow-red-entry` beyond the leading flags; it reaches no shell line.
-- `package.json` / `pharn.config.json` → read by `run-gates.mjs` exactly as at verify (shape-gated by `gate-run-core`).
+- Gate stdout/stderr → untrusted. They are reduced to a sha256 by `run-gates.mjs` and never read here.
+- `red` / `unattributed` ids → `ALLOWLIST` members from a validated stamp (a closed set); still quoted as DATA.
+- The user's description → never parsed for `--allow-red-entry` beyond the leading flags, and it reaches no shell line.
+- `ps` output → parsed as three integer columns only; a malformed line is skipped. Nothing in it is executed.
 
 ## Determinism audit (P5)
 
-Every branch is an exit-code membership test; the terminal fallback of every unknown exit is a stop (`S9` / STOP), never
-a guess. The opt-in is the one judgment input, and it is the person's, read before the run.
+Every branch is an exit-code membership test. The fallback for an unknown exit is a stop (`S9`, or ship's question to
+the human), never a guess. The opt-in is the one judgment input, and it is the person's, given before the run.
 
 ## Open questions (HALT)
 
-- None blocking. For the orchestrator at GATE 1: (1) confirm (A) over (B) given the measured `.env.local` false red;
-  (2) the opt-in's name `--allow-red-entry`; (3) `/pharn-ship` asking on red (vs. a plain STOP).
+- None.
