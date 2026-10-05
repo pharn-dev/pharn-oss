@@ -45,5 +45,18 @@ deferred: none
 - **PENDING, not done:** the post-merge dogfood. The next pharn-starter `/pharn-plan` that changes no convention should
   name no instruction file in `## Files`.
 
+## After GATE 2 — the human chose "fix"
+
+The human chose **fix**. The orchestrator then committed (`aa8e0e9`), opened PR #310 and merged `origin/main`. Main
+had moved twice during the run: 6.36.0 (#307), then 6.37.0 (#308). So the renumber target became **6.37.1**, not the
+6.36.1 named above.
+
+- The conflicts were in `CHANGELOG.md`, `README.md` and `SKILLS_VERSION`.
+- Main's released sections were kept byte-for-byte: the CHANGELOG diff against `origin/main` removes zero lines.
+- The renumbered lines were found by diffing the added lines against `origin/main`.
+- The run records above still say 6.35.3 / 6.36.1, as written at the time.
+- The gates were re-run after the merge (see the PR).
+- `LIMITS.md` §3e is still the human's edit, and its version tag reads `6.37.1`.
+
 Chain ran; the named floor verdicts are as shown. This is NOT a judgment that the increment is good or wise; that is
 the human's call at the post-review gate.

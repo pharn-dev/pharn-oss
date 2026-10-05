@@ -57,7 +57,9 @@ Load the trusted prefix and obey it:
 ## What you may claim, and the one honest residual (P0/P7)
 
 - **Guaranteed:** any regression OUTSIDE the feature **that the project's deterministic suite covers** is
-  caught — deterministically — built only from a **current Approved, un-drifted** plan.
+  caught — deterministically — built only from a **current Approved, un-drifted** plan. Bound: a path changed before
+  an open `/pharn-loop` or `/pharn-ship` run began counts as inside, so a test file among them is not compared here
+  (the report's `pre_run_snapshot`; `pharn/floor/pre-run-snapshot-core.mjs`).
 - **The residual, named not hidden:** `/pharn-regress` catches **exactly what the project's suite
   catches — nothing more.** A regression no deterministic check covers is **invisible**. Never read a
   `done` exit as "nothing broke."
@@ -137,7 +139,8 @@ Read the printed `pharn-stage-exit/1` JSON object and branch on the **exit code 
     `/pharn-plan` if the PLAN itself is stale against the current SPEC;
   - `plan-files-unparseable` — fix `PLAN.md`'s `## Files` heading (or its list syntax) so it parses;
   - `scope-escaped` — an undeclared path changed: either declare it in `PLAN.md`'s `## Files` via
-    `/pharn-plan` (a legitimate widening) or revert the undeclared change. **The blind spot this remedy
+    `/pharn-plan` (a legitimate widening) or revert the undeclared change. Re-running does not fix it; it only replaces
+    the refusal with a report, and the escaped change stays in the tree. **The blind spot this remedy
     walks into (M3, GATE-2 round 2):** `scope` exempts this feature's own `PLAN.md` from the escape check,
     so once a `## Files` line authorizes a path, nothing here can tell a legitimate widening from a
     `## Files` rewritten to authorize a path the build had already written. `check-plan-spec-agree.mjs`
@@ -209,9 +212,10 @@ either way.
 **`{ test, lint, format:check, lint:md, typecheck, type-check, build, test:e2e, e2e }`** intersected with
 the project's own `package.json` `scripts`, **minus the e2e ids `test:e2e` and `e2e`**, which `/pharn-regress`
 never discovers (verify-only — a base-side e2e run would double an expensive stage, and a red e2e gate
-already fails `/pharn-verify`'s absolute threshold). No discoverable gate → the script's own `no-gates`
-question, which names all three causes (no allowlisted script, an e2e-only manifest, or every discovered
-gate being style-only and skipped by the config-touch rule).
+already fails `/pharn-verify`'s absolute threshold), then minus any id the project's `pharn.config.json`
+`gates.exclude` lists (6.36.0; both sides skip it, and the report names it). No discoverable gate → the script's own
+`no-gates` question, which names all four causes (no allowlisted script, an e2e-only manifest, every discovered
+gate being style-only and skipped by the config-touch rule, or the project's `gates.exclude`).
 
 The base-commit **install** command is resolved from exactly one lockfile family present at that commit
 (`npm ci`; `pnpm install --frozen-lockfile`, `yarn install --frozen-lockfile` and

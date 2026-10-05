@@ -66,7 +66,7 @@ test("--write then --check is GREEN; the lock's shape is the closed key set, dig
     for (const f of lock.files) assert.equal(f.sha256, sha256RegularFile(join(root, f.path)));
     assert.equal(lock.red_run, null);
     // no package.json and no runner config in this world: the pin records the level and nothing else
-    assert.deepEqual(lock.test_infra, { levels: ["unit"], gates: [], chained: [], configs: [], script_files: [], jest: null });
+    assert.deepEqual(lock.test_infra, { levels: ["unit"], gates: [], chained: [], configs: [], script_files: [], jest: null, exclude: [] });
     assert.equal(lockShapeError(lock, NAME), null);
     const r = cli(root, ["--check", NAME]); // the DEFAULT --base, exercised (L41)
     assert.equal(r.code, 0, r.out);
@@ -229,12 +229,12 @@ const redRunFor = (lock) => ({
   acs: [{ id: "AC-1", tests: ["tests/ac/one.test.js::AC-1: t"] }],
 });
 
-test("/4: --write writes mode test-first with bootstrap null; a well-formed red_run bound to the files checks GREEN", () => {
+test("/5: --write writes mode test-first with bootstrap null; a well-formed red_run bound to the files checks GREEN", () => {
   const root = world();
   try {
     cli(root, ["--write", NAME]);
     const lock = lockOf(root);
-    assert.equal(lock.schema, "ac-tests-lock/4");
+    assert.equal(lock.schema, "ac-tests-lock/5");
     assert.equal(lock.mode, "test-first");
     assert.equal(lock.bootstrap, null);
     writeLockJson(root, { ...lock, red_run: redRunFor(lock) });
@@ -408,7 +408,7 @@ test("bootstrap: --write-bootstrap records mode bootstrap, no mapping, no files,
     assert.match(w.out, /BOOTSTRAP .* WEAKER than test-first/);
     const lock = lockOf(root);
     assert.deepEqual(lock, {
-      schema: "ac-tests-lock/4",
+      schema: "ac-tests-lock/5",
       feature: NAME,
       mode: "bootstrap",
       spec: { spec_id: NAME, spec_content_hash: pinOf(spec) },
@@ -614,7 +614,7 @@ test("/2 is still read: GREEN with --require-red-run, saying it has no pin; a re
     writeLockJson(root, { ...lock, schema: "ac-tests-lock/2", test_infra: null });
     const rec = cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]);
     assert.equal(rec.code, 2, rec.out);
-    assert.match(rec.out, /ac-tests-lock\/2 test-first; a red run is recorded on an ac-tests-lock\/4 test-first lock/);
+    assert.match(rec.out, /ac-tests-lock\/2 test-first; a red run is recorded on an ac-tests-lock\/5 test-first lock/);
     writeLockJson(root, { ...lock, test_infra: null });
     const u = cli(root, ["--check", NAME]);
     assert.equal(u.code, 2, u.out);
@@ -748,7 +748,7 @@ test("6.31.0 MIGRATION — a /3 lock is still read: GREEN over a tree with nothi
     // a red run is recorded on a /4 lock only (re-running --write is cheap there)
     const rec = cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]);
     assert.equal(rec.code, 2, rec.out);
-    assert.match(rec.out, /ac-tests-lock\/3 test-first; a red run is recorded on an ac-tests-lock\/4 test-first lock — re-run --write/);
+    assert.match(rec.out, /ac-tests-lock\/3 test-first; a red run is recorded on an ac-tests-lock\/5 test-first lock — re-run --write/);
     // closed per schema: a /4-shaped pin under /3, and a /3-shaped one under /4, are unusable, never a verdict
     writeLockJson(root, { ...v3, test_infra: lock.test_infra });
     const u3 = cli(root, ["--check", NAME]);
@@ -776,6 +776,76 @@ test("6.31.0 MIGRATION — a /3 lock is still read: GREEN over a tree with nothi
       "RED — test infrastructure unpinned — .npmrc: a package-manager config, which an ac-tests-lock/3 pin does not cover",
       "RED — test infrastructure unpinned — package.json's jest key: an ac-tests-lock/3 pin does not cover it",
     ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── 6.36.0: the declared gate exclusion is pinned under /5; a /4 lock is still read ────────────────────────────
+
+const declare = (root, exclude) =>
+  writeFileSync(join(root, "pharn.config.json"), JSON.stringify({ testResults: { test: "vitest-json" }, gates: { exclude } }));
+const toV4 = (lock) => {
+  const test_infra = { ...lock.test_infra };
+  delete test_infra.exclude;
+  return { ...lock, schema: "ac-tests-lock/4", test_infra };
+};
+
+test("6.36.0 /5 — --write pins the declared gate exclusion; --check REDs a change to it, naming the id (never project text)", () => {
+  const root = infraWorld();
+  try {
+    declare(root, ["e2e", "typecheck"]);
+    assert.equal(cli(root, ["--write", NAME]).code, 0);
+    assert.deepEqual(lockOf(root).test_infra.exclude, ["typecheck", "e2e"]);
+    assert.equal(cli(root, ["--check", NAME]).code, 0, "the pin holds over the tree it was taken from");
+    declare(root, ["e2e", "typecheck", "build"]);
+    const r = cli(root, ["--check", NAME]);
+    assert.equal(r.code, 1, r.out);
+    assert.match(
+      r.out,
+      /RED — test infrastructure changed — pharn\.config\.json gates\.exclude: build was added — discovery no longer runs it/
+    );
+    // a declaration that cannot be read refuses the write, loudly, and nothing is written
+    declare(root, ["not-a-gate"]);
+    const w = cli(root, ["--write", NAME]);
+    assert.equal(w.code, 2, w.out);
+    assert.match(w.out, /gates\.exclude` entry 0 is not one of the allowlisted gate ids/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("6.36.0 MIGRATION — a /4 lock is still read: GREEN with no declaration, RED `unpinned` with one; no red run is recorded on it", () => {
+  const root = infraWorld();
+  try {
+    cli(root, ["--write", NAME]);
+    const lock = lockOf(root);
+    const v4 = { ...toV4(lock), red_run: redRunFor(lock) };
+    writeLockJson(root, v4);
+    const g = cli(root, ["--check", NAME, "--require-red-run"]);
+    assert.equal(g.code, 0, g.out);
+    declare(root, []);
+    assert.equal(cli(root, ["--check", NAME, "--require-red-run"]).code, 0, "an EMPTY declaration adds nothing");
+    declare(root, ["e2e"]);
+    const r = cli(root, ["--check", NAME, "--require-red-run"]);
+    assert.equal(r.code, 1, r.out);
+    assert.deepEqual(
+      r.out.split("\n").filter((l) => l.startsWith("RED — test infrastructure")),
+      [
+        "RED — test infrastructure unpinned — pharn.config.json gates.exclude: e2e — the project excludes discovered gate(s), and a pin written before ac-tests-lock/5 does not cover the declaration",
+      ]
+    );
+    const rec = cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]);
+    assert.equal(rec.code, 2, rec.out);
+    assert.match(rec.out, /ac-tests-lock\/4 test-first; a red run is recorded on an ac-tests-lock\/5 test-first lock — re-run --write/);
+    // closed per schema: a /5-shaped pin under /4, and a /4-shaped one under /5, are unusable, never a verdict
+    writeLockJson(root, { ...v4, test_infra: lock.test_infra });
+    assert.match(cli(root, ["--check", NAME]).out, /test_infra is not exactly \{chained, configs, gates, jest, levels, script_files\}/);
+    writeLockJson(root, { ...v4, schema: "ac-tests-lock/5" });
+    assert.match(
+      cli(root, ["--check", NAME]).out,
+      /test_infra is not exactly \{chained, configs, exclude, gates, jest, levels, script_files\}/
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

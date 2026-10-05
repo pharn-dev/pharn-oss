@@ -332,6 +332,7 @@ test("preflight: GREEN when every level has a discovered gate with results confi
       rows: [row("AC-1", UNIT), row("AC-2", "tests/ac/i.test.js", "integration"), row("AC-3", "tests/e2e/x.spec.js", "e2e")],
       scripts: { test: "vitest run", "test:e2e": "playwright test", lint: "eslint ." },
       root: s.root,
+      exclude: [],
     });
     assert.deepEqual(p.unavailable, []);
     assert.deepEqual(p.gates, ["test", "test:e2e"]);
@@ -344,30 +345,82 @@ test("preflight: ac-level-unavailable for a missing script, a missing format, an
   const s = scratch({ [CONFIG_KEY]: { "test:e2e": "playwright-json" } });
   try {
     const rows = [row("AC-1", UNIT), row("AC-2", "tests/e2e/x.spec.js", "e2e")];
-    const noScript = preflight({ rows, scripts: { "test:e2e": "x" }, root: s.root });
+    const noScript = preflight({ rows, scripts: { "test:e2e": "x" }, root: s.root, exclude: [] });
     assert.deepEqual(
       noScript.unavailable.map((u) => [u.id, u.level]),
       [["AC-1", "unit"]]
     );
     assert.match(noScript.unavailable[0].why, /no `test` script/);
-    const noFormat = preflight({ rows, scripts: { test: "x", "test:e2e": "x" }, root: s.root });
+    const noFormat = preflight({ rows, scripts: { test: "x", "test:e2e": "x" }, root: s.root, exclude: [] });
     assert.deepEqual(
       noFormat.unavailable.map((u) => u.id),
       ["AC-1"]
     );
     assert.match(noFormat.unavailable[0].why, /no per-test results for `test` \(not-configured\)/);
-    const half = preflight({ rows, scripts: { test: "x", "test:e2e": "x", e2e: "x" }, root: s.root });
+    const half = preflight({ rows, scripts: { test: "x", "test:e2e": "x", e2e: "x" }, root: s.root, exclude: [] });
     assert.deepEqual(
       half.unavailable.map((u) => u.id),
       ["AC-1", "AC-2"],
       "e2e is discovered but unconfigured, so AC-2 is unavailable too"
     );
     assert.match(half.unavailable[1].why, /`e2e`/);
-    const none = preflight({ rows, scripts: null, root: s.root });
+    const none = preflight({ rows, scripts: null, root: s.root, exclude: [] });
     assert.equal(none.unavailable.length, 2, "no package.json scripts at all");
+    assert.throws(() => preflight({ rows, scripts: null, root: s.root }), TypeError, "the exclusion is required (L41)");
   } finally {
     s.done();
   }
+});
+
+test("6.36.0 — preflight: a level whose discovered gates are ALL excluded is ac-level-unavailable naming the exclusion; one of two excluded is not", () => {
+  const s = scratch({ [CONFIG_KEY]: { test: "vitest-json", "test:e2e": "playwright-json", e2e: "playwright-json" } });
+  try {
+    const rows = [row("AC-1", UNIT), row("AC-2", "tests/e2e/x.spec.js", "e2e")];
+    const scripts = { test: "x", e2e: "x" };
+    // the control: nothing excluded → GREEN, so the RED below is the exclusion's (L34)
+    assert.deepEqual(preflight({ rows, scripts, root: s.root, exclude: [] }).unavailable, []);
+    const p = preflight({ rows, scripts, root: s.root, exclude: ["e2e"] });
+    assert.deepEqual(
+      p.unavailable.map((u) => [u.id, u.level, u.excluded]),
+      [["AC-2", "e2e", ["e2e"]]]
+    );
+    assert.match(
+      p.unavailable[0].why,
+      /every e2e gate package\.json has \(`e2e`\) is excluded by the project's pharn\.config\.json gates\.exclude/
+    );
+    assert.deepEqual(p.gates, ["test"]);
+    // an exclusion of a gate NO level needs changes nothing, and one of TWO e2e gates excluded leaves the other
+    assert.deepEqual(preflight({ rows, scripts, root: s.root, exclude: ["typecheck"] }).unavailable, []);
+    const two = preflight({ rows, scripts: { ...scripts, "test:e2e": "x" }, root: s.root, exclude: ["e2e"] });
+    assert.deepEqual(two.unavailable, []);
+    assert.deepEqual(two.gates, ["test", "test:e2e"]);
+    // excluding the unit level's only gate
+    const unit = preflight({ rows, scripts, root: s.root, exclude: ["test"] });
+    assert.deepEqual(
+      unit.unavailable.map((u) => [u.id, u.excluded]),
+      [["AC-1", ["test"]]]
+    );
+  } finally {
+    s.done();
+  }
+});
+
+test("6.36.0 — blockedLine: an exclusion-caused AC gets the exclusion remedy, alone or after the setup command; the prefix is unchanged", () => {
+  const only = blockedLine([{ id: "AC-2", level: "e2e", excluded: ["e2e"] }]);
+  assert.equal(
+    only,
+    "blocked: no-test-runner — AC-2 (e2e); suggested: remove e2e from pharn.config.json gates.exclude, or re-specify AC-2 at a level whose gate is not excluded"
+  );
+  const mixed = blockedLine([
+    { id: "AC-1", level: "unit", excluded: [] },
+    { id: "AC-2", level: "e2e", excluded: ["e2e"] },
+  ]);
+  assert.equal(
+    mixed,
+    'blocked: no-test-runner — AC-1 (unit), AC-2 (e2e); suggested: /pharn-ship "set up a test runner for unit with per-test results (spec_kind: test-infra)"; and remove e2e from pharn.config.json gates.exclude, or re-specify AC-2 at a level whose gate is not excluded'
+  );
+  for (const line of [only, mixed]) assert.match(line, /^blocked: no-test-runner — /);
+  assert.ok(!/\/pharn-loop/.test(only + mixed), "never a /pharn-loop suggestion");
 });
 
 test("blockedLine is the brief's closed line, built from ids and levels only", () => {
@@ -647,6 +700,66 @@ test("END TO END: preflight with no runner prints the blocked line LAST; the run
   }
 });
 
+test("6.36.0 END TO END: an e2e criterion whose only gate is EXCLUDED stops the preflight and the runner; a bad declaration is UNUSABLE", () => {
+  const dir = project([["AC-1", "e2e", UNIT]]);
+  try {
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "p", scripts: { test: "node runner.cjs", e2e: "node runner.cjs" } }));
+    const config = (exclude) =>
+      writeFileSync(
+        join(dir, CONFIG_FILE),
+        JSON.stringify({ [CONFIG_KEY]: { test: "vitest-json", e2e: "vitest-json" }, gates: { exclude } })
+      );
+    const pre = () => node(dir, CLI, ["--preflight", "--ac-tests", AC, "--discover", "package.json", "--root", "."]);
+    config([]);
+    assert.equal(pre().status, 0, "the control: without the exclusion the e2e level has its runner");
+    config(["e2e"]);
+    const r = pre();
+    assert.equal(r.status, 1, r.stdout);
+    const lines = r.stdout.trim().split("\n");
+    assert.match(lines[0], /^RED — ac-level-unavailable: AC-1 \(e2e\) — every e2e gate package\.json has \(`e2e`\) is excluded/);
+    assert.equal(lines.at(-1), blockedLine([{ id: "AC-1", level: "e2e", excluded: ["e2e"] }]));
+    const init = node(dir, RUN_GATES, [
+      "init",
+      "--stage",
+      "ac-test",
+      "--feature",
+      "demo",
+      "--out",
+      OUT,
+      "--discover",
+      "package.json",
+      "--ac-tests",
+      AC,
+    ]);
+    assert.equal(init.status, 2, init.stdout);
+    const doc = JSON.parse(init.stdout);
+    assert.equal(doc.reason_code, "coverage-violation");
+    assert.match(doc.reason, /pharn\.config\.json#gates\.exclude removed them \(e2e\)/);
+    // a declaration that cannot be read: the preflight is UNUSABLE and the runner refuses, naming the cause
+    config(["playwright"]);
+    const bad = pre();
+    assert.equal(bad.status, 2, bad.stdout);
+    assert.match(bad.stdout, /^UNUSABLE — pharn\.config\.json `gates\.exclude` entry 0 is not one of the allowlisted gate ids/);
+    const badInit = node(dir, RUN_GATES, [
+      "init",
+      "--stage",
+      "ac-test",
+      "--feature",
+      "demo",
+      "--out",
+      OUT,
+      "--discover",
+      "package.json",
+      "--ac-tests",
+      AC,
+    ]);
+    assert.equal(badInit.status, 2, badInit.stdout);
+    assert.equal(JSON.parse(badInit.stdout).reason_code, "bad-gate-exclusion");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("the CLI's unusable inputs are exit 2: bad usage, a malformed mapping, a bad package.json, no finished stamp", () => {
   const dir = project([["AC-1", "unit", UNIT]]);
   try {
@@ -730,6 +843,66 @@ test("★ WIRING — /pharn-test's pinned mode, preflight, lock, red-run, verdic
       const r = sh(dir, lines[k]);
       assert.equal(r.status, 0, `${k}: ${lines[k]}\n${r.stdout}${r.stderr}`);
     }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("★ WIRING 6.36.0 — /pharn-test's pinned lines run GREEN over a project that DECLARES a gate exclusion; the lock pins it, the red-run stamp discloses it", () => {
+  const keys = ["preflight", "write", "check", "init"];
+  const lines = {
+    preflight: pinnedLine(/check-red-run\.mjs --preflight/),
+    write: pinnedLine(/ac-tests-lock\.mjs --write <name>$/),
+    check: pinnedLine(/ac-tests-lock\.mjs --check <name>$/),
+    init: pinnedLine(/run-gates\.mjs init --stage ac-test/),
+    drain: pinnedLine(/run-gates\.mjs run --next --out \.pharn\/pharn-test\/gates/),
+    verdict: pinnedLine(/check-red-run\.mjs --verdict/),
+    record: pinnedLine(/ac-tests-lock\.mjs --record-red-run/),
+    requireRed: pinnedLine(/ac-tests-lock\.mjs --check <name> --require-red-run$/),
+  };
+  // an e2e level with BOTH e2e gates, one of them excluded, plus an excluded non-level gate (the captured report holds
+  // one red criterion, AC-1 in UNIT, so the e2e criterion is that one)
+  const dir = project([["AC-1", "e2e", UNIT]]);
+  try {
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({
+        name: "p",
+        scripts: { test: "node runner.cjs", typecheck: "node -e 0", "test:e2e": "node runner.cjs", e2e: "node -e 0" },
+      })
+    );
+    writeFileSync(
+      join(dir, CONFIG_FILE),
+      JSON.stringify({ [CONFIG_KEY]: { test: "vitest-json", "test:e2e": "vitest-json" }, gates: { exclude: ["e2e", "typecheck"] } })
+    );
+    mkdirSync(join(dir, "pharn"), { recursive: true });
+    execFileSync("cp", ["-R", HERE, join(dir, "pharn", "floor")]);
+    for (const k of keys) {
+      const r = sh(dir, lines[k]);
+      assert.equal(r.status, 0, `${k}: ${lines[k]}\n${r.stdout}${r.stderr}`);
+    }
+    for (let i = 0; i < 5; i++) {
+      const r = sh(dir, lines.drain);
+      if (r.status === 3) break;
+      assert.equal(r.status, 0, `drain: ${r.stdout}`);
+    }
+    const stamp = JSON.parse(readFileSync(join(dir, OUT, "stamp.json"), "utf8"));
+    assert.deepEqual(
+      stamp.excluded,
+      { declared_in: "pharn.config.json#gates.exclude", ids: ["e2e"] },
+      "only the level gate it would have run"
+    );
+    assert.deepEqual(
+      stamp.runs.map((r) => r.id),
+      ["test:e2e"]
+    );
+    for (const k of ["verdict", "record", "requireRed"]) {
+      const r = sh(dir, lines[k]);
+      assert.equal(r.status, 0, `${k}: ${lines[k]}\n${r.stdout}${r.stderr}`);
+    }
+    const lock = JSON.parse(readFileSync(join(dir, "pharn", "features", "demo", "AC-TESTS.lock.json"), "utf8"));
+    assert.equal(lock.schema, "ac-tests-lock/5");
+    assert.deepEqual(lock.test_infra.exclude, ["typecheck", "e2e"], "the WHOLE declared list is pinned");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

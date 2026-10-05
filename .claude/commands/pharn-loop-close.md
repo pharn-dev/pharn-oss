@@ -306,6 +306,8 @@ Report, plainly and without asking anything:
   `not committed: branch failed` | `not committed: stage failed` | `not committed: commit failed`;
 - where the checkout is: on the new branch (naming `<original branch>` to return to), or unchanged;
 - any committed path that was already dirty in the pre-run snapshot (`.pharn/pharn-loop/<name>/pre-run-status.txt`);
+- every path `pre_run_snapshot.unchanged` lists (`regression-report.json`, or a quick run's scope-check output):
+  changed before the run, present when the gates ran, and never in the commit;
 - the SPEC state: **approved by the model** (inside the commit), **reverted to `Draft`**, **revert failed**
   (still approved by the model — say so), or **not approved** (the run never approved it, as on S6b);
 - **the run report**: print `pharn/features/<name>/RUN-REPORT.md`'s `## Tokens` table and its `## Files`
@@ -379,7 +381,8 @@ last three feeds `check-loop.mjs`'s inputs.
   tree-bound and checked for fabrication over the verify evidence (bounds unchanged). A changed file outside the
   declared files stops a quick loop — `check-quick-scope.mjs`'s exit, over inputs it builds itself; running it and
   obeying the exit are advisory. **Bounded:** it compares changed since `<base sha>`, never written by the build; it
-  carries `/pharn-regress`'s closed exemptions; a plan that rewrites its own `## Files` defeats it; and **nothing
+  carries `/pharn-regress`'s closed exemptions; a path Step 1a's pre-run snapshot holds with the bytes it still has is
+  reported, not counted (an earlier run's escape included); a plan that rewrites its own `## Files` defeats it; and **nothing
   downstream re-checks it** — it leaves no record, the freshness check skips G and H in quick mode, and the commit
   gate does not re-run it. The quick briefs are rendered by code from `ROUTE_POLICY`'s quick column; running the
   `--mode quick` lines is advisory, and a miss fails safe. No regression outside the feature is looked for — a stated
@@ -407,7 +410,8 @@ last three feeds `check-loop.mjs`'s inputs.
   so: untrusted prose reaches an Approved SPEC, a PLAN, a writes-scope and code with no person reading it; code built
   from it is EXECUTED — project gates, the suite, commit hooks — before any person sees it, bounded by nothing beyond
   fix #7's write scope (pre-egress is not built); a plan that lists a tracked file the user had edited commits that
-  edit (the summary names such paths); a prior run's Handoff informs this run with no person reading it first; the
+  edit (the summary names such paths); an undeclared path changed before the run is not counted as an escape and not
+  committed, so the branch alone is not the tree the gates ran on (the summary names those too); a prior run's Handoff informs this run with no person reading it first; the
   slug's check prints only a `FEATURE_SLUG_RE` member (`pharn/floor/feature-name.mjs`, floor), while writing the
   candidate with the Write tool and re-typing only the printed value into later lines are advisory; the Stop
   guard's marker and counter, the freshness ledger and every stamp, log and report live in the writable tree Bash

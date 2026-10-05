@@ -9,7 +9,7 @@ import { readFileSync, mkdirSync, writeFileSync, existsSync, rmSync } from "node
 import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { renderDone, renderRefused } from "./render-regression.mjs";
+import { renderDone, renderRefused, preRunLines } from "./render-regression.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..");
@@ -356,4 +356,109 @@ test("renderDone: a miss names its category and whether the evidence was recorde
 test("renderDone: with no baseEvidence (an older caller) nothing about reuse is rendered", () => {
   const md = renderDone({ feature: "demo", base: "a".repeat(40), report: baseReport(), scope: baseScope(), progress: baseProgress() });
   assert.doesNotMatch(md, /BASE evidence/);
+});
+
+// ── 6.37.0: the pre-run snapshot (regress-pre-run-snapshot) ──────────────────────────────────────────────────────
+const done = (pre) =>
+  renderDone({
+    feature: "demo",
+    base: "a".repeat(40),
+    report: baseReport(),
+    scope: baseScope({ pre_run_snapshot: pre }),
+    progress: baseProgress(),
+  });
+
+test("renderDone: applied with paths lists them, fenced, as reported-not-counted; applied with none says so; a miss names its status", () => {
+  const md = done({ status: "applied", unchanged: ["src/user.js", "pharn/features/old/SPEC.md"] });
+  assert.match(md, /already changed when this run began \(2\)/);
+  assert.match(md, /NOT counted as this build's escape/);
+  assert.match(md, /```text\nsrc\/user\.js\npharn\/features\/old\/SPEC\.md\n```/);
+  assert.match(done({ status: "applied", unchanged: [] }), /pre-run snapshot: applied — no undeclared path/);
+  assert.match(
+    done({ status: "other-run", unchanged: [] }),
+    /pre-run snapshot: not applied \(other-run\) — every undeclared changed path is counted\./
+  );
+});
+
+test("renderDone: a standalone regress (`no-delivery-run`) or an older scope with no block renders byte-identically to before", () => {
+  const before = renderDone({ feature: "demo", base: "a".repeat(40), report: baseReport(), scope: baseScope(), progress: baseProgress() });
+  assert.equal(done({ status: "no-delivery-run", unchanged: [] }), before);
+  assert.equal(done(undefined), before);
+  assert.deepEqual(preRunLines(null), []);
+});
+
+test("renderRefused: a scope-escaped refusal names the pre-run paths in their own section; a hostile path cannot become structure", () => {
+  const md = renderRefused({
+    feature: "demo",
+    reasonCode: "scope-escaped",
+    detail: "1 path(s) escaped",
+    preRun: { status: "applied", unchanged: ["# fake heading", "src/user.js"] },
+  });
+  assert.match(md, /## Pre-run snapshot/);
+  assert.match(md, /src\/user\.js/);
+  assert.match(md, /```text\n# fake heading\nsrc\/user\.js\n```/, "fenced as DATA: inside the fence, inert to a CommonMark parser");
+  assert.equal(md.split("\n").filter((l) => l === "# fake heading").length, 1, "and nowhere outside it");
+  const without = renderRefused({ feature: "demo", reasonCode: "scope-escaped", detail: "1 path(s) escaped" });
+  assert.doesNotMatch(without, /Pre-run snapshot/, "no block, no section — the pre-6.37.0 render");
+});
+
+// ── 6.36.0: the gate-exclusion disclosure, from gate_run.head.excluded, DIRECTLY under the verdict line ─────────
+
+const headRun = (excluded) => ({
+  base: { stamp_sha256: "a".repeat(64), source: "discover", fingerprint: { algo: "x", final: "b".repeat(64) } },
+  head: {
+    stamp_sha256: "c".repeat(64),
+    source: "discover",
+    fingerprint: { algo: "x", final: "d".repeat(64) },
+    ...(excluded ? { excluded } : {}),
+  },
+});
+
+test("6.36.0 — the exclusion line sits DIRECTLY under the verdict line for EVERY outcome (L52), and is absent without the block", () => {
+  const outcomes = [
+    baseReport(),
+    baseReport({ verdict: "regressions", regressions: ["test"], outside_gates: { test: { base: 0, head: 1 } } }),
+    baseReport({ verdict: "inconclusive", reason: "r" }),
+  ];
+  for (const r of outcomes) {
+    const excluded = { declared_in: "pharn.config.json#gates.exclude", ids: ["typecheck"] };
+    const md = renderDone({
+      feature: "demo",
+      base: "a".repeat(40),
+      report: { ...r, gate_run: headRun(excluded) },
+      scope: baseScope(),
+      progress: baseProgress(),
+    });
+    const lines = md.split("\n");
+    const at = lines.findIndex((l) => l.startsWith("**verdict:"));
+    assert.equal(
+      lines[at + 2],
+      "**1 discovered gate(s) EXCLUDED and NOT RUN on either side** by the project's `pharn.config.json` `gates.exclude`: `typecheck` — a regression in an excluded gate cannot be seen here.",
+      r.verdict
+    );
+    const plain = renderDone({
+      feature: "demo",
+      base: "a".repeat(40),
+      report: { ...r, gate_run: headRun(null) },
+      scope: baseScope(),
+      progress: baseProgress(),
+    });
+    assert.doesNotMatch(plain, /EXCLUDED and NOT RUN/, `${r.verdict}: the control`);
+  }
+});
+
+test("6.36.0 — an exclusion id outside the ALLOWLIST and an unknown source are never rendered inline (P2)", () => {
+  const excluded = { declared_in: "# x", ids: ["[l](hostile-link-target)", "build"] };
+  const md = renderDone({
+    feature: "demo",
+    base: "a".repeat(40),
+    report: { ...baseReport(), gate_run: headRun(excluded) },
+    scope: baseScope(),
+    progress: baseProgress(),
+  });
+  assert.match(
+    md,
+    /by a declaration whose source is not one this renderer recognizes: `build` \(\+1 id\(s\) outside the allowlist, not rendered\)/
+  );
+  assert.ok(!md.includes("hostile-link-target") && !md.includes("# x"));
 });

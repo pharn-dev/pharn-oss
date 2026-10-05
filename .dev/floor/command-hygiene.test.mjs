@@ -2371,7 +2371,10 @@ test("✧ QUICK MODE (GATE-2 F3): ## Quick mode keeps the scope check — the pi
   assert.match(section, /7\. \*\*The scope check: KEPT — run it before `\/pharn-verify`\.\*\*/);
   assert.match(section, /`1` → \*\*STOP\*\*:\s+a changed path is outside the declared writes/);
   assert.match(section, /the scope\s+check \(item 7\) runs again between the re-build and the re-verify/);
-  assert.match(section, /\*\*Kept:\*\* the\s+scope check \(item 7\) — a changed file outside the plan's `## Files` still stops the run/);
+  assert.match(
+    section,
+    /\*\*Kept:\*\* the\s+scope check \(item 7\) — a file the run changed outside the plan's `## Files` still stops the run/
+  );
   assert.match(section, /the scope\s+check's result verbatim \(`scope: clean`, item 7\)/);
 });
 
@@ -3412,7 +3415,10 @@ const RUN_MARKER_WIRING = [
     file: "pharn-ship.md",
     command: "pharn-ship",
     openAfter: "node pharn/floor/check-spec-approved.mjs pharn/features/<name>/SPEC.md",
-    openBefore: "node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-plan",
+    // 6.37.0: the pre-run snapshot line follows the open line, before /pharn-plan, with its OWN STOP — so the next
+    // pinned line, not the plan marker, is what the open line's STOP must precede (pre-run-snapshot.test.mjs pins the
+    // capture line's order and STOP).
+    openBefore: "node pharn/floor/pre-run-snapshot.mjs --capture '<name>'",
     closeAfter: "node pharn/floor/mark-phase.mjs --name '<name>' --kind run-stop",
   },
   {
@@ -4806,7 +4812,7 @@ test("WRITE_TOOL_RULE — each command that writes the user's files says, in its
   assert.equal(Object.keys(WRITE_TOOL_RULE_SITES).length, 2, "the two commands that write the user's files (L34)");
 });
 
-// ── INSTRUCTION_FILE_RULE (6.35.3, plan-instruction-file-rule) ──────────────────────────────────────────────
+// ── INSTRUCTION_FILE_RULE (6.37.1, plan-instruction-file-rule) ──────────────────────────────────────────────
 // THE RECORDED FAILURE (P7): in pharn-starter the harness attached 634,379 B of instruction files (CLAUDE.md 418,456 B,
 // 14 `.claude/rules/*.md` 213,290 B, MEMORY.md 2,633 B) to every stage agent, about half of each agent's ~302k-token
 // first request (.dev/measurements/loop-wall-clock-2026-10-05.md §3, §10). The user reports, unverified here, that
