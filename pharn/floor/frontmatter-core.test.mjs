@@ -33,6 +33,7 @@ const CONSUMERS = [
   "check-ship-briefing.mjs",
   "render-ship-briefing.mjs",
   "loop-closeout.mjs", // 6.44.0: reads LOOP.md's envelope and SPEC.md's state
+  "installed-skills-core.mjs", // 6.47.0: reads an installed SKILL.md's name/description for the catalogue
 ];
 
 // ── stripBom ──────────────────────────────────────────────────────────────────────────────────────

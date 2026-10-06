@@ -21,7 +21,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -186,4 +186,148 @@ test("★ FAIL-CLOSED on a bad TARGET: a nonexistent target dir → nonzero exit
     assert.notEqual(r.status, 0);
     assert.equal(r.stdout.trim(), "");
   });
+});
+
+// --- characterization (6.47.0, selective-skill-reads) ------------------------------------------------
+// Written and run against the scanner BEFORE its loop moved into installed-skills-core.mjs, and unchanged
+// after, so the extraction is held to the legacy behaviour rather than to a description of it. Several
+// cases pin behaviour the catalogue reports differently (an unreadable root, a `.claude` link leaving the
+// target): this file pins only what the legacy roster prints.
+
+test("characterization: the exact stdout bytes — one JSON line, a trailing newline, nothing else", () => {
+  withRepo({ ".claude/skills/b/SKILL.md": "# b\n", ".claude/skills/a/SKILL.md": "# a\n" }, (root) => {
+    const r = run(root);
+    assert.equal(r.status, 0);
+    assert.equal(
+      r.stdout,
+      '{"count":2,"skills":[{"name":"a","path":".claude/skills/a/SKILL.md"},{"name":"b","path":".claude/skills/b/SKILL.md"}]}\n'
+    );
+    assert.equal(r.stderr, "");
+  });
+});
+
+test("characterization: ordering is code-unit order (uppercase before lowercase, digits first)", () => {
+  withRepo({ ".claude/skills/beta/SKILL.md": "x", ".claude/skills/Alpha/SKILL.md": "x", ".claude/skills/9z/SKILL.md": "x" }, (root) => {
+    assert.deepEqual(
+      json(run(root)).skills.map((s) => s.name),
+      ["9z", "Alpha", "beta"]
+    );
+  });
+});
+
+test("characterization (L41): no target argument → the current directory", () => {
+  withRepo({ ".claude/skills/here/SKILL.md": "# here\n" }, (root) => {
+    const r = spawnSync(process.execPath, [SS], { encoding: "utf8", cwd: root });
+    assert.equal(r.status, 0);
+    assert.deepEqual(json(r), { count: 1, skills: [{ name: "here", path: ".claude/skills/here/SKILL.md" }] });
+  });
+});
+
+test("characterization: a target that is a FILE → exit 1, no stdout", () => {
+  withRepo({ "f.txt": "x" }, (root) => {
+    const r = run(join(root, "f.txt"));
+    assert.equal(r.status, 1);
+    assert.equal(r.stdout, "");
+  });
+});
+
+test("characterization: extra arguments after the target are ignored", () => {
+  withRepo({ ".claude/skills/a/SKILL.md": "x" }, (root) => {
+    const r = spawnSync(process.execPath, [SS, root, "--catalogue", "extra"], { encoding: "utf8" });
+    assert.equal(r.status, 0);
+    assert.equal(json(r).count, 1);
+  });
+});
+
+test("characterization: `.claude/skills` itself a symlink → count 0 (the root is lstat'ed)", () => {
+  withRepo({ "elsewhere/x/SKILL.md": "x", ".claude/": "" }, (root) => {
+    symlinkSync(join(root, "elsewhere"), join(root, ".claude", "skills"), "dir");
+    assert.deepEqual(json(run(root)), { count: 0, skills: [] });
+  });
+});
+
+test("characterization: `.claude/skills` a regular FILE, or `.claude` a file → count 0, exit 0", () => {
+  withRepo({ ".claude/skills": "not a dir" }, (root) => {
+    assert.deepEqual(json(run(root)), { count: 0, skills: [] });
+  });
+  withRepo({ ".claude": "not a dir" }, (root) => {
+    const r = run(root);
+    assert.equal(r.status, 0);
+    assert.deepEqual(json(r), { count: 0, skills: [] });
+  });
+});
+
+test("characterization: PARENT LINK — a `.claude` symlink leaving the target IS followed, and its skills ARE listed", () => {
+  // The legacy roster lstat's `.claude/skills` and below, never `.claude` itself. The catalogue keeps this
+  // roster (one enumerator) and marks such entries `unsafe`, never reading them.
+  withRepo({ "outside/skills/far/SKILL.md": "# far\n", "repo/README.md": "x" }, (root) => {
+    symlinkSync(join(root, "outside"), join(root, "repo", ".claude"), "dir");
+    assert.deepEqual(json(run(join(root, "repo"))), {
+      count: 1,
+      skills: [{ name: "far", path: ".claude/skills/far/SKILL.md" }],
+    });
+  });
+});
+
+test("characterization: entry kinds — a file entry, a SKILL.md that is a directory, dangling and looping links register nothing", () => {
+  withRepo(
+    {
+      ".claude/skills/ok/SKILL.md": "x",
+      ".claude/skills/README.md": "a file entry",
+      ".claude/skills/dirskill/SKILL.md/": "",
+    },
+    (root) => {
+      const skills = join(root, ".claude", "skills");
+      symlinkSync(join(root, "gone"), join(skills, "dangling"), "dir");
+      symlinkSync(join(skills, "loop"), join(skills, "loop"), "dir");
+      assert.deepEqual(json(run(root)), { count: 1, skills: [{ name: "ok", path: ".claude/skills/ok/SKILL.md" }] });
+    }
+  );
+});
+
+const IS_ROOT = typeof process.getuid === "function" && process.getuid() === 0;
+
+test("characterization: an UNREADABLE `.claude/skills` → silently count 0, exit 0", { skip: IS_ROOT && "root ignores mode bits" }, () => {
+  withRepo({ ".claude/skills/a/SKILL.md": "x" }, (root) => {
+    const skills = join(root, ".claude", "skills");
+    chmodSync(skills, 0o000);
+    try {
+      const r = run(root);
+      assert.equal(r.status, 0);
+      assert.deepEqual(json(r), { count: 0, skills: [] });
+    } finally {
+      chmodSync(skills, 0o755);
+    }
+  });
+});
+
+test(
+  "characterization: a skill dir whose SKILL.md cannot be lstat'ed is silently skipped",
+  { skip: IS_ROOT && "root ignores mode bits" },
+  () => {
+    withRepo({ ".claude/skills/a/SKILL.md": "x", ".claude/skills/b/SKILL.md": "x" }, (root) => {
+      const b = join(root, ".claude", "skills", "b");
+      chmodSync(b, 0o000);
+      try {
+        assert.deepEqual(json(run(root)), { count: 1, skills: [{ name: "a", path: ".claude/skills/a/SKILL.md" }] });
+      } finally {
+        chmodSync(b, 0o755);
+      }
+    });
+  }
+);
+
+test("characterization: two dirs whose SKILL.md declare the same frontmatter name stay two entries", () => {
+  withRepo(
+    {
+      ".claude/skills/one/SKILL.md": "---\nname: same\n---\n",
+      ".claude/skills/two/SKILL.md": "---\nname: same\n---\n",
+    },
+    (root) => {
+      assert.deepEqual(
+        json(run(root)).skills.map((s) => s.name),
+        ["one", "two"]
+      );
+    }
+  );
 });

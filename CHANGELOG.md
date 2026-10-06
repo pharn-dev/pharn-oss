@@ -23,6 +23,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.47.0] - 2026-10-06
+
+### Added
+
+- 2026-10-06: **`/pharn-build`, full `/pharn-grill` and each `/pharn-review` lens now read a body-free catalogue of
+  your installed skills, then only the `SKILL.md` bodies they judge relevant, plus every skill whose metadata they
+  cannot read cleanly.** Before this, each of them read every installed skill in full, and review did so once per
+  spawned lens. (`.dev/features/selective-skill-reads/`)
+  - **New helper `pharn/floor/catalogue-installed-skills.mjs`**, a companion of `scan-installed-skills.mjs`. Both now
+    share one discovery in `pharn/floor/installed-skills-core.mjs`, and the scanner's output, ordering, arguments and
+    exit codes are unchanged (pinned by characterization tests run before the extraction). The catalogue lists every
+    discovered skill with its path as identity, its size, a bounded `description` read from a stated frontmatter
+    subset, and a metadata status (`ok`, `truncated`, `missing`, `unsupported`, `unreadable`, `unsafe`,
+    `withheld`). It separates no skills, an incomplete roster, entries the discovery rules exclude (such as
+    symlinked skill directories, which stay excluded) and unreadable entries. It never emits body text, and never
+    reads an entry that fails its access check (containment, `O_NOFOLLOW`, regular file). It picks `none`,
+    `read-all` or `select` deterministically. The roster is never truncated.
+  - **Changed for one layout:** when `.claude` itself is a symlink that leaves the project, the scanner still
+    lists the skills behind it, as before, but the catalogue marks each one `unsafe` (`outside-target`) and the
+    consumers no longer read them. Before this release they were read in full. If every entry is `unsafe`, the
+    catalogue reports `read-all` with the new reason `all-unsafe`, and nothing is read.
+  - **New pharn-core skill `installed-skill-selection`**, the advisory procedure the three consumers follow in
+    `select` mode: read every non-`ok` entry, select by work, dependencies, wrappers and cross-cutting concerns,
+    read when unsure, expand as new concerns surface, and record one `skills:` line. Its 7 evals are the live
+    evaluation's cases.
+  - **Review:** the orchestrator reads neither the catalogue nor any body. Each lens runs the catalogue itself and
+    selects for its own concern. Skill selection never decides whether a lens spawns. `--quick` and `--floor-only`
+    grill still read no skills. Routing, models, gates, findings and merge are unchanged.
+  - **Measured, not guaranteed.** In a live evaluation (7 synthetic cases; 2 candidate samples plus 1 read-all
+    baseline each; expectations pre-registered and hashed), candidates missed no expected skill and no
+    convention or finding the baseline produced (`EVAL.md`). Static bytes (`MEASUREMENTS.md`): about −3 KB per
+    consumer on 4-skill fixtures, net overhead on a small roster (+820 B) and fallback-heavy ones (up to +6.3 KB),
+    and 53–79 KB saved per consumer in two scenarios on a real 8-skill roster (118 KB of bodies). **Selection is
+    advisory:** a skill whose description is narrower than its body can be skipped. Proposed `THREAT-MODEL.md` and
+    `pharn/ARCHITECTURE.md` wording for that residual is in `TRUSTED-DOC-PROPOSAL.md`, for a human to apply.
+
 ## [6.46.1] - 2026-10-06
 
 ### Changed
