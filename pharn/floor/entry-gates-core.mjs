@@ -25,6 +25,11 @@
 //     red to /pharn-verify, exactly as before this check existed.
 // status `red` iff at least one attributable red exists, else `green`.
 //
+// THE BASE TEST SLOT (6.49.0, entry-run-as-base-evidence). The set may also hold gate-run-core.mjs ENTRY_BASE_TEST_ID:
+// the `test` command handed regress's own default test list, so /pharn-regress can take its BASE `test` result from
+// this run (entry-base-evidence-core.mjs). It is EVIDENCE, not a gate /pharn-verify runs: it is listed in `gates` (and
+// `mutated` when it moved the tree) but never counted red or unattributed, so it can never cause S14.
+//
 // THE GATES' OWN WRITES (review R1). A gate the stamp marks `mutated` changed the tree itself (`next build` rewriting
 // `next-env.d.ts`) AFTER the run's pre-run snapshot. `entryVerdict` returns those paths — from the runner's per-gate
 // listings (`gate_changes`: changed-since-HEAD paths outside the feature directory, digested before and after each gate)
@@ -46,7 +51,7 @@
 // integer columns. Nothing here is evaluated, spawned or interpolated into a shell. A value quoted into a detail goes
 // through `shown()`, which cannot throw (L62).
 
-import { STYLE_SET, FEATURE_SLUG_RE, REASON_CODES as RUNNER_REASON_CODES } from "./gate-run-core.mjs";
+import { STYLE_SET, FEATURE_SLUG_RE, ENTRY_BASE_TEST_ID, REASON_CODES as RUNNER_REASON_CODES } from "./gate-run-core.mjs";
 
 /** The one scratch root of the entry check — ONE per tree (L38): a new `--start` supersedes an earlier runner. */
 export const ENTRY_ROOT = ".pharn/pharn-entry";
@@ -58,6 +63,8 @@ export const ENTRY_PATHS = Object.freeze({
   progress: `${ENTRY_ROOT}/progress.json`,
   result: `${ENTRY_ROOT}/result.json`,
   log: `${ENTRY_ROOT}/runner.log`,
+  // 6.49.0 — the base:test slot's file list, handed to run-gates init (`--base-tests`).
+  baseTests: `${ENTRY_ROOT}/base-tests.json`,
 });
 
 export const RUNNER_SCHEMA = "pharn-entry-runner/1";
@@ -250,6 +257,7 @@ export function entryVerdict({ stamp, featureDir, d0, gateChanges = [] }) {
       for (const [p, d] of changesById.get(r.id) ?? []) changedMap.set(p, d);
     }
     if (!(r.exit !== 0 || r.timed_out === true)) continue;
+    if (r.id === ENTRY_BASE_TEST_ID) continue; // evidence only (6.49.0): never a red the run stops on
     if (!STYLE_SET.includes(r.id)) {
       red.push(r.id);
       continue;

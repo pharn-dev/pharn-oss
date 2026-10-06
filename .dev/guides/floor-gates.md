@@ -73,7 +73,7 @@ come from the single code block this text was moved from, so the entry they name
 # Exit: init 0 ok | 2 runner error (closed reason_code) | 3 EMPTY SOURCE SET (nothing written; routes to the
 # existing no-gates HALT, and to /pharn-loop's unattended S4 `blocked: no-gates`) ·
 # run 0 an entry ran (a FAILING GATE IS DATA, not a runner error) | 2 runner error | 3 nothing left.
-node pharn/floor/run-gates.mjs init --stage verify|regress|entry [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--discover <package.json>] [--gates "<cmd>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>] [--reuse-stamp <f> --reuse-sha256 <hex>]
+node pharn/floor/run-gates.mjs init --stage verify|regress|entry [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--discover <package.json>] [--gates "<cmd>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>] [--reuse-stamp <f> --reuse-sha256 <hex>] [--base-tests <json-array-file>]   # --base-tests: entry only (6.49.0)
 node pharn/floor/run-gates.mjs init --stage ac-test --feature <name> --out <dir> --discover <package.json> --ac-tests <AC-TESTS.md> [--cwd <dir>]   # 6.18.0, /pharn-test's red run
 node pharn/floor/run-gates.mjs run --next --out <dir> --timeout-ms <N>
 node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
@@ -185,7 +185,7 @@ node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --b
 # scratch layout; `loop-fresh-core.mjs`'s `DEFAULT_STAMPS.regressHead`/`regressBase` derive from it.
 # THE BUDGET (`--budget-ms`) solves the 600 s Bash-tool cap: a slow step (the base-commit install, or one gate)
 # starts only if it is the FIRST slow step of THIS invocation, or `elapsed + timeoutMs <= budgetMs`; otherwise the
-# script persists `.pharn/pharn-regress/stage.json` (schema `pharn-stage-regress-progress/2` since 6.33.0, which adds the BASE-reuse decision) and exits 5
+# script persists `.pharn/pharn-regress/stage.json` (schema `pharn-stage-regress-progress/3` since 6.49.0 — `/2` (6.33.0) added the BASE-reuse decision, `/3` the entry decision and `installOverride`) and exits 5
 # `continue`. `--resume` accepts ONLY `--budget-ms` and reads everything else from that record, so the resume line
 # carries no state (L44). With no `--budget-ms` (a code caller, never a Bash-tool caller), nothing is budgeted.
 # `pharn/floor/render-regression.mjs` (pure, no CLI) renders `REGRESSION.md` from the verdict JSON, the scope
@@ -239,6 +239,33 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 # writer can forge record + evidence together; the base side's in-progress scratch is write-tool reachable while a chain
 # is paused at `continue` (follow-up regress-paused-chain-integrity); a stale marker (≤ 24 h) binds a later standalone
 # regress. /pharn-dev-regress (prose) is unchanged. Contract: pharn/pharn-contracts/regression-report.md.
+```
+
+## Entry evidence as BASE (regress)
+
+```bash
+# ENTRY-DERIVED BASE EVIDENCE (6.49.0, entry-run-as-base-evidence) — when 6.33.0's retained BASE evidence is not reused, a
+# /pharn-regress of an open /pharn-loop or /pharn-ship run takes its BASE from THAT run's validated entry execution when
+# tested code shows it is exactly the BASE evidence needed; no base worktree, no install, no base gate. The rule (and every
+# bound): pharn/floor/entry-base-evidence-core.mjs; storage + the materialization: entry-base-evidence.mjs; the closed misses:
+# stage-regress-core.mjs ENTRY_BASE_MISSES (first failure decides, a MISS runs the BASE side exactly as before, never a
+# question or a stop). Pieces:
+#   • the entry `base:test` slot — entry-gates.mjs --start hands run-gates `--base-tests` = scope-inputs.mjs
+#     defaultTestUniverse (regress's own default test rule, moved there, ONE owner) minus changedPaths(HEAD); reserved id,
+#     right after the style gates, never an entry red; any problem with the list = no slot (never unusable);
+#   • the OFFER — <git dir>/pharn-entry-base-offer.json, published by --wait only after its own checks pass on a green or
+#     red verdict, bound to the run marker + the entry stamp's sha256; --start discards it; ★ HOOK-probed;
+#   • the decision — after drain-head and after decideFromDisk; re-decided in full at "verdict" before anything is written;
+#     needs the pre-run snapshot at this BASE listing only this run's feature dir, byte-equal shapes per mapped slot (`test`
+#     with files → base:test), completed runs, style gates with the feature dir absent, no tree movement through the last
+#     mapped run, entry timeout <= regress timeout, no explicit --install/--no-install;
+#   • the DERIVED regress/base stamp — runs ran:false, reason "reused", reused {stage: "entry", side: null, seq,
+#     stamp_sha256}; logs copied + verified; algo ENTRY_ALGO; gate-run-core.mjs REUSE_PAIRS is the closed matrix
+#     (verify ← regress/head, regress/base ← entry).
+# check-regress.mjs and check-loop-fresh.mjs unchanged. Report: base_evidence.source (fresh|reused|entry) + .entry; work
+# record evidence "entry". NOT CLAIMED: equality with a nested-worktree BASE (different environments). ADVISORY,
+# inherited and now pointing the other way: a non-style entry gate reading the front stages' feature-dir writes can hide
+# a regression as pre_existing. Contracts: gate-run-record.md (matrix), regression-report.md (block), cost-ledger.md.
 ```
 
 ## Head→verify gate reuse

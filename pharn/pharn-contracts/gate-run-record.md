@@ -136,6 +136,28 @@ so a re-run — the fail-closed direction). The in-progress record's `reuse` bin
 dropped at finalize. While a verify chain is paused at `continue`, that in-progress binding is ordinary `.pharn/` state
 the write tools reach, as the in-progress `runs` already are — the named residual `verify-paused-chain-integrity`.
 
+### The closed reuse matrix, and the entry-derived BASE stamp (6.49.0)
+
+A reused run validates only in one of the two (target ← source) pairs `REUSE_PAIRS` holds; any other pair is
+`stamp-malformed`:
+
+| target stamp   | source         | shape                                                                                                   |
+| -------------- | -------------- | ------------------------------------------------------------------------------------------------------- |
+| `verify`       | `regress/head` | the 6.34.0 entry above, unchanged                                                                       |
+| `regress/base` | `entry`        | `ran: false`, `reason: "reused"`, an ALLOWLIST id, exit 0..125, `timed_out: false`, `mutated: false`,   |
+|                |                | `fp_before === fp_after`, `results_sha256: null`, NO `identity_sha256`, `reused: {stage: "entry", side: |
+|                |                | null, seq, stamp_sha256}`                                                                               |
+
+A `regress/base` stamp that carries a reused run is an **entry-derived BASE stamp**: `/pharn-regress` wrote it from
+this delivery run's entry execution instead of running its BASE side (`pharn/floor/entry-base-evidence-core.mjs` holds
+when, and every bound; `regression-report.md`, "The additive `base_evidence` block", the report's side). Every run is
+`ran: false` — reused or `no-files`, never a run this invocation spawned — and every reused run names ONE entry stamp;
+its `fingerprint.algo` is the entry stamp's `ENTRY_ALGO`, so the derivation is visible in the stamp itself. It is new
+evidence with explicit provenance, never an entry stamp relabelled: each run carries the entry run's exit and log
+digests, and its logs are copied under the regress slot's own names, each verified before and after the write.
+`check-regress.mjs` and `check-loop-fresh.mjs` read it unchanged. A historical `regress/base` stamp (no reused run)
+validates exactly as before.
+
 ## Excluding a discovered gate (`gates.exclude`, `excluded`, 6.36.0)
 
 **Why (P7).** In a user's project the discovered `e2e` gate could not run on the user's machine, discovery offered no
@@ -230,10 +252,14 @@ gate — it already is one today.
   discover — e2e kept, `gates.exclude` applied — with every `STYLE_SET` member first (each part in its own order), no
   `reconcile` and no `aux.completeness`. Its fingerprint also excludes the run's whole `pharn/features/<name>/`, because
   its gates run in the background while `/pharn-spec`, `/pharn-plan` and `/pharn-grill` write there, and it records its
-  own algo (`worktree-fingerprint.mjs` `ENTRY_ALGO`). That is sound for this stage only: an `entry` stamp is read by
-  `entry-gates.mjs` alone, it is never reuse evidence (`gate-reuse-core.mjs` `findReusable` accepts only a regress/head
-  stamp, and the execution identity carries the algo), and every other stamp reader asserts its own stage, so it is
-  `stage-mismatch` there. Any other tree change between two gates still refuses (`tree-changed-between-gates`). What
+  own algo (`worktree-fingerprint.mjs` `ENTRY_ALGO`). An `entry` stamp is never `/pharn-verify`'s reuse evidence
+  (`gate-reuse-core.mjs` `findReusable` accepts only a regress/head stamp, and the execution identity carries the algo),
+  and every other stamp reader asserts its own stage, so it is `stage-mismatch` there. Since 6.49.0 it may become
+  `/pharn-regress`'s BASE evidence, only through the closed matrix row above and `entry-base-evidence-core.mjs`'s rule,
+  which keeps the 6.42.0 advisory assumption about the excluded directory and states where it now points. With
+  `--base-tests <file>` (a JSON array of test files, each through `badPath`) the set also holds the evidence-only slot
+  `base:test` (`ENTRY_BASE_TEST_ID`, reserved): the discovered `test` command handed regress's own default test list,
+  right after the style part; the entry verdict never counts it. Any other tree change between two gates still refuses (`tree-changed-between-gates`). What
   counts as red at entry, and why a style gate's red is weighed differently, is `entry-gates-core.mjs`'s header.
 - **`build` (6.39.0), `/pharn-build`'s own gate, run by `pharn/floor/build-gate.mjs`:** `--discover` or a human's
   `--gates` is required, and `--extra`, `--skip-style`, `--scope-json`, `--spec-from`, `--side` and `--base` are

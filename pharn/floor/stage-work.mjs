@@ -13,16 +13,19 @@
 // ── WHAT A RECORD SAYS (schema `pharn-stage-work/1`) ─────────────────────────────────────────────────────────────
 //   {"schema","stage":"pharn-regress","ts","session_id",
 //    "head":{"required","executed","reused","no_files"},
-//    "base":{"evidence":"fresh"|"reused","miss","required","executed","reused","no_files"},
+//    "base":{"evidence":"fresh"|"reused"|"entry","miss","required","executed","reused","no_files"},
 //    "install":null | {"exit","timed_out","ms"}}
 //   {"schema","stage":"pharn-verify","ts","session_id","gates":{"required","executed","reused","no_files"}}
 // Counts come from a gate-run stamp's `runs[]` (`countRuns`): `executed` = entries with `ran: true` (a process ran),
 // `reused` = `reason: "reused"` (a VERIFY result taken from the REGRESS/HEAD execution), `no_files` = `reason:
 // "no-files"` (nothing to run), `required` = every entry. For a BASE HIT the base stamp is the earlier execution's, so
 // its `ran: true` entries did NOT run here: `executed` is 0 and `reused` = required − no_files. Invariant, checked:
-// executed + reused + no_files === required. A BASE worktree was created, and an install could run, only when
-// `base.evidence` is `fresh` — those facts are DERIVED from `evidence`, never stored a second time. `install` is null
-// when no install ran (not configured, or skipped by reuse — `evidence` says which).
+// executed + reused + no_files === required. Since 6.49.0 (entry-run-as-base-evidence) `evidence: "entry"` is a BASE
+// taken from THIS run's entry gates: `executed` 0, `reused` = required − no_files (each a result the entry check
+// produced — its time is in the ledger's separate `entry` view, never counted here a second time, and no BASE duration
+// is synthesized), and `miss` names why the retained (6.33.0) evidence was not used. A BASE worktree was created, and an
+// install could run, only when `base.evidence` is `fresh` — those facts are DERIVED from `evidence`, never stored a
+// second time. `install` is null when no install ran (not configured, or skipped by reuse — `evidence` says which).
 //
 // ── HONEST SCOPE (P0) ────────────────────────────────────────────────────────────────────────────────────────────
 // FLOOR: the record's shape and invariants (closed keys, enums, integer compare) — `validateWork`, applied by the
@@ -51,7 +54,7 @@ export const WORK_FILE = "work.jsonl";
 export const REGRESS_STAGE = "pharn-regress";
 export const VERIFY_STAGE = "pharn-verify";
 export const WORK_STAGES = Object.freeze([REGRESS_STAGE, VERIFY_STAGE]);
-export const BASE_EVIDENCE = Object.freeze(["fresh", "reused"]);
+export const BASE_EVIDENCE = Object.freeze(["fresh", "reused", "entry"]);
 
 export const SIDE_KEYS = Object.freeze(["required", "executed", "reused", "no_files"]);
 export const BASE_KEYS = Object.freeze(["evidence", "miss", ...SIDE_KEYS]);
@@ -100,11 +103,12 @@ export function regressWork(input) {
   }
 }
 
-function regressWorkUnsafe({ headStamp, baseStamp, baseReuse, installResult, ts, sessionId = null }) {
+function regressWorkUnsafe({ headStamp, baseStamp, baseReuse, entryUsed = false, installResult, ts, sessionId = null }) {
   const head = countRuns(headStamp);
   const base = countRuns(baseStamp);
   if (head === null || base === null || !baseReuse || typeof baseReuse.reused !== "boolean") return null;
   const reused = baseReuse.reused;
+  const fromEntry = !reused && entryUsed === true;
   const rec = {
     schema: WORK_SCHEMA,
     stage: REGRESS_STAGE,
@@ -120,9 +124,18 @@ function regressWorkUnsafe({ headStamp, baseStamp, baseReuse, installResult, ts,
           reused: base.required - base.no_files,
           no_files: base.no_files,
         }
-      : { evidence: "fresh", miss: baseReuse.miss ?? null, ...base },
+      : fromEntry
+        ? {
+            evidence: "entry",
+            miss: baseReuse.miss ?? null,
+            required: base.required,
+            executed: 0,
+            reused: base.required - base.no_files,
+            no_files: base.no_files,
+          }
+        : { evidence: "fresh", miss: baseReuse.miss ?? null, ...base },
     install:
-      reused || installResult === null || installResult === undefined
+      reused || fromEntry || installResult === null || installResult === undefined
         ? null
         : {
             exit: installResult.exit,
@@ -180,6 +193,9 @@ export function validateWork(rec) {
   if (!BASE_EVIDENCE.includes(b.evidence)) return bad("base.evidence");
   if (b.evidence === "reused") {
     if (b.miss !== null || b.executed !== 0 || rec.install !== null) return bad("a reused BASE has no miss, executed 0 and no install");
+  } else if (b.evidence === "entry") {
+    if (!BASE_REUSE_MISSES.includes(b.miss) || b.executed !== 0 || rec.install !== null)
+      return bad("an entry-derived BASE names the retained miss, executed 0 and no install");
   } else if (b.reused !== 0 || (b.miss !== null && !BASE_REUSE_MISSES.includes(b.miss))) {
     return bad("a fresh BASE reuses nothing and names a closed miss code (or null)");
   }

@@ -1344,3 +1344,118 @@ test("build — a build stamp validates, and every reader that asserts another s
   for (const stage of ["verify", "regress", "ac-test"]) assert.equal(validateStamp(s, { stage }).reason_code, "stage-mismatch", stage);
   assert.equal(validateStamp(goodStamp({ stage: "build", side: "head" })).reason_code, "stamp-malformed");
 });
+
+// ── 6.49.0 (entry-run-as-base-evidence): the base:test slot, and the closed reuse matrix ────────────────────────────────
+import {
+  ENTRY_BASE_TEST_ID as SLOT_ID,
+  REUSE_PAIRS as PAIRS,
+  ENTRY_REUSE_SOURCE as E_SRC,
+  ENTRY_REUSE_TARGET as E_TGT,
+  baseTestsError as baseTestsErr,
+  resolveSet as resolveSetSlot,
+  parseGatesSpec as parseGatesSlot,
+  validateStamp as validateStampSlot,
+  RESERVED_IDS as RESERVED_SLOT,
+} from "./gate-run-core.mjs";
+
+test("✧ REUSE_PAIRS is exactly the two closed (target ← source) pairs", () => {
+  assert.deepEqual(JSON.parse(JSON.stringify(PAIRS)), [
+    { target: { stage: "verify", side: null }, source: { stage: "regress", side: "head" } },
+    { target: { stage: "regress", side: "base" }, source: { stage: "entry", side: null } },
+  ]);
+  assert.deepEqual({ ...E_SRC }, { stage: "entry", side: null });
+  assert.deepEqual({ ...E_TGT }, { stage: "regress", side: "base" });
+});
+
+test("the base:test slot: reserved (no --gates token may claim it), placed after the style part with the discovered test command", () => {
+  assert.equal(SLOT_ID, "base:test");
+  assert.ok(RESERVED_SLOT.includes(SLOT_ID));
+  assert.equal(parseGatesSlot(`npm run x::${SLOT_ID}`).reason_code, "bad-gates");
+  const scripts = { test: "t", lint: "l", typecheck: "c", build: "b", e2e: "e" };
+  const r = resolveSetSlot({ stage: "entry", feature: "demo", scripts, baseTests: ["a.test.js", "b.test.js"] });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.deepEqual(
+    r.spec.entries.map((e) => [e.id, e.argv, e.files]),
+    [
+      ["lint", ["npm", "run", "lint"], []],
+      [SLOT_ID, ["npm", "run", "test"], ["a.test.js", "b.test.js"]],
+      ["test", ["npm", "run", "test"], []],
+      ["typecheck", ["npm", "run", "typecheck"], []],
+      ["build", ["npm", "run", "build"], []],
+      ["e2e", ["npm", "run", "e2e"], []],
+    ]
+  );
+  assert.ok(r.spec.required.includes(SLOT_ID), "the slot is required, so a stamp that lost it fails coverage");
+  // no discovered test → no slot; no list → no slot (both byte-identical to before 6.49.0)
+  const noTest = resolveSetSlot({ stage: "entry", feature: "demo", scripts: { lint: "l" }, baseTests: ["a.test.js"] });
+  assert.deepEqual(
+    noTest.spec.entries.map((e) => e.id),
+    ["lint"]
+  );
+  const noList = resolveSetSlot({ stage: "entry", feature: "demo", scripts });
+  assert.ok(!noList.spec.entries.some((e) => e.id === SLOT_ID));
+});
+
+test("--base-tests: entry only, and a non-empty, unique, clean, non-flag, non-glob list (each refusal its own control)", () => {
+  assert.equal(
+    resolveSetSlot({ stage: "verify", feature: "demo", scripts: { test: "t" }, baseTests: ["a.test.js"] }).reason_code,
+    "usage-error"
+  );
+  assert.equal(
+    resolveSetSlot({ stage: "regress", side: "head", feature: "demo", scripts: { test: "t" }, baseTests: ["a.test.js"] }).reason_code,
+    "usage-error"
+  );
+  for (const bad of [[], "a.test.js", ["a.test.js", "a.test.js"], ["-a.test.js"], ["src/*.test.js"], ["a\nb.test.js"], [7]]) {
+    assert.notEqual(baseTestsErr(bad), null, JSON.stringify(bad));
+    assert.equal(resolveSetSlot({ stage: "entry", feature: "demo", scripts: { test: "t" }, baseTests: bad }).reason_code, "usage-error");
+  }
+  assert.equal(baseTestsErr(["a.test.js"]), null, "control");
+});
+
+test("the reuse matrix: a reused run validates ONLY in its pair — every off-matrix (target, source) combination is stamp-malformed", () => {
+  const H = "a".repeat(64);
+  const reusedRun = (block) => ({
+    seq: 0,
+    id: "build",
+    exit: 0,
+    ran: false,
+    timed_out: false,
+    mutated: false,
+    reason: "reused",
+    argv: ["npm", "run", "build"],
+    shell: null,
+    files: [],
+    fp_before: H,
+    fp_after: H,
+    stdout_sha256: H,
+    stderr_sha256: H,
+    results_sha256: null,
+    reused: { seq: 0, stamp_sha256: H, ...block },
+  });
+  const stampOf = (stage, side, block, extra = {}) => ({
+    schema: "gate-run-record/1",
+    stage,
+    side,
+    feature: "demo",
+    head: "b".repeat(40),
+    source: "discover",
+    source_raw: null,
+    style_skipped: false,
+    finalized: true,
+    fingerprint: { algo: "x", init: H, final: H },
+    required: ["build"],
+    runs: [{ ...reusedRun(block), ...extra }],
+    aux: { completeness: null },
+  });
+  // the entry pair: valid (no identity of its own)
+  assert.deepEqual(validateStampSlot(stampOf("regress", "base", { stage: "entry", side: null })), { ok: true });
+  const off = [
+    ["regress/base ← regress/head", stampOf("regress", "base", { stage: "regress", side: "head" })],
+    ["regress/head ← entry", stampOf("regress", "head", { stage: "entry", side: null })],
+    ["entry ← entry", stampOf("entry", null, { stage: "entry", side: null })],
+    ["verify ← entry", stampOf("verify", null, { stage: "entry", side: null }, { identity_sha256: H })],
+    ["build ← entry", stampOf("build", null, { stage: "entry", side: null })],
+    ["ac-test ← entry", stampOf("ac-test", null, { stage: "entry", side: null })],
+  ];
+  for (const [name, s] of off) assert.equal(validateStampSlot(s).reason_code, "stamp-malformed", name);
+});

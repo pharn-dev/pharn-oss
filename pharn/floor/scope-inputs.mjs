@@ -18,6 +18,12 @@
 //   changedPaths(base) — `git diff --name-only --no-renames -z <base>` ∪ `git ls-files -z --others --exclude-standard`,
 //       NUL-split, de-duplicated, minus the state root (worktree-fingerprint.mjs's `isExcluded`). Each path is the name
 //       git printed, decoded as UTF-8: never trimmed, never C-quoted, never split on anything but NUL.
+//   defaultTestUniverse() (6.49.0, entry-run-as-base-evidence) — regress's DEFAULT test universe (no `--tests`):
+//       `git ls-files -z --cached --others --exclude-standard` filtered by stage-regress-core.mjs `isTestFile`
+//       (TEST_FILE_RULE), in git's order. Moved here from `stage-regress.mjs` `computeTests` so the entry check's
+//       `base:test` slot (entry-gates.mjs) lists its files with the SAME call regress makes (L35); the partition then keeps
+//       those not changed since base. Only byte equality of the two lists ever reuses anything, so a divergence here can
+//       only make regress MISS.
 //
 // NO EMISSION, NO REASON CODES: each function RETURNS `{ok: true, value}` or `{ok: false, …}`, and its caller words the
 // refusal — when this module was cut out of `stage-regress.mjs` (6.28.0), that script kept every detail string it
@@ -30,8 +36,9 @@
 // `base` is passed to git as given — each caller validates it as a 40-hex commit first; a file named exactly like
 // `base` makes git's revision argument ambiguous, and git then fails (a refusal, never a pass).
 //
-// LOAD GRAPH: node:fs, and three floor modules already in `stage-regress.mjs`'s graph — plan-files-core.mjs (zero
-// imports), stage-runtime.mjs (`gitSync`, `nulList`) and worktree-fingerprint.mjs (`isExcluded`). Imported as
+// LOAD GRAPH: node:fs, and four floor modules already in `stage-regress.mjs`'s graph — plan-files-core.mjs (zero
+// imports), stage-runtime.mjs (`gitSync`, `nulList`), worktree-fingerprint.mjs (`isExcluded`) and, since 6.49.0,
+// stage-regress-core.mjs (`isTestFile`; it imports gate-run-core.mjs alone). Imported as
 // `"./scope-inputs.mjs"`, so stage-regress.test.mjs's fixture closure (string-literal module names) copies it.
 //
 // TRUST (P2): `## Files` text and git paths are untrusted, attacker-nameable strings. They are returned as data, never
@@ -41,6 +48,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { pathsFromPlanFiles, clean } from "./plan-files-core.mjs";
 import { gitSync, nulList } from "./stage-runtime.mjs";
 import { isExcluded } from "./worktree-fingerprint.mjs";
+import { isTestFile } from "./stage-regress-core.mjs";
 
 /**
  * The declared writes: PLAN.md's `## Files` ∪ AC-TESTS.md's `## Files` (when present and parseable), cleaned, unique.
@@ -72,4 +80,14 @@ export function changedPaths(base) {
   if (!untracked.ok) return { ok: false, which: "untracked", detail: untracked.detail };
   const all = [...new Set([...nulList(diff.stdout), ...nulList(untracked.stdout)])];
   return { ok: true, value: all.filter((p) => !isExcluded(p, null)) }; // the state root is never an escape
+}
+
+/**
+ * Regress's default test universe: every tracked or untracked-not-ignored path TEST_FILE_RULE names, in git's order.
+ * @returns {{ok: true, value: string[]} | {ok: false, detail: string}}
+ */
+export function defaultTestUniverse() {
+  const r = gitSync(["ls-files", "-z", "--cached", "--others", "--exclude-standard"]);
+  if (!r.ok) return { ok: false, detail: r.detail };
+  return { ok: true, value: nulList(r.stdout).filter(isTestFile) };
 }

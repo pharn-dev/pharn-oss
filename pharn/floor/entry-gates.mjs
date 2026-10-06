@@ -64,6 +64,15 @@
 //     outside fix #7, before the build's reconcile anchor.
 //   • The record readers (`readInProject`) are imported from regress-base-reuse.mjs (reused, not copied — L35), so a
 //     change to that reader reaches this check too.
+//   • THE BASE EVIDENCE (6.49.0, entry-run-as-base-evidence): `--start` also hands run-gates the list regress's own
+//     default rule would give its `test` gate (scope-inputs.mjs `defaultTestUniverse` minus `changedPaths(HEAD)`), so
+//     the set holds the evidence-only `base:test` slot (gate-run-core.mjs ENTRY_BASE_TEST_ID; never an S14 red). Any
+//     problem with that list — a listing that fails, a path ac-tests-core.mjs `badPath` refuses, a shape resolveSet would
+//     refuse, more than BASE_TESTS_MAX_ARGV_BYTES of argv, a regress BASE checkout still standing at
+//     `.pharn/pharn-regress/base` (a runner's path filters could match its copies) — means NO slot, never a refusal. A
+//     `--wait` that decided green or red, after every check above, then PUBLISHES the offer /pharn-regress reads
+//     (entry-base-evidence.mjs `publishEntryOffer`, in the git dir); `--start` discards an earlier one. Publication is
+//     best-effort: a failure is one `note —` line on stderr and changes no document, exit or record.
 //   • OBSERVATIONS (6.48.0, entry-gates-ledger-row): `--start`, the runner, a `--wait` call (and its takeover) and
 //     `--abort` each append one line per boundary they already have to `.pharn/cost/<name>/entry.jsonl` for the cost
 //     ledger — schema, binding and view in entry-observations.mjs's header. Each is written AFTER the control record it
@@ -81,7 +90,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { containmentWalk, flag, gitSync, has, lstatSafe, parseBudgetMs, parseTimeoutMs, scanFlags } from "./stage-runtime.mjs";
 import { readInProject } from "./regress-base-reuse.mjs";
 import { hashFile } from "./reconcile-baseline.mjs";
-import { FEATURE_SLUG_RE, validateStamp, REASON_CODES as RUNNER_REASON_CODES } from "./gate-run-core.mjs";
+import { FEATURE_SLUG_RE, validateStamp, baseTestsError, REASON_CODES as RUNNER_REASON_CODES } from "./gate-run-core.mjs";
 import { ENTRY_ALGO, productFeatureDir } from "./worktree-fingerprint.mjs";
 import { mayStartSlowStep } from "./stage-exit-core.mjs";
 import {
@@ -104,7 +113,10 @@ import {
   CHANGES_RECORD,
   shown,
 } from "./entry-gates-core.mjs";
-import { changedPaths } from "./scope-inputs.mjs";
+import { changedPaths, defaultTestUniverse } from "./scope-inputs.mjs";
+import { badPath } from "./ac-tests-core.mjs";
+import { REGRESS_PATHS } from "./stage-regress-core.mjs";
+import { publishEntryOffer, discardEntryOffer } from "./entry-base-evidence.mjs";
 import { pathDigest, recordEntryChanges, clearEntryChanges } from "./pre-run-snapshot.mjs";
 import { OBS_SCHEMA, recordEntryEvent, currentRunStart, sessionFromEnv } from "./entry-observations.mjs";
 
@@ -116,6 +128,9 @@ const STAMP_MAX_BYTES = 1 << 24;
 const POLL_MS = 250;
 const KILL_GRACE_MS = 2000;
 const FEATURE_DIR_MAX_ENTRIES = 10000;
+/** The base:test slot's argv budget (grill G5): a longer list is no slot, never an E2BIG that would make the whole entry
+ *  check unusable. Regress hands the same list to its BASE and HEAD `test`, so such a project already pays that limit. */
+const BASE_TESTS_MAX_ARGV_BYTES = 64 * 1024;
 
 const USAGE =
   "usage: entry-gates.mjs --start --feature <name> --timeout-ms <N> | --wait --feature <name> --budget-ms <B> | --abort --feature <name>";
@@ -439,6 +454,8 @@ function startRun({ feature, timeoutMs }, obs) {
   mkdirSync(ENTRY_PATHS.root, { recursive: true });
   if (!clearEntryChanges())
     return refuse("path-containment", "an earlier run's entry-gate changes record in the git dir could not be removed");
+  // 6.49.0: an earlier run's offer names that run's marker and stamp, so a leftover can only MISS; removed anyway (L66).
+  discardEntryOffer();
 
   const nonce = randomBytes(16).toString("hex");
   const rec = { schema: RUNNER_SCHEMA, feature, nonce, pid: null, timeout_ms: timeoutMs, d0: featureDirDigest(feature) };
@@ -446,7 +463,10 @@ function startRun({ feature, timeoutMs }, obs) {
   obs.nonce = nonce;
 
   const initArgs = ["init", "--stage", "entry", "--feature", feature, "--out", ENTRY_PATHS.gates];
-  if (lstatSafe("package.json").stat) initArgs.push("--discover", "package.json");
+  if (lstatSafe("package.json").stat) {
+    initArgs.push("--discover", "package.json");
+    if (writeBaseTests()) initArgs.push("--base-tests", ENTRY_PATHS.baseTests);
+  }
   const init = spawnSync(process.execPath, [RUN_GATES, ...initArgs], { encoding: "utf8" });
   const parsed = parseJson(init.stdout);
   if (init.status === 3) {
@@ -492,6 +512,29 @@ function startRun({ feature, timeoutMs }, obs) {
       `${superseded ? `; an earlier runner was superseded: ${superseded}` : ""}\n`
   );
   return 0;
+}
+
+/** The base:test slot's list (6.49.0): regress's default test universe minus the paths changed since HEAD — what
+ *  /pharn-regress would hand its BASE `test` if the build changed no pre-existing test file. Written to
+ *  ENTRY_PATHS.baseTests; returns false (no slot) on ANY problem, so this list can never make the entry check unusable. */
+function writeBaseTests() {
+  try {
+    const leftover = lstatSafe(REGRESS_PATHS.base);
+    if (!leftover.ok || leftover.stat !== null) return false;
+    const head = headSha();
+    if (head === null) return false;
+    const universe = defaultTestUniverse();
+    const changed = changedPaths(head);
+    if (!universe.ok || !changed.ok) return false;
+    const inside = new Set(changed.value);
+    const list = universe.value.filter((t) => !inside.has(t));
+    if (baseTestsError(list) !== null || list.some((t) => badPath(t) !== null)) return false;
+    if (list.reduce((n, t) => n + Buffer.byteLength(t) + 1, 0) > BASE_TESTS_MAX_ARGV_BYTES) return false;
+    writeAtomic(ENTRY_PATHS.baseTests, list);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** ---------------------------------------------------------------------------------------------------------------
@@ -658,6 +701,21 @@ function decideDone(feature, runnerRec, res) {
   if (verdict.changed.length) {
     const w = recordEntryChanges(feature, verdict.changed);
     changesRecord = w.ok ? "recorded" : CHANGES_RECORD.includes(w.code) ? w.code : "write-failed";
+  }
+  // 6.49.0: every check above passed and the verdict is green or red — offer this completed run to /pharn-regress as
+  // BASE evidence, bound to the stamp bytes just validated and the open run marker. Best-effort: no exit, document or
+  // record depends on it; without an open delivery run there is nothing to bind and nothing is said.
+  const offered = publishEntryOffer({
+    feature,
+    nonce: runnerRec.nonce,
+    stampBytes: stamp.bytes,
+    base: stamp.value.head,
+    timeoutMs: runnerRec.timeout_ms,
+    d0: runnerRec.d0,
+    featureDir: res.feature_dir,
+  });
+  if (!offered.published && offered.why !== "no-delivery-run") {
+    process.stderr.write(`entry-gates: note — the entry evidence could not be offered to /pharn-regress (${offered.why})\n`);
   }
   return emitDoc({ status: verdict.status, feature, verdict, changesRecord });
 }

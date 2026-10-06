@@ -2789,3 +2789,19 @@ test("REVIEW F2 — a wait call or a start that ENDED after the run-stop is not 
   assert.equal(late.entry.invocations.length, 0, "never a 'measured' lifetime ending after the cutoff");
   assert.deepEqual(checkLedger(late).reds, []);
 });
+
+// ── 6.49.0: the entry-derived BASE in one line — no worktree, no install, no base process ─────────────────────────────
+import { workSummary as workSummaryEntry } from "./render-cost-ledger.mjs";
+
+test("workSummary: an entry-derived BASE says where it came from and that no base process, worktree or install ran", () => {
+  const line = workSummaryEntry({
+    stage: "pharn-regress",
+    head: { required: 3, executed: 3, reused: 0, no_files: 0 },
+    base: { evidence: "entry", miss: "no-record", required: 3, executed: 0, reused: 2, no_files: 1 },
+    install: null,
+  });
+  assert.equal(
+    line,
+    "HEAD gates 3 run, 0 reused, 0 nothing-to-run, of 3; BASE from the entry gates (no worktree, no install, 0 base gate processes; 2 results from this run's entry check, 1 nothing-to-run)"
+  );
+});

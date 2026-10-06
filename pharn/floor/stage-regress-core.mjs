@@ -49,6 +49,11 @@
 // the write tools reach, `regress-base-reuse.mjs`, header). A persisted MISS keeps the delivery run it saw, which a
 // later publication must see again.
 //
+// Since `/3` (6.49.0, entry-run-as-base-evidence) it also carries `installOverride` (the invocation passed --install or
+// --no-install) and `entryReuse`, the entry-derived BASE decision made when the retained one misses. A persisted entry
+// HIT is never trusted either: stage-regress.mjs re-decides it in full at the verdict, from the git-dir offer and the
+// entry source, before anything is materialized.
+//
 // TRUST (P2): every field here is a string/int/bool the CLI derived from deterministic tooling (git, a
 // shelled checker's exit code) or from argv already shape-gated at the CLI layer. Nothing here is
 // untrusted free text; a value that FAILS to validate is refused (`progress-malformed`), never repaired.
@@ -160,6 +165,66 @@ export const BASE_REUSE_MISSES = Object.freeze([
 ]);
 
 /** ------------------------------------------------------------------------------------------------
+ *  ENTRY-DERIVED BASE EVIDENCE (6.49.0, entry-run-as-base-evidence) — why this delivery run's ENTRY execution was NOT
+ *  used as the BASE evidence, in the predicate's evaluation order (first failure decides; entry-base-evidence-core.mjs
+ *  `decideEntryBase`). Owned HERE for the reason BASE_REUSE_MISSES is: the progress record carries the decision and
+ *  this module's validator checks membership (G8: this module imports gate-run-core.mjs alone). A miss is DATA — the
+ *  BASE side then runs exactly as before. The one owner of each member's meaning (the contract cites this list):
+ *    requirement-unknown   the head record gives no spec, so nothing can be mapped;
+ *    no-delivery-run       not exactly one open /pharn-loop or /pharn-ship marker for the feature (6.33.0's rule);
+ *    install-override      the invocation passed --install or --no-install: a BASE environment entry did not sample;
+ *    no-offer              no entry offer in the git dir (no validated --wait published one in this run);
+ *    offer-malformed       the offer is not a regular file of the closed pharn-entry-base-offer/1 shape;
+ *    other-run             the offer names another feature or another run marker;
+ *    no-snapshot           no pre-run snapshot in the git dir;
+ *    snapshot-malformed    the snapshot is not a regular file of its closed shape;
+ *    snapshot-other-run    the snapshot is bound to another feature or run;
+ *    start-not-base        the snapshot's or the offer's base commit is not this invocation's BASE SHA;
+ *    start-dirty           the snapshot lists a path outside this run's own pharn/features/<name>/;
+ *    source-missing        no entry stamp at its path;
+ *    source-unusable       the entry stamp is a link, a non-regular file, oversize, unreadable or not JSON;
+ *    source-unbound        the entry stamp is not the bytes the offer bound;
+ *    source-invalid        the entry stamp fails validateStamp as this feature's entry stamp, its fingerprint algo is not
+ *                          ENTRY_ALGO, or its head is not the offer's base;
+ *    timeout-incompatible  the entry timeout exceeds this invocation's --timeout-ms;
+ *    structural-gate       a required BASE entry is a regress-only structural: gate;
+ *    gate-missing          a required BASE entry has no entry run under its mapped id;
+ *    shape-mismatch        the spec source, or a mapped pair's shell, argv or ordered files, differ;
+ *    not-completed         a mapped entry run did not run, timed out, or is not a completed process exit;
+ *    style-unattributed    a mapped style run's feature-directory digests are not all `absent`;
+ *    mutated-prefix        an entry run up to the last mapped one moved the tree, or a mapped run did not judge the
+ *                          stamp's init fingerprint;
+ *    nothing-mapped        every BASE slot is a regress no-files slot, so no entry evidence would be used (L34);
+ *    log-unverified        a mapped run's log is missing, a link, oversize, or not the stamp's digest (at the copy).
+ *  ---------------------------------------------------------------------------------------------- */
+export const ENTRY_BASE_MISSES = Object.freeze([
+  "requirement-unknown",
+  "no-delivery-run",
+  "install-override",
+  "no-offer",
+  "offer-malformed",
+  "other-run",
+  "no-snapshot",
+  "snapshot-malformed",
+  "snapshot-other-run",
+  "start-not-base",
+  "start-dirty",
+  "source-missing",
+  "source-unusable",
+  "source-unbound",
+  "source-invalid",
+  "timeout-incompatible",
+  "structural-gate",
+  "gate-missing",
+  "shape-mismatch",
+  "not-completed",
+  "style-unattributed",
+  "mutated-prefix",
+  "nothing-mapped",
+  "log-unverified",
+]);
+
+/** ------------------------------------------------------------------------------------------------
  *  TEST_FILE_RULE (GRILL G15).
  *  ---------------------------------------------------------------------------------------------- */
 const TEST_FILE_BASENAME_RE = /\.(test|spec)\.[cm]?[jt]sx?$/;
@@ -245,13 +310,15 @@ export function resolveBaseSource({ explicitBase = null, workingTreeDirty, hasMe
 /** ------------------------------------------------------------------------------------------------
  *  THE PROGRESS RECORD — schema + validator.
  *  ---------------------------------------------------------------------------------------------- */
-// `/2` since 6.33.0: the record carries `baseReuse` (below). A `/1` record is refused as `progress-malformed` — a run
-// straddling the upgrade stops and is re-run fresh, never resumed under rules it was not started with.
-export const PROGRESS_SCHEMA = "pharn-stage-regress-progress/2";
+// `/2` since 6.33.0: the record carries `baseReuse` (below). `/3` since 6.49.0: `installOverride` and `entryReuse`. An
+// older record is refused as `progress-malformed` — a run straddling the upgrade stops and is re-run fresh, never
+// resumed under rules it was not started with.
+export const PROGRESS_SCHEMA = "pharn-stage-regress-progress/3";
 
 const INSTALL_KIND_SET = new Set(["none", "cmd"]);
 const HEX64_RE = /^[0-9a-f]{64}$/;
 const REUSE_DECISION_KEYS = Object.freeze(["reused", "miss", "requirementSha256", "stampSha256", "run"]);
+const ENTRY_DECISION_KEYS = Object.freeze(["reused", "miss", "offerSha256", "sourceStampSha256", "run"]);
 
 function isHex64(v) {
   return typeof v === "string" && HEX64_RE.test(v);
@@ -292,6 +359,38 @@ export function validateReuseDecision(d, phase) {
   if (d.miss === "requirement-unknown" ? d.requirementSha256 !== null : !isHex64(d.requirementSha256)) {
     return { ok: false, reason: "progress.baseReuse.requirementSha256 must be a sha256 (null only when the requirement was unknown)" };
   }
+  return { ok: true };
+}
+
+function isRunOrNull(r) {
+  if (r === null) return true;
+  if (typeof r !== "object" || Array.isArray(r) || Object.keys(r).length !== 2) return false;
+  return DELIVERY_COMMANDS.includes(r.command) && isHex64(r.markerSha256);
+}
+
+/**
+ * The ENTRY-derived BASE decision a progress record carries (6.49.0, entry-base-evidence-core.mjs `decideEntryBase`'s
+ * result): closed keys; `run` the delivery run seen, or null. A HIT names the offer and the entry stamp it decided on
+ * and can only sit at `verdict`; a miss names its ENTRY_BASE_MISSES category and no digests.
+ */
+export function validateEntryDecision(d, phase) {
+  if (d === null || typeof d !== "object" || Array.isArray(d)) return { ok: false, reason: "progress.entryReuse must be an object" };
+  const keys = Object.keys(d);
+  if (keys.length !== ENTRY_DECISION_KEYS.length || !ENTRY_DECISION_KEYS.every((k) => Object.hasOwn(d, k))) {
+    return { ok: false, reason: `progress.entryReuse keys must be exactly ${ENTRY_DECISION_KEYS.join(", ")}` };
+  }
+  if (typeof d.reused !== "boolean") return { ok: false, reason: "progress.entryReuse.reused must be a boolean" };
+  if (!isRunOrNull(d.run)) return { ok: false, reason: "progress.entryReuse.run must be null or {command, markerSha256}" };
+  if (d.reused) {
+    if (d.miss !== null || !isHex64(d.offerSha256) || !isHex64(d.sourceStampSha256) || d.run === null) {
+      return { ok: false, reason: "a reused entry decision has no miss, and names its offer, source and run" };
+    }
+    if (phase !== "verdict") return { ok: false, reason: "a reused entry decision can only sit at the verdict phase" };
+    return { ok: true };
+  }
+  if (!ENTRY_BASE_MISSES.includes(d.miss))
+    return { ok: false, reason: `progress.entryReuse.miss must be one of ${ENTRY_BASE_MISSES.join(" | ")}` };
+  if (d.offerSha256 !== null || d.sourceStampSha256 !== null) return { ok: false, reason: "an entry miss names no digests" };
   return { ok: true };
 }
 
@@ -346,12 +445,22 @@ export function validateProgress(rec) {
   }
   // `baseReuse` — null while the HEAD side drains (the decision is made after it), the decision from then on.
   if (!Object.hasOwn(rec, "baseReuse")) return { ok: false, reason: "progress.baseReuse is required (schema /2)" };
+  // `installOverride` and `entryReuse` (/3): the entry decision is made only when the retained one misses.
+  if (typeof rec.installOverride !== "boolean") return { ok: false, reason: "progress.installOverride must be a boolean (schema /3)" };
+  if (!Object.hasOwn(rec, "entryReuse")) return { ok: false, reason: "progress.entryReuse is required (schema /3)" };
   if (rec.phase === "drain-head") {
     if (rec.baseReuse !== null)
       return { ok: false, reason: "progress.baseReuse must be null at drain-head — the decision follows the HEAD side" };
+    if (rec.entryReuse !== null) return { ok: false, reason: "progress.entryReuse must be null at drain-head" };
   } else {
     const d = validateReuseDecision(rec.baseReuse, rec.phase);
     if (!d.ok) return d;
+    if (rec.baseReuse.reused) {
+      if (rec.entryReuse !== null) return { ok: false, reason: "progress.entryReuse must be null after a retained HIT (never evaluated)" };
+    } else {
+      const e = validateEntryDecision(rec.entryReuse, rec.phase);
+      if (!e.ok) return e;
+    }
   }
   return { ok: true };
 }

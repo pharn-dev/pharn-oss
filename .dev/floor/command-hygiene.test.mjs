@@ -4638,7 +4638,7 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   "pharn-loop-quick.md": 12288,
   "pharn-memory-promote.md": 27648,
   "pharn-plan.md": 24064,
-  "pharn-regress.md": 20480,
+  "pharn-regress.md": 23040, // 6.49.0 entry-run-as-base-evidence: 20699 B measured + 10% → next 512 (was 20480)
   "pharn-review.md": 24064,
   // orchestrator-direct-stage-calls (6.43.0), after #313 merged: 40,551 bytes measured, 615 over 39,936 (the GATE-2
   // review's R1–R3 text plus #313's entry gates); raised by the rule (+10%, up to a multiple of 512).

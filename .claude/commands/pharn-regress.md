@@ -63,10 +63,12 @@ Load the trusted prefix and obey it:
 - **The residual, named not hidden:** `/pharn-regress` catches **exactly what the project's suite
   catches — nothing more.** A regression no deterministic check covers is **invisible**. Never read a
   `done` exit as "nothing broke."
-- **A reused BASE side** (the report's `base_evidence.reused`, 6.33.0) is reused because the run marker, the reuse
-  record, the stamp and its logs agree with this invocation's BASE requirement — a floor decision over hashes and
-  enums. That an earlier `/pharn-regress` of this run produced it, and that it equals a fresh base run, are
-  **advisory** (L43; a marker an interrupted run left, ≤ 24 h, also binds — `pharn/pharn-contracts/regression-report.md`).
+- **A BASE side not run here** (the report's `base_evidence.source`: `reused`, 6.33.0, or `entry`, 6.49.0 — this
+  run's own entry gates) is used because the run marker, the reuse record or entry offer, the stamp and its logs agree
+  with this invocation's BASE needs — a floor decision over hashes and enums. That the evidence was produced as its
+  record says, and that it equals a fresh base run, are **advisory** (L43; a marker an interrupted run left, ≤ 24 h, also
+  binds). Entry evidence is the run's real start environment, not a fresh worktree, and a non-style entry gate that read
+  the feature directory can hide a regression as `pre_existing` (`pharn/pharn-contracts/regression-report.md`).
 
 ## Step 0 — Resolve `<name>`, then set the writes-scope (fix #7, fail-closed; amendment A1)
 

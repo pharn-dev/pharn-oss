@@ -24,7 +24,8 @@ purpose: "Single source of truth for the machine regression-report — the pharn
 The regression-report is `pharn/features/<name>/regression-report.json` (product) /
 `.dev/features/<name>/regression-report.json` (dev) — the machine half of the regress stage, written
 beside the human-facing `REGRESSION.md`. It is `pharn/floor/check-regress.mjs`'s **`verdict` subcommand**
-stdout, plus — in the product report — three additive advisory blocks, `base_evidence` (6.33.0),
+stdout, plus — in the product report — three additive advisory blocks, `base_evidence` (6.33.0; its `source` and
+`entry` keys 6.49.0),
 `pre_run_snapshot` (6.37.0) and `head_install` (6.40.0), and, only when the run's entry gates recorded changes, a
 fourth, `entry_gate_changes` (6.42.0), all below.
 
@@ -281,6 +282,59 @@ as `node_modules/`, the environment, the machine). The reuse record lives in the
 reach; a Bash writer can forge it with the evidence, and the base side's in-progress scratch is write-tool reachable
 while a chain is paused (`pharn/floor/regress-base-reuse.mjs`, header). No floor op reads this block, and the four
 verdict consumers above ignore it.
+
+### Entry-derived BASE evidence — `source` and `entry` (6.49.0, additive)
+
+When the retained evidence above is not reused, `/pharn-regress` asks whether THIS delivery run's validated entry
+execution (`entry-gates.mjs`, offered through the git dir) is exactly the BASE evidence it needs. If it is, it writes
+an **entry-derived** `regress/base` stamp (`gate-run-record.md`, "The closed reuse matrix, and the entry-derived BASE
+stamp") and skips the BASE worktree, the install and every BASE gate. The four keys above keep their 6.33.0 meaning (the
+retained-reuse decision); two keys follow them:
+
+```json
+{
+  "base_evidence": {
+    "reused": false,
+    "miss": "no-record",
+    "requirement_sha256": "<sha256>",
+    "recorded": false,
+    "source": "entry",
+    "entry": {
+      "used": true,
+      "miss": null,
+      "offer_sha256": "<sha256>",
+      "entry_stamp_sha256": "<sha256>",
+      "base": "<40-hex>",
+      "run": { "command": "pharn-loop", "marker_sha256": "<sha256>" },
+      "reused_ids": ["test", "typecheck", "build"],
+      "no_files_ids": [],
+      "ignored_ids": ["test"]
+    }
+  }
+}
+```
+
+- **`source`** — where the BASE evidence came from: `"fresh"` (this invocation created the BASE worktree, ran its install
+  decision and spawned the base gates), `"reused"` (a retained 6.33.0 HIT) or `"entry"` (this run's entry gates). For
+  `reused` and `entry`: no worktree, no install, no base gate process. `recorded` is `false` with `entry`: no retained
+  record ever binds entry-derived evidence (`REGRESSION.md`'s `entry-derived`).
+- **`entry`** — `null` when a retained HIT left the entry rule unasked; else the decision. `used`; `miss` — `null` when
+  used, otherwise one member of the closed, ordered set `ENTRY_BASE_MISSES`, the first that applied (owned, with each
+  member's meaning, by `pharn/floor/stage-regress-core.mjs`; the rule is `pharn/floor/entry-base-evidence-core.mjs`'s
+  header — cited, not restated, P4); the offer's and the entry stamp's digests, the BASE commit and the run binding when
+  used; `reused_ids` (BASE slots taken from an entry run), `no_files_ids` (regress `no-files` slots, which take no
+  evidence) and `ignored_ids` (entry runs that did not become evidence). No log, environment, prompt or timing.
+
+**The rule, and its bounds (P0).** FLOOR: the decision (content hashes and closed enums over the offer, the pre-run
+snapshot, the run marker, the entry stamp and its logs — agreement, never provenance, L43) and the derived stamp's
+shape (`validateStamp`'s closed matrix); the verdict is `check-regress.mjs`'s over the stamps on disk, unchanged.
+NOT CLAIMED: that entry-derived BASE equals what a fresh nested-worktree BASE would give — they may differ because the
+environments differ (ignored files, `node_modules`, the inherited environment, the machine); the entry gates are the
+real, unattested start environment, and a regression is still a gate green at BASE and red at HEAD. ADVISORY and
+inherited: that a non-style entry gate did not read a front stage's concurrent write under `pharn/features/<name>/`
+(6.42.0) — used as BASE evidence, a false red there can HIDE a HEAD regression as `pre_existing`. Not seen: ignored
+state an earlier entry-only run left. Every reuse assumes per-sample determinism. A MISS is never a question, a refusal
+or a stop: the BASE side then runs exactly as before.
 
 ## The additive `pre_run_snapshot` block (6.37.0, advisory shape)
 
