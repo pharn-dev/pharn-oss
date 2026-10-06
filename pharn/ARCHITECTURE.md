@@ -135,7 +135,9 @@ pharn/pharn-contracts   L-1  schemas only, ZERO behavior: finding-shape (incl. s
                              (+ templates/spec-template.md, the default SPEC template it defines;
                              a project may supply its own at pharn.spec-template.md).
                              Everything depends on this.
-  └─ pharn-core          L0   seam-resolver — the seam MECHANISM, framework-agnostic.
+  └─ pharn-core          L0   seam-resolver — the seam MECHANISM, framework-agnostic;
+                              installed-skill-selection — the advisory procedure for choosing
+                              which installed skills to read.
        ├─ pharn-pipeline      grillers (plan-time interrogation, one axis each)
        └─ pharn-review        lenses (post-build review, one hunt each)
 .claude/commands/                              the stages: pharn-spec … pharn-ship (+ loop, review, memory-promote)
@@ -234,7 +236,7 @@ linking back to the spec:
 | ------- | -------------------- | -------------------------------------------- |
 | spec    | `SPEC.md`            | intent (Draft → Approved) + `spec_template` (provenance; a templated SPEC's criteria are `AC-<n>` items, one verify level each) + optional `spec_kind` (hashed into the approval pin, 6.18.0) |
 | plan | `PLAN.md` | `spec_id` **+ `spec_content_hash`** (fix #4) + `applied_lessons` (floor-shaped: `none` \| `[L<n>…]`; content advisory) |
-| grill   | grill-log            | findings vs plan                             |
+| grill   | grill-log            | the two floor stops' results + findings vs plan (findings only when the plan is interrogated — not under `--quick` / `--floor-only`) |
 | test    | `AC-TESTS.lock.json` | the spec pin + the AC tests' digests + the test-infrastructure pin (6.20.0) + the red-run evidence: each AC's test failed before the build (6.18.0) — or a bootstrap record for a `spec_kind: test-infra` SPEC |
 | build   | `BUILD.md`           | per-phase results                            |
 | regress | regression-report    | regressions outside the feature              |

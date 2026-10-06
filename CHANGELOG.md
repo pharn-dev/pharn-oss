@@ -23,6 +23,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.49.1] - 2026-10-06
+
+### Fixed
+
+- 2026-10-06: **The trusted docs catch up with 6.36.0–6.47.0, and three hand-written sentences catch up with
+  6.42.0–6.49.0.** (`.dev/features/docs-sync-6-49-1/`) Each trusted-doc edit is the text a merged feature proposed for a
+  human to apply, applied unchanged by a human-run script (`apply-trusted-doc-edits.py`). No behaviour changes.
+  - **`LIMITS.md`:**
+    - §3a, `/pharn-ship --quick`: the scope check stops on a file _the run_ changed (6.37.0's pre-run snapshot);
+    - §3a, `/pharn-loop --quick`: no longer implies the full loop interrogates the plan (6.45.0);
+    - §5: `/pharn-verify` runs the discovered gates less `gates.exclude`, and may reuse regress's HEAD result
+      (6.34.0, 6.36.0); under an unattended `/pharn-loop` the plan's telemetry is not judged at all (6.45.0);
+    - §6, the older partial backstop: a fifth bound for a path already changed when the run began (6.37.0).
+  - **`THREAT-MODEL.md`:**
+    - §1: an unattended `/pharn-loop` runs only the security griller's secret scan (6.45.0);
+    - §2 item 8 and the §3 surface-8 row: the stages read a body-free catalogue
+      (`catalogue-installed-skills.mjs`) and then only the skill bodies they select (6.47.0);
+    - §5: a third named residual, the **selection-omission** channel. A skill whose description is narrower than
+      its body can be skipped, and nothing structural closes that.
+  - **`pharn/ARCHITECTURE.md`:** §4's layer tree names `installed-skill-selection` under `pharn-core`; §6's grill row
+    says a floor-only grill-log holds no findings. This changes `spec_content_hash`; the next `/pharn-dev-plan`
+    re-pins it.
+  - **`.dev/floor/specified-primitives.json`:** registers the new `catalogue-installed-skills.mjs` citation in
+    `THREAT-MODEL.md`, beside the `scan-installed-skills.mjs` one, so `check:markers` catches it if it drifts.
+  - **`README.md`:** the `/pharn-loop` paragraph names the entry gates (6.42.0): a gate already red stops the run
+    before `/pharn-test` unless `--allow-red-entry` is passed, and `/pharn-ship` asks. The cost paragraph no longer
+    says every pass re-runs the suite at the base: BASE evidence is reused within a run (6.33.0) and from the entry
+    gates (6.49.0), and a verify gate can reuse regress's HEAD result (6.34.0).
+  - **`CLAUDE.md`:** the `validate.mjs` sentence names both `pharn/pharn-core/` skills; it named only `seam-resolver/`
+    after 6.47.0 added `installed-skill-selection/`.
+  - Not changed: `docs/**`. Everything under it is generated, or is a logo, and `docs:check` was green before and after.
+
 ## [6.49.0] - 2026-10-06
 
 ### Added

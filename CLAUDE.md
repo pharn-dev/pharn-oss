@@ -155,8 +155,8 @@ Packaging later = "ship root minus `.dev/`". `.dev/` (committed apparatus) is un
   chain: `npm run check:changelog-entry` (`.dev/floor/check-changelog-entry.mjs`, the per-PR diff) needs a
   base to compare against. CI runs it on pull requests only, against the merge commit's first parent.
 - `node pharn/floor/validate.mjs .` reports `GREEN` over the product surface — the `pharn/pharn-review/*`
-  code-review lenses, the `pharn/pharn-pipeline/grillers/*` grillers, and `pharn/pharn-core/seam-resolver/`,
-  over the `pharn/pharn-contracts/{finding-shape,eval-format,seam-config}` contracts.
+  code-review lenses, the `pharn/pharn-pipeline/grillers/*` grillers, and the `pharn/pharn-core/` skills
+  (`seam-resolver/`, `installed-skill-selection/`), over the `pharn/pharn-contracts/{finding-shape,eval-format,seam-config}` contracts.
   `pharn/pharn-review/trust-fence/` (attempt 0) remains the injection-residual probe, its dogfood
   `/pharn-dev-review` recorded in `.dev/features/trust-fence/REVIEW.md`. Read this count live;
   never assert repo state from memory (P6). The floor still deliberately ignores this repo's own

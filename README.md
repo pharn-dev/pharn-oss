@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.49.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.49.1-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -130,7 +130,10 @@ own spec, checks the plan with the grill's two floor stops and its deterministic
 model-driven griller, since 6.45.0 — no stage would read them before the build), writes each acceptance criterion's test and shows it fails before any code exists, repeats build →
 regress → verify until a deterministic stop — green, the `--max-iter` cap, or a
 result it must not retry — commits a green result to a new local branch (never pushed or merged), and
-ends with a summary of what was done. When it reaches a point that needs a human decision, it stops and
+ends with a summary of what was done. While the spec, plan and grill stages work, it runs your project's gates once
+in the background on the tree it started from (6.42.0). If one is already red, the run stops before `/pharn-test`
+writes anything (`blocked: gates-red-at-entry`); pass `--allow-red-entry` when fixing that gate is the feature.
+`/pharn-ship` runs the same check and asks you whether to stop or continue. When it reaches a point that needs a human decision, it stops and
 says what it needs instead of guessing. On any stop other than a committed green result it reverts its
 own spec approval — a procedural step, so an aborted run can skip it.
 
@@ -857,8 +860,11 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   platform veto, and what deleting the block costs — are stated once, in [`LIMITS.md`](./LIMITS.md) § 8.
 - **It is token-hungry by construction.** `/pharn-grill` runs the grillers over your plan and
   `/pharn-review` fans every applicable lens out as its own parallel subagent; `/pharn-loop` repeats
-  build → regress → verify up to the cap, unattended — each pass re-runs your suite at the base and at
-  HEAD plus every verify gate. That buys parallel scrutiny and costs tokens accordingly.
+  build → regress → verify up to the cap, unattended — each pass runs your suite at HEAD and the verify gates,
+  and at the base too unless that evidence can be reused: from an earlier pass of the same run (6.33.0) or, since
+  6.49.0, from the run's own entry gates. A verify gate is not re-run when the same run's regress already recorded
+  its HEAD result on the same inputs (6.34.0). Every delivery run, quick mode included, also runs your gates once in
+  the background at entry (6.42.0), and since 6.49.0 one more test-suite run there. That buys parallel scrutiny and costs tokens accordingly.
   Budget for it, or drive individual stages instead of the loop. Since `6.5.0` a run no longer leaves you
   guessing what it spent: `/pharn-loop` and `/pharn-ship` write `cost.json` and `RUN-REPORT.md` into the
   feature directory, with tokens broken down per stage, iteration and model. That is a measurement, not a
