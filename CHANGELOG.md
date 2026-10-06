@@ -23,6 +23,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.48.0] - 2026-10-06
+
+### Added
+
+- 2026-10-06: **`cost.json` now records the background entry check's timing, apart from the stage rows.** Since 6.42.0
+  `/pharn-loop` and `/pharn-ship` run the project's gates once in a background process while spec, plan and grill
+  work, deliberately with no stage marker. Until now that work appeared nowhere in the cost ledger: the `--wait` call
+  fell between two marked stages, and the entry scratch (which holds no timestamps) is wiped by the next `--start`.
+  This closes the named follow-up `entry-gates-ledger-row`. (`.dev/features/entry-gates-ledger-row/`)
+  - **Facts at the moment of each act.** `entry-gates.mjs` appends one line per boundary it already has to
+    `.pharn/cost/<name>/entry.jsonl`: the `--start` call, each runner or `--wait` takeover process (a begin and an end),
+    each `--wait` call and each `--abort`. The new owner is `pharn/floor/entry-observations.mjs`
+    (`pharn-entry-observation/1`, closed keys per event). Durations within one process are monotonic. Wall-clock
+    timestamps are used only for placement across processes. Lines are written after the control record they describe,
+    best-effort, through the safe append now shared with `work.jsonl` (`stage-work.mjs appendJsonLine`, extracted with
+    `appendWork` / `readWork` unchanged). A failure is one `note —` line on stderr. **No exit code, stdout document,
+    verdict, takeover, abort, wait point, route or commit changes**. A test runs the CLI with every append failing and
+    compares its exits, documents and `--abort` line byte for byte with the same run's appends succeeding (within
+    6.48.0). The pre-existing CLI tests pin the documents against earlier behaviour. Every observation's arguments are
+    built inside its guard.
+  - **Two closed `/2` keys, no schema bump:** `entry_events[]` (the facts the run window admits, exact duplicates
+    dropped, invalid lines in `dropped[]`) and `entry` (method `entry-observations/1`). The view gives per invocation the
+    lifetime (start to the one producer-recorded end), each execution segment, each wait call, wall-clock interval
+    unions (never sums) and the overlap with measured `executions` rows (placement, not a saving). An invocation binds
+    to a run only through the run-start `{seq, ts}` its `--start` recorded. Anything else is counted as unbound, never
+    attached, and so is a nonce whose start records conflict. Unknown is `null` and a named status, never `0`. A line is
+    admitted only when every timestamp it carries (`ts`, and a call's `end_ts`) is inside the run window. So a segment
+    end after the `run-stop` marker leaves the segment `incomplete`, and a call that ended after it is not admitted. The
+    reads refuse a linked `.pharn/cost` or feature directory.
+  - **`check-cost-ledger.mjs` RULE 10** validates each fact, requires window admission and no exact duplicate, and
+    recomputes `entry` from the file's own `markers[]`, `entry_events[]` and `executions`. RULE 1 now admits exactly
+    three `/2` key sets (current, 6.35.0–6.47.x, pre-6.35.0). Historical ledgers stay GREEN. A checker older than
+    6.48.0 REDs a ledger carrying the new keys (the closed key set is not forward-compatible). Requests, membership,
+    attribution, totals, markers, `executions` and `work[]` are unchanged, and a regression test compares every
+    pre-6.48.0 key with and without observations.
+  - **Rendering:** the `/pharn-loop` stop table gains a labelled ledger-window line (the run-stop precedes the ledger,
+    the report and the closeout) and an entry block. `RUN-REPORT.md` gains a `## Entry gates (background)` section.
+  - **Overhead and evidence:** one append ≈ 0.04 ms; a typical run writes 5–6 lines (~1.5 KB). Loading the new
+    module costs ≈ 1.4 ms per entry-gates process, ≈ 6 ms across a typical run's four. No subprocess, model request or
+    pinned line was added. A controlled-fixture report and a matched-comparison procedure are in
+    `.dev/measurements/entry-gates-ledger-row-2026-10-06.md`. This increment measures; it claims no speedup.
+  - Contract: `pharn/pharn-contracts/cost-ledger.md`, "Entry gate observations". SKILLS_VERSION 6.47.0 → 6.48.0
+    (minor: a new shipped ledger capability). `MIN_CLI` unchanged: no installed path or frontmatter moved.
+
 ## [6.47.0] - 2026-10-06
 
 ### Added

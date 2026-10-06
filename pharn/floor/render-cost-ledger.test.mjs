@@ -1866,7 +1866,11 @@ test("LAYOUT: JSON.parse of the new file equals JSON.parse of the old one — ov
     assert.equal(serializeLedger(structuredClone(led)), text, `${label}: byte-deterministic for an equal object`);
     assert.ok(text.split("\n").length <= old.split("\n").length, `${label}: never MORE lines than the old layout`);
   }
-  assert.deepEqual([...ROW_ARRAYS], ["markers", "requests", "work"], "exactly the three fact arrays — equality, not presence (L36)");
+  assert.deepEqual(
+    [...ROW_ARRAYS],
+    ["markers", "requests", "work", "entry_events"],
+    "exactly the four fact arrays — equality, not presence (L36)"
+  );
 });
 
 test("LAYOUT: a value carrying \\n or U+2028 stays on its row's line — the \\n-delimited claim, probed (L37)", () => {
@@ -2519,7 +2523,7 @@ const VERIFY_WORK = {
 test("6.35.0 — every ledger carries `executions` (a view over markers) and `work` (facts), after membership", () => {
   const { projectsDir, markersBase } = perfRun({ work: [REGRESS_WORK, VERIFY_WORK] });
   const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase });
-  assert.deepEqual(Object.keys(led).slice(-3), ["membership", "executions", "work"]);
+  assert.deepEqual(Object.keys(led).slice(-5), ["membership", "executions", "work", "entry_events", "entry"]);
   assert.deepEqual(led.work, [REGRESS_WORK, VERIFY_WORK]);
   assert.equal(led.executions.method, "stage-start-to-return/1");
   assert.deepEqual(
@@ -2637,4 +2641,151 @@ test("GATE-2 (L58) — a --verify-transcript re-derivation never reads the live 
   const again = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase, markers: led.markers });
   assert.deepEqual(again.work, [], "the recorded-boundary path reads no live work.jsonl");
   assert.deepEqual(led.work, [VERIFY_WORK]);
+});
+
+// ── 6.48.0: the entry-gate observations (`entry_events[]` facts + the `entry` view) ─────────────────────────────────
+import { TOP_LEVEL_KEYS_PRE_ENTRY, ENTRY_KEYS, entryLines, windowLines } from "./render-cost-ledger.mjs";
+import { OBS_SCHEMA } from "./entry-observations.mjs";
+
+const ENONCE = "e".repeat(32);
+const eStart = (o = {}) => ({
+  schema: OBS_SCHEMA,
+  event: "start",
+  nonce: ENONCE,
+  run: { seq: 1, ts: "2026-09-21T08:00:00.000Z" },
+  ts: "2026-09-21T08:00:01.000Z",
+  end_ts: "2026-09-21T08:00:01.400Z",
+  elapsed_ms: 400,
+  outcome: "started",
+  session_id: null,
+  ...o,
+});
+const eBegin = (o = {}) => ({
+  schema: OBS_SCHEMA,
+  event: "segment-begin",
+  nonce: ENONCE,
+  segment: "5".repeat(16),
+  kind: "runner",
+  ts: "2026-09-21T08:00:02.000Z",
+  session_id: null,
+  ...o,
+});
+const eEnd = (o = {}) => ({
+  schema: OBS_SCHEMA,
+  event: "segment-end",
+  nonce: ENONCE,
+  segment: "5".repeat(16),
+  kind: "runner",
+  ts: "2026-09-21T08:20:02.000Z",
+  elapsed_ms: 1199990,
+  end: "done",
+  gates: 4,
+  session_id: null,
+  ...o,
+});
+const eWait = (o = {}) => ({
+  schema: OBS_SCHEMA,
+  event: "wait",
+  nonce: ENONCE,
+  call: "9".repeat(16),
+  ts: "2026-09-21T08:30:00.000Z",
+  end_ts: "2026-09-21T08:30:00.150Z",
+  elapsed_ms: 150,
+  status: "green",
+  takeover: null,
+  session_id: null,
+  ...o,
+});
+const writeEntry = (markersBase, lines) =>
+  writeFileSync(
+    join(markersBase, "feat", "entry.jsonl"),
+    lines.map((l) => (typeof l === "string" ? l : JSON.stringify(l))).join("\n") + "\n"
+  );
+
+test("6.48.0 REGRESSION — the same request/marker/work fixture keeps every pre-6.48.0 key identical with and without entry observations", () => {
+  const a = perfRun({ work: [REGRESS_WORK, VERIFY_WORK] });
+  const without = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir: a.projectsDir, markersBase: a.markersBase });
+  writeEntry(a.markersBase, [eStart(), eBegin(), eEnd(), eWait()]);
+  const withEntry = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir: a.projectsDir, markersBase: a.markersBase });
+  assert.deepEqual([...ENTRY_KEYS], ["entry_events", "entry"]);
+  assert.ok(without.requests.length > 0, "non-vacuity: the fixture has request rows");
+  for (const k of TOP_LEVEL_KEYS_PRE_ENTRY) assert.deepEqual(withEntry[k], without[k], `${k} is unchanged by the observations`);
+  for (const k of [
+    "requests",
+    "totals",
+    "by_model",
+    "by_stage_iteration_model",
+    "unattributed",
+    "membership",
+    "markers",
+    "executions",
+    "work",
+  ])
+    assert.ok(TOP_LEVEL_KEYS_PRE_ENTRY.includes(k), `${k} is among the keys compared`);
+  assert.deepEqual(without.entry_events, [], "no entry file: no facts");
+  assert.equal(without.entry.invocations.length, 0);
+  assert.equal(withEntry.entry_events.length, 4);
+  assert.equal(withEntry.entry.invocations[0].lifetime.status, "measured");
+  assert.deepEqual(checkLedger(withEntry).reds, []);
+  assert.deepEqual(checkLedger(without).reds, []);
+});
+
+test("6.48.0 CUTOFF — a segment end written after the run-stop is not a fact (it stays INCOMPLETE); invalid lines are dropped by index; exact duplicates once", () => {
+  const a = perfRun({ work: [] });
+  const late = eEnd({ ts: "2026-09-21T09:30:00.000Z" }); // run-stop is 09:00
+  writeEntry(a.markersBase, [eStart(), eBegin(), eBegin(), late, '{"schema":"x"}', eWait()]);
+  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir: a.projectsDir, markersBase: a.markersBase });
+  assert.equal(led.entry.cutoff_ts, "2026-09-21T09:00:00.000Z");
+  assert.ok(!led.entry_events.some((e) => e.event === "segment-end"), "the late end is not admitted");
+  assert.equal(led.entry_events.filter((e) => e.event === "segment-begin").length, 1, "the exact duplicate is dropped");
+  assert.ok(led.dropped.includes("entry.jsonl[4]"), "the invalid line is listed by its index");
+  const x = led.entry.invocations[0];
+  assert.equal(x.segments[0].status, "incomplete", "late completion is NOT converted into completion before the cutoff");
+  assert.equal(x.lifetime.status, "incomplete");
+  assert.equal(x.segments_union_ms, null);
+  assert.deepEqual(checkLedger(led).reds, []);
+});
+
+test("6.48.0 RENDER — known zero, unknown, none recorded and not recorded read differently; the ledger window is labelled for what it is", () => {
+  const a = perfRun({ work: [] });
+  writeEntry(a.markersBase, [eStart({ outcome: "no-gates" })]);
+  const zero = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir: a.projectsDir, markersBase: a.markersBase });
+  const zt = entryLines(zero).join("\n");
+  assert.match(zt, /lifetime 400 ms \(wall clock, start to the start end record/);
+  assert.match(zt, /execution union: 0 ms/);
+  writeEntry(a.markersBase, [eStart(), eBegin()]);
+  const unknown = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir: a.projectsDir, markersBase: a.markersBase });
+  const ut = entryLines(unknown).join("\n");
+  assert.match(ut, /lifetime INCOMPLETE — no end record at or before the cutoff/);
+  assert.match(ut, /execution union: UNKNOWN — .*not a zero/);
+  assert.doesNotMatch(ut, /execution union: 0 ms/);
+  writeEntry(a.markersBase, []);
+  const none = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir: a.projectsDir, markersBase: a.markersBase });
+  assert.match(entryLines(none).join("\n"), /no entry invocation recorded in this run/);
+  const old = structuredClone(none);
+  delete old.entry;
+  delete old.entry_events;
+  assert.deepEqual(entryLines(old), ["entry gates — not recorded (a ledger written before 6.48.0)"]);
+  assert.match(
+    windowLines(none)[0],
+    /run-start to run-stop marker: 3600\.0 s \(run-stop is written before this ledger, the report and the closeout; not the whole command\)/
+  );
+  assert.match(table(zero), /entry gates — the background check/);
+  const hostile = structuredClone(zero);
+  hostile.entry.invocations[0].nonce = JSON.parse('{"toString":1}');
+  assert.doesNotThrow(() => entryLines(hostile));
+  assert.match(entryLines(hostile).join("\n"), /does not have the shape/);
+});
+
+test("REVIEW F2 — a wait call or a start that ENDED after the run-stop is not admitted; a start that did makes its whole invocation unbound", () => {
+  const a = perfRun({ work: [] });
+  writeEntry(a.markersBase, [eStart(), eBegin(), eEnd(), eWait({ ts: "2026-09-21T08:59:00.000Z", end_ts: "2026-09-21T09:40:00.000Z" })]);
+  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir: a.projectsDir, markersBase: a.markersBase });
+  assert.ok(!led.entry_events.some((e) => e.event === "wait"), "the wait ended after the cutoff");
+  assert.equal(led.entry.invocations[0].waits_union_ms, null);
+  writeEntry(a.markersBase, [eStart({ outcome: "no-gates", end_ts: "2026-09-21T09:30:00.000Z" })]);
+  const late = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir: a.projectsDir, markersBase: a.markersBase });
+  assert.deepEqual(late.entry_events, []);
+  assert.equal(late.entry.invocations.length, 0, "never a 'measured' lifetime ending after the cutoff");
+  assert.deepEqual(checkLedger(late).reds, []);
 });

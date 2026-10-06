@@ -442,6 +442,9 @@ node pharn/floor/pre-run-snapshot.mjs --capture <name>
 # A red gate is /pharn-loop S14 (`--allow-red-entry` opts out); /pharn-ship asks. A gate's own writes are recorded beside
 # the pre-run snapshot (regression-report.md `entry_gate_changes`). Rules, bounds and the P7 trigger:
 # pharn/floor/entry-gates.mjs and entry-gates-core.mjs headers; gate-run-record.md's `entry` bullet.
+# Since 6.48.0 each mode also appends observations for the cost ledger to `.pharn/cost/<name>/entry.jsonl`
+# (entry-observations.mjs; cost-ledger.md "Entry gate observations") — after its control record, best-effort, read by
+# nothing here; exits and stdout documents are unchanged (a test runs every append failing and compares them).
 # Exit (--wait): 0 green · 4 red · 3 no-gates · 5 continue (run again) · 2 unusable; --start 0 · 3 · 2; --abort 0.
 node pharn/floor/entry-gates.mjs --start --feature <name> --timeout-ms <N>
 node pharn/floor/entry-gates.mjs --wait --feature <name> --budget-ms <B>

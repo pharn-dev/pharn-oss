@@ -156,6 +156,7 @@ import {
 import { ABS_PATH_RE, isIdentityToken, isTokenCount } from "./cost-value-core.mjs";
 import { readWork, WORK_FILE } from "./stage-work.mjs";
 import { buildExecutions, unattachedWork } from "./stage-executions-core.mjs";
+import { readEntryEventsFor, dedupeExact, buildEntryView, entryViewDefect, isAdmitted } from "./entry-observations.mjs";
 
 /** What this emitter writes. `/2` adds the `membership` block and scopes every row to the run window. */
 export const SCHEMA = "pharn-cost-ledger/2";
@@ -241,6 +242,8 @@ export const TOP_LEVEL_KEYS = Object.freeze([
   "membership",
   "executions",
   "work",
+  "entry_events",
+  "entry",
 ]);
 
 /** The two keys added in 6.35.0 (run-performance-breakdown): the `executions` VIEW over `markers[]` + `work[]`, and the
@@ -248,9 +251,18 @@ export const TOP_LEVEL_KEYS = Object.freeze([
  *  deterministic work". Every ledger this emitter writes carries both. */
 export const WORK_KEYS = Object.freeze(["executions", "work"]);
 
-/** A `/2` ledger written BEFORE 6.35.0 — `TOP_LEVEL_KEYS` minus `WORK_KEYS`, DERIVED rather than re-listed (L35). The
- *  checker accepts exactly this set or exactly `TOP_LEVEL_KEYS` for `/2`: both new keys, or neither (L36). */
-export const TOP_LEVEL_KEYS_PRE_WORK = Object.freeze(TOP_LEVEL_KEYS.filter((k) => !WORK_KEYS.includes(k)));
+/** The two keys added in 6.48.0 (entry-gates-ledger-row): the `entry_events[]` FACTS the background entry check
+ *  records (`entry-observations.mjs`), and the `entry` VIEW over them. See the contract's "Entry gate observations".
+ *  Every ledger this emitter writes carries both. */
+export const ENTRY_KEYS = Object.freeze(["entry_events", "entry"]);
+
+/** A `/2` ledger written from 6.35.0 to 6.47.x — `TOP_LEVEL_KEYS` minus `ENTRY_KEYS`, DERIVED (L35). */
+export const TOP_LEVEL_KEYS_PRE_ENTRY = Object.freeze(TOP_LEVEL_KEYS.filter((k) => !ENTRY_KEYS.includes(k)));
+
+/** A `/2` ledger written BEFORE 6.35.0 — `TOP_LEVEL_KEYS` minus `WORK_KEYS` and `ENTRY_KEYS`, DERIVED rather than
+ *  re-listed (L35). The checker accepts exactly this set, exactly `TOP_LEVEL_KEYS_PRE_ENTRY`, or exactly
+ *  `TOP_LEVEL_KEYS` for `/2`: each pair whole or absent, and the later pair only with the earlier one (L36). */
+export const TOP_LEVEL_KEYS_PRE_WORK = Object.freeze(TOP_LEVEL_KEYS_PRE_ENTRY.filter((k) => !WORK_KEYS.includes(k)));
 
 /** The `/1` key set — `TOP_LEVEL_KEYS` minus `membership` and the 6.35.0 keys (a `/1` ledger predates both), DERIVED
  *  rather than re-listed (L35). */
@@ -660,8 +672,34 @@ export function renderLedger(opts) {
  */
 export function deriveLedger(opts) {
   const stats = { excludedAfterWindow: 0 };
-  const ledger = withWork(buildLedger(opts, stats), opts);
+  const ledger = withEntry(withWork(buildLedger(opts, stats), opts), opts);
   return { ledger, excludedAfterWindow: stats.excludedAfterWindow };
+}
+
+/**
+ * Append the 6.48.0 keys — on EVERY path, like the 6.35.0 keys. `entry_events[]` = the valid lines of
+ * `<markersBase>/<name>/entry.jsonl` (`entry-observations.mjs readEntryEventsFor`, which refuses a linked directory
+ * chain) that the run window over the ledger's OWN `markers[]` for the selected session ADMITS (`isAdmitted`: every
+ * timestamp the line carries is a window member, the test `requests[]` and `work[]` rows pass — so a bounded window's
+ * cutoff is its `run-stop`, and a call that ended later stays out), exact duplicates dropped (first kept).
+ * An invalid line joins `dropped[]` as `entry.jsonl[<n>]`. `entry` is `buildEntryView(markers, entry_events,
+ * executions)`, which `check-cost-ledger.mjs` recomputes from the file. Emission never waits for the background runner:
+ * whatever it has not written yet is simply not a fact. Nothing above is changed: every existing key keeps its value.
+ */
+function withEntry(ledger, { name, sessionId, markersBase = MARKERS_DEFAULT_BASE, markers: suppliedMarkers, entryEvents: suppliedEvents }) {
+  // A re-derivation under a RECORDED boundary (`--verify-transcript`) never reads the live file (L58), as for work[].
+  const { records, dropped } =
+    suppliedMarkers !== undefined
+      ? { records: Array.isArray(suppliedEvents) ? suppliedEvents : [], dropped: [] }
+      : readEntryEventsFor(name, markersBase);
+  const win = runWindow(ledger.markers, sessionId ?? null);
+  const events = dedupeExact(records.filter((e) => isAdmitted(win, e)));
+  return {
+    ...ledger,
+    dropped: dropped.length ? [...ledger.dropped, ...dropped] : ledger.dropped,
+    entry_events: events,
+    entry: buildEntryView(ledger.markers, events, ledger.executions),
+  };
 }
 
 /**
@@ -973,11 +1011,11 @@ export function buildViews(requests) {
 
 /** The two FACT arrays (the contract's "record facts, derive views"), written one element per line. Every
  *  other value in the file is a derived view or scalar metadata and stays pretty-printed. */
-export const ROW_ARRAYS = Object.freeze(["markers", "requests", "work"]);
+export const ROW_ARRAYS = Object.freeze(["markers", "requests", "work", "entry_events"]);
 
 /** A derived view whose `rows` are written one per line too (6.35.0), so a many-iteration run's elapsed view costs a
- *  line per execution in a diff, not a dozen. */
-export const NESTED_ROW_ARRAYS = Object.freeze({ executions: "rows" });
+ *  line per execution in a diff, not a dozen. `entry.invocations` likewise (6.48.0). */
+export const NESTED_ROW_ARRAYS = Object.freeze({ executions: "rows", entry: "invocations" });
 
 /**
  * THE ONE serialization of a ledger, used by BOTH CLI output paths (the file write and `--stdout`).
@@ -1038,7 +1076,90 @@ export function serializeLedger(ledger) {
  *  usage (tokens, from `requests[]`), observed elapsed (from `executions`), deterministic work (from `work[]`) — no
  *  number in one is derived from another, and none is subtracted from another. */
 export function table(ledger) {
-  return [...usageLines(ledger), ...elapsedLines(ledger), ...workLines(ledger)].join("\n");
+  return [...usageLines(ledger), ...windowLines(ledger), ...elapsedLines(ledger), ...workLines(ledger), ...entryLines(ledger)].join("\n");
+}
+
+/** The ledger window, labelled for what it is: two marker timestamps, the stop written BEFORE this ledger, the report
+ *  and the closeout steps — so it is not the whole command, and not delivery time. */
+export function windowLines(ledger) {
+  const m = ledger.membership;
+  if (!m || typeof m !== "object") return [];
+  const a = tsMs(m.start);
+  if (a === null) return ["ledger window — UNKNOWN (the markers do not bound one run). Not a zero."];
+  const b = tsMs(m.end);
+  const span = b === null ? "open (no run-stop marker)" : b >= a ? formatMs(b - a) : "unmeasured — the run-stop precedes the run-start";
+  return [
+    `ledger window — run-start to run-stop marker: ${span} (run-stop is written before this ledger, the report and the closeout; not the whole command)`,
+  ];
+}
+
+/**
+ * The entry-gate block (6.48.0): the background check's observed timing, kept apart from the sequential stage elapsed
+ * above and never added to it. Every number carries its kind; an unmeasured value prints its status, never a number.
+ */
+export function entryLines(ledger) {
+  const v = ledger.entry;
+  if (!Object.hasOwn(ledger, "entry")) return ["entry gates — not recorded (a ledger written before 6.48.0)"];
+  const head = "entry gates — the background check, observed apart from the stage rows (never added to them)";
+  if (entryViewDefect(v) !== null)
+    return [head, "  (the stored view does not have the shape the emitter writes — run check-cost-ledger.mjs on it)"];
+  if (v.status === "unknown")
+    return [head, `  UNKNOWN — the run window is unknown (${v.reason}), so no observation was admitted. Not a zero.`];
+  const lines = [head];
+  if (v.invocations.length === 0) {
+    lines.push("  no entry invocation recorded in this run (none started, or its start record was not written)");
+  }
+  for (const x of v.invocations) lines.push(...invocationLines(x));
+  if (v.unbound_events > 0)
+    lines.push(`  ${v.unbound_events} observation(s) bind to no invocation of this run — shown as a count, never attached`);
+  if (v.conflicting_events > 0)
+    lines.push(`  ${v.conflicting_events} observation(s) conflict with another of the same identity — not measured`);
+  return lines;
+}
+
+function invocationLines(x) {
+  const out = [];
+  const st = x.start;
+  const lt = x.lifetime;
+  const life =
+    lt.status === "measured"
+      ? `${formatMs(lt.elapsed_ms)} (wall clock, start to the ${lt.end_by} end record; placement, not CPU or gate time)`
+      : lt.status === "incomplete"
+        ? "INCOMPLETE — no end record at or before the cutoff; the time it ran is unknown"
+        : `unmeasured — ${lt.reason}`;
+  out.push(
+    `  invocation ${x.nonce.slice(0, 8)}: ${st ? `start ${st.outcome} (call ${formatMs(st.elapsed_ms)})` : "start conflicting"}; lifetime ${life}`
+  );
+  for (const s of x.segments) {
+    const v =
+      s.status === "complete" || s.status === "end-only"
+        ? `${formatMs(s.elapsed_ms)} monotonic, ${s.gates} gate(s), ended ${s.end}${s.status === "end-only" ? " (no begin record: not placed)" : ""}`
+        : s.status === "incomplete"
+          ? "INCOMPLETE — begun, no end record at or before the cutoff"
+          : "conflicting records — not measured";
+    out.push(`    ${s.kind ?? "segment"} ${s.segment.slice(0, 6)}: ${v}`);
+  }
+  const union =
+    x.segments_union_ms === null
+      ? "UNKNOWN — no segment could be placed (none recorded, or none ended before the cutoff); not a zero"
+      : `${formatMs(x.segments_union_ms)}${x.segment_coverage === "partial" ? " (partial: some segments are not placeable)" : ""}`;
+  out.push(`    execution union: ${union}`);
+  if (x.segments_overlap_marked_stages_ms !== null) {
+    out.push(
+      `    of it inside measured stage rows (wall-clock placement only — not proof both were active, not a saving): ${formatMs(x.segments_overlap_marked_stages_ms)}`
+    );
+  } else if (x.segments_union_ms !== null) {
+    out.push("    overlap with stage rows: UNKNOWN — no measured stage row to place it against; not a zero");
+  }
+
+  if (x.waits.length === 0) out.push("    wait calls: none recorded");
+  else
+    out.push(
+      `    wait calls: ${x.waits.length} (${x.waits.map((w) => `${formatMs(w.elapsed_ms)} ${w.status}${w.takeover ? ", ran a takeover" : ""}`).join("; ")}); union ${formatMs(x.waits_union_ms)} foreground`
+    );
+  for (const a of x.aborts)
+    out.push(`    abort: ${a.stopped ? "stopped the runner" : "nothing running"}${a.wrote_result ? ", recorded the end" : ""}`);
+  return out;
 }
 
 function usageLines(ledger) {

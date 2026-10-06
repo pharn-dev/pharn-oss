@@ -162,7 +162,9 @@ import {
   TOKEN_CLASSES,
   TOP_LEVEL_KEYS,
   TOP_LEVEL_KEYS_PRE_WORK,
+  TOP_LEVEL_KEYS_PRE_ENTRY,
   WORK_KEYS,
+  ENTRY_KEYS,
   SKILLS_VERSION_SOURCES,
   ATTRIBUTION_METHOD,
   OUTCOME_SOURCES,
@@ -191,6 +193,7 @@ import { shown } from "./quote-core.mjs";
 import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 import { validateWork } from "./stage-work.mjs";
 import { buildExecutions } from "./stage-executions-core.mjs";
+import { validateEntryEvent, canonical, buildEntryView, isAdmitted } from "./entry-observations.mjs";
 
 const reds = [];
 const warns = [];
@@ -331,10 +334,14 @@ export function checkLedger(led, opts = {}) {
 
   // ---- RULE 1: the closed top-level key set, BOTH directions -----------------------------------
   const present = new Set(Object.keys(led));
-  // `/2` admits EXACTLY two key sets (6.35.0): the current one, or the pre-6.35.0 one with neither `WORK_KEYS` member.
-  // One of the two new keys without the other is held to the current set, so the absent one reads as missing (L36).
-  const hasWork = WORK_KEYS.some((k) => present.has(k));
-  const expected = new Set(legacy ? TOP_LEVEL_KEYS_V1 : hasWork ? TOP_LEVEL_KEYS : TOP_LEVEL_KEYS_PRE_WORK);
+  // `/2` admits EXACTLY three key sets: the current one (6.48.0), the 6.35.0–6.47.x one with no `ENTRY_KEYS` member,
+  // and the pre-6.35.0 one with neither pair. Any `ENTRY_KEYS` member holds the ledger to the current set, and any
+  // `WORK_KEYS` member to at least the 6.35.0 set, so a half-present pair reads as missing keys (L36).
+  const hasEntry = ENTRY_KEYS.some((k) => present.has(k));
+  const hasWork = hasEntry || WORK_KEYS.some((k) => present.has(k));
+  const expected = new Set(
+    legacy ? TOP_LEVEL_KEYS_V1 : hasEntry ? TOP_LEVEL_KEYS : hasWork ? TOP_LEVEL_KEYS_PRE_ENTRY : TOP_LEVEL_KEYS_PRE_WORK
+  );
   const extra = [...present].filter((k) => !expected.has(k)).sort();
   const missing = [...expected].filter((k) => !present.has(k)).sort();
   if (extra.length) red(`top-level key set is not closed — unexpected key(s): ${listText(extra, keyText)}`);
@@ -579,6 +586,9 @@ export function checkLedger(led, opts = {}) {
 
   // ---- RULE 9 (6.35.0): the work facts and the executions view ----------------------------------
   if (!legacy && hasWork) checkWorkAndExecutions(led);
+
+  // ---- RULE 10 (6.48.0): the entry-gate observations and their view ------------------------------
+  if (!legacy && hasEntry) checkEntry(led);
 
   // ---- WARN (never RED): marker completeness ----------------------------------------------------
   if (Array.isArray(led.markers) && led.outcome && Number.isInteger(led.outcome.iterations)) {
@@ -935,6 +945,56 @@ function checkWorkAndExecutions(led) {
   if (!sameValue(led.executions, expected, 0)) {
     red(
       `executions disagrees with a recompute from markers[] and work[] (method ${valText(expected.method)}, ${expected.rows.length} row(s) recomputed) — the elapsed view is a function of the file's own facts`
+    );
+  }
+}
+
+/**
+ * RULE 10 (6.48.0, `cost-ledger.md` "Entry gate observations"). `entry_events[]` rows are FACTS: each must pass
+ * `entry-observations.mjs validateEntryEvent` (closed keys per event, enums, ranges), be ADMITTED by the run window
+ * recomputed from the file's own `markers[]` for `membership.session` (`isAdmitted`, the emitter's own rule: every
+ * timestamp the event carries, `end_ts` included, is a window member), and appear once (an exact duplicate is RED; two
+ * DIFFERENT lines of one identity are a conflict the view reports, never a RED). `entry` is a VIEW: it must equal
+ * `buildEntryView` recomputed from the file's own `markers[]`, `entry_events[]` and `executions` (recomputed from
+ * `markers[]` and `work[]`), so an edited elapsed value, union, status or binding is RED. It never reads the live
+ * `entry.jsonl`. BOUND ([[L43]]): agreement between the file's facts and its view, never that the events describe what
+ * ran. A structurally valid ledger whose view says `incomplete` / `unknown` is GREEN: that is an honest measurement
+ * state, not a defect.
+ */
+function checkEntry(led) {
+  if (!Array.isArray(led.entry_events)) {
+    red("entry_events must be an array");
+    return;
+  }
+  const markers = normalizeMarkers(Array.isArray(led.markers) ? led.markers : []);
+  const session = isPlainObject(led.membership) ? (led.membership.session ?? null) : null;
+  const win = runWindow(markers, typeof session === "string" ? session : null);
+  const invalid = [];
+  const outside = [];
+  const dup = [];
+  const seen = new Set();
+  led.entry_events.forEach((e, i) => {
+    if (!validateEntryEvent(e).ok) {
+      invalid.push(i);
+      return;
+    }
+    if (!isAdmitted(win, e)) outside.push(i);
+    const c = canonical(e);
+    if (seen.has(c)) dup.push(i);
+    seen.add(c);
+  });
+  if (invalid.length)
+    red(`entry_events[] holds ${invalid.length} row(s) that are not valid entry observations, at index ${listText(invalid, String)}`);
+  if (outside.length)
+    red(`entry_events[] holds ${outside.length} row(s) OUTSIDE the recorded run window, at index ${listText(outside, String)}`);
+  if (dup.length)
+    red(`entry_events[] holds ${dup.length} exact duplicate row(s), at index ${listText(dup, String)} — the emitter drops them`);
+  if (invalid.length) return; // the view cannot be recomputed over rows the rule refused
+  const work = Array.isArray(led.work) && led.work.every((w) => validateWork(w).ok) ? led.work : [];
+  const expected = buildEntryView(markers, led.entry_events, buildExecutions(markers, work));
+  if (!sameValue(led.entry, expected, 0)) {
+    red(
+      `entry disagrees with a recompute from markers[], entry_events[] and executions (method ${valText(expected.method)}, ${expected.invocations.length} invocation(s) recomputed) — the entry view is a function of the file's own facts`
     );
   }
 }

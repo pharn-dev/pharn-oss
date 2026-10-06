@@ -194,17 +194,18 @@ export function validateWork(rec) {
 }
 
 /**
- * Append one record as one JSON line to `<root>/<base>/<feature>/work.jsonl`. BEST-EFFORT and TOTAL: never throws;
- * returns `{ok: true}` or `{ok: false, why}`. Refuses (writes nothing) when a record is invalid, the feature is not a
- * slug, or any directory component under `root` is a symlink or not a directory ([[L54]]/[[L59]]: lstat, never
- * followed), and opens the file with `O_NOFOLLOW | O_NONBLOCK` so a link planted at the file is refused, not followed,
- * and a FIFO planted there fails the open (ENXIO with no reader) or the regular-file test instead of BLOCKING the stage
- * before its `done` exit (GATE-2 review: a plain open hung on a planted FIFO, reproduced).
+ * Append one JSON line to `<root>/<base>/<feature>/<fileName>` — the ONE safe append for the per-feature state files
+ * beside `markers.jsonl` (`work.jsonl` here, `entry.jsonl` in `entry-observations.mjs`, L35). BEST-EFFORT and TOTAL:
+ * never throws; returns `{ok: true}` or `{ok: false, why}`. Refuses (writes nothing) when the feature is not a slug, or
+ * any directory component under `root` is a symlink or not a directory ([[L54]]/[[L59]]: lstat, never followed), and
+ * opens the file with `O_NOFOLLOW | O_NONBLOCK` so a link planted at the file is refused, not followed, and a FIFO
+ * planted there fails the open (ENXIO with no reader) or the regular-file test instead of BLOCKING the caller (GATE-2
+ * review: a plain open hung on a planted FIFO, reproduced). `line` is written with ONE `write(2)` of
+ * `JSON.stringify(value)` + newline, so concurrent appenders never interleave inside a line on a local file system.
  */
-export function appendWork({ feature, record, root = ".", base = DEFAULT_BASE }) {
+export function appendJsonLine({ feature, fileName, value, root = ".", base = DEFAULT_BASE }) {
   try {
     if (typeof feature !== "string" || !FEATURE_SLUG_RE.test(feature)) return { ok: false, why: "feature is not a slug" };
-    if (!validateWork(record).ok) return { ok: false, why: "record is not a valid work record" };
     const segments = [
       ...String(base)
         .split("/")
@@ -226,10 +227,10 @@ export function appendWork({ feature, record, root = ".", base = DEFAULT_BASE })
         return { ok: false, why: "a state directory component is a symlink or not a directory" };
     }
     const flags = FS.O_WRONLY | FS.O_APPEND | FS.O_CREAT | (FS.O_NOFOLLOW ?? 0) | (FS.O_NONBLOCK ?? 0);
-    const fd = openSync(join(dir, WORK_FILE), flags, 0o644);
+    const fd = openSync(join(dir, fileName), flags, 0o644);
     try {
-      if (!fstatSync(fd).isFile()) return { ok: false, why: "the work file is not a regular file" };
-      writeSync(fd, `${JSON.stringify(record)}\n`);
+      if (!fstatSync(fd).isFile()) return { ok: false, why: `the ${fileName === WORK_FILE ? "work" : "state"} file is not a regular file` };
+      writeSync(fd, `${JSON.stringify(value)}\n`);
     } finally {
       closeSync(fd);
     }
@@ -239,28 +240,42 @@ export function appendWork({ feature, record, root = ".", base = DEFAULT_BASE })
   }
 }
 
+/**
+ * Append one work record as one JSON line to `<root>/<base>/<feature>/work.jsonl`, through `appendJsonLine`. Refuses an
+ * invalid record (writes nothing).
+ */
+export function appendWork({ feature, record, root = ".", base = DEFAULT_BASE }) {
+  if (typeof feature !== "string" || !FEATURE_SLUG_RE.test(feature)) return { ok: false, why: "feature is not a slug" };
+  try {
+    if (!validateWork(record).ok) return { ok: false, why: "record is not a valid work record" };
+  } catch {
+    return { ok: false, why: "record is not a valid work record" };
+  }
+  return appendJsonLine({ feature, fileName: WORK_FILE, value: record, root, base });
+}
+
 /** A work file larger than this is not read (its records are dropped as one `work.jsonl` entry). One line per stage
  *  execution is ~300 bytes, so this is millions of executions. */
 export const WORK_FILE_MAX_BYTES = 16 * 1024 * 1024;
 
 /**
- * Read a work file: `{records, dropped}`. `records` are the lines `validateWork` accepts, in file order; `dropped`
- * lists `work.jsonl[<n>]` for every other non-empty line — n is its index among the FILE's non-empty lines, across every
- * run the file has seen (the file is never pruned), not an index into a ledger's `work[]`; a torn final line from an
- * interrupted append included. No raw value is ever copied into `dropped`. A missing file is `{[], []}`. A path that is
- * not a regular file (a symlink — `O_NOFOLLOW` —, a FIFO — `O_NONBLOCK`, never blocking —, a directory) or is larger
- * than `WORK_FILE_MAX_BYTES` is `{[], ["work.jsonl"]}`: nothing is read through it, and its presence is listed.
+ * Read a JSON-lines state file: `{records, dropped}`. `records` are the lines `validate` accepts (`validate(rec).ok`), in
+ * file order; `dropped` lists `<label>[<n>]` for every other non-empty line — n is its index among the FILE's non-empty
+ * lines, across every run the file has seen (the file is never pruned); a torn final line from an interrupted append
+ * included. No raw value is ever copied into `dropped`. A missing file is `{[], []}`. A path that is not a regular file
+ * (a symlink — `O_NOFOLLOW` —, a FIFO — `O_NONBLOCK`, never blocking —, a directory) or is larger than `maxBytes` is
+ * `{[], [label]}`: nothing is read through it, and its presence is listed. TOTAL: a throwing `validate` drops the line.
  */
-export function readWork(file) {
+export function readJsonLines(file, validate, label, maxBytes = WORK_FILE_MAX_BYTES) {
   let text;
   let fd = null;
   try {
     fd = openSync(file, FS.O_RDONLY | (FS.O_NOFOLLOW ?? 0) | (FS.O_NONBLOCK ?? 0));
     const st = fstatSync(fd);
-    if (!st.isFile() || st.size > WORK_FILE_MAX_BYTES) return { records: [], dropped: [WORK_FILE] };
+    if (!st.isFile() || st.size > maxBytes) return { records: [], dropped: [label] };
     text = readFileSync(fd, "utf8");
   } catch (e) {
-    return { records: [], dropped: e && e.code === "ENOENT" ? [] : [WORK_FILE] };
+    return { records: [], dropped: e && e.code === "ENOENT" ? [] : [label] };
   } finally {
     if (fd !== null) closeSync(fd);
   }
@@ -275,11 +290,22 @@ export function readWork(file) {
     } catch {
       rec = undefined;
     }
-    if (rec !== undefined && validateWork(rec).ok) records.push(rec);
-    else dropped.push(`${WORK_FILE}[${n}]`);
+    let ok;
+    try {
+      ok = rec !== undefined && validate(rec).ok === true;
+    } catch {
+      ok = false;
+    }
+    if (ok) records.push(rec);
+    else dropped.push(`${label}[${n}]`);
     n++;
   }
   return { records, dropped };
+}
+
+/** Read a work file through `readJsonLines` (`validateWork`, label `work.jsonl`). */
+export function readWork(file) {
+  return readJsonLines(file, validateWork, WORK_FILE);
 }
 
 /** The stage scripts' one call: derive nothing here, append the record they built, and say so on stderr when it could

@@ -1,0 +1,42 @@
+{
+  "base": "6aa4f59492a7ad4108abd91e65e426b768081afc",
+  "inside": [
+    ".dev/features/entry-gates-ledger-row/GRILL.md",
+    ".dev/features/entry-gates-ledger-row/PLAN.md",
+    ".dev/guides/floor-gates.md",
+    ".dev/guides/floor-orchestration.md",
+    ".dev/measurements/entry-gates-ledger-row-2026-10-06.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/check-cost-ledger.mjs",
+    "pharn/floor/check-cost-ledger.test.mjs",
+    "pharn/floor/entry-gates.mjs",
+    "pharn/floor/entry-gates.test.mjs",
+    "pharn/floor/entry-observations.mjs",
+    "pharn/floor/entry-observations.test.mjs",
+    "pharn/floor/render-cost-ledger.mjs",
+    "pharn/floor/render-cost-ledger.test.mjs",
+    "pharn/floor/render-run-report.mjs",
+    "pharn/floor/render-run-report.test.mjs",
+    "pharn/floor/stage-work.mjs",
+    "pharn/pharn-contracts/cost-ledger.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
