@@ -249,6 +249,15 @@ node pharn/floor/ship-closeout.mjs --feature <name>
 # exit, verdict, reuse, route or commit reads it); only a `done` exit writes one. check-cost-ledger rule 9 validates
 # the rows and recomputes `executions`; /2 admits exactly the current key set or the pre-6.35.0 one. Contract:
 # cost-ledger.md "Stage executions and deterministic work".
+# ENTRY GATE OBSERVATIONS (6.48.0, entry-gates-ledger-row) — two more additive `/2` keys, no schema bump, no marker
+# change. `entry_events[]` FACTS: entry-gates.mjs appends one `pharn-entry-observation/1` line per boundary it already
+# has (start, runner/takeover segment begin+end, each --wait call, each --abort) to `.pharn/cost/<feature>/entry.jsonl`
+# (pharn/floor/entry-observations.mjs, the one owner; the append is stage-work.mjs appendJsonLine). `entry` VIEW: bound
+# to the run ONLY by the run-start {seq, ts} the start recorded; lifetime (wall clock, placement), segments (monotonic),
+# wait calls (monotonic), interval UNIONS never sums, overlap with measured `executions` rows (placement, not a saving);
+# unknown is null, never 0; admission by the run window, so a line after run-stop stays out. check-cost-ledger RULE 10
+# validates the rows and recomputes the view; /2 now admits exactly THREE key sets. Contract: cost-ledger.md "Entry gate
+# observations". Best-effort and OBSERVATIONAL: nothing reads an event to decide anything.
 # Exit: mark-phase 0 ok · 2 bad usage (nothing written) | render 0 (incl. an honest `unavailable`) · 2 bad
 # usage | check 0 GREEN (WARNs possible) · 1 RED · 2 unusable input.
 node pharn/floor/mark-phase.mjs --name <slug> --kind <run-start|stage-start|orchestrator|run-stop> [--stage <s>] [--iteration <n>] [--base <dir>] [--mode <m>] [--route <token>]

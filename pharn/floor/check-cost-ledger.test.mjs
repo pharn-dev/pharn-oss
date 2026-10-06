@@ -739,9 +739,11 @@ test("COMPATIBILITY — a legacy /1 ledger is GREEN under its own rules, WARNed 
   const v1 = clone(led);
   v1.schema = LEGACY_SCHEMA;
   delete v1.membership;
-  // A /1 ledger predates the 6.35.0 keys too.
+  // A /1 ledger predates the 6.35.0 and 6.48.0 keys too.
   delete v1.executions;
   delete v1.work;
+  delete v1.entry_events;
+  delete v1.entry;
   v1.requests.unshift({
     ...clone(v1.requests[0]),
     request_id: "before",
@@ -1588,7 +1590,7 @@ test("--verify-transcript ctx — GROWTH CLOSURE (L58, L63): every kind of line 
 
 // ── RULE 9 (6.35.0): the work facts and the executions view ──────────────────────────────────────────────────────
 
-import { TOP_LEVEL_KEYS_PRE_WORK, WORK_KEYS } from "./render-cost-ledger.mjs";
+import { TOP_LEVEL_KEYS_PRE_WORK, TOP_LEVEL_KEYS_PRE_ENTRY, WORK_KEYS, ENTRY_KEYS } from "./render-cost-ledger.mjs";
 
 /** The run fixture above, with its stages bracketed and two work records (fresh BASE regress, partially reused verify). */
 function perfFixture() {
@@ -1690,11 +1692,21 @@ test("RULE 9 — a work row that is not a valid record, or lies outside the wind
   assert.ok(redsOf(notArray).some((r) => /work must be an array/.test(r)));
 });
 
-test("RULE 9 / L36 — /2 admits exactly two key sets: both 6.35.0 keys, or neither (a pre-6.35.0 ledger stays GREEN)", () => {
+test("RULE 1 / L36 — /2 admits exactly three key sets: current, 6.35.0–6.47.x (no entry pair), pre-6.35.0 (neither pair)", () => {
   const { led } = perfFixture();
   assert.deepEqual([...WORK_KEYS], ["executions", "work"]);
-  assert.deepEqual([...TOP_LEVEL_KEYS_PRE_WORK].sort(), TOP_LEVEL_KEYS.filter((k) => k !== "executions" && k !== "work").sort());
-  const pre = clone(led);
+  assert.deepEqual([...ENTRY_KEYS], ["entry_events", "entry"]);
+  assert.deepEqual([...TOP_LEVEL_KEYS_PRE_ENTRY].sort(), TOP_LEVEL_KEYS.filter((k) => k !== "entry_events" && k !== "entry").sort());
+  assert.deepEqual(
+    [...TOP_LEVEL_KEYS_PRE_WORK].sort(),
+    TOP_LEVEL_KEYS.filter((k) => !["executions", "work", "entry_events", "entry"].includes(k)).sort()
+  );
+  assert.deepEqual(redsOf(led), [], "the current set is GREEN");
+  const preEntry = clone(led);
+  delete preEntry.entry_events;
+  delete preEntry.entry;
+  assert.deepEqual(redsOf(preEntry), [], "a ledger written by 6.35.0–6.47.x is not retroactively REDed");
+  const pre = clone(preEntry);
   delete pre.executions;
   delete pre.work;
   assert.deepEqual(redsOf(pre), [], "a ledger written before 6.35.0 is not retroactively REDed");
@@ -1704,4 +1716,128 @@ test("RULE 9 / L36 — /2 admits exactly two key sets: both 6.35.0 keys, or neit
   const otherHalf = clone(led);
   delete otherHalf.executions;
   assert.ok(redsOf(otherHalf).some((r) => /missing key\(s\): executions/.test(r)));
+  const halfEntry = clone(led);
+  delete halfEntry.entry;
+  assert.ok(
+    redsOf(halfEntry).some((r) => /missing key\(s\): entry\b/.test(r)),
+    "one entry key without the other is held to the current set"
+  );
+  const entryNoWork = clone(led);
+  delete entryNoWork.executions;
+  delete entryNoWork.work;
+  assert.ok(
+    redsOf(entryNoWork).some((r) => /missing key\(s\): executions, work/.test(r)),
+    "the entry pair only with the work pair"
+  );
+});
+
+// ── RULE 10 (6.48.0): the entry-gate observations and their view ─────────────────────────────────────────────────────
+import { OBS_SCHEMA, buildEntryView } from "./entry-observations.mjs";
+
+/** perfFixture's ledger plus a bound entry invocation (start, a runner segment that overlaps the regress row, a wait). */
+function entryFixture({ endTs = "2026-09-21T10:03:00.000Z" } = {}) {
+  const { led } = perfFixture();
+  const N = "f".repeat(32);
+  const S = "7".repeat(16);
+  led.entry_events = [
+    {
+      schema: OBS_SCHEMA,
+      event: "start",
+      nonce: N,
+      run: { seq: 1, ts: "2026-09-21T10:00:00.000Z" },
+      ts: "2026-09-21T10:00:00.500Z",
+      end_ts: "2026-09-21T10:00:00.800Z",
+      elapsed_ms: 300,
+      outcome: "started",
+      session_id: RS,
+    },
+    { schema: OBS_SCHEMA, event: "segment-begin", nonce: N, segment: S, kind: "runner", ts: "2026-09-21T10:00:01.000Z", session_id: RS },
+    {
+      schema: OBS_SCHEMA,
+      event: "segment-end",
+      nonce: N,
+      segment: S,
+      kind: "runner",
+      ts: endTs,
+      elapsed_ms: 179000,
+      end: "done",
+      gates: 2,
+      session_id: RS,
+    },
+    {
+      schema: OBS_SCHEMA,
+      event: "wait",
+      nonce: N,
+      call: "8".repeat(16),
+      ts: "2026-09-21T10:07:00.000Z",
+      end_ts: "2026-09-21T10:07:00.100Z",
+      elapsed_ms: 100,
+      status: "red",
+      takeover: null,
+      session_id: RS,
+    },
+  ];
+  led.entry = buildEntryView(normalizeMarkers(led.markers), led.entry_events, led.executions);
+  return led;
+}
+
+test("RULE 10 — a ledger whose entry view is the recompute of its own facts is GREEN; the overlap is the named intersection", () => {
+  const led = entryFixture();
+  assert.deepEqual(redsOf(led), []);
+  const x = led.entry.invocations[0];
+  assert.equal(x.segments_union_ms, 179000);
+  assert.equal(x.segments_overlap_marked_stages_ms, 120000, "only the 10:01→10:03 part lies inside the measured regress row");
+  const incomplete = clone(led);
+  incomplete.entry_events = incomplete.entry_events.filter((e) => e.event !== "segment-end");
+  incomplete.entry = buildEntryView(normalizeMarkers(incomplete.markers), incomplete.entry_events, incomplete.executions);
+  assert.equal(incomplete.entry.invocations[0].lifetime.status, "incomplete");
+  assert.deepEqual(redsOf(incomplete), [], "an honest INCOMPLETE measurement is a valid ledger, not a defect");
+});
+
+test("RULE 10 — an edited elapsed, union, status or binding is RED; so is an invalid, an out-of-window or an exactly duplicated fact", () => {
+  const led = entryFixture();
+  const edits = [
+    (l) => (l.entry.invocations[0].lifetime.elapsed_ms += 1),
+    (l) => (l.entry.invocations[0].segments_union_ms = 1),
+    (l) => (l.entry.invocations[0].segments_overlap_marked_stages_ms = 179000),
+    (l) => (l.entry.invocations[0].lifetime.status = "incomplete"),
+    (l) => (l.entry.unbound_events = 3),
+    (l) => (l.entry.invocations = []),
+  ];
+  for (const e of edits) {
+    const l = clone(led);
+    e(l);
+    assert.ok(
+      redsOf(l).some((r) => /entry disagrees with a recompute/.test(r)),
+      e.toString()
+    );
+  }
+  const invalid = clone(led);
+  invalid.entry_events[1].kind = "daemon";
+  assert.ok(redsOf(invalid).some((r) => /not valid entry observations, at index 1/.test(r)));
+  const outside = clone(led);
+  outside.entry_events[2].ts = "2026-09-21T11:00:00.000Z";
+  assert.ok(redsOf(outside).some((r) => /OUTSIDE the recorded run window, at index 2/.test(r)));
+  const dup = clone(led);
+  dup.entry_events.push(clone(dup.entry_events[3]));
+  dup.entry = buildEntryView(normalizeMarkers(dup.markers), dup.entry_events, dup.executions);
+  assert.ok(redsOf(dup).some((r) => /exact duplicate row\(s\), at index 4/.test(r)));
+  const notArray = clone(led);
+  notArray.entry_events = {};
+  assert.ok(redsOf(notArray).some((r) => /entry_events must be an array/.test(r)));
+});
+
+test("RULE 10 — two DIFFERENT lines of one identity are a conflict the view reports (unmeasured, counted), never a RED and never resolved", () => {
+  const led = entryFixture();
+  led.entry_events.push({ ...clone(led.entry_events[2]), elapsed_ms: 1 });
+  led.entry = buildEntryView(normalizeMarkers(led.markers), led.entry_events, led.executions);
+  assert.deepEqual(redsOf(led), []);
+  assert.equal(led.entry.conflicting_events, 2);
+  assert.equal(led.entry.invocations[0].lifetime.reason, "conflicting-records");
+});
+
+test("REVIEW F2 — RULE 10 holds every timestamp to the window: a fact whose end_ts is past the run-stop is RED", () => {
+  const led = entryFixture();
+  led.entry_events[3].end_ts = "2026-09-21T10:45:00.000Z"; // the wait call; run-stop is 10:30
+  assert.ok(redsOf(led).some((r) => /OUTSIDE the recorded run window, at index 3/.test(r)));
 });

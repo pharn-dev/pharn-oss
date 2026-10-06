@@ -133,6 +133,54 @@ tagged `pharn-loop`**, with no sub-stage named anywhere. The field is therefore 
       "install": { "exit": 0, "timed_out": false, "ms": 41234 },
     },
   ],
+  "entry_events": [
+    // one line of .pharn/cost/<feature>/entry.jsonl per lifecycle boundary (see "Entry gate observations")
+    {
+      "schema": "pharn-entry-observation/1",
+      "event": "start",
+      "nonce": "<32 hex>",
+      "run": { "seq": 1, "ts": "…" },
+      "ts": "…",
+      "end_ts": "…",
+      "elapsed_ms": 412,
+      "outcome": "started",
+      "session_id": "…",
+    },
+  ],
+  "entry": {
+    "method": "entry-observations/1",
+    "status": "derived",
+    "reason": null,
+    "run": { "seq": 1, "ts": "…" },
+    "cutoff_ts": "…",
+    "invocations": [
+      {
+        "nonce": "<32 hex>",
+        "start": { "ts": "…", "end_ts": "…", "elapsed_ms": 412, "outcome": "started" },
+        "lifetime": { "status": "measured", "end_by": "runner", "end_ts": "…", "elapsed_ms": 401234, "reason": null },
+        "segments": [
+          {
+            "segment": "<16 hex>",
+            "kind": "runner",
+            "begin_ts": "…",
+            "end_ts": "…",
+            "elapsed_ms": 399876,
+            "status": "complete",
+            "end": "done",
+            "gates": 4,
+          },
+        ],
+        "waits": [{ "call": "<16 hex>", "ts": "…", "end_ts": "…", "elapsed_ms": 180, "status": "green", "takeover": null }],
+        "aborts": [],
+        "segment_coverage": "all",
+        "segments_union_ms": 399901,
+        "waits_union_ms": 180,
+        "segments_overlap_marked_stages_ms": 352000,
+      },
+    ],
+    "unbound_events": 0,
+    "conflicting_events": 0,
+  },
 }
 ```
 
@@ -893,7 +941,7 @@ or was avoided by reuse** — beside the model usage above, never folded into it
 included: timing needs only markers, so a run whose transcript is gone still has its intervals. **No schema bump:**
 the change is additive and no existing field changes meaning. The checker admits, for `/2`, EXACTLY the current key
 set or the pre-6.35.0 set with neither key (`TOP_LEVEL_KEYS_PRE_WORK`); one key without the other is RED. A `/1`
-ledger has neither.
+ledger has neither. (6.48.0 added a third admitted set; see "Entry gate observations".)
 
 ### `executions` — a VIEW over `markers[]` (method `stage-start-to-return/1`)
 
@@ -965,6 +1013,109 @@ nothing reads a record to decide a verdict, an exit, a reuse, a route or a commi
 Bash write reaches (LIMITS.md §6): the checker certifies agreement between the file's facts and its view, never that
 the records or markers are true (L43). `--verify-transcript` does not compare either key: neither is
 transcript-derived. No per-gate duration is measured (`gate-process-duration`).
+
+## Entry gate observations (6.48.0)
+
+The entry check (`pharn/floor/entry-gates.mjs`, 6.42.0) runs `/pharn-verify`'s gates in a detached process while
+`/pharn-spec`, `/pharn-plan` and `/pharn-grill` work. It has deliberately **no stage marker**: a marker would put
+concurrent work into the sequential phase stream that attributes requests. So until 6.48.0 its execution appeared
+nowhere in this file. The foreground `--wait` call fell into the gap between two marked stages, and the entry scratch
+(`.pharn/pharn-entry/`, which holds no timestamp anyway) is wiped by the next `--start`. Two keys now carry it,
+appended after `work` on every `/2` ledger the emitter writes. **No schema bump and no change to any existing key,
+marker, marker field or printed marker line**, so membership, attribution, totals and `executions` are exactly as
+before. For `/2` the checker admits EXACTLY three key sets: the current one, the 6.35.0–6.47.x one with neither entry
+key (`TOP_LEVEL_KEYS_PRE_ENTRY`), and the pre-6.35.0 one with neither pair. An entry key without its pair, or the
+entry pair without the work pair, is RED. A checker older than 6.48.0 REDs a ledger carrying the new keys: the
+closed key set is not forward-compatible, by design. The record's one owner, whose header is its spec, is
+`pharn/floor/entry-observations.mjs`.
+
+### `entry_events[]` — FACTS written at the moment of each act (`pharn-entry-observation/1`)
+
+Each process appends one line per lifecycle boundary it already has to `<.pharn/cost>/<feature>/entry.jsonl`, beside
+`markers.jsonl`. That file is never wiped by `--start`, so consecutive invocations keep their history:
+
+- `start`, once per `--start` that created an invocation. `run` is the current run-start `{seq, ts}` read from
+  `markers.jsonl` AT `--start` (null when there is none); `ts` / `end_ts` are the call's wall-clock bounds and
+  `elapsed_ms` is its monotonic duration. `outcome` is `started`, `no-gates`, `init-refused` or `spawn-failed`. A
+  refusal before the nonce exists (`usage-error`, `path-containment`, `runner-unverifiable`) writes nothing.
+- `segment-begin` / `segment-end`, one pair per runner or `--wait` takeover process, sharing a fresh 16-hex
+  `segment`. The end is written AFTER `result.json`, with `elapsed_ms` monotonic in that process, `end` (`done`,
+  `refused`, `crashed` or `budget`) and `gates` (the gate entries that process ran).
+- `wait`, one per `--wait` call that read this invocation's runner record, written after its document. It has a
+  fresh `call`, wall-clock `ts` / `end_ts`, a monotonic `elapsed_ms`, the document's `status`, and `takeover` (the
+  segment it ran, or null).
+- `abort`, one per `--abort` that read this invocation's runner record: `stopped`, `wrote_result`.
+
+Every event carries the invocation's `nonce` and the session id from the environment, and nothing else. No gate
+output, argument, environment value, prompt or path is written. The emitter admits a line only when it passes
+`validateEntryEvent` and the run window ADMITS it. Admission (`isAdmitted`, one copy shared by the emitter and the
+checker) requires EVERY timestamp the line carries to be a window member: `ts`, and `end_ts` for a start or a wait. It
+uses `isMember`, the test request rows and `work[]` pass. The emitter also drops exact duplicates. An invalid line joins
+`dropped[]` as `entry.jsonl[<n>]`. The read lstat-walks the directory chain (`readEntryEventsFor`), so a linked
+`.pharn/cost` or feature directory is never read through; it is listed in `dropped[]` as `entry.jsonl`.
+
+### `entry` — a VIEW over `entry_events[]` (method `entry-observations/1`)
+
+- **Binding.** An invocation is in the view only when a `start` for its nonce recorded EXACTLY the ledger's current
+  run-start `(seq, ts)` from `markers[]`. Every other event binds through its nonce. An event of any other nonce is
+  counted in `unbound_events` and never attached. Nothing binds by feature name, pid, session or timestamp proximity,
+  so any disagreement (a reset `.pharn/cost`, a run-start the emitter normalizes away) reads unbound, never as another
+  run's. A nonce whose start records conflict is bound to NO run, even when one of them names this run: a contested
+  binding is left unattached and counted.
+- **The quantities, kept apart and never added.** `start.elapsed_ms` is the `--start` call (monotonic). The
+  **lifetime** runs from `start.ts` to the one TERMINAL record: a segment end with `end` in {`done`, `refused`,
+  `crashed`}, an abort with `wrote_result`, or a start whose outcome is not `started`. It is measured on the wall
+  clock across processes, so it is placement only, never CPU or gate time, and it includes scheduling, pauses and
+  takeover gaps. Each **segment** is one process's monotonic `elapsed_ms`, placed by its wall-clock begin and end.
+  Each **wait call** is one `--wait` line's monotonic `elapsed_ms`. A takeover segment runs INSIDE its wait call and
+  is never added to it. A wait's `end_ts` is when it noticed a result, an observation; it is never the runner's end
+  and never a terminal.
+- **Unknown is never zero.** A lifetime with no terminal record at or before the cutoff is `incomplete`, with
+  `elapsed_ms: null`. One with two terminal records, a terminal before its start, or a conflicting record is
+  `unmeasured` with a closed reason (`multiple-terminal-events`, `clock-went-back`, `conflicting-records`). A segment
+  is `complete`, `incomplete` (begun, not ended before the cutoff), `end-only` (no begin record: its monotonic time is
+  kept, it is not placed) or `conflicting`. `segment_coverage` is `all` (zero segments only when no runner ever
+  existed, a known zero), `partial`, or `none-observed`, where a runner was started and no segment of it was recorded
+  and the union is null.
+- **Aggregates are wall-clock UNIONS, never sums:** `segments_union_ms` (null when no segment is placeable),
+  `waits_union_ms` (null when no wait call was recorded), and `segments_overlap_marked_stages_ms` = |union of the
+  complete segments ∩ union of the measured `executions` rows| (null when either side is empty or unknown). That says where the observed runner execution fell relative to PHARN's marked stages. It is
+  **not** proof that both were active at once, not model time and **not a saving**. No field subtracts one quantity
+  from another.
+- **Cutoff.** Admission is by the window, so under a bounded window (every closeout emits after `run-stop`) a line
+  that carries a timestamp after the `run-stop` marker is not a fact. So a segment whose end came later stays
+  `incomplete`, and a start or wait call that ended later is not admitted. Emission
+  never waits for the background runner. A re-emission follows the window exactly as `work[]` does. An unknown window
+  admits nothing and the view is `status: "unknown"` with no invocations.
+- **Duplicates and conflicts.** An event's identity is `(nonce, event, segment | call)` (a start's is
+  `(nonce, start)`). An exact duplicate counts once (the checker REDs one left in the file). Two different lines of
+  one identity are kept as facts and counted in `conflicting_events`, and the invocation reads
+  `unmeasured conflicting-records`. So are a segment's begin and end that disagree on `kind`. None is resolved by
+  picking one.
+- **The ledger window is a separate quantity.** It is the existing `run-start` → `run-stop` interval. The `run-stop`
+  marker is written BEFORE this ledger, the run report and the rest of the closeout, so that interval is not the whole
+  command and not delivery time. The screen table labels it so. Whole-command time needs a boundary outside PHARN and
+  is not recorded.
+
+**RULE 10 (the checker).** Each `entry_events[]` row passes `validateEntryEvent` and is admitted by the window
+(`isAdmitted`), and no row
+is an exact duplicate of another. `entry` must equal `buildEntryView(markers, entry_events, executions)` recomputed
+from the file alone; it never reads `entry.jsonl`. A structurally valid ledger whose view says `incomplete` or
+`unknown` is GREEN, because that is an honest measurement state. `--verify-transcript` compares neither key: neither
+is transcript-derived.
+
+**Bounds, each stated.** Every write is best-effort and OBSERVATIONAL. It goes through the one safe append shared
+with `work.jsonl` (`stage-work.mjs appendJsonLine`: lstat walk, `O_NOFOLLOW | O_NONBLOCK`, one `write(2)` per line,
+no lock). It never throws and never writes to stdout, and a failure is one `note —` line on stderr. No exit,
+document, verdict, takeover, abort, route, reuse or commit reads an event, and a test runs the CLI with every append
+failing and compares its exits, stdout documents and `--abort` line byte for byte with the same run's appends
+succeeding. That is a comparison within 6.48.0. The pre-existing CLI tests are what pin the documents against earlier
+behaviour. A process killed between its two boundaries leaves its
+segment `incomplete`. A `--start` that supersedes an earlier runner writes no event for that earlier nonce, so that
+invocation stays as it was recorded. An event whose session id matches no current-run marker of its session is not a
+window member and stays out (a resumed session with a new id is the case). The file is never pruned. `.pharn/` is
+Bash-reachable (LIMITS.md §6): the checker certifies agreement between the facts and the view, never that the events
+describe what ran (L43); a self-consistent fabricated file passes. Per-gate durations are not measured.
 
 ## Size, disclosed rather than discovered
 

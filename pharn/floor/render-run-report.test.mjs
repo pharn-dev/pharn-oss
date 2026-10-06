@@ -165,7 +165,7 @@ test("L36 CLOSURE: the rendered `##` headings equal SECTIONS exactly, both direc
   try {
     feature(root, "feat", { "cost.json": costJson(), "LOOP.md": LOOP_MD });
     const got = headings(renderRunReport("feat", { repo: root }));
-    assert.equal(SECTIONS.length, 7, "non-vacuity: the vocabulary must be non-empty");
+    assert.equal(SECTIONS.length, 8, "non-vacuity: the vocabulary must be non-empty");
     // Equality, not per-member presence: a variant spelling of ANY member fails here, which is the
     // whole point — a presence set is satisfied by the spelling its author was looking at.
     assert.deepEqual(got, [...SECTIONS]);
@@ -2257,6 +2257,61 @@ test("6.35.0 — a pre-6.35.0 ledger renders n/a; a hand-edited view renders n/a
         `case ${i}`
       );
     }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── 6.48.0: `## Entry gates (background)` ────────────────────────────────────────────────────────────────────────────
+import { buildEntryView, OBS_SCHEMA } from "./entry-observations.mjs";
+
+const entrySectionOf = (md) => md.slice(md.indexOf("## Entry gates (background)"), md.indexOf("## Files"));
+
+test("6.48.0 — the entry section copies the stored view, apart from the stage rows; an older ledger is n/a, a hand-edited view never crashes", () => {
+  const root = scratch();
+  try {
+    const markers = [
+      { seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-09-21T08:00:00.000Z", session_id: null },
+      { seq: 2, kind: "run-stop", stage: null, iteration: null, ts: "2026-09-21T09:00:00.000Z", session_id: null },
+    ];
+    const N = "1".repeat(32);
+    const events = [
+      {
+        schema: OBS_SCHEMA,
+        event: "start",
+        nonce: N,
+        run: { seq: 1, ts: markers[0].ts },
+        ts: "2026-09-21T08:00:01.000Z",
+        end_ts: "2026-09-21T08:00:01.300Z",
+        elapsed_ms: 300,
+        outcome: "started",
+        session_id: null,
+      },
+      {
+        schema: OBS_SCHEMA,
+        event: "segment-begin",
+        nonce: N,
+        segment: "2".repeat(16),
+        kind: "runner",
+        ts: "2026-09-21T08:00:02.000Z",
+        session_id: null,
+      },
+    ];
+    const entry = buildEntryView(markers, events, null);
+    feature(root, "feat", { "cost.json": costJson({ entry_events: events, entry }) });
+    const sec = entrySectionOf(renderRunReport("feat", { repo: root }));
+    assert.match(sec, /lifetime INCOMPLETE — no end record at or before the cutoff/);
+    assert.match(sec, /never\s+added to it/);
+    assert.match(sec, /Totals are interval unions, never sums/);
+    feature(root, "old", { "cost.json": costJson() });
+    assert.match(entrySectionOf(renderRunReport("old", { repo: root })), /_n\/a — cost\.json predates 6\.48\.0/);
+    const hostile = structuredClone(entry);
+    hostile.invocations[0].lifetime.status = { toString: 1 };
+    feature(root, "bad", { "cost.json": costJson({ entry_events: events, entry: hostile }) });
+    assert.match(
+      entrySectionOf(renderRunReport("bad", { repo: root })),
+      /_n\/a — cost\.json's `entry`\/`entry_events` do not have the shape/
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

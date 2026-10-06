@@ -64,6 +64,11 @@
 //     outside fix #7, before the build's reconcile anchor.
 //   • The record readers (`readInProject`) are imported from regress-base-reuse.mjs (reused, not copied — L35), so a
 //     change to that reader reaches this check too.
+//   • OBSERVATIONS (6.48.0, entry-gates-ledger-row): `--start`, the runner, a `--wait` call (and its takeover) and
+//     `--abort` each append one line per boundary they already have to `.pharn/cost/<name>/entry.jsonl` for the cost
+//     ledger — schema, binding and view in entry-observations.mjs's header. Each is written AFTER the control record it
+//     describes, best-effort (a failure is one `note —` line on stderr), and read by nothing here: no exit, document,
+//     verdict, takeover or abort depends on one.
 //
 // TRUST (P2): gate output is never read (run-gates.mjs reduces it to a sha256). Every value quoted into a detail goes
 // through entry-gates-core.mjs `shown` (L62). `ps` output is parsed as integer columns only.
@@ -101,6 +106,7 @@ import {
 } from "./entry-gates-core.mjs";
 import { changedPaths } from "./scope-inputs.mjs";
 import { pathDigest, recordEntryChanges, clearEntryChanges } from "./pre-run-snapshot.mjs";
+import { OBS_SCHEMA, recordEntryEvent, currentRunStart, sessionFromEnv } from "./entry-observations.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RUN_GATES = join(HERE, "run-gates.mjs");
@@ -274,6 +280,52 @@ function killRunner(rec) {
   return { killed: true, unverifiable: false, how };
 }
 
+/** ---------------------------------------------------------------------------------------------------------------
+ *  Observations for the cost ledger (entry-observations.mjs, its header). Best-effort and total: an observation is
+ *  written AFTER the control record it describes, never read by anything here, never printed to stdout, and a failed
+ *  write is one `note —` line on stderr — no exit, verdict, takeover or abort depends on it.
+ *  ------------------------------------------------------------------------------------------------------------- */
+function observe(feature, build) {
+  try {
+    // `build` is a thunk, so every argument (ids, clocks) is computed INSIDE this guard (GATE-2 review).
+    recordEntryEvent(feature, { schema: OBS_SCHEMA, ...build(), session_id: sessionFromEnv() });
+  } catch {
+    /* recordEntryEvent is total; this guards the thunk and the spread */
+  }
+}
+
+/** The three helpers an observation uses outside `observe` too (a segment id held across a drain, a call's start
+ *  time). Each is total: a throw yields null, which `validateEntryEvent` refuses — the event is not written, nothing
+ *  else changes. */
+const nowIso = () => {
+  try {
+    return new Date().toISOString();
+  } catch {
+    return null;
+  }
+};
+const monoNow = () => {
+  try {
+    return performance.now();
+  } catch {
+    return null;
+  }
+};
+const monoMs = (t0) => {
+  const t = monoNow();
+  return t === null || t0 === null ? null : Math.max(0, Math.round(t - t0));
+};
+const freshId = () => {
+  try {
+    return randomBytes(8).toString("hex");
+  } catch {
+    return null;
+  }
+};
+
+/** A `--wait` exit code back to its document status (EXIT is one-to-one). */
+const STATUS_OF_EXIT = Object.freeze(Object.fromEntries(Object.entries(EXIT).map(([s, c]) => [c, s])));
+
 function result(status, feature, nonce, extra = {}) {
   return { schema: RESULT_SCHEMA, status, feature, nonce, ...extra };
 }
@@ -345,7 +397,30 @@ function refuse(code, detail) {
   return EXIT.unusable;
 }
 
-function start({ feature, timeoutMs }) {
+/** `--start`, observed: one `start` event once the invocation exists (a nonce was created) and its outcome is known.
+ *  A refusal before the nonce (path-containment, runner-unverifiable) creates no invocation and records nothing. The run
+ *  it belongs to is the current run-start read HERE, at entry (entry-observations.mjs `currentRunStart`). */
+function start(args) {
+  const t0 = monoNow();
+  const ts = nowIso();
+  const run = currentRunStart(args.feature);
+  const obs = { nonce: null, outcome: null };
+  const code = startRun(args, obs);
+  if (obs.nonce !== null && obs.outcome !== null) {
+    observe(args.feature, () => ({
+      event: "start",
+      nonce: obs.nonce,
+      run,
+      ts,
+      end_ts: nowIso(),
+      elapsed_ms: monoMs(t0),
+      outcome: obs.outcome,
+    }));
+  }
+  return code;
+}
+
+function startRun({ feature, timeoutMs }, obs) {
   const contained = rootContained();
   if (!contained.ok) return refuse("path-containment", contained.detail);
   const prior = readRecord(ENTRY_PATHS.runner);
@@ -368,6 +443,7 @@ function start({ feature, timeoutMs }) {
   const nonce = randomBytes(16).toString("hex");
   const rec = { schema: RUNNER_SCHEMA, feature, nonce, pid: null, timeout_ms: timeoutMs, d0: featureDirDigest(feature) };
   writeAtomic(ENTRY_PATHS.runner, rec);
+  obs.nonce = nonce;
 
   const initArgs = ["init", "--stage", "entry", "--feature", feature, "--out", ENTRY_PATHS.gates];
   if (lstatSafe("package.json").stat) initArgs.push("--discover", "package.json");
@@ -376,11 +452,13 @@ function start({ feature, timeoutMs }) {
   if (init.status === 3) {
     writeAtomic(ENTRY_PATHS.result, result("no-gates", feature, nonce, { detail: shown(parsed ? parsed.reason : "no gates") }));
     process.stdout.write(`entry-gates: no gates to run for '${feature}' — ${shown(parsed ? parsed.reason : "")}\n`);
+    obs.outcome = "no-gates";
     return EXIT["no-gates"];
   }
   if (init.status !== 0 || parsed === null) {
     const detail = `run-gates.mjs init --stage entry refused: ${parsed ? parsed.reason : init.stderr || init.stdout}`;
     writeAtomic(ENTRY_PATHS.result, unusableResult(feature, nonce, "child-refused", detail, runnerReasonOf(parsed)));
+    obs.outcome = "init-refused";
     return refuse("child-refused", detail);
   }
 
@@ -395,16 +473,19 @@ function start({ feature, timeoutMs }) {
     });
   } catch (e) {
     writeAtomic(ENTRY_PATHS.result, unusableResult(feature, nonce, "spawn-failed", e && e.code ? e.code : "spawn failed"));
+    obs.outcome = "spawn-failed";
     return refuse("spawn-failed", e && e.code ? e.code : "spawn failed");
   } finally {
     if (fd !== undefined) closeSync(fd);
   }
   if (!Number.isInteger(child.pid)) {
     writeAtomic(ENTRY_PATHS.result, unusableResult(feature, nonce, "spawn-failed", "the runner has no pid"));
+    obs.outcome = "spawn-failed";
     return refuse("spawn-failed", "the runner has no pid");
   }
   child.unref();
   writeAtomic(ENTRY_PATHS.runner, { ...rec, pid: child.pid });
+  obs.outcome = "started";
   const ids = Array.isArray(parsed.ids) ? parsed.ids : [];
   process.stdout.write(
     `entry-gates: started ${ids.length} gate(s) for '${feature}' in the background (${ids.join(", ")})` +
@@ -454,7 +535,7 @@ function upsert(list, entry) {
  *  feature directory's digest and the changed-path listing; both persisted to progress.json after every gate (a takeover
  *  keeps them). `budget.may()` gates every gate. Returns `{kind: done, featureDir, gateChanges}` · `{kind: budget}` ·
  *  `{kind: refused, detail, runnerReason}`. */
-function drainEntry({ feature, nonce, timeoutMs, budget }) {
+function drainEntry({ feature, nonce, timeoutMs, budget, counter = { ran: 0 } }) {
   const { featureDir, gateChanges } = readProgress(feature, nonce);
   const head = headSha();
   for (;;) {
@@ -477,6 +558,7 @@ function drainEntry({ feature, nonce, timeoutMs, budget }) {
     }
     budget.spent();
     if (typeof parsed.ran === "string") {
+      counter.ran++;
       upsert(featureDir, { id: parsed.ran, before, after });
       const paths = listBefore !== null && listAfter !== null ? listingDiff(listBefore, listAfter, (p) => pathDigest(p)) : [];
       upsert(gateChanges, { id: parsed.ran, paths });
@@ -509,19 +591,39 @@ function runner({ feature, timeoutMs, nonce }) {
     process.stderr.write("entry-gates --runner: no runner record names this nonce; nothing was run\n");
     return EXIT.unusable;
   }
+  // One execution segment: its begin first, its end only AFTER result.json (the control record never waits on it). A
+  // runner killed between the two leaves the segment incomplete — reported as such, never given an end.
+  const segment = freshId();
+  const t0 = monoNow();
+  const counter = { ran: 0 };
+  observe(feature, () => ({ event: "segment-begin", nonce, segment, kind: "runner", ts: nowIso() }));
+  const ended = (end) =>
+    observe(feature, () => ({
+      event: "segment-end",
+      nonce,
+      segment,
+      kind: "runner",
+      ts: nowIso(),
+      elapsed_ms: monoMs(t0),
+      end,
+      gates: counter.ran,
+    }));
   try {
-    const d = drainEntry({ feature, nonce, timeoutMs, budget: { may: () => true, spent: () => {} } });
+    const d = drainEntry({ feature, nonce, timeoutMs, budget: { may: () => true, spent: () => {} }, counter });
     if (d.kind === "refused") {
       writeAtomic(ENTRY_PATHS.result, unusableResult(feature, nonce, "child-refused", d.detail, d.runnerReason));
+      ended("refused");
       return EXIT.unusable;
     }
     finalizeResult(feature, nonce, d.featureDir, d.gateChanges);
+    ended("done");
     return 0;
   } catch (e) {
     writeAtomic(
       ENTRY_PATHS.result,
       unusableResult(feature, nonce, "crashed", e && e.message ? e.message.split("\n")[0] : "a thrown value")
     );
+    ended("crashed");
     return EXIT.unusable;
   }
 }
@@ -560,7 +662,9 @@ function decideDone(feature, runnerRec, res) {
   return emitDoc({ status: verdict.status, feature, verdict, changesRecord });
 }
 
-function wait({ feature, budgetMs }) {
+/** `ctx` (optional) collects what the call's `wait` observation needs: the nonce of the runner record it last read for
+ *  this feature, and the id of a takeover segment it ran. Nothing in this function reads `ctx` back. */
+function wait({ feature, budgetMs }, ctx = null) {
   const t0 = Date.now();
   const contained = rootContained();
   if (!contained.ok) return unusableDoc(feature, "path-containment", contained.detail);
@@ -570,6 +674,7 @@ function wait({ feature, budgetMs }) {
     const defect = runnerRecordDefect(rr.value);
     if (defect !== null) return unusableDoc(feature, "no-runner", `${ENTRY_PATHS.runner} ${defect}`);
     if (rr.value.feature !== feature) return unusableDoc(feature, "no-runner", `${ENTRY_PATHS.runner} names another feature`);
+    if (ctx) ctx.nonce = rr.value.nonce;
 
     const res = readRecord(ENTRY_PATHS.result);
     if (res.state === "unusable") return unusableDoc(feature, "result-unbound", `${ENTRY_PATHS.result} is not a readable JSON file`);
@@ -605,14 +710,35 @@ function wait({ feature, budgetMs }) {
           steps++;
         },
       };
-      const d = drainEntry({ feature, nonce: rr.value.nonce, timeoutMs: rr.value.timeout_ms, budget });
+      // A takeover is its own execution segment, INSIDE this wait call (never added to the call's duration). A throw
+      // from the drain writes no result and no end: the segment reads incomplete.
+      const segment = freshId();
+      const s0 = monoNow();
+      const counter = { ran: 0 };
+      if (ctx) ctx.takeover = segment;
+      observe(feature, () => ({ event: "segment-begin", nonce: rr.value.nonce, segment, kind: "takeover", ts: nowIso() }));
+      const ended = (end) =>
+        observe(feature, () => ({
+          event: "segment-end",
+          nonce: rr.value.nonce,
+          segment,
+          kind: "takeover",
+          ts: nowIso(),
+          elapsed_ms: monoMs(s0),
+          end,
+          gates: counter.ran,
+        }));
+      const d = drainEntry({ feature, nonce: rr.value.nonce, timeoutMs: rr.value.timeout_ms, budget, counter });
       if (d.kind === "budget") {
+        ended("budget");
         return emitDoc({ status: "continue", feature, detail: "the background runner is gone; this line is running the gates itself" });
       }
       if (d.kind === "refused") {
         writeAtomic(ENTRY_PATHS.result, unusableResult(feature, rr.value.nonce, "child-refused", d.detail, d.runnerReason));
+        ended("refused");
       } else {
         finalizeResult(feature, rr.value.nonce, d.featureDir, d.gateChanges);
+        ended("done");
       }
       continue; // the result now exists: read it like any other
     }
@@ -640,10 +766,21 @@ function abort({ feature }) {
     return 0;
   }
   const k = killRunner(rr.value);
+  let wroteResult = false;
   if (k.killed && readRecord(ENTRY_PATHS.result).state === "absent") {
     writeAtomic(ENTRY_PATHS.result, result("aborted", feature, rr.value.nonce));
+    wroteResult = true;
   }
   process.stdout.write(`entry-gates: abort for '${feature}' — ${k.how}\n`);
+  // `ts` is taken after the kill and the result write, so an abort that ended the invocation ends it at this moment.
+  observe(feature, () => ({
+    event: "abort",
+    nonce: rr.value.nonce,
+    call: freshId(),
+    ts: nowIso(),
+    stopped: k.killed,
+    wrote_result: wroteResult,
+  }));
   return 0;
 }
 
@@ -657,16 +794,41 @@ export function main(argv) {
     }
     return refuse("usage-error", a.detail);
   }
+  if (a.mode === "--wait") return observedWait(a);
   try {
     if (a.mode === "--start") return start(a);
     if (a.mode === "--runner") return runner(a);
-    if (a.mode === "--wait") return wait(a);
     return abort(a);
   } catch (e) {
-    const detail = e && e.message ? e.message.split("\n")[0] : "a thrown value";
-    if (a.mode === "--wait") return unusableDoc(a.feature, "crashed", detail);
-    return refuse("crashed", detail);
+    return refuse("crashed", e && e.message ? e.message.split("\n")[0] : "a thrown value");
   }
+}
+
+/** One `--wait` call, observed: its document and exit first, then ONE `wait` event (status read back from the exit
+ *  code). A call that never read a runner record for this feature has no invocation to bind to and records nothing. */
+function observedWait(a) {
+  const t0 = monoNow();
+  const ts = nowIso();
+  const ctx = { nonce: null, takeover: null };
+  let code;
+  try {
+    code = wait(a, ctx);
+  } catch (e) {
+    code = unusableDoc(a.feature, "crashed", e && e.message ? e.message.split("\n")[0] : "a thrown value");
+  }
+  if (ctx.nonce !== null && Object.hasOwn(STATUS_OF_EXIT, code)) {
+    observe(a.feature, () => ({
+      event: "wait",
+      nonce: ctx.nonce,
+      call: freshId(),
+      ts,
+      end_ts: nowIso(),
+      elapsed_ms: monoMs(t0),
+      status: STATUS_OF_EXIT[code],
+      takeover: ctx.takeover,
+    }));
+  }
+  return code;
 }
 
 if (import.meta.main) process.exitCode = main(process.argv);

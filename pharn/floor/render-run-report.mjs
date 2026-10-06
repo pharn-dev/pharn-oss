@@ -115,7 +115,9 @@ import {
   normalizeMarkers,
   elapsedLines,
   workLines,
+  entryLines,
 } from "./render-cost-ledger.mjs";
+import { entryViewDefect } from "./entry-observations.mjs";
 import { validateWork } from "./stage-work.mjs";
 import { DEFAULT_BASE as MARKERS_DEFAULT_BASE } from "./mark-phase.mjs";
 import { verdictApplicability, APPLICABILITY, runMode } from "./ship-outcome-core.mjs";
@@ -145,6 +147,7 @@ export const SECTIONS = Object.freeze([
   "## Outcome",
   "## Tokens — stage x iteration x model",
   "## Stage elapsed and deterministic work",
+  "## Entry gates (background)",
   "## Files",
   "## Verdicts",
   "## Briefing",
@@ -623,6 +626,32 @@ function performanceSection(cost, absentReason = null) {
   ].join("\n");
 }
 
+/**
+ * ENTRY GATES (6.48.0) — COPIED from `cost.json`'s stored `entry` view (never recomputed here), rendered by the ledger's
+ * own screen function. Kept OUT of the stage-elapsed section: the entry check runs in the background beside the front
+ * stages, so its time is never a stage row and is never added to one. Fenced as DATA.
+ */
+function entrySection(cost, absentReason = null) {
+  if (absentReason) return na(absentReason);
+  if (!cost) return na("no cost.json — no ledger was emitted for this run");
+  if (!Object.hasOwn(cost, "entry") && !Object.hasOwn(cost, "entry_events")) {
+    return na("cost.json predates 6.48.0 — it records no entry-gate observations (not a zero: nothing was recorded)");
+  }
+  if (entryViewDefect(cost.entry) !== null || !Array.isArray(cost.entry_events)) {
+    return na("cost.json's `entry`/`entry_events` do not have the shape the emitter writes — run check-cost-ledger.mjs on it");
+  }
+  return [
+    "The **entry check** runs the project's gates in a background process while the spec, plan and grill stages work.",
+    "Its **lifetime** runs from `--start` to the record of the process that ended it: wall clock across processes,",
+    "placement only, not CPU or gate time. A **segment** is one runner or takeover process, timed on its own monotonic",
+    "clock. A **wait call** is the foreground time one `--wait` line took, and a takeover runs inside it and is never",
+    "added to it. Totals are interval unions, never sums. `INCOMPLETE` means no end was recorded before the run-stop",
+    "marker, and it is never a zero.",
+    "",
+    quoteData("", entryLines(cost).join("\n")).trimStart(),
+  ].join("\n");
+}
+
 function filesSection({ cost, repo, planEntries, dirtyBefore, dirtyNote, absentReason = null }) {
   if (absentReason) return na(absentReason);
   const base = cost && typeof cost.base_sha === "string" ? cost.base_sha : null;
@@ -1065,6 +1094,7 @@ export function renderRunReport(name, opts = {}) {
     "## Outcome": outcomeSection(cost, staleReason),
     "## Tokens — stage x iteration x model": tokensSection(cost, staleReason),
     "## Stage elapsed and deterministic work": performanceSection(cost, staleReason),
+    "## Entry gates (background)": entrySection(cost, staleReason),
     "## Files": filesSection({ cost, repo, planEntries, dirtyBefore, dirtyNote, absentReason: staleReason }),
     "## Verdicts": verdictsSection({ verify, regress, cost: staleReason ? null : cost, stale: Boolean(staleReason) }),
     "## Briefing": briefingSection({ dir, cost: staleReason ? null : cost }),

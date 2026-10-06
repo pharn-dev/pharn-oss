@@ -760,3 +760,253 @@ test("★ WIRING: /pharn-loop's S14 row exists and the opt-in is part of both en
   assert.ok(loop.includes("`/pharn-loop [--allow-red-entry] [--max-iter N] <increment description>`"));
   assert.ok(loop.includes("`/pharn-loop --quick [--allow-red-entry] [--max-iter N] <increment description>`"));
 });
+
+// ── OBSERVATIONS for the cost ledger (6.48.0, entry-gates-ledger-row) — real processes, the real emitter and checker ──
+import { renderLedger } from "./render-cost-ledger.mjs";
+import { checkLedger } from "./check-cost-ledger.mjs";
+import { readEntryEvents, ENTRY_FILE } from "./entry-observations.mjs";
+
+const MARK_PHASE = join(HERE, "mark-phase.mjs");
+/** The environment every observation test runs under: no session id, so the binding is the run-start and nothing else. */
+const OBS_ENV = (() => {
+  const e = { ...process.env };
+  delete e.CLAUDE_CODE_SESSION_ID;
+  return e;
+})();
+const ocli = (dir, ...args) => spawnSync(process.execPath, [CLI, ...args], { cwd: dir, encoding: "utf8", env: OBS_ENV });
+const ostart = (dir, t = "60000") => ocli(dir, "--start", "--feature", FEATURE, "--timeout-ms", t);
+function owait(dir, budget = "60000") {
+  const r = ocli(dir, "--wait", "--feature", FEATURE, "--budget-ms", budget);
+  return { status: r.status, doc: JSON.parse(r.stdout), stderr: r.stderr, stdout: r.stdout };
+}
+const mark = (dir, kind) =>
+  execFileSync(process.execPath, [MARK_PHASE, "--name", FEATURE, "--kind", kind], { cwd: dir, env: OBS_ENV, stdio: "ignore" });
+const entryFile = (dir) => join(dir, ".pharn/cost", FEATURE, ENTRY_FILE);
+const events = (dir) => readEntryEvents(entryFile(dir)).records;
+/** The runner appends its segment-end just AFTER result.json, so a reader that saw the result may be a moment early. */
+function untilEvent(dir, pred, ms = 10000) {
+  const until = Date.now() + ms;
+  while (!events(dir).some(pred) && Date.now() < until) execFileSync("sleep", ["0.05"]);
+  assert.ok(events(dir).some(pred), "the expected observation was written");
+}
+function ledgerOf(dir) {
+  const empty = mkdtempSync(join(tmpdir(), "entry-proj-"));
+  const led = renderLedger({ name: FEATURE, sessionId: null, projectsDir: empty, markersBase: join(dir, ".pharn/cost"), repo: dir });
+  rmSync(empty, { recursive: true, force: true });
+  return led;
+}
+
+test("OBSERVED: finished before the first wait — start bound to THIS run-start, runner begin/end with its gate count, one wait; the emitter binds them and the checker is GREEN", () => {
+  const dir = sandbox({ gates: { lint: {}, test: {}, build: {} } });
+  try {
+    mark(dir, "run-start");
+    assert.equal(ostart(dir).status, 0);
+    waitForFile(join(dir, ENTRY_PATHS.result));
+    untilEvent(dir, (e) => e.event === "segment-end");
+    const w = owait(dir);
+    assert.equal(w.status, 0);
+    mark(dir, "run-stop");
+    const ev = events(dir);
+    const start = ev.find((e) => e.event === "start");
+    const marker = JSON.parse(readFileSync(join(dir, ".pharn/cost", FEATURE, "markers.jsonl"), "utf8").split("\n")[0]);
+    assert.deepEqual(start.run, { seq: marker.seq, ts: marker.ts }, "the run-start read AT --start");
+    assert.equal(start.outcome, "started");
+    const end = ev.find((e) => e.event === "segment-end");
+    assert.deepEqual([end.kind, end.end, end.gates], ["runner", "done", 3]);
+    assert.ok(Number.isInteger(end.elapsed_ms) && end.elapsed_ms >= 0);
+    const led = ledgerOf(dir);
+    assert.deepEqual(checkLedger(led).reds, []);
+    assert.equal(led.entry.invocations.length, 1);
+    const x = led.entry.invocations[0];
+    assert.equal(x.lifetime.status, "measured");
+    assert.equal(x.lifetime.end_by, "runner");
+    assert.equal(x.segment_coverage, "all");
+    assert.deepEqual(
+      x.waits.map((v) => [v.status, v.takeover]),
+      [["green", null]]
+    );
+    assert.ok(
+      x.lifetime.elapsed_ms >= 0 && x.segments_union_ms <= x.lifetime.elapsed_ms + 50,
+      "a segment lies inside its lifetime (ms clock skew aside)"
+    );
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("OBSERVED: still running at the wait, a budget continuation, then the verdict — two wait calls, one runner segment, nothing double-counted", () => {
+  const dir = sandbox({ gates: { test: { sleepMs: 2500 } } });
+  try {
+    mark(dir, "run-start");
+    assert.equal(ostart(dir).status, 0);
+    assert.equal(owait(dir, "300").status, 5);
+    assert.equal(owait(dir).status, 0);
+    untilEvent(dir, (e) => e.event === "segment-end");
+    const led = ledgerOf(dir);
+    assert.deepEqual(checkLedger(led).reds, []);
+    const x = led.entry.invocations[0];
+    assert.deepEqual(
+      x.waits.map((w) => w.status),
+      ["continue", "green"]
+    );
+    assert.equal(x.segments.length, 1);
+    assert.ok(x.waits_union_ms <= x.waits.reduce((s, w) => s + w.elapsed_ms, 0) + 50, "the union never exceeds the calls it covers");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("OBSERVED: TAKEOVER — the killed runner's segment stays incomplete; each takeover is its own segment, named by the wait call that ran it", () => {
+  const pidFile = join(mkdtempSync(join(tmpdir(), "entry-pid-")), "gate.pid");
+  const dir = sandbox({ gates: { lint: { exit: 1 }, test: { sleepMs: 1500, pidFile }, build: { exit: 2 } } });
+  try {
+    mark(dir, "run-start");
+    assert.equal(ostart(dir).status, 0);
+    waitForFile(pidFile);
+    const runner = JSON.parse(readFileSync(join(dir, ENTRY_PATHS.runner), "utf8"));
+    process.kill(-runner.pid, "SIGKILL");
+    let r = owait(dir);
+    for (let i = 0; i < 5 && r.status === 5; i++) r = owait(dir);
+    assert.equal(r.status, 4);
+    const led = ledgerOf(dir);
+    assert.deepEqual(checkLedger(led).reds, []);
+    const x = led.entry.invocations[0];
+    const runnerSeg = x.segments.find((s) => s.kind === "runner");
+    assert.equal(runnerSeg.status, "incomplete", "a killed runner never gets an end");
+    const takeovers = x.segments.filter((s) => s.kind === "takeover");
+    assert.ok(takeovers.length >= 1);
+    assert.deepEqual(
+      x.waits
+        .filter((w) => w.takeover !== null)
+        .map((w) => w.takeover)
+        .sort(),
+      takeovers.map((s) => s.segment).sort(),
+      "every takeover segment is named by the wait call it ran inside"
+    );
+    assert.equal(x.lifetime.end_by, "takeover");
+    assert.equal(x.segment_coverage, "partial");
+  } finally {
+    cleanup(dir);
+    rmSync(dirname(pidFile), { recursive: true, force: true });
+  }
+});
+
+test("OBSERVED: no-gates and an init refusal end at the start (a known zero); an abort mid-gate ends the lifetime and leaves the segment incomplete", () => {
+  const none = sandbox({ noPackage: true });
+  const bad = sandbox({ gates: { test: {} }, config: { gates: { exclude: "test" } } });
+  const pidFile = join(mkdtempSync(join(tmpdir(), "entry-pid-")), "gate.pid");
+  const slow = sandbox({ gates: { test: { sleepMs: 30000, pidFile } } });
+  try {
+    for (const [dir, outcome, code] of [
+      [none, "no-gates", 3],
+      [bad, "init-refused", 2],
+    ]) {
+      mark(dir, "run-start");
+      assert.equal(ostart(dir).status, code);
+      const x = ledgerOf(dir).entry.invocations[0];
+      assert.equal(x.start.outcome, outcome);
+      assert.deepEqual([x.lifetime.status, x.lifetime.end_by, x.segment_coverage, x.segments_union_ms], ["measured", "start", "all", 0]);
+    }
+    mark(slow, "run-start");
+    assert.equal(ostart(slow).status, 0);
+    waitForFile(pidFile);
+    assert.equal(ocli(slow, "--abort", "--feature", FEATURE).status, 0);
+    mark(slow, "run-stop");
+    const led = ledgerOf(slow);
+    assert.deepEqual(checkLedger(led).reds, []);
+    const x = led.entry.invocations[0];
+    assert.equal(x.lifetime.end_by, "abort");
+    assert.deepEqual(
+      x.aborts.map((a) => [a.stopped, a.wrote_result]),
+      [[true, true]]
+    );
+    assert.equal(x.segments[0].status, "incomplete");
+    assert.equal(x.segments_union_ms, null, "unknown, never 0");
+  } finally {
+    for (const d of [none, bad, slow]) cleanup(d);
+    rmSync(dirname(pidFile), { recursive: true, force: true });
+  }
+});
+
+test("OBSERVED: consecutive invocations — a superseding --start in a NEW run binds only its own events; the earlier run's stay unbound there", () => {
+  const dir = sandbox({ gates: { test: { sleepMs: 1500 } } });
+  try {
+    mark(dir, "run-start");
+    assert.equal(ostart(dir).status, 0);
+    execFileSync("sleep", ["0.3"]);
+    mark(dir, "run-stop");
+    mark(dir, "run-start");
+    assert.equal(ostart(dir).status, 0, "supersedes the first runner");
+    assert.equal(owait(dir).status, 0);
+    untilEvent(dir, (e) => e.event === "segment-end" && e.end === "done");
+    const led = ledgerOf(dir);
+    assert.deepEqual(checkLedger(led).reds, []);
+    const nonces = new Set(
+      events(dir)
+        .filter((e) => e.event === "start")
+        .map((e) => e.nonce)
+    );
+    assert.equal(nonces.size, 2);
+    assert.equal(led.entry.invocations.length, 1, "only the invocation started in THIS run");
+    assert.equal(led.entry.invocations[0].lifetime.status, "measured");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("OBSERVED: no run-start before --start — the start records run null and the ledger attaches nothing to any run", () => {
+  const dir = sandbox({ gates: { test: {} } });
+  try {
+    assert.equal(ostart(dir).status, 0);
+    assert.equal(owait(dir).status, 0);
+    assert.equal(events(dir).find((e) => e.event === "start").run, null);
+    mark(dir, "run-start");
+    const led = ledgerOf(dir);
+    assert.equal(led.entry.invocations.length, 0);
+    assert.deepEqual(checkLedger(led).reds, []);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("OBSERVED: a telemetry write that fails changes NOTHING — same exits, same stdout documents, same verdict; one note on stderr", () => {
+  const runOne = (plant) => {
+    const dir = sandbox({ gates: { lint: {}, test: { exit: 1 } } });
+    try {
+      mark(dir, "run-start");
+      if (plant) mkdirSync(entryFile(dir), { recursive: true }); // a DIRECTORY where the file goes: every append fails
+      const s = ostart(dir);
+      waitForFile(join(dir, ENTRY_PATHS.result));
+      const w = owait(dir);
+      const a = ocli(dir, "--abort", "--feature", FEATURE);
+      return { s, w, a, res: JSON.parse(readFileSync(join(dir, ENTRY_PATHS.result), "utf8")).status };
+    } finally {
+      cleanup(dir);
+    }
+  };
+  const ok = runOne(false);
+  const failing = runOne(true);
+  assert.equal(failing.s.status, ok.s.status);
+  assert.equal(failing.s.stdout, ok.s.stdout);
+  assert.equal(failing.w.status, ok.w.status);
+  assert.equal(failing.w.status, 4, "the red verdict is untouched");
+  assert.equal(failing.w.stdout, ok.w.stdout, "the --wait document is byte-identical");
+  assert.equal(failing.a.status, ok.a.status);
+  assert.equal(failing.a.stdout, ok.a.stdout, "the --abort line is byte-identical (review F8)");
+  assert.equal(failing.res, ok.res, "the runner wrote the same result");
+  assert.match(failing.s.stderr, /note — an entry-gate observation for the cost ledger was not written/);
+  assert.match(failing.w.stderr, /note — an entry-gate observation/);
+  assert.doesNotMatch(ok.w.stderr, /note —/);
+});
+
+test("REVIEW F7 — CLOSURE: every observe() call passes a THUNK, so no observation argument (id, clock) is built outside its guard", () => {
+  const src = readFileSync(CLI, "utf8");
+  const calls = [...src.matchAll(/\bobserve\(([^\n]*)/g)].map((m) => m[1]).filter((rest) => !rest.startsWith("feature, build)"));
+  assert.ok(calls.length >= 7, `non-vacuity: the observation sites are found (${calls.length})`);
+  for (const rest of calls) assert.match(rest, /^[a-z.]+, \(\) => \(\{/, `observe(${rest.slice(0, 40)}… must take a thunk`);
+  // The three helpers used outside observe() are total: each catches and yields null (the event is then refused).
+  for (const name of ["nowIso", "monoNow", "freshId"]) {
+    const body = src.slice(src.indexOf(`const ${name} = `), src.indexOf("};", src.indexOf(`const ${name} = `)));
+    assert.match(body, /try \{[\s\S]*catch \{[\s\S]*return null;/, `${name} is total`);
+  }
+});
