@@ -23,6 +23,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.46.1] - 2026-10-06
+
+### Changed
+
+- 2026-10-06: **The root `CLAUDE.md` is now a 28,403 B bootstrap, down from 189,120 B. The rest moved, unedited, into
+  ten guides under `.dev/guides/`. Each guide is read before the action it covers.** (`.dev/features/claude-md-bootstrap/`)
+  `CLAUDE.md` is loaded into every Claude Code session in this repo, and 128 KB of it was a code block restating floor
+  module headers and contracts.
+  - **Kept in the root, byte for byte:** the repo's identity and read order, the dev/product boundary, the
+    `SKILLS_VERSION` bump rules, the hard constraints, the core writes-scope rules, the architecture summary, the
+    capability conventions and the generated-docs rule. **New:** a `## Guidance index` that names each guide and when to
+    read it, plus a pointer at the end of two shortened writes-scope bullets.
+  - **Moved:**
+    - the floor CLI reference, one section per CLI, into `floor-checks.md`, `floor-gates.md`, `floor-ac-tests.md` and
+      `floor-orchestration.md`;
+    - the writes-scope postures and deny bodies into `writes-scope.md`;
+    - the installer and `MIN_CLI` notes into `versioning.md`;
+    - the command budget and part files into `product-commands.md`;
+    - the lessons conventions into `lessons.md`;
+    - two `docs:check` notes into `generated-docs.md`;
+    - two deferrals into `deferred-decisions.md`.
+  - **Retired, not moved:** the CHANGELOG sub-rules, a second copy of `CONTRIBUTING.md` "CHANGELOG entries", which now
+    owns them alone.
+  - `.dev/features/claude-md-bootstrap/check-migration.mjs` accounts for all 1,912 base lines as kept, moved,
+    deduplicated or framing, with none missing. That shows the text is accounted for. It does not show that a reader
+    finds a guide in time: the index is an instruction, and nothing forces the read.
+  - **Measured with the unchanged checker:** `check-instruction-files --growth --base 6ff4dd1` reads `within`, with
+    1,722 B added against the default 2,048 B budget. Every kept line is a base line, so only the new lines count. The
+    modelled always-loaded set is `CLAUDE.md` alone. That is the checker's model of the loader, not the loader. No
+    change in model quality, run time or token cost was measured, so none is claimed.
+  - **Product surface (the reason for this patch bump):** one sentence in `pharn/pharn-contracts/cost-ledger.md` ("One
+    row per request") no longer names `CLAUDE.md` as a place that summarizes the rule. That summary now sits in a
+    `.dev/` guide, which an install does not receive. No rule changes. `MIN_CLI` is unchanged: no installed path moves.
+  - `.dev/floor/specified-primitives.json`: the two forward-claim sites now name the guide that holds their text.
+  - `.claude/hooks/require-loop-record.cjs` (shipped; human-only, so a person made the edit): its header comment no
+    longer says `CLAUDE.md` repeats its limits verbatim; it names `.dev/guides/floor-orchestration.md` as a summary.
+    Comment only.
+  - `/pharn-dev-regress` Step 1.3 (apparatus): L69's remedy. The `## Files` extraction is a pinned line over
+    `pharn/floor/plan-files-core.mjs` instead of prose, and Step 1.4 reads its output.
+  - **Not changed:** any product command, setting, floor module, gate, verdict or trusted doc.
+  - **Not done:**
+    - the floor guides still restate module headers, and removing that repetition is the follow-up
+      `floor-guide-dedupe`;
+
 ## [6.46.0] - 2026-10-06
 
 ### Fixed

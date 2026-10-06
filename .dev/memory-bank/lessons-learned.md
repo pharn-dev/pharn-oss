@@ -2289,3 +2289,18 @@ type: scoping · concepts: [reconciliation, trusted-docs, human-only-patch, attr
 - commit: `d40667d1e998ecfc3039a658648065cba0243e9c` (working-tree build on this commit; uncommitted at promotion time)
 - source: `.dev/features/plan-instruction-file-rule/REVIEW.md` § Proposed lesson candidate + `VERIFY.md` § Orchestration notes
 - promoted: 2026-10-05 via gated `/pharn-dev-memory-promote` (human-approved). Promoted first as L67; renumbered to L68 when 6.38.0 (#311) merged its own L67.
+
+## L69 — L22 recurred in /pharn-dev-regress's declared-paths step — a PLAN's `## Files` must be read by the canonical parser, never a hand-written split
+
+type: tooling · concepts: [command-prescription, plan-shape, lesson-recurrence, false-red]
+
+**Lesson.** /pharn-dev-regress Step 1.3 tells the agent to read the PLAN's `## Files` back-tick paths in prose and pins no extractor. In claude-md-bootstrap the hand-written extractor split on the first literal `## Files`, which also appears in an Applied-lessons line, and passed an empty --declared, so `scope` reported every planned file as escaped. It failed loud (exit 1) and was re-run, but the opposite mistake (a split that reads too much) would fail OPEN. set-writes-scope.cjs is already the canonical `## Files` parser; the remedy is to pin a line that uses it (e.g. read .pharn/writes-scope.json after --from-plan), not to remember.
+
+**Why it matters.** [[L22]] pinned the `xargs` line in this same command, but Step 1.3's extraction stayed prose, so each run re-implements a `## Files` reader. Two hand readers of one section is [[L39]]'s shape, and per [[L20]] a second occurrence of a discipline-only remedy earns a pinned line.
+
+**Provenance.**
+
+- feature: `claude-md-bootstrap`
+- commit: `6ff4dd1ac064087660c03e20b48571868ab45863` (working-tree build on this commit; uncommitted at promotion time)
+- source: `.dev/features/claude-md-bootstrap/REVIEW.md` § Proposed lesson candidate + `REGRESSION.md` Run note
+- promoted: 2026-10-06 via gated `/pharn-dev-memory-promote` (human-approved).

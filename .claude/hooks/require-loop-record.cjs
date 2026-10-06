@@ -13,7 +13,8 @@
 // produce, and what stuck point S11 (`blocked: stale-evidence`) exists for.
 //
 // ====================================== WHAT THIS GUARD CANNOT DO ======================================
-// (repeated verbatim from the plan, the PR and CLAUDE.md, never paraphrased into something stronger)
+// (repeated verbatim from the plan and the PR; .dev/guides/floor-orchestration.md summarizes it, and no copy
+// may paraphrase it into something stronger)
 //   • It cannot make a model do work. It refuses the turn end; the model decides what to do with the refusal.
 //   • It cannot judge a record. Blocking on record quality would contradict the loop's own rules: a second
 //     check-loop-record.mjs repair would pass the ≤1 bound, and check-loop-decision.mjs says "do not retry it".
