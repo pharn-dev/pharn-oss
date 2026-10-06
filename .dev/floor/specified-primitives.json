@@ -284,6 +284,17 @@
       "cited_in": "THREAT-MODEL.md",
       "citation": "scan-installed-skills.mjs",
       "must_exist": "pharn/floor/scan-installed-skills.mjs"
+    },
+    {
+      "$comment": [
+        "THREAT-MODEL.md §2 item 8 and its §3 row cite the installed-skill CATALOGUE by name since 6.49.1",
+        "(the 6.47.0 selective-skill-reads proposal, applied by a human). Registered for the same reason as",
+        "scan-installed-skills above, and deliberately not a forward_claims entry for the same reason."
+      ],
+      "id": "catalogue-installed-skills",
+      "cited_in": "THREAT-MODEL.md",
+      "citation": "catalogue-installed-skills.mjs",
+      "must_exist": "pharn/floor/catalogue-installed-skills.mjs"
     }
   ],
 

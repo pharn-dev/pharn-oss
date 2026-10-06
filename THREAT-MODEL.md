@@ -17,7 +17,8 @@ Conflating these is the most common security mistake in agentic systems.
 
 - **Threat model A — does the app PHARN _builds_ defend itself.** OWASP LLM Top 10 in the _user's
   product_: prompt injection, output handling, unbounded consumption. This is **methodology
-  delivered to the user** — the security griller and the (deferred) AI/LLM-security lens. It is
+  delivered to the user** — the security griller (in an unattended `/pharn-loop`, since 6.45.0, only its
+  deterministic secret scan) and the (deferred) AI/LLM-security lens. It is
   triggered by a real dogfood failure, not built speculatively (P7). **Not the subject of this
   document.**
 - **Threat model B — is PHARN _itself_ injectable** as an agent reading hostile context (someone
@@ -54,9 +55,11 @@ memory, is an agent operating on hostile input. The concrete surface:
    endpoint is a legal hole in egress pointed at a text sink that returns text = an exfiltration
    channel.
 8. **user-installed Claude Code skill** — a `.claude/skills/<name>/SKILL.md` the user dropped into
-   their own repo. `/pharn-build`, `/pharn-grill` and `/pharn-review` enumerate these
-   (`pharn/floor/scan-installed-skills.mjs`) and feed the bodies to the model as untrusted context;
-   `/pharn-review` hands them to **each lens subagent it spawns**. Same delivery mechanism as 6 — markdown is
+   their own repo. `/pharn-build`, full `/pharn-grill` and each `/pharn-review` lens subagent list these through a
+   body-free catalogue (`pharn/floor/catalogue-installed-skills.mjs`, over the same discovery as
+   `pharn/floor/scan-installed-skills.mjs`) and feed the model the catalogue's descriptions plus the bodies of the
+   skills they select (`pharn/pharn-core/installed-skill-selection/`), all as untrusted context. Same delivery
+   mechanism as 6 — markdown is
    executable (`LIMITS.md §1a`) — but a **different privilege story**: a Capability's `kind`/`seal`
    are enum-gated by `validate.mjs`, whereas **nothing gates a `.claude/skills/` drop** —
    `validate.mjs` never scans `.claude/`. The sharpest risk here is **suppression, not addition**: a
@@ -86,7 +89,7 @@ Every answer reduces to the floor (P0) or is labeled a limit (`LIMITS.md`).
 | seam-record poisoning   | content-hash on resolution; drift is loud, not silent                                                                       | content-hash _(specified; ships with the guarded surface)_ |
 | community Capability    | `kind` is a **privilege level**: community = markdown-only, no `.cjs`; cannot declare trusted-write or off-allowlist egress | `seal`-gating enforced (validate.mjs); markdown-only/no-`.cjs` and trusted-write pre-write hook + pre-egress (specified; ships with the guarded surface) |
 | cross-model response    | egress-fenced + response returns in an untrusted fence + advisory-only (never gates ship)                                   | pre-egress (specified; ships with the guarded surface) + enum gate |
-| user-installed skill    | Enumerated deterministically, then fed to three stages as untrusted DATA. **Partial bound only:** for a lens whose `pharn/floor/lens-scanner-map.json` entry names a scanner, that scanner's MATCH is a regex verdict a skill cannot erase — but that covers only that it matched, never that the lens REPORTS it, and it does not exist at all for the scanner-less entries (read that membership from the map, not from here). See `.claude/commands/pharn-review.md` Step 3b | enum/regex — **ENUMERATION ONLY** (`scan-installed-skills.mjs`), and it **GATES NOTHING**: no proceed/stop/scope in any stage reads its output. **No primitive is specified or planned for this row** |
+| user-installed skill    | Enumerated deterministically, then fed to three stages as untrusted DATA. **Partial bound only:** for a lens whose `pharn/floor/lens-scanner-map.json` entry names a scanner, that scanner's MATCH is a regex verdict a skill cannot erase — but that covers only that it matched, never that the lens REPORTS it, and it does not exist at all for the scanner-less entries (read that membership from the map, not from here). See `.claude/commands/pharn-review.md` Step 3b | enum/regex — **ENUMERATION ONLY** (`scan-installed-skills.mjs`; its catalogue `catalogue-installed-skills.mjs` shares the discovery), and it **GATES NOTHING**: no proceed/stop/scope in any stage reads its output. **No primitive is specified or planned for this row** |
 | project SPEC template   | one fixed path, never read from config — a configurable pointer would itself be unguarded, agent-writable state; `check-spec.mjs` validates a MINIMUM shape before printing its reference and never authenticates the guidance text | pre-write hook — `protect-trusted-paths.cjs` denies it by path, whether or not the file exists, on `Write`/`Edit`/`MultiEdit`/`NotebookEdit` only. A `Bash` write reaches it and is detected only inside a build's anchor-to-verify window, which opens after `/pharn-spec` ran, and only for a non-adversarial writer on a file that is not git-ignored (`LIMITS.md §1d`, §6). A change landed by a merge, a pull or a human editor is obeyed as-is |
 
 ---
@@ -151,7 +154,13 @@ it (free text never alone gates a guaranteed decision) but does not zero it.
 described. (2) The **suppression** channel on surface 8 (§2, §3): a hostile `SKILL.md` steering a
 lens to DROP a genuine finding, which the human therefore never sees — bounded for a scanner-bound
 lens by the scanner's match, and bounded by **nothing structural** for the scanner-less ones, a set
-that includes `trust-fence`, the attempt-0 probe itself. The quantifier is corrected in the heading
+that includes `trust-fence`, the attempt-0 probe itself. (3) The **selection-omission** channel on surface 8
+(6.47.0): a stage now reads only the skill bodies it judges relevant from a body-free catalogue, plus every skill
+whose metadata it cannot read cleanly. A skill whose description is narrower than its body — benign or hostile —
+can be skipped, and its convention or its argument about a finding then never reaches the stage. The conservative
+rules in `pharn/pharn-core/installed-skill-selection/installed-skill-selection.md` narrow this; nothing structural
+closes it, and the catalogue's `ok` status means only "syntactically readable", never "a complete account".
+Measured in `.dev/features/selective-skill-reads/EVAL.md`, not bounded by it. The quantifier is corrected in the heading
 rather than contradicted by a paragraph beneath it: an unchanged "the one residual" would have left
 a false quantifier standing above text that disagrees with it. It is replaced by an OPEN form rather
 than by a new count — "two" would be exactly as brittle as "one" the day a third is found, and
