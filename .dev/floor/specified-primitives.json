@@ -317,7 +317,7 @@
       "probe": { "type": "path", "path": ".claude/commands/pharn-eval.md" },
       "sites": [
         {
-          "file": "CLAUDE.md",
+          "file": ".dev/guides/deferred-decisions.md",
           "marker": "no `pharn-eval` command exists"
         }
       ]
@@ -329,7 +329,7 @@
       "probe": { "type": "path", "path": "pharn/floor/gen-capability-catalog.mjs" },
       "sites": [
         {
-          "file": "CLAUDE.md",
+          "file": ".dev/guides/deferred-decisions.md",
           "marker": "nothing under `pharn/floor/` renders one"
         }
       ]

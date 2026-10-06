@@ -1,0 +1,44 @@
+{
+  "base": "6ff4dd1ac064087660c03e20b48571868ab45863",
+  "inside": [
+    ".dev/features/claude-md-bootstrap/GRILL.md",
+    ".dev/features/claude-md-bootstrap/MEASUREMENTS.md",
+    ".dev/features/claude-md-bootstrap/PLAN.md",
+    ".dev/features/claude-md-bootstrap/check-migration.mjs",
+    ".dev/features/claude-md-bootstrap/split.mjs",
+    ".dev/floor/specified-primitives.json",
+    ".dev/guides/deferred-decisions.md",
+    ".dev/guides/floor-ac-tests.md",
+    ".dev/guides/floor-checks.md",
+    ".dev/guides/floor-gates.md",
+    ".dev/guides/floor-orchestration.md",
+    ".dev/guides/generated-docs.md",
+    ".dev/guides/lessons.md",
+    ".dev/guides/product-commands.md",
+    ".dev/guides/versioning.md",
+    ".dev/guides/writes-scope.md",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/pharn-contracts/cost-ledger.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

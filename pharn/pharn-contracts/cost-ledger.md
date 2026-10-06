@@ -194,8 +194,8 @@ file, and those lines need not carry the same usage:
 A row's identity fields and `ts` therefore come from the request's FIRST line in walk order. Its `usage` and
 `tokens` come from the request's line with the greatest `output_tokens`, the earliest such line on a tie. This
 paragraph defines the rule for the contracts and commands: `ship-record.md` and `/pharn-ship` cite it rather than
-restate it. `CLAUDE.md`, the cost modules' headers and the CHANGELOG entry summarize it, and where a summary differs,
-this paragraph governs. It has one implementation, `sessionRequests()` in `pharn/floor/transcript-core.mjs`, which
+restate it. Other files summarize it, among them the cost modules' headers and the CHANGELOG entry, and where any
+summary differs, this paragraph governs. It has one implementation, `sessionRequests()` in `pharn/floor/transcript-core.mjs`, which
 both cost renderers import.
 `--verify-transcript` re-derives through the emitter.
 
