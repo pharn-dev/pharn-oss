@@ -57,12 +57,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     row per request") no longer names `CLAUDE.md` as a place that summarizes the rule. That summary now sits in a
     `.dev/` guide, which an install does not receive. No rule changes. `MIN_CLI` is unchanged: no installed path moves.
   - `.dev/floor/specified-primitives.json`: the two forward-claim sites now name the guide that holds their text.
-  - **Not changed:** any command, hook, setting, floor module, gate, verdict or trusted doc.
+  - `.claude/hooks/require-loop-record.cjs` (shipped; human-only, so a person applied it with
+    `.dev/features/claude-md-bootstrap/followups/fix_hook_comment.py`): its header comment no longer says
+    `CLAUDE.md` repeats its limits verbatim; it names `.dev/guides/floor-orchestration.md` as a summary. Comment only.
+  - `/pharn-dev-regress` Step 1.3 (apparatus): L69's remedy. The `## Files` extraction is a pinned line over
+    `pharn/floor/plan-files-core.mjs` instead of prose, and Step 1.4 reads its output.
+  - **Not changed:** any product command, setting, floor module, gate, verdict or trusted doc.
   - **Not done:**
     - the floor guides still restate module headers, and removing that repetition is the follow-up
       `floor-guide-dedupe`;
-    - `.claude/hooks/require-loop-record.cjs:16` still says its header is repeated in `CLAUDE.md`. That file is
-      human-only, so a person must edit it.
 
 ## [6.46.0] - 2026-10-06
 

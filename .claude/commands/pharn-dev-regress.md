@@ -78,15 +78,26 @@ re-run this setter** — never bypass the hook.
      (the terminal fallback is a question, never a guess).
 2. **Inside (the changed scope).** `inside = git diff --name-only <base>` **plus** untracked-new files
    (`git ls-files --others --exclude-standard`). This is the set the feature was allowed to change.
-3. **Declared writes.** Read the feature's `.dev/features/<name>/PLAN.md` `## Files` back-tick paths — the
-   exact scope `/pharn-dev-build` was pinned to.
+3. **Declared writes.** Extract the feature's `.dev/features/<name>/PLAN.md` `## Files` paths — the exact scope
+   `/pharn-dev-build` was pinned to — with exactly this line, never a hand-written split
+   (`.dev/memory-bank/lessons-learned.md` **L69**, cited not restated — P4):
+
+   ```bash
+   node --input-type=module -e "import {readFileSync} from 'node:fs'; import {pathsFromPlanFiles, clean} from './pharn/floor/plan-files-core.mjs'; const r = pathsFromPlanFiles(readFileSync(process.argv[1], 'utf8')); if (!r.ok || r.value.length === 0) { console.error('declared: ' + (r.reason || 'empty ## Files')); process.exit(2); } console.log(r.value.map(clean).join(','));" .dev/features/<name>/PLAN.md > .pharn/pharn-dev-regress/declared.txt
+   ```
+
+   It uses `pharn/floor/plan-files-core.mjs`, the parity-tested twin of the canonical parser in
+   `set-writes-scope.cjs`; re-running the setter itself would overwrite this stage's own writes-scope. A non-zero
+   exit (no `## Files`, or an empty one) is a setup error: **stop** and hand to the human, never pass an empty
+   list.
+
 4. **Partition (the floor helper, not you).** Pass both lists, the full test universe, and the committed
    eval pairs to `scope`:
 
    ```bash
    node pharn/floor/check-regress.mjs scope \
      --changed "<inside, comma-separated>" \
-     --declared "<PLAN.md ## Files paths>" \
+     --declared "$(cat .pharn/pharn-dev-regress/declared.txt)" \
      --tests "$(git ls-files '*.test.mjs' '*.test.cjs' | paste -sd, -)" \
      --eval-pairs "<EXPECTED::ACTUAL committed eval pairs, comma-separated>" \
      --feature "<name>"
