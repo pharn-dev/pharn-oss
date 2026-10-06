@@ -2,7 +2,7 @@
 
 # Capability catalog
 
-36 capabilities, generated from their source `.md` files. Do not edit these pages by hand — run `npm run docs:generate`.
+37 capabilities, generated from their source `.md` files. Do not edit these pages by hand — run `npm run docs:generate`.
 
 ## Grillers (13)
 
@@ -45,6 +45,7 @@
 - [trust-fence](trust-fence.md) — read untrusted code, keep taint fenced
 - [unsafe-deserialization](unsafe-deserialization.md) — read untrusted CODE, flag a dangerous deserialization / dynamic-code-eval sink CALL
 
-## Skills (1)
+## Skills (2)
 
+- [installed-skill-selection](installed-skill-selection.md) — choose which installed skills to read, conservatively
 - [seam-resolver](seam-resolver.md) — the agnostic mechanism for resolving a framework/library seam

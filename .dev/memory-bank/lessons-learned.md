@@ -2304,3 +2304,18 @@ type: tooling · concepts: [command-prescription, plan-shape, lesson-recurrence,
 - commit: `6ff4dd1ac064087660c03e20b48571868ab45863` (working-tree build on this commit; uncommitted at promotion time)
 - source: `.dev/features/claude-md-bootstrap/REVIEW.md` § Proposed lesson candidate + `REGRESSION.md` Run note
 - promoted: 2026-10-06 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L70 — A committed fixture shaped like `.claude/skills/<name>/SKILL.md` is a live skill in every session of this repo — store fixtures outside harness-discovered paths and materialize them at test time
+
+type: tooling · concepts: [test-fixtures, harness-discovery, skill-listing, eval-contamination]
+
+**Lesson.** Claude Code discovers nested `.claude/skills/*/SKILL.md` anywhere in the repository and lists each one's name and description in the session's skill listing. In selective-skill-reads the 29 eval fixture skills were committed under `.dev/floor/test-fixtures/skill-selection/<case>/.claude/skills/`, so every pharn-oss session, including the review's, carried synthetic and deliberately misleading vendor conventions as model-invocable skills. The same channel may have shown descriptions to the eval subagents outside the catalogue under test. Nothing failed: the hazard was only seen in a skill listing. The remedy applied is to store the fixtures under a path the harness does not discover (`<case>/skills/`) and to copy them to `.claude/skills/` inside a `tmpdir()` scratch repo in the test (`materialize()`), with an assertion that no fixture sits under a `.claude` segment.
+
+**Why it matters.** Every gate stayed green while the fixtures were live skills, so no check would surface a recurrence. Any future increment that tests skill discovery, selection or the scanner will want fixtures in the real layout, and the real layout is the one that leaks into the repo's own sessions.
+
+**Provenance.**
+
+- feature: `selective-skill-reads`
+- commit: `c441b0965825f9e2e2f8d5e2ef543cc4991ed56a` (working-tree build on this commit; uncommitted at promotion time)
+- source: `.dev/features/selective-skill-reads/REVIEW.md` § Advisory findings, finding 2 (P2, the fixture `.claude/skills/` path) + § Proposed lesson candidate
+- promoted: 2026-10-06 via gated `/pharn-dev-memory-promote` (human-approved).
