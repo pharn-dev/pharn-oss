@@ -1666,7 +1666,13 @@ test("★ HIT — a second regress of the same run, after a new build, runs HEAD
     editIndex(fx.dir, 1);
     const first = runReuse(fx, reuseArgs(fx.base));
     assert.equal(first.code, 0, first.raw);
-    assert.deepEqual(first.be, { reused: false, miss: "no-record", requirement_sha256: first.be.requirement_sha256, recorded: true });
+    // The 6.33.0 keys keep their meaning; 6.49.0 appends `source` and `entry` (--install is explicit here, so entry evidence
+    // is never used: install-override).
+    const { source, entry, ...retainedKeys } = first.be;
+    assert.deepEqual(retainedKeys, { reused: false, miss: "no-record", requirement_sha256: first.be.requirement_sha256, recorded: true });
+    assert.equal(source, "fresh");
+    assert.equal(entry.used, false);
+    assert.equal(entry.miss, "install-override");
     // L34: the fixture COUNTS — the first run made a worktree, installed, and ran every gate on both sides.
     assert.deepEqual(first.counts, { worktree: 1, install: 1, base: 3, head: 3 });
     assert.ok(existsSync(recordFile(fx.dir)), "the first run published a record in the git dir");
@@ -1681,6 +1687,9 @@ test("★ HIT — a second regress of the same run, after a new build, runs HEAD
     assert.equal(second.be.miss, null);
     assert.equal(second.be.recorded, true);
     assert.equal(second.be.requirement_sha256, first.be.requirement_sha256, "the same requirement");
+    // 6.49.0 — a retained HIT keeps precedence: the entry rule is never asked.
+    assert.equal(second.be.source, "reused");
+    assert.equal(second.be.entry, null);
     assert.deepEqual(second.counts, { worktree: 0, install: 0, base: 0, head: 3 }, "HEAD ran in full; nothing ran at BASE");
     assert.equal(second.report.gate_run.base.stamp_sha256, first.report.gate_run.base.stamp_sha256, "the reused stamp is the first run's");
     assert.notEqual(
@@ -1693,7 +1702,10 @@ test("★ HIT — a second regress of the same run, after a new build, runs HEAD
     const md = readFileSync(join(fx.dir, second.json.render), "utf8");
     assert.match(md, /BASE evidence: REUSED/);
     assert.match(md, /install: none run by this invocation/);
-    assert.match(firstMd, /BASE evidence: produced by this invocation \(not reused: `no-record`\); recorded for reuse/);
+    assert.match(
+      firstMd,
+      /BASE evidence: produced by this invocation \(not reused: `no-record`; entry evidence not used: `install-override`\); recorded for reuse/
+    );
     // 6.35.0 — one deterministic-work record per execution, whose counts agree with what the fixture COUNTED spawning.
     const { records, dropped } = readWork(join(fx.dir, COST_BASE, FEATURE, WORK_FILE));
     assert.deepEqual(dropped, []);
@@ -2205,6 +2217,8 @@ test("a forged stage.json HIT at verdict over a forged stamp is never honored �
           stampSha256: sha256(forgedText),
           run: { command: "pharn-loop", markerSha256: sha256(readFileSync(join(fx.dir, ".pharn", "pharn-loop", FEATURE, "active.json"))) },
         },
+        installOverride: true,
+        entryReuse: null, // a retained HIT never asks the entry rule (progress /3, 6.49.0)
       })
     );
     const r = runReuse(fx, ["--resume"]);
@@ -2469,6 +2483,8 @@ test("6.35.0 — validateProgress: installResult.ms is optional; when present a 
     installResult,
     cleanupResult: null,
     baseReuse: null,
+    installOverride: false,
+    entryReuse: null,
   });
   assert.deepEqual(validateProgress(rec({ ran: true, exit: 0, timedOut: false })), { ok: true }, "a pre-6.35.0 record still resumes");
   assert.deepEqual(validateProgress(rec({ ran: true, exit: 0, timedOut: false, ms: 0 })), { ok: true });

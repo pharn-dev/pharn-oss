@@ -245,7 +245,8 @@ node pharn/floor/ship-closeout.mjs --feature <name>
 # monotonic, never decomposed. mark-phase.mjs and its printed binding line are UNCHANGED. `work[]` is FACTS: at `done`
 # stage-regress.mjs / stage-verify.mjs append one `pharn-stage-work/1` line to `.pharn/cost/<feature>/work.jsonl`
 # (pharn/floor/stage-work.mjs, the one owner), counted from the stamp the verdict used — executed / reused / no_files /
-# required, BASE `fresh|reused`, the install's exit and ms (the ONE new timer). Best-effort and OBSERVATIONAL (no
+# required, BASE `fresh|reused|entry` (6.49.0: `entry` = taken from this run's entry gates — executed 0, install null,
+# its work counted once, in the `entry` view), the install's exit and ms (the ONE new timer). Best-effort and OBSERVATIONAL (no
 # exit, verdict, reuse, route or commit reads it); only a `done` exit writes one. check-cost-ledger rule 9 validates
 # the rows and recomputes `executions`; /2 admits exactly the current key set or the pre-6.35.0 one. Contract:
 # cost-ledger.md "Stage executions and deterministic work".

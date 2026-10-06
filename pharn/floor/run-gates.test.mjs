@@ -2146,3 +2146,71 @@ test("build: refusals by presence, and every --targets entry through badPath (no
     { scripts: BUILD_SCRIPTS }
   );
 });
+
+// ── 6.49.0: `init --stage entry --base-tests <file>` — the evidence-only base:test slot ─────────────────────────────────
+import { mkdtempSync as mkdtempBT, writeFileSync as writeBT, readFileSync as readBT, rmSync as rmBT } from "node:fs";
+
+test("init --base-tests: entry only; the slot carries exactly the listed files; a bad path or another stage is a usage-error", () => {
+  const dir = mkdtempBT(join(tmpdir(), "rg-bt-"));
+  try {
+    execFileSync("git", ["init", "-q", "."], { cwd: dir });
+    writeBT(join(dir, "package.json"), JSON.stringify({ scripts: { test: "node --test", build: "true" } }));
+    writeBT(join(dir, ".gitignore"), ".pharn/\n");
+    const cli = (...a) =>
+      spawnSync(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "run-gates.mjs"), ...a], { cwd: dir, encoding: "utf8" });
+    writeBT(join(dir, "list.json"), JSON.stringify(["src/a.test.js", "src/b.test.js"]));
+    const ok = cli(
+      "init",
+      "--stage",
+      "entry",
+      "--feature",
+      "demo",
+      "--out",
+      ".pharn/e",
+      "--discover",
+      "package.json",
+      "--base-tests",
+      "list.json"
+    );
+    assert.equal(ok.status, 0, ok.stdout + ok.stderr);
+    assert.deepEqual(JSON.parse(ok.stdout).ids, ["base:test", "test", "build"]);
+    const state = JSON.parse(readBT(join(dir, ".pharn", "e", "state.json"), "utf8"));
+    assert.deepEqual(state.entries[0].files, ["src/a.test.js", "src/b.test.js"]);
+    assert.deepEqual(state.entries[0].argv, ["npm", "run", "test"]);
+    const verify = cli(
+      "init",
+      "--stage",
+      "verify",
+      "--feature",
+      "demo",
+      "--out",
+      ".pharn/v",
+      "--discover",
+      "package.json",
+      "--base-tests",
+      "list.json"
+    );
+    assert.equal(verify.status, 2);
+    assert.equal(JSON.parse(verify.stdout).reason_code, "usage-error");
+    for (const bad of [["/abs.test.js"], [".pharn/x.test.js"], ["../up.test.js"], []]) {
+      writeBT(join(dir, "bad.json"), JSON.stringify(bad));
+      const r = cli(
+        "init",
+        "--stage",
+        "entry",
+        "--feature",
+        "demo",
+        "--out",
+        ".pharn/e",
+        "--discover",
+        "package.json",
+        "--base-tests",
+        "bad.json"
+      );
+      assert.equal(r.status, 2, JSON.stringify(bad));
+      assert.equal(JSON.parse(r.stdout).reason_code, "usage-error", JSON.stringify(bad));
+    }
+  } finally {
+    rmBT(dir, { recursive: true, force: true });
+  }
+});

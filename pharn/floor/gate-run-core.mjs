@@ -155,7 +155,11 @@ export const AC_RESERVED_IDS = Object.freeze(["ac-delivery", "ac-evidence"]);
 /** The instruction-growth gate's id (6.38.0): the runner injects it for verify, before `reconcile`
  *  (`instructionGrowthEntry`, below). Reserved so no project gate can claim the name. */
 export const INSTRUCTION_GROWTH_ID = "instruction-growth";
-export const RESERVED_IDS = Object.freeze(["reconcile", "completeness", ...AC_RESERVED_IDS, INSTRUCTION_GROWTH_ID]);
+/** The entry check's evidence-only BASE test slot (6.49.0, entry-run-as-base-evidence): the `test` execution
+ *  /pharn-regress's BASE side would run, built at entry by regress's own test-list rule (entry-gates.mjs). Reserved so no
+ *  project gate can claim the name; never counted by the entry verdict (entry-gates-core.mjs `entryVerdict`). */
+export const ENTRY_BASE_TEST_ID = "base:test";
+export const RESERVED_IDS = Object.freeze(["reconcile", "completeness", ...AC_RESERVED_IDS, INSTRUCTION_GROWTH_ID, ENTRY_BASE_TEST_ID]);
 
 /** The `structural:` prefix belongs to `--extra` entries alone. */
 export const STRUCTURAL_PREFIX = "structural:";
@@ -258,8 +262,10 @@ export function isReasonCode(code) {
  *  build-gate-bounded) is /pharn-build's own project gate, run by build-gate.mjs: no verdict reads its stamp, and every
  *  stamp reader that asserts a stage refuses it the same way. `entry` (6.42.0) is a delivery run's ENTRY check
  *  (entry-gates.mjs): verify's discovered set, STYLE_SET first, run once in the background on the tree the run starts
- *  from — read by entry-gates.mjs alone, never reuse evidence (its fingerprint algo is its own; worktree-fingerprint.mjs
- *  ENTRY_ALGO). */
+ *  from, with its own fingerprint algo (worktree-fingerprint.mjs ENTRY_ALGO). Since 6.49.0 (entry-run-as-base-evidence)
+ *  an entry stamp is ALSO the one sanctioned source of an entry-derived /pharn-regress BASE stamp — only through the
+ *  closed REUSE_PAIRS row below, and only when entry-base-evidence-core.mjs's predicate HITs. It is still never reuse
+ *  evidence for /pharn-verify (gate-reuse-core.mjs accepts REUSE_SOURCE alone). */
 export const STAGES = Object.freeze(["verify", "regress", "ac-test", "build", "entry"]);
 export const SIDES = Object.freeze(["base", "head"]);
 
@@ -273,11 +279,25 @@ export const SCHEMA = "gate-run-record/1";
  *  not run the process — with `reason: REUSED_REASON` and a `reused` block naming the source execution. The shape is
  *  ADDITIVE, like `results_sha256` (6.15.0): SCHEMA is unchanged, and a floor older than 6.34.0 reads such an entry as
  *  `entry-not-run` (a LAPSE code — a re-run), the fail-closed direction.
- *  REUSE_SOURCE is the ONE sanctioned source; a reused entry is admitted only in a stamp of REUSE_TARGET_STAGE.
+ *  REUSE_SOURCE is the ONE sanctioned source of a VERIFY reuse, and REUSE_TARGET_STAGE its target.
+ *
+ *  6.49.0 (entry-run-as-base-evidence) adds a SECOND closed pair: a /pharn-regress BASE stamp may be DERIVED from this
+ *  delivery run's ENTRY execution (entry-base-evidence-core.mjs decides when; this module holds only the SHAPE). Every
+ *  run of such a stamp is `ran: false` — the regress invocation spawned nothing for that slot — either reused or
+ *  `no-files`, and every reused run names ONE entry stamp. REUSE_PAIRS is the whole matrix: a reused run in any other
+ *  (target, source) pair is `stamp-malformed`, so no other stamp kind starts accepting reused runs.
  *  ---------------------------------------------------------------------------------------------- */
 export const REUSED_REASON = "reused";
 export const REUSE_SOURCE = Object.freeze({ stage: "regress", side: "head" });
 export const REUSE_TARGET_STAGE = "verify";
+/** The entry → regress/base pair (6.49.0): its source and its target. */
+export const ENTRY_REUSE_SOURCE = Object.freeze({ stage: "entry", side: null });
+export const ENTRY_REUSE_TARGET = Object.freeze({ stage: "regress", side: "base" });
+/** The CLOSED reuse matrix, materialized once (L29): each row is a (target stamp, source) pair a reused run may name. */
+export const REUSE_PAIRS = Object.freeze([
+  Object.freeze({ target: Object.freeze({ stage: REUSE_TARGET_STAGE, side: null }), source: REUSE_SOURCE }),
+  Object.freeze({ target: ENTRY_REUSE_TARGET, source: ENTRY_REUSE_SOURCE }),
+]);
 export const REUSED_BLOCK_KEYS = Object.freeze(["stage", "side", "seq", "stamp_sha256"]);
 /** The largest exit a COMPLETED process reports as itself: 126/127 are the runner's spawn-failure codes, >= 128 a signal
  *  (run-gates.mjs `signalExit`), and 124-by-timeout is excluded by `timed_out`. Only 0..this is ever reused. */
@@ -522,6 +542,7 @@ export function resolveSet({
   acRows = null,
   exclude = [],
   targets = null,
+  baseTests = null,
 }) {
   if (!STAGES.includes(stage)) return err("usage-error", `--stage must be one of ${STAGES.join(" | ")}`);
   if (stage === "regress") {
@@ -544,6 +565,11 @@ export function resolveSet({
     if (bad) return err("usage-error", bad);
   } else if (targets !== null) {
     return err("usage-error", "--targets applies to --stage build only");
+  }
+  if (baseTests !== null) {
+    if (stage !== "entry") return err("usage-error", "--base-tests applies to --stage entry only");
+    const bad = baseTestsError(baseTests);
+    if (bad) return err("usage-error", bad);
   }
 
   let source;
@@ -626,7 +652,17 @@ export function resolveSet({
 
   // entry (6.42.0): STYLE_SET first, each part in its own order — the style gates run before a front stage has
   // written any markdown they could read (entry-gates-core.mjs, "attributable").
-  if (stage === "entry") kept = [...kept.filter((e) => STYLE_SET.includes(e.id)), ...kept.filter((e) => !STYLE_SET.includes(e.id))];
+  // 6.49.0 (entry-run-as-base-evidence): with `baseTests`, the evidence-only ENTRY_BASE_TEST_ID slot — the discovered
+  // `test` command handed exactly those files — right after the style part, before the rest (and before every gate a
+  // front-stage write could reach first). No discovered `test`, no slot. The entry verdict never counts it.
+  if (stage === "entry") {
+    const testEntry = kept.find((e) => e.id === "test");
+    const slot =
+      baseTests !== null && testEntry !== undefined
+        ? [{ id: ENTRY_BASE_TEST_ID, shell: testEntry.shell, argv: testEntry.argv, files: [...baseTests] }]
+        : [];
+    kept = [...kept.filter((e) => STYLE_SET.includes(e.id)), ...slot, ...kept.filter((e) => !STYLE_SET.includes(e.id))];
+  }
   const entries = orderEntries(kept, ex.entries, stage === "verify");
   return {
     ok: true,
@@ -651,6 +687,24 @@ export function resolveSet({
  *  declaration (or one naming no discovered script) writes a stamp byte-identical to before 6.36.0. */
 function excludedBlock(ids) {
   return ids.length ? { declared_in: EXCLUSION_DECLARED_IN, ids: [...ids] } : null;
+}
+
+/** The `--base-tests` list's shape (6.49.0), or null: a NON-EMPTY array (an empty list handed to a runner means "the
+ *  whole suite", L16) of distinct clean tokens, none led by `-` and none glob-shaped, at most MAX_BASE_TESTS long. The
+ *  path rule proper is ac-tests-core.mjs `badPath`, which run-gates.mjs applies when it reads the file. TOTAL (L62). */
+export const MAX_BASE_TESTS = 100000;
+export function baseTestsError(list) {
+  if (!Array.isArray(list) || list.length === 0) return "--base-tests must be a non-empty array of test files";
+  if (list.length > MAX_BASE_TESTS) return `--base-tests holds more than ${MAX_BASE_TESTS} files`;
+  const seen = new Set();
+  for (let i = 0; i < list.length; i++) {
+    const t = list[i];
+    if (!isCleanToken(t, 1024) || t.startsWith("-") || /[*?]/.test(t))
+      return `--base-tests entry ${i} is not a clean, non-flag, non-glob path`;
+    if (seen.has(t)) return `--base-tests entry ${i} repeats an earlier entry`;
+    seen.add(t);
+  }
+  return null;
 }
 
 /** The most target files one targeted build run takes. A cap, never a truncation: over it is a refusal. */
@@ -814,8 +868,55 @@ export function coverageGap(stamp) {
 /** Why run `r` of `stamp` is not a well-formed REUSED entry, or null. The runner writes exactly this shape
  *  (gate-reuse-core.mjs `reusedRunRecord`): VERIFY ran nothing (`ran: false`), nothing timed out or moved the tree in
  *  this slot (`fp_before === fp_after`), no per-test file exists at this stage's results path, the identity is
- *  recorded, and the block names the one sanctioned source. TOTAL over parsed JSON (L62): no value is interpolated. */
+ *  recorded, and the block names the one sanctioned source. TOTAL over parsed JSON (L62): no value is interpolated.
+ *  6.49.0: the dispatcher over REUSE_PAIRS — a verify stamp keeps its 6.34.0 rule unchanged, a regress/base stamp gets
+ *  the entry rule, and every other stamp kind refuses a reused run. */
 function reusedRunDefect(stamp, r) {
+  if (stamp.stage === REUSE_TARGET_STAGE) return verifyReusedRunDefect(stamp, r);
+  if (stamp.stage === ENTRY_REUSE_TARGET.stage && stamp.side === ENTRY_REUSE_TARGET.side) return entryReusedRunDefect(r);
+  return `only a ${REUSE_PAIRS.map((p) => (p.target.side ? `${p.target.stage}/${p.target.side}` : p.target.stage)).join(" or a ")} stamp may carry a reused entry`;
+}
+
+/** The entry → regress/base row (6.49.0): the shape entry-base-evidence-core.mjs `derivedBaseStamp` writes. The regress
+ *  invocation ran nothing in this slot (`ran: false`, nothing timed out or moved the tree, no results file, no execution
+ *  identity of its own), the id is an ALLOWLIST gate (a `structural:` or reserved id is never entry evidence), the exit
+ *  is a completed process exit, and the block names the entry source. Which entry run may stand in, and why, is that
+ *  module's rule — this one holds the SHAPE. TOTAL (L62). */
+function entryReusedRunDefect(r) {
+  if (r.reason !== REUSED_REASON || r.ran !== false) return `a reused entry is ran:false with reason ${JSON.stringify(REUSED_REASON)}`;
+  if (!ALLOWLIST.includes(r.id)) return "an entry-derived BASE run is an allowlisted gate id";
+  if (!isInt(r.exit) || r.exit < 0 || r.exit > MAX_REUSABLE_EXIT)
+    return `a reused exit is a completed process exit, 0..${MAX_REUSABLE_EXIT}`;
+  const b = r.reused;
+  if (b === null || typeof b !== "object" || Array.isArray(b)) return "the `reused` block is not an object";
+  const keys = Object.keys(b);
+  if (keys.length !== REUSED_BLOCK_KEYS.length || !REUSED_BLOCK_KEYS.every((k) => Object.hasOwn(b, k))) {
+    return `the \`reused\` block's keys are not exactly ${REUSED_BLOCK_KEYS.join(", ")}`;
+  }
+  if (b.stage !== ENTRY_REUSE_SOURCE.stage || b.side !== ENTRY_REUSE_SOURCE.side)
+    return "the `reused` block does not name the entry source";
+  if (!isInt(b.seq) || b.seq < 0) return "reused.seq is not a non-negative integer";
+  if (!isCleanToken(b.stamp_sha256, 64) || !HEX64_RE.test(b.stamp_sha256)) return "reused.stamp_sha256 is not a sha256 hex digest";
+  if (Object.hasOwn(r, "identity_sha256")) return "an entry-derived BASE run records no identity_sha256 (nothing ran here)";
+  if (r.timed_out !== false || r.mutated !== false || r.fp_before !== r.fp_after)
+    return "a reused entry neither times out nor moves the tree";
+  if (!Object.hasOwn(r, "results_sha256") || r.results_sha256 !== null) return "a reused entry records results_sha256: null";
+  return null;
+}
+
+/** Why a regress/base stamp that carries a reused run is not ONE entry-derived stamp, or null (6.49.0): every run is
+ *  `ran: false` (reused or `no-files` — a derived stamp never mixes in a run this invocation spawned, so it never mixes
+ *  two environments), and every reused run names the same entry stamp. TOTAL (L62). */
+function derivedBaseDefect(stamp) {
+  if (!stamp.runs.some((r) => r.reason === REUSED_REASON)) return null;
+  if (stamp.runs.some((r) => r.ran !== false || (r.reason !== REUSED_REASON && r.reason !== "no-files")))
+    return "an entry-derived BASE stamp holds only reused and no-files runs";
+  const sources = new Set(stamp.runs.filter((r) => r.reason === REUSED_REASON).map((r) => r.reused.stamp_sha256));
+  if (sources.size !== 1) return "an entry-derived BASE stamp names ONE entry stamp";
+  return null;
+}
+
+function verifyReusedRunDefect(stamp, r) {
   if (stamp.stage !== REUSE_TARGET_STAGE) return `only a ${REUSE_TARGET_STAGE} stamp may carry a reused entry`;
   if (r.reason !== REUSED_REASON || r.ran !== false) return `a reused entry is ran:false with reason ${JSON.stringify(REUSED_REASON)}`;
   if (NON_REUSABLE_IDS.includes(r.id)) return `${NON_REUSABLE_IDS.join(", ")} are never reused`;
@@ -935,6 +1036,12 @@ export function validateStamp(stamp, expect = {}) {
     if (r.ran === false && r.reason !== "no-files" && r.reason !== REUSED_REASON) {
       return err("entry-not-run", `stamp.runs[${i}] (${r.id}) never ran and carries no 'no-files' reason`);
     }
+  }
+
+  // 6.49.0 — an entry-derived regress/base stamp is ONE derivation: no spawned run mixed in, one source stamp.
+  if (stamp.stage === ENTRY_REUSE_TARGET.stage && stamp.side === ENTRY_REUSE_TARGET.side) {
+    const bad = derivedBaseDefect(stamp);
+    if (bad !== null) return err("stamp-malformed", `stamp is not a well-formed entry-derived BASE stamp: ${bad}`);
   }
 
   // No edit between gates: entry k's fp_before must equal entry k-1's fp_after.

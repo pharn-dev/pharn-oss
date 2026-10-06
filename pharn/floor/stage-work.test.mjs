@@ -313,3 +313,41 @@ test("readWork: a symlink at the file is not followed — listed, nothing read t
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// ── 6.49.0 (entry-run-as-base-evidence): a BASE taken from this run's entry gates ─────────────────────────────────────
+import { validateWork as validateWorkEntry, BASE_EVIDENCE as BASE_EVIDENCE_ENTRY } from "./stage-work.mjs";
+
+test("regress, ENTRY-derived BASE (6.49.0): evidence entry, the retained miss, 0 base processes, no install — and its refusals", () => {
+  assert.deepEqual([...BASE_EVIDENCE_ENTRY], ["fresh", "reused", "entry"]);
+  const fromEntry = (id) => ({ ...reusedRun(id), reused: { stage: "entry", side: null, seq: 3, stamp_sha256: "b".repeat(64) } });
+  const rec = regressWork({
+    headStamp: stamp([ran("test"), ran("typecheck"), ran("build")]),
+    baseStamp: stamp([noFiles("test"), fromEntry("typecheck"), fromEntry("build")]),
+    baseReuse: { reused: false, miss: "no-record" },
+    entryUsed: true,
+    installResult: null,
+    ts: TS,
+  });
+  assert.deepEqual(rec.base, { evidence: "entry", miss: "no-record", required: 3, executed: 0, reused: 2, no_files: 1 });
+  assert.equal(rec.install, null, "no BASE install ran, and no duration is synthesized");
+  assert.deepEqual(validateWorkEntry(rec), { ok: true });
+  const bad = [
+    { ...rec, base: { ...rec.base, executed: 1, reused: 1 } },
+    { ...rec, base: { ...rec.base, miss: null } },
+    { ...rec, base: { ...rec.base, miss: "shape-mismatch" } }, // an ENTRY miss is not the retained miss
+    { ...rec, install: { exit: 0, timed_out: false, ms: 5 } },
+    { ...rec, base: { ...rec.base, evidence: "entry-ish" } },
+  ];
+  for (const b of bad) assert.equal(validateWorkEntry(b).ok, false, JSON.stringify(b.base));
+  // control: without entryUsed the same stamps read as a fresh BASE, which reuses nothing — refused, never mislabelled
+  assert.equal(
+    regressWork({
+      headStamp: stamp([ran("a")]),
+      baseStamp: stamp([fromEntry("a")]),
+      baseReuse: { reused: false, miss: "no-record" },
+      installResult: null,
+      ts: TS,
+    }),
+    null
+  );
+});

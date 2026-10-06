@@ -111,9 +111,13 @@ export const ENTRY_ALGO = `${ALGO}+entry-feature-dir`;
 
 /** The one stage whose fingerprint excludes the run's WHOLE product feature directory (6.42.0). Its gates run in the
  *  background while /pharn-spec, /pharn-plan and /pharn-grill write `pharn/features/<name>/**` and nothing else a gate
- *  reads, so those writes must not read as a tree change between gates. Sound for this stage only: an entry stamp is
- *  read by entry-gates.mjs alone and is never reuse evidence (gate-reuse-core.mjs `findReusable` accepts only a
- *  regress/head stamp, and ENTRY_ALGO differs). Every other stage keeps the digest and ALGO it had. */
+ *  reads, so those writes must not read as a tree change between gates. An entry stamp is never /pharn-verify's reuse
+ *  evidence (gate-reuse-core.mjs `findReusable` accepts only a regress/head stamp, and ENTRY_ALGO differs). Since 6.49.0
+ *  (entry-run-as-base-evidence) it CAN become /pharn-regress's BASE evidence, through entry-base-evidence-core.mjs only:
+ *  that rule requires the directory `absent` before, during and after every reused STYLE gate, and keeps the 6.42.0
+ *  ADVISORY assumption that a NON-style gate does not read it — an assumption whose failure there can hide a HEAD
+ *  regression as `pre_existing` (stated in that module's header). The derived stamp keeps ENTRY_ALGO, so the derivation
+ *  stays visible. Every other stage keeps the digest and ALGO it had. */
 export const FEATURE_DIR_EXCLUDED_STAGE = "entry";
 
 /** The product feature directory the entry stage excludes — a literal prefix for a slug FEATURE_SLUG_RE accepted. */

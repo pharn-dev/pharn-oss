@@ -990,7 +990,10 @@ record's one owner, whose header is its spec) from the stamp the verdict just us
   as true: they ran in an EARLIER execution. Those two counts follow from `evidence` and are stored anyway, so every
   side carries the same four counts and one invariant. `install` is `null` (none ran) or `{exit, timed_out, ms}`.
   **Worktree creation and install skipping are not stored at all**: both happen iff `evidence` is `fresh`, and are
-  read from it.
+  read from it. Since 6.49.0 `evidence` may also be `entry`: the BASE came from this run's entry gates
+  (`regression-report.md`, "Entry-derived BASE evidence") — `executed: 0`, `reused = required − no_files`, `install`
+  null, and `miss` the retained decision's code. Those entry executions are counted once, in the `entry` view below;
+  no BASE duration is synthesized for them, and nothing here reads the entry observations.
 - verify: `gates` (`reconcile` included).
 - `install.ms` is the ONE new timer: `performance.now()` around the install process, integer milliseconds, carried
   through a budget `continue` by the progress record. No gate process is timed.

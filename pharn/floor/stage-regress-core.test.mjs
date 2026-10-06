@@ -19,7 +19,9 @@ import {
   PROGRESS_SCHEMA,
   validateProgress,
   validateReuseDecision,
+  validateEntryDecision,
   BASE_REUSE_MISSES,
+  ENTRY_BASE_MISSES,
   DELIVERY_COMMANDS,
 } from "./stage-regress-core.mjs";
 
@@ -242,6 +244,8 @@ function validRecord(overrides = {}) {
     installResult: null,
     cleanupResult: null,
     baseReuse: null,
+    installOverride: false,
+    entryReuse: null,
     ...overrides,
   };
 }
@@ -251,17 +255,21 @@ const H = (c) => c.repeat(64);
 const RUN = { command: "pharn-loop", markerSha256: H("a") };
 const HIT = { reused: true, miss: null, requirementSha256: H("b"), stampSha256: H("c"), run: RUN };
 const MISS = { reused: false, miss: "gates-changed", requirementSha256: H("b"), stampSha256: null, run: RUN };
+// 6.49.0 — the entry decision a /3 record carries whenever the retained one missed.
+const EHIT = { reused: true, miss: null, offerSha256: H("d"), sourceStampSha256: H("e"), run: RUN };
+const EMISS = { reused: false, miss: "shape-mismatch", offerSha256: null, sourceStampSha256: null, run: RUN };
 
-test("progress /2: baseReuse is required — null at drain-head, a decision at every later phase", () => {
-  assert.equal(PROGRESS_SCHEMA, "pharn-stage-regress-progress/2");
+test("progress /3: baseReuse is required — null at drain-head, a decision at every later phase", () => {
+  assert.equal(PROGRESS_SCHEMA, "pharn-stage-regress-progress/3");
   const noKey = validRecord();
   delete noKey.baseReuse;
   assert.equal(validateProgress(noKey).ok, false, "a record without baseReuse (a /1-shaped record) is refused");
   assert.equal(validateProgress(validRecord({ schema: "pharn-stage-regress-progress/1" })).ok, false, "a /1 record is refused");
-  assert.equal(validateProgress(validRecord({ baseReuse: MISS })).ok, false, "no decision yet at drain-head");
+  assert.equal(validateProgress(validRecord({ schema: "pharn-stage-regress-progress/2" })).ok, false, "a /2 record is refused");
+  assert.equal(validateProgress(validRecord({ baseReuse: MISS, entryReuse: EMISS })).ok, false, "no decision yet at drain-head");
   for (const phase of ["worktree", "install", "base-init", "drain-base", "verdict"]) {
-    assert.deepEqual(validateProgress(validRecord({ phase, baseReuse: MISS })), { ok: true }, phase);
-    assert.equal(validateProgress(validRecord({ phase, baseReuse: null })).ok, false, `${phase} needs its decision`);
+    assert.deepEqual(validateProgress(validRecord({ phase, baseReuse: MISS, entryReuse: EMISS })), { ok: true }, phase);
+    assert.equal(validateProgress(validRecord({ phase, baseReuse: null, entryReuse: EMISS })).ok, false, `${phase} needs its decision`);
   }
 });
 
@@ -270,6 +278,61 @@ test("progress /2: a HIT decision can only sit at verdict — it never visits th
   for (const phase of ["worktree", "install", "base-init", "drain-base"]) {
     assert.equal(validateProgress(validRecord({ phase, baseReuse: HIT })).ok, false, phase);
   }
+});
+
+test("progress /3 (6.49.0): installOverride is a boolean, and entryReuse is null at drain-head and after a retained HIT, a decision otherwise", () => {
+  const noOverride = validRecord();
+  delete noOverride.installOverride;
+  assert.equal(validateProgress(noOverride).ok, false, "installOverride is required");
+  assert.equal(validateProgress(validRecord({ installOverride: "no" })).ok, false);
+  const noEntry = validRecord();
+  delete noEntry.entryReuse;
+  assert.equal(validateProgress(noEntry).ok, false, "entryReuse is required");
+  assert.equal(validateProgress(validRecord({ entryReuse: EMISS })).ok, false, "no entry decision at drain-head");
+  // after a retained HIT the entry rule is never evaluated
+  assert.deepEqual(validateProgress(validRecord({ phase: "verdict", baseReuse: HIT, entryReuse: null })), { ok: true });
+  assert.equal(validateProgress(validRecord({ phase: "verdict", baseReuse: HIT, entryReuse: EMISS })).ok, false);
+  // after a retained MISS it is always decided
+  assert.equal(validateProgress(validRecord({ phase: "worktree", baseReuse: MISS, entryReuse: null })).ok, false);
+  // an entry HIT sits only at verdict (L60: the control validates, each other phase refuses)
+  assert.deepEqual(validateProgress(validRecord({ phase: "verdict", baseReuse: MISS, entryReuse: EHIT })), { ok: true });
+  for (const phase of ["worktree", "install", "base-init", "drain-base"]) {
+    assert.equal(validateProgress(validRecord({ phase, baseReuse: MISS, entryReuse: EHIT })).ok, false, phase);
+  }
+});
+
+test("validateEntryDecision: closed keys and every field's shape (fail-closed)", () => {
+  assert.deepEqual(validateEntryDecision(EHIT, "verdict"), { ok: true });
+  assert.deepEqual(validateEntryDecision(EMISS, "worktree"), { ok: true });
+  assert.deepEqual(validateEntryDecision({ ...EMISS, run: null, miss: "no-delivery-run" }, "worktree"), { ok: true });
+  for (const m of ENTRY_BASE_MISSES) assert.deepEqual(validateEntryDecision({ ...EMISS, miss: m }, "worktree"), { ok: true }, m);
+  const bad = [
+    null,
+    [],
+    { ...EHIT, extra: 1 },
+    { ...EHIT, reused: 1 },
+    { ...EHIT, miss: "shape-mismatch" },
+    { ...EHIT, offerSha256: null },
+    { ...EHIT, sourceStampSha256: "x" },
+    { ...EHIT, run: null },
+    { ...EMISS, miss: "gates-changed" }, // a BASE_REUSE_MISSES member is not an entry miss
+    { ...EMISS, offerSha256: H("d") },
+    { ...EMISS, run: { command: "pharn-review", markerSha256: H("a") } },
+  ];
+  for (const d of bad) assert.equal(validateEntryDecision(d, "verdict").ok, false, JSON.stringify(d));
+});
+
+test("ENTRY_BASE_MISSES is closed, ordered, duplicate-free, and every member is glossed once, in order (P4)", () => {
+  assert.equal(new Set(ENTRY_BASE_MISSES).size, ENTRY_BASE_MISSES.length);
+  assert.equal(ENTRY_BASE_MISSES[0], "requirement-unknown");
+  assert.equal(ENTRY_BASE_MISSES[ENTRY_BASE_MISSES.length - 1], "log-unverified");
+  for (const m of ENTRY_BASE_MISSES) assert.match(m, /^[a-z]+(-[a-z]+)*$/);
+  const src = readFileSync(fileURLToPath(new URL("./stage-regress-core.mjs", import.meta.url)), "utf8");
+  const from = src.indexOf("ENTRY-DERIVED BASE EVIDENCE (6.49.0");
+  const to = src.indexOf("export const ENTRY_BASE_MISSES");
+  assert.ok(from !== -1 && to > from, "both anchors are found (L60)");
+  const glossed = [...src.slice(from, to).matchAll(/^ \* {4}([a-z]+(?:-[a-z]+)*) {2,}\S/gm)].map((m) => m[1]);
+  assert.deepEqual(glossed, [...ENTRY_BASE_MISSES], "a member added, renamed or dropped without its gloss fails here");
 });
 
 test("validateReuseDecision: closed keys and every field's shape (fail-closed)", () => {

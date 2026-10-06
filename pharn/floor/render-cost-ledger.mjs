@@ -1231,11 +1231,13 @@ export function workSummary(rec) {
   const base =
     b.evidence === "reused"
       ? `BASE REUSED (no worktree, no install, 0 base gate processes; ${b.reused} results from earlier evidence)`
-      : `BASE fresh${b.miss ? ` (${b.miss})` : ""} — worktree created, install ${
-          rec.install === null
-            ? "none configured"
-            : `ran (exit ${rec.install.exit}${rec.install.timed_out ? ", timed out" : ""}, ${rec.install.ms === null ? "time unmeasured" : formatMs(rec.install.ms)})`
-        }, base gates ${side(b)}`;
+      : b.evidence === "entry"
+        ? `BASE from the entry gates (no worktree, no install, 0 base gate processes; ${b.reused} results from this run's entry check${b.no_files ? `, ${b.no_files} nothing-to-run` : ""})`
+        : `BASE fresh${b.miss ? ` (${b.miss})` : ""} — worktree created, install ${
+            rec.install === null
+              ? "none configured"
+              : `ran (exit ${rec.install.exit}${rec.install.timed_out ? ", timed out" : ""}, ${rec.install.ms === null ? "time unmeasured" : formatMs(rec.install.ms)})`
+          }, base gates ${side(b)}`;
   return `HEAD gates ${side(rec.head)}; ${base}`;
 }
 

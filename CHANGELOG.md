@@ -23,6 +23,79 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.49.0] - 2026-10-06
+
+### Added
+
+- 2026-10-06: **`/pharn-regress` takes its BASE evidence from the run's own entry gates when tested code shows they
+  are exactly that BASE.** Since 6.42.0 a delivery run runs its gates once at entry, in the real working tree, before
+  the build. `/pharn-regress` then built a nested BASE worktree, installed into it and ran the BASE gates again. When
+  6.33.0's retained BASE evidence is not reused, a regress of the same `/pharn-loop` or `/pharn-ship` run now asks
+  whether the validated entry execution holds the exact BASE evidence it needs. If it does, regress writes an
+  entry-derived BASE stamp and skips the worktree, the install and every BASE gate. On every miss the BASE side runs
+  exactly as before. This closes the named follow-up `entry-run-as-base-evidence`.
+  (`.dev/features/entry-run-as-base-evidence/`)
+  - **An evidence-only entry slot, `base:test`.** Regress hands its `test` gate an explicit list of outside test files,
+    and entry's `test` runs the whole suite, so the two never match, and no full-suite-to-subset inference is made.
+    `entry-gates.mjs --start` now also runs the discovered `test` command over the list regress's own default rule
+    would give it. That rule moved to `scope-inputs.mjs` `defaultTestUniverse`, its one owner, now shared with
+    `stage-regress.mjs`. The slot runs right after the style gates (`run-gates.mjs init --stage entry --base-tests
+<file>`; the id `base:test` is reserved). The entry verdict never counts it, so it is never an S14 stop. Any problem
+    with the list means no slot, never an unusable entry check: a path `badPath` refuses, more than 64 KiB of argv, or
+    a regress BASE checkout still standing. The slot is one more test-suite run of background entry work in every
+    delivery run, quick mode included.
+  - **A protected offer.** After `--wait` has validated a completed green or red entry run (nonce, result, stamp
+    digest, `validateStamp`, `ENTRY_ALGO`, the verdict), it publishes `<git dir>/pharn-entry-base-offer.json`
+    (`entry-base-evidence.mjs`). The offer binds the run marker, the entry stamp's sha256, the BASE commit, the
+    timeout and the feature-directory digests. `--start` discards an earlier one. Publication is best-effort and
+    changes no document or exit.
+  - **The rule** (`entry-base-evidence-core.mjs`, the 24 closed misses in `stage-regress-core.mjs`
+    `ENTRY_BASE_MISSES`, first failure decides). It requires:
+    - the same open delivery run;
+    - no explicit `--install` / `--no-install` (the inferred install never blocks; skipping it is the point);
+    - a pre-run snapshot of that run whose base is this BASE, listing nothing outside the run's own
+      `pharn/features/<name>/`;
+    - the offered entry stamp, byte-equal and valid;
+    - an entry timeout no larger than regress's;
+    - every required BASE slot mapped to an entry run of byte-equal shell, argv and ordered files (`test` with files →
+      `base:test`; `test` without files is a regress `no-files` slot);
+    - every mapped run completed (exit 0..125, not timed out);
+    - every mapped style gate run with the feature directory absent throughout;
+    - no entry run, up to the last mapped one, that moved the tree, and every mapped run on the stamp's init
+      fingerprint.
+
+    A completed RED stays RED, so a gate already red at the start stays `pre_existing`.
+
+  - **Where it sits, and how it is trusted.** The decision comes after the HEAD side and after 6.33.0's predicate. It
+    is re-decided in full at the verdict from the offer and the source, never trusted from `stage.json`, and only then
+    is `base-gates/` written:
+    - every run is `ran: false`, `reason: "reused"`, with `reused: {stage: "entry", side: null, seq, stamp_sha256}`;
+    - every log is copied and verified;
+    - the fingerprint algo stays `ENTRY_ALGO`.
+
+    `validateStamp` admits a reused run only in a closed matrix of two (target ← source) pairs: `verify ← regress/head`
+    (6.34.0, unchanged) and `regress/base ← entry`. `check-regress.mjs` and `check-loop-fresh.mjs` are unchanged and
+    read the derived stamp as they read any other. No retained record is ever published over entry-derived evidence.
+
+  - **Reported, not hidden.** `regression-report.json`'s `base_evidence` keeps its four 6.33.0 keys and gains `source`
+    (`fresh` | `reused` | `entry`) and `entry` (used, the miss, the digests, the BASE commit, the run, and the
+    reused, no-files and ignored ids). `REGRESSION.md` says which, and that no install ran. The cost ledger's work
+    record gains `evidence: "entry"`: executed 0, install null, no BASE duration synthesized, and the entry work
+    counted once, in the separate `entry` view.
+  - **Progress record `/3`** adds `installOverride` and `entryReuse`. A `/2` record on `--resume` is
+    `progress-malformed`: re-run the stage fresh.
+  - **Not claimed.** That entry-derived BASE equals a fresh nested-worktree BASE: they may differ because the
+    environments differ (ignored files, `node_modules`, the inherited environment), and the test suite holds such a
+    case. Entry evidence is the real, unattested start environment.
+  - **Inherited, and now pointing the other way.** That a non-style entry gate did not read a front stage's
+    concurrent write under `pharn/features/<name>/` stays advisory (`entry-gates-nonstyle-overlap`). As BASE evidence,
+    a false red there can hide a HEAD regression as `pre_existing`.
+  - **Named, not closed.** Ignored state an earlier entry-only gate left; the snapshot→entry-init window; and agreement,
+    never provenance: a Bash writer can forge the offer, snapshot, marker and evidence together.
+  - **Where it HITs.** A build that edits or deletes a pre-existing test file, or a mapped gate that moves the tree,
+    MISSes. So did the recorded trigger run and 2 of 3 real runs, which started on a dirty tree. The controlled
+    measurement is in `.dev/features/entry-run-as-base-evidence/MEASUREMENT.md`. No real-project saving is claimed.
+
 ## [6.48.0] - 2026-10-06
 
 ### Added

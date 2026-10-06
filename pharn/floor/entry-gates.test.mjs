@@ -1010,3 +1010,36 @@ test("REVIEW F7 — CLOSURE: every observe() call passes a THUNK, so no observat
     assert.match(body, /try \{[\s\S]*catch \{[\s\S]*return null;/, `${name} is total`);
   }
 });
+
+// ── 6.49.0: the base:test slot is EVIDENCE — never an entry red, never S14 ────────────────────────────────────────────
+import { entryVerdict as entryVerdictSlot } from "./entry-gates-core.mjs";
+import { ENTRY_BASE_TEST_ID } from "./gate-run-core.mjs";
+
+test("entryVerdict: a red or timed-out base:test slot is listed but never counted red or unattributed (6.49.0)", () => {
+  const H = "a".repeat(64);
+  const r = (seq, id, extra = {}) => ({
+    seq,
+    id,
+    exit: 0,
+    ran: true,
+    timed_out: false,
+    mutated: false,
+    fp_before: H,
+    fp_after: H,
+    ...extra,
+  });
+  for (const slot of [{ exit: 1 }, { exit: 124, timed_out: true }]) {
+    const v = entryVerdictSlot({ stamp: { runs: [r(0, ENTRY_BASE_TEST_ID, slot), r(1, "test")] }, featureDir: [], d0: "absent" });
+    assert.equal(v.status, "green");
+    assert.deepEqual(v.red, []);
+    assert.deepEqual(v.unattributed, []);
+    assert.deepEqual(
+      v.gates.map((g) => g.id),
+      [ENTRY_BASE_TEST_ID, "test"]
+    );
+  }
+  // control: the same exit on verify's own `test` IS a red the run stops on
+  const v = entryVerdictSlot({ stamp: { runs: [r(0, ENTRY_BASE_TEST_ID), r(1, "test", { exit: 1 })] }, featureDir: [], d0: "absent" });
+  assert.equal(v.status, "red");
+  assert.deepEqual(v.red, ["test"]);
+});

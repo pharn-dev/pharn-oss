@@ -105,7 +105,9 @@
 //        [--extra <json-array>] [--scope-json <file>] [--skip-style] [--spec-from <dir>]
 //        [--reuse-stamp <file> --reuse-sha256 <hex>]
 //     `--reuse-stamp` (6.34.0) applies to `--stage verify` only, always with the offered bytes' `--reuse-sha256`: see
-//     REUSED EXECUTIONS above.
+//     REUSED EXECUTIONS above. `--base-tests <json-array-file>` (6.49.0) applies to `--stage entry` only: the entry
+//     check's evidence-only `base:test` slot (gate-run-core.mjs ENTRY_BASE_TEST_ID), the discovered `test` command handed
+//     exactly those files (each through ac-tests-core.mjs `badPath`), right after the style gates.
 //   node pharn/floor/run-gates.mjs init --stage ac-test --feature <name> --out <dir> --discover <package.json>
 //        --ac-tests <pharn/features/<name>/AC-TESTS.md> [--cwd <dir>]
 //     /pharn-test's RED RUN (6.18.0). The set is selected BY ID from the mapping's levels (gate-run-core.mjs
@@ -566,15 +568,15 @@ function readAcRows(file, feature) {
  *  already applies to the files it hands a runner (no glob, not absolute, no leading `-`, normalized, outside `.pharn/`
  *  and `pharn/features/`). The array's shape (non-empty, unique, capped) is resolveSet's. Returns `{ok, targets}` or a
  *  reason naming a POSITION, never a value (L62). */
-function readTargets(file) {
-  if (!file || file.startsWith("-")) return { ok: false, reason: "--targets requires a file" };
+function readTargets(file, name = "--targets") {
+  if (!file || file.startsWith("-")) return { ok: false, reason: `${name} requires a file` };
   const r = readJson(resolve(file));
-  if (!r.ok) return { ok: false, reason: `--targets is not readable/parseable (${file}): ${r.reason}` };
-  if (!Array.isArray(r.value)) return { ok: false, reason: `--targets must hold a JSON array of paths (${file})` };
+  if (!r.ok) return { ok: false, reason: `${name} is not readable/parseable (${file}): ${r.reason}` };
+  if (!Array.isArray(r.value)) return { ok: false, reason: `${name} must hold a JSON array of paths (${file})` };
   for (let i = 0; i < r.value.length; i++) {
     const p = r.value[i];
     if (typeof p !== "string" || badPath(p))
-      return { ok: false, reason: `--targets entry ${i} is not a usable repo-relative test file path` };
+      return { ok: false, reason: `${name} entry ${i} is not a usable repo-relative test file path` };
   }
   return { ok: true, targets: r.value };
 }
@@ -663,6 +665,16 @@ function runInit(args) {
     fail("usage-error", "--targets applies to --stage build only");
   }
 
+  // 6.49.0 (entry-run-as-base-evidence) — the entry check's evidence-only base:test slot: a JSON array of test files, read
+  // from a FILE through the --targets reader (the badPath rule), for --stage entry only. resolveSet owns the shape.
+  let baseTests = null;
+  if (has(args, "--base-tests")) {
+    if (stage !== "entry") fail("usage-error", "--base-tests applies to --stage entry only");
+    const r = readTargets(flag(args, "--base-tests"), "--base-tests");
+    if (!r.ok) fail("usage-error", r.reason);
+    baseTests = r.targets;
+  }
+
   const discover = flag(args, "--discover");
   let scripts = null;
   if (discover) {
@@ -694,6 +706,7 @@ function runInit(args) {
     acRows,
     exclude,
     targets,
+    baseTests,
   });
   if (!res.ok) {
     // The empty SOURCE set is the ONE refusal that writes no state and exits 3, so the invoking command

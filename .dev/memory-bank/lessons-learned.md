@@ -2319,3 +2319,18 @@ type: tooling · concepts: [test-fixtures, harness-discovery, skill-listing, eva
 - commit: `c441b0965825f9e2e2f8d5e2ef543cc4991ed56a` (working-tree build on this commit; uncommitted at promotion time)
 - source: `.dev/features/selective-skill-reads/REVIEW.md` § Advisory findings, finding 2 (P2, the fixture `.claude/skills/` path) + § Proposed lesson candidate
 - promoted: 2026-10-06 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L71 — L20 recurred as an UNDER-grant — set-writes-scope dropped two glob `## Files` bullets silently (37 bullets, 35 paths), because L20's plan-time comparison was never built
+
+type: scoping · concepts: [writes-scope, plan-shape, lesson-recurrence, glob, floor-escalation]
+
+**Lesson.** In entry-run-as-base-evidence the PLAN's `## Files` held 37 bullets, two of them globs (`.dev/features/entry-run-as-base-evidence/**` and `docs/capabilities/**`). `set-writes-scope.cjs --from-plan` printed `35 path(s)`: `isConcrete()` drops a glob with no message. Nobody compared 35 to 37 at the plan gate, so the gap surfaced only mid-build, as a fix #7 deny on `measure.mjs`. The remedy then was to name the files explicitly, re-run the setter and record a reconcile scope amendment. It failed closed this time (a missing grant), the opposite direction from L20's over-grant. But the cause is the same: the setter's parsed set and the plan's bullets disagreed, and only a person reading a printed count could notice. L20 prescribed the fix, a `/pharn-dev-plan` Step 4 line that re-runs the setter and compares its set against the bullets, RED on disagreement. `.claude/commands/pharn-dev-plan.md` has no such step, so L20's remedy is still discipline. Remedy: build that comparison (set membership, primitive #3), and have the setter itself name every bullet it drops instead of only printing a total.
+
+**Why it matters.** [[L20]] is about the correction mechanism failing, and this is that failure a second time: a lesson promoted with a floor-check remedy that nobody built protects no better than a reminder. [[L37]] already recorded the glob drop as a doc-drift example on 2026-09-08. So the behaviour was known for a month, and it still reached a build. The under-grant direction is benign only by luck: had the dropped glob been the plan's sole grant over a path that a Bash step wrote, reconcile would have flagged the write as an escape instead of a deny stopping it.
+
+**Provenance.**
+
+- feature: `entry-run-as-base-evidence`
+- commit: `0e38b861f7839a7c19f8bb29756888d84e152568` (working-tree build on this commit; uncommitted at promotion time)
+- source: .dev/features/entry-run-as-base-evidence/PLAN.md § Files (the measure.mjs bullet: "named explicitly: the scope setter drops glob entries") + reconcile scope amendment 1
+- promoted: 2026-10-06 via gated `/pharn-dev-memory-promote` (pre-authorized by the human in chat — "if there's a lesson to promote do it. do not ask me" — the entry itself was not shown before the write).

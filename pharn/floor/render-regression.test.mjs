@@ -532,3 +532,73 @@ test("6.40.0 — a head-install-drift refusal renders NOT measured with its deta
   assert.match(md, /regression NOT measured/);
   assert.match(md, /```text\nRemedy: run `npm ci`/);
 });
+
+// ── 6.49.0: where the BASE evidence came from ─────────────────────────────────────────────────────────────────────────
+test("renderDone: an entry-derived BASE names its source, the entry stamp, the ids, the not-claimed equality, and no install", () => {
+  const H = "c".repeat(64);
+  const baseEvidence = {
+    reused: false,
+    miss: "no-record",
+    requirement_sha256: "d".repeat(64),
+    recorded: false,
+    notRecordedWhy: "entry-derived",
+    source: "entry",
+    entry: {
+      used: true,
+      miss: null,
+      offer_sha256: "e".repeat(64),
+      entry_stamp_sha256: H,
+      base: "a".repeat(40),
+      run: { command: "pharn-loop", marker_sha256: "f".repeat(64) },
+      reused_ids: ["typecheck", "build"],
+      no_files_ids: ["test"],
+      ignored_ids: ["e2e"],
+    },
+  };
+  const md = renderDone({
+    feature: "demo",
+    base: "a".repeat(40),
+    report: baseReport(),
+    scope: baseScope(),
+    progress: baseProgress({ installResult: null, baseEvidence }),
+  });
+  assert.match(md, /BASE evidence: taken from this run's ENTRY gates/);
+  assert.match(md, new RegExp(`entry stamp \\(sha256 \`${H}\`\\)`));
+  assert.match(md, /`typecheck`, `build`; nothing to run: `test`/);
+  assert.match(md, /NOT claimed/);
+  assert.match(md, /^install: none run by this invocation \(the BASE evidence came from this run's entry gates\)\.$/m);
+  assert.doesNotMatch(md, /npm ci/, "the inferred install command is not rendered as if it ran");
+  // a hostile id stays inline: never a line of its own, never a heading
+  const hostile = { ...baseEvidence, entry: { ...baseEvidence.entry, reused_ids: ["x\n# HEADING"] } };
+  const md2 = renderDone({
+    feature: "demo",
+    base: "a".repeat(40),
+    report: baseReport(),
+    scope: baseScope(),
+    progress: baseProgress({ installResult: null, baseEvidence: hostile }),
+  });
+  assert.doesNotMatch(md2, /^# HEADING/m);
+});
+
+test("renderDone: a fresh BASE names why entry evidence was not used", () => {
+  const baseEvidence = {
+    reused: false,
+    miss: "no-record",
+    requirement_sha256: "d".repeat(64),
+    recorded: true,
+    notRecordedWhy: null,
+    source: "fresh",
+    entry: { used: false, miss: "shape-mismatch" },
+  };
+  const md = renderDone({
+    feature: "demo",
+    base: "a".repeat(40),
+    report: baseReport(),
+    scope: baseScope(),
+    progress: baseProgress({ baseEvidence }),
+  });
+  assert.match(
+    md,
+    /BASE evidence: produced by this invocation \(not reused: `no-record`; entry evidence not used: `shape-mismatch`\); recorded for reuse/
+  );
+});

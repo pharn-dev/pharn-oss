@@ -47,6 +47,16 @@ function inline(v) {
   return String(v);
 }
 
+/** A gate id from the report's entry block (6.49.0), JSON-escaped so a newline or a backtick can never leave its inline
+ *  span (the ids are allowlisted by the derived stamp's validator, and the render does not rely on that). TOTAL (L62). */
+function idText(v) {
+  try {
+    return typeof v === "string" ? JSON.stringify(v).slice(1, -1).replace(/`/g, "\\u0060") : "?";
+  } catch {
+    return "?";
+  }
+}
+
 function section(title, lines) {
   return [`## ${title}`, "", ...lines, ""];
 }
@@ -170,9 +180,15 @@ export function renderDone({ feature, base, report, scope, progress }) {
         `BASE evidence: REUSED — the run marker, the reuse record, the stamp and its logs agree with this invocation's BASE requirement (sha256 \`${inline(be.requirement_sha256)}\`; that an earlier /pharn-regress of this run produced them is advisory), so this invocation created no base worktree, ran no install and ran no base gate; \`gate_run.base.stamp_sha256\` in regression-report.json names the stamp.`,
         ""
       );
+    } else if (be.source === "entry" && be.entry) {
+      // 6.49.0 — taken from this run's entry gates. Every value is the floor's own: digests, a commit, enum ids.
+      out.push(
+        `BASE evidence: taken from this run's ENTRY gates — the run marker, the entry offer, the pre-run snapshot, the entry stamp (sha256 \`${inline(be.entry.entry_stamp_sha256)}\`) and its logs agree with this invocation's BASE slots at \`${inline(be.entry.base)}\`, so this invocation created no base worktree, ran no install and spawned no base gate (retained evidence not reused: \`${inline(be.miss)}\`). The base stamp marks every slot \`reused\` from the entry run (${be.entry.reused_ids.map((x) => `\`${idText(x)}\``).join(", ")}${be.entry.no_files_ids.length ? `; nothing to run: ${be.entry.no_files_ids.map((x) => `\`${idText(x)}\``).join(", ")}` : ""}). That they equal what a fresh BASE worktree would give is NOT claimed: the entry gates ran in this tree's real start environment.`,
+        ""
+      );
     } else {
       out.push(
-        `BASE evidence: produced by this invocation (not reused: \`${inline(be.miss)}\`); ` +
+        `BASE evidence: produced by this invocation (not reused: \`${inline(be.miss)}\`${be.entry && be.entry.miss ? `; entry evidence not used: \`${inline(be.entry.miss)}\`` : ""}); ` +
           (be.recorded
             ? "recorded for reuse by a later /pharn-regress of this run."
             : `not recorded for reuse (\`${inline(be.notRecordedWhy ?? "unknown")}\`).`),
@@ -185,6 +201,8 @@ export function renderDone({ feature, base, report, scope, progress }) {
     // Already rendered above, before the verdict — no redundant install-info line here.
   } else if (be && be.reused) {
     out.push("install: none run by this invocation (the BASE evidence was reused).", "");
+  } else if (be && be.source === "entry") {
+    out.push("install: none run by this invocation (the BASE evidence came from this run's entry gates).", "");
   } else if (progress.install.kind === "none") {
     out.push(`install: none${progress.install.reason ? ` (${inline(progress.install.reason)})` : ""}`, "");
   } else {
