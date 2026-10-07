@@ -10,7 +10,7 @@ lessons to fetch; canon stays the source of truth and the floor's verification t
 applied, without fetching its full `## L<n>` entry from canon, is the P0 disease. "The index was
 consulted" never means "the relevant lessons were read".
 
-71 lessons · 71 tagged · 0 malformed · 0 untagged · ~50772 tokens total
+72 lessons · 72 tagged · 0 malformed · 0 untagged · ~51210 tokens total
 
 Columns: `id | type | concepts | title | promoted | ~tokens`. `-` is rendered in THREE columns
 and does NOT mean the same thing in each — read it against the column it sits in. In `type`/`concepts`:
@@ -95,4 +95,5 @@ L68 | scoping  | reconciliation,trusted-docs,human-only-patch,attribution,false-
 L69 | tooling  | command-prescription,plan-shape,lesson-recurrence,false-red                                    | L22 recurred in /pharn-dev-regress's declared-paths step — a PLAN's `## Files` must be read by the canonical parser, never a hand-written split | 2026-10-06 | ~388
 L70 | tooling  | test-fixtures,harness-discovery,skill-listing,eval-contamination                               | A committed fixture shaped like `.claude/skills/<name>/SKILL.md` is a live skill in every session of this repo — store fixtures outside harness-discovered paths and materialize them at test time | 2026-10-06 | ~478
 L71 | scoping  | writes-scope,plan-shape,lesson-recurrence,glob,floor-escalation                                | L20 recurred as an UNDER-grant — set-writes-scope dropped two glob `## Files` bullets silently (37 bullets, 35 paths), because L20's plan-time comparison was never built | 2026-10-06 | ~633
+L72 | process  | enumeration,referent-binding,shared-parser,test-blindspot                                      | Renaming a member of a shared decision's return enum is an API change — a caller outside the plan that compares against the old literal silently takes the other branch | 2026-10-07 | ~438
 ```
