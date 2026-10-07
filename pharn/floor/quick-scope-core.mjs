@@ -75,6 +75,8 @@ export const REASON_CODES = Object.freeze([
   "plan-files-unparseable",
   "git-failed",
   "crashed",
+  // regress-base-integrity (audit P2-E): a `## Files` entry that declares everything (check-regress.mjs declaredClasses).
+  "total-glob-declared",
 ]);
 
 /** The exit code of each verdict. check-quick-scope.mjs restates it, because it must not import this module statically;
@@ -137,18 +139,27 @@ function check(args) {
 
   const preRunDecision = preRunUnchanged({ feature, base, inside });
   const entryDecision = entryChangesUnchanged({ feature, base, inside }); // 6.42.0: the entry gates' own writes (R1)
-  const { escaped, escapeExempt, preRun } = partitionScope({
+  const { escaped, escapeExempt, preRun, totalGlobs, unenforcedGlobs } = partitionScope({
     inside,
     declared,
     feature,
     preRunUnchanged: [...new Set([...preRunDecision.unchanged, ...entryDecision.unchanged])],
   });
+  // regress-base-integrity (audit P2-E): a TOTAL glob would declare every path here while the write hook drops it — the
+  // same refusal /pharn-regress's partition makes. Globs the hook drops are REPORTED (only when present).
+  if (totalGlobs.length) {
+    const why =
+      `${featureDir}/PLAN.md (or AC-TESTS.md) declares a total glob (${totalGlobs.map((g) => JSON.stringify(g)).join(", ")}): it ` +
+      "would count every changed path as declared while the write hook drops it — name the files instead";
+    inconclusive("total-glob-declared", why);
+  }
   const { preRunBlock, entryBlock } = entryBlocks(preRunDecision, entryDecision, preRun);
   const doc = {
     feature,
     base,
     inside,
     declared,
+    ...(unenforcedGlobs.length ? { unenforced_globs: unenforcedGlobs } : {}),
     escaped,
     escape_exempt: escapeExempt,
     pre_run_snapshot: preRunBlock,

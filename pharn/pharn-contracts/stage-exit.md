@@ -159,8 +159,19 @@ Keyed by stage; `regress` and `verify` are its members.
     only the PLAN's `spec_content_hash`, which a `## Files` edit does not move. A widening therefore rests
     on a human reading that `PLAN.md` diff. The deterministic remedy, comparing the base and HEAD
     `## Files`, is a follow-up named in `check-regress.mjs`'s honest-scope block.
+  - **Three more since regress-base-integrity**, each writing `REGRESSION.md` (with the base and how it was chosen) and
+    **no** `regression-report.json`: `plan-files-total-glob` (a `## Files` entry that declares everything — partition,
+    before any gate), `no-change-under-test` (nothing but this feature's artifacts or a trusted doc changed since the
+    base — partition, before any gate; remedy `--base <the commit the build started from>`), and
+    `base-install-unreliable` (after the verdict and cleanup: a `no-regressions` over a base produced here with a
+    skipped-or-failed install while a gate is red on both sides; remedy: fix the install). Why each is a refusal and
+    not a checker verdict: `regression-report.md`, "Base-evidence integrity".
 - **`unusable`** — `usage-error`, `no-feature`, `path-containment`, `unrepresentable-path`, `git-failed`,
-  `child-crashed`, `child-refused`, `no-progress`, `progress-malformed`.
+  `child-crashed`, `child-refused`, `no-progress`, `progress-malformed`, `base-worktree-unplaceable`
+  (regress-base-integrity: the temp directory that holds the base checkout is inside the project, or could not be
+  created — `pharn/floor/base-worktree.mjs`). A progress record of schema `pharn-stage-regress-progress/4` carries the
+  base's source and its checkout path; a resumed record whose path is not this project's temp-root checkout is
+  `progress-malformed`, and an older schema is refused the same way (re-run fresh).
 
 `/pharn-loop`'s mapping from a stage-exit object to its own stuck-point table (a paragraph beside its
 Step 2 table, not restated here):
@@ -197,7 +208,10 @@ rebuild iteration, up to the cap), a runner refusal with a lapse included (befor
 `check-loop-fresh.mjs` B could route to one re-run), and an unparseable `## Files` (before, the gates ran and the
 verdict read `INCONCLUSIVE`). **New S9 stops as of 6.40.0:** `head-install-drift` from either stage (before, the gates
 ran over the drifted install: regress could report a false regression, verify FAILed, and the loop CONTINUEd into
-iterations no rebuild could fix — including when the build itself edited the lockfile without installing).
+iterations no rebuild could fix — including when the build itself edited the lockfile without installing). **New S9
+stops as of regress-base-integrity:** `no-change-under-test` (before, a `no-regressions` over a base that held the
+build), `plan-files-total-glob` (before, a scope check that passed every path) and `base-install-unreliable` (before,
+`pre_existing` over a gate the base could not run); `/pharn-ship` stops on each through its missing-report rule.
 
 ## The `regress` install command (GATE 1 Q3 — M10, GATE 2 review: this table had gone missing here)
 

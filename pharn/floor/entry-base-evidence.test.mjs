@@ -20,7 +20,9 @@ import {
   copyFileSync,
   realpathSync,
   renameSync,
+  readdirSync,
 } from "node:fs";
+import { namePrefix, tempRoot } from "./base-worktree.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -67,7 +69,8 @@ const CHECK_VERIFY = join(HERE, "check-verify.mjs");
 
 const COUNT_JS =
   "import { appendFileSync } from 'node:fs';\n" +
-  "const side = /[\\\\/]\\.pharn[\\\\/]pharn-regress[\\\\/]base([\\\\/]|$)/.test(process.cwd()) ? 'base'\n" +
+  // regress-base-integrity: the BASE checkout is a temp-root directory named by base-worktree.mjs (never nested now).
+  "const side = /[\\\\/]pharn-regress-base-[0-9a-f]{12}-[A-Za-z0-9]{6}([\\\\/]|$)/.test(process.cwd()) ? 'base'\n" +
   "  : /[\\\\/]\\.pharn[\\\\/]pharn-entry[\\\\/]/.test(process.env.PHARN_TEST_RESULTS || '') ? 'entry' : 'head';\n" +
   "if (process.env.EBE_COUNTER) appendFileSync(process.env.EBE_COUNTER, `${process.argv[2]} ${side}\\n`);\n";
 const TEST_OK = (name, expr) =>
@@ -122,6 +125,18 @@ function fixture({ scripts = {}, files = {}, gitignore = ".pharn/\nnode_modules/
   writeFileSync(hook, '#!/bin/sh\n[ -n "$EBE_COUNTER" ] && echo "worktree base" >> "$EBE_COUNTER"\nexit 0\n');
   chmodSync(hook, 0o755);
   return { dir, counter, base, w, git };
+}
+
+/** Every BASE checkout of this fixture that exists now: base-worktree.mjs's temp-root entries for it, plus the legacy
+ *  nested path (regress-base-integrity — an `existsSync` of the old path alone would pass vacuously now, L41). */
+function baseCheckouts(dir) {
+  const root = tempRoot();
+  const prefix = namePrefix(realpathSync(dir));
+  const found = readdirSync(root)
+    .filter((n) => n.startsWith(prefix))
+    .map((n) => join(root, n));
+  if (existsSync(join(dir, REGRESS_PATHS.legacyBase))) found.push(REGRESS_PATHS.legacyBase);
+  return found;
 }
 
 function drop(fx) {
@@ -239,7 +254,7 @@ test("★ entry HIT — a run that began clean at BASE takes its BASE from the e
     assert.equal(hit.be.recorded, false, "no retained record binds entry-derived evidence");
     assert.deepEqual(hit.counts, { worktree: 0, install: 0, entry: 0, head: 3, base: 0 }, "nothing ran at BASE; HEAD ran in full");
     assert.equal(hit.report.gate_run.base.fingerprint.algo, ENTRY_ALGO, "the report shows the derivation");
-    assert.ok(!existsSync(join(fx.dir, REGRESS_PATHS.base)), "no base worktree");
+    assert.deepEqual(baseCheckouts(fx.dir), [], "no base worktree (temp root or legacy nested path)");
 
     // The verdict is check-regress.mjs's: re-deriving it over the stamps on disk reproduces the report.
     const again = node(fx, [
@@ -437,6 +452,9 @@ test("resume — a persisted entry HIT is re-decided: genuine → HIT; source ed
       timeoutMs: 540000,
       budgetMs: null,
       base: fx.base,
+      baseSource: "dirty-head", // schema /4 (regress-base-integrity)
+      baseWorktree: null,
+      installNeeded: true,
       phase: "verdict",
       install: { kind: "cmd", cmd: "npm ci", unmeasured: false, family: "npm" },
       e2eExcluded: [],
@@ -592,7 +610,7 @@ test("no slot — a test path badPath refuses, or a leftover regress BASE checko
       variant === "dash-path" ? { files: { "-weird.test.js": "import { test } from 'node:test';\ntest('w', () => {});\n" } } : {}
     );
     try {
-      if (variant === "leftover-base") mkdirSync(join(fx.dir, REGRESS_PATHS.base), { recursive: true });
+      if (variant === "leftover-base") mkdirSync(join(fx.dir, REGRESS_PATHS.legacyBase), { recursive: true });
       const e = enter(fx);
       assert.ok(["green", "red"].includes(e.doc.status), `${variant}: the entry check decided, never unusable: ${e.wait.stdout}`);
       assert.ok(!e.doc.gates.some((g) => g.id === ENTRY_BASE_TEST_ID), `${variant}: no slot`);

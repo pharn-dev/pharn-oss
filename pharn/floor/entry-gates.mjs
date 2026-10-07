@@ -519,7 +519,7 @@ function startRun({ feature, timeoutMs }, obs) {
  *  ENTRY_PATHS.baseTests; returns false (no slot) on ANY problem, so this list can never make the entry check unusable. */
 function writeBaseTests() {
   try {
-    const leftover = lstatSafe(REGRESS_PATHS.base);
+    const leftover = lstatSafe(REGRESS_PATHS.legacyBase); // a pre-6.50 nested checkout; regress no longer creates one
     if (!leftover.ok || leftover.stat !== null) return false;
     const head = headSha();
     if (head === null) return false;

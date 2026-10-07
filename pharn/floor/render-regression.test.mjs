@@ -602,3 +602,64 @@ test("renderDone: a fresh BASE names why entry evidence was not used", () => {
     /BASE evidence: produced by this invocation \(not reused: `no-record`; entry evidence not used: `shape-mismatch`\); recorded for reuse/
   );
 });
+
+// ── regress-base-integrity ────────────────────────────────────────────────────────────────────────────────────
+const SHA40 = "a".repeat(40);
+const render = (extra = {}) =>
+  renderDone({ feature: "demo", base: SHA40, report: baseReport(), scope: baseScope(), progress: baseProgress(), ...extra });
+
+test("base_source: every BASE_SOURCES member renders its own 'chosen by' text; dirty-head alone carries the committed-build warning", async () => {
+  const { BASE_SOURCES } = await import("./stage-regress-core.mjs");
+  assert.ok(BASE_SOURCES.length === 3, "NON-VACUITY (L34)");
+  const seen = new Set();
+  for (const s of BASE_SOURCES) {
+    const md = render({ baseSource: s });
+    const line = md.split("\n").find((l) => l.startsWith("base: "));
+    assert.match(line, /— chosen by: /, s);
+    seen.add(line);
+    if (s === "dirty-head") assert.match(md, /\*\*The base is HEAD \(dirty-tree rule\):\*\*/);
+    else assert.doesNotMatch(md, /dirty-tree rule/, s);
+  }
+  assert.equal(seen.size, BASE_SOURCES.length, "each source has distinct text");
+  // A value outside the closed set renders nothing extra (never echoed), and an absent one keeps the old line.
+  assert.equal(
+    render({ baseSource: "<script>" })
+      .split("\n")
+      .find((l) => l.startsWith("base: ")),
+    `base: \`${SHA40}\``
+  );
+  assert.equal(
+    render()
+      .split("\n")
+      .find((l) => l.startsWith("base: ")),
+    `base: \`${SHA40}\``
+  );
+});
+
+test("base_timed_out: named under the verdict line, ids quoted; absent key → no line", () => {
+  const md = render({
+    report: baseReport({ base_timed_out: ["test"], pre_existing: ["test"], outside_gates: { test: { base: 1, head: 0 } } }),
+  });
+  assert.match(md, /\*\*1 base gate run\(s\) TIMED OUT\*\* \(test\)/);
+  assert.doesNotMatch(render(), /TIMED OUT/, "CONTROL");
+});
+
+test("unenforced_globs: listed in the Scope section as DATA; absent → no line", () => {
+  const md = render({ scope: baseScope({ unenforced_globs: ["src/**"] }) });
+  assert.match(md, /not enforced by the write hook \(1\)/);
+  assert.match(md, /src\/\*\*/);
+  assert.doesNotMatch(render(), /not enforced by the write hook/, "CONTROL");
+});
+
+test("renderRefused: a refusal after the base phase names the base and its source; without baseInfo the old shape stands", () => {
+  const md = renderRefused({
+    feature: "demo",
+    reasonCode: "no-change-under-test",
+    detail: "nothing under test",
+    baseInfo: { base: SHA40, baseSource: "merge-base" },
+  });
+  assert.match(md, /^refused: `no-change-under-test`/m);
+  assert.match(md, /chosen by: the merge-base with origin\/main/);
+  const plain = renderRefused({ feature: "demo", reasonCode: "chain-red", detail: "x" });
+  assert.doesNotMatch(plain, /^base: /m, "CONTROL");
+});

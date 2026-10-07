@@ -45,6 +45,7 @@ import {
   coverageGap,
   validateStamp,
   stampToMap,
+  timedOutRunIds,
   completenessFromStamp,
   gateRunBlock,
   REUSED_REASON,
@@ -645,6 +646,19 @@ test("validateStamp reports the CALLER's expectation mismatches with their own c
 // ---------------------------------------------------------------------------------------------------
 // The derived views
 // ---------------------------------------------------------------------------------------------------
+
+test("timedOutRunIds (regress-base-integrity): the ids of runs recorded timed_out === true, in run order — the one owner both readers call", () => {
+  const s = goodStamp();
+  assert.deepEqual(timedOutRunIds(s), [], "CONTROL: nothing timed out");
+  const t = goodStamp();
+  t.runs[0].timed_out = true;
+  assert.deepEqual(timedOutRunIds(t), [t.runs[0].id]);
+  for (const rel of ["pharn/floor/check-regress.mjs", "pharn/floor/regress-base-reuse-core.mjs"]) {
+    const src = read(rel);
+    assert.match(src, /timedOutRunIds\(/, `${rel} calls the shared predicate`);
+    assert.doesNotMatch(src, /\.timed_out === true/, `${rel} must not restate the predicate (L35)`);
+  }
+});
 
 test("stampToMap / completenessFromStamp / coverageGap / gateRunBlock", () => {
   const s = goodStamp();

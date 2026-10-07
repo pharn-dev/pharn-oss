@@ -80,6 +80,17 @@
 // Every path this script hands to a shelled checker, to git, or to `render-regression.mjs` is
 // REPO-RELATIVE. `/pharn-loop` commits `REGRESSION.md`, and a child's refusal text can quote whatever path
 // it was handed — so nothing here ever resolves a path to an absolute one before using it.
+// ONE EXCEPTION, NARROWED (regress-base-integrity, 6.50.x): the BASE checkout lives in the temp root, outside the
+// project (base-worktree.mjs says why), so its path is absolute. It reaches git (`worktree add/remove`) and run-gates.mjs
+// (`--cwd`, which the finalized stamp drops) as an argv element, never `render-regression.mjs`: a git error that quotes it
+// is redacted to `<base worktree>` before the cleanup line renders, and the `unusable` detail of a failed `add` is
+// redacted the same way. A `child-refused` detail from base-init can still quote it — stdout only, never a render.
+//
+// THE BASE IS RECORDED (regress-base-integrity): `base_source` (stage-regress-core.mjs BASE_SOURCES) travels in the
+// progress record, the report and every render after the base phase. Two refusals guard the evidence itself:
+// `no-change-under-test` (partition: nothing but exempt paths changed since the base — a base that collapsed onto HEAD)
+// and `base-install-unreliable` (after the verdict: a base produced here with a skipped or failed install, and a gate
+// red on both sides). A third, `plan-files-total-glob`, refuses a `## Files` entry that declares everything.
 //
 // TRUST (P2): the `## Files` text of PLAN.md/AC-TESTS.md is untrusted and becomes ONLY declared glob
 // patterns; SPEC.md is hashed by the shelled checker and never read here; git paths are attacker-nameable
@@ -94,7 +105,7 @@
 //
 // Exit: 0 done · 2 unusable · 3 refused · 4 question · 5 continue · anything else (1 included) = CRASHED.
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync, rmSync, unlinkSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -121,9 +132,12 @@ import {
   shouldSkipStyle,
   resolveInstall,
   resolveBaseSource,
+  unreliableInstallMasking,
+  baseInstallNeeded,
   PROGRESS_SCHEMA,
   validateProgress,
 } from "./stage-regress-core.mjs";
+import { clearBaseWorktrees, createBaseDir, isOurBaseDir, redact } from "./base-worktree.mjs";
 import { readInstallCheck, recordInstallCheck, readRecordedInstallCheck, refuses } from "./install-drift.mjs";
 import { detailText } from "./install-drift-core.mjs";
 import { renderDone, renderRefused } from "./render-regression.mjs";
@@ -132,7 +146,7 @@ import { spawnGate } from "./run-gates.mjs";
 import { declaredWrites, changedPaths } from "./scope-inputs.mjs";
 // 6.49.0 — the default test universe's one owner (the entry check's base:test slot lists with it too).
 import { defaultTestUniverse } from "./scope-inputs.mjs";
-import { partitionScope, scopeFindings, normPath } from "./check-regress.mjs";
+import { partitionScope, scopeFindings, normPath, changedUnderTest } from "./check-regress.mjs";
 import { preRunUnchanged, entryChangesUnchanged } from "./pre-run-snapshot.mjs";
 import { entryBlocks } from "./pre-run-snapshot-core.mjs";
 import { FEATURE_SLUG_RE, SCHEMA as GATE_RUN_SCHEMA, actualForExpected } from "./gate-run-core.mjs";
@@ -229,11 +243,20 @@ function atomicWriteIntoFeature(relPath, bytes) {
  *  registration whose directory is gone. Every step is best-effort: an absent worktree is the normal case.
  *  The path is this stage's own scratch, never a user worktree, and containment has already been walked
  *  over `.pharn` and `.pharn/pharn-regress` (a symlink at `base` itself is removed as a link, never
- *  followed). */
+ *  followed).
+ *
+ *  SINCE regress-base-integrity (6.50.x) the checkout lives in the TEMP ROOT, outside the project (base-worktree.mjs, its
+ *  one owner, says why: the nested one resolved the HEAD tree's `node_modules`/.bin). The same double-force rule now runs
+ *  over every base checkout of THIS project there (registered or not; a link is unlinked, never followed; a foreign entry
+ *  is left alone), and over the legacy nested path as an upgrade leftover. */
 function clearBaseWorktree() {
-  gitSync(["worktree", "remove", "--force", "--force", REGRESS_PATHS.base]);
-  rmSync(REGRESS_PATHS.base, { recursive: true, force: true });
-  gitSync(["worktree", "prune"]);
+  clearBaseWorktrees(projectReal(), REGRESS_PATHS.legacyBase);
+}
+
+/** The invoking project's realpath — the key base-worktree.mjs binds a checkout name to. Every pinned caller runs from the
+ *  project root. */
+function projectReal() {
+  return realpathSync(process.cwd());
 }
 
 /** ------------------------------------------------------------------------------------------------
@@ -411,8 +434,10 @@ function phaseFreshLate(cfg) {
   return { planPath, specPath };
 }
 
-function writeRefusedAndEmit(feature, reasonCode, detail, preRun = null, entryGates = null) {
-  const md = renderRefused({ feature, reasonCode, detail, preRun, entryGates });
+/** `baseInfo` (regress-base-integrity): `{base, baseSource}` once the base phase has resolved one, so every refusal after
+ *  it names the commit it compared against and how that commit was chosen. */
+function writeRefusedAndEmit(feature, reasonCode, detail, preRun = null, entryGates = null, baseInfo = null) {
+  const md = renderRefused({ feature, reasonCode, detail, preRun, entryGates, baseInfo });
   const renderPath = `${FEATURES_DIR}/${feature}/REGRESSION.md`;
   atomicWriteIntoFeature(renderPath, md);
   emit(refusedExit({ stage: "regress", feature, reasonCode, render: renderPath }));
@@ -452,13 +477,14 @@ function porcelainPath(line) {
   return line.slice(3).trim();
 }
 
+// Returns `{base, baseSource}` — the 40-hex SHA and the BASE_SOURCES member that chose it (regress-base-integrity).
 function phaseBase(cfg) {
   if (cfg.explicitBase !== null) {
     const r = gitSync(["rev-parse", "--verify", "--quiet", `${cfg.explicitBase}^{commit}`]);
     if (!r.ok || !SHA_RE.test(r.stdout.trim())) {
       emitUnusable(cfg.feature, "usage-error", `--base ${JSON.stringify(cfg.explicitBase)} does not resolve to a commit`);
     }
-    return r.stdout.trim();
+    return { base: r.stdout.trim(), baseSource: "explicit" };
   }
   const porcelain = gitSync(["status", "--porcelain"]);
   if (!porcelain.ok) emitUnusable(cfg.feature, "git-failed", `git status failed: ${porcelain.detail}`);
@@ -471,14 +497,14 @@ function phaseBase(cfg) {
   const hasMergeBase = mb.ok && SHA_RE.test(mb.stdout.trim());
 
   const source = resolveBaseSource({ workingTreeDirty, hasMergeBase });
-  if (source.kind === "head") {
+  if (source.kind === "dirty-head") {
     const head = gitSync(["rev-parse", "HEAD"]);
     if (!head.ok || !SHA_RE.test(head.stdout.trim())) {
       emitUnusable(cfg.feature, "git-failed", "git rev-parse HEAD failed" + (head.ok ? "" : `: ${head.detail}`));
     }
-    return head.stdout.trim();
+    return { base: head.stdout.trim(), baseSource: "dirty-head" };
   }
-  if (source.kind === "merge-base") return mb.stdout.trim();
+  if (source.kind === "merge-base") return { base: mb.stdout.trim(), baseSource: "merge-base" };
   emitQuestion(cfg.feature, "base-unresolved", cfg.originalArgv);
   return undefined; // unreachable — emitQuestion throws
 }
@@ -495,7 +521,7 @@ function readPlanDeclared(cfg, planPath, specPath) {
   const planText = readFileSync(planPath, "utf8");
   const declared = declaredWrites(planText, `${FEATURES_DIR}/${cfg.feature}/AC-TESTS.md`);
   if (!declared.ok) {
-    writeRefusedAndEmit(cfg.feature, "plan-files-unparseable", `${planPath}: ${declared.reason}`);
+    writeRefusedAndEmit(cfg.feature, "plan-files-unparseable", `${planPath}: ${declared.reason}`, null, null, cfg.baseInfo);
   }
   return declared.value;
 }
@@ -576,7 +602,7 @@ function phasePartition(cfg, planPath, specPath, base) {
   // 6.42.0 (loop-entry-preflight, review R1): the run's ENTRY GATES' own writes, recorded beside the snapshot by the same
   // rule — subtracted only while they hold the recorded bytes, and reported in their own block (entryBlocks).
   const entryDecision = entryChangesUnchanged({ feature: cfg.feature, base, inside });
-  const { escaped, escapeExempt, preRun, outsideTests, outsideEvalPairs } = partitionScope({
+  const { escaped, escapeExempt, preRun, outsideTests, outsideEvalPairs, totalGlobs, unenforcedGlobs } = partitionScope({
     inside,
     declared: declaredPatterns,
     tests,
@@ -585,10 +611,27 @@ function phasePartition(cfg, planPath, specPath, base) {
     preRunUnchanged: [...new Set([...preRunDecision.unchanged, ...entryDecision.unchanged])],
   });
   const { preRunBlock, entryBlock } = entryBlocks(preRunDecision, entryDecision, preRun);
+  // A TOTAL glob in `## Files` (regress-base-integrity, audit P2-E) is refused before anything else here: it would declare
+  // every path while the write hook drops it (check-regress.mjs declaredClasses). The other globs the hook drops are
+  // reported in scope.json and REGRESSION.md (`unenforced_globs`, only when present, so a concrete plan's bytes keep).
+  if (totalGlobs.length) {
+    writeRefusedAndEmit(
+      cfg.feature,
+      "plan-files-total-glob",
+      `${planPath} (or AC-TESTS.md) declares a total glob — ${totalGlobs.map((g) => JSON.stringify(g)).join(", ")}: it would ` +
+        "count every changed path as declared here while the write hook (set-writes-scope.cjs) drops it, so the two scope " +
+        "readers disagree. Name the files (or a narrow glob such as `src/foo/**`) instead.",
+      null,
+      null,
+      cfg.baseInfo
+    );
+  }
+  const unenforced = unenforcedGlobs.length ? { unenforced_globs: unenforcedGlobs } : {};
   const scope = escaped.length
     ? {
         inside,
         declared: declaredPatterns,
+        ...unenforced,
         escaped,
         escape_exempt: escapeExempt,
         pre_run_snapshot: preRunBlock,
@@ -600,6 +643,7 @@ function phasePartition(cfg, planPath, specPath, base) {
     : {
         inside,
         declared: declaredPatterns,
+        ...unenforced,
         escaped: [],
         escape_exempt: escapeExempt,
         pre_run_snapshot: preRunBlock,
@@ -614,7 +658,27 @@ function phasePartition(cfg, planPath, specPath, base) {
       "scope-escaped",
       `${escaped.length} path(s) escaped the declared writes-scope: ${JSON.stringify(escaped)}\n` + JSON.stringify(scope.findings, null, 2),
       preRunBlock,
-      entryBlock
+      entryBlock,
+      cfg.baseInfo
+    );
+  }
+  // NOTHING UNDER TEST (regress-base-integrity, audit P1-B; lessons-learned L34). With no changed path outside the closed
+  // exemptions, the HEAD side would judge exactly the base's non-exempt bytes: every outcome would be a comparison of a tree
+  // with itself, and "no gate flipped" would be true for free. That is what a base that collapsed onto HEAD produces — a
+  // committed build under the dirty-tree rule (only the untracked feature directory changed) or under `merge-base == HEAD`
+  // (nothing changed) — reproduced as a `no-regressions` over a real regression. Refused before any gate runs; the
+  // remedy is `--base <the commit the build started from>`, which /pharn-ship and /pharn-loop pass.
+  if (changedUnderTest(inside, cfg.feature).length === 0) {
+    writeRefusedAndEmit(
+      cfg.feature,
+      "no-change-under-test",
+      `no path outside this feature's own pipeline artifacts and the trusted docs changed since the base ${base} ` +
+        `(chosen by: ${cfg.baseInfo ? cfg.baseInfo.baseSource : "unknown"}), so base and HEAD would run the same code and ` +
+        "the comparison could not show a regression. If the build is already committed, re-run with --base <the commit " +
+        "the build started from>.",
+      preRunBlock,
+      entryBlock,
+      cfg.baseInfo
     );
   }
   return { scope, tests };
@@ -646,7 +710,7 @@ function lockfilesAtBase(base) {
 // recorded for the report. The rule and its bounds: install-drift-core.mjs's header.
 function phaseHeadInstall(cfg) {
   const check = readInstallCheck(".");
-  if (refuses(check)) writeRefusedAndEmit(cfg.feature, "head-install-drift", detailText(check));
+  if (refuses(check)) writeRefusedAndEmit(cfg.feature, "head-install-drift", detailText(check), null, null, cfg.baseInfo);
   recordInstallCheck(REGRESS_PATHS.headInstall, check);
 }
 
@@ -699,8 +763,22 @@ function phaseHeadInit(cfg, base, scope, tests) {
   const { hasPackageJson, lockfiles } = lockfilesAtBase(base);
   const install = resolveInstall({ explicitInstall: cfg.explicitInstall, noInstall: cfg.noInstall, hasPackageJson, lockfiles });
   if (install.kind === "ask") emitQuestion(cfg.feature, "install-unresolved", cfg.originalArgv);
+  // regress-base-integrity: would an install at the base materialize anything? Read once, here, for the unreliable-install
+  // rule (stage-regress-core.mjs baseInstallNeeded) — the base package.json is parsed as data, never executed.
+  const installNeeded = hasPackageJson ? baseInstallNeeded({ lockfiles, manifest: manifestAtBase(base) }) : false;
 
-  return { install, e2eExcluded: parsed.e2e_excluded ?? [], styleSkipped: skipStyle };
+  return { install, installNeeded, e2eExcluded: parsed.e2e_excluded ?? [], styleSkipped: skipStyle };
+}
+
+/** The base commit's package.json, parsed, or null when it cannot be read or parsed (baseInstallNeeded fails closed). */
+function manifestAtBase(base) {
+  const r = gitSync(["show", `${base}:package.json`]);
+  if (!r.ok) return null;
+  try {
+    return JSON.parse(r.stdout);
+  } catch {
+    return null;
+  }
 }
 
 /** ------------------------------------------------------------------------------------------------
@@ -813,9 +891,18 @@ function runPhases(state, budget) {
     // — its record first, then `base-gates/`, so no record outlives the evidence it names. Idempotent on a resume.
     discardRetained();
     clearBaseWorktree(); // a no-op on a fresh run; on a resumed one, clears a half-added, locked leftover (A3)
-    const r = gitSync(["worktree", "add", "--detach", REGRESS_PATHS.base, state.base]);
+    // regress-base-integrity: a fresh temp-root directory outside the project (base-worktree.mjs), recorded in the state so
+    // install / base-init / drain-base / cleanup — and a resume — use exactly this checkout.
+    const dir = createBaseDir(projectReal());
+    if (!dir.ok) emitUnusable(state.feature, "base-worktree-unplaceable", dir.reason);
+    state.baseWorktree = dir.path;
+    const r = gitSync(["worktree", "add", "--detach", state.baseWorktree, state.base]);
     if (!r.ok)
-      emitUnusable(state.feature, "git-failed", `git worktree add --detach ${REGRESS_PATHS.base} ${state.base} failed: ${r.detail}`);
+      emitUnusable(
+        state.feature,
+        "git-failed",
+        redact(`git worktree add --detach ${state.baseWorktree} ${state.base} failed: ${r.detail}`, state.baseWorktree)
+      );
     state.phase = "install";
   }
 
@@ -835,7 +922,7 @@ function runPhases(state, budget) {
       const installStart = performance.now();
       const resultPromise = spawnGate(
         { shell: state.install.cmd, argv: null, files: [] },
-        REGRESS_PATHS.base,
+        state.baseWorktree,
         outFile,
         errFile,
         null,
@@ -867,7 +954,7 @@ function runPhases(state, budget) {
       "--spec-from",
       REGRESS_PATHS.head,
       "--cwd",
-      REGRESS_PATHS.base,
+      state.baseWorktree,
     ]);
     let parsed;
     try {
@@ -962,6 +1049,19 @@ function runPhases(state, budget) {
     }
     state.report = report;
     state.scope = scope;
+    // regress-base-integrity: a `no-regressions` over a base THIS invocation produced with an unreliable install, while a
+    // gate is red on both sides, is not a measurement of that gate (stage-regress-core.mjs unreliableInstallMasking). The
+    // render phase refuses `base-install-unreliable` instead of writing the report; cleanup still runs first.
+    state.installMasked =
+      report.verdict === "no-regressions"
+        ? unreliableInstallMasking({
+            install: state.install,
+            installResult: state.installResult,
+            installNeeded: state.installNeeded,
+            freshBase: !state.baseReuse.reused && !entryUsed(state),
+            outsideGates: report.outside_gates,
+          })
+        : [];
     // Publication (6.33.0): after a real verdict (exit 0 or 1 — both stamps validated, the specs agree, the base head
     // matches) over base evidence THIS chain produced, bind it for later invocations of the same delivery run — only
     // through the predicate, and only for the run and requirement the decision saw. A HIT keeps the record that bound it.
@@ -994,13 +1094,39 @@ function runPhases(state, budget) {
       // N2 (round 2): a failed removal with NO directory left behind is not a failure. That is a re-run of
       // this phase after a kill or crash in "render" (the record stays parked at "verdict"), where the earlier
       // invocation already removed the worktree; `prune` clears any stale registration.
-      const r = gitSync(["worktree", "remove", "--force", REGRESS_PATHS.base]);
-      const left = lstatSafe(REGRESS_PATHS.base);
+      // The checkout's path is absolute (base-worktree.mjs); a git error quoting it is redacted before REGRESSION.md
+      // renders it (G10: the render never carries an absolute path this script supplied).
+      const wt = state.baseWorktree;
+      const r = wt === null ? { ok: true } : gitSync(["worktree", "remove", "--force", wt]);
+      const left = wt === null ? { ok: true, stat: null } : lstatSafe(wt);
       const gone = left.ok && left.stat === null;
       if (!r.ok && gone) gitSync(["worktree", "prune"]);
-      state.cleanupResult = r.ok || gone ? { ok: true } : { ok: false, error: r.stderr || "git worktree remove failed" };
+      state.cleanupResult = r.ok || gone ? { ok: true } : { ok: false, error: redact(r.stderr || "git worktree remove failed", wt) };
     }
     state.phase = "render";
+  }
+
+  // regress-base-integrity: the unreliable-install refusal decided at "verdict" (no report; the progress record goes too).
+  if (Array.isArray(state.installMasked) && state.installMasked.length) {
+    try {
+      unlinkSync(REGRESS_PATHS.stageJson);
+    } catch {
+      /* never persisted in a single-invocation run */
+    }
+    const why =
+      state.install.kind === "none"
+        ? "the base install was skipped (--no-install) although the base commit has a lockfile or declares dependencies"
+        : `the base install ${state.installResult && state.installResult.timedOut ? "timed out" : `exited ${state.installResult ? state.installResult.exit : "without running"}`}`;
+    writeRefusedAndEmit(
+      state.feature,
+      "base-install-unreliable",
+      `${why}, and ${state.installMasked.map((id) => JSON.stringify(id)).join(", ")} ${state.installMasked.length === 1 ? "is" : "are"} ` +
+        "red at both base and head — with no reliable install at the base, a red base gate cannot be told apart from a " +
+        "missing dependency, so it cannot be classified pre_existing. Fix the install (or supply --install) and re-run.",
+      null,
+      null,
+      { base: state.base, baseSource: state.baseSource }
+    );
   }
 
   // "render" — always reached in the same invocation as verdict/cleanup (neither is budgeted). The report is the
@@ -1025,7 +1151,15 @@ function runPhases(state, budget) {
   atomicWriteIntoFeature(
     reportPath,
     `${JSON.stringify(
-      { ...state.report, base_evidence: baseEvidence, pre_run_snapshot: preRunBlock, head_install: headInstall, ...entryGates },
+      // `base_source` (regress-base-integrity): how `base` was chosen — a BASE_SOURCES member, after `head_install`.
+      {
+        ...state.report,
+        base_evidence: baseEvidence,
+        pre_run_snapshot: preRunBlock,
+        head_install: headInstall,
+        base_source: state.baseSource,
+        ...entryGates,
+      },
       null,
       2
     )}\n`
@@ -1033,6 +1167,7 @@ function runPhases(state, budget) {
   const md = renderDone({
     feature: state.feature,
     base: state.base,
+    baseSource: state.baseSource,
     report: state.report,
     scope: state.scope,
     progress: {
@@ -1095,15 +1230,19 @@ function runFresh(args) {
   const cfg = parseRestOfArgv(args, feature);
   const { planPath, specPath } = phaseFreshLate(cfg);
   phaseChain(cfg, planPath, specPath);
-  const base = phaseBase(cfg);
+  const { base, baseSource } = phaseBase(cfg);
+  cfg.baseInfo = { base, baseSource }; // every later refusal names the base and its source (regress-base-integrity)
   const { scope, tests } = phasePartition(cfg, planPath, specPath, base);
-  const { install, e2eExcluded, styleSkipped } = phaseHeadInit(cfg, base, scope, tests);
+  const { install, installNeeded, e2eExcluded, styleSkipped } = phaseHeadInit(cfg, base, scope, tests);
 
   const state = {
     feature: cfg.feature,
     timeoutMs: cfg.timeoutMs,
     budgetMs: cfg.budgetMs,
     base,
+    baseSource,
+    baseWorktree: null, // the temp-root checkout, made at the worktree phase (base-worktree.mjs)
+    installNeeded,
     install,
     e2eExcluded,
     styleSkipped,
@@ -1146,6 +1285,11 @@ function runResume(args) {
   // symlink; `--resume` must refuse the identical case, not write through a link introduced between the
   // fresh invocation and this one.
   containmentGuard(parsed.feature);
+  // regress-base-integrity: the recorded checkout must be exactly one base-worktree.mjs would make for THIS project in the
+  // temp root — a forged record never aims a removal or a gate run at another directory.
+  if (parsed.baseWorktree !== null && !isOurBaseDir(parsed.baseWorktree, projectReal())) {
+    emitUnusable(parsed.feature, "progress-malformed", "progress.baseWorktree is not this project's base checkout in the temp directory");
+  }
 
   const state = { ...parsed };
   delete state.schema;

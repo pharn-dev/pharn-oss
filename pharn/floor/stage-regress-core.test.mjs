@@ -16,6 +16,9 @@ import {
   shouldSkipStyle,
   resolveInstall,
   resolveBaseSource,
+  BASE_SOURCES,
+  unreliableInstallMasking,
+  baseInstallNeeded,
   PROGRESS_SCHEMA,
   validateProgress,
   validateReuseDecision,
@@ -224,9 +227,56 @@ test("resolveInstall: no lockfile, or two lockfile families -> ask (install-unre
 // ── BASE_RULE ────────────────────────────────────────────────────────────────────────────────────────
 test("resolveBaseSource: explicit --base wins; else a dirty tree resolves to HEAD; else merge-base; else ask", () => {
   assert.deepEqual(resolveBaseSource({ explicitBase: "origin/main", workingTreeDirty: true, hasMergeBase: true }), { kind: "explicit" });
-  assert.deepEqual(resolveBaseSource({ workingTreeDirty: true, hasMergeBase: true }), { kind: "head" });
+  assert.deepEqual(resolveBaseSource({ workingTreeDirty: true, hasMergeBase: true }), { kind: "dirty-head" });
   assert.deepEqual(resolveBaseSource({ workingTreeDirty: false, hasMergeBase: true }), { kind: "merge-base" });
   assert.deepEqual(resolveBaseSource({ workingTreeDirty: false, hasMergeBase: false }), { kind: "ask" });
+});
+
+test("regress-base-integrity: every non-ask resolveBaseSource kind is a BASE_SOURCES member, and the set is closed both ways (L29)", () => {
+  const kinds = new Set();
+  for (const explicitBase of [null, "x"])
+    for (const workingTreeDirty of [false, true])
+      for (const hasMergeBase of [false, true]) kinds.add(resolveBaseSource({ explicitBase, workingTreeDirty, hasMergeBase }).kind);
+  kinds.delete("ask");
+  assert.deepEqual([...kinds].sort(), [...BASE_SOURCES].sort(), "a source the rule returns must be recordable, and every member reachable");
+});
+
+// ── THE UNRELIABLE-INSTALL MASK (regress-base-integrity) ──────────────────────────────────────────────
+test("unreliableInstallMasking: only a FRESH base with a skipped or failed install, and only gates red on BOTH sides", () => {
+  const gates = { lint: { base: 0, head: 0 }, test: { base: 1, head: 1 }, build: { base: 1, head: 0 }, types: { base: 0, head: 2 } };
+  const npm = { kind: "cmd", cmd: "npm ci", unmeasured: false };
+  const ok = { ran: true, exit: 0, timedOut: false };
+  const none = { kind: "none", cmd: null, unmeasured: false };
+  const noManifest = { kind: "none", cmd: null, unmeasured: false, reason: "no-manifest" };
+  const at = (install, installResult, freshBase = true, installNeeded = true) =>
+    unreliableInstallMasking({ install, installResult, installNeeded, freshBase, outsideGates: gates });
+  // CONTROL (L34 non-vacuity): a clean install masks nothing — the rule is not "every red base".
+  assert.deepEqual(at(npm, ok), []);
+  assert.deepEqual(at(noManifest, null), [], "no-manifest: nothing to install, never unreliable");
+  assert.deepEqual(at(none, null, true, false), [], "--no-install where the base has nothing to install: not unreliable");
+  for (const [label, install, result] of [
+    ["--no-install", none, null],
+    ["install exit 1", npm, { ran: true, exit: 1, timedOut: false }],
+    ["install timed out", npm, { ran: true, exit: 124, timedOut: true }],
+    ["install never ran", npm, null],
+  ]) {
+    assert.deepEqual(at(install, result), ["test"], `${label}: only the gate red on both sides`);
+    assert.deepEqual(at(install, result, false), [], `${label}: reused / entry-derived evidence ran no install here`);
+  }
+});
+
+test("baseInstallNeeded: a lockfile, a declared dependency, or an unreadable manifest means an install would materialize something", () => {
+  const no = { npm: false, pnpm: false, yarn: false, bun: false };
+  assert.equal(baseInstallNeeded({ lockfiles: no, manifest: { name: "x", scripts: { test: "t" } } }), false, "CONTROL: nothing to install");
+  assert.equal(baseInstallNeeded({ lockfiles: no, manifest: { dependencies: {} } }), false, "an empty field declares nothing");
+  for (const k of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"]) {
+    assert.equal(baseInstallNeeded({ lockfiles: no, manifest: { [k]: { a: "1" } } }), true, k);
+  }
+  for (const fam of ["npm", "pnpm", "yarn", "bun"]) {
+    assert.equal(baseInstallNeeded({ lockfiles: { ...no, [fam]: true }, manifest: {} }), true, fam);
+  }
+  assert.equal(baseInstallNeeded({ lockfiles: no, manifest: null }), true, "unreadable manifest fails closed");
+  assert.equal(baseInstallNeeded({ lockfiles: no, manifest: [] }), true, "a non-object manifest fails closed");
 });
 
 // ── THE PROGRESS RECORD ──────────────────────────────────────────────────────────────────────────────
@@ -237,6 +287,9 @@ function validRecord(overrides = {}) {
     timeoutMs: 540000,
     budgetMs: 570000,
     base: "a".repeat(40),
+    baseSource: "explicit",
+    baseWorktree: "/tmp/pharn-regress-base-0123456789ab-AbC123",
+    installNeeded: true,
     phase: "drain-head",
     install: { kind: "cmd", cmd: "npm ci", unmeasured: false },
     e2eExcluded: [],
@@ -259,8 +312,29 @@ const MISS = { reused: false, miss: "gates-changed", requirementSha256: H("b"), 
 const EHIT = { reused: true, miss: null, offerSha256: H("d"), sourceStampSha256: H("e"), run: RUN };
 const EMISS = { reused: false, miss: "shape-mismatch", offerSha256: null, sourceStampSha256: null, run: RUN };
 
+test("progress /4 (regress-base-integrity): baseSource is a BASE_SOURCES member; baseWorktree null or absolute, required at install..drain-base", () => {
+  assert.equal(PROGRESS_SCHEMA, "pharn-stage-regress-progress/4");
+  assert.equal(validateProgress(validRecord({ schema: "pharn-stage-regress-progress/3" })).ok, false, "a /3 record is refused");
+  for (const s of BASE_SOURCES) assert.deepEqual(validateProgress(validRecord({ baseSource: s })), { ok: true }, s);
+  for (const bad of ["head", "", null, "HEAD"]) assert.equal(validateProgress(validRecord({ baseSource: bad })).ok, false, String(bad));
+  const noSource = validRecord();
+  delete noSource.baseSource;
+  assert.equal(validateProgress(noSource).ok, false, "baseSource is required");
+  assert.equal(validateProgress(validRecord({ baseWorktree: "relative/dir" })).ok, false, "a relative path is refused");
+  assert.equal(validateProgress(validRecord({ baseWorktree: "/tmp/x\ny" })).ok, false, "a control character is refused");
+  assert.deepEqual(validateProgress(validRecord({ baseWorktree: null })), { ok: true }, "null before the worktree phase");
+  for (const bad of [undefined, "yes", 1, null]) {
+    assert.equal(validateProgress(validRecord({ installNeeded: bad })).ok, false, `installNeeded ${String(bad)}`);
+  }
+  for (const phase of ["install", "base-init", "drain-base"]) {
+    assert.equal(validateProgress(validRecord({ phase, baseReuse: MISS, entryReuse: EMISS, baseWorktree: null })).ok, false, phase);
+  }
+  assert.deepEqual(validateProgress(validRecord({ phase: "worktree", baseReuse: MISS, entryReuse: EMISS, baseWorktree: null })), {
+    ok: true,
+  });
+});
+
 test("progress /3: baseReuse is required — null at drain-head, a decision at every later phase", () => {
-  assert.equal(PROGRESS_SCHEMA, "pharn-stage-regress-progress/3");
   const noKey = validRecord();
   delete noKey.baseReuse;
   assert.equal(validateProgress(noKey).ok, false, "a record without baseReuse (a /1-shaped record) is refused");

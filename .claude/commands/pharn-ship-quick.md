@@ -90,13 +90,11 @@ spec_kind: quick`. The remedy is to re-run `/pharn-ship <description>` **without
    `regression-report.json` read. (Step 2's regress item, above, is the full-mode procedure this one item
    omits — every other Step-2 item runs as written.) Its first check is **kept**: item 7.
 
-7. **The scope check: KEPT — run it before `/pharn-verify`.** First resolve the base by the branches of
-   `/pharn-regress`'s `BASE_RULE` (`stage-regress-core.mjs` — cited, not restated, P4) that apply here — `/pharn-ship`
-   has no `--base` flag, so a base is never read out of the description: `HEAD` when the working tree is dirty (an
-   uncommitted build), else `git merge-base HEAD origin/main`, else ask the human for the base commit's 40-hex SHA.
-   `git rev-parse HEAD` and `git merge-base HEAD origin/main` each print one. Then run it, substituting `<name>` and
-   that SHA as `<base sha>` — the only two values the line takes (Step 3a captures its own `<base sha>` later,
-   separately):
+7. **The scope check: KEPT — run it before `/pharn-verify`.** Its base is the `<base sha>` Step 2 item 1 captured right
+   after the GATE-1 backstop — never re-derived here: a dirty-tree or merge-base rule would put a committed build inside
+   its own base, so its changes would not be listed at all. If you no longer hold it, **STOP**, as item 1 says. Run the
+   line, substituting `<name>` and that SHA as `<base sha>` — the only two values it takes (Step 3a's own `base_sha` for
+   the ledger is a different value, captured at the close):
 
    ```bash
    node pharn/floor/check-quick-scope.mjs --feature '<name>' --base '<base sha>'

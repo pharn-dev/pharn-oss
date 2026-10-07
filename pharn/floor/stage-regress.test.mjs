@@ -21,7 +21,9 @@ import {
   utimesSync,
   appendFileSync,
   realpathSync,
+  readdirSync,
 } from "node:fs";
+import { namePrefix, tempRoot } from "./base-worktree.mjs";
 import { execFileSync, spawnSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -103,6 +105,19 @@ function writeVerifyStampAndReport(dir, { head, digest }) {
   const report = JSON.parse(r.stdout);
   writeFileSync(join(dir, FEATURES, FEATURE, "verify-report.json"), JSON.stringify(report, null, 2));
   return report;
+}
+
+/** Every BASE checkout of the fixture at `dir` that exists now (regress-base-integrity): base-worktree.mjs's temp-root
+ *  entries for that project, plus the legacy nested path. An `existsSync` of the old nested path alone would pass
+ *  vacuously since the move (L41). */
+function baseCheckouts(dir) {
+  const root = tempRoot();
+  const prefix = namePrefix(realpathSync(dir));
+  const found = readdirSync(root)
+    .filter((n) => n.startsWith(prefix))
+    .map((n) => join(root, n));
+  if (existsSync(join(dir, REGRESS_PATHS.legacyBase))) found.push(join(dir, REGRESS_PATHS.legacyBase));
+  return found;
 }
 
 function specBody() {
@@ -809,6 +824,8 @@ test("unusable/usage-error: --timeout-ms must be 3-9 digits, matching run-gates.
       assert.equal(r.code, 2, `--timeout-ms ${bad}: ${r.raw}`);
       assert.equal(r.json.reason_code, "usage-error");
     }
+    // a declared change under test, so the control is a real comparison (regress-base-integrity: no-change-under-test)
+    writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport const one = 1;\n");
     const ok = cli(dir, freshArgs(base));
     assert.equal(ok.code, 0, ok.raw);
   } finally {
@@ -1045,7 +1062,7 @@ test("A3 (round 2) — a hard kill DURING `git worktree add` leaves git's own lo
 
     const child = spawn(process.execPath, [CLI, ...freshArgs(base)], { cwd: dir, env: CLEAN_ENV, stdio: "ignore", detached: true });
     const t0 = Date.now();
-    while (!existsSync(join(dir, REGRESS_PATHS.base)) && Date.now() - t0 < 30000) {
+    while (baseCheckouts(dir).length === 0 && Date.now() - t0 < 30000) {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     await new Promise((resolve) => setTimeout(resolve, 1000)); // inside the smudge filter's sleep: mid-checkout
@@ -1056,15 +1073,19 @@ test("A3 (round 2) — a hard kill DURING `git worktree add` leaves git's own lo
     assert.equal(rec.phase, "worktree", "the kill must land in the worktree phase — the scenario under test");
     assert.match(
       execFileSync("git", ["worktree", "list", "--porcelain"], { cwd: dir, encoding: "utf8" }),
-      /pharn-regress\/base[\s\S]*?\nlocked/,
+      /pharn-regress-base-[\s\S]*?\nlocked/,
       "precondition: git left the half-added worktree LOCKED"
     );
+    const leftover = baseCheckouts(dir);
+    assert.equal(leftover.length, 1, "precondition: the half-added checkout sits in the temp root");
 
     execFileSync("git", ["config", "--unset", "filter.slow.smudge"], { cwd: dir }); // the re-add must not sleep again
     const r = cli(dir, ["--resume"]);
     assert.equal(r.code, 0, r.raw);
     assert.equal(r.json.status, "done");
     assert.equal(r.json.verdict, "no-regressions");
+    assert.ok(!existsSync(leftover[0]), "the locked leftover was cleared");
+    assert.deepEqual(baseCheckouts(dir), [], "and the resumed run's own checkout was removed at cleanup");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -1086,7 +1107,7 @@ test("N2 (round 2) — a render crash after cleanup: the resumed run reports NO 
     chmodSync(featureDir, 0o555);
     let r = cli(dir, freshArgs(base));
     assert.equal(r.code, 1, `the render into a read-only feature directory must crash — the scenario under test: ${r.raw}`);
-    assert.ok(!existsSync(join(dir, REGRESS_PATHS.base)), "precondition: cleanup removed the worktree before render crashed");
+    assert.deepEqual(baseCheckouts(dir), [], "precondition: cleanup removed the worktree before render crashed");
     assert.equal(JSON.parse(readFileSync(join(dir, REGRESS_PATHS.stageJson), "utf8")).phase, "verdict");
 
     chmodSync(featureDir, 0o755);
@@ -1189,6 +1210,7 @@ test("--resume over a MALFORMED progress record → unusable progress-malformed,
 // ── GRILL G4 — cleanup runs AFTER the verdict; its failure never voids a computed one ──────────────
 test("GRILL G4: a LOCKED base worktree cannot be removed (needs a second --force) — the run still reaches `done`", () => {
   const { dir, base } = repo({ scripts: { test: "node --test", lint: "true" } });
+  let locked = null;
   try {
     writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport function id(x){return x;}\n");
     // Stop the run right after "worktree" (not budgeted, so it always completes once reached) but before
@@ -1196,17 +1218,23 @@ test("GRILL G4: a LOCKED base worktree cannot be removed (needs a second --force
     // already consumed the first-always slow step for at least one gate — with two gates it may take a
     // couple of continues to actually reach the worktree phase; loop until the worktree exists).
     let r = cli(dir, freshArgs(base, ["--budget-ms", "1"]));
-    for (let i = 0; i < 20 && r.code === 5 && !existsSync(join(dir, REGRESS_PATHS.base)); i++) {
+    for (let i = 0; i < 20 && r.code === 5 && baseCheckouts(dir).length === 0; i++) {
       r = cli(dir, ["--resume", "--budget-ms", "1"]);
     }
-    assert.ok(existsSync(join(dir, REGRESS_PATHS.base)), "the base worktree was never created within the loop bound");
-    execFileSync("git", ["worktree", "lock", REGRESS_PATHS.base], { cwd: dir });
+    const checkouts = baseCheckouts(dir);
+    assert.equal(checkouts.length, 1, "the base worktree was never created within the loop bound");
+    locked = checkouts[0];
+    execFileSync("git", ["worktree", "lock", locked], { cwd: dir });
     while (r.code === 5) {
       r = cli(dir, ["--resume", "--budget-ms", "600000"]);
     }
     assert.equal(r.code, 0, r.raw);
     assert.equal(r.json.status, "done");
-    assert.match(readFileSync(join(dir, r.json.render), "utf8"), /removing the base worktree FAILED/);
+    const md = readFileSync(join(dir, r.json.render), "utf8");
+    assert.match(md, /removing the base worktree FAILED/);
+    // regress-base-integrity (G10): the checkout's absolute temp path never reaches the render — git's error is redacted.
+    // (git's locked-tree message names no path today; base-worktree.test.mjs pins `redact` for one that does.)
+    assert.ok(!md.includes(locked) && !md.includes(tmpdir()), `an absolute temp path leaked into REGRESSION.md:\n${md}`);
     // The verdict itself is UNAFFECTED by the cleanup failure.
     assert.equal(r.json.verdict, "no-regressions");
 
@@ -1218,17 +1246,21 @@ test("GRILL G4: a LOCKED base worktree cannot be removed (needs a second --force
     // "worktree" phase's — because either one alone clears this leftover (measured with each mutant).
     assert.match(
       execFileSync("git", ["worktree", "list", "--porcelain"], { cwd: dir, encoding: "utf8" }),
-      /pharn-regress\/base[\s\S]*?\nlocked/,
+      /pharn-regress-base-[\s\S]*?\nlocked/,
       "precondition: the leftover base worktree is still locked when the next fresh start begins"
     );
     const next = cli(dir, freshArgs(base));
     assert.equal(next.code, 0, next.raw);
     assert.equal(next.json.status, "done");
+    assert.ok(!existsSync(locked), "the next fresh start cleared the locked leftover in the temp root");
   } finally {
-    try {
-      execFileSync("git", ["worktree", "unlock", REGRESS_PATHS.base], { cwd: dir, stdio: "ignore" });
-    } catch {
-      /* the worktree may already be gone by the time cleanup ran once more on a later resume */
+    if (locked) {
+      try {
+        execFileSync("git", ["worktree", "unlock", locked], { cwd: dir, stdio: "ignore" });
+      } catch {
+        /* the worktree may already be gone by the time cleanup ran once more on a later resume */
+      }
+      rmSync(locked, { recursive: true, force: true });
     }
     rmSync(dir, { recursive: true, force: true });
   }
@@ -1258,9 +1290,11 @@ test("★ CLOSURE discriminates — an injected variant spelling FAILS the scan"
 });
 
 test("every REGISTERED regress reason_code is reachable — the registry and the script agree on the vocabulary size", () => {
-  assert.equal(REGISTRY.regress.refused.length, 5); // head-install-drift since 6.40.0
+  // head-install-drift since 6.40.0; plan-files-total-glob, no-change-under-test, base-install-unreliable since
+  // regress-base-integrity (plus the unusable base-worktree-unplaceable)
+  assert.equal(REGISTRY.regress.refused.length, 8);
   assert.equal(Object.keys(REGISTRY.regress.question).length, 4);
-  assert.equal(REGISTRY.regress.unusable.length, 9);
+  assert.equal(REGISTRY.regress.unusable.length, 10);
 });
 
 // ── ★ WIRING (L45) — the COMMITTED pharn-regress.md line, executed ─────────────────────────────────
@@ -1502,14 +1536,20 @@ test("★ round trip — base-unresolved: answering with a git-commit value reac
     );
     writeFileSync(join(dir, "x.txt"), "x\n");
     git("add", "-A");
-    git("commit", "-q", "-m", "base"); // clean tree, no origin/main -> base-unresolved
+    git("commit", "-q", "-m", "base");
+    const first = git("rev-parse", "HEAD").trim();
+    // the build, committed: still a clean tree with no origin/main -> base-unresolved. The answer names the commit the
+    // build started from, so a declared change is under test (regress-base-integrity: answering HEAD would compare HEAD
+    // with itself and be refused no-change-under-test).
+    writeFileSync(join(dir, "x.txt"), "y\n");
+    git("commit", "-q", "-am", "build");
     // --no-tests: this minimal fixture has no test file, and the point of this test is the base-unresolved
     // round trip alone, not a second, nested tests-unresolved question.
     const q = cli(dir, ["--feature", FEATURE, "--timeout-ms", "30000", "--no-install", "--no-tests"]);
     assert.equal(q.code, 4, q.raw);
     assert.equal(q.json.reason_code, "base-unresolved");
     const chosen = REGISTRY.regress.question["base-unresolved"].options.find((o) => o.id === "base");
-    const answerArgv = substitute(chosen.argv, "HEAD");
+    const answerArgv = substitute(chosen.argv, first);
     const done = cli(dir, [...q.json.resume.argv, ...answerArgv]);
     assert.equal(done.code, 0, done.raw);
     assert.equal(done.json.status, "done");
@@ -1583,7 +1623,8 @@ test("★ round trip — tests-unresolved: a typo'd --tests corrected on the SEC
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 const COUNT_JS =
   "import { appendFileSync } from 'node:fs';\n" +
-  "const side = /[\\\\/]\\.pharn[\\\\/]pharn-regress[\\\\/]base([\\\\/]|$)/.test(process.cwd()) ? 'base' : 'head';\n" +
+  // regress-base-integrity: the BASE checkout is a temp-root directory named by base-worktree.mjs (never nested now).
+  "const side = /[\\\\/]pharn-regress-base-[0-9a-f]{12}-[A-Za-z0-9]{6}([\\\\/]|$)/.test(process.cwd()) ? 'base' : 'head';\n" +
   "if (process.env.RBR_COUNTER) appendFileSync(process.env.RBR_COUNTER, `${process.argv[2]} ${side}\\n`);\n";
 const RUN_MARKER = join(HERE, "run-marker.mjs");
 const LOOP_RECORD = join(HERE, "..", "..", ".claude", "hooks", "require-loop-record.cjs");
@@ -1698,7 +1739,7 @@ test("★ HIT — a second regress of the same run, after a new build, runs HEAD
       "the HEAD side judged the NEW tree"
     );
     assert.equal(second.report.verdict, first.report.verdict);
-    assert.ok(!existsSync(join(fx.dir, REGRESS_PATHS.base)), "no base worktree exists after a HIT");
+    assert.deepEqual(baseCheckouts(fx.dir), [], "no base worktree exists after a HIT");
     const md = readFileSync(join(fx.dir, second.json.render), "utf8");
     assert.match(md, /BASE evidence: REUSED/);
     assert.match(md, /install: none run by this invocation/);
@@ -1819,10 +1860,11 @@ test("★ EQUIVALENCE — fresh BASE evidence and reused BASE evidence for one r
     delete withoutBlock.base_evidence;
     delete withoutBlock.pre_run_snapshot; // 6.37.0's additive block
     delete withoutBlock.head_install; // 6.40.0's additive block
+    delete withoutBlock.base_source; // regress-base-integrity's additive key
     assert.equal(
       `${JSON.stringify(withoutBlock, null, 2)}\n`,
       rederived.stdout,
-      "report minus base_evidence, pre_run_snapshot and head_install == the checker's stdout, byte for byte"
+      "report minus base_evidence, pre_run_snapshot, head_install and base_source == the checker's stdout, byte for byte"
     );
   } finally {
     dropReuseRepo(fx);
@@ -2153,7 +2195,7 @@ const NEVER_RECORDED = [
     why: "a timed-out base gate",
     scripts: {
       test: "node count.mjs test && node --test",
-      typecheck: 'node count.mjs typecheck && node -e "if (/pharn-regress[\\\\/]base/.test(process.cwd())) setTimeout(() => {}, 5000)"',
+      typecheck: 'node count.mjs typecheck && node -e "if (/pharn-regress-base-/.test(process.cwd())) setTimeout(() => {}, 5000)"',
     },
     args: (fx) => ["--feature", FEATURE, "--timeout-ms", "1500", "--install", INSTALL_CMD, "--base", fx.base],
   },
@@ -2204,6 +2246,9 @@ test("a forged stage.json HIT at verdict over a forged stamp is never honored �
         timeoutMs: 30000,
         budgetMs: null,
         base: fx.base,
+        baseSource: "explicit", // schema /4 (regress-base-integrity)
+        baseWorktree: null,
+        installNeeded: true,
         phase: "verdict",
         install: inst,
         e2eExcluded: [],
@@ -2237,7 +2282,7 @@ test("crash — a kill during drain-base of a MISS run, then a fresh run: no rec
   const scripts = {
     test: "node count.mjs test && node --test",
     typecheck:
-      'node count.mjs typecheck && node -e "if (/pharn-regress[\\\\/]base/.test(process.cwd()) && process.env.RBR_SLOW) setTimeout(() => {}, 20000)"',
+      'node count.mjs typecheck && node -e "if (/pharn-regress-base-/.test(process.cwd()) && process.env.RBR_SLOW) setTimeout(() => {}, 20000)"',
   };
   const fx = reuseRepo({ scripts });
   try {
@@ -2476,6 +2521,9 @@ test("6.35.0 — validateProgress: installResult.ms is optional; when present a 
     timeoutMs: 540000,
     budgetMs: 570000,
     base: "a".repeat(40),
+    baseSource: "explicit", // schema /4 (regress-base-integrity)
+    baseWorktree: null,
+    installNeeded: true,
     phase: "drain-head",
     install: { kind: "cmd", cmd: "npm ci", unmeasured: false },
     e2eExcluded: [],
@@ -2533,9 +2581,9 @@ test("PRE-RUN — the two recorded cases pass under an open run with a snapshot,
     const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
     assert.deepEqual(report.pre_run_snapshot, expected);
     assert.deepEqual(
-      Object.keys(report).slice(-3),
-      ["base_evidence", "pre_run_snapshot", "head_install"],
-      "the three additive blocks, last (head_install since 6.40.0)"
+      Object.keys(report).slice(-4),
+      ["base_evidence", "pre_run_snapshot", "head_install", "base_source"],
+      "the four additive blocks, last (head_install since 6.40.0, base_source since regress-base-integrity)"
     );
     const scope = JSON.parse(readFileSync(join(dir, REGRESS_PATHS.scopeJson), "utf8"));
     assert.deepEqual(scope.pre_run_snapshot, expected);
@@ -2649,7 +2697,13 @@ test("ENTRY GATES (6.42.0, review R1) — a path an entry gate rewrote after the
     const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
     assert.deepEqual(report.entry_gate_changes, expected);
     assert.deepEqual(report.pre_run_snapshot, { status: "applied", unchanged: [] });
-    assert.deepEqual(Object.keys(report).slice(-4), ["base_evidence", "pre_run_snapshot", "head_install", "entry_gate_changes"]);
+    assert.deepEqual(Object.keys(report).slice(-5), [
+      "base_evidence",
+      "pre_run_snapshot",
+      "head_install",
+      "base_source",
+      "entry_gate_changes",
+    ]);
     const scope = JSON.parse(readFileSync(join(dir, REGRESS_PATHS.scopeJson), "utf8"));
     assert.deepEqual(scope.entry_gate_changes, expected);
     assert.deepEqual(scope.escaped, []);
@@ -2737,7 +2791,11 @@ test("6.40.0 — a drifted HEAD install is refused head-install-drift BEFORE any
       lockfile: "package-lock.json",
       counts: { changed: 0, missing: 0, extraneous: 0, missing_unchecked: 0 },
     });
-    assert.deepEqual(Object.keys(report).slice(-1), ["head_install"], "the additive block, last");
+    assert.deepEqual(
+      Object.keys(report).slice(-2),
+      ["head_install", "base_source"],
+      "the additive blocks, last (base_source after head_install)"
+    );
     assert.match(readFileSync(join(dir, r.json.render), "utf8"), /^HEAD install: checked — npm's record of the installed tree agrees/m);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -2781,6 +2839,247 @@ test("6.40.0 — a project with no lockfile is not checked, proceeds exactly as 
     assert.equal(report.head_install.why, "no-lockfile");
     assert.match(readFileSync(join(dir, r.json.render), "utf8"), /^HEAD install: NOT CHECKED \(`no-lockfile`\)/m);
   } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// regress-base-integrity — the 2026-10-07 audit's reproductions, each run through the REAL script with its control
+// (L34: every refusal below has a sibling run that does NOT trip it). Fixtures mirror the audit's scratch fixtures
+// f1, f1b, f2, f3 and f6.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+const OUTSIDE_ADD_TEST =
+  "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport { add } from './index.js';\ntest('other', () => { assert.equal(add(2, 2), 4); });\n";
+const BROKEN_ADD = "export function add(a, b) { return a * b + 1; }\n";
+const nodeArgs = (base = null, extra = []) => [
+  "--feature",
+  FEATURE,
+  "--timeout-ms",
+  "30000",
+  "--no-install",
+  ...(base ? ["--base", base] : []),
+  ...extra,
+];
+const refusedMd = (dir) => readFileSync(join(dir, FEATURES, FEATURE, "REGRESSION.md"), "utf8");
+
+test("★ P1-B (f1) — a COMMITTED build under the dirty-tree rule is refused no-change-under-test, never no-regressions; --base finds the regression", () => {
+  const { dir, git, base } = repo({ committed: { "src/other.test.js": OUTSIDE_ADD_TEST } });
+  try {
+    writeFileSync(join(dir, "src", "index.js"), BROKEN_ADD);
+    // CONTROL: the build uncommitted — the dirty-tree rule compares it, and the regression is found.
+    const control = cli(dir, nodeArgs());
+    assert.equal(control.code, 0, control.raw);
+    assert.equal(control.json.verdict, "regressions");
+    const controlReport = JSON.parse(readFileSync(join(dir, control.json.report), "utf8"));
+    assert.equal(controlReport.base_source, "dirty-head");
+    assert.match(readFileSync(join(dir, control.json.render), "utf8"), /chosen by: HEAD, because the working tree was dirty/);
+    assert.match(readFileSync(join(dir, control.json.render), "utf8"), /\*\*The base is HEAD \(dirty-tree rule\):\*\*/);
+
+    // The build committed; only an (exempt) pipeline artifact is left dirty — the audit's reproduction.
+    git("commit", "-q", "-am", "feat: build");
+    writeFileSync(join(dir, FEATURES, FEATURE, "BUILD.md"), "# BUILD\n");
+    const r = cli(dir, nodeArgs());
+    assert.equal(r.code, 3, r.raw);
+    assert.equal(r.json.status, "refused");
+    assert.equal(r.json.reason_code, "no-change-under-test");
+    assert.ok(!existsSync(join(dir, FEATURES, FEATURE, "regression-report.json")), "no report, so no verdict to read");
+    const md = refusedMd(dir);
+    assert.match(md, /chosen by: HEAD, because the working tree was dirty/);
+    assert.match(md, /--base <the commit/);
+
+    // The remedy /pharn-ship and /pharn-loop now apply: the commit the build started from.
+    const fixed = cli(dir, nodeArgs(base));
+    assert.equal(fixed.code, 0, fixed.raw);
+    assert.equal(fixed.json.verdict, "regressions");
+    assert.equal(JSON.parse(readFileSync(join(dir, fixed.json.report), "utf8")).base_source, "explicit");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("★ P1-B (f1b) — everything committed, merge-base == HEAD: refused no-change-under-test, naming the merge-base source", () => {
+  const { dir, git, base } = repo({ committed: { "src/other.test.js": OUTSIDE_ADD_TEST } });
+  try {
+    writeFileSync(join(dir, "src", "index.js"), BROKEN_ADD);
+    git("commit", "-q", "-am", "feat: build");
+    git("update-ref", "refs/remotes/origin/main", "HEAD"); // pushed: merge-base(HEAD, origin/main) == HEAD
+    const r = cli(dir, nodeArgs());
+    assert.equal(r.code, 3, r.raw);
+    assert.equal(r.json.reason_code, "no-change-under-test");
+    assert.match(refusedMd(dir), /chosen by: the merge-base with origin\/main/);
+    // CONTROL: origin/main at the pre-build commit — the merge-base is that commit, and the regression is found.
+    git("update-ref", "refs/remotes/origin/main", base);
+    const c = cli(dir, nodeArgs());
+    assert.equal(c.code, 0, c.raw);
+    assert.equal(c.json.verdict, "regressions");
+    assert.equal(JSON.parse(readFileSync(join(dir, c.json.report), "utf8")).base_source, "merge-base");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("★ P2-C (f2) — a timed-out base gate under a red head is inconclusive (base-timed-out); under a green head it masks nothing", () => {
+  const slow = "export function add(a, b) { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 4000); return a + b; }\n";
+  for (const [label, headSrc, verdict] of [
+    ["red head", BROKEN_ADD, "inconclusive"],
+    ["green head (control)", "export function add(a, b) { return a + b; }\nexport const fast = true;\n", "no-regressions"],
+  ]) {
+    const { dir, base } = repo({ committed: { "src/index.js": slow, "src/other.test.js": OUTSIDE_ADD_TEST } });
+    try {
+      writeFileSync(join(dir, "src", "index.js"), headSrc);
+      const r = cli(dir, ["--feature", FEATURE, "--timeout-ms", "1500", "--no-install", "--base", base]);
+      assert.equal(r.code, 0, `${label}: ${r.raw}`);
+      assert.equal(r.json.verdict, verdict, label);
+      const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
+      assert.deepEqual(report.base_timed_out, ["test"], `${label}: the timed-out base run is named`);
+      const md = readFileSync(join(dir, r.json.render), "utf8");
+      assert.match(md, /base gate run\(s\) TIMED OUT/, label);
+      if (verdict === "inconclusive") {
+        assert.equal(report.reason_code, "base-timed-out");
+        assert.deepEqual(report.pre_existing, ["test"], "the table is still shown — it is the verdict that refuses to read it");
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test("★ P2-E (f3) — a total-glob `## Files` entry is refused plan-files-total-glob; a narrow glob is honored and reported as unenforced", () => {
+  for (const pat of ["**", "*", "**/*", "*/**", "."]) {
+    const { dir, base } = repo({ extraPlanLines: [`- \`${pat}\` — everything`] });
+    try {
+      writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport const x = 2;\n");
+      writeFileSync(join(dir, "src", "evil.js"), "// undeclared\n");
+      writeFileSync(join(dir, "ROOTFILE.txt"), "undeclared\n");
+      const r = cli(dir, nodeArgs(base));
+      assert.equal(r.code, 3, `${pat}: ${r.raw}`);
+      assert.equal(r.json.reason_code, "plan-files-total-glob", pat);
+      assert.match(refusedMd(dir), /total glob/, pat);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+  // CONTROL: a narrow glob keeps its meaning — it covers its subtree, an undeclared path elsewhere still escapes, and the
+  // glob is reported as one the write hook does not enforce.
+  const { dir, base } = repo({ extraPlanLines: ["- `src/**` — the source tree"] });
+  try {
+    writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport const x = 2;\n");
+    writeFileSync(join(dir, "src", "new.js"), "export const y = 1;\n");
+    const ok = cli(dir, nodeArgs(base));
+    assert.equal(ok.code, 0, ok.raw);
+    const scope = JSON.parse(readFileSync(join(dir, REGRESS_PATHS.scopeJson), "utf8"));
+    assert.deepEqual(scope.unenforced_globs, ["src/**"]);
+    assert.match(readFileSync(join(dir, ok.json.render), "utf8"), /not enforced by the write hook \(1\)/);
+    writeFileSync(join(dir, "ROOTFILE.txt"), "undeclared\n");
+    const esc = cli(dir, nodeArgs(base));
+    assert.equal(esc.json.reason_code, "scope-escaped", esc.raw);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("★ P2-D (f6) — the base worktree sits OUTSIDE the project: base gates no longer resolve the HEAD tree's node_modules or .bin", () => {
+  const where =
+    "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\n" +
+    "test('dep', async () => { console.log('CWD ' + process.cwd()); const m = await import('mydep'); console.log('RESOLVED ' + m.where); assert.ok(m.where); });\n";
+  const { dir, base } = repo({
+    scripts: { test: "node --test", typecheck: "mytool" },
+    committed: { "src/other.test.js": where, ".gitignore": ".pharn/\nnode_modules/\n" },
+  });
+  try {
+    mkdirSync(join(dir, "node_modules", "mydep"), { recursive: true });
+    writeFileSync(join(dir, "node_modules", "mydep", "package.json"), JSON.stringify({ name: "mydep", type: "module", main: "index.js" }));
+    writeFileSync(join(dir, "node_modules", "mydep", "index.js"), "export const where = import.meta.url;\n");
+    mkdirSync(join(dir, "node_modules", ".bin"), { recursive: true });
+    writeFileSync(join(dir, "node_modules", ".bin", "mytool"), '#!/bin/sh\necho "mytool ran in $(pwd)"\nexit 0\n');
+    chmodSync(join(dir, "node_modules", ".bin", "mytool"), 0o755);
+    writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport const x = 2;\n");
+    const r = cli(dir, nodeArgs(base));
+    assert.equal(r.code, 0, r.raw);
+    const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
+    // HEAD resolves its own node_modules (the CONTROL); the base cannot reach them any more, so both base gates are red.
+    assert.deepEqual(report.outside_gates, { test: { base: 1, head: 0 }, typecheck: { base: 127, head: 0 } });
+    const stamp = JSON.parse(readFileSync(join(dir, REGRESS_PATHS.baseGates, "stamp.json"), "utf8"));
+    const testRun = stamp.runs.find((x) => x.id === "test");
+    const out = readFileSync(join(dir, REGRESS_PATHS.baseGates, `${logBasename(testRun.seq, testRun.id)}.out`), "utf8");
+    const real = realpathSync(dir);
+    const cwdLine = out.split("\n").find((l) => l.includes("CWD "));
+    assert.ok(cwdLine, `the base test ran and printed its cwd:\n${out}`);
+    assert.ok(!cwdLine.includes(real), `the base gate ran inside the project: ${cwdLine}`);
+    assert.ok(!out.includes(`RESOLVED file://${real}/node_modules`), "the base gate resolved the HEAD tree's node_modules");
+    assert.deepEqual(baseCheckouts(dir), [], "and the checkout was removed at cleanup");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("★ P2-D's second half — a gate red at BOTH sides over an unreliable base install is refused base-install-unreliable; controls proceed", () => {
+  const red =
+    "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\ntest('always red', () => { assert.fail('red'); });\n";
+  const withDeps = (dir) => {
+    const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ ...pkg, devDependencies: { leftpad: "1.0.0" } }, null, 2) + "\n");
+  };
+  for (const [label, prep, args, expect] of [
+    ["--no-install over declared dependencies", withDeps, (b) => nodeArgs(b), "refused"],
+    ["a failed --install", null, (b) => ["--feature", FEATURE, "--timeout-ms", "30000", "--install", "false", "--base", b], "refused"],
+    ["CONTROL: --no-install with nothing to install", null, (b) => nodeArgs(b), "done"],
+    ["CONTROL: a clean --install", null, (b) => ["--feature", FEATURE, "--timeout-ms", "30000", "--install", "true", "--base", b], "done"],
+  ]) {
+    const { dir, git, base: first } = repo({ committed: { "src/other.test.js": red } });
+    try {
+      let base = first;
+      if (prep) {
+        prep(dir);
+        git("commit", "-q", "-am", "deps");
+        base = git("rev-parse", "HEAD").trim();
+      }
+      writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport const x = 2;\n");
+      const r = cli(dir, args(base));
+      if (expect === "refused") {
+        assert.equal(r.code, 3, `${label}: ${r.raw}`);
+        assert.equal(r.json.reason_code, "base-install-unreliable", label);
+        assert.ok(!existsSync(join(dir, FEATURES, FEATURE, "regression-report.json")), `${label}: no report`);
+        assert.match(refusedMd(dir), /"test" is red at both base and head/, label);
+        assert.deepEqual(baseCheckouts(dir), [], `${label}: cleanup ran before the refusal`);
+      } else {
+        assert.equal(r.code, 0, `${label}: ${r.raw}`);
+        assert.equal(r.json.verdict, "no-regressions", label);
+        assert.deepEqual(JSON.parse(readFileSync(join(dir, r.json.report), "utf8")).pre_existing, ["test"], label);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test("resume — a stage.json whose baseWorktree is not this project's temp checkout is progress-malformed, never used", () => {
+  const { dir, base } = repo({ scripts: { test: "node --test", lint: "true" } });
+  const victim = mkdtempSync(join(tmpdir(), "sr-victim-"));
+  try {
+    writeFileSync(join(victim, "keep.txt"), "must survive\n");
+    writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport const x = 2;\n");
+    let r = cli(dir, freshArgs(base, ["--budget-ms", "1"]));
+    for (let i = 0; i < 20 && r.code === 5 && baseCheckouts(dir).length === 0; i++) r = cli(dir, ["--resume", "--budget-ms", "1"]);
+    assert.equal(r.code, 5, `the chain must be paused past the worktree phase: ${r.raw}`);
+    const rec = JSON.parse(readFileSync(join(dir, REGRESS_PATHS.stageJson), "utf8"));
+    assert.ok(
+      rec.baseWorktree && baseCheckouts(dir).includes(rec.baseWorktree),
+      "CONTROL: the genuine record names this project's checkout"
+    );
+    for (const forged of [victim, join(dir, "src"), "/tmp", `${rec.baseWorktree}x`]) {
+      writeFileSync(join(dir, REGRESS_PATHS.stageJson), JSON.stringify({ ...rec, baseWorktree: forged }));
+      const f = cli(dir, ["--resume"]);
+      assert.equal(f.code, 2, `${forged}: ${f.raw}`);
+      assert.equal(f.json.reason_code, "progress-malformed", forged);
+    }
+    assert.equal(readFileSync(join(victim, "keep.txt"), "utf8"), "must survive\n");
+    writeFileSync(join(dir, REGRESS_PATHS.stageJson), JSON.stringify(rec));
+    for (let i = 0; i < 20 && r.code === 5; i++) r = cli(dir, ["--resume", "--budget-ms", "600000"]);
+    assert.equal(r.code, 0, r.raw);
+  } finally {
+    rmSync(victim, { recursive: true, force: true });
+    for (const c of baseCheckouts(dir)) rmSync(c, { recursive: true, force: true });
     rmSync(dir, { recursive: true, force: true });
   }
 });

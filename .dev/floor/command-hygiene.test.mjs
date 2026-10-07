@@ -3337,6 +3337,28 @@ test("✧ CLOSURE discriminates — the SAME predicate, run over a mapping parag
 // never that a run executed a line or branched as the prose says (P0).
 // ---------------------------------------------------------------------------------------------------------------
 
+// regress-base-integrity (audit P1-B) — /pharn-ship captures its regress base ONCE, right after the GATE-1 backstop and
+// before the run marker opens (so before anything is built), and both regress lines and the quick scope check substitute
+// it. Presence + order over committed text — never that a run executed it (P0).
+test("✧ SHIP BASE CAPTURE — `git rev-parse --verify HEAD` once, after check-spec-approved and before run-marker --open; never re-captured", () => {
+  const ship = commandBody("pharn-ship.md");
+  const lines = fencedLines(ship).map((l) => l.text.trim());
+  const at = (re) => lines.findIndex((l) => re.test(l));
+  const capture = at(/^git rev-parse --verify HEAD$/);
+  assert.ok(capture >= 0, "pharn-ship.md must pin the base capture line");
+  assert.equal(lines.filter((l) => l === "git rev-parse --verify HEAD").length, 1, "captured exactly once");
+  const backstop = at(/^node pharn\/floor\/check-spec-approved\.mjs /);
+  const marker = at(/^node pharn\/floor\/run-marker\.mjs --open pharn-ship /);
+  assert.ok(backstop >= 0 && marker >= 0, "fixture sanity (L60): both neighbours are found");
+  assert.ok(backstop < capture && capture < marker, "the capture sits between the GATE-1 backstop and the run marker");
+  assert.match(ship, /never re-capture/, "the no-re-capture rule is stated");
+  const regress = lines.filter((l) => l.startsWith("node pharn/floor/stage-direct.mjs --stage pharn-regress --name '<name>' --iteration"));
+  assert.equal(regress.length, 2, "fixture sanity: ship has two fresh regress lines");
+  for (const l of regress) assert.ok(l.endsWith(" --base '<base sha>'"), `a ship regress line without the captured base: ${l}`);
+  const quick = commandFamilyText(join(REPO_ROOT, ".claude", "commands"), "pharn-ship.md");
+  assert.doesNotMatch(quick, /git merge-base HEAD origin\/main` each print one/, "quick item 7 no longer re-derives its base");
+});
+
 const DIRECT_STAGE_WIRING = [
   {
     file: "pharn-loop.md",
@@ -3350,7 +3372,8 @@ const DIRECT_STAGE_WIRING = [
   {
     file: "pharn-ship.md",
     fresh: ["pharn-regress@1", "pharn-regress@2", "pharn-verify@1", "pharn-verify@2"],
-    extra: { "pharn-regress": "", "pharn-verify": "" },
+    // regress-base-integrity: ship's regress lines carry the base captured right after GATE 1, as the loop's do.
+    extra: { "pharn-regress": " --base '<base sha>'", "pharn-verify": "" },
     exitText: (body) => {
       const at = body.indexOf("**The two floor-only stages, `/pharn-regress` and `/pharn-verify`, are one call each**");
       assert.ok(at >= 0, "pharn-ship.md must carry the floor-only stages paragraph (L60: the anchor is found first)");
