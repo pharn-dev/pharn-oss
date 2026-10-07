@@ -23,6 +23,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.49.2] - 2026-10-07
+
+### Fixed
+
+- 2026-10-07: **`run-marker.test.mjs` no longer splices absolute script paths into the shell string it runs.**
+  CodeQL alert 12 (`js/shell-command-injection-from-environment`) flagged `runShellLine`, which rewrote the
+  shipped commands' relative script paths into absolute ones inside the `sh -c` string. The paths now travel in
+  the child's environment and the line names them as quoted `"$VAR"`s; the argv each pinned line passes is still
+  executed unedited. Test-only: no shipped byte changes.
+- 2026-10-07: **`mark-phase.test.mjs` no longer holds a `${…}` inside a plain string.** CodeQL alert 13
+  (`js/template-syntax-in-string-literal`) read the pinned CLI source text as a forgotten template literal. The
+  string is now built from two pieces; the text the test searches `mark-phase.mjs`'s CLI for is unchanged.
+  Test-only: no shipped byte changes.
+- 2026-10-07: **`spawnGate` refuses an argv gate whose program is not a bare name.** CodeQL alert 10
+  (`js/indirect-command-line-injection`) flagged the `spawn(cmd, argv)` in `pharn/floor/run-gates.mjs`, where
+  `cmd` is `argv[0]` of a gate entry read from a record or command line. Every gate the runner builds names its
+  program bare (`npm`, `node`), so the entry's `argv[0]` must now match `^[A-Za-z0-9][A-Za-z0-9._+-]*$`; a
+  path, an empty or non-string value is recorded as exit 2 with a `spawnError` and nothing is spawned. The
+  `--gates` shell form is unchanged.
+
 ## [6.49.1] - 2026-10-06
 
 ### Fixed
