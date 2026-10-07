@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.49.2-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.50.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -112,8 +112,8 @@ them. The goal is not to make AI development look clean. The goal is to make it 
 PHARN runs on [Claude Code](https://claude.com/claude-code). The `@pharn-dev/pharn` installer requires
 Node 20 or newer. The deterministic floor checkers this repo ships (`pharn/floor/*.mjs`, invoked by the
 `/pharn-*` stages) require **Node 24.2 or newer**: their CLI entry points gate on `import.meta.main`, which
-Node added in 22.18 / 24.2. On an older Node a guarded tool can exit `0` without running its checks — a
-silent false green for several gates. CI and local contributor gates use Node 24. In your project root:
+Node added in 22.18 / 24.2. Since 6.50.0 every guarded tool refuses an older Node: it prints the required version
+and exits `2` instead of exiting `0` without running its checks. CI and local contributor gates use Node 24. In your project root:
 
 ```bash
 npx @pharn-dev/pharn@latest init
@@ -714,7 +714,7 @@ byte-for-byte by `npm run docs:check`, so it cannot quietly drift from what is a
 - **Product commands — 11** (`.claude/commands/`): `/pharn-build`, `/pharn-grill`, `/pharn-loop`, `/pharn-memory-promote`, `/pharn-plan`, `/pharn-regress`, `/pharn-review`, `/pharn-ship`, `/pharn-spec`, `/pharn-test`, `/pharn-verify`.
 - **Dev-apparatus commands — 9** (`.claude/commands/`): `/pharn-dev-build`, `/pharn-dev-eval`, `/pharn-dev-grill`, `/pharn-dev-memory-promote`, `/pharn-dev-plan`, `/pharn-dev-regress`, `/pharn-dev-review`, `/pharn-dev-ship`, `/pharn-dev-verify`.
 - **Hook scripts — 4** (`.claude/hooks/`): `enforce-writes-scope.cjs`, `protect-trusted-paths.cjs`, `require-loop-record.cjs`, `set-writes-scope.cjs`.
-- **Floor checkers — 130** `.mjs` files under `pharn/floor/` (tests excluded).
+- **Floor checkers — 131** `.mjs` files under `pharn/floor/` (tests excluded).
 
 <!-- CURRENT-STATE:END -->
 

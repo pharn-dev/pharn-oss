@@ -131,6 +131,7 @@
 // checker needs because that part of `excluded_requests` keeps growing after emission (6.14.1).
 // Exit codes: 0 = a ledger was written (including an honest `unavailable` one); 2 = bad usage.
 
+import "./runtime-floor.mjs";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";

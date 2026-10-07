@@ -142,6 +142,7 @@
 // Fail-closed (P5): a missing <out>, or ANY input that is unreadable / not valid JSON / not an array,
 //          → exit non-zero, writing NOTHING to <out> (all inputs are validated before any write).
 
+import "./runtime-floor.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

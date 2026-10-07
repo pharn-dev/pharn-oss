@@ -24,6 +24,7 @@
 // Exit: 0 the section on stdout · 2 refusal (usage, an unreadable plan, a scanner that failed or printed an
 // unexpected shape) — the reason on stderr, NOTHING on stdout, so a partial section is never printed.
 
+import "./runtime-floor.mjs";
 import { spawnSync } from "node:child_process";
 import { lstatSync } from "node:fs";
 import { dirname, join } from "node:path";

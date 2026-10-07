@@ -114,6 +114,7 @@
 // file is DATA from another model: it reaches control flow only through `read`'s exit code and closed line,
 // and `read`'s stderr only as a fixed `READ_DEFECTS` code.
 
+import "./runtime-floor.mjs";
 import {
   lstatSync,
   statSync,

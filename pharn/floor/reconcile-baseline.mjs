@@ -53,6 +53,7 @@
 // Exit: 0 ok · 2 unusable input / git unavailable / no usable scope to snapshot (D6) / write failed —
 // FAIL-CLOSED (P5). Never a silent pass.
 
+import "./runtime-floor.mjs";
 import {
   readFileSync,
   writeFileSync,

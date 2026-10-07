@@ -148,8 +148,11 @@ must tolerate untagged entries.
    git rev-parse HEAD
    ```
 
-   **If it fails** — not a git repo, an unborn `HEAD`, git unavailable — write the literal **`unknown`**.
-   Never an empty field, never a plausible-looking SHA you did not read.
+   **If it fails — not a git repo, an unborn `HEAD`, git unavailable — HALT and ask the human** (6.49.3; the
+   dev twin's rule). Never write a placeholder on your own, never an empty field, never a plausible-looking SHA
+   you did not read. Only when the human answers that the project has no commit to point at (not a git repo, or
+   no commit yet) and tells you to go on, write the literal **`unknown`** — the honest absence
+   `check-provenance.mjs` admits.
 
 ## Step 2 — Assemble the candidate (mechanics — provenance is deterministic, body is DATA)
 
@@ -164,7 +167,7 @@ and gitignored):
   "concepts": ["<tag>", "<tag>"],
   "provenance": {
     "feature": "<Step 1 — the pharn/features/<name> segment derived from the surfacing artifact>",
-    "commit": "<Step 1 — git rev-parse HEAD, or the literal `unknown`>",
+    "commit": "<Step 1 — git rev-parse HEAD; on failure HALT, `unknown` only on the human's answer>",
     "source": "<Step 1 — artifact path + traceable finding id(s)>",
     "date": "<Step 1 — YYYY-MM-DD from runtime capture>"
   },
@@ -175,7 +178,7 @@ and gitignored):
 
 - **Provenance is captured, not composed (P5).** `feature`, `source`, and `date` come **only** from Step 1's
   live artifact read and runtime capture — never from model recall or estimation. `commit` comes **only**
-  from `git rev-parse HEAD` or the literal `unknown`. Before writing `candidate.json`, confirm `feature` and
+  from `git rev-parse HEAD`, or the literal `unknown` after Step 1's halt and the human's answer. Before writing `candidate.json`, confirm `feature` and
   `source` are both non-empty and traceable to the artifact you read; if repository or artifact state is
   ambiguous, **HALT and ask** rather than guessing. An entry whose provenance you cannot truthfully capture
   is **not promotable**: say so and stop.
@@ -378,7 +381,8 @@ confines it to the declared file.
 - **Floor:** every candidate reaching the gate carries well-shaped provenance, a non-duplicate id, a target in the
   two-file canon enum, an enum-member `type` and a well-SHAPED `concepts` list — `check-provenance.mjs`
   (enum/regex/presence). **Narrowed, and stated:** `commit` may be the literal `unknown`, so this does **not**
-  guarantee a diff pointer — only that the absence is honest rather than fabricated. The duplicate test keys on the
+  guarantee a diff pointer — only that the absence is honest rather than fabricated. That `unknown` follows Step 1's
+  halt and a human's answer is advisory: the checker admits it either way. The duplicate test keys on the
   first token after `##`, so against a foreign id scheme it cannot collide — which is why Step 2 branch 3 asks.
 - **Floor:** the duplicate-id check ranges over the file the candidate DECLARED (the canon-arg binding). **NARROWED:**
   a relative argument must EQUAL the target; an absolute one need only END with it at a segment boundary. It does

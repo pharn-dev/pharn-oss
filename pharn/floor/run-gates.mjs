@@ -132,6 +132,7 @@
 // Exit: init  0 ok · 2 runner error (reason_code) · 3 empty SOURCE set (nothing written)
 //       run   0 an entry ran (or none remained to claim) · 2 runner error (reason_code) · 3 nothing left
 
+import "./runtime-floor.mjs";
 import { createHash } from "node:crypto";
 import {
   existsSync,

@@ -209,7 +209,8 @@ entries**: the checker never scans canon, so nothing here guarantees canon is un
 
    > **This is the ONE place the dev surface deliberately DIVERGES from `/pharn-memory-promote`, and the
    > divergence must not be "fixed" (P5, `.dev/memory-bank/lessons-learned.md` L27).** The product twin
-   > admits the literal `unknown` there, because a **user's** project need not be a git repo. This
+   > halts here too (since 6.49.3), but its human may answer that the project has no commit, and it then
+   > records the literal `unknown`, because a **user's** project need not be a git repo. This
    > apparatus always is, and `.dev/floor/check-provenance.mjs`'s `COMMIT_RE = /^[0-9a-f]{7,40}$/`
    > **rejects `unknown`** — a divergence `.dev/floor/check-provenance.test.mjs` pins on purpose. So
    > prescribing `unknown` here would print a remedy that guarantees a Step-3 RED and train a bypass; the
