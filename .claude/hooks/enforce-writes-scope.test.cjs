@@ -167,6 +167,37 @@ test("scope [pharn/features/foo/**]: a module path OUTSIDE is DENIED (authoritat
   assert.equal(hook(cwd, "pharn-core/x.md").status, 2);
 });
 
+// --- 6.49.3 (audit P3-M): every tool shape the matcher admits. NotebookEdit carries its path as `notebook_path`;
+// MultiEdit as a top-level `file_path` (the shape Claude Code sends) and, in some shapes, per `edits[]` entry — the
+// hook judges every path it collects, and one out of scope denies the call. Denied correctly before; regression nets.
+
+function hookPayload(cwd, tool_name, tool_input) {
+  return spawnSync(process.execPath, [HOOK], { input: JSON.stringify({ tool_name, tool_input }), cwd, encoding: "utf8" });
+}
+
+test("6.49.3: NotebookEdit — notebook_path OUTSIDE the scope is DENIED, inside it is ALLOWED", () => {
+  const cwd = tmp();
+  setScope(cwd, ["pharn/features/foo/**"]);
+  assert.equal(hookPayload(cwd, "NotebookEdit", { notebook_path: "src/analysis.ipynb", new_source: "x" }).status, 2);
+  assert.equal(hookPayload(cwd, "NotebookEdit", { notebook_path: "pharn/features/foo/analysis.ipynb", new_source: "x" }).status, 0);
+});
+
+test("6.49.3: MultiEdit — a top-level file_path OUTSIDE the scope is DENIED, inside it is ALLOWED", () => {
+  const cwd = tmp();
+  setScope(cwd, ["pharn/features/foo/**"]);
+  const edits = [{ old_string: "a", new_string: "b" }];
+  assert.equal(hookPayload(cwd, "MultiEdit", { file_path: "src/x.js", edits }).status, 2);
+  assert.equal(hookPayload(cwd, "MultiEdit", { file_path: "pharn/features/foo/x.md", edits }).status, 0);
+});
+
+test("6.49.3: MultiEdit — ONE edits[] entry outside the scope denies the call; all inside is ALLOWED", () => {
+  const cwd = tmp();
+  setScope(cwd, ["pharn/features/foo/**"]);
+  const inside = { file_path: "pharn/features/foo/a.md" };
+  assert.equal(hookPayload(cwd, "MultiEdit", { edits: [inside, { file_path: "src/x.js" }] }).status, 2);
+  assert.equal(hookPayload(cwd, "MultiEdit", { edits: [inside, { file_path: "pharn/features/foo/b.md" }] }).status, 0);
+});
+
 // --- Hook, explicit unlock of a sensitive zone ---
 
 test("scope [memory-bank/lessons-learned.md]: that exact file is ALLOWED", () => {

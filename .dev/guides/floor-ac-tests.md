@@ -30,7 +30,9 @@ come from the single code block this text was moved from, so the entry they name
 # and cannot be re-pinned through the build's scope, a composition a ★ HOOK test executes; the parts it does not read
 # stay changeable, as the NOT-caught list states); exit 0/1/2. ac-tests-lock.mjs --write/--check pins the tests
 # in AC-TESTS.lock.json (schema ac-tests-lock/5 since 6.36.0 — /4, /3, /2 and /1 still read; closed keys per mode; test_infra
-# is the test-infrastructure pin, see THE AC GATE below); --check names a PATH, never content. The mapping grammar lives in ac-tests-core.mjs. AC-TESTS.md and the lock are PIPELINE_ARTIFACTS (regress-exempt); for reconcile
+# is the test-infrastructure pin, see THE AC GATE below); --check names a PATH, never content. Since 6.49.3 every file a
+# mapping cell names must be in the lock's files (byte-equal, unlisted-file's comparison): --write refuses such a cell,
+# and --check REDs a lock that holds one (lock-red at check-test-stage, ac-tests-modified at the AC gate; audit P3-K). The mapping grammar lives in ac-tests-core.mjs. AC-TESTS.md and the lock are PIPELINE_ARTIFACTS (regress-exempt); for reconcile
 # AC-TESTS.md is exempt like PLAN.md (a re-plan rewrites it) but the LOCK is `pre_anchor_artifacts` (NOT exempt).
 # Paths are compared as the setter SCOPES them (clean + isConcrete, case-folded). `--spec <SPEC.md>` decides
 # templated (0) / legacy (3) / bootstrap (4, 6.18.0) before any mapping exists; in full mode a legacy or test-infra
