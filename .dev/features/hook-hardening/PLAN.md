@@ -4,8 +4,10 @@
 - applied_lessons: [L31]
 
 Fixes audit findings P3-Q and P3-R (2026-10-07). Both touch write-guard hook sources, which the agent's write tools may
-not edit (CLAUDE.md hard constraint 1), so the source change ships as a HUMAN-RUN apply script with every input and
-result pinned by sha256. The agent writes only the script, the tests, and the records.
+not edit (CLAUDE.md hard constraint 1), so the source change ships as a HUMAN-RUN Python script with every input and
+result pinned by sha256; it deletes itself after a successful apply. The same script applies the trusted-doc text
+that 6.50.0–6.53.0 made stale (LIMITS.md §1d, §6, a new §10; THREAT-MODEL.md §2 item 7 and the memory-poisoning row),
+drafted by the increments that changed it. The agent writes only the script, the tests, and the records.
 
 - P3-Q: both hooks drain their segment queue with `pending.shift()`, which is O(n) per call, so a payload path far past
   `MAX_RESOLVED_SEGMENTS` stalled the hook quadratically (measured on main: 25k segments 0.5 s, 100k segments killed at
@@ -23,7 +25,8 @@ edit to both copies, and the builder checked the two function bodies stay identi
 
 ## Files
 
-- `.dev/features/hook-hardening/apply-hook-patch.mjs` — **NEW.** The human-run patch (sha256-pinned before and after).
+- `.dev/features/hook-hardening/apply_protected_edits.py` — **NEW, never committed.** The human-run patch (sha256-pinned
+  before and after); it deletes itself after applying.
 - `.dev/features/hook-hardening/PLAN.md` — **NEW.** This file.
 - `.claude/hooks/protect-trusted-paths.test.cjs` — **EDIT.** The lexical-mutant anchor follows the new loop text; a
   long-path timing test.
@@ -34,4 +37,4 @@ edit to both copies, and the builder checked the two function bodies stay identi
 - `README.md` — **EDIT.** The version badge.
 
 Applied by the human with the script above, not by the agent: `.claude/hooks/protect-trusted-paths.cjs`,
-`.claude/hooks/enforce-writes-scope.cjs`, `.claude/hooks/set-writes-scope.cjs`.
+`.claude/hooks/enforce-writes-scope.cjs`, `.claude/hooks/set-writes-scope.cjs`, `LIMITS.md`, `THREAT-MODEL.md`.

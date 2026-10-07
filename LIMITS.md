@@ -98,11 +98,10 @@ validates under the legacy four-section rule, and the AC stages report it not-ap
 The template `/pharn-spec` fills may be the project's own, `pharn.spec-template.md` at the project root
 (6.14.0), and its guidance comments are instructions. `protect-trusted-paths.cjs` denies it by path,
 like the trusted docs — on the `Write`/`Edit`/`MultiEdit`/`NotebookEdit` surface only; a `Bash` write
-reaches it (§6). `check-bash-reconcile.mjs` detects such a write only when it lands inside a build's
-anchor-to-verify window and the file is not git-ignored, and only from a non-adversarial writer: the
-path is not always-reconciled, so a writer who also rewrites its baseline entry gets a silent `CLEAN`.
-That window opens after `/pharn-spec` ran, so a write that steered the current SPEC is never detected
-by the run it steered. A change landed by a merge, a pull or a human editor is obeyed as-is.
+reaches it (§6). Since 6.53.0 `check-bash-reconcile.mjs` compares the file against HEAD's committed blob on every run
+(`reconciliation-record.md` §4a), so an uncommitted write, an added untracked file included, is reported whoever
+made it and whatever its baseline entry says, unless the file is git-ignored. That check runs at `/pharn-*verify`,
+after `/pharn-spec` ran, so a write that steered the current SPEC is reported after it steered it, never prevented. A change landed by a merge, a pull or a human editor is obeyed as-is.
 
 ---
 
@@ -281,7 +280,9 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
   prevention.** `/pharn-*build` anchors a content-hash baseline and `/pharn-*verify` runs
   `pharn/floor/check-bash-reconcile.mjs`, which re-hashes the tree and asks the **live guards**, by
   executing them, whether each changed path would have been denied. Denied means the `reconcile` gate
-  fails, so the verify verdict is `FAIL`. **The supported claim is exactly "a write to a path the active
+  fails, so the verify verdict is `FAIL`. Since 6.52.0 one class is
+  reported rather than failed: a path whose bytes are exactly the upstream bytes HEAD merged in during the window
+  (`merged[]`, `reconciliation-record.md` §2a); a commit the build makes itself still fails. **The supported claim is exactly "a write to a path the active
   scope would have denied is detected and fails the stage" — never "Bash writes are prevented."** Four
   bounds, all in `pharn/pharn-contracts/reconciliation-record.md`: ignored paths are outside the
   reconciled set; the window is anchor-to-verify; the model is **one worktree per session** (two sessions
@@ -292,8 +293,11 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
   under `.pharn/`, which `Bash` reaches, and nothing authenticates it. Deleting it does not yield a quiet
   green: `/pharn-*verify` passes `--require-baseline`, which makes an absent baseline `INCONCLUSIVE`, and
   the always-reconciled control surface (`.claude/hooks/*`, `.claude/settings*.json`, `pharn/floor/*`,
-  `.dev/floor/*`) is compared against **committed blob ids** rather than against the baseline, so that
-  half resists a determined writer. But for an **ordinary** path the baseline IS the reference, so a
+  `.dev/floor/*`, and since 6.53.0 the four trusted docs, `CODEOWNERS`, `pharn.spec-template.md` and memory-bank canon,
+  an added untracked file included) is compared against **committed blob ids** rather than against the baseline, so that
+  half resists a determined writer. The cost, stated ([[L68]]): reconcile has no attribution, so a
+  human's uncommitted edit at one of those paths reads as an escape even with no baseline; commit it before running
+  the gates. But for an **ordinary** path the baseline IS the reference, so a
   writer who edits a denied file **and** rewrites that file's baseline entry obtains a silent `CLEAN` —
   no escape, no warning. **Therefore the guarantee is NON-ADVERSARIAL detection:** it catches tooling
   that escapes its scope — a formatter, a generator, a script, a mistake, which is the entire population
@@ -325,7 +329,11 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
   changed when the run began whose bytes still equal the run's pre-run snapshot is reported, not counted — so a build
   that writes such a path back to its pre-run bytes is not seen, a path an earlier run escaped with is pre-run state
   for a re-run (reported, not refused), and the snapshot, kept in the git dir out of the write tools' reach, can be
-  forged through `Bash`. A smoke alarm, never the guard.
+  forged through `Bash`. Since 6.52.0 a total-glob `## Files` entry (`**`, `*`, `**/*`, `.`) is refused by both scope checks rather than
+  read as declaring everything, and the base the check compares against is recorded as `base_source` (`explicit`,
+  `dirty-head` or `merge-base`): `/pharn-ship` and `/pharn-loop` pass the base they captured before the build, while a
+  standalone `/pharn-regress` on a partly committed build still compares against a base that holds the committed part.
+  A smoke alarm, never the guard.
 - **The only true prevention is OS-level sandboxing of the `Bash` process** — a filesystem jail, a
   read-only mount, or an equivalent harness-layer control that makes the write fail before any hook
   would be consulted. PHARN does **not** implement it, and cannot: exactly like §1d's out-of-band
@@ -563,3 +571,13 @@ write — harness-layer, the same category as §6's sandbox and §1d's out-of-ba
 §6 and §8, this is a limit, not one of §1's four.
 
 <!-- §9 was drafted from .dev/features/verify-ac-gate/PROTECTED-FOLLOWUPS.md (queue item 07) and applied by a human (SKILLS_VERSION 6.20.2). -->
+
+---
+
+## 10. The floor refuses an old Node; it cannot vouch for the runtime it runs on
+
+Since 6.50.0 every floor CLI that gates its entry point on `import.meta.main` imports `pharn/floor/runtime-floor.mjs`
+first, and below Node 24.2.0 it prints one line and exits 2 instead of exiting 0 having checked nothing (CHANGELOG
+[6.50.0]). The refusal is floor for those CLIs only. A script with no entry gate runs on any Node, an API an older
+Node lacks fails loudly rather than silently, and a caller that ignores exit codes is outside it. The installer's own
+`engines` field lives in a separate repository and is not governed by this tree.
