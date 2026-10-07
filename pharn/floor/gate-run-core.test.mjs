@@ -45,6 +45,7 @@ import {
   coverageGap,
   validateStamp,
   stampToMap,
+  timedOutRunIds,
   completenessFromStamp,
   gateRunBlock,
   REUSED_REASON,
@@ -601,6 +602,24 @@ test("validateStamp catches a TREE CHANGE between consecutive gates", () => {
   assert.equal(validateStamp(s).ok, true);
 });
 
+test("audit P3-J — validateStamp catches a TREE CHANGE between init and the FIRST gate (fingerprint.init vs runs[0].fp_before)", () => {
+  // REPRODUCED by the audit: package.json rewritten between init and the first `run --next`, so aux.completeness (captured
+  // at init) describes a different tree than the gates judged — and the inter-gate chain alone held. Every run keeps the
+  // chain consistent here, so the init link is the ONLY defect.
+  const A = "a".repeat(64);
+  const C = "c".repeat(64);
+  const s = goodStamp();
+  s.fingerprint.init = C;
+  const r = validateStamp(s);
+  assert.equal(r.ok, false, "a stamp whose first gate saw another tree than init validated");
+  assert.equal(r.reason_code, "tree-changed-between-gates");
+  assert.match(r.reason, /between init and "test"/);
+  assert.ok(LAPSE_CODES.includes(r.reason_code), "a re-run re-fingerprints at init, so it must route as a lapse");
+  // Control (L34): the same stamp with init restored validates, so the refusal is about the init link and nothing else.
+  s.fingerprint.init = A;
+  assert.deepEqual(validateStamp(s), { ok: true });
+});
+
 test("validateStamp requires `reconcile` to be LAST when it is present", () => {
   const s = goodStamp();
   s.runs = [s.runs[1], { ...s.runs[0], seq: 1 }];
@@ -645,6 +664,19 @@ test("validateStamp reports the CALLER's expectation mismatches with their own c
 // ---------------------------------------------------------------------------------------------------
 // The derived views
 // ---------------------------------------------------------------------------------------------------
+
+test("timedOutRunIds (regress-base-integrity): the ids of runs recorded timed_out === true, in run order — the one owner both readers call", () => {
+  const s = goodStamp();
+  assert.deepEqual(timedOutRunIds(s), [], "CONTROL: nothing timed out");
+  const t = goodStamp();
+  t.runs[0].timed_out = true;
+  assert.deepEqual(timedOutRunIds(t), [t.runs[0].id]);
+  for (const rel of ["pharn/floor/check-regress.mjs", "pharn/floor/regress-base-reuse-core.mjs"]) {
+    const src = read(rel);
+    assert.match(src, /timedOutRunIds\(/, `${rel} calls the shared predicate`);
+    assert.doesNotMatch(src, /\.timed_out === true/, `${rel} must not restate the predicate (L35)`);
+  }
+});
 
 test("stampToMap / completenessFromStamp / coverageGap / gateRunBlock", () => {
   const s = goodStamp();

@@ -30,7 +30,10 @@
 //
 // BASE_RULE — a pure decision over git results the CLI passes in: explicit `--base` wins; else a dirty
 // working tree resolves to `HEAD`; else `git merge-base HEAD origin/main`; else `ask`. The CLI turns the
-// chosen SOURCE into the actual 40-hex SHA (a `git rev-parse` the CLI performs, never this module).
+// chosen SOURCE into the actual 40-hex SHA (a `git rev-parse` the CLI performs, never this module). The source is a
+// BASE_SOURCES member the report records (regress-base-integrity): the two implicit branches put a COMMITTED build inside
+// its own base (audit P1-B), which is why the delivery runs pass `--base` and why an empty changed-set-under-test is
+// refused by the stage (`no-change-under-test`).
 //
 // ==================================== THE PROGRESS RECORD ====================================
 // `.pharn/pharn-regress/stage.json` (REGRESS_PATHS.stageJson) is the in-progress record `--resume` reads.
@@ -80,7 +83,10 @@ export const REGRESS_PATHS = Object.freeze({
   root: ".pharn/pharn-regress",
   head: ".pharn/pharn-regress/head",
   baseGates: ".pharn/pharn-regress/base-gates",
-  base: ".pharn/pharn-regress/base",
+  // LEGACY (regress-base-integrity): the BASE worktree's location until 6.49.x, nested in the project. It is never created
+  // now (base-worktree.mjs puts the checkout in the temp root); it is CLEARED at every fresh start as an upgrade
+  // leftover, and entry-gates.mjs still refuses its base slot while one stands there.
+  legacyBase: ".pharn/pharn-regress/base",
   scopeJson: ".pharn/pharn-regress/scope.json",
   stageJson: ".pharn/pharn-regress/stage.json",
   // 6.40.0 — the HEAD install check's result (install-drift.mjs), written at head-init and re-read at render, so a
@@ -300,20 +306,68 @@ export function resolveInstall({ explicitInstall = null, noInstall = false, hasP
  *  BASE_RULE — a pure decision over git results the CLI already gathered. The CLI turns the chosen SOURCE
  *  into the resolved 40-hex SHA (a `git rev-parse`/`git merge-base` call), never this function.
  *  ---------------------------------------------------------------------------------------------- */
+/** BASE_SOURCES — how the base commit was chosen, the closed set the report's `base_source` and the progress record carry
+ *  (regress-base-integrity, 6.50.x). `dirty-head` is the rule that lets a COMMITTED build sit inside its own base (audit
+ *  P1-B): REGRESSION.md warns under it, and `/pharn-ship` and `/pharn-loop` pass `--base`, so their runs read `explicit`. */
+export const BASE_SOURCES = Object.freeze(["explicit", "dirty-head", "merge-base"]);
+
 export function resolveBaseSource({ explicitBase = null, workingTreeDirty, hasMergeBase }) {
   if (typeof explicitBase === "string" && explicitBase.length > 0) return { kind: "explicit" };
-  if (workingTreeDirty) return { kind: "head" };
+  if (workingTreeDirty) return { kind: "dirty-head" };
   if (hasMergeBase) return { kind: "merge-base" };
   return { kind: "ask" };
 }
 
 /** ------------------------------------------------------------------------------------------------
+ *  THE UNRELIABLE-INSTALL MASK (regress-base-integrity, P2-D's second half). A BASE side produced by THIS invocation with
+ *  an install that cannot be trusted to have prepared it — `--no-install` over a project with a manifest, or an install
+ *  that did not run to exit 0 in time — leaves the base without dependencies (its worktree sits outside the project since
+ *  6.50.x, so it no longer borrows HEAD's), and a gate red on BOTH sides then reads `pre_existing`. That was the named
+ *  `regress-failed-install-false-green` residual; the move made `--no-install` reach it too. Returns the ids masked that
+ *  way (base ≠ 0 ∧ head ≠ 0), or [] — the stage refuses `base-install-unreliable` over a `no-regressions` verdict when it
+ *  is non-empty. A `no-manifest` install (nothing to install at the base commit), a skipped install where the base
+ *  commit has nothing an install would materialize (`installNeeded` false — `baseInstallNeeded` below), and BASE evidence
+ *  that was reused or came from the entry gates (no install ran here), are not unreliable. Pure.
+ *  ---------------------------------------------------------------------------------------------- */
+
+/** Would an install at the base commit materialize anything? True when any lockfile family is present there, or the
+ *  base `package.json` declares at least one dependency (`dependencies`, `devDependencies`, `optionalDependencies`,
+ *  `peerDependencies`), or that manifest is unreadable (`manifest === null` — fail closed: npm would not run cleanly
+ *  either). A project with no lockfile and no declared dependency has nothing to install, so skipping it changes nothing.
+ *  Bound: a dependency resolved some other way (a vendored tree, a global tool a gate calls) is not seen. Pure. */
+export function baseInstallNeeded({ lockfiles, manifest }) {
+  if (lockfiles && Object.values(lockfiles).some(Boolean)) return true;
+  if (manifest === null || typeof manifest !== "object" || Array.isArray(manifest)) return true;
+  return ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"].some((k) => {
+    const v = manifest[k];
+    return v !== null && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length > 0;
+  });
+}
+export function unreliableInstallMasking({ install, installResult, installNeeded, freshBase, outsideGates }) {
+  if (!freshBase || install === null || typeof install !== "object") return [];
+  const unreliable =
+    install.kind === "none"
+      ? install.reason !== "no-manifest" && installNeeded === true
+      : !installResult || installResult.ran !== true || installResult.exit !== 0 || installResult.timedOut === true;
+  if (!unreliable || outsideGates === null || typeof outsideGates !== "object") return [];
+  return Object.keys(outsideGates)
+    .sort()
+    .filter((id) => {
+      const g = outsideGates[id];
+      return g && g.base !== 0 && g.head !== 0;
+    });
+}
+
+/** ------------------------------------------------------------------------------------------------
  *  THE PROGRESS RECORD — schema + validator.
  *  ---------------------------------------------------------------------------------------------- */
-// `/2` since 6.33.0: the record carries `baseReuse` (below). `/3` since 6.49.0: `installOverride` and `entryReuse`. An
-// older record is refused as `progress-malformed` — a run straddling the upgrade stops and is re-run fresh, never
-// resumed under rules it was not started with.
-export const PROGRESS_SCHEMA = "pharn-stage-regress-progress/3";
+// `/2` since 6.33.0: the record carries `baseReuse` (below). `/3` since 6.49.0: `installOverride` and `entryReuse`. `/4`
+// (regress-base-integrity): `baseSource` (a BASE_SOURCES member), `baseWorktree` (the temp-root checkout, or null;
+// base-worktree.mjs re-validates it against this project before any use) and `installNeeded` (baseInstallNeeded's answer
+// at the base commit). An older record is refused as
+// `progress-malformed` — a run straddling the upgrade stops and is re-run fresh, never resumed under rules it was not
+// started with.
+export const PROGRESS_SCHEMA = "pharn-stage-regress-progress/4";
 
 const INSTALL_KIND_SET = new Set(["none", "cmd"]);
 const HEX64_RE = /^[0-9a-f]{64}$/;
@@ -417,6 +471,16 @@ export function validateProgress(rec) {
   }
   if (!isCleanToken(rec.base, 40) || !SHA_RE.test(rec.base)) return { ok: false, reason: "progress.base must be a 40-hex SHA" };
   if (!RESUMABLE_PHASES.includes(rec.phase)) return { ok: false, reason: `progress.phase must be one of ${RESUMABLE_PHASES.join(" | ")}` };
+  // `/4`: how the base was chosen, and where its checkout lives (an absolute path; null before the worktree phase made one).
+  if (!BASE_SOURCES.includes(rec.baseSource))
+    return { ok: false, reason: `progress.baseSource must be one of ${BASE_SOURCES.join(" | ")}` };
+  if (rec.baseWorktree !== null && !(isCleanToken(rec.baseWorktree, 4096) && rec.baseWorktree.startsWith("/"))) {
+    return { ok: false, reason: "progress.baseWorktree must be null or an absolute path" };
+  }
+  if (typeof rec.installNeeded !== "boolean") return { ok: false, reason: "progress.installNeeded must be a boolean (schema /4)" };
+  if (["install", "base-init", "drain-base"].includes(rec.phase) && rec.baseWorktree === null) {
+    return { ok: false, reason: `progress.baseWorktree is required at ${rec.phase} — the base checkout exists from the worktree phase on` };
+  }
   if (!isValidInstall(rec.install)) return { ok: false, reason: "progress.install must be {kind: none|cmd, cmd, unmeasured}" };
   if (!Array.isArray(rec.e2eExcluded) || !rec.e2eExcluded.every((s) => typeof s === "string")) {
     return { ok: false, reason: "progress.e2eExcluded must be a string array" };

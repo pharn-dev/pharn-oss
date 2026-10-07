@@ -26,7 +26,8 @@ makes such a write **detectable after the fact**.
 ## The claim these artifacts support — and the seven it does not
 
 **Supported, literally:** _a **non-adversarial** write to a path the active writes-scope would have
-DENIED is detected, and fails the stage._
+DENIED is detected, and fails the stage_ — unless, since 6.52.0, the path's bytes are exactly the upstream bytes
+HEAD merged in during the window, which classifies it `merged` and is reported, not failed (§2a).
 
 **"Non-adversarial" is load-bearing.** The baseline is unauthenticated state inside the writable tree, so
 a writer who edits a denied file **and** rewrites that file's baseline entry gets a silent `CLEAN`. This
@@ -65,6 +66,7 @@ before this call, so the refusal reaches only a caller that anchors out of order
   "version": 1,
   "epoch": "2026-09-10T11:33:19.704Z",
   "anchored_by": "pharn-build",
+  "anchored_head": "052709d2c0ffee…",
   "scope_snapshot": { "scope": ["src/app.ts"], "set_by": "pharn/features/x/PLAN.md", "set_at": "…" },
   "scope_amendments": [
     { "scope": ["memory-bank/lessons-learned.md"], "set_by": ".claude/commands/pharn-memory-promote.md", "set_at": "…" }
@@ -79,6 +81,7 @@ before this call, so the refusal reaches only a caller that anchors out of order
 | `version`          | integer          | Schema version. A **newer** version than the reader is `INCONCLUSIVE`; an **older** one is tolerated at read and reported in `warnings[]`                                                                 |
 | `epoch`            | ISO-8601         | When this epoch opened                                                                                                                                                                                    |
 | `anchored_by`      | string           | A label passed as `--by`. **Advisory** — it is argv, so it is a description, never an authorization                                                                                                       |
+| `anchored_head`    | string \| `null` | The full object id of the commit HEAD named at anchor time (6.52.0); `null` on an unborn HEAD or a git error. Read only by the `merged` classification (§2a). Absent on an older record, read as `null`   |
 | `scope_snapshot`   | object \| `null` | A verbatim copy of `.pharn/writes-scope.json` at anchor time. An object; `null` only in a baseline anchored before 6.24.0 — since then `--anchor` REFUSES rather than write a `null` snapshot (D6, above) |
 | `scope_amendments` | array            | Further scopes that came into force **during** the epoch, in call order. Empty on a fresh anchor; absent on a pre-5.1.0 record, read as `[]`                                                              |
 | `entry_count`      | integer          | `Object.keys(entries).length` at write time                                                                                                                                                               |
@@ -192,6 +195,7 @@ path the guard judges. The rule, as implemented and tested:
   "reconciled": 0,
   "escapes": [],
   "exempted": [],
+  "merged": [],
   "warnings": []
 }
 ```
@@ -204,17 +208,72 @@ carries `findings[]` in `finding-shape.md`'s enum-gated/free-text split — `typ
 
 | Verdict        | Exit | Meaning                                                                                                                                                                                                                                                          |
 | -------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CLEAN`        | 0    | Reconciled against a baseline; no candidate was one the guards would deny                                                                                                                                                                                        |
-| `ESCAPE`       | 1    | ≥1 changed path the guards would have denied. `escapes[]` names each                                                                                                                                                                                             |
+| `CLEAN`        | 0    | Reconciled against a baseline; every candidate the guards would deny, if any, was classified `merged` (§2a)                                                                                                                                                      |
+| `ESCAPE`       | 1    | ≥1 changed path the guards would have denied and that is not `merged`. `escapes[]` names each                                                                                                                                                                    |
 | `NO_BASELINE`  | 0    | No epoch has been opened. **GREEN by design** — a fresh clone or CI checkout has never anchored, and REDding there makes every first run a false alarm (the posture `check-lessons-index.mjs` takes for `COLD`). Only reachable **without** `--require-baseline` |
 | `INCONCLUSIVE` | 2    | Fail-closed: a malformed or future-schema baseline, an absent guard, a failed enumeration, or `--require-baseline` with no baseline                                                                                                                              |
 
 Callers branch on **set membership over this enum, or on the exit code** — never on prose (P5).
 
+### 2a. `merged[]` — a would-be escape whose bytes came from upstream (6.52.0)
+
+**Why (P7, measured — audit 2026-10-07, P3-L).** A `git merge` of upstream moves bytes without any write tool.
+Every path upstream changed then differs from its baseline entry, and an out-of-scope one read as _"a write
+reached it outside the guarded tool surface"_. On the maintainer's checkout a day-old baseline reported 9 such
+escapes, every one a legitimate merge (two dependency bumps, and a docs PR that touched trusted docs), and a ship
+run that merged `origin/main` mid-run met the same RED at verify. That is lessons-learned **L17**'s failure class
+again: a changed-since-anchor fact reported as a wrote-outside-scope claim.
+
+**The rule.** A path that would otherwise be an escape is listed in `merged[]` instead, and a `warnings[]` line
+names the HEAD move and the count, iff **all** of the following hold. Each is an object-id or byte equality, or a
+git exit code. **Any git failure leaves the path an escape.**
+
+| #   | Condition                                                                                                                                                                                  | What failing it means                                                  |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| a   | the baseline records `anchored_head` X; HEAD H resolves and differs from X                                                                                                                 | an older baseline, or HEAD did not move: nothing to classify           |
+| b   | X is an ancestor of H                                                                                                                                                                      | a rebase or a reset elsewhere; a warning says so                       |
+| c   | the symbolic ref `refs/remotes/origin/HEAD` resolves to a commit U; H and U have a merge base M; and X does **not** contain M — so at least one upstream commit entered HEAD in the window | no upstream named, or HEAD moved by the build's own commits only       |
+| d   | the path's **baseline** entry is the digest of its blob at X, or the path is absent from both                                                                                              | the path was edited, uncommitted, when the epoch opened                |
+| e   | the path's **current** bytes are the digest of its blob at H                                                                                                                               | an uncommitted edit on top of the merge                                |
+| f   | its blob at H equals its blob at M — same object id, same mode (100644, 100755 or 120000 only)                                                                                             | the build committed its own bytes to that path: **it stays an escape** |
+
+A blob's digest follows the baseline's own rule: the SHA-256 of its bytes, or of `symlink\0` + bytes for mode 120000. **(f) is the anti-laundering condition.** M is reachable from upstream, and a commit the build makes during
+the window is not, so committing an escape never clears it. (f) compares against M rather than U so that a later
+fetch, which moves U past the commit HEAD merged, does not undo the classification.
+
+**Scope of the class.** It is computed only for would-be escapes, so an authorized path is never relabelled and a
+clean run makes no extra git call. It applies to every escape kind: a trusted doc or canon denied by
+`protect-trusted-paths.cjs`, the always-reconciled control surface, and an ordinary path outside the scope. The
+condition is about where the bytes came from, not which guard denied them. `merged[]` carries paths only, and no
+finding is emitted for a merged path. The verdict enum and the exit codes do not change.
+
+**Bounds, stated (P0).** This buys **precision** — fewer false REDs on the designed workflow — never **strength**
+(lessons-learned **L42**'s bound):
+
+- **Bytes equal to upstream's are classified `merged` whoever wrote them.** A `git checkout origin/main -- <path>`,
+  or a write that reproduces exactly the merged upstream bytes and is then committed, is included. That is what the class
+  means.
+- **The upstream is a mutable local alias** (lessons-learned **L32**). `refs/remotes/origin/HEAD` and the ref it
+  names can be moved by Bash, and a build that pushes its own commit to the upstream branch and fetches it back
+  makes those bytes upstream's. Both are outside the **non-adversarial** claim this record already states. A
+  **stale** fetch can only withhold the class, so the RED stays, which is the loud direction.
+- **Read now versus recorded then** (lessons-learned **L42**, **L58**). Only X is recorded at anchor time. HEAD, U
+  and M are read when the check runs, and each of those reads can only withhold the class, never grant it to bytes
+  that are not upstream's.
+- **Where it is inert, and says so.** A repository created by `git init` + `git remote add` has no
+  `refs/remotes/origin/HEAD`; the warning then names `git remote set-head origin --auto`. A remote not named
+  `origin` is never consulted. An older baseline (no `anchored_head`) gets a warning, and the next anchor records it.
+- **Where it stays RED by design.** A conflict resolved by hand gives a blob equal to neither side, so (f) fails
+  for an out-of-scope path. Line-ending or filter conversion (`.gitattributes` eol, LFS) makes (e) fail. A shallow
+  clone may lack the history (b) needs; that reads as "could not decide", never as an ancestor.
+- **No attribution, still** (lessons-learned **L68**). `merged` is provenance by content, not authorship. An
+  uncommitted human edit of a trusted doc inside the window is an escape exactly as before.
+
 ## 3. `WARN` vs `RED`
 
-**RED** (`ESCAPE` / `INCONCLUSIVE`): a denied candidate; a control-surface path changed with no
-authorizing scope; any statusless or unresolvable input. _Statusless = RED at write._
+**RED** (`ESCAPE` / `INCONCLUSIVE`): a denied candidate that is not `merged` (§2a); a control-surface path
+changed with no authorizing scope and not `merged`; any statusless or unresolvable input. _Statusless = RED at
+write._
 
 **Unreadable during reconcile is a CANDIDATE, not only a warning.** A path the reconciler cannot hash
 (`hashFile` returns `null`) is treated as **changed**. It is judged like any other candidate, so it goes
@@ -251,7 +310,13 @@ it.
 ## 5. Guarantee audit (P0)
 
 - **"a denied path that changed is reported"** → **FLOOR**: content-hash (`ARCHITECTURE §2` primitive
-  #2) composed with path/enum membership (primitive #3). No model judgment.
+  #2) composed with path/enum membership (primitive #3). No model judgment. Reported in `escapes[]`, or in
+  `merged[]` when every §2a condition holds — never dropped.
+- **"a merged path's bytes are upstream's, and a commit the build made itself is not `merged`"** → **FLOOR
+  within the non-adversarial claim**: object-id and SHA-256 equalities plus git exit codes (primitives #2, #3),
+  pinned by one test per §2a condition. Bounded by §2a's list: the upstream ref is a Bash-movable alias, and bytes
+  equal to upstream's are classified whoever wrote them. **"The detector got stronger" is STRUCK**: the class
+  adds precision, not resistance.
 - **"denied is decided by the real guards"** → **FLOOR, by delegation**: the checker **executes**
   `protect-trusted-paths.cjs`, and for the no-scope default it executes `enforce-writes-scope.cjs` in a
   probe sandbox reproducing THREE runtime signals (6.24.0, up from two): a `pharn.config.json`

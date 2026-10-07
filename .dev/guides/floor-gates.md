@@ -55,8 +55,12 @@ come from the single code block this text was moved from, so the entry they name
 # does NOT ignore `.pharn/` the runner's own logs would move the fingerprint between EVERY pair of gates and
 # refuse every run. MEASURED, never inherited (L24): 1925 paths, ~463 ms cold / ~75-85 ms warm on this repo.
 # BOUNDS: POSIX only; gates assumed order-independent; a `setsid` descendant escapes the group kill; a
-# harness kill before --timeout-ms orphans the group, which is why the Bash-tool timeout must EXCEED it and
-# why --timeout-ms is REQUIRED (floor code carries no harness-specific default, so there is no default for a
+# harness SIGTERM/SIGINT/SIGHUP before --timeout-ms is FORWARDED to the gate's group and the runner dies by it,
+# recording nothing (6.50.1); a harness SIGKILL orphans the group until the next `run --next` recovers the stale
+# lock, which first stops the group <out>/lock.child names (audit P3-P), so the Bash-tool timeout must still
+# EXCEED it; test-level gates (CI_GATE_IDS) get CI=1 unless CI is already defined, so vitest/Jest refuse a new
+# snapshot (audit P2-F); validateStamp and finalize also refuse fingerprint.init != runs[0].fp_before as
+# tree-changed-between-gates (audit P3-J); --timeout-ms is REQUIRED (floor code carries no harness-specific default, so there is no default for a
 # test to leave unexercised — L41); `--gates` splits on commas, so a command containing one needs a wrapper;
 # gate stdout/stderr are UNTRUSTED free text, written by fd and reduced to a sha256, and NO verdict reads
 # their content; logs are bounded per stage by init's recreate of <out> and are otherwise unbounded across
@@ -185,7 +189,7 @@ node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --b
 # scratch layout; `loop-fresh-core.mjs`'s `DEFAULT_STAMPS.regressHead`/`regressBase` derive from it.
 # THE BUDGET (`--budget-ms`) solves the 600 s Bash-tool cap: a slow step (the base-commit install, or one gate)
 # starts only if it is the FIRST slow step of THIS invocation, or `elapsed + timeoutMs <= budgetMs`; otherwise the
-# script persists `.pharn/pharn-regress/stage.json` (schema `pharn-stage-regress-progress/3` since 6.49.0 — `/2` (6.33.0) added the BASE-reuse decision, `/3` the entry decision and `installOverride`) and exits 5
+# script persists `.pharn/pharn-regress/stage.json` (schema `pharn-stage-regress-progress/4` since regress-base-integrity — `/2` (6.33.0) added the BASE-reuse decision, `/3` (6.49.0) the entry decision and `installOverride`, `/4` `baseSource`, `baseWorktree` and `installNeeded`) and exits 5
 # `continue`. `--resume` accepts ONLY `--budget-ms` and reads everything else from that record, so the resume line
 # carries no state (L44). With no `--budget-ms` (a code caller, never a Bash-tool caller), nothing is budgeted.
 # `pharn/floor/render-regression.mjs` (pure, no CLI) renders `REGRESSION.md` from the verdict JSON, the scope
@@ -207,12 +211,25 @@ node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --b
 # express, `.pharn/pharn-regress/stage.json` (which resolves to `.pharn/**` alone, since `writes: []` is refused
 # by the setter), so no Write-tool write may land outside `.pharn/**` at all while the script runs — a real,
 # probed guarantee (`.dev/floor/command-hygiene.test.mjs`'s STAGE_SCRIPT_WIRING).
-# THE UNCHANGED, NAMED RESIDUAL: `regress-failed-install-false-green` (amendment A2, not built). A failed
-# base-commit install CAN turn a base gate red, so a gate that does is classified `pre_existing`, and the
-# verdict JSON — all `/pharn-ship`/`/pharn-loop` read — still says `no-regressions`: a possible false green
-# on exactly the gates the install broke (NARROWED, GATE 2 review A6: not "every base gate", and the
-# warning renders above the verdict line, not literally REGRESSION.md's first line — see
-# render-regression.mjs). Read by no machine consumer either way.
+# BASE-EVIDENCE INTEGRITY (regress-base-integrity, the 2026-10-07 audit's P1-B/P2-C/P2-D/P2-E). (1) The report records
+# `base_source` (stage-regress-core.mjs BASE_SOURCES: explicit | dirty-head | merge-base); /pharn-ship now captures
+# `git rev-parse --verify HEAD` right after its GATE-1 backstop and passes `--base`, as /pharn-loop does from S3. (2) The
+# partition refuses `no-change-under-test` when nothing but this feature's artifacts or a trusted doc changed since the
+# base (check-regress.mjs changedUnderTest) — a committed build under either implicit rule. (3) check-regress.mjs verdict
+# reads a timed-out BASE run (gate-run-core.mjs timedOutRunIds, also the reuse rule's) as `inconclusive`/`base-timed-out`
+# when its head is red, and lists `base_timed_out`; stamp-only, so check-loop-fresh E agrees. (4) The BASE checkout is a
+# temp-root mkdtemp directory OUTSIDE the project (pharn/floor/base-worktree.mjs: name bound to the project's realpath,
+# prefix clear that unlinks links and skips foreign entries, resume validation, path redaction in REGRESSION.md;
+# `base-worktree-unplaceable` when TMPDIR points into the project) — so base gates no longer resolve HEAD's
+# node_modules/.bin; and because a skipped-over-something or failed install then leaves the base without dependencies,
+# a `no-regressions` with a gate red on both sides over such a base is refused `base-install-unreliable`
+# (unreliableInstallMasking + baseInstallNeeded). That closes the former `regress-failed-install-false-green`
+# residual for an install that exits non-zero or times out; it stays open for an `--install` that exits 0 without
+# preparing anything and for dependencies the base neither locks nor declares. (5) A total-glob `## Files` entry (only `*` and `/`, or `.`) is refused `plan-files-total-glob`
+# (check-regress.mjs declaredClasses; quick scope: `total-glob-declared`), and hook-dropped globs are reported as
+# `unenforced_globs`. Refusals, not verdicts, wherever a stamp alone cannot decide — so check E never re-derives one.
+# NAMED RESIDUAL: a partially committed build with another uncommitted change still compares against a base holding
+# the committed part — only `--base` closes it.
 # Ships: bumps SKILLS_VERSION. Exit: 0 done · 2 unusable · 3 refused · 4 question · 5 continue · anything else
 # (1 included) = crashed.
 node pharn/floor/stage-regress.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--base <ref>] [--gates "<cmd>[::<id>],…"] [--install "<cmd>" | --no-install] [--tests "<pathspec>,…" | --no-tests]
@@ -227,7 +244,8 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 # for exactly the current BASE requirement; the HEAD side always runs. pharn/floor/regress-base-reuse-core.mjs is the
 # rule (the requirement: base SHA, the spec base-init copies — gate-run-core.mjs baseSpecFrom, one owner —, the install
 # decision, the timeout, the stamp/fingerprint versions, and the content of every root-level HEAD path in `inside`,
-# because the base worktree is nested in the HEAD tree; no-install, failed-install and timed-out evidence is never
+# because the base worktree was nested in the HEAD tree until regress-base-integrity moved it to the temp root — kept,
+# since binding more than is reachable can only cause a miss; no-install, failed-install and timed-out evidence is never
 # reused); pharn/floor/regress-base-reuse.mjs is the storage. The evidence stays in .pharn/pharn-regress/base-gates/
 # (the fresh start now keeps that one directory); the binding record is <git rev-parse --absolute-git-dir>/
 # pharn-regress-base-reuse.json, out of the write tools' reach (the composed guards deny it: protect-trusted-paths in a main checkout, enforce-writes-scope in a linked worktree), bound to the run marker's bytes and
@@ -415,6 +433,9 @@ node pharn/floor/build-gate.mjs --feature <name> --mode targeted|full --timeout-
 # pattern — so a module that cannot load, a throw while checking, or a result outside the checker's contract exits 2
 # `crashed`, never 1. NOT CAUGHT, and stated: the entry file itself unloadable (a run from outside the project root, where
 # the pinned relative path names no file) is node's own exit 1 with no document; both callers stop on 1.
+# regress-base-integrity: a total-glob `## Files` entry exits 2 `total-glob-declared` (the same refusal the regress
+# partition makes); hook-dropped globs are listed as `unenforced_globs`. /pharn-ship --quick's base is the one Step 2
+# item 1 captured after GATE 1, never re-derived.
 # Exit: 0 clean · 1 escaped · 2 inconclusive (closed reason_code, `crashed` included).
 node pharn/floor/check-quick-scope.mjs --feature <name> --base <40-hex>
 ```

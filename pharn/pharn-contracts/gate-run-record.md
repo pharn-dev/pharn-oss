@@ -103,6 +103,14 @@ before the gate runs and afterwards records `results_sha256`: the sha256 of the 
 else `null`. It is recorded on **every** run, but only the gates `test-results-record.md` lets a project
 configure are ever read; on any other gate the hash means nothing.
 
+**`CI=1` for the test-level gates (6.50.1).** The runner also sets `CI=1` in the environment of every AC level gate
+(`test`, `test:e2e`, `e2e`) and of the entry check's `base:test` slot (`run-gates.mjs` `CI_GATE_IDS`), unless the
+inherited environment already defines `CI`, whatever its value. vitest and Jest write a missing snapshot on a run
+where `CI` is unset, so an AC test whose oracle is a snapshot failed before the build and passed after it for any
+implementation; under `CI` both refuse to write one. Bounded: a project's own `CI=false` restores snapshot writing,
+an oracle file the build writes by other means is not caught (`/pharn-test`'s rule against such oracles is advisory),
+and an explicit `--gates` token gets the variable only when its id is one of those ids. Style gates are untouched.
+
 The field is **optional and additive**. `SCHEMA` is unchanged: `validateStamp` checks it only when present
 (`null` or a sha256 digest), so every stamp written before it still validates. A stamp carrying a
 **malformed** value is refused as `stamp-malformed` by all three `validateStamp` callers — a route reachable
@@ -314,6 +322,9 @@ release line; `check-loop-fresh.mjs`'s log check is now its emitter.
   eligible and identity-equal at the live tree when it recorded the entry;
 - the map's **keys** cover the resolved source set, plus `instruction-growth` and `reconcile` for verify (the runner
   composes both; nothing re-checks that a stamp carries them);
+- **no tree edit happened between init and the first gate** (`fingerprint.init === runs[0].fp_before`, since 6.50.1 —
+  `aux.completeness` and the set were captured over the tree init fingerprinted), refused as
+  `tree-changed-between-gates` like the next rule;
 - **no tree edit happened between consecutive gate runs** (`fp_after[k-1] === fp_before[k]`);
 - `reconcile`, when present, ran **last**.
 
@@ -343,8 +354,13 @@ release line; `check-loop-fresh.mjs`'s log check is now its emitter.
 
 - **POSIX only** — process groups, `SIGTERM`→`SIGKILL` escalation and `/bin/sh` are assumed.
 - Gates are assumed **order-independent**; a gate needing another's output must build it itself.
-- A descendant calling `setsid` escapes the group kill; a harness kill before `--timeout-ms` orphans the
-  group, which is why the invoking command's Bash timeout must exceed it.
+- A descendant calling `setsid` escapes the group kill. A harness `SIGTERM`, `SIGINT` or `SIGHUP` before
+  `--timeout-ms` is forwarded to the gate's group (6.50.1); the runner then dies by that signal and records nothing
+  for the entry, which the next `run --next` runs again. A `SIGKILL` cannot be caught: it orphans the group until the
+  next `run --next` recovers the stale lock, which first stops the group `<out>/lock.child` names (SIGTERM, then
+  SIGKILL; still alive is `lock-busy`) so two copies of a gate never overlap. Bounded: a kill in the instant between
+  the spawn and that record is not covered, and a group that had already exited may have had its id reused, which
+  nothing can tell apart. The invoking command's Bash timeout must still exceed `--timeout-ms`.
 - **`--timeout-ms` is required.** Floor code carries no harness-specific default, so there is no default
   for a test to leave unexercised (**L41**).
 - Gate stdout/stderr are **untrusted free text** (P2): written by fd, only their sha256 reaches the

@@ -23,6 +23,90 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.52.0] - 2026-10-07
+
+### Added
+
+- **The Bash-write reconciler classifies an upstream merge as `merged`, not as an escape.**
+  `reconcile-baseline.mjs --anchor` now records `anchored_head`, the commit HEAD named when the epoch opened. `check-bash-reconcile.mjs`
+  lists a path that would otherwise be an escape under a new `merged[]` field, with a warning, when its change since
+  the anchor is exactly the change upstream commits made: the anchored commit is an ancestor of HEAD; HEAD and
+  `refs/remotes/origin/HEAD` share a merge base the anchored commit does not contain; the baseline held the path's
+  blob at the anchored commit; and the worktree holds its blob at HEAD, which equals its blob at that merge base.
+  A commit the build makes itself is not on upstream, so it stays an escape. Any git failure keeps the escape. Why:
+  a merge of `origin/main` mid-run, or a stale baseline on a checkout that later pulled, reported every path main
+  changed as an escape (audit P3-L: 9 false escapes on one checkout, trusted docs among them). The verdict enum and
+  the exit codes are unchanged. Bounds, in `reconciliation-record.md` §2a: bytes equal to upstream's are classified
+  whoever wrote them; the upstream ref is a local alias Bash can move, which is outside the non-adversarial claim;
+  with no `refs/remotes/origin/HEAD` the class is inert and the warning names `git remote set-head origin --auto`;
+  a baseline anchored before this release records no head and gets no classification until the next anchor; a
+  rebase, a hand-resolved conflict, or line-ending conversion keeps the RED. This makes the detector more precise,
+  not stronger.
+
+### Fixed
+
+- **A `/pharn-regress` verdict of `no-regressions` no longer rests on base evidence that cannot show a regression**
+  (regress-base-integrity; the 2026-10-07 production-readiness audit's P1-B, P2-C, P2-D, P2-E and P3-O(a), each
+  reproduced and now a test through the real stage script):
+  - **`/pharn-ship` now compares against the commit it started from.** Its command now tells it to capture
+    `git rev-parse --verify HEAD` once, right after the GATE-1 backstop, and pass it as `--base` to both regress lines
+    and to `--quick`'s scope check, as `/pharn-loop` already did from S3. That capture is an advisory command step, not
+    a floor check; what the floor adds is the record (`base_source: explicit`) and the refusal below. Before, a committed
+    build under the dirty-tree rule, or a pushed one under `merge-base == HEAD`, sat inside its own base and every
+    regression read `pre_existing`; a standalone `/pharn-regress` without `--base` still uses those rules. A run with
+    nothing but the feature's own artifacts (or a trusted doc) changed since its base is now refused
+    `no-change-under-test` before any gate runs.
+  - **The report says how its base was chosen:** `regression-report.json` gains `base_source` (`explicit`,
+    `dirty-head` or `merge-base`), and `REGRESSION.md` names it, with a warning under `dirty-head`.
+  - **A timed-out base gate no longer hides a red head.** `check-regress.mjs verdict` reads it as `inconclusive`
+    (`base-timed-out`) and lists `base_timed_out`; under a green head nothing is masked. Stamp-only, so the loop's
+    freshness check re-derives the same verdict.
+  - **The base checkout leaves the project tree.** It is a temp-root directory (`pharn/floor/base-worktree.mjs`),
+    so base gates no longer resolve the HEAD tree's `node_modules` or `.bin`. Because a skipped or failed base
+    install then leaves the base with no dependencies, a `no-regressions` with a gate red on both sides over such a
+    base is refused `base-install-unreliable`. That closes the former `regress-failed-install-false-green` bound for
+    an install that exits non-zero or times out (and for `--no-install` over a lockfile or declared dependencies). It
+    stays open for an `--install` command that exits 0 without preparing anything, and for dependencies the base
+    neither locks nor declares.
+  - **A total-glob `## Files` entry is refused** (`**`, `*`, `**/*`, `.`: `plan-files-total-glob` at regress,
+    `total-glob-declared` in the quick scope check and the `check-regress.mjs scope` CLI). Globs the write hook drops
+    are reported as `unenforced_globs`. Before, `**` passed every path through both scope checks while the hook denied
+    the same writes.
+  - `check-regress.mjs` uses `gate-run-core.mjs`'s `FEATURE_SLUG_RE` instead of a looser private copy.
+  - Minor bump (verdict semantics): the stage-exit registry gains three `refused` codes and one `unusable` code
+    (`base-worktree-unplaceable`), and the progress record moves to schema `/4` — a regress run paused across the
+    upgrade is refused `progress-malformed` and re-run fresh. Not covered: a partially committed build with another
+    uncommitted change still compares against a base holding the committed part, unless `--base` is passed.
+
+## [6.50.1] - 2026-10-07
+
+### Fixed
+
+- 2026-10-07: **A snapshot-oracle AC test now fails the AC gate instead of passing for any implementation.** (audit
+  P2-F, `.dev/features/gate-runner-batch/`) vitest and Jest write a missing snapshot on a run where `CI` is unset, so
+  an AC test asserting `toMatchSnapshot()` failed before the build and passed after it whatever the build returned.
+  `pharn/floor/run-gates.mjs` now sets `CI=1` for the test-level gates (`test`, `test:e2e`, `e2e`, and the entry
+  check's `base:test`) unless the environment already defines `CI`; a project's own `CI=false` is kept and restores
+  snapshot writing. `/pharn-test` Step 3 gains an advisory rule: no snapshot, fixture or golden file the build or a
+  test run writes. Other oracle files the build writes are not caught by the runner.
+- 2026-10-07: **`validateStamp` and the runner's finalize compare `fingerprint.init` with the first gate's
+  `fp_before`.** (audit P3-J) Only consecutive gates were compared, so a tree edit between `init` and the first
+  `run --next` left a stamp whose `aux.completeness` described another tree than the gates judged. The mismatch is
+  `tree-changed-between-gates`, an existing lapse code (a re-run re-fingerprints at init).
+- 2026-10-07: **A killed `run-gates` no longer leaves its gate running into the re-run.** (audit P3-P) A SIGTERM,
+  SIGINT or SIGHUP to the runner is forwarded to the gate's process group; the runner then dies by that signal and
+  records nothing for the entry. A SIGKILL cannot be caught, so the runner records the running group in
+  `<out>/lock.child`, and the next `run --next` that recovers the stale lock stops that group (SIGTERM, then
+  SIGKILL; a group still alive is `lock-busy`) before re-running the entry. Bounds in
+  `pharn/pharn-contracts/gate-run-record.md`, "Bounds".
+- 2026-10-07: **Two concurrent first appends to a per-feature state file no longer drop a line.**
+  `pharn/floor/stage-work.mjs` `appendJsonLine` created a missing directory after an `lstat`; the appender that lost
+  the `mkdir` race got `EEXIST` and returned `{ok: false}`, so its record was lost (a CI flake: 199 of 200 lines).
+  `EEXIST` now re-`lstat`s the directory and applies the same symlink / not-a-directory refusal.
+- 2026-10-07: **CodeQL alerts #10 and #17 on the gate spawn carry a justification at the call.** The traced flow is a
+  project-configured gate command reaching `spawn`, which is what the runner is for; the alerts are not dismissed
+  here.
+
 ## [6.50.0] - 2026-10-07
 
 ### Fixed

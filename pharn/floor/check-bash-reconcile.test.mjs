@@ -961,3 +961,276 @@ test("★ UPGRADE (GATE-1 note 2): a baseline anchored before 6.20.8 — the lin
   assert.equal(anchor(dir).status, 0);
   assert.equal(check(dir, ["--require-baseline"]).json.verdict, "CLEAN", "…and a fresh anchor clears it");
 });
+
+// ------------------------------------------------------- the `merged` classification (6.52.0, audit P3-L)
+//
+// Real git histories, never a faked enumeration (L26). Upstream lives on branch `upstream`, committed through a
+// second worktree so the reconciled worktree is never touched by building it, and is named the way a clone names
+// it: refs/remotes/origin/main, with refs/remotes/origin/HEAD pointing at it. Each NON-VACUITY case below differs
+// from the positive case's fixture in ONE condition and must stay an ESCAPE (L34) — so the suite cannot pass by
+// classifying everything `merged`.
+
+const g = (dir, ...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+
+// A repo with dep.json committed, on branch `feat` cut from that commit (BASE). `beforeAnchor` runs on `feat`
+// before the anchor; the scope is the in-scope seed file only, so dep.json is OUT of scope.
+function mergeFixture({ beforeAnchor = () => {} } = {}) {
+  const dir = makeRepo();
+  writeFileSync(join(dir, "dep.json"), "v1\n");
+  g(dir, "add", "-A");
+  g(dir, "commit", "-q", "-m", "dep v1");
+  const base = g(dir, "rev-parse", "HEAD");
+  g(dir, "checkout", "-q", "-b", "feat");
+  beforeAnchor(dir);
+  setScope(dir, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  return { dir, base };
+}
+
+const upstreamWorktrees = new Map();
+// Commit `files` on `upstream` (cut from BASE on first use) and point origin/main + origin/HEAD at it.
+function upstreamCommit({ dir, base }, files) {
+  let wt = upstreamWorktrees.get(dir);
+  if (!wt) {
+    wt = mkdtempSync(join(tmpdir(), "pharn-recon-up-"));
+    made.push(wt);
+    rmSync(wt, { recursive: true, force: true });
+    g(dir, "worktree", "add", "-q", "-b", "upstream", wt, base);
+    upstreamWorktrees.set(dir, wt);
+  }
+  for (const [p, c] of Object.entries(files)) {
+    mkdirSync(dirname(join(wt, p)), { recursive: true });
+    writeFileSync(join(wt, p), c);
+  }
+  g(wt, "add", "-A");
+  g(wt, "commit", "-q", "-m", "upstream");
+  g(dir, "update-ref", "refs/remotes/origin/main", "refs/heads/upstream");
+  g(dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
+}
+
+// The build's own in-scope commit, then the merge of upstream — the "main moved mid-ship" sequence.
+function buildThenMerge(dir) {
+  writeFileSync(join(dir, "pharn/features/keep.md"), "built in scope\n");
+  g(dir, "commit", "-q", "-am", "build");
+  g(dir, "merge", "-q", "--no-edit", "upstream");
+}
+
+test("★ MERGED: paths an upstream merge changed after the anchor are classified merged, not escapes — every escape kind", () => {
+  // On main before 6.52.0 this exact sequence was ESCAPE on all three paths (the audit's P3-L false RED).
+  const fx = mergeFixture();
+  upstreamCommit(fx, { "dep.json": "v2\n", "LIMITS.md": "a trusted doc changed on main\n", "pharn/floor/new.mjs": "// floor\n" });
+  buildThenMerge(fx.dir);
+  const r = check(fx.dir, ["--require-baseline"]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.json.verdict, "CLEAN");
+  assert.deepEqual(r.json.escapes, []);
+  assert.deepEqual([...r.json.merged].sort(), ["LIMITS.md", "dep.json", "pharn/floor/new.mjs"]);
+  assert.ok(
+    r.json.warnings.some((w) => /3 path\(s\) classified merged/.test(w)),
+    "reported, never silent (L48): " + r.json.warnings.join(" | ")
+  );
+});
+
+test("★ ANTI-LAUNDERING: a path the build COMMITTED itself stays an escape; the upstream path beside it is merged", () => {
+  const fx = mergeFixture();
+  writeFileSync(join(fx.dir, "OUT.txt"), "the build's own out-of-scope write, committed\n");
+  g(fx.dir, "add", "OUT.txt");
+  g(fx.dir, "commit", "-q", "-m", "escape, committed");
+  upstreamCommit(fx, { "dep.json": "v2\n" });
+  buildThenMerge(fx.dir);
+  const r = check(fx.dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    ["OUT.txt"]
+  );
+  assert.deepEqual(r.json.merged, ["dep.json"]);
+});
+
+test("★ NON-VACUITY (f): the build's own commit to a merged path, AFTER the merge, is an escape", () => {
+  const fx = mergeFixture();
+  upstreamCommit(fx, { "dep.json": "v2\n" });
+  buildThenMerge(fx.dir);
+  writeFileSync(join(fx.dir, "dep.json"), "v3 by the build\n");
+  g(fx.dir, "commit", "-q", "-am", "the build edits the merged file and commits it");
+  const r = check(fx.dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    ["dep.json"]
+  );
+  assert.deepEqual(r.json.merged, []);
+});
+
+test("★ a LATER fetch that moves origin/main past the merged commit does not undo the classification", () => {
+  const fx = mergeFixture();
+  upstreamCommit(fx, { "dep.json": "v2\n" });
+  buildThenMerge(fx.dir);
+  upstreamCommit(fx, { "dep.json": "v3 — main moved again, not merged here\n" });
+  const r = check(fx.dir, ["--require-baseline"]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.deepEqual(r.json.merged, ["dep.json"], "judged against the merge base, the upstream commit HEAD contains");
+});
+
+test("★ NON-VACUITY (a): a baseline with no anchored_head (pre-6.52.0) gets no classification, and says so", () => {
+  const fx = mergeFixture();
+  const rec = JSON.parse(readFileSync(join(fx.dir, RECORD_PATH), "utf8"));
+  delete rec.anchored_head;
+  writeFileSync(join(fx.dir, RECORD_PATH), JSON.stringify(rec, null, 2) + "\n");
+  upstreamCommit(fx, { "dep.json": "v2\n" });
+  buildThenMerge(fx.dir);
+  const r = check(fx.dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    ["dep.json"]
+  );
+  assert.ok(r.json.warnings.some((w) => /no anchored_head/.test(w)));
+});
+
+test("★ NON-VACUITY (b), GATE-1: HEAD moved by a REBASE — the anchored commit is not an ancestor: no classification, a warning, RED", () => {
+  const fx = mergeFixture({
+    beforeAnchor: (dir) => {
+      writeFileSync(join(dir, "pharn/features/keep.md"), "a feat commit the anchor sits on\n");
+      g(dir, "commit", "-q", "-am", "feat before anchor");
+    },
+  });
+  upstreamCommit(fx, { "dep.json": "v2\n" });
+  g(fx.dir, "rebase", "-q", "upstream"); // rewrites the anchored commit
+  const r = check(fx.dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.equal(r.json.verdict, "ESCAPE");
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    ["dep.json"]
+  );
+  assert.deepEqual(r.json.merged, []);
+  assert.ok(
+    r.json.warnings.some((w) => /not its ancestor/.test(w)),
+    r.json.warnings.join(" | ")
+  );
+});
+
+test("★ NON-VACUITY (c): no refs/remotes/origin/HEAD — the class is inert, the warning names the remedy, RED", () => {
+  const fx = mergeFixture();
+  upstreamCommit(fx, { "dep.json": "v2\n" });
+  buildThenMerge(fx.dir);
+  g(fx.dir, "symbolic-ref", "--delete", "refs/remotes/origin/HEAD");
+  const r = check(fx.dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(r.json.merged, []);
+  assert.ok(r.json.warnings.some((w) => /git remote set-head origin --auto/.test(w)));
+});
+
+test("★ NON-VACUITY (d), GATE-1: an UNCOMMITTED edit to the path at anchor time keeps it an escape after main changes it", () => {
+  const fx = mergeFixture({
+    beforeAnchor: (dir) => writeFileSync(join(dir, "dep.json"), "a local, uncommitted edit at anchor time\n"),
+  });
+  g(fx.dir, "checkout", "--", "dep.json"); // the edit is discarded (a write in the window), so the merge can land
+  upstreamCommit(fx, { "dep.json": "v2\n" });
+  buildThenMerge(fx.dir);
+  const r = check(fx.dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    ["dep.json"]
+  );
+  assert.deepEqual(r.json.merged, []);
+});
+
+test("★ NON-VACUITY (e): an uncommitted edit ON TOP of a merged path is an escape", () => {
+  const fx = mergeFixture();
+  upstreamCommit(fx, { "dep.json": "v2\n" });
+  buildThenMerge(fx.dir);
+  writeFileSync(join(fx.dir, "dep.json"), "v2 plus a Bash edit\n");
+  const r = check(fx.dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    ["dep.json"]
+  );
+});
+
+test("★ NON-VACUITY (c, merge base new since the anchor): HEAD moved by the build's OWN commits only — a revert to upstream's old bytes is an escape", () => {
+  // X carries a pre-anchor feat change to dep.json; after the anchor the build reverts it to BASE's bytes and
+  // commits. H's blob then equals the merge base's (BASE, an upstream commit) — but BASE is already inside X, so
+  // no upstream commit entered HEAD in the window and nothing here is explained by a merge.
+  const fx = mergeFixture({
+    beforeAnchor: (dir) => {
+      writeFileSync(join(dir, "dep.json"), "feat's own dep change, committed before the anchor\n");
+      g(dir, "commit", "-q", "-am", "feat dep");
+    },
+  });
+  upstreamCommit(fx, { "OTHER.md": "upstream exists, never merged\n" });
+  writeFileSync(join(fx.dir, "dep.json"), "v1\n");
+  g(fx.dir, "commit", "-q", "-am", "revert dep to base, out of scope");
+  const r = check(fx.dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    ["dep.json"]
+  );
+  assert.deepEqual(r.json.merged, []);
+});
+
+test("★ GATE-2 A1: an anchored_head that is not an object id (a leading `-`) is refused before git — never an option", () => {
+  const fx = mergeFixture();
+  const rec = JSON.parse(readFileSync(join(fx.dir, RECORD_PATH), "utf8"));
+  rec.anchored_head = "--all";
+  writeFileSync(join(fx.dir, RECORD_PATH), JSON.stringify(rec, null, 2) + "\n");
+  upstreamCommit(fx, { "dep.json": "v2\n" });
+  buildThenMerge(fx.dir);
+  const r = check(fx.dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(r.json.merged, []);
+  assert.ok(
+    r.json.warnings.some((w) => /anchored_head is not a full object id/.test(w)),
+    "refused by shape, not by whatever git makes of the option: " + r.json.warnings.join(" | ")
+  );
+});
+
+test("★ GATE-2 A2: filenames holding pathspec magic (`:(top)`) or glob characters are LITERAL paths to git — each is merged", () => {
+  // At X, `dep.json` exists. Read as pathspec magic, `:(top)dep.json` would name it at X, the lookup would not be
+  // "absent", and (d) would fail closed — so `:(top)dep.json` is merged only because every pathspec is literal
+  // (measured: removing GIT_LITERAL_PATHSPECS fails this test). `ls-tree` reads `*` and `?` literally on its own;
+  // those two names pin that, so a future switch to a globbing subcommand is caught as well.
+  const fx = mergeFixture({
+    beforeAnchor: (dir) => {
+      writeFileSync(join(dir, "dep-x.json"), "a sibling a `?` pattern would match\n");
+      g(dir, "add", "dep-x.json");
+      g(dir, "commit", "-q", "-m", "sibling");
+    },
+  });
+  upstreamCommit(fx, { ":(top)dep.json": "magic-looking name\n", "dep-?.json": "added on upstream\n", "dep-*.json": "also added\n" });
+  buildThenMerge(fx.dir);
+  const r = check(fx.dir, ["--require-baseline"]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.deepEqual([...r.json.merged].sort(), [":(top)dep.json", "dep-*.json", "dep-?.json"]);
+});
+
+test("★ GATE-2 A2: a SYMLINK upstream added (mode 120000) is merged — digest = sha256(`symlink\\0` + link text), the baseline's rule", () => {
+  const fx = mergeFixture();
+  const wtFiles = { "dep.json": "v2\n" };
+  upstreamCommit(fx, wtFiles);
+  const wt = upstreamWorktrees.get(fx.dir);
+  symlinkSync("dep.json", join(wt, "link.json"));
+  g(wt, "add", "link.json");
+  g(wt, "commit", "-q", "-m", "upstream adds a link");
+  g(fx.dir, "update-ref", "refs/remotes/origin/main", "refs/heads/upstream");
+  assert.equal(g(fx.dir, "ls-tree", "upstream", "--", "link.json").split(" ")[0], "120000", "the fixture is a real mode-120000 entry");
+  buildThenMerge(fx.dir);
+  const r = check(fx.dir, ["--require-baseline"]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.deepEqual([...r.json.merged].sort(), ["dep.json", "link.json"]);
+});
+
+test("✧ `merged` is always present in the verdict — an empty array when HEAD did not move", () => {
+  const dir = makeRepo();
+  setScope(dir, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  writeFileSync(join(dir, "SNEAKY.txt"), "x\n");
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 1);
+  assert.deepEqual(r.json.merged, []);
+  assert.ok(!r.json.warnings.some((w) => /merged/.test(w)), "no HEAD move, no classification talk");
+});

@@ -178,6 +178,7 @@ export const REASON_CODES = Object.freeze([
   "bad-scope-json",
   "base-head-mismatch",
   "base-not-sha",
+  "base-timed-out",
   "checker-crashed",
   "coverage-violation",
   "empty-source-set",
@@ -201,6 +202,7 @@ export const REASON_CODES = Object.freeze([
   "stamp-malformed",
   "stamp-missing",
   "stamp-unfinalized",
+  "total-glob-declared",
   "tree-changed-between-gates",
   "tree-moved-since-verify",
   "usage-error",
@@ -1044,6 +1046,15 @@ export function validateStamp(stamp, expect = {}) {
     if (bad !== null) return err("stamp-malformed", `stamp is not a well-formed entry-derived BASE stamp: ${bad}`);
   }
 
+  // No edit between init and the first gate: `aux.completeness` and the resolved set were captured over the tree init
+  // fingerprinted, so a first gate that saw another tree judged a different state than the record describes. Same
+  // code as the inter-gate break below (a re-run re-fingerprints at init, so it routes as a lapse).
+  if (stamp.runs[0].fp_before !== fp.init) {
+    return err(
+      "tree-changed-between-gates",
+      `the worktree changed between init and ${JSON.stringify(stamp.runs[0].id)} — fingerprint.init is not runs[0].fp_before`
+    );
+  }
   // No edit between gates: entry k's fp_before must equal entry k-1's fp_after.
   for (let i = 1; i < stamp.runs.length; i++) {
     if (stamp.runs[i].fp_before !== stamp.runs[i - 1].fp_after) {
@@ -1090,6 +1101,15 @@ export function stampToMap(stamp) {
   const map = {};
   for (const r of stamp.runs) map[r.id] = r.exit;
   return map;
+}
+
+/** The ids of a VALIDATED stamp's runs the runner recorded as timed out (`timed_out === true`), in run order. The ONE
+ *  owner of "this run's exit is not the gate's own verdict" (regress-base-integrity, 6.50.x): regress-base-reuse-core.mjs
+ *  refuses such a base stamp as reusable evidence, and check-regress.mjs refuses to read a timed-out base gate as
+ *  `pre_existing` when its head is red. A timed-out exit is the runner's kill (or a runner's own exit on the group
+ *  signal — node's test runner exits 1, measured), never a finished verdict of the gate. */
+export function timedOutRunIds(stamp) {
+  return stamp.runs.filter((r) => r.timed_out === true).map((r) => r.id);
 }
 
 /** verify only: the `--complete` integer, read from `aux`, NEVER from `runs[]` (GRILL R1). */

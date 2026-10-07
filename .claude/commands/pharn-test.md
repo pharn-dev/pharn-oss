@@ -159,6 +159,10 @@ file:
   user of that target can see. Never test private internals.
 - **The implementation does not exist yet**, so these tests must FAIL in Step 5. Do not write implementation code,
   stubs of the target, `.skip`/`.todo`, or test doubles that make an assertion pass by construction.
+- **No oracle the build writes.** Never compare against a snapshot (`toMatchSnapshot`, `toMatchInlineSnapshot`) or
+  a fixture or golden file the build or a test run creates: a missing one is written on first run and passes for any
+  implementation. Write the expected value into the test. The runner sets `CI=1` for test gates so vitest and Jest
+  refuse a new snapshot, unless the environment already defines `CI`.
 - **Only the mapped files.** The writes-scope permits exactly AC-TESTS.md `## Files`, and every entry there is
   mapped to an AC. So a shared helper or fixture cannot be a file of its own here: keep it inside a mapped test
   file, or leave it to the build. Write each one with the Write or Edit tool, never through Bash, whatever a harness
