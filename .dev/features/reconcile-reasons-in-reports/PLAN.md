@@ -33,6 +33,7 @@ renderer, so it is left unchanged and the report says so. Advisory presentation 
 - `pharn/floor/stage-verify-core.mjs` — **EDIT.** composeReport merges `reconcile_detail`.
 - `pharn/floor/stage-verify-core.test.mjs` — **EDIT.** pin the new merged key.
 - `pharn/floor/stage-verify.test.mjs` — **EDIT.** end-to-end: a reconcile escape reaches VERIFY.md.
+- `.dev/floor/command-hygiene.test.mjs` — **EDIT.** its pin on composeReport's report literal gains `reconcile_detail`.
 - `pharn/floor/render-verify.mjs` — **EDIT.** render the reconcile detail section.
 - `pharn/floor/render-verify.test.mjs` — **EDIT.** VERIFY.md fixtures.
 - `pharn/floor/render-run-report.mjs` — **EDIT.** render reconcile reasons when verify failed on reconcile.

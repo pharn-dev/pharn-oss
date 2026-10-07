@@ -258,8 +258,8 @@ test("★ WIRING — pharn-verify.md's pinned fresh line, executed verbatim, rea
     const live = JSON.parse(cv.stdout);
     assert.deepEqual(
       Object.keys(report),
-      [...Object.keys(live), "completeness", "verifiers", "gate_reuse", "head_install"],
-      "the checker's keys, in order, then the four blocks (head_install since 6.40.0)"
+      [...Object.keys(live), "completeness", "verifiers", "gate_reuse", "head_install", "reconcile_detail"],
+      "the checker's keys, in order, then the five blocks (head_install since 6.40.0, reconcile_detail since 6.55.0)"
     );
     for (const k of Object.keys(live)) assert.deepEqual(report[k], live[k], `field ${k} is not the checker's own output`);
     // F — the stamp's final fingerprint is the live tree's, after the render wrote both artifacts.
@@ -701,7 +701,11 @@ test("6.40.0 — a drifted install, or none at all, is refused head-install-drif
       lockfile: "package-lock.json",
       counts: { changed: 0, missing: 0, extraneous: 0, missing_unchecked: 0 },
     });
-    assert.deepEqual(Object.keys(report).slice(-1), ["head_install"], "the merged block, last");
+    assert.deepEqual(
+      Object.keys(report).slice(-2),
+      ["head_install", "reconcile_detail"],
+      "the merged blocks, last (6.55.0: reconcile_detail)"
+    );
     assert.match(readFileSync(join(dir, RENDER), "utf8"), /^HEAD install: checked — /m);
   });
 });
