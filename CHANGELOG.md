@@ -42,6 +42,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Not covered: the finding's remedy text is not rendered (re-run the checker for it). The dev twin
     `/pharn-dev-verify` writes `VERIFY.md` by prose and does not render the block. No verdict reads it.
 
+## [6.54.1] - 2026-10-07
+
+### Fixed
+
+- 2026-10-07: **The writes-scope deny message and `LIMITS.md` §6 name 6.54.0's widening rule.** The deny bullet that says
+  "re-run the scope-setter" now adds that, when the scope came from a PLAN after the build anchored, verify's reconcile
+  still reports the path `plan-widened-after-anchor`, and that declaring every path before the build's Step 0 stays
+  clean. `LIMITS.md` §6 states the rule beside the 6.52.0 `merged` sentence. Both files were applied by the maintainer
+  with a reviewed, sha256-pinned script that deleted itself; the three golden deny-body tests are updated.
+
 ## [6.54.0] - 2026-10-07
 
 ### Changed
