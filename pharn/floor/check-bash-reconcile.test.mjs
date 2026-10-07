@@ -964,7 +964,7 @@ test("★ UPGRADE (GATE-1 note 2): a baseline anchored before 6.20.8 — the lin
   assert.equal(check(dir, ["--require-baseline"]).json.verdict, "CLEAN", "…and a fresh anchor clears it");
 });
 
-// ------------------------------------------------------- the `merged` classification (6.51.0, audit P3-L)
+// ------------------------------------------------------- the `merged` classification (6.52.0, audit P3-L)
 //
 // Real git histories, never a faked enumeration (L26). Upstream lives on branch `upstream`, committed through a
 // second worktree so the reconciled worktree is never touched by building it, and is named the way a clone names
@@ -1019,7 +1019,7 @@ function buildThenMerge(dir) {
 }
 
 test("★ MERGED: paths an upstream merge changed after the anchor are classified merged, not escapes — every escape kind", () => {
-  // On main before 6.51.0 this exact sequence was ESCAPE on all three paths (the audit's P3-L false RED).
+  // On main before 6.52.0 this exact sequence was ESCAPE on all three paths (the audit's P3-L false RED).
   const fx = mergeFixture();
   upstreamCommit(fx, { "dep.json": "v2\n", "LIMITS.md": "a trusted doc changed on main\n", "pharn/floor/new.mjs": "// floor\n" });
   buildThenMerge(fx.dir);
@@ -1075,7 +1075,7 @@ test("★ a LATER fetch that moves origin/main past the merged commit does not u
   assert.deepEqual(r.json.merged, ["dep.json"], "judged against the merge base, the upstream commit HEAD contains");
 });
 
-test("★ NON-VACUITY (a): a baseline with no anchored_head (pre-6.51.0) gets no classification, and says so", () => {
+test("★ NON-VACUITY (a): a baseline with no anchored_head (pre-6.52.0) gets no classification, and says so", () => {
   const fx = mergeFixture();
   const rec = JSON.parse(readFileSync(join(fx.dir, RECORD_PATH), "utf8"));
   delete rec.anchored_head;
@@ -1242,7 +1242,7 @@ test("✧ `merged` is always present in the verdict — an empty array when HEAD
 //
 // Audit 2026-10-07: a Bash edit of LIMITS.md plus a forged baseline entry read CLEAN, because the trusted docs were
 // not always-reconciled. And `git diff HEAD` never lists an UNTRACKED file, so a control path absent at HEAD could be
-// added through Bash and hidden the same way. Each case below fails on the 6.51.0 checker.
+// added through Bash and hidden the same way. Each case below fails on the 6.52.0 checker.
 
 // Rewrite a path's baseline entry to its CURRENT bytes — the forgery the contract's non-adversarial bound names.
 function forge(dir, rel) {
@@ -1295,7 +1295,7 @@ test("★ L29: EVERY human-only member, ADDED as an untracked file with a forged
   }
 });
 
-test("★ ADDED FILE: an untracked new pharn/floor/ file with a forged entry is an ESCAPE (the 6.51.0 added-file hole) — no human-only remedy", () => {
+test("★ ADDED FILE: an untracked new pharn/floor/ file with a forged entry is an ESCAPE (the 6.52.0 added-file hole) — no human-only remedy", () => {
   const dir = makeRepo();
   setScope(dir, ["pharn/features/keep.md"]);
   assert.equal(anchor(dir).status, 0);

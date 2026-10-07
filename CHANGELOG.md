@@ -52,6 +52,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [6.52.0] - 2026-10-07
 
+### Added
+
+- **The Bash-write reconciler classifies an upstream merge as `merged`, not as an escape.**
+  `reconcile-baseline.mjs --anchor` now records `anchored_head`, the commit HEAD named when the epoch opened. `check-bash-reconcile.mjs`
+  lists a path that would otherwise be an escape under a new `merged[]` field, with a warning, when its change since
+  the anchor is exactly the change upstream commits made: the anchored commit is an ancestor of HEAD; HEAD and
+  `refs/remotes/origin/HEAD` share a merge base the anchored commit does not contain; the baseline held the path's
+  blob at the anchored commit; and the worktree holds its blob at HEAD, which equals its blob at that merge base.
+  A commit the build makes itself is not on upstream, so it stays an escape. Any git failure keeps the escape. Why:
+  a merge of `origin/main` mid-run, or a stale baseline on a checkout that later pulled, reported every path main
+  changed as an escape (audit P3-L: 9 false escapes on one checkout, trusted docs among them). The verdict enum and
+  the exit codes are unchanged. Bounds, in `reconciliation-record.md` §2a: bytes equal to upstream's are classified
+  whoever wrote them; the upstream ref is a local alias Bash can move, which is outside the non-adversarial claim;
+  with no `refs/remotes/origin/HEAD` the class is inert and the warning names `git remote set-head origin --auto`;
+  a baseline anchored before this release records no head and gets no classification until the next anchor; a
+  rebase, a hand-resolved conflict, or line-ending conversion keeps the RED. This makes the detector more precise,
+  not stronger.
+
 ### Fixed
 
 - **A `/pharn-regress` verdict of `no-regressions` no longer rests on base evidence that cannot show a regression**
@@ -86,26 +104,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     (`base-worktree-unplaceable`), and the progress record moves to schema `/4` — a regress run paused across the
     upgrade is refused `progress-malformed` and re-run fresh. Not covered: a partially committed build with another
     uncommitted change still compares against a base holding the committed part, unless `--base` is passed.
-
-## [6.51.0] - 2026-10-07
-
-### Added
-
-- **The Bash-write reconciler classifies an upstream merge as `merged`, not as an escape.**
-  `reconcile-baseline.mjs --anchor` now records `anchored_head`, the commit HEAD named when the epoch opened. `check-bash-reconcile.mjs`
-  lists a path that would otherwise be an escape under a new `merged[]` field, with a warning, when its change since
-  the anchor is exactly the change upstream commits made: the anchored commit is an ancestor of HEAD; HEAD and
-  `refs/remotes/origin/HEAD` share a merge base the anchored commit does not contain; the baseline held the path's
-  blob at the anchored commit; and the worktree holds its blob at HEAD, which equals its blob at that merge base.
-  A commit the build makes itself is not on upstream, so it stays an escape. Any git failure keeps the escape. Why:
-  a merge of `origin/main` mid-run, or a stale baseline on a checkout that later pulled, reported every path main
-  changed as an escape (audit P3-L: 9 false escapes on one checkout, trusted docs among them). The verdict enum and
-  the exit codes are unchanged. Bounds, in `reconciliation-record.md` §2a: bytes equal to upstream's are classified
-  whoever wrote them; the upstream ref is a local alias Bash can move, which is outside the non-adversarial claim;
-  with no `refs/remotes/origin/HEAD` the class is inert and the warning names `git remote set-head origin --auto`;
-  a baseline anchored before this release records no head and gets no classification until the next anchor; a
-  rebase, a hand-resolved conflict, or line-ending conversion keeps the RED. This makes the detector more precise,
-  not stronger.
 
 ## [6.50.1] - 2026-10-07
 

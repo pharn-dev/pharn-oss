@@ -85,7 +85,7 @@ test("★ the scope is SNAPSHOTTED into the record, not left to be read live (L3
   assert.deepEqual(built.record.scope_snapshot.scope, ["a.md", "b.md"]);
 });
 
-test("★ 6.51.0: the anchor records anchored_head = the commit HEAD names — and null on an unborn HEAD, never a guess", () => {
+test("★ 6.52.0: the anchor records anchored_head = the commit HEAD names — and null on an unborn HEAD, never a guess", () => {
   const dir = makeRepo();
   seedScope(dir, ["tracked.md"]);
   const r = spawnSync(process.execPath, [ANCHOR, "--anchor", "--base", dir], { encoding: "utf8" });

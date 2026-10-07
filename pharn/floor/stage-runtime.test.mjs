@@ -587,9 +587,9 @@ test("gitFailureDetail is TOTAL (L62) — hostile and odd shapes yield text, nev
 const GIT_SPAWN_RE = /\b(?:execFileSync|spawnSync|execSync|execFile|spawn|exec)\(\s*(["'`])git\1/g;
 const BOUNDED = new Set(["rev-parse", "merge-base"]);
 const GIT_SPAWNS = {
-  "check-bash-reconcile.mjs": [null, null, "diff"], // 6.51.0: the merged classification's two argv helpers
+  "check-bash-reconcile.mjs": [null, null, "diff"], // 6.52.0: the merged classification's two argv helpers
   "instruction-files.mjs": [null, null],
-  "reconcile-baseline.mjs": ["ls-files", "rev-parse"], // 6.51.0: headCommit() records anchored_head
+  "reconcile-baseline.mjs": ["ls-files", "rev-parse"], // 6.52.0: headCommit() records anchored_head
   "render-review-assignments.mjs": ["merge-base", "rev-parse", "diff"],
   "render-run-report.mjs": [null],
   "render-ship-briefing.mjs": ["rev-parse"],
@@ -664,7 +664,7 @@ test("★ GIT CEILING — every git spawn in a shipped floor module is listed, a
   assert.equal(
     spawns.length,
     15,
-    "non-vacuity (L34): the fifteen spawns the sweep found (loop-closeout.mjs's gitRun, 6.44.0; the reconciler's three, 6.51.0)"
+    "non-vacuity (L34): the fifteen spawns the sweep found (loop-closeout.mjs's gitRun, 6.44.0; the reconciler's three, 6.52.0)"
   );
   assert.deepEqual(
     ceilingViolations(spawns).map((s) => `${s.file}: ${s.text}`),

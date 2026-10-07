@@ -26,7 +26,7 @@ makes such a write **detectable after the fact**.
 ## The claim these artifacts support — and the seven it does not
 
 **Supported, literally:** _a **non-adversarial** write to a path the active writes-scope would have
-DENIED is detected, and fails the stage_ — unless, since 6.51.0, the path's bytes are exactly the upstream bytes
+DENIED is detected, and fails the stage_ — unless, since 6.52.0, the path's bytes are exactly the upstream bytes
 HEAD merged in during the window, which classifies it `merged` and is reported, not failed (§2a).
 
 **"Non-adversarial" is load-bearing.** The baseline is unauthenticated state inside the writable tree, so
@@ -83,7 +83,7 @@ before this call, so the refusal reaches only a caller that anchors out of order
 | `version`          | integer          | Schema version. A **newer** version than the reader is `INCONCLUSIVE`; an **older** one is tolerated at read and reported in `warnings[]`                                                                 |
 | `epoch`            | ISO-8601         | When this epoch opened                                                                                                                                                                                    |
 | `anchored_by`      | string           | A label passed as `--by`. **Advisory** — it is argv, so it is a description, never an authorization                                                                                                       |
-| `anchored_head`    | string \| `null` | The full object id of the commit HEAD named at anchor time (6.51.0); `null` on an unborn HEAD or a git error. Read only by the `merged` classification (§2a). Absent on an older record, read as `null`   |
+| `anchored_head`    | string \| `null` | The full object id of the commit HEAD named at anchor time (6.52.0); `null` on an unborn HEAD or a git error. Read only by the `merged` classification (§2a). Absent on an older record, read as `null`   |
 | `scope_snapshot`   | object \| `null` | A verbatim copy of `.pharn/writes-scope.json` at anchor time. An object; `null` only in a baseline anchored before 6.24.0 — since then `--anchor` REFUSES rather than write a `null` snapshot (D6, above) |
 | `scope_amendments` | array            | Further scopes that came into force **during** the epoch, in call order. Empty on a fresh anchor; absent on a pre-5.1.0 record, read as `[]`                                                              |
 | `entry_count`      | integer          | `Object.keys(entries).length` at write time                                                                                                                                                               |
@@ -217,7 +217,7 @@ carries `findings[]` in `finding-shape.md`'s enum-gated/free-text split — `typ
 
 Callers branch on **set membership over this enum, or on the exit code** — never on prose (P5).
 
-### 2a. `merged[]` — a would-be escape whose bytes came from upstream (6.51.0)
+### 2a. `merged[]` — a would-be escape whose bytes came from upstream (6.52.0)
 
 **Why (P7, measured — audit 2026-10-07, P3-L).** A `git merge` of upstream moves bytes without any write tool.
 Every path upstream changed then differs from its baseline entry, and an out-of-scope one read as _"a write

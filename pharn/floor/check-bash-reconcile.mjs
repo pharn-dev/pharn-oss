@@ -10,7 +10,7 @@
 //
 // THE CLAIM, and it is deliberately this narrow (P0):
 //   "A NON-ADVERSARIAL write to a path the active writes-scope would have DENIED is DETECTED, and fails
-//    the stage." — unless (6.51.0) the path's bytes are exactly the upstream bytes HEAD merged in during the
+//    the stage." — unless (6.52.0) the path's bytes are exactly the upstream bytes HEAD merged in during the
 //   window: it is then classified `merged`, reported, and does not fail the stage (THE `merged` CLASSIFICATION).
 //
 //   "Non-adversarial" is load-bearing, not hedging — see bound 5. The baseline is unauthenticated state
@@ -113,7 +113,7 @@
 //     remedy offered there was "narrow the documented guarantee", and this is that narrowing.
 //  6. A COMMITTED change moves HEAD too, so the control-surface fallback cannot see it. The backstop
 //     there is Code-Owner review, which is where CODEOWNERS already sits. (The baseline comparison DOES see a
-//     committed change; since 6.51.0 it is classified `merged` rather than an escape only when the committed
+//     committed change; since 6.52.0 it is classified `merged` rather than an escape only when the committed
 //     bytes are upstream's — a commit the build makes itself stays an escape. See THE `merged` CLASSIFICATION.)
 //  7. THIS FILE CANNOT VOUCH FOR ITSELF. /pharn-*verify runs the WORKTREE copy of this checker through
 //     Bash, so a modified checker can print `CLEAN` without reconciling anything. `pharn/floor/` is in
@@ -332,7 +332,7 @@ export function makeDefaultProbeSandbox(root) {
   return dir;
 }
 
-// ================================ THE `merged` CLASSIFICATION (6.51.0) ================================
+// ================================ THE `merged` CLASSIFICATION (6.52.0) ================================
 //
 // WHY (P7 — measured, audit 2026-10-07 P3-L): a `git merge` of upstream into the worktree moves bytes without
 // any write tool, so every path upstream changed differs from its baseline entry and — being outside the
@@ -457,7 +457,7 @@ export function classifyMerged(root, baseline, files) {
   if (x === null) {
     warnings.push(
       raw === undefined || raw === null
-        ? "merged classification unavailable: the baseline records no anchored_head (anchored before 6.51.0, or on an unborn HEAD) — the next anchor records it"
+        ? "merged classification unavailable: the baseline records no anchored_head (anchored before 6.52.0, or on an unborn HEAD) — the next anchor records it"
         : "merged classification unavailable: the baseline's anchored_head is not a full object id — refused, never passed to git"
     );
     return { merged, warnings };
