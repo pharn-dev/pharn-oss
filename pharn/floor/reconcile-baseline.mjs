@@ -255,7 +255,7 @@ export function buildRecord(baseDir, by) {
       version: RECORD_VERSION,
       epoch: new Date().toISOString(),
       anchored_by: by,
-      // The commit HEAD named when this epoch opened (6.51.0), or null. Read by check-bash-reconcile.mjs's
+      // The commit HEAD named when this epoch opened (6.52.0), or null. Read by check-bash-reconcile.mjs's
       // `merged` classification ONLY: a candidate whose change since the anchor is exactly the change upstream
       // commits merged into HEAD made. Additive, so RECORD_VERSION stays 1 — the 5.1.0 `scope_amendments`
       // precedent; a baseline written before this field reads as `undefined`, which gets no classification.

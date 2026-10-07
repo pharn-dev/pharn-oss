@@ -962,7 +962,7 @@ test("★ UPGRADE (GATE-1 note 2): a baseline anchored before 6.20.8 — the lin
   assert.equal(check(dir, ["--require-baseline"]).json.verdict, "CLEAN", "…and a fresh anchor clears it");
 });
 
-// ------------------------------------------------------- the `merged` classification (6.51.0, audit P3-L)
+// ------------------------------------------------------- the `merged` classification (6.52.0, audit P3-L)
 //
 // Real git histories, never a faked enumeration (L26). Upstream lives on branch `upstream`, committed through a
 // second worktree so the reconciled worktree is never touched by building it, and is named the way a clone names
@@ -1016,7 +1016,7 @@ function buildThenMerge(dir) {
 }
 
 test("★ MERGED: paths an upstream merge changed after the anchor are classified merged, not escapes — every escape kind", () => {
-  // On main before 6.51.0 this exact sequence was ESCAPE on all three paths (the audit's P3-L false RED).
+  // On main before 6.52.0 this exact sequence was ESCAPE on all three paths (the audit's P3-L false RED).
   const fx = mergeFixture();
   upstreamCommit(fx, { "dep.json": "v2\n", "LIMITS.md": "a trusted doc changed on main\n", "pharn/floor/new.mjs": "// floor\n" });
   buildThenMerge(fx.dir);
@@ -1072,7 +1072,7 @@ test("★ a LATER fetch that moves origin/main past the merged commit does not u
   assert.deepEqual(r.json.merged, ["dep.json"], "judged against the merge base, the upstream commit HEAD contains");
 });
 
-test("★ NON-VACUITY (a): a baseline with no anchored_head (pre-6.51.0) gets no classification, and says so", () => {
+test("★ NON-VACUITY (a): a baseline with no anchored_head (pre-6.52.0) gets no classification, and says so", () => {
   const fx = mergeFixture();
   const rec = JSON.parse(readFileSync(join(fx.dir, RECORD_PATH), "utf8"));
   delete rec.anchored_head;
