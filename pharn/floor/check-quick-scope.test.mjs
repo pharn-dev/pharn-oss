@@ -402,7 +402,7 @@ test("refusals: every bad input exits 2 with its closed reason_code, never 0 or 
 
 test("✧ CLOSURE (L36) — every reason_code the checker emits is a member, and every member but `crashed` has an inconclusive() call", async () => {
   const { REASON_CODES } = await import("./quick-scope-core.mjs");
-  assert.equal(REASON_CODES.length, 7, "NON-VACUITY (L34)");
+  assert.equal(REASON_CODES.length, 8, "NON-VACUITY (L34)");
   const src = readFileSync(join(HERE, "quick-scope-core.mjs"), "utf8");
   const emitted = new Set([...src.matchAll(/inconclusive\("([a-z-]+)"/g)].map((m) => m[1]));
   for (const code of emitted) assert.ok(REASON_CODES.includes(code), `an emitted code outside the set: ${code}`);
@@ -411,6 +411,46 @@ test("✧ CLOSURE (L36) — every reason_code the checker emits is a member, and
     else assert.ok(emitted.has(code), `a member no inconclusive() call emits: ${code}`);
   }
   assert.ok(!emitted.has("crashed"), "a crash is reported by the entry alone, never by the checker");
+});
+
+// ── regress-base-integrity (audit P2-E) — a total glob is refused; a dropped glob is reported ───────────────────
+
+test("★ P2-E — a total-glob `## Files` entry exits 2 total-glob-declared (it covered every path, while the hook drops it); a narrow glob is honored and reported", () => {
+  for (const pat of ["**", "*", "**/*", "."]) {
+    const { dir, base } = makeRepo({ declared: ["src/x.js", pat] });
+    try {
+      writeFileSync(join(dir, "src", "x.js"), "export const x = 2;\n");
+      writeFileSync(join(dir, "src", "evil.js"), "// undeclared\n");
+      writeFileSync(join(dir, "ROOT.txt"), "undeclared\n");
+      const r = runCli(dir, ["--feature", "demo", "--base", base]);
+      assert.equal(r.status, 2, `${pat}: ${r.stdout}`);
+      assert.equal(r.doc.reason_code, "total-glob-declared", pat);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+  // CONTROL: a narrow glob still covers its subtree, is listed as unenforced, and a path outside it still escapes.
+  const { dir, base } = makeRepo({ declared: ["src/**"] });
+  try {
+    writeFileSync(join(dir, "src", "x.js"), "export const x = 2;\n");
+    const ok = runCli(dir, ["--feature", "demo", "--base", base]);
+    assert.equal(ok.status, 0, ok.stdout);
+    assert.deepEqual(ok.doc.unenforced_globs, ["src/**"]);
+    writeFileSync(join(dir, "ROOT.txt"), "undeclared\n");
+    const esc = runCli(dir, ["--feature", "demo", "--base", base]);
+    assert.equal(esc.status, 1, esc.stdout);
+    assert.deepEqual(esc.doc.escaped, ["ROOT.txt"]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  const { dir: d2, base: b2 } = makeRepo();
+  try {
+    writeFileSync(join(d2, "src", "x.js"), "export const x = 2;\n");
+    const c = runCli(d2, ["--feature", "demo", "--base", b2]);
+    assert.equal(Object.hasOwn(c.doc, "unenforced_globs"), false, "CONTROL: a concrete plan's document keeps its keys");
+  } finally {
+    rmSync(d2, { recursive: true, force: true });
+  }
 });
 
 // ── L35 — one owner of each fact ─────────────────────────────────────────────────────────────────────────────

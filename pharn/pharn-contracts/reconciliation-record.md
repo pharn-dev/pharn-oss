@@ -34,8 +34,8 @@ a writer who edits a denied file **and** rewrites that file's baseline entry get
 is an **accounting tool against tooling that escapes its scope** — a formatter, a generator, a script, a
 mistake, which is the entire population of the `L19`/`L20` failures it was built for — and it is **not a
 control against an attacker**. Only the always-reconciled control surface resists that actor, because
-only it is anchored in committed git objects rather than in the baseline. Since 6.52.0 that surface is the guard
-files and the floors **plus the human-only surface and memory-bank canon** (§4a). Before 6.52.0, a forged baseline
+only it is anchored in committed git objects rather than in the baseline. Since 6.53.0 that surface is the guard
+files and the floors **plus the human-only surface and memory-bank canon** (§4a). Before 6.53.0, a forged baseline
 entry cleared a Bash edit of `LIMITS.md`.
 
 **Struck (P0), each for a stated reason:**
@@ -295,7 +295,7 @@ quantified over a set, the enumeration is the deliverable). Five keys:
 | Key                  | What it holds                                                                                                                                                                                                                                                                                                                                                                                  |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `derived_ignore`     | git's own ignore rules — **never re-listed** here (**L35**: retire the second copy). The reconciled set is `tracked ∪ untracked-not-ignored`, so `node_modules/`, `.pharn/`, `runs/` cost nothing                                                                                                                                                                                              |
-| `always_reconciled`  | Never exemptible, and compared against HEAD's committed blobs on every run, with or without a baseline: tracked changes and **added untracked files** (6.52.0). `exact` + `prefixes` are the guards' control surface and the floors; `human_only` + `human_only_prefixes` are the human-only surface and canon (§4a). Each list is a **copy** of the hooks' own sets, pinned set-equal by test |
+| `always_reconciled`  | Never exemptible, and compared against HEAD's committed blobs on every run, with or without a baseline: tracked changes and **added untracked files** (6.53.0). `exact` + `prefixes` are the guards' control surface and the floors; `human_only` + `human_only_prefixes` are the human-only surface and canon (§4a). Each list is a **copy** of the hooks' own sets, pinned set-equal by test |
 | `pipeline_artifacts` | A stage's **own** output (`pharn/features/<slug>/PLAN.md`, `VERIFY.md`, `lenses/<lens>/findings.json`, …) — **exact** enum membership, never a `**` glob, so a stray file under the same directory is still reported. A copy of `check-regress.mjs`'s `PIPELINE_ARTIFACTS`, pinned set-equal by test                                                                                           |
 | `exempt`             | Tracked paths a **named** command legitimately rewrites through Bash. Deliberately tiny; each entry carries its `writer`                                                                                                                                                                                                                                                                       |
 | `never_exempt`       | A refusal set — memory-bank canon, the four trusted docs, `CODEOWNERS`. Enforced at **run time**, not only under test                                                                                                                                                                                                                                                                          |
@@ -309,7 +309,7 @@ is precisely how an operator is trained to wave through the one finding that mus
 through. This defect was found by running the checker against its own increment, not by reasoning about
 it.
 
-## 4a. The human-only surface is always reconciled (6.52.0)
+## 4a. The human-only surface is always reconciled (6.53.0)
 
 **Why (P7, measured — audit 2026-10-07).** In the audit's fixture, a Bash edit of `LIMITS.md` followed by a
 rewrite of its baseline entry read `CLEAN`. The four trusted docs were not always-reconciled, so the forgeable

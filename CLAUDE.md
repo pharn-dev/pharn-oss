@@ -184,7 +184,7 @@ state under `.pharn/`, which Bash reaches, so a writer who edits a denied file *
 file's baseline entry gets a silent `CLEAN`. This is an **accounting tool against tooling that escapes
 its scope** — a formatter, a generator, a script, a mistake — **not a control against an attacker**. Only
 the always-reconciled control surface resists that actor, because only it is anchored in committed blob
-ids rather than in the baseline. Since 6.52.0 that surface includes the four trusted docs, `CODEOWNERS`,
+ids rather than in the baseline. Since 6.53.0 that surface includes the four trusted docs, `CODEOWNERS`,
 `pharn.spec-template.md` and memory-bank canon, and an added untracked file there. So a maintainer's
 **uncommitted** trusted-doc edit REDs `npm run check`: commit it first (L68). The only true prevention is OS-level sandboxing, harness-layer and not
 implemented; an authenticated baseline store outside the worktree is the same category and equally

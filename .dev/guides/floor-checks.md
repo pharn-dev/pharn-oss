@@ -98,7 +98,7 @@ node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 # blob at HEAD = blob at M (a commit the build makes itself is not on upstream, so it stays an escape). Any git
 # failure keeps the escape. Precision, not strength: origin/HEAD is a Bash-movable alias; a stale fetch only
 # withholds the class; no origin/HEAD (git init + remote add) => inert, the warning names `git remote set-head`.
-# HUMAN-ONLY (6.52.0, contract §4a): always_reconciled gains `human_only` (the four trusted docs, CODEOWNERS x3,
+# HUMAN-ONLY (6.53.0, contract §4a): always_reconciled gains `human_only` (the four trusted docs, CODEOWNERS x3,
 # pharn.spec-template.md) and `human_only_prefixes` (memory-bank/, .dev/memory-bank/), each pinned set-equal to
 # protect-trusted-paths.cjs (DEFAULT_PROTECTED - CONTROL_SURFACE - .pharn/writes-scope.json; PROTECTED_SUBTREES).
 # The HEAD comparison also adds UNTRACKED control paths (ls-files --others, filtered to control paths), so a forged

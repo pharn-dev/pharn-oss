@@ -1238,7 +1238,7 @@ test("✧ `merged` is always present in the verdict — an empty array when HEAD
   assert.ok(!r.json.warnings.some((w) => /merged/.test(w)), "no HEAD move, no classification talk");
 });
 
-// ------------------------------------------------ the human-only surface joins the control surface (6.52.0)
+// ------------------------------------------------ the human-only surface joins the control surface (6.53.0)
 //
 // Audit 2026-10-07: a Bash edit of LIMITS.md plus a forged baseline entry read CLEAN, because the trusted docs were
 // not always-reconciled. And `git diff HEAD` never lists an UNTRACKED file, so a control path absent at HEAD could be

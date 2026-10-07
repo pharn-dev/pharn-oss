@@ -664,3 +664,134 @@ test("★ L43 BOUND, PROVEN NOT ASSERTED — a self-consistent FABRICATED pair p
     assert.equal(JSON.parse(r.stdout).verdict, "no-regressions");
   });
 });
+
+// ===================================================================================================
+// regress-base-integrity (the 2026-10-07 audit's P2-C, P2-E, P3-O(a), and the P1-B partition rule).
+// ===================================================================================================
+
+/** A regress stamp whose runs listed in `timedOut` carry `timed_out: true`. */
+function mkTimedOut(gates, side, timedOut) {
+  const s = mkRegressStamp(gates, side);
+  for (const r of s.runs) if (timedOut.includes(r.id)) r.timed_out = true;
+  return s;
+}
+
+test("★ P2-C — a timed-out BASE run whose head is red makes the verdict inconclusive (base-timed-out), never pre_existing → no-regressions", () => {
+  // The audit's f2: base `test` killed at --timeout-ms (node's test runner exits 1, not 124), head fails fast.
+  withPair(mkTimedOut({ test: 1, lint: 0 }, "base", ["test"]), mkRegressStamp({ test: 1, lint: 0 }, "head"), (b, h) => {
+    const r = run(["verdict", "--base-stamp", b, "--head-stamp", h, "--base", SHA]);
+    assert.equal(r.status, 2, r.stdout);
+    const j = JSON.parse(r.stdout);
+    assert.equal(j.verdict, "inconclusive");
+    assert.equal(j.reason_code, "base-timed-out");
+    assert.deepEqual(j.base_timed_out, ["test"]);
+    assert.deepEqual(j.pre_existing, ["test"], "the table is still reported; the verdict refuses to read it");
+    assert.deepEqual(Object.keys(j.outside_gates).sort(), ["lint", "test"]);
+    assert.ok(j.gate_run, "the provenance block stays");
+  });
+  // CONTROL 1 (L34): the SAME exits with no timeout are a plain pre-existing red — the rule is about the timeout alone.
+  withPair(mkRegressStamp({ test: 1 }, "base"), mkRegressStamp({ test: 1 }, "head"), (b, h) => {
+    const j = JSON.parse(run(["verdict", "--base-stamp", b, "--head-stamp", h, "--base", SHA]).stdout);
+    assert.equal(j.verdict, "no-regressions");
+    assert.equal(Object.hasOwn(j, "base_timed_out"), false, "no key when nothing timed out (every older report keeps its bytes)");
+  });
+  // CONTROL 2: a timed-out base under a GREEN head masks nothing — the verdict stands, the timeout is still named.
+  withPair(mkTimedOut({ test: 1 }, "base", ["test"]), mkRegressStamp({ test: 0 }, "head"), (b, h) => {
+    const r = run(["verdict", "--base-stamp", b, "--head-stamp", h, "--base", SHA]);
+    assert.equal(r.status, 0);
+    const j = JSON.parse(r.stdout);
+    assert.equal(j.verdict, "no-regressions");
+    assert.deepEqual(j.base_timed_out, ["test"]);
+  });
+  // A masked gate wins over a regression elsewhere: the run is not a clean measurement.
+  withPair(mkTimedOut({ test: 1, lint: 0 }, "base", ["test"]), mkRegressStamp({ test: 1, lint: 1 }, "head"), (b, h) => {
+    const j = JSON.parse(run(["verdict", "--base-stamp", b, "--head-stamp", h, "--base", SHA]).stdout);
+    assert.equal(j.verdict, "inconclusive");
+    assert.deepEqual(j.regressions, ["lint"], "the regression is still listed");
+  });
+});
+
+test("P2-C — the positional maps carry exits only, so they keep the plain table (the stamp path is the one stage-regress uses)", () => {
+  withResults({ test: 1 }, { test: 1 }, (b, h) => {
+    const j = JSON.parse(run(["verdict", b, h]).stdout);
+    assert.equal(j.verdict, "no-regressions");
+    assert.equal(Object.hasOwn(j, "base_timed_out"), false);
+  });
+});
+
+test("★ P2-E — declaredClasses: total globs (only `*` and `/`, or `.`) vs entries the write hook drops; narrow globs are never total", async () => {
+  const { declaredClasses } = await import("./check-regress.mjs");
+  for (const total of ["**", "*", "**/*", "*/**", "**/**", "/**", "."]) {
+    assert.deepEqual(declaredClasses([total]).totalGlobs, [total], total);
+  }
+  const { totalGlobs, unenforcedGlobs } = declaredClasses(["src/a.js", "src/**", "src/foo/*.ts", "a?.js", "pharn/features/<name>/X", "**"]);
+  assert.deepEqual(totalGlobs, ["**"]);
+  assert.deepEqual(unenforcedGlobs, ["src/**", "src/foo/*.ts", "a?.js", "pharn/features/<name>/X"]);
+  assert.deepEqual(declaredClasses(["src/a.js", "README.md"]), { totalGlobs: [], unenforcedGlobs: [] }, "CONTROL: concrete paths");
+});
+
+test("★ P2-E — partitionScope gives a total glob NO coverage (a caller that forgets to refuse still sees the escapes) and returns it", async () => {
+  const { partitionScope } = await import("./check-regress.mjs");
+  const p = partitionScope({ inside: ["src/index.js", "src/evil.js", "ROOT.txt"], declared: ["src/index.js", "**"], feature: "demo" });
+  assert.deepEqual(p.escaped, ["src/evil.js", "ROOT.txt"]);
+  assert.deepEqual(p.totalGlobs, ["**"]);
+  // CONTROL: a narrow glob covers its subtree only.
+  const q = partitionScope({ inside: ["src/index.js", "src/evil.js", "ROOT.txt"], declared: ["src/**"], feature: "demo" });
+  assert.deepEqual(q.escaped, ["ROOT.txt"]);
+  assert.deepEqual(q.unenforcedGlobs, ["src/**"]);
+});
+
+test("★ P2-E — the `scope` CLI refuses a total glob (exit 2, total-glob-declared) and reports unenforced globs only when present", () => {
+  for (const pat of ["**", "*", "**/*", "."]) {
+    const r = run(["scope", "--changed", "src/a.js,src/evil.js", "--declared", `src/a.js,${pat}`, "--feature", "demo"]);
+    assert.equal(r.status, 2, `${pat}: ${r.stdout}`);
+    assert.equal(json(r).reason_code, "total-glob-declared");
+    assert.deepEqual(json(r).total_globs, [pat]);
+  }
+  const g = run(["scope", "--changed", "src/a.js", "--declared", "src/**", "--feature", "demo"]);
+  assert.equal(g.status, 0);
+  assert.deepEqual(json(g).unenforced_globs, ["src/**"]);
+  const c = run(["scope", "--changed", "src/a.js", "--declared", "src/a.js", "--feature", "demo"]);
+  assert.equal(Object.hasOwn(json(c), "unenforced_globs"), false, "CONTROL: a concrete plan's output keeps its bytes");
+});
+
+test("✧ L31 PARITY — the isConcrete check-regress.mjs imports (plan-files-core.mjs) is byte-for-byte set-writes-scope.cjs's", () => {
+  const fn = (rel) => {
+    const src = readFileSync(join(here, "..", "..", rel), "utf8");
+    const m = src.match(/function isConcrete\(entry\) \{\n[\s\S]*?\n\}/);
+    assert.ok(m, `${rel} no longer carries function isConcrete(entry)`);
+    return m[0];
+  };
+  assert.equal(fn("pharn/floor/plan-files-core.mjs"), fn(".claude/hooks/set-writes-scope.cjs"));
+  const cr = readFileSync(CR, "utf8");
+  assert.match(cr, /import \{ isConcrete \} from "\.\/plan-files-core\.mjs";/, "check-regress.mjs imports it");
+  assert.doesNotMatch(cr, /function isConcrete\(/, "and keeps no third copy (L35)");
+});
+
+test("P1-B — changedUnderTest: the changed set minus EXACTLY the closed exemptions; empty means nothing could be compared", async () => {
+  const { changedUnderTest } = await import("./check-regress.mjs");
+  assert.deepEqual(changedUnderTest(["pharn/features/demo/PLAN.md", "pharn/features/demo/BUILD.md", "LIMITS.md"], "demo"), []);
+  assert.deepEqual(changedUnderTest([], "demo"), [], "the audit's f1b: nothing changed at all");
+  assert.deepEqual(
+    changedUnderTest(["pharn/features/demo/PLAN.md", "src/a.js"], "demo"),
+    ["src/a.js"],
+    "CONTROL: a build change is under test"
+  );
+  assert.deepEqual(
+    changedUnderTest(["pharn/features/other/PLAN.md", "pharn/features/demo/notes.md"], "demo"),
+    ["pharn/features/other/PLAN.md", "pharn/features/demo/notes.md"],
+    "another feature's artifact, or a non-artifact file in this one, is under test"
+  );
+});
+
+test("✧ P3-O(a) — check-regress.mjs keeps no private slug grammar: it imports gate-run-core.mjs's FEATURE_SLUG_RE", () => {
+  const src = readFileSync(CR, "utf8");
+  assert.doesNotMatch(src, /const FEATURE_SLUG_RE\s*=/, "a private copy is back");
+  assert.match(src, /import \{[^}]*\bFEATURE_SLUG_RE\b[^}]*\} from "\.\/gate-run-core\.mjs";/);
+  // The behaviour that changed: slugs the looser copy admitted are refused now, as everywhere else.
+  for (const slug of ["My_Feat", "a.b", "UPPER"]) {
+    const r = run(["scope", "--changed", "src/a.ts", "--declared", "src/a.ts", "--feature", slug]);
+    assert.equal(r.status, 2, slug);
+  }
+  assert.equal(run(["scope", "--changed", "src/a.ts", "--declared", "src/a.ts", "--feature", "my-feat"]).status, 0, "CONTROL");
+});

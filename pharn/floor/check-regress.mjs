@@ -22,6 +22,8 @@
 //                                          on the feature, mirroring check-variance's errored-exclusion).
 //             base == 0 && head != 0    → REGRESSION (a pass→fail flip OUTSIDE the feature).
 //             base == 0 && head == 0    → OK.
+//           ONE override, on the stamp path only (regress-base-integrity): a gate whose BASE run timed out and whose head is
+//           red makes the whole verdict INCONCLUSIVE (`base-timed-out`) — a killed base is not a base result.
 //           A model detects regressions UNRELIABLY; this exit-code comparison detects them RELIABLY —
 //           that is the entire reason /regress has ZERO LLM-judge in its core.
 //
@@ -95,7 +97,8 @@
 import "./runtime-floor.mjs";
 import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { validateStamp, stampToMap, gateRunBlock, SHA_RE } from "./gate-run-core.mjs";
+import { validateStamp, stampToMap, gateRunBlock, timedOutRunIds, SHA_RE, FEATURE_SLUG_RE } from "./gate-run-core.mjs";
+import { isConcrete } from "./plan-files-core.mjs";
 
 // --- The ESCAPE-EXEMPT sets (the floor check for lessons-learned L17). -----------------------------
 // `scope` computes `escaped` over `git diff <base>`, which answers "what CHANGED since base" — but it is
@@ -162,10 +165,10 @@ const LENS_FINDINGS_RE = /^lenses\/[A-Za-z0-9._-]+\/findings\.json$/;
 // the previous code claimed a crafted value "yields a prefix that matches no path", but `--feature ..`
 // builds `.dev/features/../`, which DOES match and exempted a path outside every feature directory.
 // Refusing the value is what makes the claim true instead of nearly true.
-// The negative lookahead is LOAD-BEARING, not decoration: `.` is inside the character class, so a bare
-// `^[A-Za-z0-9._-]+$` happily admits `.` and `..` — which is the exact traversal this gate exists to
-// refuse. Caught by re-running the reproduction against the "fix" instead of trusting the regex.
-const FEATURE_SLUG_RE = /^(?!\.\.?$)[A-Za-z0-9._-]+$/;
+// The grammar is gate-run-core.mjs's exported FEATURE_SLUG_RE (regress-base-integrity, P3-O(a) of the 2026-10-07 audit):
+// this file used to keep a private, looser copy (`/^(?!\.\.?$)[A-Za-z0-9._-]+$/`), so `check-regress scope` accepted
+// slugs (`My_Feat`, `a.b`) that every other floor module refuses. One owner now (L35); its first character is
+// `[a-z0-9]`, so `.` and `..` cannot match at all.
 
 // The four hook-protected trusted docs. `protect-trusted-paths.cjs` DENIES every Write|Edit|MultiEdit to
 // them (exit 2), so the build cannot have produced the change — the denial is the disproof, not an
@@ -315,6 +318,51 @@ function flag(args, name) {
 // `scope` CLI passes nothing, so its output is byte-identical. Bound: the subtraction never attributes — a path an
 // earlier run escaped with is pre-run state for the next run (pre-run-snapshot-core.mjs, "HONEST SCOPE").
 // ---------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------
+// THE DECLARED PATTERNS' TWO READERS (regress-base-integrity, P2-E of the 2026-10-07 audit; lessons-learned L39, L71).
+// A PLAN's `## Files` is read by `set-writes-scope.cjs` (what the write hook allows) and by this partition (what the plan
+// authorized). The setter keeps CONCRETE entries only — it drops anything holding `*`, `?`, `<` or `>` without a word —
+// while this partition matches every entry as a glob. So a `**` entry made this check (and check-quick-scope.mjs) count
+// EVERY changed path as declared while the hook denied the same writes: reproduced, `src/evil.js` and a root file passed
+// both scope checks. Two closed answers, both deterministic (regex over the normalized entry, P5):
+//   • a TOTAL glob — after normPath, an entry made only of `*` and `/` (`**`, `*`, `**/*`, `*/**`, …), or the entry `.`
+//     ("everything", in a plan's words; it matches no real path in either reader, and is refused for its intent) —
+//     covers nothing here (excluded from matching, so a caller that forgets to refuse still sees the escapes) and is
+//     returned in `totalGlobs`, which every caller REFUSES (exit 2 / refused, a closed reason code);
+//   • an UNENFORCED entry — one the setter drops (`isConcrete` false: plan-files-core.mjs's existing byte-faithful copy of
+//     the setter's predicate, imported rather than copied a third time, L35; check-regress.test.mjs pins the two
+//     function sources equal, L31) — keeps its glob meaning here and is returned in
+//     `unenforcedGlobs`, which callers REPORT (advisory): the write hook allows none of it, so a Write-tool write it
+//     covers is denied, and only this partition honors it.
+// A narrow glob (`src/foo/*.ts`, `vendor/**`) is unenforced, never total. BOUND: a broad-but-not-total glob (`**/*.js`) is
+// allowed and still diverges from the hook — reported, never refused.
+const TOTAL_GLOB_RE = /^[*/]+$/;
+
+/** Split DECLARED patterns (already `normPath`-ed) into the two classes above. Pure; order kept, duplicates kept once. */
+export function declaredClasses(declared) {
+  const totalGlobs = [];
+  const unenforcedGlobs = [];
+  for (const p of declared) {
+    if (typeof p !== "string") continue;
+    if (p === "." || TOTAL_GLOB_RE.test(p)) {
+      if (!totalGlobs.includes(p)) totalGlobs.push(p);
+    } else if (!isConcrete(p) && !unenforcedGlobs.includes(p)) {
+      unenforcedGlobs.push(p);
+    }
+  }
+  return { totalGlobs, unenforcedGlobs };
+}
+
+/** THE CHANGED SET UNDER TEST (regress-base-integrity, P1-B): the changed paths minus EXACTLY the closed exemptions this
+ *  file owns (the four trusted docs + this feature's pipeline artifacts — L17's sets, never re-listed). Empty means the
+ *  HEAD side differs from the base only in paths no gate is attributed to, so no comparison outcome can be the feature's
+ *  — a base that collapsed onto HEAD (a committed build, `merge-base == HEAD`) is the recorded instance (lessons-learned
+ *  L34: a verdict quantified over "gates that flipped" is vacuously clean over an empty domain). stage-regress.mjs refuses
+ *  `no-change-under-test` on an empty result, before any gate runs. */
+export function changedUnderTest(inside, feature) {
+  return inside.filter((f) => !TRUSTED_DOCS.includes(f) && !isPipelineArtifact(f, feature));
+}
+
 export function partitionScope({ inside, declared, tests = [], evalPairs = [], feature, preRunUnchanged = [] }) {
   // fix #7 cross-check: every changed file must be covered by a declared `writes:` pattern. A changed
   // path matching none means the build wrote OUTSIDE its declared `## Files` — a blocking escape.
@@ -323,7 +371,11 @@ export function partitionScope({ inside, declared, tests = [], evalPairs = [], f
   // artifacts, and the hook-protected trusted docs. Neither can be a build escape, and reporting them as
   // one is a false BLOCKING finding on the correct workflow. The exemption is SUBTRACTIVE and REPORTED —
   // `escape_exempt` is always emitted, so a suppressed path is visible, never silently dropped.
-  const undeclared = inside.filter((f) => !matchesAny(f, declared));
+  //
+  // A TOTAL glob covers nothing (see declaredClasses): it is excluded before matching and returned for the caller to refuse.
+  const { totalGlobs, unenforcedGlobs } = declaredClasses(declared);
+  const matchable = declared.filter((p) => !totalGlobs.includes(p));
+  const undeclared = inside.filter((f) => !matchesAny(f, matchable));
   const escapeExempt = undeclared.filter((f) => TRUSTED_DOCS.includes(f) || isPipelineArtifact(f, feature));
   const exemptSet = new Set(escapeExempt);
   const preRunSet = new Set(preRunUnchanged);
@@ -335,7 +387,7 @@ export function partitionScope({ inside, declared, tests = [], evalPairs = [], f
   const insideSet = new Set(inside);
   const outsideTests = tests.filter((t) => !insideSet.has(t));
   const outsideEvalPairs = evalPairs.filter((p) => !insideSet.has(p.expected) && !insideSet.has(p.actual));
-  return { escaped, escapeExempt, preRun, outsideTests, outsideEvalPairs };
+  return { escaped, escapeExempt, preRun, outsideTests, outsideEvalPairs, totalGlobs, unenforcedGlobs };
 }
 
 // Dogfood the finding object (fix #1): type/rule_id/severity/file are enum-gated (this helper's own
@@ -419,7 +471,21 @@ function runScope(args) {
       2
     );
   }
-  const { escaped, escapeExempt, outsideTests, outsideEvalPairs } = partitionScope({ inside, declared, tests, evalPairs, feature });
+  const part = partitionScope({ inside, declared, tests, evalPairs, feature });
+  const { escaped, escapeExempt, outsideTests, outsideEvalPairs, totalGlobs, unenforcedGlobs } = part;
+  if (totalGlobs.length) {
+    emit(
+      {
+        verdict: "inconclusive",
+        reason: `--declared holds a total glob (${totalGlobs.map((g) => JSON.stringify(g)).join(", ")}): it would declare every path here while the write hook drops it — name the files instead`,
+        reason_code: "total-glob-declared",
+        total_globs: totalGlobs,
+      },
+      2
+    );
+  }
+  // Reported only when present, so every output over concrete declarations keeps its bytes.
+  const unenforced = unenforcedGlobs.length ? { unenforced_globs: unenforcedGlobs } : {};
 
   if (escaped.length) {
     const findings = scopeFindings(escaped);
@@ -427,6 +493,7 @@ function runScope(args) {
       {
         inside,
         declared,
+        ...unenforced,
         escaped,
         escape_exempt: escapeExempt,
         findings,
@@ -441,6 +508,7 @@ function runScope(args) {
     {
       inside,
       declared,
+      ...unenforced,
       escaped: [],
       escape_exempt: escapeExempt,
       outside_tests: outsideTests,
@@ -504,6 +572,7 @@ function runVerdict(positional, args) {
   let base;
   let head;
   let gate_run = null;
+  let baseTimedOut = []; // stamp path only: the positional maps carry exits alone
 
   if (baseStampPath !== undefined || headStampPath !== undefined) {
     if (baseStampPath === undefined || headStampPath === undefined) {
@@ -571,6 +640,7 @@ function runVerdict(positional, args) {
     }
     base = { ok: true, value: stampToMap(b.stamp) };
     head = { ok: true, value: stampToMap(h.stamp) };
+    baseTimedOut = timedOutRunIds(b.stamp);
     gate_run = { base: gateRunBlock(b.stamp, b.sha256), head: gateRunBlock(h.stamp, h.sha256) };
   } else {
     base = readResultsMap(basePath, "base-results.json");
@@ -615,6 +685,35 @@ function runVerdict(positional, args) {
     // else b === 0 && h === 0 → OK
   }
 
+  // A TIMED-OUT BASE RUN IS NOT A BASE VERDICT (regress-base-integrity, P2-C of the 2026-10-07 audit). The runner records a
+  // gate it killed at --timeout-ms as `timed_out: true` with whatever exit the kill produced (node's test runner exits 1 on
+  // the group signal, measured — not 124), so the table above files it under `pre_existing`. When that gate is ALSO red at
+  // head, the classification hides exactly what this checker exists to find: reproduced, a fast, wrong head beside a slow
+  // base read `no-regressions`. Such a gate makes the verdict `inconclusive` (`base-timed-out`, exit 2) — nothing about it
+  // was measured at base. A timed-out base under a GREEN head masks nothing (no head failure to hide) and stays as before;
+  // `base_timed_out` names every timed-out base run either way. Read from the BASE STAMP alone, so check-loop-fresh.mjs's
+  // check E, which re-derives this verdict from the two stamps, reaches the same answer. Precedence: a masked gate wins
+  // over a regression elsewhere — the run is not a clean measurement, and it stops either way.
+  const masked = baseTimedOut.filter((id) => Object.hasOwn(head.value, id) && head.value[id] !== 0);
+  const timedOutBlock = baseTimedOut.length ? { base_timed_out: baseTimedOut } : {};
+  if (masked.length) {
+    emit(
+      {
+        base: baseRef !== undefined ? baseRef : null,
+        inside,
+        outside_gates: outsideGates,
+        regressions,
+        pre_existing: preExisting,
+        ...timedOutBlock,
+        verdict: "inconclusive",
+        reason: `the base run of ${masked.map((id) => JSON.stringify(id)).join(", ")} timed out, and the same gate is red at head — a timed-out base is not a base result, so it cannot be classified pre_existing`,
+        reason_code: "base-timed-out",
+        ...(gate_run ? { gate_run } : {}),
+      },
+      2
+    );
+  }
+
   const verdict = regressions.length ? "regressions" : "no-regressions";
   emit(
     {
@@ -623,6 +722,7 @@ function runVerdict(positional, args) {
       outside_gates: outsideGates,
       regressions,
       pre_existing: preExisting,
+      ...timedOutBlock,
       verdict,
       ...(gate_run ? { gate_run } : {}),
     },
