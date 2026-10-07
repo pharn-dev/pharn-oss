@@ -26,6 +26,7 @@ import {
 import { filesDigest } from "./ac-tests-lock.mjs";
 import { RESERVED_IDS, resultsFileName } from "./gate-run-core.mjs";
 import { RECORD_REASONS } from "./test-results-core.mjs";
+import { spawnGate } from "./run-gates.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHECK_SPEC = join(HERE, "check-spec.mjs");
@@ -1037,4 +1038,91 @@ test("6.20.5 bootstrap: a SPEC re-approved by APPENDING a new pin under the old 
   } finally {
     w.done();
   }
+});
+
+// ── audit P2-F: a snapshot oracle the build's own first run writes ─────────────────────────────────────────────
+
+/** A stand-in for vitest's / Jest's snapshot rule (vitest may not be installed here): each AC test compares against
+ *  `__snapshots__/ac<n>.snap`; a MISSING snapshot is written and the test passes when `CI` is unset or falsy, and the test
+ *  FAILS when `CI` is truthy — the runners' documented behaviour. It writes a vitest-json report to PHARN_TEST_RESULTS. */
+const SNAP_RUNNER = `
+const fs = require("fs"), path = require("path");
+const ci = process.env.CI !== undefined && !["", "0", "false"].includes(process.env.CI.toLowerCase());
+const ids = JSON.parse(process.argv[2]);
+fs.mkdirSync("__snapshots__", { recursive: true });
+const root = fs.realpathSync(".");
+const results = ids.map((id) => {
+  const snap = path.join("__snapshots__", "ac" + id.slice(3) + ".snap");
+  let status = "passed";
+  if (!fs.existsSync(snap)) { if (ci) status = "failed"; else fs.writeFileSync(snap, "whatever the build returned\\n"); }
+  const file = path.join(root, "tests", "ac", "ac" + id.slice(3) + ".test.js");
+  return { name: file, status, assertionResults: [{ ancestorTitles: [], title: id + ": t", fullName: id + ": t", status }] };
+});
+fs.writeFileSync(process.env.PHARN_TEST_RESULTS, JSON.stringify({ testResults: results }));
+process.exit(results.some((r) => r.status === "failed") ? 1 : 0);
+`;
+
+async function withWorldAsync(fn) {
+  const w = world({});
+  try {
+    return await fn(w);
+  } finally {
+    w.done();
+  }
+}
+
+/** Run the stand-in as the REAL runner runs the `test` gate (spawnGate, id `test`), with `CI` in the runner's own
+ *  environment set to `ci` (undefined = unset), and evaluate the AC gate over the result. */
+async function snapshotGate(w, ci) {
+  writeFileSync(join(w.root, "snap-runner.cjs"), SNAP_RUNNER);
+  const outFile = join(w.outDir, "0-test.out");
+  const resultsFile = join(w.outDir, resultsFileName(0, "test"));
+  const saved = process.env.CI;
+  if (ci === undefined) delete process.env.CI;
+  else process.env.CI = ci;
+  let res;
+  try {
+    res = await spawnGate(
+      { id: "test", shell: null, argv: ["node", "snap-runner.cjs", JSON.stringify(w.ids)], files: [] },
+      w.root,
+      outFile,
+      join(w.outDir, "0-test.err"),
+      resultsFile,
+      30000
+    );
+  } finally {
+    if (saved === undefined) delete process.env.CI;
+    else process.env.CI = saved;
+  }
+  const results = readFileSync(resultsFile, "utf8");
+  const stamp = stampOf(w, [{ id: "test", exit: res.exit, results }, { id: "reconcile" }]);
+  return evaluateAcGate({ feature: NAME, stamp, outDir: w.outDir, root: w.root });
+}
+
+test("audit P2-F — a snapshot-oracle AC test the build's first run would write FAILS the AC gate (the runner sets CI=1)", async () => {
+  // Before the fix the runner passed `CI` through as it found it: unset on a developer machine, so the stand-in wrote
+  // the snapshot and every AC passed for ANY implementation — a test that cannot fail after the build.
+  await withWorldAsync(async (w) => {
+    const g = await snapshotGate(w, undefined);
+    assert.equal(g.verdict, "FAIL", JSON.stringify(g, null, 1));
+    assert.deepEqual(
+      g.acs.map((a) => [a.id, a.status, a.reason]),
+      [
+        ["AC-1", "failed", "ac-not-passed"],
+        ["AC-2", "failed", "ac-not-passed"],
+      ]
+    );
+  });
+  // Control (L34): the same world whose snapshots already exist (an oracle the TEST stage wrote, not the build) passes,
+  // so the FAIL above is the missing oracle and nothing else.
+  await withWorldAsync(async (w) => {
+    mkdirSync(join(w.root, "__snapshots__"));
+    for (const id of w.ids) writeFileSync(join(w.root, "__snapshots__", `ac${id.slice(3)}.snap`), "expected\n");
+    assert.equal((await snapshotGate(w, undefined)).verdict, "PASS");
+  });
+  // A CI value the environment already defines is the project's, passed unchanged — an explicit CI=false restores
+  // snapshot writing (the stated bound), and the gate passes over the build-written oracle.
+  await withWorldAsync(async (w) => {
+    assert.equal((await snapshotGate(w, "false")).verdict, "PASS");
+  });
 });

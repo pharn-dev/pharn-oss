@@ -256,8 +256,18 @@ const CASES = [
   ["mutated-prefix", (w) => mutateRun(w, 4)], // the LAST mapped run itself (grill G2: own write or concurrent?)
   [
     "mutated-prefix",
-    // nothing is flagged mutated and the chain holds, but no run judged the stamp's init (grill G6: validateStamp never
-    // compares runs[0].fp_before to fingerprint.init, so this rule must)
+    // nothing is flagged mutated and the chain holds from init, but an unflagged run moved the tree, so the later mapped
+    // runs did not judge the stamp's init
+    (w) => {
+      const MOVED = "7".repeat(64);
+      w.entry.runs = w.entry.runs.map((r, k) => (k < 2 ? r : k === 2 ? { ...r, fp_after: MOVED } : { ...r, fp_before: MOVED, fp_after: MOVED }));
+      w.entry.fingerprint.final = MOVED;
+    },
+  ],
+  [
+    "source-invalid",
+    // nothing is flagged mutated and the chain holds, but no run judged the stamp's init: validateStamp refuses it
+    // (tree-changed-between-gates, the init→first-gate link — grill G6's gap, closed there by audit P3-J)
     (w) => (w.entry.runs = w.entry.runs.map((r) => ({ ...r, fp_before: "7".repeat(64), fp_after: "7".repeat(64) }))),
   ],
   [

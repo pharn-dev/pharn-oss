@@ -47,10 +47,15 @@
 //   • Gates are assumed ORDER-INDEPENDENT. ALLOWLIST order is fixed and recorded, but a gate needing
 //     another's output must build it itself (e.g. a `pretest` script).
 //   • A descendant that calls `setsid` leaves the process group and escapes the group kill.
-//   • If the HARNESS kills this process before its own `--timeout-ms` fires, the group is orphaned —
-//     which is why the invoking command's Bash timeout must exceed `--timeout-ms`, and why
-//     `--timeout-ms` is REQUIRED rather than defaulted: floor code carries no harness-specific default,
-//     so there is no default for a test to leave unexercised (lessons-learned L41).
+//   • If the HARNESS kills this process before its own `--timeout-ms` fires: a SIGTERM, SIGINT or SIGHUP is
+//     FORWARDED to the gate's group and the runner then dies by that signal, recording nothing for the entry; a
+//     SIGKILL cannot be caught, so the group is orphaned until the next `run --next` recovers the stale lock and
+//     stops the group `<out>/lock.child` names before re-running the entry (reapOrphanGroup, audit P3-P). That
+//     is why the invoking command's Bash timeout must still exceed `--timeout-ms`, and why `--timeout-ms` is
+//     REQUIRED rather than defaulted: floor code carries no harness-specific default, so there is no default
+//     for a test to leave unexercised (lessons-learned L41).
+//   • `CI=1` is added to the environment of the test-level gates (CI_GATE_IDS) unless `CI` is already defined,
+//     so vitest and Jest refuse to write a missing snapshot (audit P2-F).
 //   • `--gates` TOKENS ARE COMMA-SEPARATED, so a command containing a literal comma cannot be expressed
 //     there — the same convention check-regress.mjs's `--eval-pairs` uses. Such a gate goes in a wrapper
 //     script whose path has no comma. Stated because a split token fails in a confusing place.
@@ -68,7 +73,8 @@
 // Every gate is spawned with ONE extra environment variable, `PHARN_TEST_RESULTS` (gate-run-core's
 // RESULTS_ENV), valued with that gate's OWN absolute path under `<out>`, named by gate-run-core's
 // resultsFileName (one copy of the rule). A project's reporter config may write its results there. The rest of
-// the inherited environment is passed unchanged. The runner REMOVES that path before spawning — `init`'s wipe
+// the inherited environment is passed unchanged, except that a test-level gate also gets `CI=1` when `CI` is not
+// already defined (gateEnv, audit P2-F). The runner REMOVES that path before spawning — `init`'s wipe
 // does not cover a stale-lock re-run, which would otherwise hash the crashed attempt's file — and afterwards
 // records `results_sha256`: the sha256 of the path if it is a REGULAR file, else `null`. The file is read
 // through a descriptor opened O_NOFOLLOW|O_NONBLOCK and fstat-checked on that same descriptor, in fixed-size
@@ -150,6 +156,8 @@ import {
   SCHEMA,
   STRUCTURAL_PREFIX,
   RESULTS_ENV,
+  LEVEL_GATES,
+  ENTRY_BASE_TEST_ID,
   REUSED_REASON,
   REUSE_TARGET_STAGE,
   isReasonCode,
@@ -496,7 +504,8 @@ function takeLock(outAbs, timeoutMs) {
   if (!isStaleLock(lock, Date.now())) {
     fail("lock-busy", `another run-gates invocation holds ${lp} (pid ${lock.pid}); parallel calls are refused`);
   }
-  // Stale: recovered. Its in-progress entry, if any, is re-run — `claimed` is cleared below.
+  // Stale: recovered. Its in-progress entry, if any, is re-run — so first stop the gate the dead runner left running.
+  reapOrphanGroup(outAbs);
   try {
     unlinkSync(lp);
   } catch {
@@ -514,6 +523,77 @@ function releaseLock(lp) {
   } catch {
     /* already gone */
   }
+}
+
+/** ------------------------------------------------------------------------------------------------
+ *  THE RUNNING GATE'S PROCESS GROUP (audit P3-P). A gate runs in its own process group, so a harness SIGKILL of
+ *  this runner — which no handler can catch — leaves the gate running. The stale-lock recovery above then re-ran
+ *  the entry while the orphan still ran: two copies of a suite overlapped (reproduced with a `sleep 30` gate).
+ *
+ *  So while a gate runs, `<out>/lock.child` holds `{runner_pid, pgid, started_ms}` (written atomically right after
+ *  the spawn, removed when the gate's leader exits), and a recovery that finds it stops that group — SIGTERM, then
+ *  SIGKILL after the grace — before it re-runs anything. A group that is still alive after both is refused
+ *  `lock-busy` (a lapse: re-run later), never overlapped. A group that answers EPERM belongs to another user, so it is
+ *  not this runner's gate and is left alone.
+ *
+ *  BOUNDS, named: a SIGKILL between the spawn and the sidecar write leaves an unrecorded group (a window of one
+ *  synchronous write); a descendant that called `setsid` left the group and is not reached; and if the WHOLE orphan
+ *  group already exited, its id may since have been reused by an unrelated group of the same user, which the reap
+ *  would signal — POSIX keeps a pgid unreused only while a member lives, and nothing here can tell the two apart.
+ *  ---------------------------------------------------------------------------------------------- */
+function childPath(outAbs) {
+  return join(outAbs, "lock.child");
+}
+
+function removeChildRecord(outAbs) {
+  try {
+    unlinkSync(childPath(outAbs));
+  } catch {
+    /* already gone */
+  }
+}
+
+/** Is process group `pgid` alive AND ours to signal? EPERM (another user's group) is not this runner's gate. */
+function groupAlive(pgid) {
+  try {
+    process.kill(-pgid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/** Wait up to `ms` for group `pgid` to be gone; true when it is. */
+function waitGroupGone(pgid, ms) {
+  const deadline = Date.now() + ms;
+  while (groupAlive(pgid)) {
+    if (Date.now() >= deadline) return false;
+    sleepSync(50);
+  }
+  return true;
+}
+
+function reapOrphanGroup(outAbs) {
+  const r = readJson(childPath(outAbs));
+  const pgid = r.ok && r.value !== null && typeof r.value === "object" ? r.value.pgid : null;
+  if (Number.isInteger(pgid) && pgid > 1 && groupAlive(pgid)) {
+    for (const sig of ["SIGTERM", "SIGKILL"]) {
+      try {
+        process.kill(-pgid, sig);
+      } catch {
+        /* gone between the test and the signal */
+      }
+      if (waitGroupGone(pgid, KILL_GRACE_MS)) break;
+    }
+    if (groupAlive(pgid)) {
+      fail("lock-busy", `the gate process group ${pgid} a crashed run left behind is still alive after SIGKILL; refusing to overlap it`);
+    }
+  }
+  removeChildRecord(outAbs);
 }
 
 /** ------------------------------------------------------------------------------------------------
@@ -839,7 +919,31 @@ function signalExit(signalName) {
  *  with a per-test reporter, so nothing should tell it where to write one. EXPORTED (6.23.0,
  *  stage-regress-script) so a stage script reuses this exact spawn/kill/log discipline rather than
  *  re-implementing it (P3/P4 — one owner of "run a command, killed by timeout, in its own process group"). */
-function spawnGate(entry, cwd, outFile, errFile, resultsFile, timeoutMs) {
+/** The gate ids whose environment carries `CI=1` (audit P2-F): every AC level gate (LEVEL_GATES — `test`, `test:e2e`,
+ *  `e2e`) and the entry check's `base:test` slot, which runs the `test` command. vitest and Jest write a MISSING snapshot
+ *  on a run where `CI` is unset, so an AC test whose oracle is a snapshot failed before the build (the import) and passed
+ *  after it for ANY implementation; under `CI` both refuse to write one and the test fails. A `CI` the inherited
+ *  environment already defines — any value, empty included — is the project's (or its CI's) and is passed unchanged, so
+ *  an explicit `CI=false` restores snapshot writing: a bound, stated. Style gates are not touched. An explicit `--gates`
+ *  token gets it only when its id is one of these. */
+const CI_GATE_IDS = Object.freeze([...new Set([...Object.values(LEVEL_GATES).flat(), ENTRY_BASE_TEST_ID])]);
+
+/** The signals this runner forwards to a running gate's group. SIGKILL cannot be caught — see reapOrphanGroup. */
+const FORWARDED_SIGNALS = Object.freeze(["SIGTERM", "SIGINT", "SIGHUP"]);
+
+/** The environment a gate is spawned with: the inherited one, plus — when `resultsFile` is not null — this gate's own
+ *  results path, plus `CI=1` for a CI_GATE_IDS member when `CI` is not already defined. */
+function gateEnv(id, resultsFile) {
+  const env = { ...process.env };
+  if (resultsFile !== null) env[RESULTS_ENV] = resultsFile;
+  if (CI_GATE_IDS.includes(id) && !Object.hasOwn(process.env, "CI")) env.CI = "1";
+  return env;
+}
+
+/** `hooks` (optional): `onSpawn(pgid)` right after the group exists; `onInterrupted(signal)` after a forwarded
+ *  SIGTERM/SIGINT/SIGHUP has ended the gate's leader, just before this process re-raises the signal on itself and dies
+ *  by it. An interrupted gate is never a result: the caller records nothing for it. */
+function spawnGate(entry, cwd, outFile, errFile, resultsFile, timeoutMs, hooks = {}) {
   return new Promise((done) => {
     let cmd;
     let argv;
@@ -876,17 +980,74 @@ function spawnGate(entry, cwd, outFile, errFile, resultsFile, timeoutMs) {
     let timedOut = false;
     let killTimer = null;
     let graceTimer = null;
+    let interrupted = null;
 
-    // The inherited environment, plus — when `resultsFile` is not null — exactly one variable: this
-    // gate's own results path. A `null` resultsFile (the install-command caller) sets no such variable.
-    const env = resultsFile === null ? { ...process.env } : { ...process.env, [RESULTS_ENV]: resultsFile };
+    // gateEnv: the inherited environment, this gate's results path when `resultsFile` is not null (a `null` — the
+    // install-command caller — sets no such variable), and CI=1 for a test-level gate id (CI_GATE_IDS).
+    const env = gateEnv(entry.id, resultsFile);
+    // CodeQL js/indirect-command-line-injection (#10) and js/shell-command-injection-from-environment (#17) report
+    // this call, and the flow they trace is the runner's PURPOSE, not a defect: the command IS the project's
+    // configured gate — a package.json script run as `npm run <allowlisted id>`, or a `--gates` token the stage's own
+    // pinned line or a human passed — and running it is what a gate runner does. What is held, and tested: argv never
+    // touches a shell; a `--gates` shell token gets its files as POSITIONAL arguments, never spliced into the command
+    // text; an argv program is a bare PATH-looked-up name (the regex above); the shell is the fixed `/bin/sh`. #17's
+    // traced source is a test passing `process.execPath`, which that regex refuses. Restructuring cannot remove the
+    // flow without removing `--gates`, so the alerts are left to a reviewed dismissal, never suppressed here.
     const child = spawn(cmd, argv, { cwd, env, detached: true, stdio: ["ignore", fdOut, fdErr] });
+
+    // Forward a harness's SIGTERM / SIGINT / SIGHUP to the gate's GROUP (audit P3-P): without this the runner died and
+    // the gate kept running. The listeners live exactly as long as the gate does.
+    const onSignal = (sig) => {
+      if (interrupted !== null) return;
+      interrupted = sig;
+      if (killTimer) clearTimeout(killTimer);
+      try {
+        process.kill(-child.pid, sig);
+      } catch {
+        /* group already gone */
+      }
+      graceTimer = setTimeout(() => {
+        try {
+          process.kill(-child.pid, "SIGKILL");
+        } catch {
+          /* group already gone */
+        }
+      }, KILL_GRACE_MS);
+    };
+    for (const s of FORWARDED_SIGNALS) process.on(s, onSignal);
+    if (Number.isInteger(child.pid) && typeof hooks.onSpawn === "function") {
+      try {
+        hooks.onSpawn(child.pid);
+      } catch {
+        /* best-effort: a failed record only loses the orphan reap, never the gate's result */
+      }
+    }
 
     const finish = (result) => {
       if (settled) return;
       settled = true;
+      for (const s of FORWARDED_SIGNALS) process.removeListener(s, onSignal);
       if (killTimer) clearTimeout(killTimer);
       if (graceTimer) clearTimeout(graceTimer);
+      if (interrupted !== null) {
+        // The leader is gone; sweep any member that ignored the forwarded signal, then die by the signal we were sent —
+        // our listener is removed, so the default action applies. Nothing is recorded for this gate.
+        try {
+          process.kill(-child.pid, "SIGKILL");
+        } catch {
+          /* group already gone */
+        }
+        for (const fd of [fdOut, fdErr]) {
+          try {
+            closeSync(fd);
+          } catch {
+            /* already closed */
+          }
+        }
+        if (typeof hooks.onInterrupted === "function") hooks.onInterrupted(interrupted);
+        process.kill(process.pid, interrupted);
+        return done({ ...result, interrupted });
+      }
       try {
         closeSync(fdOut);
       } catch {
@@ -1052,7 +1213,18 @@ async function runNext(args) {
         writeFileSync(outFile, "");
         writeFileSync(errFile, "");
       } else {
-        const res = await spawnGate(next, cwd, outFile, errFile, resultsFile, timeoutMs);
+        const res = await spawnGate(next, cwd, outFile, errFile, resultsFile, timeoutMs, {
+          onSpawn: (pgid) =>
+            writeAtomic(childPath(outAbs), JSON.stringify({ runner_pid: process.pid, pgid, started_ms: Date.now() })),
+          onInterrupted: () => {
+            // The entry stays unclaimed (nothing is written to state.json), so the next `run --next` runs it again.
+            removeChildRecord(outAbs);
+            if (heldLock) releaseLock(heldLock);
+            heldLock = null;
+          },
+        });
+        removeChildRecord(outAbs);
+        if (res.interrupted) process.exit(signalExit(res.interrupted)); // reached only if the re-raise did not end us
         if (res.spawnError) fail("usage-error", `gate ${next.id} could not be started: ${res.spawnError}`);
         exit = res.exit;
         timed_out = res.timed_out;
@@ -1092,6 +1264,13 @@ async function runNext(args) {
     if (remaining === 0) {
       // FINALIZE. The refusal is computed here, before anything is written, so a refused run leaves the
       // in-progress record intact and nothing downstream can read a half-valid stamp.
+      // audit P3-J — init's fingerprint (over which aux.completeness was captured) must be the tree the first gate saw.
+      if (rec.runs[0].fp_before !== rec.fingerprint.init) {
+        fail(
+          "tree-changed-between-gates",
+          `the worktree changed between init and ${rec.runs[0].id} — the gates did not judge the tree init recorded`
+        );
+      }
       for (let i = 1; i < rec.runs.length; i++) {
         if (rec.runs[i].fp_before !== rec.runs[i - 1].fp_after) {
           fail(
@@ -1152,4 +1331,4 @@ if (import.meta.main) {
   });
 }
 
-export { assertContained, isStaleLock, signalExit, readScopeJson, spawnGate, sha256RegularFile };
+export { assertContained, isStaleLock, signalExit, readScopeJson, spawnGate, sha256RegularFile, CI_GATE_IDS };

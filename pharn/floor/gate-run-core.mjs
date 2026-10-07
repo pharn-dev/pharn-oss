@@ -1044,6 +1044,15 @@ export function validateStamp(stamp, expect = {}) {
     if (bad !== null) return err("stamp-malformed", `stamp is not a well-formed entry-derived BASE stamp: ${bad}`);
   }
 
+  // No edit between init and the first gate: `aux.completeness` and the resolved set were captured over the tree init
+  // fingerprinted, so a first gate that saw another tree judged a different state than the record describes. Same
+  // code as the inter-gate break below (a re-run re-fingerprints at init, so it routes as a lapse).
+  if (stamp.runs[0].fp_before !== fp.init) {
+    return err(
+      "tree-changed-between-gates",
+      `the worktree changed between init and ${JSON.stringify(stamp.runs[0].id)} — fingerprint.init is not runs[0].fp_before`
+    );
+  }
   // No edit between gates: entry k's fp_before must equal entry k-1's fp_after.
   for (let i = 1; i < stamp.runs.length; i++) {
     if (stamp.runs[i].fp_before !== stamp.runs[i - 1].fp_after) {
