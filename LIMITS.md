@@ -282,7 +282,9 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
   executing them, whether each changed path would have been denied. Denied means the `reconcile` gate
   fails, so the verify verdict is `FAIL`. Since 6.52.0 one class is
   reported rather than failed: a path whose bytes are exactly the upstream bytes HEAD merged in during the window
-  (`merged[]`, `reconciliation-record.md` §2a); a commit the build makes itself still fails. **The supported claim is exactly "a write to a path the active
+  (`merged[]`, `reconciliation-record.md` §2a); a commit the build makes itself still fails. Since 6.54.0 a scope amendment derived from a plan
+  authorizes only what the anchored snapshot covered, so a `## Files` widened after the anchor is reported
+  (`plan-widened-after-anchor`); one widened before the anchor, or a forged snapshot, is not. **The supported claim is exactly "a write to a path the active
   scope would have denied is detected and fails the stage" — never "Bash writes are prevented."** Four
   bounds, all in `pharn/pharn-contracts/reconciliation-record.md`: ignored paths are outside the
   reconciled set; the window is anchor-to-verify; the model is **one worktree per session** (two sessions
