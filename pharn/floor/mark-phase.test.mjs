@@ -610,11 +610,9 @@ test("✧ ONE ENCODING (L35): the printed line's template is spelled once, in ma
   );
   assert.deepEqual(spellings, ["mark-phase.mjs"], "one template, in one module");
   const source = readFileSync(CLI, "utf8");
-  assert.equal(
-    source.split("process.stdout.write(`${markerLine(m)}\\n`);").length,
-    2,
-    "the CLI prints the marker line through markerLine()"
-  );
+  // The CLI's source text, spelled so this string is not itself a `${…}` that reads as a forgotten template literal.
+  const CLI_PRINT = "process.stdout.write(`$" + "{markerLine(m)}\\n`);";
+  assert.equal(source.split(CLI_PRINT).length, 2, "the CLI prints the marker line through markerLine()");
   assert.match(
     readFileSync(join(HERE, "render-cost-ledger.mjs"), "utf8"),
     /import \{[^}]*\bmarkerLine\b[^}]*\} from "\.\/mark-phase\.mjs";/

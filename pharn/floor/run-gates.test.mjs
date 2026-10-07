@@ -1040,6 +1040,30 @@ test("spawnGate is exported, and resultsFile: null means NO PHARN_TEST_RESULTS v
   }
 });
 
+test("spawnGate: an argv gate whose program is a PATH or not a bare name is refused (exit 2, nothing spawned)", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "rg-spawngate-name-"));
+  try {
+    const marker = join(dir, "ran");
+    for (const program of [process.execPath, "./x", "../x", "a/b", "", "-e", "a b", "a;b", undefined, 7]) {
+      const r = await spawnGate(
+        { shell: null, argv: [program, "-e", `require("fs").writeFileSync(${JSON.stringify(marker)}, "x")`], files: [] },
+        dir,
+        join(dir, "o"),
+        join(dir, "e"),
+        null,
+        10000
+      );
+      assert.equal(r.exit, 2, `${JSON.stringify(program)} must be refused`);
+      assert.match(r.spawnError, /bare program name/);
+      assert.equal(existsSync(marker), false, `${JSON.stringify(program)} must not have been spawned`);
+    }
+    const ok = await spawnGate({ shell: null, argv: ["node", "-e", "0"], files: [] }, dir, join(dir, "o"), join(dir, "e"), null, 10000);
+    assert.equal(ok.exit, 0, "a bare name still runs");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("spawnGate: a NON-null resultsFile still sets PHARN_TEST_RESULTS to exactly that path (unchanged behavior)", async () => {
   const dir = mkdtempSync(join(tmpdir(), "rg-spawngate2-"));
   try {

@@ -254,12 +254,21 @@ function pinnedLine(file, re) {
 // tests execute them with `cwd` set to a THROWAWAY sandbox (so the marker lands there, not in this repo's
 // own `.pharn/`), so the relative script path is rewritten to this repo's absolute one first — the
 // SUBSTITUTED PATH is infrastructure for running the test in isolation; the argv the line passes after the
-// script name (--open/--close, the command, the quoted name) is executed completely unedited.
+// script name (--open/--close, the command, the quoted name) is executed completely unedited. The absolute
+// path travels in the child's ENVIRONMENT and the line names it as a quoted "$VAR", so no path is ever
+// spliced into the shell string (CodeQL js/shell-command-injection-from-environment).
 function runShellLine(dir, line) {
   const resolved = line
-    .replace("node pharn/floor/run-marker.mjs", `node ${JSON.stringify(CLI)}`)
-    .replace("node .claude/hooks/require-loop-record.cjs", `node ${JSON.stringify(LOOP_HOOK)}`);
-  return spawnSync("sh", ["-c", resolved], { cwd: dir, encoding: "utf8" });
+    .replace("node pharn/floor/run-marker.mjs", 'node "$PHARN_TEST_RUN_MARKER"')
+    .replace("node .claude/hooks/require-loop-record.cjs", 'node "$PHARN_TEST_LOOP_HOOK"')
+    .replace("node pharn/floor/ship-closeout.mjs", 'node "$PHARN_TEST_SHIP_CLOSEOUT"');
+  const env = {
+    ...process.env,
+    PHARN_TEST_RUN_MARKER: CLI,
+    PHARN_TEST_LOOP_HOOK: LOOP_HOOK,
+    PHARN_TEST_SHIP_CLOSEOUT: join(HERE, "ship-closeout.mjs"),
+  };
+  return spawnSync("sh", ["-c", resolved], { cwd: dir, env, encoding: "utf8" });
 }
 
 test("✧ WIRING: pharn-ship.md's pinned OPEN line, executed verbatim (with <name> substituted), opens a pharn-ship marker", () => {
@@ -278,9 +287,7 @@ test("✧ WIRING: pharn-ship.md's pinned Step 3a closeout line, executed verbati
     "<name>",
     "demo-run"
   );
-  const closeLine = pinnedLine("pharn-ship.md", /node pharn\/floor\/ship-closeout\.mjs --feature '<name>'/)
-    .replace("<name>", "demo-run")
-    .replace("node pharn/floor/ship-closeout.mjs", `node ${JSON.stringify(join(HERE, "ship-closeout.mjs"))}`);
+  const closeLine = pinnedLine("pharn-ship.md", /node pharn\/floor\/ship-closeout\.mjs --feature '<name>'/).replace("<name>", "demo-run");
   const dir = tmp();
   runShellLine(dir, openLine);
   assert.ok(existsSync(markerPath(dir, "pharn-ship", "demo-run")));

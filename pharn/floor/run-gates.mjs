@@ -850,6 +850,12 @@ function spawnGate(entry, cwd, outFile, errFile, resultsFile, timeoutMs) {
     } else {
       const base = entry.argv ?? [];
       cmd = base[0];
+      // The program is looked up on PATH by bare name (`node`, `npm`, `npx`), never run from a path: a name with a
+      // separator would execute whatever file a record or command line points at (CodeQL
+      // js/indirect-command-line-injection). The spawn below is the one place such a name could reach `exec`.
+      if (typeof cmd !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._+-]*$/.test(cmd)) {
+        return done({ exit: 2, timed_out: false, spawnError: `gate argv[0] must be a bare program name, got ${JSON.stringify(cmd)}` });
+      }
       argv = base.slice(1);
       // Files follow `--`. Before 6.18.0 only `test` ever carried files; the ac-test stage hands the e2e gates their
       // mapped files too, so the rule is "an argv gate carrying files", which changes nothing for verify or regress.
