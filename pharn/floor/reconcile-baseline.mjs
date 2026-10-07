@@ -219,6 +219,23 @@ export function snapshotScope(baseDir) {
   }
 }
 
+// The commit HEAD names, or null — an unborn HEAD (no commit yet), a non-repo, or git unavailable. A full object
+// id, never a ref name: a ref is a mutable alias (lessons-learned L32), the id is the identity the merged
+// classification in check-bash-reconcile.mjs compares against. `--verify -q` + `^{commit}` makes every
+// non-answer a non-zero exit, read here as null rather than as a guessed value.
+export function headCommit(baseDir) {
+  try {
+    const out = execFileSync("git", ["rev-parse", "--verify", "-q", "HEAD^{commit}"], {
+      cwd: baseDir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(out) ? out : null;
+  } catch {
+    return null;
+  }
+}
+
 export function buildRecord(baseDir, by) {
   const en = enumerate(baseDir);
   if (!en.ok) return { ok: false, reason: en.reason };
@@ -237,6 +254,13 @@ export function buildRecord(baseDir, by) {
       version: RECORD_VERSION,
       epoch: new Date().toISOString(),
       anchored_by: by,
+      // The commit HEAD named when this epoch opened (6.51.0), or null. Read by check-bash-reconcile.mjs's
+      // `merged` classification ONLY: a candidate whose change since the anchor is exactly the change upstream
+      // commits merged into HEAD made. Additive, so RECORD_VERSION stays 1 — the 5.1.0 `scope_amendments`
+      // precedent; a baseline written before this field reads as `undefined`, which gets no classification.
+      // Recorded at the anchor only, never on an amendment: the classification's base must be the instant the
+      // `entries` were hashed, and a head on an amendment would be a field nothing reads (P7).
+      anchored_head: headCommit(baseDir),
       scope_snapshot: snapshotScope(baseDir),
       // Further scopes that came legitimately into force DURING this epoch — see amendScope below.
       // Always an array, never absent, so a reader never branches on presence (a baseline written

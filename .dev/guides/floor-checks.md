@@ -91,6 +91,13 @@ node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 # check-lessons-index COLD posture); /pharn-*verify passes --require-baseline, where absence is a refusal.
 # Since 6.24.0 `--anchor` itself REFUSES (exit 2, nothing written) when there is no usable scope to
 # snapshot (D6) — an explicit `{"scope": []}` IS a scope and anchors; both shipped callers set one first.
+# MERGED (6.51.0, audit P3-L): `--anchor` records `anchored_head`; a would-be escape whose bytes are exactly the
+# upstream bytes HEAD merged in during the window is listed in `merged[]` (+ a warning), not `escapes[]`. Six
+# equality/exit-code conditions (contract §2a): X recorded and HEAD moved; X an ancestor of HEAD; a merge base M of
+# HEAD and refs/remotes/origin/HEAD that X does not contain; baseline entry = blob at X; bytes now = blob at HEAD;
+# blob at HEAD = blob at M (a commit the build makes itself is not on upstream, so it stays an escape). Any git
+# failure keeps the escape. Precision, not strength: origin/HEAD is a Bash-movable alias; a stale fetch only
+# withholds the class; no origin/HEAD (git init + remote add) => inert, the warning names `git remote set-head`.
 # Contract: pharn/pharn-contracts/reconciliation-record.md. Data: pharn/floor/reconcile-ignore.json.
 # Exit: 0 CLEAN|NO_BASELINE · 1 ESCAPE · 2 INCONCLUSIVE / no usable scope to anchor (D6).
 node pharn/floor/reconcile-baseline.mjs --anchor [--base <dir>] [--by <label>]
