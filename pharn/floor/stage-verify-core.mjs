@@ -239,16 +239,19 @@ export function gateReuseBlock(stampText) {
  *  stage merges: `completeness` (the runner's capture, verbatim, after `checkCompleteness`), `verifiers`
  *  (`{registered, findings: []}`, plus a fixed `note` when `registered > 0`) and, since 6.34.0, `gate_reuse`
  *  (`gateReuseBlock`), and since 6.40.0 `head_install` (the HEAD install check's block, `install-drift-core.mjs`;
- *  the CALLER validates it — this module keeps its one import — so here it is only "a plain object, or null").
+ *  the CALLER validates it — this module keeps its one import — so here it is only "a plain object, or null"),
+ *  and since 6.55.0 `reconcile_detail` (WHY the reconcile gate failed, `reconcile-detail-core.mjs`'s block read from
+ *  the gate's recorded output; the CALLER builds it, so here it is likewise "a plain object, or null" — null when the
+ *  stamp has no reconcile run).
  *  A checker key named like any of them is REFUSED rather than overwritten (GATE 1 Q2) —
  *  `check-verify.mjs` prints none today, so the refusal guards a future change to it.
  *  ---------------------------------------------------------------------------------------------- */
-export const MERGED_KEYS = Object.freeze(["completeness", "verifiers", "gate_reuse", "head_install"]);
+export const MERGED_KEYS = Object.freeze(["completeness", "verifiers", "gate_reuse", "head_install", "reconcile_detail"]);
 
 export const VERIFIER_DEFERRED_NOTE =
   "verifiers are registered, but the live verifier runner is deferred (P7): none was run, and a verifier finding never flips the verdict (fix #3)";
 
-export function composeReport({ checker, completeness, verifiers, gateReuse, headInstall }) {
+export function composeReport({ checker, completeness, verifiers, gateReuse, headInstall, reconcileDetail = null }) {
   if (checker === null || typeof checker !== "object" || Array.isArray(checker)) {
     return { ok: false, reason: "the verdict checker's output is not a JSON object" };
   }
@@ -272,8 +275,18 @@ export function composeReport({ checker, completeness, verifiers, gateReuse, hea
   if (headInstall !== null && (typeof headInstall !== "object" || Array.isArray(headInstall))) {
     return { ok: false, reason: "the head-install block is not an object or null" };
   }
+  if (reconcileDetail !== null && (typeof reconcileDetail !== "object" || Array.isArray(reconcileDetail))) {
+    return { ok: false, reason: "the reconcile-detail block is not an object or null" };
+  }
   return {
     ok: true,
-    report: { ...checker, completeness, verifiers: block, gate_reuse: { reused: gateReuse.reused }, head_install: headInstall },
+    report: {
+      ...checker,
+      completeness,
+      verifiers: block,
+      gate_reuse: { reused: gateReuse.reused },
+      head_install: headInstall,
+      reconcile_detail: reconcileDetail,
+    },
   };
 }

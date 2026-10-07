@@ -73,18 +73,19 @@ them in its command prose.
 
 ## Field shape + trust classes
 
-| field           | shape                                                                                                                                                                                    | who writes it                                                                                          | class                                      |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
-| `feature`       | the increment's slug, or `null`                                                                                                                                                          | `check-verify.mjs` (from `--feature`)                                                                  | ADVISORY — no floor op reads it            |
-| `gates`         | flat `{ "<gate-id>": <int exit code> }`, keys sorted                                                                                                                                     | `check-verify.mjs`                                                                                     | ADVISORY — no floor op reads it            |
-| `verdict`       | **enum** — see the table below                                                                                                                                                           | `check-verify.mjs`                                                                                     | **FLOOR-RELEVANT** — enum-gated by 4 sites |
-| `failing_gates` | array of the `gates` keys whose value is non-zero, plus `ac-delivery` / `ac-evidence` when the AC gate is red (6.20.0 — these two never enter `gates`)                                   | `check-verify.mjs`                                                                                     | read by `check-loop.mjs` on a FAIL (below) |
-| `completeness`  | `{ declared: [], skipped: [], missing: [], complete: bool, verdict: str, note: str }`, OPTIONAL — members vary by emitter; treat any subset as valid                                     | `stage-verify.mjs` (product) / the dev command, from `pharn/floor/check-build-complete.mjs`'s stdout   | ADVISORY — no floor op reads it            |
-| `verifiers`     | `{ registered: <int>, findings: [], note: str }`, OPTIONAL — `findings` and `note` are each optional; zero verifiers ship today, so no committed report exercises a non-empty `findings` | `stage-verify.mjs` (product) / the dev command, from `pharn/floor/count-verifiers.mjs` + each verifier | ADVISORY — no floor op reads it            |
-| `reason`        | a diagnostic sentence, present only on `INCONCLUSIVE`                                                                                                                                    | `check-verify.mjs`                                                                                     | ADVISORY — no floor op reads it            |
-| `ac_gate`       | the AC gate's block, OPTIONAL — present when `check-verify.mjs` ran with `--ac-gate` (below)                                                                                             | `check-verify.mjs` (`ac-gate-core.mjs`)                                                                | compared by `check-loop-fresh.mjs` check E |
-| `gate_reuse`    | `{ reused: [{ id, stage, side, seq }] }`, OPTIONAL — since 6.34.0 `stage-verify.mjs` always writes it (below)                                                                            | `stage-verify.mjs`, from its own verify stamp                                                          | ADVISORY — no floor op reads it            |
-| `head_install`  | `{ state, why, family, lockfile, counts }` or `null`, OPTIONAL — since 6.40.0 `stage-verify.mjs` always writes it (below)                                                                | `stage-verify.mjs`, from `install-drift.mjs`                                                           | ADVISORY — no floor op reads it            |
+| field              | shape                                                                                                                                                                                    | who writes it                                                                                          | class                                      |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| `feature`          | the increment's slug, or `null`                                                                                                                                                          | `check-verify.mjs` (from `--feature`)                                                                  | ADVISORY — no floor op reads it            |
+| `gates`            | flat `{ "<gate-id>": <int exit code> }`, keys sorted                                                                                                                                     | `check-verify.mjs`                                                                                     | ADVISORY — no floor op reads it            |
+| `verdict`          | **enum** — see the table below                                                                                                                                                           | `check-verify.mjs`                                                                                     | **FLOOR-RELEVANT** — enum-gated by 4 sites |
+| `failing_gates`    | array of the `gates` keys whose value is non-zero, plus `ac-delivery` / `ac-evidence` when the AC gate is red (6.20.0 — these two never enter `gates`)                                   | `check-verify.mjs`                                                                                     | read by `check-loop.mjs` on a FAIL (below) |
+| `completeness`     | `{ declared: [], skipped: [], missing: [], complete: bool, verdict: str, note: str }`, OPTIONAL — members vary by emitter; treat any subset as valid                                     | `stage-verify.mjs` (product) / the dev command, from `pharn/floor/check-build-complete.mjs`'s stdout   | ADVISORY — no floor op reads it            |
+| `verifiers`        | `{ registered: <int>, findings: [], note: str }`, OPTIONAL — `findings` and `note` are each optional; zero verifiers ship today, so no committed report exercises a non-empty `findings` | `stage-verify.mjs` (product) / the dev command, from `pharn/floor/count-verifiers.mjs` + each verifier | ADVISORY — no floor op reads it            |
+| `reason`           | a diagnostic sentence, present only on `INCONCLUSIVE`                                                                                                                                    | `check-verify.mjs`                                                                                     | ADVISORY — no floor op reads it            |
+| `ac_gate`          | the AC gate's block, OPTIONAL — present when `check-verify.mjs` ran with `--ac-gate` (below)                                                                                             | `check-verify.mjs` (`ac-gate-core.mjs`)                                                                | compared by `check-loop-fresh.mjs` check E |
+| `gate_reuse`       | `{ reused: [{ id, stage, side, seq }] }`, OPTIONAL — since 6.34.0 `stage-verify.mjs` always writes it (below)                                                                            | `stage-verify.mjs`, from its own verify stamp                                                          | ADVISORY — no floor op reads it            |
+| `head_install`     | `{ state, why, family, lockfile, counts }` or `null`, OPTIONAL — since 6.40.0 `stage-verify.mjs` always writes it (below)                                                                | `stage-verify.mjs`, from `install-drift.mjs`                                                           | ADVISORY — no floor op reads it            |
+| `reconcile_detail` | `{ state, exit, … }` or `null`, OPTIONAL — since 6.55.0 `stage-verify.mjs` always writes it (below)                                                                                      | `stage-verify.mjs`, from the reconcile gate's recorded stdout                                          | ADVISORY — no floor op reads it            |
 
 **Trust (P2).** Every field except one carries deterministic-tool output — gate-id strings, integer exit
 codes, path strings: the enum-gated / floor-verifiable class. The exceptions are **free text and inherit
@@ -364,3 +365,30 @@ is their first gate run.
   between the gates and completeness.
 - **ADDITIVE and ADVISORY.** `check-verify.mjs` is unchanged and no verdict, stop or freshness check reads the block; a
   report written before 6.40.0 has no such key.
+
+## The additive `reconcile_detail` block (6.55.0)
+
+WHY the `reconcile` gate failed, so a human need not re-run `check-bash-reconcile.mjs` by hand. At the verdict,
+`stage-verify.mjs` reads the reconcile gate's recorded stdout (`<seq>-reconcile.out` under `.pharn/pharn-verify/gates/`)
+only when its SHA-256 equals the `stdout_sha256` the verify stamp records for that run, and
+`pharn/floor/reconcile-detail-core.mjs` parses the checker's JSON document (`reconciliation-record.md` §2) — never its
+prose. The report carries it as its last merged key:
+
+- `null` when the stamp has no reconcile run.
+- `{ state: "parsed", exit, verdict, escapes: [{ file, denied_by, reason?, scope_set_by? }], escapes_total,
+merged_count, reason? }` — `escapes` holds at most the first 20 entries, `escapes_total` counts them all,
+  `merged_count` is the length of the checker's `merged[]`, and `reason` is the checker's own sentence (on
+  `INCONCLUSIVE`).
+- `{ state, exit }` for every other closed state: `log-missing`, `log-unreadable`, `log-digest-mismatch`,
+  `not-checker-json`. No row is ever invented for these.
+
+`VERIFY.md` renders a `## Reconcile` section when the gate exited non-zero, when a path was merged, or when
+`failing_gates` lists `reconcile` with no block; `RUN-REPORT.md` renders the same lines when the final verify FAILed on
+`reconcile`. One renderer serves both (`reconcileDetailLines`).
+
+- **Trust (P2):** `file`, `denied_by`, `scope_set_by` and `reason` are untrusted text. The renderer JSON-quotes them
+  inside a fence; an escape's `reason` and the checker `verdict` render inline only after a membership test of their
+  closed sets.
+- **ADDITIVE and ADVISORY.** No verdict, stop or freshness check reads the block. The digest binding says the bytes are
+  the ones the runner recorded, not that the checker was right; the log and the stamp both live under `.pharn/`, which
+  Bash reaches. A report written before 6.55.0 has no such key.

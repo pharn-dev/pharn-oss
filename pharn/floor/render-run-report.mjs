@@ -126,6 +126,7 @@ import { handoffSections, HANDOFF_SECTIONS } from "./loop-record-core.mjs";
 import { pathsFromPlanFiles } from "./plan-files-core.mjs";
 import { quoteData, dataText } from "./quote-core.mjs";
 import { MEMBERSHIP_METHOD, MEMBERSHIP_METHOD_V1 } from "./run-window-core.mjs";
+import { reconcileDetailLines, RECONCILE_GATE_ID } from "./reconcile-detail-core.mjs";
 
 // `quoteData` and `dataText` are IMPORTED, not defined here (GRILL G6, stage-regress-script): they moved
 // byte-for-byte into `quote-core.mjs`, whose only import is `fenceFor` from `loop-record-core.mjs` (a
@@ -780,6 +781,7 @@ function verdictsSection({ verify, regress, cost, stale = false }) {
     out.push("");
     out.push(indent(quoteData("failing_gates, quoted as DATA:", fg.length ? fg.map(dataText).join("\n") : "(none)"), "  "));
     out.push("");
+    out.push(...reconcileLines(verify, fg));
     out.push(...acGateLines(verify.ac_gate));
   }
   // A quick `/pharn-ship` run starts no `/pharn-regress` at all (6.25.0), so a `regression-report.json` on
@@ -797,6 +799,20 @@ function verdictsSection({ verify, regress, cost, stale = false }) {
     out.push(indent(quoteData("regressions, quoted as DATA:", rg.length ? rg.map(dataText).join("\n") : "(none)"), "  "));
   }
   return out.join("\n");
+}
+
+/** 6.55.0 — WHY the run stopped on `reconcile`: when the final verify FAILed with `reconcile` among its failing gates
+ *  (exactly `check-loop.mjs`'s predicate for `terminal_cause: reconcile`; this report reads no check-loop output), the
+ *  verify report's `reconcile_detail` block, rendered by the ONE renderer VERIFY.md uses (reconcile-detail-core.mjs,
+ *  L35) — escapes' files JSON-quoted in a fence, closed reasons inline only after a membership test. An absent or
+ *  unparsed block is one line naming the re-run command, never an invented row. Any other report: no lines. */
+function reconcileLines(verify, failing) {
+  if (verify.verdict !== "FAIL" || !failing.includes(RECONCILE_GATE_ID)) return [];
+  return [
+    "- reconcile — why the gate failed:",
+    "",
+    ...reconcileDetailLines(verify.reconcile_detail).map((l) => (l === "" ? "" : indent(l, "  "))),
+  ];
 }
 
 /** The two reports' closed verdict enums (check-verify.mjs, check-regress.mjs), restated ONLY as the render guard, as

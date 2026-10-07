@@ -76,7 +76,9 @@
 // quoted DATA — and that exit writes no file.
 // TRUST (P2): the PLAN's `## Files` becomes only declared path strings (prefix operands of a membership test);
 // SPEC.md is hashed by the shelled checker and never read here; child stdout is parsed as JSON and only enums and
-// ints branch; every child value quoted into a `detail` goes through `dataText` (L62).
+// ints branch; every child value quoted into a `detail` goes through `dataText` (L62). Since 6.55.0 it reads ONE gate
+// log: the reconcile gate's stdout, digest-bound to the stamp, parsed into `verify-report.json`'s advisory
+// `reconcile_detail` block (reconcile-detail-core.mjs) — no verdict and no branch of this script reads it.
 //
 // Usage:
 //   node pharn/floor/stage-verify.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--gates "<cmd>[::<id>],…"]
@@ -85,7 +87,17 @@
 // Exit: 0 done · 2 unusable · 3 refused · 4 question · 5 continue · anything else (1 included) = CRASHED.
 
 import "./runtime-floor.mjs";
-import { existsSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+  mkdirSync,
+  openSync,
+  fstatSync,
+  closeSync,
+  constants as fsConstants,
+} from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -106,7 +118,8 @@ import {
 import { renderDone, renderRefused } from "./render-verify.mjs";
 import { shelledVerdict, crashedDetail } from "./shelled-verdict-core.mjs";
 import { pathsFromPlanFiles, clean } from "./plan-files-core.mjs";
-import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
+import { FEATURE_SLUG_RE, logBasename } from "./gate-run-core.mjs";
+import { reconcileRun, reconcileDetail, RECONCILE_GATE_ID } from "./reconcile-detail-core.mjs";
 import { dataText } from "./quote-core.mjs";
 import { readMarkers, readInProject, HEAD_STAMP } from "./regress-base-reuse.mjs";
 import { readOffer, acceptReuseSource } from "./head-reuse-offer.mjs";
@@ -379,6 +392,43 @@ function checkpoint(state, phase) {
   writeFileSync(VERIFY_PATHS.stageJson, JSON.stringify(rec, null, 2));
 }
 
+/** 6.55.0 — WHY the reconcile gate failed: its recorded stdout (`<seq>-reconcile.out` under the verify gate dir),
+ *  read only when its sha256 equals the `stdout_sha256` the stamp the verdict just read records for that run, then
+ *  parsed by `reconcile-detail-core.mjs`. ADVISORY and best-effort: every failure is a named state the report renders
+ *  as one line, never a crash and never an invented row. `null` when the stamp (bound bytes) has no reconcile run. */
+function readReconcileDetail(stampText) {
+  let stamp;
+  try {
+    stamp = stampText === null ? null : JSON.parse(stampText);
+  } catch {
+    stamp = null;
+  }
+  const run = reconcileRun(stamp);
+  if (run === null) return null;
+  const path = join(VERIFY_PATHS.gates, `${logBasename(run.seq, RECONCILE_GATE_ID)}.out`);
+  // ONE descriptor, opened without following a final symlink, then fstat'd and read — the type and size checks and the
+  // read describe the same file (no check-then-use window on the path).
+  let bytes;
+  let fd = null;
+  try {
+    fd = openSync(path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+    const st = fstatSync(fd);
+    if (!st.isFile() || st.size > RECONCILE_LOG_MAX_BYTES) return reconcileDetail({ exit: run.exit, logState: "log-unreadable" });
+    bytes = readFileSync(fd);
+  } catch (e) {
+    return reconcileDetail({ exit: run.exit, logState: e && e.code === "ENOENT" ? "log-missing" : "log-unreadable" });
+  } finally {
+    if (fd !== null) closeSync(fd);
+  }
+  if (run.stdout_sha256 === null || createHash("sha256").update(bytes).digest("hex") !== run.stdout_sha256) {
+    return reconcileDetail({ exit: run.exit, logState: "log-digest-mismatch" });
+  }
+  return reconcileDetail({ exit: run.exit, logState: "read", text: bytes.toString("utf8") });
+}
+
+/** The largest reconcile log read for the detail block — far above any real document; a larger file is `log-unreadable`. */
+const RECONCILE_LOG_MAX_BYTES = 8 * 1024 * 1024;
+
 /** ------------------------------------------------------------------------------------------------
  *  THE REST OF THE PHASE MACHINE, shared by a fresh run and a resumed one. `state.phase` is the NEXT phase.
  *  ---------------------------------------------------------------------------------------------- */
@@ -425,6 +475,7 @@ function runPhases(state, budget) {
     verifiers: state.verifiers,
     gateReuse: gateReuse.value,
     headInstall: readRecordedInstallCheck(VERIFY_PATHS.headInstall), // advisory; null when absent or malformed
+    reconcileDetail: readReconcileDetail(stampText), // 6.55.0, advisory; null when the stamp has no reconcile run
   });
   if (!composed.ok) emitUnusable(state.feature, "child-crashed", composed.reason);
 

@@ -258,8 +258,8 @@ test("★ WIRING — pharn-verify.md's pinned fresh line, executed verbatim, rea
     const live = JSON.parse(cv.stdout);
     assert.deepEqual(
       Object.keys(report),
-      [...Object.keys(live), "completeness", "verifiers", "gate_reuse", "head_install"],
-      "the checker's keys, in order, then the four blocks (head_install since 6.40.0)"
+      [...Object.keys(live), "completeness", "verifiers", "gate_reuse", "head_install", "reconcile_detail"],
+      "the checker's keys, in order, then the five blocks (head_install since 6.40.0, reconcile_detail since 6.55.0)"
     );
     for (const k of Object.keys(live)) assert.deepEqual(report[k], live[k], `field ${k} is not the checker's own output`);
     // F — the stamp's final fingerprint is the live tree's, after the render wrote both artifacts.
@@ -365,6 +365,80 @@ test("verdict FAIL — a red project gate is named; done is still exit 0 (the ve
     assert.deepEqual(report.failing_gates, ["lint"]);
     assert.equal(r.doc.verdict, "FAIL");
     assert.match(readFileSync(join(dir, RENDER), "utf8"), /VERIFY FAILS/);
+  });
+});
+
+// ── 6.55.0 — WHY the reconcile gate failed reaches the report and VERIFY.md (reconcile-reasons-in-reports) ─────────
+test("6.55.0 — an out-of-scope write after the anchor: reconcile_detail names the escape and VERIFY.md lists it", () => {
+  withFixture({}, ({ dir }) => {
+    writeFileSync(join(dir, "src", "stray.js"), "export const stray = 1;\n"); // NOT in the plan's ## Files
+    const r = runCli(dir, fresh());
+    assert.equal(r.code, 0, r.raw);
+    const report = readReport(dir);
+    assert.equal(report.verdict, "FAIL");
+    assert.ok(report.failing_gates.includes("reconcile"), JSON.stringify(report.failing_gates));
+    const d = report.reconcile_detail;
+    assert.equal(d.state, "parsed", JSON.stringify(d));
+    assert.equal(d.verdict, "ESCAPE");
+    assert.equal(d.exit, 1);
+    assert.ok(
+      d.escapes.some((e) => e.file === "src/stray.js" && typeof e.denied_by === "string"),
+      JSON.stringify(d.escapes)
+    );
+    const md = readFileSync(join(dir, RENDER), "utf8");
+    assert.match(md, /^## Reconcile$/m);
+    assert.match(md, /"src\/stray\.js" {2}denied_by="writes-scope/);
+  });
+});
+
+test("6.55.0 — a reconcile gate whose output is not the checker's JSON: one VERIFY.md line naming it, never a row", () => {
+  const garbage = 'console.log("not json at all"); process.exit(1);\n';
+  withFixture({ floor: { "check-bash-reconcile.mjs": garbage } }, ({ dir }) => {
+    const r = runCli(dir, fresh());
+    assert.equal(r.code, 0, r.raw);
+    const report = readReport(dir);
+    assert.deepEqual(report.reconcile_detail, { state: "not-checker-json", exit: 1 });
+    const md = readFileSync(join(dir, RENDER), "utf8");
+    assert.match(md, /not check-bash-reconcile\.mjs's JSON document; no row is invented/);
+    assert.doesNotMatch(md, /denied_by=/);
+  });
+});
+
+test("6.55.0 — a reconcile log rewritten after the run (digest mismatch) or removed (missing) is named on a resumed render", () => {
+  withFixture({}, ({ dir }) => {
+    writeFileSync(join(dir, "src", "stray.js"), "export const stray = 1;\n");
+    assert.equal(runCli(dir, fresh()).code, 0);
+    assert.equal(readReport(dir).reconcile_detail.state, "parsed");
+    const park = () =>
+      writeFileSync(
+        join(dir, VERIFY_PATHS.stageJson),
+        JSON.stringify({
+          schema: PROGRESS_SCHEMA,
+          feature: FEATURE,
+          timeoutMs: 30000,
+          budgetMs: null,
+          phase: "verdict",
+          verifiers: { registered: 0, verifiers: [] },
+        })
+      );
+    const [log] = gateLogs(dir).filter((f) => /-reconcile\.out$/.test(f));
+    assert.ok(log, "the reconcile gate left its stdout log");
+    // a CLEAN-looking document planted over the recorded bytes is NOT believed: the stamp's digest no longer matches
+    writeFileSync(join(dir, VERIFY_PATHS.gates, log), JSON.stringify({ verdict: "CLEAN", escapes: [], merged: [] }));
+    park();
+    assert.equal(runCli(dir, ["--resume"]).code, 0);
+    assert.deepEqual(readReport(dir).reconcile_detail, { state: "log-digest-mismatch", exit: 1 });
+    assert.match(readFileSync(join(dir, RENDER), "utf8"), /no longer matches the digest the gate runner recorded/);
+    rmSync(join(dir, VERIFY_PATHS.gates, log));
+    park();
+    assert.equal(runCli(dir, ["--resume"]).code, 0);
+    assert.deepEqual(readReport(dir).reconcile_detail, { state: "log-missing", exit: 1 });
+    // a symlink planted at the log path is never followed (O_NOFOLLOW): log-unreadable
+    writeFileSync(join(dir, "elsewhere.json"), JSON.stringify({ verdict: "CLEAN", escapes: [], merged: [] }));
+    symlinkSync(join(dir, "elsewhere.json"), join(dir, VERIFY_PATHS.gates, log));
+    park();
+    assert.equal(runCli(dir, ["--resume"]).code, 0);
+    assert.deepEqual(readReport(dir).reconcile_detail, { state: "log-unreadable", exit: 1 });
   });
 });
 
@@ -633,7 +707,11 @@ test("6.40.0 — a drifted install, or none at all, is refused head-install-drif
       lockfile: "package-lock.json",
       counts: { changed: 0, missing: 0, extraneous: 0, missing_unchecked: 0 },
     });
-    assert.deepEqual(Object.keys(report).slice(-1), ["head_install"], "the merged block, last");
+    assert.deepEqual(
+      Object.keys(report).slice(-2),
+      ["head_install", "reconcile_detail"],
+      "the merged blocks, last (6.55.0: reconcile_detail)"
+    );
     assert.match(readFileSync(join(dir, RENDER), "utf8"), /^HEAD install: checked — /m);
   });
 });

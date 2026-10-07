@@ -156,9 +156,13 @@ The only widening that stays clean is declaring every path **before** the build'
 says so.
 
 **Where the reason is visible.** `check-loop.mjs`'s closed `terminal_cause` names the cause (`reconcile`), not the
-reason. `VERIFY.md` and `RUN-REPORT.md` do not render reconcile escapes. To see **why**, re-run
-`node pharn/floor/check-bash-reconcile.mjs --require-baseline`: each escape carries `reason`, and its `problem` carries
-the remedy. Rendering the reason in those reports is a named follow-up.
+reason. Since 6.55.0 `/pharn-verify` reads the reconcile gate's recorded output (bound to the stamp's digest) into
+`verify-report.json`'s advisory `reconcile_detail` block (`verify-report.md`), and `VERIFY.md` — and `RUN-REPORT.md`
+when the loop stopped on `reconcile` — lists each escape's `file`, `denied_by`, `reason` and `scope_set_by` (first 20
+rows) and the `merged` count. The remedy text stays in each finding's `problem`, which the reports do not render: to
+read it, or when the log is missing or unreadable (the reports say so in one line), re-run
+`node pharn/floor/check-bash-reconcile.mjs --require-baseline`. The dev twin `/pharn-dev-verify` writes its `VERIFY.md`
+by prose and does not render the block.
 
 **Bounds.**
 

@@ -3847,8 +3847,8 @@ test("✧ verify's report keeps EVERY checker field — composeReport spreads th
   const core = readFileSync(join(REPO_ROOT, "pharn/floor/stage-verify-core.mjs"), "utf8");
   assert.match(
     core,
-    /report: \{ \.\.\.checker, completeness, verifiers: block, gate_reuse: \{ reused: gateReuse\.reused \}, head_install: headInstall \}/,
-    "the checker's object is carried whole — gate_run and ac_gate included — then the merged blocks (6.34.0: gate_reuse; 6.40.0: head_install)"
+    /report: \{\s*\.\.\.checker,\s*completeness,\s*verifiers: block,\s*gate_reuse: \{ reused: gateReuse\.reused \},\s*head_install: headInstall,\s*reconcile_detail: reconcileDetail,\s*\}/,
+    "the checker's object is carried whole — gate_run and ac_gate included — then the merged blocks (6.34.0: gate_reuse; 6.40.0: head_install; 6.55.0: reconcile_detail)"
   );
   assert.match(STAGE_VERIFY_SRC(), /composeReport\(\{\s*checker: verdict\.report,/, "the script composes through composeReport");
 });
