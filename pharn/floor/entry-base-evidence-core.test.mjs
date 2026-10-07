@@ -260,7 +260,9 @@ const CASES = [
     // runs did not judge the stamp's init
     (w) => {
       const MOVED = "7".repeat(64);
-      w.entry.runs = w.entry.runs.map((r, k) => (k < 2 ? r : k === 2 ? { ...r, fp_after: MOVED } : { ...r, fp_before: MOVED, fp_after: MOVED }));
+      w.entry.runs = w.entry.runs.map((r, k) =>
+        k < 2 ? r : k === 2 ? { ...r, fp_after: MOVED } : { ...r, fp_before: MOVED, fp_after: MOVED }
+      );
       w.entry.fingerprint.final = MOVED;
     },
   ],

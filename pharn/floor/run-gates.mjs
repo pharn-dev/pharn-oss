@@ -1215,8 +1215,7 @@ async function runNext(args) {
         writeFileSync(errFile, "");
       } else {
         const res = await spawnGate(next, cwd, outFile, errFile, resultsFile, timeoutMs, {
-          onSpawn: (pgid) =>
-            writeAtomic(childPath(outAbs), JSON.stringify({ runner_pid: process.pid, pgid, started_ms: Date.now() })),
+          onSpawn: (pgid) => writeAtomic(childPath(outAbs), JSON.stringify({ runner_pid: process.pid, pgid, started_ms: Date.now() })),
           onInterrupted: () => {
             // The entry stays unclaimed (nothing is written to state.json), so the next `run --next` runs it again.
             removeChildRecord(outAbs);

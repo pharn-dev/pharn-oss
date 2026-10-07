@@ -23,6 +23,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.50.1] - 2026-10-07
+
+### Fixed
+
+- 2026-10-07: **A snapshot-oracle AC test now fails the AC gate instead of passing for any implementation.** (audit
+  P2-F, `.dev/features/gate-runner-batch/`) vitest and Jest write a missing snapshot on a run where `CI` is unset, so
+  an AC test asserting `toMatchSnapshot()` failed before the build and passed after it whatever the build returned.
+  `pharn/floor/run-gates.mjs` now sets `CI=1` for the test-level gates (`test`, `test:e2e`, `e2e`, and the entry
+  check's `base:test`) unless the environment already defines `CI`; a project's own `CI=false` is kept and restores
+  snapshot writing. `/pharn-test` Step 3 gains an advisory rule: no snapshot, fixture or golden file the build or a
+  test run writes. Other oracle files the build writes are not caught by the runner.
+- 2026-10-07: **`validateStamp` and the runner's finalize compare `fingerprint.init` with the first gate's
+  `fp_before`.** (audit P3-J) Only consecutive gates were compared, so a tree edit between `init` and the first
+  `run --next` left a stamp whose `aux.completeness` described another tree than the gates judged. The mismatch is
+  `tree-changed-between-gates`, an existing lapse code (a re-run re-fingerprints at init).
+- 2026-10-07: **A killed `run-gates` no longer leaves its gate running into the re-run.** (audit P3-P) A SIGTERM,
+  SIGINT or SIGHUP to the runner is forwarded to the gate's process group; the runner then dies by that signal and
+  records nothing for the entry. A SIGKILL cannot be caught, so the runner records the running group in
+  `<out>/lock.child`, and the next `run --next` that recovers the stale lock stops that group (SIGTERM, then
+  SIGKILL; a group still alive is `lock-busy`) before re-running the entry. Bounds in
+  `pharn/pharn-contracts/gate-run-record.md`, "Bounds".
+- 2026-10-07: **Two concurrent first appends to a per-feature state file no longer drop a line.**
+  `pharn/floor/stage-work.mjs` `appendJsonLine` created a missing directory after an `lstat`; the appender that lost
+  the `mkdir` race got `EEXIST` and returned `{ok: false}`, so its record was lost (a CI flake: 199 of 200 lines).
+  `EEXIST` now re-`lstat`s the directory and applies the same symlink / not-a-directory refusal.
+- 2026-10-07: **CodeQL alerts #10 and #17 on the gate spawn carry a justification at the call.** The traced flow is a
+  project-configured gate command reaching `spawn`, which is what the runner is for; the alerts are not dismissed
+  here.
+
 ## [6.50.0] - 2026-10-07
 
 ### Fixed

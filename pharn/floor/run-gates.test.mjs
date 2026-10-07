@@ -2260,7 +2260,10 @@ test("audit P2-F — CI=1 reaches every test-level gate and no other; a CI the e
   const gates = ids.map((id) => `node ciprobe.cjs::${id}`).join(",");
   for (const env of [NO_CI_ENV, { ...NO_CI_ENV, CI: "false" }, { ...NO_CI_ENV, CI: "" }]) {
     withRepo((dir) => {
-      writeFileSync(join(dir, "ciprobe.cjs"), 'process.stdout.write("CI=" + (process.env.CI === undefined ? "<unset>" : process.env.CI));\n');
+      writeFileSync(
+        join(dir, "ciprobe.cjs"),
+        'process.stdout.write("CI=" + (process.env.CI === undefined ? "<unset>" : process.env.CI));\n'
+      );
       const init = cli(dir, ["init", "--stage", "build", "--feature", FEATURE, "--out", OUT, "--gates", gates], { env });
       assert.equal(init.code, 0, init.raw);
       for (let i = 0; i < ids.length; i++) assert.equal(cli(dir, runArgs(), { env }).code, 0);
