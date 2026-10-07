@@ -9,7 +9,8 @@
   },
 
   "always_reconciled": {
-    "why": "These paths are NEVER exempt and are never dropped from the candidate set by any rule — a detector that can be silently disabled through the channel it monitors is not a guarantee. They are additionally reconciled against their committed blob id when no usable baseline exists, so deleting the reconciler's own state does not blind this half.",
+    "why": "These paths are NEVER exempt and are never dropped from the candidate set by any rule — a detector that can be silently disabled through the channel it monitors is not a guarantee. They are ALSO reconciled against HEAD's committed blobs on every run, with a baseline and without one: a tracked change via `git diff HEAD`, and an ADDED untracked-not-ignored file via `git ls-files --others` (6.53.0). So neither deleting the reconciler's state nor forging a path's baseline entry hides a change here.",
+    "bound": "A git-ignored control path is invisible, as every ignored path is (derived_ignore) — including one ignored only through .git/info/exclude. A COMMITTED change moves HEAD too, so this half cannot see it; Code-Owner review is that backstop.",
     "not_a_deny": "Being listed here does NOT make a change to these paths an escape. It makes the path VISIBLE. The verdict is still `would the guards have denied this write?` — so a plan that legitimately declares `pharn/floor/x.mjs` in its `## Files` writes it cleanly. `.claude/hooks/*` and `.claude/settings*.json` are effectively unreachable that way, because set-writes-scope.cjs REFUSES to emit a scope naming them without --allow-claude-dir.",
     "exact": [
       ".claude/settings.json",
@@ -19,8 +20,19 @@
       ".claude/hooks/set-writes-scope.cjs",
       ".claude/hooks/require-loop-record.cjs"
     ],
+    "human_only": [
+      "pharn/CONSTITUTION.md",
+      "pharn/ARCHITECTURE.md",
+      "THREAT-MODEL.md",
+      "LIMITS.md",
+      "CODEOWNERS",
+      ".github/CODEOWNERS",
+      "docs/CODEOWNERS",
+      "pharn.spec-template.md"
+    ],
+    "human_only_prefixes": ["memory-bank/", ".dev/memory-bank/"],
     "prefixes": ["pharn/floor/", ".dev/floor/"],
-    "parity": "The six `exact` entries are a deliberate COPY of CONTROL_SURFACE in .claude/hooks/set-writes-scope.cjs and of the corresponding tail of DEFAULT_PROTECTED in .claude/hooks/protect-trusted-paths.cjs. check-bash-reconcile.test.mjs pins all three set-equal; they must be updated together."
+    "parity": "The six `exact` entries are a deliberate COPY of CONTROL_SURFACE in .claude/hooks/set-writes-scope.cjs and of the corresponding tail of DEFAULT_PROTECTED in .claude/hooks/protect-trusted-paths.cjs. `human_only` (6.53.0) is the rest of DEFAULT_PROTECTED — the four trusted docs, CODEOWNERS at its three GitHub locations, the project SPEC template — MINUS `.pharn/writes-scope.json`, excluded by name because it is gitignored runtime state that is never in the reconciled set. `human_only_prefixes` — `memory-bank/` and `.dev/memory-bank/` — are the hook's PROTECTED_SUBTREES, the whole canon subtree it denies, dev and product alike. check-bash-reconcile.test.mjs pins every one of these set-equal to the hook source; they must be updated together. The copy must exist: the checker cannot import a list from a hook-protected .cjs, and asking the hook per path would read the Bash-writable live scope (lessons-learned L35's question, answered)."
   },
 
   "pipeline_artifacts": {

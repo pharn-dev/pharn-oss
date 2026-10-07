@@ -94,7 +94,11 @@
 //     baseline present" exists to keep it caught.
 //
 //     BUT THE CLAIM MUST BE NARROWED FURTHER, AND THIS IS THE MOST IMPORTANT SENTENCE IN THIS HEADER:
-//     that argument holds ONLY for the always-reconciled control surface. For an ORDINARY path the
+//     that argument holds ONLY for the always-reconciled control surface — since 6.53.0 the guard files and
+//     pharn/floor/ + .dev/floor/, PLUS the human-only surface (the four trusted docs, CODEOWNERS at its three
+//     locations, pharn.spec-template.md) and the memory-bank canon subtrees, an added untracked file included.
+//     Before 6.53.0 a forged baseline entry cleared a Bash edit of LIMITS.md (audit 2026-10-07). For an ORDINARY
+//     path the
 //     baseline IS the reference, the baseline lives under `.pharn/` — which Bash reaches — and nothing
 //     authenticates it. So a writer who edits a denied file AND rewrites that file's baseline entry to
 //     the new hash gets a SILENT `CLEAN`: no escape, no warning, no INCONCLUSIVE. Therefore:
@@ -177,6 +181,8 @@ export function loadIgnoreData(path = IGNORE_DATA_PATH) {
   const exempt = (raw.exempt?.paths ?? []).map((e) => String(e.path));
   const neverExempt = (raw.never_exempt?.paths ?? []).map(String);
   const alwaysExact = (raw.always_reconciled?.exact ?? []).map(String);
+  const humanOnly = (raw.always_reconciled?.human_only ?? []).map(String);
+  const humanOnlyPrefixes = (raw.always_reconciled?.human_only_prefixes ?? []).map(String);
   const alwaysPrefixes = (raw.always_reconciled?.prefixes ?? []).map(String);
   // A `never_exempt` member may NEVER be exempted, whatever `exempt` says. Enforced here (not only in a
   // test) so a bad edit fails closed at RUN time rather than only under `npm test`.
@@ -185,7 +191,7 @@ export function loadIgnoreData(path = IGNORE_DATA_PATH) {
     return { ok: false, reason: `reconcile-ignore.json exempts a never_exempt path: ${offenders.join(", ")}` };
   }
   const pipelineNames = (raw.pipeline_artifacts?.names ?? []).map(String);
-  return { ok: true, exempt, neverExempt, alwaysExact, alwaysPrefixes, pipelineNames };
+  return { ok: true, exempt, neverExempt, alwaysExact, humanOnly, humanOnlyPrefixes, alwaysPrefixes, pipelineNames };
 }
 
 // --- A stage's OWN pipeline artifact (lessons-learned L17). `pharn/features/<slug>/<NAME>` or the same under
@@ -219,9 +225,21 @@ export function isPipelineArtifact(rel, data, activeSlug = null) {
   return /^lenses\/[A-Za-z0-9._-]+\/findings\.json$/.test(tail);
 }
 
-export function isAlwaysReconciled(rel, data) {
-  return data.alwaysExact.includes(rel) || data.alwaysPrefixes.some((p) => rel.startsWith(p));
+// The human-only half (6.53.0): the four trusted docs, CODEOWNERS at its three locations, the project SPEC template,
+// and the whole memory-bank canon subtree, dev and product. Listed in reconcile-ignore.json, pinned to the hook.
+export function isHumanOnly(rel, data) {
+  return (data.humanOnly ?? []).includes(rel) || (data.humanOnlyPrefixes ?? []).some((p) => rel.startsWith(p));
 }
+
+export function isAlwaysReconciled(rel, data) {
+  return data.alwaysExact.includes(rel) || data.alwaysPrefixes.some((p) => rel.startsWith(p)) || isHumanOnly(rel, data);
+}
+
+// The one-line remedy a human-only escape carries (6.53.0, GATE-1 addition). Reconcile has no attribution
+// (lessons-learned L68), so a maintainer's own uncommitted edit of a trusted doc, CODEOWNERS, the SPEC template or
+// canon reads exactly like a stray Bash write; this tells them what to do instead of how to silence it.
+export const HUMAN_ONLY_REMEDY =
+  "if this is a human's own edit: commit it before running the gates, or land it outside the build's anchor->verify window (lessons-learned L68) — never re-anchor or edit the baseline to clear it";
 
 // --- EXECUTE a hook against one candidate path and read its exit code. -----------------------------
 // 0 = it would have allowed the write; 2 = it would have denied it. Anything else is unusable input and
@@ -569,13 +587,27 @@ function main(argv) {
   // surface to `HEAD` instead anchors it in something the monitored channel cannot rewrite in place.
   // This is the difference between the guarantee this file CLAIMS and the one an earlier draft
   // implemented, and it was caught in review rather than by a test.
+  //
+  // ADDED FILES TOO (6.53.0). `git diff HEAD` lists tracked paths only, so a control path ABSENT at HEAD — no
+  // pharn.spec-template.md yet, a new pharn/floor/x.mjs — could be created through Bash, have its baseline entry
+  // forged, and read CLEAN (or NO_BASELINE with no baseline at all). The untracked-not-ignored control paths are
+  // therefore added from git's own `--others --exclude-standard` listing, filtered to the control surface ONLY, so
+  // an untracked file anywhere else is still judged by the baseline alone, exactly as before. BOUND: a git-ignored
+  // control path is invisible — including one ignored only through .git/info/exclude — as every ignored path is.
   function controlSurfaceChanges() {
     try {
-      const out = execFileSync("git", ["diff", "--name-only", "HEAD", "--"], { cwd: root, encoding: "utf8", maxBuffer: 1 << 26 });
-      return out
-        .split("\n")
-        .filter(Boolean)
-        .filter((rel) => isAlwaysReconciled(rel, data));
+      // NUL-separated (6.53.0, GATE-2 R2): newline-split output is QUOTED by git's default core.quotePath for any
+      // non-ASCII name ("\303\274"), so such a control path failed isAlwaysReconciled and was missed silently.
+      // `-z` prints names verbatim. `--no-renames`: with rename detection on, a staged `git mv` of a control file
+      // lists only the NEW name, so the control path it left was missed the same way.
+      const out = execFileSync("git", ["diff", "--name-only", "-z", "--no-renames", "HEAD", "--"], {
+        cwd: root,
+        encoding: "utf8",
+        maxBuffer: 1 << 26,
+      });
+      const tracked = out.split("\0").filter(Boolean);
+      const untracked = git(root, ["ls-files", "-z", "--others", "--exclude-standard"]).split("\0").filter(Boolean);
+      return [...new Set([...tracked, ...untracked])].filter((rel) => isAlwaysReconciled(rel, data));
     } catch {
       warnings.push("control-surface blob-id reconciliation unavailable (no git HEAD) — baseline comparison only");
       return null;
@@ -738,7 +770,9 @@ function main(argv) {
       rule_id: "P0",
       severity: "blocking",
       file: e.file,
-      problem: `'${e.file}' changed since the reconciliation anchor, and the write guards would have DENIED a write to it (${e.denied_by}) — a write reached it outside the guarded tool surface`,
+      problem:
+        `'${e.file}' changed since the reconciliation anchor, and the write guards would have DENIED a write to it (${e.denied_by}) — a write reached it outside the guarded tool surface` +
+        (isHumanOnly(e.file, data) ? `; ${HUMAN_ONLY_REMEDY}` : ""),
     }));
   }
   emit(base, escapes.length ? 1 : 0);

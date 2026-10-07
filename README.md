@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.52.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.53.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -755,8 +755,10 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   escape — a formatter, a generator, a script, a mistake, which is the whole population of failures it
   was built for. **Deleting** its state is loud (a missing baseline is `INCONCLUSIVE` at verify) and the
   always-reconciled control surface (`.claude/hooks/*`, `.claude/settings*.json`, `pharn/floor/*`,
-  `.dev/floor/*`) is anchored in committed blob ids rather than the baseline, so that half resists a
-  determined writer — but **forging** an ordinary path's entry does not. Two further bounds, stated
+  `.dev/floor/*`, the four trusted docs, `CODEOWNERS`, `pharn.spec-template.md` and memory-bank canon,
+  including a file added there) is anchored in committed blob ids rather than the baseline, so that half
+  resists a determined writer — but **forging** an ordinary path's entry does not. The cost: an uncommitted
+  human edit of a trusted doc reads as an escape too, so commit it before running the gates. Two further bounds, stated
   rather than solved: the checker runs from the worktree, so it cannot vouch for its own integrity; and
   the anchor is a shell step, so a run that skips it silently reuses an earlier epoch instead of failing.
   **The only true prevention remains OS-level sandboxing of the `Bash` process, which PHARN does not

@@ -23,6 +23,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.53.0] - 2026-10-07
+
+### Added
+
+- **The Bash-write reconciler compares the trusted docs, `CODEOWNERS`, the project SPEC template and memory-bank
+  canon against HEAD on every run, including a file added at one of those paths.**
+  - What changed: `reconcile-ignore.json`'s `always_reconciled` gains `human_only` (the four trusted docs,
+    `CODEOWNERS` at its three GitHub locations, `pharn.spec-template.md`) and `human_only_prefixes`
+    (`memory-bank/`, `.dev/memory-bank/`). Each is pinned set-equal by a test to `protect-trusted-paths.cjs`'s own
+    sets. The HEAD comparison now also lists untracked files at control paths, and only there.
+  - Why: in the audit's fixture, a Bash edit of `LIMITS.md` followed by a rewrite of its baseline entry read
+    `CLEAN`. `git diff HEAD` never lists an untracked file, so an added `pharn.spec-template.md` or
+    `pharn/floor/x.mjs` could be hidden the same way. With no baseline it read `NO_BASELINE`.
+  - Cost, stated in `reconciliation-record.md` §4a (lessons-learned L68): reconcile cannot tell who wrote a file,
+    so an **uncommitted** human edit at those paths now reads as an escape even with no baseline. A plain
+    `npm run check` on a checkout holding one is RED, as an uncommitted guard edit already was. That includes a
+    canon write by a memory-promote run outside a build, until it is committed. Each such finding names the
+    remedy: commit first, or land the edit outside the anchor-to-verify window.
+  - Unchanged: a trusted doc merged in from upstream is still classified `merged`; a forged entry on an ordinary
+    path is still silent; a git-ignored control path is still invisible; a committed change still moves HEAD
+    (Code-Owner review is that backstop). This makes a Bash edit of a trusted doc detected under baseline forgery.
+    It does not make the doc tamper-proof.
+  - Also fixed in the same check: its tracked half split `git diff --name-only` on newlines. Git quotes any
+    non-ASCII name there, so a control path such as `.dev/memory-bank/lessons-ü.md` was silently missed. The
+    listing is now NUL-separated (`-z`). It also passes `--no-renames`, because a staged `git mv` of a control
+    file used to list only the new name.
+
 ## [6.52.0] - 2026-10-07
 
 ### Added
