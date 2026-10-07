@@ -64,6 +64,7 @@
 // Test-file paths resolve against the CURRENT directory, exactly as the lock script resolves them: run it from the
 // project root (check-loop-fresh.mjs spawns it with `cwd` = its `--repo`).
 
+import "./runtime-floor.mjs";
 import { spawnSync } from "node:child_process";
 import { lstatSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";

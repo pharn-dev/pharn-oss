@@ -278,6 +278,32 @@ test("blocks a MultiEdit whose edits[] reaches a control file", () => {
   assert.equal(r.status, 2);
 });
 
+// --- 6.49.3 (audit P3-M): every tool shape the matcher admits, sent to the REAL hook. NotebookEdit carries its path
+// as `notebook_path`; MultiEdit as a top-level `file_path` (the shape Claude Code sends) and, in some shapes, per
+// `edits[]` entry. Both were denied correctly before — these are regression nets, each with its allow control.
+
+test("6.49.3: NotebookEdit — a notebook_path to a trusted doc is DENIED; one to an ordinary path is ALLOWED", () => {
+  const deny = run({ tool_name: "NotebookEdit", tool_input: { notebook_path: "pharn/CONSTITUTION.md", new_source: "x" } });
+  assert.equal(deny.status, 2, deny.stderr);
+  assert.match(deny.stderr, /BLOCKED by PHARN floor/);
+  assert.equal(run({ tool_name: "NotebookEdit", tool_input: { notebook_path: "src/analysis.ipynb", new_source: "x" } }).status, 0);
+});
+
+test("6.49.3: MultiEdit — a top-level file_path to a trusted doc is DENIED (edits[] carry no path); an ordinary one is ALLOWED", () => {
+  const edits = [{ old_string: "a", new_string: "b" }];
+  assert.equal(run({ tool_name: "MultiEdit", tool_input: { file_path: "LIMITS.md", edits } }).status, 2);
+  assert.equal(run({ tool_name: "MultiEdit", tool_input: { file_path: "src/ok.js", edits } }).status, 0);
+});
+
+test("6.49.3: MultiEdit — edits[] that all reach ordinary paths are ALLOWED (the control for the deny above)", () => {
+  const r = run({ tool_name: "MultiEdit", tool_input: { edits: [{ file_path: "src/ok.js" }, { file_path: "src/also.js" }] } });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(
+    run({ tool_name: "MultiEdit", tool_input: { edits: [{ file_path: "src/ok.js" }, { file_path: "THREAT-MODEL.md" }] } }).status,
+    2
+  );
+});
+
 // --- Negative / anti-widening: the entries must NOT reach a user's own files. ---
 
 for (const p of [

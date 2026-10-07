@@ -138,6 +138,7 @@
 //
 // Usage, exit codes and the stdout document: check-loop-fresh.mjs, header. `evaluate` below is the whole verdict.
 
+import "./runtime-floor.mjs";
 import { readFileSync, existsSync, lstatSync, mkdirSync, appendFileSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";

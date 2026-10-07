@@ -50,6 +50,7 @@
 // Output: writes <base>/<name>/assignments.json (2-space JSON + trailing newline, deterministic);
 //         prints {"lenses":<int>,"target":<int>,"unassigned_scanner_bound":<int>} on stdout; exit 0.
 
+import "./runtime-floor.mjs";
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, readdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join, relative, basename, dirname, sep } from "node:path";

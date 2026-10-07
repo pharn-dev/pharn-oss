@@ -49,6 +49,7 @@
 // shell control flow would EMPTY_CHAIN or under-report rather than silently pass, because an unmatched
 // segment contributes no gate while every gate that IS matched is still checked.
 
+import "../../pharn/floor/runtime-floor.mjs";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 

@@ -54,12 +54,14 @@ _"no baseline"_ is expected and harmless when no epoch is open.
    `pharn/features/<name>/BRIEFING.md`, then:
 
    ```bash
-   npx prettier --ignore-unknown --write pharn/features/<name>/BRIEFING.md
-   npx markdownlint-cli2 --no-globs --fix pharn/features/<name>/BRIEFING.md
+   [ -x node_modules/.bin/prettier ] && node_modules/.bin/prettier --ignore-unknown --write pharn/features/<name>/BRIEFING.md
+   [ -x node_modules/.bin/markdownlint-cli2 ] && node_modules/.bin/markdownlint-cli2 --no-globs --fix pharn/features/<name>/BRIEFING.md
    node pharn/floor/check-ship-briefing.mjs pharn/features/<name>/BRIEFING.md
    ```
 
-   The formatting is scoped to this one file only — never a repo-wide sweep. **Surface
+   The formatting is scoped to this one file only — never a repo-wide sweep. Each formatter runs only as the
+   project's own installed binary and is **skipped when absent** — never through a package runner, which without a
+   TTY downloads and runs the registry's latest release. A skipped formatter never blocks. **Surface
    `check-ship-briefing.mjs`'s exit code as an annotation on the presented briefing, never as a gate:** a RED
    here means the render and the check disagree and is worth a human's attention, not a reason to stop the run.
    **GATE 2 is reached regardless of this checker's exit code.**

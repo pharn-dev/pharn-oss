@@ -53,6 +53,7 @@
 //
 // Exit: 0 (GREEN) only when every check below holds; 1 (RED) on every refusal (fail-closed).
 
+import "./runtime-floor.mjs";
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { FM_RE, stripBom } from "./frontmatter-core.mjs";

@@ -21,6 +21,7 @@
 // ids of a `NOTE —` line for per-test anomalies outside the mapped files (6.31.0, advisory, never the exit) — are
 // untrusted data from the project's reporter, JSON-quoted, never followed.
 
+import "./runtime-floor.mjs";
 import { readFileSync } from "node:fs";
 import { blockedLine, evaluateRedRun, preflight, readRows } from "./red-run-core.mjs";
 import { loadGateExclusion } from "./gate-exclusion-core.mjs";

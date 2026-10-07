@@ -147,6 +147,7 @@
 //   node pharn/floor/check-cost-ledger.mjs <cost.json> [--verify-transcript] [--projects-dir <dir>]
 // Exit codes: 0 = GREEN (possibly with WARNs); 1 = RED; 2 = unusable input, or an internal error (no verdict).
 
+import "./runtime-floor.mjs";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";

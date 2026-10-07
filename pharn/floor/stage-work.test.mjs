@@ -4,7 +4,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { execFileSync, spawnSync } from "node:child_process";
 import { join } from "node:path";
@@ -14,6 +14,7 @@ import {
   verifyWork,
   validateWork,
   appendWork,
+  appendJsonLine,
   readWork,
   recordWork,
   WORK_SCHEMA,
@@ -257,6 +258,50 @@ test("appendWork REFUSES — writes nothing, never throws — on a symlinked com
     // 4. Bad slug / invalid record.
     assert.equal(appendWork({ feature: "../x", record: rec, root }).ok, false);
     assert.equal(appendWork({ feature: "feat", record: { schema: WORK_SCHEMA }, root }).ok, false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(elsewhere, { recursive: true, force: true });
+  }
+});
+
+test("CONCURRENT FIRST APPENDS — a directory another appender makes between the lstat and the mkdir is USED, never a dropped line", () => {
+  // The CI flake on #328 (entry-observations' CONCURRENT WRITERS: 199 of 200), made deterministic through the test seam:
+  // the component is created in exactly the window two real appenders race in. Every component of the chain is raced.
+  const root = mkdtempSync(join(tmpdir(), "stage-work-race-"));
+  try {
+    const raced = [];
+    const r = appendJsonLine({
+      feature: "feat",
+      fileName: WORK_FILE,
+      value: { n: 1 },
+      root,
+      onMissing: (dir) => {
+        mkdirSync(dir); // the other appender wins the mkdir
+        raced.push(dir);
+      },
+    });
+    assert.deepEqual(r, { ok: true }, JSON.stringify(r));
+    assert.deepEqual(raced, [join(root, ".pharn"), join(root, ".pharn", "cost"), join(root, ".pharn", "cost", "feat")]);
+    assert.equal(readFileSync(join(root, DEFAULT_BASE, "feat", WORK_FILE), "utf8"), '{"n":1}\n');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("CONCURRENT FIRST APPENDS — a SYMLINK or a FILE planted in that window is still refused (re-lstat, never followed)", () => {
+  const root = mkdtempSync(join(tmpdir(), "stage-work-race-"));
+  const elsewhere = mkdtempSync(join(tmpdir(), "stage-work-target-"));
+  try {
+    for (const [what, plant] of [
+      ["symlink", (dir) => symlinkSync(elsewhere, dir)],
+      ["file", (dir) => writeFileSync(dir, "x")],
+    ]) {
+      rmSync(join(root, ".pharn"), { recursive: true, force: true });
+      const r = appendJsonLine({ feature: "feat", fileName: WORK_FILE, value: { n: 1 }, root, onMissing: plant });
+      assert.equal(r.ok, false, `${what}: a component planted in the race window was accepted`);
+      assert.match(r.why, /symlink or not a directory/, what);
+      assert.deepEqual(readdirSync(elsewhere), [], `${what}: something was written through the planted component`);
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(elsewhere, { recursive: true, force: true });
