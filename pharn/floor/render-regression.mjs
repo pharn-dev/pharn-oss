@@ -167,10 +167,10 @@ export function renderDone({ feature, base, baseSource = null, report, scope, pr
   out.push(`# REGRESSION — ${feature}`, "");
   out.push(...baseLines(base, baseSource));
 
-  // A6 (GATE 2 review) — rendered ABOVE the verdict line, not six-plus lines below it: this is the ONLY
-  // signal of a failed base-commit install (no machine consumer reads it — the recorded, deliberately
-  // unclosed `regress-failed-install-false-green` bound), so a reader must see it BEFORE the headline
-  // "NO REGRESSIONS", never after. The "reads red" clause is CONDITIONED on the report's own
+  // A6 (GATE 2 review) — rendered ABOVE the verdict line, not six-plus lines below it, so a reader sees a failed
+  // base-commit install BEFORE the headline "NO REGRESSIONS", never after. Since regress-base-integrity a gate red at
+  // both base and head over such an install is refused (`base-install-unreliable`) instead of reported, so this line
+  // now only ever accompanies a report with no such gate, or a verdict that already stops. The "reads red" clause is CONDITIONED on the report's own
   // `pre_existing`, never an unconditional "every base gate" — an install failure does not guarantee
   // every base gate failed (it can fail fast before any gate even attempts to run, or a gate may not
   // depend on the failed install step at all).
@@ -186,8 +186,9 @@ export function renderDone({ feature, base, baseSource = null, report, scope, pr
           : "base gates MAY read red as a result and be classified `pre_existing` below rather than blamed on the feature — " +
             "none were, this run.") +
         " A gate red at BOTH base and head under this install no longer reads as no regressions: the stage refuses " +
-        "`base-install-unreliable` instead (regress-base-integrity, closing the former `regress-failed-install-false-green` " +
-        "bound) — so a report that renders this line has either no such gate or a verdict that already stops.",
+        "`base-install-unreliable` instead (regress-base-integrity; the former `regress-failed-install-false-green` " +
+        "bound is closed for an install that exits non-zero or times out) — so a report that renders this line has " +
+        "either no such gate or a verdict that already stops.",
       ""
     );
   }
@@ -338,7 +339,7 @@ export function renderDone({ feature, base, baseSource = null, report, scope, pr
  *  a shelled checker's own message or a git/plan-scan finding; it is quoted as untrusted DATA here rather
  *  than trusted as this renderer's own prose. `preRun` (6.37.0) is the partition's `pre_run_snapshot` block, passed
  *  with a `scope-escaped` refusal so the paths it did NOT count are named beside the ones it did. */
-export function renderRefused({ feature, reasonCode, detail, preRun = null, entryGates = null, baseInfo = null }) {
+export function renderRefused({ feature, reasonCode, detail, preRun = null, entryGates = null, baseInfo = null, cleanupResult = null }) {
   const out = [];
   out.push(`# REGRESSION — ${feature}`, "");
   out.push(`refused: \`${inline(reasonCode)}\``, "");
@@ -350,6 +351,17 @@ export function renderRefused({ feature, reasonCode, detail, preRun = null, entr
   if (pre.length) out.push(...section("Pre-run snapshot", pre));
   const ent = entryGateLines(entryGates);
   if (ent.length) out.push(...section("Entry gates' changes", ent));
+  // regress-base-integrity: a refusal decided AFTER the base side ran (`base-install-unreliable`) reports a failed cleanup
+  // the same way a completed run does.
+  if (cleanupResult && cleanupResult.ok === false) {
+    out.push(
+      ...section("Cleanup", [
+        "removing the base worktree FAILED — the next fresh start removes the leftover worktree.",
+        "",
+        quoteData("error, quoted as DATA:", dataText(cleanupResult.error ?? "(no detail)")),
+      ])
+    );
+  }
   return (
     out
       .join("\n")

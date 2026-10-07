@@ -3418,6 +3418,24 @@ test("✧ SHIP BASE CAPTURE — `git rev-parse --verify HEAD` once, after check-
   assert.doesNotMatch(quick, /git merge-base HEAD origin\/main` each print one/, "quick item 7 no longer re-derives its base");
 });
 
+// GATE-2 review (regress-base-integrity): the quick part's own ORDER sentence must name the base capture, between the
+// kind read and the marker — item 7 STOPs without the captured base, so an order that omits it walks into that STOP.
+test("✧ SHIP --quick ORDER — item 3's order sentence names the base capture between the kind read and the run marker", () => {
+  const part = readFileSync(join(REPO_ROOT, ".claude", "commands", "pharn-ship-quick.md"), "utf8");
+  const m = part.match(/The order in a quick run is\s+therefore:([\s\S]*?)then `\/pharn-plan` starts/);
+  assert.ok(m, "fixture sanity (L60): the order sentence is found");
+  const order = m[1].replace(/\s+/g, " ");
+  const at = (re) => order.search(re);
+  const kind = at(/this kind read prints `quick`/);
+  const capture = at(/the base capture prints `<base sha>`/);
+  const marker = at(/the marker opens/);
+  assert.ok(kind >= 0 && marker >= 0, "fixture sanity: the kind read and the marker are named");
+  assert.ok(capture >= 0, "the order sentence omits the base capture");
+  assert.ok(kind < capture && capture < marker, "the capture sits between the kind read and the marker");
+  // mutation control (L60): the sentence without the capture fails the rule above
+  assert.equal(order.replace(/the base capture prints `<base sha>` \(item 7 needs it\), /, "").search(/the base capture prints/), -1);
+});
+
 const DIRECT_STAGE_WIRING = [
   {
     file: "pharn-loop.md",

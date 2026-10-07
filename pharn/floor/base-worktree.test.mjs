@@ -33,6 +33,8 @@ test("placementError: a temp root inside (or equal to) the project is refused; a
   assert.match(placementError("/work/p", null), /could not be resolved/);
   assert.equal(placementError("/work/p", "/var/tmp"), null, "CONTROL: outside");
   assert.equal(placementError("/work/p", "/work/p2"), null, "CONTROL: a sibling whose name only starts the same");
+  assert.match(placementError("/work/p", "/work/p/..foo"), /inside the project/, "a directory named `..foo` inside it is inside");
+  assert.equal(placementError("/work/p", "/work"), null, "CONTROL: the parent itself is outside");
 });
 
 test("createBaseDir: a fresh empty directory in the root, named for the project; refused when the root is inside it", () => {

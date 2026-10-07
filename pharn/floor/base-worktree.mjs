@@ -36,6 +36,9 @@
 //   a shell or a renderer; a git error that quotes it is redacted (`redact`) before REGRESSION.md renders it (G10).
 // • A hard kill leaves the directory and its registration behind until the next fresh start of the same project; an OS
 //   temp sweep that deletes it first leaves a registration `git worktree prune` clears.
+// • A RESUME checks the recorded path's shape, not that the directory still exists: a pause across a temp sweep or a
+//   reboot ends in `child-refused` at the next base step, and a TMPDIR changed between invocations in
+//   `progress-malformed`. Both stop; the remedy is a fresh run.
 
 import { createHash } from "node:crypto";
 import { lstatSync, mkdtempSync, readdirSync, realpathSync, rmSync, unlinkSync } from "node:fs";
@@ -66,7 +69,9 @@ export function namePrefix(projectReal) {
 export function placementError(projectReal, root) {
   if (typeof root !== "string" || !isAbsolute(root)) return "the temp directory could not be resolved to an absolute path";
   const rel = relative(projectReal, root);
-  if (rel === "" || (!rel.startsWith("..") && !isAbsolute(rel))) {
+  // Outside means `..` itself or a path that starts with `../` — a sibling named `..foo` inside the project is INSIDE.
+  const outside = rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel);
+  if (rel === "" || !outside) {
     return `the temp directory ${JSON.stringify(root)} is inside the project, so the base checkout would be nested in it again (set TMPDIR outside the project)`;
   }
   return null;

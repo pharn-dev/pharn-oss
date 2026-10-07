@@ -223,8 +223,9 @@ node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --b
 # `base-worktree-unplaceable` when TMPDIR points into the project) — so base gates no longer resolve HEAD's
 # node_modules/.bin; and because a skipped-over-something or failed install then leaves the base without dependencies,
 # a `no-regressions` with a gate red on both sides over such a base is refused `base-install-unreliable`
-# (unreliableInstallMasking + baseInstallNeeded). That CLOSED the former `regress-failed-install-false-green`
-# residual. (5) A total-glob `## Files` entry (only `*` and `/`, or `.`) is refused `plan-files-total-glob`
+# (unreliableInstallMasking + baseInstallNeeded). That closes the former `regress-failed-install-false-green`
+# residual for an install that exits non-zero or times out; it stays open for an `--install` that exits 0 without
+# preparing anything and for dependencies the base neither locks nor declares. (5) A total-glob `## Files` entry (only `*` and `/`, or `.`) is refused `plan-files-total-glob`
 # (check-regress.mjs declaredClasses; quick scope: `total-glob-declared`), and hook-dropped globs are reported as
 # `unenforced_globs`. Refusals, not verdicts, wherever a stamp alone cannot decide — so check E never re-derives one.
 # NAMED RESIDUAL: a partially committed build with another uncommitted change still compares against a base holding
@@ -243,7 +244,8 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 # for exactly the current BASE requirement; the HEAD side always runs. pharn/floor/regress-base-reuse-core.mjs is the
 # rule (the requirement: base SHA, the spec base-init copies — gate-run-core.mjs baseSpecFrom, one owner —, the install
 # decision, the timeout, the stamp/fingerprint versions, and the content of every root-level HEAD path in `inside`,
-# because the base worktree is nested in the HEAD tree; no-install, failed-install and timed-out evidence is never
+# because the base worktree was nested in the HEAD tree until regress-base-integrity moved it to the temp root — kept,
+# since binding more than is reachable can only cause a miss; no-install, failed-install and timed-out evidence is never
 # reused); pharn/floor/regress-base-reuse.mjs is the storage. The evidence stays in .pharn/pharn-regress/base-gates/
 # (the fresh start now keeps that one directory); the binding record is <git rev-parse --absolute-git-dir>/
 # pharn-regress-base-reuse.json, out of the write tools' reach (the composed guards deny it: protect-trusted-paths in a main checkout, enforce-writes-scope in a linked worktree), bound to the run marker's bytes and

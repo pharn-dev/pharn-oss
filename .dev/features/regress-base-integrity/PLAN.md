@@ -161,6 +161,9 @@ selection), CHANGELOG. LIMITS.md is human-only: a proposed text goes in the fina
 - `pharn/floor/quick-scope-core.mjs` — **EDIT.** refuse a total glob (`total-glob-declared`); report `unenforced_globs`
 - `pharn/floor/check-quick-scope.test.mjs` — **EDIT.** the quick-scope changes
 - `pharn/floor/entry-gates.mjs` — **EDIT.** `REGRESS_PATHS.legacyBase` (renamed key; same path, same leftover check)
+- `pharn/floor/check-quick-scope.mjs` — **EDIT.** header reason-code list gains `total-glob-declared` (GATE 2 fix)
+- `pharn/floor/entry-base-evidence-core.mjs` — **EDIT.** header no longer calls the fresh BASE a nested worktree (GATE 2
+  fix)
 - `pharn/floor/instruction-files.mjs` — **EDIT.** its `--base-rule` reads `resolveBaseSource`, whose dirty-tree kind is
   now `dirty-head` (added at /pharn-dev-regress: the outside `check-instruction-files` and `stage-verify` suites went
   red at HEAD — the regression this stage exists to catch)

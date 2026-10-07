@@ -295,8 +295,10 @@ classifies nothing in Step 1. Every terminal fallback is a structured `question`
 - **A skipped or failed base-commit install no longer reads as no regressions where it could hide one.** The base
   checkout sits outside the project, so it never borrows HEAD's `node_modules`; when the install was skipped over
   something to install, or failed, and a gate is red at both base and head, the stage refuses
-  `base-install-unreliable` (this closed the former `regress-failed-install-false-green` bound). A failed install with
-  no such gate still renders its warning line above the verdict. Rule and bounds:
+  `base-install-unreliable` — closing the former `regress-failed-install-false-green` bound for an install that exits
+  non-zero or times out. It stays open for an `--install` command that exits 0 without preparing anything, and for
+  dependencies the base neither locks nor declares. A failed install with no such gate still renders its warning line
+  above the verdict. Rule and bounds:
   `pharn/floor/stage-regress-core.mjs` (`unreliableInstallMasking`, `baseInstallNeeded`) and
   `pharn/floor/base-worktree.mjs`.
 - **A base chosen by rule is the weak point.** A partially committed build with any other uncommitted change still

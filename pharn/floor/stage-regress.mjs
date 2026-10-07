@@ -437,8 +437,8 @@ function phaseFreshLate(cfg) {
 
 /** `baseInfo` (regress-base-integrity): `{base, baseSource}` once the base phase has resolved one, so every refusal after
  *  it names the commit it compared against and how that commit was chosen. */
-function writeRefusedAndEmit(feature, reasonCode, detail, preRun = null, entryGates = null, baseInfo = null) {
-  const md = renderRefused({ feature, reasonCode, detail, preRun, entryGates, baseInfo });
+function writeRefusedAndEmit(feature, reasonCode, detail, preRun = null, entryGates = null, baseInfo = null, cleanupResult = null) {
+  const md = renderRefused({ feature, reasonCode, detail, preRun, entryGates, baseInfo, cleanupResult });
   const renderPath = `${FEATURES_DIR}/${feature}/REGRESSION.md`;
   atomicWriteIntoFeature(renderPath, md);
   emit(refusedExit({ stage: "regress", feature, reasonCode, render: renderPath }));
@@ -1126,7 +1126,8 @@ function runPhases(state, budget) {
         "missing dependency, so it cannot be classified pre_existing. Fix the install (or supply --install) and re-run.",
       null,
       null,
-      { base: state.base, baseSource: state.baseSource }
+      { base: state.base, baseSource: state.baseSource },
+      state.cleanupResult // a failed cleanup is reported on this refusal too
     );
   }
 

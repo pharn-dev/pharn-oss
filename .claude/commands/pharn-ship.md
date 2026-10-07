@@ -296,7 +296,8 @@ checker's verdict alongside the RED. See Step 3a's own presentation rule, in the
    has not approved / must re-approve via `/pharn-spec`). This is a backstop, not the gate: the gate is the
    human halt above.
 
-   **Capture the base — immediately after the backstop exits 0, before anything is built:**
+   **Capture the base — immediately after the backstop exits 0 (in a `--quick` run, after its kind read), before
+   anything is built:**
 
    ```bash
    git rev-parse --verify HEAD

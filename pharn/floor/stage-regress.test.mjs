@@ -1224,7 +1224,9 @@ test("GRILL G4: a LOCKED base worktree cannot be removed (needs a second --force
     const checkouts = baseCheckouts(dir);
     assert.equal(checkouts.length, 1, "the base worktree was never created within the loop bound");
     locked = checkouts[0];
-    execFileSync("git", ["worktree", "lock", locked], { cwd: dir });
+    // The lock REASON is the checkout's own absolute path, so git's refusal quotes it — which makes the redaction check
+    // below non-vacuous (git's locked-tree message carries the reason, never the path itself).
+    execFileSync("git", ["worktree", "lock", "--reason", `held at ${locked}`, locked], { cwd: dir });
     while (r.code === 5) {
       r = cli(dir, ["--resume", "--budget-ms", "600000"]);
     }
@@ -1233,8 +1235,8 @@ test("GRILL G4: a LOCKED base worktree cannot be removed (needs a second --force
     const md = readFileSync(join(dir, r.json.render), "utf8");
     assert.match(md, /removing the base worktree FAILED/);
     // regress-base-integrity (G10): the checkout's absolute temp path never reaches the render — git's error is redacted.
-    // (git's locked-tree message names no path today; base-worktree.test.mjs pins `redact` for one that does.)
     assert.ok(!md.includes(locked) && !md.includes(tmpdir()), `an absolute temp path leaked into REGRESSION.md:\n${md}`);
+    assert.match(md, /held at <base worktree>/, "CONTROL: git's error DID quote the path (via the lock reason), redacted");
     // The verdict itself is UNAFFECTED by the cleanup failure.
     assert.equal(r.json.verdict, "no-regressions");
 
@@ -2594,6 +2596,31 @@ test("PRE-RUN — the two recorded cases pass under an open run with a snapshot,
     assert.match(md, /pharn\/features\/abandoned\/cost\.json/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("PRE-RUN × no-change-under-test (regress-base-integrity) — a build that wrote NOTHING over pre-run changes still compares (the stated bound); with no pre-run change either, it is refused", () => {
+  const { dir, base } = dirtyBeforeRun();
+  try {
+    openRun(dir, "pharn-loop");
+    captureSnapshotCli(dir);
+    // no buildDeclared: the build wrote nothing; the only non-exempt changes are the user's pre-run ones
+    const r = cli(dir, freshArgs(base));
+    assert.equal(r.code, 0, `pre-run paths are real tree differences from the base, so the run is not vacuous: ${r.raw}`);
+    assert.equal(r.json.status, "done");
+    const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
+    assert.ok(report.pre_run_snapshot.unchanged.includes("src/other.js"), "the comparison ran over the pre-run change");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  // CONTROL (L34): the same run with nothing changed at all but this feature's artifacts is refused.
+  const { dir: d2, base: b2 } = repo();
+  try {
+    const r = cli(d2, freshArgs(b2));
+    assert.equal(r.code, 3, r.raw);
+    assert.equal(r.json.reason_code, "no-change-under-test");
+  } finally {
+    rmSync(d2, { recursive: true, force: true });
   }
 });
 

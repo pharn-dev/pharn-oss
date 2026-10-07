@@ -663,3 +663,17 @@ test("renderRefused: a refusal after the base phase names the base and its sourc
   const plain = renderRefused({ feature: "demo", reasonCode: "chain-red", detail: "x" });
   assert.doesNotMatch(plain, /^base: /m, "CONTROL");
 });
+
+test("renderRefused: a failed cleanup passed with the refusal is reported; a clean or absent one adds nothing", () => {
+  const failed = renderRefused({
+    feature: "demo",
+    reasonCode: "base-install-unreliable",
+    detail: "x",
+    cleanupResult: { ok: false, error: "fatal: cannot remove a locked working tree, lock reason: <base worktree>" },
+  });
+  assert.match(failed, /removing the base worktree FAILED/);
+  assert.match(failed, /lock reason: <base worktree>/);
+  for (const cleanupResult of [{ ok: true }, null]) {
+    assert.doesNotMatch(renderRefused({ feature: "demo", reasonCode: "x", detail: "x", cleanupResult }), /FAILED/, "CONTROL");
+  }
+});

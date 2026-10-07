@@ -60,10 +60,11 @@ written for a `--quick` invocation too; only what is listed here changes.**
 spec_kind: quick`. The remedy is to re-run `/pharn-ship <description>` **without** `--quick`: the SPEC
    resumes and the full flow runs. A STOP here still runs Steps 3 and 3a (with the quick deltas below).
 
-   **Then the run marker and the pre-run snapshot, unchanged.** On a `quick` token, Step 2's run-marker `--open` line
-   and its snapshot line run next, exactly as written there, each with its own rule: a non-zero exit is a STOP before
-   `/pharn-plan`. The order in a quick run is therefore: the backstop exits `0`, this kind read prints `quick`, the
-   marker opens, the snapshot is recorded, the entry gates start (Step 2's line and rule), then `/pharn-plan` starts. A refused `--quick` never opens a marker. Every quick exit still reaches
+   **Then the base capture, the run marker and the pre-run snapshot, unchanged.** On a `quick` token, Step 2's base
+   capture (`git rev-parse --verify HEAD`), its run-marker `--open` line and its snapshot line run next, exactly as
+   written there, each with its own rule: a non-zero exit is a STOP before `/pharn-plan`. The order in a quick run is
+   therefore: the backstop exits `0`, this kind read prints `quick`, the base capture prints `<base sha>` (item 7 needs
+   it), the marker opens, the snapshot is recorded, the entry gates start (Step 2's line and rule), then `/pharn-plan` starts. A refused `--quick` never opens a marker. Every quick exit still reaches
    Step 3a, whose closeout closes the marker right after the run-stop marker, idempotently (item 12).
 
 4. **The grill step.** Run this pinned QUICK start line in place of Step 2's grill start line (6.27.0):

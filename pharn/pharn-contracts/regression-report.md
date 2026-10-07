@@ -439,7 +439,12 @@ stage REFUSAL, which writes no report at all (`pharn/pharn-contracts/stage-exit.
   the source on its base line and warns under `dirty-head`.
 - **`no-change-under-test`** (refusal) — nothing changed since the base but this feature's pipeline artifacts and the
   trusted docs (`check-regress.mjs` `changedUnderTest`, the closed exemptions it already owns): both sides would run the
-  same code, so "no gate flipped" would be true for free. Decided at the partition, before any gate runs.
+  same code, so "no gate flipped" would be true for free. Decided at the partition, before any gate runs. Stated, and
+  kept on purpose (fail-closed): the exemptions answer "the build did not write this", not "no gate reads this", so a
+  change that is ONLY a human edit to a trusted doc, or to a pipeline artifact a gate happens to read, is refused too,
+  and `--base` cannot clear it — a false stop, never a false green. Not refused: a run whose only non-exempt changes are
+  paths the pre-run snapshot or the entry gates recorded (the build wrote nothing) still compares — those are real tree
+  differences from the base, just not this run's.
 - **`base_timed_out`, and `inconclusive` / `base-timed-out`** (verdict) — a base run the runner killed at
   `--timeout-ms` is not a base result. When its head is red the verdict is `inconclusive`, `reason_code`
   `base-timed-out`, exit 2, with the table still reported; under a green head nothing is masked and the verdict stands.
@@ -451,7 +456,10 @@ stage REFUSAL, which writes no report at all (`pharn/pharn-contracts/stage-exit.
   produced by this invocation with an install that was skipped over something to install, or that failed or timed out,
   therefore has no dependencies; when such a base and HEAD are both red on a gate, a `no-regressions` verdict is
   replaced by this refusal (`stage-regress-core.mjs` `unreliableInstallMasking`, `baseInstallNeeded`). Reused and
-  entry-derived evidence are not affected. This closed the former `regress-failed-install-false-green` bound.
+  entry-derived evidence are not affected. This closes the former `regress-failed-install-false-green` bound for an
+  install that exits non-zero or times out (and for `--no-install` over a lockfile or declared dependencies); it stays
+  open for an `--install` command that exits 0 without preparing anything, and for dependencies the base neither locks
+  nor declares.
 - **`plan-files-total-glob`** (refusal) — a `## Files` entry that declares everything (only `*` and `/`, or `.`) made
   the partition count every path declared while the write hook drops it (`check-regress.mjs` `declaredClasses`). The
   quick scope check refuses the same entry (`total-glob-declared`). Entries the hook drops (any glob) are reported as

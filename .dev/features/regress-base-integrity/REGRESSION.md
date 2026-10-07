@@ -3,11 +3,13 @@
 base: `052709d35cb3ce1f0e58ad18a0a5513a39d9e0bd` (HEAD; a working-tree dogfood — the build is uncommitted, so the
 dirty-tree rule is sound here: every change of this increment is in `inside`).
 
-**REGRESSIONS: none — no deterministically-detectable breakage outside the feature** (`check-regress.mjs verdict`
-exit 0, second run). This certifies the comparison only: `/pharn-dev-regress` catches exactly what its suite catches,
-nothing more.
+**The stage's first verdict was `regressions` (`check-regress.mjs verdict` exit 1) — under `/pharn-dev-ship` gated
+mode a RED STOP.** After a delegated orchestrator decision (not a human approval) to fix the missed caller in scope and
+re-run, the second run read **REGRESSIONS: none — no deterministically-detectable breakage outside the feature**
+(exit 0). This certifies the comparison only: `/pharn-dev-regress` catches exactly what its suite catches, nothing
+more.
 
-## The first run was RED, and that is recorded, not smoothed over
+## Run 1 — RED, recorded as the stage's first verdict
 
 The first comparison (same base, before one fix) read **`regressions: ["tests"]`** (exit 1): the outside test suite
 was green at base and red at head. Cause, read from the failing tests (not guessed): `stage-regress-core.mjs`
@@ -16,8 +18,9 @@ plan had not enumerated — `pharn/floor/instruction-files.mjs` (`check-instruct
 still tested `kind === "head"`. Its dirty branch fell through to merge-base, so 3 `check-instruction-files` tests and
 15 `stage-verify` tests (verify injects the `instruction-growth` gate) went red. The fix — one line in
 `instruction-files.mjs`, added to the PLAN's `## Files` with a setter re-run and a reconcile `--amend-scope` — is the
-second run's only difference. Under `/pharn-dev-ship` gated mode a non-GREEN regress verdict is a STOP; this run
-fixed in-scope and re-ran instead, which is recorded in `SHIP.md` for the GATE 2 decision.
+second run's only difference. Under `/pharn-dev-ship` gated mode a non-GREEN regress verdict is a STOP. The agent fixed
+in scope and re-ran before presenting; at GATE 2 the orchestrator, by delegated decision, accepted that fix-and-re-run
+(`SHIP.md` records both). Run 1 stands as the stage's first verdict; it is not superseded, only followed.
 
 ## Scope (from `check-regress.mjs scope --feature regress-base-integrity`, exit 0)
 

@@ -30,11 +30,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **A `/pharn-regress` verdict of `no-regressions` no longer rests on base evidence that cannot show a regression**
   (regress-base-integrity; the 2026-10-07 production-readiness audit's P1-B, P2-C, P2-D, P2-E and P3-O(a), each
   reproduced and now a test through the real stage script):
-  - **The base no longer collapses onto HEAD.** `/pharn-ship` captures `git rev-parse --verify HEAD` once, right
-    after its GATE-1 backstop, and passes it as `--base` to both regress lines and to `--quick`'s scope check, as
-    `/pharn-loop` already did from S3. Before, a committed build under the dirty-tree rule, or a pushed one under
-    `merge-base == HEAD`, sat inside its own base and every regression read `pre_existing`. A run with nothing but
-    the feature's own artifacts changed since its base is now refused `no-change-under-test` before any gate runs.
+  - **`/pharn-ship` now compares against the commit it started from.** Its command now tells it to capture
+    `git rev-parse --verify HEAD` once, right after the GATE-1 backstop, and pass it as `--base` to both regress lines
+    and to `--quick`'s scope check, as `/pharn-loop` already did from S3. That capture is an advisory command step, not
+    a floor check; what the floor adds is the record (`base_source: explicit`) and the refusal below. Before, a committed
+    build under the dirty-tree rule, or a pushed one under `merge-base == HEAD`, sat inside its own base and every
+    regression read `pre_existing`; a standalone `/pharn-regress` without `--base` still uses those rules. A run with
+    nothing but the feature's own artifacts (or a trusted doc) changed since its base is now refused
+    `no-change-under-test` before any gate runs.
   - **The report says how its base was chosen:** `regression-report.json` gains `base_source` (`explicit`,
     `dirty-head` or `merge-base`), and `REGRESSION.md` names it, with a warning under `dirty-head`.
   - **A timed-out base gate no longer hides a red head.** `check-regress.mjs verdict` reads it as `inconclusive`
@@ -43,7 +46,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **The base checkout leaves the project tree.** It is a temp-root directory (`pharn/floor/base-worktree.mjs`),
     so base gates no longer resolve the HEAD tree's `node_modules` or `.bin`. Because a skipped or failed base
     install then leaves the base with no dependencies, a `no-regressions` with a gate red on both sides over such a
-    base is refused `base-install-unreliable` — which closes the former `regress-failed-install-false-green` bound.
+    base is refused `base-install-unreliable`. That closes the former `regress-failed-install-false-green` bound for
+    an install that exits non-zero or times out (and for `--no-install` over a lockfile or declared dependencies). It
+    stays open for an `--install` command that exits 0 without preparing anything, and for dependencies the base
+    neither locks nor declares.
   - **A total-glob `## Files` entry is refused** (`**`, `*`, `**/*`, `.`: `plan-files-total-glob` at regress,
     `total-glob-declared` in the quick scope check and the `check-regress.mjs scope` CLI). Globs the write hook drops
     are reported as `unenforced_globs`. Before, `**` passed every path through both scope checks while the hook denied
