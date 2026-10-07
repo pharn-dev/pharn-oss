@@ -98,6 +98,13 @@ node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 # blob at HEAD = blob at M (a commit the build makes itself is not on upstream, so it stays an escape). Any git
 # failure keeps the escape. Precision, not strength: origin/HEAD is a Bash-movable alias; a stale fetch only
 # withholds the class; no origin/HEAD (git init + remote add) => inert, the warning names `git remote set-head`.
+# HUMAN-ONLY (6.52.0, contract §4a): always_reconciled gains `human_only` (the four trusted docs, CODEOWNERS x3,
+# pharn.spec-template.md) and `human_only_prefixes` (memory-bank/, .dev/memory-bank/), each pinned set-equal to
+# protect-trusted-paths.cjs (DEFAULT_PROTECTED - CONTROL_SURFACE - .pharn/writes-scope.json; PROTECTED_SUBTREES).
+# The HEAD comparison also adds UNTRACKED control paths (ls-files --others, filtered to control paths), so a forged
+# baseline entry no longer hides a Bash edit of LIMITS.md or an added pharn.spec-template.md. Cost (L68): an
+# UNCOMMITTED human edit there REDs even with no baseline; the finding names the remedy (commit first). Bound: a
+# git-ignored control path stays invisible.
 # Contract: pharn/pharn-contracts/reconciliation-record.md. Data: pharn/floor/reconcile-ignore.json.
 # Exit: 0 CLEAN|NO_BASELINE · 1 ESCAPE · 2 INCONCLUSIVE / no usable scope to anchor (D6).
 node pharn/floor/reconcile-baseline.mjs --anchor [--base <dir>] [--by <label>]

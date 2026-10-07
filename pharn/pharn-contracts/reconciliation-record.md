@@ -34,19 +34,21 @@ a writer who edits a denied file **and** rewrites that file's baseline entry get
 is an **accounting tool against tooling that escapes its scope** — a formatter, a generator, a script, a
 mistake, which is the entire population of the `L19`/`L20` failures it was built for — and it is **not a
 control against an attacker**. Only the always-reconciled control surface resists that actor, because
-only it is anchored in committed git objects rather than in the baseline.
+only it is anchored in committed git objects rather than in the baseline. Since 6.52.0 that surface is the guard
+files and the floors **plus the human-only surface and memory-bank canon** (§4a). Before 6.52.0, a forged baseline
+entry cleared a Bash edit of `LIMITS.md`.
 
 **Struck (P0), each for a stated reason:**
 
-| Struck claim                                  | Why                                                                                                                                                                                                                                                             |
-| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "Bash writes are prevented"                   | Detection is strictly weaker than prevention. The only true prevention is OS-level sandboxing of the `Bash` process, which PHARN does not implement and cannot — harness-layer, environment-dependent, not expressible in markdown methodology (`LIMITS.md §6`) |
-| "all Bash writes are detected"                | Only those to **denied** paths, inside the reconciled set, between two anchors, in one worktree                                                                                                                                                                 |
-| "a `CLEAN` verdict means no escape occurred"  | It means none was **detected**                                                                                                                                                                                                                                  |
-| "the detector cannot be disabled"             | Its state is reachable by the channel it monitors. **Deleting** it is loud (`--require-baseline` ⇒ `INCONCLUSIVE`), and the control surface is anchored in committed blob ids — but **forging** an ordinary path's baseline entry is silent                     |
-| "the detector cannot be disabled **quietly**" | True for the control surface **only**. For ordinary paths a forged baseline entry yields `CLEAN` with no warning. Closing this needs authenticated state outside the worktree — the same harness-layer category as the OS sandbox, and just as absent           |
-| "the checker vouches for its own integrity"   | It cannot. `/pharn-*verify` runs the **worktree** copy through Bash. `pharn/floor/` is always-reconciled, so a modified checker is caught **by itself** — circular, and not a guarantee                                                                         |
-| "skipping the anchor fails the run"           | Only in a tree that has **never** anchored. Otherwise `--require-baseline` is satisfied by whatever earlier epoch is on disk, and the reconciliation silently ranges over the wrong window. The anchor is a Bash call (`L19`), so nothing forces it             |
+| Struck claim                                  | Why                                                                                                                                                                                                                                                                   |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Bash writes are prevented"                   | Detection is strictly weaker than prevention. The only true prevention is OS-level sandboxing of the `Bash` process, which PHARN does not implement and cannot — harness-layer, environment-dependent, not expressible in markdown methodology (`LIMITS.md §6`)       |
+| "all Bash writes are detected"                | Only those to **denied** paths, inside the reconciled set, between two anchors, in one worktree                                                                                                                                                                       |
+| "a `CLEAN` verdict means no escape occurred"  | It means none was **detected**                                                                                                                                                                                                                                        |
+| "the detector cannot be disabled"             | Its state is reachable by the channel it monitors. **Deleting** it is loud (`--require-baseline` ⇒ `INCONCLUSIVE`), and the control surface is anchored in committed blob ids — but **forging** an ordinary path's baseline entry is silent                           |
+| "the detector cannot be disabled **quietly**" | True for the always-reconciled surface **only** (§4a). For ordinary paths a forged baseline entry yields `CLEAN` with no warning. Closing this needs authenticated state outside the worktree — the same harness-layer category as the OS sandbox, and just as absent |
+| "the checker vouches for its own integrity"   | It cannot. `/pharn-*verify` runs the **worktree** copy through Bash. `pharn/floor/` is always-reconciled, so a modified checker is caught **by itself** — circular, and not a guarantee                                                                               |
+| "skipping the anchor fails the run"           | Only in a tree that has **never** anchored. Otherwise `--require-baseline` is satisfied by whatever earlier epoch is on disk, and the reconciliation silently ranges over the wrong window. The anchor is a Bash call (`L19`), so nothing forces it                   |
 
 ## 1. The baseline record — `.pharn/reconcile/baseline.json`
 
@@ -290,13 +292,13 @@ a write; a baseline written by an **older** schema version — _legacy records t
 One file, iterated by the rules **and** by the tests (lessons-learned **L29**: when a remedy is
 quantified over a set, the enumeration is the deliverable). Five keys:
 
-| Key                  | What it holds                                                                                                                                                                                                                                                                                        |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `derived_ignore`     | git's own ignore rules — **never re-listed** here (**L35**: retire the second copy). The reconciled set is `tracked ∪ untracked-not-ignored`, so `node_modules/`, `.pharn/`, `runs/` cost nothing                                                                                                    |
-| `always_reconciled`  | Never exemptible; falls back to committed blob ids when no baseline exists. A **copy** of the guards' own control-surface sets, pinned set-equal by test                                                                                                                                             |
-| `pipeline_artifacts` | A stage's **own** output (`pharn/features/<slug>/PLAN.md`, `VERIFY.md`, `lenses/<lens>/findings.json`, …) — **exact** enum membership, never a `**` glob, so a stray file under the same directory is still reported. A copy of `check-regress.mjs`'s `PIPELINE_ARTIFACTS`, pinned set-equal by test |
-| `exempt`             | Tracked paths a **named** command legitimately rewrites through Bash. Deliberately tiny; each entry carries its `writer`                                                                                                                                                                             |
-| `never_exempt`       | A refusal set — memory-bank canon, the four trusted docs, `CODEOWNERS`. Enforced at **run time**, not only under test                                                                                                                                                                                |
+| Key                  | What it holds                                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `derived_ignore`     | git's own ignore rules — **never re-listed** here (**L35**: retire the second copy). The reconciled set is `tracked ∪ untracked-not-ignored`, so `node_modules/`, `.pharn/`, `runs/` cost nothing                                                                                                                                                                                              |
+| `always_reconciled`  | Never exemptible, and compared against HEAD's committed blobs on every run, with or without a baseline: tracked changes and **added untracked files** (6.52.0). `exact` + `prefixes` are the guards' control surface and the floors; `human_only` + `human_only_prefixes` are the human-only surface and canon (§4a). Each list is a **copy** of the hooks' own sets, pinned set-equal by test |
+| `pipeline_artifacts` | A stage's **own** output (`pharn/features/<slug>/PLAN.md`, `VERIFY.md`, `lenses/<lens>/findings.json`, …) — **exact** enum membership, never a `**` glob, so a stray file under the same directory is still reported. A copy of `check-regress.mjs`'s `PIPELINE_ARTIFACTS`, pinned set-equal by test                                                                                           |
+| `exempt`             | Tracked paths a **named** command legitimately rewrites through Bash. Deliberately tiny; each entry carries its `writer`                                                                                                                                                                                                                                                                       |
+| `never_exempt`       | A refusal set — memory-bank canon, the four trusted docs, `CODEOWNERS`. Enforced at **run time**, not only under test                                                                                                                                                                                                                                                                          |
 
 **Why `pipeline_artifacts` exists, and it is lessons-learned L17 verbatim.** A stage's own artifact
 changes _after_ the build's anchor — `/pharn-verify` writes `VERIFY.md`, `/pharn-review` writes
@@ -306,6 +308,64 @@ _wrote-outside-scope_ claim, producing a **blocking** finding on the correct, de
 is precisely how an operator is trained to wave through the one finding that must never be waved
 through. This defect was found by running the checker against its own increment, not by reasoning about
 it.
+
+## 4a. The human-only surface is always reconciled (6.52.0)
+
+**Why (P7, measured — audit 2026-10-07).** In the audit's fixture, a Bash edit of `LIMITS.md` followed by a
+rewrite of its baseline entry read `CLEAN`. The four trusted docs were not always-reconciled, so the forgeable
+baseline was their only reference. A second hole sat in the HEAD comparison itself: `git diff HEAD` never lists an
+**untracked** file, so a control path absent at HEAD could be created through Bash and hidden the same way. With no
+baseline at all it read `NO_BASELINE`. Examples are `pharn.spec-template.md`, which most repositories do not have,
+or a new `pharn/floor/x.mjs`.
+
+**What joined:**
+
+- `human_only` — `protect-trusted-paths.cjs`'s `DEFAULT_PROTECTED` minus the guard control surface:
+  - the four trusted docs;
+  - `CODEOWNERS` at its three GitHub locations (root, `.github/`, `docs/`);
+  - `pharn.spec-template.md`.
+
+  `.pharn/writes-scope.json` is excluded by name: it is gitignored runtime state, never in the reconciled set.
+
+- `human_only_prefixes` — the hook's `PROTECTED_SUBTREES`, `memory-bank/` and `.dev/memory-bank/`. That is the whole
+  canon subtree, dev and product alike, because the hook denies the whole subtree.
+- Every always-reconciled path's **added untracked-not-ignored** file is now a candidate too, from git's own
+  `ls-files --others --exclude-standard`. The listing is filtered to control paths only, so an untracked file
+  anywhere else is judged by the baseline alone, as before.
+- Both listings are **NUL-separated** (`-z`). Before this change the tracked half split on newlines, and git quotes a
+  non-ASCII name there, so a control path such as `.dev/memory-bank/lessons-ü.md` was silently missed. The tracked
+  half also passes `--no-renames`, because a staged `git mv` of a control file used to list only the new name.
+
+**Unchanged on purpose:**
+
+- C1's `merged` class (§2a) still applies. A trusted doc changed on upstream and merged in during the window
+  matches HEAD, so the HEAD comparison does not see it. It still differs from its baseline entry, and the `merged`
+  conditions classify it.
+- A forged baseline entry on an **ordinary** path is still silent. That bound is pinned as behaviour.
+
+**The consequence, stated rather than hidden (lessons-learned L68).** Reconcile has no attribution, so a human's
+**uncommitted** edit of a trusted doc, `CODEOWNERS`, the SPEC template or canon reads as an escape:
+
+- inside a build's anchor→verify window, as before;
+- **and now also with no baseline**, because the HEAD comparison sees it. So `npm run check` (`check:reconcile`) on
+  a checkout holding an uncommitted `LIMITS.md` edit is RED, exactly as an uncommitted guard edit already was.
+- The same holds for an uncommitted canon write by `/pharn-*memory-promote` run outside any build epoch, until that
+  write is committed.
+
+This is the loud direction, deliberately. Each such finding's `problem` ends with the remedy: commit the edit
+before running the gates, or land it outside the anchor→verify window. **Never** re-anchor or edit the baseline to
+clear it.
+
+**Bounds.**
+
+- A git-ignored control path is invisible, as every ignored path is. That includes one ignored only through
+  `.git/info/exclude`.
+- A **committed** change moves HEAD too (bound 6), so Code-Owner review stays the backstop for committed edits.
+- The checker and `reconcile-ignore.json` run from the worktree (bound 7). A Bash writer can edit them, and that
+  edit is caught only by the checker it alters.
+
+None of this makes a trusted doc tamper-proof; it makes a Bash edit of one **detected** when the writer also forges
+the baseline.
 
 ## 5. Guarantee audit (P0)
 

@@ -19,12 +19,14 @@ import {
   matchesAny,
   loadIgnoreData,
   isAlwaysReconciled,
+  isHumanOnly,
+  HUMAN_ONLY_REMEDY,
   isPipelineArtifact,
   activeFeatureSlug,
   makeDefaultProbeSandbox,
   VERDICTS,
 } from "./check-bash-reconcile.mjs";
-import { RECORD_PATH, buildRecord } from "./reconcile-baseline.mjs";
+import { RECORD_PATH, buildRecord, hashFile } from "./reconcile-baseline.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..", "..");
@@ -974,8 +976,9 @@ const g = (dir, ...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", st
 
 // A repo with dep.json committed, on branch `feat` cut from that commit (BASE). `beforeAnchor` runs on `feat`
 // before the anchor; the scope is the in-scope seed file only, so dep.json is OUT of scope.
-function mergeFixture({ beforeAnchor = () => {} } = {}) {
+function mergeFixture({ beforeAnchor = () => {}, baseFiles = {} } = {}) {
   const dir = makeRepo();
+  for (const [p, c] of Object.entries(baseFiles)) writeFileSync(join(dir, p), c);
   writeFileSync(join(dir, "dep.json"), "v1\n");
   g(dir, "add", "-A");
   g(dir, "commit", "-q", "-m", "dep v1");
@@ -1233,4 +1236,178 @@ test("✧ `merged` is always present in the verdict — an empty array when HEAD
   assert.equal(r.status, 1);
   assert.deepEqual(r.json.merged, []);
   assert.ok(!r.json.warnings.some((w) => /merged/.test(w)), "no HEAD move, no classification talk");
+});
+
+// ------------------------------------------------ the human-only surface joins the control surface (6.52.0)
+//
+// Audit 2026-10-07: a Bash edit of LIMITS.md plus a forged baseline entry read CLEAN, because the trusted docs were
+// not always-reconciled. And `git diff HEAD` never lists an UNTRACKED file, so a control path absent at HEAD could be
+// added through Bash and hidden the same way. Each case below fails on the 6.51.0 checker.
+
+// Rewrite a path's baseline entry to its CURRENT bytes — the forgery the contract's non-adversarial bound names.
+function forge(dir, rel) {
+  const rec = JSON.parse(readFileSync(join(dir, RECORD_PATH), "utf8"));
+  rec.entries[rel] = hashFile(join(dir, rel));
+  writeFileSync(join(dir, RECORD_PATH), JSON.stringify(rec, null, 2) + "\n");
+}
+
+// Every human-only member: the exact list, plus one canon file per subtree prefix (L29: iterate the set).
+function humanOnlyMembers() {
+  const data = loadIgnoreData(IGNORE_JSON);
+  return [...data.humanOnly, ...data.humanOnlyPrefixes.map((p) => `${p}lessons-learned.md`)];
+}
+
+test("★ FORGED BASELINE: a Bash edit of LIMITS.md with its baseline entry rewritten is still an ESCAPE — and names the remedy", () => {
+  const dir = makeRepo();
+  writeFileSync(join(dir, "LIMITS.md"), "the human-only text\n");
+  g(dir, "add", "LIMITS.md");
+  g(dir, "commit", "-q", "-m", "limits");
+  setScope(dir, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  writeFileSync(join(dir, "LIMITS.md"), "rewritten through Bash\n");
+  forge(dir, "LIMITS.md");
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(
+    r.json.escapes.map((e) => `${e.file}:${e.denied_by}`),
+    ["LIMITS.md:protect-trusted-paths.cjs"]
+  );
+  assert.ok(r.json.findings[0].problem.endsWith(HUMAN_ONLY_REMEDY), "GATE-1 addition: the one-line remedy is carried");
+});
+
+test("★ L29: EVERY human-only member, ADDED as an untracked file with a forged entry, is an ESCAPE naming exactly it", () => {
+  const members = humanOnlyMembers();
+  assert.equal(members.length, 10, "non-vacuity (L34): 8 human_only paths + 2 canon subtrees");
+  for (const rel of members) {
+    const dir = makeRepo();
+    setScope(dir, ["pharn/features/keep.md"]);
+    assert.equal(anchor(dir).status, 0);
+    mkdirSync(dirname(join(dir, rel)), { recursive: true });
+    writeFileSync(join(dir, rel), "added through Bash\n");
+    forge(dir, rel);
+    const r = check(dir, ["--require-baseline"]);
+    assert.equal(r.status, 1, `${rel}: ${r.stdout}${r.stderr}`);
+    assert.deepEqual(
+      r.json.escapes.map((e) => e.file),
+      [rel],
+      rel
+    );
+  }
+});
+
+test("★ ADDED FILE: an untracked new pharn/floor/ file with a forged entry is an ESCAPE (the 6.51.0 added-file hole) — no human-only remedy", () => {
+  const dir = makeRepo();
+  setScope(dir, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  mkdirSync(join(dir, "pharn/floor"), { recursive: true });
+  writeFileSync(join(dir, "pharn/floor/x.mjs"), "// planted\n");
+  forge(dir, "pharn/floor/x.mjs");
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    ["pharn/floor/x.mjs"]
+  );
+  assert.ok(!r.json.findings[0].problem.includes(HUMAN_ONLY_REMEDY), "the remedy is for the human-only surface only");
+});
+
+test("★ NO BASELINE: an untracked pharn.spec-template.md is an ESCAPE, not NO_BASELINE", () => {
+  const dir = makeRepo();
+  writeFileSync(join(dir, "pharn.spec-template.md"), "<!-- an instruction channel -->\n");
+  const r = check(dir);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.equal(r.json.verdict, "ESCAPE");
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    ["pharn.spec-template.md"]
+  );
+});
+
+test("★ L68 CONSEQUENCE, pinned: with no baseline, a human's UNCOMMITTED trusted-doc edit is an ESCAPE carrying the remedy", () => {
+  const dir = makeRepo();
+  writeFileSync(join(dir, "LIMITS.md"), "v1\n");
+  g(dir, "add", "LIMITS.md");
+  g(dir, "commit", "-q", "-m", "limits");
+  writeFileSync(join(dir, "LIMITS.md"), "a maintainer's own edit, not yet committed\n");
+  const r = check(dir);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.json.findings[0].problem, /commit it before running the gates/);
+  g(dir, "commit", "-q", "-am", "the human commits it");
+  assert.equal(check(dir).json.verdict, "NO_BASELINE", "…and committing it is the remedy that works");
+});
+
+test("★ NON-VACUITY (GATE-1): with no baseline, an untracked file OUTSIDE the control surface is NOT reported", () => {
+  // `ls-files --others` must widen the HEAD comparison to added CONTROL paths only, never to every untracked file.
+  const dir = makeRepo();
+  mkdirSync(join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, "NOTES.txt"), "scratch\n");
+  writeFileSync(join(dir, "src/x.js"), "export {};\n");
+  writeFileSync(join(dir, "pharn/features/stray.md"), "x\n");
+  const r = check(dir);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.json.verdict, "NO_BASELINE");
+  assert.deepEqual(r.json.escapes, []);
+});
+
+test("★ MERGED still applies: LIMITS.md MODIFIED on upstream and merged in during the window is merged, not an escape", () => {
+  const fx = mergeFixture({ baseFiles: { "LIMITS.md": "v1\n" } });
+  upstreamCommit(fx, { "LIMITS.md": "v2, edited by a human on main\n" });
+  buildThenMerge(fx.dir);
+  const r = check(fx.dir, ["--require-baseline"]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.deepEqual(r.json.merged, ["LIMITS.md"]);
+});
+
+test("★ GATE-2 R2: a TRACKED canon file with a NON-ASCII name, Bash-edited and baseline-forged, is an ESCAPE (no quotePath miss)", () => {
+  const rel = ".dev/memory-bank/lessons-ü.md";
+  const dir = makeRepo();
+  mkdirSync(join(dir, ".dev/memory-bank"), { recursive: true });
+  writeFileSync(join(dir, rel), "v1\n");
+  g(dir, "add", "-A");
+  g(dir, "commit", "-q", "-m", "canon with a non-ASCII name");
+  assert.match(g(dir, "diff", "--name-only", "HEAD~1", "HEAD"), /\\303\\274/, "precondition: git QUOTES this name by default");
+  setScope(dir, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  writeFileSync(join(dir, rel), "rewritten through Bash\n");
+  forge(dir, rel);
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    [rel]
+  );
+});
+
+test("★ GATE-2 R2: a staged `git mv` of a trusted doc is seen under the doc's OWN path (no rename collapse)", () => {
+  const dir = makeRepo();
+  writeFileSync(join(dir, "LIMITS.md"), "the human-only text, long enough to be detected as a rename\n".repeat(4));
+  g(dir, "add", "LIMITS.md");
+  g(dir, "commit", "-q", "-m", "limits");
+  g(dir, "mv", "LIMITS.md", "ELSEWHERE.md");
+  const r = check(dir); // no baseline: the HEAD comparison is the only reference
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.ok(
+    r.json.escapes.some((e) => e.file === "LIMITS.md"),
+    JSON.stringify(r.json.escapes)
+  );
+});
+
+test("✧ PARITY: human_only and its canon prefixes equal the hook's own sets; never_exempt is always reconciled", () => {
+  const data = loadIgnoreData(IGNORE_JSON);
+  const protect = readFileSync(join(REPO, ".claude/hooks/protect-trusted-paths.cjs"), "utf8");
+  const protected_ = eval(protect.match(/const DEFAULT_PROTECTED\s*=\s*(\[[\s\S]*?\n\])/)[1]);
+  const subtrees = eval(protect.match(/const PROTECTED_SUBTREES\s*=\s*(\[[^\]]*\])/)[1]);
+  const setter = readFileSync(join(REPO, ".claude/hooks/set-writes-scope.cjs"), "utf8");
+  const control = eval(setter.match(/const CONTROL_SURFACE\s*=\s*(\[[\s\S]*?\])/)[1]);
+  // `.pharn/writes-scope.json` is excluded BY NAME: gitignored runtime state, never in the reconciled set.
+  const expected = protected_.filter((p) => !control.includes(p) && p !== ".pharn/writes-scope.json");
+  assert.deepEqual([...data.humanOnly].sort(), [...expected].sort(), "reconcile-ignore.json human_only drifted from DEFAULT_PROTECTED");
+  assert.deepEqual(
+    [...data.humanOnlyPrefixes].sort(),
+    subtrees.map((s) => `${s}/`).sort(),
+    "human_only_prefixes drifted from PROTECTED_SUBTREES"
+  );
+  for (const p of data.neverExempt) assert.ok(isAlwaysReconciled(p, data), `never_exempt ${p} is not always reconciled`);
+  assert.ok(isHumanOnly(".dev/memory-bank/feature-catalog.md", data), "the whole canon subtree, not four files");
+  assert.ok(!isHumanOnly("pharn/floor/x.mjs", data));
 });
