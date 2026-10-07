@@ -87,7 +87,17 @@
 // Exit: 0 done · 2 unusable · 3 refused · 4 question · 5 continue · anything else (1 included) = CRASHED.
 
 import "./runtime-floor.mjs";
-import { existsSync, readFileSync, rmSync, writeFileSync, mkdirSync, lstatSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+  mkdirSync,
+  openSync,
+  fstatSync,
+  closeSync,
+  constants as fsConstants,
+} from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -396,13 +406,19 @@ function readReconcileDetail(stampText) {
   const run = reconcileRun(stamp);
   if (run === null) return null;
   const path = join(VERIFY_PATHS.gates, `${logBasename(run.seq, RECONCILE_GATE_ID)}.out`);
+  // ONE descriptor, opened without following a final symlink, then fstat'd and read — the type and size checks and the
+  // read describe the same file (no check-then-use window on the path).
   let bytes;
+  let fd = null;
   try {
-    const st = lstatSync(path);
+    fd = openSync(path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+    const st = fstatSync(fd);
     if (!st.isFile() || st.size > RECONCILE_LOG_MAX_BYTES) return reconcileDetail({ exit: run.exit, logState: "log-unreadable" });
-    bytes = readFileSync(path);
+    bytes = readFileSync(fd);
   } catch (e) {
     return reconcileDetail({ exit: run.exit, logState: e && e.code === "ENOENT" ? "log-missing" : "log-unreadable" });
+  } finally {
+    if (fd !== null) closeSync(fd);
   }
   if (run.stdout_sha256 === null || createHash("sha256").update(bytes).digest("hex") !== run.stdout_sha256) {
     return reconcileDetail({ exit: run.exit, logState: "log-digest-mismatch" });

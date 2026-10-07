@@ -384,7 +384,7 @@ node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 ```bash
 # WHY RECONCILE FAILED (6.55.0, reconcile-reasons-in-reports) — no CLI: pharn/floor/reconcile-detail-core.mjs (pure;
 # imports quote-core.mjs only). At "verdict", stage-verify.mjs finds the reconcile run in the stamp bytes the verdict
-# read, reads `<seq>-reconcile.out` under .pharn/pharn-verify/gates/ (lstat regular file, <= 8 MiB) only when its
+# read, reads `<seq>-reconcile.out` under .pharn/pharn-verify/gates/ (one O_NOFOLLOW fd, fstat regular file, <= 8 MiB) only when its
 # sha256 equals the run's stdout_sha256, and `reconcileDetail` parses check-bash-reconcile.mjs's JSON document into
 # verify-report.json's `reconcile_detail` (last merged key; null with no reconcile run). Closed states: parsed |
 # log-missing | log-unreadable | log-digest-mismatch | not-checker-json — a non-parsed state renders ONE line plus the

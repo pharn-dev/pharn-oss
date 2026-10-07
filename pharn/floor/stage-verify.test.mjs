@@ -433,6 +433,12 @@ test("6.55.0 — a reconcile log rewritten after the run (digest mismatch) or re
     park();
     assert.equal(runCli(dir, ["--resume"]).code, 0);
     assert.deepEqual(readReport(dir).reconcile_detail, { state: "log-missing", exit: 1 });
+    // a symlink planted at the log path is never followed (O_NOFOLLOW): log-unreadable
+    writeFileSync(join(dir, "elsewhere.json"), JSON.stringify({ verdict: "CLEAN", escapes: [], merged: [] }));
+    symlinkSync(join(dir, "elsewhere.json"), join(dir, VERIFY_PATHS.gates, log));
+    park();
+    assert.equal(runCli(dir, ["--resume"]).code, 0);
+    assert.deepEqual(readReport(dir).reconcile_detail, { state: "log-unreadable", exit: 1 });
   });
 });
 
