@@ -2941,3 +2941,21 @@ test("★ L9: scoped write matches declared path under case fold only when the v
   const r = hook(cwd, "src/foo.md");
   assert.equal(r.status, aliases ? 0 : 2, "case-only mismatch allows only when it reaches the scoped file");
 });
+
+// LONG PATHS (audit P3-Q, 2026-10-07): the same quadratic drain as protect-trusted-paths.cjs, fixed the same way. The
+// bound is generous for a slow CI runner; patched, 100k segments take well under a second.
+test("✧ a 100k-segment payload path is judged in linear time and still denied outside the scope", () => {
+  const cwd = seedDevRepo(tmp());
+  setScope(cwd, ["src/app.js"]);
+  const t = Date.now();
+  const r = spawnSync(process.execPath, [HOOK], {
+    input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: "src/" + "../src/".repeat(100000) + "LIMITS.md" } }),
+    cwd,
+    encoding: "utf8",
+    timeout: 30000,
+  });
+  const ms = Date.now() - t;
+  assert.notEqual(r.status, null, `the hook did not finish within 30 s (${ms} ms)`);
+  assert.ok(ms < 10000, `the hook took ${ms} ms over a 100k-segment path`);
+  assert.equal(r.status, 2, "a path that is not the scoped file stays denied");
+});

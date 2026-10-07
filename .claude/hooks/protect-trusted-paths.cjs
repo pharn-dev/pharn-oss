@@ -540,8 +540,11 @@ function resolveWriteTarget(p) {
   const missing = [];
   let hops = 0;
   let walked = 0;
-  while (pending.length) {
-    const seg = pending.shift();
+  // Read the queue by index: `shift()` is O(n) per call, so draining a long tail past MAX_RESOLVED_SEGMENTS was
+  // quadratic (25k segments 2.7 s, 100k 31 s; audit P3-Q, 2026-10-07). Same segments, same order, same verdict.
+  let at = 0;
+  while (at < pending.length) {
+    const seg = pending[at++];
     // Once a segment does not exist, nothing below it can be resolved: keep the rest as a lexical tail.
     if (missing.length) {
       missing.push(seg);
@@ -589,7 +592,8 @@ function resolveWriteTarget(p) {
       // An absolute target restarts at the filesystem root; a relative one resolves against the link's
       // own directory, which is exactly `cur`.
       if (path.isAbsolute(link)) cur = realpathOr(fsRootOf(link));
-      pending = segs.concat(pending);
+      pending = segs.concat(pending.slice(at));
+      at = 0;
       continue;
     }
     missing.push(seg);
@@ -623,8 +627,11 @@ function resolvePhysicalTarget(p) {
   const missing = [];
   let hops = 0;
   let walked = 0;
-  while (pending.length) {
-    const seg = pending.shift();
+  // Read the queue by index: `shift()` is O(n) per call, so draining a long tail past MAX_RESOLVED_SEGMENTS was
+  // quadratic (25k segments 2.7 s, 100k 31 s; audit P3-Q, 2026-10-07). Same segments, same order, same verdict.
+  let at = 0;
+  while (at < pending.length) {
+    const seg = pending[at++];
     if (missing.length) {
       missing.push(seg);
       continue;
@@ -662,7 +669,8 @@ function resolvePhysicalTarget(p) {
       pending = link
         .split(SEPARATORS)
         .filter((x) => x && x !== ".")
-        .concat(pending);
+        .concat(pending.slice(at));
+      at = 0;
       continue;
     }
     missing.push(seg);

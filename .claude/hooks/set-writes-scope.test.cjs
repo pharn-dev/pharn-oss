@@ -218,6 +218,30 @@ for (const ctl of CONTROL_SURFACE) {
   });
 }
 
+// Audit P3-R (2026-10-07): the membership test compared case-sensitively, so `.CLAUDE/hooks/…` was EMITTED as scope
+// (protect-trusted-paths.cjs, which folds case, still denied the write). On a case-insensitive volume every spelling
+// below names the same file, so each is refused here too. NFD is the decomposed form of a precomposed character; the
+// control paths are ASCII, so it is pinned with a non-control control: the fold must not refuse an unrelated path.
+for (const ctl of CONTROL_SURFACE) {
+  for (const variant of [ctl.toUpperCase(), ctl.replace(".claude", ".Claude"), ctl.replace(/\.(cjs|json)$/, (m) => m.toUpperCase())]) {
+    test(`--from-plan naming the case variant ${variant} is REFUSED and writes nothing`, () => {
+      const cwd = tmp();
+      const r = setter(cwd, "--from-plan", planWith(cwd, variant, "src/legit.ts"));
+      assert.notEqual(r.status, 0, r.stdout);
+      assert.match(r.stderr, /refusing to scope the write-guards' own control surface/);
+      assert.equal(fs.existsSync(join(cwd, ".pharn", "writes-scope.json")), false);
+    });
+  }
+}
+
+test("the case fold refuses only the control surface: ordinary mixed-case paths are still emitted", () => {
+  const cwd = tmp();
+  const r = setter(cwd, "--from-plan", planWith(cwd, ".claude/commands/Pharn-Thing.md", "src/Legit.TS", "docs/café.md"));
+  assert.equal(r.status, 0, r.stderr);
+  const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
+  assert.deepEqual(rec.scope, [".claude/commands/Pharn-Thing.md", "src/Legit.TS", "docs/café.md"]);
+});
+
 test("--allow-claude-dir opts back in: the same PLAN succeeds and the entry survives in scope", () => {
   const cwd = tmp();
   const r = setter(cwd, "--from-plan", planWith(cwd, ".claude/settings.json", "src/legit.ts"), "--allow-claude-dir");

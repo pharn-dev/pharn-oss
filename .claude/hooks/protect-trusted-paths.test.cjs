@@ -178,7 +178,7 @@ test("✧ blocks `..` applied after a SYMLINKED directory (lexical collapse is n
 });
 
 test("✧ MUTANT: lexical `path.resolve` before realpath re-opens the symlink+`..` bypass", () => {
-  const anchorSrc = "  while (pending.length) {";
+  const anchorSrc = "  let at = 0;";
   const sb = mutantSandbox(["pharn/ARCHITECTURE.md", "pharn/sub/keep.md"], anchorSrc, "  return path.resolve(CWD, raw);\n" + anchorSrc);
   fs.symlinkSync(join(sb, "pharn", "sub"), join(sb, "a"));
   assert.equal(
@@ -1089,4 +1089,22 @@ test("★ L7: null JSON payload denies (exit 2), never fail-open", () => {
     encoding: "utf8",
   });
   assert.equal(r.status, 2);
+});
+
+// --- LONG PATHS (audit P3-Q, 2026-10-07). Past MAX_RESOLVED_SEGMENTS the remaining segments are kept lexically, and
+// draining them with shift() was quadratic: 100k segments ran past 120 s on main. Reading the queue by index keeps it
+// linear. The verdict is not the point here (such a path exceeds PATH_MAX, so no write can land); a guard that HANGS
+// stalls the agent as surely as one that allows. The bound is generous for a slow CI runner; patched, it takes < 0.5 s.
+test("✧ a 100k-segment payload path is judged in linear time, with the same verdict as its short spelling", () => {
+  const file_path = "src/" + "../src/".repeat(100000) + "LIMITS.md";
+  const t = Date.now();
+  const r = spawnSync(process.execPath, [HOOK], {
+    input: JSON.stringify({ tool_name: "Write", tool_input: { file_path } }),
+    encoding: "utf8",
+    timeout: 30000,
+  });
+  const ms = Date.now() - t;
+  assert.notEqual(r.status, null, `the hook did not finish within 30 s (${ms} ms)`);
+  assert.ok(ms < 10000, `the hook took ${ms} ms over a 100k-segment path`);
+  assert.ok(r.status === 0 || r.status === 2, `exit ${r.status}: ${r.stderr}`);
 });

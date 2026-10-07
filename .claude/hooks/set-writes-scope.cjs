@@ -119,9 +119,11 @@ const CONTROL_SURFACE = [
 
 // Lexical normalization for the MEMBERSHIP TEST ONLY — the emitted scope value is never rewritten. Folds
 // `./`, `a/../` and backslashes so a trivial re-spelling (`./.claude/settings.json`) cannot walk past the
-// exact-membership test below. NOT a realpath; see the header's HONEST BOUND.
+// exact-membership test below. NOT a realpath; see the header's HONEST BOUND. Since the audit's P3-R (2026-10-07) it
+// also folds Unicode to NFC and case to lower, the way protect-trusted-paths.cjs keys its denylist: on a
+// case-insensitive volume `.CLAUDE/hooks/…` names the same file, and the refusal must not be the layer that misses it.
 function normalizeForTest(entry) {
-  return path.posix.normalize(String(entry).replace(/\\/g, "/"));
+  return path.posix.normalize(String(entry).replace(/\\/g, "/")).normalize("NFC").toLowerCase();
 }
 
 // Strip a trailing " (annotation)" (e.g. " (gated)") and surrounding whitespace.

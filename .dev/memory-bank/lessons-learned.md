@@ -2334,3 +2334,18 @@ type: scoping · concepts: [writes-scope, plan-shape, lesson-recurrence, glob, f
 - commit: `0e38b861f7839a7c19f8bb29756888d84e152568` (working-tree build on this commit; uncommitted at promotion time)
 - source: .dev/features/entry-run-as-base-evidence/PLAN.md § Files (the measure.mjs bullet: "named explicitly: the scope setter drops glob entries") + reconcile scope amendment 1
 - promoted: 2026-10-06 via gated `/pharn-dev-memory-promote` (pre-authorized by the human in chat — "if there's a lesson to promote do it. do not ask me" — the entry itself was not shown before the write).
+
+## L72 — Renaming a member of a shared decision's return enum is an API change — a caller outside the plan that compares against the old literal silently takes the other branch
+
+type: process · concepts: [enumeration, referent-binding, shared-parser, test-blindspot]
+
+**Lesson.** In regress-base-integrity, `resolveBaseSource` (stage-regress-core.mjs) renamed its dirty-tree kind from `head` to `dirty-head`. `pharn/floor/instruction-files.mjs` still tested `kind === "head"`, was not in the plan's `## Files`, and kept running: its dirty branch fell through to merge-base, so the first /pharn-dev-regress run went RED on 18 outside tests (3 check-instruction-files, 15 stage-verify). Nothing failed at the rename site, because an equality test against a literal that no longer occurs is simply false, not an error. The remedy is mechanical, not memory: before renaming or removing an enum member, grep the whole floor (callers, tests, contracts, commands) for the old literal and declare every hit in `## Files`, or keep the old member as an accepted alias until every caller has moved.
+
+**Why it matters.** The failure was loud only because a test happened to exercise that caller's dirty branch; a caller with no such test would have shipped the wrong branch. It is [[L39]]'s shape (two readers of one decision drift) arriving through a value rather than a parser.
+
+**Provenance.**
+
+- feature: `regress-base-integrity`
+- commit: `f27c759b6d3c0cca175d2f76f8c0fea1c3264d5a`
+- source: .dev/features/regress-base-integrity/REGRESSION.md Run 1 + REVIEW.md Proposed lesson candidate
+- promoted: 2026-10-07 via gated `/pharn-dev-memory-promote` (pre-authorized by the human in chat — "promote lesson" — the entry itself was not shown before the write).
