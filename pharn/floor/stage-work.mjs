@@ -219,7 +219,15 @@ export function validateWork(rec) {
  * review: a plain open hung on a planted FIFO, reproduced). `line` is written with ONE `write(2)` of
  * `JSON.stringify(value)` + newline, so concurrent appenders never interleave inside a line on a local file system.
  */
-export function appendJsonLine({ feature, fileName, value, root = ".", base = DEFAULT_BASE }) {
+/*
+ * CONCURRENT FIRST APPENDS (a CI flake on #328: entry-observations' CONCURRENT WRITERS test read 199 of 200 lines). Two
+ * appenders that both lstat a missing directory both mkdir it; the loser's mkdir throws EEXIST. Before the fix that fell
+ * through to the outer catch and the record was dropped. Now EEXIST re-lstats the component and applies the SAME refusal
+ * (a symlink or a non-directory is never followed); a directory the other appender just made is used. `onMissing` is a
+ * TEST SEAM only — called with the component's path between the missing lstat and the mkdir, so a test can create the
+ * component there and make the race deterministic. No shipped caller passes it.
+ */
+export function appendJsonLine({ feature, fileName, value, root = ".", base = DEFAULT_BASE, onMissing = null }) {
   try {
     if (typeof feature !== "string" || !FEATURE_SLUG_RE.test(feature)) return { ok: false, why: "feature is not a slug" };
     const segments = [
@@ -238,8 +246,16 @@ export function appendJsonLine({ feature, fileName, value, root = ".", base = DE
       } catch (e) {
         if (e.code !== "ENOENT") return { ok: false, why: `cannot lstat a state directory (${e.code})` };
       }
-      if (st === null) mkdirSync(dir);
-      else if (st.isSymbolicLink() || !st.isDirectory())
+      if (st === null) {
+        if (typeof onMissing === "function") onMissing(dir);
+        try {
+          mkdirSync(dir);
+        } catch (e) {
+          if (e.code !== "EEXIST") throw e;
+          st = lstatSync(dir); // made by a concurrent appender (or planted): judged below exactly like a found one
+        }
+      }
+      if (st !== null && (st.isSymbolicLink() || !st.isDirectory()))
         return { ok: false, why: "a state directory component is a symlink or not a directory" };
     }
     const flags = FS.O_WRONLY | FS.O_APPEND | FS.O_CREAT | (FS.O_NOFOLLOW ?? 0) | (FS.O_NONBLOCK ?? 0);

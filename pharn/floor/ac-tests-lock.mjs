@@ -68,7 +68,8 @@
 //     project root), exactly as the writes-scope setter resolves them.
 //
 // Exit: --write  0 written · 2 refused (bad usage, AC-TESTS.md missing / not a regular file / no pin / no
-//                  `## Files` / no usable `## Mapping`, a listed file missing or not a regular file, a test
+//                  `## Files` / no usable `## Mapping`, a mapping cell naming a file `## Files` does not list
+//                  (6.49.3), a listed file missing or not a regular file, a test
 //                  infrastructure that cannot be pinned — an unparseable package.json, a symlinked runner or
 //                  package-manager config, a symlinked or unreadable file a level gate's script names, a chain deeper
 //                  than test-infra-core.mjs's MAX_CHAIN_HOPS)
@@ -78,7 +79,8 @@
 //       --record-red-run  0 recorded · 1 the red run is not GREEN, or `--check` is RED (nothing written) ·
 //                  2 unusable (no lock, a bootstrap or /1 lock, no finished stamp, a stamp not bound to the mapping)
 //       --check  0 GREEN · 1 RED (a pinned file or AC-TESTS.md changed, went missing or is no longer a regular
-//                  file; a `## Files` entry added or dropped; the spec pin changed; `red_run` no longer bound to
+//                  file; a `## Files` entry added or dropped; a mapping cell naming a file the lock does not pin
+//                  (6.49.3); the spec pin changed; `red_run` no longer bound to
 //                  `files`; /5, /4 and /3 test-first: the test-infrastructure pin no longer holds, and /4 or /3: the
 //                  tree has test infrastructure only a newer pin covers (/4: a declared gate exclusion; /3: that and
 //                  what /4 added); bootstrap: the SPEC's pin, kind or levels changed, or an AC-TESTS.md appeared;
@@ -90,6 +92,7 @@
 // Test-file paths resolve against the CURRENT directory (the project root), as the setter resolves them; `--base`
 // moves only where AC-TESTS.md and the lock live, and the mapping path is compared resolved, never as spelled.
 
+import "./runtime-floor.mjs";
 import { createHash } from "node:crypto";
 import { readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -189,7 +192,25 @@ function mappingFacts(name, base, root) {
   if (mappingSha === null) return { ok: false, reason: `${mappingPath} is not a regular file (a symlink is refused)` };
   const rows = acRowsOf(text);
   const levels = rows.ok ? [...new Set(rows.rows.map((r) => r.level))].sort() : null;
-  return { ok: true, spec: { spec_id, spec_content_hash }, files, mapping: { path: mappingPath, sha256: mappingSha }, levels };
+  return {
+    ok: true,
+    spec: { spec_id, spec_content_hash },
+    files,
+    mapping: { path: mappingPath, sha256: mappingSha },
+    levels,
+    rows: rows.ok ? rows.rows : null,
+  };
+}
+
+/** PURE: the `## Mapping` rows whose test-file cell names a file `pinned` does not hold — `[{id, file}]`, in mapping
+ *  order. Compared BYTE FOR BYTE, the comparison check-ac-tests.mjs's `unlisted-file` makes, because the red run hands
+ *  the cell to the runner verbatim and red-run-core.mjs matches results on it unfolded. Until 6.49.3 the lock pinned
+ *  `## Files` only: a mapped file absent from `## Files` was run by the red run, matched by the AC gate, and pinned by
+ *  nothing, so the build could rewrite it and every lock check stayed GREEN (audit P3-K — reachable only past a RED
+ *  `unlisted-file`, so this is defence in depth). */
+export function unpinnedMappedFiles(rows, pinned) {
+  const set = new Set(pinned);
+  return rows.filter((r) => !set.has(r.file)).map((r) => ({ id: r.id, file: r.file }));
 }
 
 /** Build the test-first lock for feature `name`: AC-TESTS.md's facts plus the test-infrastructure pin over the tree at
@@ -199,6 +220,17 @@ export function buildLock(name, base, root) {
   const f = mappingFacts(name, base, root);
   if (!f.ok) return f;
   if (f.levels === null) return { ok: false, reason: `${f.mapping.path} has no usable \`## Mapping\` — run check-ac-tests.mjs` };
+  const unpinned = unpinnedMappedFiles(
+    f.rows,
+    f.files.map((x) => x.path)
+  );
+  if (unpinned.length) {
+    const u = unpinned[0];
+    return {
+      ok: false,
+      reason: `${u.id} is mapped to ${JSON.stringify(u.file.slice(0, 80))}, which is not in ${MAPPING_NAME} \`## Files\`, so the lock would not pin it — run check-ac-tests.mjs (unlisted-file)`,
+    };
+  }
   const pin = computeTestInfra({ root, levels: f.levels });
   if (!pin.ok) return { ok: false, reason: `the test infrastructure cannot be pinned: ${pin.reason}` };
   return {
@@ -461,6 +493,13 @@ export function testFirstReds(lock, name, base, root) {
   }
   for (const p of now) if (!recorded.has(p)) reds.push(`${p} is in ${MAPPING_NAME} \`## Files\` but not in the lock`);
   for (const p of recorded.keys()) if (!now.has(p)) reds.push(`${p} is in the lock but no longer in ${MAPPING_NAME} \`## Files\``);
+  // Every file a mapping cell names is one the lock pins (6.49.3, audit P3-K): the red run and the AC gate read the
+  // cell, so a cell outside `files` is a test nothing pins. A mapping that does not parse is left to the reds above.
+  const rows = acRowsOf(readFileSafe(resolve(root, mappingPath)) ?? "");
+  if (rows.ok) {
+    for (const u of unpinnedMappedFiles(rows.rows, recorded.keys()))
+      reds.push(`${JSON.stringify(u.file.slice(0, 80))} is mapped to ${u.id} in ${MAPPING_NAME} but is not pinned in the lock's files`);
+  }
   if (fresh.ok && fresh.spec.spec_content_hash !== lock.spec.spec_content_hash)
     reds.push(`${MAPPING_NAME}'s spec_content_hash changed since the lock was written`);
   return reds;

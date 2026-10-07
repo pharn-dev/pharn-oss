@@ -91,10 +91,38 @@ node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 # check-lessons-index COLD posture); /pharn-*verify passes --require-baseline, where absence is a refusal.
 # Since 6.24.0 `--anchor` itself REFUSES (exit 2, nothing written) when there is no usable scope to
 # snapshot (D6) — an explicit `{"scope": []}` IS a scope and anchors; both shipped callers set one first.
+# MERGED (6.51.0, audit P3-L): `--anchor` records `anchored_head`; a would-be escape whose bytes are exactly the
+# upstream bytes HEAD merged in during the window is listed in `merged[]` (+ a warning), not `escapes[]`. Six
+# equality/exit-code conditions (contract §2a): X recorded and HEAD moved; X an ancestor of HEAD; a merge base M of
+# HEAD and refs/remotes/origin/HEAD that X does not contain; baseline entry = blob at X; bytes now = blob at HEAD;
+# blob at HEAD = blob at M (a commit the build makes itself is not on upstream, so it stays an escape). Any git
+# failure keeps the escape. Precision, not strength: origin/HEAD is a Bash-movable alias; a stale fetch only
+# withholds the class; no origin/HEAD (git init + remote add) => inert, the warning names `git remote set-head`.
 # Contract: pharn/pharn-contracts/reconciliation-record.md. Data: pharn/floor/reconcile-ignore.json.
 # Exit: 0 CLEAN|NO_BASELINE · 1 ESCAPE · 2 INCONCLUSIVE / no usable scope to anchor (D6).
 node pharn/floor/reconcile-baseline.mjs --anchor [--base <dir>] [--by <label>]
 node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
+```
+
+## `runtime-floor.mjs` — the Node runtime floor
+
+```bash
+# Refuse to run a floor CLI on a Node that would make it a silent no-op (6.50.0, audit finding P1-A). Every floor CLI
+# gated on `if (import.meta.main)` exits 0 having checked nothing on a Node without that property (before 22.18 / 24.2),
+# reproduced on 20.13.1 and 22.16.0. This module is imported for its SIDE EFFECT as the FIRST static import of every
+# gated CLI under both floors (`import "./runtime-floor.mjs";`, or `import "../../pharn/floor/runtime-floor.mjs";` from
+# .dev/floor). Below the floor — `import.meta.main` not a boolean, or `process.versions.node` older than 24.2.0 or
+# unparseable — it writes one line to stderr ending in REFUSAL_TAIL and exits 2, before any sibling module evaluates.
+# Three CLIs take no static import by design (check-instruction-files, check-loop-fresh, check-quick-scope: a module
+# that cannot load maps to their own exit 2); they carry the feature check INLINE above their gate, with REFUSAL_TAIL
+# verbatim, and `await import("./runtime-floor.mjs")` inside their `try`. A new gated CLI must carry the guard too:
+# .dev/floor/entry-point-guard.test.mjs pins the position in every gated CLI and spawns each one under a faked
+# `process.versions.node` of 22.16.0 (exit 2, empty stdout, the sentence on stderr). The fake cannot remove
+# `import.meta.main`; `PHARN_OLD_NODE=<old node binary> node --test .dev/floor/entry-point-guard.test.mjs` runs the
+# same sweep on a real old runtime (CI does not). FLOOR: the refusal on a runtime below the floor, for every CLI that
+# carries the guard. NOT covered: ungated scripts (unaffected by this defect), an API an old Node lacks (fails loudly),
+# a caller that ignores exit codes. Exit: 2 refusal; otherwise the module is silent and the CLI runs as before.
+node pharn/floor/runtime-floor.mjs   # silent exit 0 on a supported Node
 ```
 
 ## `run-marker.mjs` — the run marker

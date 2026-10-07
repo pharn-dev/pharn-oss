@@ -68,6 +68,7 @@
 //   node pharn/floor/render-cost-record.mjs [--session <id>] [--projects-dir <dir>]
 // Exit codes: 0 = a valid block was printed (including an honest `unavailable` one); 2 = bad usage.
 
+import "./runtime-floor.mjs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { findTranscriptDirs, sessionRequests } from "./transcript-core.mjs";

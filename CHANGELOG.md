@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.51.0] - 2026-10-07
+## [6.52.0] - 2026-10-07
 
 ### Fixed
 
@@ -53,6 +53,104 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     (`base-worktree-unplaceable`), and the progress record moves to schema `/4` — a regress run paused across the
     upgrade is refused `progress-malformed` and re-run fresh. Not covered: a partially committed build with another
     uncommitted change still compares against a base holding the committed part, unless `--base` is passed.
+
+## [6.51.0] - 2026-10-07
+
+### Added
+
+- **The Bash-write reconciler classifies an upstream merge as `merged`, not as an escape.**
+  `reconcile-baseline.mjs --anchor` now records `anchored_head`, the commit HEAD named when the epoch opened. `check-bash-reconcile.mjs`
+  lists a path that would otherwise be an escape under a new `merged[]` field, with a warning, when its change since
+  the anchor is exactly the change upstream commits made: the anchored commit is an ancestor of HEAD; HEAD and
+  `refs/remotes/origin/HEAD` share a merge base the anchored commit does not contain; the baseline held the path's
+  blob at the anchored commit; and the worktree holds its blob at HEAD, which equals its blob at that merge base.
+  A commit the build makes itself is not on upstream, so it stays an escape. Any git failure keeps the escape. Why:
+  a merge of `origin/main` mid-run, or a stale baseline on a checkout that later pulled, reported every path main
+  changed as an escape (audit P3-L: 9 false escapes on one checkout, trusted docs among them). The verdict enum and
+  the exit codes are unchanged. Bounds, in `reconciliation-record.md` §2a: bytes equal to upstream's are classified
+  whoever wrote them; the upstream ref is a local alias Bash can move, which is outside the non-adversarial claim;
+  with no `refs/remotes/origin/HEAD` the class is inert and the warning names `git remote set-head origin --auto`;
+  a baseline anchored before this release records no head and gets no classification until the next anchor; a
+  rebase, a hand-resolved conflict, or line-ending conversion keeps the RED. This makes the detector more precise,
+  not stronger.
+
+## [6.50.1] - 2026-10-07
+
+### Fixed
+
+- 2026-10-07: **A snapshot-oracle AC test now fails the AC gate instead of passing for any implementation.** (audit
+  P2-F, `.dev/features/gate-runner-batch/`) vitest and Jest write a missing snapshot on a run where `CI` is unset, so
+  an AC test asserting `toMatchSnapshot()` failed before the build and passed after it whatever the build returned.
+  `pharn/floor/run-gates.mjs` now sets `CI=1` for the test-level gates (`test`, `test:e2e`, `e2e`, and the entry
+  check's `base:test`) unless the environment already defines `CI`; a project's own `CI=false` is kept and restores
+  snapshot writing. `/pharn-test` Step 3 gains an advisory rule: no snapshot, fixture or golden file the build or a
+  test run writes. Other oracle files the build writes are not caught by the runner.
+- 2026-10-07: **`validateStamp` and the runner's finalize compare `fingerprint.init` with the first gate's
+  `fp_before`.** (audit P3-J) Only consecutive gates were compared, so a tree edit between `init` and the first
+  `run --next` left a stamp whose `aux.completeness` described another tree than the gates judged. The mismatch is
+  `tree-changed-between-gates`, an existing lapse code (a re-run re-fingerprints at init).
+- 2026-10-07: **A killed `run-gates` no longer leaves its gate running into the re-run.** (audit P3-P) A SIGTERM,
+  SIGINT or SIGHUP to the runner is forwarded to the gate's process group; the runner then dies by that signal and
+  records nothing for the entry. A SIGKILL cannot be caught, so the runner records the running group in
+  `<out>/lock.child`, and the next `run --next` that recovers the stale lock stops that group (SIGTERM, then
+  SIGKILL; a group still alive is `lock-busy`) before re-running the entry. Bounds in
+  `pharn/pharn-contracts/gate-run-record.md`, "Bounds".
+- 2026-10-07: **Two concurrent first appends to a per-feature state file no longer drop a line.**
+  `pharn/floor/stage-work.mjs` `appendJsonLine` created a missing directory after an `lstat`; the appender that lost
+  the `mkdir` race got `EEXIST` and returned `{ok: false}`, so its record was lost (a CI flake: 199 of 200 lines).
+  `EEXIST` now re-`lstat`s the directory and applies the same symlink / not-a-directory refusal.
+- 2026-10-07: **CodeQL alerts #10 and #17 on the gate spawn carry a justification at the call.** The traced flow is a
+  project-configured gate command reaching `spawn`, which is what the runner is for; the alerts are not dismissed
+  here.
+
+## [6.50.0] - 2026-10-07
+
+### Fixed
+
+- 2026-10-07: **Every floor CLI now refuses to run on a Node older than 24.2 instead of exiting 0 having checked
+  nothing.** The 48 CLIs under `pharn/floor/` and `.dev/floor/` that gate their entry point on `import.meta.main` were
+  silent no-ops on a Node without that property (before 22.18 / 24.2). Reproduced on Node 20.13.1 and 22.16.0:
+  `check-regress.mjs verdict` over a real regression, `check-bash-reconcile.mjs --require-baseline` with no baseline,
+  `check-test-stage.mjs`, `check-loop-fresh.mjs`, `run-gates.mjs init` and `stage-verify.mjs` all exited 0 with empty
+  output, and the installer admits Node 20. The new `pharn/floor/runtime-floor.mjs` is now the first import of each of
+  them. Below the floor (`import.meta.main` missing, or `process.versions.node` older than 24.2.0 or unparseable) it
+  writes one line to stderr and exits 2 before any other module runs. The three CLIs that take no static import by
+  design carry the feature check inline and load the module inside their `try`. The rule follows the README's documented
+  floor, 24.2.0, so Node 22.18–24.1 is refused too although it has the property: no gate has ever run there.
+  `package.json` gains `engines.node >=24.2.0`. A test pins the guard's position in every gated CLI and spawns each one
+  under a faked Node 22.16.0; `PHARN_OLD_NODE=<binary>` runs the same sweep on a real old Node. Not covered: a script
+  with no entry gate (unaffected), and a caller that ignores exit codes. The installer's own `engines` lives in a
+  separate repository.
+
+## [6.49.3] - 2026-10-07
+
+### Fixed
+
+- **The AC-tests lock now pins every test file a mapping cell names.** Before, `ac-tests-lock.mjs` pinned
+  AC-TESTS.md's `## Files` only. A mapped file missing from `## Files` was run by the red run and matched by the AC
+  gate, but nothing pinned it, so the build could rewrite it while every lock check stayed GREEN (audit P3-K). The
+  mapping check already reds that file as `unlisted-file`, so this is defence in depth. `--write` now refuses such a
+  cell. `--check` REDs a lock that already holds one, which reads as `lock-red` at the test-stage gate and as
+  `ac-tests-modified` at the AC gate. The comparison is byte for byte, the one `unlisted-file` makes.
+- **`/pharn-ship`'s close no longer runs `npx` to format `BRIEFING.md`.** Without a TTY, `npx prettier` in a project
+  that lacks prettier installs the registry's latest release and runs it (audit P2-G). The step now runs
+  `node_modules/.bin/prettier` and `node_modules/.bin/markdownlint-cli2` only when present and skips them otherwise;
+  skipping never blocks. A new hygiene test REDs on any package-runner call (`npx`, `bunx`, `pnpx`, `dlx`,
+  `npm exec`) in a product command or part. It checks wording only and proves nothing about a run. No other product
+  command had one. SECURITY.md's "no network egress" now says exactly what reaches the network.
+- **`/pharn-memory-promote` halts and asks when `git rev-parse HEAD` fails**, as its dev twin does, instead of writing
+  `commit: unknown` on its own (audit P3-O). It writes `unknown` only after the human answers that the project has
+  no commit. `check-provenance.mjs` still accepts `unknown`, so the halt is advisory prose.
+- **Test and CI coverage (no shipped byte changes):**
+  - `hook-wiring.test.cjs` now requires the `Stop` guard's wiring. Before, a missing block printed a diagnostic and
+    passed (audit P3-M).
+  - Both write guards get `NotebookEdit` `notebook_path` and `MultiEdit` (`file_path` and `edits[]`) payload tests,
+    each with an allow control.
+  - `floor.yml` runs `npm test` on Node 24 instead of restating the globs on `lts/*`. Its old `.claude/**` pattern
+    would collect sibling `.claude/worktrees/**` checkouts.
+  - The `setup-node` pin is commented `# v7.0.0`, the tag that SHA is, in both workflows (audit P3-N).
+  - A new test runs `npm test`'s own globs through the real `node --test` over a fixture and asserts nothing under
+    `.claude/worktrees/` is collected. `node --test` has no file-exclusion flag to make that explicit.
 
 ## [6.49.2] - 2026-10-07
 

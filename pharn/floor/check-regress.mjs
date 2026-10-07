@@ -94,6 +94,7 @@
 // bytes is not seen, a path an earlier run escaped with is pre-run state for a re-run, and the record (in the git dir,
 // out of the write tools' reach) can be forged through Bash. The `scope` CLI below passes no such list.
 
+import "./runtime-floor.mjs";
 import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { validateStamp, stampToMap, gateRunBlock, timedOutRunIds, SHA_RE, FEATURE_SLUG_RE } from "./gate-run-core.mjs";

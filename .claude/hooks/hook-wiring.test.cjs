@@ -98,10 +98,11 @@ for (let i = 0; i < GUARDS.length; i++) {
 // widening it: matcher-less (Stop has no matcher support), EXEC form (`command` + `args`, no shell), and an
 // explicit small timeout so a stalled guard cannot sit on every turn end for the 600 s default.
 //
-// settings.json is protected (fix #2), so a HUMAN applies this entry
-// (.dev/features/loop-stop-guard/settings-patch/APPLY.md). Until then the committed file has no Stop event,
-// and the first test says so on its diagnostic channel instead of failing. The moment it is wired, the
-// same test binds it to exactly this entry. The staged entry itself is EXECUTED below either way (L45).
+// settings.json is protected (fix #2), so a HUMAN applied this entry
+// (.dev/features/loop-stop-guard/settings-patch/APPLY.md). Until 6.49.3 the first test accepted an ABSENT Stop
+// event with only a diagnostic, so deleting the guard's wiring failed no test (audit P3-M). The entry has been
+// wired since, so the test now REQUIRES it, exactly as staged, and a negative control proves an absent or altered
+// block fails (L4). The staged entry itself is EXECUTED below (L45).
 // ---------------------------------------------------------------------------------------------------
 
 const STOP_ENTRY = Object.freeze({
@@ -112,18 +113,34 @@ const STOP_ENTRY = Object.freeze({
 });
 const APPLY = join(REPO, ".dev", "features", "loop-stop-guard", "settings-patch", "APPLY.md");
 
-test("✧ the Stop event is either NOT YET WIRED (a human applies it) or wired EXACTLY as the staged entry", (t) => {
-  const settings = JSON.parse(fs.readFileSync(join(REPO, ".claude", "settings.json"), "utf8"));
-  const stop = settings.hooks && settings.hooks.Stop;
-  if (stop === undefined) {
-    t.diagnostic("Stop guard NOT WIRED in .claude/settings.json — inert until a human applies settings-patch/APPLY.md");
-    return;
-  }
+/** Throws unless `settings` wires the Stop event as exactly the staged entry — present, matcher-less, exec form,
+ *  timeout 10. An absent `hooks` or `Stop` key is a failure, never a skip. */
+function assertStopWired(settings) {
+  const stop = settings && settings.hooks ? settings.hooks.Stop : undefined;
+  assert.ok(stop !== undefined, "the Stop guard is NOT WIRED in .claude/settings.json — require-loop-record.cjs never runs");
   assert.deepEqual(
     JSON.parse(JSON.stringify(stop)),
     [{ hooks: [JSON.parse(JSON.stringify(STOP_ENTRY))] }],
     "the wired Stop entry must be exactly the staged one — matcher-less, exec form, timeout 10"
   );
+}
+
+test("✧ the Stop event is WIRED, exactly as the staged entry (required since 6.49.3)", () => {
+  assertStopWired(JSON.parse(fs.readFileSync(join(REPO, ".claude", "settings.json"), "utf8")));
+});
+
+test("✧ the Stop-wiring check DISCRIMINATES: an absent or altered Stop block fails it (L4 negative control)", () => {
+  const settings = JSON.parse(fs.readFileSync(join(REPO, ".claude", "settings.json"), "utf8"));
+  const without = JSON.parse(JSON.stringify(settings));
+  delete without.hooks.Stop;
+  assert.throws(() => assertStopWired(without), /NOT WIRED/, "deleting the Stop block must fail");
+  assert.throws(() => assertStopWired({}), /NOT WIRED/, "a settings file with no hooks at all must fail");
+  const altered = JSON.parse(JSON.stringify(settings));
+  altered.hooks.Stop[0].hooks[0].timeout = 600;
+  assert.throws(() => assertStopWired(altered), /exactly the staged one/, "a changed timeout must fail");
+  const shell = JSON.parse(JSON.stringify(settings));
+  shell.hooks.Stop[0].hooks[0] = { type: "command", command: `node "${PLACEHOLDER}"/.claude/hooks/require-loop-record.cjs`, timeout: 10 };
+  assert.throws(() => assertStopWired(shell), /exactly the staged one/, "the shell form must fail");
 });
 
 test("✧ the staged APPLY.md carries this exact entry (the patch and the test cannot drift apart)", () => {

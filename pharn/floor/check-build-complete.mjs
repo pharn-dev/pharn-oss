@@ -49,6 +49,7 @@
 //
 // Exit: 0 complete · 1 incomplete (missing[] non-empty) · 2 inconclusive / bad input — FAIL-CLOSED (P5).
 
+import "./runtime-floor.mjs";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, isAbsolute } from "node:path";
 import { pathsFromPlanFiles, clean, isConcrete } from "./plan-files-core.mjs";

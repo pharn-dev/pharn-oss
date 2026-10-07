@@ -55,8 +55,12 @@ come from the single code block this text was moved from, so the entry they name
 # does NOT ignore `.pharn/` the runner's own logs would move the fingerprint between EVERY pair of gates and
 # refuse every run. MEASURED, never inherited (L24): 1925 paths, ~463 ms cold / ~75-85 ms warm on this repo.
 # BOUNDS: POSIX only; gates assumed order-independent; a `setsid` descendant escapes the group kill; a
-# harness kill before --timeout-ms orphans the group, which is why the Bash-tool timeout must EXCEED it and
-# why --timeout-ms is REQUIRED (floor code carries no harness-specific default, so there is no default for a
+# harness SIGTERM/SIGINT/SIGHUP before --timeout-ms is FORWARDED to the gate's group and the runner dies by it,
+# recording nothing (6.50.1); a harness SIGKILL orphans the group until the next `run --next` recovers the stale
+# lock, which first stops the group <out>/lock.child names (audit P3-P), so the Bash-tool timeout must still
+# EXCEED it; test-level gates (CI_GATE_IDS) get CI=1 unless CI is already defined, so vitest/Jest refuse a new
+# snapshot (audit P2-F); validateStamp and finalize also refuse fingerprint.init != runs[0].fp_before as
+# tree-changed-between-gates (audit P3-J); --timeout-ms is REQUIRED (floor code carries no harness-specific default, so there is no default for a
 # test to leave unexercised — L41); `--gates` splits on commas, so a command containing one needs a wrapper;
 # gate stdout/stderr are UNTRUSTED free text, written by fd and reduced to a sha256, and NO verdict reads
 # their content; logs are bounded per stage by init's recreate of <out> and are otherwise unbounded across

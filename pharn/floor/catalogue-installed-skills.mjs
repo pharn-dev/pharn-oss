@@ -17,6 +17,7 @@
 //
 // Usage:  node pharn/floor/catalogue-installed-skills.mjs [targetDir]
 
+import "./runtime-floor.mjs";
 import { existsSync, statSync } from "node:fs";
 import { buildCatalogue } from "./installed-skills-core.mjs";
 

@@ -296,14 +296,19 @@ the script.
   `isConcrete` (6.20.5; before, the raw entry was pinned, so `tests/a.test.js (new)` refused the write). An entry the
   setter would drop (a placeholder or glob) refuses the write and is a `--check` RED. Each must be a regular file, and so must
   AC-TESTS.md: a missing file or a symlink refuses the write. Test-file paths resolve against the current directory
-  (the project root); the mapping path is compared by its real location, never as spelled.
+  (the project root); the mapping path is compared by its real location, never as spelled. **Every file a `## Mapping`
+  cell names must be in `files`** (6.49.3), compared byte for byte as `unlisted-file` compares it: a cell naming a file
+  `## Files` does not list refuses the write, and on a lock that already holds one it is a `--check` RED — so
+  `lock-red` at the test-stage gate and `ac-tests-modified` at the AC gate. Before, such a file was run by the red run
+  and matched by the AC gate while nothing pinned it.
 - **`red_run`** is written only by `--record-red-run`, which re-derives the verdict itself, requires `--check` GREEN
   and the binding above, and records only when every AC is red as required: the matched test ids per AC (untrusted
   DATA from the project's reporter, sorted by AC number), each gate's results digest, the stamp's digest, and
   `files_sha256` — a digest of the lock's own `files` section, one `path\0sha256\n` per entry. `--write` resets
   `red_run` to `null`, because a rewrite means the tests changed.
 - `--check` REDs, naming the path and never the content, when AC-TESTS.md changed, a test file changed, went missing
-  or stopped being a regular file, a `## Files` entry was added or dropped, the spec pin changed, `red_run` is no
+  or stopped being a regular file, a `## Files` entry was added or dropped, a mapping cell names a file the lock does
+  not pin, the spec pin changed, `red_run` is no
   longer bound to `files` (its `files_sha256` differs), `red_run` names other ACs than the mapping, (`/5`, `/4`,
   `/3`) the test-infrastructure pin no longer holds, or (`/4`, `/3`) the live tree has test infrastructure only a newer
   pin covers ("test infrastructure unpinned — …", below).

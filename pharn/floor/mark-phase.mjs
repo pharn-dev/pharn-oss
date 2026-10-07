@@ -116,6 +116,7 @@
 //   node pharn/floor/mark-phase.mjs --pending-start [--base <dir>]
 // Exit codes: 0 = a marker (or the pending start) was written; 2 = bad usage (nothing written).
 
+import "./runtime-floor.mjs";
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { tsMs } from "./run-window-core.mjs";

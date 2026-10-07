@@ -602,6 +602,24 @@ test("validateStamp catches a TREE CHANGE between consecutive gates", () => {
   assert.equal(validateStamp(s).ok, true);
 });
 
+test("audit P3-J — validateStamp catches a TREE CHANGE between init and the FIRST gate (fingerprint.init vs runs[0].fp_before)", () => {
+  // REPRODUCED by the audit: package.json rewritten between init and the first `run --next`, so aux.completeness (captured
+  // at init) describes a different tree than the gates judged — and the inter-gate chain alone held. Every run keeps the
+  // chain consistent here, so the init link is the ONLY defect.
+  const A = "a".repeat(64);
+  const C = "c".repeat(64);
+  const s = goodStamp();
+  s.fingerprint.init = C;
+  const r = validateStamp(s);
+  assert.equal(r.ok, false, "a stamp whose first gate saw another tree than init validated");
+  assert.equal(r.reason_code, "tree-changed-between-gates");
+  assert.match(r.reason, /between init and "test"/);
+  assert.ok(LAPSE_CODES.includes(r.reason_code), "a re-run re-fingerprints at init, so it must route as a lapse");
+  // Control (L34): the same stamp with init restored validates, so the refusal is about the init link and nothing else.
+  s.fingerprint.init = A;
+  assert.deepEqual(validateStamp(s), { ok: true });
+});
+
 test("validateStamp requires `reconcile` to be LAST when it is present", () => {
   const s = goodStamp();
   s.runs = [s.runs[1], { ...s.runs[0], seq: 1 }];

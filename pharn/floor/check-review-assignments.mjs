@@ -65,6 +65,7 @@
 // Output: a GREEN line on stdout, or a RED line on stderr naming the FIRST failing invariant.
 // Exit:   0 GREEN · 1 RED · 2 the record is unreadable / not JSON / not an object (fail-closed).
 
+import "./runtime-floor.mjs";
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";

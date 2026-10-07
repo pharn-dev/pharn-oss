@@ -56,6 +56,7 @@
 //     Prints the rendered BRIEFING.md to stdout. Exit 0 on success; exit 1 if PLAN.md (the one REQUIRED
 //     input) is absent or unreadable — fail-closed, since there is nothing to render without it.
 
+import "./runtime-floor.mjs";
 import { readFileSync, existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";

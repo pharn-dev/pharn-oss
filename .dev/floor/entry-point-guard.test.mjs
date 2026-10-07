@@ -31,6 +31,16 @@
 // The command line is PINNED here rather than described (L22): the idiom was previously prescribed only
 // by example, and ten files copied it wrong.
 //
+// THE RUNTIME FLOOR (6.50.0, audit finding P1-A). `import.meta.main` itself is the next silent no-op: on a
+// Node without it (before 22.18 / 24.2) every gated CLI exits 0 having checked nothing. Reproduced on 20.13.1
+// and 22.16.0. So every gated CLI under both floors now carries `pharn/floor/runtime-floor.mjs`, which exits 2
+// with a fixed sentence below the floor. The last section of this file pins (4) the guard's POSITION in every
+// gated CLI — the first static import, or, for the three CLIs that take no static import by design, an inline
+// feature check above the gate plus a dynamic import inside their `try` — and (5) the BEHAVIOR: every gated CLI
+// spawned under a faked `process.versions.node` of 22.16.0 exits 2 with the sentence on stderr and nothing on
+// stdout. The fake cannot remove `import.meta.main`; set `PHARN_OLD_NODE` to an old node binary to run (6), the
+// same sweep on a real old runtime, which CI does not do.
+//
 // ── Honest scope (P0) — what a green run does and does NOT buy ───────────────────────────────────────
 // FLOOR (what green means): (1) no executable line under either floor carries one of the two BANNED
 //   spellings; (2) every non-test `.mjs` under either floor that HAS an entry guard spells it
@@ -261,3 +271,105 @@ test("importing a guarded script does not execute its main()", () => {
   assert.equal(r.status, 0, `importing must not exit the process: ${r.stderr}`);
   assert.equal(r.stdout.trim(), "OK");
 });
+
+// ── The runtime floor (checks 4–6, 6.50.0) ────────────────────────────────────────────────────────
+
+/** The guard module and the literals every gated CLI must carry (L22 — pinned, never described). */
+const RUNTIME_FLOOR = join(PRODUCT_FLOOR, "runtime-floor.mjs");
+const { REFUSAL_TAIL } = await import(pathToFileURL(RUNTIME_FLOOR).href);
+const STATIC_IMPORT = { product: 'import "./runtime-floor.mjs";', dev: 'import "../../pharn/floor/runtime-floor.mjs";' };
+const DYNAMIC_IMPORT = 'await import("./runtime-floor.mjs");';
+const INLINE_CHECK = 'if (typeof import.meta.main !== "boolean") {';
+/** The CLIs that take NO static import on purpose (a module that cannot load must map to their exit 2). Closed set. */
+const NO_STATIC_IMPORT = ["check-instruction-files.mjs", "check-loop-fresh.mjs", "check-quick-scope.mjs"];
+/** Lower bound on gated CLIs, measured at 6.50.0 (39 product, 9 dev), so the sweep cannot go vacuous unnoticed. */
+const GATED_MIN = { product: 39, dev: 9 };
+
+/** Every gated CLI under `dir`: a non-test script whose executable source uses `import.meta.main`. */
+function gatedClis(dir) {
+  return floorScripts(dir).filter(
+    (n) => n !== "runtime-floor.mjs" && executableSource(readFileSync(join(dir, n), "utf8")).includes(CORRECT_GUARD)
+  );
+}
+
+const STATIC_IMPORT_RE = /^import[\s{"'*]/;
+
+for (const [label, dir, kind] of [
+  ["pharn/floor", PRODUCT_FLOOR, "product"],
+  [".dev/floor", DEV_FLOOR, "dev"],
+]) {
+  test(`✧ every gated CLI under ${label} carries the runtime floor in the pinned position`, () => {
+    const clis = gatedClis(dir);
+    assert.ok(clis.length >= GATED_MIN[kind], `${label}: ${clis.length} gated CLI(s), below the pinned ${GATED_MIN[kind]}`);
+    const offenders = [];
+    for (const name of clis) {
+      const lines = readFileSync(join(dir, name), "utf8").split("\n");
+      const firstImport = lines.find((l) => STATIC_IMPORT_RE.test(l));
+      if (kind === "product" && NO_STATIC_IMPORT.includes(name)) {
+        const src = lines.join("\n");
+        if (firstImport !== undefined) offenders.push(`${name}: listed as import-free but has \`${firstImport}\``);
+        const check = src.indexOf(INLINE_CHECK);
+        const gate = src.indexOf("\nif (import.meta.main)");
+        if (check < 0 || gate < 0 || check > gate) offenders.push(`${name}: no inline feature check above its gate`);
+        if (!src.includes(REFUSAL_TAIL)) offenders.push(`${name}: the inline refusal is not REFUSAL_TAIL byte for byte`);
+        if (!src.includes(DYNAMIC_IMPORT)) offenders.push(`${name}: no \`${DYNAMIC_IMPORT}\` inside its try`);
+      } else if (firstImport !== STATIC_IMPORT[kind]) {
+        offenders.push(`${name}: first import is ${JSON.stringify(firstImport)}, not ${JSON.stringify(STATIC_IMPORT[kind])}`);
+      }
+    }
+    assert.deepEqual(offenders, [], `runtime floor missing or misplaced:\n  ${offenders.join("\n  ")}`);
+  });
+}
+
+test("✧ the import-free set is closed: each listed CLI exists, is gated, and takes no static import", () => {
+  const gated = gatedClis(PRODUCT_FLOOR);
+  for (const name of NO_STATIC_IMPORT) assert.ok(gated.includes(name), `${name} is not a gated product CLI`);
+});
+
+/** A preload that makes `process.versions.node` read as an old release before any floor module evaluates. */
+const FAKE_OLD =
+  "data:text/javascript," +
+  encodeURIComponent(
+    'Object.defineProperty(process, "versions", { value: { ...process.versions, node: "22.16.0" }, configurable: true });'
+  );
+
+/** Spawn every gated CLI of both floors with `bin` and `pre` (argv before the script), from a scratch cwd. */
+function sweep(bin, pre) {
+  const cwd = mkdtempSync(join(tmpdir(), "pharn-runtime-floor-"));
+  try {
+    const results = [];
+    for (const [dir, rel] of [
+      [PRODUCT_FLOOR, "pharn/floor"],
+      [DEV_FLOOR, ".dev/floor"],
+    ]) {
+      for (const name of gatedClis(dir)) {
+        const r = spawnSync(bin, [...pre, join(dir, name)], { cwd, encoding: "utf8", timeout: 30_000 });
+        results.push({ cli: `${rel}/${name}`, code: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" });
+      }
+    }
+    return results;
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
+function assertAllRefused(results, what) {
+  const bad = results
+    .filter((r) => r.code !== 2 || r.stdout !== "" || !r.stderr.includes(REFUSAL_TAIL))
+    .map((r) => `${r.cli}: exit ${r.code}, stdout ${r.stdout.length}B, stderr ${JSON.stringify(r.stderr.slice(0, 160))}`);
+  assert.deepEqual(bad, [], `${what}: these CLIs did not refuse:\n  ${bad.join("\n  ")}`);
+}
+
+test("✧ under a faked Node 22.16.0 every gated CLI refuses: exit 2, empty stdout, the pinned sentence", () => {
+  const results = sweep(process.execPath, [`--import=${FAKE_OLD}`]);
+  assert.ok(results.length >= GATED_MIN.product + GATED_MIN.dev, `swept only ${results.length} CLI(s)`);
+  assertAllRefused(results, "faked 22.16.0");
+});
+
+test(
+  "✧ on a real old Node (PHARN_OLD_NODE) every gated CLI refuses",
+  { skip: process.env.PHARN_OLD_NODE ? false : "set PHARN_OLD_NODE to an old node binary to run this probe" },
+  () => {
+    assertAllRefused(sweep(process.env.PHARN_OLD_NODE, []), `PHARN_OLD_NODE=${process.env.PHARN_OLD_NODE}`);
+  }
+);

@@ -72,6 +72,7 @@ function outsideContract(code, text) {
 async function run(args) {
   let core;
   try {
+    await import("./runtime-floor.mjs");
     core = await import("./quick-scope-core.mjs");
   } catch (e) {
     return crashed("the quick scope checker could not load (quick-scope-core.mjs or a module it imports)", e);
@@ -89,6 +90,15 @@ async function run(args) {
   return { code: r.code, text, error: null };
 }
 
+// Runtime floor (6.50.0), inline because this file takes no static import (see the header): without `import.meta.main`
+// the block below never runs and the process would exit 0 having checked nothing. The version half is runtime-floor.mjs,
+// loaded inside run()'s `try`. The sentence is runtime-floor.mjs REFUSAL_TAIL, pinned by .dev/floor/entry-point-guard.test.mjs.
+if (typeof import.meta.main !== "boolean") {
+  process.stderr.write(
+    `PHARN floor: refusing to run on Node ${process.versions.node}. The PHARN floor checkers need Node >= 24.2.0: each gates its CLI on import.meta.main, and on an older Node a checker exits 0 having checked nothing. Upgrade Node, then re-run.\n`
+  );
+  process.exit(2);
+}
 if (import.meta.main) {
   let printed = false;
   const print = ({ code, text, error }) => {

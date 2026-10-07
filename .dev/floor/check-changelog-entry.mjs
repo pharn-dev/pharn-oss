@@ -104,6 +104,7 @@
 //         (targetDir default: cwd; head = <targetDir>/CHANGELOG.md; git runs with cwd = targetDir)
 // Non-LLM, stdlib-only, fail-closed. Apparatus: never ships to a user install, so no SKILLS_VERSION bump.
 
+import "../../pharn/floor/runtime-floor.mjs";
 import { readFileSync, statSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
