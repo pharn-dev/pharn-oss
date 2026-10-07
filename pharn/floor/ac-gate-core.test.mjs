@@ -295,6 +295,29 @@ test("ac-tests-modified — a pinned test edited after the lock (a Bash write th
   });
 });
 
+test("6.49.3 ac-tests-modified — a MAPPED test file the lock does not pin (absent from `## Files`) no longer PASSES (audit P3-K)", () => {
+  withWorld({}, (w) => {
+    // The lock a pre-6.49.3 `--write` accepted: AC-2 is mapped to FILE(2), but `## Files` lists FILE(1) only, so
+    // `files` pins FILE(1) alone and every digest is self-consistent. --write now refuses this mapping; the gate must
+    // still read such a lock as invalid evidence rather than PASS.
+    const mappingPath = join(w.fd, "AC-TESTS.md");
+    writeFileSync(mappingPath, readFileSync(mappingPath, "utf8").replace(`- \`${FILE(2)}\` — AC-2\n`, ""));
+    const l = JSON.parse(readFileSync(w.lockPath, "utf8"));
+    l.mapping.sha256 = sha256(readFileSync(mappingPath));
+    l.files = l.files.filter((f) => f.path !== FILE(2));
+    l.red_run.files_sha256 = filesDigest(l.files);
+    writeFileSync(w.lockPath, JSON.stringify(l));
+    // the build rewrites the unpinned AC-2 test to pass for any implementation
+    writeFileSync(join(w.root, FILE(2)), 'test("AC-2: t", () => {});\n');
+    const g = gateOf(w);
+    only(g, "ac-tests-modified", "FAIL");
+    assert.match(
+      g.evidence[0].detail,
+      /"tests\/ac\/ac2\.test\.js" is mapped to AC-2 in AC-TESTS\.md but is not pinned in the lock's files/
+    );
+  });
+});
+
 test("ac-tests-modified — the lock is missing, unusable, or a bootstrap lock beside a feature SPEC; the SPEC pin is not the lock's", () => {
   for (const [why, mutate, re] of [
     ["lock missing", (w) => unlinkSync(w.lockPath), /AC-TESTS\.lock\.json is missing/],

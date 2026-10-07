@@ -614,6 +614,31 @@ test("✧ COMMIT_RE differs deliberately: only the PRODUCT copy admits the liter
   assert.doesNotMatch(constSource(CHECK, "COMMIT_RE"), /unknown/);
 });
 
+test("✧ 6.49.3: BOTH promote commands HALT and ask on a failed `git rev-parse HEAD`; neither writes `unknown` on its own (audit P3-O)", () => {
+  // Before 6.49.3 the PRODUCT command told the model to write `unknown` itself when rev-parse failed, where the dev twin
+  // halts. Now both halt; the product command records `unknown` only after the human answers that the project has no
+  // commit (its checker still admits the value — see the COMMIT_RE test above). This pins the PROSE, never a run.
+  const step = (file) => {
+    const src = readFileSync(join(COMMANDS_DIR, file), "utf8");
+    const at = src.indexOf("Capture **`commit` deterministically**");
+    assert.ok(at !== -1, `${file}: the commit-capture step must exist`);
+    return src.slice(at, src.indexOf("## Step 2", at));
+  };
+  for (const file of ["pharn-memory-promote.md", "pharn-dev-memory-promote.md"]) {
+    const s = step(file);
+    assert.match(
+      s,
+      /\*\*If it fails — not a git repo, an unborn `HEAD`, git unavailable — HALT and ask the human\.?\*\*/,
+      `${file} must halt`
+    );
+    assert.doesNotMatch(s, /If it fails\*\*[^\n]*write the literal/, `${file} must not prescribe a placeholder on failure`);
+  }
+  // control: the pre-6.49.3 product text is what the negative assertion catches
+  const OLD = "**If it fails** — not a git repo, an unborn `HEAD`, git unavailable — write the literal **`unknown`**.";
+  assert.match(OLD, /If it fails\*\*[^\n]*write the literal/);
+  assert.match(step("pharn-memory-promote.md"), /only when the human answers[\s\S]*write the literal \*\*`unknown`\*\*/i);
+});
+
 test("✧ L7: no command outside the two *memory-promote ones declares a memory-bank path in `writes:`", () => {
   // L7's own prescribed remedy, applied at the moment a canon path first becomes reachable from the
   // PRODUCT surface: pin the declaration so a future re-widening fails closed. Over-declaring a canon
