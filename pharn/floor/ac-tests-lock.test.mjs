@@ -30,7 +30,8 @@ function acTests(files = FILES, hash = H) {
     "",
     "## Mapping",
     "",
-    "- AC-1 | unit | `x` | y",
+    // AC-1 maps a LISTED file: since 6.49.3 a cell naming a file outside `## Files` refuses --write (audit P3-K).
+    `- AC-1 | unit | \`${files[0] ?? "x"}\` | y`,
     "",
   ].join("\n");
 }
@@ -935,6 +936,52 @@ test("6.20.5: a `## Files` entry the setter would drop (placeholder or glob) ref
     const w = cli(root, ["--write", NAME]);
     assert.equal(w.code, 2, w.out);
     assert.match(w.out, /placeholder or glob — run check-ac-tests\.mjs/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── 6.49.3 — every MAPPED test file is a PINNED one (audit P3-K) ─────────────────────────────────────────────────────
+// Before, the lock pinned `## Files` only: a cell naming a file outside it was run by the red run and matched by the AC
+// gate, but pinned by nothing, so the build could rewrite it with every lock check GREEN.
+
+const ROGUE = "tests/ac/rogue.test.js";
+
+test("6.49.3: --write REFUSES a mapping cell naming a file `## Files` does not list, naming the AC and the remedy", () => {
+  const root = world();
+  try {
+    const p = join(root, "pharn", "features", NAME, "AC-TESTS.md");
+    writeFileSync(p, acTests() + `- AC-2 | unit | \`${ROGUE}\` | y\n`);
+    writeFileSync(join(root, ROGUE), 'test("AC-2: t", () => {});\n');
+    const w = cli(root, ["--write", NAME]);
+    assert.equal(w.code, 2, w.out);
+    assert.match(w.out, /AC-2 is mapped to "tests\/ac\/rogue\.test\.js", which is not in AC-TESTS\.md `## Files`.*unlisted-file/);
+    // control: the same cell, listed, writes
+    writeFileSync(p, acTests([...FILES, ROGUE]) + `- AC-2 | unit | \`${ROGUE}\` | y\n`);
+    assert.equal(cli(root, ["--write", NAME]).code, 0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("6.49.3: --check REDs a lock whose mapping names an unpinned file (a lock a pre-6.49.3 --write accepted)", () => {
+  const root = world();
+  try {
+    assert.equal(cli(root, ["--write", NAME]).code, 0);
+    const p = join(root, "pharn", "features", NAME, "AC-TESTS.md");
+    writeFileSync(p, acTests() + `- AC-2 | unit | \`${ROGUE}\` | y\n`);
+    writeFileSync(join(root, ROGUE), 'test("AC-2: t", () => {});\n');
+    // self-consistent: the mapping digest is re-recorded, exactly what the old --write produced over this text
+    const lock = lockOf(root);
+    lock.mapping.sha256 = sha256RegularFile(p);
+    writeLockJson(root, lock);
+    const r = cli(root, ["--check", NAME]);
+    assert.equal(r.code, 1, r.out);
+    assert.deepEqual(
+      r.out.split("\n").filter((l) => l.startsWith("RED — ") && !/failed$/.test(l)),
+      [`RED — "${ROGUE}" is mapped to AC-2 in AC-TESTS.md but is not pinned in the lock's files`],
+      "the unpinned cell is the ONLY red (L52)"
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

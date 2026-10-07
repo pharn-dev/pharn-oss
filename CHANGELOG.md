@@ -23,6 +23,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.49.3] - 2026-10-07
+
+### Fixed
+
+- **The AC-tests lock now pins every test file a mapping cell names.** Before, `ac-tests-lock.mjs` pinned
+  AC-TESTS.md's `## Files` only. A mapped file missing from `## Files` was run by the red run and matched by the AC
+  gate, but nothing pinned it, so the build could rewrite it while every lock check stayed GREEN (audit P3-K). The
+  mapping check already reds that file as `unlisted-file`, so this is defence in depth. `--write` now refuses such a
+  cell. `--check` REDs a lock that already holds one, which reads as `lock-red` at the test-stage gate and as
+  `ac-tests-modified` at the AC gate. The comparison is byte for byte, the one `unlisted-file` makes.
+- **`/pharn-ship`'s close no longer runs `npx` to format `BRIEFING.md`.** Without a TTY, `npx prettier` in a project
+  that lacks prettier installs the registry's latest release and runs it (audit P2-G). The step now runs
+  `node_modules/.bin/prettier` and `node_modules/.bin/markdownlint-cli2` only when present and skips them otherwise;
+  skipping never blocks. A new hygiene test REDs on any package-runner call (`npx`, `bunx`, `pnpx`, `dlx`,
+  `npm exec`) in a product command or part. It checks wording only and proves nothing about a run. No other product
+  command had one. SECURITY.md's "no network egress" now says exactly what reaches the network.
+- **`/pharn-memory-promote` halts and asks when `git rev-parse HEAD` fails**, as its dev twin does, instead of writing
+  `commit: unknown` on its own (audit P3-O). It writes `unknown` only after the human answers that the project has
+  no commit. `check-provenance.mjs` still accepts `unknown`, so the halt is advisory prose.
+- **Test and CI coverage (no shipped byte changes):**
+  - `hook-wiring.test.cjs` now requires the `Stop` guard's wiring. Before, a missing block printed a diagnostic and
+    passed (audit P3-M).
+  - Both write guards get `NotebookEdit` `notebook_path` and `MultiEdit` (`file_path` and `edits[]`) payload tests,
+    each with an allow control.
+  - `floor.yml` runs `npm test` on Node 24 instead of restating the globs on `lts/*`. Its old `.claude/**` pattern
+    would collect sibling `.claude/worktrees/**` checkouts.
+  - The `setup-node` pin is commented `# v7.0.0`, the tag that SHA is, in both workflows (audit P3-N).
+  - A new test runs `npm test`'s own globs through the real `node --test` over a fixture and asserts nothing under
+    `.claude/worktrees/` is collected. `node --test` has no file-exclusion flag to make that explicit.
+
 ## [6.49.2] - 2026-10-07
 
 ### Fixed

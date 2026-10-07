@@ -364,6 +364,65 @@ for (const site of MARKDOWNLINT_SITES) {
   });
 }
 
+// ── No PRODUCT command runs a tool through a package runner (6.49.3, audit P2-G) ─────────────────────
+//
+// `npx <tool>` in a project without that devDependency does not fail: with no TTY (the Bash tool has none) npm logs
+// a warning and INSTALLS the registry's latest release, then runs it — unpinned code, fetched over the network, run
+// over a tracked file. The ship close prescribed exactly that for its BRIEFING.md format step until 6.49.3; it now
+// runs the project's own `node_modules/.bin` binary when present and skips otherwise, the `/pharn-memory-promote`
+// shape. This pins the VOCABULARY over every product command and part (the dev commands run in this repo, where
+// `npm ci` has installed the toolchain): `npx`/`bunx`/`pnpx` followed by an argument (except `npx --no-install`, which
+// refuses to fetch), `pnpm|yarn|bun dlx`, and `npm exec`/`npm x`. Honest scope (P0): a spelling outside that set, a
+// runner reached through a shell variable, or a tool that fetches on its own is not detected, and nothing here proves
+// a run executed or skipped a line.
+const PACKAGE_RUNNER_RE =
+  /(?:^|[\s;&|(])(?:npx|bunx|pnpx)[ \t]+(?!--no-install\b)\S|\b(?:pnpm|yarn|bun)[ \t]+dlx\b|\bnpm[ \t]+(?:exec|x)\b/;
+
+function packageRunnerLines(corpus) {
+  const out = [];
+  for (const [file, body] of corpus)
+    body.split(/\r?\n/).forEach((text, i) => {
+      if (PACKAGE_RUNNER_RE.test(text)) out.push(`${file}:${i + 1}: ${text.trim()}`);
+    });
+  return out;
+}
+
+const productCorpus = () => new Map(productCommandFiles().map((f) => [f, readFileSync(join(COMMANDS_DIR, f), "utf8")]));
+
+test("✧ P2-G: no product command or part runs a tool through a package runner (closure over the shipped corpus)", () => {
+  const corpus = productCorpus();
+  assert.ok(corpus.has("pharn-ship-close.md") && corpus.has("pharn-memory-promote.md"), "non-vacuous: the domain holds both format sites");
+  assert.deepEqual(packageRunnerLines(corpus), [], "a product command must run the project's installed binary or skip, never fetch one");
+});
+
+test("✧ P2-G: the package-runner rule DISCRIMINATES — the pre-6.49.3 ship-close lines are flagged, the fixed ones are not", () => {
+  const REJECTED = [
+    "   npx prettier --ignore-unknown --write pharn/features/<name>/BRIEFING.md", // the shipped line, 6.32.0–6.49.2
+    "   npx markdownlint-cli2 --no-globs --fix pharn/features/<name>/BRIEFING.md",
+    "npx -y prettier a.md",
+    "cd x && npx prettier a.md",
+    "pnpm dlx prettier a.md",
+    "yarn dlx markdownlint-cli2 a.md",
+    "bunx prettier a.md",
+    "npm exec -- prettier a.md",
+    "npm x prettier a.md",
+  ];
+  for (const line of REJECTED) assert.ok(PACKAGE_RUNNER_RE.test(line), `must be flagged: ${line}`);
+  const ACCEPTED = [
+    "   [ -x node_modules/.bin/prettier ] && node_modules/.bin/prettier --ignore-unknown --write pharn/features/<name>/BRIEFING.md",
+    "[ -x vendor/bin/prettier ] && NODE_ENV=production vendor/bin/prettier --ignore-unknown --check <canon-file>",
+    "npx --no-install prettier a.md",
+    "never through a package runner such as `npx`", // prose naming the tool, no argument after it
+    "npm run lint:md",
+    "npm ci",
+  ];
+  for (const line of ACCEPTED) assert.ok(!PACKAGE_RUNNER_RE.test(line), `must pass: ${line}`);
+  // L4 over the REAL corpus: re-inserting the old line into the ship close flags that file alone.
+  const corpus = productCorpus();
+  corpus.set("pharn-ship-close.md", corpus.get("pharn-ship-close.md") + `\n${REJECTED[0]}\n`);
+  assert.deepEqual([...new Set(packageRunnerLines(corpus).map((l) => l.split(":")[0]))], ["pharn-ship-close.md"]);
+});
+
 // ── The PREMISE the rule rests on, EXECUTED rather than read off `--help` (L37/L45) ──────────────────
 //
 // The rule above is only worth pinning if `--no-globs` really does scope a run under THIS repo's
