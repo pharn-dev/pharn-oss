@@ -89,6 +89,7 @@
 // and digits; the body and Handoff are never read. Paths reach git NUL-separated through a file with
 // GIT_LITERAL_PATHSPECS=1, never through a shell. Child output is echoed as DATA; no branch reads it.
 
+import "./runtime-floor.mjs";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";

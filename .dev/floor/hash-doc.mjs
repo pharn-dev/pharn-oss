@@ -43,6 +43,7 @@
 //
 // Exit: 0 on success · 1 on a missing argument or an unreadable file — never a silent empty digest.
 
+import "../../pharn/floor/runtime-floor.mjs";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 

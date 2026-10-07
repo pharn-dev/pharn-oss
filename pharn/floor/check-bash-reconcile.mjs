@@ -129,6 +129,7 @@
 //   pharn/floor/check-lessons-index.mjs takes for COLD. /verify passes --require-baseline because a
 //   build DID run, so there an absent baseline is a real refusal.
 
+import "./runtime-floor.mjs";
 import { readFileSync, writeFileSync, existsSync, statSync, mkdtempSync, mkdirSync, copyFileSync } from "node:fs";
 import { resolve, join, dirname, basename } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";

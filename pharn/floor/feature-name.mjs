@@ -84,6 +84,7 @@
 // | { ok: false, code }, cliResult(args, root) → { exitCode, stdout, stderr }. `root` has NO default (L41).
 // CLI: node pharn/floor/feature-name.mjs [--fresh]
 
+import "./runtime-floor.mjs";
 import { closeSync, constants, fstatSync, openSync, readSync, unlinkSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";

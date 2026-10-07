@@ -103,6 +103,7 @@
 //       2 — unusable input: no `<name>`, a `<name>` that is not a plain slug, or the feature dir is
 //           absent. Fail-closed: nothing is written.
 
+import "./runtime-floor.mjs";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { execFileSync } from "node:child_process";

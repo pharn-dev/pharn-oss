@@ -33,6 +33,7 @@
 // report is then rendered in a quick run — the same marker the ledger's outcome already trusts
 // (ship-outcome-core.mjs, header). NON-LLM. TRUST (P2): child output is echoed as DATA; no branch reads it.
 
+import "./runtime-floor.mjs";
 import { join } from "node:path";
 import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 import { DEFAULT_BASE as MARKERS_BASE } from "./mark-phase.mjs";

@@ -71,6 +71,7 @@
 // the raw message), and main() turns any other throw into exit 2 as well. What a refusal leaves behind: a
 // failed `--open` writes no marker, though `mkdirSync` may already have created a directory on the way.
 
+import "./runtime-floor.mjs";
 import { lstatSync, mkdirSync, writeFileSync, rmSync, realpathSync } from "node:fs";
 import { join, dirname, parse as pathParse } from "node:path";
 import { fileURLToPath } from "node:url";

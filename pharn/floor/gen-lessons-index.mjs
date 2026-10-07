@@ -30,6 +30,7 @@
 // Usage:  node pharn/floor/gen-lessons-index.mjs [targetDir]     (default: cwd)
 // Non-LLM, stdlib-only.
 
+import "./runtime-floor.mjs";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { buildIndex, OUT_PATH, CANON_PATH, STATUS_NO_CANON } from "./lessons-index-core.mjs";

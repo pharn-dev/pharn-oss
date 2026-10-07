@@ -79,6 +79,7 @@
 //     pid the OS has reused for another process reads as alive, so that call refuses (fail-closed) until the file is
 //     removed. The lock is a Bash write outside fix #7 (L19), unauthenticated `.pharn/` state like the markers.
 
+import "./runtime-floor.mjs";
 import { spawnSync } from "node:child_process";
 import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readSync, unlinkSync, writeSync } from "node:fs";
 import { dirname, join } from "node:path";

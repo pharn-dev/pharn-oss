@@ -90,6 +90,7 @@
 // Test-file paths resolve against the CURRENT directory (the project root), as the setter resolves them; `--base`
 // moves only where AC-TESTS.md and the lock live, and the mapping path is compared resolved, never as spelled.
 
+import "./runtime-floor.mjs";
 import { createHash } from "node:crypto";
 import { readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";

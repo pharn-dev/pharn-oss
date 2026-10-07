@@ -52,6 +52,7 @@
 // Usage:  node .dev/floor/check-version-badge.mjs [targetDir]     (default: cwd)
 // Non-LLM, stdlib-only, fail-closed. Apparatus: never ships to a user install, so no SKILLS_VERSION bump.
 
+import "../../pharn/floor/runtime-floor.mjs";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 

@@ -29,6 +29,7 @@
 // Usage:  node .dev/floor/check-capability-catalog.mjs [targetDir]     (default: cwd)
 // Non-LLM, stdlib-only, fail-closed.
 
+import "../../pharn/floor/runtime-floor.mjs";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {

@@ -1495,7 +1495,16 @@ test("6.21.1 — a checker that cannot LOAD is INCONCLUSIVE `checker-crashed`, e
         const keep = readFileSync(file);
         breakIt(file);
         try {
-          expectCrashDoc(spawnSync(process.execPath, [cli, ...argv], { encoding: "utf8" }), `${m} ${mode}`, copy);
+          const r = spawnSync(process.execPath, [cli, ...argv], { encoding: "utf8" });
+          if (m === "runtime-floor.mjs" && mode === "exports nothing (an older copy)") {
+            // 6.50.0: the runtime floor is imported for its side effect only, so an empty copy LOADS and the checker
+            // gives its ordinary verdict. On the supported Node this test runs on, that verdict is the correct one.
+            assert.equal(r.status, EXIT.RERUN, `${m} ${mode}: exit ${r.status}\n${r.stdout}${r.stderr}`);
+            assert.equal(JSON.parse(r.stdout).reason_code, "report-missing", `${m} ${mode}`);
+            rmSync(join(copy, ".pharn"), { recursive: true, force: true });
+          } else {
+            expectCrashDoc(r, `${m} ${mode}`, copy);
+          }
           cases++;
         } finally {
           writeFileSync(file, keep);

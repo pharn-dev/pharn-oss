@@ -23,6 +23,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.50.0] - 2026-10-07
+
+### Fixed
+
+- 2026-10-07: **Every floor CLI now refuses to run on a Node older than 24.2 instead of exiting 0 having checked
+  nothing.** The 48 CLIs under `pharn/floor/` and `.dev/floor/` that gate their entry point on `import.meta.main` were
+  silent no-ops on a Node without that property (before 22.18 / 24.2). Reproduced on Node 20.13.1 and 22.16.0:
+  `check-regress.mjs verdict` over a real regression, `check-bash-reconcile.mjs --require-baseline` with no baseline,
+  `check-test-stage.mjs`, `check-loop-fresh.mjs`, `run-gates.mjs init` and `stage-verify.mjs` all exited 0 with empty
+  output, and the installer admits Node 20. The new `pharn/floor/runtime-floor.mjs` is now the first import of each of
+  them. Below the floor (`import.meta.main` missing, or `process.versions.node` older than 24.2.0 or unparseable) it
+  writes one line to stderr and exits 2 before any other module runs. The three CLIs that take no static import by
+  design carry the feature check inline and load the module inside their `try`. The rule follows the README's documented
+  floor, 24.2.0, so Node 22.18–24.1 is refused too although it has the property: no gate has ever run there.
+  `package.json` gains `engines.node >=24.2.0`. A test pins the guard's position in every gated CLI and spawns each one
+  under a faked Node 22.16.0; `PHARN_OLD_NODE=<binary>` runs the same sweep on a real old Node. Not covered: a script
+  with no entry gate (unaffected), and a caller that ignores exit codes. The installer's own `engines` lives in a
+  separate repository.
+
 ## [6.49.2] - 2026-10-07
 
 ### Fixed

@@ -717,6 +717,9 @@ function executeCiBlock({ prAddsEntry }) {
     git(work, ["checkout", "-q", "--detach", merge], env);
     mkdirSync(join(work, ".dev", "floor"), { recursive: true });
     for (const f of ["check-changelog-entry.mjs", "changelog-core.mjs"]) copyFileSync(join(HERE, f), join(work, ".dev", "floor", f));
+    // 6.50.0: the checker's first import is the Node runtime floor, which lives in the product floor.
+    mkdirSync(join(work, "pharn", "floor"), { recursive: true });
+    copyFileSync(join(HERE, "..", "..", "pharn", "floor", "runtime-floor.mjs"), join(work, "pharn", "floor", "runtime-floor.mjs"));
 
     const script = runLines(ciStep().block).join("\n");
     const r = spawnSync("bash", ["-e", "-c", script], { cwd: work, env: { ...env, GITHUB_SHA: merge }, encoding: "utf8" });

@@ -22,6 +22,7 @@
 // Usage:  node .dev/floor/gen-capability-catalog.mjs [targetDir]     (default: cwd)
 // Non-LLM, stdlib-only.
 
+import "../../pharn/floor/runtime-floor.mjs";
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import {
