@@ -105,6 +105,11 @@ node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 # baseline entry no longer hides a Bash edit of LIMITS.md or an added pharn.spec-template.md. Cost (L68): an
 # UNCOMMITTED human edit there REDs even with no baseline; the finding names the remedy (commit first). Bound: a
 # git-ignored control path stays invisible.
+# PLAN-WIDENED (6.54.0, audit P2-I, contract §1): an amendment authorizes a NEW path only if its set_by is a stage
+# command (.claude/commands/*.md); a plan-origin amendment re-authorizes only what the anchored snapshot covered, and a
+# path only it covers is an escape with the closed reason `plan-widened-after-anchor`. Cost: a legit mid-build re-plan
+# reds verify / STOP_TERMINALs the loop; declare every `## Files` path before build Step 0. Re-run the checker to see
+# the reason — VERIFY.md / RUN-REPORT.md do not render it yet.
 # Contract: pharn/pharn-contracts/reconciliation-record.md. Data: pharn/floor/reconcile-ignore.json.
 # Exit: 0 CLEAN|NO_BASELINE · 1 ESCAPE · 2 INCONCLUSIVE / no usable scope to anchor (D6).
 node pharn/floor/reconcile-baseline.mjs --anchor [--base <dir>] [--by <label>]

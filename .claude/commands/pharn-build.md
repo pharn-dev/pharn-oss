@@ -104,7 +104,9 @@ Load the trusted prefix and obey it for the whole run:
      **not** proceed in either case — a leftover `.pharn/writes-scope.json` from an earlier command must never
      become this build's scope by accident.
    - A later in-build block (`writes-scope guard`) means **declare the path in the plan's `## Files` and
-     re-run this setter** — never bypass the hook.
+     re-run this setter** — never bypass the hook. Since 6.54.0 that clears the hook but not verify: the anchored
+     plan did not name the path, so `reconcile` reports it `plan-widened-after-anchor` and the human decides at
+     the post-review gate. Declaring every path before this step is what stays clean.
 
 ## Step 1 — Discovery + chain inputs (P6, mandatory; never assert from memory)
 

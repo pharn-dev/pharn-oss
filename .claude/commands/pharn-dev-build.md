@@ -48,7 +48,9 @@ loud `INCONCLUSIVE` rather than a quiet pass.
 read from the plan's `## Files` list (the back-tick paths above the "not touched" subsection) — which
 is also what makes "writes only the files the plan names" true. Deterministic (P0/P5): the scope is
 parsed, not chosen. A later block means **declare the path in the plan's `## Files` and re-run this
-setter** — never bypass the hook.
+setter** — never bypass the hook. Since 6.54.0 that clears the hook but not verify: the anchored plan did not
+name the path, so `reconcile` reports it `plan-widened-after-anchor` and the human decides at GATE 2. Declaring
+every path before this step is what stays clean.
 
 ## Step 1 — Verify, then refuse-or-proceed (P6, fix #4)
 

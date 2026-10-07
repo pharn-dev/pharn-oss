@@ -123,6 +123,48 @@ the origin check. And the detector's non-adversarial bound is **unchanged**: `--
 call, so anything holding Bash can append a scope authorizing anything — but the same actor could
 already rewrite this record outright. Still an accounting tool, still not a control against an attacker.
 
+**A plan-origin amendment authorizes nothing the opening snapshot did not (6.54.0, audit P2-I).**
+
+**Why.** The plan is model-authored. Bash-editing `PLAN.md`'s `## Files`, re-running
+`set-writes-scope.cjs --from-plan` and calling `--amend-scope` made any write `CLEAN`, because every amendment
+counted toward the union. That is lessons-learned **L48**'s silent direction.
+
+**The rule.**
+
+- An amendment may authorize a **new** path only when its `set_by` is a stage command file: exactly one path segment
+  under `.claude/commands/`, ending `.md`, compared after `/` normalization and leading-`./` stripping. So
+  `.claude/commands/../../x/PLAN.md` is plan-origin. Those are the `--from-frontmatter` origins, each
+  narrowed by `--target` to that stage's own artifacts; the promote canon write is one.
+- Any other origin is a plan re-derivation. It may re-authorize what the snapshot already covered.
+- A path that **only** a plan-origin amendment covers is an escape with `reason: "plan-widened-after-anchor"`, and its
+  `scope_set_by` names that amendment.
+- The test is the origin, not "an equal `set_by` and a strict superset". A plan copied to a new path, or a re-plan that
+  adds one path and drops another, is the same widening.
+
+**Where it applies.** Wherever the checker runs: verify, the loop close's re-derivation, and a later `npm run check`
+in the same worktree.
+
+**The cost, stated (GATE 1, option A).** The reconciler cannot tell an Edit-tool `PLAN.md` edit from a Bash one, so
+a **legitimate mid-build re-plan is reported too**. A routine "declare the path in `## Files` and re-run the setter"
+after a write block now:
+
+- reds `/pharn-*verify`;
+- in `/pharn-loop`, reaches `STOP_TERMINAL` (cause `reconcile`).
+
+The human decides at the stop. False RED was chosen over false GREEN, because in the loop nobody reads a warning.
+The only widening that stays clean is declaring every path **before** the build's Step 0. The finding's `problem`
+says so.
+
+**Where the reason is visible.** `check-loop.mjs`'s closed `terminal_cause` names the cause (`reconcile`), not the
+reason. `VERIFY.md` and `RUN-REPORT.md` do not render reconcile escapes. To see **why**, re-run
+`node pharn/floor/check-bash-reconcile.mjs --require-baseline`: each escape carries `reason`, and its `problem` carries
+the remedy. Rendering the reason in those reports is a named follow-up.
+
+**Bounds.**
+
+- The snapshot itself is unauthenticated state (bound 5).
+- A Bash-written scope record claiming a command `set_by` is outside the non-adversarial claim.
+
 **Why the baseline is not `git status`.** `git status` answers _changed since the base commit_, a
 different question: it misses a `Bash` write that restores HEAD bytes, and it counts every legitimate
 Write-tool edit as a change with no way to separate the two. `check-regress.mjs scope` already makes
@@ -202,7 +244,8 @@ path the guard judges. The rule, as implemented and tested:
 }
 ```
 
-`escapes[]` entries carry `{ file, denied_by, scope_set_by? }`. When non-empty the record additionally
+`escapes[]` entries carry `{ file, denied_by, scope_set_by?, reason? }`. `reason` is a closed enum whose only member
+is `plan-widened-after-anchor` (§1, 6.54.0); it is absent on every other escape. When non-empty the record additionally
 carries `findings[]` in `finding-shape.md`'s enum-gated/free-text split — `type`, `rule_id`, `severity`,
 `file` are floor-verifiable; `problem` is free text and MUST be rendered as quoted DATA downstream.
 
