@@ -3,6 +3,9 @@
   "_version_comment": "DELIBERATELY INERT — 0.0.0, and it stays there. The product version of record is SKILLS_VERSION (what an install receives, what the README badge shows, what CHANGELOG entries are keyed to). This package is `private: true` and is never published, so npm's version field addresses nothing. It previously read 1.0.0 as a 'foundation tag', which made a THIRD identity to keep in sync with SKILLS_VERSION and the README badge — and nothing stopped a well-meaning bump of it from passing every gate. Bump SKILLS_VERSION instead; see CLAUDE.md, 'SKILLS_VERSION discipline'.",
   "version": "0.0.0",
   "private": true,
+  "engines": {
+    "node": ">=24.2.0"
+  },
   "description": "Audit-grade methodology for AI-native development. Skills, commands, lenses, and rules that turn AI sessions into versioned artifacts — so your codebase stays legible past month six. Claude Code first; Codex and Cursor next.",
   "keywords": [
     "audit",

@@ -61,6 +61,8 @@ const CLOSURE = [
   // 6.43.0: `start` / `finish` write markers through mark-phase.mjs, which imports run-window-core.mjs.
   "mark-phase.mjs",
   "run-window-core.mjs",
+  // 6.50.0: every gated CLI imports the Node runtime floor first.
+  "runtime-floor.mjs",
 ];
 
 function scratch(prefix = "stage-agent-") {

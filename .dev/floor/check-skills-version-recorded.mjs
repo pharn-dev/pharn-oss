@@ -118,6 +118,7 @@
 // Usage:  node .dev/floor/check-skills-version-recorded.mjs [targetDir]     (default: cwd)
 // Non-LLM, stdlib-only, fail-closed. Apparatus: never ships to a user install, so no SKILLS_VERSION bump.
 
+import "../../pharn/floor/runtime-floor.mjs";
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parseChangelog, isCalendarDate, compareVersions, utcDay, quote } from "./changelog-core.mjs";

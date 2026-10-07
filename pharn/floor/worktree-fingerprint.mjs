@@ -92,6 +92,7 @@
 //
 // Exit (CLI): 0 digest printed · 2 unusable input — FAIL-CLOSED (P5).
 
+import "./runtime-floor.mjs";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { enumerate, hashFile } from "./reconcile-baseline.mjs";

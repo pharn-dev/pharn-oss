@@ -84,6 +84,7 @@
 //       which check-test-stage.mjs reads as UNUSABLE. With a RED kind the exit stays 1 and the crash is named on a
 //       line before the closing `RED — N … failed`.
 
+import "./runtime-floor.mjs";
 import { readFileSync, readdirSync, lstatSync, realpathSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";

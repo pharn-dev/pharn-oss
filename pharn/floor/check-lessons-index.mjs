@@ -45,6 +45,7 @@
 //
 // Non-LLM, stdlib-only, fail-closed.
 
+import "./runtime-floor.mjs";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { buildIndex, CANON_PATH, OUT_PATH, MALFORMED, STATUS_NO_CANON } from "./lessons-index-core.mjs";

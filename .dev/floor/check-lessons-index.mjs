@@ -25,6 +25,7 @@
 // Usage:  node .dev/floor/check-lessons-index.mjs [targetDir]     (default: cwd)
 // Non-LLM, stdlib-only, fail-closed.
 
+import "../../pharn/floor/runtime-floor.mjs";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { buildIndex, CANON_PATH, OUT_PATH, MALFORMED } from "./lessons-index-core.mjs";

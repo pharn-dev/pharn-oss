@@ -82,6 +82,7 @@
 // TRUST (P2): gate output is never read (run-gates.mjs reduces it to a sha256). Every value quoted into a detail goes
 // through entry-gates-core.mjs `shown` (L62). `ps` output is parsed as integer columns only.
 
+import "./runtime-floor.mjs";
 import { randomBytes, createHash } from "node:crypto";
 import { mkdirSync, openSync, closeSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";

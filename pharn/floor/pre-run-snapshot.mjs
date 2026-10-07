@@ -52,6 +52,7 @@
 // TRUST (P2): git paths are untrusted, attacker-nameable strings — hashed, compared and JSON-encoded, never evaluated;
 // git runs as an argument vector. Marker bytes are hashed, never parsed. Nothing a record holds is opened.
 
+import "./runtime-floor.mjs";
 import { writeFileSync, renameSync, unlinkSync } from "node:fs";
 import { dirname, join, sep } from "node:path";
 import { containmentWalk, gitSync, lstatSafe } from "./stage-runtime.mjs";

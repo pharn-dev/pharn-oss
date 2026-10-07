@@ -28,10 +28,10 @@ import {
   readdirSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
-import { RESULTS_ENV, resultsFileName } from "./gate-run-core.mjs";
-import { spawnGate } from "./run-gates.mjs";
+import { RESULTS_ENV, resultsFileName, LEVEL_GATES, ENTRY_BASE_TEST_ID, logBasename } from "./gate-run-core.mjs";
+import { spawnGate, CI_GATE_IDS } from "./run-gates.mjs";
 import { testRecord } from "./test-results-core.mjs";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -2236,5 +2236,174 @@ test("init --base-tests: entry only; the slot carries exactly the listed files; 
     }
   } finally {
     rmBT(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------------------------------
+// Audit batch B2 (2026-10-07): CI=1 for the test-level gates (P2-F), the init→first-gate link at finalize (P3-J),
+// and the running gate's process group on a harness kill (P3-P).
+// ---------------------------------------------------------------------------------------------------
+
+/** The runner's environment with `CI` removed — GitHub Actions sets CI=true, which the rule must (and does) keep. */
+const NO_CI_ENV = (() => {
+  const e = { ...process.env };
+  delete e.CI;
+  return e;
+})();
+
+test("audit P2-F — CI=1 reaches every test-level gate and no other; a CI the environment defines is passed unchanged", () => {
+  // The set, closed both ways (L52): the AC level gates plus the entry check's base:test slot.
+  assert.deepEqual([...CI_GATE_IDS].sort(), [...new Set([...Object.values(LEVEL_GATES).flat(), ENTRY_BASE_TEST_ID])].sort());
+  assert.deepEqual([...CI_GATE_IDS].sort(), ["base:test", "e2e", "test", "test:e2e"]);
+  // Every member a --gates token can name, and two non-members (base:test is reserved, so its membership is the line above).
+  const ids = ["test", "test:e2e", "e2e", "lint", "build"];
+  const gates = ids.map((id) => `node ciprobe.cjs::${id}`).join(",");
+  for (const env of [NO_CI_ENV, { ...NO_CI_ENV, CI: "false" }, { ...NO_CI_ENV, CI: "" }]) {
+    withRepo((dir) => {
+      writeFileSync(
+        join(dir, "ciprobe.cjs"),
+        'process.stdout.write("CI=" + (process.env.CI === undefined ? "<unset>" : process.env.CI));\n'
+      );
+      const init = cli(dir, ["init", "--stage", "build", "--feature", FEATURE, "--out", OUT, "--gates", gates], { env });
+      assert.equal(init.code, 0, init.raw);
+      for (let i = 0; i < ids.length; i++) assert.equal(cli(dir, runArgs(), { env }).code, 0);
+      ids.forEach((id, seq) => {
+        const got = readFileSync(join(dir, OUT, `${logBasename(seq, id)}.out`), "utf8");
+        const inherited = env.CI === undefined ? "<unset>" : env.CI;
+        const want = CI_GATE_IDS.includes(id) && env.CI === undefined ? "1" : inherited;
+        assert.equal(got, `CI=${want}`, `${id} under an inherited CI of ${JSON.stringify(env.CI)}`);
+      });
+    });
+  }
+});
+
+test("audit P3-J — finalize REFUSES `tree-changed-between-gates` when the first gate saw another tree than init recorded", () => {
+  withRepo(
+    (dir) => {
+      cli(dir, initArgs());
+      const statePath = join(dir, OUT, "state.json");
+      const st = JSON.parse(readFileSync(statePath, "utf8"));
+      st.fingerprint.init = "f".repeat(64); // the tree init captured aux.completeness over, which no gate saw
+      writeFileSync(statePath, JSON.stringify(st));
+      const refused = drain(dir).find((c) => c.code === 2);
+      assert.ok(refused, "finalize did not refuse a first gate that judged another tree than init");
+      assert.equal(refused.json.reason_code, "tree-changed-between-gates");
+      assert.match(refused.json.reason, /between init and test/);
+      assert.ok(!existsSync(join(dir, OUT, "stamp.json")), "a refused finalize must write no stamp");
+    },
+    { scripts: { test: "true", lint: "true" } }
+  );
+  // Control (L34): the untouched record finalizes — every other test here drains one.
+});
+
+/** A gate that runs once for ~30 s (recording its pid under the git-ignored state root), and exits 0 at once after. */
+const SLOW_GATE = `const fs = require("fs");
+fs.mkdirSync(".pharn/m", { recursive: true });
+if (fs.existsSync(".pharn/m/once")) process.exit(0);
+fs.writeFileSync(".pharn/m/once", "");
+fs.writeFileSync(".pharn/m/pid", String(process.pid));
+setTimeout(() => {}, 30000);
+`;
+
+function alive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitFor(cond, ms) {
+  const t0 = Date.now();
+  while (!cond()) {
+    if (Date.now() - t0 > ms) return false;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return true;
+}
+
+/** init a one-gate build run over SLOW_GATE and start `run --next` in the background; resolves once the gate runs. */
+async function startSlowRun(dir) {
+  writeFileSync(join(dir, "slow.cjs"), SLOW_GATE);
+  const init = cli(dir, ["init", "--stage", "build", "--feature", FEATURE, "--out", OUT, "--gates", "node slow.cjs::slow"]);
+  assert.equal(init.code, 0, init.raw);
+  const runner = spawn(process.execPath, [CLI, ...runArgs()], { cwd: dir, stdio: "ignore" });
+  const exited = new Promise((r) => runner.once("exit", (code, signal) => r({ code, signal })));
+  const pidFile = join(dir, ".pharn/m/pid");
+  const up = await waitFor(() => existsSync(pidFile) && existsSync(join(dir, OUT, "lock.child")), 20000);
+  assert.ok(up, "fixture: the slow gate never started");
+  return { runner, exited, gate: Number(readFileSync(pidFile, "utf8")) };
+}
+
+test("audit P3-P — a SIGKILLed runner's gate group is stopped by the next run's stale-lock recovery BEFORE the entry re-runs", async () => {
+  // Unreachable end to end without a crashed runner, so the crash is real (L41): SIGKILL, which no handler can catch.
+  const dir = repo();
+  let gate = null;
+  try {
+    const run = await startSlowRun(dir);
+    gate = run.gate;
+    const sidecar = JSON.parse(readFileSync(join(dir, OUT, "lock.child"), "utf8"));
+    assert.equal(sidecar.runner_pid, run.runner.pid, "the sidecar names the runner that spawned the group");
+    assert.ok(Number.isInteger(sidecar.pgid) && sidecar.pgid > 1);
+    run.runner.kill("SIGKILL");
+    await run.exited;
+    assert.ok(alive(gate), "fixture: a SIGKILL of the runner must leave its gate running — the orphan this reaps");
+    const r = cli(dir, runArgs());
+    assert.equal(r.code, 0, r.raw);
+    assert.equal(alive(gate), false, "the orphaned gate was still running when the entry was re-run (two suites overlapped)");
+    assert.equal(r.json.ran, "slow");
+    assert.equal(r.json.finalized, true);
+    assert.ok(!existsSync(join(dir, OUT, "lock.child")), "the sidecar survived the recovery");
+    assert.ok(!existsSync(join(dir, OUT, "lock")), "the lock survived the call");
+  } finally {
+    if (gate !== null && alive(gate)) process.kill(gate, "SIGKILL");
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("audit P3-P — a LIVE lock's running group is never touched: the second runner refuses lock-busy and the gate keeps running", async () => {
+  // Control (L34) for the reap: the sidecar is acted on only when the lock is STALE.
+  const dir = repo();
+  let gate = null;
+  try {
+    const run = await startSlowRun(dir);
+    gate = run.gate;
+    const r = cli(dir, runArgs());
+    assert.equal(r.code, 2);
+    assert.equal(r.json.reason_code, "lock-busy");
+    assert.ok(alive(gate), "a live runner's gate was stopped by a contending call");
+    run.runner.kill("SIGTERM");
+    await run.exited;
+  } finally {
+    if (gate !== null && alive(gate)) process.kill(gate, "SIGKILL");
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("audit P3-P — SIGTERM, SIGINT and SIGHUP are FORWARDED to the gate's group; the runner dies by the signal and records nothing", async () => {
+  for (const sig of ["SIGTERM", "SIGINT", "SIGHUP"]) {
+    const dir = repo();
+    let gate = null;
+    try {
+      const run = await startSlowRun(dir);
+      gate = run.gate;
+      run.runner.kill(sig);
+      const ex = await run.exited;
+      assert.equal(ex.signal, sig, `${sig}: the runner must die by the signal it was sent`);
+      assert.ok(await waitFor(() => !alive(gate), 5000), `${sig}: the gate kept running after its runner was signalled`);
+      assert.ok(!existsSync(join(dir, OUT, "lock")), `${sig}: the lock was left behind`);
+      assert.ok(!existsSync(join(dir, OUT, "lock.child")), `${sig}: the sidecar was left behind`);
+      const st = JSON.parse(readFileSync(join(dir, OUT, "state.json"), "utf8"));
+      assert.equal(st.runs.length, 0, `${sig}: an interrupted gate is never recorded as a result`);
+      // The entry stayed unclaimed, so the next call runs it (the gate exits 0 at once on its second run).
+      const r = cli(dir, runArgs());
+      assert.equal(r.code, 0, r.raw);
+      assert.equal(r.json.ran, "slow");
+      assert.equal(r.json.exit, 0);
+    } finally {
+      if (gate !== null && alive(gate)) process.kill(gate, "SIGKILL");
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
 });

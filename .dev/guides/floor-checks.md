@@ -97,6 +97,27 @@ node pharn/floor/reconcile-baseline.mjs --anchor [--base <dir>] [--by <label>]
 node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
 ```
 
+## `runtime-floor.mjs` — the Node runtime floor
+
+```bash
+# Refuse to run a floor CLI on a Node that would make it a silent no-op (6.50.0, audit finding P1-A). Every floor CLI
+# gated on `if (import.meta.main)` exits 0 having checked nothing on a Node without that property (before 22.18 / 24.2),
+# reproduced on 20.13.1 and 22.16.0. This module is imported for its SIDE EFFECT as the FIRST static import of every
+# gated CLI under both floors (`import "./runtime-floor.mjs";`, or `import "../../pharn/floor/runtime-floor.mjs";` from
+# .dev/floor). Below the floor — `import.meta.main` not a boolean, or `process.versions.node` older than 24.2.0 or
+# unparseable — it writes one line to stderr ending in REFUSAL_TAIL and exits 2, before any sibling module evaluates.
+# Three CLIs take no static import by design (check-instruction-files, check-loop-fresh, check-quick-scope: a module
+# that cannot load maps to their own exit 2); they carry the feature check INLINE above their gate, with REFUSAL_TAIL
+# verbatim, and `await import("./runtime-floor.mjs")` inside their `try`. A new gated CLI must carry the guard too:
+# .dev/floor/entry-point-guard.test.mjs pins the position in every gated CLI and spawns each one under a faked
+# `process.versions.node` of 22.16.0 (exit 2, empty stdout, the sentence on stderr). The fake cannot remove
+# `import.meta.main`; `PHARN_OLD_NODE=<old node binary> node --test .dev/floor/entry-point-guard.test.mjs` runs the
+# same sweep on a real old runtime (CI does not). FLOOR: the refusal on a runtime below the floor, for every CLI that
+# carries the guard. NOT covered: ungated scripts (unaffected by this defect), an API an old Node lacks (fails loudly),
+# a caller that ignores exit codes. Exit: 2 refusal; otherwise the module is silent and the CLI runs as before.
+node pharn/floor/runtime-floor.mjs   # silent exit 0 on a supported Node
+```
+
 ## `run-marker.mjs` — the run marker
 
 ```bash

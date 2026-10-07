@@ -40,6 +40,7 @@
 // arguments after `--`. Gate output is quoted as DATA by the core; the exit decides. A `--gates` spec is the human's
 // own text, run exactly as `/pharn-verify` runs it (through `/bin/sh -c`, the runner's documented form).
 
+import "./runtime-floor.mjs";
 import { closeSync, fstatSync, openSync, readFileSync, readSync, constants as fsConstants } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
