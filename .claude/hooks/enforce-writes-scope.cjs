@@ -1201,7 +1201,7 @@ function denyMessage(blockedPath, scope, record, branch = "in-repo", ctx = {}) {
     "WHY: a Capability/command may only write paths it declared in `writes:` (P0 floor, ARCHITECTURE §7 — not advisory).\n" +
     "FIX (pick one):\n" +
     stale +
-    "  • If this path SHOULD be written by the current work: add it to the active Capability's `writes:`, then re-run the scope-setter so .pharn/writes-scope.json reflects it.\n" +
+    "  • If this path SHOULD be written by the current work: add it to the active Capability's `writes:`, then re-run the scope-setter so .pharn/writes-scope.json reflects it. If the scope came from a PLAN after the build anchored, verify's reconcile still reports this path `plan-widened-after-anchor`; declaring every path before the build's Step 0 stays clean.\n" +
     '  • If running a command (/pharn-build, /pharn-dev-build, …): scope is set in the command\'s FIRST step. If "(none set)", that step did not run — restart the command from the top; do not write ad hoc.\n' +
     "  • If this is a one-off outside any Capability: it is intentionally blocked (fail-closed). Declare a scope, or do the write by hand outside the agent.\n" +
     "Scope file: .pharn/writes-scope.json (set by a command's first step; released by its last step via `--clear`, or delete it by hand; absence = fail-closed default-safe-set" +

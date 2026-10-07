@@ -1704,7 +1704,7 @@ test("★ D1 GOLDEN (permanent): in-repo, no scope, dev posture — full stderr 
       "  Active scope : (none set — fail-closed default-safe-set active)\n" +
       "WHY: a Capability/command may only write paths it declared in `writes:` (P0 floor, ARCHITECTURE §7 — not advisory).\n" +
       "FIX (pick one):\n" +
-      "  • If this path SHOULD be written by the current work: add it to the active Capability's `writes:`, then re-run the scope-setter so .pharn/writes-scope.json reflects it.\n" +
+      "  • If this path SHOULD be written by the current work: add it to the active Capability's `writes:`, then re-run the scope-setter so .pharn/writes-scope.json reflects it. If the scope came from a PLAN after the build anchored, verify's reconcile still reports this path `plan-widened-after-anchor`; declaring every path before the build's Step 0 stays clean.\n" +
       '  • If running a command (/pharn-build, /pharn-dev-build, …): scope is set in the command\'s FIRST step. If "(none set)", that step did not run — restart the command from the top; do not write ad hoc.\n' +
       "  • If this is a one-off outside any Capability: it is intentionally blocked (fail-closed). Declare a scope, or do the write by hand outside the agent.\n" +
       "Scope file: .pharn/writes-scope.json (set by a command's first step; released by its last step via `--clear`, or delete it by hand; absence = fail-closed default-safe-set).\n" +
@@ -1727,7 +1727,7 @@ test("★ D1 GOLDEN (permanent): in-repo, under a set scope, dev posture — ful
       "WHY: a Capability/command may only write paths it declared in `writes:` (P0 floor, ARCHITECTURE §7 — not advisory).\n" +
       "FIX (pick one):\n" +
       "  • If THAT COMMAND ALREADY FINISHED, this scope is STALE — a finished run's scope is narrower than the fail-closed default, so it denies ordinary work the default would allow. Release it: `node .claude/hooks/set-writes-scope.cjs --clear` (or delete .pharn/writes-scope.json).\n" +
-      "  • If this path SHOULD be written by the current work: add it to the active Capability's `writes:`, then re-run the scope-setter so .pharn/writes-scope.json reflects it.\n" +
+      "  • If this path SHOULD be written by the current work: add it to the active Capability's `writes:`, then re-run the scope-setter so .pharn/writes-scope.json reflects it. If the scope came from a PLAN after the build anchored, verify's reconcile still reports this path `plan-widened-after-anchor`; declaring every path before the build's Step 0 stays clean.\n" +
       '  • If running a command (/pharn-build, /pharn-dev-build, …): scope is set in the command\'s FIRST step. If "(none set)", that step did not run — restart the command from the top; do not write ad hoc.\n' +
       "  • If this is a one-off outside any Capability: it is intentionally blocked (fail-closed). Declare a scope, or do the write by hand outside the agent.\n" +
       "Scope file: .pharn/writes-scope.json (set by a command's first step; released by its last step via `--clear`, or delete it by hand; absence = fail-closed default-safe-set).\n" +
@@ -2382,7 +2382,7 @@ test("★ D1 GOLDEN (permanent): a record that is a plain object with no array `
       "WHY: a Capability/command may only write paths it declared in `writes:` (P0 floor, ARCHITECTURE §7 — not advisory).\n" +
       "FIX (pick one):\n" +
       "  • If THAT COMMAND ALREADY FINISHED, this scope is STALE — a finished run's scope is narrower than the fail-closed default, so it denies ordinary work the default would allow. Release it: `node .claude/hooks/set-writes-scope.cjs --clear` (or delete .pharn/writes-scope.json).\n" +
-      "  • If this path SHOULD be written by the current work: add it to the active Capability's `writes:`, then re-run the scope-setter so .pharn/writes-scope.json reflects it.\n" +
+      "  • If this path SHOULD be written by the current work: add it to the active Capability's `writes:`, then re-run the scope-setter so .pharn/writes-scope.json reflects it. If the scope came from a PLAN after the build anchored, verify's reconcile still reports this path `plan-widened-after-anchor`; declaring every path before the build's Step 0 stays clean.\n" +
       '  • If running a command (/pharn-build, /pharn-dev-build, …): scope is set in the command\'s FIRST step. If "(none set)", that step did not run — restart the command from the top; do not write ad hoc.\n' +
       "  • If this is a one-off outside any Capability: it is intentionally blocked (fail-closed). Declare a scope, or do the write by hand outside the agent.\n" +
       "Scope file: .pharn/writes-scope.json (set by a command's first step; released by its last step via `--clear`, or delete it by hand; absence = fail-closed default-safe-set).\n" +
