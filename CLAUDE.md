@@ -216,7 +216,9 @@ the rule has to be the thing that holds.
   posture: `.dev/guides/writes-scope.md`.
 - **When a write is blocked,** the fix is to **declare the path in `writes:` and re-run the
   scope-setter** — _never_ to bypass the hook (an in-repo write routed through Bash is a bypass). The five deny
-  bodies: `.dev/guides/writes-scope.md`.
+  bodies: `.dev/guides/writes-scope.md`. Since 6.54.0, for a plan-sourced build scope that clears the hook but
+  not verify: a path added to `## Files` after the anchor is a `plan-widened-after-anchor` reconcile escape, so
+  declare every path before build Step 0.
 - **Release the scope when a command finishes.** Each setter-invoking command's **last** step runs
   `node .claude/hooks/set-writes-scope.cjs --clear`, after every write it performs — **including a
   write that follows a human gate** (`/pharn-*memory-promote` writes canon _after_ its accept/deny

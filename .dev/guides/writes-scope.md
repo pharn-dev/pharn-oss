@@ -112,7 +112,9 @@ one file, **not** `.pharn/**` — the rest is disposable runtime scratch stages 
 ## When a write is blocked — the five deny bodies
 
 - **When a write is blocked,** the fix is to **declare the path in `writes:` and re-run the
-  scope-setter** — _never_ to bypass the hook. The deny message names the blocked path and the active
+  scope-setter** — _never_ to bypass the hook. For a plan-sourced build scope (6.54.0) that clears the hook but
+  not verify: a path added to `## Files` after the build's anchor is reported by reconcile as
+  `plan-widened-after-anchor` (`reconciliation-record.md` §1). The deny message names the blocked path and the active
   scope. `denyMessage()` has **five** bodies (up from three), and the split is what keeps every remedy
   reachable (L27):
   - **in-repo** — declare the path and re-run the setter; in an installed project it may ALSO list any

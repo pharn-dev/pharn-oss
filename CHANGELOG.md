@@ -23,6 +23,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.54.0] - 2026-10-07
+
+### Changed
+
+- **A plan that widens its own `## Files` after the build anchored no longer clears the reconciler.**
+  - What changed: `check-bash-reconcile.mjs` lets an amendment authorize a new path only when its `set_by` is a
+    stage command file (`.claude/commands/*.md`). A plan-origin amendment re-authorizes only what the anchored
+    snapshot already covered. A path only it covers is an escape with the new closed `reason`
+    `plan-widened-after-anchor`. Its finding names the remedy: declare every path before the build's Step 0, or have
+    the human accept the widened plan at the post-review gate.
+  - Why (audit P2-I): the plan is model-authored, and Bash-editing `## Files`, re-running the setter and
+    `--amend-scope` made any write `CLEAN`. A copied plan, or a re-plan that adds one path and drops another, is
+    caught too.
+  - Cost, in `reconciliation-record.md` §1: the reconciler cannot tell an Edit-tool plan edit from a Bash one, so
+    a routine mid-build re-plan now reds `/pharn-*verify`, and `/pharn-loop` stops `STOP_TERMINAL`. `/pharn-build`
+    and `/pharn-dev-build` say so where they tell you to re-run the setter after a write block. The loop's stop
+    names the cause (`reconcile`), not the reason; re-run the checker to see it.
+  - Unchanged: stage-command amendments, including the memory-promote canon write, still authorize as before. The
+    opening snapshot is still unauthenticated state, so this remains non-adversarial detection.
+
 ## [6.53.0] - 2026-10-07
 
 ### Added

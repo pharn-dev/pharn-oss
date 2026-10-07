@@ -1,0 +1,35 @@
+{
+  "base": "2a2e5a10272e419dd7a1f745c185a83714631469",
+  "inside": [
+    ".claude/commands/pharn-build.md",
+    ".claude/commands/pharn-dev-build.md",
+    ".dev/guides/floor-checks.md",
+    ".dev/guides/writes-scope.md",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/check-bash-reconcile.mjs",
+    "pharn/floor/check-bash-reconcile.test.mjs",
+    "pharn/pharn-contracts/reconciliation-record.md",
+    ".dev/features/reconcile-scope-widening/GRILL.md",
+    ".dev/features/reconcile-scope-widening/PLAN.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

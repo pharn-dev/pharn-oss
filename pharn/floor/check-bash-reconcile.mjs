@@ -241,6 +241,26 @@ export function isAlwaysReconciled(rel, data) {
 export const HUMAN_ONLY_REMEDY =
   "if this is a human's own edit: commit it before running the gates, or land it outside the build's anchor->verify window (lessons-learned L68) — never re-anchor or edit the baseline to clear it";
 
+// The closed `reason` enum an escape may carry (6.54.0). Absent on every other escape.
+export const WIDENED_REASON = "plan-widened-after-anchor";
+export const ESCAPE_REASONS = Object.freeze([WIDENED_REASON]);
+export const WIDENED_REMEDY =
+  "this path was added to the plan's `## Files` after the build anchored, and the anchored plan does not authorize it: declare every path in `## Files` BEFORE the build's Step 0 (the only widening that stays clean), or, if the human approves the widened plan, accept this at the post-review gate — never re-anchor or edit the baseline to clear it";
+
+// `set_by` as git and the setter would spell it: `/` separators, no leading `./`. Untrusted data, compared only.
+export function normalizeSetBy(setBy) {
+  return String(setBy ?? "")
+    .replace(/\\/g, "/")
+    .replace(/^(?:\.\/)+/, "");
+}
+
+// A stage command file: EXACTLY one path segment under `.claude/commands/`, ending `.md` (GATE-2 A1). A prefix test
+// admitted `.claude/commands/../../x/PLAN.md`, a plan dressed as a command; `..` and `.` cannot be a segment here.
+export function isCommandOrigin(setBy) {
+  const m = /^\.claude\/commands\/([^/]+\.md)$/.exec(normalizeSetBy(setBy));
+  return m !== null && m[1] !== ".." && !m[1].startsWith("..");
+}
+
 // --- EXECUTE a hook against one candidate path and read its exit code. -----------------------------
 // 0 = it would have allowed the write; 2 = it would have denied it. Anything else is unusable input and
 // the caller treats it as INCONCLUSIVE (fail-closed) rather than guessing a direction.
@@ -680,7 +700,24 @@ function main(argv) {
   // Residual, stated: a RE-POINTED link that no recorded scope names still gets the uniform "would have DENIED"
   // sentence below. The guards cannot see a re-point at all (a Write writes through the link), so for a link
   // re-pointed to an in-scope target that sentence describes this scope match, not a decision a guard made.
-  const authorizingScope = (rel) => recordedScopes.find((s) => matchesAny(rel, s.scope)) ?? null;
+  //
+  // A PLAN-ORIGIN AMENDMENT AUTHORIZES NOTHING THE SNAPSHOT DID NOT (6.54.0, audit P2-I). The plan is model-authored,
+  // so Bash-editing PLAN.md's `## Files`, re-running the setter and `--amend-scope` used to make any write CLEAN:
+  // the union above took every recorded scope at face value (lessons-learned L48's silent direction). An amendment is
+  // now trusted to authorize NEW paths only when its `set_by` is a stage command file (`.claude/commands/*.md` — the
+  // only `--from-frontmatter` origins, each narrowed to that stage's own artifacts by `--target`; the promote canon
+  // write, L42's F3, is one). Any other origin is a plan re-derivation: it may re-authorize what the opening snapshot
+  // already covered, and a path ONLY it covers is an escape with the closed reason `plan-widened-after-anchor`. The
+  // test is the origin, not "equal set_by + strict superset": a plan copied to a new path, or a re-plan that adds one
+  // path and drops another, is the same widening. COST, accepted at GATE 1 (option A): a LEGITIMATE mid-build re-plan
+  // is reported too — the reconciler cannot tell an Edit-tool PLAN edit from a Bash one — so it reds verify and is a
+  // STOP_TERMINAL in /pharn-loop; the human decides. BOUND: the opening snapshot is itself unauthenticated (bound 5),
+  // and a Bash-written scope record claiming a command `set_by` is outside the non-adversarial claim.
+  const commandOrigin = (s) => isCommandOrigin(s.set_by);
+  const authorizing = [scopeSnapshot, ...amendments.filter(commandOrigin)].filter((s) => s && Array.isArray(s.scope));
+  const planAmendments = amendments.filter((s) => s && Array.isArray(s.scope) && !commandOrigin(s));
+  const authorizingScope = (rel) => authorizing.find((s) => matchesAny(rel, s.scope)) ?? null;
+  const widenedBy = (rel) => planAmendments.find((s) => matchesAny(rel, s.scope)) ?? null;
 
   let sandbox = null;
   let escapes = [];
@@ -713,11 +750,12 @@ function main(argv) {
     // tell a build-scope write from an amendment's without opening the baseline.
     if (recordedScopes.length > 0) {
       if (auth === null) {
-        escapes.push({
-          file: rel,
-          denied_by: "writes-scope (snapshot)",
-          scope_set_by: (scopeSnapshot ?? recordedScopes[0]).set_by,
-        });
+        const widened = widenedBy(rel);
+        escapes.push(
+          widened
+            ? { file: rel, denied_by: "writes-scope (snapshot)", reason: WIDENED_REASON, scope_set_by: widened.set_by }
+            : { file: rel, denied_by: "writes-scope (snapshot)", scope_set_by: (scopeSnapshot ?? recordedScopes[0]).set_by }
+        );
       }
       continue;
     }
@@ -772,7 +810,8 @@ function main(argv) {
       file: e.file,
       problem:
         `'${e.file}' changed since the reconciliation anchor, and the write guards would have DENIED a write to it (${e.denied_by}) — a write reached it outside the guarded tool surface` +
-        (isHumanOnly(e.file, data) ? `; ${HUMAN_ONLY_REMEDY}` : ""),
+        (isHumanOnly(e.file, data) ? `; ${HUMAN_ONLY_REMEDY}` : "") +
+        (e.reason === WIDENED_REASON ? ` [${WIDENED_REASON}]; ${WIDENED_REMEDY}` : ""),
     }));
   }
   emit(base, escapes.length ? 1 : 0);

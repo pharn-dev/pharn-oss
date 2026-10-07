@@ -20,6 +20,11 @@ import {
   loadIgnoreData,
   isAlwaysReconciled,
   isHumanOnly,
+  WIDENED_REASON,
+  WIDENED_REMEDY,
+  ESCAPE_REASONS,
+  normalizeSetBy,
+  isCommandOrigin,
   HUMAN_ONLY_REMEDY,
   isPipelineArtifact,
   activeFeatureSlug,
@@ -74,6 +79,10 @@ function setScope(dir, scope) {
     join(dir, ".pharn/writes-scope.json"),
     JSON.stringify({ scope, set_by: "pharn/features/t/PLAN.md", set_at: new Date().toISOString() }, null, 2) + "\n"
   );
+}
+function setScopeBy(dir, scope, setBy) {
+  mkdirSync(join(dir, ".pharn"), { recursive: true });
+  writeFileSync(join(dir, ".pharn/writes-scope.json"), JSON.stringify({ scope, set_by: setBy, set_at: new Date().toISOString() }) + "\n");
 }
 const anchor = (dir, extra = []) =>
   spawnSync(process.execPath, [ANCHOR, "--anchor", "--base", dir, "--by", "test", ...extra], { encoding: "utf8" });
@@ -741,11 +750,13 @@ test("★ an amendment whose ORIGIN is not a promote command does NOT clear a ca
   assert.ok(r.json.escapes.some((e) => e.file === CANON && e.denied_by === "protect-trusted-paths.cjs"));
 });
 
-test("★ an amendment authorizes an ORDINARY path the opening scope did not cover", () => {
+test("★ a COMMAND-origin amendment authorizes an ORDINARY path the opening scope did not cover", () => {
+  // 6.54.0: only a stage command's amendment may authorize a NEW path; a plan-origin one may not (see the
+  // plan-widened-after-anchor tests below). Before 6.54.0 this test used a PLAN.md set_by and passed for either.
   const dir = makeRepo();
   setScope(dir, ["pharn/features/keep.md"]);
   assert.equal(anchor(dir).status, 0);
-  setScope(dir, ["later.md"]);
+  setScopeBy(dir, ["later.md"], ".claude/commands/pharn-ship-close.md");
   assert.equal(amend(dir).status, 0);
   writeFileSync(join(dir, "later.md"), "written under the amendment\n");
   assert.equal(check(dir).json?.verdict, "CLEAN");
@@ -1410,4 +1421,135 @@ test("✧ PARITY: human_only and its canon prefixes equal the hook's own sets; n
   for (const p of data.neverExempt) assert.ok(isAlwaysReconciled(p, data), `never_exempt ${p} is not always reconciled`);
   assert.ok(isHumanOnly(".dev/memory-bank/feature-catalog.md", data), "the whole canon subtree, not four files");
   assert.ok(!isHumanOnly("pharn/floor/x.mjs", data));
+});
+
+// -------------------------------------- a plan widened after the anchor is not authorized (6.54.0, audit P2-I)
+//
+// The audit's fixture, driven through the REAL setter (--from-plan) and the real --amend-scope: the plan is
+// model-authored, so editing its `## Files` and re-deriving used to make any write CLEAN.
+
+const SETTER = (dir) => join(dir, ".claude/hooks/set-writes-scope.cjs");
+function writePlan(dir, rel, files) {
+  mkdirSync(dirname(join(dir, rel)), { recursive: true });
+  writeFileSync(join(dir, rel), `# PLAN — w\n\n## Files\n\n${files.map((f) => `- \`${f}\` — x`).join("\n")}\n`);
+}
+function setFromPlan(dir, rel) {
+  const r = spawnSync(process.execPath, [SETTER(dir), "--from-plan", rel], { cwd: dir, encoding: "utf8" });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+}
+function widenFixture() {
+  const dir = makeRepo();
+  writePlan(dir, "pharn/features/w/PLAN.md", ["pharn/features/keep.md"]);
+  setFromPlan(dir, "pharn/features/w/PLAN.md");
+  assert.equal(anchor(dir).status, 0);
+  return dir;
+}
+
+test("★ P2-I: Bash-widening PLAN.md + setter + --amend-scope no longer clears the write — ESCAPE, reason plan-widened-after-anchor", () => {
+  const dir = widenFixture();
+  writePlan(dir, "pharn/features/w/PLAN.md", ["pharn/features/keep.md", "src/other.js"]); // the Bash edit
+  setFromPlan(dir, "pharn/features/w/PLAN.md");
+  assert.equal(amend(dir).status, 0);
+  mkdirSync(join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, "src/other.js"), "export {};\n");
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(
+    r.json.escapes.map((e) => `${e.file}:${e.reason}:${e.scope_set_by}`),
+    ["src/other.js:plan-widened-after-anchor:pharn/features/w/PLAN.md"]
+  );
+  assert.ok(r.json.findings[0].problem.includes(WIDENED_REMEDY), "the remedy is carried");
+  assert.match(r.json.findings[0].problem, /BEFORE the build's Step 0/, "GATE-1 addition: the cheap path is named");
+});
+
+test("★ P2-I variant: the plan COPIED to a new path before re-deriving is the same widening — ESCAPE", () => {
+  const dir = widenFixture();
+  writePlan(dir, "pharn/features/w2/PLAN.md", ["pharn/features/keep.md", "src/other.js"]);
+  setFromPlan(dir, "pharn/features/w2/PLAN.md");
+  assert.equal(amend(dir).status, 0);
+  mkdirSync(join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, "src/other.js"), "export {};\n");
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  const other = r.json.escapes.find((e) => e.file === "src/other.js");
+  assert.equal(other?.reason, WIDENED_REASON, JSON.stringify(r.json.escapes));
+  assert.equal(other.scope_set_by, "pharn/features/w2/PLAN.md");
+});
+
+test("★ P2-I variant: ADD one path, DROP one (not a strict superset) — the added path is an ESCAPE", () => {
+  const dir = widenFixture();
+  writePlan(dir, "pharn/features/w/PLAN.md", ["src/other.js"]);
+  setFromPlan(dir, "./pharn/features/w/PLAN.md"); // a `./` spelling of the same plan normalizes equal
+  assert.equal(amend(dir).status, 0);
+  mkdirSync(join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, "src/other.js"), "export {};\n");
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(
+    r.json.escapes.map((e) => `${e.file}:${e.reason}`),
+    ["src/other.js:plan-widened-after-anchor"]
+  );
+});
+
+test("★ NON-VACUITY: a plan re-derivation EQUAL to the snapshot, and a path the snapshot covers, stay CLEAN", () => {
+  const dir = widenFixture();
+  setFromPlan(dir, "pharn/features/w/PLAN.md"); // the loop CONTINUE / loop-close re-derivation, unwidened
+  assert.equal(amend(dir).status, 0);
+  writeFileSync(join(dir, "pharn/features/keep.md"), "in the anchored plan\n");
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.json.verdict, "CLEAN");
+});
+
+test("✧ the widened-plan remedy is carried ONLY by plan-widened-after-anchor escapes (L27: reachable per branch)", () => {
+  const dir = widenFixture();
+  writeFileSync(join(dir, "SNEAKY.txt"), "an ordinary escape, no widening\n");
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 1);
+  assert.equal(r.json.escapes[0].reason, undefined, "no reason on an ordinary escape");
+  assert.ok(!r.json.findings[0].problem.includes(WIDENED_REMEDY));
+  assert.deepEqual([...ESCAPE_REASONS], ["plan-widened-after-anchor"], "the reason enum is closed");
+  assert.equal(normalizeSetBy(".\\pharn\\features\\w\\PLAN.md"), "pharn/features/w/PLAN.md");
+});
+
+test("★ GATE-2 A1: a set_by DRESSED as a command (`.claude/commands/../../x/PLAN.md`) is plan-origin — its new path is widened", () => {
+  const dir = widenFixture();
+  setScopeBy(dir, ["src/other.js"], ".claude/commands/../../pharn/features/w/PLAN.md");
+  assert.equal(amend(dir).status, 0);
+  mkdirSync(join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, "src/other.js"), "export {};\n");
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.equal(r.json.escapes.find((e) => e.file === "src/other.js")?.reason, WIDENED_REASON);
+  assert.equal(isCommandOrigin(".claude/commands/pharn-ship-close.md"), true);
+  assert.equal(isCommandOrigin("./.claude/commands/pharn-ship-close.md"), true, "normalized spelling");
+  for (const bad of [".claude/commands/../../x/PLAN.md", ".claude/commands/sub/x.md", ".claude/commands/x.txt", ".claude/commandsx/y.md"]) {
+    assert.equal(isCommandOrigin(bad), false, bad);
+  }
+});
+
+test("★ GATE-2 A3: a LEGACY baseline with a null snapshot + a plan-origin amendment reports every new path widened", () => {
+  const dir = makeRepo();
+  setScope(dir, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  const rec = JSON.parse(readFileSync(join(dir, RECORD_PATH), "utf8"));
+  rec.scope_snapshot = null; // the pre-6.24.0 shape
+  writeFileSync(join(dir, RECORD_PATH), JSON.stringify(rec, null, 2) + "\n");
+  setScopeBy(dir, ["a.txt", "b.txt"], "pharn/features/w/PLAN.md");
+  assert.equal(amend(dir).status, 0);
+  writeFileSync(join(dir, "a.txt"), "a\n");
+  writeFileSync(join(dir, "b.txt"), "b\n");
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(r.json.escapes.map((e) => `${e.file}:${e.reason}`).sort(), [
+    "a.txt:plan-widened-after-anchor",
+    "b.txt:plan-widened-after-anchor",
+  ]);
+});
+
+test("✧ both build commands name the verify consequence of widening `## Files` mid-build", () => {
+  for (const cmd of [".claude/commands/pharn-build.md", ".claude/commands/pharn-dev-build.md"]) {
+    const text = readFileSync(join(REPO, cmd), "utf8");
+    assert.match(text, /plan-widened-after-anchor/, `${cmd} must name the reason a mid-build widening produces`);
+  }
 });
