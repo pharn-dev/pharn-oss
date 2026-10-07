@@ -13,10 +13,12 @@
 // A fresh BASE execution is `git worktree add` at the base commit → the INSTALL_RULE install → `run-gates.mjs init
 // --side base`, which copies the HEAD record's spec VERBATIM (gate-run-core.mjs `baseSpecFrom`, the one owner) → one
 // `run --next` per entry under `--timeout-ms` → a stamp in the gate-run-record SCHEMA, fingerprinted with the
-// worktree-fingerprint ALGO. Its gates also read whatever lies OUTSIDE the base worktree: the worktree is nested at
-// `.pharn/pharn-regress/base` inside the HEAD tree, so a tool that searches parent directories (node's module
-// resolution, npm's `.bin` PATH, tsc / prettier / eslint config lookup) reaches the HEAD tree's root. The requirement
-// binds every input PHARN can enumerate:
+// worktree-fingerprint ALGO. Its gates also read whatever lies OUTSIDE the base worktree: until 6.49.x the worktree was
+// nested at `.pharn/pharn-regress/base` inside the HEAD tree, so a tool that searches parent directories (node's module
+// resolution, npm's `.bin` PATH, tsc / prettier / eslint config lookup) reached the HEAD tree's root. Since
+// regress-base-integrity it sits in the temp root, outside the project (base-worktree.mjs), so that search no longer
+// reaches it; `head_root` below is KEPT anyway — binding more than is now reachable can only cause a miss, never a false
+// HIT. The requirement binds every input PHARN can enumerate:
 //   • the feature, the base SHA, the stamp schema and the fingerprint algorithm;
 //   • the copied spec — source, source_raw, style_skipped, required, and each entry's ordered id/shell/argv/files, which
 //     is where the outside tests, the outside eval pairs, the style skip, explicit-vs-discovered gates and the e2e
@@ -60,7 +62,7 @@
 // (L62): every function returns for any parsed-JSON input, and no value is interpolated into a string.
 
 import { createHash } from "node:crypto";
-import { validateStamp, baseSpecFrom, logBasename, resultsFileName, FEATURE_SLUG_RE } from "./gate-run-core.mjs";
+import { validateStamp, baseSpecFrom, logBasename, resultsFileName, FEATURE_SLUG_RE, timedOutRunIds } from "./gate-run-core.mjs";
 import { BASE_REUSE_MISSES, DELIVERY_COMMANDS } from "./stage-regress-core.mjs";
 
 export const REQUIREMENT_SCHEMA = "pharn-regress-base-requirement/1";
@@ -272,7 +274,7 @@ function unreliable(stamp, record) {
   if (record.install.kind !== "cmd") return true;
   const ir = record.install_result;
   if (ir.ran !== true || ir.exit !== 0 || ir.timedOut === true) return true;
-  return stamp.runs.some((r) => r.timed_out === true);
+  return timedOutRunIds(stamp).length > 0; // the one owner of the timed-out predicate (gate-run-core.mjs)
 }
 
 function canon(v) {

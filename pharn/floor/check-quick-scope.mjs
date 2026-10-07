@@ -29,7 +29,8 @@
 //
 // Usage: node pharn/floor/check-quick-scope.mjs --feature <name> --base <40-hex>   (from the repo root)
 // Exit: 0 clean · 1 escaped (a blocking P0 fix #7 finding per path) · 2 inconclusive, `reason_code` one of
-//       usage-error | base-not-commit | path-containment | plan-unreadable | plan-files-unparseable | git-failed | crashed.
+//       usage-error | base-not-commit | path-containment | plan-unreadable | plan-files-unparseable | git-failed |
+//       total-glob-declared (regress-base-integrity: a `## Files` entry that declares everything) | crashed.
 
 /** quick-scope-core.mjs EXIT, restated because that module cannot be imported here. Pinned by a test. */
 const EXIT = Object.freeze({ clean: 0, escaped: 1, inconclusive: 2 });

@@ -60,10 +60,11 @@ written for a `--quick` invocation too; only what is listed here changes.**
 spec_kind: quick`. The remedy is to re-run `/pharn-ship <description>` **without** `--quick`: the SPEC
    resumes and the full flow runs. A STOP here still runs Steps 3 and 3a (with the quick deltas below).
 
-   **Then the run marker and the pre-run snapshot, unchanged.** On a `quick` token, Step 2's run-marker `--open` line
-   and its snapshot line run next, exactly as written there, each with its own rule: a non-zero exit is a STOP before
-   `/pharn-plan`. The order in a quick run is therefore: the backstop exits `0`, this kind read prints `quick`, the
-   marker opens, the snapshot is recorded, the entry gates start (Step 2's line and rule), then `/pharn-plan` starts. A refused `--quick` never opens a marker. Every quick exit still reaches
+   **Then the base capture, the run marker and the pre-run snapshot, unchanged.** On a `quick` token, Step 2's base
+   capture (`git rev-parse --verify HEAD`), its run-marker `--open` line and its snapshot line run next, exactly as
+   written there, each with its own rule: a non-zero exit is a STOP before `/pharn-plan`. The order in a quick run is
+   therefore: the backstop exits `0`, this kind read prints `quick`, the base capture prints `<base sha>` (item 7 needs
+   it), the marker opens, the snapshot is recorded, the entry gates start (Step 2's line and rule), then `/pharn-plan` starts. A refused `--quick` never opens a marker. Every quick exit still reaches
    Step 3a, whose closeout closes the marker right after the run-stop marker, idempotently (item 12).
 
 4. **The grill step.** Run this pinned QUICK start line in place of Step 2's grill start line (6.27.0):
@@ -90,13 +91,11 @@ spec_kind: quick`. The remedy is to re-run `/pharn-ship <description>` **without
    `regression-report.json` read. (Step 2's regress item, above, is the full-mode procedure this one item
    omits — every other Step-2 item runs as written.) Its first check is **kept**: item 7.
 
-7. **The scope check: KEPT — run it before `/pharn-verify`.** First resolve the base by the branches of
-   `/pharn-regress`'s `BASE_RULE` (`stage-regress-core.mjs` — cited, not restated, P4) that apply here — `/pharn-ship`
-   has no `--base` flag, so a base is never read out of the description: `HEAD` when the working tree is dirty (an
-   uncommitted build), else `git merge-base HEAD origin/main`, else ask the human for the base commit's 40-hex SHA.
-   `git rev-parse HEAD` and `git merge-base HEAD origin/main` each print one. Then run it, substituting `<name>` and
-   that SHA as `<base sha>` — the only two values the line takes (Step 3a captures its own `<base sha>` later,
-   separately):
+7. **The scope check: KEPT — run it before `/pharn-verify`.** Its base is the `<base sha>` Step 2 item 1 captured right
+   after the GATE-1 backstop — never re-derived here: a dirty-tree or merge-base rule would put a committed build inside
+   its own base, so its changes would not be listed at all. If you no longer hold it, **STOP**, as item 1 says. Run the
+   line, substituting `<name>` and that SHA as `<base sha>` — the only two values it takes (Step 3a's own `base_sha` for
+   the ledger is a different value, captured at the close):
 
    ```bash
    node pharn/floor/check-quick-scope.mjs --feature '<name>' --base '<base sha>'

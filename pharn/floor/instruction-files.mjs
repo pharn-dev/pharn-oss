@@ -246,7 +246,8 @@ export function resolveBase(root, { ref = null, rule = false, prefix = "" }) {
   const mb = gitMaybe(["merge-base", "HEAD", "origin/main"], root);
   const hasMergeBase = mb.ok && SHA_RE.test(mb.out.trim());
   const source = resolveBaseSource({ workingTreeDirty, hasMergeBase });
-  if (source.kind === "head") {
+  if (source.kind === "dirty-head") {
+    // BASE_SOURCES' name for the dirty-tree branch (regress-base-integrity; it was "head" before).
     const h = gitMaybe(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"], root);
     if (!h.ok || !SHA_RE.test(h.out.trim()))
       throw new Refusal("base-unresolved", "the working tree is dirty but HEAD names no commit (an unborn branch?) — pass --base");

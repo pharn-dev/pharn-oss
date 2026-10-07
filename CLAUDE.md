@@ -176,7 +176,9 @@ setter — order load-bearing, because the anchor snapshots the live scope **int
 verify time the single mutable `.pharn/writes-scope.json` holds a LATER stage's scope (**L38**) — and
 `/pharn-*verify` runs `pharn/floor/check-bash-reconcile.mjs`, which re-hashes the tree and asks the
 **live guards** whether each changed path would have been denied. Denied ⇒ the `reconcile` gate fails ⇒
-verify `FAIL`. `check-verify.mjs` needed no change: it is generic over gate keys.
+verify `FAIL` — unless (6.52.0) the path's bytes are exactly the upstream bytes HEAD merged in during the
+window, which lists it under `merged` instead (a merge of `origin/main` is not a write; a commit the build
+makes itself still REDs — contract §2a). `check-verify.mjs` needed no change: it is generic over gate keys.
 **DETECTED, never PREVENTED — and NON-ADVERSARIAL detection at that.** The baseline is unauthenticated
 state under `.pharn/`, which Bash reaches, so a writer who edits a denied file **and** rewrites that
 file's baseline entry gets a silent `CLEAN`. This is an **accounting tool against tooling that escapes

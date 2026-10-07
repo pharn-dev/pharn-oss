@@ -48,7 +48,17 @@ test("statusForExitCode: round-trips every EXIT_CODE member; anything else is nu
 test("REGISTRY: the regress vocabulary matches the plan's closed table exactly", () => {
   assert.deepEqual(
     new Set(REGISTRY.regress.refused),
-    new Set(["missing-artifact", "chain-red", "plan-files-unparseable", "scope-escaped", "head-install-drift"])
+    new Set([
+      "missing-artifact",
+      "chain-red",
+      "plan-files-unparseable",
+      "scope-escaped",
+      "head-install-drift",
+      // regress-base-integrity
+      "plan-files-total-glob",
+      "no-change-under-test",
+      "base-install-unreliable",
+    ])
   );
   assert.deepEqual(
     new Set(Object.keys(REGISTRY.regress.question)),
@@ -66,6 +76,7 @@ test("REGISTRY: the regress vocabulary matches the plan's closed table exactly",
       "child-refused",
       "no-progress",
       "progress-malformed",
+      "base-worktree-unplaceable", // regress-base-integrity
     ])
   );
   assert.deepEqual(STAGES, ["regress", "verify"]);
@@ -146,7 +157,7 @@ test("isReasonCode / allReasonCodes: membership matches the registry, and non-me
   assert.equal(isReasonCode("nonexistent-stage", "refused", "chain-red"), false);
 
   const all = allReasonCodes("regress");
-  assert.equal(all.length, 5 + 4 + 9, "refused + question + unusable counts");
+  assert.equal(all.length, 8 + 4 + 10, "refused + question + unusable counts");
   assert.deepEqual(new Set(all).size, all.length, "no duplicate reason_code across the three sub-vocabularies");
   assert.deepEqual(allReasonCodes("nonexistent-stage"), []);
 });

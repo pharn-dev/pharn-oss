@@ -85,6 +85,23 @@ test("★ the scope is SNAPSHOTTED into the record, not left to be read live (L3
   assert.deepEqual(built.record.scope_snapshot.scope, ["a.md", "b.md"]);
 });
 
+test("★ 6.52.0: the anchor records anchored_head = the commit HEAD names — and null on an unborn HEAD, never a guess", () => {
+  const dir = makeRepo();
+  seedScope(dir, ["tracked.md"]);
+  const r = spawnSync(process.execPath, [ANCHOR, "--anchor", "--base", dir], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  const rec = JSON.parse(readFileSync(join(dir, RECORD_PATH), "utf8"));
+  const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
+  assert.equal(rec.anchored_head, head, "the object id, never a ref name (L32)");
+  assert.equal(rec.version, RECORD_VERSION, "additive field: the record version does not move");
+
+  const unborn = mkdtempSync(join(tmpdir(), "pharn-anchor-unborn-"));
+  made.push(unborn);
+  execFileSync("git", ["init", "-q"], { cwd: unborn });
+  writeFileSync(join(unborn, "a.md"), "a\n");
+  assert.equal(buildRecord(unborn, "t").record.anchored_head, null, "no commit yet => null");
+});
+
 test("an absent or unusable scope file snapshots as null — never as an empty allow-list", () => {
   const dir = makeRepo();
   assert.equal(snapshotScope(dir), null, "absent => null");

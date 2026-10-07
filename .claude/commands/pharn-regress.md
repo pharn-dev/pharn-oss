@@ -59,7 +59,9 @@ Load the trusted prefix and obey it:
 - **Guaranteed:** any regression OUTSIDE the feature **that the project's deterministic suite covers** is
   caught — deterministically — built only from a **current Approved, un-drifted** plan. Bound: a path changed before
   an open `/pharn-loop` or `/pharn-ship` run began counts as inside, so a test file among them is not compared here
-  (the report's `pre_run_snapshot`; `pharn/floor/pre-run-snapshot-core.mjs`).
+  (the report's `pre_run_snapshot`; `pharn/floor/pre-run-snapshot-core.mjs`). Bound: "outside the feature" is measured
+  against the base the report names (`base_source`) — a build committed into that base is invisible to it; a run with
+  nothing else changed is refused, a partially committed one is not (pass `--base`).
 - **The residual, named not hidden:** `/pharn-regress` catches **exactly what the project's suite
   catches — nothing more.** A regression no deterministic check covers is **invisible**. Never read a
   `done` exit as "nothing broke."
@@ -110,6 +112,13 @@ are pinned (Bash-tool timeout 600000; `N < B < 600000`, GATE 1 Q2):
 node pharn/floor/stage-regress.mjs --feature <name> --timeout-ms 540000 --budget-ms 570000
 ```
 
+**The base.** With no `--base`, the script picks one by its rule (`BASE_RULE`, `pharn/floor/stage-regress-core.mjs`):
+`HEAD` when the working tree is dirty, else the merge-base with `origin/main`, else it asks. Either implicit branch puts
+a build that is already **committed** inside its own base, so its breakage would compare against itself. The report
+records which rule chose the base (`base_source`), and a comparison with nothing but this feature's own artifacts
+changed is refused (`no-change-under-test`). So when the build, or any part of it, is committed, pass `--base <the
+commit the build started from>` — `/pharn-ship` and `/pharn-loop` pass the commit they captured before the build.
+
 Read the printed `pharn-stage-exit/1` JSON object and branch on the **exit code only**:
 
 - **`0` done** — report the object's `verdict` and point at `pharn/features/<name>/REGRESSION.md`. Both
@@ -141,6 +150,12 @@ Read the printed `pharn-stage-exit/1` JSON object and branch on the **exit code 
     `/pharn-plan` if the PLAN itself is stale against the current SPEC;
   - `plan-files-unparseable` — fix `PLAN.md`'s `## Files` heading (or its list syntax) so it parses;
   - `head-install-drift` — `node_modules` does not match the lockfile: run `npm ci`, then re-run;
+  - `no-change-under-test` — nothing but this feature's pipeline artifacts (or a trusted doc) changed since the base,
+    so base and HEAD would run the same code: re-run with `--base <the commit the build started from>`;
+  - `plan-files-total-glob` — a `## Files` entry declares everything (`**`, `*`, `**/*`, `.`): replace it with the
+    files, or a narrow glob, via `/pharn-plan`;
+  - `base-install-unreliable` — the base install was skipped or failed and a gate is red at base and head, so that
+    gate could not be measured: fix the install (or pass `--install "<cmd>"`) and re-run;
   - `scope-escaped` — an undeclared path changed: either declare it in `PLAN.md`'s `## Files` via
     `/pharn-plan` (a legitimate widening) or revert the undeclared change. Re-running does not fix it; it only replaces
     the refusal with a report, and the escaped change stays in the tree. **The blind spot this remedy
@@ -277,12 +292,17 @@ classifies nothing in Step 1. Every terminal fallback is a structured `question`
 ## Named limits (honest, not silent gaps — P7)
 
 - **Whole-repo gates are repo-granular.** A `typecheck`/`build` flip is reported at repo granularity.
-- **A failed base-commit install is not silent, but its ONLY signal is the warning line
-  `render-regression.mjs` renders ABOVE `REGRESSION.md`'s verdict line** (A6, GATE 2: narrowed from "first
-  line" — the title and base lines still precede it) — no machine consumer reads it (the named,
-  deliberately unclosed `regress-failed-install-false-green` bound: a base gate MAY then read `pre_existing`
-  as a result, which can read as a false green on exactly the gates the install broke; the render never
-  claims EVERY base gate did).
+- **A skipped or failed base-commit install no longer reads as no regressions where it could hide one.** The base
+  checkout sits outside the project, so it never borrows HEAD's `node_modules`; when the install was skipped over
+  something to install, or failed, and a gate is red at both base and head, the stage refuses
+  `base-install-unreliable` — closing the former `regress-failed-install-false-green` bound for an install that exits
+  non-zero or times out. It stays open for an `--install` command that exits 0 without preparing anything, and for
+  dependencies the base neither locks nor declares. A failed install with no such gate still renders its warning line
+  above the verdict. Rule and bounds:
+  `pharn/floor/stage-regress-core.mjs` (`unreliableInstallMasking`, `baseInstallNeeded`) and
+  `pharn/floor/base-worktree.mjs`.
+- **A base chosen by rule is the weak point.** A partially committed build with any other uncommitted change still
+  compares against a base that holds the committed part — only `--base` closes it (`base_source` says which rule ran).
 - **The suite is the ceiling.** `/pharn-regress` catches exactly what the project's deterministic suite
   catches — a regression no test/type-check/lint covers is invisible.
 - **The Bash-tool timeout must exceed `--timeout-ms`** (540000 < 600000): a harness kill before the

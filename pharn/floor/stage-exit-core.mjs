@@ -259,7 +259,10 @@ export const REGISTRY = Object.freeze({
         question:
           "The base worktree's dependency-install command could not be determined: there is a package.json but no " +
           "recognized single lockfile (none of package-lock.json/npm-shrinkwrap.json, pnpm-lock.yaml, yarn.lock, " +
-          "bun.lock/bun.lockb — or more than one family is present). How should dependencies be installed at the base commit?",
+          "bun.lock/bun.lockb — or more than one family is present). How should dependencies be installed at the base commit? " +
+          "If the install is skipped, the base checkout has no dependencies (it sits outside the project), so a gate red at " +
+          "both base and head cannot be told apart from a missing install, and the stage then stops (base-install-unreliable) " +
+          "instead of reporting no regressions.",
         options: Object.freeze([
           Object.freeze({
             id: "install",
@@ -293,7 +296,22 @@ export const REGISTRY = Object.freeze({
       }),
     }),
     // `head-install-drift` (6.40.0): the HEAD working tree's npm install does not match its lockfile (install-drift-core.mjs).
-    refused: Object.freeze(["missing-artifact", "chain-red", "plan-files-unparseable", "scope-escaped", "head-install-drift"]),
+    // regress-base-integrity (6.50.x): `plan-files-total-glob` (a `## Files` entry that declares everything — check-regress.mjs
+    // declaredClasses), `no-change-under-test` (nothing but exempt paths changed since the base, so the comparison could not
+    // show a regression), `base-install-unreliable` (a no-regressions verdict over a base whose install was skipped or failed
+    // while a gate was red on both sides — stage-regress-core.mjs unreliableInstallMasking).
+    refused: Object.freeze([
+      "missing-artifact",
+      "chain-red",
+      "plan-files-unparseable",
+      "scope-escaped",
+      "head-install-drift",
+      "plan-files-total-glob",
+      "no-change-under-test",
+      "base-install-unreliable",
+    ]),
+    // `base-worktree-unplaceable` (regress-base-integrity): the base checkout's temp directory is inside the project, or could
+    // not be created (base-worktree.mjs).
     unusable: Object.freeze([
       "usage-error",
       "no-feature",
@@ -304,6 +322,7 @@ export const REGISTRY = Object.freeze({
       "child-refused",
       "no-progress",
       "progress-malformed",
+      "base-worktree-unplaceable",
     ]),
   }),
   // stage-verify-script (6.26.0): `/pharn-verify`'s vocabulary. ONE question — verify has no base, no install and

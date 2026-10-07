@@ -182,7 +182,9 @@ only — Bash-tool writes bypass them entirely, for these paths exactly as for t
 **detected, not prevented**: `/pharn-build` anchors a content-hash baseline and `/pharn-verify` runs
 `check-bash-reconcile.mjs`, which fails verify when a changed path is one the live guards would have denied —
 for a non-adversarial writer only, since the baseline is unauthenticated state a Bash write can also reach
-(`../pharn-contracts/reconciliation-record.md`, `LIMITS.md §6`).
+(`../pharn-contracts/reconciliation-record.md`, `LIMITS.md §6`). Since 6.52.0 a denied path whose bytes are
+exactly the upstream bytes HEAD merged in during the window is reported as `merged` and does not fail verify; a
+commit the build makes itself still does (contract §2a).
 
 ## Honest scope (P0, P7)
 
