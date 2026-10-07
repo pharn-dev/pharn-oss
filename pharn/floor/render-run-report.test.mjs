@@ -620,6 +620,60 @@ test("Verdicts: verdicts are shown and the final-iteration-only bound is stated 
   }
 });
 
+test("6.55.0 — a stop on the reconcile terminal cause names the reconcile reasons and escapes; other FAILs add nothing", () => {
+  const root = scratch();
+  try {
+    const hostile = "src/evil\n## Injected | col";
+    feature(root, "feat", {
+      "cost.json": costJson(),
+      "verify-report.json": {
+        verdict: "FAIL",
+        failing_gates: ["reconcile"],
+        reconcile_detail: {
+          state: "parsed",
+          exit: 1,
+          verdict: "ESCAPE",
+          escapes: [
+            { file: "src/other.js", denied_by: "writes-scope (snapshot)", reason: "plan-widened-after-anchor", scope_set_by: "PLAN.md" },
+            { file: hostile, denied_by: "protect-trusted-paths.cjs" },
+          ],
+          escapes_total: 2,
+          merged_count: 0,
+        },
+      },
+    });
+    const md = renderRunReport("feat", { repo: root });
+    assert.match(md, /- reconcile — why the gate failed:/);
+    assert.match(md, /Closed reasons: `plan-widened-after-anchor` ×1, no closed reason ×1\./);
+    assert.ok(md.includes(`"src/other.js"  denied_by="writes-scope (snapshot)"  reason=plan-widened-after-anchor  scope_set_by="PLAN.md"`));
+    assert.ok(md.includes(JSON.stringify(hostile)));
+    assert.deepEqual(headings(md), [...SECTIONS], "the hostile path opened no heading");
+    // a garbage log: one line, never a row
+    feature(root, "feat", {
+      "cost.json": costJson(),
+      "verify-report.json": { verdict: "FAIL", failing_gates: ["reconcile"], reconcile_detail: { state: "not-checker-json", exit: 1 } },
+    });
+    const garbage = renderRunReport("feat", { repo: root });
+    assert.match(
+      garbage,
+      /reconcile detail: not shown — the reconcile gate's recorded output is not check-bash-reconcile\.mjs's JSON document/
+    );
+    assert.doesNotMatch(garbage, /denied_by=/);
+    // the control: a FAIL that is not a reconcile red renders no reconcile lines, even with a block present
+    feature(root, "feat", {
+      "cost.json": costJson(),
+      "verify-report.json": {
+        verdict: "FAIL",
+        failing_gates: ["test"],
+        reconcile_detail: { state: "parsed", exit: 0, verdict: "CLEAN", escapes: [], escapes_total: 0, merged_count: 0 },
+      },
+    });
+    assert.doesNotMatch(renderRunReport("feat", { repo: root }), /reconcile — why/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("Verdicts: the per-AC table (6.20.0) is the report's ac_gate, FENCED — a pipe or back-tick in a test id cannot break out", () => {
   const root = scratch();
   try {
@@ -772,7 +826,19 @@ const domainInputs = () => ({
   }),
   "verify-report.json": {
     verdict: "FAIL",
-    failing_gates: ["ac-delivery", "test"],
+    failing_gates: ["ac-delivery", "test", "reconcile"],
+    // 6.55.0 — the reconcile detail block, so the closure walks every node the reconcile lines render
+    reconcile_detail: {
+      state: "parsed",
+      exit: 1,
+      verdict: "ESCAPE",
+      escapes: [
+        { file: "src/other.js", denied_by: "writes-scope (snapshot)", reason: "plan-widened-after-anchor", scope_set_by: "PLAN.md" },
+      ],
+      escapes_total: 3,
+      merged_count: 2,
+      reason: "checker note",
+    },
     ac_gate: {
       mode: "test-first",
       verdict: "FAIL",
@@ -862,6 +928,10 @@ test('★ DOMAIN CLOSURE: every node of the three JSON inputs, replaced by `null
       /format:check/,
       /- verify: `FAIL`/,
       /- regress: `regressions`/,
+      /"src\/other\.js" {2}denied_by="writes-scope \(snapshot\)" {2}reason=plan-widened-after-anchor {2}scope_set_by="PLAN\.md"/,
+      /and 2 more escape/,
+      /2 path\(s\) classified `merged`/,
+      /checker note/,
     ]) {
       assert.match(control, re);
     }

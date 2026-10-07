@@ -34,12 +34,16 @@
 //
 // LOAD GRAPH: `quote-core.mjs` (→ `loop-record-core.mjs`) for the fences, `stage-exit-core.mjs` (which imports
 // nothing) for the refusal code's membership test, and `gate-run-core.mjs` (which imports nothing) for the ALLOWLIST
-// membership test the gate-exclusion line (6.36.0) renders an id after.
+// membership test the gate-exclusion line (6.36.0) renders an id after, and `reconcile-detail-core.mjs` (which imports
+// only `quote-core.mjs`) for the `## Reconcile` section (6.55.0): the escapes' files, guards, closed reasons and scope
+// labels, and the merged count, rendered from the report's `reconcile_detail` block — ONE renderer shared with
+// RUN-REPORT.md (L35), whose own header states its trust rules.
 
 import { quoteData, dataText } from "./quote-core.mjs";
 import { isReasonCode } from "./stage-exit-core.mjs";
 import { ALLOWLIST, EXCLUSION_DECLARED_IN } from "./gate-run-core.mjs";
 import { headInstallLine } from "./install-drift-core.mjs";
+import { reconcileDetailLines, wantsReconcileSection } from "./reconcile-detail-core.mjs";
 
 /** The fixed reading guide. It names BOTH markers validate.mjs CHECK 5 looks for (L10). */
 export const PREAMBLE =
@@ -290,6 +294,8 @@ export function renderDone(report) {
   const out = [title(r.feature), "", PREAMBLE, ""];
   out.push(...verdictSection(r));
   out.push(...gatesSection(r));
+  // 6.55.0 — WHY the reconcile gate failed (or what it merged), from the report's `reconcile_detail` block alone.
+  if (wantsReconcileSection(r.reconcile_detail, r.failing_gates)) out.push("## Reconcile", "", ...reconcileDetailLines(r.reconcile_detail));
   // 6.40.0 — the install check that ran before the gates (install-drift-core.mjs); a report without the key renders as before.
   if (Object.hasOwn(r, "head_install")) out.push(headInstallLine(r.head_install), "");
   out.push(...completenessSection(r));

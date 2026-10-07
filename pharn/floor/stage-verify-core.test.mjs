@@ -337,6 +337,21 @@ test("composeReport: the checker's keys in order, values deep-equal, then comple
   );
 });
 
+test("6.55.0 — composeReport carries reconcile_detail as given, null by default, and refuses a non-object", () => {
+  const base = {
+    checker: CHECKER,
+    completeness: COMPLETE,
+    verifiers: { registered: 0, verifiers: [] },
+    gateReuse: NO_REUSE,
+    headInstall: null,
+  };
+  assert.equal(composeReport(base).report.reconcile_detail, null, "no block is null, never an omitted key");
+  const block = { state: "log-missing", exit: 1 };
+  assert.deepEqual(composeReport({ ...base, reconcileDetail: block }).report.reconcile_detail, block);
+  assert.equal(composeReport({ ...base, reconcileDetail: [] }).ok, false);
+  assert.equal(composeReport({ ...base, reconcileDetail: "x" }).ok, false);
+});
+
 test("composeReport: the deferral note appears only when registered > 0", () => {
   const r = composeReport({
     checker: CHECKER,
@@ -349,7 +364,7 @@ test("composeReport: the deferral note appears only when registered > 0", () => 
 });
 
 test("composeReport (Q2): a checker key named like a merged block is REFUSED, never overwritten", () => {
-  assert.deepEqual(MERGED_KEYS, ["completeness", "verifiers", "gate_reuse", "head_install"]);
+  assert.deepEqual(MERGED_KEYS, ["completeness", "verifiers", "gate_reuse", "head_install", "reconcile_detail"]);
   const V0 = { registered: 0, verifiers: [] };
   for (const k of MERGED_KEYS) {
     const r = composeReport({

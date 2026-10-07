@@ -23,6 +23,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.55.0] - 2026-10-07
+
+### Added
+
+- **`VERIFY.md` and `RUN-REPORT.md` now say why the `reconcile` gate failed.**
+  - What changed: `/pharn-verify` reads the reconcile gate's recorded output, only when it matches the digest in the
+    verify stamp. It parses the checker's JSON document into a new advisory `reconcile_detail` block in
+    `verify-report.json`. `VERIFY.md` gains a `## Reconcile` section listing each escape's file, `denied_by`, closed
+    `reason` (such as `plan-widened-after-anchor`) and `scope_set_by`, up to 20 rows plus "and N more", and the count
+    of `merged` paths. `RUN-REPORT.md` shows the same lines when the loop stopped on `reconcile`. One renderer,
+    `pharn/floor/reconcile-detail-core.mjs`, serves both.
+  - Why: until now both reports named only the gate id, so a human had to re-run `check-bash-reconcile.mjs` by hand.
+    The contract listed this as a follow-up.
+  - Trust and failure: file names and scope labels are JSON-quoted inside a fence. A reason is shown inline only when
+    it is in the closed set. A missing, unreadable, rewritten or non-JSON log gets one line naming the state and the
+    re-run command, and no rows.
+  - Not covered: the finding's remedy text is not rendered (re-run the checker for it). The dev twin
+    `/pharn-dev-verify` writes `VERIFY.md` by prose and does not render the block. No verdict reads it.
+
 ## [6.54.0] - 2026-10-07
 
 ### Changed

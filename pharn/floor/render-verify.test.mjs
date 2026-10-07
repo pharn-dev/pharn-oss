@@ -487,3 +487,87 @@ test("6.40.0 — the HEAD install line renders from the report's head_install, b
   assert.match(renderDone(report({ head_install: null })), /^HEAD install: not recorded/m);
   assert.doesNotMatch(renderDone(report()), /HEAD install/, "a pre-6.40.0 report renders as before");
 });
+
+// ── 6.55.0: WHY the reconcile gate failed (reconcile-reasons-in-reports) ──────────────────────────────────────────────
+const RECONCILE_FAIL = { verdict: "FAIL", gates: { reconcile: 1, test: 0 }, failing_gates: ["reconcile"] };
+const HOSTILE_PATH = "src/evil\n# fake heading\n```\n[click](https://evil.example)";
+
+function outsideFences(md) {
+  let inFence = null;
+  const outside = [];
+  for (const line of md.split("\n")) {
+    const f = line.match(/^(`{3,})/);
+    if (f) {
+      if (inFence === null) inFence = f[1];
+      else if (f[1].length >= inFence.length && /^`+$/.test(line.trim())) inFence = null;
+      continue;
+    }
+    if (inFence === null) outside.push(line);
+  }
+  return outside;
+}
+
+test("6.55.0 — VERIFY.md lists each reconcile escape: file, denied_by, closed reason, scope_set_by; a hostile name stays fenced", () => {
+  const md = renderDone(
+    report({
+      ...RECONCILE_FAIL,
+      reconcile_detail: {
+        state: "parsed",
+        exit: 1,
+        verdict: "ESCAPE",
+        escapes: [
+          {
+            file: "src/other.js",
+            denied_by: "writes-scope (snapshot)",
+            reason: "plan-widened-after-anchor",
+            scope_set_by: "pharn/features/demo/PLAN.md",
+          },
+          { file: HOSTILE_PATH, denied_by: "protect-trusted-paths.cjs" },
+        ],
+        escapes_total: 2,
+        merged_count: 1,
+      },
+    })
+  );
+  const lines = md.split("\n");
+  const at = lines.indexOf("## Reconcile");
+  assert.ok(at > lines.indexOf("## Gates") && at < lines.indexOf("## Completeness"), "the section sits after the gates");
+  assert.match(md, /^reconcile: `ESCAPE` \(exit 1\)/m);
+  assert.match(md, /Closed reasons: `plan-widened-after-anchor` ×1, no closed reason ×1\./);
+  assert.ok(
+    md.includes(
+      `"src/other.js"  denied_by="writes-scope (snapshot)"  reason=plan-widened-after-anchor  scope_set_by="pharn/features/demo/PLAN.md"`
+    )
+  );
+  assert.ok(md.includes(JSON.stringify(HOSTILE_PATH)), "the hostile path is JSON-quoted, its newline kept as \\n");
+  assert.match(md, /^1 path\(s\) classified `merged`/m);
+  const outside = outsideFences(md);
+  assert.ok(!outside.some((l) => l === "# fake heading"), "the injected heading escaped its fence");
+  assert.ok(!outside.some((l) => l.includes("[click](")), "the injected link escaped its fence");
+});
+
+test("6.55.0 — VERIFY.md over a merged-only reconcile (gate green) shows the merged count and no escape rows", () => {
+  const md = renderDone(
+    report({ reconcile_detail: { state: "parsed", exit: 0, verdict: "CLEAN", escapes: [], escapes_total: 0, merged_count: 4 } })
+  );
+  assert.match(md, /^## Reconcile$/m);
+  assert.match(md, /^4 path\(s\) classified `merged`/m);
+  assert.doesNotMatch(md, /escape\(s\)\*\*/);
+  assert.doesNotMatch(
+    renderDone(
+      report({ reconcile_detail: { state: "parsed", exit: 0, verdict: "CLEAN", escapes: [], escapes_total: 0, merged_count: 0 } })
+    ),
+    /## Reconcile/,
+    "a clean reconcile with nothing merged adds no section"
+  );
+});
+
+test("6.55.0 — VERIFY.md over a garbage reconcile log renders ONE line naming it and the re-run command, never a row", () => {
+  const md = renderDone(report({ ...RECONCILE_FAIL, reconcile_detail: { state: "not-checker-json", exit: 1 } }));
+  const section = md.split("## Reconcile")[1].split("## Completeness")[0];
+  assert.match(section, /not check-bash-reconcile\.mjs's JSON document; no row is invented/);
+  assert.ok(section.includes("node pharn/floor/check-bash-reconcile.mjs --base . --require-baseline"));
+  assert.doesNotMatch(section, /denied_by=/);
+  const legacy = renderDone(report({ ...RECONCILE_FAIL }));
+  assert.match(legacy, /reconcile detail: not recorded in this report/, "a failing reconcile without a block says so");
+});

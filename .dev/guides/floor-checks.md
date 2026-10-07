@@ -108,8 +108,12 @@ node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 # PLAN-WIDENED (6.54.0, audit P2-I, contract §1): an amendment authorizes a NEW path only if its set_by is a stage
 # command (.claude/commands/*.md); a plan-origin amendment re-authorizes only what the anchored snapshot covered, and a
 # path only it covers is an escape with the closed reason `plan-widened-after-anchor`. Cost: a legit mid-build re-plan
-# reds verify / STOP_TERMINALs the loop; declare every `## Files` path before build Step 0. Re-run the checker to see
-# the reason — VERIFY.md / RUN-REPORT.md do not render it yet.
+# reds verify / STOP_TERMINALs the loop; declare every `## Files` path before build Step 0.
+# RENDERED (6.55.0): /pharn-verify reads this checker's recorded stdout (digest-bound to the stamp) into
+# verify-report.json's advisory `reconcile_detail`; VERIFY.md and (on a reconcile stop) RUN-REPORT.md list each
+# escape's file / denied_by / reason / scope_set_by (20 rows) and the merged count — reconcile-detail-core.mjs, in
+# floor-gates.md's stage-verify section. The finding `problem` (the remedy) is not rendered: re-run the checker for it.
+# ESCAPE_REASONS / WIDENED_REASON live in reconcile-detail-core.mjs since 6.55.0; this checker re-exports them.
 # Contract: pharn/pharn-contracts/reconciliation-record.md. Data: pharn/floor/reconcile-ignore.json.
 # Exit: 0 CLEAN|NO_BASELINE · 1 ESCAPE · 2 INCONCLUSIVE / no usable scope to anchor (D6).
 node pharn/floor/reconcile-baseline.mjs --anchor [--base <dir>] [--by <label>]

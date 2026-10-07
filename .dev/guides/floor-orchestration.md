@@ -347,6 +347,11 @@ node pharn/floor/check-cost-ledger.mjs <cost.json> [--verify-transcript]
 # with the file check-cost-ledger.mjs certifies (L43); (3) verdicts are the FINAL ITERATION ONLY, because
 # /pharn-loop overwrites both report files in place each iteration — earlier ones are not on disk and are
 # not invented. Per-iteration COST is genuine and comes from by_stage_iteration_model.
+# RECONCILE STOP (6.55.0): when the final verify FAILed with `reconcile` in failing_gates (check-loop.mjs's
+# `terminal_cause: reconcile` predicate, re-applied to the report — no check-loop output is read), `## Verdicts` adds
+# the verify report's `reconcile_detail` block through reconcile-detail-core.mjs's `reconcileDetailLines`, the SAME
+# renderer VERIFY.md uses (L35): escape rows JSON-quoted in a fence, closed reasons inline after a membership test, the
+# merged count, or one line naming a missing/garbage log and the re-run command. Any other report: no lines.
 # NO MARKDOWN TABLE ANYWHERE, and it is a measurement not a taste (L37): sanitizeIdentity("opus|5", …)
 # returns it UNCHANGED — rule 3 bounds length, control chars and paths, not a pipe — and one pipe shifts
 # every column right of it. So every untrusted region is a fence computed longer than any back-tick run

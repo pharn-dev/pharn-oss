@@ -145,6 +145,7 @@ import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { enumerate, hashFile, RECORD_VERSION, RECORD_PATH } from "./reconcile-baseline.mjs";
 import { openRun } from "./run-marker.mjs";
+import { WIDENED_REASON, ESCAPE_REASONS } from "./reconcile-detail-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const IGNORE_DATA_PATH = join(HERE, "reconcile-ignore.json");
@@ -241,9 +242,9 @@ export function isAlwaysReconciled(rel, data) {
 export const HUMAN_ONLY_REMEDY =
   "if this is a human's own edit: commit it before running the gates, or land it outside the build's anchor->verify window (lessons-learned L68) — never re-anchor or edit the baseline to clear it";
 
-// The closed `reason` enum an escape may carry (6.54.0). Absent on every other escape.
-export const WIDENED_REASON = "plan-widened-after-anchor";
-export const ESCAPE_REASONS = Object.freeze([WIDENED_REASON]);
+// The closed `reason` enum an escape may carry (6.54.0). Absent on every other escape. Since 6.55.0 its ONE copy lives
+// in reconcile-detail-core.mjs, which the two report renderers also read (L35); re-exported here under the same names.
+export { WIDENED_REASON, ESCAPE_REASONS };
 export const WIDENED_REMEDY =
   "this path was added to the plan's `## Files` after the build anchored, and the anchored plan does not authorize it: declare every path in `## Files` BEFORE the build's Step 0 (the only widening that stays clean), or, if the human approves the widened plan, accept this at the post-review gate — never re-anchor or edit the baseline to clear it";
 

@@ -381,6 +381,22 @@ node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 # additive `head_install` block", stage-exit.md.
 ```
 
+```bash
+# WHY RECONCILE FAILED (6.55.0, reconcile-reasons-in-reports) — no CLI: pharn/floor/reconcile-detail-core.mjs (pure;
+# imports quote-core.mjs only). At "verdict", stage-verify.mjs finds the reconcile run in the stamp bytes the verdict
+# read, reads `<seq>-reconcile.out` under .pharn/pharn-verify/gates/ (lstat regular file, <= 8 MiB) only when its
+# sha256 equals the run's stdout_sha256, and `reconcileDetail` parses check-bash-reconcile.mjs's JSON document into
+# verify-report.json's `reconcile_detail` (last merged key; null with no reconcile run). Closed states: parsed |
+# log-missing | log-unreadable | log-digest-mismatch | not-checker-json — a non-parsed state renders ONE line plus the
+# re-run command (the runner's own reconcile argv), never a row (L34). `reconcileDetailLines` is the ONE renderer for
+# VERIFY.md's `## Reconcile` (shown on a non-zero exit, a merged path, or a failing reconcile with no block) and for
+# RUN-REPORT.md on a reconcile stop (L35). Rows capped at 20 + "and N more"; file/denied_by/scope_set_by JSON-quoted in
+# a fence; a reason and the checker verdict inline only after membership. The core owns ESCAPE_REASONS (the checker
+# re-exports it). ADVISORY: no verdict reads the block, and reading this one gate log does not change the runner's
+# "no verdict reads gate content" rule. The dev twin /pharn-dev-verify writes VERIFY.md by prose — not covered.
+# Contract: verify-report.md "The additive `reconcile_detail` block".
+```
+
 ## `build-gate.mjs` — /pharn-build's project gate
 
 ```bash
