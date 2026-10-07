@@ -6,16 +6,17 @@
 //
 // ==================================== WHY (P7) ====================================
 // The named follow-up `entry-run-as-base-evidence` (6.42.0, `.dev/features/loop-entry-preflight/PLAN.md`): a delivery
-// run already runs its gates at ENTRY, in the real working tree, before the build; /pharn-regress then built a nested
-// BASE worktree, installed into it and ran the BASE gates again. In the recorded 92-minute run that BASE side took two
+// run already runs its gates at ENTRY, in the real working tree, before the build; /pharn-regress then built a BASE
+// worktree (nested in the project until regress-base-integrity, in the temp root since), installed into it and ran the
+// BASE gates again. In the recorded 92-minute run that BASE side took two
 // script calls (146.2 s + 192.1 s), and the nested worktree lacked the ignored `.env.local` the entry tree had. Built at
 // the maintainer's direction (`.dev/features/entry-run-as-base-evidence/`).
 //
 // ============================ TWO EVIDENCE SOURCES, TWO RULES ============================
 // 6.33.0's `decideBaseReuse` (regress-base-reuse-core.mjs, untouched) reuses an earlier NORMAL BASE execution, so it binds
-// that execution's own inputs: the nested worktree's install decision, the regress fingerprint ALGO, and the HEAD root
-// files a parent-directory search from the nested worktree reaches. Entry evidence ran in the real starting tree: no
-// nested worktree and no install ran, so none of those bind — skipping the inferred install is the point. This rule binds
+// that execution's own inputs: the BASE worktree's install decision, the regress fingerprint ALGO, and the HEAD root
+// files a parent-directory search from the (formerly nested) worktree reached. Entry evidence ran in the real starting
+// tree: no BASE worktree and no install ran, so none of those bind — skipping the inferred install is the point. This rule binds
 // what makes entry evidence the BASE: the same delivery run, a pre-run snapshot saying the run started at this BASE commit
 // with nothing changed outside its own feature directory, the exact execution shape of every mapped slot, completion,
 // style attribution, no tree movement through the last mapped run, and a compatible timeout. Shared, never copied (L35):
@@ -44,7 +45,7 @@
 // HONEST SCOPE (P0):
 //   • AGREEMENT, never PROVENANCE (L43): the offer, the snapshot, the marker, the entry stamp and its logs agree. All of
 //     them live in the git dir or `.pharn/`, which a Bash writer reaches; a self-consistent forged set passes.
-//   • NOT CLAIMED: that entry-derived BASE equals what a fresh nested-worktree BASE would give. They may differ because
+//   • NOT CLAIMED: that entry-derived BASE equals what a fresh BASE worktree would give. They may differ because
 //     the environments differ (ignored files, `node_modules`, the inherited environment, the machine) — entry evidence is
 //     the real sampled START environment, unattested. The definition of a regression is unchanged.
 //   • NOT SEEN (grill G1): git-ignored state an earlier entry-only run left (a cache, `*.tsbuildinfo`, `.next/`) — the

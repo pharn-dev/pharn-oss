@@ -296,7 +296,22 @@ checker's verdict alongside the RED. See Step 3a's own presentation rule, in the
    has not approved / must re-approve via `/pharn-spec`). This is a backstop, not the gate: the gate is the
    human halt above.
 
-   **Open the run marker (6.24.0, D3) — immediately after the backstop exits 0, before `/pharn-plan`'s own
+   **Capture the base — immediately after the backstop exits 0 (in a `--quick` run, after its kind read), before
+   anything is built:**
+
+   ```bash
+   git rev-parse --verify HEAD
+   ```
+
+   Its one printed line is `<base sha>`: substitute it literally into both `/pharn-regress` lines (step 6 and Step 2b)
+   and into the quick scope check (`## Quick mode` item 7). Run this capture **once per run**, here, and never again:
+   a later `HEAD` may already hold the build, which would put the build inside its own base. If you no longer hold
+   `<base sha>` when a regress line needs it (a resumed conversation, a compaction that dropped it), **STOP** and hand to
+   the human — never re-capture. Non-zero (no commit to compare against, an unborn `HEAD`) → **STOP** before
+   `/pharn-plan`, through Steps 3 and 3a like every STOP. Why the base is captured, not derived:
+   `pharn/floor/stage-regress-core.mjs` (`BASE_SOURCES`).
+
+   **Open the run marker (6.24.0, D3) — immediately after the base capture, before `/pharn-plan`'s own
    `stage-start` marker:**
 
    ```bash
@@ -499,7 +514,7 @@ build did not complete).
    `## Quick mode` item 7.)_ One call (`## Running a stage`, its last paragraph):
 
    ```bash
-   node pharn/floor/stage-direct.mjs --stage pharn-regress --name '<name>' --iteration 1 --timeout-ms 540000 --budget-ms 570000
+   node pharn/floor/stage-direct.mjs --stage pharn-regress --name '<name>' --iteration 1 --timeout-ms 540000 --budget-ms 570000 --base '<base sha>'
    ```
 
 **Verdict read
@@ -585,7 +600,7 @@ measures the AC gate again from scratch, and it proceeds only on `PASS`.
    above), each at `--iteration 2`:
 
    ```bash
-   node pharn/floor/stage-direct.mjs --stage pharn-regress --name '<name>' --iteration 2 --timeout-ms 540000 --budget-ms 570000
+   node pharn/floor/stage-direct.mjs --stage pharn-regress --name '<name>' --iteration 2 --timeout-ms 540000 --budget-ms 570000 --base '<base sha>'
    ```
 
    ```bash

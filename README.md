@@ -21,7 +21,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.51.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.52.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -278,7 +278,11 @@ PHARN splits an AI-assisted change into typed stages:
 4. **Test** — write each acceptance criterion's test, run it, and require it to fail before any code exists.
 5. **Build** — implement the plan. With the hooks wired as they ship, Claude Code write/edit tools are
    denied outside the active scope, in whichever working tree Claude is currently in.
-6. **Regress** — re-run existing project suites and record breakage outside the feature.
+6. **Regress** — re-run existing project suites and record breakage outside the feature. The comparison base is
+   the commit `/pharn-ship` and `/pharn-loop` captured before the build. Run alone, `/pharn-regress` picks one
+   (HEAD on a dirty tree, else the merge-base with `origin/main`) and records which; pass `--base` once any of
+   the build is committed, or the committed part sits inside the base (a fully committed build is refused as having
+   nothing to compare).
 7. **Verify** — run the project's gates, check declared artifacts and completeness signals (including missing
    concrete paths), and check that each acceptance criterion's locked test now passes.
 8. **Ship** — write the ship/briefing artifacts and present the final human decision gate.
@@ -714,7 +718,7 @@ byte-for-byte by `npm run docs:check`, so it cannot quietly drift from what is a
 - **Product commands — 11** (`.claude/commands/`): `/pharn-build`, `/pharn-grill`, `/pharn-loop`, `/pharn-memory-promote`, `/pharn-plan`, `/pharn-regress`, `/pharn-review`, `/pharn-ship`, `/pharn-spec`, `/pharn-test`, `/pharn-verify`.
 - **Dev-apparatus commands — 9** (`.claude/commands/`): `/pharn-dev-build`, `/pharn-dev-eval`, `/pharn-dev-grill`, `/pharn-dev-memory-promote`, `/pharn-dev-plan`, `/pharn-dev-regress`, `/pharn-dev-review`, `/pharn-dev-ship`, `/pharn-dev-verify`.
 - **Hook scripts — 4** (`.claude/hooks/`): `enforce-writes-scope.cjs`, `protect-trusted-paths.cjs`, `require-loop-record.cjs`, `set-writes-scope.cjs`.
-- **Floor checkers — 131** `.mjs` files under `pharn/floor/` (tests excluded).
+- **Floor checkers — 132** `.mjs` files under `pharn/floor/` (tests excluded).
 
 <!-- CURRENT-STATE:END -->
 

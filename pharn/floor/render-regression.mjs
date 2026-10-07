@@ -139,15 +139,38 @@ function verdictLine(verdict, regressions) {
  *  stdout; `scope` is `check-regress.mjs scope`'s parsed stdout; `progress` is the stage's final in-memory
  *  progress state (never re-read from a deleted file — `stage-regress.mjs` holds it before removing the
  *  record). */
-export function renderDone({ feature, base, report, scope, progress }) {
+/** regress-base-integrity: how the base was chosen, in words — keyed by a closed BASE_SOURCES member (never free text). */
+const BASE_SOURCE_TEXT = Object.freeze({
+  explicit: "named with --base",
+  "dirty-head": "HEAD, because the working tree was dirty (no --base)",
+  "merge-base": "the merge-base with origin/main (no --base, clean tree)",
+});
+
+/** The base line, plus the dirty-head warning: under that rule anything already COMMITTED on the branch is inside the
+ *  base, so its breakage reads `pre_existing` (audit P1-B). Nothing renders for a value outside the closed set. */
+function baseLines(base, baseSource) {
+  const how = Object.hasOwn(BASE_SOURCE_TEXT, baseSource) ? ` — chosen by: ${BASE_SOURCE_TEXT[baseSource]}` : "";
+  const lines = [`base: \`${inline(base)}\`${how}`, ""];
+  if (baseSource === "dirty-head") {
+    lines.push(
+      "**The base is HEAD (dirty-tree rule):** anything already committed on this branch sits INSIDE the base, so a " +
+        "regression it caused reads `pre_existing` here. If any of the build is committed, re-run with `--base <the commit " +
+        "the build started from>` (as /pharn-ship and /pharn-loop do).",
+      ""
+    );
+  }
+  return lines;
+}
+
+export function renderDone({ feature, base, baseSource = null, report, scope, progress }) {
   const out = [];
   out.push(`# REGRESSION — ${feature}`, "");
-  out.push(`base: \`${inline(base)}\``, "");
+  out.push(...baseLines(base, baseSource));
 
-  // A6 (GATE 2 review) — rendered ABOVE the verdict line, not six-plus lines below it: this is the ONLY
-  // signal of a failed base-commit install (no machine consumer reads it — the recorded, deliberately
-  // unclosed `regress-failed-install-false-green` bound), so a reader must see it BEFORE the headline
-  // "NO REGRESSIONS", never after. The "reads red" clause is CONDITIONED on the report's own
+  // A6 (GATE 2 review) — rendered ABOVE the verdict line, not six-plus lines below it, so a reader sees a failed
+  // base-commit install BEFORE the headline "NO REGRESSIONS", never after. Since regress-base-integrity a gate red at
+  // both base and head over such an install is refused (`base-install-unreliable`) instead of reported, so this line
+  // now only ever accompanies a report with no such gate, or a verdict that already stops. The "reads red" clause is CONDITIONED on the report's own
   // `pre_existing`, never an unconditional "every base gate" — an install failure does not guarantee
   // every base gate failed (it can fail fast before any gate even attempts to run, or a gate may not
   // depend on the failed install step at all).
@@ -162,14 +185,26 @@ export function renderDone({ feature, base, report, scope, progress }) {
             "(rather than blamed on the feature) could include ones this install failure caused to fail, not this feature's own change."
           : "base gates MAY read red as a result and be classified `pre_existing` below rather than blamed on the feature — " +
             "none were, this run.") +
-        " This line is the ONLY signal of that failure; no machine consumer reads it (the recorded, deliberately unclosed " +
-        "`regress-failed-install-false-green` bound).",
+        " A gate red at BOTH base and head under this install no longer reads as no regressions: the stage refuses " +
+        "`base-install-unreliable` instead (regress-base-integrity; the former `regress-failed-install-false-green` " +
+        "bound is closed for an install that exits non-zero or times out) — so a report that renders this line has " +
+        "either no such gate or a verdict that already stops.",
       ""
     );
   }
 
   out.push(verdictLine(report.verdict, report.regressions), "");
   out.push(...exclusionLines(report));
+  // regress-base-integrity: base runs the runner killed at --timeout-ms (`base_timed_out`, check-regress.mjs). An id is
+  // quoted through `dataText` after fixed prose, like every gate id here.
+  if (Array.isArray(report.base_timed_out) && report.base_timed_out.length) {
+    out.push(
+      `**${report.base_timed_out.length} base gate run(s) TIMED OUT** (${report.base_timed_out.map(dataText).join(", ")}) — a ` +
+        "killed base run is not a base result: wherever the table below files it, a red head on that gate makes the verdict " +
+        "inconclusive, and a green head means nothing was masked.",
+      ""
+    );
+  }
 
   // BASE-evidence reuse (6.33.0): ONE line, from the report's own `base_evidence` block. Every value in it is this
   // floor's own — a boolean, a closed-enum member, a hex digest — never untrusted text.
@@ -227,6 +262,15 @@ export function renderDone({ feature, base, report, scope, progress }) {
       `declared (${scope.declared.length}):`,
       "",
       scope.declared.length ? quoteData("", scope.declared.join("\n")) : "_(none)_",
+      // regress-base-integrity: the declared globs the write hook drops (set-writes-scope.cjs keeps concrete paths only).
+      ...(Array.isArray(scope.unenforced_globs) && scope.unenforced_globs.length
+        ? [
+            "",
+            `not enforced by the write hook (${scope.unenforced_globs.length}) — globs this partition honors but set-writes-scope.cjs drops, so a Write-tool write they cover is denied:`,
+            "",
+            quoteData("", scope.unenforced_globs.join("\n")),
+          ]
+        : []),
       ...(scope.escape_exempt && scope.escape_exempt.length
         ? [
             "",
@@ -295,16 +339,29 @@ export function renderDone({ feature, base, report, scope, progress }) {
  *  a shelled checker's own message or a git/plan-scan finding; it is quoted as untrusted DATA here rather
  *  than trusted as this renderer's own prose. `preRun` (6.37.0) is the partition's `pre_run_snapshot` block, passed
  *  with a `scope-escaped` refusal so the paths it did NOT count are named beside the ones it did. */
-export function renderRefused({ feature, reasonCode, detail, preRun = null, entryGates = null }) {
+export function renderRefused({ feature, reasonCode, detail, preRun = null, entryGates = null, baseInfo = null, cleanupResult = null }) {
   const out = [];
   out.push(`# REGRESSION — ${feature}`, "");
   out.push(`refused: \`${inline(reasonCode)}\``, "");
+  // regress-base-integrity: a refusal after the base phase names the base and how it was chosen.
+  if (baseInfo && typeof baseInfo.base === "string") out.push(...baseLines(baseInfo.base, baseInfo.baseSource));
   out.push("**regression NOT measured — the refusal below must be resolved first.**", "");
   out.push(...section("Why", [quoteData("detail, quoted as DATA:", dataText(detail))]));
   const pre = preRunLines(preRun);
   if (pre.length) out.push(...section("Pre-run snapshot", pre));
   const ent = entryGateLines(entryGates);
   if (ent.length) out.push(...section("Entry gates' changes", ent));
+  // regress-base-integrity: a refusal decided AFTER the base side ran (`base-install-unreliable`) reports a failed cleanup
+  // the same way a completed run does.
+  if (cleanupResult && cleanupResult.ok === false) {
+    out.push(
+      ...section("Cleanup", [
+        "removing the base worktree FAILED — the next fresh start removes the leftover worktree.",
+        "",
+        quoteData("error, quoted as DATA:", dataText(cleanupResult.error ?? "(no detail)")),
+      ])
+    );
+  }
   return (
     out
       .join("\n")

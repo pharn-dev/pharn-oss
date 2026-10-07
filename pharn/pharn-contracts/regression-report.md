@@ -26,14 +26,14 @@ The regression-report is `pharn/features/<name>/regression-report.json` (product
 beside the human-facing `REGRESSION.md`. It is `pharn/floor/check-regress.mjs`'s **`verdict` subcommand**
 stdout, plus — in the product report — three additive advisory blocks, `base_evidence` (6.33.0; its `source` and
 `entry` keys 6.49.0),
-`pre_run_snapshot` (6.37.0) and `head_install` (6.40.0), and, only when the run's entry gates recorded changes, a
-fourth, `entry_gate_changes` (6.42.0), all below.
+`pre_run_snapshot` (6.37.0) and `head_install` (6.40.0), the key `base_source` (regress-base-integrity), and, only
+when the run's entry gates recorded changes, `entry_gate_changes` (6.42.0), all below.
 
 **Since `stage-regress-script` (6.23.0), the WRITER is `pharn/floor/stage-regress.mjs`, not the model.** The
 product stage script shells `check-regress.mjs verdict` and writes its output atomically (a tmp file under
 `.pharn/pharn-regress/`, then `rename`), so no stray tmp file lands in the feature directory. Since 6.33.0 it
-appends `base_evidence`, since 6.37.0 `pre_run_snapshot` after it, since 6.40.0 `head_install`, and since 6.42.0, when
-present, `entry_gate_changes` last, as the object's last keys and re-serializes with the same `JSON.stringify(…, null, 2)`
+appends `base_evidence`, since 6.37.0 `pre_run_snapshot` after it, since 6.40.0 `head_install`, then `base_source`
+(regress-base-integrity), and since 6.42.0, when present, `entry_gate_changes` last, as the object's last keys and re-serializes with the same `JSON.stringify(…, null, 2)`
 the checker prints with, so every key the checker printed keeps its bytes: the report minus those blocks is the
 checker's stdout, byte for byte (`stage-regress.test.mjs` pins it). The dev
 twin (`/pharn-dev-regress`) is unchanged: the model writes the checker's bytes by hand and adds no block.
@@ -64,15 +64,17 @@ twin (`/pharn-dev-regress`) is unchanged: the model writes the checker's bytes b
 
 ## Field shape + trust classes
 
-| field           | shape                                                        | class                                      |
-| --------------- | ------------------------------------------------------------ | ------------------------------------------ |
-| `base`          | the git ref the baseline was captured at, or `null`          | ADVISORY — no floor op reads it            |
-| `inside`        | array of repo-relative paths counted as inside the feature   | ADVISORY — no floor op reads it            |
-| `outside_gates` | `{ "<gate-id>": { "base": <int>, "head": <int> } }`          | ADVISORY — no floor op reads it            |
-| `regressions`   | array of gate-ids that were `0` at base and non-zero at head | ADVISORY — no floor op reads it            |
-| `pre_existing`  | array of gate-ids already non-zero at base                   | ADVISORY — no floor op reads it            |
-| `verdict`       | **enum** — `no-regressions` · `regressions` · `inconclusive` | **FLOOR-RELEVANT** — enum-gated by 4 sites |
-| `reason`        | a diagnostic sentence, present only on `inconclusive`        | ADVISORY — no floor op reads it            |
+| field            | shape                                                                       | class                                      |
+| ---------------- | --------------------------------------------------------------------------- | ------------------------------------------ |
+| `base`           | the git ref the baseline was captured at, or `null`                         | ADVISORY — no floor op reads it            |
+| `inside`         | array of repo-relative paths counted as inside the feature                  | ADVISORY — no floor op reads it            |
+| `outside_gates`  | `{ "<gate-id>": { "base": <int>, "head": <int> } }`                         | ADVISORY — no floor op reads it            |
+| `regressions`    | array of gate-ids that were `0` at base and non-zero at head                | ADVISORY — no floor op reads it            |
+| `pre_existing`   | array of gate-ids already non-zero at base                                  | ADVISORY — no floor op reads it            |
+| `verdict`        | **enum** — `no-regressions` · `regressions` · `inconclusive`                | **FLOOR-RELEVANT** — enum-gated by 4 sites |
+| `reason`         | a diagnostic sentence, present only on `inconclusive`                       | ADVISORY — no floor op reads it            |
+| `base_timed_out` | gate-ids whose BASE run timed out — stamp path, present only when non-empty | ADVISORY — the verdict already reflects it |
+| `base_source`    | **enum** — `explicit` · `dirty-head` · `merge-base` (product report only)   | ADVISORY — no floor op reads it            |
 
 **`regressions` being empty is not the guarantee — `verdict` is.** The two always agree in emitter
 output, but only one of them is read, so a hand-edited report with `regressions: []` beside
@@ -328,7 +330,7 @@ retained-reuse decision); two keys follow them:
 **The rule, and its bounds (P0).** FLOOR: the decision (content hashes and closed enums over the offer, the pre-run
 snapshot, the run marker, the entry stamp and its logs — agreement, never provenance, L43) and the derived stamp's
 shape (`validateStamp`'s closed matrix); the verdict is `check-regress.mjs`'s over the stamps on disk, unchanged.
-NOT CLAIMED: that entry-derived BASE equals what a fresh nested-worktree BASE would give — they may differ because the
+NOT CLAIMED: that entry-derived BASE equals what a fresh BASE worktree would give — they may differ because the
 environments differ (ignored files, `node_modules`, the inherited environment, the machine); the entry gates are the
 real, unattested start environment, and a regression is still a gate green at BASE and red at HEAD. ADVISORY and
 inherited: that a non-style entry gate did not read a front stage's concurrent write under `pharn/features/<name>/`
@@ -421,6 +423,53 @@ install. No bypass is offered — the only way past the refusal is an install th
 does not re-check (its HEAD gates already ran). A build that edits the lockfile without installing is now refused here
 — in `/pharn-loop`, an S9 stop with `npm ci` as the remedy instead of iterations over the old install. No verdict
 consumer reads this block.
+
+## Base-evidence integrity — `base_source`, `base_timed_out`, and three refusals (regress-base-integrity)
+
+The 2026-10-07 production-readiness audit reproduced four ways a `no-regressions` verdict rested on base evidence that
+could not show a regression. Each is closed where the loop's freshness check (`check-loop-fresh.mjs` check E, which
+re-derives `verdict` / `regressions` / `pre_existing` / `outside_gates` from the two stamps alone) still agrees with
+the report: a rule that needs only the stamps sits in `check-regress.mjs verdict`; a rule that needs anything else is a
+stage REFUSAL, which writes no report at all (`pharn/pharn-contracts/stage-exit.md`).
+
+- **`base_source`** — how `base` was chosen, one member of `BASE_SOURCES` (`pharn/floor/stage-regress-core.mjs`, the
+  one owner): `explicit` (`--base`), `dirty-head` (no `--base`, a dirty tree: `HEAD`), `merge-base` (no `--base`, a
+  clean tree: `git merge-base HEAD origin/main`). The two implicit rules put a COMMITTED build inside its own base, so
+  `/pharn-ship` (captured right after GATE 1) and `/pharn-loop` (captured at S3) pass `--base`. `REGRESSION.md` names
+  the source on its base line and warns under `dirty-head`.
+- **`no-change-under-test`** (refusal) — nothing changed since the base but this feature's pipeline artifacts and the
+  trusted docs (`check-regress.mjs` `changedUnderTest`, the closed exemptions it already owns): both sides would run the
+  same code, so "no gate flipped" would be true for free. Decided at the partition, before any gate runs. Stated, and
+  kept on purpose (fail-closed): the exemptions answer "the build did not write this", not "no gate reads this", so a
+  change that is ONLY a human edit to a trusted doc, or to a pipeline artifact a gate happens to read, is refused too,
+  and `--base` cannot clear it — a false stop, never a false green. Not refused: a run whose only non-exempt changes are
+  paths the pre-run snapshot or the entry gates recorded (the build wrote nothing) still compares — those are real tree
+  differences from the base, just not this run's.
+- **`base_timed_out`, and `inconclusive` / `base-timed-out`** (verdict) — a base run the runner killed at
+  `--timeout-ms` is not a base result. When its head is red the verdict is `inconclusive`, `reason_code`
+  `base-timed-out`, exit 2, with the table still reported; under a green head nothing is masked and the verdict stands.
+  `base_timed_out` lists every timed-out base run whenever there is one (stamp path only; absent otherwise, so older
+  reports keep their bytes). One owner of the predicate: `gate-run-core.mjs` `timedOutRunIds`, which the reuse rule
+  calls too.
+- **`base-install-unreliable`** (refusal) — the BASE checkout lives in the temp root, outside the project
+  (`pharn/floor/base-worktree.mjs`), so its gates no longer resolve the HEAD tree's `node_modules` or `.bin`. A base
+  produced by this invocation with an install that was skipped over something to install, or that failed or timed out,
+  therefore has no dependencies; when such a base and HEAD are both red on a gate, a `no-regressions` verdict is
+  replaced by this refusal (`stage-regress-core.mjs` `unreliableInstallMasking`, `baseInstallNeeded`). Reused and
+  entry-derived evidence are not affected. This closes the former `regress-failed-install-false-green` bound for an
+  install that exits non-zero or times out (and for `--no-install` over a lockfile or declared dependencies); it stays
+  open for an `--install` command that exits 0 without preparing anything, and for dependencies the base neither locks
+  nor declares.
+- **`plan-files-total-glob`** (refusal) — a `## Files` entry that declares everything (only `*` and `/`, or `.`) made
+  the partition count every path declared while the write hook drops it (`check-regress.mjs` `declaredClasses`). The
+  quick scope check refuses the same entry (`total-glob-declared`). Entries the hook drops (any glob) are reported as
+  `unenforced_globs` in `scope.json`, the quick check's document and `REGRESSION.md`, only when present.
+
+**Bounds (P0).** FLOOR: each decision is a membership/equality test over closed sets, stamps and the stage's own
+records. NOT claimed: a partially committed build with another uncommitted change still compares against a base that
+holds the committed part (only `--base` closes it); the base checkout still reaches an inherited `NODE_PATH`, global
+folders and an ancestor of the temp root; `baseInstallNeeded` sees lockfiles and declared dependencies, not a
+dependency resolved some other way; and a broad-but-not-total glob (`**/*.js`) is reported, never refused.
 
 ## The conditional `entry_gate_changes` block (6.42.0, advisory shape)
 
