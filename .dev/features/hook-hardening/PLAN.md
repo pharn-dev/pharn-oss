@@ -32,6 +32,8 @@ edit to both copies, and the builder checked the two function bodies stay identi
   long-path timing test.
 - `.claude/hooks/enforce-writes-scope.test.cjs` — **EDIT.** A long-path timing test.
 - `.claude/hooks/set-writes-scope.test.cjs` — **EDIT.** Case and Unicode variants of every control-surface path refused.
+- `.dev/memory-bank/lessons-learned.md` — **EDIT, by `/pharn-dev-memory-promote`.** L72, at the maintainer's request.
+- `docs/lessons-index.md` — **EDIT, by `gen-lessons-index.mjs`.** Regenerated after L72.
 - `CHANGELOG.md` — **EDIT.** A patch section.
 - `SKILLS_VERSION` — **EDIT.** Patch bump (hook sources are product surface).
 - `README.md` — **EDIT.** The version badge.

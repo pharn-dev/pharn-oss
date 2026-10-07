@@ -23,6 +23,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.53.1] - 2026-10-07
+
+### Fixed
+
+- 2026-10-07: **The two write-guard hooks judge a very long payload path in linear time.** Past
+  `MAX_RESOLVED_SEGMENTS` both drained their segment queue with `shift()`, which is O(n) per call, so a path of 100k
+  segments ran past 120 s (audit P3-Q). They now read the queue by index: same segments, same order, same verdict,
+  0.17 s. Such a path exceeds `PATH_MAX`, so no write could land either way; the fix removes an agent stall.
+- 2026-10-07: **`set-writes-scope.cjs` refuses the guards' control surface in any letter case.** Its membership test
+  compared case-sensitively, so `.CLAUDE/hooks/…` was emitted as scope (audit P3-R); `protect-trusted-paths.cjs` still
+  denied the write. The test now folds NFC and case, the way the protect hook keys its denylist.
+- 2026-10-07: **`LIMITS.md` and `THREAT-MODEL.md` catch up with 6.50.0–6.53.0.** §1d and §6 describe the always-reconciled
+  trusted docs and canon, the `merged` class, total-glob refusal and `base_source`; a new §10 states the Node runtime
+  floor. All five files above were applied by the maintainer with a reviewed, sha256-pinned script that deleted itself.
+- 2026-10-07: **L72 promoted** (apparatus): renaming a shared enum member is an API change.
+
 ## [6.53.0] - 2026-10-07
 
 ### Added
