@@ -149,3 +149,71 @@ spellings, each paired with a control (L60).
 **blocked-with-1-floor-finding.** Recommendation: **fix-first**. Re-check `badPath` / `.git` / `isControl` over the
 `realpathSync.native` spelling (closes the blocking finding and the important `.pharn/` / `pharn/features/` finding).
 Add the volume-gated tests, then re-run verify and review. The minor findings can ride along or be named follow-ups.
+
+## Re-review after fix-first (78adb0d)
+
+This is a focused re-check of `git diff b22a225..78adb0d`, not a full new review.
+
+Floor: `validate.mjs .` is GREEN (37). `node --test` over `apply-plan-deletions.test.mjs` and
+`check-build-complete.test.mjs` gives 30/30 pass. The orchestrator reports iteration 3 regress and verify as green;
+this re-check did not re-run them.
+
+### Repro and evasions (macOS, APFS case-insensitive)
+
+Each item ran alone, in a fresh scratch project, through the fixed helper.
+
+| Declared `(delete)` path                                      | Exit | Result                                                                      |
+| ------------------------------------------------------------- | ---- | --------------------------------------------------------------------------- |
+| `LIMITſ.md` (U+017F)                                          | 2    | `control-path`, nothing deleted                                             |
+| `.claude/ſettings.json`                                       | 2    | `control-path`, nothing deleted                                             |
+| `.PHARN/writes-scope.json`                                    | 2    | `bad-path`, nothing deleted                                                 |
+| `PHARN/features/other/SPEC.md`                                | 2    | `bad-path`, nothing deleted                                                 |
+| `pharn/featureſ/other/SPEC.md`                                | 2    | `bad-path`, nothing deleted                                                 |
+| `.claude/hooKs/protect-trusted-paths.cjs` (U+212A Kelvin)     | 2    | `control-path`, nothing deleted                                             |
+| `PHARN/FLOOR/validate.mjs`, `LIMITS.MD`                       | 2    | `control-path`, nothing deleted                                             |
+| `pharn/ﬂoor/validate.mjs` (U+FB02 ligature)                   | 2    | `control-path`, nothing deleted                                             |
+| `.dev/memory-bank/leſſons-learned.md` (canon)                 | 2    | `control-path`, nothing deleted                                             |
+| `LIMITS.md` plus a trailing space (trimmed by `clean`)        | 2    | `control-path`, nothing deleted                                             |
+| `./LIMITS.md`, `a/../LIMITS.md`                               | 2    | `bad-path`, nothing deleted                                                 |
+| `hardlink-to-limits.md` (a hard link to LIMITS.md)            | 2    | `control-path` (dev/ino), nothing deleted                                   |
+| `pharn/CONSTITUTION.md.` (trailing dot)                       | 0    | reported `absent` (a distinct name on APFS), nothing deleted                |
+| `café/x.md` (NFD spelling of an NFC directory, ordinary file) | 0    | deleted. Correct: normalization-equivalent and not a control path (control) |
+
+No spelling I tried deleted a control, trusted, `.pharn/` or `pharn/features/` path.
+
+### Per-finding status
+
+- **Blocking (control-path spelling): FIXED.** `bad-path` and `control-path` now also run over the leaf's
+  `realpathSync.native` spelling. A failed resolve, or a spelling outside the root, refuses (fail closed). Existing
+  exact members are also compared by dev/ino. Volume-gated tests pin the long-s cases.
+- **Important (`.pharn/` / `pharn/features/` letter case): FIXED.** The two prefixes are folded, and the on-disk
+  spelling check runs as well. New table rows cover each, with controls.
+- **Minor (test coverage): FIXED.** Upper-case and mixed-case rows, on-disk long-s cases and a hard-link case were
+  added.
+- **Minor (one space vs `[ \t]+`): FIXED, by tightening the code.** `DELETE_MARKER_RE` now requires exactly one
+  space. Two spaces or a tab is a near-miss and refuses, so it fails closed. The docs, CHANGELOG and tests agree.
+- **Minor (P3 import from the reconcile CLI): ADDRESSED AS A STATED BOUND.** The module header, guide and CHANGELOG
+  now name it, with the follow-up `apply-deletions-core-extract`. It is not extracted, which is acceptable as a named
+  follow-up.
+- **Minor (TOCTOU): ADDRESSED AS A STATED BOUND.** The header, the `pharn-build.md` claims bullet ("check-then-act
+  gap"), the guide and the CHANGELOG name it under the non-adversarial model.
+- **Minor (marker after the description): FIXED as a stated bound.** The core header, `pharn-plan.md` and the
+  CHANGELOG state it, and a `check-build-complete.test.mjs` row pins it.
+
+### P0 prose
+
+The `pharn-build.md` "Floor:" bullet now reads "judged as written and on disk … (regex + membership +
+`lstat`/`realpath`)", carries a NARROWED clause naming the check-then-act gap, and keeps "nothing else deletes" as
+advisory. `pharn-plan.md` and the CHANGELOG now say "Refused, and not deleted" with the on-disk qualification. The
+module header bounds the identity to "the volume as it stands" and to platforms whose realpath returns the stored
+spelling. I found no remaining unqualified "never deleted".
+
+### New defects from the fixes
+
+None found. One observation, not a finding: the dev/ino rule also refuses deleting an ordinary file that happens to be
+a hard link to a trusted or guard file. That is conservative and fails closed.
+
+### Re-review verdict
+
+**GREEN: 0 floor findings outstanding.** Recommendation: **merge**. The follow-up `apply-deletions-core-extract` stays
+named.
