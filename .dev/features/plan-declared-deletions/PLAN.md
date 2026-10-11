@@ -103,6 +103,9 @@ must be ABSENT by `lstat` ENOENT (L54). New output keys, additive: `deletions[]`
 `complete` iff `missing[]` and `undeleted[]` are both empty; `incomplete` (exit 1) otherwise; inconclusive (exit 2)
 when both concrete sets are empty, on a near-miss, on a conflicting declaration, or on an `lstat` error other than
 ENOENT. A marked glob or placeholder is `skipped[]` as today (the helper refuses it, so the build stops first).
+**Every** output, each new inconclusive branch included, keeps `complete` a boolean and `missing[]` / `skipped[]`
+string arrays (amended after grill, G2): `stage-verify-core.mjs`'s `checkCompleteness` refuses any other shape as
+`child-crashed` before a gate runs, so a new branch that dropped one would turn a refusal into a crash.
 **Bound, stated:** "absent" is not "deleted by this build" — a marked path that never existed reads `complete`, and a
 typo'd marked path leaves the intended file in place with every checker green (no git in this checker, P7).
 
@@ -149,9 +152,12 @@ that is the existing S9 "a stage refuses", unchanged). It imports `runtime-floor
 `import.meta.main` (`.dev/floor/entry-point-guard.test.mjs`).
 
 **Interaction with the guards, stated (L19).** The writes-scope hooks never see the unlink (Bash). Reconcile does,
-afterwards: the build's anchor (Step 0) precedes the helper, the path stays in git's index, so the deletion is a
-candidate judged against the plan's scope — permitted, because the setter scoped the bare marked path (scenario A). A
-control path never reaches the unlink (step 3). **It is not staged** (`unlinkSync`, not `git rm`): staging would move
+afterwards: the build's anchor (Step 0) precedes the helper. For a **tracked** path the unlink leaves it in git's
+index, so the deletion is a candidate judged against the plan's scope — permitted, because the setter scoped the bare
+marked path (scenario A). For an **untracked** path (amended after grill, G1) nothing is left to enumerate, so it is
+reconcile's "present at anchor, absent now" WARN, judged by nothing; the scope checks never see it either (no git
+change). That is acceptable only because the helper deletes nothing but marked paths. A control path never reaches
+the unlink (step 3). **It is not staged** (`unlinkSync`, not `git rm`): staging would move
 it into reconcile's unjudged WARN branch (scenario B), and every other build write is unstaged too; `/pharn-loop`'s
 commit stages tracked deletions in scope by itself.
 
@@ -233,7 +239,7 @@ No Capability is added or changed, so no `evals/` pair is owed. Every new behavi
 above:
 
 - `plan-files-core` (in `check-build-complete.test.mjs`) → the exact marker sets `delete`; each near-miss sets `deleteNearMiss`; `(delete)` inside the back-ticks, in a later description, or after `(new)` sets neither; `value` is unchanged for a fixture with and without markers.
-- `check-build-complete` → marked + absent = complete; marked + present (file, directory, dangling link) = incomplete with `undeleted`; only-deletions plan = complete; near-miss / conflict / non-ENOENT lstat = inconclusive; ★ PARITY setter scope == `declared ∪ deletions`.
+- `check-build-complete` → marked + absent = complete; marked + present (file, directory, dangling link) = incomplete with `undeleted`; only-deletions plan = complete; near-miss / conflict / non-ENOENT lstat = inconclusive, each document accepted by `stage-verify-core.mjs`'s `checkCompleteness` (G2); ★ PARITY setter scope == `declared ∪ deletions`.
 - `apply-plan-deletions` → each `PATH_KINDS` member; each refusal code with a passing control; one bad entry deletes nothing; a second run reports `absent`; the committed `pharn-build.md` line, read from the file, run under `sh -c` in a throwaway project.
 - `render-verify` → `undeleted[]` rendered as fenced DATA; a hostile path stays inside the fence.
 - `check-quick-scope` / `check-bash-reconcile` → the four probe rows A–D, as locks on behaviour this increment relies on and does not change.
@@ -251,7 +257,7 @@ above:
 ## Trust audit (P2)
 
 - `PLAN.md` `## Files` (untrusted) → the marker is read by regex only; paths become `lstat`/`unlink` operands after validation and never reach a shell (the pinned line carries only `<name>`); every path in the helper's JSON, in `undeleted[]`, and in VERIFY.md is quoted as DATA (JSON-quoted or fenced); a refusal names a closed code first.
-- A hostile PLAN can at most make the helper delete a regular, tracked-or-untracked, non-control file inside the project that the plan also scoped — the same reach the Write tool already has under that scope (it could truncate the file), and reconcile judges the deletion against that scope.
+- A hostile PLAN can at most make the helper delete a regular, tracked-or-untracked, non-control file inside the project that the plan also scoped — the same reach the Write tool already has under that scope (it could truncate the file); reconcile judges a tracked path's deletion against that scope, and an untracked one's only as a WARN (G1).
 
 ## Determinism audit (P5)
 
@@ -266,6 +272,17 @@ above:
 - `reconcile-index-removed-deletion` — scenario D: an undeclared `git rm` reads `CLEAN` at reconcile (the scope check catches it).
 - `plan-declared-directory-deletion` — a marked directory is refused; files are listed one by one.
 - `loop-fix-list-undeleted` — only if Q2 is answered (a).
+
+## Amended after grill
+
+`/pharn-dev-grill` (`GRILL.md`) raised two concerns this plan takes; neither changes the approved intent, `## Files` is
+unchanged, and the four GATE-1 answers stand.
+
+- **G1** — D4 and the trust audit said the helper's deletion is always judged by reconcile against the scope. That holds
+  for a tracked path only; an untracked marked file becomes a WARN. Both sentences now say so.
+- **G2** — D2 now requires every `check-build-complete.mjs` output, the new inconclusive branches included, to keep the
+  shape `checkCompleteness` accepts, and the checker's suite runs each new branch's document through
+  `checkCompleteness` (the test list below gains that case).
 
 ## Self-checks (this stage)
 
