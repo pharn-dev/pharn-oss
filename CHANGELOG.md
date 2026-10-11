@@ -23,6 +23,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.57.0] - 2026-10-11
+
+### Changed
+
+- **The `reconcile` gate now judges every deletion like a write.**
+  - What changed: `pharn/floor/check-bash-reconcile.mjs` treats a path that was present at the anchor and is gone from
+    disk as a changed path. It is judged by the write guards and the recorded scopes, so an undeclared deletion is an
+    `ESCAPE`, whether it was made with `rm`, with `git rm`, by a commit, or by unlinking an untracked file. A path
+    still on disk that git no longer lists, because it became git-ignored, stays a warning and is not judged.
+  - Why: 6.56.0 measured that only a tracked file removed from the worktree alone was judged. A `git rm`, a committed
+    deletion or an untracked file was a warning that nothing judged, so an undeclared `git rm` read `CLEAN`. This was a
+    measured gap, not an observed escape, and the scope checks already caught a tracked one.
+  - The `merged` class now covers an upstream deletion: a path that upstream removed and HEAD merged during the window
+    is listed in `merged[]`, not as an escape. A deletion the build commits itself still fails.
+  - What can newly fail: an undeclared deletion in the build-to-verify window. A maintainer's own committed local
+    deletion also fails `npm run check` while a stale `.pharn/reconcile/baseline.json` sits in the checkout, exactly as a
+    committed local edit already did.
+  - This corrects `CHANGELOG [6.56.0]`'s statement that a deletion staged with `git rm`, or of an untracked file, is a
+    warning that nothing judges. `/pharn-build`'s deletion helper is unchanged, and its untracked deletions are now
+    judged against the plan's scope too.
+  - `LIMITS.md` §6 gains one sentence stating this, applied by a human.
+  - `reconciliation-record.md` §2a, §3 and §5 state the rule.
+- **The always-reconciled set's loader and matcher moved into `pharn/floor/reconcile-ignore-core.mjs`.** Behaviour is
+  unchanged. `check-bash-reconcile.mjs` re-exports them under the same names, and `apply-plan-deletions.mjs` now
+  imports the core instead of the reconcile CLI module. A test pins that both modules expose the same functions.
+
 ## [6.56.0] - 2026-10-11
 
 ### Added

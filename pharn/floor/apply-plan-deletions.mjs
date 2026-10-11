@@ -39,10 +39,8 @@
 // BOUND, check-then-act (TOCTOU): every path is validated first and unlinked after, and `unlinkSync` re-resolves the
 // parent chain, so a parent swapped for a symlink in between is followed. Nothing in this module prevents that; the
 // model is NON-ADVERSARIAL (a mistaken or careless PLAN, not a concurrent attacker), as for the reconciler it relies on.
-// LOAD GRAPH, stated (review P3): `isAlwaysReconciled` / `loadIgnoreData` are imported from the reconcile CLI module, so
-// that module's exports are now a shared API with a second reason to change. Accepted for now — the CLI runs only under
-// `import.meta.main`, and a copy of the set would be a third store (L35). Named follow-up: `apply-deletions-core-extract`
-// (move the set's loader and matcher into a core both import).
+// LOAD GRAPH (6.57.0): `isAlwaysReconciled` / `loadIgnoreData` come from `reconcile-ignore-core.mjs`, the one owner of
+// the always-reconciled set, which `check-bash-reconcile.mjs` imports too — never from that CLI module (L35).
 //   not-a-regular-file       — the path holds a directory, a symlink (a dangling or looping one included) or anything
 //                              that is not a regular file; links are never followed (L59)
 //   unlink-failed            — an unlink failed with anything but ENOENT; `deleted[]` lists what was already removed
@@ -54,12 +52,11 @@
 // else crashed.
 //
 // WHAT IT IS NOT (P0), stated: a deletion here is an `unlinkSync` reached through Bash, so neither PreToolUse guard sees
-// it. Reconcile judges it afterwards: the build's anchor precedes this line, and a TRACKED file unlinked from the
-// worktree stays in git's index, so `check-bash-reconcile.mjs` makes it a candidate judged against the anchored scope —
-// which holds the bare marked path, because the setter reads the back-ticked text and the marker sits after it. An
-// UNTRACKED marked file leaves nothing to enumerate and is only that checker's "present at anchor, absent now" WARN
-// (`reconciliation-record.md` §3). It never stages (`git rm` would move a tracked deletion into that WARN branch too);
-// `/pharn-loop`'s commit stages tracked deletions in scope by itself. That `/pharn-build` runs this line, and deletes
+// it. Reconcile judges it afterwards: the build's anchor precedes this line, and since 6.57.0 `check-bash-reconcile.mjs`
+// makes every path the anchor hashed and that is gone from disk a candidate — tracked or untracked — judged against the
+// anchored scope, which holds the bare marked path, because the setter reads the back-ticked text and the marker sits
+// after it (`reconciliation-record.md` §3). It never stages; `/pharn-loop`'s commit stages tracked deletions in scope
+// by itself. That `/pharn-build` runs this line, and deletes
 // nothing any other way, is advisory command discipline. That the deleted file SHOULD have been deleted is the plan's
 // claim, never this module's.
 //
@@ -72,7 +69,7 @@ import { pathsFromPlanFiles, clean, isConcrete } from "./plan-files-core.mjs";
 import { badPath } from "./ac-tests-core.mjs";
 import { containmentWalk, lstatSafe } from "./stage-runtime.mjs";
 import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
-import { isAlwaysReconciled, loadIgnoreData } from "./check-bash-reconcile.mjs";
+import { isAlwaysReconciled, loadIgnoreData } from "./reconcile-ignore-core.mjs";
 
 /** The closed refusal codes, in the order the checks run. */
 export const REFUSALS = Object.freeze([

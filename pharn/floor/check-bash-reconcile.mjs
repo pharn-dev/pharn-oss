@@ -77,7 +77,10 @@
 //     design (it is what makes `.pharn/` scratch, `runs/**` and `node_modules/` free) and by consequence
 //     (a Bash write there is never reported). See pharn/floor/reconcile-ignore.json. A symlink is reconciled as
 //     the LINK (its text, since 6.20.8), never as its target: a write through it lands on the target's own
-//     path, and a target outside the set (outside the repo, or ignored) is not seen through the link.
+//     path, and a target outside the set (outside the repo, or ignored) is not seen through the link. A DELETION is
+//     a change (6.57.0): a path the anchor hashed that is gone from disk is judged like a write, whether git still
+//     lists it or not (see DELETIONS); a path still on disk that LEFT the set because it became ignored is only a
+//     warning — this bound again.
 //  2. THE WINDOW is anchor -> reconcile (build -> verify). A write before the anchor is baked into the
 //     baseline and is invisible; a later anchor RESETS, which is why anchoring is at build ONLY.
 //  3. ONE WORKTREE. Two agent sessions sharing a tree share `.pharn/`, so a second session's writes can
@@ -137,18 +140,19 @@
 //   build DID run, so there an absent baseline is a real refusal.
 
 import "./runtime-floor.mjs";
-import { readFileSync, writeFileSync, existsSync, statSync, mkdtempSync, mkdirSync, copyFileSync } from "node:fs";
-import { resolve, join, dirname, basename } from "node:path";
+import { readFileSync, writeFileSync, existsSync, statSync, lstatSync, mkdtempSync, mkdirSync, copyFileSync } from "node:fs";
+import { resolve, join, basename } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
-import { fileURLToPath } from "node:url";
 import { enumerate, hashFile, RECORD_VERSION, RECORD_PATH } from "./reconcile-baseline.mjs";
 import { openRun } from "./run-marker.mjs";
 import { WIDENED_REASON, ESCAPE_REASONS } from "./reconcile-detail-core.mjs";
+import { IGNORE_DATA_PATH, loadIgnoreData, isHumanOnly, isAlwaysReconciled } from "./reconcile-ignore-core.mjs";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-export const IGNORE_DATA_PATH = join(HERE, "reconcile-ignore.json");
+// The always-reconciled set's loader and matcher live in reconcile-ignore-core.mjs since 6.57.0 (one owner, L35; the
+// deletion helper imports them from there). Re-exported here under the same names, so no importer of this module changes.
+export { IGNORE_DATA_PATH, loadIgnoreData, isHumanOnly, isAlwaysReconciled };
 export const VERDICTS = ["CLEAN", "ESCAPE", "NO_BASELINE", "INCONCLUSIVE"];
 
 // --- the hook's matcher, copied faithfully (see THE ONE DUPLICATION above). `**` spans segments; `*`
@@ -175,24 +179,6 @@ export function globToRegExp(glob) {
 
 export function matchesAny(rel, globs) {
   return globs.some((g) => globToRegExp(g).test(rel));
-}
-
-export function loadIgnoreData(path = IGNORE_DATA_PATH) {
-  const raw = JSON.parse(readFileSync(path, "utf8"));
-  const exempt = (raw.exempt?.paths ?? []).map((e) => String(e.path));
-  const neverExempt = (raw.never_exempt?.paths ?? []).map(String);
-  const alwaysExact = (raw.always_reconciled?.exact ?? []).map(String);
-  const humanOnly = (raw.always_reconciled?.human_only ?? []).map(String);
-  const humanOnlyPrefixes = (raw.always_reconciled?.human_only_prefixes ?? []).map(String);
-  const alwaysPrefixes = (raw.always_reconciled?.prefixes ?? []).map(String);
-  // A `never_exempt` member may NEVER be exempted, whatever `exempt` says. Enforced here (not only in a
-  // test) so a bad edit fails closed at RUN time rather than only under `npm test`.
-  const offenders = exempt.filter((p) => neverExempt.includes(p));
-  if (offenders.length) {
-    return { ok: false, reason: `reconcile-ignore.json exempts a never_exempt path: ${offenders.join(", ")}` };
-  }
-  const pipelineNames = (raw.pipeline_artifacts?.names ?? []).map(String);
-  return { ok: true, exempt, neverExempt, alwaysExact, humanOnly, humanOnlyPrefixes, alwaysPrefixes, pipelineNames };
 }
 
 // --- A stage's OWN pipeline artifact (lessons-learned L17). `pharn/features/<slug>/<NAME>` or the same under
@@ -226,16 +212,6 @@ export function isPipelineArtifact(rel, data, activeSlug = null) {
   return /^lenses\/[A-Za-z0-9._-]+\/findings\.json$/.test(tail);
 }
 
-// The human-only half (6.53.0): the four trusted docs, CODEOWNERS at its three locations, the project SPEC template,
-// and the whole memory-bank canon subtree, dev and product. Listed in reconcile-ignore.json, pinned to the hook.
-export function isHumanOnly(rel, data) {
-  return (data.humanOnly ?? []).includes(rel) || (data.humanOnlyPrefixes ?? []).some((p) => rel.startsWith(p));
-}
-
-export function isAlwaysReconciled(rel, data) {
-  return data.alwaysExact.includes(rel) || data.alwaysPrefixes.some((p) => rel.startsWith(p)) || isHumanOnly(rel, data);
-}
-
 // The one-line remedy a human-only escape carries (6.53.0, GATE-1 addition). Reconcile has no attribution
 // (lessons-learned L68), so a maintainer's own uncommitted edit of a trusted doc, CODEOWNERS, the SPEC template or
 // canon reads exactly like a stray Bash write; this tells them what to do instead of how to silence it.
@@ -260,6 +236,32 @@ export function normalizeSetBy(setBy) {
 export function isCommandOrigin(setBy) {
   const m = /^\.claude\/commands\/([^/]+\.md)$/.exec(normalizeSetBy(setBy));
   return m !== null && m[1] !== ".." && !m[1].startsWith("..");
+}
+
+// ================================ DELETIONS (6.57.0, deletion-follow-ups) ================================
+//
+// WHY (measured, not hypothetical — reconciliation-record.md §3): the enumeration is `git ls-files --cached --others
+// --exclude-standard`, so a path the anchor hashed and git no longer lists — removed with `git rm`, deleted by a
+// commit, or an untracked file unlinked — used to be only a "present at anchor, absent now" WARN, judged by nothing:
+// an undeclared `git rm` read CLEAN (the 6.56.0 plan's scenario D, re-probed in deletion-follow-ups). A TRACKED file
+// unlinked from the worktree alone was already judged (git still lists it; it hashes to nothing). Now every such path
+// is classified by `absenceState`, and a deletion is a CANDIDATE judged exactly like a modified path: the real guard,
+// then the recorded scopes, then the default probe; an upstream merge's deletion is classified `merged` (below).
+//
+// absenceState answers from `lstat` — never stat/existsSync, which FOLLOW a link (L54, L59): a dangling or
+// re-pointed symlink left at the path is "present". ENOENT / ENOTDIR (a parent component is now a file) are the
+// only proof of absence → "gone". Any other lstat error → "unreadable", which the caller treats as gone (a
+// candidate) — fail closed, the "unreadable is changed" rule of §3. "present" = still on disk but no longer listed
+// by git: it became git-ignored (a `git rm --cached` plus an ignore rule, say), which is the stated ignored-paths
+// bound (bound 1) — reported as a WARN, never judged. A DIRECTORY now at the path is "gone": the anchor hashed a file
+// or a link there (never a directory — hashFile returns null for one), so the entry it recorded no longer exists; the
+// files inside the new directory are new paths, judged on their own.
+export function absenceState(root, rel) {
+  try {
+    return lstatSync(resolve(root, rel)).isDirectory() ? "gone" : "present";
+  } catch (e) {
+    return e && (e.code === "ENOENT" || e.code === "ENOTDIR") ? "gone" : "unreadable";
+  }
 }
 
 // --- EXECUTE a hook against one candidate path and read its exit code. -----------------------------
@@ -380,6 +382,9 @@ export function makeDefaultProbeSandbox(root) {
 //       classification (U's newer bytes for the path are not HEAD's; M's still are).
 // The digest of a blob is the baseline's own rule: SHA-256 of its bytes, or of `symlink\0` + bytes for mode
 // 120000. Only modes 100644 / 100755 / 120000 qualify; a gitlink or a tree is never classified.
+// A DELETION (6.57.0) qualifies on the same (a)–(c) and: (d) its anchored bytes are X's blob; (e) it is gone from
+// disk; (f) it is ABSENT at H and ABSENT at M. Upstream's removal merged into HEAD is `merged`; a deletion the build
+// committed itself still has the path at M, so it stays an escape (the anti-laundering condition, for deletions).
 //
 // WHY ONLY WOULD-BE ESCAPES: an authorized path is never re-labelled, and a CLEAN run makes no extra git call.
 // It applies to every escape KIND — a trusted doc or canon (protect-trusted-paths.cjs), the control surface,
@@ -519,7 +524,22 @@ export function classifyMerged(root, baseline, files) {
   }
   for (const rel of files) {
     const atH = blobAt(root, h, rel);
-    if (!atH || atH.absent) continue;
+    if (!atH) continue;
+    if (atH.absent) {
+      // A DELETION (6.57.0): upstream removed the path and HEAD merged that removal. (f) absent at H AND at M — a
+      // null at either (a tree, a gitlink, an unusual mode, a git failure) keeps the escape; a deletion the build
+      // commits itself leaves the path PRESENT at M, so it stays an escape. (e) gone from disk now. (d) the anchored
+      // bytes are X's blob — so the epoch opened on the committed file, unedited.
+      const atM = blobAt(root, m, rel);
+      if (!atM || !atM.absent) continue; // (f)
+      if (absenceState(root, rel) !== "gone") continue; // (e)
+      const atX = blobAt(root, x, rel);
+      if (!atX || atX.absent) continue;
+      const anchored = Object.hasOwn(baseline.entries, rel) ? baseline.entries[rel] : undefined;
+      if (anchored !== atX.digest) continue; // (d)
+      merged.push(rel);
+      continue;
+    }
     const atM = blobAt(root, m, rel);
     if (!atM || atM.absent || atM.oid !== atH.oid || atM.mode !== atH.mode) continue; // (f)
     if (hashFile(resolve(root, rel)) !== atH.digest) continue; // (e)
@@ -654,9 +674,16 @@ function main(argv) {
     }
     const cs = controlSurfaceChanges();
     if (cs) for (const rel of cs) if (!candidates.includes(rel)) candidates.push(rel);
+    // A path the anchor hashed that git no longer lists (6.57.0 — see absenceState). Gone from disk, or not lstat-able:
+    // a CANDIDATE, judged like any other change. Still on disk: it left the reconciled set (now git-ignored), a WARN.
     for (const rel of Object.keys(baseline.entries)) {
-      // A deletion is not an escape: nothing was WRITTEN. Reported so it is never silently swallowed.
-      if (!seen.has(rel)) warnings.push(`present at anchor, absent now: ${rel}`);
+      if (seen.has(rel)) continue;
+      if (absenceState(root, rel) === "present") {
+        warnings.push(`present at anchor, still on disk, no longer in the reconciled set (git-ignored now?) — not judged: ${rel}`);
+        continue;
+      }
+      warnings.push(`present at anchor, absent now — judged as a change: ${rel}`);
+      if (!candidates.includes(rel)) candidates.push(rel);
     }
   } else {
     if (requireBaseline) {

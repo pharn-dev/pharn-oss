@@ -442,11 +442,11 @@ node pharn/floor/build-gate.mjs --feature <name> --mode targeted|full --timeout-
 # control-path also run over the leaf's realpathSync.native spelling — the spelling-only first version deleted
 # LIMITS.md via `LIMITſ.md` (U+017F, folded by APFS, not by toLowerCase); realpath failure refuses (fail closed).
 # BOUNDS added there: validate-all-then-unlink is check-then-act (a parent swapped for a symlink in between is followed;
-# non-adversarial model); the always-reconciled set is imported from the reconcile CLI module (follow-up
-# `apply-deletions-core-extract`); the marker is exactly ONE space then `(delete)` — two spaces or a tab is a near-miss,
+# non-adversarial model); the always-reconciled set is imported from reconcile-ignore-core.mjs (6.57.0, the former
+# follow-up `apply-deletions-core-extract`; before, from the reconcile CLI module); the marker is exactly ONE space then `(delete)` — two spaces or a tab is a near-miss,
 # and `(delete)` after the description is an ordinary item nothing reports. It UNLINKS and never stages: a tracked file then stays
 # in git's index, so check-bash-reconcile.mjs judges it against the anchored scope (holding the bare path); an untracked
-# one, or one a `git rm` removed, is only a WARN (reconciliation-record.md §3, corrected here). THE SCOPE CHECKS ARE
+# one, or one a `git rm` removed, was only a WARN in 6.56.0 and since 6.57.0 is judged the same way (reconciliation-record.md §3). THE SCOPE CHECKS ARE
 # UNCHANGED (decision D3): they read the bare path, so a deleted marked path is declared; a marked path left in place is
 # caught at verify as undeleted. BOUNDS: absent is not "deleted by this build"; a synonym (`(remove)`) is an ordinary
 # item; the unlink is a Bash-side write, so that /pharn-build deletes nothing another way is advisory; a marked directory

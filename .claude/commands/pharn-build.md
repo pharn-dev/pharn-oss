@@ -303,7 +303,7 @@ stage adds no new floor primitive.
 - **Floor:** `apply-plan-deletions.mjs` deletes only the plan's `(delete)`-marked, concrete, regular, non-control
   files inside the project, judged as written and on disk, validating all before removing any (regex + membership +
   `lstat`/`realpath`). **NARROWED:** an unlink through Bash, outside both hooks, with a check-then-act gap (its
-  header); reconcile judges a tracked one against the plan's scope
+  header); reconcile judges each one against the plan's scope
   afterwards (`reconciliation-record.md` §3). That nothing else deletes is advisory.
 - **Advisory:** invoking each gate and obeying it (the verdict is floor; the act is orchestration); writing through
   the write tools rather than Bash, and scoping a formatter (Step 3 — no shell command is parsed); the
