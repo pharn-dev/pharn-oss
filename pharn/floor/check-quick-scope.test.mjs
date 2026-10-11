@@ -339,6 +339,28 @@ test("a deleted undeclared file escapes; a path under .pharn/ is never counted, 
   }
 });
 
+// 6.56.0 (plan-declared-deletions, decision D3): the scope check is NOT taught the `(delete)` marker — it reads the bare
+// back-ticked path, so a marked path that was deleted is declared, whether removed from the worktree or from the index.
+// The test above is this one's control: the same deletion, undeclared, escapes.
+test("6.56.0 — a path the PLAN marks `(delete)` is declared: deleting it (unlink or git rm) does not escape", () => {
+  for (const how of ["unlink", "git rm"]) {
+    const { dir, base, git } = makeRepo();
+    try {
+      writeFileSync(
+        join(dir, "pharn", "features", "demo", "PLAN.md"),
+        "# PLAN\n\n## Files\n\n- `src/x.js` — declared\n- `src/y.js` (delete) — orphan\n\n## Next\n\nx\n"
+      );
+      if (how === "unlink") unlinkSync(join(dir, "src", "y.js"));
+      else git("rm", "-q", "--", "src/y.js");
+      const r = runCli(dir, ["--feature", "demo", "--base", base]);
+      assert.equal(r.status, 0, `${how}: ${r.stdout}`);
+      assert.deepEqual(r.doc.escaped, [], how);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
 test("a declared glob covers what it names and nothing else", () => {
   const { dir, base } = makeRepo({ declared: ["src/**"] });
   try {

@@ -156,6 +156,55 @@ test("★ NON-VACUITY CONTROL (L34): the suite cannot pass by reporting everythi
   );
 });
 
+// DELETIONS, as measured for plan-declared-deletions (6.56.0) and stated in reconciliation-record.md §3. A tracked file
+// removed from the WORKTREE only stays in git's index, is enumerated, hashes to nothing and is judged like a write
+// against the scope; a file gone from the index too (`git rm`) — or an untracked one — is only a WARN, judged by nothing.
+// These rows lock the behaviour apply-plan-deletions.mjs relies on (it unlinks, never stages).
+test("★ deletions: a worktree-only deletion is JUDGED against the scope; an index-removed or untracked one is a WARN", () => {
+  const fixture = () => {
+    const dir = makeRepo();
+    mkdirSync(join(dir, "src"), { recursive: true });
+    writeFileSync(join(dir, "src/declared.txt"), "a\n");
+    writeFileSync(join(dir, "src/undeclared.txt"), "b\n");
+    execFileSync("git", ["add", "-A"], { cwd: dir, stdio: "pipe" });
+    execFileSync("git", ["commit", "-q", "-m", "two tracked files"], { cwd: dir, stdio: "pipe" });
+    writeFileSync(join(dir, "src/untracked.txt"), "c\n");
+    setScope(dir, ["src/declared.txt", "src/untracked.txt"]);
+    assert.equal(anchor(dir).status, 0);
+    return dir;
+  };
+  const gitRm = (dir, p) => execFileSync("git", ["rm", "-q", "--", p], { cwd: dir, stdio: "pipe" });
+
+  // A — declared, unlinked: judged, permitted.
+  let dir = fixture();
+  unlinkSync(join(dir, "src/declared.txt"));
+  unlinkSync(join(dir, "src/untracked.txt"));
+  let r = check(dir);
+  assert.equal(r.json.verdict, "CLEAN", r.stdout);
+  assert.ok(r.json.warnings.includes("unreadable during reconcile, treated as changed: src/declared.txt"), "the tracked one was judged");
+  assert.ok(r.json.warnings.includes("present at anchor, absent now: src/untracked.txt"), "the untracked one is a WARN only");
+
+  // C — undeclared, unlinked: judged, denied → ESCAPE (the control for A).
+  dir = fixture();
+  unlinkSync(join(dir, "src/undeclared.txt"));
+  r = check(dir);
+  assert.equal(r.json.verdict, "ESCAPE", r.stdout);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    ["src/undeclared.txt"]
+  );
+
+  // B / D — removed from the index too: a WARN, declared or not (the named residual reconcile-index-removed-deletion;
+  // the scope checks still see D — check-quick-scope.test.mjs).
+  for (const p of ["src/declared.txt", "src/undeclared.txt"]) {
+    dir = fixture();
+    gitRm(dir, p);
+    r = check(dir);
+    assert.equal(r.json.verdict, "CLEAN", `${p}: ${r.stdout}`);
+    assert.ok(r.json.warnings.includes(`present at anchor, absent now: ${p}`), p);
+  }
+});
+
 test("★ no-scope FAIL-CLOSED: with no scope set, the default is delegated to the live hook", () => {
   const dir = makeRepo({ devRepo: true }); // dev posture: pharn/features/**, .dev/features/**, pharn/pharn-*/**
   anchorLegacyNoScope(dir); // D6: a fresh CLI anchor now REFUSES with no scope — see the legacy helper above

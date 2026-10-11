@@ -199,18 +199,34 @@ function completenessSection(report) {
     return out;
   }
   if (c.complete === true) {
-    out.push("completeness: build complete — every concrete path the PLAN declares exists.", "");
+    out.push(
+      "completeness: build complete — every concrete path the PLAN declares exists, and every one it marks `(delete)` is absent.",
+      ""
+    );
     return out;
   }
   const missing = Array.isArray(c.missing) ? c.missing : [];
-  if (c.complete === false && missing.length > 0) {
-    out.push(
-      quoteData(
-        "completeness: INCOMPLETE — plan-declared path(s) MISSING, quoted as DATA (they originate in the untrusted PLAN):",
-        missing.map(dataText).join("\n")
-      ),
-      ""
-    );
+  // 6.56.0: a path the PLAN marks `(delete)` that is still present. Optional in the capture (older reports lack it).
+  const undeleted = Array.isArray(c.undeleted) ? c.undeleted : [];
+  if (c.complete === false && (missing.length > 0 || undeleted.length > 0)) {
+    if (missing.length > 0) {
+      out.push(
+        quoteData(
+          "completeness: INCOMPLETE — plan-declared path(s) MISSING, quoted as DATA (they originate in the untrusted PLAN):",
+          missing.map(dataText).join("\n")
+        ),
+        ""
+      );
+    }
+    if (undeleted.length > 0) {
+      out.push(
+        quoteData(
+          "completeness: INCOMPLETE — path(s) the PLAN marks `(delete)` are STILL PRESENT, quoted as DATA (they originate in the untrusted PLAN):",
+          undeleted.map(dataText).join("\n")
+        ),
+        ""
+      );
+    }
     return out;
   }
   out.push("completeness: could not be asserted — the checker read no concrete declared path, or could not read the PLAN.", "");

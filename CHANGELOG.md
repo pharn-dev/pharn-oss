@@ -23,6 +23,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.56.0] - 2026-10-11
+
+### Added
+
+- **A PLAN can now delete files: mark a `## Files` item ``- `path` (delete)``.**
+  - What changed: `/pharn-build` runs a new floor CLI, `pharn/floor/apply-plan-deletions.mjs --feature <name>`, once
+    at the end of its Step 3. It removes every regular file the PLAN marks, after validating all of them first.
+    `check-build-complete.mjs` now requires a marked path to be absent (`lstat`), lists them in `deletions[]` and any
+    still present in `undeleted[]`, and reads a plan that only deletes files as complete. `VERIFY.md` names a path
+    still present, and `/pharn-ship`'s `INCOMPLETE` text counts it. `/pharn-plan` documents the marker.
+  - Why: a `/pharn-loop` hygiene run in a user's project could not delete orphaned files. Undeclared, the deletion was
+    a scope escape; declared, verify read `INCOMPLETE` because the path no longer existed.
+  - The marker is exactly `(delete)`, one space after the closing back-tick. A near-miss spelling (`(Delete)`,
+    `(deleted)`) is refused rather than read as an ordinary item; a synonym such as `(remove)` is an ordinary item, so
+    the file stays. A path both marked and unmarked is refused.
+  - Never deleted: a directory, any symlink, a glob or placeholder, a path under `.git`, `.pharn/` or `pharn/features/`,
+    a path through a symlinked parent, and the guards, floors, trusted docs, `CODEOWNERS`, SPEC template and canon.
+  - Bounds: the deletion is an unlink run through Bash, outside both write hooks, and is never staged. Reconcile judges
+    a tracked file's deletion against the plan's scope, which keeps the bare path; an untracked one is only a WARN.
+    "Absent" is not "deleted by this build". The scope checks are unchanged: they already admit a declared deletion and
+    still reject an undeclared one. `/pharn-loop`'s rebuild hand-off does not list `undeleted[]`; the rebuild re-runs
+    the deletion line. The dev loop has no deletion path.
+
+### Fixed
+
+- **`reconciliation-record.md` §3 said every deletion is a WARN; measured, that holds only when git no longer lists
+  the path.** A tracked file removed from the worktree alone is still enumerated and judged against the scope like a
+  write, so an undeclared one is an `ESCAPE`. A deletion staged with `git rm`, or of an untracked file, is a WARN and
+  judged by nothing; the scope checks still see a tracked one. Behaviour is unchanged and now pinned by a test.
+
 ## [6.55.0] - 2026-10-07
 
 ### Added

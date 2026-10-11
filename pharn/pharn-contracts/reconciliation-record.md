@@ -331,8 +331,19 @@ purpose: if it were only a warning, making a file unreadable would hide a denied
 this section listed it under WARN; the checker had already been treating it as changed, and the row was
 corrected in 6.17.1.)
 
-**WARN** (`warnings[]`, verdict unaffected): a path present at anchor and absent now — a deletion is not
-a write; a baseline written by an **older** schema version — _legacy records tolerated at read._
+**WARN** (`warnings[]`, verdict unaffected): a path present at anchor and absent now **and no longer listed by
+git** — an untracked file deleted, or a tracked one removed from the index too (`git rm`); a baseline written by an
+**older** schema version — _legacy records tolerated at read._
+
+**A deletion is judged only while git still lists the path (corrected in 6.56.0, measured).** The enumeration is
+`git ls-files --cached --others --exclude-standard`, so a TRACKED file removed from the worktree alone (`rm`, an
+`unlinkSync`) is still enumerated, hashes to nothing, and is the unreadable candidate above: judged against the
+scopes like a write — permitted when a scope covers the path, an `ESCAPE` when none does. Before 6.56.0 this section
+called every deletion a WARN; that held only for the index-removed and untracked cases. So a deletion staged with
+`git rm`, declared or not, is reported here and never judged; the scope check (`check-regress.mjs` /
+`check-quick-scope.mjs`, which list `git diff --name-only <base>`) still sees a tracked one (named residual
+`reconcile-index-removed-deletion`). `pharn/floor/apply-plan-deletions.mjs` deletes a plan's `(delete)`-marked
+paths with an unlink and never stages, so a tracked one is judged against the plan's scope, which holds the bare path.
 
 ## 4. The ignore/exempt data — `pharn/floor/reconcile-ignore.json`
 

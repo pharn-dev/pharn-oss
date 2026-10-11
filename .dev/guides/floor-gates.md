@@ -420,6 +420,37 @@ node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 node pharn/floor/build-gate.mjs --feature <name> --mode targeted|full --timeout-ms <N> [--budget-ms <B>] [--gates "<cmd>[::<id>],…"]
 ```
 
+## `apply-plan-deletions.mjs` / `check-build-complete.mjs` — plan-declared deletions
+
+```bash
+# PLAN-DECLARED DELETIONS (6.56.0, plan-declared-deletions). THE RECORDED FAILURE (P7): a /pharn-loop hygiene run in a
+# user's project could not delete orphaned files — undeclared, a deletion escaped the scope checks; declared,
+# check-build-complete.mjs required the path to EXIST, so verify read INCOMPLETE. THE MARKER (plan-files-core.mjs, the
+# one owner): ``- `path` (delete)`` — exactly `(delete)` after the closing back-tick; `entries[]` gain `delete` and
+# `deleteNearMiss` (a variant spelling, refused by both readers — L36); `value` is unchanged, so the setter (untouched,
+# hook-protected) still scopes the bare path, which /pharn-loop's commit (loop-closeout.mjs buildStageList) needs to stage
+# the tracked deletion. COMPLETENESS: marked paths must be ABSENT by lstat ENOENT (L54) → `deletions[]`, `undeleted[]`;
+# complete iff missing[] and undeleted[] are empty; an only-deletions plan can be complete (the empty-domain refusal is
+# over declared ∪ deletions, L34); near-miss / conflicting declaration / non-ENOENT lstat → inconclusive, every output in
+# the shape stage-verify-core.mjs checkCompleteness accepts. THE DELETION: /pharn-build runs apply-plan-deletions.mjs once,
+# unconditionally, last in Step 3 — the pinned line carries only <name> (no PLAN path reaches a shell; SHELL_VALUES).
+# Validate-all-then-unlink; refusals are a closed set (REFUSALS): usage, no-plan, plan-files-unparseable,
+# delete-near-miss, conflicting-declaration, delete-not-concrete, bad-path (ac-tests-core badPath + a `.git` segment +
+# a backslash), control-path (reconcile-ignore.json's always-reconciled set, exact and case-folded), containment,
+# not-a-regular-file (links never followed, L59), unlink-failed. It UNLINKS and never stages: a tracked file then stays
+# in git's index, so check-bash-reconcile.mjs judges it against the anchored scope (holding the bare path); an untracked
+# one, or one a `git rm` removed, is only a WARN (reconciliation-record.md §3, corrected here). THE SCOPE CHECKS ARE
+# UNCHANGED (decision D3): they read the bare path, so a deleted marked path is declared; a marked path left in place is
+# caught at verify as undeleted. BOUNDS: absent is not "deleted by this build"; a synonym (`(remove)`) is an ordinary
+# item; the unlink is a Bash-side write, so that /pharn-build deletes nothing another way is advisory; a marked directory
+# is refused; /pharn-loop's fix-list (FIX_LIST_SOURCES) does not carry undeleted[] (the rebuild re-runs the helper);
+# the dev loop has no deletion path. Ships: bumps SKILLS_VERSION.
+# Exit (apply-plan-deletions): 0 applied (possibly nothing) · 2 refused (closed reason_code) · anything else = crashed.
+# Exit (check-build-complete): 0 complete · 1 incomplete (missing[] or undeleted[]) · 2 inconclusive.
+node pharn/floor/apply-plan-deletions.mjs --feature <name>
+node pharn/floor/check-build-complete.mjs <PLAN.md> [repoDir]
+```
+
 ## `check-quick-scope.mjs` — the quick scope check
 
 ```bash

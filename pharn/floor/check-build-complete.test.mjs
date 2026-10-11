@@ -308,3 +308,154 @@ test("★ PARITY: a head-less exclusion CUE truncates both parsers, and its two 
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// ── PLAN-DECLARED DELETIONS (6.56.0, plan-declared-deletions) ─────────────────────────────────────────────
+// An item marked ``- `path` (delete)`` must be ABSENT after the build (lstat ENOENT — L54); unmarked items must
+// still exist. Every output keeps the capture shape stage-verify-core.mjs's checkCompleteness requires (GRILL G2).
+
+import { symlinkSync } from "node:fs";
+import { pathsFromPlanFiles, DELETE_MARKER_RE, DELETE_NEAR_MISS_RE } from "./plan-files-core.mjs";
+import { checkCompleteness } from "./stage-verify-core.mjs";
+
+const shapeOk = (r) => checkCompleteness(r.stdout).ok;
+
+test("★ plan-files-core: the exact marker sets `delete`; each near-miss sets `deleteNearMiss`; neither moves `value`", () => {
+  const lines = [
+    ["- `a.ts` (delete) — gone", true, false],
+    ["- `a.ts` (delete)", true, false],
+    ["- `a.ts`\t(delete)\t— tab", true, false],
+    ["- `a.ts` (Delete) — case", false, true],
+    ["- `a.ts` (DELETE)", false, true],
+    ["- `a.ts` ( delete ) — spaces", false, true],
+    ["- `a.ts` (deleted)", false, true],
+    ["- `a.ts` (deletes)", false, true],
+    ["- `a.ts`(delete) — no space", false, true],
+    ["- `a.ts` (delete)— no space after", false, true],
+    ["- `a.ts (delete)` — inside the back-ticks", false, false],
+    ["- `a.ts` — keep; the (delete) note below", false, false],
+    ["- `a.ts` (new) (delete)", false, false],
+    ["- `a.ts` (remove) — a synonym is an ordinary item (stated bound)", false, false],
+    ["- `a.ts` (deleted helper moved)", false, false],
+  ];
+  for (const [line, del, near] of lines) {
+    const p = pathsFromPlanFiles(`# PLAN\n\n## Files\n\n${line}\n`);
+    assert.equal(p.ok, true);
+    assert.equal(p.entries[0].delete, del, `delete for ${JSON.stringify(line)}`);
+    assert.equal(p.entries[0].deleteNearMiss, near, `deleteNearMiss for ${JSON.stringify(line)}`);
+    assert.equal(DELETE_MARKER_RE.test(line), del);
+    assert.equal(!del && DELETE_NEAR_MISS_RE.test(line), near);
+  }
+  // `value` is byte-identical with and without the marker (L72: additive members only).
+  const marked = pathsFromPlanFiles("# PLAN\n\n## Files\n\n- `x/a.ts` (delete) — d\n- `x/b.ts` — e\n");
+  const plain = pathsFromPlanFiles("# PLAN\n\n## Files\n\n- `x/a.ts` — d\n- `x/b.ts` — e\n");
+  assert.deepEqual(marked.value, plain.value);
+  assert.deepEqual(marked.value, ["x/a.ts", "x/b.ts"]);
+});
+
+test("★ a marked path that is absent → complete; an unmarked one must still exist", () => {
+  withPlan({ filesBody: "- `src/old.ts` (delete) — orphan\n- `src/keep.ts` — edited", existing: ["src/keep.ts"] }, (plan, root) => {
+    const r = run([plan, root]);
+    assert.equal(r.status, 0, r.stdout);
+    const o = json(r);
+    assert.equal(o.verdict, "complete");
+    assert.deepEqual(o.declared, ["src/keep.ts"]);
+    assert.deepEqual(o.deletions, ["src/old.ts"]);
+    assert.deepEqual(o.undeleted, []);
+    assert.deepEqual(o.missing, []);
+    assert.ok(shapeOk(r));
+  });
+  // CONTROL (L60): the same plan with the unmarked file gone is incomplete on `missing`.
+  withPlan({ filesBody: "- `src/old.ts` (delete) — orphan\n- `src/keep.ts` — edited" }, (plan, root) => {
+    const o = json(run([plan, root]));
+    assert.equal(o.verdict, "incomplete");
+    assert.deepEqual(o.missing, ["src/keep.ts"]);
+    assert.deepEqual(o.undeleted, []);
+  });
+});
+
+test("★ a marked path still present (a file, a directory, a dangling link) → incomplete, named in undeleted[]", () => {
+  withPlan(
+    {
+      filesBody: "- `src/old.ts` (delete) — orphan\n- `src/dir` (delete) — dir\n- `src/dl` (delete) — dangling",
+      existing: ["src/old.ts", "src/dir/x"],
+    },
+    (plan, root) => {
+      symlinkSync(join(root, "nowhere"), join(root, "src", "dl"));
+      const r = run([plan, root]);
+      assert.equal(r.status, 1);
+      const o = json(r);
+      assert.equal(o.verdict, "incomplete");
+      assert.equal(o.complete, false);
+      assert.deepEqual(o.undeleted, ["src/old.ts", "src/dir", "src/dl"]); // the dangling link is PRESENT (L54)
+      assert.deepEqual(o.missing, []);
+      assert.ok(shapeOk(r));
+    }
+  );
+});
+
+test("★ a plan that ONLY deletes files can be complete — the empty-domain refusal covers declared ∪ deletions (L34)", () => {
+  withPlan({ filesBody: "- `content/blog/a.mdx` (delete) — orphan\n- `.vscode/settings.json` (delete) — orphan" }, (plan, root) => {
+    const r = run([plan, root]);
+    assert.equal(r.status, 0, r.stdout);
+    const o = json(r);
+    assert.equal(o.verdict, "complete");
+    assert.deepEqual(o.declared, []);
+    assert.deepEqual(o.deletions, ["content/blog/a.mdx", ".vscode/settings.json"]);
+  });
+  // CONTROL: a plan with no concrete item at all is still inconclusive, in the capture shape.
+  withPlan({ filesBody: "- `<path>` (delete) — placeholder" }, (plan, root) => {
+    const r = run([plan, root]);
+    assert.equal(r.status, 2);
+    assert.equal(json(r).verdict, "inconclusive");
+    assert.deepEqual(json(r).skipped, ["<path>"]);
+    assert.ok(shapeOk(r));
+  });
+});
+
+test("★ a near-miss marker and a conflicting declaration are inconclusive, in the capture shape (L36, G2)", () => {
+  withPlan({ filesBody: "- `src/old.ts` (Delete) — case", existing: [] }, (plan, root) => {
+    const r = run([plan, root]);
+    assert.equal(r.status, 2);
+    assert.match(json(r).reason, /spells the deletion marker another way/);
+    assert.ok(shapeOk(r));
+  });
+  withPlan({ filesBody: "- `src/old.ts` (delete) — gone\n- `src/old.ts` — kept", existing: ["src/old.ts"] }, (plan, root) => {
+    const r = run([plan, root]);
+    assert.equal(r.status, 2);
+    assert.match(json(r).reason, /both for deletion and as an ordinary path/);
+    assert.ok(shapeOk(r));
+  });
+  // CONTROL: the exact spelling of the first fixture is complete.
+  withPlan({ filesBody: "- `src/old.ts` (delete) — case" }, (plan, root) => assert.equal(run([plan, root]).status, 0));
+});
+
+test("★ PARITY: the setter scopes a marked item's bare path — setter scope == declared ∪ deletions", () => {
+  const root = mkdtempSync(join(tmpdir(), "pharn-complete-"));
+  try {
+    const plan = join(root, "PLAN.md");
+    writeFileSync(
+      plan,
+      [
+        "# PLAN — deletion parity",
+        "",
+        "## Files",
+        "",
+        "- `keep/one.md` — x",
+        "- `gone/two.tsx` (delete) — removed",
+        "- `.vscode/settings.json` (delete) — orphan",
+        "- `gen/*.md` (delete) — glob skipped by both",
+        "",
+      ].join("\n")
+    );
+    const s = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
+    assert.equal(s.status, 0, `setter failed: ${s.stderr}`);
+    const scope = JSON.parse(readFileSync(join(root, ".pharn", "writes-scope.json"), "utf8")).scope;
+    const o = json(run([plan, root]));
+    assert.deepEqual([...o.declared, ...o.deletions].sort(), [...scope].sort());
+    assert.deepEqual([...scope].sort(), [".vscode/settings.json", "gone/two.tsx", "keep/one.md"]);
+    assert.deepEqual(o.deletions, ["gone/two.tsx", ".vscode/settings.json"]);
+    assert.deepEqual(o.skipped, ["gen/*.md"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

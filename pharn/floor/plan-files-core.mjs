@@ -10,6 +10,18 @@
 //   • pharn/floor/check-ac-tests.mjs (6.17.0) — asks "would the build's scope cover this AC test file?", so it
 //     compares what `clean` + `isConcrete` leave, exactly as the setter scopes.
 //   • pharn/floor/ac-tests-lock.mjs (6.17.0) — the AC test files a lock pins.
+//   • pharn/floor/apply-plan-deletions.mjs (6.56.0) — the paths a PLAN marks for deletion, which it removes.
+//
+// ── THE DELETION MARKER (6.56.0, plan-declared-deletions) ────────────────────────────────────────────
+// A `## Files` item whose closing back-tick is followed, after spaces or tabs, by exactly `(delete)` and then
+// whitespace or the end of the line — ``- `src/old.ts` (delete) — why`` — declares that path for DELETION:
+// `check-build-complete.mjs` requires it ABSENT after the build and `apply-plan-deletions.mjs` removes it. The
+// marker sits OUTSIDE the back-ticks, so `value` (and the setter, which reads the same back-ticked text) still
+// returns the bare path: the writes-scope keeps it, which `/pharn-loop`'s commit needs to stage the deletion.
+// `entries[]` carries the reading — `delete` for the exact marker, `deleteNearMiss` for a variant spelling of it
+// (another letter case, inner spaces, `deleted`/`deletes`, or no space after the back-tick), which every reader
+// REFUSES rather than read as an ordinary item (L36: an ordinary item would leave the file in place and pass).
+// BOUND: a synonym — `(remove)`, `(rm)` — is an ordinary item, and nothing reports it.
 //
 // ── WHY A SHARED CORE, and not a second copy (L35) ───────────────────────────────────────────────────
 // The question "must the second copy exist?" is asked BEFORE choosing a remedy, never after. Here the
@@ -79,14 +91,22 @@ export function isConcrete(entry) {
   return entry.length > 0 && !entry.includes("<") && !entry.includes(">") && !entry.includes("*") && !entry.includes("?");
 }
 
+/** The exact deletion marker, tested against an item's raw line (see the header). */
+export const DELETE_MARKER_RE = /^\s*-\s+`[^`]+`[ \t]+\(delete\)(?=[ \t]|$)/;
+
+/** A variant spelling of the marker. A line matching this but not DELETE_MARKER_RE is a near-miss, refused. */
+export const DELETE_NEAR_MISS_RE = /^\s*-\s+`[^`]+`[ \t]*\(\s*delete[sd]?\s*\)/i;
+
 /**
  * The leading back-tick path of each list item under `## Files`.
  *
  * @param {string} text  the PLAN's full source
- * @returns {{ok: false, reason: string} | {ok: true, value: string[], entries: {path: string, line: string}[]}}
+ * @returns {{ok: false, reason: string} | {ok: true, value: string[], entries: {path: string, line: string, delete: boolean, deleteNearMiss: boolean}[]}}
  *   `value`   — the paths, in document order. Byte-for-byte the pre-extraction behaviour.
  *   `entries` — the same items, each with its RAW LINE. ADDITIVE: `render-run-report.mjs` needs the
- *               declared purpose beside the path, and quotes it verbatim as untrusted DATA.
+ *               declared purpose beside the path, and quotes it verbatim as untrusted DATA. Since 6.56.0 each
+ *               also carries `delete` (the exact marker) and `deleteNearMiss` (a variant spelling) — additive
+ *               members, so no existing reader's answer moves (L72).
  *
  * The list is terminated by EITHER of two boundaries:
  *   1. STRUCTURAL — any markdown heading of any level, so an exclusion subsection (`### Explicitly not
@@ -134,7 +154,8 @@ export function pathsFromPlanFiles(text) {
     const m = line.match(/^\s*-\s+`([^`]+)`/);
     if (m) {
       out.push(m[1].trim());
-      entries.push({ path: m[1].trim(), line });
+      const del = DELETE_MARKER_RE.test(line);
+      entries.push({ path: m[1].trim(), line, delete: del, deleteNearMiss: !del && DELETE_NEAR_MISS_RE.test(line) });
     }
   }
   return { ok: true, value: out, entries };
