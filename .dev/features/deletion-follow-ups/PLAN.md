@@ -3,7 +3,7 @@
 - spec_content_hash: 75088a82d113bc52cdd3d5fb2e44533e81cba5f520877f5eaa441ced45fb0fd6 # fix #4
 - applied_lessons: [L17, L19, L29, L34, L35, L37, L42, L48, L50, L54, L59, L60, L64, L68, L72]
 - increment: (A) the always-reconciled set's loader and matcher move out of the reconcile CLI into a core module both `check-bash-reconcile.mjs` and `apply-plan-deletions.mjs` import, behaviour unchanged; (B) `check-bash-reconcile.mjs` judges a path that was present at the anchor and is gone from disk (`git rm`, a committed deletion, an untracked file) against the guards and scopes like any other change, and classifies an upstream merge's deletion `merged`
-- layer(s): product floor (`pharn/floor/` — one new core, three edits); product contract (`reconciliation-record.md`); product command (`pharn-build.md`, one claims line); tests; dev guides; repo-meta. No hook, settings file, trusted doc or capability changes.
+- layer(s): product floor (`pharn/floor/` — one new core, three edits); product contract (`reconciliation-record.md`); product command (`pharn-build.md`, one claims line); tests; dev guides; repo-meta. No hook, settings file or capability changes; no AGENT write to a trusted doc — the branch also carries the human-applied `LIMITS.md §6` sentence (`83c5829`, Q4), which ships in 6.57.0 and is named in its CHANGELOG entry (amended after grill, G1).
 - constitution_refs: [P0, P2, P3, P4, P5, P6, P7]
 - base: worktree branch `deletion-follow-ups`, cut from `origin/main` at `45107f7` (6.56.0, #338), fetched this run. `pharn/ARCHITECTURE.md` hashed this run with `.dev/floor/hash-doc.mjs` (the pin above). Bumps to **6.57.0** (minor — see `## Version`); renumbered at GATE 2 if `main` moves first.
 - lessons index: `node .dev/floor/check-lessons-index.mjs .` exited 0 (GREEN) this run, so the two-step sweep ran: candidates selected from `docs/lessons-index.md`, every cited entry read in full from canon.
@@ -264,6 +264,21 @@ deleted `LIMITS.md` on APFS) and feature `plan-declared-deletions`. **Duplicate 
 (an enumerated value's variant spellings — lexical, inside one set), **L54** / **L59** (a follow-call answers for the
 target — link-vs-target identity, not filesystem equivalence of names). The 6.31.1 hook change (judge the filesystem's
 target) was never promoted. The product canon is not the target (`.dev/` lesson).
+
+## Amended after grill
+
+`/pharn-dev-grill` (`GRILL.md`) raised three advisory concerns; all are inside the approved intent, `## Files` is
+unchanged, and the GATE-1 answers stand.
+
+- **G1** — the header no longer says "no trusted doc changes": `LIMITS.md` changes on this branch by the human's
+  `83c5829`, and the 6.57.0 CHANGELOG entry names that sentence (no agent write to `LIMITS.md`).
+- **G2** — the "parent made unreadable" row must assert it reached the NEW `lstat` branch (the path is a candidate,
+  the verdict is not `INCONCLUSIVE` from enumeration). If git's own enumeration fails first on the fixture, the row is
+  replaced by a fixture that reaches the `lstat` error (or dropped, with the reason stated in the test file), never
+  kept passing on the wrong branch.
+- **G3** — D3's (f) for a deletion: `blobAt` must return `{ absent: true }` at BOTH H and M; a `null` at either (a
+  non-blob, a gitlink, an unusual mode, a git failure) keeps the escape — fail closed, pinned by one row (upstream
+  replaces the file with a directory → stays an escape).
 
 ## Self-checks (plan stage)
 
