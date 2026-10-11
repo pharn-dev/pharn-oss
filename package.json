@@ -6,9 +6,9 @@
   "engines": {
     "node": ">=24.2.0"
   },
-  "description": "Audit-grade methodology for AI-native development. Skills, commands, lenses, and rules that turn AI sessions into versioned artifacts — so your codebase stays legible past month six. Claude Code first; Codex and Cursor next.",
+  "description": "Get features shipped right with Claude Code: spec → plan → grill → test → build → regress → verify → ship. Every step stays in Git, so you can check what was done when someone asks.",
   "keywords": [
-    "audit",
+    "spec-driven-development",
     "developer-tools",
     "methodology",
     "cursor",

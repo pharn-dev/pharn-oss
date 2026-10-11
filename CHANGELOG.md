@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- 2026-10-11: **The README hero and the `package.json` description now lead with shipping a feature right, and put the Git trail second.** The "audit-grade" framing is gone from both, and the `audit` keyword became `spec-driven-development`. Copy only: no behavior, contract, checker or `SKILLS_VERSION` change, so nothing an install receives moved. Still saying "audit-grade" and left for a human to decide: `pharn/ARCHITECTURE.md` (a trusted doc), `CLAUDE.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md` and `pharn/features/README.md` (the last would bump).
 - **The `reconcile` gate now judges every deletion like a write.**
   - What changed: `pharn/floor/check-bash-reconcile.mjs` treats a path that was present at the anchor and is gone from
     disk as a changed path. It is judged by the write guards and the recorded scopes, so an undeclared deletion is an

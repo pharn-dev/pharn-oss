@@ -6,11 +6,14 @@
   <img alt="Pharn" src="./docs/assets/pharn-logo-light-transparent.svg" width="320" />
 </picture>
 
-**Audit-grade workflow for AI-assisted software development.**
+**Get features shipped right with Claude Code.**
 
-PHARN turns an AI coding session into a persistent engineering record: the intent that anchored the
-change, the plan the agent followed, the files it declared, the checks that ran, and the handoff at the
-shipping gate.
+PHARN takes one feature through `spec → plan → grill → test → build → regress → verify → ship`: the intent
+you approve, a plan with the files the build may touch, a failing test for each acceptance criterion before
+any code exists, and your project's gates run before the final decision is yours.
+
+Every step stays in Git: the spec, the plan, the declared files, the checks that ran and the handoff at the
+shipping gate are committed Markdown, so months later you can answer "what was done and why?".
 
 It is open-source methodology, not a black box: Claude Code commands, readable Markdown artifacts,
 deterministic hooks, stdlib-only floor checkers, grillers, and review lenses that live in your
@@ -60,7 +63,7 @@ npx @pharn-dev/pharn@latest init
 ## What PHARN is
 
 PHARN is an open-source workflow layer for teams using AI agents to change real code. It gives each
-increment a committed paper trail:
+increment a trail in Git:
 
 - `SPEC.md` — the human-readable intent PHARN asks you to approve before implementation (or, under the
   unattended `/pharn-loop`, approves for you and records as the model's approval).
@@ -103,7 +106,8 @@ The expensive questions moved upstream and downstream:
 - What should a reviewer, maintainer, or future incident responder trust?
 
 PHARN puts those answers in the repo, where normal engineering tools can diff, review, and preserve
-them. The goal is not to make AI development look clean. The goal is to make it inspectable.
+them. The first goal is a feature that ships right; the second is that how it got there can be inspected
+later, not taken on trust.
 
 ---
 
@@ -831,7 +835,7 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   **What it does NOT close:** `PreToolUse` hooks never see **Bash**, so an agent holding Bash can still
   append to canon, run the setter with promote-shaped argv, or forge the scope record. No mechanism
   without that hole was found and none is claimed. So "canon cannot be written" stays **struck** — what
-  changed is that on the guarded tool surface a canon write now costs a separate, explicit, auditable
+  changed is that on the guarded tool surface a canon write now costs a separate, explicit
   act that a build plan cannot cause. Keep reviewing `memory-bank/**` in diffs like any other file.
 - **Model judgment remains model judgment.** Architecture quality, review correctness, severity,
   completeness of intent, and semantic correctness are advisory unless a specific deterministic checker
