@@ -209,10 +209,11 @@ touched` heading (rule 3) for a real exclusion. Keep unfilled placeholders as **
 > but a non-path line under `## Files` is not harmless (see the caveat above) — only the `## Files`
 > back-tick paths **before any such truncation** become the build's scope, and `/pharn-build` writes
 > nothing outside them (fix #7). **Deleting a file:** list it as ``- `path` (delete) — <why>``: exactly
-> `(delete)`, lower-case, one space after the closing back-tick. `/pharn-build` removes it
-> (`apply-plan-deletions.mjs`) and `/pharn-verify` requires it absent; a near-miss spelling (`(Delete)`, `(deleted)`)
-> refuses, and a directory, link, glob, placeholder or guard/trusted path is never deleted. A synonym such as
-> `(remove)` is an ordinary item, so the file stays.
+> `(delete)`, lower-case, exactly one space after the closing back-tick. `/pharn-build` removes it
+> (`apply-plan-deletions.mjs`) and `/pharn-verify` requires it absent; a near-miss spelling (`(Delete)`, `(deleted)`,
+> two spaces) refuses, and so do a directory, link, glob, placeholder and a guard/trusted path (judged by its on-disk
+> name too). A synonym such as `(remove)`, or `(delete)` anywhere but directly after the path, is an ordinary item:
+> the file stays and nothing reports it.
 
 ## Step 4b — Check the lessons declaration (FLOOR)
 

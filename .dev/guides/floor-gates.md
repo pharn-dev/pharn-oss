@@ -435,9 +435,16 @@ node pharn/floor/build-gate.mjs --feature <name> --mode targeted|full --timeout-
 # the shape stage-verify-core.mjs checkCompleteness accepts. THE DELETION: /pharn-build runs apply-plan-deletions.mjs once,
 # unconditionally, last in Step 3 — the pinned line carries only <name> (no PLAN path reaches a shell; SHELL_VALUES).
 # Validate-all-then-unlink; refusals are a closed set (REFUSALS): usage, no-plan, plan-files-unparseable,
-# delete-near-miss, conflicting-declaration, delete-not-concrete, bad-path (ac-tests-core badPath + a `.git` segment +
-# a backslash), control-path (reconcile-ignore.json's always-reconciled set, exact and case-folded), containment,
-# not-a-regular-file (links never followed, L59), unlink-failed. It UNLINKS and never stages: a tracked file then stays
+# delete-near-miss, conflicting-declaration, delete-not-concrete, bad-path (ac-tests-core badPath + `.pharn/`,
+# `pharn/features/` and a `.git` segment in any letter case + a backslash), control-path (reconcile-ignore.json's
+# always-reconciled set, exact and case-folded, plus dev/ino against the existing exact members), containment,
+# not-a-regular-file (links never followed, L59), unlink-failed. GATE-2 REVIEW FIX (same release): bad-path and
+# control-path also run over the leaf's realpathSync.native spelling — the spelling-only first version deleted
+# LIMITS.md via `LIMITſ.md` (U+017F, folded by APFS, not by toLowerCase); realpath failure refuses (fail closed).
+# BOUNDS added there: validate-all-then-unlink is check-then-act (a parent swapped for a symlink in between is followed;
+# non-adversarial model); the always-reconciled set is imported from the reconcile CLI module (follow-up
+# `apply-deletions-core-extract`); the marker is exactly ONE space then `(delete)` — two spaces or a tab is a near-miss,
+# and `(delete)` after the description is an ordinary item nothing reports. It UNLINKS and never stages: a tracked file then stays
 # in git's index, so check-bash-reconcile.mjs judges it against the anchored scope (holding the bare path); an untracked
 # one, or one a `git rm` removed, is only a WARN (reconciliation-record.md §3, corrected here). THE SCOPE CHECKS ARE
 # UNCHANGED (decision D3): they read the bare path, so a deleted marked path is declared; a marked path left in place is

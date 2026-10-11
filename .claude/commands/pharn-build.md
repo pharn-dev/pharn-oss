@@ -301,9 +301,10 @@ stage adds no new floor primitive.
   (`catalogue-installed-skills.mjs`, over the scanner's own discovery). Which bodies are read is ADVISORY selection,
   and the `skills:` line is self-report, never proof a skill was loaded or followed.
 - **Floor:** `apply-plan-deletions.mjs` deletes only the plan's `(delete)`-marked, concrete, regular, non-control
-  files inside the project, validating all before removing any (regex + membership + `lstat`). **NARROWED:** an unlink
-  through Bash, outside both hooks; reconcile judges a tracked one against the plan's scope afterwards
-  (`reconciliation-record.md` §3). That nothing else deletes is advisory.
+  files inside the project, judged as written and on disk, validating all before removing any (regex + membership +
+  `lstat`/`realpath`). **NARROWED:** an unlink through Bash, outside both hooks, with a check-then-act gap (its
+  header); reconcile judges a tracked one against the plan's scope
+  afterwards (`reconciliation-record.md` §3). That nothing else deletes is advisory.
 - **Advisory:** invoking each gate and obeying it (the verdict is floor; the act is orchestration); writing through
   the write tools rather than Bash, and scoping a formatter (Step 3 — no shell command is parsed); the
   implementation — HOW the code is written, whether it is correct, complete or faithful to the plan — checked

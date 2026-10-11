@@ -35,12 +35,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     still present, and `/pharn-ship`'s `INCOMPLETE` text counts it. `/pharn-plan` documents the marker.
   - Why: a `/pharn-loop` hygiene run in a user's project could not delete orphaned files. Undeclared, the deletion was
     a scope escape; declared, verify read `INCOMPLETE` because the path no longer existed.
-  - The marker is exactly `(delete)`, one space after the closing back-tick. A near-miss spelling (`(Delete)`,
-    `(deleted)`) is refused rather than read as an ordinary item; a synonym such as `(remove)` is an ordinary item, so
-    the file stays. A path both marked and unmarked is refused.
-  - Never deleted: a directory, any symlink, a glob or placeholder, a path under `.git`, `.pharn/` or `pharn/features/`,
-    a path through a symlinked parent, and the guards, floors, trusted docs, `CODEOWNERS`, SPEC template and canon.
-  - Bounds: the deletion is an unlink run through Bash, outside both write hooks, and is never staged. Reconcile judges
+  - The marker is exactly `(delete)`, exactly one space after the closing back-tick. A near-miss spelling (`(Delete)`,
+    `(deleted)`, two spaces or a tab) is refused rather than read as an ordinary item. A synonym such as `(remove)`, or
+    `(delete)` written after the description, is an ordinary item, so the file stays and nothing reports it. A path
+    both marked and unmarked is refused.
+  - Refused, and not deleted: a directory, any symlink, a glob or placeholder, a path under `.git`, `.pharn/` or
+    `pharn/features/` in any letter case, a path through a symlinked parent, and the guards, floors, trusted docs,
+    `CODEOWNERS`, SPEC template and canon. Each rule is checked against the path as written and against its on-disk
+    spelling (`realpath`), so on a case-insensitive volume `LIMITſ.md` (with U+017F) is refused as `LIMITS.md`; the
+    exact guard and trusted files are also matched by device and inode. A review found the spelling-only first version
+    deleted `LIMITS.md` and `.claude/settings.json` that way; this release ships the fix.
+  - Bounds: the deletion is an unlink run through Bash, outside both write hooks, and is never staged. Every path is
+    validated before any is removed, so a parent swapped for a symlink in between is followed; the model is
+    non-adversarial. The helper imports the always-reconciled set from the reconcile CLI module (follow-up
+    `apply-deletions-core-extract`). Reconcile judges
     a tracked file's deletion against the plan's scope, which keeps the bare path; an untracked one is only a WARN.
     "Absent" is not "deleted by this build". The scope checks are unchanged: they already admit a declared deletion and
     still reject an undeclared one. `/pharn-loop`'s rebuild hand-off does not list `undeleted[]`; the rebuild re-runs

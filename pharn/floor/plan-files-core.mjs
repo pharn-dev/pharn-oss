@@ -13,15 +13,17 @@
 //   • pharn/floor/apply-plan-deletions.mjs (6.56.0) — the paths a PLAN marks for deletion, which it removes.
 //
 // ── THE DELETION MARKER (6.56.0, plan-declared-deletions) ────────────────────────────────────────────
-// A `## Files` item whose closing back-tick is followed, after spaces or tabs, by exactly `(delete)` and then
+// A `## Files` item whose closing back-tick is followed by exactly ONE space, then exactly `(delete)`, then
 // whitespace or the end of the line — ``- `src/old.ts` (delete) — why`` — declares that path for DELETION:
 // `check-build-complete.mjs` requires it ABSENT after the build and `apply-plan-deletions.mjs` removes it. The
 // marker sits OUTSIDE the back-ticks, so `value` (and the setter, which reads the same back-ticked text) still
 // returns the bare path: the writes-scope keeps it, which `/pharn-loop`'s commit needs to stage the deletion.
 // `entries[]` carries the reading — `delete` for the exact marker, `deleteNearMiss` for a variant spelling of it
-// (another letter case, inner spaces, `deleted`/`deletes`, or no space after the back-tick), which every reader
-// REFUSES rather than read as an ordinary item (L36: an ordinary item would leave the file in place and pass).
-// BOUND: a synonym — `(remove)`, `(rm)` — is an ordinary item, and nothing reports it.
+// (another letter case, inner spaces, `deleted`/`deletes`, or no space, two spaces or a tab after the back-tick),
+// which every reader REFUSES rather than read as an ordinary item (L36: an ordinary item would leave the file in place
+// and pass). BOUND: two shapes are ordinary items that nothing reports, so the file stays and completeness reads
+// complete — a synonym (`(remove)`, `(rm)`), and a correctly spelled `(delete)` placed anywhere but directly after the
+// path (``- `src/x.ts` — orphan (delete)``, or after another annotation).
 //
 // ── WHY A SHARED CORE, and not a second copy (L35) ───────────────────────────────────────────────────
 // The question "must the second copy exist?" is asked BEFORE choosing a remedy, never after. Here the
@@ -92,7 +94,7 @@ export function isConcrete(entry) {
 }
 
 /** The exact deletion marker, tested against an item's raw line (see the header). */
-export const DELETE_MARKER_RE = /^\s*-\s+`[^`]+`[ \t]+\(delete\)(?=[ \t]|$)/;
+export const DELETE_MARKER_RE = /^\s*-\s+`[^`]+` \(delete\)(?=[ \t]|$)/;
 
 /** A variant spelling of the marker. A line matching this but not DELETE_MARKER_RE is a near-miss, refused. */
 export const DELETE_NEAR_MISS_RE = /^\s*-\s+`[^`]+`[ \t]*\(\s*delete[sd]?\s*\)/i;

@@ -323,7 +323,10 @@ test("★ plan-files-core: the exact marker sets `delete`; each near-miss sets `
   const lines = [
     ["- `a.ts` (delete) — gone", true, false],
     ["- `a.ts` (delete)", true, false],
-    ["- `a.ts`\t(delete)\t— tab", true, false],
+    ["- `a.ts` (delete)\t— tab after the marker", true, false],
+    ["- `a.ts`\t(delete) — a tab before it", false, true],
+    ["- `a.ts`  (delete) — two spaces before it", false, true],
+    ["- `a.ts` — orphan (delete) — after the description (stated bound)", false, false],
     ["- `a.ts` (Delete) — case", false, true],
     ["- `a.ts` (DELETE)", false, true],
     ["- `a.ts` ( delete ) — spaces", false, true],

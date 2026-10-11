@@ -284,6 +284,25 @@ unchanged, and the four GATE-1 answers stand.
   shape `checkCompleteness` accepts, and the checker's suite runs each new branch's document through
   `checkCompleteness` (the test list below gains that case).
 
+## Amended after review (GATE 2: fix-first)
+
+The orchestrator decided fix-first at GATE 2, under the human's delegation, on `REVIEW.md`'s blocking finding. Every fix
+stays inside `## Files` above; no path was added.
+
+- **F1 (blocking)**: the helper's refusals also run over the leaf's `realpathSync.native` spelling, and the exact
+  control files are matched by `dev`/`ino`. A realpath failure refuses. The spelling-only version deleted `LIMITS.md` via
+  `LIMITſ.md` (U+017F) on APFS.
+- **F2**: `.pharn/` and `pharn/features/` are refused in any letter case.
+- **F3**: refusal rows for the ASCII case variants; on-disk rows gated on a probe of the tmpdir volume; a hard-link row.
+- **F4**: `DELETE_MARKER_RE` is tightened to exactly one space. Two spaces or a tab is now a near-miss and is refused.
+- **F5**: the import from `check-bash-reconcile.mjs` is stated and accepted in the helper's header, with the follow-up
+  `apply-deletions-core-extract`.
+- **F6**: the check-then-act gap is stated in the helper's header and in `/pharn-build`'s Floor bullet.
+- **F7**: a `(delete)` placed after the description is stated as an ordinary item that nothing reports.
+
+Named follow-up added: `apply-deletions-core-extract` (move the always-reconciled set's loader and matcher into a core
+both modules import).
+
 ## Self-checks (this stage)
 
 - `node pharn/floor/check-plan-lessons.mjs .dev/features/plan-declared-deletions/PLAN.md .dev/memory-bank/lessons-learned.md` → exit 0 GREEN, all 19 cited ids resolve and are referenced in the body (the declaration, never the application — P0).
