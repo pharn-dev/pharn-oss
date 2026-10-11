@@ -36,16 +36,14 @@
     },
     "tests": {
       "base": 0,
-      "head": 1
+      "head": 0
     },
     "validate": {
       "base": 0,
       "head": 0
     }
   },
-  "regressions": [
-    "tests"
-  ],
+  "regressions": [],
   "pre_existing": [],
-  "verdict": "regressions"
+  "verdict": "no-regressions"
 }

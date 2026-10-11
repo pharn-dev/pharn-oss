@@ -1,6 +1,33 @@
 # REGRESSION — plan-declared-deletions
 
-## Iteration 2 (after the GATE-2 review fixes, `292730c`)
+## Iteration 3 — the current record (a re-run of iteration 2's tree, `40fe1e5`; supersedes iteration 2)
+
+- Why re-run: iteration 2 read `regressions` (`tests` 0 → 1) from one timeout in
+  `.claude/hooks/protect-trusted-paths.test.cjs:1098`, a file this diff does not touch, with load averages 26.95 /
+  59.75 / 68.11. The orchestrator did not override that floor verdict. It had the stage re-run once the 1-minute load
+  average fell below 10 (waited 14 minutes; 8.04 / 27.02 / 43.17 at the start).
+- Base: `2acb55ad7568c3a5bbbe18109b148e4b59fc5c32` (clean tree → `git merge-base HEAD origin/main`). Inside: the same 27
+  paths; `check-regress.mjs scope` exited 0 with no escape; `escape_exempt` is the same six pipeline artifacts.
+- Outside gates: 148 test files, `validate`, the one committed eval pair; style gates skipped (no shared style config
+  inside).
+
+| Gate                                                                                       | base → head |
+| ------------------------------------------------------------------------------------------ | ----------- |
+| `tests` (148 outside test files; 4811 tests each side, 0 failed)                           | 0 → 0       |
+| `validate`                                                                                 | 0 → 0       |
+| `structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json` | 0 → 0       |
+
+`regressions[]`: none · `pre_existing[]`: none.
+
+**REGRESSIONS: none.** No deterministically detectable breakage outside the feature. This stage catches exactly what
+its suite catches, and nothing more.
+
+- Load averages, from the runner: 7.48 / 26.59 / 42.92 at start, 4.55 / 14.22 / 31.66 when the base side finished, and
+  99.63 / 87.98 / 67.20 when the head side finished (other sessions started meanwhile). The test that timed out in
+  iteration 2 passed at head in 207 ms.
+- `regression-report.json` is this iteration's verdict stdout byte-for-byte (sha256 `ff3190d7…9189e36` on both).
+
+## Iteration 2 (after the GATE-2 review fixes, `292730c`) — superseded by iteration 3
 
 - Base: `2acb55ad7568c3a5bbbe18109b148e4b59fc5c32` — the working tree was clean, so the base is
   `git merge-base HEAD origin/main`: main at 6.55.0.
