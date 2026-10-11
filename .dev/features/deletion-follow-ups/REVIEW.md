@@ -174,3 +174,62 @@ from the filesystem." Provenance: feature `deletion-follow-ups`, commit `9c26dbf
 wording, including a human-only LIMITS sentence. A `git check-ignore` gate plus two test rows closes it without
 touching LIMITS. F2 and F3 are one-line prose qualifications. If the human prefers, merge now and file F1 as a named
 follow-up. Nothing here is a floor-gate blocker.
+
+## Re-review after fix-first (817a6b0)
+
+Reviewed: `git diff 9c26dbf..817a6b0`, fast-forwarded onto `review-deletion-follow-ups`. Treated as `trust: untrusted`
+again; no instruction-looking content was found.
+
+**Floor:** `validate.mjs .` reports GREEN (37 capabilities). These also passed: `format:check`, `lint`, `lint:md`,
+`docs:check` and `check:changelog-entry`, which found 2 new entries and no merged entry edited. `node --test` over
+`check-bash-reconcile`, `reconcile-ignore-core` and `stage-runtime` (the GIT CEILING) ran 128 tests: 128 passed,
+0 skipped on this macOS host.
+
+| Probe                                                           | Before (9c26dbf) | Now (817a6b0)                                                                     |
+| --------------------------------------------------------------- | ---------------- | --------------------------------------------------------------------------------- |
+| R2: case-only `git mv src/Out.txt src/out.txt`, staged          | CLEAN            | **ESCAPE `src/Out.txt`** ("not proven ignored" warning) ✓                         |
+| R3: the same as R2, committed                                   | CLEAN            | **ESCAPE `src/Out.txt`** ✓                                                        |
+| R7: `src/` replaced by a symlink to a copy                      | CLEAN            | **ESCAPE** ×4 ✓                                                                   |
+| C1: `git rm --cached` + `.git/info/exclude` + edit              | CLEAN + WARN     | CLEAN + "now git-ignored" WARN ✓ (the bound)                                      |
+| C2: self-ignoring untracked `src/.gitignore` + untracked edit   | CLEAN + WARN     | CLEAN + WARN ✓ (the bound, now named)                                             |
+| C3: excluded file named `src/sp ace ü<TAB>x.txt`                | —                | CLEAN + WARN ✓ (`-z` echo is byte-identical for spaces, non-ASCII and tabs)       |
+| C6: C1 with `GIT_LITERAL_PATHSPECS=1` / `GIT_ICASE_PATHSPECS=1` | —                | CLEAN + WARN ✓ (`CHECK_IGNORE_ENV` strips them; no fail-closed noise)             |
+| C7: case-only rename + an exclude rule for the NEW name only    | —                | CLEAN + WARN. git (core.ignorecase) reports the alias ignored: see observation O1 |
+
+**`git()` behaviour identity:** confirmed by reading the code. When `opts` is `{}`, `env` is `GIT_ENV`, stdin is
+`"ignore"` and no `input` key is set, which is exactly the old call. Only `ignoredByGit` passes `opts`. The GIT
+CEILING test in `stage-runtime.test.mjs` still passes.
+
+### Per-finding status
+
+- **F1: resolved.**
+  - `ignoredByGit` returns true only on exit 0 with an exact `rel\0` echo. Any other answer, or a throw, makes the
+    path a candidate.
+  - The case-only rename and parent-symlink probes now read ESCAPE, so macOS and Linux agree.
+  - Two new test rows pin them. The case row skips on a case-sensitive tmp volume, so it does not run on Linux CI.
+    That is acceptable: on Linux the old spelling is simply gone, and `DELETION_KINDS` covers that.
+- **F2: resolved.** The §3 WARN paragraph now names the self-ignoring untracked `.gitignore` route, and a test row
+  pins it.
+- **F3: resolved.** §2a, the code comment and CHANGELOG [6.57.0] all add the qualification for a deletion upstream
+  made too ("whoever wrote them").
+- **Prose now matches the code:**
+  - The CHANGELOG says the WARN applies "only when git itself reports it ignored (`git check-ignore`)".
+  - Contract §3 and §5 describe the exit-0 condition and the fail-closed rule.
+  - The human-only `LIMITS.md` §6 sentence, "a path still on disk that has left the reconciled set, because it
+    became git-ignored, is only a warning", is now TRUE as written: the code warns only in that case. No LIMITS edit
+    is needed.
+
+### New observations (advisory, not defects)
+
+- **O1, informational.** C7: a case-only rename plus a `.git/info/exclude` rule that names only the new spelling
+  reads CLEAN. With `core.ignorecase`, git reports the old spelling ignored, so the WARN branch is taken. The entry
+  is still on disk under an alias that git itself calls ignored. This is the same class as C1, the stated
+  ignored-paths bound, through the untracked `.git/info/exclude` route the contract already names. No change asked.
+- **O2, minor (test prose).** In `check-bash-reconcile.test.mjs`, the `ignoredByGit` row's message reads "a leading
+  dash is an operand after --, never an option". The path travels on stdin and there is no `--`, so the message
+  describes an older design. The assertion itself holds.
+
+### Verdict
+
+**GREEN: 0 floor-gate findings. F1, F2 and F3 are resolved, and no new defect was found.** Recommendation:
+**merge.** O2 is an optional one-word test-message fix and can ride along or be dropped.
