@@ -23,6 +23,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+- 2026-10-11: **The README hero and the `package.json` description now lead with shipping a feature right, and put the Git trail second.** The "audit-grade" framing is gone from both, and the `audit` keyword became `spec-driven-development`. Copy only: no behavior, contract, checker or `SKILLS_VERSION` change, so nothing an install receives moved. Still saying "audit-grade" and left for a human to decide: `pharn/ARCHITECTURE.md` (a trusted doc), `CLAUDE.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md` and `pharn/features/README.md` (the last would bump).
+
 ## [6.56.0] - 2026-10-11
 
 ### Added
