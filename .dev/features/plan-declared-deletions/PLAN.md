@@ -7,7 +7,7 @@
 - constitution_refs: [P0, P2, P3, P5, P6, P7]
 - base: worktree branch `plan-declared-deletions`, cut from `main` at `2acb55a` (6.55.0, #337); `origin/main` fetched this run and equal to it. `pharn/ARCHITECTURE.md` hashed this run with `.dev/floor/hash-doc.mjs` (the pin above). Bumps to **6.56.0** (minor: a newly shipped floor CLI and a new `## Files` marker); renumbered at GATE 2 if `main` moves first.
 - lessons index: `node .dev/floor/check-lessons-index.mjs .` exited 0 (GREEN) this run, so the two-step sweep ran: candidates selected from `docs/lessons-index.md`, every cited entry read in full from canon.
-- gate1: PENDING — the open questions at the end are for the human.
+- gate1: APPROVED 2026-10-11 by the human, in chat, relayed by the orchestrating agent (a human approval relayed, not a model decision): approved with the RECOMMENDED answer to all four open questions — Q1 (a), Q2 (a), Q3 (a), Q4 (a). See `## Resolved questions (GATE 1)`.
 
 ## Applied lessons
 
@@ -273,7 +273,17 @@ above:
 - L71 count, measured with `plan-files-core.mjs` (the setter's parity copy, so the live scope record is left alone): 21 `## Files` bullets, 21 parsed paths, 21 concrete — no glob, no placeholder, no cue truncation.
 - Prettier and markdownlint run over this file only (L13).
 
-## Open questions (HALT)
+## Resolved questions (GATE 1)
+
+All four resolved by the human at GATE 1 (relayed in chat by the orchestrating agent): the recommended option (a) each.
+No open question remains.
+
+- **Q1 → (a)**: the marker is ``- `path` (delete)`` after the back-ticks, near-misses refused (D1).
+- **Q2 → (a)**: `/pharn-loop`'s `FIX_LIST_SOURCES` is left unchanged; the follow-up `loop-fix-list-undeleted` stands.
+- **Q3 → (a)**: `reconciliation-record.md` §3 is corrected to the measured behaviour in this increment.
+- **Q4 → (a)**: the helper refuses every always-reconciled path (exact or case-folded) before deleting anything.
+
+The questions as asked at GATE 1:
 
 - **Q1 — the marker.** (a) ``- `path` (delete)`` exactly, near-misses refused [recommended, D1]; (b) inside the back-ticks, `` `path (delete)` `` (the setter's `clean()` already strips it, but `value` would then carry the marker for every other reader); (c) a `### Delete` subsection (the setter stops at headings, so the path would leave the scope: the hook-protected setter would need a human patch, and the loop's commit would drop the deletion).
 - **Q2 — `/pharn-loop`'s fix-list.** (a) leave `FIX_LIST_SOURCES` as is; an `undeleted` path is cleared by the rebuild's unconditional helper line, and VERIFY.md names it [recommended, smallest]; (b) add `.completeness.undeleted[]` to it, the brief's rule 7, `pharn-loop.md` and `pharn-loop-quick.md` (two pinned counts change).
