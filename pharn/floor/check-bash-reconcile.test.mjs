@@ -30,6 +30,8 @@ import {
   activeFeatureSlug,
   makeDefaultProbeSandbox,
   VERDICTS,
+  absenceState,
+  ignoredByGit,
 } from "./check-bash-reconcile.mjs";
 import { RECORD_PATH, buildRecord, hashFile } from "./reconcile-baseline.mjs";
 
@@ -156,53 +158,250 @@ test("★ NON-VACUITY CONTROL (L34): the suite cannot pass by reporting everythi
   );
 });
 
-// DELETIONS, as measured for plan-declared-deletions (6.56.0) and stated in reconciliation-record.md §3. A tracked file
-// removed from the WORKTREE only stays in git's index, is enumerated, hashes to nothing and is judged like a write
-// against the scope; a file gone from the index too (`git rm`) — or an untracked one — is only a WARN, judged by nothing.
-// These rows lock the behaviour apply-plan-deletions.mjs relies on (it unlinks, never stages).
-test("★ deletions: a worktree-only deletion is JUDGED against the scope; an index-removed or untracked one is a WARN", () => {
+// DELETIONS (reconciliation-record.md §3). 6.56.0 measured that only a tracked file removed from the WORKTREE was
+// judged (git still lists it, it hashes to nothing); a `git rm`, a committed deletion or an untracked file was only a
+// WARN, judged by nothing (the plan-declared-deletions plan's scenario D). 6.57.0 (deletion-follow-ups) judges them all:
+// every path the anchor hashed that is gone from disk is a candidate, against the guards and the recorded scopes.
+// Every way a path the anchor hashed can stop existing is ONE enumeration the rows iterate (L29). The `merge` kinds run
+// in the merged section below, over a real upstream.
+const gitIn = (dir, ...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe" });
+const DELETION_KINDS = [
+  { name: "tracked, unlinked from the worktree", judgedBy: "unreadable", act: (dir, p) => unlinkSync(join(dir, p)) },
+  { name: "tracked, git rm", judgedBy: "absent", act: (dir, p) => gitIn(dir, "rm", "-q", "--", p) },
+  {
+    name: "tracked, git rm + the build's own commit",
+    judgedBy: "absent",
+    act: (dir, p) => {
+      gitIn(dir, "rm", "-q", "--", p);
+      gitIn(dir, "commit", "-q", "-m", "the build deletes");
+    },
+  },
+  { name: "untracked, unlinked", untracked: true, judgedBy: "absent", act: (dir, p) => unlinkSync(join(dir, p)) },
+  { name: "upstream deletion merged into HEAD", merge: true },
+  { name: "the build's own committed deletion, after a merge", merge: true },
+];
+
+test("★ deletions: every DELETION_KINDS member is JUDGED — declared → CLEAN, undeclared → ESCAPE", () => {
   const fixture = () => {
     const dir = makeRepo();
     mkdirSync(join(dir, "src"), { recursive: true });
     writeFileSync(join(dir, "src/declared.txt"), "a\n");
     writeFileSync(join(dir, "src/undeclared.txt"), "b\n");
-    execFileSync("git", ["add", "-A"], { cwd: dir, stdio: "pipe" });
-    execFileSync("git", ["commit", "-q", "-m", "two tracked files"], { cwd: dir, stdio: "pipe" });
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-q", "-m", "two tracked files");
     writeFileSync(join(dir, "src/untracked.txt"), "c\n");
+    writeFileSync(join(dir, "src/untracked-out.txt"), "d\n");
     setScope(dir, ["src/declared.txt", "src/untracked.txt"]);
     assert.equal(anchor(dir).status, 0);
     return dir;
   };
-  const gitRm = (dir, p) => execFileSync("git", ["rm", "-q", "--", p], { cwd: dir, stdio: "pipe" });
+  // 6.57.0 (deletion-follow-ups): EVERY kind is judged now. `judgedBy` is the warning that proves which branch judged
+  // it: the enumerated-unreadable branch (git still lists the path) or the new absent-from-the-enumeration branch.
+  const UNREADABLE = (p) => `unreadable during reconcile, treated as changed: ${p}`;
+  const ABSENT = (p) => `present at anchor, absent now — judged as a change: ${p}`;
+  const KINDS = DELETION_KINDS.filter((k) => !k.merge);
+  assert.ok(KINDS.length >= 4, "the enumeration is non-empty (L34)");
+  for (const kind of KINDS) {
+    // declared (in scope) → CLEAN, and judged; undeclared → ESCAPE naming exactly that path (the control).
+    for (const declared of [true, false]) {
+      const dir = fixture();
+      const p = kind.untracked
+        ? declared
+          ? "src/untracked.txt"
+          : "src/untracked-out.txt"
+        : declared
+          ? "src/declared.txt"
+          : "src/undeclared.txt";
+      kind.act(dir, p);
+      const r = check(dir);
+      const label = `${kind.name} / ${declared ? "declared" : "undeclared"}`;
+      assert.ok(r.json.warnings.includes(kind.judgedBy === "unreadable" ? UNREADABLE(p) : ABSENT(p)), `${label}: judged — ${r.stdout}`);
+      if (declared) {
+        assert.equal(r.json.verdict, "CLEAN", `${label}: ${r.stdout}`);
+      } else {
+        assert.equal(r.json.verdict, "ESCAPE", `${label}: ${r.stdout}`);
+        assert.deepEqual(
+          r.json.escapes.map((e) => e.file),
+          [p],
+          label
+        );
+      }
+    }
+  }
+});
 
-  // A — declared, unlinked: judged, permitted.
-  let dir = fixture();
-  unlinkSync(join(dir, "src/declared.txt"));
-  unlinkSync(join(dir, "src/untracked.txt"));
+test("★ deletions: a path still ON DISK that left the reconciled set (ignored now) is a WARN, never judged", () => {
+  // The build-time probe the plan named: `git rm --cached` + `.git/info/exclude` (an UNTRACKED ignore rule, so no
+  // tracked file changes). The path stays on disk, git lists it nowhere, and even an edit to it is invisible — the
+  // ignored-paths bound (header bound 1), now stated for this case.
+  const dir = makeRepo();
+  mkdirSync(join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, "src/kept.txt"), "a\n");
+  gitIn(dir, "add", "-A");
+  gitIn(dir, "commit", "-q", "-m", "kept");
+  setScope(dir, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  gitIn(dir, "rm", "-q", "--cached", "--", "src/kept.txt");
+  writeFileSync(join(dir, ".git/info/exclude"), "src/kept.txt\n", { flag: "a" });
+  writeFileSync(join(dir, "src/kept.txt"), "edited while invisible\n");
   let r = check(dir);
   assert.equal(r.json.verdict, "CLEAN", r.stdout);
-  assert.ok(r.json.warnings.includes("unreadable during reconcile, treated as changed: src/declared.txt"), "the tracked one was judged");
-  assert.ok(r.json.warnings.includes("present at anchor, absent now: src/untracked.txt"), "the untracked one is a WARN only");
+  assert.ok(r.json.warnings.includes("present at anchor, still on disk, now git-ignored — not judged: src/kept.txt"), r.stdout);
+  assert.deepEqual(r.json.escapes, []);
 
-  // C — undeclared, unlinked: judged, denied → ESCAPE (the control for A).
-  dir = fixture();
-  unlinkSync(join(dir, "src/undeclared.txt"));
-  r = check(dir);
+  // The second invisible ignore route (review F2): an UNTRACKED file edited, plus a NEW untracked src/.gitignore that
+  // ignores itself (`*`) — never listed, so never a candidate. Still the stated bound: CLEAN, the WARN names it.
+  const dir3 = makeRepo();
+  mkdirSync(join(dir3, "src"), { recursive: true });
+  writeFileSync(join(dir3, "src/untr.txt"), "a\n");
+  setScope(dir3, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir3).status, 0);
+  writeFileSync(join(dir3, "src/untr.txt"), "edited\n");
+  writeFileSync(join(dir3, "src/.gitignore"), "*\n");
+  r = check(dir3);
+  assert.equal(r.json.verdict, "CLEAN", r.stdout);
+  assert.ok(r.json.warnings.includes("present at anchor, still on disk, now git-ignored — not judged: src/untr.txt"), r.stdout);
+
+  // CONTROL: the same move through a TRACKED .gitignore makes the rule change itself a candidate, judged and denied.
+  const dir2 = makeRepo();
+  mkdirSync(join(dir2, "src"), { recursive: true });
+  writeFileSync(join(dir2, "src/kept.txt"), "a\n");
+  gitIn(dir2, "add", "-A");
+  gitIn(dir2, "commit", "-q", "-m", "kept");
+  setScope(dir2, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir2).status, 0);
+  gitIn(dir2, "rm", "-q", "--cached", "--", "src/kept.txt");
+  writeFileSync(join(dir2, ".gitignore"), "src/kept.txt\n", { flag: "a" });
+  r = check(dir2);
   assert.equal(r.json.verdict, "ESCAPE", r.stdout);
   assert.deepEqual(
     r.json.escapes.map((e) => e.file),
-    ["src/undeclared.txt"]
+    [".gitignore"]
   );
+});
 
-  // B / D — removed from the index too: a WARN, declared or not (the named residual reconcile-index-removed-deletion;
-  // the scope checks still see D — check-quick-scope.test.mjs).
-  for (const p of ["src/declared.txt", "src/undeclared.txt"]) {
-    dir = fixture();
-    gitRm(dir, p);
-    r = check(dir);
-    assert.equal(r.json.verdict, "CLEAN", `${p}: ${r.stdout}`);
-    assert.ok(r.json.warnings.includes(`present at anchor, absent now: ${p}`), p);
+// GATE-2 review F1: lstat succeeding is NOT proof the path became ignored. Two measured routes with no ignore rule:
+// a case-only rename on a case-insensitive volume, and a parent directory replaced by a symlink. Both must be JUDGED
+// (candidate), so the verdict is the same on macOS and Linux.
+function caseInsensitiveTmp() {
+  const d = mkdtempSync(join(tmpdir(), "pharn-recon-case-"));
+  made.push(d);
+  writeFileSync(join(d, "Probe"), "x");
+  try {
+    readFileSync(join(d, "probe"));
+    return true;
+  } catch {
+    return false;
   }
+}
+
+test("★ deletions (F1): a case-only rename keeps the old spelling lstat-able — it is JUDGED, not a WARN", (t) => {
+  if (!caseInsensitiveTmp()) {
+    t.skip("the tmp volume is case-sensitive: the old spelling is simply gone, which the DELETION_KINDS rows cover");
+    return;
+  }
+  for (const commit of [false, true]) {
+    const dir = makeRepo();
+    mkdirSync(join(dir, "src"), { recursive: true });
+    writeFileSync(join(dir, "src/Out.txt"), "a\n");
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-q", "-m", "Out");
+    setScope(dir, ["src/out.txt"]);
+    assert.equal(anchor(dir).status, 0);
+    gitIn(dir, "mv", "src/Out.txt", "src/out.txt");
+    if (commit) gitIn(dir, "commit", "-q", "-m", "case-only rename");
+    const r = check(dir);
+    const label = commit ? "committed" : "staged";
+    assert.equal(r.json.verdict, "ESCAPE", `${label}: ${r.stdout}`);
+    assert.deepEqual(
+      r.json.escapes.map((e) => e.file),
+      ["src/Out.txt"],
+      label
+    );
+    assert.ok(
+      r.json.warnings.some((w) => w.includes("not proven ignored") && w.endsWith(": src/Out.txt")),
+      `${label}: judged through the new branch — ${r.stdout}`
+    );
+  }
+});
+
+test("★ deletions (F1): a parent directory replaced by a symlink is JUDGED, not a WARN", () => {
+  const dir = makeRepo();
+  mkdirSync(join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, "src/a.txt"), "a\n");
+  gitIn(dir, "add", "-A");
+  gitIn(dir, "commit", "-q", "-m", "src");
+  setScope(dir, ["src"]); // the link itself is in scope; the files git no longer lists through it are not
+  assert.equal(anchor(dir).status, 0);
+  const copy = mkdtempSync(join(tmpdir(), "pharn-recon-copy-"));
+  made.push(copy);
+  writeFileSync(join(copy, "a.txt"), "a\n");
+  gitIn(dir, "rm", "-q", "-r", "--cached", "src");
+  rmSync(join(dir, "src"), { recursive: true, force: true });
+  symlinkSync(copy, join(dir, "src"));
+  const r = check(dir);
+  assert.equal(r.json.verdict, "ESCAPE", r.stdout);
+  assert.ok(
+    r.json.escapes.some((e) => e.file === "src/a.txt"),
+    r.stdout
+  );
+  assert.ok(
+    r.json.warnings.some((w) => w.includes("not proven ignored") && w.endsWith(": src/a.txt")),
+    r.stdout
+  );
+});
+
+test("ignoredByGit: exit 0 only for a path git reports ignored (a control and two non-members)", () => {
+  const dir = makeRepo();
+  writeFileSync(join(dir, ".git/info/exclude"), "ignored.txt\n", { flag: "a" });
+  writeFileSync(join(dir, "ignored.txt"), "x\n");
+  writeFileSync(join(dir, "plain.txt"), "x\n");
+  assert.equal(ignoredByGit(dir, "ignored.txt"), true);
+  assert.equal(ignoredByGit(dir, "plain.txt"), false);
+  assert.equal(ignoredByGit(dir, "-x"), false, "a leading dash is an operand after --, never an option");
+});
+
+test("★ deletions: a path git no longer lists whose lstat fails with neither ENOENT nor ENOTDIR is a candidate (fail closed)", (t) => {
+  if (typeof process.getuid === "function" && process.getuid() === 0) {
+    t.skip("root ignores directory permissions, so the lstat error cannot be produced");
+    return;
+  }
+  const dir = makeRepo();
+  mkdirSync(join(dir, "src/locked"), { recursive: true });
+  writeFileSync(join(dir, "src/locked/f.txt"), "a\n");
+  gitIn(dir, "add", "-A");
+  gitIn(dir, "commit", "-q", "-m", "locked");
+  setScope(dir, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  // Out of the index, then its directory made unsearchable: git cannot list it, and lstat fails with EACCES.
+  gitIn(dir, "rm", "-q", "--cached", "--", "src/locked/f.txt");
+  chmodSync(join(dir, "src/locked"), 0o000);
+  let r;
+  try {
+    r = check(dir);
+  } finally {
+    chmodSync(join(dir, "src/locked"), 0o755);
+  }
+  // G2: assert the NEW branch was reached — not an enumeration failure (INCONCLUSIVE) passing for it.
+  assert.notEqual(r.json.verdict, "INCONCLUSIVE", r.stdout);
+  assert.ok(r.json.warnings.includes("present at anchor, absent now — judged as a change: src/locked/f.txt"), r.stdout);
+  assert.equal(r.json.verdict, "ESCAPE", r.stdout);
+  assert.ok(
+    r.json.escapes.some((e) => e.file === "src/locked/f.txt"),
+    r.stdout
+  );
+});
+
+test("absenceState: lstat ENOENT and ENOTDIR are gone; a directory now at the path is gone; a dangling link is present", () => {
+  const dir = makeRepo();
+  writeFileSync(join(dir, "file"), "x\n");
+  mkdirSync(join(dir, "adir"));
+  symlinkSync("nowhere", join(dir, "dangling"));
+  assert.equal(absenceState(dir, "missing"), "gone");
+  assert.equal(absenceState(dir, "file/child"), "gone", "ENOTDIR: a parent component is a file");
+  assert.equal(absenceState(dir, "adir"), "gone", "a directory replaced the recorded entry");
+  assert.equal(absenceState(dir, "dangling"), "present", "lstat, never stat (L59): a dangling link is still there");
+  assert.equal(absenceState(dir, "file"), "present");
 });
 
 test("★ no-scope FAIL-CLOSED: with no scope set, the default is delegated to the live hook", () => {
@@ -311,13 +510,17 @@ test("a FUTURE schema version is INCONCLUSIVE; an OLDER one is tolerated at read
   assert.ok(old.json.warnings.some((w) => /older/.test(w)));
 });
 
-test("a DELETION is a warning, not an escape — nothing was written", () => {
+// Renamed in 6.57.0: this was "a DELETION is a warning, not an escape — nothing was written", which stayed green
+// only because the deleted path is IN scope. A deletion is now judged like a write (the ★ deletions rows above);
+// in scope it is permitted, and a warning still names it.
+test("a deletion of an IN-SCOPE path is permitted (judged, CLEAN), and a warning names it", () => {
   const dir = makeRepo();
   setScope(dir, ["pharn/features/keep.md"]);
   assert.equal(anchor(dir).status, 0);
   rmSync(join(dir, "pharn/features/keep.md"));
   const r = check(dir);
   assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.json.verdict, "CLEAN");
   assert.ok(r.json.warnings.some((w) => w.includes("pharn/features/keep.md")));
 });
 
@@ -1092,6 +1295,98 @@ test("★ MERGED: paths an upstream merge changed after the anchor are classifie
     r.json.warnings.some((w) => /3 path\(s\) classified merged/.test(w)),
     "reported, never silent (L48): " + r.json.warnings.join(" | ")
   );
+});
+
+// --- DELETIONS in the merged class (6.57.0, deletion-follow-ups, D3). Upstream's removal merged into HEAD is `merged`;
+// every row below breaks ONE condition and must stay an ESCAPE (L60). The two `merge` DELETION_KINDS members.
+function upstreamRun(fx, act) {
+  let wt = upstreamWorktrees.get(fx.dir);
+  if (!wt) {
+    wt = mkdtempSync(join(tmpdir(), "pharn-recon-up-"));
+    made.push(wt);
+    rmSync(wt, { recursive: true, force: true });
+    g(fx.dir, "worktree", "add", "-q", "-b", "upstream", wt, fx.base);
+    upstreamWorktrees.set(fx.dir, wt);
+  }
+  act(wt);
+  g(wt, "add", "-A");
+  g(wt, "commit", "-q", "-m", "upstream");
+  g(fx.dir, "update-ref", "refs/remotes/origin/main", "refs/heads/upstream");
+  g(fx.dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
+}
+const MERGE_KINDS = DELETION_KINDS.filter((k) => k.merge).map((k) => k.name);
+
+test(`★ MERGED DELETION: ${MERGE_KINDS[0]} is classified merged, not an escape`, () => {
+  // Before 6.57.0 this was a WARN; with deletions judged and no D3 it would be a false ESCAPE on the designed
+  // "merge origin/main mid-ship" workflow (the plan's probe row P3).
+  const fx = mergeFixture();
+  upstreamRun(fx, (wt) => g(wt, "rm", "-q", "dep.json"));
+  buildThenMerge(fx.dir);
+  const r = check(fx.dir, ["--require-baseline"]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.json.verdict, "CLEAN");
+  assert.deepEqual(r.json.merged, ["dep.json"]);
+  assert.ok(r.json.warnings.includes("present at anchor, absent now — judged as a change: dep.json"), r.stdout);
+});
+
+test(`★ ANTI-LAUNDERING (deletion): ${MERGE_KINDS[1]} stays an escape — the path is still present at the merge base`, () => {
+  const fx = mergeFixture();
+  upstreamCommit(fx, { "OTHER.md": "upstream moved, deleting nothing\n" });
+  g(fx.dir, "rm", "-q", "dep.json");
+  g(fx.dir, "commit", "-q", "-m", "the build deletes dep.json and commits it");
+  buildThenMerge(fx.dir);
+  const r = check(fx.dir, ["--require-baseline"]);
+  assert.equal(r.json.verdict, "ESCAPE", r.stdout);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    ["dep.json"]
+  );
+  assert.deepEqual(r.json.merged, ["OTHER.md"], "upstream's own path is merged; the build's deletion never is");
+});
+
+test("★ NON-VACUITY (deletion, f): upstream REPLACES the file with a directory — a tree at H keeps the escape (fail closed)", () => {
+  const fx = mergeFixture();
+  upstreamRun(fx, (wt) => {
+    g(wt, "rm", "-q", "dep.json");
+    mkdirSync(join(wt, "dep.json"));
+    writeFileSync(join(wt, "dep.json/x"), "now a directory\n");
+  });
+  buildThenMerge(fx.dir);
+  const r = check(fx.dir, ["--require-baseline"]);
+  assert.equal(r.json.verdict, "ESCAPE", r.stdout);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    ["dep.json"]
+  );
+  assert.deepEqual(r.json.merged, ["dep.json/x"], "the new file inside is upstream's bytes, merged as before");
+});
+
+test("★ NON-VACUITY (deletion, d): an uncommitted edit at the anchor keeps upstream's deletion an escape", () => {
+  const fx = mergeFixture({ beforeAnchor: (dir) => writeFileSync(join(dir, "dep.json"), "dirty at the anchor\n") });
+  g(fx.dir, "checkout", "--", "dep.json"); // clean again, so the merge can delete it
+  upstreamRun(fx, (wt) => g(wt, "rm", "-q", "dep.json"));
+  buildThenMerge(fx.dir);
+  const r = check(fx.dir, ["--require-baseline"]);
+  assert.equal(r.json.verdict, "ESCAPE", r.stdout);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    ["dep.json"]
+  );
+  assert.deepEqual(r.json.merged, []);
+});
+
+test("★ NON-VACUITY (deletion, e): the path back on disk after upstream's deletion keeps it an escape", () => {
+  const fx = mergeFixture();
+  upstreamRun(fx, (wt) => g(wt, "rm", "-q", "dep.json"));
+  buildThenMerge(fx.dir);
+  writeFileSync(join(fx.dir, "dep.json"), "re-created, untracked\n");
+  const r = check(fx.dir, ["--require-baseline"]);
+  assert.equal(r.json.verdict, "ESCAPE", r.stdout);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    ["dep.json"]
+  );
+  assert.deepEqual(r.json.merged, []);
 });
 
 test("★ ANTI-LAUNDERING: a path the build COMMITTED itself stays an escape; the upstream path beside it is merged", () => {

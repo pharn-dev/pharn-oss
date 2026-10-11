@@ -114,6 +114,16 @@ node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 # escape's file / denied_by / reason / scope_set_by (20 rows) and the merged count — reconcile-detail-core.mjs, in
 # floor-gates.md's stage-verify section. The finding `problem` (the remedy) is not rendered: re-run the checker for it.
 # ESCAPE_REASONS / WIDENED_REASON live in reconcile-detail-core.mjs since 6.55.0; this checker re-exports them.
+# DELETIONS (6.57.0, deletion-follow-ups, contract §3): a path the anchor hashed that git no longer lists is classified
+# by `absenceState` (lstat, never stat — L54/L59): gone (ENOENT/ENOTDIR, or a directory now there) or unreadable (any
+# other lstat error) → a CANDIDATE judged like a write; still on disk → a WARN only when `git check-ignore --stdin -z
+# --no-index` exits 0 (bound 1), a CANDIDATE on any other answer (GATE-2 review F1: a case-only rename on APFS and a
+# symlinked parent both keep lstat succeeding with no ignore rule — they read CLEAN on macOS, ESCAPE on Linux, before).
+# Before, a `git rm`, a committed deletion or an untracked unlink was a WARN judged by nothing (6.56.0's measured gap).
+# The merged class (§2a) gains the deletion row: absent at H AND at M, gone from disk, anchored bytes = X's blob; a
+# deletion the build commits stays an escape. LOAD GRAPH: IGNORE_DATA_PATH / loadIgnoreData / isHumanOnly /
+# isAlwaysReconciled live in reconcile-ignore-core.mjs (one owner, also imported by apply-plan-deletions.mjs); this
+# checker re-exports them, pinned identical by reconcile-ignore-core.test.mjs.
 # Contract: pharn/pharn-contracts/reconciliation-record.md. Data: pharn/floor/reconcile-ignore.json.
 # Exit: 0 CLEAN|NO_BASELINE · 1 ESCAPE · 2 INCONCLUSIVE / no usable scope to anchor (D6).
 node pharn/floor/reconcile-baseline.mjs --anchor [--base <dir>] [--by <label>]

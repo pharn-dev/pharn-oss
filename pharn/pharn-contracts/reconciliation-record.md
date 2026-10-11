@@ -286,7 +286,16 @@ git exit code. **Any git failure leaves the path an escape.**
 | e   | the path's **current** bytes are the digest of its blob at H                                                                                                                               | an uncommitted edit on top of the merge                                |
 | f   | its blob at H equals its blob at M — same object id, same mode (100644, 100755 or 120000 only)                                                                                             | the build committed its own bytes to that path: **it stays an escape** |
 
-A blob's digest follows the baseline's own rule: the SHA-256 of its bytes, or of `symlink\0` + bytes for mode 120000. **(f) is the anti-laundering condition.** M is reachable from upstream, and a commit the build makes during
+A blob's digest follows the baseline's own rule: the SHA-256 of its bytes, or of `symlink\0` + bytes for mode 120000.
+
+**A deletion (6.57.0, §3).** A path gone from disk qualifies on (a)–(c) unchanged and: (d) its baseline entry is the
+digest of its blob at X; (e) it is gone from disk now; (f) it is **absent** at H **and absent** at M. Anything else
+at H or M — a tree, a gitlink, an unusual mode, a git failure — keeps the escape. A deletion the build commits itself
+leaves the path present at M, so it stays an escape — unless upstream removed the same path inside the window: M then
+lacks it too, and the build's deletion is classified `merged` (the "classified `merged` whoever wrote them" bound
+below).
+
+**(f) is the anti-laundering condition.** M is reachable from upstream, and a commit the build makes during
 the window is not, so committing an escape never clears it. (f) compares against M rather than U so that a later
 fetch, which moves U past the commit HEAD merged, does not undo the classification.
 
@@ -331,19 +340,29 @@ purpose: if it were only a warning, making a file unreadable would hide a denied
 this section listed it under WARN; the checker had already been treating it as changed, and the row was
 corrected in 6.17.1.)
 
-**WARN** (`warnings[]`, verdict unaffected): a path present at anchor and absent now **and no longer listed by
-git** — an untracked file deleted, or a tracked one removed from the index too (`git rm`); a baseline written by an
-**older** schema version — _legacy records tolerated at read._
+**WARN** (`warnings[]`, verdict unaffected): a path present at anchor that git no longer lists, that is still on
+disk, **and that git itself reports ignored** (`git check-ignore --stdin -z --no-index`, given the path on stdin, exits 0 and echoes it back) — it left the
+reconciled set because it became git-ignored (a `git rm --cached` plus an ignore rule, say); this is §1's
+ignored-paths bound, so the path is not judged, and an edit to it is invisible. When the ignore rule is a tracked
+`.gitignore`, that file's own change is a candidate and is judged; through `.git/info/exclude`, or through a new
+untracked `.gitignore` that ignores itself (`*`), nothing is. A path still on disk that git does NOT report ignored —
+any other exit, or a failed call — is a candidate (fail closed): `lstat` alone cannot tell "ignored" from a case-only
+rename on a case-insensitive volume or a parent directory replaced by a symlink, both measured (6.57.0 review F1), so
+the verdict no longer depends on the platform.
+Also a WARN: a baseline written by an **older** schema version — _legacy records tolerated at read._
 
-**A deletion is judged only while git still lists the path (corrected in 6.56.0, measured).** The enumeration is
-`git ls-files --cached --others --exclude-standard`, so a TRACKED file removed from the worktree alone (`rm`, an
-`unlinkSync`) is still enumerated, hashes to nothing, and is the unreadable candidate above: judged against the
-scopes like a write — permitted when a scope covers the path, an `ESCAPE` when none does. Before 6.56.0 this section
-called every deletion a WARN; that held only for the index-removed and untracked cases. So a deletion staged with
-`git rm`, declared or not, is reported here and never judged; the scope check (`check-regress.mjs` /
-`check-quick-scope.mjs`, which list `git diff --name-only <base>`) still sees a tracked one (named residual
-`reconcile-index-removed-deletion`). `pharn/floor/apply-plan-deletions.mjs` deletes a plan's `(delete)`-marked
-paths with an unlink and never stages, so a tracked one is judged against the plan's scope, which holds the bare path.
+**A deletion is judged like a write (6.57.0).** Every path the anchor hashed that is gone from disk is a candidate,
+judged against the guards and the recorded scopes — permitted when a scope covers it, an `ESCAPE` when none does —
+whatever removed it: `rm` or an unlink (git still lists a tracked path, which hashes to nothing: the unreadable
+candidate above), `git rm`, a commit, or the unlink of an untracked file (git lists neither, so the checker asks
+`lstat`). "Gone" is `lstat` `ENOENT` or `ENOTDIR`, or a directory now at the path; any other `lstat` error is a
+candidate too (fail closed); `lstat` never follows a link, so a dangling link left at the path is still there. Each is
+named in a `warnings[]` line (`present at anchor, absent now — judged as a change: <path>`) beside the verdict. An
+upstream merge's deletion is `merged` under §2a's deletion row, never an escape. History, measured: before 6.56.0 this
+section called every deletion a WARN; 6.56.0 corrected that to "judged only while git still lists the path", so an
+undeclared `git rm` read `CLEAN` (the scope checks still saw a tracked one); 6.57.0 closes that.
+`pharn/floor/apply-plan-deletions.mjs` deletes a plan's `(delete)`-marked paths with an unlink and never stages, so
+each one, tracked or untracked, is judged against the plan's scope, which holds the bare path.
 
 ## 4. The ignore/exempt data — `pharn/floor/reconcile-ignore.json`
 
@@ -430,6 +449,11 @@ the baseline.
 - **"a denied path that changed is reported"** → **FLOOR**: content-hash (`ARCHITECTURE §2` primitive
   #2) composed with path/enum membership (primitive #3). No model judgment. Reported in `escapes[]`, or in
   `merged[]` when every §2a condition holds — never dropped.
+- **"a path the anchor hashed that is gone from disk is judged like a write"** (6.57.0, §3) → **FLOOR**: baseline
+  membership minus the enumeration, `lstat` error-code membership, then the same delegated guard and scope
+  membership; a path still on disk is a WARN only on `git check-ignore`'s exit 0, any other answer a candidate.
+  Bounded: a path still on disk that git reports ignored is a WARN only (§1's ignored-paths bound), and a
+  forged baseline that drops the entry hides the deletion (the non-adversarial claim).
 - **"a merged path's bytes are upstream's, and a commit the build made itself is not `merged`"** → **FLOOR
   within the non-adversarial claim**: object-id and SHA-256 equalities plus git exit codes (primitives #2, #3),
   pinned by one test per §2a condition. Bounded by §2a's list: the upstream ref is a Bash-movable alias, and bytes
