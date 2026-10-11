@@ -291,6 +291,11 @@ Every fix stays inside `## Files`; no path was added.
   the path echoed back). Any other answer makes the path a candidate. `GIT_LITERAL_PATHSPECS` is deliberately not set
   there: check-ignore refuses it (exit 128, measured). Rows added: the case alias (staged and committed; skipped with
   its reason on a case-sensitive tmp volume), the symlinked parent, and `ignoredByGit` members/non-members.
+  Regress iteration 2 then went RED: F1's own `spawnSync("git", …)` broke `stage-runtime.test.mjs`'s pinned
+  `★ GIT CEILING` enumeration. Orchestrator decision (a): `ignoredByGit` now goes through the existing `git()` helper,
+  which gained an optional `{ env, input }` (absent → byte-for-byte the old call for every existing caller; stdin is
+  piped only when `input` is given; its `maxBuffer` is kept). Only the check-ignore call passes an env without
+  `GIT_LITERAL_PATHSPECS`. A throw (non-zero exit, spawn failure) reads as "not ignored" → a candidate.
 - **F2** — §3 names the second invisible ignore route, a new untracked `.gitignore` that ignores itself (`*`), and a
   row pins it as the stated bound (CLEAN, WARN).
 - **F3** — "a deletion the build commits itself stays an escape" is qualified in §2a, the checker comment and the

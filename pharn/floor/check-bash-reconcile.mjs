@@ -283,15 +283,14 @@ const CHECK_IGNORE_ENV = (() => {
   for (const k of ["GIT_LITERAL_PATHSPECS", "GIT_GLOB_PATHSPECS", "GIT_NOGLOB_PATHSPECS", "GIT_ICASE_PATHSPECS"]) delete env[k];
   return env;
 })();
+// Through the shared `git()` helper (no git spawn of its own — the GIT CEILING enumeration is unchanged): exit 0 returns
+// stdout; a non-zero exit, a spawn failure or an oversize answer THROWS, which reads as "not ignored" → a candidate.
 export function ignoredByGit(root, rel) {
-  const r = spawnSync("git", ["check-ignore", "--stdin", "-z", "--no-index"], {
-    cwd: root,
-    env: CHECK_IGNORE_ENV,
-    input: `${rel}\0`,
-    encoding: "utf8",
-    stdio: ["pipe", "pipe", "ignore"],
-  });
-  return !r.error && r.status === 0 && r.stdout === `${rel}\0`;
+  try {
+    return git(root, ["check-ignore", "--stdin", "-z", "--no-index"], "utf8", { env: CHECK_IGNORE_ENV, input: `${rel}\0` }) === `${rel}\0`;
+  } catch {
+    return false;
+  }
 }
 
 // --- EXECUTE a hook against one candidate path and read its exit code. -----------------------------
@@ -443,13 +442,18 @@ const OBJECT_ID_RE = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
 // parses a path.
 const GIT_ENV = { ...process.env, GIT_LITERAL_PATHSPECS: "1" };
 
-function git(root, args, encoding = "utf8") {
+// The ONE argv helper that prints git output (stage-runtime.test.mjs's GIT CEILING pins its spawn and its maxBuffer).
+// `opts` is optional and, when absent, changes nothing for any caller: GIT_ENV, stdin ignored. `opts.env` replaces the
+// environment (only ignoredByGit passes one, to drop GIT_LITERAL_PATHSPECS); `opts.input` pipes stdin, and only then.
+function git(root, args, encoding = "utf8", opts = {}) {
+  const piped = opts.input !== undefined;
   return execFileSync("git", args, {
     cwd: root,
     encoding,
-    env: GIT_ENV,
+    env: opts.env ?? GIT_ENV,
     maxBuffer: 1 << 28,
-    stdio: ["ignore", "pipe", "ignore"],
+    ...(piped ? { input: opts.input } : {}),
+    stdio: [piped ? "pipe" : "ignore", "pipe", "ignore"],
   });
 }
 
