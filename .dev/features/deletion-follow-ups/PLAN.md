@@ -7,6 +7,7 @@
 - constitution_refs: [P0, P2, P3, P4, P5, P6, P7]
 - base: worktree branch `deletion-follow-ups`, cut from `origin/main` at `45107f7` (6.56.0, #338), fetched this run. `pharn/ARCHITECTURE.md` hashed this run with `.dev/floor/hash-doc.mjs` (the pin above). Bumps to **6.57.0** (minor — see `## Version`); renumbered at GATE 2 if `main` moves first.
 - lessons index: `node .dev/floor/check-lessons-index.mjs .` exited 0 (GREEN) this run, so the two-step sweep ran: candidates selected from `docs/lessons-index.md`, every cited entry read in full from canon.
+- gate1: APPROVED 2026-10-11 by the human, in chat ("approve, implement"), relayed by the orchestrating agent (a human approval relayed, not a model decision), with the RECOMMENDED answer to every open question — Q1 (a), Q2 (a), Q3 (a), Q4 (a), Q5 (a). The `LIMITS.md §6` sentence was committed by the human as `83c5829` before the build anchor. See `## Resolved questions (GATE 1)`.
 
 ## Applied lessons
 
@@ -264,7 +265,7 @@ deleted `LIMITS.md` on APFS) and feature `plan-declared-deletions`. **Duplicate 
 target — link-vs-target identity, not filesystem equivalence of names). The 6.31.1 hook change (judge the filesystem's
 target) was never promoted. The product canon is not the target (`.dev/` lesson).
 
-## Self-checks (this stage)
+## Self-checks (plan stage)
 
 - `node pharn/floor/check-plan-lessons.mjs .dev/features/deletion-follow-ups/PLAN.md .dev/memory-bank/lessons-learned.md`
   → exit 0 GREEN, all 15 cited ids resolve and are referenced in the body (the declaration, never the application —
@@ -273,7 +274,21 @@ target) was never promoted. The product canon is not the target (`.dev/` lesson)
   13 `## Files` bullets, 13 parsed paths, 13 concrete, 0 marked `(delete)` — no glob, no placeholder.
 - Prettier and markdownlint run over this file only (L13). The probe script under `.pharn/pharn-dev-plan/` was removed.
 
-## Open questions (HALT)
+## Resolved questions (GATE 1)
+
+All five resolved by the human at GATE 1 (relayed in chat by the orchestrating agent): the recommended option (a)
+each. No open question remains.
+
+- **Q1 → (a)**: every baseline path gone from disk is a candidate — `git rm`, committed and untracked deletions (D2).
+- **Q2 → (a)**: `merged` is extended to upstream deletions (D3).
+- **Q3 → (a)**: A and B ship as one increment, 6.57.0.
+- **Q4 → (a)**: the human committed the `LIMITS.md §6` sentence on this branch as `83c5829` (verbatim the proposed
+  text, inserted where proposed), before `/pharn-dev-build` Step 0, so it lands outside the anchor→verify window (L68)
+  and ships in 6.57.0. The 6.57.0 CHANGELOG entry names it; no agent write touches `LIMITS.md`.
+- **Q5 → (a)**: directory deletion stays out of this increment, deferred until a post-6.56.0 run that a per-file list
+  cannot reasonably serve.
+
+The questions as asked at GATE 1:
 
 - **Q1 — B's domain.** (a) every baseline path gone from disk: `git rm`, committed deletion AND an untracked file —
   one rule over the reconciled set, which already treats tracked and untracked alike for writes; closes 6.56.0's G1
