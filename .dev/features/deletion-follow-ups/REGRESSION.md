@@ -1,6 +1,31 @@
 # REGRESSION — deletion-follow-ups
 
-## Iteration 2 — after the GATE-2 review fixes (`6f41fc3`); the current record
+## Iteration 3 — F1 routed through the existing `git()` helper (`bdb75d3`); the current record
+
+- Base: `45107f7bb1a9e19d39b5f561c4fcb12d5b557a45` (clean tree → `git merge-base HEAD origin/main`). Inside: the same 20
+  paths; `check-regress.mjs scope` exited 0 with no escape; `escape_exempt`: this feature's six pipeline artifacts and
+  `LIMITS.md`.
+- Outside gates: 153 test files, `validate`, and the one committed eval pair (real `{expected, actual}` paths, both
+  confirmed readable). Style gates skipped (no shared style config inside).
+
+| Gate                                                                                       | base → head |
+| ------------------------------------------------------------------------------------------ | ----------- |
+| `tests` (153 outside test files; 5201 tests each side, 0 failed)                           | 0 → 0       |
+| `validate`                                                                                 | 0 → 0       |
+| `structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json` | 0 → 0       |
+
+`regressions[]`: none · `pre_existing[]`: none.
+
+**REGRESSIONS: none.** No deterministically detectable breakage outside the feature. This stage catches exactly what
+its suite catches, and nothing more.
+
+- Iteration 2's two `★ GIT CEILING` failures (`stage-runtime.test.mjs`) pass at head: `ignoredByGit` no longer adds a
+  git spawn of its own.
+- Load averages: 4.06 / 6.81 / 10.03 at start, 3.58 / 5.68 / 8.56 when the base side finished, 3.82 / 5.92 / 7.90 at
+  the end.
+- `regression-report.json` is this iteration's verdict stdout byte-for-byte (sha256 `c1b562b7…aaa6` on both).
+
+## Iteration 2 — after the GATE-2 review fixes (`6f41fc3`); superseded by iteration 3
 
 - Base: `45107f7bb1a9e19d39b5f561c4fcb12d5b557a45` (clean tree → `git merge-base HEAD origin/main`). Inside: 20 paths;
   `check-regress.mjs scope` exited 0 with no escape; `escape_exempt`: this feature's six pipeline artifacts and
@@ -26,7 +51,7 @@ maxBuffer` and its `discriminates` twin. Cause, read from the assertion diff: th
   `check-ignore` beside the pinned `GIT_SPAWNS["check-bash-reconcile.mjs"]` (`[null, null, "diff"]`). A real
   regression caused by this increment, not load: load averages 3.31 / 4.20 / 13.96 at start and 7.55 / 9.35 / 11.51 at
   the end.
-- Not fixed here (the stop rule): see the orchestrator report for the in-scope remedy.
+- Not fixed in iteration 2 (the stop rule); the orchestrator chose remedy (a), applied in `bdb75d3` (iteration 3).
 - `regression-report.json` is this iteration's verdict stdout byte-for-byte (sha256 `c48a45ab…88edb` on both).
 
 ## Iteration 1 (`41a2c49`) — superseded
