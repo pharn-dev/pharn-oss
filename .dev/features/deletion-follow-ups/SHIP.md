@@ -37,9 +37,11 @@ lesson: promoted L73
 
 changelog-entry: exit 0
 
-- Measured against the merge base `45107f7` before merging `main`. `origin/main` moved to `2f0eaa2` (#339, a
-  README/`package.json` copy change with an `[Unreleased]` CHANGELOG entry) during the run; the merge of `origin/main`
-  follows this file's first commit.
+- Re-measured after merging `origin/main` (`2f0eaa2`, #339) into this branch as `52c4057`: exit 0, "2 new entr(ies)
+  against the base (--merge-base origin/main (2f0eaa2e617f))". The first run (exit 0) was against `45107f7`, before the
+  merge. Per CONTRIBUTING.md "CHANGELOG entries", #339's `[Unreleased]` entry moved into `[6.57.0]`; `SKILLS_VERSION` on
+  `main` was still 6.56.0, so no renumbering. `npm run check` after the merge: exit 0 (`npm test` 5303 tests, 5302 pass,
+  0 fail, 1 skipped); `check:reconcile` `CLEAN`, `merged: [".dev/features/positioning-copy/PLAN.md", "package.json"]`.
 
 deferred:
 
