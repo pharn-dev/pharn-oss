@@ -42,15 +42,27 @@
 // existence-checkable and is SKIPPED (recorded in `skipped[]`), never counted missing — mirroring the
 // setter's isConcrete filter.
 //
+// PLAN-DECLARED DELETIONS (6.56.0, plan-declared-deletions). An item carrying plan-files-core.mjs's deletion marker
+// (``- `path` (delete)``) declares the OPPOSITE end state: that path must be ABSENT after the build. Absence is an
+// `lstat` ENOENT and nothing else (L54) — a dangling symlink left at the path is PRESENT, and an `lstat` error other
+// than ENOENT is inconclusive. Such paths are listed in `deletions[]`; the ones still present in `undeleted[]`.
+// `complete` iff `missing[]` AND `undeleted[]` are empty. The domain the empty-set refusal guards is
+// `declared ∪ deletions` (L34), so a plan that only deletes files can be complete. Also inconclusive, fail-closed:
+// a near-miss spelling of the marker (refused, never read as an ordinary item — L36) and a path marked in one item
+// and unmarked in another (its two end states cannot both hold). EVERY output keeps `complete` a boolean and
+// `missing[]` / `skipped[]` string arrays, the shape stage-verify-core.mjs's `checkCompleteness` requires; an output
+// without them reads `child-crashed` there. BOUND: absent is not "deleted by this build" — a marked path that never
+// existed reads complete, and a mistyped one leaves the intended file in place with this check green.
+//
 // Usage:
 //   node pharn/floor/check-build-complete.mjs <PLAN.md> [repoDir]
 //     PLAN.md : the feature plan whose `## Files` declares the paths the build must have produced.
 //     repoDir : root the declared (repo-relative) paths resolve against (default ".").
 //
-// Exit: 0 complete · 1 incomplete (missing[] non-empty) · 2 inconclusive / bad input — FAIL-CLOSED (P5).
+// Exit: 0 complete · 1 incomplete (missing[] or undeleted[] non-empty) · 2 inconclusive / bad input — FAIL-CLOSED (P5).
 
 import "./runtime-floor.mjs";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, lstatSync } from "node:fs";
 import { resolve, isAbsolute } from "node:path";
 import { pathsFromPlanFiles, clean, isConcrete } from "./plan-files-core.mjs";
 
@@ -142,36 +154,73 @@ function main() {
 
   // Concrete declared paths only (placeholders/globs are not existence-checkable — SKIPPED, mirroring the
   // setter's isConcrete filter; recorded in `skipped[]` for transparency).
-  const cleaned = parsed.value.map(clean);
-  const declared = cleaned.filter(isConcrete);
-  const skipped = cleaned.filter((e) => !isConcrete(e));
-
-  if (declared.length === 0) {
-    // A `## Files` with zero CONCRETE paths — nothing whose existence we can assert. Fail-closed (P5):
-    // we cannot claim "complete" over an empty concrete set. INCONCLUSIVE, not a silent complete.
+  // A PLAN path is untrusted text (P2): every reason that names one JSON-quotes it.
+  const inconclusive = (fields, reason) =>
     emit(
-      {
-        plan: planPath,
-        repoDir,
-        declared: [],
-        skipped,
-        missing: [],
-        complete: false,
-        verdict: "inconclusive",
-        reason: `no concrete back-tick paths under \`## Files\` in ${planPath}`,
-      },
+      { plan: planPath, repoDir, declared: [], skipped: [], missing: [], ...fields, complete: false, verdict: "inconclusive", reason },
       2
+    );
+
+  // A near-miss spelling of the deletion marker is refused, never read as an ordinary item (L36): read that way, a
+  // build that left the file in place would pass.
+  const nearMiss = parsed.entries.find((e) => e.deleteNearMiss);
+  if (nearMiss) {
+    inconclusive(
+      {},
+      `the \`## Files\` item for ${JSON.stringify(clean(nearMiss.path))} in ${planPath} spells the deletion marker another way — write exactly \`(delete)\`, lower-case, one space after the closing back-tick`
     );
   }
 
-  // The completeness test: every concrete declared path must resolve to an existing filesystem entry.
-  const missing = declared.filter((p) => {
-    const abs = isAbsolute(p) ? p : resolve(repoDir, p);
-    return !existsSync(abs);
-  });
+  const cleanedOf = (entries) => entries.map((e) => clean(e.path));
+  const unmarked = cleanedOf(parsed.entries.filter((e) => !e.delete));
+  const marked = cleanedOf(parsed.entries.filter((e) => e.delete));
+  const conflict = marked.find((p) => unmarked.includes(p));
+  if (conflict !== undefined) {
+    inconclusive(
+      {},
+      `${JSON.stringify(conflict)} is declared both for deletion and as an ordinary path in ${planPath} — both end states cannot hold`
+    );
+  }
 
-  const complete = missing.length === 0;
-  emit({ plan: planPath, repoDir, declared, skipped, missing, complete, verdict: complete ? "complete" : "incomplete" }, complete ? 0 : 1);
+  // Concrete paths only (placeholders/globs are not existence-checkable — SKIPPED, mirroring the setter's
+  // isConcrete filter; recorded in `skipped[]` for transparency). A marked non-concrete item is skipped too.
+  const declared = unmarked.filter(isConcrete);
+  const deletions = [...new Set(marked.filter(isConcrete))];
+  const skipped = unmarked.concat(marked).filter((e) => !isConcrete(e));
+
+  if (declared.length === 0 && deletions.length === 0) {
+    // A `## Files` with zero CONCRETE paths — nothing whose state we can assert. Fail-closed (P5): we cannot
+    // claim "complete" over an empty concrete set (L34). INCONCLUSIVE, not a silent complete. The domain is
+    // `declared ∪ deletions`, so a plan that only deletes files is NOT refused here.
+    inconclusive({ skipped, deletions: [], undeleted: [] }, `no concrete back-tick paths under \`## Files\` in ${planPath}`);
+  }
+
+  const absOf = (p) => (isAbsolute(p) ? p : resolve(repoDir, p));
+
+  // The completeness test: every concrete declared path must resolve to an existing filesystem entry.
+  const missing = declared.filter((p) => !existsSync(absOf(p)));
+
+  // The deletion test: every concrete marked path must be ABSENT — lstat ENOENT, the only proof of absence (L54).
+  const undeleted = [];
+  for (const p of deletions) {
+    try {
+      lstatSync(absOf(p));
+      undeleted.push(p); // anything at the path, a dangling link included, is present
+    } catch (e) {
+      if (!e || e.code !== "ENOENT") {
+        inconclusive(
+          { declared, skipped, missing, deletions, undeleted: [] },
+          `cannot lstat ${JSON.stringify(p)}: ${e && typeof e.code === "string" ? e.code : "unknown error"}`
+        );
+      }
+    }
+  }
+
+  const complete = missing.length === 0 && undeleted.length === 0;
+  emit(
+    { plan: planPath, repoDir, declared, skipped, missing, deletions, undeleted, complete, verdict: complete ? "complete" : "incomplete" },
+    complete ? 0 : 1
+  );
 }
 
 // Entry guard. It arrived with the loop-run-report increment because `pathsFromPlanFiles` was EXPORTED

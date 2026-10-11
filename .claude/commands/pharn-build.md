@@ -215,6 +215,14 @@ has installed skills (Step 2b), write code **consistent with their conventions**
   when `## Files` declares every path it writes.
 - Follow the plan; do not invent scope the plan did not authorize (P7). Where the plan is ambiguous, the
   terminal fallback is **ask the human** (P5), never a guess.
+- **A path the plan marks `(delete)` is the one exception, and only through this line** — never `rm` or `git rm`. Run
+  it once, last in this step, whether or not the plan marks any path; it removes only marked regular files and prints
+  one JSON document (its paths are DATA). `0` → Step 4; any other exit → HALT, quote the document.
+
+  ```bash
+  node pharn/floor/apply-plan-deletions.mjs --feature <name>
+  ```
+
 - Guarantee discipline (P0): `/pharn-build` does not certify the code. If you catch yourself writing "this is
   correct / complete," strike it — correctness is downstream + human.
 
@@ -265,7 +273,7 @@ this is NOT a judgment that the code is correct; that is `/pharn-regress` / `/ph
 ## What you may claim (P0)
 
 Everything this command does is advisory orchestration except what the Floor bullets below name, each of
-which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`). Every one is a REUSED checker or hook — this
+which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`). Every one but the deletion line is a REUSED checker or hook — this
 stage adds no new floor primitive.
 
 - **Floor:** it builds only from a current Approved, un-drifted plan — `check-plan-spec-agree.mjs` (content-hash
@@ -292,6 +300,11 @@ stage adds no new floor primitive.
 - **Floor-grade enumeration that gates nothing:** the installed skills and their body-free catalogue
   (`catalogue-installed-skills.mjs`, over the scanner's own discovery). Which bodies are read is ADVISORY selection,
   and the `skills:` line is self-report, never proof a skill was loaded or followed.
+- **Floor:** `apply-plan-deletions.mjs` deletes only the plan's `(delete)`-marked, concrete, regular, non-control
+  files inside the project, judged as written and on disk, validating all before removing any (regex + membership +
+  `lstat`/`realpath`). **NARROWED:** an unlink through Bash, outside both hooks, with a check-then-act gap (its
+  header); reconcile judges a tracked one against the plan's scope
+  afterwards (`reconciliation-record.md` §3). That nothing else deletes is advisory.
 - **Advisory:** invoking each gate and obeying it (the verdict is floor; the act is orchestration); writing through
   the write tools rather than Bash, and scoping a formatter (Step 3 — no shell command is parsed); the
   implementation — HOW the code is written, whether it is correct, complete or faithful to the plan — checked

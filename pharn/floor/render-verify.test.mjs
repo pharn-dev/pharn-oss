@@ -571,3 +571,47 @@ test("6.55.0 — VERIFY.md over a garbage reconcile log renders ONE line naming 
   const legacy = renderDone(report({ ...RECONCILE_FAIL }));
   assert.match(legacy, /reconcile detail: not recorded in this report/, "a failing reconcile without a block says so");
 });
+
+// ── PLAN-DECLARED DELETIONS (6.56.0) ─────────────────────────────────────────────────────────────────────────
+test("★ 6.56.0 — an INCOMPLETE whose only offender is a marked path still present renders the STILL PRESENT block", () => {
+  const block = {
+    complete: false,
+    declared: [],
+    skipped: [],
+    missing: [],
+    deletions: ["src/old.ts"],
+    undeleted: ["src/old.ts"],
+    verdict: "incomplete",
+  };
+  const md = renderDone(report({ verdict: "INCOMPLETE", completeness: block }));
+  assert.match(md, /marks `\(delete\)` are STILL PRESENT/);
+  assert.ok(md.includes("src/old.ts"));
+  assert.doesNotMatch(md, /MISSING/, "no missing block when missing[] is empty");
+  assert.doesNotMatch(md, /could not be asserted/, "an undeleted-only incomplete is not 'could not be asserted'");
+  // Both lists → both blocks; CONTROL: the same report without undeleted[] has no STILL PRESENT line.
+  const both = renderDone(report({ verdict: "INCOMPLETE", completeness: { ...INCOMPLETE_BLOCK, undeleted: ["src/old.ts"] } }));
+  assert.match(both, /MISSING/);
+  assert.match(both, /STILL PRESENT/);
+  assert.doesNotMatch(renderDone(report({ verdict: "INCOMPLETE", completeness: INCOMPLETE_BLOCK })), /STILL PRESENT/);
+});
+
+test("★ 6.56.0 — a hostile undeleted path stays inside its fence (P2)", () => {
+  const hostile = "x\n# fake heading\n```\n[click](https://evil.example)";
+  const md = renderDone(
+    report({ verdict: "INCOMPLETE", completeness: { complete: false, declared: [], skipped: [], missing: [], undeleted: [hostile] } })
+  );
+  let inFence = null;
+  const outside = [];
+  for (const line of md.split("\n")) {
+    const f = line.match(/^(`{3,})/);
+    if (f) {
+      if (inFence === null) inFence = f[1];
+      else if (f[1].length >= inFence.length && line.trim() === f[1]) inFence = null;
+      continue;
+    }
+    if (inFence === null) outside.push(line);
+  }
+  assert.ok(!outside.includes("# fake heading"), "the injected heading escaped its fence");
+  assert.ok(!outside.some((l) => l.includes("evil.example")), "the injected link escaped its fence");
+  assert.ok(md.includes("evil.example"), "non-vacuity: the hostile text is rendered, inside a fence");
+});

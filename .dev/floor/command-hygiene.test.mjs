@@ -5415,3 +5415,54 @@ test("INSTRUCTION_FILE_RULE — every product command that authors a PLAN carrie
   assert.equal(one({ "x.md": '---\nwrites: ["pharn/features/<name>/PLAN.md"]\n---\n\n## Step 3 — x\n' }), 1, "derivation");
   assert.throws(() => frontmatterWrites('---\nwrites:\n  ["a"]\n---\n'), SyntaxError, "a multi-line writes: is refused");
 });
+
+// ── PLAN_DELETION_WIRING (6.56.0, plan-declared-deletions) ──────────────────────────────────────────────────
+// A PLAN's `(delete)`-marked paths are removed by ONE pinned line, `apply-plan-deletions.mjs --feature <name>`, inside
+// /pharn-build's Step 3 and in a bash fence (so SHELL_VALUES' closure sees it), and by no other product command — the
+// orchestrators reach it only through /pharn-build. PRESENCE + PLACEMENT only: never proof a run executes it, and
+// apply-plan-deletions.test.mjs executes the committed line. Self-contained so a stacking merge appends.
+const PLAN_DELETION_LINE = "node pharn/floor/apply-plan-deletions.mjs --feature <name>";
+
+/** Offenders for the deletion line over { file: text } — empty when it sits exactly once in pharn-build.md's Step 3. */
+function planDeletionOffenders(texts) {
+  const out = [];
+  for (const [file, text] of Object.entries(texts)) {
+    // Shell lines only: prose may NAME the helper (a claims block, /pharn-plan's marker note); only a shell line RUNS it.
+    const hits = shellLines(text).filter((l) => l.text.includes("apply-plan-deletions.mjs")).length;
+    if (file !== "pharn-build.md") {
+      if (hits) out.push(`${file}: a shell line runs apply-plan-deletions.mjs — only /pharn-build runs it`);
+      continue;
+    }
+    const start = text.search(/^## Step 3\b/m);
+    const end = text.search(/^## Step 4\b/m);
+    if (start < 0 || end < start) {
+      out.push(`${file}: its Step 3 / Step 4 anchors were not found`);
+      continue;
+    }
+    const step = text.slice(start, end);
+    const fenced = shellLines(step).filter((l) => l.kind === "fence" && l.text === PLAN_DELETION_LINE);
+    if (fenced.length !== 1)
+      out.push(`${file}: Step 3 carries the pinned deletion line ${fenced.length} time(s) in a bash fence, not once`);
+    if (hits !== 1) out.push(`${file}: ${hits} shell line(s) run apply-plan-deletions.mjs, not one`);
+  }
+  return out;
+}
+
+test("PLAN_DELETION_WIRING — the deletion line sits once, fenced, in /pharn-build's Step 3, and in no other product command", () => {
+  const texts = Object.fromEntries(productCommandFiles().map((f) => [f, productCommandText(f)]));
+  assert.ok(Object.hasOwn(texts, "pharn-build.md"), "non-vacuous: /pharn-build is in the domain");
+  assert.deepEqual(planDeletionOffenders(texts), []);
+  // CONTROLS (L60): moved to Step 4, removed, and named by another command each turn the predicate red.
+  const build = texts["pharn-build.md"];
+  const moved = build
+    .replace(`  \`\`\`bash\n  ${PLAN_DELETION_LINE}\n  \`\`\`\n`, "")
+    .replace(/^## Step 4\b.*$/m, (h) => `${h}\n\n\`\`\`bash\n${PLAN_DELETION_LINE}\n\`\`\``);
+  assert.notEqual(moved, build, "the move control changed the text");
+  assert.ok(planDeletionOffenders({ "pharn-build.md": moved }).length > 0, "a line moved out of Step 3 fails");
+  assert.ok(planDeletionOffenders({ "pharn-build.md": build.replaceAll(PLAN_DELETION_LINE, "true") }).length > 0, "a removed line fails");
+  assert.ok(planDeletionOffenders({ "pharn-loop.md": `\`\`\`bash\n${PLAN_DELETION_LINE}\n\`\`\`\n` }).length > 0, "another command fails");
+  assert.ok(
+    planDeletionOffenders({ "pharn-build.md": build.replace(/^## Step 3\b/m, "## Stage 3") }).length > 0,
+    "an unfound anchor fails"
+  );
+});
