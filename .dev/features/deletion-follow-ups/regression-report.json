@@ -4,6 +4,11 @@
     ".claude/commands/pharn-build.md",
     ".dev/features/deletion-follow-ups/GRILL.md",
     ".dev/features/deletion-follow-ups/PLAN.md",
+    ".dev/features/deletion-follow-ups/REGRESSION.md",
+    ".dev/features/deletion-follow-ups/REVIEW.md",
+    ".dev/features/deletion-follow-ups/VERIFY.md",
+    ".dev/features/deletion-follow-ups/regression-report.json",
+    ".dev/features/deletion-follow-ups/verify-report.json",
     ".dev/guides/floor-checks.md",
     ".dev/guides/floor-gates.md",
     "CHANGELOG.md",
@@ -24,14 +29,16 @@
     },
     "tests": {
       "base": 0,
-      "head": 0
+      "head": 1
     },
     "validate": {
       "base": 0,
       "head": 0
     }
   },
-  "regressions": [],
+  "regressions": [
+    "tests"
+  ],
   "pre_existing": [],
-  "verdict": "no-regressions"
+  "verdict": "regressions"
 }

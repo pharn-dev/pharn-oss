@@ -1,5 +1,36 @@
 # REGRESSION — deletion-follow-ups
 
+## Iteration 2 — after the GATE-2 review fixes (`6f41fc3`); the current record
+
+- Base: `45107f7bb1a9e19d39b5f561c4fcb12d5b557a45` (clean tree → `git merge-base HEAD origin/main`). Inside: 20 paths;
+  `check-regress.mjs scope` exited 0 with no escape; `escape_exempt`: this feature's six pipeline artifacts and
+  `LIMITS.md`.
+- Outside gates: 153 test files, `validate`, and the one committed eval pair (passed as its real `{expected, actual}`
+  paths this time, both confirmed readable). Style gates skipped (no shared style config inside).
+
+| Gate                                                                                       | base → head |
+| ------------------------------------------------------------------------------------------ | ----------- |
+| `tests` (153 outside test files; 5201 tests each side; head: 2 failed)                     | 0 → **1**   |
+| `validate`                                                                                 | 0 → 0       |
+| `structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json` | 0 → 0       |
+
+`regressions[]`: `tests` · `pre_existing[]`: none.
+
+**REGRESSIONS: 1 outside the feature — stage FAILS.** This stage catches exactly what its suite catches, and nothing
+more.
+
+- The two failing tests are in `pharn/floor/stage-runtime.test.mjs`, outside this plan's `## Files`:
+  `★ GIT CEILING — every git spawn in a shipped floor module is listed, and each that can print a listing carries a
+maxBuffer` and its `discriminates` twin. Cause, read from the assertion diff: the review fix F1 added a NEW
+  `spawnSync("git", ["check-ignore", …])` in `check-bash-reconcile.mjs` (`ignoredByGit`), so the scanned map gained
+  `check-ignore` beside the pinned `GIT_SPAWNS["check-bash-reconcile.mjs"]` (`[null, null, "diff"]`). A real
+  regression caused by this increment, not load: load averages 3.31 / 4.20 / 13.96 at start and 7.55 / 9.35 / 11.51 at
+  the end.
+- Not fixed here (the stop rule): see the orchestrator report for the in-scope remedy.
+- `regression-report.json` is this iteration's verdict stdout byte-for-byte (sha256 `c48a45ab…88edb` on both).
+
+## Iteration 1 (`41a2c49`) — superseded
+
 - Base: `45107f7bb1a9e19d39b5f561c4fcb12d5b557a45`. The working tree was clean, so the base is
   `git merge-base HEAD origin/main` (main at 6.56.0). HEAD: `41a2c49` (the build commit).
 - Inside: 15 paths, the 13 declared `## Files` paths plus `GRILL.md` and `LIMITS.md`. `check-regress.mjs scope` exited
