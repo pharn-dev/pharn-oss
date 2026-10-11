@@ -79,8 +79,8 @@
 //     the LINK (its text, since 6.20.8), never as its target: a write through it lands on the target's own
 //     path, and a target outside the set (outside the repo, or ignored) is not seen through the link. A DELETION is
 //     a change (6.57.0): a path the anchor hashed that is gone from disk is judged like a write, whether git still
-//     lists it or not (see DELETIONS); a path still on disk that LEFT the set because it became ignored is only a
-//     warning — this bound again.
+//     lists it or not (see DELETIONS); a path still on disk that LEFT the set is only a warning when git itself
+//     reports it ignored (`git check-ignore`) — this bound again — and a candidate otherwise.
 //  2. THE WINDOW is anchor -> reconcile (build -> verify). A write before the anchor is baked into the
 //     baseline and is invisible; a later anchor RESETS, which is why anchoring is at build ONLY.
 //  3. ONE WORKTREE. Two agent sessions sharing a tree share `.pharn/`, so a second session's writes can
@@ -251,17 +251,47 @@ export function isCommandOrigin(setBy) {
 // absenceState answers from `lstat` — never stat/existsSync, which FOLLOW a link (L54, L59): a dangling or
 // re-pointed symlink left at the path is "present". ENOENT / ENOTDIR (a parent component is now a file) are the
 // only proof of absence → "gone". Any other lstat error → "unreadable", which the caller treats as gone (a
-// candidate) — fail closed, the "unreadable is changed" rule of §3. "present" = still on disk but no longer listed
-// by git: it became git-ignored (a `git rm --cached` plus an ignore rule, say), which is the stated ignored-paths
-// bound (bound 1) — reported as a WARN, never judged. A DIRECTORY now at the path is "gone": the anchor hashed a file
-// or a link there (never a directory — hashFile returns null for one), so the entry it recorded no longer exists; the
-// files inside the new directory are new paths, judged on their own.
+// candidate) — fail closed, the "unreadable is changed" rule of §3. A DIRECTORY now at the path is "gone": the anchor
+// hashed a file or a link there (never a directory — hashFile returns null for one), so the entry it recorded no
+// longer exists; the files inside the new directory are new paths, judged on their own.
+//
+// "present" does NOT by itself mean "it became git-ignored" (GATE-2 review F1, measured). A successful lstat proves
+// only that SOME entry answers to that spelling: on a case-insensitive volume a case-only rename (`git mv src/Out.txt
+// src/out.txt`) leaves the old spelling lstat-able, and a parent directory replaced by a symlink lets lstat follow the
+// parent component. Both read CLEAN on macOS and ESCAPE on Linux before the fix. So the WARN needs git's own proof
+// of ignore — `ignoredByGit`, exit 0 of `git check-ignore --stdin -z --no-index` echoing the path back — and every
+// other answer (1 = not ignored, 128 = e.g. "beyond a symbolic link", a spawn failure) makes the path a candidate:
+// fail closed, and the platforms agree. Only a path git itself says is ignored is the stated ignored-paths bound
+// (bound 1) — a WARN, never judged.
 export function absenceState(root, rel) {
   try {
     return lstatSync(resolve(root, rel)).isDirectory() ? "gone" : "present";
   } catch (e) {
     return e && (e.code === "ENOENT" || e.code === "ENOTDIR") ? "gone" : "unreadable";
   }
+}
+
+// true ONLY when git answers exit 0 ("ignored") AND echoes back exactly this path. The path travels on STDIN,
+// NUL-terminated (`--stdin -z`; `-z` is refused without `--stdin`, measured), never on argv, so it can never parse as
+// an option; no shell; `--no-index` so a path still in the index is judged by the rules alone. NOT under
+// GIT_LITERAL_PATHSPECS: check-ignore refuses that magic outright (measured: exit 128, "pathspec magic not supported
+// by this command: 'literal'" — the same trap CHANGELOG [6.19.0] records), which would make every path a
+// candidate. The echo test stands in for it: a name git read as anything other than itself does not come back
+// byte-identical, so it is not cleared.
+const CHECK_IGNORE_ENV = (() => {
+  const env = { ...process.env };
+  for (const k of ["GIT_LITERAL_PATHSPECS", "GIT_GLOB_PATHSPECS", "GIT_NOGLOB_PATHSPECS", "GIT_ICASE_PATHSPECS"]) delete env[k];
+  return env;
+})();
+export function ignoredByGit(root, rel) {
+  const r = spawnSync("git", ["check-ignore", "--stdin", "-z", "--no-index"], {
+    cwd: root,
+    env: CHECK_IGNORE_ENV,
+    input: `${rel}\0`,
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "ignore"],
+  });
+  return !r.error && r.status === 0 && r.stdout === `${rel}\0`;
 }
 
 // --- EXECUTE a hook against one candidate path and read its exit code. -----------------------------
@@ -528,7 +558,8 @@ export function classifyMerged(root, baseline, files) {
     if (atH.absent) {
       // A DELETION (6.57.0): upstream removed the path and HEAD merged that removal. (f) absent at H AND at M — a
       // null at either (a tree, a gitlink, an unusual mode, a git failure) keeps the escape; a deletion the build
-      // commits itself leaves the path PRESENT at M, so it stays an escape. (e) gone from disk now. (d) the anchored
+      // commits itself leaves the path PRESENT at M, so it stays an escape — unless upstream removed the same path in
+      // the window, when M lacks it too and it is merged (the "whoever wrote them" bound). (e) gone from disk now. (d) the anchored
       // bytes are X's blob — so the epoch opened on the committed file, unedited.
       const atM = blobAt(root, m, rel);
       if (!atM || !atM.absent) continue; // (f)
@@ -674,15 +705,20 @@ function main(argv) {
     }
     const cs = controlSurfaceChanges();
     if (cs) for (const rel of cs) if (!candidates.includes(rel)) candidates.push(rel);
-    // A path the anchor hashed that git no longer lists (6.57.0 — see absenceState). Gone from disk, or not lstat-able:
-    // a CANDIDATE, judged like any other change. Still on disk: it left the reconciled set (now git-ignored), a WARN.
+    // A path the anchor hashed that git no longer lists (6.57.0 — see absenceState). A CANDIDATE, judged like any other
+    // change, unless it is still on disk AND git says it is ignored (ignoredByGit) — only then a WARN (bound 1).
     for (const rel of Object.keys(baseline.entries)) {
       if (seen.has(rel)) continue;
-      if (absenceState(root, rel) === "present") {
-        warnings.push(`present at anchor, still on disk, no longer in the reconciled set (git-ignored now?) — not judged: ${rel}`);
+      const state = absenceState(root, rel);
+      if (state === "present" && ignoredByGit(root, rel)) {
+        warnings.push(`present at anchor, still on disk, now git-ignored — not judged: ${rel}`);
         continue;
       }
-      warnings.push(`present at anchor, absent now — judged as a change: ${rel}`);
+      warnings.push(
+        state === "present"
+          ? `present at anchor, no longer listed by git and not proven ignored (a case alias or a symlinked parent?) — judged as a change: ${rel}`
+          : `present at anchor, absent now — judged as a change: ${rel}`
+      );
       if (!candidates.includes(rel)) candidates.push(rel);
     }
   } else {

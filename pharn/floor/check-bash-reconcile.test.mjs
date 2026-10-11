@@ -31,6 +31,7 @@ import {
   makeDefaultProbeSandbox,
   VERDICTS,
   absenceState,
+  ignoredByGit,
 } from "./check-bash-reconcile.mjs";
 import { RECORD_PATH, buildRecord, hashFile } from "./reconcile-baseline.mjs";
 
@@ -245,13 +246,21 @@ test("★ deletions: a path still ON DISK that left the reconciled set (ignored 
   writeFileSync(join(dir, "src/kept.txt"), "edited while invisible\n");
   let r = check(dir);
   assert.equal(r.json.verdict, "CLEAN", r.stdout);
-  assert.ok(
-    r.json.warnings.includes(
-      "present at anchor, still on disk, no longer in the reconciled set (git-ignored now?) — not judged: src/kept.txt"
-    ),
-    r.stdout
-  );
+  assert.ok(r.json.warnings.includes("present at anchor, still on disk, now git-ignored — not judged: src/kept.txt"), r.stdout);
   assert.deepEqual(r.json.escapes, []);
+
+  // The second invisible ignore route (review F2): an UNTRACKED file edited, plus a NEW untracked src/.gitignore that
+  // ignores itself (`*`) — never listed, so never a candidate. Still the stated bound: CLEAN, the WARN names it.
+  const dir3 = makeRepo();
+  mkdirSync(join(dir3, "src"), { recursive: true });
+  writeFileSync(join(dir3, "src/untr.txt"), "a\n");
+  setScope(dir3, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir3).status, 0);
+  writeFileSync(join(dir3, "src/untr.txt"), "edited\n");
+  writeFileSync(join(dir3, "src/.gitignore"), "*\n");
+  r = check(dir3);
+  assert.equal(r.json.verdict, "CLEAN", r.stdout);
+  assert.ok(r.json.warnings.includes("present at anchor, still on disk, now git-ignored — not judged: src/untr.txt"), r.stdout);
 
   // CONTROL: the same move through a TRACKED .gitignore makes the rule change itself a candidate, judged and denied.
   const dir2 = makeRepo();
@@ -269,6 +278,87 @@ test("★ deletions: a path still ON DISK that left the reconciled set (ignored 
     r.json.escapes.map((e) => e.file),
     [".gitignore"]
   );
+});
+
+// GATE-2 review F1: lstat succeeding is NOT proof the path became ignored. Two measured routes with no ignore rule:
+// a case-only rename on a case-insensitive volume, and a parent directory replaced by a symlink. Both must be JUDGED
+// (candidate), so the verdict is the same on macOS and Linux.
+function caseInsensitiveTmp() {
+  const d = mkdtempSync(join(tmpdir(), "pharn-recon-case-"));
+  made.push(d);
+  writeFileSync(join(d, "Probe"), "x");
+  try {
+    readFileSync(join(d, "probe"));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+test("★ deletions (F1): a case-only rename keeps the old spelling lstat-able — it is JUDGED, not a WARN", (t) => {
+  if (!caseInsensitiveTmp()) {
+    t.skip("the tmp volume is case-sensitive: the old spelling is simply gone, which the DELETION_KINDS rows cover");
+    return;
+  }
+  for (const commit of [false, true]) {
+    const dir = makeRepo();
+    mkdirSync(join(dir, "src"), { recursive: true });
+    writeFileSync(join(dir, "src/Out.txt"), "a\n");
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-q", "-m", "Out");
+    setScope(dir, ["src/out.txt"]);
+    assert.equal(anchor(dir).status, 0);
+    gitIn(dir, "mv", "src/Out.txt", "src/out.txt");
+    if (commit) gitIn(dir, "commit", "-q", "-m", "case-only rename");
+    const r = check(dir);
+    const label = commit ? "committed" : "staged";
+    assert.equal(r.json.verdict, "ESCAPE", `${label}: ${r.stdout}`);
+    assert.deepEqual(
+      r.json.escapes.map((e) => e.file),
+      ["src/Out.txt"],
+      label
+    );
+    assert.ok(
+      r.json.warnings.some((w) => w.includes("not proven ignored") && w.endsWith(": src/Out.txt")),
+      `${label}: judged through the new branch — ${r.stdout}`
+    );
+  }
+});
+
+test("★ deletions (F1): a parent directory replaced by a symlink is JUDGED, not a WARN", () => {
+  const dir = makeRepo();
+  mkdirSync(join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, "src/a.txt"), "a\n");
+  gitIn(dir, "add", "-A");
+  gitIn(dir, "commit", "-q", "-m", "src");
+  setScope(dir, ["src"]); // the link itself is in scope; the files git no longer lists through it are not
+  assert.equal(anchor(dir).status, 0);
+  const copy = mkdtempSync(join(tmpdir(), "pharn-recon-copy-"));
+  made.push(copy);
+  writeFileSync(join(copy, "a.txt"), "a\n");
+  gitIn(dir, "rm", "-q", "-r", "--cached", "src");
+  rmSync(join(dir, "src"), { recursive: true, force: true });
+  symlinkSync(copy, join(dir, "src"));
+  const r = check(dir);
+  assert.equal(r.json.verdict, "ESCAPE", r.stdout);
+  assert.ok(
+    r.json.escapes.some((e) => e.file === "src/a.txt"),
+    r.stdout
+  );
+  assert.ok(
+    r.json.warnings.some((w) => w.includes("not proven ignored") && w.endsWith(": src/a.txt")),
+    r.stdout
+  );
+});
+
+test("ignoredByGit: exit 0 only for a path git reports ignored (a control and two non-members)", () => {
+  const dir = makeRepo();
+  writeFileSync(join(dir, ".git/info/exclude"), "ignored.txt\n", { flag: "a" });
+  writeFileSync(join(dir, "ignored.txt"), "x\n");
+  writeFileSync(join(dir, "plain.txt"), "x\n");
+  assert.equal(ignoredByGit(dir, "ignored.txt"), true);
+  assert.equal(ignoredByGit(dir, "plain.txt"), false);
+  assert.equal(ignoredByGit(dir, "-x"), false, "a leading dash is an operand after --, never an option");
 });
 
 test("★ deletions: a path git no longer lists whose lstat fails with neither ENOENT nor ENOTDIR is a candidate (fail closed)", (t) => {

@@ -31,12 +31,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - What changed: `pharn/floor/check-bash-reconcile.mjs` treats a path that was present at the anchor and is gone from
     disk as a changed path. It is judged by the write guards and the recorded scopes, so an undeclared deletion is an
     `ESCAPE`, whether it was made with `rm`, with `git rm`, by a commit, or by unlinking an untracked file. A path
-    still on disk that git no longer lists, because it became git-ignored, stays a warning and is not judged.
+    still on disk that git no longer lists stays a warning, and is not judged, only when git itself reports it ignored
+    (`git check-ignore`). Otherwise it is judged too, so a case-only rename on a case-insensitive volume, or a parent
+    directory replaced by a symlink, gets the same verdict on macOS as on Linux.
   - Why: 6.56.0 measured that only a tracked file removed from the worktree alone was judged. A `git rm`, a committed
     deletion or an untracked file was a warning that nothing judged, so an undeclared `git rm` read `CLEAN`. This was a
     measured gap, not an observed escape, and the scope checks already caught a tracked one.
   - The `merged` class now covers an upstream deletion: a path that upstream removed and HEAD merged during the window
-    is listed in `merged[]`, not as an escape. A deletion the build commits itself still fails.
+    is listed in `merged[]`, not as an escape. A deletion the build commits itself still fails, unless upstream removed
+    the same path in the window: it is then `merged`, like any bytes equal to upstream's, whoever wrote them.
   - What can newly fail: an undeclared deletion in the build-to-verify window. A maintainer's own committed local
     deletion also fails `npm run check` while a stale `.pharn/reconcile/baseline.json` sits in the checkout, exactly as a
     committed local edit already did.

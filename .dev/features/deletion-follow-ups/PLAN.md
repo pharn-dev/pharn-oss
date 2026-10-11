@@ -280,6 +280,24 @@ unchanged, and the GATE-1 answers stand.
   non-blob, a gitlink, an unusual mode, a git failure) keeps the escape — fail closed, pinned by one row (upstream
   replaces the file with a directory → stays an escape).
 
+## Amended after review (GATE 2: fix-first)
+
+The orchestrator decided fix-first at GATE 2, under the human's delegation, on `REVIEW.md`'s three advisory findings.
+Every fix stays inside `## Files`; no path was added.
+
+- **F1 (important)** — D2's "lstat still finds it → WARN" was reachable with no ignore rule: a case-only rename on a
+  case-insensitive volume and a parent directory replaced by a symlink (CLEAN on macOS, ESCAPE on Linux). The WARN
+  now needs git's own proof: `ignoredByGit` (`git check-ignore --stdin -z --no-index`, the path on stdin, exit 0 and
+  the path echoed back). Any other answer makes the path a candidate. `GIT_LITERAL_PATHSPECS` is deliberately not set
+  there: check-ignore refuses it (exit 128, measured). Rows added: the case alias (staged and committed; skipped with
+  its reason on a case-sensitive tmp volume), the symlinked parent, and `ignoredByGit` members/non-members.
+- **F2** — §3 names the second invisible ignore route, a new untracked `.gitignore` that ignores itself (`*`), and a
+  row pins it as the stated bound (CLEAN, WARN).
+- **F3** — "a deletion the build commits itself stays an escape" is qualified in §2a, the checker comment and the
+  CHANGELOG: not when upstream removed the same path in the window (the "whoever wrote them" bound).
+- The human-applied `LIMITS.md §6` sentence ("A path still on disk that has left the reconciled set, because it
+  became git-ignored, is only a warning") is true after F1 without a LIMITS edit.
+
 ## Self-checks (plan stage)
 
 - `node pharn/floor/check-plan-lessons.mjs .dev/features/deletion-follow-ups/PLAN.md .dev/memory-bank/lessons-learned.md`

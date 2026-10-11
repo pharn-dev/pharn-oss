@@ -291,7 +291,9 @@ A blob's digest follows the baseline's own rule: the SHA-256 of its bytes, or of
 **A deletion (6.57.0, §3).** A path gone from disk qualifies on (a)–(c) unchanged and: (d) its baseline entry is the
 digest of its blob at X; (e) it is gone from disk now; (f) it is **absent** at H **and absent** at M. Anything else
 at H or M — a tree, a gitlink, an unusual mode, a git failure — keeps the escape. A deletion the build commits itself
-leaves the path present at M, so it stays an escape.
+leaves the path present at M, so it stays an escape — unless upstream removed the same path inside the window: M then
+lacks it too, and the build's deletion is classified `merged` (the "classified `merged` whoever wrote them" bound
+below).
 
 **(f) is the anti-laundering condition.** M is reachable from upstream, and a commit the build makes during
 the window is not, so committing an escape never clears it. (f) compares against M rather than U so that a later
@@ -338,10 +340,15 @@ purpose: if it were only a warning, making a file unreadable would hide a denied
 this section listed it under WARN; the checker had already been treating it as changed, and the row was
 corrected in 6.17.1.)
 
-**WARN** (`warnings[]`, verdict unaffected): a path present at anchor that git no longer lists **and that is still
-on disk** — it left the reconciled set because it became git-ignored (a `git rm --cached` plus an ignore rule, say);
-this is §1's ignored-paths bound, so the path is not judged, and an edit to it is invisible. When the ignore rule is
-a tracked `.gitignore`, that file's own change is a candidate and is judged; through `.git/info/exclude` nothing is.
+**WARN** (`warnings[]`, verdict unaffected): a path present at anchor that git no longer lists, that is still on
+disk, **and that git itself reports ignored** (`git check-ignore --stdin -z --no-index`, given the path on stdin, exits 0 and echoes it back) — it left the
+reconciled set because it became git-ignored (a `git rm --cached` plus an ignore rule, say); this is §1's
+ignored-paths bound, so the path is not judged, and an edit to it is invisible. When the ignore rule is a tracked
+`.gitignore`, that file's own change is a candidate and is judged; through `.git/info/exclude`, or through a new
+untracked `.gitignore` that ignores itself (`*`), nothing is. A path still on disk that git does NOT report ignored —
+any other exit, or a failed call — is a candidate (fail closed): `lstat` alone cannot tell "ignored" from a case-only
+rename on a case-insensitive volume or a parent directory replaced by a symlink, both measured (6.57.0 review F1), so
+the verdict no longer depends on the platform.
 Also a WARN: a baseline written by an **older** schema version — _legacy records tolerated at read._
 
 **A deletion is judged like a write (6.57.0).** Every path the anchor hashed that is gone from disk is a candidate,
@@ -444,7 +451,8 @@ the baseline.
   `merged[]` when every §2a condition holds — never dropped.
 - **"a path the anchor hashed that is gone from disk is judged like a write"** (6.57.0, §3) → **FLOOR**: baseline
   membership minus the enumeration, `lstat` error-code membership, then the same delegated guard and scope
-  membership. Bounded: a path still on disk that became ignored is a WARN only (§1's ignored-paths bound), and a
+  membership; a path still on disk is a WARN only on `git check-ignore`'s exit 0, any other answer a candidate.
+  Bounded: a path still on disk that git reports ignored is a WARN only (§1's ignored-paths bound), and a
   forged baseline that drops the entry hides the deletion (the non-adversarial claim).
 - **"a merged path's bytes are upstream's, and a commit the build made itself is not `merged`"** → **FLOOR
   within the non-adversarial claim**: object-id and SHA-256 equalities plus git exit codes (primitives #2, #3),
