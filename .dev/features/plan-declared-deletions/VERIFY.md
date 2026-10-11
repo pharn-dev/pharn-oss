@@ -1,8 +1,10 @@
 # VERIFY — plan-declared-deletions
 
+## Iteration 3 — the current record (after the GATE-2 review fixes; tree `6476837`)
+
 | Gate                                                                                       | exit |
 | ------------------------------------------------------------------------------------------ | ---- |
-| `test` (`npm test`: 5286 tests, 5285 pass, 0 fail)                                         | 0    |
+| `test` (`npm test`: 5288 tests, 5287 pass, 0 fail, 1 skipped)                              | 0    |
 | `validate`                                                                                 | 0    |
 | `lint`                                                                                     | 0    |
 | `format:check`                                                                             | 0    |
@@ -17,16 +19,26 @@ Verifiers: no verifiers registered — floor gates only (`count-verifiers.mjs` �
 _Verified = the named gates passed; this is NOT a guarantee of correctness beyond what those gates check — verifier
 concerns are advisory help, not assurance._
 
+- Run after the 1-minute load average fell below 10 (8.96 / 51.67 / 56.72 when the wait ended; 7.27 / 49.20 / 55.75 at
+  the runner's start, 8.59 / 22.10 / 40.64 after `npm test`).
+- `verify-report.json` is unchanged from iteration 1: the checker printed the same object (same gates, `PASS`).
+- `exempted` at reconcile: this feature's `PLAN.md` (amended after review), `REGRESSION.md`, `REVIEW.md`, `VERIFY.md`,
+  `regression-report.json`, `verify-report.json` (pipeline artifacts).
+
+## Iteration 1 (the build, `8a85699`)
+
+The same seven gates all exited 0; `npm test` 5286 tests, 5285 pass, 0 fail; reconcile `CLEAN`, 20 reconciled. Verdict
+`PASS`. The GATE-2 review then found the blocking defect fixed in `292730c` (see `REVIEW.md`, `PLAN.md` "Amended after
+review").
+
 ## Run note (advisory)
 
 - The worktree's command guard refuses the pinned `$?` capture form, so Step 1 ran through a node runner under
   `.pharn/pharn-dev-verify/` with `spawnSync` argv arrays: the same seven gates in the same order (`reconcile` last), the
   same results map, the same `check-verify.mjs` call. `verify-report.json` is that call's stdout plus the `verifiers`
   block. The runner was deleted after the stage.
-- The reconcile epoch is the one `/pharn-dev-build` anchored after its setter; `exempted` lists this feature's
-  `REGRESSION.md` and `regression-report.json` (pipeline artifacts).
-- The build-stage confirmation run of `npm run check` had two failures under full-suite load —
-  `entry-base-evidence.test.mjs` ("a build that edits a pre-existing test MISSes shape-mismatch …", 49 s) and
-  `entry-gates.test.mjs` ("CLI: TAKEOVER …", 15 s) — files this increment does not touch. Both files passed in
-  isolation (55/55), and this verify's `npm test` run passed in full. Recorded as a load-sensitivity observation, not
-  as a result of this feature.
+- The reconcile epoch is the one `/pharn-dev-build` anchored after its setter; the baseline was never edited.
+- Load sensitivity observed on this machine, in files this increment does not touch: the build-stage `npm run check` saw
+  `entry-base-evidence.test.mjs` and `entry-gates.test.mjs` time out under load (both passed alone, 55/55), and regress
+  iteration 2 saw `protect-trusted-paths.test.cjs:1098` time out at load ~60 (128 ms alone). Both stages were re-run
+  after the load fell; see `REGRESSION.md`.
