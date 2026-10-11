@@ -7,6 +7,11 @@
     ".claude/commands/pharn-ship.md",
     ".dev/features/plan-declared-deletions/GRILL.md",
     ".dev/features/plan-declared-deletions/PLAN.md",
+    ".dev/features/plan-declared-deletions/REGRESSION.md",
+    ".dev/features/plan-declared-deletions/REVIEW.md",
+    ".dev/features/plan-declared-deletions/VERIFY.md",
+    ".dev/features/plan-declared-deletions/regression-report.json",
+    ".dev/features/plan-declared-deletions/verify-report.json",
     ".dev/floor/command-hygiene.test.mjs",
     ".dev/guides/floor-gates.md",
     "CHANGELOG.md",
@@ -31,14 +36,16 @@
     },
     "tests": {
       "base": 0,
-      "head": 0
+      "head": 1
     },
     "validate": {
       "base": 0,
       "head": 0
     }
   },
-  "regressions": [],
+  "regressions": [
+    "tests"
+  ],
   "pre_existing": [],
-  "verdict": "no-regressions"
+  "verdict": "regressions"
 }
